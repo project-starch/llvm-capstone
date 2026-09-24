@@ -6442,6 +6442,39 @@ the fix. The integration gate is libc-test's `inet_pton` and `mntent` under
 
 ### C-47 — `__thread` cannot be lowered (`Cannot select: c128 = GlobalTLSAddress`), and it is NOT what blocks a libc `OPEN — REAL BUT OFF THE CRITICAL PATH; recorded 2026-09-16 while making musl's errno work`
 
+> **A fix exists, unmerged and not yet validated by this registry (2026-09-24).**
+> `origin/compiler/c47-tls` at `07829e435e0d`, by the external collaborator. It is stacked on a C-46
+> fix (`5fbdfb139c7d`) in the same branch, 2 ahead and 7 behind `dev`, based at `56c39b13369d`.
+> What it does:
+> - every thread-local becomes local-exec (a domain is one static image);
+> - the `%tprel` offset is built as an integer and applied to `tp`'s **capability**
+>   (`lui`/`addi`, then `cincoffset …, tp, …`), where RISC-V's integer ADD would drop the tag;
+> - it narrows to the variable under `-capstone-shrink-globals`;
+> - it disables emulated TLS for the target;
+> - it adds a PT_TLS linker-script change (`my_first_domain/link.ld`) and a `runtime/tls.c` that
+>   lays the block out from linker symbols, because a domain has no auxv.
+>
+> It carries two lit tests (`tls-local-exec.ll`, `tls-capability-initializer.ll`) and a QEMU probe
+> (`runtime-qemu/thread-local/run.sh`). The probe's controls include the previous `tls.c`, pinned
+> at `56c39b13369d`, which must NOT pass. Verified against the branch on 2026-09-24: its head and
+> counts, its authorship, the `cincoffset …, tp` CHECK lines, the emulated-TLS removal in
+> `CapstoneTargetMachine.cpp`, and the pinned control. **Nobody in this registry has built or run
+> it.** Merging is the lead's call. Until then, the workarounds in the tshark port (a single-thread
+> define) and in CPython's patch 0006 (thread-locals turned into plain globals) stand. Note that the
+> branch also edits this entry itself, so merging it means reconciling with this text.
+>
+> **Scope, measured 2026-09-24 and reproduced independently.**
+> - **Every reference fails.** ANY reference to a `__thread` variable dies with
+>   `Cannot select: c128 = GlobalTLSAddress`. That holds for `int`, pointer-typed, struct-typed,
+>   address-taken, initialised and `extern` variables, read or written, at `-O0` and `-O2` alike.
+>   Neither the type nor the optimisation level is the discriminator.
+> - **The only thing that compiles** is a `__thread` that is **declared and never referenced**,
+>   whether a definition or `extern`, because no `GlobalTLSAddress` node is ever created.
+> - **So a sample that "compiled" proves the variable was unused, not that its type was
+>   acceptable.** The port census hit exactly that trap.
+> - The matrix was run once by the compiler lane on its toolchain and again here: 9 cases × 2 levels
+>   on a C-50…C-58 build without C-47. Both runs got the same 14 failures and 4 compiles.
+
 **What happens.** A `__thread` variable dies in isel with `Cannot select: c128 = GlobalTLSAddress`,
 and `-femulated-tls` does not help. No capability TLS relocation or captable-style TLS slot exists.
 
