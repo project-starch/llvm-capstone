@@ -39,7 +39,13 @@
 # the price of correctness. (The claim lived in a plan and in messages; it was never committed.)
 
 == FULL ROUTED TABLE ==
-  combinational loops 1 (unchanged) . no LUTLP-1 (control: TIMING-4/6 present) . design LUTRAM 1,966 (device)
+  combinational loops 1 (unchanged) . LUTLP-1 = 0 . design LUTRAM 1,966 (device)
+  # LUTLP-1 basis CORRECTED 2026-09-24: first recorded as "control: TIMING-4/6 present", which was invalid.
+  # LUTLP-1 is a DRC rule and was being read from methodology.rpt, which can never contain it, so the
+  # control proved only that the file was read. Re-read from the right file, ariane_xilinx_drc_routed.rpt:
+  # LUTLP-1 = 0, in a DRC table listing 20 real rules (CFGBVS-1, CHECK-3, DPIP-1, PDRC-*, ...). It is
+  # independently implied by bitgen completing, since LUTLP-1 is Error-severity and blocks write_bitstream.
+  # The conclusion stands; only its stated basis changed.
   lsu_i     16,831 LUT   480 LUTRAM   7,988 FF
   rev_node   1,082 LUT     0 LUTRAM     740 FF   (f83fe9342: 2,252 -- the fill decode left rev_node's hierarchy)
   dyn_unit   1,588 LUT     0 LUTRAM   1,095 FF
