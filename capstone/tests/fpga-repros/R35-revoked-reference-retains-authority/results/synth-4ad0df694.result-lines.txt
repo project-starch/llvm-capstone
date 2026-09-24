@@ -1,0 +1,61 @@
+# R-35 FIX SYNTHESIZED AND ROUTED -- capstone-ariane 4ad0df694 (branch r35-m1-revnode-cache), on 054cea69b.
+# Synthesis lane, 2026-09-24, exit=0, 2h36m04s. Flow unchanged (retiming on, RuntimeOptimized, no seed).
+# Bitstream sha256 8db73f8e20244438a2663fef070202e95dde29fe5b1d957b9804a7babf60382c (11,443,722 B).
+# Every number below was PRE-REGISTERED before the run, and is scored here against that registration.
+
+== THE RESULT: the correct revocation check is essentially FREE in timing ==
+  build                       routed WNS   failing endpoints   route/hop
+  054cea69b  base (flashed)     -8.307        51.76 %             --
+  247b76896  Stage 0           -12.900        57.25 %            0.363
+  079dc720a  first cache       -14.415        60.82 %             --
+  f83fe9342  register file     -27.665        63.52 %            0.629   <- congested
+  4ad0df694  THIS              -8.341         51.70 %            0.341
+# 0.034 ns from base. Quote failing endpoints as RATES: the cache moves the denominator.
+
+== PRE-REGISTERED PREDICTIONS, SCORED ==
+  1. load_store_unit LUTRAM >= 60 .............. 480        PASS  (full RAM64M on all 120 bit columns)
+  2. load_store_unit FFs ~7,993 ................ 7,988      PASS  (the whole 7,680-bit tag left flops)
+     design FFs ~93,714 routed ................. 93,810     PASS
+  3. routed LUTs 168k-174k ..................... 171,500    PASS  (84.15 %)
+  4. WNS -8.3 to -14, refuted if <= -20 ........ -8.341     PASS  (best end of the range)
+  5. worst-500 paths D$ grant -> rev-node selector -> cache write decode: 470 -> ~0
+                                                 0          PASS  CONTROL: same matcher reads 470 on f83fe9342
+# (5) settles the retiming question: Vivado did NOT push the fill-tap register back across the selector.
+
+== WHAT FIXED IT: two defects, not one ==
+# f83fe9342's -27.665 had TWO causes, found at pin level by the synthesis lane:
+#  (a) ON the path: the rev-node's COMBINATIONAL write-request selector drove the cache's 256-entry
+#      write decode. Fixed at a87a24a59 by registering both fill taps.
+#  (b) NEXT TO the path: regional routing congestion (+50-60 %), the cache inside the worst window.
+#      30 of f83fe9342's worst 500 went PAST the cache and still lost ~16 ns of wire. Fixed at 4ad0df694
+#      by moving the tag array into distributed RAM (the reset on every flop was what forbade it).
+# Evidence that (b) was real and not just inference: those same paths recovered ~18.5 ns in this build
+# WITHOUT BEING TOUCHED. The worst path now ends at issue_read_operands fu_data_q, their endpoint class.
+
+== A MECHANISM THAT WAS WRONG, recorded because it was told to the lead ==
+# It had been argued that base was cheap BECAUSE ITS CHECK WAS VACUOUS, so a correct check should cost
+# about what Stage 0 cost (4.593 ns). REFUTED: this build has the correct check at 0.034 ns. Stage 0's
+# cost was its IMPLEMENTATION -- a combinational read of the post-adopt value feeding a long path -- not
+# the price of correctness. (The claim lived in a plan and in messages; it was never committed.)
+
+== FULL ROUTED TABLE ==
+  combinational loops 1 (unchanged) . no LUTLP-1 (control: TIMING-4/6 present) . design LUTRAM 1,966 (device)
+  lsu_i     16,831 LUT   480 LUTRAM   7,988 FF
+  rev_node   1,082 LUT     0 LUTRAM     740 FF   (f83fe9342: 2,252 -- the fill decode left rev_node's hierarchy)
+  dyn_unit   1,588 LUT     0 LUTRAM   1,095 FF
+  synth peak 21.73 GB . collector peak 34.92 GB . routing ~70 min (f83fe9342: ~4h15m)
+
+== WHAT THIS DOES NOT LICENSE ==
+# 1. NOTHING IS ON SILICON YET. This is a routed bitstream, not a board result. The folder's defect is
+#    closed when the board probe that exposed it -- 'stale-deref ok ... is_live_data=1' -- TRAPS instead.
+# 2. It still DENIES ON A CACHE MISS. Zero false denies across 92 simulation fixtures bounds nothing for
+#    the monitor or SQLite at scale; the board run and the ladder refresh after it are that measurement.
+# 3. WNS is still NEGATIVE, as the flashed base's is. It is no worse than today's silicon, not timing-clean.
+# 4. Two watch items were checked and neither is a finding, with limits stated:
+#    - the invalidation port did not surface within the 1.7 ns worst-500 band (-nworst 1; the port's own
+#      name does not survive into the reports);
+#    - no LUTRAM primitive appears on the worst 500, but no build exists where LUTRAM is KNOWN to be on a
+#      path, so that zero has no positive control. Not proven.
+# 5. The CPMP half of Stage 0 is now STRONGLY SUGGESTED timing-innocent -- a CPMP-sourced path reaches base
+#    timing with pmp_data_if.sv byte-identical to Stage 0 -- but that is still not a single-variable
+#    measurement.

@@ -2,7 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-23 — R-35 is fixed in simulation at `f83fe9342`; it is NOT yet deployable, and neither synthesized hash is
+## 2026-09-24 — R-35's fix is synthesized and timing-clean at `4ad0df694`: a reflash candidate, not yet on silicon
+
+**R-35 FIX IS SYNTHESIZED, TIMING-CLEAN, AND A REFLASH CANDIDATE (2026-09-24).** `capstone-ariane` **`4ad0df694`** routes at **WNS -8.341, 0.034 ns from the flashed base's -8.307**, with 51.70 % failing endpoints against base's 51.76 %. All five pre-registered synthesis predictions pass. Bitstream sha256 `8db73f8e20244438a2663fef070202e95dde29fe5b1d957b9804a7babf60382c`. **Nothing is on silicon yet**: the defect this folder reports is closed when the board probe that exposed it traps instead of reading live data. Full readings: the R-35 folder's `results/synth-4ad0df694.result-lines.txt`.
+
+**What fixed the timing, in two parts** — `f83fe9342`'s −27.665 had two causes. The rev-node's *combinational* write-request selector drove the cache's write decode; `a87a24a59` registers the fill taps. And the cache's footprint crowded a congested region; `4ad0df694` moves the tag array into distributed RAM. Paths that went *past* the cache recovered ~18.5 ns untouched, which measures the congestion rather than inferring it.
+
+**The correct revocation check turned out to be essentially free.** An earlier claim that it must cost about what Stage 0 cost — because the base was cheap *by being vacuous* — is refuted: Stage 0's 4.593 ns was its implementation, not the price of correctness.
+
+**Next:** put the `.bit` on the console's server-side BITSTREAM store (GUI Bitstream Manager or the board owner — our driver would file it as a boot image), verify its hash, flash (authorized by the lead), and run the folder's board probe. The board lane takes the window after, for its ladder refresh — which doubles as the false-deny test at scale.
+
+## 2026-09-23 — R-35 is fixed in simulation at `f83fe9342`; it is NOT yet deployable, and neither synthesized hash is — **SUPERSEDED 2026-09-24 by the section above**
 
 **Current fix: `capstone-ariane` commit `f83fe9342`, branch `r35-m1-revnode-cache`, pushed.** `f83fe9342` WAS SYNTHESIZED 2026-09-23 AND IS NOT DEPLOYABLE. Area: fixed -- 177,669 post-synth LUTs, -17,423 against the crossbar build with -111 FFs, i.e. the crossbar rewritten as a register file and nothing else. Slack: REFUTED -- routed WNS -27.665, the worst this design has produced, against a pre-registered prediction of roughly -12.9. The worst path is SHALLOWER than Stage 0's (94 vs 121 logic levels, less logic delay) but carries +15.45 ns of ROUTE delay: congestion, absent from every earlier build. Traced at pin level by the synthesis lane: D-cache read-port grant (fan-out 88) -> the rev-node's memory-channel write-request selector, a deep combinational Anvil mux (fan-out 70) -> the cache's WRITE decode. The fix hung a 256-entry write decode off that selector. The read mux is not on the path. Next: register the fill taps, so the decode sees flops.
 
