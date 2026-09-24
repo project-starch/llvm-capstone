@@ -4,16 +4,20 @@
 #   bash run.sh        build exit_test.c three times, run all in one boot; exit 0 only
 #                      if exit-default ends with status 7 and exit-hook with 42, both
 #                      print the line buffered before exit() and the atexit handler's
-#                      line, neither faults, AND both controls halt
+#                      line, neither faults, exit-control halts, AND exit-muslatexit
+#                      (musl's own atexit(), no override) ends like exit-default
 #
 # exit-control is exit-default linked against the hostcall.c of 40eefa09420c (dev
 # before this fix; pinned, so it stays a control after this lands), which only
 # declares the hook weak and tests its address: in a domain that address is not
 # NULL (C-56), so exit() jumps to the image base and halts. exit-muslatexit is
 # exit-default linked WITHOUT runtime/atexit_capability_safe.o, so musl's own
-# atexit() runs: it passes the handler through uintptr_t and the call at exit
-# faults (cause 24). A halted domain can take the guest with it, so each control
-# runs last in a boot of its own: two boots, the second only for exit-muslatexit.
+# atexit() runs. It passes the handler through uintptr_t, and before
+# CapstoneRecoverProvenance that call at exit faulted (cause 24) -- which is why the
+# override exists. The pass rebuilds the handler's capability inside musl's
+# atexit.c, so the arm now must run like exit-default: status 7, the handler's line.
+# A halted domain can take the guest with it, so exit-control runs last in its boot,
+# and exit-muslatexit has a boot of its own.
 #
 # Needs: CAPSTONE_LLVM_BUILD_DIR (clang, ld.lld, llvm-ar), CAPSTONE_BUILDROOT_DIR
 # and CAPSTONE_QEMU_BINARY (the tree that has them), and a python with pexpect
@@ -154,12 +158,13 @@ else
   verdict=1
 fi
 block=$(sed -n "/RUN-BEGIN exit-muslatexit\$/,\$p" "$LOG2")
-if grep -aq "EXIT-TEST before exit" <<<"$block" && grep -aq "halted by capability fault" <<<"$block" &&
-   ! grep -aq "EXIT-TEST atexit handler ran" <<<"$block"; then
-  echo "  exit-muslatexit: halts before the handler runs, as musl's own atexit() must"
+if grep -aq "EXIT-TEST before exit" <<<"$block" && grep -aq "EXIT-TEST atexit handler ran" <<<"$block" &&
+   grep -aq "LT-RESULT exit-muslatexit.dom status=7 " <<<"$block" &&
+   ! grep -aq "halted by capability fault" <<<"$block"; then
+  echo "  exit-muslatexit: PASS (status 7) -- musl's own atexit() works without the override"
 else
-  echo "  exit-muslatexit: did NOT run to exit() and halt there -- the test cannot see the atexit override"
-  grep -aE "EXIT-TEST|LT-RESULT" <<<"$block" | sed 's/^/    /'
+  echo "  exit-muslatexit: FAIL -- musl's own atexit() did not run its handler (CapstoneRecoverProvenance?)"
+  grep -aE "EXIT-TEST|LT-RESULT|halted" <<<"$block" | sed 's/^/    /'
   verdict=1
 fi
 echo "  compiler $("$CAPSTONE_CLANG" --version | grep -oE '[0-9a-f]{40}' | cut -c1-12), log $LOG"

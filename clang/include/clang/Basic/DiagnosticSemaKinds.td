@@ -13100,9 +13100,9 @@ def err_capstone_intcap_atomic_rmw : Error<
   "atomic read-modify-write through %0 is not supported yet on Capstone; "
   "only load, store, exchange and compare-exchange keep an __intcap's tag">;
 def warn_capstone_pointer_roundtrip : Warning<
-  "%select{casting an integer that was itself converted from a pointer|"
-  "casting a value of type %1}0 to %2 does not restore capability provenance "
-  "on Capstone: the result is untagged and faults when dereferenced">,
+  "casting a value of type %0 to %1 restores capability provenance on Capstone "
+  "only if the value was computed from a single pointer in this function; one "
+  "read from memory or passed in is untagged and faults when dereferenced">,
   InGroup<DiagGroup<"capstone-pointer-roundtrip">>;
 def warn_capstone_capability_cast_align : Warning<
   "cast from %0 to %1 puts a capability where memory is only %2-byte aligned; "
