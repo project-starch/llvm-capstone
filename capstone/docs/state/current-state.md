@@ -2,6 +2,14 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-25 — R-35 CLOSED (fixed on the M-mode LSU data path); R-43 and R-44 filed; R-42 reflash authorized
+
+**R-35 is closed**, decided by the RTL lane on the lead's delegation after an adversarial audit. It is scoped: the fix covers the M-mode LSU check. The same optimistic adopt **still exists at the CPMP**, which is all of S/U-mode enforcement and live in production. That is now **R-44**, deferred on a boot-kill risk (the hardcoded `cpmp(0..2)` ids have no rev-node traffic). The fix's own cost, false denies from deny-on-miss, is **R-43**, whose first test is a SQLite run on the fix bitstream. R-37/R-38's Stage 0 is in the flashed build (fixed in source, not verified on silicon).
+
+**R-42**: bitstream `caplifive_r42_6cbdaeeb4.bit` (sha256 `0cd45bb0…2b8c05`) is hash-verified on apollo and handed to the board lane. The reflash was authorized by the lead 2026-09-25, and the acceptance is pre-registered in `tests/fpga-repros/R42-icache-killed-miss-refill/`. It is a superset of the R-35 image, and its acceptance boot re-runs the R-35 stale probe as a regression check.
+
+**M-1**: unchanged in RTL. Default-built probes still wedge on a fault (both R-35 probes did, 2026-09-24), and that cost R-35's record one attribution. `tests/fpga-repros/RTL-domain-trap-vector-unset/` now has a one-picture summary.
+
 ## 2026-09-24 — R-35's fix is on silicon, and the probe that exposed R-35 no longer reproduces it
 
 **ON SILICON (2026-09-24, caplifive_r35_4ad0df694.bit):** the probe that exposed R-35 no longer reproduces it. The same image that read the current occupant's live data through a revoked alias on 054cea69b (is_live_data=1) now traps with cause 25 on the stale read of leaf[0]. A live alias to the same leaf, at the same address, commits without a trap, as do ~43k earlier live accesses, and 17 of 17 ladder rungs return their pre-flash values. N=1 per arm. NOT shown on silicon: WHY the stale read was denied -- cause 25 cannot separate observed revocation from the cache's deny-on-miss, which is the expected route for an id reissued thousands of times; which probe age trapped (k=0 or k=21648); the stale write; and false-deny rates under SQLite. Result lines and limits: the R-35 folder's `results/board-4ad0df694.result-lines.txt`.

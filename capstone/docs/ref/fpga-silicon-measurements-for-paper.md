@@ -5253,6 +5253,30 @@ So the instrument that would show a stale reference being refused has no enforce
 Condition 3 is **answered on the emulator with a positive control and unmeasurable on this bitstream** —
 not failed. Full report: `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`.
 
+### Condition 3 MEASURED on the R-35 fix bitstream (2026-09-24): the stale reference is refused, and live ones are not
+
+On `caplifive_r35_4ad0df694.bit` (RTL `4ad0df694`, identified by label and by behaviour), N=1 per arm, the
+same two images as before the reflash:
+
+| | on `054cea69b` | on `4ad0df694` |
+|---|---|---|
+| stale alias, image `35fb3fec3196841b` | reads the current occupant's data (`is_live_data=1`) | **traps, cause 25**, at the stale read (`+0x4354`), `tval` = leaf[0] |
+| live alias to the same leaf, image `aed492ab985653f3` | read commits; the later mint traps 26 | **identical** |
+| ~43k earlier live-alias accesses in each run | commit | commit |
+
+So Condition 3 is now **measured on silicon, and holds on this probe**: a revoked reference no longer reads
+another object's storage, and the live path is unchanged. Limits the numbers must carry:
+- **Why** the access was denied is not observable. Cause 25 has three arms on this RTL, one of them
+  deny-on-miss, which is the expected route for an id reissued thousands of times. The silicon shows
+  *denied*, not *recognised as revoked*.
+- **Which** probe age trapped (k=0 or k=21648) is lost, because a fault still wedges the domain (M-1).
+- **Not reached on silicon:** the stale write (the read traps first; refused in simulation) and false-deny
+  rates under a large live-id population.
+
+Result lines: `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/results/board-4ad0df694.result-lines.txt`.
+**Do not compare `take_cyc`/`give_cyc` across this reflash:** loop layout effects (R-42) and global
+placement (`RTL-give-cost-tracks-global-placement/`) both move them.
+
 
 ## R1 on silicon — release-to-reuse cost: proportional to affected NODES and to nothing else varied (boots sw8x-r1-b1…b8, 2026-09-21)
 
