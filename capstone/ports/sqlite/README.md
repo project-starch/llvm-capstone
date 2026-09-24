@@ -101,6 +101,38 @@ Current result: **green** — the domain runs the base 3-row workload and the
 extended workload, emitting `__CAPSTONE_SQLITE_EXTENDED_PASSED__` then
 `__CAPSTONE_SQLITE_MEMORY_PASSED__`.
 
+## SQLite 3.22.0
+
+SQLite 3.22.0 (2018-01-22) passes the same silicon-config QEMU gate as 3.53.3: all five
+success markers and `__CAPSTONE_SQLITE_SILICON_PASSED__`.
+
+```bash
+bash capstone/ports/sqlite/run-sqlite-322-silicon.sh
+```
+
+The runner fetches `sqlite-amalgamation-3220000.zip` (SHA3-256
+`69bc5ee8f08d747494dd3a4bfe075e5b078fe200dfc671d76dd9e1ccb5b2decb`), adapts it with
+`adapt-sqlite-322.sh`, and hands the result to the unchanged `run-sqlite-silicon.sh` through
+`PATCHED_SQLITE`. Its scratch root is `/tmp/capstone-322` (override: `SQLITE322_TMP_ROOT`),
+kept apart from 3.53.3's because the silicon build stages `sqlite3.h` by glob.
+
+Adaptations, all in `adapt-sqlite-322.sh`:
+
+- carried over from the 3.53.3 pass unchanged: the `SQLITE_TRANSIENT` sentinel, the
+  runtime-initialised memsys5 methods table, and the 16-byte-aligned `saveBuf`;
+- restated for 3.22.0: `allocateCursor` 16-aligns the embedded `BtCursor`, which 3.53.3 does
+  through `SZ_VDBECURSOR` and 3.22.0 spells as `ROUND8(sizeof(VdbeCursor))+2*sizeof(u32)*nField`;
+- backported: `typedef const char *sqlite3_filename;` (SQLite 3.41.0), the type the shared VFS's
+  `xOpen` is declared with.
+
+Not needed, because 3.22.0 has none of the code they rewrite: the `Atoi64` `z`/`zIn` typo, the
+`c_atomic` guard, and `YYDYNSTACK`.
+
+Scope: the workload is the 3.53.3 one (three rows plus the extended workload). The Sublet port
+is not applied, since `sublet/sublet-3530300.patch` targets 3.53.3, and neither speedtest1 nor
+sqllogictest has been run. The 3.22.0 domain is 1,030,488 bytes of code with 169 globals,
+against 1,444,040 and 211 for 3.53.3.
+
 ## speedtest1 and the Sublet port
 
 `run-sqlite-speedtest1.sh` runs SQLite's own benchmark in a domain, `--memdb --size 1`,
