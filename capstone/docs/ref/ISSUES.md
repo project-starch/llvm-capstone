@@ -6203,7 +6203,7 @@ the transcript, never a verdict. Audit of the archive (2026-09-15 08:10, §7r): 
 changes and no cited number is a truncated fragment. Related: M-10 (the emulator console's silent
 truncation of a long command), the transcript-marker note in the board-run skill.
 
-### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — latent ODR violation, found 2026-09-24; harmless only because the project builds with BUILD_SHARED_LIBS=ON`
+### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — latent ODR violation, found 2026-09-24; harmless only because the project builds with BUILD_SHARED_LIBS=ON. FIX ON BRANCH compiler/c59-odr (efe9b957d538), NOT MERGED: the Capstone copy is made static, verified by symbol binding (T to t); the static link itself is not verified`
 
 **What happens.** `llvm/lib/Target/Capstone/AsmParser/CapstoneAsmParser.cpp:3476` and
 `llvm/lib/Target/RISCV/AsmParser/RISCVAsmParser.cpp:3346` each define
@@ -6303,7 +6303,7 @@ TargetLoweringBase. The compiler lane probed each once, on dev:
 | ShadowStackGCLowering | Unused by this project: needs the shadow-stack GC strategy. |
 | JMCInstrumenter | Unused by this project: needs `-fjmc`. |
 
-### C-61 — any C++ with exceptions enabled crashes in "Exception handling preparation", because `_Unwind_Resume`'s type is built with an address-space-0 pointer `OPEN — COMPILER, crash; found 2026-09-24 while auditing C-60's class; root cause read from source; reproduced with the tree's clang`
+### C-61 — any C++ with exceptions enabled crashes in "Exception handling preparation", because `_Unwind_Resume`'s type is built with an address-space-0 pointer `OPEN — COMPILER, crash; found 2026-09-24 while auditing C-60's class; root cause read from source; reproduced with the tree's clang. FIX ON BRANCH compiler/c61-eh-addrspace (8fb7d4461eca), NOT MERGED; C++ exceptions stay blocked behind C-63 even with it`
 
 **What happens.** `DwarfEHPrepare::InsertUnwindResumeCalls` aborts with
 `Calling a function with a bad signature!` (`llvm/lib/IR/Instructions.cpp:761`) in the
@@ -6460,6 +6460,43 @@ representation that capstone64 violates. They lie on two axes:
 - **address space:** C-54 (fixed), C-60 (open), C-61 (open);
 - **width, pointer vs. index:** this one (fixed).
 
+### C-63 — a `landingpad` cannot be selected: the exception pointer is zero-extended as an integer `OPEN — COMPILER, crash; found 2026-09-24 behind C-61; reproduced with the tree's llc; the second layer blocking C++ exceptions`
+
+**What happens.** `Capstone DAG->DAG Pattern Instruction Selection` aborts with
+`Assertion 'VT.isInteger() && N1.getValueType().isInteger() && "Invalid ZERO_EXTEND!"'`
+(`SelectionDAG.cpp`). It needs only a landingpad, whose result need not even be used. There is no
+`resume`, so DwarfEHPrepare returns early, and this is independent of C-61.
+
+    declare void @g() addrspace(200)
+    declare i32 @__gxx_personality_v0(...) addrspace(200)
+    define i32 @f() addrspace(200) personality ptr addrspace(200) @__gxx_personality_v0 {
+    entry:
+      invoke addrspace(200) void @g() to label %c unwind label %l
+    c:
+      ret i32 0
+    l:
+      %0 = landingpad { ptr addrspace(200), i32 } cleanup
+      ret i32 1
+    }
+
+Reproduced 2026-09-24: `llc -mtriple=capstone64-unknown-elf` aborts at both `-O0` and `-O2` (rc 134).
+
+**Root cause.**
+- `SelectionDAGBuilder::visitLandingPad` (`SelectionDAGBuilder.cpp:3539-3544`) copies
+  `ExceptionPointerVirtReg` out at `getPointerTy()`.
+- It then coerces the result with `DAG.getZExtOrTrunc` to the landingpad's first element type, which
+  here is the capability, `c128`.
+- `getZExtOrTrunc` requires integer types. A capability can be neither zero-extended nor truncated
+  into place.
+
+**Family.** This is the fifth upstream pointer-representation assumption, alongside C-54, C-60, C-61
+and C-62. Its axis is a pointer coerced with an integer operation.
+
+**Consequence.** C++ exceptions stay unusable at default flags even once C-61's fix lands.
+`-fno-exceptions` is still the workaround.
+
+**Fix: none yet.**
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
@@ -6602,6 +6639,22 @@ shared tree's. After that, all of them ran and passed.
 **Fix shape (not done):** route every one of those includes and paths through
 `$CAPSTONE_BUILDROOT_DIR`: an `-I"$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib"` on the
 compile, and `#include <libcapstone.h>` in the guest source.
+
+### I-10 — `toolchain-fresh.py` misreports a FRESH build dir in both directions `OPEN — gate defect, reported 2026-09-24 by the compiler lane; the target list was checked here, the two outcomes were not re-run`
+
+The gate checks only `DEFAULT_TARGETS` (`capstone/tests/toolchain-fresh.py:56-62`), and that causes
+two opposite errors on a fresh build dir.
+
+- **It passes (rc 0) when lit cannot run.** On such a build dir, `count`, `llvm-readelf`,
+  `llvm-stress` and `llvm-config` are not in the list, and lit dies on the first of them.
+  `llvm-readelf` is left out **deliberately**, with the reason at `:63`: it is a regenerated symlink
+  that the classifier misreads. So the fix is not simply "add it".
+- **It returns 2 ("cannot check") whenever `llvm-ar` is built.** `llvm-ar` is outside the list, and
+  the thread-local probe's log carries that warning.
+
+The rc=2 cost is already recorded in the comment at `:58-61`: every caller warns on rc 2 and nothing
+acts on it. **The fix belongs to the gate's owner. Until then, read rc 0 on a fresh build dir as "the
+listed tools are fresh", NOT as "lit can run".**
 
 ## Compiler / toolchain (ours)
 
