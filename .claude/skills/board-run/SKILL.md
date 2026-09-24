@@ -565,6 +565,15 @@ c.power(True);  time.sleep(15.0)     # FPGA keeps the old config until it reconf
 rb = flash_state["nv_bitstream_name"]   # RE-READ. Never trust the call.
 ```
 
+**Re-read on the SAME `FpgaConsole`, or `close()` it first.** Every `FpgaConsole.connect()` takes
+the local flock on `/tmp/capstone/.board.lock`, and a second instance in the same process cannot
+get it while the first holds it (`BlockingIOError` → "another board session holds"). On 2026-09-24
+a reflash script opened a second connection for the readback: the flash had completed, but the
+verification died and the result was unverified until a separate read. It is the same class as
+`run-board-ladder.sh` deadlocking against its own driver (2026-09-22). And if the script ends with
+`os._exit()` (the socket thread otherwise keeps Python alive), `print(..., flush=True)` the readback
+first, or `os._exit` discards it on a pipe and only the exit code survives.
+
 **Reading the resident name is itself a trap, twice over.** `_current_state()` returns only the
 `state` field and **drops `nv_bitstream_name`**; and registering the event handler *after*
 `connect()` misses the initial state burst. Both return `None`, which is indistinguishable from
