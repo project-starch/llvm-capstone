@@ -1,0 +1,183 @@
+tshark as a Capstone domain on QEMU: predictions, written BEFORE the first boot of the real images
+====================================================================================================
+
+Written 2026-09-24, while the cross build (host/cross-build.sh) was still compiling. Nothing below
+was known from a boot of tshark when it was written. Each prediction names what would refute it.
+
+Images: host/build-domain.sh -> tshark_m1..m5.dom (SHA256SUMS in this folder once built). Runner:
+host/run-qemu.sh, private rootfs (host/make-rootfs.sh) with the a74a856 module, CAPSTONE_GP_NONLIN=1.
+
+---------------------------------------------------------------------------------------------------
+0. The harness, before any tshark image (DONE, recorded here because the predictions rest on it)
+---------------------------------------------------------------------------------------------------
+Fake tshark images (a 20-line program: prints argv, env, and a hash of argv[2]) through the same
+runner, rootfs and module:
+- stages, M3 built to exit 9 instead of 3: M1 M2 M4 M5 REACHED, M3 NOT REACHED. The stage verdict
+  can fire.
+- argv/env arrived as written (/tmp/tshark -r /tmp/input.pcap -V -n; TZ=UTC HOME=/tmp
+  WIRESHARK_CONFIG_DIR=/tmp/wsconf), and the capture read in the domain hashed to what the host
+  computed (1400 bytes, 5135637673594229841).
+- the heap report, predicted before its boot for a program holding 3 x 100,000-byte blocks and
+  freeing one (48-byte level0 header): in_use=200096 peak_in_use=300144 peak_end=300144. Got
+  exactly that, from every stage.
+- oracle mode, with a stand-in for stock that mirrors the fake except for a wrong hash on ntp:
+  dhcp MATCH, dhcp.flip MATCH, ntp DIFFERS. Both comparison outcomes can fire, and the flipped copy
+  reached the domain (its hash changed).
+- the stderr split, on that boot's saved output with stand-ins: stdout MATCH + stderr MATCH when
+  both agree; with a wrong expected stderr, stderr DIFFERS and stdout DIFFERS too (nothing is
+  removed); with the check off, the extra line stays in and stdout DIFFERS.
+- the flip control (stock output must change) FIRES on a real change and DID NOT FIRE on
+  identical references.
+- 0 EXT4-fs errors in every serial log; MODULE-MD5 5696d0fe... in every guest (the a74a856 module).
+- After the audit's fixes, a stand-in following the corrected protocol (exit 100 + n, stage lines,
+  a registration-style stderr line, a uname call), booted through the final runner:
+  - M1-M4 REACHED with status 101-104, and M5 with 0;
+  - output MATCH for M1, M2, M3 and M5, with unserved none for M1 and 160 for M2-M5;
+  - the oracle's dhcp and dhcp.flip gave stdout MATCH and stderr MATCH, and the flip control
+    FIRES.
+  Its M4 output reads DIFFERS, which I had not predicted. It is correct: the stand-in's "stock"
+  prints no blank-line frame separator, so there is no frame 1 to equal. The exact-frame check was
+  tested offline on the real stock output: frame 1 matches, and a 100-byte truncation differs.
+  In the same offline tests each audit finding now fails as it should:
+  - a cf_open-style exit 3 is NOT REACHED, even with the output check off;
+  - status 103 without its stage line is NOT REACHED;
+  - a stray stage line fails M5;
+  - an echoed argv[2] that is not the one written is an ERROR;
+  - an empty expected stderr is an ERROR;
+  - equal output from an exit status of 1 reads FAILED.
+
+---------------------------------------------------------------------------------------------------
+1. M0: the link (build-domain.sh), before any boot
+---------------------------------------------------------------------------------------------------
+P1.1  All five images link. No undefined weak symbol. The negative control (M5 without hostcall.o)
+      comes back with exactly __capstone_hostcall and domain_main undefined.
+      Refuted by: any link error, any weak undefined, or a control with more or fewer symbols.
+      CORRECTED before the M0 link: this first said "exactly __capstone_hostcall". Relinking a
+      stand-in without hostcall.o showed start-musl's call to domain_main, which hostcall.o
+      defines, goes undefined too. The control as first written would have failed a correct link.
+      That test also bounds what the control shows: it proves the link gate can fire (dropping
+      start-musl.o as well changes the set and fails it), but not that every libc override is
+      linked (dropping string_bounds_safe.o too still passes, since musl's own memcpy links in).
+P1.2  code_len (PT_LOAD memsz) = 69-76 MiB: the plan's image estimate (results 4b: 24-28 MiB for
+      tshark, 5-8 MiB for the dependencies) plus the level0 arena, which is a static array inside
+      the image (40 MiB, TSAPP_ARENA_BYTES). code_len minus the arena therefore 29-36 MiB.
+      Refuted by: code_len - arena outside 29-36 MiB. That refutes the plan's size estimate, not
+      the port.
+P1.3  Block: code_len + 8 KiB + 1 MiB declared, to a power of two = 128 MiB (order 15). a74a856
+      does not double it (the declared 1 MiB survives the monitor's split at this size).
+      Refuted by: a block of 64 or 256 MiB, or a doubling message in dmesg.
+
+---------------------------------------------------------------------------------------------------
+2. The stages boot: M1..M5 on dhcp.pcap, one boot, ascending
+---------------------------------------------------------------------------------------------------
+REACHED means BOTH the stage's exit code (100 + n; patch 0006) AND its `TSAPP-STAGE n` line; M5
+means status 0 and no stage line.
+CORRECTED before any tshark boot (an adversarial audit of the runner): the stages first exited with
+n and REACHED was read from the status alone. tshark's own exit codes are 1..18 and 256
+(ws_exit_codes.h), and a failed cf_open exits with WS_EXIT_INVALID_FILE = 3 before stage 3, so the
+runner would have printed "M3 REACHED" for the very failure M3 tests. The stand-in control that
+exited 9 only showed the verdict could say NOT REACHED, never that REACHED could be wrong. The
+same audit found, and these were fixed before this boot:
+- an empty expected-stderr file matched anything; it is now an ERROR;
+- the oracle printed MATCH whatever the exit status; a non-zero one now reads FAILED first;
+- a failed capture copy in the guest ran the previous capture; now the run does not start;
+- two runs started in the same second shared a log directory; each now has its own;
+- domain_entry's argv/env echoes were removed unchecked; they must now equal what the runner
+  wrote.
+
+Known risks, from reading the code, before the boot:
+- uname and readlink are not served, so get_current_executable_path() returns NULL and tshark falls
+  back to argv[0], which is absolute (/tmp/tshark): no warning expected (wsutil/filesystem.c).
+- The guest runs as root and getuid() is served as 0, but the cross build has HAVE_ISSETUGID and
+  musl's issetugid() reads libc.secure, which is 0 in a domain: no "Running as user root" warning.
+- level0 is first fit over a list, O(live blocks) per call. Native minimal tshark on dhcp makes
+  5,225 allocation calls with at most 2,642 blocks live (LD_PRELOAD counter; its control, +100,000
+  blocks, moved both counts by 100,000), so about 10^7 steps: not a time risk.
+- gqsort (16-byte elements copied as two words) is not called on this workload natively (plan).
+
+P2.1  M1 REACHED: status 101, TSAPP-STAGE 1. The ~257k pointer initialisers run before main, in a
+      frame the plan measures at 322,080 bytes for manuf.c, inside the 1 MiB declared stack.
+      Refuted by: HALTED or no LT-RESULT (a fault in __capstone_cap_init or the entry glue).
+P2.2  M2 REACHED: status 102. This is the first real uncertainty: epan_init registers every
+      whitelisted dissector, initialises GLib, libgcrypt and libxml2, and reads a configuration
+      that is empty. If it does not return, the fault is inside epan_init and the next step is a
+      finer ladder there.
+      Heap at M2 (TSAPP-HEAP peak_end): 17-27 MiB. Native, epan_init creates two 8 MiB wmem
+      blocks (guids_init, addr_resolv_init), and wmem_epan_scope's block allocator may take a
+      third; everything else is about 0.5 MB natively, roughly doubled with 16-byte pointers.
+      Refuted by: peak_end outside 17-27 MiB.
+P2.3  M3 REACHED: status 103 (cf_open through the file service).
+P2.4  M4 REACHED: status 104, with the first frame's -V text on stdout before the TSAPP-STAGE line.
+P2.5  M5 REACHED: status 0, and no TSAPP-STAGE line. Heap peak_end 26-32 MiB: native peak 27.8 MB (26.5 MiB) with
+      CAPSTONE_HF_PREALLOC=4096, of which 27.27 MB is fixed-size wmem blocks; under the 40 MiB
+      arena. Refuted by: peak_end outside 26-32 MiB, or an allocation failure.
+P2.6  stderr. Found natively before this boot: the minimal build (native-min-pa: the same
+      whitelist, a byte-identical generated dissectors.c, the same patches) writes 194 lines,
+      10,398 bytes, to stderr on EVERY capture, ntp and the flips included: patch 0002's notices
+      for dissector tables the whitelist leaves out ("OOPS: dissector table ... doesn't exist" /
+      "Protocol being registered is ..."). Stock writes none. They are written during
+      registration, inside epan_init. So:
+      - M1: no stderr besides domain_entry's echoes and the TSAPP lines;
+      - M2, M3, M4, M5: exactly those 194 lines, in the same order, before any stdout byte.
+      Refuted by: any other stderr line, or those lines differing from the native minimal build's.
+P2.8  Unserved syscalls (added before the M0 link; the runtime writes one `capstone-domain:
+      UNSERVED syscalls:` line at exit, and the runner reports it per stage). From reading the
+      source and a native strace of the minimal build on dhcp:
+      - M1: none.
+      - M2, M3: 160 (uname) twice: filesystem.c:397 (the executable's path, which then falls back to
+        argv[0]) and ws_init_version_info (tshark.c:1197, the OS version, os_version_info.c:609);
+        179 (sysinfo, memory size, version_info.c:334); 134 (rt_sigaction, epan.c:328 ignores SIGPIPE); 278 (getrandom)
+        at least once, from c-ares, which on ENOSYS marks the OS source bad and reads /dev/urandom
+        instead (ares_rand.c).
+      - M4, M5: those, plus 134 four more times (process_cap_file, tshark.c:4246-4250).
+      (Line numbers are Wireshark 4.6.8's, before patch 0006.)
+      Nothing else. In particular NOT libgcrypt's entropy source: it is built USE_RNDGETENTROPY,
+      and rndgetentropy.c:111-112 is a log_fatal on ENOSYS, so a gcrypt random request would end the
+      run, not appear in this list. Natively nothing on this workload asks it for randomness.
+      Refuted by: any other number in the list, or a missing 160.
+P2.7  The runner checks what each stage printed, apart from the banner, the echoes and the
+      TSAPP-HEAP/LT-RESULT lines, and prints `output MATCH` for every stage:
+      - M1: its TSAPP-STAGE line and nothing else;
+      - M2, M3: the minimal build's stderr, then the TSAPP-STAGE line;
+      - M4: that stderr, then exactly stock's first frame (its -V text up to and including the
+        first blank line: stock ends each frame with one, and has as many as frames on the four
+        workload captures), then the TSAPP-STAGE line. First written as "a non-empty prefix of
+        stock's stdout", which one byte would have passed; tightened before the boot;
+      - M5: that stderr, then stock's stdout exactly (the oracle's dhcp arm, a boot early).
+      Tested offline, before this boot, on synthetic outputs made from the real native
+      references: all five MATCH; an extra line in M3 and an altered frame number in M4 DIFFER.
+
+---------------------------------------------------------------------------------------------------
+3. The oracle boot (only if M5 REACHED): M5 on 10 captures, one boot
+---------------------------------------------------------------------------------------------------
+Order: dhcp dns_port http arp, their four .flip twins, dns-ooo, ntp. Both of the domain's streams
+are checked (the runtime delivers them on one channel; host/domain-stdout.py splits them):
+- stdout against native STOCK tshark (native-stock/run/tshark), the comparison host/oracle.sh
+  makes (-V -n, TZ=UTC, empty configuration);
+- stderr against the native MINIMAL build (native-min-pa/run/tshark), the same command.
+
+P3.1  dhcp, dns_port, http, arp: stdout MATCH and stderr MATCH, byte for byte.
+P3.2  Each .flip: flip control FIRES (stock's output changes), and the domain still has
+      stdout MATCH and stderr MATCH.
+P3.3  dns-ooo: stdout MATCH and stderr MATCH (whitelisted, not in the workload).
+P3.4  ntp: stdout DIFFERS (NTP is not whitelisted), stderr MATCH. The stdout comparison's
+      negative control: it must differ.
+      Refuted by: ntp stdout MATCH, which would mean the comparison cannot fail.
+
+---------------------------------------------------------------------------------------------------
+What a pass does NOT establish
+---------------------------------------------------------------------------------------------------
+- The board. Every musl-capstone domain on the my_first_domain link.ld ABI relies on QEMU
+  fabricating a cursor-0 gp that cannot exist on silicon (the FFmpeg app port measured it: with
+  fabrication off it did not reach main). This image is on that ABI, so a pass shows the program
+  is correct under capability enforcement, not that it can run on the board. The board needs the
+  gp-captable ABI.
+  WITHDRAWN (same day, before any tshark boot): "the serial log's `gp FABRICATED` lines will be
+  counted and reported". That line is printed only by the cincoffset fallback (op_helper.c:718),
+  for a gp that arrives untagged. With CAPSTONE_GP_NONLIN=1, gp is fabricated at every cjalr and
+  domain entry without a print (op_helper.c:2497-2501, 2556-2559) and stays tagged, so the count is
+  0 whatever the dependency: the stand-in boots gave 4 without NONLIN and 0 with it. A zero there
+  would have read as "no dependency".
+- Safety. level0 is one arena with no per-object bounds (CAPSTONE_LEVEL0_SHRINK off) and no
+  revocation: this is a compatibility result.
+- Captures beyond these ten, and any tshark option other than -r -V -n.
