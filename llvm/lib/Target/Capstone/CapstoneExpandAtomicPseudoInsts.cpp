@@ -118,25 +118,33 @@ bool CapstoneExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Nand, false, 64,
                              NextMBBI);
   case Capstone::PseudoMaskedAtomicSwap32:
+  case Capstone::PseudoMaskedAtomicSwap32_CAP:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Xchg, true, 32,
                              NextMBBI);
   case Capstone::PseudoMaskedAtomicLoadAdd32:
+  case Capstone::PseudoMaskedAtomicLoadAdd32_CAP:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Add, true, 32, NextMBBI);
   case Capstone::PseudoMaskedAtomicLoadSub32:
+  case Capstone::PseudoMaskedAtomicLoadSub32_CAP:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Sub, true, 32, NextMBBI);
   case Capstone::PseudoMaskedAtomicLoadNand32:
+  case Capstone::PseudoMaskedAtomicLoadNand32_CAP:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Nand, true, 32,
                              NextMBBI);
   case Capstone::PseudoMaskedAtomicLoadMax32:
+  case Capstone::PseudoMaskedAtomicLoadMax32_CAP:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::Max, true, 32,
                                 NextMBBI);
   case Capstone::PseudoMaskedAtomicLoadMin32:
+  case Capstone::PseudoMaskedAtomicLoadMin32_CAP:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::Min, true, 32,
                                 NextMBBI);
   case Capstone::PseudoMaskedAtomicLoadUMax32:
+  case Capstone::PseudoMaskedAtomicLoadUMax32_CAP:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::UMax, true, 32,
                                 NextMBBI);
   case Capstone::PseudoMaskedAtomicLoadUMin32:
+  case Capstone::PseudoMaskedAtomicLoadUMin32_CAP:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::UMin, true, 32,
                                 NextMBBI);
   case Capstone::PseudoCmpXchg32:
@@ -146,6 +154,7 @@ bool CapstoneExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
   case Capstone::PseudoCmpXchg64_CAP:
     return expandAtomicCmpXchg(MBB, MBBI, false, 64, NextMBBI);
   case Capstone::PseudoMaskedCmpXchg32:
+  case Capstone::PseudoMaskedCmpXchg32_CAP:
     return expandAtomicCmpXchg(MBB, MBBI, true, 32, NextMBBI);
   }
 
@@ -392,7 +401,9 @@ static void doMaskedAtomicBinOpExpansion(const CapstoneInstrInfo *TII,
   //   xor scratch, destreg, scratch
   //   sc.w scratch, scratch, (alignedaddr)
   //   bnez scratch, loop
-  BuildMI(LoopMBB, DL, TII->get(getLRForRMW32(Ordering, STI)), DestReg)
+  BuildMI(LoopMBB, DL,
+          TII->get(withAtomicAddressClass(getLRForRMW32(Ordering, STI), AddrReg)),
+          DestReg)
       .addReg(AddrReg);
   switch (BinOp) {
   default:
@@ -425,7 +436,9 @@ static void doMaskedAtomicBinOpExpansion(const CapstoneInstrInfo *TII,
   insertMaskedMerge(TII, DL, LoopMBB, ScratchReg, DestReg, ScratchReg, MaskReg,
                     ScratchReg);
 
-  BuildMI(LoopMBB, DL, TII->get(getSCForRMW32(Ordering, STI)), ScratchReg)
+  BuildMI(LoopMBB, DL,
+          TII->get(withAtomicAddressClass(getSCForRMW32(Ordering, STI), AddrReg)),
+          ScratchReg)
       .addReg(AddrReg)
       .addReg(ScratchReg);
   BuildMI(LoopMBB, DL, TII->get(Capstone::BNE))
@@ -533,7 +546,9 @@ bool CapstoneExpandAtomicPseudo::expandAtomicMinMaxOp(
   //   mv scratch1, destreg
   //   [sext scratch2 if signed min/max]
   //   ifnochangeneeded scratch2, incr, .looptail
-  BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW32(Ordering, STI)), DestReg)
+  BuildMI(LoopHeadMBB, DL,
+          TII->get(withAtomicAddressClass(getLRForRMW32(Ordering, STI), AddrReg)),
+          DestReg)
       .addReg(AddrReg);
   BuildMI(LoopHeadMBB, DL, TII->get(Capstone::AND), Scratch2Reg)
       .addReg(DestReg)
@@ -585,7 +600,9 @@ bool CapstoneExpandAtomicPseudo::expandAtomicMinMaxOp(
   // .looptail:
   //   sc.w scratch1, scratch1, (addr)
   //   bnez scratch1, loop
-  BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW32(Ordering, STI)), Scratch1Reg)
+  BuildMI(LoopTailMBB, DL,
+          TII->get(withAtomicAddressClass(getSCForRMW32(Ordering, STI), AddrReg)),
+          Scratch1Reg)
       .addReg(AddrReg)
       .addReg(Scratch1Reg);
   BuildMI(LoopTailMBB, DL, TII->get(Capstone::BNE))

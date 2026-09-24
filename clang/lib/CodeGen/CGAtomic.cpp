@@ -851,6 +851,40 @@ static void EmitAtomicOp(CodeGenFunction &CGF, AtomicExpr *Expr, Address Dest,
   Builder.SetInsertPoint(ContBB);
 }
 
+/// Atomic operations that only move or compare the value, never compute on it.
+/// On a target whose pointers are capabilities (a non-integral address space),
+/// these keep a pointer-typed value as a pointer, so it is never split into
+/// integer halves and its tag survives to memory and back (C-54). Arithmetic
+/// operations on pointers are left on the integer type.
+static bool movesOrComparesOnly(AtomicExpr::AtomicOp Op) {
+  switch (Op) {
+  case AtomicExpr::AO__atomic_load:
+  case AtomicExpr::AO__atomic_load_n:
+  case AtomicExpr::AO__atomic_store:
+  case AtomicExpr::AO__atomic_store_n:
+  case AtomicExpr::AO__atomic_exchange:
+  case AtomicExpr::AO__atomic_exchange_n:
+  case AtomicExpr::AO__atomic_compare_exchange:
+  case AtomicExpr::AO__atomic_compare_exchange_n:
+  case AtomicExpr::AO__c11_atomic_load:
+  case AtomicExpr::AO__c11_atomic_store:
+  case AtomicExpr::AO__c11_atomic_exchange:
+  case AtomicExpr::AO__c11_atomic_compare_exchange_strong:
+  case AtomicExpr::AO__c11_atomic_compare_exchange_weak:
+  case AtomicExpr::AO__scoped_atomic_load:
+  case AtomicExpr::AO__scoped_atomic_load_n:
+  case AtomicExpr::AO__scoped_atomic_store:
+  case AtomicExpr::AO__scoped_atomic_store_n:
+  case AtomicExpr::AO__scoped_atomic_exchange:
+  case AtomicExpr::AO__scoped_atomic_exchange_n:
+  case AtomicExpr::AO__scoped_atomic_compare_exchange:
+  case AtomicExpr::AO__scoped_atomic_compare_exchange_n:
+    return true;
+  default:
+    return false;
+  }
+}
+
 RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   ApplyAtomGroup Grp(getDebugInfo());
 
@@ -1036,6 +1070,12 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     Val1 = EmitValToTemp(*this, E->getVal1());
     break;
   }
+
+  // A capability-typed value that is only moved or compared stays a pointer.
+  if (ShouldCastToIntPtrTy && MemTy->isPointerType() &&
+      movesOrComparesOnly(E->getOp()) &&
+      CGM.getDataLayout().isNonIntegralPointerType(ConvertTypeForMem(MemTy)))
+    ShouldCastToIntPtrTy = false;
 
   QualType RValTy = E->getType().getUnqualifiedType();
 

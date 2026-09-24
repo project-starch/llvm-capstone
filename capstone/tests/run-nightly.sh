@@ -369,6 +369,10 @@ if [ "$BUILD_OK" -eq 1 ]; then
   mkdir -p "$(dirname -- "$LOCK")"; : >"$LOCK" 2>/dev/null || true
   exec 9>"$LOCK"
   flock 9 || log "[warn] could not take QEMU lock; proceeding serially anyway"
+  # Every suite below runs under this lock, so tell them: a runner that honours
+  # CAPSTONE_QEMU_LOCK_HELD (capstone_with_qemu_lock, the twin suites, the FFmpeg app)
+  # then does not try to take it again and wait on its own parent.
+  export CAPSTONE_QEMU_LOCK_HELD=1
   # REGISTRY SANITY, BEFORE ANY SUITE RUNS. A suite whose script has moved exits 127, which this
   # runner does record as FAIL(127) rather than a pass -- but it records it AFTER the run reaches
   # that suite, indistinguishable from a genuine failure without opening the log, and only after

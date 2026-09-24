@@ -27,6 +27,7 @@
  * the first time this file was compiled: it had never been built, so nothing
  * had ever asked where syscall_arg_t came from. */
 #include <setjmp.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
@@ -118,9 +119,15 @@ struct hc_file {
 static struct hc_file hc_files[HC_MAX_FILES];
 
 /* Optional: what a domain wants done when the program exits from inside a call
-   rather than by returning from main. Weak, so a domain that does not define it
-   links unchanged and the exit path simply skips it. */
-__attribute__((__weak__)) int __capstone_at_exit(int status);
+   rather than by returning from main. A domain overrides it with a strong
+   definition; this weak one is what every other domain gets.
+
+   DEFINED, not merely declared weak. An undefined weak symbol's address is not
+   NULL in a domain (C-56): it is formed pc-relative against gp, the linker
+   resolves the symbol to 0 at the link address, and the image runs at another
+   base without relocation, so the old `if (__capstone_at_exit)` was always true
+   and exit() called the image base. */
+__attribute__((__weak__)) int __capstone_at_exit(int status) { return status; }
 
 /* Where exit() lands. Armed once domain_main is ready to receive it. */
 static jmp_buf hc_exit_jb;
@@ -130,6 +137,14 @@ static volatile int hc_exit_status;
 #define HC_UNSERVED_MAX 16
 static long hc_unserved[HC_UNSERVED_MAX];
 static unsigned long hc_unserved_n;
+
+/* stdout and stderr are served by WRITE_STDOUT, so they exist from the start;
+   a domain may close them, and a closed one then answers like any descriptor
+   nobody opened. stdin has no service here and never exists. Every syscall that
+   takes a descriptor asks this and hc_slot, so all of them agree on which
+   descriptors exist: fstat, fcntl, ioctl, lseek, write and close. */
+static int hc_stdio_closed[3];
+static int hc_is_stdio(long fd) { return (fd == 1 || fd == 2) && !hc_stdio_closed[fd]; }
 
 static struct hc_file *hc_slot(long fd) {
   if (fd < HC_FD_BASE || fd >= HC_FD_BASE + HC_MAX_FILES)
@@ -316,6 +331,10 @@ static long hc_open(const char *path, long flags, long mode) {
 }
 
 static long hc_close(long fd) {
+  if (hc_is_stdio(fd)) {
+    hc_stdio_closed[fd] = 1;
+    return 0;
+  }
   struct hc_file *f = hc_slot(fd);
   if (!f)
     return -EBADF;
@@ -336,7 +355,53 @@ static long hc_close(long fd) {
   return rc;
 }
 
+/* getdents64 through DIR_READ. The handle is an ordinary FILE_OPEN of the
+ * directory (musl's opendir passes O_DIRECTORY, which the helper hands to
+ * open), and f->pos is the directory cookie rather than a byte offset: the d_off
+ * of the last record returned, 0 at the start. seekdir and rewinddir reach it
+ * through lseek(SEEK_SET), which sets exactly that. The records arrive in the
+ * layout musl's struct dirent already has (linux_dirent64) and are copied as
+ * they are; only whole records are ever returned, so a short buffer gets fewer
+ * of them and the cookie picks up at the next. */
+static long hc_getdents(long fd, char *buf, unsigned long count) {
+  struct hc_file *f = hc_slot(fd);
+  if (!f)
+    return -EBADF;
+  const unsigned long data_off = HC_DIR_READ_REQ_V0_DATA_OFFSET;
+  if (count > HC_PAYLOAD_SIZE - data_off)
+    count = HC_PAYLOAD_SIZE - data_off;
+
+  hc_put_u64(0, f->handle);
+  hc_put_u64(8, f->pos);
+  if (hc_round(HC_V0_OP_DIR_READ, data_off, count) != 0)
+    return -EIO;
+  if (hc_metadata->error != 0)
+    return hc_err();
+  long n = (long)hc_metadata->result;
+  if (n < 0 || (unsigned long)n > count)
+    return -EIO;
+
+  unsigned long long last_off = f->pos;
+  for (long off = 0; off < n;) {
+    const unsigned char *rec = (const unsigned char *)&hc_payload[data_off + off];
+    unsigned reclen = rec[16] | (unsigned)rec[17] << 8;
+    if (reclen < 19 || off + (long)reclen > n)
+      return -EIO; /* a record the helper cannot have produced */
+    unsigned long long d_off = 0;
+    for (int i = 7; i >= 0; i--)
+      d_off = d_off << 8 | rec[8 + i];
+    last_off = d_off;
+    off += reclen;
+  }
+  for (long i = 0; i < n; i++)
+    buf[i] = hc_payload[data_off + i];
+  f->pos = last_off;
+  return n;
+}
+
 static long hc_lseek(long fd, long long off, long whence) {
+  if (hc_is_stdio(fd))
+    return -ESPIPE; /* a stream, as on a pipe or a terminal */
   struct hc_file *f = hc_slot(fd);
   if (!f)
     return -EBADF;
@@ -413,7 +478,7 @@ static long hc_write(long fd, const char *buf, unsigned long count) {
      FILE_WRITE with its own position. */
   if (fd >= HC_FD_BASE)
     return hc_file_rw(fd, (char *)buf, count, 1);
-  if (fd != 1 && fd != 2)
+  if (!hc_is_stdio(fd))
     return -EBADF;
 
   while (done < count) {
@@ -470,20 +535,19 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_readv:
     return hc_readv((long)a, (const struct iovec *)b, (long)c);
 
+  case SYS_getdents64:
+    return hc_getdents((long)a, (char *)b, (unsigned long)c);
+
   /* stdio asks whether stdout is a terminal, to choose line buffering over full
      buffering. ENOTTY is the true answer for a domain and the one musl handles:
      it picks full buffering. Returning ENOSYS would work by accident; returning
      the right error means the next reader does not have to wonder.
-     CAVEAT (2026-09-23): full buffering is only safe if someone flushes. musl
-     switches stdout to full buffering on its FIRST flush (__stdout_write.c), and
-     domain_main below runs no exit path when capstone_main RETURNS, so buffered
-     stdout is lost: exactly the first line of a returning program reaches the
-     host. exit() is fine (musl flushes on its exit path). A program that returns
-     must flush itself, or set stdout line-buffered with setvbuf, which sets F_SVB
-     and skips the switch (the FFmpeg app port does both). The durable fix is a
-     flush in domain_main after capstone_main returns; not made here, because
-     every musl domain would then change behaviour at once. */
+     Full buffering is only safe if someone flushes: musl switches stdout to full
+     buffering on its FIRST flush (__stdout_write.c). exit() flushes, and since
+     domain_main ends a returning program with exit() too, so does returning. */
   case SYS_ioctl:
+    if (!hc_is_stdio((long)a) && !hc_slot((long)a))
+      return -EBADF;
     return -ENOTTY;
 
   case SYS_fsync:
@@ -506,6 +570,16 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                       HC_PATH_ACCESS_FLAG_EXISTS);
 
   case SYS_fstat: {
+    /* stdout and stderr exist in every domain -- the service writes them --
+       so fstat describes them: a character device, and not a terminal (the
+       tty ioctl answers ENOTTY). Answering EBADF made programs that check a
+       descriptor before using it conclude they have no output: CPython sets
+       sys.stdout and sys.stderr to None that way, and print() then writes
+       nothing, silently. stdin has no service here and stays EBADF. */
+    if (hc_is_stdio((long)a)) {
+      hc_fill_stat((struct stat *)b, 0, S_IFCHR | 0620);
+      return 0;
+    }
     struct hc_file *f = hc_slot((long)a);
     if (!f)
       return -EBADF;
@@ -544,9 +618,14 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     return 0;
 
   /* open() issues this once, for O_CLOEXEC, and discards the result. There are
-     no other processes here for a descriptor to leak into. */
+     no other processes here for a descriptor to leak into. It does answer
+     whether a descriptor EXISTS, though: musl's fstat asks F_GETFD after an
+     EBADF, and a 0 for a descriptor nobody opened sent it on to fstatat(fd, "")
+     and ENOENT, so fstat(0) reported the wrong error. */
   case SYS_fcntl:
-    return 0;
+    if (hc_is_stdio((long)a) || hc_slot((long)a))
+      return 0;
+    return -EBADF;
 
   /* A domain has exactly one thread, and 1 is its identifier. This is not an
      invented value in the way a fabricated st_dev would be: nothing outside the
@@ -572,8 +651,7 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
       /* Whatever the program would have done after main returned still has to
          happen, and only the program knows what that is. A domain that has
          something to report defines this; one that has not pays nothing. */
-      if (__capstone_at_exit)
-        hc_exit_status = __capstone_at_exit(hc_exit_status);
+      hc_exit_status = __capstone_at_exit(hc_exit_status);
       longjmp(hc_exit_jb, 1);
     }
     return -ENOSYS;
@@ -724,7 +802,13 @@ void domain_main(unsigned *res, unsigned func) {
   if (jumped)
     status = hc_exit_status;
   else
-    status = capstone_main();
+    /* A program that returns ends as returning from main ends in C: through
+       exit(), so its atexit handlers run and stdio is flushed, and the exit
+       syscall brings the status back here through the jump above. Returning
+       straight to the host skipped both: musl buffers stdout fully after its
+       first flush, so exactly the first line of a returning program reached the
+       host and the rest was lost (FFmpeg and CPython each worked around it). */
+    exit(capstone_main());
   hc_exit_armed = 0;
   hc_report_unserved();
 
