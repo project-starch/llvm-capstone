@@ -6360,6 +6360,100 @@ flight, but this should be known before anyone scopes one.
 - **The libcall path at `AtomicExpandPass.cpp:2030`:** RESOLVED as CLEAN. It is guarded by C-54; see
   C-60's audit table.
 
+### C-54 — a capability-valued atomic lost its tag at three layers, so every atomic pointer came back untagged `FIXED 2026-09-23 (external collaborator, c7f0de349b4b, merged): pointers in a non-integral address space stay pointers from clang through AtomicExpand to the runtime; entry backfilled 2026-09-24 by the compiler lane; claims re-checked against origin/dev when filed`
+
+**What was wrong.** An atomic whose value is a pointer lost the tag at three separate layers:
+
+* **clang** (`CGAtomic.cpp`): `EmitAtomicExpr` cast every `__atomic_*` operand to an `iN` pointer,
+  so a `void **` load became `load atomic i128`.
+* **AtomicExpand, which value to pass:** a 16-byte atomic exceeds the 8-byte lock-free limit and
+  becomes a libcall; the sized `__atomic_*_16` calls pass the value in two integer registers.
+* **AtomicExpand, the object pointer:** it was `addrspacecast` to address space 0 for every
+  libcall, which on this target is a 64-bit integer pointer — `mv a1, a0` passed a bare address
+  the callee could not dereference. **This was true of every atomic libcall, including the
+  existing `__int128` ones, which nothing had implemented to notice.**
+
+**The fix.** Operations that only move or compare a value (load, store, exchange,
+compare-exchange, in the GNU, C11 and scoped spellings) keep a pointer in a non-integral address
+space as a pointer; a non-integral pointer value takes the generic libcall, which passes through
+memory with capability loads and stores; and the object pointer is passed as it is. Arithmetic on
+pointers and all integer atomics are unchanged, and C11 `_Atomic` already kept pointers.
+
+**THE GUARD THIS ESTABLISHED, which is the part later work needs.** `AtomicExpandPass.cpp:2030`
+(and `:1929`) now read the address space instead of assuming it:
+
+    if (!DL.isNonIntegralPointerType(PtrVal->getType()))
+      PtrVal = Builder.CreateAddrSpaceCast(PtrVal, PointerType::getUnqual(Ctx));
+
+capstone64 declares AS200 non-integral (`ni:200`), so the cast is skipped and the capability is
+passed intact. This is the canonical in-tree remedy for a generic CodeGen pass that hardcodes
+address space 0; `CodeGenPrepare` guards the same way at seven sites. **See C-61**, whose
+`_Unwind_Resume` FunctionType should be built the same way, and **C-60**, which this pattern does
+NOT reach because `llvm.stackprotector`'s signature is fixed in `Intrinsics.td`.
+
+**Runtime.** `capstone/ports/musl-capstone/runtime/atomic_libcalls.c` provides
+`__atomic_load`/`store`/`exchange`/`compare_exchange` by copying through capability loads and
+stores. **It takes no lock**, which is correct only on a one-hart domain with no `clone`, where
+nothing else writes the domain's memory while it runs; the file says so.
+
+**What is deliberately left.** The ISA has LR/SC and AMOs with capability *addresses* but none
+whose *data* is a capability, so a lock-free lowering of capability CAS is not available. Inline
+`ldc`/`stc` for plain atomic loads and stores is left for later.
+
+**Evidence, as recorded by the fix's author** (this lane verified the artifacts exist on dev but
+has NOT re-run the suites): `clang/test/CodeGen/capstone-atomic-pointer.c` and
+`llvm/test/CodeGen/Capstone/atomic-capability-value-libcall.ll` (the `movc` check fails when fed
+`mv a1, a0`); `capstone/tests/runtime-qemu/capability-atomics/run.sh`, 7 checks at -O0 and -O2
+where every pointer an atomic stored or returned is dereferenced, with a negative control — the
+same image with a runtime copying the 16 bytes as two `long`s halts with cause 24 at the first
+dereference; CoreMark CRC validated; BEEBS 76 of 81 wrappers pass, the other 5 skipped as they
+fail identically on dev.
+
+**Verified by the compiler lane 2026-09-24 when backfilling:** all four cited test artifacts are
+present on `origin/dev`, `clang/lib/CodeGen/CGAtomic.cpp` carries a non-integral check, and the
+`AtomicExpandPass` guards at `:1929` and `:2030` are present and dated to this commit by
+`git log -L`. A loaded probe — a 32-byte struct through `__atomic_load`, whose emitted assembly
+actually contains an `__atomic_load` call — compiles cleanly, which is how the guard was
+rediscovered.
+
+### C-62 — with `-g` at `-O1`+, Assignment Tracking asserts on every escaping local, because its offset accumulator is sized at the POINTER width (128) instead of the INDEX width (64) `FIXED 2026-09-23 (external collaborator, f8b140caa818, merged via #75). COMMITTED AS "C-50", a number already taken by an unrelated OPEN defect; renumbered here 2026-09-24`
+
+> **Numbering.** The fix commit (`f8b140caa818`), its merge (`359fb2140caa`, #75), the reproducer
+> commit (`a6486c9731ec`) and the folder `capstone/tests/compiler-repros/C50-assignment-tracking-index-width/`
+> all say **C-50**. This registry's **C-50** is a different, **OPEN** defect: the by-value aggregate
+> copy through an integer `addi` on the frame pointer. The FFmpeg port's build gate, plan and results
+> cite that one, which is why this one moved rather than that. **A merged "C-50" branch does NOT close C-50.**
+
+**What happens.** At `-g -O1` and above, `AssignmentTrackingAnalysis` asserts
+`BitWidth == DL.getIndexTypeSizeInBits(getType())` in `stripAndAccumulateConstantOffsets`
+(`Value.cpp`) on every local whose address escapes.
+
+**Cause.** `walkToAllocaAndPrependOffsetDeref` (`llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp`, a
+shared LLVM file) sized its `APInt` with the pointer's type size, which is 128 for an `addrspace(200)`
+capability. `stripAndAccumulateInBoundsConstantOffsets` requires the index width, which is 64. The
+pass's other accumulator, and `at::getAssignmentInfo` in `DebugInfo.cpp`, already used
+`getIndexTypeSizeInBits`. On every upstream target the pointer width equals the index width, so nothing
+upstream sees it.
+
+**Impact.** This was the largest single failure in the CPython port's compile survey: 146 of 253
+objects, because CPython builds with `-g -O3`. Before the fix, the port avoided it with
+`-Xclang -fexperimental-assignment-tracking=disabled`.
+
+**Fix and evidence, as recorded by the fix's author.**
+- The fix sizes the accumulator with `getIndexTypeSizeInBits`.
+- A new lit test, `clang/test/CodeGen/capstone-assignment-tracking-index-width.c`, covers an escaping
+  array, an escaping struct holding a pointer, and a local that SROA removes, at `-g -O1/-O2`. The
+  unfixed clang aborts on it.
+- In DWARF, the `-g -O1` and `-O0` objects give the same `DW_AT_location`.
+- CoreMark's CRC validated, and 76 of 81 BEEBS wrappers pass; the other 5 fail identically on dev.
+- The suites were NOT re-run when this entry was filed. The fix and reproducer commits were checked
+  to be ancestors of `origin/dev`.
+
+**The family.** C-54, C-60, C-61 and this one are all upstream assumptions about pointer
+representation that capstone64 violates. They lie on two axes:
+- **address space:** C-54 (fixed), C-60 (open), C-61 (open);
+- **width, pointer vs. index:** this one (fixed).
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
@@ -6506,6 +6600,9 @@ compile, and `#include <libcapstone.h>` in the guest source.
 ## Compiler / toolchain (ours)
 
 ### C-50 — an integer-valued pointer in an aggregate passed BY VALUE (union or struct) is copied through an address formed with integer `addi` on the frame pointer, which faults `OPEN — COMPILER, caller side (byval copy, CapstoneISelLowering.cpp:24316); found 2026-09-23 by the FFmpeg app port on QEMU, reduced to 12 lines, proven from disassembly and -debug-only=isel; worked around in the port; audited and CORRECTED the same day, see the box`
+
+> **Not the "C-50" in commit `f8b140caa818` / PR #75.** That merged fix is Assignment Tracking's
+> index width, renumbered **C-62**. It does not touch this defect, which stays OPEN.
 
 > **CORRECTED 2026-09-23 after an adversarial audit. The text below the box stands, but four
 > things in it were wrong or too narrow.**
