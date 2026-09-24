@@ -461,6 +461,29 @@ static long hc_path_op(unsigned long long opcode, const char *path,
   return hc_metadata->error != 0 ? hc_err() : 0;
 }
 
+/* PATH_READLINK: PATH_ACCESS's layout out, the target back at payload offset 0
+   with its length in the result. Copied out like readlink(2): at most bufsiz
+   bytes, no terminator, the length of what was copied. */
+static long hc_readlink(const char *path, char *buf, unsigned long bufsiz) {
+  hc_put_u64(0, 0);
+  long len = hc_put_path(HC_PATH_READLINK_REQ_V0_PATH_OFFSET, path);
+  if (len < 0)
+    return len;
+  if (hc_round(HC_V0_OP_PATH_READLINK, HC_PATH_READLINK_REQ_V0_PATH_OFFSET,
+               (unsigned long)len) != 0)
+    return -EIO;
+  if (hc_metadata->error != 0)
+    return hc_err();
+  long n = (long)hc_metadata->result;
+  if (n < 0 || (unsigned long)n > HC_PAYLOAD_SIZE)
+    return -EIO;
+  if ((unsigned long)n > bufsiz)
+    n = (long)bufsiz;
+  for (long i = 0; i < n; i++)
+    buf[i] = hc_payload[i];
+  return n;
+}
+
 /* PATH_RENAME: PATH_ACCESS's layout with two paths behind the flags word, as
    "old NUL new", the length covering both and the NUL. musl's rename() arrives as
    renameat2 with flags 0; RENAME_NOREPLACE and friends have no service behind
@@ -930,6 +953,12 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_mkdirat:
     return hc_path_op(HC_V0_OP_PATH_MKDIR, (const char *)b,
                       (unsigned long long)((long)c & 07777));
+
+  /* musl's readlink() is readlinkat(AT_FDCWD, ...) here. realpath() calls it
+     on every component of the path it resolves, and takes EINVAL as "not a
+     link"; PostgreSQL's find_my_exec is the first caller. */
+  case SYS_readlinkat:
+    return hc_readlink((const char *)b, (char *)c, (unsigned long)d);
 
   /* musl's rename() is renameat2(AT_FDCWD, old, AT_FDCWD, new, 0) here: this
      target has neither rename nor renameat. The directory descriptors are

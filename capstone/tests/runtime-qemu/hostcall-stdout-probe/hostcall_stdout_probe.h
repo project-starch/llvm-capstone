@@ -181,6 +181,11 @@ struct hostcall_v0 {
  * PATH_DELETE with HC_PATH_DELETE_FLAG_DIRECTORY, the helper's rmdir(2).
  * First consumer is PostgreSQL's CREATE DATABASE (base/<oid>). */
 #define HC_V0_OP_PATH_MKDIR 28ULL
+/* Read a symbolic link. Request: PATH_ACCESS's layout, flags 0. Response: the
+ * link's target at payload offset 0, result = its length, no terminator, as
+ * readlink(2). A name that is not a link answers EINVAL, which is what musl's
+ * realpath() asks each path component and expects for the common case. */
+#define HC_V0_OP_PATH_READLINK 29ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL
@@ -288,6 +293,7 @@ struct hc_dir_read_req_v0 {
 #define HC_PATH_DELETE_REQ_V0_PATH_OFFSET 8ULL
 #define HC_PATH_RENAME_REQ_V0_PATH_OFFSET 8ULL
 #define HC_PATH_MKDIR_REQ_V0_PATH_OFFSET 8ULL
+#define HC_PATH_READLINK_REQ_V0_PATH_OFFSET 8ULL
 
 #define HC_PATH_ACCESS_FLAG_EXISTS 0ULL
 #define HC_PATH_DELETE_FLAG_NONE 0ULL

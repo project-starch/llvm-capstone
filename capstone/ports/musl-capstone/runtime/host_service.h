@@ -195,6 +195,18 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     else hc_host_ok(metadata, 0);
     return 0;
   }
+  case HC_V0_OP_PATH_READLINK: {
+    /* The target goes back at payload offset 0, over the request; the path is
+       copied out first. The payload holds any target Linux can return. */
+    memcpy(h->path, payload + req->offset, (size_t)req->length);
+    h->path[req->length] = '\0';
+    ssize_t n = readlink(h->path, payload, HOSTCALL_STDOUT_PROBE_REGION_SIZE);
+    if (n < 0) { hc_host_error(metadata, errno); return 0; }
+    metadata->offset = 0;
+    metadata->length = (hostcall_u64_t)n;
+    hc_host_ok(metadata, n);
+    return 0;
+  }
   case HC_V0_OP_DIR_READ: {
     /* lseek to the cookie, then getdents64 into the bounce buffer and on into
        the payload: the records are linux_dirent64 on both sides (the domain's
