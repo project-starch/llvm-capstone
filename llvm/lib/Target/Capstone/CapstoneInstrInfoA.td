@@ -283,18 +283,21 @@ class PseudoAMO<RegisterClass AddrRC = GPR>
   let hasSideEffects = 0;
 }
 
-class PseudoMaskedAMO
+// AddrRC is GPCR for the capability-address forms (the _CAP pseudos below):
+// the aligned word a masked (8/16-bit) atomic works on is reached through the
+// capability, so LR/SC take the _CAP encodings at expansion.
+class PseudoMaskedAMO<RegisterClass AddrRC = GPR>
     : Pseudo<(outs GPR:$res, GPR:$scratch),
-             (ins GPR:$addr, GPR:$incr, GPR:$mask, ixlenimm:$ordering), []> {
+             (ins AddrRC:$addr, GPR:$incr, GPR:$mask, ixlenimm:$ordering), []> {
   let Constraints = "@earlyclobber $res,@earlyclobber $scratch";
   let mayLoad = 1;
   let mayStore = 1;
   let hasSideEffects = 0;
 }
 
-class PseudoMaskedAMOMinMax
+class PseudoMaskedAMOMinMax<RegisterClass AddrRC = GPR>
     : Pseudo<(outs GPR:$res, GPR:$scratch1, GPR:$scratch2),
-             (ins GPR:$addr, GPR:$incr, GPR:$mask, ixlenimm:$sextshamt,
+             (ins AddrRC:$addr, GPR:$incr, GPR:$mask, ixlenimm:$sextshamt,
               ixlenimm:$ordering), []> {
   let Constraints = "@earlyclobber $res,@earlyclobber $scratch1,"
                     "@earlyclobber $scratch2";
@@ -303,9 +306,9 @@ class PseudoMaskedAMOMinMax
   let hasSideEffects = 0;
 }
 
-class PseudoMaskedAMOUMinUMax
+class PseudoMaskedAMOUMinUMax<RegisterClass AddrRC = GPR>
     : Pseudo<(outs GPR:$res, GPR:$scratch1, GPR:$scratch2),
-             (ins GPR:$addr, GPR:$incr, GPR:$mask, ixlenimm:$ordering), []> {
+             (ins AddrRC:$addr, GPR:$incr, GPR:$mask, ixlenimm:$ordering), []> {
   let Constraints = "@earlyclobber $res,@earlyclobber $scratch1,"
                     "@earlyclobber $scratch2";
   let mayLoad = 1;
@@ -334,16 +337,22 @@ multiclass PseudoAMOPat<string AtomicOp, Pseudo AMOInst, ValueType vt = XLenVT,
             (AMOInst AddrRC:$addr, GPR:$incr, 7)>;
 }
 
-class PseudoMaskedAMOPat<Intrinsic intrin, Pseudo AMOInst>
-    : Pat<(XLenVT (intrin (XLenVT GPR:$addr), (XLenVT GPR:$incr),
+// Address and data types are matched independently, as for AMOPat: the
+// masked intrinsics are overloaded on the pointer, and an addrspace(200)
+// address is CLenVT in GPCR, not XLenVT.
+class PseudoMaskedAMOPat<Intrinsic intrin, Pseudo AMOInst,
+                         RegisterClass AddrRC = GPR, ValueType AddrVT = XLenVT>
+    : Pat<(XLenVT (intrin (AddrVT AddrRC:$addr), (XLenVT GPR:$incr),
                           (XLenVT GPR:$mask), (XLenVT timm:$ordering))),
-          (AMOInst GPR:$addr, GPR:$incr, GPR:$mask, timm:$ordering)>;
+          (AMOInst AddrRC:$addr, GPR:$incr, GPR:$mask, timm:$ordering)>;
 
-class PseudoMaskedAMOMinMaxPat<Intrinsic intrin, Pseudo AMOInst>
-    : Pat<(XLenVT (intrin (XLenVT GPR:$addr), (XLenVT GPR:$incr),
+class PseudoMaskedAMOMinMaxPat<Intrinsic intrin, Pseudo AMOInst,
+                               RegisterClass AddrRC = GPR,
+                               ValueType AddrVT = XLenVT>
+    : Pat<(XLenVT (intrin (AddrVT AddrRC:$addr), (XLenVT GPR:$incr),
                           (XLenVT GPR:$mask), (XLenVT GPR:$shiftamt),
            (XLenVT timm:$ordering))),
-          (AMOInst GPR:$addr, GPR:$incr, GPR:$mask, GPR:$shiftamt,
+          (AMOInst AddrRC:$addr, GPR:$incr, GPR:$mask, GPR:$shiftamt,
            timm:$ordering)>;
 
 let Predicates = [HasStdExtA] in {
@@ -360,17 +369,25 @@ let Size = 28 in {
   def PseudoMaskedAtomicSwap32 : PseudoMaskedAMO;
   def PseudoMaskedAtomicLoadAdd32 : PseudoMaskedAMO;
   def PseudoMaskedAtomicLoadSub32 : PseudoMaskedAMO;
+  def PseudoMaskedAtomicSwap32_CAP : PseudoMaskedAMO<GPCR>;
+  def PseudoMaskedAtomicLoadAdd32_CAP : PseudoMaskedAMO<GPCR>;
+  def PseudoMaskedAtomicLoadSub32_CAP : PseudoMaskedAMO<GPCR>;
 }
 let Size = 32 in {
   def PseudoMaskedAtomicLoadNand32 : PseudoMaskedAMO;
+  def PseudoMaskedAtomicLoadNand32_CAP : PseudoMaskedAMO<GPCR>;
 }
 let Size = 44 in {
   def PseudoMaskedAtomicLoadMax32 : PseudoMaskedAMOMinMax;
   def PseudoMaskedAtomicLoadMin32 : PseudoMaskedAMOMinMax;
+  def PseudoMaskedAtomicLoadMax32_CAP : PseudoMaskedAMOMinMax<GPCR>;
+  def PseudoMaskedAtomicLoadMin32_CAP : PseudoMaskedAMOMinMax<GPCR>;
 }
 let Size = 36 in {
  def PseudoMaskedAtomicLoadUMax32 : PseudoMaskedAMOUMinUMax;
  def PseudoMaskedAtomicLoadUMin32 : PseudoMaskedAMOUMinUMax;
+ def PseudoMaskedAtomicLoadUMax32_CAP : PseudoMaskedAMOUMinUMax<GPCR>;
+ def PseudoMaskedAtomicLoadUMin32_CAP : PseudoMaskedAMOUMinUMax<GPCR>;
 }
 
 def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_xchg,
@@ -389,6 +406,23 @@ def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_umax,
                          PseudoMaskedAtomicLoadUMax32>;
 def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_umin,
                          PseudoMaskedAtomicLoadUMin32>;
+
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_xchg,
+                         PseudoMaskedAtomicSwap32_CAP, GPCR, CLenVT>;
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_add,
+                         PseudoMaskedAtomicLoadAdd32_CAP, GPCR, CLenVT>;
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_sub,
+                         PseudoMaskedAtomicLoadSub32_CAP, GPCR, CLenVT>;
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_nand,
+                         PseudoMaskedAtomicLoadNand32_CAP, GPCR, CLenVT>;
+def : PseudoMaskedAMOMinMaxPat<int_capstone_masked_atomicrmw_max,
+                               PseudoMaskedAtomicLoadMax32_CAP, GPCR, CLenVT>;
+def : PseudoMaskedAMOMinMaxPat<int_capstone_masked_atomicrmw_min,
+                               PseudoMaskedAtomicLoadMin32_CAP, GPCR, CLenVT>;
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_umax,
+                         PseudoMaskedAtomicLoadUMax32_CAP, GPCR, CLenVT>;
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_umin,
+                         PseudoMaskedAtomicLoadUMin32_CAP, GPCR, CLenVT>;
 } // Predicates = [HasStdExtA]
 
 let Predicates = [HasStdExtA, IsRV64] in {
@@ -453,9 +487,9 @@ defm : PseudoCmpXchgPat<"atomic_cmp_swap_i64", PseudoCmpXchg64_CAP,
 }
 
 let Predicates = [HasStdExtA] in {
-def PseudoMaskedCmpXchg32
+class PseudoMaskedCmpXchg<RegisterClass AddrRC>
     : Pseudo<(outs GPR:$res, GPR:$scratch),
-             (ins GPR:$addr, GPR:$cmpval, GPR:$newval, GPR:$mask,
+             (ins AddrRC:$addr, GPR:$cmpval, GPR:$newval, GPR:$mask,
               ixlenimm:$ordering), []> {
   let Constraints = "@earlyclobber $res,@earlyclobber $scratch";
   let mayLoad = 1;
@@ -463,10 +497,17 @@ def PseudoMaskedCmpXchg32
   let hasSideEffects = 0;
   let Size = 32;
 }
+def PseudoMaskedCmpXchg32 : PseudoMaskedCmpXchg<GPR>;
+def PseudoMaskedCmpXchg32_CAP : PseudoMaskedCmpXchg<GPCR>;
 
-def : Pat<(XLenVT (int_capstone_masked_cmpxchg
-            (XLenVT GPR:$addr), (XLenVT GPR:$cmpval), (XLenVT GPR:$newval),
-            (XLenVT GPR:$mask), (XLenVT timm:$ordering))),
-          (PseudoMaskedCmpXchg32
-            GPR:$addr, GPR:$cmpval, GPR:$newval, GPR:$mask, timm:$ordering)>;
+foreach IsCap = [0, 1] in {
+  defvar AddrRC = !if(IsCap, GPCR, GPR);
+  defvar AddrVT = !if(IsCap, CLenVT, XLenVT);
+  defvar Inst = !cast<Pseudo>("PseudoMaskedCmpXchg32" # !if(IsCap, "_CAP", ""));
+  def : Pat<(XLenVT (int_capstone_masked_cmpxchg
+              (AddrVT AddrRC:$addr), (XLenVT GPR:$cmpval), (XLenVT GPR:$newval),
+              (XLenVT GPR:$mask), (XLenVT timm:$ordering))),
+            (Inst AddrRC:$addr, GPR:$cmpval, GPR:$newval, GPR:$mask,
+                  timm:$ordering)>;
+}
 } // Predicates = [HasStdExtA]
