@@ -27,6 +27,7 @@
  * the first time this file was compiled: it had never been built, so nothing
  * had ever asked where syscall_arg_t came from. */
 #include <fcntl.h>
+#include <poll.h>
 #include <setjmp.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -149,6 +150,143 @@ static struct hc_file *hc_slot(long fd) {
     return 0;
   struct hc_file *f = &hc_files[fd - HC_FD_BASE];
   return f->used ? f : 0;
+}
+
+/* PIPES, kept in the domain. A pipe is a byte queue between two descriptors,
+ * and with one thread on one hart nothing can ever fill or drain it while the
+ * program waits on it, so a pipe here NEVER BLOCKS: an empty read answers
+ * EAGAIN (or 0 once the write end is closed), a full write EAGAIN, whatever the
+ * O_NONBLOCK flag says. That is the only useful answer -- the blocking one is
+ * a deadlock -- and it is what the one consumer asks for anyway: PostgreSQL's
+ * self-pipe latch (WAIT_USE_SELF_PIPE) sets both ends non-blocking, writes a
+ * byte to raise the latch and reads until EAGAIN to lower it. The descriptors
+ * sit above the file table, so hc_slot and this never disagree about a number.
+ * poll() on them (hc_poll) reports what is queued; its timeout is where the
+ * same fact shows again, see there. */
+#define HC_PIPE_FD_BASE (HC_FD_BASE + HC_MAX_FILES)
+#define HC_MAX_PIPES 2
+#define HC_PIPE_BYTES 4096
+
+struct hc_pipe {
+  char buf[HC_PIPE_BYTES];
+  unsigned head, count; /* ring: the next byte to read, and how many are queued */
+  int rd_open, wr_open;
+};
+static struct hc_pipe hc_pipes[HC_MAX_PIPES];
+
+/* The pipe behind fd, and which end it is (0 read, 1 write), if that end is open. */
+static struct hc_pipe *hc_pipe_end(long fd, int *writing) {
+  if (fd < HC_PIPE_FD_BASE || fd >= HC_PIPE_FD_BASE + 2 * HC_MAX_PIPES)
+    return 0;
+  struct hc_pipe *p = &hc_pipes[(fd - HC_PIPE_FD_BASE) / 2];
+  *writing = (int)((fd - HC_PIPE_FD_BASE) % 2);
+  if (*writing ? !p->wr_open : !p->rd_open)
+    return 0;
+  return p;
+}
+
+static long hc_pipe2(int *fds, long flags) {
+  if (flags & ~(O_CLOEXEC | O_NONBLOCK))
+    return -EINVAL;
+  int i;
+  for (i = 0; i < HC_MAX_PIPES && (hc_pipes[i].rd_open || hc_pipes[i].wr_open); i++)
+    ;
+  if (i == HC_MAX_PIPES)
+    return -EMFILE;
+  hc_pipes[i].head = hc_pipes[i].count = 0;
+  hc_pipes[i].rd_open = hc_pipes[i].wr_open = 1;
+  fds[0] = (int)(HC_PIPE_FD_BASE + 2 * i);
+  fds[1] = (int)(HC_PIPE_FD_BASE + 2 * i + 1);
+  return 0;
+}
+
+static long hc_pipe_read(struct hc_pipe *p, char *buf, unsigned long count) {
+  if (p->count == 0)
+    return p->wr_open ? -EAGAIN : 0; /* nothing queued: try again, or end of file */
+  unsigned long n = count < p->count ? count : p->count;
+  for (unsigned long i = 0; i < n; i++)
+    buf[i] = p->buf[(p->head + i) % HC_PIPE_BYTES];
+  p->head = (p->head + (unsigned)n) % HC_PIPE_BYTES;
+  p->count -= (unsigned)n;
+  return (long)n;
+}
+
+static long hc_pipe_write(struct hc_pipe *p, const char *buf, unsigned long count) {
+  if (!p->rd_open)
+    return -EPIPE; /* nobody will ever read it; no SIGPIPE here to say so */
+  unsigned long room = HC_PIPE_BYTES - p->count;
+  if (room == 0)
+    return count ? -EAGAIN : 0;
+  unsigned long n = count < room ? count : room; /* a short write is a legal write */
+  for (unsigned long i = 0; i < n; i++)
+    p->buf[(p->head + p->count + (unsigned)i) % HC_PIPE_BYTES] = buf[i];
+  p->count += (unsigned)n;
+  return (long)n;
+}
+
+static long hc_pipe_close(long fd) {
+  int writing;
+  struct hc_pipe *p = hc_pipe_end(fd, &writing);
+  if (!p)
+    return -EBADF;
+  if (writing)
+    p->wr_open = 0;
+  else
+    p->rd_open = 0;
+  return 0;
+}
+
+/* Does fd name an open pipe end. */
+static int hc_pipe_exists(long fd) {
+  int writing;
+  return hc_pipe_end(fd, &writing) != 0;
+}
+
+/* poll(), which musl issues as ppoll. Readiness is a fact this side knows for
+ * every descriptor it has: a pipe end has bytes queued or room for them, a
+ * file is always ready, stdout and stderr always take a write, anything else
+ * is POLLNVAL. The TIMEOUT is not a fact this side can act on: with one thread
+ * on one hart nothing can make a descriptor ready while the program waits, so
+ * a wait with nothing ready returns 0 at once, as a timeout would, whatever
+ * the timeout was -- and that call is recorded under NO-OP in the exit report,
+ * because a program that expected to sleep did not. A zero timeout asks only
+ * for the facts and is served in full. */
+static long hc_poll(struct pollfd *fds, unsigned long n, const long *ts) {
+  long ready = 0;
+  for (unsigned long i = 0; i < n; i++) {
+    long fd = fds[i].fd;
+    short want = fds[i].events, got = 0;
+    int writing;
+    struct hc_pipe *p;
+    if (fd < 0) {
+      /* skipped by request */
+    } else if ((p = hc_pipe_end(fd, &writing)) != 0) {
+      if (!writing) {
+        if (p->count)
+          got |= POLLIN;
+        if (!p->wr_open)
+          got |= POLLHUP;
+      } else {
+        if (p->count < HC_PIPE_BYTES)
+          got |= POLLOUT;
+        if (!p->rd_open)
+          got |= POLLERR;
+      }
+    } else if (hc_is_stdio(fd)) {
+      got = POLLOUT;
+    } else if (hc_slot(fd)) {
+      got = POLLIN | POLLOUT;
+    } else {
+      got = POLLNVAL;
+    }
+    got &= (short)(want | POLLHUP | POLLERR | POLLNVAL);
+    fds[i].revents = got;
+    if (got)
+      ready++;
+  }
+  if (ready == 0 && (ts == 0 || ts[0] != 0 || ts[1] != 0))
+    hc_note_noop(SYS_ppoll); /* it was asked to wait, and there is nothing to wait for */
+  return ready;
 }
 
 /* The wire spec (section 11) says metadata.error carries a NEGATIVE errno on
@@ -462,6 +600,8 @@ static long hc_close(long fd) {
     hc_stdio_closed[fd] = 1;
     return 0;
   }
+  if (hc_pipe_exists(fd))
+    return hc_pipe_close(fd);
   struct hc_file *f = hc_slot(fd);
   if (!f)
     return -EBADF;
@@ -583,12 +723,21 @@ static long hc_writev(long fd, const struct iovec *iov, long count) {
   return (long)done;
 }
 
+/* read(): a pipe end answers from its queue, everything else is a file. */
+static long hc_read(long fd, char *buf, unsigned long count) {
+  int writing;
+  struct hc_pipe *p = hc_pipe_end(fd, &writing);
+  if (p)
+    return writing ? -EBADF : hc_pipe_read(p, buf, count);
+  return hc_file_rw(fd, buf, count, 0);
+}
+
 static long hc_readv(long fd, const struct iovec *iov, long count) {
   unsigned long done = 0;
   for (long i = 0; i < count; i++) {
     if (iov[i].iov_len == 0)
       continue;
-    long n = hc_file_rw(fd, (char *)iov[i].iov_base, iov[i].iov_len, 0);
+    long n = hc_read(fd, (char *)iov[i].iov_base, iov[i].iov_len);
     if (n < 0)
       return done ? (long)done : n;
     done += (unsigned long)n;
@@ -649,6 +798,10 @@ static unsigned long long hc_join_offset(long lo, long hi) {
 static long hc_write(long fd, const char *buf, unsigned long count) {
   unsigned long done = 0;
 
+  int writing;
+  struct hc_pipe *p = hc_pipe_end(fd, &writing);
+  if (p)
+    return writing ? hc_pipe_write(p, buf, count) : -EBADF;
   /* Anything above stderr is a handle this domain opened, and goes through
      FILE_WRITE with its own position. */
   if (fd >= HC_FD_BASE)
@@ -701,13 +854,23 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     return hc_getcwd((char *)a, (unsigned long)b);
 
   case SYS_read:
-    return hc_file_rw((long)a, (char *)b, (unsigned long)c, 0);
+    return hc_read((long)a, (char *)b, (unsigned long)c);
 
   case SYS_close:
     return hc_close((long)a);
 
   case SYS_lseek:
+    if (hc_pipe_exists((long)a))
+      return -ESPIPE;
     return hc_lseek((long)a, (long long)b, (long)c);
+
+  /* musl's pipe() is pipe2(fds, 0) here. */
+  case SYS_pipe2:
+    return hc_pipe2((int *)a, (long)b);
+
+  /* musl's poll() is ppoll(fds, n, timeout ? &ts : 0, 0, _NSIG/8). */
+  case SYS_ppoll:
+    return hc_poll((struct pollfd *)a, (unsigned long)b, (const long *)c);
 
   case SYS_writev:
     return hc_writev((long)a, (const struct iovec *)b, (long)c);
@@ -738,7 +901,7 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
      buffering on its FIRST flush (__stdout_write.c). exit() flushes, and since
      domain_main ends a returning program with exit() too, so does returning. */
   case SYS_ioctl:
-    if (!hc_is_stdio((long)a) && !hc_slot((long)a))
+    if (!hc_is_stdio((long)a) && !hc_slot((long)a) && !hc_pipe_exists((long)a))
       return -EBADF;
     return -ENOTTY;
 
@@ -776,6 +939,14 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     if (hc_is_stdio((long)a)) {
       hc_fill_stat((struct stat *)b, 0, S_IFCHR | 0620);
       return 0;
+    }
+    {
+      int writing;
+      struct hc_pipe *p = hc_pipe_end((long)a, &writing);
+      if (p) { /* a fifo, with what is queued as its size */
+        hc_fill_stat((struct stat *)b, p->count, S_IFIFO | 0600);
+        return 0;
+      }
     }
     struct hc_file *f = hc_slot((long)a);
     if (!f)
@@ -820,6 +991,13 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
      EBADF, and a 0 for a descriptor nobody opened sent it on to fstatat(fd, "")
      and ENOENT, so fstat(0) reported the wrong error. */
   case SYS_fcntl:
+    if (hc_pipe_exists((long)a)) {
+      /* A pipe here never blocks (see hc_pipes), so F_GETFL says O_NONBLOCK
+         whatever was set; the other commands are accepted as for a file. */
+      if ((long)b == F_GETFL)
+        return O_NONBLOCK;
+      return 0;
+    }
     if (hc_is_stdio((long)a) || hc_slot((long)a))
       return 0;
     return -EBADF;
