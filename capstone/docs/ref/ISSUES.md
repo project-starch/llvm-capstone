@@ -6198,6 +6198,65 @@ dynamic linker.
 namespace), or rename it. That is a one-line change, but it is in the compiler lane's area.
 Verify it with a static build of `llvm-ar`, which is exactly what fails today.
 
+### C-60 — any `-fstack-protector*` asserts in "Insert stack protectors" on capstone64, because `llvm.stackprotector` is not address-space overloaded `OPEN — COMPILER, crash; found 2026-09-24 by the tshark port; root cause from the datalayout and the intrinsic declaration; reproduced with the tree's clang`
+
+**What happens.** `-fstack-protector`, `-fstack-protector-strong` and `-fstack-protector-all` abort
+with `Calling a function with a bad signature!` (`llvm/lib/IR/Instructions.cpp:761`) in the
+`Insert stack protectors` pass. `-fno-stack-protector` compiles.
+
+    printf 'void use(char *);\nvoid f(void) { char buf[64]; use(buf); }\n' > ssp.c
+    clang -target capstone64-unknown-elf -ffreestanding -O2 -fstack-protector-strong -c ssp.c
+
+Reproduced on 2026-09-24 with `llvm/cmake-build-debug/bin/clang`:
+
+- `-fstack-protector-strong` exits 1 with the assertion;
+- `-fno-stack-protector` exits 0;
+- `int main(void){return 0;}` under `-fstack-protector-strong` exits 0.
+
+**Root cause.**
+- `CreatePrologue` (`llvm/lib/CodeGen/StackProtector.cpp:562-566`) creates the guard slot as
+  `PointerType::getUnqual(...)`, which is address space 0.
+- It then calls `CreateIntrinsic(Intrinsic::stackprotector, {GuardSlot, AI})`.
+- `int_stackprotector` is declared `[llvm_ptr_ty, llvm_ptr_ty]` (`llvm/include/llvm/IR/Intrinsics.td:937`),
+  which is plain AS0 and not overloaded.
+- capstone64's datalayout ends `-ni:200-A200-P200-G200` (`clang/lib/Basic/Targets/Capstone.h:249`), so
+  allocas and globals are AS200.
+- `CapstoneTargetLowering::getIRStackGuard` falls through to the generic version
+  (`CapstoneISelLowering.cpp:26051`), which loads `@__stack_chk_guard`, an AS200 global.
+
+The intrinsic is declared AS0 and receives AS200, hence the assertion. `StackProtector.cpp` never
+calls `getAllocaAddrSpace`. This is an upstream assumption that capstone64 violates, and no in-tree
+target with a non-zero alloca address space enables SSP.
+
+**Why it escapes configure and CMake probes.** A protector is inserted only for a function with
+something to protect, so a flag probe compiles cleanly and the flag is enabled build-wide. The
+peer's measurements:
+
+| Probe | Result |
+|---|---|
+| `int main(void){return 0;}` | compiles |
+| an unused local array | compiles |
+| `char buf[64]; use(buf);` | crashes |
+| `int x; use((char*)&x);` | crashes |
+
+The last row shows an address-taken scalar is enough, so this is not array-specific. Wireshark's
+CMake adds `-fstack-protector-strong` whenever the compiler accepts it, and 82 tshark files failed.
+Any autotools or CMake port that probes the flag hits the same trap.
+
+**Workaround.** `-fno-stack-protector`. The tshark port passes it and is not blocked.
+
+**Fix shape: not chosen, and the lead's call.** A compiler must not assert, so the crash is a defect
+whichever shape wins.
+
+- **(a)** Overload `llvm.stackprotector` on address space and use `DL.getAllocaAddrSpace()` in
+  `CreatePrologue`. This is correct and upstreamable, but it changes generic CodeGen.
+- **(b)** Have Capstone decline the IR stack protector, giving a clear diagnostic or a no-op. The
+  argument for (b) is that bounds already catch a stack-buffer overflow spatially, which subsumes
+  most of SSP's value. That is a threat-model claim, not a compiler detail.
+
+**Not checked.** No fix has been built. Whether other generic CodeGen passes make the same AS0
+assumption has not been checked either, and that question deserves its own look.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
