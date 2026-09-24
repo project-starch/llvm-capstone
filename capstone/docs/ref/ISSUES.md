@@ -472,6 +472,55 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ## RTL / FPGA
 
+### R-42 — a speculatively fetched I-cache MISS that a taken-branch redirect kills is never refilled, so a loop whose taken branch ends a 16-byte line pays +1 cycle EVERY iteration `OPEN — performance, not correctness; found 2026-09-24 (ladder control, E2b); identical at 054cea69b and 4ad0df694; the fix is a design change for the hardware side`
+
+**Symptom.** Search terms: cycle anomaly, loop alignment, layout-dependent CPI, 7 vs 6 cycles
+per iteration. The ladder control `ctrsanity` (identical code on both halves) read **1.167×**
+on `caplifive_m1_054cea69b` when its hot loop started at `…1ac`, and **1.000×** at every other
+start address. A layout pad moves it; it follows no length and no boot position (phases 6–10,
+`fpga-silicon-measurements-for-paper.md` §2).
+
+**Mechanism.** Established from a waveform, a discriminating run and the RTL source. The front
+end fetches PC+4 speculatively every cycle; this target's fetch is 4 bytes and its I-cache line
+is **16 bytes** (`CVA6ConfigIcacheLineWidth = 128`).
+- When a loop's **taken backward branch is the last word of its 16-byte line** (address mod
+  16 = 12), the PC+4 fetch lands in the next line, which the loop never executes, and misses.
+- The predicted-taken redirect asserts `kill_s2` (`frontend.sv:345`: `kill_s2 = kill_s1 |
+  bp_valid`). On a killed miss the I-cache FSM goes `READ→IDLE` **without raising
+  `mem_data_req_o`** (`cva6_icache.sv:294-295`; the refill request at `:301` is never
+  reached). So the refill is abandoned, the line is never installed, and **the miss recurs
+  every iteration**. It costs one cycle each time, because the redirect is accepted a cycle
+  late.
+- On a hit, the FSM accepts the redirect in the same cycle (`:275-286`).
+
+**Evidence.** All of it is in `tests/rtl-smoke/ladder-revival-2026-09-22/`, as
+`sim-loopalign*.S` and `sim-loopalign.result-lines.txt`, on `capstone-ariane 054cea69b`,
+Verilator, `--sv_seed 1`.
+- A 5-instruction loop runs **7.009** cycles/iteration with its branch at mod 16 = 12, and
+  **6.008** at mod 16 = 0, 4 and 8. It behaves **identically in plain M-mode and after
+  `capenter`**, so it is not a capability effect.
+- Waveform: at the slow offset the fall-through fetch shows `cl_hit=0000`, `kill_s2=1` and
+  READ→IDLE every iteration. At the fast offset the same fetch shows `cl_hit=0001` and the FSM
+  stays in READ.
+- **Discriminator:** executing the line after the loop once, beforehand, removes the penalty,
+  7.453 → 6.453 against the fast control's 6.406.
+- It predicts all five board offsets by position mod 16.
+- The source reading was confirmed independently by the RTL lane at `4ad0df694` (the R-35
+  branch leaves both files untouched).
+
+**Consequences.**
+- **Every ladder cycle ratio can carry up to one cycle per hot-loop iteration of layout cost**,
+  in either half. That is why the layout-randomised table (phase 10) exists, and why
+  `bs`/`janne`/`insertsort` carry bands.
+- **Any cycle comparison across a rebuild or a reflash must hold loop layout fixed.** The R-35
+  lane already excludes `take_cyc`/`give_cyc` from cross-reflash comparison for this reason.
+- It affects silicon performance only; no value is ever wrong.
+
+**Fix shape (not started; the hardware side's call).** Let a demand miss that is on the right
+path complete its refill instead of abandoning it on `kill_s2`. That touches the front end's
+kill protocol, which is high-risk, so it needs audit and synthesis before anyone trusts it.
+Noted as a candidate by the RTL lane, 2026-09-24.
+
 ## Q-08 — no capability fault path assigned `env->badaddr`, so `tval` was stale on every capability fault ever reported `FIXED 2026-09-11 in capstone-qemu cabc953e58; found while root-causing an unaligned capability store in SQLite`
 
 **Word any restatement of this carefully.** `grep -c badaddr target/riscv/op_helper.c` returns **2**,
