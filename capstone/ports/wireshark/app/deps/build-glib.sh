@@ -117,6 +117,12 @@ mkdir -p "$I/glib/deprecated"
 cp "$X"/glib/*.h "$I/glib/"; cp "$X"/glib/deprecated/*.h "$I/glib/deprecated/"
 cp "$X"/build/glib/glib-visibility.h "$X"/build/glib/gversionmacros.h "$I/glib/" 2>/dev/null || true
 cp "$X/build/glib/glibconfig.h" "$TS_DEPS_PREFIX/lib/glib-2.0/include/"
+# gmodule.h and its generated visibility header, without libgmodule: Wireshark includes
+# <gmodule.h> unconditionally (wsutil/version_info.c:28, wiretap/busmaster_priv.h:15), and only
+# calls g_module_* with plugins on, which this port builds off.
+ninja -C "$X/build" gmodule/gmodule-visibility.h > "$LOG/gmodule-visibility.log" 2>&1
+mkdir -p "$I/gmodule"
+cp "$X/gmodule/gmodule.h" "$I/"; cp "$X/build/gmodule/gmodule-visibility.h" "$I/gmodule/"
 cat > "$TS_DEPS_PREFIX/lib/pkgconfig/glib-2.0.pc" <<PCEOF
 prefix=$TS_DEPS_PREFIX
 Name: GLib
