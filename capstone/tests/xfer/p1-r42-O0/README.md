@@ -38,6 +38,30 @@ separately.
 
 All arms carry the oracle `Verification Hash: 112006 38bb59fd…3925d8518`, `DROPPED 0 RC 0`.
 
+## Three things a later reader needs, which the files alone do not say
+
+**1. The invocation, because the pass record's `args=` line is NOT it.** Arena and tables are
+separate argv elements BEFORE the quoted benchmark string; the host lifts them out of argv before
+the join, so `--arena` written inside the quotes is a speedtest1 flag and not a region request:
+
+    --speedtest1 --arena 2097152 --tables 1750285 '--testset main --size 1 --verify'
+
+Cell ⑤ takes no `--arena`/`--tables` at all. A reader who copies the `args=` line out of a
+`.qemu-pass` record reproduces the DEFAULT-arena run, which is not the b79 denominator.
+
+**2. There is one pass record per IMAGE, and it is the default-arena run's.** The record system
+keys on the image sha256, so `cell6.qemu-pass.record` exists and satisfies a gate that wants
+`qemu-pass/<full sha256>` — but its `args=` and `log=` describe the default-arena run. The 2 MiB run
+has a log here and no record of its own. That is the record system's shape, not a missing artefact.
+
+**3. How the 2 MiB log is tied to THIS image.** The log carries no image hash, so the link is
+argued rather than read off. Both arena runs came from one sweep 47 seconds apart, and the sweep's
+default-arena arm produced `SPEEDTEST1-CYCLES 690051663 … HEAP 911104` with `sublet: 5481/37874` —
+byte-for-byte the numbers in this image's own recorded pass. The emulator is deterministic and those
+numbers are image-specific, so the sweep ran this image. If you want the chain closed by a hash
+rather than by determinism, re-run the 2 MiB arena over `cell6-sublet-O0.dom`: it must reproduce
+692392094 exactly.
+
 ## The 2 MiB log is the ORIGINAL sw79 pre-run, and identifying it needed provenance, not content
 
 Six files on the building host contain the exact string
