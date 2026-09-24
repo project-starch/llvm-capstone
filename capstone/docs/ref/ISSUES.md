@@ -555,7 +555,7 @@ one-cycle IDLE detour goes.
 
 te by the RTL lane, 2026-09-24.
 
-### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `OPEN — filed 2026-09-25 as R-35's residual; safe direction (false DENY, never an authority escape); none observed yet`
+### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `OPEN — CONFIRMED 2026-09-25, on silicon (both R1 harness runs, caplifive_r42_6cbdaeeb4.bit) and in RTL simulation (r43-evict-live.S); safe direction (false DENY, never an authority escape) but it blocks every revocation-heavy workload on the R-35-fixed silicon; fix planned: docs/plans/r43-query-on-miss.md`
 
 > **Scope.** The M-mode LSU revocation cache in `capstone-ariane 4ad0df694` (4 ways x 64 sets, exact
 > 30-bit `{generation, index}` tag). An access whose id is not resident is refused with cause 25
@@ -572,7 +572,22 @@ te by the RTL lane, 2026-09-24.
 > But those live ids were **recently minted**, so they barely exercise eviction. A program with more live
 > revocation ids than the cache holds (SQLite) is the real test and has not run on this image.
 >
-> **First experiments.**
+> **CONFIRMED 2026-09-25 — on silicon and in simulation.**
+> - **Board, boot r42b3** (image `1b7a04fe237e1580`, the R1 release-cost harness, clean in all 90
+>   invocations on `054cea69b`): cause 25 on the first invocation. It was a load through the domain's
+>   own globals capability (`ldc a1,0x80(gp)`), which was **allowed at `+0x4f40` and denied at `+0x4ff4`**
+>   after an intervening `mrev`. The emulator runs the same invocation to completion. The RTL lane
+>   re-decoded the capture and the disassembly.
+> - **Board, boot r42b4** (image `46f99c7b5bf2556e`, the R1 cold harness): cause 25 on its first
+>   invocation, a load in `run_series`, tval inside the domain's own block. The register was not traced.
+> - **RTL simulation** (`verif/tests/custom/capstone/r43-evict-live.S`, capstone-ariane `93f509f54`,
+>   on `6cbdaeeb4`): alias A reads fine after 16 new live nodes; after 512 more the same read traps 25
+>   while `LCC(A) = 1`; after that `LCC` it reads fine again, because the LCC's node read re-installed it
+>   through the read tap. Arms 1 and 2 differ only in the number of nodes minted.
+> - Not affected: the ladder, the small m1 drop run (about 160 ids), and the live16 sweep (board, passed).
+>
+> **First experiments** *(written at filing; the sweep images exist, and the simulation test supersedes
+> the board discriminator)*.
 > 1. A SQLite workload on the fix bitstream: a correct result with no cause-25 trap bounds the rate.
 > 2. The discriminator: a stale probe of the NEWEST age only (k=43295, just revoked, likely still resident
 >    as dead), paired with a live alias installed more than 256 fills earlier and untouched since (a
