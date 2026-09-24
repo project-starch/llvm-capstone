@@ -62,7 +62,7 @@ neither header, and GLib falls back.
   direction, `strlcpy`, `/proc`).
 - **libffi** is a stub `.pc`, since only libglib is built, not GObject.
 
-Six patches, each under `__CAPSTONE__` except `gqsort`'s copy, whose native suite (`sort`, 4
+Seven patches, each under `__CAPSTONE__` except `gqsort`'s copy, whose native suite (`sort`, 4
 subtests) covers the rewrite:
 - `glib-0001`: `gintptr`/`guintptr` are `long`, the address, because no integer type is as wide as
   a capstone64 pointer and the compiler has no `__intcap_t`;
@@ -75,6 +75,12 @@ subtests) covers the rewrite:
 - `glib-0005`: an aligned allocator built from `malloc`, since musl-capstone's heap has none;
 - `glib-0006`: `gqsort`'s copy mode 2 moves pointer-sized words whole. Found by reading, not by
   the census, which cannot see a cast of a pointer's type.
+- `glib-0007`: no "dynamic ASAN loading" in a domain. GLib declares the LeakSanitizer entry points
+  weak and calls them when their address is not NULL; in a domain an undefined weak symbol's
+  address is not NULL (ISSUES C-56's open half), so `g_ignore_leak()` would call the image base.
+  Found by the tshark M0 link gate, not by GLib's suite. The recipe now refuses an archive with any
+  undefined weak symbol; that check fired on the unpatched archive (`__lsan_enable`,
+  `__lsan_ignore_object`) and passes with the patch, and none of the other six archives has one.
 
 Of the 63 census lines left, the 23 rebuilt sites all carry real integers (quarks, fds, log
 depths, error numbers, unichars) or are the `ghash` small-array code, dead with 16-byte pointers.

@@ -101,6 +101,12 @@ touch "$LOG/cast-log.txt"; sort -u "$LOG/cast-log.txt" > "$LOG/cast-sites.txt"
 echo "glib: $(wc -l < "$LOG/failed.txt") objects failed; cast sites: $(wc -l < "$LOG/cast-sites.txt")"
 [ -f "$X/build/glib/libglib-2.0.a" ] || { echo "glib: libglib-2.0.a NOT built" >&2; exit 1; }
 echo "glib: libglib-2.0.a built"
+# No undefined weak symbol: in a domain its address is not NULL (ISSUES C-56), so a `sym != NULL`
+# test passes and the call lands on the image base. GLib's LeakSanitizer hooks were two such
+# symbols until patch glib-0007; the tshark port's link gate found them.
+weak=$("$CAPSTONE_LLVM_BIN/llvm-nm" -A "$X/build/glib/libglib-2.0.a" | awk '$(NF-1) ~ /^[wv]$/ {print $NF}' | sort -u | tr '\n' ' ')
+[ -z "$weak" ] || { echo "glib: undefined weak symbols in libglib-2.0.a: $weak" >&2; exit 1; }
+echo "glib: no undefined weak symbol in libglib-2.0.a"
 
 # 2. Install: the library, its public headers and the generated glibconfig.h, and a .pc file.
 I=$TS_DEPS_PREFIX/include/glib-2.0

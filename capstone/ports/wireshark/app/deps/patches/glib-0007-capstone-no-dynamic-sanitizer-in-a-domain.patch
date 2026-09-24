@@ -1,0 +1,22 @@
+CAPSTONE (tshark app port): no "dynamic ASAN loading" in a Capstone domain. GLib declares the
+LeakSanitizer entry points weak and calls them when their address is not NULL. In a domain an
+undefined weak symbol's address is not NULL (ISSUES C-56), so g_ignore_leak() would call the image
+base. Found by the tshark port's link gate, which refuses an image with an undefined weak symbol:
+gquark.c, gthreadpool.c and gutils.c reference __lsan_ignore_object / __lsan_enable.
+
+--- a/glib/glib-private.h	2024-08-26 18:15:22.000000000 +0800
++++ b/glib/glib-private.h	2026-09-24 21:54:19.227568966 +0800
+@@ -54,7 +54,12 @@
+  * as we'd like: https://stackoverflow.com/a/11529277/210151 and
+  * https://devblogs.microsoft.com/oldnewthing/20200731-00/?p=104024
+  */
+-#elif defined (G_OS_UNIX) && !defined (__APPLE__) && !defined(__CYGWIN__) && g_macro__has_attribute (weak)
++/* CAPSTONE (tshark app port): not in a Capstone domain. It has no dynamic loader, so no sanitizer
++ * can be loaded into it, and an undefined weak symbol's address is not NULL there (ISSUES C-56):
++ * it is formed relative to gp and the image runs where the linker did not put it. So the
++ * `__lsan_ignore_object != NULL` tests below would be true and g_ignore_leak() would call the
++ * image base. With this branch skipped, g_ignore_leak() does nothing, as natively without a sanitizer. */
++#elif defined (G_OS_UNIX) && !defined (__APPLE__) && !defined(__CYGWIN__) && g_macro__has_attribute (weak) && !defined (__CAPSTONE__)
+ 
+ #define HAS_DYNAMIC_ASAN_LOADING
+ 
