@@ -80,6 +80,12 @@ stage_cap() {  # name -> copies the capture (or its flipped twin) into the share
   else python3 -c 'import sys; b=bytearray(open(sys.argv[1],"rb").read()); b[len(b)-8]^=1; open(sys.argv[2],"wb").write(b)' \
          "$CAPS/$base.pcap" "$SHARE/$n.pcap"; fi
 }
+# Time budgets. Every tshark run measured so far took 15-30 s, and setup (the copies from the share)
+# about 30 s. So: the host program's alarm at 120 s per run, and the whole guest command at 150 s
+# per section plus 300 s. A guest that stalls holds the SHARED QEMU lock until this expires: with
+# 960 s per section a 9p-copy stall held it for 85 minutes against other lanes' queued work
+# (2026-09-25). The alarm cannot end a guest stall, only a run that keeps making hostcalls.
+RUN_ALARM=${TSAPP_RUN_ALARM:-120}
 G="$SHARE/guest.sh"
 { echo 'echo MODULE-MD5 $(md5sum /capstone.ko); cat /proc/cmdline'
   echo 'cp /mnt/host/lt.user /tmp/lt.user && chmod 0755 /tmp/lt.user; cp /mnt/host/domain.argv /mnt/host/domain.env /tmp/; mkdir -p /tmp/wsconf'
@@ -92,7 +98,7 @@ case $MODE in
     for n in 1 2 3 4 5; do
       cp "$OUT/tshark_m$n.dom" "$SHARE/"
       { echo "echo __TS_BEGIN_M${n}__; rm -f /tmp/input.pcap"
-        echo "cp '/mnt/host/$SC.pcap' /tmp/input.pcap && /tmp/lt.user /tmp/tshark_m$n.dom 900 > /tmp/out-m$n.txt 2> /tmp/err-m$n.txt; echo __TS_RC_M${n}__ \$?"
+        echo "cp '/mnt/host/$SC.pcap' /tmp/input.pcap && /tmp/lt.user /tmp/tshark_m$n.dom $RUN_ALARM > /tmp/out-m$n.txt 2> /tmp/err-m$n.txt; echo __TS_RC_M${n}__ \$?"
         echo "tail -n 1 /tmp/out-m$n.txt; tail -n 3 /tmp/err-m$n.txt; cp /tmp/out-m$n.txt /tmp/err-m$n.txt /mnt/host/"
         echo "dmesg -c > /tmp/dmesg-m$n.txt; grep -v 'remote fence' /tmp/dmesg-m$n.txt | sed 's/^/DMESG M$n: /'; echo __TS_END_M${n}__"; } >> "$G"
       SECTIONS+=("M$n")
@@ -103,7 +109,7 @@ case $MODE in
     for c in "$@"; do
       stage_cap "$c"
       { echo "echo __TS_BEGIN_$c""__; rm -f /tmp/input.pcap"
-        echo "cp '/mnt/host/$c.pcap' /tmp/input.pcap && /tmp/lt.user /tmp/tshark_m5.dom 900 > '/tmp/out-$c.txt' 2> '/tmp/err-$c.txt'; echo __TS_RC_$c""__ \$?"
+        echo "cp '/mnt/host/$c.pcap' /tmp/input.pcap && /tmp/lt.user /tmp/tshark_m5.dom $RUN_ALARM > '/tmp/out-$c.txt' 2> '/tmp/err-$c.txt'; echo __TS_RC_$c""__ \$?"
         echo "tail -n 1 /tmp/out-$c.txt; cp /tmp/out-$c.txt /tmp/err-$c.txt /mnt/host/"
         echo "dmesg -c > /tmp/dmesg-$c.txt; grep -v 'remote fence' /tmp/dmesg-$c.txt | sed 's/^/DMESG $c: /'; echo __TS_END_$c""__"; } >> "$G"
       SECTIONS+=("$c")
@@ -128,7 +134,7 @@ LOG=$(mktemp "$RUNS/qemu-$MODE-$(date +%Y%m%d-%H%M%S)-XXXX.log")
 ( cd "$SHARE" && sha256sum lt.user ./*.dom ./*.pcap domain.argv domain.env ) > "$LOG.sha256"
 echo "run-qemu: ${#SECTIONS[@]} runs, block ${BLOCK_MB} MiB, cma=${CMA}M, CAPSTONE_GP_NONLIN=$CAPSTONE_GP_NONLIN, log $LOG" | tee "$LOG.head"
 set +e
-CAPSTONE_GUEST_COMMAND_TIMEOUT=${CAPSTONE_GUEST_COMMAND_TIMEOUT:-$(( ${#SECTIONS[@]} * 960 + 300 ))} \
+CAPSTONE_GUEST_COMMAND_TIMEOUT=${CAPSTONE_GUEST_COMMAND_TIMEOUT:-$(( ${#SECTIONS[@]} * 150 + 300 ))} \
 capstone_with_qemu_lock python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --share-dir "$SHARE" --buildroot-dir "$ROOTFS" --qemu-binary "$CAPSTONE_QEMU_BINARY" \
   --kernel-arg "cma=${CMA}M" --guest-command "sh /mnt/host/guest.sh" \
