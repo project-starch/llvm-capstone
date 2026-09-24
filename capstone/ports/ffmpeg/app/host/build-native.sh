@@ -21,6 +21,11 @@ source "$APP_DIR/../../../tests/capstone-test-env.sh"
 
 WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
 JOBS=${FFAPP_JOBS:-48}
+# FFAPP_CLIP_SECONDS: the workload's length. 1 (the default) is the run of record's clip and
+# keeps every file name; anything else gets its own names (input-<n>s.mkv, stock-<n>s.framemd5,
+# ...), so a second workload never overwrites the first one's reference.
+CLIP=${FFAPP_CLIP_SECONDS:-1}
+SFX=; [ "$CLIP" = 1 ] || SFX="-${CLIP}s"
 SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)                  # patched
 PRISTINE=$(bash "$SCRIPT_DIR/prepare-source.sh" --pristine | tail -1)  # unpatched
 OUT="$WORK/native"
@@ -44,12 +49,12 @@ if [ ! -x "$OUT/stock/ffmpeg" ] || [ "$(cat "$OUT/stock/.src" 2>/dev/null)" != "
   echo "$PRISTINE" > "$OUT/stock/.src"
 fi
 COMMON=(-nostdin -hide_banner -loglevel warning -threads 1 -filter_threads 1 -filter_complex_threads 1)
-"$OUT/stock/ffmpeg" "${COMMON[@]}" -f lavfi -i "testsrc2=size=320x180:rate=30:duration=1" \
-  -c:v mpeg4 -q:v 3 -y "$WORK/input.mkv" 2>/dev/null
-"$OUT/stock/ffmpeg" "${COMMON[@]}" -i "$WORK/input.mkv" -f framemd5 -y "$WORK/stock.framemd5"
+"$OUT/stock/ffmpeg" "${COMMON[@]}" -f lavfi -i "testsrc2=size=320x180:rate=30:duration=$CLIP" \
+  -c:v mpeg4 -q:v 3 -y "$WORK/input$SFX.mkv" 2>/dev/null
+"$OUT/stock/ffmpeg" "${COMMON[@]}" -i "$WORK/input$SFX.mkv" -f framemd5 -y "$WORK/stock$SFX.framemd5"
 
 # The positive-control input: one byte flipped in the middle of the payload.
-python3 - "$WORK/input.mkv" "$WORK/input.flip.mkv" <<'PY'
+python3 - "$WORK/input$SFX.mkv" "$WORK/input$SFX.flip.mkv" <<'PY'
 import sys
 b = bytearray(open(sys.argv[1], 'rb').read()); b[len(b) // 2] ^= 0x01
 open(sys.argv[2], 'wb').write(b)
@@ -75,8 +80,8 @@ cc -O1 -I"$OUT/minimal" -I"$SRC" -I"$APP_DIR/src/shared" \
   "$OUT/minimal/libavutil/libavutil.a" -lm -o "$OUT/ffapp_native"
 
 # --- 3 and 4. oracle check and positive control ----------------------------------------
-"$OUT/ffapp_native" "$WORK/input.mkv"      > "$WORK/native.out"
-"$OUT/ffapp_native" "$WORK/input.flip.mkv" > "$WORK/native.flip.out" || true
-python3 "$SCRIPT_DIR/compare-md5.py" "$WORK/stock.framemd5" "$WORK/native.out" \
-  --control "$WORK/native.flip.out"
+"$OUT/ffapp_native" "$WORK/input$SFX.mkv"      > "$WORK/native$SFX.out"
+"$OUT/ffapp_native" "$WORK/input$SFX.flip.mkv" > "$WORK/native$SFX.flip.out" || true
+python3 "$SCRIPT_DIR/compare-md5.py" "$WORK/stock$SFX.framemd5" "$WORK/native$SFX.out" \
+  --control "$WORK/native$SFX.flip.out"
 printf 'native oracle ready in %s\n' "$WORK"

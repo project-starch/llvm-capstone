@@ -50,14 +50,19 @@ case ${FFAPP_HEAP:-level0} in
           LOG=${LOG_FILE:-$WORK/qemu-sublet${FFAPP_POOL:+-pool$FFAPP_POOL}-$STAGE.log} ;;
   *) echo "FFAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
 esac
+# FFAPP_CLIP_SECONDS: which workload's images, inputs and reference (build-native.sh).
+CLIP=${FFAPP_CLIP_SECONDS:-1}
+SFX=; [ "$CLIP" = 1 ] || SFX="-${CLIP}s"
+DOM="$DOM$SFX"
+[ -n "$SFX" ] && LOG=${LOG_FILE:-${LOG%.log}$SFX.log}
 SHARE="$WORK/share"
-for f in "$DOM/ffapp.user" "$WORK/input.mkv" "$WORK/stock.framemd5"; do
+for f in "$DOM/ffapp.user" "$WORK/input$SFX.mkv" "$WORK/stock$SFX.framemd5"; do
   [ -f "$f" ] || { echo "missing $f; run build-native.sh and build-domain.sh first" >&2; exit 2; }
 done
 rm -rf "$SHARE"; mkdir -p "$SHARE"
-cp "$DOM/ffapp.user" "$WORK/input.mkv" "$WORK/input.flip.mkv" "$SHARE/"
+cp "$DOM/ffapp.user" "$WORK/input$SFX.mkv" "$WORK/input$SFX.flip.mkv" "$SHARE/"
 
-RUN="dmesg -n 7; cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user && cp /mnt/host/input.mkv /mnt/host/input.flip.mkv /tmp/"
+RUN="dmesg -n 7; cp /mnt/host/ffapp.user /tmp/ffapp.user && chmod 0755 /tmp/ffapp.user && cp /mnt/host/input$SFX.mkv /mnt/host/input$SFX.flip.mkv /tmp/"
 MARKERS=(--success-marker '__CAPSTONE_QEMU_BOOT_CONTROL_OK__')
 SECTIONS=()          # "BEGIN END expected-stage" per image, verified after the boot
 for spec in $STAGES; do
@@ -131,6 +136,6 @@ done
 case " $STAGES " in *" 5 "*)
   section __FFAPP_BEGIN_M5__ __FFAPP_END_M5__     > "$WORK/domain-m5.out"
   section __FFAPP_BEGIN_FLIP__ __FFAPP_END_FLIP__ > "$WORK/domain-m5flip.out"
-  python3 "$SCRIPT_DIR/compare-md5.py" "$WORK/stock.framemd5" "$WORK/domain-m5.out" \
+  python3 "$SCRIPT_DIR/compare-md5.py" "$WORK/stock$SFX.framemd5" "$WORK/domain-m5.out" \
     --control "$WORK/domain-m5flip.out" ;;
 esac
