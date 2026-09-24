@@ -27,10 +27,13 @@ Three things qualify it:
 
 ## What it took, beyond the pre-registered plan
 
-The first boots found three runtime gaps. None of the three is tshark's own: tshark is the
-first domain whose libraries carry these features. Each fix below is port-local, is shown
-to fire on a stand-in, and is named for the lead, since the complete fix belongs in shared
-infrastructure.
+The first boots found three runtime gaps, filed as **ISSUES C-64, C-65 and I-11**, each with a
+reproducer in `tests/runtime-gaps/`. None of the three is tshark's own. A survey of 219 recent
+domain images under `/tmp/capstone` (FFmpeg app, SQLite, the R1 campaigns, …) found none with a
+non-empty `.init_array`/`.fini_array` or any `pthread_cond` symbol. The same check fires on tshark.
+So tshark is the first domain these gaps reach, and no shipped result depends on them; the CPython
+domain's image was not on disk to check. Each fix below is port-local and is shown to fire on a
+stand-in. The complete fixes belong in shared infrastructure.
 
 | boot | what happened | cause | fix |
 |---|---|---|---|
@@ -193,5 +196,6 @@ Not counted, and every log is kept:
   compatibility result.
 - **Other captures and options:** only these captures, and only `-r -V -n`.
 - **The runtime fixes outside this port.** `.init_array` and `.fini_array` still do not work in any
-  other domain. musl-capstone's `pthread_cond_t` is still too small for its own fields. Both are
-  reported for the lead; the complete fixes belong in the shared runtime and libc.
+  other domain (C-64). musl-capstone's `pthread_cond_t` is still too small for its own fields
+  (C-65). The runtime's unserved report still goes to fd 1 (I-11). The complete fixes belong in
+  the shared runtime and libc.

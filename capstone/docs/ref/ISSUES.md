@@ -6539,6 +6539,84 @@ configuration in which C++ compiles today.** C-61 alone does not make C++ "nearl
 
 **Fix: none yet. The ABI decision is the lead's.**
 
+### C-64 — a domain never runs `.init_array`, and musl's `exit()` cannot run `.fini_array` `OPEN — RUNTIME; found 2026-09-24 by the tshark port, the first domain with either array non-empty; WORKED AROUND in that port only (ports/wireshark/app/src/tsapp-init-fini.c); source read at 93860ed`
+
+**What happens.**
+- **`.init_array` is never called.** `start-musl.S` runs only `.capstone_cap_init`,
+  `domain_main` (`runtime/hostcall.c`) calls `capstone_main`, and musl's `__libc_start_main` is not
+  used. `my_first_domain/link.ld` says so ("nothing in a domain calls the INIT array … for the day
+  one appears"). A library constructor silently does not run. In tshark these were GLib's
+  `glib_init_ctor` and libgpg-error's `gpg_err_init`.
+- **`.fini_array` faults on its first slot.** musl's `exit.c` (`libc_exit_fini`) walks the array
+  through `uintptr_t` and loads each slot through an **integer address**: cause 24.
+- **A second defect behind the first, not reached:** each 16-byte slot holds the function's
+  **link** address as a plain integer. A static image carries no relocations, and the capability
+  initialisers do not cover these arrays. An audit scanned all 253 initialiser bodies of the
+  tshark image and found none that writes there.
+- **Priority constructors are orphaned.** `link.ld`'s `KEEP(*(.init_array))` does not match
+  `.init_array.NNN`/`.fini_array.NNN`, which then land outside the markers.
+
+**Repro** (QEMU): `ports/wireshark/app/tests/runtime-gaps/run.sh c64` (two constructors, two
+destructors) halts with cause 24 in `exit.c` (log `qemu-oracle-20260925-002459-IGkM`).
+`run.sh c64-fixed`, the same program with the port's workaround, prints the native build's output
+byte for byte, order included.
+
+**Evidence.**
+- The first tshark boot halted in M1's `exit()` on the one `.fini_array` slot, libxml2's
+  `xmlDestructor` (`ports/wireshark/app/results/2026-09-24-qemu-tshark-staged/`).
+- An audit re-derived the faulting instruction and the slot from the image.
+
+**Worked around (tshark only).** `tsapp-init-fini.c`:
+- runs the constructors before `main`, from `deps/domain_entry.c`, through a DEFINED weak
+  default, so it is C-56-safe;
+- replaces musl's weak `__libc_exit_fini`;
+- calls each slot through an anchor function's code capability, moved by (slot − the anchor's
+  link address).
+`build-domain.sh` refuses an image with orphaned constructor sections.
+
+**Impact.** Any domain linking a C constructor or destructor. A survey of 219 recent domain images
+under `/tmp/capstone` (FFmpeg app, SQLite, the R1 campaigns, …) found none with either array
+non-empty. The check fires on tshark (32 and 16 bytes). So no shipped result is affected. The
+CPython domain's image was not on disk to check.
+
+**The fix** belongs in the runtime (`domain_main` runs `.init_array`; the runtime overrides
+`__libc_exit_fini`, converting slots as above) and in `link.ld`
+(`KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))` beside the plain sections).
+
+### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `OPEN — LIBC ABI (musl-capstone); found 2026-09-24 by the tshark port; WORKED AROUND for GLib only (ports/wireshark/app/deps/patches/glib-0008); source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
+
+**What happens.** On capstone64, `pthread_cond_t` (`include/alltypes.h.in:88`) is `int __i[12]`,
+48 bytes, and its pointer view `__p[12*sizeof(int)/sizeof(void*)]` holds three 16-byte pointers.
+musl's internal macros (`src/internal/pthread_impl.h:92-98`) assume 8-byte pointers:
+- `_c_head` is `__p[1]`;
+- `_c_tail` is `__p[5]`, at +80, 32 bytes past the object;
+- `_c_shared` (`__p[0]`) overlaps `_c_seq` (`__vi[2]`);
+- `_c_lock` (`__vi[8]`) lies inside `__p[2]`.
+
+`pthread_cond_init` zeroes 48 bytes. `pthread_cond_signal`/`broadcast` then walk the waiter list
+from whatever follows the object, single-threaded or not. On level0's heap that is the next block's
+header, whose `free` flag, 1, sits at +80: `cincoffsetimm a4, a0, 0x20` with `a0 = 1`, cause 24.
+The mutex, barrier and rwlock macros fit their types (`_m_prev`/`_m_next` are `__p[3]`/`__p[4]`
+of a 5-pointer union, and `_b_inst` is `__p[3]` of 4); only the condition variable overruns.
+
+**Repro** (QEMU): `ports/wireshark/app/tests/runtime-gaps/run.sh c65`, a heap
+`pthread_cond_t`, init, broadcast. It halts with cause 24 in `__private_cond_signal`
+(`pthread_cond_timedwait.c`) with `x10 = 1` (log `qemu-oracle-20260925-002510-T6wb`). Natively,
+glibc's broadcast returns.
+
+**Evidence.**
+- tshark's second boot halted identically in `epan_init`: GLib's `gthread-posix.c` broadcast,
+  n = −1, `a0 = 1`.
+- An audit matched the instruction in the archived `libc-capstone.a` (`ldc a0, 0x50(s3)` reads
+  `_c_tail`).
+
+**Worked around (GLib in the tshark port).** In a domain, GCond signal and broadcast are no-ops,
+since one thread has no waiter, and waits abort. Other code calling `pthread_cond_*` is still
+exposed. A survey of 219 recent domain images found no `pthread_cond` symbol outside tshark.
+
+**The fix** is an ABI change for the lead: size `pthread_cond_t`/`cnd_t` for 16-byte pointers and
+relayout the `_c_*` macros. Every port relinks against the new libc.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
@@ -6697,6 +6775,22 @@ two opposite errors on a fresh build dir.
 The rc=2 cost is already recorded in the comment at `:58-61`: every caller warns on rc 2 and nothing
 acts on it. **The fix belongs to the gate's owner. Until then, read rc 0 on a fresh build dir as "the
 listed tools are fresh", NOT as "lit can run".**
+
+### I-11 — the runtime's unserved-syscall report is lost, and reads as "none", when the program has closed fd 1 `OPEN — instrument defect; found 2026-09-24 by the tshark port; WORKED AROUND in that port (src/tsapp-heap.c reports on fd 2); source read at 93860ed`
+
+**What happens.** `hc_report_unserved` (`runtime/hostcall.c`) writes its
+`capstone-domain: UNSERVED syscalls: …` line with `write(1, …)` after the program has ended. `hc_close`
+marks a closed stdio descriptor in `hc_stdio_closed`, and later writes to it fail with EBADF. A
+program that closed fd 1 therefore loses the report without a trace. A missing line is what "none
+unserved" looks like, so the loss reads as a clean result. The full tshark run closes fd 1: its M5
+image printed no line, while M4 (the same program, stopped earlier) listed fifteen calls.
+
+**Repro** (QEMU): `ports/wireshark/app/tests/runtime-gaps/run.sh i11` calls uname twice and then
+`close(1)`. The domain's output has 0 runtime UNSERVED lines; the port's exit hook, on fd 2,
+reports `unserved=160x2 stdout=closed` (log `qemu-oracle-20260925-002557-yPoh`).
+
+**The fix:** write the report to fd 2, or let the runtime's own report bypass the program's
+closed flag. Until then, a missing line is not evidence that nothing was unserved.
 
 ## Compiler / toolchain (ours)
 
