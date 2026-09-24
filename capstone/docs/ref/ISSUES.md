@@ -6513,8 +6513,12 @@ against source on origin/dev.
    (`LLVM_ENABLE_RUNTIMES` is empty). Even with C-61 and C-63 fixed, `_Unwind_Resume` would be an
    undefined symbol at link time.
 
-No link was attempted, and whether a domain personality routine exists was not checked; either
-would only add to the list. **`-fno-exceptions` is not a workaround pending a fix. It is the only
+The runtime is absent in general, not only `_Unwind_*`. No `__gxx_personality_v0`, `__cxa_throw` or
+`__cxa_begin_catch` is defined under `capstone/` either; the grep does fire, since it finds the names
+in this file. **The link failure cannot be demonstrated from C++ source until C-63 is fixed**, because
+clang produces no object. The evidence is the absence of any definition, which is weaker than a link
+but sufficient. Hand-written IR calling `_Unwind_Resume` directly could force a link; that has not
+been done. **`-fno-exceptions` is not a workaround pending a fix. It is the only
 configuration in which C++ compiles today.** C-61 alone does not make C++ "nearly work".
 
 **Fix: none yet. The ABI decision is the lead's.**

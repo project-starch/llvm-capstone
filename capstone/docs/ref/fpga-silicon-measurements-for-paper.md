@@ -771,6 +771,34 @@ to quote is the lead's call.
   of the pairing: 1.000× in three layouts, 1.167× in one.
 
 
+### Phase-10 REFRESH on the R-35 fix bitstream (2026-09-24): no false deny, no cost, and the short kernels' bands are partly BOOT variance
+
+This re-runs the same builds as phase 10 on `caplifive_r35_4ad0df694.bit`: 4 layouts × (capability
+boot + bare-metal sweep) (`phase10-r35-refresh.result-lines.txt`). The purpose was the R-35 fix's
+false-deny test, plus a re-measurement.
+
+- **No false deny.** All 68 capability rows are correct. Every retval and every instret is
+  identical to phase 10, and there were no traps. The control gate passed at all four K (instruction
+  ratio 1.00002, baseline CPI 1.2000, 15/15).
+- **No measurable cost.** Over the 15 kernels' medians the range is 0.990×–2.150×, the median
+  **1.161×** and the geometric mean **1.298×**. Phase 10 read 0.990×–2.154×, 1.160× and 1.299×.
+  - 12 of 15 kernel medians agree with phase 10 to within 0.003.
+  - The three that move more are the short kernels: `beebs_janne` 1.993 → 1.978, `beebs_bs`
+    1.439 → 1.430 and `beebs_insertsort` 2.154 → 2.150.
+  - The per-rung capability cycle ratio (new over old) has a median of 1.000 at every K (1.0000–1.0001).
+- **The three short kernels' bands are NOT purely layout.** The same layout, on the same image,
+  re-measured on another boot, moved as follows:
+  - `beebs_janne` at K=1: 1.906 → **1.803**, which widens its band from 6.6 % to **13.2 %**;
+  - `beebs_bs` at K=1: 1.468 → 1.453;
+  - `beebs_insertsort` at K=0: 2.160 → 2.099.
+
+  Part of what phase 10 read as a layout band is boot-to-boot variance. Phase 11 (3 boots per layout
+  for these three) is the experiment that separates the two. **Until it runs, quote `bs`, `janne`
+  and `insertsort` with the wider of the two bands.**
+- **The bare-metal baseline did not move.** 67 of 68 BEST rows are cycle-identical to phase 10; the
+  exception is `beebs_bs` K=3, 1523 → 1524. The capability-side movement above is therefore not
+  a denominator artefact.
+
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
 Eight rows are measured. Coverage is bounded by silicon failures, not by effort, and the
