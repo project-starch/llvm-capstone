@@ -793,11 +793,49 @@ false-deny test, plus a re-measurement.
   - `beebs_insertsort` at K=0: 2.160 → 2.099.
 
   Part of what phase 10 read as a layout band is boot-to-boot variance. Phase 11 (3 boots per layout
-  for these three) is the experiment that separates the two. **Until it runs, quote `bs`, `janne`
-  and `insertsort` with the wider of the two bands.**
+  for these three) is the experiment that separates the two. It has now run; see the next section.
 - **The bare-metal baseline did not move.** 67 of 68 BEST rows are cycle-identical to phase 10; the
   exception is `beebs_bs` K=3, 1523 → 1524. The capability-side movement above is therefore not
   a denominator artefact.
+
+### Phase 11 (2026-09-24): which bands are LAYOUT and which are BOOT — 3 boots × 4 layouts
+
+This adds a third capability boot per layout on `caplifive_r35_4ad0df694.bit`, with the same flags and
+the full 17-rung list, so every entry VA is unchanged (`phase11-boot-vs-layout.result-lines.txt`).
+
+- **The three boots per layout:** phase 10, the refresh above, and this run.
+- **Validity:**
+  - all 68 rows are correct, with instret identical at every K;
+  - the K=3 rung images are byte-identical to the refresh's, so the builds are deterministic;
+  - the refresh showed no bitstream effect, so mixing the two bitstreams is admissible.
+- **How the split is read:** the within-layout spread is the largest over K of one layout's 3 boots.
+  The across-layout spread is taken over the 4 per-layout medians.
+
+| kernel | within-layout (boot) | across-layout | reading | median of 12 | band of 12 |
+|---|---:|---:|---|---:|---|
+| `beebs_bs` | 1.6 % | **5.9 %** | **layout** | 1.428× | 1.375–1.468 (6.8 %) |
+| `beebs_janne` | **14.4 %** | 7.1 % | **boot** | 2.003× | 1.803–2.063 (14.4 %) |
+| `beebs_insertsort` | 3.1 % | 4.0 % | mixed | 2.154× | 2.095–2.185 (4.3 %) |
+| `beebs_recursion` | 0.3 % | 1.4 % | layout, small | 1.972× | 1.955–1.984 (1.5 %) |
+| `coremark_matrix` | 1.2 % | 0.3 % | boot, small | 1.460× | 1.457–1.474 (1.2 %) |
+| `matmult_int` | 0.5 % | 1.0 % | mixed, small | 1.687× | 1.681–1.700 (1.2 %) |
+| other 9 kernels | ≤ 0.4 % | ≤ 1.0 % | stable | unchanged | ≤ 1.0 % |
+
+- **Pre-registered prediction for `bs`: CONFIRMED.** Its layout band persists across boots, and K=3 is
+  the lowest on all three.
+- **`janne`'s band is boot variance.** One layout (K=1) alone reads 1.906, 1.803 and 2.063.
+  - `janne` runs ~640 capability cycles, so ±40 cycles is the whole effect.
+  - No layout choice would have removed it.
+- **The table's summary numbers are robust.** Over all 12 readings the 15 kernels' medians give
+  0.990×–2.154×, median **1.161×**, geometric mean **1.299×**, identical to phase 10.
+- **For the paper, quote:**
+  - `janne` as ≈2.0× with a 14 % band;
+  - `bs` as ≈1.43× with a 6.8 % layout band;
+  - `insertsort` as ≈2.15× with a 4.3 % band;
+  - every other kernel as its median.
+- **Not established: what the boot-to-boot mechanism is for `janne`.** The capability image and
+  instret are identical across boots, so the variance is in the machine's state, for example
+  cache or DRAM placement, not in the code.
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
