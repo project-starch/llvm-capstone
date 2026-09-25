@@ -6904,6 +6904,18 @@ configuration in which C++ compiles today.** C-61 alone does not make C++ "nearl
 
 **Fix: none yet. The ABI decision is the lead's.**
 
+### C-67 — in an epilogue with no free register, the register scavenger spills only the integer half of a capability register and reloads it after the frame is released `OPEN — LATENT: reproduced in MIR on dev (01ec8b0d322a), no compiled-C trigger known; found 2026-09-25 by the audit of the C-32 live-source copy rule, and independent of it`
+
+A frame over 2 KiB needs a scratch register to release, and with every capability register live at
+the return the scavenger spills c15 with `sd a5, 0(sp)`. It reloads it with `ld a5, 0(sp)` after
+`cincoffset sp, sp, a5` has moved sp.
+- The metadata of c15 is never saved.
+- The reload reads a different address.
+
+Ordinary code has free caller-saved registers at the epilogue, and the Capstone clang ignores
+`__attribute__((interrupt))`, so no compiled-C trigger is known. Reproducer, detector and a
+one-free-register control: `capstone/tests/compiler-repros/C67-scavenger-epilogue-spill/`.
+
 ### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `OPEN — LIBC ABI (musl-capstone); found 2026-09-24 by the tshark port; WORKED AROUND for GLib only (ports/wireshark/app/deps/patches/glib-0008); source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
 
 **What happens.** On capstone64, `pthread_cond_t` (`include/alltypes.h.in:88`) is `int __i[12]`,

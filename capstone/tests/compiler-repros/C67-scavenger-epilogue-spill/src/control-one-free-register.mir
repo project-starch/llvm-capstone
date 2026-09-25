@@ -1,0 +1,22 @@
+--- |
+  target triple = "capstone64"
+  define void @scav() { ret void }
+...
+---
+name: scav
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 16, alignment: 16 }
+  - { id: 1, size: 16, alignment: 16 }
+  - { id: 2, size: 4096, alignment: 16 }
+  - { id: 3, size: 4096, alignment: 16 }
+body: |
+  bb.0:
+    liveins: $c1, $c5, $c6, $c7, $c8, $c9, $c10, $c12, $c13, $c14, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c27, $c28, $c29, $c30, $c31
+    STC $c10, %stack.0, 0
+    $c11 = COPY $c12
+    STC $c13, %stack.1, 0
+    STC $c14, %stack.2, 0
+    STC $c14, %stack.3, 0
+    PseudoRET implicit $c1, implicit $c5, implicit $c6, implicit $c7, implicit $c8, implicit $c9, implicit $c10, implicit $c11, implicit $c12, implicit $c13, implicit $c14, implicit $c16, implicit $c17, implicit $c18, implicit $c19, implicit $c20, implicit $c21, implicit $c22, implicit $c23, implicit $c24, implicit $c25, implicit $c26, implicit $c27, implicit $c28, implicit $c29, implicit $c30, implicit $c31
+...
