@@ -192,6 +192,9 @@ def ExternCCompat : DiagGroup<"extern-c-compat">;
 def KeywordCompat : DiagGroup<"keyword-compat">;
 def GNUCaseRange : DiagGroup<"gnu-case-range">;
 def CastAlign : DiagGroup<"cast-align">;
+// Capstone: a capability placed in, or copied through, memory aligned below a
+// capability (SemaChecking.cpp, checkCapstoneCapability*).
+def CapstoneCapabilityAlignment : DiagGroup<"capstone-capability-alignment">;
 def CastQual : DiagGroup<"cast-qual">;
 def : DiagGroup<"char-align">;
 def Comment : DiagGroup<"comment">;
