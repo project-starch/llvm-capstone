@@ -55,12 +55,46 @@ arena token. They are two answers to the same provenance problem.
 `pymalloc-compat.h` and cuts interpreter statistics, the debug allocator and
 lifecycle code. The interpreter build must not have that.
 
-So the deliverable is a **new interpreter patch 0014**, not a port of 0003:
-keep 0009's provenance mechanism, add only the lifetime transitions — issue at
-every hand-out, release at every free, reissue at every successful realloc
-including in place — at the sites 0003 identifies. 0003 is the map of where
-those sites are; `_Py_ARENA_PTR` stays the way a pointer into the arena is
-derived.
+### Corrected 2026-09-25, after reading the adapter: 0014 REPLACES 0009, it does not sit on it
+
+This plan first said "keep 0009's provenance mechanism, add only the lifetime
+transitions". That is wrong, and the adapter says why in its own comment.
+`pym_arena_alloc` returns `a`, the adapter's `struct arena`, with:
+
+    /* An opaque token, not an alias spanning the arena's children. */
+
+The arena's capability stays in the adapter's slot and every pool is carved out
+of it; no capability spans the whole arena while its children are out. That is
+what makes per-block revocation mean anything — an arena-wide alias would still
+reach a revoked block's memory.
+
+0009 keeps exactly such an alias: `arenaobj->arena_ptr = (pymem_block *)address`,
+read through `_Py_ARENA_PTR()`, with `pool_address` derived from it as a pointer.
+The two models are mutually exclusive inside `obmalloc.c`.
+
+So **0014 supersedes 0009 there**: `arenaobj->address` comes from
+`pym_arena_address(token)`, `pool_address` is an address again, and every pool
+and block pointer is handed out by `pym_pool_create` / `pym_block_pointer` —
+address in, freshly derived capability out, which is why the adapter needs only
+addresses as keys. What 0009 keeps is everything outside obmalloc's arena
+derivation: the `__builtin_align_down/up` definitions in `pymacro.h` (POOL_ADDR,
+stringlib's fastsearch, pyarena all need them), `_PyMem_FreeDelayed`, and the
+statistics walks.
+
+**The build therefore selects, it does not stack:** the plain interpreter applies
+0001-0013 as today; the Sublet interpreter applies 0001-0008 and 0010-0013 with
+**0014 in place of 0009**. Both stay coherent, and the plain port's recorded
+boots are untouched.
+
+0003 remains the map of where the transition sites are. In the tree the port
+produces they are `new_arena` (1825), `pymalloc_pool_extend` (2040),
+`allocate_from_new_pool` (2062, pool carve at 2134), `pymalloc_alloc` (2198),
+`pymalloc_free` (2470) and `pymalloc_realloc` (2554).
+
+One thing 0014 does **not** need a patch for: the arena allocator itself.
+`PyObject_SetArenaAllocator()` can install `pym_arena_alloc`/`pym_arena_free`
+from `domain_entry.c` at startup, so the hook does not have to be cut into
+obmalloc at all.
 
 ## Step 2 — link and initialise the adapter in the domain image
 
