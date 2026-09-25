@@ -121,6 +121,43 @@ inherit — the C corpus publishes a labelled probe address and the runner check
 the fault PC against it. A Python-level trigger has no such probe; the oracle
 has to be built, and "it faulted somewhere" is not the same claim.
 
+## What the first boots said (2026-09-25)
+
+The arm builds, links and runs Python. Three faults, and how each was placed.
+
+**Placing a fault at all.** The loader puts ELF vaddr `0x10000` at the load base,
+so the ELF address is `pc - base + 0x10000`. Taking it as `pc - base` named the
+wrong function in the first write-up (retracted). The check that settles it is the
+**instruction encoding**: the fault line gives the register and offset, and the
+disassembly at the computed address must match. Both attributions below were
+confirmed that way, and any further one must be.
+
+| arm | script | where | what it is |
+|---|---|---|---|
+| spatial | hello.py | `_PyInterpreterState_FinalizeAllocatedBlocks +0xfc`, `lwu t1, 0(t1)` | the shutdown walk over arenas and pools, striding an address and loading through it. `t1` held a bare integer. A strided integer walk has no authority where each pool body is its own capability — and it is the one place hello.py fails, after running its whole body |
+| spatial | case 0 | adapter code 516, `pym_validate` | the pointer CPython hands `_PyObject_Realloc` is not bit-identical to the lease the adapter issued. A SELF-CHECK of the adapter, which the component port's replay never trips because it only reallocs its own leases |
+| sublet | case 0 | `_PyEval_Vector +0x64`, `ldc a6, 0(a6)` then `lw a7, 0(a6)`, `addiw a7, a7, 1` | a capability loaded out of an array, then a refcount increment through it. It came back UNTAGGED, and a REV handle in the same dump covers the faulting address: an object whose block was REVOKED, on the STARTUP path, before the case's own marker |
+
+A stale object pointer at an `INCREF` is the shape the corpus looks for — but on
+the startup path the interpreter is not supposed to have a use-after-free, so the
+suspicion is the adapter revoking a block the interpreter still holds.
+
+**First hypothesis, from the primitives rather than the run.** `sublet_carve`
+gives the carved block the region's ORIGINAL node and leaves the remainder under
+a FRESH one, and revoke walks the junior run of nodes. Carving front to back that
+way, freeing an early block in a pool could revoke the blocks carved after it.
+The component port's security suite claims to cover this ("live siblings"), so
+either the carve order is handled and the cause is elsewhere, or that case does
+not reach the shape an interpreter produces. Settle it with a directed probe over
+the adapter, not another interpreter boot: a boot costs minutes and answers one
+bit.
+
+**And the emulator's node pool.** `CAP_REV_TREE_SIZE` is 65536 and this emulator
+reclaims none, which a real interpreter under per-block revocation exhausts:
+QEMU asserted in `_cap_rev_tree_dup_node_before`. `CAPSTONE_REV_NODES=8388608`
+clears it. The `REV-NODE WATERMARK -- cumulative allocation #1022` line is the
+silicon half of the same fact and is not fixed by an environment variable.
+
 ## Measured constraints to design against
 
 From `block-lifetimes.c` and the port's README, read 2026-09-25:
