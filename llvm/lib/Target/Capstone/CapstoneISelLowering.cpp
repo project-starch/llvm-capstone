@@ -24394,7 +24394,16 @@ SDValue CapstoneTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
     int FI =
         MF.getFrameInfo().CreateStackObject(Size, Alignment, /*isSS=*/false);
-    SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+    // The alloca address space, NOT the default one. getPointerTy(DL) means
+    // getPointerTy(DL, 0), and AS0 on this target is a 64-bit integer, so the
+    // frame index came out i64. A stack object is a capability (the datalayout
+    // says A200), and once the copy's destination is an integer the +8 half of
+    // a split 16-byte store has its address formed with an integer `addi` off
+    // the capability frame pointer, which faults with cause 24 (C-50). Same
+    // spelling as the CapPtrVT sites elsewhere in this file.
+    const DataLayout &ByValDL = DAG.getDataLayout();
+    SDValue FIPtr = DAG.getFrameIndex(
+        FI, getPointerTy(ByValDL, ByValDL.getAllocaAddrSpace()));
     SDValue SizeNode = DAG.getConstant(Size, DL, XLenVT);
 
     Chain = DAG.getMemcpy(Chain, DL, FIPtr, Arg, SizeNode, Alignment,
