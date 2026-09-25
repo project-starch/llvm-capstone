@@ -54,7 +54,14 @@ if [[ ! -f "$PATCHED" ]]; then
   # OUT_DIR is ours (the silicon image's), not the amalgamation's: without the override the
   # fallback writes sqlite3-capstone.c next to the image and the check below fails anyway
   # ("still no .../sqlite-build/sqlite3-capstone.c"). Found 2026-09-07 after a reboot emptied /tmp.
-  OUT_DIR="$(dirname "$PATCHED")" bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
+  # env -u SQLITE_SUBLET_PATCH: this bootstrap wants the PLAIN amalgamation. The Sublet patch is
+  # applied below, to this build's own private copy (see :66). Without the -u the variable is
+  # inherited here, the inner build patches $PATCHED, and the copy below is patched a second time:
+  #   Reversed (or previously applied) patch detected!  ... 28 out of 28 hunks ignored
+  # and the build fails. It fires only when $PATCHED is MISSING -- a cold or cleared
+  # CAPSTONE_TMP_ROOT -- which is why a warm tree never showed it.
+  env -u SQLITE_SUBLET_PATCH OUT_DIR="$(dirname "$PATCHED")" \
+    bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
 fi
 [[ -f "$PATCHED" ]] || { echo "still no $PATCHED" >&2; exit 1; }
 
