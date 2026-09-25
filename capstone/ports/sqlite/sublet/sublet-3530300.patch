@@ -38,9 +38,14 @@
 # instead of void*, and setupLookaside keeps pStart as a uptr, casting back at the four places
 # that consume it.  The capability never enters a C variable: it stays in the `block` slot and in
 # the per-slot p->cap, which is the Sublet discipline.  This removes C-32 at setupLookaside --
-# the only two shapes in the whole translation unit (one INT-ONLY, one mixed) -- measured with
-# movc-cfg-scan.py, 2 hits before and 0 after, with the scanner's self-test and the same scan on
-# the unmodified arm as controls.  It is sound because every consumer of the value uses it as an
+# the only two shapes there -- measured with movc-cfg-scan.py.  ON THE LINKED speedtest1 DOMAIN,
+# which is what to scan when reproducing this: 4 mixed / 0 INT-ONLY before, 2 mixed / 0 INT-ONLY
+# after, the two that go being setupLookaside+0x23d58 and +0x23e58, and the two that REMAIN
+# (relocatePage, whereLoopAddBtreeIndex) being the control that shows the scan still fires.  On the
+# standalone translation unit the same sites read 1 INT-ONLY + 1 mixed before and 0 + 0 after; the
+# classification differs between the two because the whole-image CFG gives the backward search more
+# reaching definitions, so compare SITES, not classes.  setupLookaside is not inlined at -O2 in
+# either arm.  It is sound because every consumer of the value uses it as an
 # address and never dereferences it: memsys5Size and memsys5FreeUnsafe both compute
 # ((uptr)p - mem5.poolBase)/szAtom, the free list lives in mem5.aLink beside the pool rather than
 # in the freed memory, sublet_carve already takes an unsigned long, and every use of
