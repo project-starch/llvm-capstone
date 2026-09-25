@@ -1616,6 +1616,31 @@ RETURN" rule applied to privilege rather than to control flow.
 
 ### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
 
+> **LEAD'S DECISION, 2026-09-25: "D′ now + prototype C".** Options were assembled by the compiler lane and
+> adversarially audited before the decision.
+> - **D′ (the route for P1): a port-only change.** `sqlite3MallocLinear` returns a `uptr`, and `pStart`
+>   stays an integer through the `pStart = 0` merge. It is cast to a pointer only at call arguments and at
+>   the store.
+>   - This is sound because `setupLookaside` never dereferences `pStart`: every use needs an address and
+>     none needs authority (`ports/sqlite/sublet/sublet-3530300.patch:418-472`).
+>   - Handing out the linear capability from `pBlock` instead was REFUTED. It is a C-46-class hazard,
+>     `sublet_carve` still needs the linear block, and a delinearised whole-pool alias would outlive the
+>     per-slot revocation.
+>   - **Unproven until measured:** whether GVN or CSE recombines the casts into one GPCR vreg at the PHI.
+>   - **Pass criteria, fixed before the build:** `movc-cfg-scan` on a fresh cell ⑥ -O2 image shows no
+>     `setupLookaside` site; its emulator counters equal arm C's (5568/37966/32565/37966/5401); and
+>     `--stats` on silicon reads non-zero lookaside slots.
+> - **C (the class fix, prototype and cost only, no commitment):** keep a bridged integer in a GPR until
+>   it is genuinely used as a capability. The audit found it is NOT "all four sites by construction":
+>   - `main+0x3aabc` is not shown to be a bridged value;
+>   - a bridged value stored with `stc` and reloaded with `ldc` is invisible to it;
+>   - every capability use must re-bridge, or a shared GPCR vreg brings the PHI copy back.
+> - **Ruled out:** A (partial sink-and-fold) reaches one site of four and changes an upstream pass's
+>   contract. B (a register class) is structurally unworkable.
+> - **Left as they are:** `renameResolveTrigger` and `main` are dormant under the P1 workload and are
+>   present in the native cell ⑤ as well. C-32 stays OPEN as a class.
+> - The paper condition in the measurements doc (§7s arm C) is re-worded to match.
+
 > # ⚠ OBSERVED LIVE ON SILICON 2026-09-15 — in a production workload, silently, and it cost three board readings and a QEMU-vs-board hunt (§7s of the measurements doc).
 >
 > **The instance.** The SQLite Sublet port's `setupLookaside`, compiled at -O2 (image `c506694f9f6f6889`,

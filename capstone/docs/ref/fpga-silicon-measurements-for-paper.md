@@ -4643,8 +4643,16 @@ disassembly, the counters' decomposition, the `--stats` block and this arm. **Wh
 first -O2 Sublet run on silicon with the lookaside on. Against ⑤ -O2 (sw80a, 1,167,116,810; its own
 lookaside state read in the next boot) it gives ⑥/⑤ = **1.1791** at -O2 on matched 2 MiB backing, and
 against native -O2 (856,450,080) 1.607 — labelled *bounded-prototype diagnostic, -O2, size 1, one
-setup function at -O0 as the C-32 workaround*; it becomes P1's number only when the bridge is fixed in
-the compiler (C-32's design choice, the lead's) and the pure -O2 image reads the same counters.
+setup function at -O0 as the C-32 workaround*. **Condition RE-WORDED by the lead's decision of 2026-09-25:**
+a pure -O2 ⑥ becomes P1's number once **the live site is removed, whether by the port or by the compiler**, as
+verified by all three of:
+- `movc-cfg-scan.py` over the image shows no `setupLookaside` site;
+- the image reads these counters (5568/37966/32565/37966/5401) on the emulator;
+- `--stats` reads non-zero lookaside slots on silicon.
+The route chosen is D′, a port change that keeps the lookaside base as an integer (see C-32). The paper must
+disclose that one port function was changed. (The condition as first written: "only when the bridge is
+fixed in the compiler (C-32's design choice, the lead's) and the pure -O2 image reads the same
+counters".)
 
 Two readings the paper lane drew from the same numbers, recorded with their caveats. **The compound,
 full stack against native**, is what a reader multiplies: 1.2103 × 1.1024 = **1.334** at -O0 (directly
