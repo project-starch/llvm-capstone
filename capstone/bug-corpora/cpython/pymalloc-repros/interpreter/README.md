@@ -8,12 +8,13 @@ the interpreter runs scripts in a capability domain — so the consumer half
 becomes reachable for the first time, and this directory is it: **one Python
 script per defect, no C model.**
 
-    cases/caseNN.py                one script per case, numbered as the corpus is
-    results/20260925-native-asan/  what each script does on a native 3.13.7
+    cases/caseNN.py                    one script per case, numbered as the corpus is
+    results/20260925-native-asan/      what each script does on a native 3.13.7
+    results/20260925-qemu-interpreter/ all twenty in a domain: the plain interpreter
+                                       against the one with pymalloc under Sublet
 
-Nothing here runs in a domain yet. Putting obmalloc under Sublet inside the
-interpreter build is `docs/plans/cpython-interpreter-sublet.md`; until that
-lands, these scripts have a native arm and no protected arm.
+The domain arm is `docs/plans/cpython-interpreter-sublet.md`, and its result is
+`results/20260925-qemu-interpreter/README.md`.
 
 **Provenance.** The twenty scripts were written on 2026-09-24 outside the tree
 and measured here on 2026-09-25; the case numbering was checked against every
@@ -60,6 +61,9 @@ can run it at all. Two things take cases out:
   (`ports/cpython/interpreter/results/survey-2026-09-24-*.txt`, "missing 13"):
   `_bz2`/`_lzma`/`zlib` (case 7), `_ssl` (13), `_curses` (18).
 - **No processes in a domain.** Cases 16 and 17 end in `fork_exec` and `spawnv`.
+  *Measured otherwise for 16 (2026-09-25):* its use-after-free is in the argv
+  conversion, in the parent before any fork, and the domain arm reaches it. So
+  the domain run takes all twenty and lets each say whether it is reachable.
 
 That leaves **13**: itertools twice, `hamt.c`, `_json`, `odictobject.c`,
 `stringlib/join.h`, `_elementtree`, `bytearrayobject.c`, `_zoneinfo`,

@@ -1,0 +1,10 @@
+{
+  "image_control": "c3e07424aff618dab47376cf3e8711cdb53b76dd8ab2b442d4f2ea337e73147f",
+  "image_sublet": "82e06d8584a7f0df207fb10faeb6f789bbfa4a2b550749a9c0bedc2dc37e32dd",
+  "compiler_commit": "82c42289c2e75547b794bf246bf7803fb1c954bd",
+  "qemu": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+  "qemu_env": "CAPSTONE_REV_NODES=8388608 (the default 65536 is exhausted by the Sublet arm)",
+  "sublet_mode": "CPY_SUBLET_MODE=1",
+  "cases": 20,
+  "arms": 40
+}

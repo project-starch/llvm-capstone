@@ -76,10 +76,24 @@ So **0014 supersedes 0009 there**: `arenaobj->address` comes from
 `pym_arena_address(token)`, `pool_address` is an address again, and every pool
 and block pointer is handed out by `pym_pool_create` / `pym_block_pointer` —
 address in, freshly derived capability out, which is why the adapter needs only
-addresses as keys. What 0009 keeps is everything outside obmalloc's arena
-derivation: the `__builtin_align_down/up` definitions in `pymacro.h` (POOL_ADDR,
-stringlib's fastsearch, pyarena all need them), `_PyMem_FreeDelayed`, and the
-statistics walks.
+addresses as keys.
+
+*Corrected 2026-09-25, after the twenty ran.* This paragraph went on to say that 0009
+"keeps" everything outside obmalloc's arena derivation: the alignment builtins in
+`pymacro.h`, `_PyMem_FreeDelayed` and the statistics walks. It cannot keep them. The
+build skips 0009 whole in the Sublet arm, so that arm had none of them. Two things
+followed from that:
+
+- every interpreter exit faulted in the first statistics walk, which cast a pool
+  address to `poolp` (`_PyInterpreterState_FinalizeAllocatedBlocks`, cases 4, 7, 13,
+  17 and 18);
+- stringlib's fastsearch would read through an address on a one-character `find` in
+  a UCS-2 string.
+
+0014 now carries 0009's `pymacro.h` and delayed-free hunks verbatim, with the two
+walks written in the adapter's vocabulary (`pym_pool_pointer`).
+`prepare-cpython-capstone.sh` refuses to build either arm once the two copies of the
+`pymacro.h` hunk differ.
 
 **The build therefore selects, it does not stack:** the plain interpreter applies
 0001-0013 as today; the Sublet interpreter applies 0001-0008 and 0010-0013 with
@@ -134,7 +148,7 @@ confirmed that way, and any further one must be.
 
 | arm | script | where | what it is |
 |---|---|---|---|
-| spatial | hello.py | `_PyInterpreterState_FinalizeAllocatedBlocks +0xfc`, `lwu t1, 0(t1)` | the shutdown walk over arenas and pools, striding an address and loading through it. `t1` held a bare integer. A strided integer walk has no authority where each pool body is its own capability — and it is the one place hello.py fails, after running its whole body |
+| spatial | hello.py | `_PyInterpreterState_FinalizeAllocatedBlocks +0xfc`, `lwu t1, 0(t1)` | the shutdown walk over arenas and pools, striding an address and loading through it. `t1` held a bare integer. A strided integer walk has no authority where each pool body is its own capability — and it is the one place hello.py fails, after running its whole body. It is the walk 0009 rewrites and 0014 did not carry (corrected under Step 1) |
 | spatial | case 0 | adapter code 516, `pym_validate` | the pointer CPython hands `_PyObject_Realloc` is not bit-identical to the lease the adapter issued. A SELF-CHECK of the adapter, which the component port's replay never trips because it only reallocs its own leases |
 | sublet | case 0 | `_PyEval_Vector +0x64`, `ldc a6, 0(a6)` then `lw a7, 0(a6)`, `addiw a7, a7, 1` | a capability loaded out of an array, then a refcount increment through it. It came back UNTAGGED, and a REV handle in the same dump covers the faulting address: an object whose block was REVOKED, on the STARTUP path, before the case's own marker |
 
@@ -185,23 +199,17 @@ From `block-lifetimes.c` and the port's README, read 2026-09-25:
 
 ## Order, and what is already true
 
-1. ~~Which defects have a Python-level trigger at all~~ — measured: 14 of 20,
-   13 of them runnable in our domain build.
-2. ~~Patch 0014~~ — written and verified to apply at fuzz 0 to upstream with
-   0001-0008 and 0010-0013 (`patches/cpython-3.13.7-0014-pymalloc-under-sublet.patch`);
-   `prepare-cpython-capstone.sh` selects it against 0009 on `CPY_SUBLET=1`. It
-   has not been COMPILED yet. Then the adapter linked in (step 2), and boot
-   `hello.py`:
-   **does the interpreter still start with a revoke on every pymalloc free?**
-   Nothing else matters until it does, and the answer also settles the arena
-   ceiling and the tag-map question above.
-3. Spatial/sublet pair over the thirteen, batched per boot, with an oracle that
-   is more than "it faulted".
-4. Per case, which allocator layer the freed object actually came from — the
-   proxy in `case.json` turned into a measurement.
-
-**The toolchain is the gate.** This host has no built Capstone LLVM
-(`find` over `/home`, `/tmp`, `/opt` to depth 8 finds neither `clang` nor
-`ld.lld`), so step 2 cannot start until one is built. A Release+Asserts build
-is under way at `llvm-capstone-compiler` (`a378789289cd` — the revision the
-port's own survey and boots used), configured with the `Capstone` target.
+1. ~~Which defects have a Python-level trigger at all.~~ Measured: 14 of 20 natively. All 20 were run
+   in the domain, because case 16 turned out to be reachable too.
+2. ~~Patch 0014.~~ It compiles, links and runs. On 2026-09-25 it also gained 0009's remainder: the
+   alignment builtins, delayed free, and the statistics walks in the adapter's form.
+3. ~~The pair over the cases.~~ It is plain against sublet, not spatial against sublet, because the
+   plain port is the natural control. It needed C-66 first: the compiler trap that ended six
+   control arms.
+   - Result: `bug-corpora/cpython/pymalloc-repros/interpreter/results/20260925-qemu-interpreter/`.
+   - Sublet catches all 14 native use-after-frees at their use, and 11 of them are caught only by
+     Sublet. The pass rule is a halt after `CPY-CASE-ARMED`, in the defect's own function.
+4. **Open:** per case, which allocator layer the freed object actually came from.
+5. **Open:** `_elementtree.c`'s JOIN flag strips the tag from `text`/`tail`. The negative control
+   found it in both arms. It needs its own port patch, and then the control's remaining modules have
+   to be rerun.

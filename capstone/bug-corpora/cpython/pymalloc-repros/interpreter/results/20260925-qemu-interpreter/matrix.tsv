@@ -1,0 +1,21 @@
+case	upstream_fix	control_plain	sublet	c66_trap_seen	verdict
+0	gh-143543	completes	cause 24 _PyEval_Vector+0x64 [tag-cleared capability]	no	CAUGHT by Sublet only
+1	gh-146613	cause 24 find_name_in_mro+0xdc [integer 0x1]	cause 24 PyObject_RichCompare+0x338 [tag-cleared capability]	no	caught without Sublet too (capability fault in the control)
+2	gh-142829	completes	cause 24 hamt_iterator_next+0x88 [tag-cleared capability]	no	CAUGHT by Sublet only
+3	gh-142831	cause 24 _PyObject_Malloc+0x94 [tag-cleared capability]	cause 24 encoder_listencode_obj+0xb0 [tag-cleared capability]	no	caught without Sublet too (capability fault in the control)
+4	gh-145244	completes	completes	no	not caught
+5	gh-148660	SystemError: null argument to internal routine	cause 24 odict_copy+0x2e4 [tag-cleared capability]	no	CAUGHT by Sublet only
+6	gh-151295	completes	cause 24 slot_bf_getbuffer+0x21c [tag-cleared capability]	no	CAUGHT by Sublet only
+7	gh-148395	ModuleNotFoundError: No module named 'zlib'	ModuleNotFoundError: No module named 'zlib'	no	not reachable in the domain (no module zlib)
+8	gh-112127	cause 24 atexit_delete_cb+0x30 [integer 0x0]	cause 24 atexit_delete_cb+0x30 [integer 0x0]	no	caught without Sublet too (capability fault in the control)
+9	gh-139210	completes	cause 24 strlen+0x0 [tag-cleared capability]	no	CAUGHT by Sublet only
+10	gh-142560	ValueError: empty separator	cause 24 memchr+0x1c [tag-cleared capability]	no	CAUGHT by Sublet only
+11	gh-142783	cause 5 unicodekeys_lookup_unicode+0xd4 [out of bounds]	cause 24 _Py_dict_lookup+0x98 [tag-cleared capability]	no	caught without Sublet too (capability fault in the control)
+12	gh-143004	completes	cause 24 slot_nb_add+0x3ac [untagged (cincoffset)]	no	CAUGHT by Sublet only
+13	gh-144833	ModuleNotFoundError: No module named '_ssl'	ModuleNotFoundError: No module named '_ssl'	no	not reachable in the domain (no module _ssl)
+14	gh-146011	completes	cause 24 signaldict_repr+0xd0 [tag-cleared capability]	no	CAUGHT by Sublet only
+15	gh-149449	cause 2 PyUnicodeDecodeError_GetReason+0x64 [wild jump (illegal instruction)]	cause 24 PyCodec_NameReplaceErrors+0x260 [tag-cleared capability]	no	CAUGHT by Sublet only
+16	gh-151403	completes	cause 24 PyOS_FSPath+0x2d0 [tag-cleared capability]	no	CAUGHT by Sublet only
+17	gh-151416	exits	exits	no	not reachable in the domain (os.spawnv is the pure-Python fallback on this platform (linux); the C)
+18	gh-151695	exits	exits	no	not reachable in the domain (curses unavailable)
+19	gh-153539	completes	cause 24 _io_TextIOWrapper_tell+0x5dc [untagged (cincoffset)]	no	CAUGHT by Sublet only
