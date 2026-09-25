@@ -67,7 +67,7 @@ llvm/lib/CodeGen/CodeGenTargetMachineImpl.cpp | +9 -0 | if (TmpAsmInfo->getExcep
 llvm/lib/CodeGen/DwarfEHPrepare.cpp | +26 -4 | // space 0. On a capability target (Capstone: addrspace(200), declared
 llvm/lib/CodeGen/EarlyIfConversion.cpp | +7 -0 | if (TII->canTrap(MI)) {
 llvm/lib/CodeGen/MachineCSE.cpp | +8 -0 | // capability increment above that test, where kwnames is NULL.
-llvm/lib/CodeGen/MachineLICM.cpp | +9 -0 | if (TII->canTrap(I) && !IsGuaranteedToExecute(I.getParent(), CurLoop)) {
+llvm/lib/CodeGen/MachineLICM.cpp | +16 -1 | if (TII->canTrap(I) && !IsGuaranteedToExecute(I.getParent(), CurLoop)) {
 llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +29 -13 | static bool isIntegerTruncate(SDValue N) {
 llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +116 -14 | return Type.isInteger() || Type.isCheriCapability();
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than

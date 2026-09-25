@@ -181,6 +181,11 @@ namespace {
     // to hoist loads from this block.
     // Tri-state: 0 - false, 1 - true, 2 - unknown
     unsigned SpeculationState = SpeculateUnknown;
+    // The loop SpeculationState answers for. HoistOutOfLoop asks about one
+    // block for the outermost loop and then for each subloop in turn, and a
+    // block can run on every iteration of the outer loop without running on
+    // every iteration of the subloop.
+    MachineLoop *SpeculationLoop = nullptr;
 
   public:
     MachineLICMImpl(bool PreRegAlloc, Pass *LegacyPass,
@@ -753,8 +758,9 @@ void MachineLICMImpl::HoistPostRA(MachineInstr *MI, Register Def,
 /// may not be safe to hoist.
 bool MachineLICMImpl::IsGuaranteedToExecute(MachineBasicBlock *BB,
                                             MachineLoop *CurLoop) {
-  if (SpeculationState != SpeculateUnknown)
+  if (SpeculationState != SpeculateUnknown && SpeculationLoop == CurLoop)
     return SpeculationState == SpeculateFalse;
+  SpeculationLoop = CurLoop;
 
   if (BB != CurLoop->getHeader()) {
     // Check loop exiting blocks.
