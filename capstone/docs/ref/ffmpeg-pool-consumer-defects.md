@@ -177,7 +177,7 @@ fixture.
 Liveness decides whether the *pinned tree* still contains the defect, not
 whether the corpus can reproduce it: what the port pins is the allocator, and a
 case transcribes its consumer's call sequence, so `461fb22053` builds and faults
-against the 9.0.1 pool as it stands ([corpus case](../../bug-corpora/ffmpeg/pool-repros/461fb22053_af_join_dedup_bound/README.md),
+against the 9.0.1 pool as it stands ([corpus case](../../bug-corpora/ffmpeg/pool-repros/00_461fb22053_af_join_dedup_bound/PROVENANCE.md),
 probe case 36, spatial completes and Sublet faults at the published PC). Moving
 the pin to n8.1 raises the fidelity tier of three specimens from "reduction of
 code that shipped until n8.1.1" to "reduction of shipping code". It buys that,
@@ -249,7 +249,11 @@ rows through a possibly older `linesize` — a size confusion, not this class.
 
 This is a source triage, not a reproduction. Each verdict names the allocation
 site it was read from; none of the four has been built, run, or shown to
-produce a stale access under the port's oracle, and that is the next gate. The
+produce a stale access under the port's oracle, and that is the next gate.
+(Superseded 2026-09-25 for three of them: reductions of af_join, h264_refs and vidstab were
+built and run. They fault under Sublet on capstone-qemu, and complete under the mode-0 control:
+`ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev/`. The fourth, vp9, has
+no domain arm.) The
 count of four is a count of *upstream-fixed, pool-backed consumer* defects found
 by this instrument on this surface — it is not a claim that FFmpeg has only three,
 and the instrument's two discarded predecessors are the reason to treat any
