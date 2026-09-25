@@ -181,16 +181,16 @@ static unsigned long long hc_get_u64(unsigned long off) {
   return v;
 }
 
-/* Both directions of FILE_READ/FILE_WRITE, which differ only in who fills the
-   data area and in the direction of the copy. Chunked, because the payload is
-   one region and a caller may ask for more than fits; a short count is a legal
-   POSIX result for both calls, so the loop stops at the first short answer
-   rather than spinning. */
-static long hc_file_rw(long fd, char *buf, unsigned long count, int writing) {
-  struct hc_file *f = hc_slot(fd);
-  if (!f)
-    return -EBADF;
-
+/* Both directions of FILE_READ/FILE_WRITE at an explicit offset, which differ
+   only in who fills the data area and in the direction of the copy. Chunked,
+   because the payload is one region and a caller may ask for more than fits; a
+   short count is a legal POSIX result for both calls, so the loop stops at the
+   first short answer rather than spinning. The position is not touched here:
+   the wire has carried an offset on every round from the start, so pread and
+   pwrite are this function as it is, and read and write are this function
+   plus a position update (hc_file_rw). */
+static long hc_file_rw_at(struct hc_file *f, char *buf, unsigned long count,
+                          int writing, unsigned long long off) {
   const unsigned long data_off = writing ? HC_FILE_WRITE_REQ_V0_DATA_OFFSET
                                          : HC_FILE_READ_REQ_V0_DATA_OFFSET;
   const unsigned long max_chunk = HC_PAYLOAD_SIZE - data_off;
@@ -202,7 +202,7 @@ static long hc_file_rw(long fd, char *buf, unsigned long count, int writing) {
       chunk = max_chunk;
 
     hc_put_u64(0, f->handle);
-    hc_put_u64(8, f->pos);
+    hc_put_u64(8, off + done);
     hc_put_u64(16, 0); /* flags, reserved, write as 0 */
     hc_put_u64(24, 0); /* reserved0 */
     if (writing)
@@ -226,11 +226,20 @@ static long hc_file_rw(long fd, char *buf, unsigned long count, int writing) {
         buf[done + i] = hc_payload[data_off + i];
 
     done += (unsigned long)serviced;
-    f->pos += (unsigned long long)serviced;
     if ((unsigned long)serviced < chunk)
       break;
   }
   return (long)done;
+}
+
+static long hc_file_rw(long fd, char *buf, unsigned long count, int writing) {
+  struct hc_file *f = hc_slot(fd);
+  if (!f)
+    return -EBADF;
+  long n = hc_file_rw_at(f, buf, count, writing, f->pos);
+  if (n > 0)
+    f->pos += (unsigned long long)n;
+  return n;
 }
 
 /* FILE_STAT_BASIC, the one request whose answer arrives in the payload rather
@@ -471,6 +480,54 @@ static long hc_readv(long fd, const struct iovec *iov, long count) {
   return (long)done;
 }
 
+/* pread, pwrite and their vector forms: the offset comes from the caller and
+ * the position stays where it was. This is most of what a database does with a
+ * file (PostgreSQL reads and writes every page with pread64/pwrite64 and its
+ * WAL with pwritev), and it is the wire's own shape: every FILE_READ/FILE_WRITE
+ * round has carried an explicit offset from the start, so nothing crosses the
+ * boundary differently, only the position bookkeeping on this side differs.
+ * On stdout and stderr the answer is ESPIPE, as on a pipe.
+ *
+ * musl hands the vector forms' offset over as two words (src/unistd/preadv.c:
+ * (long)ofs and (long)(ofs >> 32)), because the kernel ABI they were written
+ * for takes pos_l and pos_h; the kernel joins them as (hi << 32) | (u32)lo, and
+ * so does hc_join_offset. */
+static long hc_prw(long fd, char *buf, unsigned long count, int writing,
+                   unsigned long long off) {
+  if (hc_is_stdio(fd))
+    return -ESPIPE;
+  struct hc_file *f = hc_slot(fd);
+  if (!f)
+    return -EBADF;
+  return hc_file_rw_at(f, buf, count, writing, off);
+}
+
+static long hc_prwv(long fd, const struct iovec *iov, long count, int writing,
+                    unsigned long long off) {
+  if (hc_is_stdio(fd))
+    return -ESPIPE;
+  struct hc_file *f = hc_slot(fd);
+  if (!f)
+    return -EBADF;
+  unsigned long done = 0;
+  for (long i = 0; i < count; i++) {
+    if (iov[i].iov_len == 0)
+      continue;
+    long n = hc_file_rw_at(f, (char *)iov[i].iov_base, iov[i].iov_len, writing,
+                           off + done);
+    if (n < 0)
+      return done ? (long)done : n;
+    done += (unsigned long)n;
+    if ((unsigned long)n < iov[i].iov_len)
+      break; /* short count, or end of file: do not start the next entry */
+  }
+  return (long)done;
+}
+
+static unsigned long long hc_join_offset(long lo, long hi) {
+  return (unsigned long long)(unsigned int)lo | ((unsigned long long)hi << 32);
+}
+
 /* The WRITE_STDOUT rounds themselves, with no descriptor check: the program's
    own writes reach this through hc_write, and the runtime's own report at exit
    calls it directly (hc_report_unserved). */
@@ -513,7 +570,6 @@ static long hc_write(long fd, const char *buf, unsigned long count) {
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                          syscall_arg_t c, syscall_arg_t d, syscall_arg_t e,
                          syscall_arg_t f) {
-  (void)e;
   (void)f;
   switch (n) {
   case SYS_write:
@@ -541,6 +597,18 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
 
   case SYS_readv:
     return hc_readv((long)a, (const struct iovec *)b, (long)c);
+
+  case SYS_pread64:
+    return hc_prw((long)a, (char *)b, (unsigned long)c, 0, (unsigned long long)(long)d);
+
+  case SYS_pwrite64:
+    return hc_prw((long)a, (char *)b, (unsigned long)c, 1, (unsigned long long)(long)d);
+
+  case SYS_preadv:
+    return hc_prwv((long)a, (const struct iovec *)b, (long)c, 0, hc_join_offset((long)d, (long)e));
+
+  case SYS_pwritev:
+    return hc_prwv((long)a, (const struct iovec *)b, (long)c, 1, hc_join_offset((long)d, (long)e));
 
   case SYS_getdents64:
     return hc_getdents((long)a, (char *)b, (unsigned long)c);

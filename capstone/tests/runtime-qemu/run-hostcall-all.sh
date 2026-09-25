@@ -29,6 +29,7 @@ HOSTCALL_RUNNERS=(
   "$SCRIPT_DIR/run-hostcall-thread-local-probe.sh"
   "$SCRIPT_DIR/run-hostcall-init-fini-probe.sh"
   "$SCRIPT_DIR/run-hostcall-unserved-report-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-pread-pwrite-probe.sh"
 )
 
 capstone_select_banner hostcall
