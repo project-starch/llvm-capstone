@@ -1,0 +1,41 @@
+case	fix	name	shape	mode	expected	passed	cause	pc	expected_pc	delivered	completed	runner_exit
+0	gh-143543	groupby-reentrant-eq	free/reuse/stale read	spatial	complete	True					1	0
+0	gh-143543	groupby-reentrant-eq	free/reuse/stale read	sublet	fault	True	24	0x101a09d20	0x101a09d20	False		1
+1	gh-146613	grouper-parent-key-freed	free/reuse/stale read	spatial	complete	True					1	0
+1	gh-146613	grouper-parent-key-freed	free/reuse/stale read	sublet	fault	True	24	0x101a09e08	0x101a09e08	False		1
+2	gh-142829	hamt-eq-interior-cursor	interior pointer	spatial	complete	True					1	0
+2	gh-142829	hamt-eq-interior-cursor	interior pointer	sublet	fault	True	24	0x101a09d58	0x101a09d58	False		1
+3	gh-142831	json-encoder-list-item	stale entry in a live array	spatial	complete	True					1	0
+3	gh-142831	json-encoder-list-item	stale entry in a live array	sublet	fault	True	24	0x101a09d70	0x101a09d70	False		1
+4	gh-145244	json-encoder-dict-key-error-path	bulk free, error path	spatial	complete	True					1	0
+4	gh-145244	json-encoder-dict-key-error-path	bulk free, error path	sublet	fault	True	24	0x101a09ebc	0x101a09ebc	False		1
+5	gh-148660	odict-copy-stale-link	pointer load from freed block	spatial	complete	True					1	0
+5	gh-148660	odict-copy-stale-link	pointer load from freed block	sublet	fault	True	24	0x101a09ec4	0x101a09ec4	False		1
+6	gh-151295	bytes-join-reentrant-buffer	payload buffer, sub-512	spatial	complete	True					1	0
+6	gh-151295	bytes-join-reentrant-buffer	payload buffer, sub-512	sublet	fault	True	24	0x101a09d58	0x101a09d58	False		1
+7	gh-148395	decompressor-next-in	cursor across two API calls	spatial	complete	True					1	0
+7	gh-148395	decompressor-next-in	cursor across two API calls	sublet	fault	True	24	0x101a09dd8	0x101a09dd8	False		1
+8	gh-112127	atexit-unregister-borrowed-tuple	free/reuse/stale read	spatial	complete	True					1	0
+8	gh-112127	atexit-unregister-borrowed-tuple	free/reuse/stale read	sublet	fault	True	24	0x101a09e18	0x101a09e18	False		1
+9	gh-139210	iterparse-event-name-after-decref	payload buffer, error path	spatial	complete	True					1	0
+9	gh-139210	iterparse-event-name-after-decref	payload buffer, error path	sublet	fault	True	24	0x101a09d58	0x101a09d58	False		1
+10	gh-142560	bytearray-search-realloc-moved	realloc moved the block	spatial	complete	True					1	0
+10	gh-142560	bytearray-search-realloc-moved	realloc moved the block	sublet	fault	True	24	0x101a0ab30	0x101a0ab30	False		1
+11	gh-142783	zoneinfo-eager-decref	free and use on adjacent lines	spatial	complete	True					1	0
+11	gh-142783	zoneinfo-eager-decref	free and use on adjacent lines	sublet	fault	True	24	0x101a09d24	0x101a09d24	False		1
+12	gh-143004	counter-update-borrowed-value	free/reuse/stale read	spatial	complete	True					1	0
+12	gh-143004	counter-update-borrowed-value	free/reuse/stale read	sublet	fault	True	24	0x101a09da8	0x101a09da8	False		1
+13	gh-144833	ssl-decref-self-then-read-self	interior pointer	spatial	complete	True					1	0
+13	gh-144833	ssl-decref-self-then-read-self	interior pointer	sublet	fault	True	24	0x101a09d58	0x101a09d58	False		1
+14	gh-146011	decimal-signaldict-outlives-context	parked in a surviving object	spatial	complete	True					1	0
+14	gh-146011	decimal-signaldict-outlives-context	parked in a surviving object	sublet	fault	True	24	0x101a09e00	0x101a09e00	False		1
+15	gh-149449	unicodedata-capi-freed-under-cache	bare PyMem block, cached	spatial	complete	True					1	0
+15	gh-149449	unicodedata-capi-freed-under-cache	bare PyMem block, cached	sublet	fault	True	24	0x101a09d44	0x101a09d44	False		1
+16	gh-151403	fork-exec-fspath-mutates-args	free/reuse/stale read	spatial	complete	True					1	0
+16	gh-151403	fork-exec-fspath-mutates-args	free/reuse/stale read	sublet	fault	True	24	0x101a09d68	0x101a09d68	False		1
+17	gh-151416	spawnv-fspath-mutates-argv	free/reuse/stale read	spatial	complete	True					1	0
+17	gh-151416	spawnv-fspath-mutates-argv	free/reuse/stale read	sublet	fault	True	24	0x101a09d70	0x101a09d70	False		1
+18	gh-151695	curses-screen-encoding-global	parked in a global	spatial	complete	True					1	0
+18	gh-151695	curses-screen-encoding-global	parked in a global	sublet	fault	True	24	0x101a09d58	0x101a09d58	False		1
+19	gh-153539	textio-tell-reentrant-decoder	free/reuse/stale read	spatial	complete	True					1	0
+19	gh-153539	textio-tell-reentrant-decoder	free/reuse/stale read	sublet	fault	True	24	0x101a09d54	0x101a09d54	False		1

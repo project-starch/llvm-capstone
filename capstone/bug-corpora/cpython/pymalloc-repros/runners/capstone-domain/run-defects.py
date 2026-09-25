@@ -176,14 +176,22 @@ echo __EXIT_CODE__$status
 cp /tmp/pyc-report.bin /mnt/host/report.bin 2>/dev/null || true
 echo PYC_DEFECT_DONE
 """)
+        # An input that cannot be hashed is recorded as ABSENT, never as the hash
+        # of something else. The domain binaries are built once and re-run many
+        # times, so a re-run on a host whose LLVM build tree is gone is a real
+        # case: the arms still say everything they said before about the
+        # emulator, and the one thing that cannot be re-established is which
+        # compiler produced the binary. Recording null says so; substituting any
+        # other file's hash would make the manifest claim a provenance the run
+        # does not have.
+        compiler = Path(os.environ["CAPSTONE_LLVM_BUILD_DIR"]) / "bin/clang"
         write_json(
             run / "manifest.json",
             {
                 "sha256": hashes,
                 "qemu_sha256": digest(os.environ["CAPSTONE_QEMU_BINARY"]),
-                "compiler_sha256": digest(
-                    Path(os.environ["CAPSTONE_LLVM_BUILD_DIR"]) / "bin/clang"
-                ),
+                "compiler_sha256": digest(compiler) if compiler.exists() else None,
+                "compiler_path": str(compiler),
             },
         )
         # BOUND EVERY BOOT. run_guest defaults to timeout_multiplier=12, which on

@@ -1,0 +1,29 @@
+{
+  "domain_binaries": {
+    "defect-00.dom": "d29dcd4c8bab60150d23d1b5001463ad2a4a480a69b31f34c643dc3c8ba1fd19",
+    "defect-01.dom": "348325eb5bc958524acc127e053ff1ea4e7cd868f9a1c2b9aca211b53e590135",
+    "defect-02.dom": "97b67c8fa8b3c4f67c032b1b4472e4f9c33254ebcc110623ce3f54abd716ca1e",
+    "defect-03.dom": "6f57df53d5eb1e4e6e955fbc80e06f02d428b372dd4c3e3a2fe77e29e24d0acc",
+    "defect-04.dom": "a946cd2ec33d2b7e536ea88c77191979ed96f0ee74ab0aab2f02441041db7f31",
+    "defect-05.dom": "81a70bdc5a364cfef3fe3bbced84d52af242fbf735fa2a0a14b6ab466cbdd57c",
+    "defect-06.dom": "138222fba9d4e89e22a457ab8ba810c68f2c086e57c23136b5e04a45200cdcd9",
+    "defect-07.dom": "f967c4ab4f88c74934f625e83acca35d27aad24cdec660eac362cedee1e0b268",
+    "defect-08.dom": "39455f2641acbb22c4fb027e26205dbfa835b634ab2e032480fb438ae1b365d5",
+    "defect-09.dom": "ed871a41f607b63e2bb4433a0d6185eef4851d96907cfe69c3a6cf171bb180a5",
+    "defect-10.dom": "ad7eca6320ecd4ac7b88b3f5e9f2623de58939e94367cc290f96e979f618c5d1",
+    "defect-11.dom": "36fd9ae6d2d04e96f165acf9236a6fb9a901f8bf353892a920d418cfb441734e",
+    "defect-12.dom": "1033f554547e2d0327458ef489710e819a2c7b33a1148033563ebf508f501f20",
+    "defect-13.dom": "5937cf904e9da70ebaa5064791b38dbc7186daf38510a1b2f8c411d0755b755e",
+    "defect-14.dom": "441630be0041ad634c7af63fdf2b1692facd1ad53d654f6840ac111b1ebb8d28",
+    "defect-15.dom": "e536863c646d84a070320722fa3401d4b18351611db5d99f96b5055642864a8b",
+    "defect-16.dom": "1ab600a4a4044a74c8e15c7acf3f10fea9c9f0d7a7c9b05cd54e79ab17709252",
+    "defect-17.dom": "64cc3739169c51e535dec224fe76c3c40f1a5cc749cd7f426cfba42c04d8349c",
+    "defect-18.dom": "a629d82bf2f79e4d61fb0c78dd83b27d5b27b389456ed9a9ef03dad536c04b43",
+    "defect-19.dom": "ff604050f8a47a06d8049d7e1e991dfb305d0dffe6f146743699edcceb484fa8"
+  },
+  "domain_loader": "997f6b5da4d4350383d3a588ca32f18248d718362b4935eefe8077ae77211efc",
+  "qemu": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+  "clang": null,
+  "distinct_trace_inputs": 20,
+  "arms": 40
+}

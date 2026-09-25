@@ -15,7 +15,10 @@ results recorded here are the Capstone ones.
 **Every one of the 20 reachable defects has a driver.** That is the whole
 reachable set at the pin, not a sample — the inventory, the triage and the three
 corrections that took it from 23 to 20 are in
-`docs/ref/cpython-pymalloc-defects.md`. Results: `results/20260919-qemu-20/` — **40/40 arms**.
+`docs/ref/cpython-pymalloc-defects.md`. Results: `results/20260925-qemu-20-percase/` —
+**40/40 arms**, the current one-program-per-defect layout on the current QEMU.
+`results/20260919-qemu-20/` is the same 40/40 on the single-binary layout this tree
+no longer builds, kept because it is where the claim was first established.
 
 ## The twenty
 
