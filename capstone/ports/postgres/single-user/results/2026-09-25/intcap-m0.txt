@@ -1,0 +1,86 @@
+# intcap M0: PostgreSQL 17.5 compiled by CHERI clang (riscv64-purecap), unique diagnostic sites
+objects built: 961
+compile errors (unique): 3
+config: ALIGNOF_DOUBLE=8 MAXIMUM_ALIGNOF=8 SIZEOF_SIZE_T=8 SIZEOF_VOID_P=16
+sites -Wcheri-inefficient [other]: 20
+sites -Wcheri-provenance [Datum]: 1
+sites -Wformat [uintptr/intptr]: 11
+sites -Wpointer-to-int-cast [other]: 1
+sites -Wshorten-cap-to-int [Datum]: 29
+sites -Wshorten-cap-to-int [uintptr/intptr]: 5
+sites -Wundefined-internal [other]: 1
+
+## sites (file:line flag [scope] message)
+brin_bloom.c:345 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+brin_pageops.c:76 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+brin_pageops.c:362 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+catcache.c:216 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'uint32' (aka 'unsigned int')
+datum.c:459 -Wcheri-inefficient [other] found underaligned store of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tag
+datum.c:521 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+detoast.c:45 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+detoast.c:116 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+detoast.c:205 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+detoast.c:545 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+detoast.c:601 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+event_trigger.c:2029 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'Oid' (aka 'unsigned int')
+execExpr.c:2902 -Wshorten-cap-to-int [uintptr/intptr] implicit conversion loses capability metadata: 'intptr_t' (aka '__intcap') to 'ExprEvalOp' (aka 'enum ExprEvalOp')
+execExprInterp.c:278 -Wshorten-cap-to-int [uintptr/intptr] implicit conversion loses capability metadata: 'intptr_t' (aka '__intcap') to 'ExprEvalOp' (aka 'enum ExprEvalOp')
+execExprInterp.c:279 -Wshorten-cap-to-int [uintptr/intptr] implicit conversion loses capability metadata: 'intptr_t' (aka '__intcap') to 'ExprEvalOp' (aka 'enum ExprEvalOp')
+execExprInterp.c:327 -Wshorten-cap-to-int [uintptr/intptr] implicit conversion loses capability metadata: 'intptr_t' (aka '__intcap') to 'ExprEvalOp' (aka 'enum ExprEvalOp')
+expandeddatum.c:29 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+expandeddatum.c:48 -Wcheri-inefficient [other] found underaligned store of capability type (aligned to 2 bytes instead of 16). Will use memcpy() instead of capability load to preserve tag
+expandeddatum.c:95 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+expandeddatum.c:118 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+expandeddatum.c:136 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+fileset.c:188 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'uint32' (aka 'unsigned int')
+gist.c:1471 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+hashinsert.c:85 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+hio.c:536 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+jsonpath.c:988 -Wshorten-cap-to-int [uintptr/intptr] implicit conversion loses capability metadata: 'uintptr_t' (aka 'unsigned __intcap') to 'int32' (aka 'int')
+jsonpath_exec.c:1521 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int32' (aka 'int')
+mac.c:483 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+mac.c:529 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'unsigned int'
+multirangetypes.c:2642 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int'
+multirangetypes.c:2650 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int'
+multirangetypes.c:2658 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int'
+multirangetypes.c:2666 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int'
+multirangetypes.c:2836 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'uint32' (aka 'unsigned int')
+nbtutils.c:5111 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+network.c:625 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+network.c:669 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'unsigned int'
+network.c:705 -Wcheri-provenance [Datum] binary expression on capability types 'Datum' (aka 'unsigned __intcap') and 'Datum'; it is not clear which should be used as the source of p
+numeric.c:545 -Wundefined-internal [other] function 'numeric_abbrev_convert_var' has internal linkage but is not defined
+objectaddress.c:4271 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'Oid' (aka 'unsigned int')
+pg_proc.c:1194 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'Oid' (aka 'unsigned int')
+pg_shmem.c:700 -Wcheri-inefficient [other] memcpy operation with capability argument 'PGShmemHeader' (aka 'struct PGShmemHeader') and underaligned destination (aligned to 1 bytes) may
+printsimple.c:126 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'Oid' (aka 'unsigned int')
+rangetypes.c:1297 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int'
+rangetypes.c:1305 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int'
+rangetypes.c:1313 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int'
+rangetypes.c:1321 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int'
+rangetypes.c:1383 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'uint32' (aka 'unsigned int')
+reorderbuffer.c:2109 -Wcheri-inefficient [other] found underaligned store of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tag
+reorderbuffer.c:3710 -Wcheri-inefficient [other] memcpy operation with capability argument 'struct SnapshotData' and underaligned destination (aligned to 1 bytes) may be inefficient or resu
+resowner.c:229 -Wpointer-to-int-cast [other] cast to smaller integer type 'uint32' (aka 'unsigned int') from 'const ResourceOwnerDesc *' (aka 'const struct ResourceOwnerDesc *')
+rewriteDefine.c:731 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'char'
+rewriteheap.c:641 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+sortsupport.c:60 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int'
+spgdoinsert.c:2003 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+spgdoinsert.c:2280 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+spgutils.c:952 -Wcheri-inefficient [other] found underaligned store of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tag
+spgutils.c:994 -Wcheri-inefficient [other] found underaligned store of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tag
+spgutils.c:1030 -Wformat [uintptr/intptr] format specifies type 'size_t' (aka 'unsigned long') but the argument has type 'uintptr_t __attribute__((cheri_no_provenance))' (aka 'unsign
+syscache.c:463 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'Oid' (aka 'unsigned int')
+tupdesc.c:627 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'uint32' (aka 'unsigned int')
+tupdesc.c:628 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'uint32' (aka 'unsigned int')
+tupdesc.c:630 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'uint32' (aka 'unsigned int')
+uuid.c:358 -Wcheri-inefficient [other] found underaligned load of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags
+uuid.c:388 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'unsigned int'
+varlena.c:715 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int32' (aka 'int')
+varlena.c:720 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'int32' (aka 'int')
+varlena.c:2422 -Wshorten-cap-to-int [Datum] implicit conversion loses capability metadata: 'Datum' (aka 'unsigned __intcap') to 'unsigned int'
+
+## compile errors
+../../../../src/include/executor/execExpr.h:723 static assertion failed due to requirement 'sizeof(struct ExprEvalStep) <= 64': size of ExprEvalStep exceeds 64 bytes
+../../../src/include/executor/execExpr.h:723 static assertion failed due to requirement 'sizeof(struct ExprEvalStep) <= 64': size of ExprEvalStep exceeds 64 bytes
+aset.c:362 static assertion failed due to requirement 'sizeof(struct AllocFreeListLink) <= (1 << 3)': sizeof(AllocFreeListLink) lar
