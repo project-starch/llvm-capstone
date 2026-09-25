@@ -1640,8 +1640,17 @@ RETURN" rule applied to privilege rather than to control flow.
 >     per-slot revocation.
 >   - **Unproven until measured:** whether GVN or CSE recombines the casts into one GPCR vreg at the PHI.
 >   - **Pass criteria, fixed before the build:** `movc-cfg-scan` on a fresh cell ⑥ -O2 image shows no
->     `setupLookaside` site; its emulator counters equal arm C's (5568/37966/32565/37966/5401); and
+>     `setupLookaside` site; **the board reads the SAME counters as that image's own emulator run**; and
 >     `--stats` on silicon reads non-zero lookaside slots.
+>   - **RETRACTED (2026-09-25): "its emulator counters equal arm C's (5568/37966/32565/37966/5401)".**
+>     - Arm C (image `2b9e4d0d`, boot 2026-09-15) and E2's cell ⑥ (09-14) both predate `dac22bcaeca4`
+>       (09-18), which rewrote the patch onto `capstone_cap_slot` and the runtime header. So they are
+>       a different program, not a baseline for today's tree.
+>     - Measured by the compiler lane on the rebuilt port: `split=5481 mrev=37884 delin=32575
+>       revoke=37884 init=5309`, lookaside ON (25015). Close to arm C, not equal.
+>     - D′ was verified against that image's own counters instead: bit-identical before and after,
+>       both `setupLookaside` sites gone, and the two unrelated sites still present as the scanner
+>       control.
 > - **C (the class fix, prototype and cost only, no commitment):** keep a bridged integer in a GPR until
 >   it is genuinely used as a capability. The audit found it is NOT "all four sites by construction":
 >   - `main+0x3aabc` is not shown to be a bridged value;

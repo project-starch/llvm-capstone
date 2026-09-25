@@ -4647,7 +4647,8 @@ setup function at -O0 as the C-32 workaround*. **Condition RE-WORDED by the lead
 a pure -O2 ⑥ becomes P1's number once **the live site is removed, whether by the port or by the compiler**, as
 verified by all three of:
 - `movc-cfg-scan.py` over the image shows no `setupLookaside` site;
-- the image reads these counters (5568/37966/32565/37966/5401) on the emulator;
+- the board reads the same counters as the image's own emulator run (RETRACTED 2026-09-25: "these counters
+  (5568/37966/32565/37966/5401)" were arm C's, and arm C predates the 09-18 patch rewrite; see C-32);
 - `--stats` reads non-zero lookaside slots on silicon.
 The route chosen is D′, a port change that keeps the lookaside base as an integer (see C-32). The paper must
 disclose that one port function was changed. (The condition as first written: "only when the bridge is
