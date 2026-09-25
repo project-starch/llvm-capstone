@@ -26,7 +26,7 @@ sqlite3-capstone.c:31887    metadata    allocator   lookasideEntry finds the ent
 sqlite3-capstone.c:31988    hierarchy   allocator   sublet_give on the lookaside free path
 sqlite3-capstone.c:32029    hierarchy   allocator   sublet_give on the other lookaside free path
 sqlite3-capstone.c:32228    hierarchy   allocator   sublet_take, the slot goes out as an alias
-sqlite3-capstone.c:188234   hierarchy   allocator   the block field, linear while it is carved
+sqlite3-capstone.c:188230   hierarchy   allocator   the block field, linear while it is carved; and pStart becomes its ADDRESS (D')
 sqlite3-capstone.c:188246   hierarchy   allocator   an application buffer is refused, it is not linear
 sqlite3-capstone.c:188265   hierarchy   allocator   the pool comes from sqlite3MallocLinear
 sqlite3-capstone.c:188286   metadata    allocator   the aSlot table is allocated beside the pool

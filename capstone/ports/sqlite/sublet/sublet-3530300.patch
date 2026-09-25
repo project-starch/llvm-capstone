@@ -2,10 +2,14 @@
 #
 # A diff against sqlite3-capstone.c as build-sqlite-capstone.sh produces it from
 # the amalgamation (its sed lines are the platform's, not this port's).  The
-# primitives are capstone/sublet/sublet.h, shared by every port.  The amalgamation includes
-# it as <sublet/sublet.h> in the first hunk; the build adds both capstone/ and capstone/sublet
-# to the include path when it applies this patch, so that form and a plain "sublet.h" reach the
-# same file, and the unprotected build never sees a Sublet file.
+# primitives this patch calls are capstone/runtime/include/sublet/sublet.h, which declares
+# capstone_cap_slot and implements seven of them over <capstone/capability.h>.  The amalgamation
+# includes it as <sublet/sublet.h> in the first hunk, and the build puts capstone/runtime/include
+# on the include path AHEAD of capstone/ when it applies this patch -- the order matters, because
+# -I capstone also resolves that spelling, to the OLDER capstone/sublet/sublet.h, which declares
+# struct sublet_cap and has never contained capstone_cap_slot.  The two headers are NOT
+# interchangeable; a plain "sublet.h" still reaches the older one, which other ports use.  The
+# unprotected build sees no Sublet file at all.
 # Every hunk belongs to one class of the bookkeeping in
 # nested-allocators-paper experiments/A7-ports.md:
 #
@@ -29,6 +33,18 @@
 # the free-to-reuse gaps of A1 are the same under the port (the profile gate of
 # A8).  Apply with patch -F0 -p1 to the copy in the build directory, before any
 # instrument's patch.
+#
+# D-PRIME (2026-09-25), class I.  sqlite3MallocLinear returns uptr, the ADDRESS of the block,
+# instead of void*, and setupLookaside keeps pStart as a uptr, casting back at the four places
+# that consume it.  The capability never enters a C variable: it stays in the `block` slot and in
+# the per-slot p->cap, which is the Sublet discipline.  This removes C-32 at setupLookaside --
+# the only two shapes in the whole translation unit (one INT-ONLY, one mixed) -- measured with
+# movc-cfg-scan.py, 2 hits before and 0 after, with the scanner's self-test and the same scan on
+# the unmodified arm as controls.  It is sound because every consumer of the value uses it as an
+# address and never dereferences it: memsys5Size and memsys5FreeUnsafe both compute
+# ((uptr)p - mem5.poolBase)/szAtom, the free list lives in mem5.aLink beside the pool rather than
+# in the freed memory, sublet_carve already takes an unsigned long, and every use of
+# db->lookaside.pStart/pMiddle/pEnd is a comparison or (uptr) arithmetic indexing aSlot[].
 --- a/sqlite3-capstone.c
 +++ b/sqlite3-capstone.c
 @@ -25,6 +25,7 @@
@@ -60,7 +76,7 @@
  SQLITE_PRIVATE int sqlite3MallocInit(void);
  SQLITE_PRIVATE void sqlite3MallocEnd(void);
  SQLITE_PRIVATE void *sqlite3Malloc(u64);
-+SQLITE_PRIVATE void *sqlite3MallocLinear(u64, capstone_cap_slot*);
++SQLITE_PRIVATE uptr sqlite3MallocLinear(u64, capstone_cap_slot*);
  SQLITE_PRIVATE void *sqlite3MallocZero(u64);
  SQLITE_PRIVATE void *sqlite3DbMallocZero(sqlite3*, u64);
  SQLITE_PRIVATE void *sqlite3DbMallocRaw(sqlite3*, u64);
@@ -200,13 +216,13 @@
 +  int i = memsys5CarveUnsafe(nByte);
 +  return i<0 ? 0 : sublet_take(&mem5.aCap[i]);
 +}
-+SQLITE_PRIVATE void *sqlite3MallocLinear(u64 nByte, capstone_cap_slot *pBlock){
++SQLITE_PRIVATE uptr sqlite3MallocLinear(u64 nByte, capstone_cap_slot *pBlock){
 +  int i;
 +  if( nByte>0x7fffff00 ) return 0;
 +  memsys5Enter();
 +  i = memsys5CarveUnsafe((int)nByte);
 +  memsys5Leave();
-+  return i<0 ? 0 : (void*)sublet_take_linear(&mem5.aCap[i], pBlock);
++  return i<0 ? 0 : sublet_take_linear(&mem5.aCap[i], pBlock);
  }
  
  /*
@@ -388,7 +404,12 @@
    }else{
      db->lookaside.anStat[2]++;
    }
-@@ -188146,6 +188234,7 @@
+@@ -188142,10 +188230,11 @@
+   int cnt         /* Number of slots to allocate */
+ ){
+ #ifndef SQLITE_OMIT_LOOKASIDE
+-  void *pStart;          /* Start of the lookaside buffer */
++  uptr pStart;           /* ADDRESS of the lookaside buffer, not a pointer: see C-32 */
    sqlite3_int64 szAlloc; /* Total space set aside for lookaside memory */
    int nBig;              /* Number of full-size slots */
    int nSm;               /* Number smaller LOOKASIDE_SMALL-byte slots */
@@ -418,31 +439,34 @@
 -    pStart = sqlite3Malloc( szAlloc );
 +    pStart = sqlite3MallocLinear( szAlloc, &block );
      sqlite3EndBenignMalloc();
-     if( pStart ) szAlloc = sqlite3MallocSize(pStart);
+-    if( pStart ) szAlloc = sqlite3MallocSize(pStart);
 -  }else{
 -    pStart = pBuf;
++    if( pStart ) szAlloc = sqlite3MallocSize((void*)pStart);
    }
  #ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
    if( sz>=LOOKASIDE_SMALL*3 ){
-@@ -188194,6 +188286,13 @@
+@@ -188194,7 +188286,14 @@
    }else{
      nBig = nSm = 0;
    }
+-  db->lookaside.pStart = pStart;
 +  if( pStart ){
 +    db->lookaside.aSlot = sqlite3MallocZero((u64)(nBig+nSm)*sizeof(LookasideSlot));
 +    if( db->lookaside.aSlot==0 ){
-+      sqlite3_free(pStart);
++      sqlite3_free((void*)pStart);
 +      pStart = 0;
 +    }
 +  }
-   db->lookaside.pStart = pStart;
++  db->lookaside.pStart = (void*)pStart;
    db->lookaside.pInit = 0;
    db->lookaside.pFree = 0;
+   db->lookaside.sz = (u16)sz;
 @@ -188202,28 +188301,33 @@
    if( pStart ){
      int i;
      LookasideSlot *p;
-+    uptr a = (uptr)pStart;
++    uptr a = pStart;
      assert( sz > (int)sizeof(LookasideSlot*) );
 -    p = (LookasideSlot*)pStart;
 +    p = db->lookaside.aSlot;
@@ -469,7 +493,7 @@
 -    assert( ((uptr)p)<=szAlloc + (uptr)pStart );
 -    db->lookaside.pEnd = p;
 +    capstone_cap_clear(&block);  /* what the slots did not cover dies with the block */
-+    assert( a<=szAlloc + (uptr)pStart );
++    assert( a<=szAlloc + pStart );
 +    db->lookaside.pEnd = (void*)a;
      db->lookaside.bDisable = 0;
 -    db->lookaside.bMalloced = pBuf==0 ?1:0;
