@@ -84,17 +84,24 @@ grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
 # the patch's own directory joins the include path too, for anything a program's port keeps
 # beside it. Both join only here, so the unprotected build never sees a Sublet file.
 #
-# TWO include ROOTS, because two conventions now coexist. This lane's code says
-# `#include "sublet.h"`; the collaborator's amalgamation patch says `#include <sublet/sublet.h>`.
-# Adding capstone/ as a root makes the angle form resolve to capstone/sublet/sublet.h without
-# moving the header or rewriting either caller. capstone/runtime/include carries the capability
-# headers the same change introduced.
+# TWO include ROOTS, because two conventions coexist. This lane's code says `#include "sublet.h"`
+# and means capstone/sublet/sublet.h (struct sublet_cap, 13 primitives as raw .insn); the
+# amalgamation patch says `#include <sublet/sublet.h>` and means capstone/runtime/include/sublet/
+# sublet.h (capstone_cap_slot, 7 primitives over <capstone/capability.h>). THESE ARE TWO DIFFERENT
+# HEADERS WITH INCOMPATIBLE TYPE NAMES, not one header reachable two ways.
+#
+# ORDER IS LOAD-BEARING: capstone/runtime/include MUST precede capstone/, because `-I capstone`
+# also resolves <sublet/sublet.h> -- to capstone/sublet/sublet.h, which has never contained
+# capstone_cap_slot. With the roots the other way round the Sublet build fails with "use of
+# undeclared identifier 'capstone_cap_slot'", which is what it did from the PR #48 merge
+# (06a31271f200, 2026-09-18) until this was restored. dac22bcaeca4 had it right with a single
+# root; the merge added two in front of it. Verify with `clang -H` if this is ever touched.
 SUBLET_FLAGS=()
 if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_SUBLET_PATCH"
-  SUBLET_FLAGS=(-I"$REPO_ROOT/capstone/sublet"
+  SUBLET_FLAGS=(-I"$REPO_ROOT/capstone/runtime/include"
+                -I"$REPO_ROOT/capstone/sublet"
                 -I"$REPO_ROOT/capstone"
-                -I"$REPO_ROOT/capstone/runtime/include"
                 -I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
 fi
 if [ -n "${SQLITE_HOOK_PATCH:-}" ]; then

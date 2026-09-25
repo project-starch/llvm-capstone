@@ -9,12 +9,15 @@ measurement is that build. `SPEEDTEST1_SUBLET=1` in `run-sqlite-speedtest1.sh`, 
 |---|---|
 | `sublet-3530300.patch` | the port of memsys5 and the lookaside pool: 28 hunks against `sqlite3-capstone.c` as the build produces it from the amalgamation, each hunk classed in the header (I interface, H hierarchy, M metadata layout). Applied with `patch -F0 -p1` to the copy in the build directory, before any instrument's patch |
 
-The primitives are not SQLite's and do not live here. They are
-[`capstone/sublet/sublet.h`](../../../sublet/sublet.h), shared by every port, and the build
-puts that directory on the include path only when a Sublet patch is applied. What stays here
-is the patch and this bookkeeping. The capability-slot headers added alongside the shared-runtime
-layout live in `capstone/runtime/include/capstone/`; the build adds that root too, so an
-`#include <sublet/sublet.h>` and an `#include "sublet.h"` both resolve to the one header.
+The primitives are not SQLite's and do not live here, and there are TWO headers rather than one.
+This patch's `#include <sublet/sublet.h>` resolves to
+[`capstone/runtime/include/sublet/sublet.h`](../../../runtime/include/sublet/sublet.h), which
+declares `capstone_cap_slot` and implements seven primitives over `<capstone/capability.h>`. The
+older [`capstone/sublet/sublet.h`](../../../sublet/sublet.h), reached as `#include "sublet.h"` by
+other ports, declares `struct sublet_cap` and spells thirteen primitives as raw `.insn`. The two
+are NOT interchangeable and the names do not match, so the build must put
+`capstone/runtime/include` on the include path AHEAD of `capstone/` -- `-I capstone` resolves the
+angle form to the wrong one of the two. What stays here is the patch and this bookkeeping.
 
 ## The recipe, as it lands in the two allocators
 

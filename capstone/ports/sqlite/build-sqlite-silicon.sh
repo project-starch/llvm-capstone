@@ -72,7 +72,12 @@ cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 SUBLET_INC=()
 if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OBJ_DIR" < "$SQLITE_SUBLET_PATCH"
-  SUBLET_INC=(-I"$REPO_ROOT/capstone/sublet"
+  # capstone/runtime/include FIRST: the patch's `#include <sublet/sublet.h>` means the
+  # capstone_cap_slot header that lives there. It was missing from this list altogether, so a
+  # Sublet build here failed with "'sublet/sublet.h' file not found" -- a different symptom from
+  # build-sqlite-capstone.sh's, same cause. See that script's SUBLET_FLAGS comment.
+  SUBLET_INC=(-I"$REPO_ROOT/capstone/runtime/include"
+              -I"$REPO_ROOT/capstone/sublet"
               -I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
   echo "== Sublet port applied to this build's amalgamation ($(basename "$SQLITE_SUBLET_PATCH"))"
 fi
