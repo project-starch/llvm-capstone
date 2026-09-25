@@ -103,7 +103,11 @@ EOF
 done
 cp "$SCRIPT" "$SHARE/main.py"
 
-"$CPY_ROOT/build-python/python" "$SCRIPT_DIR/make-stdlib-zip.py" \
+# CPY_BUILD_PYTHON, the same variable prepare-cpython-capstone.sh takes, so a
+# tree configured against an existing native build can be run as well as built.
+# Hardcoding the in-tree path meant a run against such a tree died here with
+# "No such file or directory" after the images were already staged.
+"${CPY_BUILD_PYTHON:-$CPY_ROOT/build-python/python}" "$SCRIPT_DIR/make-stdlib-zip.py" \
   "$CPY_ROOT/src/Python-3.13.7/Lib" "$SHARE/pyhome/lib/python313.zip"
 
 # CPY_SUBLET=1: the host shares the allocator's two regions as well. The sizes
