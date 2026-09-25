@@ -116,7 +116,40 @@ CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
   -c "$MRT/level0.c" -o "$RT/level0.o"
 "$CAPSTONE_CLANG" "${CF[@]}" -I"$MUSL_DIR/src/multibyte" \
   -c "$MRT/mbsrtowcs_bounds_safe.c" -o "$RT/mbsrtowcs_bounds_safe.o"
-"$CAPSTONE_CLANG" "${CF[@]}" -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$RT/domain_entry.o"
+
+# The Sublet arm's allocator side. link-cpython-capstone.py links every *.o in
+# this directory, so compiling them here is the whole wiring; nothing in the link
+# step changes. The adapter and its metadata heap are the component port's,
+# program-independent and taken as they are -- 40/40 arms of the pymalloc defect
+# corpus stand on that code -- and PYMALLOC_DOMAIN selects backing.c's domain
+# form, whose arenas come from the shared region rather than from a native heap.
+# hostcall.c is rebuilt with CAPSTONE_PROGRAM_REGIONS so it parks the two regions
+# the adapter's init needs; the plain arm never sees any of this and stays
+# byte-identical.
+DOMAIN_ENTRY_FLAGS=()
+if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
+  PYM=$PORTS_DIR/cpython/pymalloc/src
+  # THERE ARE TWO sublet.h AND THE ORDER DECIDES WHICH. capstone/sublet/sublet.h
+  # is the shared one, over `sublet_cap`; capstone/runtime/include/sublet/sublet.h
+  # is over `capstone_cap_slot` and pulls in capstone/capability.h, and that is
+  # the one the adapter is written against. Putting capstone/ on the path first
+  # resolves <sublet/sublet.h> to the other file and the build fails on an unknown
+  # capstone_cap_slot -- loudly, which is the good case. SIZEOF_VOID_P=16 is the
+  # component port's own domain define (cmake/Replay.cmake).
+  SUBLET_INC=(-I"$PYM/shared" -I"$REPO_ROOT/capstone/runtime/include" -DSIZEOF_VOID_P=16)
+  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" -DPYMALLOC_DOMAIN \
+    -c "$PYM/allocators/sublet/block-lifetimes.c" -o "$RT/pym_block_lifetimes.o"
+  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" -DPYMALLOC_DOMAIN \
+    -c "$PYM/shared/backing.c" -o "$RT/pym_backing.o"
+  "$CAPSTONE_CLANG" "${CF[@]}" \
+    -c "$SCRIPT_DIR/toolchain/pym_sublet_glue.c" -o "$RT/pym_sublet_glue.o"
+  "$CAPSTONE_CLANG" "${CF[@]}" -DCAPSTONE_PROGRAM_REGIONS=1 \
+    -c "$MRT/hostcall.c" -o "$RT/hostcall.o"
+  DOMAIN_ENTRY_FLAGS=(-DCPY_SUBLET=1)
+  log "Sublet arm: adapter, metadata heap and glue compiled; hostcall.c parks program regions"
+fi
+"$CAPSTONE_CLANG" "${CF[@]}" "${DOMAIN_ENTRY_FLAGS[@]}" \
+  -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$RT/domain_entry.o"
 
 # compiler-rt's generic builtins, as an ARCHIVE so the linker takes only what is
 # referenced -- which is what a toolchain's libclang_rt.builtins.a is. The

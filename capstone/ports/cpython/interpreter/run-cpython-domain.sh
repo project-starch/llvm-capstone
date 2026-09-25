@@ -106,10 +106,23 @@ cp "$SCRIPT" "$SHARE/main.py"
 "$CPY_ROOT/build-python/python" "$SCRIPT_DIR/make-stdlib-zip.py" \
   "$CPY_ROOT/src/Python-3.13.7/Lib" "$SHARE/pyhome/lib/python313.zip"
 
+# CPY_SUBLET=1: the host shares the allocator's two regions as well. The sizes
+# are the adapter's own constants (ports/cpython/pymalloc/src/shared/port.h,
+# PYM_ARENA_BYTES and PYM_META_BYTES) and are NOT free to choose --
+# pym_lifetime_init refuses a payload region that is not exactly PYM_ARENA_BYTES
+# long and 16 KiB aligned. Keep them in step with that header.
+SUBLET_HOST_FLAGS=()
+SUBLET_REGION_MB=0
+if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
+  SUBLET_HOST_FLAGS=(-DLT_PROGRAM_REGION0_BYTES=$((64 << 20))UL
+                     -DLT_PROGRAM_REGION1_BYTES=$((16 << 20))UL)
+  SUBLET_REGION_MB=80
+fi
 "$BR/host/bin/riscv64-buildroot-linux-gnu-gcc" -O2 \
   -I"$MUSL_PORT/libc-test" -I"$MUSL_PORT/runtime" -I"$MODSRC/userspace/lib" \
   -I"$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/hostcall-stdout-probe" \
   -I"$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu" \
+  "${SUBLET_HOST_FLAGS[@]}" \
   -o "$SHARE/lt.user" "$MUSL_PORT/libc-test/libc_test_host.c" "$MODSRC/userspace/lib/libcapstone.c"
 
 cp -r "$MODSRC/module" "$WORK/mod/module"; cp -r "$MODSRC/include" "$WORK/mod/include"
@@ -173,7 +186,10 @@ export CAPSTONE_GP_NONLIN=${CAPSTONE_GP_NONLIN:-1}
 # rest of the boot: with the old fixed cma=256M the second run of a batch
 # failed create_dom ("Failed to allocate memory for domain (order 15)"). One
 # block per run plus one spare, inside the guest's 8 GiB.
-CMA_MB=$(( (NRUNS + 1) * 128 ))
+# The Sublet arm's two regions come from CMA too (the module allocates a region
+# with dma_alloc_pages, capstone.c:265), and they are per RUN for the same reason
+# the blocks are: nothing frees them for the rest of the boot.
+CMA_MB=$(( (NRUNS + 1) * (128 + SUBLET_REGION_MB) ))
 (( CMA_MB <= 6144 )) || { echo "$NRUNS runs need ${CMA_MB} MiB of CMA; split them over two boots" >&2; exit 2; }
 # A boot that ends with neither a result line nor a domain halt stalled in the
 # guest (seen on 2026-09-23 with the guest kernel idling, at varying points) and

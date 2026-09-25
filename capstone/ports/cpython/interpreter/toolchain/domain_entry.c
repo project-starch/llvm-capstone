@@ -52,6 +52,9 @@ enum { ENV_MAX = 8, ENV_LINE = 256 };
 
 extern char **__environ;
 int main(int argc, char **argv);
+#ifdef CPY_SUBLET
+int cpy_sublet_init(void);
+#endif
 
 static void read_env_file(char **envp, int *n)
 {
@@ -85,6 +88,20 @@ int capstone_main(void)
 	read_env_file(envp, &n);
 	envp[n] = 0;
 	__environ = envp;
+#ifdef CPY_SUBLET
+	/* AFTER __environ, because the arm is read from the environment, and BEFORE
+	   main(), because the first allocation that reaches pymalloc must already
+	   find the adapter initialised -- obmalloc's pym_* calls would otherwise run
+	   against an empty arena table. Nothing before this point allocates through
+	   pymalloc: the runtime's own startup and stdio go to level0. A failure is
+	   not survivable and must not be quiet, so it ends the run here rather than
+	   letting an "unprotected sublet arm" be measured (pym_sublet_glue.c). */
+	if (cpy_sublet_init() < 0) {
+		fprintf(stderr, "CPY-SUBLET-FAIL init refused; not running the script\n");
+		fflush(stderr);
+		exit(70);
+	}
+#endif
 	/* Returning from main is exit(): atexit handlers run and stdio is flushed.
 	   Returning from capstone_main would do neither, and musl buffers stdout
 	   fully in a domain (the tty ioctl fails), so everything after the first

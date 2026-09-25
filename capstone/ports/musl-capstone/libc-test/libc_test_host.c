@@ -177,6 +177,41 @@ int main(int argc, char **argv) {
   shared_region_annotated(dom, mr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
   shared_region_annotated(dom, pr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
 
+#ifdef LT_PROGRAM_REGION0_BYTES
+  /* Two regions for a program whose ALLOCATOR needs them, past the two host-call
+     ones. hostcall.c compiled with CAPSTONE_PROGRAM_REGIONS parks these and
+     hands them over one at a time through __capstone_region(); HC_PROGRAM_REGIONS
+     is 2, so this is the whole capacity and the order here is the index there.
+     Opt-in at build time, so every other port's host stays byte-identical.
+     Region 0 is TRANSFERRED -- linear, the domain's outright -- because a Sublet
+     allocator carves it and revokes out of it, which needs linearity. Region 1 is
+     ordinary shared writable memory for the allocator's records, which must NOT
+     live in payload it revokes. The host never touches either after call_dom;
+     region 0 it does not even map, since the capability left. */
+#define LT_ANNOTATION_REV_TRANSFERRED 0x3UL
+  region_id_t g0 = create_region(LT_PROGRAM_REGION0_BYTES);
+  region_id_t g1 = create_region(LT_PROGRAM_REGION1_BYTES);
+  if ((long)g0 < 0 || (long)g1 < 0) {
+    /* A region this size comes from CMA (the module's dma_alloc_pages path), so
+       a failure here is the guest's cma= being too small, not a code fault.
+       Saying which is the difference between minutes and a wasted boot. */
+    fprintf(stderr, "libc-test %s: create_region failed for the program regions "
+                    "(%lu and %lu bytes; is the guest's cma= large enough?)\n",
+            name, (unsigned long)LT_PROGRAM_REGION0_BYTES,
+            (unsigned long)LT_PROGRAM_REGION1_BYTES);
+    capstone_cleanup();
+    return 3;
+  }
+  shared_region_annotated(dom, g0, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT,
+                          LT_ANNOTATION_REV_TRANSFERRED);
+  shared_region_annotated(dom, g1, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT,
+                          HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
+  fprintf(stderr, "LT-REGIONS %s program0=%lu transferred program1=%lu shared\n",
+          name, (unsigned long)LT_PROGRAM_REGION0_BYTES,
+          (unsigned long)LT_PROGRAM_REGION1_BYTES);
+  fflush(stderr);
+#endif
+
   static struct hc_host host;
   host.tag = name; host.verbose = 0;
   for (unsigned i = 0; i <= HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES; i++) lt_cur[i] = -1;
