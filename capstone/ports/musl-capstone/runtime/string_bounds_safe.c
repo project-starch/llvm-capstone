@@ -106,6 +106,11 @@ void *memccpy(void *restrict dest, const void *restrict src, int c, size_t n)
    the word-at-a-time code is back in the image through the side door. */
 char *__stpcpy(char *restrict, const char *restrict) __attribute__((alias("stpcpy")));
 char *__stpncpy(char *restrict, const char *restrict, size_t) __attribute__((alias("stpncpy")));
+/* And the public name of the one routine defined under its internal name: musl's
+   strchrnul.o carries both, so a program that calls strchrnul() -- PostgreSQL's
+   snprintf.c does, under HAVE_DECL_STRCHRNUL -- pulled that member in beside
+   this object, and the link failed on the duplicate __strchrnul. */
+char *strchrnul(const char *, int) __attribute__((weak, alias("__strchrnul")));
 
 /* ---- memcpy, memmove, memset: tag-preserving ---------------------------
  *
