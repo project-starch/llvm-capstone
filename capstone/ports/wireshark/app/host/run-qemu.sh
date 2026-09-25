@@ -10,8 +10,11 @@
 #                                        given, one boot, judged by host/safety-verdict.py against
 #                                        host/safety-expect.txt
 #
-# TSAPP_HEAP=level0|shrink picks the heap arm's images (build-domain.sh), from $TS_WORK/domain or
-# $TS_WORK/domain-shrink; TSAPP_DOMAIN_DIR overrides the directory.
+# TSAPP_HEAP=level0|shrink|sublet picks the heap arm's images (build-domain.sh), from $TS_WORK/domain,
+# domain-shrink or domain-sublet; TSAPP_DOMAIN_DIR overrides the directory. On the sublet arm the host
+# also transfers each domain a LINEAR heap region of TSAPP_HEAP_REGION_BYTES (default 32 MiB, so a
+# CMA region aligned to 1 MiB still holds the heap's self-aligned 16 MiB pool;
+# libc_test_host.c's LT_HEAP_REGION_BYTES).
 #
 # SAFETY MODE. A capability fault inside a domain ends the emulator, so a boot holds at most one
 # fixture predicted to FAULT on its arm, and it must come last: the runner refuses any other
@@ -56,7 +59,14 @@ APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$APP/deps/env.sh" > /dev/null
 MODE=${1:?stages | oracle <capture>... | safety <fixture>...}; shift || true
 HEAP=${TSAPP_HEAP:-level0}
-case $HEAP in level0) d=domain ;; shrink) d=domain-shrink ;; *) echo "TSAPP_HEAP must be level0 or shrink" >&2; exit 2 ;; esac
+HOSTF=() REGION_MB=0
+case $HEAP in
+  level0) d=domain ;;
+  shrink) d=domain-shrink ;;
+  sublet) d=domain-sublet REGION=${TSAPP_HEAP_REGION_BYTES:-$((32 << 20))}
+          HOSTF=(-DLT_HEAP_REGION_BYTES="${REGION}UL") REGION_MB=$(( (REGION + (1 << 20) - 1) >> 20 )) ;;
+  *) echo "TSAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
+esac
 OUT=${TSAPP_DOMAIN_DIR:-$TS_WORK/$d} CAPS=$TS_WORK/xsrc/test/captures RUNS=$TS_WORK/runs
 EXPECT=$APP/host/safety-expect.txt
 STOCK=${TSAPP_STOCK:-$TS_WORK/native-stock/run/tshark}
@@ -82,7 +92,7 @@ LT_DIR="$CAPSTONE_REPO_ROOT/capstone/ports/musl-capstone/libc-test"
   -I"$LT_DIR" -I"$CAPSTONE_REPO_ROOT/capstone/ports/musl-capstone/runtime" \
   -I"$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib" \
   -I"$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/hostcall-stdout-probe" \
-  -I"$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu" \
+  -I"$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu" "${HOSTF[@]}" \
   -o "$SHARE/lt.user" "$LT_DIR/libc_test_host.c" "$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib/libcapstone.c"
 printf '%s\n' /tmp/tshark -r /tmp/input.pcap -V -n > "$SHARE/domain.argv"
 printf '%s\n' TZ=UTC HOME=/tmp WIRESHARK_CONFIG_DIR=/tmp/wsconf > "$SHARE/domain.env"
@@ -178,7 +188,8 @@ for img in sys.argv[2:]:
 print(mb)
 PY2
 )
-CMA=$(( (${#SECTIONS[@]} + 1) * BLOCK_MB * 2 ))
+# On the sublet arm every run also takes its heap region from CMA (dma_alloc_pages, capstone.c).
+CMA=$(( (${#SECTIONS[@]} + 1) * (BLOCK_MB * 2 + REGION_MB) ))
 # The largest cma a boot has been seen to take (the six-capture oracle, 2026-09-24). Beyond it the
 # reservation is untested, and it may not fit below the 4 GiB the kernel places CMA under; a boot
 # that fails there would read as a stall. Split the runs instead.

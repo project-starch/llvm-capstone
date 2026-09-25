@@ -48,6 +48,19 @@ int main(int argc, char **argv) {
   memset(metadata, 0, LT_REGION); memset(payload, 0, LT_REGION);
   shared_region_annotated(dom, mr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
   shared_region_annotated(dom, pr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
+#ifdef LT_HEAP_REGION_BYTES
+  /* A heap for the domain's Sublet heap (runtime/sublet_heap.c), for a port that builds this host
+     with it (the tshark port's sublet arm): a third region, TRANSFERRED, so it arrives LINEAR and
+     this host keeps no authority over it. hostcall.c parks it (CAPSTONE_PROGRAM_REGIONS). As the
+     FFmpeg app's host does it (ports/ffmpeg/app/src/linux-guest/ffapp_host.c). Without the define
+     this host is unchanged. */
+  region_id_t hr = create_region(LT_HEAP_REGION_BYTES);
+  if (hr == (region_id_t)-1) {
+    fprintf(stderr, "libc-test %s: create_region(%lu) for the heap failed\n", name, (unsigned long)LT_HEAP_REGION_BYTES);
+    capstone_cleanup(); return 3;
+  }
+  shared_region_annotated(dom, hr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, 0x3UL /* REV_TRANSFERRED */);
+#endif
 
   static struct hc_host host;
   host.tag = name; host.verbose = 0;

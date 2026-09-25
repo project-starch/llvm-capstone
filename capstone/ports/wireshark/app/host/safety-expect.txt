@@ -61,3 +61,31 @@ shrink   9  RETURN 90005b
 shrink  10  RETURN a0015b
 shrink  11  RETURN b0015b
 shrink  12  RETURN c000ee
+
+# THE SUBLET ARM (host/build-domain.sh TSAPP_HEAP=sublet), registered 2026-09-25 after the level0
+# and shrink runs, BEFORE any sublet image had booted, and pushed before its first run.
+# - The heap is runtime/sublet_heap.c over a 16 MiB pool the host transfers LINEAR: each g_malloc
+#   pointer is narrowed to the bytes asked for, free scrubs the object and revokes every alias,
+#   and free and realloc first read one byte through the pointer they are given.
+# - On capstone-qemu a revoked capability reloads untagged (ISSUES Q-11), and one still in a
+#   register faults as revoked. So a use after free (4), a use after reuse (5) and a stale free
+#   (6, which faults inside free, on that probe read) are each predicted to fault as temporal, at
+#   the address the fixture printed.
+# - wmem's blocks are 1 MiB here (patch 0007), and a scope reset never calls free: a BLOCK_FAST
+#   reset keeps and rewinds its first block, and a BLOCK reset re-initialises its blocks. So the
+#   pointers in 10 and 11 are never revoked, and those two are predicted to RETURN as on the other
+#   arms. That is the gap the wmem hooks would close. 12 stays inside one block: RETURN.
+# - 9 is the compiler's merged globals, the same on every arm.
+sublet   1  RETURN 100001
+sublet   1  LEN    64
+sublet   2  FAULT  oob
+sublet   3  FAULT  oob
+sublet   4  FAULT  temporal
+sublet   5  FAULT  temporal
+sublet   6  FAULT  temporal
+sublet   7  FAULT  oob
+sublet   8  FAULT  oob
+sublet   9  RETURN 90005b
+sublet  10  RETURN a0015b
+sublet  11  RETURN b0015b
+sublet  12  RETURN c000ee
