@@ -1,0 +1,68 @@
+# CPython 3.13.7 compile survey, 2026-09-25, SUBLET ARM (CPY_SUBLET=1: patch 0014 in place of 0009).
+# Output of survey-cpython-capstone.sh, exit 0, on clang a378789289cd built Release+Asserts with the
+# Capstone target (the same revision as the 2026-09-24 survey; that build tree had been removed from
+# the host and was rebuilt for this arm). Absolute host paths replaced by the variables that produced them.
+toolchain-fresh: cannot check: no lit suite directory found under '$CAPSTONE_REPO_ROOT'; the drift check cannot run, and silence must not read as fresh. Pass --suite, or --no-drift-check if that is deliberate.
+capstone-test-env.sh: WARNING: toolchain check rc=2 for $CAPSTONE_LLVM_BUILD_DIR (1 = stale, 2 = could not check)
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0 46 28.0M   46 12.9M    0     0  21.5M      0  0:00:01 --:--:--  0:00:01 21.5M100 28.0M  100 28.0M    0     0  22.1M      0  0:00:01  0:00:01 --:--:-- 22.1M
+[prepare] patches applied: 13 cpython-3.13.7-0001-address-width.patch cpython-3.13.7-0002-freed-pointer-address.patch cpython-3.13.7-0003-radix-tree-address-bits.patch cpython-3.13.7-0004-hash-pointer-address.patch cpython-3.13.7-0005-qsbr-pad-multiple.patch cpython-3.13.7-0006-thread-local-as-global.patch cpython-3.13.7-0007-pointer-int-at-address-width.patch cpython-3.13.7-0008-gc-links-as-pointers.patch cpython-3.13.7-0010-dict-entries-pointer-aligned.patch cpython-3.13.7-0011-no-specialization-with-capabilities.patch cpython-3.13.7-0012-dtoa-bigint-pointer-aligned.patch cpython-3.13.7-0013-pyarena-pointer-aligned.patch cpython-3.13.7-0014-pymalloc-under-sublet.patch
+[prepare] building libc-capstone.a with $CAPSTONE_LLVM_BUILD_DIR/bin/clang
+surveyed       1361 files (169 foreign-arch sources excluded)
+compiled       1355
+failed         6   (99.6% ok)
+archived       1355 objects -> $CPY_ROOT/musl-build/libc-capstone.a
+[prepare] compiler-rt builtins: 162 archived, 19 did not compile (builtins/failed.txt)
+[prepare] link check: strlen links, an undefined function and -lz are refused
+[prepare] configuring CPython for riscv64-unknown-linux-musl via $CAPSTONE_REPO_ROOT/capstone/ports/cpython/interpreter/toolchain/capstone-cc
+[prepare] configure checks that crashed the compiler: 2, all reviewed
+build tree     $CPY_ROOT/build
+compiler       $CAPSTONE_LLVM_BUILD_DIR/bin/clang
+compiler rev   a378789289cdd4838c5bfe311c8d69037c236393
+patches        13  cpython-3.13.7-0001-address-width.patch cpython-3.13.7-0002-freed-pointer-address.patch cpython-3.13.7-0003-radix-tree-address-bits.patch cpython-3.13.7-0004-hash-pointer-address.patch cpython-3.13.7-0005-qsbr-pad-multiple.patch cpython-3.13.7-0006-thread-local-as-global.patch cpython-3.13.7-0007-pointer-int-at-address-width.patch cpython-3.13.7-0008-gc-links-as-pointers.patch cpython-3.13.7-0010-dict-entries-pointer-aligned.patch cpython-3.13.7-0011-no-specialization-with-capabilities.patch cpython-3.13.7-0012-dtoa-bigint-pointer-aligned.patch cpython-3.13.7-0013-pyarena-pointer-aligned.patch cpython-3.13.7-0014-pymalloc-under-sublet.patch
+optimisation   CPython default OPT
+surveyed       250 objects (CPython's Makefile list)
+compiled       250
+failed         0
+notrun         0   (a prerequisite failed first)
+               100.0% ok
+
+by group:          ok  fail notrun
+  parser             16     0      0   of 16
+  objects            43     0      0   of 43
+  python             84     0      0   of 84
+  core-modules        5     0      0   of 5
+  stdlib-modules     83     0      0   of 83
+  lib:mpdec          14     0      0   of 14
+  lib:expat           3     0      0   of 3
+  lib:hacl-sha2       1     0      0   of 1
+  program             1     0      0   of 1
+
+failures by FIRST error (one cause per object):
+
+error sites by objects affected (every error in every failing object; 0 distinct):
+
+integer->pointer round trips (-Wcapstone-pointer-roundtrip): 52 sites in 13 source files, reached by 13 objects
+     19  Modules/_elementtree.c
+     12  Objects/obmalloc.c
+      8  Python/tracemalloc.c
+      2  Objects/stringlib/fastsearch.h
+      2  Python/lock.c
+      2  Python/thread_pthread.h
+      1  Modules/signalmodule.c
+      1  Objects/longobject.c
+      1  Python/compile.c
+      1  Python/crossinterp_data_lookup.h
+      1  Python/marshal.c
+      1  Python/pyarena.c
+      1  Python/symtable.c
+
+failing objects:
+
+stdlib modules by configure state (only 'yes' is in the denominator):
+  disabled   16  _ctypes_test _sqlite3 _testbuffer _testcapi _testclinic _testclinic_limited _testexternalinspection _testimportmultiple _testinternalcapi _testlimitedcapi _testmultiphase _testsinglephase _xxtestfuzz xxlimited xxlimited_35 xxsubtype
+  missing    13  _bz2 _ctypes _curses _curses_panel _dbm _gdbm _hashlib _lzma _ssl _tkinter _uuid readline zlib
+  n/a         3  _multiprocessing _posixshmem _scproxy
+  yes        51  _asyncio _bisect _blake2 _codecs_cn _codecs_hk _codecs_iso2022 _codecs_jp _codecs_kr _codecs_tw _contextvars _csv _datetime _decimal _elementtree _heapq _interpchannels _interpqueues _interpreters _io _json _lsprof _md5 _multibytecodec _opcode _pickle _posixsubprocess _queue _random _sha1 _sha2 _sha3 _socket _statistics _struct _typing _zoneinfo array binascii cmath fcntl grp math mmap pwd pyexpat resource select syslog termios time unicodedata
+SURVEY_EXIT=0
