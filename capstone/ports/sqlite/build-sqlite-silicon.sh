@@ -54,7 +54,14 @@ if [[ ! -f "$PATCHED" ]]; then
   # OUT_DIR is ours (the silicon image's), not the amalgamation's: without the override the
   # fallback writes sqlite3-capstone.c next to the image and the check below fails anyway
   # ("still no .../sqlite-build/sqlite3-capstone.c"). Found 2026-09-07 after a reboot emptied /tmp.
-  OUT_DIR="$(dirname "$PATCHED")" bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
+  # env -u SQLITE_SUBLET_PATCH: this bootstrap wants the PLAIN amalgamation. The Sublet patch is
+  # applied below, to this build's own private copy (see :66). Without the -u the variable is
+  # inherited here, the inner build patches $PATCHED, and the copy below is patched a second time:
+  #   Reversed (or previously applied) patch detected!  ... 28 out of 28 hunks ignored
+  # and the build fails. It fires only when $PATCHED is MISSING -- a cold or cleared
+  # CAPSTONE_TMP_ROOT -- which is why a warm tree never showed it.
+  env -u SQLITE_SUBLET_PATCH OUT_DIR="$(dirname "$PATCHED")" \
+    bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
 fi
 [[ -f "$PATCHED" ]] || { echo "still no $PATCHED" >&2; exit 1; }
 
@@ -72,7 +79,12 @@ cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 SUBLET_INC=()
 if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OBJ_DIR" < "$SQLITE_SUBLET_PATCH"
-  SUBLET_INC=(-I"$REPO_ROOT/capstone/sublet"
+  # capstone/runtime/include FIRST: the patch's `#include <sublet/sublet.h>` means the
+  # capstone_cap_slot header that lives there. It was missing from this list altogether, so a
+  # Sublet build here failed with "'sublet/sublet.h' file not found" -- a different symptom from
+  # build-sqlite-capstone.sh's, same cause. See that script's SUBLET_FLAGS comment.
+  SUBLET_INC=(-I"$REPO_ROOT/capstone/runtime/include"
+              -I"$REPO_ROOT/capstone/sublet"
               -I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
   echo "== Sublet port applied to this build's amalgamation ($(basename "$SQLITE_SUBLET_PATCH"))"
 fi
@@ -2732,7 +2744,7 @@ COMMON=("${SUBLET_INC[@]}" -target capstone64-unknown-elf -Xclang -target-featur
         # sibling calls: -fno-optimize-sibling-calls retired 2026-09-05 -- C-28 (tail calls emitted as calls) is fixed; W-16 pair AGREE-PASS at -O2, and the coremark_matrix silicon rung built with sibling calls returned its oracle (board-results/2026-09-05.tsv B4)
         -ffreestanding -fno-builtin
         -include "$ADAPTED/capstone_sqlite_libc.h"
-        -I"$ADAPTED" -I"$SCRIPT_DIR" -I"$VFS_DIR" -I"$OBJ_DIR"
+        -I"$ADAPTED/stubinc" -I"$ADAPTED" -I"$SCRIPT_DIR" -I"$VFS_DIR" -I"$OBJ_DIR"
         -I"$(dirname "$PATCHED")" -I"$BUILTINS")
 
 echo "== compiling the single silicon TU (this is the first time SQLite sees the silicon ABI)"

@@ -13093,6 +13093,20 @@ def warn_capstone_pointer_roundtrip : Warning<
   "casting a value of type %1}0 to %2 does not restore capability provenance "
   "on Capstone: the result is untagged and faults when dereferenced">,
   InGroup<DiagGroup<"capstone-pointer-roundtrip">>;
+def warn_capstone_capability_cast_align : Warning<
+  "cast from %0 to %1 puts a capability where memory is only %2-byte aligned; "
+  "a capability must be stored %3-byte aligned on Capstone, or the store "
+  "faults">, InGroup<CapstoneCapabilityAlignment>, DefaultIgnore;
+def warn_capstone_capability_copy_align : Warning<
+  "%select{copying %1, which holds a capability, to|copying to %1, which holds "
+  "a capability, from}0 memory that is only %2-byte aligned: the capability's "
+  "tag is lost on Capstone, and the pointer read back faults">,
+  InGroup<CapstoneCapabilityAlignment>;
+def warn_capstone_capability_copy_bytes : Warning<
+  "%select{copying %1, which holds a capability, to|copying to %1, which holds "
+  "a capability, from}0 a byte buffer: the capability's tag survives on "
+  "Capstone only if the buffer is %2-byte aligned at run time">,
+  InGroup<CapstoneCapabilityAlignment>, DefaultIgnore;
 def err_capstone_builtin_invalid_ccsr : Error<
   "capability CSR id %0 is not one of ctvec (0), cih (1), cepc (2), "
   "cscratch (4) or a cpmp entry (16-31)">;

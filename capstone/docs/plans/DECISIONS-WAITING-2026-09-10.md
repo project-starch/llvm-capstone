@@ -411,6 +411,9 @@ already in force. It is the least urgent of the three RTL items.
 
 ## 4. Q-04 — are scalars exempt from the MOVC consumption rule?
 
+> **2026-09-24: a recommendation, (b) scalars exempt, with the evidence and a measurement of what
+> today's silicon does differently: `plans/2026-09-24-q04-movc-integer-source.md`.**
+
 **Genuinely a spec question. I ruled on it, was wrong, and retracted.**
 
 My ruling argued the spec was explicit because *"NOT_CAP is type 0, and 0 != 1"*. **The spec has no

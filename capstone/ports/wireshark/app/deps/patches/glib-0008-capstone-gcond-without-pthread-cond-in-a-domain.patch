@@ -1,0 +1,68 @@
+CAPSTONE (tshark app port): GCond does not reach pthread_cond_* in a Capstone domain. musl-capstone's
+pthread_cond_t is 48 bytes on capstone64 (room for 3 pointers), but musl's internal macros put
+_c_tail at __u.__p[5], 32 bytes past it, so pthread_cond_broadcast() read beyond the object: a
+broadcast from GLib halted the tshark domain in epan_init (cause 24). A domain runs one thread:
+signal and broadcast have no waiter to wake (no effect, as documented), and a wait could never be
+woken, so it aborts.
+
+--- a/glib/gthread-posix.c	2024-08-26 18:15:22.000000000 +0800
++++ b/glib/gthread-posix.c	2026-09-25 00:07:29.975486308 +0800
+@@ -785,12 +785,24 @@
+  * For this reason, g_cond_wait() must always be used in a loop.  See
+  * the documentation for #GCond for a complete example.
+  **/
++/* CAPSTONE (tshark app port): in a Capstone domain GCond does not reach pthread_cond_*. A domain
++ * runs one thread (musl-capstone serves no clone), and musl-capstone's pthread_cond_t cannot hold
++ * its own fields with 16-byte pointers: the type is 12 ints (48 bytes, room for 3 pointers), and
++ * musl's internal macros put _c_tail at __u.__p[5], 32 bytes past the object
++ * (src/internal/pthread_impl.h). pthread_cond_broadcast() walked from there, and a broadcast
++ * from GLib halted the tshark domain in epan_init with cause 24 (g_once_init_leave() broadcasts
++ * on every call). With one thread a signal or broadcast has no waiter, so it has the documented
++ * "no effect", and a wait could never be woken, so it aborts instead of hanging. */
+ void
+ g_cond_wait (GCond  *cond,
+              GMutex *mutex)
+ {
+   gint status;
+ 
++#if defined(__CAPSTONE__)
++  (void) cond; (void) mutex; (void) status;
++  g_thread_abort (EDEADLK, "g_cond_wait in a single-threaded Capstone domain");
++#endif
+   if G_UNLIKELY ((status = pthread_cond_wait (g_cond_get_impl (cond), g_mutex_get_impl (mutex))) != 0)
+     g_thread_abort (status, "pthread_cond_wait");
+ }
+@@ -809,6 +821,10 @@
+ {
+   gint status;
+ 
++#if defined(__CAPSTONE__)
++  (void) cond; (void) status;
++  return;
++#endif
+   if G_UNLIKELY ((status = pthread_cond_signal (g_cond_get_impl (cond))) != 0)
+     g_thread_abort (status, "pthread_cond_signal");
+ }
+@@ -827,6 +843,10 @@
+ {
+   gint status;
+ 
++#if defined(__CAPSTONE__)
++  (void) cond; (void) status;
++  return;
++#endif
+   if G_UNLIKELY ((status = pthread_cond_broadcast (g_cond_get_impl (cond))) != 0)
+     g_thread_abort (status, "pthread_cond_broadcast");
+ }
+@@ -897,6 +917,11 @@
+   struct timespec ts;
+   gint status;
+ 
++#if defined(__CAPSTONE__)
++  (void) cond; (void) mutex; (void) end_time; (void) ts; (void) status;
++  g_thread_abort (EDEADLK, "g_cond_wait_until in a single-threaded Capstone domain");
++#endif
++
+ #ifdef HAVE_PTHREAD_COND_TIMEDWAIT_RELATIVE_NP
+   /* end_time is given relative to the monotonic clock as returned by
+    * g_get_monotonic_time().

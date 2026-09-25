@@ -199,6 +199,29 @@ log "output   : $OUT"
 log "parent   : $(sha HEAD) ($(git -C "$CAPSTONE_REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null))"
 log "jobs=$JOBS timeout=${TIMEOUT}s clean=$DO_CLEAN skip_build=$SKIP_BUILD extended=$EXTENDED"
 
+# Which QEMU the suites run on. They use $CAPSTONE_QEMU_BINARY, which need not be this checkout's
+# build, so name it: its hash, the commit of the tree it was built from and whether that tree has
+# local changes now, and whether the commit is on any remote branch. An emulator built from
+# unpushed or locally modified source is one nobody else can rebuild, and a result that stands on
+# it cannot be reproduced elsewhere (found 2026-09-24: capstone-qemu as pushed could not run
+# hostcall-all on dev, while this machine's shared build, with unpushed changes, could).
+qemu_identity() {
+  local bin="${CAPSTONE_QEMU_BINARY:-}" src head dirty remote
+  if [ -z "$bin" ] || [ ! -f "$bin" ]; then echo "none at '${bin:-<unset>}'"; return; fi
+  printf '%s, sha256 %s' "$bin" "$(sha256sum "$bin" | cut -c1-12)"
+  if ! src=$(git -C "$(dirname "$bin")/.." rev-parse --show-toplevel 2>/dev/null); then
+    echo ", source tree unknown"; return
+  fi
+  head=$(git -C "$src" rev-parse --short=10 HEAD 2>/dev/null)
+  dirty=$(git -C "$src" status --porcelain --untracked-files=no 2>/dev/null | wc -l)
+  remote=$(git -C "$src" branch -r --contains HEAD 2>/dev/null | head -n 1 | tr -d ' ')
+  printf ', from %s at %s%s, %s\n' "$src" "$head" \
+    "$([ "$dirty" -gt 0 ] && echo " with $dirty tracked files modified now")" \
+    "$([ -n "$remote" ] && echo "on $remote" || echo "NOT on any remote branch")"
+}
+QEMU_ID=$(qemu_identity)
+log "qemu     : $QEMU_ID"
+
 # Is qemu-system-riscv64 older than its own tracked source? With "relink" it fixes it;
 # with "check" it only reports, because --skip-build promises not to build anything.
 # Either way it must SPEAK: a stale emulator silently running every suite is what Q-02 was.
@@ -207,6 +230,13 @@ qemu_staleness_guard() {
   local QBUILD="$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/build"
   local QBIN="$QBUILD/qemu-system-riscv64"
   local QSRC="$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target"
+  # It guards this checkout's build only. When the suites run another binary, say so and leave
+  # both alone: "suites will fail" about a binary they do not use is false, and relinking it
+  # changes nothing they run.
+  if [ "${CAPSTONE_QEMU_BINARY:-$QBIN}" != "$QBIN" ]; then
+    log "[build] qemu staleness guard skipped: the suites use $CAPSTONE_QEMU_BINARY, not $QBIN"
+    return 0
+  fi
   [ -f "$QBIN" ] || { log "[build] no qemu binary at $QBIN -- suites will fail"; return 0; }
   [ -n "$(find "$QSRC" -type f -newer "$QBIN" -print -quit 2>/dev/null)" ] || return 0
   if [ "$mode" = "relink" ] && [ -f "$QBUILD/build.ninja" ]; then
@@ -409,6 +439,7 @@ fi
   echo
   echo "- parent: \`$(sha HEAD)\` ($(git -C "$CAPSTONE_REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null))"
   echo "- build: $([ "$SKIP_BUILD" -eq 1 ] && echo skipped || ([ "$BUILD_OK" -eq 1 ] && echo ok || echo FAILED))"
+  echo "- qemu: $QEMU_ID"
   echo "- output: \`$OUT\`"
   echo
   echo "| suite | result | duration | load1 | foreign CPU | log |"

@@ -1,9 +1,22 @@
 # tshark as a full application in a Capstone domain — M0 census and port plan (2026-09-23)
 
-**Status:** a plan with its M0 census, not the port. It lives on branch `tshark-app`, like the
-FFmpeg app port it follows (`2026-09-23-ffmpeg-full-app-port.md`). An adversarial audit ran
-before implementation; its corrections are folded in, and the three claims it refuted are listed
-under "Withdrawn" so the trail survives.
+**Status (2026-09-25):** M-infra, M-deps, M0 and M1–M5 are done on QEMU, and so is the heap half of
+Safety. All three heap arms ran every pre-registered fixture three times, all as predicted:
+- **level0:** no heap safety;
+- **shrink:** spatial safety for g_malloc'd objects;
+- **sublet:** spatial and temporal safety for g_malloc'd objects.
+- **On every arm:** wmem's allocations stay unprotected. Safety's other half, the wmem hooks, is
+  the lead's call.
+
+tshark's output matches stock on all three arms. See "Progress on the full port" below.
+- **The tshark domain:** 66.3 MiB, in a 128 MiB CMA block. It reaches all five stages. Its
+  `-V -n` output is byte-identical to native stock tshark on the four workload captures, their
+  flipped copies and dns-ooo.
+- **Evidence:** `ports/wireshark/app/results/2026-09-24-qemu-tshark-staged/`.
+
+The plan and M0 census below are as written before implementation. An adversarial audit ran on
+them; its corrections are folded in, and the three claims it refuted are listed under
+"Withdrawn" so the trail survives.
 
 **Question:** can tshark (Wireshark 4.6.8) read a capture file and print its full dissection
 inside one Capstone domain, and what does it cost? In particular, what does it cost with the
@@ -349,11 +362,11 @@ for its -c build (debug clang). That is a build-time cost, not a blocker.
 domain is single-threaded: `epan_init` runs registration inline (`tshark.c:1370`), and a native
 run makes 0 `clone` calls.
 
-**The compiler fix is on a branch, unmerged.** C-47 has an implemented fix on branch
-`compiler/c47-tls` (`07829e435e0d`): local-exec TLS on `tp`'s capability, with a runtime
-`tls.c`. It is not merged, and this port has not built or run it. Until it lands, the define
-stays. When it does, patch 0004 can go, after one run shows the three files unchanged in
-output.
+**The compiler fix is merged (2026-09-25).** C-47's fix is local-exec TLS on `tp`'s capability,
+with a runtime `tls.c`. It was branch `compiler/c47-tls` (`8abb7757fbf2`; first cited here as
+`07829e435e0d`, before the branch was rebased) and was merged into dev as `3979abd8e9a3`.
+This port has not yet been rebuilt with it, so the define stays for now. Patch 0004 can go
+after one run on the new compiler shows the three files' output unchanged.
 
 **Checked from both sides.** The three `__thread` files (`except.c`, `wtap.c`,
 `filesystem.c`) fail the gate without the define, each with `Cannot select:
@@ -674,12 +687,63 @@ recipe each, gated as in its README. What that took:
   - an aligned allocator is built from `malloc`;
   - `gqsort` copies pointer-sized words whole.
 
-**Next: M0**, the minimal tshark linked as a domain against these libraries.
+**M0: done.** `host/cross-build.sh` builds the minimal tshark with Wireshark's own CMake, 397 of
+397 steps. `host/build-domain.sh` links it with the port's own link.
+- **Size:** 66.3 MiB. Without the 40 MiB level0 arena that is 26.3 MiB, below this plan's 29–36 MiB
+  estimate. The block is 128 MiB.
+- **Link gates:** no undefined symbol; no undefined weak symbol, after glib-0007 fixed GLib's two
+  LeakSanitizer hooks (ISSUES C-56's open half); the negative control fires.
+
+**M1–M5: done on QEMU.** Evidence: `results/2026-09-24-qemu-tshark-staged/`.
+- **Stages and oracle:** every stage returns. M5's `-V -n` stdout is byte-identical to stock on
+  dhcp, dns_port, http and arp, on their flipped copies (each flip changes stock's output) and on
+  dns-ooo. Its stderr is identical to the native minimal build's. ntp differs, as the negative
+  control must.
+- **Heap:** the level0 peak is 26.8 MiB.
+- **It took three runtime fixes this plan did not foresee,** each port-local:
+  - constructors and destructors (`.init_array` never ran in any domain, and musl's exit walked
+    `.fini_array` through integers);
+  - GCond (musl-capstone's `pthread_cond_t` is too small for its own fields, glib-0008);
+  - the unserved-syscall report, which was lost when the program closed fd 1.
+  On 2026-09-25 the first and third moved into the shared runtime (ISSUES C-64 and I-11 fixed).
+  The GCond one (C-65) awaits the lead's decision on a libc ABI change.
+- **Stalls:** one ntp section stalled in the guest before its domain started, the known QEMU stall
+  class. Two later ntp runs returned.
+
+**Safety, cheap arms: done on QEMU (2026-09-25).** Evidence:
+`results/2026-09-25-qemu-safety/`. Twelve fixtures, pre-registered and pushed before any ran
+(`fc2ee56`), on level0 and shrink, N = 3: all 72 counted runs as predicted. One premise in the
+predictions file was wrong, though its prediction held: level0 narrows nothing, so its wmem
+pointers carry the whole arena, not their block (an audit found it; the README records it).
+- **level0:** no heap safety. Every heap pointer carries the whole arena; only the compiler's
+  bounds on a global and a stack array fault.
+- **shrink:** g_malloc'd objects are spatially exact, and overflow and one-past-the-end fault at
+  the printed address. Nothing temporal changes: a stale free still lets a later allocation alias
+  a live object.
+- **wmem, on both arms:** an allocation carries its whole 2 or 8 MiB block. A stale pointer after
+  a scope reset, and an overflow between two wmem allocations, go unnoticed. That is the gap the
+  wmem hooks would close.
+- **The shrink arm is a working tshark:** M1–M5 and the oracle match stock as on level0.
+
+**Safety, sublet arm: done on QEMU (2026-09-25).** Evidence:
+`results/2026-09-25-qemu-safety-sublet/`. Predictions pushed before any sublet boot (`cd06fd2`), and
+all 36 counted runs are as predicted.
+- **The arm:** the revoking Sublet heap over a 16 MiB pool that the host transfers linear, with
+  wmem's blocks cut to 1 MiB (patch 0007).
+- **Use after free, use after reuse and a stale free** now fault as temporal, at the printed address.
+- **wmem, fixtures 10–12, still return:** a scope reset never calls free.
+- **tshark on this heap matches stock:** M1–M5 and the oracle.
+- **The node budget:** a full run spends 9,827–13,335 revocation nodes. A boot holds about four such
+  runs before capstone-qemu's 65,536-node pool runs out. It ran out once, and QEMU asserted.
+
+**Next, the lead's call:** the wmem hooks (`ports/wireshark/wmem`, `WMEM_PORT_HOOKS`), which would
+close the gap all three arms leave. Separately, the port is still built with `b7b31421e9fa`; dev's
+compiler is now `3979abd8e9a3` (C-46, C-47), and patch 0004 can go after one run on it.
 
 ## Plan
 
-Everything happens on `tshark-app`. Nothing lands on `dev` without the lead's OK, and there is no
-push without the lead's approval (a new branch).
+Work lands on `dev` at stable points, as the lead directed on 2026-09-24 ("squash … and then
+merge"). The branch `tshark-app` is a local worktree branch and has not been pushed.
 
 | milestone | content | exit criterion |
 |---|---|---|

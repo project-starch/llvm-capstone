@@ -63,6 +63,12 @@ P1.2  code_len (PT_LOAD memsz) = 69-76 MiB: the plan's image estimate (results 4
       the image (40 MiB, TSAPP_ARENA_BYTES). code_len minus the arena therefore 29-36 MiB.
       Refuted by: code_len - arena outside 29-36 MiB. That refutes the plan's size estimate, not
       the port.
+NOTE, added after the first M0 link attempt and before any tshark boot: the staged objects
+first came out far smaller than M5's (M1 7.7 KB against 207 KB), because a stop that calls exit()
+makes everything after it dead code, and --gc-sections then drops whatever only that code reached.
+Patch 0006's stop now sits behind a volatile flag, and build-domain.sh refuses a staged object
+under 95% of M5's. P1.2 and P1.3 are therefore about all five images, not only M5. What that first
+link attempt found is recorded with the results, not here.
 P1.3  Block: code_len + 8 KiB + 1 MiB declared, to a power of two = 128 MiB (order 15). a74a856
       does not double it (the declared 1 MiB survives the monitor's split at this size).
       Refuted by: a block of 64 or 256 MiB, or a doubling message in dmesg.

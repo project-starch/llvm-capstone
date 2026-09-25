@@ -1,5 +1,30 @@
 # R-35 — on silicon a REVOKED capability still reads AND writes the storage its object has given up, at every age, and the access does not trap
 
+**CLOSED 2026-09-25 — FIXED ON THE M-MODE LSU DATA PATH.** Siblings, so a reader with a neighbouring
+symptom is redirected at once:
+- **R-44** — the SAME optimistic adopt, still present at the **CPMP** (S/U-mode enforcement, live in
+  production). A stale capability used from Linux or userspace is R-44, not this folder.
+- **R-43** — the cost of this fix: it **denies on a cache miss**, so a live capability whose id was evicted
+  can be falsely refused.
+- **M-1** (`../RTL-domain-trap-vector-unset/`) — why a fault here wedges the domain and loses its output.
+
+Registry: `docs/ref/ISSUES.md` R-35, R-43, R-44.
+
+What closed it, and what did not:
+- Fix `capstone-ariane 4ad0df694`, flashed as `caplifive_r35_4ad0df694.bit` on 2026-09-24.
+- Two-sided in RTL simulation: the acceptance fixture goes from 4 to 7 traps, the build is shown to track
+  source, and the stale read, stale store and readback all trap 25.
+- On silicon the probe that exposed R-35 **no longer reproduces it**. See "The defect and the fix, in
+  pictures" below, and `results/board-4ad0df694.result-lines.txt` for the limits: N=1 per arm; which
+  cause-25 arm fired and which probe age trapped are not observable; the stale write was never reached.
+- That the oldest probe cannot have been allowed is a **source** argument. An allow needs an exact 30-bit
+  tag hit marked live, and the 14-bit generation retires at 16383 and never wraps.
+- Capability loads and stores (LDC/STC) never used this tracker: they are gated by the DYN unit's own
+  rev-node query.
+
+The status paragraphs that follow are the dated history, newest first.
+
+
 **Status (2026-09-21): ROOT-CAUSED, in the board's own RTL, and the cause is NOT a missing tag check.**
 REPRODUCED ON THE BOARD four times with controls; provenance SETTLED (the flashed bitstream carries the
 R-34/R-24 fix, verified by a cause comparison on the board rather than by the build record). The defect
@@ -92,6 +117,89 @@ causes aliasing the core's `DEBUG_REQUEST = 24`, which would route a trap into d
 same commit says it "move[s] the debug sentinel off 24, and put[s] the capability causes on the spec's
 base", so R-24 does not explain this either. **This folder is one issue: a capability check that does
 not fire on silicon.**
+
+## The defect and the fix, in pictures
+
+**The defect (RTL `054cea69b`).** The LSU's revocation check trusted ONE tracker register for the whole
+core, and any access through a capability it had not seen RE-ADOPTED that capability as valid:
+
+```
+           +-----------------------------------------------+
+  access   |  core-wide tracker:  id = ?     valid = ?     |
+  via cap  |                                               |
+  (id x) ->|  x != tracked id ?  ->  id := x, valid := 1   |  <- "never seen it, so it must be live"
+           |  valid == 0 ?       ->  cause 25 (revoked)    |     (load_store_unit.sv:966-971)
+           +-----------------------------------------------+
+  revocation broadcast for x: clears valid ONLY if the tracker holds x at that moment
+
+  Sixteen rotating slots, so consecutive accesses almost never share an id:
+
+   t0   access via A (id a)   tracker = a, valid = 1
+   t1   A's object revoked    tracker = a, valid = 0        A is dead
+   t2   access via B (id b)   tracker = b, valid = 1        the record of A's death is gone
+   t3   access via A again    a != b -> tracker = a, valid = 1
+                              -> ALLOWED: A reads and writes storage now owned by someone else
+```
+
+No local fix exists: the broadcast carries only a bare 16-bit index (the generation is masked off at the
+source), so the tracker cannot tell an old generation of a node from a new one.
+
+**The fix (RTL `4ad0df694`).** Authority now needs POSITIVE evidence of liveness. That evidence is taken
+from the only place that knows the truth, the rev-node unit's own node memory, by two passive taps:
+
+```
+                 rev-node unit  (ground truth: one node per (generation, index))
+                   |                                   |
+                   | node WRITES (create/revoke/...)   | node READS (other units' queries)
+                   v  tap 1, registered                v  tap 2, registered
+          +------------------------------------------------------------------+
+          |  revocation validity cache, 4 ways x 64 sets                      |
+          |  entry = { id[29:0] (generation+index), occupied, node-live }     |
+          |  install/refresh on a tap . mark dead on a node-dead write        |
+          |  tag array in distributed RAM (LUTRAM); occupied/live in flops    |
+          +------------------------------------------------------------------+
+                               ^  lookup by the capability's EXACT 30-bit id
+                               |
+       LSU access via cap -----+---->  hit, live        -> ALLOW
+                                       hit, dead        -> cause 25   (a genuine revocation)
+                                       dead THIS cycle  -> cause 25   (two-term same-cycle compare)
+                                       MISS             -> cause 25   (fail CLOSED: no evidence, no authority)
+```
+
+The two compares have **opposite widths on purpose**. The lookup is 30-bit, `{generation, index}`, so an
+old generation can never hit a new node. The invalidate is 16-bit, because that is all the broadcast
+carries. "Harmonising" them breaks one or the other; see the analytical notes below.
+
+**Scope of the fix.** This is the M-mode LSU check (`lsu_ctrl.fu` LOAD or STORE, which includes AMOs).
+It does NOT cover:
+- the **CPMP**, which enforces S/U mode and still adopts on sight (**R-44**);
+- the **PC** tracker in `commit_stage.sv` (latent, same adopt);
+- LDC/STC, which go through the DYN unit's authoritative query instead.
+
+**What it cost to make it deployable** — three builds, each refuted by synthesis, not by simulation:
+
+```
+   079dc720a  cache as _d/_q arrays   -> a crossbar, 95.7 % of the device           NOT deployable
+   f83fe9342  rebuilt as register file -> fill decode hung off the rev-node's
+                                          combinational selector + congestion,
+                                          WNS -27.665                                NOT deployable
+   4ad0df694  fill taps registered + tag array in LUTRAM
+                                       -> WNS -8.341 (base -8.307), 480 LUTRAM      FLASHED 2026-09-24
+```
+
+**What the silicon then showed** — the same two images on the old and the new bitstream:
+
+```
+                                     caplifive_m1_054cea69b.bit      caplifive_r35_4ad0df694.bit
+   stale alias   (image 35fb3fec)    reads the new owner's data      TRAPS, cause 25, at the stale read
+                                     (is_live_data=1)
+   live alias    (image aed492ab)    read commits; later mint        identical
+                                     traps cause 26
+   ~43k live-alias accesses          commit                          commit
+   17 ladder rungs                   reference values                the same values
+```
+
+Details and limits: `results/board-4ad0df694.result-lines.txt`.
 
 ## What was observed
 

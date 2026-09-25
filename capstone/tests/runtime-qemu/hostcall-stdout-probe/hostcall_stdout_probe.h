@@ -171,6 +171,21 @@ struct hostcall_v0 {
  * First consumer is musl's readdir, and behind it CPython's os.listdir and
  * import's directory cache. */
 #define HC_V0_OP_DIR_READ 26ULL
+/* Rename. Request: PATH_ACCESS's layout with two paths behind the flags word,
+ * "old NUL new", metadata.length covering both and the NUL. Response: result 0.
+ * The helper's rename(2); a flag (renameat2's) is refused on the domain side.
+ * First consumer is PostgreSQL's durable_rename. */
+#define HC_V0_OP_PATH_RENAME 27ULL
+/* Make a directory. Request: PATH_ACCESS's layout, the mode in the flags word.
+ * Response: result 0. The helper's mkdir(2). The matching removal is
+ * PATH_DELETE with HC_PATH_DELETE_FLAG_DIRECTORY, the helper's rmdir(2).
+ * First consumer is PostgreSQL's CREATE DATABASE (base/<oid>). */
+#define HC_V0_OP_PATH_MKDIR 28ULL
+/* Read a symbolic link. Request: PATH_ACCESS's layout, flags 0. Response: the
+ * link's target at payload offset 0, result = its length, no terminator, as
+ * readlink(2). A name that is not a link answers EINVAL, which is what musl's
+ * realpath() asks each path component and expects for the common case. */
+#define HC_V0_OP_PATH_READLINK 29ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL
@@ -276,9 +291,13 @@ struct hc_dir_read_req_v0 {
 };
 #define HC_DIR_READ_REQ_V0_DATA_OFFSET 16ULL
 #define HC_PATH_DELETE_REQ_V0_PATH_OFFSET 8ULL
+#define HC_PATH_RENAME_REQ_V0_PATH_OFFSET 8ULL
+#define HC_PATH_MKDIR_REQ_V0_PATH_OFFSET 8ULL
+#define HC_PATH_READLINK_REQ_V0_PATH_OFFSET 8ULL
 
 #define HC_PATH_ACCESS_FLAG_EXISTS 0ULL
 #define HC_PATH_DELETE_FLAG_NONE 0ULL
+#define HC_PATH_DELETE_FLAG_DIRECTORY 1ULL /* rmdir, not unlink */
 
 #endif
 

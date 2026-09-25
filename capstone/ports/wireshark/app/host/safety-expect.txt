@@ -1,0 +1,91 @@
+# PRE-REGISTERED predictions for the tshark safety fixtures (src/tsapp-safety.c), written
+# 2026-09-25 BEFORE any fixture had run on any arm, and committed and pushed before the first
+# boot. A cell whose outcome differs is a FINDING, never an edit to this file: if a prediction is
+# wrong, the result says so and this file keeps the prediction that was made.
+#
+# The format is the FFmpeg port's (ports/ffmpeg/app/host/safety-expect.txt), judged by
+# host/safety-verdict.py:
+#   RETURN <hex>   the image exited with exactly this mark (fixture * 0x100000 + value)
+#   RETURN *       a mark with this fixture's prefix; the value is not predictable (fixture 3 on
+#                  level0 reads a byte of the next block's header)
+#   FAULT oob      a bounds fault AFTER the fixture's touch line, at the target it printed
+#   FAULT temporal a fault on a revoked or untagged capability, after the touch line, at the target
+# LEN lines check fixture 1's printed capability length of a 64-byte g_malloc:
+#   LEN arena      longer than 64 KiB (the pointer covers the rest of level0's arena)
+#   LEN 64         exactly 64
+#
+# WHAT EACH PREDICTION RESTS ON, so a wrong one can be traced to the premise that failed:
+# - the heap is runtime/level0.c: first fit, a 48-byte header BELOW each payload, forward
+#   coalescing on every free, so at rest no two free blocks are adjacent. So a block freed and
+#   asked for again at the same size comes back at the same address (5, 6). free writes only
+#   headers, so a freed payload keeps its bytes (4).
+# - shrink (CAPSTONE_LEVEL0_SHRINK) narrows each returned pointer to the bytes asked for, and
+#   changes nothing else: no temporal safety (4, 5, 6 as on level0).
+# - wmem (10-12): a BLOCK_FAST or BLOCK allocator carves its allocations out of one g_malloc'd
+#   block (2 or 8 MiB), and every allocation carries that block's bounds on BOTH arms, since
+#   level0 narrows only the block. After wmem_free_all, BLOCK_FAST keeps its first block and
+#   rewinds it, and BLOCK re-initialises every block as one free chunk; either way the next
+#   64-byte allocation takes the first chunk again (wmem_allocator_block_fast.c
+#   wmem_block_fast_free_all; wmem_allocator_block.c wmem_block_free_all, wmem_block_init_block).
+# - fixture 9: tsapp-safety.c built with tshark.c's compile command puts its two static arrays in
+#   one .L_MergedGlobals (llvm-nm of the fixture-9 object, compiler b7b31421e9fa, 2026-09-25,
+#   before any fixture was linked or run). FFmpeg's fixture 10, the same shape, returned
+#   a0005b: the capability covers the merged group.
+# - 7 and 8 are controls that do not depend on the heap: a global's and a stack array's
+#   capability end at the object, as FFmpeg's fixtures 8 and 9 did on every arm.
+
+level0   1  RETURN 100001
+level0   1  LEN    arena
+level0   2  RETURN 2000ee
+level0   3  RETURN *
+level0   4  RETURN 4000a0
+level0   5  RETURN 50015b
+level0   6  RETURN 600177
+level0   7  FAULT  oob
+level0   8  FAULT  oob
+level0   9  RETURN 90005b
+level0  10  RETURN a0015b
+level0  11  RETURN b0015b
+level0  12  RETURN c000ee
+
+shrink   1  RETURN 100001
+shrink   1  LEN    64
+shrink   2  FAULT  oob
+shrink   3  FAULT  oob
+shrink   4  RETURN 4000a0
+shrink   5  RETURN 50015b
+shrink   6  RETURN 600177
+shrink   7  FAULT  oob
+shrink   8  FAULT  oob
+shrink   9  RETURN 90005b
+shrink  10  RETURN a0015b
+shrink  11  RETURN b0015b
+shrink  12  RETURN c000ee
+
+# THE SUBLET ARM (host/build-domain.sh TSAPP_HEAP=sublet), registered 2026-09-25 after the level0
+# and shrink runs, BEFORE any sublet image had booted, and pushed before its first run.
+# - The heap is runtime/sublet_heap.c over a 16 MiB pool the host transfers LINEAR: each g_malloc
+#   pointer is narrowed to the bytes asked for, free scrubs the object and revokes every alias,
+#   and free and realloc first read one byte through the pointer they are given.
+# - On capstone-qemu a revoked capability reloads untagged (ISSUES Q-11), and one still in a
+#   register faults as revoked. So a use after free (4), a use after reuse (5) and a stale free
+#   (6, which faults inside free, on that probe read) are each predicted to fault as temporal, at
+#   the address the fixture printed.
+# - wmem's blocks are 1 MiB here (patch 0007), and a scope reset never calls free: a BLOCK_FAST
+#   reset keeps and rewinds its first block, and a BLOCK reset re-initialises its blocks. So the
+#   pointers in 10 and 11 are never revoked, and those two are predicted to RETURN as on the other
+#   arms. That is the gap the wmem hooks would close. 12 stays inside one block: RETURN.
+# - 9 is the compiler's merged globals, the same on every arm.
+sublet   1  RETURN 100001
+sublet   1  LEN    64
+sublet   2  FAULT  oob
+sublet   3  FAULT  oob
+sublet   4  FAULT  temporal
+sublet   5  FAULT  temporal
+sublet   6  FAULT  temporal
+sublet   7  FAULT  oob
+sublet   8  FAULT  oob
+sublet   9  RETURN 90005b
+sublet  10  RETURN a0015b
+sublet  11  RETURN b0015b
+sublet  12  RETURN c000ee

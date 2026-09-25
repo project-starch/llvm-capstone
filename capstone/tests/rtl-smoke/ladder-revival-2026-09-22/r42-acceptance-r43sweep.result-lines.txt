@@ -1,0 +1,67 @@
+# R-43 live-sweep on caplifive_r42_6cbdaeeb4.bit, 2026-09-25: one image per boot, all at entry 0x410000 (source dev c462d0a40a83), list "1 pressure m1 shared 2097152 --cap 64 --budget 60000"
+## r42b5: live16 f1aa05aa4fc2e4ff
+#  05:14:20 fw_payload 2bf7dfa763ea (monitor 2dcd3a5, buildroot d04bd83)
+#  05:14:20 === pre-registered: retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx; RESULT k800 retval=4 twice; 'R1 m1 live-sweep ok live=16 reads=32 sum=544 expect=544'; no trap (seen=0). A cause-25 here = the cache false-denies even when NOT full.; 1 x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nodes/bytes/heap invocation, 4 per depth/object); nd = 2n on shared nodes points; fb = B 
+#  05:22:18 runner ended after 478 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4540 ran=53406 instret=1089 phase=2
+DBAS:81A00000
+ENT1:00000001
+ENT2:4EB10000
+R1 m1 start arm=pressure C=64 target=640 fixture_nodes=31 budget=60000ECSA:00000001
+R1 m1 live-sweep ok live=16 reads=32 sum=544 expect=544
+SQ: speedtest1-ran=1320222720
+DBAS:81940000
+ladder-perf: RESULT k800 retval=4 cycles=4552 ran=53406 instret=1089 phase=2
+## r42b6: live128_va410 8333c411dce02ea8
+#  06:09:38 fw_payload b165705278b1 (monitor 2dcd3a5, buildroot d04bd83)
+#  06:09:38 === pre-registered: retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx; RESULT k800 retval=4 twice; 'R1 m1 live-sweep ok live=128 reads=256 sum=4352 expect=4352'; no trap (seen=0). A cause-25 here = the cache false-denies even when NOT full.; 1 x released pool rc=1; every R1 point line ok=1 bad=0 (5 lines per nodes/bytes/heap invocation, 4 per depth/object); nd = 2n on shared nodes points; fb 
+#  06:22:37 runner ended after 779 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4525 ran=53406 instret=1089 phase=2
+DBAS:81A00000
+ENT0:00000001
+ENT1:00000001
+[wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x99 10011001
+[wedge] sw=196 trap mepc[7:0]   (LATCHED)                           0x88 10001000
+[wedge] sw=197 trap mepc[15:8]  (LATCHED)                           0x34 00110100
+[wedge] sw=198 trap mepc[23:16] (LATCHED)                           0xa0 10100000
+[wedge] sw=199 trap mepc[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=200 trap mepc[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=201 trap mepc[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=202 trap mepc[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=203 trap mepc[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=210 trap tval[7:0]   (LATCHED)                           0xe0 11100000
+[wedge] sw=211 trap tval[15:8]  (LATCHED)                           0xfb 11111011
+[wedge] sw=213 trap tval[23:16] (LATCHED)                           0xaf 10101111
+[wedge] sw=214 trap tval[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=215 trap tval[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=216 trap tval[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
+## r42b7: live512_va410 1186b02f0df6d80e
+#  06:24:00 fw_payload 372f4aab8093 (monitor 2dcd3a5, buildroot d04bd83)
+#  06:24:00 === pre-registered: retval=4 twice; 1 x speedtest1-ran=0x4EB1xxxx; opening RESULT k800 retval=4; ENT1; under deny-on-miss: trap log seen=1 mcause=25 at the sweep lbu (a FALSE DENY of a live capability), tval an early alias leaf -- R-43 CONFIRMED on silicon. REFUTED (no false deny): 'R1 m1 live-sweep ok live=512 reads=1024 sum=17408 expect=17408' and closing k800=4.; 1 x released pool rc=1
+#  06:36:54 runner ended after 774 s with rc=0
+DBAS:81960000
+ladder-perf: RESULT k800 retval=4 cycles=4533 ran=53406 instret=1089 phase=2
+DBAS:81A00000
+ENT1:00000001
+[wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x99 10011001
+[wedge] sw=196 trap mepc[7:0]   (LATCHED)                           0xfc 11111100
+[wedge] sw=197 trap mepc[15:8]  (LATCHED)                           0x33 00110011
+[wedge] sw=198 trap mepc[23:16] (LATCHED)                           0xa0 10100000
+[wedge] sw=199 trap mepc[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=200 trap mepc[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=201 trap mepc[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=202 trap mepc[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=203 trap mepc[63:56] (LATCHED)                           0x00 00000000
+[wedge] sw=210 trap tval[7:0]   (LATCHED)                           0xf0 11110000
+[wedge] sw=211 trap tval[15:8]  (LATCHED)                           0xfb 11111011
+[wedge] sw=213 trap tval[23:16] (LATCHED)                           0xaf 10101111
+[wedge] sw=214 trap tval[31:24] (LATCHED)                           0x81 10000001
+[wedge] sw=215 trap tval[39:32] (LATCHED)                           0x00 00000000
+[wedge] sw=216 trap tval[47:40] (LATCHED)                           0x00 00000000
+[wedge] sw=217 trap tval[55:48] (LATCHED)                           0x00 00000000
+[wedge] sw=218 trap tval[63:56] (LATCHED)                           0x00 00000000
+# decode (llvm-objdump of each image): b6 mepc DBAS+0x3488 = run_m1 `ld t0,0x0(s10)` after `mrev t1,t2; stc; delin t2` (s10 = globals cap, ldc s10,0x90(gp) @0x41338c per the RTL lane); b7 mepc DBAS+0x33fc = run_m1 `ld t0,0x0(s8)` (counter increment) in the minting phase. Neither reached the sweep.

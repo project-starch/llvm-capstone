@@ -837,6 +837,67 @@ the full 17-rung list, so every entry VA is unchanged (`phase11-boot-vs-layout.r
   instret are identical across boots, so the variance is in the machine's state, for example
   cache or DRAM placement, not in the code.
 
+### R-42 acceptance, Boot A (2026-09-25): the I-cache fix removes the controls' layout penalty and nothing else
+
+This run repeats the same builds and flags as phase 10 and the R-35 refresh, both halves, on
+`caplifive_r42_6cbdaeeb4.bit` (`r42-acceptance-bootA.result-lines.txt`). The pre-registration was
+written before launch and is quoted in the file.
+
+| check (pre-registered) | result |
+|---|---|
+| capability `ctrsanity` K=0: 1.167× → ≈1.000× | **1.0004×** (700,312 → 600,293 cycles: 100,019 recovered on a 100k-iteration loop) |
+| K=1..3 stay at 1.000× | 1.0004–1.0005× |
+| every retval and instret unchanged; 68/68 correct | yes |
+| baseline unchanged, INCLUDING K=1, where `base_ctrsanity`'s `bne` sits at `0x8020029c` (mod 16 = 12) | CPI 1.2000 at every K. 12/17 baseline rows at K=1 are cycle-identical; the other 5 are at most 0.56 % faster |
+
+- **`ctrsanitys` recovered too, without being predicted.** Its slow layout, K=1 at 1.210×, reads
+  1.045×. The controls' 16.7 % layout band was entirely R-42, and it is now about 0.4 %.
+- **The baseline was immune for the reason predicted.** Its BEST-of-15 runs warm: the loop's exit
+  path fills the next I-cache line on the first pass. So the R-42 penalty only ever hit the one-shot,
+  cold capability run.
+- **The kernels did not move.** The 15 kernels' medians are 0.990×–2.160×, median **1.161×**,
+  geometric mean **1.300×** (R-35 refresh: 1.161× / 1.298×).
+  - Only the short, boot-variable kernels shifted: `janne` K=0 read 2.188×, and `insertsort` K=2
+    read 2.205×. Both are inside the phase-11 boot bands.
+- **Not tested by this boot:** R-35's regression and R-43's false deny. Those are the R1-harness
+  acceptance boots.
+
+### R-42 acceptance, R1-harness boots (2026-09-25): R-43 false denies stop both R1 harnesses
+
+These are five boots on `caplifive_r42_6cbdaeeb4.bit`, one harness image per boot, each with k800
+first (`r42-acceptance-r1boots.result-lines.txt`).
+
+| boot | image | result |
+|---|---|---|
+| B1 workload regression | `079b1f3a` q0 run | **PASS.** k800 = 4 twice, `speedtest1-ran=1320222911` and `R1 m1 end … alloc=160`, all identical to 054cea69b; no trap |
+| B5 R-43 control live16 | `f1aa05aa` | **PASS.** `live-sweep ok live=16 reads=32 sum=544`; no trap |
+| B2 R-35 regression | `35fb3fec` stale probe | **still traps** cause 25 at +0x4354, tval `0xac100000`, as on 4ad0df694 |
+| B3 R1 warm, campaign boot 1 | `1b7a04fe` | **TRAP cause 25 on invocation 1** (S nodes shared). mepc +0x4ff4 = `ld t0,0(a1)` in `run_series`, where a1 comes from `ldc a1,0x80(gp)`, a global's capability. tval is inside the domain's block |
+| B4 R1 cold, wide rep 1 | `46f99c7b` | **TRAP cause 25 on invocation 1.** mepc +0x51bc = `lwu t0,0x24(s10)` in `run_series`; tval is inside the domain's block |
+
+- **Attribution: R-43**, the R-35 fix's deny-on-miss. After enough fresh revocation ids evict a live
+  capability's entry, the access is denied.
+  - The RTL lane reproduced it in RTL simulation on 6cbdaeeb4 (`r43-evict-live.S`, capstone-ariane
+    93f509f54). A live alias is read correctly after 16 fresh ids but traps 25 after 512, even though
+    the rev-node unit reports it live.
+  - Both R1 series churn thousands of ids; the passing B1 churns 160.
+- **Consequence:**
+  - R1's slopes (22.91 / 15.92 warm, 28.15 cold) **cannot be re-measured on R-42**;
+  - no revocation-heavy workload, P1's Sublet cell included, runs on it until the R-43 fix is on a
+    bitstream;
+  - the numbers measured on 054cea69b stand as they were, with their recorded caveats.
+- **B6 and B7, the R-43 sweep at one VA: BOTH trap cause 25 in the MINTING phase, before the sweep**
+  (`r42-acceptance-r43sweep.result-lines.txt`).
+  - live128 traps at `ld t0,0(s10)` right after an `mrev`/`delin`; s10 is a globals capability that
+    the same code read successfully earlier.
+  - live512 traps at `ld t0,0(s8)`.
+  - live16 (B5) passes.
+  - live128 was predicted to fit, and that prediction was the RTL lane's and is RETRACTED: each alias
+    carries two live ids (leaf plus alias), so live128 is about 256 live ids against a 256-entry
+    cache.
+  - The false-deny threshold on this silicon is therefore **roughly 256 simultaneously live
+    revocation ids**. The fix, probe-on-miss, is on capstone-ariane branch `r43-query-on-miss`.
+
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
 Eight rows are measured. Coverage is bounded by silicon failures, not by effort, and the
@@ -4582,8 +4643,17 @@ disassembly, the counters' decomposition, the `--stats` block and this arm. **Wh
 first -O2 Sublet run on silicon with the lookaside on. Against ⑤ -O2 (sw80a, 1,167,116,810; its own
 lookaside state read in the next boot) it gives ⑥/⑤ = **1.1791** at -O2 on matched 2 MiB backing, and
 against native -O2 (856,450,080) 1.607 — labelled *bounded-prototype diagnostic, -O2, size 1, one
-setup function at -O0 as the C-32 workaround*; it becomes P1's number only when the bridge is fixed in
-the compiler (C-32's design choice, the lead's) and the pure -O2 image reads the same counters.
+setup function at -O0 as the C-32 workaround*. **Condition RE-WORDED by the lead's decision of 2026-09-25:**
+a pure -O2 ⑥ becomes P1's number once **the live site is removed, whether by the port or by the compiler**, as
+verified by all three of:
+- `movc-cfg-scan.py` over the image shows no `setupLookaside` site;
+- the board reads the same counters as the image's own emulator run (RETRACTED 2026-09-25: "these counters
+  (5568/37966/32565/37966/5401)" were arm C's, and arm C predates the 09-18 patch rewrite; see C-32);
+- `--stats` reads non-zero lookaside slots on silicon.
+The route chosen is D′, a port change that keeps the lookaside base as an integer (see C-32). The paper must
+disclose that one port function was changed. (The condition as first written: "only when the bridge is
+fixed in the compiler (C-32's design choice, the lead's) and the pure -O2 image reads the same
+counters".)
 
 Two readings the paper lane drew from the same numbers, recorded with their caveats. **The compound,
 full stack against native**, is what a reader multiplies: 1.2103 × 1.1024 = **1.334** at -O0 (directly
@@ -5252,6 +5322,30 @@ at **M** — entering a domain does not change privilege (`priv_lvl_d` has six w
 So the instrument that would show a stale reference being refused has no enforcement to observe.
 Condition 3 is **answered on the emulator with a positive control and unmeasurable on this bitstream** —
 not failed. Full report: `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`.
+
+### Condition 3 MEASURED on the R-35 fix bitstream (2026-09-24): the stale reference is refused, and live ones are not
+
+On `caplifive_r35_4ad0df694.bit` (RTL `4ad0df694`, identified by label and by behaviour), N=1 per arm, the
+same two images as before the reflash:
+
+| | on `054cea69b` | on `4ad0df694` |
+|---|---|---|
+| stale alias, image `35fb3fec3196841b` | reads the current occupant's data (`is_live_data=1`) | **traps, cause 25**, at the stale read (`+0x4354`), `tval` = leaf[0] |
+| live alias to the same leaf, image `aed492ab985653f3` | read commits; the later mint traps 26 | **identical** |
+| ~43k earlier live-alias accesses in each run | commit | commit |
+
+So Condition 3 is now **measured on silicon, and holds on this probe**: a revoked reference no longer reads
+another object's storage, and the live path is unchanged. Limits the numbers must carry:
+- **Why** the access was denied is not observable. Cause 25 has three arms on this RTL, one of them
+  deny-on-miss, which is the expected route for an id reissued thousands of times. The silicon shows
+  *denied*, not *recognised as revoked*.
+- **Which** probe age trapped (k=0 or k=21648) is lost, because a fault still wedges the domain (M-1).
+- **Not reached on silicon:** the stale write (the read traps first; refused in simulation) and false-deny
+  rates under a large live-id population.
+
+Result lines: `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/results/board-4ad0df694.result-lines.txt`.
+**Do not compare `take_cyc`/`give_cyc` across this reflash:** loop layout effects (R-42) and global
+placement (`RTL-give-cost-tracks-global-placement/`) both move them.
 
 
 ## R1 on silicon — release-to-reuse cost: proportional to affected NODES and to nothing else varied (boots sw8x-r1-b1…b8, 2026-09-21)

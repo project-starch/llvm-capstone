@@ -295,7 +295,19 @@ the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause *
 a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
 
 
-## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass`
+## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
+
+> **2026-09-24: the emulator can now do what the RTL does here, on request.** capstone-qemu's
+> `CAPSTONE_MOVC_NULL_SCALAR=1` makes `helper_csmovc` null an untagged source too (default off: the
+> helper is unchanged). `capstone/tests/runtime-qemu/movc-null-scalar/run.sh` boots one -O2 domain
+> with the switch off and then on. The stage-50 probe (two hand-written `movc` of one integer) reads
+> `b=5 c=5` and then `b=5 c=0`. C-32's shape, the Sublet port's `setupLookaside` reduced to a
+> function, keeps its address and then loses it to the null arm: the lookaside-off symptom, seen on
+> the emulator for the first time. Against a QEMU that lacks the switch the test exits 2 rather than
+> passing. With it on, the whole boot (monitor, Linux, the domain) completed in the one boot run so far. The first
+> non-zero integer the switch nulled is the monitor's: `split_out_cap` passing a `region_cpmp` index
+> to `read_cpmp` (pc `0x80020a50`). None of this rules the spec question. It removes the reason an
+> emulator pass could not stand in for the board on it.
 
 > **2026-09-15: this divergence MASKED C-32 on every emulator pass of the SQLite Sublet port at -O1/-O2.**
 > The port's `setupLookaside` moves an integer-bridged block base through `movc` and re-reads the
@@ -472,7 +484,7 @@ named above (`docs/history/09-09-2026_16-00-00_r25-r26-fix-cycle.md`).
 
 ## RTL / FPGA
 
-### R-42 — a speculatively fetched I-cache MISS that a taken-branch redirect kills is never refilled, so a loop whose taken branch ends a 16-byte line pays +1 cycle EVERY iteration `OPEN — performance, not correctness; found 2026-09-24 (ladder control, E2b); identical at 054cea69b and 4ad0df694; FIX IN SIMULATION at capstone-ariane 6cbdaeeb4, not yet synthesized or on silicon`
+### R-42 — a speculatively fetched I-cache MISS that a taken-branch redirect kills is never refilled, so a loop whose taken branch ends a 16-byte line pays +1 cycle EVERY iteration `OPEN — performance, not correctness; found 2026-09-24 (ladder control, E2b); identical at 054cea69b and 4ad0df694; FIX SYNTHESIZED at capstone-ariane 6cbdaeeb4 (2026-09-24): no new combinational loop, bitstream written, routed WNS -10.615 against 4ad0df694's -8.341; not on silicon, and the flash is the lead's call`
 
 **Symptom.** Search terms: cycle anomaly, loop alignment, layout-dependent CPI, 7 vs 6 cycles
 per iteration. The ladder control `ctrsanity` (identical code on both halves) read **1.167×**
@@ -531,13 +543,101 @@ one-cycle IDLE detour goes.
   - the baseline arm reproduced all 13 of the board lane's numbers;
   - the neutrality sweep shows 0 differing trap counts across 92 tests;
   - `rtl-lint-gate` PASS, at baseline.
-- **Open, and only synthesis can close it:** `dreq_o.ready` now depends on `kill_s2`, computed
-  in the frontend. `cva6_icache` and `frontend` already share a struct-level UNOPTFLAT, so lint
-  cannot see a new loop. A bit-level trace found none; Vivado's loop check must confirm it
-  before any board time. Sent to the synth lane 2026-09-24.
+- **Synthesis (synth lane, 2026-09-24, sealed at `6cbdaeeb4`), against `4ad0df694`:**
+  - **No new combinational loop.** `check_timing` reports 1 in both, and it is the SAME loop: the
+    TIMING-23 arc is `ex_stage_i/lsu_i/state_q[3]_i_19` (I1→O) in both builds. So a count of 1 → 1
+    is not hiding a swap. `LUTLP-1` = 0 in `drc_routed.rpt` (`CFGBVS-1` present as control).
+    `write_bitstream` completed; all 241,250 routable nets routed. This settles the one question
+    lint could not: `ready`'s new dependence on `kill_s2` closes no loop.
+  - **Area neutral:** LUT 171,503 (+3), FF 93,812 (+2), LUTRAM unchanged. `i_cva6_icache` 736 LUT /
+    136 FF (746 / 136 before).
+  - **WNS −10.615 against −8.341 (Δ −2.274); failing endpoints 55.23 % against 51.70 %.**
+    Pre-registered ±0.5 ns, so the prediction MISSED. The band was too narrow, and prior art said
+    so: the S2 null-duplication control moved WNS by 3.74 ns with no functional change (see S2
+    below). The worst path is the base's own class (`csr_regfile cpmp_q_reg` →
+    `issue_read_operands fu_data_q`), with fewer logic levels and more wire. It has 0 I-cache and
+    0 frontend cells, and so do all of the worst 500 (0/500 in both builds; control: the sibling
+    `i_wt_dcache` appears on 500/500). The new failing endpoints fall in the D-cache and the issue
+    stage, while the I-cache's count is unchanged (294 → 294). That fits placement variance, but
+    ONE build cannot separate variance from a real effect.
+  - Bitstream sha256 `0cd45bb099a22b0636363ce7d955766803b6fd193dccc23f24478046032b8c05`, on the
+    synthesis host. Not staged anywhere. Flashing trades ~2.3 ns of WNS for one cycle per affected
+    loop iteration; the board has run a flashed bitstream at −12.425 (`1bfff7776`).
 - **Board acceptance:** slow offset 7.009 → ~6.008 cyc/iter, and fast offsets unchanged.
 
 te by the RTL lane, 2026-09-24.
+
+### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `OPEN — CONFIRMED 2026-09-25, on silicon (both R1 harness runs, caplifive_r42_6cbdaeeb4.bit) and in RTL simulation (r43-evict-live.S); safe direction (false DENY, never an authority escape) but it blocks every revocation-heavy workload on the R-35-fixed silicon; fix planned: docs/plans/r43-query-on-miss.md`
+
+> **Scope.** The M-mode LSU revocation cache in `capstone-ariane 4ad0df694` (4 ways x 64 sets, exact
+> 30-bit `{generation, index}` tag). An access whose id is not resident is refused with cause 25
+> (`load_store_unit.sv`, the `!rvc_lu_hit` arm). That is fail-closed by design, and the RTL's own comment
+> calls it **"an oracle rather than the shipping design"**: a miss is absence of proof of liveness,
+> not proof of revocation. This entry is about the cost of that choice, not about safety.
+>
+> **Distinct from R-38.** R-38 is a same-cycle compare race in the CPMP tracker (S/U mode). This is a
+> capacity/eviction miss in the LSU cache (M mode).
+>
+> **Evidence so far, and why it is weak.** On the flashed bitstream, ~43k live-alias accesses commit and
+> 17/17 ladder rungs return their pre-flash values
+> (`tests/fpga-repros/R35-revoked-reference-retains-authority/results/board-4ad0df694.result-lines.txt`).
+> But those live ids were **recently minted**, so they barely exercise eviction. A program with more live
+> revocation ids than the cache holds (SQLite) is the real test and has not run on this image.
+>
+> **CONFIRMED 2026-09-25 — on silicon and in simulation.**
+> - **Board, boot r42b3** (image `1b7a04fe237e1580`, the R1 release-cost harness, clean in all 90
+>   invocations on `054cea69b`): cause 25 on the first invocation. It was a load through the domain's
+>   own globals capability (`ldc a1,0x80(gp)`), which was **allowed at `+0x4f40` and denied at `+0x4ff4`**
+>   after an intervening `mrev`. The emulator runs the same invocation to completion. The RTL lane
+>   re-decoded the capture and the disassembly.
+> - **Board, boot r42b4** (image `46f99c7b5bf2556e`, the R1 cold harness): cause 25 on its first
+>   invocation, a load in `run_series`, tval inside the domain's own block. The register was not traced.
+> - **RTL simulation** (`verif/tests/custom/capstone/r43-evict-live.S`, capstone-ariane `93f509f54`,
+>   on `6cbdaeeb4`): alias A reads fine after 16 new live nodes; after 512 more the same read traps 25
+>   while `LCC(A) = 1`; after that `LCC` it reads fine again, because the LCC's node read re-installed it
+>   through the read tap. Arms 1 and 2 differ only in the number of nodes minted.
+> - Not affected: the ladder, the small m1 drop run (about 160 ids), and the live16 sweep (board, passed).
+>
+> **First experiments** *(written at filing; the sweep images exist, and the simulation test supersedes
+> the board discriminator)*.
+> 1. A SQLite workload on the fix bitstream: a correct result with no cause-25 trap bounds the rate.
+> 2. The discriminator: a stale probe of the NEWEST age only (k=43295, just revoked, likely still resident
+>    as dead), paired with a live alias installed more than 256 fills earlier and untouched since (a
+>    probable miss). If the live one traps 25, the fix is selecting on residency, and this entry's cost is
+>    real.
+>
+> **Remedy, parked:** query-on-miss (ask the rev-node unit on a miss). The first attempt broke the DYN
+> unit's own queries by OR-ing a second requester onto the rev-node channel, invisibly to lint. A retry
+> needs registered arbitration, a miss fixture first, and synthesis. **Any remedy must fail closed and
+> re-pass R-35's acceptance fixture (exactly 7 traps).**
+
+### R-44 — the CPMP tracker still ADOPTS any unseen revnode id as valid, so R-35's authority escape remains open for S/U-mode capability enforcement `OPEN — split out of R-35 on 2026-09-25 so that closing R-35 does not orphan it; LIVE IN PRODUCTION; fix deferred on a boot-kill risk`
+
+> **The defect.** `core/pmp/src/pmp_data_if.sv:86-93` @ `4ad0df694`, inside `cpmp_revnode_tracking`:
+> when a CPMP entry presents a revnode id different from the one it tracks, the tracker takes it and sets
+> `cpmp_revnode_valid_d[i] = 1'b1` — *"assume the revnode is live until proven otherwise"*. This is
+> R-35's mechanism, per CPMP entry instead of core-wide. R-12's own residual already said so: *"the
+> same stale capability installed into a different CPMP entry is re-adopted until the next broadcast of
+> its index."*
+>
+> **Why it is not latent.** The LSU check that R-35 fixed is gated `ld_st_priv_lvl_i == PRIV_LVL_M`; the
+> CPMP check is gated `!= PRIV_LVL_M`. They are complementary, so the CPMP is **100 % of S/U-mode
+> capability enforcement**. `capmode` is a sticky core-wide bit the monitor sets before the first S-mode
+> instruction, so Linux and userspace run under it and cannot opt out.
+>
+> **Why it was deferred rather than fixed with R-35.** Copying R-35's fail-closed approach here has a
+> boot-kill risk: `cpmp(0..2)` carry hardcoded ids produced with zero rev-node traffic, so a
+> deny-on-miss tracker predicts a permanent deny on the first S-mode instruction fetch, i.e. an
+> unbootable board. Reachability and fault-loop objections were raised and refuted; the boot-kill risk
+> was not. Measured in simulation by `verif/tests/custom/capstone/r12-recl-cpmp.S` probe 4.
+>
+> **Sibling, latent:** `core/commit_stage.sv`, `pc_revnode_tracking`, adopts the same way for the PC
+> capability ("On domain change ... assume valid"). It needs a stale CODE capability via CALL/RETURN,
+> which has never been constructed.
+>
+> **What a fix needs:** positive evidence for the CPMP entries (R-35's taps can feed a second consumer)
+> plus an explicit seed for the hardcoded `cpmp(0..2)` ids, so they are not denied at boot. It goes to
+> synthesis before any board time, and a first S-mode boot is its acceptance.
 
 ## Q-08 — no capability fault path assigned `env->badaddr`, so `tval` was stale on every capability fault ever reported `FIXED 2026-09-11 in capstone-qemu cabc953e58; found while root-causing an unaligned capability store in SQLite`
 
@@ -659,6 +759,20 @@ passes on the emulator and loses it on silicon — the opposite polarity from Q-
 every loaded linear capability back and reads the base before the store, so the Sublet port is unaffected.
 Related: R-21, R-22 (resolved on silicon), Q-04.
 
+
+## Q-13 — an out-of-range TIGHTEN permission immediate (> 7): the RTL faults, capstone-qemu clamps it to NA `OPEN — model divergence and a spec question for the lead; found 2026-09-25 (E3 boot r42e3) through a harness encoding bug`
+
+**The two models disagree:**
+- **RTL**, `capstone_dyn_unit.anvil:262-273` @6cbdaeeb4: `(imm_v > 5'd7) || ((imm_v & rs1_perm) !=
+  imm_v)` → ILLEGAL_OPERAND_VALUE, mcause 29 (`capstone_unit.anvilh:319`).
+- **capstone-qemu**, `target/riscv/op_helper.c:1164-1189` (`helper_cstighten`): `perms > 7 ?
+  CAP_PERMS_NA : perms`. An out-of-range immediate silently means "no access", and the operation
+  proceeds.
+
+A program that passes an invalid immediate therefore runs on the emulator and traps on silicon. The
+first instance was E3's R1 harness encoding a register NUMBER (12) into the immediate field; see
+R-21's box. **Which behaviour is intended is a spec question**, and neither source reads as the
+specification. The RTL's refusal is the safer default.
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -1512,7 +1626,53 @@ userspace binary die in M-mode will actually look; also in `fpga-debugging-recip
 handler, so only that invocation dies and the rest of the run still returns data — the "make every run
 RETURN" rule applied to privilege rather than to control flow.
 
-### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL faults on it `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
+### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL nulls its source (silently: MOVC raises nothing) `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
+
+> **LEAD'S DECISION, 2026-09-25: "D′ now + prototype C".** Options were assembled by the compiler lane and
+> adversarially audited before the decision.
+> - **D′ (the route for P1): a port-only change.** `sqlite3MallocLinear` returns a `uptr`, and `pStart`
+>   stays an integer through the `pStart = 0` merge. It is cast to a pointer only at call arguments and at
+>   the store.
+>   - This is sound because `setupLookaside` never dereferences `pStart`: every use needs an address and
+>     none needs authority (`ports/sqlite/sublet/sublet-3530300.patch:418-472`).
+>   - Handing out the linear capability from `pBlock` instead was REFUTED. It is a C-46-class hazard,
+>     `sublet_carve` still needs the linear block, and a delinearised whole-pool alias would outlive the
+>     per-slot revocation.
+>   - **Unproven until measured:** whether GVN or CSE recombines the casts into one GPCR vreg at the PHI.
+>   - **Pass criteria, fixed before the build:** `movc-cfg-scan` on a fresh cell ⑥ -O2 image shows no
+>     `setupLookaside` site; **the board reads the SAME counters as that image's own emulator run**; and
+>     `--stats` on silicon reads non-zero lookaside slots.
+>   - **RETRACTED (2026-09-25): "its emulator counters equal arm C's (5568/37966/32565/37966/5401)".**
+>     - Arm C (image `2b9e4d0d`, boot 2026-09-15) and E2's cell ⑥ (09-14) both predate `dac22bcaeca4`
+>       (09-18), which rewrote the patch onto `capstone_cap_slot` and the runtime header. So they are
+>       a different program, not a baseline for today's tree.
+>     - Measured by the compiler lane on the rebuilt port: `split=5481 mrev=37884 delin=32575
+>       revoke=37884 init=5309`, lookaside ON (25015). Close to arm C, not equal.
+>     - D′ was verified against that image's own counters instead: bit-identical before and after,
+>       both `setupLookaside` sites gone, and the two unrelated sites still present as the scanner
+>       control.
+> - **C (the class fix, prototype and cost only, no commitment):** keep a bridged integer in a GPR until
+>   it is genuinely used as a capability. The audit found it is NOT "all four sites by construction":
+>   - `main+0x3aabc` is not shown to be a bridged value;
+>   - a bridged value stored with `stc` and reloaded with `ldc` is invisible to it;
+>   - every capability use must re-bridge, or a shared GPCR vreg brings the PHI copy back.
+> - **Ruled out:** A (partial sink-and-fold) reaches one site of four and changes an upstream pass's
+>   contract. B (a register class) is structurally unworkable.
+> - **Left as they are:** `renameResolveTrigger` and `main` are dormant under the P1 workload and are
+>   present in the native cell ⑤ as well. C-32 stays OPEN as a class.
+> - The paper condition in the measurements doc (§7s arm C) is re-worded to match.
+
+> **2026-09-24: a second instance, in musl, found by measurement and out of reach of any compiler
+> fix.** `CAPSTONE_MOVC_NULL_SCALAR=1` (Q-04) with `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh`
+> runs the nightly and libc-test with MOVC keeping and zeroing an integer source. Across the corpus
+> exactly one verdict changes, `iconv_open`, the same in two runs at the same pc. musl's
+> `combine_to_from()` returns a conversion descriptor as an integer, `(void *)(f<<16 | t<<1 | 1)`.
+> libc-test at -O1 keeps it in `s5` and passes it to `iconv` three times with `movc a0, s5`, and
+> under the RTL's rule the second call gets `cd = 0` and faults at `iconv`'s first load (cause 24).
+> The integer becomes a pointer inside `iconv_open`, so the caller sees only a returned pointer.
+> No caller-side analysis can know it is an integer, and the design-A extension discussed below
+> would not reach it either. The measurement and what it did not cover:
+> `plans/2026-09-24-q04-movc-integer-source.md`.
 
 > # ⚠ OBSERVED LIVE ON SILICON 2026-09-15 — in a production workload, silently, and it cost three board readings and a QEMU-vs-board hunt (§7s of the measurements doc).
 >
@@ -3213,7 +3373,7 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > path implies (`load_unit.sv:718-721`: the responding load's id, the next request's cause) needs two DIFFERENT
 > causes back to back to show.
 
-### R-35 — on silicon a REVOKED capability still READS AND WRITES the storage its object gave up, and the access does not trap, because the LSU's single core-wide revnode tracker RE-ADOPTS any unseen id as valid `OPEN — ON SILICON (2026-09-24, caplifive_r35_4ad0df694.bit): the probe that exposed R-35 no longer reproduces it. The same image that read the current occupant's live data through a revoked alias on 054cea69b (is_live_data=1) now traps with cause 25 on the stale read of leaf[0]. A live alias to the same leaf, at the same address, commits without a trap, as do ~43k earlier live accesses, and 17 of 17 ladder rungs return their pre-flash values. N=1 per arm. NOT shown on silicon: WHY the stale read was denied -- cause 25 cannot separate observed revocation from the cache's deny-on-miss, which is the expected route for an id reissued thousands of times; which probe age trapped (k=0 or k=21648); the stale write; and false-deny rates under SQLite. Result lines and limits: results/board-4ad0df694.result-lines.txt. History follows. WAS (earlier 2026-09-24): FIX SYNTHESIZED AND TIMING-CLEAN, NOT YET ON SILICON: capstone-ariane 4ad0df694 routes at WNS -8.341 against the flashed base's -8.307, all five pre-registered predictions pass, bitstream sha256 8db73f8e20244438a2663fef070202e95dde29fe5b1d957b9804a7babf60382c; reflash authorized by the lead, pending the board probe. History follows. WAS: FIXED IN SIMULATION, NOT YET DEPLOYABLE. Root-caused at 054cea69b (load_store_unit.sv, the optimistic adopt) and reproduced two-sided in RTL simulation 2026-09-22. FIX: capstone-ariane f83fe9342 (branch r35-m1-revnode-cache), a tagged positive validity cache filled ONLY by passive taps on the rev-node unit's own node-memory traffic, so an access is allowed only if its exact 30-bit (generation,index) is resident and was last seen live. The acceptance fixture inverts (exactly 7 traps; the three revoked accesses trap 25; both live-alias controls still return data) and lint is at the committed baseline -- and f83fe9342 WAS SYNTHESIZED and is NOT deployable: area fixed (177,669 post-synth LUTs) but routed WNS -27.665 from +15.45 ns of route delay on a fill-side path (the rev-node's combinational write-request selector driving the cache's 256-entry write decode). Next: register the fill taps. The two hashes that WERE synthesized are not reflash candidates: Stage 0 (247b76896) routed at WNS -12.900 against base -8.307, and the first cache (079dc720a) at -14.415 with 192,642 LUTs = 94.53 % of the device because it described a crossbar. The intermediate register-file rebuild (6ee277cc3) introduced an authority escape of THIS issue's own class, closed at f83fe9342 and found only by an adversarial audit -- the fixture returned 7 traps before and after, since it cannot see same-cycle coincidences. The defect is in the BROADCAST PROTOCOL (the invalidation carries a bare index), which is why no tracker-local fix exists. Board evidence is build-contaminated and the simulation supersedes it`
+### R-35 — on silicon a REVOKED capability still READS AND WRITES the storage its object gave up, and the access does not trap, because the LSU's single core-wide revnode tracker RE-ADOPTS any unseen id as valid `FIXED on the M-mode LSU data path — CLOSED 2026-09-25 by the RTL lane (decision delegated by the project lead), after an adversarial audit. Fix: capstone-ariane 4ad0df694, flashed as caplifive_r35_4ad0df694.bit (2026-09-24). Two-sided in RTL simulation: acceptance fixture 4 -> 7 traps, build shown to track source; the stale read, stale store and readback trap 25; live controls return data. On silicon the exposing probe NO LONGER REPRODUCES: image 35fb3fec traps 25 at the stale lbu where 054cea69b read live data; a live alias and ~43k live accesses commit; 17/17 ladder rungs unchanged. N=1 per arm, no closing control, bitstream identified by label and behaviour. NOT shown on silicon: which cause-25 arm fired, which probe (k=0 or k=21648) trapped, the stale write. That k=0 cannot have been allowed is a SOURCE argument: an allow needs an exact 30-bit tag hit marked live; the 14-bit generation retires at 16383 and never wraps (capstone_rev_node.anvil); reuses_since <= 2706. The flashed configuration denies on a miss, which the RTL calls an oracle rather than the shipping design; its false-deny cost is R-43, and any replacement must re-pass this folder's acceptance. LDC/STC never used this tracker: they decode to CAPSTONE_DYN and are gated by the DYN unit's rev-node query (a stale STC has no fixture). NOT CLOSED BY THIS: the same optimistic adopt at the CPMP (S/U mode, live in production) -- R-44 -- and at commit_stage's PC tracker (latent). PREVIOUSLY RECORDED: ON SILICON (2026-09-24, caplifive_r35_4ad0df694.bit): the probe that exposed R-35 no longer reproduces it. The same image that read the current occupant's live data through a revoked alias on 054cea69b (is_live_data=1) now traps with cause 25 on the stale read of leaf[0]. A live alias to the same leaf, at the same address, commits without a trap, as do ~43k earlier live accesses, and 17 of 17 ladder rungs return their pre-flash values. N=1 per arm. NOT shown on silicon: WHY the stale read was denied -- cause 25 cannot separate observed revocation from the cache's deny-on-miss, which is the expected route for an id reissued thousands of times; which probe age trapped (k=0 or k=21648); the stale write; and false-deny rates under SQLite. Result lines and limits: results/board-4ad0df694.result-lines.txt. History follows. WAS (earlier 2026-09-24): FIX SYNTHESIZED AND TIMING-CLEAN, NOT YET ON SILICON: capstone-ariane 4ad0df694 routes at WNS -8.341 against the flashed base's -8.307, all five pre-registered predictions pass, bitstream sha256 8db73f8e20244438a2663fef070202e95dde29fe5b1d957b9804a7babf60382c; reflash authorized by the lead, pending the board probe. History follows. WAS: FIXED IN SIMULATION, NOT YET DEPLOYABLE. Root-caused at 054cea69b (load_store_unit.sv, the optimistic adopt) and reproduced two-sided in RTL simulation 2026-09-22. FIX: capstone-ariane f83fe9342 (branch r35-m1-revnode-cache), a tagged positive validity cache filled ONLY by passive taps on the rev-node unit's own node-memory traffic, so an access is allowed only if its exact 30-bit (generation,index) is resident and was last seen live. The acceptance fixture inverts (exactly 7 traps; the three revoked accesses trap 25; both live-alias controls still return data) and lint is at the committed baseline -- and f83fe9342 WAS SYNTHESIZED and is NOT deployable: area fixed (177,669 post-synth LUTs) but routed WNS -27.665 from +15.45 ns of route delay on a fill-side path (the rev-node's combinational write-request selector driving the cache's 256-entry write decode). Next: register the fill taps. The two hashes that WERE synthesized are not reflash candidates: Stage 0 (247b76896) routed at WNS -12.900 against base -8.307, and the first cache (079dc720a) at -14.415 with 192,642 LUTs = 94.53 % of the device because it described a crossbar. The intermediate register-file rebuild (6ee277cc3) introduced an authority escape of THIS issue's own class, closed at f83fe9342 and found only by an adversarial audit -- the fixture returned 7 traps before and after, since it cannot see same-cycle coincidences. The defect is in the BROADCAST PROTOCOL (the invalidation carries a bare index), which is why no tracker-local fix exists. Board evidence is build-contaminated and the simulation supersedes it`
 
 > **Folder (the report):** `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/` — the
 > board probe, the RTL-simulation reproducer `src/r35-rotate-stale.S`, its 117 result lines, and the
@@ -3295,7 +3455,7 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > a serial **dependent** node-read chain with no memory-level parallelism, against a fixed handful of
 > up-front addresses for INIT/DELIN.
 
-### R-37 — the revnode trackers' INVALIDATE and ADOPT are mis-ordered, so an invalidation broadcast arriving in the same cycle as an adopt is LOST at the LSU and mis-applied at the CPMP `OPEN in the flashed build, read from source at 054cea69b. Stage 0 was IMPLEMENTED at capstone-ariane 247b76896 and SYNTHESIZED 2026-09-23: routed WNS -12.900 against base -8.307, a 4.593 ns REGRESSION from 32 lines and zero new signal declarations, with all nine lint counters at the committed baseline -- so the earlier expectation that its zero lint delta made it 'a usable bisection control' held for lint and failed for synthesis. A before-audit localized the cost to the LSU half, whose post-adopt value fed cap_exception combinationally. (AUDITED, NOT MEASURED: Stage 0 changed the LSU and CPMP halves in one commit and 4.593 ns is their combined cost; no build has separated them. The split is one build -- 247b76896 with pmp_data_if.sv reverted -- and has not been run.) NOT a reflash candidate. At the LSU this issue is now moot rather than fixed: the tracker it reorders no longer exists in R-35's fix (f83fe9342), which keeps the same-cycle-invalidation property with a single comparator against the accessed id`
+### R-37 — the revnode trackers' INVALIDATE and ADOPT are mis-ordered, so an invalidation broadcast arriving in the same cycle as an adopt is LOST at the LSU and mis-applied at the CPMP `STAGE 0 IS IN THE FLASHED BUILD since 2026-09-24 (247b76896 is an ancestor of the flashed 4ad0df694): fixed in source, NOT verified on silicon; the LSU half is moot, since R-35's fix replaced the LSU tracker outright. WAS: OPEN in the flashed build, read from source at 054cea69b. Stage 0 was IMPLEMENTED at capstone-ariane 247b76896 and SYNTHESIZED 2026-09-23: routed WNS -12.900 against base -8.307, a 4.593 ns REGRESSION from 32 lines and zero new signal declarations, with all nine lint counters at the committed baseline -- so the earlier expectation that its zero lint delta made it 'a usable bisection control' held for lint and failed for synthesis. A before-audit localized the cost to the LSU half, whose post-adopt value fed cap_exception combinationally. (AUDITED, NOT MEASURED: Stage 0 changed the LSU and CPMP halves in one commit and 4.593 ns is their combined cost; no build has separated them. The split is one build -- 247b76896 with pmp_data_if.sv reverted -- and has not been run.) NOT a reflash candidate. At the LSU this issue is now moot rather than fixed: the tracker it reorders no longer exists in R-35's fix (f83fe9342), which keeps the same-cycle-invalidation property with a single comparator against the accessed id`
 
 > **Folder:** shares `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`. Parent
 > defect **R-35**; see also **R-38**.
@@ -3320,7 +3480,7 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > further broadcast for it ever arriving — a **permanent false ALLOW**. The target shape is the
 > CPMP's direction (invalidate-wins); the LSU must move *toward* it.
 
-### R-38 — the CPMP tracker's invalidation compares the PRE-ADOPT id, so an entry rewritten in the same cycle as a broadcast for its old id is left tracking a LIVE capability marked permanently INVALID `OPEN in the flashed build, read from source at 054cea69b. RETRACTED 2026-09-23: this entry said the consequence is a false DENY and 'never an authority escape'. An audit has since constructed a false ALLOW from the SAME code -- entry holds X; the CPMP presents Y so the adopt fires; the same cycle's broadcast names Y (the NEW id, not the old one); the compare is against the stale X and misses; the entry latches valid for a dead Y indefinitely. So 'never an authority escape' is withdrawn. Its REACHABILITY is UNRESOLVED -- it needs a CPMP entry write in the same cycle as a broadcast for the id being written. Stage 0's _q -> _d retarget (247b76896, carried into f83fe9342) closes both the filed false deny and this false allow. The same audit ARGUES that this CPMP half is timing-innocent (every consumer reads the registered value, so the path is flop-to-flop into 16 endpoints) and that the 4.593 ns lies in Stage 0's LSU half. (AUDITED, NOT MEASURED: Stage 0 changed the LSU and CPMP halves in one commit and 4.593 ns is their combined cost; no build has separated them. The split is one build -- 247b76896 with pmp_data_if.sv reverted -- and has not been run.) DO NOT revert it to _q as a timing measure: that reinstates the false allow. A parallel-compare restructure of it is audited bit-identical and parked`
+### R-38 — the CPMP tracker's invalidation compares the PRE-ADOPT id, so an entry rewritten in the same cycle as a broadcast for its old id is left tracking a LIVE capability marked permanently INVALID `STAGE 0 IS IN THE FLASHED BUILD since 2026-09-24 (247b76896 is an ancestor of the flashed 4ad0df694): fixed in source, NOT verified on silicon; the CPMP compare now tests the post-adopt id (_d). WAS: OPEN in the flashed build, read from source at 054cea69b. RETRACTED 2026-09-23: this entry said the consequence is a false DENY and 'never an authority escape'. An audit has since constructed a false ALLOW from the SAME code -- entry holds X; the CPMP presents Y so the adopt fires; the same cycle's broadcast names Y (the NEW id, not the old one); the compare is against the stale X and misses; the entry latches valid for a dead Y indefinitely. So 'never an authority escape' is withdrawn. Its REACHABILITY is UNRESOLVED -- it needs a CPMP entry write in the same cycle as a broadcast for the id being written. Stage 0's _q -> _d retarget (247b76896, carried into f83fe9342) closes both the filed false deny and this false allow. The same audit ARGUES that this CPMP half is timing-innocent (every consumer reads the registered value, so the path is flop-to-flop into 16 endpoints) and that the 4.593 ns lies in Stage 0's LSU half. (AUDITED, NOT MEASURED: Stage 0 changed the LSU and CPMP halves in one commit and 4.593 ns is their combined cost; no build has separated them. The split is one build -- 247b76896 with pmp_data_if.sv reverted -- and has not been run.) DO NOT revert it to _q as a timing measure: that reinstates the false allow. A parallel-compare restructure of it is audited bit-identical and parked`
 
 > **Folder:** shares `capstone/tests/fpga-repros/R35-revoked-reference-retains-authority/`. Siblings
 > **R-35** (parent) and **R-37** (the ordering half).
@@ -4287,6 +4447,25 @@ globals *after* ISel would silently break this positional scheme.
 > pool's blocks would spend fewer. The number stands as what THIS discipline costs, which is what
 > a paper claims, and not as a floor.
 >
+> **A SECOND WORKLOAD, 2026-09-25: tshark on the Sublet heap spends 10–13 thousand nodes per run,
+> and capstone-qemu itself ran out in one boot.** From the port's heap line (`split + mrev`) for one
+> full `-V -n` run: dhcp 12,596; dns_port 13,335; dns-ooo 12,261; http 10,396; arp 9,827; ntp
+> 10,055. So on a bitstream without the node reclaimer the budget is about five such runs per boot,
+> before the monitor's and the host's own node use.
+>
+> **capstone-qemu reclaims no node, and so it has the same cumulative per-boot budget.** A node's
+> refcount is set to 1 and never changed. Nothing calls `cap_rev_tree_release`: its only caller,
+> `cap_rev_tree_update_refcount`, is never called. `cap_rev_tree.h` says "this emulator reuses no
+> node". The free-list comment at `cap_rev_tree.c:8-10` describes that dead code. It misled the
+> first draft of this measurement, although a 2026-09-15 history note had already found the dead
+> code (`docs/history/15-09-2026_19-16-04_manuscript-read-directly-at-last.md`).
+>
+> In one boot, five full runs spent 64,123 nodes and completed. Everything else up to the
+> watermark spent 1,409, ntp's first heap allocations included. ntp then crossed #65,532, and QEMU
+> asserted at the pool's end (`cap_rev_tree.c:56: _cap_rev_tree_dup_node_before: Assertion
+> new_node != CAP_REV_NODE_ID_NULL`). The port's runner now allows at most four full runs per
+> sublet boot (`ports/wireshark/app/results/2026-09-25-qemu-safety-sublet/`).
+
 > **A diagnostic that carries the withdrawn account.** `capstone-qemu/target/riscv/cap_rev_tree.c`
 > prints, at cumulative allocation 1022, that "on silicon (10-bit bump head from 3, no
 > reclamation) this is where the head WRAPS to 0 and starts reusing LIVE ids". That is the account
@@ -6203,7 +6382,22 @@ the transcript, never a verdict. Audit of the archive (2026-09-15 08:10, §7r): 
 changes and no cited number is a truncated fragment. Related: M-10 (the emulator console's silent
 truncation of a long command), the transcript-marker note in the board-run skill.
 
-### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — latent ODR violation, found 2026-09-24; harmless only because the project builds with BUILD_SHARED_LIBS=ON. FIX ON BRANCH compiler/c59-odr (efe9b957d538), NOT MERGED: the Capstone copy is made static, verified by symbol binding (T to t); the static link itself is not verified`
+### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
+
+> **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
+> target trees was enumerated and intersected, and each pair was reproduced with `ld -r`. **Sixteen
+> symbols collide** between `llvm/lib/Target/Capstone` and `llvm/lib/Target/RISCV`, not one:
+>
+> - twelve `isTune*Fusion`: ADDILoad, ADDLoad, AUIPCADDI, AUIPCLoad, BFExt, LDADD, LUIADDI,
+>   LUILoad, SHXADDLoad, ShiftedZExtW, ZExtH, ZExtW. They are emitted into `*GenMacroFusion.inc`,
+>   which is **tablegen output, so not a one-word `static` fix**;
+> - three that are a one-word fix: `getPredicatedOpcode` (`CapstoneInstrInfo.cpp`),
+>   `isRegImmLoadOrStore` (`CapstoneISelDAGToDAG.cpp`) and `PreferredLandingPadLabel`
+>   (`CapstoneIndirectBranchTracking.cpp`).
+>
+> Those objects link into any tool with both targets enabled, and they are more central than the
+> AsmParser object whose collision was the one observed. **The entry's original premise, one symbol,
+> was incomplete when filed.** Nothing here means "the static build is fixed".
 
 **What happens.** `llvm/lib/Target/Capstone/AsmParser/CapstoneAsmParser.cpp:3476` and
 `llvm/lib/Target/RISCV/AsmParser/RISCVAsmParser.cpp:3346` each define
@@ -6296,14 +6490,31 @@ TargetLoweringBase. The compiler lane probed each once, on dev:
 
 | Pass | What the probe showed |
 |---|---|
-| LowerEmuTLS | `-femulated-tls` dies earlier, on C-47's `Cannot select: GlobalTLSAddress`. This pass is MASKED BY C-47 and surfaces once C-47 is fixed. |
+| LowerEmuTLS | **UNREACHABLE by design, not masked.** RETRACTED 2026-09-25: "masked by C-47, surfaces once C-47 is fixed". The C-47 fix forces `Options.EmulatedTLS = false` (`CapstoneTargetMachine.cpp:171`), so `-femulated-tls` is served by native local-exec lowering and the pass never runs. Measured: objects with and without the flag are byte-identical, with 0 `emutls` symbols. The underlying defect is real and NOT fixed (the pass's control-variable struct has integer fields where this target's pointers are capabilities, and it asserted), but nothing can reach it. Re-examine only if a domain ever needs an `__emutls` runtime. |
 | DwarfEHPrepare | **CONFIRMED, filed as C-61.** The first probe, a C++ `throw` at -O2, compiled clean only because it had no cleanup and so no `resume` to rewrite. That was a false negative. |
 | AtomicExpandPass | **CLEAN, and already FIXED by this project.** Both sites are guarded on `DL.isNonIntegralPointerType()`: `:1929` and `:2030`. The guards came from C-54, `c7f0de349b4b` (2026-09-23), and `ni:200` makes AS200 non-integral, so the AS0 cast is skipped. The probe was loaded: a 32-byte struct through `__atomic_load` emits a real `__atomic_load` call at -O1, re-checked here. An earlier oversized-`_Atomic` probe was VOID, because the frontend rejected it. |
 | SjLjEHPrepare | No hard case was constructed. |
 | ShadowStackGCLowering | Unused by this project: needs the shadow-stack GC strategy. |
 | JMCInstrumenter | Unused by this project: needs `-fjmc`. |
 
-### C-61 — any C++ with exceptions enabled crashes in "Exception handling preparation", because `_Unwind_Resume`'s type is built with an address-space-0 pointer `OPEN — COMPILER, crash; found 2026-09-24 while auditing C-60's class; root cause read from source; reproduced with the tree's clang. FIX ON BRANCH compiler/c61-eh-addrspace (8fb7d4461eca), NOT MERGED; C++ exceptions stay blocked behind C-63 even with it`
+### C-61 — any C++ with exceptions enabled crashes in "Exception handling preparation", because `_Unwind_Resume`'s type is built with an address-space-0 pointer `FIXED 2026-09-25, merged at 114f9678a670 (branch compiler/c61-eh-addrspace, 8fb7d4461eca): DwarfEHPrepare builds _Unwind_Resume's parameter and the exn.obj PHI in the exception object's own address space, guarded on isNonIntegralPointerType. C++ exceptions stay blocked behind C-63 and the absent unwind runtime`
+
+> **Two residuals, neither a regression, recorded so they are not rediscovered.**
+> 1. **An ARRAY-typed landingpad** (`landingpad [2 x ptr addrspace(200)]`) still aborts identically,
+>    because `dyn_cast<StructType>` cannot match it and the guard falls back to AS0. It is valid IR
+>    and clang never emits it. The fix is `isAggregateType()` plus `getContainedType(0)`.
+> 2. **A module that already declares `_Unwind_Resume` with an AS0 parameter** gets that existing
+>    declaration back from `getOrInsertFunction`, with nothing checking that the two agree. The call
+>    and the declaration can therefore diverge **silently**, where the pre-fix compiler aborted
+>    loudly. clang's C++ path never declares `_Unwind_Resume`, so this is reachable only from
+>    hand-written or linked mixed-address-space IR.
+>
+> **Verification (compiler lane):**
+> - the test is negative-tested two-sided, and the PHI-site CHECK is load-bearing at -O0 and -O2;
+> - no `.ll`/`.mir` in `llvm/test` or `clang/test` carries both a `resume` and an `ni:` datalayout;
+> - `llvm/test/CodeGen` + `llvm/test/Transforms` (38,745 tests) have failure sets identical to dev's
+>   baseline;
+> - Capstone lit passes 115/115.
 
 **What happens.** `DwarfEHPrepare::InsertUnwindResumeCalls` aborts with
 `Calling a function with a bad signature!` (`llvm/lib/IR/Instructions.cpp:761`) in the
@@ -6693,6 +6904,52 @@ configuration in which C++ compiles today.** C-61 alone does not make C++ "nearl
 
 **Fix: none yet. The ABI decision is the lead's.**
 
+### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `OPEN — LIBC ABI (musl-capstone); found 2026-09-24 by the tshark port; WORKED AROUND for GLib only (ports/wireshark/app/deps/patches/glib-0008); source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
+
+**What happens.** On capstone64, `pthread_cond_t` (`include/alltypes.h.in:88`) is `int __i[12]`,
+48 bytes, and its pointer view `__p[12*sizeof(int)/sizeof(void*)]` holds three 16-byte pointers.
+musl's internal macros (`src/internal/pthread_impl.h:92-98`) assume 8-byte pointers:
+- `_c_head` is `__p[1]`;
+- `_c_tail` is `__p[5]`, at +80, 32 bytes past the object;
+- `_c_shared` (`__p[0]`) overlaps `_c_seq` (`__vi[2]`);
+- `_c_lock` (`__vi[8]`) lies inside `__p[2]`.
+
+`pthread_cond_init` zeroes 48 bytes. `pthread_cond_signal`/`broadcast` then walk the waiter list
+from whatever follows the object, single-threaded or not. On level0's heap that is the next block's
+header, whose `free` flag, 1, sits at +80: `cincoffsetimm a4, a0, 0x20` with `a0 = 1`, cause 24.
+The mutex, barrier and rwlock macros fit their types (`_m_prev`/`_m_next` are `__p[3]`/`__p[4]`
+of a 5-pointer union, and `_b_inst` is `__p[3]` of 4); only the condition variable overruns.
+
+**Repro** (QEMU): `ports/wireshark/app/tests/runtime-gaps/run.sh c65`, a heap
+`pthread_cond_t`, init, broadcast. It halts with cause 24 in `__private_cond_signal`
+(`pthread_cond_timedwait.c`) with `x10 = 1` (log `qemu-oracle-20260925-002510-T6wb`). Natively,
+glibc's broadcast returns.
+
+**Evidence.**
+- tshark's second boot halted identically in `epan_init`: GLib's `gthread-posix.c` broadcast,
+  n = −1, `a0 = 1`.
+- An audit matched the instruction in the archived `libc-capstone.a` (`ldc a0, 0x50(s3)` reads
+  `_c_tail`).
+
+**Worked around (GLib in the tshark port).** In a domain, GCond signal and broadcast are no-ops,
+since one thread has no waiter, and waits abort. Other code calling `pthread_cond_*` is still
+exposed. A survey of 219 recent domain images found no `pthread_cond` symbol outside tshark.
+
+**The fix** is an ABI change for the lead: size `pthread_cond_t`/`cnd_t` for 16-byte pointers and
+relayout the `_c_*` macros. Every port relinks against the new libc.
+
+**Proposed, not landed (2026-09-25):** local branch `musl/c65-pthread-cond` (`85972d2`), not
+pushed. It adds two overlay files in `ports/musl-capstone/arch-capstone64/` and leaves the
+upstream tree untouched:
+- `bits/alltypes.h.in` declares a 64-byte `pthread_cond_t`/`cnd_t`, which the generic TYPEDEFs
+  then skip;
+- `pthread_impl.h`, found before `src/internal`, `#include_next`s musl's own header and moves only
+  the seven `_c_*` macros: the pointers at `__p[0..2]`, the ints at bytes 48–63.
+
+With a private musl build, `run.sh c65` returns with `sizeof = 64` and "broadcast returned". The
+musl build fails the same 6 objects as without the patch. The wait paths need a futex and were not
+exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
@@ -6851,6 +7108,40 @@ two opposite errors on a fresh build dir.
 The rc=2 cost is already recorded in the comment at `:58-61`: every caller warns on rc 2 and nothing
 acts on it. **The fix belongs to the gate's owner. Until then, read rc 0 on a fresh build dir as "the
 listed tools are fresh", NOT as "lit can run".**
+
+### I-12 — QEMU guests stall before any domain starts, and a runner's time budget decides how long the shared lock is held `OPEN — infra; counted 2026-09-25 on the tshark runner; cause unknown`
+
+Some QEMU guest boots stop, or crawl, before any domain starts. The tshark safety campaign
+(`ports/wireshark/app/results/2026-09-25-qemu-safety/stall-classes.txt`) had 28 boots, and 7 of
+them never reached a domain. All ran on the port's PRIVATE rootfs, so the shared rootfs's ext4
+corruption is not the cause. FFmpeg's hardening round counted 9 such boots: 7 before login, 1 at
+login, 1 in the 9p copy. The shapes, told apart by a setup watchdog in
+`ports/wireshark/app/host/run-qemu.sh`:
+- **A slow 9p copy, 6 of the 28.** The guest's copy of the domain images from the 9p share
+  normally takes about 30 s, and here took about 5 minutes. Each time, `cp` was waiting in
+  `p9_virtio_zc_request`, a 9p zero-copy read, while its file kept growing. 3 of these boots
+  completed. The other 3 were powered off by earlier watchdog versions that did not check for
+  progress.
+- **The guest wedged in setup, 1 boot.** The watchdog's `sleep` never woke, so userland stopped
+  too.
+- **Stopped between init and login, 2 boots.**
+- **1 more stopped in setup before the watchdog existed**, so its kind is unknown.
+
+During these stalls the host's load average was about 2.3, and the stalled QEMU was at 100% CPU.
+So a guest that crawls is the common factor, not 9p alone.
+
+**The cost is the shared lock, not the boot.** Nothing is lost, since a stalled boot is retried and
+never counted. But the QEMU holds the lock for the whole guest budget. At 960 s per section, one
+such boot held it for 85 minutes against three other lanes' queued work. What the tshark runner does now:
+- size the budget from measured run times;
+- a setup watchdog: at 300 s it reports where the copy stands (files, `cp`'s kernel stack, memory
+  and CMA), then powers the guest off only if nothing moved in the next 30 s;
+- 600 s for setup in the outer budget, so a slow copy can still finish.
+No other runner has the watchdog.
+
+**What would settle the cause:** whether the TCG vCPU or the 9p server is starved during a slow
+copy. The QEMU monitor's `info registers`, or a host-side stack of the QEMU threads, taken during a
+stall, would show which. No runner collects either yet.
 
 ## Compiler / toolchain (ours)
 
@@ -7045,30 +7336,33 @@ directly, `sd` at 0, 16 and 32 and none at 8, and needs no emulator; it fails on
 the fix. The integration gate is libc-test's `inet_pton` and `mntent` under
 `capstone/ports/musl-capstone/`, which fail without the fix for exactly this reason.
 
-### C-47 — `__thread` cannot be lowered (`Cannot select: c128 = GlobalTLSAddress`), and it is NOT what blocks a libc `OPEN — REAL BUT OFF THE CRITICAL PATH; recorded 2026-09-16 while making musl's errno work`
+### C-47 — `__thread` cannot be lowered (`Cannot select: c128 = GlobalTLSAddress`), and it is NOT what blocks a libc `FIXED 2026-09-24 on compiler/c47-tls: local-exec on tp's capability, a PT_TLS segment in my_first_domain/link.ld, and the block runtime/tls.c builds from it`
 
-> **A fix exists, unmerged and not yet validated by this registry (2026-09-24).**
-> `origin/compiler/c47-tls` at `07829e435e0d`, by the external collaborator. It is stacked on a C-46
-> fix (`5fbdfb139c7d`) in the same branch, 2 ahead and 7 behind `dev`, based at `56c39b13369d`.
-> What it does:
-> - every thread-local becomes local-exec (a domain is one static image);
-> - the `%tprel` offset is built as an integer and applied to `tp`'s **capability**
->   (`lui`/`addi`, then `cincoffset …, tp, …`), where RISC-V's integer ADD would drop the tag;
-> - it narrows to the variable under `-capstone-shrink-globals`;
-> - it disables emulated TLS for the target;
-> - it adds a PT_TLS linker-script change (`my_first_domain/link.ld`) and a `runtime/tls.c` that
->   lays the block out from linker symbols, because a domain has no auxv.
+> **2026-09-24: FIXED on `compiler/c47-tls`.** The "capability TLS model" this entry called a design
+> question has a narrow answer for domains: one static image, so every thread-local is local-exec.
+> The compiler builds `lui %tprel_hi` / `addi %tprel_lo` as an integer and applies it to tp's
+> CAPABILITY with `cincoffset` (the RISC-V sequence ADDs tp as an integer and drops the tag), then
+> narrows the result to the variable as a sized global is. `my_first_domain/link.ld` gives the image
+> a PT_TLS segment (empty, and nothing moved, for every existing domain), and `runtime/tls.c` builds
+> the block -- struct pthread below tp, the copied template at tp -- that musl's `__init_tls` would,
+> since a domain has no auxv. -femulated-tls is served by the same lowering (the emutls pass asserted
+> here). A thread-local initialised with a global's address is now a compile error: the
+> capability-initializer pass used to skip it and leave an untagged value. Test:
+> `tests/runtime-qemu/thread-local/`, 9 checks at -O0 and -O2 with an overrun control and an
+> old-runtime control; the -O2 arm is what exposed C-46 live, so this branch sits on that fix.
+> Still not covered: libc-test's `tls_*` tests need threads or DSOs. With this fix `tls_init` and
+> `tls_local_exec` build and run, and both fault in `pthread_create`, because a domain has no
+> threads (`tls_local_exec`'s main thread reports no failed check before that). `tls_init_dso` does
+> not build: it initialises a thread-local with a global's address, which is the new error.
+
+> **The registry's note on this fix, written 2026-09-24 while it sat on an unmerged branch, is
+> reconciled with the box above at merge, as the note asked.** What it checked independently (the
+> `cincoffset …, tp` CHECK lines, the emulated-TLS removal, the pinned old-runtime control) is what
+> that box describes. On the workarounds it named: CPython runs its port's `checks.py` 6/6 in a
+> domain with patch 0006 deleted and this fix; the tshark port's single-thread define has not been
+> tried against it. Dropping either is that port's own change.
 >
-> It carries two lit tests (`tls-local-exec.ll`, `tls-capability-initializer.ll`) and a QEMU probe
-> (`runtime-qemu/thread-local/run.sh`). The probe's controls include the previous `tls.c`, pinned
-> at `56c39b13369d`, which must NOT pass. Verified against the branch on 2026-09-24: its head and
-> counts, its authorship, the `cincoffset …, tp` CHECK lines, the emulated-TLS removal in
-> `CapstoneTargetMachine.cpp`, and the pinned control. **Nobody in this registry has built or run
-> it.** Merging is the lead's call. Until then, the workarounds in the tshark port (a single-thread
-> define) and in CPython's patch 0006 (thread-locals turned into plain globals) stand. Note that the
-> branch also edits this entry itself, so merging it means reconciling with this text.
->
-> **Scope, measured 2026-09-24.**
+> **Scope of the defect before the fix, measured 2026-09-24.**
 > - **What dies.** Any reference to a `__thread` variable that SURVIVES to instruction selection
 >   dies with `Cannot select: c128 = GlobalTLSAddress`. That covers `int`, pointer-typed,
 >   struct-typed, address-taken, written, or read through external linkage, at `-O0` through `-O2`.
@@ -7135,25 +7429,54 @@ model, which is a design question and not a missing pattern.
 `-DMUSL_WRITE_PROBE_WANT_BADFD`, which reads `errno` after a refused fd and so cannot pass unless the
 thread pointer survives.
 
-### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — LATENT HARDENING, not a live miscompile (compiler lane verified 2026-09-10: the transforms this would license are each independently blocked today). The fix shape this entry first implied is WRONG — see the box`
+### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — OBSERVED LIVE 2026-09-24 for direct-call targets (the direct-call instance fixed at 563e0765953e, merged 2026-09-25 at 3979abd8e9a3); the MOVC modelling itself is unchanged. The fix shape this entry first implied is WRONG — see the box`
 
-> **⚠ CAVEAT on "not a live miscompile" (2026-09-24). A reproduced fault contradicts it, on an
-> unmerged branch.**
+> **What the merged fix does NOT guard.** `llvm/test/CodeGen/Capstone/c46-call-target-nonlinear.ll` is
+> a codegen-SHAPE test: it checks that the target is built non-linear, not that a program survives.
+> The runtime reproducer lives on the stacked C-47 commit: the thread-local QEMU test, whose -O2 arm
+> is how the fault was found. So `563e0765953e` alone ships no runtime regression guard, and reverting
+> the C-47 work would take C-46's runtime coverage with it.
 >
-> **The branch and its evidence.** `origin/compiler/c47-tls` carries `5fbdfb139c7d` ("C-46: a direct
-> call's target capability is built non-linear"), by the external collaborator. Its commit
-> message records a QEMU fault in a `-O2` domain that calls one static function nine times:
-> - `selectCall` built each target as a bare `cincoffset rd, gp, off`, which is LINEAR and pure, so
->   MachineCSE merged the nine targets into one register;
-> - under register pressure the allocator copied it (`movc s8, s11`), which consumes the source;
-> - the next call went through the source, `cjalr ra, 0(s11)`: cause 24, with `s11` null and the
->   copy `type 0`;
-> - it reports 6 musl libc-test faults on `dev` from this shape (fwscanf, memstream, setjmp, string,
->   strtod_simple, tgmath). Each hides the rest of its chunk, 27 tests in all. With the fix: 0 faults.
->
-> **Not yet validated by this registry** (same status as the C-47 note, which shares the branch).
-> The verdict above stands until the merge changes it, which is the lead's call. But it should not
-> be read as "C-46 is not live".
+> **libc-test, measured 2026-09-25 by the helper lane.** Same compiler binary for each tree, clean
+> rebuilt musl, EXT4 errors uniform across all runs.
+> - Before, dev `da4c9a5`: 37/6/6 + 1 NOBOOT, with the six C-46 tests faulting cause 24.
+> - After, `3979abd8e9a3`: 43 PASS / 7 FAIL / 2 FAULT. fwscanf, memstream, string, strtod_simple and
+>   tgmath now pass. setjmp runs and FAILs on an unserved `rt_sigprocmask`. The 2 FAULTs are
+>   tls_init and tls_local_exec, which C-47 now lets build; both halt in `pthread_create.c`, because a
+>   domain has no threads.
+> - **Among tests that were already building, FAULT went 6 → 0.** "FAULT 2" does NOT mean C-46
+>   underperformed: both faults are new arrivals that C-47 made buildable. The contributor's
+>   43 PASS / 7 FAIL is exact for the population it described.
+> - The musl README's 43/7/0 for 2026-09-17 predates a later regression of dev. It was not a wrong
+>   baseline.
+
+> **2026-09-24: OBSERVED LIVE under QEMU, and the "What would settle it" case below now exists.**
+> A direct call's target was built as a bare `cincoffset rd, gp, off` (selectCall), which is LINEAR
+> (QEMU prints `type 0` = `CAP_TYPE_LIN`, `cap.h:27`) and pure, so MachineCSE merged the targets of
+> the nine calls `main` makes to one static function into one register. Under the extra register
+> pressure of a thread-local test at -O2, the allocator copied it -- `movc s8, s11` at image offset
+> 0x14290 -- and called through the SOURCE next: `cjalr ra, 0(s11)` at 0x14294, cause 24, "cs.cjalr
+> requires capability in rs1", with the dump showing `x24 = C(... type 0)` and `x27 = 0`.
+> `helper_csmovc` nulls a source that is not copyable (`op_helper.c`), which is exactly this entry's
+> premise. The same program without the thread-locals has the same linear target register but no
+> copy, so the trigger is register pressure, not TLS. A straight-line scan of the 168 images dev's
+> baseline built found three more call-target candidates, all in SQLite (sqlite3BtreeDropTable,
+> sqlite3AlterRenameTable, sqlite3WindowCodeStep) -- candidates, since the scan ignores branches.
+> **It was also behind every libc-test fault on dev:** fwscanf, memstream, setjmp, string,
+> strtod_simple and tgmath all halt with "cs.cjalr requires capability in rs1"; with only the fix
+> below, none faults (five pass, setjmp fails its signal-mask check, which a domain cannot serve),
+> and the 27 tests their chunks hid run: 38 pass / 6 fail / 6 fault becomes 43 / 7 / 0. The
+> straight-line scan above found none of these six, so its count is a floor.
+> **Fixed for call targets** by building them with PseudoCapGlobalBase (cincoffset + delin as one
+> instruction, non-linear), as selectLGA builds a global's base for the same reason; test
+> `c46-call-target-nonlinear.ll`. The MOVC definition is untouched: the trade in the box below
+> (`hasSideEffects = 1` for every capability copy) is still the lead's, and any other LINEAR value
+> the allocator can copy with a live source is still exposed.
+
+> **⚠ CAVEAT on "not a live miscompile" (2026-09-24). A reproduced fault contradicts it.** The fault,
+> its evidence and the fix for call targets are in the 2026-09-24 box above. (This caveat was first
+> written while the fix sat on an unmerged branch; it is reconciled with that box here, as it asked
+> to be at merge.) The 2026-09-10 "latent" verdict below should not be read as "C-46 is not live".
 >
 > **Why the 2026-09-10 argument did not catch it** (compiler lane, re-read at source 2026-09-24).
 > The argument says MOVC has no IR pattern and is emitted only by `copyPhysReg` and frame-index
@@ -7164,8 +7487,8 @@ thread pointer survives.
 > cannot establish latency. What has to be bounded is **which LINEAR (or untagged) values can reach
 > register allocation with a live range the allocator may split**. It is the same pre-RA/RA
 > boundary C-32 turned on (there, `PerformSinkAndFold` deciding whether a value reaches RA as a
-> copyable capability). The branch's own C-46 entry agrees (its `ISSUES.md`, C-46 box): "any other
-> LINEAR value the allocator can copy with a live source is still exposed."
+> copyable capability). The box above agrees: "any other LINEAR value the allocator can copy with a
+> live source is still exposed."
 
 > **2026-09-15: the read-after-copy precondition this entry defers to C-32 is OBSERVED on silicon** —
 > `movc a0, s3` of an integer-bridged base with `s3` live afterwards, emitted by -O1 and -O2 in the
@@ -7894,6 +8217,26 @@ the project lead's call.
 ---
 
 ### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` untested on silicon; the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
+
+> **`tighten` and `shrinkto` COPY on silicon: R-21 CONFIRMED for both (2026-09-25, boot r42e3b,
+> `caplifive_r42_6cbdaeeb4.bit`, image `cbf8cb41eb56c477`).** R1 `--series linear`:
+> - **arm 8 `tighten-LIN` reads 0** and **arm 10 `shrinkto-LIN` reads 0**: the linear source survives
+>   in both, i.e. a duplicate.
+> - capstone-qemu reads 7 for `tighten` (it moves) and 0 for `shrinkto` (it copies).
+> - Controls 9/11 read 1, and there was no trap.
+> - Arms 2/3 (`cincoffset`/`scc`) read 7, as this entry's 2026-09-15 resolution says.
+> - Arms 4/6 (`ldc`/`stc`) read 7 on silicon against QEMU's 0, which is Q-12.
+>
+> **CORRECTION to this box's first version (4c7e6b9).** It read the first boot, r42e3, as "`tighten`
+> traps cause 29 on a linear source". The trap was a HARNESS ENCODING BUG, found by the RTL lane's
+> reading of the RTL:
+> - `.insn r` put an `"r"` operand in TIGHTEN's rs2 FIELD, which is the permission immediate. That
+>   encoded the allocated register's number, a2 = 12, as imm 12.
+> - The RTL refuses imm > 7 with cause 29, and QEMU clamps it to NA. Both are Q-13.
+> - Fixed in `r1_slots_pools.c` with the literal `x6` (6 = RW). The linear source was never the
+>   issue.
+>
+> Result lines: `tests/rtl-smoke/ladder-revival-2026-09-22/r42-e3-linear.result-lines.txt`, both boots.
 
 > **On silicon 2026-09-15 (boot sw8x-f4, §7w of the measurements doc):** through the R1 harness's `--series
 > linear` on `caplifive_r30r31_1bfff7776`, the LINEAR source of `cincoffset` and of `scc` reads cleared (7)

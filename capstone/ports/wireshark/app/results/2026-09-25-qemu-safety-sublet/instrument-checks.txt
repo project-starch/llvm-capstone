@@ -1,0 +1,25 @@
+# The verdict's self-test with its temporal cases, regenerated 2026-09-25 from the committed host/safety-verdict.py,
+# and a broken classifier that the new negative case (a temporal fault on another value) must catch.
+
+## safety-verdict.py --self-test (must be all ok, rc 0)
+self-test ok   return: got RETURN 100001
+self-test ok   fault at the target: got FAULT oob
+self-test ok   fault elsewhere: got FAULT-ELSEWHERE oob at 180, target 140
+self-test ok   fault before the touch: got FAULT-BEFORE-TOUCH oob
+self-test ok   fault after a return line: got FAULT-AFTER-RETURN oob
+self-test ok   host failure is not a mark: got NOTHING host reported status -1
+self-test ok   another image's result is not this one's: got NOTHING None
+self-test ok   nothing at all: got NOTHING None
+self-test ok   temporal fault at the target: got FAULT temporal
+self-test ok   temporal fault on another value: got FAULT-ELSEWHERE untagged access f7000700, target f7000600
+self-test ok   untagged operand at the target: got FAULT temporal
+self-test ok   judge case 1
+self-test ok   judge case 2
+self-test ok   judge case 3
+self-test ok   judge case 4
+self-test ok   judge case 5
+rc=0
+
+## broken classifier: sed 's/if addr != target:$/if False:/' (every 'addr != target' check disabled; the self-test must FAIL, rc 1)
+self-test FAIL temporal fault on another value: got FAULT temporal
+rc=1

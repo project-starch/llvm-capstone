@@ -26,6 +26,17 @@ HOSTCALL_RUNNERS=(
   "$SCRIPT_DIR/run-hostcall-exit-hook-probe.sh"
   "$SCRIPT_DIR/run-hostcall-stdio-descriptors-probe.sh"
   "$SCRIPT_DIR/run-hostcall-return-flush-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-thread-local-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-init-fini-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-unserved-report-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-pread-pwrite-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-path-rename-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-cwd-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-mmap-shm-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-pid-timer-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-pipe-poll-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-mkdir-rmdir-probe.sh"
+  "$SCRIPT_DIR/run-hostcall-path-readlink-probe.sh"
 )
 
 capstone_select_banner hostcall

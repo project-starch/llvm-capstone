@@ -18,7 +18,11 @@ bash capstone/ports/wireshark/app/deps/build-zlib.sh     # then pcre2, c-ares, l
   - this lane's own `libc-capstone.a`;
   - the domain runtime: start-musl, hostcall, tls, level0, the libc overrides from
     `runtime/libc_overrides.sh`, soft-float, and compiler-rt's 128-bit division;
-  - `domain_entry.c`, the `capstone_main` → `main` adapter.
+  - `domain_entry.c`, the `capstone_main` → `main` adapter. A domain has no command line and no
+    environment, so it reads them when the domain starts, from `/tmp/domain.argv` (one argument
+    per line) and `/tmp/domain.env` (one `NAME=value` per line). One image then serves every run.
+    Without the files it passes argv `{"domain"}` and an empty environment, which is what every
+    configure link test gets.
 
   It then checks `capstone-cc` in both directions: a call to `puts` links, while an undefined
   function and an unknown `-l` do not.
@@ -62,7 +66,7 @@ neither header, and GLib falls back.
   direction, `strlcpy`, `/proc`).
 - **libffi** is a stub `.pc`, since only libglib is built, not GObject.
 
-Six patches, each under `__CAPSTONE__` except `gqsort`'s copy, whose native suite (`sort`, 4
+Eight patches, each under `__CAPSTONE__` except `gqsort`'s copy, whose native suite (`sort`, 4
 subtests) covers the rewrite:
 - `glib-0001`: `gintptr`/`guintptr` are `long`, the address, because no integer type is as wide as
   a capstone64 pointer and the compiler has no `__intcap_t`;
@@ -75,10 +79,30 @@ subtests) covers the rewrite:
 - `glib-0005`: an aligned allocator built from `malloc`, since musl-capstone's heap has none;
 - `glib-0006`: `gqsort`'s copy mode 2 moves pointer-sized words whole. Found by reading, not by
   the census, which cannot see a cast of a pointer's type.
+- `glib-0007`: no "dynamic ASAN loading" in a domain. GLib declares the LeakSanitizer entry points
+  weak and calls them when their address is not NULL; in a domain an undefined weak symbol's
+  address is not NULL (ISSUES C-56's open half), so `g_ignore_leak()` would call the image base.
+  Found by the tshark M0 link gate, not by GLib's suite. The recipe now refuses an archive with any
+  undefined weak symbol; that check fired on the unpatched archive (`__lsan_enable`,
+  `__lsan_ignore_object`) and passes with the patch, and none of the other six archives has one.
+- `glib-0008`: GCond does not reach `pthread_cond_*` in a domain. musl-capstone's
+  `pthread_cond_t` is 48 bytes on capstone64, room for three pointers, but musl's internal macros
+  put `_c_tail` at `__u.__p[5]`, 32 bytes past the object (`src/internal/pthread_impl.h`), and
+  `_c_shared`/`_c_head` overlap its int fields. A broadcast from GLib halted the tshark domain in
+  `epan_init` (cause 24 in `__private_cond_signal`); `g_once_init_leave()` broadcasts on every call. A
+  domain runs one thread, so a signal or broadcast has no waiter (no effect, as documented) and a
+  wait could never be woken (it aborts). GLib's `gthread-posix.c` is the only user of
+  `pthread_cond_*` among the seven libraries and tshark. The defect itself is musl-capstone's.
 
 Of the 63 census lines left, the 23 rebuilt sites all carry real integers (quarks, fds, log
 depths, error numbers, unichars) or are the `ghash` small-array code, dead with 16-byte pointers.
 None rebuilds a pointer from an address.
+
+**What tshark's own build needs from the prefix, beyond the archives** (found by its
+cross-configure, `host/cross-build.sh`):
+- `libpcre2-8.pc`, which `glib-2.0.pc` requires and Wireshark's FindPCRE2 reads first;
+- `gmodule.h` and its generated `gmodule/gmodule-visibility.h`, without libgmodule. Wireshark
+  includes `<gmodule.h>` unconditionally and calls `g_module_*` only with plugins, which are off.
 
 **Also needed by the recipes:** the runtime carries three things the shared lists do not:
 - compiler-rt's 128-bit integer division and four long-double conversions (libgcrypt's mpi, GLib's

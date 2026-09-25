@@ -6,7 +6,8 @@ clang/include/clang/Basic/Attr.td | +54 -1 | def TargetCapstone : TargetArch<["c
 clang/include/clang/Basic/AttrDocs.td | +84 -0 | def CapstoneInterruptDocs : Documentation {
 clang/include/clang/Basic/AttributeCommonInfo.h | +2 -1 | enum class Scope { NONE, CLANG, GNU, MSVC, OMP, HLSL, VK, GSL, RISCV,
 clang/include/clang/Basic/CMakeLists.txt | +31 -0 | clang_tablegen(BuiltinsCapstone.inc -gen-clang-builtins
-clang/include/clang/Basic/DiagnosticSemaKinds.td | +10 -0 | def warn_capstone_pointer_roundtrip : Warning<
+clang/include/clang/Basic/DiagnosticGroups.td | +3 -0 | // Capstone: a capability placed in, or copied through, memory aligned below a
+clang/include/clang/Basic/DiagnosticSemaKinds.td | +24 -0 | def warn_capstone_pointer_roundtrip : Warning<
 clang/include/clang/Basic/LangOptions.def | +1 -0 | 
 clang/include/clang/Basic/Specifiers.h | +15 -0 | CC_CapstoneVectorCall,    // __attribute__((capstone_vector_cc))
 clang/include/clang/Basic/TargetBuiltins.h | +29 -0 | namespace CapstoneVector {
@@ -41,7 +42,7 @@ clang/lib/Sema/CMakeLists.txt | +1 -0 | SemaCapstone.cpp
 clang/lib/Sema/Sema.cpp | +2 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Sema/SemaCapstone.cpp | +114 -0 | //===------ SemaCapstone.cpp ---- Capstone target-specific routines -------===//
 clang/lib/Sema/SemaCast.cpp | +6 -0 | #include "clang/Sema/SemaCapstone.h"
-clang/lib/Sema/SemaChecking.cpp | +4 -0 | #include "clang/Sema/SemaCapstone.h"
+clang/lib/Sema/SemaChecking.cpp | +130 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Support/CMakeLists.txt | +1 -0 | CapstoneVIntrinsicUtils.cpp
 llvm/include/llvm/BinaryFormat/Dwarf.def | +2 -0 | HANDLE_DW_CC(0xd1, LLVM_CapstoneVectorCall)
 llvm/include/llvm/BinaryFormat/ELF.h | +32 -1 | EM_CAPSTONE = 259,      // Capstone
@@ -62,6 +63,7 @@ llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp | +4 -1 | // Capstone: stripAndA
 llvm/lib/CodeGen/AtomicExpandPass.cpp | +15 -1 | if (UseSizedLibcall && DL.isNonIntegralPointerType(ValTy))
 llvm/lib/CodeGen/CodeGenPrepare.cpp | +5 -3 | return ConstantInt::get(IntPtrTy, BaseOffs, /*IsSigned=*/true);
 llvm/lib/CodeGen/CodeGenTargetMachineImpl.cpp | +9 -0 | if (TmpAsmInfo->getExceptionHandlingType() !=
+llvm/lib/CodeGen/DwarfEHPrepare.cpp | +26 -4 | // space 0. On a capability target (Capstone: addrspace(200), declared
 llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +29 -13 | static bool isIntegerTruncate(SDValue N) {
 llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +116 -14 | return Type.isInteger() || Type.isCheriCapability();
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than

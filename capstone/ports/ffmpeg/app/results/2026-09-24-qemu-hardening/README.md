@@ -56,7 +56,12 @@ fabricated `gp`).
    - **The resident bitstream (`054cea69b`)** reclaims the nodes a revoke walk invalidates, but
      never a handle's own node (R-12). So its ceiling for this workload depends on a leak
      fraction that has NOT been measured.
-   - QEMU reuses nodes and shows neither case.
+   - ~~QEMU reuses nodes and shows neither case.~~ **WITHDRAWN 2026-09-25:** capstone-qemu
+     reclaims no node. Nothing calls `cap_rev_tree_release`, and `cap_rev_tree.h` says "this
+     emulator reuses no node". So QEMU has the same cumulative per-boot budget of 65,536. When it
+     runs out, QEMU dies on an assertion instead of stalling. The tshark port's sublet arm ran
+     into it (`ports/wireshark/app/results/2026-09-25-qemu-safety-sublet/`, ISSUES R-12). A
+     30-frame decode here spends 1,900 nodes, far below it.
 
 ## Method
 

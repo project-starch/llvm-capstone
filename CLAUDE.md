@@ -54,6 +54,22 @@ New to the project? See `capstone/docs/ONBOARDING.md`.
   them into the change they belong to. Debug logs and session scratch stay in local files and are
   never committed at all. Rare exceptions: a retraction that must land immediately, and a fix that
   is genuinely one line.
+- **Shared branches receive only squashed, logically complete commits.** A shared branch is `dev`
+  here, and in every other repo the branch other lanes build on. Today that means `capstone-bootstrap`
+  in `caplifive-buildroot` and `caplifive-system`, and `c128-qemu-merge` in `capstone-qemu`; for any
+  other submodule, the branch the parent's pointer tracks.
+  - Work on your own branch, named for the lane or the task (no prefix scheme), and push it as often as you like.
+    That is what "push at stable points" means.
+  - Land on the shared branch once per logical change, as ONE commit:
+    `git checkout <shared> && git merge --squash <your-branch> && git commit -F <msgfile>`.
+    Interactive rebase is unavailable here.
+  - Never commit WIP, a fixup, a pre-registration or a follow-up correction directly to a shared
+    branch, and never merge a shared branch into itself — rebase.
+  - Pre-registrations keep their evidence: push them to the lane branch BEFORE the run, and cite that
+    commit's hash in the squashed commit. Lane branches are never deleted.
+  - Exceptions:
+    - an external collaborator's PR keeps its merge commit, because that is how authorship survives;
+    - a retraction of something ALREADY on a shared branch lands at once, as its own commit.
 - **Commit only your OWN paths: `git commit -o <paths> -F <msgfile>`.** `git add <files>` followed
   by a bare `git commit` commits the ENTIRE index, so a concurrent session's staged work rides
   along under your message. This happened twice on 2026-08-18 — an LLVM merge landed under a
@@ -99,6 +115,10 @@ is how another lane or the project lead sees a result at all. Work that exists o
 nobody can act on. (It also surfaces access problems early — a submodule with no write access is
 discovered only by attempting a push.)
 
+**"Push" here means push your LANE branch.** Landing on a shared branch is a separate step, done
+once per logical change and squashed (see "Shared branches receive only squashed, logically
+complete commits" under Hard constraints).
+
 **Push without asking at a stable point.** A stable point is any of:
 
 - a bug **root-caused, fixed, or explicitly ruled out**, with its evidence recorded;
@@ -119,7 +139,7 @@ Unchanged and absolute: `precommit-scan.sh` runs before every push, and **never 
 lack write access — push the submodule first, then the parent, so the parent never references
 commits that do not exist remotely.
 
-## Squash before the first push — what lands is one complete change
+## Squash when landing — what lands is one complete change
 
 **The unit that lands on a shared branch is the smallest self-contained change that stands on its
 own**: it builds, it bisects, and its message explains all of it. Fixups, WIP and "address review"
@@ -130,14 +150,16 @@ This is "No micro-commits" one level up, and it fails the same way: a squashed c
 describes only part of what it carries is the 2026-08-18 defect again, where the content was right
 and the message described something else.
 
-- **Squash BEFORE the first push, never after.** Rewriting pushed history is a force-push, needs the
-  lead, and costs every other lane a re-sync. Once it is on the remote it stays.
+- **Squash when LANDING, never by rewriting.** The lane branch keeps its commits as pushed. The
+  squash is the `merge --squash` onto the shared branch. Rewriting pushed history is a force-push,
+  needs the lead, and costs every other lane a re-sync. Once it is on the remote it stays.
 - **Squash noise, SPLIT substance.** A branch carrying two logical changes lands as two commits, not
   one that does both: a message can only honestly describe one of them, and bisect then stops
   working at exactly the commit you need it to.
-- **Never squash across a RETRACTION.** If the branch claims something and then withdraws it, both
-  commits survive. The withdrawal trail is evidence — it records that the claim was tested, which is
-  what separates a conclusion from an assumption.
+- **Never squash away a RETRACTION of a claim that reached a shared branch.** That withdrawal lands
+  as its own commit. A claim made and withdrawn only on your lane branch does not need two commits
+  on the shared branch. Record the withdrawal in the squashed message instead, and cite the lane
+  commits: the lane branch keeps the trail, and the trail is the evidence that the claim was tested.
 - **Squash only your OWN commits.** The `-o` rule applies to history rewriting too: a rebase that
   absorbs another lane's commit republishes their work under your message.
 
