@@ -63,7 +63,7 @@ tag at run time. Three instructions meet that:
 
 | operation | intcap needs | QEMU today | silicon today |
 |---|---|---|---|
-| `MOVC` copy of an untagged value | keep the source | keeps it | **zeroes the source** (C-32). Not fixable in software: Q-04 (b), an RTL change |
+| `MOVC` copy of an untagged value | keep the source | keeps it | **zeroes the source** (C-32). No single instruction avoids it; Q-04 (b) is a one-line RTL change |
 | `SCC` set-cursor on an untagged value | untagged value with the new address (CHERI) | traps; `assert`s without capstone-qemu#8 | traps (cause 24) |
 | `CINCOFFSET` on an untagged value | the same | traps | traps |
 
@@ -72,8 +72,24 @@ operation to a tag dispatch: if tagged, `SCC`/`CINCOFFSET`; if not, integer arit
 re-bridged as an untagged value through the existing `PseudoBRIDGE_CAP` path. No untagged
 `SCC`/`CINCOFFSET` is ever executed. QEMU already keeps an integer `MOVC` source.
 
-**Silicon needs Q-04 (b)** (`plans/2026-09-24-q04-movc-integer-source.md`, merged as #96, not yet
-decided or built): a register copy cannot be guarded. When the SCC/CINCOFFSET decision
+**Silicon needs Q-04 (b), or a copy detour in software** (`plans/2026-09-24-q04-movc-integer-source.md`,
+merged as #96, not yet decided or built). Today a capability register holds a capability or NULL,
+and NULL zeroed is still NULL, which is why `MOVC`'s rule has cost only C-32 so far. Under intcap a
+capability register routinely holds a non-zero integer (`Int32GetDatum(42)`, an OID, a hash), and
+every register copy the compiler makes (`copyPhysReg`, calls, phi elimination) would silently zero
+the source on the board. `mv` would strip a real pointer's tag, so neither instruction is right for
+a value whose taggedness is known only at run time. Two software copies do work, at a price on every
+capability-register copy in intcap code:
+- test the tag with `LCC` selector 1, the one query that does not trap on an untagged value (it
+  answers 7, RTL and QEMU; C-33), and branch between `MOVC` and `mv`. That costs a branch and a
+  scratch register, inserted after register allocation;
+- copy through memory. `STC` leaves an integer source alone (spec and RTL) and `LDC` reads it back.
+  That costs a store and a load, plus a slot.
+
+Q-04 (b) makes `MOVC` leave an untagged source alone, as `STC` already does, so every copy is one
+instruction again. Linear capabilities are still consumed, so security is unchanged. M5 therefore
+has two routes, the RTL line or the software copy, and the software route's cost is measurable on
+QEMU in M4 by switching it on there. When the SCC/CINCOFFSET decision
 (`plans/2026-09-24-scc-cincoffset-untagged.md`) lands with CHERI's rule, the tag dispatch becomes a
 single `SCC`. That is one switch in the back end, and C-66's `canTrap` drops those opcodes in the
 same change. R-33 and R-29 are OPEN silicon defects that intcap exercises harder. They gate the
@@ -196,7 +212,8 @@ is the least certain until M0 has run.
 1. **Scope:** stage 1 (the type, PostgreSQL opts in) rather than the ABI-wide switch. This is the
    recommendation.
 2. **QEMU first with tag dispatch**, without waiting for the SCC rule. Silicon stays gated on it.
-3. **Q-04 (b) and the SCC rule** for the RTL (#96 and the SCC plan). This is only needed for M5,
-   but it is the long pole: one synthesis cycle for both.
+3. **For the board: Q-04 (b) and the SCC rule in the RTL** (#96 and the SCC plan), or the software
+   copy described above. This is only needed for M5, but the RTL route is the long pole: one
+   synthesis cycle for both rules.
 
 M0 needs none of these and can start at once.
