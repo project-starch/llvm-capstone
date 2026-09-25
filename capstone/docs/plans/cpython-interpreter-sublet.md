@@ -150,7 +150,11 @@ From `block-lifetimes.c` and the port's README, read 2026-09-25:
 
 1. ~~Which defects have a Python-level trigger at all~~ — measured: 14 of 20,
    13 of them runnable in our domain build.
-2. Patch 0014 (step 1) and the adapter linked in (step 2), then boot `hello.py`:
+2. ~~Patch 0014~~ — written and verified to apply at fuzz 0 to upstream with
+   0001-0008 and 0010-0013 (`patches/cpython-3.13.7-0014-pymalloc-under-sublet.patch`);
+   `prepare-cpython-capstone.sh` selects it against 0009 on `CPY_SUBLET=1`. It
+   has not been COMPILED yet. Then the adapter linked in (step 2), and boot
+   `hello.py`:
    **does the interpreter still start with a revoke on every pymalloc free?**
    Nothing else matters until it does, and the answer also settles the arena
    ceiling and the tag-map question above.

@@ -44,10 +44,21 @@ rm -rf "$CPY_SRC"
 tar -xzf "$CPY_ARCHIVE" -C "$CPY_ROOT/src"
 # patches/ in order. CPY_PATCHES=none measures upstream as released, which is
 # the number every patch has to be argued against.
+#
+# The set SELECTS between two patches rather than applying both. CPY_SUBLET=1
+# puts pymalloc under the Sublet discipline: 0014 carries the allocator's
+# lifetime transitions and REPLACES 0009. They rewrite the same statements --
+# 0009 keeps an arena-wide alias (arena_ptr) and derives pools from it, which is
+# exactly what the adapter refuses, since such an alias still reaches a revoked
+# block. Applying both is not a conflict to resolve, it is a contradiction, so
+# whichever is not selected is skipped here and the applied list records which
+# arm the tree is. 0014's header has the argument.
 APPLIED=()
+if [[ "${CPY_SUBLET:-0}" == 1 ]]; then SKIP_PATCH=0009; else SKIP_PATCH=0014; fi
 if [[ "${CPY_PATCHES:-all}" != none ]]; then
   for p in "$SCRIPT_DIR"/patches/cpython-$CPY_VERSION-*.patch; do
     [[ -e "$p" ]] || continue
+    [[ "$(basename "$p")" == *-$SKIP_PATCH-* ]] && continue
     patch -d "$CPY_SRC" --batch --forward --fuzz=0 -p1 < "$p" >/dev/null \
       || { echo "patch did not apply: $p" >&2; exit 2; }
     APPLIED+=("$(basename "$p")")
