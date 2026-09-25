@@ -1,0 +1,81 @@
+Subject: [PATCH 0007] Convert between a pointer and an int at the address width
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+PyLong_FromVoidPtr and PyLong_AsVoidPtr pick unsigned long or unsigned long
+long by SIZEOF_VOID_P and stop with #error when neither is as wide as a
+pointer. On capstone64 none is (a pointer is a 16-byte capability), so
+Objects/longobject.o, a core object, did not compile; it was the one failing
+object the interpreter cannot do without.
+
+What an int can carry is the pointer's address, _Py_SIZEOF_ADDRESS (patch
+0001), 8 bytes here, so both functions are keyed on that:
+
+- FromVoidPtr returns the address. id() and repr()'s "at 0x..." need no
+  more, and it is the value they print on every other platform.
+- AsVoidPtr cannot give back the capability the int came from; nothing can.
+  It returns a pointer with the int as its address and no authority
+  ((void *)(uintptr_t)x), which traps when dereferenced instead of reaching
+  memory. Its callers here are struct's and memoryview's "P" format, which
+  pack an address; neither dereferences it.
+
+Everywhere _Py_SIZEOF_ADDRESS is SIZEOF_VOID_P the preprocessor picks the
+same branch as before and the cast through uintptr_t is the identity, so no
+existing platform changes.
+
+--- a/Objects/longobject.c
++++ b/Objects/longobject.c
+@@ -1330,13 +1330,15 @@
+ PyLong_FromVoidPtr(void *p)
+ {
+-#if SIZEOF_VOID_P <= SIZEOF_LONG
++    /* The int is the pointer's ADDRESS, which is all an integer can hold where
++       a pointer is a capability; id() and repr() need nothing more. */
++#if _Py_SIZEOF_ADDRESS <= SIZEOF_LONG
+     return PyLong_FromUnsignedLong((unsigned long)(uintptr_t)p);
+ #else
+ 
+-#if SIZEOF_LONG_LONG < SIZEOF_VOID_P
+-#   error "PyLong_FromVoidPtr: sizeof(long long) < sizeof(void*)"
++#if SIZEOF_LONG_LONG < _Py_SIZEOF_ADDRESS
++#   error "PyLong_FromVoidPtr: sizeof(long long) < sizeof(uintptr_t)"
+ #endif
+     return PyLong_FromUnsignedLongLong((unsigned long long)(uintptr_t)p);
+-#endif /* SIZEOF_VOID_P <= SIZEOF_LONG */
++#endif /* _Py_SIZEOF_ADDRESS <= SIZEOF_LONG */
+ 
+ }
+@@ -1347,5 +1349,8 @@
+ PyLong_AsVoidPtr(PyObject *vv)
+ {
+-#if SIZEOF_VOID_P <= SIZEOF_LONG
++    /* Where a pointer is a capability, an int can give back only an address:
++       the result has no authority, and dereferencing it traps rather than
++       reaching memory. struct's and memoryview's "P" format are the callers. */
++#if _Py_SIZEOF_ADDRESS <= SIZEOF_LONG
+     long x;
+ 
+@@ -1358,6 +1363,6 @@
+ #else
+ 
+-#if SIZEOF_LONG_LONG < SIZEOF_VOID_P
+-#   error "PyLong_AsVoidPtr: sizeof(long long) < sizeof(void*)"
++#if SIZEOF_LONG_LONG < _Py_SIZEOF_ADDRESS
++#   error "PyLong_AsVoidPtr: sizeof(long long) < sizeof(uintptr_t)"
+ #endif
+     long long x;
+@@ -1370,9 +1375,9 @@
+     }
+ 
+-#endif /* SIZEOF_VOID_P <= SIZEOF_LONG */
++#endif /* _Py_SIZEOF_ADDRESS <= SIZEOF_LONG */
+ 
+     if (x == -1 && PyErr_Occurred())
+         return NULL;
+-    return (void *)x;
++    return (void *)(uintptr_t)x;
+ }
+ 

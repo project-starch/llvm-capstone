@@ -1,0 +1,95 @@
+# First link of the CPython 3.13.7 interpreter, 2026-09-23, clang d030df93d4a4 (dev),
+# on a freshly prepared survey tree (with ac_cv_libatomic_needed=no; same 222 of 253 as
+# results/survey-2026-09-23-d030df93d4a4.txt). Host paths replaced
+# by the variables that produced them; $NATIVE is a native CPython 3.13.7 build.
+
+## link-cpython-capstone.py
+
+build tree     $CPY_ROOT/build
+linked         206 objects + 3 archives (29 of 253 survey objects absent)
+workaround     Modules/getbuildinfo.o: its own rule, prerequisites assumed built
+workaround     Python/compile.o: -mllvm -regalloc=basic (C-52)
+strict link    exit 1; 388 undefined symbols, 0 other errors
+
+undefined because a CPython object is absent: 385 symbols from 27 objects
+   107  Objects/unicodeobject.o                    backend assert: VT.isInteger() && "Shift amount is not an in
+    45  Objects/typeobject.o                       backend assert: VT.isInteger() && "Shift amount is not an in
+    45  Objects/longobject.o                       other: "PyLong_FromVoidPtr: sizeof(long long) < sizeof(void*
+    35  Python/pystate.o                           backend assert: VT.isInteger() && "Shift amount is not an in
+    21  Python/import.o                            backend assert: VT.isInteger() && "Shift amount is not an in
+    21  Objects/obmalloc.o                         backend assert: VT.isInteger() && "Shift amount is not an in
+    21  Python/pylifecycle.o                       backend assert: VT.isInteger() && "Shift amount is not an in
+    17  Python/ceval.o                             backend assert: VT.isInteger() && "Shift amount is not an in
+    17  Python/crossinterp.o                       backend assert: VT.isInteger() && "Shift amount is not an in
+    12  Python/sysmodule.o                         backend assert: VT.isInteger() && "Shift amount is not an in
+    10  Modules/posixmodule.o                      backend assert: VT.isInteger() && "Shift amount is not an in
+     8  Python/ceval_gil.o                         backend assert: VT.isInteger() && "Shift amount is not an in
+     8  Python/instrumentation.o                   backend assert: VT.isInteger() && "Shift amount is not an in
+     3  Modules/rotatingtree.o                     backend assert: VT.isInteger() && "Shift amount is not an in
+     3  Python/lock.o                              backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/_interpchannelsmodule.o            backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/_interpqueuesmodule.o              backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/md5module.o                        backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/_multiprocessing/multiprocessing.o other: "can't find format code for unsigned integer of same 
+     1  Modules/sha1module.o                       backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/sha2module.o                       backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/sha3module.o                       backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/_threadmodule.o                    backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/grpmodule.o                        backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Parser/myreadline.o                        backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/_blake2/blake2b_impl.o             backend assert: VT.isInteger() && "Shift amount is not an in
+     1  Modules/_blake2/blake2s_impl.o             backend assert: VT.isInteger() && "Shift amount is not an in
+
+undefined because configure left the defining module out here: 0
+
+undefined compiler-rt builtins (their source did not compile): 0
+
+undefined, provided by NOTHING in this link (libc, runtime or unknown): 3
+  __atomic_compare_exchange_16       <- $CPY_ROOT/build/Python/getargs.o
+  __atomic_load_16                   <- $CPY_ROOT/build/Modules/signalmodule.o
+  __atomic_store_16                  <- $CPY_ROOT/build/Modules/signalmodule.o
+
+image without the absent objects (a LOWER bound):
+  PT_LOAD memsz 8,774,832 bytes (8.37 MiB), filesz 8,489,867; a domain gets at most 4 MiB
+  .text                   5,274,864
+  .rodata                 2,580,742
+  .data                     498,912
+  .bss                      284,960
+  .init_array                     0
+  .fini_array                     0
+  .capstone_cap_init          1,248
+  .gct                      134,091
+  absent objects: 2,477,885 bytes native x 1.30 (capstone/native over the present ones) = ~3.1 MiB more, so ~11.5 MiB for the whole image (estimate)
+
+linked libc calls that need an UNSERVED syscall (check-domain-support.py, exit 1): 100 symbols, 53 syscalls
+  brk chdir clock_getres clock_nanosleep clock_settime dup epoll_create1 epoll_ctl epoll_pwait execve flock futex getcwd getdents getitimer getpid getrandom getrlimit getrusage gettid kill madvise membarrier mmap mprotect mremap msync munmap nanosleep ppoll prlimit64 pselect6 readlinkat rt_sigaction rt_sigpending rt_sigprocmask rt_sigqueueinfo rt_sigtimedwait sched_getaffinity setgroups sethostname setitimer setpgid setregid setreuid setrlimit setsid sigaltstack sysinfo times tkill umask uname
+  full list: $CPY_ROOT/build/link-attempt/domain-support.txt
+
+## host/startup-syscalls.py
+
+native run: $NATIVE/python -S -I -c pass -> exit 0, 242 syscalls
+unserved in the domain (from $CPY_ROOT/build/link-attempt/domain-support.txt): 53 syscalls
+calls to unserved syscalls, by first CPython frame (glibc + dynamic loader: an approximation of a musl static domain):
+     4  brk            CPython _PyObject_Malloc
+     2  brk            CPython _PyMem_RawStrdup
+     2  brk            CPython _PyObject_Free
+     1  futex          CPython Py_DecodeLocale
+     4  getdents64     CPython os_listdir
+     1  getrandom      CPython _PyMem_RawStrdup
+     1  getrandom      CPython _Py_HashRandomization_Init
+     1  gettid         CPython PyThread_get_thread_native_id
+     3  mmap           CPython _PyMem_ArenaAlloc
+     2  mmap           CPython arena_map_mark_used
+     1  mmap           CPython _Py_SetLocaleFromEnv
+     1  mmap           CPython Py_DecodeLocale
+     1  munmap         CPython PyInterpreterState_Delete
+    62  rt_sigaction   CPython PyOS_getsig
+     4  rt_sigaction   CPython PyOS_setsig
+     1  brk            loader/libc _dl_mcount
+     1  execve         loader/libc _dl_mcount
+     1  getrandom      loader/libc syscall
+    12  mmap           loader/libc _dl_mcount
+     4  mprotect       loader/libc _dl_mcount
+     1  munmap         loader/libc _dl_mcount
+     1  prlimit64      loader/libc getrlimit
+

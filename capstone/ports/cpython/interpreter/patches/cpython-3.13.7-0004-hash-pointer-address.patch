@@ -1,0 +1,35 @@
+Subject: [PATCH 0004] Hash a pointer by its address, and assert the address width
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Depends-On: cpython-3.13.7-0001-address-width.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+_Py_HashPointerRaw (Include/internal/pycore_pyhash.h) converts the pointer to
+uintptr_t, rotates it by 4 and returns it, after asserting
+sizeof(uintptr_t) == sizeof(ptr). On capstone64 that is 8 against 16 and the
+assert fails in every core file (161 in the fifth survey). The assert guards
+against losing bits the hash needs; the hash needs the address, which is all
+the conversion carries and all that distinguishes two live objects. The rotate
+already uses sizeof(uintptr_t). The assert now checks the address width, which
+is the same condition wherever the two sizes agree.
+
+This patch does not make any pointer<->integer ROUND TRIP safe. The hash is
+never converted back; code that does convert back is a separate finding.
+
+--- a/Include/internal/pycore_pyhash.h
++++ b/Include/internal/pycore_pyhash.h
+@@ -9,8 +9,11 @@
+ static inline Py_hash_t
+ _Py_HashPointerRaw(const void *ptr)
+ {
++    // The hash is of the address. Where a pointer is a capability the
++    // conversion keeps only the address, which is what identity means here:
++    // two live objects never share one.
+     uintptr_t x = (uintptr_t)ptr;
+-    Py_BUILD_ASSERT(sizeof(x) == sizeof(ptr));
++    Py_BUILD_ASSERT(sizeof(x) == _Py_SIZEOF_ADDRESS);
+ 
+     // Bottom 3 or 4 bits are likely to be 0; rotate x by 4 to the right
+     // to avoid excessive hash collisions for dicts and sets.

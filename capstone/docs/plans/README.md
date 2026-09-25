@@ -44,3 +44,5 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 | `sqlite-row3-matched-repro-plan.md` | 2026-07-20 |
 | `sqlite-row3-option-b-held-cap-probe-plan.md` | 2026-07-20 |
 | `xlang-phase2-seam-TODO.md` | 2026-08-02 |
+| `cpython-interpreter-port.md` | 2026-09-23 |
+| `DECISIONS-WAITING-2026-09-23-cpython-port.md` | 2026-09-23 |
