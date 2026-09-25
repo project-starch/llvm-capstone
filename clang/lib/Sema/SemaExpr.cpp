@@ -5335,6 +5335,11 @@ Sema::CreateBuiltinArraySubscriptExpr(Expr *Base, SourceLocation LLoc,
   if (!IndexExpr->getType()->isIntegerType() && !IndexExpr->isTypeDependent())
     return ExprError(Diag(LLoc, diag::err_typecheck_subscript_not_integer)
                      << IndexExpr->getSourceRange());
+  // Capstone: an __intcap index would need converting to its address first.
+  if (IndexExpr->getType()->isIntCapType())
+    return ExprError(Diag(LLoc, diag::err_capstone_intcap_arith)
+                     << "[]" << IndexExpr->getType()
+                     << IndexExpr->getSourceRange());
 
   if ((IndexExpr->getType()->isSpecificBuiltinType(BuiltinType::Char_S) ||
        IndexExpr->getType()->isSpecificBuiltinType(BuiltinType::Char_U)) &&
@@ -15117,14 +15122,38 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
   if (!LHS.isUsable() || !RHS.isUsable())
     return ExprError();
 
-  // Capstone: an arithmetic, bitwise or shift operator on __intcap has to
-  // replace the address inside a capability without trapping on an untagged
-  // one. That lowering does not exist yet, so refuse it rather than lose the
-  // capability through an integer round trip. Assignment, comparison and the
-  // logical operators need no arithmetic and are allowed.
+  // Capstone: two __intcap operands that both carry provenance leave the
+  // result's authority ambiguous; CodeGen takes the left one. An operand
+  // converted from an ordinary integer, or a literal, carries none.
+  if (Opc == BO_Add || Opc == BO_Mul || Opc == BO_And || Opc == BO_Or ||
+      Opc == BO_Xor) {
+    auto CarriesProvenance = [](const Expr *E) {
+      if (!E->getType()->isIntCapType())
+        return false;
+      E = E->IgnoreParens();
+      if (const auto *CE = dyn_cast<CastExpr>(E)) {
+        QualType From = CE->getSubExpr()->getType();
+        return From->isIntCapType() || From->isPointerType() ||
+               From->isArrayType() || From->isFunctionType();
+      }
+      return !isa<IntegerLiteral>(E) && !isa<CharacterLiteral>(E);
+    };
+    if (CarriesProvenance(LHSExpr) && CarriesProvenance(RHSExpr))
+      Diag(OpLoc, diag::warn_ambiguous_provenance_capability_binop)
+          << LHSExpr->getType() << RHSExpr->getType()
+          << LHSExpr->getSourceRange() << RHSExpr->getSourceRange();
+  }
+
+  // Capstone: arithmetic, bitwise and shift operators on __intcap run on the
+  // address and put the result back into the capability of one operand
+  // (llvm.capstone.cap.set.address). Not yet: pointer arithmetic with an
+  // __intcap operand, and compound assignment to an _Atomic __intcap.
   if (Opc != BO_Assign && Opc != BO_Comma && !BinaryOperator::isComparisonOp(Opc) &&
       !BinaryOperator::isLogicalOp(Opc) &&
-      (LHSExpr->getType()->isIntCapType() || RHSExpr->getType()->isIntCapType()))
+      (LHSExpr->getType()->isIntCapType() || RHSExpr->getType()->isIntCapType()) &&
+      (LHSExpr->getType()->isPointerType() || RHSExpr->getType()->isPointerType() ||
+       (BinaryOperator::isCompoundAssignmentOp(Opc) &&
+        LHSExpr->getType()->isAtomicType())))
     return ExprError(Diag(OpLoc, diag::err_capstone_intcap_arith)
                      << BinaryOperator::getOpcodeStr(Opc)
                      << (LHSExpr->getType()->isIntCapType() ? LHSExpr->getType()
@@ -15798,9 +15827,11 @@ ExprResult Sema::CreateBuiltinUnaryOp(SourceLocation OpLoc,
   bool CanOverflow = false;
 
   bool ConvertHalfVec = false;
-  // Capstone: see CreateBuiltinBinOp.
-  if ((Opc == UO_Minus || Opc == UO_Not || UnaryOperator::isIncrementDecrementOp(Opc)) &&
-      InputExpr->getType()->isIntCapType())
+  // Capstone: ++/-- on an _Atomic __intcap would need an atomic read-modify-
+  // write of a capability; refused for now (see CreateBuiltinBinOp).
+  if (UnaryOperator::isIncrementDecrementOp(Opc) &&
+      InputExpr->getType()->isIntCapType() &&
+      InputExpr->getType()->isAtomicType())
     return ExprError(Diag(OpLoc, diag::err_capstone_intcap_arith)
                      << UnaryOperator::getOpcodeStr(Opc) << InputExpr->getType()
                      << InputExpr->getSourceRange());

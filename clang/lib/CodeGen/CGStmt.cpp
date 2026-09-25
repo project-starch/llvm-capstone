@@ -2342,6 +2342,9 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
   if (S.getConditionVariable())
     EmitDecl(*S.getConditionVariable());
   llvm::Value *CondV = EmitScalarExpr(S.getCond());
+  // Capstone: a switch on an __intcap switches on its address.
+  if (S.getCond()->getType()->isIntCapType())
+    CondV = Builder.CreatePtrToInt(CondV, Int64Ty, "intcap.addr");
   MaybeEmitDeferredVarDeclInit(S.getConditionVariable());
 
   // Create basic block to hold stuff that comes after switch

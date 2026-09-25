@@ -18,6 +18,11 @@ _Static_assert(__INTCAP_MAX__ == 0x7fffffffffffffffL, "");
 _Static_assert(_Generic((unsigned __intcap)0, __uintcap_t: 1, default: 0), "spellings agree");
 _Static_assert(_Generic((__intcap)0, __intcap_t: 1, default: 0), "");
 
+// A constant: an untagged capability holding the value (it used to be emitted as
+// an i64 and trip the global's size assertion).
+// CHECK: @gc = {{.*}}global ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 4660), align 16
+__uintcap_t gc = 0x1234;
+
 // CHECK-LABEL: define {{.*}}ptr addrspace(200) @from_ptr(ptr addrspace(200) {{.*}}%p)
 // CHECK-NOT: ptrtoint
 // CHECK-NOT: inttoptr
@@ -70,3 +75,68 @@ typedef unsigned long uptr;
 // CHECK: ptrtoint ptr addrspace(200)
 // CHECK: inttoptr i{{[0-9]+}} %{{.*}} to ptr addrspace(200)
 void *via_ulong(void *p) { return (void *)(uptr)p; }
+
+// Arithmetic runs on the addresses and puts the result back with
+// llvm.capstone.cap.set.address, into the capability of the provenance source.
+// CHECK-LABEL: define {{.*}}ptr addrspace(200) @plus_one(ptr addrspace(200) {{.*}}%u)
+// CHECK: [[A:%.*]] = ptrtoint ptr addrspace(200) [[U:%.*]] to i64
+// CHECK: [[S:%.*]] = add i64 [[A]], 1
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) [[U]], i64 [[S]])
+__uintcap_t plus_one(__uintcap_t u) { return u + 1; }
+
+// A literal on the left carries no provenance: the result derives from u.
+// CHECK-LABEL: define {{.*}}ptr addrspace(200) @five_plus(ptr addrspace(200) {{.*}}%u)
+// CHECK: [[U2:%.*]] = load ptr addrspace(200)
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) [[U2]], i64
+__uintcap_t five_plus(__uintcap_t u) { return 5 + u; }
+
+// An integer converted to __uintcap_t on the left: again from the right.
+// CHECK-LABEL: define {{.*}}ptr addrspace(200) @int_plus(i64 {{.*}}, ptr addrspace(200)
+// CHECK: [[U3:%.*]] = load ptr addrspace(200), ptr addrspace(200) %u.addr
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) [[U3]], i64
+__uintcap_t int_plus(unsigned long n, __uintcap_t u) { return (__uintcap_t)n + u; }
+
+// Subtraction is not commutative: always the left operand.
+// CHECK-LABEL: define {{.*}}ptr addrspace(200) @minus(
+// CHECK: [[L:%.*]] = load ptr addrspace(200), ptr addrspace(200) %u.addr
+// CHECK: sub i64
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) [[L]], i64
+__uintcap_t minus(__uintcap_t u, __uintcap_t v) { return u - v; }
+
+// CHECK-LABEL: define {{.*}}ptr addrspace(200) @low_bits(
+// CHECK: and i64 %{{.*}}, 15
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(
+__uintcap_t low_bits(__uintcap_t u) { return u & 15; }
+
+// Compound assignment: the left operand, stored back as a capability.
+// CHECK-LABEL: define {{.*}}void @add_assign(
+// CHECK: add i64 %{{.*}}, 2
+// CHECK: [[R:%.*]] = call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(
+// CHECK: store ptr addrspace(200) [[R]]
+void add_assign(__uintcap_t *u) { *u += 2; }
+
+// A switch runs on the address (it used to switch on the capability itself, which
+// the verifier rejects).
+// CHECK-LABEL: define {{.*}}i32 @on_switch(
+// CHECK: [[SA:%.*]] = ptrtoint ptr addrspace(200) %{{.*}} to i64
+// CHECK: switch i64 [[SA]]
+int on_switch(__uintcap_t d) { switch (d) { case 0x5000: return 1; default: return 2; } }
+
+// Unary operators work on the address and derive from the operand.
+// CHECK-LABEL: define {{.*}}ptr addrspace(200) @complement(ptr addrspace(200) {{.*}}%u)
+// CHECK: [[C:%.*]] = load ptr addrspace(200)
+// CHECK: [[CA:%.*]] = ptrtoint ptr addrspace(200) [[C]] to i64
+// CHECK: [[N:%.*]] = xor i64 [[CA]], -1
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) [[C]], i64 [[N]])
+__uintcap_t complement(__uintcap_t u) { return ~u; }
+
+// CHECK-LABEL: define {{.*}}ptr addrspace(200) @negate(
+// CHECK: sub i64 0, %{{.*}}
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(
+__intcap negate(__intcap x) { return -x; }
+
+// CHECK-LABEL: define {{.*}}void @bump(
+// CHECK: add i64 %{{.*}}, 1
+// CHECK: [[B:%.*]] = call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(
+// CHECK: store ptr addrspace(200) [[B]]
+void bump(__uintcap_t *u) { (*u)++; }

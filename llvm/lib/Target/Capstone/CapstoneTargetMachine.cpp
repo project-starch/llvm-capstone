@@ -139,6 +139,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstonePushPopOptPass(*PR);
   initializeCapstoneIndirectBranchTrackingPass(*PR);
   initializeCapstoneLiveSourceCopyPass(*PR);
+  initializeCapstoneSetAddressExpandPass(*PR);
   initializeCapstoneLoadStoreOptPass(*PR);
   initializeCapstoneExpandAtomicPseudoPass(*PR);
   initializeCapstoneRedundantCopyEliminationPass(*PR);
@@ -667,6 +668,11 @@ void CapstonePassConfig::addPreRegAlloc() {
   addPass(createCapstoneInsertReadWriteCSRPass());
   addPass(createCapstoneInsertWriteVXRMPass());
   addPass(createCapstoneLandingPadSetupPass());
+
+  // __intcap arithmetic: the type dispatch behind llvm.capstone.cap.set.address.
+  // After the SSA-level MachineLICM/MachineCSE, before register allocation, at
+  // every optimization level.
+  addPass(createCapstoneSetAddressExpandPass());
 
   // S-07 instrument, off by default. Sited in the UNGATED region deliberately:
   // the silicon SQLite domain is built at -O0, and the opt-level-gated block

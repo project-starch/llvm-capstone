@@ -3356,6 +3356,12 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return selectShrink(Node);
     case Intrinsic::capstone_cap_scc:
       return selectSCC(Node);
+    case Intrinsic::capstone_cap_set_address:
+      ReplaceNode(Node, CurDAG->getMachineNode(Capstone::PseudoSetAddr,
+                                               SDLoc(Node), MVT::c128,
+                                               Node->getOperand(1),
+                                               Node->getOperand(2)));
+      return;
     case Intrinsic::capstone_cap_init:
       return selectInit(Node);
     case Intrinsic::capstone_cap_tighten:

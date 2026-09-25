@@ -45,6 +45,8 @@ void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);
 
 FunctionPass *createCapstoneIndirectBranchTrackingPass();
 FunctionPass *createCapstoneLiveSourceCopyPass(bool CheckOnly = false);
+FunctionPass *createCapstoneSetAddressExpandPass();
+void initializeCapstoneSetAddressExpandPass(PassRegistry &);
 void initializeCapstoneLiveSourceCopyPass(PassRegistry &);
 /// A GPCR COPY/MOVC whose source is not always tagged or null (c0, sp, gp, tp,
 /// fp/bp when present): the copies CapstoneLiveSourceCopy may rewrite.

@@ -10,7 +10,7 @@ clang/include/clang/Basic/AttrDocs.td | +84 -0 | def CapstoneInterruptDocs : Doc
 clang/include/clang/Basic/AttributeCommonInfo.h | +2 -1 | enum class Scope { NONE, CLANG, GNU, MSVC, OMP, HLSL, VK, GSL, RISCV,
 clang/include/clang/Basic/CMakeLists.txt | +31 -0 | clang_tablegen(BuiltinsCapstone.inc -gen-clang-builtins
 clang/include/clang/Basic/DiagnosticGroups.td | +3 -0 | // Capstone: a capability placed in, or copied through, memory aligned below a
-clang/include/clang/Basic/DiagnosticSemaKinds.td | +27 -0 | def err_capstone_intcap_arith : Error<
+clang/include/clang/Basic/DiagnosticSemaKinds.td | +32 -0 | def warn_ambiguous_provenance_capability_binop : Warning<
 clang/include/clang/Basic/LangOptions.def | +1 -0 | 
 clang/include/clang/Basic/Specifiers.h | +16 -0 | TST_intcap, // Capstone: capability-carrying integer
 clang/include/clang/Basic/TargetBuiltins.h | +29 -0 | namespace CapstoneVector {
@@ -41,7 +41,9 @@ clang/lib/CodeGen/CGBuiltin.cpp | +3 -0 | case llvm::Triple::capstone32:
 clang/lib/CodeGen/CGDebugInfo.cpp | +19 -0 | case CC_CapstoneVectorCall:
 clang/lib/CodeGen/CGDecl.cpp | +32 -3 | // Capstone: a capability tag is out-of-band metadata, so a bytewise memcpy from
 clang/lib/CodeGen/CGExpr.cpp | +102 -3 | #include "llvm/IR/IntrinsicsCapstone.h"
-clang/lib/CodeGen/CGExprScalar.cpp | +50 -2 | // Capstone __intcap: its LLVM type is a capability pointer, and its integer
+clang/lib/CodeGen/CGExprConstant.cpp | +26 -0 | // Capstone __intcap: an intcap source is a capability, not a
+clang/lib/CodeGen/CGExprScalar.cpp | +130 -4 | #include "llvm/IR/IntrinsicsCapstone.h"
+clang/lib/CodeGen/CGStmt.cpp | +3 -0 | // Capstone: a switch on an __intcap switches on its address.
 clang/lib/CodeGen/CMakeLists.txt | +2 -0 | TargetBuiltins/Capstone.cpp
 clang/lib/CodeGen/CodeGenFunction.h | +8 -0 | llvm::Value *EmitCapstoneBuiltinExpr(unsigned BuiltinID, const CallExpr *E,
 clang/lib/CodeGen/CodeGenModule.cpp | +6 -1 | // agree everywhere except on a capability target, where a pointer carries
@@ -62,7 +64,7 @@ clang/lib/Sema/Sema.cpp | +13 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Sema/SemaCapstone.cpp | +118 -0 | //===------ SemaCapstone.cpp ---- Capstone target-specific routines -------===//
 clang/lib/Sema/SemaCast.cpp | +6 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Sema/SemaChecking.cpp | +130 -0 | #include "clang/Sema/SemaCapstone.h"
-clang/lib/Sema/SemaExpr.cpp | +20 -0 | // Capstone: an arithmetic, bitwise or shift operator on __intcap has to
+clang/lib/Sema/SemaExpr.cpp | +51 -0 | // Capstone: an __intcap index would need converting to its address first.
 clang/lib/Sema/SemaTemplateVariadic.cpp | +1 -0 | case TST_intcap:
 clang/lib/Sema/SemaType.cpp | +11 -0 | // Capstone: an integer held in a capability. Only a target whose pointers
 clang/lib/Serialization/ASTCommon.cpp | +6 -0 | case BuiltinType::UIntCap:

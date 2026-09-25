@@ -2653,6 +2653,23 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 4,
     isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def PseudoBRIDGE_CAP : Pseudo<(outs GPCR:$rd), (ins GPR:$rs), []>;
 
+// PseudoSetAddr: llvm.capstone.cap.set.address, the address replacement behind
+// __intcap arithmetic. CapstoneSetAddressExpand turns it, before register
+// allocation, into a dispatch on the operand's type:
+//     lcc  t, cap, 1            ; total: an untagged operand answers 7
+//     addi t, t, -1             ; NONLIN answers 1
+//     bnez t, bridge
+//     scc  rd, cap, addr        ; NONLIN: keep the authority, move the cursor
+//     j    done
+//   bridge:
+//     rd = PseudoBRIDGE_CAP addr ; otherwise: an untagged value, the address
+// so the scc never sees an operand it traps on. It stays a pseudo until then
+// so MachineLICM and MachineCSE see one side-effect-free instruction; after
+// expansion scc is in trapsOnUntaggedOperand, so later code motion keeps it
+// behind its branch (C-66).
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 24 in
+def PseudoSetAddr : Pseudo<(outs GPCR:$rd), (ins GPCR:$cap, GPR:$addr), []>;
+
 // THE CURSOR IS READ WITH A PLAIN INTEGER MOVE, NOT `lcc rd, rs, 2`.
 
 // Only the CURSOR has a plain-read equivalent; base/end/perms still need LCC.

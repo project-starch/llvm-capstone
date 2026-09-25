@@ -102,6 +102,16 @@ let TargetPrefix = "capstone" in {
   def int_capstone_cap_scc :
     Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty],[IntrNoMem]>;
 
+  // ptr set_address(ptr cap, i64 address)
+  // The value of __intcap arithmetic: `cap` with its address replaced. Unlike
+  // scc it is defined for every operand: a NONLIN capability gets the new
+  // cursor (scc), anything else -- an untagged integer, a sealed or linear
+  // capability -- becomes an untagged value holding the address. It never
+  // traps. Not IntrSpeculatable: it selects to a pseudo that the backend
+  // expands into a branch, and nothing earlier should reason about that.
+  def int_capstone_cap_set_address :
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty], [IntrNoMem]>;
+
   // ptr delin(ptr cap)
   // Mutates the revocation tree: clears the node's `linear` flag, which decides
   // whether a later REVOKE yields LIN (data retained) or UNINIT. Modelled as a
