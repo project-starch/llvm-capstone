@@ -1,7 +1,8 @@
 # tshark as a full application in a Capstone domain — M0 census and port plan (2026-09-23)
 
-**Status (2026-09-24, late):** M-infra, M-deps, M0 and M1–M5 are done on QEMU. The safety
-milestone has not started. See "Progress on the full port" below.
+**Status (2026-09-25):** M-infra, M-deps, M0 and M1–M5 are done on QEMU. Safety is half
+done: the two cheap heap arms (level0, shrink) ran every pre-registered fixture three times, all
+as predicted. The revoking sublet arm is next. See "Progress on the full port" below.
 - **The tshark domain:** 66.3 MiB, in a 128 MiB CMA block. It reaches all five stages. Its
   `-V -n` output is byte-identical to native stock tshark on the four workload captures, their
   flipped copies and dns-ooo.
@@ -703,8 +704,23 @@ recipe each, gated as in its README. What that took:
 - **Stalls:** one ntp section stalled in the guest before its domain started, the known QEMU stall
   class. Two later ntp runs returned.
 
-**Next: Safety** (the table below). It needs the smaller wmem arenas or a larger sublet pool
-first.
+**Safety, cheap arms: done on QEMU (2026-09-25).** Evidence:
+`results/2026-09-25-qemu-safety/`. Twelve fixtures, pre-registered and pushed before any ran
+(`fc2ee56`), on level0 and shrink, N = 3: all 72 counted runs as predicted. One premise in the
+predictions file was wrong, though its prediction held: level0 narrows nothing, so its wmem
+pointers carry the whole arena, not their block (an audit found it; the README records it).
+- **level0:** no heap safety. Every heap pointer carries the whole arena; only the compiler's
+  bounds on a global and a stack array fault.
+- **shrink:** g_malloc'd objects are spatially exact, and overflow and one-past-the-end fault at
+  the printed address. Nothing temporal changes: a stale free still lets a later allocation alias
+  a live object.
+- **wmem, on both arms:** an allocation carries its whole 2 or 8 MiB block. A stale pointer after
+  a scope reset, and an overflow between two wmem allocations, go unnoticed. That is the gap the
+  wmem hooks would close.
+- **The shrink arm is a working tshark:** M1–M5 and the oracle match stock as on level0.
+
+**Next: Safety, the sublet arm** (the table below). It needs the smaller wmem arenas or a larger
+sublet pool first. Its predictions are registered before it runs.
 
 ## Plan
 

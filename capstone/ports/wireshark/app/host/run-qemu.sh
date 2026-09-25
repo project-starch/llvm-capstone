@@ -95,15 +95,32 @@ stage_cap() {  # name -> copies the capture (or its flipped twin) into the share
          "$CAPS/$base.pcap" "$SHARE/$n.pcap"; fi
 }
 # Time budgets. Every tshark run measured so far took 15-30 s, and setup (the copies from the share)
-# about 30 s. So: the host program's alarm at 120 s per run, and the whole guest command at 150 s
-# per section plus 300 s. A guest that stalls holds the SHARED QEMU lock until this expires: with
-# 960 s per section a 9p-copy stall held it for 85 minutes against other lanes' queued work
-# (2026-09-25). The alarm cannot end a guest stall, only a run that keeps making hostcalls.
+# usually about 30 s. So: the host program's alarm at 120 s per run, and the whole guest command at
+# 150 s per section plus 600 s for setup (see the setup watchdog). A guest that stalls holds the
+# SHARED QEMU lock until this expires: with 960 s per section a 9p-copy stall held it for 85 minutes
+# against other lanes' queued work (2026-09-25). The alarm cannot end a guest stall, only a run that
+# keeps making hostcalls.
 RUN_ALARM=${TSAPP_RUN_ALARM:-120}
 G="$SHARE/guest.sh"
-{ echo 'echo MODULE-MD5 $(md5sum /capstone.ko); cat /proc/cmdline'
+# The setup watchdog. Boots on 2026-09-24/25 stalled in the copies below, before any domain started,
+# and each held the shared QEMU lock until the whole guest budget ran out. What it caught once it
+# could look: a cp waiting in p9_virtio_zc_request, a 9p zero-copy read, and the copy still MOVING,
+# only slowly -- one finished during the watchdog's own report, after more than five minutes. So:
+# if setup has not finished within TSAPP_SETUP_BUDGET seconds, the guest prints where the copy
+# stands (what reached /tmp, each cp's kernel stack and wait channel, memory and CMA), then checks
+# every 30 s and powers itself off only if nothing moved in that time. A slow copy completes and its
+# boot counts; a stopped one ends the boot within a minute of being seen. A guest that wedges
+# outright shows neither line, and only the outer budget below ends it.
+SETUP_BUDGET=${TSAPP_SETUP_BUDGET:-300}
+{ echo "( sleep $SETUP_BUDGET; [ -e /tmp/.ts_setup_done ] && exit 0; echo __TS_SETUP_SLOW__; ls -l /tmp;" \
+       "for p in \$(pidof cp); do echo cp \$p wchan=\$(cat /proc/\$p/wchan); cat /proc/\$p/stack; done;" \
+       "grep -E 'MemFree|MemAvailable|Shmem:|CmaTotal|CmaFree' /proc/meminfo; echo __TS_SETUP_SLOW_END__;" \
+       "while :; do a=\$(du -sk /tmp | cut -f1); sleep 30; [ -e /tmp/.ts_setup_done ] && exit 0;" \
+       "b=\$(du -sk /tmp | cut -f1); echo __TS_SETUP_PROGRESS__ \$a \$b;" \
+       "[ \"\$a\" = \"\$b\" ] && { echo __TS_SETUP_STALLED__; poweroff -f; }; done ) &"
+  echo 'echo MODULE-MD5 $(md5sum /capstone.ko); cat /proc/cmdline'
   echo 'cp /mnt/host/lt.user /tmp/lt.user && chmod 0755 /tmp/lt.user; cp /mnt/host/domain.argv /mnt/host/domain.env /tmp/; mkdir -p /tmp/wsconf'
-  echo 'cp /mnt/host/*.dom /tmp/; dmesg -c > /dev/null'; } > "$G"
+  echo 'cp /mnt/host/*.dom /tmp/; dmesg -c > /dev/null; touch /tmp/.ts_setup_done; echo __TS_SETUP_DONE__'; } > "$G"
 SECTIONS=()
 case $MODE in
   stages)
@@ -171,7 +188,12 @@ LOG=$(mktemp "$RUNS/qemu-$tag-$(date +%Y%m%d-%H%M%S)-XXXX.log")
 ( cd "$SHARE" && sha256sum lt.user domain.argv domain.env ./*.dom $(find . -maxdepth 1 -name '*.pcap' | sort) ) > "$LOG.sha256"
 echo "run-qemu: ${#SECTIONS[@]} runs, block ${BLOCK_MB} MiB, cma=${CMA}M, CAPSTONE_GP_NONLIN=$CAPSTONE_GP_NONLIN, log $LOG" | tee "$LOG.head"
 set +e
-CAPSTONE_GUEST_COMMAND_TIMEOUT=${CAPSTONE_GUEST_COMMAND_TIMEOUT:-$(( ${#SECTIONS[@]} * 150 + 300 ))} \
+# A safety fixture runs in about 10 s (2026-09-25), so its sections get 60 s. Setup gets 600 s: a
+# slow 9p copy has taken more than five minutes and then completed, and the watchdog above ends a
+# copy that stops. A guest that wedges outright, which nothing inside it can end, then costs at
+# most 16 minutes for six fixtures.
+PER_SECTION=150; [ "$MODE" = safety ] && PER_SECTION=60
+CAPSTONE_GUEST_COMMAND_TIMEOUT=${CAPSTONE_GUEST_COMMAND_TIMEOUT:-$(( ${#SECTIONS[@]} * PER_SECTION + 600 ))} \
 capstone_with_qemu_lock python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --share-dir "$SHARE" --buildroot-dir "$ROOTFS" --qemu-binary "$CAPSTONE_QEMU_BINARY" \
   --kernel-arg "cma=${CMA}M" --guest-command "sh /mnt/host/guest.sh" \

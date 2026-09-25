@@ -6862,6 +6862,40 @@ The rc=2 cost is already recorded in the comment at `:58-61`: every caller warns
 acts on it. **The fix belongs to the gate's owner. Until then, read rc 0 on a fresh build dir as "the
 listed tools are fresh", NOT as "lit can run".**
 
+### I-12 — QEMU guests stall before any domain starts, and a runner's time budget decides how long the shared lock is held `OPEN — infra; counted 2026-09-25 on the tshark runner; cause unknown`
+
+Some QEMU guest boots stop, or crawl, before any domain starts. The tshark safety campaign
+(`ports/wireshark/app/results/2026-09-25-qemu-safety/stall-classes.txt`) had 28 boots, and 7 of
+them never reached a domain. All ran on the port's PRIVATE rootfs, so the shared rootfs's ext4
+corruption is not the cause. FFmpeg's hardening round counted 9 such boots: 7 before login, 1 at
+login, 1 in the 9p copy. The shapes, told apart by a setup watchdog in
+`ports/wireshark/app/host/run-qemu.sh`:
+- **A slow 9p copy, 6 of the 28.** The guest's copy of the domain images from the 9p share
+  normally takes about 30 s, and here took about 5 minutes. Each time, `cp` was waiting in
+  `p9_virtio_zc_request`, a 9p zero-copy read, while its file kept growing. 3 of these boots
+  completed. The other 3 were powered off by earlier watchdog versions that did not check for
+  progress.
+- **The guest wedged in setup, 1 boot.** The watchdog's `sleep` never woke, so userland stopped
+  too.
+- **Stopped between init and login, 2 boots.**
+- **1 more stopped in setup before the watchdog existed**, so its kind is unknown.
+
+During these stalls the host's load average was about 2.3, and the stalled QEMU was at 100% CPU.
+So a guest that crawls is the common factor, not 9p alone.
+
+**The cost is the shared lock, not the boot.** Nothing is lost, since a stalled boot is retried and
+never counted. But the QEMU holds the lock for the whole guest budget. At 960 s per section, one
+such boot held it for 85 minutes against three other lanes' queued work. What the tshark runner does now:
+- size the budget from measured run times;
+- a setup watchdog: at 300 s it reports where the copy stands (files, `cp`'s kernel stack, memory
+  and CMA), then powers the guest off only if nothing moved in the next 30 s;
+- 600 s for setup in the outer budget, so a slow copy can still finish.
+No other runner has the watchdog.
+
+**What would settle the cause:** whether the TCG vCPU or the 9p server is starved during a slow
+copy. The QEMU monitor's `info registers`, or a host-side stack of the QEMU threads, taken during a
+stall, would show which. No runner collects either yet.
+
 ## Compiler / toolchain (ours)
 
 ### C-50 — an integer-valued pointer in an aggregate passed BY VALUE (union or struct) is copied through an address formed with integer `addi` on the frame pointer, which faults `OPEN — COMPILER, caller side (byval copy, CapstoneISelLowering.cpp:24316); found 2026-09-23 by the FFmpeg app port on QEMU, reduced to 12 lines, proven from disassembly and -debug-only=isel; worked around in the port; audited and CORRECTED the same day, see the box`
