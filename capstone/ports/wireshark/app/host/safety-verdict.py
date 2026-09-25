@@ -157,6 +157,19 @@ def self_test():
         ('another image\'s result is not this one\'s', 4, ['LT-RESULT tsapp_fx5.dom status=5 rounds=3 FAIL'],
          ('NOTHING', None)),
         ('nothing at all', 4, ['TSAPP-FIX 4 begin'], ('NOTHING', None)),
+        # the temporal kinds, added with the sublet arm's results (audit, 2026-09-25)
+        ('temporal fault at the target', 4,
+         ['TSAPP-FIX 4 target=f7000600', 'TSAPP-FIX 4 touch',
+          '[CAPSTONE] Cap mem access requires capability: pc = 1, rs1 = x10, imm = 0, value = f7000600, value_hi = 0',
+          halt], ('FAULT', 'temporal')),
+        ('temporal fault on another value', 4,
+         ['TSAPP-FIX 4 target=f7000600', 'TSAPP-FIX 4 touch',
+          '[CAPSTONE] Cap mem access requires capability: pc = 1, rs1 = x10, imm = 0, value = f7000700, value_hi = 0',
+          halt], ('FAULT-ELSEWHERE', None)),
+        ('untagged operand at the target', 5,
+         ['TSAPP-FIX 5 target=f7000600', 'TSAPP-FIX 5 touch',
+          'capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x1 rd=x10 rs1=x10 val=0xf7000600 priv=3', halt],
+         ('FAULT', 'temporal')),
     ]
     bad = 0
     for name, n, body, (want_got, want_detail) in cases:

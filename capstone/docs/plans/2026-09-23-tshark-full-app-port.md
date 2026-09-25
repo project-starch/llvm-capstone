@@ -1,8 +1,14 @@
 # tshark as a full application in a Capstone domain — M0 census and port plan (2026-09-23)
 
-**Status (2026-09-25):** M-infra, M-deps, M0 and M1–M5 are done on QEMU. Safety is half
-done: the two cheap heap arms (level0, shrink) ran every pre-registered fixture three times, all
-as predicted. The revoking sublet arm is next. See "Progress on the full port" below.
+**Status (2026-09-25):** M-infra, M-deps, M0 and M1–M5 are done on QEMU, and so is the heap half of
+Safety. All three heap arms ran every pre-registered fixture three times, all as predicted:
+- **level0:** no heap safety;
+- **shrink:** spatial safety for g_malloc'd objects;
+- **sublet:** spatial and temporal safety for g_malloc'd objects.
+- **On every arm:** wmem's allocations stay unprotected. Safety's other half, the wmem hooks, is
+  the lead's call.
+
+tshark's output matches stock on all three arms. See "Progress on the full port" below.
 - **The tshark domain:** 66.3 MiB, in a 128 MiB CMA block. It reaches all five stages. Its
   `-V -n` output is byte-identical to native stock tshark on the four workload captures, their
   flipped copies and dns-ooo.
@@ -719,8 +725,20 @@ pointers carry the whole arena, not their block (an audit found it; the README r
   wmem hooks would close.
 - **The shrink arm is a working tshark:** M1–M5 and the oracle match stock as on level0.
 
-**Next: Safety, the sublet arm** (the table below). It needs the smaller wmem arenas or a larger
-sublet pool first. Its predictions are registered before it runs.
+**Safety, sublet arm: done on QEMU (2026-09-25).** Evidence:
+`results/2026-09-25-qemu-safety-sublet/`. Predictions pushed before any sublet boot (`cd06fd2`), and
+all 36 counted runs are as predicted.
+- **The arm:** the revoking Sublet heap over a 16 MiB pool that the host transfers linear, with
+  wmem's blocks cut to 1 MiB (patch 0007).
+- **Use after free, use after reuse and a stale free** now fault as temporal, at the printed address.
+- **wmem, fixtures 10–12, still return:** a scope reset never calls free.
+- **tshark on this heap matches stock:** M1–M5 and the oracle.
+- **The node budget:** a full run spends 9,827–13,335 revocation nodes. A boot holds about four such
+  runs before capstone-qemu's 65,536-node pool runs out. It ran out once, and QEMU asserted.
+
+**Next, the lead's call:** the wmem hooks (`ports/wireshark/wmem`, `WMEM_PORT_HOOKS`), which would
+close the gap all three arms leave. Separately, the port is still built with `b7b31421e9fa`; dev's
+compiler is now `3979abd8e9a3` (C-46, C-47), and patch 0004 can go after one run on it.
 
 ## Plan
 

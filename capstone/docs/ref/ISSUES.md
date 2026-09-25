@@ -4389,6 +4389,25 @@ globals *after* ISel would silently break this positional scheme.
 > pool's blocks would spend fewer. The number stands as what THIS discipline costs, which is what
 > a paper claims, and not as a floor.
 >
+> **A SECOND WORKLOAD, 2026-09-25: tshark on the Sublet heap spends 10–13 thousand nodes per run,
+> and capstone-qemu itself ran out in one boot.** From the port's heap line (`split + mrev`) for one
+> full `-V -n` run: dhcp 12,596; dns_port 13,335; dns-ooo 12,261; http 10,396; arp 9,827; ntp
+> 10,055. So on a bitstream without the node reclaimer the budget is about five such runs per boot,
+> before the monitor's and the host's own node use.
+>
+> **capstone-qemu reclaims no node, and so it has the same cumulative per-boot budget.** A node's
+> refcount is set to 1 and never changed. Nothing calls `cap_rev_tree_release`: its only caller,
+> `cap_rev_tree_update_refcount`, is never called. `cap_rev_tree.h` says "this emulator reuses no
+> node". The free-list comment at `cap_rev_tree.c:8-10` describes that dead code. It misled the
+> first draft of this measurement, although a 2026-09-15 history note had already found the dead
+> code (`docs/history/15-09-2026_19-16-04_manuscript-read-directly-at-last.md`).
+>
+> In one boot, five full runs spent 64,123 nodes and completed. Everything else up to the
+> watermark spent 1,409, ntp's first heap allocations included. ntp then crossed #65,532, and QEMU
+> asserted at the pool's end (`cap_rev_tree.c:56: _cap_rev_tree_dup_node_before: Assertion
+> new_node != CAP_REV_NODE_ID_NULL`). The port's runner now allows at most four full runs per
+> sublet boot (`ports/wireshark/app/results/2026-09-25-qemu-safety-sublet/`).
+
 > **A diagnostic that carries the withdrawn account.** `capstone-qemu/target/riscv/cap_rev_tree.c`
 > prints, at cumulative allocation 1022, that "on silicon (10-bit bump head from 3, no
 > reclamation) this is where the head WRAPS to 0 and starts reusing LIVE ids". That is the account

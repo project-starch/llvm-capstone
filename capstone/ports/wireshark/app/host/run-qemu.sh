@@ -128,6 +128,9 @@ SETUP_BUDGET=${TSAPP_SETUP_BUDGET:-300}
        "while :; do a=\$(du -sk /tmp | cut -f1); sleep 30; [ -e /tmp/.ts_setup_done ] && exit 0;" \
        "b=\$(du -sk /tmp | cut -f1); echo __TS_SETUP_PROGRESS__ \$a \$b;" \
        "[ \"\$a\" = \"\$b\" ] && { echo __TS_SETUP_STALLED__; poweroff -f; }; done ) &"
+  # The wedge detector's positive control (below): TSAPP_TEST_QUIET=<s> makes the guest sit silent
+  # that long before setup, which a real run never does. Test use only.
+  [ -z "${TSAPP_TEST_QUIET:-}" ] || echo "sleep $TSAPP_TEST_QUIET"
   echo 'echo MODULE-MD5 $(md5sum /capstone.ko); cat /proc/cmdline'
   echo 'cp /mnt/host/lt.user /tmp/lt.user && chmod 0755 /tmp/lt.user; cp /mnt/host/domain.argv /mnt/host/domain.env /tmp/; mkdir -p /tmp/wsconf'
   echo 'cp /mnt/host/*.dom /tmp/; dmesg -c > /dev/null; touch /tmp/.ts_setup_done; echo __TS_SETUP_DONE__'; } > "$G"
@@ -146,6 +149,13 @@ case $MODE in
     done ;;
   oracle)
     [ $# -gt 0 ] || { echo "oracle needs captures" >&2; exit 2; }
+    # The revocation-node budget. Every free on the sublet heap revokes, and one full run on dhcp
+    # spends about 12,600 nodes (split + mrev, its TSAPP-HEAP line). capstone-qemu reclaims no node
+    # (nothing calls cap_rev_tree_release), so its 65,536-node pool is a per-boot budget: the sixth
+    # run of a six-capture boot exhausted it and QEMU died on an assertion (cap_rev_tree.c:56,
+    # 2026-09-25). Five dhcp-sized runs fit, five dns_port-sized ones would not.
+    [ "$HEAP" != sublet ] || [ $# -le 4 ] \
+      || { echo "at most 4 full runs per sublet boot: the revocation-node pool (65,536) runs out" >&2; exit 2; }
     cp "$OUT/tshark_m5.dom" "$SHARE/"
     for c in "$@"; do
       stage_cap "$c"
@@ -197,7 +207,7 @@ CMA=$(( (${#SECTIONS[@]} + 1) * (BLOCK_MB * 2 + REGION_MB) ))
 tag=$MODE; if [ "$MODE" = safety ] || [ "$HEAP" != level0 ]; then tag=$MODE-$HEAP; fi
 LOG=$(mktemp "$RUNS/qemu-$tag-$(date +%Y%m%d-%H%M%S)-XXXX.log")
 ( cd "$SHARE" && sha256sum lt.user domain.argv domain.env ./*.dom $(find . -maxdepth 1 -name '*.pcap' | sort) ) > "$LOG.sha256"
-echo "run-qemu: ${#SECTIONS[@]} runs, block ${BLOCK_MB} MiB, cma=${CMA}M, CAPSTONE_GP_NONLIN=$CAPSTONE_GP_NONLIN, log $LOG" | tee "$LOG.head"
+echo "run-qemu: ${#SECTIONS[@]} runs, block ${BLOCK_MB} MiB, cma=${CMA}M, CAPSTONE_GP_NONLIN=$CAPSTONE_GP_NONLIN, wedge ${TSAPP_WEDGE_SECONDS:-360}s${TSAPP_TEST_QUIET:+, TEST quiet ${TSAPP_TEST_QUIET}s}, log $LOG" | tee "$LOG.head"
 set +e
 # A safety fixture runs in about 10 s (2026-09-25), so its sections get 60 s. Setup gets 600 s: a
 # slow 9p copy has taken more than five minutes and then completed, and the watchdog above ends a
@@ -208,7 +218,36 @@ CAPSTONE_GUEST_COMMAND_TIMEOUT=${CAPSTONE_GUEST_COMMAND_TIMEOUT:-$(( ${#SECTIONS
 capstone_with_qemu_lock python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --share-dir "$SHARE" --buildroot-dir "$ROOTFS" --qemu-binary "$CAPSTONE_QEMU_BINARY" \
   --kernel-arg "cma=${CMA}M" --guest-command "sh /mnt/host/guest.sh" \
-  --success-marker __TS_ALL_DONE__ --log-file "$LOG" > "$LOG.runner" 2>&1
+  --success-marker __TS_ALL_DONE__ --log-file "$LOG" > "$LOG.runner" 2>&1 &
+SMOKE=$!
+# The wedge detector. A guest that stops outright (twice on 2026-09-25, in setup) prints nothing
+# more, and nothing inside it can end the boot, so it held the shared lock for the whole guest
+# budget. Here, once the boot has started writing its log, a log that has not grown for
+# TSAPP_WEDGE_SECONDS (default 360) ends it: this boot's QEMU is the one whose -virtfs names this
+# boot's own share. Nothing legitimate is that quiet: the guest's setup watchdog prints every 30 s
+# while a copy is slow, and every run is shorter than its 120 s alarm.
+WEDGE=${TSAPP_WEDGE_SECONDS:-360}
+while kill -0 "$SMOKE" 2>/dev/null; do
+  sleep 15
+  [ -s "$LOG" ] || continue
+  quiet=$(( $(date +%s) - $(stat -c %Y "$LOG") ))
+  [ "$quiet" -ge "$WEDGE" ] || continue
+  q=$(python3 - "path=$SHARE," <<'PYW'
+import os, sys
+for p in os.listdir('/proc'):
+    if not p.isdigit(): continue
+    try: a = open(f'/proc/{p}/cmdline', 'rb').read().split(b'\0')
+    except OSError: continue
+    if a and a[0].endswith(b'qemu-system-riscv64') and any(sys.argv[1].encode() in x for x in a):
+        print(p)
+PYW
+)
+  [ -n "$q" ] || continue
+  echo "run-qemu: no serial output for ${quiet}s: the guest wedged; stopping QEMU $q" | tee -a "$LOG.head"
+  kill $q 2>/dev/null || true
+  break
+done
+wait "$SMOKE"
 echo "run-domain-smoke exit status $? (not the verdict)"
 set -e
 mkdir "$LOG.out"; cp "$SHARE"/out-*.txt "$SHARE"/err-*.txt "$LOG.out/" 2>/dev/null || true

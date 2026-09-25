@@ -1,0 +1,151 @@
+# Result lines, regenerated from each boot's serial log by host/safety-verdict.py and the stage and
+# oracle checks of host/run-qemu.sh (logs not committed). Every attempt is kept: a stalled one shows
+# as section-less ERROR lines and was retried, never counted. Tree cd06fd29055d plus this folder's
+# runner changes; compiler b7b31421e9fa.
+
+## sublet gate: stages (qemu-stages-sublet-20260925-092107-TeFY; the first attempt, -091022-R5oa, wedged in setup and was stopped)
+M1: STAGE 1 REACHED (LT-RESULT tshark_m1.dom status=101 rounds=18 FAIL)
+M1: output MATCH (unserved: none; expected nothing else)
+M2: STAGE 2 REACHED (LT-RESULT tshark_m2.dom status=102 rounds=356 FAIL)
+M2: output MATCH (stderr MATCH, unserved: 160x3 278x2 134 17; expected nothing else)
+M3: STAGE 3 REACHED (LT-RESULT tshark_m3.dom status=103 rounds=432 FAIL)
+M3: output MATCH (stderr MATCH, unserved: 160x5 278x4 134 17; expected nothing else)
+M4: STAGE 4 REACHED (LT-RESULT tshark_m4.dom status=104 rounds=444 FAIL)
+M4: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135; expected stock stdout's first frame exactly (3774 bytes))
+M5: STAGE 5 REACHED (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+M5: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit; expected stock stdout exactly)
+
+## sublet gate: oracle A (qemu-oracle-sublet-20260925-092321-u4UV): ntp's section died when capstone-qemu's revocation-node pool ran out
+dhcp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+dhcp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+dns_port: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=500 PASS)
+dns_port.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=500 PASS)
+dns-ooo: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=482 PASS)
+ntp: ERROR no output (the section started; nothing was copied back and no halt was logged)
+dhcp.flip: flip control FIRES (stock changed 2 lines)
+dns_port.flip: flip control FIRES (stock changed 2 lines)
+capstone-qemu: REV-NODE WATERMARK -- cumulative allocation #65532; on silicon (16-bit bump head from 3, sentinel 65535, no reclamation) that is the LAST usable id. The next allocation STALLS the core.
+qemu-system-riscv64: ../target/riscv/cap_rev_tree.c:56: _cap_rev_tree_dup_node_before: Assertion `new_node != CAP_REV_NODE_ID_NULL' failed.
+
+## sublet gate: oracle B (qemu-oracle-sublet-20260925-092608-Q3j9)
+http: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=450 PASS)
+http.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=450 PASS)
+arp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=444 PASS)
+arp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=444 PASS)
+http.flip: flip control FIRES (stock changed 2 lines)
+arp.flip: flip control FIRES (stock changed 2 lines)
+
+## sublet gate: ntp alone (qemu-oracle-sublet-20260925-092951-Av17)
+ntp: stdout DIFFERS (24 diff lines), stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=446 PASS)
+
+## the heap line of every full run above (TSAPP-HEAP)
+qemu-stages-sublet-20260925-092107-TeFY out-m5: TSAPP-HEAP status=0 sublet alloc=4692 free=4552 merge=3747 peak_live=2598 split=3953 mrev=8643 delin=4692 revoke=8299 init=3747 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092321-u4UV out-dhcp.flip: TSAPP-HEAP status=0 sublet alloc=4692 free=4552 merge=3747 peak_live=2598 split=3953 mrev=8643 delin=4692 revoke=8299 init=3747 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092321-u4UV out-dhcp: TSAPP-HEAP status=0 sublet alloc=4692 free=4552 merge=3747 peak_live=2598 split=3953 mrev=8643 delin=4692 revoke=8299 init=3747 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092321-u4UV out-dns-ooo: TSAPP-HEAP status=0 sublet alloc=4637 free=4497 merge=3607 peak_live=2588 split=3813 mrev=8448 delin=4637 revoke=8104 init=3607 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092321-u4UV out-dns_port.flip: TSAPP-HEAP status=0 sublet alloc=4971 free=4831 merge=3977 peak_live=2774 split=4183 mrev=9152 delin=4971 revoke=8808 init=3977 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092321-u4UV out-dns_port: TSAPP-HEAP status=0 sublet alloc=4971 free=4831 merge=3977 peak_live=2774 split=4183 mrev=9152 delin=4971 revoke=8808 init=3977 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092608-Q3j9 out-arp.flip: TSAPP-HEAP status=0 sublet alloc=3715 free=3575 merge=2851 peak_live=2444 split=3057 mrev=6770 delin=3715 revoke=6426 init=2851 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092608-Q3j9 out-arp: TSAPP-HEAP status=0 sublet alloc=3715 free=3575 merge=2851 peak_live=2444 split=3057 mrev=6770 delin=3715 revoke=6426 init=2851 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092608-Q3j9 out-http.flip: TSAPP-HEAP status=0 sublet alloc=3900 free=3760 merge=3043 peak_live=2608 split=3249 mrev=7147 delin=3900 revoke=6803 init=3043 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092608-Q3j9 out-http: TSAPP-HEAP status=0 sublet alloc=3900 free=3760 merge=3043 peak_live=2608 split=3249 mrev=7147 delin=3900 revoke=6803 init=3043 unserved=160x5,278x4,134x4,17,135 stdout=closed
+qemu-oracle-sublet-20260925-092951-Av17 out-ntp: TSAPP-HEAP status=0 sublet alloc=3811 free=3671 merge=2917 peak_live=2526 split=3123 mrev=6932 delin=3811 revoke=6588 init=2917 unserved=160x5,278x4,134x4,17,135 stdout=closed
+
+
+## sublet: qemu-safety-sublet-20260925-093107-l0Ee.log [1 2 9 10 11 12]
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=1048528
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=1048528
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=1048528
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7: [CAPSTONE] Cap mem access OOB: insn = 00c50023, pc = ea20c978, pcc_base = ea200000, va = c978, rs1 = x10, cursor = ed000700, imm = 0, addr = ed000700, size = 1, bounds = (ed000600, ed000640)]  len=64
+
+## sublet: qemu-safety-sublet-20260925-093308-C3bZ.log [3]
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = f420c94c, pcc_base = f4200000, va = c94c, rs1 = x10, cursor = f7000640, imm = 0, addr = f7000640, size = 1, bounds = (f7000600, f7000640)]  len=64
+
+## sublet: qemu-safety-sublet-20260925-093339-VEhs.log [4]
+fx4: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0xf420c948 rd=x10 rs1=x10 val=0xf7000600 priv=3]  len=64
+
+## sublet: qemu-safety-sublet-20260925-093510-tA2E.log [5]
+fx5: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0xf420c948 rd=x10 rs1=x10 val=0xf7000600 priv=3]  len=64
+
+## sublet: qemu-safety-sublet-20260925-093541-mkIk.log [6]
+fx6: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = f4209938, rs1 = x10, imm = 0, value = f7000600, value_hi = db89900600]  len=64
+
+## sublet: qemu-safety-sublet-20260925-093612-V7aZ.log [7]
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = f420c94c, pcc_base = f4200000, va = c94c, rs1 = x10, cursor = f5e27a6c, imm = 0, addr = f5e27a6c, size = 1, bounds = (f5e27a2c, f5e27a6c)]
+
+## sublet: qemu-safety-sublet-20260925-093642-Fkqf.log [8]
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = f420c94c, pcc_base = f4200000, va = c94c, rs1 = x10, cursor = f61ffc48, imm = 0, addr = f61ffc48, size = 1, bounds = (f61ffc08, f61ffc48)]
+
+## sublet: qemu-safety-sublet-20260925-093713-oiLY.log [1 2 9 10 11 12]
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=1048528
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=1048528
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=1048528
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7: [CAPSTONE] Cap mem access OOB: insn = 00c50023, pc = ea20c978, pcc_base = ea200000, va = c978, rs1 = x10, cursor = ed000700, imm = 0, addr = ed000700, size = 1, bounds = (ed000600, ed000640)]  len=64
+
+## sublet: qemu-safety-sublet-20260925-093914-l0bn.log [3]
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = f420c94c, pcc_base = f4200000, va = c94c, rs1 = x10, cursor = f7000640, imm = 0, addr = f7000640, size = 1, bounds = (f7000600, f7000640)]  len=64
+
+## sublet: qemu-safety-sublet-20260925-093945-vqwM.log [4]
+fx4: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0xf420c948 rd=x10 rs1=x10 val=0xf7000600 priv=3]  len=64
+
+## sublet: qemu-safety-sublet-20260925-094016-6sPI.log [5]
+fx5: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0xf420c948 rd=x10 rs1=x10 val=0xf7000600 priv=3]  len=64
+
+## sublet: qemu-safety-sublet-20260925-094047-G6SO.log [6]
+fx6: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = f4209938, rs1 = x10, imm = 0, value = f7000600, value_hi = dd89900600]  len=64
+
+## sublet: qemu-safety-sublet-20260925-094117-nN9X.log [7]
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = f420c94c, pcc_base = f4200000, va = c94c, rs1 = x10, cursor = f5e27a6c, imm = 0, addr = f5e27a6c, size = 1, bounds = (f5e27a2c, f5e27a6c)]
+
+## sublet: qemu-safety-sublet-20260925-094148-t65c.log [8]
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = f420c94c, pcc_base = f4200000, va = c94c, rs1 = x10, cursor = f61ffc48, imm = 0, addr = f61ffc48, size = 1, bounds = (f61ffc08, f61ffc48)]
+
+## sublet: qemu-safety-sublet-20260925-094719-B65y.log [1 2 9 10 11 12]
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=1048528
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=1048528
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=1048528
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7: [CAPSTONE] Cap mem access OOB: insn = 00c50023, pc = ea20c978, pcc_base = ea200000, va = c978, rs1 = x10, cursor = ed000700, imm = 0, addr = ed000700, size = 1, bounds = (ed000600, ed000640)]  len=64
+
+## sublet: qemu-safety-sublet-20260925-095420-HNIL.log [3]
+fx3: ERROR no section in the log -- the image never started
+
+## sublet: qemu-safety-sublet-20260925-095636-Y95B.log [3]
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = f420c94c, pcc_base = f4200000, va = c94c, rs1 = x10, cursor = f7000640, imm = 0, addr = f7000640, size = 1, bounds = (f7000600, f7000640)]  len=64
+
+## sublet: qemu-safety-sublet-20260925-095707-mluY.log [4]
+fx4: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0xf420c948 rd=x10 rs1=x10 val=0xf7000600 priv=3]  len=64
+
+## sublet: qemu-safety-sublet-20260925-095738-jyvp.log [5]
+fx5: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0xf420c948 rd=x10 rs1=x10 val=0xf7000600 priv=3]  len=64
+
+## sublet: qemu-safety-sublet-20260925-095808-tKcT.log [6]
+fx6: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = f4209938, rs1 = x10, imm = 0, value = f7000600, value_hi = dd89900600]  len=64
+
+## sublet: qemu-safety-sublet-20260925-095839-qvtP.log [7]
+fx7: ERROR no section in the log -- the image never started
+
+## sublet: qemu-safety-sublet-20260925-100055-ohTe.log [7]
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = f420c94c, pcc_base = f4200000, va = c94c, rs1 = x10, cursor = f5e27a6c, imm = 0, addr = f5e27a6c, size = 1, bounds = (f5e27a2c, f5e27a6c)]
+
+## sublet: qemu-safety-sublet-20260925-100126-m50r.log [8]
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = f420c94c, pcc_base = f4200000, va = c94c, rs1 = x10, cursor = f61ffc48, imm = 0, addr = f61ffc48, size = 1, bounds = (f61ffc08, f61ffc48)]
+# host binaries booted: 1 (618bbeaccb1866f2)
+# per cell: counted runs (a section-less attempt is an ERROR line, never counted)
+# sublet fx1  3 runs, 3 as predicted
+# sublet fx2  3 runs, 3 as predicted
+# sublet fx3  3 runs, 3 as predicted
+# sublet fx4  3 runs, 3 as predicted
+# sublet fx5  3 runs, 3 as predicted
+# sublet fx6  3 runs, 3 as predicted
+# sublet fx7  3 runs, 3 as predicted
+# sublet fx8  3 runs, 3 as predicted
+# sublet fx9  3 runs, 3 as predicted
+# sublet fx10 3 runs, 3 as predicted
+# sublet fx11 3 runs, 3 as predicted
+# sublet fx12 3 runs, 3 as predicted
