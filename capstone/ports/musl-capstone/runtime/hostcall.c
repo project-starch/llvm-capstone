@@ -105,12 +105,17 @@ static int hc_round(unsigned long opcode, unsigned long offset,
  * Descriptors start at 3 because 0, 1 and 2 are the stdout path and always will
  * be: WRITE_STDOUT needs no handle and no open.
  *
- * A fixed table of eight rather than a growing one, for the same reason the wire
- * spec recommends a slot array on the helper side: a domain that needs thousands
- * of open files is not the workload this is being built for, and -EMFILE is an
- * honest answer that the caller already has to handle. */
+ * A fixed table rather than a growing one, for the same reason the wire spec
+ * recommends a slot array on the helper side: a domain that needs thousands of
+ * open files is not the workload this is being built for, and -EMFILE is an
+ * honest answer that the caller already has to handle. It was eight until
+ * PostgreSQL's bootstrap ran out ("could not stat directory "base/1": No file
+ * descriptors available"): its storage manager keeps a segment file open per
+ * relation it has touched, and bootstrap touches dozens. 128 matches the
+ * helper's slot array (HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES), which has to
+ * be at least this large for the opens to reach us. */
 #define HC_FD_BASE 3
-#define HC_MAX_FILES 8
+#define HC_MAX_FILES 128
 #define HC_PAYLOAD_SIZE HOSTCALL_STDOUT_PROBE_REGION_SIZE
 
 struct hc_file {

@@ -7,7 +7,7 @@
 
 #include "hostcall-stdout-probe/hostcall_stdout_probe.h"
 
-#define HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES 8ULL
+#define HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES 128ULL
 
 struct hostcall_file_service_handle_slot {
   int in_use;
