@@ -220,6 +220,17 @@ directory answers `EISDIR`). musl reaches the pair through `mkdirat` and `unlink
 AT_REMOVEDIR)`. First consumer is PostgreSQL's `CREATE DATABASE`, which makes `base/<oid>` under
 its data directory.
 
+`HC_V0_OP_PATH_READLINK = 29` (added 2026-09-24). Request: `PATH_ACCESS`'s layout with a zero
+flags word, the path at `metadata.offset = 8`, `metadata.length = strlen(path)`. Response: the
+link's target at payload offset 0, `metadata.offset = 0`, `metadata.length = result = ` its length
+in bytes, no terminator, as `readlink(2)` returns it; failure as in section 11 (`EINVAL` for a name
+that is not a symbolic link, `ENOENT`). The helper calls `readlink(path, payload, 4096)`, so any
+target Linux can return fits. The domain copies at most the caller's `bufsiz` bytes and returns
+the count copied. musl reaches this through `readlinkat`; its `realpath()` calls `readlink` on
+every component of the path it resolves and takes `EINVAL` as "not a link", which is why the
+opcode exists: PostgreSQL's `find_my_exec` resolves `argv[0]` through `realpath` before the
+backend does anything else.
+
 ## 5. Region contract
 
 ## 5a. Metadata region
