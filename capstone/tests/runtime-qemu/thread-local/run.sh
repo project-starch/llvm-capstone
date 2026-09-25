@@ -99,7 +99,8 @@ boot() {
   local log=$1; shift
   local guest="echo __BOOT_OK__; cp /mnt/host/lt.user /tmp/lt.user && chmod 0755 /tmp/lt.user; for d in $*; do echo RUN-BEGIN \$d; /tmp/lt.user /mnt/host/\$d.dom 60; echo RUN-END \$d rc=\$?; done; echo __ALL_DONE__"
   set +e
-  "$PYTHON" "$REPO/capstone/tests/runtime-qemu/run-domain-smoke.py" \
+  # Under the shared QEMU lock, as every runner is (init-fini/run.sh does the same).
+  capstone_with_qemu_lock "$PYTHON" "$REPO/capstone/tests/runtime-qemu/run-domain-smoke.py" \
     --share-dir "$OUT/share" --log-file "$log" --timeout-multiplier 8 \
     --guest-command "$guest" --success-marker __BOOT_OK__ --success-marker __ALL_DONE__ >/dev/null 2>&1
   set -e
