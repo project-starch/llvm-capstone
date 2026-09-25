@@ -110,8 +110,13 @@ confirming the two cell ⑥ logs are different runs rather than copies.
 
 Cell ⑤ runs at its sw75 shape with no `--arena`/`--tables` — it has a compiled-in 2 MiB static heap
 and takes neither flag. Cell ⑥ runs `--arena 2097152 --tables 1750285`. **Two boots, one SQLite
-image each**, so both may stay at entry VA `0x410000`; two distinct SQLite images in one boot would
-need distinct VAs or R-3 hangs the second.
+image each**; two distinct SQLite images in one boot would need distinct VAs or R-3 hangs the second.
+
+**Entry VA — CORRECTED.** Both images are linked at **`0x10000`**, read from the ELF headers
+(`llvm-readelf -h`: `Entry point address: 0x10000` for each). An earlier version of this README
+said they "may stay at entry VA `0x410000`". That was wrong: `0x410000` was the VA named in the
+request, and it was written here as a fact about these images without being read off them. They
+are E2's bytes, and E2 linked them at `0x10000`; the board lane relinks its `k800` control to fit.
 
 Nothing here is a board result. These are emulator records and the images they belong to; the
 silicon verdict is the board's.
