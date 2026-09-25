@@ -2798,6 +2798,12 @@ void MicrosoftCXXNameMangler::mangleType(const BuiltinType *T, Qualifiers,
   case BuiltinType::Float16:
     mangleArtificialTagType(TagTypeKind::Struct, "_Float16", {"__clang"});
     break;
+  case BuiltinType::IntCap:
+    mangleArtificialTagType(TagTypeKind::Struct, "__intcap", {"__clang"});
+    break;
+  case BuiltinType::UIntCap:
+    mangleArtificialTagType(TagTypeKind::Struct, "__uintcap", {"__clang"});
+    break;
 
   case BuiltinType::Half:
     if (!getASTContext().getLangOpts().HLSL)

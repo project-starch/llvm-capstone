@@ -92,6 +92,11 @@ UNSIGNED_TYPE(ULong, UnsignedLongTy)
 // 'unsigned long long'
 UNSIGNED_TYPE(ULongLong, UnsignedLongLongTy)
 
+// '__uintcap_t' / 'unsigned __intcap' (Capstone): an unsigned integer whose
+// representation is a capability, so it can hold a pointer without losing
+// its tag. Its integer value is the capability's address.
+UNSIGNED_TYPE(UIntCap, UnsignedIntCapTy)
+
 // '__uint128_t'
 UNSIGNED_TYPE(UInt128, UnsignedInt128Ty)
 
@@ -117,6 +122,9 @@ SIGNED_TYPE(Long, LongTy)
 
 // 'long long' or 'signed long long'
 SIGNED_TYPE(LongLong, LongLongTy)
+
+// '__intcap_t' / '__intcap' (Capstone): the signed counterpart of __uintcap_t.
+SIGNED_TYPE(IntCap, IntCapTy)
 
 // '__int128_t'
 SIGNED_TYPE(Int128, Int128Ty)

@@ -1123,6 +1123,12 @@ enum PredefinedTypeIDs {
   /// \brief The '__ibm128' type
   PREDEF_TYPE_IBM128_ID = 74,
 
+  /// The '__uintcap_t' type (Capstone).
+  PREDEF_TYPE_UINTCAP_ID = 75,
+
+  /// The '__intcap_t' type (Capstone).
+  PREDEF_TYPE_INTCAP_ID = 76,
+
 /// OpenCL image types with auto numeration
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix)                   \
   PREDEF_TYPE_##Id##_ID,
@@ -1160,7 +1166,7 @@ enum PredefinedTypeIDs {
 ///
 /// Type IDs for non-predefined types will start at
 /// NUM_PREDEF_TYPE_IDs.
-const unsigned NUM_PREDEF_TYPE_IDS = 513;
+const unsigned NUM_PREDEF_TYPE_IDS = 515; // +2 for Capstone __intcap_t, __uintcap_t
 
 // Ensure we do not overrun the predefined types we reserved
 // in the enum PredefinedTypeIDs above.

@@ -15117,6 +15117,20 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
   if (!LHS.isUsable() || !RHS.isUsable())
     return ExprError();
 
+  // Capstone: an arithmetic, bitwise or shift operator on __intcap has to
+  // replace the address inside a capability without trapping on an untagged
+  // one. That lowering does not exist yet, so refuse it rather than lose the
+  // capability through an integer round trip. Assignment, comparison and the
+  // logical operators need no arithmetic and are allowed.
+  if (Opc != BO_Assign && Opc != BO_Comma && !BinaryOperator::isComparisonOp(Opc) &&
+      !BinaryOperator::isLogicalOp(Opc) &&
+      (LHSExpr->getType()->isIntCapType() || RHSExpr->getType()->isIntCapType()))
+    return ExprError(Diag(OpLoc, diag::err_capstone_intcap_arith)
+                     << BinaryOperator::getOpcodeStr(Opc)
+                     << (LHSExpr->getType()->isIntCapType() ? LHSExpr->getType()
+                                                            : RHSExpr->getType())
+                     << LHSExpr->getSourceRange() << RHSExpr->getSourceRange());
+
   if (getLangOpts().OpenCL) {
     QualType LHSTy = LHSExpr->getType();
     QualType RHSTy = RHSExpr->getType();
@@ -15784,6 +15798,12 @@ ExprResult Sema::CreateBuiltinUnaryOp(SourceLocation OpLoc,
   bool CanOverflow = false;
 
   bool ConvertHalfVec = false;
+  // Capstone: see CreateBuiltinBinOp.
+  if ((Opc == UO_Minus || Opc == UO_Not || UnaryOperator::isIncrementDecrementOp(Opc)) &&
+      InputExpr->getType()->isIntCapType())
+    return ExprError(Diag(OpLoc, diag::err_capstone_intcap_arith)
+                     << UnaryOperator::getOpcodeStr(Opc) << InputExpr->getType()
+                     << InputExpr->getSourceRange());
   if (getLangOpts().OpenCL) {
     QualType Ty = InputExpr->getType();
     // The only legal unary operation for atomics is '&'.

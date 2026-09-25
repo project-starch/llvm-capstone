@@ -1132,6 +1132,17 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
     else
       Result = Context.Int128Ty;
     break;
+  case DeclSpec::TST_intcap:
+    // Capstone: an integer held in a capability. Only a target whose pointers
+    // are capabilities has one.
+    if (!S.Context.getTargetInfo().SupportsCapabilities())
+      S.Diag(DS.getTypeSpecTypeLoc(), diag::err_type_unsupported)
+          << "__intcap";
+    if (DS.getTypeSpecSign() == TypeSpecifierSign::Unsigned)
+      Result = Context.UnsignedIntCapTy;
+    else
+      Result = Context.IntCapTy;
+    break;
   case DeclSpec::TST_float16:
     // CUDA host and device may have different _Float16 support, therefore
     // do not diagnose _Float16 usage to avoid false alarm.

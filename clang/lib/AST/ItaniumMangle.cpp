@@ -3218,6 +3218,9 @@ void CXXNameMangler::mangleType(const BuiltinType *T) {
   case BuiltinType::UInt128:
     Out << 'o';
     break;
+  case BuiltinType::UIntCap: // Capstone; the vendor spelling CHERI uses
+    Out << "u11__uintcap_t";
+    break;
   case BuiltinType::SChar:
     Out << 'a';
     break;
@@ -3248,6 +3251,9 @@ void CXXNameMangler::mangleType(const BuiltinType *T) {
     break;
   case BuiltinType::Int128:
     Out << 'n';
+    break;
+  case BuiltinType::IntCap:
+    Out << "u10__intcap_t";
     break;
   case BuiltinType::Float16:
     Out << "DF16_";

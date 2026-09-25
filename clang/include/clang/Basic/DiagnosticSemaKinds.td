@@ -13088,6 +13088,9 @@ def warn_tcb_enforcement_violation : Warning<
   InGroup<DiagGroup<"tcb-enforcement">>;
 
 // RISC-V builtin required extension warning
+def err_capstone_intcap_arith : Error<
+  "operator '%0' on %1 is not supported yet on Capstone: arithmetic on "
+  "__intcap needs the address-replacing lowering (llvm.capstone.cap.set.address)">;
 def warn_capstone_pointer_roundtrip : Warning<
   "%select{casting an integer that was itself converted from a pointer|"
   "casting a value of type %1}0 to %2 does not restore capability provenance "

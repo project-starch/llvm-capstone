@@ -1534,6 +1534,26 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
                                                QualType DstType,
                                                SourceLocation Loc,
                                                ScalarConversionOpts Opts) {
+  // Capstone __intcap: its LLVM type is a capability pointer, and its integer
+  // value is the address. Between two intcaps nothing changes. Out of one, take
+  // the address and continue as a 64-bit integer. Into one, convert to a 64-bit
+  // integer first and bridge it into a capability register with inttoptr,
+  // which gives an untagged value: an integer carries no provenance.
+  if (SrcType->isIntCapType() || DstType->isIntCapType()) {
+    QualType AddrTy = [&](QualType T) {
+      return T->isSignedIntegerOrEnumerationType() ? CGF.getContext().LongTy
+                                                   : CGF.getContext().UnsignedLongTy;
+    }(SrcType->isIntCapType() ? SrcType : DstType);
+    if (SrcType->isIntCapType() && DstType->isIntCapType())
+      return Src;
+    if (SrcType->isIntCapType()) {
+      Src = Builder.CreatePtrToInt(Src, ConvertType(AddrTy), "intcap.addr");
+      return EmitScalarConversion(Src, AddrTy, DstType, Loc, Opts);
+    }
+    Value *Int = EmitScalarConversion(Src, SrcType, AddrTy, Loc, Opts);
+    return Builder.CreateIntToPtr(Int, ConvertType(DstType), "intcap.from.int");
+  }
+
   // All conversions involving fixed point types should be handled by the
   // EmitFixedPoint family functions. This is done to prevent bloating up this
   // function more, and although fixed point numbers are represented by
@@ -2745,6 +2765,11 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_IntegralToPointer: {
     Value *Src = Visit(E);
 
+    // Capstone: an __intcap already is a capability; the pointer is that
+    // capability, provenance included.
+    if (E->getType()->isIntCapType())
+      return Builder.CreateAddrSpaceCast(Src, ConvertType(DestTy));
+
     // First, convert to the correct width so that we control the kind of
     // extension.
     auto DestLLVMTy = ConvertType(DestTy);
@@ -2779,6 +2804,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     }
 
     PtrExpr = CGF.authPointerToPointerCast(PtrExpr, E->getType(), DestTy);
+    // Capstone: a pointer converted to __intcap keeps the whole capability.
+    if (DestTy->isIntCapType())
+      return Builder.CreateAddrSpaceCast(PtrExpr, ConvertType(DestTy));
     return Builder.CreatePtrToInt(PtrExpr, ConvertType(DestTy));
   }
   case CK_ToVoid: {
@@ -2895,6 +2923,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
                                 CE->getExprLoc(), Opts);
   }
   case CK_IntegralToBoolean:
+    if (E->getType()->isIntCapType())
+      return EmitIntToBoolConversion(
+          Builder.CreatePtrToInt(Visit(E), CGF.Int64Ty, "intcap.addr"));
     return EmitIntToBoolConversion(Visit(E));
   case CK_PointerToBoolean:
     return EmitPointerToBoolConversion(Visit(E), E->getType());
