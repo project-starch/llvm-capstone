@@ -155,6 +155,44 @@ changed those. Gate: CHERI's intcap Sema and CodeGen tests, retargeted to capsto
 
   The control is the same probe with `uintptr_t`, which must fault where intcap does not.
 
+**M2b: the board question, answered on QEMU (about 1 week).** Is an RTL change needed at all? The
+analysis below says it is not strictly needed. This milestone measures what doing without it costs.
+
+*Which instructions intcap meets*, per `CapstoneISASemantics.md` and its RTL line references:
+- `STC` keeps an integer source (`capstone_dyn_unit.anvil:439-446`).
+- `LDC` loads an untagged value, and it clears the granule when it loads a linear one.
+- Integer instructions read the cursor, and an integer writeback clears the metadata.
+- `LCC` selector 1 is total on an untagged value (`capstone_dyn_unit.anvil:195,208`), so it is the
+  tag test for the `SCC`/`CINCOFFSET` dispatch.
+- That leaves `MOVC`, which zeroes an untagged source, as the one behaviour with no free answer.
+
+*The software rule.* The back end emits `MOVC` in two places:
+- `copyPhysReg` (`CapstoneInstrInfo.cpp:549`);
+- frame addressing (`CapstoneRegisterInfo.cpp:313`), whose source is the tagged stack capability.
+
+In `copyPhysReg`, a copy whose source dies stays a `MOVC`. A copy whose source is read again goes
+through a reserved 16-byte stack slot: `STC`, then `LDC`. The RTL rows show this matches `MOVC` for
+every type. An integer or a non-linear source is kept. A linear source is nulled by `STC`, and its
+memory copy is cleared by `LDC`, so a move is still a move. The rule never needs to know whether a
+value is an integer. That is why it would also reach the musl `iconv_open` instance of C-32, which
+`ISSUES.md` records as out of reach of a compiler fix. That holds only for analyses that must know
+in advance whether a value is an integer. The rule is not proven until it is built.
+
+*Its size, measured 2026-09-25* on CPython 3.13.7's core: 129 files, the port's flags, the MIR
+just before `postrapseudos`. Liveness was computed from the MIR itself, because post-RA kill flags
+are conservative, and the analyser was checked on a two-call control with a known answer. Of
+62,757 capability copies, 30,625 read their source again, 25,836 do not, and 6,296 copy from
+`$c0`. That makes 30,625 store/load pairs against 901,489 static instructions, 3.4 %. The dynamic
+cost is not measured.
+
+*Gate.* QEMU with `CAPSTONE_MOVC_NULL_SCALAR=1` zeroes an untagged `MOVC` source as the RTL does.
+1. Under it, the libc-test and nightly exposure run (`movc-null-scalar/exposure.sh`) must show no
+   changed verdict with the rule on. `iconv_open` changes today, which makes it the positive control.
+2. CoreMark, SQLite and, from M4, PostgreSQL are timed with the rule on and off.
+
+If that cost is acceptable, the board needs no RTL change. If it is not, Q-04 (b) is the cheaper
+fix, and now it comes with a number.
+
 **M3: PostgreSQL past the wall (1-2 weeks).**
 - Apply `typedef __uintcap_t Datum`, the M0 site list and the `SIZEOF_DATUM` branches on
   `postgres/9-boot-attempt`.
@@ -212,8 +250,7 @@ is the least certain until M0 has run.
 1. **Scope:** stage 1 (the type, PostgreSQL opts in) rather than the ABI-wide switch. This is the
    recommendation.
 2. **QEMU first with tag dispatch**, without waiting for the SCC rule. Silicon stays gated on it.
-3. **For the board: Q-04 (b) and the SCC rule in the RTL** (#96 and the SCC plan), or the software
-   copy described above. This is only needed for M5, but the RTL route is the long pole: one
-   synthesis cycle for both rules.
+3. **For the board: the software copy rule (M2b) or Q-04 (b) in the RTL.** M2b's measurement
+   decides it, and it runs on QEMU. The SCC rule is not needed: the tag dispatch covers it.
 
 M0 needs none of these and can start at once.
