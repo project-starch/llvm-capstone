@@ -112,8 +112,14 @@ print(mb)
 PYB
 )
 # The sublet arm also takes its 4 MiB heap region from CMA, and a pool arm a second one.
+# Spelled out rather than as $(( 4 + ${FFAPP_POOL:+4} )): with FFAPP_POOL unset that expands to
+# "4 + " and is a SYNTAX ERROR, which leaves REGION_MB at 0 and silently under-reserves -- the
+# boot then still works whenever cma has slack, so the error hides (2026-09-25).
 REGION_MB=0
-[ "${FFAPP_HEAP:-level0}" = sublet ] && REGION_MB=$(( 4 + ${FFAPP_POOL:+4} ))
+if [ "${FFAPP_HEAP:-level0}" = sublet ]; then
+  REGION_MB=4
+  [ -n "${FFAPP_POOL:-}" ] && REGION_MB=8
+fi
 CMA=$(( (${#SECTIONS[@]} + 1) * (BLOCK_MB * 2 + REGION_MB) ))
 # 1792M is the largest reservation measured to boot (tshark, 2026-09-24). Beyond it the reservation
 # is untested and may not fit below the 4 GiB the kernel places CMA under; such a boot would read
