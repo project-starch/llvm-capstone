@@ -1,0 +1,41 @@
+# Phase D, first --boot runs with typedef __uintcap_t Datum (intcap plan, 2026-09-25-intcap-implementation.md)
+compiler: compiler/intcap 87e005a71c4e (Phases A, B and C), clang/llc from its Release+Asserts build
+qemu: capstone-qemu-movc-merge d621df553f (CAPSTONE_MOVC_NULL_SCALAR off), buildroot snapshot br-snap, cma=640M
+build: patches 0001-0013; 760 objects compiled; link rc=0, 0 undefined symbols; loadable size 81780240
+run: run-domain.sh 4 (the --boot call over the catalog script), one attempt per run
+
+gate 1 "past create pg_proc" (the uintptr_t Datum faulted here, at GetTableAmRoutine+0x38): PASSED
+  debug4 log: "creating bootstrap relation pg_proc 1255" then "bootstrap relation created"
+
+each run's stop, and what moved it:
+  1 heap_fill_tuple -> memcpy, cause 24: att_align_nominal's char branch returned (uintptr_t)(ptr)   -> patch 0011
+  2 FATAL "buffer io 0x1 is not owned by resource owner TopTransaction", after 84 pg_proc rows
+      root cause: patch 0007's TYPEALIGN evaluated its operand twice; InitBufferPool passes
+      ShmemInitStruct("Buffer Blocks", ...) as the operand, the second call reported found=true
+      (logged: found descs=0 bufs=1 iocv=0 ckpt=0), buffer descriptors were never initialized
+      (buf_id 0 and freeNext 0 everywhere; victim buffers all claimed id 0)                        -> 0007 rewritten
+  3 read_stream_look_ahead, cause 24: cincoffset on a NULL per_buffer_data (+0)                      -> patch 0012
+  4 FATAL 'could not stat directory "base/1": No file descriptors available'
+      the musl-capstone runtime serves 8 open files (HC_MAX_FILES); raised to 128 on both sides
+      as a MEASUREMENT only, not committed (a runtime change, its own branch and hostcall gates)
+  5 XLogInsert (XLogRecordAssemble), cause 24: lhu 0xc(t5), t5 an untagged page-aligned pointer
+      from regbuf->page. A tag probe in XLogRegisterBlock caught the page (0xd9d21000, untagged)
+      with log_newpages as the caller: bulk_write.c sorts its pending pages with pg_qsort, whose
+      void-element swap moves bytes and strips the tag                                           -> patch 0013
+  runs between these sometimes hung instead of faulting (same image, fault on one run, no output
+  on another), so the outcome of a failing image is not deterministic; the passing image passed
+  every run with the 1800 s bound (1 run at a 1500 s bound was cut short before it printed)
+
+call 4 (--boot over the catalog script): PASS, status=0, rounds=17902, in 2 runs (identical rounds)
+  -- with the runtime's open-file table at 128 (stop 4): that change is not committed yet, so
+     this pass depends on it
+
+call 5 (--single over the setup SQL), chained from call 4's OWN output:
+  a native recording cannot be the input: "database files are incompatible with server",
+  "initialized with MAXALIGN 8, but the server was compiled with MAXALIGN 16" (the port's
+  MAXIMUM_ALIGNOF 16, which predates the intcap work). So the plan's gate "a native postgres
+  accepts the directory" cannot hold for this port and has to be restated as a domain-only chain.
+  initdb itself writes base/1/PG_VERSION between the two calls; it is the one file the domain's
+  call-4 output lacks against the native before-5 directory, and it is copied from there
+  run-domain.sh put the extra -c options after --single's database name ("invalid command-line
+  argument: -c"); they now go before it, for --single only (--boot ends in -X's value)

@@ -1,45 +1,105 @@
-c.h: TYPEALIGN and TYPEALIGN_DOWN keep a pointer's capability.
+c.h: TYPEALIGN and TYPEALIGN_DOWN keep a pointer's capability, and evaluate their operand once.
 
-PostgreSQL aligns pointers by casting them to uintptr_t, masking, and casting back;
-on capstone the value that comes back is an integer, without the tag, and the first
+PostgreSQL aligns pointers by casting them to uintptr_t, masking, and casting back.
+On Capstone the value that comes back is an integer, without the tag, and the first
 access through it faults (XLOGShmemInit -> memset, the first boot attempt's fault).
-The padding is computed on the address and added to the operand itself, so a byte
-pointer stays a capability and an integer stays an integer; a pointer to a wider
-element would scale the padding and is refused at link time by name.
+A byte pointer is therefore aligned by adding the padding to the pointer itself.
+An integer keeps the original formula, which stays a constant expression, because
+array bounds use MAXALIGN under -Werror=vla. A pointer to a wider element would
+scale the padding, and fails to link by name.
+
+The operand is evaluated ONCE: a _Generic sends byte pointers to an inline function.
+The first version of this patch evaluated it twice, as `(LEN) + unit * pad(LEN)`, and
+InitBufferPool passes ShmemInitStruct("Buffer Blocks", ...) as the operand. The second
+evaluation found the struct the first had just allocated, reported it as found, and
+InitBufferPool skipped initializing every buffer descriptor. Every buf_id and
+freeNext stayed 0, and the fourth extension of pg_proc handed out a live buffer
+again ("buffer io 0x1 is not owned by resource owner TopTransaction"). Found
+2026-09-26 in the first --boot run to reach buffer allocation (the intcap Datum
+build), by logging InitBufferPool's found flags: descs=0 bufs=1.
 
 --- a/src/include/c.h
 +++ b/src/include/c.h
-@@ -801,8 +801,23 @@
+@@ -801,8 +801,63 @@
   * ----------------
   */
  
 +/* capstone: a pointer rounded through uintptr_t comes back without its
 + * capability tag (the first such site, XLOGShmemInit's page buffers, faulted
-+ * on the memset that followed). So the padding is computed on the address and
-+ * added to the operand itself: pointer arithmetic on a byte pointer, integer
-+ * arithmetic on an integer. Any other operand type -- a pointer to a wider
-+ * element would scale the padding -- fails to link on pg_typealign_bad_type,
-+ * which names the object. */
++ * on the memset that followed). A byte pointer is therefore aligned by adding
++ * the padding to the pointer itself, in an inline function, so the operand is
++ * evaluated once: callers pass expressions with side effects, and
++ * InitBufferPool passes ShmemInitStruct("Buffer Blocks", ...) itself, which a
++ * second evaluation finds already allocated. An integer keeps the original
++ * formula, which stays a constant expression (array bounds use MAXALIGN). Any
++ * other pointer type -- a pointer to a wider element -- fails to link on
++ * pg_typealign_bad_type, which names the object. */
 +extern long pg_typealign_bad_type(void);
-+#define PG_TYPEALIGN_UNIT(X) _Generic((X), \
-+	char *: 1, const char *: 1, unsigned char *: 1, const unsigned char *: 1, \
-+	signed char *: 1, void *: 1, const void *: 1, \
-+	char: 1, signed char: 1, unsigned char: 1, short: 1, unsigned short: 1, \
-+	int: 1, unsigned int: 1, long: 1, unsigned long: 1, \
-+	long long: 1, unsigned long long: 1, \
++static inline char *
++pg_typealign_ptr(const void *p, uintptr_t align)
++{
++	return (char *) p + ((align - ((uintptr_t) p & (align - 1))) & (align - 1));
++}
++static inline char *
++pg_typealign_down_ptr(const void *p, uintptr_t align)
++{
++	return (char *) p - ((uintptr_t) p & (align - 1));
++}
++#define PG_TYPEALIGN_INT(X) _Generic((X), \
++	char: 0, signed char: 0, unsigned char: 0, short: 0, unsigned short: 0, \
++	int: 0, unsigned int: 0, long: 0, unsigned long: 0, \
++	long long: 0, unsigned long long: 0, \
 +	default: pg_typealign_bad_type())
++/* In the arms _Generic does not select, the operand is replaced by a constant
++ * of the right kind, so they neither warn nor evaluate anything. */
++#define PG_TYPEALIGN_AS_PTR(X) _Generic((X), \
++	char *: (X), \
++	const char *: (X), \
++	unsigned char *: (X), \
++	const unsigned char *: (X), \
++	signed char *: (X), \
++	void *: (X), \
++	const void *: (X), \
++	default: (const void *) 0)
++#define PG_TYPEALIGN_AS_INT(X) _Generic((X), \
++	char *: (uintptr_t) 0, \
++	const char *: (uintptr_t) 0, \
++	unsigned char *: (uintptr_t) 0, \
++	const unsigned char *: (uintptr_t) 0, \
++	signed char *: (uintptr_t) 0, \
++	void *: (uintptr_t) 0, \
++	const void *: (uintptr_t) 0, \
++	default: (X))
  #define TYPEALIGN(ALIGNVAL,LEN)  \
 -	(((uintptr_t) (LEN) + ((ALIGNVAL) - 1)) & ~((uintptr_t) ((ALIGNVAL) - 1)))
-+	((LEN) + PG_TYPEALIGN_UNIT(LEN) * (((ALIGNVAL) - ((uintptr_t) (LEN) & ((ALIGNVAL) - 1))) & ((ALIGNVAL) - 1)))
++	_Generic((LEN), \
++		char *: pg_typealign_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		const char *: pg_typealign_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		unsigned char *: pg_typealign_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		const unsigned char *: pg_typealign_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		signed char *: pg_typealign_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		void *: pg_typealign_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		const void *: pg_typealign_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		default: (((uintptr_t) PG_TYPEALIGN_AS_INT(LEN) + ((ALIGNVAL) - 1)) & ~((uintptr_t) ((ALIGNVAL) - 1))) \
++			+ PG_TYPEALIGN_INT(LEN))
  
  #define SHORTALIGN(LEN)			TYPEALIGN(ALIGNOF_SHORT, (LEN))
  #define INTALIGN(LEN)			TYPEALIGN(ALIGNOF_INT, (LEN))
-@@ -814,7 +829,7 @@
+@@ -814,7 +869,16 @@
  #define CACHELINEALIGN(LEN)		TYPEALIGN(PG_CACHE_LINE_SIZE, (LEN))
  
  #define TYPEALIGN_DOWN(ALIGNVAL,LEN)  \
 -	(((uintptr_t) (LEN)) & ~((uintptr_t) ((ALIGNVAL) - 1)))
-+	((LEN) - PG_TYPEALIGN_UNIT(LEN) * ((uintptr_t) (LEN) & ((ALIGNVAL) - 1)))
++	_Generic((LEN), \
++		char *: pg_typealign_down_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		const char *: pg_typealign_down_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		unsigned char *: pg_typealign_down_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		const unsigned char *: pg_typealign_down_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		signed char *: pg_typealign_down_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		void *: pg_typealign_down_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		const void *: pg_typealign_down_ptr(PG_TYPEALIGN_AS_PTR(LEN), (ALIGNVAL)), \
++		default: (((uintptr_t) PG_TYPEALIGN_AS_INT(LEN)) & ~((uintptr_t) ((ALIGNVAL) - 1))) \
++			+ PG_TYPEALIGN_INT(LEN))
  
  #define SHORTALIGN_DOWN(LEN)	TYPEALIGN_DOWN(ALIGNOF_SHORT, (LEN))
  #define INTALIGN_DOWN(LEN)		TYPEALIGN_DOWN(ALIGNOF_INT, (LEN))

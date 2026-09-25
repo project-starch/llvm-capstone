@@ -96,7 +96,18 @@ else
 fi
 
 # Arguments and environment, as recorded, with the paths moved to the share.
-{ cat "$REC/call-$CALL.args"; [[ -n $EXTRA ]] && printf '%s\n' $EXTRA; } > "$SHARE/pg-args"
+# For --single the extra options go before the database name, which comes last; an option
+# after it is rejected ("invalid command-line argument: -c"). Only there: --boot's last
+# argument is the value of -X, and splitting the pair breaks it.
+{
+  mapfile -t ARGV < "$REC/call-$CALL.args"
+  last=${ARGV[${#ARGV[@]}-1]}
+  if [[ ${ARGV[0]:-} == --single && $last != -* ]]; then
+    printf '%s\n' "${ARGV[@]:0:${#ARGV[@]}-1}"; [[ -n $EXTRA ]] && printf '%s\n' $EXTRA; printf '%s\n' "$last"
+  else
+    printf '%s\n' "${ARGV[@]}"; [[ -n $EXTRA ]] && printf '%s\n' $EXTRA
+  fi
+} > "$SHARE/pg-args"
 {
   echo "PGDATA=/mnt/host/pgdata"
   echo "PGSU_DOMAIN=1"
