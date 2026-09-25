@@ -55,6 +55,14 @@ tar -xzf "$CPY_ARCHIVE" -C "$CPY_ROOT/src"
 # arm the tree is. 0014's header has the argument.
 APPLIED=()
 if [[ "${CPY_SUBLET:-0}" == 1 ]]; then SKIP_PATCH=0009; else SKIP_PATCH=0014; fi
+# 0014 carries 0009's pymacro.h hunk verbatim, so that the arms differ in
+# pymalloc and nothing else. Two copies drift; refuse to build either arm once
+# they disagree.
+pymacro_section() { awk '/^--- a\//{p=($0=="--- a/Include/pymacro.h")} p' "$1"; }
+PYMACRO_0009=$(pymacro_section "$SCRIPT_DIR/patches/cpython-$CPY_VERSION-0009-pymalloc-arena-pointer.patch")
+[[ -n "$PYMACRO_0009" && "$PYMACRO_0009" == \
+   "$(pymacro_section "$SCRIPT_DIR/patches/cpython-$CPY_VERSION-0014-pymalloc-under-sublet.patch")" ]] \
+  || { echo "0009 and 0014 disagree on Include/pymacro.h (0014's header says why they must not)" >&2; exit 2; }
 if [[ "${CPY_PATCHES:-all}" != none ]]; then
   for p in "$SCRIPT_DIR"/patches/cpython-$CPY_VERSION-*.patch; do
     [[ -e "$p" ]] || continue
