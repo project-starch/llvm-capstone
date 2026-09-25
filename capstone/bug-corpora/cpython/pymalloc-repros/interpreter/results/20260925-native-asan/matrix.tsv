@@ -1,0 +1,21 @@
+case	upstream_fix	consumer	native_asan	domain_candidate	note
+0	gh-143543	Modules/itertoolsmodule.c	heap-use-after-free	yes	
+1	gh-146613	Modules/itertoolsmodule.c	heap-use-after-free	yes	
+2	gh-142829	Python/hamt.c	heap-use-after-free	yes	
+3	gh-142831	Modules/_json.c	heap-use-after-free	yes	
+4	gh-145244	Modules/_json.c	completed	no	ran through; the one case never back-ported, live by inspection only
+5	gh-148660	Objects/odictobject.c	heap-use-after-free	yes	
+6	gh-151295	Objects/stringlib/join.h	heap-use-after-free	yes	
+7	gh-148395	Modules/_bz2module.c, _lzmamodule.c, zlibmodule.c	no-trigger	no	_bz2/_lzma/zlib not built in the domain interpreter
+8	gh-112127	Modules/atexitmodule.c	SEGV-at-0	no	crashes, but ASan reports SEGV on address 0, not a use-after-free
+9	gh-139210	Modules/_elementtree.c	heap-use-after-free	yes	
+10	gh-142560	Objects/bytearrayobject.c	heap-use-after-free	yes	
+11	gh-142783	Modules/_zoneinfo.c	heap-use-after-free	yes	
+12	gh-143004	Modules/_collectionsmodule.c	heap-use-after-free	yes	
+13	gh-144833	Modules/_ssl.c	no-trigger	no	_ssl not built
+14	gh-146011	Modules/_decimal/_decimal.c	heap-use-after-free	yes	
+15	gh-149449	Modules/unicodedata.c	heap-use-after-free	yes	
+16	gh-151403	Modules/_posixsubprocess.c	heap-use-after-free	no	fork_exec: a domain has no fork/exec
+17	gh-151416	Modules/posixmodule.c	no-trigger	no	spawnv: a domain has no fork/exec
+18	gh-151695	Modules/_cursesmodule.c	no-trigger	no	_curses not built
+19	gh-153539	Modules/_io/textio.c	heap-use-after-free	yes	
