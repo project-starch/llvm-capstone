@@ -1116,6 +1116,15 @@ bool MachineLICMImpl::IsLICMCandidate(MachineInstr &I, MachineLoop *CurLoop) {
     return false;
   }
 
+  // An instruction that can trap on some operand values follows the rule for
+  // loads: in the preheader it would also run on the paths that never reach
+  // its block, which may be the ones on which its operand was never checked.
+  if (TII->canTrap(I) && !IsGuaranteedToExecute(I.getParent(), CurLoop)) {
+    LLVM_DEBUG(dbgs() << "LICM: Trapping instruction not guaranteed to "
+                         "execute.\n");
+    return false;
+  }
+
   // Convergent attribute has been used on operations that involve inter-thread
   // communication which results are implicitly affected by the enclosing
   // control flows. It is not safe to hoist or sink such operations across
