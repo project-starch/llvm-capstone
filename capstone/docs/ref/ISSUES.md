@@ -6802,6 +6802,11 @@ LICM), which LLVM also considers free. Not seen yet; the same trap would follow.
 recorded in `docs/history/23-08-2026_00-30-00_sqlite-lost-tag-two-hypotheses-withdrawn.md`
 (`cincoffsetimm a4, a4, 0xb0` = `&pWInfo->sWC` with `pWInfo` NULL, concluded "a null dereference in
 software") has this shape and was not checked against it.
+*2026-09-25:* the machine-level half of this was reached a second way, through MachineCSE's PRE, and
+is C-66, which also moves this entry's fix out of MachineLICM's hook into a generic one. The IR-level
+half named here was already covered when this was written: C-19 put the rule into
+`isSafeToSpeculativelyExecute`, which SimplifyCFG, LICM and GVN's PRE all ask. The SQLite fault was
+checked against C-66 and is not it (see there).
 
 ### C-62 — with `-g` at `-O1`+, Assignment Tracking asserts on every escaping local, because its offset accumulator is sized at the POINTER width (128) instead of the INDEX width (64) `FIXED 2026-09-23 (external collaborator, f8b140caa818, merged via #75). COMMITTED AS "C-50", a number already taken by an unrelated OPEN defect; renumbered here 2026-09-24`
 
@@ -6951,6 +6956,100 @@ musl build fails the same 6 objects as without the patch. The wait paths need a 
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
 
 ## Infrastructure / procedure
+
+### C-66 — MachineCSE's PRE moves capability arithmetic above the test that guards it: a second hoisting path the C-58 fix does not see `FIX on compiler/c66-machinecse-pre-trapping-cap-arith; found 2026-09-25 by the CPython pymalloc corpus run inside the interpreter`
+
+**What happens.** The CPython interpreter image of #107 (no Sublet, no adapter) halts with cause 24 in
+`_PyArg_UnpackKeywords` on any call without keyword arguments that reaches its keyword walk:
+`cincoffsetimm with an UNTAGGED rs1 -- rd=x16 rs1=x13 val=0x0`, at ELF `0x33e210` =
+`_PyArg_UnpackKeywords+0x500`, `cincoffsetimm a6, a3, 0x30`. `a3` is `kwnames`, NULL. It ended the
+control arm of **6 of the 13** interpreter-corpus candidates (cases 1, 5, 9, 10, 11, 19) before
+their defect ran, and the Sublet arm of three of them (9, 11, 19), so those pairs could not be
+decided at all.
+
+The arithmetic is `&kwnames->ob_item` (`0x30` is `offsetof(PyTupleObject, ob_item)` with 16-byte
+pointers) from `find_keyword` (`Python/getargs.c:2022-2046`), inlined twice. Each inlined loop forms
+it in its own preheader, and each loop is entered only when `nkwargs > 0` -- which implies
+`kwnames != NULL`. The guard is that correlation, not a NULL test, so no known-non-NULL reasoning
+on the operand can see it.
+
+**Where it moves.** `-print-before/-print-after=machine-cse` on `getargs.c`, compiled as the port
+compiles it:
+
+    before  bb.29.for.body.lr.ph.i.us       %37:gpcr  = CIncOffsetImm %101:gpcr, 48
+    before  bb.73.for.body.lr.ph.i424.us    %76:gpcr  = CIncOffsetImm %101:gpcr, 48
+    after   bb.125.for.end                  %678:gpcr = CIncOffsetImm %101:gpcr, 48
+            (%101:gpcr = COPY $c13 -- the fourth argument, kwnames)
+
+`MachineCSEImpl::ProcessBlockPRE` (`llvm/lib/CodeGen/MachineCSE.cpp:822`) finds the two copies in
+blocks where neither dominates the other, duplicates the instruction into their nearest common
+dominator (`TII->duplicate(*CMBB, CMBB->getFirstTerminator(), MI)`, debug location erased -- which
+is why `addr2line` gives `getargs.c:0` for it), and lets CSE delete the originals. `isPRECandidate`
+refuses loads and asks nothing else about speculation. `for.end` lies above the loops' zero-trip
+test, so the copy runs when `nkwargs == 0`.
+
+**Why the C-58 fix did not catch it.** C-58 is the same trap reached through MachineLICM, and it was
+fixed inside MachineLICM's own hook, `TargetInstrInfo::shouldHoist(MI, FromLoop)`, with the
+guaranteed-to-execute test re-derived by reachability because that hook gets no dominator tree. The
+knowledge was right -- `trapsOnUntaggedOperand` lists the ten opcodes that raise on an untagged
+operand -- but only one pass could ask for it. `shouldHoist` occurs zero times in `MachineCSE.cpp`.
+Measured, not inferred: `early-machinelicm` leaves all three copies in their guarded blocks on this
+file; it is `machine-cse` that moves one.
+
+**The asymmetry this is an instance of.** At the IR level the same rule is in ONE predicate that
+every speculating pass asks: C-19 made `isSafeToSpeculativelyExecute` answer false for a GEP on a
+non-integral pointer whose base is not known non-NULL (`llvm/lib/Analysis/ValueTracking.cpp`), and
+SimplifyCFG, LICM, GVN's scalar PRE (`GVN.cpp:3072`, the IR counterpart of this pass),
+SpeculativeExecution and InstCombine's select folds all consult it. At the machine level there was
+no such predicate, so each speculating pass had to be taught separately, and one was.
+
+**The fix: the IR design, one level down.** A generic hook, `TargetInstrInfo::canTrap(MI)` -- true
+when the instruction can trap for some operand values although it neither accesses memory nor has
+unmodeled side effects; false by default, so no other target changes. Every machine pass that runs
+an instruction on a path where it did not run before asks it, the way it already treats loads:
+
+- MachineLICM (`IsLICMCandidate`, both before and after register allocation): a trapping
+  instruction is hoisted only from a block that is guaranteed to execute -- its own dominator-tree
+  test, the one it applies to loads.
+- MachineCSE (`isPRECandidate`): a trapping instruction is not PRE'd. Ordinary CSE, which replaces
+  an instruction by a dominating copy, is untouched.
+- EarlyIfConversion (`canSpeculateInstrs`): not speculated. Inert on Capstone today -- the target
+  does not enable the pass and cannot insert a select -- and there so that the rule does not depend
+  on that staying true.
+
+Capstone answers once, with the existing `trapsOnUntaggedOperand`. Its `shouldHoist` override and
+`executesOnEveryIteration` are removed: MachineLICM now applies the same test itself, with the real
+dominator tree, and C-58's test (`no-speculative-cap-arith.ll`) is what shows the two agree.
+
+**What a PRE refused costs.** PRE merges two copies that lie on one path; refusing it costs at most
+one extra capability increment on the paths through both blocks, and nothing on any other path.
+
+**If the ISA changes.** `plans/2026-09-24-scc-cincoffset-untagged.md` asks whether an untagged
+`CINCOFFSET`/`SCC` should compute, as CHERI's do. If it does, those opcodes leave
+`trapsOnUntaggedOperand` and every pass above follows from that one line. That memo also says
+"no program we build needs the change now"; this issue is a program that does.
+
+**Not covered.** A machine pass added later that speculates without asking `canTrap`. The passes
+that can place an instruction on a new path were inventoried for this entry (MachineLICM,
+MachineCSE's PRE, EarlyIfConversion; MachineSink only moves an instruction to a subset of its
+paths, BranchFolding hoists only what every successor already runs); a new one has to be added to
+that list by hand.
+
+**Checked and ruled out: the SQLite fault C-58 lists as unchecked.** `cincoffsetimm a4, a4, 0xb0`
+(`&pWInfo->sWC`, `pWInfo` NULL) in `sqlite3WhereCodeOneLoopStart`
+(`docs/history/23-08-2026_00-30-00_sqlite-lost-tag-two-hypotheses-withdrawn.md`) has this shape but
+not this cause, on two grounds that history records. It was a SILICON fault and "QEMU runs the
+identical path tagged": a code-motion defect is deterministic compiler output, and QEMU traps on an
+untagged `cincoffsetimm` as the silicon does, so a moved increment would have faulted on QEMU too.
+And `pWInfo` is a parameter that `sqlite3WhereBegin` allocates -- never NULL in a correct run --
+whereas this issue needs a value that is legitimately NULL on the path the copy was moved onto. So
+that fault stays what history concluded it was not: a value lost on silicon.
+
+**Test.** `llvm/test/CodeGen/Capstone/c66-machinecse-pre-trapping-cap-arith.ll`: two guarded blocks
+form `&kw->field` in sequence, and their nearest common dominator is `%entry`. On `a378789289cd`
+(no fix) the test FAILS as it must -- `CIncOffsetImm %0, 48` is in `bb.0.entry` after
+`machine-cse`. Its control, the same shape with an integer multiply, is PRE'd into `%entry` both
+with and without the fix, which is what shows the test can see PRE at all.
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
 

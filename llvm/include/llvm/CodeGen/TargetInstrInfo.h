@@ -419,6 +419,25 @@ public:
     return true;
   }
 
+  /// Return true if \p MI can trap for some values of its register operands
+  /// although it neither accesses memory nor has unmodeled side effects: the
+  /// machine-level counterpart of an instruction for which
+  /// isSafeToSpeculativelyExecute() is false.
+  ///
+  /// Code motion must not execute such an instruction on a path where it did
+  /// not execute before, because that path may be exactly the one on which
+  /// the operand was never checked. Every pass that speculates consults this,
+  /// the way it already treats loads: MachineLICM hoists it only from a block
+  /// that is guaranteed to execute, MachineCSE does not PRE it, and
+  /// EarlyIfConversion does not speculate it. Ordinary CSE, which replaces an
+  /// instruction by a dominating copy, is unaffected.
+  ///
+  /// The default is false, which is what LLVM assumes of any instruction that
+  /// is safe to move. A target whose arithmetic can fault -- Capstone's
+  /// capability increment traps on an operand that holds no capability, and a
+  /// NULL pointer holds none -- answers here once instead of in each pass.
+  virtual bool canTrap(const MachineInstr &MI) const { return false; }
+
   /// Re-issue the specified 'original' instruction at the
   /// specific location targeting a new destination register.
   /// The register in Orig->getOperand(0).getReg() will be substituted by
