@@ -7045,6 +7045,30 @@ And `pWInfo` is a parameter that `sqlite3WhereBegin` allocates -- never NULL in 
 whereas this issue needs a value that is legitimately NULL on the path the copy was moved onto. So
 that fault stays what history concluded it was not: a value lost on silicon.
 
+**End to end, one variable.** Two CPython images from one tree (the port as merged on dev,
+patches 0001-0013, 250 of 250 objects compiled, strict link 0 undefined symbols): image A entirely
+from this branch's compiler, image B identical except `Python/getargs.o`, recompiled by
+`a378789289cd` and relinked. Corpus cases 1 and 9, whose control arm used to end at this trap:
+
+    B, case 1 and case 9   cincoffsetimm with an UNTAGGED rs1 -- rd=x16 rs1=x13 val=0x0   (this issue)
+    A, case 9              BEGIN, ARMED ... CPY-CASE-END -- runs through
+    A, case 1              no untagged cincoffset; faults later, in find_name_in_mro+0xdc,
+                           loading through a register that holds the integer 1
+
+The trap is present with the unfixed `getargs.o` and absent with the fixed one; nothing else
+differs. What case 1 does next is not this issue and is worth recording: gh-146613 compares
+through a pointer to a freed key, the block has been reused, and where `ob_type` stood there is now
+integer data -- no tag, so the capability machine stops the use-after-free on its own, without
+Sublet. It could not be seen before, because the control arm died here first.
+
+**Lit.** The Capstone CodeGen directory, 106 tests: 105 pass. The one failure is
+`shared-patches-present.test`, the manifest guard, and not on account of this branch: the four
+shared files patched here are added to `llvm/utils/capstone-shared-patches.txt` (four lines,
+nothing else moved), and what it still reports is `CodeGenDAGPatterns.cpp: diff is +40 -6, manifest
+says +41 -7` -- a file this branch does not touch, whose manifest entry this branch does not touch.
+It fails on dev as it stands, and whether a line of that TableGen patch was lost is a question of
+its own.
+
 **Test.** `llvm/test/CodeGen/Capstone/c66-machinecse-pre-trapping-cap-arith.ll`: two guarded blocks
 form `&kw->field` in sequence, and their nearest common dominator is `%entry`. On `a378789289cd`
 (no fix) the test FAILS as it must -- `CIncOffsetImm %0, 48` is in `bb.0.entry` after
