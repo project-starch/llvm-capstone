@@ -1653,6 +1653,18 @@ RETURN" rule applied to privilege rather than to control flow.
 >   present in the native cell ⑤ as well. C-32 stays OPEN as a class.
 > - The paper condition in the measurements doc (§7s arm C) is re-worded to match.
 
+> **2026-09-24: a second instance, in musl, found by measurement and out of reach of any compiler
+> fix.** `CAPSTONE_MOVC_NULL_SCALAR=1` (Q-04) with `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh`
+> runs the nightly and libc-test with MOVC keeping and zeroing an integer source. Across the corpus
+> exactly one verdict changes, `iconv_open`, the same in two runs at the same pc. musl's
+> `combine_to_from()` returns a conversion descriptor as an integer, `(void *)(f<<16 | t<<1 | 1)`.
+> libc-test at -O1 keeps it in `s5` and passes it to `iconv` three times with `movc a0, s5`, and
+> under the RTL's rule the second call gets `cd = 0` and faults at `iconv`'s first load (cause 24).
+> The integer becomes a pointer inside `iconv_open`, so the caller sees only a returned pointer.
+> No caller-side analysis can know it is an integer, and the design-A extension discussed below
+> would not reach it either. The measurement and what it did not cover:
+> `plans/2026-09-24-q04-movc-integer-source.md`.
+
 > # ⚠ OBSERVED LIVE ON SILICON 2026-09-15 — in a production workload, silently, and it cost three board readings and a QEMU-vs-board hunt (§7s of the measurements doc).
 >
 > **The instance.** The SQLite Sublet port's `setupLookaside`, compiled at -O2 (image `c506694f9f6f6889`,
