@@ -6490,7 +6490,7 @@ TargetLoweringBase. The compiler lane probed each once, on dev:
 
 | Pass | What the probe showed |
 |---|---|
-| LowerEmuTLS | `-femulated-tls` dies earlier, on C-47's `Cannot select: GlobalTLSAddress`. This pass is MASKED BY C-47 and surfaces once C-47 is fixed. |
+| LowerEmuTLS | **UNREACHABLE by design, not masked.** RETRACTED 2026-09-25: "masked by C-47, surfaces once C-47 is fixed". The C-47 fix forces `Options.EmulatedTLS = false` (`CapstoneTargetMachine.cpp:171`), so `-femulated-tls` is served by native local-exec lowering and the pass never runs. Measured: objects with and without the flag are byte-identical, with 0 `emutls` symbols. The underlying defect is real and NOT fixed (the pass's control-variable struct has integer fields where this target's pointers are capabilities, and it asserted), but nothing can reach it. Re-examine only if a domain ever needs an `__emutls` runtime. |
 | DwarfEHPrepare | **CONFIRMED, filed as C-61.** The first probe, a C++ `throw` at -O2, compiled clean only because it had no cleanup and so no `resume` to rewrite. That was a false negative. |
 | AtomicExpandPass | **CLEAN, and already FIXED by this project.** Both sites are guarded on `DL.isNonIntegralPointerType()`: `:1929` and `:2030`. The guards came from C-54, `c7f0de349b4b` (2026-09-23), and `ni:200` makes AS200 non-integral, so the AS0 cast is skipped. The probe was loaded: a 32-byte struct through `__atomic_load` emits a real `__atomic_load` call at -O1, re-checked here. An earlier oversized-`_Atomic` probe was VOID, because the frontend rejected it. |
 | SjLjEHPrepare | No hard case was constructed. |
