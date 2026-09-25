@@ -93,8 +93,36 @@ esac
 RUN="${RUN/; echo __FFAPP_BEGIN_/; cp /mnt/host/*.dom /tmp/; echo __FFAPP_BEGIN_}"
 # What this boot mounts, hashed from its own share (which nothing else can touch).
 ( cd "$SHARE" && sha256sum ffapp.user ./*.dom ./*.mkv ) > "$LOG.sha256"
+# cma: an image past 4 MiB no longer fits an order-10 allocation, so the module serves its block
+# from CMA instead (buildroot 2b8ad05, pinned by #97). Nothing reserves a CMA area unless the
+# kernel is told to, and this port's kernel is built CONFIG_CMA_SIZE_MBYTES=0, so without cma= a
+# large image simply fails to load -- which reads as a stall rather than as a refusal. Sized as
+# the tshark port sizes it: (runs + 1) blocks of the largest image this boot runs, each twice the
+# size build-domain.sh prints (the module doubles a block whose declared data does not survive the
+# monitor's split), because the module never frees a domain block -- every run takes a new one.
+BLOCK_MB=$(python3 - "${FFAPP_STACK_BYTES:-$((256 * 1024))}" "$SHARE"/*.dom <<'PYB'
+import subprocess, sys
+mb = 4
+for img in sys.argv[2:]:
+    out = subprocess.run(['readelf', '-lW', img], capture_output=True, text=True).stdout
+    memsz = max(int(l.split()[5], 16) for l in out.splitlines() if l.split()[:1] == ['LOAD'])
+    pages = (memsz + 8192 + int(sys.argv[1]) - 1) // 4096 + 1
+    mb = max(mb, (1 << (pages - 1).bit_length()) * 4096 >> 20)
+print(mb)
+PYB
+)
+# The sublet arm also takes its 4 MiB heap region from CMA, and a pool arm a second one.
+REGION_MB=0
+[ "${FFAPP_HEAP:-level0}" = sublet ] && REGION_MB=$(( 4 + ${FFAPP_POOL:+4} ))
+CMA=$(( (${#SECTIONS[@]} + 1) * (BLOCK_MB * 2 + REGION_MB) ))
+# 1792M is the largest reservation measured to boot (tshark, 2026-09-24). Beyond it the reservation
+# is untested and may not fit below the 4 GiB the kernel places CMA under; such a boot would read
+# as a stall. Split the run instead of guessing.
+[ "$CMA" -le 1792 ] || { echo "cma=${CMA}M for ${#SECTIONS[@]} runs is more than the 1792M measured to boot; use fewer stages per boot" >&2; exit 2; }
+echo "run-qemu: ${#SECTIONS[@]} runs, block ${BLOCK_MB} MiB, region ${REGION_MB} MiB, cma=${CMA}M"
 smoke=(python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py"
        --share-dir "$SHARE" --log-file "$LOG" --timeout-multiplier "${TIMEOUT_MULTIPLIER:-8}"
+       --kernel-arg "cma=${CMA}M"
        --guest-command "echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__; $RUN" "${MARKERS[@]}")
 # FFAPP_BUILDROOT_DIR: boot from a directory whose build/images/ holds a PRIVATE rootfs copy
 # (kernel and firmware may be symlinks to the shared ones). Used on 2026-09-23 while the

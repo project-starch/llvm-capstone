@@ -196,13 +196,17 @@ static void *sh_narrow(void *alias, size_t n)
 	return __builtin_capstone_cap_shrink(alias, c, c + len);
 }
 
-void *malloc(size_t n)
+/* Carve a block of at least n bytes and mark it handed out; the atom index lands in *idx.
+   Returns 0, or -1 with errno set. This is malloc's body up to the hand-out: the linear lend
+   below carves IDENTICALLY and differs only in how the block leaves, so both arms share one
+   buddy policy and one set of counters. */
+static int sh_carve_block(size_t n, unsigned *idx)
 {
 	if (sh_state == 0)
 		sh_init();
 	if (sh_state < 0 || n > (1UL << (sh_maxord + CAPSTONE_SUBLET_ATOM_LOG))) {
 		errno = ENOMEM;
-		return 0;
+		return -1;
 	}
 	if (n == 0)
 		n = 1;
@@ -214,7 +218,7 @@ void *malloc(size_t n)
 		j++;
 	if (j > sh_maxord) {
 		errno = ENOMEM;
-		return 0;
+		return -1;
 	}
 	unsigned i = sh_head[j];
 	sh_unlink(i, j);
@@ -232,6 +236,15 @@ void *malloc(size_t n)
 	sh_n_alloc++;
 	if (++sh_live > sh_peak_live)
 		sh_peak_live = sh_live;
+	*idx = i;
+	return 0;
+}
+
+void *malloc(size_t n)
+{
+	unsigned i;
+	if (sh_carve_block(n, &i) < 0)
+		return 0;
 	return sh_narrow(sublet_take(&sh_cap[i]), n);
 }
 
@@ -265,6 +278,67 @@ void free(void *p)
 		unsigned lo = i < b ? i : b, hi = lo + (1u << k);
 		/* the handle taken before the split: one revoke, the block is whole again,
 		   and the upper half's capability died with it */
+		sublet_give_to(&sh_par[sh_paridx(lo, k + 1)], &sh_cap[lo]);
+		sublet_clear(&sh_cap[hi]);
+		sh_ctrl[hi] = 0;
+		sh_n_merge++;
+		i = lo;
+		k++;
+	}
+	sh_push(i, k);
+}
+
+/* --- lending a block to a NESTED allocator -------------------------------------------------
+ * SQLite's memsys5 hands lookaside its block LINEAR and keeps the handle, so one revoke later
+ * destroys the pool and every slot in it at once (ports/sqlite/sublet/README.md). FFmpeg's
+ * AVBufferPool and AVRefStructPool need exactly that shape, and malloc cannot serve it: malloc
+ * returns a DELINEARISED alias (sublet_take), and a nested allocator cannot carve an alias.
+ *
+ * sublet_malloc_linear carves the block the same way malloc does and hands it out with
+ * sublet_take_linear instead: the region stays LINEAR in *out, and sh_cap[i] keeps the senior
+ * handle. Everything the borrower splits out of *out therefore hangs BELOW that handle, so the
+ * single revoke in sublet_free_linear reclaims the whole sub-pool -- the hierarchy property,
+ * not merely a free.
+ *
+ * Reclaim is keyed by BASE, not by a pointer: the lender holds no alias to probe, and the
+ * borrower's own aliases are exactly what the revoke is meant to kill. The caller must have
+ * released nothing else from the region first; a revoke of a handle whose region still has live
+ * borrowers is the point of the operation, not an error.
+ */
+unsigned long __capstone_sublet_malloc_linear(size_t n, sublet_cap *out)
+{
+	unsigned i;
+	if (sh_carve_block(n, &i) < 0)
+		return 0;
+	/* Reads the base before moving the region out, as the header requires. */
+	return sublet_take_linear(&sh_cap[i], out);
+}
+
+/* Reclaim a block lent by __capstone_sublet_malloc_linear. One revoke kills the lent region and
+   every capability the borrower carved from it; the buddy merge below is free's, unchanged. */
+void __capstone_sublet_free_linear(unsigned long base)
+{
+	unsigned i;
+	if (sh_state <= 0 || base < sh_base ||
+	    base - sh_base >= (1UL << (sh_maxord + CAPSTONE_SUBLET_ATOM_LOG)) ||
+	    ((base - sh_base) & ((1UL << CAPSTONE_SUBLET_ATOM_LOG) - 1)) ||
+	    !(sh_ctrl[i = (unsigned)((base - sh_base) >> CAPSTONE_SUBLET_ATOM_LOG)] & SH_OUT)) {
+		sh_say("sublet-heap: linear free of a base this heap did not lend; ignored\n");
+		return;
+	}
+	unsigned k = sh_ctrl[i] & SH_ORD;
+	/* No scrub here, and that is deliberate: the lender holds no alias to write through, and
+	   sublet_give's write-through IS the scrub when the revoke returns UNINIT -- which is
+	   precisely the case a linear child produces. */
+	sublet_give(&sh_cap[i]);
+	sh_n_free++;
+	sh_live--;
+	while (k < sh_maxord) {
+		unsigned b = i ^ (1u << k);
+		if (sh_ctrl[b] != (SH_FREE | k))
+			break;
+		sh_unlink(b, k);
+		unsigned lo = i < b ? i : b, hi = lo + (1u << k);
 		sublet_give_to(&sh_par[sh_paridx(lo, k + 1)], &sh_cap[lo]);
 		sublet_clear(&sh_cap[hi]);
 		sh_ctrl[hi] = 0;
