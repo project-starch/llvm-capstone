@@ -1,0 +1,56 @@
+# Result lines, regenerated from /tmp/capstone/ffpool-check (logs not committed): the runner's verdicts, each
+# mode-2 serial log's stage marker and fault line, each mode-0 log's completion line, and the native
+# fix-differential. Tree: origin/dev 892bf63d11de; compiler 3979abd8e9a3; QEMU deb7d75756; buildroot d04bd83b13cd.
+
+## verdicts.json
+{'mode': 0, 'case': 36, 'name': 'af-join-dedup-bound-stale-read', 'expected': 'completed', 'domain_sha256': 'b1bf1b9a46809a638c4c138c97b7e92673ee14fcd05938454cc1c818a3811bf1'}
+{'mode': 0, 'case': 37, 'name': 'h264-refs-partial-clear-stale-read', 'expected': 'completed', 'domain_sha256': 'b1bf1b9a46809a638c4c138c97b7e92673ee14fcd05938454cc1c818a3811bf1'}
+{'mode': 0, 'case': 38, 'name': 'vidstab-parked-plane-pointer-stale-write', 'expected': 'completed', 'domain_sha256': 'b1bf1b9a46809a638c4c138c97b7e92673ee14fcd05938454cc1c818a3811bf1'}
+{'mode': 2, 'case': 36, 'name': 'af-join-dedup-bound-stale-read', 'expected': 'fault', 'cause': 24, 'pc': '0x101a114f0', 'expected_pc': '0x101a114f0', 'domain_sha256': 'b1bf1b9a46809a638c4c138c97b7e92673ee14fcd05938454cc1c818a3811bf1'}
+{'mode': 2, 'case': 37, 'name': 'h264-refs-partial-clear-stale-read', 'expected': 'fault', 'cause': 24, 'pc': '0x101a114f0', 'expected_pc': '0x101a114f0', 'domain_sha256': 'b1bf1b9a46809a638c4c138c97b7e92673ee14fcd05938454cc1c818a3811bf1'}
+{'mode': 2, 'case': 38, 'name': 'vidstab-parked-plane-pointer-stale-write', 'expected': 'fault', 'cause': 24, 'pc': '0x101a116a0', 'expected_pc': '0x101a116a0', 'domain_sha256': 'b1bf1b9a46809a638c4c138c97b7e92673ee14fcd05938454cc1c818a3811bf1'}
+
+## mode 0 case 36 (serial.log)
+[CAPSTONE] Print = Scalar(0xff25000000000024)
+FF2 return=42044 status=0 events=1 metadata=1472 payload=128
+FF2_SECURITY_DONE
+
+## mode 0 case 37 (serial.log)
+[CAPSTONE] Print = Scalar(0xff25000000000025)
+FF2 return=42044 status=0 events=1 metadata=4800 payload=512
+FF2_SECURITY_DONE
+
+## mode 0 case 38 (serial.log)
+[CAPSTONE] Print = Scalar(0xff25000000000026)
+FF2 return=42044 status=0 events=1 metadata=1344 payload=128
+FF2_SECURITY_DONE
+
+## mode 2 case 36 (serial.log)
+[CAPSTONE] Print = Scalar(0xff25000000000024)
+[CAPSTONE] Cap mem access requires capability: pc = 101a114f0, rs1 = x10, imm = 0, value = f1200040, value_hi = 5b88200040
+[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x101a114f0, tval = 0x0, badaddr = 0xe9200000
+
+## mode 2 case 37 (serial.log)
+[CAPSTONE] Print = Scalar(0xff25000000000025)
+[CAPSTONE] Cap mem access requires capability: pc = 101a114f0, rs1 = x10, imm = 0, value = f12001c0, value_hi = 7f888001c0
+[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x101a114f0, tval = 0x0, badaddr = 0xe9200000
+
+## mode 2 case 38 (serial.log)
+[CAPSTONE] Print = Scalar(0xff25000000000026)
+[CAPSTONE] Cap mem access requires capability: pc = 101a116a0, rs1 = x11, imm = 0, value = f1200000, value_hi = 4f88100000
+[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x101a116a0, tval = 0x0, badaddr = 0xe9200000
+
+## native fix-differential (run-native.sh)
+00_461fb22053_af_join_dedup_bound case=0 arm=fixed
+00_461fb22053_af_join_dedup_bound VERDICT FIXED output holds a reference, storage not reissued
+00_461fb22053_af_join_dedup_bound case=0 arm=buggy
+00_461fb22053_af_join_dedup_bound VERDICT DEFECT-REPRODUCED stale pointer reads the new owner's payload
+01_1886c3269d_h264_refs_partial_clear case=1 arm=fixed
+01_1886c3269d_h264_refs_partial_clear VERDICT FIXED the reset covers the whole list
+01_1886c3269d_h264_refs_partial_clear case=1 arm=buggy
+01_1886c3269d_h264_refs_partial_clear VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage
+02_316531e61c_vidstab_parked_plane_pointer case=2 arm=fixed
+02_316531e61c_vidstab_parked_plane_pointer VERDICT FIXED nothing is carried across frames
+02_316531e61c_vidstab_parked_plane_pointer case=2 arm=buggy
+02_316531e61c_vidstab_parked_plane_pointer VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner
+native rc=0
