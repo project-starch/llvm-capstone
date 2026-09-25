@@ -77,4 +77,12 @@ tree was built before 0007 existed.
 
 ## Results
 
-(Filled in as each step lands.)
+**Step 1 (the compiler only) — landed 2026-09-25. All six predictions AS PREDICTED.**
+P1.1 `diff -r` of `xsrc` empty and the cross build linked; P1.2 gates and the negative control on
+all three arms; P1.3 15/15 stage cells; P1.4 the whole oracle, `ntp` differing as predicted and all
+four flip controls firing; P1.5 36/36 fixture cells, fixture 9 unmoved; P1.6 level0 `peak_end`
+28,123,984 (64 bytes from the baseline) and sublet `split + mrev` = 12,596, the baseline exactly.
+Eight of 29 boot attempts stalled before the domain started (I-12) and passed on retry.
+Full record: `ports/wireshark/app/results/2026-09-25-qemu-dev-compiler/`.
+
+**Step 2 (the thread-local workarounds) — not yet run.** Its predictions above stand unchanged.

@@ -1,0 +1,133 @@
+=== stages [level0] try 1
+M1: STAGE 1 REACHED (LT-RESULT tshark_m1.dom status=101 rounds=18 FAIL)
+M1: output MATCH (unserved: none; expected nothing else)
+M2: STAGE 2 REACHED (LT-RESULT tshark_m2.dom status=102 rounds=356 FAIL)
+M2: output MATCH (stderr MATCH, unserved: 160x3 278x2 134 17; expected nothing else)
+M3: STAGE 3 REACHED (LT-RESULT tshark_m3.dom status=103 rounds=432 FAIL)
+M3: output MATCH (stderr MATCH, unserved: 160x5 278x4 134 17; expected nothing else)
+M4: STAGE 4 REACHED (LT-RESULT tshark_m4.dom status=104 rounds=444 FAIL)
+M4: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135; expected stock stdout's first frame exactly (3774 bytes))
+M5: STAGE 5 REACHED (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+M5: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit; expected stock stdout exactly)
+=== stages [shrink] try 1
+M1: NOT RUN (the boot ended before this section)
+M2: NOT RUN (the boot ended before this section)
+M3: NOT RUN (the boot ended before this section)
+M4: NOT RUN (the boot ended before this section)
+M5: NOT RUN (the boot ended before this section)
+=== stages [shrink] try 2
+M1: STAGE 1 REACHED (LT-RESULT tshark_m1.dom status=101 rounds=18 FAIL)
+M1: output MATCH (unserved: none; expected nothing else)
+M2: STAGE 2 REACHED (LT-RESULT tshark_m2.dom status=102 rounds=356 FAIL)
+M2: output MATCH (stderr MATCH, unserved: 160x3 278x2 134 17; expected nothing else)
+M3: STAGE 3 REACHED (LT-RESULT tshark_m3.dom status=103 rounds=432 FAIL)
+M3: output MATCH (stderr MATCH, unserved: 160x5 278x4 134 17; expected nothing else)
+M4: STAGE 4 REACHED (LT-RESULT tshark_m4.dom status=104 rounds=444 FAIL)
+M4: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135; expected stock stdout's first frame exactly (3774 bytes))
+M5: STAGE 5 REACHED (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+M5: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit; expected stock stdout exactly)
+=== stages [sublet] try 1
+M1: STAGE 1 REACHED (LT-RESULT tshark_m1.dom status=101 rounds=18 FAIL)
+M1: output MATCH (unserved: none; expected nothing else)
+M2: STAGE 2 REACHED (LT-RESULT tshark_m2.dom status=102 rounds=356 FAIL)
+M2: output MATCH (stderr MATCH, unserved: 160x3 278x2 134 17; expected nothing else)
+M3: STAGE 3 REACHED (LT-RESULT tshark_m3.dom status=103 rounds=432 FAIL)
+M3: output MATCH (stderr MATCH, unserved: 160x5 278x4 134 17; expected nothing else)
+M4: STAGE 4 REACHED (LT-RESULT tshark_m4.dom status=104 rounds=444 FAIL)
+M4: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135; expected stock stdout's first frame exactly (3774 bytes))
+M5: STAGE 5 REACHED (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+M5: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit; expected stock stdout exactly)
+=== oracleA [level0] try 1
+dhcp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+dhcp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+dns_port: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=500 PASS)
+dns_port.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=500 PASS)
+dns-ooo: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=482 PASS)
+ntp: stdout DIFFERS (24 diff lines), stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=446 PASS)
+dhcp.flip: flip control FIRES (stock changed 2 lines)
+dns_port.flip: flip control FIRES (stock changed 2 lines)
+=== oracleB [level0] try 1
+http: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=450 PASS)
+http.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=450 PASS)
+arp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=444 PASS)
+arp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=444 PASS)
+http.flip: flip control FIRES (stock changed 2 lines)
+arp.flip: flip control FIRES (stock changed 2 lines)
+=== oracle1 [sublet] try 1
+dhcp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+dhcp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+dns_port: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=500 PASS)
+dns_port.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=500 PASS)
+dhcp.flip: flip control FIRES (stock changed 2 lines)
+dns_port.flip: flip control FIRES (stock changed 2 lines)
+=== oracle2 [sublet] try 1
+dns-ooo: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=482 PASS)
+ntp: stdout DIFFERS (24 diff lines), stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=446 PASS)
+http: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=450 PASS)
+http.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=450 PASS)
+http.flip: flip control FIRES (stock changed 2 lines)
+=== oracle3 [sublet] try 1
+arp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=444 PASS)
+arp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=444 PASS)
+arp.flip: flip control FIRES (stock changed 2 lines)
+=== safety [level0] try 1
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN arena  got: RETURN 100001  len=41909248
+fx2: AS PREDICTED  predicted: RETURN 2000ee  got: RETURN 2000ee  len=41909248
+fx3: AS PREDICTED  predicted: RETURN *  got: RETURN 300090  len=41909248
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=41909248
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=41909248
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5]
+=== safety [level0] try 1
+fx6: AS PREDICTED  predicted: RETURN 600177  got: RETURN 600177  len=41909248
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=41908928
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=41908912
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=41908912
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5]
+=== safety [shrink] try 1
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=64
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=64
+fx6: AS PREDICTED  predicted: RETURN 600177  got: RETURN 600177  len=64
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7]
+=== safety [shrink] try 1
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=2097104
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=8388560
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=8388560
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5]
+=== safety [shrink] try 1
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5]
+=== safety [shrink] try 1
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5]
+=== safety [sublet] try 1
+fx1: ERROR no section in the log -- the image never started
+fx9: ERROR no section in the log -- the image never started
+fx10: ERROR no section in the log -- the image never started
+fx11: ERROR no section in the log -- the image never started
+fx12: ERROR no section in the log -- the image never started
+fx2: ERROR no section in the log -- the image never started
+=== safety [sublet] try 2
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=1048528
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=1048528
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=1048528
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7]
+=== safety [sublet] try 1
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5]
+=== safety [sublet] try 1
+fx4: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24]
+=== safety [sublet] try 1
+fx5: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24]
+=== safety [sublet] try 1
+fx6: ERROR no section in the log -- the image never started
+=== safety [sublet] try 2
+fx6: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24]
+=== safety [sublet] try 1
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5]
+=== safety [sublet] try 1
+fx8: ERROR no section in the log -- the image never started
+=== safety [sublet] try 2
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5]
+=== STEP BOOTS DONE

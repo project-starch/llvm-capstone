@@ -1,0 +1,8 @@
+# The three M5 images this round ran, and the tools that made and ran them.
+433402c992f595e3fa1e32429cc7a96dc0e14954ced76798605757837373af54  domain/tshark_m5.dom
+be107c34d11bf497ce5a50b22fcf40257e0c52672f2eb2f8c6bb137b3965fcb9  domain-shrink/tshark_m5.dom
+2f7ec3f2966a17c7a0156bec189f61728d1eae6da35e963dbec0d47312013a20  domain-sublet/tshark_m5.dom
+# compiler  3979abd8e9a36a8feb7ff67c5b84377025b0b047 (a private build in the worktree)
+# emulator  capstone-qemu deb7d75756
+6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2  capstone-qemu/build/qemu-system-riscv64
+# guest module MODULE-MD5 5696d0fe05f5fd5395a0935a0c7ff302, printed by every boot

@@ -1,0 +1,5 @@
+# P1.6 evidence: the TSAPP-HEAP exit line, from each run's copied-back stdout capture.
+# level0 M5 on dhcp (oracle):
+TSAPP-HEAP status=0 in_use=100512 peak_in_use=28123984 peak_end=28123984 arena=41943040 unserved=160x5,278x4,134x4,17,135 stdout=closed
+# sublet M5 on dhcp (oracle):
+TSAPP-HEAP status=0 sublet alloc=4692 free=4552 merge=3747 peak_live=2598 split=3953 mrev=8643 delin=4692 revoke=8299 init=3747 unserved=160x5,278x4,134x4,17,135 stdout=closed
