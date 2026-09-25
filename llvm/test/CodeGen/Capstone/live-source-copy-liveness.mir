@@ -1,0 +1,132 @@
+# CapstoneLiveSourceCopy decides "is the source read again" from post-RA physical-register
+# liveness (LiveRegUnits, successor live-ins included). Each function below pins one way a
+# source can be live or dead after a capability COPY. Live: a successor's live-in, a call's
+# implicit use, the return's implicit use, a read of the x-half of the same register. Dead:
+# overwritten before any read, clobbered by a call's regmask. Live copies become STC+LDC
+# through the slot and dead ones stay MOVC. The KEEP run (+movc-keeps-integer-source) is the
+# control: there every copy is a MOVC, so each RULE check fails against it.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m -O2 -start-before=shrink-wrap -stop-after=capstone-live-source-copy \
+# RUN:   -verify-machineinstrs -o - %s | FileCheck %s --check-prefixes=CHECK,RULE
+# RUN: llc -mtriple=capstone64 -mattr=+m,+movc-keeps-integer-source -O2 -start-before=shrink-wrap \
+# RUN:   -stop-after=capstone-live-source-copy -verify-machineinstrs -o - %s | FileCheck %s --check-prefixes=CHECK,KEEP
+# The rewrite reads the final order, so the post-RA scheduler running first must not matter. This
+# run goes to the end of the pipeline: the CheckOnly instance would abort on a surviving
+# live-source MOVC.
+# RUN: llc -mtriple=capstone64 -mattr=+m -O2 -misched-postra -enable-post-misched -start-before=shrink-wrap \
+# RUN:   -verify-machineinstrs -o /dev/null %s
+--- |
+  target triple = "capstone64"
+  define void @live_in_successor() { ret void }
+  define void @call_implicit_use() { ret void }
+  define void @ret_use() { ret void }
+  define void @x_half_read() { ret void }
+  define void @dead_by_redef() { ret void }
+  define void @dead_by_regmask() { ret void }
+...
+---
+name: live_in_successor
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $c10, $x12
+    ; CHECK-LABEL: name: live_in_successor
+    ; RULE:      STC $c10, $c2, 0 :: (store (s128) into %stack.0, addrspace 200)
+    ; RULE-NEXT: $c11 = LDC $c2, 0 :: (load (s128) from %stack.0, addrspace 200)
+    ; KEEP:      $c11 = MOVC $c10
+    $c11 = COPY $c10
+    BEQ $x12, $x0, %bb.2
+    PseudoBR %bb.1
+  bb.1:
+    liveins: $c10, $c11
+    PseudoRET implicit $c10, implicit $c11
+  bb.2:
+    liveins: $c11
+    PseudoRET implicit $c11
+...
+---
+name: call_implicit_use
+tracksRegLiveness: true
+frameInfo:
+  adjustsStack: true
+  hasCalls: true
+body: |
+  bb.0:
+    liveins: $c10, $c9
+    ; CHECK-LABEL: name: call_implicit_use
+    ; RULE:      STC $c10, $c2, 0 :: (store (s128) into %stack.2, addrspace 200)
+    ; RULE-NEXT: $c8 = LDC $c2, 0 :: (load (s128) from %stack.2, addrspace 200)
+    ; KEEP:      $c8 = MOVC $c10
+    ; CHECK:     PseudoCALLIndirect
+    ; CHECK-NEXT: $c10 = MOVC killed $c8
+    $c8 = COPY $c10
+    ADJCALLSTACKDOWN 0, 0, implicit-def dead $x2, implicit $x2
+    PseudoCALLIndirect killed $c9, csr_ilp32_lp64, implicit-def dead $x1, implicit $c10, implicit-def $x2
+    ADJCALLSTACKUP 0, 0, implicit-def dead $x2, implicit $x2
+    $c10 = COPY killed $c8
+    PseudoRET implicit $c10
+...
+---
+name: ret_use
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10
+    ; CHECK-LABEL: name: ret_use
+    ; RULE:      STC $c10, $c2, 0
+    ; RULE-NEXT: $c11 = LDC $c2, 0
+    ; KEEP:      $c11 = MOVC $c10
+    $c11 = COPY $c10
+    PseudoRET implicit $c10, implicit $c11
+...
+---
+name: x_half_read
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10
+    ; CHECK-LABEL: name: x_half_read
+    ; RULE:      STC $c10, $c2, 0
+    ; RULE-NEXT: $c11 = LDC $c2, 0
+    ; KEEP:      $c11 = MOVC $c10
+    ; CHECK-NEXT: $x12 = ADDI killed $x10, 1
+    $c11 = COPY $c10
+    $x12 = ADDI killed $x10, 1
+    PseudoRET implicit $c11, implicit $x12
+...
+---
+name: dead_by_redef
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $c12
+    ; CHECK-LABEL: name: dead_by_redef
+    ; CHECK-NOT: STC
+    ; CHECK:      $c11 = MOVC killed $c10
+    ; CHECK-NEXT: $c10 = MOVC killed $c12
+    $c11 = COPY killed $c10
+    $c10 = COPY killed $c12
+    PseudoRET implicit $c10, implicit $c11
+...
+---
+name: dead_by_regmask
+tracksRegLiveness: true
+frameInfo:
+  adjustsStack: true
+  hasCalls: true
+body: |
+  bb.0:
+    liveins: $c10, $c9
+    ; CHECK-LABEL: name: dead_by_regmask
+    ; CHECK-NOT: STC $c10
+    ; CHECK:      $c18 = MOVC $c10
+    ; CHECK-NEXT: PseudoCALLIndirect
+    ; CHECK-NEXT: $c10 = MOVC killed $c18
+    $c18 = COPY $c10
+    ADJCALLSTACKDOWN 0, 0, implicit-def dead $x2, implicit $x2
+    PseudoCALLIndirect killed $c9, csr_ilp32_lp64, implicit-def dead $x1, implicit-def $x2
+    ADJCALLSTACKUP 0, 0, implicit-def dead $x2, implicit $x2
+    $c10 = COPY killed $c18
+    PseudoRET implicit $c10
+...

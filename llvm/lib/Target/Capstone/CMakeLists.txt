@@ -44,6 +44,7 @@ add_llvm_target(CapstoneCodeGen
   CapstoneFrameLowering.cpp
   CapstoneGatherScatterLowering.cpp
   CapstoneIndirectBranchTracking.cpp
+  CapstoneLiveSourceCopy.cpp
   CapstoneInsertReadWriteCSR.cpp
   CapstoneInsertVSETVLI.cpp
   CapstoneInsertWriteVXRM.cpp

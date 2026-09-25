@@ -1628,6 +1628,46 @@ RETURN" rule applied to privilege rather than to control flow.
 
 ### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL nulls its source (silently: MOVC raises nothing) `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
 
+> **2026-09-25: a class fix, on branch `compiler/movc-live-source-copy` (Phase A of
+> `plans/2026-09-25-intcap-implementation.md`). Not on dev, not RTL-simulated, not on a board.**
+> - **What it does.** `CapstoneLiveSourceCopy` runs after the last MachineCopyPropagation. It
+>   rewrites every `movc` whose source is read again as `stc src, slot` + `ldc dst, slot`, through a
+>   16-byte stack slot of its own.
+>   - On RTL, `stc` keeps an untagged or NONLIN source and nulls a LINEAR one, and `ldc` clears the
+>     granule of a LINEAR value. So the pair is a `movc` for every type, except that an integer
+>     survives. It never needs to know the type, which is why it reaches the musl `iconv_open`
+>     instance below that no caller-side analysis could.
+>   - `movc`s with a dead source, or from c0/sp/gp/tp/fp/bp, stay.
+>   - A check-only instance after MakeCompressible refuses any live-source `movc` still left.
+>   - `+movc-keeps-integer-source` turns it off, for a bitstream that implements Q-04 (b).
+> - **QEMU, under the RTL's `movc` (`CAPSTONE_MOVC_NULL_SCALAR=1`, `movc-null-scalar/run.sh`).**
+>   - The C-32 probe reads `0x5000` with the rule. The same source built with the rule off reads
+>     `0x1`, the positive control.
+>   - An iconv-shaped probe (one integer descriptor passed to three calls) makes 3/3 calls with the
+>     rule, and 1/3 with it off.
+>   - exposure.sh with the rule (switch 0 vs switch 1, one QEMU, one compiler): libc-test identical, 44 PASS / 6 FAIL / 5 NOBUILD / 22 EXCLUDED in both arms, and `iconv_open` PASSES under the RTL `movc` (on 2026-09-24, with dev's compiler, it was the one verdict that changed). The musl file/stdio/write probes are identical. Of the 28 hostcall probes run one at a time, 18 are ok in both arms; the only difference, `cwd`, was a boot stall in the on arm (killed) and passed 2/2 when rerun under switch 1. The 26 nightly suites give 19 PASS in each arm; the two that differ swap FLAKE and FAIL (hostcall-all stalled at boot, postgres-sublet has no host tree here), which is environment in both arms. In every on-arm boot (240/240) the firmware executes one integer `movc` (pc 0x80020a50, x9=1), without effect.
+> - **Cost on CPython 3.13.7's core** (129 files, the port's flags, rule against off):
+>   - 30,606 copies rewritten, which matches the 30,625 predicted from MIR; 167 more reuse a store.
+>   - `.text` +3.25 %.
+>   - No function gains a frame.
+>   - Stack +7.6 % (57 KB summed over all functions).
+>   - Shrink-wrap candidates fall from 393 to 157.
+>   - Dynamic cost: CoreMark (10 iterations, `movc-null-scalar/cost-coremark.sh`, QEMU `-icount` over the timed region): 1,644,401 instructions with the rule against 1,630,867 without, +0.83 % (1,353 per iteration). It validates, including under `CAPSTONE_MOVC_NULL_SCALAR=1`. An instruction count, not cycles.
+> - **An adversarial audit refuted the first version, and each finding is now a test**
+>   (`live-source-copy-slot.mir`):
+>   - Sharing the register scavenger's slot was a **miscompile**: in a frame over 2 KiB, a copy
+>     between the scavenger's save and restore overwrote the saved register. The rule now has its own
+>     slot, registered after the scavenger's, and refuses to compile a function in which anything
+>     else touched it. The test's SCAV check fails on the old output.
+>   - Two pre-frame liveness shapes aborted the compile with "no copy slot": a copy BranchFolder
+>     hoists in front of a branch, and a redefinition MachineLateInstrsCleanup deletes.
+> - **Open before any board image uses it:**
+>   - the RTL-sim cases in `tests/rtl-smoke/live-source-copy/` (S-10b's tag route is the risk);
+>   - the cycle cost of an adjacent `stc`/`ldc`.
+>
+>   The S-07 `-capstone-double-ldc` mitigation runs before register allocation, so it does not
+>   cover the rule's `ldc`s.
+
 > **LEAD'S DECISION, 2026-09-25: "D′ now + prototype C".** Options were assembled by the compiler lane and
 > adversarially audited before the decision.
 > - **D′ (the route for P1): a port-only change.** `sqlite3MallocLinear` returns a `uptr`, and `pStart`
@@ -1663,7 +1703,8 @@ RETURN" rule applied to privilege rather than to control flow.
 > - The paper condition in the measurements doc (§7s arm C) is re-worded to match.
 
 > **2026-09-24: a second instance, in musl, found by measurement and out of reach of any compiler
-> fix.** `CAPSTONE_MOVC_NULL_SCALAR=1` (Q-04) with `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh`
+> fix.** *(Amended 2026-09-25: out of reach of any fix that must know the value is an integer. The
+> live-source copy rule above does not need to, and the iconv-shaped probe passes under it.)* `CAPSTONE_MOVC_NULL_SCALAR=1` (Q-04) with `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh`
 > runs the nightly and libc-test with MOVC keeping and zeroing an integer source. Across the corpus
 > exactly one verdict changes, `iconv_open`, the same in two runs at the same pc. musl's
 > `combine_to_from()` returns a conversion descriptor as an integer, `(void *)(f<<16 | t<<1 | 1)`.

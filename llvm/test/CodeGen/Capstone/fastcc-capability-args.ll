@@ -1,6 +1,7 @@
 ; MUTATION: give @cap_ret a second capability argument and return that ->
 ; 'movc a0, a1' and the movc negative fires (performed 2026-09-04).
-; RUN: llc -mtriple=capstone64 < %s | FileCheck %s
+; RUN: llc -mtriple=capstone64 < %s | FileCheck %s --check-prefixes=CHECK,RULE
+; RUN: llc -mtriple=capstone64 -mattr=+movc-keeps-integer-source < %s | FileCheck %s --check-prefixes=CHECK,KEEP
 ; RUN: %llc_cap -O0 < %s -o /dev/null
 ; RUN: %llc_cap -O1 < %s -o /dev/null
 
@@ -61,10 +62,17 @@ define i64 @call_many_caps(ptr addrspace(200) %p) {
 ; FastCC-only registers t3-t6, which the standard CC never uses for arguments.
 ; CHECK-LABEL: call_many_caps:
 ; CHECK: stc a0, 0(sp)
-; CHECK: movc t3, a0
-; CHECK: movc t4, a0
-; CHECK: movc t5, a0
-; CHECK: movc t6, a0
+; a0 stays live across the fills (it is also the first argument), so by default
+; each fill is a reload from the live-source copy slot, stored once.
+; RULE: stc a0, [[SLOT:[0-9]+\(sp\)]]
+; RULE: ldc t3, [[SLOT]]
+; RULE-NEXT: ldc t4, [[SLOT]]
+; RULE-NEXT: ldc t5, [[SLOT]]
+; RULE-NEXT: ldc t6, [[SLOT]]
+; KEEP: movc t3, a0
+; KEEP: movc t4, a0
+; KEEP: movc t5, a0
+; KEEP: movc t6, a0
 ; CHECK: cjalr ra
   %r = call fastcc i64 @many_caps(ptr addrspace(200) %p, ptr addrspace(200) %p,
     ptr addrspace(200) %p, ptr addrspace(200) %p, ptr addrspace(200) %p,

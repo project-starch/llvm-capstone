@@ -532,20 +532,18 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   // buys: the question "is this copy a capability?" used to be answered by a
   // heuristic on liveness, and answering it wrong dropped a tag silently.
   //
-  // MOVC is the right and only instruction here. From op_helper.c's
-  // helper_csmovc, it zeroes its source ONLY when the source is a TAGGED,
-  // non-copyable (linear) capability -- and a linear capability is one the ISA
-  // forbids copying at all, so a live-source copy of one is not a thing the
-  // register allocator may ask for. An untagged value or a NONLIN capability is
-  // copied without destroying anything.
+  // Emitted as MOVC, and in QEMU's model (op_helper.c, helper_csmovc) MOVC
+  // zeroes its source only when that source is a tagged linear capability,
+  // which the ISA forbids copying anyway.
   //
-  // ponytail: on silicon `movc` is reported to zero an untagged source
-  // unconditionally, where the model guards on the tag (R-18). An untagged value
-  // can sit in a capability register after an inttoptr, so that case is not
-  // impossible here -- it is just no longer reachable from an INTEGER copy,
-  // which is what R-18 was about. cincoffsetimm rd, rs, 0 would be the
-  // non-destructive alternative and it faults outright on an untagged source,
-  // which is worse.
+  // On silicon MOVC also writes cnull into an UNTAGGED source (C-32), and an
+  // untagged value does reach a capability register (inttoptr, an integer
+  // passed as a pointer). So this MOVC is provisional: CapstoneLiveSourceCopy
+  // rewrites each one whose source is still read afterwards as STC+LDC through
+  // a stack slot, which matches MOVC for every type but keeps an integer
+  // source. +movc-keeps-integer-source turns that off for a bitstream that
+  // fixes MOVC (Q-04 b). cincoffsetimm rd, rs, 0 is no alternative: it faults
+  // outright on an untagged source.
   if (Capstone::GPCRRegClass.contains(DstReg, SrcReg)) {
     BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstReg)
         .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc));

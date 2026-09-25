@@ -1,0 +1,121 @@
+# Three shapes an adversarial audit of CapstoneLiveSourceCopy found (2026-09-25). Each broke
+# the first version.
+#   scav:  a frame over 2 KiB with every GPCR live, so PEI's register scavenger spills c14 and
+#          keeps it spilled across the copy. The rewrite used to share the scavenger's slot, its
+#          STC overwrote the spilled c14, and the restore returned the copied value (a
+#          miscompile). The copy slot is now its own, and the check pins the two offsets apart.
+#   hoist: BranchFolder hoists a copy common to both successors in front of a branch that reads
+#          its source. The pre-PEI test did not reserve the slot, and the rewrite stopped with "no
+#          copy slot was reserved".
+#   late:  MachineLateInstrsCleanup deletes the second, identical definition of c10, so the copy's
+#          source is live afterwards. Same fatal error.
+# All three run from PEI onwards, so the scavenger, BranchFolder and the late cleanup act on them.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m -O2 -start-before=prologepilog -verify-machineinstrs \
+# RUN:   -o %t.s %s
+# RUN: FileCheck %s < %t.s
+# RUN: FileCheck %s --check-prefix=SCAV < %t.s
+# RUN: FileCheck %s --check-prefix=PAIR < %t.s
+--- |
+  target triple = "capstone64"
+  define void @scav() { ret void }
+  define void @hoist() { ret void }
+  define void @late() { ret void }
+...
+---
+name: scav
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 16, alignment: 16 }
+  - { id: 1, size: 16, alignment: 16 }
+  - { id: 2, size: 4096, alignment: 16 }
+  - { id: 3, size: 4096, alignment: 16 }
+body: |
+  bb.0:
+    ; CHECK-LABEL: scav:
+    ; SCAV-LABEL: scav:
+    ; PAIR-LABEL: scav:
+    ; The scavenger saves a4 (c14) and restores it, and nothing may touch that slot in
+    ; between. The rewritten copy sits in between, so it must use another slot.
+    ; SCAV:      stc a4, [[SCAV:[0-9]+\(sp\)]]
+    ; SCAV-NOT:  [[SCAV]]
+    ; SCAV:      ldc a4, [[SCAV]]
+    ; PAIR:      stc a2, [[COPY:[0-9]+\(sp\)]]
+    ; PAIR-NEXT: ldc a1, [[COPY]]
+    successors: %bb.1
+    liveins: $c1, $c5, $c6, $c7, $c8, $c9, $c10, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c27, $c28, $c29, $c30, $c31
+    STC $c10, %stack.0, 0
+    $c11 = COPY $c12
+    STC $c13, %stack.1, 0
+    PseudoBR %bb.1
+  bb.1:
+    liveins: $c1, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c27, $c28, $c29, $c30, $c31
+    STC $c14, %stack.2, 0
+    STC $c15, %stack.2, 16
+    STC $c16, %stack.2, 32
+    STC $c17, %stack.2, 48
+    STC $c18, %stack.2, 64
+    STC $c19, %stack.2, 80
+    STC $c20, %stack.2, 96
+    STC $c21, %stack.2, 112
+    STC $c22, %stack.2, 128
+    STC $c23, %stack.2, 144
+    STC $c24, %stack.2, 160
+    STC $c25, %stack.2, 176
+    STC $c26, %stack.2, 192
+    STC $c27, %stack.2, 208
+    STC $c28, %stack.2, 224
+    STC $c29, %stack.2, 240
+    STC $c30, %stack.2, 256
+    STC $c31, %stack.2, 272
+    STC $c5, %stack.2, 288
+    STC $c6, %stack.2, 304
+    STC $c7, %stack.2, 320
+    STC $c8, %stack.2, 336
+    STC $c9, %stack.2, 352
+    STC $c10, %stack.2, 368
+    STC $c11, %stack.2, 384
+    STC $c12, %stack.2, 400
+    STC $c13, %stack.2, 416
+    STC $c14, %stack.3, 0
+    PseudoRET implicit $c1
+...
+---
+name: hoist
+tracksRegLiveness: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: hoist:
+    ; CHECK:      stc a0, [[S:[0-9]+\(sp\)]]
+    ; CHECK-NEXT: ldc a1, [[S]]
+    ; CHECK-NEXT: beqz a0
+    successors: %bb.1, %bb.2
+    liveins: $c10, $c12
+    BEQ $x10, $x0, %bb.2
+    PseudoBR %bb.1
+  bb.1:
+    liveins: $c10, $c12
+    $c11 = COPY killed $c10
+    $x10 = ADDI $x0, 1, implicit-def $c10
+    PseudoRET implicit $c10, implicit $c11
+  bb.2:
+    liveins: $c10, $c12
+    $c11 = COPY killed $c10
+    $c10 = COPY killed $c12
+    PseudoRET implicit $c10, implicit $c11
+...
+---
+name: late
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 16, alignment: 16 }
+body: |
+  bb.0:
+    ; CHECK-LABEL: late:
+    ; CHECK:      stc a0, [[L:[0-9]+\(sp\)]]
+    ; CHECK-NEXT: ldc a1, [[L]]
+    $c10 = CIncOffsetImm %stack.0, 0
+    $c11 = COPY $c10
+    $c10 = CIncOffsetImm %stack.0, 0
+    PseudoRET implicit $c10, implicit $c11
+...
