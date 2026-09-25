@@ -275,6 +275,30 @@ static long hc_path_op(unsigned long long opcode, const char *path,
   return hc_metadata->error != 0 ? hc_err() : 0;
 }
 
+/* PATH_RENAME: PATH_ACCESS's layout with two paths behind the flags word, as
+   "old NUL new", the length covering both and the NUL. musl's rename() arrives as
+   renameat2 with flags 0; RENAME_NOREPLACE and friends have no service behind
+   them and are refused rather than quietly dropped. */
+static long hc_path_rename(const char *old, const char *new, long flags) {
+  if (flags != 0)
+    return -EINVAL;
+  unsigned long lo = 0, ln = 0;
+  while (old[lo]) lo++;
+  while (new[ln]) ln++;
+  if (lo + 1 + ln > HC_PAYLOAD_SIZE - HC_PATH_RENAME_REQ_V0_PATH_OFFSET)
+    return -ENAMETOOLONG;
+  hc_put_u64(0, 0);
+  const unsigned long at = HC_PATH_RENAME_REQ_V0_PATH_OFFSET;
+  for (unsigned long i = 0; i < lo; i++)
+    hc_payload[at + i] = old[i];
+  hc_payload[at + lo] = '\0';
+  for (unsigned long i = 0; i < ln; i++)
+    hc_payload[at + lo + 1 + i] = new[i];
+  if (hc_round(HC_V0_OP_PATH_RENAME, at, lo + 1 + ln) != 0)
+    return -EIO;
+  return hc_metadata->error != 0 ? hc_err() : 0;
+}
+
 /* FILE_SYNC and FILE_TRUNCATE: handle-only requests with an empty payload area. */
 static long hc_handle_op(long fd, unsigned long long opcode,
                          unsigned long long arg) {
@@ -643,6 +667,12 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_faccessat:
     return hc_path_op(HC_V0_OP_PATH_ACCESS, (const char *)b,
                       HC_PATH_ACCESS_FLAG_EXISTS);
+
+  /* musl's rename() is renameat2(AT_FDCWD, old, AT_FDCWD, new, 0) here: this
+     target has neither rename nor renameat. The directory descriptors are
+     accepted and not used, as openat's is. */
+  case SYS_renameat2:
+    return hc_path_rename((const char *)b, (const char *)d, (long)e);
 
   case SYS_fstat: {
     /* stdout and stderr exist in every domain -- the service writes them --
