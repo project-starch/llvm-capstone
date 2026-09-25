@@ -92,7 +92,21 @@ if len(rec) != len(new) or bad:
 print(f"boot input: {len(new)} lines, {len(diff)} row(s) differ from the native recording (16-byte pointer types)")
 PY
 else
-  cp "$REC/call-$CALL.stdin" "$SHARE/pg-input"
+  # The setup SQL names files of the install initdb ran from (COPY ... FROM
+  # '<prefix>/share/postgresql/sql_features.txt'); the domain sees that directory
+  # as /mnt/host/share. Each named file must be in the staged share.
+  python3 - "$REC/call-$CALL.stdin" "$SHARE/pg-input" "$SHARE/share" <<'PY'
+import os, re, sys
+recorded, out, share = sys.argv[1:]
+text = open(recorded).read()
+pat = re.compile(r"/[^'\s]*/share/postgresql/([^'\s]+)")
+names = pat.findall(text)
+missing = [n for n in names if not os.path.isfile(os.path.join(share, n))]
+if missing:
+    sys.exit(f"setup SQL names install files the share lacks: {missing}")
+open(out, "w").write(pat.sub(lambda m: "/mnt/host/share/" + m.group(1), text))
+print(f"single input: {len(names)} install path(s) moved to /mnt/host/share: {sorted(set(names))}")
+PY
 fi
 
 # Arguments and environment, as recorded, with the paths moved to the share.
@@ -126,9 +140,21 @@ echo "  env: $(tr '\n' ' ' < "$SHARE/pg-env")"
 # The image goes to the guest's tmpfs first; the domain's output goes straight
 # to the console, so what a halting domain printed before is kept. The sed is
 # for run-domain-smoke.py, which takes "# " for the shell prompt.
+#
+# PGSU_STALL_DUMP=<seconds> adds a guest-side watchdog: every that many seconds while
+# lt.user lives, each of its threads' state, wait channel and kernel stack. A run
+# that stops with the vCPU in the idle task (neither the domain nor its helper
+# runnable) then says what the helper is blocked on.
+STALL_DUMP=
+if [[ -n ${PGSU_STALL_DUMP:-} ]]; then
+  STALL_DUMP="( while sleep $PGSU_STALL_DUMP; do p=\$(pidof lt.user) || break; \
+for t in /proc/\$p/task/*; do echo \"PGSU-STALL-DUMP t=\$(date +%s) task=\${t##*/} \$(grep State: \$t/status) wchan=\$(cat \$t/wchan)\"; \
+sed 's/^/PGSU-STACK /' \$t/stack 2>&1; done; done ) &"
+fi
 cat > "$SHARE/pg-run.sh" <<EOF
 mkdir -p /usr/share && ln -sfn /mnt/host/share/timezone /usr/share/zoneinfo && echo PGSU-ZONEINFO-LINKED
 cp /mnt/host/bin/postgres.dom /tmp/postgres.dom && echo PGSU-IMAGE-COPIED
+$STALL_DUMP
 echo PGSU-RUN-BEGIN call=$CALL t=\$(date +%s)
 /tmp/lt.user /tmp/postgres.dom $SECONDS_LIMIT 2>&1
 echo PGSU-RUN-END call=$CALL rc=\$? t=\$(date +%s)

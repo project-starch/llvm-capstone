@@ -1,0 +1,92 @@
+Four places take sizeof(Datum) for the width of a by-value Datum (intcap plan, Phase D).
+
+Under 0010 a Datum is a capability, 16 bytes, holding an 8-byte value; SIZEOF_DATUM
+is 8. Where PostgreSQL wrote sizeof(Datum) for the value's width:
+
+- pg_type.c (TypeCreate): an 8-byte by-value type is accepted when its size equals
+  sizeof(Datum). The --single setup call stopped after 559 statements at a CREATE
+  TYPE: "internal size 8 is invalid for passed-by-value type".
+- datum.c (datum_image_hash): hashed all 16 bytes, the capability's metadata half
+  with the value.
+- outfuncs.c/readfuncs.c (outDatum/readDatum): a stored node tree (a view's rule,
+  a column default) carried 16 bytes per by-value constant, the metadata half
+  included, where the native tree carries 8.
+
+Each now takes the value (the Datum converted to uint64) and SIZEOF_DATUM bytes of
+it, so the hash and the stored text are the native ones on this little-endian
+target. The last two change only under __SIZEOF_INTCAP__; pg_type.c's comparison
+is the same test natively, where SIZEOF_DATUM is sizeof(Datum).
+
+--- a/src/backend/catalog/pg_type.c
++++ b/src/backend/catalog/pg_type.c
+@@ -286,7 +286,8 @@
+ 								alignment, internalSize)));
+ 		}
+ #if SIZEOF_DATUM == 8
+-		else if (internalSize == (int16) sizeof(Datum))
++		/* capstone: the value width, not sizeof(Datum), which is 16 */
++		else if (internalSize == (int16) SIZEOF_DATUM)
+ 		{
+ 			if (alignment != TYPALIGN_DOUBLE)
+ 				ereport(ERROR,
+--- a/src/backend/utils/adt/datum.c
++++ b/src/backend/utils/adt/datum.c
+@@ -341,7 +341,16 @@
+ 	uint32		result;
+ 
+ 	if (typByVal)
++	{
++#ifdef __SIZEOF_INTCAP__
++		/* capstone: hash the value, not the capability's metadata half */
++		uint64		v = (uint64) value;
++
++		result = hash_bytes((unsigned char *) &v, SIZEOF_DATUM);
++#else
+ 		result = hash_bytes((unsigned char *) &value, sizeof(Datum));
++#endif
++	}
+ 	else if (typLen > 0)
+ 		result = hash_bytes((unsigned char *) DatumGetPointer(value), typLen);
+ 	else if (typLen == -1)
+--- a/src/backend/nodes/outfuncs.c
++++ b/src/backend/nodes/outfuncs.c
+@@ -348,10 +348,20 @@
+ 
+ 	if (typbyval)
+ 	{
++#ifdef __SIZEOF_INTCAP__
++		/* capstone: the value's bytes, as natively; not the capability's */
++		uint64		v = (uint64) value;
++
++		s = (char *) (&v);
++		appendStringInfo(str, "%u [ ", (unsigned int) length);
++		for (i = 0; i < (Size) SIZEOF_DATUM; i++)
++			appendStringInfo(str, "%d ", (int) (s[i]));
++#else
+ 		s = (char *) (&value);
+ 		appendStringInfo(str, "%u [ ", (unsigned int) length);
+ 		for (i = 0; i < (Size) sizeof(Datum); i++)
+ 			appendStringInfo(str, "%d ", (int) (s[i]));
++#endif
+ 		appendStringInfoChar(str, ']');
+ 	}
+ 	else
+--- a/src/backend/nodes/readfuncs.c
++++ b/src/backend/nodes/readfuncs.c
+@@ -614,2 +614,12 @@
+ 		s = (char *) (&res);
++#ifdef __SIZEOF_INTCAP__
++		/* capstone: outDatum wrote the value's SIZEOF_DATUM bytes; build the Datum from them */
++		{
++			uint64		v = 0;
++
++			for (i = 0; i < (Size) SIZEOF_DATUM; i++)
++				((char *) &v)[i] = (char) atoi(pg_strtok(&tokenLength));
++			res = (Datum) v;
++		}
++#else
+ 		for (i = 0; i < (Size) sizeof(Datum); i++)
+@@ -619,2 +629,3 @@
+ 		}
++#endif
+ 	}

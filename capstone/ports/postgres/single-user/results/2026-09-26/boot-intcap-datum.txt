@@ -27,8 +27,8 @@ each run's stop, and what moved it:
   every run with the 1800 s bound (1 run at a 1500 s bound was cut short before it printed)
 
 call 4 (--boot over the catalog script): PASS, status=0, rounds=17902, in 2 runs (identical rounds)
-  -- with the runtime's open-file table at 128 (stop 4): that change is not committed yet, so
-     this pass depends on it
+  -- with the runtime's open-file table at 128 (stop 4): committed since on its own branch,
+     runtime/hostcall-more-files 162ef1071fba (hostcall probes 28/28 before and after)
 
 call 5 (--single over the setup SQL), chained from call 4's OWN output:
   a native recording cannot be the input: "database files are incompatible with server",
@@ -39,3 +39,39 @@ call 5 (--single over the setup SQL), chained from call 4's OWN output:
   call-4 output lacks against the native before-5 directory, and it is copied from there
   run-domain.sh put the extra -c options after --single's database name ("invalid command-line
   argument: -c"); they now go before it, for --single only (--boot ends in -X's value)
+
+call 5 result: PASS, status=0, rounds=34187, 707 statements logged, the last two
+  CREATE DATABASE postgres OID = 5 STRATEGY = file_copy and its COMMENT (the end of the setup SQL)
+  image: patches 0001-0016, loadable size 83598240; its input: the catalog call 4 wrote with the
+  0001-0013 image. So the two calls ran different images; one image through both is still owed.
+
+the catalog call 4 wrote, against the native one, tuple by tuple: every difference is one the port
+  makes on purpose -- 176 pg_proc rows 16 bytes longer (array data MAXALIGNed to 16), pg_type's
+  pointer-sized pg_ddl_command and internal at typlen 16, 25 pg_class rows whose relpages follow
+
+call 5's stops, and what moved each:
+  356 statements  pg_import_system_collations popen()s "locale -a"; a domain cannot spawn  -> patch 0014
+  358 statements  FATAL 'could not access file "$libdir/dict_snowball"': a domain cannot dlopen
+                  -> patch 0015: the modules the setup SQL needs (dict_snowball, plpgsql) are linked
+                  into the image, 2 modules and 240 functions, resolved by base name
+  559 statements  FATAL "internal size 8 is invalid for passed-by-value type" (CREATE TYPE):
+                  TypeCreate compares an 8-byte by-value size with sizeof(Datum), now 16
+                  -> patch 0016, with the three other places that take sizeof(Datum) for a
+                  by-value Datum's width: datum_image_hash, outDatum, readDatum
+  695 statements  COPY ... FROM '<initdb's install>/share/postgresql/sql_features.txt', a host path
+                  -> run-domain.sh moves such paths to the staged share (1 path in this recording)
+
+repeatability, one image (0014 plus a diagnostic in relationHasPrimaryKey): 4 runs, 3 stopped at the
+  same statement with identical rounds (7784), 1 stalled
+
+events not explained:
+  - once: FATAL 'multiple primary keys for table "pg_proc"' at statement 2, the first ADD PRIMARY KEY,
+    on the image before that diagnostic. 7 later runs over 3 images passed the statement. The
+    uninstrumented index_check_primary_key reads indisprimary at t_data + t_hoff + 14, as it should
+    (its disassembly). One input to a single-threaded backend should give one answer: OPEN.
+  - once: 100% CPU for 30 minutes at CREATE VIEW pg_roles (statement 262); killed
+  - twice: a run stopped mid-way (statements 354 and 348), the vCPU in the guest kernel's idle task
+    (same sp and tp over three samples 20 s apart), so neither the domain nor its host helper was
+    runnable. run-domain.sh gained PGSU_STALL_DUMP=<seconds>, which prints the helper's thread
+    states, wait channels and kernel stacks from inside the guest, for the next one
+  - twice: boots that never reached the domain (the loader stall of HOW-TO-RUN-ON-QEMU.md)

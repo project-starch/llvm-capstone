@@ -1,0 +1,22 @@
+collationcmds.c: a domain does not run "locale -a" (intcap plan, Phase D).
+
+initdb's --single call imports the system collations with pg_import_system_collations,
+which popen()s "locale -a". A domain cannot spawn a process, so the call failed ("could
+not execute command "locale -a": No file descriptors available") after 356 setup
+statements. Under Capstone, READ_LOCALE_A_OUTPUT is not defined, as on a platform
+without "locale -a": no libc collations are imported. pg_collation therefore lacks the
+rows a native initdb adds, which a comparison with native output has to allow for.
+
+--- a/src/backend/commands/collationcmds.c
++++ b/src/backend/commands/collationcmds.c
+@@ -579,7 +579,9 @@
+ 
+ 
+ /* will we use "locale -a" in pg_import_system_collations? */
+-#if !defined(WIN32)
++/* capstone: not in a domain, which cannot spawn a process; initdb then imports
++ * no libc collations, as on a platform without "locale -a". */
++#if !defined(WIN32) && !defined(__SIZEOF_INTCAP__)
+ #define READ_LOCALE_A_OUTPUT
+ #endif
+ 

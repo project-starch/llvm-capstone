@@ -132,6 +132,11 @@ if stage configure; then
   grep -E '^#define (MAXIMUM_ALIGNOF|SIZEOF_VOID_P|USE_SYSV_SHARED_MEMORY)' src/include/pg_config.h | sed 's/^/[build-domain] /'
 fi
 
+# The loadable modules initdb's setup SQL needs (name:directory), linked into the
+# image because a domain cannot dlopen (patch 0015, toolchain/static_modules.c).
+MODULES="dict_snowball:src/backend/snowball plpgsql:src/pl/plpgsql/src"
+module_objs() { make -s -C "$1" -f Makefile -f "$SCRIPT_DIR/toolchain/print-objs.mk" print-objs; }
+
 # ---- make ---------------------------------------------------------------------------
 if stage make; then
   # --enable-depend tracks headers from now on; a tree configured without it
@@ -160,6 +165,15 @@ if stage make; then
   # retried objects alone do not write one; a second pass over the finished
   # objects does (without it, utils/adt's 20 symbols were undefined at the link).
   make -k -j"$JOBS" -C src/backend >> "$ROOT/domain-make.log" 2>&1 || true
+  # The loadable modules (patch 0015), their objects only: a module's own link would
+  # be a shared library. Pg_magic_func and _PG_init are renamed per module, so two
+  # modules can be linked into one image.
+  for md in $MODULES; do
+    m=${md%%:*} d=${md#*:}
+    # shellcheck disable=SC2046
+    make -k -j"$JOBS" -C "$d" COPT="-DPg_magic_func=${m}_Pg_magic_func -D_PG_init=${m}__PG_init" \
+      $(module_objs "$d") >> "$ROOT/domain-modules.log" 2>&1 || true
+  done
   # The survey log names an object as make named it, relative to its own directory;
   # what counts is whether the backend's link inputs exist, so look there.
   missing=$(find src/backend src/timezone -name objfiles.txt -exec cat {} + | tr ' ' '\n' | grep -v '^$' | while read -r o; do [[ -f $o ]] || echo "$o"; done)
@@ -171,9 +185,31 @@ fi
 # source root), then the two server archives; the port runtime and musl are here.
 objs=$(find src/backend src/timezone -name objfiles.txt -exec cat {} + | tr ' ' '\n' | grep -v '^$' | sort -u)
 [[ -n "$objs" ]] || { echo "no objfiles.txt under src/backend; make did not get far" >&2; exit 2; }
+# The modules, and the table toolchain/static_modules.c resolves them from: every
+# global function each one defines, under the name dlsym would be asked for.
+NM=$(dirname "$CAPSTONE_CLANG")/llvm-nm
+TABLE=$ROOT/link/static_modules_table.h
+: > "$TABLE"
+for md in $MODULES; do
+  m=${md%%:*} d=${md#*:}
+  mo=$(module_objs "$d" | tr ' ' '\n' | grep -v '^$' | sed "s|^|$d/|")
+  for o in $mo; do [[ -f $o ]] || { echo "module $m: $o was not built (domain-modules.log)" >&2; exit 2; }; done
+  echo "PGSU_MODULE($m)" >> "$TABLE"
+  # shellcheck disable=SC2086
+  "$NM" --defined-only -g $mo | awk '$2 == "T" { print $3 }' | sort -u | while read -r sym; do
+    case $sym in ${m}_Pg_magic_func) n=Pg_magic_func ;; ${m}__PG_init) n=_PG_init ;; *) n=$sym ;; esac
+    echo "PGSU_SYMBOL($m, \"$n\", $sym)"
+  done >> "$TABLE"
+  echo "PGSU_MODULE_END" >> "$TABLE"
+  grep -q "PGSU_SYMBOL($m, \"Pg_magic_func\"" "$TABLE" || { echo "module $m: no Pg_magic_func" >&2; exit 2; }
+  objs="$objs $mo"
+done
+"$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O1 -I"$ROOT/link" -c "$SCRIPT_DIR/toolchain/static_modules.c" \
+  -o "$ROOT/link/static_modules.o"
+log "modules linked in: $(grep -c PGSU_MODULE_END "$TABLE"), $(grep -c PGSU_SYMBOL "$TABLE") functions"
 # shellcheck disable=SC2086
 "$CAPSTONE_LD_LLD" --gc-sections -T "$PGSU_LINKER_SCRIPT" -o "$ROOT/link/postgres.dom" \
-  "$O"/*.o $objs src/port/libpgport_srv.a src/common/libpgcommon_srv.a "$ARCHIVE" \
+  "$O"/*.o "$ROOT/link/static_modules.o" $objs src/port/libpgport_srv.a src/common/libpgcommon_srv.a "$ARCHIVE" \
   > "$ROOT/link/link.log" 2>&1 && rc=0 || rc=$?
 { grep -oE 'undefined symbol: [^ ]+' "$ROOT/link/link.log" || true; } | sed 's/undefined symbol: //' | sort -u > "$ROOT/link/undefined.txt"
 { grep -E 'error:' "$ROOT/link/link.log" | grep -v 'undefined symbol' || true; } | head -5 | sed 's/^/[build-domain] /'
