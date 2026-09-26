@@ -100,8 +100,9 @@ the shared SDK; Perl and mruby execute through the common launcher. See
 [checked acceptance](../runtime/tests/application/results/20260926-qemu.json)
 and [current state](state/current-state.md) for scope and remaining failures.
 This is a one-hart QEMU platform extension, not a new FPGA result.
-The current [Perl `t/base` result](../ports/perl/musl/results/2026-09-26/base-tests.txt)
-is 6/9 files passing; three fail, so upstream Perl coverage remains incomplete.
+The current [Perl `t/base` result](../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+is 8/9 files passing; the remaining case requires target subprocess creation.
+Upstream Perl coverage remains incomplete.
 
 
 Opt-in [generic client-fault recovery](../runtime/domain-faults.md) and its

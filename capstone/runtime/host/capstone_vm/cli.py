@@ -41,6 +41,14 @@ CAPSTONE_TAGWATCH_LO CAPSTONE_TAGWATCH_MAX CAPSTONE_TAGWATCH_VICTIM
 """.split())
 
 
+def qemu_process_environment(recorded: dict[str, str]) -> dict[str, str]:
+    """Use only the session's recorded QEMU settings on every boot."""
+    environment = {name: value for name, value in os.environ.items()
+                   if name not in QEMU_ENV}
+    environment.update(recorded)
+    return environment
+
+
 def qmp(state: Path, command: str) -> dict:
     with socket.socket(socket.AF_UNIX) as connection:
         connection.settimeout(5)
@@ -361,7 +369,8 @@ dropbear -s -g -p 22
                 raise VMError(f"Another Capstone VM owns {global_lock}") from error
             # Retain the common test-suite lock in QEMU itself, across CLI exits.
             process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log,
-                                       stderr=log, start_new_session=True,
+                                       stderr=log, env=qemu_process_environment(environment),
+                                       start_new_session=True,
                                        pass_fds=(ownership.fileno(),))
         try:
             deadline = time.monotonic() + args.boot_timeout

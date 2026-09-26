@@ -15,6 +15,15 @@ from capstone_vm import cli
 
 
 class TransportTests(unittest.TestCase):
+    def test_qemu_uses_recorded_environment_on_restart(self):
+        with patch.dict(os.environ, {"CAPSTONE_GP_NONLIN": "0",
+                                    "CAPSTONE_TAGWATCH": "1",
+                                    "UNRELATED_SETTING": "retained"}):
+            environment = cli.qemu_process_environment({"CAPSTONE_GP_NONLIN": "1"})
+        self.assertEqual(environment["CAPSTONE_GP_NONLIN"], "1")
+        self.assertNotIn("CAPSTONE_TAGWATCH", environment)
+        self.assertEqual(environment["UNRELATED_SETTING"], "retained")
+
     def test_arguments_round_trip_through_remote_shell(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)

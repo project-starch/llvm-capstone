@@ -49,11 +49,15 @@ prove --exec 'capstone-vm --state /tmp/capstone/dev-vm run --cwd /mnt/host/perl-
 ```
 
 The migrated recipe was rebuilt from the pinned tarball and these three files
-pass. The [complete `t/base` run](results/2026-09-26/base-tests.txt) has six
-passing files and three failing files: `base/term.t` fails one of seven tests
-because target fork/clone is unserved; `base/lex.t` and `base/rs.t` each end in
-SIGSEGV before producing TAP output. `prove` reports 9 files, 332 emitted
-assertions and exit status 1. The same Linux VM continues after both faults.
+pass. The [current complete `t/base` run](results/2026-09-26/base-tests-fixed.txt)
+has eight passing files. `base/term.t` alone fails test 2: its backtick command
+tries to start another Perl process, and target clone syscall 220 is unserved.
+`prove` reports 9 files, 493 emitted assertions and exit status 1. The
+[earlier 6/9 run](results/2026-09-26/base-tests.txt) used a compiler binary
+predating the C-46 direct-call fix, and the VM CLI did not pass its recorded
+`CAPSTONE_GP_NONLIN=1` setting to QEMU. Either the compiler fix or an effective
+`CAPSTONE_GP_NONLIN=1` makes `rs.t` pass. `lex.t` needed patch 0007 below.
+The same Linux VM continues after a fault.
 The complete upstream Perl suite has not been run. The historical 17-check smoke
 result above belongs to its recorded build and is not a new claim about this
 upstream subset. The common runtime separately verifies real Perl argv and a
@@ -86,15 +90,17 @@ build script:
 | `-Ud_nanosleep` | this release's configure leaves the variable unset and the `config.h` template then emits `# HAS_NANOSLEEP`, which is not a directive, so every compilation fails. The script now checks the generated `config.h` for such a line rather than reading 300 errors |
 | `-Accflags=-D_GNU_SOURCE` | musl declares `memrchr`, `setresuid`, `setresgid` and `eaccess` only under it while the symbols are in libc either way, so configure's link tests find them and the compile would not |
 
-`d_fork` is left as configured: musl has `fork`, the runtime does not serve it, and
-a program that forks gets an error at run time. Nothing on the path so far forks.
+`d_fork` is left as configured: musl has `fork`, the runtime does not serve it,
+and a program that forks gets an error at run time. `base/term.t` test 2 reaches
+this gap through a backtick command.
 
 ## What perl needed (`patches/5.36.3/`)
 
 Each patch's header carries its evidence. 0001-0005 are conditional -- on
 `PTRSIZE > IVSIZE`, `PTRSIZE > UVSIZE`, `PTRSIZE == 16` or
 `__CAPSTONE_PURECAP__` -- so no other platform is affected; 0006 fixes a defect
-that is simply latent elsewhere, and is unconditional.
+that is simply latent elsewhere. 0007 replaces pointer-to-integer round trips
+in regex state with pointer-typed fields; both are unconditional.
 
 | | File | Why |
 |---|---|---|
@@ -104,6 +110,7 @@ that is simply latent elsewhere, and is unconditional.
 | 0004 | `perl.h` | two defects. `PTRV` picks the first integer whose size equals `PTRSIZE`; at 16 none matches and the fallthrough takes `unsigned`, so **every** `PTR2UV`/`PTR2IV`/`PTR2nat` truncated an address to 32 bits, silently. And `DPTR2FPTR`/`FPTR2DPTR` convert data to function pointers through an integer, which loses authority: the call through the result traps in `Perl_filter_read` on every `perl -e`. 39 sites use that pair |
 | 0005 | `op.c` | `S_maybe_multideref` counts its arguments on a first pass by incrementing a pointer from `arg_buf`, which is `NULL` then, and takes `arg - arg_buf` as the count; every write through it is under `if (pass)`. Incrementing a null pointer is undefined in C and harmless elsewhere, and here it is capability arithmetic without a capability: cause 24, reached by any subscript chain. Measured at `-O2` **and** at `-O1`, which is what says it is the program and not the optimiser |
 | 0006 | `doio.c` | `S_openn_setup` does `Zero(mode,sizeof(mode),char)` where `mode` is its own `char *` parameter, so it clears **a pointer's** size, not the buffer's. Both callers pass a `char[PERL_MODE_MAX]`, and PERL_MODE_MAX is 8, so wherever a pointer is 8 bytes the two agree by coincidence; at 16 it writes 16 bytes into an 8-byte stack array. A defect in perl rather than a porting difference, so the patch is unconditional and a no-op elsewhere. Present unchanged in 5.32.1, 5.36.3 and 5.38.2, and worth reporting upstream. Found at the script's first `open()` |
+| 0007 | `pp_ctl.c` | `rxres_save` puts `RX_SAVED_COPY`, `RX_SUBBEG` and an optional copied buffer through `UV` slots. Restoring a 128-bit capability from a 64-bit `UV` keeps its address but loses its tag. `lex.t` then faults in `Perl_pregfree2` when it decrements the saved-copy reference count. Pointer-typed fields preserve the capability; all 120 `lex.t` assertions now pass |
 
 ## Open, in the order they matter
 
@@ -114,9 +121,9 @@ that is simply latent elsewhere, and is unconditional.
    is sound). None is on the path reached so far; each is a latent cause-24.
 2. **The test suite.** 2823 `.t` files and `t/TEST` forks per file, which a domain
    cannot do. Host `prove --exec` now runs each file through the shared VM CLI;
-   the complete `t/base` result above is the current upstream subset. Diagnose
-   the `lex.t` and `rs.t` faults and the missing target fork/clone service before
-   extending the suite.
+   the complete `t/base` result above is the current upstream subset. Define
+   target subprocess semantics for backticks/fork/clone before claiming `term.t`
+   or extending the suite.
 3. **The library is staged only for development tests.** Set `PERL5LIB` to
    `/mnt/host/perl-tests/lib` for those tests. A rootfs installation and broader
    module loading coverage remain open; `scripts/smoke.pl` uses core builtins.

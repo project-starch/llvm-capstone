@@ -4,6 +4,18 @@ cmake_minimum_required(VERSION 3.25)
 set(CMAKE_C_FLAGS_RELEASE "-O1 -DNDEBUG" CACHE STRING "Release C flags")
 project(capstone_application LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 11)
+option(CAPSTONE_CHECK_COMPILER_ABI "Qualify Capstone direct-call codegen" ON)
+if(CAPSTONE_CHECK_COMPILER_ABI)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/../host/capstone_vm/compiler.py"
+            --check-compiler "${CMAKE_C_COMPILER}"
+    RESULT_VARIABLE compiler_probe_status
+    ERROR_VARIABLE compiler_probe_error)
+  if(NOT compiler_probe_status EQUAL 0)
+    message(FATAL_ERROR "Capstone compiler ABI check failed: ${compiler_probe_error}")
+  endif()
+endif()
 set(CAPSTONE_APPLICATION_INPUTS "" CACHE STRING "Sources, objects and archives containing main")
 set(CAPSTONE_APPLICATION_NAME application CACHE STRING "Output basename")
 set(CAPSTONE_APPLICATION_DATA_BYTES 4194304 CACHE STRING "Globals and stack budget")

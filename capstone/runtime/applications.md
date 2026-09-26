@@ -82,6 +82,10 @@ export CC="$CAPSTONE_TMP_ROOT/application-sdk/capstone-cc"
 `sdk.json` records the compiler, headers, linker script, runtime, libc and
 compiler builtins. The driver preserves source/library order and normal
 compile/preprocessor modes; unknown options and unresolved symbols fail.
+Configuration checks the compiler's direct-call capability codegen and refuses
+the old C-46 backend. `capstone-cc --check-toolchain` repeats that check when an
+existing SDK is reused; source freshness checks alone cannot establish what an
+older compiler binary actually emits.
 It does not claim C++ runtime, dynamic-linker or arbitrary GCC-driver support.
 The standalone CMake project defaults to the currently verified `-O1` runtime;
 compiler regression work may override that explicitly. The imported upstream
@@ -119,7 +123,8 @@ capstone-vm --state "$CAPSTONE_TMP_ROOT/dev-vm" shell
 
 QEMU needs user networking (`--enable-slirp`). Defaults are one hart, 8 GiB RAM,
 640 MiB CMA, `CAPSTONE_GP_NONLIN=1` and 65,536 revocation nodes. Explicit supported
-emulator environment settings are recorded in the session identity. The rootfs
+emulator environment settings are recorded in the session identity and passed
+to QEMU on every boot or restart. The rootfs
 runs as a disposable snapshot; files on the host share remain persistent.
 
 The installed rootfs already supplies the tools. For development, optional
@@ -231,8 +236,8 @@ see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu.json)
 records 1,008 mixed starts after node exhaustion, with stable pool/node/tag counts.
-Four native ASan/UBSan tests and eleven Python tests pass. A subsequent common
-gate uses fresh SDK-built Perl and mruby. The [complete Perl `t/base` run](../ports/perl/musl/results/2026-09-26/base-tests.txt)
-has six passing files and three failing files (one unsupported fork/clone case,
-two SIGSEGV before TAP). Legacy CoreMark/shared-region/basic HostCalls pass; null_blk
+Four native ASan/UBSan tests and twelve Python tests pass. A subsequent common
+gate uses fresh SDK-built Perl and mruby. The [complete Perl `t/base` run](../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+has eight passing files and one failing file (unsupported target subprocess
+creation). Legacy CoreMark/shared-region/basic HostCalls pass; null_blk
 and borrowed-region open/close failures reproduce on the old platform as well.

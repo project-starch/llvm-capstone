@@ -22,16 +22,20 @@ The test also covers ownership isolation, rollback, fork/dup/VMA lifetime,
 overlapping processes, blocked I/O cancellation and transferred Sublet heaps.
 See the [checked result](../../runtime/tests/application/results/20260926-qemu.json).
 
-Four native ASan/UBSan tests and eleven host Python tests pass. A fresh Buildroot
+Four native ASan/UBSan tests and twelve host Python tests pass. A fresh Buildroot
 rootfs installs the driver, launchers and Dropbear. The shared CMake application
 SDK provides a compiler driver for upstream Make/configure builds; Perl's private
 compiler wrapper, entry adapter and VM runner are removed. Fresh Perl 5.36.3 and
-SDK-linked mruby pass the common application gate. The complete upstream Perl
-`t/base` directory run through ordinary `prove` fails: six files pass,
-`base/term.t` fails one test because target fork/clone is unserved, and
-`base/lex.t` and `base/rs.t` each fault before TAP output. `prove` reports
-9 files, 332 emitted assertions and exit 1. See the
-[curated result](../../ports/perl/musl/results/2026-09-26/base-tests.txt).
+SDK-linked mruby pass the common application gate. The current complete Perl
+`t/base` run through ordinary `prove` has eight passing files and one failing
+file: `base/term.t` test 2 needs a target subprocess, but clone syscall 220 is
+unserved. `prove` reports 9 files, 493 emitted assertions and exit 1. The
+[new result](../../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+uses the C-46-corrected compiler and Perl's capability-preserving regex-save
+patch. The [earlier 6/9 result](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
+used an older compiler and a VM CLI that recorded, but did not pass, QEMU
+environment settings. The CLI now passes the recorded settings on every boot;
+the common SDK rejects a compiler binary with the old linear direct-call bug.
 The full upstream Perl suite has not been run or claimed to pass.
 
 Legacy CoreMark, shared-region and the first three HostCall proofs pass on the

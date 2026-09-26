@@ -87,9 +87,21 @@ fi
   || { echo "rebuild the application SDK (PERLD_FROM=runtime)" >&2; exit 2; }
 export CAPSTONE_SDK=$O
 export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
+"$O/capstone-cc" --check-toolchain
+CC=$(python3 - "$O/sdk.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))["cc"])
+PY
+)
+CC_HASH=$(sha256sum "$CC" | cut -d' ' -f1)
 
 # ---- perl, pinned, patched, cross-built ------------------------------------
 S=$ROOT/src/perl-$PERL_VERSION
+PATCH_HASH=$(sha256sum "$PATCHES"/*.patch | sha256sum | cut -d' ' -f1)
+if [[ -f "$S/.perld-patched" && $(cat "$S/.perld-patchset" 2>/dev/null) != "$PATCH_HASH" ]]; then
+  log "source patch set changed; unpacking Perl again"
+  rm -rf "$S"
+fi
 if [[ ! -f "$S/.perld-ready" ]]; then
   rm -rf "$S"
   TAR=${PERL_MIRROR:-$ROOT/dl}/perl-$PERL_VERSION.tar.gz
@@ -118,9 +130,15 @@ apply_our_patches() {
     log "applied $(basename "$p")"
   done
   touch "$S/.perld-patched"
+  printf '%s\n' "$PATCH_HASH" > "$S/.perld-patchset"
 }
 
 if stage perl; then
+  if [[ -f "$S/Makefile.config" && $(cat "$ROOT/.compiler-hash" 2>/dev/null) != "$CC_HASH" ]]; then
+    log "compiler binary changed; cleaning upstream objects"
+    (cd "$S" && make clean > "$ROOT/clean.log" 2>&1) \
+      || { tail -5 "$ROOT/clean.log" >&2; echo "make clean failed" >&2; exit 2; }
+  fi
   # The NATIVE reference, the same release with its own Configure, out of tree.
   if [[ ! -x "$ROOT/native/bin/perl" ]]; then
     N=$ROOT/src/native-perl-$PERL_VERSION
@@ -191,5 +209,6 @@ PY
     echo "a constant was truncated; see the lines above" >&2; exit 2
   fi
   log "domain image $S/perl"
+  printf '%s\n' "$CC_HASH" > "$ROOT/.compiler-hash"
 fi
 ls -la "$S/perl" "$ROOT/native/bin/perl" 2>/dev/null | awk '{print "[build-perl] " $NF, $5" bytes"}'

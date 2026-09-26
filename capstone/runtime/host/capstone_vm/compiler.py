@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -18,6 +19,40 @@ import tempfile
 MUSL_LIBS = {"c", "m", "pthread", "rt", "dl", "util", "crypt", "xnet", "resolv"}
 PAIRED = {"-D", "-U", "-I", "-isystem", "-iquote", "-include", "-imacros",
           "-idirafter", "-Xclang", "-mllvm", "-isysroot"}
+
+# A direct-call target must be non-linear before the register allocator can
+# copy it. The old backend emitted a bare cincoffset; a later movc consumed the
+# linear source and the next call faulted. This check qualifies the compiler
+# binary used by every SDK, even when the source checkout is sparse or newer.
+CALL_TARGET_PROBE = """
+@total = internal addrspace(200) global i32 0, align 4
+define internal void @f(i32 %x) addrspace(200) noinline {
+  %t = load i32, ptr addrspace(200) @total
+  %s = add i32 %t, %x
+  store i32 %s, ptr addrspace(200) @total
+  ret void
+}
+define void @g() addrspace(200) {
+  call addrspace(200) void @f(i32 1)
+  call addrspace(200) void @f(i32 2)
+  ret void
+}
+"""
+
+
+def check_toolchain(cc: str) -> None:
+    result = subprocess.run([cc, "-S", "-x", "ir", "-target", "capstone64-unknown-elf",
+                             "-O2", "-o", "-", "-"], input=CALL_TARGET_PROBE,
+                            text=True, capture_output=True)
+    if result.returncode:
+        raise ValueError(f"compiler codegen probe failed: {result.stderr.strip()}")
+    if "\ng:" not in result.stdout:
+        raise ValueError("compiler codegen probe did not emit the direct-call function")
+    body = result.stdout.split("\ng:", 1)[1].split(".Lfunc_end", 1)[0]
+    target = re.search(r"^\s*cincoffset\s+(\w+),\s*gp,\s*\w+\s*\n"
+                       r"\s*delin\s+\1\s*$", body, re.MULTILINE)
+    if not target or not re.search(r"cjalr\s+ra,\s*0\(" + target[1] + r"\)", body):
+        raise ValueError("compiler emits a linear direct-call target (C-46); rebuild the toolchain")
 
 
 def expand(arguments: list[str], depth: int = 0) -> list[str]:
@@ -73,10 +108,16 @@ def link_arguments(arguments: list[str]) -> tuple[list[str], list[str], list[str
 def main(argv: list[str] | None = None) -> int:
     try:
         arguments = expand(sys.argv[1:] if argv is None else argv)
+        if len(arguments) == 2 and arguments[0] == "--check-compiler":
+            check_toolchain(arguments[1])
+            return 0
         sdk = Path(os.environ.get("CAPSTONE_SDK", Path(sys.argv[0]).absolute().parent))
         config = json.loads((sdk / "sdk.json").read_text())
         if config["version"] != 1:
             raise ValueError("unsupported SDK version; rebuild the SDK")
+        if arguments == ["--check-toolchain"]:
+            check_toolchain(config["cc"])
+            return 0
         target = [config["cc"], "-target", "capstone64-unknown-elf",
                   "-Xclang", "-target-feature", "-Xclang", "+m",
                   "-Xclang", "-target-feature", "-Xclang", "+a",
