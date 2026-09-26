@@ -1,0 +1,38 @@
+mruby-io's tests: in an environment with no sockets, FileTest.socket? skips (4.0.0-rc2).
+
+io_test_setup makes a UNIX socket file as the fixture of one test,
+FileTest.socket?, and raised "can't make a socket" when socket() failed, which
+ended mrbtest before any mruby-io test ran. A Capstone domain has no sockets:
+socket() answers ENOSYS. On that answer the setup now records
+$mrbtest_io_nosocket and makes no socket file, and FileTest.socket? skips with
+that reason. Every other failure still raises. Only test code changes.
+
+diff --git i/mrbgems/mruby-io/test/file_test.rb w/mrbgems/mruby-io/test/file_test.rb
+index 2134c6a75..0dcd9bc22 100644
+--- i/mrbgems/mruby-io/test/file_test.rb
++++ w/mrbgems/mruby-io/test/file_test.rb
+@@ -72,6 +72,7 @@ assert("FileTest.size?") do
+ end
+ 
+ assert("FileTest.socket?") do
++  skip 'no sockets in this environment' if $mrbtest_io_nosocket
+   begin
+     assert_true FileTest.socket?($mrbtest_io_socketname)
+   rescue NotImplementedError => e
+diff --git i/mrbgems/mruby-io/test/mruby_io_test.c w/mrbgems/mruby-io/test/mruby_io_test.c
+index ea288ae5d..21858f803 100644
+--- i/mrbgems/mruby-io/test/mruby_io_test.c
++++ w/mrbgems/mruby-io/test/mruby_io_test.c
+@@ -137,6 +137,12 @@ mrb_io_test_io_setup(mrb_state *mrb, mrb_value self)
+ 
+   unlink(fnames[IDX_SOCKET]);
+   fds[IDX_SOCKET] = socket(AF_UNIX, SOCK_STREAM, 0);
++  if (fds[IDX_SOCKET] == -1 && errno == ENOSYS) {
++    /* An environment with no sockets at all (a Capstone domain): the socket
++       file is only FileTest.socket?'s fixture, and that test skips. */
++    mrb_gv_set(mrb, mrb_intern_lit(mrb, "$mrbtest_io_nosocket"), mrb_true_value());
++    return mrb_true_value();
++  }
+   if (fds[IDX_SOCKET] == -1) {
+     mrb_raise(mrb, E_RUNTIME_ERROR, "can't make a socket");
+   }

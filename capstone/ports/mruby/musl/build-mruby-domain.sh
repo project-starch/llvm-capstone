@@ -12,6 +12,9 @@
 #   src/mruby/build/capstone/bin/mrbtest  mruby's test suite, with MRBD_TESTS=1
 #   src/mruby/build/native/bin/{mruby,mrbtest}   the same, natively
 #
+# MRBD_PIN picks the mruby: head (default, 2026-09-17, every known defect fixed)
+# or 4.0.0-rc2 (2026-03-12, the Sublet evaluation's pin: temporal defects on
+# mruby's own allocators, fixed later). Each pin has its own patches/<pin>/.
 # Knobs (see build_config.rb): MRBD_BOXING, MRBD_DISPATCH, MRBD_OPT, MRBD_TESTS,
 # MRBD_DEFINES. MRBD_FROM=runtime|mruby starts at that stage. MRUBY_MIRROR=<a
 # local mruby clone> clones from there instead of GitHub (its Prism submodule too).
@@ -26,11 +29,19 @@ ARENA=${MRBD_ARENA_BYTES:-$((64 * 1024 * 1024))}
 JOBS=${JOBS:-16}
 FROM=${MRBD_FROM:-all}
 BOXING=${MRBD_BOXING:-no}
+PIN=${MRBD_PIN:-head}
 
-# The pinned trees. mruby's head of 2026-09-17, and the Prism its .gitmodules names.
+# The pinned trees. head: mruby of 2026-09-17 and the Prism its .gitmodules
+# names. 4.0.0-rc2: the tag's commit, whose parser is still parse.y (no Prism).
 MRUBY_URL=https://github.com/mruby/mruby.git
-MRUBY_COMMIT=ad98f216eb472202c8e5deece5ea13655d9f7969
-PRISM_COMMIT=c0e37816e97e23e92524a4070e1b99a4025bc63f
+case "$PIN" in
+  head)      MRUBY_COMMIT=ad98f216eb472202c8e5deece5ea13655d9f7969
+             PRISM_COMMIT=c0e37816e97e23e92524a4070e1b99a4025bc63f ;;
+  4.0.0-rc2) MRUBY_COMMIT=9d523e2f74f2e63ca02840937523de61398a617d
+             PRISM_COMMIT= ;;
+  *) echo "MRBD_PIN=$PIN? (head, 4.0.0-rc2)" >&2; exit 2 ;;
+esac
+PATCHES=$SCRIPT_DIR/patches/$PIN
 
 [[ -f "$MRT/hostcall.c" ]] || { echo "no runtime at $MRT (RUNTIME_REPO=$RT)" >&2; exit 2; }
 mkdir -p "$ROOT/runtime" "$ROOT/src"
@@ -93,22 +104,27 @@ M=$ROOT/src/mruby
 if [[ ! -d "$M/.git" ]]; then
   git clone -q "${MRUBY_MIRROR:-$MRUBY_URL}" "$M"
   git -C "$M" checkout -q "$MRUBY_COMMIT"
-  if [[ -n ${MRUBY_MIRROR:-} ]]; then
-    git -C "$M" config submodule.mrbgems/mruby-compiler/lib/prism.url "$MRUBY_MIRROR/mrbgems/mruby-compiler/lib/prism"
+  if [[ -n $PRISM_COMMIT ]]; then
+    if [[ -n ${MRUBY_MIRROR:-} ]]; then
+      git -C "$M" config submodule.mrbgems/mruby-compiler/lib/prism.url "$MRUBY_MIRROR/mrbgems/mruby-compiler/lib/prism"
+    fi
+    # A mirror is a local path, which git refuses as a submodule source by default.
+    git -C "$M" ${MRUBY_MIRROR:+-c protocol.file.allow=always} submodule update -q --init mrbgems/mruby-compiler/lib/prism
+    [[ $(git -C "$M/mrbgems/mruby-compiler/lib/prism" rev-parse HEAD) == "$PRISM_COMMIT" ]] \
+      || { echo "Prism is not at $PRISM_COMMIT" >&2; exit 2; }
   fi
-  # A mirror is a local path, which git refuses as a submodule source by default.
-  git -C "$M" ${MRUBY_MIRROR:+-c protocol.file.allow=always} submodule update -q --init mrbgems/mruby-compiler/lib/prism
-  [[ $(git -C "$M/mrbgems/mruby-compiler/lib/prism" rev-parse HEAD) == "$PRISM_COMMIT" ]] \
-    || { echo "Prism is not at $PRISM_COMMIT" >&2; exit 2; }
-  for p in "$SCRIPT_DIR"/patches/*.patch; do
+  if [[ $BOXING == word ]] && ! ls "$PATCHES"/0006-*.patch >/dev/null 2>&1; then
+    echo "MRBD_BOXING=word needs a 0006 patch for $PIN, and $PATCHES has none" >&2; exit 2
+  fi
+  for p in "$PATCHES"/*.patch; do
     case $(basename "$p") in 0006-*) [[ $BOXING == word ]] || continue ;; esac
     (cd "$M" && patch -p1 -s < "$p") || { echo "patch $p did not apply" >&2; exit 2; }
     log "applied $(basename "$p")"
   done
-  echo "$BOXING" > "$M/.mrbd-boxing"
+  echo "$PIN $BOXING" > "$M/.mrbd-boxing"
 fi
-[[ $(cat "$M/.mrbd-boxing") == "$BOXING" ]] \
-  || { echo "the tree at $M was patched for MRBD_BOXING=$(cat "$M/.mrbd-boxing"); remove it to rebuild" >&2; exit 2; }
+[[ $(cat "$M/.mrbd-boxing") == "$PIN $BOXING" ]] \
+  || { echo "the tree at $M was patched for MRBD_PIN MRBD_BOXING = $(cat "$M/.mrbd-boxing"); remove it to rebuild" >&2; exit 2; }
 
 if stage mruby; then
   export MRBD_SURVEY_LOG=$ROOT/objects.tsv

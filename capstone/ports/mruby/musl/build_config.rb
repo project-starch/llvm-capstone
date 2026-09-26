@@ -45,7 +45,9 @@ end
 
 MRuby::CrossBuild.new('capstone') do |conf|
   conf.toolchain :clang
-  conf.ports 'posix'                      # a cross build picks no port; musl is POSIX
+  # A cross build picks no port; musl is POSIX. Versions before the port layer
+  # (4.0.0-rc2) have no `ports` and need none.
+  conf.ports 'posix' if conf.respond_to?(:ports)
   conf.cc.command = 'capstone-cc'
   conf.cc.flags = opt + common
   # A domain cannot spawn a process: mruby-io's own veto over IO.popen, backticks

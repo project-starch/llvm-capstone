@@ -35,10 +35,21 @@ then four of mruby's `benchmark/` scripts read from their files and evaluated
 there (`bm_mandel_term`, `bm_so_lists`, `bm_hash_access`, `bm_so_mandelbrot`).
 The output is byte-identical to native (`results/2026-09-26/scripts.txt`).
 
-This is mruby's head of 2026-09-17: every known defect is fixed in it. For the
-Sublet evaluation mruby will be re-pinned at a release that still has fixed
-temporal defects whose memory mruby's own allocators manage; this pin stays as
-the fixed control.
+## Pins (`MRBD_PIN`)
+
+- `head` (default): mruby of 2026-09-17, the results above. Every defect known
+  when it was taken is fixed in it, save one fixed the next day (0cf969a2b).
+- `4.0.0-rc2` (9d523e2f74f2, 2026-03-12): the pin for the Sublet evaluation.
+  An inventory of mruby's fixed temporal defects (CVEs, OSS-Fuzz, issues and
+  PRs) against every release tag put 24 at this tag whose memory mruby's own
+  allocators manage, 11 of them in reused GC object slots, which ASan cannot
+  see; more than at any final release (18 at 4.0.0 and at 3.3.0). Each defect is to
+  be measured against this tag plus that one defect's upstream fix.
+  mrbtest in the domain: OK 1632, KO 0, Crash 0 (native OK 1639); the 7 extra
+  skips are popen and sockets (`results/2026-09-26/mrbtest-4.0.0-rc2.txt`).
+  This version still parses with parse.y, so it needs no Prism patches; its
+  0001, 0003 and 0007 are rewritten for its code, 0002 is head's. There is no
+  0006 for it yet: `MRBD_BOXING=word` stops with a message.
 
 ## Build and run
 
@@ -60,7 +71,7 @@ Knobs (`build_config.rb`): `MRBD_BOXING=no|word`, `MRBD_DISPATCH=switch|direct`,
 
 ## What mruby needed
 
-### Patches (`patches/`, each with its reason in its header)
+### Patches (`patches/<pin>/`, each with its reason in its header; the table is head's)
 
 | | File | Why |
 |---|---|---|
@@ -93,7 +104,9 @@ The two `__uintcap_t` patches (and 0006) need the compiler's `__intcap` type.
 128 open files instead of 8; and for mruby-io: `symlink`, `lstat`
 (`AT_SYMLINK_NOFOLLOW`), `chmod`, `flock` through the helper, `dup`/`dup3`/
 `F_DUPFD` sharing one file position, `FD_CLOEXEC` kept per descriptor, and
-`/dev/tty` refused with ENXIO (a domain has no controlling terminal).
+`/dev/tty` refused with ENXIO (a domain has no controlling terminal); and pipes
+that hold 64 KiB, as Linux's do (4.0.0-rc2's mrbtest writes 4097 bytes into one
+before reading).
 `tests/runtime-qemu/fd-path-ops/` tests these with a control.
 
 ### Configuration
