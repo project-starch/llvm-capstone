@@ -1,6 +1,7 @@
 // __intcap on capstone64: the type, its spellings, conversions and binary
-// and unary arithmetic are accepted; pointer arithmetic with an __intcap operand,
-// an __intcap subscript and _Atomic read-modify-write are refused for now.
+// and unary arithmetic, pointer arithmetic with an __intcap operand and an
+// __intcap subscript (both by the address) are accepted; _Atomic
+// read-modify-write is refused for now.
 // Other targets have no capabilities and reject the keyword.
 //
 // RUN: %clang_cc1 -triple capstone64-unknown-elf -ffreestanding -fsyntax-only -verify=cap %s
@@ -24,8 +25,12 @@ __intcap neg(__intcap x) { return -x; }
 __intcap bnot(__intcap x) { return ~x; }
 void inc(__uintcap_t *u) { (*u)++; }
 void ainc(_Atomic __uintcap_t *a) { (*a)++; }         // cap-error {{operator '++' on '_Atomic(__uintcap_t)' is not supported yet on Capstone}}
-char *ptradd(char *p, __uintcap_t u) { return p + u; } // cap-error {{operator '+' on '__uintcap_t'}}
-char sub(char *p, __uintcap_t u) { return p[u]; }    // cap-error {{operator '[]' on '__uintcap_t'}}
+char *ptradd(char *p, __uintcap_t u) { return p + u; } // by the address
+char *ptrsub(char *p, __intcap i) { return p - i; }
+char *capadd(__uintcap_t u, char *p) { return u + p; }
+void ptraddeq(char **p, __uintcap_t u) { *p += u; }
+char sub(char *p, __uintcap_t u) { return p[u]; }      // the address is the index
+char arr(__uintcap_t u) { static char a[4]; return a[u & 3] + u[a]; }
 void atom(_Atomic __uintcap_t *a) { *a += 1; }       // cap-error {{operator '+=' on '_Atomic(__uintcap_t)'}}
 #else
 __intcap e; // x86-error {{__intcap is not supported on this target}}

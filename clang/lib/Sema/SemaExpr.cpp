@@ -5335,11 +5335,19 @@ Sema::CreateBuiltinArraySubscriptExpr(Expr *Base, SourceLocation LLoc,
   if (!IndexExpr->getType()->isIntegerType() && !IndexExpr->isTypeDependent())
     return ExprError(Diag(LLoc, diag::err_typecheck_subscript_not_integer)
                      << IndexExpr->getSourceRange());
-  // Capstone: an __intcap index would need converting to its address first.
-  if (IndexExpr->getType()->isIntCapType())
-    return ExprError(Diag(LLoc, diag::err_capstone_intcap_arith)
-                     << "[]" << IndexExpr->getType()
-                     << IndexExpr->getSourceRange());
+  // Capstone: an __intcap index is its address, as in CHERI C. The element is
+  // chosen by the integer; a capability the index may carry plays no part.
+  if (IndexExpr->getType()->isIntCapType()) {
+    QualType AddrTy = IndexExpr->getType()->isSignedIntegerType()
+                          ? Context.getIntPtrType()
+                          : Context.getUIntPtrType();
+    Expr *Addr = ImpCastExprToType(IndexExpr, AddrTy, CK_IntegralCast).get();
+    if (IndexExpr == LHSExp)
+      LHSExp = Addr;
+    else
+      RHSExp = Addr;
+    IndexExpr = Addr;
+  }
 
   if ((IndexExpr->getType()->isSpecificBuiltinType(BuiltinType::Char_S) ||
        IndexExpr->getType()->isSpecificBuiltinType(BuiltinType::Char_U)) &&
@@ -15144,10 +15152,43 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
           << LHSExpr->getSourceRange() << RHSExpr->getSourceRange();
   }
 
+  // Capstone: pointer arithmetic with an __intcap operand uses the operand's
+  // address, as in CHERI C: p + ic is p advanced by ic's address, and the
+  // result's authority is p's. Converted here, the rest is ordinary pointer
+  // arithmetic.
+  if ((Opc == BO_Add || Opc == BO_Sub || Opc == BO_AddAssign ||
+       Opc == BO_SubAssign) &&
+      !LHSExpr->getType()->isAtomicType()) {
+    auto IsPtrLike = [](const Expr *E) {
+      return E->getType()->isAnyPointerType() || E->getType()->isArrayType();
+    };
+    auto ToAddress = [&](ExprResult &E) {
+      E = DefaultLvalueConversion(E.get());
+      if (E.isInvalid())
+        return;
+      QualType AddrTy = E.get()->getType()->isSignedIntegerType()
+                            ? Context.getIntPtrType()
+                            : Context.getUIntPtrType();
+      E = ImpCastExprToType(E.get(), AddrTy, CK_IntegralCast);
+    };
+    if (IsPtrLike(LHSExpr) && RHSExpr->getType()->isIntCapType()) {
+      ToAddress(RHS);
+      if (RHS.isInvalid())
+        return ExprError();
+      RHSExpr = RHS.get();
+    } else if (Opc == BO_Add && LHSExpr->getType()->isIntCapType() &&
+               IsPtrLike(RHSExpr)) {
+      ToAddress(LHS);
+      if (LHS.isInvalid())
+        return ExprError();
+      LHSExpr = LHS.get();
+    }
+  }
+
   // Capstone: arithmetic, bitwise and shift operators on __intcap run on the
   // address and put the result back into the capability of one operand
-  // (llvm.capstone.cap.set.address). Not yet: pointer arithmetic with an
-  // __intcap operand, and compound assignment to an _Atomic __intcap.
+  // (llvm.capstone.cap.set.address). Not yet: compound assignment to an
+  // _Atomic __intcap.
   if (Opc != BO_Assign && Opc != BO_Comma && !BinaryOperator::isComparisonOp(Opc) &&
       !BinaryOperator::isLogicalOp(Opc) &&
       (LHSExpr->getType()->isIntCapType() || RHSExpr->getType()->isIntCapType()) &&

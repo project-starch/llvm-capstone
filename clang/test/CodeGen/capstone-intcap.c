@@ -140,3 +140,18 @@ __intcap negate(__intcap x) { return -x; }
 // CHECK: [[B:%.*]] = call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(
 // CHECK: store ptr addrspace(200) [[B]]
 void bump(__uintcap_t *u) { (*u)++; }
+
+// An __intcap subscript and pointer arithmetic with an __intcap operand use its
+// address (as in CHERI C); the pointer keeps its own capability.
+// CHECK-LABEL: define {{.*}}i8 @subscript(ptr addrspace(200) {{.*}}%p, ptr addrspace(200) {{.*}}%u)
+// CHECK: [[SI:%.*]] = ptrtoint ptr addrspace(200) %{{.*}} to i64
+// CHECK: getelementptr inbounds {{(nuw )?}}i8, ptr addrspace(200) %{{.*}}, i64 [[SI]]
+char subscript(char *p, __uintcap_t u) { return p[u]; }
+
+// CHECK-LABEL: define {{.*}}ptr addrspace(200) @advance(ptr addrspace(200) {{.*}}%p, ptr addrspace(200) {{.*}}%i)
+// CHECK: [[AI:%.*]] = ptrtoint ptr addrspace(200) %{{.*}} to i64
+// CHECK: [[NEG:%.*]] = sub i64 0, [[AI]]
+// CHECK: getelementptr inbounds i8, ptr addrspace(200) %{{.*}}, i64 [[NEG]]
+// CHECK-NOT: llvm.capstone.cap.set.address
+// CHECK: ret ptr addrspace(200)
+char *advance(char *p, __intcap i) { return p - i; }

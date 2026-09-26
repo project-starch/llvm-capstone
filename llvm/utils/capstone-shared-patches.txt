@@ -64,7 +64,7 @@ clang/lib/Sema/Sema.cpp | +13 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Sema/SemaCapstone.cpp | +118 -0 | //===------ SemaCapstone.cpp ---- Capstone target-specific routines -------===//
 clang/lib/Sema/SemaCast.cpp | +6 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Sema/SemaChecking.cpp | +130 -0 | #include "clang/Sema/SemaCapstone.h"
-clang/lib/Sema/SemaExpr.cpp | +51 -0 | // Capstone: an __intcap index would need converting to its address first.
+clang/lib/Sema/SemaExpr.cpp | +92 -0 | // Capstone: an __intcap index is its address, as in CHERI C. The element is
 clang/lib/Sema/SemaTemplateVariadic.cpp | +1 -0 | case TST_intcap:
 clang/lib/Sema/SemaType.cpp | +11 -0 | // Capstone: an integer held in a capability. Only a target whose pointers
 clang/lib/Serialization/ASTCommon.cpp | +6 -0 | case BuiltinType::UIntCap:
