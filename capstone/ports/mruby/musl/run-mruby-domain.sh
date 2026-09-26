@@ -16,7 +16,8 @@
 # needs a block beyond the buddy allocator, taken from CMA), MRBD_ENV (the
 # domain's environment, NAME=value words; default HOME=/mnt/host),
 # MRBD_HEAP_REGION_BYTES (an image built with MRBD_HEAP=sublet: the region the
-# host grants its heap, twice the pool, e.g. 134217728 for the default pool). CAPSTONE_* switches
+# host grants its heap, twice the pool, e.g. 134217728 for the default pool),
+# MRBD_GC_REGION_BYTES (MRBD_HEAP=sublet-gc: the second grant, the GC's pages). CAPSTONE_* switches
 # of the QEMU (CAPSTONE_TAGWATCH, CAPSTONE_MOVC_NULL_SCALAR, ...) pass through.
 set -uo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -39,7 +40,7 @@ MODSRC=$RT/capstone/caplifive-buildroot/package/modcapstone
 "$CAPSTONE_LLVM_BIN/llvm-objcopy" --strip-debug "$IMG" "$SHARE/bin/mruby.dom" || exit 2
 "$BR/host/bin/riscv64-buildroot-linux-gnu-gcc" -O2 -I"$MUSL_PORT/libc-test" -I"$MUSL_PORT/runtime" \
   -I"$MODSRC/userspace/lib" -I"$RT/capstone/tests/runtime-qemu/hostcall-stdout-probe" \
-  -I"$RT/capstone/tests/runtime-qemu" ${MRBD_HEAP_REGION_BYTES:+-DLT_HEAP_REGION_BYTES=${MRBD_HEAP_REGION_BYTES}UL} -o "$SHARE/lt.user" \
+  -I"$RT/capstone/tests/runtime-qemu" ${MRBD_HEAP_REGION_BYTES:+-DLT_HEAP_REGION_BYTES=${MRBD_HEAP_REGION_BYTES}UL} ${MRBD_GC_REGION_BYTES:+-DLT_GC_REGION_BYTES=${MRBD_GC_REGION_BYTES}UL} -o "$SHARE/lt.user" \
   "$MUSL_PORT/libc-test/libc_test_host.c" "$MODSRC/userspace/lib/libcapstone.c" || exit 2
 cat > "$SHARE/dom-run.sh" <<RUN
 cp /mnt/host/bin/mruby.dom /tmp/mruby.dom && echo MRBD-IMAGE-COPIED

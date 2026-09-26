@@ -59,6 +59,12 @@ MRuby::CrossBuild.new('capstone') do |conf|
   conf.cc.defines += defines + %w(MRB_NO_IO_POPEN MRB_WITH_IO_PREAD_PWRITE MRB_STR_LENGTH_MAX=0)
   conf.archiver.command = ENV.fetch('LLVM_AR')
   conf.linker.command = 'capstone-cc'
+  # MRBD_HEAP=sublet-gc: every GC object slot under Sublet (patch 0008), which
+  # needs sublet.h from the runtime tree; the build script exports its path.
+  if (inc = ENV['MRBD_GC_SUBLET_INCLUDE'])
+    conf.cc.defines << 'MRB_CAPSTONE_GC_SUBLET'
+    conf.cc.include_paths << inc
+  end
   gems.call(conf)
   conf.enable_test if tests
   conf.test_runner.command = 'false'      # the domain runs it, not rake

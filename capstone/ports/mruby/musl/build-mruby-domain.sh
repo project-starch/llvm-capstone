@@ -21,7 +21,10 @@
 # bounded alias per block, every free revokes). The sublet arm differs in three
 # runtime objects -- the heap, hostcall.o (which parks the grant) and the entry
 # (which reports the heap's counters) -- and in the host (the grant); mruby is
-# the same. MRBD_HEAP_LOG sets its pool, 2^26 = 64 MiB by default; the host must
+# the same. sublet-gc is sublet plus every GC object slot issued and revoked on
+# its own (patches/4.0.0-rc2/0008, MRB_CAPSTONE_GC_SUBLET): the GC carves its
+# pages from a second grant (run-mruby-domain.sh MRBD_GC_REGION_BYTES).
+# MRBD_HEAP_LOG sets its pool, 2^26 = 64 MiB by default; the host must
 # grant twice that (run-mruby-domain.sh, MRBD_HEAP_REGION_BYTES), since a CMA
 # region is only 1 MiB-aligned and the pool is a self-aligned block inside it.
 # Knobs (see build_config.rb): MRBD_BOXING, MRBD_DISPATCH, MRBD_OPT, MRBD_TESTS,
@@ -41,7 +44,12 @@ BOXING=${MRBD_BOXING:-no}
 PIN=${MRBD_PIN:-head}
 HEAP=${MRBD_HEAP:-level0}
 HEAP_LOG=${MRBD_HEAP_LOG:-26}
-case "$HEAP" in level0|sublet) ;; *) echo "MRBD_HEAP=$HEAP? (level0, sublet)" >&2; exit 2 ;; esac
+case "$HEAP" in level0|sublet|sublet-gc) ;; *) echo "MRBD_HEAP=$HEAP? (level0, sublet, sublet-gc)" >&2; exit 2 ;; esac
+if [[ $HEAP == sublet-gc ]]; then
+  [[ -f "$SCRIPT_DIR/patches/$PIN/0008-gc-slots-under-sublet.patch" ]] \
+    || { echo "MRBD_HEAP=sublet-gc needs patches/$PIN/0008-gc-slots-under-sublet.patch" >&2; exit 2; }
+  export MRBD_GC_SUBLET_INCLUDE=$RT/capstone/sublet
+fi
 
 # The pinned trees. head: mruby of 2026-09-17 and the Prism its .gitmodules
 # names. 4.0.0-rc2: the tag's commit, whose parser is still parse.y (no Prism).
@@ -92,10 +100,11 @@ if stage runtime; then
       -ffreestanding -O0 -c "$MRT/$s.S" -o "$O/$s.o"
   done
   HCF=(); EF=()
-  [[ $HEAP == sublet ]] && { HCF=(-DCAPSTONE_PROGRAM_REGIONS=1); EF=(-DMRBD_SUBLET_HEAP=1); }
+  [[ $HEAP == sublet* ]] && { HCF=(-DCAPSTONE_PROGRAM_REGIONS=1); EF=(-DMRBD_SUBLET_HEAP=1); }
+  [[ $HEAP == sublet-gc ]] && EF+=(-DMRBD_GC_SUBLET=1)
   "$CAPSTONE_CLANG" "${RF[@]}" "${HCF[@]}" -c "$MRT/hostcall.c" -o "$O/hostcall.o"
   "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/tls.c" -o "$O/tls.o"
-  if [[ $HEAP == sublet ]]; then
+  if [[ $HEAP == sublet* ]]; then
     "$CAPSTONE_CLANG" "${RF[@]}" -I"$RT/capstone/sublet" -DCAPSTONE_SUBLET_HEAP_LOG="$HEAP_LOG" \
       -c "$MRT/sublet_heap.c" -o "$O/heap.o"
   else
@@ -109,7 +118,7 @@ if stage runtime; then
   source "$RT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
   "$CAPSTONE_CLANG" "${CF[@]}" "${EF[@]}" -std=c11 -O1 -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$O/domain_entry.o"
   echo "$HEAP" > "$O/.heap"
-  if [[ $HEAP == sublet ]]; then log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, sublet heap pool 2^$HEAP_LOG"
+  if [[ $HEAP == sublet* ]]; then log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, sublet heap pool 2^$HEAP_LOG"
   else log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, level0 arena $ARENA bytes"; fi
 fi
 

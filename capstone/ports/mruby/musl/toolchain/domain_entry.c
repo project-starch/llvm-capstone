@@ -40,6 +40,9 @@ int main(int argc, char **argv);
 #ifdef MRBD_SUBLET_HEAP
 void __capstone_sublet_heap_stats(unsigned long out[9]);
 #endif
+#ifdef MRBD_GC_SUBLET
+void mrb_capstone_gc_sublet_stats(unsigned long out[7]);
+#endif
 
 static int read_lines(const char *path, char lines[][LINE_MAX_BYTES], char **out, int start)
 {
@@ -94,6 +97,14 @@ int capstone_main(void)
 	printf("MRBD-HEAP alloc=%lu free=%lu merge=%lu peak-live=%lu split=%lu mrev=%lu "
 	       "delin=%lu revoke=%lu init=%lu\n",
 	       hs[0], hs[1], hs[2], hs[3], hs[4], hs[5], hs[6], hs[7], hs[8]);
+#endif
+#ifdef MRBD_GC_SUBLET
+	/* The GC's own arm (patch 0008): its Sublet counts are kept apart from the
+	   heap's, per translation unit, so they are reported apart too. */
+	unsigned long gs[7];
+	mrb_capstone_gc_sublet_stats(gs);
+	printf("MRBD-GC pages=%lu issued=%lu revoked=%lu split=%lu mrev=%lu delin=%lu revoke=%lu\n",
+	       gs[0], gs[1], gs[2], gs[3], gs[4], gs[5], gs[6]);
 #endif
 	fflush(NULL);
 	return rc;

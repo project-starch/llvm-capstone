@@ -66,6 +66,26 @@ mrbtest OK 1632, KO 0, Crash 0, the same skips as on level0. The run spends
 under QEMU's default pool, which is that budget, it stopped after 307 passing
 tests, and it completes with `CAPSTONE_REV_NODES=16777216`.
 
+## Every GC object slot under Sublet (`MRBD_HEAP=sublet-gc`)
+
+The third arm (4.0.0-rc2, patch 0008, `MRB_CAPSTONE_GC_SUBLET`; the design is
+`docs/design/mruby-gc-sublet-port-plan.md`): the GC carves its pages from a
+second grant it holds linearly, issues each object its own 80-byte alias
+(`sublet_take`) and revokes the slot when the sweep frees the object
+(`sublet_give`), so a stale reference to a collected object dies with it rather
+than reaching the slot's next occupant. No free slot is read: the page header
+and the free list are a sidecar. Without the define `gc.c` preprocesses
+identically to before.
+
+mrbtest (`results/2026-09-26/mrbtest-4.0.0-rc2-sublet-gc.txt`): OK 1632, KO 0,
+Crash 0, the same skips as on level0; the GC carved 65 pages, issued 109,608
+slots and revoked 82,122. Its first run faulted in `obj_free`, on a dying fiber's
+frame env that the same sweep had already revoked -- a GC check that reads a
+possibly dead object, which the design names and this call site had missed; it
+now goes through the GC's own alias. Deviations: an all-dead page is kept, and
+`mrb_gc_add_region` is refused. Runs need `MRBD_GC_REGION_BYTES` (the second
+grant) and a large `CAPSTONE_REV_NODES`.
+
 ## Build and run
 
     CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
