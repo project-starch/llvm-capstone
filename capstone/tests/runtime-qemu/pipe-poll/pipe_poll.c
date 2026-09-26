@@ -22,6 +22,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+/* The runtime's pipe capacity, Linux's default (runtime/hostcall.c HC_PIPE_BYTES). */
+#define PIPE_CAPACITY 65536
+
 static int failures;
 
 static void check(const char *name, int ok, const char *detail)
@@ -34,7 +37,7 @@ static void check(const char *name, int ok, const char *detail)
 int main(void)
 {
 	char detail[200], buf[64];
-	static char big[5000];
+	static char big[PIPE_CAPACITY + 1000];
 	int fds[2], rc;
 	long n;
 
@@ -100,15 +103,15 @@ int main(void)
 	m = write(wr, "y", 1);
 	struct pollfd pw = { wr, POLLOUT, 0 };
 	rc = poll(&pw, 1, 0);
-	snprintf(detail, sizeof detail, "short=%ld (want 4096) then=%ld errno=%d (want EAGAIN) pollout=%d", n, m, errno, rc);
-	check("full-pipe", n == 4096 && m < 0 && errno == EAGAIN && rc == 0, detail);
+	snprintf(detail, sizeof detail, "short=%ld (want %d) then=%ld errno=%d (want EAGAIN) pollout=%d", n, PIPE_CAPACITY, m, errno, rc);
+	check("full-pipe", n == PIPE_CAPACITY && m < 0 && errno == EAGAIN && rc == 0, detail);
 	long drained = 0;
 	while ((n = read(rd, big, sizeof big)) > 0)
 		drained += n;
 	pw.revents = 0;
 	rc = poll(&pw, 1, 0);
-	snprintf(detail, sizeof detail, "drained=%ld (want 4096) pollout=%d revents=%#x", drained, rc, pw.revents);
-	check("drain-then-pollout", drained == 4096 && rc == 1 && (pw.revents & POLLOUT), detail);
+	snprintf(detail, sizeof detail, "drained=%ld (want %d) pollout=%d revents=%#x", drained, PIPE_CAPACITY, rc, pw.revents);
+	check("drain-then-pollout", drained == PIPE_CAPACITY && rc == 1 && (pw.revents & POLLOUT), detail);
 
 	close(wr);
 	pf.revents = 0;

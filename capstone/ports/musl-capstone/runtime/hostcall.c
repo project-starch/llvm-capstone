@@ -201,7 +201,13 @@ static struct hc_file *hc_slot(long fd) {
  * same fact shows again, see there. */
 #define HC_PIPE_FD_BASE (HC_FD_BASE + HC_MAX_FILES)
 #define HC_MAX_PIPES 2
-#define HC_PIPE_BYTES 4096
+/* A Linux pipe's default capacity (16 pages). Nothing here ever reads a pipe
+   while its writer waits, so what a program may write before reading is
+   exactly what fits: a write Linux takes whole with no reader must be taken
+   whole here too. It was 4096, and mruby 4.0.0-rc2's mrbtest writes 4097
+   bytes into a pipe before reading them (IO#read(n) with n > IO::BUF_SIZE):
+   the last byte came back EAGAIN and the test failed. */
+#define HC_PIPE_BYTES 65536
 
 struct hc_pipe {
   char buf[HC_PIPE_BYTES];
