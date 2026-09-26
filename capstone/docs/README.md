@@ -1,5 +1,7 @@
 # Capstone project documentation
 
+Application execution: [shared launcher, persistent Linux shell, build commands and limits](../runtime/applications.md).
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).
 
 Everything durable the project knows about itself: architecture, the issue registry, the test
@@ -89,6 +91,20 @@ weeks stale without anyone noticing, because nothing mapped the tree.
 
 ## Current verified baseline
 
+The `domain-process-runtime` application stack supports a persistent Linux guest,
+ordinary application arguments/streams, trusted fault/preemption return and owned
+resource reuse. The installed QEMU guest passes exhaustion/recovery followed by
+1,008 mixed starts in the same boot, with stable retained resources. Perl uses
+the shared SDK; Perl and mruby execute through the common launcher. See
+[applications](../runtime/applications.md), the
+[checked acceptance](../runtime/tests/application/results/20260926-qemu-rebased.json)
+and [current state](state/current-state.md) for scope and remaining failures.
+This is a one-hart QEMU platform extension, not a new FPGA result.
+The current [Perl `t/base` result](../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
+is 8/9 files passing; the remaining case requires target subprocess creation.
+Upstream Perl coverage remains incomplete.
+
+
 Opt-in [generic client-fault recovery](../runtime/domain-faults.md) and its
 [standalone tests](../runtime/tests/fault-recovery/README.md) are independent of
 the allocator ports. The runtime requires the matching QEMU trap-delivery change;
@@ -99,8 +115,10 @@ are in [the component README](../ports/postgres/memory-contexts/README.md).
 This is allocator-level coverage, not a protected server or consumer-defect suite.
 
 
-> **Scope note added 2026-09-04.** This list is the **QEMU/runtime** baseline and it is still
-> accurate, but it accumulated before any of the silicon work and says nothing about it. For
+> **Historical baseline list (scope updated 2026-09-26).** The list below records earlier
+> QEMU/runtime validation. The available legacy snapshot currently fails null_blk and
+> the borrowed-region file-open-close proof on both old and new platforms; see current state.
+> It accumulated before the silicon work and says nothing about it. For
 > what is verified **on the board** — the resident bitstream, S-06/S-07/S-08/S-12, and SQLite's
 > logic tests running in a capability domain — read `state/current-state.md`. For the status of
 > any individual defect, `ref/ISSUES.md` outranks both.
@@ -168,6 +186,9 @@ Use these only when the task actually needs them:
 - `design/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
 - `design/research-decisions-log.md` — paper-worthy implementation decisions and tradeoffs, cited by commit hash
 - `plans/backend-compiler-fixes.md` — known backend bugs and workarounds (from CoreMark bring-up)
+- [Domain applications as Linux commands](plans/domain-process-runtime.md) — implemented
+  shared launcher, owned lifecycle, shell I/O, common SDK and persistent development VM;
+  architecture, verified acceptance and platform limits
 - `history/README.md` — historical index and note selection guide
 
 ## History rules

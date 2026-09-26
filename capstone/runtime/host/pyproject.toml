@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "capstone-vm"
+version = "0.1.0"
+description = "Persistent Linux development guests for Capstone applications"
+requires-python = ">=3.11"
+
+[project.scripts]
+capstone-vm = "capstone_vm.__main__:main"

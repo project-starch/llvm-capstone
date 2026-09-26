@@ -1,0 +1,5 @@
+string_bounds_safe
+fputwc_null_safe
+mbsrtowcs_bounds_safe
+atexit_capability_safe
+mmap_shm_level0

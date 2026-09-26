@@ -1,0 +1,30 @@
+# scripts/smoke.pl, perl 5.36.3 (PERLD_PIN via PERL_VERSION), PERLD_HEAP=level0, -O2,
+# patches/5.36.3/0001-0006; compiler llvm-capstone 7d01722aab88; runtime 9704639b4a3a;
+# QEMU the shared build 408fd83945, br-snap. Domain output is byte-identical to the native
+# reference built from the same release (17 checks + SMOKE_DONE, diffed, 18 lines).
+native and domain:
+P1 hello
+P2 array 2000 4002000
+P3 hash 3000 2999
+P4 string 2390 ab0ab1ab2a
+P5 churn ok
+P6 fib 6765
+P7 deep 500
+P8 eval caught msg
+P9 num 4.50 2.5 1.18059162071741e+21
+P10 sort apple banana fig pear
+P11 regex The quick | The slow brown fox | 2
+P12 closure 5
+P13 ref ARRAY REF 2
+P14 method Counter 3
+P15 file 50 last-ok
+P16 dir 1
+P17 pack 1,2,3 03.14
+SMOKE_DONE
+LT-RESULT perl.dom status=0 rounds=40 PASS
+capstone-domain: UNSERVED syscalls: 134x14 135x2 ...
+
+# perl -e 'print "PERL-HELLO
+"' in a domain, the first thing that ran:
+PERL-HELLO
+LT-RESULT perl.dom status=0 rounds=25 PASS

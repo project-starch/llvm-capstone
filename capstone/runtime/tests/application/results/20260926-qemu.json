@@ -1,0 +1,115 @@
+{
+  "platform": "QEMU supervised CALL, one hart",
+  "boot_id": "644dd97f-96ae-4670-8db1-d6a0fb935010",
+  "mixed_starts": 1008,
+  "sublet": true,
+  "before": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 71450624,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 65285,
+    "nodes_live": 68,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 65923,
+    "tag_pages": 646,
+    "node_capacity": 65536
+  },
+  "after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 71450624,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 65285,
+    "nodes_live": 68,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 77011,
+    "tag_pages": 646,
+    "node_capacity": 65536
+  },
+  "binaries": {
+    "qemu": "600ed1c3fe5791d070baaffdff6b1b9298d2fa219da639a268a6f39715962111",
+    "kernel": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "firmware": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+    "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f"
+  },
+  "environment": {
+    "CAPSTONE_GP_NONLIN": "1",
+    "CAPSTONE_REV_NODES": "65536"
+  },
+  "date": "2026-09-26",
+  "source_branch": "domain-process-runtime",
+  "verification": {
+    "native": {
+      "passed": 4,
+      "sanitizers": [
+        "address",
+        "undefined"
+      ]
+    },
+    "host_python": {
+      "passed": 11
+    },
+    "sdk": {
+      "ordinary_c_main": "pass; stdout matched, exit 7",
+      "undefined_symbol_control": "link rejected"
+    },
+    "fresh_ports": {
+      "common_gate": "pass after full soak; fresh Perl recipe and SDK-linked mruby",
+      "perl_version": "5.36.3",
+      "mruby": "argv and stream checks pass"
+    },
+    "perl_upstream": {
+      "runner": "prove with common capstone-vm run command",
+      "files": [
+        "base/if.t",
+        "base/cond.t",
+        "base/num.t"
+      ],
+      "tests": 62,
+      "result": "pass",
+      "remaining": {
+        "base/term.t": "1 of 7 fails; target fork unsupported",
+        "base/lex.t": "domain fault before TAP",
+        "historical_17_check_smoke": "fresh run interrupted; no new passing verdict"
+      }
+    },
+    "legacy": {
+      "passed": [
+        "CoreMark CRC validation",
+        "shared-region",
+        "HostCall stdout",
+        "HostCall filewrite",
+        "HostCall fileread"
+      ],
+      "failed_on_new_and_original_platform": {
+        "null_blk": "all 3 arms: null_submit_bio Oops, bad address 0x6f, cause 13",
+        "HostCall file-open-close": "borrowed-region INIT, cause 29"
+      },
+      "remaining_hostcall_aggregate": "not reached after file-open-close failure"
+    },
+    "buildroot": "fresh installed rootfs and driver/launchers/Dropbear built using existing prepared Linux kernel and external toolchain"
+  },
+  "limits": [
+    "one-hart QEMU extension; not implemented by existing FPGA",
+    "bounded retained physical pool; not pages returned to Linux",
+    "existing target syscall limits; no full POSIX or full Perl-suite claim",
+    "no complete hostile-code security audit",
+    "legacy and managed driver APIs exclusive for module lifetime"
+  ],
+  "legacy_comparison_binaries": {
+    "qemu": "26fbc847dc52e8d142fe42aef7fef6d78a331977fb0a82860ee52879292b7bda",
+    "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs": "d1bcf48a780c396453936fdac0f4088d39c928c14eb54018a07df9c4a32c354b"
+  },
+  "source_commits": {
+    "caplifive-buildroot-domain-runtime": "2acecf8ca8c4a2e39900a9dc2c5dc1a57a6efe1a",
+    "capstone-qemu-domain-runtime": "d6fc8ebec0e269e28875019f9e84fff3987403ac",
+    "opensbi": "e22c51070b20e0a683b23441fc6bc6e13253a443",
+    "capstone-sbi": "2dc4d76246895f318a11f3925f8c7e9719a040bb"
+  }
+}

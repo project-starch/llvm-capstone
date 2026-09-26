@@ -42,12 +42,22 @@
 #define lcc(rd, rs, imm) .insn r 0x5b, 0x1, 0x4, rd, rs, x##imm
 #define scc(rd, rs1, rs2) .insn r 0x5b, 0x1, 0x5, rd, rs1, rs2
 #define delin(rd) .insn r 0x5b, 0x1, 0x3, rd, x0, x0
+#define split(rd, rs1, rs2) .insn r 0x5b, 0x1, 0x6, rd, rs1, rs2
+#define ctvec 0x000
 #define cscratch 0x004
 #endif
+
+#include "../../../runtime/include/capstone/domain-fault.h"
 
 .text
 
 __test_reentry:
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  ccsrrw(t0, cscratch, x0)
+  ldc(sp, t0, 48)
+  ldc(gp, t0, 32)
+  ccsrrw(x0, cscratch, t0)
+#else
   ccsrrw(sp, cscratch, x0)
   ldc(gp, sp, -16)
   ldc(t0, sp, -32)
@@ -56,6 +66,7 @@ __test_reentry:
   csrrw x0, mcause, t0
   ld t0, -48(sp)
   csrrw x0, mtval, t0
+#endif
   j test
 
 .section .text.entry
@@ -63,9 +74,23 @@ __test_reentry:
 _start:
 __test_entry:
   ccsrrw(sp, cscratch, x0)
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  /* Keep recovery state outside the application's stack. cscratch always
+     holds this context, including across HostCall yields. Slots match the
+     generic entry, with suspended SP added at 80. */
+  lcc(t1, sp, 4)
+  addi t1, t1, -256
+  split(t2, sp, t1)
+  delin(t2)
+  ccsrrw(x0, cscratch, t2)
+#endif
   lcc(t1, sp, 4)
   scc(sp, sp, t1)
   delin(sp)
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  stc(sp, t2, 48)
+  li t2, 0
+#endif
   j test
 
 .text
@@ -73,7 +98,25 @@ __test_entry:
 test:
   delin(gp)
   cincoffsetimm(sp, sp, -96)
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  ccsrrw(t2, cscratch, x0)
+  stc(ra, t2, 0)
+  li ra, 0
+  stc(gp, t2, 32)
+  sd a0, 64(t2)
+  bnez a0, .Lmusl_no_result
+  stc(a1, t2, 16)
+.Lmusl_no_result:
+  ccsrrw(x0, cscratch, t2)
+  li t2, 0
+  lla t0, .Lmusl_fault
+  cincoffset(t0, gp, t0)
+  .insn r 0x5b, 0x1, 0x2, t0, t0, x1
+  ccsrrw(x0, ctvec, t0)
+  li t0, 0
+#else
   stc(ra, sp, 48)
+#endif
   sd a0, 64(sp)
   stc(a1, sp, 80)
 
@@ -82,11 +125,13 @@ test:
      `stc(ra, sp, 48)` here and still work across SQLite's three entries. The
      yield needs it from arbitrary depth inside libc, so it also goes into a
      global slot. */
+#ifndef CAPSTONE_DOMAIN_FAULT_RECOVERY
   .Lpcrel_domret_entry:
   auipc t0, %pcrel_hi(__capstone_dom_ret)
   addi t0, t0, %pcrel_lo(.Lpcrel_domret_entry)
   cincoffset t0, gp, t0
   stc(ra, t0, 0)
+#endif
 
   # Run capability-global initializers before domain_main. A capability tag
   # cannot live in the static image, so initialized capability globals (pointer/
@@ -131,10 +176,18 @@ test:
   .insn i 0x5b, 0x5, ra, 0(t0)
 
   lla t2, __test_reentry
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  ccsrrw(t0, cscratch, x0)
+  ldc(t1, t0, 0)
+  stc(x0, t0, 0)
+  ccsrrw(x0, cscratch, t0)
+#else
   ldc(t1, sp, 48)
   lcc(t0, sp, 4)
   scc(sp, sp, t0)
   stc(gp, sp, -16)
+#endif
+.Lmusl_scrub_return:
   li ra, 0
   li gp, 0
   li tp, 0
@@ -163,6 +216,7 @@ test:
   li t4, 0
   li t5, 0
   li t6, 0
+#ifndef CAPSTONE_DOMAIN_FAULT_RECOVERY
   ccsrrw(t0, cscratch, x0)
   stc(t0, sp, -32)
   csrrw t0, mcause, x0
@@ -171,8 +225,36 @@ test:
   sd t0, -48(sp)
   li t0, 0
   ccsrrw(x0, cscratch, sp)
+#endif
   li sp, 0
   domreturn(t1, t2, x0)
+
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+.Lmusl_fault:
+  ccsrrw(x0, ctvec, x0)
+  ccsrrw(sp, cscratch, x0)
+  ld t0, 64(sp)
+  bnez t0, .Lmusl_fault_return
+  ldc(t0, sp, 16)
+  li t3, CAPSTONE_DOMAIN_FAULT_RETVAL
+  sd t3, 0(t0)
+.Lmusl_fault_return:
+  ldc(t1, sp, 0)
+  stc(x0, sp, 0)
+  ccsrrw(x0, cscratch, sp)
+  lla t2, .Lmusl_faulted_reentry
+  j .Lmusl_scrub_return
+
+.Lmusl_faulted_reentry:
+  bnez a0, .Lmusl_faulted_return
+  li t0, CAPSTONE_DOMAIN_FAULT_RETVAL
+  sd t0, 0(a1)
+.Lmusl_faulted_return:
+  .insn r 0x5b, 0x1, 0xa, t1, ra, x0
+  li ra, 0
+  lla t2, .Lmusl_faulted_reentry
+  j .Lmusl_scrub_return
+#endif
 
 .Ltest_ret:
   j .Ltest_ret
@@ -239,16 +321,38 @@ __capstone_yield:
      free; the frame is 256 bytes and 0..208 were in use. */
   stc(tp, sp, 224)
 
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  ccsrrw(t0, cscratch, x0)
+  stc(sp, t0, 80)
+  ldc(t1, t0, 0)
+  stc(x0, t0, 0)
+  ccsrrw(x0, cscratch, t0)
+#else
   .Lpcrel_domret_load:
   auipc t3, %pcrel_hi(__capstone_dom_ret)
   addi t3, t3, %pcrel_lo(.Lpcrel_domret_load)
   cincoffset t3, gp, t3
   ldc(t1, t3, 0)
+#endif
   lla t2, .Lyield_resume
+#ifndef CAPSTONE_DOMAIN_FAULT_RECOVERY
   ccsrrw(x0, cscratch, sp)
+#endif
   domreturn(t1, t2, x0)
 
 .Lyield_resume:
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  /* The resuming CALL supplies a NEW result pointer and return capability.
+     Install both before touching the suspended application's stack. */
+  ccsrrw(t0, cscratch, x0)
+  stc(ra, t0, 0)
+  li ra, 0
+  stc(a1, t0, 16)
+  sd a0, 64(t0)
+  ldc(sp, t0, 80)
+  ldc(gp, t0, 32)
+  ccsrrw(x0, cscratch, t0)
+#else
   ccsrrw(sp, cscratch, x0)
   ldc(gp, sp, 16)
 
@@ -259,6 +363,7 @@ __capstone_yield:
   addi t3, t3, %pcrel_lo(.Lpcrel_domret_store)
   cincoffset t3, gp, t3
   stc(ra, t3, 0)
+#endif
 
   ldc(ra, sp, 0)
   ldc(s0, sp, 32)

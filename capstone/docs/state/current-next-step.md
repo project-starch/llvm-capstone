@@ -1,3 +1,27 @@
+Application execution (2026-09-26): the persistent **one-hart QEMU** lifecycle,
+trusted preemption/fault return, owned resource reclamation, installed Buildroot
+guest and common application SDK are implemented and verified. The combined
+gate passes resource exhaustion/recovery and 1,008 subsequent mixed starts in
+one boot with stable retained resources. Use the shared launcher and ordinary
+upstream test runners for new application work; do not add per-port VM runners.
+
+The next port work is to migrate each real application's upstream build to the
+CMake target or SDK, keeping only necessary source/configuration adaptations.
+Perl is migrated and mruby links with the same SDK. The [current complete Perl
+`t/base` run](../../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
+has eight passing files; only `term.t` test 2 fails because its backtick command
+needs target subprocess creation, and clone syscall 220 is unserved. The prior
+`lex.t` fault was a Perl pointer-to-UV regex-save round trip, now patched;
+`rs.t` passes with effective `CAPSTONE_GP_NONLIN=1` or the already-merged C-46
+compiler fix. Next decide how application subprocesses map to protected domains,
+then extend upstream coverage. Keep older hardware/ABI gates until their
+callers migrate. The legacy snapshot's null_blk and borrowed-region INIT failures
+reproduce before these changes and remain separate work. An FPGA equivalent
+requires architectural support for protected continuations and reclamation;
+this QEMU result does not establish it. [Commands](../../runtime/applications.md),
+[acceptance](../../runtime/tests/application/results/20260926-qemu-rebased.json),
+[architecture and scope](../plans/domain-process-runtime.md).
+
 Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-stack-integration.md)
 for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
 and state-file merge conflicts remain integration work; the board milestones

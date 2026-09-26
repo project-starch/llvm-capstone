@@ -1,0 +1,25 @@
+Perl 5.36.3 upstream t/base on the persistent one-hart QEMU guest
+Interpreter SHA256: a03f3ac8fd48809ce5b474c40d77110faaa891c79b066edbc91dc1c5a97edf57
+QEMU SHA256: 600ed1c3fe5791d070baaffdff6b1b9298d2fa219da639a268a6f39715962111
+Effective QEMU environment: CAPSTONE_GP_NONLIN=1, CAPSTONE_REV_NODES=65536
+Compiler: isolated old build with the already-merged C-46 direct-call fix
+  (PseudoCapGlobalBase in selectCall); musl and application SDK rebuilt with it.
+Perl patches 0001-0007 applied during a fresh build from the pinned tarball.
+Runner: prove --exec 'capstone-vm --state <guest-state> run --cwd /mnt/host/perl-tests/t -e PERL5LIB=/mnt/host/perl-tests/lib /mnt/host/perl-fresh.dom' base/*.t
+
+PASS: base/cond.t, base/if.t, base/lex.t, base/num.t, base/pat.t,
+      base/rs.t, base/translate.t, base/while.t
+FAIL: base/term.t, test 2 of 7: backticks try to start another Perl process;
+      target clone syscall 220 is unserved.
+
+Files=9, Tests=493, Result=FAIL, prove exit=1. One emitted assertion fails;
+the other 492 pass or are TAP-skipped. This is the complete t/base directory,
+not the complete upstream Perl suite.
+
+Controls on the pinned QEMU binary:
+  Old compiler image, effective CAPSTONE_GP_NONLIN=0: rs.t SIGSEGV.
+  C-46-fixed compiler image, effective CAPSTONE_GP_NONLIN=0: rs.t passes.
+  Old compiler image, effective CAPSTONE_GP_NONLIN=1: rs.t passes.
+  C-46-fixed compiler image without Perl patch 0007: lex.t SIGSEGV.
+  C-46-fixed compiler image with patch 0007: lex.t passes all 120 tests.
+The VM remained running across faults and all test files.

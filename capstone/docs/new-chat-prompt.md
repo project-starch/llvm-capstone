@@ -1,5 +1,14 @@
 # Prompt for continuing this Capstone work in a new chat
 
+Application execution: use the [persistent Linux guest and shared SDK](../runtime/applications.md).
+The one-hart QEMU stack verifies trusted fault/preemption return, process-owned
+reclamation and 1,008 repeated starts after exhaustion in one boot. Perl uses the
+shared SDK; use upstream test runners, not new per-port VM scripts. This requires
+the matching pinned QEMU/monitor/driver and does not claim FPGA support or full POSIX.
+Perl's complete `t/base` run currently passes eight of nine files; the
+remaining failure needs target subprocess creation. See the
+[curated result](../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt).
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).
 
 Use the following prompt as the opening message in a fresh chat.
