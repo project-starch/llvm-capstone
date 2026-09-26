@@ -234,10 +234,10 @@ existing boot. The checked report includes platform hashes, before/after counter
 and the unchanged Linux boot ID. Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
-The [2026-09-26 acceptance result](tests/application/results/20260926-qemu.json)
+The [2026-09-26 acceptance result](tests/application/results/20260926-qemu-rebased.json)
 records 1,008 mixed starts after node exhaustion, with stable pool/node/tag counts.
 Four native ASan/UBSan tests and twelve Python tests pass. A subsequent common
-gate uses fresh SDK-built Perl and mruby. The [complete Perl `t/base` run](../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+gate uses fresh SDK-built Perl and mruby. The [complete Perl `t/base` run](../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
 has eight passing files and one failing file (unsupported target subprocess
 creation). Legacy CoreMark/shared-region/basic HostCalls pass; null_blk
 and borrowed-region open/close failures reproduce on the old platform as well.

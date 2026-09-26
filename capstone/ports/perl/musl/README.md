@@ -49,10 +49,12 @@ prove --exec 'capstone-vm --state /tmp/capstone/dev-vm run --cwd /mnt/host/perl-
 ```
 
 The migrated recipe was rebuilt from the pinned tarball and these three files
-pass. The [current complete `t/base` run](results/2026-09-26/base-tests-fixed.txt)
+pass. The [current complete `t/base` run](results/2026-09-26/base-tests-rebased-qemu.txt)
 has eight passing files. `base/term.t` alone fails test 2: its backtick command
 tries to start another Perl process, and target clone syscall 220 is unserved.
 `prove` reports 9 files, 493 emitted assertions and exit status 1. The
+[earlier controls](results/2026-09-26/base-tests-fixed.txt) isolate the
+compiler and regex fixes. The
 [earlier 6/9 run](results/2026-09-26/base-tests.txt) used a compiler binary
 predating the C-46 direct-call fix, and the VM CLI did not pass its recorded
 `CAPSTONE_GP_NONLIN=1` setting to QEMU. Either the compiler fix or an effective

@@ -14,13 +14,13 @@ launcher, and final file/VMA release revokes and scrubs its resources for reuse.
 
 The installed-rootfs acceptance passes node exhaustion/recovery followed by
 **1,008 mixed starts in the same boot**. Live domains, regions and bytes return
-to zero. Cached storage stays at 71,450,624 bytes, live nodes at 68, retired nodes
-at zero and tag pages at 646. Cumulative node allocations rise from 65,923 to
+to zero. Cached storage stays at 138,559,488 bytes, live nodes at 67, retired nodes
+at zero and tag pages at 648. Cumulative node allocations rise from 65,923 to
 77,011 against a 65,536-node pool, demonstrating reuse after stale tags are
 removed. This is bounded retained storage, not physical pages returned to Linux.
 The test also covers ownership isolation, rollback, fork/dup/VMA lifetime,
 overlapping processes, blocked I/O cancellation and transferred Sublet heaps.
-See the [checked result](../../runtime/tests/application/results/20260926-qemu.json).
+See the [checked result](../../runtime/tests/application/results/20260926-qemu-rebased.json).
 
 Four native ASan/UBSan tests and twelve host Python tests pass. A fresh Buildroot
 rootfs installs the driver, launchers and Dropbear. The shared CMake application
@@ -30,9 +30,11 @@ SDK-linked mruby pass the common application gate. The current complete Perl
 `t/base` run through ordinary `prove` has eight passing files and one failing
 file: `base/term.t` test 2 needs a target subprocess, but clone syscall 220 is
 unserved. `prove` reports 9 files, 493 emitted assertions and exit 1. The
-[new result](../../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+[rebased-QEMU result](../../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
 uses the C-46-corrected compiler and Perl's capability-preserving regex-save
-patch. The [earlier 6/9 result](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
+patch. The [earlier controls](../../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+isolate the compiler and regex fixes. The
+[earlier 6/9 result](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
 used an older compiler and a VM CLI that recorded, but did not pass, QEMU
 environment settings. The CLI now passes the recorded settings on every boot;
 the common SDK rejects a compiler binary with the old linear direct-call bug.

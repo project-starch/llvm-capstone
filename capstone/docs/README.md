@@ -97,10 +97,10 @@ resource reuse. The installed QEMU guest passes exhaustion/recovery followed by
 1,008 mixed starts in the same boot, with stable retained resources. Perl uses
 the shared SDK; Perl and mruby execute through the common launcher. See
 [applications](../runtime/applications.md), the
-[checked acceptance](../runtime/tests/application/results/20260926-qemu.json)
+[checked acceptance](../runtime/tests/application/results/20260926-qemu-rebased.json)
 and [current state](state/current-state.md) for scope and remaining failures.
 This is a one-hart QEMU platform extension, not a new FPGA result.
-The current [Perl `t/base` result](../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+The current [Perl `t/base` result](../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
 is 8/9 files passing; the remaining case requires target subprocess creation.
 Upstream Perl coverage remains incomplete.
 

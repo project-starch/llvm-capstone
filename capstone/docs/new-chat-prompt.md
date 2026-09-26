@@ -7,7 +7,7 @@ shared SDK; use upstream test runners, not new per-port VM scripts. This require
 the matching pinned QEMU/monitor/driver and does not claim FPGA support or full POSIX.
 Perl's complete `t/base` run currently passes eight of nine files; the
 remaining failure needs target subprocess creation. See the
-[curated result](../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt).
+[curated result](../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt).
 
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).
 

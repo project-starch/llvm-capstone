@@ -8,7 +8,7 @@ upstream test runners for new application work; do not add per-port VM runners.
 The next port work is to migrate each real application's upstream build to the
 CMake target or SDK, keeping only necessary source/configuration adaptations.
 Perl is migrated and mruby links with the same SDK. The [current complete Perl
-`t/base` run](../../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+`t/base` run](../../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
 has eight passing files; only `term.t` test 2 fails because its backtick command
 needs target subprocess creation, and clone syscall 220 is unserved. The prior
 `lex.t` fault was a Perl pointer-to-UV regex-save round trip, now patched;
@@ -19,7 +19,7 @@ callers migrate. The legacy snapshot's null_blk and borrowed-region INIT failure
 reproduce before these changes and remain separate work. An FPGA equivalent
 requires architectural support for protected continuations and reclamation;
 this QEMU result does not establish it. [Commands](../../runtime/applications.md),
-[acceptance](../../runtime/tests/application/results/20260926-qemu.json),
+[acceptance](../../runtime/tests/application/results/20260926-qemu-rebased.json),
 [architecture and scope](../plans/domain-process-runtime.md).
 
 Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-stack-integration.md)
