@@ -51,6 +51,21 @@ The output is byte-identical to native (`results/2026-09-26/scripts.txt`).
   0001, 0003 and 0007 are rewritten for its code, 0002 is head's. There is no
   0006 for it yet: `MRBD_BOXING=word` stops with a message.
 
+## The Sublet heap (`MRBD_HEAP=sublet`)
+
+mruby's `mrb_malloc` sits on the domain's `malloc`. `MRBD_HEAP=sublet` links
+the runtime's `sublet_heap.c` in place of level0: a buddy heap over a region the
+host grants, one bounded alias per block, every free revoked. Every body mruby
+allocates -- strings, arrays, hashes, the VM stack, ireps -- and its GC heap
+pages come from it; single GC object slots do not (a page is revoked only when
+the GC frees it whole). mruby itself is unchanged.
+
+4.0.0-rc2 on it (`results/2026-09-26/mrbtest-4.0.0-rc2-sublet-heap.txt`):
+mrbtest OK 1632, KO 0, Crash 0, the same skips as on level0. The run spends
+259,253 revocation nodes (split + mrev), four times silicon's 65,532 per boot;
+under QEMU's default pool, which is that budget, it stopped after 307 passing
+tests, and it completes with `CAPSTONE_REV_NODES=16777216`.
+
 ## Build and run
 
     CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \

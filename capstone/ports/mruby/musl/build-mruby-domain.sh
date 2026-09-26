@@ -15,6 +15,15 @@
 # MRBD_PIN picks the mruby: head (default, 2026-09-17, every known defect fixed)
 # or 4.0.0-rc2 (2026-03-12, the Sublet evaluation's pin: temporal defects on
 # mruby's own allocators, fixed later). Each pin has its own patches/<pin>/.
+# MRBD_HEAP picks the domain's malloc, which mruby's mrb_malloc sits on:
+# level0 (default; every pointer carries the arena's bounds, free only marks) or
+# sublet (runtime/sublet_heap.c: a buddy heap over a region the host grants, one
+# bounded alias per block, every free revokes). The sublet arm differs in three
+# runtime objects -- the heap, hostcall.o (which parks the grant) and the entry
+# (which reports the heap's counters) -- and in the host (the grant); mruby is
+# the same. MRBD_HEAP_LOG sets its pool, 2^26 = 64 MiB by default; the host must
+# grant twice that (run-mruby-domain.sh, MRBD_HEAP_REGION_BYTES), since a CMA
+# region is only 1 MiB-aligned and the pool is a self-aligned block inside it.
 # Knobs (see build_config.rb): MRBD_BOXING, MRBD_DISPATCH, MRBD_OPT, MRBD_TESTS,
 # MRBD_DEFINES. MRBD_FROM=runtime|mruby starts at that stage. MRUBY_MIRROR=<a
 # local mruby clone> clones from there instead of GitHub (its Prism submodule too).
@@ -30,6 +39,9 @@ JOBS=${JOBS:-16}
 FROM=${MRBD_FROM:-all}
 BOXING=${MRBD_BOXING:-no}
 PIN=${MRBD_PIN:-head}
+HEAP=${MRBD_HEAP:-level0}
+HEAP_LOG=${MRBD_HEAP_LOG:-26}
+case "$HEAP" in level0|sublet) ;; *) echo "MRBD_HEAP=$HEAP? (level0, sublet)" >&2; exit 2 ;; esac
 
 # The pinned trees. head: mruby of 2026-09-17 and the Prism its .gitmodules
 # names. 4.0.0-rc2: the tag's commit, whose parser is still parse.y (no Prism).
@@ -79,21 +91,31 @@ if stage runtime; then
     "$CAPSTONE_CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
       -ffreestanding -O0 -c "$MRT/$s.S" -o "$O/$s.o"
   done
-  for f in hostcall tls; do
-    "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/$f.c" -o "$O/$f.o"
-  done
-  "$CAPSTONE_CLANG" "${RF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="($ARENA)" -c "$MRT/level0.c" -o "$O/level0.o"
+  HCF=(); EF=()
+  [[ $HEAP == sublet ]] && { HCF=(-DCAPSTONE_PROGRAM_REGIONS=1); EF=(-DMRBD_SUBLET_HEAP=1); }
+  "$CAPSTONE_CLANG" "${RF[@]}" "${HCF[@]}" -c "$MRT/hostcall.c" -o "$O/hostcall.o"
+  "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/tls.c" -o "$O/tls.o"
+  if [[ $HEAP == sublet ]]; then
+    "$CAPSTONE_CLANG" "${RF[@]}" -I"$RT/capstone/sublet" -DCAPSTONE_SUBLET_HEAP_LOG="$HEAP_LOG" \
+      -c "$MRT/sublet_heap.c" -o "$O/heap.o"
+  else
+    "$CAPSTONE_CLANG" "${RF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="($ARENA)" -c "$MRT/level0.c" -o "$O/level0.o"
+  fi
   source "$MRT/libc_overrides.sh"
   build_musl_overrides "$CAPSTONE_CLANG" "$O" "$MUSL" "${RF[@]}"
   CLANG=$CAPSTONE_CLANG OBJ_DIR=$O COMPILER_RT=$RT/compiler-rt/lib/builtins
   COMMON_FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
                 -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w)
   source "$RT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
-  "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O1 -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$O/domain_entry.o"
-  log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, level0 arena $ARENA bytes"
+  "$CAPSTONE_CLANG" "${CF[@]}" "${EF[@]}" -std=c11 -O1 -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$O/domain_entry.o"
+  echo "$HEAP" > "$O/.heap"
+  if [[ $HEAP == sublet ]]; then log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, sublet heap pool 2^$HEAP_LOG"
+  else log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, level0 arena $ARENA bytes"; fi
 fi
 
 # ---- the compiler and linker rake is given ----------------------------------
+[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" ]] \
+  || { echo "the runtime in $O was built for MRBD_HEAP=$(cat "$O/.heap" 2>/dev/null); rebuild it (MRBD_FROM=runtime)" >&2; exit 2; }
 export MRBD_MUSL=$MUSL MRBD_RUNTIME_DIR=$O MRBD_LIBC_ARCHIVE=$ARCHIVE
 export MRBD_LINKER_SCRIPT=$RT/capstone/my_first_domain/link.ld
 export PATH=$SCRIPT_DIR/toolchain:$PATH

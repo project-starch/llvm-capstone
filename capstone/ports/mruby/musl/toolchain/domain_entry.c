@@ -37,6 +37,9 @@ enum { LINES_MAX = 64, LINE_MAX_BYTES = 512 };
 
 extern char **__environ;
 int main(int argc, char **argv);
+#ifdef MRBD_SUBLET_HEAP
+void __capstone_sublet_heap_stats(unsigned long out[9]);
+#endif
 
 static int read_lines(const char *path, char lines[][LINE_MAX_BYTES], char **out, int start)
 {
@@ -82,6 +85,16 @@ int capstone_main(void)
 	if (chdir(MRBD_START_DIR) != 0)
 		fprintf(stderr, "MRBD-WARN chdir(%s) failed\n", MRBD_START_DIR);
 	int rc = main(argc, argv);
+#ifdef MRBD_SUBLET_HEAP
+	/* What the revoking heap (runtime/sublet_heap.c) spent. split + mrev is the
+	   revocation-node count, which silicon caps at 65,532 per boot. Printed only
+	   when main returns; a program that ends in exit() does not reach it. */
+	unsigned long hs[9];
+	__capstone_sublet_heap_stats(hs);
+	printf("MRBD-HEAP alloc=%lu free=%lu merge=%lu peak-live=%lu split=%lu mrev=%lu "
+	       "delin=%lu revoke=%lu init=%lu\n",
+	       hs[0], hs[1], hs[2], hs[3], hs[4], hs[5], hs[6], hs[7], hs[8]);
+#endif
 	fflush(NULL);
 	return rc;
 }

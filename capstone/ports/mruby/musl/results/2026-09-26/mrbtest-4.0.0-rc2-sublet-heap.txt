@@ -1,0 +1,17 @@
+# mrbtest, MRBD_PIN=4.0.0-rc2 MRBD_HEAP=sublet (runtime/sublet_heap.c, pool 2^26, grant 134217728)
+# MRB_NO_BOXING, switch dispatch, -O2; compiler 7d01722aab88; runtime 9704639b4a3a;
+# QEMU capstone-qemu-movc-merge d621df553f, br-snap.
+# With QEMU's default revocation-node pool (65536, silicon's budget) the run stopped after 307
+# passing tests: qemu cap_rev_tree.c:56 _cap_rev_tree_dup_node_before, new_node != NULL. Rerun with
+# CAPSTONE_REV_NODES=16777216:
+domain:
+  Total: 1648
+     OK: 1632
+     KO: 0
+  Crash: 0
+   Skip: 16
+capstone-domain: UNSERVED syscalls: 198x3
+LT-RESULT mruby.dom status=0 rounds=5538 PASS
+MRBD-HEAP alloc=92071 free=92071 merge=83590 peak-live=10216 split=83592 mrev=175661 delin=92071 revoke=175661 init=83590
+skip list identical to MRBD_HEAP=level0's (mrbtest-4.0.0-rc2.txt)
+# split + mrev = 259253 revocation nodes over the run.
