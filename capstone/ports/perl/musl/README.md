@@ -1,0 +1,96 @@
+# perl in a Capstone musl domain
+
+perl, pinned at 5.36.3, cross-built with perl-cross as a Capstone domain on musl
+with this repo's port runtime, and the same release built natively as the
+reference its output is compared with. Why perl, which release, and what its four
+nested allocators look like: `docs/design/perl-sublet-port-evaluation.md`.
+
+## State (2026-09-26)
+
+**`perl -e 'print "PERL-HELLO\n"'` runs in a domain and exits 0.** Startup,
+argument handling, the environment, `/dev/urandom` for the hash seed, compiling
+the program and printing all work.
+
+**A script that uses subscripts does not yet finish.** `scripts/smoke.pl` gets
+past everything the five patches cover and stops in `memset`, on a one-byte store
+at offset 8 of an 8-byte capability (`bounds = (e81ff873, e81ff87b)`, `size = 1`,
+`addr = e81ff87b`) -- a write one past the end of an object, which an ordinary
+machine tolerates and this one refuses. Not yet localised to its caller; that is
+the next step. So no result line is recorded yet: the port builds and starts, and
+is not yet measured.
+
+## Build and run
+
+    CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
+      bash build-perl-domain.sh
+    bash run-perl-domain.sh $PERLD_ROOT/src/perl-5.36.3/perl <work> 600 -- -e 'print 1'
+
+`build-perl-domain.sh` builds musl and the runtime privately, fetches perl and
+perl-cross at their pins, applies perl-cross's own patches and then `patches/`,
+configures for `capstone64-unknown-elf` and builds both the domain image and a
+native reference. `run-perl-domain.sh` stages files and arguments on the share and
+runs the image under QEMU, as the mruby port's runner does.
+
+`PERLD_HEAP=sublet` links the runtime's revoking heap in place of level0, the same
+switch the mruby port has; nothing has been measured on it yet.
+
+## Why perl-cross
+
+perl's own `Configure` answers its questions by **running** target programs, which
+a cross build cannot do. perl-cross answers them by compiling only -- a size comes
+from the ELF symbol table through `readelf` (`cnf/configure_type.sh`, `checksize`)
+-- and builds `miniperl` with the **host** compiler (its `Makefile`, the `miniperl`
+rule), so the build never executes target code. That is the host/target split the
+PostgreSQL port uses for its build tools. It carries a diff for every perl5
+release from 5.22.3 to 5.44.0.
+
+One build step in perl does run target code: `dist/Time-HiRes/Makefile.PL`
+compiles a probe and executes it. That extension is disabled, together with
+`PerlIO/mmap`, which needs a symbol `-Ud_mmap` removes.
+
+## What configure cannot know about a domain
+
+The `linux` hints answer from what musl's libc *contains*, and a domain serves
+less than musl exposes. Each of these is given explicitly, with its reason in the
+build script:
+
+| Given | Why |
+|---|---|
+| `-Dalignbytes=16` | a capability's alignment; the hints derive 8 from `long` |
+| `-Ud_mmap` | a domain has no mmap. Left defined, perl reads the page size at startup for its mmap PerlIO layer, and a domain has no auxv either, so `sysconf(_SC_PAGESIZE)` is 0 and perl dies with `panic: bad pagesize 0` before running anything |
+| `-Ud_nanosleep` | this release's configure leaves the variable unset and the `config.h` template then emits `# HAS_NANOSLEEP`, which is not a directive, so every compilation fails. The script now checks the generated `config.h` for such a line rather than reading 300 errors |
+| `-Accflags=-D_GNU_SOURCE` | musl declares `memrchr`, `setresuid`, `setresgid` and `eaccess` only under it while the symbols are in libc either way, so configure's link tests find them and the compile would not |
+
+`d_fork` is left as configured: musl has `fork`, the runtime does not serve it, and
+a program that forks gets an error at run time. Nothing on the path so far forks.
+
+## What perl needed (`patches/5.36.3/`)
+
+Each patch's header carries its evidence. All five are conditional -- on
+`PTRSIZE > IVSIZE`, `PTRSIZE > UVSIZE`, `PTRSIZE == 16` or
+`__CAPSTONE_PURECAP__` -- so no other platform is affected.
+
+| | File | Why |
+|---|---|---|
+| 0001 | `sv_inline.h` | `struct body_details` describes each SV body's size in a `U8`. At 16-byte pointers `XPVIO` is 256 bytes and truncates to **0**, `regexp` is 320 and truncates to **64**, so the arena would carve slots smaller than the bodies they are for. clang reported both and the build ignored the warnings; the build script now fails on a truncated constant |
+| 0002 | `cv.h` | `PoisonPADLIST` has arms for 8- and 4-byte pointers and `#error` otherwise, which stops `ext/re`, the one extension built with `-DDEBUGGING` |
+| 0003 | `gv.c` | the stash cache keeps a stash as `PTR2IV(stash)` in an SV's `IV` and reads it back with `INT2PTR`. An 8-byte `IV` cannot hold a capability, so what comes back is an address without authority: cause 24 at the head of `S_mro_get_linear_isa_dfs`, on every `perl -e`. The cache is transparent, so it is not used where a pointer is wider than an `IV` |
+| 0004 | `perl.h` | two defects. `PTRV` picks the first integer whose size equals `PTRSIZE`; at 16 none matches and the fallthrough takes `unsigned`, so **every** `PTR2UV`/`PTR2IV`/`PTR2nat` truncated an address to 32 bits, silently. And `DPTR2FPTR`/`FPTR2DPTR` convert data to function pointers through an integer, which loses authority: the call through the result traps in `Perl_filter_read` on every `perl -e`. 39 sites use that pair |
+| 0005 | `op.c` | `S_maybe_multideref` counts its arguments on a first pass by incrementing a pointer from `arg_buf`, which is `NULL` then, and takes `arg - arg_buf` as the count; every write through it is under `if (pass)`. Incrementing a null pointer is undefined in C and harmless elsewhere, and here it is capability arithmetic without a capability: cause 24, reached by any subscript chain. Measured at `-O2` **and** at `-O1`, which is what says it is the program and not the optimiser |
+
+## Open, in the order they matter
+
+1. **The `memset` write one past an 8-byte capability** above: find the caller.
+   The bounds are a sub-object's, not an allocation's (level0 hands out
+   arena-wide bounds), so something takes a pointer to an 8-byte field and writes
+   nine bytes through it.
+2. **`INT2PTR` round trips that remain.** clang lists them as
+   `-Wint-to-pointer-cast` on a build with warnings on; in `op.c` alone they are
+   `CALL_BLOCK_HOOKS` (`op.h:837,839`), the custom-op table (`op.c:18548,18628`)
+   and the COP identity cache (`op.c:1331,9598` -- that one only compares, so it
+   is sound). None is on the path reached so far; each is a latent cause-24.
+3. **The test suite.** 2823 `.t` files and `t/TEST` forks per file, which a domain
+   cannot do, so a behavioural gate needs a harness that runs a chosen set in one
+   process. Until then `scripts/smoke.pl` against the native reference is the gate.
+4. **The library is not on the share**, so a script cannot `use` anything yet;
+   `scripts/smoke.pl` is core builtins only for that reason.
