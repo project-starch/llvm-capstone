@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -66,7 +67,7 @@ def running(state: Path) -> bool:
         # A paused guest still owns its resources and must not be replaced.
         qmp(state, "query-status")
         return True
-    except (FileNotFoundError, ConnectionRefusedError):
+    except (FileNotFoundError, ConnectionRefusedError, ConnectionResetError):
         return False
 
 
@@ -136,17 +137,128 @@ def fingerprint(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+class InterruptedRun(Exception):
+    def __init__(self, signum: int):
+        self.signum = signum
+
+
+def run_application(state: Path, config: dict, words: list[str], *, cwd: str | None = None, environment: list[str] = (), result_path: Path | None = None) -> int:
+    """Forward host interruption without putting pipes through a pseudo-terminal.
+
+    The short-lived PID file identifies this SSH command. Verify its random
+    environment token before signalling: a stale PID must never kill a new job.
+    The guest still runs an ordinary capstone-exec process, with no job daemon.
+    """
+    if any(not re.match(r"^[A-Za-z_][A-Za-z_0-9]*=", value) or value.startswith("CAPSTONE_JOB=")
+           for value in environment):
+        raise VMError("Environment must contain NAME=value assignments; CAPSTONE_JOB is reserved")
+    job_id = uuid.uuid4().hex
+    jobs = state / "assets" / "jobs"
+    jobs.mkdir(exist_ok=True)
+    job = jobs / job_id
+    job.mkdir()
+    remote = f"/mnt/control/jobs/{job_id}/pid"
+    script = (f"cd {shlex.quote(cwd)} || exit 125; " if cwd is not None else "")
+    script += f"echo $$ > {remote}; exec " + shlex.join([
+        "capstone-job", f"/mnt/control/jobs/{job_id}/result.json", "--", "capstone-exec", "--", *words])
+    command = ssh_command(state, config) + ["exec " + shlex.join(
+        ["env", "CAPSTONE_JOB=" + job_id, *environment, "sh", "-c", script])]
+    previous = {}
+
+    def completed() -> int:
+        record_file = job / "result.json"
+        if not record_file.exists():
+            raise VMError("Guest command ended without a waitpid result; completion is unknown")
+        record = json.loads(record_file.read_text())
+        kind, value = record.get("kind"), record.get("value")
+        if record.get("version") != 1 or kind not in ("exit", "signal") or type(value) is not int or not 0 <= value <= 255:
+            raise VMError("Invalid guest waitpid result")
+        if result_path is not None:
+            temporary = result_path.with_name(result_path.name + "." + job_id + ".tmp")
+            try:
+                temporary.write_text(json.dumps(record) + "\n")
+                temporary.replace(result_path)
+            finally:
+                temporary.unlink(missing_ok=True)
+        if kind == "signal":
+            print(f"capstone-vm: application terminated by signal {value}", file=sys.stderr)
+            return 128 + value
+        return value
+
+    def interrupt(signum, _frame):
+        raise InterruptedRun(signum)
+
+    process = None
+    try:
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            previous[signum] = signal.signal(signum, interrupt)
+        # The terminal sends Ctrl-C to us, not the SSH transport. Keep the latter
+        # alive long enough to receive the guest's final output and exit status.
+        process = subprocess.Popen(command, start_new_session=True)
+        try:
+            process.wait()
+            return completed()
+        except InterruptedRun as stopped:
+            for signum in previous:
+                signal.signal(signum, signal.SIG_IGN)
+            deadline = time.monotonic() + 5
+            while not (job / "pid").exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            if (job / "pid").exists():
+                pid = (job / "pid").read_text().strip()
+                if not pid.isdecimal() or int(pid) <= 1:
+                    raise VMError("Invalid guest job PID")
+                owns = (f"test -r /proc/{pid}/environ && "
+                        f"tr '\\000' '\\n' < /proc/{pid}/environ 2>/dev/null | "
+                        f"grep -qx CAPSTONE_JOB={job_id}")
+                cancel = (f"if {owns}; then kill -{stopped.signum} {pid}; fi; "
+                          f"n=0; while {owns}; do n=$((n+1)); "
+                          "test $n -lt 100 || exit 1; sleep 0.05; done")
+                subprocess.run(ssh_command(state, config) + [cancel], stdin=subprocess.DEVNULL,
+                               check=True, timeout=10)
+                try:
+                    process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    # Guest death was confirmed above. A full consumer pipe may
+                    # still block SSH; the finally block closes that transport.
+                    pass
+            elif process.poll() is None:
+                raise VMError("Guest job did not publish its PID; cancellation could not be confirmed")
+            return completed()
+    finally:
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        shutil.rmtree(job)
+
+
 def start(args: argparse.Namespace, state: Path) -> int:
     with lock(state):
         files = {key: require_file(getattr(args, key)) for key in
-                 ("qemu", "kernel", "firmware", "rootfs", "launcher", "ssh_server")}
-        if args.module:
-            files["module"] = require_file(args.module)
+                 ("qemu", "kernel", "firmware", "rootfs")}
+        for key in ("launcher", "ssh_server", "module", "job_helper"):
+            if getattr(args, key, None):
+                files[key] = require_file(getattr(args, key))
+        if "launcher" in files and "job_helper" not in files:
+            files["job_helper"] = require_file(files["launcher"].with_name("capstone-job"))
         share = args.share.resolve(strict=True)
         if not share.is_dir() or "," in str(share):
             raise VMError("Share must be a directory whose path contains no comma")
-        environment = {name: value for name, value in os.environ.items()
-                       if name in QEMU_ENV}
+        environment = getattr(args, "environment", None)
+        if environment is None:
+            environment = {name: value for name, value in os.environ.items()
+                           if name in QEMU_ENV}
+        if any(name not in QEMU_ENV or not isinstance(value, str)
+               for name, value in environment.items()):
+            raise VMError("Invalid QEMU environment in session configuration")
+        environment.setdefault("CAPSTONE_GP_NONLIN", "1")
+        environment.setdefault("CAPSTONE_REV_NODES", "65536")
         identity_config = {"files": {name: {"path": str(path), "sha256": fingerprint(path)}
                                      for name, path in files.items()},
                            "share": str(share), "memory": args.memory,
@@ -164,9 +276,11 @@ def start(args: argparse.Namespace, state: Path) -> int:
             raise VMError("State path is too long for Unix sockets")
         assets = state / "assets"
         assets.mkdir(exist_ok=True)
-        for key in ("launcher", "ssh_server", "module"):
+        for key in ("launcher", "ssh_server", "module", "job_helper"):
             if key in files:
                 shutil.copyfile(files[key], assets / key)
+            else:
+                (assets / key).unlink(missing_ok=True)
         identity = state / "identity"
         if not identity.exists():
             subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C",
@@ -178,22 +292,42 @@ def start(args: argparse.Namespace, state: Path) -> int:
 set -eu
 dmesg -n 1
 mkdir -p /mnt/host /root/.ssh /etc/dropbear
-mount -t 9p -o trans=virtio,version=9p2000.L hostshare /mnt/host
-cp /mnt/control/launcher /usr/bin/capstone-exec
-cp /mnt/control/ssh_server /usr/sbin/dropbear
-chmod 0755 /usr/bin/capstone-exec /usr/sbin/dropbear
-ln -sf /usr/sbin/dropbear /usr/sbin/dropbearkey
+if ! grep -q ' /mnt/host ' /proc/mounts; then
+    mount -t 9p -o trans=virtio,version=9p2000.L hostshare /mnt/host
+fi
+if [ -f /mnt/control/launcher ]; then
+    cp /mnt/control/launcher /usr/bin/capstone-exec
+    chmod 0755 /usr/bin/capstone-exec
+fi
+if [ -f /mnt/control/ssh_server ]; then
+    cp /mnt/control/ssh_server /usr/sbin/dropbear
+    chmod 0755 /usr/sbin/dropbear
+    ln -sf /usr/sbin/dropbear /usr/sbin/dropbearkey
+fi
+if [ -f /mnt/control/job_helper ]; then
+    cp /mnt/control/job_helper /usr/bin/capstone-job
+    chmod 0755 /usr/bin/capstone-job
+fi
+test -x /usr/bin/capstone-exec
+test -x /usr/bin/capstone-job
 cp /mnt/control/authorized_keys /root/.ssh/authorized_keys
 chmod 0700 /root/.ssh
 chmod 0600 /root/.ssh/authorized_keys
-if [ -f /mnt/control/module ]; then insmod /mnt/control/module; else insmod /capstone.ko; fi
+if [ -f /mnt/control/module ]; then
+    if [ -c /dev/capstone ]; then rmmod capstone; fi
+    insmod /mnt/control/module
+elif [ ! -c /dev/capstone ]; then
+    insmod /capstone.ko
+fi
+capstone-exec --stats >/dev/null
 ifconfig eth0 10.0.2.15 netmask 255.255.255.0 up
-dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key >/dev/null
+killall dropbear 2>/dev/null || true
+if [ ! -f /etc/dropbear/dropbear_ed25519_host_key ]; then
+    dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key >/dev/null
+fi
 dropbearkey -y -f /etc/dropbear/dropbear_ed25519_host_key | sed -n '/^ssh-ed25519 /p' > /mnt/control/hostkey.pub
 dropbear -s -g -p 22
 """
-        if not args.module:
-            (assets / "module").unlink(missing_ok=True)
         (assets / "setup.sh").write_text(setup)
         # An ephemeral host port is chosen once; QEMU fails safely if a racer takes it.
         with socket.socket() as reservation:
@@ -271,23 +405,43 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--state", type=Path, default=Path("/tmp/capstone/vm"))
     sub = parser.add_subparsers(dest="action", required=True)
     up = sub.add_parser("up", help="Boot and provision one persistent guest")
-    for option in ("qemu", "kernel", "firmware", "rootfs", "share", "launcher", "ssh-server"):
+    for option in ("qemu", "kernel", "firmware", "rootfs", "share"):
         up.add_argument("--" + option, type=Path, required=True)
-    up.add_argument("--module", type=Path)
+    for option in ("launcher", "ssh-server", "module", "job-helper"):
+        up.add_argument("--" + option, type=Path, help="Override the installed guest component")
     up.add_argument("--port", type=int, default=0)
     up.add_argument("--memory", default="8G")
     up.add_argument("--boot-timeout", type=float, default=120)
     sub.add_parser("down", help="Stop this VM and discard its temporary disk changes")
+    sub.add_parser("restart", help="Explicitly restart using the recorded files and settings")
     sub.add_parser("status")
     sub.add_parser("shell", help="Open an ordinary interactive Linux shell")
     for name in ("exec", "run"):
         cmd = sub.add_parser(name, help="Run guest argv" if name == "exec" else "Run a Capstone application")
+        if name == "run":
+            cmd.add_argument("--cwd", help="Guest working directory")
+            cmd.add_argument("--result", type=Path, help="Write the actual guest exit/signal result as JSON")
+            cmd.add_argument("-e", "--env", action="append", default=[], help="Guest NAME=value")
         cmd.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     state = args.state.expanduser().resolve()
     try:
         if args.action == "up":
             return start(args, state)
+        if args.action == "restart":
+            with lock(state):
+                config = json.loads((state / "config.json").read_text())["identity"]
+                if running(state):
+                    qmp(state, "quit")
+                deadline = time.monotonic() + 5
+                while running(state):
+                    if time.monotonic() >= deadline:
+                        raise VMError("VM did not stop after QMP quit")
+                    time.sleep(0.05)
+            settings = {key: Path(value["path"]) for key, value in config["files"].items()}
+            settings.update(share=Path(config["share"]), memory=config["memory"],
+                            environment=config["environment"], port=0, boot_timeout=120)
+            return start(argparse.Namespace(**settings), state)
         if args.action == "status":
             active = running(state)
             print("running" if active else "stopped")
@@ -311,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
             if not words:
                 raise VMError("An executable and optional arguments are required")
             if args.action == "run":
-                words = ["capstone-exec", "--", *words]
+                return run_application(state, config, words, cwd=args.cwd, environment=args.env, result_path=args.result)
             command.append("exec " + shlex.join(words))
         return subprocess.call(command)
     except (VMError, OSError, ValueError, subprocess.CalledProcessError) as error:

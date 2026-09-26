@@ -19,18 +19,43 @@ domain has no signals for.
 
 ## Build and run
 
-    CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
-      bash build-perl-domain.sh
-    bash run-perl-domain.sh $PERLD_ROOT/src/perl-5.36.3/perl <work> 600 -- -e 'print 1'
+```sh
+source capstone/tests/capstone-test-env.sh
+CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
+  bash capstone/ports/perl/musl/build-perl-domain.sh
+# Copy the resulting interpreter into the existing VM's host share.
+capstone-vm --state "$CAPSTONE_TMP_ROOT/dev-vm" run /mnt/host/perl.dom -e 'print 1'
+```
 
-`build-perl-domain.sh` builds musl and the runtime privately, fetches perl and
-perl-cross at their pins, applies perl-cross's own patches and then `patches/`,
-configures for `capstone64-unknown-elf` and builds both the domain image and a
-native reference. `run-perl-domain.sh` stages files and arguments on the share and
-runs the image under QEMU, as the mruby port's runner does.
+The build recipe retains the pinned upstream sources, cross configuration,
+patches and native reference. CMake now builds the [shared application SDK](../../../runtime/applications.md)
+under `$PERLD_ROOT/runtime`; its `capstone-cc` supplies the CRT and linker rules.
+There is no Perl-specific entry adapter, argument file, compiler wrapper or VM
+runner. The old `run-perl-domain.sh` interface has been removed. Use ordinary
+argv, `run --cwd DIR -e NAME=value`, or `capstone-exec` in the Linux guest shell.
 
-`PERLD_HEAP=sublet` links the runtime's revoking heap in place of level0, the same
-switch the mruby port has; nothing has been measured on it yet.
+`PERLD_HEAP=level0` remains the default; `PERLD_HEAP=sublet` selects the common
+revoking heap with `PERLD_HEAP_LOG`. The image declares its additional heap grant;
+the launcher supplies it and the monitor reclaims it, including after SIGKILL.
+No caller-side `PERLD_HEAP_REGION_BYTES` is needed.
+
+An upstream TAP harness can run several tests without rebooting. Place the
+upstream `t/` and `lib/` on the share, install the host CLI, then from the host's
+copy of `t/`:
+
+```sh
+prove --exec 'capstone-vm --state /tmp/capstone/dev-vm run --cwd /mnt/host/perl-tests/t -e PERL5LIB=/mnt/host/perl-tests/lib /mnt/host/perl.dom' \
+  base/if.t base/cond.t base/num.t
+```
+
+The migrated recipe was rebuilt from the pinned tarball and these three files
+pass. The broader five-file check also included `base/term.t` (one failure,
+unsupported target fork) and `base/lex.t` (domain fault before TAP output).
+Those are application compatibility gaps, not a passing upstream suite; the
+same Linux VM remained available after both. The historical 17-check smoke
+result above belongs to its recorded build and is not a new claim about this
+upstream subset. The common runtime separately verifies real Perl argv and a
+stdin/stdout filter, alongside mruby and the lifecycle contract programs.
 
 ## Why perl-cross
 

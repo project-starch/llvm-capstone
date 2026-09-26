@@ -1,8 +1,35 @@
 # Domain applications as Linux commands
 
-Status: proposed architecture and implementation sequence, 2026-09-26.
-Source baseline: LLVM `92e3ca824ba3`. No new runtime, QEMU or FPGA result is
-claimed here. Command names and interfaces below are proposals.
+Status: QEMU application lifecycle implemented, 2026-09-26. The design below
+records the original goals; the implementation and verified limits are in
+[applications.md](../../runtime/applications.md). The matched platform changes
+live on the `domain-process-runtime` branches in LLVM, Buildroot, OpenSBI,
+capstone-sbi and QEMU. This does not claim FPGA implementation or full POSIX.
+
+## Delivered implementation
+
+| Layer | Implemented and tested |
+|---|---|
+| Application | Shared musl CRT, versioned argv/env/cwd block, immutable ELF snapshot, inherited streams, ordinary main/exit |
+| Platform | Protected CALL continuation, typed return/preemption/fault, no-yield cancellation, guest operand faults instead of host assertions |
+| Ownership | Per-open driver owner retained by dup/fork/VMAs; forced close cleanup; retained roots above domain and transferred heap; scrub and reusable slots |
+| Resource reuse | Bounded retained physical pool with explicit live/cache accounting; stale-tag sweep before node reuse; emergency cleanup reserve and recoverable node exhaustion |
+| Host/guest | Installed Buildroot package, QMP lifecycle, SSH shell/streams, token-checked cancellation, waitpid result collector, explicit restart |
+| Port build | Shared CMake application/SDK interface; generic compiler driver; Perl's three private execution/compiler/entry files removed; Perl and mruby exercised |
+
+The managed path avoids the old stack-pop/CPMP lifetime bugs through its own
+stable ownership and revocation protocol. **M-7/M-9 are not declared globally
+fixed for legacy loaders.** Legacy global IDs cannot be mixed with managed
+execution in one module lifetime. The retained pool is not memory returned to
+the Linux page allocator; its capacity and accounting are explicit.
+
+Follow-up platform work is FPGA/ISA implementation and validation of the
+supervised continuation and node-reclamation protocol. Follow-up application
+work is gradual migration of remaining legacy entry protocols and actual missing
+OS services demanded by upstream tests. The Perl upstream subset already exposes
+unsupported fork and another domain fault; those are not silently counted as
+passing tests. A complete POSIX/fork/thread ABI and a hostile-code security audit
+remain outside this delivery.
 
 ## Outcome
 
@@ -27,14 +54,14 @@ example from an interactive console or a Linux test harness. Application build
 systems and upstream test harnesses remain their own projects. The target is
 ordinary program execution; trace formats and replay drivers are not its API.
 
-## Existing implementation and gaps
+## Original baseline and gaps (before this implementation)
 
 | Existing code | What it establishes | Remaining work |
 |---|---|---|
 | [Generic recovery](../../runtime/domain-faults.md) and its [recorded tests](../../runtime/tests/fault-recovery/README.md) | On a matching QEMU, a cooperative CALL/REGION_SHARE client can fault, return to Linux and cause actual SIGSEGV in its launcher; a later healthy client runs in the same boot | Integrate application entry/yield paths; complete destruction; independently trusted fault termination |
 | [musl entry](../../ports/musl-capstone/runtime/start-musl.S) and [HostCall runtime](../../ports/musl-capstone/runtime/hostcall.c) | Resumable execution of real applications across service requests | This is a different continuation ABI from the generic recovery entry; installing its recovery define alone is insufficient |
 | [Host services](../../ports/musl-capstone/runtime/host_service.h) | Shared file-service implementation, including the bounce buffer required by observed 9p I/O failures | Separate stdout/stderr, working stdin, descriptor semantics, reusable library ownership |
-| [Perl application entry](../../ports/perl/musl/toolchain/domain_entry.c) | Argument/environment setup before main, currently using fixed files | Shared startup ABI with environment established before constructors, no application-specific argument files |
+| [Former Perl application entry](../../ports/perl/musl/README.md) | Argument/environment setup before main, currently using fixed files | Shared startup ABI with environment established before constructors, no application-specific argument files |
 | [Guest runner](../../tests/runtime-qemu/run-domain-smoke.py) | Linux boot, shared-directory mount, module loading and commands | It owns a whole boot and powers off afterward; no persistent session interface |
 | [Shared host support](../../ports/common/host/port_support.py) | Input staging, identities, results and execution serialization | Extract reusable host infrastructure without introducing another test framework |
 
@@ -241,8 +268,8 @@ soak run is evidence of reuse, not proof of unlimited lifetime.
 The first implementation is `capstone-vm` under `capstone/runtime/host`, with
 `up`, `shell`, `run`, `exec`, `status` and `down`. The guest launcher and shared
 CRT are described in [applications.md](../../runtime/applications.md).
-The long-term requirements below still apply; implemented session transport
-does not imply implemented domain destruction or trusted cancellation.
+The requirements below informed the now-implemented session transport,
+destruction and trusted cancellation paths.
 
 The host interface is a small set of commands such as `capstone vm start dev`,
 `capstone vm shell dev`, `capstone vm status dev` and `capstone vm stop dev`.
@@ -338,8 +365,6 @@ separate changes with end-to-end gates. Before implementation, enumerate the
 exact monitor continuation and revocation primitives available in the selected
 component revisions; do not infer them from the cooperative demo. Once a new
 workflow is verified, update the canonical state, testing matrix and command
-cookbook together. Until then this document is a proposal, not a replacement for
-the recorded working entry points. The bounded application path and initial
-SSH/QMP session implementation were verified on 2026-09-26; execution ownership,
-trusted stop/destruction, native packaging and wholesale port migration remain
-future milestones.
+cookbook together. The verified implementation now supersedes the original bounded demo. See
+[applications.md](../../runtime/applications.md) for the installed workflow and
+[the current state](../state/current-state.md) for the checked acceptance scope.

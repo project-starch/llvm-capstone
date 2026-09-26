@@ -52,14 +52,36 @@ static int reserve_stdio(unsigned *mask) {
   return 0;
 }
 
+static int print_stats(void) {
+  struct ioctl_process_stats stats;
+  if (capstone_process_init()) { perror("capstone-exec: device"); return 125; }
+  if (capstone_process_stats(&stats)) {
+    perror("capstone-exec: stats");
+    capstone_cleanup();
+    return 125;
+  }
+  printf("{\"version\":%lu,\"live_domains\":%lu,\"live_regions\":%lu,"
+         "\"live_bytes\":%lu,\"cached_bytes\":%lu,\"poisoned_blocks\":%lu,"
+         "\"nodes_high_water\":%lu,\"nodes_live\":%lu,\"nodes_retired\":%lu,"
+         "\"nodes_allocated_total\":%lu,\"tag_pages\":%lu,\"node_capacity\":%lu}\n",
+         stats.version, stats.live_domains, stats.live_regions, stats.live_bytes,
+         stats.cached_bytes, stats.poisoned_blocks, stats.nodes_high_water,
+         stats.nodes_live, stats.nodes_retired, stats.nodes_allocated_total,
+         stats.tag_pages, stats.node_capacity);
+  capstone_cleanup();
+  return 0;
+}
+
 int main(int argc, char **argv) {
   int literal = argc > 1 && !strcmp(argv[1], "--");
   if (literal) {
     --argc;
     ++argv;
   }
+  if (argc == 2 && !literal && !strcmp(argv[1], "--stats"))
+    return print_stats();
   if (argc < 2 || (!literal && !strcmp(argv[1], "--help"))) {
-    fprintf(argc < 2 ? stderr : stdout, "usage: capstone-exec [--] PROGRAM [ARG...]\n");
+    fprintf(argc < 2 ? stderr : stdout, "usage: capstone-exec [--] PROGRAM [ARG...]\n       capstone-exec --stats\n");
     return argc < 2 ? 2 : 0;
   }
   struct execution e = {.image = -1};
@@ -86,7 +108,7 @@ int main(int argc, char **argv) {
     return 125;
   }
   capstone_set_verbose(0);
-  if (capstone_init()) {
+  if (capstone_process_init()) {
     perror("capstone-exec: device");
     free(startup);
     cleanup(&e);
@@ -117,6 +139,8 @@ int main(int argc, char **argv) {
     if (i == 2)
       memcpy(e.maps[i], startup, CAPSTONE_LAUNCH_BYTES);
     if (capstone_share(domain, region, i == 2 ? 0 : 1, 2)) {
+      if (errno == EFAULT)
+        capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, cleanup, &e);
       perror("capstone-exec: share launch region");
       free(startup);
       cleanup(&e);
@@ -132,6 +156,8 @@ int main(int argc, char **argv) {
       return 125;
     }
     if (capstone_share(domain, heap, 1, 3)) {
+      if (errno == EFAULT)
+        capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, cleanup, &e);
       perror("capstone-exec: share heap");
       cleanup(&e);
       return 125;
@@ -140,13 +166,17 @@ int main(int argc, char **argv) {
   struct hostcall_v0 *metadata = e.maps[0];
   char *payload = e.maps[1];
   for (;;) {
-    unsigned long result;
-    if (capstone_call(domain, &result)) {
+    struct ioctl_dom_step_args step;
+    if (capstone_step(domain, &step)) {
       perror("capstone-exec: enter domain");
       cleanup(&e);
       return 125;
     }
-    capstone_domain_exit_on_fault(result, cleanup, &e);
+    if (step.event == CAPSTONE_STEP_PREEMPTED)
+      continue;
+    if (step.event == CAPSTONE_STEP_FAULT) {
+      capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, cleanup, &e);
+    }
     struct hostcall_v0 request;
     hostcall_snapshot_request(&request, metadata);
     if (request.phase == HC_V0_PHASE_DONE) {

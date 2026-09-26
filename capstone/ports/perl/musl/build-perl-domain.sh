@@ -67,48 +67,26 @@ ARCHIVE=$ROOT/musl-build/libc-capstone.a
 [[ -f "$ARCHIVE" ]] || { echo "no $ARCHIVE" >&2; exit 2; }
 log "musl $MUSL, archive $ARCHIVE"
 
-# ---- the runtime, as the mruby and PostgreSQL ports build it ----------------
-INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
-     -isystem "$MUSL/obj/include" -isystem "$MUSL/include")
-CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
-    -Xclang -target-feature -Xclang +a -ffreestanding -fno-builtin -fno-jump-tables
-    -ffunction-sections -fdata-sections -O1 -w -Wno-int-conversion "${INC[@]}")
-RF=("${CF[@]}" -std=c99 -D_XOPEN_SOURCE=700
-    -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
+# ---- shared application SDK (also usable by other upstream build systems) ----
 O=$ROOT/runtime
 if stage runtime; then
-  rm -f "$O"/*.o
-  for s in start-musl set_thread_area setjmp; do
-    "$CAPSTONE_CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-      -ffreestanding -O0 -c "$MRT/$s.S" -o "$O/$s.o"
-  done
-  HCF=(); EF=()
-  [[ $HEAP == sublet ]] && { HCF=(-DCAPSTONE_PROGRAM_REGIONS=1); EF=(-DPERLD_SUBLET_HEAP=1); }
-  "$CAPSTONE_CLANG" "${RF[@]}" "${HCF[@]}" -c "$MRT/hostcall.c" -o "$O/hostcall.o"
-  "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/tls.c" -o "$O/tls.o"
-  if [[ $HEAP == sublet ]]; then
-    "$CAPSTONE_CLANG" "${RF[@]}" -I"$RT/capstone/sublet" -DCAPSTONE_SUBLET_HEAP_LOG="$HEAP_LOG" \
-      -c "$MRT/sublet_heap.c" -o "$O/heap.o"
-  else
-    "$CAPSTONE_CLANG" "${RF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="($ARENA)" -c "$MRT/level0.c" -o "$O/level0.o"
-  fi
-  source "$MRT/libc_overrides.sh"
-  build_musl_overrides "$CAPSTONE_CLANG" "$O" "$MUSL" "${RF[@]}"
-  CLANG=$CAPSTONE_CLANG OBJ_DIR=$O COMPILER_RT=$RT/compiler-rt/lib/builtins
-  COMMON_FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
-                -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w)
-  source "$RT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
-  "$CAPSTONE_CLANG" "${CF[@]}" "${EF[@]}" -std=c11 -O1 -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$O/domain_entry.o"
-  echo "$HEAP" > "$O/.heap"
-  log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, heap $HEAP"
+  cmake -S "$RT/capstone/runtime/application" -B "$O" -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE="$RT/capstone/ports/common/cmake/toolchains/capstone-domain.cmake" \
+    -DCAPSTONE_LLVM_BUILD_DIR="$CAPSTONE_LLVM_BUILD_DIR" \
+    -DPORT_HEADER_PROVIDER=musl -DPORT_C11_ATOMICS=ON \
+    -DPORT_MUSL_ROOT="$MUSL" -DCAPSTONE_MUSL_ARCHIVE="$ARCHIVE" \
+    -DCAPSTONE_APPLICATION_SDK=ON -DCAPSTONE_APPLICATION_HEAP="$HEAP" \
+    -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
+    -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
+    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS_RELEASE=-O1
+  cmake --build "$O" -j"$JOBS"
+  printf '%s\n' "$HEAP" > "$O/.heap"
 fi
-[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" ]] \
-  || { echo "the runtime in $O was built for PERLD_HEAP=$(cat "$O/.heap" 2>/dev/null); rebuild it (PERLD_FROM=runtime)" >&2; exit 2; }
-
-# ---- the compiler and linker perl-cross is given ---------------------------
-export PERLD_MUSL=$MUSL PERLD_RUNTIME_DIR=$O PERLD_LIBC_ARCHIVE=$ARCHIVE
-export PERLD_LINKER_SCRIPT=$RT/capstone/my_first_domain/link.ld
-export PATH=$SCRIPT_DIR/toolchain:$CAPSTONE_LLVM_BIN:$PATH
+[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" && -x "$O/capstone-cc" ]] \
+  || { echo "rebuild the application SDK (PERLD_FROM=runtime)" >&2; exit 2; }
+export CAPSTONE_SDK=$O
+export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
 
 # ---- perl, pinned, patched, cross-built ------------------------------------
 S=$ROOT/src/perl-$PERL_VERSION
@@ -201,6 +179,9 @@ PY
   (cd "$S" && make crosspatch > "$ROOT/crosspatch.log" 2>&1) \
     || { tail -5 "$ROOT/crosspatch.log" >&2; echo "make crosspatch failed (see $ROOT/crosspatch.log)" >&2; exit 2; }
   apply_our_patches
+  # The upstream Makefile cannot see the external SDK archive dependencies.
+  # Relink on each requested Perl build; compiled upstream objects remain reusable.
+  rm -f "$S/perl"
   (cd "$S" && make -j"$JOBS" perl > "$ROOT/make.log" 2>&1) \
     || { grep -m5 "error:" "$ROOT/make.log" >&2; echo "make failed (see $ROOT/make.log)" >&2; exit 2; }
   # A size that does not fit its field is silent at run time and fatal: the arena

@@ -2,26 +2,49 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-26 — Shared application launcher and persistent QEMU session
+## 2026-09-26 — Persistent application processes, reclamation and shared SDK
 
-The `domain-process-runtime` lane adds `capstone-exec`, application ABI v1 and
-the shared musl application CRT. Perl 5.36.3 and mruby run through ordinary
-argv/stdin, using the same launcher. A single-boot gate passes healthy → fault
-after HostCalls → fault with invalid SP/GP → exit 139 → healthy. Linux waitpid
-reports signal 11 for the two faults and normal exit 139 for the control.
-The subsequent Perl/mruby commands retain the same Linux boot ID.
+The `domain-process-runtime` lane implements the complete **one-hart QEMU**
+application lifecycle across the emulator, monitor, driver, Buildroot package,
+Linux launcher and host CLI. Boot once into Linux, then run application ABI v1
+images through `capstone-exec`. Faults produce real SIGSEGV; normal exit 139
+remains a normal exit. Protected continuations return control even after a
+corrupted stack/trap vector or a no-yield loop. Linux signals terminate the
+launcher, and final file/VMA release revokes and scrubs its resources for reuse.
 
-Three native C tests pass with ASan/UBSan; six host CLI tests pass. The Python
-`capstone-vm` CLI uses QMP and SSH, retains the common QEMU lock after exiting,
-reuses matching sessions, and refuses configuration mismatch without stopping
-the guest. An explicit stop/restart and subsequent application gate pass.
+The installed-rootfs acceptance passes node exhaustion/recovery followed by
+**1,008 mixed starts in the same boot**. Live domains, regions and bytes return
+to zero. Cached storage stays at 71,450,624 bytes, live nodes at 68, retired nodes
+at zero and tag pages at 646. Cumulative node allocations rise from 65,923 to
+77,011 against a 65,536-node pool, demonstrating reuse after stale tags are
+removed. This is bounded retained storage, not physical pages returned to Linux.
+The test also covers ownership isolation, rollback, fork/dup/VMA lifetime,
+overlapping processes, blocked I/O cancellation and transferred Sublet heaps.
+See the [checked result](../../runtime/tests/application/results/20260926-qemu.json).
 
-This uses trap-delivery QEMU `77d69353b7` rebuilt with libslirp, and matching
-libcapstone quiet/checked-call APIs in the Buildroot lane. It is a **bounded,
-cooperative QEMU baseline**: domain destruction, resource reuse, reliable
-interruption of no-yield loops and native Buildroot packaging remain open.
-There is no new silicon result. See the [commands and limits](../../runtime/applications.md)
-and [implementation plan](../plans/domain-process-runtime.md).
+Four native ASan/UBSan tests and eleven host Python tests pass. A fresh Buildroot
+rootfs installs the driver, launchers and Dropbear. The shared CMake application
+SDK provides a compiler driver for upstream Make/configure builds; Perl's private
+compiler wrapper, entry adapter and VM runner are removed. Fresh Perl 5.36.3 and
+SDK-linked mruby pass the common application gate. Upstream Perl `base/if.t`,
+`base/cond.t` and `base/num.t` pass through ordinary `prove`: 3 files, 62 tests.
+`base/term.t` still needs target fork and `base/lex.t` faults; the full Perl suite
+is not a passing claim.
+
+Legacy CoreMark, shared-region and the first three HostCall proofs pass on the
+new platform. The available legacy snapshot fails all three `null_blk` arms
+in `null_submit_bio` (bad address 0x6f) and the borrowed-region file-open-close
+proof at INIT (cause 29). Both signatures also reproduce with the old QEMU and
+original firmware/rootfs; these are unresolved baseline failures, not passing
+regression gates. The managed path uses its own reclamation protocol.
+
+Existing FPGA hardware does not implement the new supervised CALL extension.
+There is no new silicon result, full POSIX implementation or hostile-code audit.
+The pool has explicit limits (default 384 MiB); the module retains carved physical
+storage until reboot. The old and managed driver APIs are mutually exclusive
+within a module lifetime. Commands, architecture and remaining port limitations
+are in [applications](../../runtime/applications.md) and the
+[implementation plan](../plans/domain-process-runtime.md).
 
 ## 2026-09-25 — R-42 FLASHED; ladder ACCEPTED, but R-43 false denies block revocation-heavy workloads (R1, P1 cell 6)
 

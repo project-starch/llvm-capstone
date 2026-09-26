@@ -3,7 +3,7 @@ include_guard(GLOBAL)
 # A normal main(argc, argv), linked against the shared musl application ABI.
 # The caller selects the existing capstone-domain toolchain and musl headers.
 function(capstone_configure_application target)
-  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES" "")
+  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG" "")
   if(app_UNPARSED_ARGUMENTS OR app_KEYWORDS_MISSING_VALUES)
     message(FATAL_ERROR "Invalid capstone_configure_application arguments")
   endif()
@@ -40,7 +40,7 @@ function(capstone_configure_application target)
       "${PORT_MUSL_ROOT}/src/include" "${PORT_MUSL_ROOT}/src/internal"
       "${PORT_MUSL_ROOT}/obj/src/internal" "${PORT_MUSL_ROOT}/src/multibyte")
     target_compile_definitions(capstone-application-core PRIVATE
-      _XOPEN_SOURCE=700 CAPSTONE_APPLICATION_RUNTIME=1 CAPSTONE_DOMAIN_FAULT_RECOVERY=1)
+      _XOPEN_SOURCE=700 CAPSTONE_APPLICATION_RUNTIME=1 CAPSTONE_DOMAIN_FAULT_RECOVERY=1 CAPSTONE_PROGRAM_REGIONS=1)
     target_compile_options(capstone-application-core PRIVATE
       -ffunction-sections -fdata-sections -fno-jump-tables
       "$<$<COMPILE_LANGUAGE:C>:-Wno-int-conversion>")
@@ -54,17 +54,38 @@ function(capstone_configure_application target)
     target_compile_options(capstone-application-builtins PRIVATE
       -ffunction-sections -fdata-sections -fno-jump-tables)
   endif()
+  if(NOT app_HEAP)
+    set(app_HEAP level0)
+  endif()
+  if(app_HEAP STREQUAL "sublet")
+    if(NOT app_HEAP_LOG MATCHES "^[0-9]+$" OR app_HEAP_LOG LESS 12 OR app_HEAP_LOG GREATER 28)
+      message(FATAL_ERROR "Sublet applications require HEAP_LOG between 12 and 28")
+    endif()
+    set(heap "${musl}/sublet_heap.c")
+    math(EXPR heap_bytes "2 * (1 << ${app_HEAP_LOG})")
+    target_compile_definitions(${target} PRIVATE CAPSTONE_SUBLET_HEAP_LOG=${app_HEAP_LOG}
+      CAPSTONE_APPLICATION_HEAP_BYTES=${heap_bytes})
+    target_include_directories(${target} PRIVATE "${capstone}/sublet")
+  elseif(app_HEAP STREQUAL "level0")
+    set(heap "${musl}/level0.c")
+  else()
+    message(FATAL_ERROR "Unknown application heap: ${app_HEAP}")
+  endif()
   math(EXPR data_bytes "${app_DATA_BYTES} + 256")
   target_sources(${target} PRIVATE "${capstone}/runtime/domain/application.c"
-    "${musl}/level0.c" "${capstone}/runtime/domain/domreq.S"
+    "${heap}" "${capstone}/runtime/domain/domreq.S"
     "${capstone}/runtime/domain/gct-section-end.S")
   target_compile_definitions(${target} PRIVATE _XOPEN_SOURCE=700
     CAPSTONE_DOMREQ_DATA=${data_bytes} CAPSTONE_DOMREQ_STACK=${app_STACK_BYTES}
     CAPSTONE_LEVEL0_ARENA_BYTES=${app_ARENA_BYTES})
   target_compile_options(${target} PRIVATE -ffunction-sections -fdata-sections -fno-jump-tables)
-  target_link_libraries(${target} PRIVATE capstone-application-core
+  target_sources(${target} PRIVATE $<TARGET_OBJECTS:capstone-application-core>)
+  target_link_libraries(${target} PRIVATE Capstone::Runtime
     "${CAPSTONE_MUSL_ARCHIVE}" capstone-application-builtins)
   set(script "${capstone}/my_first_domain/link.ld")
   target_link_options(${target} PRIVATE --gc-sections -T "${script}")
-  set_target_properties(${target} PROPERTIES SUFFIX .dom LINK_DEPENDS "${script}")
+  get_target_property(kind ${target} TYPE)
+  if(kind STREQUAL "EXECUTABLE")
+    set_target_properties(${target} PROPERTIES SUFFIX .dom LINK_DEPENDS "${script}")
+  endif()
 endfunction()

@@ -18,25 +18,54 @@ class TransportTests(unittest.TestCase):
     def test_arguments_round_trip_through_remote_shell(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
+            (state / "assets").mkdir()
             (state / "config.json").write_text(json.dumps({"port": 2222}))
             arguments = ["/mnt/host/app.dom", "", "two words", "line\nbreak",
                          "'quoted'", "$(touch should-not-exist)", "; exit 98"]
             seen = []
+            real_popen = subprocess.Popen
 
-            def execute(command):
+            def execute(command, **kwargs):
                 words = shlex.split(command[-1])
-                self.assertEqual(words[:3], ["exec", "capstone-exec", "--"])
+                self.assertEqual(words[:2], ["exec", "env"])
+                script = words[-1]
+                words = shlex.split(script.split("; exec ", 1)[1])
+                self.assertEqual(words[0], "capstone-job")
+                self.assertEqual(words[2:5], ["--", "capstone-exec", "--"])
+                result_file = state / "assets" / Path(words[1]).relative_to("/mnt/control")
+                result_file.write_text('{"version":1,"kind":"exit","value":139}')
                 # Exercise a real POSIX shell too, without executing capstone-exec.
                 capture = "python3 -c 'import json,sys;print(json.dumps(sys.argv[1:]))' "
-                result = subprocess.check_output(["sh", "-c", capture +
-                    shlex.join(words[3:])], text=True)
+                with patch.object(subprocess, "Popen", real_popen):
+                    result = subprocess.check_output(["sh", "-c", capture +
+                        shlex.join(words[5:])], text=True)
                 seen.extend(json.loads(result))
-                return 139
+                class Process:
+                    def wait(self): return 139
+                    def poll(self): return 139
+                return Process()
 
-            with patch.object(cli, "running", return_value=True), patch.object(cli.subprocess, "call", execute):
+            with patch.object(cli, "running", return_value=True), patch.object(cli.subprocess, "Popen", execute):
                 rc = cli.main(["--state", directory, "run", "--", *arguments])
             self.assertEqual(seen, arguments)
             self.assertEqual(rc, 139)
+
+    def test_restart_preserves_paths_and_recorded_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            identity = {"files": {k: {"path": "/tmp/" + k, "sha256": "old"}
+                        for k in ("qemu", "kernel", "firmware", "rootfs")},
+                        "share": "/tmp/share", "memory": "4G",
+                        "environment": {"CAPSTONE_REV_NODES": "65536"}}
+            (state / "config.json").write_text(json.dumps({"identity": identity}))
+            with patch.object(cli, "running", return_value=False), patch.object(cli, "start", return_value=0) as start:
+                self.assertEqual(cli.main(["--state", directory, "restart"]), 0)
+                args, received = start.call_args.args
+                self.assertEqual(received, state)
+                self.assertEqual(args.environment, identity["environment"])
+                self.assertEqual(args.rootfs, Path("/tmp/rootfs"))
+                self.assertEqual(args.port, 0)
+                self.assertFalse(hasattr(args, "launcher"))
 
     def test_qmp_events_and_partial_messages(self):
         with tempfile.TemporaryDirectory() as directory:

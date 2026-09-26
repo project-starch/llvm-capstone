@@ -1,10 +1,21 @@
-Application execution (2026-09-26): the shared musl CRT, Linux launcher and
-persistent SSH/QMP development session are verified with Perl, mruby and actual
-waitpid fault evidence. The next runtime milestone is monitor/driver execution
-ownership, destruction and trusted interruption; current per-boot resource
-limits remain. Keep existing port scripts until their build/test callers migrate
-and upstream results match. [Commands](../../runtime/applications.md),
-[milestones and acceptance](../plans/domain-process-runtime.md).
+Application execution (2026-09-26): the persistent **one-hart QEMU** lifecycle,
+trusted preemption/fault return, owned resource reclamation, installed Buildroot
+guest and common application SDK are implemented and verified. The combined
+gate passes resource exhaustion/recovery and 1,008 subsequent mixed starts in
+one boot with stable retained resources. Use the shared launcher and ordinary
+upstream test runners for new application work; do not add per-port VM runners.
+
+The next port work is to migrate each real application's upstream build to the
+CMake target or SDK, keeping only necessary source/configuration adaptations.
+Perl is migrated and mruby links with the same SDK. Extend actual upstream tests:
+Perl's three verified base files pass 62 tests; target fork remains unsupported
+and `base/lex.t` needs diagnosis. Keep older hardware/ABI gates until their
+callers migrate. The legacy snapshot's null_blk and borrowed-region INIT failures
+reproduce before these changes and remain separate work. An FPGA equivalent
+requires architectural support for protected continuations and reclamation;
+this QEMU result does not establish it. [Commands](../../runtime/applications.md),
+[acceptance](../../runtime/tests/application/results/20260926-qemu.json),
+[architecture and scope](../plans/domain-process-runtime.md).
 
 Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-stack-integration.md)
 for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
