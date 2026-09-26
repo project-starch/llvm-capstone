@@ -16,34 +16,7 @@ fi
 
 # double, float, conversion, and fp-environment builtins.  Extend here if a new
 # benchmark surfaces an additional undefined __*sf/__*df symbol.
-CAPSTONE_SOFTFLOAT_BUILTINS=(
-  adddf3 subdf3 muldf3 divdf3 fixdfsi floatsidf comparedf2
-  addsf3 subsf3 mulsf3 divsf3 fixsfsi floatsisf comparesf2
-  extendsfdf2 truncdfsf2
-  floatdisf floatundisf
-  # floatunsisf: -O2 converts an unsigned int straight to float (sqrt did so on
-  # 2026-09-05 and failed to link); -O0 went through the double conversions.
-  floatunsisf
-  floatunsidf floatdidf floatundidf fixdfdi fixunsdfdi fixunsdfsi
-  fp_mode
-  # TF mode, i.e. 128-bit long double. musl's vfprintf references the whole
-  # family whether or not a caller uses %Lf, so ANY program that links printf
-  # needs these: they were the last eleven undefined symbols the musl port had
-  # (measured 2026-09-16). comparetf2 carries __eqtf2, __netf2 and __unordtf2
-  # together, so nine files close eleven symbols. All nine compile for
-  # capstone64 as they stand, which was the open question: compiler-rt computes
-  # the significand in __uint128_t and MVT::i128 is this target's capability
-  # carrier.
-  addtf3 subtf3 multf3 comparetf2 extenddftf2
-  fixtfsi fixunstfsi floatsitf floatunsitf
-  # The second TF wave, from running libc-test rather than one probe: musl's
-  # floatscan (behind strtod, sscanf and every scanf) divides in long double
-  # and converts float and double to and from it, and tgmath converts float to
-  # int64. Thirteen libc-test programs failed to link on exactly these four TF
-  # symbols and one on __fixsfdi (2026-09-16).
-  divtf3 extendsftf2 trunctfdf2 trunctfsf2
-  fixsfdi fixunssfdi
-)
+mapfile -t CAPSTONE_SOFTFLOAT_BUILTINS < "$(dirname -- "${BASH_SOURCE[0]}")/../../runtime/cmake/softfloat.list"
 
 softfloat_objs=()
 for b in "${CAPSTONE_SOFTFLOAT_BUILTINS[@]}"; do

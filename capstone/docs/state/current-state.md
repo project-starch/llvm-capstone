@@ -2,6 +2,27 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-26 — Shared application launcher and persistent QEMU session
+
+The `domain-process-runtime` lane adds `capstone-exec`, application ABI v1 and
+the shared musl application CRT. Perl 5.36.3 and mruby run through ordinary
+argv/stdin, using the same launcher. A single-boot gate passes healthy → fault
+after HostCalls → fault with invalid SP/GP → exit 139 → healthy. Linux waitpid
+reports signal 11 for the two faults and normal exit 139 for the control.
+The subsequent Perl/mruby commands retain the same Linux boot ID.
+
+Three native C tests pass with ASan/UBSan; six host CLI tests pass. The Python
+`capstone-vm` CLI uses QMP and SSH, retains the common QEMU lock after exiting,
+reuses matching sessions, and refuses configuration mismatch without stopping
+the guest. An explicit stop/restart and subsequent application gate pass.
+
+This uses trap-delivery QEMU `77d69353b7` rebuilt with libslirp, and matching
+libcapstone quiet/checked-call APIs in the Buildroot lane. It is a **bounded,
+cooperative QEMU baseline**: domain destruction, resource reuse, reliable
+interruption of no-yield loops and native Buildroot packaging remain open.
+There is no new silicon result. See the [commands and limits](../../runtime/applications.md)
+and [implementation plan](../plans/domain-process-runtime.md).
+
 ## 2026-09-25 — R-42 FLASHED; ladder ACCEPTED, but R-43 false denies block revocation-heavy workloads (R1, P1 cell 6)
 
 **Resident bitstream is `caplifive_r42_6cbdaeeb4.bit`**, sha256 `0cd45bb0…8c05`.

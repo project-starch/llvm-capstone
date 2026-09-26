@@ -5,6 +5,11 @@ Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../.
 This file is the compact map of which test layer to run for which kind of change.
 It is intentionally shorter than the older narrative version.
 
+Shared application runtime: run the native startup/image/stream tests and host
+CLI tests, then the [persistent-guest application gate](../../runtime/applications.md#verification).
+It checks actual waitpid signals, two real interpreters and a stable boot ID.
+It does not validate resource destruction, target fork or no-yield cancellation.
+
 ## Setup once per shell
 
 ```bash

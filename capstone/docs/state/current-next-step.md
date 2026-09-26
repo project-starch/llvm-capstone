@@ -1,3 +1,11 @@
+Application execution (2026-09-26): the shared musl CRT, Linux launcher and
+persistent SSH/QMP development session are verified with Perl, mruby and actual
+waitpid fault evidence. The next runtime milestone is monitor/driver execution
+ownership, destruction and trusted interruption; current per-boot resource
+limits remain. Keep existing port scripts until their build/test callers migrate
+and upstream results match. [Commands](../../runtime/applications.md),
+[milestones and acceptance](../plans/domain-process-runtime.md).
+
 Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-stack-integration.md)
 for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
 and state-file merge conflicts remain integration work; the board milestones

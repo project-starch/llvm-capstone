@@ -34,8 +34,8 @@ function(capstone_configure_domain target)
   endif()
   target_sources(${target} PRIVATE
     "${capstone}/my_first_domain/start.S"
-    "${capstone}/tests/runtime-qemu/gct-section-end.S"
-    "${capstone}/tests/runtime-qemu/domreq.S")
+    "${capstone}/runtime/domain/gct-section-end.S"
+    "${capstone}/runtime/domain/domreq.S")
   target_compile_definitions(${target} PRIVATE
     CAPSTONE_DOMREQ_DATA=${data_bytes} CAPSTONE_DOMREQ_STACK=${domain_STACK_BYTES})
   target_link_libraries(${target} PRIVATE Capstone::Runtime)

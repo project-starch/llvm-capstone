@@ -1,5 +1,7 @@
 # Capstone project documentation
 
+Application execution: [shared launcher, persistent Linux shell, build commands and limits](../runtime/applications.md).
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).
 
 Everything durable the project knows about itself: architecture, the issue registry, the test
@@ -168,6 +170,9 @@ Use these only when the task actually needs them:
 - `design/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
 - `design/research-decisions-log.md` — paper-worthy implementation decisions and tradeoffs, cited by commit hash
 - `plans/backend-compiler-fixes.md` — known backend bugs and workarounds (from CoreMark bring-up)
+- [Domain applications as Linux commands](plans/domain-process-runtime.md) — proposed
+  shared launcher, process lifecycle, shell I/O and persistent development VM;
+  language choices and implementation gates, not a new verified baseline
 - `history/README.md` — historical index and note selection guide
 
 ## History rules

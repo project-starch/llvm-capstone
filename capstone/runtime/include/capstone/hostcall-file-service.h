@@ -1,13 +1,13 @@
-#ifndef CAPSTONE_TESTS_RUNTIME_QEMU_HOSTCALL_FILE_SERVICE_PROBE_COMMON_H
-#define CAPSTONE_TESTS_RUNTIME_QEMU_HOSTCALL_FILE_SERVICE_PROBE_COMMON_H
+#ifndef CAPSTONE_HOSTCALL_FILE_SERVICE_H
+#define CAPSTONE_HOSTCALL_FILE_SERVICE_H
 
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
 
-#include "hostcall-stdout-probe/hostcall_stdout_probe.h"
+#include "hostcall.h"
 
-#define HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES 8ULL
+#define HC_FILE_SERVICE_MAX_HANDLES 8ULL
 
 struct hostcall_file_service_handle_slot {
   int in_use;
@@ -21,9 +21,9 @@ static inline void hostcall_snapshot_request(struct hostcall_v0 *snapshot,
 
 static inline int
 hostcall_payload_range_valid(const struct hostcall_v0 *request) {
-  if (request->offset > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
+  if (request->offset > HC_V0_REGION_SIZE)
     return 0;
-  if (request->length > HOSTCALL_STDOUT_PROBE_REGION_SIZE - request->offset)
+  if (request->length > HC_V0_REGION_SIZE - request->offset)
     return 0;
   return 1;
 }
