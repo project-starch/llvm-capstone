@@ -49,10 +49,12 @@ prove --exec 'capstone-vm --state /tmp/capstone/dev-vm run --cwd /mnt/host/perl-
 ```
 
 The migrated recipe was rebuilt from the pinned tarball and these three files
-pass. The broader five-file check also included `base/term.t` (one failure,
-unsupported target fork) and `base/lex.t` (domain fault before TAP output).
-Those are application compatibility gaps, not a passing upstream suite; the
-same Linux VM remained available after both. The historical 17-check smoke
+pass. The [complete `t/base` run](results/2026-09-26/base-tests.txt) has six
+passing files and three failing files: `base/term.t` fails one of seven tests
+because target fork/clone is unserved; `base/lex.t` and `base/rs.t` each end in
+SIGSEGV before producing TAP output. `prove` reports 9 files, 332 emitted
+assertions and exit status 1. The same Linux VM continues after both faults.
+The complete upstream Perl suite has not been run. The historical 17-check smoke
 result above belongs to its recorded build and is not a new claim about this
 upstream subset. The common runtime separately verifies real Perl argv and a
 stdin/stdout filter, alongside mruby and the lifecycle contract programs.
@@ -111,7 +113,10 @@ that is simply latent elsewhere, and is unconditional.
    and the COP identity cache (`op.c:1331,9598` -- that one only compares, so it
    is sound). None is on the path reached so far; each is a latent cause-24.
 2. **The test suite.** 2823 `.t` files and `t/TEST` forks per file, which a domain
-   cannot do, so a behavioural gate needs a harness that runs a chosen set in one
-   process. Until then `scripts/smoke.pl` against the native reference is the gate.
-3. **The library is not on the share**, so a script cannot `use` anything yet;
-   `scripts/smoke.pl` is core builtins only for that reason.
+   cannot do. Host `prove --exec` now runs each file through the shared VM CLI;
+   the complete `t/base` result above is the current upstream subset. Diagnose
+   the `lex.t` and `rs.t` faults and the missing target fork/clone service before
+   extending the suite.
+3. **The library is staged only for development tests.** Set `PERL5LIB` to
+   `/mnt/host/perl-tests/lib` for those tests. A rootfs installation and broader
+   module loading coverage remain open; `scripts/smoke.pl` uses core builtins.

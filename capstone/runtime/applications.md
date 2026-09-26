@@ -232,6 +232,7 @@ see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu.json)
 records 1,008 mixed starts after node exhaustion, with stable pool/node/tag counts.
 Four native ASan/UBSan tests and eleven Python tests pass. A subsequent common
-gate uses fresh SDK-built Perl and mruby; Perl's three verified upstream base
-files pass 62 tests. Legacy CoreMark/shared-region/basic HostCalls pass; null_blk
+gate uses fresh SDK-built Perl and mruby. The [complete Perl `t/base` run](../ports/perl/musl/results/2026-09-26/base-tests.txt)
+has six passing files and three failing files (one unsupported fork/clone case,
+two SIGSEGV before TAP). Legacy CoreMark/shared-region/basic HostCalls pass; null_blk
 and borrowed-region open/close failures reproduce on the old platform as well.

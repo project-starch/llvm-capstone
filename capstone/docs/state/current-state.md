@@ -26,10 +26,13 @@ Four native ASan/UBSan tests and eleven host Python tests pass. A fresh Buildroo
 rootfs installs the driver, launchers and Dropbear. The shared CMake application
 SDK provides a compiler driver for upstream Make/configure builds; Perl's private
 compiler wrapper, entry adapter and VM runner are removed. Fresh Perl 5.36.3 and
-SDK-linked mruby pass the common application gate. Upstream Perl `base/if.t`,
-`base/cond.t` and `base/num.t` pass through ordinary `prove`: 3 files, 62 tests.
-`base/term.t` still needs target fork and `base/lex.t` faults; the full Perl suite
-is not a passing claim.
+SDK-linked mruby pass the common application gate. The complete upstream Perl
+`t/base` directory run through ordinary `prove` fails: six files pass,
+`base/term.t` fails one test because target fork/clone is unserved, and
+`base/lex.t` and `base/rs.t` each fault before TAP output. `prove` reports
+9 files, 332 emitted assertions and exit 1. See the
+[curated result](../../ports/perl/musl/results/2026-09-26/base-tests.txt).
+The full upstream Perl suite has not been run or claimed to pass.
 
 Legacy CoreMark, shared-region and the first three HostCall proofs pass on the
 new platform. The available legacy snapshot fails all three `null_blk` arms

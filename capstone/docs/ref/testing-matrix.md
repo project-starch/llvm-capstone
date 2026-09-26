@@ -13,6 +13,11 @@ Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../.
 This file is the compact map of which test layer to run for which kind of change.
 It is intentionally shorter than the older narrative version.
 
+Perl's [complete upstream `t/base` run](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
+uses host `prove --exec` with `capstone-vm run`: 6/9 files pass; `term.t` has one
+failed assertion and `lex.t`/`rs.t` each terminate by SIGSEGV before TAP. This
+is a port compatibility gate, not a passing full Perl-suite result.
+
 Shared application runtime: run the native startup/image/stream tests and host
 CLI tests, then the [persistent-guest application gate](../../runtime/applications.md#verification).
 It checks actual waitpid signals, no-yield and blocked-I/O cancellation,
