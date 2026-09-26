@@ -108,6 +108,7 @@ llvm/lib/Support/CMakeLists.txt | +3 -0 | CapstoneAttributes.cpp
 llvm/lib/TargetParser/CMakeLists.txt | +2 -0 | CapstoneISAInfo.cpp
 llvm/lib/TargetParser/TargetDataLayout.cpp | +46 -0 | static std::string computeCapstoneDataLayout(const Triple &TT,
 llvm/lib/TargetParser/Triple.cpp | +21 -1 | case capstone32:     return "capstone32";
+llvm/lib/Transforms/Scalar/SROA.cpp | +145 -0 | /// Capstone: does a value of type \p Ty hold a pointer wider than its index --
 llvm/utils/TableGen/Basic/CMakeLists.txt | +1 -0 | CapstoneTargetDefEmitter.cpp
 llvm/utils/TableGen/Basic/VTEmitter.cpp | +19 -3 | if (IsCapstoneVecTuple) {
 llvm/utils/TableGen/Common/CodeGenDAGPatterns.cpp | +40 -6 | // A capability IS a pointer type. Leaving it out makes iPTR intersect to the
