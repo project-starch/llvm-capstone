@@ -2,6 +2,28 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-27 — Application memory workload discovery
+
+The `application-memory-experiments` lane adds one Python build/link adapter and
+one persistent-VM runner with real workloads for Perl, CPython, mruby, SQLite,
+PostgreSQL single-user, the configured FFmpeg decode app, and prepared tshark
+PCAP inputs. Shared SDK atomic/integer helpers and the existing 128-file table
+adaptation let these cached application objects use the common launcher.
+
+The bounded discovery records 183 attempts: 147 pass, 21 signal, 3 PostgreSQL
+exits at unsupported FileFallocate, and 12 unavailable tshark attempts. All 171
+launched cases return with zero live domains, regions and bytes. A separately
+recorded 262,144-node configuration lets previously failing mruby cases complete
+but larger protected CPython cases still fault near the limit. Collection between
+processes is verified; continuous in-process node reuse is not established.
+
+Four native runtime tests, twelve host CLI tests, eleven runner false-pass tests,
+known-allocation calibration, 128-file capacity/reuse, and native output oracles
+pass. The [workload documentation](../../experiments/applications/README.md)
+gives protection scopes and accounting limits. Compact measurements and six plots
+live on nested-allocators-paper's `eval/application-memory` branch. These are QEMU
+memory/capacity observations, not CheriBSD comparisons or hardware timings.
+
 ## 2026-09-26 — Persistent application processes, reclamation and shared SDK
 
 The `domain-process-runtime` lane implements the complete **one-hart QEMU**

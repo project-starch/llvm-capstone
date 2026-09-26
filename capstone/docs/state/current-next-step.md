@@ -1,3 +1,13 @@
+Application workload discovery (2026-09-27): the
+[`application-memory-experiments` lane](../../experiments/applications/README.md)
+has checked workloads across six applications and prepared tshark inputs.
+Prioritize node reuse within a continuing protected interpreter before claiming
+bounded metadata over long runs. PostgreSQL's larger workload needs FileFallocate
+support; tshark needs its full dependency build restored. Pair the same useful
+work with CheriBSD once its guest is accessible, matching protection scopes and
+the complete memory ledger. QEMU timings do not establish performance; inspect
+the paper branch `eval/application-memory` for the exploratory plots and failures.
+
 Application execution (2026-09-26): the persistent **one-hart QEMU** lifecycle,
 trusted preemption/fault return, owned resource reclamation, installed Buildroot
 guest and common application SDK are implemented and verified. The combined

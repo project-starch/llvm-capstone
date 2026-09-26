@@ -97,6 +97,21 @@ static int sh_state;              /* 0 not yet, 1 ready, -1 no usable grant */
 /* counts a program can report: allocations, frees, merges, and the Sublet primitives */
 static unsigned long sh_n_alloc, sh_n_free, sh_n_merge, sh_live, sh_peak_live;
 
+/* Optional accounting of occupied buddy blocks, including internal slack.
+ * The pool and the out-of-line tables are separate reservations. */
+#ifdef CAPSTONE_SUBLET_HEAP_STATS
+static size_t sh_live_bytes, sh_peak_bytes;
+size_t __capstone_sublet_live_bytes(void) { return sh_live_bytes; }
+size_t __capstone_sublet_peak_bytes(void) { return sh_peak_bytes; }
+size_t __capstone_sublet_pool_bytes(void) {
+	return sh_state > 0 ? (size_t)1 << (sh_maxord + CAPSTONE_SUBLET_ATOM_LOG) : 0;
+}
+size_t __capstone_sublet_table_bytes(void) {
+	return sizeof sh_grant + sizeof sh_cap + sizeof sh_par + sizeof sh_ctrl +
+	       sizeof sh_next + sizeof sh_prev + sizeof sh_head + sizeof sh_paroff;
+}
+#endif
+
 static void sh_say(const char *msg)
 {
 	write(2, msg, strlen(msg));
@@ -230,6 +245,11 @@ void *malloc(size_t n)
 	}
 	sh_ctrl[i] = SH_OUT | k;
 	sh_n_alloc++;
+#ifdef CAPSTONE_SUBLET_HEAP_STATS
+	sh_live_bytes += (size_t)1 << (k + CAPSTONE_SUBLET_ATOM_LOG);
+	if (sh_live_bytes > sh_peak_bytes)
+		sh_peak_bytes = sh_live_bytes;
+#endif
 	if (++sh_live > sh_peak_live)
 		sh_peak_live = sh_live;
 	return sh_narrow(sublet_take(&sh_cap[i]), n);
@@ -251,6 +271,9 @@ void free(void *p)
 		return;
 	}
 	unsigned k = sh_ctrl[i] & SH_ORD;
+#ifdef CAPSTONE_SUBLET_HEAP_STATS
+	sh_live_bytes -= (size_t)1 << (k + CAPSTONE_SUBLET_ATOM_LOG);
+#endif
 	/* the scrub, through the object's own alias and within its own bounds: the next owner of
 	   this block must not find the last owner's bytes or capabilities in it */
 	memset(p, 0, __builtin_capstone_cap_get_end(p) - a);

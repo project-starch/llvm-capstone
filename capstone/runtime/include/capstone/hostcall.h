@@ -3,6 +3,8 @@
 
 /* Shared HostCall v0 wire ABI. Snapshot mutable requests before servicing them. */
 #define HC_V0_REGION_SIZE 4096UL
+/* Common domain/helper capacity; database backends keep many relations open. */
+#define HC_V0_FILE_SLOTS 128
 
 typedef unsigned long long hostcall_u64_t;
 typedef long long hostcall_s64_t;
