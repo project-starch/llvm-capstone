@@ -1,0 +1,28 @@
+gc.c: a region handed to the GC is aligned on a capability-carrying integer.
+
+mrb_gc_add_region rounds the region's base up to pointer alignment through
+uintptr_t and turns the result back into a pointer, which drops the tag on
+capstone64 (the compiler reports it, -Wcapstone-pointer-roundtrip). The rounding
+now runs on __uintcap_t; natively it is uintptr_t as before.
+
+--- a/src/gc.c
++++ b/src/gc.c
+@@ -502,9 +502,15 @@
+   uint16_t i;
+ 
+   /* align base to pointer size */
+-  uintptr_t align = sizeof(void*);
+-  uintptr_t offset = ((uintptr_t)base + align - 1) & ~(align - 1);
+-  size_t pad = (size_t)(offset - (uintptr_t)base);
++  /* capstone: aligned on a capability-carrying integer, so base keeps its tag */
++#ifdef __SIZEOF_INTCAP__
++  typedef __uintcap_t gc_uptr;
++#else
++  typedef uintptr_t gc_uptr;
++#endif
++  size_t align = sizeof(void*);
++  gc_uptr offset = ((gc_uptr)base + align - 1) & ~(gc_uptr)(align - 1);
++  size_t pad = (size_t)((size_t)offset - (size_t)(gc_uptr)base);
+   /* A buffer smaller than the alignment padding leaves nothing behind: bail
+      out before the subtraction, which would otherwise wrap `size` and carve
+      pages out past the end of the region. */

@@ -1,0 +1,72 @@
+ccontext.c: the arena Prism allocates from answers aligned for any object.
+
+mruby-compiler gives the Prism parser an arena (MRC_PRISM_ARENA). Each chunk
+carried an 8-byte size header and was rounded to 8, so every answer sat 8 bytes
+off a 16-byte boundary. Wherever a pointer is a 16-byte capability, the first
+pointer Prism stored in one faulted as a misaligned capability store (cause 6,
+in pm_constant_pool_insert). The header is now a union padded to the alignment
+of a pointer, long double and long long, and chunks and the block header are
+rounded to it: malloc's guarantee. C99, since the host build is -std=gnu99.
+
+--- a/mrbgems/mruby-compiler/src/ccontext.c
++++ b/mrbgems/mruby-compiler/src/ccontext.c
+@@ -44,9 +44,17 @@
+ };
+ 
+ /* Every answer carries the size it was given, so that growing one knows how
+-   much of it there is to copy.  realloc() is told the new size only. */
++   much of it there is to copy.  realloc() is told the new size only.
++   Every answer is aligned for any object, as malloc()'s is: the header is
++   padded to that alignment and each chunk rounded up to it.  Rounding to 8
++   put the body of a chunk 8 bytes off wherever a pointer is wider (a 16-byte
++   capability on Capstone and CHERI), and the first pointer Prism stored in
++   one faulted as a misaligned capability store. */
++union arena_align { size_t size; void *ptr; long double ld; long long ll; };
++#define ARENA_ROUND(n) (((n) + _Alignof(union arena_align) - 1) \
++                        & ~(size_t)(_Alignof(union arena_align) - 1))
+ struct arena_chunk {
+-  size_t size;
++  union arena_align head;
+   char body[];
+ };
+ 
+@@ -54,10 +62,10 @@
+ arena_block_new(size_t need)
+ {
+   size_t size = MRC_PRISM_ARENA_BLOCK;
+-  while (size - sizeof(struct arena_block) < need) size *= 2;
++  while (size - ARENA_ROUND(sizeof(struct arena_block)) < need) size *= 2;
+   struct arena_block *b = (struct arena_block *)arena_block_alloc(size);
+   b->head.prev = mrc_prism_arena;
+-  b->used = sizeof(struct arena_block);
++  b->used = ARENA_ROUND(sizeof(struct arena_block));
+   b->size = size;
+   mrc_prism_arena = &b->head;
+   return b;
+@@ -79,7 +87,7 @@
+ void *
+ mrc_prism_arena_alloc(size_t size)
+ {
+-  size_t need = (sizeof(struct arena_chunk) + size + 7u) & ~(size_t)7;
++  size_t need = ARENA_ROUND(sizeof(struct arena_chunk) + size);
+   struct arena_block *b = (struct arena_block *)mrc_prism_arena;
+ 
+   if (b == NULL || b->size - b->used < need) {
+@@ -87,7 +95,7 @@
+   }
+   struct arena_chunk *chunk = (struct arena_chunk *)((char *)b + b->used);
+   b->used += need;
+-  chunk->size = size;
++  chunk->head.size = size;
+   return chunk->body;
+ }
+ 
+@@ -101,7 +109,7 @@
+        at once, so what a growing array leaves behind is reclaimed with it.
+        How much is left behind is bounded by the doubling the caller does. */
+     struct arena_chunk *old = (struct arena_chunk *)((char *)ptr - offsetof(struct arena_chunk, body));
+-    size_t copy = old->size < size ? old->size : size;
++    size_t copy = old->head.size < size ? old->head.size : size;
+     memcpy(p, ptr, copy);
+   }
+   return p;
