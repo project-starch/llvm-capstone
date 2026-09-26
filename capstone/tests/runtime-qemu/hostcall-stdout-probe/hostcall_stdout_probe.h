@@ -186,6 +186,26 @@ struct hostcall_v0 {
  * readlink(2). A name that is not a link answers EINVAL, which is what musl's
  * realpath() asks each path component and expects for the common case. */
 #define HC_V0_OP_PATH_READLINK 29ULL
+/* Make a symbolic link. Request: PATH_RENAME's layout, "target NUL linkpath",
+ * metadata.length covering both and the NUL. The target is stored as given
+ * (a symlink's target is not resolved when it is made); the link path is the
+ * domain's, joined with its cwd. Response: result 0. The helper's symlink(2).
+ * First consumer is mruby's File.symlink (mruby-io's tests). */
+#define HC_V0_OP_PATH_SYMLINK 30ULL
+/* Stat a path. Request: PATH_ACCESS's layout, HC_PATH_STAT_FLAG_* in the flags
+ * word. Response: FILE_STAT_BASIC's. The helper's stat(2), or lstat(2) with
+ * NOFOLLOW; the domain sends only the NOFOLLOW form, since stat() is served by
+ * FILE_OPEN and FILE_STAT_BASIC. First consumer is mruby's FileTest.symlink?. */
+#define HC_V0_OP_PATH_STAT 31ULL
+/* Change a file's mode. Request: PATH_ACCESS's layout, the mode in the flags
+ * word. Response: result 0. The helper's chmod(2). First consumer is mruby's
+ * File.chmod. */
+#define HC_V0_OP_PATH_CHMOD 32ULL
+/* Lock a file. Request: FILE_TRUNCATE's layout, the flock(2) operation in the
+ * second word. Response: result 0. The helper's flock(2) on the handle's
+ * descriptor, so the lock belongs to that open file description. First
+ * consumer is mruby's File#flock. */
+#define HC_V0_OP_FILE_FLOCK 33ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL
@@ -294,10 +314,14 @@ struct hc_dir_read_req_v0 {
 #define HC_PATH_RENAME_REQ_V0_PATH_OFFSET 8ULL
 #define HC_PATH_MKDIR_REQ_V0_PATH_OFFSET 8ULL
 #define HC_PATH_READLINK_REQ_V0_PATH_OFFSET 8ULL
+#define HC_PATH_SYMLINK_REQ_V0_PATH_OFFSET 8ULL
+#define HC_PATH_STAT_REQ_V0_PATH_OFFSET 8ULL
+#define HC_PATH_CHMOD_REQ_V0_PATH_OFFSET 8ULL
 
 #define HC_PATH_ACCESS_FLAG_EXISTS 0ULL
 #define HC_PATH_DELETE_FLAG_NONE 0ULL
 #define HC_PATH_DELETE_FLAG_DIRECTORY 1ULL /* rmdir, not unlink */
+#define HC_PATH_STAT_FLAG_NOFOLLOW 1ULL /* lstat, not stat */
 
 #endif
 

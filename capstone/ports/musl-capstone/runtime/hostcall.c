@@ -118,10 +118,21 @@ static int hc_round(unsigned long opcode, unsigned long offset,
 #define HC_MAX_FILES 128
 #define HC_PAYLOAD_SIZE HOSTCALL_STDOUT_PROBE_REGION_SIZE
 
+/* Each slot is two things with separate fields: a DESCRIPTOR (used, desc) and
+ * an open file DESCRIPTION (handle, pos, refs). open() takes a slot free as
+ * both and points the descriptor at its own description; dup() takes any free
+ * descriptor and points it at the original's description, so the two share
+ * the helper's handle and one file position, as POSIX has it (a read through
+ * one moves the other). The description goes back to the helper with
+ * FILE_CLOSE when its last descriptor closes. A slot whose descriptor is closed
+ * can still hold a description a dup keeps alive, which is why open() needs
+ * both halves free and dup() only the first. First consumer is mruby's IO#dup. */
 struct hc_file {
   unsigned long long handle; /* helper token; token 0 is reserved as invalid */
   unsigned long long pos;    /* POSIX file position, ours to keep */
-  int used;
+  int refs;                  /* descriptors naming this description */
+  int used;                  /* this descriptor is open */
+  int desc;                  /* ... and names hc_files[desc]'s description */
 };
 static struct hc_file hc_files[HC_MAX_FILES];
 
@@ -169,11 +180,12 @@ static long hc_umask = 022;
 static int hc_stdio_closed[3];
 static int hc_is_stdio(long fd) { return (fd == 1 || fd == 2) && !hc_stdio_closed[fd]; }
 
+/* The description an open descriptor names, or 0. */
 static struct hc_file *hc_slot(long fd) {
   if (fd < HC_FD_BASE || fd >= HC_FD_BASE + HC_MAX_FILES)
     return 0;
   struct hc_file *f = &hc_files[fd - HC_FD_BASE];
-  return f->used ? f : 0;
+  return f->used ? &hc_files[f->desc] : 0;
 }
 
 /* PIPES, kept in the domain. A pipe is a byte queue between two descriptors,
@@ -198,6 +210,14 @@ struct hc_pipe {
 };
 static struct hc_pipe hc_pipes[HC_MAX_PIPES];
 
+/* FD_CLOEXEC, per descriptor. No process is ever executed here for a descriptor
+   to leak into, so the flag changes nothing; it is kept because a program may
+   ask for it back (mruby's IO#close_on_exec?), and answering 0 after it was set
+   would be a lie. Set by O_CLOEXEC on open and pipe2, by F_SETFD, by dup3 and
+   F_DUPFD_CLOEXEC; cleared when the descriptor closes. Indexed by descriptor,
+   stdio, files and pipes alike, and only after the descriptor is known open. */
+static unsigned char hc_cloexec[HC_PIPE_FD_BASE + 2 * HC_MAX_PIPES];
+
 /* The pipe behind fd, and which end it is (0 read, 1 write), if that end is open. */
 static struct hc_pipe *hc_pipe_end(long fd, int *writing) {
   if (fd < HC_PIPE_FD_BASE || fd >= HC_PIPE_FD_BASE + 2 * HC_MAX_PIPES)
@@ -221,6 +241,7 @@ static long hc_pipe2(int *fds, long flags) {
   hc_pipes[i].rd_open = hc_pipes[i].wr_open = 1;
   fds[0] = (int)(HC_PIPE_FD_BASE + 2 * i);
   fds[1] = (int)(HC_PIPE_FD_BASE + 2 * i + 1);
+  hc_cloexec[fds[0]] = hc_cloexec[fds[1]] = (flags & O_CLOEXEC) != 0;
   return 0;
 }
 
@@ -531,6 +552,49 @@ static long hc_path_rename(const char *old, const char *new, long flags) {
   return hc_metadata->error != 0 ? hc_err() : 0;
 }
 
+/* PATH_SYMLINK: PATH_RENAME's layout, "target NUL linkpath". The target goes over
+   as written -- symlink(2) stores it without resolving it, so a relative target
+   stays relative to the link's directory -- and only the link path is joined
+   with the cwd. */
+static long hc_path_symlink(const char *target, const char *linkpath) {
+  hc_put_u64(0, 0);
+  const unsigned long at = HC_PATH_SYMLINK_REQ_V0_PATH_OFFSET;
+  unsigned long lt = 0;
+  while (target[lt]) {
+    if (at + lt + 1 >= HC_PAYLOAD_SIZE)
+      return -ENAMETOOLONG;
+    hc_payload[at + lt] = target[lt];
+    lt++;
+  }
+  hc_payload[at + lt] = '\0';
+  long ln = hc_put_path(at + lt + 1, linkpath);
+  if (ln < 0)
+    return ln;
+  if (hc_round(HC_V0_OP_PATH_SYMLINK, at, lt + 1 + (unsigned long)ln) != 0)
+    return -EIO;
+  return hc_metadata->error != 0 ? hc_err() : 0;
+}
+
+/* PATH_STAT: PATH_ACCESS's layout, the answer in FILE_STAT_BASIC's. Only for
+   lstat -- fstatat with AT_SYMLINK_NOFOLLOW -- which the open-and-fstat that
+   stat() is served by cannot answer: open follows the link. */
+static long hc_path_stat(const char *path, unsigned long long flags,
+                         unsigned long long *size, unsigned long long *mode) {
+  hc_put_u64(0, flags);
+  long len = hc_put_path(HC_PATH_STAT_REQ_V0_PATH_OFFSET, path);
+  if (len < 0)
+    return len;
+  if (hc_round(HC_V0_OP_PATH_STAT, HC_PATH_STAT_REQ_V0_PATH_OFFSET, (unsigned long)len) != 0)
+    return -EIO;
+  if (hc_metadata->error != 0)
+    return hc_err();
+  if (hc_metadata->length < HC_FILE_STAT_BASIC_RESP_V0_SIZE)
+    return -EIO;
+  *size = hc_get_u64(0);
+  *mode = hc_get_u64(8);
+  return 0;
+}
+
 /* FILE_SYNC and FILE_TRUNCATE: handle-only requests with an empty payload area. */
 static long hc_handle_op(long fd, unsigned long long opcode,
                          unsigned long long arg) {
@@ -565,7 +629,7 @@ static void hc_fill_stat(struct stat *st, unsigned long long size,
 static long hc_open_wire(const char *path, long flags, long mode, int joined) {
   int slot = -1;
   for (int i = 0; i < HC_MAX_FILES; i++)
-    if (!hc_files[i].used) {
+    if (!hc_files[i].used && !hc_files[i].refs) {
       slot = i;
       break;
     }
@@ -599,11 +663,26 @@ static long hc_open_wire(const char *path, long flags, long mode, int joined) {
 
   hc_files[slot].handle = handle;
   hc_files[slot].pos = 0;
+  hc_files[slot].refs = 1;
   hc_files[slot].used = 1;
+  hc_files[slot].desc = slot;
+  hc_cloexec[HC_FD_BASE + slot] = (flags & O_CLOEXEC) != 0;
   return HC_FD_BASE + slot;
 }
 
+/* "/dev/tty" is the process's controlling terminal, and a domain has none: the
+   helper's is the guest console, and handing that out would make isatty() true
+   for a descriptor whose output does not go where the domain's stdout goes.
+   ENXIO is what Linux answers a process without one. */
+static int hc_is_dev_tty(const char *path) {
+  const char *t = "/dev/tty";
+  while (*t && *path == *t) { path++; t++; }
+  return !*t && !*path;
+}
+
 static long hc_open(const char *path, long flags, long mode) {
+  if (hc_is_dev_tty(path))
+    return -ENXIO;
   return hc_open_wire(path, flags, mode, 0);
 }
 
@@ -645,13 +724,20 @@ static long hc_getcwd(char *buf, unsigned long size) {
 static long hc_close(long fd) {
   if (hc_is_stdio(fd)) {
     hc_stdio_closed[fd] = 1;
+    hc_cloexec[fd] = 0;
     return 0;
   }
-  if (hc_pipe_exists(fd))
+  if (hc_pipe_exists(fd)) {
+    hc_cloexec[fd] = 0;
     return hc_pipe_close(fd);
+  }
   struct hc_file *f = hc_slot(fd);
   if (!f)
     return -EBADF;
+  hc_files[fd - HC_FD_BASE].used = 0;
+  hc_cloexec[fd] = 0;
+  if (--f->refs > 0)
+    return 0; /* a dup still names the description */
 
   hc_put_u64(0, f->handle);
   long rc = 0;
@@ -663,10 +749,50 @@ static long hc_close(long fd) {
   /* The slot is released whatever the helper said. A close that reports an
      error has still consumed the descriptor in POSIX, and keeping the slot
      would leak it for the life of the domain. */
-  f->used = 0;
   f->handle = 0;
   f->pos = 0;
   return rc;
+}
+
+/* dup, dup3 and F_DUPFD for a file: a new descriptor naming the same
+   description (see struct hc_file). `newfd` < 0 takes the lowest free
+   descriptor at or above `min`, as dup and F_DUPFD do; otherwise that exact
+   descriptor, closed first if open, as dup3 does. stdout, stderr and pipes have
+   no description in the table, and duplicating them is left unserved rather
+   than faked: the caller gets ENOSYS and the exit report names the call. */
+static long hc_dup(long n, long oldfd, long newfd, long min, int cloexec) {
+  struct hc_file *d = hc_slot(oldfd);
+  if (!d) {
+    if (!hc_is_stdio(oldfd) && !hc_pipe_exists(oldfd))
+      return -EBADF;
+    if (hc_unserved_n < HC_UNSERVED_MAX)
+      hc_unserved[hc_unserved_n] = n;
+    hc_unserved_n++;
+    return -ENOSYS;
+  }
+  long slot = -1;
+  if (newfd >= 0) {
+    if (newfd == oldfd)
+      return -EINVAL; /* dup3's answer; dup2's own same-fd case is musl's */
+    if (newfd < HC_FD_BASE || newfd >= HC_FD_BASE + HC_MAX_FILES)
+      return -EBADF;
+    if (hc_files[newfd - HC_FD_BASE].used)
+      hc_close(newfd);
+    slot = newfd - HC_FD_BASE;
+  } else {
+    for (long i = min > HC_FD_BASE ? min - HC_FD_BASE : 0; i < HC_MAX_FILES; i++)
+      if (!hc_files[i].used) {
+        slot = i;
+        break;
+      }
+    if (slot < 0)
+      return -EMFILE;
+  }
+  d->refs++;
+  hc_files[slot].used = 1;
+  hc_files[slot].desc = (int)(d - hc_files);
+  hc_cloexec[HC_FD_BASE + slot] = cloexec != 0;
+  return HC_FD_BASE + slot;
 }
 
 /* getdents64 through DIR_READ. The handle is an ordinary FILE_OPEN of the
@@ -991,6 +1117,11 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_readlinkat:
     return hc_readlink((const char *)b, (char *)c, (unsigned long)d);
 
+  /* musl's symlink() is symlinkat(target, AT_FDCWD, linkpath). The directory
+     descriptor is accepted and not used, as openat's is. */
+  case SYS_symlinkat:
+    return hc_path_symlink((const char *)a, (const char *)c);
+
   /* musl's rename() is renameat2(AT_FDCWD, old, AT_FDCWD, new, 0) here: this
      target has neither rename nor renameat. The directory descriptors are
      accepted and not used, as openat's is. */
@@ -1032,6 +1163,14 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
      call made a handful of times, through the same service fstat is already
      measured against. The open is read-only, which a directory accepts too. */
   case SYS_newfstatat: {
+    if ((long)d & AT_SYMLINK_NOFOLLOW) {
+      unsigned long long size, mode;
+      long rc = hc_path_stat((const char *)b, HC_PATH_STAT_FLAG_NOFOLLOW, &size, &mode);
+      if (rc < 0)
+        return rc;
+      hc_fill_stat((struct stat *)c, size, mode);
+      return 0;
+    }
     long fd = hc_open((const char *)b, 0, 0);
     if (fd < 0)
       return fd;
@@ -1053,22 +1192,57 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_getegid:
     return 0;
 
-  /* open() issues this once, for O_CLOEXEC, and discards the result. There are
-     no other processes here for a descriptor to leak into. It does answer
-     whether a descriptor EXISTS, though: musl's fstat asks F_GETFD after an
-     EBADF, and a 0 for a descriptor nobody opened sent it on to fstatat(fd, "")
-     and ENOENT, so fstat(0) reported the wrong error. */
-  case SYS_fcntl:
-    if (hc_pipe_exists((long)a)) {
-      /* A pipe here never blocks (see hc_pipes), so F_GETFL says O_NONBLOCK
-         whatever was set; the other commands are accepted as for a file. */
-      if ((long)b == F_GETFL)
-        return O_NONBLOCK;
+  /* open() issues this for O_CLOEXEC. It answers whether a descriptor EXISTS
+     first: musl's fstat asks F_GETFD after an EBADF, and a 0 for a descriptor
+     nobody opened sent it on to fstatat(fd, "") and ENOENT, so fstat(0)
+     reported the wrong error. FD_CLOEXEC is kept (hc_cloexec); F_DUPFD is dup.
+     The other commands are accepted and change nothing, as before. */
+  case SYS_fcntl: {
+    long fd = (long)a;
+    int pipe = hc_pipe_exists(fd);
+    if (!pipe && !hc_is_stdio(fd) && !hc_slot(fd))
+      return -EBADF;
+    switch ((long)b) {
+    case F_GETFD:
+      return hc_cloexec[fd] ? FD_CLOEXEC : 0;
+    case F_SETFD:
+      hc_cloexec[fd] = ((long)c & FD_CLOEXEC) != 0;
+      return 0;
+    case F_DUPFD:
+    case F_DUPFD_CLOEXEC:
+      return hc_dup(n, fd, -1, (long)c, (long)b == F_DUPFD_CLOEXEC);
+    case F_GETFL:
+      /* A pipe here never blocks (see hc_pipes), so it says O_NONBLOCK
+         whatever was set. */
+      return pipe ? O_NONBLOCK : 0;
+    default:
       return 0;
     }
-    if (hc_is_stdio((long)a) || hc_slot((long)a))
-      return 0;
-    return -EBADF;
+  }
+
+  /* musl's dup2() is dup3(old, new, 0) here, after its own old == new check. */
+  case SYS_dup:
+    return hc_dup(n, (long)a, -1, 0, 0);
+
+  case SYS_dup3:
+    if ((long)c & ~O_CLOEXEC)
+      return -EINVAL;
+    return hc_dup(n, (long)a, (long)b, 0, ((long)c & O_CLOEXEC) != 0);
+
+  /* flock through the helper, on the helper's descriptor: the lock belongs to
+     the open file description there as it would here, and a dup shares it. A
+     lock another process holds blocks the helper, and the domain with it, as a
+     blocking flock blocks any caller; LOCK_NB answers EWOULDBLOCK instead. */
+  case SYS_flock:
+    return hc_handle_op((long)a, HC_V0_OP_FILE_FLOCK, (unsigned long long)b);
+
+  /* musl's chmod() is fchmodat(AT_FDCWD, path, mode) here; the directory
+     descriptor is accepted and not used, as openat's is. A flag (fchmodat2's
+     AT_SYMLINK_NOFOLLOW) never reaches this syscall: musl handles it with
+     O_PATH, which the helper does not have. */
+  case SYS_fchmodat:
+    return hc_path_op(HC_V0_OP_PATH_CHMOD, (const char *)b,
+                      (unsigned long long)((long)c & 07777));
 
   /* A domain has exactly one thread, and 1 is its identifier. This is not an
      invented value in the way a fabricated st_dev would be: nothing outside the

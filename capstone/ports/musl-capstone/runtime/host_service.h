@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <time.h>
@@ -167,11 +168,39 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     if (ftruncate(fd, (off_t)want) < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, 0);
     return 0;
   }
+  case HC_V0_OP_FILE_FLOCK: {
+    /* FILE_TRUNCATE's layout: the handle, then the operation. */
+    const struct hc_file_truncate_req_v0 *r = (const struct hc_file_truncate_req_v0 *)payload;
+    int op = (int)r->size;
+    int fd = hostcall_lookup_handle_fd(h->slots, max, r->handle);
+    if (fd < 0) { hc_host_error(metadata, errno); return 0; }
+    if (flock(fd, op) < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, 0);
+    return 0;
+  }
+  case HC_V0_OP_PATH_STAT: {
+    /* The flags are read before the answer overwrites the request. */
+    const struct hc_file_open_req_v0 *r = (const struct hc_file_open_req_v0 *)payload;
+    unsigned long long flags = r->flags;
+    memcpy(h->path, payload + req->offset, (size_t)req->length);
+    h->path[req->length] = '\0';
+    struct stat st;
+    int rc = (flags & HC_PATH_STAT_FLAG_NOFOLLOW) ? lstat(h->path, &st) : stat(h->path, &st);
+    if (rc < 0) { hc_host_error(metadata, errno); return 0; }
+    struct hc_file_stat_basic_resp_v0 *resp = (struct hc_file_stat_basic_resp_v0 *)payload;
+    resp->file_size = (hostcall_u64_t)st.st_size;
+    resp->mode = (hostcall_u64_t)st.st_mode;
+    resp->reserved0 = resp->reserved1 = 0;
+    metadata->offset = 0;
+    metadata->length = HC_FILE_STAT_BASIC_RESP_V0_SIZE;
+    hc_host_ok(metadata, 0);
+    return 0;
+  }
   case HC_V0_OP_PATH_ACCESS:
   case HC_V0_OP_PATH_DELETE:
-  case HC_V0_OP_PATH_MKDIR: {
-    /* One layout for the three: the flags word at 0 (PATH_DELETE's directory
-       flag, PATH_MKDIR's mode), the path at req->offset. */
+  case HC_V0_OP_PATH_MKDIR:
+  case HC_V0_OP_PATH_CHMOD: {
+    /* One layout for the four: the flags word at 0 (PATH_DELETE's directory
+       flag, PATH_MKDIR's and PATH_CHMOD's mode), the path at req->offset. */
     const struct hc_file_open_req_v0 *r = (const struct hc_file_open_req_v0 *)payload;
     unsigned long long flags = r->flags;
     memcpy(h->path, payload + req->offset, (size_t)req->length);
@@ -179,6 +208,7 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     int rc;
     if (req->opcode == HC_V0_OP_PATH_ACCESS) rc = access(h->path, F_OK);
     else if (req->opcode == HC_V0_OP_PATH_MKDIR) rc = mkdir(h->path, (mode_t)flags);
+    else if (req->opcode == HC_V0_OP_PATH_CHMOD) rc = chmod(h->path, (mode_t)flags);
     else if (flags & HC_PATH_DELETE_FLAG_DIRECTORY) rc = rmdir(h->path);
     else rc = unlink(h->path);
     if (rc < 0) hc_host_error(metadata, errno); else hc_host_ok(metadata, 0);
@@ -192,6 +222,17 @@ static inline int hc_host_service(struct hc_host *h, const struct hostcall_v0 *r
     size_t lo = strnlen(h->path, (size_t)req->length);
     if (lo >= (size_t)req->length) { hc_host_error(metadata, EINVAL); return 0; }
     if (rename(h->path, h->path + lo + 1) < 0) hc_host_error(metadata, errno);
+    else hc_host_ok(metadata, 0);
+    return 0;
+  }
+  case HC_V0_OP_PATH_SYMLINK: {
+    /* "target NUL linkpath" in one range, as PATH_RENAME; the NUL must be inside
+       it, or there is no link path. */
+    memcpy(h->path, payload + req->offset, (size_t)req->length);
+    h->path[req->length] = '\0';
+    size_t lt = strnlen(h->path, (size_t)req->length);
+    if (lt >= (size_t)req->length) { hc_host_error(metadata, EINVAL); return 0; }
+    if (symlink(h->path, h->path + lt + 1) < 0) hc_host_error(metadata, errno);
     else hc_host_ok(metadata, 0);
     return 0;
   }

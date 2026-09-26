@@ -37,7 +37,7 @@ static const char *base(const char *p) {
  * would fold into fewer. The first LT-HIST line checks itself against the
  * round count of the LT-RESULT line, so a histogram that lost rounds says so
  * (MISMATCH) instead of reading as a smaller total. */
-#define LT_HIST_OPS 32
+#define LT_HIST_OPS 40
 #define LT_HIST_FILES 32
 #define LT_HIST_PATH 96
 struct lt_op_hist { unsigned rounds, full; unsigned long long req, moved, max; };
@@ -82,6 +82,13 @@ static const char *lt_op_name(unsigned op) {
   case HC_V0_OP_PATH_DELETE: return "PATH_DELETE";
   case HC_V0_OP_CLOCK_GETTIME: return "CLOCK_GETTIME";
   case HC_V0_OP_DIR_READ: return "DIR_READ";
+  case HC_V0_OP_PATH_RENAME: return "PATH_RENAME";
+  case HC_V0_OP_PATH_MKDIR: return "PATH_MKDIR";
+  case HC_V0_OP_PATH_READLINK: return "PATH_READLINK";
+  case HC_V0_OP_PATH_SYMLINK: return "PATH_SYMLINK";
+  case HC_V0_OP_PATH_STAT: return "PATH_STAT";
+  case HC_V0_OP_PATH_CHMOD: return "PATH_CHMOD";
+  case HC_V0_OP_FILE_FLOCK: return "FILE_FLOCK";
   default: return "?";
   }
 }
