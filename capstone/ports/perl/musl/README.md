@@ -5,19 +5,17 @@ with this repo's port runtime, and the same release built natively as the
 reference its output is compared with. Why perl, which release, and what its four
 nested allocators look like: `docs/design/perl-sublet-port-evaluation.md`.
 
-## State (2026-09-26)
+## Result (2026-09-26)
 
-**`perl -e 'print "PERL-HELLO\n"'` runs in a domain and exits 0.** Startup,
-argument handling, the environment, `/dev/urandom` for the hash seed, compiling
-the program and printing all work.
-
-**A script that uses subscripts does not yet finish.** `scripts/smoke.pl` gets
-past everything the five patches cover and stops in `memset`, on a one-byte store
-at offset 8 of an 8-byte capability (`bounds = (e81ff873, e81ff87b)`, `size = 1`,
-`addr = e81ff87b`) -- a write one past the end of an object, which an ordinary
-machine tolerates and this one refuses. Not yet localised to its caller; that is
-the next step. So no result line is recorded yet: the port builds and starts, and
-is not yet measured.
+**`scripts/smoke.pl` runs in a domain and its output is byte-identical to the
+native reference** built from the same release
+(`results/2026-09-26/smoke.txt`): 17 checks covering arrays, hashes, string
+building, SV churn (20,000 hashes of arrays, made and dropped), recursion,
+`eval`/`die`, numeric formatting and bignums, `sort`, regex match, substitution
+and a global count, a closure, references, a blessed object with method calls,
+file write and read back, a directory listing, and `pack`/`sprintf`. Exit status
+0, and the only unserved syscalls are `rt_sigaction` and `rt_sigprocmask`, which a
+domain has no signals for.
 
 ## Build and run
 
@@ -66,9 +64,10 @@ a program that forks gets an error at run time. Nothing on the path so far forks
 
 ## What perl needed (`patches/5.36.3/`)
 
-Each patch's header carries its evidence. All five are conditional -- on
+Each patch's header carries its evidence. 0001-0005 are conditional -- on
 `PTRSIZE > IVSIZE`, `PTRSIZE > UVSIZE`, `PTRSIZE == 16` or
-`__CAPSTONE_PURECAP__` -- so no other platform is affected.
+`__CAPSTONE_PURECAP__` -- so no other platform is affected; 0006 fixes a defect
+that is simply latent elsewhere, and is unconditional.
 
 | | File | Why |
 |---|---|---|
@@ -77,20 +76,17 @@ Each patch's header carries its evidence. All five are conditional -- on
 | 0003 | `gv.c` | the stash cache keeps a stash as `PTR2IV(stash)` in an SV's `IV` and reads it back with `INT2PTR`. An 8-byte `IV` cannot hold a capability, so what comes back is an address without authority: cause 24 at the head of `S_mro_get_linear_isa_dfs`, on every `perl -e`. The cache is transparent, so it is not used where a pointer is wider than an `IV` |
 | 0004 | `perl.h` | two defects. `PTRV` picks the first integer whose size equals `PTRSIZE`; at 16 none matches and the fallthrough takes `unsigned`, so **every** `PTR2UV`/`PTR2IV`/`PTR2nat` truncated an address to 32 bits, silently. And `DPTR2FPTR`/`FPTR2DPTR` convert data to function pointers through an integer, which loses authority: the call through the result traps in `Perl_filter_read` on every `perl -e`. 39 sites use that pair |
 | 0005 | `op.c` | `S_maybe_multideref` counts its arguments on a first pass by incrementing a pointer from `arg_buf`, which is `NULL` then, and takes `arg - arg_buf` as the count; every write through it is under `if (pass)`. Incrementing a null pointer is undefined in C and harmless elsewhere, and here it is capability arithmetic without a capability: cause 24, reached by any subscript chain. Measured at `-O2` **and** at `-O1`, which is what says it is the program and not the optimiser |
+| 0006 | `doio.c` | `S_openn_setup` does `Zero(mode,sizeof(mode),char)` where `mode` is its own `char *` parameter, so it clears **a pointer's** size, not the buffer's. Both callers pass a `char[PERL_MODE_MAX]`, and PERL_MODE_MAX is 8, so wherever a pointer is 8 bytes the two agree by coincidence; at 16 it writes 16 bytes into an 8-byte stack array. A defect in perl rather than a porting difference, so the patch is unconditional and a no-op elsewhere. Present unchanged in 5.32.1, 5.36.3 and 5.38.2, and worth reporting upstream. Found at the script's first `open()` |
 
 ## Open, in the order they matter
 
-1. **The `memset` write one past an 8-byte capability** above: find the caller.
-   The bounds are a sub-object's, not an allocation's (level0 hands out
-   arena-wide bounds), so something takes a pointer to an 8-byte field and writes
-   nine bytes through it.
-2. **`INT2PTR` round trips that remain.** clang lists them as
+1. **`INT2PTR` round trips that remain.** clang lists them as
    `-Wint-to-pointer-cast` on a build with warnings on; in `op.c` alone they are
    `CALL_BLOCK_HOOKS` (`op.h:837,839`), the custom-op table (`op.c:18548,18628`)
    and the COP identity cache (`op.c:1331,9598` -- that one only compares, so it
    is sound). None is on the path reached so far; each is a latent cause-24.
-3. **The test suite.** 2823 `.t` files and `t/TEST` forks per file, which a domain
+2. **The test suite.** 2823 `.t` files and `t/TEST` forks per file, which a domain
    cannot do, so a behavioural gate needs a harness that runs a chosen set in one
    process. Until then `scripts/smoke.pl` against the native reference is the gate.
-4. **The library is not on the share**, so a script cannot `use` anything yet;
+3. **The library is not on the share**, so a script cannot `use` anything yet;
    `scripts/smoke.pl` is core builtins only for that reason.
