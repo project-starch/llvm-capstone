@@ -196,6 +196,21 @@ int main(int argc, char **argv) {
   }
   shared_region_annotated(dom, hr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, 0x3UL /* REV_TRANSFERRED */);
 #endif
+#ifdef LT_GC_REGION_BYTES
+#ifndef LT_HEAP_REGION_BYTES
+#error "LT_GC_REGION_BYTES is the program's second region: it needs LT_HEAP_REGION_BYTES for the first"
+#endif
+  /* A second transferred region, the program's region 1 (__capstone_region(1)): for an allocator
+     that must hold its memory LINEARLY to carve and revoke per object, which the Sublet heap's
+     malloc cannot give it (it lends aliases). First consumer is mruby's GC object heap under
+     Sublet (ports/mruby/musl, docs/design/mruby-gc-sublet-port-plan.md). */
+  region_id_t gr = create_region(LT_GC_REGION_BYTES);
+  if (gr == (region_id_t)-1) {
+    fprintf(stderr, "libc-test %s: create_region(%lu) for the second program region failed\n", name, (unsigned long)LT_GC_REGION_BYTES);
+    capstone_cleanup(); return 3;
+  }
+  shared_region_annotated(dom, gr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, 0x3UL /* REV_TRANSFERRED */);
+#endif
 
   static struct hc_host host;
   host.tag = name; host.verbose = 0;
