@@ -2,6 +2,7 @@
 # Replay one of initdb's backend invocations in a domain under QEMU.
 #
 #   run-domain.sh <call> [seconds]
+#   PGSU_CLUSTER=<data directory> [PGSU_SQL=<file>] run-domain.sh work [seconds]
 #
 # <call> is a call number from record-initdb.sh (4 is `--boot` over the catalog
 # script, 5 the `--single` session over the setup SQL). The run stages, on the
@@ -55,21 +56,33 @@ SHARE=$WORK/share
 EXTRA=${PGSU_EXTRA_ARGS-"-c shared_buffers=4MB -c max_connections=10 -c dynamic_shared_memory_type=sysv"}
 
 [[ -f "$IMAGE" ]] || { echo "no image $IMAGE; run build-domain.sh" >&2; exit 2; }
-[[ -f "$REC/call-$CALL.args" ]] || { echo "no recorded call $CALL under $REC; run record-initdb.sh" >&2; exit 2; }
-[[ -f "$REC/call-$CALL.stdin" ]] || { echo "call $CALL took no input; only --boot and --single calls are replayed" >&2; exit 2; }
+if [[ $CALL == work ]]; then
+  CLUSTER=${PGSU_CLUSTER:?PGSU_CLUSTER=<a data directory initdb finished: the share/pgdata of a passing call-5 run>}
+  INPUT=${PGSU_SQL:-$SCRIPT_DIR/work.sql}
+  [[ -f "$CLUSTER/PG_VERSION" ]] || { echo "PGSU_CLUSTER=$CLUSTER is not a data directory" >&2; exit 2; }
+  [[ -f "$INPUT" ]] || { echo "no SQL file $INPUT" >&2; exit 2; }
+else
+  [[ -f "$REC/call-$CALL.args" ]] || { echo "no recorded call $CALL under $REC; run record-initdb.sh" >&2; exit 2; }
+  [[ -f "$REC/call-$CALL.stdin" ]] || { echo "call $CALL took no input; only --boot and --single calls are replayed" >&2; exit 2; }
+  CLUSTER=$REC/pgdata-before-$CALL INPUT=$REC/call-$CALL.stdin
+fi
 
 rm -rf "$WORK"; mkdir -p "$SHARE/bin"
 "$CAPSTONE_LLVM_BIN/llvm-objcopy" --strip-debug "$IMAGE" "$SHARE/bin/postgres.dom"
 cp -a "$ROOT/pg-native/share/postgresql" "$SHARE/share"
-cp -a "$REC/pgdata-before-$CALL" "$SHARE/pgdata"
+cp -a "$CLUSTER" "$SHARE/pgdata"
 chmod 0700 "$SHARE/pgdata"
+# "work": a single-user session over a SQL file (default work.sql) in the database
+# postgres, as survey-native.sh runs it natively.
+ARGS=$REC/call-$CALL.args
+if [[ $CALL == work ]]; then ARGS=$WORK/work.args; printf '%s\n' --single postgres > "$ARGS"; fi
 
 # The input. For --boot, the template with this target's substitutions; the
 # recording must then differ from it in the pointer-sized rows alone (the
 # pg_ddl_command and internal types: 8 there, 16 here), or initdb substituted
 # something this script does not know about.
-if grep -qx -- '--boot' "$REC/call-$CALL.args"; then
-  python3 - "$ROOT/pg-native/share/postgresql/postgres.bki" "$REC/call-$CALL.stdin" "$SHARE/pg-input" <<'PY'
+if grep -qx -- '--boot' "$ARGS"; then
+  python3 - "$ROOT/pg-native/share/postgresql/postgres.bki" "$INPUT" "$SHARE/pg-input" <<'PY'
 import sys
 template, recorded, out = sys.argv[1:]
 subst = [("NAMEDATALEN", "64"), ("SIZEOF_POINTER", "16"), ("ALIGNOF_POINTER", "d"),
@@ -95,7 +108,7 @@ else
   # The setup SQL names files of the install initdb ran from (COPY ... FROM
   # '<prefix>/share/postgresql/sql_features.txt'); the domain sees that directory
   # as /mnt/host/share. Each named file must be in the staged share.
-  python3 - "$REC/call-$CALL.stdin" "$SHARE/pg-input" "$SHARE/share" <<'PY'
+  python3 - "$INPUT" "$SHARE/pg-input" "$SHARE/share" <<'PY'
 import os, re, sys
 recorded, out, share = sys.argv[1:]
 text = open(recorded).read()
@@ -114,7 +127,7 @@ fi
 # after it is rejected ("invalid command-line argument: -c"). Only there: --boot's last
 # argument is the value of -X, and splitting the pair breaks it.
 {
-  mapfile -t ARGV < "$REC/call-$CALL.args"
+  mapfile -t ARGV < "$ARGS"
   last=${ARGV[${#ARGV[@]}-1]}
   if [[ ${ARGV[0]:-} == --single && $last != -* ]]; then
     printf '%s\n' "${ARGV[@]:0:${#ARGV[@]}-1}"; [[ -n $EXTRA ]] && printf '%s\n' $EXTRA; printf '%s\n' "$last"
@@ -125,7 +138,7 @@ fi
 {
   echo "PGDATA=/mnt/host/pgdata"
   echo "PGSU_DOMAIN=1"
-  if grep -qx -- '--boot' "$REC/call-$CALL.args"; then echo "PG_BOOT_INPUT=/mnt/host/pg-input"
+  if grep -qx -- '--boot' "$ARGS"; then echo "PG_BOOT_INPUT=/mnt/host/pg-input"
   else echo "PG_SINGLE_INPUT=/mnt/host/pg-input"; fi
   [[ -n ${PGSU_EXTRA_ENV:-} ]] && printf '%s\n' $PGSU_EXTRA_ENV
 } > "$SHARE/pg-env"
@@ -144,12 +157,16 @@ echo "  env: $(tr '\n' ' ' < "$SHARE/pg-env")"
 # PGSU_STALL_DUMP=<seconds> adds a guest-side watchdog: every that many seconds while
 # lt.user lives, each of its threads' state, wait channel and kernel stack. A run
 # that stops with the vCPU in the idle task (neither the domain nor its helper
-# runnable) then says what the helper is blocked on.
+# runnable) then says what the helper is blocked on. It polls every 5 s so that it
+# ends with lt.user, and writes to /dev/console, not to the pipe into sed: the first
+# version slept the whole period with the pipe open, and a finished run then waited
+# for it (the guest's date read the same second at the start and end of a whole run).
 STALL_DUMP=
 if [[ -n ${PGSU_STALL_DUMP:-} ]]; then
-  STALL_DUMP="( while sleep $PGSU_STALL_DUMP; do p=\$(pidof lt.user) || break; \
+  STALL_DUMP="( sleep 5; n=0; while p=\$(pidof lt.user); do sleep 5; n=\$((n + 5)); \
+[ \$n -ge $PGSU_STALL_DUMP ] || continue; n=0; \
 for t in /proc/\$p/task/*; do echo \"PGSU-STALL-DUMP t=\$(date +%s) task=\${t##*/} \$(grep State: \$t/status) wchan=\$(cat \$t/wchan)\"; \
-sed 's/^/PGSU-STACK /' \$t/stack 2>&1; done; done ) &"
+sed 's/^/PGSU-STACK /' \$t/stack 2>&1; done; done ) > /dev/console 2>&1 < /dev/null &"
 fi
 cat > "$SHARE/pg-run.sh" <<EOF
 mkdir -p /usr/share && ln -sfn /mnt/host/share/timezone /usr/share/zoneinfo && echo PGSU-ZONEINFO-LINKED

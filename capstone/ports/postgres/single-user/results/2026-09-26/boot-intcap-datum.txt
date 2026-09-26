@@ -43,7 +43,26 @@ call 5 (--single over the setup SQL), chained from call 4's OWN output:
 call 5 result: PASS, status=0, rounds=34187, 707 statements logged, the last two
   CREATE DATABASE postgres OID = 5 STRATEGY = file_copy and its COMMENT (the end of the setup SQL)
   image: patches 0001-0016, loadable size 83598240; its input: the catalog call 4 wrote with the
-  0001-0013 image. So the two calls ran different images; one image through both is still owed.
+  0001-0013 image. So the two calls ran different images; the chain below is one image through both.
+
+one image, patches 0001-0016 as committed (c1f876ca09c0), built from a fresh extraction:
+  call 4 (--boot)                            PASS, status=0, rounds=17902
+  call 5 (--single, on call 4's own output)  PASS, status=0, rounds=34186, 707 statements
+
+work.sql (survey-native.sh's session: DDL, 2000 rows, an index, a scan, a join, an update, a
+delete, a vacuum, a count) under --single in database postgres of that cluster, its result rows
+against the native session's (work-compare.py; a fresh native initdb and --single on this host):
+  QEMU                                  run 1 PASS, run 2 PASS: status=0, rounds=2587, 22 of 22
+                                        result rows identical, the last count = "1500"
+  QEMU, CAPSTONE_MOVC_NULL_SCALAR=1     run 1 PASS, run 2 PASS: status=0, rounds=2587, 22 of 22
+  (the silicon's MOVC rule)             result rows identical. The switch was in effect: each
+                                        boot printed its notice once (first nulling at M-mode
+                                        pc 0x80020a50); the two runs without it printed none
+  work-compare.py's controls: a native log against itself IDENTICAL; one value changed
+  (1500 -> 1499) DIFFER, exit 1; an empty domain log "no result rows", exit 1
+  one run (QEMU, run 2) printed its result and then stopped for 13 minutes before lt.user's exit,
+  with no watchdog line either; killed. A guest whose timers no longer fire would look like
+  this and like the mid-run stalls below; that is a hypothesis, not tested
 
 the catalog call 4 wrote, against the native one, tuple by tuple: every difference is one the port
   makes on purpose -- 176 pg_proc rows 16 bytes longer (array data MAXALIGNed to 16), pg_type's
@@ -73,5 +92,8 @@ events not explained:
   - twice: a run stopped mid-way (statements 354 and 348), the vCPU in the guest kernel's idle task
     (same sp and tp over three samples 20 s apart), so neither the domain nor its host helper was
     runnable. run-domain.sh gained PGSU_STALL_DUMP=<seconds>, which prints the helper's thread
-    states, wait channels and kernel stacks from inside the guest, for the next one
+    states, wait channels and kernel stacks from inside the guest, for the next one. Its first
+    version slept the whole period holding the pipe into sed, and a finished call 4 waited on it
+    for 30 minutes (the guest's date read the same second at the start and end of the run); it
+    now polls every 5 s and writes to /dev/console
   - twice: boots that never reached the domain (the loader stall of HOW-TO-RUN-ON-QEMU.md)
