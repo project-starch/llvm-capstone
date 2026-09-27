@@ -155,7 +155,7 @@ rankings until the intended reclamation implementation is available.
 | mruby upstream lists / Mandelbrot / AO | Real interpreter in existing four-arm stack; lists now has a pinned output adapter | PoisonCap GC-slot integration; inner slot counters; byte-output oracle for image workloads |
 | CPython pyperformance bodies | Real Capstone interpreter; PoisonCap pymalloc component exists | Link PoisonCap into full interpreter; fixed-work controller; same freelist/GC settings and dependencies |
 | PostgreSQL pgbench | Single-user Capstone backend; PoisonCap context component exists | Full backend integration; matching database lifecycle; pgbench server/client support or explicitly labeled SQL-body subset |
-| FFmpeg known decode corpus | Real configured decoder; PoisonCap pool component exists | Connect library into same decoder/version; preserve pool state; upstream CLI/workload adapter. Encoding remains outside current scope |
+| FFmpeg known decode corpus | Full 9.0.1 decoder pool pilot now runs all four nested arms for 1/4/16 independent streams | PoisonCap repetitions, wider FATE input coverage, complete metadata accounting; encoding remains outside current scope |
 | Perl upstream performance cases | Real interpreter port | Identify and implement a common nested allocator boundary on both systems; outer-malloc results remain useful but answer another question |
 
 Component examples and allocator recordings do not qualify as these application

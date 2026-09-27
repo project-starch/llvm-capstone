@@ -5,6 +5,17 @@ Minimal snapshot. Read first in every session.
 
 ## 2026-09-27 — Full SQLite nested-memory pilot and benchmark readiness
 
+The [FFmpeg whole-decoder pool pilot](../../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
+now connects the existing PoisonCap AVBufferPool/AVRefStructPool adapter to the
+actual configured 9.0.1 decoder. For 1, 4 and 16 independent 30-frame streams,
+all six new PoisonCap mode-0/2 runs and all eighteen existing Capstone
+pool-mode-0/2 repeats match the same frame oracle. The PoisonCap temporal arm
+retains a 315,072 B snapshot; within-platform jemalloc allocated rises by
+294,912–318,336 B over spatial. Capstone's reported outer-heap peak and pool
+payload used are equal between its two modes. The ledgers differ across
+platforms, and neither includes all kernel metadata. Two plots and per-phase
+records are retained; broader FATE coverage and PoisonCap repetitions remain.
+
 The [SQLite 3.22.0 memory pilot](../../experiments/study/results/sqlite-322-memory-20260927/README.md)
 now runs all 32 official `speedtest1 main --size 1` phases on Capstone spatial,
 Capstone + memsys5-only Sublet, PoisonCap spatial, and corrected PoisonCap

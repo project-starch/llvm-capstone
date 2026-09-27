@@ -7,6 +7,9 @@ now has 32/32 native-matched SQL phases in all four nested arms, selected
 application-visible backing measurements, a policy-path audit and three memory
 figures. The published PoisonCap path has unrevoked full-queue drains; the
 protected comparator uses a separately identified correction. The
+[whole FFmpeg decoder pool pilot](../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
+adds 24 exact-output attempts over three workload sizes and four nested arms,
+with separate memory ledgers and two further figures. The
 [planner](../experiments/study/README.md) still blocks generalized PoisonCap
 execution qualification pending shared-runner integration. Upstream mruby
 lists passes 4/4 original arms but lacks a full PoisonCap application adapter.

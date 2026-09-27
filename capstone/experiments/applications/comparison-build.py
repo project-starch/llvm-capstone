@@ -35,13 +35,20 @@ def source_manifest(root):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--app', choices=['ffmpeg', 'mruby'], required=True)
-    p.add_argument('--platform', choices=['cheribsd'], required=True)
+    p.add_argument('--platform', choices=['cheribsd', 'poisoncap'], required=True)
     for name in ('source', 'cc', 'ar', 'ranlib', 'out'):
         p.add_argument('--'+name, type=Path, required=True)
     p.add_argument('--allocations', action='store_true')
+    p.add_argument('--nested-pool', choices=['poisoncap'])
     p.add_argument('--jobs', type=int, default=16)
     args = p.parse_args()
     args.out = args.out.resolve(); args.source = args.source.resolve()
+    if args.nested_pool and (args.app != 'ffmpeg' or args.platform != 'poisoncap'):
+        p.error('--nested-pool poisoncap requires --app ffmpeg --platform poisoncap')
+    if args.platform == 'poisoncap' and args.nested_pool != 'poisoncap':
+        p.error('the PoisonCap build must select its nested pool adapter')
+    if args.nested_pool and not (args.source/'libavutil/trace.h').exists():
+        p.error('the PoisonCap build requires prepare-source.sh --pool')
     args.out.mkdir(parents=True, exist_ok=False)
     (args.out/'source-inputs.json').write_text(json.dumps(source_manifest(args.source), indent=2)+'\n')
     commands = []
@@ -83,6 +90,13 @@ def main():
         flags = ['-O1', '-Wl,--wrap=main,--wrap=write']
         for path in (build, args.source, app): flags += ['-I', str(path)]
         sources = [HERE/'workloads/decode.c', HERE/'cheribsd-memory.c']
+        if args.nested_pool:
+            pool = REPO/'capstone/ports/ffmpeg/buffer-pool/src'
+            sources[0] = REPO/'capstone/experiments/study/ffmpeg-poisoncap-decode.c'
+            flags += ['-DFFPOOL_CHERI', '-DFFPOOL_POISONCAP', '-DFFPOOL_APP_MEMORY',
+                      '-I', str(pool/'shared'), '-I', str(REPO/'capstone/runtime/include')]
+            sources += [pool/'shared/pool-allocator.c',
+                        pool/'cheribsd/poisoncap-payload.c']
         if args.allocations:
             flags += ['-DEXP_ALLOCATIONS', '-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free,--wrap=posix_memalign,--wrap=aligned_alloc']
             sources += [HERE/'allocations.c']
@@ -90,6 +104,7 @@ def main():
         run([cc, *flags, *sources, app/'ffapp_decode.c', *[build/lib/(lib+'.a')
              for lib in ('libavformat','libavcodec','libavutil')], '-lm', '-o', image])
     manifest = dict(app=args.app, platform=args.platform, allocations=args.allocations,
+                    nested_pool=args.nested_pool,
                     image_sha256=digest(image), compiler_driver_sha256=digest(args.cc),
                     source=str(args.source), source_manifest_sha256=digest(args.out/'source-inputs.json'),
                     commands_sha256=digest(args.out/'commands.json'),

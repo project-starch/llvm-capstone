@@ -191,6 +191,15 @@ for corrected temporal PoisonCap within its spatial control. Smaller corrected
 PoisonCap trials panic in the published kernel, so these are exploratory
 configuration observations, not minimum-capacity or total-memory claims.
 
+The [whole FFmpeg 9.0.1 decoder pool pilot](results/ffmpeg-pool-memory-20260927/README.md)
+connects the existing PoisonCap pool adapter to the complete configured
+decoder. Across 1, 4 and 16 independent streams, six new PoisonCap runs and
+eighteen earlier Capstone repeats match the exact frame oracle. The PoisonCap
+temporal adapter retains a 315,072 B snapshot and increases within-platform
+jemalloc allocated by 294,912–318,336 B. The two FFmpeg figures keep that
+process ledger separate from Capstone's outer-heap peak and pool payload
+accounting; they make no cross-platform total-RSS or QEMU-speed claim.
+
 The [upstream mruby lists readiness run](results/20260927-mruby-lists.json)
 passes all four original arms at 300 iterations and 10,000 elements. Prepare
 the pinned fetched source with `prepare-mruby-lists.py --source PATH --out DIR`,

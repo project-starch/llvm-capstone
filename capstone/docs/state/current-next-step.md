@@ -8,6 +8,12 @@ move the legacy SQLite domain host to the shared persistent runner. Extend that
 runner rather than adding VM scripts. PoisonCap plans currently preserve
 unqualified cells and cannot execute through ordinary CheriBSD bindings.
 
+The [whole FFmpeg decoder pool pilot](../../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
+adds a second real four-arm nested application: 1/4/16 independent 30-frame
+streams, 24/24 exact-output attempts. Next repeat the PoisonCap cells, widen
+the input corpus toward FFmpeg FATE and report complete platform metadata.
+The plot keeps Capstone outer-heap and PoisonCap jemalloc ledgers separate.
+
 mruby upstream lists already passes all four original arms at full work counts.
 Match backing constraints and add internal GC-slot counters before drawing
 memory conclusions; the 64 MiB Capstone pilot recovers from six allocation

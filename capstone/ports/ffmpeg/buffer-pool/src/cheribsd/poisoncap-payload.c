@@ -109,7 +109,11 @@ void ff2_payload_report_stats(struct ff2_header *report) {
   report->reserved[1] = poison_bytes;
   report->reserved[2] = snapshot_bytes;
   report->reserved[3] = sizeof(void *);
+#ifdef FFPOOL_APP_MEMORY
+  fprintf(stderr, "FF2_POISONCAP sweeps=%zu poison_bytes=%zu clear_bytes=%zu "
+#else
   printf("FF2_POISONCAP sweeps=%zu poison_bytes=%zu clear_bytes=%zu "
+#endif
          "snapshot_bytes=%zu copied_bytes=%zu\n", sweeps, poison_bytes,
          clear_bytes, snapshot_bytes, copied_bytes);
 }
