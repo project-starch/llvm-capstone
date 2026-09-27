@@ -17,7 +17,10 @@ hits its separate `share->excl` kernel panic with this patch. An isolated
 trap-PC diagnostic identifies RISC-V `fupoison` probing a nonresident user
 target while the revoker holds the VM-map read lock. A temporary bypass only
 changed the failure into a 120-second pre-workload timeout; it was removed and
-supplies no paper measurement.
+supplies no paper measurement. A subsequent fail-closed direct-map diagnostic
+reached a backed page with no PTE and stopped rather than treating possible
+stored poison as absent. That experimental kernel was also removed; the
+protected CPython arm and its memory plot remain unqualified.
 
 ## 2026-09-28 — Cross-application reuse preview
 

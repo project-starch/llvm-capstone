@@ -56,7 +56,14 @@ while the revoker already holds the user VM-map read lock. Skipping such faults
 in a **diagnostic-only** kernel avoided the panic but timed out before the
 first workload marker after 120 seconds; that bypass may miss poison in paged
 out data and is not a valid benchmark arm. The diagnostic kernel changes were
-removed. Correct the nonresident-page probe without weakening revocation and
+removed. A follow-up direct-map probe build showed why a general skip is
+unsafe: the first missing page had no backing object, but a later CPython
+probe targeted a backed page absent from the page table (`0x406b9b60`). The
+fail-closed build stopped there with `Poison probe backed page missing`; it
+was excluded and its source edits were removed. A correct fix must resolve
+or defer that backed-page fault outside the incompatible VM-map lock state,
+then resume the scan without losing a poisoned capability. Correct the probe
+without weakening revocation and
 batch the interpreter adapter's per-free sweeps before accepting a protected
 process. Then add inner-pymalloc
 issue/release, backing and metadata ledgers; the present outer counters cannot
