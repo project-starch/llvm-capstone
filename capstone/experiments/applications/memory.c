@@ -28,8 +28,31 @@ size_t __capstone_level0_arena_bytes(void);
 void exp_alloc_start(void);
 void exp_alloc_report(const char *);
 #endif
+#ifdef EXP_MRB_GC_SUBLET
+void mrb_capstone_gc_sublet_stats(unsigned long out[7]);
+#endif
+#ifdef EXP_MRB_GC_GAPS
+void mrb_gc_study_report(const char *phase);
+#endif
 
 static void report(const char *phase) {
+#ifdef EXP_MRB_GC_GAPS
+  mrb_gc_study_report(phase);
+#endif
+#ifdef EXP_MRB_GC_SUBLET
+  unsigned long gc[7];
+  mrb_capstone_gc_sublet_stats(gc);
+  char gc_line[320];
+  int gc_n = snprintf(gc_line, sizeof gc_line,
+      "EXP-INNER phase=%s pages=%lu issues=%lu releases=%lu ",
+      phase, gc[0], gc[1], gc[2]);
+  if (gc_n > 0 && (size_t)gc_n < sizeof gc_line)
+    gc_n += snprintf(gc_line + gc_n, sizeof gc_line - (size_t)gc_n,
+        "split=%lu mrev=%lu delin=%lu revoke=%lu\n",
+        gc[3], gc[4], gc[5], gc[6]);
+  if (gc_n > 0 && (size_t)gc_n < sizeof gc_line)
+    __real_write(2, gc_line, (size_t)gc_n);
+#endif
 #ifdef EXP_ALLOCATIONS
   exp_alloc_report(phase);
 #endif

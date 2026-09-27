@@ -31,14 +31,20 @@ def samples(stderr):
 def policy_environment(point):
     """Only the named on/off contrast may change the process allocator policy."""
     expected = {'cheribsd-default': 1, 'cheribsd-revocation-on': 1,
-                'cheribsd-revocation-off': 0}
+                'cheribsd-revocation-off': 0,
+                'poisoncap-spatial': 1, 'poisoncap-temporal': 1}
     arm = point['arm']
     if arm not in expected or point['revocation'] != expected[arm]:
         raise ValueError('arm and expected revocation state disagree')
     environment = point['environment']
-    if any(k.startswith(('_RUNTIME_', 'MALLOC_', 'EXP_CHERI_')) for k in environment):
+    if any(k.startswith(('_RUNTIME_', 'MALLOC_', 'EXP_CHERI_')) for k in environment) or \
+            'MRB_GC_POISONCAP' in environment:
         raise ValueError('allocator overrides must come from the named study arm')
     environment = dict(environment)
+    if arm.startswith('poisoncap-'):
+        if point.get('application') != 'mruby' or point.get('nested_allocator') != 'mruby-gc':
+            raise ValueError('PoisonCap GC arms require the full mruby GC adapter')
+        environment['MRB_GC_POISONCAP'] = '1' if arm == 'poisoncap-temporal' else '0'
     if arm != 'cheribsd-default':
         switch = 'ENABLE' if expected[arm] else 'DISABLE'
         environment['_RUNTIME_REVOCATION_' + switch] = '1'
@@ -54,12 +60,22 @@ def application_command(point, timeout):
                       *[k+'='+str(v) for k, v in environment.items()], *point['argv']])
 
 
-def verdict(point, rc, stdout, stderr):
+def nested_samples(stderr):
+    return [dict((k, v if k == 'phase' else int(v))
+                 for k, v in (word.split('=', 1) for word in line.split()[1:]))
+            for line in stderr.splitlines() if line.startswith('MRB_GC_STUDY ')]
+
+
+def verdict(point, rc, stdout, stderr, stdout_raw=None):
     if rc: return 'transport-error'
     exits = re.findall(r'^EXP-GUEST-EXIT (\d+)$', stderr, re.M)
     if len(exits) != 1: return 'missing-exit-evidence'
     if int(exits[0]) != 0: return 'guest-error'
-    if stdout != point['expected_stdout']: return 'oracle-mismatch'
+    if 'expected_stdout_sha256' in point:
+        if stdout_raw is None or hashlib.sha256(stdout_raw).hexdigest() != point['expected_stdout_sha256'] or \
+                len(stdout_raw) != point['expected_stdout_bytes']:
+            return 'oracle-mismatch'
+    elif stdout != point['expected_stdout']: return 'oracle-mismatch'
     try:
         memory = samples(stderr)
         if [s['phase'] for s in memory] != point['expected_phases']: return 'missing-phases'
@@ -71,6 +87,26 @@ def verdict(point, rc, stdout, stderr):
     except (ValueError, KeyError): return 'bad-metrics'
     if point.get('allocations') and not valid_allocations(stderr, point['expected_phases']):
         return 'bad-allocation-metrics'
+    if point.get('nested_allocator') == 'mruby-gc':
+        try:
+            inner = nested_samples(stderr)
+            mode = int(point['arm'] == 'poisoncap-temporal')
+            if [s['phase'] for s in inner] != point['expected_phases'] or \
+                    any(s['mode'] != mode or s['issues'] < s['releases'] or
+                        s['releases'] < s['reissues'] or s['gap15'] > s['reissues'] or
+                        s['slot_bytes'] <= 0 or s['metadata_bytes'] <= 0
+                        for s in inner):
+                return 'bad-inner-metrics'
+            gaps = [line for line in stderr.splitlines() if line.startswith('MRB_GC_GAPS ')]
+            if len(gaps) != 1:
+                return 'bad-inner-metrics'
+            bins = dict((k, int(v)) for k, v in (word.split('=', 1) for word in gaps[0].split()[1:]))
+            if set(bins) != {f'b{i}' for i in range(32)} or sum(bins.values()) != inner[-1]['reissues']:
+                return 'bad-inner-metrics'
+            if inner[-1]['sweeps'] < point.get('expected_min_sweeps', 0):
+                return 'bad-inner-metrics'
+        except (KeyError, ValueError):
+            return 'bad-inner-metrics'
     return 'pass'
 
 
@@ -159,7 +195,7 @@ def execute(args):
             # A failed host timeout aborts the campaign; it is never called a pass.
             try:
                 result = subprocess.run(ssh+[command], capture_output=True,
-                                        text=True, timeout=args.timeout+20)
+                                        timeout=args.timeout+20)
             except subprocess.TimeoutExpired as error:
                 (directory/'stdout').write_bytes(error.stdout or b'')
                 (directory/'stderr').write_bytes(error.stderr or b'')
@@ -167,18 +203,22 @@ def execute(args):
                 with (args.out/'runs.jsonl').open('a') as stream:
                     stream.write(json.dumps(record)+'\n')
                 raise
-            (directory/'stdout').write_text(result.stdout)
-            (directory/'stderr').write_text(result.stderr)
-            status = verdict(point, result.returncode, result.stdout, result.stderr)
-            try: memory = samples(result.stderr)
+            (directory/'stdout').write_bytes(result.stdout)
+            (directory/'stderr').write_bytes(result.stderr)
+            stdout = result.stdout.decode(errors='replace')
+            stderr = result.stderr.decode(errors='replace')
+            status = verdict(point, result.returncode, stdout, stderr, result.stdout)
+            try: memory = samples(stderr)
             except (ValueError, KeyError): memory = []
             record = dict(point=point, repetition=repetition, status=status,
                           effective_environment=policy_environment(point),
                           memory=memory, host_seconds=time.monotonic()-start,
                           stdout_sha256=digest(directory/'stdout'),
                           stderr_sha256=digest(directory/'stderr'))
-            try: record['allocations'] = allocation_samples(result.stderr)
+            try: record['allocations'] = allocation_samples(stderr)
             except (ValueError, KeyError): record['allocations'] = []
+            try: record['inner_memory'] = nested_samples(stderr)
+            except (ValueError, KeyError): record['inner_memory'] = []
             with (args.out/'runs.jsonl').open('a') as stream:
                 stream.write(json.dumps(record)+'\n')
             print(point['id'], repetition, status, flush=True)

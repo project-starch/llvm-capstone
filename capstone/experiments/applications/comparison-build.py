@@ -40,14 +40,17 @@ def main():
         p.add_argument('--'+name, type=Path, required=True)
     p.add_argument('--allocations', action='store_true')
     p.add_argument('--nested-pool', choices=['poisoncap'])
+    p.add_argument('--nested-gc', choices=['poisoncap'])
     p.add_argument('--pool-reuse-gaps', action='store_true')
     p.add_argument('--jobs', type=int, default=16)
     args = p.parse_args()
     args.out = args.out.resolve(); args.source = args.source.resolve()
     if args.nested_pool and (args.app != 'ffmpeg' or args.platform != 'poisoncap'):
         p.error('--nested-pool poisoncap requires --app ffmpeg --platform poisoncap')
-    if args.platform == 'poisoncap' and args.nested_pool != 'poisoncap':
-        p.error('the PoisonCap build must select its nested pool adapter')
+    if args.nested_gc and (args.app != 'mruby' or args.platform != 'poisoncap'):
+        p.error('--nested-gc poisoncap requires --app mruby --platform poisoncap')
+    if args.platform == 'poisoncap' and not (args.nested_pool or args.nested_gc):
+        p.error('the PoisonCap build must select its nested allocator adapter')
     if args.nested_pool and not (args.source/'libavutil/trace.h').exists():
         p.error('the PoisonCap build requires prepare-source.sh --pool')
     if args.pool_reuse_gaps and not args.nested_pool:
@@ -68,9 +71,13 @@ def main():
             return [name for name in names if name == '.git' or
                     (Path(directory) == args.source and name in ('build', 'bin'))]
         shutil.copytree(args.source, src, ignore=ignore)
+        if args.nested_gc:
+            run(['python3', REPO/'capstone/experiments/study/prepare-mruby-poisoncap.py',
+                 '--source', src])
         config = args.out/'mruby-cheribsd.rb'
         shutil.copy2(HERE/'mruby-cheribsd.rb', config)
         env = dict(os.environ, EXP_ALLOCATIONS=str(int(args.allocations)),
+                   EXP_GC_STUDY=str(int(bool(args.nested_gc))),
                    EXP_ALLOC_SOURCE=str(HERE/'allocations.c'), EXP_CC=cc, EXP_AR=str(args.ar.absolute()),
                    EXP_MEMORY_SOURCE=str(HERE/'cheribsd-memory.c'),
                    MRUBY_CONFIG=str(config))
@@ -109,7 +116,8 @@ def main():
         run([cc, *flags, *sources, app/'ffapp_decode.c', *[build/lib/(lib+'.a')
              for lib in ('libavformat','libavcodec','libavutil')], '-lm', '-o', image])
     manifest = dict(app=args.app, platform=args.platform, allocations=args.allocations,
-                    nested_pool=args.nested_pool,pool_reuse_gaps=args.pool_reuse_gaps,
+                    nested_pool=args.nested_pool, nested_gc=args.nested_gc,
+                    pool_reuse_gaps=args.pool_reuse_gaps,
                     image_sha256=digest(image), compiler_driver_sha256=digest(args.cc),
                     source=str(args.source), source_manifest_sha256=digest(args.out/'source-inputs.json'),
                     commands_sha256=digest(args.out/'commands.json'),

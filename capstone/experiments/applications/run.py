@@ -40,7 +40,20 @@ def parse_memory(text):
         samples.append(sample)
     return samples
 
-def verdict(point, rc, timed_out, stdout, stderr, result):
+def parse_gc_study(text):
+    rows = [dict((k, v if k == 'phase' else int(v))
+                 for k, v in (word.split('=', 1) for word in line.split()[1:]))
+            for line in text.splitlines() if line.startswith('MRB_GC_STUDY ')]
+    lines = [line for line in text.splitlines() if line.startswith('MRB_GC_GAPS ')]
+    if len(lines) != 1:
+        raise ValueError('expected exactly one GC gap histogram')
+    bins = dict((k, int(v)) for k, v in
+                (word.split('=', 1) for word in lines[0].split()[1:]))
+    if set(bins) != {f'b{i}' for i in range(32)}:
+        raise ValueError('malformed GC gap histogram')
+    return rows, bins
+
+def verdict(point, rc, timed_out, stdout, stderr, result, stdout_raw=None):
     if timed_out: return 'timeout'
     if result.get('kind') == 'signal': return 'signal'
     if rc: return 'exit-error'
@@ -48,6 +61,10 @@ def verdict(point, rc, timed_out, stdout, stderr, result):
     if 'expected_values' in point:
         values = re.findall(r'\d+: oracle = "([^"\n]+)"', stdout)
         if values != point['expected_values'] or re.search(r'\b(ERROR|FATAL|PANIC):', stderr):
+            return 'oracle-mismatch'
+    elif 'expected_stdout_sha256' in point:
+        if stdout_raw is None or hashlib.sha256(stdout_raw).hexdigest() != point['expected_stdout_sha256'] or \
+                len(stdout_raw) != point['expected_stdout_bytes']:
             return 'oracle-mismatch'
     elif stdout != point['expected_stdout']: return 'oracle-mismatch'
     try: samples = parse_memory(stderr)
@@ -57,6 +74,20 @@ def verdict(point, rc, timed_out, stdout, stderr, result):
     if not samples or any(x['live'] > x['peak'] for x in samples): return 'bad-metrics'
     if point.get('allocations') and not valid_allocations(stderr, point['expected_phases']):
         return 'bad-allocation-metrics'
+    if point.get('gc_gaps'):
+        try:
+            rows, bins = parse_gc_study(stderr)
+            mode = int(point['arm'] == 'capstone-sublet')
+            if [row['phase'] for row in rows] != point['expected_phases'] or \
+                    any(row['mode'] != mode or row['issues'] < row['releases'] or
+                        row['releases'] < row['reissues'] or row['gap15'] > row['reissues'] or
+                        row['pages'] > row['peak_pages'] or row['slot_bytes'] <= 0 or
+                        row['observer_bytes'] <= 0 or row['page_payload_bytes'] <= 0 or
+                        row['page_metadata_bytes'] <= 0 for row in rows) or \
+                    sum(bins.values()) != rows[-1]['reissues']:
+                return 'bad-inner-metrics'
+        except (ValueError, KeyError):
+            return 'bad-inner-metrics'
     return 'pass'
 
 def main():
@@ -135,7 +166,8 @@ def main():
                     stdout, stderr = stdout.decode(errors='replace'), stderr.decode(errors='replace')
                     result = json.loads(result_file.read_text()) if result_file.exists() else {}
                     after = json.loads(call(['exec', 'capstone-exec', '--stats']))
-                    status = verdict(point, child.returncode, timed_out, stdout, stderr, result)
+                    status = verdict(point, child.returncode, timed_out, stdout, stderr, result,
+                                     (directory/'stdout').read_bytes())
                     if digest(image) != images[point['image']]:
                         raise RuntimeError('image changed during execution')
                     if after['live_domains'] or after['live_regions'] or after['live_bytes']:
@@ -152,6 +184,8 @@ def main():
                     record['inner_memory'] = [dict((k, v if k == 'phase' else int(v))
                         for k, v in (word.split('=', 1) for word in line.split()[1:]))
                         for line in stderr.splitlines() if line.startswith('EXP-INNER ')]
+                    if point.get('gc_gaps'):
+                        record['gc_study'], record['gc_gap_bins'] = parse_gc_study(stderr)
                 except (OSError, ValueError, subprocess.SubprocessError, RuntimeError) as e:
                     record.update(status='infrastructure-error', reason=str(e), memory=[])
             with (args.out / 'runs.jsonl').open('a') as f:
