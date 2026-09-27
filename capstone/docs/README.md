@@ -15,6 +15,8 @@ adds SQLite budget attempts, a size-2 scaling attempt, and a selective FFmpeg
 adapter. It leaves the protected PoisonCap minimum unresolved after kernel
 panics and removes the original FFmpeg snapshot advantage as an adapter
 artifact. The
+[full-application campaign contract](plans/application-memory-campaign.md)
+fixes the same four memory experiments for each admitted benchmark. The
 [planner](../experiments/study/README.md) still blocks generalized PoisonCap
 execution qualification pending shared-runner integration. Upstream mruby
 lists passes 4/4 original arms but lacks a full PoisonCap application adapter.

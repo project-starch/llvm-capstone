@@ -21,6 +21,11 @@ The [application memory follow-up](results/memory-followup-20260927/README.md)
 contains full-SQLite budget attempts and a selective FFmpeg adapter control.
 It preserves kernel panics and port faults as unresolved outcomes, rather
 than treating failed attempts as lower bounds on required memory.
+The [full-application campaign contract](../../docs/plans/application-memory-campaign.md)
+defines one experiment family and measurement schema for every admitted case:
+fixed-live churn, live-set scaling, burst recovery, and fixed-budget progress.
+Existing pilot data are discovery inputs, not a pre-registered confirmatory
+campaign.
 
 ## Comparisons
 

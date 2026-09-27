@@ -5,6 +5,10 @@ allocator boundary**. Default CheriBSD malloc revocation does not by itself
 observe those lifetimes. PoisonCap is the implemented nested-allocator
 comparator. Keep the existing default-CheriBSD experiment as a separate
 reference, and retain its results and failures.
+The [full-application campaign contract](application-memory-campaign.md)
+fixes the four reusable experiment families, metrics, benchmark units, and
+paper figure/claim gates for every admitted application case. The measurements
+below record discovery and readiness for that campaign.
 
 ## Two matched pairs
 

@@ -7,6 +7,9 @@ or emulator-time performance claims. This document describes the original
 default-CheriBSD reference comparison. The primary nested-allocator comparison
 now follows the [Sublet/PoisonCap design](sublet-poisoncap-memory-study.md), with
 its own matched spatial control and explicit qualification gates.
+The [full-application memory campaign](application-memory-campaign.md)
+defines the common churn, live-set, burst, and fixed-budget experiments that
+each admitted case must follow; one-off favorable endpoints do not qualify.
 
 ## Questions and comparisons
 
