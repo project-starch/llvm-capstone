@@ -2,6 +2,29 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-27 — Node reuse within a running application
+
+The `runtime-node-reuse` follow-up fixes the six mruby failures below without
+raising the 65,536-node capacity or changing application binaries. Under node
+pressure, one-hart QEMU now saves the current application at its allocation
+instruction, enters the trusted monitor context, clears stale tags and recycles
+retired identities, then resumes the same process. Valid or pinned identities
+remain unavailable; genuine exhaustion still faults with cleanup headroom.
+Previously, the collector was invoked only when the process owner was released.
+
+All 27 original Capstone application repeats and nine extended runs now pass;
+the longest mruby run allocates 1,092,495 identities within the fixed pool.
+The regression completes
+200,000 allocation/free cycles per process, preserves live data and rejects an
+old reference after reuse. The full lifecycle gate again passes 1,008 mixed
+starts in one boot with stable retained resources. Four native runtime tests
+and twelve host CLI tests pass. [Checked results and extended workloads](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+identify the exact platform and keep the old failing control.
+
+This is a QEMU software tag sweep, not a new FPGA result or a hardware cost
+measurement. The earlier comparison and larger-node controls remain historical
+data; default CheriBSD was unchanged and was not rerun for this fix.
+
 ## 2026-09-27 — Default CheriBSD application memory comparison
 
 The same FFmpeg 9.0.1 decoder and mruby 4.0.0-rc2 workloads now run on Capstone

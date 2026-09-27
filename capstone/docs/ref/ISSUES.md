@@ -4229,6 +4229,18 @@ globals *after* ISel would silently break this positional scheme.
 
 ### R-12 — rev-node exhaustion DEADLOCKS the core (a deliberate stall), and the pool is 65536 nodes, not 1024 `CHARACTERISED 2026-09-10 — the wraparound/silent-corruption account below is WITHDRAWN; the threshold is ~65532 allocations, not 1025, and the failure is a visible hang, not silent id reuse. The `99.3 % consumed` board reading is WITHDRAWN 2026-09-10 (it appears only after a wedge; every healthy boot reads the sentinel, which cannot be the true head or no domain would run). No workload is known to approach the threshold; measuring one needs a monitor-side split counter, not the debug aperture`
 
+> **2026-09-27 — QEMU application runtime: collect on node pressure.** The
+> supervised VM now suspends a running application before a node-allocating
+> instruction, performs its existing stale-tag sweep in the trusted monitor
+> context, and resumes the instruction after recycling invalid identities.
+> Collection previously ran only at process teardown. All six mruby failures
+> in the default 65,536-node comparison now pass with unchanged binaries;
+> the complete Capstone rerun is 27/27. Genuine live-node exhaustion still
+> produces a resource fault while preserving the 256-node cleanup reserve.
+> [Regression and application evidence](../../runtime/tests/application/results/20260927-node-reuse/README.md).
+> This software sweep updates the QEMU baseline only; it does not change the
+> hardware status or cost measurements documented below.
+
 > # 2026-09-16 — THE REVOKE-WALK SPLICE: built, measured, synthesised. R-12's COST half, not its capacity half.
 >
 > `r12-splice-revoked-nodes` at `f1331daed` (synthesised at `379248185`). **This addresses the cost of

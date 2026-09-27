@@ -1,10 +1,11 @@
 # Prompt for continuing this Capstone work in a new chat
 
 Application memory: [Capstone ports versus default CheriBSD](../experiments/applications/comparison.md) now covers
-FFmpeg and mruby with common allocation counters. The primary matrix is 48/54
-passing (six Capstone node-capacity failures); the separate larger-node mruby
-matrix passes 12/12. Fifteen instrument/runner tests pass. See the contract for
-commands, reservations and limits; these are memory observations, not timings.
+FFmpeg and mruby with common allocation counters. The original matrix recorded
+six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../runtime/tests/application/results/20260927-node-reuse/README.md)
+passes all 27 Capstone repeats at the same 65,536-node capacity, including all six
+previous failures, using unchanged application binaries. Keep the original data
+and larger-node controls separate. These are memory observations, not timings.
 
 Application execution: use the [persistent Linux guest and shared SDK](../runtime/applications.md).
 The one-hart QEMU stack verifies trusted fault/preemption return, process-owned

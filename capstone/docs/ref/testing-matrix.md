@@ -1,10 +1,11 @@
 # Capstone testing matrix and current recommendations
 
 Application memory: [Capstone ports versus default CheriBSD](../../experiments/applications/comparison.md) now covers
-FFmpeg and mruby with common allocation counters. The primary matrix is 48/54
-passing (six Capstone node-capacity failures); the separate larger-node mruby
-matrix passes 12/12. Fifteen instrument/runner tests pass. See the contract for
-commands, reservations and limits; these are memory observations, not timings.
+FFmpeg and mruby with common allocation counters. The original matrix recorded
+six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+passes all 27 Capstone repeats at the same 65,536-node capacity, including all six
+previous failures, using unchanged application binaries. Keep the original data
+and larger-node controls separate. These are memory observations, not timings.
 
 2026-09-26 application-platform run: the installed managed guest passes the common
 acceptance (including exhaustion followed by 1,008 starts). Legacy CoreMark,
@@ -30,7 +31,8 @@ It checks actual waitpid signals, no-yield and blocked-I/O cancellation,
 concurrent ownership, dup/fork/VMA lifetime, rollback, memory scrubbing, two real
 interpreters and an unchanged boot ID. `--repeat 200` adds 1,008 mixed starts with
 stable resource counters; `--sublet-image` adds transferred-heap reclamation,
-stale-reference rejection and recoverable node exhaustion. It does not add
+200,000-cycle in-process reuse, stale-reference rejection after reuse and
+recoverable genuine node exhaustion. It does not add
 fork/threads inside a domain or constitute FPGA validation.
 
 ## Setup once per shell

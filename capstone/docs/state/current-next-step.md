@@ -1,15 +1,19 @@
 Application workload discovery (2026-09-27): the
 [`application-memory-experiments` lane](../../experiments/applications/README.md)
 has checked workloads across six applications and prepared tshark inputs.
-Prioritize node reuse within a continuing protected interpreter before claiming
-bounded metadata over long runs. PostgreSQL's larger workload needs FileFallocate
+The [in-process node-reuse follow-up](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+now passes all 27 original Capstone repeats at 65,536 nodes. Extend the checked
+workload sizes and remaining application ports; record live-node demand separately
+from cumulative allocations. The QEMU collector performs a software tag sweep.
+PostgreSQL's larger workload needs FileFallocate
 support; tshark needs its full dependency build restored. Matching default
 CheriBSD runs now cover FFmpeg and mruby: use the [shared comparison
 contract](../../experiments/applications/comparison.md) for requested bytes,
 address reuse and allocator retention. Extend this exact default-only method to
 the remaining ports. Account for complete reservations before claiming a total
-memory advantage; the six larger-mruby failures at 65,536 nodes remain visible
-even though all four mruby workloads pass with 262,144 nodes. QEMU timings do not establish performance; inspect
+memory advantage. Keep the original six mruby failures and larger-node control
+visible as historical data, alongside the separately identified fixed-QEMU runs.
+QEMU timings do not establish performance; inspect
 the paper branch `eval/application-memory` for the exploratory plots and failures.
 
 Application execution (2026-09-26): the persistent **one-hart QEMU** lifecycle,

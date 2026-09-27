@@ -6,6 +6,15 @@ forced drains, event recording or replay are used. The currently built matching
 applications are mruby 4.0.0-rc2 and the configured FFmpeg 9.0.1 Matroska/MPEG-4
 decoder. This is not a claim about every FFmpeg feature or every port.
 
+The [2026-09-27 QEMU node-reuse follow-up](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+reruns the same Capstone application binaries at 65,536 nodes: all 27 attempts
+pass, including the six mruby failures in the original campaign. The emulator
+now collects retired identities under allocation pressure during a process.
+Keep these runs separate from the original 66-attempt data and its larger-node
+control. Default CheriBSD is unchanged and was not rerun for this QEMU fix.
+The software sweep is included in this implementation; its cost cannot be used
+as evidence of scan-free reclamation or a hardware performance advantage.
+
 ## Build and run
 
 Source `capstone/tests/capstone-test-env.sh` before commands. Keep prepared

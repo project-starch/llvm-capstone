@@ -46,7 +46,8 @@ static int run(const char *launcher, const char *image, const char *mode, int st
     _exit(124);
   }
   int status = 0;
-  double deadline = now() + 20;
+  double deadline = now() +
+      ((!strcmp(mode, "churn") || !strcmp(mode, "fault-reused")) ? 120 : 20);
   if (stop) {
     while ((!check_file("contract.out", "stdout\n") ||
             !check_file("contract.err", "stderr\n")) && now() < deadline) {
