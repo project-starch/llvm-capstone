@@ -1,4 +1,5 @@
-FFmpeg FATE follow-up (2026-09-28): the Capstone spatial/Sublet pair passes
+FFmpeg FATE follow-up (2026-09-28): the [archived three-arm qualification](../../experiments/study/results/ffmpeg-fate-qualification-20260928/README.md)
+shows the Capstone spatial/Sublet pair passes
 12/12 complete 20- and 150-frame decoder runs with native output hashes in
 one VM boot; the CheriBSD spatial arm passes 6/6 further matched runs. The
 three passing arms have identical pool lease-gap bins for each input. The

@@ -36,6 +36,9 @@ the serial console reports one; a repeat diagnostic detected this panic four
 seconds into the application attempt. The original FATE bitstreams were
 losslessly remuxed to Matroska for the configured decoder, so these are
 adapted application inputs, not official FATE scores.
+The [archived 18/18 three-arm qualification](../../experiments/study/results/ffmpeg-fate-qualification-20260928/README.md)
+preserves accepted raw runs and the excluded panic separately. It cannot be
+rendered as a four-arm FATE memory figure.
 
 ## 2026-09-28 — CheriBSD CPython complete-interpreter spatial qualification
 
