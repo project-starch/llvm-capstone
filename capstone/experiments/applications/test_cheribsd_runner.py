@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 import shlex
+import tempfile
 
 spec = importlib.util.spec_from_file_location('runner', Path(__file__).with_name('cheribsd-run.py'))
 runner = importlib.util.module_from_spec(spec)
@@ -102,6 +103,17 @@ class PolicyTests(unittest.TestCase):
                     runner.policy_environment(broken)
             with self.assertRaises(ValueError):
                 runner.policy_environment(dict(point, revocation=1))
+
+
+class GuestPanicTests(unittest.TestCase):
+    def test_serial_panic_is_distinct_from_application_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            serial = Path(tmp)/'serial.log'
+            self.assertIsNone(runner.guest_panic(serial))
+            serial.write_bytes(b'boot\r\r\nStarting sshd.\r\r\n'
+                               b'panic: Poison probe missing page 0x41400480\r\r\n')
+            self.assertEqual(runner.guest_panic(serial),
+                             'panic: Poison probe missing page 0x41400480')
 
 
 if __name__ == '__main__':

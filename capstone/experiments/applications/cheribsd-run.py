@@ -22,6 +22,13 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def guest_panic(serial_path):
+    if not serial_path.is_file():
+        return None
+    matches = re.findall(rb'panic: [^\r\n]+', serial_path.read_bytes())
+    return matches[-1].decode(errors='replace') if matches else None
+
+
 def samples(stderr):
     return [dict((k, v if k == 'phase' else int(v))
                  for k, v in (word.split('=', 1) for word in line.split()[1:]))
@@ -226,22 +233,49 @@ def execute(args):
             command = 'ulimit -c 0; '+command+'; result=$?; printf "EXP-GUEST-EXIT %s\\n" "$result" >&2; exit 0'
             (directory/'command.txt').write_text(command+'\n')
             start = time.monotonic()
-            # A failed host timeout aborts the campaign; it is never called a pass.
-            try:
-                result = subprocess.run(ssh+[command], capture_output=True,
-                                        timeout=args.timeout+20)
-            except subprocess.TimeoutExpired as error:
-                (directory/'stdout').write_bytes(error.stdout or b'')
-                (directory/'stderr').write_bytes(error.stderr or b'')
-                record = dict(point=point, repetition=repetition, status='host-timeout')
+            # Serial kernel panics and host timeouts abort this guest campaign.
+            # A process exit without these signals is checked by the oracle below.
+            process = subprocess.Popen(ssh+[command], stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+            deadline = time.monotonic() + args.timeout + 20
+            serial_path = args.key.parent/'serial.log'
+            failure = None
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    failure = 'host-timeout'
+                    break
+                try:
+                    stdout_raw, stderr_raw = process.communicate(timeout=min(2, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    panic = guest_panic(serial_path)
+                    if panic:
+                        failure = 'guest-panic'
+                        break
+            if not failure and guest_panic(serial_path):
+                failure = 'guest-panic'
+            if failure:
+                process.terminate()
+                try:
+                    stdout_raw, stderr_raw = process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    stdout_raw, stderr_raw = process.communicate()
+                (directory/'stdout').write_bytes(stdout_raw)
+                (directory/'stderr').write_bytes(stderr_raw)
+                record = dict(point=point, repetition=repetition, status=failure,
+                              host_seconds=time.monotonic()-start,
+                              diagnostic=guest_panic(serial_path) if failure == 'guest-panic' else None)
                 with (args.out/'runs.jsonl').open('a') as stream:
                     stream.write(json.dumps(record)+'\n')
-                raise
-            (directory/'stdout').write_bytes(result.stdout)
-            (directory/'stderr').write_bytes(result.stderr)
-            stdout = result.stdout.decode(errors='replace')
-            stderr = result.stderr.decode(errors='replace')
-            status = verdict(point, result.returncode, stdout, stderr, result.stdout)
+                raise RuntimeError(failure + (': ' + record['diagnostic']
+                                              if record['diagnostic'] else ''))
+            (directory/'stdout').write_bytes(stdout_raw)
+            (directory/'stderr').write_bytes(stderr_raw)
+            stdout = stdout_raw.decode(errors='replace')
+            stderr = stderr_raw.decode(errors='replace')
+            status = verdict(point, process.returncode, stdout, stderr, stdout_raw)
             try: memory = samples(stderr)
             except (ValueError, KeyError): memory = []
             record = dict(point=point, repetition=repetition, status=status,

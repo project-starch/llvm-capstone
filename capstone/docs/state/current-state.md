@@ -25,7 +25,10 @@ protected arm hit the published kernel's `Poison probe missing page` panic;
 that interrupted campaign is excluded. A second fresh guest running the
 protected arm first hit the same panic; eagerly touching the 4 MiB pool
 before use and omitting its final explicit `munmap` did not resolve it. The
-original FATE bitstreams were losslessly remuxed to Matroska for the
+generic CheriBSD runner now records `guest-panic` and aborts immediately when
+the serial console reports one; a repeat diagnostic detected this panic four
+seconds into the application attempt. The original FATE bitstreams were
+losslessly remuxed to Matroska for the
 configured decoder, so these are adapted application inputs, not official
 FATE scores.
 
