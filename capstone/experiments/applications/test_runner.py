@@ -1,3 +1,4 @@
+import hashlib
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -22,9 +23,17 @@ class EvidenceTest(unittest.TestCase):
     def test_non_numeric_counter(self): self.assertEqual(self.check(stderr=self.err.replace('live=0', 'live=bad')), 'bad-metrics')
     def test_negative_counter(self): self.assertEqual(self.check(stderr=self.err.replace('live=0', 'live=-1')), 'bad-metrics')
     def test_postgres_error_after_oracle(self):
-        point = dict(expected_values=['ok'], expected_phases=['startup', 'exit'])
+        point = dict(application='postgres', expected_values=['ok'],
+                     expected_phases=['startup', 'exit'])
         self.assertEqual(verdict(point, 0, False, '1: oracle = "ok"',
                                  self.err+'FATAL: incomplete transaction\n', self.exit), 'oracle-mismatch')
+    def test_postgres_error_after_stdout_hash(self):
+        stdout = b'EXP-OK\n'
+        point = dict(application='postgres', expected_stdout_sha256=hashlib.sha256(stdout).hexdigest(),
+                     expected_stdout_bytes=len(stdout), expected_phases=['startup', 'exit'])
+        self.assertEqual(verdict(point, 0, False, stdout.decode(),
+                                 self.err+'FATAL: incomplete transaction\n', self.exit, stdout),
+                         'oracle-mismatch')
 
 class FreshTreeTest(unittest.TestCase):
     def test_each_attempt_starts_from_the_same_directory(self):

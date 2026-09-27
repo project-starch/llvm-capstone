@@ -109,9 +109,11 @@ def verdict(point, rc, timed_out, stdout, stderr, result, stdout_raw=None):
     if result.get('kind') == 'signal': return 'signal'
     if rc: return 'exit-error'
     if result.get('kind') != 'exit' or result.get('value') != 0: return 'missing-exit-evidence'
+    if point.get('application') == 'postgres' and re.search(r'\b(ERROR|FATAL|PANIC):', stderr):
+        return 'oracle-mismatch'
     if 'expected_values' in point:
         values = re.findall(r'\d+: oracle = "([^"\n]+)"', stdout)
-        if values != point['expected_values'] or re.search(r'\b(ERROR|FATAL|PANIC):', stderr):
+        if values != point['expected_values']:
             return 'oracle-mismatch'
     elif 'expected_stdout_sha256' in point:
         if stdout_raw is None or hashlib.sha256(stdout_raw).hexdigest() != point['expected_stdout_sha256'] or \
