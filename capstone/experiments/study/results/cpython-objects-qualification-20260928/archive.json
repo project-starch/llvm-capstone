@@ -1,0 +1,9 @@
+{
+  "archive": "/tmp/capstone/cpython-objects-qualification-20260928.tar.gz",
+  "bytes": 11699986,
+  "sha256": "60e77322df147a0b7b1a298cf62cda4b613a85984cf35ac4db84555c5983060e",
+  "entries": 75,
+  "includes": "nine raw qualified processes, two excluded protected kernel panics, measured binaries, stdlib/input, build manifests and logs",
+  "excludes": "guest SSH credentials and VM state",
+  "repository_revision": "501c7f65489a"
+}

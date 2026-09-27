@@ -6,6 +6,12 @@ paper-width figure with the same all-issues denominator and three independent
 process repetitions per arm. It is derived from existing campaigns; the other
 three application rows remain unqualified.
 
+The [complete-interpreter CPython qualification](results/cpython-objects-qualification-20260928/README.md)
+adds nine accepted application processes across the Capstone spatial/Sublet
+pair and CheriBSD spatial control. The protected PoisonCap interpreter is
+built but hits a reproducible published-kernel VM-map panic, so CPython is not
+yet a fourth complete memory panel.
+
 The [normalized SQLite memory campaign](results/sqlite-normalized-memory-20260927/README.md)
 adds matched original-layout controls, three repeated-work runs per arm, event
 ledgers and address-footprint plots. It reports a reuse advantage for Sublet

@@ -35,15 +35,16 @@ Capstone node storage in each pair. `work.sql` is a qualification workload,
 not pgbench. Keep this study off a PR until the broader experiment set is
 ready. See the [complete-backend port](../../ports/postgres/single-user/README.md).
 
-CPython next (2026-09-28): merge the existing PoisonCap pymalloc lifetime
-hooks with the verified complete-interpreter CheriBSD spatial port. The
-component patches overlap the interpreter's capability-safe `obmalloc`
-changes, so qualify their combined source and an application workload before
-claiming a protected arm. Then rebuild the Capstone original/Sublet pair and
-the CheriBSD spatial/PoisonCap pair at matched release settings, preserve exact
-JSON/GC oracles, and add inner-pymalloc memory ledgers. The current
-[CheriBSD port](../../ports/cpython/interpreter/cheribsd/README.md) is a
-functional spatial baseline, not a four-arm paper result.
+CPython next (2026-09-28): the [archived complete-interpreter qualification](../../experiments/study/results/cpython-objects-qualification-20260928/README.md)
+now passes Capstone spatial/Sublet 3/3 each and CheriBSD PoisonCap-adapter
+spatial 3/3 at `-O1`, all with the same JSON/GC oracle. The PoisonCap
+component is integrated into the complete interpreter, but protected mode 1
+triggers the published kernel's `share->excl` VM-map lock panic both after a
+control and when run first in a fresh guest. Isolate and correct that kernel
+path before accepting a protected process. Then add inner-pymalloc
+issue/release, backing and metadata ledgers; the present outer counters cannot
+support a four-arm CPython memory figure. The [CheriBSD port](../../ports/cpython/interpreter/cheribsd/README.md)
+records the build and runtime selection.
 
 Nested application memory study (2026-09-27): the [normalized SQLite campaign](../../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
 now passes the build gate with an original-layout CheriBSD denominator and

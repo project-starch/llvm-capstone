@@ -52,14 +52,18 @@ rendered as a four-arm FATE memory figure.
 
 ## 2026-09-28 — CheriBSD CPython complete-interpreter spatial qualification
 
-A fresh CPython 3.13.7 purecap build with ordinary pymalloc now links on
-CheriBSD. Its pinned build recipe, source adjustments and stdlib zip are in
-the [CheriBSD interpreter port](../../ports/cpython/interpreter/cheribsd/README.md).
-The clean recipe build runs the existing JSON/GC `objects.py 8 3 0` workload
-in the guest and prints `EXP-OK cpython 552` with all expected phase markers.
-This is a functional spatial baseline only. The PoisonCap pymalloc component
-has not yet been integrated into the complete interpreter, and no paired
-CPython memory plot is established.
+A fresh CPython 3.13.7 purecap build with ordinary pymalloc links on
+CheriBSD and passes the JSON/GC `objects.py 8 3 0` workload. The complete
+interpreter now also links the existing PoisonCap pymalloc lifetime backend;
+its adapter mode-0 control passes 3/3 in a fresh guest. At matched `-O1`,
+Capstone spatial and real per-block Sublet modes pass 3/3 each in one Linux
+boot. The [archived nine-process qualification](../../experiments/study/results/cpython-objects-qualification-20260928/README.md)
+preserves exact oracle hashes and build evidence. Protected PoisonCap mode 1
+reaches Python startup but triggers the published kernel's `share->excl`
+VM-map lock panic, including when it runs first in a fresh guest. Both
+interrupted attempts are excluded. The reported outer heaps omit the inner
+pymalloc regions and Capstone node storage; no four-arm CPython memory plot
+is established.
 
 ## 2026-09-28 — PostgreSQL complete-backend memory qualification
 
