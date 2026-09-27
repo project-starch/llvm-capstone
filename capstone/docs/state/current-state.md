@@ -2,6 +2,28 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-27 — SQLite budget and selective FFmpeg memory controls
+
+The [memory follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
+validates 21 full-SQLite budget attempts against native size-1/size-2 SQL
+oracles and 12 FFmpeg decoder attempts against the exact frame oracle. At
+SQLite size 1, the smallest successful budgets tried are 1.25 MiB Capstone
+spatial, 1.25 MiB Capstone + Sublet (2.05 MiB with tables), and 1.125 MiB
+PoisonCap spatial (1.39 MiB with tables). The corrected and pressure-reclaim
+PoisonCap temporal policies complete at 8 MiB heap (9.11 MiB with tables);
+the pressure policy panics at 7.5 MiB in the published kernel. These are
+successful selected capacities, not measured minima or total RSS. At size 2,
+both spatial arms pass with 2.5 MiB; Sublet faults in SQLite with 2.5/3 MiB
+and PoisonCap temporal panics with 16 MiB. The four-arm scaling cell is open.
+
+The fairer FFmpeg PoisonCap adapter copies only stateful `AVRefStructPool`
+entries and frees snapshots with their backing. All revised 1/4/16-stream
+runs match decoder output. Snapshot backing peaks at 36,288 B and ends at
+zero; final jemalloc allocated matches spatial at 1/4 streams and differs by
+13,632 B at 16. The original full-copy FFmpeg advantage was an adapter
+artifact, not a PoisonCap lower bound. The older result below remains a
+record of that adapter's behavior.
+
 
 ## 2026-09-27 — Full SQLite nested-memory pilot and benchmark readiness
 

@@ -91,7 +91,10 @@ lookaside off, a memsys5-only Sublet backport, per-phase allocator accounting,
 and explicit corrected-policy identity. It reports selected passing memory
 reservations and failure attempts; corrected PoisonCap trials at 4.5 and 7 MiB
 panic in the published kernel, so a minimum capacity is not established. The
-separate
+subsequent [budget and selective-adapter follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
+finds another protected PoisonCap panic at 7.5 MiB and an incomplete size-2
+matrix; its FFmpeg control removes the earlier full-copy adapter's apparent
+memory disadvantage. Neither failure establishes a protected minimum. The separate
 [mruby lists pilot](../../experiments/study/results/20260927-mruby-lists.json)
 passes the full upstream work count on all four original arms, with explicit
 remaining budget/counter qualification gaps.

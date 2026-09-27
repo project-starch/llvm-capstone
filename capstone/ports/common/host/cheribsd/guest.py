@@ -130,7 +130,9 @@ class Guest:
             env={**os.environ, "TMPDIR": str(self.output)},
         )
         self.process.logfile_read = self.log
-        self.process.expect("Enter full pathname of shell or RETURN for /bin/sh:")
+        # Kernel messages can interrupt the rest of this prompt on the serial
+        # console (for example, "random: unblocking device" before its colon).
+        self.process.expect("Enter full pathname of shell")
         self.process.sendline("")
         self.process.expect(r"# ")
         commands = [

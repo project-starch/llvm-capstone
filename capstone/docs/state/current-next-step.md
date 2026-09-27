@@ -1,17 +1,25 @@
-Nested application memory study (2026-09-27): the [matched SQLite 3.22.0
+Nested application memory study (2026-09-27): the [memory follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
+adds full-oracle budget attempts and a size-2 scaling check. Resolve the
+published-kernel `Poison probe missing page` panic in protected PoisonCap
+SQLite at 7.5 MiB (and size 2 at 16 MiB), plus the Capstone Sublet
+`sqlite3GenerateConstraintChecks` bounds fault at size 2, before estimating
+protected minimum capacity or scaling. Repeat fixed budgets and count complete
+platform memory once both arms can finish. The [matched SQLite 3.22.0
 pilot](../../experiments/study/results/sqlite-322-memory-20260927/README.md)
 now covers all 32 phases, native-matched SQL results, memsys5-only Sublet,
 effective lookaside/heap settings, and both published and corrected PoisonCap
 quarantine paths. Next diagnose the published-kernel `Poison probe missing page`
-panic at corrected 4.5/7 MiB, qualify more workload sizes and repetitions, and
-move the legacy SQLite domain host to the shared persistent runner. Extend that
+panic across attempted budgets and move the legacy SQLite domain host to the
+shared persistent runner. Extend that
 runner rather than adding VM scripts. PoisonCap plans currently preserve
 unqualified cells and cannot execute through ordinary CheriBSD bindings.
 
 The [whole FFmpeg decoder pool pilot](../../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
 adds a second real four-arm nested application: 1/4/16 independent 30-frame
-streams, 24/24 exact-output attempts. Next repeat the PoisonCap cells, widen
-the input corpus toward FFmpeg FATE and report complete platform metadata.
+streams, 24/24 exact-output attempts. The [selective adapter follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
+shows the original full-copy snapshot overhead was adapter-specific. Next
+repeat the PoisonCap cells, widen the input corpus toward FFmpeg FATE and
+report complete platform metadata.
 The plot keeps Capstone outer-heap and PoisonCap jemalloc ledgers separate.
 
 mruby upstream lists already passes all four original arms at full work counts.

@@ -23,6 +23,12 @@ node metadata and PoisonCap kernel shadow are excluded. Capstone's outer-heap
 peak and PoisonCap's process-wide jemalloc `allocated` are **different ledgers**,
 so their absolute heights must not be subtracted across platforms.
 
+This result characterizes the **original conservative adapter**. The
+[selective-state follow-up](../memory-followup-20260927/README.md) retains
+only the stateful `AVRefStructPool` payload, passes the same decoder oracle,
+and removes almost all of this within-PoisonCap final allocation difference.
+The full-copy snapshot is not a PoisonCap architectural lower bound.
+
 The [retention plot](ffmpeg-pool-retention.pdf) shows those two within-platform
 pairs in separate panels. The [snapshot/rewrite plot](ffmpeg-pool-snapshot-work.pdf)
 shows retained snapshot backing and the temporal adapter's explicit copied,

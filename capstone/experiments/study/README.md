@@ -17,6 +17,10 @@ design](../../docs/plans/sublet-poisoncap-memory-study.md). It identifies the
 published SQLite source, matched platform controls, policy audit findings,
 cost plots and missing application integrations. The existing default-CheriBSD
 pair remains a separate reference; it is not the PoisonCap spatial control.
+The [application memory follow-up](results/memory-followup-20260927/README.md)
+contains full-SQLite budget attempts and a selective FFmpeg adapter control.
+It preserves kernel panics and port faults as unresolved outcomes, rather
+than treating failed attempts as lower bounds on required memory.
 
 ## Comparisons
 

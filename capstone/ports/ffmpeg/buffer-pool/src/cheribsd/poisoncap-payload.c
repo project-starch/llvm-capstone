@@ -1,7 +1,7 @@
 /* Experimental trusted adapter: poison on return, sweep before reissue.
- * Pool contents survive idle periods, unlike malloc's freed payload. Keep a
- * capability-preserving snapshot outside the poisoned storage and account
- * for it explicitly. This is a conservative policy, not optimized quarantine.
+ * AVRefStructPool retains initialized state while an entry is idle, so its
+ * payload needs an external capability-preserving snapshot. AVBufferPool does
+ * not promise contents across leases and can reuse detoxed storage directly.
  */
 #include "payload-backend.h"
 #include <cheri/cheric.h>
@@ -17,7 +17,8 @@
 
 static unsigned char *arena;
 static unsigned long returned, swept;
-static size_t sweeps, poison_bytes, clear_bytes, copied_bytes, snapshot_bytes;
+static size_t sweeps, poison_bytes, clear_bytes, copied_bytes;
+static size_t snapshot_bytes, snapshot_peak;
 
 static void check_mode(unsigned mode) {
   if (mode != 0 && mode != 2)
@@ -38,12 +39,7 @@ void ff2_payload_carve(struct payload_block *b, size_t offset) {
 
 void ff2_payload_prepare_backing(struct payload_block *b, unsigned mode) {
   check_mode(mode);
-  if (mode == 2 && !b->outer.c) {
-    b->outer.c = aligned_alloc(16, b->rounded);
-    if (!b->outer.c)
-      ff2_fail(332);
-    snapshot_bytes += b->rounded;
-  }
+  (void)b;
 }
 
 void *ff2_payload_issue_pointer(struct payload_block *b, unsigned mode) {
@@ -63,8 +59,10 @@ void *ff2_payload_issue_pointer(struct payload_block *b, unsigned mode) {
       __asm__ volatile("cclearpoison %0, 0(%0)" : : "C"(word) : "memory");
     }
     clear_bytes += b->rounded;
-    memcpy(b->region.c, b->outer.c, b->rounded);
-    copied_bytes += b->rounded;
+    if (b->outer.c) {
+      memcpy(b->region.c, b->outer.c, b->rounded);
+      copied_bytes += b->rounded;
+    }
     b->poison_epoch = 0;
   }
   /* A previous bounded alias may have been revoked. Always derive anew. */
@@ -84,10 +82,20 @@ void ff2_payload_return_lease(struct payload_block *b, unsigned mode) {
   check_mode(mode);
   if (mode == 0)
     return;
-  if (b->poison_epoch || !b->outer.c || returned == ~0UL)
+  if (b->poison_epoch || returned == ~0UL)
     ff2_fail(335);
-  memcpy(b->outer.c, b->region.c, b->rounded);
-  copied_bytes += b->rounded;
+  if (b->meta) {
+    if (!b->outer.c) {
+      b->outer.c = aligned_alloc(16, b->rounded);
+      if (!b->outer.c)
+        ff2_fail(332);
+      snapshot_bytes += b->rounded;
+      if (snapshot_bytes > snapshot_peak)
+        snapshot_peak = snapshot_bytes;
+    }
+    memcpy(b->outer.c, b->region.c, b->rounded);
+    copied_bytes += b->rounded;
+  }
   /* Poison padding too: every exposed compressed bound must be covered. */
   unsigned char *bounded = cheri_setboundsexact(b->region.c, b->rounded);
   if (!cheri_gettag(bounded))
@@ -101,6 +109,13 @@ void ff2_payload_return_lease(struct payload_block *b, unsigned mode) {
 }
 
 void ff2_payload_free_backing(struct payload_block *b, unsigned mode) {
+  /* The final owner is gone. Its initialized state will never be reissued. */
+  if (b->outer.c) {
+    free(b->outer.c);
+    b->outer.c = NULL;
+    snapshot_bytes -= b->rounded;
+  }
+  b->meta = NULL;
   ff2_payload_return_lease(b, mode);
 }
 
@@ -114,6 +129,7 @@ void ff2_payload_report_stats(struct ff2_header *report) {
 #else
   printf("FF2_POISONCAP sweeps=%zu poison_bytes=%zu clear_bytes=%zu "
 #endif
-         "snapshot_bytes=%zu copied_bytes=%zu\n", sweeps, poison_bytes,
-         clear_bytes, snapshot_bytes, copied_bytes);
+         "snapshot_bytes=%zu snapshot_peak=%zu copied_bytes=%zu\n",
+         sweeps, poison_bytes, clear_bytes, snapshot_bytes, snapshot_peak,
+         copied_bytes);
 }
