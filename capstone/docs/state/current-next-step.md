@@ -35,6 +35,21 @@ Capstone node storage in each pair. `work.sql` is a qualification workload,
 not pgbench. Keep this study off a PR until the broader experiment set is
 ready. See the [complete-backend port](../../ports/postgres/single-user/README.md).
 
+A fresh-guest policy diagnostic on 2026-09-28 tested bounded chunk and whole-block
+quarantines at the same 17.5 `work.sql` input. The mode-0 control from the
+same binary passed all 22 native-matched rows in about 9 seconds. The protected
+mode did not complete: a 256-entry chunk queue recorded 949 sweeps after about
+six minutes before an oracle result. Raising the chunk limit to 4,096 entries
+and queuing whole blocks reached the first aggregate SELECT, but then entered
+runaway recursion in PostgreSQL's `flatten_grouping_sets`; two core samples
+from one process show the stack pointer falling by 128.5 MiB. A 100 KiB
+`max_stack_depth` diagnostic did not stop it. These interrupted processes are
+not benchmark cells. The unqualified policy changes were removed from the
+branch; their code and raw diagnostics remain under
+`/tmp/capstone/pg-poison-batched-blocks-o1/`. Next isolate whether the parser
+graph is corrupted by the adapter's deferred block lifetime or by the
+published PoisonCap runtime before changing another threshold.
+
 CPython next (2026-09-28): the [archived complete-interpreter qualification](../../experiments/study/results/cpython-objects-qualification-20260928/README.md)
 now passes Capstone spatial/Sublet 3/3 each and CheriBSD PoisonCap-adapter
 spatial 3/3 at `-O1`, all with the same JSON/GC oracle. The PoisonCap
