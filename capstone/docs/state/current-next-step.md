@@ -1,7 +1,19 @@
+FFmpeg FATE follow-up (2026-09-28): the Capstone spatial/Sublet pair passes
+12/12 complete 20- and 150-frame decoder runs with native output hashes in
+one VM boot. The first fresh CheriBSD three-repeat campaign hit `Poison probe
+missing page` in the protected arm after three passing spatial controls.
+The same panic also occurs when the protected arm runs first in a fresh guest;
+eagerly touching the pool pages did not resolve it. Isolate the kernel's
+missing-page path before treating the CheriBSD pair as measured; retain the
+interrupted guest logs outside the paper dataset. Preserve the adapted-FATE
+label and measure matching pool ledgers and release-gap bins for each arm.
+
 PostgreSQL next (2026-09-28): revise the protected PoisonCap 17.5
-queue/sweep policy, then finish its `work.sql` run and validate both fresh
-`-O1` Capstone images against the
-same 22-row native oracle. The PoisonCap chunk queue has passed `SELECT 1`
+queue/sweep policy, then finish its `work.sql` run. Both fresh `-O1` Capstone
+images now pass 3/3 complete SQL oracles each with explicit `sysv` DSM.
+Regenerate and pin a pristine same-platform cluster before archiving the
+campaign; charge the separate Sublet context region and platform node storage
+before comparing memory. The PoisonCap chunk queue has passed `SELECT 1`
 but a full-workload diagnostic was stopped during its first INSERT after
 53 minutes of guest CPU and 7,154 sweeps, with no completed SQL oracle.
 It is excluded from paper data. The existing memory contexts reissue slots

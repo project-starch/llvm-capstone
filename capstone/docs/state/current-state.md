@@ -2,6 +2,32 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — PostgreSQL and FFmpeg application-memory follow-up
+
+The PostgreSQL 17.5 `-O1` Capstone original and memory-context Sublet images
+pass 6/6 complete 2,000-row single-user `work.sql` attempts with the exact
+22-row native SQL-output hash, across three fresh copies of the same cluster
+per arm in one Linux VM boot. The SDK images take arguments and environment
+directly from the shared runner. `dynamic_shared_memory_type=sysv` uses the
+existing domain System V segment service; POSIX and file-backed mmap DSM
+cannot run in this runtime. This is a functional two-arm qualification, not a
+four-arm memory ranking: the Sublet context region and node storage are not
+included in the reported outer-heap peak. The current temporary cluster was
+cleaned after earlier experiments; regenerate a pristine pinned fixture before
+archiving a paper campaign.
+
+The same persistent Capstone VM also passes 12/12 complete FFmpeg 9.0.1
+decoder attempts on two [adapted FATE MPEG-4 inputs](../../experiments/study/fate-mpeg4-inputs.json)
+at 20 and 150 frames, each with spatial and Sublet pool modes and three
+repetitions. Every run matches the native per-frame oracle. A separate fresh
+CheriBSD PoisonCap guest passed three spatial 20-frame controls, then the
+protected arm hit the published kernel's `Poison probe missing page` panic;
+that interrupted campaign is excluded. A second fresh guest running the
+protected arm first hit the same panic, and eagerly touching the 4 MiB pool
+before use did not resolve it. The original FATE bitstreams were
+losslessly remuxed to Matroska for the configured decoder, so these are
+adapted application inputs, not official FATE scores.
+
 ## 2026-09-28 — CheriBSD CPython complete-interpreter spatial qualification
 
 A fresh CPython 3.13.7 purecap build with ordinary pymalloc now links on
@@ -21,8 +47,8 @@ spatial, and a CheriBSD binary with the existing PoisonCap context backend.
 The pinned 2,000-row `work.sql` passes its 22-row native PostgreSQL oracle in
 the first three arms and in the PoisonCap binary's mode-0 control. The
 Capstone results were initially built at `-O2`; both Capstone modes have now
-also been rebuilt at the CheriBSD pair's `-O1`, but those new images still
-need an oracle run. An earlier CheriBSD index-build SIGPROT came from a stale
+also been rebuilt at the CheriBSD pair's `-O1` and passed the shared-runner
+oracle above. An earlier CheriBSD index-build SIGPROT came from a stale
 `src/port/qsort.o` predating the tag-preserving swap patch; the new builder
 forces that object to rebuild before linking.
 
