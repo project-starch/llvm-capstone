@@ -1,5 +1,7 @@
 import unittest
-from run import verdict, parse_memory
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from run import verdict, parse_memory, fresh_tree_paths, prepare_fresh_tree, tree_digest
 
 class EvidenceTest(unittest.TestCase):
     def setUp(self):
@@ -23,5 +25,61 @@ class EvidenceTest(unittest.TestCase):
         point = dict(expected_values=['ok'], expected_phases=['startup', 'exit'])
         self.assertEqual(verdict(point, 0, False, '1: oracle = "ok"',
                                  self.err+'FATAL: incomplete transaction\n', self.exit), 'oracle-mismatch')
+
+class FreshTreeTest(unittest.TestCase):
+    def test_each_attempt_starts_from_the_same_directory(self):
+        with TemporaryDirectory() as temporary:
+            share = Path(temporary)
+            source = share / 'baseline'
+            source.mkdir()
+            (source / 'data').write_text('original')
+            specification = dict(source='baseline', destination='working')
+            expected = tree_digest(source)
+            owned = set()
+            prepare_fresh_tree(share, specification, expected, owned)
+            (share / 'working/data').write_text('changed')
+            (share / 'working/new').write_text('new')
+            prepare_fresh_tree(share, specification, expected, owned)
+            self.assertEqual((share / 'working/data').read_text(), 'original')
+            self.assertFalse((share / 'working/new').exists())
+            self.assertEqual((source / 'data').read_text(), 'original')
+
+    def test_foreign_destination_is_preserved(self):
+        with TemporaryDirectory() as temporary:
+            share = Path(temporary)
+            (share / 'baseline').mkdir()
+            (share / 'working').mkdir()
+            (share / 'working/keep').write_text('mine')
+            with self.assertRaisesRegex(RuntimeError, 'not created by this campaign'):
+                prepare_fresh_tree(share, dict(source='baseline', destination='working'),
+                                   tree_digest(share / 'baseline'), set())
+            self.assertEqual((share / 'working/keep').read_text(), 'mine')
+
+    def test_escape_and_changed_source_are_rejected(self):
+        with TemporaryDirectory() as temporary:
+            share = Path(temporary)
+            source = share / 'baseline'
+            source.mkdir()
+            (source / 'data').write_text('original')
+            with self.assertRaises(ValueError):
+                fresh_tree_paths(share, dict(source='baseline', destination='../outside'))
+            (share / 'alias').symlink_to(source, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'overlap'):
+                fresh_tree_paths(share, dict(source='baseline', destination='alias/new'))
+            expected = tree_digest(source)
+            (source / 'data').write_text('changed')
+            with self.assertRaisesRegex(RuntimeError, 'source changed'):
+                prepare_fresh_tree(share, dict(source='baseline', destination='working'),
+                                   expected, set())
+            self.assertFalse((share / 'working').exists())
+
+    def test_source_symlink_is_rejected(self):
+        with TemporaryDirectory() as temporary:
+            share = Path(temporary)
+            source = share / 'baseline'
+            source.mkdir()
+            (source / 'external').symlink_to('/etc/passwd')
+            with self.assertRaisesRegex(ValueError, 'symlink'):
+                tree_digest(source)
 
 if __name__ == '__main__': unittest.main()

@@ -73,6 +73,20 @@ complete stdout, stderr, actual guest exit/signal evidence, binary hashes,
 resource counters and a record in `runs.jsonl`. A missing image is unavailable,
 not a passed or faulted application. The runner preserves its own source.
 
+Stateful workloads can add `"fresh_tree": {"source": "pgstudy/pgdata16",
+"destination": "pgstudy/pgdata-current"}` to a point. Both paths are relative
+to the VM share. The runner hashes the pristine source tree into its manifest
+and copies it to the destination before every attempt, including repetitions.
+It refuses an existing destination at campaign start, symlinks in the source,
+overlapping paths, and changes to the source during the campaign. Thus a
+PostgreSQL attempt never inherits tables or WAL from the previous one. The
+workload still names the destination path in its ordinary application input.
+`inputs` lists any additional `/mnt/host/` files consumed indirectly, such as
+PostgreSQL's argument, environment and SQL files. Their hashes are recorded
+and checked before every attempt. A completed campaign removes only the
+destination trees it created; an interrupted campaign retains them for
+inspection.
+
 It does not reboot or retry. Host timeout sends SIGTERM through the CLI's
 guest cancellation path. Failure of VM control or resource cleanup stops the
 campaign. Every returned fault is recorded, and subsequent independent cells
