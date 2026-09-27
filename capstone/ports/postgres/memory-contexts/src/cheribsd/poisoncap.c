@@ -27,6 +27,13 @@ static pg_block blocks[PG_BLOCK_MAX];
 static size_t used[PG_BLOCK_MAX];
 static pg_chunk chunks[PG_CHUNK_MAX];
 static unsigned char active[PG_CHUNK_MAX];
+#ifdef PG_POISONCAP_BATCHED
+/* Freed chunks remain poisoned until the manager actually asks to reissue
+ * one. The free-list links are in the existing external chunk table. */
+static unsigned char pending[PG_CHUNK_MAX];
+static unsigned pending_ids[PG_CHUNK_MAX], pending_count, pending_peak;
+static size_t withheld_bytes, withheld_peak;
+#endif
 static unsigned char headers[PG_SUBPOOL_MAX][PG_HEADER_BYTES]
     __attribute__((aligned(16)));
 static unsigned char header_live[PG_SUBPOOL_MAX];
@@ -38,6 +45,45 @@ static _Noreturn void refuse(const char *why) {
   fprintf(stderr, "PG_POISONCAP refused: %s\n", why);
   exit(1);
 }
+
+#ifdef PG_POISONCAP_BATCHED
+static void poison_only(void *ptr, size_t n) {
+  if (!mode || !n) return;
+  if ((cheri_getaddress(ptr) & 15) || (n & 15) ||
+      (cheri_getperm(ptr) & (CHERI_PERM_POISON | CHERI_PERM_SW_VMEM)) !=
+          (CHERI_PERM_POISON | CHERI_PERM_SW_VMEM))
+    refuse("poison geometry or authority");
+  for (size_t i = 0; i < n; i += 16) {
+    void *p = (unsigned char *)ptr + i;
+    __asm__ volatile("cpoison %0, 0(%0)" : : "C"(p) : "memory");
+  }
+  poisoned += n;
+}
+
+static void flush_pending(void) {
+  if (!pending_count) return;
+  struct cheri_revoke_syscall_info info = {0};
+  if (cheri_revoke(CHERI_REVOKE_LAST_PASS | CHERI_REVOKE_IGNORE_START |
+                   CHERI_REVOKE_TAKE_STATS, 0, &info))
+    refuse("quarantine sweep failed");
+  ++sweeps;
+  for (unsigned q = 0; q < pending_count; ++q) {
+    unsigned i = pending_ids[q];
+    void *ptr = chunks[i].slot;
+    size_t n = cheri_getlen(ptr);
+    for (size_t off = 0; off < n; off += 16) {
+      void *p = (unsigned char *)ptr + off;
+      __asm__ volatile("cclearpoison %0, 0(%0)" : : "C"(p) : "memory");
+    }
+    memset(ptr, 0, n);
+    cleared += n;
+    zeroed += n;
+    pending[i] = 0;
+  }
+  pending_count = 0;
+  withheld_bytes = 0;
+}
+#endif
 
 void pg_poisoncap_init(unsigned selected) {
   if (initialized || selected > 1 || !feature_present("cheri_caprevoke_poison"))
@@ -153,6 +199,9 @@ static void release_entries(pg_block *b) {
 
 void pg_subpool_block_free(pg_block *b) {
   if (!b || !b->pool) refuse("double block release");
+#ifdef PG_POISONCAP_BATCHED
+  flush_pending();
+#endif
   invalidate(b->region, used[b - blocks]);
   release_entries(b);
   if (b->pool_prev) b->pool_prev->pool_next = b->pool_next;
@@ -185,6 +234,9 @@ pg_block *pg_subpool_managed_block(pg_subpool *sp, unsigned long bytes,
 }
 void pg_subpool_managed_reset(pg_block *b, unsigned long prefix) {
   if (prefix > b->endptr - b->base) refuse("managed prefix");
+#ifdef PG_POISONCAP_BATCHED
+  flush_pending();
+#endif
   invalidate(b->region, used[b - blocks]);
   release_entries(b);
   b->freeptr = b->base + prefix;
@@ -223,6 +275,9 @@ unsigned int pg_subpool_carve(pg_block *b, unsigned long bytes) {
 void *pg_subpool_hand(unsigned int i) {
   if (!i || i >= PG_CHUNK_MAX || !chunks[i].slot || active[i])
     refuse("invalid chunk handout");
+#ifdef PG_POISONCAP_BATCHED
+  if (pending[i]) flush_pending();
+#endif
   active[i] = 1;
   ++pg_subpool_counts.hands;
   return cheri_clearperm(chunks[i].slot,
@@ -245,7 +300,20 @@ void pg_subpool_drop(unsigned int i) {
     ++tolerated;
     return;
   }
+#ifdef PG_POISONCAP_BATCHED
+  if (mode) {
+    size_t bytes = cheri_getlen(chunks[i].slot);
+    if (pending_count >= PG_CHUNK_MAX) refuse("quarantine index capacity");
+    poison_only(chunks[i].slot, bytes);
+    pending[i] = 1;
+    pending_ids[pending_count++] = i;
+    if (pending_count > pending_peak) pending_peak = pending_count;
+    withheld_bytes += bytes;
+    if (withheld_bytes > withheld_peak) withheld_peak = withheld_bytes;
+  }
+#else
   invalidate(chunks[i].slot, cheri_getlen(chunks[i].slot));
+#endif
   active[i] = 0;
   ++pg_subpool_counts.drops;
 }
@@ -274,6 +342,11 @@ void pg_subpool_header_free(void *p) {
   refuse("invalid context header");
 }
 void pg_poisoncap_report(void) {
+#ifdef PG_POISONCAP_BATCHED
+  /* Do not drain the queue for reporting: its retained bytes are a result. */
+  printf("PG_POISONCAP_QUEUE pending=%u peak_pending=%u withheld=%zu peak_withheld=%zu\n",
+         pending_count, pending_peak, withheld_bytes, withheld_peak);
+#endif
   printf("PG_POISONCAP mode=%u sweeps=%zu poison_bytes=%zu clear_bytes=%zu "
          "zeroed_bytes=%zu hands=%lu drops=%lu tolerated_double_drops=%zu "
          "mapped_bytes=%zu padding_bytes=%zu pointer_bytes=%zu\n",

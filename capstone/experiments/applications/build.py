@@ -74,7 +74,7 @@ def main():
     p.add_argument('--input-revision', required=True, help='Port recipe revision; cached objects are identified separately by hashes')
     p.add_argument('--libc-root', type=Path, help='Separate root containing musl-src and musl-build')
     p.add_argument('--include', type=Path, action='append', default=[])
-    p.add_argument('--nested', choices=['none', 'cpython', 'mruby'], default='none')
+    p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres'], default='none')
     p.add_argument('--gc-gaps', action='store_true', help='mruby GC-slot aggregate observer is present in the input archive')
     p.add_argument('--allocations', action='store_true', help='Count application allocation sizes and address reuse')
     args = p.parse_args()
@@ -94,6 +94,8 @@ def main():
     objects = inputs(args.app, root)
     if args.nested == 'cpython':
         objects += [root / 'runtime' / n for n in ('pym_backing.o', 'pym_block_lifetimes.o', 'pym_sublet_glue.o')]
+    if args.nested == 'postgres':
+        objects += [root / 'link/context-pools.o']
     if args.nested != 'none' and (args.heap != 'level0' or args.app != args.nested):
         raise ValueError('nested discovery arms use level0 for their separate outer heap')
     if args.gc_gaps and args.app != 'mruby':
@@ -112,13 +114,16 @@ def main():
          '-DCAPSTONE_APPLICATION_ARENA_BYTES=' + str(args.arena),
          '-DCMAKE_BUILD_TYPE=Release',
          '-DCMAKE_C_FLAGS_RELEASE=-O1 -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS' +
-         (' -DCAPSTONE_APPLICATION_HEAP_BYTES=' + str((80 if args.nested == 'cpython' else 32) << 20)
+         (' -DCAPSTONE_APPLICATION_HEAP_BYTES=' + str((80 if args.nested == 'cpython' else 64 if args.nested == 'postgres' else 32) << 20)
           if args.nested != 'none' else '')])
     run(['cmake', '--build', sdk, '-j8'])
     probe = out / 'memory.o'
-    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_PYMALLOC'] if args.nested == 'cpython' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
+    defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_PYMALLOC'] if args.nested == 'cpython' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_PG_CONTEXT_SUBLET'] if args.nested == 'postgres' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
     if args.allocations: defines += ['-DEXP_ALLOCATIONS', '-DEXP_CAPSTONE']
-    run([sdk / 'capstone-cc', '-O1', *defines,
+    memory_includes = (['-I', REPO / 'capstone/ports/postgres/memory-contexts/src/allocators/sublet',
+                        '-I', REPO / 'capstone/runtime/include']
+                       if args.nested == 'postgres' else [])
+    run([sdk / 'capstone-cc', '-O1', *defines, *memory_includes,
          '-c', HERE / 'memory.c', '-o', probe])
     image = out / (args.app + '.dom')
     extra = []

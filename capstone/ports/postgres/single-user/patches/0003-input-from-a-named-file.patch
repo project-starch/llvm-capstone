@@ -1,0 +1,47 @@
+--- a/src/backend/bootstrap/bootstrap.c	2026-09-24 19:56:47.505604309 +0800
++++ b/src/backend/bootstrap/bootstrap.c	2026-09-24 19:56:47.537708435 +0800
+@@ -354,6 +354,19 @@
+ 	 * Process bootstrap input.
+ 	 */
+ 	StartTransactionCommand();
++	{
++		/* capstone: a domain has no stdin; the catalog description comes from
++		 * the file PG_BOOT_INPUT names, when it is set. */
++		extern FILE *boot_yyin;
++		const char *boot_input = getenv("PG_BOOT_INPUT");
++
++		if (boot_input != NULL)
++		{
++			boot_yyin = fopen(boot_input, "r");
++			if (boot_yyin == NULL)
++				elog(FATAL, "could not open bootstrap input \"%s\": %m", boot_input);
++		}
++	}
+ 	boot_yyparse();
+ 	CommitTransactionCommand();
+ 
+--- a/src/backend/tcop/postgres.c	2026-09-24 19:56:47.508176671 +0800
++++ b/src/backend/tcop/postgres.c	2026-09-24 19:56:47.537934691 +0800
+@@ -345,7 +345,21 @@
+ 	 */
+ 	CHECK_FOR_INTERRUPTS();
+ 
+-	c = getc(stdin);
++	{
++		/* capstone: a domain has no stdin; the single-user session reads the
++		 * file PG_SINGLE_INPUT names, when it is set, opened once. */
++		static FILE *single_input = NULL;
++
++		if (single_input == NULL)
++		{
++			const char *path = getenv("PG_SINGLE_INPUT");
++
++			single_input = path ? fopen(path, "r") : stdin;
++			if (single_input == NULL)
++				elog(FATAL, "could not open single-user input \"%s\": %m", path);
++		}
++		c = getc(single_input);
++	}
+ 
+ 	ProcessClientReadInterrupt(false);
+ 

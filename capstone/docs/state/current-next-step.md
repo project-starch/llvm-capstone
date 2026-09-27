@@ -1,3 +1,15 @@
+PostgreSQL next (2026-09-28): finish the protected PoisonCap 17.5
+`work.sql` run, then validate both fresh `-O1` Capstone images against the
+same 22-row native oracle. The PoisonCap chunk queue has passed `SELECT 1`
+but still sweeps frequently because the existing memory contexts reissue
+slots promptly. Preserve queued bytes and sweep counts when tuning its
+threshold; do not quote the old per-free-sweep adapter as a PoisonCap memory
+lower bound. Before a paper plot, use a common phase/work-size schedule and
+account for live payload, reusable and withheld backing, metadata, and
+Capstone node storage in each pair. `work.sql` is a qualification workload,
+not pgbench. Keep this study off a PR until the broader experiment set is
+ready. See the [complete-backend port](../../ports/postgres/single-user/README.md).
+
 Nested application memory study (2026-09-27): the [normalized SQLite campaign](../../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
 now passes the build gate with an original-layout CheriBSD denominator and
 all 12 repeated-work attempts. Sublet has a reproducible address-reuse advantage

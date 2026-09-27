@@ -34,8 +34,28 @@ void mrb_capstone_gc_sublet_stats(unsigned long out[7]);
 #ifdef EXP_MRB_GC_GAPS
 void mrb_gc_study_report(const char *phase);
 #endif
+#ifdef EXP_PG_CONTEXT_SUBLET
+#include "pg_subpool.h"
+void *__capstone_region(unsigned);
+#endif
 
 static void report(const char *phase) {
+#ifdef EXP_PG_CONTEXT_SUBLET
+  const struct sublet_stats *primitives = pg_subpool_primitives();
+  char inner[512];
+  int inner_n = snprintf(inner, sizeof inner,
+      "EXP-INNER phase=%s contexts=%lu resets=%lu destroyed=%lu "
+      "blocks=%lu peak_blocks=%lu entries=%lu peak_entries=%lu "
+      "pools=%lu peak_pools=%lu split=%lu mrev=%lu revoke=%lu init=%lu\n",
+      phase, pg_subpool_counts.created, pg_subpool_counts.resets,
+      pg_subpool_counts.destroyed, pg_subpool_counts.blocks_live,
+      pg_subpool_counts.blocks_peak, pg_subpool_counts.entries_live,
+      pg_subpool_counts.entries_peak, pg_subpool_counts.pools_live,
+      pg_subpool_counts.pools_peak, primitives->split, primitives->mrev,
+      primitives->revoke, primitives->init);
+  if (inner_n > 0 && (size_t)inner_n < sizeof inner)
+    __real_write(2, inner, (size_t)inner_n);
+#endif
 #ifdef EXP_MRB_GC_GAPS
   mrb_gc_study_report(phase);
 #endif
@@ -96,6 +116,9 @@ ssize_t __wrap_write(int fd, const void *buf, size_t n) {
 
 static void at_exit(void) { report("exit"); }
 int __wrap_main(int argc, char **argv) {
+#ifdef EXP_PG_CONTEXT_SUBLET
+  if (pg_subpool_arena(__capstone_region(1), 64UL << 20) != 0) return 126;
+#endif
 #ifdef EXP_PYMALLOC
   extern int cpy_sublet_init(void);
   if (cpy_sublet_init() < 0) return 124;

@@ -1,5 +1,12 @@
 # Capstone project documentation
 
+PostgreSQL complete-backend memory work: the
+[17.5 single-user port](../ports/postgres/single-user/README.md) has a
+native-matched 22-row SQL qualification in Capstone spatial, Capstone+Sublet,
+CheriBSD spatial and the PoisonCap mode-0 control. The protected PoisonCap
+mode has passed a smaller `SELECT 1` qualification; the full four-arm
+application result and memory plots are still pending.
+
 Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
 separate reference data. The [SQLite 3.22.0 pilot](../experiments/study/results/sqlite-322-memory-20260927/README.md)

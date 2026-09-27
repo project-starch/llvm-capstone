@@ -2,6 +2,28 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — PostgreSQL complete-backend memory qualification
+
+The PostgreSQL 17.5 single-user backend now builds in Capstone spatial,
+Capstone with all four real Sublet memory-context hooks, CheriBSD purecap
+spatial, and a CheriBSD binary with the existing PoisonCap context backend.
+The pinned 2,000-row `work.sql` passes its 22-row native PostgreSQL oracle in
+the first three arms and in the PoisonCap binary's mode-0 control. The
+Capstone results were initially built at `-O2`; both Capstone modes have now
+also been rebuilt at the CheriBSD pair's `-O1`, but those new images still
+need an oracle run. An earlier CheriBSD index-build SIGPROT came from a stale
+`src/port/qsort.o` predating the tag-preserving swap patch; the new builder
+forces that object to rebuild before linking.
+
+The earlier PostgreSQL PoisonCap adapter sweeps every free and is not a valid
+lower-bound memory comparator. The complete-backend variant instead poisons
+at free, retains an external chunk queue, and sweeps before reissue. Its
+protected `SELECT 1` qualification passes with 8,692 hands, 6,097 drops,
+1,619 sweeps and a 525,312-byte peak queue. The full `work.sql` mode-1
+qualification remains open. No four-arm PostgreSQL paper plot or total-memory
+ranking is established. The new build path and limits are in the
+[single-user port](../../ports/postgres/single-user/README.md).
+
 ## 2026-09-27 — mruby GC-slot four-arm memory behavior
 
 The [full mruby 4.0.0-rc2 AO-render campaign](../../experiments/study/results/mruby-gc-memory-20260927/README.md)
