@@ -5,7 +5,9 @@ uses two matched pairs for the nested boundary; default CheriBSD on/off remains
 separate reference data. The [SQLite 3.22.0 pilot](../experiments/study/results/sqlite-322-memory-20260927/README.md)
 now has 32/32 native-matched SQL phases in all four nested arms, selected
 application-visible backing measurements, a policy-path audit and three memory
-figures. The published PoisonCap path has unrevoked full-queue drains; the
+figures. These are exploratory: the SQLite source forks and build options are
+not normalized across platforms, as the pilot's build audit explains. The
+published PoisonCap path has unrevoked full-queue drains; the
 protected comparator uses a separately identified correction. The
 [whole FFmpeg decoder pool pilot](../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
 adds 24 exact-output attempts over three workload sizes and four nested arms,

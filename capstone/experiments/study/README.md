@@ -199,6 +199,21 @@ additional application-visible backing for Sublet within Capstone and 7.58 MiB
 for corrected temporal PoisonCap within its spatial control. Smaller corrected
 PoisonCap trials panic in the published kernel, so these are exploratory
 configuration observations, not minimum-capacity or total-memory claims.
+The [build audit](results/sqlite-322-memory-20260927/README.md) additionally
+finds unmatched SQLite source forks and compile options. These figures cannot
+be promoted to a cross-platform memory claim until a rebuild records the
+actual compiler commands and passes the [four-arm build gate](check-build-comparability.py).
+The gate takes one JSON manifest with `schema: 1` and an `arms` object keyed by `capstone`,
+`capstone-sublet`, `poisoncap-spatial`, and `poisoncap-temporal`. Each arm records
+`platform`, `upstream_sha256`, `port_source_sha256`, `base_port_patch_sha256`,
+`protection_patch_sha256`, `driver_sha256`, `workload_sha256`, `binary_sha256`,
+`compiler_sha256`, `target`, `vfs`, `runtime_sqlite_config`, and actual argv arrays
+`compile_argv`, `driver_compile_argv`, and `link_argv`. Invoke
+`python3 capstone/experiments/study/check-build-comparability.py MANIFEST.json`.
+Unknown values or reconstructed command lines do not qualify. The platform
+VFS and compiler may differ across OSes, while SQLite options and optimization
+must match across all four arms and the platform baseline must match within
+each spatial/protected pair.
 
 The [whole FFmpeg 9.0.1 decoder pool pilot](results/ffmpeg-pool-memory-20260927/README.md)
 connects the existing PoisonCap pool adapter to the complete configured

@@ -113,11 +113,11 @@ def backing_figure(arms, out):
     ax.legend(loc="upper left", frameon=False, fontsize=8)
     ax.grid(axis="y", alpha=.18)
     ax.set_axisbelow(True)
-    ax.set_title("SQLite 3.22 speedtest1 main, size 1: 32 matching phases")
+    ax.set_title("Exploratory SQLite 3.22 pilot: 32 matching SQL phases")
     fig.subplots_adjust(bottom=.31)
-    fig.text(.12, .015, f"Within-platform increment: Sublet +{cap_delta:.2f} MiB; PoisonCap corrected +{poi_delta:.2f} MiB.\n"
+    fig.text(.12, .015, f"Selected successful reservations: Sublet +{cap_delta:.2f} MiB; PoisonCap corrected +{poi_delta:.2f} MiB.\n"
              "† Corrected full-queue revocation; published policy drained without revocation.\n"
-             "Heap includes inline control bytes. Kernel shadow and Capstone node metadata excluded.", fontsize=8)
+             "Build options not normalized; kernel shadow and Capstone node metadata excluded.", fontsize=8)
     save(fig, out, "sqlite-backing")
 
 
@@ -150,7 +150,7 @@ def phase_figure(arms, out):
         ax.grid(alpha=.2)
         ax.legend(loc="upper left", fontsize=7, frameon=False, ncol=2)
     fig.tight_layout(rect=(0, .04, 1, 1))
-    fig.text(.12, .015, "Phase-end snapshots; intra-phase peaks are reported in the JSON. QEMU time is excluded.", fontsize=8)
+    fig.text(.12, .015, "Exploratory builds, not normalized. Phase-end snapshots; intra-phase peaks in JSON. QEMU time excluded.", fontsize=8)
     save(fig, out, "sqlite-release-refill")
 
 
@@ -180,7 +180,7 @@ def policy_figure(arms, published, out):
     axes[1].legend(frameon=False, fontsize=8, loc="upper right")
     for ax in axes: ax.grid(axis="y", alpha=.18); ax.set_axisbelow(True)
     fig.subplots_adjust(bottom=.20)
-    fig.text(.12, .025, "Both use an 8 MiB heap and return the same 32 SQL result hashes; no timing inference.", fontsize=8)
+    fig.text(.12, .025, "Within PoisonCap: same 8 MiB heap and 32 SQL hashes; exploratory policy comparison only.", fontsize=8)
     save(fig, out, "sqlite-poisoncap-policy")
 
 

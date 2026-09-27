@@ -27,6 +27,52 @@ policy and a corrected policy have distinct identities; neither a drain
 without revocation nor a failed kernel run is a successful protected result.
 Default CheriBSD revocation on/off remains a separately labeled reference.
 
+## Build and execution denominator
+
+Before admitting a four-arm memory figure, record the **actual compiler argv**
+for the application translation unit in every arm, rather than reconstructing
+flags from a build script later. Pin the same upstream archive digest, benchmark
+driver digest, input digest and logical run arguments. Split source changes into
+an upstream base, a platform/ABI/VFS patch, a protection patch, and observer
+instrumentation; retain a digest for each stage. The platform patch may differ
+between Linux/Capstone and CheriBSD, but must be the same for spatial and
+protected builds *within* a platform. A published fork with a new source ID is
+a ported derivative, not an identical upstream translation unit merely because
+its version string matches.
+
+Compile the application at the same declared optimization level and with the
+same effective application feature switches in all four arms. For SQLite,
+compare every explicit `SQLITE_*` definition or undefinition, including
+`TEMP_STORE`, `DEFAULT_LOOKASIDE`, `ZERO_MALLOC`, and every `OMIT_*` switch;
+only `SQLITE_OS_OTHER` is a necessary platform exception. Record target ABI,
+compiler binary digest, sysroot/libc, link mode, and VFS separately. These
+cannot be made byte-identical across the two platforms. Within each platform,
+the spatial and protected arms must share the compiler, target, VFS, base port
+patch, and non-protection flags. The protection patch and its metadata are the
+intended difference.
+
+Record effective runtime configuration as well: pool size, memsys5 minimum
+request/atom, lookaside hit count, page size, journal/temp mode, cache settings,
+and any benchmark-specific options. Run the same native output oracle and
+verify per-unit useful-work and allocation-request counts; identical SQL
+answers alone do not imply identical allocator demand. If a requested common
+option fails on one platform, keep the failed build/run and identify the
+smallest necessary exception before changing the denominator. Do not quietly
+choose different options for the two systems.
+
+The generic [build-comparability gate](../../experiments/study/check-build-comparability.py)
+checks the recorded four-arm manifest for common source, driver, input,
+runtime configuration, optimization and SQLite flags, plus within-platform
+compiler/target/VFS/base-patch identity. It rejects absent compile argv and
+unknown optimization. The existing SQLite pilot predates that manifest and
+fails this publication gate; its plots remain explicitly exploratory. A
+successful compile of the published PoisonCap SQLite fork with Capstone's
+deployed SQLite define set (except `SQLITE_OS_OTHER`) demonstrates that this
+normalization is technically plausible; the corresponding CheriBSD probe
+linked too. Its first guest attempt panicked in the published CheriBSD kernel
+(`vm_map.c:6103`, `share->excl`) during `scp`, before SQLite ran. Keep this as
+an infrastructure failure, not as evidence about the normalized workload.
+
 ## One application adapter, four experiments
 
 An admitted benchmark supplies a pinned upstream workload body and a native

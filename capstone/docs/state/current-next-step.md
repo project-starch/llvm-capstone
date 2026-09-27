@@ -1,7 +1,13 @@
 Nested application memory study (2026-09-27): the [campaign contract](../plans/application-memory-campaign.md)
 now fixes four common experiment families and per-case qualification for the
-paper. Qualify the same inner address/byte observer and repeated work-unit
-boundary across the four arms, then freeze the first confirmatory matrix.
+paper. First rebuild the four SQLite arms from the same pinned upstream base
+with explicit platform/protection patches, identical SQLite feature flags and
+optimization, and captured application/driver/link argv; run the
+[build-comparability gate](../../experiments/study/check-build-comparability.py)
+and native result oracle. The present four-arm memory plots fail that build
+gate and remain exploratory. Then qualify the same inner address/byte observer
+and repeated work-unit boundary across the four arms, and freeze the first
+confirmatory matrix.
 The [memory follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
 adds full-oracle budget attempts and a size-2 scaling check. Resolve the
 published-kernel `Poison probe missing page` panic in protected PoisonCap

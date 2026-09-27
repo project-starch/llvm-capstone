@@ -8,6 +8,43 @@ the run produces 4,301 result rows. Lookaside is effectively disabled in all
 arms. This is one exploratory execution per passing cell, not a statistical or
 timing result.
 
+**Build-comparability audit (2026-09-27): these four binaries are not yet a
+normalized cross-platform build.** The Capstone translation unit starts from
+the official 3.22.0 amalgamation (source ID `2018-01-22 ... 0c55d179`), while
+the published PoisonCap port reports the same version number but a different
+source ID (`2026-04-26 ... 637f6b03`). A direct source comparison shows 431
+added and 56 removed lines in the PoisonCap port, including CHERI alignment,
+`memsys5`, and quarantine changes. Both run the same 32 benchmark phases and
+match the SQL-result oracle, but that proves output equivalence, not identical
+allocation demand.
+
+The Capstone build scripts use `-O0` for SQLite, `SQLITE_OS_OTHER=1`, a private
+in-memory VFS, `SQLITE_TEMP_STORE=3`, `SQLITE_DEFAULT_LOOKASIDE=0,0`,
+`SQLITE_ZERO_MALLOC=1`, and numerous `SQLITE_OMIT_*` switches. The recorded
+PoisonCap binary exposes only `ENABLE_MEMSYS5`, `THREADSAFE=0`,
+`OMIT_FLOATING_POINT`, and `OMIT_DEPRECATED` in its compiled-option strings;
+its exact compile argv and optimization level were not preserved. The runs
+report zero successful lookaside allocations, but that does not make their
+complete feature configurations equal. The CheriBSD Unix VFS and Capstone
+domain VFS also remain different by design. The four-arm backing bars and
+phase curves are therefore exploratory observations of these specific builds,
+not paper-ready protection overhead or fragmentation estimates. The
+PoisonCap published/corrected policy-path control is a within-platform result.
+
+A compile/link probe under `/tmp/capstone/poisoncap-plots` applied the complete
+deployed Capstone SQLite define list to the instrumented PoisonCap spatial
+source at `-O0`, omitting only `SQLITE_OS_OTHER`; its workload driver compiled
+at `-O1`. The CheriBSD purecap executable linked successfully. Its first
+guest attempt did **not** execute SQLite: the published guest kernel panicked
+in `vm_map.c:6103` (`share->excl`) while `scp` copied the executable. The raw
+serial log is `/tmp/capstone/poisoncap-plots/parity-guest-20260927/serial.log`.
+The probe binary's SHA-256 is
+`af9ae23b78f52b5e11b709c099f08420a8003f30da51e95b510cd8c1952f9668`;
+the panic log's is
+`38e6a2eb9fe2cfbce38f0ea7e7a0e9d141d523264ef1af2abea40516ee26132c`.
+Thus feature parity is compile-feasible, but runtime parity and the 32-phase
+oracle still require verification on that rebuilt binary.
+
 | Arm | Heap/pool | App allocator tables/links | Static quarantine table | Total application-visible reservation |
 |---|---:|---:|---:|---:|
 | Capstone spatial | 1.25 MiB | 0 | 0 | 1.25 MiB |
@@ -34,8 +71,9 @@ that fault prevents a minimum-heap conclusion. Smaller Capstone and spatial
 PoisonCap trials also fail; every attempted configuration remains listed in
 `data.json`.
 
-The [backing figure](sqlite-backing.pdf) shows reservations and the two
-within-platform increments. The [release/refill figure](sqlite-release-refill.pdf)
+The [backing figure](sqlite-backing.pdf) shows selected successful reservations
+and their within-platform differences; these are not matched minimal budgets.
+The [release/refill figure](sqlite-release-refill.pdf)
 shows phase-end rounded live capacity and quarantine, with intra-phase peaks
 in [data.json](data.json). The [policy-path figure](sqlite-poisoncap-policy.pdf)
 reports completed drains/revocations and explicit payload rewriting. None of
@@ -64,3 +102,6 @@ attempt because this port's old `create_dom` host is incompatible with the
 persistent process VM; this affects experimental overhead, not the reported
 memory counters. The next measurement pass needs a shared runner integration,
 multiple matched workload sizes and repeated blocks before a paper claim.
+The [campaign build contract](../../../../docs/plans/application-memory-campaign.md)
+and [build gate](../../check-build-comparability.py) describe what the next
+four-arm rebuild must record and match before those figures can be promoted.

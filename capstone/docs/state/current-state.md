@@ -4,6 +4,17 @@ Minimal snapshot. Read first in every session.
 
 ## 2026-09-27 — SQLite budget and selective FFmpeg memory controls
 
+The four-arm SQLite 3.22 pilot passes the same 32 SQL-result phases but **is
+not build-normalized**: Capstone uses the official amalgamation with its
+deployed omit/heap/VFS profile, while PoisonCap uses a ported fork with a
+different source ID and incompletely recorded compile argv. The pilot memory
+plots are exploratory. The [campaign contract](../plans/application-memory-campaign.md)
+now includes a build-comparability gate; compile-only probing confirms that
+the PoisonCap fork accepts Capstone's SQLite defines except the required
+`SQLITE_OS_OTHER` VFS switch, and the CheriBSD prototype links. Its first
+guest attempt panicked in the published kernel during `scp`, before SQLite
+started. No normalized four-arm benchmark has run yet.
+
 The [memory follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
 validates 21 full-SQLite budget attempts against native size-1/size-2 SQL
 oracles and 12 FFmpeg decoder attempts against the exact frame oracle. At
