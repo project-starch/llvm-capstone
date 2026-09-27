@@ -9,6 +9,11 @@ figures. These are exploratory: the SQLite source forks and build options are
 not normalized across platforms, as the pilot's build audit explains. The
 published PoisonCap path has unrevoked full-queue drains; the
 protected comparator uses a separately identified correction. The
+[normalized SQLite campaign](../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
+adds a matched build gate, 12 complete repeated-work processes, paired
+protection-cost plots and explicit negative results. Its
+[reuse-gap follow-up](../experiments/study/results/sqlite-reuse-gaps-20260927/README.md)
+measures logical memsys5 address reuse in four arms. The
 [whole FFmpeg decoder pool pilot](../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
 adds 24 exact-output attempts over three workload sizes and four nested arms,
 with separate memory ledgers and two further figures. The
@@ -17,6 +22,9 @@ adds SQLite budget attempts, a size-2 scaling attempt, and a selective FFmpeg
 adapter. It leaves the protected PoisonCap minimum unresolved after kernel
 panics and removes the original FFmpeg snapshot advantage as an adapter
 artifact. The
+[FFmpeg lease-gap campaign](../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
+repeats the four full-decoder arms at three workload sizes; all 36 runs pass
+frame oracles and all four arms have equal observed pool reuse bins. The
 [full-application campaign contract](plans/application-memory-campaign.md)
 fixes the same four memory experiments for each admitted benchmark. The
 [planner](../experiments/study/README.md) still blocks generalized PoisonCap

@@ -1,5 +1,27 @@
 # Paired application memory studies
 
+The [normalized SQLite memory campaign](results/sqlite-normalized-memory-20260927/README.md)
+adds matched original-layout controls, three repeated-work runs per arm, event
+ledgers and address-footprint plots. It reports a reuse advantage for Sublet
+and a countervailing table cost; see the explicit selected-memory scope.
+The [four-arm release-gap follow-up](results/sqlite-reuse-gaps-20260927/README.md)
+now measures exact same-start reuse timing inside the complete SQLite application:
+12/12 long runs match all SQL phase oracles; Sublet's histogram matches its
+original bin for bin, while corrected PoisonCap shifts reuse to longer gaps.
+The [FFmpeg whole-decoder lease-gap follow-up](results/ffmpeg-reuse-gaps-20260927/README.md)
+adds a second inner-allocator boundary: 36/36 full 1/4/16-stream processes
+match the frame oracle. All four arms have exactly equal pool lease-gap bins,
+while the selective PoisonCap temporal adapter targets 116.155 MiB of
+cumulative payload spans with poison, clear and copy operations in the
+16-stream workload. This is not measured physical memory traffic or total footprint.
+
+The [application figure design](../../docs/plans/application-memory-figures.md)
+defines three main figures from complete application executions: paired memory
+cost, address reuse, and sustained-work/burst behaviour. The
+[SQLite paper-layout preview](results/sqlite-normalized-memory-20260927/paper-layout/README.md)
+reformats existing checked data at manuscript width; it adds no measurements
+and keeps missing full-memory instrumentation explicit.
+
 This directory organizes known application benchmarks using the existing
 persistent-guest runners. `catalog.json` records candidate suites, source pins,
 application scope and qualification gaps. `study.py` fixes the workload matrix,

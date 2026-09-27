@@ -107,7 +107,14 @@ fi
 # sqlite3-capstone.c is included first and defines SQLITE3_H at its :355, so the host header expands
 # to nothing. It is NOT inert for any TU that includes the VFS header WITHOUT the amalgamation ahead
 # of it: that compiles against another version's declarations and nothing warns.
-_amalg_h=$(ls -d "$CAPSTONE_TMP_ROOT"/sqlite-src/sqlite-amalgamation-*/sqlite3.h 2>/dev/null | head -1)
+if [[ -n "${SQLITE_AMALGAMATION_HEADER:-}" ]]; then
+  _amalg_h=$SQLITE_AMALGAMATION_HEADER
+  [[ -f "$_amalg_h" ]] || {
+    echo "SQLITE_AMALGAMATION_HEADER=$_amalg_h does not exist" >&2; exit 1;
+  }
+else
+  _amalg_h=$(ls -d "$CAPSTONE_TMP_ROOT"/sqlite-src/sqlite-amalgamation-*/sqlite3.h 2>/dev/null | head -1)
+fi
 if [[ -n "$_amalg_h" ]]; then
   cp -f "$_amalg_h" "$OBJ_DIR/sqlite3.h"
 else

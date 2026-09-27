@@ -37,6 +37,9 @@ int main(int argc, char **argv) {
     if (ffapp_run(argv[1], FFAPP_M5_ALL) != FFAPP_M5_ALL) return 1;
     phase("released", batch);
   }
+#ifdef FFPOOL_STUDY_GAPS
+  ff2_reuse_report();
+#endif
   printf("EXP-OK ffmpeg %d\n", batches);
   return munmap(pool, 4UL*1024*1024) == 0 ? 0 : 66;
 }

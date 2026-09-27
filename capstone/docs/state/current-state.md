@@ -2,6 +2,63 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-27 — Normalized SQLite repeated-work memory
+
+The [complete FFmpeg 9.0.1 decoder lease-gap study](../../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
+now adds a second measured internal allocator boundary. All 36 four-arm
+1/4/16-stream runs pass the exact frame oracle, and all 32 pool lease-gap bins
+are identical across arms and three repetitions at each size. At 16 streams,
+the selective PoisonCap temporal adapter targets 116.155 MiB of cumulative
+payload spans with per-granule poison/clear and copy operations while snapshot
+backing peaks at 36,288 B and finishes at zero. These operation span counters
+are not time, DRAM traffic or total memory. Both platforms use the same prepared FFmpeg
+9.0.1 source and the shared pool observer; Capstone's application SDK reuses
+one Linux VM. The new allocator ledgers match the prior selective FFmpeg
+campaign. This result shows why SQLite's delayed-reuse behavior cannot be
+generalized to every nested allocator policy.
+
+The [complete-application reuse-gap follow-up](../../experiments/study/results/sqlite-reuse-gaps-20260927/README.md)
+adds 12/12 complete four-arm runs, all 6,528 native-matched SQL phases, and
+same-start release-to-reuse CDFs over 550,137 memsys5 allocations per run.
+Capstone original and Sublet are identical in every gap bin. The fraction
+reusing a start within 15 allocations is 73.116% in both Capstone arms,
+73.113% in CheriBSD original, and 0.052% in corrected PoisonCap. PoisonCap's
+overall same-start reuse is 86.358% versus 99.561% in its own original.
+Three repetitions per arm coincide. All 6,732 allocator phase rows match the
+prior campaign except for the extra 524,560 bytes of static observer storage.
+This is a full SQLite application result at its memsys5 boundary, not a
+physical-memory, runtime, or other-application claim.
+
+The [normalized SQLite campaign](../../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
+passes the four-arm build-comparability gate and all 12 repeated-work attempts
+(three per arm, one warmup plus 16 measured full `speedtest1 main --size 1`
+units per process). Every complete unit matches all 32 native SQL-result
+oracles. The CheriBSD original-layout control now removes PoisonCap's external
+allocator adaptation from the denominator. Both platform pairs have equal
+allocatable atom counts, matching SQLite feature switches, lookaside off and
+application/driver `-O0`; explicit platform patches and compiler differences remain.
+
+Sublet's cumulative allocated-address footprint stays at 1.00× its original
+baseline; corrected PoisonCap reaches 3.99× and then plateaus. Sublet returns
+all pool spans after each database close, but its selected allocator metadata
+is much larger. Selected peak H (rounded live + quarantine + specified tables)
+is **4.68× original for Sublet versus 4.27× for PoisonCap**. This is a reuse
+advantage with a metadata tradeoff, not a general total-memory win. Neither
+address footprint nor H is resident working set or complete platform memory.
+
+The fixed size-4 burst passes 3/3 in Sublet and both original-layout controls.
+Corrected PoisonCap fails its first qualification with SQLite OOM during phase
+190; two later repeats remain blocked. This is equal usable pool capacity,
+not equal total reservation. No four-arm post-burst recovery claim is made.
+
+The legacy SQLite path still needs 4,194,304 provisioned emulator nodes for
+these repeated runs, identically configured in both Capstone arms. Its
+65,536-node Sublet control faults; supervised-runtime node reclamation does
+not operate on this legacy path. These application-pool metrics exclude node
+storage and cannot establish hardware memory/scalability. New source/build
+and plotting tools reuse the port builders; no new VM manager is introduced.
+The earlier pilot below remains historical and build-unmatched.
+
 ## 2026-09-27 — SQLite budget and selective FFmpeg memory controls
 
 The four-arm SQLite 3.22 pilot passes the same 32 SQL-result phases but **is

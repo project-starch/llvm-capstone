@@ -40,6 +40,7 @@ def main():
         p.add_argument('--'+name, type=Path, required=True)
     p.add_argument('--allocations', action='store_true')
     p.add_argument('--nested-pool', choices=['poisoncap'])
+    p.add_argument('--pool-reuse-gaps', action='store_true')
     p.add_argument('--jobs', type=int, default=16)
     args = p.parse_args()
     args.out = args.out.resolve(); args.source = args.source.resolve()
@@ -49,6 +50,8 @@ def main():
         p.error('the PoisonCap build must select its nested pool adapter')
     if args.nested_pool and not (args.source/'libavutil/trace.h').exists():
         p.error('the PoisonCap build requires prepare-source.sh --pool')
+    if args.pool_reuse_gaps and not args.nested_pool:
+        p.error('--pool-reuse-gaps requires --nested-pool poisoncap')
     args.out.mkdir(parents=True, exist_ok=False)
     (args.out/'source-inputs.json').write_text(json.dumps(source_manifest(args.source), indent=2)+'\n')
     commands = []
@@ -95,6 +98,8 @@ def main():
             sources[0] = REPO/'capstone/experiments/study/ffmpeg-poisoncap-decode.c'
             flags += ['-DFFPOOL_CHERI', '-DFFPOOL_POISONCAP', '-DFFPOOL_APP_MEMORY',
                       '-I', str(pool/'shared'), '-I', str(REPO/'capstone/runtime/include')]
+            if args.pool_reuse_gaps:
+                flags += ['-DFFPOOL_STUDY_GAPS']
             sources += [pool/'shared/pool-allocator.c',
                         pool/'cheribsd/poisoncap-payload.c']
         if args.allocations:
@@ -104,7 +109,7 @@ def main():
         run([cc, *flags, *sources, app/'ffapp_decode.c', *[build/lib/(lib+'.a')
              for lib in ('libavformat','libavcodec','libavutil')], '-lm', '-o', image])
     manifest = dict(app=args.app, platform=args.platform, allocations=args.allocations,
-                    nested_pool=args.nested_pool,
+                    nested_pool=args.nested_pool,pool_reuse_gaps=args.pool_reuse_gaps,
                     image_sha256=digest(image), compiler_driver_sha256=digest(args.cc),
                     source=str(args.source), source_manifest_sha256=digest(args.out/'source-inputs.json'),
                     commands_sha256=digest(args.out/'commands.json'),

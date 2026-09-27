@@ -64,5 +64,6 @@ void *ff2_ref_issue(void *);
 void ff2_memory_init(void *, size_t);
 void ff2_payload_init(void *, size_t);
 void ff2_memory_report(struct ff2_header *);
+void ff2_reuse_report(void);
 void ff2_set_mode(unsigned);
 #endif

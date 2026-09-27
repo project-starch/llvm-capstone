@@ -1,0 +1,657 @@
+--- a/sqlite3.c
++++ b/sqlite3.c
+@@ -22973,6 +22973,58 @@
+ #endif /* SQLITE_ENABLE_MEMSYS3 */
+ 
+ /************** End of mem3.c ************************************************/
++/************** Begin file mem5.c ********************************************/
++/*
++** 2007 October 14
++**
++** The author disclaims copyright to this source code.  In place of
++** a legal notice, here is a blessing:
++**
++**    May you do good and not evil.
++**    May you find forgiveness for yourself and forgive others.
++**    May you share freely, never taking more than you give.
++**
++*************************************************************************
++** This file contains the C functions that implement a memory
++** allocation subsystem for use by SQLite. 
++**
++** This version of the memory allocation subsystem omits all
++** use of malloc(). The application gives SQLite a block of memory
++** before calling sqlite3_initialize() from which allocations
++** are made and returned by the xMalloc() and xRealloc() 
++** implementations. Once sqlite3_initialize() has been called,
++** the amount of memory available to SQLite is fixed and cannot
++** be changed.
++**
++** This version of the memory allocation subsystem is included
++** in the build only if SQLITE_ENABLE_MEMSYS5 is defined.
++**
++** This memory allocator uses the following algorithm:
++**
++**   1.  All memory allocation sizes are rounded up to a power of 2.
++**
++**   2.  If two adjacent free blocks are the halves of a larger block,
++**       then the two blocks are coalesced into the single larger block.
++**
++**   3.  New memory is allocated from the first available free block.
++**
++** This algorithm is described in: J. M. Robson. "Bounds for Some Functions
++** Concerning Dynamic Storage Allocation". Journal of the Association for
++** Computing Machinery, Volume 21, Number 8, July 1974, pages 491-499.
++** 
++** Let n be the size of the largest allocation divided by the minimum
++** allocation size (after rounding all sizes up to a power of 2.)  Let M
++** be the maximum amount of memory ever outstanding at one time.  Let
++** N be the total amount of memory available for allocation.  Robson
++** proved that this memory allocator will never breakdown due to 
++** fragmentation as long as the following constraint holds:
++**
++**      N >=  M*(1 + log2(n)/2) - n + 1
++**
++** The sqlite3_status() logic tracks the maximum values of n and M so
++** that an application can, at any time, verify this constraint.
++*/
++/* #include "sqliteInt.h" */
+ #include <sys/param.h>
+ #include <sys/ktrace.h>
+ #include <sys/mman.h>
+@@ -23008,58 +23060,7 @@
+ #include <sys/elf.h>
+ 
+ 
+-/************** Begin file mem5.c ********************************************/
+-/*
+-** 2007 October 14
+-**
+-** The author disclaims copyright to this source code.  In place of
+-** a legal notice, here is a blessing:
+-**
+-**    May you do good and not evil.
+-**    May you find forgiveness for yourself and forgive others.
+-**    May you share freely, never taking more than you give.
+-**
+-*************************************************************************
+-** This file contains the C functions that implement a memory
+-** allocation subsystem for use by SQLite. 
+-**
+-** This version of the memory allocation subsystem omits all
+-** use of malloc(). The application gives SQLite a block of memory
+-** before calling sqlite3_initialize() from which allocations
+-** are made and returned by the xMalloc() and xRealloc() 
+-** implementations. Once sqlite3_initialize() has been called,
+-** the amount of memory available to SQLite is fixed and cannot
+-** be changed.
+-**
+-** This version of the memory allocation subsystem is included
+-** in the build only if SQLITE_ENABLE_MEMSYS5 is defined.
+-**
+-** This memory allocator uses the following algorithm:
+-**
+-**   1.  All memory allocation sizes are rounded up to a power of 2.
+-**
+-**   2.  If two adjacent free blocks are the halves of a larger block,
+-**       then the two blocks are coalesced into the single larger block.
+-**
+-**   3.  New memory is allocated from the first available free block.
+-**
+-** This algorithm is described in: J. M. Robson. "Bounds for Some Functions
+-** Concerning Dynamic Storage Allocation". Journal of the Association for
+-** Computing Machinery, Volume 21, Number 8, July 1974, pages 491-499.
+-** 
+-** Let n be the size of the largest allocation divided by the minimum
+-** allocation size (after rounding all sizes up to a power of 2.)  Let M
+-** be the maximum amount of memory ever outstanding at one time.  Let
+-** N be the total amount of memory available for allocation.  Robson
+-** proved that this memory allocator will never breakdown due to 
+-** fragmentation as long as the following constraint holds:
+-**
+-**      N >=  M*(1 + log2(n)/2) - n + 1
+-**
+-** The sqlite3_status() logic tracks the maximum values of n and M so
+-** that an application can, at any time, verify this constraint.
+-*/
+-/* #include "sqliteInt.h" */
++#define NESTED_TEMPORAL 1
+ 
+ /*
+ ** This version of the memory allocator is used only when 
+@@ -23075,11 +23076,63 @@
+ ** The size of this object must be a power of two.  That fact is
+ ** verified in memsys5Init().
+ */
++
++static inline uint64_t
++cheri_revoke_get_cyc(void)
++{
++#if defined(__riscv)
++	return (__builtin_readcyclecounter());
++#elif defined(__aarch64__)
++	uint64_t _val;
++	__asm __volatile("mrs %0, cntvct_el0" : "=&r" (_val));
++	return (_val);
++#else
++	return (0);
++#endif
++}
++
++
++
++static inline void cclear(void * a){
++  asm volatile("cclearpoison %0, 0(%1)": :"C"(a),"C"(a));
++}
++
++static inline void
++clear_region(void *mem, size_t len)
++{
++	static const size_t ZERO_THRESHOLD = 64;
++
++	/*
++	 * For small regions that are qword-multiple-sized, use writes to avoid
++	 * memset call.  Alignment should be good in normal cases.
++	 */
++	if ((len <= ZERO_THRESHOLD) && (len % sizeof(uint64_t) == 0)) {
++		for (size_t i = 0; i < (len / sizeof(uint64_t)); i++) {
++			/*
++			 * volatile needed to avoid memset call by
++			 * compiler "optimization"
++			 */
++			((volatile uint64_t *)mem)[i] = 0;
++		}
++	} else {
++		memset(mem, 0, len);
++	}
++}
++
++
+ typedef struct Mem5Link Mem5Link;
+ struct Mem5Link {
+   int next;       /* Index of next free chunk */
+   int prev;       /* Index of previous free chunk */
+ };
++
++static void* mem5_heap_cap;
++static uintptr_t mem5_heap_base;
++/* Rounded-capacity accounting independent of SQLITE_DEBUG. */
++static size_t study_held, study_peak_held, study_live, study_peak_live;
++static size_t study_oom_requests, study_clear_bytes, study_poison_bytes;
++static size_t study_peak_quarantine, study_full_drains, study_threshold_drains;
++static size_t study_revokes, study_revoke_errors;
+ 
+ /*
+ ** Maximum size of any allocation is ((1<<LOGMAX)*mem5.szAtom). Since
+@@ -23147,11 +23200,36 @@
+ */
+ #define mem5 GLOBAL(struct Mem5Global, mem5)
+ 
++/* Integer block-index observer. No stored application capabilities. */
++#define STUDY_MAX_ATOMS 131072
++static unsigned char study_ever[STUDY_MAX_ATOMS/8];
++static unsigned char study_window[STUDY_MAX_ATOMS/8];
++static unsigned char study_starts[STUDY_MAX_ATOMS/8];
++static unsigned long study_ever_atoms, study_window_atoms;
++static unsigned long study_allocs, study_reused_starts, study_unit;
++static void study_cover(unsigned long first, unsigned long count){
++  unsigned long j;
++  if(first+count>STUDY_MAX_ATOMS) abort();
++  study_allocs++;
++  if(study_starts[first/8] & (1u<<(first%8))) study_reused_starts++;
++  study_starts[first/8] |= 1u<<(first%8);
++  for(j=first;j<first+count;j++){
++    unsigned char mask = 1u<<(j%8);
++    if(!(study_ever[j/8]&mask)) study_ever_atoms++;
++    if(!(study_window[j/8]&mask)) study_window_atoms++;
++    study_ever[j/8] |= mask;
++    study_window[j/8] |= mask;
++  }
++}
++
++
+ /*
+ ** Assuming mem5.zPool is divided up into an array of Mem5Link
+ ** structures, return a pointer to the idx-th such link.
+ */
+-#define MEM5LINK(idx) ((Mem5Link *)(&mem5.zPool[(idx)*mem5.szAtom]))
++//#define MEM5LINK(idx) ((Mem5Link *)(&mem5.zPool[(idx)*mem5.szAtom]))
++static Mem5Link *mem5_link; 
++//#define MEM5LINK(idx) ((Mem5Link *)cheri_setoffset(mem5_heap_cap, (idx)*mem5.szAtom))
+ 
+ /*
+ ** Unlink the chunk at mem5.aPool[i] from list it is currently
+@@ -23163,15 +23241,17 @@
+   assert( iLogsize>=0 && iLogsize<=LOGMAX );
+   assert( (mem5.aCtrl[i] & CTRL_LOGSIZE)==iLogsize );
+ 
+-  next = MEM5LINK(i)->next;
+-  prev = MEM5LINK(i)->prev;
++  next = mem5_link[i].next; //MEM5LINK(i)->next;
++  prev = mem5_link[i].prev; //MEM5LINK(i)->prev;
+   if( prev<0 ){
+     mem5.aiFreelist[iLogsize] = next;
+   }else{
+-    MEM5LINK(prev)->next = next;
++    //MEM5LINK(prev)->next = next;
++    mem5_link[prev].next = next; 
+   }
+   if( next>=0 ){
+-    MEM5LINK(next)->prev = prev;
++    //MEM5LINK(next)->prev = prev;
++    mem5_link[next].prev = prev;
+   }
+ }
+ 
+@@ -23186,11 +23266,14 @@
+   assert( iLogsize>=0 && iLogsize<=LOGMAX );
+   assert( (mem5.aCtrl[i] & CTRL_LOGSIZE)==iLogsize );
+ 
+-  x = MEM5LINK(i)->next = mem5.aiFreelist[iLogsize];
+-  MEM5LINK(i)->prev = -1;
++  //x = MEM5LINK(i)->next = mem5.aiFreelist[iLogsize];
++  //MEM5LINK(i)->prev = -1;
++  x = mem5_link[i].next = mem5.aiFreelist[iLogsize];
++  mem5_link[i].prev = -1;
+   if( x>=0 ){
+     assert( x<mem5.nBlock );
+-    MEM5LINK(x)->prev = i;
++    //MEM5LINK(x)->prev = i;
++    mem5_link[x].prev = i;
+   }
+   mem5.aiFreelist[iLogsize] = i;
+ }
+@@ -23210,11 +23293,20 @@
+ ** This only works for chunks that are currently checked out.
+ */
+ static int memsys5Size(void *p){
+-  int iSize, i;
+-  assert( p!=0 );
+-  i = (int)(((u8 *)p-mem5.zPool)/mem5.szAtom);
+-  assert( i>=0 && i<mem5.nBlock );
+-  iSize = mem5.szAtom * (1 << (mem5.aCtrl[i]&CTRL_LOGSIZE));
++  //int iSize, i;
++  //assert( p!=0 );
++  //i = (int)(((u8 *)p-mem5.zPool)/mem5.szAtom);
++  //assert( i>=0 && i<mem5.nBlock );
++  //iSize = mem5.szAtom * (1 << (mem5.aCtrl[i]&CTRL_LOGSIZE));
++  //return iSize;
++  uintptr_t addr = cheri_getaddress(p);
++  uintptr_t base = mem5_heap_base; 
++  
++  uintptr_t offset = addr - base; 
++  offset &= ~(mem5.szAtom -1);
++ 
++  int i = offset / mem5.szAtom;
++  int iSize = mem5.szAtom  * (1 << (mem5.aCtrl[i] & CTRL_LOGSIZE));
+   return iSize;
+ }
+ 
+@@ -23238,7 +23330,7 @@
+   assert( nByte>0 );
+ 
+   /* No more than 1GiB per allocation */
+-  if( nByte > 0x40000000 ) return 0;
++  if( nByte > 0x40000000 ){ study_oom_requests++; return 0; }
+ 
+ #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
+   /* Keep track of the maximum allocation request.  Even unfulfilled
+@@ -23260,6 +23352,10 @@
+   if( iBin>LOGMAX ){
+     testcase( sqlite3GlobalConfig.xLog!=0 );
+     sqlite3_log(SQLITE_NOMEM, "failed to allocate %u bytes", nByte);
++    study_oom_requests++;
++    //printf("malloc early return\n");
++    //for(int k =0 ; k < LOGMAX ; k++)
++    //  printf("freelist[%d] = %d\n", k, mem5.aiFreelist[k]);
+     return 0;
+   }
+   i = mem5.aiFreelist[iBin];
+@@ -23273,6 +23369,9 @@
+     memsys5Link(i+newSize, iBin);
+   }
+   mem5.aCtrl[i] = iLogsize;
++  study_cover(i, iFullSz/mem5.szAtom);
++  study_held += (size_t)iFullSz;
++  if( study_peak_held<study_held ) study_peak_held = study_held;
+ 
+ #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
+   /* Update allocator performance statistics. */
+@@ -23288,11 +23387,20 @@
+ #ifdef SQLITE_DEBUG
+   /* Make sure the allocated memory does not assume that it is set to zero
+   ** or retains a value from a previous allocation */
+-  memset(&mem5.zPool[i*mem5.szAtom], 0xAA, iFullSz);
+-#endif
+-
++  //memset(&mem5.zPool[i*mem5.szAtom], 0xAA, iFullSz);
++#endif
++  if(!cheri_gettag(mem5.zPool))
++    printf("mem5.zPool is not tagged");
+   /* Return a pointer to the allocated memory. */
+-  return cheri_setbounds((void*)&mem5.zPool[i*mem5.szAtom], iFullSz);
++  //return (void*)&mem5.zPool[i*mem5.szAtom];
++  void* p =  cheri_setoffset(mem5_heap_cap, i*mem5.szAtom);
++  //clear_region(mem5_heap_cap + i*mem5.szAtom , iFullSz);
++  //if(cheri_gettag(p))
++  //  printf("p has tag\n");
++  //else 
++  //  printf("p has no tag\n");
++  assert(cheri_gettag(p));
++  return p;
+ }
+ 
+ /*
+@@ -23305,7 +23413,10 @@
+   /* Set iBlock to the index of the block pointed to by pOld in 
+   ** the array of mem5.szAtom byte blocks pointed to by mem5.zPool.
+   */
+-  iBlock = (int)(((u8 *)pOld-mem5.zPool)/mem5.szAtom);
++  uintptr_t addr = cheri_getaddress(pOld);
++  uintptr_t base = mem5_heap_base;
++  iBlock = (addr - base) /mem5.szAtom;
++  //iBlock = (int)(((u8 *)pOld-mem5.zPool)/mem5.szAtom);
+ 
+   /* Check that the pointer pOld points to a valid, non-free block. */
+   assert( iBlock>=0 && iBlock<mem5.nBlock );
+@@ -23314,6 +23425,7 @@
+ 
+   iLogsize = mem5.aCtrl[iBlock] & CTRL_LOGSIZE;
+   size = 1<<iLogsize;
++  study_held -= (size_t)size*mem5.szAtom;
+   assert( iBlock+size-1<(u32)mem5.nBlock );
+ 
+   mem5.aCtrl[iBlock] |= CTRL_FREE;
+@@ -23361,17 +23473,78 @@
+   memsys5Link(iBlock, iLogsize);
+ }
+ 
++#define QUARANTINE_MAX 4096
++#define QUARANTINE_EPOCH_DELAY 2
++
++struct quarantine_entry{
++  void * ptr; 
++  size_t size; 
++  //cheri_revoke_epoch_t epoch;
++};
++
++static struct quarantine_entry quarantine[QUARANTINE_MAX];
++static size_t q_head = 0;
++static size_t q_tail = 0;
++static size_t q_count =0;
++static size_t total_alloc_size = 0;
++static size_t quarantine_size = 0;
++static size_t revocation_count = 0;
++void sqlite3_study_report(int phase){
++  printf("STUDY-MEM phase=%d heap=%d atom=%d blocks=%d links=%zu ctrl=%d qtable=%zu live=%zu peak_live=%zu held=%zu peak_held=%zu quarantine=%zu peak_quarantine=%zu qcount=%zu full_drains=%zu threshold_drains=%zu revokes=%zu revoke_errors=%zu poison_bytes=%zu clear_bytes=%zu oom=%zu\n",
++    phase, sqlite3GlobalConfig.nHeap, mem5.szAtom, mem5.nBlock,
++    (size_t)mem5.nBlock*sizeof(Mem5Link), mem5.nBlock,
++    sizeof(quarantine), study_live, study_peak_live, study_held,
++    study_peak_held, quarantine_size, study_peak_quarantine, q_count,
++    study_full_drains, study_threshold_drains, study_revokes,
++    study_revoke_errors, study_poison_bytes, study_clear_bytes,
++    study_oom_requests);
++}
++
+ /*
+ ** Allocate nBytes of memory.
+ */
++
++void * cclearpoisonperm(void * a){
++	void *ptr ;
++	uint64_t mask = ~(1ull << 12);
++    ptr = cheri_andperm(a, mask);
++
++	return ptr;
++}
++
+ static void *memsys5Malloc(int nBytes){
+   sqlite3_int64 *p = 0;
++  
+   if( nBytes>0 ){
+     memsys5Enter();
+     p = memsys5MallocUnsafe(nBytes);
+     memsys5Leave();
+   }
+-  return (void*)p; 
++  //if(!cheri_gettag(p))
++  //  printf("malloc p has no tag %d\n", nBytes);
++
++  
++
++  if( !p ) return 0; /* SQLite must see OOM instead of a capability fault. */
++  size_t alloc_size = memsys5Size(p);
++  study_live += alloc_size;
++  if( study_peak_live<study_live ) study_peak_live=study_live;
++#ifdef NESTED_TEMPORAL
++  total_alloc_size += alloc_size;
++  study_clear_bytes += alloc_size;
++  clear_region(cheri_setoffset(mem5_heap_cap, cheri_getoffset(p)), alloc_size);
++  //for(int i = 0 ; i< alloc_size; i+=16){
++  //  void *addr = (char*) p + i;
++  //  //cclear(addr);
++  //  *(volatile uint64_t*) addr = 0;
++  //  //cclear((void*)p+i);
++  //}
++#endif 
++  void *bounded_p =  cheri_setbounds((void*)p, alloc_size);
++  //printf("alloc_size =%zu\n", alloc_size);
++  //printf("cheri_getlen %lu\n", cheri_getlen(bounded_p));
++  //bounded_p = cclearpoisonperm(bounded_p);
++  return bounded_p; 
+ }
+ 
+ /*
+@@ -23380,10 +23553,115 @@
+ ** The outer layer memory allocator prevents this routine from
+ ** being called with pPrior==0.
+ */
++
++static inline void cpoison(char * a){
++  asm volatile("cpoison %0, 0(%1)": :"C"(a),"C"(a));
++}
++
++static void quarantine_flush(void){
++  //cheri_revoke_epoch_t now = cheri_revoke_st_get_epoch();
++  //revocation_count+=1;
++  //printf("revocation_count %d\n", (int)revocation_count);
++  while(q_count > 0){
++    struct quarantine_entry *e = &quarantine[q_head];
++
++    //if((now - e-> epoch) < QUARANTINE_EPOCH_DELAY ){
++    //  break;
++    //}
++    memsys5Enter();
++    memsys5FreeUnsafe(e -> ptr);
++    memsys5Leave();  
++
++    q_head = (q_head + 1) % QUARANTINE_MAX;
++    size_t current_size = e->size;
++    quarantine_size = quarantine_size - current_size;
++    total_alloc_size -= current_size;
++    q_count --;
++  }
++}
++static void quarantine_revoke(void){
++  	//(void)cheri_revoke(CHERI_REVOKE_ASYNC, 0, NULL);
++  //printf("nested_revoke\n");
++  struct cheri_revoke_syscall_info crsi;
++
++  crsi.epochs.enqueue = 0xC0FFEE;
++  crsi.epochs.dequeue = 0xB00;
++
++  int rc = cheri_revoke(CHERI_REVOKE_LAST_PASS | CHERI_REVOKE_IGNORE_START |
++            CHERI_REVOKE_TAKE_STATS , 0, &crsi);
++  study_revokes++;
++  if( rc!=0 ){
++    study_revoke_errors++;
++#if 1 /* corrected full-queue policy */
++    abort(); /* Never release a retained block after a failed pass. */
++#endif
++  }
++  quarantine_flush();
++
++}
++
++
++static void check_and_flush(void){
++  if (total_alloc_size < 1024 * 1024*16)
++    return ;
++
++  if(quarantine_size*4  >= total_alloc_size){
++    study_threshold_drains++;
++    //quarantine_flush();
++    quarantine_revoke();
++  }
++}
++
++
++static void quarantine_insert(void* base, size_t size){
++  //cheri_revoke_epoch_t now = cheri_revoke_get_epoch();
++  if (q_count == QUARANTINE_MAX){
++    study_full_drains++;
++#if 1 /* corrected full-queue policy */
++    quarantine_revoke();
++#else
++    quarantine_flush(); /* Published policy: record this unrevoked drain. */
++#endif
++  }
++  
++  quarantine[q_tail].ptr = base;
++  quarantine[q_tail].size = size;
++  //quarantine[q_tail].epoch = now;
++
++  q_tail = (q_tail + 1) % QUARANTINE_MAX;
++  quarantine_size += size;
++  if( study_peak_quarantine<quarantine_size )
++    study_peak_quarantine=quarantine_size;
++  q_count +=1;
++}
++
++
+ static void memsys5Free(void *pPrior){
+   assert( pPrior!=0 );
++  //fprintf(stderr, "memsys5Free\n");
++
++  uintptr_t heap_base = cheri_getaddress(mem5_heap_cap);
++  uintptr_t addr      = cheri_getaddress(pPrior);
++
++  uintptr_t offset = addr - heap_base; 
++  offset &= ~(mem5.szAtom -1);
++  void *p = cheri_setoffset(mem5_heap_cap, offset);
++  study_live -= (size_t)memsys5Size(p);
++
+   memsys5Enter();
+-  memsys5FreeUnsafe(pPrior);
++#ifdef NESTED_TEMPORAL
++  int iBlock = offset/ mem5.szAtom;
++  int iLogsize = mem5.aCtrl[iBlock] &CTRL_LOGSIZE;
++  size_t size = mem5.szAtom * (1 << iLogsize);
++  void *bounded = cheri_setbounds(p, size);
++  quarantine_insert(p, size);
++  study_poison_bytes += size;
++  for(size_t i =0 ; i< size;i+=16)
++    cpoison(bounded + i);
++  check_and_flush();
++#else 
++  memsys5FreeUnsafe(p);
++#endif 
+   memsys5Leave();  
+ }
+ 
+@@ -23465,6 +23743,11 @@
+   int nMinLog;       /* Log base 2 of minimum allocation size in bytes */
+   int iOffset;       /* An offset into mem5.aCtrl[] */
+ 
++  printf("INIT\n");
++  printf("nHeap= %d\n", sqlite3GlobalConfig.nHeap);
++  printf("pHeap= %p\n", sqlite3GlobalConfig.pHeap);
++  printf("mnReq= %d\n", sqlite3GlobalConfig.mnReq);
++
+   UNUSED_PARAMETER(NotUsed);
+ 
+   /* For the purposes of this routine, disable the mutex */
+@@ -23488,12 +23771,24 @@
+ 
+   mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
+   mem5.zPool = zByte;
++  mem5_heap_cap = cheri_setbounds(zByte, nByte); 
++  mem5_heap_base = cheri_getaddress(mem5_heap_cap);
++  assert(cheri_gettag(mem5_heap_cap));
++
++  //printf("heap tag =%d\n", cheri_gettag(mem5_heap_cap));
+   mem5.aCtrl = (u8 *)&mem5.zPool[mem5.nBlock*mem5.szAtom];
+-
++  //mem5.aCtrl = cheri_setoffset(mem5_heap_cap, mem5.nBlock * mem5.szAtom);
+   for(ii=0; ii<=LOGMAX; ii++){
+     mem5.aiFreelist[ii] = -1;
+   }
+ 
++
++  void *raw = mmap(NULL, mem5.nBlock* sizeof(Mem5Link), PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
++  if(raw == MAP_FAILED) return SQLITE_NOMEM; 
++  memset(raw, 0, mem5.nBlock * sizeof(Mem5Link));
++  mem5_link = cheri_setbounds(raw, mem5.nBlock * sizeof(Mem5Link));
++  if(!cheri_gettag(mem5_link))
++    printf("mem5_link has no tag\n");
+   iOffset = 0;
+   for(ii=LOGMAX; ii>=0; ii--){
+     int nAlloc = (1<<ii);
+@@ -23510,6 +23805,13 @@
+     mem5.mutex = sqlite3MutexAlloc(SQLITE_MUTEX_STATIC_MEM);
+   }
+ 
++  //for(int k=0; k <= LOGMAX ;k++)
++  //  printf("INIT freelist [%d]= %d\n", k, mem5.aiFreelist[k]);
++  //printf("nByte =%d szAtmo=%d nBlock=%d\n", nByte, mem5.szAtom, mem5.nBlock);
++  //app_quarantine = mmap(NULL, sizeof(struct sql_quarantine), PROT_READ | PROT_WRITE, MAP_ANON, -1, 0);
++  //printf("app_quarantine tag=%d perms %lx\n", cheri_gettag(app_quarantine), cheri_getperm(app_quarantine));
++
++  printf("heap len =%lu, expected = %d\n", cheri_getlen(mem5_heap_cap), nByte);
+   return SQLITE_OK;
+ }
+ 
+@@ -23545,7 +23847,7 @@
+   memsys5Enter();
+   nMinLog = memsys5Log(mem5.szAtom);
+   for(i=0; i<=LOGMAX && i+nMinLog<32; i++){
+-    for(n=0, j=mem5.aiFreelist[i]; j>=0; j = MEM5LINK(j)->next, n++){}
++    for(n=0, j=mem5.aiFreelist[i]; j>=0; j = mem5_link[j].next, n++){}
+     fprintf(out, "freelist items of size %d: %d\n", mem5.szAtom << i, n);
+   }
+   fprintf(out, "mem5.nAlloc       = %llu\n", mem5.nAlloc);
+@@ -23582,6 +23884,34 @@
+      0
+   };
+   return &memsys5Methods;
++}
++
++
++SQLITE_API void sqlite3_study_begin(unsigned long unit){
++  study_unit=unit;
++  memset(study_window,0,sizeof(study_window));
++  study_window_atoms=study_allocs=study_reused_starts=0;
++  study_peak_held=study_held;
++}
++SQLITE_API void sqlite3_study_sample(int phase){
++  unsigned long f=0, largest=0, blocks=0, m=(unsigned long)(((mem5.nBlock*sizeof(Mem5Link)+4095UL)&~4095UL) + mem5.nBlock + sizeof(quarantine) + sizeof(mem5));
++  int k,j;
++  for(k=0;k<=LOGMAX;k++){
++    for(j=mem5.aiFreelist[k];j>=0;j=mem5_link[j].next){
++      unsigned long bytes=((unsigned long)mem5.szAtom)<<k;
++      if(++blocks>(unsigned long)mem5.nBlock) abort();
++      f+=bytes;
++      if(bytes>largest) largest=bytes;
++    }
++  }
++  if(f+(unsigned long)study_held!=(unsigned long)mem5.nBlock*mem5.szAtom) abort();
++  printf("STUDY-LEDGER unit=%lu phase=%d live=%lu held=%lu peak_held=%lu quarantine=%lu metadata=%lu free=%lu largest_free=%lu pool=%lu ever=%lu window=%lu allocs=%lu reused_starts=%lu oom=%lu observer=%lu\n",
++    study_unit,phase,(unsigned long)study_live,(unsigned long)study_held,
++    (unsigned long)study_peak_held,(unsigned long)(study_held-study_live),m,f,largest,
++    (unsigned long)mem5.nBlock*mem5.szAtom,study_ever_atoms*mem5.szAtom,
++    study_window_atoms*mem5.szAtom,study_allocs,study_reused_starts,
++    (unsigned long)study_oom_requests,(unsigned long)(sizeof(study_ever)+sizeof(study_window)+sizeof(study_starts)));
++  printf("STUDY-REVOKE unit=%lu calls=%lu errors=%lu full=%lu threshold=%lu\n", study_unit, (unsigned long)study_revokes, (unsigned long)study_revoke_errors, (unsigned long)study_full_drains, (unsigned long)study_threshold_drains);
+ }
+ 
+ #endif /* SQLITE_ENABLE_MEMSYS5 */

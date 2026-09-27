@@ -1,22 +1,40 @@
-Nested application memory study (2026-09-27): the [campaign contract](../plans/application-memory-campaign.md)
-now fixes four common experiment families and per-case qualification for the
-paper. First rebuild the four SQLite arms from the same pinned upstream base
-with explicit platform/protection patches, identical SQLite feature flags and
-optimization, and captured application/driver/link argv; run the
-[build-comparability gate](../../experiments/study/check-build-comparability.py)
-and native result oracle. The present four-arm memory plots fail that build
-gate and remain exploratory. Then qualify the same inner address/byte observer
-and repeated work-unit boundary across the four arms, and freeze the first
-confirmatory matrix.
-Use the [metric specification](../../experiments/study/memory-metrics.md)
-when adding those observers: validate a disjoint byte ledger, capture the
-simultaneous peak vector, and retain eligible unreused lifetimes in the reuse
-denominator. Availability, virtual address history and resident memory are
-distinct results; the present phase counters cannot stand in for all three.
-The requested protected/original normalization also needs matching baseline
-definitions: qualify the original-layout PoisonCap spatial control before
-ranking full adaptation-overhead factors against Sublet. Keep the existing
-PoisonCap adapter-spatial control as a separately identified policy baseline.
+Nested application memory study (2026-09-27): the [normalized SQLite campaign](../../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
+now passes the build gate with an original-layout CheriBSD denominator and
+all 12 repeated-work attempts. Sublet has a reproducible address-reuse advantage
+(1.00× baseline versus PoisonCap's 3.99×), but higher selected peak allocator
+footprint once tables are charged (4.68× versus 4.27×). Keep both results.
+Do not substitute the old capacity-selected pilot for this matched-pool result.
+
+Next reduce/account for Sublet's per-atom table cost, add requested live bytes
+before fragmentation claims, and measure platform/node storage before total
+memory or working-set claims. Move SQLite from the legacy host to the shared
+supervised runner: the legacy campaign needed 4,194,304 provisioned nodes and
+fresh guests between processes. Work units already preserve allocator state
+inside one process. Apply the same unit/oracle/ledger contract to other ports;
+no cross-application generalization is established by SQLite alone. Use the
+[metric specification](../../experiments/study/memory-metrics.md) and preserve
+all burst failures and the metadata counterexample. Keep this study off a PR
+until the broader experiment set is ready.
+
+The [measured four-arm SQLite reuse CDF](../../experiments/study/results/sqlite-reuse-gaps-20260927/README.md)
+fills the release-gap slot for memsys5, and the [FFmpeg whole-decoder
+follow-up](../../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
+fills it for actual pool leases. FFmpeg's four arms have equal reuse bins
+over 36 passing full-application processes; its selective PoisonCap adapter
+still performs explicit per-granule poison/clear and copy operations. Next admit another complete
+application boundary with the same logical-release and output-oracle contract,
+and qualify a broader recognized FFmpeg input set. Do not substitute
+outer-malloc address data for inner-pool reuse. Before a total-memory claim,
+measure Capstone node and PoisonCap revocation storage in comparable units;
+the current SQLite CDF runs provision 4,194,304 emulator nodes and omit those
+bytes. Qualify an optimized release build before a final paper result.
+
+Use the [application figure contract](../plans/application-memory-figures.md)
+for the next measurements: complete applications, paired original controls,
+release-to-reissue gaps, full metadata accounting and a qualified common burst.
+The linked SQLite layout preview reformats existing complete repeated-work
+data only; it does not qualify the failed burst or fill missing metrics.
+
 The [memory follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
 adds full-oracle budget attempts and a size-2 scaling check. Resolve the
 published-kernel `Poison probe missing page` panic in protected PoisonCap
@@ -35,10 +53,11 @@ unqualified cells and cannot execute through ordinary CheriBSD bindings.
 
 The [whole FFmpeg decoder pool pilot](../../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
 adds a second real four-arm nested application: 1/4/16 independent 30-frame
-streams, 24/24 exact-output attempts. The [selective adapter follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
-shows the original full-copy snapshot overhead was adapter-specific. Next
-repeat the PoisonCap cells, widen the input corpus toward FFmpeg FATE and
-report complete platform metadata.
+streams. The [selective adapter follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
+shows the original full-copy snapshot overhead was adapter-specific. The
+[lease-gap campaign](../../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
+now repeats every PoisonCap cell three times. Next widen the input corpus
+toward FFmpeg FATE and report complete platform metadata.
 The plot keeps Capstone outer-heap and PoisonCap jemalloc ledgers separate.
 
 mruby upstream lists already passes all four original arms at full work counts.
