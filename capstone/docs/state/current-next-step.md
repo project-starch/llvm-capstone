@@ -1,3 +1,13 @@
+Application memory measurements (2026-09-27): use the [checked reuse and retention metrics](../../experiments/applications/memory-behavior.md)
+and [72 passing application attempts](../../experiments/applications/results/20260927-reuse/README.md).
+Extend the same input/oracle and default-CheriBSD method to Perl, CPython and
+SQLite before generalizing beyond the two measured applications. Keep the
+large-retained-graph counterexample and all reservations visible. For longer
+runs, provision and account for the address-history observer before running:
+the rejected 128-batch mruby attempt exhausted its fixed table. Replace the
+QEMU software sweep with the intended reclaimer before metadata-capacity or
+hardware-cost claims; preserve the phase-equality controls across that change.
+
 Application workload discovery (2026-09-27): the
 [`application-memory-experiments` lane](../../experiments/applications/README.md)
 has checked workloads across six applications and prepared tshark inputs.

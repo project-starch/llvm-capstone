@@ -1,5 +1,11 @@
 # Capstone testing matrix and current recommendations
 
+Application memory behavior: [twelve paired workload configurations](../../experiments/applications/results/20260927-reuse/README.md)
+pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU
+controls without in-process collection. The results quantify prompt address
+reuse and post-release retention, include the large-retained-graph counterexample,
+and make no timing or total-RSS claim.
+
 Application memory: [Capstone ports versus default CheriBSD](../../experiments/applications/comparison.md) now covers
 FFmpeg and mruby with common allocation counters. The original matrix recorded
 six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../../runtime/tests/application/results/20260927-node-reuse/README.md)

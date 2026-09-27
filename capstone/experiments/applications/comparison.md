@@ -15,6 +15,13 @@ control. Default CheriBSD is unchanged and was not rerun for this QEMU fix.
 The software sweep is included in this implementation; its cost cannot be used
 as evidence of scan-free reclamation or a hardware performance advantage.
 
+[Memory-behavior analysis](memory-behavior.md) relates the selected metrics to
+the Cornucopia papers. The [extended paired results](results/20260927-reuse/README.md)
+contain twelve workloads, 72 passing attempts, four figures and controls checking
+that every recorded Capstone memory phase is unchanged without in-process sweeps.
+They include a large-retained-graph counterexample and an invalid observer-limit
+attempt; address reuse is not a proxy for total memory or hardware speed.
+
 ## Build and run
 
 Source `capstone/tests/capstone-test-env.sh` before commands. Keep prepared

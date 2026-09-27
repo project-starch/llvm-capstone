@@ -2,6 +2,26 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-27 — Address reuse and post-release application memory
+
+The `application-reuse-metrics` lane studies Cornucopia and Cornucopia Reloaded
+and checks twelve FFmpeg/mruby workloads against default CheriBSD purecap.
+All 72 paired attempts pass. The complete allocation and allocator phase
+samples match old-QEMU controls for all twelve Capstone workloads (108 equal
+control/repetition comparisons). The larger-capacity controls do not collect
+nodes during application execution; the temporary sweep does not create the
+reported differences in these workloads.
+
+Sixty-four FFmpeg streams use 178 distinct starts versus 2,982 (16.75 times fewer)
+with 46,720 allocation calls on both platforms. mruby's 512-record, 16-batch case
+uses 14,554 versus 44,552 (3.06 times fewer). Full post-release curves show both
+retention advantages and the large-retained-graph case where buddy occupancy is
+initially higher. No total-RSS, physical-fragmentation or timing win is inferred.
+An invalid 128-batch observer-overflow attempt and its interrupted repeat remain
+recorded separately. Four analysis guard tests pass. [Results and figures](../../experiments/applications/results/20260927-reuse/README.md)
+and [paper analysis and metric definitions](../../experiments/applications/memory-behavior.md)
+identify exact scope and the remaining port work.
+
 ## 2026-09-27 — Node reuse within a running application
 
 The `runtime-node-reuse` follow-up fixes the six mruby failures below without
