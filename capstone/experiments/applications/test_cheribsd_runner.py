@@ -40,6 +40,27 @@ class VerdictTests(unittest.TestCase):
             with self.subTest(rc=rc, out=out, err=err):
                 self.assertNotEqual(runner.verdict(self.point, rc, out, err), 'pass')
 
+    def test_ffmpeg_pool_requires_complete_reuse_and_phase_ledgers(self):
+        point = dict(self.point, application='ffmpeg', arm='poisoncap-temporal',
+                     nested_allocator='ffmpeg-pool', mode=2, revocation=0,
+                     expected_phases=['before-0', 'released-0'])
+        metric = ('EXP-CHERI phase=before-0 revocation=0 heap_error=0 shadow_error=0 '
+                  'allocated=32 active=64 resident=128\n')
+        stderr = (metric + metric.replace('before-0', 'released-0') +
+                  'FFPOOL-POLICY mode=2 payload_reservation=4194304\n' +
+                  'FFPOOL-MEM phase=before-0 payload_used=0\n' +
+                  'FFPOOL-MEM phase=released-0 payload_used=16\n' +
+                  'FF2-GAP-TOTAL issues=3 reuses=2 observer=128\n' +
+                  ''.join(f'FF2-GAP pair={i} a={2 if i == 0 else 0} b=0\n'
+                          for i in range(16)) + 'EXP-GUEST-EXIT 0\n')
+        self.assertEqual(runner.verdict(point, 0, 'OK\n', stderr), 'pass')
+        for broken in (stderr.replace('mode=2', 'mode=0'),
+                       stderr.replace('reuses=2', 'reuses=3'),
+                       stderr.replace('FF2-GAP pair=15', 'FF2-GAP pair=14'),
+                       stderr.replace('FFPOOL-MEM phase=released-0',
+                                      'FFPOOL-MEM phase=before-0')):
+            self.assertEqual(runner.verdict(point, 0, 'OK\n', broken), 'bad-inner-metrics')
+
 
 class PolicyTests(unittest.TestCase):
     def point(self, arm, enabled):
@@ -67,6 +88,20 @@ class PolicyTests(unittest.TestCase):
         for point in bad:
             with self.subTest(point=point), self.assertRaises(ValueError):
                 runner.policy_environment(point)
+
+    def test_ffmpeg_poisoncap_uses_explicit_nested_mode_and_disabled_outer_revocation(self):
+        for arm, mode in (('poisoncap-spatial', 0), ('poisoncap-temporal', 2)):
+            point = self.point(arm, 0)
+            point.update(application='ffmpeg', nested_allocator='ffmpeg-pool',
+                         mode=mode, argv=['/tmp/ffmpeg', '/tmp/input.mkv', '1', str(mode)])
+            env = runner.policy_environment(point)
+            self.assertEqual(env, {'_RUNTIME_REVOCATION_DISABLE': '1'})
+            for value in (1, 3):
+                broken = dict(point, mode=value)
+                with self.assertRaises(ValueError):
+                    runner.policy_environment(broken)
+            with self.assertRaises(ValueError):
+                runner.policy_environment(dict(point, revocation=1))
 
 
 if __name__ == '__main__':

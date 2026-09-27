@@ -31,9 +31,21 @@ def samples(stderr):
 def policy_environment(point):
     """Only the named on/off contrast may change the process allocator policy."""
     expected = {'cheribsd-default': 1, 'cheribsd-revocation-on': 1,
-                'cheribsd-revocation-off': 0,
-                'poisoncap-spatial': 1, 'poisoncap-temporal': 1}
+                'cheribsd-revocation-off': 0}
     arm = point['arm']
+    if arm.startswith('poisoncap-'):
+        if arm not in ('poisoncap-spatial', 'poisoncap-temporal'):
+            raise ValueError('unknown PoisonCap arm')
+        boundary = (point.get('application'), point.get('nested_allocator'))
+        if boundary == ('mruby', 'mruby-gc'):
+            expected[arm] = 1
+        elif boundary == ('ffmpeg', 'ffmpeg-pool'):
+            expected[arm] = 0
+            mode = 2 if arm == 'poisoncap-temporal' else 0
+            if point.get('mode') != mode or not point.get('argv') or point['argv'][-1] != str(mode):
+                raise ValueError('FFmpeg pool arm and application mode disagree')
+        else:
+            raise ValueError('PoisonCap arm needs a qualified application boundary')
     if arm not in expected or point['revocation'] != expected[arm]:
         raise ValueError('arm and expected revocation state disagree')
     environment = point['environment']
@@ -41,9 +53,7 @@ def policy_environment(point):
             'MRB_GC_POISONCAP' in environment:
         raise ValueError('allocator overrides must come from the named study arm')
     environment = dict(environment)
-    if arm.startswith('poisoncap-'):
-        if point.get('application') != 'mruby' or point.get('nested_allocator') != 'mruby-gc':
-            raise ValueError('PoisonCap GC arms require the full mruby GC adapter')
+    if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'mruby-gc':
         environment['MRB_GC_POISONCAP'] = '1' if arm == 'poisoncap-temporal' else '0'
     if arm != 'cheribsd-default':
         switch = 'ENABLE' if expected[arm] else 'DISABLE'
@@ -106,6 +116,24 @@ def verdict(point, rc, stdout, stderr, stdout_raw=None):
             if inner[-1]['sweeps'] < point.get('expected_min_sweeps', 0):
                 return 'bad-inner-metrics'
         except (KeyError, ValueError):
+            return 'bad-inner-metrics'
+    if point.get('nested_allocator') == 'ffmpeg-pool':
+        mode = 2 if point['arm'] == 'poisoncap-temporal' else 0
+        if re.findall(r'^FFPOOL-POLICY mode=(\d+)\b', stderr, re.M) != [str(mode)]:
+            return 'bad-inner-metrics'
+        expected = [phase for phase in point['expected_phases']
+                    if phase.startswith(('before-', 'released-'))]
+        phases = re.findall(r'^FFPOOL-MEM phase=([a-z]+-\d+)\b', stderr, re.M)
+        if phases != expected:
+            return 'bad-inner-metrics'
+        totals = re.findall(r'^FF2-GAP-TOTAL issues=(\d+) reuses=(\d+) observer=(\d+)$',
+                            stderr, re.M)
+        pairs = re.findall(r'^FF2-GAP pair=(\d+) a=(\d+) b=(\d+)$', stderr, re.M)
+        if len(totals) != 1 or [int(row[0]) for row in pairs] != list(range(16)):
+            return 'bad-inner-metrics'
+        issues, reuses, observer = map(int, totals[0])
+        if not 0 < reuses <= issues or observer <= 0 or \
+                sum(int(a) + int(b) for _, a, b in pairs) != reuses:
             return 'bad-inner-metrics'
     return 'pass'
 
