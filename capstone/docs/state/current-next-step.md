@@ -7,7 +7,12 @@ first fresh CheriBSD three-repeat campaign hit `Poison probe missing page`
 in the protected arm after three passing spatial controls.
 The same panic also occurs when the protected arm runs first in a fresh guest;
 eagerly touching the pool pages and omitting the final explicit `munmap` did
-not resolve it. Isolate the kernel's missing-page path before treating the
+not resolve it. Subsequent `mlock`, page-`mprotect`, and combined diagnostics
+also hit the same panic. The kernel's poison-probe path panics when
+`pmap_extract_and_hold` finds no page; its current RISC-V implementation only
+looks up L3 mappings, while the pmap can also hold L2 superpages. This is a
+source-level lead, not a proven root cause. Isolate the missing-page path
+before treating the
 CheriBSD pair as measured; retain the
 interrupted guest logs outside the paper dataset. Preserve the adapted-FATE
 label and measure matching pool ledgers and release-gap bins for each arm.

@@ -19,7 +19,9 @@ remux and oracle hashes are in [fate-mpeg4-inputs.json](../../fate-mpeg4-inputs.
 The protected PoisonCap mode triggers `panic: Poison probe missing page
 0x41400480` in a fresh published CheriBSD guest. It does so when run before
 the spatial controls as well. Eagerly touching the pool and omitting the
-final explicit `munmap` did not resolve the panic. The interrupted and
+final explicit `munmap` did not resolve the panic. Later diagnostic binaries
+that locked the pool with `mlock`, changed its page protection with
+`mprotect`, or combined both also hit the same kernel panic. The interrupted and
 diagnostic processes are excluded from the 18 qualified attempts. This is a
 **three-arm functional and lease-gap qualification, not a four-arm FATE memory
 figure**. The earlier [30-frame four-arm decoder campaign](../ffmpeg-reuse-gaps-20260927/README.md)

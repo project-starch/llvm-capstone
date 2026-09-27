@@ -1,5 +1,11 @@
 # Paired application memory studies
 
+The [three-application reuse CDF preview](results/cross-application-reuse-preview-20260928/README.md)
+places the qualified SQLite, mruby and FFmpeg inner-allocator results on one
+paper-width figure with the same all-issues denominator and three independent
+process repetitions per arm. It is derived from existing campaigns; the other
+three application rows remain unqualified.
+
 The [normalized SQLite memory campaign](results/sqlite-normalized-memory-20260927/README.md)
 adds matched original-layout controls, three repeated-work runs per arm, event
 ledgers and address-footprint plots. It reports a reuse advantage for Sublet

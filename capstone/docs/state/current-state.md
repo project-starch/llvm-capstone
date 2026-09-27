@@ -2,6 +2,16 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — Cross-application reuse preview
+
+The [paper-width three-application CDF preview](../../experiments/study/results/cross-application-reuse-preview-20260928/README.md)
+derives from the qualified SQLite memsys5, mruby GC-slot and FFmpeg pool-lease
+four-arm campaigns. It checks three complete process repetitions per arm and
+uses all inner-boundary issues as the denominator. SQLite and mruby separate
+the protected PoisonCap reissue curves from their spatial controls; FFmpeg's
+four curves coincide. It is not a six-application paper result, physical
+working-set comparison or new measurement.
+
 ## 2026-09-28 — PostgreSQL and FFmpeg application-memory follow-up
 
 The PostgreSQL 17.5 `-O1` Capstone original and memory-context Sublet images
