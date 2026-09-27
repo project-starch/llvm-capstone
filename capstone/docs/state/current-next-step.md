@@ -8,6 +8,15 @@ and native result oracle. The present four-arm memory plots fail that build
 gate and remain exploratory. Then qualify the same inner address/byte observer
 and repeated work-unit boundary across the four arms, and freeze the first
 confirmatory matrix.
+Use the [metric specification](../../experiments/study/memory-metrics.md)
+when adding those observers: validate a disjoint byte ledger, capture the
+simultaneous peak vector, and retain eligible unreused lifetimes in the reuse
+denominator. Availability, virtual address history and resident memory are
+distinct results; the present phase counters cannot stand in for all three.
+The requested protected/original normalization also needs matching baseline
+definitions: qualify the original-layout PoisonCap spatial control before
+ranking full adaptation-overhead factors against Sublet. Keep the existing
+PoisonCap adapter-spatial control as a separately identified policy baseline.
 The [memory follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
 adds full-oracle budget attempts and a size-2 scaling check. Resolve the
 published-kernel `Poison probe missing page` panic in protected PoisonCap

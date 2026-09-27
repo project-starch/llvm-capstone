@@ -9,6 +9,11 @@ recognized workload sources; the [platform design](sublet-poisoncap-memory-study
 defines the four matched arms. This document defines experiments, not new
 measurements or a claim that every listed port already qualifies.
 
+The [metric definitions](../../experiments/study/memory-metrics.md) fix byte
+ledger identities, simultaneous peaks, paired denominators, reuse cohorts,
+recovery thresholds and claim limits. They are the normative definitions for
+the figure slots below; a metric name alone does not qualify an existing log.
+
 ## Paper question and comparisons
 
 The thesis to test is: *for repeated useful work, can protection of inner
@@ -104,7 +109,7 @@ observer overflow, and unavailable ports in the planned denominator.
 
 | Experiment | Fixed and varied quantities | Primary figure and falsifiable question |
 |---|---|---|
-| **A. Churn at fixed live demand** | Keep the reference input and retained state fixed. Run 16 consecutive units in one process; report prefixes 1, 4, 16. A 64-unit extension is predeclared for cases whose observer and runtime qualify. Each post-warm-up unit's peak live requested bytes and post-release live bytes must be within 5% of the corresponding 16-unit median; otherwise report this as stateful growth, not fixed-demand churn. | Small multiples of cumulative distinct inner allocation starts and union of their address intervals versus units, plus reuse-delay CDFs. Does the historical address set saturate, or keep growing with completed work? A changing live set disqualifies the “fixed-demand” interpretation. |
+| **A. Churn at fixed live demand** | Keep the reference input and retained state fixed. Run 16 consecutive units in one process; report prefixes 1, 4, 16. A 64-unit extension is predeclared for cases whose observer and runtime qualify. Each post-warm-up unit's peak live requested bytes and post-release live bytes must be within 5% of the corresponding 16-unit median; otherwise report this as stateful growth, not fixed-demand churn. | Allocator bytes unavailable for new requests, withheld bytes, reusable capacity and backing versus useful units. Supporting panels show distinct starts, interval union and retirement-side reuse fractions on a fixed follow-up cohort. Does storage demand stay stable over the observed horizon? A changing live set disqualifies the “fixed-demand” interpretation; address reuse alone does not establish memory savings. |
 | **B. Live-set scaling** | Run four units each at three predeclared, valid application input/retention sizes (`small`, `reference`, `large`). Choose them in native discovery so observed peak inner live requests increase approximately 1×, 2×, 4×; use the observed bytes, not nominal input size, on the x-axis. Do not alter one arm's work to fit memory. | Peak *simultaneous* allocator-held data, reusable capacity, protection metadata, and total allocator reservation versus peak live requested bytes. Does the within-platform protection tax scale with the live set, object count, or rounding? |
 | **C. Burst and recovery** | Four reference units, one unit with 4× the reference live demand, its normal release, then eight reference units in the same process. Preserve any intentional retained graph. | Aligned phase curves for live requests, withheld/quarantined bytes, reusable free bytes, backing grants, and metadata. Report the first post-burst unit returning to the pre-burst envelope, or right-censor at eight. Does freed capacity become usable for subsequent work, and does storage return to the allocator or OS? |
 | **D. Fixed-budget progress** | Repeat A at the reference input under an **identical absolute allocator budget** across the four arms, charged for payload, application metadata, quarantine/snapshots, and protection metadata. Let `B0` be the smallest common successful *spatial-control* allocator budget from a separate discovery grid. Freeze page-rounded `B0 × {1, 1.25, 1.5, 2, 3, 4, 6, 8, 12}` before protected runs; run every point in a fresh process and right-censor above-grid requirements. | Completed units and exact output per budget, with allocation OOM, capability fault, kernel panic, timeout, and observer failure shown separately. What capacity permits the declared work? A panic is not an out-of-memory bound. If a platform component cannot yet be charged or capped, label this experiment provisional rather than reporting a minimum. |
@@ -121,7 +126,7 @@ Record these layers at **the same inner boundary** for all four arms:
 | Layer | Required observations | Meaning |
 |---|---|---|
 | Useful demand | Live and peak requested bytes/objects, allocation and release counts, completed units, output oracle | Logical live allocation set, not cache working set. The four arms must execute comparable requests; report any differences. |
-| Address reuse | Integer `(start, usable size, allocation index, release index)` events, in-place realloc and censored never-reused allocations | Distinct starts, union of allocated address intervals, reuse gaps in allocation calls, and immediate/8/64/512/4096-call reuse fractions. These are virtual address histories, not resident pages. |
+| Address reuse | Integer `(start, usable size, allocation index, release index)` observations, in-place realloc and unreused/insufficient-follow-up counts | Distinct starts, union of allocated address intervals, allocation-side reuse fraction and retirement-side reuse within 1/8/64/512/4096 attempts on a fixed eligible cohort. These are virtual address histories, not resident pages. |
 | Inner allocator state | Rounded live capacity, reusable free capacity, capacity withheld from reuse, grants/returns to parent, high-water capacity | Separate useful live storage, rounding, reusable cache, and quarantine. `held = live + withheld` only where those categories really partition the same backing. |
 | Protection and process storage | Sublet tables and live/retired/reclaimed node counts; PoisonCap link and queue tables, snapshot backing and revoker/page-table state; committed/mapped pages and process RSS where measured | Attribute metadata to the process or platform once, never sum independent peaks. Distinguish fixed reservations, touched pages, allocator-owned bytes, and OS-returned pages. |
 
@@ -142,11 +147,12 @@ Page residency needs measured committed/resident pages. Failure despite free
 capacity needs request-size and free-block geometry before being called
 fragmentation.
 
-For A, give the count of allocations that immediately reuse a start, the
-distance distribution among all successful allocations, and the right-censored
-count. For B/C, report both absolute bytes and protected/spatial differences
-within each platform at matched unit boundaries. Normalize retained excess by
-that run's peak requested live bytes only when the denominator is nonzero.
+For A, keep the allocation-side reuse fraction and retirement-side reuse
+curve separate, using the denominators in the metric definitions. Never
+drop unreused eligible retirements from the latter curve. For B/C, report both
+absolute bytes and protected/spatial differences within each platform at
+matched unit boundaries. Any paired normalization uses the same spatial
+reference denominator for both arms and only when that denominator is nonzero.
 Do not compare an application's high-water mark in one arm with another arm's
 final value. Record drops as well as growth; a late sweep may flatten a curve.
 
@@ -174,9 +180,20 @@ are separately labeled sensitivity experiments after the common campaign.
 
 ## Figures, aggregation, and publication gate
 
-Use the same panel template for each admitted case: A address history/reuse,
+Use the same panel template for each admitted case: A availability and reuse,
 B footprint versus live demand, C phase ledger and recovery, D budget/status.
 Show the four absolute arms and the two within-platform protection deltas.
+The main cross-platform summary uses **protected / spatial on each platform**:
+both baselines equal `1.0x`, with Sublet and PoisonCap factors plotted per
+application for the same declared byte metric. Calculate factors within paired
+repetition blocks, then summarize them. Show absolute bytes alongside these
+factors; the PoisonCap spatial adapter already includes structural adaptation
+cost whereas Capstone's current spatial control uses the original allocator.
+Before comparing these ratios as full protection overhead, qualify an
+original-layout PoisonCap control and record matching `baseline_kind` values
+on both platforms. Preserve the existing adapter-spatial arm for policy
+isolation. The metric specification fixes the exact formula, baseline-scope
+gate and zero-denominator rules.
 The paper's main figure can select one representative app of each allocator
 type, but supplementary figures and a table retain **every predeclared case**
 and failure. Aggregate only after per-app plots: equal weight per application,

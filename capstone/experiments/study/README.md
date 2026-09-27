@@ -190,6 +190,14 @@ and writing its record needs manual reconciliation before resuming that cell.
 
 ## Current verification and next integration
 
+The [memory metric specification](memory-metrics.md) defines the scientific
+endpoints for the four-arm campaign: a disjoint byte ledger, simultaneous
+peaks, fixed reuse cohorts, sustained burst recovery and fixed-budget progress.
+It distinguishes allocator capacity from residency, and address history from
+an access working set. The current pilots do not yet provide every required
+counter; successful execution and build-manifest checks are necessary but
+insufficient for a paper memory claim.
+
 The [SQLite 3.22.0 nested-memory pilot](results/sqlite-322-memory-20260927/README.md)
 qualifies all 32 official `speedtest1 main --size 1` phases across the four
 nested arms against an independent native SQL-result oracle. It preserves

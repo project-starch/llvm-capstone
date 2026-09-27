@@ -34,6 +34,14 @@ Otherwise subtracting the spatial control hides storage needed by both
 PoisonCap modes. An optional original-layout control isolates this adaptation;
 it is not a replacement for the matched control.
 
+For the requested **protected/original ratio**, the
+[metric specification](../../experiments/study/memory-metrics.md) requires
+matching baseline definitions. The current Capstone original-layout spatial
+control and PoisonCap adapter-spatial control cover different adaptation
+costs. An original-layout PoisonCap spatial reference is required before
+ranking full adaptation-overhead factors; preserve the existing layout-matched
+PoisonCap pair for the separate incremental policy question.
+
 For the first inner-boundary experiment, hold automatic outer libc revocation
 off in both PoisonCap modes, as in the existing nested adapters; explicit
 inner revocation remains active. This isolates internal lifetime handling.
