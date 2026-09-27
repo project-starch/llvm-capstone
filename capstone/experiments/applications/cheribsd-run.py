@@ -145,6 +145,8 @@ def main():
     p.add_argument('--rootfs', type=Path)
     p.add_argument('--disk', type=Path)
     p.add_argument('--memory-mib', type=int, default=8192)
+    p.add_argument('--disable-default-revocation', action='store_true',
+                   help='Disable the guest-wide default at boot; arms still set their process policy')
     p.add_argument('--port', type=int, required=True)
     p.add_argument('--points', type=Path, required=True)
     p.add_argument('--out', type=Path, required=True)
@@ -166,7 +168,7 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         vm = args.out/'vm'; vm.mkdir()
         guest = Guest(args.sdk, args.rootfs, args.disk, vm, args.port,
-                      disable_default_revocation=False)
+                      disable_default_revocation=args.disable_default_revocation)
         guest.argv[guest.argv.index('-m')+1] = str(args.memory_mib)
         (vm/'command.json').write_text(json.dumps(guest.argv)+'\n')
         try:
@@ -204,7 +206,11 @@ def execute(args):
                         'root@127.0.0.1:'+guest], check=True, capture_output=True, timeout=120)
         if call('sha256 -q '+shlex.quote(guest)) != spec['sha256']:
             raise RuntimeError('staged input hash mismatch')
+    guest_default = call('sysctl -n security.cheri.runtime_revocation_default')
+    if args.disable_default_revocation and guest_default != '0':
+        raise RuntimeError('guest default revocation was not disabled')
     manifest = dict(boot=boot, platform=platform, files=files,
+                    guest_default_revocation=guest_default,
                     process_environments={p['id']: policy_environment(p) for p in points},
                     runner_sha256=digest(__file__), repeats=args.repeat,
                     allocation_validator_sha256=digest(Path(__file__).with_name('allocation_metrics.py')),

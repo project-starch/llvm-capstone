@@ -30,8 +30,11 @@ The earlier PostgreSQL PoisonCap adapter sweeps every free and is not a valid
 lower-bound memory comparator. The complete-backend variant instead poisons
 at free, retains an external chunk queue, and sweeps before reissue. Its
 protected `SELECT 1` qualification passes with 8,692 hands, 6,097 drops,
-1,619 sweeps and a 525,312-byte peak queue. The full `work.sql` mode-1
-qualification remains open. No four-arm PostgreSQL paper plot or total-memory
+1,619 sweeps and a 525,312-byte peak queue. A full `work.sql` mode-1
+diagnostic was stopped during its first INSERT after more than 53 minutes of
+guest CPU and 7,154 sweeps; it produced no completed SQL oracle and is excluded
+from the study. The current eager reissue policy needs batching or a different
+threshold before full-workload qualification. No four-arm PostgreSQL paper plot or total-memory
 ranking is established. The new build path and limits are in the
 [single-user port](../../ports/postgres/single-user/README.md).
 

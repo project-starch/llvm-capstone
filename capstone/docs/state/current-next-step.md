@@ -1,8 +1,11 @@
-PostgreSQL next (2026-09-28): finish the protected PoisonCap 17.5
-`work.sql` run, then validate both fresh `-O1` Capstone images against the
+PostgreSQL next (2026-09-28): revise the protected PoisonCap 17.5
+queue/sweep policy, then finish its `work.sql` run and validate both fresh
+`-O1` Capstone images against the
 same 22-row native oracle. The PoisonCap chunk queue has passed `SELECT 1`
-but still sweeps frequently because the existing memory contexts reissue
-slots promptly. Preserve queued bytes and sweep counts when tuning its
+but a full-workload diagnostic was stopped during its first INSERT after
+53 minutes of guest CPU and 7,154 sweeps, with no completed SQL oracle.
+It is excluded from paper data. The existing memory contexts reissue slots
+promptly. Preserve queued bytes and sweep counts when tuning its
 threshold; do not quote the old per-free-sweep adapter as a PoisonCap memory
 lower bound. Before a paper plot, use a common phase/work-size schedule and
 account for live payload, reusable and withheld backing, metadata, and
