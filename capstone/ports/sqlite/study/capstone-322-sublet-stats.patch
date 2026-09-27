@@ -1,0 +1,51 @@
+--- a/sqlite3-capstone.c
++++ b/sqlite3-capstone.c
+@@ -23073,6 +23073,14 @@
+ ** Access the static variable through a macro for SQLITE_OMIT_WSD.
+ */
+ #define mem5 GLOBAL(struct Mem5Global, mem5)
++static unsigned long study_live, study_peak, study_oom;
++SQLITE_API void sqlite3_study_snapshot(unsigned long *v){
++  v[0]=study_live;
++  v[1]=study_peak;
++  v[2]=study_oom;
++  v[3]=(unsigned long)mem5.nBlock;
++  v[4]=(unsigned long)mem5.szAtom;
++}
+ 
+ /*
+ ** Assuming mem5.zPool is divided up into an array of Mem5Link
+@@ -23165,7 +23173,7 @@
+   assert( nByte>0 );
+ 
+   /* No more than 1GiB per allocation */
+-  if( nByte > 0x40000000 ) return -1;
++  if( nByte > 0x40000000 ){ study_oom++; return -1; }
+ 
+ #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
+   /* Keep track of the maximum allocation request.  Even unfulfilled
+@@ -23187,6 +23195,7 @@
+   if( iBin>LOGMAX ){
+     testcase( sqlite3GlobalConfig.xLog!=0 );
+     sqlite3_log(SQLITE_NOMEM, "failed to allocate %u bytes", nByte);
++    study_oom++;
+     return -1;
+   }
+   i = mem5.aiFreelist[iBin];
+@@ -23205,6 +23214,8 @@
+     memsys5Link(i+newSize, iBin);
+   }
+   mem5.aCtrl[i] = iLogsize;
++  study_live += (unsigned long)iFullSz;
++  if( study_peak<study_live ) study_peak=study_live;
+ 
+ #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
+   /* Update allocator performance statistics. */
+@@ -23255,6 +23266,7 @@
+ 
+   iLogsize = mem5.aCtrl[iBlock] & CTRL_LOGSIZE;
+   size = 1<<iLogsize;
++  study_live -= (unsigned long)size*mem5.szAtom;
+   assert( iBlock+size-1<(u32)mem5.nBlock );
+ 
+   mem5.aCtrl[iBlock] |= CTRL_FREE;

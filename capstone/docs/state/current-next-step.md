@@ -1,11 +1,12 @@
-Nested application memory study (2026-09-27): qualify the matched SQLite
-3.22.0 memsys5-only comparison in the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md).
-Restore all 32 declared main phases with an independent SQL-result/error oracle;
-verify effective lookaside/heap settings, instrument all quarantine drain paths
-and revoker outcomes, and qualify the same Sublet boundary/version. Keep the
-published and corrected policies separate. Extend the shared runner rather than
-adding VM scripts. PoisonCap plans currently preserve unqualified cells and
-cannot execute through ordinary CheriBSD bindings.
+Nested application memory study (2026-09-27): the [matched SQLite 3.22.0
+pilot](../../experiments/study/results/sqlite-322-memory-20260927/README.md)
+now covers all 32 phases, native-matched SQL results, memsys5-only Sublet,
+effective lookaside/heap settings, and both published and corrected PoisonCap
+quarantine paths. Next diagnose the published-kernel `Poison probe missing page`
+panic at corrected 4.5/7 MiB, qualify more workload sizes and repetitions, and
+move the legacy SQLite domain host to the shared persistent runner. Extend that
+runner rather than adding VM scripts. PoisonCap plans currently preserve
+unqualified cells and cannot execute through ordinary CheriBSD bindings.
 
 mruby upstream lists already passes all four original arms at full work counts.
 Match backing constraints and add internal GC-slot counters before drawing

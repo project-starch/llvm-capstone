@@ -64,6 +64,10 @@ if [[ ! -f "$PATCHED" ]]; then
     bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
 fi
 [[ -f "$PATCHED" ]] || { echo "still no $PATCHED" >&2; exit 1; }
+if grep -q '^#include <sublet/sublet.h>$' "$PATCHED"; then
+  echo "patched amalgamation already contains Sublet; supply a clean source with PATCHED_SQLITE" >&2
+  exit 1
+fi
 
 # Stage the amalgamation's includes side by side so plain #include works.
 cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
@@ -87,6 +91,13 @@ if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
               -I"$REPO_ROOT/capstone/sublet"
               -I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
   echo "== Sublet port applied to this build's amalgamation ($(basename "$SQLITE_SUBLET_PATCH"))"
+fi
+
+# Optional measured-source overlay, applied after the allocator port so a
+# single benchmark can instrument its spatial and Sublet memsys5 variants.
+# The patch lives outside the fetched amalgamation and must match exactly.
+if [ -n "${SQLITE_STUDY_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OBJ_DIR" < "$SQLITE_STUDY_PATCH"
 fi
 
 # ...AND THE HEADER, which this line has always claimed to do and never did (found 2026-09-10 by the

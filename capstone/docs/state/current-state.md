@@ -3,13 +3,29 @@
 Minimal snapshot. Read first in every session.
 
 
-## 2026-09-27 — Nested comparison and benchmark readiness
+## 2026-09-27 — Full SQLite nested-memory pilot and benchmark readiness
+
+The [SQLite 3.22.0 memory pilot](../../experiments/study/results/sqlite-322-memory-20260927/README.md)
+now runs all 32 official `speedtest1 main --size 1` phases on Capstone spatial,
+Capstone + memsys5-only Sublet, PoisonCap spatial, and corrected PoisonCap
+temporal. All four arms match the independent native SQL-result oracle for
+4,301 rows, with lookaside disabled. Selected successful application-visible
+reservations are 1.25, 2.05, 1.53 and 9.11 MiB, respectively. These omit
+platform metadata and are not measured RSS or minimum viable capacities.
+The published PoisonCap full-queue path drained six times without revoking;
+the corrected path drained and revoked six times at 8 MiB. Its 4.5 and 7 MiB
+attempts panic in the published kernel. Figures, attempt statuses, phase data,
+and source/binary/raw-log hashes are preserved with the result; raw VM logs
+remain outside the repository.
+The owned persistent Capstone VM is restored. This pilot still uses the legacy
+SQLite domain host, which boots a guest per attempt; full application PoisonCap
+adapters for other ports remain future work.
 
 The `application-poisoncap-study` branch adds a [Sublet/PoisonCap memory
 study design](../plans/sublet-poisoncap-memory-study.md), a separately pinned
 SQLite 3.22.0 artifact catalog and matched-platform planning. Existing CheriBSD
-on/off results remain the secondary reference. PoisonCap execution qualification
-stays closed until the shared application runner observes the inner policy,
+on/off results remain the secondary reference. Generalized PoisonCap execution
+qualification stays closed until the shared application runner observes the inner policy,
 allocator boundary and all quarantine/revocation paths; outer malloc policy
 cannot substitute for that evidence. Fourteen planner and six runner tests pass.
 
@@ -19,15 +35,15 @@ oracle. Both Capstone arms recover from six allocation failures at a 64 MiB oute
 heap limit; these runs need matched backing budgets and GC-slot counters before
 memory comparison. No PoisonCap mruby application is claimed.
 
-The published PoisonCap SQLite fork builds after supplying header prerequisites.
+The earlier published PoisonCap SQLite fork builds after supplying header prerequisites.
 [Both workload modes complete](../../experiments/study/results/20260927-poisoncap-sqlite.json)
 20 active main phases at size 1 using the preserved published libc and outer
 revocation off. The artifact comments out 12 phases; `--verify` does not check
 main results. Its full-quarantine drain bypasses the explicit revoker call, and
 revocation errors are unchecked. These findings require policy-path accounting
 and an independent result oracle, not a security benchmark. This is not a full
-32-phase reproduction or a Sublet/PoisonCap memory comparison. The owned
-Capstone VM is restored, idle and at 44 live nodes with no retained domains.
+32-phase reproduction or a Sublet/PoisonCap memory comparison. The pilot above
+supersedes that readiness limit.
 
 ## 2026-09-27 — Four-configuration benchmark study foundation
 

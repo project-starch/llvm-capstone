@@ -181,6 +181,16 @@ and writing its record needs manual reconciliation before resuming that cell.
 
 ## Current verification and next integration
 
+The [SQLite 3.22.0 nested-memory pilot](results/sqlite-322-memory-20260927/README.md)
+qualifies all 32 official `speedtest1 main --size 1` phases across the four
+nested arms against an independent native SQL-result oracle. It preserves
+per-phase memory records, three figures, raw-log digests, source/binary hashes
+and failed capacity attempts. The selected passing capacities yield 0.80 MiB
+additional application-visible backing for Sublet within Capstone and 7.58 MiB
+for corrected temporal PoisonCap within its spatial control. Smaller corrected
+PoisonCap trials panic in the published kernel, so these are exploratory
+configuration observations, not minimum-capacity or total-memory claims.
+
 The [upstream mruby lists readiness run](results/20260927-mruby-lists.json)
 passes all four original arms at 300 iterations and 10,000 elements. Prepare
 the pinned fetched source with `prepare-mruby-lists.py --source PATH --out DIR`,
@@ -211,7 +221,7 @@ guest, with the expected state at every phase. See [the checked policy result](r
 The [external evidence archive](results/20260927-archive.json) preserves raw
 attempts, commands and the tested sources, with guest credentials excluded.
 
-Next: qualify mruby's upstream workloads, SQLite speedtest1 and the selected
+Next: qualify mruby's upstream workloads, broader SQLite speedtest1 sizes and the selected
 pyperformance bodies, including internal allocator counters. The existing
 runner contract currently expects textual stdout; binary-output benchmarks
 (such as Mandelbrot PBM output) need exact byte-hash oracles before qualification.

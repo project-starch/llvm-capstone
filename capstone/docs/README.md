@@ -2,12 +2,14 @@
 
 Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
-separate reference data. The [planner](../experiments/study/README.md) supports
-PoisonCap plans but blocks execution qualification pending observed inner-policy
-accounting. Twenty host checks pass. Upstream mruby lists passes 4/4 original
-arms; both PoisonCap SQLite modes complete the artifact's 20 active phases at
-size 1. Twelve phases are commented out in that artifact, and the main
-result oracle is missing. These are readiness results, not a memory ranking.
+separate reference data. The [SQLite 3.22.0 pilot](../experiments/study/results/sqlite-322-memory-20260927/README.md)
+now has 32/32 native-matched SQL phases in all four nested arms, selected
+application-visible backing measurements, a policy-path audit and three memory
+figures. The published PoisonCap path has unrevoked full-queue drains; the
+protected comparator uses a separately identified correction. The
+[planner](../experiments/study/README.md) still blocks generalized PoisonCap
+execution qualification pending shared-runner integration. Upstream mruby
+lists passes 4/4 original arms but lacks a full PoisonCap application adapter.
 
 Application memory behavior: [twelve paired workload configurations](../experiments/applications/results/20260927-reuse/README.md)
 pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU

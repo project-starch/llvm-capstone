@@ -80,21 +80,28 @@ remove the artifact's retained-alias startup demonstration; record that patch.
 No security suite is part of this memory study. A passing SQL run is only a
 functional result until the selected policy and accounting are observed.
 
-The [readiness pilot](../../experiments/study/results/20260927-poisoncap-sqlite.json)
+The earlier [readiness pilot](../../experiments/study/results/20260927-poisoncap-sqlite.json)
 builds both modes and completes the artifact's 20 active main phases at size 1
 on the published libc, with automatic outer revocation off. This is execution
 evidence only: no inner-policy counters or independent main-result oracle were
-added, and no comparison against Sublet was measured. The separate
+added, and no comparison against Sublet was measured then. The subsequent
+[full 32-phase memory pilot](../../experiments/study/results/sqlite-322-memory-20260927/README.md)
+matches an independent native oracle in four nested arms, with effective
+lookaside off, a memsys5-only Sublet backport, per-phase allocator accounting,
+and explicit corrected-policy identity. It reports selected passing memory
+reservations and failure attempts; corrected PoisonCap trials at 4.5 and 7 MiB
+panic in the published kernel, so a minimum capacity is not established. The
+separate
 [mruby lists pilot](../../experiments/study/results/20260927-mruby-lists.json)
 passes the full upstream work count on all four original arms, with explicit
 remaining budget/counter qualification gaps.
 
-Use 3.22.0 for the reproduction anchor: Capstone already has a stock 3.22.0
-port, but a matched memsys5-only Sublet speedtest build still needs qualification.
-Current Sublet SQLite integration is 3.53.3 and covers memsys5 plus lookaside.
-Disable lookaside **effectively in all arms** for the first comparison. Then
-forward-port PoisonCap to the common newer version or backport the matching
-Sublet boundary; never compare 3.22.0 against 3.53.3 as a protection delta.
+Use 3.22.0 for the reproduction anchor: the matched memsys5-only Sublet
+speedtest build is now qualified for the single size-1 pilot. The existing
+newer Sublet SQLite integration is 3.53.3 and covers memsys5 plus lookaside.
+The first comparison disables lookaside **effectively in all arms** and uses
+the 3.22.0 Sublet backport. For later work, keep versions matched; never
+compare 3.22.0 against 3.53.3 as a protection delta.
 A corrected full-queue path must have its own policy identity and evidence;
 keep the published attempt visible. Do not sweep per free as the sole baseline.
 
@@ -144,7 +151,7 @@ rankings until the intended reclamation implementation is available.
 
 | Application and known workload | Current reuse | Missing for primary nested comparison |
 |---|---|---|
-| SQLite `speedtest1` | Both versions have Capstone ports; published PoisonCap source recovered and compiled | Same version, memsys5-only boundary, effective configuration, policy-path counters and SQL oracle |
+| SQLite `speedtest1` | Full 32-phase size-1 pilot passes all four nested arms with native SQL oracle | Shared runner, multiple sizes/repeats, corrected PoisonCap kernel panic diagnosis, matched complete platform metadata |
 | mruby upstream lists / Mandelbrot / AO | Real interpreter in existing four-arm stack; lists now has a pinned output adapter | PoisonCap GC-slot integration; inner slot counters; byte-output oracle for image workloads |
 | CPython pyperformance bodies | Real Capstone interpreter; PoisonCap pymalloc component exists | Link PoisonCap into full interpreter; fixed-work controller; same freelist/GC settings and dependencies |
 | PostgreSQL pgbench | Single-user Capstone backend; PoisonCap context component exists | Full backend integration; matching database lifecycle; pgbench server/client support or explicitly labeled SQL-body subset |
