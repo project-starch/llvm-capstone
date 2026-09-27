@@ -20,17 +20,19 @@ The same persistent Capstone VM also passes 12/12 complete FFmpeg 9.0.1
 decoder attempts on two [adapted FATE MPEG-4 inputs](../../experiments/study/fate-mpeg4-inputs.json)
 at 20 and 150 frames, each with spatial and Sublet pool modes and three
 repetitions. Every run matches the native per-frame oracle. A separate fresh
-CheriBSD PoisonCap guest passed three spatial 20-frame controls, then the
-protected arm hit the published kernel's `Poison probe missing page` panic;
-that interrupted campaign is excluded. A second fresh guest running the
+CheriBSD spatial guest passes 6/6 attempts across the same two inputs and
+three repetitions. For each input the three qualified arms have identical
+32-bin pool lease-gap histograms (262 issues/219 reuses, and 1,852/1,751),
+so these inputs show no Capstone-versus-spatial reuse difference. The
+protected PoisonCap arm hit the published kernel's `Poison probe missing page`
+panic; that interrupted campaign is excluded. A second fresh guest running the
 protected arm first hit the same panic; eagerly touching the 4 MiB pool
 before use and omitting its final explicit `munmap` did not resolve it. The
 generic CheriBSD runner now records `guest-panic` and aborts immediately when
 the serial console reports one; a repeat diagnostic detected this panic four
 seconds into the application attempt. The original FATE bitstreams were
-losslessly remuxed to Matroska for the
-configured decoder, so these are adapted application inputs, not official
-FATE scores.
+losslessly remuxed to Matroska for the configured decoder, so these are
+adapted application inputs, not official FATE scores.
 
 ## 2026-09-28 — CheriBSD CPython complete-interpreter spatial qualification
 
