@@ -24,7 +24,15 @@ size_t __capstone_level0_peak_end(void);
 size_t __capstone_level0_arena_bytes(void);
 #endif
 
+#ifdef EXP_ALLOCATIONS
+void exp_alloc_start(void);
+void exp_alloc_report(const char *);
+#endif
+
 static void report(const char *phase) {
+#ifdef EXP_ALLOCATIONS
+  exp_alloc_report(phase);
+#endif
   char line[640];
 #ifdef EXP_SUBLET
   unsigned long c[9];
@@ -70,6 +78,9 @@ int __wrap_main(int argc, char **argv) {
   if (cpy_sublet_init() < 0) return 124;
 #endif
   if (atexit(at_exit)) return 125;
+#ifdef EXP_ALLOCATIONS
+  exp_alloc_start();
+#endif
   report("startup");
   return __real_main(argc, argv);
 }

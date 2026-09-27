@@ -1,5 +1,11 @@
 # Prompt for continuing this Capstone work in a new chat
 
+Application memory: [Capstone ports versus default CheriBSD](../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The primary matrix is 48/54
+passing (six Capstone node-capacity failures); the separate larger-node mruby
+matrix passes 12/12. Fifteen instrument/runner tests pass. See the contract for
+commands, reservations and limits; these are memory observations, not timings.
+
 Application execution: use the [persistent Linux guest and shared SDK](../runtime/applications.md).
 The one-hart QEMU stack verifies trusted fault/preemption return, process-owned
 reclamation and 1,008 repeated starts after exhaustion in one boot. Perl uses the

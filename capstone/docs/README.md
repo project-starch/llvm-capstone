@@ -1,5 +1,11 @@
 # Capstone project documentation
 
+Application memory: [Capstone ports versus default CheriBSD](../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The primary matrix is 48/54
+passing (six Capstone node-capacity failures); the separate larger-node mruby
+matrix passes 12/12. Fifteen instrument/runner tests pass. See the contract for
+commands, reservations and limits; these are memory observations, not timings.
+
 Application execution: [shared launcher, persistent Linux shell, build commands and limits](../runtime/applications.md).
 
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).

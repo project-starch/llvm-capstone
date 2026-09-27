@@ -75,6 +75,7 @@ def main():
     p.add_argument('--libc-root', type=Path, help='Separate root containing musl-src and musl-build')
     p.add_argument('--include', type=Path, action='append', default=[])
     p.add_argument('--nested', choices=['none', 'cpython', 'mruby'], default='none')
+    p.add_argument('--allocations', action='store_true', help='Count application allocation sizes and address reuse')
     args = p.parse_args()
     input_revision = subprocess.check_output(['git', '-C', REPO, 'rev-parse', args.input_revision+'^{commit}'], text=True).strip()
     root, out = args.root.resolve(), args.out.resolve()
@@ -113,10 +114,14 @@ def main():
     run(['cmake', '--build', sdk, '-j8'])
     probe = out / 'memory.o'
     defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_PYMALLOC'] if args.nested == 'cpython' else [])
+    if args.allocations: defines += ['-DEXP_ALLOCATIONS', '-DEXP_CAPSTONE']
     run([sdk / 'capstone-cc', '-O1', *defines,
          '-c', HERE / 'memory.c', '-o', probe])
     image = out / (args.app + '.dom')
     extra = []
+    if args.allocations:
+        extra += ['-O1', *defines, HERE / 'allocations.c',
+                  '-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=free']
     if args.nested != 'none':
         extra += ['-O1', '-Wl,--wrap=__capstone_region', *defines, '-I',
                   REPO / 'capstone/runtime/include', HERE / 'regions.c']
@@ -127,7 +132,9 @@ def main():
         if args.app == 'ffmpeg': extra += ['-I', REPO / 'capstone/ports/ffmpeg/app/src/shared']
     run([sdk / 'capstone-cc', '-Wl,--wrap=main,--wrap=write', probe, *extra, *objects, '-o', image])
     run([args.toolchain / 'bin/llvm-objcopy', '--strip-debug', image])
-    manifest = dict(application=args.app, heap=args.heap, nested=args.nested, recipe_revision=input_revision,
+    manifest = dict(application=args.app, allocations=args.allocations,
+                    allocations_sha256=sha(HERE / 'allocations.c') if args.allocations else None,
+                    heap=args.heap, nested=args.nested, recipe_revision=input_revision,
                     runtime_revision=subprocess.check_output(['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip(),
                     runtime_dirty=bool(subprocess.check_output(['git', '-C', REPO, 'status', '--porcelain'])),
                     arena_bytes=args.arena, heap_log=args.heap_log,

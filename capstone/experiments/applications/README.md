@@ -9,6 +9,10 @@ the configured FFmpeg decode application, and tshark. The design discussion
 and plotting script are in nested-allocators-paper's
 `eval/application-memory` branch, `experiments/application-exploration/`.
 
+The follow-up [CheriBSD comparison](comparison.md) builds the same FFmpeg and
+mruby applications against default CheriBSD. Shared counters measure requested
+bytes and address reuse; its runner reuses the common guest.
+
 ## Build and run
 
 Source `capstone/tests/capstone-test-env.sh` first. Use the existing per-port
@@ -152,6 +156,7 @@ The paper branch `eval/application-memory` contains all compact attempt records,
 six PNG/PDF figures and the detailed analysis in
 `experiments/application-exploration/results/2026-09-27/`. Its `archive.json`
 fingerprints the durable raw archive, including binaries and input objects.
-No CheriBSD comparison or hardware timing is claimed. Native output oracles,
+The initial discovery below does not include CheriBSD or hardware timing; the
+separate default-CheriBSD campaign is documented above. Native output oracles,
 four native runtime tests, twelve host CLI tests, eleven runner tests, heap
 calibration and the 128-file capacity/reuse gate pass.

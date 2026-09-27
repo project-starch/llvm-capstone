@@ -1,5 +1,11 @@
 # Capstone test/run instructions for future agent sessions
 
+Application memory: [Capstone ports versus default CheriBSD](../../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The primary matrix is 48/54
+passing (six Capstone node-capacity failures); the separate larger-node mruby
+matrix passes 12/12. Fifteen instrument/runner tests pass. See the contract for
+commands, reservations and limits; these are memory observations, not timings.
+
 Application execution: use the [installed persistent guest and shared SDK](../../runtime/applications.md).
 Start a VM once with `capstone-vm up`, use its Linux shell or `capstone-vm run`,
 and run the common gate in that existing boot. The standard workflow does not

@@ -16,6 +16,7 @@ import signal
 import subprocess
 import sys
 import time
+from allocation_metrics import allocation_samples, valid_allocations
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -54,6 +55,8 @@ def verdict(point, rc, timed_out, stdout, stderr, result):
     if point.get('expected_phases') is not None:
         if [x['phase'] for x in samples] != point['expected_phases']: return 'missing-phases'
     if not samples or any(x['live'] > x['peak'] for x in samples): return 'bad-metrics'
+    if point.get('allocations') and not valid_allocations(stderr, point['expected_phases']):
+        return 'bad-allocation-metrics'
     return 'pass'
 
 def main():
@@ -78,7 +81,8 @@ def main():
     (args.out / 'points.json').write_text(json.dumps(points, indent=2)+'\n')
     manifest = dict(boot_id=boot, platform=config['identity'], repeats=args.repeat,
                     timeout_seconds=args.timeout, points_sha256=digest(args.points),
-                    runner_sha256=digest(Path(__file__)), timing='host wall time; diagnostic only')
+                    runner_sha256=digest(Path(__file__)),
+                    allocation_validator_sha256=digest(HERE / 'allocation_metrics.py'), timing='host wall time; diagnostic only')
     manifest['guest_launcher_sha256'] = call(['exec', 'sha256sum', '/usr/bin/capstone-exec']).split()[0]
     inputs = {}
     for point in points:
@@ -144,6 +148,7 @@ def main():
                                   host_seconds=elapsed, memory=memory, before=before, after=after,
                                   image_sha256=digest(image), stdout_sha256=digest(directory/'stdout'),
                                   stderr_sha256=digest(directory/'stderr'))
+                    record['allocations'] = allocation_samples(stderr)
                     record['inner_memory'] = [dict((k, v if k == 'phase' else int(v))
                         for k, v in (word.split('=', 1) for word in line.split()[1:]))
                         for line in stderr.splitlines() if line.startswith('EXP-INNER ')]

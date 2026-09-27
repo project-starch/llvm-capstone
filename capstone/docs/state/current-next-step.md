@@ -3,9 +3,13 @@ Application workload discovery (2026-09-27): the
 has checked workloads across six applications and prepared tshark inputs.
 Prioritize node reuse within a continuing protected interpreter before claiming
 bounded metadata over long runs. PostgreSQL's larger workload needs FileFallocate
-support; tshark needs its full dependency build restored. Pair the same useful
-work with CheriBSD once its guest is accessible, matching protection scopes and
-the complete memory ledger. QEMU timings do not establish performance; inspect
+support; tshark needs its full dependency build restored. Matching default
+CheriBSD runs now cover FFmpeg and mruby: use the [shared comparison
+contract](../../experiments/applications/comparison.md) for requested bytes,
+address reuse and allocator retention. Extend this exact default-only method to
+the remaining ports. Account for complete reservations before claiming a total
+memory advantage; the six larger-mruby failures at 65,536 nodes remain visible
+even though all four mruby workloads pass with 262,144 nodes. QEMU timings do not establish performance; inspect
 the paper branch `eval/application-memory` for the exploratory plots and failures.
 
 Application execution (2026-09-26): the persistent **one-hart QEMU** lifecycle,

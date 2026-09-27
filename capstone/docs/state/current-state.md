@@ -2,6 +2,33 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-27 — Default CheriBSD application memory comparison
+
+The same FFmpeg 9.0.1 decoder and mruby 4.0.0-rc2 workloads now run on Capstone
+Sublet malloc and default CheriBSD purecap, with shared requested-byte and address
+reuse counters. No allocator-policy variants or forced drains are used. The
+primary matrix has 54 attempts: 27/27 CheriBSD pass; Capstone at 65,536 nodes has
+21 pass and six larger-mruby signals. All 12 mruby repeats pass at 262,144 nodes,
+recorded separately. All 39 Capstone launches return zero live domains, regions
+and bytes. Fifteen instrument/runner tests pass, including failed realloc,
+calloc overflow, observer-table exhaustion and false-pass rejection.
+
+Sixteen independent 30-frame streams perform 11,680 allocation calls on either
+platform. They use 178 distinct start addresses on Capstone versus 2,803 on
+CheriBSD (15.7 times fewer, identical across three repeats). Observed requested
+bytes return to zero on both. Capstone occupied blocks return to zero; CheriBSD's
+allocated ledger retains 8,590,776 bytes. Capstone separately reserves an 8 MiB
+logical pool from a 16 MiB grant plus 1,343,636 bytes of static allocator tables.
+Both observers add 1.5 MiB of static address-history storage. These findings do
+not establish lower total RSS, bounded in-process node use, or a general
+fragmentation advantage. Hardware timings are not measured.
+
+See the [comparison contract](../../experiments/applications/comparison.md).
+The paper's `eval/application-memory` branch contains five figures and all 66
+attempts under `experiments/application-exploration/results/2026-09-27-default-cheribsd/`.
+Only these two applications have matching default-CheriBSD measurements so far;
+the earlier six-application discovery below is a separate campaign.
+
 ## 2026-09-27 — Application memory workload discovery
 
 The `application-memory-experiments` lane adds one Python build/link adapter and
