@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — CheriBSD CPython complete-interpreter spatial qualification
+
+A fresh CPython 3.13.7 purecap build with ordinary pymalloc now links on
+CheriBSD. Its pinned build recipe, source adjustments and stdlib zip are in
+the [CheriBSD interpreter port](../../ports/cpython/interpreter/cheribsd/README.md).
+The clean recipe build runs the existing JSON/GC `objects.py 8 3 0` workload
+in the guest and prints `EXP-OK cpython 552` with all expected phase markers.
+This is a functional spatial baseline only. The PoisonCap pymalloc component
+has not yet been integrated into the complete interpreter, and no paired
+CPython memory plot is established.
+
 ## 2026-09-28 — PostgreSQL complete-backend memory qualification
 
 The PostgreSQL 17.5 single-user backend now builds in Capstone spatial,

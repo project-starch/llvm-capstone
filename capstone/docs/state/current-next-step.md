@@ -10,6 +10,16 @@ Capstone node storage in each pair. `work.sql` is a qualification workload,
 not pgbench. Keep this study off a PR until the broader experiment set is
 ready. See the [complete-backend port](../../ports/postgres/single-user/README.md).
 
+CPython next (2026-09-28): merge the existing PoisonCap pymalloc lifetime
+hooks with the verified complete-interpreter CheriBSD spatial port. The
+component patches overlap the interpreter's capability-safe `obmalloc`
+changes, so qualify their combined source and an application workload before
+claiming a protected arm. Then rebuild the Capstone original/Sublet pair and
+the CheriBSD spatial/PoisonCap pair at matched release settings, preserve exact
+JSON/GC oracles, and add inner-pymalloc memory ledgers. The current
+[CheriBSD port](../../ports/cpython/interpreter/cheribsd/README.md) is a
+functional spatial baseline, not a four-arm paper result.
+
 Nested application memory study (2026-09-27): the [normalized SQLite campaign](../../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
 now passes the build gate with an original-layout CheriBSD denominator and
 all 12 repeated-work attempts. Sublet has a reproducible address-reuse advantage
