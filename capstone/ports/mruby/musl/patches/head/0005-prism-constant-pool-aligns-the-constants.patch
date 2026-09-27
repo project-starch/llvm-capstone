@@ -1,0 +1,64 @@
+pm_constant_pool.c: the constants array starts aligned after the buckets.
+
+The pool keeps its buckets (8 bytes each) and its constants (a pointer and a
+length) in one allocation, the constants directly after the buckets. At
+capacity 1 they start 8 bytes in, which a 16-byte capability cannot use. The
+buckets' part is now rounded up to the constants' alignment, in both
+pm_constant_pool_init and pm_constant_pool_resize. Prism is a submodule of
+mruby (lib/prism); this patch applies inside it.
+
+--- a/mrbgems/mruby-compiler/lib/prism/src/util/pm_constant_pool.c
++++ b/mrbgems/mruby-compiler/lib/prism/src/util/pm_constant_pool.c
+@@ -119,6 +119,19 @@
+ #endif
+ 
+ /**
++ * The constants follow the buckets in one allocation. Round the buckets' part
++ * up to the constants' alignment: a pm_constant_t holds a pointer, and where a
++ * pointer is a 16-byte capability (Capstone, CHERI) a pool of capacity 1 put
++ * the constants 8 bytes in, and the first store of a start pointer faulted as a
++ * misaligned capability store.
++ */
++static inline size_t
++pm_constant_pool_buckets_size(uint32_t capacity) {
++    const size_t align = __alignof__(pm_constant_t);
++    return (capacity * sizeof(pm_constant_pool_bucket_t) + align - 1) & ~(align - 1);
++}
++
++/**
+  * Resize a constant pool to a given capacity.
+  */
+ static inline bool
+@@ -129,13 +142,13 @@
+     if (next_capacity < pool->capacity) return false;
+ 
+     const uint32_t mask = next_capacity - 1;
+-    const size_t element_size = sizeof(pm_constant_pool_bucket_t) + sizeof(pm_constant_t);
++    const size_t buckets_size = pm_constant_pool_buckets_size(next_capacity);
+ 
+-    void *next = xcalloc(next_capacity, element_size);
++    void *next = xcalloc(1, buckets_size + next_capacity * sizeof(pm_constant_t));
+     if (next == NULL) return false;
+ 
+     pm_constant_pool_bucket_t *next_buckets = next;
+-    pm_constant_t *next_constants = (void *)(((char *) next) + next_capacity * sizeof(pm_constant_pool_bucket_t));
++    pm_constant_t *next_constants = (void *)(((char *) next) + buckets_size);
+ 
+     // For each bucket in the current constant pool, find the index in the
+     // next constant pool, and insert it.
+@@ -181,12 +194,12 @@
+     if (capacity >= ((maximum / 2) + 1)) return false;
+ 
+     capacity = next_power_of_two(capacity);
+-    const size_t element_size = sizeof(pm_constant_pool_bucket_t) + sizeof(pm_constant_t);
+-    void *memory = xcalloc(capacity, element_size);
++    const size_t buckets_size = pm_constant_pool_buckets_size(capacity);
++    void *memory = xcalloc(1, buckets_size + capacity * sizeof(pm_constant_t));
+     if (memory == NULL) return false;
+ 
+     pool->buckets = memory;
+-    pool->constants = (void *)(((char *)memory) + capacity * sizeof(pm_constant_pool_bucket_t));
++    pool->constants = (void *)(((char *)memory) + buckets_size);
+     pool->size = 0;
+     pool->capacity = capacity;
+     return true;
