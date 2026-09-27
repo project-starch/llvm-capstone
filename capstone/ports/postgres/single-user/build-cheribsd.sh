@@ -81,4 +81,67 @@ if [[ $MODE == poisoncap ]]; then
   "$CHERI_SDK/bin/llvm-nm" src/backend/postgres | grep ' pg_poisoncap_init$' > /dev/null
 fi
 "$CHERI_SDK/bin/llvm-strip" --strip-all -o "$ROOT/postgres" src/backend/postgres
+python3 - "$MODE" "$ROOT" "$TARBALL" "$CC" "$FLAGS" "$HERE" "$MANAGER" "$CHERI_SDK" "$CHERI_SYSROOT" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import re
+import shlex
+import sys
+
+mode, root, archive, compiler, flags, recipe, manager, sdk, sysroot = sys.argv[1:]
+root, archive, recipe, manager, sdk, sysroot = map(
+    Path, (root, archive, recipe, manager, sdk, sysroot))
+
+def sha256(path):
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+def one_patch(directory, pattern):
+    matches = list(directory.glob(pattern))
+    if len(matches) != 1:
+        raise ValueError(f'expected one patch for {pattern}: {matches}')
+    return matches[0]
+
+patches = [one_patch(recipe / 'patches', f'{number}-*.patch') for number in
+           ('0001', '0002', '0004', '0005', '0007', '0008', '0009',
+            '0010', '0011', '0012', '0013', '0016')]
+if mode == 'poisoncap':
+    patches += [one_patch(manager / 'patches', f'postgresql-17.0-{number}-*.patch')
+                for number in ('0003', '0004', '0005', '0006', '0007')]
+inputs = [*patches, recipe / 'cheribsd-compat.py', recipe / 'build-cheribsd.sh']
+if mode == 'poisoncap':
+    inputs += [recipe / 'poisoncap-app.c', manager / 'src/cheribsd/poisoncap.c']
+config = root / 'postgresql-17.5/src/include/pg_config.h'
+settings = config.read_text()
+def setting(name):
+    match = re.search(rf'^#define {name} (\d+)\b', settings, re.MULTILINE)
+    if not match:
+        raise ValueError(f'{name} missing from {config}')
+    return int(match.group(1))
+
+if setting('MAXIMUM_ALIGNOF') != 16 or setting('SIZEOF_VOID_P') != 16:
+    raise ValueError('the purecap application ABI is not the matched 16-byte layout')
+manifest = {
+    'schema': 1,
+    'application': 'postgresql-17.5',
+    'mode': mode,
+    'poisoncap_policy': 'reuse-or-block-release-triggered-batch' if mode == 'poisoncap' else None,
+    'source_archive_sha256': sha256(archive),
+    'pg_config_sha256': sha256(config),
+    'pointer_bytes': setting('SIZEOF_VOID_P'),
+    'maxalign_bytes': setting('MAXIMUM_ALIGNOF'),
+    'compiler_sha256': sha256(sdk / 'bin/clang'),
+    'sysroot': str(sysroot.resolve()),
+    'compiler_argv': shlex.split(compiler),
+    'cflags': shlex.split(flags),
+    'inputs_sha256': {
+        str(path.relative_to(recipe.parent.parent)
+            if path.is_relative_to(recipe.parent.parent) else path): sha256(path)
+        for path in inputs
+    },
+    'binary_sha256': sha256(root / 'postgres'),
+}
+(root / 'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+PY
 echo "$ROOT/postgres"
