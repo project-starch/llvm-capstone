@@ -321,7 +321,11 @@ void pym_backing_stats(struct pym_header *h) {
   h->arenas = arena_allocations;
   h->arena_frees = arena_releases;
   h->metadata = pym_metadata_used();
+#ifdef PYMALLOC_APP_MEMORY
+  fprintf(stderr, "PYM_POISONCAP mode=%u sweeps=%zu poison_bytes=%zu clear_bytes=%zu "
+#else
   printf("PYM_POISONCAP mode=%u sweeps=%zu poison_bytes=%zu clear_bytes=%zu "
+#endif
          "zeroed_bytes=%zu copied_bytes=%zu snapshot_peak=%zu reclasses=%zu pointer_bytes=%zu\n",
          protected_mode, sweeps, poison_bytes, cleared_bytes, zeroed_bytes, copied_bytes,
          snapshot_peak, reclassifications, sizeof(void *));

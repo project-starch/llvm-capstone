@@ -62,6 +62,22 @@ class VerdictTests(unittest.TestCase):
                                       'FFPOOL-MEM phase=before-0')):
             self.assertEqual(runner.verdict(point, 0, 'OK\n', broken), 'bad-inner-metrics')
 
+    def test_cpython_requires_matching_inner_policy_report(self):
+        point = dict(self.point, application='cpython', arm='poisoncap-temporal',
+                     nested_allocator='cpython-pymalloc', mode=1, revocation=0)
+        stderr = (self.metrics.replace('revocation=1', 'revocation=0') +
+                  'PYM_INTERPRETER_POLICY mode=1 payload_reservation=67108864 '
+                  'metadata_reservation=16777216\n'
+                  'PYM_POISONCAP mode=1 sweeps=2 poison_bytes=16 clear_bytes=16 '
+                  'zeroed_bytes=16\n')
+        self.assertEqual(runner.verdict(point, 0, 'OK\n', stderr), 'pass')
+        for broken in (stderr.replace('mode=1', 'mode=0'),
+                       stderr.replace('sweeps=2', 'sweeps=0'),
+                       stderr.replace('metadata_reservation=16777216',
+                                      'metadata_reservation=0')):
+            self.assertEqual(runner.verdict(point, 0, 'OK\n', broken),
+                             'bad-inner-metrics')
+
 
 class PolicyTests(unittest.TestCase):
     def point(self, arm, enabled):
@@ -103,6 +119,19 @@ class PolicyTests(unittest.TestCase):
                     runner.policy_environment(broken)
             with self.assertRaises(ValueError):
                 runner.policy_environment(dict(point, revocation=1))
+
+    def test_cpython_poisoncap_mode_is_runner_owned(self):
+        for arm, mode in (('poisoncap-spatial', 0), ('poisoncap-temporal', 1)):
+            point = self.point(arm, 0)
+            point.update(application='cpython', nested_allocator='cpython-pymalloc',
+                         mode=mode)
+            env = runner.policy_environment(point)
+            self.assertEqual(env['PYM_POISONCAP_MODE'], str(mode))
+            self.assertEqual(env['_RUNTIME_REVOCATION_DISABLE'], '1')
+            with self.assertRaises(ValueError):
+                runner.policy_environment(dict(point, mode=1-mode))
+            with self.assertRaises(ValueError):
+                runner.policy_environment(dict(point, environment={'PYM_POISONCAP_MODE': str(mode)}))
 
 
 class GuestPanicTests(unittest.TestCase):

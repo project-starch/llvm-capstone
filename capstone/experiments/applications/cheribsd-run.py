@@ -51,17 +51,23 @@ def policy_environment(point):
             mode = 2 if arm == 'poisoncap-temporal' else 0
             if point.get('mode') != mode or not point.get('argv') or point['argv'][-1] != str(mode):
                 raise ValueError('FFmpeg pool arm and application mode disagree')
+        elif boundary == ('cpython', 'cpython-pymalloc'):
+            expected[arm] = 0
+            if point.get('mode') != int(arm == 'poisoncap-temporal'):
+                raise ValueError('CPython pymalloc arm and application mode disagree')
         else:
             raise ValueError('PoisonCap arm needs a qualified application boundary')
     if arm not in expected or point['revocation'] != expected[arm]:
         raise ValueError('arm and expected revocation state disagree')
     environment = point['environment']
     if any(k.startswith(('_RUNTIME_', 'MALLOC_', 'EXP_CHERI_')) for k in environment) or \
-            'MRB_GC_POISONCAP' in environment:
+            'MRB_GC_POISONCAP' in environment or 'PYM_POISONCAP_MODE' in environment:
         raise ValueError('allocator overrides must come from the named study arm')
     environment = dict(environment)
     if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'mruby-gc':
         environment['MRB_GC_POISONCAP'] = '1' if arm == 'poisoncap-temporal' else '0'
+    if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'cpython-pymalloc':
+        environment['PYM_POISONCAP_MODE'] = '1' if arm == 'poisoncap-temporal' else '0'
     if arm != 'cheribsd-default':
         switch = 'ENABLE' if expected[arm] else 'DISABLE'
         environment['_RUNTIME_REVOCATION_' + switch] = '1'
@@ -142,6 +148,15 @@ def verdict(point, rc, stdout, stderr, stdout_raw=None):
         if not 0 < reuses <= issues or observer <= 0 or \
                 sum(int(a) + int(b) for _, a, b in pairs) != reuses:
             return 'bad-inner-metrics'
+    if point.get('nested_allocator') == 'cpython-pymalloc':
+        mode = int(point['arm'] == 'poisoncap-temporal')
+        policy = re.findall(r'^PYM_INTERPRETER_POLICY mode=(\d+) payload_reservation=(\d+) metadata_reservation=(\d+)$', stderr, re.M)
+        report = re.findall(r'^PYM_POISONCAP mode=(\d+) sweeps=(\d+) poison_bytes=(\d+) clear_bytes=(\d+) ', stderr, re.M)
+        if len(policy) != 1 or len(report) != 1 or \
+                tuple(map(int, policy[0])) != (mode, 64 << 20, 16 << 20) or \
+                int(report[0][0]) != mode or \
+                (mode and (int(report[0][1]) == 0 or int(report[0][2]) == 0)):
+            return 'bad-inner-metrics'
     return 'pass'
 
 
@@ -209,6 +224,7 @@ def execute(args):
                 raise ValueError('conflicting guest input: '+guest)
             files[guest] = dict(host=host, sha256=digest(host))
     for guest, spec in files.items():
+        call('mkdir -p '+shlex.quote(str(Path(guest).parent)))
         subprocess.run(['scp', '-O', *options, '-P', str(args.port), spec['host'],
                         'root@127.0.0.1:'+guest], check=True, capture_output=True, timeout=120)
         if call('sha256 -q '+shlex.quote(guest)) != spec['sha256']:
