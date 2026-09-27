@@ -12,7 +12,7 @@
  * environment are built in: the domain reads them from two files the host
  * writes before each run, one entry per line,
  *
- *   /mnt/host/pg-args    argv[1..]; argv[0] is PGSU_ARGV0, the image on the share
+ *   /mnt/host/pg-args    argv[1..]; argv[0] names the staged image for this arm
  *   /mnt/host/pg-env     NAME=value, exported before main runs
  *
  * and echoes each line it took to stderr, so a run shows what it ran with.
@@ -36,7 +36,11 @@
    when the directory is named bin, which is why the shared runner stages the image
    under bin/ and the native share/ beside it. */
 #ifndef PGSU_ARGV0
+#ifdef PGSU_NESTED
+#define PGSU_ARGV0 "/mnt/host/bin/postgres-sublet.dom"
+#else
 #define PGSU_ARGV0 "/mnt/host/bin/postgres.dom"
+#endif
 #endif
 enum { LINES_MAX = 32, LINE_MAX_BYTES = 512 };
 #include <unistd.h>

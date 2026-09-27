@@ -101,7 +101,10 @@ if stage runtime; then
     fi
     "$CAPSTONE_CLANG" "${COMMON_FLAGS[@]}" -c "$RT/compiler-rt/lib/builtins/$b.c" -o "$O/int128-$b.o"
   done
-  "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O1 -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$O/domain_entry.o"
+  ENTRY_DEFINES=()
+  if [[ $NESTED == sublet ]]; then ENTRY_DEFINES=(-DPGSU_NESTED=1); fi
+  "$CAPSTONE_CLANG" "${CF[@]}" "${ENTRY_DEFINES[@]}" -std=c11 -O1 \
+    -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$O/domain_entry.o"
   log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, level0 arena $ARENA bytes"
 fi
 
