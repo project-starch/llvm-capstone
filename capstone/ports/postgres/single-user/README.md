@@ -38,6 +38,16 @@ The older direct-link adapter remains available without the batch definition
 for its existing defect checks; it sweeps on every free and must not be used
 as a lower-bound cost for PoisonCap.
 
+For a pristine Capstone input cluster, run
+`python3 capstone/ports/postgres/single-user/build-native16-fixture.py`
+after sourcing the test environment. It builds a native PostgreSQL 17.5
+fixture generator at `-O1` with the domain's 16-byte `MAXIMUM_ALIGNOF` and
+matching 16-byte chunk-header layout, then runs upstream `initdb` with C
+locale, GMT and System V DSM. The fresh root and cluster remain under
+`$CAPSTONE_TMP_ROOT`; its manifest records the archive, patch, binaries and
+cluster-tree hashes. Copy the untouched cluster for each application attempt.
+An ordinary 8-byte-MAXALIGN native cluster cannot be used by either domain.
+
 ## Running and checking
 
 Use the common persistent Capstone application VM or the common CheriBSD
@@ -45,8 +55,13 @@ Use the common persistent Capstone application VM or the common CheriBSD
 initialized by a **16-byte MAXALIGN backend**. A conventional native cluster
 uses a different on-disk alignment and is not interchangeable. Supply
 `timezone=GMT`, `log_timezone=GMT`, `shared_buffers=4MB`,
-`max_connections=10`, and `dynamic_shared_memory_type=posix` to `--single`;
-pass `work.sql` on standard input. CheriBSD needs the guest's ordinary
+`max_connections=10` to `--single`. The Capstone application SDK backend
+uses `dynamic_shared_memory_type=sysv`, because its single-process System V
+segment service is implemented and file-backed `mmap` is not. Pass the
+`--single` arguments and `PG_SINGLE_INPUT=/mnt/host/.../work.sql` directly
+through the shared application runner; set `PGSU_DOMAIN=1` for the domain's
+synthetic uid 0. The CheriBSD backend uses `dynamic_shared_memory_type=posix`
+with the same SQL input. CheriBSD needs the guest's ordinary
 revocation default disabled while the adapter's explicit sweeps remain on.
 
 Compare each result with an independent native 17.5 `work.sql` result using
