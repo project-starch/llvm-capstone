@@ -1,5 +1,13 @@
 # Paired application memory studies
 
+The [adapted FFmpeg FATE four-arm qualification](results/ffmpeg-fate-four-arm-20260928/README.md)
+passes 24/24 complete decoder processes on two known input cases. A narrow
+CheriBSD L2-superpage lookup fix removes the published kernel's poison-probe
+panic; both CheriBSD arms use the same patched kernel. Lease-reuse bins remain
+identical across all arms, while the PoisonCap temporal adapter uses transient
+snapshot backing. This selected component does not establish a total-memory
+advantage.
+
 The [three-application reuse CDF preview](results/cross-application-reuse-preview-20260928/README.md)
 places the qualified SQLite, mruby and FFmpeg inner-allocator results on one
 paper-width figure with the same all-issues denominator and three independent

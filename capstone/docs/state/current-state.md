@@ -2,6 +2,19 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — FFmpeg adapted-FATE four-arm qualification
+
+The [checked four-arm campaign](../../experiments/study/results/ffmpeg-fate-four-arm-20260928/README.md)
+passes 24/24 complete FFmpeg 9.0.1 decoder processes over two adapted FATE
+inputs, with three exact-oracle repetitions per arm and input. The original
+published CheriBSD kernel's poison-probe panic was traced to a missing L2
+superpage case in RISC-V `pmap_extract_and_hold()`. A narrow patch fixes the
+lookup; both CheriBSD arms were rerun on the same patched kernel. All four
+arms have identical pool lease-gap bins for each input. The protected
+PoisonCap adapter peaks at 224.4 and 167.1 KiB of selected snapshot backing;
+these are not total-memory results. The CPython protected interpreter still
+hits its separate `share->excl` kernel panic with this patch.
+
 ## 2026-09-28 — Cross-application reuse preview
 
 The [paper-width three-application CDF preview](../../experiments/study/results/cross-application-reuse-preview-20260928/README.md)
@@ -47,8 +60,9 @@ seconds into the application attempt. The original FATE bitstreams were
 losslessly remuxed to Matroska for the configured decoder, so these are
 adapted application inputs, not official FATE scores.
 The [archived 18/18 three-arm qualification](../../experiments/study/results/ffmpeg-fate-qualification-20260928/README.md)
-preserves accepted raw runs and the excluded panic separately. It cannot be
-rendered as a four-arm FATE memory figure.
+preserves accepted raw runs and the excluded panic separately. At that point it
+could not be rendered as a four-arm FATE memory figure; the later patched-kernel
+campaign above supersedes that qualification for the four-arm input.
 
 ## 2026-09-28 — CheriBSD CPython complete-interpreter spatial qualification
 

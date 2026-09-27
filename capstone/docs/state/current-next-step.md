@@ -1,21 +1,15 @@
-FFmpeg FATE follow-up (2026-09-28): the [archived three-arm qualification](../../experiments/study/results/ffmpeg-fate-qualification-20260928/README.md)
-shows the Capstone spatial/Sublet pair passes
-12/12 complete 20- and 150-frame decoder runs with native output hashes in
-one VM boot; the CheriBSD spatial arm passes 6/6 further matched runs. The
-three passing arms have identical pool lease-gap bins for each input. The
-first fresh CheriBSD three-repeat campaign hit `Poison probe missing page`
-in the protected arm after three passing spatial controls.
-The same panic also occurs when the protected arm runs first in a fresh guest;
-eagerly touching the pool pages and omitting the final explicit `munmap` did
-not resolve it. Subsequent `mlock`, page-`mprotect`, and combined diagnostics
-also hit the same panic. The kernel's poison-probe path panics when
-`pmap_extract_and_hold` finds no page; its current RISC-V implementation only
-looks up L3 mappings, while the pmap can also hold L2 superpages. This is a
-source-level lead, not a proven root cause. Isolate the missing-page path
-before treating the
-CheriBSD pair as measured; retain the
-interrupted guest logs outside the paper dataset. Preserve the adapted-FATE
-label and measure matching pool ledgers and release-gap bins for each arm.
+FFmpeg FATE follow-up (2026-09-28): the [archived four-arm qualification](../../experiments/study/results/ffmpeg-fate-four-arm-20260928/README.md)
+passes 24/24 complete decoder processes on two adapted FATE inputs, each with
+three exact-oracle repetitions. The original published CheriBSD kernel's
+`Poison probe missing page` panic was caused by RISC-V
+`pmap_extract_and_hold()` omitting valid L2 superpages. A narrow source patch
+now holds the constituent page; both CheriBSD spatial and protected arms were
+rerun on the same patched kernel. All four arms have identical 32-bin pool
+lease-reuse histograms per input. The selective PoisonCap temporal adapter
+peaks at 224.4 and 167.1 KiB of snapshot backing; this selected component is
+not a total-memory ranking. Preserve the adapted-FATE label and the original
+panic as excluded evidence. Next build a common requested/live/backing ledger
+and an original-layout CheriBSD control before ranking full adaptation cost.
 
 PostgreSQL next (2026-09-28): revise the protected PoisonCap 17.5
 queue/sweep policy, then finish its `work.sql` run. Both fresh `-O1` Capstone
@@ -54,8 +48,9 @@ CPython next (2026-09-28): the [archived complete-interpreter qualification](../
 now passes Capstone spatial/Sublet 3/3 each and CheriBSD PoisonCap-adapter
 spatial 3/3 at `-O1`, all with the same JSON/GC oracle. The PoisonCap
 component is integrated into the complete interpreter, but protected mode 1
-triggers the published kernel's `share->excl` VM-map lock panic both after a
-control and when run first in a fresh guest. Isolate and correct that kernel
+triggers the kernel's `share->excl` VM-map lock panic both after a
+control and when run first in a fresh guest; it still panics on the patched
+FFmpeg kernel. Isolate and correct that kernel
 path before accepting a protected process. Then add inner-pymalloc
 issue/release, backing and metadata ledgers; the present outer counters cannot
 support a four-arm CPython memory figure. The [CheriBSD port](../../ports/cpython/interpreter/cheribsd/README.md)

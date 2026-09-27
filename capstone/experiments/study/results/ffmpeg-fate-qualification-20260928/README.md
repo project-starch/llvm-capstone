@@ -1,5 +1,9 @@
 # FFmpeg adapted-FATE decoder qualification
 
+Later, the [four-arm patched-kernel campaign](../ffmpeg-fate-four-arm-20260928/README.md)
+qualified the protected arm on these same inputs. This document preserves the
+original published-kernel failure and its three-arm baseline.
+
 The complete FFmpeg 9.0.1 Matroska/MPEG-4 decoder passes **18/18** checked
 application processes on two adapted FATE inputs. Each of the three qualified
 arms—Capstone pool original, Capstone pool Sublet, and CheriBSD PoisonCap
