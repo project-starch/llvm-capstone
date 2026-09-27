@@ -20,8 +20,12 @@ postgres` supplies a separate 64 MiB inner arena and its counters.
 or `poisoncap`, and a distinct `PG_CHERI_ROOT` per mode. It applies the same
 application ABI patches as the Capstone build where relevant, pins
 `MAXIMUM_ALIGNOF=16`, and rebuilds `src/port/qsort.o` after the tag-preserving
-swap patch. The PoisonCap variant links the existing memory-context hook
-backend, with a quarantine policy selected for the complete application.
+swap patch. Study builds require a fresh root; `PG_CHERI_REUSE=1` permits an
+explicit development rebuild, refreshes the adapter sources, and records root
+reuse in `manifest.json`. Each build also records the archive, applied patches,
+compiler, ABI settings and binary hashes. The PoisonCap variant links the
+existing memory-context hook backend, with a quarantine policy selected for
+the complete application.
 Set `PG_POISONCAP_MODE=0` for its original-layout control or `1` for poison,
 sweep and detox. The two modes use the same binary and context layout.
 

@@ -9,6 +9,14 @@ source "$HERE/../../../tests/capstone-test-env.sh" >/dev/null
 MODE=${PG_CHERI_MODE:-spatial}
 case "$MODE" in spatial|poisoncap) ;; *) echo "PG_CHERI_MODE=$MODE?" >&2; exit 2;; esac
 ROOT=${PG_CHERI_ROOT:-$CAPSTONE_TMP_ROOT/pg-cheribsd-$MODE}
+REUSED_ROOT=0
+if [[ -e $ROOT ]]; then
+  [[ ${PG_CHERI_REUSE:-0} == 1 ]] || {
+    echo "build root exists: $ROOT (use a fresh root, or PG_CHERI_REUSE=1 for development)" >&2
+    exit 2
+  }
+  REUSED_ROOT=1
+fi
 TARBALL=${1:-$CAPSTONE_TMP_ROOT/pg-mmgr-host/pg.tar.bz2}
 JOBS=${JOBS:-12}
 MANAGER=$HERE/../memory-contexts
@@ -51,8 +59,6 @@ if [[ ! -f config.status ]]; then
   grep -q '^#define MAXIMUM_ALIGNOF 8$' src/include/pg_config.h
   sed -i 's/^#define MAXIMUM_ALIGNOF 8$/#define MAXIMUM_ALIGNOF 16/' src/include/pg_config.h
   if [[ $MODE == poisoncap ]]; then
-    cp "$MANAGER/src/cheribsd/poisoncap.c" src/backend/poisoncap.c
-    cp "$HERE/poisoncap-app.c" src/backend/poisoncap-app.c
     python3 - <<'PY'
 from pathlib import Path
 p = Path('src/backend/Makefile')
@@ -65,6 +71,12 @@ s += 'override LDFLAGS += -Wl,--wrap=main\n'
 p.write_text(s)
 PY
   fi
+fi
+if [[ $MODE == poisoncap ]]; then
+  # Reused roots must not retain a diagnostic copy of either adapter source.
+  # Copy before make so its dependency rule recompiles any changed source.
+  cp "$MANAGER/src/cheribsd/poisoncap.c" src/backend/poisoncap.c
+  cp "$HERE/poisoncap-app.c" src/backend/poisoncap-app.c
 fi
 make -C src/backend generated-headers > "$ROOT/headers.log" 2>&1
 # The qsort object must see the capability-safe swap in patch 0013. PostgreSQL
@@ -81,7 +93,7 @@ if [[ $MODE == poisoncap ]]; then
   "$CHERI_SDK/bin/llvm-nm" src/backend/postgres | grep ' pg_poisoncap_init$' > /dev/null
 fi
 "$CHERI_SDK/bin/llvm-strip" --strip-all -o "$ROOT/postgres" src/backend/postgres
-python3 - "$MODE" "$ROOT" "$TARBALL" "$CC" "$FLAGS" "$HERE" "$MANAGER" "$CHERI_SDK" "$CHERI_SYSROOT" <<'PY'
+python3 - "$MODE" "$ROOT" "$TARBALL" "$CC" "$FLAGS" "$HERE" "$MANAGER" "$CHERI_SDK" "$CHERI_SYSROOT" "$REUSED_ROOT" <<'PY'
 import hashlib
 import json
 from pathlib import Path
@@ -89,7 +101,7 @@ import re
 import shlex
 import sys
 
-mode, root, archive, compiler, flags, recipe, manager, sdk, sysroot = sys.argv[1:]
+mode, root, archive, compiler, flags, recipe, manager, sdk, sysroot, reused_root = sys.argv[1:]
 root, archive, recipe, manager, sdk, sysroot = map(
     Path, (root, archive, recipe, manager, sdk, sysroot))
 
@@ -126,6 +138,7 @@ manifest = {
     'schema': 1,
     'application': 'postgresql-17.5',
     'mode': mode,
+    'reused_source_root': bool(int(reused_root)),
     'poisoncap_policy': 'reuse-or-block-release-triggered-batch' if mode == 'poisoncap' else None,
     'source_archive_sha256': sha256(archive),
     'pg_config_sha256': sha256(config),
