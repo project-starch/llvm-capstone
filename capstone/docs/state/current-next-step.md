@@ -3,7 +3,8 @@ FFmpeg FATE follow-up (2026-09-28): the Capstone spatial/Sublet pair passes
 one VM boot. The first fresh CheriBSD three-repeat campaign hit `Poison probe
 missing page` in the protected arm after three passing spatial controls.
 The same panic also occurs when the protected arm runs first in a fresh guest;
-eagerly touching the pool pages did not resolve it. Isolate the kernel's
+eagerly touching the pool pages and omitting the final explicit `munmap` did
+not resolve it. Isolate the kernel's
 missing-page path before treating the CheriBSD pair as measured; retain the
 interrupted guest logs outside the paper dataset. Preserve the adapted-FATE
 label and measure matching pool ledgers and release-gap bins for each arm.
