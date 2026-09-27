@@ -52,6 +52,25 @@ class StudyTests(unittest.TestCase):
         self.assertIn(self.key, blocked)
         self.assertEqual(sum(r['counts']['unqualified'] for r in study.summary(self.plan, {}, {})), 8)
 
+    def test_poisoncap_is_a_distinct_matched_platform(self):
+        plan = study.make_plan(self.catalog, 'nested', ['suite'], 2, 7, comparison='nested-poisoncap')
+        self.assertEqual(len(plan['cells']), 8)
+        self.assertEqual({c['platform'] for c in plan['cells']}, {'capstone', 'poisoncap'})
+        self.assertEqual({c['arm'] for c in plan['cells']}, set(study.COMPARISONS['nested-poisoncap']))
+        self.assertEqual(sum(r['counts']['unqualified'] for r in study.summary(plan, {}, {})), 8)
+        with self.assertRaises(ValueError):
+            study.make_plan(self.catalog, 'outer-malloc', ['suite'], 2, 7, comparison='nested-poisoncap')
+        with self.assertRaises(ValueError): study.platform('invented-arm')
+
+    def test_poisoncap_cannot_reuse_default_cheribsd_qualification(self):
+        plan = study.make_plan(self.catalog, 'nested', ['suite'], 2, 7, comparison='nested-poisoncap')
+        for guest in ('capstone', 'poisoncap'):
+            points, blocked = study.emit(plan, {}, guest, {})
+            self.assertEqual(points, [])
+            self.assertIn('not yet qualified', blocked[self.key])
+        with self.assertRaisesRegex(ValueError, 'not yet qualified'):
+            study.emit(plan, self.bindings, 'poisoncap', {})
+
     def test_explicit_size_matrix_changes_plan_and_denominator(self):
         matrix = {'suite/lists': {'small': {'operations': 100}, 'large': {'operations': 1000}}}
         plan = study.make_plan(self.catalog, 'nested', ['suite'], 2, 7, matrix)

@@ -3,6 +3,32 @@
 Minimal snapshot. Read first in every session.
 
 
+## 2026-09-27 — Nested comparison and benchmark readiness
+
+The `application-poisoncap-study` branch adds a [Sublet/PoisonCap memory
+study design](../plans/sublet-poisoncap-memory-study.md), a separately pinned
+SQLite 3.22.0 artifact catalog and matched-platform planning. Existing CheriBSD
+on/off results remain the secondary reference. PoisonCap execution qualification
+stays closed until the shared application runner observes the inner policy,
+allocator boundary and all quarantine/revocation paths; outer malloc policy
+cannot substitute for that evidence. Fourteen planner and six runner tests pass.
+
+[Upstream mruby lists](../../experiments/study/results/20260927-mruby-lists.json)
+passes 4/4 original arms at the full 300 × 10,000 work count with a native output
+oracle. Both Capstone arms recover from six allocation failures at a 64 MiB outer
+heap limit; these runs need matched backing budgets and GC-slot counters before
+memory comparison. No PoisonCap mruby application is claimed.
+
+The published PoisonCap SQLite fork builds after supplying header prerequisites.
+[Both workload modes complete](../../experiments/study/results/20260927-poisoncap-sqlite.json)
+20 active main phases at size 1 using the preserved published libc and outer
+revocation off. The artifact comments out 12 phases; `--verify` does not check
+main results. Its full-quarantine drain bypasses the explicit revoker call, and
+revocation errors are unchecked. These findings require policy-path accounting
+and an independent result oracle, not a security benchmark. This is not a full
+32-phase reproduction or a Sublet/PoisonCap memory comparison. The owned
+Capstone VM is restored, idle and at 44 live nodes with no retained domains.
+
 ## 2026-09-27 — Four-configuration benchmark study foundation
 
 The `application-benchmark-study` branch adds a [pinned candidate catalog and

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "reviewed": "2026-09-27",
+  "applications": {
+    "sqlite": {
+      "version": "3.22.0",
+      "scope": "SQL application workloads; published-artifact reproduction anchor",
+      "nested": "memsys5 only; effective lookaside disable required"
+    }
+  },
+  "suites": [
+    {
+      "id": "sqlite-poisoncap-speedtest1",
+      "application": "sqlite",
+      "title": "Published PoisonCap SQLite speedtest1",
+      "kind": "upstream-performance-with-published-adaptations",
+      "source": {
+        "url": "https://github.com/Yuecheng-CAM/Ajs38RO4Vz-p",
+        "revision": "731c5720d1a6321d436a8d7b85bf3aa2e4971fe0",
+        "sha256": "c5e8b07d4f70ed8cc1ecf04193ceacc5266553a2cbd233e6fa51fb8f0d190b9c",
+        "release": "SQLite 3.22.0",
+        "subdirectory": "sqlite"
+      },
+      "cases": [
+        "main"
+      ],
+      "adaptation_status": "not-qualified",
+      "blockers": [
+        "Matched memsys5-only Sublet application build at SQLite 3.22.0.",
+        "Verify effective allocator configuration and independent SQL-output oracle.",
+        "Instrument quarantine drain paths and revocation failures before protected cost claims.",
+        "Shared application runner needs observed inner-mode and platform identity contract."
+      ],
+      "documentation": "https://arxiv.org/html/2605.13210v1"
+    }
+  ]
+}

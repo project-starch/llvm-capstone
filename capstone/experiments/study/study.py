@@ -15,10 +15,24 @@ import re
 
 HERE = Path(__file__).resolve().parent
 ARMS = ('capstone', 'capstone-sublet', 'cheribsd-revocation-on', 'cheribsd-revocation-off')
+COMPARISONS = {
+    'cheribsd': ARMS,
+    'nested-poisoncap': ('capstone', 'capstone-sublet', 'poisoncap-spatial', 'poisoncap-temporal'),
+}
+ARM_PLATFORMS = {arm: arm.split('-')[0] for group in COMPARISONS.values() for arm in group}
+POISONCAP_GATE = ('PoisonCap application execution is not yet qualified: require matched '
+                 'allocator boundaries, observed inner policy, quarantine-path accounting, '
+                 'and pinned kernel/libc/SDK identities. Component replays do not qualify.')
+
+
+def arms(plan):
+    return COMPARISONS[plan.get('comparison', 'cheribsd')]
 
 
 def platform(arm):
-    return 'cheribsd' if arm.startswith('cheribsd') else 'capstone'
+    if arm not in ARM_PLATFORMS:
+        raise ValueError('unknown study arm: '+arm)
+    return ARM_PLATFORMS[arm]
 
 
 def identity(value):
@@ -43,9 +57,13 @@ def write_new(path, value):
         stream.write('\n')
 
 
-def make_plan(catalog, profile, suites, repeats, seed, matrix=None):
+def make_plan(catalog, profile, suites, repeats, seed, matrix=None, comparison='cheribsd'):
     if profile not in ('nested', 'outer-malloc') or repeats < 1:
         raise ValueError('explicit profile and positive repetitions required')
+    if comparison not in COMPARISONS or (comparison == 'nested-poisoncap' and profile != 'nested'):
+        raise ValueError('PoisonCap comparison requires the nested profile')
+    selected_arms = COMPARISONS[comparison]
+    guests = tuple(dict.fromkeys(platform(a) for a in selected_arms))
     known = {s['id']: s for s in catalog['suites']}
     if not suites or len(set(suites)) != len(suites) or set(suites) - known.keys():
         raise ValueError('select unique known suites')
@@ -70,15 +88,17 @@ def make_plan(catalog, profile, suites, repeats, seed, matrix=None):
     # Repeat is the block. Both arms of a platform share one boot; record the
     # shuffled order, and alternate platform order between repetition blocks.
     for repeat in range(repeats):
-        for guest in (('capstone', 'cheribsd') if repeat % 2 == 0 else ('cheribsd', 'capstone')):
+        for guest in (guests if repeat % 2 == 0 else tuple(reversed(guests))):
             block = [dict(workload=key, arm=arm, platform=guest, repetition=repeat)
-                     for key in workloads for arm in ARMS if platform(arm) == guest]
+                     for key in workloads for arm in selected_arms if platform(arm) == guest]
             rng.shuffle(block)
             for cell in block:
                 cell['id'] = identity(cell)[:20]
                 cells.append(cell)
     result = dict(schema_version=1, profile=profile, seed=seed, repeats=repeats,
                   catalog_sha256=identity(catalog), workloads=workloads, cells=cells)
+    if comparison != 'cheribsd':
+        result.update(schema_version=2, comparison=comparison)
     result['plan_id'] = identity(result)
     return result
 
@@ -91,6 +111,8 @@ def check_plan(plan):
 
 def qualified_points(plan, key, binding):
     """Check four artifacts as one comparison, never qualify just the winner."""
+    if plan.get('comparison', 'cheribsd') == 'nested-poisoncap':
+        raise ValueError(POISONCAP_GATE)
     spec = plan['workloads'][key]
     suite = spec['suite']
     if binding['source'] != suite['source']:
@@ -189,7 +211,8 @@ def emit(plan, bindings, guest, rows, repeat=None):
         raise ValueError('repetition is outside the plan')
     for key in plan['workloads']:
         if key not in bindings:
-            blocked[key] = 'No qualified four-arm binding'
+            blocked[key] = (POISONCAP_GATE if plan.get('comparison') == 'nested-poisoncap'
+                            else 'No qualified four-arm binding')
             continue
         # Invalid supplied evidence is an error, never an unavailable benchmark.
         qualified[key] = qualified_points(plan, key, bindings[key])
@@ -217,7 +240,7 @@ def check_bindings(rows, bindings):
 def summary(plan, rows, bindings):
     result = []
     for key in plan['workloads']:
-        for arm in ARMS:
+        for arm in arms(plan):
             counts = Counter()
             for cell in plan['cells']:
                 if cell['workload'] != key or cell['arm'] != arm:
@@ -236,6 +259,8 @@ def main():
     planning = sub.add_parser('plan')
     planning.add_argument('--catalog', type=Path, default=HERE/'catalog.json')
     planning.add_argument('--profile', choices=['nested', 'outer-malloc'], required=True)
+    planning.add_argument('--comparison', choices=COMPARISONS, default='cheribsd',
+                          help='PoisonCap supports planning only until application qualification')
     planning.add_argument('--suites', nargs='+', required=True)
     planning.add_argument('--repeat', type=int, default=3)
     planning.add_argument('--seed', type=int, default=1)
@@ -247,7 +272,7 @@ def main():
         cmd.add_argument('--bindings', type=Path, required=True)
         cmd.add_argument('--runs', type=Path, nargs='*', default=[])
         if name == 'points':
-            cmd.add_argument('--platform', choices=['capstone', 'cheribsd'], required=True)
+            cmd.add_argument('--platform', choices=['capstone', 'cheribsd', 'poisoncap'], required=True)
             cmd.add_argument('--repetition', type=int)
             cmd.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
@@ -257,7 +282,7 @@ def main():
         return
     if args.command == 'plan':
         plan = make_plan(read(args.catalog), args.profile, args.suites, args.repeat, args.seed,
-                         read(args.matrix) if args.matrix else None)
+                         read(args.matrix) if args.matrix else None, args.comparison)
         write_new(args.out, plan)
         print(f"{len(plan['cells'])} planned attempts; plan {plan['plan_id']}")
         return

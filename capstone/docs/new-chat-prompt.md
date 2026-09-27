@@ -1,9 +1,13 @@
 # Prompt for continuing this Capstone work in a new chat
 
-Application benchmark study: [four-configuration catalog and planner](../experiments/study/README.md)
-separate internal Sublet integration from outer-malloc experiments. Known suites
-remain unqualified. Eighteen host checks and five real CheriBSD on/off policy
-smokes pass; both policies use the same application binary in one guest.
+Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
+uses two matched pairs for the nested boundary; default CheriBSD on/off remains
+separate reference data. The [planner](../experiments/study/README.md) supports
+PoisonCap plans but blocks execution qualification pending observed inner-policy
+accounting. Twenty host checks pass. Upstream mruby lists passes 4/4 original
+arms; both PoisonCap SQLite modes complete the artifact's 20 active phases at
+size 1. Twelve phases are commented out in that artifact, and the main
+result oracle is missing. These are readiness results, not a memory ranking.
 
 Application memory behavior: [twelve paired workload configurations](../experiments/applications/results/20260927-reuse/README.md)
 pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU

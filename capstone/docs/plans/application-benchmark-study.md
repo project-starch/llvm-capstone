@@ -3,7 +3,10 @@
 Status: candidate suite catalog, four-arm planner and explicit CheriBSD process
 policy controls implemented. Standard-suite adapters are not yet qualified.
 This is memory-behavior work, with no security ranking, allocation-event replay,
-PoisonCap, or emulator-time performance claims.
+or emulator-time performance claims. This document describes the original
+default-CheriBSD reference comparison. The primary nested-allocator comparison
+now follows the [Sublet/PoisonCap design](sublet-poisoncap-memory-study.md), with
+its own matched spatial control and explicit qualification gates.
 
 ## Questions and comparisons
 

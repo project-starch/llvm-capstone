@@ -107,7 +107,14 @@
         "Add independently checked output oracles and phase sampling without changing workload bodies.",
         "Revalidate GC-slot Sublet integration on the current VM; malloc counters alone do not measure GC slots."
       ],
-      "documentation": "https://github.com/mruby/mruby/tree/9d523e2f74f2e63ca02840937523de61398a617d/benchmark"
+      "documentation": "https://github.com/mruby/mruby/tree/9d523e2f74f2e63ca02840937523de61398a617d/benchmark",
+      "case_readiness": {
+        "bm_so_lists.rb": {
+          "status": "four-arm-functional-pass",
+          "evidence": "results/20260927-mruby-lists.json",
+          "qualified_memory_comparison": false
+        }
+      }
     },
     {
       "id": "perl-core",

@@ -1,9 +1,18 @@
-Application benchmark study (2026-09-27): qualify mruby upstream benchmarks,
-SQLite speedtest1 and selected pyperformance bodies using the [four-arm study
-contract](../../experiments/study/README.md). Add exact byte-output oracles and
-matched internal-allocator counters. Keep the outer-malloc profile separate;
-Perl internal integration, PostgreSQL server support and FFmpeg encoding/CLI
-coverage remain explicit gaps. [Benchmark selection and rollout](../plans/application-benchmark-study.md).
+Nested application memory study (2026-09-27): qualify the matched SQLite
+3.22.0 memsys5-only comparison in the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md).
+Restore all 32 declared main phases with an independent SQL-result/error oracle;
+verify effective lookaside/heap settings, instrument all quarantine drain paths
+and revoker outcomes, and qualify the same Sublet boundary/version. Keep the
+published and corrected policies separate. Extend the shared runner rather than
+adding VM scripts. PoisonCap plans currently preserve unqualified cells and
+cannot execute through ordinary CheriBSD bindings.
+
+mruby upstream lists already passes all four original arms at full work counts.
+Match backing constraints and add internal GC-slot counters before drawing
+memory conclusions; the 64 MiB Capstone pilot recovers from six allocation
+failures per arm. Extend known workloads and full-application PoisonCap adapters
+according to the design's readiness table. Retain the CheriBSD on/off reference,
+original failures and existing no-timing limits.
 
 Application memory measurements (2026-09-27): use the [checked reuse and retention metrics](../../experiments/applications/memory-behavior.md)
 and [72 passing application attempts](../../experiments/applications/results/20260927-reuse/README.md).
@@ -26,8 +35,8 @@ PostgreSQL's larger workload needs FileFallocate
 support; tshark needs its full dependency build restored. Matching default
 CheriBSD runs now cover FFmpeg and mruby: use the [shared comparison
 contract](../../experiments/applications/comparison.md) for requested bytes,
-address reuse and allocator retention. Extend this exact default-only method to
-the remaining ports. Account for complete reservations before claiming a total
+address reuse and allocator retention. Extend this default-CheriBSD reference method to
+the remaining ports alongside the separate nested comparison. Account for complete reservations before claiming a total
 memory advantage. Keep the original six mruby failures and larger-node control
 visible as historical data, alongside the separately identified fixed-QEMU runs.
 QEMU timings do not establish performance; inspect

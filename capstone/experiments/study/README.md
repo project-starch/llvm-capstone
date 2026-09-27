@@ -1,4 +1,4 @@
-# Four-configuration application memory study
+# Paired application memory studies
 
 This directory organizes known application benchmarks using the existing
 persistent-guest runners. `catalog.json` records candidate suites, source pins,
@@ -11,6 +11,12 @@ is yet qualified for a four-configuration published comparison. Previous
 FFmpeg/mruby discovery results remain useful but are not renamed as standard
 benchmarks. The [research and execution plan](../../docs/plans/application-benchmark-study.md)
 explains benchmark selection, measurement layers and the rollout.
+
+For the nested-lifetime comparison, use the [Sublet/PoisonCap study
+design](../../docs/plans/sublet-poisoncap-memory-study.md). It identifies the
+published SQLite source, matched platform controls, policy audit findings,
+cost plots and missing application integrations. The existing default-CheriBSD
+pair remains a separate reference; it is not the PoisonCap spatial control.
 
 ## Comparisons
 
@@ -27,6 +33,26 @@ addresses the internal-allocator paper question. The outer-malloc profile is
 a separate comparison continuing the earlier experiments. Neither means
 disabling the Capstone ISA. Level0 is the SDK's arena allocator, not jemalloc;
 cross-platform differences include allocator policy and OS/runtime differences.
+
+`--comparison nested-poisoncap --profile nested` instead plans `capstone`,
+`capstone-sublet`, `poisoncap-spatial` and `poisoncap-temporal`. PoisonCap has its
+own platform identity and repetition blocks. **This comparison supports planning
+only:** `points` preserves unavailable cells and explains the qualification gap;
+it cannot relabel ordinary CheriBSD binaries as PoisonCap applications. Extending
+the shared runner with observed inner mode and policy-path accounting is required
+before this gate opens. The existing `--comparison cheribsd` is the default, and
+existing plan identities remain valid.
+
+The separate `catalog-poisoncap.json` pins the published SQLite 3.22.0 anchor.
+It does not silently substitute it for the current 3.53.3 application catalog:
+
+```sh
+python3 capstone/experiments/study/study.py plan \
+  --comparison nested-poisoncap --profile nested \
+  --catalog capstone/experiments/study/catalog-poisoncap.json \
+  --suites sqlite-poisoncap-speedtest1 --repeat 3 --seed 20260927 \
+  --out "$STUDY_ROOT/poisoncap-plan.json"
+```
 
 CheriBSD uses one kernel, libc, application binary and inputs for both arms.
 Only `_RUNTIME_REVOCATION_ENABLE=1` versus `_RUNTIME_REVOCATION_DISABLE=1`
@@ -155,8 +181,29 @@ and writing its record needs manual reconciliation before resuming that cell.
 
 ## Current verification and next integration
 
-The planner has twelve tests for pairing, matrix identity, missing controls,
+The [upstream mruby lists readiness run](results/20260927-mruby-lists.json)
+passes all four original arms at 300 iterations and 10,000 elements. Prepare
+the pinned fetched source with `prepare-mruby-lists.py --source PATH --out DIR`,
+then run the generated script unchanged on each interpreter. The adapter adds
+per-iteration checks, two phase writes and final text output, without forcing
+GC. An independent native Ruby run supplies the preserved output oracle.
+Both Capstone arms recover from six allocation failures at their 64 MiB outer
+heap budget. These are functional passes, not a qualified nested-memory ranking:
+backing budgets and internal-slot counters still need matching.
+
+The [PoisonCap source/build audit](results/20260927-poisoncap-source-audit.json)
+records source and binary hashes, the published quarantine paths, and the
+header prerequisites needed to compile its SQLite fork. It is separate from
+application qualification.
+The [two SQLite execution smokes](results/20260927-poisoncap-sqlite.json)
+complete the artifact's 20 active main phases at size 1; twelve are commented
+out and the main result oracle is absent. The
+[external readiness archive](results/20260927-poisoncap-archive.json) preserves
+the commands, raw output, builds and tested sources, excluding guest credentials.
+
+The planner has fourteen tests for pairing, matrix identity, missing controls,
 scope, input/observer/oracle identity, and preservation of failed attempts.
+They also reject substitution of ordinary CheriBSD qualification for PoisonCap.
 Six CheriBSD runner tests cover false passes and explicit policy selection.
 The real policy smoke uses existing FFmpeg/mruby discovery images, not known
 benchmark results: both on/off pairs and a subsequent on process pass in one
