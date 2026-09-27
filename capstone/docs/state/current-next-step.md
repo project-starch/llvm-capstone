@@ -21,9 +21,13 @@ fills the release-gap slot for memsys5, and the [FFmpeg whole-decoder
 follow-up](../../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
 fills it for actual pool leases. FFmpeg's four arms have equal reuse bins
 over 36 passing full-application processes; its selective PoisonCap adapter
-still performs explicit per-granule poison/clear and copy operations. Next admit another complete
-application boundary with the same logical-release and output-oracle contract,
-and qualify a broader recognized FFmpeg input set. Do not substitute
+still performs explicit per-granule poison/clear and copy operations. The
+[mruby AO GC-slot campaign](../../experiments/study/results/mruby-gc-memory-20260927/README.md)
+now admits a third complete boundary with 24/24 native-PPM-matched processes
+at two AO sizes. Next extend the recognized AO work-size range toward the
+upstream default, qualify a broader FFmpeg input
+set, and bring another full application allocator into the paired comparison.
+Do not substitute
 outer-malloc address data for inner-pool reuse. Before a total-memory claim,
 measure Capstone node and PoisonCap revocation storage in comparable units;
 the current SQLite CDF runs provision 4,194,304 emulator nodes and omit those
@@ -60,12 +64,14 @@ now repeats every PoisonCap cell three times. Next widen the input corpus
 toward FFmpeg FATE and report complete platform metadata.
 The plot keeps Capstone outer-heap and PoisonCap jemalloc ledgers separate.
 
-mruby upstream lists already passes all four original arms at full work counts.
-Match backing constraints and add internal GC-slot counters before drawing
-memory conclusions; the 64 MiB Capstone pilot recovers from six allocation
-failures per arm. Extend known workloads and full-application PoisonCap adapters
-according to the design's readiness table. Retain the CheriBSD on/off reference,
-original failures and existing no-timing limits.
+mruby now has a full-interpreter GC-slot Sublet/PoisonCap comparison on upstream
+AO at widths 8 and 16, with exact PPM output and per-slot gap counters. Its Sublet
+metadata and post-render page retention remain a counterexample to a blanket
+memory-footprint win. Measure multiple AO sizes and selected physical backing,
+then admit lists or another upstream benchmark under the same four-arm
+contract. The generic `study.py` PoisonCap binding gate still needs qualified
+artifact emission; the direct shared runners already execute this case.
+Retain the CheriBSD on/off reference, original failures and no-timing limits.
 
 Application memory measurements (2026-09-27): use the [checked reuse and retention metrics](../../experiments/applications/memory-behavior.md)
 and [72 passing application attempts](../../experiments/applications/results/20260927-reuse/README.md).

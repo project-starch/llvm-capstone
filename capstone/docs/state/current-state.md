@@ -2,6 +2,25 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-27 — mruby GC-slot four-arm memory behavior
+
+The [full mruby 4.0.0-rc2 AO-render campaign](../../experiments/study/results/mruby-gc-memory-20260927/README.md)
+passes 24/24 independent native-PPM-matched processes at widths 8 and 16: three repetitions of
+Capstone spatial GC, real per-slot Sublet GC, PoisonCap spatial GC, and an
+explicit PoisonCap temporal GC adapter. Every arm issues 217,070 slots at
+width 8 and 915,981 at width 16. Sublet and PoisonCap spatial have identical
+32-bin release-gap histograms at both sizes. Within 1,023 subsequent issues,
+Sublet reissues 75.38%/75.54% of slots at widths 8/16, versus 1.31%/1.95%
+for the temporal PoisonCap adapter.
+PoisonCap temporal peaks at nine GC page groups versus six in its spatial
+control at both sizes; Sublet peaks at six versus six. The peak groups stay
+flat across 4.22× more slot issues, within this tested range. Sublet's per-page metadata and its
+retention of all-dead groups are countercosts, so this is a logical-reuse and
+selected GC-page result, not a total-memory ranking. The process-level
+CheriBSD jemalloc ledger excludes the mmap GC pages, and Capstone node
+storage is not charged. The generic `study.py` PoisonCap binding gate remains
+closed, although the shared guest runners now execute and validate this case.
+
 ## 2026-09-27 — Normalized SQLite repeated-work memory
 
 The [complete FFmpeg 9.0.1 decoder lease-gap study](../../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)

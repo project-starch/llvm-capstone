@@ -28,7 +28,7 @@ def main():
     (args.out/'workload.json').write_text(json.dumps(dict(
         suite='mruby-upstream', case='bm_ao_render.rb', source_sha256=SOURCE_SHA256,
         generated_sha256=hashlib.sha256(code.encode()).hexdigest(),
-        default_width=64, tested_widths=[16],
+        default_width=64, tested_widths=[8,16],
         adaptation='Two stderr phase markers only; render body, constants and binary PPM output unchanged.'),
         indent=2)+'\n')
 

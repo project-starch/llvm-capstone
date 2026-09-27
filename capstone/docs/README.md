@@ -25,11 +25,15 @@ artifact. The
 [FFmpeg lease-gap campaign](../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
 repeats the four full-decoder arms at three workload sizes; all 36 runs pass
 frame oracles and all four arms have equal observed pool reuse bins. The
+[mruby GC-slot campaign](../experiments/study/results/mruby-gc-memory-20260927/README.md)
+adds a complete interpreter benchmark: 24/24 AO-render processes at two widths
+match native PPM oracles, and Sublet preserves prompt slot reuse where the explicit
+PoisonCap temporal adapter delays it. The selected GC-page metadata and
+post-render retention countercosts are reported alongside the advantage. The
 [full-application campaign contract](plans/application-memory-campaign.md)
 fixes the same four memory experiments for each admitted benchmark. The
 [planner](../experiments/study/README.md) still blocks generalized PoisonCap
-execution qualification pending shared-runner integration. Upstream mruby
-lists passes 4/4 original arms but lacks a full PoisonCap application adapter.
+binding qualification; mruby AO uses the shared guest runners directly.
 
 Application memory behavior: [twelve paired workload configurations](../experiments/applications/results/20260927-reuse/README.md)
 pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU

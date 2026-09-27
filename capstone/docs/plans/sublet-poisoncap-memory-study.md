@@ -42,11 +42,13 @@ costs. An original-layout PoisonCap spatial reference is required before
 ranking full adaptation-overhead factors; preserve the existing layout-matched
 PoisonCap pair for the separate incremental policy question.
 
-For the first inner-boundary experiment, hold automatic outer libc revocation
-off in both PoisonCap modes, as in the existing nested adapters; explicit
-inner revocation remains active. This isolates internal lifetime handling.
-It is not a whole-process coverage equivalence claim. Preserved-default outer
-revocation is a separate experiment with known historical guest failures.
+For the original SQLite and FFmpeg inner-boundary experiments, hold automatic
+outer libc revocation off in both PoisonCap modes, as in their nested adapters;
+explicit inner revocation remains active. The mruby GC-slot campaign instead
+holds outer revocation **on** in both PoisonCap modes and changes only the
+nested GC policy. Each comparison is within its own matched pair. Neither
+setting establishes whole-process coverage equivalence across platforms.
+Preserved-default outer revocation has known historical guest failures.
 The locally patched P-prime libc is a different platform, never a silent repair
 of the published platform. Hash the running libc as well as the kernel and SDK.
 
@@ -167,7 +169,7 @@ rankings until the intended reclamation implementation is available.
 | Application and known workload | Current reuse | Missing for primary nested comparison |
 |---|---|---|
 | SQLite `speedtest1` | Full 32-phase size-1 pilot passes all four nested arms with native SQL oracle | Shared runner, multiple sizes/repeats, corrected PoisonCap kernel panic diagnosis, matched complete platform metadata |
-| mruby upstream lists / Mandelbrot / AO | Real interpreter in existing four-arm stack; lists now has a pinned output adapter | PoisonCap GC-slot integration; inner slot counters; byte-output oracle for image workloads |
+| mruby upstream lists / Mandelbrot / AO | [AO width-8/16 GC-slot campaign](../../experiments/study/results/mruby-gc-memory-20260927/README.md) passes 24/24 full-interpreter processes with native PPM oracles and 32-bin reuse counts in all four arms | Larger AO sizes toward the upstream default, selected physical backing/node cost, and generic study-planner binding; lists and Mandelbrot still need four-arm nested measurements |
 | CPython pyperformance bodies | Real Capstone interpreter; PoisonCap pymalloc component exists | Link PoisonCap into full interpreter; fixed-work controller; same freelist/GC settings and dependencies |
 | PostgreSQL pgbench | Single-user Capstone backend; PoisonCap context component exists | Full backend integration; matching database lifecycle; pgbench server/client support or explicitly labeled SQL-body subset |
 | FFmpeg known decode corpus | Full 9.0.1 decoder pool lease-gap study passes 36/36 four-arm 1/4/16-stream runs with three repetitions and exact frame oracle | Wider FATE input coverage and complete platform metadata accounting; encoding remains outside current scope |

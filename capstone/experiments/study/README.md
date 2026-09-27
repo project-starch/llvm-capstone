@@ -14,6 +14,13 @@ match the frame oracle. All four arms have exactly equal pool lease-gap bins,
 while the selective PoisonCap temporal adapter targets 116.155 MiB of
 cumulative payload spans with poison, clear and copy operations in the
 16-stream workload. This is not measured physical memory traffic or total footprint.
+The [mruby GC-slot campaign](results/mruby-gc-memory-20260927/README.md) adds
+a third complete-application boundary. All 24 upstream AO-render processes
+at widths 8 and 16 match independent binary PPM oracles. Sublet and the PoisonCap spatial
+control have identical slot-gap histograms; the explicit PoisonCap temporal
+adapter shifts reuse to longer gaps and peaks at nine GC page groups versus
+six in its spatial control. Sublet's page metadata and post-render retention
+remain visible countercosts.
 
 The [application figure design](../../docs/plans/application-memory-figures.md)
 defines three main figures from complete application executions: paired memory
@@ -28,9 +35,10 @@ application scope and qualification gaps. `study.py` fixes the workload matrix,
 emits runner points from checked local artifacts, and reports the complete
 attempt denominator. It does not implement another VM manager or vendor suites.
 
-The initial catalog has six applications and eight candidate suites. No suite
-is yet qualified for a four-configuration published comparison. Previous
-FFmpeg/mruby discovery results remain useful but are not renamed as standard
+The general catalog has six applications and eight candidate suites. The
+mruby AO case now has a repeated four-arm memory measurement through the
+shared guest runners, while the generic `study.py` PoisonCap binding gate
+remains closed. Previous discovery results are not renamed as standard
 benchmarks. The [research and execution plan](../../docs/plans/application-benchmark-study.md)
 explains benchmark selection, measurement layers and the rollout.
 
@@ -67,11 +75,12 @@ cross-platform differences include allocator policy and OS/runtime differences.
 
 `--comparison nested-poisoncap --profile nested` instead plans `capstone`,
 `capstone-sublet`, `poisoncap-spatial` and `poisoncap-temporal`. PoisonCap has its
-own platform identity and repetition blocks. **This comparison supports planning
-only:** `points` preserves unavailable cells and explains the qualification gap;
-it cannot relabel ordinary CheriBSD binaries as PoisonCap applications. Extending
-the shared runner with observed inner mode and policy-path accounting is required
-before this gate opens. The existing `--comparison cheribsd` is the default, and
+own platform identity and repetition blocks. **This planner comparison supports
+planning only:** `points` preserves unavailable cells and explains the generic
+binding qualification gap; it cannot relabel ordinary CheriBSD binaries as
+PoisonCap applications. The mruby AO campaign uses the shared runners directly
+with observed GC mode, quarantine and gap accounting. The existing
+`--comparison cheribsd` is the default, and
 existing plan identities remain valid.
 
 The separate `catalog-poisoncap.json` pins the published SQLite 3.22.0 anchor.
