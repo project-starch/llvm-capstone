@@ -60,12 +60,24 @@ removed. A follow-up direct-map probe build showed why a general skip is
 unsafe: the first missing page had no backing object, but a later CPython
 probe targeted a backed page absent from the page table (`0x406b9b60`). The
 fail-closed build stopped there with `Poison probe backed page missing`; it
-was excluded and its source edits were removed. A correct fix must resolve
-or defer that backed-page fault outside the incompatible VM-map lock state,
-then resume the scan without losing a poisoned capability. Correct the probe
-without weakening revocation and
-batch the interpreter adapter's per-free sweeps before accepting a protected
-process. Then add inner-pymalloc
+was excluded and its source edits were removed. Further scratch diagnostics
+showed that this particular backed page was a capability-free vnode page;
+another missed page was swap-backed but had no tag at its index. An isolated,
+fail-closed trap build that skipped only these provably empty probe classes
+reached CPython's `startup` phase without a panic, but timed out before
+`baseline` at 120 seconds. This is still not a protected application oracle.
+The general case of a nonresident, tag-bearing target needs a resumable VM
+probe rather than a silent skip. A separate, unqualified CPython external
+free-list/quarantine attempt passed the spatial JSON/GC control, but protected
+mode still timed out before `baseline`: in a 40-second diagnostic it had over
+100 sweeps, including 84 flushes on normal block issue, zero on `realloc`,
+and eight on region transitions. The fixed 512-block/1 MiB quarantine did
+not prevent prompt reissue from cached pools. The diagnostic and allocator
+edits were removed from the branch; scratch evidence remains under
+`/tmp/capstone/poisoncap-nofault-probe/` and
+`/tmp/capstone/cpython-external-free-list/`. Next design a bounded pool-level
+quarantine with explicit retained-pool accounting and complete the VM probe
+before accepting a protected process. Then add inner-pymalloc
 issue/release, backing and metadata ledgers; the present outer counters cannot
 support a four-arm CPython memory figure. The [CheriBSD port](../../ports/cpython/interpreter/cheribsd/README.md)
 records the build and runtime selection.

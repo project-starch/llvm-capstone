@@ -20,7 +20,14 @@ changed the failure into a 120-second pre-workload timeout; it was removed and
 supplies no paper measurement. A subsequent fail-closed direct-map diagnostic
 reached a backed page with no PTE and stopped rather than treating possible
 stored poison as absent. That experimental kernel was also removed; the
-protected CPython arm and its memory plot remain unqualified.
+protected CPython arm and its memory plot remain unqualified. A later
+scratch kernel classified that specific vnode page and a swap page without
+capability tags as safe misses and reached `startup` without panic, but the
+protected interpreter still timed out before `baseline` at 120 seconds. An
+external-free-list/quarantine candidate passed its spatial control; a
+diagnostic protected run performed over 100 sweeps in 40 seconds, including
+84 on normal block issue, so that candidate was not admitted. Its source
+changes were removed from the branch. No CPython four-arm result is claimed.
 
 ## 2026-09-28 — Cross-application reuse preview
 
