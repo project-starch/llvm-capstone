@@ -1,5 +1,9 @@
 # Application memory experiments
 
+The [four-configuration study](../study/README.md) builds on these runners with
+known benchmark candidates, immutable work matrices, explicit CheriBSD on/off
+policies and checked artifact bindings. Standard-suite qualification is pending.
+
 One runner, a reusable link adapter, and application workloads. These are
 bounded discovery experiments for selecting paper workloads, not accepted
 hardware performance results. They run applications, not allocator traces.
@@ -119,9 +123,9 @@ domain and helper use one capacity constant. These are ordinary application
 prerequisites, independent of measurement instrumentation.
 
 QEMU wall time is diagnostic only. Node allocations per launch include startup
-and teardown and are cumulative, not peak live metadata. The supervisor may
-recycle nodes between launches by sweeping capability tags; it does not run
-that collector inside a still-executing application. A process restart cannot
+and teardown and are cumulative, not peak live metadata. The original discovery platform recycled nodes only between launches. The
+current QEMU follow-up also sweeps retired identities under in-process pressure;
+record the exact emulator and control for its effects on each new workload. A process restart cannot
 be presented as another epoch in a continuous workload.
 
 ## Checked discovery, 2026-09-27

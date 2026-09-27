@@ -2,6 +2,23 @@
 
 Minimal snapshot. Read first in every session.
 
+
+## 2026-09-27 — Four-configuration benchmark study foundation
+
+The `application-benchmark-study` branch adds a [pinned candidate catalog and
+matrix planner](../../experiments/study/README.md) for six application ports.
+Plans distinguish internal-allocator Sublet from outer-malloc Sublet, enumerate
+all four arms, lock work parameters, preserve unavailable/failing cells and
+resume without silently retrying failures. CheriBSD on/off uses explicit process
+switches and checks effective policy at every phase; guest defaults stay intact.
+
+Twelve planner tests and six runner tests pass. Five real FFmpeg/mruby policy
+smokes pass, including re-enabling revocation after an off process, in one guest.
+The original Capstone VM is restored and idle. These smokes reuse discovery
+workloads; no standard benchmark suite is yet qualified across four arms.
+The [rollout plan](../plans/application-benchmark-study.md) records recognized
+benchmarks, source pins, internal accounting requirements and application gaps.
+
 ## 2026-09-27 — Address reuse and post-release application memory
 
 The `application-reuse-metrics` lane studies Cornucopia and Cornucopia Reloaded

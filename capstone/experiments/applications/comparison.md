@@ -1,5 +1,9 @@
 # Capstone ports versus default CheriBSD
 
+The newer [four-configuration study](../study/README.md) adds separately named
+revocation-on/off controls. The default-only campaign below keeps its original
+policy and identities.
+
 This campaign compares actual applications on Capstone/Sublet malloc with the
 same workloads on default CheriBSD purecap. No allocator policy overrides,
 forced drains, event recording or replay are used. The currently built matching

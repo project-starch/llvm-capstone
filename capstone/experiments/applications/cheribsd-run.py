@@ -28,6 +28,32 @@ def samples(stderr):
             for line in stderr.splitlines() if line.startswith('EXP-CHERI ')]
 
 
+def policy_environment(point):
+    """Only the named on/off contrast may change the process allocator policy."""
+    expected = {'cheribsd-default': 1, 'cheribsd-revocation-on': 1,
+                'cheribsd-revocation-off': 0}
+    arm = point['arm']
+    if arm not in expected or point['revocation'] != expected[arm]:
+        raise ValueError('arm and expected revocation state disagree')
+    environment = point['environment']
+    if any(k.startswith(('_RUNTIME_', 'MALLOC_', 'EXP_CHERI_')) for k in environment):
+        raise ValueError('allocator overrides must come from the named study arm')
+    environment = dict(environment)
+    if arm != 'cheribsd-default':
+        switch = 'ENABLE' if expected[arm] else 'DISABLE'
+        environment['_RUNTIME_REVOCATION_' + switch] = '1'
+    return environment
+
+
+def application_command(point, timeout):
+    environment = policy_environment(point)
+    # Study arms inherit no allocator settings from the SSH server or shell.
+    prefix = ['env'] if point['arm'] == 'cheribsd-default' else [
+        'env', '-i', 'PATH=/sbin:/bin:/usr/sbin:/usr/bin', 'HOME=/root', 'LC_ALL=C']
+    return shlex.join(['timeout', str(timeout), *prefix,
+                      *[k+'='+str(v) for k, v in environment.items()], *point['argv']])
+
+
 def verdict(point, rc, stdout, stderr):
     if rc: return 'transport-error'
     exits = re.findall(r'^EXP-GUEST-EXIT (\d+)$', stderr, re.M)
@@ -103,9 +129,7 @@ def execute(args):
     platform = call('uname -a; sysctl security.cheri')
     files = {}
     for point in points:
-        if any(k.startswith(('_RUNTIME_REVOCATION_', 'MALLOC_', 'EXP_CHERI_'))
-               for k in point['environment']):
-            raise ValueError('allocator policy overrides are outside the default comparison')
+        policy_environment(point)
     for point in points:
         for host, guest in point['files'].items():
             if guest in files and files[guest]['sha256'] != digest(host):
@@ -117,6 +141,7 @@ def execute(args):
         if call('sha256 -q '+shlex.quote(guest)) != spec['sha256']:
             raise RuntimeError('staged input hash mismatch')
     manifest = dict(boot=boot, platform=platform, files=files,
+                    process_environments={p['id']: policy_environment(p) for p in points},
                     runner_sha256=digest(__file__), repeats=args.repeat,
                     allocation_validator_sha256=digest(Path(__file__).with_name('allocation_metrics.py')),
                     timing='QEMU host elapsed seconds: diagnostic only')
@@ -127,9 +152,7 @@ def execute(args):
                 raise RuntimeError('guest rebooted')
             directory = args.out/(point['id']+'-'+str(repetition))
             directory.mkdir()
-            command = shlex.join(['timeout', str(args.timeout), 'env',
-                        *[k+'='+str(v) for k, v in point['environment'].items()],
-                        *point['argv']])
+            command = application_command(point, args.timeout)
             command = 'ulimit -c 0; '+command+'; result=$?; printf "EXP-GUEST-EXIT %s\\n" "$result" >&2; exit 0'
             (directory/'command.txt').write_text(command+'\n')
             start = time.monotonic()
@@ -150,6 +173,7 @@ def execute(args):
             try: memory = samples(result.stderr)
             except (ValueError, KeyError): memory = []
             record = dict(point=point, repetition=repetition, status=status,
+                          effective_environment=policy_environment(point),
                           memory=memory, host_seconds=time.monotonic()-start,
                           stdout_sha256=digest(directory/'stdout'),
                           stderr_sha256=digest(directory/'stderr'))

@@ -1,3 +1,10 @@
+Application benchmark study (2026-09-27): qualify mruby upstream benchmarks,
+SQLite speedtest1 and selected pyperformance bodies using the [four-arm study
+contract](../../experiments/study/README.md). Add exact byte-output oracles and
+matched internal-allocator counters. Keep the outer-malloc profile separate;
+Perl internal integration, PostgreSQL server support and FFmpeg encoding/CLI
+coverage remain explicit gaps. [Benchmark selection and rollout](../plans/application-benchmark-study.md).
+
 Application memory measurements (2026-09-27): use the [checked reuse and retention metrics](../../experiments/applications/memory-behavior.md)
 and [72 passing application attempts](../../experiments/applications/results/20260927-reuse/README.md).
 Extend the same input/oracle and default-CheriBSD method to Perl, CPython and

@@ -1,5 +1,10 @@
 # Prompt for continuing this Capstone work in a new chat
 
+Application benchmark study: [four-configuration catalog and planner](../experiments/study/README.md)
+separate internal Sublet integration from outer-malloc experiments. Known suites
+remain unqualified. Eighteen host checks and five real CheriBSD on/off policy
+smokes pass; both policies use the same application binary in one guest.
+
 Application memory behavior: [twelve paired workload configurations](../experiments/applications/results/20260927-reuse/README.md)
 pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU
 controls without in-process collection. The results quantify prompt address
