@@ -121,6 +121,11 @@ def main():
                     image_sha256=digest(image), compiler_driver_sha256=digest(args.cc),
                     source=str(args.source), source_manifest_sha256=digest(args.out/'source-inputs.json'),
                     commands_sha256=digest(args.out/'commands.json'),
+                    builder_sha256=digest(Path(__file__)),
+                    adapter_sources=({name: digest(REPO/'capstone/experiments/study'/name)
+                                      for name in ('prepare-mruby-poisoncap.py',
+                                                   'mruby-poisoncap-gc.inc')}
+                                     if args.nested_gc else {}),
                     experiment_sources=source_manifest(HERE),
                     repository_revision=subprocess.check_output(['git','-C',str(REPO),
                         'rev-parse','HEAD'], text=True).strip())
