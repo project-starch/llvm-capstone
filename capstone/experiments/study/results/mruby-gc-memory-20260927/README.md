@@ -125,6 +125,17 @@ archive identified by `archive.json`; guest private keys are excluded.
 The [scale plotter](../../plot-mruby-gc-size-effect.py) also rejects a changed
 AO source or interpreter binary between sizes.
 
+The committed [matrix](matrix.json) and [four-arm binding](bindings.json)
+admit both sizes through the generic `study.py` planner for subsequent runs.
+With the raw archive restored and the named platform binaries present, the
+planner emits 12 qualified points per platform and no unavailable cell. All
+24 emitted points were checked against the existing runner verdicts on the
+measured transcripts. Rebinding those transcripts to the planned point IDs
+also reproduces both checked summary JSON files byte for byte through the
+same plotter. This binding was assembled after the direct-runner
+campaign; it does not turn these already collected runs into a pre-registered
+campaign.
+
 After restoring that archive under `/tmp/capstone`, redraw with:
 
 ```sh

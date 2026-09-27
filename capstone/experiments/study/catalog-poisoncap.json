@@ -56,9 +56,9 @@
       "cases": [
         "bm_ao_render.rb"
       ],
-      "adaptation_status": "four-arm-measured-direct-runner",
+      "adaptation_status": "four-arm-measured-and-planner-qualified",
       "blockers": [
-        "General study.py binding and point emission for nested PoisonCap remains closed; this case uses the shared guest runners directly."
+        "Larger AO sizes and complete platform storage are needed before a total-memory ranking."
       ],
       "work_units": {
         "upstream_default_width": 64,

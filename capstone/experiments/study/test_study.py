@@ -71,6 +71,83 @@ class StudyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not yet qualified'):
             study.emit(plan, self.bindings, 'poisoncap', {})
 
+    def poisoncap_fixture(self):
+        plan = study.make_plan(self.catalog, 'nested', ['suite'], 2, 7,
+                               comparison='nested-poisoncap')
+        source = self.root/'input'
+        reference = self.root/'ppm'
+        reference.write_bytes(b'P6\n\x00\xff\x01')
+        evidence = self.root/'evidence'
+        evidence.write_text('complete nested fixture')
+        platform_files = {}
+        for name in ('capstone_qemu', 'capstone_kernel', 'poisoncap_qemu',
+                     'poisoncap_kernel', 'poisoncap_libc'):
+            path = self.root/name
+            path.write_text(name)
+            platform_files[name] = dict(path=str(path), sha256=study.file_hash(path))
+        binding = dict(comparison='nested-poisoncap', source={'revision': 'a'*40},
+            application_version='test', profile='nested',
+            parameters={'work': 'upstream-default'}, adaptation='GC slot observer fixture',
+            nested_allocator='mruby-gc', oracle_reference=str(reference),
+            oracle_reference_sha256=study.file_hash(reference),
+            oracle={'expected_stdout_sha256': study.file_hash(reference),
+                    'expected_stdout_bytes': reference.stat().st_size,
+                    'expected_phases': ['startup', 'exit']},
+            input_sha256={'script': study.file_hash(source)},
+            platform_files=platform_files, arms={})
+        for arm in study.COMPARISONS['nested-poisoncap']:
+            poison = arm.startswith('poisoncap')
+            name = 'poisoncap' if poison else arm
+            binary = self.root/name
+            binary.write_text(name)
+            manifest = self.root/(name+'.json')
+            manifest.write_text(json.dumps(dict(app='mruby' if poison else None,
+                application='mruby', platform='poisoncap' if poison else 'capstone',
+                nested_gc='poisoncap' if poison else None,
+                heap='level0', nested='mruby' if arm == 'capstone-sublet' else 'none',
+                gc_gaps=True, image_sha256=study.file_hash(binary))))
+            guest_source = '/tmp/ao.rb' if poison else '/mnt/host/study/input'
+            point = dict(application='mruby', environment={},
+                argv=(['/tmp/mruby', guest_source, '8'] if poison else [guest_source, '8']),
+                files={str(source): guest_source})
+            if poison:
+                point['files'][str(binary)] = '/tmp/mruby'
+                point['nested_allocator'] = 'mruby-gc'
+            binding['arms'][arm] = dict(binary=str(binary), build_manifest=str(manifest),
+                inputs={'script': str(source)}, resources={'observer_bytes': 8320},
+                qualification_evidence=dict(path=str(evidence),
+                    sha256=study.file_hash(evidence)), point=point)
+        return plan, {self.key: binding}
+
+    def test_qualified_poisoncap_binding_emits_only_real_nested_arms(self):
+        plan, bindings = self.poisoncap_fixture()
+        cap, blocked = study.emit(plan, bindings, 'capstone', {})
+        poison, blocked_poison = study.emit(plan, bindings, 'poisoncap', {})
+        self.assertEqual((len(cap), len(poison), blocked, blocked_poison), (4, 4, {}, {}))
+        self.assertTrue(all(p['gc_gaps'] and p['expected_stdout_bytes'] == 6 for p in cap))
+        self.assertEqual({(p['arm'], p['expected_min_sweeps']) for p in poison},
+                         {('poisoncap-spatial', 0), ('poisoncap-temporal', 1)})
+        self.assertEqual(len({p['study_artifact']['binary_sha256'] for p in poison}), 1)
+
+    def test_poisoncap_binding_rejects_unmatched_binary_and_workload(self):
+        plan, bindings = self.poisoncap_fixture()
+        item = bindings[self.key]['arms']['poisoncap-temporal']
+        item['point']['argv'][-1] = '16'
+        with self.assertRaises(ValueError): study.emit(plan, bindings, 'poisoncap', {})
+        item['point']['argv'][-1] = '8'
+        item['point']['files'].pop(str(self.root/'input'))
+        with self.assertRaises(ValueError): study.emit(plan, bindings, 'poisoncap', {})
+
+    def test_poisoncap_binding_rejects_changed_platform_or_oracle(self):
+        plan, bindings = self.poisoncap_fixture()
+        kernel = self.root/'poisoncap_kernel'
+        kernel.write_text('different kernel')
+        with self.assertRaises(ValueError): study.emit(plan, bindings, 'capstone', {})
+        kernel.write_text('poisoncap_kernel')
+        reference = self.root/'ppm'
+        reference.write_bytes(b'changed PPM')
+        with self.assertRaises(ValueError): study.emit(plan, bindings, 'poisoncap', {})
+
     def test_explicit_size_matrix_changes_plan_and_denominator(self):
         matrix = {'suite/lists': {'small': {'operations': 100}, 'large': {'operations': 1000}}}
         plan = study.make_plan(self.catalog, 'nested', ['suite'], 2, 7, matrix)

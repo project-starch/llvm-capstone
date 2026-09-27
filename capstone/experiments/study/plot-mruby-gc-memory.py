@@ -69,14 +69,21 @@ def collect(capstone, poisoncap, width=16):
             raise ValueError('Capstone cleanup or node capacity failed')
         for record in raw:
             point = record['point']
-            arm = point['arm']
-            marker = '-r' if platform == 'capstone' else '-'
-            match = re.fullmatch(r'ao'+str(width)+'-'+re.escape(arm)+marker+r'([0-2])', point['id'])
-            if arm not in ARMS or not arm.startswith(platform) or not match or \
+            arm = ('capstone-spatial' if point['arm'] == 'capstone' else point['arm'])
+            study = point.get('study')
+            if study is None:
+                marker = '-r' if platform == 'capstone' else '-'
+                match = re.fullmatch(r'ao'+str(width)+'-'+re.escape(arm)+marker+r'([0-2])', point['id'])
+                rep = int(match[1]) if match else -1
+            else:
+                match = point['id'] == 'study-'+study['cell_id'] and \
+                        study['workload'] == f'mruby-poisoncap-ao/bm_ao_render.rb@width{width}' and \
+                        study['profile'] == 'nested'
+                rep = study['repetition'] if match else -1
+            if arm not in ARMS or not arm.startswith(platform) or not 0 <= rep < 3 or \
                     record['status'] != 'pass' or record['repetition'] != 0 or \
                     point['argv'][-1] != str(width) or point['expected_stdout_sha256'] != oracle:
                 raise ValueError('unexpected or failed mruby AO point')
-            rep = int(match[1])
             directory = root/(point['id']+'-0')
             stdout, stderr = directory/'stdout', directory/'stderr'
             if digest(stdout) != oracle or stdout.stat().st_size != output_bytes or \

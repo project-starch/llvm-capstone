@@ -18,8 +18,9 @@ flat across 4.22× more slot issues, within this tested range. Sublet's per-page
 retention of all-dead groups are countercosts, so this is a logical-reuse and
 selected GC-page result, not a total-memory ranking. The process-level
 CheriBSD jemalloc ledger excludes the mmap GC pages, and Capstone node
-storage is not charged. The generic `study.py` PoisonCap binding gate remains
-closed, although the shared guest runners now execute and validate this case.
+storage is not charged. `study.py` now admits a pinned mruby four-arm binding
+for future planned runs; the reported campaign itself used the shared guest
+runners directly, before that binding was assembled.
 
 ## 2026-09-27 — Normalized SQLite repeated-work memory
 

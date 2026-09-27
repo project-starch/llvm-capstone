@@ -52,8 +52,9 @@ effective lookaside/heap settings, and both published and corrected PoisonCap
 quarantine paths. Next diagnose the published-kernel `Poison probe missing page`
 panic across attempted budgets and move the legacy SQLite domain host to the
 shared persistent runner. Extend that
-runner rather than adding VM scripts. PoisonCap plans currently preserve
-unqualified cells and cannot execute through ordinary CheriBSD bindings.
+runner rather than adding VM scripts. The SQLite PoisonCap planner binding
+still preserves unqualified cells until it moves to the shared runner; the
+qualified mruby binding cannot substitute ordinary CheriBSD binaries.
 
 The [whole FFmpeg decoder pool pilot](../../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
 adds a second real four-arm nested application: 1/4/16 independent 30-frame
@@ -69,8 +70,9 @@ AO at widths 8 and 16, with exact PPM output and per-slot gap counters. Its Subl
 metadata and post-render page retention remain a counterexample to a blanket
 memory-footprint win. Measure multiple AO sizes and selected physical backing,
 then admit lists or another upstream benchmark under the same four-arm
-contract. The generic `study.py` PoisonCap binding gate still needs qualified
-artifact emission; the direct shared runners already execute this case.
+contract. The generic `study.py` binding now emits all mruby four-arm cells
+from pinned artifacts; the next application's adapter still needs registration
+after its shared runner can validate the inner policy.
 Retain the CheriBSD on/off reference, original failures and no-timing limits.
 
 Application memory measurements (2026-09-27): use the [checked reuse and retention metrics](../../experiments/applications/memory-behavior.md)

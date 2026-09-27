@@ -37,8 +37,8 @@ attempt denominator. It does not implement another VM manager or vendor suites.
 
 The general catalog has six applications and eight candidate suites. The
 mruby AO case now has a repeated four-arm memory measurement through the
-shared guest runners, while the generic `study.py` PoisonCap binding gate
-remains closed. Previous discovery results are not renamed as standard
+shared guest runners. `study.py` now admits its pinned four-arm PoisonCap
+binding; unregistered application adapters remain blocked. Previous discovery results are not renamed as standard
 benchmarks. The [research and execution plan](../../docs/plans/application-benchmark-study.md)
 explains benchmark selection, measurement layers and the rollout.
 
@@ -75,16 +75,20 @@ cross-platform differences include allocator policy and OS/runtime differences.
 
 `--comparison nested-poisoncap --profile nested` instead plans `capstone`,
 `capstone-sublet`, `poisoncap-spatial` and `poisoncap-temporal`. PoisonCap has its
-own platform identity and repetition blocks. **This planner comparison supports
-planning only:** `points` preserves unavailable cells and explains the generic
-binding qualification gap; it cannot relabel ordinary CheriBSD binaries as
-PoisonCap applications. The mruby AO campaign uses the shared runners directly
-with observed GC mode, quarantine and gap accounting. The existing
-`--comparison cheribsd` is the default, and
+own platform identity and repetition blocks. `points` preserves unavailable
+cells and never relabels ordinary CheriBSD binaries as PoisonCap applications.
+The registered mruby GC-slot adapter now admits only a four-arm binding with
+one PoisonCap binary, the shared AO input, a preserved binary-output oracle,
+the observed inner mode and pinned QEMU/kernel/libc files. The measured mruby
+campaign used the shared runners directly; its [binding](results/mruby-gc-memory-20260927/bindings.json)
+qualifies future planned runs and does not retroactively label those measurements
+as pre-registered. Other nested boundaries need their own runner validation
+and adapter registration. The existing `--comparison cheribsd` is the default, and
 existing plan identities remain valid.
 
-The separate `catalog-poisoncap.json` pins the published SQLite 3.22.0 anchor.
-It does not silently substitute it for the current 3.53.3 application catalog:
+The separate `catalog-poisoncap.json` pins the published SQLite 3.22.0 anchor
+and the measured mruby 4.0.0-rc2 AO case. It does not silently substitute
+SQLite 3.22.0 for the current 3.53.3 application catalog:
 
 ```sh
 python3 capstone/experiments/study/study.py plan \
@@ -92,6 +96,29 @@ python3 capstone/experiments/study/study.py plan \
   --catalog capstone/experiments/study/catalog-poisoncap.json \
   --suites sqlite-poisoncap-speedtest1 --repeat 3 --seed 20260927 \
   --out "$STUDY_ROOT/poisoncap-plan.json"
+```
+
+To emit the qualified mruby matrix after restoring its [raw archive](results/mruby-gc-memory-20260927/archive.json)
+under `/tmp/capstone`, use the committed [two-size matrix](results/mruby-gc-memory-20260927/matrix.json)
+and binding. The plan has 24 cells; each platform command emits its 12 cells
+for one persistent guest:
+
+```sh
+source capstone/tests/capstone-test-env.sh
+python3 capstone/experiments/study/study.py plan \
+  --comparison nested-poisoncap --profile nested \
+  --catalog capstone/experiments/study/catalog-poisoncap.json \
+  --suites mruby-poisoncap-ao --repeat 3 --seed 20260927 \
+  --matrix capstone/experiments/study/results/mruby-gc-memory-20260927/matrix.json \
+  --out /tmp/capstone/mruby-study-plan.json
+python3 capstone/experiments/study/study.py points \
+  --plan /tmp/capstone/mruby-study-plan.json \
+  --bindings capstone/experiments/study/results/mruby-gc-memory-20260927/bindings.json \
+  --platform capstone --out /tmp/capstone/mruby-study-capstone-points.json
+python3 capstone/experiments/study/study.py points \
+  --plan /tmp/capstone/mruby-study-plan.json \
+  --bindings capstone/experiments/study/results/mruby-gc-memory-20260927/bindings.json \
+  --platform poisoncap --out /tmp/capstone/mruby-study-poisoncap-points.json
 ```
 
 CheriBSD uses one kernel, libc, application binary and inputs for both arms.
