@@ -15,9 +15,9 @@ four-arm memory ranking: the Sublet context region and node storage are not
 included in the reported outer-heap peak. The initial temporary cluster had
 been used before the campaign. A clean native 16-byte-MAXALIGN fixture builder
 now creates a pristine C-locale/GMT/System V cluster; its tree hash matches
-the shared runner's declared fixture, and a new 6/6 campaign from that
-untouched source retains the exact 22-row native oracle. This still needs the
-full four-arm and inner-storage ledgers before a paper memory plot.
+the shared runner's declared fixture, and the [archived 6/6 campaign](../../experiments/study/results/postgres-pristine-20260928/README.md)
+from that untouched source retains the exact 22-row native oracle. This still
+needs the full four-arm and inner-storage ledgers before a paper memory plot.
 
 The same persistent Capstone VM also passes 12/12 complete FFmpeg 9.0.1
 decoder attempts on two [adapted FATE MPEG-4 inputs](../../experiments/study/fate-mpeg4-inputs.json)

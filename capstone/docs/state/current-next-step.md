@@ -14,10 +14,10 @@ label and measure matching pool ledgers and release-gap bins for each arm.
 PostgreSQL next (2026-09-28): revise the protected PoisonCap 17.5
 queue/sweep policy, then finish its `work.sql` run. Both fresh `-O1` Capstone
 images now pass 3/3 complete SQL oracles each with explicit `sysv` DSM.
-The pristine 16-byte-MAXALIGN cluster builder and a new 6/6 campaign are now
-verified by matching tree hashes and SQL oracles. Archive the paired raw
-measurements with their builder manifest; charge the separate Sublet context
-region and platform node storage before comparing memory. The PoisonCap chunk queue has passed `SELECT 1`
+The pristine 16-byte-MAXALIGN cluster builder and [archived 6/6 campaign](../../experiments/study/results/postgres-pristine-20260928/README.md)
+are verified by matching tree hashes and SQL oracles. Charge the separate
+Sublet context region and platform node storage before comparing memory. The
+PoisonCap chunk queue has passed `SELECT 1`
 but a full-workload diagnostic was stopped during its first INSERT after
 53 minutes of guest CPU and 7,154 sweeps, with no completed SQL oracle.
 It is excluded from paper data. The existing memory contexts reissue slots
