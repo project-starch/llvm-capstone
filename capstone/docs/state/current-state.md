@@ -13,7 +13,11 @@ lookup; both CheriBSD arms were rerun on the same patched kernel. All four
 arms have identical pool lease-gap bins for each input. The protected
 PoisonCap adapter peaks at 224.4 and 167.1 KiB of selected snapshot backing;
 these are not total-memory results. The CPython protected interpreter still
-hits its separate `share->excl` kernel panic with this patch.
+hits its separate `share->excl` kernel panic with this patch. An isolated
+trap-PC diagnostic identifies RISC-V `fupoison` probing a nonresident user
+target while the revoker holds the VM-map read lock. A temporary bypass only
+changed the failure into a 120-second pre-workload timeout; it was removed and
+supplies no paper measurement.
 
 ## 2026-09-28 — Cross-application reuse preview
 

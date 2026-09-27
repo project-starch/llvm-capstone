@@ -50,8 +50,15 @@ spatial 3/3 at `-O1`, all with the same JSON/GC oracle. The PoisonCap
 component is integrated into the complete interpreter, but protected mode 1
 triggers the kernel's `share->excl` VM-map lock panic both after a
 control and when run first in a fresh guest; it still panics on the patched
-FFmpeg kernel. Isolate and correct that kernel
-path before accepting a protected process. Then add inner-pymalloc
+FFmpeg kernel. A temporary trap-PC diagnostic resolved the faulting instruction
+to RISC-V `fupoison` in the PoisonCap test predicate: a target user page faults
+while the revoker already holds the user VM-map read lock. Skipping such faults
+in a **diagnostic-only** kernel avoided the panic but timed out before the
+first workload marker after 120 seconds; that bypass may miss poison in paged
+out data and is not a valid benchmark arm. The diagnostic kernel changes were
+removed. Correct the nonresident-page probe without weakening revocation and
+batch the interpreter adapter's per-free sweeps before accepting a protected
+process. Then add inner-pymalloc
 issue/release, backing and metadata ledgers; the present outer counters cannot
 support a four-arm CPython memory figure. The [CheriBSD port](../../ports/cpython/interpreter/cheribsd/README.md)
 records the build and runtime selection.
