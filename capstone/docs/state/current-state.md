@@ -2,6 +2,18 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — Three-application paper figures
+
+The [checked figure set](../../experiments/study/results/application-memory-paper-20260928/README.md)
+reanalyses SQLite, mruby and FFmpeg with common CDF axes, differences from
+each spatial control, selected-memory companions and all eight workloads in
+a supplement. All 96 reuse-process records reproduce exactly through the
+original raw-data validators; the 12 separate SQLite memory transcripts pass
+their SQL oracle and ledger checks. The five vector figures use paper width
+and embedded fonts; a captioned PDF, LaTeX snippets and derived CSVs accompany
+them. Five measurement-guard tests pass. No new application runs or total-memory
+claims are added; the complete four-arm application count remains three.
+
 ## 2026-09-28 — FFmpeg adapted-FATE four-arm qualification
 
 The [checked four-arm campaign](../../experiments/study/results/ffmpeg-fate-four-arm-20260928/README.md)

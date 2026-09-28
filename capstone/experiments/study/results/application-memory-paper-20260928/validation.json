@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "new_application_runs": false,
+  "raw_archives": {
+    "sqlite-reuse-gaps-20260927": {
+      "path": "/tmp/capstone/sqlite-reuse-gap-20260927.tar.gz",
+      "sha256": "655f0e05e71f11acb08ec4ff4f272bba82681978a2ac02d7ca48942b5ec9b2da"
+    },
+    "mruby-gc-memory-20260927": {
+      "path": "/tmp/capstone/mruby-gc-memory-20260927.tar.gz",
+      "sha256": "022186b129400cdd80c7e288718902768fc1e34857cd2cb6ee7926b215452db0"
+    },
+    "ffmpeg-reuse-gaps-20260927": {
+      "path": "/tmp/capstone/ffmpeg-reuse-gap-20260927.tar.gz",
+      "sha256": "4e6d48fd82260e4d8180231317d46c0f0fb89256b41d4ab2c40cc1961f08a1de"
+    },
+    "ffmpeg-fate-four-arm-20260928": {
+      "path": "/tmp/capstone/ffmpeg-fate-four-arm-20260928.tar.gz",
+      "sha256": "53a2b582ac8b5222604492c66814464411244a4a5e0742bb8122365fae42e89b"
+    }
+  },
+  "checks": [
+    {
+      "campaign": "sqlite-reuse",
+      "processes": 12,
+      "exact_records_match": true
+    },
+    {
+      "campaign": "mruby-ao8",
+      "processes": 12,
+      "exact_records_match": true
+    },
+    {
+      "campaign": "mruby-ao16",
+      "processes": 12,
+      "exact_records_match": true
+    },
+    {
+      "campaign": "ffmpeg-streams",
+      "processes": 36,
+      "exact_records_match": true
+    },
+    {
+      "campaign": "ffmpeg-fate",
+      "processes": 24,
+      "exact_records_match": true
+    }
+  ],
+  "sqlite_memory_processes_revalidated_from_committed_raw": 12,
+  "input_sha256": {
+    "plot-application-memory-paper.py": "9acca913c4d08cea9db23d54b993f62858cf2e7f8ed88e079139e9f4d9fa5d20",
+    "results/sqlite-reuse-gaps-20260927/runs.json": "77cc927fc4650d74a100f01795bcb6676d1caa9f770ed4d881ca8f61bd45d87c",
+    "results/mruby-gc-memory-20260927/ao8/summary.json": "78d13bb8b2a6cffaa67c156f8e816b84e3bc44d803cfda60c452b9f751f6d4b5",
+    "results/mruby-gc-memory-20260927/summary.json": "1a10a6cb3f17fc2d54708621b4d5130e9e04bec69182aea91f96d865c72bd6ce",
+    "results/ffmpeg-fate-four-arm-20260928/summary.json": "4f7b3527a9f6f3334bbde866ea41e5859140802a573742e0b03ffd1959738a55",
+    "results/ffmpeg-reuse-gaps-20260927/summary.json": "4950bca79d895804fc2ec23a21e590d34e8d8229c3568e4f952853496001603f",
+    "plot-sqlite-normalized.py": "2c0eb4229f6bf25938279a00a9c0ad5308abbe021ed0c090734877fe6090aaba",
+    "results/sqlite-normalized-memory-20260927/runs.json": "74e472d986e1dea6d6e26182752d6761f4a5b10ae78fa645a78bfaffdaf08166",
+    "results/sqlite-normalized-memory-20260927/oracles.json": "46550480e8f8daf5921e2ba867c6a1c46021c460f3e1eecd7323b293832e0889",
+    "results/sqlite-normalized-memory-20260927/raw/poisoncap-spatial-churn-1.stdout.gz": "d99976b74631216b08888bf300b3cb968a84d9e706c03b84f69547bac06b18a7",
+    "results/sqlite-normalized-memory-20260927/raw/poisoncap-spatial-churn-2.stdout.gz": "53b263936acf119fb2c9133b52603959011abda1d49627ebfdd3bb964bbb0156",
+    "results/sqlite-normalized-memory-20260927/raw/poisoncap-spatial-churn-3.stdout.gz": "68136cc35719ea4aadfe9ef5c9d929e73505db306e0bc8caea176c1be0b015e2",
+    "results/sqlite-normalized-memory-20260927/raw/poisoncap-temporal-churn-1.stdout.gz": "bdcff00e8788a92a34bf330d99ea4acf344e82225ceecd97bbb0e802109bd634",
+    "results/sqlite-normalized-memory-20260927/raw/poisoncap-temporal-churn-2.stdout.gz": "7f076732c1fc0b290dab3bb34bc41deeaf7cc6d447dee4571d8c7276d9168f51",
+    "results/sqlite-normalized-memory-20260927/raw/poisoncap-temporal-churn-3.stdout.gz": "8a6e388c99ef1b4acc6a56b06df5c7016b48583f9abce553819544e687c1642a",
+    "results/sqlite-normalized-memory-20260927/raw/capstone-sublet-churn-1.stdout.gz": "f971fa9c6b545ec59deb019444818f6745654ffe8264a42253ad534abc08912f",
+    "results/sqlite-normalized-memory-20260927/raw/capstone-sublet-churn-2.stdout.gz": "927fd08c4b52fe0db7c50e25e77b7c58f6413fedd839175bdbe51430e98a0b08",
+    "results/sqlite-normalized-memory-20260927/raw/capstone-sublet-churn-3.stdout.gz": "c630aa873d658877203a845298be96631ec521735fb41e595f0f66b0b4dc6ba8",
+    "results/sqlite-normalized-memory-20260927/raw/capstone-churn-1.stdout.gz": "42e9ed1a41edd9fee4e3c16d86115d2b08406479498e806f4e589bc2de08dc96",
+    "results/sqlite-normalized-memory-20260927/raw/capstone-churn-2.stdout.gz": "2520935ace776890b6e62ad49a8f859524da703e61c713c964403fee433a1e2b",
+    "results/sqlite-normalized-memory-20260927/raw/capstone-churn-3.stdout.gz": "b2c01f2545ef789e6a6250835b0a1a9d45e19dceb5d7f6696259e0ccd53c8e47",
+    "results/sqlite-reuse-gaps-20260927/archive.json": "7d2221ee3c802940d0950d9920409ccf54edb8ec50f64717ef943ce22a5e8bf4",
+    "results/mruby-gc-memory-20260927/archive.json": "8b0e1ff90680b6e5ec3eb2d206cfa3cd95f2e1d991b980f822a1e06d06b7eaf6",
+    "results/ffmpeg-reuse-gaps-20260927/archive.json": "93a5ef5ab4bfd3a822dcfb0d8114ff65d4d864f29352d6d0287efd2098fe4d7c",
+    "results/ffmpeg-fate-four-arm-20260928/archive.json": "4982c6455cd5f6938473df71013cd00ffd9e7d8930905e6050bd8f33f2c94658",
+    "plot-sqlite-reuse-gaps.py": "0515e6835dd84b7f258addb9b01bb5a2b5c489737509baa24e5a530f39c368d9",
+    "plot-mruby-gc-memory.py": "ee731a93ed7fe592fc781d080249c12540ab3f57a17f3bd1e2076de88a3fcb7e",
+    "plot-ffmpeg-reuse-gaps.py": "f42920dd0044c085a08674f5b9bd92a124d0a649b78188443a395f680cb2b7bb",
+    "collect-ffmpeg-fate.py": "e36114f02a3d88e5de223d6e944a9ddb4ca0a057b3f4c92757fb24f0b3d5550d"
+  }
+}

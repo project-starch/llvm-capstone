@@ -1,3 +1,13 @@
+Three-application paper figures (2026-09-28): the [checked figure set](../../experiments/study/results/application-memory-paper-20260928/README.md)
+contains common four-arm reuse/difference panels, SQLite/mruby/FFmpeg memory
+companions and all eight workloads in a supplement. All 96 raw reuse records
+reproduce exactly; 12 separate SQLite memory processes pass their raw oracle
+and ledger checks. No new guest measurements were run. The next memory
+milestone is equal-scope allocator/metadata accounting and original-layout
+controls for mruby/FFmpeg, followed by consistent optimized-build campaigns.
+Keep the measured reuse advantage separate from total-memory claims and keep
+the study off a PR while these measurement gaps remain.
+
 FFmpeg FATE follow-up (2026-09-28): the [archived four-arm qualification](../../experiments/study/results/ffmpeg-fate-four-arm-20260928/README.md)
 passes 24/24 complete decoder processes on two adapted FATE inputs, each with
 three exact-oracle repetitions. The original published CheriBSD kernel's

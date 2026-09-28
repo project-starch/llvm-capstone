@@ -152,6 +152,16 @@ measure rounding, available size classes, and allocability separately.
 
 ## Current SQLite preview and remaining measurements
 
+The [three-application figure set](../../experiments/study/results/application-memory-paper-20260928/README.md)
+now applies this layout to SQLite, mruby and FFmpeg, with a common four-arm
+reuse figure, signed changes from each platform's control, three memory
+companions and an eight-workload supplement. It reproduces all 96 existing
+reuse-process records through their raw campaign validators and revalidates
+the 12 committed SQLite memory transcripts. The review PDF includes captions;
+vector figures and LaTeX snippets are separate. This is a checked reanalysis,
+not a new application campaign. It preserves the SQLite metadata tradeoff,
+mruby's post-render retention and FFmpeg's coincident reuse curves.
+
 The [SQLite layout preview](../../experiments/study/results/sqlite-normalized-memory-20260927/paper-layout/README.md)
 renders only the complete 12-run repeated-work experiment, at paper width.
 It shows paired costs, absolute address coverage, and selected allocator
@@ -163,8 +173,10 @@ fills its memsys5 reuse slot, and the [FFmpeg decoder lease-gap
 CDF](../../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
 fills a second inner-boundary slot from complete application executions. The
 FFmpeg study also counts explicit per-granule poison/clear and copy operations in the selective
-PoisonCap adapter despite identical reuse bins in all four arms. Other
-applications still need inner-boundary observations. Requested payload,
+PoisonCap adapter despite identical reuse bins in all four arms. The complete
+mruby GC-slot and adapted FFmpeg FATE observations are included in the new
+figure set. The remaining three applications still need complete four-arm
+inner-boundary observations. Requested payload,
 complete protection-metadata accounting, a qualified common burst, and a
 sustainable node policy remain
 before the other planned memory figures can make total-cost claims. Existing
