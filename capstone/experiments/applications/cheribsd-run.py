@@ -64,7 +64,7 @@ def policy_environment(point):
             if point.get('mode') != int(arm == 'poisoncap-temporal'):
                 raise ValueError('CPython pymalloc arm and application mode disagree')
         elif boundary == ('postgres', 'postgres-memory-contexts'):
-            expected[arm] = 0
+            expected[arm] = int(point.get('nested_policy') is not None)
             if point.get('mode') != int(arm == 'poisoncap-temporal'):
                 raise ValueError('PostgreSQL context arm and application mode disagree')
         else:
@@ -134,6 +134,9 @@ def nested_samples(stderr):
 def published_policy_valid(point, stderr):
     boundary = point.get('nested_allocator')
     prefix = {'mruby-gc': 'MRB_GC_STUDY ', 'ffmpeg-pool': 'FF2_POISONCAP '}.get(boundary)
+    if boundary == 'postgres-memory-contexts':
+        # Its reports are on stdout and are validated in verdict().
+        return True
     if prefix is None:
         return not point.get('nested_policy')
     reports = [dict(word.split('=', 1) for word in line.split()[1:])
@@ -204,6 +207,29 @@ def verdict(point, rc, stdout, stderr, stdout_raw=None):
         stream = stdout if point.get('reuse_gap_stream') == 'stdout' else stderr
         try: parse_reuse_gap(stream, point['reuse_gap'])
         except ValueError: return 'bad-reuse-gap'
+    if (point.get('nested_allocator') == 'postgres-memory-contexts' and
+            point.get('nested_policy')):
+        if re.findall(r'^PG_RUNTIME revocation=(\d+)$', stderr, re.M) != [str(point['revocation'])]:
+            return 'bad-runtime-policy'
+        try:
+            def pg_report(prefix):
+                lines = [re.sub(r'^(backend> )+', '', line) for line in stdout.splitlines()]
+                reports = [line for line in lines if line.startswith(prefix + ' ')]
+                if len(reports) != 1:
+                    raise ValueError('missing or duplicate PostgreSQL report')
+                return {k: int(v) for k, v in (part.split('=') for part in reports[0].split()[1:])}
+            policy = pg_report('PG_POISONCAP_POLICY')
+            state = pg_report('PG_POISONCAP')
+            meta = pg_report('PG_POISONCAP_METADATA')
+            if (policy['queue_capacity'], policy['min_held'], policy['fraction_denominator']) != (4096, 16 << 20, 4):
+                return 'bad-inner-policy'
+            if (state['mode'] != point['mode'] or state['tolerated_double_drops'] or
+                    state['managed_reset_sweeps'] or
+                    state['sweeps'] != policy['capacity_sweeps'] + policy['threshold_sweeps'] or
+                    not 0 <= meta['chunk_live'] <= meta['chunk_peak'] < meta['chunk_capacity']):
+                return 'bad-inner-metrics'
+        except (KeyError, ValueError):
+            return 'bad-inner-metrics'
     if point.get('nested_allocator') == 'mruby-gc':
         try:
             inner = nested_samples(stderr)

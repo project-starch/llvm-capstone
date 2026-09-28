@@ -40,6 +40,7 @@ if [[ ! -d $SRC ]]; then
       patch -d "$SRC" -p1 --batch --forward --fuzz=0 -s \
         < "$MANAGER"/patches/postgresql-17.0-"$n"-*.patch
     done
+    patch -d "$SRC" -p1 --batch --forward --fuzz=0 -s < "$HERE/patches/0018-poisoncap-defer-freelist-reuse.patch"
   fi
   printf '%s\n' "$MODE" > "$ROOT/mode.txt"
 fi
@@ -47,12 +48,35 @@ fi
 CC="$CHERI_SDK/bin/clang --target=riscv64-unknown-freebsd13 --sysroot=$CHERI_SYSROOT -march=rv64imafdcxcheri -mabi=l64pc128d -mno-relax -fuse-ld=lld -B$CHERI_SDK/bin"
 FLAGS=-O1
 if [[ $MODE == poisoncap ]]; then
-  FLAGS="$FLAGS -DPG_POISONCAP -DPG_POISONCAP_BATCHED -I$MANAGER/src/allocators/sublet -I$MANAGER/src/cheribsd"
+  CHUNK_CAPACITY=${PG_CHERI_CHUNK_CAPACITY:-65536}
+  [[ $CHUNK_CAPACITY =~ ^[0-9]+$ && $CHUNK_CAPACITY -ge 2 && $CHUNK_CAPACITY -le 1048576 ]] || {
+    echo "PG_CHERI_CHUNK_CAPACITY must be between 2 and 1048576" >&2; exit 2;
+  }
+  BLOCK_CAPACITY=${PG_CHERI_BLOCK_CAPACITY:-8192}
+  [[ $BLOCK_CAPACITY =~ ^[0-9]+$ && $BLOCK_CAPACITY -ge 2 && $BLOCK_CAPACITY -le 1048576 ]] || {
+    echo "PG_CHERI_BLOCK_CAPACITY must be between 2 and 1048576" >&2; exit 2;
+  }
+  FLAGS="$FLAGS -DPG_BLOCK_MAX=$BLOCK_CAPACITY -DPG_POISONCAP -DPG_POISONCAP_BATCHED -DPG_CHUNK_MAX=$CHUNK_CAPACITY -I$MANAGER/src/allocators/sublet -I$MANAGER/src/cheribsd"
   if [[ ${PG_CHERI_GAP_OBSERVER:-0} == 1 ]]; then
     FLAGS="$FLAGS -DPG_REUSE_GAP_OBSERVER=1"
   fi
 fi
 cd "$SRC"
+if [[ $MODE == poisoncap ]]; then
+  grep -q pg_poisoncap_defer_reuse src/backend/utils/mmgr/aset.c || {
+    echo "reused source lacks quarantine patch; use a fresh PG_CHERI_ROOT" >&2; exit 2;
+  }
+fi
+if [[ -f config.status ]]; then
+  python3 - "$FLAGS" <<'PY'
+from pathlib import Path
+import sys
+line = next(line for line in Path('src/Makefile.global').read_text().splitlines()
+            if line.startswith('CFLAGS = '))
+if not line.endswith(' ' + sys.argv[1]):
+    raise SystemExit('configured CFLAGS differ from requested build; use a fresh PG_CHERI_ROOT')
+PY
+fi
 if [[ ! -f config.status ]]; then
   CC="$CC" CFLAGS="$FLAGS" pgac_cv_computed_goto=no \
     ./configure --host=riscv64-unknown-freebsd13 --build=x86_64-pc-linux-gnu \
@@ -124,9 +148,13 @@ patches = [one_patch(recipe / 'patches', f'{number}-*.patch') for number in
 if mode == 'poisoncap':
     patches += [one_patch(manager / 'patches', f'postgresql-17.0-{number}-*.patch')
                 for number in ('0003', '0004', '0005', '0006', '0007')]
+if mode == 'poisoncap':
+    patches.append(recipe / 'patches/0018-poisoncap-defer-freelist-reuse.patch')
 inputs = [*patches, recipe / 'cheribsd-compat.py', recipe / 'build-cheribsd.sh']
 if mode == 'poisoncap':
-    inputs += [recipe / 'poisoncap-app.c', manager / 'src/cheribsd/poisoncap.c']
+    inputs += [recipe / 'poisoncap-app.c', manager / 'src/cheribsd/poisoncap.c',
+               manager / 'src/cheribsd/poisoncap.h',
+               manager / 'src/allocators/sublet/pg_subpool.h']
     if '-DPG_REUSE_GAP_OBSERVER=1' in shlex.split(flags):
         inputs.append(recipe / '../../../experiments/study/reuse-gap-observer.h')
 config = root / 'postgresql-17.5/src/include/pg_config.h'
@@ -144,8 +172,12 @@ manifest = {
     'application': 'postgresql-17.5',
     'mode': mode,
     'reused_source_root': bool(int(reused_root)),
-    'poisoncap_policy': 'reuse-or-block-release-triggered-batch' if mode == 'poisoncap' else None,
+    'poisoncap_policy': 'published-sqlite-thresholds-transferred-full-queue-corrected' if mode == 'poisoncap' else None,
     'reuse_gap_observer': '-DPG_REUSE_GAP_OBSERVER=1' in shlex.split(flags),
+    'chunk_metadata_capacity': next((int(f.split('=', 1)[1]) for f in shlex.split(flags)
+                                     if f.startswith('-DPG_CHUNK_MAX=')), None),
+    'block_metadata_capacity': next((int(f.split('=', 1)[1]) for f in shlex.split(flags)
+                                     if f.startswith('-DPG_BLOCK_MAX=')), None),
     'source_archive_sha256': sha256(archive),
     'pg_config_sha256': sha256(config),
     'pointer_bytes': setting('SIZEOF_VOID_P'),

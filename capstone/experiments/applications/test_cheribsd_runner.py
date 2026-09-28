@@ -101,10 +101,40 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(runner.verdict(point, 0, stdout, 'ERROR: broken\n' + stderr),
                          'oracle-mismatch')
 
+    def test_postgres_transferred_policy_requires_runtime_and_sweep_evidence(self):
+        rows = [f'1: row = "{i}" (typeid = 23, len = 4, typmod = -1, byval = t)' for i in range(20)] + ['1: count = "1500" (typeid = 20, len = 8, typmod = -1, byval = t)', '----']
+        stdout = (''.join('\t'+row+'\n' for row in rows) +
+                  'PG_POISONCAP mode=1 sweeps=3 tolerated_double_drops=0 managed_reset_sweeps=0\n'
+                  'backend> PG_POISONCAP_POLICY queue_capacity=4096 min_held=16777216 fraction_denominator=4 '
+                  'capacity_sweeps=2 threshold_sweeps=1\n'
+                  'PG_POISONCAP_METADATA chunk_live=4000 chunk_peak=18000 chunk_capacity=65536\n')
+        point = dict(application='postgres', arm='poisoncap-temporal', mode=1, revocation=1,
+                     nested_allocator='postgres-memory-contexts',
+                     nested_policy='published-sqlite-thresholds-corrected-v1',
+                     expected_pg_rows_sha256=hashlib.sha256(('\n'.join(rows)+'\n').encode()).hexdigest())
+        stderr = 'PG_RUNTIME revocation=1\nEXP-GUEST-EXIT 0\n'
+        self.assertEqual(runner.verdict(point, 0, stdout, stderr), 'pass')
+        for old, new in [('sweeps=3', 'sweeps=4'), ('managed_reset_sweeps=0', 'managed_reset_sweeps=1'),
+                         ('chunk_peak=18000', 'chunk_peak=65536'),
+                         ('queue_capacity=4096', 'queue_capacity=512'),
+                         ('tolerated_double_drops=0', 'tolerated_double_drops=1')]:
+            self.assertNotEqual(runner.verdict(point, 0, stdout.replace(old, new), stderr), 'pass')
+        self.assertEqual(runner.verdict(point, 0, stdout, stderr.replace('revocation=1', 'revocation=0')),
+                         'bad-runtime-policy')
+
 
 class PolicyTests(unittest.TestCase):
     def point(self, arm, enabled):
         return dict(arm=arm, revocation=enabled, environment={}, argv=['/tmp/app', 'a b'])
+
+    def test_postgres_transferred_policy_enables_outer_revocation(self):
+        point = dict(self.point('poisoncap-temporal', 1), application='postgres', mode=1,
+                     nested_allocator='postgres-memory-contexts',
+                     nested_policy='published-sqlite-thresholds-corrected-v1')
+        self.assertEqual(runner.policy_environment(point),
+                         {'PG_POISONCAP_MODE': '1', '_RUNTIME_REVOCATION_ENABLE': '1'})
+        with self.assertRaises(ValueError):
+            runner.policy_environment(dict(point, revocation=0))
 
     def test_default_remains_unmodified(self):
         self.assertEqual(runner.policy_environment(self.point('cheribsd-default', 1)), {})
