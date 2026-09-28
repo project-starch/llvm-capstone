@@ -76,6 +76,8 @@ def main():
     p.add_argument('--include', type=Path, action='append', default=[])
     p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres'], default='none')
     p.add_argument('--gc-gaps', action='store_true', help='mruby GC-slot aggregate observer is present in the input archive')
+    p.add_argument('--reuse-gap', action='store_true',
+                   help='retain the PostgreSQL inner-chunk reuse report in the final image')
     p.add_argument('--allocations', action='store_true', help='Count application allocation sizes and address reuse')
     args = p.parse_args()
     input_revision = subprocess.check_output(['git', '-C', REPO, 'rev-parse', args.input_revision+'^{commit}'], text=True).strip()
@@ -100,6 +102,8 @@ def main():
         raise ValueError('nested discovery arms use level0 for their separate outer heap')
     if args.gc_gaps and args.app != 'mruby':
         raise ValueError('--gc-gaps is only for the instrumented mruby archives')
+    if args.reuse_gap and (args.app, args.nested) != ('postgres', 'postgres'):
+        raise ValueError('--reuse-gap requires an instrumented PostgreSQL Sublet archive')
     for f in [musl / 'include/stdlib.h', libc, *objects]:
         if not f.is_file(): raise FileNotFoundError(f)
     sdk = out / 'sdk'
@@ -133,6 +137,8 @@ def main():
     if args.nested != 'none':
         extra += ['-O1', '-Wl,--wrap=__capstone_region', *defines, '-I',
                   REPO / 'capstone/runtime/include', HERE / 'regions.c']
+    if args.reuse_gap:
+        extra += ['-Wl,--undefined=pg_reuse_gap_report']
     if args.app in ('sqlite', 'ffmpeg'):
         source = HERE / 'workloads' / ('sqlite.c' if args.app == 'sqlite' else 'decode.c')
         extra += ['-O1', source]
@@ -142,6 +148,7 @@ def main():
     run([args.toolchain / 'bin/llvm-objcopy', '--strip-debug', image])
     manifest = dict(application=args.app, allocations=args.allocations,
                     gc_gaps=args.gc_gaps,
+                    reuse_gap=args.reuse_gap,
                     allocations_sha256=sha(HERE / 'allocations.c') if args.allocations else None,
                     heap=args.heap, nested=args.nested, recipe_revision=input_revision,
                     runtime_revision=subprocess.check_output(['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip(),
