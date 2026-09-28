@@ -1,5 +1,14 @@
 # Capstone project documentation
 
+Inner-reuse expansion: [CPython](../experiments/study/results/cpython-reuse-three-arm-20260928/README.md)
+now has three qualified complete-interpreter arms and
+[PostgreSQL](../experiments/study/results/postgres-reuse-spatial-20260928/README.md)
+has a qualified CheriBSD spatial control plus a
+[Capstone+Sublet arm](../experiments/study/results/postgres-reuse-sublet-20260928/README.md).
+The common runners validate native/application oracles and inner histograms.
+Neither application has a four-arm reuse figure yet; Perl still lacks the
+matched CheriBSD inner allocator port.
+
 Published-threshold memory comparison: the
 [fresh mruby/FFmpeg campaign](../experiments/study/results/published-policy-20260928/README.md)
 validates 48 complete application processes with the audited PoisonCap
