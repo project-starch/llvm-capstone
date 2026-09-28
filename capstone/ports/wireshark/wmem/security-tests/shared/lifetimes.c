@@ -1,5 +1,8 @@
 #include "port.h"
 #include "scopes.h"
+#if defined(WM_DOMAIN) && defined(WMEM_PORT_CHUNKS)
+#include "chunks.h"
+#endif
 #include <string.h>
 #define CHECK(x, n)                                                            \
   do {                                                                         \
@@ -41,7 +44,7 @@ void wm_replay(const struct wm_header *in, struct wm_header *out) {
   out->count = 1;
   const struct wm_event *e = (const void *)(in + 1);
   unsigned test = e->arg;
-  CHECK(in->magic == WM_MAGIC && in->count == 1 && test <= 12, 501);
+  CHECK(in->magic == WM_MAGIC && in->count == 1 && test <= 17, 501);
   wm_scopes_init();
   wm_enter_file_scope();
   /* The per-dissection pool (block_fast) and the file scope (block). */
@@ -108,22 +111,36 @@ void wm_replay(const struct wm_header *in, struct wm_header *out) {
     CHECK(r[16] == 93, 512);
     break;
   }
-  case 3:
+  case 3: {
     /* The recycler allocator's reset retains and reinitializes its block.
-     * Its free-list node is written into the freed chunk's data, so the
-     * unprotected read returns allocator metadata, not the old byte. */
+     * Under the chunk port the block's headers and free-list links live
+     * beside it, so nothing is written into the freed chunk: the unprotected
+     * read returns the old byte, and that is checked. (Upstream writes a
+     * free-list node into the chunk's data, and the read returns metadata.) */
     wmem_free_all(file);
     mark(test);
-    (void)read_probe(held_q);
+    unsigned v = read_probe(held_q);
+#if defined(WMEM_PORT_CHUNKS) || defined(WM_P2_CONTROL)
+    CHECK(mode == 1 || v == 41, 519);
+#endif
+    (void)v;
     break;
-  case 4:
-    /* Documented limit: an individual recycler free returns the chunk to a
-     * free list inside a live block and ends no epoch. Neither mode faults;
-     * the unprotected read again sees the free-list node. */
+  }
+  case 4: {
+    /* An individual recycler free inside a live block. The chunk port gives
+     * the chunk a region of its own, so the free is a revoke and the
+     * protected read faults; the unprotected one sees the old byte. (Under
+     * the region-granular hooks alone this ended no epoch and neither mode
+     * faulted.) */
     wmem_free(file, q);
     mark(test);
-    (void)read_probe(held_q);
+    unsigned v = read_probe(held_q);
+#if defined(WMEM_PORT_CHUNKS) || defined(WM_P2_CONTROL)
+    CHECK(mode == 1 || v == 41, 520);
+#endif
+    (void)v;
     break;
+  }
   case 5:
     /* Bounds: one byte past the request faults in both modes. */
     mark(test);
@@ -204,6 +221,88 @@ void wm_replay(const struct wm_header *in, struct wm_header *out) {
     if (mode == 1)
       wmem_free(file, held_q);
     break;
+  /* 13-17 were added with the port's v2, after its claim audit found no
+   * fixture for the realloc paths, the block allocator's jumbo path, a double
+   * free inside a live block, or the reuse of small chunks. */
+  case 13: {
+    /* A growing realloc. Upstream grows this chunk in place, into the free
+     * space that follows it, so the old pointer stays valid; the port never
+     * grows in place, so it moves, and the old chunk's free is a revoke. The
+     * moved copy is checked live first. */
+    unsigned char *g = wmem_alloc(file, 64);
+    CHECK(g, 521);
+    g[0] = 43;
+    unsigned char *volatile held_g = g;
+    uintptr_t address_g = (uintptr_t)g;
+    unsigned char *g2 = wmem_realloc(file, g, 4096);
+    CHECK(g2 && g2[0] == 43, 522);
+#ifdef WMEM_PORT_CHUNKS
+    CHECK((uintptr_t)g2 != address_g, 523);
+#endif
+    (void)address_g;
+    mark(test);
+    (void)read_probe(held_g);
+    break;
+  }
+  case 14: {
+    /* A shrinking realloc that splits the chunk. The port takes the chunk
+     * back (a revoke) and hands its front out again at the same address, so a
+     * pointer kept from before the realloc is stale although its address did
+     * not change -- realloc's contract, which upstream does not enforce: it
+     * returns the same pointer, and the old one stays valid. */
+    unsigned char *s = wmem_alloc(file, 256);
+    CHECK(s, 524);
+    s[0] = 47;
+    unsigned char *volatile held_s = s;
+    uintptr_t address_s = (uintptr_t)s;
+    unsigned char *s2 = wmem_realloc(file, s, 64);
+    CHECK(s2 && (uintptr_t)s2 == address_s && s2[0] == 47, 525);
+    mark(test);
+    (void)read_probe(held_s);
+    break;
+  }
+  case 15: {
+    /* A jumbo object of the BLOCK allocator (fixture 9's is block_fast's)
+     * lives in a region of its own, which its free releases. */
+    size_t jumbo = 9u << 20;
+    unsigned char *j = wmem_alloc(file, jumbo);
+    CHECK(j, 526);
+    j[0] = 87;
+    unsigned char *volatile held_j = j;
+    wmem_free(file, j);
+    mark(test);
+    (void)read_probe(held_j);
+    break;
+  }
+  case 16:
+    /* A chunk freed twice inside a live block. The port's first free revoked
+     * it, so the second is refused at the allocator's own probe. Only the
+     * protected arm runs the second free: unprotected, it would corrupt the
+     * free lists silently. */
+    wmem_free(file, q);
+    mark(test);
+    if (mode == 1)
+      wmem_free(file, held_q);
+    break;
+  case 17: {
+    /* Small chunks are reused, not lost. A 16-byte chunk freed inside a live
+     * block serves the next request of its size from the same address:
+     * upstream merges it back into the free space it came from, and the port,
+     * which never merges, lists it. The port's first version listed no chunk
+     * under two pointers of data, so each of these would carve new space. */
+    unsigned char *t0 = wmem_alloc(file, 8);
+    CHECK(t0, 527);
+    uintptr_t address_t = (uintptr_t)t0;
+    wmem_free(file, t0);
+    for (unsigned i = 0; i < 1000; ++i) {
+      unsigned char *t = wmem_alloc(file, 8);
+      CHECK(t && (uintptr_t)t == address_t, 528);
+      t[0] = (unsigned char)i;
+      wmem_free(file, t);
+    }
+    mark(test);
+    break;
+  }
   }
   if (packet)
     wm_packet_pool_release(packet);
@@ -211,4 +310,7 @@ void wm_replay(const struct wm_header *in, struct wm_header *out) {
     wm_leave_file_scope();
   wm_scopes_cleanup();
   out->completed = 1;
+#if defined(WM_DOMAIN) && defined(WMEM_PORT_CHUNKS)
+  wm_chunk_report(out);
+#endif
 }
