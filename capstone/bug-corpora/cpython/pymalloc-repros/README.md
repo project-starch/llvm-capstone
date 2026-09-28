@@ -96,7 +96,7 @@ That is the corpus's thesis in the project's own build documentation.
 
 ## Layout
 
-    SCHEMA.md            the corpus contract, field by field
+    corpus.json          this corpus's declaration; ../../SCHEMA.md is the contract
     NN_<gh-NNNNN>_<slug>/   NN is the case number a run selects
         case.c           the sequence; one program per defect
         case.json        machine-readable claims: layer, size, shape, arms, oracles
@@ -107,7 +107,6 @@ That is the corpus's thesis in the project's own build documentation.
         README.md            how to run the corpus there
         run-defects.py       the runner and its oracles
     tests/               everything that can say FAIL
-        check-corpus.py      enforces SCHEMA.md; exits non-zero on drift
         cheribsd/            the CheriBSD oracles' own negative controls
     platform/            the libc fix the CheriBSD target needs, and a script
                          that applies it, rebuilds and reverts
@@ -127,14 +126,15 @@ own. `shared/build-cases.sh` invokes that seam once per case and puts the
 programs side by side as `bin/defect-NN`. All twenty build in under half a
 minute for either target.
 
-`SCHEMA.md` states what a case is and what every field means, and
-`tests/check-corpus.py` enforces it -- required fields, dense case numbers, a
+[`../../SCHEMA.md`](../../SCHEMA.md) states what a case is and what every field
+means, and [`../../tools/check-corpus.py`](../../tools/check-corpus.py) enforces
+it over every corpus -- required fields, dense case numbers, a
 `PROVENANCE.md` beside every claim, every arm's oracle, and the shape table
 actually partitioning the cases. It found the headline ratio wrong on the day
 it was written: the table has ten rows and the prose said nine. Run it after
 touching anything here:
 
-    python3 tests/check-corpus.py
+    python3 ../../tools/check-corpus.py
     python3 -m unittest discover -s tests -p 'test_*.py'
 
 ## Running it
@@ -150,7 +150,7 @@ commands, its oracle and its negative control are in its own manual:
 Both build from the same `case.c` files; a case behaves identically on both.
 After touching anything here, run the checks:
 
-    python3 tests/check-corpus.py
+    python3 ../../tools/check-corpus.py
     python3 -m unittest discover -s tests -p 'test_*.py'
 
 ## The same twenty on PoisonCap/CheriBSD

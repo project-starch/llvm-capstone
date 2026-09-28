@@ -1,0 +1,21 @@
+{
+  "case": 6,
+  "upstream_fix": "php#77977",
+  "title": "A user-defined function remains registered after its backing state is freed and dereferences that state when invoked.",
+  "consumer": "PHP",
+  "class": "UAF",
+  "verdict": "literal-traceable",
+  "primitive": "S",
+  "live_in_pin": null,
+  "live_note": "The defect is in the binding, not in SQLite: this corpus pins no binding release, and the host arm builds the 3.53.3 amalgamation, so whether a row is live in a given binding version is not established here.",
+  "arms": {
+    "host-asan": {
+      "oracle": "heap-use-after-free",
+      "observed": "heap-use-after-free (UDF pApp)"
+    }
+  },
+  "capstone_column": {
+    "ledger_status": "family (S)"
+  },
+  "status": "host ASan arm recorded, oracle 'heap-use-after-free'"
+}

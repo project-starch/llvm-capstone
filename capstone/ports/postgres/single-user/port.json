@@ -1,0 +1,30 @@
+{
+  "program": "postgres",
+  "role": "full-application",
+  "title": "The complete PostgreSQL single-user backend, on Capstone and CheriBSD purecap",
+  "upstream": {
+    "version": "17.5",
+    "pin_source": [
+      {
+        "file": "capstone/ports/postgres/single-user/build-domain.sh",
+        "grep": "not the pinned PostgreSQL 17.5 archive"
+      },
+      {
+        "file": "capstone/ports/postgres/single-user/build-cheribsd.sh",
+        "grep": "SRC=$ROOT/postgresql-17.5"
+      }
+    ]
+  },
+  "targets": [
+    "capstone-domain",
+    "cheribsd-purecap"
+  ],
+  "workload": "work.sql, checked against the native 16-byte-MAXALIGN oracle",
+  "evidence": [
+    "capstone/experiments/study/results/postgres-reuse-four-arm-20260928"
+  ],
+  "related": [
+    "capstone/ports/postgres/memory-contexts"
+  ],
+  "note": "The memory-context corpus and replay component pin 17.0, not 17.5."
+}

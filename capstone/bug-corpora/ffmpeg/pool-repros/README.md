@@ -23,7 +23,7 @@ further pool-backed specimens it found that are not built here, are in
 ## The contract
 
 The layout and the `case.json` fields are the corpus contract in
-[`cpython/pymalloc-repros/SCHEMA.md`](../../cpython/pymalloc-repros/SCHEMA.md),
+[`SCHEMA.md`](../../SCHEMA.md),
 which is the authority; it is referenced rather than copied, because a contract
 that exists twice is two contracts. One directory per case,
 `NN_<upstream-fix>_<slug>/` holding `case.c`, `case.json` and `PROVENANCE.md`;
@@ -127,17 +127,17 @@ emulators.
 
 ## Where this corpus deviates from the contract, and why
 
-`tests/check-corpus.py` in the pymalloc corpus enforces
-[SCHEMA.md](../../cpython/pymalloc-repros/SCHEMA.md). Run against these cases it
-reports exactly three kinds of problem, all of them deliberate. They are listed
-here rather than silenced, and no copy of that checker is shipped beside them: a
-fork would be a second contract, and a checker that fails by design is noise.
+[`../../tools/check-corpus.py`](../../tools/check-corpus.py) enforces
+[SCHEMA.md](../../SCHEMA.md) over every corpus, this one included, reading the
+`corpus.json` beside these cases. The deviations this section used to list are
+now part of the contract instead of complaints: the extra arms are declared
+arms, and the case macro is declared (`FF2`) rather than assumed to be the
+pymalloc corpus's `PYC`. What each one means is unchanged.
 
-| what it reports | why |
+| arm | what it is |
 |---|---|
-| `arm 'native-fix-differential' is not in SCHEMA.md` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
-| `arm 'cheribsd-revocation' is not in SCHEMA.md` | stock CheriBSD with `libc` revocation enabled is a fourth system the contract does not yet name. It is the arm that makes the blindness claim a measurement |
-| `case.c declares no PYC_CASE` | the macro is the corpus's seam to its allocator; here it is `FF2_CASE`/`APR_CASE`. The rule the checker means — a case declares the number its directory carries, and the driver refuses a fixture that names another — is implemented |
+| `native-fix-differential` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
+| `cheribsd-revocation` | stock CheriBSD with `libc` revocation enabled: a fourth system, and the arm that makes the blindness claim a measurement |
 
 `poisoncap-protected` carries `si_code: null` with a note. The runner records a
 process exit status; 162 is 128+34 so the signal is derived, but `si_code` is not

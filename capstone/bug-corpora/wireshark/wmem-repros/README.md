@@ -7,7 +7,7 @@ for the guarded authority hooks the port applies. The consumers are reduced,
 the allocator is not.
 
 The layout is the contract in
-[`../../cpython/pymalloc-repros/SCHEMA.md`](../../cpython/pymalloc-repros/SCHEMA.md):
+[`../../SCHEMA.md`](../../SCHEMA.md):
 one directory per case, `NN_<upstream-fix>_<slug>/`, holding a `case.c` that is
 a complete translation unit, a `case.json` of machine-readable claims, and a
 `PROVENANCE.md`. Case numbers are dense from zero. One program per case,
@@ -158,5 +158,5 @@ The runner needs the same environment the port documents (`CAPSTONE_QEMU_BINARY`
 A run that produced no `serial.log` did not run; check before believing a
 domain result. `--negative-control` corrupts the input record so the program
 refuses it before any case runs; every arm must then FAIL, and the flag makes
-the exit status 0 only if every one did. `tests/check-corpus.py --self-test`
+the exit status 0 only if every one did. `../../tools/check-corpus.py --self-test`
 enforces the contract and first proves it can reject four corruptions.

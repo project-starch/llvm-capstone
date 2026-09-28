@@ -1,0 +1,37 @@
+{
+  "program": "ffmpeg",
+  "boundary": "AVBufferPool / AVRefStructPool",
+  "title": "Consumer-side temporal defects whose stale storage an FFmpeg pool handed out",
+  "upstream": {
+    "version": "9.0.1",
+    "port": "capstone/ports/ffmpeg/buffer-pool"
+  },
+  "cases": 3,
+  "case_schema": "case-json",
+  "case_macro": "FF2",
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "cheribsd-revocation",
+    "native-detect",
+    "native-fix-differential",
+    "backing"
+  ],
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "false": 3
+  },
+  "runners": [
+    "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-native.sh"
+  ],
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "inventory": "capstone/docs/ref/ffmpeg-pool-consumer-defects.md",
+  "evidence": [
+    "capstone/ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev"
+  ],
+  "advisories": [],
+  "shape_table": true
+}
