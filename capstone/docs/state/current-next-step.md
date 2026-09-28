@@ -1,19 +1,14 @@
-PostgreSQL reuse follow-up (2026-09-28): the
-[spatial raw qualification](../../experiments/study/results/postgres-reuse-spatial-20260928/README.md)
-now passes three complete, native-matched SQL processes with a validated
-inner-chunk histogram in the common CheriBSD runner. The
-[Capstone+Sublet arm](../../experiments/study/results/postgres-reuse-sublet-20260928/README.md)
-also passes three complete processes with the same SQL oracle and a checked
-histogram. The [Capstone original-layout
-control](../../experiments/study/results/postgres-reuse-capstone-spatial-20260928/README.md)
-now passes 3/3 with the same SQL oracle and inner-chunk scope. Qualify
-protected PoisonCap before
-admitting a PostgreSQL row to the cross-application violin. A scratch queue
-candidate still stopped progressing during the INSERT without actual
-`cheri_revoke`, after about 16,384 handouts; an O(1) chunk-index free list
-did not remove that failure. Isolate the deferred free-list lifetime before
-moving any queue-policy change into the study branch. The diagnostic binary
-has no temporal protection and must remain excluded.
+PostgreSQL reuse follow-up (2026-09-28): [four-arm qualification](../../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
+now validates 12/12 complete SQL processes and the
+[first-plot extension](../../experiments/study/results/reuse-four-applications-20260928/README.md)
+adds PostgreSQL to SQLite/mruby/FFmpeg. The blocking recursion was metadata
+exhaustion; the PIE-offset parser diagnosis was wrong. Preserve the larger,
+equal within-pair metadata capacities, transferred thresholds, verified outer
+process revocation, disabled guest-service default and raw repeat variation.
+CPython still needs the revoker VM-map locking repair plus deferred pymalloc
+publication; Perl needs the complete CheriBSD inner-allocator port. Keep this
+study off a PR. Standard pgbench workloads, equal-scope total memory ledgers,
+and the fixed-follow-up reuse metric remain later milestones.
 
 CPython reuse follow-up (2026-09-28): the
 [three-arm raw qualification](../../experiments/study/results/cpython-reuse-three-arm-20260928/README.md)
@@ -89,15 +84,14 @@ quarantines at the same 17.5 `work.sql` input. The mode-0 control from the
 same binary passed all 22 native-matched rows in about 9 seconds. The protected
 mode did not complete: a 256-entry chunk queue recorded 949 sweeps after about
 six minutes before an oracle result. Raising the chunk limit to 4,096 entries
-and queuing whole blocks reached the first aggregate SELECT, but then entered
-runaway recursion in PostgreSQL's `flatten_grouping_sets`; two core samples
-from one process show the stack pointer falling by 128.5 MiB. A 100 KiB
-`max_stack_depth` diagnostic did not stop it. These interrupted processes are
-not benchmark cells. The unqualified policy changes were removed from the
-branch; their code and raw diagnostics remain under
-`/tmp/capstone/pg-poison-batched-blocks-o1/`. Next isolate whether the parser
-graph is corrupted by the adapter's deferred block lifetime or by the
-published PoisonCap runtime before changing another threshold.
+and queuing whole blocks reached the first aggregate SELECT, then exhausted
+the fixed chunk metadata table. **Correction:** the earlier attribution to
+`flatten_grouping_sets` omitted the PIE load bias. The stack instead recursed
+through allocator failure and error-message allocation. The new adapter
+reports explicit capacity exhaustion and provisions both metadata tables
+independently of the published quarantine. Scratch diagnostics remain
+excluded; the qualified replacement is linked above.
+
 
 CPython next (2026-09-28): the [archived complete-interpreter qualification](../../experiments/study/results/cpython-objects-qualification-20260928/README.md)
 now passes Capstone spatial/Sublet 3/3 each and CheriBSD PoisonCap-adapter

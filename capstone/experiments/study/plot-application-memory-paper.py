@@ -128,20 +128,22 @@ def cdf(bins, issues):
     return np.cumsum(bins) * 100.0 / issues
 
 
-def checked_cell(rows):
+def checked_cell(rows, matched_issue_counts=True, allow_variation=False):
     require(len(rows) == 12 and {(r['arm'], r['rep']) for r in rows} ==
             {(a, rep) for a in ARMS for rep in range(3)},
             'expected exactly three processes for each of four arms')
-    require(len({r['issues'] for r in rows}) == 1, 'allocation demand differs')
+    if matched_issue_counts:
+        require(len({r['issues'] for r in rows}) == 1, 'allocation demand differs')
     cell = {}
     for arm in ARMS:
         samples = sorted((r for r in rows if r['arm'] == arm), key=lambda r: r['rep'])
         for r in samples:
             cdf(r['bins'], r['issues'])
             require(sum(r['bins']) == r['reuses'], 'histogram does not reconcile')
-        require(all(r['bins'] == samples[0]['bins'] for r in samples),
-                'repetitions differ: plot their range instead of one curve')
-        cell[arm] = samples[0]
+        if not allow_variation:
+            require(all(r['bins'] == samples[0]['bins'] for r in samples),
+                    'repetitions differ: plot their range instead of one curve')
+        cell[arm] = dict(samples[0], replicates=samples)
     return cell
 
 
@@ -877,6 +879,77 @@ def sqlite_policy_campaign(root, out):
     print('Validated six new SQLite default-policy processes and six archived Capstone controls')
 
 
+def reuse_distribution_plot(cells, keys, labels, out):
+    """Same log-binned histogram violins for every qualified application."""
+    # Pool all three process histograms, preserving genuine between-process
+    # variation. The original cells have identical replicates; pooling leaves
+    # their conditional shape unchanged. Raw process counts remain archived.
+    pooled = {}
+    for key in keys:
+        pooled[key] = {}
+        for arm, record in cells[key].items():
+            samples = record['replicates']
+            require(len(samples) == 3, 'reuse violin requires three complete processes')
+            pooled[key][arm] = dict(
+                bins=[sum(r['bins'][b] for r in samples) for b in range(32)],
+                issues=sum(r['issues'] for r in samples),
+                reuses=sum(r['reuses'] for r in samples))
+    cells = pooled
+    # Histograms are the finest available observations. Draw split, stepped
+    # violins in log-gap coordinates rather than inventing samples for a KDE.
+    fig, ax = plt.subplots(figsize=(7.05, 4.35))
+    fig.subplots_adjust(left=.115, right=.985, top=.88, bottom=.29)
+    control_color, sublet_color, poison_color = '#D1B98D', '#218C86', '#8961B2'
+    fig.legend(handles=[Patch(facecolor=control_color, label='Spatial control'),
+                        Patch(facecolor=sublet_color, label='Sublet'),
+                        Patch(facecolor=poison_color, label='PoisonCap')],
+               loc='upper center', bbox_to_anchor=(.55, .99), ncol=3, frameon=False,
+               fontsize=10, handlelength=1.15, columnspacing=2)
+    max_mass = max(max(r['bins']) / r['reuses'] for cell in cells.values()
+                   for r in cell.values() if r['reuses'])
+    violin_rows = []
+    gap_boundaries = 2.**np.arange(33)
+    for pair_index, (base, protected) in enumerate(PAIRS):
+        color = (sublet_color, poison_color)[pair_index]
+        for row_index, key in enumerate(keys):
+            x = row_index + (-.22 if pair_index == 0 else .22)
+            for arm, direction, shade in ((base, -1, control_color), (protected, 1, color)):
+                r = cells[key][arm]
+                require(not any(r['bins'][20:]), 'violin axis would truncate observed gaps')
+                mass = np.array(r['bins']) / r['reuses'] if r['reuses'] else np.zeros(32)
+                if r['reuses']:
+                    ax.fill_betweenx(gap_boundaries, x,
+                                     x + direction*.19*np.r_[mass, 0]/max_mass,
+                                     step='post', facecolor=shade, edgecolor='none', zorder=3)
+                else:
+                    ax.text(x+.07, 64, 'no reuse', color=shade, fontsize=8,
+                            rotation=90, ha='center', va='center')
+                percent = 100*r['reuses']/r['issues']
+                for bucket, count in enumerate(r['bins']):
+                    violin_rows.append(dict(workload=key, arm=arm, lower_gap=2**bucket,
+                        upper_gap=int(EDGES[bucket]), count=count, issues=r['issues'], reuses=r['reuses'],
+                        conditional_mass=float(mass[bucket]) if r['reuses'] else None,
+                        reused_percent=percent, repetitions=3))
+    ax.set_yscale('log', base=2)
+    ax.set(ylim=(1, 2**20), xlim=(-.6, len(keys)-.4), xticks=range(len(keys)),
+           xticklabels=labels)
+    ax.set_yticks([1, 16, 256, 4096, 65536, 2**20], ['1', '16', '256', '4K', '64K', '1M'])
+    ax.set_ylabel('Release-to-reuse gap (allocations)', fontsize=10)
+    ax.tick_params(axis='x', rotation=90, length=0, pad=9, labelsize=10)
+    ax.tick_params(axis='y', length=0, pad=6, labelsize=9)
+    ax.grid(axis='y', color='#E6E8EB', linewidth=.6, zorder=0)
+    ax.set_axisbelow(True)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    target = out / 'by-metric/00-reuse-distributions'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(target.with_suffix('.pdf'), metadata={'CreationDate': None, 'ModDate': None})
+    fig.savefig(target.with_suffix('.png'), dpi=240)
+    fig.savefig(out / 'reuse-distributions.pdf', metadata={'CreationDate': None, 'ModDate': None})
+    plt.close(fig)
+    write_csv(out / 'reuse-distributions.csv', violin_rows)
+
+
 def organized_policy_review(out):
     """Two navigation views of the same validated measurements, without reruns."""
     campaign = json.loads((out / 'summary.json').read_text())
@@ -984,56 +1057,9 @@ def organized_policy_review(out):
         book.savefig(fig)
         plt.close(fig)
 
-    # Histograms are the finest available observations. Draw split, stepped
-    # violins in log-gap coordinates rather than inventing samples for a KDE.
-    fig, ax = plt.subplots(figsize=(7.05, 4.35))
-    fig.subplots_adjust(left=.115, right=.985, top=.88, bottom=.29)
-    control_color, sublet_color, poison_color = '#D1B98D', '#218C86', '#8961B2'
-    fig.legend(handles=[Patch(facecolor=control_color, label='Spatial control'),
-                        Patch(facecolor=sublet_color, label='Sublet'),
-                        Patch(facecolor=poison_color, label='PoisonCap')],
-               loc='upper center', bbox_to_anchor=(.55, .99), ncol=3, frameon=False,
-               fontsize=10, handlelength=1.15, columnspacing=2)
-    max_mass = max(max(r['bins']) / r['reuses'] for cell in cells.values()
-                   for r in cell.values() if r['reuses'])
-    violin_rows = []
-    gap_boundaries = 2.**np.arange(33)
-    for pair_index, (base, protected) in enumerate(PAIRS):
-        color = (sublet_color, poison_color)[pair_index]
-        for row_index, key in enumerate(keys):
-            x = row_index + (-.22 if pair_index == 0 else .22)
-            for arm, direction, shade in ((base, -1, control_color), (protected, 1, color)):
-                r = cells[key][arm]
-                require(not any(r['bins'][20:]), 'violin axis would truncate observed gaps')
-                mass = np.array(r['bins']) / r['reuses'] if r['reuses'] else np.zeros(32)
-                if r['reuses']:
-                    ax.fill_betweenx(gap_boundaries, x,
-                                     x + direction*.19*np.r_[mass, 0]/max_mass,
-                                     step='post', facecolor=shade, edgecolor='none', zorder=3)
-                else:
-                    ax.text(x+.07, 64, 'no reuse', color=shade, fontsize=8,
-                            rotation=90, ha='center', va='center')
-                percent = 100*r['reuses']/r['issues']
-                for bucket, count in enumerate(r['bins']):
-                    violin_rows.append(dict(workload=key, arm=arm, lower_gap=2**bucket,
-                        upper_gap=int(EDGES[bucket]), count=count, issues=r['issues'], reuses=r['reuses'],
-                        conditional_mass=float(mass[bucket]) if r['reuses'] else None,
-                        reused_percent=percent, repetitions=3))
-    ax.set_yscale('log', base=2)
-    ax.set(ylim=(1, 2**20), xlim=(-.6, 4.6), xticks=range(5),
-           xticklabels=('SQLite · main', 'mruby · AO 8', 'mruby · AO 16',
-                        'FFmpeg · Xvid', 'FFmpeg · resize'))
-    ax.set_yticks([1, 16, 256, 4096, 65536, 2**20], ['1', '16', '256', '4K', '64K', '1M'])
-    ax.set_ylabel('Release-to-reuse gap (allocations)', fontsize=10)
-    ax.tick_params(axis='x', rotation=90, length=0, pad=9, labelsize=10)
-    ax.tick_params(axis='y', length=0, pad=6, labelsize=9)
-    ax.grid(axis='y', color='#E6E8EB', linewidth=.6, zorder=0)
-    ax.set_axisbelow(True)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    with PdfPages(out / 'reuse-distributions.pdf', metadata=metadata) as book:
-        save(fig, 'by-metric/00-reuse-distributions', book)
-    write_csv(out / 'reuse-distributions.csv', violin_rows)
+    reuse_distribution_plot(cells, keys,
+                            ('SQLite · main', 'mruby · AO 8', 'mruby · AO 16',
+                             'FFmpeg · Xvid', 'FFmpeg · resize'), out)
 
     # Exploratory cross-application summary of existing CDFs. These cuts are
     # display choices, not preregistered endpoints for the future A-D campaign.
@@ -1157,6 +1183,36 @@ Die ältere gemischte Ablage bleibt für bestehende Links erhalten.</p>''' + ''.
     print('Wrote review index, three metric sheets and three application sheets from the same validated data')
 
 
+def extended_reuse_review(args):
+    base = args.reuse_review
+    campaign = json.loads((base / 'summary.json').read_text())
+    sqlite = json.loads((base / 'sqlite-summary.json').read_text())
+    keys = ['sqlite-main', 'mruby-ao8', 'mruby-ao16', 'ffmpeg-xvid', 'ffmpeg-resize']
+    labels = ['SQLite · main', 'mruby · AO 8', 'mruby · AO 16', 'FFmpeg · Xvid', 'FFmpeg · resize']
+    cells = {key: checked_cell(sqlite['runs'] if key == 'sqlite-main' else
+                             [r for r in campaign['runs'] if r['workload'] == key]) for key in keys}
+    inputs = [Path(__file__).resolve(), base / 'summary.json', base / 'sqlite-summary.json']
+    for directory in args.reuse_campaign:
+        subprocess.run([sys.executable, str(directory / 'validate.py')], check=True)
+        summary = directory / 'reuse-summary.json'
+        data = json.loads(summary.read_text())
+        require(data['workload'] not in cells, 'duplicate reuse workload')
+        keys.append(data['workload'])
+        labels.append(data['label'])
+        cells[data['workload']] = checked_cell(data['runs'], matched_issue_counts=False, allow_variation=True)
+        inputs.extend([summary, directory / 'validate.py', directory / 'cheribsd-raw.tar.gz'])
+    args.out.mkdir(parents=True, exist_ok=True)
+    plt.rcParams.update({'font.family': 'STIXGeneral', 'font.size': 9,
+                         'pdf.fonttype': 42, 'ps.fonttype': 42})
+    reuse_distribution_plot(cells, keys, labels, args.out)
+    (args.out / 'reuse-provenance.json').write_text(json.dumps({
+        'workloads': keys, 'processes_per_cell': 3,
+        'inputs_sha256': {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest() for path in inputs},
+        'metric': 'Pooled three-process conditional distribution of observed same-start release-to-reissue gaps; successful lifetime index.',
+        'scope': 'Per-application inner allocators; no physical working-set or total-memory inference.'
+    }, indent=2) + '\n')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
@@ -1166,7 +1222,18 @@ def main():
                         metavar=('CAPSTONE_MRUBY', 'CAPSTONE_FFMPEG', 'MRUBY8', 'MRUBY16', 'FFMPEG'),
                         help='render fresh transferred-policy runs separately from historical figures')
     parser.add_argument('--sqlite-policy-runs', type=Path, help='add fresh outer-default SQLite runs paired with archived Capstone controls')
+    parser.add_argument('--reuse-review', type=Path,
+                        help='extend an existing review first figure using its validated summaries')
+    parser.add_argument('--reuse-campaign', type=Path, action='append', default=[],
+                        help='additional four-arm archive with validate.py and reuse-summary.json')
     args = parser.parse_args()
+    if args.reuse_review:
+        if args.policy_runs or args.sqlite_policy_runs or args.verify_raw:
+            parser.error('--reuse-review is a separate archived-figure operation')
+        extended_reuse_review(args)
+        return
+    if args.reuse_campaign:
+        parser.error('--reuse-campaign requires --reuse-review')
     if args.sqlite_policy_runs and not args.policy_runs:
         parser.error('--sqlite-policy-runs requires --policy-runs')
     if args.policy_runs:

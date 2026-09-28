@@ -2,24 +2,34 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-28 — PostgreSQL inner-reuse qualification, three arms
+## 2026-09-28 — PostgreSQL four-arm inner reuse
 
-The [archived CheriBSD spatial campaign](../../experiments/study/results/postgres-reuse-spatial-20260928/README.md)
-passes 3/3 complete PostgreSQL 17.5 `work.sql` processes from independent
-copies of a pristine cluster. Each matches all 22 native 16-byte-MAXALIGN
-result rows and reports the same validated 32-bin inner-chunk reuse histogram.
-The [Capstone+Sublet campaign](../../experiments/study/results/postgres-reuse-sublet-20260928/README.md)
-adds 3/3 complete `work.sql` processes with the same output oracle and
-identical validated inner histograms across repetitions. The
-[Capstone original-layout control](../../experiments/study/results/postgres-reuse-capstone-spatial-20260928/README.md)
-also passes 3/3, with the same 54,032 handouts and 51,177 releases as Sublet;
-its 45,002 observed reuses are compared with Sublet's 43,705. Each histogram
-is error-free and stable across repetitions. The CheriBSD spatial control
-selects 54,004 chunks, so cross-platform counts are not a paired fraction.
-The shared CheriBSD runner now owns fresh archive extraction, `nobody`
-execution, SQL stdin and the native-row oracle. The protected PoisonCap
-backend still lacks a complete inner histogram and application oracle; these
-three qualified arms are not a four-arm paper comparison.
+The [four-arm archive](../../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
+validates 12/12 complete PostgreSQL 17.5 SQL processes: six new CheriBSD
+processes and six archived Capstone processes, three per arm. All match the
+native SQL oracle and have error-free inner histograms. The protected adapter
+now transfers the published SQLite quarantine thresholds, with full-queue
+revocation correction and no allocation-triggered sweep. Each protected
+process performs five capacity sweeps, zero percentage/managed-reset sweeps.
+Both CheriBSD modes use the same fresh `-O1` binary and corrected libc;
+application libc revocation is verified enabled. Guest setup services use a
+disabled default because the separate kernel lock panic can occur in SCP.
+
+The blocker was fixed metadata exhaustion, followed by recursive allocation
+of PostgreSQL error messages. Earlier parser attribution missed the PIE load
+bias and was incorrect. Both modes now provision 65,536 chunk and 8,192 block
+records, reporting occupancy and failing directly on exhaustion. The protected
+processes peak at 20,472–20,502 chunk records. The enlarged metadata must be
+charged in any later total-memory comparison.
+
+Sublet observes 80.89% same-start reuses versus its control's 83.29%; both
+median observed gaps lie in [4,7]. PoisonCap observes 36.20–36.27% versus
+83.28% in its control, with median observed gap in [8192,16383]. The
+[first-plot extension](../../experiments/study/results/reuse-four-applications-20260928/README.md)
+pools all three raw histograms per arm; slight protected-process variation
+is preserved in the archive. Four applications now have complete four-arm
+reuse evidence. CPython and Perl remain incomplete. The SQL is qualification
+work, not pgbench; no physical working-set or total-memory conclusion follows.
 
 ## 2026-09-28 — CPython inner-reuse qualification, three arms
 
