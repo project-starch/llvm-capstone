@@ -99,6 +99,37 @@ well, and row 8 into a plain failure rather than a fault. Every other row answer
 the same with a collection at every allocation as without one, so none of the nine
 depends on stress to reproduce -- which is what makes them usable as cases.
 
+### Temporal or spatial: not the same answer for all nine
+
+Every one of the nine has a temporal **cause** -- something changes underneath a
+reference the client is still holding. That is what makes them one family. But only
+three **manifest** as a use-after-free, and the distinction decides which mechanism
+could enforce against each, so it is measured here rather than assumed from the
+family name.
+
+| row | what ASan reports at the pin | enforcement handle |
+|---|---|---|
+| 7 `606d9a6b2`, 8 `39aecc143`, 9 `0cf969a2b` | `heap-use-after-free` | **revoke-on-free** answers these |
+| 5 `4663fef45` | `heap-buffer-overflow`, READ 0 bytes after the 80-byte entry array from `ea_resize` | **bounds**, not revocation -- nothing is freed |
+| 6 `fb4974528` | overflow 0 bytes past a 30-byte region at 1024 slots per page, use-after-free at one | either, depending on which it reaches first |
+| 1 `1c57532b2`, 2 `a54353ecf`, 3 `08a0432d1`, 4 `eb7693857` | nothing, at either page size | **neither** -- see below |
+
+So: three use-after-free, one purely spatial, one that is both depending on the page
+size, and four with no allocator event to enforce on at all.
+
+Row 5 is the one to be careful about. `GHSA-2778-fvwg-5m8w` reads like a temporal
+defect and is caused by one -- a delete inside an `eql?` callback leaves the scan
+walking for more entries than the hash still holds -- but the violation it commits is
+reading one element past the end of the entry array. A revoke-on-free arm cannot see
+it, because the array was never freed; bounds can. Filing it as temporal would
+predict the wrong arm.
+
+Rows 1-4 are the corpus's reason to exist precisely because they fall in neither
+column: the reference outlives what it named, so the shape is temporal, and yet
+nothing is released and nothing goes out of range, so neither a bounds check nor a
+free-triggered revocation has an event to fire on. Rows 2-4 need per-entry identity
+inside the hash's array; row 1 needs revocation at an ownership transfer.
+
 Row 9 is the one whose oracle is not its own test: the extracted test **passes** in
 the `host` and `stress` builds because the stale read does not change the answer,
 while ASan faults at the pin on exactly the path the fix describes --
@@ -135,11 +166,22 @@ write after it goes through the stale pointer into the **parent's** buffer, whic
 why `base` comes back with a NUL in the middle of it. The whole fix is moving the
 `char *ptr = RSTR_PTR(s);` line to after the modify, at three sites.
 
-ASan is silent because the write is in-bounds *for the parent's allocation* and out
-of bounds only for the view. No allocator event happens at all: nothing is freed,
-nothing is reused, one object simply writes into another's region through a pointer
-the sub-allocation made valid and the un-share made stale. This is the shape a
-per-object capability sees and a malloc-granularity mechanism cannot.
+ASan is silent because no allocator event happens at all. `str_decref`
+(`src/string.c:264`) frees the shared buffer only when the last reference goes; here
+the parent still holds it, so the refcount drops 2 to 1 and nothing is released.
+
+**And the write is in bounds at every granularity**, which is worth stating exactly
+because it decides which mechanism could catch it. Measured on the reproducer above:
+the parent is 45 bytes, the view occupies parent offsets 1 to 44, and the corruption
+spans offsets **1 to 37** -- inside the parent's allocation, and inside the view's own
+extent as well. So neither malloc-granularity bounds nor per-view bounds see it. The
+pointer is not out of range; it names the wrong buffer. The view was handed a new
+buffer by `mrb_str_modify()` and the write went to the old one.
+
+The only handle is **revoking the view's alias into the shared buffer at the
+un-share**, which is revocation on an ownership transfer rather than on a free. That
+is a third enforcement point, distinct from both arms the port has, and this row is
+the one that argues for it.
 
 **Rows 2-4** share one shape at three sets of sites. The nested allocator is the
 hash's own entry array: `ar_delete` and `ht_delete` (`src/hash.c:586`, `:951` at the
@@ -226,11 +268,17 @@ The prediction worth committing before that runs, in the spirit of
   `patches/4.0.0-rc2/0008` stands it sub-lets GC object slots only, so these three
   are predicted to MISS in all three arms -- they are the rows that say what the
   port does not yet cover.
-* **row 1** MISSes in all three arms for the same reason and needs a fourth: the
-  shared string buffer sub-let per `RString` view. It is the cheapest arm to add,
-  because the two views differ by an offset and a length that `mrb_str_modify()`
-  already computes.
-* **rows 5-9** MISS under `level0` and FAULT under both `sublet` and `sublet-gc`.
+* **row 1** MISSes in all three arms, and a fourth arm that merely bounds each
+  `RString` view would not change that: the write is in bounds for the view as well,
+  as measured above. The arm it needs issues each view its own alias into the shared
+  buffer and **revokes that alias in `mrb_str_modify()`**, at the un-share -- an
+  ownership transfer, not a free. Cheap to site, because `str_unshare_buffer`
+  (`src/string.c:274`) is the one place it happens.
+* **row 5** MISSes under `level0`, whose pointers carry the whole arena's bounds, and
+  FAULTs under both sublet arms -- but by **bounds**, since its read runs past an
+  entry array that was never freed. If it faults under an arm with revocation and no
+  per-block bounds, that reading is wrong.
+* **rows 6-9** MISS under `level0` and FAULT under both `sublet` and `sublet-gc`.
 
 If rows 2-4 fault under `sublet` as it stands, the entry array is being reallocated
 where this reading says it is reused, and the reading is wrong.
