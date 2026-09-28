@@ -67,7 +67,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/memcached/allocator-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/memcached/allocator-repros` commits no result bundle of its own.
 - `capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.
-- `capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.
+- `capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. Seven candidates are measured live at the pin and listed in CANDIDATES.md, three of them invisible to ASan; each is reproduced by the upstream test that shipped with its own fix, and four are attributed by a control that carries that fix.
 - `capstone/bug-corpora/postgres/mmgr-repros`: 3 of 8 cases have a PROVENANCE.md.
 - `capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.
 - `capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.
