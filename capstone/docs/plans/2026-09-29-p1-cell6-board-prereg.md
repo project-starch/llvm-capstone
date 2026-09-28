@@ -206,3 +206,117 @@ cell6-hoststdout-*.log for exactly that gate. And board-b80s.sh additionally gre
 baseline for `BASELINE-WARM CYCLES 240654449`: that log is not part of this pair and was not found
 under ~/capstone-artifacts, capstone/ or /tmp/capstone -- it has to be located or re-run before a
 cell-5 boot.
+
+# ============================================================================
+# THE -O2 PAIR, which supersedes everything above
+# ============================================================================
+
+Built 2026-09-30 with `SQLITE_OPT_LEVEL=-O2` passed explicitly on every arm, one tmp root per arm,
+each measure run under its own `flock` on the QEMU lock. Staged at
+`~/capstone-artifacts/p1-O2-2026-09-30/` with a self-verified SHA256SUMS and a
+`check-driver-gates.sh` that evaluates every driver expression with a negative control on each.
+
+## The images
+
+    cell5-memsys5-O2.dom   5f4b44257c93347738a16e2b21596bbe7033b642b4d14b0bb5b58ae5cbaa1016
+                           1,378,344 bytes   entry VA 0x10000
+    cell6-sublet-O2.dom    df484d98b489aeab1e5b33f1bafd4693cf5835b37da27916c15b1327993f159f
+                           1,379,064 bytes   entry VA 0x10000
+    native-baseline-O2     9a80c1cd2a576ed2b7732350b9ebb206515303844b0518e4b9c34c4fa2ac1bd1
+                           793,584 bytes
+
+Both cells enter at 0x10000, so neither collides with the k800 control relinked at 0x20000.
+
+## The emulator readings
+
+    cell 5   canonical  SPEEDTEST1-CYCLES 330684651  HEAP 2097152
+             --stats    SPEEDTEST1-CYCLES 330731081  HEAP 2097152
+    cell 6   arena 2097152  SPEEDTEST1-CYCLES 341028517  HEAP 1344064
+                            sublet: split=5568 mrev=37966 delin=32565 revoke=37966 init=5401
+             arena 1419584  SPEEDTEST1-CYCLES 338707825  HEAP 911104
+                            sublet: split=5481 mrev=37874 delin=32565 revoke=37874 init=5309
+             --stats @2 MiB SPEEDTEST1-CYCLES 341075473  HEAP 1344064
+    baseline BASELINE-WARM CYCLES 240714705 INSTRS 240714707, 25,122 successful lookasides
+
+THE SUBLET COUNTERS ARE UNCHANGED FROM THE -O0 RUN, to the event. That is expected and is a
+cross-check rather than a coincidence: they count allocator events, not instructions, so the
+optimisation level cannot move them while the workload is the same.
+
+## Three independent corroborations that these really are -O2
+
+Each is a figure recorded by somebody else, before this rebuild, that the new numbers land on:
+
+    board-b80a.sh  old -O2 cell 5      330,723,308   new 330,684,651   0.012% apart
+    board-b80b.sh  old -O2 @ 911104    338,496,909   new 338,707,825   0.062% apart
+    board-b80b.sh  old -O2 @ 1344064   340,817,186   new 341,028,517   0.062% apart
+    board-b80a.sh  old native baseline 240,654,449   new 240,714,705   0.025% apart
+    board-b80a.sh  baseline lookasides      25,122   new      25,122   EXACT
+
+The -O0 pair read 678,534,902 for cell 5 against the same 330.7 M record -- a hair over 2x, which
+is the gap that should have been read as an optimisation-level difference on the day.
+
+## THE C-32 CHECK: lookaside is ON at -O2
+
+    cell 5  Successful lookasides: 25010   Lookaside Slots Used: 1
+    cell 6  Successful lookasides: 25010   Lookaside Slots Used: 1
+
+On the pre-D-prime -O2 build this read 0: the pool was compiled in and never used, because
+setupLookaside's pStart was nulled. This is the run-time half of the D-prime claim and it is the
+half that could not be obtained at -O0 at all. The staging script refuses to write the folder if
+either cell reports zero.
+
+## The movc scan: WHAT WAS PREDICTED AND WHAT WAS FOUND
+
+The prediction was written before the -O2 images existed, from the D-PRIME note in
+`capstone/ports/sqlite/sublet/sublet-3530300.patch`, which records 4 mixed / 0 INT-ONLY before
+D-prime and 2 mixed / 0 INT-ONLY after, the two removed being setupLookaside and the two remaining
+being relocatePage and whereLoopAddBtreeIndex "the control that shows the scan still fires".
+
+    PREDICTED   0 INT-ONLY, 2 mixed = relocatePage and whereLoopAddBtreeIndex, no setupLookaside
+    FOUND       1 INT-ONLY, 1 mixed, no setupLookaside -- at two DIFFERENT sites
+
+    cell 6 -O2: 17246 movc(rd!=rs); 10201 with the source read again; 1 INT-ONLY, 1 mixed,
+                1768 call-return-or-argument
+       [MIXED cap,int] main + 0x3ac44   movc a1, s5  -> read @0x3acfc mv a1, s5
+       [INT-ONLY] renameResolveTrigger + 0x10b9c0    movc s11, s10 -> read @0x10b9c4 jalr s10
+
+THE PART THAT MATCHED IS THE PART THE PRE-REGISTRATION WAS ABOUT: no setupLookaside site, on an
+image where the scan demonstrably fires (it returned two sites, and it reproduces the -O0 image's
+6810/3004/0/0/554 on demand). Combined with 25,010 lookasides at run time, D-prime holds at -O2.
+
+THE PART THAT DID NOT MATCH IS NOT EXPLAINED AND IS NOT CLAIMED TO BE. The predicted in-situ
+controls did not appear, and two other sites did. Two things are known about them:
+
+- The scanner prints `<function> + 0x<ABSOLUTE ADDRESS>`, not an offset within the function. The
+  INT-ONLY site is at absolute 0x10b9c0, which is renameResolveTrigger + 0x654; the disassembly
+  there is `movc s11, s10` / `jalr s10`, exactly as reported. The location is real.
+- **Both sites appear identically in cell 5**, which is memsys5 without Sublet and therefore
+  carries no D-prime at all (1 INT-ONLY, 1 mixed, same two functions). So they are common code and
+  are not a D-prime residual.
+
+That leaves an unexplained INT-ONLY movc site in code both cells share. It is not what this
+pre-registration is about and it does not block this boot, but it is a C-32 candidate and it should
+be filed and investigated on its own rather than folded into this result.
+
+## Predictions for the board
+
+1. Cell 6 at the 2 MiB arena reproduces split=5568 mrev=37966 delin=32565 revoke=37966 init=5401.
+2. Cell 6 at the default arena reproduces split=5481 mrev=37874 delin=32565 revoke=37874 init=5309.
+3. HEAP reads 1344064 and 911104 respectively; cell 5 reads 2097152.
+4. Both cells report "Successful lookasides" non-zero under --stats. A zero is C-32 returning.
+5. Cell 5 shows NO sublet counter line. One appearing means the wrong image booted.
+6. Cycle counts are NOT predicted: icount is not silicon timing.
+
+## Falsifiers
+
+- Any counter differing from its configuration above.
+- Lookaside zero on either cell.
+- HEAP other than the values above: the granted arena is not what this assumes.
+- A sublet line in cell 5, or none in cell 6.
+
+## Re-pinning the drivers
+
+board-b80s.sh and board-b80a.sh hard-code the OLD images and figures (d61c8bf784f2bbd1,
+b36eb3814c3cefce, 330723308, 240654449), and board-b80b.sh its own. All of those images are gone
+from disk. A boot on this pair runs a copy of the driver with every constant re-pinned to the
+records above; `check-driver-gates.sh` in the staged folder evaluates the re-pinned values.
