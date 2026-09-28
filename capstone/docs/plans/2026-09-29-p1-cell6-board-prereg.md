@@ -1,7 +1,8 @@
 # Pre-registration: the P1 cell-6 board readings, written BEFORE the boot
 
-Cell 5 is NOT in this pre-registration: it does not build on current dev (see the last section).
-What follows is cell 6 only.
+Both cells are pre-registered here: cell 6 first, cell 5 in its own section below. Cell 5 was
+added after the first version of this document, which said cell 5 was excluded because it did
+not build; the last section records why it did not and what changed.
 
 ## The image this pre-registration is about
 
@@ -92,7 +93,14 @@ SPEEDTEST1_STACK=385024, which is what lets it load under the module's one-regio
 
     sha256      ff577d44e3ee8dd3b356a0e9ce8ffa89da11a1884ae6e9df8b7095e4bb5b5891  (1,684,216 bytes)
     entry VA    0x10000
-    emulator    SPEEDTEST1-CYCLES 678681249 HIGHWATER n/a HEAP 2097152
+    emulator    SPEEDTEST1-CYCLES 678534902 HIGHWATER n/a HEAP 2097152   (canonical, no --stats)
+                SPEEDTEST1-CYCLES 678681249 HIGHWATER n/a HEAP 2097152   (the same image WITH --stats)
+                An earlier version of this document quoted 678681249 as the figure. That is the
+                --stats run: the --stats runs reused the canonical tmp roots and overwrote
+                sqlite-speedtest1.log, so the contaminated number was the one to hand. Canonical
+                is 678534902, reproduced from a clean root. Which one a boot compares against
+                depends on the boot: board-b80s.sh runs the cell WITH --stats and must use
+                678681249; a run without --stats uses 678534902.
     lookaside   Successful lookasides 25010   (from the run, not the build flag)
     no sublet line, as it must be: this arm is memsys5, not Sublet
     budget      declares dom_data >= 2,701,968 (carve 2,316,944 + stack 385,024) -- FITS
@@ -110,7 +118,7 @@ merely equivalent. fd6da67aea96's content is also identical to dev df3a8e57df42,
 
 ## Historical note: why cell 5 first failed to build
 
-cell 5 does not build on current dev. The domain budget refuses it:
+cell 5 did not build at first. With no explicit stack declaration the domain budget refused it:
 
     pass 2  declared nothing              order 10, FITS, but stack only 392,064
     pass 3  declared dom_data >= 3365520  order 11 -- exceeds the kernel maximum 10, DOES NOT FIT
@@ -126,6 +134,24 @@ C-50, whose cost on this translation unit was measured at ~144 bytes. It is cell
 memsys5 heap in .bss: once a 1 MiB stack is declared on top of it, dom_data needs order 11.
 Cell 6 escapes it because its arena comes from a region rather than .bss.
 
-Resolving it means changing cell 5's geometry (a smaller declared stack, or the undeclared sizing
-that fits with a 392 KB stack), and that changes what the pair compares. That is the lead's call,
-not a lane's, so it is recorded here rather than worked around.
+It was resolved without a new geometry and without a decision: declaring SPEEDTEST1_STACK=385024
+is the recipe the measurements doc already records at :1701, and the resulting asymmetry against
+cell 6's 1,048,576 is already tabulated at :4758. So the pair compares what it always compared.
+The alternative that WOULD have needed the lead -- picking some new stack size to make it fit --
+was not taken.
+
+## Where the artifacts are
+
+    ~/capstone-artifacts/p1-O2-2026-09-29/
+
+Both images, every QEMU log behind the figures above, a README mapping each board driver's
+environment variables onto the files that satisfy its gates, and a self-verified SHA256SUMS. The
+per-image qemu-pass records under ~/capstone-artifacts/qemu-pass/ point their log= into that folder.
+
+TWO THINGS A BOARD DRIVER NEEDS THAT ARE EASY TO MISS. board-c6var.sh greps the
+`== Sublet: pool <arena> bytes (arena, REV_BORROWED), tables <tables> bytes` line, which appears in
+the measure run's HOST STDOUT and in no guest log; both cell-6 host stdouts are staged as
+cell6-hoststdout-*.log for exactly that gate. And board-b80s.sh additionally greps a native -O2
+baseline for `BASELINE-WARM CYCLES 240654449`: that log is not part of this pair and was not found
+under ~/capstone-artifacts, capstone/ or /tmp/capstone -- it has to be located or re-run before a
+cell-5 boot.
