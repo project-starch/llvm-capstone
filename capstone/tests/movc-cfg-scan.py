@@ -22,8 +22,18 @@ def parse(path):
         if m:
             if not m.group(2).startswith('.L'): func=m.group(2); funcs.setdefault(func,[])
             continue
-        m=re.match(r'^\s+([0-9a-f]+):\s+(?:[0-9a-f]{2} ){2,4}\s*(\S+)\s*(.*)$',ln)
+        # ^\s* NOT ^\s+: llvm-objdump right-aligns the address column, so a domain at 0x10000
+        # indents ("   103b0:") while a monitor at 0x80000000 starts at column 0 ("80020052:").
+        # Requiring the indent made every firmware image parse to nothing and report all zeros.
+        m=re.match(r'^\s*([0-9a-f]+):\s+(?:[0-9a-f]{2} ){2,4}\s*(\S+)\s*(.*)$',ln)
         if m and func is not None: funcs[func].append((int(m.group(1),16),m.group(2),m.group(3).strip()))
+    # PARSING NOTHING IS AN ERROR, NOT A ZERO. Without this the two failures that produce an empty
+    # disassembly -- an objdump that errored, and an address format the regex does not match --
+    # both render as "0 movc, 0 INT-ONLY, 0 mixed", which is indistinguishable from a clean image.
+    if not any(funcs.values()):
+        sys.exit(f"movc-cfg-scan: parsed NO instructions from {path!r} using {OD} -- "
+                 f"refusing to report a clean scan it did not perform "
+                 f"({len(out.splitlines())} lines of objdump output, {len(funcs)} symbols)")
     return funcs
 def analyse(insns):
     idx={a:i for i,(a,_,_) in enumerate(insns)}
