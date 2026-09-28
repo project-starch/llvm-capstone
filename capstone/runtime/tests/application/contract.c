@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <capstone/capability.h>
+
+void *__capstone_region(unsigned);
+static volatile unsigned char *volatile saved_allocation;
 
 static int constructed;
 __attribute__((constructor)) static void initialize(void) {
@@ -24,12 +28,38 @@ int main(int argc, char **argv) {
     return *stale;
   }
   if (!strcmp(argv[1], "fault-exhaust")) {
+    /* Keep adding valid tree ancestors without revoking them. Unlike malloc/
+     * free churn, these structural nodes cannot be collected. The runtime must
+     * report exhaustion and preserve enough nodes to destroy this process. */
+    capstone_cap_slot region, handle;
+    capstone_cap_store(&region, __capstone_region(0));
     for (;;) {
+      capstone_cap_make_handle(&region, &handle);
+      capstone_cap_clear(&handle);
+    }
+  }
+  if (!strcmp(argv[1], "churn") || !strcmp(argv[1], "fault-reused")) {
+    saved_allocation = malloc(64);
+    if (!saved_allocation) return 46;
+    *saved_allocation = 42;
+    free((void *)saved_allocation);
+    unsigned char *held = malloc(256);
+    if (!held) return 46;
+    memset(held, 0x5a, 256);
+    /* The held block prevents whole-pool coalescing on every iteration. Each
+     * iteration retires an identity while the useful working set stays small.
+     * More than three times the 65,536-node capacity must fit in one process. */
+    for (unsigned i = 0; i < 200000; ++i) {
       volatile unsigned char *p = malloc(64);
       if (!p) return 46;
-      *p = 42;
+      p[0] = i & 255;
+      p[63] = (i >> 8) & 255;
+      if (p[0] != (i & 255) || p[63] != ((i >> 8) & 255)) return 47;
       free((void *)p);
+      if (held[i & 255] != 0x5a) return 48;
     }
+    free(held);
+    if (!strcmp(argv[1], "fault-reused")) return *saved_allocation;
   }
   if (!strcmp(argv[1], "write-loop")) {
     char output[8192];

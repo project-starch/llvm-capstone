@@ -6,6 +6,12 @@ records the original goals; the implementation and verified limits are in
 live on the `domain-process-runtime` branches in LLVM, Buildroot, OpenSBI,
 capstone-sbi and QEMU. This does not claim FPGA implementation or full POSIX.
 
+The 2026-09-27 `runtime-node-reuse` follow-up adds collection under allocation
+pressure within a continuing application. It reuses the protected continuation
+and existing stale-tag collector; no monitor, driver or application ABI changes
+are required. [Checked results](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+cover the original 65,536-node capacity and the previously failing mruby matrix.
+
 ## Delivered implementation
 
 | Layer | Implemented and tested |
@@ -13,7 +19,7 @@ capstone-sbi and QEMU. This does not claim FPGA implementation or full POSIX.
 | Application | Shared musl CRT, versioned argv/env/cwd block, immutable ELF snapshot, inherited streams, ordinary main/exit |
 | Platform | Protected CALL continuation, typed return/preemption/fault, no-yield cancellation, guest operand faults instead of host assertions |
 | Ownership | Per-open driver owner retained by dup/fork/VMAs; forced close cleanup; retained roots above domain and transferred heap; scrub and reusable slots |
-| Resource reuse | Bounded retained physical pool with explicit live/cache accounting; stale-tag sweep before node reuse; emergency cleanup reserve and recoverable node exhaustion |
+| Resource reuse | Bounded retained physical pool with explicit live/cache accounting; stale-tag sweep at process teardown and in-process node pressure; emergency cleanup reserve and recoverable genuine exhaustion |
 | Host/guest | Installed Buildroot package, QMP lifecycle, SSH shell/streams, token-checked cancellation, waitpid result collector, explicit restart |
 | Port build | Shared CMake application/SDK interface; generic compiler driver; Perl's three private execution/compiler/entry files removed; Perl and mruby exercised |
 

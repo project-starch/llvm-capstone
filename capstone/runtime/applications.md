@@ -196,9 +196,19 @@ changing the platform or its pool budget requires an explicit VM restart.
 
 Before invalid node IDs are reused, QEMU clears stale tags in memory, registers
 and paused continuations. Invalid saved PCC identities stay pinned. Applications
-cannot consume the emergency reserve required by monitor cleanup; node exhaustion
-faults the application and reclamation makes the next launch possible. This is a
-one-hart VM implementation, not a silicon reclamation or performance claim.
+approaching the node limit are suspended at the allocation instruction, collected
+through the trusted monitor context, and resumed to retry that instruction. This
+works within a continuing process without application or allocator changes. The
+emulator unwinds the interrupted helper after collection instead of continuing
+with its temporary capability copies. The sweep also covers other paused
+applications.
+
+The 256-node emergency reserve remains unavailable to applications. If collection
+cannot recover space because nodes are still valid or pinned, the application
+receives the resource fault and cleanup still allows the next launch. This is a
+one-hart QEMU software tag sweep; it does not establish FPGA reclamation support
+or hardware collection cost. Increasing `CAPSTONE_REV_NODES` only changes the
+capacity; it is no longer necessary for the six previously failing mruby repeats.
 
 The musl port's existing syscall coverage still applies: launching a Linux
 process does not add target fork, exec, threads, dynamic loading or full POSIX
@@ -228,16 +238,23 @@ python3 capstone/runtime/tests/application/run.py \
   --state "$CAPSTONE_TMP_ROOT/dev-vm" --repeat 200 --report acceptance.json
 ```
 
-For the transferred heap/stale-reference/exhaustion controls, build the same
+For the transferred heap/node-reuse/exhaustion controls, build the same
 `contract.c` through `runtime/application` with `CAPSTONE_APPLICATION_HEAP=sublet`,
 `CAPSTONE_APPLICATION_HEAP_LOG=20`, name `contract-sublet`, then additionally pass
 `--sublet-image /mnt/host/contract-sublet.dom` to the gate. All tests use the
 existing boot. The checked report includes platform hashes, before/after counters
-and the unchanged Linux boot ID. Upstream test failures remain port results;
+and the unchanged Linux boot ID. Two 200,000-cycle churn cases check continued
+execution, preservation of live data and rejection of an old reference after
+identity reuse. A separate case keeps creating valid ancestors to verify genuine
+exhaustion and recovery. Allocation-progress checks reject faults that happen
+before the intended threshold. Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu-rebased.json)
 records 1,008 mixed starts after node exhaustion, with stable pool/node/tag counts.
+The [2026-09-27 node-reuse results](tests/application/results/20260927-node-reuse/README.md)
+add in-process collection and repeat the lifecycle gate at the same 65,536-node
+capacity. They retain the old failing control and separate application reruns.
 Four native ASan/UBSan tests and twelve Python tests pass. A subsequent common
 gate uses fresh SDK-built Perl and mruby. The [complete Perl `t/base` run](../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
 has eight passing files and one failing file (unsupported target subprocess

@@ -112,12 +112,11 @@ static int hc_round(unsigned long opcode, unsigned long offset,
  * Descriptors start at 3 because 0, 1 and 2 are the stdout path and always will
  * be: WRITE_STDOUT needs no handle and no open.
  *
- * A fixed table of eight rather than a growing one, for the same reason the wire
- * spec recommends a slot array on the helper side: a domain that needs thousands
- * of open files is not the workload this is being built for, and -EMFILE is an
- * honest answer that the caller already has to handle. */
+ * A fixed table shared with the helper's capacity. Database backends keep
+ * relation segments open across requests; eight slots were insufficient even
+ * for their startup. Exhaustion still reports EMFILE to the application. */
 #define HC_FD_BASE 3
-#define HC_MAX_FILES 8
+#define HC_MAX_FILES HC_V0_FILE_SLOTS
 #define HC_PAYLOAD_SIZE HC_V0_REGION_SIZE
 
 struct hc_file {

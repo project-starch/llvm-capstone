@@ -1,0 +1,16 @@
+{
+  "path": "$HOME/capstone-artifacts/runtime-node-reuse-2026-09-27.tar.gz",
+  "bytes": 31427238,
+  "sha256": "7fe32e609f4f4acaf99233aabfff066a79428ae3bd62d2298d7f231aa59b75c2",
+  "payload_files": 212,
+  "all_payload_hashes_verified_after_archive": true,
+  "excludes": [
+    "SSH private keys",
+    "VM control credentials",
+    "base kernel/firmware/rootfs already identified by hash"
+  ],
+  "deployment_smoke": {
+    "mruby-n512-b8-k256-sublet": "pass",
+    "mruby-n128-b8-k4096-sublet": "pass"
+  }
+}
