@@ -19,8 +19,12 @@
 // MUTATION: add a signed 128-bit division -> the __divti3 reference and its
 // call frame's cincoffsetimm trip the implicit-check-nots (performed
 // 2026-09-04).
+// The control below is a uintptr_t round trip with the provenance pass OFF: with
+// it on (the default), align_down's result is rebuilt as the argument's
+// capability moved -- a cincoffset -- which recover-provenance.ll and
+// cap-addr-bitmask.ll cover. Here it has to stay the one-`andi` integer shape.
 // RUN: %clang_cc1 -triple capstone64-unknown-elf -target-feature +m -ffreestanding \
-// RUN:   -O2 -mframe-pointer=none -S -o - %s \
+// RUN:   -O2 -mframe-pointer=none -mllvm -capstone-recover-provenance=false -S -o - %s \
 // RUN:   | FileCheck %s --implicit-check-not=cincoffset --implicit-check-not=lcc \
 // RUN:       --implicit-check-not=__addti3 --implicit-check-not=__divti3 \
 // RUN:       --implicit-check-not=__multi3
