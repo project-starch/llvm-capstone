@@ -74,7 +74,7 @@ def main():
     p.add_argument('--input-revision', required=True, help='Port recipe revision; cached objects are identified separately by hashes')
     p.add_argument('--libc-root', type=Path, help='Separate root containing musl-src and musl-build')
     p.add_argument('--include', type=Path, action='append', default=[])
-    p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres'], default='none')
+    p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres', 'perl'], default='none')
     p.add_argument('--gc-gaps', action='store_true', help='mruby GC-slot aggregate observer is present in the input archive')
     p.add_argument('--reuse-gap', action='store_true',
                    help='retain the PostgreSQL inner-chunk reuse report in the final image')
@@ -98,6 +98,9 @@ def main():
         objects += [root / 'runtime' / n for n in ('pym_backing.o', 'pym_block_lifetimes.o', 'pym_sublet_glue.o')]
     if args.nested == 'postgres':
         objects += [root / 'link/context-pools.o']
+    if args.nested == 'perl':
+        # Built by ports/perl/musl/build-perl-domain.sh with PERLD_SV_HEADS=1.
+        objects += [root / 'link/perl-sv-heads.o']
     if args.reuse_gap and args.app == 'postgres' and args.nested == 'none':
         objects += [root / 'link/spatial-reuse-gap.o']
     if args.nested != 'none' and (args.heap != 'level0' or args.app != args.nested):
