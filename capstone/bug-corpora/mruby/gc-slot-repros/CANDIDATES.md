@@ -298,7 +298,77 @@ where `mrb_gc_protect()` itself can allocate and collect it. Two of the three,
 `Task::Queue#__pop_try`, is in `mruby-task`, which exists at the pin but is in none
 of the port's gemboxes -- as is `456a8687a`'s site.
 
-## Measuring them in a domain: the apparatus works, the compiler is the blocker
+## Measured in a domain: the control arm, and what blocks the other two
+
+A clang was built from `7d01722aab88` ("SROA: do not split an alloca so that a
+capability is cut or misaligned") -- `LLVM_TARGETS_TO_BUILD=Capstone`, Release with
+assertions, through `capstone/tests/build-toolchain.sh` so it took the machine-wide
+memory lock; `ninja rc=0`, scope peak 11 GiB, no OOM events. With it the port's own
+`scripts/smoke.rb` reaches `SMOKE_DONE` and `LT-RESULT mruby.dom status=0 rounds=158
+PASS` in the `level0` arm. The cause-24 fault in `mrb_packed_int_decode` reported above
+is gone, so that fix was indeed the blocker.
+
+**`level0` is the matched pair's control arm** -- free only marks, so nothing is
+revoked -- and `HOW-TO-RUN-ON-QEMU.md` is explicit that this is what a "caught" claim
+needs: a cause-24 fault *"looks identical to a caught use-after-free until the control
+shows the same program completing when the revoke is removed"*. So nothing below is a
+catch, by construction; this is the row that has to MISS before a fault in `sublet`
+means anything.
+
+| case | `level0` domain | reading |
+|---|---|---|
+| 1 `1c57532b2`, 117-byte variant | completes, `status=0`, parent corrupted | **reproduces, uncaught** |
+| 2 `a54353ecf` | completes, 9 wrong answers | **reproduces, uncaught** |
+| 3 `08a0432d1` | completes, 4 wrong answers | **reproduces, uncaught** |
+| 5 `4663fef45` | completes, 4 wrong answers | **reproduces, uncaught** |
+| 6 `fb4974528` | completes, 2 wrong answers | reproduces as a wrong answer, not the native SIGSEGV |
+| 7 `606d9a6b2` | completes, 2 wrong answers | reproduces as a wrong answer, not the native SIGABRT |
+| 9 `0cf969a2b` | completes, PASS | expected: its oracle is ASan, and this arm revokes nothing |
+| 4 `eb7693857` | cause-24 fault, `mrb_vformat +0x7c0` | **not a catch** -- no revocation in this arm |
+| 8 `39aecc143` | cause-24 fault, `mrb_vm_exec +0x488` | **not a catch**, same reason |
+
+Rows 4 and 8 are the trap the documentation names, met in practice: a cause-24 fault in
+an arm that cannot revoke anything. Read without the control they would have been two
+"caught" results.
+
+### Row 1 needs a longer string in a domain than natively
+
+The case as extracted **passes** in the domain, and not because anything caught it.
+`patches/4.0.0-rc2/0001` states the reason itself: `RSTRING_EMBED_LEN_MAX` is
+*"27 at 8-byte pointers, 59 at 16-byte capabilities"*. The upstream test's 45-byte
+subject is a heap string natively, so `base[1..-1]` becomes a shared view and the
+defect fires; in a domain 45 is under the embed limit, the subject is embedded in its
+`RString`, and there is no shared buffer for a stale pointer to point into.
+
+A 117-byte subject reproduces in both: natively the parent comes back corrupted and the
+fix turns it green, and in the `level0` domain the parent comes back corrupted with
+`status=0`. That is a fidelity condition a case must carry, and it generalises -- any
+case in this corpus whose trigger depends on a size class has to be re-derived for
+16-byte pointers rather than copied from upstream.
+
+### What blocks `sublet` and `sublet-gc`
+
+Both arms build, and both fail their **own** control: `scripts/smoke.rb` halts at
+`cause = 24` in `stack_extend_alloc +0x194`, the VM stack's `mrb_realloc`. So the cases
+were not run in either arm -- an arm whose control fails cannot report anything about a
+defect.
+
+It is not the runtime or the grants: `RUNTIME_REPO` was `b338c156c8d1`, which sits on
+`9704639b4a3a`, exactly the pair `results/2026-09-26` records, and the grants were the
+documented 134217728 and 67108864. The port's own recorded `sublet` and `sublet-gc`
+mrbtest runs used compiler `7d01722aab88`, the same commit built here, so the
+difference is narrower than the toolchain: candidates are the QEMU
+(`movc-merge d621df553f` was used, as recorded), `CAPSTONE_REV_NODES`, or the buddy
+heap's behaviour on the VM stack's repeated realloc at this pool size. That is the next
+thing to chase, and it is one fault at one site rather than a category.
+
+One infra note, because it cost a wrong reading: the first `level0` control with the new
+toolchain stalled after `stty columns 29999` with no fault and no result. Re-run
+unchanged, it passed. A run that neither finishes nor faults is an infra flake, not a
+result, and `measure2.sh` now retries such a run up to three times instead of recording
+it.
+
+## Earlier attempt: the apparatus works, the compiler was the blocker
 
 This was attempted, not just reasoned about. What works:
 
@@ -339,7 +409,7 @@ self-evidently a finding than a clean run is.
 
 ### The recipe, so it is not rediscovered
 
-    PATH=/home/biecho/.venvs/capstone/bin:$PATH      # run-domain-smoke.py needs pexpect
+    PATH=$HOME/.venvs/capstone/bin:$PATH             # run-domain-smoke.py needs pexpect
     CAPSTONE_LLVM_BUILD_DIR=<a clang with 7d01722aab88>
     RUNTIME_REPO=<a worktree of runtime/libc-test-second-grant, submodule initialised>
     CAPSTONE_QEMU_BINARY=<capstone-qemu movc-merge d621df553f>
