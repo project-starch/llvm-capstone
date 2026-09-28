@@ -183,11 +183,13 @@ static void sh_init(void)
 
 /* Exactly n bytes when that is representable; above 4 KiB, n rounded up to the granule the
    compressed encoding keeps (capstone.c's capstone_repr_granule). The block is a power of two
-   at least as long and aligned to itself, so the rounding never reaches another object. */
+   at least as long and aligned to itself, so the rounding never reaches another object.
+   malloc(0) gets ONE byte, as its carve does: an empty range is not a legal shrink, and
+   capstone-qemu halts the domain on it (libvidstab's malloc(0) did, 2026-09-29). */
 static void *sh_narrow(void *alias, size_t n)
 {
 	unsigned long c = __builtin_capstone_cap_get_cursor(alias);
-	unsigned long len = n;
+	unsigned long len = n ? n : 1;
 	if (len >= 4096) {
 		unsigned lg = 63 - __builtin_clzl(len);
 		unsigned long g = 1UL << (lg - 9);

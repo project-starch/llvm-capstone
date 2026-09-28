@@ -98,3 +98,29 @@ stays applied. The C-50, budget and layout gates apply unchanged.
   audit found that linking ahead on one side only moves every later symbol.
 
 Predictions unchanged.
+
+## Addendum 2, 2026-09-29: the first run never reached either fixture's graph, and why
+
+The first run's images were built from `2028e987183e`, three boots per arm. All six boots came out
+the same: fixture 22 **DIFFERS**, `FAULT-BEFORE-TOUCH`, and fixture 23 never ran because the
+boot had ended.
+
+- **Where it faulted.** Every boot faulted at the same place, after the filter printed its
+  settings in `config_input`:
+  `SHRINK illegal operand value ... requested [102405800, 102405800)`, cause 29, pc `malloc`+0x1b4.
+- **The cause is the Sublet heap, not FFmpeg, libvidstab or the pools.** `malloc(0)` carves a
+  one-byte block (`sh_carve_block` turns 0 into 1), but it narrowed the capability with the
+  original 0. capstone-qemu refuses an empty shrink.
+- **The call is legitimate C.** libvidstab's `vsSimpleMotionsToTransform` calls
+  `vs_malloc(sizeof(double) * 0)` for a frame with no local motions. It does so for every frame of
+  a zero-motion transforms file.
+- **The heap on dev has the same code.** No earlier port had called `malloc(0)` on the Sublet heap.
+
+**The fix is one line in `ports/musl-capstone/runtime/sublet_heap.c`.** `sh_narrow` gives a zero
+request one byte, as its carve already does. `malloc(0)` then returns a unique pointer, as musl's
+own does. Nothing else in the heap changes. Every Sublet-heap image is rebuilt by it, but no
+earlier result can depend on the old behaviour, because that behaviour was a halt.
+
+**Predictions unchanged.** Fixtures 22 and 23 are re-run N = 3 per arm on images rebuilt with
+the fix. The matched pair for the fix is these six boots against the rerun: the same images, one
+heap line apart.
