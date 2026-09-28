@@ -6703,6 +6703,21 @@ compiler and PRESENT with dev's; `compile.ll` compiles at `-O1`..`-O3` with the 
 errors. lit: `CodeGen/Capstone/frame-base-register-capability.ll` (12 lines of IR: two byval copies
 ahead of a 4 KiB byval temporary; fails on the unfixed llc). CoreMark validated; BEEBS 76 of 81 with the five known host-header skips.
 
+**Where it did not crash, the output happened to work, and that is an inference, not an observation.**
+`x<n>` and `c<n>` share an encoding, and the `ADDI` on a frame index was expanded to a `cincoffset`
+from `sp`. A spill of that GPR would have been an 8-byte `sd`, which drops the tag. **That is
+inferred from the register class, NOT observed** (the fix author's own distinction, `fc987bb99d8d`).
+Cite it as "a latent tag loss was reasoned", never as "a tag loss occurred".
+
+**The regression guard moved (C-50, 4c407f9, 2026-09-25).** After C-50 gives byval local copies a
+capability frame index, the IR test `frame-base-register-capability.ll` no longer makes
+LocalStackSlotAllocation materialise a base register. `-stats` shows the "virtual frame base
+registers allocated" counter absent, i.e. zero, so its two CHECK lines could no longer fail. C-52's
+guard is now `frame-base-register-capability.mir`, which feeds `-run-pass=localstackalloc` the
+recorded input so the pass still runs. It is negative-tested: forcing
+`materializeFrameBaseRegister` back to GPR+ADDI makes it fail with `%21:gpr = ADDI %stack.1, 0`.
+Updating the old CHECKs instead would have left a guard that cannot fail.
+
 ### C-53 — an inline-asm `"m"` INPUT operand crashes isel ("Memory operands expect pointer values"); `"=m"` outputs compile `OPEN — COMPILER; found 2026-09-23 through CPython's configure; blocks no port today`
 
 **What happens.** `__asm__ volatile("lw zero, %0" : : "m"(*p))` asserts in
