@@ -1,0 +1,41 @@
+# mrbtest, MRBD_BOXING=no MRBD_DISPATCH=switch MRBD_OPT=-O2
+# mruby ad98f216eb47, prism c0e37816e97e, patches 0001-0005 0007
+# compiler: llvm-capstone 7d01722aab88 (compiler/sroa-keep-capability-whole), built from that tree; clang --version reports 5dacd7c9e69c, its hash is not refreshed per commit
+# runtime runtime/hostcall-mruby-io (working tree), QEMU capstone-qemu-movc-merge d621df553f, CAPSTONE_GP_NONLIN=1
+native:
+  Total: 2710
+     OK: 2617
+     KO: 0
+  Crash: 0
+   Skip: 70
+domain:
+  Total: 2710
+     OK: 2604
+     KO: 0
+  Crash: 0
+   Skip: 83
+capstone-domain: UNSERVED syscalls: 198x3
+LT-RESULT mruby.dom status=0 rounds=9118 PASS
+skipped in the domain only:
+Skip: `cmd` => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: FileTest.pipe? => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: FileTest.socket? => no sockets in this environment (mrbgems: mruby-io)
+Skip: IO#close_write closes the stream for writing => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: IO#close_write on a closed stream => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: IO#close_write on a stream opened to a child => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: IO#close_write => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: IO#close_write twice => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: IO.popen => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: IO.popen with err option => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: IO.popen with in option => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: IO.popen with out option => popen is not supported on this platform (mrbgems: mruby-io)
+Skip: IO#write to a duplex stream after a buffered read => popen is not supported on this platform (mrbgems: mruby-io)
+
+# arm MRBD_BOXING=word (patch 0006) MRBD_DISPATCH=switch; image has 4 word-boxing symbols
+native:  Total: 2710  OK: 2617  KO: 0  Crash: 0  Skip: 70 
+domain:  Total: 2710  OK: 2604  KO: 0  Crash: 0  Skip: 83 
+domain skip list identical to the MRB_NO_BOXING arm's
+# arm MRBD_BOXING=no MRBD_DISPATCH=direct (labels-as-values); image has mrb_vm_exec's optable
+native:  Total: 2710  OK: 2617  KO: 0  Crash: 0  Skip: 70 
+domain:  Total: 2710  OK: 2604  KO: 0  Crash: 0  Skip: 83 
+domain skip list identical to the MRB_NO_BOXING arm's

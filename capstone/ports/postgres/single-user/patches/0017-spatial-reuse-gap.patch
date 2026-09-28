@@ -1,0 +1,184 @@
+--- a/src/backend/utils/mmgr/mcxt.c
++++ b/src/backend/utils/mmgr/mcxt.c
+@@ -27,6 +27,9 @@
+ #include "utils/memutils.h"
+ #include "utils/memutils_internal.h"
+ #include "utils/memutils_memorychunk.h"
++#ifdef PG_SPATIAL_GAP_OBSERVER
++#include "spatial-reuse-gap.h"
++#endif
+ 
+ 
+ static void BogusFree(void *pointer);
+@@ -210,6 +213,16 @@
+ 	return (MemoryContextMethodID) (header & MEMORY_CONTEXT_METHODID_MASK);
+ }
+ 
++#ifdef PG_SPATIAL_GAP_OBSERVER
++static uintptr_t
++pg_gap_base(void *pointer)
++{
++    if (GetMemoryChunkMethodID(pointer) == MCTX_ALIGNED_REDIRECT_ID)
++        return (uintptr_t) MemoryChunkGetBlock(PointerGetMemoryChunk(pointer));
++    return (uintptr_t) pointer;
++}
++#endif
++
+ /*
+  * GetMemoryChunkHeader
+  *		Return the uint64 chunk header which directly precedes 'pointer'.
+@@ -416,6 +429,9 @@
+ 		 * the programmer got it right.
+ 		 */
+ 
++#ifdef PG_SPATIAL_GAP_OBSERVER
++        pg_spatial_gap_reset((uintptr_t) context);
++#endif
+ 		context->methods->reset(context);
+ 		context->isReset = true;
+ 		VALGRIND_DESTROY_MEMPOOL(context);
+@@ -525,6 +541,9 @@
+ 	 */
+ 	context->ident = NULL;
+ 
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    pg_spatial_gap_reset((uintptr_t) context);
++#endif
+ 	context->methods->delete_context(context);
+ 
+ 	VALGRIND_DESTROY_MEMPOOL(context);
+@@ -1197,6 +1216,9 @@
+ 	 * function instead.
+ 	 */
+ 	ret = context->methods->alloc(context, size, 0);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ 
+ 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
+ 
+@@ -1221,6 +1243,9 @@
+ 	context->isReset = false;
+ 
+ 	ret = context->methods->alloc(context, size, 0);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ 
+ 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
+ 
+@@ -1248,6 +1273,9 @@
+ 	context->isReset = false;
+ 
+ 	ret = context->methods->alloc(context, size, flags);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ 	if (unlikely(ret == NULL))
+ 		return NULL;
+ 
+@@ -1335,6 +1363,9 @@
+ 	 * function instead.
+ 	 */
+ 	ret = context->methods->alloc(context, size, 0);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ 	/* We expect OOM to be handled by the alloc function */
+ 	Assert(ret != NULL);
+ 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
+@@ -1355,6 +1386,9 @@
+ 	context->isReset = false;
+ 
+ 	ret = context->methods->alloc(context, size, 0);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ 
+ 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
+ 
+@@ -1376,6 +1410,9 @@
+ 	context->isReset = false;
+ 
+ 	ret = context->methods->alloc(context, size, flags);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ 	if (unlikely(ret == NULL))
+ 	{
+ 		return NULL;
+@@ -1524,7 +1561,16 @@
+ 	MemoryContext context = GetMemoryChunkContext(pointer);
+ #endif
+ 
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    uintptr_t pg_old_base = pg_gap_base(pointer);
++    MemoryContextMethodID pg_old_method = GetMemoryChunkMethodID(pointer);
++#endif
+ 	MCXT_METHOD(pointer, free_p) (pointer);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    if (pg_old_method != MCTX_BUMP_ID &&
++        pg_old_method != MCTX_ALIGNED_REDIRECT_ID)
++        pg_spatial_gap_release(pg_old_base);
++#endif
+ 
+ #ifdef USE_VALGRIND
+ 	if (method != MCTX_ALIGNED_REDIRECT_ID)
+@@ -1562,7 +1608,23 @@
+ 	 * this call, consider making it the responsibility of the 'realloc'
+ 	 * function instead.
+ 	 */
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    uintptr_t pg_old_base = pg_gap_base(pointer);
++    MemoryContext pg_old_context = GetMemoryChunkContext(pointer);
++    MemoryContextMethodID pg_old_method = GetMemoryChunkMethodID(pointer);
++#endif
+ 	ret = MCXT_METHOD(pointer, realloc) (pointer, size, 0);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    if (ret != NULL && pg_old_method != MCTX_ALIGNED_REDIRECT_ID) {
++        uintptr_t pg_new_base = pg_gap_base(ret);
++        if (pg_new_base == pg_old_base)
++            pg_spatial_gap_resize(pg_old_base, size);
++        else {
++            pg_spatial_gap_release(pg_old_base);
++            pg_spatial_gap_issue((uintptr_t) pg_old_context, pg_new_base, size);
++        }
++    }
++#endif
+ 
+ #ifdef USE_VALGRIND
+ 	if (method != MCTX_ALIGNED_REDIRECT_ID)
+@@ -1600,7 +1662,23 @@
+ 	 * this call, consider making it the responsibility of the 'realloc'
+ 	 * function instead.
+ 	 */
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    uintptr_t pg_old_base = pg_gap_base(pointer);
++    MemoryContext pg_old_context = GetMemoryChunkContext(pointer);
++    MemoryContextMethodID pg_old_method = GetMemoryChunkMethodID(pointer);
++#endif
+ 	ret = MCXT_METHOD(pointer, realloc) (pointer, size, flags);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    if (ret != NULL && pg_old_method != MCTX_ALIGNED_REDIRECT_ID) {
++        uintptr_t pg_new_base = pg_gap_base(ret);
++        if (pg_new_base == pg_old_base)
++            pg_spatial_gap_resize(pg_old_base, size);
++        else {
++            pg_spatial_gap_release(pg_old_base);
++            pg_spatial_gap_issue((uintptr_t) pg_old_context, pg_new_base, size);
++        }
++    }
++#endif
+ 	if (unlikely(ret == NULL))
+ 		return NULL;
+ 
+@@ -1656,6 +1734,9 @@
+ 	 * function instead.
+ 	 */
+ 	ret = context->methods->alloc(context, size, MCXT_ALLOC_HUGE);
++#ifdef PG_SPATIAL_GAP_OBSERVER
++    pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ 
+ 	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
+ 

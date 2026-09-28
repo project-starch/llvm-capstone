@@ -1,0 +1,43 @@
+dfmgr.c: a domain's loadable modules are linked into its image (intcap plan, Phase D).
+
+initdb's --single call creates the snowball text search dictionaries, whose
+functions live in $libdir/dict_snowball, and runs CREATE EXTENSION plpgsql. Both
+make the backend load a library: CREATE FUNCTION ... LANGUAGE C validates the
+function by loading it. A domain has no dynamic loader, and the call stopped
+after 358 statements: 'could not access file "$libdir/dict_snowball": No such
+file or directory'.
+
+build-domain.sh links the modules the setup SQL needs into the image, each with
+its Pg_magic_func and _PG_init renamed so that two modules can coexist, and
+toolchain/static_modules.c resolves them by base name. Here stat, dlopen, dlsym,
+dlerror and dlclose become calls to it; the magic-block check and _PG_init run
+as for a loaded library.
+
+--- a/src/backend/utils/fmgr/dfmgr.c
++++ b/src/backend/utils/fmgr/dfmgr.c
+@@ -37,6 +37,25 @@
+ #include "storage/shmem.h"
+ #include "utils/hsearch.h"
+ 
++#ifdef __SIZEOF_INTCAP__
++/*
++ * capstone: a domain cannot dlopen. The modules it needs are linked into the
++ * image, and the port's toolchain/static_modules.c finds them by base name
++ * (build-domain.sh). Any other library fails to load, as it would natively
++ * without the file.
++ */
++extern int	pgsu_module_stat(const char *path, struct stat *buf);
++extern void *pgsu_module_open(const char *path);
++extern void *pgsu_module_sym(void *handle, const char *name);
++extern char *pgsu_module_error(void);
++
++#define stat(path, buf) pgsu_module_stat(path, buf)
++#define dlopen(path, mode) pgsu_module_open(path)
++#define dlsym(handle, name) pgsu_module_sym(handle, name)
++#define dlerror() pgsu_module_error()
++#define dlclose(handle) ((void) 0)
++#endif
++
+ 
+ /* signature for PostgreSQL-specific library init function */
+ typedef void (*PG_init_t) (void);

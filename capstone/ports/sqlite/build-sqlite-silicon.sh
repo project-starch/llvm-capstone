@@ -64,6 +64,10 @@ if [[ ! -f "$PATCHED" ]]; then
     bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
 fi
 [[ -f "$PATCHED" ]] || { echo "still no $PATCHED" >&2; exit 1; }
+if grep -q '^#include <sublet/sublet.h>$' "$PATCHED"; then
+  echo "patched amalgamation already contains Sublet; supply a clean source with PATCHED_SQLITE" >&2
+  exit 1
+fi
 
 # Stage the amalgamation's includes side by side so plain #include works.
 cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
@@ -89,6 +93,13 @@ if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   echo "== Sublet port applied to this build's amalgamation ($(basename "$SQLITE_SUBLET_PATCH"))"
 fi
 
+# Optional measured-source overlay, applied after the allocator port so a
+# single benchmark can instrument its spatial and Sublet memsys5 variants.
+# The patch lives outside the fetched amalgamation and must match exactly.
+if [ -n "${SQLITE_STUDY_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OBJ_DIR" < "$SQLITE_STUDY_PATCH"
+fi
+
 # ...AND THE HEADER, which this line has always claimed to do and never did (found 2026-09-10 by the
 # bench lane). `capstone_sqlite_vfs.h:4` does `#include "sqlite3.h"`, and NO -I directory carried one,
 # so it resolved to the HOST's /usr/include/sqlite3.h -- a DIFFERENT SQLite (3.45.1 on this machine
@@ -96,7 +107,14 @@ fi
 # sqlite3-capstone.c is included first and defines SQLITE3_H at its :355, so the host header expands
 # to nothing. It is NOT inert for any TU that includes the VFS header WITHOUT the amalgamation ahead
 # of it: that compiles against another version's declarations and nothing warns.
-_amalg_h=$(ls -d "$CAPSTONE_TMP_ROOT"/sqlite-src/sqlite-amalgamation-*/sqlite3.h 2>/dev/null | head -1)
+if [[ -n "${SQLITE_AMALGAMATION_HEADER:-}" ]]; then
+  _amalg_h=$SQLITE_AMALGAMATION_HEADER
+  [[ -f "$_amalg_h" ]] || {
+    echo "SQLITE_AMALGAMATION_HEADER=$_amalg_h does not exist" >&2; exit 1;
+  }
+else
+  _amalg_h=$(ls -d "$CAPSTONE_TMP_ROOT"/sqlite-src/sqlite-amalgamation-*/sqlite3.h 2>/dev/null | head -1)
+fi
 if [[ -n "$_amalg_h" ]]; then
   cp -f "$_amalg_h" "$OBJ_DIR/sqlite3.h"
 else

@@ -4,4 +4,5 @@
  * and allocation policy; mode 1 additionally invalidates retired storage. */
 void pg_poisoncap_init(unsigned mode);
 void pg_poisoncap_report(void);
+int pg_poisoncap_defer_reuse(unsigned index);
 #endif
