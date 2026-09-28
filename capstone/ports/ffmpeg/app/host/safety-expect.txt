@@ -138,3 +138,27 @@ poolsublet   20  RETURN 1400800
 poolsublet   21  RETURN 1500800
 poolstock    20  RETURN 14e00f0
 poolstock    21  RETURN 15e00f0
+
+# TRACK B, af_join as FFmpeg's real code (fixtures 18 and 19; build with FFAPP_EXTRA_CONFIGURE=
+# "--enable-avfilter --enable-filter=join --enable-decoder=pcm_s16le_planar"). Registered with
+# app/results/2026-09-29-trackb-afjoin/PREDICTIONS.md before either image was first built.
+# 18 links af_join as shipped: the output frame holds a reference to input 1's buffer, so input 1's
+# next packet gets a different buffer (same-address 0) and the read sees input 1's first packet,
+# 0x5b: 0x1200000 + 0x05b. 19 links the one-token revert of the upstream fix: no reference is
+# taken, input 1's buffer goes back to its pool when the join frees its inputs, the next packet's
+# frame is handed that buffer (same-address 1), and the stale read sees the new packet's 0x77 --
+# unless the pool port revoked the buffer when it came back, and the read faults.
+poolstock    18  RETURN 120005b
+poolstock    19  RETURN 1300177
+poolsublet   18  RETURN 120005b
+poolsublet   19  FAULT  temporal
+
+# 30-33: configure-only DIAGNOSTICS for fixture 18's graph, which faulted inside
+# avfilter_graph_config on both pool arms (2026-09-29) while the same graph runs clean natively
+# under ASan. Not predictions of safety: each returns 0x1 (mark 0x..00001) if the graph configures.
+# Registered so the runner will run them; a fault in any of them localizes the negotiation fault.
+poolsublet   30  RETURN 1e00001
+poolsublet   31  RETURN 1f00001
+poolsublet   32  RETURN 2000001
+poolsublet   33  RETURN 2100001
+level0       30  RETURN 1e00001
