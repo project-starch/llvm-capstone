@@ -354,6 +354,15 @@ for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
 and state-file merge conflicts remain integration work; the board milestones
 below are a separate track. Build entry points are in the [port catalog](../../ports/README.md).
 
+## 0. CURRENT — 2026-09-29. **Next: synthesize capstone-ariane `0f5185a6d` (R-43 + R-45), then reflash and run the board lane's staged R-43 set.** The staged set, each boot opening with `k800`:
+- R1 harnesses B3/B4, which must complete;
+- live16/128/512, which must return 544/4352/17408;
+- the R-35 stale probe, which must still trap 25;
+- the ladder;
+- P1 cells 5/6.
+
+The synthesis predictions are in `docs/plans/r43-query-on-miss.md`. It is the highest-risk edit class (a new term into the load path), so compare the loop by identity and read WNS. The resident bitstream is `caplifive_r42_6cbdaeeb4.bit`. On apollo, obey the TSan benchmark rules: only CPUs 0-7,32-39.
+
 ## 0. CURRENT — 2026-09-25. **Resident bitstream: `caplifive_r35_4ad0df694.bit`** (RTL `4ad0df694`, R-35's fix; the 2026-09-17 section below names the PREVIOUS one). Next board steps, in order:
 1. **Reflash to `caplifive_r42_6cbdaeeb4.bit`** (R-42, lead-authorized; sha256 `0cd45bb0…2b8c05`, at `/tmp/capstone/_bitstreams/` on apollo). The acceptance boot is pre-registered in `tests/fpga-repros/R42-icache-killed-miss-refill/`: control, the ladder with the slow layout expected at ≈1.000×, and the R-35 stale probe LAST, which must still trap 25.
 2. **R-43's first test:** a SQLite workload on that image. A correct result with no cause-25 trap bounds the false-deny rate.

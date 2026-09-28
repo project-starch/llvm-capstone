@@ -567,7 +567,7 @@ one-cycle IDLE detour goes.
 
 te by the RTL lane, 2026-09-24.
 
-### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `OPEN — CONFIRMED 2026-09-25, on silicon (both R1 harness runs, caplifive_r42_6cbdaeeb4.bit) and in RTL simulation (r43-evict-live.S); safe direction (false DENY, never an authority escape) but it blocks every revocation-heavy workload on the R-35-fixed silicon; fix planned: docs/plans/r43-query-on-miss.md`
+### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `FIX IN RTL (capstone-ariane branch r43-query-on-miss, 2026-09-29): probe the rev-node on a miss; verified in RTL simulation with seven deliberately broken builds, lint PASS, sweep neutral; NOT yet synthesized or on silicon. Confirmed 2026-09-25 on silicon (both R1 harness runs) and in simulation. Report folder: tests/fpga-repros/R43-revocation-cache-false-deny/`
 
 > **Scope.** The M-mode LSU revocation cache in `capstone-ariane 4ad0df694` (4 ways x 64 sets, exact
 > 30-bit `{generation, index}` tag). An access whose id is not resident is refused with cause 25
@@ -638,6 +638,58 @@ te by the RTL lane, 2026-09-24.
 > **What a fix needs:** positive evidence for the CPMP entries (R-35's taps can feed a second consumer)
 > plus an explicit seed for the hardcoded `cpmp(0..2)` ids, so they are not denied at boot. It goes to
 > synthesis before any board time, and a first S-mode boot is its acceptance.
+
+### R-45 — a load/store issued right after REVOKE or DROP could be checked BEFORE the revocation took effect, and was allowed `FIX IN RTL (capstone-ariane branch r43-query-on-miss, 2026-09-28), in the same bitstream as R-43; found while testing R-43; predates it`
+
+> **What happens.** REVOKE and DROP change rev-node memory, and the DYN unit completes them only after that
+> (REVOKE waits for `rev_res` at the end of its walk). But nothing holds LSU issue behind an in-flight DYN
+> op (`issue_read_operands.sv` sets only `fus_busy.capstone_dyn`; load/store are busy only when the LSU is
+> not ready). So a younger load/store can pass its capability check against the PRE-revocation state. The
+> verdict is fixed at execute (commit re-examines only LDC/STC), so the load retires with data and a store
+> would reach memory. The rev-node's busy/debug outputs reach only the debug LEDs (`cva6.sv` ~1153-1236).
+>
+> **Found by** the R-43 test's arm 7 (`verif/tests/custom/capstone/r43-evict-live.S`). With no barrier after
+> REVOKE, the read was allowed: the probe read the node live before the walk wrote it dead. An adversarial
+> audit could not refute it. It **predates R-43**: on `6cbdaeeb4` the same read is allowed whenever the
+> entry is still resident. R-43's probe extended it to evicted entries, which deny-on-miss had refused only
+> by accident. The R-35 fixture's 64-nop BARRIER after every REVOKE exists precisely to step around it
+> (`r35-rotate-stale.S` header); the barrier relies on timing alone, and silicon walks take up to 11,811
+> cycles.
+>
+> **Fix** (the project lead chose to close it in the R-43 bitstream): `commit_stage.sv` raises
+> `flush_commit` when a REVOKE or DROP commits, as R-26 does for a capability CSR write. Younger
+> instructions refetch from `pc_commit + 4` and re-execute after the revocation. It is a pipeline flush
+> only; the D-cache is untouched. Nothing commits beside a REVOKE/DROP on a second commit port.
+> **Cost:** one pipeline flush per REVOKE/DROP.
+>
+> **Acceptance** (simulation, `r43-evict-live.S`): arms 7 (evicted) and 7r (resident), a read immediately
+> after REVOKE with no barrier, must deny. The `noflush` variant, with the flush removed, must ALLOW arm 7r,
+> which proves the flush is what closes it. Results:
+> `tests/fpga-repros/R43-revocation-cache-false-deny/results/sim-query-on-miss.result-lines.txt`.
+>
+> **Related:** R-26 (the same class: a committed state change that younger instructions checked too early).
+
+### R-46 — a commit-stage refetch keeps the PC-capability metadata, so a younger CJALR's target metadata can leak into the refetched code `OPEN — accepted for the R-43/R-45 bitstream by the project lead (2026-09-29); predates R-45, which makes it routine`
+
+> **What happens.** On a commit-stage refetch, `frontend.sv` (the `set_pc_commit_i` branch) redirects the PC
+> to `pc_commit + 4` but carries `npc_metadata_q` forward unchanged. The refetch comes from the AMO, CSR and
+> fence flushes, and since R-45 from every REVOKE/DROP commit. A younger CJALR that resolved in EX before the
+> flush may already have set that metadata to ITS target (`branch_unit.sv`, `resolved_branch.sets_metadata`).
+> So the re-fetched instructions after the flushing one run under the wrong code-capability metadata until
+> the next capability control-flow change. The consumers are `pc_cap_check` in `commit_stage.sv` and CALL's
+> saved caller metadata.
+>
+> **Why accepted for now.** It is harmless when a domain has a single code capability, because a `ret`
+> restores the same metadata. That is the case in R1, the sweeps and the test corpus. With several code
+> capabilities it can raise a spurious bounds fault, or run code under the wrong capability.
+>
+> **Fix candidate:** on `set_pc_commit_i`, load `npc_metadata_d` from the committing instruction's PC
+> capability, with priority over a same-cycle `resolved_branch` update. That needs plumbing from commit to
+> the frontend. **First test:** REVOKE, then a CJALR to a code capability with different bounds, within
+> the window.
+>
+> Found by the final R-43/R-45 audit. Related: ISSUES.md ~5464 and SILICON-BLOCKER.md (metadata carried
+> forward on traps).
 
 ## Q-08 — no capability fault path assigned `env->badaddr`, so `tval` was stale on every capability fault ever reported `FIXED 2026-09-11 in capstone-qemu cabc953e58; found while root-causing an unaligned capability store in SQLite`
 

@@ -2,6 +2,22 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-29 — R-43 and R-45 fixed in RTL (capstone-ariane `r43-query-on-miss`, `0f5185a6d`); synthesis next
+
+- **R-43:** R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live, which
+  killed both R1 harness runs on the resident `caplifive_r42_6cbdaeeb4.bit`.
+  - Fix `bbd4d1478`: on a miss, probe the rev-node unit and resolve from the existing read tap.
+- **R-45:** a load/store right after REVOKE/DROP could be checked before the revocation took effect. It
+  predates R-43, which extended it.
+  - Fix `0f5185a6d`: flush younger instructions when a REVOKE/DROP commits (the lead chose to close it in
+    this bitstream).
+- **R-46** (filed, accepted for this bitstream by the lead): a commit refetch keeps the PC-capability
+  metadata. Harmless with one code capability per domain.
+- **Evidence:** verified in RTL simulation with seven deliberately broken builds, each failing as
+  predicted; R-35's fixture unchanged; 92-test sweep neutral; lint gate PASS. Details in
+  `tests/fpga-repros/R43-revocation-cache-false-deny/`.
+- **Not yet synthesized or on silicon.** Resident: `caplifive_r42_6cbdaeeb4.bit`, which has R-43.
+
 ## Review baseline (2026-09-28)
 
 The runtime and application study are organized into dependency-ordered review
