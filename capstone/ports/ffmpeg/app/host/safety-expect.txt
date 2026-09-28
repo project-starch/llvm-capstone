@@ -100,3 +100,15 @@ pool2   17  POOLFAIL 304
 level0  16  RETURN *
 shrink  16  RETURN *
 sublet  16  RETURN *
+
+# poolsublet: the Sublet PORT of FFmpeg's own pools (ports/ffmpeg/sublet), FFAPP_POOL=sublet.
+# Registered with ports/ffmpeg/sublet/PREREGISTRATION.md, before its first ported line. 11-14 are
+# Phase A (AVBufferPool); 15-17 are Phase B (refstruct), which lands after Phase A.
+poolsublet   11  RETURN b00001
+poolsublet   11  LEN    64
+poolsublet   12  FAULT  temporal
+poolsublet   13  FAULT  temporal
+poolsublet   14  FAULT  oob
+poolsublet   15  FAULT  temporal
+poolsublet   16  FAULT  oob
+poolsublet   17  FAULT  temporal
