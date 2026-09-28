@@ -1,0 +1,14 @@
+--- a/poisoncap-temporal.c
++++ b/poisoncap-temporal.c
+@@ -23100,6 +23100,11 @@
+ static inline void
+ clear_region(void *mem, size_t len)
+ {
++	/* Retire poison metadata before initializing the next owner. */
++	for (size_t i = 0; i < len; i += 16) {
++		void *word = (char *)mem + i;
++		__asm__ volatile("cclearpoison %0, 0(%0)" : : "C"(word) : "memory");
++	}
+ 	static const size_t ZERO_THRESHOLD = 64;
+ 
+ 	/*
