@@ -10,8 +10,10 @@
 #                                        given, one boot, judged by host/safety-verdict.py against
 #                                        host/safety-expect.txt
 #
-# TSAPP_HEAP=level0|shrink|sublet picks the heap arm's images (build-domain.sh), from $TS_WORK/domain,
-# domain-shrink or domain-sublet; TSAPP_DOMAIN_DIR overrides the directory. On the sublet arm the host
+# TSAPP_HEAP=level0|shrink|sublet|chunks picks the heap arm's images (build-domain.sh), from
+# $TS_WORK/domain, domain-shrink, domain-sublet or domain-chunks; TSAPP_DOMAIN_DIR overrides the
+# directory. The chunks arm is the sublet arm with wmem's BLOCK allocator under the chunk port, and
+# is run as the sublet arm is. On the sublet arm the host
 # also transfers each domain a LINEAR heap region of TSAPP_HEAP_REGION_BYTES (default 32 MiB, so a
 # CMA region aligned to 1 MiB still holds the heap's self-aligned 16 MiB pool;
 # libc_test_host.c's LT_HEAP_REGION_BYTES).
@@ -63,9 +65,9 @@ HOSTF=() REGION_MB=0
 case $HEAP in
   level0) d=domain ;;
   shrink) d=domain-shrink ;;
-  sublet) d=domain-sublet REGION=${TSAPP_HEAP_REGION_BYTES:-$((32 << 20))}
+  sublet|chunks) d=domain-$HEAP REGION=${TSAPP_HEAP_REGION_BYTES:-$((32 << 20))}
           HOSTF=(-DLT_HEAP_REGION_BYTES="${REGION}UL") REGION_MB=$(( (REGION + (1 << 20) - 1) >> 20 )) ;;
-  *) echo "TSAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
+  *) echo "TSAPP_HEAP must be level0, shrink, sublet or chunks" >&2; exit 2 ;;
 esac
 OUT=${TSAPP_DOMAIN_DIR:-$TS_WORK/$d} CAPS=$TS_WORK/xsrc/test/captures RUNS=$TS_WORK/runs
 EXPECT=$APP/host/safety-expect.txt
@@ -156,6 +158,11 @@ case $MODE in
     # 2026-09-25). Five dhcp-sized runs fit, five dns_port-sized ones would not.
     [ "$HEAP" != sublet ] || [ $# -le 4 ] \
       || { echo "at most 4 full runs per sublet boot: the revocation-node pool (65,536) runs out" >&2; exit 2; }
+    # The chunks arm spends nodes in the chunk port too (every carve and take), by an amount only a
+    # run can say: one full run per boot until TSAPP_CHUNKS_RUNS_PER_BOOT is set from a measured
+    # spend (the step-2 pre-registration fixes the rule that sets it).
+    [ "$HEAP" != chunks ] || [ $# -le "${TSAPP_CHUNKS_RUNS_PER_BOOT:-1}" ] \
+      || { echo "at most ${TSAPP_CHUNKS_RUNS_PER_BOOT:-1} full runs per chunks boot (TSAPP_CHUNKS_RUNS_PER_BOOT)" >&2; exit 2; }
     cp "$OUT/tshark_m5.dom" "$SHARE/"
     for c in "$@"; do
       stage_cap "$c"
