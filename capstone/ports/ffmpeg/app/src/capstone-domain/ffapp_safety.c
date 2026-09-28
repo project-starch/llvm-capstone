@@ -75,7 +75,7 @@
 #include "libavutil/buffer.h"
 #include "libavutil/mem.h"
 #include "libavutil/refstruct.h"
-#if FFAPP_FIXTURE == 18 || FFAPP_FIXTURE == 19
+#if FFAPP_FIXTURE == 18 || FFAPP_FIXTURE == 19 || (FFAPP_FIXTURE >= 30 && FFAPP_FIXTURE <= 33)
 #include "libavcodec/avcodec.h"
 #include "libavfilter/avfilter.h"
 #include "libavfilter/buffersink.h"
@@ -466,6 +466,46 @@ static int fixture(void)
     printf("FFAPP-FIX %d returned out.FC[0]=%02x (0x5b = input 1's first packet, 0x77 = its next)\n",
            FFAPP_FIXTURE, v);
     return FX_MARK((same << 8) | v);
+
+#elif FFAPP_FIXTURE >= 30 && FFAPP_FIXTURE <= 33
+    /* DIAGNOSTIC, not a safety fixture: fixture 18 faults inside avfilter_graph_config (format
+     * negotiation, merge_channel_layouts_internal) on both pool arms, and the same graph runs clean
+     * natively under ASan. These configure progressively larger graphs and return, so one boot
+     * bisects which graph shape reaches the fault:
+     *   30 abuffer(mono) -> abuffersink
+     *   31 abuffer(mono) x2 -> join(stereo, map=0.0-FL|1.0-FR) -> abuffersink
+     *   32 fixture 18's graph: join(3.0, map=0.0-FL|0.0-FR|1.0-FC)
+     *   33 join(3.0) with join's own default mapping (no map) */
+    AVFilterGraph *g = avfilter_graph_alloc();
+    AVFilterContext *src[2] = { 0 }, *join = NULL, *sink = NULL;
+    const AVFilter *fsrc = avfilter_get_by_name("abuffer"), *fjoin = avfilter_get_by_name("join"),
+                   *fsink = avfilter_get_by_name("abuffersink");
+    const char *sa = "sample_rate=8000:sample_fmt=s16p:channel_layout=mono:time_base=1/8000";
+    (void)idx;
+    (void)v;
+    if (!g || !fsrc || !fjoin || !fsink)
+        return FX_MARK(0xE0001);
+    if (avfilter_graph_create_filter(&src[0], fsrc, "in0", sa, NULL, g) < 0
+        || avfilter_graph_create_filter(&sink, fsink, "out", NULL, NULL, g) < 0)
+        return FX_MARK(0xE0002);
+#if FFAPP_FIXTURE == 30
+    if (avfilter_link(src[0], 0, sink, 0) < 0)
+        return FX_MARK(0xE0003);
+#else
+    const char *jargs = FFAPP_FIXTURE == 31 ? "inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR"
+                      : FFAPP_FIXTURE == 32 ? "inputs=2:channel_layout=3.0:map=0.0-FL|0.0-FR|1.0-FC"
+                      :                       "inputs=2:channel_layout=3.0";
+    if (avfilter_graph_create_filter(&src[1], fsrc, "in1", sa, NULL, g) < 0
+        || avfilter_graph_create_filter(&join, fjoin, "join", jargs, NULL, g) < 0
+        || avfilter_link(src[0], 0, join, 0) < 0 || avfilter_link(src[1], 0, join, 1) < 0
+        || avfilter_link(join, 0, sink, 0) < 0)
+        return FX_MARK(0xE0003);
+#endif
+    printf("FFAPP-FIX %d graph built, configuring\n", FFAPP_FIXTURE);
+    fflush(stdout);
+    int cr = avfilter_graph_config(g, NULL);
+    printf("FFAPP-FIX %d avfilter_graph_config=%d\n", FFAPP_FIXTURE, cr);
+    return FX_MARK(cr < 0 ? 0xE0004 : 0x1);
 
 #elif FFAPP_FIXTURE == 20 || FFAPP_FIXTURE == 21
     enum { N = 8 };

@@ -350,6 +350,8 @@ echo "control image $OUT/ffapp_m5flip.dom decodes ${INPUT%.mkv}.flip.mkv"
 # Same runtime, allocator and libraries as the milestone images above; only the entry differs.
 FIXTURES="1 2 3 4 5 6 7 8 9 10 16"   # 16 on the heap arms: the stock control for the pool arms
 [ -n "$POOL" ] && FIXTURES="$(seq -s ' ' 1 17) 20 21"          # the pool fixtures, and the pool-end counts
+# FFAPP_EXTRA_FIXTURES: more fixture ids on any arm, e.g. a diagnostic on the level0 heap
+FIXTURES="$FIXTURES ${FFAPP_EXTRA_FIXTURES:-}"
 # Track B, af_join (fixtures 18 and 19): only when configure built the join filter
 # (FFAPP_EXTRA_CONFIGURE="--enable-avfilter --enable-filter=join --enable-decoder=pcm_s16le_planar").
 # 18 links libavfilter as built. 19 links af_join.o with upstream's fix 461fb22053 reverted -- one
@@ -359,11 +361,15 @@ FIXTURES="1 2 3 4 5 6 7 8 9 10 16"   # 16 on the heap arms: the stock control fo
 # reverted object differs from the linked library by that one token and nothing else.
 FIXLINK=()
 if [ -n "$POOL" ] && [ -f "$XB/libavfilter/af_join.o" ]; then
-  FIXTURES="$FIXTURES 18 19"
+  FIXTURES="$FIXTURES 18 19 30 31 32 33"   # 30-33: configure-only diagnostics for 18's graph
   AJ=$OUT/afjoin; rm -rf "$AJ"; mkdir -p "$AJ"
-  # make's own command for the archive member, as make would run it now (V=1 prints it whole)
-  AJCMD=$(cd "$XB" && make -s -n -B V=1 libavfilter/af_join.o 2>/dev/null | grep -E ' -c ' | grep -F 'af_join.c' | tail -1)
+  # make's own command for the archive member, as make would run it now (V=1 prints it whole; -s
+  # would silence the recipe echo), less its dependency-file flags, which would overwrite make's
+  # record for af_join.o with the reruns' inputs.
+  AJCMD=$(cd "$XB" && make -n -B V=1 libavfilter/af_join.o 2>/dev/null | grep -F ' -c -o libavfilter/af_join.o ' | tail -1 || true)
   [ -n "$AJCMD" ] || { echo "AF_JOIN GATE: make printed no compile command for libavfilter/af_join.o" >&2; exit 1; }
+  AJCMD=$(printf '%s' "$AJCMD" | sed 's/ -MMD -MF [^ ]* -MT [^ ]*//')
+  case $AJCMD in *" -MF "*|*" -MMD"*) echo "AF_JOIN GATE: dependency flags left in: $AJCMD" >&2; exit 1 ;; esac
   AJSRC=$(printf '%s\n' $AJCMD | grep -E 'af_join\.c$' | tail -1)
   [ -n "$AJSRC" ] || { echo "AF_JOIN GATE: no af_join.c in make's command: $AJCMD" >&2; exit 1; }
   cp "$SRC/libavfilter/af_join.c" "$AJ/af_join.c"
@@ -386,12 +392,14 @@ PY
   ( cd "$XB" && eval "$(printf '%s' "$AJCMD" | sed "s| -o libavfilter/af_join.o | -o $AJ/af_join_reverted.o |; s| $AJSRC\$| $AJ/rev/af_join.c|") -I$SRC/libavfilter -fmacro-prefix-map=$AJ/rev/=$(dirname "$AJSRC")/" )
   cmp -s "$AJ/af_join_shipped.o" "$XB/libavfilter/af_join.o" \
     || { echo "AF_JOIN GATE: the out-of-tree route does not reproduce libavfilter's af_join.o" >&2; exit 1; }
-  diff "$AJ/af_join.c" "$AJ/rev/af_join.c" > "$AJ/revert.diff"
+  diff "$AJ/af_join.c" "$AJ/rev/af_join.c" > "$AJ/revert.diff" || true   # 1 = they differ, as they must
   [ "$(grep -c '^[<>]' "$AJ/revert.diff")" = 2 ] || { echo "AF_JOIN GATE: the revert is not one line" >&2; exit 1; }
   echo "af_join: as-shipped object reproduced byte-identically; fixture 19 links the one-token revert"
 fi
 for fx in $FIXTURES; do
   FIXLINK=(); [ "$fx" = 19 ] && FIXLINK=("$AJ/af_join_reverted.o")
+  # FFAPP_LINK_AHEAD_<n>: objects linked ahead of the libraries for fixture <n> only (diagnostics)
+  _ahead=FFAPP_LINK_AHEAD_$fx; [ -n "${!_ahead:-}" ] && FIXLINK+=(${!_ahead})
   "$CLANG" "${APPF[@]}" -DFFAPP_FIXTURE="$fx" \
     -c "$APP_DIR/src/capstone-domain/ffapp_safety.c" -o "$OUT/ffapp_safety_$fx.o"
   "$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_fx$fx.dom" \

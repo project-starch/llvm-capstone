@@ -49,3 +49,33 @@ on something else: the same graph, with the fix present, completes.
 --enable-filter=join --enable-decoder=pcm_s16le_planar"`, in a work directory of its own, on the
 same compiler (`3979abd8`) and emulator as the pool port's v2 run. The C-50 and budget gates
 apply unchanged.
+
+## Addendum, 2026-09-29: the first run refuted its own control, and why
+
+The first boots (images built from 4a9e6ed46132) never reached the defect. Fixture 18, the shipped
+code, faulted *before its touch* on both arms, inside `avfilter_graph_config`. The registration
+above names that outcome as a refutation ("18 faulting on either arm"), so the run said nothing
+about af_join.
+
+**Cause: a compiler defect, not FFmpeg and not the pools.** It was bisected in the domain:
+
+- A configure-only diagnostic (fixture 30: `abuffer` → `abuffersink`, no join) faults the same way.
+  So does the same diagnostic on the **level0** heap, which never revokes. The untagged pointer was
+  therefore never freed: its tag was stripped.
+- The same graph runs clean natively under AddressSanitizer, with the predicted output (0x5b).
+- An instrumented `avfiltergraph.c` shows `link->incfg.channel_layouts` with tag 1 when read
+  directly, and tag 0 when read through `FF_FIELD_AT(void *, m->offset, link->incfg)`
+  (libavutil/internal.h:79).
+- The compiler (`3979abd8`) gives `*(T *)((char *)&obj + off)` alignment 1, and legalizes the
+  capability load into 16 byte loads, integer stores to a stack temporary, and an `ldc` from it,
+  which drops the tag. A ten-line reduction reproduces it at -O1 and -O3, and has been reported to
+  the compiler lane.
+
+**Workaround, and its matched pair.** App patch 0004 gives `FF_FIELD_AT` the pointee's alignment
+(`__builtin_assume_aligned`), under `__CAPSTONE__` only. On the reduction the load becomes one
+`ldc`. On the level0 heap, fixture 30 faults without the patch and returns `1e00001` with it:
+same arm, same image source, one patch apart.
+
+**Predictions unchanged.** Fixtures 18 and 19 are re-run with 0004 applied, N = 3, against the
+table above. 0004 changes every FFmpeg build of the app port. The committed results predate it, and
+M5's decode path is re-checked on the rebuilt images in the same batch.
