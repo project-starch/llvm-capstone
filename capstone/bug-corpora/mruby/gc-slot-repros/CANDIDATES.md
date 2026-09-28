@@ -368,7 +368,46 @@ valid -- is the likely reason in all three.
 **This is a conclusion about how the corpus must be built, not just three failures.** Rows
 1-9's vmstack members need a C-level `case.c` that drives `mrb_stack_extend()` and holds a
 raw `mrb_value*` across it, which is precisely the form `SCHEMA.md` specifies and which the
-other corpora in this tree already use. The Ruby scripts extracted from upstream tests are
+other corpora in this tree already use.
+
+**That case is now written, and it works.** `probe/vmstack-case/` holds `case.c`, its
+`grow.rb`, and a build-and-run script; six cases against the pin's own `libmruby.a`, in a
+plain arm and an ASan arm:
+
+| case | what it drives | plain | ASan at the pin |
+|---|---|---|---|
+| 0 | the bare shape, stale WRITE | completes, stack moved | `heap-use-after-free`, **WRITE** |
+| 1 | the bare shape, stale READ | completes, stack moved | `heap-use-after-free`, READ |
+| 2 | destination fixed before the call | completes, stack moved | `heap-use-after-free`, READ |
+| 3 | `c52faebb7` -- `mrb_funcall_argv()` | completes, stack moved | `heap-use-after-free`, READ |
+| 4 | `7b503f3a3` -- `mrb_ary_splat()` with a user-defined `to_a` | completes, stack moved | `heap-use-after-free`, READ |
+| 5 | `e8d075045` -- `mrb_hash_delete_key()` | **stack does not move** | silent |
+
+Rows 3 and 4 are the two the Ruby attempts could not reach. They reach them, which settles
+the split: the shape is reproducible against the real interpreter, from C, with the
+interpreter's own public API and a Ruby receiver whose methods grow the stack.
+
+**What the attribution means, exactly.** Case 0 is reported as a WRITE at the case's own
+stale store -- the defect's store landing in the freed block. Cases 2-4 are reported as a
+READ, at the case's read-back rather than at the store, because at `-O0` GCC computes the
+assignment's destination address *after* the call returns. So those three prove the held
+pointer is **dangling** after each of the three named calls, which is the precondition every
+one of these defects rests on; whether the *store* lands in the freed block is the
+compiler's evaluation order, and that is literally `c52faebb7`'s second stated reason --
+*"The C language does not specify the order in which the left-hand and right-hand sides of
+an assignment expression are evaluated."* A case cannot decide that, and claiming the store
+was caught when ASan named the read-back would be the same overreach as reading a cause-24
+fault as a catch.
+
+`-O0` is deliberate: at `-O1` the store nothing reads is eliminated and rows 1, 3 and 4 go
+silent for a reason with nothing to do with the defect. That cost one wrong reading here
+before the read-back was added.
+
+Case 5 is **INVALID rather than a MISS**, and the case says so itself: `mrb_hash_delete_key`
+on a one-entry hash does not reach the key's `hash`/`eql?` deeply enough to move the stack,
+at depth 30 or 300. Nothing was stale, so nothing was measured. The distinction is the one
+`xlang/capstone/rows.tsv` insists on, and `case.c` prints the stack's base before and after
+so an INVALID run cannot be mistaken for a quiet pass. The Ruby scripts extracted from upstream tests are
 the right instrument for the hash and string rows, whose triggers are ordinary Ruby, and
 the wrong one for the VM stack. The two `NOT-REPRODUCED` files under `probe/` are kept as
 the evidence for that split, named so nobody mistakes them for cases.
