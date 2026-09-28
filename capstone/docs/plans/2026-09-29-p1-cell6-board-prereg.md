@@ -326,8 +326,10 @@ records above; `check-driver-gates.sh` in the staged folder evaluates the re-pin
 Neither site is new, and neither is unexplained. Both are C-32's documented dormant residue, and the
 prior art says so in three places that were not searched before the prediction was written:
 
-- `docs/ref/ISSUES.md:1652`, inside the C-32 box: "**Left as they are:** `renameResolveTrigger` and
-  `main` are dormant under the P1 workload and are present in the native cell 5 as well."
+- `docs/ref/ISSUES.md`, in the C-32 box, the bullet beginning "**Left as they are:**" —
+  "`renameResolveTrigger` and `main` are dormant under the P1 workload and are present in the native
+  cell 5 as well." (:1730 as of 08ff5d07 and dev; the number moves with every registry edit, so the
+  quote is the anchor.)
 - `docs/ref/fpga-silicon-measurements-for-paper.md:4554-4562` records the site census per image:
   "Sublet -O2 **4 sites** (`setupLookaside` x2 — the live one and its free path; `main`+0x3aab4,
   mixed; `renameResolveTrigger`+0x10b5b8, a self-loop on the ALTER TABLE path)", and "cell 5 -O2
@@ -374,9 +376,9 @@ THE +1 IS ATTRIBUTED TO THE MONITOR, NOT PROVEN TO BE IT:
 - `sqlite_host.user` cannot contribute: it contains no `movc` at all, checked against the raw
   disassembly and not only via the scanner;
 - the domain image's own scan is clean of reachable integer-sourced sites — but only MODULO the
-  scanner's documented blind spot (`ISSUES.md:1648`: "a bridged value stored with `stc` and reloaded
-  with `ldc` is invisible to it"), so that leg is a static argument with a known hole rather than a
-  proof.
+  scanner's documented blind spot — `ISSUES.md`, the C-32 audit bullet "a bridged value stored with
+  `stc` and reloaded with `ldc` is invisible to it" (:1726 as of 08ff5d07 and dev) — so that leg is a
+  static argument with a known hole rather than a proof.
 
 A null domain bracketing `mcycle` around no work would close the hole. It was not run: it would
 re-derive a conclusion the existing binaries already support, and the GO does not rest on it.
@@ -394,3 +396,16 @@ right-aligns the address column, so an image at 0x80000000 starts at column 0 wh
 together with making an empty parse exit non-zero instead of printing zeros. No recorded claim rests
 on it: every documented scan is of a domain image linked at 0x10000 or 0x410000, and the monitor had
 never been scanned.
+
+### Citation note
+
+The ISSUES.md line numbers in the section above were briefly given as :1652 and :1648. Those are
+true only in the shared checkout at the repository root, which was 53 commits behind
+dev; in this branch's own tree and on dev they are :1730 and :1726. The grep had been run in the
+shell's working directory rather than in the tree the document belongs to, and `ISSUES.md` is
+precisely the file that churned in between. The two other citations here — the measurements doc's
+site census and the consolidated queue's reachability sentence — were re-checked in all three trees
+and are identical in each, so only the registry ones moved.
+
+Both are now anchored by quote. A line number into a registry that is edited daily is a citation
+with an expiry date on it.
