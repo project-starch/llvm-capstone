@@ -99,5 +99,9 @@ int capstone_main(void)
 	   (find_my_exec). The share the runner mounts is the natural one. */
 	if (chdir(PGSU_START_DIR) != 0)
 		fprintf(stderr, "PGSU-WARN chdir(%s) failed\n", PGSU_START_DIR);
-	return main(argc, argv);
+	int status = main(argc, argv);
+#ifdef PG_REUSE_GAP_OBSERVER
+	pg_reuse_gap_report();
+#endif
+	return status;
 }

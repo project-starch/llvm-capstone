@@ -550,6 +550,8 @@ void pg_subpool_drop(unsigned int i) {
 
 #ifdef PG_REUSE_GAP_OBSERVER
 void pg_reuse_gap_report(void) {
+  static unsigned reported;
+  if (reported++) return;
   fprintf(stderr, "PG_REUSE_GAP attempts=%llu issues=%llu releases=%llu "
           "reuses=%llu distinct=%llu capacity=%u error=%u bins=",
           (unsigned long long)pg_reuse.attempts,
