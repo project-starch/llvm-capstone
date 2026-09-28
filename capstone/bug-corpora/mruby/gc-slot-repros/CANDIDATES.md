@@ -323,6 +323,14 @@ core files, and six read as temporal:
 | `d95ebe4a2` | stack extension bug causing a HardFault | no |
 | `ab249864c` | `mrb_gc_unregister()` removed only the first matching entry | no |
 
+Four more from the wider `src/gc.c` and OSS-Fuzz sweeps were run and are **not**
+candidates, each for a stated reason rather than a shrug: `1911ec3a5` and `225439b0b`
+(both `mruby-compiler`, register handling) pass at the pin with their own upstream tests
+once the harness gains `assert_raise_with_message`; `4305b11a6` is out of scope twice over
+-- `Regexp` is an uninitialised constant at this pin and `mruby-regexp` is in none of the
+port's gemboxes; and `456a8687a` names this corpus's own `MRB_TT_FREE` assertion but sits
+in `mruby-task`, also in no gembox.
+
 **Row 10 = `af6f23ddb`**, the one with a test, and it reproduces hard: at the pin its own
 upstream test dies with `malloc(): invalid size (unsorted)` and a core dump -- glibc's own
 heap metadata check -- and ASan calls it a `heap-buffer-overflow`. At `4.0.0` it passes.
@@ -335,12 +343,35 @@ corpus's own `realloc-vmstack` shape stated in one line each: `regs` is
 sharper of the two -- the assignment's left side may be computed *before* the call, so C's
 unspecified evaluation order is part of the defect.
 
-Two reproducers were written for `c52faebb7` and **neither triggers it**: an operator with
-a Ruby-defined method and a callee grown wide enough to move the stack, once at a fixed
-width and once with the demand rising per call, all pass at the pin under ASan. The likely
-reason is the one `xlang/capstone/rows.tsv` already names as `INVALID` for this shape --
-`realloc` growing the block in place, so the old pointer stays valid and nothing is
-observable. Recorded as not reproduced rather than as absent.
+### The realloc-vmstack rows are not reachable from a Ruby script
+
+Three reproducers were written for this shape and **none triggers it**, which is the most
+useful negative in this file.
+
+Two were for `c52faebb7`: an operator with a Ruby-defined method and a callee grown wide
+enough to move the data stack, once at a fixed width and once with the demand rising per
+call. Both pass at the pin under ASan.
+
+The third was for `7b503f3a3` (*"store through the refreshed regs after a VM re-entry"*),
+and it is the one that settles it, because that commit **names its own trigger**: it was
+found via `clusterfuzz-testcase-minimized-mruby_fuzzer-4936203238178816`, *"where a
+user-defined `to_a` grows the stack during a splat"*, and it states the mechanism exactly
+-- `regs[a] = mrb_ary_splat(...)` computes the destination address before the call, so the
+store lands in the freed buffer. Written to that recipe, with `to_a` growing the stack over
+80 rising widths, it still passes at the pin under ASan.
+
+So a Ruby script does not control the stack geometry finely enough to put a realloc at the
+one instruction that matters, and the outcome `xlang/capstone/rows.tsv` already calls
+`INVALID` for this shape -- `realloc` growing the block in place, leaving the old pointer
+valid -- is the likely reason in all three.
+
+**This is a conclusion about how the corpus must be built, not just three failures.** Rows
+1-9's vmstack members need a C-level `case.c` that drives `mrb_stack_extend()` and holds a
+raw `mrb_value*` across it, which is precisely the form `SCHEMA.md` specifies and which the
+other corpora in this tree already use. The Ruby scripts extracted from upstream tests are
+the right instrument for the hash and string rows, whose triggers are ordinary Ruby, and
+the wrong one for the VM stack. The two `NOT-REPRODUCED` files under `probe/` are kept as
+the evidence for that split, named so nobody mistakes them for cases.
 
 ## Gems, and what is out of reach
 

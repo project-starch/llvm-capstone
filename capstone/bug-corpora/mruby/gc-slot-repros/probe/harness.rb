@@ -35,3 +35,13 @@ def flunk(m = nil) _f("FLUNK", m.to_s) end
 def assert_predicate(o, m, msg = nil) _f("NOT_PREDICATE", o.inspect, m.to_s) unless o.__send__(m) end
 def assert_not_predicate(o, m, msg = nil) _f("PREDICATE", o.inspect, m.to_s) if o.__send__(m) end
 def assert_operator(a, op, b, msg = nil) _f("NOT_OPERATOR", op.to_s) unless a.__send__(op, b) end
+def assert_raise_with_message(k, msg, m = nil)
+  begin; yield; _f("NO_RAISE")
+  rescue Exception => e
+    _f("WRONG_CLASS", e.class.to_s) unless e.kind_of?(k)
+    _f("WRONG_MESSAGE", e.message.inspect, msg.inspect) unless e.message == msg
+  end
+end
+def assert_raise_with_message_pattern(k, pat, m = nil)
+  begin; yield; _f("NO_RAISE"); rescue Exception => e; end
+end
