@@ -5,18 +5,20 @@
     python3 capstone/bug-corpora/tools/check-ports.py --self-test
     python3 capstone/bug-corpora/tools/build-index.py
 
-A component's directory name does **not** say what it is -- `role` does. The complete application of a program is variously `app/`, `interpreter/`, `musl/`, `single-user/` or the port root, because those names are load-bearing in build recipes and in archived result manifests. **New components use `app/` for the complete application, `<boundary>/` for an allocator component, and `cheribsd/` for a platform build.**
+**A component is named for what it is:** `app/` for the complete application, `<boundary>/` for one allocator, `cheribsd/` for the same release built for another platform. `role` states it as well, so nothing depends on reading the path.
+
+4 components do not follow that rule yet. Each is listed under **Path history** below with the reason, because in every case the move would cost more than the name is worth today.
 
 ## full-application -- the whole program runs, in a domain or on CheriBSD purecap
 
 | component | pinned version | runs on | workload | corpora |
 |---|---|---|---|---|
-| `cpython/interpreter` | 3.13.7 | capstone-domain, cheribsd-purecap | objects.py JSON/GC qualification workload | `pymalloc-repros` |
+| `cpython/app` | 3.13.7 | capstone-domain, cheribsd-purecap | objects.py JSON/GC qualification workload | `pymalloc-repros` |
 | `ffmpeg/app` | 9.0.1 | capstone-domain | matroska demuxer to mpeg4 decoder, per-frame framemd5 | -- |
 | `micropython` | 2e3304a | capstone-domain, silicon | the registered upstream test selection | -- |
-| `mruby/musl` | 4.0.0-rc2 | capstone-domain, native | mrbtest, and the upstream ao-render benchmark for the study | `gc-slot-repros` |
+| `mruby/app` | 4.0.0-rc2 | capstone-domain, native | mrbtest, and the upstream ao-render benchmark for the study | `gc-slot-repros` |
 | `perl/musl` | 5.36.3 | capstone-domain, native | scripts/smoke.pl, byte-identical to the native reference | -- |
-| `postgres/single-user` | 17.5 | capstone-domain, cheribsd-purecap | work.sql, checked against the native 16-byte-MAXALIGN oracle | -- |
+| `postgres/app` | 17.5 | capstone-domain, cheribsd-purecap | work.sql, checked against the native 16-byte-MAXALIGN oracle | -- |
 | `sqlite` | 3.53.3, 3.22.0 | capstone-domain, silicon, native | the in-memory SQL smoke, speedtest1, and the 3.22.0 silicon gate | `capi-repros` |
 | `wireshark/app` | 4.6.8 | capstone-domain | -- | -- |
 
@@ -44,5 +46,22 @@ A component's directory name does **not** say what it is -- `role` does. The com
 | component | pinned version | runs on | workload | corpora |
 |---|---|---|---|---|
 | `musl-capstone` | 1.2.5 | capstone-domain | libc-test, plus the hostcall probes | -- |
+
+## Path history
+
+A component's directory has been renamed where the old name did not say what it is. **Archived result bundles keep quoting the old path on purpose** -- a `build-manifest.json` records which directory a measured binary was built from, so it is evidence and is never rewritten -- and `docs/history/` is append-only for the same reason. Resolve an old path here; `renames.json` is the machine-readable form, and check-ports.py verifies that each old path is gone, each new one carries a declaration, and each file below really still quotes the old name.
+
+| old path | new path | when | archived files still quoting it |
+|---|---|---|---:|
+| `capstone/ports/cpython/interpreter` | `capstone/ports/cpython/app` | 2026-09-28 | 3 |
+| `capstone/ports/mruby/musl` | `capstone/ports/mruby/app` | 2026-09-28 | 1 |
+| `capstone/ports/postgres/single-user` | `capstone/ports/postgres/app` | 2026-09-28 | 4 |
+
+Deferred, with the reason:
+
+- `capstone/ports/perl/musl` &rarr; `capstone/ports/perl/app` -- another lane is editing this component; rename it once that work lands
+- `capstone/ports/sqlite` &rarr; `capstone/ports/sqlite/app` -- 99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them
+- `capstone/ports/micropython` &rarr; `capstone/ports/micropython/app` -- same added level: run-nightly.sh drives its gate script, which resolves the test environment relative to its own depth
+- `capstone/ports/nginx` &rarr; `capstone/ports/nginx/pool` -- same added level, and two board drivers invoke its scripts
 
 Which defects each corpus holds, and whether they are live in the version above, is in the [bug-material index](../bug-corpora/INDEX.md).

@@ -6,7 +6,7 @@
     "version": "4.0.0-rc2",
     "commit": "9d523e2f74f2e63ca02840937523de61398a617d",
     "pin_source": {
-      "file": "capstone/ports/mruby/musl/build-mruby-domain.sh",
+      "file": "capstone/ports/mruby/app/build-mruby-domain.sh",
       "grep": "4.0.0-rc2) MRUBY_COMMIT="
     }
   },
@@ -16,7 +16,7 @@
   ],
   "workload": "mrbtest, and the upstream ao-render benchmark for the study",
   "evidence": [
-    "capstone/ports/mruby/musl/results/2026-09-26",
+    "capstone/ports/mruby/app/results/2026-09-26",
     "capstone/experiments/study/results/mruby-gc-memory-20260927"
   ],
   "corpora": [

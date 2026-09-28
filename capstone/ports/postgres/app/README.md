@@ -74,7 +74,7 @@ These are selected ledgers, not total RSS. The direct-link component without
 the batch definition retains its synchronous policy for defect checks.
 
 For a pristine Capstone input cluster, run
-`python3 capstone/ports/postgres/single-user/build-native16-fixture.py`
+`python3 capstone/ports/postgres/app/build-native16-fixture.py`
 after sourcing the test environment. It builds a native PostgreSQL 17.5
 fixture generator at `-O1` with the domain's 16-byte `MAXIMUM_ALIGNOF` and
 matching 16-byte chunk-header layout, then runs upstream `initdb` with C

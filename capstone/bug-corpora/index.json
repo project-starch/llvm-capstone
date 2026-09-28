@@ -215,7 +215,7 @@
       "title": "Planned: the xlang mruby rows re-run inside the complete interpreter",
       "upstream": {
         "version": "4.0.0-rc2",
-        "port": "capstone/ports/mruby/musl"
+        "port": "capstone/ports/mruby/app"
       },
       "cases": 0,
       "case_schema": "case-json",
@@ -226,7 +226,7 @@
       "advisories": [],
       "related": [
         "xlang/repro",
-        "capstone/ports/mruby/musl"
+        "capstone/ports/mruby/app"
       ],
       "note": "Six xlang rows (4, 5, 8, 10, 13, 15) share the realloc-vmstack shape and are the intended first cases.",
       "where": "capstone/bug-corpora/mruby/gc-slot-repros"
@@ -477,7 +477,7 @@
       "upstream": {
         "version": "3.13.7",
         "pin_source": {
-          "file": "capstone/ports/cpython/interpreter/upstream.json",
+          "file": "capstone/ports/cpython/app/upstream.json",
           "grep": "\"version\": \"3.13.7\""
         }
       },
@@ -496,7 +496,7 @@
         "capstone/ports/cpython/pymalloc"
       ],
       "note": "The README is still headed 'compile survey': it documents the 2026-09-23 compile census and first link, not the interpreter runs that followed.",
-      "where": "capstone/ports/cpython/interpreter"
+      "where": "capstone/ports/cpython/app"
     },
     {
       "program": "cpython",
@@ -613,7 +613,7 @@
         "version": "4.0.0-rc2",
         "commit": "9d523e2f74f2e63ca02840937523de61398a617d",
         "pin_source": {
-          "file": "capstone/ports/mruby/musl/build-mruby-domain.sh",
+          "file": "capstone/ports/mruby/app/build-mruby-domain.sh",
           "grep": "4.0.0-rc2) MRUBY_COMMIT="
         }
       },
@@ -623,7 +623,7 @@
       ],
       "workload": "mrbtest, and the upstream ao-render benchmark for the study",
       "evidence": [
-        "capstone/ports/mruby/musl/results/2026-09-26",
+        "capstone/ports/mruby/app/results/2026-09-26",
         "capstone/experiments/study/results/mruby-gc-memory-20260927"
       ],
       "corpora": [
@@ -632,7 +632,7 @@
       "related": [
         "xlang/repro"
       ],
-      "where": "capstone/ports/mruby/musl"
+      "where": "capstone/ports/mruby/app"
     },
     {
       "program": "musl",
@@ -713,6 +713,37 @@
     },
     {
       "program": "postgres",
+      "role": "full-application",
+      "title": "The complete PostgreSQL single-user backend, on Capstone and CheriBSD purecap",
+      "upstream": {
+        "version": "17.5",
+        "pin_source": [
+          {
+            "file": "capstone/ports/postgres/app/build-domain.sh",
+            "grep": "not the pinned PostgreSQL 17.5 archive"
+          },
+          {
+            "file": "capstone/ports/postgres/app/build-cheribsd.sh",
+            "grep": "SRC=$ROOT/postgresql-17.5"
+          }
+        ]
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap"
+      ],
+      "workload": "work.sql, checked against the native 16-byte-MAXALIGN oracle",
+      "evidence": [
+        "capstone/experiments/study/results/postgres-reuse-four-arm-20260928"
+      ],
+      "related": [
+        "capstone/ports/postgres/memory-contexts"
+      ],
+      "note": "The memory-context corpus and replay component pin 17.0, not 17.5.",
+      "where": "capstone/ports/postgres/app"
+    },
+    {
+      "program": "postgres",
       "role": "allocator-component",
       "title": "PostgreSQL's memory contexts, replayed against aset, slab and generation",
       "upstream": {
@@ -732,37 +763,6 @@
         "capstone/bug-corpora/postgres/mmgr-repros"
       ],
       "where": "capstone/ports/postgres/memory-contexts"
-    },
-    {
-      "program": "postgres",
-      "role": "full-application",
-      "title": "The complete PostgreSQL single-user backend, on Capstone and CheriBSD purecap",
-      "upstream": {
-        "version": "17.5",
-        "pin_source": [
-          {
-            "file": "capstone/ports/postgres/single-user/build-domain.sh",
-            "grep": "not the pinned PostgreSQL 17.5 archive"
-          },
-          {
-            "file": "capstone/ports/postgres/single-user/build-cheribsd.sh",
-            "grep": "SRC=$ROOT/postgresql-17.5"
-          }
-        ]
-      },
-      "targets": [
-        "capstone-domain",
-        "cheribsd-purecap"
-      ],
-      "workload": "work.sql, checked against the native 16-byte-MAXALIGN oracle",
-      "evidence": [
-        "capstone/experiments/study/results/postgres-reuse-four-arm-20260928"
-      ],
-      "related": [
-        "capstone/ports/postgres/memory-contexts"
-      ],
-      "note": "The memory-context corpus and replay component pin 17.0, not 17.5.",
-      "where": "capstone/ports/postgres/single-user"
     },
     {
       "program": "sqlite",
@@ -1030,6 +1030,66 @@
   "live_false": 20,
   "live_not": 28,
   "advisories_total": 14,
+  "renames": {
+    "schema_version": 1,
+    "note": "Path history for port components. An archived result bundle records which directory a measured binary was built from, so it is never rewritten and keeps quoting the 'from' path; docs/history/ is append-only for the same reason. Resolve an old path here. check-ports.py verifies that every 'from' is gone, every 'to' exists, and every file listed under quoted_by really still quotes the old path.",
+    "renames": [
+      {
+        "from": "capstone/ports/cpython/interpreter",
+        "to": "capstone/ports/cpython/app",
+        "date": "2026-09-28",
+        "reason": "the complete application of a program is app/",
+        "quoted_by": [
+          "capstone/experiments/study/results/cpython-objects-qualification-20260928/README.md",
+          "capstone/experiments/study/results/cpython-reuse-four-arm-20260928/build-manifest.json",
+          "capstone/experiments/study/results/cpython-reuse-three-arm-20260928/cheribsd-build-manifest.json"
+        ]
+      },
+      {
+        "from": "capstone/ports/mruby/musl",
+        "to": "capstone/ports/mruby/app",
+        "date": "2026-09-28",
+        "reason": "the complete application of a program is app/",
+        "quoted_by": [
+          "capstone/experiments/study/results/mruby-gc-memory-20260927/README.md"
+        ]
+      },
+      {
+        "from": "capstone/ports/postgres/single-user",
+        "to": "capstone/ports/postgres/app",
+        "date": "2026-09-28",
+        "reason": "the complete application of a program is app/",
+        "quoted_by": [
+          "capstone/experiments/study/results/postgres-pristine-20260928/README.md",
+          "capstone/experiments/study/results/postgres-reuse-four-arm-20260928/README.md",
+          "capstone/experiments/study/results/postgres-reuse-four-arm-20260928/build-manifest.json",
+          "capstone/experiments/study/results/postgres-reuse-spatial-20260928/build-manifest.json"
+        ]
+      }
+    ],
+    "deferred": [
+      {
+        "from": "capstone/ports/perl/musl",
+        "to": "capstone/ports/perl/app",
+        "reason": "another lane is editing this component; rename it once that work lands"
+      },
+      {
+        "from": "capstone/ports/sqlite",
+        "to": "capstone/ports/sqlite/app",
+        "reason": "99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them"
+      },
+      {
+        "from": "capstone/ports/micropython",
+        "to": "capstone/ports/micropython/app",
+        "reason": "same added level: run-nightly.sh drives its gate script, which resolves the test environment relative to its own depth"
+      },
+      {
+        "from": "capstone/ports/nginx",
+        "to": "capstone/ports/nginx/pool",
+        "reason": "same added level, and two board drivers invoke its scripts"
+      }
+    ]
+  },
   "gaps": [
     "`capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.",
     "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
@@ -1050,7 +1110,7 @@
     "`capstone/ports/ffmpeg/app` is a complete application with no corpus.",
     "`capstone/ports/micropython` is a complete application with no corpus.",
     "`capstone/ports/perl/musl` is a complete application with no corpus.",
-    "`capstone/ports/postgres/single-user` is a complete application with no corpus.",
+    "`capstone/ports/postgres/app` is a complete application with no corpus.",
     "`capstone/ports/wireshark/app` is a complete application with no corpus."
   ]
 }

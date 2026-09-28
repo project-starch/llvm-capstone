@@ -247,7 +247,7 @@ guest CPU and 7,154 sweeps; it produced no completed SQL oracle and is excluded
 from the study. The current eager reissue policy needs batching or a different
 threshold before full-workload qualification. No four-arm PostgreSQL paper plot or total-memory
 ranking is established. The new build path and limits are in the
-[single-user port](../../ports/postgres/single-user/README.md).
+[single-user port](../../ports/postgres/app/README.md).
 
 ## 2026-09-27 — mruby GC-slot four-arm memory behavior
 

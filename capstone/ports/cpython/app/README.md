@@ -128,7 +128,7 @@ toward 4 MiB. With `--opt` there is no baseline gate unless `--expect-ok` is giv
 
     source capstone/tests/capstone-test-env.sh
     CAPSTONE_LLVM_BUILD_DIR=<llvm build with clang, lld, llvm-ar> \
-      bash capstone/ports/cpython/interpreter/survey-cpython-capstone.sh --jobs 14
+      bash capstone/ports/cpython/app/survey-cpython-capstone.sh --jobs 14
 
 `prepare-cpython-capstone.sh` unpacks the pinned archive (`upstream.json`), applies `patches/`,
 builds or reuses a native CPython 3.13.7 (`configure` requires one for a cross build), builds

@@ -21,7 +21,7 @@ Capstone controls complete the 60-process three-application figure set.
 The wider six-application study remains unfinished.
 
 PostgreSQL complete-backend memory work: the
-[17.5 single-user port](../ports/postgres/single-user/README.md) now completes
+[17.5 single-user port](../ports/postgres/app/README.md) now completes
 the same native-matched SQL qualification and inner reuse checks in all four
 arms. Its metadata-capacity and queue-policy repair is documented in the
 [four-arm campaign](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md).

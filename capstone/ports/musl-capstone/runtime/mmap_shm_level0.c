@@ -30,7 +30,7 @@
  *
  * First consumer is PostgreSQL's single-user backend: one MAP_SHARED|MAP_ANONYMOUS
  * mapping for its shared memory and one small System V segment as its
- * data-directory interlock (capstone/ports/postgres/single-user/).
+ * data-directory interlock (capstone/ports/postgres/app/).
  *
  * __mmap and __munmap are defined too: musl's own objects call those names, and
  * a reference to one would otherwise pull musl's mmap.o in beside this file.

@@ -32,6 +32,7 @@ REPO = CORPORA.parents[1]
 INDEX_MD = CORPORA / "INDEX.md"
 INDEX_JSON = CORPORA / "index.json"
 PORTS_MD = REPO / "capstone/ports/INDEX.md"
+RENAMES = REPO / "capstone/ports/renames.json"
 FPGA = REPO / "capstone/tests/fpga-repros"
 ISSUES = REPO / "capstone/docs/ref/ISSUES.md"
 ISSUES_ARCHIVE = REPO / "capstone/docs/ref/ISSUES-ARCHIVE.md"
@@ -245,12 +246,16 @@ def render_ports(data):
     add("    python3 capstone/bug-corpora/tools/check-ports.py --self-test")
     add("    python3 capstone/bug-corpora/tools/build-index.py")
     add("")
-    add("A component's directory name does **not** say what it is -- `role` does. The complete "
-        "application of a program is variously `app/`, `interpreter/`, `musl/`, `single-user/` "
-        "or the port root, because those names are load-bearing in build recipes and in "
-        "archived result manifests. **New components use `app/` for the complete application, "
-        "`<boundary>/` for an allocator component, and `cheribsd/` for a platform build.**")
+    add("**A component is named for what it is:** `app/` for the complete application, "
+        "`<boundary>/` for one allocator, `cheribsd/` for the same release built for another "
+        "platform. `role` states it as well, so nothing depends on reading the path.")
     add("")
+    deferred = data["renames"]["deferred"]
+    if deferred:
+        add(f"{len(deferred)} components do not follow that rule yet. Each is listed under "
+            f"**Path history** below with the reason, because in every case the move would "
+            f"cost more than the name is worth today.")
+        add("")
     for role in ROLE_ORDER:
         rows = [p for p in data["ports"] if p["role"] == role]
         if not rows:
@@ -264,6 +269,28 @@ def render_ports(data):
             add(f"| `{port['where'].split('capstone/ports/')[-1]}` | {version_of(port)} | "
                 f"{', '.join(port['targets'])} | {port.get('workload', '--')} | "
                 f"{', '.join(f'`{n.split(chr(47))[-1]}`' for n in names) or '--'} |")
+        add("")
+    add("## Path history")
+    add("")
+    add("A component's directory has been renamed where the old name did not say what it is. "
+        "**Archived result bundles keep quoting the old path on purpose** -- a "
+        "`build-manifest.json` records which directory a measured binary was built from, so it "
+        "is evidence and is never rewritten -- and `docs/history/` is append-only for the same "
+        "reason. Resolve an old path here; `renames.json` is the machine-readable form, and "
+        "check-ports.py verifies that each old path is gone, each new one carries a "
+        "declaration, and each file below really still quotes the old name.")
+    add("")
+    add("| old path | new path | when | archived files still quoting it |")
+    add("|---|---|---|---:|")
+    for entry in data["renames"]["renames"]:
+        add(f"| `{entry['from']}` | `{entry['to']}` | {entry['date']} | "
+            f"{len(entry['quoted_by'])} |")
+    add("")
+    if deferred:
+        add("Deferred, with the reason:")
+        add("")
+        for entry in deferred:
+            add(f"- `{entry['from']}` &rarr; `{entry['to']}` -- {entry['reason']}")
         add("")
     add("Which defects each corpus holds, and whether they are live in the version above, is in "
         "the [bug-material index](../bug-corpora/INDEX.md).")
@@ -290,6 +317,7 @@ def collect():
         "live_not": sum(d.get("expect_live_in_pin", {}).get("not_asserted", 0)
                         for d in all_corpora),
         "advisories_total": sum(len(d.get("advisories", [])) for d in all_corpora),
+        "renames": read_json(RENAMES) if RENAMES.is_file() else {"renames": [], "deferred": []},
     }
     data["gaps"] = gaps(all_corpora, all_ports)
     # Links are written relative to this file, so they work on the forge and on disk.

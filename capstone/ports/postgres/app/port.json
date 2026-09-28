@@ -6,11 +6,11 @@
     "version": "17.5",
     "pin_source": [
       {
-        "file": "capstone/ports/postgres/single-user/build-domain.sh",
+        "file": "capstone/ports/postgres/app/build-domain.sh",
         "grep": "not the pinned PostgreSQL 17.5 archive"
       },
       {
-        "file": "capstone/ports/postgres/single-user/build-cheribsd.sh",
+        "file": "capstone/ports/postgres/app/build-cheribsd.sh",
         "grep": "SRC=$ROOT/postgresql-17.5"
       }
     ]

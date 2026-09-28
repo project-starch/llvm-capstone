@@ -5,7 +5,7 @@
   "upstream": {
     "version": "3.13.7",
     "pin_source": {
-      "file": "capstone/ports/cpython/interpreter/upstream.json",
+      "file": "capstone/ports/cpython/app/upstream.json",
       "grep": "\"version\": \"3.13.7\""
     }
   },

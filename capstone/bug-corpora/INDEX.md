@@ -42,19 +42,19 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | component | role | pinned version | targets | corpora | cases |
 |---|---|---|---|---|---:|
 | `capstone/ports/apr/pools` | allocator-component | 1.7.4 | capstone-domain, cheribsd-purecap, native | `apr-pool-repros`, `bucket-repros` | 9 |
-| `capstone/ports/cpython/interpreter` | full-application | 3.13.7 | capstone-domain, cheribsd-purecap | `pymalloc-repros` | 20 |
+| `capstone/ports/cpython/app` | full-application | 3.13.7 | capstone-domain, cheribsd-purecap | `pymalloc-repros` | 20 |
 | `capstone/ports/cpython/pymalloc` | allocator-component | 3.13.7 | capstone-domain, cheribsd-purecap, native | `pymalloc-repros` | 20 |
 | `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | -- | 0 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 3 |
 | `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 5 |
 | `capstone/ports/micropython` | full-application | 2e3304a | capstone-domain, silicon | -- | 0 |
-| `capstone/ports/mruby/musl` | full-application | 4.0.0-rc2 | capstone-domain, native | `gc-slot-repros` | 0 |
+| `capstone/ports/mruby/app` | full-application | 4.0.0-rc2 | capstone-domain, native | `gc-slot-repros` | 0 |
 | `capstone/ports/musl-capstone` | domain-libc | 1.2.5 | capstone-domain | -- | 0 |
 | `capstone/ports/nginx` | allocator-component | 1.28.0 | capstone-domain, native | -- | 0 |
 | `capstone/ports/perl/cheribsd` | platform-build | 5.36.3 | cheribsd-purecap | -- | 0 |
 | `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, native | -- | 0 |
+| `capstone/ports/postgres/app` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
 | `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-domain, cheribsd-purecap, linux-guest, native | `mmgr-repros` | 8 |
-| `capstone/ports/postgres/single-user` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
 | `capstone/ports/sqlite` | full-application | 3.53.3, 3.22.0 | capstone-domain, silicon, native | `capi-repros` | 19 |
 | `capstone/ports/whisper/ggml-context` | allocator-component | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | 0 |
 | `capstone/ports/wireshark/app` | full-application | 4.6.8 | capstone-domain | -- | 0 |
@@ -81,7 +81,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/ports/ffmpeg/app` is a complete application with no corpus.
 - `capstone/ports/micropython` is a complete application with no corpus.
 - `capstone/ports/perl/musl` is a complete application with no corpus.
-- `capstone/ports/postgres/single-user` is a complete application with no corpus.
+- `capstone/ports/postgres/app` is a complete application with no corpus.
 - `capstone/ports/wireshark/app` is a complete application with no corpus.
 
 ## Our own silicon defects

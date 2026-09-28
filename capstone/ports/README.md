@@ -43,22 +43,30 @@ historical results keep their original source and binary identities.
 pinned version, the targets it runs on, its workload and its corpora. Read it before
 this table: it cannot go stale, and the table above can.
 
-## Naming, and why the existing names stay
+## Naming
 
-**A new component is named for what it is:** `app/` for the complete application,
+**A component is named for what it is:** `app/` for the complete application,
 `<boundary>/` for one allocator (`pools`, `pymalloc`, `buffer-pool`, `wmem`,
 `memory-contexts`), `cheribsd/` for the same release built for another platform.
+`role` in each `port.json` states the same thing, so nothing depends on reading a path.
 
-The components that predate that rule keep their names — `cpython/interpreter`,
-`mruby/musl`, `perl/musl`, `postgres/single-user`, and the flat trees of `sqlite`,
-`micropython` and `nginx` — and `role` in each `port.json` says what they are instead.
-That is deliberate: those paths are quoted by **archived result bundles**, including
-four `build-manifest.json`/`inputs.json` files that record which directory a measured
-binary was built from. Renaming a component either falsifies that record or leaves
-evidence pointing at a path that no longer exists, and the point of a manifest is that
-neither can happen. A rename is therefore a decision with a cost, taken deliberately
-and once — as `bug-corpora/sqlite/cve-repros` → `capi-repros` was, because that name
-was wrong in kind rather than merely old.
+Three components were renamed to that rule on 2026-09-28 — `cpython/interpreter`,
+`mruby/musl` and `postgres/single-user` are now each `app/` — and four are deferred with
+their reasons. **[renames.json](renames.json) is the path history**, rendered in
+[INDEX.md](INDEX.md#path-history) and checked by `check-ports.py`.
+
+The rename does not touch the evidence. An archived `build-manifest.json` records which
+directory a measured binary was actually built from, so it keeps quoting the old path and
+is never rewritten; `docs/history/` is append-only for the same reason. Eight archived
+files quote a renamed path today, the ledger lists each one, and the checker fails if one
+of them stops quoting it — so the record and its resolution table cannot drift apart.
+
+What is deferred is deferred for a measured reason, not for taste. `perl/musl` has
+another lane working in it. `sqlite`, `micropython` and `nginx` are flat trees, so the
+move would add a directory level that every script inside resolves its own paths
+against — and for `sqlite`, 99 files quote the path and 23 of them are evidence. Neither
+can be claimed to work from a worktree that cannot run the nightly or the board gates
+that drive those scripts.
 
 ## Shared layout for component ports
 

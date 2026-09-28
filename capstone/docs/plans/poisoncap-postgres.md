@@ -132,7 +132,7 @@ is not in-band, which is a different experiment.
 
 ## Complete-backend batch policy
 
-The [PostgreSQL 17.5 single-user port](../../ports/postgres/single-user/README.md)
+The [PostgreSQL 17.5 single-user port](../../ports/postgres/app/README.md)
 now uses the same out-of-band chunk table as the Sublet port and adds a
 separate PoisonCap batch policy. It poisons a freed chunk immediately and
 records its identifier and byte span outside the chunk. It sweeps the whole

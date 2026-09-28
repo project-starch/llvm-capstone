@@ -104,7 +104,7 @@ lower bound. Before a paper plot, use a common phase/work-size schedule and
 account for live payload, reusable and withheld backing, metadata, and
 Capstone node storage in each pair. `work.sql` is a qualification workload,
 not pgbench. Keep this study off a PR until the broader experiment set is
-ready (superseded 2026-09-28: the review stack is merged into dev; the experiment set is still incomplete). See the [complete-backend port](../../ports/postgres/single-user/README.md).
+ready (superseded 2026-09-28: the review stack is merged into dev; the experiment set is still incomplete). See the [complete-backend port](../../ports/postgres/app/README.md).
 
 A fresh-guest policy diagnostic on 2026-09-28 tested bounded chunk and whole-block
 quarantines at the same 17.5 `work.sql` input. The mode-0 control from the
@@ -155,7 +155,7 @@ edits were removed from the branch; scratch evidence remains under
 quarantine with explicit retained-pool accounting and complete the VM probe
 before accepting a protected process. Then add inner-pymalloc
 issue/release, backing and metadata ledgers; the present outer counters cannot
-support a four-arm CPython memory figure. The [CheriBSD port](../../ports/cpython/interpreter/cheribsd/README.md)
+support a four-arm CPython memory figure. The [CheriBSD port](../../ports/cpython/app/cheribsd/README.md)
 records the build and runtime selection.
 
 Nested application memory study (2026-09-27): the [normalized SQLite campaign](../../experiments/study/results/sqlite-normalized-memory-20260927/README.md)

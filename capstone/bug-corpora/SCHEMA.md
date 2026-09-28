@@ -157,15 +157,13 @@ ported backend was 17.5.
 | `targets` | where it runs: `capstone-domain`, `cheribsd-purecap`, `linux-guest`, `silicon`, `native` |
 | `workload`, `evidence`, `corpora`, `related`, `status`, `note` | the qualifying workload, result bundles, the corpora whose cases are its own, neighbouring components, and anything else a reader needs. Paths must exist |
 
-**`role` is why nothing was renamed.** The complete application of a program is
-variously `app`, `interpreter`, `musl`, `single-user` or the port root. Those paths
-are quoted by archived result bundles — four `build-manifest.json`/`inputs.json`
-files record which directory a measured binary was built from — so a rename either
-falsifies that record or points evidence at a path that no longer exists. The role is
-declared instead, so a reader and the index can ask what a component is without the
-directory name having to answer. **New components follow the rule in
-[`../ports/README.md`](../ports/README.md#naming-and-why-the-existing-names-stay):
-`app/`, `<boundary>/`, `cheribsd/`.**
+**`role` says what a component is, so a path never has to.** Three components were
+renamed to the rule in [`../ports/README.md`](../ports/README.md#naming) on 2026-09-28 —
+`app/` for the complete application — and four are deferred there with their reasons.
+Archived result bundles keep quoting the old paths, because a `build-manifest.json`
+records which directory a measured binary was built from and is evidence rather than a
+link; `../ports/renames.json` is the resolution table, and `check-ports.py` fails if a
+listed bundle stops quoting the old path or a renamed component loses its declaration.
 
 ## Naming, on this side
 
