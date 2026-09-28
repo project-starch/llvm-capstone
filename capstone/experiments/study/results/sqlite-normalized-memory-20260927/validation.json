@@ -1,0 +1,210 @@
+[
+  {
+    "arm": "poisoncap-spatial",
+    "profile": "qualification",
+    "rep": 0,
+    "status": "completed",
+    "completed_units": 1,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-spatial",
+    "profile": "churn",
+    "rep": 1,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-spatial",
+    "profile": "churn",
+    "rep": 2,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-spatial",
+    "profile": "churn",
+    "rep": 3,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-spatial",
+    "profile": "burst",
+    "rep": 1,
+    "status": "completed",
+    "completed_units": 13,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-spatial",
+    "profile": "burst",
+    "rep": 2,
+    "status": "completed",
+    "completed_units": 13,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-spatial",
+    "profile": "burst",
+    "rep": 3,
+    "status": "completed",
+    "completed_units": 13,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-temporal",
+    "profile": "qualification",
+    "rep": 0,
+    "status": "completed",
+    "completed_units": 1,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-temporal",
+    "profile": "churn",
+    "rep": 1,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-temporal",
+    "profile": "churn",
+    "rep": 2,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-temporal",
+    "profile": "churn",
+    "rep": 3,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "poisoncap-temporal",
+    "profile": "burst",
+    "rep": 1,
+    "status": "guest-error",
+    "completed_units": 4,
+    "valid": true
+  },
+  {
+    "arm": "capstone-sublet",
+    "profile": "qualification",
+    "rep": 0,
+    "status": "completed",
+    "completed_units": 1,
+    "valid": true
+  },
+  {
+    "arm": "capstone-sublet",
+    "profile": "churn",
+    "rep": 1,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "capstone-sublet",
+    "profile": "churn",
+    "rep": 2,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "capstone-sublet",
+    "profile": "churn",
+    "rep": 3,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "capstone-sublet",
+    "profile": "burst",
+    "rep": 1,
+    "status": "completed",
+    "completed_units": 13,
+    "valid": true
+  },
+  {
+    "arm": "capstone-sublet",
+    "profile": "burst",
+    "rep": 2,
+    "status": "completed",
+    "completed_units": 13,
+    "valid": true
+  },
+  {
+    "arm": "capstone-sublet",
+    "profile": "burst",
+    "rep": 3,
+    "status": "completed",
+    "completed_units": 13,
+    "valid": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "qualification",
+    "rep": 0,
+    "status": "completed",
+    "completed_units": 1,
+    "valid": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "churn",
+    "rep": 1,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "churn",
+    "rep": 2,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "churn",
+    "rep": 3,
+    "status": "completed",
+    "completed_units": 17,
+    "valid": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "burst",
+    "rep": 1,
+    "status": "completed",
+    "completed_units": 13,
+    "valid": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "burst",
+    "rep": 2,
+    "status": "completed",
+    "completed_units": 13,
+    "valid": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "burst",
+    "rep": 3,
+    "status": "completed",
+    "completed_units": 13,
+    "valid": true
+  }
+]

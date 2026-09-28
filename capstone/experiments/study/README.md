@@ -1,5 +1,23 @@
 # Paired application memory studies
 
+## Current review entry point
+
+Start with the [five-application reuse figure](results/reuse-five-applications-20260928/README.md)
+and its PNG, PDF, CSV and provenance. SQLite, mruby, FFmpeg, PostgreSQL and
+CPython have checked four-arm inner-reuse evidence; Perl currently has only
+[interpreter qualification](../../ports/perl/cheribsd/README.md).
+The [PostgreSQL](results/postgres-reuse-four-arm-20260928/README.md) and
+[CPython](results/cpython-reuse-four-arm-20260928/README.md) archive validators
+recheck 12 processes each. The current figure pools all three repetitions in
+each arm and retains the observed-reuse-only scope.
+
+The campaign descriptions below preserve earlier policy and qualification
+states. Their then-unresolved CPython/PostgreSQL blockers are superseded by
+these archives. Historical figures must retain their recorded policy labels;
+none supplies an equal-scope total-memory or physical-working-set comparison.
+
+## Campaign history and reproduction
+
 The [published-threshold campaign](results/published-policy-20260928/README.md)
 validates 48/48 fresh mruby/FFmpeg processes and provides checked reuse and
 selected-memory plots. Six new outer-default SQLite runs paired with six

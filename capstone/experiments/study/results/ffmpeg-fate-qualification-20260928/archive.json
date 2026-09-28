@@ -1,0 +1,8 @@
+{
+  "archive": "/tmp/capstone/ffmpeg-fate-qualification-20260928.tar.gz",
+  "bytes": 2527987,
+  "sha256": "ac6e794e5d63f082d0b014588c78ebd780792a5d7f63497bee1fcb404f834080",
+  "includes": "18 raw qualified application attempts, two pinned adapted FATE inputs, measured binaries/build manifests, excluded kernel panic serial and record",
+  "excludes": "guest SSH credentials and VM state",
+  "repository_revision": "65169efa53969beae41ddf53502cd95e0437069a"
+}

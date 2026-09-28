@@ -1,0 +1,6 @@
+{
+  "command": "env _RUNTIME_REVOCATION_ENABLE=1 LD_PRELOAD=/tmp/libc-fixed.so.7 /tmp/probe-check",
+  "exit": 0,
+  "stdout": "PROBE-OK resident hidden zero-fill unmapped\n",
+  "stderr": "tags=0,0,1 perms=6817d,6817d,6817d\n"
+}

@@ -1,5 +1,82 @@
 # Capstone project documentation
 
+Inner-reuse expansion: [CPython](../experiments/study/results/cpython-reuse-four-arm-20260928/README.md)
+and [PostgreSQL](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
+now each validate 12/12 complete processes across four arms. The
+[first reuse figure](../experiments/study/results/reuse-five-applications-20260928/README.md)
+contains SQLite, mruby, FFmpeg, PostgreSQL and CPython. CPython required a
+VM-object poison-probe repair and deferred pymalloc publication at the
+published quarantine thresholds. The [Perl CheriBSD recipe](../ports/perl/cheribsd/README.md)
+now builds 5.36.3 and passes the 17-section smoke with both libc policy switches;
+its inner SV adapters and four-arm reuse measurements remain to be implemented.
+
+Published-threshold memory comparison: the
+[fresh mruby/FFmpeg campaign](../experiments/study/results/published-policy-20260928/README.md)
+validates 48 complete application processes with the audited PoisonCap
+thresholds transferred from SQLite and outer libc defaults enabled. Its
+reuse and selected-memory plots replace the historical custom-policy
+comparisons for those workloads, with runtime repairs and countercosts
+explicitly reported. Six new outer-default SQLite runs plus six archived
+Capstone controls complete the 60-process three-application figure set.
+The wider six-application study remains unfinished.
+
+PostgreSQL complete-backend memory work: the
+[17.5 single-user port](../ports/postgres/single-user/README.md) now completes
+the same native-matched SQL qualification and inner reuse checks in all four
+arms. Its metadata-capacity and queue-policy repair is documented in the
+[four-arm campaign](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md).
+Standard pgbench workloads and total-memory ledgers remain later work.
+
+Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
+uses two matched pairs for the nested boundary; default CheriBSD on/off remains
+separate reference data. The [SQLite 3.22.0 pilot](../experiments/study/results/sqlite-322-memory-20260927/README.md)
+now has 32/32 native-matched SQL phases in all four nested arms, selected
+application-visible backing measurements, a policy-path audit and three memory
+figures. These are exploratory: the SQLite source forks and build options are
+not normalized across platforms, as the pilot's build audit explains. The
+published PoisonCap path has unrevoked full-queue drains; the
+protected comparator uses a separately identified correction. The
+[normalized SQLite campaign](../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
+adds a matched build gate, 12 complete repeated-work processes, paired
+protection-cost plots and explicit negative results. Its
+[reuse-gap follow-up](../experiments/study/results/sqlite-reuse-gaps-20260927/README.md)
+measures logical memsys5 address reuse in four arms. The
+[whole FFmpeg decoder pool pilot](../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
+adds 24 exact-output attempts over three workload sizes and four nested arms,
+with separate memory ledgers and two further figures. The
+[memory follow-up](../experiments/study/results/memory-followup-20260927/README.md)
+adds SQLite budget attempts, a size-2 scaling attempt, and a selective FFmpeg
+adapter. It leaves the protected PoisonCap minimum unresolved after kernel
+panics and removes the original FFmpeg snapshot advantage as an adapter
+artifact. The
+[FFmpeg lease-gap campaign](../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
+repeats the four full-decoder arms at three workload sizes; all 36 runs pass
+frame oracles and all four arms have equal observed pool reuse bins. The
+[mruby GC-slot campaign](../experiments/study/results/mruby-gc-memory-20260927/README.md)
+adds a complete interpreter benchmark: 24/24 AO-render processes at two widths
+match native PPM oracles, and Sublet preserves prompt slot reuse where the explicit
+PoisonCap temporal adapter delays it. The selected GC-page metadata and
+post-render retention countercosts are reported alongside the advantage. The
+[full-application campaign contract](plans/application-memory-campaign.md)
+fixes the same four memory experiments for each admitted benchmark. The
+[planner](../experiments/study/README.md) now admits a pinned mruby four-arm
+binding for subsequent runs; other PoisonCap application boundaries still
+need registered adapters. The measured AO campaign used the shared guest
+runners directly.
+
+Application memory behavior: [twelve paired workload configurations](../experiments/applications/results/20260927-reuse/README.md)
+pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU
+controls without in-process collection. The results quantify prompt address
+reuse and post-release retention, include the large-retained-graph counterexample,
+and make no timing or total-RSS claim.
+
+Application memory: [Capstone ports versus default CheriBSD](../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The original matrix recorded
+six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../runtime/tests/application/results/20260927-node-reuse/README.md)
+passes all 27 Capstone repeats at the same 65,536-node capacity, including all six
+previous failures, using unchanged application binaries. Keep the original data
+and larger-node controls separate. These are memory observations, not timings.
+
 Application execution: [shared launcher, persistent Linux shell, build commands and limits](../runtime/applications.md).
 
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).

@@ -1,0 +1,30 @@
+{
+  "archive": "/tmp/capstone/mruby-gc-memory-20260927.tar.gz",
+  "bytes": 4596181,
+  "sha256": "022186b129400cdd80c7e288718902768fc1e34857cd2cb6ee7926b215452db0",
+  "file_count": 178,
+  "includes": "all 24 raw AO process transcripts at widths 8 and 16; both Capstone images and PoisonCap interpreter; build commands/manifests and prepared GC sources; original benchmark and GC source pins; independent native PPM oracles; platform binary hashes",
+  "excludes": "guest SSH keys, VM state and unselected source/build trees",
+  "platform_files": {
+    "capstone_qemu": {
+      "path": "/tmp/capstone/node-reuse/qemu/qemu-system-riscv64",
+      "sha256": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e"
+    },
+    "capstone_kernel": {
+      "path": "/tmp/capstone/br-snap/build/images/Image",
+      "sha256": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd"
+    },
+    "poisoncap_qemu": {
+      "path": "/tmp/capstone/poisoncap-work/sdk/bin/qemu-system-riscv64cheri",
+      "sha256": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9"
+    },
+    "poisoncap_kernel": {
+      "path": "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/boot/kernel/kernel",
+      "sha256": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e"
+    },
+    "poisoncap_libc": {
+      "path": "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/lib/libc.so.7",
+      "sha256": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef"
+    }
+  }
+}

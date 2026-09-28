@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "application": "PostgreSQL 17.5 single-user backend",
+  "workload": "work.sql, 2000 rows, 22 native-matched result rows",
+  "oracle_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+  "native_oracle_bytes": 1081,
+  "fixture_tree_sha256": "ac378cd83c86129c8e843d7759bcc70bfd6ba1e893af5759dea3eb8c43fb9170",
+  "fixture_builder_sha256": "9229ef4520ee61a4beb9332891ca418f60a12433e9555848ed7c1c5c085e34ee",
+  "boot_count": 1,
+  "runs": [
+    {
+      "id": "postgres-capstone-o1",
+      "repetition": 0,
+      "status": "pass",
+      "stdout_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+      "outer_heap": {
+        "end": 13428880,
+        "live": 2512912,
+        "peak": 13350352,
+        "phase": "exit",
+        "pool": 67108864
+      },
+      "inner": null,
+      "image_sha256": "52f14948236fade4e935fcbe7ea1b9367fd19289cba27ba9327e05a3b3062266"
+    },
+    {
+      "id": "postgres-capstone-o1",
+      "repetition": 1,
+      "status": "pass",
+      "stdout_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+      "outer_heap": {
+        "end": 13428880,
+        "live": 2512912,
+        "peak": 13350352,
+        "phase": "exit",
+        "pool": 67108864
+      },
+      "inner": null,
+      "image_sha256": "52f14948236fade4e935fcbe7ea1b9367fd19289cba27ba9327e05a3b3062266"
+    },
+    {
+      "id": "postgres-capstone-o1",
+      "repetition": 2,
+      "status": "pass",
+      "stdout_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+      "outer_heap": {
+        "end": 13428880,
+        "live": 2512912,
+        "peak": 13350352,
+        "phase": "exit",
+        "pool": 67108864
+      },
+      "inner": null,
+      "image_sha256": "52f14948236fade4e935fcbe7ea1b9367fd19289cba27ba9327e05a3b3062266"
+    },
+    {
+      "id": "postgres-capstone-sublet-o1",
+      "repetition": 0,
+      "status": "pass",
+      "stdout_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+      "outer_heap": {
+        "end": 10551760,
+        "live": 38592,
+        "peak": 10550688,
+        "phase": "exit",
+        "pool": 67108864
+      },
+      "inner": {
+        "blocks": 298,
+        "contexts": 162,
+        "destroyed": 24,
+        "entries": 3262,
+        "init": 2499,
+        "mrev": 57048,
+        "peak_blocks": 307,
+        "peak_entries": 5419,
+        "peak_pools": 499,
+        "phase": "exit",
+        "pools": 493,
+        "resets": 2069,
+        "revoke": 38844,
+        "split": 27023
+      },
+      "image_sha256": "ea1aa3a07d1d9bd78315a74fae349efff7a29a1bb368e0da95744cfb713105f8"
+    },
+    {
+      "id": "postgres-capstone-sublet-o1",
+      "repetition": 1,
+      "status": "pass",
+      "stdout_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+      "outer_heap": {
+        "end": 10551760,
+        "live": 38592,
+        "peak": 10550688,
+        "phase": "exit",
+        "pool": 67108864
+      },
+      "inner": {
+        "blocks": 298,
+        "contexts": 162,
+        "destroyed": 24,
+        "entries": 3262,
+        "init": 2499,
+        "mrev": 57048,
+        "peak_blocks": 307,
+        "peak_entries": 5419,
+        "peak_pools": 499,
+        "phase": "exit",
+        "pools": 493,
+        "resets": 2069,
+        "revoke": 38844,
+        "split": 27023
+      },
+      "image_sha256": "ea1aa3a07d1d9bd78315a74fae349efff7a29a1bb368e0da95744cfb713105f8"
+    },
+    {
+      "id": "postgres-capstone-sublet-o1",
+      "repetition": 2,
+      "status": "pass",
+      "stdout_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+      "outer_heap": {
+        "end": 10551760,
+        "live": 38592,
+        "peak": 10550688,
+        "phase": "exit",
+        "pool": 67108864
+      },
+      "inner": {
+        "blocks": 298,
+        "contexts": 162,
+        "destroyed": 24,
+        "entries": 3262,
+        "init": 2499,
+        "mrev": 57048,
+        "peak_blocks": 307,
+        "peak_entries": 5419,
+        "peak_pools": 499,
+        "phase": "exit",
+        "pools": 493,
+        "resets": 2069,
+        "revoke": 38844,
+        "split": 27023
+      },
+      "image_sha256": "ea1aa3a07d1d9bd78315a74fae349efff7a29a1bb368e0da95744cfb713105f8"
+    }
+  ],
+  "qualification_only": true,
+  "omissions": [
+    "Sublet 64 MiB inner region and node storage absent from reported outer heap",
+    "CheriBSD protected work.sql does not complete; no four-arm memory ratio"
+  ]
+}

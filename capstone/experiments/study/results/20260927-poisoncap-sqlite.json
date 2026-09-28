@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "scope": "Published-artifact workload execution smoke; not a qualified correctness, protection or memory comparison",
+  "workload": {
+    "version": "3.22.0",
+    "testset": "main",
+    "size": 1,
+    "active_phases": 20,
+    "commented_out_phases": 12,
+    "heap_bytes": 268435456
+  },
+  "platform_sha256": {
+    "qemu": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9",
+    "kernel": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e",
+    "firmware": "c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf",
+    "image": "c0d0c49d61bb2ce427251aa7f5f22a8106ab29aeb323cc885b2eea64995ee4f6",
+    "published_libc": "71eaa9757000aa5533390caff5849ddeab888cbaefcbb1f20f9835e504f0159c"
+  },
+  "outer_revocation": 0,
+  "running_libc_verified": true,
+  "adaptation": "Removed retained-alias startup probe; spatial build undefines NESTED_TEMPORAL. Benchmark bodies and 256 MiB heap unchanged.",
+  "attempts": [
+    {
+      "mode": "spatial",
+      "returncode": 0,
+      "binary_sha256": "18cbb052c8bcd01eb58e4c027d7ab09cfc71478fa4574c55d9319f689a8bbb95",
+      "status": "completed-unqualified",
+      "completed_phase_ids": [
+        100,
+        110,
+        120,
+        130,
+        140,
+        142,
+        145,
+        160,
+        190,
+        210,
+        240,
+        250,
+        260,
+        280,
+        300,
+        320,
+        400,
+        410,
+        980,
+        990
+      ],
+      "stdout_sha256": "84808d5b838c8ad9dd70c934e1edc9a6635bc37c04e4f3d031396a82546cf059",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "mode": "temporal",
+      "returncode": 0,
+      "binary_sha256": "1338663b71ba0aef0788b88c7a4cb7726cb8a7e38c7466b140ddadbd4cfcf012",
+      "status": "completed-unqualified",
+      "completed_phase_ids": [
+        100,
+        110,
+        120,
+        130,
+        140,
+        142,
+        145,
+        160,
+        190,
+        210,
+        240,
+        250,
+        260,
+        280,
+        300,
+        320,
+        400,
+        410,
+        980,
+        990
+      ],
+      "stdout_sha256": "a76205f05fa052972e9604bfffbf7ef17c0e652a3dc9553895606a4635c21642",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "totals": {
+    "attempted": 2,
+    "completed": 2,
+    "guest_errors": 0,
+    "qualified_memory_comparisons": 0
+  },
+  "limitations": [
+    "Artifact comments out 12 main phases; enabled phase 160 retains an indexed label although the preceding index creation is commented out.",
+    "Driver --verify covers other testsets, not main; no independent SQL-result oracle in this run.",
+    "Quarantine path and successful inner revocation counts were not instrumented; temporal build completion does not verify policy execution.",
+    "No matching 3.22.0 memsys5-only Sublet workload was run; no performance or memory winner claimed."
+  ]
+}
