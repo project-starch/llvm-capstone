@@ -18,6 +18,7 @@ is an actual complete PostgreSQL backend workload, not a trace replay.
 The [CheriBSD spatial control](../postgres-reuse-spatial-20260928/README.md)
 has the same SQL oracle but 54,004 inner handouts; platform-specific
 allocator decisions differ slightly, so these raw counts are not a paired
-fraction. The Capstone original-layout control and the protected PoisonCap
-backend lack qualified inner histograms. Consequently this is not a
+fraction. The [Capstone original-layout control](../postgres-reuse-capstone-spatial-20260928/README.md)
+now has a qualified inner histogram; the protected PoisonCap backend still
+lacks one. Consequently this is not a
 four-arm reuse plot or a claim that Sublet wins PostgreSQL memory behavior.

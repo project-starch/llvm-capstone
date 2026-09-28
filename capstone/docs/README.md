@@ -4,7 +4,8 @@ Inner-reuse expansion: [CPython](../experiments/study/results/cpython-reuse-thre
 now has three qualified complete-interpreter arms and
 [PostgreSQL](../experiments/study/results/postgres-reuse-spatial-20260928/README.md)
 has a qualified CheriBSD spatial control plus a
-[Capstone+Sublet arm](../experiments/study/results/postgres-reuse-sublet-20260928/README.md).
+[Capstone+Sublet arm](../experiments/study/results/postgres-reuse-sublet-20260928/README.md)
+and an [original-layout Capstone control](../experiments/study/results/postgres-reuse-capstone-spatial-20260928/README.md).
 The common runners validate native/application oracles and inner histograms.
 Neither application has a four-arm reuse figure yet; Perl still lacks the
 matched CheriBSD inner allocator port.

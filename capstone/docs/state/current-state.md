@@ -2,7 +2,7 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-28 — PostgreSQL inner-reuse qualification, two arms
+## 2026-09-28 — PostgreSQL inner-reuse qualification, three arms
 
 The [archived CheriBSD spatial campaign](../../experiments/study/results/postgres-reuse-spatial-20260928/README.md)
 passes 3/3 complete PostgreSQL 17.5 `work.sql` processes from independent
@@ -10,13 +10,16 @@ copies of a pristine cluster. Each matches all 22 native 16-byte-MAXALIGN
 result rows and reports the same validated 32-bin inner-chunk reuse histogram.
 The [Capstone+Sublet campaign](../../experiments/study/results/postgres-reuse-sublet-20260928/README.md)
 adds 3/3 complete `work.sql` processes with the same output oracle and
-identical validated inner histograms across repetitions. Its chosen chunk
-counts differ slightly from the CheriBSD control, so only within-platform
-paired metrics can support an effect claim.
+identical validated inner histograms across repetitions. The
+[Capstone original-layout control](../../experiments/study/results/postgres-reuse-capstone-spatial-20260928/README.md)
+also passes 3/3, with the same 54,032 handouts and 51,177 releases as Sublet;
+its 45,002 observed reuses are compared with Sublet's 43,705. Each histogram
+is error-free and stable across repetitions. The CheriBSD spatial control
+selects 54,004 chunks, so cross-platform counts are not a paired fraction.
 The shared CheriBSD runner now owns fresh archive extraction, `nobody`
 execution, SQL stdin and the native-row oracle. The protected PoisonCap
-backend and Capstone original-layout control still lack complete inner
-histograms; these two qualified arms are not a paper comparison.
+backend still lacks a complete inner histogram and application oracle; these
+three qualified arms are not a four-arm paper comparison.
 
 ## 2026-09-28 — CPython inner-reuse qualification, three arms
 

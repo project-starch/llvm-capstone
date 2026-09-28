@@ -4,7 +4,9 @@ now passes three complete, native-matched SQL processes with a validated
 inner-chunk histogram in the common CheriBSD runner. The
 [Capstone+Sublet arm](../../experiments/study/results/postgres-reuse-sublet-20260928/README.md)
 also passes three complete processes with the same SQL oracle and a checked
-histogram. Finish the Capstone original-layout instrumentation and qualify
+histogram. The [Capstone original-layout
+control](../../experiments/study/results/postgres-reuse-capstone-spatial-20260928/README.md)
+now passes 3/3 with the same SQL oracle and inner-chunk scope. Qualify
 protected PoisonCap before
 admitting a PostgreSQL row to the cross-application violin. A scratch queue
 candidate still stopped progressing during the INSERT without actual
