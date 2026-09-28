@@ -33,7 +33,11 @@
  * data-directory interlock (capstone/ports/postgres/single-user/).
  *
  * __mmap and __munmap are defined too: musl's own objects call those names, and
- * a reference to one would otherwise pull musl's mmap.o in beside this file.
+ * a reference to one would otherwise pull musl's mmap.o in beside this file. So is
+ * __vm_wait, mmap.o's third symbol: musl's pthread_create.c, pthread_mutex_destroy.c
+ * and pthread_barrier_destroy.c call it, so any program using pthreads (GLib, in
+ * the tshark port) pulled mmap.o in and failed on a duplicate __mmap. Weak and empty,
+ * exactly as mmap.o's own; vmlock.c's strong definition wins where it is linked.
  */
 #define _GNU_SOURCE /* MAP_ANONYMOUS, MAP_HUGETLB */
 #include <errno.h>
@@ -44,6 +48,9 @@
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
+
+/* mmap.o's no-op, for the pthread objects that call it (see the note above). */
+__attribute__((__weak__)) void __vm_wait(void) { }
 
 #ifndef MAP_HUGETLB
 #define MAP_HUGETLB 0x40000
