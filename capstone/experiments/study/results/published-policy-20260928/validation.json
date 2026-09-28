@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "application_processes": 60,
+  "fresh_processes": 54,
+  "archived_capstone_sqlite_processes": 6,
+  "repetitions_per_cell": 3,
+  "mruby_ffmpeg_repetitions_coincide": true,
+  "sqlite_outer_default_inner_ledgers_equal_historical_controls": true,
+  "isolated_ffmpeg_inner_ledgers_equal_qualification": true,
+  "application_oracles": "all complete native reference outputs match",
+  "unit_tests": {
+    "study": 30,
+    "cheribsd_runner": 14
+  },
+  "runtime_patch_chain_reproduces_compiled_source": true,
+  "sqlite_retirement_patch_reproduces_compiled_source": true,
+  "allocation_retirement_regression": {
+    "before": "guest SIGABRT",
+    "after": "exit 0, 64/64 live allocations retain their tags"
+  },
+  "scope": "Selected allocator quantities; no timing, total-memory or physical-working-set claims."
+}

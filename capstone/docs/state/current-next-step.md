@@ -1,3 +1,15 @@
+Published-threshold memory follow-up (2026-09-28): the
+[fresh mruby/FFmpeg campaign](../../experiments/study/results/published-policy-20260928/README.md)
+passes all 48 processes with outer defaults enabled. Preserve its exact
+policy labels, destructor-sweep counters, corrected runtime identities and
+retention countercosts. SQLite's six repeated outer-default processes also
+pass and pair with six archived Capstone controls; the combined figure set
+validates 60 processes (54 new). Do not relabel the old outer-disabled SQLite
+data. The next wider
+milestone remains complete qualified PoisonCap arms for PostgreSQL, CPython
+and Perl, followed by normalized compiler settings and equal-scope full
+memory accounting. Keep the study off a PR.
+
 Three-application paper figures (2026-09-28): the [checked figure set](../../experiments/study/results/application-memory-paper-20260928/README.md)
 contains common four-arm reuse/difference panels, SQLite/mruby/FFmpeg memory
 companions and all eight workloads in a supplement. All 96 raw reuse records

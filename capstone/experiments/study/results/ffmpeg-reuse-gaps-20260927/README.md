@@ -1,5 +1,7 @@
 # FFmpeg 9.0.1: pool lease reuse and explicit payload operations
 
+**Policy audit, 2026-09-28.** Historical policy: these measurements use the custom sweep-before-reissue adapter and disable outer libc revocation. Keep them as an eager-reuse control, not a published-default comparison. See the [reference-policy audit](../../poisoncap-policy.md).
+
 The [lease-gap figure](reuse-gaps.pdf) and [payload-operation figure](payload-operations.pdf)
 measure the complete configured Matroska/MPEG-4 decoder, not allocator replay.
 Each process decodes 1, 4 or 16 independent copies of the same pinned 30-frame

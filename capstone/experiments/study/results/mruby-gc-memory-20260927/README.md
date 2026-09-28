@@ -1,5 +1,7 @@
 # mruby 4.0.0-rc2: GC-slot reuse at two AO work sizes
 
+**Policy audit, 2026-09-28.** Historical policy: these measurements reclaim poisoned slots when reusable GC slots run out. This pressure trigger differs from the published SQLite byte and queue thresholds. See the [reference-policy audit](../../poisoncap-policy.md).
+
 This campaign runs the complete mruby interpreter on the upstream
 `benchmark/bm_ao_render.rb` workload at widths 8 and 16 (the upstream default
 is 64). The same interpreter binaries, AO source and GC observer serve both

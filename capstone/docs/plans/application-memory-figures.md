@@ -5,6 +5,13 @@ preview uses previously collected data; it is not a new experiment or a
 preregistered confirmatory result. This refines the presentation of the
 [application campaign](application-memory-campaign.md).
 
+The [PoisonCap reference-policy contract](../../experiments/study/poisoncap-policy.md)
+governs the [fresh 48-process mruby/FFmpeg campaign](../../experiments/study/results/published-policy-20260928/README.md).
+It transfers the published SQLite thresholds with disclosed correctness
+repairs, keeps outer revocation enabled, and counts destructor drains
+separately. Historical custom-policy and outer-disabled curves remain controls.
+The new plots show both reuse/peak advantages and retained-memory countercosts.
+
 ## Experimental unit
 
 Run the actual application and its benchmark body in the target environment.

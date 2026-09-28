@@ -1,5 +1,7 @@
 # FFmpeg adapted-FATE four-arm pool study
 
+**Policy audit, 2026-09-28.** Historical policy: these measurements use the custom sweep-before-reissue adapter and disable outer libc revocation. Their coincident reuse curves do not describe the published SQLite quarantine policy transferred to FFmpeg. See the [reference-policy audit](../../poisoncap-policy.md).
+
 The complete FFmpeg 9.0.1 Matroska/MPEG-4 decoder passes **24/24** checked
 application processes on two adapted FATE inputs: Capstone pool original,
 Capstone pool Sublet, CheriBSD PoisonCap spatial, and CheriBSD PoisonCap

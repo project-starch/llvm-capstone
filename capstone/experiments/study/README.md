@@ -1,5 +1,13 @@
 # Paired application memory studies
 
+The [published-threshold campaign](results/published-policy-20260928/README.md)
+validates 48/48 fresh mruby/FFmpeg processes and provides checked reuse and
+selected-memory plots. Six new outer-default SQLite runs paired with six
+archived Capstone controls bring the checked figure set to 60 processes.
+The [policy audit](poisoncap-policy.md) fixes the
+reference thresholds, outer defaults and disclosed runtime repairs. Historical
+figures below retain their custom-policy labels; they are not this campaign.
+
 The [adapted FFmpeg FATE four-arm qualification](results/ffmpeg-fate-four-arm-20260928/README.md)
 passes 24/24 complete decoder processes on two known input cases. A narrow
 CheriBSD L2-superpage lookup fix removes the published kernel's poison-probe

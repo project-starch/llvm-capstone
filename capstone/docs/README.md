@@ -1,5 +1,15 @@
 # Capstone project documentation
 
+Published-threshold memory comparison: the
+[fresh mruby/FFmpeg campaign](../experiments/study/results/published-policy-20260928/README.md)
+validates 48 complete application processes with the audited PoisonCap
+thresholds transferred from SQLite and outer libc defaults enabled. Its
+reuse and selected-memory plots replace the historical custom-policy
+comparisons for those workloads, with runtime repairs and countercosts
+explicitly reported. Six new outer-default SQLite runs plus six archived
+Capstone controls complete the 60-process three-application figure set.
+The wider six-application study remains unfinished.
+
 PostgreSQL complete-backend memory work: the
 [17.5 single-user port](../ports/postgres/single-user/README.md) has a
 native-matched 22-row SQL qualification in Capstone spatial, Capstone+Sublet,

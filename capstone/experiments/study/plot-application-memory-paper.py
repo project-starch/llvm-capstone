@@ -10,6 +10,7 @@ import csv
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -36,6 +37,18 @@ MARKERS = ('x', 'o', '+', 's')
 LABELS = ('Capstone spatial', 'Sublet', 'PoisonCap spatial', 'PoisonCap temporal')
 EDGES = np.array([2**(i+1)-1 for i in range(32)])
 MAIN = ('sqlite-main', 'mruby-ao16', 'ffmpeg-resize')
+POLICIES = {
+    'sqlite': 'Published SQLite thresholds with full-queue correction; outer libc revocation disabled',
+    'mruby': 'Custom free-slot-exhaustion sweep; outer libc revocation enabled',
+    'ffmpeg': 'Custom sweep-before-reissue; outer libc revocation disabled',
+}
+POLICY_NOTES = {
+    '01-reuse-and-control': 'Policies differ: SQLite corrected queue; mruby slot exhaustion; FFmpeg eager reuse. Not common defaults.',
+    '02-sqlite-memory': 'PoisonCap: published thresholds with full-queue correction; outer libc revocation disabled.',
+    '03-mruby-memory': 'PoisonCap: custom free-slot-exhaustion policy; outer libc revocation enabled.',
+    '04-ffmpeg-snapshots': 'PoisonCap: custom eager-reuse policy; outer libc revocation disabled.',
+    '05-all-workloads-reuse': 'Policies differ: SQLite corrected queue; mruby slot exhaustion; FFmpeg eager reuse. Not common defaults.',
+}
 TITLES = {
     'sqlite-main': 'SQLite · memsys5\nspeedtest1 main',
     'mruby-ao8': 'mruby · GC slots\nAO, width 8',
@@ -89,6 +102,8 @@ CAPTIONS = {
         'and successful raw-log revalidation. A plateau is the observed reuse fraction, not '
         'an estimate of eventual reuse of every released object.'),
 }
+for _name in CAPTIONS:
+    CAPTIONS[_name] = POLICY_NOTES[_name] + ' ' + CAPTIONS[_name]
 
 
 def require(condition, message):
@@ -550,14 +565,339 @@ def verify_raw(inputs, out):
     (out / 'validation.json').write_text(json.dumps(report, indent=2)+'\n')
 
 
+def transferred_policy_campaign(args):
+    """Revalidate fresh application runs; never relabel the historical curves."""
+    roots = list(map(Path, args.policy_runs))
+    rows, excluded, hashes = [], [], {}
+    def track(path):
+        hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+        return path
+    def fields(text, prefix):
+        return [dict(word.split('=', 1) for word in line.split()[1:])
+                for line in text.splitlines() if line.startswith(prefix)]
+    sys.path.insert(0, str(HERE.parent / 'applications'))
+    spec = importlib.util.spec_from_file_location('cheri_policy_runner',
+        HERE.parent / 'applications/cheribsd-run.py')
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    spec = importlib.util.spec_from_file_location('capstone_policy_runner',
+        HERE.parent / 'applications/run.py')
+    cap_runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cap_runner)
+    mruby_parser = module('plot-mruby-gc-memory')
+    for path in (Path(__file__).resolve(), HERE / 'poisoncap-policy.md',
+                 HERE.parent / 'applications/cheribsd-run.py',
+                 HERE.parent / 'applications/run.py'):
+        track(path)
+    for source_index, root in enumerate(roots):
+        manifest = json.loads(track(root / 'manifest.json').read_text())
+        if source_index >= 2:
+            require(manifest['guest_default_revocation'] == '1' and all(
+                setting in manifest['platform'] for setting in (
+                    'security.cheri.runtime_revocation_async: 1',
+                    'security.cheri.runtime_revocation_every_free_default: 0')),
+                'outer allocator defaults differ')
+        records = [json.loads(line) for line in track(root / 'runs.jsonl').read_text().splitlines()]
+        for record in records:
+            point = record['point']
+            # AO16 was requalified at a longer timeout in its own complete
+            # three-repeat campaign. Preserve all initial attempts as diagnostics.
+            if source_index == 2 and point['argv'][-1] != '8':
+                excluded.append(dict(root=str(root), point=point['id'], status=record['status'],
+                                     reason='AO16 qualification at initial 180-second timeout'))
+                continue
+            if source_index == 0 and point['application'] == 'ffmpeg':
+                excluded.append(dict(root=str(root), point=point['id'], status=record['status'],
+                                     reason='SDK enlarged the static malloc arena instead of the program pool; rebuilt and requalified'))
+                continue
+            require(record['status'] == 'pass', 'incomplete policy campaign: '+point['id'])
+            directory = root / (point['id'] + '-' + str(record['repetition']))
+            stdout = track(directory / 'stdout').read_bytes()
+            stderr = track(directory / 'stderr').read_text(errors='replace')
+            require(hashlib.sha256(stdout).hexdigest() == record['stdout_sha256'] ==
+                    point['expected_stdout_sha256'] and len(stdout) == point['expected_stdout_bytes'],
+                    'application output oracle differs')
+            require(hashes[str(directory / 'stderr')] == record['stderr_sha256'], 'stderr hash differs')
+            cap = source_index < 2
+            if cap:
+                require(cap_runner.verdict(point, record['returncode'], False,
+                        stdout.decode(errors='replace'), stderr, record['exit'], stdout) == 'pass',
+                        'current Capstone runner validation failed')
+                require(not any(record['after'][k] for k in ('live_domains', 'live_regions', 'live_bytes')),
+                        'domain resources retained')
+                require(record['image_sha256'] == manifest['images'][point['image']], 'image differs')
+                arm = ARMS[1] if point.get('mode') == 2 or point['arm'] == ARMS[1] else ARMS[0]
+                rep = int(re.search(r'-r([0-2])$', point['id'])[1])
+                image_sha = record['image_sha256']
+            else:
+                require(point.get('nested_policy') == 'published-sqlite-thresholds-corrected-v1',
+                        'unnamed inner policy')
+                require(runner.verdict(point, 0, stdout.decode(errors='replace'), stderr, stdout) == 'pass',
+                        'current runner policy/oracle validation failed')
+                require(record['effective_environment'] == runner.policy_environment(point),
+                        'effective allocator environment differs')
+                require(all(m['revocation'] == 1 for m in record['memory']), 'outer revocation disabled')
+                arm = point['arm']
+                rep = record['repetition'] if source_index == 4 else int(point['id'].rsplit('-', 1)[1])
+                image_sha = manifest['files'][point['argv'][0]]['sha256']
+            detail = {}
+            if point['application'] == 'mruby':
+                width = int(point['argv'][-1])
+                require(width == (8 if source_index == 2 else 16) if not cap else width in (8, 16),
+                        'unexpected AO work size')
+                require((point['expected_stdout_sha256'], len(stdout)) == mruby_parser.ORACLES[width],
+                        'AO reference differs')
+                phases, bins = mruby_parser.metrics(stderr)
+                end, after = phases[-1], phases[2]
+                require(end['pages'] == 0 and end.get('quarantine', 0) == 0, 'GC retained exit pages')
+                issues, reuses = end['issues'], end['reissues']
+                page_bytes = (after['page_payload_bytes'] + after['page_metadata_bytes']
+                              if cap else after['mapped_page_bytes'])
+                memory = after['peak_pages'] * page_bytes
+                detail.update(phases=phases, peak_groups=after['peak_pages'], page_bytes=page_bytes,
+                              selected_retained_bytes=after['pages'] * page_bytes)
+                if not cap and arm == ARMS[3]:
+                    require(end['poison_bytes'] == end['releases'] * end['slot_bytes'] and
+                            end['clear_bytes'] == end['zero_bytes'] and
+                            end['poison_bytes'] == end['clear_bytes'] +
+                            end['discarded_quarantine'] * end['slot_bytes'], 'GC poison ledger differs')
+                key = f'mruby-ao{width}'
+            else:
+                require(point['application'] == 'ffmpeg' and point['batches'] == 1, 'unexpected decoder work')
+                key = {'fate-xvid-idct': 'ffmpeg-xvid',
+                       'fate-mpeg4-resolution-change-down-up': 'ffmpeg-resize'}[point['fate_id']]
+                totals = fields(stderr, 'FF2-GAP-TOTAL ')
+                pairs = fields(stderr, 'FF2-GAP ')
+                require(len(totals) == 1 and [int(p['pair']) for p in pairs] == list(range(16)),
+                        'missing lease histogram')
+                bins = [int(p[k]) for p in pairs for k in ('a', 'b')]
+                issues, reuses = (int(totals[0][k]) for k in ('issues', 'reuses'))
+                if cap:
+                    ledger = fields(stderr, 'EXP-POOL ')
+                    require(len(ledger) == 1, 'missing Capstone pool extent')
+                    mode = 2 if arm == ARMS[1] else 0
+                    require(int(ledger[0]['mode']) == mode and
+                            bool(int(ledger[0]['revoke'])) == bool(mode), 'Capstone pool mode differs')
+                    memory = int(ledger[0]['payload'])
+                    detail['pool'] = ledger[0]
+                else:
+                    ledger = fields(stderr, 'FFPOOL-MEM ')
+                    require([p['phase'] for p in ledger] == ['before-0', 'released-0'], 'pool phases differ')
+                    policy = fields(stderr, 'FFPOOL-POLICY ')
+                    require(len(policy) == 1 and int(policy[0]['payload_reservation']) == 256 << 20,
+                            'FFmpeg reservation differs')
+                    memory = int(ledger[-1]['payload_used'])
+                    detail['pool'] = fields(stderr, 'FF2_POISONCAP ')[-1]
+            cdf(bins, issues)
+            require(sum(bins) == reuses and memory > 0, 'histogram or backing does not reconcile')
+            rows.append(dict(workload=key, arm=arm, rep=rep, issues=issues, reuses=reuses,
+                             bins=bins, selected_backing_bytes=memory, binary_sha256=image_sha,
+                             stdout_sha256=point['expected_stdout_sha256'], source=str(directory), **detail))
+    keys = ('mruby-ao8', 'mruby-ao16', 'ffmpeg-xvid', 'ffmpeg-resize')
+    require(len(rows) == 48, 'expected 48 complete application processes')
+    for key in keys:
+        cell = [r for r in rows if r['workload'] == key]
+        require(len(cell) == 12 and {(r['arm'], r['rep']) for r in cell} ==
+                {(a, rep) for a in ARMS for rep in range(3)}, 'missing/duplicate policy cell')
+        require(len({r['stdout_sha256'] for r in cell}) == 1, 'cross-platform application oracle differs')
+    out = args.out
+    out.mkdir(parents=True, exist_ok=True)
+    plt.rcParams.update({'font.family': 'STIXGeneral', 'font.size': 9,
+                         'pdf.fonttype': 42, 'ps.fonttype': 42,
+                         'axes.spines.top': False, 'axes.spines.right': False})
+    fig, axes = plt.subplots(2, 2, figsize=(7.05, 5.6), sharex=True, sharey=True)
+    fig.subplots_adjust(top=.85, bottom=.13, left=.09, right=.98, hspace=.42, wspace=.2)
+    legend(fig)
+    for ax, key in zip(axes.flat, keys):
+        for i, arm in enumerate(ARMS):
+            samples = np.array([cdf(r['bins'], r['issues']) for r in rows
+                                if r['workload'] == key and r['arm'] == arm])
+            ax.step(EDGES, np.median(samples, axis=0), where='post', markevery=(i, 4), **line_style(i))
+            ax.fill_between(EDGES, samples.min(axis=0), samples.max(axis=0),
+                            step='post', color=COLORS[i], alpha=.15)
+        reuse_axis(ax)
+        ax.set_title(TITLES[key], fontsize=9)
+        ax.set_ylim(0, 103)
+    for ax in axes[:, 0]: ax.set_ylabel('Reissues / all issues (%)')
+    for ax in axes[-1]: ax.set_xlabel('Release-to-reissue gap (issues)')
+    fig.text(.5, .015, 'Transferred SQLite thresholds + queue correction; FFmpeg teardown sweeps disclosed. Outer revocation on.',
+             ha='center', fontsize=7)
+    for ext in ('pdf', 'png'):
+        fig.savefig(out / ('01-transferred-policy-reuse.'+ext), dpi=240,
+                    metadata={'CreationDate': None, 'ModDate': None} if ext == 'pdf' else None)
+    plt.close(fig)
+    fig, axes = plt.subplots(1, 3, figsize=(7.05, 3.1))
+    fig.subplots_adjust(top=.77, bottom=.25, left=.09, right=.98, wspace=.5)
+    legend(fig, four=False)
+    ratios = []
+    for ax, subset, metric, title in zip(axes, (keys[:2], keys[:2], keys[2:]),
+            ('selected_backing_bytes', 'selected_retained_bytes', 'selected_backing_bytes'),
+            ('(a) GC backing\nPeak', '(b) GC backing\nAfter render',
+             '(c) FFmpeg pool\nCarved address extent')):
+        for x, key in enumerate(subset):
+            for original, protected in PAIRS:
+                values = []
+                for rep in range(3):
+                    selected = {r['arm']: r[metric] for r in rows
+                                if r['workload'] == key and r['rep'] == rep}
+                    values.append(selected[protected] / selected[original])
+                i = ARMS.index(protected)
+                at = x + (-.12 if i == 1 else .12)
+                mid = np.median(values)
+                ax.errorbar(at, mid, yerr=[[mid-min(values)], [max(values)-mid]],
+                            fmt=MARKERS[i], color=COLORS[i], capsize=3, markersize=5)
+                ax.annotate(f'{mid:.2f}×', (at, mid), xytext=(0, 7), textcoords='offset points',
+                            ha='center', fontsize=8, color=COLORS[i])
+                ratios.append(dict(workload=key, metric=metric, protected=protected, ratios=values))
+        short = {'mruby-ao8': 'AO 8', 'mruby-ao16': 'AO 16',
+                 'ffmpeg-xvid': 'FATE Xvid', 'ffmpeg-resize': 'FATE resize'}
+        ax.set(title=title, xticks=[0, 1], xticklabels=[short[k] for k in subset],
+               ylabel='Protected / spatial control (×)', xlim=(-.5, 1.5))
+        ax.title.set_fontsize(9)
+        ax.axhline(1, color='.6', linestyle=':', linewidth=.7)
+        ax.margins(y=.3)
+        if subset == keys[2:]: ax.set_ylim(bottom=0)
+    fig.text(.5, .02, 'Median and range of three paired runs. Selected backing / address extent; excludes total platform memory.',
+             ha='center', fontsize=7)
+    for ext in ('pdf', 'png'):
+        fig.savefig(out / ('02-transferred-policy-backing.'+ext), dpi=240,
+                    metadata={'CreationDate': None, 'ModDate': None} if ext == 'pdf' else None)
+    plt.close(fig)
+    (out / 'summary.json').write_text(json.dumps(dict(schema=1, policy='published-sqlite-thresholds-corrected-v1',
+        processes=48, runs=rows, paired_ratios=ratios, excluded_qualification_attempts=excluded,
+        width_inches=7.05, fresh_processes=48,
+        rendering_versions={'matplotlib': matplotlib.__version__, 'numpy': np.__version__},
+        repetitions_coincide=all(len({(tuple(r['bins']), r['issues'], r['selected_backing_bytes'],
+                                      r.get('selected_retained_bytes')) for r in rows
+                                     if r['workload'] == key and r['arm'] == arm}) == 1
+                                for key in keys for arm in ARMS),
+        raw_sha256=hashes), indent=2)+'\n')
+    write_csv(out / 'policy-processes.csv', [
+        {k: r.get(k, '') for k in ('workload', 'arm', 'rep', 'issues', 'reuses',
+         'selected_backing_bytes', 'selected_retained_bytes', 'binary_sha256', 'source')}
+        for r in rows])
+    write_csv(out / 'policy-reuse.csv', [
+        dict(workload=r['workload'], arm=r['arm'], rep=r['rep'], upper_gap=int(edge),
+             count=count, cumulative_percent=float(value), denominator=r['issues'])
+        for r in rows for edge, count, value in zip(EDGES, r['bins'], cdf(r['bins'], r['issues']))])
+    write_csv(out / 'policy-ratios.csv', [
+        dict(workload=r['workload'], metric=r['metric'], protected=r['protected'], rep=rep, ratio=value)
+        for r in ratios for rep, value in enumerate(r['ratios'])])
+    print(f'Validated {len(rows)} fresh processes; wrote transferred-policy figures to {out}')
+
+
+def sqlite_policy_campaign(root, out):
+    """Pair six new outer-default processes with unchanged, archived Capstone controls."""
+    gap_parser, memory_parser = module('plot-sqlite-reuse-gaps'), module('plot-sqlite-normalized')
+    old = Path('/tmp/capstone/sqlite-reuse-gap-20260927')
+    reference = json.loads((ROOT / 'sqlite-normalized-memory-20260927/oracles.json').read_text())['1']
+    manifest = json.loads((root / 'manifest.json').read_text())
+    require(all(setting in (root / 'platform.txt').read_text() for setting in (
+                'security.cheri.runtime_revocation_default: 1',
+                'security.cheri.runtime_revocation_async: 1',
+                'security.cheri.runtime_revocation_every_free_default: 0')),
+            'SQLite outer guest default differs')
+    rows, hashes = [], {}
+    for cap in (True, False):
+        attempts = old / 'nodes4m/capstone-runs.jsonl' if cap else root / 'runs.jsonl'
+        hashes[str(attempts)] = hashlib.sha256(attempts.read_bytes()).hexdigest()
+        for run in map(json.loads, attempts.read_text().splitlines()):
+            if cap and run['profile'] != 'churn': continue
+            arm, rep = run['arm'], run['rep'] - int(cap)
+            require(run['status'] == ('completed' if cap else 'pass'), 'incomplete SQLite process')
+            path = (old / f'nodes4m/{arm}-churn-{rep+1}.stdout' if cap else
+                    root / f'{arm}-r{rep}.stdout')
+            binary = (old / f'{arm}-build/sqlite_silicon.dom' if cap else
+                      Path(manifest['binary_paths'][arm]))
+            require(hashlib.sha256(binary.read_bytes()).hexdigest() == run['binary_sha256'],
+                    'SQLite binary identity differs')
+            hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+            raw = path.read_text(errors='replace')
+            if not cap:
+                require(hashes[str(path)] == run['stdout_sha256'] and
+                        '_RUNTIME_REVOCATION_ENABLE=1' in run['argv'] and
+                        'LD_LIBRARY_PATH=/tmp/policy-lib' in run['argv'] and
+                        not any('DISABLE' in word for word in run['argv']), 'SQLite process policy differs')
+            else:
+                require('DROPPED 0 RC 0' in raw, 'SQLite domain completion missing')
+            require([list(m) for m in gap_parser.ORACLE.findall(raw)] == reference * 17,
+                    'SQLite SQL output oracle differs')
+            gaps = gap_parser.parse(raw, 17)
+            ledger, begins, ends, _ = memory_parser.parse(raw)
+            require(begins == {i: 1 for i in range(17)} and ends == {i: 0 for i in range(17)},
+                    'SQLite workload phases differ')
+            units = [r for r in ledger if r['phase'] == -1]
+            require(len(units) == 17 and all(r['live'] == r['oom'] == 0 for r in units),
+                    'SQLite retained live data or allocation failure')
+            revoke = [dict((k, int(v)) for k, v in re.findall(r'(\w+)=(\d+)', line))
+                      for line in raw.splitlines() if 'STUDY-REVOKE ' in line]
+            if arm == ARMS[3]:
+                require(revoke and all(r['errors'] == 0 and r['calls'] == r['full'] + r['threshold']
+                                       for r in revoke), 'SQLite revocation ledger differs')
+            rows.append(dict(arm=ARMS[0] if arm == 'capstone' else arm, rep=rep,
+                             issues=gaps['allocations'], reuses=gaps['reuses'], bins=gaps['bins'],
+                             units=units, revocation=revoke, binary_sha256=run['binary_sha256'],
+                             source=str(path), fresh=not cap))
+    cell = checked_cell(rows)
+    require(len(rows) == 12 and sum(r['fresh'] for r in rows) == 6, 'incomplete SQLite matrix')
+    fig, axes = plt.subplots(1, 3, figsize=(7.05, 2.85))
+    fig.subplots_adjust(top=.73, bottom=.26, left=.085, right=.98, wspace=.47)
+    legend(fig)
+    draw_cdf(axes[0], cell)
+    axes[0].set(title='(a) Same-start reuse', xlabel='Release gap (issues)', ylabel='Reissues / all issues (%)')
+    ratios = []
+    for ax, field, title in zip(axes[1:], ('ever', 'peak'),
+                               ('(b) Address coverage\nAllocated interval union',
+                                '(c) Allocator bytes\nPeak selected backing')):
+        for base, protected in PAIRS:
+            def series(arm, rep):
+                units = next(r['units'] for r in rows if r['arm'] == arm and r['rep'] == rep)
+                return np.array([u['ever'] if field == 'ever' else u['peak_held'] + u['metadata']
+                                 for u in units])
+            samples = np.array([series(protected, rep) / series(base, rep) for rep in range(3)])
+            i = ARMS.index(protected)
+            ax.plot(range(1, 18), np.median(samples, axis=0), markevery=(i-1, 4), **line_style(i))
+            ax.fill_between(range(1, 18), samples.min(axis=0), samples.max(axis=0), color=COLORS[i], alpha=.15)
+            ratios.append(dict(protected=protected, metric=field, samples=samples.tolist()))
+        ax.axvspan(.5, 1.5, color='.93', zorder=-1)
+        ax.set(title=title, xlabel='Completed workload units', ylabel='Protected / own control (×)',
+               xlim=(.7, 17.3), xticks=[1, 5, 9, 13, 17])
+        ax.title.set_fontsize(9)
+        clean_axis(ax)
+    fig.text(.5, .015, 'SQLite 3.22.0; corrected published queue; outer libc defaults on. Six new + six archived processes.',
+             ha='center', fontsize=7)
+    for ext in ('pdf', 'png'):
+        fig.savefig(out / ('03-sqlite-outer-defaults.'+ext), dpi=240,
+                    metadata={'CreationDate': None, 'ModDate': None} if ext == 'pdf' else None)
+    plt.close(fig)
+    (out / 'sqlite-summary.json').write_text(json.dumps(dict(schema=1, runs=rows, ratios=ratios,
+        manifest=manifest, raw_sha256=hashes, fresh_processes=6, archived_capstone_processes=6), indent=2)+'\n')
+    write_csv(out / 'sqlite-units.csv', [dict(arm=r['arm'], rep=r['rep'], fresh=r['fresh'], **u)
+                                      for r in rows for u in r['units']])
+    print('Validated six new SQLite default-policy processes and six archived Capstone controls')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--verify-raw', action='store_true',
                         help='also rerun original validators on restored /tmp/capstone archives')
+    parser.add_argument('--policy-runs', nargs=5, type=Path,
+                        metavar=('CAPSTONE_MRUBY', 'CAPSTONE_FFMPEG', 'MRUBY8', 'MRUBY16', 'FFMPEG'),
+                        help='render fresh transferred-policy runs separately from historical figures')
+    parser.add_argument('--sqlite-policy-runs', type=Path, help='add fresh outer-default SQLite runs paired with archived Capstone controls')
     args = parser.parse_args()
+    if args.sqlite_policy_runs and not args.policy_runs:
+        parser.error('--sqlite-policy-runs requires --policy-runs')
+    if args.policy_runs:
+        if args.verify_raw: parser.error('--policy-runs already validates raw records')
+        transferred_policy_campaign(args)
+        if args.sqlite_policy_runs:
+            sqlite_policy_campaign(args.sqlite_policy_runs, args.out)
+        return
     inputs = Inputs()
     inputs.track(Path(__file__).resolve())
+    inputs.track(HERE / 'poisoncap-policy.md')
     data, mruby, fate, streams = load_reuse(inputs)
     sqlite = load_sqlite_memory(inputs)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -577,8 +917,13 @@ def main():
     with PdfPages(args.out / 'application-memory-figures.pdf', metadata=metadata) as book:
         for index, (name, draw) in enumerate(figures, 1):
             fig = draw()
+            # Keep policy scope visible even when a standalone panel is copied
+            # without the captioned packet or its accompanying README.
+            note = fig.text(.5, .008, POLICY_NOTES[name], ha='center', va='bottom',
+                            fontsize=6.5, color='.25')
             fig.savefig(args.out / (name+'.pdf'), metadata=metadata)
             fig.savefig(args.out / (name+'.png'), dpi=240)
+            note.remove()  # The review packet includes the same text in its caption.
             # The review packet is self-contained; standalone figures stay at
             # exactly 7.05 inches and leave caption typesetting to the paper.
             caption = textwrap.fill(f'Figure {index}. '+CAPTIONS[name], 112)
@@ -603,6 +948,7 @@ def main():
     (args.out / 'figures.tex').write_text('\n'.join(snippets).rstrip()+'\n')
     manifest = dict(schema=1, new_application_runs=False, reuse_processes=96, sqlite_memory_processes=12,
         repetitions_per_cell=3, repetitions_coincide=True, width_inches=7.05,
+        poisoncap_policies=POLICIES, common_published_default_comparison=False,
         plotted_denominator='all successful inner-boundary issues; immediate gap = 1',
         main_workloads=list(MAIN), all_workloads=list(data),
         main_selection='SQLite available matched workload; larger measured mruby size; longer adapted FATE input. Exploratory, not preregistered.',

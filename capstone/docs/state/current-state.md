@@ -2,6 +2,33 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — Published-threshold application measurements
+
+The [fresh campaign](../../experiments/study/results/published-policy-20260928/README.md)
+validates 48/48 complete mruby/FFmpeg processes with the published SQLite
+quarantine thresholds transferred to these allocators, the disclosed queue
+correction, and outer libc revocation enabled in both PoisonCap arms. The
+[policy audit](../../experiments/study/poisoncap-policy.md) distinguishes this
+transfer from an author-provided port. FFmpeg's eager reissue sweeps and
+mruby's slot-exhaustion sweeps are removed from the new comparison.
+Sublet's carved FFmpeg pool extent remains 1.00× its control; PoisonCap uses
+6.66× and 12.84× for Xvid and resize. mruby peak GC ratios are 1.39× for
+Sublet versus 1.67×/1.83× for PoisonCap; after AO16, Sublet's retained ratio
+is worse (2.08× versus 1.83×). These are selected allocator quantities,
+not total-memory or physical-working-set claims.
+
+Outer defaults exposed a libc asm-output constraint defect and incomplete
+retirement of stored poison capabilities. Both FFmpeg arms use the same
+corrected libc; a focused allocation test and all complete decoder oracles
+pass. SQLite additionally needs explicit nested poison-metadata retirement;
+all six repaired 17-unit outer-default processes pass. Their inner ledgers
+match the historical controls exactly. Paired with six archived Capstone runs,
+the new SQLite plot shows 1.00× versus 3.99× allocated-address coverage and a
+Sublet selected-allocator-peak countercost. The three new figures therefore
+validate 60 processes (54 fresh plus six archived). Historical SQLite figures
+still use outer revocation disabled and must retain that label. Review copies are under
+`/home/biecho/nested-allocators-paper/review/published-policy-2026-09-28/`.
+
 ## 2026-09-28 — Three-application paper figures
 
 The [checked figure set](../../experiments/study/results/application-memory-paper-20260928/README.md)

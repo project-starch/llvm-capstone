@@ -1,5 +1,18 @@
 # Memory behavior in three complete applications
 
+**Policy audit, 2026-09-28:** these are comparisons of different adapter
+policies, not a common published-default PoisonCap comparison. SQLite uses
+published thresholds with the full-queue correction; mruby sweeps on free-slot
+exhaustion; FFmpeg sweeps before reissue and disables outer libc revocation.
+SQLite's normalized memory/reuse campaigns also disable outer libc revocation.
+The [reference-policy audit](../../poisoncap-policy.md) pins the published
+sources and defines the replacement measurements. The revised figure footers,
+captions and provenance make this distinction explicit. Data are unchanged;
+no new default-policy application measurements are represented.
+
+The [new published-threshold results](../published-policy-20260928/README.md)
+are a separate campaign; use that directory for the replacement comparisons.
+
 [Review PDF with captions](application-memory-figures.pdf) ·
 [LaTeX figure snippets](figures.tex) ·
 [Raw-data validation](validation.json) · [Provenance](provenance.json)

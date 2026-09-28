@@ -48,7 +48,8 @@
   ],
   "sqlite_memory_processes_revalidated_from_committed_raw": 12,
   "input_sha256": {
-    "plot-application-memory-paper.py": "9acca913c4d08cea9db23d54b993f62858cf2e7f8ed88e079139e9f4d9fa5d20",
+    "plot-application-memory-paper.py": "d216b65417c28c20e8748b27b733c3fe1c3f05940ef290c7ce31affc0e3c70ea",
+    "poisoncap-policy.md": "d89fa8f6457f26a30416630259825da415e2b775be346d4002e39bf60112c289",
     "results/sqlite-reuse-gaps-20260927/runs.json": "77cc927fc4650d74a100f01795bcb6676d1caa9f770ed4d881ca8f61bd45d87c",
     "results/mruby-gc-memory-20260927/ao8/summary.json": "78d13bb8b2a6cffaa67c156f8e816b84e3bc44d803cfda60c452b9f751f6d4b5",
     "results/mruby-gc-memory-20260927/summary.json": "1a10a6cb3f17fc2d54708621b4d5130e9e04bec69182aea91f96d865c72bd6ce",
