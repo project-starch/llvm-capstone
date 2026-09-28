@@ -108,6 +108,17 @@ static void study_gap_emit(void){
 
 
 def instrument(s, arm, reuse_gaps=False):
+    if arm == 'poisoncap-temporal':
+        # With outer revocation enabled, malloc does not delegate poison
+        # authority. Explicitly retire metadata before ordinary initialization;
+        # overwriting bytes alone is not a reliable poison retirement path.
+        s = replace(s, 'clear_region(void *mem, size_t len)\n{\n',
+                    'clear_region(void *mem, size_t len)\n{\n'
+                    '\t/* Retire poison metadata before initializing the next owner. */\n'
+                    '\tfor (size_t i = 0; i < len; i += 16) {\n'
+                    '\t\tvoid *word = (char *)mem + i;\n'
+                    '\t\t__asm__ volatile("cclearpoison %0, 0(%0)" : : "C"(word) : "memory");\n'
+                    '\t}\n')
     if arm == 'capstone-sublet':
         # Legacy sharing rounds the region to pages. Keep the allocatable atom
         # count equal to the original heap, and leave the extra tail unused.

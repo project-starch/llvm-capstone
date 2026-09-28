@@ -1,5 +1,5 @@
 /* Whole FFmpeg decoder with the existing PoisonCap pool adapter.
- * Mode 0 and mode 2 use the same image and 4 MiB pool mapping. stdout remains
+ * Mode 0 and mode 2 use the same image and 256 MiB pool reservation. stdout remains
  * the decoded-frame oracle; pool policy and storage accounting go to stderr. */
 #include <sys/mman.h>
 #include <stdio.h>
@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include "ffapp_decode.h"
 #include "trace.h"
+#define POOL_BYTES (256UL << 20)
 
 static void phase(const char *name, int batch) {
   char marker[80];
@@ -26,12 +27,12 @@ int main(int argc, char **argv) {
   int batches = atoi(argv[2]);
   int mode = atoi(argv[3]);
   if (batches < 1 || (mode != 0 && mode != 2)) return 64;
-  void *pool = mmap(NULL, 4UL*1024*1024, PROT_READ|PROT_WRITE,
+  void *pool = mmap(NULL, POOL_BYTES, PROT_READ|PROT_WRITE,
                     MAP_PRIVATE|MAP_ANON, -1, 0);
   if (pool == MAP_FAILED) return 65;
-  ff2_payload_init(pool, 4UL*1024*1024);
+  ff2_payload_init(pool, POOL_BYTES);
   ff2_set_mode((unsigned)mode);
-  fprintf(stderr, "FFPOOL-POLICY mode=%d payload_reservation=4194304\n", mode);
+  fprintf(stderr, "FFPOOL-POLICY mode=%d payload_reservation=%lu policy=1\n", mode, POOL_BYTES);
   for (int batch = 0; batch < batches; batch++) {
     phase("before", batch);
     if (ffapp_run(argv[1], FFAPP_M5_ALL) != FFAPP_M5_ALL) return 1;
@@ -41,5 +42,5 @@ int main(int argc, char **argv) {
   ff2_reuse_report();
 #endif
   printf("EXP-OK ffmpeg %d\n", batches);
-  return munmap(pool, 4UL*1024*1024) == 0 ? 0 : 66;
+  return munmap(pool, POOL_BYTES) == 0 ? 0 : 66;
 }

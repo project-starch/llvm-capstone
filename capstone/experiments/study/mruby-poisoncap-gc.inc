@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "poisoncap-quarantine-policy.h"
 
 #ifndef CHERI_PERM_POISON
 #error "The mruby GC study requires the PoisonCap SDK"
@@ -20,6 +21,7 @@ static struct {
   uint64_t pages, peak_pages, quarantine, peak_quarantine;
   uint64_t discarded_quarantine;
   uint64_t sweeps, poison_bytes, clear_bytes, zero_bytes;
+  uint64_t full_drains, threshold_drains;
 } mrb_gc_study = { .mode = -1 };
 
 static void
@@ -92,19 +94,29 @@ mrb_gc_study_quarantined(mrb_heap_page *page, RVALUE *p)
   return (page->study_quarantine[i >> 3] >> (i & 7)) & 1;
 }
 
+static void mrb_gc_study_reclaim(mrb_gc *gc);
+
 static void
-mrb_gc_study_release(mrb_heap_page *page, RVALUE *p)
+mrb_gc_study_release(mrb_gc *gc, mrb_heap_page *page, RVALUE *p)
 {
   size_t i = mrb_gc_study_index(page, p);
   if (!((page->study_seen[i >> 3] >> (i & 7)) & 1) ||
       mrb_gc_study_quarantined(page, p))
     mrb_gc_study_fail("release state");
+  if (mrb_gc_study.mode &&
+      mrb_gc_study.quarantine == POISONCAP_QUARANTINE_ENTRIES) {
+    /* Published capacity trigger; correct its unswept full-queue drain. */
+    ++mrb_gc_study.full_drains;
+    mrb_gc_study_reclaim(gc);
+  }
   ++mrb_gc_study.releases;
   page->study_release_at[i] = mrb_gc_study.issues;
   if (!mrb_gc_study.mode) return;
   /* obj_free has run. No in-band free-list link is written until revocation. */
+  void *bounded = cheri_setboundsexact(p, sizeof(RVALUE));
+  if (!cheri_gettag(bounded)) mrb_gc_study_fail("poison slot bounds");
   for (size_t offset = 0; offset < sizeof(RVALUE); offset += 16) {
-    void *word = (unsigned char *)p + offset;
+    void *word = (unsigned char *)bounded + offset;
     __asm__ volatile("cpoison %0, 0(%0)" : : "C"(word) : "memory");
   }
   mrb_gc_study.poison_bytes += sizeof(RVALUE);
@@ -112,6 +124,13 @@ mrb_gc_study_release(mrb_heap_page *page, RVALUE *p)
   ++mrb_gc_study.quarantine;
   if (mrb_gc_study.quarantine > mrb_gc_study.peak_quarantine)
     mrb_gc_study.peak_quarantine = mrb_gc_study.quarantine;
+  size_t held = (mrb_gc_study.issues - mrb_gc_study.releases +
+                 mrb_gc_study.quarantine) * sizeof(RVALUE);
+  if (poisoncap_quarantine_threshold(held,
+                                    mrb_gc_study.quarantine * sizeof(RVALUE))) {
+    ++mrb_gc_study.threshold_drains;
+    mrb_gc_study_reclaim(gc);
+  }
 }
 
 static void
@@ -185,7 +204,8 @@ mrb_gc_study_report(const char *phase)
           "poison_bytes=%llu clear_bytes=%llu zero_bytes=%llu "
           "slot_bytes=%zu metadata_bytes=%zu observer_bytes=%zu "
           "page_payload_bytes=%zu page_metadata_bytes=%zu mapped_page_bytes=%zu "
-          "discarded_quarantine=%llu\n",
+          "discarded_quarantine=%llu policy=1 full_drains=%llu threshold_drains=%llu "
+          "quarantine_limit=%u minimum_held=%lu\n",
           phase, mrb_gc_study.mode,
           (unsigned long long)mrb_gc_study.issues,
           (unsigned long long)mrb_gc_study.releases,
@@ -205,7 +225,10 @@ mrb_gc_study_report(const char *phase)
           sizeof(((mrb_heap_page *)0)->objects),
           sizeof(mrb_heap_page) - sizeof(((mrb_heap_page *)0)->objects),
           (sizeof(mrb_heap_page) + 4095) & ~(size_t)4095,
-          (unsigned long long)mrb_gc_study.discarded_quarantine);
+          (unsigned long long)mrb_gc_study.discarded_quarantine,
+          (unsigned long long)mrb_gc_study.full_drains,
+          (unsigned long long)mrb_gc_study.threshold_drains,
+          POISONCAP_QUARANTINE_ENTRIES, POISONCAP_MIN_HELD_BYTES);
   if (!strcmp(phase, "exit")) {
     fputs("MRB_GC_GAPS", stderr);
     for (unsigned i = 0; i < 32; ++i)

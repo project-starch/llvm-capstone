@@ -138,6 +138,26 @@ class StudyTests(unittest.TestCase):
         item['point']['files'].pop(str(self.root/'input'))
         with self.assertRaises(ValueError): study.emit(plan, bindings, 'poisoncap', {})
 
+    def test_compiled_quarantine_policy_is_preserved_and_requires_provenance(self):
+        plan, bindings = self.poisoncap_fixture()
+        paths = {Path(bindings[self.key]['arms'][arm]['build_manifest'])
+                 for arm in ('poisoncap-spatial', 'poisoncap-temporal')}
+        policy = 'published-sqlite-thresholds-corrected-v1'
+        for path in paths:
+            manifest = study.read(path)
+            manifest.update(nested_policy=policy, quarantine_policy_sha256='a'*64)
+            path.write_text(json.dumps(manifest))
+        points, blocked = study.emit(plan, bindings, 'poisoncap', {})
+        self.assertFalse(blocked)
+        self.assertTrue(all(p['nested_policy'] == policy and p['expected_min_sweeps'] == 0
+                            for p in points))
+        path = next(iter(paths))
+        manifest = study.read(path)
+        del manifest['quarantine_policy_sha256']
+        path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'policy source hash'):
+            study.emit(plan, bindings, 'poisoncap', {})
+
     def test_poisoncap_binding_rejects_changed_platform_or_oracle(self):
         plan, bindings = self.poisoncap_fixture()
         kernel = self.root/'poisoncap_kernel'

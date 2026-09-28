@@ -40,6 +40,8 @@ def policy_environment(point):
     expected = {'cheribsd-default': 1, 'cheribsd-revocation-on': 1,
                 'cheribsd-revocation-off': 0}
     arm = point['arm']
+    if point.get('nested_policy') not in (None, 'published-sqlite-thresholds-corrected-v1'):
+        raise ValueError('unknown nested policy')
     if arm.startswith('poisoncap-'):
         if arm not in ('poisoncap-spatial', 'poisoncap-temporal'):
             raise ValueError('unknown PoisonCap arm')
@@ -47,7 +49,12 @@ def policy_environment(point):
         if boundary == ('mruby', 'mruby-gc'):
             expected[arm] = 1
         elif boundary == ('ffmpeg', 'ffmpeg-pool'):
-            expected[arm] = 0
+            # Legacy adapter campaigns explicitly isolated the inner pool.
+            # The published-policy transfer keeps the outer libc defaults on.
+            policy = point.get('nested_policy')
+            if policy not in (None, 'published-sqlite-thresholds-corrected-v1'):
+                raise ValueError('unknown FFmpeg nested policy')
+            expected[arm] = int(policy is not None)
             mode = 2 if arm == 'poisoncap-temporal' else 0
             if point.get('mode') != mode or not point.get('argv') or point['argv'][-1] != str(mode):
                 raise ValueError('FFmpeg pool arm and application mode disagree')
@@ -87,6 +94,40 @@ def nested_samples(stderr):
     return [dict((k, v if k == 'phase' else int(v))
                  for k, v in (word.split('=', 1) for word in line.split()[1:]))
             for line in stderr.splitlines() if line.startswith('MRB_GC_STUDY ')]
+
+
+def published_policy_valid(point, stderr):
+    boundary = point.get('nested_allocator')
+    prefix = {'mruby-gc': 'MRB_GC_STUDY ', 'ffmpeg-pool': 'FF2_POISONCAP '}.get(boundary)
+    if prefix is None:
+        return not point.get('nested_policy')
+    reports = [dict(word.split('=', 1) for word in line.split()[1:])
+               for line in stderr.splitlines() if line.startswith(prefix)]
+    if not point.get('nested_policy'):
+        return not any(row.get('policy') == '1' for row in reports)
+    if not reports:
+        return False
+    try:
+        for row in reports:
+            if (int(row['policy']) != 1 or int(row['quarantine_limit']) != 4096 or
+                    int(row['minimum_held']) != 16 << 20):
+                return False
+            full, threshold, sweeps = (int(row[k]) for k in
+                                       ('full_drains', 'threshold_drains', 'sweeps'))
+            teardown = int(row['teardown_drains']) if boundary == 'ffmpeg-pool' else 0
+            if min(full, threshold, sweeps, teardown) < 0 or sweeps != full + threshold + teardown:
+                return False
+            if boundary == 'mruby-gc':
+                if not 0 <= int(row['quarantine']) <= int(row['peak_quarantine']) <= 4096:
+                    return False
+            elif (int(row['legacy_reuse_drains']) or
+                  not 0 <= int(row['qcount']) <= 4096 or
+                  not 0 <= int(row['quarantine']) <= int(row['held']) <= int(row['peak_held']) or
+                  not int(row['quarantine']) <= int(row['peak_quarantine']) <= int(row['peak_held'])):
+                return False
+    except (KeyError, ValueError):
+        return False
+    return True
 
 
 def verdict(point, rc, stdout, stderr, stdout_raw=None):
@@ -145,7 +186,7 @@ def verdict(point, rc, stdout, stderr, stdout_raw=None):
         if len(totals) != 1 or [int(row[0]) for row in pairs] != list(range(16)):
             return 'bad-inner-metrics'
         issues, reuses, observer = map(int, totals[0])
-        if not 0 < reuses <= issues or observer <= 0 or \
+        if not (issues > 0 and 0 <= reuses <= issues) or observer <= 0 or \
                 sum(int(a) + int(b) for _, a, b in pairs) != reuses:
             return 'bad-inner-metrics'
     if point.get('nested_allocator') == 'cpython-pymalloc':
@@ -157,6 +198,8 @@ def verdict(point, rc, stdout, stderr, stdout_raw=None):
                 int(report[0][0]) != mode or \
                 (mode and (int(report[0][1]) == 0 or int(report[0][2]) == 0)):
             return 'bad-inner-metrics'
+    if not published_policy_valid(point, stderr):
+        return 'bad-inner-policy'
     return 'pass'
 
 

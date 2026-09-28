@@ -55,6 +55,9 @@ class VerdictTests(unittest.TestCase):
                   ''.join(f'FF2-GAP pair={i} a={2 if i == 0 else 0} b=0\n'
                           for i in range(16)) + 'EXP-GUEST-EXIT 0\n')
         self.assertEqual(runner.verdict(point, 0, 'OK\n', stderr), 'pass')
+        # A short quarantined workload can legitimately have no reissues.
+        no_reuse = stderr.replace('reuses=2', 'reuses=0').replace('pair=0 a=2', 'pair=0 a=0')
+        self.assertEqual(runner.verdict(point, 0, 'OK\n', no_reuse), 'pass')
         for broken in (stderr.replace('mode=2', 'mode=0'),
                        stderr.replace('reuses=2', 'reuses=3'),
                        stderr.replace('FF2-GAP pair=15', 'FF2-GAP pair=14'),
@@ -86,6 +89,27 @@ class PolicyTests(unittest.TestCase):
     def test_default_remains_unmodified(self):
         self.assertEqual(runner.policy_environment(self.point('cheribsd-default', 1)), {})
 
+    def test_published_ffmpeg_policy_requires_outer_revocation(self):
+        point = dict(self.point('poisoncap-temporal', 1), application='ffmpeg',
+                     nested_allocator='ffmpeg-pool', mode=2,
+                     nested_policy='published-sqlite-thresholds-corrected-v1')
+        point['argv'] = ['/tmp/ffmpeg', 'input.mkv', '1', '2']
+        self.assertEqual(runner.policy_environment(point), {'_RUNTIME_REVOCATION_ENABLE': '1'})
+        with self.assertRaises(ValueError):
+            runner.policy_environment(dict(point, revocation=0))
+
+    def test_published_policy_rejects_unreported_sweeps_and_threshold_changes(self):
+        point = dict(nested_allocator='mruby-gc',
+                     nested_policy='published-sqlite-thresholds-corrected-v1')
+        report = ('MRB_GC_STUDY policy=1 quarantine_limit=4096 minimum_held=16777216 '
+                  'full_drains=3 threshold_drains=0 sweeps=3 quarantine=2 peak_quarantine=4096\n')
+        self.assertTrue(runner.published_policy_valid(point, report))
+        for bad in ('', report.replace('sweeps=3', 'sweeps=4'),
+                    report.replace('minimum_held=16777216', 'minimum_held=1048576'),
+                    report.replace('peak_quarantine=4096', 'peak_quarantine=4097')):
+            self.assertFalse(runner.published_policy_valid(point, bad))
+        self.assertFalse(runner.published_policy_valid(dict(nested_allocator='mruby-gc'), report))
+
     def test_on_off_are_isolated_process_switches(self):
         for enabled, suffix in ((1, 'on'), (0, 'off')):
             point = self.point('cheribsd-revocation-'+suffix, enabled)
@@ -94,6 +118,20 @@ class PolicyTests(unittest.TestCase):
             self.assertIn(switch, command)
             self.assertIn('-i', command)
             self.assertEqual(command[-1], 'a b')
+
+    def test_ffmpeg_transferred_policy_rejects_eager_reuse_and_hidden_sweeps(self):
+        point = dict(nested_allocator='ffmpeg-pool',
+                     nested_policy='published-sqlite-thresholds-corrected-v1')
+        report = ('FF2_POISONCAP policy=1 quarantine_limit=4096 minimum_held=16777216 '
+                  'full_drains=0 threshold_drains=1 teardown_drains=2 sweeps=3 '
+                  'qcount=1 quarantine=16 held=32 peak_held=16777216 '
+                  'peak_quarantine=4194304 legacy_reuse_drains=0\n')
+        self.assertTrue(runner.published_policy_valid(point, report))
+        for bad in (report.replace('legacy_reuse_drains=0', 'legacy_reuse_drains=1'),
+                    report.replace('sweeps=3', 'sweeps=4'),
+                    report.replace('qcount=1', 'qcount=4097'),
+                    report.replace('quarantine=16 ', 'quarantine=48 ')):
+            self.assertFalse(runner.published_policy_valid(point, bad))
 
     def test_policy_labels_and_overrides_cannot_disagree(self):
         bad = [self.point('cheribsd-default', 0), self.point('cheribsd-revocation-off', 1),

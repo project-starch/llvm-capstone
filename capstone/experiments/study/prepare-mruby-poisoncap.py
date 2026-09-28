@@ -62,14 +62,8 @@ def main():
 #else
       mrb_free(mrb, tmp);
 #endif''')
-    source = replace_once(source,
-        '  if (gc->free_heaps == NULL) {\n    add_heap(mrb, gc);\n  }',
-        '''#ifdef MRB_GC_STUDY_POISONCAP
-  if (gc->free_heaps == NULL) mrb_gc_study_reclaim(gc);
-#endif
-  if (gc->free_heaps == NULL) {
-    add_heap(mrb, gc);
-  }''')
+    # Empty reusable storage grows the heap normally. Reclamation occurs on
+    # the published byte/queue thresholds at release, not on allocation demand.
     source = replace_once(source,
         '  paint_partial_white(gc, &p->as.basic);\n  return &p->as.basic;',
         '''  paint_partial_white(gc, &p->as.basic);
@@ -103,7 +97,7 @@ def main():
           }''',
         '''          if (p->as.basic.tt == MRB_TT_FREE) {
 #ifdef MRB_GC_STUDY_POISONCAP
-            mrb_gc_study_release(page, p);
+            mrb_gc_study_release(gc, page, p);
             if (!mrb_gc_study.mode) {
 #endif
               p->as.free.next = page->freelist;
@@ -128,6 +122,8 @@ def main():
 #endif
       page = next;''')
     shutil.copy2(HERE / 'mruby-poisoncap-gc.inc', args.source / 'src/mruby-poisoncap-gc.inc')
+    shutil.copy2(HERE.parents[1] / 'ports/common/include/poisoncap-quarantine-policy.h',
+                 args.source / 'src/poisoncap-quarantine-policy.h')
     gc_file.write_text(source)
     print(hashlib.sha256(source.encode()).hexdigest())
 

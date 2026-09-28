@@ -53,6 +53,11 @@ def main():
         p.error('the PoisonCap build must select its nested allocator adapter')
     if args.nested_pool and not (args.source/'libavutil/trace.h').exists():
         p.error('the PoisonCap build requires prepare-source.sh --pool')
+    if args.nested_pool:
+        for filename, hook in (('buffer.c', 'ff2_payload_reusable'),
+                               ('refstruct.c', 'ff2_ref_reusable')):
+            if hook not in (args.source/'libavutil'/filename).read_text():
+                p.error('prepared FFmpeg sources lack quarantine-aware selection; rerun prepare-source.sh --pool')
     if args.pool_reuse_gaps and not args.nested_pool:
         p.error('--pool-reuse-gaps requires --nested-pool poisoncap')
     args.out.mkdir(parents=True, exist_ok=False)
@@ -104,6 +109,7 @@ def main():
             pool = REPO/'capstone/ports/ffmpeg/buffer-pool/src'
             sources[0] = REPO/'capstone/experiments/study/ffmpeg-poisoncap-decode.c'
             flags += ['-DFFPOOL_CHERI', '-DFFPOOL_POISONCAP', '-DFFPOOL_APP_MEMORY',
+                      '-DFFPOOL_APP_QUARANTINE',
                       '-I', str(pool/'shared'), '-I', str(REPO/'capstone/runtime/include')]
             if args.pool_reuse_gaps:
                 flags += ['-DFFPOOL_STUDY_GAPS']
@@ -115,7 +121,22 @@ def main():
         image = args.out/'ffmpeg'
         run([cc, *flags, *sources, app/'ffapp_decode.c', *[build/lib/(lib+'.a')
              for lib in ('libavformat','libavcodec','libavutil')], '-lm', '-o', image])
+    adapter_paths = []
+    if args.nested_gc:
+        adapter_paths += [REPO/'capstone/experiments/study'/name for name in
+                          ('prepare-mruby-poisoncap.py', 'mruby-poisoncap-gc.inc')]
+    if args.nested_pool:
+        adapter_paths += [REPO/'capstone/ports/ffmpeg/buffer-pool/src'/name for name in
+                          ('shared/pool-allocator.c', 'shared/payload-backend.h',
+                           'shared/trace.h', 'cheribsd/poisoncap-payload.c')]
+        adapter_paths += [REPO/'capstone/experiments/study/ffmpeg-poisoncap-decode.c']
+    if adapter_paths:
+        adapter_paths += [REPO/'capstone/ports/common/include/poisoncap-quarantine-policy.h']
     manifest = dict(app=args.app, platform=args.platform, allocations=args.allocations,
+                    nested_policy=('published-sqlite-thresholds-corrected-v1'
+                                   if args.nested_gc or args.nested_pool else None),
+                    quarantine_policy_sha256=(digest(REPO/'capstone/ports/common/include/poisoncap-quarantine-policy.h')
+                                               if args.nested_gc or args.nested_pool else None),
                     nested_pool=args.nested_pool, nested_gc=args.nested_gc,
                     pool_reuse_gaps=args.pool_reuse_gaps,
                     image_sha256=digest(image), compiler_driver_sha256=digest(args.cc),
@@ -126,6 +147,8 @@ def main():
                                       for name in ('prepare-mruby-poisoncap.py',
                                                    'mruby-poisoncap-gc.inc')}
                                      if args.nested_gc else {}),
+                    nested_adapter_inputs={str(path.relative_to(REPO)): digest(path)
+                                           for path in adapter_paths},
                     experiment_sources=source_manifest(HERE),
                     repository_revision=subprocess.check_output(['git','-C',str(REPO),
                         'rev-parse','HEAD'], text=True).strip())

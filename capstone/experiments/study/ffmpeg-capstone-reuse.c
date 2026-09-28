@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include "trace.h"
 
-#define POOL_BYTES (4UL << 20)
+#define POOL_BYTES (256UL << 20)
 
 extern void *__capstone_region(unsigned);
 extern int ffdecode_main(int, char **);

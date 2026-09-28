@@ -257,7 +257,16 @@ def qualified_poisoncap_points(plan, key, binding):
                     point['files'].get(binary) != point['argv'][0] or \
                     point.get('revocation', 1) != 1:
                 raise ValueError('PoisonCap point is not the qualified nested interpreter')
-            point.update(revocation=1, expected_min_sweeps=int(arm == 'poisoncap-temporal'))
+            policy = build.get('nested_policy')
+            if policy not in (None, 'published-sqlite-thresholds-corrected-v1'):
+                raise ValueError('unknown compiled nested quarantine policy')
+            if point.get('nested_policy') not in (None, policy):
+                raise ValueError('point and compiled nested quarantine policy disagree')
+            if policy:
+                if not re.fullmatch('[0-9a-f]{64}', build.get('quarantine_policy_sha256', '')):
+                    raise ValueError('published-policy build lacks its policy source hash')
+                point['nested_policy'] = policy
+            point.update(revocation=1, expected_min_sweeps=(0 if policy else int(arm == 'poisoncap-temporal')))
         point['study_artifact'] = dict(binary_sha256=binary_sha,
             build_manifest_sha256=file_hash(item['build_manifest']),
             platform_files_sha256=identity(platform_files),
