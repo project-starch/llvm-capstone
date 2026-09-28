@@ -46,8 +46,8 @@ remainder too small to list. The classes of the hunks are in the sibling
 + * range away from any authority over the whole block -- and the headers and
 + * free-list links below live in exactly those ranges. So they move beside the
 + * block, into records with upstream's field names. The bytes the headers
-+ * occupied are still reserved in the block, so every address handed out is
-+ * the one upstream hands out. */
++ * occupied are still reserved in the block, so its layout is upstream's;
++ * placement differs only once upstream would have merged two chunks. */
 +typedef struct _wmem_block_chunk_t wmem_block_chunk_t;
 +typedef struct _wmem_block_hdr_t wmem_block_hdr_t;
 +
