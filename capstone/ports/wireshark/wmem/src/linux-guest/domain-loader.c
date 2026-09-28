@@ -2,6 +2,7 @@
 
 #include "libcapstone.h"
 #include "port.h"
+#include "chunks.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +37,9 @@ int main(int argc, char **argv) {
   if (!out || out == (void *)-1 || !input || input == (void *)-1)
     return 7;
   memset(out, 0, sizeof *out);
+  struct wm_chunk_counts *counts =
+      (struct wm_chunk_counts *)((unsigned char *)out + 128);
+  memset(counts, 0, sizeof *counts);
   out->mode = strtoul(argv[4], NULL, 10);
   memcpy(input, staging, bytes);
   shared_region_annotated(dom, ro, 1, 0);
@@ -46,6 +50,24 @@ int main(int argc, char **argv) {
   printf("WM return=%lu status=%llu completed=%llu allocs=%llu\n", result,
          (unsigned long long)out->status, (unsigned long long)out->completed,
          (unsigned long long)out->allocs);
+  /* The chunk port's counts, written beyond the header by a domain that
+   * completes. Absent is said, never printed as zeros. */
+  if (counts->magic == WM_CHUNK_COUNTS_MAGIC)
+    printf("WM-CHUNKS opens=%llu resets=%llu closes=%llu reset_revokes=%llu "
+           "close_revokes=%llu dropped=%llu retires=%llu splits=%llu "
+           "issues=%llu revokes=%llu inits=%llu\n",
+           (unsigned long long)counts->opens, (unsigned long long)counts->resets,
+           (unsigned long long)counts->closes,
+           (unsigned long long)counts->reset_revokes,
+           (unsigned long long)counts->close_revokes,
+           (unsigned long long)counts->dropped,
+           (unsigned long long)counts->retires,
+           (unsigned long long)counts->splits,
+           (unsigned long long)counts->issues,
+           (unsigned long long)counts->revokes,
+           (unsigned long long)counts->inits);
+  else
+    printf("WM-CHUNKS absent\n");
   f = fopen(argv[3], "wb");
   if (!f || fwrite(out, sizeof *out, 1, f) != 1 || fclose(f))
     return 8;

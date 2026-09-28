@@ -9,14 +9,23 @@ if(PORT_PLATFORM STREQUAL "cheribsd")
     set(WM_BACKING src/cheribsd/poisoncap.c)
   endif()
 endif()
+# The chunk port (patches/...-0002): every chunk of the block allocator is a
+# region of its own, so a chunk free is a revoke. It needs the Sublet backing,
+# so the PoisonCap arm keeps the region-granular hooks and its own per-chunk
+# poisoning.
+set(WM_CHUNKS_HOSTED)
+if(NOT WM_POISONCAP)
+  set(WM_CHUNKS_HOSTED src/native/chunks.c)
+endif()
 function(wm_executable name variant)
   set(workload ${ARGN})
   set(source "${CMAKE_BINARY_DIR}/source-${variant}")
   wm_upstream_units(upstream ${variant})
   if(PORT_HOSTED)
-    set(platform src/native/main.c src/native/regions.c ${WM_BACKING})
+    set(platform src/native/main.c src/native/regions.c ${WM_BACKING} ${WM_CHUNKS_HOSTED})
   else()
     set(platform src/capstone-domain/entry.c src/allocators/sublet/regions.c
+      src/allocators/sublet/chunks.c
       "${CAPSTONE_REPO_ROOT}/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
       "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/start.S"
       "${CAPSTONE_REPO_ROOT}/capstone/tests/runtime-qemu/gct-section-end.S"
@@ -30,6 +39,8 @@ function(wm_executable name variant)
   if(WM_POISONCAP)
     target_compile_definitions(${name} PRIVATE WM_POISONCAP)
     target_include_directories(${name} PRIVATE src/cheribsd)
+  else()
+    target_compile_definitions(${name} PRIVATE WMEM_PORT_CHUNKS)
   endif()
   target_compile_options(${name} PRIVATE -Wall -Wextra -ffunction-sections -fdata-sections)
   target_link_libraries(${name} PRIVATE Capstone::Runtime)
@@ -47,7 +58,7 @@ wm_source(ported)
 wm_executable(replay ported src/shared/replay.c)
 if(PORT_HOSTED)
   wm_upstream_units(upstream_ported ported)
-  add_library(wireshark-wmem STATIC src/native/regions.c ${WM_BACKING} ${WM_SHARED} ${upstream_ported})
+  add_library(wireshark-wmem STATIC src/native/regions.c ${WM_BACKING} ${WM_CHUNKS_HOSTED} ${WM_SHARED} ${upstream_ported})
   add_dependencies(wireshark-wmem source-ported)
   target_include_directories(wireshark-wmem PUBLIC src/shared/shim src/shared
     "${CMAKE_BINARY_DIR}/source-ported/wsutil/wmem")
@@ -55,6 +66,8 @@ if(PORT_HOSTED)
   if(WM_POISONCAP)
     target_compile_definitions(wireshark-wmem PUBLIC WM_POISONCAP)
     target_include_directories(wireshark-wmem PUBLIC src/cheribsd)
+  else()
+    target_compile_definitions(wireshark-wmem PUBLIC WMEM_PORT_CHUNKS)
   endif()
   if(PORT_PLATFORM STREQUAL "cheribsd")
     # The corpus arms run under a supervisor that reports the child's fault

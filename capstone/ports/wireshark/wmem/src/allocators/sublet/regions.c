@@ -17,6 +17,14 @@ void wm_region_create(struct wm_region *r, size_t size) {
   r->size = size;
   r->alias = sublet_take(&r->handle);
 }
+void wm_region_create_linear(struct wm_region *r, size_t size) {
+  if (!size || (size & 15) || size > end - cursor)
+    wm_fail(202);
+  cursor += size;
+  sublet_carve(&remaining, cursor, &r->handle);
+  r->size = size;
+  r->alias = NULL;
+}
 void wm_region_renew(struct wm_region *r, unsigned revoke) {
   if (revoke) {
     sublet_give(&r->handle);

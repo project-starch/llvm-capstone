@@ -1,5 +1,8 @@
 #include "port.h"
 #include "scopes.h"
+#if defined(WM_DOMAIN) && defined(WMEM_PORT_CHUNKS)
+#include "chunks.h"
+#endif
 #include <string.h>
 #define CHECK(x, n)                                                            \
   do {                                                                         \
@@ -108,22 +111,36 @@ void wm_replay(const struct wm_header *in, struct wm_header *out) {
     CHECK(r[16] == 93, 512);
     break;
   }
-  case 3:
+  case 3: {
     /* The recycler allocator's reset retains and reinitializes its block.
-     * Its free-list node is written into the freed chunk's data, so the
-     * unprotected read returns allocator metadata, not the old byte. */
+     * Under the chunk port the block's headers and free-list links live
+     * beside it, so nothing is written into the freed chunk: the unprotected
+     * read returns the old byte, and that is checked. (Upstream writes a
+     * free-list node into the chunk's data, and the read returns metadata.) */
     wmem_free_all(file);
     mark(test);
-    (void)read_probe(held_q);
+    unsigned v = read_probe(held_q);
+#ifdef WMEM_PORT_CHUNKS
+    CHECK(mode == 1 || v == 41, 519);
+#endif
+    (void)v;
     break;
-  case 4:
-    /* Documented limit: an individual recycler free returns the chunk to a
-     * free list inside a live block and ends no epoch. Neither mode faults;
-     * the unprotected read again sees the free-list node. */
+  }
+  case 4: {
+    /* An individual recycler free inside a live block. The chunk port gives
+     * the chunk a region of its own, so the free is a revoke and the
+     * protected read faults; the unprotected one sees the old byte. (Under
+     * the region-granular hooks alone this ended no epoch and neither mode
+     * faulted.) */
     wmem_free(file, q);
     mark(test);
-    (void)read_probe(held_q);
+    unsigned v = read_probe(held_q);
+#ifdef WMEM_PORT_CHUNKS
+    CHECK(mode == 1 || v == 41, 520);
+#endif
+    (void)v;
     break;
+  }
   case 5:
     /* Bounds: one byte past the request faults in both modes. */
     mark(test);
@@ -211,4 +228,7 @@ void wm_replay(const struct wm_header *in, struct wm_header *out) {
     wm_leave_file_scope();
   wm_scopes_cleanup();
   out->completed = 1;
+#if defined(WM_DOMAIN) && defined(WMEM_PORT_CHUNKS)
+  wm_chunk_report(out);
+#endif
 }
