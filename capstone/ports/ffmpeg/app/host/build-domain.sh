@@ -218,7 +218,45 @@ toolchain_id() {
     xargs stat -L -c '%n %s %Y'
 }
 TOOLCHAIN_ID=$(toolchain_id | sha256sum | cut -c1-12)
-CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${FFEXTRA[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" "$TOOLCHAIN_ID" | sha256sum | cut -c1-12)
+# --- libvidstab, only when configure is asked for it (Track B, vidstab) -----------------
+# vidstabtransform is FFmpeg's wrapper around libvidstab, an external library, so running that
+# defect as FFmpeg's real code needs libvidstab in the image: the pinned release
+# (deps/libvidstab.json), every source its CMake build compiles, with this image's flags, and
+# OpenMP, SSE2 and ORC off, as its CMake leaves them on a target that has none of them.
+# configure finds it the way it does on any system, through a pkg-config file, and its
+# identity joins the configure key. A configure that does not ask for it is unchanged.
+VSLIB=(); VIDSTAB_ID=; CFGENV=()
+case " ${CONFIGURE_OPTS[*]} " in *" --enable-libvidstab "*)
+  read -r VSURL VSSHA VSVER < <(python3 -c '
+import json,sys; u=json.load(open(sys.argv[1])); print(u["url"], u["sha256"], u["version"])' "$APP_DIR/deps/libvidstab.json")
+  VSTAR="$WORK/vid.stab-$VSVER.tar.gz"
+  if [ ! -f "$VSTAR" ]; then
+    curl -sSfL --retry 5 --retry-all-errors --retry-delay 3 -o "$VSTAR.part" "$VSURL"
+    mv "$VSTAR.part" "$VSTAR"
+  fi
+  echo "$VSSHA  $VSTAR" | sha256sum -c --quiet - \
+    || { echo "libvidstab: $VSTAR does not match deps/libvidstab.json; refusing to build from it" >&2; exit 1; }
+  VIDSTAB_ID=$(printf '%s\n' "$VSSHA" "${FLAGS[*]}" "$TOOLCHAIN_ID" | sha256sum | cut -c1-12)
+  VSP="$BASE/libvidstab-$VIDSTAB_ID"
+  if [ ! -f "$VSP/lib/libvidstab.a" ]; then
+    rm -rf "$VSP"; mkdir -p "$VSP/src" "$VSP/obj" "$VSP/lib/pkgconfig" "$VSP/include/vid.stab"
+    tar xzf "$VSTAR" -C "$VSP/src" --strip-components=1
+    for c in frameinfo transformtype libvidstab transform transformfixedpoint motiondetect \
+             motiondetect_opt serialize localmotion2transform boxblur vsvector orc/motiondetectorc; do
+      "$CLANG" "${FLAGS[@]}" -std=gnu99 -DDISABLE_ORC -c "$VSP/src/src/$c.c" -o "$VSP/obj/${c##*/}.o" \
+        2>> "$VSP/build.log" || { echo "libvidstab: $c.c did not compile; see $VSP/build.log" >&2; exit 1; }
+    done
+    "${CAPSTONE_LLVM_AR:-$CAPSTONE_LLVM_BIN/llvm-ar}" rcs "$VSP/lib/libvidstab.a.part" "$VSP"/obj/*.o
+    cp "$VSP"/src/src/*.h "$VSP/include/vid.stab/"
+    printf '%s\n' "prefix=$VSP" 'libdir=${prefix}/lib' 'includedir=${prefix}/include' '' \
+      'Name: vidstab' 'Description: vid.stab, built for the capstone domain' "Version: $VSVER" \
+      'Libs: -L${libdir} -lvidstab' 'Cflags: -I${includedir}' > "$VSP/lib/pkgconfig/vidstab.pc"
+    mv "$VSP/lib/libvidstab.a.part" "$VSP/lib/libvidstab.a"
+  fi
+  VSLIB=("$VSP/lib/libvidstab.a")
+  CFGENV=(env PKG_CONFIG_LIBDIR="$VSP/lib/pkgconfig" PKG_CONFIG_PATH=) ;;
+esac
+CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${FFEXTRA[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" "$TOOLCHAIN_ID" ${VIDSTAB_ID:+"$VIDSTAB_ID"} | sha256sum | cut -c1-12)
 # The enabled libraries, read from configure's own config.mak, in static link order (avutil
 # last, since everything depends on it). avfilter and swresample appear only when configure
 # turned them on, so the default minimal build is unchanged.
@@ -233,7 +271,7 @@ ff_libdirs() {
 }
 if [ ! -f "$XB/libavformat/libavformat.a" ] || [ "$(cat "$XB/.config-key" 2>/dev/null)" != "$CONFIG_KEY" ]; then
   rm -rf "$XB"; mkdir -p "$XB"
-  ( cd "$XB" && "$SRC/configure" --enable-cross-compile --cc="$CLANG" --ld="$LD_LLD" \
+  ( cd "$XB" && "${CFGENV[@]}" "$SRC/configure" --enable-cross-compile --cc="$CLANG" --ld="$LD_LLD" \
       --arch=riscv64 --target-os=none \
       --extra-cflags="${FLAGS[*]}${FFEXTRA[*]:+ ${FFEXTRA[*]}}" --extra-ldflags="-e main --no-warn-mismatch" \
       --extra-libs="$ARCHIVE $CFGSTUBS" "${CONFIGURE_OPTS[@]}" > configure.log 2>&1 ) \
@@ -259,6 +297,7 @@ fi
 { grep -hE 'warning: .*\[-Wcapstone-pointer-roundtrip\]' "$XB/build.log" || true; } \
   | sed -E 's#^(src/)?##; s/: warning:.*//' | sort -u > "$OUT/pointer-roundtrip-sites.txt"
 FFLIBS=(); for _d in $(ff_libdirs); do FFLIBS+=("$XB/$_d/$_d.a"); done
+FFLIBS+=("${VSLIB[@]}")   # after libavfilter, which calls it; libvidstab itself needs only libc
 for _l in "${FFLIBS[@]}"; do [ -f "$_l" ] || { echo "configure enabled $(basename "$_l") but it was not built" >&2; exit 1; }; done
 
 # The Sublet port's level below: FFmpeg's pools take their blocks from the Sublet heap.
@@ -396,8 +435,43 @@ PY
   [ "$(grep -c '^[<>]' "$AJ/revert.diff")" = 2 ] || { echo "AF_JOIN GATE: the revert is not one line" >&2; exit 1; }
   echo "af_join: as-shipped object reproduced byte-identically; fixture 19 links the one-token revert"
 fi
+# Track B, vidstab (fixtures 22 and 23): only when configure built the vidstabtransform filter
+# (FFAPP_EXTRA_CONFIGURE="--enable-avfilter --enable-gpl --enable-libvidstab
+#  --enable-filter=vidstabtransform --enable-decoder=yuv4"; libvidstab is built above).
+# 22 links libavfilter as built. 23 links vf_vidstabtransform.o with upstream's fix 316531e61c
+# reverted: trackb/vidstab-316531e61c.diff, the fix's own diff, applied in reverse at fuzz 0.
+# af_join's two gates apply unchanged, and one more: applying the fix to the reverted file must
+# give back the shipped file byte for byte, so the revert is exactly the fix's reverse.
+if [ -n "$POOL" ] && [ -f "$XB/libavfilter/vf_vidstabtransform.o" ]; then
+  FIXTURES="$FIXTURES 22 23"
+  VS=$OUT/vidstab; rm -rf "$VS"; mkdir -p "$VS/rev/libavfilter" "$VS/rt/libavfilter"
+  VSCMD=$(cd "$XB" && make -n -B V=1 libavfilter/vf_vidstabtransform.o 2>/dev/null | grep -F ' -c -o libavfilter/vf_vidstabtransform.o ' | tail -1 || true)
+  [ -n "$VSCMD" ] || { echo "VIDSTAB GATE: make printed no compile command for libavfilter/vf_vidstabtransform.o" >&2; exit 1; }
+  VSCMD=$(printf '%s' "$VSCMD" | sed 's/ -MMD -MF [^ ]* -MT [^ ]*//')
+  case $VSCMD in *" -MF "*|*" -MMD"*) echo "VIDSTAB GATE: dependency flags left in: $VSCMD" >&2; exit 1 ;; esac
+  VSSRC=$(printf '%s\n' $VSCMD | grep -E 'vf_vidstabtransform\.c$' | tail -1)
+  [ -n "$VSSRC" ] || { echo "VIDSTAB GATE: no vf_vidstabtransform.c in make's command: $VSCMD" >&2; exit 1; }
+  cp "$SRC/libavfilter/vf_vidstabtransform.c" "$VS/vf_vidstabtransform.c"
+  cp "$SRC/libavfilter/vf_vidstabtransform.c" "$VS/rev/libavfilter/"
+  ( cd "$VS/rev" && patch -s -p1 -R --fuzz=0 --no-backup-if-mismatch < "$APP_DIR/trackb/vidstab-316531e61c.diff" ) \
+    || { echo "VIDSTAB GATE: upstream's fix 316531e61c does not reverse at fuzz 0" >&2; exit 1; }
+  cp "$VS/rev/libavfilter/vf_vidstabtransform.c" "$VS/rt/libavfilter/"
+  ( cd "$VS/rt" && patch -s -p1 --fuzz=0 --no-backup-if-mismatch < "$APP_DIR/trackb/vidstab-316531e61c.diff" ) \
+    && cmp -s "$VS/rt/libavfilter/vf_vidstabtransform.c" "$SRC/libavfilter/vf_vidstabtransform.c" \
+    || { echo "VIDSTAB GATE: applying the fix to the revert does not give back the shipped file" >&2; exit 1; }
+  ( cd "$XB" && eval "${VSCMD/ -o libavfilter\/vf_vidstabtransform.o / -o $VS/vs_make.o }" )
+  cmp -s "$VS/vs_make.o" "$XB/libavfilter/vf_vidstabtransform.o" \
+    || { echo "VIDSTAB GATE: make's own command, rerun, does not reproduce libavfilter's vf_vidstabtransform.o" >&2; exit 1; }
+  ( cd "$XB" && eval "$(printf '%s' "$VSCMD" | sed "s| -o libavfilter/vf_vidstabtransform.o | -o $VS/vs_shipped.o |; s| $VSSRC\$| $VS/vf_vidstabtransform.c|") -I$SRC/libavfilter -fmacro-prefix-map=$VS/=$(dirname "$VSSRC")/" )
+  ( cd "$XB" && eval "$(printf '%s' "$VSCMD" | sed "s| -o libavfilter/vf_vidstabtransform.o | -o $VS/vs_reverted.o |; s| $VSSRC\$| $VS/rev/libavfilter/vf_vidstabtransform.c|") -I$SRC/libavfilter -fmacro-prefix-map=$VS/rev/libavfilter/=$(dirname "$VSSRC")/" )
+  cmp -s "$VS/vs_shipped.o" "$XB/libavfilter/vf_vidstabtransform.o" \
+    || { echo "VIDSTAB GATE: the out-of-tree route does not reproduce libavfilter's vf_vidstabtransform.o" >&2; exit 1; }
+  diff "$VS/vf_vidstabtransform.c" "$VS/rev/libavfilter/vf_vidstabtransform.c" > "$VS/revert.diff" || true
+  echo "vidstab: as-shipped object reproduced byte-identically; fixture 23 links upstream's fix reversed ($(grep -c '^[<>]' "$VS/revert.diff") changed lines)"
+fi
 for fx in $FIXTURES; do
   FIXLINK=(); [ "$fx" = 19 ] && FIXLINK=("$AJ/af_join_reverted.o")
+  [ "$fx" = 23 ] && FIXLINK=("$VS/vs_reverted.o")
   # FFAPP_LINK_AHEAD_<n>: objects linked ahead of the libraries for fixture <n> only (diagnostics)
   _ahead=FFAPP_LINK_AHEAD_$fx; [ -n "${!_ahead:-}" ] && FIXLINK+=(${!_ahead})
   "$CLANG" "${APPF[@]}" -DFFAPP_FIXTURE="$fx" \
