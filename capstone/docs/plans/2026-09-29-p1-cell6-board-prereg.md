@@ -1,5 +1,56 @@
 # Pre-registration: the P1 cell-6 board readings, written BEFORE the boot
 
+## RETRACTED 2026-09-29: this pair is -O0, NOT -O2
+
+Everything in this document that says or implies -O2 is wrong, including the staged folder's name
+(`p1-O2-2026-09-29`) and both image filenames (`cell5-memsys5-O2.dom`, `cell6-sublet-O2.dom`). The
+two cells were built at the DEFAULT optimisation level, which build-sqlite-silicon.sh:42 sets to
+-O0. No script in the build path ever set SQLITE_OPT_LEVEL; -O2 existed only in names.
+
+Established by rebuilding each cell exactly as it was built, with QEMU stubbed out so no run and no
+lock were involved:
+
+    staged cell 6                    6f94d9891918d0b56c1670b40943fd1104a88d17232002b242aaacbb7e5cda11
+    rebuilt, no OPT set              6f94d9891918d0b56c1670b40943fd1104a88d17232002b242aaacbb7e5cda11   1,685,984 B
+    rebuilt, SQLITE_OPT_LEVEL=-O2    df484d98b489aeab1e5b33f1bafd4693cf5835b37da27916c15b1327993f159f   1,379,064 B
+
+    staged cell 5                    ff577d44e3ee8dd3b356a0e9ce8ffa89da11a1884ae6e9df8b7095e4bb5b5891
+    rebuilt, no OPT set              ff577d44e3ee8dd3b356a0e9ce8ffa89da11a1884ae6e9df8b7095e4bb5b5891   1,684,216 B
+
+Both staged images reproduce byte-for-byte from the default build. The -O2 arm is the negative
+control and is a different, much smaller image, so the flag is live and the pair simply never
+received it -- without that arm the reproduction would only have shown the build is deterministic.
+
+Corroboration that was available hours earlier and was misread: board-b80a.sh records the old -O2
+cell 5 at 330,723,308 instructions against this one's 678,534,902, a hair over 2x. That gap was
+attributed to a SQLite version difference; the version has been 3.53.3 throughout.
+
+WHAT IS AND IS NOT AFFECTED. Every measured figure below -- cycles, HEAP, sublet counters,
+lookaside, image hashes, entry VAs -- is correct as measured, and so are the predictions and
+falsifiers. Only the LEVEL those artifacts were built at is misstated. Nothing has been renamed and
+nothing deleted: under the resolution below the -O0 artifacts are superseded rather than corrected,
+and they are worth keeping as the -O0 reference they actually are.
+
+CONSEQUENCE FOR THE NATIVE BASELINE. build-speedtest1-baseline.sh's header requires the baseline to
+be built at the domain's level, because one built at a different level "measures the optimiser, not
+the ABI" -- it cites five bogus silicon failures from exactly that mismatch. So the baseline is
+built at -O2 too, and not before the cells are.
+
+IT ALSO VOIDS A CLAIM, NOT ONLY A LABEL. The static movc scan recorded below reports
+**0 INT-ONLY, 0 mixed, no setupLookaside site** for cell 6. That scan ran on an -O0 image, and C-32
+does not manifest at -O0 -- so the zero is a property of the optimisation level, not evidence about
+D-prime. It is the clean-result shape this project keeps paying for: a check that cannot fire on the
+input it was given. The scan has to be re-run on the -O2 image, with the pre-D-prime -O2 control
+firing at setupLookaside, before it says anything.
+
+RESOLUTION: REBUILD AT -O2. Settled, not a preference --
+paper-nested-allocators/experiments/protocols/hardware/P1-application-cost.md:76-79 reads "Use
+optimization level O2 in every capability arm and identical common flags ... The existing O0 replays
+are not timing baselines for this study." Everything staged under p1-O2-2026-09-29 is therefore
+superseded rather than relabelled, and is kept only as an -O0 reference. The -O2 figures land in a
+later commit on this branch; both commits stay, because the trail is the evidence.
+
+
 Both cells are pre-registered here: cell 6 first, cell 5 in its own section below. Cell 5 was
 added after the first version of this document, which said cell 5 was excluded because it did
 not build; the last section records why it did not and what changed.
