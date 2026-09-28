@@ -238,6 +238,54 @@ The two untested leads are the remaining work with the highest expected yield:
 both name this corpus's mechanism and neither can be dismissed without writing a
 reproducer, since neither shipped one.
 
+## How much of this depends on the pin
+
+The question "would another version give us these?" is not an estimate -- the cases
+run, so it is a measurement. Four versions were built and the nine cases run against
+each, `host` plus `asan`:
+
+| version | date | of the nine, live | what changes |
+|---|---|---:|---|
+| `3.4.0` | 2025-04-20 | 6, one of them ambiguous | rows 1 and 9 **do not exist yet**; row 8 crashes but ASan is silent there, so it is not claimed |
+| `4.0.0-rc2` | 2026-03-12 | **9** | the current pin |
+| `4.0.0` | 2026-04-20 | **9** | identical to the pin, case for case |
+| `4.1.0-rc2` | 2026-09-11 | 6 | rows 1, 5 and 8 fixed; rows 2, 3, 4, 6, 7, 9 still live |
+| `head` (`ad98f216e`) | 2026-09-17 | 1 | only row 9 survives |
+
+`probe/versions.sh` prints that matrix. Row 6 is worth one note: at `3.4.0` it reports
+a use-after-free where the 4.0 line reports a buffer-overflow, so a row's *class* can
+move between versions even when it reproduces in both -- another reason the table is
+run rather than derived.
+
+**The pin is already the best available choice, and `4.0.0` is the same choice with a
+release number.** Every one of the nine reproduces identically at `4.0.0-rc2` and at
+`4.0.0` -- same verdicts, same ASan reports -- so moving the pin from the release
+candidate to the release costs nothing and stops the corpus resting on a
+pre-release. That is worth doing for its own sake; `port.json` and
+`build-mruby-domain.sh` would both follow.
+
+Going **older** loses the two best-understood rows outright rather than merely
+fixing them: `str_lstrip_bang` and `shaped_iv_foreach` are absent before the 4.0
+line, so rows 1 and 9 have no code to be live in at `3.4.0`. Row 1 is the cheapest
+case in the set, so an older pin is strictly worse. The hash machinery
+(`H_CHECK_MODIFIED`, `ea_resize`, `mrb_hash_merge`) does reach back to `3.2.0`
+(2023), so rows 2-7 are roughly three years old and are not an artefact of a recent
+rewrite.
+
+Going **newer** is where the cliff is, and it is a cliff rather than a slope: five
+of the nine were fixed in a single week, 2026-09-08 to 09-12. `4.1.0-rc2` was tagged
+2026-09-11, one day before the hash cluster landed, which is why six of the nine are
+still live in it and only one is at `head` six days later. The port's `head` pin is
+therefore the wrong one for this corpus, which `build-mruby-domain.sh` already says
+in its own words.
+
+**Ancestry of the named fix commit is only a proxy, and it was wrong once here.**
+`merge-base --is-ancestor` puts row 5's fix (`4663fef45`) outside `4.1.0-rc2`, so the
+defect should still be live there; the case **passes** at `4.1.0-rc2` when run. An
+equivalent change reached that tag by another route. So this table is built from runs,
+not from the ancestry matrix, and the matrix is kept only as the thing that pointed at
+which versions were worth building.
+
 ## Gems, and what is out of reach
 
 The port's gemboxes carry `mruby-string-ext`, `mruby-hash-ext`, `mruby-array-ext`,
