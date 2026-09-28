@@ -15,6 +15,9 @@
 # it as an alias for const char * and changed sqlite3_vfs.xOpen to take it; the shared VFS
 # (tests/runtime-qemu/sqlite-vfs-skeleton/capstone_sqlite_vfs.c) is written against that
 # signature. Backporting the typedef keeps the shared VFS untouched.
+# The old RowSet allocation hardcodes 64 bytes, but its capability-pointer
+# layout is 112 bytes here. Allocate the actual rounded struct size; otherwise
+# phase 210 faults while SQLite initializes the RowSet.
 #
 # The result is written to a temporary file and moved into place only after every assertion
 # passes. build-sqlite-silicon.sh reuses whatever file sits at $PATCHED, so a failed run must
@@ -30,6 +33,7 @@ sed \
   -e 's/^  char saveBuf\[PARSE_TAIL_SZ\];/  char saveBuf[PARSE_TAIL_SZ] __attribute__((aligned(16)));/' \
   -e 's/ROUND8(sizeof(VdbeCursor)) + 2\*sizeof(u32)\*nField + /((ROUND8(sizeof(VdbeCursor)) + 2*sizeof(u32)*nField + 15)\&~15) + /' \
   -e 's/&pMem->z\[ROUND8(sizeof(VdbeCursor))+2\*sizeof(u32)\*nField\]/\&pMem->z[(ROUND8(sizeof(VdbeCursor))+2*sizeof(u32)*nField+15)\&~15]/' \
+  -e 's/pMem->zMalloc = sqlite3DbMallocRawNN(db, 64);/pMem->zMalloc = sqlite3DbMallocRawNN(db, ROUND8(sizeof(RowSet)));/' \
   -e '/^typedef struct sqlite3_file sqlite3_file;$/a\
 typedef const char *sqlite3_filename;' \
   "$SRC" > "$TMP"
@@ -39,6 +43,7 @@ typedef const char *sqlite3_filename;' \
 grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$TMP"
 grep -q '((ROUND8(sizeof(VdbeCursor)) + 2\*sizeof(u32)\*nField + 15)&~15) + ' "$TMP"
 grep -q '&pMem->z\[(ROUND8(sizeof(VdbeCursor))+2\*sizeof(u32)\*nField+15)&~15\]' "$TMP"
+grep -q 'pMem->zMalloc = sqlite3DbMallocRawNN(db, ROUND8(sizeof(RowSet)));' "$TMP"
 [ "$(grep -c '^typedef const char \*sqlite3_filename;$' "$TMP")" = 1 ]
 mv -f "$TMP" "$OUT"
 echo "adapted 3.22.0 -> $OUT ($(wc -l < "$OUT") lines)"
