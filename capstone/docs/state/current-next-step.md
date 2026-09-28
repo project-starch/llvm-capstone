@@ -1,3 +1,13 @@
+CPython reuse follow-up (2026-09-28): the
+[three-arm raw qualification](../../experiments/study/results/cpython-reuse-three-arm-20260928/README.md)
+now has three valid complete-interpreter processes per available arm, with
+runner-checked inner histograms. Complete the protected CheriBSD PoisonCap
+oracle and repeat it three times before drawing or admitting the fourth
+violin. The present observer indexes successful new lifetimes; instrument
+failed attempts and fixed-follow-up retirement cohorts before claiming the
+full metric from `memory-metrics.md`. Capstone runs require an explicit
+262,144-node capacity gate; the smaller-capacity attempt is excluded.
+
 Published-threshold memory follow-up (2026-09-28): the
 [fresh mruby/FFmpeg campaign](../../experiments/study/results/published-policy-20260928/README.md)
 passes all 48 processes with outer defaults enabled. Preserve its exact

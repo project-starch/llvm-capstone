@@ -2,6 +2,19 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — CPython inner-reuse qualification, three arms
+
+The [archived observer campaign](../../experiments/study/results/cpython-reuse-three-arm-20260928/README.md)
+passes 9/9 complete CPython 3.13.7 `objects.py 8 3 0` processes: three
+Capstone spatial, three Capstone+Sublet and three CheriBSD PoisonCap-adapter
+spatial. The common runners reject missing or inconsistent 32-bin inner
+pymalloc histograms, and the raw archive validator reproduces every reported
+count. The Capstone pair uses 262,144 nodes; an earlier underprovisioned
+65,536-node attempt failed and is excluded. The protected PoisonCap
+interpreter still has no full application oracle, so this is not a four-arm
+comparison. The observer currently indexes successful new lifetimes, not all
+failed allocation attempts required for the fixed-follow-up metric.
+
 ## 2026-09-28 — Published-threshold application measurements
 
 The [fresh campaign](../../experiments/study/results/published-policy-20260928/README.md)
