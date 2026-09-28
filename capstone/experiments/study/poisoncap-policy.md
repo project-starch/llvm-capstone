@@ -181,3 +181,32 @@ same corrected libc with process revocation explicitly enabled. The guest's
 setup services run with their default disabled because staging a cluster
 can hit the separate VM-map lock panic. This service setting does not disable
 the benchmark's libc revocation; its effective setting is checked at startup.
+
+
+## CPython and recursive poison probes
+
+The [complete-interpreter campaign](results/cpython-reuse-four-arm-20260928/README.md)
+transfers the same published SQLite thresholds to pymalloc. Frees poison and
+queue blocks while preserving pymalloc's occupancy. A completed sweep clears
+the payload and then publishes the original free-list operation. This avoids
+both per-free sweeps and allocation-triggered drains. The comparison enables
+outer libc revocation in both modes; teardown drains are counted separately.
+This is our disclosed application adapter, not a published CPython port.
+
+The [PoisonCap paper, §§4.5 and 5.5](https://arxiv.org/html/2605.13210v1)
+identifies recursive poison-probe faults as a prototype limitation and reports
+nested-revoker hangs/panics. The published artifact did not contain a later
+repair when inspected. Our `share->excl` CPython backtrace enters `vm_fault`
+from `fupoison` while the revoker holds the VM-map read lock.
+
+The [new kernel patch](patches/cheribsd-poison-object-probe.patch) passes the
+revoked map to the predicate and resolves targets through held pages/VM objects
+without installing user PTEs or recursively scanning target pages. It preserves
+poison containment checks. Proven zero-fill, absent mappings and objects that
+cannot store capabilities can return no poison. Partial pages, unsupported
+objects and pager failures remain explicit errors. Its
+[regression](patches/poisoncap-probe-check.c) verifies revocation of resident and
+`PROT_NONE` poison and preservation of a zero-fill target. All six new CPython
+processes complete on the same patched kernel. This evidence does not qualify
+general swap-pressure, device mappings or concurrent VM mutation; it does not
+justify silently skipping missing pages. RISC-V is the tested architecture.

@@ -101,6 +101,30 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(runner.verdict(point, 0, stdout, 'ERROR: broken\n' + stderr),
                          'oracle-mismatch')
 
+    def test_cpython_deferred_policy_rejects_hidden_sweeps_and_pending_frees(self):
+        point = dict(self.point, application='cpython', arm='poisoncap-temporal',
+                     nested_allocator='cpython-pymalloc', mode=1,
+                     nested_policy='published-sqlite-thresholds-corrected-v1')
+        stderr = (self.metrics +
+                  'PYM_INTERPRETER_POLICY mode=1 payload_reservation=67108864 '
+                  'metadata_reservation=16777216\n'
+                  'PYM_POISONCAP mode=1 sweeps=3 poison_bytes=64 clear_bytes=64 '
+                  'zeroed_bytes=64 policy=1 queue_capacity=4096 minimum_held=16777216 '
+                  'fraction_denominator=4 capacity_sweeps=2 threshold_sweeps=0 '
+                  'teardown_sweeps=1 explicit_sweeps=0 pending_count=0 pending_bytes=0 '
+                  'queue_metadata_bytes=196608\n')
+        self.assertEqual(runner.verdict(point, 0, 'OK\n', stderr), 'pass')
+        for before, after in [('sweeps=3', 'sweeps=4'),
+                              ('explicit_sweeps=0', 'explicit_sweeps=1'),
+                              ('pending_count=0', 'pending_count=1'),
+                              ('pending_bytes=0', 'pending_bytes=16'),
+                              ('clear_bytes=64', 'clear_bytes=48'),
+                              ('queue_capacity=4096', 'queue_capacity=512')]:
+            self.assertNotEqual(runner.verdict(point, 0, 'OK\n',
+                                              stderr.replace(before, after)), 'pass')
+        self.assertFalse(runner.published_policy_valid(
+            dict(point, nested_policy=None), stderr))
+
     def test_postgres_transferred_policy_requires_runtime_and_sweep_evidence(self):
         rows = [f'1: row = "{i}" (typeid = 23, len = 4, typmod = -1, byval = t)' for i in range(20)] + ['1: count = "1500" (typeid = 20, len = 8, typmod = -1, byval = t)', '----']
         stdout = (''.join('\t'+row+'\n' for row in rows) +

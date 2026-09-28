@@ -1,7 +1,6 @@
-/* Trusted pymalloc adapter. Synchronous revocation completes before freed
- * storage becomes an in-band free-list link. Only in-place realloc needs a
- * capability-preserving snapshot. This policy favors simple lifetime rules,
- * not sweep throughput; all sweep/copy work is reported explicitly. */
+/* Trusted pymalloc adapter.  Whole-interpreter frees retain pymalloc's
+ * occupancy until a completed sweep permits publishing the free-list link.
+ * Queue capacity and byte thresholds transfer the published SQLite policy. */
 #include "port.h"
 #include <cheri/cheric.h>
 #include <cheri/revoke.h>
@@ -28,7 +27,7 @@ struct block {
   unsigned char *manager;
   void *client;
   size_t size, requested;
-  unsigned active;
+  unsigned active, pending;
 };
 struct pool {
   unsigned char *header;
@@ -49,6 +48,59 @@ static unsigned large_used, protected_mode, initialized;
 static size_t arena_allocations, arena_releases, reclassifications;
 static size_t sweeps, poison_bytes, cleared_bytes, zeroed_bytes, copied_bytes, snapshot_peak;
 size_t pym_metadata_used(void);
+#define QUARANTINE_CAPACITY 4096
+#define QUARANTINE_MIN_HELD (16UL * 1024 * 1024)
+struct deferred_free {
+  struct block *block;
+  void *owner;
+  void (*publish)(void *, void *);
+};
+static struct deferred_free quarantine[QUARANTINE_CAPACITY];
+static size_t pending_count, pending_bytes, peak_pending_bytes, live_span_bytes;
+static size_t capacity_sweeps, threshold_sweeps, teardown_sweeps, explicit_sweeps;
+
+static void poison_block(struct block *b) {
+  for (size_t i = 0; i < b->size; i += 16) {
+    void *word = b->manager + i;
+    __asm__ volatile("cpoison %0, 0(%0)" : : "C"(word) : "memory");
+  }
+  poison_bytes += b->size;
+}
+static void drain(void) {
+  if (!pending_count)
+    return;
+  struct cheri_revoke_syscall_info info = {0};
+  if (cheri_revoke(CHERI_REVOKE_LAST_PASS | CHERI_REVOKE_IGNORE_START |
+                   CHERI_REVOKE_TAKE_STATS, 0, &info))
+    pym_fail(706);
+  ++sweeps;
+  /* Clear every record before a callback can release its pool metadata. */
+  for (size_t j = 0; j < pending_count; ++j) {
+    struct block *b = quarantine[j].block;
+    for (size_t i = 0; i < b->size; i += 16) {
+      void *word = b->manager + i;
+      __asm__ volatile("cclearpoison %0, 0(%0)" : : "C"(word) : "memory");
+    }
+    cleared_bytes += b->size;
+    memset(b->manager, 0, b->size);
+    zeroed_bytes += b->size;
+    b->pending = 0;
+  }
+  for (size_t j = 0; j < pending_count; ++j) {
+    struct deferred_free *q = &quarantine[j];
+    if (q->publish)
+      q->publish(q->owner, q->block->manager);
+  }
+  memset(quarantine, 0, pending_count * sizeof *quarantine);
+  pending_count = pending_bytes = 0;
+}
+void pym_drain_deferred(void) {
+  if (pending_count) {
+    ++teardown_sweeps;
+    drain();
+  }
+}
+int pym_can_resize_inplace(void) { return !protected_mode; }
 
 void pym_lifetime_init(void *region) {
   if (initialized || !feature_present("cheri_caprevoke_poison") ||
@@ -94,35 +146,6 @@ static void *manager_pointer(unsigned char *p, size_t n) {
     pym_fail(704);
   return q;
 }
-/* The retained manager capabilities carry poison authority. Client pointers
- * lose it before publication and are cleared by the published kernel revoker. */
-static void invalidate(unsigned char *manager, size_t n) {
-  if (!protected_mode)
-    return;
-  if (!n || (n & 15) || ((uintptr_t)manager & 15))
-    pym_fail(705);
-  for (size_t i = 0; i < n; i += 16) {
-    void *word = manager + i;
-    __asm__ volatile("cpoison %0, 0(%0)" : : "C"(word) : "memory");
-  }
-  poison_bytes += n;
-  struct cheri_revoke_syscall_info info = {0};
-  if (cheri_revoke(CHERI_REVOKE_LAST_PASS | CHERI_REVOKE_IGNORE_START |
-                   CHERI_REVOKE_TAKE_STATS, 0, &info))
-    pym_fail(706); /* Never reuse storage after a failed sweep. */
-  ++sweeps;
-  for (size_t i = 0; i < n; i += 16) {
-    void *word = manager + i;
-    __asm__ volatile("cclearpoison %0, 0(%0)" : : "C"(word) : "memory");
-  }
-  cleared_bytes += n;
-  /* cclearpoison resets access state but leaves the stored poison capability.
-   * The kernel scans that payload on later sweeps. Remove it before publishing
-   * fresh client authority, including zero-size allocations that do no stores.
-   * In-place realloc restores its capability-preserving snapshot afterwards. */
-  memset(manager, 0, n);
-  zeroed_bytes += n;
-}
 void *pym_arena_alloc(void *ctx, size_t n) {
   (void)ctx;
   if (n != ARENA_SIZE)
@@ -163,9 +186,9 @@ void pym_arena_free(void *ctx, void *token, size_t n) {
     pym_fail(709);
   for (size_t i = 0; i < a->carved; ++i)
     for (size_t j = 0; j < a->pools[i].carved; ++j)
-      if (a->pools[i].blocks[j].active)
+      if (a->pools[i].blocks[j].active || a->pools[i].blocks[j].pending)
         pym_fail(710);
-  invalidate(a->base, n);
+  /* Every client block was swept before its pool occupancy reached zero. */
   for (size_t i = 0; i < a->carved; ++i) {
     pym_raw_free(a->pools[i].blocks);
     memset(&a->pools[i], 0, sizeof a->pools[i]);
@@ -194,9 +217,9 @@ void pym_pool_reclass(void *header, size_t size, size_t overhead) {
     pym_fail(712);
   if (p->size) {
     for (size_t i = 0; i < p->carved; ++i)
-      if (p->blocks[i].active)
+      if (p->blocks[i].active || p->blocks[i].pending)
         pym_fail(713);
-    invalidate(p->header + overhead, POOL_SIZE - overhead);
+    /* There are no outstanding client leases or quarantined blocks. */
     pym_raw_free(p->blocks);
     ++reclassifications;
   }
@@ -249,7 +272,7 @@ void pym_validate(void *ptr) {
 }
 void *pym_issue(void *ptr, size_t requested) {
   struct block *b = block_for(ptr);
-  if (b->active || requested > b->size)
+  if (b->active || b->pending || requested > b->size)
     pym_fail(720);
   void *p = cheri_setbounds(b->manager, requested ? requested : 1);
   if (!cheri_gettag(p) || cheri_getbase(p) != cheri_getaddress(b->manager) ||
@@ -257,6 +280,7 @@ void *pym_issue(void *ptr, size_t requested) {
     pym_fail(721);
   b->requested = requested;
   b->active = 1;
+  live_span_bytes += b->size;
   b->client = cheri_clearperm(p, CHERI_PERM_POISON | CHERI_PERM_SW_VMEM);
 #ifdef PYMALLOC_GAP_OBSERVER
   if (!observer_inplace_resize) {
@@ -267,16 +291,46 @@ void *pym_issue(void *ptr, size_t requested) {
 #endif
   return b->client;
 }
-void *pym_release(void *ptr) {
+void pym_defer_free(void *ptr, void *owner, void (*publish)(void *, void *)) {
   pym_validate(ptr);
   struct block *b = block_for(ptr);
 #ifdef PYMALLOC_GAP_OBSERVER
   if (!observer_inplace_resize)
     reuse_gap_release(&pym_reuse, (uint64_t)cheri_getaddress(ptr));
 #endif
-  invalidate(b->manager, b->size);
   b->active = 0;
+  live_span_bytes -= b->size;
   b->client = NULL;
+  if (!protected_mode) {
+    if (publish)
+      publish(owner, b->manager);
+    return;
+  }
+  if (pending_count == QUARANTINE_CAPACITY) {
+    ++capacity_sweeps;
+    drain();
+  }
+  poison_block(b);
+  b->pending = 1;
+  quarantine[pending_count++] = (struct deferred_free){b, owner, publish};
+  pending_bytes += b->size;
+  if (pending_bytes > peak_pending_bytes)
+    peak_pending_bytes = pending_bytes;
+  size_t held = live_span_bytes + pending_bytes;
+  if (held >= QUARANTINE_MIN_HELD && pending_bytes >= held / 4) {
+    ++threshold_sweeps;
+    drain();
+  }
+}
+/* Compatibility entry point for the standalone component.  The complete
+ * interpreter uses pym_defer_free and never requests this forced flush. */
+void *pym_release(void *ptr) {
+  struct block *b = block_for(ptr);
+  pym_defer_free(ptr, NULL, NULL);
+  if (pending_count) {
+    ++explicit_sweeps;
+    drain();
+  }
   return b->manager;
 }
 void *pym_resize(void *ptr, size_t requested) {
@@ -320,7 +374,7 @@ void *pym_user_raw_malloc(size_t n) {
     return NULL;
   size_t rounded = CHERI_REPRESENTABLE_LENGTH(n ? (n + 15) & ~(size_t)15 : 16);
   for (unsigned i = 0; i < large_used; ++i)
-    if (!large[i].active && large[i].size == rounded)
+    if (!large[i].active && !large[i].pending && large[i].size == rounded)
       return large[i].manager;
   size_t mask = CHERI_REPRESENTABLE_ALIGNMENT_MASK(rounded);
   size_t offset = (large_cursor + ~mask) & mask;
@@ -336,21 +390,21 @@ void pym_user_raw_free(void *ptr) { (void)ptr; }
 void *pym_user_raw_realloc(void *ptr, size_t n) {
   pym_validate(ptr);
   struct block *b = block_for(ptr);
-  if (n <= b->size && n > b->size / 2)
+  if (!protected_mode && n <= b->size && n > b->size / 2)
     return pym_resize(ptr, n);
   void *raw = pym_user_raw_malloc(n);
   if (!raw)
     return NULL;
   void *q = pym_issue(raw, n);
   memcpy(q, ptr, n < b->requested ? n : b->requested);
-  pym_release(ptr);
+  pym_defer_free(ptr, NULL, NULL);
   return q;
 }
 uint64_t pym_decision_checksum(void) { return 0; }
 void pym_backing_stats(struct pym_header *h) {
   h->arenas = arena_allocations;
   h->arena_frees = arena_releases;
-  h->metadata = pym_metadata_used();
+  h->metadata = pym_metadata_used() + sizeof quarantine;
 #ifdef PYMALLOC_GAP_OBSERVER
   fprintf(stderr, "PYM_REUSE_GAP attempts=%llu issues=%llu releases=%llu "
           "reuses=%llu distinct=%llu capacity=%u error=%u bins=",
@@ -370,7 +424,13 @@ void pym_backing_stats(struct pym_header *h) {
 #else
   printf("PYM_POISONCAP mode=%u sweeps=%zu poison_bytes=%zu clear_bytes=%zu "
 #endif
-         "zeroed_bytes=%zu copied_bytes=%zu snapshot_peak=%zu reclasses=%zu pointer_bytes=%zu\n",
+         "zeroed_bytes=%zu copied_bytes=%zu snapshot_peak=%zu reclasses=%zu pointer_bytes=%zu "
+         "queue_capacity=%u pending_count=%zu pending_bytes=%zu peak_pending_bytes=%zu "
+         "capacity_sweeps=%zu threshold_sweeps=%zu teardown_sweeps=%zu explicit_sweeps=%zu "
+         "policy=1 minimum_held=%lu fraction_denominator=4 queue_metadata_bytes=%zu\n",
          protected_mode, sweeps, poison_bytes, cleared_bytes, zeroed_bytes, copied_bytes,
-         snapshot_peak, reclassifications, sizeof(void *));
+         snapshot_peak, reclassifications, sizeof(void *), QUARANTINE_CAPACITY,
+         pending_count, pending_bytes, peak_pending_bytes, capacity_sweeps,
+         threshold_sweeps, teardown_sweeps, explicit_sweeps,
+         QUARANTINE_MIN_HELD, sizeof quarantine);
 }

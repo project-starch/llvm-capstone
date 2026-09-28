@@ -11,6 +11,7 @@
 #define METADATA_BYTES (16UL * 1024 * 1024)
 
 static void report(void) {
+  pym_drain_deferred();
   struct pym_header counts = {0};
   pym_backing_stats(&counts);
   fprintf(stderr, "PYM_INTERPRETER_METADATA bytes=%llu\n",

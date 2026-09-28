@@ -22,8 +22,8 @@ reserves a 64 MiB payload region plus 16 MiB for allocator metadata. The same
 binary selects its spatial adapter control (`PYM_POISONCAP_MODE=0`) or explicit
 nested revocation (`PYM_POISONCAP_MODE=1`). It reports the mode and policy
 operation counts and uses the shared application phase observer. The kernel's
-ordinary libc revocation default is disabled for both modes; the explicit
-pymalloc path still runs in mode 1.
+ordinary libc revocation is enabled in both modes for the published-policy
+campaign. Earlier diagnostics explicitly disabled it and remain separate.
 For a reuse study, `CPY_CHERI_GAP_OBSERVER=1` compiles an integer-only
 observer into the inner pymalloc lifetime backend. Both process modes emit
 one `PYM_REUSE_GAP` histogram with 32 logarithmic release-to-reissue bins.
@@ -42,10 +42,21 @@ env -i PATH=/sbin:/bin:/usr/sbin:/usr/bin HOME=/root LC_ALL=C \
   PYM_POISONCAP_MODE=0 /tmp/python-study -S -c 'print(6*7)'
 ```
 
-The existing JSON/GC `objects.py 8 3 0` workload produces `EXP-OK cpython
-552` in the ordinary spatial build and in three fresh-guest PoisonCap-adapter
-mode-0 control processes. The protected mode-1 build links and reaches Python
-startup but triggers `panic: share->excl` in the published CheriBSD kernel
-during its first explicit nested revocation; it has no completed application
-oracle. The outer jemalloc phase ledger does not include the separate pymalloc
-regions. No four-arm CPython memory result is established yet.
+The [four-arm campaign](../../../../experiments/study/results/cpython-reuse-four-arm-20260928/README.md)
+now passes the JSON/GC oracle and inner reuse checks in three processes per
+arm. The protected mode uses deferred free-list publication with the published
+SQLite thresholds transferred to pymalloc. It never makes a retired block
+available before its sweep completes. A full queue holds 4,096 blocks; the
+percentage trigger requires at least 16 MiB in live plus quarantined rounded
+spans and at least one quarter quarantined. Realloc may move a block. Explicit
+teardown drains precede interpreter-state destruction. The queue's static
+metadata is charged in both arms.
+
+This campaign requires the [VM-object poison-probe repair](../../../../experiments/study/patches/cheribsd-poison-object-probe.patch)
+as well as the existing superpage/libc repairs. The original artifact's user
+probe can enter `vm_fault()` recursively under the VM-map read lock, causing
+`panic: share->excl`. No unresolved probe is silently ignored by the repair.
+Unsupported VM objects and partial pages fail explicitly; swap-pressure stress
+is still outstanding. The full successful campaign preserves its build and
+runtime identities. Its outer jemalloc phase ledger excludes the separate
+pymalloc regions; the reuse result is not a total-memory claim.

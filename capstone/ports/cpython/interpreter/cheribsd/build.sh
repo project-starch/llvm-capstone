@@ -40,6 +40,11 @@ done
 patch -d "$SRC" -p1 --batch --forward --fuzz=0 -s \
   < "$HERE/patches/cpython-3.13.7-cheribsd-purecap.patch"
 PATCHES+=("$HERE/patches/cpython-3.13.7-cheribsd-purecap.patch")
+if [[ $MODE == poisoncap ]]; then
+  patch -d "$SRC" -p1 --batch --forward --fuzz=0 -s \
+    < "$HERE/patches/cpython-3.13.7-cheribsd-deferred-free.patch"
+  PATCHES+=("$HERE/patches/cpython-3.13.7-cheribsd-deferred-free.patch")
+fi
 
 BUILD_PYTHON=${CPY_BUILD_PYTHON:-}
 if [[ -z $BUILD_PYTHON ]]; then
@@ -146,6 +151,7 @@ document = {
          *patches, *([here / 'poisoncap-glue.c',
                       port / '../pymalloc/src/cheribsd/poisoncap-lifetimes.c',
                       port / '../pymalloc/src/shared/backing.c',
+                      port / '../pymalloc/src/shared/port.h',
                       port / '../../../experiments/applications/cheribsd-memory.c']
                      if mode == 'poisoncap' else []),
          *([here / '../../../../experiments/study/reuse-gap-observer.h']

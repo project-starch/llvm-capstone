@@ -60,7 +60,7 @@ def policy_environment(point):
             if point.get('mode') != mode or not point.get('argv') or point['argv'][-1] != str(mode):
                 raise ValueError('FFmpeg pool arm and application mode disagree')
         elif boundary == ('cpython', 'cpython-pymalloc'):
-            expected[arm] = 0
+            expected[arm] = int(point.get('nested_policy') is not None)
             if point.get('mode') != int(arm == 'poisoncap-temporal'):
                 raise ValueError('CPython pymalloc arm and application mode disagree')
         elif boundary == ('postgres', 'postgres-memory-contexts'):
@@ -134,6 +134,24 @@ def nested_samples(stderr):
 def published_policy_valid(point, stderr):
     boundary = point.get('nested_allocator')
     prefix = {'mruby-gc': 'MRB_GC_STUDY ', 'ffmpeg-pool': 'FF2_POISONCAP '}.get(boundary)
+    if boundary == 'cpython-pymalloc':
+        reports = [dict(word.split('=', 1) for word in line.split()[1:])
+                   for line in stderr.splitlines() if line.startswith('PYM_POISONCAP ')]
+        if not point.get('nested_policy'):
+            return not any(row.get('policy') == '1' for row in reports)
+        if len(reports) != 1:
+            return False
+        try:
+            row = {k: int(v) for k, v in reports[0].items()}
+            return (row['policy'] == 1 and row['queue_capacity'] == 4096 and
+                    row['minimum_held'] == 16 << 20 and row['fraction_denominator'] == 4 and
+                    row['mode'] == point['mode'] and
+                    row['sweeps'] == row['capacity_sweeps'] + row['threshold_sweeps'] + row['teardown_sweeps'] and
+                    row['explicit_sweeps'] == row['pending_count'] == row['pending_bytes'] == 0 and
+                    row['poison_bytes'] == row['clear_bytes'] == row['zeroed_bytes'] and
+                    min(row.values()) >= 0 and row['queue_metadata_bytes'] > 0)
+        except (KeyError, ValueError):
+            return False
     if boundary == 'postgres-memory-contexts':
         # Its reports are on stdout and are validated in verdict().
         return True
