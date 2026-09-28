@@ -19,7 +19,7 @@ libavutil/buffer_internal.h:113   metadata    allocator   AVBufferPool holds the
 libavutil/buffer.c:294            hierarchy   allocator   a pool on the default allocators takes its storage from the heap as blocks; a custom allocator keeps upstream's path
 libavutil/buffer.c:312            hierarchy   allocator   a flush frees an entry's record, not its storage: the storage belongs to its block, which the pool's end revokes
 libavutil/buffer.c:327            hierarchy   allocator   the pool's end is one revoke per block, every entry with it, before the records are freed
-libavutil/buffer.c:363            hierarchy   allocator   a buffer's return is a revoke, before the freelist can reissue the entry
-libavutil/buffer.c:388            hierarchy   allocator   a new entry is carved from the pool's block and handed out under its own handle, zeroed where av_buffer_allocz would have
-libavutil/buffer.c:445            hierarchy   allocator   a reissue is a take: a new handle, a new alias
-libavutil/buffer.c:458            hierarchy   allocator   a reissue that fails gives the entry back, since it stays in the pool
+libavutil/buffer.c:364            hierarchy   allocator   a buffer's return is a revoke, before the freelist can reissue the entry
+libavutil/buffer.c:389            hierarchy   allocator   a new entry is carved from the pool's block and handed out under its own handle, zeroed where av_buffer_allocz would have
+libavutil/buffer.c:446            hierarchy   allocator   a reissue is a take: a new handle, a new alias
+libavutil/buffer.c:459            hierarchy   allocator   a reissue that fails gives the entry back, since it stays in the pool

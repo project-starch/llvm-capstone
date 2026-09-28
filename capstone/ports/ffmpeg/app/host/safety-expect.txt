@@ -128,3 +128,13 @@ poolstock    14  FAULT  oob
 poolstock    15  RETURN f000a0
 poolstock    16  RETURN *
 poolstock    17  RETURN 1100177
+
+# Fixtures 20 and 21: what a pool's END costs, counted across FFmpeg's own uninit (v2, after the
+# 2026-09-29 claim audit showed the first measurement could not fire). Registered with
+# sublet/PREREGISTRATION.md's v2 addendum, before v2 was first built. The mark is
+# (the pool layer's file revokes across the 8 returns) << 8 | (the same across the pool's end):
+# 8 returns are 8 gives, and the end gives nothing back. poolstock has no pool layer: 0xE00F0.
+poolsublet   20  RETURN 1400800
+poolsublet   21  RETURN 1500800
+poolstock    20  RETURN 14e00f0
+poolstock    21  RETURN 15e00f0

@@ -6,7 +6,13 @@
  *   new entry   sublet_carve: the entry's region, linear, in the entry's slot
  *   get         sublet_take: the slot keeps the handle, the caller gets an alias, narrowed
  *   return      sublet_give: one revoke, every alias of the entry dies, the region is linear again
- *   destroy     the heap's free of each block: one revoke, every entry carved from it dies
+ *   end         the pool is ending: no give -- the entry's slot is dropped, and the block's revoke
+ *               below ends it (a callback that must read it gets an alias through a new handle)
+ *   destroy     the heap's free of each block: one revoke, every entry carved from it dies, then
+ *               the block's record, one more heap free
+ * The pool takes no senior handle of its own (the design note in docs/plans considered one): the
+ * heap keeps its handle on every block it lends, and its free revokes that handle, which already
+ * covers everything carved from the block.
  * The records here, like FFmpeg's own BufferPoolEntry, live on the heap, outside every block. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,8 +34,8 @@ struct FFSubletBlock {
 };
 
 static struct {
-    unsigned long blocks, destroyed, entries, takes, gives, destroy_revokes, destroy_merges;
-} ff_sublet_counts;
+    unsigned long blocks, destroyed, entries, takes, gives, ends, end_takes, destroy_merges;
+} counts;
 
 void ff_sublet_pool_init(FFSubletPool *p, size_t size)
 {
@@ -52,7 +58,7 @@ static FFSubletBlock *ff_sublet_block_new(FFSubletPool *p)
     b->end    = sublet_end(&b->rest);
     b->next   = p->blocks;
     p->blocks = b;
-    ff_sublet_counts.blocks++;
+    counts.blocks++;
     return b;
 }
 
@@ -67,7 +73,7 @@ int ff_sublet_entry_new(FFSubletPool *p, FFSubletEntry *e)
     }
     b->cursor += p->entry;
     sublet_carve(&b->rest, b->cursor, (sublet_cap *)&e->slot);
-    ff_sublet_counts.entries++;
+    counts.entries++;
     return 0;
 }
 
@@ -78,14 +84,27 @@ void *ff_sublet_entry_take(FFSubletEntry *e, size_t size)
     char         *alias = sublet_take(slot);
     char         *p = alias + (base - __builtin_capstone_cap_get_cursor(alias));
 
-    ff_sublet_counts.takes++;
+    counts.takes++;
     return __builtin_capstone_cap_shrink(p, base, base + size);
 }
 
 void ff_sublet_entry_give(FFSubletEntry *e)
 {
     sublet_give((sublet_cap *)&e->slot);
-    ff_sublet_counts.gives++;
+    counts.gives++;
+}
+
+void *ff_sublet_entry_end(FFSubletEntry *e, size_t size, int want_alias)
+{
+    void *p = NULL;
+
+    if (want_alias) {
+        p = ff_sublet_entry_take(e, size);
+        counts.end_takes++;
+    }
+    sublet_clear((sublet_cap *)&e->slot);
+    counts.ends++;
+    return p;
 }
 
 void ff_sublet_pool_destroy(FFSubletPool *p)
@@ -94,28 +113,35 @@ void ff_sublet_pool_destroy(FFSubletPool *p)
 
     while (b) {
         next = b->next;
-        /* The heap's revoke of its handle on the block: every entry carved from it dies. The
-           revokes are MEASURED on the heap's own counter, and include its buddy merges. */
+        /* The heap's revoke of its handle on the block: every entry carved from it dies. By
+           __capstone_sublet_free_linear's own code that is one revoke plus one per buddy merge,
+           so only the merges are counted here; a bracket of the revoke count around that one call
+           would measure its code, not the pool (audit, 2026-09-29). */
         unsigned long before[9], after[9];
         __capstone_sublet_heap_stats(before);
         __capstone_sublet_free_linear(b->base);
         __capstone_sublet_heap_stats(after);
         sublet_clear(&b->rest);
-        ff_sublet_counts.destroyed++;
-        ff_sublet_counts.destroy_revokes += after[7] - before[7];
-        ff_sublet_counts.destroy_merges  += after[2] - before[2]; /* the heap's buddy merges */
+        counts.destroyed++;
+        counts.destroy_merges += after[2] - before[2]; /* the heap's buddy merges */
         free(b);
         b = next;
     }
     p->blocks = NULL;
 }
 
+void ff_sublet_counts(unsigned long out[3])
+{
+    out[0] = sublet_stats.revoke; /* THIS file's: sublet.h keeps one copy per translation unit */
+    out[1] = counts.gives;
+    out[2] = counts.ends;
+}
+
 void ff_sublet_report(void);
 void ff_sublet_report(void)
 {
-    printf("FFAPP-SUBLET-POOLS blocks=%lu destroyed=%lu entries=%lu takes=%lu gives=%lu "
-           "destroy-revokes=%lu destroy-merges=%lu\n",
-           ff_sublet_counts.blocks, ff_sublet_counts.destroyed, ff_sublet_counts.entries,
-           ff_sublet_counts.takes, ff_sublet_counts.gives, ff_sublet_counts.destroy_revokes,
-           ff_sublet_counts.destroy_merges);
+    printf("FFAPP-SUBLET-POOLS blocks=%lu destroyed=%lu entries=%lu takes=%lu gives=%lu ends=%lu "
+           "end-takes=%lu file-revokes=%lu destroy-merges=%lu\n",
+           counts.blocks, counts.destroyed, counts.entries, counts.takes, counts.gives,
+           counts.ends, counts.end_takes, sublet_stats.revoke, counts.destroy_merges);
 }

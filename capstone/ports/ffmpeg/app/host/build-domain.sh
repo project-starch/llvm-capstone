@@ -349,7 +349,7 @@ echo "control image $OUT/ffapp_m5flip.dom decodes ${INPUT%.mkv}.flip.mkv"
 # One image per fixture: a fault ends the emulator, so a faulting fixture reports nothing else.
 # Same runtime, allocator and libraries as the milestone images above; only the entry differs.
 FIXTURES="1 2 3 4 5 6 7 8 9 10 16"   # 16 on the heap arms: the stock control for the pool arms
-[ -n "$POOL" ] && FIXTURES="$(seq -s ' ' 1 17)"                 # the pool fixtures
+[ -n "$POOL" ] && FIXTURES="$(seq -s ' ' 1 17) 20 21"          # the pool fixtures, and the pool-end counts
 for fx in $FIXTURES; do
   "$CLANG" "${APPF[@]}" -DFFAPP_FIXTURE="$fx" \
     -c "$APP_DIR/src/capstone-domain/ffapp_safety.c" -o "$OUT/ffapp_safety_$fx.o"

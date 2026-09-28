@@ -10,7 +10,8 @@ A pool on the default allocators takes blocks from the heap as linear regions an
 entries from them, the way SQLite's lookaside takes its block from memsys5. A get takes the
 entry's handle and hands out an alias of exactly the pool's size; the buffer's last unref gives it
 back, one revoke, before FFmpeg's LIFO freelist can reissue the entry; the pool's end is the heap's
-free of each block, one revoke per block, before the entries' records are freed. Upstream already
+free of each block, one revoke per block, which ends every entry carved from it; the entries'
+records are freed one by one, as upstream frees them. Upstream already
 keeps an entry's bookkeeping -- BufferPoolEntry, freelist link included -- in its own allocation,
 outside the payload, so nothing moves. A pool with a custom allocator keeps upstream's path. The
 level below is ffsublet.h, implemented by the app port. The classes of the hunks are in the
@@ -61,7 +62,7 @@ sibling .classes file.
 +    /* A pool on the default allocators takes its storage from the heap as blocks, and
 +     * carves its entries from them. A custom allocator keeps upstream's path. */
 +    if (pool->alloc == av_buffer_alloc || pool->alloc == av_buffer_allocz)
-+        ff_sublet_pool_init(&pool->sublet, size);
++        ff_sublet_pool_init(&pool->sublet, size ? size : 1);
 +#endif
 +
      atomic_init(&pool->refcount, 1);
@@ -78,19 +79,20 @@ sibling .classes file.
          buf->free(buf->opaque, buf->data);
          av_freep(&buf);
      }
-@@ -316,6 +327,11 @@
+@@ -316,6 +327,12 @@
   */
  static void buffer_pool_free(AVBufferPool *pool)
  {
 +#if FF_SUBLET_POOLS
-+    /* One revoke per block the pool took from the heap: every entry carved from it dies,
-+     * before the entries' records are freed. */
++    /* One revoke per block the pool took from the heap: every entry carved from it dies. The
++     * records of the entries in the pool were freed by the flush before this, and any still out
++     * are freed here after it. */
 +    ff_sublet_pool_destroy(&pool->sublet);
 +#endif
      buffer_pool_flush(pool);
      ff_mutex_destroy(&pool->mutex);
  
-@@ -347,6 +363,13 @@
+@@ -347,6 +364,13 @@
      BufferPoolEntry *buf = opaque;
      AVBufferPool *pool = buf->pool;
  
@@ -104,7 +106,7 @@ sibling .classes file.
      ff_mutex_lock(&pool->mutex);
      buf->next = pool->pool;
      pool->pool = buf;
-@@ -365,6 +388,33 @@
+@@ -365,6 +389,33 @@
  
      av_assert0(pool->alloc || pool->alloc2);
  
@@ -138,7 +140,7 @@ sibling .classes file.
      ret = pool->alloc2 ? pool->alloc2(pool->opaque, pool->size) :
                           pool->alloc(pool->size);
      if (!ret)
-@@ -395,6 +445,11 @@
+@@ -395,6 +446,11 @@
      ff_mutex_lock(&pool->mutex);
      buf = pool->pool;
      if (buf) {
@@ -150,7 +152,7 @@ sibling .classes file.
          memset(&buf->buffer, 0, sizeof(buf->buffer));
          ret = buffer_create(&buf->buffer, buf->data, pool->size,
                              pool_release_buffer, buf, 0);
-@@ -403,6 +458,13 @@
+@@ -403,6 +459,13 @@
              buf->next = NULL;
              buf->buffer.flags_internal |= BUFFER_FLAG_NO_FREE;
          }

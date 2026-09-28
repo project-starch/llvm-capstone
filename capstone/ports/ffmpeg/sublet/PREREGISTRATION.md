@@ -74,3 +74,33 @@ one line per hunk in `<patch>.classes`.
 - The Sublet heap now holds the pools' storage too, so its granted region may need to grow; that is
   sizing, not policy, and is reported rather than predicted.
 - QEMU only (**Q-11**).
+
+## Addendum, 2026-09-29: v2, registered before v2's first build
+
+A claim audit of the A+B run found that A4's evidence could not fire. The `destroy-revokes` counter
+bracketed the heap's own, per-file revoke count around `__capstone_sublet_free_linear`, which by
+that function's code is always one revoke plus one per buddy merge. It also showed that refstruct's
+pool end was NOT one revoke per block: `pool_free_entry` took and then gave back every free entry,
+one revoke each, in a file the counter could not see. v2 changes the port, and measures instead
+of inferring.
+
+- **0002, `pool_free_entry`**: an entry already given back is not given back again at the pool's
+  end. Its slot is dropped (`ff_sublet_entry_end`), and the block's revoke at `pool_free` ends it
+  with every other entry. A `free_entry_cb` still gets an alias, through a new handle that is
+  dropped at once.
+- **0001**: `av_buffer_pool_init(0, …)` no longer collides with the "not ported" sentinel. A
+  comment that said the records are freed after the block revoke now says when they are.
+- **`ffsublet.c`** reports its own file's revoke counter; `destroy-revokes` is gone.
+
+Predictions, on the same compiler, emulator and configure as the A+B run:
+
+- **A4/B4 — the pool's end, counted across FFmpeg's own uninit.** New counting fixtures 20
+  (`AVRefStructPool`) and 21 (`AVBufferPool`) make 8 entries, return them, then end the pool. They
+  read the pool layer's file counter and the heap's across each phase. The pool layer's revokes
+  are **8 across the returns, which shows the counter can move, and 0 across the end**: marks
+  `1400800` and `1500800`. v1's refstruct would have read 8 across the end.
+- **Everything else as before.** M1-M5 MATCH with the flip control firing on both arms; fixtures
+  11-17 as registered, N = 3; poolstock 20 and 21 print the heap's numbers and mark `0xE00F0`.
+- **Reported, not predicted:** each run's heap figures (`FFAPP-HEAP`, including `peak-live`) on
+  both arms, since the pools now take their storage from the heap and the heap's region is sized
+  for it; and `ends` / `end-takes` per stage.

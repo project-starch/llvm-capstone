@@ -178,7 +178,7 @@ end is one revoke per block. The classes of the hunks are in the sibling .classe
  };
  
  static void pool_free(AVRefStructPool *pool)
-@@ -210,14 +318,31 @@
+@@ -210,14 +318,32 @@
      ff_mutex_destroy(&pool->mutex);
      if (pool->free_cb)
          pool->free_cb(pool->opaque);
@@ -194,12 +194,13 @@ end is one revoke per block. The classes of the hunks are in the sibling .classe
  static void pool_free_entry(AVRefStructPool *pool, RefCount *ref)
  {
 +#if FF_SUBLET_POOLS
-+    /* The entry was returned, so every alias of it is dead: the callback gets a new one, and
-+     * the entry is given back before its header goes. Its storage belongs to its block. */
-+    ref->obj = ff_sublet_entry_take(&ref->sublet, pool->size ? pool->size : 1);
++    /* The pool's end: the entry, already given back, is not given back again -- its block's
++     * revoke at pool_free ends it with every other entry. A callback still gets an alias, through
++     * a new handle that is dropped at once. */
++    ref->obj = ff_sublet_entry_end(&ref->sublet, pool->size ? pool->size : 1,
++                                   pool->free_entry_cb != NULL);
 +    if (pool->free_entry_cb)
 +        pool->free_entry_cb(pool->opaque, ref->obj);
-+    ff_sublet_entry_give(&ref->sublet);
 +    rs_index_del(ref);
 +    av_free(ref);
 +#else
@@ -210,7 +211,7 @@ end is one revoke per block. The classes of the hunks are in the sibling .classe
  }
  
  static void pool_return_entry(void *ref_)
-@@ -225,6 +350,10 @@
+@@ -225,6 +351,10 @@
      RefCount *ref = ref_;
      AVRefStructPool *pool = ref->opaque.nc;
  
@@ -221,7 +222,7 @@ end is one revoke per block. The classes of the hunks are in the sibling .classe
      ff_mutex_lock(&pool->mutex);
      if (!pool->uninited) {
          ref->opaque.nc = pool->available_entries;
-@@ -257,6 +386,10 @@
+@@ -257,6 +387,10 @@
      ff_assert(!pool->uninited);
      if (pool->available_entries) {
          RefCount *ref = pool->available_entries;
@@ -232,7 +233,7 @@ end is one revoke per block. The classes of the hunks are in the sibling .classe
          ret = get_userdata(ref);
          pool->available_entries = ref->opaque.nc;
          ref->opaque.nc = pool;
-@@ -266,11 +399,28 @@
+@@ -266,11 +400,28 @@
  
      if (!ret) {
          RefCount *ref;
@@ -261,7 +262,7 @@ end is one revoke per block. The classes of the hunks are in the sibling .classe
          ref->free = pool_return_entry;
          if (pool->init_cb) {
              int err = pool->init_cb(pool->opaque, ret);
-@@ -279,6 +429,11 @@
+@@ -279,6 +430,11 @@
                      pool->reset_cb(pool->opaque, ret);
                  if (pool->pool_flags & AV_REFSTRUCT_POOL_FLAG_FREE_ON_INIT_ERROR)
                      pool->free_entry_cb(pool->opaque, ret);
@@ -273,7 +274,7 @@ end is one revoke per block. The classes of the hunks are in the sibling .classe
                  av_free(ref);
                  return err;
              }
-@@ -353,6 +508,9 @@
+@@ -353,6 +509,9 @@
      get_refcount(pool)->free = pool_unref;
  
      pool->size          = size;
@@ -283,7 +284,7 @@ end is one revoke per block. The classes of the hunks are in the sibling .classe
      pool->opaque        = opaque;
      pool->init_cb       = init_cb;
      pool->reset_cb      = reset_cb;
-@@ -379,7 +537,11 @@
+@@ -379,7 +538,11 @@
      if (err) {
          // Don't call av_refstruct_uninit() on pool, as it hasn't been properly
          // set up and is just a POD right now.
