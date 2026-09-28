@@ -7,7 +7,10 @@ Minimal snapshot. Read first in every session.
 The runtime and application study are organized into dependency-ordered review
 branches: `domain-process-runtime`, `application-runtime-capacity`,
 `application-memory-tooling`, `application-nested-ports`,
-`perl-cheribsd-interpreter`, and `application-memory-results`.
+`perl-cheribsd-interpreter`, and `application-memory-results`. **All six are on
+dev as of 2026-09-28** — #108, #110, #111, #113 and #114 merged, and #112's
+content through merge commit `9881dc4781c8`, which GitHub records as closed
+rather than merged because its branch advanced afterwards.
 The runtime capacity branch also requires QEMU's `runtime-node-reuse` follow-up.
 The squashed runtime tree and reconstructed study tree match their measured
 predecessors exactly; only this review-status documentation changes afterward.
@@ -46,7 +49,8 @@ The [Perl CheriBSD recipe](../../ports/perl/cheribsd/README.md) freshly builds
 both libc policy switches. This is interpreter qualification only: SV-head/body
 lifetime adapters and the inner reuse observer are missing on both comparison
 sides. The outer Capstone Sublet malloc switch does not fill that gap. Keep the
-study off a PR; complete Perl's inner boundary before adding a sixth application.
+study off a PR (superseded 2026-09-28: the review stack is merged into dev); complete Perl's inner boundary before adding a
+sixth application.
 
 ## 2026-09-28 — PostgreSQL four-arm inner reuse
 

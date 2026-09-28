@@ -28,10 +28,16 @@ and validation workflow linked from that guide.
 | Whisper / ggml | Context allocator and buffer-epoch replay; not domain speech recognition | [ggml contexts](whisper/ggml-context/README.md); shared CMake layout |
 | Wireshark / wmem | All four wmem allocators with pool-reset epochs and lifetime fixtures; not domain packet dissection | [wmem](wireshark/wmem/README.md); shared CMake layout |
 
-This integration branch includes the pending Whisper port and PostgreSQL/runtime
-PRs. Consult the selected revision's `upstream.json` or fetch script for the
-source pin, and the component's result bundle for the revision actually tested.
-Historical results keep their original source and binary identities.
+Every component carries a `port.json` stating what it is — `full-application`,
+`allocator-component`, `platform-build`, `domain-libc` or `census` — the upstream
+version it pins, and the text in its own recipe that decides that pin.
+`capstone/bug-corpora/tools/check-ports.py` reads that line and refuses a
+declaration the recipe no longer supports, so the version is machine-readable
+without becoming a second source of truth. The generated
+[bug-material index](../bug-corpora/INDEX.md) joins those versions to the
+corpora, which is the shortest answer to "which defects does this release have".
+A component's result bundle still names the revision actually tested, and
+historical results keep their original source and binary identities.
 
 ## Shared layout for component ports
 

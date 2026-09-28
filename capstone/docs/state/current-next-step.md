@@ -33,7 +33,7 @@ equal within-pair metadata capacities, transferred thresholds, verified outer
 process revocation, disabled guest-service default and raw repeat variation.
 CPython still needs the revoker VM-map locking repair plus deferred pymalloc
 publication; Perl needs the complete CheriBSD inner-allocator port. Keep this
-study off a PR. Standard pgbench workloads, equal-scope total memory ledgers,
+study off a PR (superseded 2026-09-28: the review stack is merged into dev). Standard pgbench workloads, equal-scope total memory ledgers,
 and the fixed-follow-up reuse metric remain later milestones.
 
 CPython reuse follow-up (2026-09-28): the
@@ -62,7 +62,7 @@ ranking. Do not relabel the old outer-disabled SQLite
 data. The next wider
 milestone remains complete qualified PoisonCap arms for PostgreSQL, CPython
 and Perl, followed by normalized compiler settings and equal-scope full
-memory accounting. Keep the study off a PR.
+memory accounting. Keep the study off a PR (superseded 2026-09-28: the review stack is merged into dev).
 
 Three-application paper figures (2026-09-28): the [checked figure set](../../experiments/study/results/application-memory-paper-20260928/README.md)
 contains common four-arm reuse/difference panels, SQLite/mruby/FFmpeg memory
@@ -71,8 +71,9 @@ reproduce exactly; 12 separate SQLite memory processes pass their raw oracle
 and ledger checks. No new guest measurements were run. The next memory
 milestone is equal-scope allocator/metadata accounting and original-layout
 controls for mruby/FFmpeg, followed by consistent optimized-build campaigns.
-Keep the measured reuse advantage separate from total-memory claims and keep
-the study off a PR while these measurement gaps remain.
+Keep the measured reuse advantage separate from total-memory claims. The
+instruction to keep the study off a PR is superseded 2026-09-28: the review stack is merged into dev; the measurement gaps it named
+remain.
 
 FFmpeg FATE follow-up (2026-09-28): the [archived four-arm qualification](../../experiments/study/results/ffmpeg-fate-four-arm-20260928/README.md)
 passes 24/24 complete decoder processes on two adapted FATE inputs, each with
@@ -103,7 +104,7 @@ lower bound. Before a paper plot, use a common phase/work-size schedule and
 account for live payload, reusable and withheld backing, metadata, and
 Capstone node storage in each pair. `work.sql` is a qualification workload,
 not pgbench. Keep this study off a PR until the broader experiment set is
-ready. See the [complete-backend port](../../ports/postgres/single-user/README.md).
+ready (superseded 2026-09-28: the review stack is merged into dev; the experiment set is still incomplete). See the [complete-backend port](../../ports/postgres/single-user/README.md).
 
 A fresh-guest policy diagnostic on 2026-09-28 tested bounded chunk and whole-block
 quarantines at the same 17.5 `work.sql` input. The mode-0 control from the
@@ -173,7 +174,7 @@ inside one process. Apply the same unit/oracle/ledger contract to other ports;
 no cross-application generalization is established by SQLite alone. Use the
 [metric specification](../../experiments/study/memory-metrics.md) and preserve
 all burst failures and the metadata counterexample. Keep this study off a PR
-until the broader experiment set is ready.
+until the broader experiment set is ready (superseded 2026-09-28: the review stack is merged into dev).
 
 The [measured four-arm SQLite reuse CDF](../../experiments/study/results/sqlite-reuse-gaps-20260927/README.md)
 fills the release-gap slot for memsys5, and the [FFmpeg whole-decoder

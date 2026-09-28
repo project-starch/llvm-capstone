@@ -1,4 +1,18 @@
-# CPython 3.13.7 interpreter — compile survey
+# CPython 3.13.7 interpreter in a Capstone domain
+
+**Status.** The complete interpreter runs. `run-cpython-domain.sh` starts it in a domain on the
+musl-capstone libc with the standard library as a zip; the four-arm inner-reuse campaign
+qualified it on the `objects.py 8 3 0` JSON/GC workload, 12 of 12 processes oracle-checked
+(`capstone/experiments/study/results/cpython-reuse-four-arm-20260928/`). `cheribsd/` cross-builds
+the same release for CheriBSD purecap, with ordinary pymalloc or the PoisonCap component.
+Fourteen patches carry the pointer-layout changes, and `port.json` states the pin and the role.
+
+**Everything below is the compile survey of 2026-09-23**, which is how this port started. It is
+kept because it is the list of what did not compile and why, and because three of those causes
+are compiler defects with registry entries. Its "Nothing has run yet" was true on that date and
+is not the status above.
+
+## The compile survey, 2026-09-23
 
 The first step of porting the whole interpreter, not only its allocator
 ([pymalloc](../pymalloc/README.md)), into a pure-capability musl domain: **how much of CPython
