@@ -7080,6 +7080,55 @@ live instance. The compiler lane's sweep
 `add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
 save loop is one alignment change from live.
 
+### C-69 — an under-aligned capability load/store is lowered to a BYTE COPY, silently dropping the tag `OPEN — COMPILER, silent miscompile, HIGH: affects every port; found 2026-09-29 by the FFmpeg/wmem port lane, reduced and verified independently by the compiler lane`
+
+**What happens.** A capability read or written through `*(T **)((char *)&lvalue + runtime_offset)`
+carries `align 1` in the IR, and the backend legalizes that into a byte-by-byte copy through a
+stack temporary: 16 `lbu` + shifts/ORs + 2 `sd` + `ldc` for a load, and `stc` + 2 `ld` + 16 `sb`
+for a store. The address and the metadata bits survive; **the tag does not**. The naturally-aligned
+control in the same translation unit is a single `ldc`.
+
+    field_at       lbu=16  ldc=3  sd=2
+    field_store     sb=16  stc=4  ld=2
+    field_direct   ldc=3   lbu=0        <- aligned control
+
+Reproducer: `capstone/tests/compiler-repros/C69-underaligned-capability-bytecopy/`, with a
+`check.py` verified two-sided on clang 22.0.0git @ 08ff5d0702c3 — PRESENT on the committed
+reproducer, ABSENT when the access is wrapped in `__builtin_assume_aligned`, and non-zero with a
+message if the aligned control ever stops lowering to `ldc`.
+
+**The `align 1` is UPSTREAM and correct; the defect is the lowering.** It comes from
+*"[Clang][CodeGen] Preserve alignment information for pointer arithmetics (#152575)"*, in the fork
+at 5569bf26f009; the same compiler emits `align 1` for `--target=x86_64-linux-gnu`, and Ubuntu
+clang 18.1.3 emits `align 8`. On an ordinary target an under-aligned load is merely slow. So this
+is not a fork alignment bug to revert: any other route to an under-aligned capability access — a
+packed struct, an `__attribute__((aligned(1)))`, a memcpy-shaped idiom — reaches the same lowering.
+
+**Why it ranks above a crash.** Nothing faults and nothing warns at the point it happens. The value
+keeps its address, so it reads correctly in a debugger and in any check that inspects the pointer
+value; it fails only at the first use as a capability, in a different function. The port symptom
+was "Cap mem access requires capability" in `avfilter_graph_config`, on level0 as well as on the
+Sublet heap — i.e. not revocation — with the same slot reading tag=1 directly and tag=0 through the
+macro.
+
+**Exposure.** Every port built with this compiler, wherever `(T *)((char *)&lvalue + runtime_off)`
+reads or writes a pointer field. Not FFmpeg-specific: FFmpeg is where it was first hit, through
+`FF_FIELD_AT` (`libavutil/internal.h`) in libavfilter's format negotiation. A disassembly scan for
+the two lowering shapes found 10 sites in the pre-workaround `avfilter_graph_config` and 0 in the
+final images. The port-side workaround is app patch 0004,
+`__builtin_assume_aligned(p, _Alignof(T))` under `__CAPSTONE__`; it is a workaround in one port,
+not a fix.
+
+**Directions, neither taken.** Either diagnose an under-aligned capability-typed access instead of
+emitting a byte copy, or treat capability-typed accesses as naturally aligned where the target
+cannot split them. Both are backend changes and neither is validated, so this is filed with a
+reproducer rather than fixed speculatively — as C-68 was.
+
+**Related.** Not C-32: that is `movc` nulling a non-NONLIN source, a register-to-register shape with
+a capability-typed value. This one never forms a capability at all. It is also the mechanism behind
+the memory note "untagged with metadata = byte copy": right address, non-zero `value_hi`, faults on
+level0 too.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
