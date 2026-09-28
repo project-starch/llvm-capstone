@@ -98,6 +98,42 @@ def check_port(decl, where):
     return problems
 
 
+def check_programs(declarations):
+    """Two components of one program may pin different releases -- deliberately.
+
+    PostgreSQL does: the complete backend is 17.5 and the memory-context replay is
+    17.0. That is legitimate and it is also exactly how experiments/study/catalog.json
+    came to carry the wrong one, so a divergence has to be explained by one of the
+    components rather than merely existing. Where two components agree today, this
+    rule is what turns a later silent bump into a blocked one.
+    """
+    problems = []
+    programs = {}
+    for where, decl in declarations:
+        programs.setdefault(decl.get("program"), []).append((where, decl))
+    for program, components in sorted(programs.items()):
+        if len(components) < 2:
+            continue
+        pinned = {}
+        for where, decl in components:
+            version = decl["upstream"]["version"]
+            pinned[where] = set(version if isinstance(version, list) else [version])
+        if len({frozenset(v) for v in pinned.values()}) == 1:
+            continue
+        for where, mine in pinned.items():
+            others = set().union(*(v for w, v in pinned.items() if w != where)) - mine
+            if not others:
+                continue
+            notes = " ".join(str(d.get("note", "")) for w, d in components)
+            unexplained = sorted(v for v in others if v not in notes)
+            if unexplained:
+                problems.append(
+                    f"{program}: {where} pins {sorted(mine)} while a sibling component "
+                    f"pins {unexplained}, and no component's note explains it -- say why "
+                    f"the releases differ, or align them")
+    return problems
+
+
 def check_renames(ledger=None):
     """The path-history ledger, held to the tree and to the evidence it names.
 
@@ -168,6 +204,16 @@ def self_test():
         if not check_port(broken, "self-test"):
             accepted.append(label)
 
+    # A program whose components diverge without saying why must be refused.
+    paired = [("capstone/ports/postgres/app", copy.deepcopy(good)),
+              ("capstone/ports/postgres/memory-contexts", copy.deepcopy(good))]
+    paired[0][1].update(program="pairtest", note="")
+    paired[1][1].update(program="pairtest", note="")
+    paired[0][1]["upstream"].update(version="17.5")
+    paired[1][1]["upstream"].update(version="17.0")
+    if not check_programs(paired):
+        accepted.append("two components of one program pinning different releases silently")
+
     # The ledger is a claim about provenance, so it gets its own controls.
     ledger = json.loads(RENAMES.read_text())
     for label, mutate in (
@@ -198,14 +244,14 @@ def main():
         if accepted:
             print("CHECKER BROKEN: it accepted " + "; ".join(accepted), file=sys.stderr)
             return 2
-        print("self-test: the checker rejected all nine corruptions")
+        print("self-test: the checker rejected all ten corruptions")
 
     manifests = sorted(PORTS.rglob("port.json"))
     if not manifests:
         print("ERROR: no port.json found under", PORTS, file=sys.stderr)
         return 2
 
-    problems, roles = check_renames(), {}
+    problems, roles, declarations = check_renames(), {}, []
     for manifest in manifests:
         where = str(manifest.parent.relative_to(REPO))
         try:
@@ -214,7 +260,9 @@ def main():
             problems.append(f"{where}: port.json is not valid JSON: {exc}")
             continue
         problems += check_port(decl, where)
+        declarations.append((where, decl))
         roles[decl.get("role", "?")] = roles.get(decl.get("role", "?"), 0) + 1
+    problems += check_programs(declarations)
 
     for line in problems:
         print("FAIL " + line, file=sys.stderr)

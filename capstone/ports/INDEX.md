@@ -47,6 +47,20 @@
 |---|---|---|---|---|
 | `musl-capstone` | 1.2.5 | capstone-domain | libc-test, plus the hostcall probes | -- |
 
+## By program -- why a program appears more than once
+
+A directory under `ports/` is an upstream **program**; a directory inside it is one **artifact we built from it**, and they are separate because they are separately buildable, separately run and separately evidenced. CPython is both a whole interpreter in a domain and its small-object allocator replayed from recorded traces: different role, different targets, different result bundles, and the defect corpus belongs to the allocator boundary rather than to the interpreter that carries the workload.
+
+| program | components | pinned release |
+|---|---|---|
+| cpython | `cpython/app` · `cpython/pymalloc` | 3.13.7 |
+| ffmpeg | `ffmpeg/app` · `ffmpeg/buffer-pool` | 9.0.1 |
+| perl | `perl/cheribsd` · `perl/musl` | 5.36.3 |
+| postgres | `postgres/app` (17.5) · `postgres/memory-contexts` (17.0) | **differs, see the note in its port.json** |
+| wireshark | `wireshark/app` · `wireshark/wmem` | 4.6.8 |
+
+The components of one program usually pin the same release, and the pin then lives in each component's own recipe rather than once per program. That duplication is guarded rather than removed: where two components pin **different** releases, one of them must say why in its `note`, and `check-ports.py` refuses the pair otherwise -- so bumping one component alone turns a silent divergence into a blocked one. PostgreSQL is the live case, and the reason its version was wrong in the study catalog until 2026-09-28.
+
 ## Path history
 
 A component's directory has been renamed where the old name did not say what it is. **Archived result bundles keep quoting the old path on purpose** -- a `build-manifest.json` records which directory a measured binary was built from, so it is evidence and is never rewritten -- and `docs/history/` is append-only for the same reason. Resolve an old path here; `renames.json` is the machine-readable form, and check-ports.py verifies that each old path is gone, each new one carries a declaration, and each file below really still quotes the old name.

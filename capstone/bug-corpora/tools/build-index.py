@@ -270,6 +270,38 @@ def render_ports(data):
                 f"{', '.join(port['targets'])} | {port.get('workload', '--')} | "
                 f"{', '.join(f'`{n.split(chr(47))[-1]}`' for n in names) or '--'} |")
         add("")
+    programs = {}
+    for port in data["ports"]:
+        programs.setdefault(port["program"], []).append(port)
+    add("## By program -- why a program appears more than once")
+    add("")
+    add("A directory under `ports/` is an upstream **program**; a directory inside it is one "
+        "**artifact we built from it**, and they are separate because they are separately "
+        "buildable, separately run and separately evidenced. CPython is both a whole "
+        "interpreter in a domain and its small-object allocator replayed from recorded traces: "
+        "different role, different targets, different result bundles, and the defect corpus "
+        "belongs to the allocator boundary rather than to the interpreter that carries the "
+        "workload.")
+    add("")
+    add("| program | components | pinned release |")
+    add("|---|---|---|")
+    for program, ports_of in sorted(programs.items()):
+        if len(ports_of) < 2:
+            continue
+        pins = {version_of(p) for p in ports_of}
+        cell = " · ".join(f"`{p['where'].split('capstone/ports/')[-1]}` ({version_of(p)})"
+                          for p in ports_of) if len(pins) > 1 else \
+               " · ".join(f"`{p['where'].split('capstone/ports/')[-1]}`" for p in ports_of)
+        add(f"| {program} | {cell} | "
+            f"{'**differs, see the note in its port.json**' if len(pins) > 1 else pins.pop()} |")
+    add("")
+    add("The components of one program usually pin the same release, and the pin then lives in "
+        "each component's own recipe rather than once per program. That duplication is guarded "
+        "rather than removed: where two components pin **different** releases, one of them must "
+        "say why in its `note`, and `check-ports.py` refuses the pair otherwise -- so bumping "
+        "one component alone turns a silent divergence into a blocked one. PostgreSQL is the "
+        "live case, and the reason its version was wrong in the study catalog until 2026-09-28.")
+    add("")
     add("## Path history")
     add("")
     add("A component's directory has been renamed where the old name did not say what it is. "
