@@ -7,16 +7,10 @@
 #   build_musl_overrides <clang> <out-dir> <musl-src-dir> <compile flags...>
 #   ... link "${MUSL_OVERRIDE_OBJS[@]}" before libc.a
 #
-# The list lives here, once, because it used to be copied into every build script
+# The list lives in libc_overrides.list, once, because it used to be copied into every build script
 # that links a musl domain: a new override then had to be added to each copy, and a
 # copy that missed it linked musl's broken object without a word.
-MUSL_OVERRIDES=(
-  string_bounds_safe      # string routines: word-at-a-time scans read past the object
-  fputwc_null_safe        # __fputwc_unlocked: pointer arithmetic on a null cursor
-  mbsrtowcs_bounds_safe   # mbsrtowcs: the same word-at-a-time scan
-  atexit_capability_safe  # atexit: the handler through uintptr_t lost its tag
-  mmap_shm_level0         # mmap/munmap and SysV shm: the mapping returned as a long lost its tag
-)
+mapfile -t MUSL_OVERRIDES < "$(dirname -- "${BASH_SOURCE[0]}")/libc_overrides.list"
 build_musl_overrides() {
   local cc=$1 out=$2 musl=$3; shift 3
   local here f

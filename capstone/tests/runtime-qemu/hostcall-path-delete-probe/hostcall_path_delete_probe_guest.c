@@ -5,7 +5,8 @@
 #include <unistd.h>
 
 #include "../../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
-#include "../hostcall-file-service-probe-common.h"
+#include "../hostcall-stdout-probe/hostcall_stdout_probe.h"
+#include "../../../runtime/include/capstone/hostcall-file-service.h"
 
 #define print_nobuf(...)         \
   do {                           \

@@ -1,0 +1,14 @@
+Perl 5.36.3 upstream t/base on the persistent one-hart QEMU guest
+Interpreter SHA256: 700873c567749d88a8e5c8f511f783837aa3cf83c548c7d9189a842e10242baa
+Runner: prove --exec 'capstone-vm --state <guest-state> run --cwd /mnt/host/perl-tests/t -e PERL5LIB=/mnt/host/perl-tests/lib /mnt/host/perl.dom' base/*.t
+
+PASS: base/cond.t, base/if.t, base/num.t, base/pat.t, base/translate.t, base/while.t
+FAIL: base/term.t, test 2 of 7; target fork/clone syscall 220 unserved
+FAIL: base/lex.t, SIGSEGV (exit 139), no TAP output
+FAIL: base/rs.t, SIGSEGV (exit 139), no TAP output
+
+Files=9, Tests=332, Result=FAIL, prove exit=1
+Of 332 emitted assertions, 331 pass and one fails. The two SIGSEGV files emit no
+assertions, so they are separate file failures and are not counted in 332.
+This is the complete t/base directory, not the complete upstream Perl suite.
+The VM survived both faults and continued to run the remaining test files.

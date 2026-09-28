@@ -2,6 +2,59 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-26 — Persistent application processes, reclamation and shared SDK
+
+The `domain-process-runtime` lane implements the complete **one-hart QEMU**
+application lifecycle across the emulator, monitor, driver, Buildroot package,
+Linux launcher and host CLI. Boot once into Linux, then run application ABI v1
+images through `capstone-exec`. Faults produce real SIGSEGV; normal exit 139
+remains a normal exit. Protected continuations return control even after a
+corrupted stack/trap vector or a no-yield loop. Linux signals terminate the
+launcher, and final file/VMA release revokes and scrubs its resources for reuse.
+
+The installed-rootfs acceptance passes node exhaustion/recovery followed by
+**1,008 mixed starts in the same boot**. Live domains, regions and bytes return
+to zero. Cached storage stays at 138,559,488 bytes, live nodes at 67, retired nodes
+at zero and tag pages at 648. Cumulative node allocations rise from 65,923 to
+77,011 against a 65,536-node pool, demonstrating reuse after stale tags are
+removed. This is bounded retained storage, not physical pages returned to Linux.
+The test also covers ownership isolation, rollback, fork/dup/VMA lifetime,
+overlapping processes, blocked I/O cancellation and transferred Sublet heaps.
+See the [checked result](../../runtime/tests/application/results/20260926-qemu-rebased.json).
+
+Four native ASan/UBSan tests and twelve host Python tests pass. A fresh Buildroot
+rootfs installs the driver, launchers and Dropbear. The shared CMake application
+SDK provides a compiler driver for upstream Make/configure builds; Perl's private
+compiler wrapper, entry adapter and VM runner are removed. Fresh Perl 5.36.3 and
+SDK-linked mruby pass the common application gate. The current complete Perl
+`t/base` run through ordinary `prove` has eight passing files and one failing
+file: `base/term.t` test 2 needs a target subprocess, but clone syscall 220 is
+unserved. `prove` reports 9 files, 493 emitted assertions and exit 1. The
+[rebased-QEMU result](../../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
+uses the C-46-corrected compiler and Perl's capability-preserving regex-save
+patch. The [earlier controls](../../ports/perl/musl/results/2026-09-26/base-tests-fixed.txt)
+isolate the compiler and regex fixes. The
+[earlier 6/9 result](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
+used an older compiler and a VM CLI that recorded, but did not pass, QEMU
+environment settings. The CLI now passes the recorded settings on every boot;
+the common SDK rejects a compiler binary with the old linear direct-call bug.
+The full upstream Perl suite has not been run or claimed to pass.
+
+Legacy CoreMark, shared-region and the first three HostCall proofs pass on the
+new platform. The available legacy snapshot fails all three `null_blk` arms
+in `null_submit_bio` (bad address 0x6f) and the borrowed-region file-open-close
+proof at INIT (cause 29). Both signatures also reproduce with the old QEMU and
+original firmware/rootfs; these are unresolved baseline failures, not passing
+regression gates. The managed path uses its own reclamation protocol.
+
+Existing FPGA hardware does not implement the new supervised CALL extension.
+There is no new silicon result, full POSIX implementation or hostile-code audit.
+The pool has explicit limits (default 384 MiB); the module retains carved physical
+storage until reboot. The old and managed driver APIs are mutually exclusive
+within a module lifetime. Commands, architecture and remaining port limitations
+are in [applications](../../runtime/applications.md) and the
+[implementation plan](../plans/domain-process-runtime.md).
+
 ## 2026-09-25 — R-42 FLASHED; ladder ACCEPTED, but R-43 false denies block revocation-heavy workloads (R1, P1 cell 6)
 
 **Resident bitstream is `caplifive_r42_6cbdaeeb4.bit`**, sha256 `0cd45bb0…8c05`.

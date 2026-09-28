@@ -1,5 +1,11 @@
 # Capstone test/run instructions for future agent sessions
 
+Application execution: use the [installed persistent guest and shared SDK](../../runtime/applications.md).
+Start a VM once with `capstone-vm up`, use its Linux shell or `capstone-vm run`,
+and run the common gate in that existing boot. The standard workflow does not
+boot per test or parse application diagnostics for control. Legacy fresh-boot
+hardware/reproducer gates remain separate.
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../../ports/common/host/port_trace/README.md).
 
 This file is the practical command cookbook for the current tree.
