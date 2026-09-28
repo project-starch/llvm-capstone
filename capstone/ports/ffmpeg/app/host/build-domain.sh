@@ -224,7 +224,9 @@ TOOLCHAIN_ID=$(toolchain_id | sha256sum | cut -c1-12)
 # (deps/libvidstab.json), every source its CMake build compiles, with this image's flags, and
 # OpenMP, SSE2 and ORC off, as its CMake leaves them on a target that has none of them.
 # configure finds it the way it does on any system, through a pkg-config file, and its
-# identity joins the configure key. A configure that does not ask for it is unchanged.
+# identity joins the configure key. A configure that does not ask for it is unchanged. The
+# header path goes through the compiler's flags, not the .pc file's Cflags: configure hands a
+# package's Cflags to its link test too, and the linker here is ld.lld itself, which refuses -I.
 VSLIB=(); VIDSTAB_ID=; CFGENV=()
 case " ${CONFIGURE_OPTS[*]} " in *" --enable-libvidstab "*)
   read -r VSURL VSSHA VSVER < <(python3 -c '
@@ -250,10 +252,10 @@ import json,sys; u=json.load(open(sys.argv[1])); print(u["url"], u["sha256"], u[
     cp "$VSP"/src/src/*.h "$VSP/include/vid.stab/"
     printf '%s\n' "prefix=$VSP" 'libdir=${prefix}/lib' 'includedir=${prefix}/include' '' \
       'Name: vidstab' 'Description: vid.stab, built for the capstone domain' "Version: $VSVER" \
-      'Libs: -L${libdir} -lvidstab' 'Cflags: -I${includedir}' > "$VSP/lib/pkgconfig/vidstab.pc"
+      'Libs: -L${libdir} -lvidstab' 'Cflags:' > "$VSP/lib/pkgconfig/vidstab.pc"
     mv "$VSP/lib/libvidstab.a.part" "$VSP/lib/libvidstab.a"
   fi
-  VSLIB=("$VSP/lib/libvidstab.a")
+  VSLIB=("$VSP/lib/libvidstab.a"); FFEXTRA+=(-I"$VSP/include")
   CFGENV=(env PKG_CONFIG_LIBDIR="$VSP/lib/pkgconfig" PKG_CONFIG_PATH=) ;;
 esac
 CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${FFEXTRA[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" "$TOOLCHAIN_ID" ${VIDSTAB_ID:+"$VIDSTAB_ID"} | sha256sum | cut -c1-12)
@@ -469,9 +471,16 @@ if [ -n "$POOL" ] && [ -f "$XB/libavfilter/vf_vidstabtransform.o" ]; then
   diff "$VS/vf_vidstabtransform.c" "$VS/rev/libavfilter/vf_vidstabtransform.c" > "$VS/revert.diff" || true
   echo "vidstab: as-shipped object reproduced byte-identically; fixture 23 links upstream's fix reversed ($(grep -c '^[<>]' "$VS/revert.diff") changed lines)"
 fi
+# Each Track B pair links its filter's object AHEAD of the libraries on BOTH sides, the shipped
+# one for 18 and 22, so the two images of a pair differ in that object's bytes and the fixture id
+# alone. Linking it ahead for the reverted side only moved every later symbol too (audit,
+# 2026-09-29: 10,062 symbol lines differed between the first 18 and 19 images).
 for fx in $FIXTURES; do
-  FIXLINK=(); [ "$fx" = 19 ] && FIXLINK=("$AJ/af_join_reverted.o")
-  [ "$fx" = 23 ] && FIXLINK=("$VS/vs_reverted.o")
+  FIXLINK=()
+  case $fx in
+    18) FIXLINK=("$AJ/af_join_shipped.o") ;;  19) FIXLINK=("$AJ/af_join_reverted.o") ;;
+    22) FIXLINK=("$VS/vs_shipped.o") ;;       23) FIXLINK=("$VS/vs_reverted.o") ;;
+  esac
   # FFAPP_LINK_AHEAD_<n>: objects linked ahead of the libraries for fixture <n> only (diagnostics)
   _ahead=FFAPP_LINK_AHEAD_$fx; [ -n "${!_ahead:-}" ] && FIXLINK+=(${!_ahead})
   "$CLANG" "${APPF[@]}" -DFFAPP_FIXTURE="$fx" \

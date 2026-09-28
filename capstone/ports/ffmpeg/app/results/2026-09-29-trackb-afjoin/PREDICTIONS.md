@@ -98,3 +98,36 @@ The fixture is corrected so that nothing of the output's plane is read before th
 address is input 1's plane, read while live, as every other fixture here takes its target before
 the free. Predictions unchanged. Fixture 19 on poolsublet is expected to FAULT temporal at the touch;
 18 and poolstock's 19 are expected unchanged. Re-run N = 3 on both arms.
+
+## Addendum 3, 2026-09-29: the claim audit's corrections, and one more run before any result is written
+
+A claim audit of the addendum-2 run upheld the 2x2 and the compiler diagnosis, and found four
+things this file says that are wrong or too strong:
+
+1. **"Images built from 4a9e6ed46132" (addendum 1) is wrong.** The build at that commit failed its
+   own gate (`AF_JOIN GATE: make printed no compile command`). The first boots' images were built
+   from working-tree fixes to `build-domain.sh`, committed afterwards in `150887238a68`.
+2. **"The two images differ by that token and nothing else" (above) holds for the objects, not
+   the images.** The reverted object's disassembly differs from the shipped one in the dedup loop
+   alone, and the shipped object matches the archive member. But fixture 19 linked its object
+   ahead of the libraries while fixture 18 took the archive's copy at its natural position, so
+   every later symbol moved: 10,062 symbol lines differed between the images.
+3. **M5's re-check "on the rebuilt images" (addendum 1) cannot test 0004.** The M5 image contains
+   no libavfilter code. It shows that the rebuilt libraries decode unchanged, and nothing about
+   `FF_FIELD_AT`.
+4. **The compiler defect's locus.** The `align 1` is upstream clang's (#152575, fork commit
+   `5569bf26f009`). The same compiler gives `align 1` for x86-64 too. The Capstone defect is the
+   backend lowering an under-aligned capability access to integer bytes, which drops the tag. It
+   does this for stores as well: `stc` to a temporary, then 16 `sb`.
+
+**Before any result is written, 18 and 19 run once more, N = 3 per arm, with two changes:**
+
+- **Fixture 18 links af_join's SHIPPED object ahead of the libraries,** exactly as 19 links the
+  reverted one. The two images then differ in af_join's bytes and the fixture id alone.
+- **Both print the output frame's reference count** (`out-refs`: non-NULL `out->buf[]`), so the
+  missing reference is observed rather than inferred from the pair. Only pointers are compared
+  with NULL; nothing they point to is read.
+
+Predictions: the marks are unchanged (18: `120005b` on both arms; 19: `1300177` on poolstock,
+FAULT temporal at the touch on poolsublet). `out-refs` is predicted to be **2** for 18 and **1** for
+19 on both arms, because the reverted dedup loop never adds input 1's buffer.

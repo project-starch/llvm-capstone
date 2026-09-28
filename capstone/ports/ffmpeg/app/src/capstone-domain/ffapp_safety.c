@@ -475,6 +475,13 @@ static int fixture(void)
     }
     if (av_buffersink_get_frame(sink, out) < 0 || out->ch_layout.nb_channels != 3)
         return FX_MARK(0xE000A);
+    /* The references the output frame holds, observed directly: the join takes one per distinct
+     * input buffer, so 2 with the fix and 1 without it (input 1's buffer is never taken). Only the
+     * pointers are compared with NULL; nothing they point to is read. */
+    int nrefs = 0;
+    for (int k = 0; k < AV_NUM_DATA_POINTERS; k++)
+        nrefs += out->buf[k] != NULL;
+    printf("FFAPP-FIX %d out-refs=%d\n", FFAPP_FIXTURE, nrefs);
     unsigned char *fc = out->extended_data[2];   /* input 1's plane: map 1.0-FC. Nothing of it is read
                                                     before the touch. */
     /* input 1's next packet: its decoder's pool reissues the buffer it gets back first */

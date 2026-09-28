@@ -85,3 +85,16 @@ fixture 19 printed `same-address=1` on poolsublet.
 --enable-libvidstab --enable-filter=vidstabtransform --enable-decoder=yuv4"`, in a work directory of
 its own. The compiler (`3979abd8`) and emulator are those of the af_join run, and app patch 0004
 stays applied. The C-50, budget and layout gates apply unchanged.
+
+## Addendum, 2026-09-29, before any vidstab image was booted
+
+- **The first build stopped at configure.** configure hands a package's `Cflags` to its link test
+  too, and the linker here is `ld.lld` itself, which refuses `-I`. The header path now goes through
+  the compiler's flags, and the `.pc` file's `Cflags` is empty. libvidstab had compiled with no
+  warnings at all, and so none from `-Wcapstone-pointer-roundtrip`, which is on by default: a
+  two-line `(char *)(uintptr_t)` positive control fires it with the same compiler.
+- **Fixture 22 links the SHIPPED object ahead of the libraries,** exactly as 23 links the reverted
+  one, so the two images differ in that object's bytes and the fixture id alone. The af_join
+  audit found that linking ahead on one side only moves every later symbol.
+
+Predictions unchanged.
