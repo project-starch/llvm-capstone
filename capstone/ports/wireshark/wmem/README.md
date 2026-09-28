@@ -44,10 +44,50 @@ Both modes run the same allocator and backing layout:
   destruction and every `strict`/`simple` free revoke the authority of the
   storage they end.
 
+**Superseded by the chunk port** (`patches/…-0002`, below): the paragraph that
+follows describes the region-granular hooks alone, and is kept because the
+PoisonCap arm still builds that way.
+
 What is deliberately **not** revoked: an individual `wmem_free` in the `block`
 allocator returns the chunk to a free list inside a live block. Sublet lends
 whole regions, and a chunk has no region of its own, so this free ends no
 epoch (fixture 4). The same holds for the no-op `free` of `block_fast`.
+
+### The chunk port (`patches/…-0002`, every Sublet build)
+
+The hooks give a block one region, so a chunk freed inside a live block keeps
+its authority until the block is reset. The chunk port closes that: the block
+is held **linear**, a senior handle is taken on it before its first split, and
+every chunk is carved from it as a region of its own. A chunk free is one
+revoke; a reset is still one revoke per retained block, on the senior handle,
+whatever the block was split into; a gc or destroy is the same revoke before
+the block goes back.
+
+Carving a chunk takes its range away from any authority over the whole block,
+and upstream keeps its chunk headers and free-list links in exactly those
+ranges (`WMEM_GET_FREE` is `WMEM_CHUNK_TO_DATA`). So they move beside the
+block, into records with upstream's field names, found by address through an
+index. The header bytes stay reserved in the block, so a block's layout is
+upstream's, and the native replay still matches unmodified upstream, regions
+and peak included. Placement is not the same once upstream would have merged
+two free chunks and the port does not: no run compares addresses, and the
+replay's checksum, being a function of the trace, cannot see them.
+
+Given up, because the discipline forbids it: free chunks never rejoin. A join
+needs a handle taken before the split that separated them, and for an
+allocator that carves from the front that handle also covers the live chunks
+between them (micropython's port states the same rule). So there is no merge on
+free and no growth in place; a shrinking `realloc` re-issues the front under a
+new handle, which revokes the caller's other copies, as `realloc` permits.
+
+`block_fast` is unchanged: its `free` is a no-op and its `realloc` never frees,
+so there is no per-chunk lifetime for a region to end, and `wm_narrow` plus
+`wm_epoch` already cover it. The PoisonCap arm keeps the hooks alone and its
+own per-chunk poisoning (`WMEM_PORT_CHUNKS` is not defined there).
+
+What the port costs, by `capstone/tests/port-effort.py` against
+`patches/…-0002….patch.classes`, and why each result is what it is, is in
+`PREREGISTRATION-chunk-port.md` and `CHUNK-PORT-FINDINGS.md`.
 
 The scope layer — file and epan scopes, and the per-dissection packet pool
 recycled through a one-entry cache — is modelled in `src/shared/scopes.c` on

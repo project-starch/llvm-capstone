@@ -42,10 +42,17 @@ def run_guest(run, command, done, *, env=None, timeout_multiplier=12, lock_timeo
         env.get("CAPSTONE_QEMU_LOCK", str(Path.home() / ".capstone-locks/qemu.lock"))
     )
     lock.parent.mkdir(parents=True, exist_ok=True)
+    # The lock is shared with every lane's runners, and one of their boots can hold it for
+    # minutes; a wait shorter than that turns contention into a failed run with no guest output.
+    lock_timeout = int(env.get("CAPSTONE_QEMU_LOCK_WAIT", lock_timeout))
     return subprocess.run(
         [
             "flock",
             "-x",
+            # A lock wait that expires exits 75, and only that: a launch that fails after the lock
+            # is taken keeps its own status, so it can never read as infrastructure.
+            "-E",
+            "75",
             "-w",
             str(lock_timeout),
             str(lock),

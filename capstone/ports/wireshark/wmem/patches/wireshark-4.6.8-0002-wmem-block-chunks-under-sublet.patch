@@ -1,0 +1,744 @@
+Subject: Give every chunk of the block allocator a region of its own, so a chunk free is a revoke
+Upstream: wireshark 4.6.8
+Upstream-Archive: https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz
+Upstream-SHA256: c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0
+Build-Variants: native port, Capstone domain; inert in full Wireshark and in the PoisonCap arm (every hunk is guarded by WMEM_PORT_CHUNKS, except four lines that name WMEM_FREE_MIN_LEN, which expands to upstream's own expression without it)
+Depends-On: wireshark-4.6.8-0001-wmem-authority-hooks.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+The hooks of 0001 give a block ONE region, so an individual free inside a
+live block ends nothing. Here the block is held linear and every chunk is
+carved from it as a region under a handle taken before the block's first
+split: a chunk free revokes that chunk, and a reset still ends the whole
+block with one revoke. Carving takes a chunk's range away from any authority
+over the block, and upstream keeps its chunk headers and free-list links in
+those ranges, so they move beside the block into records with upstream's
+field names. The header bytes stay reserved, so a block's layout is
+upstream's; placement diverges from upstream's once a free that upstream
+would merge is not merged. Free chunks never rejoin: a join needs a handle
+taken before the split that separated them, which for a front-carving
+allocator also covers the live chunks between them. So there is no merge on
+free and no growth in place. Because nothing rejoins, every chunk that can
+serve a request is listed -- the links live in the record, so upstream's
+minimum of two pointers no longer applies -- and a shrink never leaves a
+remainder too small to list. The classes of the hunks are in the sibling
+.classes file.
+
+--- a/wsutil/wmem/wmem_allocator_block.c
++++ b/wsutil/wmem/wmem_allocator_block.c
+@@ -20,6 +20,9 @@
+ #ifdef WMEM_PORT_HOOKS
+ #include "wmem-port-hooks.h"
+ #endif
++#ifdef WMEM_PORT_CHUNKS
++#include "chunks.h"
++#endif
+ 
+ /* This has turned into a very interesting exercise in algorithms and data
+  * structures.
+@@ -144,6 +147,70 @@
+  * also a nice power of two, of course. */
+ #define WMEM_BLOCK_SIZE (8 * 1024 * 1024)
+ 
++#ifdef WMEM_PORT_CHUNKS
++/* THE CHUNK PORT. Every chunk is a region of its own, carved from a block that
++ * is held linear, so freeing a chunk is a revoke. Carving a chunk takes its
++ * range away from any authority over the whole block -- and the headers and
++ * free-list links below live in exactly those ranges. So they move beside the
++ * block, into records with upstream's field names. The bytes the headers
++ * occupied are still reserved in the block, so its layout is upstream's;
++ * placement differs only once upstream would have merged two chunks. */
++typedef struct _wmem_block_chunk_t wmem_block_chunk_t;
++typedef struct _wmem_block_hdr_t wmem_block_hdr_t;
++
++/* The free-list links, which upstream keeps in the data of a free chunk. */
++typedef struct _wmem_block_free_t {
++    wmem_block_chunk_t *prev, *next;
++} wmem_block_free_t;
++
++/* A block's header, beside the block. */
++struct _wmem_block_hdr_t {
++    wmem_block_hdr_t   *prev, *next;
++    wmem_block_chunk_t *first;
++    struct wm_block_auth auth;
++};
++
++/* A chunk's header, beside the block. */
++struct _wmem_block_chunk_t {
++    uint32_t prev;
++
++    /* flags */
++    uint32_t last:1;
++    uint32_t used:1;
++    uint32_t jumbo:1;
++
++    uint32_t len:29;
++
++    size_t              addr;         /* where upstream puts this header */
++    wmem_block_chunk_t *left, *right; /* the neighbours in the block */
++    wmem_block_free_t   free;         /* the master and recycler links */
++    wmem_block_hdr_t   *block;
++    wmem_block_chunk_t *index_next;   /* the address index's chain */
++    struct wm_chunk_auth auth;
++};
++
++#define WMEM_CHUNK_PREV(CHUNK) ((CHUNK)->prev ? (CHUNK)->left : NULL)
++#define WMEM_CHUNK_NEXT(CHUNK) ((CHUNK)->last ? NULL : (CHUNK)->right)
++
++/* Upstream's header sizes, so the block's layout is upstream's. */
++#define WMEM_CHUNK_HEADER_SIZE WMEM_ALIGN_SIZE(2 * sizeof(uint32_t))
++#define WMEM_BLOCK_HEADER_SIZE WMEM_ALIGN_SIZE(2 * sizeof(void *))
++
++#define WMEM_BLOCK_MAX_ALLOC_SIZE (WMEM_BLOCK_SIZE - \
++        (WMEM_BLOCK_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE))
++
++#define WMEM_CHUNK_DATA_LEN(CHUNK) ((CHUNK)->len - WMEM_CHUNK_HEADER_SIZE)
++#define WMEM_CHUNK_DATA(CHUNK) ((CHUNK)->addr + WMEM_CHUNK_HEADER_SIZE)
++#define WMEM_BLOCK_TO_CHUNK(BLOCK) ((BLOCK)->first)
++#define WMEM_CHUNK_TO_BLOCK(CHUNK) ((CHUNK)->block)
++#define WMEM_GET_FREE(CHUNK) (&(CHUNK)->free)
++/* The smallest chunk a free list can hold. Upstream needs room for the links
++ * in the chunk's data; here they live in the record, so every chunk that can
++ * serve a request is listed. That matters because chunks never rejoin: a freed
++ * chunk too small for two pointers, which upstream's merge would reclaim, would
++ * otherwise be lost until the block's next reset. */
++#define WMEM_FREE_MIN_LEN WMEM_ALIGN_AMOUNT
++#else
+ /* The header for an entire OS-level 'block' of memory */
+ typedef struct _wmem_block_hdr_t {
+     struct _wmem_block_hdr_t *prev, *next;
+@@ -197,6 +264,9 @@
+ 
+ /* Handy macro for accessing the free-header of a chunk */
+ #define WMEM_GET_FREE(CHUNK) ((wmem_block_free_t*)WMEM_CHUNK_TO_DATA(CHUNK))
++/* The smallest chunk a free list can hold: room for the links in its data. */
++#define WMEM_FREE_MIN_LEN sizeof(wmem_block_free_t)
++#endif
+ 
+ typedef struct _wmem_block_allocator_t {
+     wmem_block_hdr_t   *block_list;
+@@ -204,6 +274,155 @@
+     wmem_block_chunk_t *recycler_head;
+ } wmem_block_allocator_t;
+ 
++#ifdef WMEM_PORT_CHUNKS
++/* THE RECORDS. Every block allocator's headers come from one pool beside the
++ * blocks, and a chunk is found from an address through an index, since an
++ * address can no longer be turned into its header by arithmetic. */
++#define WM_INDEX_LOG 14
++#define WM_SLAB 256
++static wmem_block_chunk_t **wm_index;
++static wmem_block_chunk_t  *wm_spare_chunks;
++static wmem_block_hdr_t    *wm_spare_blocks;
++
++static size_t
++wm_index_of(size_t addr)
++{
++    return (size_t)(((uint64_t)(addr >> 4) * UINT64_C(0x9E3779B97F4A7C15))
++                    >> (64 - WM_INDEX_LOG));
++}
++
++/* A chunk header of block, not yet at any address. */
++static wmem_block_chunk_t *
++wm_chunk_new(wmem_block_hdr_t *block)
++{
++    wmem_block_chunk_t *chunk;
++
++    if (!wm_spare_chunks) {
++        wmem_block_chunk_t *slab = wm_meta_alloc(WM_SLAB * sizeof *slab);
++        for (unsigned i = 0; i < WM_SLAB; ++i) {
++            slab[i].index_next = wm_spare_chunks;
++            wm_spare_chunks = &slab[i];
++        }
++    }
++    chunk = wm_spare_chunks;
++    wm_spare_chunks = chunk->index_next;
++    chunk->index_next = NULL;
++    chunk->block = block;
++    chunk->left = chunk->right = NULL;
++    chunk->free.prev = chunk->free.next = NULL;
++    return chunk;
++}
++
++/* Put a chunk header at an address, and in the index under it. */
++static void
++wm_chunk_place(wmem_block_chunk_t *chunk, size_t addr)
++{
++    size_t i;
++
++    if (!wm_index) {
++        wm_index = wm_meta_alloc(((size_t)1 << WM_INDEX_LOG) * sizeof *wm_index);
++    }
++    chunk->addr = addr;
++    i = wm_index_of(addr);
++    chunk->index_next = wm_index[i];
++    wm_index[i] = chunk;
++}
++
++static wmem_block_chunk_t *
++wm_chunk_at(size_t addr)
++{
++    wmem_block_chunk_t *chunk;
++
++    if (!wm_index) {
++        return NULL;
++    }
++    for (chunk = wm_index[wm_index_of(addr)]; chunk; chunk = chunk->index_next) {
++        if (chunk->addr == addr) {
++            return chunk;
++        }
++    }
++    return NULL;
++}
++
++static void
++wm_chunk_unplace(wmem_block_chunk_t *chunk)
++{
++    wmem_block_chunk_t **link = &wm_index[wm_index_of(chunk->addr)];
++
++    while (*link && *link != chunk) {
++        link = &(*link)->index_next;
++    }
++    if (!*link) {
++        wm_fail(261);
++    }
++    *link = chunk->index_next;
++}
++
++/* A chunk header goes back to the pool. Its authority is dead or has moved. */
++static void
++wm_chunk_delete(wmem_block_chunk_t *chunk)
++{
++    wm_chunk_unplace(chunk);
++    wm_chunk_forget(&chunk->auth);
++    chunk->index_next = wm_spare_chunks;
++    wm_spare_chunks = chunk;
++}
++
++static size_t
++wm_chunk_count(wmem_block_hdr_t *block)
++{
++    wmem_block_chunk_t *chunk;
++    size_t n = 0;
++
++    for (chunk = block->first; chunk; chunk = WMEM_CHUNK_NEXT(chunk)) {
++        ++n;
++    }
++    return n;
++}
++
++/* Every chunk header of a block, after the revoke that ended the chunks. */
++static void
++wm_chunk_drop_block(wmem_block_hdr_t *block)
++{
++    wmem_block_chunk_t *chunk = block->first, *next;
++
++    while (chunk) {
++        next = WMEM_CHUNK_NEXT(chunk);
++        wm_chunk_delete(chunk);
++        chunk = next;
++    }
++    block->first = NULL;
++}
++
++static wmem_block_hdr_t *
++wm_block_new(void)
++{
++    wmem_block_hdr_t *block;
++
++    if (!wm_spare_blocks) {
++        wmem_block_hdr_t *slab = wm_meta_alloc(WM_SLAB * sizeof *slab);
++        for (unsigned i = 0; i < WM_SLAB; ++i) {
++            slab[i].next = wm_spare_blocks;
++            wm_spare_blocks = &slab[i];
++        }
++    }
++    block = wm_spare_blocks;
++    wm_spare_blocks = block->next;
++    block->prev = block->next = NULL;
++    block->first = NULL;
++    return block;
++}
++
++static void
++wm_block_delete(wmem_block_hdr_t *block)
++{
++    wm_block_forget(&block->auth);
++    block->next = wm_spare_blocks;
++    wm_spare_blocks = block;
++}
++
++#endif
++
+ /* DEBUG AND TEST */
+ static int
+ wmem_block_verify_block(wmem_block_hdr_t *block)
+@@ -234,7 +453,7 @@
+         }
+ 
+         if (!chunk->used &&
+-                WMEM_CHUNK_DATA_LEN(chunk) >= sizeof(wmem_block_free_t)) {
++                WMEM_CHUNK_DATA_LEN(chunk) >= WMEM_FREE_MIN_LEN) {
+ 
+             total_free_space += chunk->len;
+ 
+@@ -396,7 +615,7 @@
+ {
+     wmem_block_free_t *free_chunk;
+ 
+-    if (WMEM_CHUNK_DATA_LEN(chunk) < sizeof(wmem_block_free_t)) {
++    if (WMEM_CHUNK_DATA_LEN(chunk) < WMEM_FREE_MIN_LEN) {
+         return;
+     }
+ 
+@@ -481,11 +700,57 @@
+ 
+ /* CHUNK HELPERS */
+ 
++#ifdef WMEM_PORT_CHUNKS
++/* The free space a split leaves after `chunk`, whose length has just been
++ * set: upstream finds it by arithmetic, here it is a new header over a new
++ * region split from the chunk's. */
++static wmem_block_chunk_t *
++wm_chunk_split_off(wmem_block_chunk_t *chunk)
++{
++    wmem_block_chunk_t *extra = wm_chunk_new(chunk->block);
++
++    wm_chunk_place(extra, chunk->addr + chunk->len);
++    wm_chunk_split(&chunk->auth, extra->addr, &extra->auth);
++    extra->left  = chunk;
++    extra->right = chunk->right;
++    if (extra->right) {
++        extra->right->left = extra;
++    }
++    chunk->right = extra;
++    return extra;
++}
++
++/* Hand out `size` bytes of a free chunk: its own region, an exact alias. */
++static void *
++wm_chunk_hand_out(wmem_block_chunk_t *chunk, const size_t size)
++{
++    wm_chunk_issue(&chunk->block->auth, &chunk->auth, chunk->addr, chunk->len);
++    return wm_chunk_bytes(&chunk->auth, WMEM_CHUNK_DATA(chunk), size);
++}
++
++/* The chunk behind a pointer handed back to the allocator. The probe comes
++ * first, so a pointer whose authority is gone faults on it, at the allocator's
++ * labelled site, and never reaches the index. */
++static wmem_block_chunk_t *
++wm_chunk_of(const void *ptr)
++{
++    wmem_block_chunk_t *chunk;
++
++    wm_probe(ptr);
++    chunk = wm_chunk_at(wm_addr(ptr) - WMEM_CHUNK_HEADER_SIZE);
++    if (!chunk || !chunk->used) {
++        wm_fail(260);
++    }
++    return chunk;
++}
++#endif
++
+ /* Takes a free chunk and checks the chunks to its immediate right and left in
+  * the block. If they are also free, the contiguous free chunks are merged into
+  * a single free chunk. The resulting chunk ends up in either the master list or
+  * the recycler, depending on where the merged chunks were originally.
+  */
++#ifndef WMEM_PORT_CHUNKS
+ static void
+ wmem_block_merge_free(wmem_block_allocator_t *allocator,
+                       wmem_block_chunk_t *chunk)
+@@ -554,6 +819,7 @@
+         }
+     }
+ }
++#endif
+ 
+ /* Takes an unused chunk and a size, and splits it into two chunks if possible.
+  * The first chunk (at the same address as the input chunk) is guaranteed to
+@@ -574,7 +840,7 @@
+ 
+     aligned_size = WMEM_ALIGN_SIZE(size) + WMEM_CHUNK_HEADER_SIZE;
+ 
+-    if (WMEM_CHUNK_DATA_LEN(chunk) < aligned_size + sizeof(wmem_block_free_t)) {
++    if (WMEM_CHUNK_DATA_LEN(chunk) < aligned_size + WMEM_FREE_MIN_LEN) {
+         /* If the available space is not enought to store all of
+          * (hdr + requested size + alignment padding + hdr + free-header) then
+          * just remove the current chunk from the free list and return, since we
+@@ -582,7 +848,7 @@
+         if (chunk == allocator->master_head) {
+             wmem_block_pop_master(allocator);
+         }
+-        else if (WMEM_CHUNK_DATA_LEN(chunk) >= sizeof(wmem_block_free_t)) {
++        else if (WMEM_CHUNK_DATA_LEN(chunk) >= WMEM_FREE_MIN_LEN) {
+             wmem_block_remove_from_recycler(allocator, chunk);
+         }
+         return;
+@@ -598,7 +864,11 @@
+ 
+     /* with chunk's values set, we can use the standard macro to calculate
+      * the location and size of the new free chunk */
++#ifdef WMEM_PORT_CHUNKS
++    extra = wm_chunk_split_off(chunk);
++#else
+     extra = WMEM_CHUNK_NEXT(chunk);
++#endif
+ 
+     /* Now we move the free chunk's address without changing its location
+      * in whichever list it is in.
+@@ -655,7 +925,11 @@
+  * The first chunk can hold at least `size` bytes of data, while the second gets
+  * whatever's left over. The second is marked as unused and is added to the
+  * recycler. */
++#ifdef WMEM_PORT_CHUNKS
++static bool
++#else
+ static void
++#endif
+ wmem_block_split_used_chunk(wmem_block_allocator_t *allocator,
+                             wmem_block_chunk_t *chunk,
+                             const size_t size)
+@@ -666,11 +940,20 @@
+ 
+     aligned_size = WMEM_ALIGN_SIZE(size) + WMEM_CHUNK_HEADER_SIZE;
+ 
++#ifdef WMEM_PORT_CHUNKS
++    /* The remainder must be big enough for a free list to hold: it never
++     * rejoins its neighbour, so a remainder no list holds would be lost until
++     * the block's next reset. Too small, and the chunk stays whole. */
++    if (aligned_size + WMEM_FREE_MIN_LEN > WMEM_CHUNK_DATA_LEN(chunk)) {
++        return false;
++    }
++#else
+     if (aligned_size > WMEM_CHUNK_DATA_LEN(chunk)) {
+         /* in this case we don't have enough space to really split it, so
+          * it's basically a no-op */
+         return;
+     }
++#endif
+     /* otherwise, we have room to split it, though the remaining free chunk
+      * may still not be usefully large */
+ 
+@@ -684,7 +967,15 @@
+ 
+     /* with chunk's values set, we can use the standard macro to calculate
+      * the location and size of the new free chunk */
++#ifdef WMEM_PORT_CHUNKS
++    /* The chunk is out, so its region is lent: it comes back first -- which
++     * revokes the caller's copies, as realloc invalidates them anyway -- and
++     * the caller hands the front out again under a new handle. */
++    wm_chunk_retire(&chunk->auth);
++    extra = wm_chunk_split_off(chunk);
++#else
+     extra = WMEM_CHUNK_NEXT(chunk);
++#endif
+ 
+     /* set the new values for the chunk */
+     extra->len   = (uint32_t) available;
+@@ -698,9 +989,15 @@
+         WMEM_CHUNK_NEXT(extra)->prev = extra->len;
+     }
+ 
++#ifdef WMEM_PORT_CHUNKS
++    /* No merge to its right: see wmem_block_free. */
++    wmem_block_add_to_recycler(allocator, extra);
++    return true;
++#else
+     /* Merge it to its right if possible (it can't be merged left, obviously).
+      * This also adds it to the recycler. */
+     wmem_block_merge_free(allocator, extra);
++#endif
+ }
+ 
+ /* BLOCK HELPERS */
+@@ -746,7 +1043,14 @@
+     wmem_block_chunk_t *chunk;
+ 
+     /* a new block contains one chunk, right at the beginning */
++#ifdef WMEM_PORT_CHUNKS
++    chunk = wm_chunk_new(block);
++    wm_chunk_place(chunk, block->auth.base + WMEM_BLOCK_HEADER_SIZE);
++    wm_chunk_adopt(&block->auth, &chunk->auth);
++    block->first = chunk;
++#else
+     chunk = WMEM_BLOCK_TO_CHUNK(block);
++#endif
+ 
+     chunk->used  = false;
+     chunk->jumbo = false;
+@@ -765,7 +1069,12 @@
+     wmem_block_hdr_t *block;
+ 
+     /* allocate the new block and add it to the block list */
++#ifdef WMEM_PORT_CHUNKS
++    block = wm_block_new();
++    wm_block_open(&block->auth, WMEM_BLOCK_SIZE, WMEM_BLOCK_HEADER_SIZE);
++#else
+     block = (wmem_block_hdr_t *)wmem_alloc(NULL, WMEM_BLOCK_SIZE);
++#endif
+     wmem_block_add_to_block_list(allocator, block);
+ 
+     /* initialize it */
+@@ -782,22 +1091,42 @@
+     wmem_block_chunk_t *chunk;
+ 
+     /* allocate a new block of exactly the right size */
++#ifdef WMEM_PORT_CHUNKS
++    /* A jumbo block is a region of the system's, as before: its release
++     * already revokes. Only its headers move beside it. */
++    block = wm_block_new();
++    block->auth.alias = wmem_alloc(NULL, size
++            + WMEM_BLOCK_HEADER_SIZE
++            + WMEM_CHUNK_HEADER_SIZE);
++    block->auth.base = wm_addr(block->auth.alias);
++#else
+     block = (wmem_block_hdr_t *) wmem_alloc(NULL, size
+             + WMEM_BLOCK_HEADER_SIZE
+             + WMEM_CHUNK_HEADER_SIZE);
++#endif
+ 
+     /* add it to the block list */
+     wmem_block_add_to_block_list(allocator, block);
+ 
+     /* the new block contains a single jumbo chunk */
++#ifdef WMEM_PORT_CHUNKS
++    chunk = wm_chunk_new(block);
++    wm_chunk_place(chunk, block->auth.base + WMEM_BLOCK_HEADER_SIZE);
++    block->first = chunk;
++#else
+     chunk = WMEM_BLOCK_TO_CHUNK(block);
++#endif
+     chunk->last  = true;
+     chunk->used  = true;
+     chunk->jumbo = true;
+     chunk->len   = 0;
+     chunk->prev  = 0;
+ 
+-#ifdef WMEM_PORT_HOOKS
++#ifdef WMEM_PORT_CHUNKS
++    /* and return the data pointer */
++    return wm_narrow((uint8_t *)block->auth.alias + WMEM_BLOCK_HEADER_SIZE
++            + WMEM_CHUNK_HEADER_SIZE, size);
++#elif defined(WMEM_PORT_HOOKS)
+     /* and return the data pointer */
+     return wm_narrow(WMEM_CHUNK_TO_DATA(chunk), size);
+ #else
+@@ -817,7 +1146,13 @@
+ 
+     wmem_block_remove_from_block_list(allocator, block);
+ 
++#ifdef WMEM_PORT_CHUNKS
++    wm_chunk_delete(chunk);
++    wmem_free(NULL, block->auth.alias);
++    wm_block_delete(block);
++#else
+     wmem_free(NULL, block);
++#endif
+ }
+ 
+ /* Reallocs special 'jumbo' blocks of sizes that won't fit normally. */
+@@ -830,6 +1165,20 @@
+ 
+     block = WMEM_CHUNK_TO_BLOCK(chunk);
+ 
++#ifdef WMEM_PORT_CHUNKS
++    /* The headers stay where they are; only the storage, and so the chunk's
++     * address, may move. */
++    (void)allocator;
++    block->auth.alias = wmem_realloc(NULL, block->auth.alias, size
++            + WMEM_BLOCK_HEADER_SIZE
++            + WMEM_CHUNK_HEADER_SIZE);
++    block->auth.base = wm_addr(block->auth.alias);
++    wm_chunk_unplace(chunk);
++    wm_chunk_place(chunk, block->auth.base + WMEM_BLOCK_HEADER_SIZE);
++
++    return wm_narrow((uint8_t *)block->auth.alias + WMEM_BLOCK_HEADER_SIZE
++            + WMEM_CHUNK_HEADER_SIZE, size);
++#else
+     block = (wmem_block_hdr_t *) wmem_realloc(NULL, block, size
+             + WMEM_BLOCK_HEADER_SIZE
+             + WMEM_CHUNK_HEADER_SIZE);
+@@ -850,6 +1199,7 @@
+ #else
+     return WMEM_CHUNK_TO_DATA(WMEM_BLOCK_TO_CHUNK(block));
+ #endif
++#endif
+ }
+ 
+ /* API */
+@@ -897,7 +1247,10 @@
+     /* mark it as used */
+     chunk->used = true;
+ 
+-#ifdef WMEM_PORT_HOOKS
++#ifdef WMEM_PORT_CHUNKS
++    /* and return the user's pointer, under the chunk's own handle */
++    return wm_chunk_hand_out(chunk, size);
++#elif defined(WMEM_PORT_HOOKS)
+     /* and return the user's pointer */
+     return wm_narrow(WMEM_CHUNK_TO_DATA(chunk), size);
+ #else
+@@ -912,26 +1265,42 @@
+     wmem_block_allocator_t *allocator = (wmem_block_allocator_t*) private_data;
+     wmem_block_chunk_t     *chunk;
+ 
++#ifdef WMEM_PORT_CHUNKS
++    chunk = wm_chunk_of(ptr);
++#else
+ #ifdef WMEM_PORT_HOOKS
+     ptr = wm_widen(ptr);
+ #endif
+     chunk = WMEM_DATA_TO_CHUNK(ptr);
++#endif
+ 
+     if (chunk->jumbo) {
+         wmem_block_free_jumbo(allocator, chunk);
+         return;
+     }
+ 
+-#ifdef WMEM_PORT_HOOKS
++#ifdef WMEM_PORT_CHUNKS
++    /* One revoke: every alias of this chunk dies here, in a block that lives
++     * on. Upstream's free changes nothing a stale pointer can see. */
++    wm_chunk_retire(&chunk->auth);
++#elif defined(WMEM_PORT_HOOKS)
+     /* The chunk's storage is retired before the free list reuses it. */
+     wm_release(WMEM_CHUNK_TO_DATA(chunk), WMEM_CHUNK_DATA_LEN(chunk));
+ #endif
+     /* mark it as unused */
+     chunk->used = false;
+ 
++#ifdef WMEM_PORT_CHUNKS
++    /* No merge with free neighbours. Two regions rejoin only through a handle
++     * taken before the split that separated them, and for an allocator that
++     * carves from the front of a free chunk that handle also covers the live
++     * chunks between them. A freed chunk is reused as it stands, or split. */
++    wmem_block_add_to_recycler(allocator, chunk);
++#else
+     /* merge it with any other free chunks adjacent to it, so that contiguous
+      * free space doesn't get fragmented */
+     wmem_block_merge_free(allocator, chunk);
++#endif
+ 
+     /* Now cycle the recycler */
+     wmem_block_cycle_recycler(allocator);
+@@ -943,10 +1312,14 @@
+     wmem_block_allocator_t *allocator = (wmem_block_allocator_t*) private_data;
+     wmem_block_chunk_t     *chunk;
+ 
++#ifdef WMEM_PORT_CHUNKS
++    chunk = wm_chunk_of(ptr);
++#else
+ #ifdef WMEM_PORT_HOOKS
+     ptr = wm_widen(ptr);
+ #endif
+     chunk = WMEM_DATA_TO_CHUNK(ptr);
++#endif
+ 
+     if (chunk->jumbo) {
+         return wmem_block_realloc_jumbo(allocator, chunk, size);
+@@ -958,6 +1331,11 @@
+ 
+         tmp = WMEM_CHUNK_NEXT(chunk);
+ 
++#ifdef WMEM_PORT_CHUNKS
++        /* Never in place: growing into the next chunk joins two regions,
++         * which the port cannot do (see wmem_block_free). */
++        tmp = NULL;
++#endif
+         if (tmp && (!tmp->used) &&
+             (size < WMEM_CHUNK_DATA_LEN(chunk) + tmp->len)) {
+             /* the next chunk is free and has enough extra, so just grab
+@@ -1009,7 +1387,13 @@
+             void *newptr;
+ 
+             newptr = wmem_block_alloc(private_data, size);
++#ifdef WMEM_PORT_CHUNKS
++            /* the whole chunk, as upstream copies it, through its own alias */
++            memcpy(newptr, wm_chunk_bytes(&chunk->auth, WMEM_CHUNK_DATA(chunk),
++                        WMEM_CHUNK_DATA_LEN(chunk)), WMEM_CHUNK_DATA_LEN(chunk));
++#else
+             memcpy(newptr, ptr, WMEM_CHUNK_DATA_LEN(chunk));
++#endif
+             wmem_block_free(private_data, ptr);
+ 
+             /* No need to cycle the recycler, alloc and free both did that
+@@ -1020,10 +1404,27 @@
+     }
+     else if (size < WMEM_CHUNK_DATA_LEN(chunk)) {
+         /* shrink */
++#ifdef WMEM_PORT_CHUNKS
++        if (wmem_block_split_used_chunk(allocator, chunk, size)) {
++            wmem_block_cycle_recycler(allocator);
++
++            /* the front, handed out again under a new handle */
++            return wm_chunk_hand_out(chunk, size);
++        }
++#else
+         wmem_block_split_used_chunk(allocator, chunk, size);
++#endif
+ 
+         /* Now cycle the recycler */
+-#ifdef WMEM_PORT_HOOKS
++#ifdef WMEM_PORT_CHUNKS
++        wmem_block_cycle_recycler(allocator);
++
++        return wm_chunk_bytes(&chunk->auth, WMEM_CHUNK_DATA(chunk), size);
++    }
++
++    /* no-op */
++    return wm_chunk_bytes(&chunk->auth, WMEM_CHUNK_DATA(chunk), size);
++#elif defined(WMEM_PORT_HOOKS)
+         wmem_block_cycle_recycler(allocator);
+ 
+         return wm_narrow(ptr, size);
+@@ -1056,7 +1457,31 @@
+     /* iterate through the blocks, reinitializing each one */
+     cur = allocator->block_list;
+ 
+-#ifdef WMEM_PORT_HOOKS
++#ifdef WMEM_PORT_CHUNKS
++    /* A retained block's chunks all end with the one revoke on the handle
++     * taken before its first split, whatever they were split into; their
++     * headers go, and the block starts again as one free chunk. The block
++     * list's records do not move, so it is walked rather than rebuilt. */
++    while (cur) {
++        wmem_block_hdr_t *nxt = cur->next;
++
++        chunk = WMEM_BLOCK_TO_CHUNK(cur);
++        if (chunk->jumbo) {
++            wmem_block_remove_from_block_list(allocator, cur);
++            wm_chunk_delete(chunk);
++            wmem_free(NULL, cur->auth.alias);
++            wm_block_delete(cur);
++        }
++        else {
++            wm_block_reset(&cur->auth, WMEM_BLOCK_HEADER_SIZE,
++                           wm_chunk_count(cur));
++            wm_chunk_drop_block(cur);
++            wmem_block_init_block(allocator, cur);
++        }
++        cur = nxt;
++    }
++}
++#elif defined(WMEM_PORT_HOOKS)
+     /* Every retained block starts a new epoch under fresh authority, so the
+      * block list is rebuilt from the renewed aliases rather than relinked
+      * through pointers the epoch has just retired. */
+@@ -1141,7 +1566,15 @@
+             else if (allocator->master_head == chunk) {
+                 allocator->master_head = free_chunk->next;
+             }
++#ifdef WMEM_PORT_CHUNKS
++            /* the revoke first: the chunk's authority must be dead before
++             * its header is reused */
++            wm_block_close(&cur->auth);
++            wm_chunk_delete(chunk);
++            wm_block_delete(cur);
++#else
+             wmem_free(NULL, cur);
++#endif
+         }
+         else {
+             /* part of this block is used, so add it to the new block list */

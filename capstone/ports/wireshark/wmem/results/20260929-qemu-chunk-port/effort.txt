@@ -1,0 +1,51 @@
+# capstone/tests/port-effort.py over patch 0002 and its .classes (rc=0 for both versions), then the
+# count under the wider scope the claim audit raised, and without #if/#else/#endif guard lines.
+
+## v1 (e5d20a1b27d3), 25 hunks: the tool's output as recorded
+== wmem block allocator, per-chunk Sublet port
+class       level           +code +comment   +blank    -code -comment   -blank
+hierarchy   allocator         126       29        9        4        0        0
+metadata    allocator         206       25       30        1        0        0
+TOTAL                         332       54       39        5        0        0
+code lines net: +327
+application code, which the claim says is zero: +0/-0
+metadata layout is 62% of the added code, the largest class, as the hypothesis says
+
+## v2 (3abcdbca84f8), 29 hunks
+class       level           +code +comment   +blank    -code -comment   -blank
+hierarchy   allocator         128       32        9        4        0        0
+metadata    allocator         212       31       30        5        0        0
+TOTAL                         340       63       39        9        0        0
+code lines net: +331
+application code, which the claim says is zero: +0/-0
+metadata layout is 62% of the added code, the largest class, as the hypothesis says
+rc=0
+
+## v2 without guard lines (a guarded port spends many lines on #if/#else/#endif; SQLite's patch has 2)
+  hierarchy  code  128  guards  49  without guards   79
+  metadata   code  212  guards  25  without guards  187
+  total      code  340  guards  74  without guards  266; metadata share 62% with guards, 70% without
+
+## The files beside the patch: added code lines since the pre-registration (b9ecf27b20bd)
+src/allocators/sublet/chunks.c           +code   96  of which #if-guards 2
+src/shared/chunks.h                      +code   49  of which #if-guards 5
+src/shared/backing.c                     +code   66  of which #if-guards 5
+src/allocators/sublet/regions.c          +code   10  of which #if-guards 0
+src/shared/regions.h                     +code    6  of which #if-guards 2
+
+## Both scopes, v2, added code lines
+
+| scope | hierarchy | metadata | metadata share | H4 (metadata largest) |
+|---|---|---|---|---|
+| patch 0002 only, as every port's .classes counts | 128 | 212 | 62% (70% without guards) | holds |
+| + chunks.c (96) and chunks.h (49), where every Sublet call lives, as hierarchy | 273 | 212 | 44% | refuted |
+| + backing.c (66), regions.c (10), regions.h (6) as well, as hierarchy | 355 | 212 | 37% | refuted |
+
+Counting the side files as hierarchy is the direction that most weakens H4. backing.c also holds
+wm_meta_alloc, which serves the records and so is arguably metadata; moving it would shift a few
+lines, not the verdict. Had the records and the index been written into a side file instead of the
+patch -- PostgreSQL's choice for its pools -- the patch's own metadata would be 90 lines (212 less
+the records-and-index hunk's 122) against hierarchy's 128, and H4 would be refuted even at patch
+scope. src/native/chunks.c, the native identity implementation, is left out of the wider rows;
+counting it only moves them further from H4. So the port's H4 outcome is a property of where its code
+was put as much as of what the discipline demands, and it is reported under both scopes.
