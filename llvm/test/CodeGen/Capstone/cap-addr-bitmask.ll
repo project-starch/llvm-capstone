@@ -18,8 +18,15 @@
 ; (EXTRACT_SUBREG on sub_cap_addr to read, INSERT_SUBREG to write back); a
 ; recovered one adds the delta from the source's address and one cincoffset.
 ; The file keeps its i128 name for the history that references it.
+; The pass moves only a source it can see HOLDS a capability, because cincoffset
+; raises UNEXPECTED_OPERAND on a base that holds none and null holds none. Hence
+; the `nonnull` on the two recovered cases, and @align_down_maybe_null, which is
+; the same arithmetic on a pointer that may be null and keeps the old single
+; instruction.
 ; MUTATION (ON): make @clear_flag_bit's mask come from a second pointer's
 ; address -> it has two sources, stays untagged, and its cincoffset line fails.
+; MUTATION (ON): add `nonnull` to @align_down_maybe_null -> it gains the
+; sub/cincoffset pair and its ON-NEXT cjalr line fails.
 ;
 ; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s \
 ; RUN:   | FileCheck %s --check-prefix=ON
@@ -40,7 +47,7 @@ target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S
 ; CHECK-LABEL: align_down:
 ; CHECK: andi a0, a0, -32
 ; CHECK-NEXT: cjalr zero, 0(ra)
-define ptr addrspace(200) @align_down(ptr addrspace(200) %p) addrspace(200) {
+define ptr addrspace(200) @align_down(ptr addrspace(200) nonnull %p) addrspace(200) {
   %i = ptrtoint ptr addrspace(200) %p to i64
   %and = and i64 %i, -32
   %r = inttoptr i64 %and to ptr addrspace(200)
@@ -54,7 +61,7 @@ define ptr addrspace(200) @align_down(ptr addrspace(200) %p) addrspace(200) {
 ; CHECK-LABEL: clear_flag_bit:
 ; CHECK: andi a0, a0, -2
 ; CHECK-NEXT: cjalr zero, 0(ra)
-define ptr addrspace(200) @clear_flag_bit(ptr addrspace(200) %p) addrspace(200) {
+define ptr addrspace(200) @clear_flag_bit(ptr addrspace(200) nonnull %p) addrspace(200) {
   %i = ptrtoint ptr addrspace(200) %p to i64
   %and = and i64 %i, -2
   %r = inttoptr i64 %and to ptr addrspace(200)
@@ -80,4 +87,20 @@ define i64 @hash_two(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200
   %p = inttoptr i64 %h to ptr addrspace(200)
   %r = ptrtoint ptr addrspace(200) %p to i64
   ret i64 %r
+}
+
+; The same arithmetic on a pointer that may be null: left as the address
+; computation it was, since moving a base that holds no capability would trap at
+; the cincoffset instead of returning an address the caller may never use.
+; ON-LABEL: align_down_maybe_null:
+; ON: andi a0, a0, -32
+; ON-NEXT: cjalr zero, 0(ra)
+; CHECK-LABEL: align_down_maybe_null:
+; CHECK: andi a0, a0, -32
+; CHECK-NEXT: cjalr zero, 0(ra)
+define ptr addrspace(200) @align_down_maybe_null(ptr addrspace(200) %p) addrspace(200) {
+  %i = ptrtoint ptr addrspace(200) %p to i64
+  %and = and i64 %i, -32
+  %r = inttoptr i64 %and to ptr addrspace(200)
+  ret ptr addrspace(200) %r
 }
