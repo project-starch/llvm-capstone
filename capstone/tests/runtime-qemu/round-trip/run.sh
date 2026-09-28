@@ -93,12 +93,12 @@ verdict=0
 for arm in O0 O2; do
   block=$(sed -n "/RUN-BEGIN rt-$arm\$/,/RUN-END rt-$arm /p" "$LOG")
   passes=$(grep -ac 'RT-TEST PASS' <<<"$block" || true)
-  if grep -aq "LT-RESULT rt-$arm.dom status=0 " <<<"$block" && [[ $passes == 6 ]] &&
+  if grep -aq "LT-RESULT rt-$arm.dom status=0 " <<<"$block" && [[ $passes == 8 ]] &&
      grep -aq "RT-TEST atexit handler ran" <<<"$block" &&
      ! grep -aq "halted by capability fault" <<<"$block"; then
-    echo "  rt-$arm: PASS (6 checks, and musl's atexit handler ran)"
+    echo "  rt-$arm: PASS (8 checks, and musl's atexit handler ran)"
   else
-    echo "  rt-$arm: FAIL ($passes of 6 checks passed)"
+    echo "  rt-$arm: FAIL ($passes of 8 checks passed)"
     grep -aE "RT-TEST|LT-RESULT|halted" <<<"$block" | sed 's/^/    /'
     verdict=1
   fi

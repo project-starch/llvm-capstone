@@ -25,6 +25,23 @@ SemaCapstone::SemaCapstone(Sema &S) : SemaBase(S) {}
 // looking through the operators an address computation uses. One means the
 // value is an address computed from one pointer right here, which the backend
 // turns back into that pointer moved (CapstoneRecoverProvenance).
+//
+// The answer has to agree with what that pass will do, or the warning goes
+// silent on a round trip that then traps untagged. Two shapes carry a pointer
+// and are still counted as unrecoverable, because the pass declines them: an
+// address that flows INTO a multiply, shift, divide or remainder is not that
+// pointer's address moved any more, and a conditional whose arms are not both
+// the same one pointer would give that pointer's authority at a foreign
+// address. Which arm holds which pointer is not decidable here, so any pointer
+// inside a conditional disqualifies it: `c ? (uintptr_t)p : (uintptr_t)q`
+// counts two pointers in the pass and would count one here. A warning one time
+// too many beats a trap with no warning at all.
+//
+// Still silent, and not fixable in the front end: a round trip the pass declines
+// because the pointer may be NULL (it may not move a base that holds no
+// capability). Whether a pointer can be null is not visible here.
+static constexpr unsigned Disqualified = 2; // any count but one
+
 static unsigned countPointerSources(const Expr *E) {
   E = E->IgnoreParens();
   if (const auto *CE = dyn_cast<CastExpr>(E)) {
@@ -35,18 +52,27 @@ static unsigned countPointerSources(const Expr *E) {
   if (const auto *BO = dyn_cast<BinaryOperator>(E)) {
     switch (BO->getOpcode()) {
     case BO_Add: case BO_Sub: case BO_And: case BO_Or: case BO_Xor:
-    case BO_Mul: case BO_Shl: case BO_Shr: case BO_Div: case BO_Rem:
       return countPointerSources(BO->getLHS()) +
              countPointerSources(BO->getRHS());
+    case BO_Mul: case BO_Shl: case BO_Shr: case BO_Div: case BO_Rem: {
+      // On plain integers these are fine and common -- `(uintptr_t)p + i * 8`
+      // keeps its one source through the multiply's operands. With an address
+      // inside one, the result is not an address the pass will rebuild.
+      unsigned N = countPointerSources(BO->getLHS()) +
+                   countPointerSources(BO->getRHS());
+      return N ? Disqualified : 0;
+    }
     default:
       return 0;
     }
   }
   if (const auto *UO = dyn_cast<UnaryOperator>(E))
     return countPointerSources(UO->getSubExpr());
-  if (const auto *CO = dyn_cast<ConditionalOperator>(E))
-    return countPointerSources(CO->getTrueExpr()) +
-           countPointerSources(CO->getFalseExpr());
+  if (const auto *CO = dyn_cast<ConditionalOperator>(E)) {
+    unsigned N = countPointerSources(CO->getTrueExpr()) +
+                 countPointerSources(CO->getFalseExpr());
+    return N ? Disqualified : 0;
+  }
   return 0;
 }
 

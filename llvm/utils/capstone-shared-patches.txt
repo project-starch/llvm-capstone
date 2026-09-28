@@ -39,7 +39,7 @@ clang/lib/Driver/ToolChains/CommonArgs.cpp | +4 -0 | case llvm::Triple::capstone
 clang/lib/Driver/ToolChains/Linux.cpp | +12 -0 | case llvm::Triple::capstone32:
 clang/lib/Sema/CMakeLists.txt | +1 -0 | SemaCapstone.cpp
 clang/lib/Sema/Sema.cpp | +2 -0 | #include "clang/Sema/SemaCapstone.h"
-clang/lib/Sema/SemaCapstone.cpp | +146 -0 | //===------ SemaCapstone.cpp ---- Capstone target-specific routines -------===//
+clang/lib/Sema/SemaCapstone.cpp | +172 -0 | //===------ SemaCapstone.cpp ---- Capstone target-specific routines -------===//
 clang/lib/Sema/SemaCast.cpp | +6 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Sema/SemaChecking.cpp | +4 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Support/CMakeLists.txt | +1 -0 | CapstoneVIntrinsicUtils.cpp

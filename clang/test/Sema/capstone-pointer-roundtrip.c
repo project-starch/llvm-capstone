@@ -8,6 +8,12 @@
 // from. A pointer made from a plain integer is the programmer's business and
 // stays silent.
 //
+// The expression shapes the backend DECLINES have to warn, or the round trip
+// traps with nothing said about it: an address that flows into a shift, a
+// multiply, a divide or a remainder, and a conditional that does not hold the
+// same one pointer in both arms. What stays silent, and cannot be decided here:
+// a round trip the pass declines because the pointer may be null.
+//
 // MUTATION: change `uintptr_t x` in @via_uintptr to `unsigned long x` -> the
 // first expected diagnostic is no longer produced and -verify fails the RUN
 // line (the typedef spelling is the whole trigger).
@@ -35,6 +41,11 @@ char *same_expr_arith(char *p) { return (char *)(((uintptr_t)p + 15) & ~(uintptr
 char *two_pointers(char *p, char *q) { return (char *)((uintptr_t)p ^ (uintptr_t)q); } // expected-warning {{casting a value of type 'uintptr_t' (aka 'unsigned long') to 'char *'}}
 struct node { uintptr_t link; };
 char *from_memory(struct node *n) { return (char *)(n->link & ~(uintptr_t)1); } // expected-warning {{casting a value of type 'uintptr_t' (aka 'unsigned long') to 'char *'}}
+char *shifted(char *p) { return (char *)(((uintptr_t)p >> 4) << 4); } // expected-warning {{casting a value of type 'uintptr_t' (aka 'unsigned long') to 'char *'}}
+char *scaled_offset(char *p, unsigned long i) { return (char *)((uintptr_t)p + i * 8); }
+char *conditional_foreign(char *p, uintptr_t x, int c) { return (char *)(c ? (uintptr_t)p : x); } // expected-warning {{casting a value of type 'uintptr_t' (aka 'unsigned long') to 'char *'}}
+char *conditional_two(char *p, char *q, int c) { return (char *)(c ? (uintptr_t)p : (uintptr_t)q); } // expected-warning {{casting a value of type 'uintptr_t' (aka 'unsigned long') to 'char *'}}
+char *conditional_plain_offset(char *p, int c) { return (char *)((uintptr_t)p + (c ? 8 : 16)); }
 char *plain_integer(unsigned long n) { return (char *)n; }
 char *null_constant(void) { return (char *)0; }
 char *pointer_to_pointer(char *p) { return (char *)(void *)p; }
