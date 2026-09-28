@@ -284,8 +284,9 @@ THE PART THAT MATCHED IS THE PART THE PRE-REGISTRATION WAS ABOUT: no setupLookas
 image where the scan demonstrably fires (it returned two sites, and it reproduces the -O0 image's
 6810/3004/0/0/554 on demand). Combined with 25,010 lookasides at run time, D-prime holds at -O2.
 
-THE PART THAT DID NOT MATCH IS NOT EXPLAINED AND IS NOT CLAIMED TO BE. The predicted in-situ
-controls did not appear, and two other sites did. Two things are known about them:
+THE PART THAT DID NOT MATCH WAS THE PREDICTION, NOT THE SCAN — see the correction below, which
+supersedes this paragraph. Kept as written because the pre-registration is only worth anything if it
+records what was predicted before the result. Two things were established about the two sites:
 
 - The scanner prints `<function> + 0x<ABSOLUTE ADDRESS>`, not an offset within the function. The
   INT-ONLY site is at absolute 0x10b9c0, which is renameResolveTrigger + 0x654; the disassembly
@@ -294,9 +295,8 @@ controls did not appear, and two other sites did. Two things are known about the
   carries no D-prime at all (1 INT-ONLY, 1 mixed, same two functions). So they are common code and
   are not a D-prime residual.
 
-That leaves an unexplained INT-ONLY movc site in code both cells share. It is not what this
-pre-registration is about and it does not block this boot, but it is a C-32 candidate and it should
-be filed and investigated on its own rather than folded into this result.
+Both statements above are correct. The conclusion drawn from them — that the sites were unexplained
+and needed their own investigation — was not, and is withdrawn in the next section.
 
 ## Predictions for the board
 
@@ -320,3 +320,77 @@ board-b80s.sh and board-b80a.sh hard-code the OLD images and figures (d61c8bf784
 b36eb3814c3cefce, 330723308, 240654449), and board-b80b.sh its own. All of those images are gone
 from disk. A boot on this pair runs a copy of the driver with every constant re-pinned to the
 records above; `check-driver-gates.sh` in the staged folder evaluates the re-pinned values.
+
+## CORRECTION: the scan matched the -O2 record exactly; the PREDICTION was drawn from the wrong image
+
+Neither site is new, and neither is unexplained. Both are C-32's documented dormant residue, and the
+prior art says so in three places that were not searched before the prediction was written:
+
+- `docs/ref/ISSUES.md:1652`, inside the C-32 box: "**Left as they are:** `renameResolveTrigger` and
+  `main` are dormant under the P1 workload and are present in the native cell 5 as well."
+- `docs/ref/fpga-silicon-measurements-for-paper.md:4554-4562` records the site census per image:
+  "Sublet -O2 **4 sites** (`setupLookaside` x2 — the live one and its free path; `main`+0x3aab4,
+  mixed; `renameResolveTrigger`+0x10b5b8, a self-loop on the ALTER TABLE path)", and "cell 5 -O2
+  **2**". D-prime removes the two `setupLookaside` sites. What remains is exactly 1 mixed in `main`
+  plus 1 INT-ONLY in `renameResolveTrigger` — which is what this scan found, in both cells, with the
+  offsets shifted by the rebuild.
+- `docs/plans/2026-09-15-consolidated-board-queue.md:283` already carried the reachability argument:
+  "`renameResolveTrigger` is reached per trigger and the main testset defines none".
+
+WHY THE PREDICTION WAS WRONG. It was taken from the D-PRIME note in the sublet patch, which names
+`relocatePage` and `whereLoopAddBtreeIndex` as the two survivors. That note describes a DIFFERENT
+image: the same measurements table lists `whereLoopAddBtreeIndex` under **Sublet -O1**, not -O2. A
+prediction sourced from one build's census cannot be checked against another's, and the mismatch was
+a property of the source, not of the result.
+
+The ALTER-path proof recorded above is therefore not a new finding but a stronger form of the
+:283 sentence: per-trigger reachability, argued from the four callers of `renameResolveTrigger`
+being the `sqlite_rename_*` SQL functions, which ADD COLUMN never emits.
+
+The lesson is the cheap one: the function name was in the registry and in the measurements doc the
+whole time, and neither was grepped for it before the site was raised as a possible live defect.
+
+## The nulling-mode verification, and a one-instruction difference
+
+Both cells re-run under a QEMU that implements Q-04's movc-nulls-untagged-source semantics, which is
+what silicon does. The default binary does not implement the switch at all — it contains neither
+"MOVC-NULL-SCALAR" nor "CAPSTONE_MOVC_NULL_SCALAR" — so the earlier runs could not have observed it.
+
+    positive control  pre-D-prime -O2, image 5627abb5: lookasides 0 (against the pair's 25,010),
+                      hash 112006 38bb59fd. The mode demonstrably reaches the domain.
+    cell 5 --stats    330,731,082 against 330,731,081 in default mode      delta +1
+    cell 6 --stats    341,075,474 against 341,075,473 in default mode      delta +1
+
+Everything else is identical in both cells: verification hash, 25,010 successful lookasides,
+1 lookaside slot used, 16,448 schema heap, HEAP, and cell 6's sublet counters
+5568/37970/32569/37970/5401.
+
+THE +1 IS ATTRIBUTED TO THE MONITOR, NOT PROVEN TO BE IT:
+
+- the measured window counts all privilege levels (`csrr mcycle`) and the domain traps to the
+  monitor throughout, so monitor instructions are inside it;
+- the emulator reported an actual nulling event in the monitor at pc=0x80020a50, priv=3, on the
+  `read_cpmp` path — `ld s1, 0x0(s1)` then `movc a0, s1`;
+- `sqlite_host.user` cannot contribute: it contains no `movc` at all, checked against the raw
+  disassembly and not only via the scanner;
+- the domain image's own scan is clean of reachable integer-sourced sites — but only MODULO the
+  scanner's documented blind spot (`ISSUES.md:1648`: "a bridged value stored with `stc` and reloaded
+  with `ldc` is invisible to it"), so that leg is a static argument with a known hole rather than a
+  proof.
+
+A null domain bracketing `mcycle` around no work would close the hole. It was not run: it would
+re-derive a conclusion the existing binaries already support, and the GO does not rest on it.
+
+THE GO DOES NOT REST ON THE +1. This pre-registration predicts no cycle count — prediction 6 says so
+explicitly — and every result field it does predict is identical under nulling. A nulled jump target
+would have crashed or changed a result; nothing changed.
+
+## An instrument defect found while doing this
+
+`movc-cfg-scan.py` reported 0 movc for `fw_jump.elf`, a file with 94 of them. `llvm-objdump`
+right-aligns the address column, so an image at 0x80000000 starts at column 0 while a domain at
+0x10000 is indented, and the instruction regex required the indent — every image linked above
+0x0fffffff scanned as perfectly clean. Fixed on `lane/compiler-movcscan-wide-addresses` (641749752f67),
+together with making an empty parse exit non-zero instead of printing zeros. No recorded claim rests
+on it: every documented scan is of a domain image linked at 0x10000 or 0x410000, and the monitor had
+never been scanned.
