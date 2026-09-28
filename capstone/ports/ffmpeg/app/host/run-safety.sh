@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run safety fixtures of one heap arm in ONE boot and judge them against the pre-registered
-# predictions.     usage: run-safety.sh <level0|shrink|sublet|pool0|pool2> <fixture>...
+# predictions.     usage: run-safety.sh <level0|shrink|sublet|pool0|pool2|poolsublet|poolstock> <fixture>...
 #
 # A capability fault inside a domain ENDS THE EMULATOR (capstone-qemu cpu_helper.c prints
 # "domain halted by capability fault" and exits), so a boot can hold at most one fixture
@@ -18,11 +18,13 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 APP_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 source "$APP_DIR/../../../tests/capstone-test-env.sh"
 
-ARM=${1:?arm: level0, shrink, sublet, pool0 or pool2}; shift
+ARM=${1:?arm: level0, shrink, sublet, pool0, pool2, poolsublet or poolstock}; shift
 [ $# -gt 0 ] || { echo "no fixtures given" >&2; exit 2; }
 case $ARM in level0) DOM_DIR=domain ;; shrink) DOM_DIR=domain-shrink ;; sublet) DOM_DIR=domain-sublet ;;
   pool0|pool2) DOM_DIR=domain-sublet-$ARM ;;   # FFAPP_HEAP=sublet FFAPP_POOL=0|2
-  *) echo "arm must be level0, shrink, sublet, pool0 or pool2" >&2; exit 2 ;; esac
+  poolsublet) DOM_DIR=domain-sublet-poolsublet ;;   # FFAPP_HEAP=sublet FFAPP_POOL=sublet
+  poolstock) DOM_DIR=domain-sublet-poolstock ;;     # FFAPP_HEAP=sublet FFAPP_POOL=stock
+  *) echo "arm must be level0, shrink, sublet, pool0, pool2, poolsublet or poolstock" >&2; exit 2 ;; esac
 WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
 DOM="$WORK/$DOM_DIR"
 # A share PER INVOCATION, removed on exit. It used to be the fixed $WORK/share-safety, prepared

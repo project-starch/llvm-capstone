@@ -112,3 +112,19 @@ poolsublet   14  FAULT  oob
 poolsublet   15  FAULT  temporal
 poolsublet   16  FAULT  oob
 poolsublet   17  FAULT  temporal
+
+# poolstock: the matched control of poolsublet (FFAPP_POOL=stock): the same patched source, built
+# with FF_SUBLET_POOLS=0, so FFmpeg's pools run upstream's path on the Sublet heap. The two arms
+# differ in that macro alone. Registered 2026-09-29, after poolsublet's fixtures 11-14 had run and
+# before poolstock was first built; the values are PREREGISTRATION.md A1's statement that "on the
+# heap arms 12 and 13 complete, because a pool never calls free", made testable, and the values the
+# substitute's unprotected pool0 arm returned on 2026-09-24 for the same fixtures. 14 faults here
+# too: a stock pool's entry is its own av_malloc on the Sublet heap, bounded to 64 bytes.
+poolstock    11  RETURN b00001
+poolstock    11  LEN    64
+poolstock    12  RETURN c000a0
+poolstock    13  RETURN d0015b
+poolstock    14  FAULT  oob
+poolstock    15  RETURN f000a0
+poolstock    16  RETURN *
+poolstock    17  RETURN 1100177
