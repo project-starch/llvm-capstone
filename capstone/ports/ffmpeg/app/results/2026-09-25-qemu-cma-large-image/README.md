@@ -26,6 +26,35 @@ difference in the same run in which it reports none.
 - **Build gates at ceiling 8:** 20 images FIT, the C-50 disassembly scan found 0 hits in 1,018,765
   instructions, and the negative link control fired.
 
+## The C-50 gate's positive control — patch 0003 is load-bearing, not droppable
+
+Added 2026-09-28, prompted by a warning from the compiler lane that a C-50 gate pass is no longer
+evidence now that `4c407f9456d4` has landed, because a fixed compiler does not emit the shape at
+all.
+
+**That warning does not apply to these builds, and checking why was the point.** They use compiler
+`3979abd8e9a3`, which **predates** `4c407f9456d4` (`git merge-base --is-ancestor 4c407f9 3979abd8`
+is false). The shape can still be emitted here.
+
+A pass was nevertheless weaker than it looked, for a different reason: **0 hits is equally
+consistent with patch 0003 removing the instance and with the shape never arising in this build.**
+That had never been separated. So M5 was rebuilt with patch 0003 removed and nothing else changed:
+
+```
+HIT ff_mpv_alloc_pic_pool   955d8: addi a2, sp, 0x8  ->  955e8: sd zero, 0x0(a2)
+1 hit(s) in 361737 instructions      (with 0003: 0 hits in 1,018,765)
+```
+
+**The gate fires, in the very function patch 0003 patches** (`libavcodec/mpegpicture.c`,
+`ff_mpv_alloc_pic_pool`). So on this compiler the patch is load-bearing, the gate is proven able to
+report the opposite, and the Phase 0 pass above is real evidence rather than an unproven check.
+
+What this does **not** settle: whether `4c407f9` makes patch 0003 droppable. That needs a build on
+a compiler at or past the fix, which is not built here. Note the trap in answering it — **on a
+fixed compiler this control cannot fire**, so "the gate passes without 0003" would there be
+uninformative, and droppability has to be argued from the emitted code or from a recorded pre-fix
+disassembly. `c50-control.txt` holds this one.
+
 ## Sizes measured on the way (the reason this matters)
 
 | | bytes | |
