@@ -1,8 +1,11 @@
 PostgreSQL reuse follow-up (2026-09-28): the
 [spatial raw qualification](../../experiments/study/results/postgres-reuse-spatial-20260928/README.md)
 now passes three complete, native-matched SQL processes with a validated
-inner-chunk histogram in the common CheriBSD runner. Finish the Capstone
-spatial/Sublet instrumentation and qualify protected PoisonCap before
+inner-chunk histogram in the common CheriBSD runner. The
+[Capstone+Sublet arm](../../experiments/study/results/postgres-reuse-sublet-20260928/README.md)
+also passes three complete processes with the same SQL oracle and a checked
+histogram. Finish the Capstone original-layout instrumentation and qualify
+protected PoisonCap before
 admitting a PostgreSQL row to the cross-application violin. A scratch queue
 candidate still stopped progressing during the INSERT without actual
 `cheri_revoke`, after about 16,384 handouts; an O(1) chunk-index free list
