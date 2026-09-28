@@ -877,6 +877,286 @@ def sqlite_policy_campaign(root, out):
     print('Validated six new SQLite default-policy processes and six archived Capstone controls')
 
 
+def organized_policy_review(out):
+    """Two navigation views of the same validated measurements, without reruns."""
+    campaign = json.loads((out / 'summary.json').read_text())
+    sqlite = json.loads((out / 'sqlite-summary.json').read_text())
+    rows = campaign['runs']
+    keys = ('sqlite-main', 'mruby-ao8', 'mruby-ao16', 'ffmpeg-xvid', 'ffmpeg-resize')
+    cells = {key: checked_cell(sqlite['runs'] if key == 'sqlite-main' else
+                              [r for r in rows if r['workload'] == key]) for key in keys}
+    metadata = {'CreationDate': None, 'ModDate': None, 'Title': 'Application memory review'}
+    note = ('Published SQLite thresholds; transferred to mruby/FFmpeg. Correctness repairs; FFmpeg teardown sweeps.\n'
+            'Outer revocation on in both PoisonCap arms. Three repeats. Selected allocators; no RSS or timing claims.')
+
+    def reuse(ax, key):
+        draw_cdf(ax, cells[key])
+        ax.set(title=TITLES[key], xlabel='Release-to-reissue gap (issues)',
+               ylabel='Reissues / all issues (%)')
+
+    def sqlite_ratio(ax, field):
+        for entry in sqlite['ratios']:
+            if entry['metric'] != field:
+                continue
+            samples = np.array(entry['samples'])
+            i = ARMS.index(entry['protected'])
+            ax.plot(range(1, 18), np.median(samples, axis=0),
+                    markevery=(i-1, 4), **line_style(i))
+            ax.fill_between(range(1, 18), samples.min(axis=0), samples.max(axis=0),
+                            color=COLORS[i], alpha=.15)
+        title = ('Address coverage: allocated interval union' if field == 'ever' else
+                 'Allocator bytes: peak held + metadata')
+        ax.set(title='SQLite 3.22.0 · speedtest1 main\n' + title,
+               xlabel='Completed workload units', ylabel='Protected / own spatial control (×)',
+               xlim=(.7, 17.3), xticks=[1, 5, 9, 13, 17], ylim=(0, 5.5))
+        ax.axvspan(.5, 1.5, color='.93', zorder=-1)
+        ax.axhline(1, color='.6', linestyle=':', linewidth=.7)
+        clean_axis(ax)
+
+    def allocator_ratio(ax, subset, metric, title, limit):
+        for x, key in enumerate(subset):
+            for entry in campaign['paired_ratios']:
+                if entry['workload'] != key or entry['metric'] != metric:
+                    continue
+                values = entry['ratios']
+                i = ARMS.index(entry['protected'])
+                at = x + (-.14 if i == 1 else .14)
+                mid = np.median(values)
+                ax.errorbar(at, mid, yerr=[[mid-min(values)], [max(values)-mid]],
+                            fmt=MARKERS[i], color=COLORS[i], capsize=3, markersize=5)
+                ax.annotate(f'{mid:.2f}×', (at, mid), xytext=(0, 8),
+                            textcoords='offset points', ha='center', fontsize=8, color=COLORS[i])
+        short = {'mruby-ao8': 'AO 8', 'mruby-ao16': 'AO 16',
+                 'ffmpeg-xvid': 'FATE Xvid', 'ffmpeg-resize': 'FATE resize'}
+        ax.set(title=title, xticks=range(len(subset)), xticklabels=[short[k] for k in subset],
+               ylabel='Protected / own spatial control (×)', xlim=(-.5, len(subset)-.5), ylim=(0, limit))
+        ax.axhline(1, color='.6', linestyle=':', linewidth=.7)
+        clean_axis(ax)
+
+    def mruby(ax, retained=False):
+        allocator_ratio(ax, keys[1:3], 'selected_retained_bytes' if retained else 'selected_backing_bytes',
+                        'mruby · GC backing\n' + ('After render' if retained else 'Peak'), 2.7)
+
+    def ffmpeg(ax):
+        allocator_ratio(ax, keys[3:], 'selected_backing_bytes',
+                        'FFmpeg · pool leases\nCarved address extent (including padding)', 15.5)
+
+    def make(title, nrows, ncols, four=True):
+        fig, axes = plt.subplots(nrows, ncols, figsize=(7.05, 1.35 + 2.4*nrows), squeeze=False)
+        fig.subplots_adjust(left=.105, right=.98, top=1-.93/fig.get_figheight(),
+                            bottom=.90/fig.get_figheight(), hspace=.65, wspace=.42)
+        legend(fig, four=four)
+        fig.suptitle(title, y=1-.38/fig.get_figheight(), fontsize=12)
+        fig.text(.5, .12/fig.get_figheight(), note, ha='center', fontsize=6.5)
+        return fig, axes.flat
+
+    captions = {
+        'by-metric/01-reuse': ('Wiederverwendung',
+            'Alle fünf Workloads, dieselben Achsen und vier Arme. Die CDF teilt Wiederverwendungen '
+            'durch alle Allokationen; sie muss daher nicht 100 % erreichen. Gemessen wird derselbe Startadresswert.'),
+        'by-metric/02-address-footprint': ('Adressraumbedarf',
+            'SQLite: Vereinigung bisher allokierter Adressintervalle über 17 Einheiten. '
+            'FFmpeg: höchste genutzte Pool-Ausdehnung inklusive Padding. Das sind unterschiedliche '
+            'Adressmetriken, keine Messungen des physischen Working Sets. Für mruby liegt diese Metrik nicht vor.'),
+        'by-metric/03-allocator-memory': ('Allocator-Speicher',
+            'SQLite: Peak aus gehaltenen Bytes plus Metadaten. mruby: GC-Backing am Peak und nach dem Rendern. '
+            'Die Grenzen der erfassten Allocatoren unterscheiden sich; keine Gesamt-RSS-Messung. '
+            'Die höheren Sublet-Kosten bei SQLite und nach AO 16 bleiben sichtbar. FFmpeg hat hier noch keine vergleichbare Messung.'),
+        'by-application/01-sqlite': ('SQLite',
+            'SQLite 3.22.0, speedtest1 main: Reuse, Adressabdeckung und Allocator-Peak. '
+            '17 vollständige Einheiten pro Prozess; sechs neue PoisonCap-Läufe und sechs archivierte Capstone-Kontrollen.'),
+        'by-application/02-mruby': ('mruby',
+            'AO 8 und AO 16: Reuse, GC-Peak und GC-Backing nach dem Rendern. '
+            '24 neue Prozesse. Compiler-Optimierung des Interpreter-Archivs noch nicht angeglichen; siehe Methoden.'),
+        'by-application/03-ffmpeg': ('FFmpeg',
+            'Adaptierte FATE-Eingaben: Xvid mit 20 Frames und Resize mit 150 Frames. '
+            'Reuse und Pool-Ausdehnung; 24 neue Prozesse. Feste 256-MiB-Reservierung und zusätzliche '
+            'PoisonCap-Snapshot-Bytes sind nicht Teil der gezeigten Pool-Ausdehnung.'),
+    }
+
+    def save(fig, name, book):
+        target = out / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        for ax in fig.axes:
+            ax.title.set_fontsize(9)
+        fig.savefig(target.with_suffix('.pdf'), metadata=metadata)
+        fig.savefig(target.with_suffix('.png'), dpi=240)
+        book.savefig(fig)
+        plt.close(fig)
+
+    # Histograms are the finest available observations. Draw split, stepped
+    # violins in log-gap coordinates rather than inventing samples for a KDE.
+    fig, ax = plt.subplots(figsize=(7.05, 4.35))
+    fig.subplots_adjust(left=.115, right=.985, top=.88, bottom=.29)
+    control_color, sublet_color, poison_color = '#D1B98D', '#218C86', '#8961B2'
+    fig.legend(handles=[Patch(facecolor=control_color, label='Spatial control'),
+                        Patch(facecolor=sublet_color, label='Sublet'),
+                        Patch(facecolor=poison_color, label='PoisonCap')],
+               loc='upper center', bbox_to_anchor=(.55, .99), ncol=3, frameon=False,
+               fontsize=10, handlelength=1.15, columnspacing=2)
+    max_mass = max(max(r['bins']) / r['reuses'] for cell in cells.values()
+                   for r in cell.values() if r['reuses'])
+    violin_rows = []
+    gap_boundaries = 2.**np.arange(33)
+    for pair_index, (base, protected) in enumerate(PAIRS):
+        color = (sublet_color, poison_color)[pair_index]
+        for row_index, key in enumerate(keys):
+            x = row_index + (-.22 if pair_index == 0 else .22)
+            for arm, direction, shade in ((base, -1, control_color), (protected, 1, color)):
+                r = cells[key][arm]
+                require(not any(r['bins'][20:]), 'violin axis would truncate observed gaps')
+                mass = np.array(r['bins']) / r['reuses'] if r['reuses'] else np.zeros(32)
+                if r['reuses']:
+                    ax.fill_betweenx(gap_boundaries, x,
+                                     x + direction*.19*np.r_[mass, 0]/max_mass,
+                                     step='post', facecolor=shade, edgecolor='none', zorder=3)
+                else:
+                    ax.text(x+.07, 64, 'no reuse', color=shade, fontsize=8,
+                            rotation=90, ha='center', va='center')
+                percent = 100*r['reuses']/r['issues']
+                for bucket, count in enumerate(r['bins']):
+                    violin_rows.append(dict(workload=key, arm=arm, lower_gap=2**bucket,
+                        upper_gap=int(EDGES[bucket]), count=count, issues=r['issues'], reuses=r['reuses'],
+                        conditional_mass=float(mass[bucket]) if r['reuses'] else None,
+                        reused_percent=percent, repetitions=3))
+    ax.set_yscale('log', base=2)
+    ax.set(ylim=(1, 2**20), xlim=(-.6, 4.6), xticks=range(5),
+           xticklabels=('SQLite · main', 'mruby · AO 8', 'mruby · AO 16',
+                        'FFmpeg · Xvid', 'FFmpeg · resize'))
+    ax.set_yticks([1, 16, 256, 4096, 65536, 2**20], ['1', '16', '256', '4K', '64K', '1M'])
+    ax.set_ylabel('Release-to-reuse gap (allocations)', fontsize=10)
+    ax.tick_params(axis='x', rotation=90, length=0, pad=9, labelsize=10)
+    ax.tick_params(axis='y', length=0, pad=6, labelsize=9)
+    ax.grid(axis='y', color='#E6E8EB', linewidth=.6, zorder=0)
+    ax.set_axisbelow(True)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    with PdfPages(out / 'reuse-distributions.pdf', metadata=metadata) as book:
+        save(fig, 'by-metric/00-reuse-distributions', book)
+    write_csv(out / 'reuse-distributions.csv', violin_rows)
+
+    # Exploratory cross-application summary of existing CDFs. These cuts are
+    # display choices, not preregistered endpoints for the future A-D campaign.
+    fig, axes = plt.subplots(1, 3, figsize=(7.05, 3.95), sharey=True)
+    fig.subplots_adjust(left=.22, right=.98, top=.73, bottom=.29, wspace=.15)
+    legend(fig, four=False)
+    fig.suptitle('Prompt address reuse · change from each spatial control', y=.88, fontsize=11)
+    overview = []
+    for ax, horizon in zip(axes, (15, 1023, 65535)):
+        bucket = list(EDGES).index(horizon)
+        for y, key in enumerate(keys):
+            for base, protected in PAIRS:
+                values = []
+                samples = sqlite['runs'] if key == 'sqlite-main' else [r for r in rows if r['workload'] == key]
+                for rep in range(3):
+                    pair = {r['arm']: r for r in samples if r['rep'] == rep}
+                    fractions = {a: float(cdf(pair[a]['bins'], pair[a]['issues'])[bucket])
+                                 for a in (base, protected)}
+                    loss = fractions[base] - fractions[protected]
+                    values.append(loss)
+                    overview.append(dict(workload=key, protected=protected, rep=rep, upper_gap=horizon,
+                                         control_percent=fractions[base], protected_percent=fractions[protected],
+                                         loss_percentage_points=loss))
+                i = ARMS.index(protected)
+                mid = np.median(values)
+                ax.errorbar(mid, y + (-.13 if i == 1 else .13),
+                            xerr=[[mid-min(values)], [max(values)-mid]],
+                            fmt=MARKERS[i], color=COLORS[i], markersize=5, capsize=2)
+        ax.axvline(0, color='.5', linewidth=.7)
+        ax.set(title=f'Gap ≤ {horizon:,} issues', xlim=(-5, 103), xticks=(0, 25, 50, 75, 100),
+               ylim=(4.5, -.5), yticks=range(5),
+               yticklabels=('SQLite · main', 'mruby · AO 8', 'mruby · AO 16', 'FFmpeg · Xvid', 'FFmpeg · resize'))
+        ax.grid(axis='x', color='.9', linewidth=.5)
+        ax.tick_params(axis='both', labelsize=8)
+        ax.title.set_fontsize(9)
+    fig.text(.6, .19, 'Control − protected (percentage points); zero = preserved reuse fraction',
+             ha='center', fontsize=8)
+    fig.text(.5, .12, 'Exploratory CDF slices; denominator: all issues. Same definition, different workload horizons.\n'
+             'Median/range of three runs (coincident). No aggregate score or memory-saving inference.',
+             ha='center', fontsize=7)
+    fig.text(.5, .015, note, ha='center', fontsize=6)
+    with PdfPages(out / 'cross-application-reuse.pdf', metadata=metadata) as book:
+        # Save through the same helper, without writing the PDF onto itself.
+        save(fig, 'by-metric/00-cross-application-reuse', book)
+    write_csv(out / 'cross-application-reuse.csv', overview)
+
+    with PdfPages(out / 'review-by-metric.pdf', metadata=metadata) as book:
+        fig, axes = make('1 · Reuse across applications', 3, 2)
+        for index, key in zip((0, 2, 3, 4, 5), keys): reuse(fig.axes[index], key)
+        fig.axes[1].axis('off')
+        fig.axes[1].text(0, .8, 'Same axes for every workload.\n\nCurves: three coinciding repetitions.\n\nRows: SQLite, mruby, FFmpeg.', fontsize=9, va='top')
+        save(fig, 'by-metric/01-reuse', book)
+        fig, axes = make('2 · Address footprint — application-specific quantities', 1, 2, four=False)
+        sqlite_ratio(next(axes), 'ever'); ffmpeg(next(axes))
+        save(fig, 'by-metric/02-address-footprint', book)
+        fig, axes = make('3 · Selected allocator memory', 2, 2, four=False)
+        sqlite_ratio(next(axes), 'peak'); next(axes).axis('off')
+        mruby(next(axes)); mruby(next(axes), retained=True)
+        fig.axes[1].text(0, .8, 'Ratios use each platform’s own control.\n\nLower ratios mean less added cost.\n\nSelected allocator bytes, not total RSS.', fontsize=9, va='top')
+        save(fig, 'by-metric/03-allocator-memory', book)
+    with PdfPages(out / 'review-by-application.pdf', metadata=metadata) as book:
+        fig, axes = make('SQLite · all measured quantities', 2, 2)
+        reuse(next(axes), keys[0]); next(axes).axis('off')
+        sqlite_ratio(next(axes), 'ever'); sqlite_ratio(next(axes), 'peak')
+        save(fig, 'by-application/01-sqlite', book)
+        fig, axes = make('mruby · all measured quantities', 2, 2)
+        reuse(next(axes), keys[1]); reuse(next(axes), keys[2])
+        mruby(next(axes)); mruby(next(axes), retained=True)
+        save(fig, 'by-application/02-mruby', book)
+        fig, axes = make('FFmpeg · all measured quantities', 2, 2)
+        reuse(next(axes), keys[3]); reuse(next(axes), keys[4])
+        ffmpeg(next(axes)); next(axes).axis('off')
+        save(fig, 'by-application/03-ffmpeg', book)
+
+    sections = []
+    for prefix, title, packet in (('by-metric', 'Nach Metrik · hier beginnen', 'review-by-metric.pdf'),
+                                  ('by-application', 'Nach Anwendung · dieselben Daten', 'review-by-application.pdf')):
+        cards = ''.join(f'<article><h3>{title}</h3><p>{caption}</p><a href="{name}.pdf">PDF öffnen</a>'
+                        f'<a href="{name}.png"><img src="{name}.png" alt="{title}" loading="lazy"></a></article>'
+                        for name, (title, caption) in captions.items() if name.startswith(prefix))
+        sections.append(f'<section id="{prefix}"><h2>{title}</h2><p><a href="{packet}">Alle drei Blätter als PDF</a></p>{cards}</section>')
+    (out / 'index.html').write_text('''<!doctype html><html lang="de"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Memory plots · Review</title>
+<style>body{font:17px/1.55 system-ui,sans-serif;color:#20252b;background:#f4f5f7;margin:0}
+main{max-width:1000px;margin:auto;padding:28px}h1,h2,h3{line-height:1.2}a{color:#005a9c}
+nav{position:sticky;top:0;background:#fff;padding:15px;border-bottom:1px solid #ccd;z-index:1}
+nav a{margin-right:22px}article{background:white;border:1px solid #ddd;border-radius:8px;padding:24px;margin:24px 0}
+img{display:block;width:100%;height:auto;margin-top:16px}table{border-collapse:collapse;width:100%;background:white}
+th,td{text-align:left;border-bottom:1px solid #ddd;padding:10px}section{scroll-margin-top:80px}
+@media(max-width:600px){main{padding:12px}article{padding:12px}table{font-size:13px}}</style>
+<nav><a href="#by-metric">Nach Metrik</a><a href="#by-application">Nach Anwendung</a><a href="README.md">Methoden &amp; Daten</a></nav>
+<main><h1>Speicherverhalten · Plot-Review</h1>
+<p><b>Haupteinstieg: nach Metrik.</b> Die Anwendungsansicht zeigt dieselben Messungen in anderer Gruppierung.
+Drei Anwendungen, fünf Workloads, vier Arme, je drei Wiederholungen: 60 vollständige Prozesse (54 neu, sechs archivierte Kontrollen).
+Diese Neuordnung enthält keine neuen Messläufe.</p>
+<p>Blau: Capstone/Sublet. Orange: PoisonCap. Gestrichelt: räumliche Kontrolle; durchgezogen: geschützt.
+Verhältnisse vergleichen immer geschützt / eigene Plattformkontrolle; 1× bedeutet keinen Mehrbedarf in dieser Metrik.</p>
+<table><tr><th>Anwendung</th><th>Reuse</th><th>Adressraumbedarf</th><th>Allocator-Speicher</th></tr>
+<tr><td>SQLite</td><td>Ja</td><td>Intervallvereinigung, Verlauf</td><td>Peak + Metadaten, Verlauf</td></tr>
+<tr><td>mruby</td><td>Ja, AO 8/16</td><td>Noch nicht gemessen</td><td>GC-Peak &amp; nach Rendern</td></tr>
+<tr><td>FFmpeg</td><td>Ja, Xvid/Resize</td><td>Pool-Ausdehnung</td><td>Noch nicht vergleichbar gemessen</td></tr></table>
+<article><h2>Wiederverwendung: Verteilung</h2>
+<p><a href="reuse-distributions.pdf">PDF</a> · <a href="reuse-distributions.csv">Messwerte</a></p>
+<img src="by-metric/00-reuse-distributions.png" alt="Vertikale Histogramm-Violinen für fünf Benchmarks">
+<p>Benchmarks auf der X-Achse; Wiederverwendungsabstand auf der logarithmischen Y-Achse.
+Je Benchmark stehen Sublet und PoisonCap nebeneinander, jeweils mit der eigenen Kontrolle als sandfarbener linker Hälfte.
+Die Verteilungen umfassen nur beobachtete Wiederverwendungen. Häufigkeiten stehen weiterhin in der CSV.
+Die leere PoisonCap-Hälfte bei Xvid bedeutet keine beobachtete Wiederverwendung.</p></article>
+<article><h2>Eine Metrik über alle Anwendungen</h2>
+<p><a href="cross-application-reuse.pdf">Gemeinsamer Reuse-Vergleich als PDF</a> ·
+<a href="cross-application-reuse.csv">Messwerte als CSV</a></p>
+<p>Jede Zeile ist ein Benchmark. Die Punkte zeigen die Änderung gegenüber der eigenen räumlichen Kontrolle
+an drei Abständen der vorhandenen Reuse-CDFs. Null bedeutet: Der Wiederverwendungsanteil bleibt erhalten.
+Explorative Übersicht über bestehende Läufe mit unterschiedlichen Arbeitshorizonten; noch kein gemeinsames A–D-Experiment.</p>
+<img src="by-metric/00-cross-application-reuse.png" alt="Reuse-Veränderung für fünf Workloads an drei Abständen">
+</article>
+<p>Kein physisches Working Set oder Gesamt-RSS; Adressmetriken und Allocator-Bytes sind getrennt.
+PoisonCap: veröffentlichte SQLite-Schwellen, für mruby/FFmpeg übertragen; Korrekturen und Teardown-Sweeps dokumentiert.
+Die ältere gemischte Ablage bleibt für bestehende Links erhalten.</p>''' + ''.join(sections) + '</main></html>\n')
+    (out / 'review-captions.json').write_text(json.dumps(captions, ensure_ascii=False, indent=2)+'\n')
+    print('Wrote review index, three metric sheets and three application sheets from the same validated data')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
@@ -894,6 +1174,7 @@ def main():
         transferred_policy_campaign(args)
         if args.sqlite_policy_runs:
             sqlite_policy_campaign(args.sqlite_policy_runs, args.out)
+            organized_policy_review(args.out)
         return
     inputs = Inputs()
     inputs.track(Path(__file__).resolve())

@@ -4,7 +4,13 @@ passes all 48 processes with outer defaults enabled. Preserve its exact
 policy labels, destructor-sweep counters, corrected runtime identities and
 retention countercosts. SQLite's six repeated outer-default processes also
 pass and pair with six archived Capstone controls; the combined figure set
-validates 60 processes (54 new). Do not relabel the old outer-disabled SQLite
+validates 60 processes (54 new). The [review index](../../experiments/study/results/published-policy-20260928/index.html)
+now groups the same measurements by metric, with a secondary application
+view and an explicit metric-coverage table. The [campaign presentation](../plans/application-memory-campaign.md#cross-application-presentation-and-paper-precedents)
+now defines common cross-application endpoints using inspected paper precedents.
+An exploratory reuse overview exists; shared byte ledgers, matched baseline
+kinds and identical A–C schedules are still required before a common memory-cost
+ranking. Do not relabel the old outer-disabled SQLite
 data. The next wider
 milestone remains complete qualified PoisonCap arms for PostgreSQL, CPython
 and Perl, followed by normalized compiler settings and equal-scope full

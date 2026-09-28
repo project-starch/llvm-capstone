@@ -1,5 +1,46 @@
 # Application memory with the published PoisonCap thresholds
 
+**Review starts here: [visual index](index.html).** The primary view groups
+plots by metric; the secondary view groups the same data by application.
+
+The [distribution view](reuse-distributions.pdf) places benchmarks on the
+X-axis and release-to-reuse gaps on the logarithmic Y-axis. Each benchmark
+has two split histogram violins: Sublet in teal and PoisonCap in violet,
+each with its own spatial control as the sand-colored left half. Shapes are
+conditional on observed reuses, with identical area and a common width
+scale per log2 bucket; there is no KDE, interpolation or reconstructed event
+sample. Reuse-frequency columns have been removed from this compact view;
+the CSV retains reuses divided by **all** allocation issues. The distribution
+alone does not show how frequent reuse is. The PoisonCap Xvid distribution
+is undefined (zero reuses), rather
+than a spike at zero or infinity. [CSV](reuse-distributions.csv) preserves
+the bin counts, conditional mass and total allocation denominator. Three
+repeats coincide; each distribution is displayed once. Workload horizons
+differ, and the figure does not measure retirement-cohort recovery or memory
+savings. This view uses the same validated raw runs as the CDFs.
+
+For one shared metric across all five cases, start with the
+[cross-application reuse comparison](cross-application-reuse.pdf)
+([per-run values](cross-application-reuse.csv)). It shows control minus
+protected reuse fractions at three existing CDF bucket edges, in percentage
+points. These are exploratory display cuts with the existing all-issues
+denominator, not a retirement-cohort measurement. Work horizons differ across
+applications; the figure adds no new experiment or claim of memory savings.
+The [common campaign presentation](../../../../docs/plans/application-memory-campaign.md#cross-application-presentation-and-paper-precedents)
+specifies the memory-cost and recovery counterparts and their admission gates.
+
+| View | Contents | Download |
+|---|---|---|
+| By metric (recommended) | Reuse; address footprint; selected allocator memory | [Three-page PDF](review-by-metric.pdf) |
+| By application | SQLite; mruby; FFmpeg, with each application's available metrics | [Three-page PDF](review-by-application.pdf) |
+
+Individual PDF/PNG sheets live under `by-metric/` and `by-application/`.
+The index includes metric definitions and a coverage matrix: missing metrics
+are explicit. Address interval union, carved pool extent and GC backing
+remain distinct quantities. This reorganization uses the same validated
+measurements; it adds no guest runs. Original mixed-layout figures below
+remain available for existing links.
+
 The figures validate **60 complete application processes: 54 fresh runs and
 six archived Capstone SQLite controls**. mruby and FFmpeg contribute 48 fresh
 processes (two workloads per application, four arms, three repetitions).
@@ -20,7 +61,7 @@ The latter therefore measure **published SQLite thresholds transferred to
 these allocators**, with necessary correctness repairs and destructor
 handling disclosed. They are not unchanged-artifact or author-provided ports.
 
-## Figures
+## Original mixed-layout figures (retained for existing links)
 
 [All three figures in one PDF](application-memory-published.pdf) ·
 [LaTeX captions](figures.tex) · [Validation](validation.json)

@@ -180,6 +180,97 @@ are separately labeled sensitivity experiments after the common campaign.
 
 ## Figures, aggregation, and publication gate
 
+### Cross-application presentation and paper precedents
+
+The primary overview uses **one metric across every admitted application**,
+with benchmark cases grouped under application names. A second layer of
+small multiples explains the per-application trajectory. Neither layer may
+substitute a different byte quantity when instrumentation is missing.
+
+Relevant precedents, inspected in the papers rather than inferred from abstracts:
+
+* [Cornucopia Reloaded, ASPLOS 2024, Figure 3, PDF page 8](https://www.cl.cam.ac.uk/research/security/ctsrd/pdfs/202404asplos-cornucopia-reloaded.pdf#page=8)
+  places normalized peak RSS for several workloads in one grouped figure,
+  with the absolute baseline MiB above each group. Its caption also explains
+  how a minimum quarantine affects small heaps. Adopt the common metric,
+  visible denominator and explanatory context. Our current allocator ledger
+  is not RSS, and must retain its own label. That paper uses ratios of averaged
+  peaks; this campaign instead computes paired run ratios before aggregation.
+* [mimalloc, 2019 technical report, Figure 5, PDF page 15](https://www.microsoft.com/en-us/research/wp-content/uploads/2019/06/mimalloc-tr-v1.pdf#page=15)
+  groups allocators by benchmark using normalized peak RSS. This makes
+  workload-specific differences visible. Adopt the grouped comparison;
+  with only two protected factors, paired dots are less crowded than bars.
+  All cases admitted to our campaign remain visible, rather than selecting
+  cases after observing a favorable result.
+* [Mesh, PLDI 2019, Figures 6–7, PDF page 11](https://people.cs.umass.edu/~mcgregor/papers/19-pldi.pdf#page=11)
+  shows Firefox and Redis memory trajectories. The Firefox discussion
+  distinguishes similar peaks from lower memory through much of execution;
+  Redis illustrates reclamation over a run. Adopt the trajectory companion.
+  Our x-axis is completed useful work, not emulator seconds, and our
+  selected allocator quantities cannot inherit Mesh's physical-memory claim.
+* [PoisonCap, arXiv v1, Figures 6–7, PDF pages 10–11](https://arxiv.org/pdf/2605.13210v1#page=10)
+  shows SQLite phase runtime factors and SPEC runtime/DRAM-traffic factors.
+  Those figures do not supply the common nested-allocator memory/recovery
+  matrix specified here. The opportunity is to measure that missing behavior
+  across allocator types, not to reinterpret DRAM traffic as storage capacity
+  or claim that the paper evaluated no memory-related effects.
+
+These references motivate the following presentation; they do not establish
+our experimental results:
+
+| Sheet | One shared endpoint across all cases | Layout and supported conclusion |
+|---|---|---|
+| Memory cost | `peak H(protected) / peak H(own spatial)` in A; the separate `B` panel uses the same rule | Two dots per benchmark, baseline at 1×, absolute four-arm bytes alongside. Lower relative cost at the selected allocator boundary, subject to equal ledger and baseline scope. Never replace `H` with pool extent for FFmpeg. |
+| Reuse change | Control minus protected retirement-side `R(h)`, in percentage points, on the same eligible cohort and horizon | One row per benchmark, columns for fixed `h`; zero means preserved reuse fraction. Full per-case CDFs accompany the summary. This explains placement/delay, not physical memory savings. |
+| Recovery | First sustained return of `H` to the declared pre-burst envelope in C | One row per benchmark, four arm markers; right-censor when recovery is not observed. Separate `B` and `F` explain retained backing versus usable capacity. No numerical averaging of censored observations. |
+| Mechanism | A's phase ledger, B's live-demand scaling, C's burst/recovery ledger | Rows are applications/cases; columns are the same experiments with identical definitions. Common work checkpoints; show live demand, withheld storage, reusable bytes and metadata. Explain where overview differences arise. |
+
+Use application order consistently across sheets. Predeclare reference cases,
+input levels, warm-up, release boundaries and observation horizon. Normalized
+phase curves must use a fixed, declared denominator from the same platform's
+spatial reference run, not a moving per-phase denominator that masks growth.
+Retain absolute curves and baselines. Never concatenate application events
+into a single pooled CDF: a high-allocation workload would dominate it.
+
+There is no need to collapse three applications into one headline average.
+Report each application, effect range and the number of admitted cases with
+lower/equal/higher values. If a multiplicative summary is later needed after
+all gates pass, use geometric means of positive paired factors within cases,
+then equal-weight application summaries; report the formula and all individual
+effects. This is an optional descriptive summary, not a significance test or
+a replacement for the pre-existing median/range case reports. Do not average
+absolute bytes across differently sized applications or compute geometric
+means of percentage-point changes. Three identical process repeats do not
+establish coverage of other inputs.
+
+The current [cross-application reuse overview](../../experiments/study/results/published-policy-20260928/cross-application-reuse.pdf)
+is an **exploratory allocation-side** CDF summary from existing measured runs,
+at three display cuts (15, 1,023 and 65,535 issues). It preserves the existing
+all-issues denominator and has a [per-run CSV](../../experiments/study/results/published-policy-20260928/cross-application-reuse.csv).
+It is not the future retirement-side endpoint, a preregistered result, or
+evidence that the A–D execution schedules are already matched. Keep the full
+CDFs visible; no cross-application score is calculated.
+
+Implementation order for the current three-application core:
+
+1. Complete and validate one disjoint `L/C/Q/F/M/S/Z/B` observer schema at the
+   inner boundary. SQLite, GC pages and decoder pools must emit the same
+   fields with explicit unavailable values. Record grants/returns and exact
+   intra-unit peaks; expose address union separately. Add retirement cohorts
+   for the future reuse endpoint without keeping guest capabilities alive.
+2. Fix the baseline-kind mismatch and remaining mruby build mismatch before
+   claiming equal-scope protection cost. Keep adapter-spatial controls as
+   separate policy-isolation measurements; add missing original-layout
+   controls rather than relabeling existing data.
+3. Qualify `prepare/unit/release/finish` adapters on native output oracles and
+   each of the four arms, then execute A identically for SQLite, mruby and
+   FFmpeg (one warm-up plus 16 units). Validate stable live demand and record
+   natural GC/destructor behavior; no forced sweeps or replay.
+4. Freeze the native-discovered live-set sizes and run B/C on those same cases.
+   Generate the three common endpoint sheets and their explanatory panels.
+   Extend exactly this contract to the remaining applications. Keep D pending
+   until the same full budget can be accounted and enforced in all arms.
+
 Use the same panel template for each admitted case: A availability and reuse,
 B footprint versus live demand, C phase ledger and recovery, D budget/status.
 Show the four absolute arms and the two within-platform protection deltas.
