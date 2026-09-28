@@ -39,6 +39,27 @@ corpora, which is the shortest answer to "which defects does this release have".
 A component's result bundle still names the revision actually tested, and
 historical results keep their original source and binary identities.
 
+**[INDEX.md](INDEX.md) is the generated list of every component** by role, with its
+pinned version, the targets it runs on, its workload and its corpora. Read it before
+this table: it cannot go stale, and the table above can.
+
+## Naming, and why the existing names stay
+
+**A new component is named for what it is:** `app/` for the complete application,
+`<boundary>/` for one allocator (`pools`, `pymalloc`, `buffer-pool`, `wmem`,
+`memory-contexts`), `cheribsd/` for the same release built for another platform.
+
+The components that predate that rule keep their names — `cpython/interpreter`,
+`mruby/musl`, `perl/musl`, `postgres/single-user`, and the flat trees of `sqlite`,
+`micropython` and `nginx` — and `role` in each `port.json` says what they are instead.
+That is deliberate: those paths are quoted by **archived result bundles**, including
+four `build-manifest.json`/`inputs.json` files that record which directory a measured
+binary was built from. Renaming a component either falsifies that record or leaves
+evidence pointing at a path that no longer exists, and the point of a manifest is that
+neither can happen. A rename is therefore a decision with a cost, taken deliberately
+and once — as `bug-corpora/sqlite/cve-repros` → `capi-repros` was, because that name
+was wrong in kind rather than merely old.
+
 ## Shared layout for component ports
 
 FFmpeg, PostgreSQL memory contexts and CPython use the same build support.

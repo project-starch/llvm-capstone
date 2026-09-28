@@ -158,7 +158,22 @@ ported backend was 17.5.
 | `workload`, `evidence`, `corpora`, `related`, `status`, `note` | the qualifying workload, result bundles, the corpora whose cases are its own, neighbouring components, and anything else a reader needs. Paths must exist |
 
 **`role` is why nothing was renamed.** The complete application of a program is
-variously `app`, `interpreter`, `musl`, `single-user` or the port root, and those
-names are load-bearing in build recipes and result bundles. The role is declared
-instead, so both a reader and the index can ask what a component is without the
-directory name having to answer.
+variously `app`, `interpreter`, `musl`, `single-user` or the port root. Those paths
+are quoted by archived result bundles — four `build-manifest.json`/`inputs.json`
+files record which directory a measured binary was built from — so a rename either
+falsifies that record or points evidence at a path that no longer exists. The role is
+declared instead, so a reader and the index can ask what a component is without the
+directory name having to answer. **New components follow the rule in
+[`../ports/README.md`](../ports/README.md#naming-and-why-the-existing-names-stay):
+`app/`, `<boundary>/`, `cheribsd/`.**
+
+## Naming, on this side
+
+A corpus is `<program>/<boundary>-repros/`, where the boundary is the allocator or
+API its cases cross: `pymalloc-repros`, `mmgr-repros`, `wmem-repros`, `pool-repros`,
+`apr-pool-repros`, `bucket-repros`, `capi-repros`, `allocator-repros`,
+`gc-slot-repros`. The name says what a case crosses, never where the defect was
+reported: `sqlite/cve-repros` was renamed to `capi-repros` on 2026-09-28 because it
+named a provenance class the corpus does not have — 19 rows, 2 advisories — and
+because SQLite's own engine CVEs are explicitly out of its scope. `allocator-repros`
+is broad rather than wrong (memcached's slabs *and* its object cache) and stays.
