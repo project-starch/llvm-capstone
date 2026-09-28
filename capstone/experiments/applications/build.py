@@ -98,12 +98,14 @@ def main():
         objects += [root / 'runtime' / n for n in ('pym_backing.o', 'pym_block_lifetimes.o', 'pym_sublet_glue.o')]
     if args.nested == 'postgres':
         objects += [root / 'link/context-pools.o']
+    if args.reuse_gap and args.app == 'postgres' and args.nested == 'none':
+        objects += [root / 'link/spatial-reuse-gap.o']
     if args.nested != 'none' and (args.heap != 'level0' or args.app != args.nested):
         raise ValueError('nested discovery arms use level0 for their separate outer heap')
     if args.gc_gaps and args.app != 'mruby':
         raise ValueError('--gc-gaps is only for the instrumented mruby archives')
-    if args.reuse_gap and (args.app, args.nested) != ('postgres', 'postgres'):
-        raise ValueError('--reuse-gap requires an instrumented PostgreSQL Sublet archive')
+    if args.reuse_gap and args.app != 'postgres':
+        raise ValueError('--reuse-gap requires an instrumented PostgreSQL archive')
     for f in [musl / 'include/stdlib.h', libc, *objects]:
         if not f.is_file(): raise FileNotFoundError(f)
     sdk = out / 'sdk'

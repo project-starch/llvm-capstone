@@ -30,10 +30,6 @@ ROOT=${PG_SU_ROOT:-$CAPSTONE_TMP_ROOT/pg-single-user}
 RT=${RUNTIME_REPO:-$CAPSTONE_REPO_ROOT}
 NESTED=${PGSU_NESTED:-none}
 case "$NESTED" in none|sublet) ;; *) echo "PGSU_NESTED=$NESTED?" >&2; exit 2 ;; esac
-if [[ ${PGSU_GAP_OBSERVER:-0} == 1 && $NESTED != sublet ]]; then
-  echo "PGSU_GAP_OBSERVER currently requires PGSU_NESTED=sublet" >&2
-  exit 2
-fi
 MANAGER=$SCRIPT_DIR/../memory-contexts
 MUSL_PORT=$RT/capstone/ports/musl-capstone
 MRT=$MUSL_PORT/runtime
@@ -162,6 +158,8 @@ if stage configure; then
   nested_flags=
   if [[ $NESTED == sublet ]]; then
     nested_flags="-I$MANAGER/src/allocators/sublet -I$RT/capstone/runtime/include"
+  elif [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
+    nested_flags="-DPG_SPATIAL_GAP_OBSERVER=1 -I$SCRIPT_DIR/toolchain"
   fi
   CC=capstone-cc CFLAGS="$OPT -DWAIT_USE_POLL $nested_flags" pgac_cv_computed_goto=no \
     ./configure --host=riscv64-unknown-linux-musl --enable-depend \
@@ -239,6 +237,12 @@ if stage make; then
       -c "$MANAGER/src/allocators/sublet/context-pools.c" \
       -o "$ROOT/link/context-pools.o"
     log "Sublet context-pool backend: $ROOT/link/context-pools.o"
+  elif [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
+    "$CAPSTONE_CLANG" "${CF[@]}" -I"$SCRIPT_DIR/toolchain" \
+      -I"$SCRIPT_DIR/../../../experiments/study" \
+      -c "$SCRIPT_DIR/toolchain/spatial-reuse-gap.c" \
+      -o "$ROOT/link/spatial-reuse-gap.o"
+    log "original-layout context observer: $ROOT/link/spatial-reuse-gap.o"
   fi
 fi
 
@@ -274,8 +278,10 @@ if [[ $NESTED == sublet ]]; then
   exit 0
 fi
 # shellcheck disable=SC2086
+GAP_OBJECTS=()
+if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then GAP_OBJECTS+=("$ROOT/link/spatial-reuse-gap.o"); fi
 "$CAPSTONE_LD_LLD" --gc-sections -T "$PGSU_LINKER_SCRIPT" -o "$ROOT/link/postgres.dom" \
-  "$O"/*.o "$ROOT/link/static_modules.o" $objs src/port/libpgport_srv.a src/common/libpgcommon_srv.a "$ARCHIVE" \
+  "$O"/*.o "$ROOT/link/static_modules.o" "${GAP_OBJECTS[@]}" $objs src/port/libpgport_srv.a src/common/libpgcommon_srv.a "$ARCHIVE" \
   > "$ROOT/link/link.log" 2>&1 && rc=0 || rc=$?
 { grep -oE 'undefined symbol: [^ ]+' "$ROOT/link/link.log" || true; } | sed 's/undefined symbol: //' | sort -u > "$ROOT/link/undefined.txt"
 { grep -E 'error:' "$ROOT/link/link.log" | grep -v 'undefined symbol' || true; } | head -5 | sed 's/^/[build-domain] /'

@@ -16,9 +16,14 @@ Generation, Slab and Bump lifetime patches to 17.5 and links
 `context-pools.o`. The application SDK's `build.py --app postgres --nested
 postgres` supplies a separate 64 MiB inner arena and its counters.
 For inner reuse measurement, `PGSU_GAP_OBSERVER=1` compiles the fixed
-integer histogram into the Sublet chunk handout/release path and reports
-`PG_REUSE_GAP` at exit. It includes live chunks retired by a block or
-context reset. Set `PGSU_ARGV0_OVERRIDE` to a dedicated share-local `.dom`
+integer histogram into either build. The original-layout build observes
+memory-context chunk handouts, explicit frees and reallocations, plus live
+chunks retired on context reset or deletion. Aligned-allocation wrappers
+delegate to the ordinary chunk methods, so they are counted once. The Sublet
+build observes its chunk handout/release path, including chunks retired by a
+block or context reset. Both report `PG_REUSE_GAP` at exit. Link the complete
+image through the application SDK with `--reuse-gap` so that the report and
+the observer object survive section collection. Set `PGSU_ARGV0_OVERRIDE` to a dedicated share-local `.dom`
 path when staging a measurement image beside its own PostgreSQL `share/`
 directory; this avoids replacing another study's staged binary.
 
