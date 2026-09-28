@@ -152,8 +152,11 @@ PY
     WCF=(-DWMEM_PORT_HOOKS -DWMEM_PORT_CHUNKS -DWM_DOMAIN -I"$WPORT/src/shared"
          -I"$CAPSTONE_REPO_ROOT/capstone/runtime/include")
     # The level below: the port's own chunks.c, unchanged, and this app's backing for it.
+    # TSAPP_WMEM_ABLATE=1: the chunk free's one give stubbed out (the harness's WM_P1_ABLATE), the
+    # matched arm that attributes fixture 13 to that revoke and shows the counter identity can fail.
+    ABL=(); [ "${TSAPP_WMEM_ABLATE:-0}" = 1 ] && ABL=(-DWM_ABLATE_RETIRE_GIVE)
     for s in "$WPORT/src/allocators/sublet/chunks.c" "$APP/src/tsapp-wmem-chunks.c"; do
-      "$CAPSTONE_CLANG" "${RTF[@]}" -std=c11 -DWM_DOMAIN -I"$WPORT/src/shared" \
+      "$CAPSTONE_CLANG" "${RTF[@]}" -std=c11 -DWM_DOMAIN "${ABL[@]}" -I"$WPORT/src/shared" \
         -I"$CAPSTONE_REPO_ROOT/capstone/runtime/include" -c "$s" -o "$OUT/$(basename "${s%.c}").o"
       HEAPOBJ+=("$OUT/$(basename "${s%.c}").o")
     done

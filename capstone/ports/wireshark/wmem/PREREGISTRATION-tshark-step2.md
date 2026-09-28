@@ -70,3 +70,19 @@ heap pool. A capture that does would fail T3, and that failure is the cost of no
 - **T4:** revokes that the structure does not account for.
 
 Any of these is a result, and is reported as one.
+
+## Addendum, 2026-09-29: the ablation arm, registered after the audit and before it is built
+
+The claim audit of the step-2 results confirmed T1-T5. It also pointed out two gaps. Fixture 13's
+fault has no one-variable attribution. T4's identity is a counter-consistency check that has never
+been shown to fail. One build closes both: `TSAPP_WMEM_ABLATE=1` is the chunks arm with only the
+`sublet_give` of `wm_chunk_retire` stubbed out (`-DWM_ABLATE_RETIRE_GIVE`, the harness's
+`WM_P1_ABLATE`). Like the harness's, it is valid only for a program that never reissues a freed
+chunk: the retired slot keeps its lent handle. A dissection does reissue, through the recycler, so
+the arm runs fixture 13 alone, in one boot:
+
+- **Fixture 13 returns** instead of faulting: the chunk is not revoked, and its free-list link is in
+  the record, so the read returns the chunk's own byte, `0xa0`: mark `d000a0`. The runner judges it
+  against the chunks arm's FAULT row, so its verdict line reads DIFFERS; the value is the result.
+- **The identity fails on its own TSAPP-HEAP line**: `retires=1` with the chunk file's `revokes=0`,
+  and no reset or close, so revokes (0) is not reset_revokes + close_revokes + retires (1).
