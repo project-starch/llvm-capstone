@@ -1628,6 +1628,23 @@ RETURN" rule applied to privilege rather than to control flow.
 
 ### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL nulls its source (silently: MOVC raises nothing) `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
 
+> **PR #94 (CapstoneRecoverProvenance) does NOT fix C-32, and D′ was not redundant (2026-09-28).**
+> Measured by the compiler lane with a three-way compile of the SQLite Sublet TU. The pre-registration
+> is `lane/compiler-pr94-threeway` @ cc19bc45ff84, and it held on every arm.
+> - **dev with D′:** 0 INT-ONLY and 0 mixed; no `setupLookaside` site.
+> - **dev + #94 on the same D′ TU:** byte-identical to dev, in every section except `.comment`. The
+>   pass is inert: D′'s `pStart` is a `uptr` assigned from a CALL, and a call result gives the pass no
+>   source.
+> - **#94 on the pre-D′ TU:** 1 INT-ONLY and 1 mixed, still at `setupLookaside`. The pass does fire
+>   there (the objects differ in exactly `.text.setupLookaside` and its relocations), but it does not
+>   remove the C-32 shape.
+>
+> #94 itself is held (review comment issuecomment-5869761874) for two measured defects:
+> - it emits `cincoffset` on NULL or untagged sources, which raises cause 24 on the RTL and in QEMU;
+> - select and phi attach a capability to an address that did not come from it.
+> Its other gates are clean: Capstone lit 121/121, and an empty llvm CodeGen+Transforms failure-set
+> diff against dev.
+
 > **LEAD'S DECISION, 2026-09-25: "D′ now + prototype C".** Options were assembled by the compiler lane and
 > adversarially audited before the decision.
 > - **D′ (the route for P1): a port-only change.** `sqlite3MallocLinear` returns a `uptr`, and `pStart`
