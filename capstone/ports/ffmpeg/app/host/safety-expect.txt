@@ -162,3 +162,18 @@ poolsublet   31  RETURN 1f00001
 poolsublet   32  RETURN 2000001
 poolsublet   33  RETURN 2100001
 level0       30  RETURN 1e00001
+
+# TRACK B, vidstab as FFmpeg's real code (fixtures 22 and 23; build with FFAPP_EXTRA_CONFIGURE=
+# "--enable-avfilter --enable-gpl --enable-libvidstab --enable-filter=vidstabtransform
+# --enable-decoder=yuv4"). Registered with app/results/2026-09-29-trackb-vidstab/PREDICTIONS.md
+# before either image was first built. The mark is (same-address << 8) | the victim's first luma
+# byte. The victim takes frame 1's buffer back from the pool on both arms (same-address 1: the
+# port keeps the pool's LIFO order, as fixture 19 showed). 22 links vidstabtransform as shipped:
+# libvidstab copies frame 1 into storage of its own, and the victim keeps its 0x77. 23 links the
+# fix reverted: libvidstab keeps a shallow pointer to frame 1's plane and copies frame 2 into it,
+# so the victim reads frame 2's 0x5b -- unless the pool port revoked the plane when it came back,
+# and libvidstab's copy faults, at frame 1's plane, after the touch line.
+poolstock    22  RETURN 1600177
+poolstock    23  RETURN 170015b
+poolsublet   22  RETURN 1600177
+poolsublet   23  FAULT  temporal

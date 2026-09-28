@@ -56,6 +56,11 @@
  *  18 afjoin_shipped  af_join as 9.0.1 ships it, in a real graph over two decoders' pool frames
  *  19 afjoin_reverted the same image with af_join.o's upstream fix 461fb22053 reverted (one token):
  *                     the output frame keeps a pointer into a buffer it holds no reference to
+ *  22 vidstab_shipped vidstabtransform as 9.0.1 ships it, over libvidstab, in a real graph over the
+ *                     yuv4 decoder's pool frames
+ *  23 vidstab_reverted the same image with vf_vidstabtransform.o's upstream fix 316531e61c reverted:
+ *                     libvidstab keeps a pointer to a plane that has gone back to its pool, and
+ *                     copies the next frame into it
  *
  * COUNTING fixtures: what a pool's END costs, measured across FFmpeg's own uninit, not inferred.
  * The Sublet port's claim is one revoke per block at a pool's end and none per entry. A bracket
@@ -75,7 +80,8 @@
 #include "libavutil/buffer.h"
 #include "libavutil/mem.h"
 #include "libavutil/refstruct.h"
-#if FFAPP_FIXTURE == 18 || FFAPP_FIXTURE == 19 || (FFAPP_FIXTURE >= 30 && FFAPP_FIXTURE <= 33)
+#if FFAPP_FIXTURE == 18 || FFAPP_FIXTURE == 19 || FFAPP_FIXTURE == 22 || FFAPP_FIXTURE == 23 \
+    || (FFAPP_FIXTURE >= 30 && FFAPP_FIXTURE <= 33)
 #include "libavcodec/avcodec.h"
 #include "libavfilter/avfilter.h"
 #include "libavfilter/buffersink.h"
@@ -137,6 +143,21 @@ static void fill(volatile unsigned char *p, unsigned char v0, int n)
     for (int i = 0; i < n; i++)
         ffapp_fix_poke(p, i, (unsigned char)(v0 + i));
 }
+
+#if FFAPP_FIXTURE == 22 || FFAPP_FIXTURE == 23
+/* One 16x16 frame through FFmpeg's yuv4 decoder, every luma byte y. yuv4 packs each 2x2 block as
+   u y00 y01 y10 y11 v (chroma stored xor 0x80), 6 bytes per block. */
+static int fx_yuv4_decode(AVCodecContext *dec, AVPacket *pkt, AVFrame *f, unsigned char y)
+{
+    if (av_new_packet(pkt, 16 * 16 * 3 / 2) < 0)
+        return -1;
+    for (int i = 0; i < pkt->size; i++)
+        pkt->data[i] = (i % 6 == 0 || i % 6 == 5) ? 0x80 : y;
+    int r = avcodec_send_packet(dec, pkt);
+    av_packet_unref(pkt);
+    return r < 0 ? r : avcodec_receive_frame(dec, f);
+}
+#endif
 
 static int fixture(void)
 {
@@ -476,6 +497,83 @@ static int fixture(void)
     touching(in1_addr);
     v = ffapp_fix_touch(fc, idx);
     printf("FFAPP-FIX %d returned out.FC[0]=%02x (0x5b = input 1's first packet, 0x77 = its next)\n",
+           FFAPP_FIXTURE, v);
+    return FX_MARK((same << 8) | v);
+
+#elif FFAPP_FIXTURE == 22 || FFAPP_FIXTURE == 23
+    /* vidstabtransform, as FFmpeg runs it (Track B), over libvidstab 1.1.1 compiled into the image.
+     * Frames are 16x16 yuv420p from FFmpeg's yuv4 decoder, so every plane is an AVBufferPool buffer
+     * the decoder's pool handed out. A real graph, buffer -> vidstabtransform -> buffersink, reads
+     * a transforms file of zero motions that the fixture writes first. Then:
+     *   frame 1 (luma 0xA0) goes in while the fixture keeps its own reference: NOT writable;
+     *   the fixture drops that reference, and frame 1's buffer goes back to the decoder's pool;
+     *   the victim (luma 0x77), decoded next and HELD by the fixture, takes that buffer again;
+     *   frame 2 (luma 0x5B) goes in as the graph's only reference: writable.
+     * 22 links vf_vidstabtransform.o as 9.0.1 ships it: its pad asks for writable frames, so frame
+     * 1 is copied first and libvidstab keeps its own copy of the source. 23 links the same file with
+     * upstream's fix 316531e61c reverted: frame 1 takes the separate-buffer path, where libvidstab
+     * keeps a SHALLOW pointer to frame 1's plane (vsTransformPrepare, td->src = *src); frame 2 takes
+     * the in-place path, which finds td->src set and copies frame 2 into it -- into the victim.
+     * The stale write is libvidstab's own, so the touch is handing frame 2 to the graph, and the
+     * target is frame 1's plane, read while it was live. After it, the fixture reads the victim's
+     * first luma byte through the victim's own frame. */
+    const char *trf = FFAPP_FIXTURE == 22 ? "/tmp/ffapp_fx22.trf" : "/tmp/ffapp_fx23.trf";
+    FILE *t = fopen(trf, "w");
+    if (!t)
+        return FX_MARK(0xE0001);
+    fputs("VID.STAB 1\n", t);
+    for (int i = 1; i <= 8; i++)
+        fprintf(t, "Frame %d (List 0 [])\n", i);
+    if (fclose(t) != 0)
+        return FX_MARK(0xE0001);
+    const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_YUV4);
+    const AVFilter *fsrc = avfilter_get_by_name("buffer"), *fvs = avfilter_get_by_name("vidstabtransform"),
+                   *fsink = avfilter_get_by_name("buffersink");
+    AVFilterGraph *g = avfilter_graph_alloc();
+    AVCodecContext *dec = codec ? avcodec_alloc_context3(codec) : NULL;
+    AVFilterContext *src = NULL, *vs = NULL, *sink = NULL;
+    AVFrame *in = av_frame_alloc(), *victim = av_frame_alloc(), *out = av_frame_alloc();
+    AVPacket *pkt = av_packet_alloc();
+    char vargs[48];
+    if (!codec || !fsrc || !fvs || !fsink || !g || !dec || !in || !victim || !out || !pkt)
+        return FX_MARK(0xE0002);
+    dec->width = 16;
+    dec->height = 16;
+    if (avcodec_open2(dec, codec, NULL) < 0)
+        return FX_MARK(0xE0003);
+    snprintf(vargs, sizeof vargs, "input=%s", trf);
+    if (avfilter_graph_create_filter(&src, fsrc, "in",
+                                     "video_size=16x16:pix_fmt=yuv420p:time_base=1/25:pixel_aspect=1/1",
+                                     NULL, g) < 0
+        || avfilter_graph_create_filter(&vs, fvs, "vs", vargs, NULL, g) < 0
+        || avfilter_graph_create_filter(&sink, fsink, "out", NULL, NULL, g) < 0
+        || avfilter_link(src, 0, vs, 0) < 0 || avfilter_link(vs, 0, sink, 0) < 0
+        || avfilter_graph_config(g, NULL) < 0)
+        return FX_MARK(0xE0004);
+    if (fx_yuv4_decode(dec, pkt, in, 0xA0) < 0)
+        return FX_MARK(0xE0005);
+    show("frame1", in->data[0]);
+    unsigned long f1_addr = cur(in->data[0]);
+    if (av_buffersrc_add_frame_flags(src, in, AV_BUFFERSRC_FLAG_KEEP_REF) < 0
+        || av_buffersink_get_frame(sink, out) < 0)
+        return FX_MARK(0xE0006);
+    av_frame_unref(out);
+    av_frame_unref(in);                       /* frame 1's buffer goes back to the decoder's pool */
+    if (fx_yuv4_decode(dec, pkt, victim, 0x77) < 0)
+        return FX_MARK(0xE0007);
+    show("victim", victim->data[0]);
+    unsigned same = cur(victim->data[0]) == f1_addr;
+    printf("FFAPP-FIX %d same-address=%u\n", FFAPP_FIXTURE, same);
+    if (fx_yuv4_decode(dec, pkt, in, 0x5B) < 0)
+        return FX_MARK(0xE0008);
+    show("frame2", in->data[0]);
+    printf("FFAPP-FIX %d frame2 writable=%d\n", FFAPP_FIXTURE, av_frame_is_writable(in));
+    touching(f1_addr);
+    if (av_buffersrc_add_frame(src, in) < 0 || av_buffersink_get_frame(sink, out) < 0)
+        return FX_MARK(0xE0009);
+    idx = 0;
+    v = ffapp_fix_touch(victim->data[0], idx);
+    printf("FFAPP-FIX %d returned victim.Y[0]=%02x (0x77 = its own, 0x5b = frame 2's)\n",
            FFAPP_FIXTURE, v);
     return FX_MARK((same << 8) | v);
 
