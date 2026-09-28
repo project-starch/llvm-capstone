@@ -15,6 +15,12 @@ directories for those modes. The Sublet build applies the existing AllocSet,
 Generation, Slab and Bump lifetime patches to 17.5 and links
 `context-pools.o`. The application SDK's `build.py --app postgres --nested
 postgres` supplies a separate 64 MiB inner arena and its counters.
+For inner reuse measurement, `PGSU_GAP_OBSERVER=1` compiles the fixed
+integer histogram into the Sublet chunk handout/release path and reports
+`PG_REUSE_GAP` at exit. It includes live chunks retired by a block or
+context reset. Set `PGSU_ARGV0_OVERRIDE` to a dedicated share-local `.dom`
+path when staging a measurement image beside its own PostgreSQL `share/`
+directory; this avoids replacing another study's staged binary.
 
 `build-cheribsd.sh` uses `CHERI_SDK`, `CHERI_SYSROOT`, `PG_CHERI_MODE=spatial`
 or `poisoncap`, and a distinct `PG_CHERI_ROOT` per mode. It applies the same

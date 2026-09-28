@@ -30,6 +30,10 @@ ROOT=${PG_SU_ROOT:-$CAPSTONE_TMP_ROOT/pg-single-user}
 RT=${RUNTIME_REPO:-$CAPSTONE_REPO_ROOT}
 NESTED=${PGSU_NESTED:-none}
 case "$NESTED" in none|sublet) ;; *) echo "PGSU_NESTED=$NESTED?" >&2; exit 2 ;; esac
+if [[ ${PGSU_GAP_OBSERVER:-0} == 1 && $NESTED != sublet ]]; then
+  echo "PGSU_GAP_OBSERVER currently requires PGSU_NESTED=sublet" >&2
+  exit 2
+fi
 MANAGER=$SCRIPT_DIR/../memory-contexts
 MUSL_PORT=$RT/capstone/ports/musl-capstone
 MRT=$MUSL_PORT/runtime
@@ -103,6 +107,13 @@ if stage runtime; then
   done
   ENTRY_DEFINES=()
   if [[ $NESTED == sublet ]]; then ENTRY_DEFINES=(-DPGSU_NESTED=1); fi
+  if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then ENTRY_DEFINES+=(-DPG_REUSE_GAP_OBSERVER=1); fi
+  if [[ -n ${PGSU_ARGV0_OVERRIDE:-} ]]; then
+    [[ $PGSU_ARGV0_OVERRIDE =~ ^/mnt/host/[A-Za-z0-9/_-]+\.dom$ ]] || {
+      echo "PGSU_ARGV0_OVERRIDE must name a share-local .dom image" >&2; exit 2;
+    }
+    ENTRY_DEFINES+=("-DPGSU_ARGV0=\"$PGSU_ARGV0_OVERRIDE\"")
+  fi
   "$CAPSTONE_CLANG" "${CF[@]}" "${ENTRY_DEFINES[@]}" -std=c11 -O1 \
     -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$O/domain_entry.o"
   log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, level0 arena $ARENA bytes"
@@ -220,8 +231,11 @@ if stage make; then
     || { echo "backend build incomplete: missing objects $missing" >&2; exit 2; }
   log "objects compiled: $(find src/backend -name '*.o' | wc -l); link inputs missing: ${missing:-none}"
   if [[ $NESTED == sublet ]]; then
+    GAP_FLAGS=()
+    if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then GAP_FLAGS=(-DPG_REUSE_GAP_OBSERVER=1); fi
     "$CAPSTONE_CLANG" "${CF[@]}" -I"$RT/capstone/runtime/include" \
       -I"$MANAGER/src/allocators/sublet" \
+      "${GAP_FLAGS[@]}" \
       -c "$MANAGER/src/allocators/sublet/context-pools.c" \
       -o "$ROOT/link/context-pools.o"
     log "Sublet context-pool backend: $ROOT/link/context-pools.o"

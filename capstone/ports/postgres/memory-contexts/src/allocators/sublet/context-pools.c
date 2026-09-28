@@ -19,6 +19,15 @@
 #include "pg_subpool.h"
 #include <stddef.h>
 #include <stdint.h>
+#ifdef PG_REUSE_GAP_OBSERVER
+#include <stdio.h>
+#include "../../../../../../experiments/study/reuse-gap-observer.h"
+#define PG_REUSE_SLOTS (1u << 17)
+static struct reuse_gap_slot pg_reuse_slots[PG_REUSE_SLOTS];
+static struct reuse_gap_observer pg_reuse;
+static unsigned char pg_reuse_active[PG_CHUNK_MAX];
+static uint64_t pg_reuse_address[PG_CHUNK_MAX];
+#endif
 #ifdef PG_MEMORY_PROFILE
 #include "profile.h"
 static struct pg_memory_backing memory;
@@ -86,6 +95,9 @@ unsigned long pg_subpool_arena(void *region, unsigned long bytes) {
    * compiler may copy, and a copy of a linear capability is what the
    * hardware refuses. */
   capstone_cap_store(&arena, region);
+#ifdef PG_REUSE_GAP_OBSERVER
+  reuse_gap_init(&pg_reuse, pg_reuse_slots, PG_REUSE_SLOTS);
+#endif
   ty = capstone_cap_type(&arena);
   if (ty != 0) /* not linear: nothing here can work */
     return ty;
@@ -203,6 +215,14 @@ static void block_release(pg_block *b) {
   memory.block_bytes -= b->endptr - b->base;
 #endif
   if (b->chunk_head) {
+#ifdef PG_REUSE_GAP_OBSERVER
+    for (unsigned i = b->chunk_head; i; i = chunk_tab[i].block_next) {
+      if (pg_reuse_active[i]) {
+        reuse_gap_release(&pg_reuse, pg_reuse_address[i]);
+        pg_reuse_active[i] = 0;
+      }
+    }
+#endif
     chunk_tab[b->chunk_tail].block_next = chunk_free;
     chunk_free = b->chunk_head;
     b->chunk_head = b->chunk_tail = 0;
@@ -440,6 +460,14 @@ pg_block *pg_subpool_managed_block(pg_subpool *sp, unsigned long bytes,
 void pg_subpool_managed_reset(pg_block *b, unsigned long prefix) {
   sublet_give_to(&b->handle, &b->region);
   if (b->chunk_head) {
+#ifdef PG_REUSE_GAP_OBSERVER
+    for (unsigned i = b->chunk_head; i; i = chunk_tab[i].block_next) {
+      if (pg_reuse_active[i]) {
+        reuse_gap_release(&pg_reuse, pg_reuse_address[i]);
+        pg_reuse_active[i] = 0;
+      }
+    }
+#endif
     chunk_tab[b->chunk_tail].block_next = chunk_free;
     chunk_free = b->chunk_head;
     pg_subpool_counts.entries_live -= b->chunks;
@@ -490,7 +518,18 @@ unsigned int pg_subpool_carve(pg_block *b, unsigned long bytes) {
 
 void *pg_subpool_hand(unsigned int i) {
   pg_subpool_counts.hands++;
-  return sublet_take(&chunk_tab[i].slot);
+  void *client = sublet_take(&chunk_tab[i].slot);
+#ifdef PG_REUSE_GAP_OBSERVER
+  if (pg_reuse_active[i]) { pg_reuse.error = 2; }
+  else {
+    pg_reuse_active[i] = 1;
+    pg_reuse_address[i] = (uint64_t)(uintptr_t)client;
+    reuse_gap_attempt(&pg_reuse);
+    reuse_gap_issue(&pg_reuse, pg_reuse_address[i],
+                    (uint64_t)chunk_tab[i].bytes);
+  }
+#endif
+  return client;
 }
 
 void pg_subpool_drop(unsigned int i) {
@@ -499,8 +538,32 @@ void pg_subpool_drop(unsigned int i) {
    * free does not release the entry: the entry is where the chunk lives
    * while it waits on a size-class list. */
   sublet_give(&chunk_tab[i].slot);
+#ifdef PG_REUSE_GAP_OBSERVER
+  if (!pg_reuse_active[i]) pg_reuse.error = 3;
+  else {
+    reuse_gap_release(&pg_reuse, pg_reuse_address[i]);
+    pg_reuse_active[i] = 0;
+  }
+#endif
   pg_subpool_counts.drops++;
 }
+
+#ifdef PG_REUSE_GAP_OBSERVER
+void pg_reuse_gap_report(void) {
+  fprintf(stderr, "PG_REUSE_GAP attempts=%llu issues=%llu releases=%llu "
+          "reuses=%llu distinct=%llu capacity=%u error=%u bins=",
+          (unsigned long long)pg_reuse.attempts,
+          (unsigned long long)pg_reuse.issues,
+          (unsigned long long)pg_reuse.releases,
+          (unsigned long long)pg_reuse.reuses,
+          (unsigned long long)pg_reuse.distinct_starts,
+          PG_REUSE_SLOTS, pg_reuse.error);
+  for (unsigned i = 0; i < 32; ++i)
+    fprintf(stderr, "%s%llu", i ? "," : "",
+            (unsigned long long)pg_reuse.bins[i]);
+  fprintf(stderr, "\n");
+}
+#endif
 
 pg_chunk *pg_subpool_entry(unsigned int i) { return &chunk_tab[i]; }
 
