@@ -298,6 +298,64 @@ where `mrb_gc_protect()` itself can allocate and collect it. Two of the three,
 `Task::Queue#__pop_try`, is in `mruby-task`, which exists at the pin but is in none
 of the port's gemboxes -- as is `456a8687a`'s site.
 
+## Measuring them in a domain: the apparatus works, the compiler is the blocker
+
+This was attempted, not just reasoned about. What works:
+
+* All three arm images build from this branch at the pin, in about 45 seconds each --
+  `MRBD_HEAP=level0`, `sublet` and `sublet-gc`, the last carrying patch 0008 (12
+  `sublet` symbols in the image, none in `level0`).
+* The `sublet-gc` arm needs the host's **second grant**, `LT_GC_REGION_BYTES`, which
+  is **not on dev**: `run-mruby-domain.sh` passes the define but no source on this
+  branch consumes it. It is on the unmerged `runtime/libc-test-second-grant`
+  (`b338c156c8d1`), which works as `RUNTIME_REPO` once its `caplifive-buildroot`
+  submodule is initialised.
+* QEMU runs the domain and reports capability faults with a cause, a pc and the
+  register file, and the pc symbolizes against the unstripped image by adding the
+  image's `0x10000` base to the offset from the `pc_cap` region base.
+
+What blocks it: **no toolchain on this host can run the port's own smoke script.**
+With the newest available clang, `scripts/smoke.rb` halts at
+`cause = 24, pc = 0xd8242b2c`, which resolves to `mrb_packed_int_decode` +0x28 --
+mruby's packed-integer bytecode reader. The port's recorded runs
+(`results/2026-09-26`) name compiler `7d01722aab88`, which is
+
+    SROA: do not split an alloca so that a capability is cut or misaligned (Capstone)
+
+on the unmerged branch `compiler/sroa-keep-capability-whole`. It is not on dev, and
+**none of the ten prebuilt toolchains under `/tmp/capstone` contains it** -- checked
+with `merge-base --is-ancestor` against each one's embedded source commit. A function
+that decodes an integer out of a byte stream through a local is exactly what that fix
+is about, so the fault and the missing fix agree.
+
+So the measurement needs a clang built from that commit, after which the runs are
+cheap: an arm image is 45 seconds and a case is one bounded QEMU boot.
+
+**The control is what makes this an honest negative.** The first case run produced a
+cause-24 fault, which read like a result -- the mechanism catching the defect. Running
+the port's own `smoke.rb` in the same arm faulted at the *identical* pc, which says
+the instrument is broken rather than the defect caught. A fault is no more
+self-evidently a finding than a clean run is.
+
+### The recipe, so it is not rediscovered
+
+    PATH=/home/biecho/.venvs/capstone/bin:$PATH      # run-domain-smoke.py needs pexpect
+    CAPSTONE_LLVM_BUILD_DIR=<a clang with 7d01722aab88>
+    RUNTIME_REPO=<a worktree of runtime/libc-test-second-grant, submodule initialised>
+    CAPSTONE_QEMU_BINARY=<capstone-qemu movc-merge d621df553f>
+    CAPSTONE_GP_NONLIN=1                             # else gp is refabricated LINEAR at every cjalr
+    CAPSTONE_REV_NODES=16777216                      # as the port's recorded runs used
+    MRBD_HEAP_REGION_BYTES=134217728                 # sublet and sublet-gc
+    MRBD_GC_REGION_BYTES=67108864                    # sublet-gc only
+
+    bash run-mruby-domain.sh <image> <work> 180 <case>.rb -- /mnt/host/files/<case>.rb
+
+A worktree created off this branch inherits a sparse checkout of `capstone` and
+`xlang` only, and `capstone-test-env.sh` refuses a root without `llvm/`, so
+`git sparse-checkout disable` comes first. Redirect the run script's output to a file
+rather than piping it: a pipe replaces its exit status, and this cost one wrong "rc=0"
+reading here before it was caught.
+
 ## Limits of this measurement
 
 Everything above is a **native x86-64** measurement of vanilla rc2. It establishes
