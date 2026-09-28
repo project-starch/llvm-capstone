@@ -8,6 +8,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef PYMALLOC_GAP_OBSERVER
+#include "../../../../../experiments/study/reuse-gap-observer.h"
+#define PYM_REUSE_SLOTS (1u << 17)
+static struct reuse_gap_slot pym_reuse_slots[PYM_REUSE_SLOTS];
+static struct reuse_gap_observer pym_reuse;
+static unsigned observer_inplace_resize;
+#endif
 
 #ifndef CHERI_PERM_POISON
 #error "Use the published PoisonCap SDK and matching kernel"
@@ -50,6 +57,9 @@ void pym_lifetime_init(void *region) {
       !(cheri_getperm(region) & CHERI_PERM_POISON))
     pym_fail(701);
   backing = region;
+#ifdef PYMALLOC_GAP_OBSERVER
+  reuse_gap_init(&pym_reuse, pym_reuse_slots, PYM_REUSE_SLOTS);
+#endif
   large_cursor = PYM_ARENA_BYTES / 2;
   initialized = 1;
 }
@@ -248,11 +258,22 @@ void *pym_issue(void *ptr, size_t requested) {
   b->requested = requested;
   b->active = 1;
   b->client = cheri_clearperm(p, CHERI_PERM_POISON | CHERI_PERM_SW_VMEM);
+#ifdef PYMALLOC_GAP_OBSERVER
+  if (!observer_inplace_resize) {
+    reuse_gap_attempt(&pym_reuse);
+    reuse_gap_issue(&pym_reuse, (uint64_t)cheri_getaddress(b->client),
+                    (uint64_t)(requested ? requested : 1));
+  }
+#endif
   return b->client;
 }
 void *pym_release(void *ptr) {
   pym_validate(ptr);
   struct block *b = block_for(ptr);
+#ifdef PYMALLOC_GAP_OBSERVER
+  if (!observer_inplace_resize)
+    reuse_gap_release(&pym_reuse, (uint64_t)cheri_getaddress(ptr));
+#endif
   invalidate(b->manager, b->size);
   b->active = 0;
   b->client = NULL;
@@ -273,13 +294,22 @@ void *pym_resize(void *ptr, size_t requested) {
     if (b->size > snapshot_peak)
       snapshot_peak = b->size;
   }
+#ifdef PYMALLOC_GAP_OBSERVER
+  observer_inplace_resize = 1;
+#endif
   void *manager = pym_release(ptr);
   if (snapshot) {
     memcpy(manager, snapshot, b->size);
     copied_bytes += b->size;
     pym_raw_free(snapshot);
   }
-  return pym_issue(manager, requested);
+  void *client = pym_issue(manager, requested);
+#ifdef PYMALLOC_GAP_OBSERVER
+  observer_inplace_resize = 0;
+  reuse_gap_resize(&pym_reuse, (uint64_t)cheri_getaddress(client),
+                   (uint64_t)(requested ? requested : 1));
+#endif
+  return client;
 }
 size_t pym_requested(void *ptr) {
   pym_validate(ptr);
@@ -321,6 +351,20 @@ void pym_backing_stats(struct pym_header *h) {
   h->arenas = arena_allocations;
   h->arena_frees = arena_releases;
   h->metadata = pym_metadata_used();
+#ifdef PYMALLOC_GAP_OBSERVER
+  fprintf(stderr, "PYM_REUSE_GAP attempts=%llu issues=%llu releases=%llu "
+          "reuses=%llu distinct=%llu capacity=%u error=%u bins=",
+          (unsigned long long)pym_reuse.attempts,
+          (unsigned long long)pym_reuse.issues,
+          (unsigned long long)pym_reuse.releases,
+          (unsigned long long)pym_reuse.reuses,
+          (unsigned long long)pym_reuse.distinct_starts,
+          PYM_REUSE_SLOTS, pym_reuse.error);
+  for (unsigned i = 0; i < 32; ++i)
+    fprintf(stderr, "%s%llu", i ? "," : "",
+            (unsigned long long)pym_reuse.bins[i]);
+  fprintf(stderr, "\n");
+#endif
 #ifdef PYMALLOC_APP_MEMORY
   fprintf(stderr, "PYM_POISONCAP mode=%u sweeps=%zu poison_bytes=%zu clear_bytes=%zu "
 #else

@@ -24,6 +24,14 @@ nested revocation (`PYM_POISONCAP_MODE=1`). It reports the mode and policy
 operation counts and uses the shared application phase observer. The kernel's
 ordinary libc revocation default is disabled for both modes; the explicit
 pymalloc path still runs in mode 1.
+For a reuse study, `CPY_CHERI_GAP_OBSERVER=1` compiles an integer-only
+observer into the inner pymalloc lifetime backend. Both process modes emit
+one `PYM_REUSE_GAP` histogram with 32 logarithmic release-to-reissue bins.
+The common CheriBSD runner validates that report when a point declares
+`"reuse_gap": "PYM_REUSE_GAP"`; a nonzero observer error or inconsistent
+counts invalidate the process. Its index counts successful handouts, and
+the conditional histogram does not establish a fixed-horizon retirement
+fraction on its own.
 
 For a PoisonCap mode-0 guest smoke test, stage the binary and zip as `/tmp/python-study` and
 `/tmp/pyhome/lib/python313.zip`, then run:

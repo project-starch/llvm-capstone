@@ -18,6 +18,7 @@ import subprocess
 import sys
 import time
 from allocation_metrics import allocation_samples, valid_allocations
+from reuse_gap_metrics import parse_reuse_gap
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -127,6 +128,9 @@ def verdict(point, rc, timed_out, stdout, stderr, result, stdout_raw=None):
     if not samples or any(x['live'] > x['peak'] for x in samples): return 'bad-metrics'
     if point.get('allocations') and not valid_allocations(stderr, point['expected_phases']):
         return 'bad-allocation-metrics'
+    if point.get('reuse_gap'):
+        try: parse_reuse_gap(stderr, point['reuse_gap'])
+        except ValueError: return 'bad-reuse-gap'
     if point.get('gc_gaps'):
         try:
             rows, bins = parse_gc_study(stderr)
@@ -168,6 +172,7 @@ def main():
                     timeout_seconds=args.timeout, points_sha256=digest(args.points),
                     runner_sha256=digest(Path(__file__)),
                     allocation_validator_sha256=digest(HERE / 'allocation_metrics.py'), timing='host wall time; diagnostic only')
+    manifest['reuse_gap_validator_sha256'] = digest(HERE / 'reuse_gap_metrics.py')
     manifest['guest_launcher_sha256'] = call(['exec', 'sha256sum', '/usr/bin/capstone-exec']).split()[0]
     fresh_trees = {}
     for point in points:
@@ -220,6 +225,9 @@ def main():
                                            fresh_trees[str(source)], owned_trees)
                     guest_image = '/mnt/host/' + str(image.resolve().relative_to(share.resolve()))
                     before = json.loads(call(['exec', 'capstone-exec', '--stats']))
+                    expected_capacity = point.get('expected_node_capacity')
+                    if expected_capacity is not None and before['node_capacity'] != expected_capacity:
+                        raise RuntimeError(f"node capacity {before['node_capacity']} != {expected_capacity}")
                     if before['live_domains']:
                         raise RuntimeError('another domain is active; campaign does not own the VM')
                     if call(['exec', 'cat', '/proc/sys/kernel/random/boot_id']) != boot:
@@ -267,6 +275,9 @@ def main():
                         for line in stderr.splitlines() if line.startswith('EXP-INNER ')]
                     if point.get('gc_gaps'):
                         record['gc_study'], record['gc_gap_bins'] = parse_gc_study(stderr)
+                    if point.get('reuse_gap'):
+                        try: record['reuse_gap'] = parse_reuse_gap(stderr, point['reuse_gap'])
+                        except ValueError as e: record['reuse_gap_error'] = str(e)
                 except (OSError, ValueError, subprocess.SubprocessError, RuntimeError) as e:
                     record.update(status='infrastructure-error', reason=str(e), memory=[])
             with (args.out / 'runs.jsonl').open('a') as f:

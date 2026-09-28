@@ -28,6 +28,12 @@ existing memory-context hook backend, with a quarantine policy selected for
 the complete application.
 Set `PG_POISONCAP_MODE=0` for its original-layout control or `1` for poison,
 sweep and detox. The two modes use the same binary and context layout.
+`PG_CHERI_GAP_OBSERVER=1` adds a fixed-capacity, integer-only observer at
+the inner chunk handout/release boundary. Its `PG_REUSE_GAP` report contains
+32 log-binned release-to-reissue distances, counts and an error code; reject
+runs with a nonzero error or a histogram sum different from `reuses`.
+The index counts successful handouts, so this report describes observed
+reuses rather than the fixed-follow-up retirement metric.
 
 The batch policy poisons a freed chunk immediately, retains it on an external
 queue, and sweeps before a queued chunk is issued again. Context block returns

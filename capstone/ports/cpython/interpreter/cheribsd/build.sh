@@ -10,6 +10,10 @@ ROOT=${CPY_CHERI_ROOT:-$CAPSTONE_TMP_ROOT/cpython-cheribsd}
 MODE=${CPY_CHERI_MODE:-spatial}
 [[ $MODE == spatial || $MODE == poisoncap ]] \
   || { echo "CPY_CHERI_MODE must be spatial or poisoncap" >&2; exit 2; }
+if [[ ${CPY_CHERI_GAP_OBSERVER:-0} == 1 && $MODE != poisoncap ]]; then
+  echo "CPY_CHERI_GAP_OBSERVER requires CPY_CHERI_MODE=poisoncap" >&2
+  exit 2
+fi
 [[ ! -e $ROOT ]] || { echo "build root already exists: $ROOT" >&2; exit 2; }
 JOBS=${JOBS:-12}
 ARCHIVE=${CPY_ARCHIVE:-$CAPSTONE_TMP_ROOT/cpython-upstream/Python-3.13.7.tgz}
@@ -65,6 +69,9 @@ CC="$CHERI_SDK/bin/clang --target=riscv64-unknown-freebsd13 --sysroot=$CHERI_SYS
     COMMON=(--target=riscv64-unknown-freebsd13 --sysroot="$CHERI_SYSROOT"
             -march=rv64imafdcxcheri -mabi=l64pc128d -mno-relax
             -O1 -fPIC -DPYMALLOC_POISONCAP=1 -I"$PYM/shared")
+    if [[ ${CPY_CHERI_GAP_OBSERVER:-0} == 1 ]]; then
+      COMMON+=(-DPYMALLOC_GAP_OBSERVER=1)
+    fi
     "$CHERI_SDK/bin/clang" "${COMMON[@]}" -DPYMALLOC_APP_MEMORY=1 \
       -c "$PYM/cheribsd/poisoncap-lifetimes.c" -o "$ROOT/poisoncap-lifetimes.o"
     "$CHERI_SDK/bin/clang" "${COMMON[@]}" \
@@ -94,6 +101,7 @@ python3 - "$ROOT" "$ARCHIVE" "$HERE" "$PORT" "$CHERI_SDK" "$CHERI_SYSROOT" "$MOD
           "$BUILD_PYTHON" "${PATCHES[@]}" <<'PY'
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -132,13 +140,16 @@ document = {
     'pointer_bytes': 16,
     'uintptr_bytes': 16,
     'pymalloc': True,
+    'reuse_gap_observer': os.environ.get('CPY_CHERI_GAP_OBSERVER') == '1',
     'inputs_sha256': {str(path): sha256(path) for path in
         [here / 'build.sh', port / 'make-stdlib-zip.py', port / 'upstream.json',
          *patches, *([here / 'poisoncap-glue.c',
                       port / '../pymalloc/src/cheribsd/poisoncap-lifetimes.c',
                       port / '../pymalloc/src/shared/backing.c',
                       port / '../../../experiments/applications/cheribsd-memory.c']
-                     if mode == 'poisoncap' else [])]},
+                     if mode == 'poisoncap' else []),
+         *([here / '../../../../experiments/study/reuse-gap-observer.h']
+           if os.environ.get('CPY_CHERI_GAP_OBSERVER') == '1' else [])]},
 }
 (root / 'manifest.json').write_text(json.dumps(document, indent=2, sort_keys=True) + '\n')
 PY

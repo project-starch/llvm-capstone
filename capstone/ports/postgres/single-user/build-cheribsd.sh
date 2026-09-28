@@ -48,6 +48,9 @@ CC="$CHERI_SDK/bin/clang --target=riscv64-unknown-freebsd13 --sysroot=$CHERI_SYS
 FLAGS=-O1
 if [[ $MODE == poisoncap ]]; then
   FLAGS="$FLAGS -DPG_POISONCAP -DPG_POISONCAP_BATCHED -I$MANAGER/src/allocators/sublet -I$MANAGER/src/cheribsd"
+  if [[ ${PG_CHERI_GAP_OBSERVER:-0} == 1 ]]; then
+    FLAGS="$FLAGS -DPG_REUSE_GAP_OBSERVER=1"
+  fi
 fi
 cd "$SRC"
 if [[ ! -f config.status ]]; then
@@ -124,6 +127,8 @@ if mode == 'poisoncap':
 inputs = [*patches, recipe / 'cheribsd-compat.py', recipe / 'build-cheribsd.sh']
 if mode == 'poisoncap':
     inputs += [recipe / 'poisoncap-app.c', manager / 'src/cheribsd/poisoncap.c']
+    if '-DPG_REUSE_GAP_OBSERVER=1' in shlex.split(flags):
+        inputs.append(recipe / '../../../experiments/study/reuse-gap-observer.h')
 config = root / 'postgresql-17.5/src/include/pg_config.h'
 settings = config.read_text()
 def setting(name):
@@ -140,6 +145,7 @@ manifest = {
     'mode': mode,
     'reused_source_root': bool(int(reused_root)),
     'poisoncap_policy': 'reuse-or-block-release-triggered-batch' if mode == 'poisoncap' else None,
+    'reuse_gap_observer': '-DPG_REUSE_GAP_OBSERVER=1' in shlex.split(flags),
     'source_archive_sha256': sha256(archive),
     'pg_config_sha256': sha256(config),
     'pointer_bytes': setting('SIZEOF_VOID_P'),

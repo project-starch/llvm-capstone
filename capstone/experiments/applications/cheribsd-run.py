@@ -16,6 +16,7 @@ import shlex
 import subprocess
 import time
 from allocation_metrics import allocation_samples, valid_allocations
+from reuse_gap_metrics import parse_reuse_gap
 
 
 def digest(path):
@@ -151,6 +152,9 @@ def verdict(point, rc, stdout, stderr, stdout_raw=None):
     except (ValueError, KeyError): return 'bad-metrics'
     if point.get('allocations') and not valid_allocations(stderr, point['expected_phases']):
         return 'bad-allocation-metrics'
+    if point.get('reuse_gap'):
+        try: parse_reuse_gap(stderr, point['reuse_gap'])
+        except ValueError: return 'bad-reuse-gap'
     if point.get('nested_allocator') == 'mruby-gc':
         try:
             inner = nested_samples(stderr)
@@ -281,6 +285,7 @@ def execute(args):
                     runner_sha256=digest(__file__), repeats=args.repeat,
                     allocation_validator_sha256=digest(Path(__file__).with_name('allocation_metrics.py')),
                     timing='QEMU host elapsed seconds: diagnostic only')
+    manifest['reuse_gap_validator_sha256'] = digest(Path(__file__).with_name('reuse_gap_metrics.py'))
     (args.out/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     for point in points:
         for repetition in range(args.repeat):
@@ -346,6 +351,9 @@ def execute(args):
             except (ValueError, KeyError): record['allocations'] = []
             try: record['inner_memory'] = nested_samples(stderr)
             except (ValueError, KeyError): record['inner_memory'] = []
+            if point.get('reuse_gap'):
+                try: record['reuse_gap'] = parse_reuse_gap(stderr, point['reuse_gap'])
+                except ValueError as error: record['reuse_gap_error'] = str(error)
             with (args.out/'runs.jsonl').open('a') as stream:
                 stream.write(json.dumps(record)+'\n')
             print(point['id'], repetition, status, flush=True)

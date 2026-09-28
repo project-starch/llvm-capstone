@@ -12,6 +12,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#ifdef PG_REUSE_GAP_OBSERVER
+#include "../../../../../experiments/study/reuse-gap-observer.h"
+#define PG_REUSE_SLOTS (1u << 17)
+static struct reuse_gap_slot pg_reuse_slots[PG_REUSE_SLOTS];
+static struct reuse_gap_observer pg_reuse;
+#endif
 
 #ifndef CHERI_PERM_POISON
 #error "PG_POISONCAP requires the PoisonCap SDK"
@@ -27,6 +33,9 @@ static pg_block blocks[PG_BLOCK_MAX];
 static size_t used[PG_BLOCK_MAX];
 static pg_chunk chunks[PG_CHUNK_MAX];
 static unsigned char active[PG_CHUNK_MAX];
+/* Recycle entry indices in O(1): scanning the full table on every carve
+ * dominates a whole-backend workload once quarantine retains many entries. */
+static unsigned free_ids[PG_CHUNK_MAX], free_count, next_id = 1;
 #ifdef PG_POISONCAP_BATCHED
 /* Freed chunks remain poisoned until the manager actually asks to reissue
  * one. The free-list links are in the existing external chunk table. */
@@ -90,6 +99,9 @@ void pg_poisoncap_init(unsigned selected) {
     refuse("initialization or platform");
   initialized = 1;
   mode = selected;
+#ifdef PG_REUSE_GAP_OBSERVER
+  reuse_gap_init(&pg_reuse, pg_reuse_slots, PG_REUSE_SLOTS);
+#endif
 }
 
 static void invalidate(void *ptr, size_t n) {
@@ -190,8 +202,14 @@ static void release_entries(pg_block *b) {
   unsigned i = b->chunk_head;
   while (i) {
     unsigned next = chunks[i].block_next;
+#ifdef PG_REUSE_GAP_OBSERVER
+    if (active[i])
+      reuse_gap_release(&pg_reuse, (uint64_t)cheri_getaddress(chunks[i].slot));
+#endif
     memset(&chunks[i], 0, sizeof chunks[i]);
     active[i] = 0;
+    if (free_count >= PG_CHUNK_MAX) refuse("chunk index free list overflow");
+    free_ids[free_count++] = i;
     i = next;
   }
   b->chunk_head = b->chunk_tail = b->chunks = 0;
@@ -248,8 +266,9 @@ unsigned int pg_subpool_carve(pg_block *b, unsigned long bytes) {
   bytes = (bytes + 15) & ~15UL;
   if (!bytes || bytes > b->endptr - b->freeptr) return 0;
   unsigned i;
-  for (i = 1; i < PG_CHUNK_MAX && chunks[i].slot; ++i) {}
-  if (i == PG_CHUNK_MAX) return 0;
+  if (free_count) i = free_ids[--free_count];
+  else if (next_id < PG_CHUNK_MAX) i = next_id++;
+  else return 0;
   size_t n = CHERI_REPRESENTABLE_LENGTH(bytes);
   size_t mask = CHERI_REPRESENTABLE_ALIGNMENT_MASK(n);
   size_t start = (b->base + used[b - blocks] + ~mask) & mask;
@@ -280,8 +299,14 @@ void *pg_subpool_hand(unsigned int i) {
 #endif
   active[i] = 1;
   ++pg_subpool_counts.hands;
-  return cheri_clearperm(chunks[i].slot,
-                         CHERI_PERM_POISON | CHERI_PERM_SW_VMEM);
+  void *client = cheri_clearperm(chunks[i].slot,
+                                CHERI_PERM_POISON | CHERI_PERM_SW_VMEM);
+#ifdef PG_REUSE_GAP_OBSERVER
+  reuse_gap_attempt(&pg_reuse);
+  reuse_gap_issue(&pg_reuse, (uint64_t)cheri_getaddress(client),
+                  (uint64_t)chunks[i].bytes);
+#endif
+  return client;
 }
 void pg_subpool_drop(unsigned int i) {
   if (!i || i >= PG_CHUNK_MAX) refuse("invalid chunk release");
@@ -300,6 +325,9 @@ void pg_subpool_drop(unsigned int i) {
     ++tolerated;
     return;
   }
+#ifdef PG_REUSE_GAP_OBSERVER
+  reuse_gap_release(&pg_reuse, (uint64_t)cheri_getaddress(chunks[i].slot));
+#endif
 #ifdef PG_POISONCAP_BATCHED
   if (mode) {
     size_t bytes = cheri_getlen(chunks[i].slot);
@@ -342,6 +370,19 @@ void pg_subpool_header_free(void *p) {
   refuse("invalid context header");
 }
 void pg_poisoncap_report(void) {
+#ifdef PG_REUSE_GAP_OBSERVER
+  printf("PG_REUSE_GAP attempts=%llu issues=%llu releases=%llu reuses=%llu "
+         "distinct=%llu capacity=%u error=%u bins=",
+         (unsigned long long)pg_reuse.attempts,
+         (unsigned long long)pg_reuse.issues,
+         (unsigned long long)pg_reuse.releases,
+         (unsigned long long)pg_reuse.reuses,
+         (unsigned long long)pg_reuse.distinct_starts,
+         PG_REUSE_SLOTS, pg_reuse.error);
+  for (unsigned i = 0; i < 32; ++i)
+    printf("%s%llu", i ? "," : "", (unsigned long long)pg_reuse.bins[i]);
+  printf("\n");
+#endif
 #ifdef PG_POISONCAP_BATCHED
   /* Do not drain the queue for reporting: its retained bytes are a result. */
   printf("PG_POISONCAP_QUEUE pending=%u peak_pending=%u withheld=%zu peak_withheld=%zu\n",

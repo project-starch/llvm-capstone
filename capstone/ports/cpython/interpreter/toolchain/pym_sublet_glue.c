@@ -43,6 +43,9 @@
 void pym_lifetime_init(void *region);
 void pym_backing_init(void *metadata, void *arena);
 void pym_set_mode(unsigned mode);
+#ifdef PYMALLOC_GAP_OBSERVER
+void pym_gap_report(void);
+#endif
 void *__capstone_region(unsigned index);
 
 #ifndef CPY_SUBLET_MODE_ENV
@@ -82,6 +85,10 @@ int cpy_sublet_init(void) {
   const char *want = getenv(CPY_SUBLET_MODE_ENV);
   unsigned mode = (want && want[0] == '1') ? 1u : 0u;
   pym_set_mode(mode);
+#ifdef PYMALLOC_GAP_OBSERVER
+  if (atexit(pym_gap_report))
+    pym_fail(735);
+#endif
   sublet_started = 1;
   fprintf(stderr, "CPY-SUBLET mode=%u (%s)\n", mode,
           mode ? "sublet: every free revokes" : "spatial: bounds only");

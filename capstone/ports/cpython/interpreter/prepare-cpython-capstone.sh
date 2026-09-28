@@ -145,11 +145,13 @@ if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   # capstone_cap_slot -- loudly, which is the good case. SIZEOF_VOID_P=16 is the
   # component port's own domain define (cmake/Replay.cmake).
   SUBLET_INC=(-I"$PYM/shared" -I"$REPO_ROOT/capstone/runtime/include" -DSIZEOF_VOID_P=16)
-  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" -DPYMALLOC_DOMAIN \
+  GAP_FLAGS=()
+  if [[ ${CPY_GAP_OBSERVER:-0} == 1 ]]; then GAP_FLAGS=(-DPYMALLOC_GAP_OBSERVER=1); fi
+  "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" "${GAP_FLAGS[@]}" -DPYMALLOC_DOMAIN \
     -c "$PYM/allocators/sublet/block-lifetimes.c" -o "$RT/pym_block_lifetimes.o"
   "$CAPSTONE_CLANG" "${CF[@]}" "${SUBLET_INC[@]}" -DPYMALLOC_DOMAIN \
     -c "$PYM/shared/backing.c" -o "$RT/pym_backing.o"
-  "$CAPSTONE_CLANG" "${CF[@]}" \
+  "$CAPSTONE_CLANG" "${CF[@]}" "${GAP_FLAGS[@]}" \
     -c "$SCRIPT_DIR/toolchain/pym_sublet_glue.c" -o "$RT/pym_sublet_glue.o"
   "$CAPSTONE_CLANG" "${CF[@]}" -DCAPSTONE_PROGRAM_REGIONS=1 \
     -c "$MRT/hostcall.c" -o "$RT/hostcall.o"
