@@ -55,7 +55,8 @@ int main(int argc, char **argv) {
   if (counts->magic == WM_CHUNK_COUNTS_MAGIC)
     printf("WM-CHUNKS opens=%llu resets=%llu closes=%llu reset_revokes=%llu "
            "close_revokes=%llu dropped=%llu retires=%llu splits=%llu "
-           "issues=%llu revokes=%llu inits=%llu\n",
+           "issues=%llu revokes=%llu inits=%llu region_revokes=%llu "
+           "region_inits=%llu\n",
            (unsigned long long)counts->opens, (unsigned long long)counts->resets,
            (unsigned long long)counts->closes,
            (unsigned long long)counts->reset_revokes,
@@ -65,7 +66,9 @@ int main(int argc, char **argv) {
            (unsigned long long)counts->splits,
            (unsigned long long)counts->issues,
            (unsigned long long)counts->revokes,
-           (unsigned long long)counts->inits);
+           (unsigned long long)counts->inits,
+           (unsigned long long)counts->region_revokes,
+           (unsigned long long)counts->region_inits);
   else
     printf("WM-CHUNKS absent\n");
   f = fopen(argv[3], "wb");

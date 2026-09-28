@@ -25,6 +25,10 @@ void wm_region_create_linear(struct wm_region *r, size_t size) {
   r->size = size;
   r->alias = NULL;
 }
+void wm_region_counts(uint64_t *revokes, uint64_t *inits) {
+  *revokes = sublet_stats.revoke;
+  *inits = sublet_stats.init;
+}
 void wm_region_renew(struct wm_region *r, unsigned revoke) {
   if (revoke) {
     sublet_give(&r->handle);

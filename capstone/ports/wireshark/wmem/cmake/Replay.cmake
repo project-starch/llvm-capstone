@@ -17,6 +17,17 @@ set(WM_CHUNKS_HOSTED)
 if(NOT WM_POISONCAP)
   set(WM_CHUNKS_HOSTED src/native/chunks.c)
 endif()
+# WM_CHUNKS=OFF builds the region-granular hooks alone from the same tree: every hunk of 0002 is
+# guarded by WMEM_PORT_CHUNKS, so the patch is applied and inert. With WM_P2_CONTROL the fixtures'
+# check that a stale unprotected read sees the old byte is compiled in anyway -- the positive
+# control for that check, which must FAIL when the headers are still in the chunk.
+option(WM_CHUNKS "the chunk port (patches/...-0002)" ON)
+option(WM_P2_CONTROL "compile the old-byte check without the chunk port" OFF)
+# WM_P1_ABLATE keeps the port and stubs out the ONE give a chunk free performs (chunks.c,
+# wm_chunk_retire): the matched arm that attributes a chunk-free fault to that revoke alone. Valid
+# only for fixtures that never reissue the freed chunk (4 and 13); anything that does would take a
+# slot still holding a lent handle.
+option(WM_P1_ABLATE "the port with a chunk free's revoke stubbed out" OFF)
 function(wm_executable name variant)
   set(workload ${ARGN})
   set(source "${CMAKE_BINARY_DIR}/source-${variant}")
@@ -39,8 +50,14 @@ function(wm_executable name variant)
   if(WM_POISONCAP)
     target_compile_definitions(${name} PRIVATE WM_POISONCAP)
     target_include_directories(${name} PRIVATE src/cheribsd)
-  else()
+  elseif(WM_CHUNKS)
     target_compile_definitions(${name} PRIVATE WMEM_PORT_CHUNKS)
+  endif()
+  if(WM_P2_CONTROL)
+    target_compile_definitions(${name} PRIVATE WM_P2_CONTROL)
+  endif()
+  if(WM_P1_ABLATE)
+    target_compile_definitions(${name} PRIVATE WM_ABLATE_RETIRE_GIVE)
   endif()
   target_compile_options(${name} PRIVATE -Wall -Wextra -ffunction-sections -fdata-sections)
   target_link_libraries(${name} PRIVATE Capstone::Runtime)
@@ -66,7 +83,7 @@ if(PORT_HOSTED)
   if(WM_POISONCAP)
     target_compile_definitions(wireshark-wmem PUBLIC WM_POISONCAP)
     target_include_directories(wireshark-wmem PUBLIC src/cheribsd)
-  else()
+  elseif(WM_CHUNKS)
     target_compile_definitions(wireshark-wmem PUBLIC WMEM_PORT_CHUNKS)
   endif()
   if(PORT_PLATFORM STREQUAL "cheribsd")

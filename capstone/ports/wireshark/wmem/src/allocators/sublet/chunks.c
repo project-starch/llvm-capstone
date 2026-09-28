@@ -87,7 +87,9 @@ void *wm_chunk_bytes(struct wm_chunk_auth *c, size_t at, size_t n) {
 void wm_chunk_retire(struct wm_chunk_auth *c) {
   ++counts.retires;
   if (temporal) {
+#ifndef WM_ABLATE_RETIRE_GIVE
     sublet_give(&c->slot);
+#endif
     c->wide = NULL;
   }
 }
@@ -102,7 +104,11 @@ void wm_block_forget(struct wm_block_auth *b) {
   b->alias = NULL;
 }
 void wm_chunk_report(void *report_page) {
+  /* sublet.h's counters are per translation unit: this one's, and the
+   * regions' (jumbo blocks, descriptors, the other allocators), reported
+   * apart so neither is mistaken for the domain's total. */
   counts.revokes = sublet_stats.revoke;
   counts.inits = sublet_stats.init;
+  wm_region_counts(&counts.region_revokes, &counts.region_inits);
   memcpy((unsigned char *)report_page + 128, &counts, sizeof counts);
 }

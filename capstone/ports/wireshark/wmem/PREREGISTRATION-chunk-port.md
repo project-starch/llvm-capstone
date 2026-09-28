@@ -83,3 +83,56 @@ registered separately.
   discipline (`sublet_handle` before the split, one `sublet_give_to` to rejoin), as memsys5 does.
 - Jumbo chunks bypass the block path and need their own handling.
 - `realloc` in place is where a naive port silently loses protection; it needs its own fixture.
+
+## Addendum, 2026-09-29: v2 and its checks, registered before v2's first build
+
+The first run (v1, commit `e5d20a1b27d3`) met P1-P5, and a claim audit then found gaps in what that
+run could show. Recorded here before v2 is built, with every prediction v2's run is judged by.
+
+**v2 changes the allocator in one respect.** v1 kept upstream's free-list minimum -- room for two
+pointers in the chunk's data, 32 bytes in purecap -- although the links had moved to the record. A
+freed chunk below it joined no list, and since chunks never rejoin, it was lost until the block's
+next reset. v2 lists every chunk that can serve a request (`WMEM_FREE_MIN_LEN`), and a shrink no
+longer splits off a remainder too small to list. The classification rule is unchanged: the new
+hunks are the recycler, which the rule names as metadata.
+
+**New fixtures, 13-17** (`security-tests/shared/lifetimes.c`), on the port (v2):
+
+| case | what | mode 0 | mode 1 |
+|---|---|---|---|
+| 13 | read through the old pointer after a GROWING realloc | completes | FAULT at `wm_probe_read` |
+| 14 | the same after a SHRINKING realloc that splits (same address) | completes | FAULT at `wm_probe_read` |
+| 15 | read after freeing a BLOCK-allocator jumbo | completes | FAULT at `wm_probe_read` |
+| 16 | a second free of a chunk inside a live block | completes (not run) | FAULT at `wm_widen_probe` |
+| 17 | 1000 alloc/free of 8 bytes reuse ONE address | completes | completes |
+
+Cases 0-12 keep v1's verdicts: 36 cells, all PASS.
+
+**Matched arms**, each one variable away from the port:
+
+- `WM_CHUNKS=OFF` (the hooks alone, same tree), mode 1: 13 **completes** (upstream grows in place,
+  so the old pointer is the live one); 14 **completes**; 15 **faults** at `wm_probe_read` too (a
+  jumbo is a region under the hooks as well -- registered as NOT discriminating); 16 does **not**
+  fault at `wm_widen_probe` (otherwise unconstrained: the free lists may be corrupted); 17
+  completes. Mode 0: 13, 14, 15 and 17 complete.
+- `WM_P1_ABLATE` (the port, with the one `sublet_give` of `wm_chunk_retire` stubbed out), mode 1:
+  cases 4 and 13 **complete**. That attributes their faults to that revoke alone, which v1's
+  control -- a whole patch away -- could not.
+- v1's allocator swapped into the same build (the generated `wmem_allocator_block.c` replaced by
+  v1's port output, with fixtures and everything else unchanged): case 17 **fails with status 528**
+  in both modes. This is the positive control for the reuse check.
+- `WM_P2_CONTROL`, re-run from the committed tree: m0c3 status 519 and m0c4 status 520, as in v1.
+
+**Counters.** The report now carries both translation units' `sublet_stats`, because `sublet.h`
+counts per translation unit. The audit showed that v1's `revokes=140` was the chunk port's unit
+alone. Replay, protected mode: `resets=40 closes=20 reset_revokes=40 close_revokes=20`. The chunk
+unit's revokes equal `reset_revokes + close_revokes + retires`, which is the "no hidden revoke on a
+reset" claim, now stated as an equality. `region_revokes` and both `inits` are reported, not
+predicted: there is no prior count for them. The spatial replay reports 0 revokes and 0 inits in
+both units.
+
+**Behaviour.** Both QEMU replay reports equal 2026-09-21's field for field, and the native replay
+still matches unmodified upstream. The audit showed that this equality cannot see the port's
+placement changes, because the checksum is a function of the trace. So it is claimed only as what
+it is: the same trace completes, with the payload checks at every free, realloc and reset passing.
+The split-overlap mutation that shows those checks fire is re-run, and its output is kept.

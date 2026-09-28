@@ -2,7 +2,7 @@ Subject: Give every chunk of the block allocator a region of its own, so a chunk
 Upstream: wireshark 4.6.8
 Upstream-Archive: https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz
 Upstream-SHA256: c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0
-Build-Variants: native port, Capstone domain; inert in full Wireshark and in the PoisonCap arm (every hunk is guarded by WMEM_PORT_CHUNKS)
+Build-Variants: native port, Capstone domain; inert in full Wireshark and in the PoisonCap arm (every hunk is guarded by WMEM_PORT_CHUNKS, except four lines that name WMEM_FREE_MIN_LEN, which expands to upstream's own expression without it)
 Depends-On: wireshark-4.6.8-0001-wmem-authority-hooks.patch
 Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
 
@@ -13,11 +13,17 @@ split: a chunk free revokes that chunk, and a reset still ends the whole
 block with one revoke. Carving takes a chunk's range away from any authority
 over the block, and upstream keeps its chunk headers and free-list links in
 those ranges, so they move beside the block into records with upstream's
-field names; the header bytes stay reserved, so every address handed out is
-upstream's. Free chunks never rejoin: a join needs a handle taken before the
-split that separated them, which for a front-carving allocator also covers
-the live chunks between them. So there is no merge on free and no growth in
-place. The classes of the hunks are in the sibling .classes file.
+field names. The header bytes stay reserved, so a block's layout is
+upstream's; placement diverges from upstream's once a free that upstream
+would merge is not merged. Free chunks never rejoin: a join needs a handle
+taken before the split that separated them, which for a front-carving
+allocator also covers the live chunks between them. So there is no merge on
+free and no growth in place. Because nothing rejoins, every chunk that can
+serve a request is listed -- the links live in the record, so upstream's
+minimum of two pointers no longer applies -- and a shrink never leaves a
+remainder too small to list. The classes of the hunks are in the sibling
+.classes file.
+
 --- a/wsutil/wmem/wmem_allocator_block.c
 +++ b/wsutil/wmem/wmem_allocator_block.c
 @@ -20,6 +20,9 @@
@@ -30,7 +36,7 @@ place. The classes of the hunks are in the sibling .classes file.
  
  /* This has turned into a very interesting exercise in algorithms and data
   * structures.
-@@ -144,6 +147,64 @@
+@@ -144,6 +147,70 @@
   * also a nice power of two, of course. */
  #define WMEM_BLOCK_SIZE (8 * 1024 * 1024)
  
@@ -91,19 +97,27 @@ place. The classes of the hunks are in the sibling .classes file.
 +#define WMEM_BLOCK_TO_CHUNK(BLOCK) ((BLOCK)->first)
 +#define WMEM_CHUNK_TO_BLOCK(CHUNK) ((CHUNK)->block)
 +#define WMEM_GET_FREE(CHUNK) (&(CHUNK)->free)
++/* The smallest chunk a free list can hold. Upstream needs room for the links
++ * in the chunk's data; here they live in the record, so every chunk that can
++ * serve a request is listed. That matters because chunks never rejoin: a freed
++ * chunk too small for two pointers, which upstream's merge would reclaim, would
++ * otherwise be lost until the block's next reset. */
++#define WMEM_FREE_MIN_LEN WMEM_ALIGN_AMOUNT
 +#else
  /* The header for an entire OS-level 'block' of memory */
  typedef struct _wmem_block_hdr_t {
      struct _wmem_block_hdr_t *prev, *next;
-@@ -197,6 +258,7 @@
+@@ -197,6 +264,9 @@
  
  /* Handy macro for accessing the free-header of a chunk */
  #define WMEM_GET_FREE(CHUNK) ((wmem_block_free_t*)WMEM_CHUNK_TO_DATA(CHUNK))
++/* The smallest chunk a free list can hold: room for the links in its data. */
++#define WMEM_FREE_MIN_LEN sizeof(wmem_block_free_t)
 +#endif
  
  typedef struct _wmem_block_allocator_t {
      wmem_block_hdr_t   *block_list;
-@@ -204,6 +266,155 @@
+@@ -204,6 +274,155 @@
      wmem_block_chunk_t *recycler_head;
  } wmem_block_allocator_t;
  
@@ -259,7 +273,25 @@ place. The classes of the hunks are in the sibling .classes file.
  /* DEBUG AND TEST */
  static int
  wmem_block_verify_block(wmem_block_hdr_t *block)
-@@ -481,11 +692,57 @@
+@@ -234,7 +453,7 @@
+         }
+ 
+         if (!chunk->used &&
+-                WMEM_CHUNK_DATA_LEN(chunk) >= sizeof(wmem_block_free_t)) {
++                WMEM_CHUNK_DATA_LEN(chunk) >= WMEM_FREE_MIN_LEN) {
+ 
+             total_free_space += chunk->len;
+ 
+@@ -396,7 +615,7 @@
+ {
+     wmem_block_free_t *free_chunk;
+ 
+-    if (WMEM_CHUNK_DATA_LEN(chunk) < sizeof(wmem_block_free_t)) {
++    if (WMEM_CHUNK_DATA_LEN(chunk) < WMEM_FREE_MIN_LEN) {
+         return;
+     }
+ 
+@@ -481,11 +700,57 @@
  
  /* CHUNK HELPERS */
  
@@ -317,7 +349,7 @@ place. The classes of the hunks are in the sibling .classes file.
  static void
  wmem_block_merge_free(wmem_block_allocator_t *allocator,
                        wmem_block_chunk_t *chunk)
-@@ -554,6 +811,7 @@
+@@ -554,6 +819,7 @@
          }
      }
  }
@@ -325,7 +357,25 @@ place. The classes of the hunks are in the sibling .classes file.
  
  /* Takes an unused chunk and a size, and splits it into two chunks if possible.
   * The first chunk (at the same address as the input chunk) is guaranteed to
-@@ -598,7 +856,11 @@
+@@ -574,7 +840,7 @@
+ 
+     aligned_size = WMEM_ALIGN_SIZE(size) + WMEM_CHUNK_HEADER_SIZE;
+ 
+-    if (WMEM_CHUNK_DATA_LEN(chunk) < aligned_size + sizeof(wmem_block_free_t)) {
++    if (WMEM_CHUNK_DATA_LEN(chunk) < aligned_size + WMEM_FREE_MIN_LEN) {
+         /* If the available space is not enought to store all of
+          * (hdr + requested size + alignment padding + hdr + free-header) then
+          * just remove the current chunk from the free list and return, since we
+@@ -582,7 +848,7 @@
+         if (chunk == allocator->master_head) {
+             wmem_block_pop_master(allocator);
+         }
+-        else if (WMEM_CHUNK_DATA_LEN(chunk) >= sizeof(wmem_block_free_t)) {
++        else if (WMEM_CHUNK_DATA_LEN(chunk) >= WMEM_FREE_MIN_LEN) {
+             wmem_block_remove_from_recycler(allocator, chunk);
+         }
+         return;
+@@ -598,7 +864,11 @@
  
      /* with chunk's values set, we can use the standard macro to calculate
       * the location and size of the new free chunk */
@@ -337,7 +387,7 @@ place. The classes of the hunks are in the sibling .classes file.
  
      /* Now we move the free chunk's address without changing its location
       * in whichever list it is in.
-@@ -655,7 +917,11 @@
+@@ -655,7 +925,11 @@
   * The first chunk can hold at least `size` bytes of data, while the second gets
   * whatever's left over. The second is marked as unused and is added to the
   * recycler. */
@@ -349,19 +399,28 @@ place. The classes of the hunks are in the sibling .classes file.
  wmem_block_split_used_chunk(wmem_block_allocator_t *allocator,
                              wmem_block_chunk_t *chunk,
                              const size_t size)
-@@ -669,7 +935,11 @@
+@@ -666,11 +940,20 @@
+ 
+     aligned_size = WMEM_ALIGN_SIZE(size) + WMEM_CHUNK_HEADER_SIZE;
+ 
++#ifdef WMEM_PORT_CHUNKS
++    /* The remainder must be big enough for a free list to hold: it never
++     * rejoins its neighbour, so a remainder no list holds would be lost until
++     * the block's next reset. Too small, and the chunk stays whole. */
++    if (aligned_size + WMEM_FREE_MIN_LEN > WMEM_CHUNK_DATA_LEN(chunk)) {
++        return false;
++    }
++#else
      if (aligned_size > WMEM_CHUNK_DATA_LEN(chunk)) {
          /* in this case we don't have enough space to really split it, so
           * it's basically a no-op */
-+#ifdef WMEM_PORT_CHUNKS
-+        return false;
-+#else
          return;
-+#endif
      }
++#endif
      /* otherwise, we have room to split it, though the remaining free chunk
       * may still not be usefully large */
-@@ -684,7 +954,15 @@
+ 
+@@ -684,7 +967,15 @@
  
      /* with chunk's values set, we can use the standard macro to calculate
       * the location and size of the new free chunk */
@@ -377,7 +436,7 @@ place. The classes of the hunks are in the sibling .classes file.
  
      /* set the new values for the chunk */
      extra->len   = (uint32_t) available;
-@@ -698,9 +976,15 @@
+@@ -698,9 +989,15 @@
          WMEM_CHUNK_NEXT(extra)->prev = extra->len;
      }
  
@@ -393,7 +452,7 @@ place. The classes of the hunks are in the sibling .classes file.
  }
  
  /* BLOCK HELPERS */
-@@ -746,7 +1030,14 @@
+@@ -746,7 +1043,14 @@
      wmem_block_chunk_t *chunk;
  
      /* a new block contains one chunk, right at the beginning */
@@ -408,7 +467,7 @@ place. The classes of the hunks are in the sibling .classes file.
  
      chunk->used  = false;
      chunk->jumbo = false;
-@@ -765,7 +1056,12 @@
+@@ -765,7 +1069,12 @@
      wmem_block_hdr_t *block;
  
      /* allocate the new block and add it to the block list */
@@ -421,7 +480,7 @@ place. The classes of the hunks are in the sibling .classes file.
      wmem_block_add_to_block_list(allocator, block);
  
      /* initialize it */
-@@ -782,22 +1078,42 @@
+@@ -782,22 +1091,42 @@
      wmem_block_chunk_t *chunk;
  
      /* allocate a new block of exactly the right size */
@@ -465,7 +524,7 @@ place. The classes of the hunks are in the sibling .classes file.
      /* and return the data pointer */
      return wm_narrow(WMEM_CHUNK_TO_DATA(chunk), size);
  #else
-@@ -817,7 +1133,13 @@
+@@ -817,7 +1146,13 @@
  
      wmem_block_remove_from_block_list(allocator, block);
  
@@ -479,7 +538,7 @@ place. The classes of the hunks are in the sibling .classes file.
  }
  
  /* Reallocs special 'jumbo' blocks of sizes that won't fit normally. */
-@@ -830,6 +1152,20 @@
+@@ -830,6 +1165,20 @@
  
      block = WMEM_CHUNK_TO_BLOCK(chunk);
  
@@ -500,7 +559,7 @@ place. The classes of the hunks are in the sibling .classes file.
      block = (wmem_block_hdr_t *) wmem_realloc(NULL, block, size
              + WMEM_BLOCK_HEADER_SIZE
              + WMEM_CHUNK_HEADER_SIZE);
-@@ -850,6 +1186,7 @@
+@@ -850,6 +1199,7 @@
  #else
      return WMEM_CHUNK_TO_DATA(WMEM_BLOCK_TO_CHUNK(block));
  #endif
@@ -508,7 +567,7 @@ place. The classes of the hunks are in the sibling .classes file.
  }
  
  /* API */
-@@ -897,7 +1234,10 @@
+@@ -897,7 +1247,10 @@
      /* mark it as used */
      chunk->used = true;
  
@@ -520,7 +579,7 @@ place. The classes of the hunks are in the sibling .classes file.
      /* and return the user's pointer */
      return wm_narrow(WMEM_CHUNK_TO_DATA(chunk), size);
  #else
-@@ -912,26 +1252,42 @@
+@@ -912,26 +1265,42 @@
      wmem_block_allocator_t *allocator = (wmem_block_allocator_t*) private_data;
      wmem_block_chunk_t     *chunk;
  
@@ -564,7 +623,7 @@ place. The classes of the hunks are in the sibling .classes file.
  
      /* Now cycle the recycler */
      wmem_block_cycle_recycler(allocator);
-@@ -943,10 +1299,14 @@
+@@ -943,10 +1312,14 @@
      wmem_block_allocator_t *allocator = (wmem_block_allocator_t*) private_data;
      wmem_block_chunk_t     *chunk;
  
@@ -579,7 +638,7 @@ place. The classes of the hunks are in the sibling .classes file.
  
      if (chunk->jumbo) {
          return wmem_block_realloc_jumbo(allocator, chunk, size);
-@@ -958,6 +1318,11 @@
+@@ -958,6 +1331,11 @@
  
          tmp = WMEM_CHUNK_NEXT(chunk);
  
@@ -591,7 +650,7 @@ place. The classes of the hunks are in the sibling .classes file.
          if (tmp && (!tmp->used) &&
              (size < WMEM_CHUNK_DATA_LEN(chunk) + tmp->len)) {
              /* the next chunk is free and has enough extra, so just grab
-@@ -1009,7 +1374,13 @@
+@@ -1009,7 +1387,13 @@
              void *newptr;
  
              newptr = wmem_block_alloc(private_data, size);
@@ -605,7 +664,7 @@ place. The classes of the hunks are in the sibling .classes file.
              wmem_block_free(private_data, ptr);
  
              /* No need to cycle the recycler, alloc and free both did that
-@@ -1020,10 +1391,27 @@
+@@ -1020,10 +1404,27 @@
      }
      else if (size < WMEM_CHUNK_DATA_LEN(chunk)) {
          /* shrink */
@@ -634,7 +693,7 @@ place. The classes of the hunks are in the sibling .classes file.
          wmem_block_cycle_recycler(allocator);
  
          return wm_narrow(ptr, size);
-@@ -1056,7 +1444,31 @@
+@@ -1056,7 +1457,31 @@
      /* iterate through the blocks, reinitializing each one */
      cur = allocator->block_list;
  
@@ -667,7 +726,7 @@ place. The classes of the hunks are in the sibling .classes file.
      /* Every retained block starts a new epoch under fresh authority, so the
       * block list is rebuilt from the renewed aliases rather than relinked
       * through pointers the epoch has just retired. */
-@@ -1141,7 +1553,15 @@
+@@ -1141,7 +1566,15 @@
              else if (allocator->master_head == chunk) {
                  allocator->master_head = free_chunk->next;
              }

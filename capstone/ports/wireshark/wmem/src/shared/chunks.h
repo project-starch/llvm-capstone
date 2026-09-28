@@ -39,7 +39,8 @@ struct wm_block_auth {
 /* What the protected mode did, for the report page (offset 128). */
 struct wm_chunk_counts {
   uint64_t magic, opens, resets, closes, reset_revokes, close_revokes,
-      dropped, retires, splits, issues, revokes, inits;
+      dropped, retires, splits, issues, revokes, inits, region_revokes,
+      region_inits;
 };
 #define WM_CHUNK_COUNTS_MAGIC UINT64_C(0x53544e554f434b43)
 static inline size_t wm_addr(const void *p) { return (size_t)(uintptr_t)p; }
