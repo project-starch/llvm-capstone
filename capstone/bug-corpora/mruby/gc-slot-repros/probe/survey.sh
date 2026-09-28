@@ -40,6 +40,7 @@ CASES=(
   "iv-walk-freed-block:0cf969a2b:test/t/kernel.rb"
   "hash-iter-deleted-ahead:5e8a65457:test/t/hash.rb"
   "ary-splice-self-aset:17d124b00:test/t/array.rb"
+  "string-prepend-self:af6f23ddb:mrbgems/mruby-string-ext/test/string.rb"
 )
 # The fixes the control carries. The three left out each depend on an
 # intermediate commit and do not apply onto rc2 alone; CANDIDATES.md says so.

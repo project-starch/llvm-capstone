@@ -257,12 +257,14 @@ a use-after-free where the 4.0 line reports a buffer-overflow, so a row's *class
 move between versions even when it reproduces in both -- another reason the table is
 run rather than derived.
 
-**The pin is already the best available choice, and `4.0.0` is the same choice with a
-release number.** Every one of the nine reproduces identically at `4.0.0-rc2` and at
-`4.0.0` -- same verdicts, same ASan reports -- so moving the pin from the release
-candidate to the release costs nothing and stops the corpus resting on a
-pre-release. That is worth doing for its own sake; `port.json` and
-`build-mruby-domain.sh` would both follow.
+**The pin is the best available choice. The earlier recommendation to move it to
+`4.0.0` is WITHDRAWN.** It was made on the nine rows measured at the time, all of which
+reproduce identically at `4.0.0-rc2` and at `4.0.0`. It does not hold once the set is
+larger: row 10 (`af6f23ddb`, `String#prepend` with a self-referencing argument) corrupts
+the heap at `4.0.0-rc2` and **passes at `4.0.0`**. `capstone/ports/mruby/app/README.md`
+states the scale of the error -- its inventory puts **24** qualifying defects at
+`4.0.0-rc2` against **18** at `4.0.0`, so moving the pin five weeks forward would give up
+six of them. Moving it would have cost material, not bought defensibility.
 
 Going **older** loses the two best-understood rows outright rather than merely
 fixing them: `str_lstrip_bang` and `shaped_iv_foreach` are absent before the 4.0
@@ -285,6 +287,60 @@ defect should still be live there; the case **passes** at `4.1.0-rc2` when run. 
 equivalent change reached that tag by another route. So this table is built from runs,
 not from the ancestry matrix, and the matrix is kept only as the thing that pointed at
 which versions were worth building.
+
+## This survey is a subset, and the project already knew the size of the set
+
+`capstone/ports/mruby/app/README.md` and the commit that wrote it (`c9e342f4d2c0`) record
+an inventory this file did not start from:
+
+> an inventory of mruby's fixed temporal defects (NVD, OSS-Fuzz, issues and PRs) against
+> every release tag put **24 at this tag** whose memory mruby's own allocators manage --
+> **11 in reused GC object slots, which ASan cannot see, 13 in bodies from `mrb_malloc`**
+
+That taxonomy is the same split this file arrives at independently, which is reassuring
+about the reading and unflattering about the search: **10 of the 24 are measured here**,
+and the inventory itself was never committed -- only its counts. Worse for the corpus's
+stated purpose, the four ASan-blind rows found here are in the **hash entry array** and
+the **shared string buffer**, not in GC object slots. The 11 reused-GC-slot defects, the
+class `patches/4.0.0-rc2/0008` exists to catch, are essentially **not** in this file.
+Finding them is the largest piece of work left, and the inventory's sources say where to
+look: OSS-Fuzz and the issue tracker, not only commit messages, which is what was swept
+here.
+
+### Row 10, and the window that produced it
+
+The gap has a first, cheap consequence. `24 - 18 = 6` says six defects are fixed between
+`4.0.0-rc2` (2026-03-12) and `4.0.0` (2026-04-20), a five-week window this file's sweep
+never looked at on its own. It holds 67 commits, ten of them touching the allocator or
+core files, and six read as temporal:
+
+| commit | what it is | shipped a test |
+|---|---|---|
+| `af6f23ddb` | `String#prepend` with a self-referencing argument | yes |
+| `c52faebb7` | the result of `mrb_funcall()` assigned straight into `regs` | no |
+| `e8d075045` | `ci` reloaded only after `regs[a] = v`, past `mrb_hash_delete_key` | no |
+| `2135088ad` | object modified by a nested `mrb_vm_exec()` call | no |
+| `d95ebe4a2` | stack extension bug causing a HardFault | no |
+| `ab249864c` | `mrb_gc_unregister()` removed only the first matching entry | no |
+
+**Row 10 = `af6f23ddb`**, the one with a test, and it reproduces hard: at the pin its own
+upstream test dies with `malloc(): invalid size (unsorted)` and a core dump -- glibc's own
+heap metadata check -- and ASan calls it a `heap-buffer-overflow`. At `4.0.0` it passes.
+That is the row that withdrew the pin recommendation above.
+
+`c52faebb7` and `e8d075045` are the most interesting of the rest, because they are this
+corpus's own `realloc-vmstack` shape stated in one line each: `regs` is
+`#define regs (ci->stack)`, and a call that extends the data stack moves it, so
+`regs[a] = <result of the call>` writes through a stale pointer. `c52faebb7` is the
+sharper of the two -- the assignment's left side may be computed *before* the call, so C's
+unspecified evaluation order is part of the defect.
+
+Two reproducers were written for `c52faebb7` and **neither triggers it**: an operator with
+a Ruby-defined method and a callee grown wide enough to move the stack, once at a fixed
+width and once with the demand rising per call, all pass at the pin under ASan. The likely
+reason is the one `xlang/capstone/rows.tsv` already names as `INVALID` for this shape --
+`realloc` growing the block in place, so the old pointer stays valid and nothing is
+observable. Recorded as not reproduced rather than as absent.
 
 ## Gems, and what is out of reach
 
