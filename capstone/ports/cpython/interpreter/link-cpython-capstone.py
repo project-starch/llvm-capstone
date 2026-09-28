@@ -304,7 +304,7 @@ def main() -> int:
         # so their native size is scaled by the ratio the present objects show.
         # An ESTIMATE; the objects themselves cannot be built yet.
         size = run(["size", "--version"])
-        if size.returncode == 0:
+        if absent and size.returncode == 0:
             def tdb(tool, path):
                 rows = run([tool, str(path)]).stdout.splitlines()
                 f = rows[1].split() if len(rows) > 1 else None
