@@ -1,0 +1,72 @@
+[
+  {
+    "arm": "capstone",
+    "profile": "qualification",
+    "rep": 0,
+    "node_capacities": [
+      65536,
+      4194304
+    ],
+    "all_ledgers_and_oracles_equal": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "churn",
+    "rep": 1,
+    "node_capacities": [
+      65536,
+      4194304
+    ],
+    "all_ledgers_and_oracles_equal": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "churn",
+    "rep": 2,
+    "node_capacities": [
+      65536,
+      4194304
+    ],
+    "all_ledgers_and_oracles_equal": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "churn",
+    "rep": 3,
+    "node_capacities": [
+      65536,
+      4194304
+    ],
+    "all_ledgers_and_oracles_equal": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "burst",
+    "rep": 1,
+    "node_capacities": [
+      65536,
+      4194304
+    ],
+    "all_ledgers_and_oracles_equal": true
+  },
+  {
+    "arm": "capstone",
+    "profile": "burst",
+    "rep": 2,
+    "node_capacities": [
+      65536,
+      4194304
+    ],
+    "all_ledgers_and_oracles_equal": true
+  },
+  {
+    "arm": "capstone-sublet",
+    "profile": "qualification",
+    "rep": 0,
+    "node_capacities": [
+      65536,
+      4194304
+    ],
+    "all_ledgers_and_oracles_equal": true
+  }
+]

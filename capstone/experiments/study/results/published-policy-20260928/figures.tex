@@ -1,0 +1,22 @@
+% Use with graphicx; set this directory before including this file.
+\providecommand{\publishedPolicyFigureRoot}{.}
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{\publishedPolicyFigureRoot/01-transferred-policy-reuse.pdf}
+  \caption{Address reuse in complete mruby and FFmpeg workloads. The ordinate divides cumulative observed same-start reissues by all application issues, including first issues; the abscissa counts intervening issues. Medians and ranges cover three processes per arm and workload (48 total); repetitions coincide. PoisonCap uses the published SQLite quarantine thresholds transferred to these allocators, with the documented queue correction and outer libc revocation enabled. FFmpeg destructor sweeps are separate port extensions. Trusted destructor issues are excluded in every arm. These are adapted FATE inputs, not an official FATE score.}
+  \label{fig:application-published-reuse}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{\publishedPolicyFigureRoot/02-transferred-policy-backing.pdf}
+  \caption{Selected memory effects, normalized to each protected implementation's own spatial control. Panels show peak GC backing, GC backing retained after rendering, and the carved FFmpeg pool address extent. Markers and ranges summarize three paired repetitions. GC accounting includes page-local metadata and observer storage; FFmpeg extent excludes its separate snapshots and fixed adapter tables. Sublet preserves the FFmpeg control's pool extent and incurs less relative GC peak growth, but retains a larger relative GC footprint after AO16. These measurements exclude total platform memory and do not estimate RSS or physical working-set size.}
+  \label{fig:application-published-backing}
+\end{figure*}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{\publishedPolicyFigureRoot/03-sqlite-outer-defaults.pdf}
+  \caption{SQLite 3.22.0 repeated complete speedtest1 main workloads. Six fresh PoisonCap processes with outer revocation enabled are paired with six unchanged archived Capstone controls. The corrected published queue policy includes explicit poison retirement. Panel (a) measures reuse over all 17 units. Panel (b) shows the cumulative union of allocated address intervals, normalized to each platform's spatial control: PoisonCap reaches a larger plateau, not unbounded growth. Panel (c) includes selected allocator metadata and exposes Sublet's fixed-region countercost. Grey marks the first completed unit. Medians and ranges cover three processes per arm; they coincide. None of these panels estimates physical working set or total platform memory.}
+  \label{fig:sqlite-published-policy}
+\end{figure*}

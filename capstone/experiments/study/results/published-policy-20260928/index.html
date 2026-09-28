@@ -1,0 +1,38 @@
+<!doctype html><html lang="de"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Memory plots · Review</title>
+<style>body{font:17px/1.55 system-ui,sans-serif;color:#20252b;background:#f4f5f7;margin:0}
+main{max-width:1000px;margin:auto;padding:28px}h1,h2,h3{line-height:1.2}a{color:#005a9c}
+nav{position:sticky;top:0;background:#fff;padding:15px;border-bottom:1px solid #ccd;z-index:1}
+nav a{margin-right:22px}article{background:white;border:1px solid #ddd;border-radius:8px;padding:24px;margin:24px 0}
+img{display:block;width:100%;height:auto;margin-top:16px}table{border-collapse:collapse;width:100%;background:white}
+th,td{text-align:left;border-bottom:1px solid #ddd;padding:10px}section{scroll-margin-top:80px}
+@media(max-width:600px){main{padding:12px}article{padding:12px}table{font-size:13px}}</style>
+<nav><a href="#by-metric">Nach Metrik</a><a href="#by-application">Nach Anwendung</a><a href="README.md">Methoden &amp; Daten</a></nav>
+<main><h1>Speicherverhalten · Plot-Review</h1>
+<p><b>Haupteinstieg: nach Metrik.</b> Die Anwendungsansicht zeigt dieselben Messungen in anderer Gruppierung.
+Drei Anwendungen, fünf Workloads, vier Arme, je drei Wiederholungen: 60 vollständige Prozesse (54 neu, sechs archivierte Kontrollen).
+Diese Neuordnung enthält keine neuen Messläufe.</p>
+<p>Blau: Capstone/Sublet. Orange: PoisonCap. Gestrichelt: räumliche Kontrolle; durchgezogen: geschützt.
+Verhältnisse vergleichen immer geschützt / eigene Plattformkontrolle; 1× bedeutet keinen Mehrbedarf in dieser Metrik.</p>
+<table><tr><th>Anwendung</th><th>Reuse</th><th>Adressraumbedarf</th><th>Allocator-Speicher</th></tr>
+<tr><td>SQLite</td><td>Ja</td><td>Intervallvereinigung, Verlauf</td><td>Peak + Metadaten, Verlauf</td></tr>
+<tr><td>mruby</td><td>Ja, AO 8/16</td><td>Noch nicht gemessen</td><td>GC-Peak &amp; nach Rendern</td></tr>
+<tr><td>FFmpeg</td><td>Ja, Xvid/Resize</td><td>Pool-Ausdehnung</td><td>Noch nicht vergleichbar gemessen</td></tr></table>
+<article><h2>Wiederverwendung: Verteilung</h2>
+<p><a href="reuse-distributions.pdf">PDF</a> · <a href="reuse-distributions.csv">Messwerte</a></p>
+<img src="by-metric/00-reuse-distributions.png" alt="Vertikale Histogramm-Violinen für fünf Benchmarks">
+<p>Benchmarks auf der X-Achse; Wiederverwendungsabstand auf der logarithmischen Y-Achse.
+Je Benchmark stehen Sublet und PoisonCap nebeneinander, jeweils mit der eigenen Kontrolle als sandfarbener linker Hälfte.
+Die Verteilungen umfassen nur beobachtete Wiederverwendungen. Häufigkeiten stehen weiterhin in der CSV.
+Die leere PoisonCap-Hälfte bei Xvid bedeutet keine beobachtete Wiederverwendung.</p></article>
+<article><h2>Eine Metrik über alle Anwendungen</h2>
+<p><a href="cross-application-reuse.pdf">Gemeinsamer Reuse-Vergleich als PDF</a> ·
+<a href="cross-application-reuse.csv">Messwerte als CSV</a></p>
+<p>Jede Zeile ist ein Benchmark. Die Punkte zeigen die Änderung gegenüber der eigenen räumlichen Kontrolle
+an drei Abständen der vorhandenen Reuse-CDFs. Null bedeutet: Der Wiederverwendungsanteil bleibt erhalten.
+Explorative Übersicht über bestehende Läufe mit unterschiedlichen Arbeitshorizonten; noch kein gemeinsames A–D-Experiment.</p>
+<img src="by-metric/00-cross-application-reuse.png" alt="Reuse-Veränderung für fünf Workloads an drei Abständen">
+</article>
+<p>Kein physisches Working Set oder Gesamt-RSS; Adressmetriken und Allocator-Bytes sind getrennt.
+PoisonCap: veröffentlichte SQLite-Schwellen, für mruby/FFmpeg übertragen; Korrekturen und Teardown-Sweeps dokumentiert.
+Die ältere gemischte Ablage bleibt für bestehende Links erhalten.</p><section id="by-metric"><h2>Nach Metrik · hier beginnen</h2><p><a href="review-by-metric.pdf">Alle drei Blätter als PDF</a></p><article><h3>Wiederverwendung</h3><p>Alle fünf Workloads, dieselben Achsen und vier Arme. Die CDF teilt Wiederverwendungen durch alle Allokationen; sie muss daher nicht 100 % erreichen. Gemessen wird derselbe Startadresswert.</p><a href="by-metric/01-reuse.pdf">PDF öffnen</a><a href="by-metric/01-reuse.png"><img src="by-metric/01-reuse.png" alt="Wiederverwendung" loading="lazy"></a></article><article><h3>Adressraumbedarf</h3><p>SQLite: Vereinigung bisher allokierter Adressintervalle über 17 Einheiten. FFmpeg: höchste genutzte Pool-Ausdehnung inklusive Padding. Das sind unterschiedliche Adressmetriken, keine Messungen des physischen Working Sets. Für mruby liegt diese Metrik nicht vor.</p><a href="by-metric/02-address-footprint.pdf">PDF öffnen</a><a href="by-metric/02-address-footprint.png"><img src="by-metric/02-address-footprint.png" alt="Adressraumbedarf" loading="lazy"></a></article><article><h3>Allocator-Speicher</h3><p>SQLite: Peak aus gehaltenen Bytes plus Metadaten. mruby: GC-Backing am Peak und nach dem Rendern. Die Grenzen der erfassten Allocatoren unterscheiden sich; keine Gesamt-RSS-Messung. Die höheren Sublet-Kosten bei SQLite und nach AO 16 bleiben sichtbar. FFmpeg hat hier noch keine vergleichbare Messung.</p><a href="by-metric/03-allocator-memory.pdf">PDF öffnen</a><a href="by-metric/03-allocator-memory.png"><img src="by-metric/03-allocator-memory.png" alt="Allocator-Speicher" loading="lazy"></a></article></section><section id="by-application"><h2>Nach Anwendung · dieselben Daten</h2><p><a href="review-by-application.pdf">Alle drei Blätter als PDF</a></p><article><h3>SQLite</h3><p>SQLite 3.22.0, speedtest1 main: Reuse, Adressabdeckung und Allocator-Peak. 17 vollständige Einheiten pro Prozess; sechs neue PoisonCap-Läufe und sechs archivierte Capstone-Kontrollen.</p><a href="by-application/01-sqlite.pdf">PDF öffnen</a><a href="by-application/01-sqlite.png"><img src="by-application/01-sqlite.png" alt="SQLite" loading="lazy"></a></article><article><h3>mruby</h3><p>AO 8 und AO 16: Reuse, GC-Peak und GC-Backing nach dem Rendern. 24 neue Prozesse. Compiler-Optimierung des Interpreter-Archivs noch nicht angeglichen; siehe Methoden.</p><a href="by-application/02-mruby.pdf">PDF öffnen</a><a href="by-application/02-mruby.png"><img src="by-application/02-mruby.png" alt="mruby" loading="lazy"></a></article><article><h3>FFmpeg</h3><p>Adaptierte FATE-Eingaben: Xvid mit 20 Frames und Resize mit 150 Frames. Reuse und Pool-Ausdehnung; 24 neue Prozesse. Feste 256-MiB-Reservierung und zusätzliche PoisonCap-Snapshot-Bytes sind nicht Teil der gezeigten Pool-Ausdehnung.</p><a href="by-application/03-ffmpeg.pdf">PDF öffnen</a><a href="by-application/03-ffmpeg.png"><img src="by-application/03-ffmpeg.png" alt="FFmpeg" loading="lazy"></a></article></section></main></html>

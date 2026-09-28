@@ -1,0 +1,42 @@
+{
+  "date": "2026-09-27",
+  "llvm_base": "29e1bbb54b0e",
+  "qemu_primary": "22aec7ee0fe1edc4b7fc780316edee68829bea38",
+  "qemu_control": "6550f19489e08d2babccab06e89d43467f8e67b6",
+  "primary_node_capacity": 65536,
+  "new_control_node_capacity": 262144,
+  "raw_manifests": {
+    "applications": "202d34160cb6e9efb9fc4597b5b72d11b7b98211be007093541ee81c9880232b",
+    "cap-bounded": "63981347b723698cc45d2af933f0f3292691ccd51bbb9b109b2ee3e6188dddd4",
+    "cap-control": "add665f31513118423f0a21729585ff8b7a8424aa24d84a0e1248b6cb1fc5e31",
+    "cheri-bounded": "02f2cc986781ae07f8a15517decad5d1b3ec65035c0b61aed17c49d4e9705f88",
+    "cheri-campaign": "3337add910f97ae6325263dbab094cab68e4c0a4da3b1e023d2fd314e1675827"
+  },
+  "policy": {
+    "environment": {},
+    "runtime_revocation_default": 1,
+    "runtime_revocation_async": 1,
+    "runtime_revocation_every_free_default": 0
+  },
+  "paper_pdfs_sha256": {
+    "cornucopia.pdf": "aba64bb0171de17910f665a19b9dd99de08a4952d8eeea1bfa1b29f3844e0e77",
+    "reloaded.pdf": "b4475b162c74d5c688636f83dfc8e8f6b61e903a6eaf90d44aba364cbe195114"
+  },
+  "analysis_sources": {
+    "analyze-reuse.py": "792d4bde9dd3533a0332004eff65ec79dc564336a10dfafe12526795febae35a",
+    "plot-reuse.py": "17a559d5fd9a0a9910ff153990907bd64a59c82e6d9cf462a899c6278e35d6e7"
+  },
+  "rejected_long_extension": {
+    "reason": "Address-history table overflow; first attempt timed out with invalid counters. Stop remaining repeats of this invalid instrumentation configuration.",
+    "completed_invalid_attempts": 1,
+    "interrupted_attempt": "mruby-n512-b128-k256-default-1",
+    "observed_unique_entries": 65536,
+    "observed_errors": 41468,
+    "observed_unknown_frees": 20734
+  },
+  "inherited_raw_archives": [
+    "application-default-cheribsd-memory-2026-09-27.tar.gz",
+    "runtime-node-reuse-2026-09-27.tar.gz"
+  ],
+  "scope": "Two actual applications; default CheriBSD purecap versus Capstone/Sublet malloc. Phase aggregates only, no allocation event recording."
+}

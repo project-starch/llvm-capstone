@@ -2,6 +2,521 @@
 
 Minimal snapshot. Read first in every session.
 
+## Review baseline (2026-09-28)
+
+The runtime and application study are organized into dependency-ordered review
+branches: `domain-process-runtime`, `application-runtime-capacity`,
+`application-memory-tooling`, `application-nested-ports`,
+`perl-cheribsd-interpreter`, and `application-memory-results`.
+The runtime capacity branch also requires QEMU's `runtime-node-reuse` follow-up.
+The squashed runtime tree and reconstructed study tree match their measured
+predecessors exactly; only this review-status documentation changes afterward.
+Original development commits remain available for measurement provenance.
+
+The verified measurement baseline is five complete four-arm inner-reuse
+comparisons. Perl's CheriBSD interpreter smoke passes, but its inner lifetime
+adapters remain the next implementation milestone. Review publication supersedes
+the older instructions below to keep the study off a PR; it does not mark the
+broader memory study complete or add new guest measurements.
+
+## 2026-09-28 — CPython four-arm reuse and CheriBSD Perl bootstrap
+
+The [CPython archive](../../experiments/study/results/cpython-reuse-four-arm-20260928/README.md)
+validates 12/12 complete-interpreter JSON/GC processes, three per arm: six new
+CheriBSD runs and six archived Capstone runs. Both new CheriBSD modes enable
+outer libc revocation and use one fresh `-O1` binary and repaired kernel.
+A VM-object probe avoids recursive user faults under the revoker's VM-map lock;
+unsupported probes fail explicitly. The resident/PROT_NONE/zero-fill regression
+passes. General swap-pressure and concurrent-VM qualification remain outstanding.
+
+Deferred free-list publication retains pymalloc occupancy until revocation
+completes. The published 4,096-entry and 16 MiB/quarter thresholds are transferred
+without allocation-triggered sweeps. Every protected process records 18 capacity
+drains and one teardown drain, with an empty final queue. Sublet and its control
+have median observed reuse gaps [2,3]; PoisonCap has [4096,8191] versus its own
+control's [2,3]. Reuse shares are 63.48% in the Capstone pair and 55.77% versus
+65.13% in the CheriBSD pair. These are successful-handout, observed-reuse metrics,
+including startup/shutdown, not physical working-set or total-memory results.
+The [first figure](../../experiments/study/results/reuse-five-applications-20260928/README.md)
+now contains five applications and seven workloads.
+
+The [Perl CheriBSD recipe](../../ports/perl/cheribsd/README.md) freshly builds
+5.36.3 purecap with the existing seven interpreter patches and an explicit
+`d_nanosleep` configure answer. Its 17-section smoke matches native output under
+both libc policy switches. This is interpreter qualification only: SV-head/body
+lifetime adapters and the inner reuse observer are missing on both comparison
+sides. The outer Capstone Sublet malloc switch does not fill that gap. Keep the
+study off a PR; complete Perl's inner boundary before adding a sixth application.
+
+## 2026-09-28 — PostgreSQL four-arm inner reuse
+
+The [four-arm archive](../../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
+validates 12/12 complete PostgreSQL 17.5 SQL processes: six new CheriBSD
+processes and six archived Capstone processes, three per arm. All match the
+native SQL oracle and have error-free inner histograms. The protected adapter
+now transfers the published SQLite quarantine thresholds, with full-queue
+revocation correction and no allocation-triggered sweep. Each protected
+process performs five capacity sweeps, zero percentage/managed-reset sweeps.
+Both CheriBSD modes use the same fresh `-O1` binary and corrected libc;
+application libc revocation is verified enabled. Guest setup services use a
+disabled default because the separate kernel lock panic can occur in SCP.
+
+The blocker was fixed metadata exhaustion, followed by recursive allocation
+of PostgreSQL error messages. Earlier parser attribution missed the PIE load
+bias and was incorrect. Both modes now provision 65,536 chunk and 8,192 block
+records, reporting occupancy and failing directly on exhaustion. The protected
+processes peak at 20,472–20,502 chunk records. The enlarged metadata must be
+charged in any later total-memory comparison.
+
+Sublet observes 80.89% same-start reuses versus its control's 83.29%; both
+median observed gaps lie in [4,7]. PoisonCap observes 36.20–36.27% versus
+83.28% in its control, with median observed gap in [8192,16383]. The
+[first-plot extension](../../experiments/study/results/reuse-four-applications-20260928/README.md)
+pools all three raw histograms per arm; slight protected-process variation
+is preserved in the archive. Four applications now have complete four-arm
+reuse evidence. CPython and Perl remain incomplete. The SQL is qualification
+work, not pgbench; no physical working-set or total-memory conclusion follows.
+
+## 2026-09-28 — CPython inner-reuse qualification, three arms
+
+The [archived observer campaign](../../experiments/study/results/cpython-reuse-three-arm-20260928/README.md)
+passes 9/9 complete CPython 3.13.7 `objects.py 8 3 0` processes: three
+Capstone spatial, three Capstone+Sublet and three CheriBSD PoisonCap-adapter
+spatial. The common runners reject missing or inconsistent 32-bin inner
+pymalloc histograms, and the raw archive validator reproduces every reported
+count. The Capstone pair uses 262,144 nodes; an earlier underprovisioned
+65,536-node attempt failed and is excluded. The protected PoisonCap
+interpreter still has no full application oracle, so this is not a four-arm
+comparison. The observer currently indexes successful new lifetimes, not all
+failed allocation attempts required for the fixed-follow-up metric.
+
+## 2026-09-28 — Published-threshold application measurements
+
+The [fresh campaign](../../experiments/study/results/published-policy-20260928/README.md)
+validates 48/48 complete mruby/FFmpeg processes with the published SQLite
+quarantine thresholds transferred to these allocators, the disclosed queue
+correction, and outer libc revocation enabled in both PoisonCap arms. The
+[policy audit](../../experiments/study/poisoncap-policy.md) distinguishes this
+transfer from an author-provided port. FFmpeg's eager reissue sweeps and
+mruby's slot-exhaustion sweeps are removed from the new comparison.
+Sublet's carved FFmpeg pool extent remains 1.00× its control; PoisonCap uses
+6.66× and 12.84× for Xvid and resize. mruby peak GC ratios are 1.39× for
+Sublet versus 1.67×/1.83× for PoisonCap; after AO16, Sublet's retained ratio
+is worse (2.08× versus 1.83×). These are selected allocator quantities,
+not total-memory or physical-working-set claims.
+
+Outer defaults exposed a libc asm-output constraint defect and incomplete
+retirement of stored poison capabilities. Both FFmpeg arms use the same
+corrected libc; a focused allocation test and all complete decoder oracles
+pass. SQLite additionally needs explicit nested poison-metadata retirement;
+all six repaired 17-unit outer-default processes pass. Their inner ledgers
+match the historical controls exactly. Paired with six archived Capstone runs,
+the new SQLite plot shows 1.00× versus 3.99× allocated-address coverage and a
+Sublet selected-allocator-peak countercost. The three new figures therefore
+validate 60 processes (54 fresh plus six archived). Historical SQLite figures
+still use outer revocation disabled and must retain that label. Review copies are under
+`/home/biecho/nested-allocators-paper/review/published-policy-2026-09-28/`.
+
+## 2026-09-28 — Three-application paper figures
+
+The [checked figure set](../../experiments/study/results/application-memory-paper-20260928/README.md)
+reanalyses SQLite, mruby and FFmpeg with common CDF axes, differences from
+each spatial control, selected-memory companions and all eight workloads in
+a supplement. All 96 reuse-process records reproduce exactly through the
+original raw-data validators; the 12 separate SQLite memory transcripts pass
+their SQL oracle and ledger checks. The five vector figures use paper width
+and embedded fonts; a captioned PDF, LaTeX snippets and derived CSVs accompany
+them. Five measurement-guard tests pass. No new application runs or total-memory
+claims are added; the complete four-arm application count remains three.
+
+## 2026-09-28 — FFmpeg adapted-FATE four-arm qualification
+
+The [checked four-arm campaign](../../experiments/study/results/ffmpeg-fate-four-arm-20260928/README.md)
+passes 24/24 complete FFmpeg 9.0.1 decoder processes over two adapted FATE
+inputs, with three exact-oracle repetitions per arm and input. The original
+published CheriBSD kernel's poison-probe panic was traced to a missing L2
+superpage case in RISC-V `pmap_extract_and_hold()`. A narrow patch fixes the
+lookup; both CheriBSD arms were rerun on the same patched kernel. All four
+arms have identical pool lease-gap bins for each input. The protected
+PoisonCap adapter peaks at 224.4 and 167.1 KiB of selected snapshot backing;
+these are not total-memory results. The CPython protected interpreter still
+hits its separate `share->excl` kernel panic with this patch. An isolated
+trap-PC diagnostic identifies RISC-V `fupoison` probing a nonresident user
+target while the revoker holds the VM-map read lock. A temporary bypass only
+changed the failure into a 120-second pre-workload timeout; it was removed and
+supplies no paper measurement. A subsequent fail-closed direct-map diagnostic
+reached a backed page with no PTE and stopped rather than treating possible
+stored poison as absent. That experimental kernel was also removed; the
+protected CPython arm and its memory plot remain unqualified. A later
+scratch kernel classified that specific vnode page and a swap page without
+capability tags as safe misses and reached `startup` without panic, but the
+protected interpreter still timed out before `baseline` at 120 seconds. An
+external-free-list/quarantine candidate passed its spatial control; a
+diagnostic protected run performed over 100 sweeps in 40 seconds, including
+84 on normal block issue, so that candidate was not admitted. Its source
+changes were removed from the branch. No CPython four-arm result is claimed.
+
+## 2026-09-28 — Cross-application reuse preview
+
+The [paper-width three-application CDF preview](../../experiments/study/results/cross-application-reuse-preview-20260928/README.md)
+derives from the qualified SQLite memsys5, mruby GC-slot and FFmpeg pool-lease
+four-arm campaigns. It checks three complete process repetitions per arm and
+uses all inner-boundary issues as the denominator. SQLite and mruby separate
+the protected PoisonCap reissue curves from their spatial controls; FFmpeg's
+four curves coincide. It is not a six-application paper result, physical
+working-set comparison or new measurement.
+
+## 2026-09-28 — PostgreSQL and FFmpeg application-memory follow-up
+
+The PostgreSQL 17.5 `-O1` Capstone original and memory-context Sublet images
+pass 6/6 complete 2,000-row single-user `work.sql` attempts with the exact
+22-row native SQL-output hash, across three fresh copies of the same cluster
+per arm in one Linux VM boot. The SDK images take arguments and environment
+directly from the shared runner. `dynamic_shared_memory_type=sysv` uses the
+existing domain System V segment service; POSIX and file-backed mmap DSM
+cannot run in this runtime. This is a functional two-arm qualification, not a
+four-arm memory ranking: the Sublet context region and node storage are not
+included in the reported outer-heap peak. The initial temporary cluster had
+been used before the campaign. A clean native 16-byte-MAXALIGN fixture builder
+now creates a pristine C-locale/GMT/System V cluster; its tree hash matches
+the shared runner's declared fixture, and the [archived 6/6 campaign](../../experiments/study/results/postgres-pristine-20260928/README.md)
+from that untouched source retains the exact 22-row native oracle. This still
+needs the full four-arm and inner-storage ledgers before a paper memory plot.
+
+The same persistent Capstone VM also passes 12/12 complete FFmpeg 9.0.1
+decoder attempts on two [adapted FATE MPEG-4 inputs](../../experiments/study/fate-mpeg4-inputs.json)
+at 20 and 150 frames, each with spatial and Sublet pool modes and three
+repetitions. Every run matches the native per-frame oracle. A separate fresh
+CheriBSD spatial guest passes 6/6 attempts across the same two inputs and
+three repetitions. For each input the three qualified arms have identical
+32-bin pool lease-gap histograms (262 issues/219 reuses, and 1,852/1,751),
+so these inputs show no Capstone-versus-spatial reuse difference. The
+protected PoisonCap arm hit the published kernel's `Poison probe missing page`
+panic; that interrupted campaign is excluded. A second fresh guest running the
+protected arm first hit the same panic; eagerly touching the 4 MiB pool
+before use and omitting its final explicit `munmap` did not resolve it. The
+generic CheriBSD runner now records `guest-panic` and aborts immediately when
+the serial console reports one; a repeat diagnostic detected this panic four
+seconds into the application attempt. The original FATE bitstreams were
+losslessly remuxed to Matroska for the configured decoder, so these are
+adapted application inputs, not official FATE scores.
+The [archived 18/18 three-arm qualification](../../experiments/study/results/ffmpeg-fate-qualification-20260928/README.md)
+preserves accepted raw runs and the excluded panic separately. At that point it
+could not be rendered as a four-arm FATE memory figure; the later patched-kernel
+campaign above supersedes that qualification for the four-arm input.
+
+## 2026-09-28 — CheriBSD CPython complete-interpreter spatial qualification
+
+A fresh CPython 3.13.7 purecap build with ordinary pymalloc links on
+CheriBSD and passes the JSON/GC `objects.py 8 3 0` workload. The complete
+interpreter now also links the existing PoisonCap pymalloc lifetime backend;
+its adapter mode-0 control passes 3/3 in a fresh guest. At matched `-O1`,
+Capstone spatial and real per-block Sublet modes pass 3/3 each in one Linux
+boot. The [archived nine-process qualification](../../experiments/study/results/cpython-objects-qualification-20260928/README.md)
+preserves exact oracle hashes and build evidence. Protected PoisonCap mode 1
+reaches Python startup but triggers the published kernel's `share->excl`
+VM-map lock panic, including when it runs first in a fresh guest. Both
+interrupted attempts are excluded. The reported outer heaps omit the inner
+pymalloc regions and Capstone node storage; no four-arm CPython memory plot
+is established.
+
+## 2026-09-28 — PostgreSQL complete-backend memory qualification
+
+The PostgreSQL 17.5 single-user backend now builds in Capstone spatial,
+Capstone with all four real Sublet memory-context hooks, CheriBSD purecap
+spatial, and a CheriBSD binary with the existing PoisonCap context backend.
+The pinned 2,000-row `work.sql` passes its 22-row native PostgreSQL oracle in
+the first three arms and in the PoisonCap binary's mode-0 control. The
+Capstone results were initially built at `-O2`; both Capstone modes have now
+also been rebuilt at the CheriBSD pair's `-O1` and passed the shared-runner
+oracle above. An earlier CheriBSD index-build SIGPROT came from a stale
+`src/port/qsort.o` predating the tag-preserving swap patch; the new builder
+forces that object to rebuild before linking.
+
+The earlier PostgreSQL PoisonCap adapter sweeps every free and is not a valid
+lower-bound memory comparator. The complete-backend variant instead poisons
+at free, retains an external chunk queue, and sweeps before reissue. Its
+protected `SELECT 1` qualification passes with 8,692 hands, 6,097 drops,
+1,619 sweeps and a 525,312-byte peak queue. A full `work.sql` mode-1
+diagnostic was stopped during its first INSERT after more than 53 minutes of
+guest CPU and 7,154 sweeps; it produced no completed SQL oracle and is excluded
+from the study. The current eager reissue policy needs batching or a different
+threshold before full-workload qualification. No four-arm PostgreSQL paper plot or total-memory
+ranking is established. The new build path and limits are in the
+[single-user port](../../ports/postgres/single-user/README.md).
+
+## 2026-09-27 — mruby GC-slot four-arm memory behavior
+
+The [full mruby 4.0.0-rc2 AO-render campaign](../../experiments/study/results/mruby-gc-memory-20260927/README.md)
+passes 24/24 independent native-PPM-matched processes at widths 8 and 16: three repetitions of
+Capstone spatial GC, real per-slot Sublet GC, PoisonCap spatial GC, and an
+explicit PoisonCap temporal GC adapter. Every arm issues 217,070 slots at
+width 8 and 915,981 at width 16. Sublet and PoisonCap spatial have identical
+32-bin release-gap histograms at both sizes. Within 1,023 subsequent issues,
+Sublet reissues 75.38%/75.54% of slots at widths 8/16, versus 1.31%/1.95%
+for the temporal PoisonCap adapter.
+PoisonCap temporal peaks at nine GC page groups versus six in its spatial
+control at both sizes; Sublet peaks at six versus six. The peak groups stay
+flat across 4.22× more slot issues, within this tested range. Sublet's per-page metadata and its
+retention of all-dead groups are countercosts, so this is a logical-reuse and
+selected GC-page result, not a total-memory ranking. The process-level
+CheriBSD jemalloc ledger excludes the mmap GC pages, and Capstone node
+storage is not charged. `study.py` now admits a pinned mruby four-arm binding
+for future planned runs; the reported campaign itself used the shared guest
+runners directly, before that binding was assembled.
+
+## 2026-09-27 — Normalized SQLite repeated-work memory
+
+The [complete FFmpeg 9.0.1 decoder lease-gap study](../../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
+now adds a second measured internal allocator boundary. All 36 four-arm
+1/4/16-stream runs pass the exact frame oracle, and all 32 pool lease-gap bins
+are identical across arms and three repetitions at each size. At 16 streams,
+the selective PoisonCap temporal adapter targets 116.155 MiB of cumulative
+payload spans with per-granule poison/clear and copy operations while snapshot
+backing peaks at 36,288 B and finishes at zero. These operation span counters
+are not time, DRAM traffic or total memory. Both platforms use the same prepared FFmpeg
+9.0.1 source and the shared pool observer; Capstone's application SDK reuses
+one Linux VM. The new allocator ledgers match the prior selective FFmpeg
+campaign. This result shows why SQLite's delayed-reuse behavior cannot be
+generalized to every nested allocator policy.
+
+The [complete-application reuse-gap follow-up](../../experiments/study/results/sqlite-reuse-gaps-20260927/README.md)
+adds 12/12 complete four-arm runs, all 6,528 native-matched SQL phases, and
+same-start release-to-reuse CDFs over 550,137 memsys5 allocations per run.
+Capstone original and Sublet are identical in every gap bin. The fraction
+reusing a start within 15 allocations is 73.116% in both Capstone arms,
+73.113% in CheriBSD original, and 0.052% in corrected PoisonCap. PoisonCap's
+overall same-start reuse is 86.358% versus 99.561% in its own original.
+Three repetitions per arm coincide. All 6,732 allocator phase rows match the
+prior campaign except for the extra 524,560 bytes of static observer storage.
+This is a full SQLite application result at its memsys5 boundary, not a
+physical-memory, runtime, or other-application claim.
+
+The [normalized SQLite campaign](../../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
+passes the four-arm build-comparability gate and all 12 repeated-work attempts
+(three per arm, one warmup plus 16 measured full `speedtest1 main --size 1`
+units per process). Every complete unit matches all 32 native SQL-result
+oracles. The CheriBSD original-layout control now removes PoisonCap's external
+allocator adaptation from the denominator. Both platform pairs have equal
+allocatable atom counts, matching SQLite feature switches, lookaside off and
+application/driver `-O0`; explicit platform patches and compiler differences remain.
+
+Sublet's cumulative allocated-address footprint stays at 1.00× its original
+baseline; corrected PoisonCap reaches 3.99× and then plateaus. Sublet returns
+all pool spans after each database close, but its selected allocator metadata
+is much larger. Selected peak H (rounded live + quarantine + specified tables)
+is **4.68× original for Sublet versus 4.27× for PoisonCap**. This is a reuse
+advantage with a metadata tradeoff, not a general total-memory win. Neither
+address footprint nor H is resident working set or complete platform memory.
+
+The fixed size-4 burst passes 3/3 in Sublet and both original-layout controls.
+Corrected PoisonCap fails its first qualification with SQLite OOM during phase
+190; two later repeats remain blocked. This is equal usable pool capacity,
+not equal total reservation. No four-arm post-burst recovery claim is made.
+
+The legacy SQLite path still needs 4,194,304 provisioned emulator nodes for
+these repeated runs, identically configured in both Capstone arms. Its
+65,536-node Sublet control faults; supervised-runtime node reclamation does
+not operate on this legacy path. These application-pool metrics exclude node
+storage and cannot establish hardware memory/scalability. New source/build
+and plotting tools reuse the port builders; no new VM manager is introduced.
+The earlier pilot below remains historical and build-unmatched.
+
+## 2026-09-27 — SQLite budget and selective FFmpeg memory controls
+
+The four-arm SQLite 3.22 pilot passes the same 32 SQL-result phases but **is
+not build-normalized**: Capstone uses the official amalgamation with its
+deployed omit/heap/VFS profile, while PoisonCap uses a ported fork with a
+different source ID and incompletely recorded compile argv. The pilot memory
+plots are exploratory. The [campaign contract](../plans/application-memory-campaign.md)
+now includes a build-comparability gate; compile-only probing confirms that
+the PoisonCap fork accepts Capstone's SQLite defines except the required
+`SQLITE_OS_OTHER` VFS switch, and the CheriBSD prototype links. Its first
+guest attempt panicked in the published kernel during `scp`, before SQLite
+started. No normalized four-arm benchmark has run yet.
+
+The [memory follow-up](../../experiments/study/results/memory-followup-20260927/README.md)
+validates 21 full-SQLite budget attempts against native size-1/size-2 SQL
+oracles and 12 FFmpeg decoder attempts against the exact frame oracle. At
+SQLite size 1, the smallest successful budgets tried are 1.25 MiB Capstone
+spatial, 1.25 MiB Capstone + Sublet (2.05 MiB with tables), and 1.125 MiB
+PoisonCap spatial (1.39 MiB with tables). The corrected and pressure-reclaim
+PoisonCap temporal policies complete at 8 MiB heap (9.11 MiB with tables);
+the pressure policy panics at 7.5 MiB in the published kernel. These are
+successful selected capacities, not measured minima or total RSS. At size 2,
+both spatial arms pass with 2.5 MiB; Sublet faults in SQLite with 2.5/3 MiB
+and PoisonCap temporal panics with 16 MiB. The four-arm scaling cell is open.
+
+The fairer FFmpeg PoisonCap adapter copies only stateful `AVRefStructPool`
+entries and frees snapshots with their backing. All revised 1/4/16-stream
+runs match decoder output. Snapshot backing peaks at 36,288 B and ends at
+zero; final jemalloc allocated matches spatial at 1/4 streams and differs by
+13,632 B at 16. The original full-copy FFmpeg advantage was an adapter
+artifact, not a PoisonCap lower bound. The older result below remains a
+record of that adapter's behavior.
+
+
+## 2026-09-27 — Full SQLite nested-memory pilot and benchmark readiness
+
+The [FFmpeg whole-decoder pool pilot](../../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
+now connects the existing PoisonCap AVBufferPool/AVRefStructPool adapter to the
+actual configured 9.0.1 decoder. For 1, 4 and 16 independent 30-frame streams,
+all six new PoisonCap mode-0/2 runs and all eighteen existing Capstone
+pool-mode-0/2 repeats match the same frame oracle. The PoisonCap temporal arm
+retains a 315,072 B snapshot; within-platform jemalloc allocated rises by
+294,912–318,336 B over spatial. Capstone's reported outer-heap peak and pool
+payload used are equal between its two modes. The ledgers differ across
+platforms, and neither includes all kernel metadata. Two plots and per-phase
+records are retained; broader FATE coverage and PoisonCap repetitions remain.
+
+The [SQLite 3.22.0 memory pilot](../../experiments/study/results/sqlite-322-memory-20260927/README.md)
+now runs all 32 official `speedtest1 main --size 1` phases on Capstone spatial,
+Capstone + memsys5-only Sublet, PoisonCap spatial, and corrected PoisonCap
+temporal. All four arms match the independent native SQL-result oracle for
+4,301 rows, with lookaside disabled. Selected successful application-visible
+reservations are 1.25, 2.05, 1.53 and 9.11 MiB, respectively. These omit
+platform metadata and are not measured RSS or minimum viable capacities.
+The published PoisonCap full-queue path drained six times without revoking;
+the corrected path drained and revoked six times at 8 MiB. Its 4.5 and 7 MiB
+attempts panic in the published kernel. Figures, attempt statuses, phase data,
+and source/binary/raw-log hashes are preserved with the result; raw VM logs
+remain outside the repository.
+The owned persistent Capstone VM is restored. This pilot still uses the legacy
+SQLite domain host, which boots a guest per attempt; full application PoisonCap
+adapters for other ports remain future work.
+
+The `application-poisoncap-study` branch adds a [Sublet/PoisonCap memory
+study design](../plans/sublet-poisoncap-memory-study.md), a separately pinned
+SQLite 3.22.0 artifact catalog and matched-platform planning. Existing CheriBSD
+on/off results remain the secondary reference. Generalized PoisonCap execution
+qualification stays closed until the shared application runner observes the inner policy,
+allocator boundary and all quarantine/revocation paths; outer malloc policy
+cannot substitute for that evidence. Fourteen planner and six runner tests pass.
+
+[Upstream mruby lists](../../experiments/study/results/20260927-mruby-lists.json)
+passes 4/4 original arms at the full 300 × 10,000 work count with a native output
+oracle. Both Capstone arms recover from six allocation failures at a 64 MiB outer
+heap limit; these runs need matched backing budgets and GC-slot counters before
+memory comparison. No PoisonCap mruby application is claimed.
+
+The earlier published PoisonCap SQLite fork builds after supplying header prerequisites.
+[Both workload modes complete](../../experiments/study/results/20260927-poisoncap-sqlite.json)
+20 active main phases at size 1 using the preserved published libc and outer
+revocation off. The artifact comments out 12 phases; `--verify` does not check
+main results. Its full-quarantine drain bypasses the explicit revoker call, and
+revocation errors are unchecked. These findings require policy-path accounting
+and an independent result oracle, not a security benchmark. This is not a full
+32-phase reproduction or a Sublet/PoisonCap memory comparison. The pilot above
+supersedes that readiness limit.
+
+## 2026-09-27 — Four-configuration benchmark study foundation
+
+The `application-benchmark-study` branch adds a [pinned candidate catalog and
+matrix planner](../../experiments/study/README.md) for six application ports.
+Plans distinguish internal-allocator Sublet from outer-malloc Sublet, enumerate
+all four arms, lock work parameters, preserve unavailable/failing cells and
+resume without silently retrying failures. CheriBSD on/off uses explicit process
+switches and checks effective policy at every phase; guest defaults stay intact.
+
+Twelve planner tests and six runner tests pass. Five real FFmpeg/mruby policy
+smokes pass, including re-enabling revocation after an off process, in one guest.
+The original Capstone VM is restored and idle. These smokes reuse discovery
+workloads; no standard benchmark suite is yet qualified across four arms.
+The [rollout plan](../plans/application-benchmark-study.md) records recognized
+benchmarks, source pins, internal accounting requirements and application gaps.
+
+## 2026-09-27 — Address reuse and post-release application memory
+
+The `application-reuse-metrics` lane studies Cornucopia and Cornucopia Reloaded
+and checks twelve FFmpeg/mruby workloads against default CheriBSD purecap.
+All 72 paired attempts pass. The complete allocation and allocator phase
+samples match old-QEMU controls for all twelve Capstone workloads (108 equal
+control/repetition comparisons). The larger-capacity controls do not collect
+nodes during application execution; the temporary sweep does not create the
+reported differences in these workloads.
+
+Sixty-four FFmpeg streams use 178 distinct starts versus 2,982 (16.75 times fewer)
+with 46,720 allocation calls on both platforms. mruby's 512-record, 16-batch case
+uses 14,554 versus 44,552 (3.06 times fewer). Full post-release curves show both
+retention advantages and the large-retained-graph case where buddy occupancy is
+initially higher. No total-RSS, physical-fragmentation or timing win is inferred.
+An invalid 128-batch observer-overflow attempt and its interrupted repeat remain
+recorded separately. Four analysis guard tests pass. [Results and figures](../../experiments/applications/results/20260927-reuse/README.md)
+and [paper analysis and metric definitions](../../experiments/applications/memory-behavior.md)
+identify exact scope and the remaining port work.
+
+## 2026-09-27 — Node reuse within a running application
+
+The `runtime-node-reuse` follow-up fixes the six mruby failures below without
+raising the 65,536-node capacity or changing application binaries. Under node
+pressure, one-hart QEMU now saves the current application at its allocation
+instruction, enters the trusted monitor context, clears stale tags and recycles
+retired identities, then resumes the same process. Valid or pinned identities
+remain unavailable; genuine exhaustion still faults with cleanup headroom.
+Previously, the collector was invoked only when the process owner was released.
+
+All 27 original Capstone application repeats and nine extended runs now pass;
+the longest mruby run allocates 1,092,495 identities within the fixed pool.
+The regression completes
+200,000 allocation/free cycles per process, preserves live data and rejects an
+old reference after reuse. The full lifecycle gate again passes 1,008 mixed
+starts in one boot with stable retained resources. Four native runtime tests
+and twelve host CLI tests pass. [Checked results and extended workloads](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+identify the exact platform and keep the old failing control.
+
+This is a QEMU software tag sweep, not a new FPGA result or a hardware cost
+measurement. The earlier comparison and larger-node controls remain historical
+data; default CheriBSD was unchanged and was not rerun for this fix.
+
+## 2026-09-27 — Default CheriBSD application memory comparison
+
+The same FFmpeg 9.0.1 decoder and mruby 4.0.0-rc2 workloads now run on Capstone
+Sublet malloc and default CheriBSD purecap, with shared requested-byte and address
+reuse counters. No allocator-policy variants or forced drains are used. The
+primary matrix has 54 attempts: 27/27 CheriBSD pass; Capstone at 65,536 nodes has
+21 pass and six larger-mruby signals. All 12 mruby repeats pass at 262,144 nodes,
+recorded separately. All 39 Capstone launches return zero live domains, regions
+and bytes. Fifteen instrument/runner tests pass, including failed realloc,
+calloc overflow, observer-table exhaustion and false-pass rejection.
+
+Sixteen independent 30-frame streams perform 11,680 allocation calls on either
+platform. They use 178 distinct start addresses on Capstone versus 2,803 on
+CheriBSD (15.7 times fewer, identical across three repeats). Observed requested
+bytes return to zero on both. Capstone occupied blocks return to zero; CheriBSD's
+allocated ledger retains 8,590,776 bytes. Capstone separately reserves an 8 MiB
+logical pool from a 16 MiB grant plus 1,343,636 bytes of static allocator tables.
+Both observers add 1.5 MiB of static address-history storage. These findings do
+not establish lower total RSS, bounded in-process node use, or a general
+fragmentation advantage. Hardware timings are not measured.
+
+See the [comparison contract](../../experiments/applications/comparison.md).
+The paper's `eval/application-memory` branch contains five figures and all 66
+attempts under `experiments/application-exploration/results/2026-09-27-default-cheribsd/`.
+Only these two applications have matching default-CheriBSD measurements so far;
+the earlier six-application discovery below is a separate campaign.
+
+## 2026-09-27 — Application memory workload discovery
+
+The `application-memory-experiments` lane adds one Python build/link adapter and
+one persistent-VM runner with real workloads for Perl, CPython, mruby, SQLite,
+PostgreSQL single-user, the configured FFmpeg decode app, and prepared tshark
+PCAP inputs. Shared SDK atomic/integer helpers and the existing 128-file table
+adaptation let these cached application objects use the common launcher.
+
+The bounded discovery records 183 attempts: 147 pass, 21 signal, 3 PostgreSQL
+exits at unsupported FileFallocate, and 12 unavailable tshark attempts. All 171
+launched cases return with zero live domains, regions and bytes. A separately
+recorded 262,144-node configuration lets previously failing mruby cases complete
+but larger protected CPython cases still fault near the limit. Collection between
+processes is verified; continuous in-process node reuse is not established.
+
+Four native runtime tests, twelve host CLI tests, eleven runner false-pass tests,
+known-allocation calibration, 128-file capacity/reuse, and native output oracles
+pass. The [workload documentation](../../experiments/applications/README.md)
+gives protection scopes and accounting limits. Compact measurements and six plots
+live on nested-allocators-paper's `eval/application-memory` branch. These are QEMU
+memory/capacity observations, not CheriBSD comparisons or hardware timings.
+
 ## 2026-09-26 — Persistent application processes, reclamation and shared SDK
 
 The `domain-process-runtime` lane implements the complete **one-hart QEMU**

@@ -1,0 +1,2 @@
+SQL error: out of memory
+INSERT INTO t2 SELECT * FROM t1;

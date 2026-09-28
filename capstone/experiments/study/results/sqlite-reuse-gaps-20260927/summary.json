@@ -1,0 +1,182 @@
+{
+  "arms": {
+    "capstone": {
+      "reuse_fraction": {
+        "median": 0.9964863297687667,
+        "min": 0.9964863297687667,
+        "max": 0.9964863297687667
+      },
+      "immediate_fraction": {
+        "median": 0.21368131938044524,
+        "min": 0.21368131938044524,
+        "max": 0.21368131938044524
+      },
+      "within_15_fraction": {
+        "median": 0.7311633284072876,
+        "min": 0.7311633284072876,
+        "max": 0.7311633284072876
+      },
+      "within_4095_fraction": {
+        "median": 0.9294503005614965,
+        "min": 0.9294503005614965,
+        "max": 0.9294503005614965
+      },
+      "allocations": [
+        550137
+      ],
+      "reuses": [
+        548204
+      ],
+      "observer_bytes": [
+        573712
+      ],
+      "setup_allocations": [
+        1
+      ]
+    },
+    "capstone-sublet": {
+      "reuse_fraction": {
+        "median": 0.9964863297687667,
+        "min": 0.9964863297687667,
+        "max": 0.9964863297687667
+      },
+      "immediate_fraction": {
+        "median": 0.21368131938044524,
+        "min": 0.21368131938044524,
+        "max": 0.21368131938044524
+      },
+      "within_15_fraction": {
+        "median": 0.7311633284072876,
+        "min": 0.7311633284072876,
+        "max": 0.7311633284072876
+      },
+      "within_4095_fraction": {
+        "median": 0.9294503005614965,
+        "min": 0.9294503005614965,
+        "max": 0.9294503005614965
+      },
+      "allocations": [
+        550137
+      ],
+      "reuses": [
+        548204
+      ],
+      "observer_bytes": [
+        573712
+      ],
+      "setup_allocations": [
+        1
+      ]
+    },
+    "poisoncap-spatial": {
+      "reuse_fraction": {
+        "median": 0.9956120021012947,
+        "min": 0.9956120021012947,
+        "max": 0.9956120021012947
+      },
+      "immediate_fraction": {
+        "median": 0.21361951659313952,
+        "min": 0.21361951659313952,
+        "max": 0.21361951659313952
+      },
+      "within_15_fraction": {
+        "median": 0.7311324270136348,
+        "min": 0.7311324270136348,
+        "max": 0.7311324270136348
+      },
+      "within_4095_fraction": {
+        "median": 0.917531451256687,
+        "min": 0.917531451256687,
+        "max": 0.917531451256687
+      },
+      "allocations": [
+        550137
+      ],
+      "reuses": [
+        547723
+      ],
+      "observer_bytes": [
+        573712
+      ],
+      "setup_allocations": [
+        1
+      ]
+    },
+    "poisoncap-temporal": {
+      "reuse_fraction": {
+        "median": 0.8635794356678428,
+        "min": 0.8635794356678428,
+        "max": 0.8635794356678428
+      },
+      "immediate_fraction": {
+        "median": 7.452689057452962e-05,
+        "min": 7.452689057452962e-05,
+        "max": 7.452689057452962e-05
+      },
+      "within_15_fraction": {
+        "median": 0.000518052775944901,
+        "min": 0.000518052775944901,
+        "max": 0.000518052775944901
+      },
+      "within_4095_fraction": {
+        "median": 0.18011331722825405,
+        "min": 0.18011331722825405,
+        "max": 0.18011331722825405
+      },
+      "allocations": [
+        550137
+      ],
+      "reuses": [
+        475087
+      ],
+      "observer_bytes": [
+        573712
+      ],
+      "setup_allocations": [
+        1
+      ]
+    }
+  },
+  "paired_effects": {
+    "capstone-sublet": [
+      {
+        "rep": 1,
+        "reuse_percentage_points": 0.0,
+        "immediate_percentage_points": 0.0,
+        "within_15_percentage_points": 0.0
+      },
+      {
+        "rep": 2,
+        "reuse_percentage_points": 0.0,
+        "immediate_percentage_points": 0.0,
+        "within_15_percentage_points": 0.0
+      },
+      {
+        "rep": 3,
+        "reuse_percentage_points": 0.0,
+        "immediate_percentage_points": 0.0,
+        "within_15_percentage_points": 0.0
+      }
+    ],
+    "poisoncap-temporal": [
+      {
+        "rep": 1,
+        "reuse_percentage_points": -13.203256643345203,
+        "immediate_percentage_points": -21.3544989702565,
+        "within_15_percentage_points": -73.061437423769
+      },
+      {
+        "rep": 2,
+        "reuse_percentage_points": -13.203256643345203,
+        "immediate_percentage_points": -21.3544989702565,
+        "within_15_percentage_points": -73.061437423769
+      },
+      {
+        "rep": 3,
+        "reuse_percentage_points": -13.203256643345203,
+        "immediate_percentage_points": -21.3544989702565,
+        "within_15_percentage_points": -73.061437423769
+      }
+    ]
+  }
+}
