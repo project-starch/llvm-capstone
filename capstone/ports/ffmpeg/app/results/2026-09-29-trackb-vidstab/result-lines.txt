@@ -1,0 +1,106 @@
+# Track B, vidstab, as FFmpeg's and libvidstab's real code, capstone-qemu, 2026-09-29. Result lines only, in the order run.
+# Predictions: PREDICTIONS.md (dadb8bcd7e60) and its three addenda (a2e729d7f93e, 4cf916b3c4f1, d558a207ee57).
+# Compiler 3979abd8 (clang sha256 1c1436586f99c53c...), emulator sha256 6e5e136a070b0ee9..., libvidstab 1.1.1 (deps/libvidstab.json)
+
+## 0. Native control (x86-64, ASan, stock pools, the same sequence, the same revert)
+# First run 04:11, before dadb8bcd7e60 (04:18); its output was not kept. Re-run 05:37 with output captured,
+# the same binaries, and a revert file byte-identical to the domain's:
+== vs_shipped (sha256 6437f7ede89441b5)
+victim plane=0x516000000080 same-address=1
+frame2 plane=0x516000000380 writable=1
+victim Y[0]=77 (0x77 = its own, 0x5b = frame 2's)
+== vs_reverted (sha256 36d897baa77cc240)
+victim plane=0x516000000080 same-address=1
+frame2 plane=0x516000000380 writable=1
+victim Y[0]=5b (0x77 = its own, 0x5b = frame 2's)
+ASan: no error in either (leak reports only)
+
+## 1. Run 1 (images from 2028e987183e): every boot halts in the Sublet heap's malloc(0), in configure, on both arms
+=== poolsublet rep 1 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH other  [[CAPSTONE] domain halted by capability fault: cause = 29, pc = 0x102000ea4, tval = 0x0, badaddr = 0xaaaaaac21461c4]
+fx23: ERROR no section in the log -- the image never started
+=== poolstock rep 1 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH other  [[CAPSTONE] domain halted by capability fault: cause = 29, pc = 0x102000ea4, tval = 0x0, badaddr = 0xaaaaaabe7341c4]
+fx23: ERROR no section in the log -- the image never started
+=== poolsublet rep 2 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH other  [[CAPSTONE] domain halted by capability fault: cause = 29, pc = 0x102000ea4, tval = 0x0, badaddr = 0xaaaaaaad1ae1c4]
+fx23: ERROR no section in the log -- the image never started
+=== poolstock rep 2 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH other  [[CAPSTONE] domain halted by capability fault: cause = 29, pc = 0x102000ea4, tval = 0x0, badaddr = 0xaaaaaacda0e1c4]
+fx23: ERROR no section in the log -- the image never started
+=== poolsublet rep 3 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH other  [[CAPSTONE] domain halted by capability fault: cause = 29, pc = 0x102000ea4, tval = 0x0, badaddr = 0xaaaaaab6a251c4]
+fx23: ERROR no section in the log -- the image never started
+=== poolstock rep 3 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH other  [[CAPSTONE] domain halted by capability fault: cause = 29, pc = 0x102000ea4, tval = 0x0, badaddr = 0xaaaaaad54221c4]
+fx23: ERROR no section in the log -- the image never started
+  the fault, every boot: [CAPSTONE] SHRINK illegal operand value: pc = 102000ea0, requested [102405800, 102405800), current [102405800, 102405900)
+  in malloc, after the filter printed its settings: libvidstab's vsMotionsToTransform -> meanMotions -> localmotions_getx
+  calls vs_malloc(sizeof(int) * 0) (transformtype.c:407); vs_malloc is av_malloc, which this build (no aligned allocation)
+  forwards to malloc(0). (First recorded as vsSimpleMotionsToTransform, which never runs here: retracted, dev 36962080a40c.)
+
+## 2. Run 2 (images from 4cf916b3c4f1, malloc(0) fixed): fixture 22 halts in memcpy, copying frame 1 into a frame from libavfilter's frame pool
+=== poolsublet rep 1 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102000620, rs1 = x13, imm = 0, value = 10240e000, value_hi = 0]
+fx23: ERROR no section in the log -- the image never started
+=== poolstock rep 1 22 23
+fx22: ERROR no section in the log -- the image never started
+fx23: ERROR no section in the log -- the image never started
+=== poolsublet rep 2 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102000620, rs1 = x13, imm = 0, value = 10240e000, value_hi = 0]
+fx23: ERROR no section in the log -- the image never started
+=== poolstock rep 2 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102000620, rs1 = x13, imm = 0, value = 10240c200, value_hi = 0]
+fx23: ERROR no section in the log -- the image never started
+=== poolsublet rep 3 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102000620, rs1 = x13, imm = 0, value = 10240e000, value_hi = 0]
+fx23: ERROR no section in the log -- the image never started
+=== poolstock rep 3 22 23
+fx22: DIFFERS  predicted: RETURN 1600177  got: FAULT-BEFORE-TOUCH temporal  [[CAPSTONE] Cap mem access requires capability: pc = 102000620, rs1 = x13, imm = 0, value = 10240c200, value_hi = 0]
+fx23: ERROR no section in the log -- the image never started
+  caller: libavutil image_copy_plane (ff_inlink_make_frame_writable's copy); the destination is an integer: value_hi = 0
+  cause: libavfilter/framepool.c:155 (uint8_t *)FFALIGN((uintptr_t)buf->data, align), listed by -Wcapstone-pointer-roundtrip with :194 and :201
+  poolstock rep 1: no section -- the guest-setup phase failed at the 9p mount (__CAPSTONE_INFRA_FLAKE__, exit 75)
+
+## 3. Final (images from d558a207ee57, patch 0005), N=3, both arms
+=== poolsublet rep 1 22 23
+fx22: AS PREDICTED  predicted: RETURN 1600177  got: RETURN 1600177
+fx23: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 102800620, rs1 = x13, imm = 0, value = 102c07000, value_hi = a238885f000]
+=== poolstock rep 1 22 23
+fx22: AS PREDICTED  predicted: RETURN 1600177  got: RETURN 1600177
+fx23: AS PREDICTED  predicted: RETURN 170015b  got: RETURN 170015b
+=== poolsublet rep 2 22 23
+fx22: ERROR no section in the log -- the image never started
+fx23: ERROR no section in the log -- the image never started
+=== poolstock rep 2 22 23
+  poolsublet rep 2 and poolstock rep 2 above: guest stalls after init, before the login prompt, each killed by hand
+  (poolsublet frozen 12 minutes; the poolstock stall's duration not recorded).
+  Every boot of this lane on the shared rootfs.ext2 (vidstab tries 1-8, af_join 11-13) logged EXT4-fs errors; the
+  remaining cells boot a private copy of the rootfs alone (kernel and firmware shared), taken while holding the QEMU
+  lock and repaired with e2fsck (FFAPP_BUILDROOT_DIR), the shared image untouched. Private boots log no EXT4 error:
+=== poolsublet rep 2 22 23 (private rootfs)
+fx22: AS PREDICTED  predicted: RETURN 1600177  got: RETURN 1600177
+fx23: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 102800620, rs1 = x13, imm = 0, value = 102c07000, value_hi = a238885f000]
+=== poolstock rep 2 22 23 (private rootfs)
+fx22: AS PREDICTED  predicted: RETURN 1600177  got: RETURN 1600177
+fx23: AS PREDICTED  predicted: RETURN 170015b  got: RETURN 170015b
+=== poolsublet rep 3 22 23 (private rootfs)
+fx22: AS PREDICTED  predicted: RETURN 1600177  got: RETURN 1600177
+fx23: AS PREDICTED  predicted: FAULT temporal  got: FAULT temporal  [cause 24: [CAPSTONE] Cap mem access requires capability: pc = 102800620, rs1 = x13, imm = 0, value = 102c07000, value_hi = a238885f000]
+=== poolstock rep 3 22 23 (private rootfs)
+fx22: AS PREDICTED  predicted: RETURN 1600177  got: RETURN 1600177
+fx23: AS PREDICTED  predicted: RETURN 170015b  got: RETURN 170015b
+printed by every final boot, both arms: frame1 and victim at the same cursor (same-address=1), frame2 writable=1, target = frame 1's plane
+  poolsublet 23: the fault's value is the printed target, 102c07000, with value_hi non-zero (a revoked capability, not an integer),
+  at memcpy+0x9c, stc a5, 0x0(a3); memcpy is tail-called by vsFrameCopyPlane (equal linesizes), called from vsFrameCopy;
+  the registers hold &td->src as the destination frame, filter_frame's stack inframe as the source, and frame 2's
+  plane: vsTransformPrepare's in-place copy (transform.c:150), not the KeepBorder copies (td->destbuf)
+
+## 4. Totals, final images (section 3): 12 of 12 cells as predicted (fx22 x 2 arms x 3, fx23 x 2 arms x 3)
+vidstab gates: make's own command, rerun, reproduces libavfilter's vf_vidstabtransform.o byte for byte, and so does the out-of-tree route;
+  re-applying upstream's fix to the reverted file gives back the shipped file; the revert changes 42 lines (the fix's 14 insertions and 28 deletions)
+pair layout (llvm-nm, named symbols defined once, .L labels excluded): 23 has one more, vsTransformGetDestFrameInfo, which only the reverted code calls;
+  poolsublet 123 at the same address, 933 +440, 708 +480; poolstock 114, 930, 704; none else (the reverted filter_frame is 440 bytes
+  longer, and +480 adds vsTransformGetDestFrameInfo's 40); the fixture objects differ in the fixture id and the transforms path
+libvidstab: 0 compiler warnings of any kind; -Wcapstone-pointer-roundtrip is on by default and fires on a (char *)(uintptr_t) control
+patch 0005: framepool.c leaves the build's round-trip list (24 sites before it, 21 after, none in framepool.c)

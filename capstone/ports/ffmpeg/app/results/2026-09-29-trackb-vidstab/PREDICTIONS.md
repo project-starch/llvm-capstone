@@ -151,3 +151,17 @@ round-trip list. 0005 changes every FFmpeg build of the app port, as 0004 did, a
 Track A and af_join results predate it. Neither ran libavfilter's frame pool.
 
 **Predictions unchanged.** 22 and 23 are re-run N = 3 per arm on images rebuilt with 0005.
+
+## Addendum 4, 2026-09-29: a correction to addendum 2, after the claim audit
+
+**Addendum 2 named the wrong libvidstab function.** It said `vsSimpleMotionsToTransform` calls
+`vs_malloc(sizeof(double) * 0)`. That function never runs here, because `vf_vidstabtransform.c:168`
+sets `simpleMotionCalculation = 0`. The zero-size call is
+`vsMotionsToTransform` → `meanMotions` → `localmotions_getx` → `vs_malloc(sizeof(int) * 0)`
+(`transformtype.c:407`).
+
+`vs_malloc` is `av_malloc`. It reaches `malloc(0)` only because this build disables
+`posix_memalign`, `memalign` and `_aligned_malloc`.
+
+The heap fix and the predictions are unaffected. The same wrong name is in `4cf916b3c4f1`'s
+message and in dev's `b586413fb7f6`; the dev one is retracted there by `36962080a40c`.

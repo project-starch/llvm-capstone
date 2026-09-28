@@ -181,3 +181,19 @@ predicted per arm before the first boot — an exhausted pool mid-decode reads e
 Standing caveats on every result: QEMU only (**Q-11** — the deployed silicon lets a stale access
 retire); M6 and the one-translation-unit `gp`-captable question are untouched; **I-12** guest
 stalls are live.
+
+## Track B outcome (2026-09-29)
+
+| defect | status | where |
+|---|---|---|
+| af_join | **run as FFmpeg's real code**, 12 of 12 as registered: the Sublet port of the pools faults at the stale read, and stock pools read the reissued buffer | `ports/ffmpeg/app/results/2026-09-29-trackb-afjoin/` |
+| vidstab | **run as FFmpeg's and libvidstab's real code**, 12 of 12 as registered: the port faults inside libvidstab's stale copy, and stock pools let it overwrite a live frame | `ports/ffmpeg/app/results/2026-09-29-trackb-vidstab/` |
+| h264_refs | **not run.** Its gate above was not passed, because no malformed stream was produced. Probe case 37 remains its reduction | — |
+| vp9 | **documented, not run.** Its own fix calls it a heap out-of-bounds access on live memory, not a temporal one, and it needs frame threading, which this port does not build | `docs/ref/ffmpeg-pool-consumer-defects.md`, "vp9, read against the Sublet pool port" |
+
+Found on the way and fixed, each with its own record:
+
+- **C-69**, the compiler lowering an under-aligned capability access to integer bytes. App patch
+  0004 is the workaround.
+- The Sublet heap's `malloc(0)`.
+- libavfilter's frame pool rebuilding plane pointers from integers, closed by app patch 0005.
