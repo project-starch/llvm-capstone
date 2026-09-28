@@ -6962,6 +6962,40 @@ With a private musl build, `run.sh c65` returns with `sizeof = 64` and "broadcas
 musl build fails the same 6 objects as without the patch. The wait paths need a futex and were not
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
 
+### C-68 — `LowerCall` asserts on a split scalar integer argument wider than 128 bits: an integer `ADD` built over a capability stack slot `OPEN — COMPILER, crash, low priority: pre-existing, not reachable from C; found 2026-09-28 by the compiler lane's frame-index sweep; reproduced by the board lane`
+
+**What happens.** A call passing a scalar integer wider than 128 bits that ends up split or
+indirect (`i256` after seven `i64` arguments) aborts in
+`CapstoneTargetLowering::LowerCall` with `Binary operator types must match!`. The threshold is sharp:
+`i128` compiles, and `i129` and wider assert. Reproduced 2026-09-28 with the tree's `llc`
+(b7b31421e9fa, pre-C-50): `i256` rc 134, `i128` control rc 0.
+Reproducer: `capstone/tests/compiler-repros/C68-frameindex-i256-lowercall/`.
+
+**Cause.** In `LowerCall`'s `CCValAssign::Indirect` path:
+- `SpillSlot = DAG.CreateStackTemporary(...)` goes through `getFrameIndexTy`, so it is a **c128**;
+- `PtrVT` is `getPointerTy(DL)`, address space 0, so it is **i64**;
+- they meet in an `ISD::ADD`.
+
+This target models capability arithmetic as `ISD::PTRADD` on `c128`, so the node is inconsistent at
+construction, not merely at selection. It is reached through `CapstoneCallingConv.cpp`'s
+`isScalarInteger() && (isSplit() || !PendingLocs.empty())`. **Not vector-gated**: treating
+`fatal-scalable-stack.ll`'s "RVV is non-functional" as covering it would have been a false
+"unreachable".
+
+**Priority and why it is not fixed.**
+- Pre-existing: the pre-C-50 compiler asserts identically.
+- Unreachable from C: clang rejects `_BitInt(N)` for `N > 128` on this target.
+- The presumable fix is `PTRADD` in the capability type. With no C-reachable case, there is nothing
+  to validate a change to argument lowering against. Filed with the reproducer instead of fixed
+  speculatively.
+
+**The class it belongs to.** Frame-index pointers spelled as integers: C-50, fixed at 4c407f9, is the
+live instance. The compiler lane's sweep
+(`docs/history/28-09-2026_00-00-00_frame-index-pointer-type-sweep.md`) records the sibling sites as
+**latent, checked, not fixed**. They are quiet only because their offsets never take the
+`add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
+save loop is one alignment change from live.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
