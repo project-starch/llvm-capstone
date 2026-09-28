@@ -13,145 +13,224 @@ says so itself in its `alloc_route` column (`stack realloc`, `gc sweep -> free`,
 (`patches/4.0.0-rc2/0008`, every GC object slot issued and revoked on its own),
 is not touched by a single one.
 
-What this corpus needs is the class ASan is structurally blind to: a slot the
-interpreter vacates and hands out again without the domain allocator ever seeing
-a release. The search below found seven such defects live at the pin, three of
-them ASan-silent.
+What this corpus needs is the class ASan is structurally blind to: memory the
+interpreter hands out again without the domain allocator ever seeing a release.
+**Nine defects reproduce at the pin, four of them invisible to ASan.**
 
 ## How the search was run
 
 The pin is `4.0.0-rc2` = `9d523e2f74f2e63ca02840937523de61398a617d` (2026-03-12).
 The port's other pin, `head` = `ad98f216eb472202c8e5deece5ea13655d9f7969`
-(2026-09-17), is **2471 commits** ahead. `build-mruby-domain.sh` already states why
-that window is the interesting one: rc2 is *"the Sublet evaluation's pin: temporal
-defects on mruby's own allocators, fixed later"*.
+(2026-09-17), is **2471 commits** ahead; upstream `master` is 2543 ahead.
+`build-mruby-domain.sh` already states why that window is the interesting one: rc2
+is *"the Sublet evaluation's pin: temporal defects on mruby's own allocators, fixed
+later"*.
 
-So the window `rc2..head` was swept rather than the history before rc2: a fix in
-that window means the defect is **live at the pin**, and needs reproducing, not
-backporting. The window names 6 GHSAs and 1 CVE
-(`GHSA-jfmr-44fc-gfhg`, `GHSA-2778-fvwg-5m8w`, `GHSA-f3mm-x76x-jmcv`,
-`GHSA-pv4h-vpp5-5349`, `GHSA-pmm3-g676-wxm7`, `GHSA-qj89-7wc6-8hfr`,
-`CVE-2018-14337`). Of those, three are spatial (`load.c` irep validation,
-`mruby-sprintf` buffer, `mruby-socket` negative length -- and that gem is not in
-the port's gembox), and one is a receiver type confusion.
+So `rc2..master` was swept rather than the history before rc2. Three filters found
+everything below, in ascending order of yield:
 
-Nine of the candidates shipped an upstream test with their fix. Those tests are
-the reproduction: extracted from the fix commit's own diff, run against the pin.
+1. the advisories named in the window -- 7 GHSAs and 1 CVE;
+2. commit **bodies** naming a sanitizer report, an `MRB_TT_FREE` assertion or a
+   fault, which is a far better filter than subjects;
+3. the house vocabulary for a lifetime defect: *keep X alive*, *keep X rooted*,
+   *off freed memory*, *while X allocates*, *vacated*, *carry X out of*.
 
-Three native builds of the pin, and one control (`probe/`):
+**A fix in the window does not by itself mean the defect is live at the pin.** The
+defect may have been *introduced* after it. `92b085a1a`
+(*keep a returning frame's env rooted while its close allocates*) is the
+counterexample and is excluded here: `svar_env_adopt_owner` and the whole
+special-variable container machinery it repairs are absent at rc2, having landed
+2026-08-30. Every row claimed below was checked to exist at the pin and then
+*reproduced* there; none rests on the window alone.
+
+Upstream has **no open issues**, so there is no unfixed-and-therefore-live seam to
+mine; everything has to come from the fixed window.
+
+## The builds
+
+Nine of the candidates shipped an upstream test with their fix. Those tests are the
+reproduction: extracted from the fix commit's own diff, run against the pin.
 
 | build | flags | what it answers |
 |---|---|---|
-| `host` | `MRB_DEBUG` | does mruby's own `MRB_TT_FREE` assertion fire? |
+| `host` | `MRB_DEBUG` | does mruby's own `MRB_TT_FREE` assertion fire, or the answer come back wrong? |
 | `stress` | `MRB_DEBUG MRB_GC_STRESS` | does it need a collection at every allocation? |
 | `asan` | `-fsanitize=address`, assertions off | **is the defect visible to ASan at all?** |
+| `asan-page1` | ASan + `MRB_HEAP_PAGE_SIZE=1` | **how deep is the nesting?** (below) |
 | control | pin + the fix hunks that apply | does the fix flip the outcome? |
 
+`asan-page1` is the instrument that makes nesting depth measurable rather than
+inferred, and `92b085a1a` is where the idea comes from -- it observes that its own
+defect is invisible *"only while its heap page still stands: with
+`MRB_HEAP_PAGE_SIZE=1`, or whenever the env was the page's last object, the page is
+gone and ASan reports the read"*. One object per GC page turns every slot release
+into a page release, so a defect that is ASan-silent at the default 1024 slots and
+ASan-visible at one object per page is reusing a **GC slot**; a defect silent at
+both is nested *below* the GC, in a block the interpreter never releases at all.
+
 The control carries six fixes (`5e8a65457`, `4663fef45`, `a54353ecf`, `08a0432d1`,
-`fb4974528`, `859288c19`). Three could not be applied onto rc2 -- `39aecc143`,
-`eb7693857` and `606d9a6b2` each depend on an intermediate commit -- so for those
-rows the flip is unproven and only the pin's own failure is reported.
+`fb4974528`, `859288c19`), and a second control carries `1c57532b2` alone. Three
+could not be applied onto rc2 -- `39aecc143`, `eb7693857` and `606d9a6b2` each
+depend on an intermediate commit -- so for those rows the flip is unproven and only
+the pin's own failure is reported.
 
 ## What reproduces at the pin
 
-| # | upstream fix | advisory | client code | pin | control | ASan at pin |
-|---|---|---|---|---|---|---|
-| 1 | `a54353ecf` | -- | `Hash#[]`, `#delete`, `#key?` | 9 failures, no `hash modified` | PASS | **silent** |
-| 2 | `08a0432d1` | -- | `Hash#assoc`, `#rassoc`, `#==`, `#eql?` | 4 failures | PASS | **silent** |
-| 3 | `eb7693857` | -- | `Hash#inspect`, `#__except`, `#rehash` | 4 failures | fix n/a | **silent** |
-| 4 | `4663fef45` | `GHSA-2778-fvwg-5m8w` | hash scans, `Hash#shift` | 4 failures | PASS | heap-buffer-overflow |
-| 5 | `fb4974528` | -- | `Hash#key`, `#slice`, `#slice!` | **SIGSEGV** | PASS | heap-buffer-overflow |
-| 6 | `606d9a6b2` | -- | `Hash#merge`, pattern `**rest` | **SIGABRT** | fix n/a | heap-use-after-free |
-| 7 | `39aecc143` | -- | `OP_ENTER` short argument list | **SIGSEGV** | fix n/a | heap-use-after-free |
+| # | upstream fix | advisory | client code | pin | control | asan | asan-page1 |
+|---|---|---|---|---|---|---|---|
+| 1 | `1c57532b2` | -- | `String#lstrip!`, `#rstrip!`, `#strip!` | wrong answer **+ parent corrupted** | PASS | silent | silent |
+| 2 | `a54353ecf` | -- | `Hash#[]`, `#delete`, `#key?` | 9 failures | PASS | silent | silent |
+| 3 | `08a0432d1` | -- | `Hash#assoc`, `#rassoc`, `#==`, `#eql?` | 4 failures | PASS | silent | silent |
+| 4 | `eb7693857` | -- | `Hash#inspect`, `#__except`, `#rehash` | 4 failures | fix n/a | silent | silent |
+| 5 | `4663fef45` | `GHSA-2778-fvwg-5m8w` | hash scans, `Hash#shift` | 4 failures | PASS | buffer-overflow | buffer-overflow |
+| 6 | `fb4974528` | -- | `Hash#key`, `#slice`, `#slice!` | **SIGSEGV** | PASS | buffer-overflow | use-after-free |
+| 7 | `606d9a6b2` | -- | `Hash#merge`, pattern `**rest` | **SIGABRT** | fix n/a | use-after-free | use-after-free |
+| 8 | `39aecc143` | -- | `OP_ENTER` short argument list | **SIGSEGV** | fix n/a | use-after-free | use-after-free |
+| 9 | `0cf969a2b` | `GHSA-j6fq-xj4w-877x` | `shaped_iv_foreach` under `#inspect` | test passes, **ASan faults** | -- | use-after-free | use-after-free |
 
-Rows 6 and 7 abort inside mruby's own barriers, at exactly the assertion each fix
+Rows 7 and 8 abort inside mruby's own barriers, at exactly the assertion each fix
 commit names:
 
     606d9a6b2 -> src/gc.c:1411  mrb_field_write_barrier: (value)->tt == MRB_TT_FREE
     39aecc143 -> src/gc.c:846   mrb_gc_mark: Assertion `(obj)->tt != MRB_TT_FREE' failed
 
-`MRB_GC_STRESS` changes two rows and no verdict: it turns row 4 into an abort as
-well, and row 7 into a plain failure rather than a fault. The other five answer the
-same with a collection at every allocation as without one, so none of the seven
+`MRB_GC_STRESS` changes two rows and no verdict: it turns row 5 into an abort as
+well, and row 8 into a plain failure rather than a fault. Every other row answers
+the same with a collection at every allocation as without one, so none of the nine
 depends on stress to reproduce -- which is what makes them usable as cases.
-`probe/survey.sh` prints that column beside the others.
 
-### Rows 1-3 are this corpus's material
+Row 9 is the one whose oracle is not its own test: the extracted test **passes** in
+the `host` and `stress` builds because the stale read does not change the answer,
+while ASan faults at the pin on exactly the path the fix describes --
+`shaped_iv_foreach` (`src/variable.c:464`) reading a block that `shaped_iv_set`
+(`:416`) freed to allocate a wider one, reached through `inspect_i`
+(`src/kernel.c:83`). A case built from it has to name ASan or a capability fault as
+its oracle, not an assertion on the answer.
 
-They are the three the corpus was declared for, and the only three in the set that
-**ASan cannot see**.
+### Rows 1-4 are this corpus's material
 
-The nested allocator is the hash's own entry array. `ar_delete` and `ht_delete`
-(`src/hash.c:586`, `:951` at the pin) vacate a slot by marking its key undef and
-decrementing the count; `ea_compress` and `ea_resize` (`:454`, `:448`) move entries
-inside the block; a later store reuses a vacated slot. All of it happens inside one
-`mrb_malloc`'d block, so no release reaches the domain allocator -- the same shape
-as the GC's own `page->freelist` recycling at `src/gc.c:1188-1191`.
+They are the only four in the set that **ASan cannot see at either page size**. That
+is the measurement, not an inference: their reuse never reaches the GC slot layer,
+so shrinking a GC page to one object does not expose them either. They are nested
+*below* the collector.
 
-The client is hash.c's own lookups and scans. Every one of them can re-enter Ruby
-through a key's `eql?` or `hash`, and `H_CHECK_MODIFIED` watches the capacity, the
-flag bits and the two pointers. A delete followed by an insert that restores the
-size moves none of those, so the guard does not fire and the scan answers from an
-entry that has been vacated and refilled.
+**Row 1 is the clearest case found, and the cheapest to arm.** Four lines, no GC
+stress, no callback:
 
-The oracle is a wrong answer, not a fault: at the pin the interpreter silently
-answers from the reused slot where the fixed version raises `hash modified`. That
-makes these cases cheap to arm -- no capability fault is needed to read the result,
-so a case can report next to itself, unlike the corpora whose cases end the domain.
+    base = ".        abcdefghijklmnopqrstuvwxyz0123456789"
+    view = base[1..-1]
+    p view.lstrip!
+    p base
 
-### Rows 4-7 belong with the xlang material
+    pin:     "        abcdefghijklmnopqrstuvwxyz01"
+             ".abcdefghijklmnopqrstuvwxyz0123456789\x003456789"
+    control: "abcdefghijklmnopqrstuvwxyz0123456789"
+             ".        abcdefghijklmnopqrstuvwxyz0123456789"
 
-ASan sees all four, so they bottom out in a real release and `sublet` answers them
-at the malloc layer. They are worth having as the ladder's lower rungs, but they do
-not exercise `sublet-gc` any more than the existing xlang rows do.
+`base[1..-1]` is a shared-buffer view: one `mrb_malloc`'d buffer with an
+`mrb_shared_string` refcount and two `RString` heads into it. `str_lstrip_bang`
+cached `RSTR_PTR(s)` *before* `mrb_str_modify()`, and `mrb_str_modify()` is
+precisely what un-shares -- it allocates the view its own buffer and copies. Every
+write after it goes through the stale pointer into the **parent's** buffer, which is
+why `base` comes back with a NUL in the middle of it. The whole fix is moving the
+`char *ptr = RSTR_PTR(s);` line to after the modify, at three sites.
 
-## What did not reproduce
+ASan is silent because the write is in-bounds *for the parent's allocation* and out
+of bounds only for the view. No allocator event happens at all: nothing is freed,
+nothing is reused, one object simply writes into another's region through a pointer
+the sub-allocation made valid and the un-share made stale. This is the shape a
+per-object capability sees and a malloc-granularity mechanism cannot.
 
-| candidate | expected | measured |
-|---|---|---|
-| `5e8a65457` / `GHSA-jfmr-44fc-gfhg` | hash iteration reads past the entry array | its own upstream test **passes** at the pin, in all three builds |
-| `7d626242a` | constant cache keyed on a freed irep's address | see below |
+**Rows 2-4** share one shape at three sets of sites. The nested allocator is the
+hash's own entry array: `ar_delete` and `ht_delete` (`src/hash.c:586`, `:951` at the
+pin) vacate a slot by marking its key undef and decrementing the count,
+`ea_compress` and `ea_resize` (`:454`, `:448`) move entries inside the block, and a
+later store reuses a vacated slot. All of it happens inside one `mrb_malloc`'d
+block, so no release reaches the domain allocator -- the same shape as the GC's own
+`page->freelist` recycling at `src/gc.c:1188-1191`, one level further down.
 
-`GHSA-jfmr-44fc-gfhg` is an out-of-bounds *read*, and the test added with the fix
-asserts an exception rather than a fault, so a plain build has nothing to report.
-It is not established here that the defect is absent at the pin -- only that this
-test does not show it. The instrument it wants is the ASan build against a case
-that dereferences what the scan read, which is not written.
+The client is hash.c's own lookups and scans. Every one can re-enter Ruby through a
+key's `eql?` or `hash`, and `H_CHECK_MODIFIED` watches the capacity, the flag bits
+and the two pointers. A delete followed by an insert that restores the size moves
+none of those, so the guard does not fire and the scan answers from an entry that
+has been vacated and refilled. The oracle is a wrong answer where the fixed
+interpreter raises `hash modified`, so a case can report beside itself without a
+fault, unlike the corpora whose cases end the domain.
 
-`7d626242a` is the most interesting candidate in the window and the least settled.
-The cache behind `OP_GETCONST` is keyed by the **irep's address**, and nothing
-dropped an irep's entries when it was freed, so a later irep landing at the same
-address is answered from the stale entry -- address reuse, with no dereference of
-freed memory at all, which is the purest form of what this corpus is about. But the
-commit's own reproducer gives `[:top, :top]` from the **first** iteration at the
-pin, where the commit describes `[:foo, :top]` first and the wrong answer only from
-the second. That does not match, so it is not counted. Settling it needs the C-side
-helper the fix added to `mrbgems/mruby-eval/test/eval.c`, which needs a build with
-tests enabled; the fix itself does not apply onto rc2 unaided.
+### Rows 5-9 belong with the xlang material
+
+ASan sees all five, so they bottom out in a real release and `sublet` answers them
+at the malloc layer. Row 6 is the one that moves under the page knob -- a
+buffer-overflow at 1024 slots per page, a use-after-free at one -- which places it
+at the GC slot layer with a page release underneath. The rest are worth having as
+the ladder's lower rungs but do not exercise `sublet-gc` any more than the existing
+xlang rows do.
+
+## What did not reproduce, and what is untested
+
+| candidate | status at the pin |
+|---|---|
+| `5e8a65457` / `GHSA-jfmr-44fc-gfhg` | its own upstream test **passes**, in all four builds |
+| `17d124b00` (`mrb_ary_splice` self-aset) | its own upstream test **passes** |
+| `eb701fa5b` (incremental GC driven from a realloc) | **not measurable**: the test needs `GC.malloc_threshold`, which the pin does not have |
+| `7d626242a` (constant cache on a freed irep's address) | wrong answer one iteration earlier than the commit describes; not counted |
+| `92b085a1a` | **excluded**: the machinery it repairs postdates the pin |
+| `0bfdb9c18` (UAF when GC runs during a stack realloc) | **untested**: shipped no test; `src/vm.c` only |
+| `456a8687a` (re-mark task stacks in `final_marking_phase`) | **untested**: shipped no test, and names the `MRB_TT_FREE` assertion -- but `mruby-task` is in none of the port's gemboxes |
+
+`GHSA-jfmr-44fc-gfhg` is an out-of-bounds *read* whose test asserts an exception
+rather than a fault, so a plain build has nothing to report. It is not established
+that the defect is absent at the pin -- only that this test does not show it.
+
+`7d626242a` is the most interesting unsettled candidate: the cache behind
+`OP_GETCONST` is keyed by the **irep's address**, and nothing dropped an irep's
+entries when it was freed, so a later irep landing at the same address is answered
+from the stale entry -- address reuse with no dereference of freed memory at all,
+which is the purest form of what this corpus is about. But the commit's own
+reproducer gives `[:top, :top]` from the **first** iteration at the pin where the
+commit describes `[:foo, :top]` first. Settling it needs the C-side helper the fix
+added to `mrbgems/mruby-eval/test/eval.c`, which needs a build with tests enabled;
+the fix does not apply onto rc2 unaided.
+
+The two untested leads are the remaining work with the highest expected yield:
+both name this corpus's mechanism and neither can be dismissed without writing a
+reproducer, since neither shipped one.
 
 ## Gems, and what is out of reach
 
-The port's gemboxes carry `mruby-hash-ext`, `mruby-array-ext`, `mruby-method` and
-`mruby-set`, so rows 1-7 are all reachable in the domain build.
+The port's gemboxes carry `mruby-string-ext`, `mruby-hash-ext`, `mruby-array-ext`,
+`mruby-method` and `mruby-set`, so rows 1-9 are all reachable in the domain build.
 
 `GHSA-f3mm-x76x-jmcv` (`859288c19`) is the same shape at three sites -- a value
 taken out of the structure that held it and published on the arena afterwards,
 where `mrb_gc_protect()` itself can allocate and collect it. Two of the three,
 `Hash#shift` and `mruby-method`'s argument shift, are in the port. The third,
-`Task::Queue#__pop_try`, is in `mruby-task`, which exists at the pin but is in
-none of the port's gemboxes.
+`Task::Queue#__pop_try`, is in `mruby-task`, which exists at the pin but is in none
+of the port's gemboxes -- as is `456a8687a`'s site.
 
 ## Limits of this measurement
 
 Everything above is a **native x86-64** measurement of vanilla rc2. It establishes
-that the defects are live at the pin and which instrument sees them. It does not
-say what the Capstone domain does with them: no clang, no QEMU and no board were
-used, the port's patches 0001-0003 and 0008 were not applied, and no arm of
-`MRBD_HEAP` was run. Turning these into cases means writing each as the corpus
-schema wants, then arming `spatial`, `sublet` and `sublet-gc` and measuring.
+that the defects are live at the pin, which instrument sees each one, and at what
+depth each is nested. It does not say what the Capstone domain does with them: no
+clang, no QEMU and no board were used, the port's patches 0001-0003 and 0008 were
+not applied, and no arm of `MRBD_HEAP` was run. Turning these into cases means
+writing each as the corpus schema wants, then arming `spatial`, `sublet` and
+`sublet-gc` and measuring.
 
 The prediction worth committing before that runs, in the spirit of
-`xlang/capstone/rows.tsv`: rows 1-3 MISS under `level0` and under `sublet`, and
-FAULT only under `sublet-gc`; rows 4-7 MISS under `level0` and FAULT under both
-`sublet` and `sublet-gc`. If rows 1-3 also fault under `sublet`, the entry array is
-being reallocated where this reading says it is reused, and the reading is wrong.
+`xlang/capstone/rows.tsv`:
+
+* **rows 2-4** MISS under `level0` and under `sublet`, and FAULT only under
+  `sublet-gc` *if* the arm is extended to sub-let hash entry slots. As
+  `patches/4.0.0-rc2/0008` stands it sub-lets GC object slots only, so these three
+  are predicted to MISS in all three arms -- they are the rows that say what the
+  port does not yet cover.
+* **row 1** MISSes in all three arms for the same reason and needs a fourth: the
+  shared string buffer sub-let per `RString` view. It is the cheapest arm to add,
+  because the two views differ by an offset and a length that `mrb_str_modify()`
+  already computes.
+* **rows 5-9** MISS under `level0` and FAULT under both `sublet` and `sublet-gc`.
+
+If rows 2-4 fault under `sublet` as it stands, the entry array is being reallocated
+where this reading says it is reused, and the reading is wrong.
