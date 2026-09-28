@@ -39,3 +39,11 @@ trunctfdf2
 trunctfsf2
 fixsfdi
 fixunssfdi
+divti3
+udivti3
+modti3
+umodti3
+udivmodti4
+multi3
+ashlti3
+lshrti3

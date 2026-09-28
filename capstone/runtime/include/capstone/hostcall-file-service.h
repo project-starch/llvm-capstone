@@ -7,7 +7,7 @@
 
 #include "hostcall.h"
 
-#define HC_FILE_SERVICE_MAX_HANDLES 8ULL
+#define HC_FILE_SERVICE_MAX_HANDLES HC_V0_FILE_SLOTS
 
 struct hostcall_file_service_handle_slot {
   int in_use;
