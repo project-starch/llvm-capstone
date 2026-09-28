@@ -74,4 +74,26 @@ CHERI_SDK=... CHERI_SYSROOT=... PERL_CHERI_SV_HEADS=1 \
 
 `bash test-native.sh` builds the same Perl natively with ASan and `native.c`,
 then checks the core's unit test, the study workload's oracle in both modes, and
-a positive control; `--suite` adds upstream's complete test suite in mode 1.
+a positive control; `--suite` adds upstream's complete test suite in both modes.
+
+## Results (2026-09-28)
+
+- [Native suite](results/2026-09-28/native-suite.txt): of 2,630 files, mode 0
+  (immediate reuse) fails only `lib/perlbug.t` test 21, exactly as the unpatched
+  ASan build does. Mode 1 (poisoned, delayed) additionally stops in three files,
+  each at one read of a freed head by upstream Perl that no adapter path covers:
+  `S_glob_assign_glob` reads its source glob after `LEAVE` may have freed it
+  (`op/gv.t`; `$x = *foo; *x = $x` reproduces it, and 5.38.2 has the same code),
+  `pp_ftrowned` reads the flags of a freed SV on the argument stack
+  (MakeMaker's `INSTALL_BASE.t`), and B's `make_sv_object` reads an SV it
+  addresses by number (`lib/B/Deparse.t`). Under Sublet or PoisonCap such a
+  read faults instead of reading stale flags.
+- [Capstone smoke](results/2026-09-28/capstone-smoke.txt): `../musl/scripts/smoke.pl`
+  prints the native oracle byte for byte in both modes, with 167,854 heads live
+  at once and 256,290 revocations under Sublet. It needs more than the campaign
+  VM's 262,144 nodes (high-water 592,192 under Sublet), so it ran in a separate
+  boot with 1,048,576; its observer table overflows and is not a measurement.
+  The [`$x = *foo; *x = $x` control](results/2026-09-28/capstone-glob-control.txt)
+  prints `done` in mode 0 and ends in SIGSEGV from the capability fault in mode 1.
+- [Four-arm campaign](../../../experiments/study/results/perl-reuse-four-arm-20260928/README.md):
+  `records.pl 512 3 0` on both platforms, 12/12 processes.
