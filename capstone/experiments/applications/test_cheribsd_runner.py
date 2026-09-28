@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Reject incomplete application output, policy mismatches and broken accounting."""
 import importlib.util
+import hashlib
 from pathlib import Path
 import unittest
 import shlex
@@ -80,6 +81,25 @@ class VerdictTests(unittest.TestCase):
                                       'metadata_reservation=0')):
             self.assertEqual(runner.verdict(point, 0, 'OK\n', broken),
                              'bad-inner-metrics')
+
+    def test_postgres_needs_complete_native_rows_and_inner_report(self):
+        rows = [f'1: row = "{i}" (typeid = 23, len = 4, typmod = -1, byval = t)'
+                for i in range(20)]
+        rows += ['1: count = "1500" (typeid = 20, len = 8, typmod = -1, byval = t)',
+                 '----']
+        stdout = ('PostgreSQL stand-alone backend 17.5\n' +
+                  ''.join('backend> \t' + row + '\n' for row in rows) +
+                  'PG_POISONCAP mode=0 sweeps=0 poison_bytes=0 \n')
+        oracle = hashlib.sha256(('\n'.join(rows) + '\n').encode()).hexdigest()
+        point = dict(application='postgres', arm='poisoncap-spatial',
+                     nested_allocator='postgres-memory-contexts', mode=0,
+                     expected_pg_rows_sha256=oracle, revocation=0)
+        stderr = 'EXP-GUEST-EXIT 0\n'
+        self.assertEqual(runner.verdict(point, 0, stdout, stderr), 'pass')
+        self.assertEqual(runner.verdict(point, 0, stdout.replace('1500', '1499'), stderr),
+                         'oracle-mismatch')
+        self.assertEqual(runner.verdict(point, 0, stdout, 'ERROR: broken\n' + stderr),
+                         'oracle-mismatch')
 
 
 class PolicyTests(unittest.TestCase):
@@ -170,6 +190,21 @@ class PolicyTests(unittest.TestCase):
                 runner.policy_environment(dict(point, mode=1-mode))
             with self.assertRaises(ValueError):
                 runner.policy_environment(dict(point, environment={'PYM_POISONCAP_MODE': str(mode)}))
+
+    def test_postgres_guest_timeout_is_inside_su(self):
+        point = self.point('poisoncap-spatial', 0)
+        point.update(application='postgres', nested_allocator='postgres-memory-contexts',
+                     mode=0, run_as='nobody', stdin_file='/tmp/work.sql')
+        command = shlex.split(runner.application_command(point, 120))
+        self.assertEqual(command[:4], ['su', '-m', 'nobody', '-c'])
+        self.assertIn('timeout 120', command[4])
+        self.assertIn('< /tmp/work.sql', command[4])
+        self.assertEqual(runner.policy_environment(point)['PG_POISONCAP_MODE'], '0')
+        with self.assertRaises(ValueError):
+            runner.policy_environment(dict(point, environment={'PG_POISONCAP_MODE': '1'}))
+        for bad in ('/tmp/../pgstudy', '/tmp', '/var/tmp/work.sql'):
+            with self.assertRaises(ValueError):
+                runner.application_command(dict(point, stdin_file=bad), 120)
 
 
 class GuestPanicTests(unittest.TestCase):

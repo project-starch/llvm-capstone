@@ -16,6 +16,18 @@ and plotting script are in nested-allocators-paper's
 The follow-up [CheriBSD comparison](comparison.md) builds the same FFmpeg and
 mruby applications against default CheriBSD. Shared counters measure requested
 bytes and address reuse; its runner reuses the common guest.
+The CheriBSD runner also accepts complete PostgreSQL single-user points with
+`run_as: nobody`, a staged `/tmp/` `stdin_file`, and
+`fresh_archive: {"archive":"/tmp/cluster.tar.gz",
+"destination":"/tmp/pgstudy","owner":"nobody"}` for a pristine cluster
+before every repetition. The archive must be declared in the point's
+`files` mapping. `expected_pg_rows_sha256` hashes
+the 22 normalized native SQL result rows, ignoring prompts and log timing.
+An opt-in `reuse_gap` report may come from `stdout` for PostgreSQL or
+`stderr` for CPython; the runner rejects missing or inconsistent histograms.
+The timeout wraps the backend inside `su`, so it owns the process that may
+otherwise outlive a timed-out shell. The runner records every attempt and
+keeps the four-arm study incomplete when a protected process lacks its oracle.
 
 ## Build and run
 

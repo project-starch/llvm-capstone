@@ -4,12 +4,14 @@ The histogram is indexed by successful new-lifetime issues. It is a
 conditional distribution over starts that were actually reused, and is not
 the fixed-follow-up retirement metric in memory-metrics.md.
 """
+import re
 
 
 def parse_reuse_gap(stderr, prefix):
     if prefix not in ('PYM_REUSE_GAP', 'PG_REUSE_GAP'):
         raise ValueError('unknown reuse-gap observer')
-    lines = [line for line in stderr.splitlines() if line.startswith(prefix + ' ')]
+    lines = [re.sub(r'^(backend> )+', '', line) for line in stderr.splitlines()]
+    lines = [line for line in lines if line.startswith(prefix + ' ')]
     if len(lines) != 1:
         raise ValueError('expected exactly one reuse-gap report')
     words = [word.split('=', 1) for word in lines[0].split()[1:]]

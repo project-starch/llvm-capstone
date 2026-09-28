@@ -10,7 +10,7 @@ import os
 import sys
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import shlex
 import subprocess
@@ -63,19 +63,26 @@ def policy_environment(point):
             expected[arm] = 0
             if point.get('mode') != int(arm == 'poisoncap-temporal'):
                 raise ValueError('CPython pymalloc arm and application mode disagree')
+        elif boundary == ('postgres', 'postgres-memory-contexts'):
+            expected[arm] = 0
+            if point.get('mode') != int(arm == 'poisoncap-temporal'):
+                raise ValueError('PostgreSQL context arm and application mode disagree')
         else:
             raise ValueError('PoisonCap arm needs a qualified application boundary')
     if arm not in expected or point['revocation'] != expected[arm]:
         raise ValueError('arm and expected revocation state disagree')
     environment = point['environment']
     if any(k.startswith(('_RUNTIME_', 'MALLOC_', 'EXP_CHERI_')) for k in environment) or \
-            'MRB_GC_POISONCAP' in environment or 'PYM_POISONCAP_MODE' in environment:
+            'MRB_GC_POISONCAP' in environment or 'PYM_POISONCAP_MODE' in environment or \
+            'PG_POISONCAP_MODE' in environment:
         raise ValueError('allocator overrides must come from the named study arm')
     environment = dict(environment)
     if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'mruby-gc':
         environment['MRB_GC_POISONCAP'] = '1' if arm == 'poisoncap-temporal' else '0'
     if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'cpython-pymalloc':
         environment['PYM_POISONCAP_MODE'] = '1' if arm == 'poisoncap-temporal' else '0'
+    if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'postgres-memory-contexts':
+        environment['PG_POISONCAP_MODE'] = '1' if arm == 'poisoncap-temporal' else '0'
     if arm != 'cheribsd-default':
         switch = 'ENABLE' if expected[arm] else 'DISABLE'
         environment['_RUNTIME_REVOCATION_' + switch] = '1'
@@ -87,8 +94,35 @@ def application_command(point, timeout):
     # Study arms inherit no allocator settings from the SSH server or shell.
     prefix = ['env'] if point['arm'] == 'cheribsd-default' else [
         'env', '-i', 'PATH=/sbin:/bin:/usr/sbin:/usr/bin', 'HOME=/root', 'LC_ALL=C']
-    return shlex.join(['timeout', str(timeout), *prefix,
-                      *[k+'='+str(v) for k, v in environment.items()], *point['argv']])
+    command = shlex.join(['timeout', str(timeout), *prefix,
+                          *[k+'='+str(v) for k, v in environment.items()], *point['argv']])
+    if point.get('stdin_file'):
+        path = point['stdin_file']
+        if not safe_tmp_path(path):
+            raise ValueError('stdin_file must be a staged /tmp path')
+        command += ' < ' + shlex.quote(path)
+    if point.get('run_as'):
+        user = point['run_as']
+        if user not in ('nobody',):
+            raise ValueError('unsupported guest user')
+        command = shlex.join(['su', '-m', user, '-c', command])
+    return command
+
+
+def safe_tmp_path(path):
+    if not isinstance(path, str):
+        return False
+    parts = PurePosixPath(path).parts
+    return len(parts) >= 3 and parts[:2] == ('/', 'tmp') and '..' not in path.split('/')
+
+
+def pg_rows(stdout):
+    rows = []
+    for line in stdout.splitlines():
+        line = re.sub(r'^(backend> )+', '', line)
+        if re.match(r'^\t( ?\d+: |----)', line):
+            rows.append(line.strip())
+    return rows
 
 
 def nested_samples(stderr):
@@ -140,20 +174,35 @@ def verdict(point, rc, stdout, stderr, stdout_raw=None):
         if stdout_raw is None or hashlib.sha256(stdout_raw).hexdigest() != point['expected_stdout_sha256'] or \
                 len(stdout_raw) != point['expected_stdout_bytes']:
             return 'oracle-mismatch'
-    elif stdout != point['expected_stdout']: return 'oracle-mismatch'
-    try:
-        memory = samples(stderr)
-        if [s['phase'] for s in memory] != point['expected_phases']: return 'missing-phases'
-        if not memory or any(s['heap_error'] or s['shadow_error'] or
-                             s['revocation'] != point['revocation'] or
-                             any(v < 0 for k, v in s.items() if k != 'phase') or
-                             not (0 <= s['allocated'] <= s['active'] <= s['resident'])
-                             for s in memory): return 'bad-metrics'
-    except (ValueError, KeyError): return 'bad-metrics'
+    elif 'expected_stdout' in point:
+        if stdout != point['expected_stdout']:
+            return 'oracle-mismatch'
+    elif not point.get('expected_pg_rows_sha256'):
+        return 'missing-oracle'
+    if point.get('expected_pg_rows_sha256'):
+        rows = pg_rows(stdout)
+        if (len(rows) != 22 or 'count = "1500"' not in rows[-2] or
+                hashlib.sha256(('\n'.join(rows) + '\n').encode()).hexdigest()
+                != point['expected_pg_rows_sha256']):
+            return 'oracle-mismatch'
+    if point.get('application') == 'postgres':
+        if re.search(r'\b(ERROR|FATAL|PANIC):', stderr):
+            return 'oracle-mismatch'
+    else:
+        try:
+            memory = samples(stderr)
+            if [s['phase'] for s in memory] != point['expected_phases']: return 'missing-phases'
+            if not memory or any(s['heap_error'] or s['shadow_error'] or
+                                 s['revocation'] != point['revocation'] or
+                                 any(v < 0 for k, v in s.items() if k != 'phase') or
+                                 not (0 <= s['allocated'] <= s['active'] <= s['resident'])
+                                 for s in memory): return 'bad-metrics'
+        except (ValueError, KeyError): return 'bad-metrics'
     if point.get('allocations') and not valid_allocations(stderr, point['expected_phases']):
         return 'bad-allocation-metrics'
     if point.get('reuse_gap'):
-        try: parse_reuse_gap(stderr, point['reuse_gap'])
+        stream = stdout if point.get('reuse_gap_stream') == 'stdout' else stderr
+        try: parse_reuse_gap(stream, point['reuse_gap'])
         except ValueError: return 'bad-reuse-gap'
     if point.get('nested_allocator') == 'mruby-gc':
         try:
@@ -201,6 +250,12 @@ def verdict(point, rc, stdout, stderr, stdout_raw=None):
                 tuple(map(int, policy[0])) != (mode, 64 << 20, 16 << 20) or \
                 int(report[0][0]) != mode or \
                 (mode and (int(report[0][1]) == 0 or int(report[0][2]) == 0)):
+            return 'bad-inner-metrics'
+    if point.get('nested_allocator') == 'postgres-memory-contexts':
+        mode = int(point['arm'] == 'poisoncap-temporal')
+        report = re.findall(r'^PG_POISONCAP mode=(\d+) sweeps=(\d+) ', stdout, re.M)
+        if (len(report) != 1 or int(report[0][0]) != mode or
+                (mode and int(report[0][1]) == 0)):
             return 'bad-inner-metrics'
     if not published_policy_valid(point, stderr):
         return 'bad-inner-policy'
@@ -258,8 +313,8 @@ def execute(args):
                'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
                '-o', 'LogLevel=ERROR', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5']
     ssh = ['ssh', *options, '-p', str(args.port), 'root@127.0.0.1']
-    def call(cmd):
-        return subprocess.check_output(ssh+[cmd], text=True, timeout=20).strip()
+    def call(cmd, timeout=20):
+        return subprocess.check_output(ssh+[cmd], text=True, timeout=timeout).strip()
     boot = call('sysctl -n kern.boottime')
     platform = call('uname -a; sysctl security.cheri')
     files = {}
@@ -276,6 +331,9 @@ def execute(args):
                         'root@127.0.0.1:'+guest], check=True, capture_output=True, timeout=120)
         if call('sha256 -q '+shlex.quote(guest)) != spec['sha256']:
             raise RuntimeError('staged input hash mismatch')
+    for point in points:
+        for command in point.get('guest_setup', []):
+            call(command, timeout=120)
     guest_default = call('sysctl -n security.cheri.runtime_revocation_default')
     if args.disable_default_revocation and guest_default != '0':
         raise RuntimeError('guest default revocation was not disabled')
@@ -291,6 +349,19 @@ def execute(args):
         for repetition in range(args.repeat):
             if call('sysctl -n kern.boottime') != boot:
                 raise RuntimeError('guest rebooted')
+            fresh = point.get('fresh_archive')
+            if fresh:
+                if (set(fresh) != {'archive', 'destination', 'owner'} or
+                        fresh['archive'] not in files or
+                        not safe_tmp_path(fresh['destination']) or
+                        fresh['owner'] not in ('nobody',)):
+                    raise ValueError('invalid fresh_archive declaration')
+                dest = shlex.quote(fresh['destination'])
+                archive = shlex.quote(fresh['archive'])
+                command = ('rm -rf -- ' + dest + ' && mkdir -p ' + dest +
+                           ' && tar -xzf ' + archive + ' -C ' + dest +
+                           ' && chown -R ' + fresh['owner'] + ':' + fresh['owner'] + ' ' + dest)
+                call(command, timeout=120)
             directory = args.out/(point['id']+'-'+str(repetition))
             directory.mkdir()
             command = application_command(point, args.timeout)
@@ -352,7 +423,8 @@ def execute(args):
             try: record['inner_memory'] = nested_samples(stderr)
             except (ValueError, KeyError): record['inner_memory'] = []
             if point.get('reuse_gap'):
-                try: record['reuse_gap'] = parse_reuse_gap(stderr, point['reuse_gap'])
+                stream = stdout if point.get('reuse_gap_stream') == 'stdout' else stderr
+                try: record['reuse_gap'] = parse_reuse_gap(stream, point['reuse_gap'])
                 except ValueError as error: record['reuse_gap_error'] = str(error)
             with (args.out/'runs.jsonl').open('a') as stream:
                 stream.write(json.dumps(record)+'\n')

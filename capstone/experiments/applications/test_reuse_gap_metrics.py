@@ -10,6 +10,7 @@ class ReuseGapMetricsTest(unittest.TestCase):
         report = parse_reuse_gap(line, 'PYM_REUSE_GAP')
         self.assertEqual(report['bins'][:2], [1, 1])
         self.assertEqual(report['reuses'], 2)
+        self.assertEqual(parse_reuse_gap('backend> ' + line, 'PYM_REUSE_GAP'), report)
 
     def test_rejects_missing_duplicate_and_error(self):
         line = ('PG_REUSE_GAP attempts=6 issues=5 releases=3 reuses=2 '

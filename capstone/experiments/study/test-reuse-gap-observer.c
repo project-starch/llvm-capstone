@@ -25,5 +25,12 @@ int main(void) {
   reuse_gap_release(&o, 0x2000);
   reuse_gap_release(&o, 0x2000);
   assert(o.error == 3);
+  struct reuse_gap_slot tiny[2];
+  reuse_gap_init(&o, tiny, 2);
+  for (uint64_t start = 1; start <= 3; ++start) {
+    reuse_gap_attempt(&o);
+    reuse_gap_issue(&o, start, 16);
+  }
+  assert(o.error == 1 && o.issues == 2);
   return 0;
 }
