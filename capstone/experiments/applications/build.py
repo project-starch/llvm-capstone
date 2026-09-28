@@ -123,6 +123,7 @@ def main():
     run(['cmake', '--build', sdk, '-j8'])
     probe = out / 'memory.o'
     defines = (['-DEXP_SUBLET'] if args.heap == 'sublet' else []) + (['-DEXP_PYMALLOC'] if args.nested == 'cpython' else []) + (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_PG_CONTEXT_SUBLET'] if args.nested == 'postgres' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
+    if args.reuse_gap: defines += ['-DEXP_PG_REUSE_GAP']
     if args.allocations: defines += ['-DEXP_ALLOCATIONS', '-DEXP_CAPSTONE']
     memory_includes = (['-I', REPO / 'capstone/ports/postgres/memory-contexts/src/allocators/sublet',
                         '-I', REPO / 'capstone/runtime/include']

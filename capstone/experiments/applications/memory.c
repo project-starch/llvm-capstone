@@ -38,6 +38,9 @@ void mrb_gc_study_report(const char *phase);
 #include "pg_subpool.h"
 void *__capstone_region(unsigned);
 #endif
+#ifdef EXP_PG_REUSE_GAP
+void pg_reuse_gap_report(void);
+#endif
 
 static void report(const char *phase) {
 #ifdef EXP_PG_CONTEXT_SUBLET
@@ -114,7 +117,12 @@ ssize_t __wrap_write(int fd, const void *buf, size_t n) {
   return __real_write(fd, buf, n);
 }
 
-static void at_exit(void) { report("exit"); }
+static void at_exit(void) {
+  report("exit");
+#ifdef EXP_PG_REUSE_GAP
+  pg_reuse_gap_report();
+#endif
+}
 int __wrap_main(int argc, char **argv) {
 #ifdef EXP_PG_CONTEXT_SUBLET
   if (pg_subpool_arena(__capstone_region(1), 64UL << 20) != 0) return 126;
