@@ -52,6 +52,11 @@
  *  17 rs_stale_unref  a stale refstruct pointer unref'd after its entry went to a new owner:
  *                     does the live owner lose its reference (a third get then aliases it)?
  *
+ * TRACK B, a pool defect in FFmpeg's REAL code (docs/plans/2026-09-25-ffmpeg-full-port-and-sublet.md):
+ *  18 afjoin_shipped  af_join as 9.0.1 ships it, in a real graph over two decoders' pool frames
+ *  19 afjoin_reverted the same image with af_join.o's upstream fix 461fb22053 reverted (one token):
+ *                     the output frame keeps a pointer into a buffer it holds no reference to
+ *
  * COUNTING fixtures: what a pool's END costs, measured across FFmpeg's own uninit, not inferred.
  * The Sublet port's claim is one revoke per block at a pool's end and none per entry. A bracket
  * around one function measures that function's code, and sublet.h keeps its counters per file, so
@@ -70,6 +75,13 @@
 #include "libavutil/buffer.h"
 #include "libavutil/mem.h"
 #include "libavutil/refstruct.h"
+#if FFAPP_FIXTURE == 18 || FFAPP_FIXTURE == 19
+#include "libavcodec/avcodec.h"
+#include "libavfilter/avfilter.h"
+#include "libavfilter/buffersink.h"
+#include "libavfilter/buffersrc.h"
+#include "libavutil/channel_layout.h"
+#endif
 #if FFAPP_FIXTURE == 20 || FFAPP_FIXTURE == 21
 void __capstone_sublet_heap_stats(unsigned long out[9]);
 #ifdef FFAPP_SUBLET_POOLS
@@ -372,6 +384,88 @@ static int fixture(void)
     v = ffapp_fix_touch(o, idx);
     printf("FFAPP-FIX 16 returned p[-1]=%02x (a byte of the RefCount header, in stock)\n", v);
     return FX_MARK(v);
+
+#elif FFAPP_FIXTURE == 18 || FFAPP_FIXTURE == 19
+    /* af_join, as FFmpeg runs it (Track B). Two mono inputs, each decoded by FFmpeg's own
+     * pcm_s16le_planar decoder, so every frame's plane is an AVBufferPool buffer the decoder's
+     * pool handed out (avcodec_default_get_buffer2). A real filter graph, abuffer x2 -> join ->
+     * abuffersink, maps 0.0->FL, 0.0->FR, 1.0->FC: the second output channel repeats a buffer and
+     * the third brings a new one, which is exactly the sequence the upstream fix 461fb22053 is
+     * about. 18 links libavfilter's af_join.o as shipped; 19 links the same file with that fix
+     * reverted (one token, `j == nb_buffers` -> `j == i`), so the output frame takes no reference
+     * to input 1's buffer. The join frees its input frames, input 1's buffer goes back to its
+     * pool, and decoding input 1's next packet takes it again. The touch reads the output's third
+     * channel. */
+    AVFilterGraph *g = avfilter_graph_alloc();
+    AVCodecContext *dec[2] = { 0 };
+    AVFilterContext *src[2] = { 0 }, *join = NULL, *sink = NULL;
+    AVFrame *in = av_frame_alloc(), *out = av_frame_alloc();
+    AVPacket *pkt = av_packet_alloc();
+    static unsigned char pcm[2][2][128];      /* [input][packet][64 s16le samples] */
+    char args[160];
+    if (!g || !in || !out || !pkt)
+        return FX_MARK(0xE0001);
+    for (int k = 0; k < 2; k++)
+        for (int m = 0; m < 2; m++)
+            for (int s = 0; s < 128; s++)   /* input k, packet m: every byte 0xA0, 0x5B or 0x77 */
+                pcm[k][m][s] = k == 0 ? 0xA0 : (m == 0 ? 0x5B : 0x77);
+    const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_PCM_S16LE_PLANAR);
+    const AVFilter *fsrc = avfilter_get_by_name("abuffer"), *fjoin = avfilter_get_by_name("join"),
+                   *fsink = avfilter_get_by_name("abuffersink");
+    if (!codec || !fsrc || !fjoin || !fsink)
+        return FX_MARK(0xE0002);
+    for (int k = 0; k < 2; k++) {
+        dec[k] = avcodec_alloc_context3(codec);
+        if (!dec[k])
+            return FX_MARK(0xE0003);
+        dec[k]->sample_rate = 8000;
+        av_channel_layout_default(&dec[k]->ch_layout, 1);
+        if (avcodec_open2(dec[k], codec, NULL) < 0)
+            return FX_MARK(0xE0004);
+        snprintf(args, sizeof args, "sample_rate=8000:sample_fmt=s16p:channel_layout=mono:time_base=1/8000");
+        char name[8] = { 'i', 'n', (char)('0' + k), 0 };
+        if (avfilter_graph_create_filter(&src[k], fsrc, name, args, NULL, g) < 0)
+            return FX_MARK(0xE0005);
+    }
+    if (avfilter_graph_create_filter(&join, fjoin, "join",
+                                     "inputs=2:channel_layout=3.0:map=0.0-FL|0.0-FR|1.0-FC", NULL, g) < 0
+        || avfilter_graph_create_filter(&sink, fsink, "out", NULL, NULL, g) < 0
+        || avfilter_link(src[0], 0, join, 0) < 0 || avfilter_link(src[1], 0, join, 1) < 0
+        || avfilter_link(join, 0, sink, 0) < 0 || avfilter_graph_config(g, NULL) < 0)
+        return FX_MARK(0xE0006);
+    /* one decoded frame per input, into the graph (the source takes the frame's references) */
+    for (int k = 0; k < 2; k++) {
+        if (av_new_packet(pkt, 128) < 0)
+            return FX_MARK(0xE0007);
+        memcpy(pkt->data, pcm[k][0], 128);
+        if (avcodec_send_packet(dec[k], pkt) < 0 || avcodec_receive_frame(dec[k], in) < 0)
+            return FX_MARK(0xE0008);
+        av_packet_unref(pkt);
+        if (k == 1)
+            show("in1", in->extended_data[0]);
+        if (av_buffersrc_add_frame(src[k], in) < 0)
+            return FX_MARK(0xE0009);
+    }
+    if (av_buffersink_get_frame(sink, out) < 0 || out->ch_layout.nb_channels != 3)
+        return FX_MARK(0xE000A);
+    unsigned char *fc = out->extended_data[2];
+    show("out.FC", fc);
+    unsigned long fc_addr = cur(fc);
+    /* input 1's next packet: its decoder's pool reissues the buffer it gets back first */
+    if (av_new_packet(pkt, 128) < 0)
+        return FX_MARK(0xE000B);
+    memcpy(pkt->data, pcm[1][1], 128);
+    if (avcodec_send_packet(dec[1], pkt) < 0 || avcodec_receive_frame(dec[1], in) < 0)
+        return FX_MARK(0xE000C);
+    show("in1-next", in->extended_data[0]);
+    unsigned same = cur(in->extended_data[0]) == fc_addr;
+    printf("FFAPP-FIX %d same-address=%u\n", FFAPP_FIXTURE, same);
+    idx = 0;
+    touching(fc_addr);
+    v = ffapp_fix_touch(fc, idx);
+    printf("FFAPP-FIX %d returned out.FC[0]=%02x (0x5b = input 1's first packet, 0x77 = its next)\n",
+           FFAPP_FIXTURE, v);
+    return FX_MARK((same << 8) | v);
 
 #elif FFAPP_FIXTURE == 20 || FFAPP_FIXTURE == 21
     enum { N = 8 };
