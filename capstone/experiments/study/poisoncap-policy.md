@@ -164,3 +164,20 @@ explicit custom-policy/outer-disabled labels. SQLite's repaired protected
 17-unit qualification and all six repeated outer-default processes pass.
 Their inner ledgers and reuse histograms reproduce the historical isolated-outer
 controls exactly; the fresh raw evidence records the enabled outer policy.
+
+## PostgreSQL transfer
+
+The [four-arm PostgreSQL qualification](results/postgres-reuse-four-arm-20260928/README.md)
+uses the same numeric thresholds and full-queue repair. It quarantines both
+chunks and context blocks, counts overlapping retired chunks only once, and
+searches past quarantined entries in AllocSet's external free list. A sweep
+is never requested merely to satisfy an allocation. Held spans comprise
+live rounded chunks and quarantined chunk/block spans; block spans include
+used prefixes, not untouched reservation tails. Managed-reset exceptions
+remain separately counted and must be zero for the published-policy row.
+
+Both modes provision identical chunk/block metadata capacities and load the
+same corrected libc with process revocation explicitly enabled. The guest's
+setup services run with their default disabled because staging a cluster
+can hit the separate VM-map lock panic. This service setting does not disable
+the benchmark's libc revocation; its effective setting is checked at startup.
