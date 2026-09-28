@@ -39,7 +39,13 @@ STACK=${FFAPP_STACK_BYTES:-$((256 * 1024))}       # declared stack (dom_data)
 CLIP=${FFAPP_CLIP_SECONDS:-1}
 SFX=; [ "$CLIP" = 1 ] || SFX="-${CLIP}s"
 INPUT=${FFAPP_INPUT:-/tmp/input$SFX.mkv}
-ORDER_CEILING=$((4 * 1024 * 1024))
+# The largest block a run may need. 4 MiB was the hard limit while a domain block had to be one
+# buddy-allocator allocation (order 10); since buildroot 2b8ad05 (pinned by #97) a block beyond
+# that is served from CMA instead, so the ceiling is now a budget rather than a wall. It stays a
+# GATE: a boot must reserve cma= for what it loads (run-qemu.sh sizes it), and the guest's module
+# must be the CMA-capable one -- an image over 4 MiB on an older module fails to load and reads as
+# a stall. Raise FFAPP_ORDER_CEILING_MB deliberately, and only together with those two.
+ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-4} * 1024 * 1024 ))
 # FFAPP_HEAP: which allocator the images link. It is the only thing the arms differ in; the
 # FFmpeg libraries are shared (built once, under domain/), so an arm cannot differ by accident
 # in anything else.
@@ -172,6 +178,15 @@ CONFIGURE_OPTS=(--disable-everything --disable-autodetect --disable-doc --disabl
   --disable-swresample --disable-swscale --disable-avfilter --disable-avdevice
   --enable-demuxer=matroska --enable-decoder=mpeg4 --enable-parser=mpeg4video
   --enable-protocol=file --enable-static --disable-shared)
+# FFAPP_EXTRA_CONFIGURE: further configure options, appended so that they WIN -- FFmpeg's
+# configure applies options in order, so "--enable-avfilter" here re-enables what the list
+# above disabled. It feeds CONFIG_KEY below, so changing it rebuilds the libraries instead of
+# reusing stale ones. Use a separate FFAPP_WORK when probing: the rebuild `rm -rf`s the
+# library tree, so probing in the default work directory destroys the baseline build.
+if [ -n "${FFAPP_EXTRA_CONFIGURE:-}" ]; then
+  read -r -a _ffapp_extra <<< "$FFAPP_EXTRA_CONFIGURE"
+  CONFIGURE_OPTS+=("${_ffapp_extra[@]}")
+fi
 CONFIG_EDIT='s/^#define HAVE_POSIX_MEMALIGN 1$/#define HAVE_POSIX_MEMALIGN 0/; s/^#define HAVE_MEMALIGN 1$/#define HAVE_MEMALIGN 0/'
 # Everything that decides what the libraries contain goes into the key, so changing any of it
 # rebuilds instead of silently reusing stale libraries (audit, 2026-09-23).
@@ -187,6 +202,18 @@ toolchain_id() {
 }
 TOOLCHAIN_ID=$(toolchain_id | sha256sum | cut -c1-12)
 CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" "$TOOLCHAIN_ID" | sha256sum | cut -c1-12)
+# The enabled libraries, read from configure's own config.mak, in static link order (avutil
+# last, since everything depends on it). avfilter and swresample appear only when configure
+# turned them on, so the default minimal build is unchanged.
+ff_libdirs() {
+  local m="$XB/ffbuild/config.mak" out=()
+  grep -qx 'CONFIG_AVFILTER=yes'    "$m" 2>/dev/null && out+=(libavfilter)
+  out+=(libavformat libavcodec)
+  grep -qx 'CONFIG_SWRESAMPLE=yes'  "$m" 2>/dev/null && out+=(libswresample)
+  grep -qx 'CONFIG_SWSCALE=yes'     "$m" 2>/dev/null && out+=(libswscale)
+  out+=(libavutil)
+  printf '%s\n' "${out[*]}"
+}
 if [ ! -f "$XB/libavformat/libavformat.a" ] || [ "$(cat "$XB/.config-key" 2>/dev/null)" != "$CONFIG_KEY" ]; then
   rm -rf "$XB"; mkdir -p "$XB"
   ( cd "$XB" && "$SRC/configure" --enable-cross-compile --cc="$CLANG" --ld="$LD_LLD" \
@@ -200,8 +227,13 @@ if [ ! -f "$XB/libavformat/libavformat.a" ] || [ "$(cat "$XB/.config-key" 2>/dev
   sed -i "$CONFIG_EDIT" "$XB/config.h"
   grep -qx '#define HAVE_POSIX_MEMALIGN 0' "$XB/config.h" \
     || { echo "config.h override did not take" >&2; exit 1; }
-  make -C "$XB" -j"$JOBS" libavutil/libavutil.a libavcodec/libavcodec.a \
-       libavformat/libavformat.a > "$XB/build.log" 2>&1 \
+  # Which libraries to build is CONFIGURE's answer, not a hardcoded list: with libavfilter
+  # enabled a hardcoded list configures it and never builds it, so the image silently lacks
+  # every filter while the build reports success (found by the 2026-09-25 size probe).
+  ff_libdirs > "$OUT/.fflibdirs"
+  # shellcheck disable=SC2046
+  make -C "$XB" -j"$JOBS" $(sed 's#\([^ ]*\)#\1/\1.a#g' "$OUT/.fflibdirs") \
+       > "$XB/build.log" 2>&1 \
     || { echo "FFmpeg domain build failed; see $XB/build.log" >&2; exit 1; }
   echo "$CONFIG_KEY" > "$XB/.config-key"
 fi
@@ -209,7 +241,8 @@ fi
 # otherwise stop the build silently at this line (audit, 2026-09-23).
 { grep -hE 'warning: .*\[-Wcapstone-pointer-roundtrip\]' "$XB/build.log" || true; } \
   | sed -E 's#^(src/)?##; s/: warning:.*//' | sort -u > "$OUT/pointer-roundtrip-sites.txt"
-FFLIBS=("$XB/libavformat/libavformat.a" "$XB/libavcodec/libavcodec.a" "$XB/libavutil/libavutil.a")
+FFLIBS=(); for _d in $(ff_libdirs); do FFLIBS+=("$XB/$_d/$_d.a"); done
+for _l in "${FFLIBS[@]}"; do [ -f "$_l" ] || { echo "configure enabled $(basename "$_l") but it was not built" >&2; exit 1; }; done
 
 # The pool arms' payload allocator and Capstone backend: the buffer-pool port's files,
 # unmodified. Compiled after FFmpeg, because libavutil/mem.h needs the generated avconfig.h.
