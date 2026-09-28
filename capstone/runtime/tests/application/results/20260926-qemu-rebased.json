@@ -1,0 +1,52 @@
+{
+  "platform": "QEMU supervised CALL, one hart",
+  "boot_id": "561b94ea-2262-4607-93da-e308063905f1",
+  "mixed_starts": 1008,
+  "sublet": true,
+  "before": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 138559488,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 65285,
+    "nodes_live": 67,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 65923,
+    "tag_pages": 648,
+    "node_capacity": 65536
+  },
+  "after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 138559488,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 65285,
+    "nodes_live": 67,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 77011,
+    "tag_pages": 648,
+    "node_capacity": 65536
+  },
+  "binaries": {
+    "qemu": "f9795d413ad1910a954dc918fcf469a2a13725a50d48d249dbe8a70cd741f85d",
+    "kernel": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "firmware": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+    "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f"
+  },
+  "environment": {
+    "CAPSTONE_GP_NONLIN": "1",
+    "CAPSTONE_REV_NODES": "65536"
+  },
+  "date": "2026-09-26",
+  "source_commits": {
+    "capstone-qemu-domain-runtime": "6550f19489e08d2babccab06e89d43467f8e67b6"
+  },
+  "verification": {
+    "runtime_gate": "PASS: exhaustion/recovery, Sublet, cancellation, faults, 1008 mixed starts in one boot",
+    "perl_base": "8/9 files; 492 of 493 TAP assertions pass or skip; term.t test 2 needs unsupported target clone syscall 220"
+  }
+}

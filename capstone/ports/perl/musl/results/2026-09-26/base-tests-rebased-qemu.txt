@@ -1,0 +1,17 @@
+Perl 5.36.3 upstream t/base on the persistent one-hart Linux guest
+Interpreter SHA256: a03f3ac8fd48809ce5b474c40d77110faaa891c79b066edbc91dc1c5a97edf57
+QEMU source commit: 6550f19489e08d2babccab06e89d43467f8e67b6
+QEMU SHA256: f9795d413ad1910a954dc918fcf469a2a13725a50d48d249dbe8a70cd741f85d
+Effective QEMU environment: CAPSTONE_GP_NONLIN=1, CAPSTONE_REV_NODES=65536
+Runner: prove --exec 'python3 -m capstone_vm --state <guest-state> run --cwd /mnt/host/perl-tests/t -e PERL5LIB=/mnt/host/perl-tests/lib /mnt/host/perl-fresh.dom' base/*.t
+
+PASS: base/cond.t, base/if.t, base/lex.t, base/num.t, base/pat.t,
+      base/rs.t, base/translate.t, base/while.t
+FAIL: base/term.t, test 2 of 7: backticks try to start another Perl process;
+      target clone syscall 220 is unserved.
+
+Files=9, Tests=493, Result=FAIL, prove exit=1. One emitted assertion fails;
+the other 492 pass or are TAP-skipped. The VM remains running across the
+test files and the failure. This is the complete t/base directory, not the
+complete upstream Perl suite. The older result with compiler/regex controls
+is in base-tests-fixed.txt.

@@ -1,9 +1,31 @@
 # Capstone testing matrix and current recommendations
 
+2026-09-26 application-platform run: the installed managed guest passes the common
+acceptance (including exhaustion followed by 1,008 starts). Legacy CoreMark,
+shared-region, stdout/filewrite/fileread pass. The available snapshot fails
+null_blk (null_submit_bio, bad address 0x6f) and file-open-close (borrowed-region
+INIT, cause 29) on both the original and new platforms. These remain baseline
+failures; the historical rows below are not a claim that every gate passed in
+this run. See [current state](../state/current-state.md).
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../../ports/common/host/port_trace/README.md).
 
 This file is the compact map of which test layer to run for which kind of change.
 It is intentionally shorter than the older narrative version.
+
+Perl's [complete upstream `t/base` run](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
+uses host `prove --exec` with `capstone-vm run`: 6/9 files pass; `term.t` has one
+failed assertion and `lex.t`/`rs.t` each terminate by SIGSEGV before TAP. This
+is a port compatibility gate, not a passing full Perl-suite result.
+
+Shared application runtime: run the native startup/image/stream tests and host
+CLI tests, then the [persistent-guest application gate](../../runtime/applications.md#verification).
+It checks actual waitpid signals, no-yield and blocked-I/O cancellation,
+concurrent ownership, dup/fork/VMA lifetime, rollback, memory scrubbing, two real
+interpreters and an unchanged boot ID. `--repeat 200` adds 1,008 mixed starts with
+stable resource counters; `--sublet-image` adds transferred-heap reclamation,
+stale-reference rejection and recoverable node exhaustion. It does not add
+fork/threads inside a domain or constitute FPGA validation.
 
 ## Setup once per shell
 
