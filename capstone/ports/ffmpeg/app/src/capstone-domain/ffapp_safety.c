@@ -433,7 +433,11 @@ static int fixture(void)
         || avfilter_link(src[0], 0, join, 0) < 0 || avfilter_link(src[1], 0, join, 1) < 0
         || avfilter_link(join, 0, sink, 0) < 0 || avfilter_graph_config(g, NULL) < 0)
         return FX_MARK(0xE0006);
-    /* one decoded frame per input, into the graph (the source takes the frame's references) */
+    /* one decoded frame per input, into the graph (the source takes the frame's references). Input
+     * 1's plane address is read HERE, while the plane is live: after the join, the output's third
+     * channel may hold a revoked capability, and reading even its bounds is then what faults, before
+     * the touch (the first 2026-09-29 rerun: the fixture's own show() of it faulted on poolsublet). */
+    unsigned long in1_addr = 0;
     for (int k = 0; k < 2; k++) {
         if (av_new_packet(pkt, 128) < 0)
             return FX_MARK(0xE0007);
@@ -441,16 +445,17 @@ static int fixture(void)
         if (avcodec_send_packet(dec[k], pkt) < 0 || avcodec_receive_frame(dec[k], in) < 0)
             return FX_MARK(0xE0008);
         av_packet_unref(pkt);
-        if (k == 1)
+        if (k == 1) {
             show("in1", in->extended_data[0]);
+            in1_addr = cur(in->extended_data[0]);
+        }
         if (av_buffersrc_add_frame(src[k], in) < 0)
             return FX_MARK(0xE0009);
     }
     if (av_buffersink_get_frame(sink, out) < 0 || out->ch_layout.nb_channels != 3)
         return FX_MARK(0xE000A);
-    unsigned char *fc = out->extended_data[2];
-    show("out.FC", fc);
-    unsigned long fc_addr = cur(fc);
+    unsigned char *fc = out->extended_data[2];   /* input 1's plane: map 1.0-FC. Nothing of it is read
+                                                    before the touch. */
     /* input 1's next packet: its decoder's pool reissues the buffer it gets back first */
     if (av_new_packet(pkt, 128) < 0)
         return FX_MARK(0xE000B);
@@ -458,10 +463,10 @@ static int fixture(void)
     if (avcodec_send_packet(dec[1], pkt) < 0 || avcodec_receive_frame(dec[1], in) < 0)
         return FX_MARK(0xE000C);
     show("in1-next", in->extended_data[0]);
-    unsigned same = cur(in->extended_data[0]) == fc_addr;
+    unsigned same = cur(in->extended_data[0]) == in1_addr;
     printf("FFAPP-FIX %d same-address=%u\n", FFAPP_FIXTURE, same);
     idx = 0;
-    touching(fc_addr);
+    touching(in1_addr);
     v = ffapp_fix_touch(fc, idx);
     printf("FFAPP-FIX %d returned out.FC[0]=%02x (0x5b = input 1's first packet, 0x77 = its next)\n",
            FFAPP_FIXTURE, v);

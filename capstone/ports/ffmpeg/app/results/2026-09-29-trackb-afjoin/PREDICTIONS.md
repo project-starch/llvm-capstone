@@ -79,3 +79,22 @@ same arm, same image source, one patch apart.
 **Predictions unchanged.** Fixtures 18 and 19 are re-run with 0004 applied, N = 3, against the
 table above. 0004 changes every FFmpeg build of the app port. The committed results predate it, and
 M5's decode path is re-checked on the rebuilt images in the same batch.
+
+## Addendum 2, 2026-09-29: the rerun with 0004, and a fixture correction before the next one
+
+With 0004 applied, M1-M5 MATCH on both arms, with the flip control firing. Of the 12 fixture cells,
+9 came out as registered: fixture 18 returns `120005b` on both arms, and fixture 19 on poolstock
+returns `1300177` (same address, 0x77), each N = 3.
+
+The other 3, fixture 19 on poolsublet, faulted *before the touch*. The first read of the stale
+pointer was the fixture's own diagnostic `show()` of the output's third channel, which reads the
+capability's bounds (`lcc`). capstone-qemu faults on `lcc` of an UNTAGGED operand. The logged operand,
+`0x102c07e00`, is exactly input 1's plane, which the fixture printed while it was live. So the plane
+had been revoked by the time the output frame reached the consumer, which is the defect caught
+earlier than the registered site. That is still a DIFFERS against the registration, and it is
+recorded as one.
+
+The fixture is corrected so that nothing of the output's plane is read before the touch: the target
+address is input 1's plane, read while live, as every other fixture here takes its target before
+the free. Predictions unchanged. Fixture 19 on poolsublet is expected to FAULT temporal at the touch;
+18 and poolstock's 19 are expected unchanged. Re-run N = 3 on both arms.
