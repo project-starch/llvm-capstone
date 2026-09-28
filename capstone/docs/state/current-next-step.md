@@ -1,3 +1,15 @@
+PostgreSQL reuse follow-up (2026-09-28): the
+[spatial raw qualification](../../experiments/study/results/postgres-reuse-spatial-20260928/README.md)
+now passes three complete, native-matched SQL processes with a validated
+inner-chunk histogram in the common CheriBSD runner. Finish the Capstone
+spatial/Sublet instrumentation and qualify protected PoisonCap before
+admitting a PostgreSQL row to the cross-application violin. A scratch queue
+candidate still stopped progressing during the INSERT without actual
+`cheri_revoke`, after about 16,384 handouts; an O(1) chunk-index free list
+did not remove that failure. Isolate the deferred free-list lifetime before
+moving any queue-policy change into the study branch. The diagnostic binary
+has no temporal protection and must remain excluded.
+
 CPython reuse follow-up (2026-09-28): the
 [three-arm raw qualification](../../experiments/study/results/cpython-reuse-three-arm-20260928/README.md)
 now has three valid complete-interpreter processes per available arm, with

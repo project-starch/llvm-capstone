@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — PostgreSQL inner-reuse spatial control
+
+The [archived CheriBSD spatial campaign](../../experiments/study/results/postgres-reuse-spatial-20260928/README.md)
+passes 3/3 complete PostgreSQL 17.5 `work.sql` processes from independent
+copies of a pristine cluster. Each matches all 22 native 16-byte-MAXALIGN
+result rows and reports the same validated 32-bin inner-chunk reuse histogram.
+The shared CheriBSD runner now owns fresh archive extraction, `nobody`
+execution, SQL stdin and the native-row oracle. The protected PoisonCap
+backend still lacks a complete full-workload oracle; this is one of four
+required arms, not a paper comparison.
+
 ## 2026-09-28 — CPython inner-reuse qualification, three arms
 
 The [archived observer campaign](../../experiments/study/results/cpython-reuse-three-arm-20260928/README.md)
