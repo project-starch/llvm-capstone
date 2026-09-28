@@ -127,9 +127,38 @@ return, and a teardown that today frees entries one at a time:
 - `libavutil/refstruct.c`: `refstruct_pool_get_ext` / `pool_return_entry` / `pool_free_entry` +
   `pool_free`.
 
-FFmpeg's pools grow one entry at a time rather than taking one fixed block, so the pool's senior
-handle must be taken **before its first entry**, and every entry carved below it — otherwise the
-one-revoke teardown does not hold. That handle lifecycle is the first thing to build.
+### The one design decision, and the deviation it forces
+
+SQLite's lookaside gets **one** block from memsys5 and carves its slots from it, so one revoke
+destroys the pool. FFmpeg's pools instead grow **one entry at a time**: `pool_alloc_buffer` runs
+whenever the freelist is empty, with no bound. That difference has to be resolved explicitly,
+because the one-revoke property is the whole point of the hierarchy.
+
+Three levels, and where each handle lives:
+
+```
+heap block            sh_cap[i]        the heap's senior handle  (__capstone_sublet_free_linear)
+  └─ pool chunk       pool->handle     the POOL's senior handle, taken on the LINEAR region
+       └─ entries     carved with sublet_split + sublet_take
+```
+
+The pool takes its handle with `sublet_handle` on the linear region it receives, **before carving
+the first entry**; teardown is then `sublet_give_to(&pool->handle, &region)` — one revoke, every
+entry in that chunk dies — followed by `__capstone_sublet_free_linear(base)` to give the block back
+to the heap.
+
+**The deviation, stated rather than implied: the pool allocates in CHUNKS of several entries, not
+one entry per `pool_alloc_buffer`.** Per-entry blocks cannot give one-revoke teardown, because each
+block's senior handle belongs to the heap rather than to the pool; the pool would then need one
+revoke per entry, which is a `free` loop and not a hierarchy. Chunking changes *when* the level
+below is called, and leaves the pool's own policy — its LIFO freelist, and which buffer a `get`
+hands back — untouched. It is the same shape lookaside has, and it is the only part of the port
+that is not a transcription. The measured workload holds ~43 live blocks per 30-frame decode, so a
+small chunk covers it in a handful of allocations.
+
+The alternative considered and rejected: give the POOL the heap's handle (a `malloc_linear` variant
+that transfers it). That makes one revoke work per entry, but the heap can then no longer reclaim
+or merge the block, which breaks the buddy allocator underneath — a worse trade than chunking.
 
 ## Verification, per defect
 

@@ -76,22 +76,37 @@ esac
 #   0  the payloads are bounded per object and never revoked
 #   2  a Sublet lease per pool get, revoked when the buffer returns to its pool
 # The two differ in nothing but that mode: the matched pair for the pool fixtures.
+#   sublet  NOT the buffer-pool port's substitute but the Sublet PORT of FFmpeg's own pools
+#           (ports/ffmpeg/sublet): the pools keep their policy and take their storage LINEAR
+#           from the Sublet heap, so there is no payload region and no buffer-pool file.
+#   stock   the matched control of `sublet`: the SAME patched source with the port's macro at 0,
+#           so FFmpeg's pools run upstream's path on the Sublet heap. It differs from `sublet` in
+#           FF_SUBLET_POOLS alone, and builds the pool fixtures, which no heap arm does.
 POOL=${FFAPP_POOL:-}
 POOL_REGION=${FFAPP_POOL_REGION_BYTES:-$((4 * 1024 * 1024))}
-POOLF=()
+POOLF=(); FFEXTRA=()
 if [ -n "$POOL" ]; then
   [ "$HEAP" = sublet ] || { echo "FFAPP_POOL needs FFAPP_HEAP=sublet" >&2; exit 2; }
-  case $POOL in 0|2) ;; *) echo "FFAPP_POOL must be 0 or 2" >&2; exit 2 ;; esac
+  case $POOL in 0|2|sublet|stock) ;; *) echo "FFAPP_POOL must be 0, 2, sublet or stock" >&2; exit 2 ;; esac
   OUT="$WORK/domain-sublet-pool$POOL"
-  POOLF=(-DFFAPP_POOL_MODE="$POOL" -DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL"
-         -I"$APP_DIR/../buffer-pool/src/shared")
-  HOSTF+=(-DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL")
+  if [ "$POOL" = sublet ]; then
+    POOLF=(-DFFAPP_SUBLET_POOLS=1)
+    FFEXTRA=(-DFF_SUBLET_POOLS=1)
+  elif [ "$POOL" = stock ]; then
+    FFEXTRA=(-DFF_SUBLET_POOLS=0)
+  else
+    POOLF=(-DFFAPP_POOL_MODE="$POOL" -DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL"
+           -I"$APP_DIR/../buffer-pool/src/shared")
+    HOSTF+=(-DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL")
+  fi
 fi
 OUT="$OUT$SFX"
 BASE="$WORK/domain"                  # the shared FFmpeg build and configure stubs
 RT="$OUT/runtime"
 XB="$BASE/ffmpeg-build"
 [ -n "$POOL" ] && XB="$BASE/ffmpeg-build-pool"
+[ "$POOL" = sublet ] && XB="$BASE/ffmpeg-build-poolsublet"
+[ "$POOL" = stock ] && XB="$BASE/ffmpeg-build-poolstock"
 mkdir -p "$RT" "$XB"
 
 CLANG=${CAPSTONE_CLANG:?}
@@ -100,7 +115,9 @@ LD_LLD=${CAPSTONE_LD_LLD:?}
 ARCHIVE="$CAPSTONE_TMP_ROOT/musl-capstone-build/libc-capstone.a"
 [ -f "$ARCHIVE" ] || { echo "no $ARCHIVE; run ports/musl-capstone/build-musl-capstone.sh (CAPSTONE_LLVM_AR=llvm-ar-18 if the build has no llvm-ar)" >&2; exit 2; }
 MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
-if [ -n "$POOL" ]; then
+if [ "$POOL" = sublet ] || [ "$POOL" = stock ]; then
+  SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --sublet | tail -1)
+elif [ -n "$POOL" ]; then
   SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --pool | tail -1)
 else
   SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" | tail -1)
@@ -201,7 +218,7 @@ toolchain_id() {
     xargs stat -L -c '%n %s %Y'
 }
 TOOLCHAIN_ID=$(toolchain_id | sha256sum | cut -c1-12)
-CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" "$TOOLCHAIN_ID" | sha256sum | cut -c1-12)
+CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${FFEXTRA[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" "$TOOLCHAIN_ID" | sha256sum | cut -c1-12)
 # The enabled libraries, read from configure's own config.mak, in static link order (avutil
 # last, since everything depends on it). avfilter and swresample appear only when configure
 # turned them on, so the default minimal build is unchanged.
@@ -218,7 +235,7 @@ if [ ! -f "$XB/libavformat/libavformat.a" ] || [ "$(cat "$XB/.config-key" 2>/dev
   rm -rf "$XB"; mkdir -p "$XB"
   ( cd "$XB" && "$SRC/configure" --enable-cross-compile --cc="$CLANG" --ld="$LD_LLD" \
       --arch=riscv64 --target-os=none \
-      --extra-cflags="${FLAGS[*]}" --extra-ldflags="-e main --no-warn-mismatch" \
+      --extra-cflags="${FLAGS[*]}${FFEXTRA[*]:+ ${FFEXTRA[*]}}" --extra-ldflags="-e main --no-warn-mismatch" \
       --extra-libs="$ARCHIVE $CFGSTUBS" "${CONFIGURE_OPTS[@]}" > configure.log 2>&1 ) \
     || { echo "FFmpeg configure failed; see $XB/configure.log and $XB/ffbuild/config.log" >&2; exit 1; }
   # av_malloc -> plain malloc: with asm off ALIGN is 16 (libavutil/mem.c:65), exactly
@@ -244,9 +261,15 @@ fi
 FFLIBS=(); for _d in $(ff_libdirs); do FFLIBS+=("$XB/$_d/$_d.a"); done
 for _l in "${FFLIBS[@]}"; do [ -f "$_l" ] || { echo "configure enabled $(basename "$_l") but it was not built" >&2; exit 1; }; done
 
+# The Sublet port's level below: FFmpeg's pools take their blocks from the Sublet heap.
+if [ "$POOL" = sublet ]; then
+  "$CLANG" "${FLAGS[@]}" -I"$XB" -I"$SRC" -I"$REPO_ROOT/capstone/sublet" \
+    -c "$APP_DIR/src/capstone-domain/ffsublet.c" -o "$RT/ffsublet.o"
+  RUNTIME+=("$RT/ffsublet.o")
+fi
 # The pool arms' payload allocator and Capstone backend: the buffer-pool port's files,
 # unmodified. Compiled after FFmpeg, because libavutil/mem.h needs the generated avconfig.h.
-if [ -n "$POOL" ]; then
+if [ "$POOL" = 0 ] || [ "$POOL" = 2 ]; then
   BPS="$APP_DIR/../buffer-pool/src"
   POOLINC=(-I"$REPO_ROOT/capstone/runtime/include" -I"$BPS/shared" -I"$BPS/capstone-domain"
            -I"$BPS/allocators/sublet" -I"$XB" -I"$SRC")
@@ -326,7 +349,7 @@ echo "control image $OUT/ffapp_m5flip.dom decodes ${INPUT%.mkv}.flip.mkv"
 # One image per fixture: a fault ends the emulator, so a faulting fixture reports nothing else.
 # Same runtime, allocator and libraries as the milestone images above; only the entry differs.
 FIXTURES="1 2 3 4 5 6 7 8 9 10 16"   # 16 on the heap arms: the stock control for the pool arms
-[ -n "$POOL" ] && FIXTURES="$(seq -s ' ' 1 17)"                 # the pool fixtures
+[ -n "$POOL" ] && FIXTURES="$(seq -s ' ' 1 17) 20 21"          # the pool fixtures, and the pool-end counts
 for fx in $FIXTURES; do
   "$CLANG" "${APPF[@]}" -DFFAPP_FIXTURE="$fx" \
     -c "$APP_DIR/src/capstone-domain/ffapp_safety.c" -o "$OUT/ffapp_safety_$fx.o"
