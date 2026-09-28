@@ -83,7 +83,32 @@ property of the image rather than of the instrument.
 
 A static scan is necessary, not sufficient: the scanner's own header says taggedness is dynamic.
 
-## Cell 5 is blocked, and it is not a codegen regression
+## Cell 5
+
+Built on the ESTABLISHED recipe, not a new geometry: SPEEDTEST1_HEAP=2097152 with
+SPEEDTEST1_STACK=385024, which is what lets it load under the module's one-region rule
+(measurements doc :1701). The stack asymmetry against cell 6 is ALREADY RECORDED at :4758 --
+385,024 declared for the memsys5 arm against cell 6's 1,048,576 -- so it is not introduced here.
+
+    sha256      ff577d44e3ee8dd3b356a0e9ce8ffa89da11a1884ae6e9df8b7095e4bb5b5891  (1,684,216 bytes)
+    entry VA    0x10000
+    emulator    SPEEDTEST1-CYCLES 678681249 HIGHWATER n/a HEAP 2097152
+    lookaside   Successful lookasides 25010   (from the run, not the build flag)
+    no sublet line, as it must be: this arm is memsys5, not Sublet
+    budget      declares dom_data >= 2,701,968 (carve 2,316,944 + stack 385,024) -- FITS
+                (the doc records 2,701,904 for the archived build; +64 bytes of carve here)
+
+PREDICTIONS for cell 5 on the board: lookaside ON with a non-zero "Successful lookasides", and NO
+sublet counter line at all. A sublet line appearing in this arm would mean the wrong image booted.
+
+ONE TREE, stated precisely because the two cells report different build commits. Cell 6 was built
+from 08ff5d0702c3 and cell 5 from fd6da67aea96. The ONLY difference between those trees is
+capstone/ports/sqlite/fetch-sqlite-src.sh -- zero files under llvm/ or clang/, and no other file
+under capstone/. That script only chooses which SQLite checkin to download, and both cells consumed
+the SAME extracted tree (manifest d4c0e51e4aeb...), so the compiled inputs are identical rather than
+merely equivalent. fd6da67aea96's content is also identical to dev df3a8e57df42, where it landed.
+
+## Historical note: why cell 5 first failed to build
 
 cell 5 does not build on current dev. The domain budget refuses it:
 
