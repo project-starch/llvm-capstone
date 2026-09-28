@@ -33,7 +33,11 @@
 ; @carrier_mask_identity is left to the null gate and keeps its inttoptr, which
 ; is the shape that broke musl's atexit() in QEMU before it was pinned here; drop
 ; the dominating-dereference rule in holdsCapability() -> @heap_deref keeps its
-; inttoptr.
+; inttoptr; let two different sources agree in joinInputs() -> @select_two_sources
+; is rewritten on whichever arm came last; drop the alloca, the extern-weak test
+; or the stack-slot look-through in holdsCapability() -> @alloca_align,
+; @weak_global_align and @slot_holds_global respectively. All nine were run
+; against the build this branch was gated with.
 
 ; OFF-LABEL: @align_up(
 ; OFF: inttoptr
@@ -497,4 +501,74 @@ define ptr addrspace(200) @heap_no_deref() {
   %c = and i64 %a, -16
   %m = inttoptr i64 %c to ptr addrspace(200)
   ret ptr addrspace(200) %m
+}
+
+; Two pointers meeting in a select have no single owner either -- @two_sources
+; through a different operator.
+; IR-LABEL: @select_two_sources(
+; IR:       inttoptr
+define ptr addrspace(200) @select_two_sources(ptr addrspace(200) nonnull %p, ptr addrspace(200) nonnull %q, i1 %c) {
+  %a = ptrtoint ptr addrspace(200) %p to i64
+  %b = ptrtoint ptr addrspace(200) %q to i64
+  %v = select i1 %c, i64 %a, i64 %b
+  %r = inttoptr i64 %v to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}
+
+; A local object is a capability by construction, so its address is moved with no
+; further proof -- the commonest source there is, and the one generic LLVM
+; declines to vouch for outside address space 0.
+; IR-LABEL: @alloca_align(
+; IR-NOT:   inttoptr
+; IR:       getelementptr i8, ptr addrspace(200) %b,
+define ptr addrspace(200) @alloca_align() {
+  %b = alloca [64 x i8], align 8, addrspace(200)
+  %i = ptrtoint ptr addrspace(200) %b to i64
+  %a = add i64 %i, 15
+  %m = and i64 %a, -16
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}
+
+; At -O0 a local pointer lives in a slot and every use is a fresh load, which no
+; query about an SSA value can answer. This slot holds only the global's address,
+; so what the load returns is a capability. Without the look-through the whole
+; -O0 arm is declined, which is the level this pass exists for.
+; IR-LABEL: @slot_holds_global(
+; IR-NOT:   inttoptr
+; IR:       getelementptr i8, ptr addrspace(200) %l,
+define ptr addrspace(200) @slot_holds_global() #0 {
+  %s = alloca ptr addrspace(200), align 16, addrspace(200)
+  store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) @g, i64 3), ptr addrspace(200) %s
+  %l = load ptr addrspace(200), ptr addrspace(200) %s
+  %i = ptrtoint ptr addrspace(200) %l to i64
+  %a = add i64 %i, 63
+  %m = and i64 %a, -64
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}
+
+; The same slot holding a pointer nothing vouches for is not enough.
+; IR-LABEL: @slot_holds_argument(
+; IR:       inttoptr
+define ptr addrspace(200) @slot_holds_argument(ptr addrspace(200) %p) #0 {
+  %s = alloca ptr addrspace(200), align 16, addrspace(200)
+  store ptr addrspace(200) %p, ptr addrspace(200) %s
+  %l = load ptr addrspace(200), ptr addrspace(200) %s
+  %i = ptrtoint ptr addrspace(200) %l to i64
+  %a = add i64 %i, 63
+  %m = and i64 %a, -64
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}
+
+; An extern-weak symbol's address may be null: not a capability by construction,
+; and not moved.
+@w = extern_weak addrspace(200) global i8
+; IR-LABEL: @weak_global_align(
+; IR:       inttoptr
+define ptr addrspace(200) @weak_global_align() {
+  %m = and i64 add (i64 ptrtoint (ptr addrspace(200) @w to i64), i64 63), -64
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  ret ptr addrspace(200) %r
 }
