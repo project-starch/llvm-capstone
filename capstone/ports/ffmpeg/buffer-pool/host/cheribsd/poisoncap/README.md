@@ -138,12 +138,26 @@ The adapter invokes the poison-aware kernel revoker itself. This isolates inner
 pool lifetime handling; it is not a whole-process temporal-safety configuration.
 Initialisation-safety enforcement is outside this experiment's scope.
 
+These switches describe the historical standalone extraction tests. The
+complete-application published-policy campaign keeps outer libc revocation
+enabled in both arms and uses the same corrected libc for both. Its
+[policy audit](../../../../../../experiments/study/poisoncap-policy.md)
+documents the required ABI fix and the distinct inner quarantine policy.
+
 ## Lifetime policy and additional storage
 
-On the last return of a lease, the adapter snapshots the rounded payload and
-poisons it. Before handing that block out again, it completes synchronous
-revocation, detoxes the block and restores its contents. Other already-poisoned
-blocks can share that sweep. Failed revocation stops execution before reuse.
+The standalone extraction retains its legacy sweep-before-reissue path.
+Complete-application builds define `FFPOOL_APP_QUARANTINE` and transfer the
+published SQLite policy: a 16 MiB held-size gate, a 1/4 quarantine fraction,
+and a 4,096-entry capacity trigger with the disclosed full-queue correction.
+Application pool requests skip quarantined entries; they do not force early
+revocation. Necessary destructor access uses a separate trusted teardown hook
+whose forced sweeps are reported separately. The shared lease observer excludes
+these trusted teardown accesses from application issue/release counts.
+
+On the last return of a lease, the adapter snapshots RefStruct payloads and
+poisons the returned payload. After a qualifying sweep, it detoxes the block
+and restores its contents before reissue. Failed revocation stops execution before reuse.
 Fresh application pointers are bounded and lose the poison/VM authority bits;
 the trusted manager retains wider backing authority obtained from `mmap()`.
 The direct-link [example](../../../examples/pool.c) shows this setup.
@@ -152,19 +166,23 @@ Snapshots preserve FFmpeg pool semantics: RefStruct's initialisation callback
 runs once, and fields can survive across lease returns. Poisoning directly
 overwrites those fields. A capability-preserving copy outside the poisoned
 storage preserves persistent state while still allowing the revoker to clear
-expired capabilities within it. Snapshots are retained per backing block for
-this process-lifetime extraction, including currently unused backing records.
-This implementation snapshots both pool types for simplicity. A policy that
-preserves only the state required by each pool may reduce this cost; these
-bytes are not a lower bound on PoisonCap's overhead.
+expired capabilities within it. Snapshots are retained while the backing
+entry exists and freed with that entry. The current application adapter
+snapshots only RefStruct state; AVBufferPool has no contents guarantee across
+leases. The original pilot copied both pool types. Neither version's snapshot
+bytes are a lower bound on PoisonCap's overhead.
 
-`FF2_POISONCAP` reports sweeps, bytes poisoned/cleared, retained snapshot bytes
-and copied bytes. These are adapter counters, not total process or kernel
+`FF2_POISONCAP` reports sweeps, bytes poisoned/cleared, retained snapshot bytes,
+copied bytes, held/quarantined spans and sweep causes. Policy 1 denotes the
+application quarantine transfer; policy 0 retains the legacy extraction.
+These are adapter counters, not total process or kernel
 memory. The binary report's four extension fields hold sweep count, poison
 bytes, snapshot bytes and pointer size. Static bookkeeping and system-allocator
 overhead need separate accounting in a memory comparison.
 
-This first policy deliberately sweeps before immediate reuse. It is not the
-paper's tuned quarantine policy and does not establish a performance ranking.
+The first measured extraction policy deliberately swept before immediate reuse. It is not the
+paper's published quarantine policy and does not establish a performance ranking.
+The [policy audit](../../../../../../experiments/study/poisoncap-policy.md)
+records the actual artifact thresholds and the replacement measurement contract.
 QEMU results support functional behaviour and operation counts, not hardware
 cache, latency, bandwidth or energy conclusions.
