@@ -40,16 +40,24 @@ grep -aq 'BASELINE-WARM CYCLES 240654449' ${QEMU_LOG_BASELINE:?} || fail "the -O
 LPC=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}/lpc
 [ "$(sha256sum $LPC|cut -c1-16)" = 3b93a2b6e2adfa36 ] || fail "lpc on the overlay is not 3b93a2b6e2adfa36"
 [ -f "$B/overlay/test-domains/k800.dom" ] || fail "k800.dom missing from the overlay"
+# K800_IMG/K800_HASH (optional): stage a k800 control relinked off 0x10000. DOMAIN_BASE_VA defaults to
+# 0x10000, so a cell built without it enters where the stock control does and the entry-VA check below
+# refuses the boot. Relink the control, never the cell: the cell is the artifact under measurement.
+if [ -n "${K800_IMG:-}" ]; then
+  [ "$(sha256sum "$K800_IMG"|cut -c1-16)" = "${K800_HASH:?set K800_HASH=<sha256/16> with K800_IMG}" ] || fail "relinked k800 is not $K800_HASH"
+  export K800_HASH
+fi
 say "pieces: cell 5 variant $C5_TAG $C5_HASH (pass record present), readback host 2af56927aaf907e9, native -O2 b36eb3814c3cefce, lpc 3b93a2b6e2adfa36; QEMU runs on record ($C5_QEMU / 240,654,449)"
 T=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}; TT=${CAPSTONE_BR_TARGET:-$B/build-fpga/target/test-domains}; mkdir -p "$T" "$TT"
-for s in speedtest1.dom sqlite_host.user speedtest1_baseline; do cp -f "$T/$s" $OUT/$s.before 2>/dev/null; done
+for s in speedtest1.dom sqlite_host.user speedtest1_baseline k800.dom; do cp -f "$T/$s" $OUT/$s.before 2>/dev/null; done
 cp -f $IMG "$T/speedtest1.dom" || fail "stage the cell 5 image"
 cp -f $RRH "$T/sqlite_host.user" || fail "stage host"
 cp -f $NAT "$T/speedtest1_baseline" && chmod 0755 "$T/speedtest1_baseline" || fail "stage native -O2"
+if [ -n "${K800_IMG:-}" ]; then cp -f "$K800_IMG" "$T/k800.dom" || fail "stage relinked k800"; fi
 STASH=$OUT/retired; mkdir -p $STASH; RESTORED=0
 RETIRE="rtpc bigregion.user trapctl.dom fillsd.dom fillwarm.dom fillcost.dom fillnop.dom speedtest1_seven.dom sqlite_host_rr.user"
 restore(){ [ "$RESTORED" = 1 ] && return 0; RESTORED=1
-  for s in speedtest1.dom sqlite_host.user speedtest1_baseline; do [ -f $OUT/$s.before ] && { cp -f $OUT/$s.before "$T/$s"; cp -f $OUT/$s.before "$TT/$s"; }; done
+  for s in speedtest1.dom sqlite_host.user speedtest1_baseline k800.dom; do [ -f $OUT/$s.before ] && { cp -f $OUT/$s.before "$T/$s"; cp -f $OUT/$s.before "$TT/$s"; }; done
   for f in $RETIRE; do [ -f "$STASH/$f" ] && { cp -f "$STASH/$f" "$T/$f"; cp -f "$STASH/$f" "$TT/$f"; }; done
   bake restore && say "rebaked with the retired set back" || say "WARN: restore rebake failed -- the next boot MUST rebake"; }
 trap restore EXIT
@@ -80,6 +88,7 @@ import sys,hashlib,os
 L=sys.argv[1]
 import os
 want={'speedtest1.dom':os.environ['C5_HASH'],'lpc':'3b93a2b6e2adfa36','sqlite_host.user':'2af56927aaf907e9','speedtest1_baseline':'b36eb3814c3cefce'}
+if os.environ.get('K800_HASH'): want['k800.dom']=os.environ['K800_HASH']
 bad=0
 for d in ('overlay/test-domains','build/target/test-domains'):
     for f,exp in want.items():

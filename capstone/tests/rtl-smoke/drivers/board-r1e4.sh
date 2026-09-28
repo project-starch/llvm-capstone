@@ -46,15 +46,23 @@ RRH=${R1_HOST:?set R1_HOST=<path to sqlite_host_rr.user, the readback host>}
 LPC=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}/lpc
 [ "$(sha256sum $LPC|cut -c1-16)" = 3b93a2b6e2adfa36 ] || fail "lpc on the overlay is not 3b93a2b6e2adfa36"
 [ -f "$B/overlay/test-domains/k800.dom" ] || fail "k800.dom missing from the overlay"
+# K800_IMG/K800_HASH (optional): stage a k800 control relinked off 0x10000 in place of the stock one.
+# The harness sits at 0x410000 and collides with neither, so here the knob only gives a relinked control
+# a silicon record before a boot whose frozen image enters at 0x10000 has to depend on it.
+if [ -n "${K800_IMG:-}" ]; then
+  [ "$(sha256sum "$K800_IMG"|cut -c1-16)" = "${K800_HASH:?set K800_HASH=<sha256/16> with K800_IMG}" ] || fail "relinked k800 is not $K800_HASH"
+  export K800_HASH
+fi
 say "pieces: R1 harness $R1_HASH (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36"
 T=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}; TT=${CAPSTONE_BR_TARGET:-$B/build-fpga/target/test-domains}; mkdir -p "$T" "$TT"
-for s in sqlite_host_rr.user; do cp -f "$T/$s" $OUT/$s.before 2>/dev/null; done
+for s in sqlite_host_rr.user k800.dom; do cp -f "$T/$s" $OUT/$s.before 2>/dev/null; done
 cp -f $IMG "$T/r1_slots_pools.dom" || fail "stage the R1 harness"
 cp -f $RRH "$T/sqlite_host_rr.user" || fail "stage rr host"
+if [ -n "${K800_IMG:-}" ]; then cp -f "$K800_IMG" "$T/k800.dom" || fail "stage relinked k800"; fi
 STASH=$OUT/retired; mkdir -p $STASH; RESTORED=0
 RETIRE="rtpc bigregion.user trapctl.dom fillsd.dom fillwarm.dom fillcost.dom fillnop.dom speedtest1_seven.dom speedtest1_baseline speedtest1.dom sqlite_host.user"
 restore(){ [ "$RESTORED" = 1 ] && return 0; RESTORED=1
-  for s in sqlite_host_rr.user; do [ -f $OUT/$s.before ] && { cp -f $OUT/$s.before "$T/$s"; cp -f $OUT/$s.before "$TT/$s"; }; done; rm -f "$T/r1_slots_pools.dom" "$TT/r1_slots_pools.dom"
+  for s in sqlite_host_rr.user k800.dom; do [ -f $OUT/$s.before ] && { cp -f $OUT/$s.before "$T/$s"; cp -f $OUT/$s.before "$TT/$s"; }; done; rm -f "$T/r1_slots_pools.dom" "$TT/r1_slots_pools.dom"
   for f in $RETIRE; do [ -f "$STASH/$f" ] && { cp -f "$STASH/$f" "$T/$f"; cp -f "$STASH/$f" "$TT/$f"; }; done
   bake restore && say "rebaked with the retired set back" || say "WARN: restore rebake failed -- the next boot MUST rebake"; }
 trap restore EXIT
@@ -85,6 +93,7 @@ import sys,hashlib,os
 L=sys.argv[1]
 import os
 want={'r1_slots_pools.dom':os.environ['R1_HASH'],'lpc':'3b93a2b6e2adfa36','sqlite_host_rr.user':'2c9e82d101b48160'}
+if os.environ.get('K800_HASH'): want['k800.dom']=os.environ['K800_HASH']
 bad=0
 for d in ('overlay/test-domains','build/target/test-domains'):
     for f,exp in want.items():
