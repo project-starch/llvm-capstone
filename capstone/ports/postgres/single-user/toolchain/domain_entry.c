@@ -23,8 +23,8 @@
 #include <string.h>
 #ifdef PG_REUSE_GAP_OBSERVER
 /* Configure conftests link this entry without the context-pool object. The
- * complete backend's strong definition replaces this weak empty hook. */
-__attribute__((weak)) void pg_reuse_gap_report(void) {}
+ * undefined weak reference is null there; the complete backend provides it. */
+extern void pg_reuse_gap_report(void) __attribute__((weak));
 #endif
 
 #ifndef PGSU_ARGS_FILE
@@ -75,7 +75,7 @@ static int read_lines(const char *path, char lines[][LINE_MAX_BYTES], char **out
 int capstone_main(void)
 {
 #ifdef PG_REUSE_GAP_OBSERVER
-	if (atexit(pg_reuse_gap_report) != 0)
+	if (pg_reuse_gap_report && atexit(pg_reuse_gap_report) != 0)
 		return 1;
 #endif
 	static char argl[LINES_MAX][LINE_MAX_BYTES];
@@ -101,7 +101,8 @@ int capstone_main(void)
 		fprintf(stderr, "PGSU-WARN chdir(%s) failed\n", PGSU_START_DIR);
 	int status = main(argc, argv);
 #ifdef PG_REUSE_GAP_OBSERVER
-	pg_reuse_gap_report();
+	if (pg_reuse_gap_report)
+		pg_reuse_gap_report();
 #endif
 	return status;
 }
