@@ -124,3 +124,30 @@ earlier result can depend on the old behaviour, because that behaviour was a hal
 **Predictions unchanged.** Fixtures 22 and 23 are re-run N = 3 per arm on images rebuilt with
 the fix. The matched pair for the fix is these six boots against the rerun: the same images, one
 heap line apart.
+
+## Addendum 3, 2026-09-29: the second run stopped at frame 1's writable copy, and why
+
+The images rebuilt with the heap fix (`4cf916b3c4f1`) passed configure, and fixture 22 then faulted
+**before its touch** on poolsublet. Frame 1 had been printed, and the fault was in `memcpy`'s store:
+`Cap mem access requires capability ... value = 10240e000, value_hi = 0`. It was called from
+libavutil's `image_copy_plane`, copying out of frame 1's live plane.
+
+- **This is the as-shipped code working as intended.** The pad asks for writable frames, so
+  libavfilter copies frame 1 into a new frame from its own video frame pool.
+- **That frame's plane pointer was a plain integer.** `value_hi = 0` rules out a stripped
+  capability. `libavfilter/framepool.c:155` aligns each plane as
+  `(uint8_t *)FFALIGN((uintptr_t)buf->data, align)`, which rebuilds the pointer from an integer.
+- **The compiler flags this line.** It is in the build's list of `-Wcapstone-pointer-roundtrip`
+  sites, together with the same pattern at `:194` and `:201` on the audio path. No earlier run
+  reached libavfilter's video frame pool.
+- **Patch 0002 already fixes the same pattern in `frame.c`**, by aligning with an added offset
+  (`cap_align_ptr`).
+
+The poolstock boot of that run printed no section: a stall, re-run in the batch below.
+
+**App patch 0005 applies 0002's fix to `framepool.c`'s three sites.** It is semantics-preserving on
+any target, like 0002. The check that it takes: those three sites must leave the compiler's
+round-trip list. 0005 changes every FFmpeg build of the app port, as 0004 did, and the committed
+Track A and af_join results predate it. Neither ran libavfilter's frame pool.
+
+**Predictions unchanged.** 22 and 23 are re-run N = 3 per arm on images rebuilt with 0005.
