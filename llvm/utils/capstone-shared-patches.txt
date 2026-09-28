@@ -23,7 +23,7 @@ clang/include/clang/Basic/capstone_vector_common.td | +781 -0 | //==------ capst
 clang/include/clang/Driver/Options.td | +9 -0 | defm capstone_subobject_bounds : BoolFOption<"capstone-subobject-bounds",
 clang/include/clang/Sema/DeclSpec.h | +1 -0 | static const TST TST_intcap = clang::TST_intcap;
 clang/include/clang/Sema/Sema.h | +7 -0 | class SemaCapstone;
-clang/include/clang/Sema/SemaCapstone.h | +43 -0 | //===----- SemaCapstone.h ---- Capstone target-specific routines ---*- C++ -*-===//
+clang/include/clang/Sema/SemaCapstone.h | +44 -0 | //===----- SemaCapstone.h ---- Capstone target-specific routines ---*- C++ -*-===//
 clang/include/clang/Serialization/ASTBitCodes.h | +7 -1 | /// The '__uintcap_t' type (Capstone).
 clang/lib/AST/ASTContext.cpp | +35 -0 | // Capstone: capability-carrying integers.
 clang/lib/AST/ExprConstant.cpp | +32 -12 | // The pointer TYPE's size is the representation width, and on a capability
@@ -61,7 +61,7 @@ clang/lib/Parse/ParseTentative.cpp | +2 -0 | case tok::kw___intcap:
 clang/lib/Sema/CMakeLists.txt | +1 -0 | SemaCapstone.cpp
 clang/lib/Sema/DeclSpec.cpp | +4 -1 | case TST_intcap:
 clang/lib/Sema/Sema.cpp | +13 -0 | #include "clang/Sema/SemaCapstone.h"
-clang/lib/Sema/SemaCapstone.cpp | +118 -0 | //===------ SemaCapstone.cpp ---- Capstone target-specific routines -------===//
+clang/lib/Sema/SemaCapstone.cpp | +149 -0 | //===------ SemaCapstone.cpp ---- Capstone target-specific routines -------===//
 clang/lib/Sema/SemaCast.cpp | +6 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Sema/SemaChecking.cpp | +138 -0 | #include "clang/Sema/SemaCapstone.h"
 clang/lib/Sema/SemaExpr.cpp | +92 -0 | // Capstone: an __intcap index is its address, as in CHERI C. The element is
