@@ -250,11 +250,13 @@ import json,sys; u=json.load(open(sys.argv[1])); print(u["url"], u["sha256"], u[
     done
     "${CAPSTONE_LLVM_AR:-$CAPSTONE_LLVM_BIN/llvm-ar}" rcs "$VSP/lib/libvidstab.a.part" "$VSP"/obj/*.o
     cp "$VSP"/src/src/*.h "$VSP/include/vid.stab/"
-    printf '%s\n' "prefix=$VSP" 'libdir=${prefix}/lib' 'includedir=${prefix}/include' '' \
-      'Name: vidstab' 'Description: vid.stab, built for the capstone domain' "Version: $VSVER" \
-      'Libs: -L${libdir} -lvidstab' 'Cflags:' > "$VSP/lib/pkgconfig/vidstab.pc"
     mv "$VSP/lib/libvidstab.a.part" "$VSP/lib/libvidstab.a"
   fi
+  # Written every time, not cached with the library: it is configure's input, and a stale one
+  # survived a change to it once (the first had Cflags -I, which ld.lld refuses).
+  printf '%s\n' "prefix=$VSP" 'libdir=${prefix}/lib' 'includedir=${prefix}/include' '' \
+    'Name: vidstab' 'Description: vid.stab, built for the capstone domain' "Version: $VSVER" \
+    'Libs: -L${libdir} -lvidstab' 'Cflags:' > "$VSP/lib/pkgconfig/vidstab.pc"
   VSLIB=("$VSP/lib/libvidstab.a"); FFEXTRA+=(-I"$VSP/include")
   CFGENV=(env PKG_CONFIG_LIBDIR="$VSP/lib/pkgconfig" PKG_CONFIG_PATH=) ;;
 esac
