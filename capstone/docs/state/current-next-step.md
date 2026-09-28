@@ -1,3 +1,22 @@
+Next application (2026-09-28): five complete four-arm inner-reuse comparisons
+are available in the [updated first figure](../../experiments/study/results/reuse-five-applications-20260928/README.md).
+CPython's VM-map panic and per-free sweep bottleneck are resolved for the
+qualified JSON/GC workload; its six new CheriBSD processes pass with outer
+revocation enabled. Preserve the explicit failure on unresolved VM probes,
+matched metadata, transferred thresholds, final drains and archived identities.
+Broader swap-pressure/concurrent-VM qualification remains a separate kernel task.
+
+Perl now has a reproducible CheriBSD 5.36.3 interpreter and a native-matched
+17-section smoke under both libc policy switches. Next implement the inner
+SV-head/body lifetime adapters for the complete Capstone and PoisonCap
+interpreters, plus the common observed-reuse histogram. The existing Capstone
+Sublet switch covers outer malloc only. Select explicit pinned `Porting/bench.pl`
+cases, qualify their outputs, then collect three processes in all four arms.
+Do not add Perl to the reuse violin until those gates pass. Keep this study off
+a PR. Equal-scope total-memory ledgers and recognized broader workloads remain
+later milestones; the present CPython and PostgreSQL inputs are qualification
+workloads. Earlier records below describe the sequence of resolved blockers.
+
 PostgreSQL reuse follow-up (2026-09-28): [four-arm qualification](../../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
 now validates 12/12 complete SQL processes and the
 [first-plot extension](../../experiments/study/results/reuse-four-applications-20260928/README.md)

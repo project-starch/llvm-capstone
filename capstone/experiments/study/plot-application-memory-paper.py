@@ -943,9 +943,11 @@ def reuse_distribution_plot(cells, keys, labels, out):
         spine.set_visible(False)
     target = out / 'by-metric/00-reuse-distributions'
     target.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(target.with_suffix('.pdf'), metadata={'CreationDate': None, 'ModDate': None})
-    fig.savefig(target.with_suffix('.png'), dpi=240)
-    fig.savefig(out / 'reuse-distributions.pdf', metadata={'CreationDate': None, 'ModDate': None})
+    # Include the full rotated labels as the application set grows.
+    export = dict(bbox_inches='tight', pad_inches=.07)
+    fig.savefig(target.with_suffix('.pdf'), metadata={'CreationDate': None, 'ModDate': None}, **export)
+    fig.savefig(target.with_suffix('.png'), dpi=240, **export)
+    fig.savefig(out / 'reuse-distributions.pdf', metadata={'CreationDate': None, 'ModDate': None}, **export)
     plt.close(fig)
     write_csv(out / 'reuse-distributions.csv', violin_rows)
 

@@ -2,6 +2,35 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-28 — CPython four-arm reuse and CheriBSD Perl bootstrap
+
+The [CPython archive](../../experiments/study/results/cpython-reuse-four-arm-20260928/README.md)
+validates 12/12 complete-interpreter JSON/GC processes, three per arm: six new
+CheriBSD runs and six archived Capstone runs. Both new CheriBSD modes enable
+outer libc revocation and use one fresh `-O1` binary and repaired kernel.
+A VM-object probe avoids recursive user faults under the revoker's VM-map lock;
+unsupported probes fail explicitly. The resident/PROT_NONE/zero-fill regression
+passes. General swap-pressure and concurrent-VM qualification remain outstanding.
+
+Deferred free-list publication retains pymalloc occupancy until revocation
+completes. The published 4,096-entry and 16 MiB/quarter thresholds are transferred
+without allocation-triggered sweeps. Every protected process records 18 capacity
+drains and one teardown drain, with an empty final queue. Sublet and its control
+have median observed reuse gaps [2,3]; PoisonCap has [4096,8191] versus its own
+control's [2,3]. Reuse shares are 63.48% in the Capstone pair and 55.77% versus
+65.13% in the CheriBSD pair. These are successful-handout, observed-reuse metrics,
+including startup/shutdown, not physical working-set or total-memory results.
+The [first figure](../../experiments/study/results/reuse-five-applications-20260928/README.md)
+now contains five applications and seven workloads.
+
+The [Perl CheriBSD recipe](../../ports/perl/cheribsd/README.md) freshly builds
+5.36.3 purecap with the existing seven interpreter patches and an explicit
+`d_nanosleep` configure answer. Its 17-section smoke matches native output under
+both libc policy switches. This is interpreter qualification only: SV-head/body
+lifetime adapters and the inner reuse observer are missing on both comparison
+sides. The outer Capstone Sublet malloc switch does not fill that gap. Keep the
+study off a PR; complete Perl's inner boundary before adding a sixth application.
+
 ## 2026-09-28 — PostgreSQL four-arm inner reuse
 
 The [four-arm archive](../../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)

@@ -1,14 +1,14 @@
 # Capstone project documentation
 
-Inner-reuse expansion: [CPython](../experiments/study/results/cpython-reuse-three-arm-20260928/README.md)
-now has three qualified complete-interpreter arms and
-[PostgreSQL](../experiments/study/results/postgres-reuse-spatial-20260928/README.md)
-has a qualified CheriBSD spatial control plus a
-[Capstone+Sublet arm](../experiments/study/results/postgres-reuse-sublet-20260928/README.md)
-and an [original-layout Capstone control](../experiments/study/results/postgres-reuse-capstone-spatial-20260928/README.md).
-The common runners validate native/application oracles and inner histograms.
-Neither application has a four-arm reuse figure yet; Perl still lacks the
-matched CheriBSD inner allocator port.
+Inner-reuse expansion: [CPython](../experiments/study/results/cpython-reuse-four-arm-20260928/README.md)
+and [PostgreSQL](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
+now each validate 12/12 complete processes across four arms. The
+[first reuse figure](../experiments/study/results/reuse-five-applications-20260928/README.md)
+contains SQLite, mruby, FFmpeg, PostgreSQL and CPython. CPython required a
+VM-object poison-probe repair and deferred pymalloc publication at the
+published quarantine thresholds. The [Perl CheriBSD recipe](../ports/perl/cheribsd/README.md)
+now builds 5.36.3 and passes the 17-section smoke with both libc policy switches;
+its inner SV adapters and four-arm reuse measurements remain to be implemented.
 
 Published-threshold memory comparison: the
 [fresh mruby/FFmpeg campaign](../experiments/study/results/published-policy-20260928/README.md)
@@ -21,11 +21,11 @@ Capstone controls complete the 60-process three-application figure set.
 The wider six-application study remains unfinished.
 
 PostgreSQL complete-backend memory work: the
-[17.5 single-user port](../ports/postgres/single-user/README.md) has a
-native-matched 22-row SQL qualification in Capstone spatial, Capstone+Sublet,
-CheriBSD spatial and the PoisonCap mode-0 control. The protected PoisonCap
-mode has passed a smaller `SELECT 1` qualification; the full four-arm
-application result and memory plots are still pending.
+[17.5 single-user port](../ports/postgres/single-user/README.md) now completes
+the same native-matched SQL qualification and inner reuse checks in all four
+arms. Its metadata-capacity and queue-policy repair is documented in the
+[four-arm campaign](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md).
+Standard pgbench workloads and total-memory ledgers remain later work.
 
 Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
