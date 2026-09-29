@@ -1,7 +1,7 @@
 #ifndef CAPSTONE_TESTS_RUNTIME_QEMU_SQLITE_BORROW_REVOKE_PROBE_H
 #define CAPSTONE_TESTS_RUNTIME_QEMU_SQLITE_BORROW_REVOKE_PROBE_H
 
-/* Stage-2 "after" for cve-repros/row3_diesel_colname_cached (diesel
+/* Stage-2 "after" for capi-repros/row3_diesel_colname_cached (diesel
  * RUSTSEC-2021-0037): a SQLite column pointer cached across sqlite3_step,
  * dereferenced after the row it belonged to has advanced -- a use-after-free.
  *

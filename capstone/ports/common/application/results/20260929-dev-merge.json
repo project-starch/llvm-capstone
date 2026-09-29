@@ -1,0 +1,1421 @@
+{
+ "schema": 1,
+ "date": "2026-09-29",
+ "scope": "dev merged into delegation-ports; the dev-side arms that the merge ports to ABI v2, re-run on QEMU (one hart). No timing or silicon claim.",
+ "source": {
+  "branch": "delegation-ports",
+  "merge_commit": "8b913afc96ad59cdb605946afc235fc385fa50be",
+  "parents": [
+   "faae8cdb7c55aaa598c344eeeaaf17902bce1c41",
+   "2909060ec313b93643c2fb805d6dfe5f1e180a39"
+  ],
+  "tree": "9c86ec28a32f4d28cbb47be3d856eb16642a040b",
+  "note": "Every image below was built from this tree, which is the merge commit's tree."
+ },
+ "compiler": {
+  "source_revision": "7d01722aab88",
+  "files": {
+   "clang": "0a0f12b14f4447928853aa88c511e11696d48b6625c2585d719ec009e26d8ac1",
+   "ld.lld": "9e5e438c585a3237675f82b95ea8568d698ae4a8b7d8faba4e591b8ec697ac11",
+   "llvm-ar": "96abda03a00e5ed6c7c497da3a99de5b1f20d20473fea2d75bd2ae9269d7e165",
+   "llvm-nm": "953e93992ceefd2d1a10d81961aff0862d258e0f76203482201d240b7f4c548c",
+   "llvm-objcopy": "ec4167603158e6aecc193859eabba61d2451a19bc9edff91d301134a15d28c57",
+   "llvm-readobj": "9676245da916f7e752e5cfabcfaaec41b069ee5282dd3be13da5e17f616b0c78",
+   "llvm-objdump": "46bb22c2be9acb9b9414dc4659e81c61c6fd1d591d0a634855151c191b1a2081",
+   "llc": "886441407a58260c93f6d3b8024eaa8a793bef770c5892df407647ae54665733",
+   "FileCheck": "2bdfed3189600f9ea0a353b2c9bc5004cc4fe4990da74c4831227b957942c547",
+   "not": "1b17d52b6771ec140bd2ef769978495cb251f5bd722c248e5b035d518238dc9b",
+   "split-file": "ec0eaf2442ec6a7f40886d846d8a92ddd065249ac804106585ccd19fe7de61a5",
+   "opt": "64fff882d3493bc76d5d08340b7b823792d19f7aefb800fee47b047759ffec80",
+   "llvm-readelf": "9676245da916f7e752e5cfabcfaaec41b069ee5282dd3be13da5e17f616b0c78",
+   "llvm-symbolizer": "43c019096472565745cdd0a39b95904e9d583203e6b9330b37b2b25b46c34e99",
+   "llvm-mc": "e5921c95a180964c9bea6083982f8ce84f43f4179b36e2fb2162263d29a22751"
+  },
+  "source_freshness": "fresh (all gate targets); primary build tools unchanged by supplemental test-tool build"
+ },
+ "platform": {
+  "memory": "8G",
+  "cma_mib": 1024,
+  "process_cache_mib": 768,
+  "environment": {
+   "CAPSTONE_GP_NONLIN": "1",
+   "CAPSTONE_REV_NODES": "262144"
+  },
+  "files_sha256": {
+   "qemu": "f9795d413ad1910a954dc918fcf469a2a13725a50d48d249dbe8a70cd741f85d",
+   "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+   "firmware": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+   "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+   "launcher": "991bc7dc5eabd3989a1f3426a3555eda1787e6ecb3a19812d525fc1661a8eabe",
+   "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168"
+  },
+  "boot": "fresh restart before the first run below"
+ },
+ "ffmpeg_pool_corpus": {
+  "runner": "bug-corpora/ffmpeg/pool-repros/runners/run-sublet-port.sh",
+  "predictions": "bug-corpora/ffmpeg/pool-repros/runners/sublet-port-expect.txt (unchanged, registered on dev)",
+  "arms": {
+   "poolstock": {
+    "verdict_lines": [
+     "fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued",
+     "fx40: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED stale pointer reads the new owner's payload",
+     "fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list",
+     "fx42: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage",
+     "fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames",
+     "fx44: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner",
+     "fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued",
+     "fx40: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED stale pointer reads the new owner's payload",
+     "fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list",
+     "fx42: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage",
+     "fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames",
+     "fx44: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner",
+     "fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued",
+     "fx40: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED stale pointer reads the new owner's payload",
+     "fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list",
+     "fx42: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage",
+     "fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames",
+     "fx44: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner"
+    ],
+    "as_predicted": 18,
+    "runs": 18,
+    "images_sha256": {
+     "ffapp_fx40.dom": "fa07d89b4cc5be6d50802fadc35aff43cdc8b456243aadc4e98b9f3d1d0bb35c",
+     "ffapp_fx41.dom": "e9460d72799e6cd2981a51474285a3391112597e5bef82dba6e328a2c6aeea7c",
+     "ffapp_fx42.dom": "2d1eb0df62e7837adf6be115cccf2329fc07fc48bdb06669f131746303035330",
+     "ffapp_fx43.dom": "a6220aaa7989f82267abb72d519a5028994295bb69c3a43dbbb0f7e82fd6634e",
+     "ffapp_fx44.dom": "7e24a6ffba390137eeffcb0a24429fcef4211d588adf0ecdebc059d741b8cf44",
+     "ffapp_fx45.dom": "b308ad7394009f31e4c4c92554fb8574d87f79c012891b8e8684a050dc5542a7"
+    },
+    "records": [
+     {
+      "run": "poolstock-r1-case0",
+      "fixture": 40,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "fa07d89b4cc5be6d50802fadc35aff43cdc8b456243aadc4e98b9f3d1d0bb35c"
+      }
+     },
+     {
+      "run": "poolstock-r1-case0",
+      "fixture": 41,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "e9460d72799e6cd2981a51474285a3391112597e5bef82dba6e328a2c6aeea7c"
+      }
+     },
+     {
+      "run": "poolstock-r1-case1",
+      "fixture": 42,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "2d1eb0df62e7837adf6be115cccf2329fc07fc48bdb06669f131746303035330"
+      }
+     },
+     {
+      "run": "poolstock-r1-case1",
+      "fixture": 43,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "a6220aaa7989f82267abb72d519a5028994295bb69c3a43dbbb0f7e82fd6634e"
+      }
+     },
+     {
+      "run": "poolstock-r1-case2",
+      "fixture": 44,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "7e24a6ffba390137eeffcb0a24429fcef4211d588adf0ecdebc059d741b8cf44"
+      }
+     },
+     {
+      "run": "poolstock-r1-case2",
+      "fixture": 45,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "b308ad7394009f31e4c4c92554fb8574d87f79c012891b8e8684a050dc5542a7"
+      }
+     },
+     {
+      "run": "poolstock-r2-case0",
+      "fixture": 40,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "fa07d89b4cc5be6d50802fadc35aff43cdc8b456243aadc4e98b9f3d1d0bb35c"
+      }
+     },
+     {
+      "run": "poolstock-r2-case0",
+      "fixture": 41,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "e9460d72799e6cd2981a51474285a3391112597e5bef82dba6e328a2c6aeea7c"
+      }
+     },
+     {
+      "run": "poolstock-r2-case1",
+      "fixture": 42,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "2d1eb0df62e7837adf6be115cccf2329fc07fc48bdb06669f131746303035330"
+      }
+     },
+     {
+      "run": "poolstock-r2-case1",
+      "fixture": 43,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "a6220aaa7989f82267abb72d519a5028994295bb69c3a43dbbb0f7e82fd6634e"
+      }
+     },
+     {
+      "run": "poolstock-r2-case2",
+      "fixture": 44,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "7e24a6ffba390137eeffcb0a24429fcef4211d588adf0ecdebc059d741b8cf44"
+      }
+     },
+     {
+      "run": "poolstock-r2-case2",
+      "fixture": 45,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "b308ad7394009f31e4c4c92554fb8574d87f79c012891b8e8684a050dc5542a7"
+      }
+     },
+     {
+      "run": "poolstock-r3-case0",
+      "fixture": 40,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "fa07d89b4cc5be6d50802fadc35aff43cdc8b456243aadc4e98b9f3d1d0bb35c"
+      }
+     },
+     {
+      "run": "poolstock-r3-case0",
+      "fixture": 41,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "e9460d72799e6cd2981a51474285a3391112597e5bef82dba6e328a2c6aeea7c"
+      }
+     },
+     {
+      "run": "poolstock-r3-case1",
+      "fixture": 42,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "2d1eb0df62e7837adf6be115cccf2329fc07fc48bdb06669f131746303035330"
+      }
+     },
+     {
+      "run": "poolstock-r3-case1",
+      "fixture": 43,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "a6220aaa7989f82267abb72d519a5028994295bb69c3a43dbbb0f7e82fd6634e"
+      }
+     },
+     {
+      "run": "poolstock-r3-case2",
+      "fixture": 44,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "7e24a6ffba390137eeffcb0a24429fcef4211d588adf0ecdebc059d741b8cf44"
+      }
+     },
+     {
+      "run": "poolstock-r3-case2",
+      "fixture": 45,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "b308ad7394009f31e4c4c92554fb8574d87f79c012891b8e8684a050dc5542a7"
+      }
+     }
+    ]
+   },
+   "poolsublet": {
+    "verdict_lines": [
+     "fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued",
+     "fx40: AS PREDICTED  predicted: FAULT 85,86,89  got: cause 24 at image 0x18624, case.c:85, value_hi 12588e00340",
+     "fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list",
+     "fx42: AS PREDICTED  predicted: FAULT 48,49,52  got: cause 24 at image 0x182ec, case.c:48, value_hi 9f888011c0",
+     "fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames",
+     "fx44: AS PREDICTED  predicted: FAULT 33  got: cause 24 at image 0x181d8, case.c:33, value_hi 12b88d00300",
+     "fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued",
+     "fx40: AS PREDICTED  predicted: FAULT 85,86,89  got: cause 24 at image 0x18624, case.c:85, value_hi 12588e00340",
+     "fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list",
+     "fx42: AS PREDICTED  predicted: FAULT 48,49,52  got: cause 24 at image 0x182ec, case.c:48, value_hi 9f888011c0",
+     "fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames",
+     "fx44: AS PREDICTED  predicted: FAULT 33  got: cause 24 at image 0x181d8, case.c:33, value_hi 12b88d00300",
+     "fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued",
+     "fx40: AS PREDICTED  predicted: FAULT 85,86,89  got: cause 24 at image 0x18624, case.c:85, value_hi 12588e00340",
+     "fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list",
+     "fx42: AS PREDICTED  predicted: FAULT 48,49,52  got: cause 24 at image 0x182ec, case.c:48, value_hi 9f888011c0",
+     "fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames",
+     "fx44: AS PREDICTED  predicted: FAULT 33  got: cause 24 at image 0x181d8, case.c:33, value_hi 12b88d00300"
+    ],
+    "as_predicted": 18,
+    "runs": 18,
+    "images_sha256": {
+     "ffapp_fx40.dom": "74aec99164704db85564107d3e435200cd3f503c736859dd50fbf719b4132be4",
+     "ffapp_fx41.dom": "0a557f7f80e45105ff72c4e48dfbecc39c185bea8b3c76b696287f77f6528e82",
+     "ffapp_fx42.dom": "e4210d8fbcd08bb41051b4768ebc33128b2ef99dadbb64d8901b8a4bc8aa1ef7",
+     "ffapp_fx43.dom": "30050f432655c82e2c8cd63f48f75829f862696d3f2baf57dd1492f784b7614c",
+     "ffapp_fx44.dom": "59f0f5e822da1adfbe81c00a69ef6233a4c53eb406f0da0523e8016bc51b6440",
+     "ffapp_fx45.dom": "16976ddcf97dd58b35fc7e49b7c33f0f804fcf35109c1d75f0be6c12f9c45573"
+    },
+    "records": [
+     {
+      "run": "poolsublet-r1-case0",
+      "fixture": 40,
+      "result": {
+       "kind": "signal",
+       "value": 11,
+       "image_sha256": "74aec99164704db85564107d3e435200cd3f503c736859dd50fbf719b4132be4",
+       "fault": {
+        "cause": 24,
+        "pc": "0xc0208624"
+       }
+      }
+     },
+     {
+      "run": "poolsublet-r1-case0",
+      "fixture": 41,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "0a557f7f80e45105ff72c4e48dfbecc39c185bea8b3c76b696287f77f6528e82"
+      }
+     },
+     {
+      "run": "poolsublet-r1-case1",
+      "fixture": 42,
+      "result": {
+       "kind": "signal",
+       "value": 11,
+       "image_sha256": "e4210d8fbcd08bb41051b4768ebc33128b2ef99dadbb64d8901b8a4bc8aa1ef7",
+       "fault": {
+        "cause": 24,
+        "pc": "0xc02082ec"
+       }
+      }
+     },
+     {
+      "run": "poolsublet-r1-case1",
+      "fixture": 43,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "30050f432655c82e2c8cd63f48f75829f862696d3f2baf57dd1492f784b7614c"
+      }
+     },
+     {
+      "run": "poolsublet-r1-case2",
+      "fixture": 44,
+      "result": {
+       "kind": "signal",
+       "value": 11,
+       "image_sha256": "59f0f5e822da1adfbe81c00a69ef6233a4c53eb406f0da0523e8016bc51b6440",
+       "fault": {
+        "cause": 24,
+        "pc": "0xc02081d8"
+       }
+      }
+     },
+     {
+      "run": "poolsublet-r1-case2",
+      "fixture": 45,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "16976ddcf97dd58b35fc7e49b7c33f0f804fcf35109c1d75f0be6c12f9c45573"
+      }
+     },
+     {
+      "run": "poolsublet-r2-case0",
+      "fixture": 40,
+      "result": {
+       "kind": "signal",
+       "value": 11,
+       "image_sha256": "74aec99164704db85564107d3e435200cd3f503c736859dd50fbf719b4132be4",
+       "fault": {
+        "cause": 24,
+        "pc": "0xc0208624"
+       }
+      }
+     },
+     {
+      "run": "poolsublet-r2-case0",
+      "fixture": 41,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "0a557f7f80e45105ff72c4e48dfbecc39c185bea8b3c76b696287f77f6528e82"
+      }
+     },
+     {
+      "run": "poolsublet-r2-case1",
+      "fixture": 42,
+      "result": {
+       "kind": "signal",
+       "value": 11,
+       "image_sha256": "e4210d8fbcd08bb41051b4768ebc33128b2ef99dadbb64d8901b8a4bc8aa1ef7",
+       "fault": {
+        "cause": 24,
+        "pc": "0xc02082ec"
+       }
+      }
+     },
+     {
+      "run": "poolsublet-r2-case1",
+      "fixture": 43,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "30050f432655c82e2c8cd63f48f75829f862696d3f2baf57dd1492f784b7614c"
+      }
+     },
+     {
+      "run": "poolsublet-r2-case2",
+      "fixture": 44,
+      "result": {
+       "kind": "signal",
+       "value": 11,
+       "image_sha256": "59f0f5e822da1adfbe81c00a69ef6233a4c53eb406f0da0523e8016bc51b6440",
+       "fault": {
+        "cause": 24,
+        "pc": "0xc02081d8"
+       }
+      }
+     },
+     {
+      "run": "poolsublet-r2-case2",
+      "fixture": 45,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "16976ddcf97dd58b35fc7e49b7c33f0f804fcf35109c1d75f0be6c12f9c45573"
+      }
+     },
+     {
+      "run": "poolsublet-r3-case0",
+      "fixture": 40,
+      "result": {
+       "kind": "signal",
+       "value": 11,
+       "image_sha256": "74aec99164704db85564107d3e435200cd3f503c736859dd50fbf719b4132be4",
+       "fault": {
+        "cause": 24,
+        "pc": "0xc0208624"
+       }
+      }
+     },
+     {
+      "run": "poolsublet-r3-case0",
+      "fixture": 41,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "0a557f7f80e45105ff72c4e48dfbecc39c185bea8b3c76b696287f77f6528e82"
+      }
+     },
+     {
+      "run": "poolsublet-r3-case1",
+      "fixture": 42,
+      "result": {
+       "kind": "signal",
+       "value": 11,
+       "image_sha256": "e4210d8fbcd08bb41051b4768ebc33128b2ef99dadbb64d8901b8a4bc8aa1ef7",
+       "fault": {
+        "cause": 24,
+        "pc": "0xc02082ec"
+       }
+      }
+     },
+     {
+      "run": "poolsublet-r3-case1",
+      "fixture": 43,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "30050f432655c82e2c8cd63f48f75829f862696d3f2baf57dd1492f784b7614c"
+      }
+     },
+     {
+      "run": "poolsublet-r3-case2",
+      "fixture": 44,
+      "result": {
+       "kind": "signal",
+       "value": 11,
+       "image_sha256": "59f0f5e822da1adfbe81c00a69ef6233a4c53eb406f0da0523e8016bc51b6440",
+       "fault": {
+        "cause": 24,
+        "pc": "0xc02081d8"
+       }
+      }
+     },
+     {
+      "run": "poolsublet-r3-case2",
+      "fixture": 45,
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "16976ddcf97dd58b35fc7e49b7c33f0f804fcf35109c1d75f0be6c12f9c45573"
+      }
+     }
+    ]
+   }
+  },
+  "verdict_negative_controls": [
+   "# poolsublet round 1 case 0, judged against the poolstock predictions",
+   "fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued",
+   "fx40: DIFFERS  predicted: COMPLETE DEFECT-REPRODUCED  got: did not exit normally: signal 11 capstone-exec: domain fault cause=24 pc=0xc0208624 address=0x0 entry=0xc020064c code=0xc0200000-0xc02f0000 last=0x42 preparing=0x42 sha256=\u2026 image=\u2026",
+   "exit 1",
+   "# poolstock round 1 case 1, judged against the poolsublet predictions",
+   "fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list",
+   "fx42: DIFFERS  predicted: FAULT 48,49,52  got: the case printed its verdict, so nothing stopped it: VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage",
+   "exit 1",
+   "# poolsublet fx44 against a --strip-debug copy of its image (record unchanged)",
+   "fx44: DIFFERS  predicted: FAULT 33  got: the fault record is for another image (59f0f5e822da1adfbe81c00a69ef6233a4c53eb406f0da0523e8016bc51b6440), not <copy>/img/ffapp_fx44.dom",
+   "exit 1",
+   "# the same, with the record's image_sha256 set to the stripped copy's",
+   "fx44: DIFFERS  predicted: FAULT 33  got: ERROR: <copy>/img/ffapp_fx44.dom has no case.c line information; the fault cannot be attributed",
+   "exit 1"
+  ]
+ },
+ "tshark": {
+  "native_stock_sha256": "6424476e5166ca7d4613e93990c8b342fcf71ab1de9dde01c70d23b60f64677d",
+  "arms": {
+   "chunks": {
+    "images_sha256": {
+     "tshark_m1.dom": "e1ada6eddad2ba255262d44fa96d590402818fa7567a8fb9c0e45e3642ae3ccb",
+     "tshark_m2.dom": "e9479a7a6e09effed308f655048824d52246e4903f1e70e1ed5d1608581ad554",
+     "tshark_m3.dom": "2df3bfbfffa878baf9c63547984445a6a04db8cdc7921530222e26b3fd5853cb",
+     "tshark_m4.dom": "3a9d3261e15ecd564a8a06037fe0b8e545eb16f107dac3f75d54f11086cc522a",
+     "tshark_m5.dom": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b",
+     "tsapp_fx10.dom": "c89196b131ab15d803665855ccb94f6175a175bd347e8a19b4190300692d3427",
+     "tsapp_fx11.dom": "48bee504903526a040777574ca599a11ec0ec715fc90b40b0c290baf269489e9",
+     "tsapp_fx12.dom": "3551eecbbfef6865cc3c1fff181dc9ab03f07aef6a80d0ab494bd634b9c371bc",
+     "tsapp_fx13.dom": "95a622f66802b92951866a93b97cde8ad317805774dd58250ff96e2518d24570",
+     "tsapp_fx1.dom": "de8c8fa56616cecfc3b7c58bde3b4ff3f33a2d93e73c4b42741606c90ae06cdc",
+     "tsapp_fx2.dom": "f92a6f734589d286eeef65d2fa0ef84ba7bbf844dfaf8b80f7775bb1862cd227",
+     "tsapp_fx3.dom": "4bf26a4f652c5d6d58cab1ddc4d19b17182e644ac1fe5daf033381b64dc2a161",
+     "tsapp_fx4.dom": "07ecd716bba815334dab76d0415d523c703b5e9bc1a3b5101110a30f60660f02",
+     "tsapp_fx5.dom": "27cc970f29072fb37783c60e1cbfb33c3a43b5ca0d435d7c672f499d15975c24",
+     "tsapp_fx6.dom": "385393956bf043b73e7d12f59e81e99d07ec471ae86be56e41def9a246bf5b16",
+     "tsapp_fx7.dom": "75eb9eef7e8931536a6af3a6eba87b3cb94524e983d430dc91105f044c03a75d",
+     "tsapp_fx8.dom": "9a3077819ba0d0143ecfece85f8eca77a0bc9894dc43a709f95c5be746974898",
+     "tsapp_fx9.dom": "d092bf99b17ab71e1cc4ea27a771dbfa1c53644677de0587b5f5e89f7e8b7c92"
+    },
+    "safety": {
+     "passed": 13,
+     "fixtures": [
+      {
+       "fixture": 1,
+       "outcome": "RETURN",
+       "detail": "100001",
+       "result": {
+        "kind": "exit",
+        "value": 1,
+        "image_sha256": "de8c8fa56616cecfc3b7c58bde3b4ff3f33a2d93e73c4b42741606c90ae06cdc"
+       }
+      },
+      {
+       "fixture": 2,
+       "outcome": "FAULT",
+       "detail": "oob",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "f92a6f734589d286eeef65d2fa0ef84ba7bbf844dfaf8b80f7775bb1862cd227",
+        "fault": {
+         "cause": 7,
+         "pc": "0xc020d0cc"
+        }
+       }
+      },
+      {
+       "fixture": 3,
+       "outcome": "FAULT",
+       "detail": "oob",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "4bf26a4f652c5d6d58cab1ddc4d19b17182e644ac1fe5daf033381b64dc2a161",
+        "fault": {
+         "cause": 5,
+         "pc": "0xc020d0a0"
+        }
+       }
+      },
+      {
+       "fixture": 4,
+       "outcome": "FAULT",
+       "detail": "temporal",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "07ecd716bba815334dab76d0415d523c703b5e9bc1a3b5101110a30f60660f02",
+        "fault": {
+         "cause": 24,
+         "pc": "0xc020d09c"
+        }
+       }
+      },
+      {
+       "fixture": 5,
+       "outcome": "FAULT",
+       "detail": "temporal",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "27cc970f29072fb37783c60e1cbfb33c3a43b5ca0d435d7c672f499d15975c24",
+        "fault": {
+         "cause": 24,
+         "pc": "0xc020d09c"
+        }
+       }
+      },
+      {
+       "fixture": 6,
+       "outcome": "FAULT",
+       "detail": "temporal",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "385393956bf043b73e7d12f59e81e99d07ec471ae86be56e41def9a246bf5b16",
+        "fault": {
+         "cause": 24,
+         "pc": "0xc02074fc"
+        }
+       }
+      },
+      {
+       "fixture": 7,
+       "outcome": "FAULT",
+       "detail": "oob",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "75eb9eef7e8931536a6af3a6eba87b3cb94524e983d430dc91105f044c03a75d",
+        "fault": {
+         "cause": 5,
+         "pc": "0xc020d0a0"
+        }
+       }
+      },
+      {
+       "fixture": 8,
+       "outcome": "FAULT",
+       "detail": "oob",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "9a3077819ba0d0143ecfece85f8eca77a0bc9894dc43a709f95c5be746974898",
+        "fault": {
+         "cause": 5,
+         "pc": "0xc020d0a0"
+        }
+       }
+      },
+      {
+       "fixture": 9,
+       "outcome": "RETURN",
+       "detail": "90005b",
+       "result": {
+        "kind": "exit",
+        "value": 91,
+        "image_sha256": "d092bf99b17ab71e1cc4ea27a771dbfa1c53644677de0587b5f5e89f7e8b7c92"
+       }
+      },
+      {
+       "fixture": 10,
+       "outcome": "RETURN",
+       "detail": "a0015b",
+       "result": {
+        "kind": "exit",
+        "value": 91,
+        "image_sha256": "c89196b131ab15d803665855ccb94f6175a175bd347e8a19b4190300692d3427"
+       }
+      },
+      {
+       "fixture": 11,
+       "outcome": "FAULT",
+       "detail": "temporal",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "48bee504903526a040777574ca599a11ec0ec715fc90b40b0c290baf269489e9",
+        "fault": {
+         "cause": 24,
+         "pc": "0xc020d09c"
+        }
+       }
+      },
+      {
+       "fixture": 12,
+       "outcome": "FAULT",
+       "detail": "oob",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "3551eecbbfef6865cc3c1fff181dc9ab03f07aef6a80d0ab494bd634b9c371bc",
+        "fault": {
+         "cause": 7,
+         "pc": "0xc020d0cc"
+        }
+       }
+      },
+      {
+       "fixture": 13,
+       "outcome": "FAULT",
+       "detail": "temporal",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "95a622f66802b92951866a93b97cde8ad317805774dd58250ff96e2518d24570",
+        "fault": {
+         "cause": 24,
+         "pc": "0xc020d09c"
+        }
+       }
+      }
+     ]
+    },
+    "stages": {
+     "dhcp-m1": {
+      "kind": "exit",
+      "value": 101,
+      "image_sha256": "e1ada6eddad2ba255262d44fa96d590402818fa7567a8fb9c0e45e3642ae3ccb"
+     },
+     "dhcp-m2": {
+      "kind": "exit",
+      "value": 102,
+      "image_sha256": "e9479a7a6e09effed308f655048824d52246e4903f1e70e1ed5d1608581ad554"
+     },
+     "dhcp-m3": {
+      "kind": "exit",
+      "value": 103,
+      "image_sha256": "2df3bfbfffa878baf9c63547984445a6a04db8cdc7921530222e26b3fd5853cb"
+     },
+     "dhcp-m4": {
+      "kind": "exit",
+      "value": 104,
+      "image_sha256": "3a9d3261e15ecd564a8a06037fe0b8e545eb16f107dac3f75d54f11086cc522a"
+     },
+     "dhcp-m5": {
+      "kind": "exit",
+      "value": 0,
+      "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+     }
+    },
+    "oracles": {
+     "arp": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "d04154a74f26942e85a0e532db3e922fe70dd30221bfded2f6488876528c52df",
+      "input_sha256": "b527c7839370aa8fdd7190a3a6c873c1270f73214e5ad791cce9fd8b04e7aed9"
+     },
+     "arp.flip": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "54ee4b929d0075c5284756d817f65abb0e6e6ba3a52609286f622e7b9d90aa87",
+      "input_sha256": "813f805aff48ed4bcae48a76247c57a10367c1c3d556c05ec4fabc1e0b1bf590",
+      "native_output_changed_from_original": true
+     },
+     "dhcp": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "df1713eb374fe5fc3c708091cf8622c077394565db93cf8977594477f02006cf",
+      "input_sha256": "2471b5420bdac826eecf8f61a2bbb4a3eb20dbfab7c02ff2be502f349f368214"
+     },
+     "dhcp.flip": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "891f584de2b905849135fa30e1791801bb0a55e4378d102088863e3bcf60b5bb",
+      "input_sha256": "d99bad7b9e7f898c675a54ab17abba46bf92847893a558dde5cc5242fd366b1e",
+      "native_output_changed_from_original": true
+     },
+     "dns-ooo": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "8e6d3060e941199fa1361ea4bd7bc691314165f39e3e20e5f85d4aceb27d87c3",
+      "input_sha256": "0e81e3d5907f53210f4551335dc4ead39972d9061e381576570495a8e234f8f0"
+     },
+     "dns_port": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "c74b3491490fab856544bb183581159e8b423086f6ed50623d8c81301c9090b8",
+      "input_sha256": "78c3c00e4cb155118468e540a6151ca222fa50edd626daf1582d25e3d79626a1"
+     },
+     "dns_port.flip": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "37e34f919762ad931a96f379db4d7c3cffefc08cd61b2d7800f18585a62f4747",
+      "input_sha256": "10d336db14b5acd81fbf034be512d46ea896b7971c117166033f4f22af55039a",
+      "native_output_changed_from_original": true
+     },
+     "http": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "8b55e1c98c33ff30f238ae8c1410524fe49c4c74c96aa4a824c1d4854f495dac",
+      "input_sha256": "69e489a26a59208a1dd56fbea4c606b1e59e8ac32d3d4789ca6cc81e71bad3f2"
+     },
+     "http.flip": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "73c486b3d5be28f6ef91bad170c9264ddda1e071653b448c712af8c64d8cfbd3",
+      "input_sha256": "92ad55675bddf3aa03aceff04bd31ad8a9713895bc5957f56d95b3f91572c750",
+      "native_output_changed_from_original": true
+     },
+     "ntp": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "d46bcd0d4882fadb142104753e612301697476214066b91ccbd752362908d16b"
+      },
+      "native_stdout_equal": false,
+      "guest_stdout_sha256": "336f591d9d4499b5e6e26d90e35e88950580306756015edae5c4dd2212e56623",
+      "input_sha256": "17fb7c76e791f33a74399c5af1ca01fcb2b72a36490822ac946c1567a4b07905"
+     }
+    },
+    "exit_lines": {
+     "stages/dhcp-m1": "TSAPP-HEAP status=101 sublet alloc=7 free=0 merge=0 peak_live=7 split=21 mrev=26 delin=7 revoke=0 init=0 wmem opens=0 resets=0 closes=0 reset_revokes=0 close_revokes=0 dropped=0 retires=0 splits=0 issues=0 revokes=0 inits=0 nodes=0 unserved=none stdout=open",
+     "stages/dhcp-m2": "TSAPP-HEAP status=102 sublet alloc=3031 free=766 merge=330 peak_live=2265 split=2605 mrev=5634 delin=3029 revoke=1096 init=330 wmem opens=2 resets=0 closes=0 reset_revokes=0 close_revokes=0 dropped=0 retires=36 splits=577 issues=613 revokes=36 inits=0 nodes=1194 unserved=none stdout=open",
+     "stages/dhcp-m3": "TSAPP-HEAP status=103 sublet alloc=3496 free=1132 merge=547 peak_live=2364 split=2918 mrev=6412 delin=3492 revoke=1679 init=548 wmem opens=4 resets=1 closes=1 reset_revokes=1 close_revokes=1 dropped=25 retires=36 splits=658 issues=694 revokes=38 inits=2 nodes=1362 unserved=none stdout=open",
+     "stages/dhcp-m4": "TSAPP-HEAP status=104 sublet alloc=3745 free=1368 merge=749 peak_live=2572 split=3133 mrev=6876 delin=3741 revoke=2117 init=750 wmem opens=4 resets=1 closes=1 reset_revokes=1 close_revokes=1 dropped=25 retires=36 splits=693 issues=729 revokes=38 inits=2 nodes=1432 unserved=none stdout=open",
+     "stages/dhcp-m5": "TSAPP-HEAP status=0 sublet alloc=4675 free=4542 merge=3663 peak_live=2589 split=3854 mrev=8527 delin=4671 revoke=8205 init=3667 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=726 retires=94 splits=722 issues=758 revokes=102 inits=8 nodes=1496 unserved=none stdout=closed",
+     "oracle/arp-m5": "TSAPP-HEAP status=0 sublet alloc=3698 free=3565 merge=2803 peak_live=2435 split=2994 mrev=6690 delin=3694 revoke=6368 init=2807 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=665 retires=94 splits=661 issues=697 revokes=102 inits=8 nodes=1374 unserved=none stdout=closed",
+     "oracle/arp.flip-m5": "TSAPP-HEAP status=0 sublet alloc=3698 free=3565 merge=2803 peak_live=2435 split=2994 mrev=6690 delin=3694 revoke=6368 init=2807 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=665 retires=94 splits=661 issues=697 revokes=102 inits=8 nodes=1374 unserved=none stdout=closed",
+     "oracle/dhcp-m5": "TSAPP-HEAP status=0 sublet alloc=4675 free=4542 merge=3663 peak_live=2589 split=3854 mrev=8527 delin=4671 revoke=8205 init=3667 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=726 retires=94 splits=722 issues=758 revokes=102 inits=8 nodes=1496 unserved=none stdout=closed",
+     "oracle/dhcp.flip-m5": "TSAPP-HEAP status=0 sublet alloc=4675 free=4542 merge=3663 peak_live=2589 split=3854 mrev=8527 delin=4671 revoke=8205 init=3667 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=726 retires=94 splits=722 issues=758 revokes=102 inits=8 nodes=1496 unserved=none stdout=closed",
+     "oracle/dns-ooo-m5": "TSAPP-HEAP status=0 sublet alloc=4620 free=4487 merge=3897 peak_live=2579 split=4088 mrev=8706 delin=4616 revoke=8384 init=3901 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=728 retires=97 splits=724 issues=763 revokes=105 inits=8 nodes=1503 unserved=none stdout=closed",
+     "oracle/dns_port-m5": "TSAPP-HEAP status=0 sublet alloc=4954 free=4821 merge=4029 peak_live=2765 split=4220 mrev=9172 delin=4950 revoke=8850 init=4033 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=724 retires=94 splits=720 issues=756 revokes=102 inits=8 nodes=1492 unserved=none stdout=closed",
+     "oracle/dns_port.flip-m5": "TSAPP-HEAP status=0 sublet alloc=4954 free=4821 merge=4029 peak_live=2765 split=4220 mrev=9172 delin=4950 revoke=8850 init=4033 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=724 retires=94 splits=720 issues=756 revokes=102 inits=8 nodes=1492 unserved=none stdout=closed",
+     "oracle/http-m5": "TSAPP-HEAP status=0 sublet alloc=3883 free=3750 merge=2968 peak_live=2599 split=3159 mrev=7040 delin=3879 revoke=6718 init=2972 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=731 retires=95 splits=727 issues=764 revokes=103 inits=8 nodes=1507 unserved=none stdout=closed",
+     "oracle/http.flip-m5": "TSAPP-HEAP status=0 sublet alloc=3883 free=3750 merge=2968 peak_live=2599 split=3159 mrev=7040 delin=3879 revoke=6718 init=2972 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=731 retires=95 splits=727 issues=764 revokes=103 inits=8 nodes=1507 unserved=none stdout=closed",
+     "oracle/ntp-m5": "TSAPP-HEAP status=0 sublet alloc=3794 free=3661 merge=2881 peak_live=2517 split=3072 mrev=6864 delin=3790 revoke=6542 init=2885 wmem opens=4 resets=4 closes=4 reset_revokes=4 close_revokes=4 dropped=696 retires=94 splits=692 issues=728 revokes=102 inits=8 nodes=1436 unserved=none stdout=closed"
+    },
+    "verdict_lines": [
+     "M1 REACHED",
+     "M2 REACHED",
+     "M3 REACHED",
+     "M4 REACHED",
+     "dhcp: PASS, stdout MATCH",
+     "dhcp: PASS, stdout MATCH",
+     "dns_port: PASS, stdout MATCH",
+     "http: PASS, stdout MATCH",
+     "arp: PASS, stdout MATCH",
+     "dhcp.flip: PASS, stdout MATCH",
+     "dns_port.flip: PASS, stdout MATCH",
+     "http.flip: PASS, stdout MATCH",
+     "arp.flip: PASS, stdout MATCH",
+     "ntp: PASS, stdout DIFFERS",
+     "dns-ooo: PASS, stdout MATCH"
+    ],
+    "t4_revoke_identity": {
+     "runs": 15,
+     "holding": 15,
+     "per_run": {
+      "stages/dhcp-m1": {
+       "revokes": 0,
+       "reset_revokes": 0,
+       "close_revokes": 0,
+       "retires": 0,
+       "opens": 0,
+       "holds": true
+      },
+      "stages/dhcp-m2": {
+       "revokes": 36,
+       "reset_revokes": 0,
+       "close_revokes": 0,
+       "retires": 36,
+       "opens": 2,
+       "holds": true
+      },
+      "stages/dhcp-m3": {
+       "revokes": 38,
+       "reset_revokes": 1,
+       "close_revokes": 1,
+       "retires": 36,
+       "opens": 4,
+       "holds": true
+      },
+      "stages/dhcp-m4": {
+       "revokes": 38,
+       "reset_revokes": 1,
+       "close_revokes": 1,
+       "retires": 36,
+       "opens": 4,
+       "holds": true
+      },
+      "stages/dhcp-m5": {
+       "revokes": 102,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 94,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/arp-m5": {
+       "revokes": 102,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 94,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/arp.flip-m5": {
+       "revokes": 102,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 94,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/dhcp-m5": {
+       "revokes": 102,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 94,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/dhcp.flip-m5": {
+       "revokes": 102,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 94,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/dns-ooo-m5": {
+       "revokes": 105,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 97,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/dns_port-m5": {
+       "revokes": 102,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 94,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/dns_port.flip-m5": {
+       "revokes": 102,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 94,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/http-m5": {
+       "revokes": 103,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 95,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/http.flip-m5": {
+       "revokes": 103,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 95,
+       "opens": 4,
+       "holds": true
+      },
+      "oracle/ntp-m5": {
+       "revokes": 102,
+       "reset_revokes": 4,
+       "close_revokes": 4,
+       "retires": 94,
+       "opens": 4,
+       "holds": true
+      }
+     }
+    }
+   },
+   "sublet": {
+    "images_sha256": {
+     "tshark_m1.dom": "6b067ad2fd06d85f2221fe4b2edbc171f4c0f8de4cf86519ae688730884d0df4",
+     "tshark_m2.dom": "5ad59bdf438b7535d77633ce2755bfe2f3c974eff41c7130247b97836b18e4c0",
+     "tshark_m3.dom": "cdda78a9caadb98c2603052ba407100f651d9223d16358d50acbfcbd72dfe01a",
+     "tshark_m4.dom": "3a5340b9a43caf4044d3cf81573fda608382da8b8a4facd7a3a080fb9c5d8f5d",
+     "tshark_m5.dom": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188",
+     "tsapp_fx10.dom": "5058d3fd1c77ce0f8e42648b951ed8e0906fed8ae458b8e096876a582b98656b",
+     "tsapp_fx11.dom": "65bc02744038f5d31a2ff10f3a579afdff30567422818554315d7f3ed039118a",
+     "tsapp_fx12.dom": "e6f03581ac08cd04264bdfa388b05802a53b24e015fdfa5fe16283eb613f432e",
+     "tsapp_fx13.dom": "fa7329160bbdafc8880e281d5794535d77b55f62beb4d5ca344d5762fdeffee6",
+     "tsapp_fx1.dom": "96b801bd88bd52690d5674941c6db9b83b32d4b7c94d431b98e63738ac941e7c",
+     "tsapp_fx2.dom": "9fad6c06d14aa6272b65e28f2c0fb655a5e2e8987c3fc9c3453171e321715305",
+     "tsapp_fx3.dom": "8c1599d0a8c5e7ebc42ce4d20964c0fdae905c2a93a77f41746b2d56438ddcd7",
+     "tsapp_fx4.dom": "b61edbba2ebf6e9e67589239f11917cfd04d8356db1f91a7b8e2d4f4e6e4b34a",
+     "tsapp_fx5.dom": "33f364107d754ad599c2c391c807778fa22069e5ab0b49981941426a70084e3f",
+     "tsapp_fx6.dom": "c7680e4c720f0fdd4c02c07d71187fbbefaa20237996ed511338d2d747fdde69",
+     "tsapp_fx7.dom": "304dc74c5000171bb24d95bdd56d66d18d06c0b209a7f135a3b5204e30fe913a",
+     "tsapp_fx8.dom": "0d471472ea4386a29e0dfc99df900b40b68d87a69f261471b9e607569e2fc0a2",
+     "tsapp_fx9.dom": "6d9cf45d99e31959b711e010f9cfce6fb229e353440e311d21f9222bb5f0db2b"
+    },
+    "safety": {
+     "passed": 13,
+     "fixtures": [
+      {
+       "fixture": 1,
+       "outcome": "RETURN",
+       "detail": "100001",
+       "result": {
+        "kind": "exit",
+        "value": 1,
+        "image_sha256": "96b801bd88bd52690d5674941c6db9b83b32d4b7c94d431b98e63738ac941e7c"
+       }
+      },
+      {
+       "fixture": 2,
+       "outcome": "FAULT",
+       "detail": "oob",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "9fad6c06d14aa6272b65e28f2c0fb655a5e2e8987c3fc9c3453171e321715305",
+        "fault": {
+         "cause": 7,
+         "pc": "0xc020adb4"
+        }
+       }
+      },
+      {
+       "fixture": 3,
+       "outcome": "FAULT",
+       "detail": "oob",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "8c1599d0a8c5e7ebc42ce4d20964c0fdae905c2a93a77f41746b2d56438ddcd7",
+        "fault": {
+         "cause": 5,
+         "pc": "0xc020ad88"
+        }
+       }
+      },
+      {
+       "fixture": 4,
+       "outcome": "FAULT",
+       "detail": "temporal",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "b61edbba2ebf6e9e67589239f11917cfd04d8356db1f91a7b8e2d4f4e6e4b34a",
+        "fault": {
+         "cause": 24,
+         "pc": "0xc020ad84"
+        }
+       }
+      },
+      {
+       "fixture": 5,
+       "outcome": "FAULT",
+       "detail": "temporal",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "33f364107d754ad599c2c391c807778fa22069e5ab0b49981941426a70084e3f",
+        "fault": {
+         "cause": 24,
+         "pc": "0xc020ad84"
+        }
+       }
+      },
+      {
+       "fixture": 6,
+       "outcome": "FAULT",
+       "detail": "temporal",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "c7680e4c720f0fdd4c02c07d71187fbbefaa20237996ed511338d2d747fdde69",
+        "fault": {
+         "cause": 24,
+         "pc": "0xc02074fc"
+        }
+       }
+      },
+      {
+       "fixture": 7,
+       "outcome": "FAULT",
+       "detail": "oob",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "304dc74c5000171bb24d95bdd56d66d18d06c0b209a7f135a3b5204e30fe913a",
+        "fault": {
+         "cause": 5,
+         "pc": "0xc020ad88"
+        }
+       }
+      },
+      {
+       "fixture": 8,
+       "outcome": "FAULT",
+       "detail": "oob",
+       "result": {
+        "kind": "signal",
+        "value": 11,
+        "image_sha256": "0d471472ea4386a29e0dfc99df900b40b68d87a69f261471b9e607569e2fc0a2",
+        "fault": {
+         "cause": 5,
+         "pc": "0xc020ad88"
+        }
+       }
+      },
+      {
+       "fixture": 9,
+       "outcome": "RETURN",
+       "detail": "90005b",
+       "result": {
+        "kind": "exit",
+        "value": 91,
+        "image_sha256": "6d9cf45d99e31959b711e010f9cfce6fb229e353440e311d21f9222bb5f0db2b"
+       }
+      },
+      {
+       "fixture": 10,
+       "outcome": "RETURN",
+       "detail": "a0015b",
+       "result": {
+        "kind": "exit",
+        "value": 91,
+        "image_sha256": "5058d3fd1c77ce0f8e42648b951ed8e0906fed8ae458b8e096876a582b98656b"
+       }
+      },
+      {
+       "fixture": 11,
+       "outcome": "RETURN",
+       "detail": "b0015b",
+       "result": {
+        "kind": "exit",
+        "value": 91,
+        "image_sha256": "65bc02744038f5d31a2ff10f3a579afdff30567422818554315d7f3ed039118a"
+       }
+      },
+      {
+       "fixture": 12,
+       "outcome": "RETURN",
+       "detail": "c000ee",
+       "result": {
+        "kind": "exit",
+        "value": 238,
+        "image_sha256": "e6f03581ac08cd04264bdfa388b05802a53b24e015fdfa5fe16283eb613f432e"
+       }
+      },
+      {
+       "fixture": 13,
+       "outcome": "RETURN",
+       "detail": "d00020",
+       "result": {
+        "kind": "exit",
+        "value": 32,
+        "image_sha256": "fa7329160bbdafc8880e281d5794535d77b55f62beb4d5ca344d5762fdeffee6"
+       }
+      }
+     ]
+    },
+    "stages": {
+     "dhcp-m1": {
+      "kind": "exit",
+      "value": 101,
+      "image_sha256": "6b067ad2fd06d85f2221fe4b2edbc171f4c0f8de4cf86519ae688730884d0df4"
+     },
+     "dhcp-m2": {
+      "kind": "exit",
+      "value": 102,
+      "image_sha256": "5ad59bdf438b7535d77633ce2755bfe2f3c974eff41c7130247b97836b18e4c0"
+     },
+     "dhcp-m3": {
+      "kind": "exit",
+      "value": 103,
+      "image_sha256": "cdda78a9caadb98c2603052ba407100f651d9223d16358d50acbfcbd72dfe01a"
+     },
+     "dhcp-m4": {
+      "kind": "exit",
+      "value": 104,
+      "image_sha256": "3a5340b9a43caf4044d3cf81573fda608382da8b8a4facd7a3a080fb9c5d8f5d"
+     },
+     "dhcp-m5": {
+      "kind": "exit",
+      "value": 0,
+      "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+     }
+    },
+    "oracles": {
+     "arp": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "d04154a74f26942e85a0e532db3e922fe70dd30221bfded2f6488876528c52df",
+      "input_sha256": "b527c7839370aa8fdd7190a3a6c873c1270f73214e5ad791cce9fd8b04e7aed9"
+     },
+     "arp.flip": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "54ee4b929d0075c5284756d817f65abb0e6e6ba3a52609286f622e7b9d90aa87",
+      "input_sha256": "813f805aff48ed4bcae48a76247c57a10367c1c3d556c05ec4fabc1e0b1bf590",
+      "native_output_changed_from_original": true
+     },
+     "dhcp": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "df1713eb374fe5fc3c708091cf8622c077394565db93cf8977594477f02006cf",
+      "input_sha256": "2471b5420bdac826eecf8f61a2bbb4a3eb20dbfab7c02ff2be502f349f368214"
+     },
+     "dhcp.flip": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "891f584de2b905849135fa30e1791801bb0a55e4378d102088863e3bcf60b5bb",
+      "input_sha256": "d99bad7b9e7f898c675a54ab17abba46bf92847893a558dde5cc5242fd366b1e",
+      "native_output_changed_from_original": true
+     },
+     "dns-ooo": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "8e6d3060e941199fa1361ea4bd7bc691314165f39e3e20e5f85d4aceb27d87c3",
+      "input_sha256": "0e81e3d5907f53210f4551335dc4ead39972d9061e381576570495a8e234f8f0"
+     },
+     "dns_port": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "c74b3491490fab856544bb183581159e8b423086f6ed50623d8c81301c9090b8",
+      "input_sha256": "78c3c00e4cb155118468e540a6151ca222fa50edd626daf1582d25e3d79626a1"
+     },
+     "dns_port.flip": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "37e34f919762ad931a96f379db4d7c3cffefc08cd61b2d7800f18585a62f4747",
+      "input_sha256": "10d336db14b5acd81fbf034be512d46ea896b7971c117166033f4f22af55039a",
+      "native_output_changed_from_original": true
+     },
+     "http": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "8b55e1c98c33ff30f238ae8c1410524fe49c4c74c96aa4a824c1d4854f495dac",
+      "input_sha256": "69e489a26a59208a1dd56fbea4c606b1e59e8ac32d3d4789ca6cc81e71bad3f2"
+     },
+     "http.flip": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": true,
+      "guest_stdout_sha256": "73c486b3d5be28f6ef91bad170c9264ddda1e071653b448c712af8c64d8cfbd3",
+      "input_sha256": "92ad55675bddf3aa03aceff04bd31ad8a9713895bc5957f56d95b3f91572c750",
+      "native_output_changed_from_original": true
+     },
+     "ntp": {
+      "result": {
+       "kind": "exit",
+       "value": 0,
+       "image_sha256": "8d1d28aa2d46398c7540808c28fe8a10d68d854ff7cc2098dc19b116eca8c188"
+      },
+      "native_stdout_equal": false,
+      "guest_stdout_sha256": "336f591d9d4499b5e6e26d90e35e88950580306756015edae5c4dd2212e56623",
+      "input_sha256": "17fb7c76e791f33a74399c5af1ca01fcb2b72a36490822ac946c1567a4b07905"
+     }
+    },
+    "exit_lines": {
+     "stages/dhcp-m1": "TSAPP-HEAP status=101 sublet alloc=7 free=0 merge=0 peak_live=7 split=21 mrev=26 delin=7 revoke=0 init=0 unserved=none stdout=open",
+     "stages/dhcp-m2": "TSAPP-HEAP status=102 sublet alloc=3026 free=766 merge=328 peak_live=2260 split=2598 mrev=5622 delin=3026 revoke=1094 init=328 unserved=none stdout=open",
+     "stages/dhcp-m3": "TSAPP-HEAP status=103 sublet alloc=3491 free=1132 merge=545 peak_live=2359 split=2911 mrev=6400 delin=3491 revoke=1677 init=545 unserved=none stdout=open",
+     "stages/dhcp-m4": "TSAPP-HEAP status=104 sublet alloc=3740 free=1368 merge=745 peak_live=2567 split=3127 mrev=6865 delin=3740 revoke=2113 init=745 unserved=none stdout=open",
+     "stages/dhcp-m5": "TSAPP-HEAP status=0 sublet alloc=4670 free=4542 merge=3659 peak_live=2584 split=3842 mrev=8510 delin=4670 revoke=8201 init=3659 unserved=none stdout=closed",
+     "oracle/arp-m5": "TSAPP-HEAP status=0 sublet alloc=3693 free=3565 merge=2804 peak_live=2430 split=2987 mrev=6678 delin=3693 revoke=6369 init=2804 unserved=none stdout=closed",
+     "oracle/arp.flip-m5": "TSAPP-HEAP status=0 sublet alloc=3693 free=3565 merge=2804 peak_live=2430 split=2987 mrev=6678 delin=3693 revoke=6369 init=2804 unserved=none stdout=closed",
+     "oracle/dhcp-m5": "TSAPP-HEAP status=0 sublet alloc=4670 free=4542 merge=3659 peak_live=2584 split=3842 mrev=8510 delin=4670 revoke=8201 init=3659 unserved=none stdout=closed",
+     "oracle/dhcp.flip-m5": "TSAPP-HEAP status=0 sublet alloc=4670 free=4542 merge=3659 peak_live=2584 split=3842 mrev=8510 delin=4670 revoke=8201 init=3659 unserved=none stdout=closed",
+     "oracle/dns-ooo-m5": "TSAPP-HEAP status=0 sublet alloc=4615 free=4487 merge=3934 peak_live=2574 split=4117 mrev=8730 delin=4615 revoke=8421 init=3934 unserved=none stdout=closed",
+     "oracle/dns_port-m5": "TSAPP-HEAP status=0 sublet alloc=4949 free=4821 merge=4021 peak_live=2760 split=4204 mrev=9151 delin=4949 revoke=8842 init=4021 unserved=none stdout=closed",
+     "oracle/dns_port.flip-m5": "TSAPP-HEAP status=0 sublet alloc=4949 free=4821 merge=4021 peak_live=2760 split=4204 mrev=9151 delin=4949 revoke=8842 init=4021 unserved=none stdout=closed",
+     "oracle/http-m5": "TSAPP-HEAP status=0 sublet alloc=3878 free=3750 merge=2970 peak_live=2594 split=3153 mrev=7029 delin=3878 revoke=6720 init=2970 unserved=none stdout=closed",
+     "oracle/http.flip-m5": "TSAPP-HEAP status=0 sublet alloc=3878 free=3750 merge=2970 peak_live=2594 split=3153 mrev=7029 delin=3878 revoke=6720 init=2970 unserved=none stdout=closed",
+     "oracle/ntp-m5": "TSAPP-HEAP status=0 sublet alloc=3789 free=3661 merge=2882 peak_live=2512 split=3065 mrev=6852 delin=3789 revoke=6543 init=2882 unserved=none stdout=closed"
+    },
+    "verdict_lines": [
+     "M1 REACHED",
+     "M2 REACHED",
+     "M3 REACHED",
+     "M4 REACHED",
+     "dhcp: PASS, stdout MATCH",
+     "dhcp: PASS, stdout MATCH",
+     "dns_port: PASS, stdout MATCH",
+     "http: PASS, stdout MATCH",
+     "arp: PASS, stdout MATCH",
+     "dhcp.flip: PASS, stdout MATCH",
+     "dns_port.flip: PASS, stdout MATCH",
+     "http.flip: PASS, stdout MATCH",
+     "arp.flip: PASS, stdout MATCH",
+     "ntp: PASS, stdout DIFFERS",
+     "dns-ooo: PASS, stdout MATCH"
+    ]
+   }
+  }
+ },
+ "perl_sv_heads": {
+  "build": "PERLD_SV_HEADS=1 PERLD_OPT=-O1 build-perl-domain.sh (fresh source build), then experiments/applications/build.py --app perl --nested perl",
+  "manifest": {
+   "application": "perl",
+   "application_abi": 2,
+   "nested": "perl",
+   "heap": "level0",
+   "instrument": true,
+   "image_sha256": "883b06e98a9331244f1c533c160d489e8baeca61181fef7b8eb2c89257254025"
+  },
+  "workload": "-e 'my @a; for my $i (1..20000) { push @a, \"x$i\"; shift @a if @a > 100 } print scalar(@a), \" \", $a[-1], \"\\n\"'",
+  "runs": {
+   "PERL_SUBLET_MODE=0": {
+    "result": {
+     "kind": "exit",
+     "value": 0,
+     "image_sha256": "883b06e98a9331244f1c533c160d489e8baeca61181fef7b8eb2c89257254025"
+    },
+    "stdout": "100 x20000",
+    "report": "PERL_SV_HEADS platform=capstone mode=0 head_bytes=48 per_page=84 pages=9 peak_pages=9 max_pages=8322 issues=40638 releases=40050 live=588 peak_live=711 retired=0 sidecar_bytes=185632 observer_bytes=4194304 region_bytes=33554432 split=756 mrev=756 delin=756 revoke=0 init=0"
+   },
+   "PERL_SUBLET_MODE=1": {
+    "result": {
+     "kind": "exit",
+     "value": 0,
+     "image_sha256": "883b06e98a9331244f1c533c160d489e8baeca61181fef7b8eb2c89257254025"
+    },
+    "stdout": "100 x20000",
+    "report": "PERL_SV_HEADS platform=capstone mode=1 head_bytes=48 per_page=84 pages=9 peak_pages=9 max_pages=8322 issues=40638 releases=40050 live=588 peak_live=711 retired=0 sidecar_bytes=185632 observer_bytes=4194304 region_bytes=33554432 split=756 mrev=40806 delin=40806 revoke=40050 init=0"
+   }
+  },
+  "limit": "a short workload; the 2026-09-28 smoke needs 1,048,576 revocation nodes and was not repeated"
+ },
+ "postgres_build": {
+  "recipe": "ports/postgres/app/build-domain.sh, fresh PG_SU_ROOT",
+  "applied": [
+   "0001-exprevalstep-size-guard.patch",
+   "0002-aset-minimum-chunk-16.patch",
+   "0004-memorychunk-header-16.patch",
+   "0005-numeric-abbrev-datum-wider-than-8.patch",
+   "0007-typealign-keeps-the-capability.patch",
+   "0008-read-stream-align-byte-pointers.patch",
+   "0009-xlogprefetcher-context-pointer.patch",
+   "0010-datum-is-uintcap.patch",
+   "0011-tupmacs-align-keeps-the-capability.patch",
+   "0012-read-stream-null-per-buffer-data.patch",
+   "0013-qsort-swap-keeps-the-capability.patch",
+   "0014-no-locale-a-in-a-domain.patch",
+   "0015-modules-linked-into-the-domain.patch",
+   "0016-datum-value-width-is-8.patch",
+   "0017-spatial-reuse-gap.patch",
+   "0019-single-user-synchronous-statistics.patch"
+  ],
+  "image_sha256": "f12b317e42a207a88901a4df87fe4be365166b57ebe14764167c1d344e8d7ce4",
+  "note": "0018 is skipped by the recipe; the image links"
+ },
+ "static_and_host": {
+  "check_corpus": "CLEAN -- 13 corpora, 107 declared cases, 0 problems",
+  "check_ports": "CLEAN -- 18 components (8 allocator-component, 1 domain-libc, 8 full-application, 1 platform-build), 3 renames and 4 deferred in the ledger, 0 problems",
+  "build_index_check": "current, after regeneration (it reported STALE before: ISSUES.md open count 88 -> 89)",
+  "python_unittest": {
+   "runtime/host": "21 OK",
+   "ports/common": "31 OK",
+   "experiments/applications": "46 OK",
+   "experiments/study": "30 OK",
+   "ports/common/application/check-safety-test.py": "2 OK"
+  },
+  "native_runtime_ctest_asan_ubsan": "23/23 passed, including mruby-spawn-shell built from ports/mruby/app",
+  "checked_on": "a git archive of the merge tree (the worktree is sparse and lacks xlang/), host tests in the worktree"
+ }
+}

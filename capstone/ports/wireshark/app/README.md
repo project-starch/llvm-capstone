@@ -14,6 +14,11 @@ arp.flip ntp dns-ooo` compares application stdout byte for byte. Native and gues
 stderr are retained separately. `ntp` must differ because it is outside the
 whitelist. Use `TSAPP_USER=UID:GID` for an unprivileged existing guest account.
 
+`TSAPP_HEAP=level0|shrink|sublet|chunks` selects the heap arm for both
+`host/build-domain.sh` and the runner. `chunks` is the `sublet` arm with wmem's
+BLOCK allocator under the chunk port of `../wmem` (see `host/build-domain.sh`);
+its predictions are the `chunks` rows of `host/safety-expect.txt`.
+
 Safety fixtures use `common/application/check-safety.py --port wireshark`, with
 `--state`, `--images`, `--out`, `--arm` and fixture numbers. The predictions in
 `host/safety-expect.txt` are unchanged. Fault attribution requires the recorded

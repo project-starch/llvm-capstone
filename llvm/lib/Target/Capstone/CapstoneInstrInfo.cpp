@@ -532,20 +532,18 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   // buys: the question "is this copy a capability?" used to be answered by a
   // heuristic on liveness, and answering it wrong dropped a tag silently.
   //
-  // MOVC is the right and only instruction here. From op_helper.c's
-  // helper_csmovc, it zeroes its source ONLY when the source is a TAGGED,
-  // non-copyable (linear) capability -- and a linear capability is one the ISA
-  // forbids copying at all, so a live-source copy of one is not a thing the
-  // register allocator may ask for. An untagged value or a NONLIN capability is
-  // copied without destroying anything.
+  // Emitted as MOVC, and in QEMU's model (op_helper.c, helper_csmovc) MOVC
+  // zeroes its source only when that source is a tagged linear capability,
+  // which the ISA forbids copying anyway.
   //
-  // ponytail: on silicon `movc` is reported to zero an untagged source
-  // unconditionally, where the model guards on the tag (R-18). An untagged value
-  // can sit in a capability register after an inttoptr, so that case is not
-  // impossible here -- it is just no longer reachable from an INTEGER copy,
-  // which is what R-18 was about. cincoffsetimm rd, rs, 0 would be the
-  // non-destructive alternative and it faults outright on an untagged source,
-  // which is worse.
+  // On silicon MOVC also writes cnull into an UNTAGGED source (C-32), and an
+  // untagged value does reach a capability register (inttoptr, an integer
+  // passed as a pointer). So this MOVC is provisional: CapstoneLiveSourceCopy
+  // rewrites each one whose source is still read afterwards as STC+LDC through
+  // a stack slot, which matches MOVC for every type but keeps an integer
+  // source. +movc-keeps-integer-source turns that off for a bitstream that
+  // fixes MOVC (Q-04 b). cincoffsetimm rd, rs, 0 is no alternative: it faults
+  // outright on an untagged source.
   if (Capstone::GPCRRegClass.contains(DstReg, SrcReg)) {
     BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstReg)
         .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc));
@@ -2061,8 +2059,8 @@ unsigned CapstoneInstrInfo::getInstBundleLength(const MachineInstr &MI) const {
 // (cause 24) on an untagged rs1; SCC, TIGHTEN and INIT assert that it is
 // tagged. The first four come from ordinary pointer code, the rest from the
 // capability intrinsics. SEAL and INIT are selected as their tied pseudos,
-// which is what MachineLICM sees. MOVC is absent: it moves an untagged value
-// without complaint.
+// which is what the code-motion passes see. MOVC is absent: it moves an
+// untagged value without complaint.
 static bool trapsOnUntaggedOperand(unsigned Opcode) {
   switch (Opcode) {
   case Capstone::CIncOffset:
@@ -2081,45 +2079,24 @@ static bool trapsOnUntaggedOperand(unsigned Opcode) {
   }
 }
 
-// Whether BB runs on every iteration of L that reaches an exit: true when no
-// exiting block of L can be reached from the header without passing BB. This
-// is MachineLICM's own "guaranteed to execute" test (BB dominates every
-// exiting block), computed here because the hook gets no dominator tree.
-static bool executesOnEveryIteration(const MachineBasicBlock *BB,
-                                     const MachineLoop *L) {
-  const MachineBasicBlock *Header = L->getHeader();
-  if (BB == Header)
-    return true;
-  SmallPtrSet<const MachineBasicBlock *, 32> Seen;
-  SmallVector<const MachineBasicBlock *, 32> Work;
-  Seen.insert(BB); // blocked: paths through BB do not count
-  Seen.insert(Header);
-  Work.push_back(Header);
-  while (!Work.empty()) {
-    const MachineBasicBlock *Cur = Work.pop_back_val();
-    if (L->isLoopExiting(Cur))
-      return false; // an exit reached without BB
-    for (const MachineBasicBlock *Succ : Cur->successors())
-      if (L->contains(Succ) && Seen.insert(Succ).second)
-        Work.push_back(Succ);
-  }
-  return true;
-}
-
-// MachineLICM hoists a loop-invariant instruction to the preheader when it is
-// safe to move, and only loads additionally have to be guaranteed to execute.
-// Pointer arithmetic on a capability is not safe to speculate: CIncOffset of
-// an untagged value -- a NULL pointer, say -- traps instead of computing a
-// harmless address. CPython's argument parser tests `kwnames` for NULL and
-// only then forms &kwnames->ob_item; early MachineLICM moved that CIncOffsetImm
-// into the outer loop's preheader, above the test, and every call without
-// keyword arguments trapped (C-58). So these instructions follow the rule for
-// loads: hoisted only from a block that runs on every iteration.
-bool CapstoneInstrInfo::shouldHoist(const MachineInstr &MI,
-                                    const MachineLoop *FromLoop) const {
-  if (!trapsOnUntaggedOperand(MI.getOpcode()))
-    return true;
-  return executesOnEveryIteration(MI.getParent(), FromLoop);
+// LLVM assumes that an instruction which neither accesses memory nor has side
+// effects can run on any path, and pointer arithmetic is such an instruction
+// everywhere else. On Capstone it is not: CIncOffset of an untagged value -- a
+// NULL pointer, say -- traps instead of computing a harmless address. So any
+// pass that executes an instruction on a path where it did not run before is
+// speculating, and for these it must not.
+//
+// This used to be answered only to MachineLICM, through its shouldHoist hook,
+// with the dominance test re-derived by reachability because that hook gets no
+// dominator tree (C-58). MachineCSE's PRE then did the same thing by another
+// route: CPython tests `nkwargs > 0` before forming &kwnames->ob_item in two
+// sibling loop preheaders, PRE duplicated the CIncOffsetImm into their nearest
+// common dominator above the test, and every call without keyword arguments
+// trapped (C-66). The question now has one answer and every speculating pass
+// asks it; MachineLICM applies its own guaranteed-to-execute test, as for
+// loads.
+bool CapstoneInstrInfo::canTrap(const MachineInstr &MI) const {
+  return trapsOnUntaggedOperand(MI.getOpcode());
 }
 
 bool CapstoneInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {

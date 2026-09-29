@@ -44,6 +44,15 @@ FunctionPass *createCapstoneDeadRegisterDefinitionsPass();
 void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);
 
 FunctionPass *createCapstoneIndirectBranchTrackingPass();
+FunctionPass *createCapstoneLiveSourceCopyPass(bool CheckOnly = false);
+void initializeCapstoneLiveSourceCopyPass(PassRegistry &);
+/// A GPCR COPY/MOVC whose source is not always tagged or null (c0, sp, gp, tp,
+/// fp/bp when present): the copies CapstoneLiveSourceCopy may rewrite.
+bool capstoneIsLiveSourceCopyCandidate(const MachineInstr &MI,
+                                       const MachineFunction &MF);
+/// Conservative: the rule is on and some candidate exists. Decides the slot and
+/// shrink-wrapping before the frame is laid out.
+bool capstoneNeedsLiveSourceCopySlot(const MachineFunction &MF);
 void initializeCapstoneIndirectBranchTrackingPass(PassRegistry &);
 
 FunctionPass *createCapstoneLandingPadSetupPass();
