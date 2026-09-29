@@ -1,0 +1,40 @@
+# PR #119 gate test lsc-stc-ldc-slot.S on capstone-ariane 6cbdaeeb4 (the resident RTL), RTL lane, 2026-09-29.
+# Worktree detached at 6cbdaeeb4, 0 tracked changes; test from origin/pr/119 (da04d49eaf67), sha256 b7e12e2b…f51699;
+# testlist entry copied from stc-register-clear; veri-testharness, cva6-build-rv container pinned to CPUs 0-7,32-39;
+# --sv_seed 1 in every run. Verdict from tohost; trap count and sites from the retirement trace's "exception @" lines,
+# not from the test's own trap_count word. Realised delay for S12_MEM_DELAY=40 is 8 cycles per R-27's README (cited, not re-measured).
+
+== ORIGINAL TEST (as in the PR): FAILS at case 0, both latencies -- a cause-number assumption, not the shape under test ==
+delay 0    *** FAILED *** (tohost = 10) after 409 cycles;  1 exception (UNEXPECTED_OPERAND, at +0x30 = case 0's LCC)
+delay 40   *** FAILED *** (tohost = 10) after 993 cycles;  1 exception (same)
+cause      the handler reads mcause = 0x18 = 24 (trace, pc 0x80000430 csrr t0,mcause -> x5 = 0x18) and expects 25:
+           on this RTL UNEXPECTED_OPERAND_TYPE = 24 (riscv_pkg.sv:358, spec base since the R-24 fix c77c65324, in every
+           bitstream from 054cea69b on); 25 is INVALID_CAPABLITY (the revoked-capability cause). TESTNUM 10 = "unexpected trap".
+
+== PATCHED VARIANT lsc-stc-ldc-slot-c24.S: ONE line changed (trap_handler: li t1, 25 -> li t1, 24), labelled in the file ==
+delay 0    *** SUCCESS *** (tohost = 0) after 1848 cycles;  exactly 3 exceptions, all UNEXPECTED_OPERAND (24)
+delay 40   *** SUCCESS *** (tohost = 0) after 6001 cycles;  exactly 3 exceptions, all UNEXPECTED_OPERAND (24)
+trap sites +0x30  (case 0: LCC x0 on the integer -- the detector's positive control)
+           +0x16e (case 5: LCC x0 on s6, the nulled LINEAR source)
+           +0x172 (case 5: LCC x0 on s8, the cleared second reload)
+           identical at both latencies; matches the author's pre-registration (case 0's one, case 5's two) exactly.
+per case   0..9 all reached and passed (tohost = 0 is RVTEST_PASS after case 9's leg loop; no fail_N taken; bad_legs = 0 by
+           construction of the pass path). Case 3 and case 9 (the S-10b stale-tag route) PASS; case 5 (LINEAR) PASS; case 8
+           (the S-07 shape) PASS.
+
+== LOCAL EXTENSION lsc-stc-ldc-slot-cold.S (the c24 variant + case 10; NOT part of the PR's test), requested by the board lane ==
+what       17 legs, each on a FRESH 16-byte granule (= its own D-cache line): STC NONLIN -> fence (the WT cache acks a flush
+           only when the write buffer is empty, wt_dcache.sv:424, so MEMORY holds the tag) -> STC integer -> LDC straight back;
+           pass = the reload is the integer and LCC x1 answers 7. Leg 0 is the positive control: its integer STC is skipped,
+           so the reload IS the NONLIN capability and MUST count as bad. Pass condition: cold_bad_legs == 1 exactly, trap_count 0.
+delay 0    *** SUCCESS *** (tohost = 0) after 3007 cycles;  3 exceptions at the same three sites as above (none in case 10)
+delay 40   *** SUCCESS *** (tohost = 0) after 10513 cycles; 3 exceptions at the same three sites
+trace      17 retirements of the loop-head STC (all legs ran), cold_bad entered exactly ONCE (the control), 17 fences retired
+           inside the loop, at both latencies. So 16 cold misses over memory that held a tag read the integer, untagged.
+
+== NOT RUN HERE ==
+8f6a0af98  (R-43 v2, in synthesis): follows once the verification batch releases that worktree.
+
+Files: the RTL lane's run directories (cva6.py output, .log.iss, the retirement .log and
+trace_rvfi_hart_00.dasm for the passing runs); the patched variant's code is this folder's lsc-stc-ldc-slot.S
+(identical apart from comments, checked by a comment-stripped diff).

@@ -33,13 +33,24 @@ On the host with the RTL build, per the `rtl-sim` skill:
    - Record the realised delay. `S12_MEM_DELAY=40` realises as 8 cycles (R-27 README).
    - Pin `--sv_seed` and record it with the result.
 
-## What was run, and what was not
+## What was run: PASS on `6cbdaeeb4` at both latencies (2026-09-29, RTL lane)
 
-- It has been preprocessed and assembled with stub `riscv_test.h`/`test_macros.h` against
-  `asm_insn.h`, and it passes both CPP-trap greps from the skill.
-- It has **not** been simulated. The host where the compiler lane works (2026-09-25) has no
-  `cva6-build-rv` image and no `tools/`. Its capstone-ariane clone also lacks `6cbdaeeb4`, which is
-  not on origin either (newest origin ref: `0bf09b1`, 2026-09-15).
+Result lines: `rtl-6cbdaeeb4.result-lines.txt` in this folder. `--sv_seed 1`; the verdict is read
+from tohost, and the trap sites from the retirement trace.
+
+- **The test as first written failed case 0 at both latencies**, on a cause number rather than on the
+  shape: its handler expected 25, and this RTL raises UNEXPECTED_OPERAND_TYPE as **24** (the R-24 fix,
+  in every bitstream from `054cea69b` on). The handler now expects 24. Nothing else changed.
+- **With that fix: `RVTEST_PASS` at delay 0 (1,848 cycles) and at `S12_MEM_DELAY=40` (6,001
+  cycles).** There are exactly three traps, all cause 24: case 0's, and case 5's two (the nulled LINEAR
+  source and the cleared second reload). That is the prediction below, site for site, identical at
+  both latencies. Cases 3 and 9, the S-10b stale-tag route, pass, and so does case 8, the S-07 shape.
+- **A cold-miss extension, run locally and not part of this test.** It adds 17 legs, each on a fresh
+  granule whose tag reached memory: STC NONLIN, fence, STC integer, LDC. Leg 0 is a positive control
+  that skips the integer store and must count as bad. Result: exactly one bad leg (the control) and
+  no extra traps, at both latencies. So 16 cold misses over a granule that held a tag read the integer
+  back, untagged.
+- **Not run:** the R-43 redesign `8f6a0af98`, and any board.
 
 ## Predicted reading, written before any run
 
