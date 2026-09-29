@@ -858,6 +858,16 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
      * which is a strictly worse claim than being able to read it. Runs after every read, because a
      * write that faults would otherwise cost the reads their transcript. */
     { volatile char *p = (volatile char *)m1_ret_alias[0];
+#if M1_STALE_TAKE_LIVE
+      /* THE CONTROL FOR THIS PROBE: the identical store and readback, through the LIVE alias to the
+       * same storage. Without it a refused stale write and a store path that faults for some other
+       * reason read alike. Until 2026-09-29 M1_STALE_TAKE_LIVE redirected only `oldest`, which the mint
+       * uses, so a TAKE_LIVE build still stored through m1_ret_alias[0] here and was no control for the
+       * write (found on the emulator: both builds faulted at this store). Off by default, so an image
+       * without the define is byte-identical. */
+      p = (volatile char *)alias[0];
+      out("R1 m1 stale-write CONTROL: storing through a LIVE alias, not a stale one\n");
+#endif
       *p = (char)0xA5;
       out("R1 m1 stale-write ok\n");
       out("R1 m1 stale-write readback"); kv("via_live_alias", (ulong)(unsigned char)*(volatile char *)alias[0]);
