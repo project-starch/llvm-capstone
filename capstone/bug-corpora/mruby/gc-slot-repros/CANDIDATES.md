@@ -691,3 +691,42 @@ and region 1 the GC slots, so no third level could be sub-let at all. Branch
 `LT_HASH_REGION_BYTES`, with an `#error` if it is set out of turn -- the grant order is what
 fixes the index `__capstone_region` hands out. Checked in all three configurations, including
 that the out-of-turn guard fires.
+
+### Sub-letting the hash entry array: attempt 1, and the error its control caught
+
+Patch 0009 landed and 0010 did not, which is the useful half of the result.
+
+0010 gave each entry array a sidecar keyed on the array's address, took a slot in
+`ea_set()` and gave it back in `entry_delete()`, carved a span out of the program's
+region 2 with 0008's own loop, and left the array's storage where it was -- an
+`mrb_realloc`'d block. Both native gates passed: with the define off `mrbtest` is
+Total 1527, OK 1527, KO 0, Crash 0, and with the software stand-in
+(`MRB_CAPSTONE_HASH_SUBLET_SOFT`) the same, so the take and the give sit somewhere
+consistent with the whole suite.
+
+**The domain control then faulted at `ht_set +0x720`, cause 5, and it was right to.**
+The alias `sublet_take()` returns points into **region 2**, while every other reader
+still uses the `mrb_realloc`'d array, and `ea_get()`'s fall-through hands out
+`&ea[index]` -- a raw pointer into a region the domain holds no capability for. The
+two halves of the array were in different places. The software stand-in could not
+have shown this: it replaces the capability operations with poisoning, so the
+addresses never diverge.
+
+What a correct 0010 needs, which is now a specification rather than a guess:
+
+1. **the array's storage must BE the carved span.** `ea_resize()` and `ea_dup()` have
+   to allocate out of region 2 and return the span's base as the array, not register
+   a block that malloc owns. That makes them a small allocator, not a hook.
+2. **a free slot must never be read**, which is 0008's stated invariant.
+   `entry_deleted_p()` has to answer from the sidecar (`obj[i] == NULL`), so
+   `ea_skip_deleted()` and `ea_compress()` become index-based against it rather than
+   reading a vacated slot's key.
+3. **growing past `AR_MAX_SIZE` must copy the live slots out** of region 2 into a
+   malloc'd array and give the span back, because above 16 entries the hash changes
+   shape and leaves this level.
+
+None of the three is large; together they are the difference between a hook and an
+allocator, and (1) is what was missing. The attempt is recorded rather than committed:
+a sub-let that is wrong produces faults that look exactly like catches, which is the
+trap this file documents twice already, and the control existing is the only reason
+this one was caught in a single run rather than written up as a result.
