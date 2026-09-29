@@ -1,0 +1,36 @@
+{
+  "program": "sqlite",
+  "role": "full-application",
+  "title": "SQLite in a Capstone domain: the in-memory workload and speedtest1",
+  "upstream": {
+    "version": [
+      "3.53.3",
+      "3.22.0"
+    ],
+    "pin_source": [
+      {
+        "file": "capstone/ports/sqlite/fetch-sqlite-src.sh",
+        "grep": "SQLITE_SRC_VERSION=${SQLITE_SRC_VERSION:-3.53.3}",
+        "version": "3.53.3"
+      },
+      {
+        "file": "capstone/ports/sqlite/run-sqlite-322-silicon.sh",
+        "grep": "export SQLITE_VERSION=3220000",
+        "version": "3220000"
+      }
+    ]
+  },
+  "targets": [
+    "capstone-domain",
+    "silicon",
+    "native"
+  ],
+  "workload": "the in-memory SQL smoke, speedtest1, and the 3.22.0 silicon gate",
+  "corpora": [
+    "capstone/bug-corpora/sqlite/capi-repros"
+  ],
+  "related": [
+    "xlang/reuse-not-free"
+  ],
+  "note": "3.22.0 is the published PoisonCap artifact's release and the anchor of the measured memory campaigns; 3.53.3 is the general port and the version the binding corpus's host arm builds."
+}

@@ -6,6 +6,14 @@
 #include "port.h"
 #include <string.h>
 #include <sublet/sublet.h>
+#ifdef PYMALLOC_GAP_OBSERVER
+#include <stdio.h>
+#include "../../../../../experiments/study/reuse-gap-observer.h"
+#define PYM_REUSE_SLOTS (1u << 17)
+static struct reuse_gap_slot pym_reuse_slots[PYM_REUSE_SLOTS];
+static struct reuse_gap_observer pym_reuse;
+static unsigned observer_inplace_resize;
+#endif
 
 #define ARENA_SIZE 1048576UL
 #define POOL_SIZE 16384UL
@@ -41,6 +49,9 @@ static size_t arena_allocations, arena_releases;
 size_t pym_metadata_used(void);
 
 void pym_lifetime_init(void *region) {
+#ifdef PYMALLOC_GAP_OBSERVER
+  reuse_gap_init(&pym_reuse, pym_reuse_slots, PYM_REUSE_SLOTS);
+#endif
   capstone_cap_store(&small_remaining, region);
   small_cursor = capstone_cap_base(&small_remaining);
   small_end = small_cursor + PYM_ARENA_BYTES / 2;
@@ -227,11 +238,22 @@ void *pym_issue(void *ptr, size_t requested) {
   uintptr_t base = (uintptr_t)b->alias;
   b->client = __builtin_capstone_cap_shrink(b->alias, base,
                                             base + (requested ? requested : 1));
+#ifdef PYMALLOC_GAP_OBSERVER
+  if (!observer_inplace_resize) {
+    reuse_gap_attempt(&pym_reuse);
+    reuse_gap_issue(&pym_reuse, (uint64_t)(uintptr_t)b->client,
+                    (uint64_t)(requested ? requested : 1));
+  }
+#endif
   return b->client;
 }
 void *pym_release(void *ptr) {
   pym_validate(ptr);
   struct block *b = block_for(ptr);
+#ifdef PYMALLOC_GAP_OBSERVER
+  if (!observer_inplace_resize)
+    reuse_gap_release(&pym_reuse, (uint64_t)(uintptr_t)ptr);
+#endif
   if (protected_mode) {
     sublet_give(&b->region);
     b->alias = sublet_take(&b->region);
@@ -241,7 +263,16 @@ void *pym_release(void *ptr) {
   return b->alias;
 }
 void *pym_resize(void *ptr, size_t requested) {
-  return pym_issue(pym_release(ptr), requested);
+#ifdef PYMALLOC_GAP_OBSERVER
+  observer_inplace_resize = 1;
+#endif
+  void *client = pym_issue(pym_release(ptr), requested);
+#ifdef PYMALLOC_GAP_OBSERVER
+  observer_inplace_resize = 0;
+  reuse_gap_resize(&pym_reuse, (uint64_t)(uintptr_t)client,
+                   (uint64_t)(requested ? requested : 1));
+#endif
+  return client;
 }
 size_t pym_requested(void *ptr) {
   pym_validate(ptr);
@@ -283,3 +314,19 @@ void pym_backing_stats(struct pym_header *h) {
   h->arena_frees = arena_releases;
   h->metadata = pym_metadata_used();
 }
+#ifdef PYMALLOC_GAP_OBSERVER
+void pym_gap_report(void) {
+  fprintf(stderr, "PYM_REUSE_GAP attempts=%llu issues=%llu releases=%llu "
+          "reuses=%llu distinct=%llu capacity=%u error=%u bins=",
+          (unsigned long long)pym_reuse.attempts,
+          (unsigned long long)pym_reuse.issues,
+          (unsigned long long)pym_reuse.releases,
+          (unsigned long long)pym_reuse.reuses,
+          (unsigned long long)pym_reuse.distinct_starts,
+          PYM_REUSE_SLOTS, pym_reuse.error);
+  for (unsigned i = 0; i < 32; ++i)
+    fprintf(stderr, "%s%llu", i ? "," : "",
+            (unsigned long long)pym_reuse.bins[i]);
+  fprintf(stderr, "\n");
+}
+#endif

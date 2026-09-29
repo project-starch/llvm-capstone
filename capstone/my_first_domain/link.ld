@@ -18,6 +18,10 @@ SECTIONS {
     *(.rodata .rodata.*)
   } :domain
 
+  .capstone_application : ALIGN(8) {
+    KEEP(*(.capstone_application))
+  } :domain
+
   .data : ALIGN(16) {
     *(.sdata .sdata.*)
     *(.data .data.*)
@@ -166,7 +170,6 @@ SECTIONS {
     *(.riscv.attributes)
   }
 }
-
 
 
 

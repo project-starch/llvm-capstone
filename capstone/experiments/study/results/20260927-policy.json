@@ -1,0 +1,85 @@
+{
+  "date": "2026-09-27",
+  "purpose": "Process policy qualification using existing discovery workloads; not standard benchmark results",
+  "base_revision": "0e93927a8dbd82300ee141b8f3d68350ddd7054b",
+  "guest_boots": 1,
+  "guest_default_policy": {
+    "runtime_revocation_default": 1,
+    "runtime_revocation_async": 1,
+    "runtime_revocation_every_free_default": 0
+  },
+  "runner_sha256": "1a6176556f523f7c16b7bae2908eb527afcb6b292278866b7f7e2f4eef21322c",
+  "allocation_validator_sha256": "4b6b2d2bc5f7cb22710c824cc5bfe141a2363ea64cc433c59ce8eac09e6f2d86",
+  "runs": [
+    {
+      "application": "mruby",
+      "arm": "cheribsd-revocation-on",
+      "status": "pass",
+      "expected_revocation": 1,
+      "observed_revocation": [
+        1
+      ],
+      "phase_count": 19,
+      "binary_sha256": "22d3911213ed71887d832e91f36da13ef0fcd2280b3137c1bb67ae7aad2c71e2",
+      "stdout_sha256": "25e7a9732cbb78eb0f0eddbc635b5b0555e09e2322c6d7e8bb72295245bd2895"
+    },
+    {
+      "application": "mruby",
+      "arm": "cheribsd-revocation-off",
+      "status": "pass",
+      "expected_revocation": 0,
+      "observed_revocation": [
+        0
+      ],
+      "phase_count": 19,
+      "binary_sha256": "22d3911213ed71887d832e91f36da13ef0fcd2280b3137c1bb67ae7aad2c71e2",
+      "stdout_sha256": "25e7a9732cbb78eb0f0eddbc635b5b0555e09e2322c6d7e8bb72295245bd2895"
+    },
+    {
+      "application": "ffmpeg",
+      "arm": "cheribsd-revocation-on",
+      "status": "pass",
+      "expected_revocation": 1,
+      "observed_revocation": [
+        1
+      ],
+      "phase_count": 4,
+      "binary_sha256": "4b9822de4885bef9fbbdf042aab4627bbe9cdd2faffe45859f51592a3fab3ea1",
+      "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af"
+    },
+    {
+      "application": "ffmpeg",
+      "arm": "cheribsd-revocation-off",
+      "status": "pass",
+      "expected_revocation": 0,
+      "observed_revocation": [
+        0
+      ],
+      "phase_count": 4,
+      "binary_sha256": "4b9822de4885bef9fbbdf042aab4627bbe9cdd2faffe45859f51592a3fab3ea1",
+      "stdout_sha256": "6175afea1c8c8913d91d96539885e96f8f807f8f4e3d1792c6674080ffbbc2af"
+    },
+    {
+      "application": "mruby",
+      "arm": "cheribsd-revocation-on",
+      "status": "pass",
+      "expected_revocation": 1,
+      "observed_revocation": [
+        1
+      ],
+      "phase_count": 19,
+      "binary_sha256": "22d3911213ed71887d832e91f36da13ef0fcd2280b3137c1bb67ae7aad2c71e2",
+      "stdout_sha256": "25e7a9732cbb78eb0f0eddbc635b5b0555e09e2322c6d7e8bb72295245bd2895"
+    }
+  ],
+  "checks": {
+    "same_binary_for_on_off": true,
+    "same_useful_output_for_on_off": true,
+    "subsequent_on_process_passes": true,
+    "capstone_vm_restored": true
+  },
+  "tests": {
+    "study": 12,
+    "cheribsd_runner": 6
+  }
+}

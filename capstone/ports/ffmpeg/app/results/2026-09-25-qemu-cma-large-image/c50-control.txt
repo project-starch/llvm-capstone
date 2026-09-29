@@ -1,0 +1,12 @@
+# The C-50 gate's POSITIVE CONTROL: M5 built WITHOUT patch 0003, everything else equal.
+# Compiler 3979abd8e9a3, which PREDATES the C-50 fix 4c407f9456d4 -- on a fixed compiler
+# this control cannot fire and its silence would mean nothing.
+
+compiler: 3979abd8e9a36a8feb7ff67c5b84377025b0b047
+HIT ff_mpv_alloc_pic_pool                    955d8: addi a2, sp, 0x8          -> 955e8: sd zero, 0x0(a2)
+1 hit(s) in 361737 instructions
+C-50 GATE: integer sp/s0 address used as a store base (see above)
+=== build-domain exit=1 (nonzero WITH a C-50 GATE line = the control FIRED) ===
+
+# For comparison, the SAME gate on the same compiler WITH patch 0003 (the Phase 0 build):
+0 hit(s) in 1018765 instructions

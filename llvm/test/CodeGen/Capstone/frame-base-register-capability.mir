@@ -1,0 +1,195 @@
+# C-52: LocalStackSlotAllocation gives loads and stores far from sp a virtual
+# base register, which materializeFrameBaseRegister built as RISC-V does: a GPR
+# from ADDI. Every Capstone load and store takes a capability base, so the
+# rewritten accesses were ill-typed; the verifier rejects them, and the Greedy
+# allocator segfaulted on them in SplitEditor::rematWillIncreaseRestriction
+# (CPython's compiler_visit_stmt). The base must be a GPCR from CIncOffsetImm.
+#
+# WHY THIS IS A CHECKED-IN .mir AND NOT THE .ll IT USED TO BE. The pass needs a
+# load or store that still carries a BARE FRAME INDEX as its base and sits far
+# from sp (CapstoneRegisterInfo::needsFrameBaseReg, and the
+# isObjectPreAllocated assert in LocalStackSlotAllocation.cpp), and the only C
+# shape that produced one was a caller-side byval copy, whose first word was
+# stored through the frame index directly. C-50's fix gives that copy a
+# capability frame index, so no byval store carries a bare frame index any more
+# and NOTHING in the tree reaches this pass from source. Measured at the time:
+# across all 102 .ll tests in this directory, zero materialize a base register
+# after the C-50 fix, where this file's predecessor did. Keeping the .ll form
+# would have left a test that passes whether or not the C-52 fix is present --
+# a guard that cannot fail is not a guard. The MIR below is therefore the
+# pass's input, recorded from the pre-C-50 compiler, so the pass still runs.
+#
+# Positive control, re-run whenever this file is touched: with -stats this input
+# must report "1 ... virtual frame base registers allocated" and "2 ... frame
+# indices references replaced". If those are absent the pass did nothing and the
+# CHECK lines below are vacuous, however green they look.
+#
+# RUN: llc -mtriple=capstone64 -run-pass=localstackalloc -verify-machineinstrs -o - %s | FileCheck %s
+#
+# The CHECK lines are the .ll test's verbatim, and deliberately so: they were
+# negative-tested against an unfixed materializeFrameBaseRegister when C-52
+# landed (it emitted ADDI %stack.1), and keeping the text identical keeps that
+# negative test meaningful. The two SD lines are one store from EACH byval
+# temporary through the ONE shared base -- offset 16 reaches %stack.0 from a
+# base at %stack.1 -- which is the sharing the pass exists to do.
+#
+# CHECK-LABEL: name: far_byval
+# CHECK-NOT: = ADDI %stack.
+# CHECK: [[BASE:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1, 0
+# CHECK: SD {{.*}}, [[BASE]], 16 ::
+# CHECK: SD {{.*}}, [[BASE]], 0 ::
+--- |
+  ; ModuleID = '<stdin>'
+  source_filename = "<stdin>"
+  target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
+  target triple = "capstone64"
+  
+  %pair = type { i64, i64 }
+  %blob = type { [4096 x i8] }
+  
+  declare void @take(ptr addrspace(200) byval(%pair)) addrspace(200)
+  
+  declare void @take_blob(ptr addrspace(200) byval(%blob)) addrspace(200)
+  
+  define void @far_byval(ptr addrspace(200) %p, ptr addrspace(200) %q) addrspace(200) {
+    call addrspace(200) void @take(ptr addrspace(200) byval(%pair) %p)
+    call addrspace(200) void @take(ptr addrspace(200) byval(%pair) %p)
+    call addrspace(200) void @take_blob(ptr addrspace(200) byval(%blob) %q)
+    ret void
+  }
+...
+---
+name:            far_byval
+alignment:       4
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+noPhis:          false
+isSSA:           true
+noVRegs:         false
+hasFakeUses:     false
+callsEHReturn:   false
+callsUnwindInit: false
+hasEHContTarget: false
+hasEHScopes:     false
+hasEHFunclets:   false
+isOutlined:      false
+debugInstrRef:   false
+failsVerification: false
+tracksDebugUserValues: false
+registers:
+  - { id: 0, class: gpcr, preferred-register: '', flags: [  ] }
+  - { id: 1, class: gpcr, preferred-register: '', flags: [  ] }
+  - { id: 2, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 3, class: gpcr, preferred-register: '', flags: [  ] }
+  - { id: 4, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 5, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 6, class: gpcrjalr, preferred-register: '', flags: [  ] }
+  - { id: 7, class: gpcr, preferred-register: '', flags: [  ] }
+  - { id: 8, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 9, class: gpcr, preferred-register: '', flags: [  ] }
+  - { id: 10, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 11, class: gpcr, preferred-register: '', flags: [  ] }
+  - { id: 12, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 13, class: gpcrjalr, preferred-register: '', flags: [  ] }
+  - { id: 14, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 15, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 16, class: gpcr, preferred-register: '', flags: [  ] }
+  - { id: 17, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 18, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 19, class: gpr, preferred-register: '', flags: [  ] }
+  - { id: 20, class: gpcrjalr, preferred-register: '', flags: [  ] }
+liveins:
+  - { reg: '$c10', virtual-reg: '%0' }
+  - { reg: '$c11', virtual-reg: '%1' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    8
+  adjustsStack:    true
+  hasCalls:        true
+  stackProtector:  ''
+  functionContext: ''
+  maxCallFrameSize: 4294967295
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  hasTailCall:     false
+  isCalleeSavedInfoValid: false
+  localFrameSize:  0
+fixedStack:      []
+stack:
+  - { id: 0, name: '', type: default, offset: 0, size: 16, alignment: 8, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 1, name: '', type: default, offset: 0, size: 16, alignment: 8, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 2, name: '', type: default, offset: 0, size: 4096, alignment: 1, 
+      stack-id: default, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+entry_values:    []
+callSites:       []
+debugValueSubstitutions: []
+constants:       []
+machineFunctionInfo:
+  varArgsFrameIndex: 0
+  varArgsSaveSize: 0
+body:             |
+  bb.0 (%ir-block.0):
+    liveins: $c10, $c11
+  
+    %1:gpcr = COPY $c11
+    %0:gpcr = COPY $c10
+    %2:gpr = LD %0, 8 :: (load (s64) from unknown-address + 8, addrspace 200)
+    %3:gpcr = CIncOffsetImm %stack.0, 8
+    SD killed %2, killed %3, 0 :: (store (s64) into %stack.0 + 8, addrspace 200)
+    %4:gpr = LD %0, 0 :: (load (s64), addrspace 200)
+    SD killed %4, %stack.0, 0 :: (store (s64) into %stack.0, addrspace 200)
+    ADJCALLSTACKDOWN 0, 0, implicit-def dead $x2, implicit $x2
+    %5:gpr = PseudoLLA @take
+    %6:gpcrjalr = CIncOffset $c3, killed %5
+    %7:gpcr = CIncOffsetImm %stack.0, 0
+    $c10 = COPY %7
+    PseudoCALLIndirect %6, csr_ilp32_lp64, implicit-def dead $x1, implicit $c10, implicit-def $x2
+    ADJCALLSTACKUP 0, 0, implicit-def dead $x2, implicit $x2
+    %8:gpr = LD %0, 8 :: (load (s64) from unknown-address + 8, addrspace 200)
+    %9:gpcr = CIncOffsetImm %stack.1, 8
+    SD killed %8, killed %9, 0 :: (store (s64) into %stack.1 + 8, addrspace 200)
+    %10:gpr = LD %0, 0 :: (load (s64), addrspace 200)
+    SD killed %10, %stack.1, 0 :: (store (s64) into %stack.1, addrspace 200)
+    ADJCALLSTACKDOWN 0, 0, implicit-def dead $x2, implicit $x2
+    %11:gpcr = CIncOffsetImm %stack.1, 0
+    $c10 = COPY %11
+    PseudoCALLIndirect %6, csr_ilp32_lp64, implicit-def dead $x1, implicit $c10, implicit-def $x2
+    ADJCALLSTACKUP 0, 0, implicit-def dead $x2, implicit $x2
+    ADJCALLSTACKDOWN 0, 0, implicit-def dead $x2, implicit $x2
+    %12:gpr = PseudoLLA &memcpy
+    %13:gpcrjalr = CIncOffset $c3, killed %12
+    %14:gpr = COPY %1.sub_cap_addr
+    %15:gpr = PseudoTRUNC_CAP killed %14
+    %16:gpcr = CIncOffsetImm %stack.2, 0
+    %17:gpr = LUI 1
+    $x10 = COPY %16
+    $x11 = COPY %15
+    $x12 = COPY %17
+    PseudoCALLIndirect killed %13, csr_ilp32_lp64, implicit-def dead $x1, implicit $x10, implicit $x11, implicit $x12, implicit-def $x2, implicit-def $x10
+    ADJCALLSTACKUP 0, 0, implicit-def dead $x2, implicit $x2
+    %18:gpr = COPY $x10
+    ADJCALLSTACKDOWN 0, 0, implicit-def dead $x2, implicit $x2
+    %19:gpr = PseudoLLA @take_blob
+    %20:gpcrjalr = CIncOffset $c3, killed %19
+    $c10 = COPY %16
+    PseudoCALLIndirect killed %20, csr_ilp32_lp64, implicit-def dead $x1, implicit $c10, implicit-def $x2
+    ADJCALLSTACKUP 0, 0, implicit-def dead $x2, implicit $x2
+    PseudoRET
+...

@@ -1,0 +1,31 @@
+application,workload,arm,repetition,snapshot_peak_bytes,snapshot_after_bytes
+ffmpeg,xvid_vlc_trac7411,poisoncap-spatial,0,0,0
+ffmpeg,xvid_vlc_trac7411,poisoncap-spatial,1,0,0
+ffmpeg,xvid_vlc_trac7411,poisoncap-spatial,2,0,0
+ffmpeg,xvid_vlc_trac7411,poisoncap-temporal,0,229824,0
+ffmpeg,xvid_vlc_trac7411,poisoncap-temporal,1,229824,0
+ffmpeg,xvid_vlc_trac7411,poisoncap-temporal,2,229824,0
+ffmpeg,resize_down-up,poisoncap-spatial,0,0,0
+ffmpeg,resize_down-up,poisoncap-spatial,1,0,0
+ffmpeg,resize_down-up,poisoncap-spatial,2,0,0
+ffmpeg,resize_down-up,poisoncap-temporal,0,171072,0
+ffmpeg,resize_down-up,poisoncap-temporal,1,171072,0
+ffmpeg,resize_down-up,poisoncap-temporal,2,171072,0
+ffmpeg,1,PoisonCap spatial,0,0,0
+ffmpeg,1,PoisonCap spatial,1,0,0
+ffmpeg,1,PoisonCap spatial,2,0,0
+ffmpeg,1,PoisonCap temporal,0,36288,0
+ffmpeg,1,PoisonCap temporal,1,36288,0
+ffmpeg,1,PoisonCap temporal,2,36288,0
+ffmpeg,4,PoisonCap spatial,0,0,0
+ffmpeg,4,PoisonCap spatial,1,0,0
+ffmpeg,4,PoisonCap spatial,2,0,0
+ffmpeg,4,PoisonCap temporal,0,36288,0
+ffmpeg,4,PoisonCap temporal,1,36288,0
+ffmpeg,4,PoisonCap temporal,2,36288,0
+ffmpeg,16,PoisonCap spatial,0,0,0
+ffmpeg,16,PoisonCap spatial,1,0,0
+ffmpeg,16,PoisonCap spatial,2,0,0
+ffmpeg,16,PoisonCap temporal,0,36288,0
+ffmpeg,16,PoisonCap temporal,1,36288,0
+ffmpeg,16,PoisonCap temporal,2,36288,0

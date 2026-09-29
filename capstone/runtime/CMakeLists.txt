@@ -10,6 +10,11 @@ target_include_directories(capstone-runtime INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Domain.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Application.cmake")
+add_library(capstone-launch STATIC EXCLUDE_FROM_ALL common/launch.c)
+add_library(Capstone::Launch ALIAS capstone-launch)
+target_compile_definitions(capstone-launch PRIVATE _POSIX_C_SOURCE=200809L)
+target_link_libraries(capstone-launch PUBLIC Capstone::Runtime)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   find_package(Threads REQUIRED)
   add_library(capstone-linux-fault-policy STATIC EXCLUDE_FROM_ALL linux/domain-fault.c)

@@ -586,6 +586,12 @@ static unsigned run_speedtest1(void) {
     baseline_sqlite_ready = 1;
   }
 #else
+#ifdef CAPSTONE_SPEEDTEST1_REGION_ARENA
+  /* The host plants a sentinel in word zero before sharing the region. SQLite
+   * 3.22.0 memsys5 reads that word as a free-list link during initialization,
+   * so the shared arena must be cleared before handing it to CONFIG_HEAP. */
+  memset(SPEED_ARENA_PTR, 0, SPEED_ARENA_LEN);
+#endif
   if (sqlite3_config(SQLITE_CONFIG_HEAP, SPEED_ARENA_PTR, SPEED_ARENA_LEN, 64) != SQLITE_OK)
     return (unsigned)SQLITE_HC_ERR_CONFIG_HEAP;
 #ifdef CAPSTONE_SPEEDTEST1_ALLOCSTATS

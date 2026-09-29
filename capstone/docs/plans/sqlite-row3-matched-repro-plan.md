@@ -9,7 +9,7 @@ so it is written up for review first (propose-before-big-directions).*
 The corpus today has a real→abstract **mismatch** the paper cannot lean on as a
 matched pair:
 
-- **Before** (`cve-repros/row3_diesel_colname_cached/before.c`, 19 LOC): a real
+- **Before** (`capi-repros/row3_diesel_colname_cached/before.c`, 19 LOC): a real
   SQLite C-API program — `open/exec/prepare/step/column_name/finalize/close`,
   then reads `name[0]` *after* `sqlite3_finalize`. Genuine UAF; host oracle =
   `heap-use-after-free` (ASan).

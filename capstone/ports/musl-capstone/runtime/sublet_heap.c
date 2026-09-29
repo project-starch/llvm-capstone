@@ -97,6 +97,21 @@ static int sh_state;              /* 0 not yet, 1 ready, -1 no usable grant */
 /* counts a program can report: allocations, frees, merges, and the Sublet primitives */
 static unsigned long sh_n_alloc, sh_n_free, sh_n_merge, sh_live, sh_peak_live;
 
+/* Optional accounting of occupied buddy blocks, including internal slack.
+ * The pool and the out-of-line tables are separate reservations. */
+#ifdef CAPSTONE_SUBLET_HEAP_STATS
+static size_t sh_live_bytes, sh_peak_bytes;
+size_t __capstone_sublet_live_bytes(void) { return sh_live_bytes; }
+size_t __capstone_sublet_peak_bytes(void) { return sh_peak_bytes; }
+size_t __capstone_sublet_pool_bytes(void) {
+	return sh_state > 0 ? (size_t)1 << (sh_maxord + CAPSTONE_SUBLET_ATOM_LOG) : 0;
+}
+size_t __capstone_sublet_table_bytes(void) {
+	return sizeof sh_grant + sizeof sh_cap + sizeof sh_par + sizeof sh_ctrl +
+	       sizeof sh_next + sizeof sh_prev + sizeof sh_head + sizeof sh_paroff;
+}
+#endif
+
 static void sh_say(const char *msg)
 {
 	write(2, msg, strlen(msg));
@@ -183,11 +198,13 @@ static void sh_init(void)
 
 /* Exactly n bytes when that is representable; above 4 KiB, n rounded up to the granule the
    compressed encoding keeps (capstone.c's capstone_repr_granule). The block is a power of two
-   at least as long and aligned to itself, so the rounding never reaches another object. */
+   at least as long and aligned to itself, so the rounding never reaches another object.
+   malloc(0) gets ONE byte, as its carve does: an empty range is not a legal shrink, and
+   capstone-qemu halts the domain on it (libvidstab's malloc(0) did, 2026-09-29). */
 static void *sh_narrow(void *alias, size_t n)
 {
 	unsigned long c = __builtin_capstone_cap_get_cursor(alias);
-	unsigned long len = n;
+	unsigned long len = n ? n : 1;
 	if (len >= 4096) {
 		unsigned lg = 63 - __builtin_clzl(len);
 		unsigned long g = 1UL << (lg - 9);
@@ -196,13 +213,17 @@ static void *sh_narrow(void *alias, size_t n)
 	return __builtin_capstone_cap_shrink(alias, c, c + len);
 }
 
-void *malloc(size_t n)
+/* Carve a block of at least n bytes and mark it handed out; the atom index lands in *idx.
+   Returns 0, or -1 with errno set. This is malloc's body up to the hand-out: the linear lend
+   below carves IDENTICALLY and differs only in how the block leaves, so both arms share one
+   buddy policy and one set of counters. */
+static int sh_carve_block(size_t n, unsigned *idx)
 {
 	if (sh_state == 0)
 		sh_init();
 	if (sh_state < 0 || n > (1UL << (sh_maxord + CAPSTONE_SUBLET_ATOM_LOG))) {
 		errno = ENOMEM;
-		return 0;
+		return -1;
 	}
 	if (n == 0)
 		n = 1;
@@ -214,7 +235,7 @@ void *malloc(size_t n)
 		j++;
 	if (j > sh_maxord) {
 		errno = ENOMEM;
-		return 0;
+		return -1;
 	}
 	unsigned i = sh_head[j];
 	sh_unlink(i, j);
@@ -230,8 +251,22 @@ void *malloc(size_t n)
 	}
 	sh_ctrl[i] = SH_OUT | k;
 	sh_n_alloc++;
+#ifdef CAPSTONE_SUBLET_HEAP_STATS
+	sh_live_bytes += (size_t)1 << (k + CAPSTONE_SUBLET_ATOM_LOG);
+	if (sh_live_bytes > sh_peak_bytes)
+		sh_peak_bytes = sh_live_bytes;
+#endif
 	if (++sh_live > sh_peak_live)
 		sh_peak_live = sh_live;
+	*idx = i;
+	return 0;
+}
+
+void *malloc(size_t n)
+{
+	unsigned i;
+	if (sh_carve_block(n, &i) < 0)
+		return 0;
 	return sh_narrow(sublet_take(&sh_cap[i]), n);
 }
 
@@ -251,6 +286,9 @@ void free(void *p)
 		return;
 	}
 	unsigned k = sh_ctrl[i] & SH_ORD;
+#ifdef CAPSTONE_SUBLET_HEAP_STATS
+	sh_live_bytes -= (size_t)1 << (k + CAPSTONE_SUBLET_ATOM_LOG);
+#endif
 	/* the scrub, through the object's own alias and within its own bounds: the next owner of
 	   this block must not find the last owner's bytes or capabilities in it */
 	memset(p, 0, __builtin_capstone_cap_get_end(p) - a);
@@ -265,6 +303,71 @@ void free(void *p)
 		unsigned lo = i < b ? i : b, hi = lo + (1u << k);
 		/* the handle taken before the split: one revoke, the block is whole again,
 		   and the upper half's capability died with it */
+		sublet_give_to(&sh_par[sh_paridx(lo, k + 1)], &sh_cap[lo]);
+		sublet_clear(&sh_cap[hi]);
+		sh_ctrl[hi] = 0;
+		sh_n_merge++;
+		i = lo;
+		k++;
+	}
+	sh_push(i, k);
+}
+
+/* --- lending a block to a NESTED allocator -------------------------------------------------
+ * SQLite's memsys5 hands lookaside its block LINEAR and keeps the handle, so one revoke later
+ * destroys the pool and every slot in it at once (ports/sqlite/sublet/README.md). FFmpeg's
+ * AVBufferPool and AVRefStructPool need exactly that shape, and malloc cannot serve it: malloc
+ * returns a DELINEARISED alias (sublet_take), and a nested allocator cannot carve an alias.
+ *
+ * sublet_malloc_linear carves the block the same way malloc does and hands it out with
+ * sublet_take_linear instead: the region stays LINEAR in *out, and sh_cap[i] keeps the senior
+ * handle. Everything the borrower splits out of *out therefore hangs BELOW that handle, so the
+ * single revoke in sublet_free_linear reclaims the whole sub-pool -- the hierarchy property,
+ * not merely a free.
+ *
+ * Reclaim is keyed by BASE, not by a pointer: the lender holds no alias to probe, and the
+ * borrower's own aliases are exactly what the revoke is meant to kill. The caller must have
+ * released nothing else from the region first; a revoke of a handle whose region still has live
+ * borrowers is the point of the operation, not an error.
+ */
+unsigned long __capstone_sublet_malloc_linear(size_t n, sublet_cap *out)
+{
+	unsigned i;
+	if (sh_carve_block(n, &i) < 0)
+		return 0;
+	/* Reads the base before moving the region out, as the header requires. */
+	return sublet_take_linear(&sh_cap[i], out);
+}
+
+/* Reclaim a block lent by __capstone_sublet_malloc_linear. One revoke kills the lent region and
+   every capability the borrower carved from it; the buddy merge below is free's, unchanged. */
+void __capstone_sublet_free_linear(unsigned long base)
+{
+	unsigned i;
+	if (sh_state <= 0 || base < sh_base ||
+	    base - sh_base >= (1UL << (sh_maxord + CAPSTONE_SUBLET_ATOM_LOG)) ||
+	    ((base - sh_base) & ((1UL << CAPSTONE_SUBLET_ATOM_LOG) - 1)) ||
+	    !(sh_ctrl[i = (unsigned)((base - sh_base) >> CAPSTONE_SUBLET_ATOM_LOG)] & SH_OUT)) {
+		sh_say("sublet-heap: linear free of a base this heap did not lend; ignored\n");
+		return;
+	}
+	unsigned k = sh_ctrl[i] & SH_ORD;
+#ifdef CAPSTONE_SUBLET_HEAP_STATS
+	/* sh_carve_block counted this block when it was lent, as it counts a malloc's */
+	sh_live_bytes -= (size_t)1 << (k + CAPSTONE_SUBLET_ATOM_LOG);
+#endif
+	/* No scrub here, and that is deliberate: the lender holds no alias to write through, and
+	   sublet_give's write-through IS the scrub when the revoke returns UNINIT -- which is
+	   precisely the case a linear child produces. */
+	sublet_give(&sh_cap[i]);
+	sh_n_free++;
+	sh_live--;
+	while (k < sh_maxord) {
+		unsigned b = i ^ (1u << k);
+		if (sh_ctrl[b] != (SH_FREE | k))
+			break;
+		sh_unlink(b, k);
+		unsigned lo = i < b ? i : b, hi = lo + (1u << k);
 		sublet_give_to(&sh_par[sh_paridx(lo, k + 1)], &sh_cap[lo]);
 		sublet_clear(&sh_cap[hi]);
 		sh_ctrl[hi] = 0;

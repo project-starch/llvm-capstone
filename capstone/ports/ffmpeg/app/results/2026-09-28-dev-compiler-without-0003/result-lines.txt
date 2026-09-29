@@ -1,0 +1,18 @@
+# WITHOUT patch 0003, on dev's compiler (fixbuild 0a458bdb, sources identical to origin/dev).
+compiler: 0a458bdb802c1856cefd1a1c86435b9c90852665
+=== BUILD: dev's compiler, WITHOUT patch 0003 ===
+0 hit(s) in 361966 instructions
+budget and layout gates: 20 images FIT, none has .capstone_gp_initdesc
+control fired: FFmpeg's libc calls reach __capstone_hostcall and nothing else is missing
+pointer round-trip sites flagged by the compiler: 21 (list: /tmp/capstone/ffmpeg-nopatch3/domain/pointer-roundtrip-sites.txt)
+=== RUN: M1..M5 + flip control ===
+run-qemu: 6 runs, block 4 MiB, region 0 MiB, cma=56M
+section __FFAPP_BEGIN_M1__: REACHED 1
+section __FFAPP_BEGIN_M2__: REACHED 2
+section __FFAPP_BEGIN_M3__: REACHED 3
+section __FFAPP_BEGIN_M4__: REACHED 4
+section __FFAPP_BEGIN_M5__: REACHED 5
+section __FFAPP_BEGIN_FLIP__: REACHED 5
+oracle: reference 30 frames, candidate 30 frames, 0 hash mismatches -> MATCH
+control: 30 frames, 10 changed hashes -> FIRES
+=== run-qemu exit=0 ===

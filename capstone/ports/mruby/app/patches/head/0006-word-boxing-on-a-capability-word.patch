@@ -1,0 +1,82 @@
+boxing_word.h: under WORD_BOXING the boxed word is a __uintcap_t (intcap plan).
+
+mruby's default representation boxes every value in one uintptr_t word: an
+object pointer as the word itself, small integers and symbols shifted with flag
+bits. On capstone64 uintptr_t is 8 bytes and cannot hold a pointer; mrb_value's
+size assertion (boxing_word.h: sizeof(mrb_value) == sizeof(union mrb_value_))
+stops the build. With the word typed __uintcap_t the pointer keeps its
+capability and the flag arithmetic runs on its address; natively the types are
+uintptr_t and intptr_t as before. Optional: MRB_NO_BOXING needs no patch.
+
+--- a/include/mruby/boxing_word.h
++++ b/include/mruby/boxing_word.h
+@@ -7,6 +7,15 @@
+ #ifndef MRUBY_BOXING_WORD_H
+ #define MRUBY_BOXING_WORD_H
+ 
++/* capstone census: the word that boxes a value carries a capability */
++#ifdef __SIZEOF_INTCAP__
++typedef __uintcap_t mrb_boxword_t;
++typedef __intcap mrb_sboxword_t;
++#else
++typedef uintptr_t mrb_boxword_t;
++typedef intptr_t mrb_sboxword_t;
++#endif
++
+ /* Floats are not inlined where a double does not fit beside the tag, nor where
+    there are no floats to inline. The tag layout below and mrb_type() both ask
+    that one question, so it is answered once, here. */
+@@ -107,7 +116,7 @@
+ #endif
+ 
+ #define WORDBOX_SET_SHIFT_VALUE(o,n,v) \
+-  ((o).w = (((uintptr_t)(v)) << WORDBOX_##n##_SHIFT) | WORDBOX_##n##_FLAG)
++  ((o).w = (((mrb_boxword_t)(v)) << WORDBOX_##n##_SHIFT) | WORDBOX_##n##_FLAG)
+ #define WORDBOX_SHIFT_VALUE_P(o,n) \
+   (((o).w & WORDBOX_##n##_MASK) == WORDBOX_##n##_FLAG)
+ #define WORDBOX_OBJ_TYPE_P(o,n) \
+@@ -141,7 +150,7 @@
+  *   object: ...PPPP PP00 (any bits are 1)
+  */
+ typedef struct mrb_value {
+-  uintptr_t w;
++  mrb_boxword_t w;
+ } mrb_value;
+ 
+ union mrb_value_ {
+@@ -155,7 +164,7 @@
+ #endif
+   struct RInteger *ip;
+   struct RCptr *vp;
+-  uintptr_t w;
++  mrb_boxword_t w;
+   mrb_value value;
+ };
+ 
+@@ -191,7 +200,7 @@
+ #define mrb_float(o) mrb_rfloat_value(mrb_val_union(o).fp)
+ #endif
+ #endif
+-#define mrb_fixnum(o)  (mrb_int)(((intptr_t)(o).w) >> WORDBOX_FIXNUM_SHIFT)
++#define mrb_fixnum(o)  (mrb_int)(((mrb_sboxword_t)(o).w) >> WORDBOX_FIXNUM_SHIFT)
+ MRB_INLINE mrb_int
+ mrb_integer_func(mrb_value o) {
+   if (mrb_immediate_p(o)) return mrb_fixnum(o);
+@@ -199,7 +208,7 @@
+ }
+ #define mrb_integer(o) mrb_integer_func(o)
+ #define mrb_symbol(o)  (mrb_sym)(((o).w) >> WORDBOX_SYMBOL_SHIFT)
+-#define mrb_bool(o)    (((o).w & ~(uintptr_t)MRB_Qfalse) != 0)
++#define mrb_bool(o)    (((o).w & ~(mrb_boxword_t)MRB_Qfalse) != 0)
+ 
+ #define mrb_fixnum_p(o) WORDBOX_SHIFT_VALUE_P(o, FIXNUM)
+ #define mrb_integer_p(o) (WORDBOX_SHIFT_VALUE_P(o, FIXNUM)||WORDBOX_OBJ_TYPE_P(o, INTEGER))
+@@ -250,7 +259,7 @@
+ #define SET_INT_VALUE(mrb,r,n) ((r) = mrb_boxing_int_value(mrb, n))
+ #define SET_FIXNUM_VALUE(r,n) WORDBOX_SET_SHIFT_VALUE(r, FIXNUM, n)
+ #define SET_SYM_VALUE(r,n) WORDBOX_SET_SHIFT_VALUE(r, SYMBOL, n)
+-#define SET_OBJ_VALUE(r,v) ((r).w = (uintptr_t)(v))
++#define SET_OBJ_VALUE(r,v) ((r).w = (mrb_boxword_t)(v))
+ 
+ #ifndef MRB_WORDBOX_NO_INLINE_FLOAT
+ MRB_INLINE enum mrb_vtype mrb_type(mrb_value o) {

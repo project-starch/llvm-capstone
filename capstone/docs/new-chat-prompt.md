@@ -1,5 +1,36 @@
 # Prompt for continuing this Capstone work in a new chat
 
+Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
+uses two matched pairs for the nested boundary; default CheriBSD on/off remains
+separate reference data. The [planner](../experiments/study/README.md) supports
+PoisonCap plans but blocks execution qualification pending observed inner-policy
+accounting. Twenty host checks pass. Upstream mruby lists passes 4/4 original
+arms; both PoisonCap SQLite modes complete the artifact's 20 active phases at
+size 1. Twelve phases are commented out in that artifact, and the main
+result oracle is missing. These are readiness results, not a memory ranking.
+
+Application memory behavior: [twelve paired workload configurations](../experiments/applications/results/20260927-reuse/README.md)
+pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU
+controls without in-process collection. The results quantify prompt address
+reuse and post-release retention, include the large-retained-graph counterexample,
+and make no timing or total-RSS claim.
+
+Application memory: [Capstone ports versus default CheriBSD](../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The original matrix recorded
+six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../runtime/tests/application/results/20260927-node-reuse/README.md)
+passes all 27 Capstone repeats at the same 65,536-node capacity, including all six
+previous failures, using unchanged application binaries. Keep the original data
+and larger-node controls separate. These are memory observations, not timings.
+
+Application execution: use the [persistent Linux guest and shared SDK](../runtime/applications.md).
+The one-hart QEMU stack verifies trusted fault/preemption return, process-owned
+reclamation and 1,008 repeated starts after exhaustion in one boot. Perl uses the
+shared SDK; use upstream test runners, not new per-port VM scripts. This requires
+the matching pinned QEMU/monitor/driver and does not claim FPGA support or full POSIX.
+Perl's complete `t/base` run currently passes eight of nine files; the
+remaining failure needs target subprocess creation. See the
+[curated result](../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt).
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).
 
 Use the following prompt as the opening message in a fresh chat.

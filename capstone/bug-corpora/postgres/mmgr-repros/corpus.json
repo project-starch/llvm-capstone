@@ -1,0 +1,37 @@
+{
+  "program": "postgres",
+  "boundary": "memory contexts (aset, slab)",
+  "title": "Upstream use-after-free and double-free defects in PostgreSQL's memory managers",
+  "upstream": {
+    "version": "17.0",
+    "port": "capstone/ports/postgres/memory-contexts"
+  },
+  "cases": 8,
+  "case_schema": "case-json",
+  "case_macro": "PG",
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "native-detect"
+  ],
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "true": 8
+  },
+  "expect_provenance": 3,
+  "runners": [
+    "capstone/bug-corpora/postgres/mmgr-repros/shared/run-defects.py",
+    "capstone/bug-corpora/postgres/mmgr-repros/run-host-repros.sh"
+  ],
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "inventory": "capstone/docs/ref/postgres-nested-allocator-defects.md",
+  "evidence": [
+    "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu",
+    "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu-delivery"
+  ],
+  "advisories": [],
+  "note": "The allocator pin is 17.0; the complete single-user backend port is 17.5."
+}

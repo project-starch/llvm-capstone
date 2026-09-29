@@ -1,0 +1,31 @@
+gc.c: a region handed to the GC is aligned on a capability-carrying integer (4.0.0-rc2).
+
+mrb_gc_add_region rounds the region's base up to pointer alignment through
+uintptr_t and turns the result back into a pointer, which drops the tag on
+capstone64. The rounding now runs on __uintcap_t; natively it is uintptr_t as
+before. The head pin's 0003 in the shape of this version, which still lacks the
+later guard against a buffer smaller than the padding: left as it is.
+
+diff --git i/src/gc.c w/src/gc.c
+index 411cb6852..0e7a10342 100644
+--- i/src/gc.c
++++ w/src/gc.c
+@@ -370,9 +370,15 @@ mrb_gc_add_region(mrb_state *mrb, void *start, size_t size)
+   uint16_t i;
+ 
+   /* align base to pointer size */
+-  uintptr_t align = sizeof(void*);
+-  uintptr_t offset = ((uintptr_t)base + align - 1) & ~(align - 1);
+-  size -= (size_t)(offset - (uintptr_t)base);
++  /* capstone: aligned on a capability-carrying integer, so base keeps its tag */
++#ifdef __SIZEOF_INTCAP__
++  typedef __uintcap_t gc_uptr;
++#else
++  typedef uintptr_t gc_uptr;
++#endif
++  size_t align = sizeof(void*);
++  gc_uptr offset = ((gc_uptr)base + align - 1) & ~(gc_uptr)(align - 1);
++  size -= (size_t)((size_t)offset - (size_t)(gc_uptr)base);
+   base = (uint8_t*)offset;
+ 
+   page_count = (uint16_t)(size / sizeof(mrb_heap_page));

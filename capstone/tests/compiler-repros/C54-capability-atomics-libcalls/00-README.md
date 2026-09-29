@@ -3,7 +3,7 @@
 **Fixed** by `c7f0de349b4b`, the commit before this folder on its branch. Measured 2026-09-23: `./run.sh` reports ABSENT with that compiler and PRESENT with `dev`'s (`1a08706b6344`, whose compiler sources are those of `d030df93d4a4`). Regression test: `llvm/test/CodeGen/Capstone/atomic-capability-value-libcall.ll` and `clang/test/CodeGen/capstone-atomic-pointer.c`. In QEMU, that tags survive: `capstone/tests/runtime-qemu/capability-atomics/run.sh`. Everything below is the investigation as it was recorded before the fix.
 
 **A COMPILER gap, recorded because a port now reaches it.** Found 2026-09-23 by the first link of
-the CPython interpreter (`capstone/ports/cpython/interpreter/`): after everything the survey
+the CPython interpreter (`capstone/ports/cpython/app/`): after everything the survey
 could compile was linked, the only undefined symbols not explained by an absent CPython object
 were `__atomic_compare_exchange_16`, `__atomic_load_16` and `__atomic_store_16`, from
 `Python/getargs.c` and `Modules/signalmodule.c`. Siblings: C-50 to C-53.
