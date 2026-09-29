@@ -1,0 +1,23 @@
+{
+  "program": "perl",
+  "role": "full-application",
+  "title": "The complete Perl interpreter in a Capstone musl domain",
+  "upstream": {
+    "version": "5.36.3",
+    "pin_source": {
+      "file": "capstone/ports/perl/musl/build-perl-domain.sh",
+      "grep": "PERL_VERSION=${PERL_VERSION:-5.36.3}"
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "native"
+  ],
+  "workload": "scripts/smoke.pl, byte-identical to the native reference",
+  "evidence": [
+    "capstone/ports/perl/musl/results/2026-09-26"
+  ],
+  "related": [
+    "capstone/ports/perl/cheribsd"
+  ]
+}

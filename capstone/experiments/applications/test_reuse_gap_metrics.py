@@ -12,6 +12,13 @@ class ReuseGapMetricsTest(unittest.TestCase):
         self.assertEqual(report['reuses'], 2)
         self.assertEqual(parse_reuse_gap('backend> ' + line, 'PYM_REUSE_GAP'), report)
 
+    def test_perl_prefix_is_accepted_and_not_confused(self):
+        line = ('PERL_REUSE_GAP attempts=6 issues=5 releases=3 reuses=2 '
+                'distinct=3 capacity=8 error=0 bins=1,1,' + ','.join(['0'] * 30))
+        self.assertEqual(parse_reuse_gap(line, 'PERL_REUSE_GAP')['issues'], 5)
+        with self.assertRaises(ValueError):
+            parse_reuse_gap(line, 'PYM_REUSE_GAP')
+
     def test_rejects_missing_duplicate_and_error(self):
         line = ('PG_REUSE_GAP attempts=6 issues=5 releases=3 reuses=2 '
                 'distinct=3 capacity=8 error=0 bins=1,1,' + ','.join(['0'] * 30))

@@ -19,6 +19,10 @@
       "oracle": "fault at the labelled read probe",
       "cause": 24
     },
+    "sublet-chunks": {
+      "oracle": "fault at the labelled read probe: the packet pool is BLOCK_FAST, which the chunk port leaves unchanged",
+      "cause": 24
+    },
     "poisoncap-spatial": {
       "mode": 0,
       "oracle": "complete"
@@ -33,5 +37,5 @@
       "status": "not written"
     }
   },
-  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd"
+  "status": "run 2026-09-21 under QEMU: spatial completes, sublet faults with cause 24 at the labelled read probe; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe, as before; results/20260929-qemu-chunk-port"
 }

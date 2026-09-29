@@ -8,7 +8,7 @@ import re
 
 
 def parse_reuse_gap(stderr, prefix):
-    if prefix not in ('PYM_REUSE_GAP', 'PG_REUSE_GAP'):
+    if prefix not in ('PYM_REUSE_GAP', 'PG_REUSE_GAP', 'PERL_REUSE_GAP'):
         raise ValueError('unknown reuse-gap observer')
     lines = [re.sub(r'^(backend> )+', '', line) for line in stderr.splitlines()]
     lines = [line for line in lines if line.startswith(prefix + ' ')]

@@ -125,7 +125,7 @@ __attribute__((noinline)) static void probe(const volatile unsigned char *p) {
                    : "memory");
   (void)x;
 }
-void wm_probe(const void *p) { probe(p); }
+void wm_handback_probe(const void *p) { probe(p); }
 /* The chunk port's block: one region of the same size class as wm_sys_alloc's,
  * counted the same way, but handed over LINEAR into *out and never lent. */
 size_t wm_block_acquire(size_t n, capstone_cap_slot *out) {
@@ -175,7 +175,7 @@ void *wm_widen(void *p) {
   return (char *)e->region.alias + ((uintptr_t)p - e->base);
 }
 #else
-void wm_probe(const void *p) { (void)p; }
+void wm_handback_probe(const void *p) { (void)p; }
 void *wm_widen(void *p) { return p; }
 #endif
 void wm_backing_stats(struct wm_header *out) {

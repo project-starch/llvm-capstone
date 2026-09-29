@@ -72,10 +72,13 @@ if [[ ! -f "$TS_RUNTIME_DIR/.key" || ! -f "$TS_LIBC_ARCHIVE" ]]; then
     source "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
     for _o in "${softfloat_objs[@]}"; do cp "$_o" "$_ts_rt/sf_$(basename "$_o")"; done ) || return 1
   rm -rf "$_ts_rt/sf"
-  # 128-bit integer division, which the soft-float list does not carry: libgcrypt's generic C mpi
-  # divides in 128 bits, and a link without these fails on __udivti3/__umodti3.
-  # And four 128-bit float conversions the soft-float list lacks (GLib's tests reach them).
+  # 128-bit integer division: libgcrypt's generic C mpi divides in 128 bits, and a link without
+  # these fails on __udivti3/__umodti3. And four 128-bit float conversions (GLib's tests reach
+  # them). Each is compiled here only if the shared soft-float list does not already carry it:
+  # since de07a5b52d53 (2026-09-28) that list includes the integer divisions, and a second copy is
+  # a duplicate-symbol failure in the control link below.
   for _b in udivmodti4 udivti3 umodti3 divmodti4 divti3 modti3 floatditf floatunditf fixtfdi fixunstfdi; do
+    [ -f "$_ts_rt/sf_softfloat-$_b.o" ] && continue
     "$CAPSTONE_CLANG" "${_ts_tf[@]}" -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w \
       -c "$CAPSTONE_REPO_ROOT/compiler-rt/lib/builtins/$_b.c" -o "$_ts_rt/crt_$_b.o" || return 1
   done

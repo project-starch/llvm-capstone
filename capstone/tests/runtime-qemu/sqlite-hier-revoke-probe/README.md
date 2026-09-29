@@ -1,6 +1,6 @@
 # SQLite hierarchical-cascade feasibility probe (use-after-close)
 
-A Stage-2 experiment for the HIERARCHICAL-REVOKE rows (use-after-close: cve-repros
+A Stage-2 experiment for the HIERARCHICAL-REVOKE rows (use-after-close: capi-repros
 rows 4/5/7/8/9/10/12). It asks whether revoking a **parent** (connection) borrow
 cascades to a **child** (statement/value) borrow, using **only existing lender
 ops** (no firmware change).
