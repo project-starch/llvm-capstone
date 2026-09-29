@@ -144,8 +144,9 @@ readings are in the measurements doc, section "Part A on R-43 v2".
 - **M1:**
   - the stale read is refused 3/3, counting a10;
   - the stale WRITE is refused 2/2, a first on any bitstream;
-  - each refusal is on the probe-path arm;
-  - the live-alias read control reads EMPTY, and the write control completes with readback 165.
+  - each stale boot's refusal record (first refusal since reset) reads the probe-path arm;
+  - the write control, matched to the stale write by one define, completes with readback 165;
+  - the live-alias read control (an older fixture, not matched to 35fb3fec) reads EMPTY.
 - **S1/S2 pilot:** s3, s5 and s11 stop at the access with cause 25 at their pre-registered `lbu` (+0x6734,
   +0x6924, +0x6794). The returning cells read their marks, and s10 reads CA0180.
 

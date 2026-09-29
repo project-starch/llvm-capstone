@@ -29,5 +29,6 @@ ENT1:00000001
 [refusal] wedge (single running sample per aperture; VOID if contaminated): LATCHED -- arm = probe resolved DEAD, revnode id = 0x00000060 (96), parity ok (an even number of flips in one half would pas
 # rr-aperture-check rc 0, 0 'no fresh event' tags
 # decode: mcause 25 at mepc 0x81a04370 - DBAS = +0x4370 = run_m1's 'sb a2,0(a1)' of 0xA5 through m1_ret_alias[0] (the emulator's mapped site); tval 0xac100000
-# no 'stale-write ok' line: the store did not commit. Record LATCHED, arm 0100 = probe path, id 0x60 (96); the stale-read image refuses id 95 (a different build)
+# (the wedge loses the domain's output, so the missing 'stale-write ok' line is not evidence; the store not
+#   committing is inferred from the precise trap at it) Record LATCHED, arm 0100 = probe path, id 0x60 (96); the stale-read image refuses id 95 (a different build)
 # VERDICT: PASS -- a STORE through a revoked reference is refused on silicon (first time on any bitstream); integrity holds, N=1

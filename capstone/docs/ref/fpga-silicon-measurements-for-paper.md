@@ -1068,8 +1068,9 @@ The ten acceptance boots, pre-registered in `tests/fpga-repros/R43-revocation-ca
   - The RTL lane's candidate mechanism: replay probes pre-warm node lines that a later revoke walk then hits. It
     is a prediction and is not tested.
   - a3 also used the relinked k800 where all five earlier reps used the stock one.
-- **a10's refusal record** reads LATCHED with arm `0100`, the probe path. So R-35's refusal on v2 is **not a
-  deny-on-miss**: the probe resolved the id as not live.
+- **a10's refusal record** reads LATCHED with arm `0100`, the probe path: the boot's first refusal since reset
+  came from a probe that resolved its id as not live, **not from a deny-on-miss**. That this first refusal is
+  the stale probe's own is likely but not proven (see Part A).
   - Arm `0100` cannot separate a dead node from a stale generation or an invalidation during the resolve, and the
     index here was reissued thousands of times. So "found its node dead" is NOT claimed.
 
@@ -1095,29 +1096,42 @@ first three launches refused before any boot, because staged cells had been left
 | 64 KiB | **40.834** (40.769..40.890) | 40.8 |
 | 256 KiB / 1 MiB | **48.164** (48.159..48.167) / **48.174** (48.170..48.174) | 48.2 |
 
-- **Latency:** identical to E4. v2's revocation-cache check costs a load that hits it nothing.
+- **Latency:** equal to E4 at E4's quoted precision (E4's 64 KiB traversals read 40.76-40.81, where v2's reach 40.89).
+  v2's revocation-cache check adds nothing measurable to a load that hits it.
 - **Timer:** `cyc_cyc` = 2 and `ret_ret` = 1 in all nine domains.
 - **Nodes regression:** `ok=1` at every n on all three boots.
   - REVOKE medians are 145 / 193 / 724 / 2,881 / 11,274 for n = 1…256, against E4's single cold 1bfff7776 run of
-    126 / 182 / 731 / 2,838 / 11,714. That is +15 % at n = 1 and −3.7 % at n = 256.
+    126 / 182 / 731 / 2,838 / 11,714. That is +15 % at n = 1 and −3.8 % at n = 256.
   - This is a change detector firing across bitstreams, not attributed.
 - **Linear family:** 7,1,7,7,7,1,7,1,0,1,0,1 on all three boots. R-21 (`tighten`/`shrinkto` copy a linear source)
   is present on v2, N = 3.
 
-**M1 condition 3, six boots plus a10.** The refusal record now names the arm:
+**M1 condition 3, six boots plus a10.** The boot's refusal record now names the arm of the boot's FIRST cause-25
+verdict since reset (`load_store_unit.sv:1466-1467` at 8f6a0af98), not necessarily the probed access's own:
 
 | arm | image | boots | reading |
 |---|---|---|---|
-| stale READ | `35fb3fec` | a10, m1v2-3, m1v2-4 | cause 25 at +0x4354 on all three; record LATCHED, arm `0100` (probe path); id **0x5f (95)**, read fresh at verified apertures on m1v2-4 (void on m1v2-3, an instrument fault, below) |
+| stale READ | `35fb3fec` | a10, m1v2-3, m1v2-4 | cause 25 at +0x4354 on all three, the stale `lbu s7,0(a0)`; the boot's record LATCHED, arm `0100` (probe path); id **0x5f (95)**, read fresh at verified apertures on m1v2-4 (void on m1v2-3, an instrument fault, below) |
 | live-alias read control | `aed492ab` | m1v2-2 | the dereference commits; the mint traps **26** at +0x4360; record **EMPTY** |
-| stale WRITE (0xA5 through the revoked alias) | `067cc96f` | m1v2-5, m1v2-6 | cause 25 at **+0x4370**, the store itself, and no `stale-write ok`; record LATCHED, arm `0100`, id 0x60 (96) |
+| stale WRITE (0xA5 through the revoked alias) | `067cc96f` | m1v2-5, m1v2-6 | cause 25 at **+0x4370**, the store itself: `sb a2,0(a1)` of 0xA5, where a1 = `ldc 0(ldc 0x190(gp))` = `m1_ret_alias[0]`. The boot's record LATCHED, arm `0100`, id 0x60 (96) |
 | write control (the same store through the live alias) | `9b24aa31` | m1v2-1 | returns: `stale-write ok`, `readback via_live_alias=165 wrote=165` |
 
 **Reading.** On v2 a revoked reference is refused for a READ (3/3) and, **for the first time on any bitstream, for a
-WRITE** (2/2). The matched live controls commit or complete. The live-alias control's EMPTY record shows the run
-refuses nothing before its probe, so the stale boots' LATCHED record belongs to the stale access. Each refusal came
-from the probe path (the id resolved as not live), not from a deny-on-miss. **Not established:** generation wrap,
-stale references held in memory rather than in a register, and anything beyond N ≤ 3 per arm.
+WRITE** (2/2). Each trap is precise and at the stale access itself (mepc names the `lbu` and the `sb`; the `ldc` that
+loads the alias checks only the live global that addresses it). That the store did not commit is inferred from the
+precise exception. The wedge loses the domain's output, so no readback exists on the stale arm.
+- The WRITE pair is matched: the control (`9b24aa31`) differs from `067cc96f` by exactly `-DM1_STALE_TAKE_LIVE=1`,
+  checked two-sided, and completes with readback 165.
+- The READ control `aed492ab` is NOT matched to `35fb3fec`. It is four source commits older (a single-age
+  dereference through `oldest`, a cap table of 672 bytes against 688), so its EMPTY record does not show that the
+  stale-read run refuses nothing before its probe.
+- Each stale boot's record reads the probe-path arm. Because the record keeps the first cause-25 verdict since
+  reset, and a wrong-path access that is later flushed can occupy it, this is "the boot's first refusal was on
+  the probe path", not a proven attribute of the stale access.
+- The cheap settler: a returning build of the same source with the probe off, reading 204 after the same workload.
+
+**Not established:** generation wrap, stale references held in memory rather than in a register, and anything
+beyond N ≤ 3 per arm.
 
 **S1/S2 pilot, three boots.** These are nginx use-after-destroy cells rebuilt with #119 at new entry VAs. Each boot
 ran the five returning cells, then ONE touch cell:
@@ -1126,16 +1140,25 @@ ran the five returning cells, then ONE touch cell:
 |---|---|---|
 | s1 / s2 / s4 / s6 | C10000 / C20000 / C40001 / C600FB | the same, all three boots |
 | s10 (the reloaded stale pointer's type) | CA0180 | CA0180, all three boots (tagged type 1; the emulator reads CA0780) |
-| s3 (touch after destroy) | **returned** C30000 (read the fill) | **cause 25 at +0x6734**, the stale `lbu`; record LATCHED, arm `0001` (hit-dead), id 260 |
-| s5 (read after the address is reused) | **returned** C5005B (read the new occupant) | **cause 25 at +0x6924**, the stale `lbu`; record LATCHED, arm `0100` (probe path, where s3 and s11 read hit-dead), id 260 |
-| s11 (type read, then touch) | **returned** CB0100 | **cause 25 at +0x6794**, the stale `lbu`; record LATCHED, hit-dead, id 260 |
+| s3 (touch after destroy) | **returned** C30000 (read the fill) | **cause 25 at +0x6734**, the stale `lbu`; the boot's record: LATCHED, arm `0001` (hit-dead), id 260 |
+| s5 (read after the address is reused) | **returned** C5005B (read the new occupant) | **cause 25 at +0x6924**, the stale `lbu`; the boot's record: LATCHED, arm `0100` (probe path), id 260 |
+| s11 (type read, then touch) | **returned** CB0100 | **cause 25 at +0x6794**, the stale `lbu`; the boot's record: LATCHED, hit-dead, id 260 |
 
 **Reading.** The touch cells that were unsafe-success on 1bfff7776 **stop at the access** on v2, at the exact
-pre-registered instruction. The paper's `tab:safety` rows that say "stops at access" now have silicon evidence, on
-this bitstream, at N = 1 per cell. This is a pilot, not the full E1 matrix (12-15 boots), which has not been run.
+pre-registered instruction (`ldc a0,0(a0)` then the faulting `lbu a0,0(a0)`, inside `domain_main`, at 0x310000 plus
+the offset in each board image). The paper's `tab:safety` rows that say "stops at access" now have silicon
+evidence, on this bitstream, at N = 1 per cell. Limits:
+- This is a pilot, not the full E1 matrix (12-15 boots), which has not been run.
+- The E1 images were DIFFERENT builds. On 1bfff7776, s3 was `103998ef`, with its touch at +0x66cc. No image ran on
+  both bitstreams, so the flip belongs to the bitstream plus the rebuild together, not to the bitstream alone.
+- The per-cell arm and id are the boot's first refusal since reset. The reads between cells are void (the
+  per-domain path's defect), so they cannot be tied to the touch.
+- The boots ran in the order b3, b1, b2.
 
-**Instrument, stated so the id readings can be weighed.** The wedge dump's record reads were fixed mid-campaign (dev
-`ae1b13c2`): each byte is read fresh or reported unread, with the switch model reset first. From m1v2-4 onward,
+**Instrument, stated so the id readings can be weighed.** The wedge dump's record reads were fixed mid-campaign. The
+campaign's runner carried the change as an uncommitted edit, and dev `ae1b13c2` commits that diff byte-for-byte
+(committed at 21:54, after m1v2-4..6 had run). Each byte is read fresh or reported unread, with the switch model
+reset first. From m1v2-4 onward,
 every record byte came back fresh, and a switch-trace check (`tests/rtl-smoke/paper-r43v2-2026-09-29/rr-aperture-check.py`,
 validated two-sided) confirms it was read at its labelled aperture. m1v2-2's and m1v2-3's bytes 205 and 208 were
 read at the wrong apertures by the first version of that fix. Their verdicts rest on 204 alone, which was read
@@ -5593,9 +5616,9 @@ stale arm reads the same on two bitstreams, N=1 on each. The live-alias image `a
 not been run on R-42. The deny arm is no more observable on R-42 than it was on `4ad0df694`: R-42 keeps
 deny-on-miss (R-43), so this reading cannot tell recognised-as-revoked from denied-on-miss either.
 
-**On R-43 v2 the question is answered.** See "Part A on R-43 v2" in the R-42/v2 part of this doc: the stale
-read is refused 3/3 and the stale WRITE 2/2, the refusal record names the probe-path arm (not a deny-on-miss),
-and the matched live-alias control reads EMPTY.
+**On R-43 v2 the question is mostly answered.** See "Part A on R-43 v2" in the R-42/v2 part of this doc: the stale
+read is refused 3/3 and the stale WRITE 2/2. Each boot's refusal record reads the probe-path arm, not a
+deny-on-miss. The record keeps the first refusal since reset, so this is not proven to be the stale access's own.
 
 Limits the numbers must carry:
 - **Why** the access was denied is not observable. Cause 25 has three arms on this RTL, one of them

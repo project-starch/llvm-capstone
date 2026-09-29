@@ -27,5 +27,6 @@ ENT1:00000001
 [wedge] sw=207 REFUSAL id[23:16]                                    0x00 00000000
 [wedge] sw=209 (no refusal field; S-07 map not applicable)          0x00 00000000
 [refusal] wedge (single running sample per aperture; VOID if contaminated): LATCHED -- arm = probe resolved DEAD, revnode id = 0x00000060 (96), parity ok (an even number of flips in one half would pas
-# rr-aperture-check rc 0, 0 'no fresh event' tags; no 'stale-write ok' line
+# rr-aperture-check rc 0, 0 'no fresh event' tags
+# (a missing 'stale-write ok' line is not evidence: the wedge loses the domain's output)
 # VERDICT: PASS -- identical to m1v2-5: the store is refused (cause 25 at +0x4370), LATCHED on the probe path, id 96. 2/2

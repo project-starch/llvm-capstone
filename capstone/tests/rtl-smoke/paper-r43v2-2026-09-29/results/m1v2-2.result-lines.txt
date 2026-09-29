@@ -24,4 +24,6 @@ ENT1:00000001
 # decode: mcause 26 at mepc 0x81a04360 - DBAS = +0x4360 (the mint); tval 0xac100000
 # refusal record: 204 = 0x02 = EMPTY (switch trace: read at 204). 205-208 are VOID: a mid-campaign runner change walked from a
 #   stale switch model and read them at other apertures (208 at 210, 205 at 207). Fixed before m1v2-4. EMPTY needs only 204.
-# VERDICT: PASS -- the live-alias run refuses nothing; a10's LATCHED record belongs to the stale access
+# VERDICT: PASS -- the live-alias run refuses nothing. RETRACTED on 2026-09-29 by the Part A audit: the first version
+#   also said this shows a10's LATCHED record belongs to the stale access. aed492ab is four source commits older
+#   than 35fb3fec (a different fixture), so it does not.
