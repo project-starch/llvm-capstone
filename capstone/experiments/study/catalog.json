@@ -23,7 +23,7 @@
       "nested": "not integrated"
     },
     "postgres": {
-      "version": "17.0",
+      "version": "17.5",
       "scope": "Single-user backend only",
       "nested": "memory contexts"
     },

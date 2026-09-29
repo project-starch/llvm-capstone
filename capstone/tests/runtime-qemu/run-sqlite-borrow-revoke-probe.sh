@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Stage-2 "after" for cve-repros/row3_diesel_colname_cached: a SQLite column
+# Stage-2 "after" for capi-repros/row3_diesel_colname_cached: a SQLite column
 # pointer cached across sqlite3_step (diesel RUSTSEC-2021-0037), enforced by
 # monitor-mediated revocation (the #70 path).
 #

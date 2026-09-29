@@ -39,7 +39,7 @@ def inputs(app, root):
         src = root / 'src/mruby/build/capstone'
         return [src / 'mrbgems/mruby-bin-mruby/tools/mruby/mruby.o', src / 'lib/libmruby.a']
     if app == 'cpython':
-        path = REPO / 'capstone/ports/cpython/interpreter/survey-cpython-capstone.py'
+        path = REPO / 'capstone/ports/cpython/app/survey-cpython-capstone.py'
         spec = importlib.util.spec_from_file_location('survey', path)
         survey = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(survey)

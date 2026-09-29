@@ -1,7 +1,7 @@
 # mruby's GC object heap under Sublet
 
 *Design record, 2026-09-26, against mruby 4.0.0-rc2 (`9d523e2f74f2`), `src/gc.c`.
-The port it plans is the third arm of `ports/mruby/musl` (`MRBD_HEAP`): level0,
+The port it plans is the third arm of `ports/mruby/app` (`MRBD_HEAP`): level0,
 then `sublet` (mruby's bodies on the runtime's revoking heap, done, mrbtest
 unchanged), then this one, where every GC object slot is issued and revoked on
 its own. The method is `slab-sublet-port-plan.md`'s: the three rules, and where
