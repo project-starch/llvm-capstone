@@ -64,8 +64,11 @@ done
 "$CAPSTONE_CLANG" "${RF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES='(512*1024)' -c "$MRT/level0.c" -o "$O/level0.o"
 # The libc overrides, from the one list every musl domain links (runtime/libc_overrides.sh).
 source "$MRT/libc_overrides.sh"
-grep -q 'mmap_shm_level0' "$MRT/libc_overrides.sh" \
-  || { echo "libc_overrides.sh does not list mmap_shm_level0; the test would link musl's mmap" >&2; exit 2; }
+# Asked of the list the script loaded, not of any one file's text: the entries moved
+# to libc_overrides.list with de07a5b5, and a grep of the old file refused a list
+# that had the entry all along.
+[[ " ${MUSL_OVERRIDES[*]} " == *" mmap_shm_level0 "* ]] \
+  || { echo "the libc overrides do not list mmap_shm_level0; the test would link musl's mmap" >&2; exit 2; }
 build_musl_overrides "$CAPSTONE_CLANG" "$O" "$MUSL" "${RF[@]}"
 # The control's one difference: the override list without mmap_shm_level0.o.
 CONTROL_OVERRIDES=()
