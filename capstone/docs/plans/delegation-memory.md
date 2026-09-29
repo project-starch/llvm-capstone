@@ -16,6 +16,10 @@ The [signal plan](delegation-signals.md) supplies the existing round, restart
 and handler-delivery contract that memory operations must preserve.
 The [architectural alternatives](delegation-memory-options.md) explore protected
 views, permission changes, translation and file-blind paging beyond this baseline.
+Their [long-term recommendation](delegation-memory-options.md#9-recommended-long-term-architecture)
+is capability-authorized virtual memory using existing MMU machinery, subject to
+a new composition argument preserving physical ownership and revocation. That
+recommendation does not change the physical-grant scope of this first stage.
 
 ## 1. Purpose and philosophy
 

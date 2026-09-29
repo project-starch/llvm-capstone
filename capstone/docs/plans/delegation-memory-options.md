@@ -297,9 +297,108 @@ Use positive controls for every denial. Measure metadata per view/page/object,
 access-path lookup cost, cache misses, update/shootdown cost, switching, and
 revocation separately. No size/cycle advantage is established by this document.
 
-Recommendation: the most useful new semantic unit to investigate is a protected
-view with separately controlled lifetime and permissions. Start with one physical
-extent per view; add translation only when arbitrary Linux backing or stable
-addresses justify it. Compare reuse of the existing MMU with a custom view map
-before committing to either. If the desired endpoint is broad Linux mmap
-compatibility, some form of indirection is the main architectural requirement.
+These experiments establish semantics; they do not require shipping a new
+physical-view ISA before investigating the existing MMU. The long-term
+recommendation below prioritizes that investigation.
+
+## 9. Recommended long-term architecture
+
+For general Linux applications, the recommended endpoint is **capability-authorized
+virtual memory using the existing MMU and TLB machinery**, while retaining
+Capstone's physical ownership and object-revocation guarantees. This is an
+architectural recommendation, not an accepted ISA change or a claim that the
+integration exists today. Physical grants remain the first implementation.
+
+The useful abstraction from candidate B is the mapping's independent lifetime
+and permission policy. It need not become a second general translation mechanism
+beside the MMU. Candidate C, implemented through the existing walker and protected
+mapping operations, is the preferred direction. Exact capability encoding,
+translation-context binding and caching still require design and measurement.
+
+### Responsibility boundaries
+
+| Layer | Responsibility |
+|---|---|
+| Linux | Allocate backing, select file/page-cache objects, manage storage and writeback, service eligible missing-page requests |
+| Monitor and hardware | Admit mappings from actual backing authority, protect translation state, enforce grant rights/lifetimes and physical exclusivity, complete invalidation before reuse |
+| Domain | Choose application mappings within granted authority, derive bounded object pointers, implement malloc/free and object revocation |
+
+Linux may propose a frame and a mapping; a scalar physical frame number is not
+authority to install it. The monitor's operations remain generic: bind authorized
+backing to a logical range, change permitted access, detach a grant, reclaim
+backing. They do not interpret an fd, filename, MAP_SHARED or storage policy.
+The access rules must be enforced by hardware and protected capability state;
+software bookkeeping alone must not replace Capstone's physical guarantees.
+
+An application can use a protected virtual address space with capability-isolated
+domains inside it. A separate page table for every small domain is not inherently
+required. Capability transfer across different address spaces needs a defined
+binding or authorized rebinding protocol: interpreting a received pointer under
+the recipient's arbitrary current page-table root is unsafe.
+
+Conceptually, an access needs all of the following:
+
+```text
+live object capability and grant
+AND bounds and capability permissions
+AND current mapping permissions
+AND authorized translation to the physical backing
+```
+
+Linux must neither retarget an old pointer into an unrelated object nor regain
+access to exclusively transferred frames through its direct map. Two virtual
+names for the same frame do not establish two exclusive physical owners.
+Mapping-control authority must be distinct from ordinary data access authority.
+
+### Why this is the preferred endpoint
+
+A contiguous virtual interval can cover scattered physical pages, removing CMA
+contiguity as the general application-size constraint. Page permissions provide
+the mechanism needed for mprotect on existing pointers. Distinct mappings can
+share actual Linux backing pages, and translation permits stable addresses across
+authorized backing changes. Fine-grained bounds and allocator lifetimes remain
+capability responsibilities. Large pages can amortize translation without making
+object protection page-granular.
+
+The established precedents support the choice of mechanisms:
+[CHERI](https://github.com/CTSRD-CHERI/cheri-specification/blob/main/chap-architecture.tex)
+composes fine-grained capabilities with conventional MMUs, while
+[seL4's mapping interface](https://docs.sel4.systems/Tutorials/mapping.html)
+uses frame and address-space capabilities to authorize hardware mappings.
+Neither precedent supplies Capstone's complete proof against hostile remapping,
+or proves this proposed implementation. Reusing paging machinery reduces the
+amount of new machinery to qualify; it does not make the composition mature by
+itself. The published Capstone physical-address model needs an explicit extension.
+
+### Conditions before calling the integration mature
+
+1. **Authority and lifetime:** prove physical exclusivity across aliases,
+   independently detachable shared grants, address-space binding, and stale
+   pointer rejection after address/identifier reuse. Specify partial-unmap
+   semantics; a PTE being absent temporarily is not temporal safety.
+2. **Completion:** define and test when protection changes and revocation have
+   taken effect across harts, cached translations, instruction fetch and saved
+   contexts. A backing frame cannot be reused before that boundary.
+3. **Linux backing contract:** integrate references, invalidation/truncation,
+   eligible pinning and dirty reporting. Native shared-file writeback requires
+   this contract; a page-table walker alone does not implement msync.
+4. **Tagged storage:** specify tag-preserving movement without duplicating linear
+   authority. COW and fork need explicit capability semantics. Paging private
+   contents through untrusted Linux additionally needs protected storage or a
+   narrower no-swap contract; generic fault forwarding does not provide secrecy
+   or integrity for stored page contents.
+
+The practical sequence is dynamic physical grants first, then a model/emulator
+prototype of protected mappings through the existing walker with resident pages.
+Use the lifetime and remapping attacks above as acceptance tests. Follow with
+one real Linux shared backing object and its invalidation/dirty protocol. Add
+demand paging, page movement and capability-aware COW only with their own
+contracts. Full Linux compatibility is not a prerequisite for the first useful
+stage and is not claimed by choosing this endpoint.
+
+If changes to Capstone's addressing model are ruled out, candidate A is the
+recommended bounded product: dynamic physical pools with explicit mmap limits.
+For the broader long-term endpoint requested here, a custom scatter/gather map
+would inherit most MMU obligations while adding another implementation to mature.
+It should displace the existing-MMU direction only on concrete evidence of a
+better security, complexity or performance result.
