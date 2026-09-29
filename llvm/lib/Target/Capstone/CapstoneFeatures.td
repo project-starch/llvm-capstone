@@ -1703,6 +1703,16 @@ foreach i = {1-31} in
       SubtargetFeature<"reserve-x"#i, "UserReservedRegister[Capstone::X"#i#"]",
                        "true", "Reserve X"#i>;
 
+// MOVC on today's silicon writes cnull into an untagged source (C-32). With this
+// feature OFF (the default), CapstoneLiveSourceCopy rewrites every MOVC whose
+// source is read again as STC+LDC through a stack slot. A bitstream whose MOVC
+// leaves an untagged source alone (Q-04 option b) turns it on, and every copy is
+// one MOVC again.
+def FeatureMovcKeepsIntegerSource
+    : SubtargetFeature<"movc-keeps-integer-source", "MovcKeepsIntegerSource",
+                       "true",
+                       "MOVC leaves an untagged (integer) source register intact">;
+
 def FeatureSaveRestore : SubtargetFeature<"save-restore", "EnableSaveRestore",
                                           "true", "Enable save/restore.">;
 

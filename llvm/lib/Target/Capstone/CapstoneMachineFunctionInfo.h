@@ -26,6 +26,7 @@ namespace yaml {
 struct CapstoneMachineFunctionInfo final : public yaml::MachineFunctionInfo {
   int VarArgsFrameIndex;
   int VarArgsSaveSize;
+  int LiveSourceCopyFrameIndex = -1;
 
   CapstoneMachineFunctionInfo() = default;
   CapstoneMachineFunctionInfo(const llvm::CapstoneMachineFunctionInfo &MFI);
@@ -38,6 +39,8 @@ template <> struct MappingTraits<CapstoneMachineFunctionInfo> {
   static void mapping(IO &YamlIO, CapstoneMachineFunctionInfo &MFI) {
     YamlIO.mapOptional("varArgsFrameIndex", MFI.VarArgsFrameIndex);
     YamlIO.mapOptional("varArgsSaveSize", MFI.VarArgsSaveSize);
+    YamlIO.mapOptional("liveSourceCopyFrameIndex", MFI.LiveSourceCopyFrameIndex,
+                       -1);
   }
 };
 } // end namespace yaml
@@ -55,6 +58,8 @@ private:
   int MoveF64FrameIndex = -1;
   /// FrameIndex of the spill slot for the scratch register in BranchRelaxation.
   int BranchRelaxationScratchFrameIndex = -1;
+  /// FrameIndex of the 16-byte slot CapstoneLiveSourceCopy copies through.
+  int LiveSourceCopyFrameIndex = -1;
   /// Size of any opaque stack adjustment due to save/restore libcalls.
   unsigned LibCallStackSize = 0;
   /// Size of RVV stack.
@@ -106,6 +111,9 @@ public:
           MF.getFrameInfo().CreateStackObject(8, Align(8), false);
     return MoveF64FrameIndex;
   }
+
+  int getLiveSourceCopyFrameIndex() const { return LiveSourceCopyFrameIndex; }
+  void setLiveSourceCopyFrameIndex(int Index) { LiveSourceCopyFrameIndex = Index; }
 
   int getBranchRelaxationScratchFrameIndex() const {
     return BranchRelaxationScratchFrameIndex;
