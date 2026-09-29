@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <sys/ioctl.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <time.h>
@@ -55,6 +56,13 @@ static const struct { uint16_t wire; long host; } numbers[] = {
   MAP(kill) MAP(wait4) MAP(tkill) MAP(rt_sigsuspend) MAP(rt_sigpending)
   MAP(pselect6) MAP(getpgid) MAP(getsid)
   MAP(rt_sigtimedwait) MAP(getitimer) MAP(setitimer)
+  MAP(linkat) MAP(mknodat) MAP(statfs) MAP(fstatfs) MAP(statx) MAP(truncate)
+  MAP(fallocate) MAP(fchdir) MAP(fchmod) MAP(fchown) MAP(fchownat) MAP(faccessat2)
+  MAP(sendfile) MAP(copy_file_range) MAP(readahead) MAP(fadvise64) MAP(sync) MAP(syncfs)
+  MAP(memfd_create) MAP(clock_getres) MAP(getgroups) MAP(getrusage) MAP(getpriority)
+  MAP(setpriority) MAP(getcpu) MAP(sched_getaffinity) MAP(sched_setaffinity)
+  MAP(sched_get_priority_max) MAP(sched_get_priority_min) MAP(sched_rr_get_interval)
+  MAP(setpgid) MAP(setsid)
 };
 #undef MAP
 
@@ -73,6 +81,9 @@ static long host_number(uint64_t nr) {
   return -1;
 #endif
 }
+
+static int self_pid(pid_t pid) { return pid == 0 || pid == getpid(); }
+static int own_group(pid_t pgid) { return self_pid(pgid) || pgid == getpgrp(); }
 
 static int child_of(const struct capstone_delegate_host *host, pid_t pid) {
   for (unsigned i = 0; i < host->child_count; ++i)
@@ -98,9 +109,9 @@ static int private_fd(const struct capstone_delegate_host *host, int fd) {
 
 static unsigned fd_arguments(uint64_t nr) {
   switch (nr) {
-  case CAPSTONE_SYS_dup3: return 3;
+  case CAPSTONE_SYS_dup3: case CAPSTONE_SYS_sendfile: return 3;
   case CAPSTONE_SYS_symlinkat: return 2;
-  case CAPSTONE_SYS_renameat2: return 5;
+  case CAPSTONE_SYS_renameat2: case CAPSTONE_SYS_linkat: case CAPSTONE_SYS_copy_file_range: return 5;
   case CAPSTONE_SYS_dup: case CAPSTONE_SYS_fcntl: case CAPSTONE_SYS_ioctl:
   case CAPSTONE_NR_FCNTL_LOCK: case CAPSTONE_NR_IOCTL_BUF:
   case CAPSTONE_SYS_mkdirat: case CAPSTONE_SYS_unlinkat: case CAPSTONE_SYS_ftruncate:
@@ -112,7 +123,11 @@ static unsigned fd_arguments(uint64_t nr) {
   case CAPSTONE_SYS_newfstatat: case CAPSTONE_SYS_fstat: case CAPSTONE_SYS_fsync:
   case CAPSTONE_SYS_fdatasync: case CAPSTONE_SYS_sync_file_range:
   case CAPSTONE_SYS_flock: case CAPSTONE_SYS_fchmodat:
-  case CAPSTONE_SYS_utimensat: return 1;
+  case CAPSTONE_SYS_utimensat: case CAPSTONE_SYS_mknodat: case CAPSTONE_SYS_fstatfs:
+  case CAPSTONE_SYS_statx: case CAPSTONE_SYS_fallocate: case CAPSTONE_SYS_fchdir:
+  case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown: case CAPSTONE_SYS_fchownat:
+  case CAPSTONE_SYS_faccessat2: case CAPSTONE_SYS_readahead: case CAPSTONE_SYS_fadvise64:
+  case CAPSTONE_SYS_syncfs: return 1;
   default: return 0;
   }
 }
@@ -361,8 +376,20 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     return -ENOSYS;
   if (entry->nr == CAPSTONE_SYS_ppoll && entry->args[3] && entry->args[4] != 8)
     return -EINVAL;
-  if (entry->nr == CAPSTONE_SYS_prlimit64 && (pid_t)entry->args[0] != 0 &&
-      (pid_t)entry->args[0] != getpid())
+  if (entry->nr == CAPSTONE_SYS_prlimit64 && !self_pid((pid_t)entry->args[0]))
+    return -EPERM;
+  /* scheduling and priority: this task only; a process group is formed by
+     the task or a child, or a child joins the task's group or a child's */
+  if ((entry->nr == CAPSTONE_SYS_sched_getaffinity || entry->nr == CAPSTONE_SYS_sched_setaffinity ||
+       entry->nr == CAPSTONE_SYS_sched_rr_get_interval) && !self_pid((pid_t)entry->args[0]))
+    return -EPERM;
+  if ((entry->nr == CAPSTONE_SYS_getpriority || entry->nr == CAPSTONE_SYS_setpriority) &&
+      (entry->args[0] != PRIO_PROCESS || !self_pid((pid_t)entry->args[1])))
+    return -EPERM;
+  if (entry->nr == CAPSTONE_SYS_setpgid &&
+      (!(self_pid((pid_t)entry->args[0]) || child_of(host, (pid_t)entry->args[0])) ||
+       !(own_group((pid_t)entry->args[1]) || child_of(host, (pid_t)entry->args[1]) ||
+         entry->args[1] == entry->args[0])))
     return -EPERM;
   if (!host->bounce)
     host->bounce = malloc(host->exchange_bytes);

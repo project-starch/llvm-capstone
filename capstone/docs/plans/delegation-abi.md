@@ -26,7 +26,13 @@ round is no longer what a program waits for. What is left, in this order:
 - **Cheap shape rows**: the ~25 rows that are integers and buffers only
   (`pselect6`, `statx`, `statfs`, `getrusage`, `getrlimit`, `truncate`,
   `fallocate`, `fchown`, `linkat`, ...), plus `timer_create` with an opaque
-  `sigevent` token now that delivery exists. Done ahead of it, on
+  `sigevent` token now that delivery exists. The rows are done on
+  `delegation-cheap-rows`: 32 of them, one line each in the shape table and
+  one native case each in `tests/application/delegate-rows-test.c`, chosen
+  as the syscalls musl's wrappers issue; `getrlimit` and `setrlimit` are not
+  among them because musl issues `prlimit64` for both, `sched_getscheduler`
+  and `sched_getparam` not because musl answers ENOSYS itself. `timer_create`
+  remains. Done ahead of it, on
   `delegation-pty-ioctls`: the pseudo-terminal and foreground-group
   `ioctl` requests, with the 32-bit request mask that any `_IOR` request
   needed; on `delegation-runtime-rows`: `pselect6` (mask flattened out of the

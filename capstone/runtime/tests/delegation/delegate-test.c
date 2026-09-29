@@ -159,7 +159,8 @@ static void table_is_consistent(void) {
     CAPSTONE_SYS_getcwd, CAPSTONE_SYS_read, CAPSTONE_SYS_write, CAPSTONE_SYS_readv,
     CAPSTONE_SYS_writev, CAPSTONE_SYS_pread64, CAPSTONE_SYS_pwrite64,
     CAPSTONE_SYS_getdents64, CAPSTONE_SYS_readlinkat, CAPSTONE_SYS_ppoll,
-    CAPSTONE_SYS_getrandom};
+    CAPSTONE_SYS_getrandom, CAPSTONE_SYS_getgroups, CAPSTONE_SYS_sched_getaffinity,
+    CAPSTONE_SYS_sched_setaffinity};
   for (size_t n = 0; n < sizeof numbers / sizeof numbers[0]; ++n) {
     const struct capstone_delegate_shape *s = capstone_delegate_shape(numbers[n]);
     assert(s && s->name);

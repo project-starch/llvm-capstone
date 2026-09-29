@@ -91,6 +91,16 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME delegate-${case} COMMAND delegate-edge-test ${case})
     set_tests_properties(delegate-${case} PROPERTIES TIMEOUT 15)
   endforeach()
+  add_executable(delegate-rows-test ../tests/application/delegate-rows-test.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
+  target_compile_options(delegate-rows-test PRIVATE -UNDEBUG)
+  target_link_libraries(delegate-rows-test PRIVATE Capstone::Delegate)
+  foreach(case statfs statx truncate fallocate fchdir fchmod fchown linkat mknodat faccessat2
+      sendfile copy-file-range readahead sync memfd clock-getres getgroups getrusage priority
+      getcpu affinity scheduler setpgid setsid private)
+    add_test(NAME delegate-row-${case} COMMAND delegate-rows-test ${case})
+    set_tests_properties(delegate-row-${case} PROPERTIES TIMEOUT 15)
+  endforeach()
   foreach(test launch-test delegate-test spawn-test application-image-test delegate-service-test spawner-test)
     target_compile_options(${test} PRIVATE -UNDEBUG)
   endforeach()

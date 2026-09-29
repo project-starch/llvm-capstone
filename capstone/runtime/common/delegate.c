@@ -22,6 +22,7 @@ _Static_assert(CAPSTONE_SIGNAL_OFFSET + sizeof(struct capstone_signal_block) <= 
 #define OPT_INOUT_FIX(n) {CAPSTONE_ARG_OPT_INOUT, CAPSTONE_LEN_FIXED, n, 0, 0}
 #define INOUT_SCALED(a, s) {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
 #define IN_SCALED(a, s) {CAPSTONE_ARG_IN, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
+#define OUT_SCALED(a, s) {CAPSTONE_ARG_OUT, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
 
 /* Sizes are the kernel's RV64 layouts, which is what lands in the exchange
  * region after the libc's marshalling: iovec is two 64-bit words, timespec
@@ -29,6 +30,11 @@ _Static_assert(CAPSTONE_SIGNAL_OFFSET + sizeof(struct capstone_signal_block) <= 
 #define IOVEC 16
 #define TIMESPEC 16
 #define STAT 128
+/* statfs 120, statx 256; rusage 144 is what the kernel writes, musl's struct
+ * is longer and the rest stays as the caller had it */
+#define STATFS 120
+#define STATX 256
+#define RUSAGE 144
 
 static const struct capstone_delegate_shape shapes[] = {
   /* files and directories */
@@ -77,6 +83,27 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_utimensat, CAPSTONE_GROUP_DELEGATED, 4, "utimensat",
    {I, {CAPSTONE_ARG_OPT_STR, CAPSTONE_LEN_NONE, 0, 0, 0}, OPT_IN_FIX(2 * TIMESPEC), I}},
   {CAPSTONE_SYS_renameat2, CAPSTONE_GROUP_DELEGATED, 5, "renameat2", {I, S, I, S, I}},
+  {CAPSTONE_SYS_linkat, CAPSTONE_GROUP_DELEGATED, 5, "linkat", {I, S, I, S, I}},
+  {CAPSTONE_SYS_mknodat, CAPSTONE_GROUP_DELEGATED, 4, "mknodat", {I, S, I, I}},
+  {CAPSTONE_SYS_statfs, CAPSTONE_GROUP_DELEGATED, 2, "statfs", {S, OUT_FIX(STATFS)}},
+  {CAPSTONE_SYS_fstatfs, CAPSTONE_GROUP_DELEGATED, 2, "fstatfs", {I, OUT_FIX(STATFS)}},
+  {CAPSTONE_SYS_statx, CAPSTONE_GROUP_DELEGATED, 5, "statx", {I, S, I, I, OUT_FIX(STATX)}},
+  {CAPSTONE_SYS_truncate, CAPSTONE_GROUP_DELEGATED, 2, "truncate", {S, I}},
+  {CAPSTONE_SYS_fallocate, CAPSTONE_GROUP_DELEGATED, 4, "fallocate", {I, I, I, I}},
+  {CAPSTONE_SYS_fchdir, CAPSTONE_GROUP_DELEGATED, 1, "fchdir", {I}},
+  {CAPSTONE_SYS_fchmod, CAPSTONE_GROUP_DELEGATED, 2, "fchmod", {I, I}},
+  {CAPSTONE_SYS_fchown, CAPSTONE_GROUP_DELEGATED, 3, "fchown", {I, I, I}},
+  {CAPSTONE_SYS_fchownat, CAPSTONE_GROUP_DELEGATED, 5, "fchownat", {I, S, I, I, I}},
+  {CAPSTONE_SYS_faccessat2, CAPSTONE_GROUP_DELEGATED, 4, "faccessat2", {I, S, I, I}},
+  /* the offsets the kernel advances are 64-bit words in the buffers */
+  {CAPSTONE_SYS_sendfile, CAPSTONE_GROUP_DELEGATED, 4, "sendfile", {I, I, OPT_INOUT_FIX(8), I}},
+  {CAPSTONE_SYS_copy_file_range, CAPSTONE_GROUP_DELEGATED, 6, "copy_file_range",
+   {I, OPT_INOUT_FIX(8), I, OPT_INOUT_FIX(8), I, I}},
+  {CAPSTONE_SYS_readahead, CAPSTONE_GROUP_DELEGATED, 3, "readahead", {I, I, I}},
+  {CAPSTONE_SYS_fadvise64, CAPSTONE_GROUP_DELEGATED, 4, "fadvise64", {I, I, I, I}},
+  {CAPSTONE_SYS_sync, CAPSTONE_GROUP_DELEGATED, 0, "sync", {I}},
+  {CAPSTONE_SYS_syncfs, CAPSTONE_GROUP_DELEGATED, 1, "syncfs", {I}},
+  {CAPSTONE_SYS_memfd_create, CAPSTONE_GROUP_DELEGATED, 2, "memfd_create", {S, I}},
   /* time */
   {CAPSTONE_SYS_nanosleep, CAPSTONE_GROUP_DELEGATED, 2, "nanosleep",
    {IN_FIX(TIMESPEC), OPT_OUT_FIX(TIMESPEC)}},
@@ -86,6 +113,7 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_gettimeofday, CAPSTONE_GROUP_DELEGATED, 2, "gettimeofday",
    {OPT_OUT_FIX(16), OPT_OUT_FIX(8)}},
   {CAPSTONE_SYS_times, CAPSTONE_GROUP_DELEGATED, 1, "times", {OPT_OUT_FIX(32)}},
+  {CAPSTONE_SYS_clock_getres, CAPSTONE_GROUP_DELEGATED, 2, "clock_getres", {I, OPT_OUT_FIX(TIMESPEC)}},
   /* identity and limits */
   {CAPSTONE_SYS_getpid, CAPSTONE_GROUP_DELEGATED, 0, "getpid", {I}},
   {CAPSTONE_SYS_getpgid, CAPSTONE_GROUP_DELEGATED, 1, "getpgid", {I}},
@@ -102,6 +130,18 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_prlimit64, CAPSTONE_GROUP_DELEGATED, 4, "prlimit64",
    {I, I, OPT_IN_FIX(16), OPT_OUT_FIX(16)}},
   {CAPSTONE_SYS_getrandom, CAPSTONE_GROUP_DELEGATED, 3, "getrandom", {OUT_ARG(1), I, I}},
+  {CAPSTONE_SYS_getgroups, CAPSTONE_GROUP_DELEGATED, 2, "getgroups", {I, OUT_SCALED(0, 4)}},
+  {CAPSTONE_SYS_getrusage, CAPSTONE_GROUP_DELEGATED, 2, "getrusage", {I, OUT_FIX(RUSAGE)}},
+  {CAPSTONE_SYS_getpriority, CAPSTONE_GROUP_DELEGATED, 2, "getpriority", {I, I}},
+  {CAPSTONE_SYS_setpriority, CAPSTONE_GROUP_DELEGATED, 3, "setpriority", {I, I, I}},
+  {CAPSTONE_SYS_getcpu, CAPSTONE_GROUP_DELEGATED, 3, "getcpu", {OPT_OUT_FIX(4), OPT_OUT_FIX(4), I}},
+  /* scheduling: the task's own thread, the launcher checks the pid */
+  {CAPSTONE_SYS_sched_getaffinity, CAPSTONE_GROUP_DELEGATED, 3, "sched_getaffinity", {I, I, OUT_ARG(1)}},
+  {CAPSTONE_SYS_sched_setaffinity, CAPSTONE_GROUP_DELEGATED, 3, "sched_setaffinity", {I, I, IN_ARG(1)}},
+  {CAPSTONE_SYS_sched_get_priority_max, CAPSTONE_GROUP_DELEGATED, 1, "sched_get_priority_max", {I}},
+  {CAPSTONE_SYS_sched_get_priority_min, CAPSTONE_GROUP_DELEGATED, 1, "sched_get_priority_min", {I}},
+  {CAPSTONE_SYS_sched_rr_get_interval, CAPSTONE_GROUP_DELEGATED, 2, "sched_rr_get_interval",
+   {I, OUT_FIX(TIMESPEC)}},
   {CAPSTONE_SYS_sched_yield, CAPSTONE_GROUP_DELEGATED, 0, "sched_yield", {I}},
   {CAPSTONE_SYS_set_tid_address, CAPSTONE_GROUP_DELEGATED, 1, "set_tid_address", {I}},
   {CAPSTONE_SYS_set_robust_list, CAPSTONE_GROUP_DELEGATED, 2, "set_robust_list", {I, I}},
@@ -111,6 +151,8 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_exit_group, CAPSTONE_GROUP_DELEGATED, 1, "exit_group", {I}},
   {CAPSTONE_SYS_kill, CAPSTONE_GROUP_DELEGATED, 2, "kill", {I, I}},
   {CAPSTONE_SYS_tkill, CAPSTONE_GROUP_DELEGATED, 2, "tkill", {I, I}},
+  {CAPSTONE_SYS_setpgid, CAPSTONE_GROUP_DELEGATED, 2, "setpgid", {I, I}},
+  {CAPSTONE_SYS_setsid, CAPSTONE_GROUP_DELEGATED, 0, "setsid", {I}},
   /* signals: Linux keeps mask and pending set; the launcher applies its physical mask */
   {CAPSTONE_SYS_rt_sigprocmask, CAPSTONE_GROUP_DELEGATED, 4, "rt_sigprocmask",
    {I, OPT_IN_FIX(8), OPT_OUT_FIX(8), I}},
@@ -277,8 +319,12 @@ size_t capstone_delegate_result_bytes(uint64_t nr, unsigned index, size_t bytes,
   if (nr == CAPSTONE_SYS_rt_sigtimedwait && index == 1 && result <= 0) return 0;
   if (nr == CAPSTONE_SYS_read || nr == CAPSTONE_SYS_pread64 ||
       nr == CAPSTONE_SYS_getdents64 || nr == CAPSTONE_SYS_getrandom ||
-      nr == CAPSTONE_SYS_getcwd || nr == CAPSTONE_SYS_readlinkat)
+      nr == CAPSTONE_SYS_getcwd || nr == CAPSTONE_SYS_readlinkat ||
+      nr == CAPSTONE_SYS_sched_getaffinity)
     return (uint64_t)result < bytes ? (size_t)result : bytes;
+  /* getgroups writes the entries it counts, four bytes each */
+  if (nr == CAPSTONE_SYS_getgroups)
+    return (uint64_t)result * 4 < bytes ? (size_t)result * 4 : bytes;
   /* Sleep's remaining-time output is defined only on interruption. */
   if ((nr == CAPSTONE_SYS_nanosleep && index == 1) ||
       (nr == CAPSTONE_SYS_clock_nanosleep && index == 3)) return 0;

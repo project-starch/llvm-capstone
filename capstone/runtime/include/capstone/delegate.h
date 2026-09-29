@@ -186,6 +186,19 @@ enum {
   CAPSTONE_SYS_mprotect = 226, CAPSTONE_SYS_madvise = 233,
   CAPSTONE_SYS_wait4 = 260, CAPSTONE_SYS_prlimit64 = 261,
   CAPSTONE_SYS_renameat2 = 276, CAPSTONE_SYS_getrandom = 278,
+  /* the plain rows: integers, strings and flat buffers only */
+  CAPSTONE_SYS_mknodat = 33, CAPSTONE_SYS_linkat = 37, CAPSTONE_SYS_statfs = 43,
+  CAPSTONE_SYS_fstatfs = 44, CAPSTONE_SYS_truncate = 45, CAPSTONE_SYS_fallocate = 47,
+  CAPSTONE_SYS_fchdir = 50, CAPSTONE_SYS_fchmod = 52, CAPSTONE_SYS_fchownat = 54,
+  CAPSTONE_SYS_fchown = 55, CAPSTONE_SYS_sendfile = 71, CAPSTONE_SYS_sync = 81,
+  CAPSTONE_SYS_clock_getres = 114, CAPSTONE_SYS_sched_setaffinity = 122,
+  CAPSTONE_SYS_sched_getaffinity = 123, CAPSTONE_SYS_sched_get_priority_max = 125,
+  CAPSTONE_SYS_sched_get_priority_min = 126, CAPSTONE_SYS_sched_rr_get_interval = 127,
+  CAPSTONE_SYS_setpriority = 140, CAPSTONE_SYS_getpriority = 141, CAPSTONE_SYS_setpgid = 154,
+  CAPSTONE_SYS_setsid = 157, CAPSTONE_SYS_getgroups = 158, CAPSTONE_SYS_getrusage = 165,
+  CAPSTONE_SYS_getcpu = 168, CAPSTONE_SYS_readahead = 213, CAPSTONE_SYS_fadvise64 = 223,
+  CAPSTONE_SYS_syncfs = 267, CAPSTONE_SYS_memfd_create = 279, CAPSTONE_SYS_copy_file_range = 285,
+  CAPSTONE_SYS_statx = 291, CAPSTONE_SYS_faccessat2 = 439,
   CAPSTONE_SYS_vfork = 1071, CAPSTONE_SYS_fork = 1079
 };
 
