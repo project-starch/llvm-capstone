@@ -228,6 +228,21 @@ int main(int argc, char **argv) {
   }
   shared_region_annotated(dom, xr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, 0x3UL /* REV_TRANSFERRED */);
 #endif
+#ifdef LT_STR_REGION_BYTES
+#ifndef LT_HASH_REGION_BYTES
+#error "LT_STR_REGION_BYTES is the program's fourth region: the order fixes the index, so it needs LT_HASH_REGION_BYTES for the third"
+#endif
+  /* A fourth transferred region, the program's region 3: the level above the hash's entry
+     array. First consumer is mruby's shared string buffers, where the revocation point is
+     an ownership transfer (mrb_str_modify's un-share) rather than a free -- str_decref
+     releases the buffer only when the last reference goes, so revoke-on-free sees nothing. */
+  region_id_t sr2 = create_region(LT_STR_REGION_BYTES);
+  if (sr2 == (region_id_t)-1) {
+    fprintf(stderr, "libc-test %s: create_region(%lu) for the fourth program region failed\n", name, (unsigned long)LT_STR_REGION_BYTES);
+    capstone_cleanup(); return 3;
+  }
+  shared_region_annotated(dom, sr2, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, 0x3UL /* REV_TRANSFERRED */);
+#endif
 
   static struct hc_host host;
   host.tag = name; host.verbose = 0;
