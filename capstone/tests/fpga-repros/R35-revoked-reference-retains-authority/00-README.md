@@ -28,8 +28,8 @@ What closed it, and what did not:
 **2026-09-29 — the WHY is now readable on silicon.** On `caplifive_r43_8f6a0af98.bit` (R-43's second fix, which adds a
 refusal record) the same stale probe (image `35fb3fec`) still traps 25 at `+0x4354`, and the record reads LATCHED with arm =
 **probe path** (the probe's node read came back not live for this id — dead or, with the index reissued thousands of times,
-most likely a stale generation): the stale access was refused by the probe, NOT by the cache's deny-on-miss. The id byte read
-0x5f from one fresh sample; the full id is unresolved. That closes the "not observable" item below
+most likely a stale generation): the stale access was refused by the probe, NOT by the cache's deny-on-miss. The refused id reads
+0x5f (95) — fresh on the repetition m1v2-4, the same on a10 — and the live-alias control's record reads EMPTY at its own wedge. That closes the "not observable" item below
 (`../R43-revocation-cache-false-deny/results/board-8f6a0af98.result-lines.txt`, a10).
 
 The status paragraphs that follow are the dated history, newest first.

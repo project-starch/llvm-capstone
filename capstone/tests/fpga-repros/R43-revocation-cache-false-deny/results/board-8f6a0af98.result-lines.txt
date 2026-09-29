@@ -144,3 +144,13 @@ reading    The identical run with a LIVE alias refuses nothing and wedges only a
            Caveat (board lane's own regression, fixed from m1v2-4): this boot's 205..208 bytes are VOID -- the wedge-dump change
            walked from a stale switch model, so "208" was read at 210 and "205" at 207; reproduced two-sided without the fix.
            a10 predates the change and its 204/205 reads were confirmed at the right apertures, so a10 is unaffected.
+
+== a10's id RESOLVED -- boots m1v2-3 and m1v2-4 (35fb3fec, the stale read, repetitions 2 and 3 on v2) ==
+m1v2-4     the first boot with the fixed wedge-dump reads: every record byte read fresh (settled_halted_read, switch model reset
+           first), each confirmed at its labelled aperture by a switch-trace check that the board lane verified two-sided (it flags
+           m1v2-2's 208@210 and 205@207). trap 0x99 (cause 25), mepc +0x4354, tval 0xac100000; 204 = 0x11 (LATCHED, arm 0100 =
+           probe path); 205 = 0x5f, 206/207/208 = 00/00/00, all fresh -> id = 0x5f (95, generation 0), parity consistent.
+m1v2-3     cause 25 at +0x4354, 204 = 0x11; ran the pre-fix runner, so its id bytes are VOID.
+reading    The stale read is 3/3 on v2 (a10, m1v2-3, m1v2-4), and the refused access's id reads 95 on both boots with a fresh
+           read. That is the id of the access the probe path refused, reproducibly; whether it is k=0's node is not shown by an
+           independent source. The stale-WRITE pair (067cc96f) runs next.
