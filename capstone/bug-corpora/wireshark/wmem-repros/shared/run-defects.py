@@ -152,8 +152,8 @@ for which in cases:
             {"defect.dom": image, "host.user": a.linux_build / "bin/domain-loader"},
         )
         share = run / "share"
-        # A count of 2 with one record fails the driver's CHECK(in->count == 1):
-        # the program refuses the input before any case runs.
+        # A count of 2 with one record fails the guest-side loader's length check
+        # (domain-loader.c, exit 3): no domain is created, so no case runs.
         count = 2 if a.negative_control else 1
         (share / "trace.bin").write_bytes(
             struct.pack("<22Q", MAGIC, count, *([0] * 14), 0, 0, 0, 0, 0, which)

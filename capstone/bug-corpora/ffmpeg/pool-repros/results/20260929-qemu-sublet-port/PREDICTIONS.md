@@ -62,3 +62,16 @@ that needs a malformed stream.
 - Any fix cell faulting, on either arm.
 - A poolstock defect cell not printing DEFECT-REPRODUCED. The case would then not have created its
   reuse, and the poolsublet fault could not be attributed to it.
+
+## Correction, appended after the run (2026-09-29); no prediction changes, and the registered text is at `60491a5b4ad8`
+
+"So FFmpeg's own `buffer.c` never ran under protection there" (above) is wrong.
+
+- The buffer-pool port's probe cases 36-38 do run FFmpeg's `buffer.c`, with hooks that serve the
+  pool's payloads from that port's own allocator, whose leases carry the revocation.
+- What had not run under protection is FFmpeg's pools **ported**: storage from the Sublet heap, and
+  the pool's own code revoking a buffer at its return.
+- The predictions are unaffected.
+- A second sentence above is inexact. "The poolsublet fix column ... its storage reused the same
+  way" holds for cases 1 and 2. In case 0's fix the output keeps its reference, so the storage is
+  never reissued (`reuse_same_address=0`).

@@ -10,7 +10,7 @@
   "shape": "stale pointer after an individual recycler free",
   "allocator_layer": "block",
   "fidelity": "model-consumer, real allocator; the ASan report's own alloc and free stacks describe the address being recycled by a packet-pool object, not the root name's lifecycle, which is taken from the fix",
-  "distinguishing": "the only case whose lifetime ends by an individual free rather than a pool reset, and the corpus's recorded non-detection: Sublet lends whole regions and a chunk inside a live block has no epoch of its own, so the protected arm is expected to complete. Introduced and fixed within one release, by a change that turned an owned copy into an alias without removing the free",
+  "distinguishing": "the only case whose lifetime ends by an individual free rather than a pool reset, and the corpus's recorded non-detection under the region-granular port: Sublet lent whole regions and a chunk inside a live block had no epoch of its own, so that arm completes. The chunk port (WM_CHUNKS=ON, the default since a34caaedb1bc) gives the chunk a region of its own and catches it. Introduced and fixed within one release, by a change that turned an owned copy into an alias without removing the free",
   "arms": {
     "spatial": {
       "oracle": "complete"
@@ -36,5 +36,5 @@
       "status": "not written"
     }
   },
-  "status": "run 2026-09-21 under QEMU: spatial completes; sublet completes, the recorded non-detection; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe with released_chunks=1, the chunk poisoned at its individual free; results/20260921-qemu and results/20260921-cheribsd"
+  "status": "run 2026-09-21 under QEMU: spatial completes; sublet completes, the recorded non-detection; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe with released_chunks=1, the chunk poisoned at its individual free; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe x3, and the WM_CHUNKS=OFF build still completes x3; results/20260929-qemu-chunk-port"
 }

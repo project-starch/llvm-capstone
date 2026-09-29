@@ -2,9 +2,9 @@
  *
  * Each case.c runs UNCHANGED against FFmpeg's own libavutil as the pool arms build it. On
  * poolsublet that is the Sublet port of the pools, where a buffer's return to its pool is a
- * revoke. On poolstock it is upstream's pools, the one-macro control. The corpus's own protected
- * arms (the buffer-pool port's probe cases 36-38) run against that port's substitute allocator,
- * so FFmpeg's buffer.c never ran under them; here it is the only allocator the case talks to.
+ * revoke. On poolstock it is upstream's pools, the one-macro control. The corpus's other protected
+ * arm (the buffer-pool port's probe cases 36-38) runs FFmpeg's buffer.c with the payloads served
+ * by that port's own allocator and its leases; here the pools are FFmpeg's own, ported.
  *
  * This file stands in for the corpus's shared/driver.c. The domain has no argv, so the case and
  * its arm (upstream's defect, or the fix applied) are compile-time. One image per case and arm,

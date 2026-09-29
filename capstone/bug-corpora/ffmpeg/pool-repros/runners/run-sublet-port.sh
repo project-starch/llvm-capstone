@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The corpus's cases, each case.c unchanged, against the Sublet port of FFmpeg's OWN pools, in
 # the FFmpeg app port's Capstone domain. The corpus's other protected arm (the buffer-pool port's
-# probe cases 36-38) runs against that port's substitute allocator; here FFmpeg's buffer.c is
-# the only allocator a case talks to.
+# probe cases 36-38) runs FFmpeg's buffer.c with the payloads served by that port's own allocator
+# and its leases; here the pools themselves are ported, and a return is the pool's own revoke.
 #
 #   run-sublet-port.sh <poolsublet|poolstock> [rounds]
 #
