@@ -4,7 +4,7 @@ Minimal snapshot. Read first in every session.
 
 ## 2026-09-29 — application ports require delegation
 
-The `delegation-ports` branch, stacked on `delegation-spawn`, migrates all
+The `delegation-ports` branch migrates all
 seven application recipes to the shared ABI-v2 SDK: Perl, mruby, CPython,
 PostgreSQL single-user, SQLite in-memory SQL, the configured FFmpeg decoder
 and offline tshark. The launcher rejects v1 images with exit 126. Private
@@ -36,6 +36,32 @@ merge tree: the FFmpeg pool corpus on the Sublet port (36/36, three rounds of
 both arms) and tshark's wmem `chunks` arm with its `sublet` control (safety
 13/13 each, all stages and capture verdicts). [Result lines](../../ports/common/application/results/20260929-dev-merge.json).
 
+## 2026-09-29 (evening) — R-43 FIXED ON SILICON: the replay design `8f6a0af98` is flashed and accepted a1..a10
+
+**Resident bitstream is `caplifive_r43_8f6a0af98.bit`** (RTL `8f6a0af98` = R-42 + R-43 second fix + R-45; sha256
+`61443441…5345`), flashed on the lead's word, name read back from the console. Every arm that trapped cause 25 on R-42
+now completes with its oracle: the R1 warm and cold harnesses, live128/512 (4352 / 17408), and **P1 cell 6 `-O2`**
+(112006 38bb59fd, 25,010 lookasides). The ladder and P1 cell 5 are unchanged within noise; the R-35 probe still traps
+25 at `+0x4354` and the new refusal record reads it as refused on the probe path (arm 0100: not live — dead or a stale
+generation), not by deny-on-miss; the id byte is one fresh sample (0x5f), the full id unresolved.
+Synthesis: loops the same as R-42, ORDER 0/500, WNS −9.595 (inside the null of −10.615). Simulation: the 8-variant batch
+as predicted, the 92-test sweep 0 differences, lint at baseline. The after-audit refuted four documented properties
+(recorded, none a defect); the `noclear` control was vacuous and is replaced by arm 6b (`capstone-ariane 5aa316e0d`).
+Open and NOT in this bitstream: R-44 (CPMP adopt), R-46 (refetch metadata, accepted), M-1's RTL half, and a
+timeout-DEAD residual of R-43 (fail-closed, wedged-rev-node-only). One N=1 note: the cold revoke ramp reads 2–7 %
+lower mid-range with a candidate mechanism (probe reads pre-warm the D-cache). Report:
+`tests/fpga-repros/R43-revocation-cache-false-deny/` (results/board-8f6a0af98.result-lines.txt); R-12's reclaimer
+now has its own folder (`R12-revnode-exhaustion-reclaimer/`).
+
+## 2026-09-29 (later) — R-43's first fix is REFUTED BY SYNTHESIS; R-45 is not implicated; redesign next
+
+`0f5185a6d` routed at WNS −24.495, against R-42's −10.615. All of the worst 500 paths run from the revocation
+lookup into the load/store request (R-42: 0 of 500). The combinational stall gate is the cause, even though
+the fix is correct in simulation. Not flashed; the board stays on R-42. The redesign must never gate the
+load request: replay the missed access through the existing registered exception path instead. Result
+lines: `tests/fpga-repros/R43-revocation-cache-false-deny/results/synth-0f5185a6d.result-lines.txt`. An
+early "3 new loops" reading was withdrawn: they are the same loop families, cut differently.
+
 ## 2026-09-29 — delegated runtime review
 
 The `delegation-spawn` stack has reviewed syscall marshalling and process
@@ -52,15 +78,6 @@ argv[0], 108 application starts, and the same 45 libc-test passes. Buildroot
 format with literal magic escapes. Complete process-group behavior, memory and
 signal delivery remain open. The 88-byte entry is not an io_uring SQE,
 and the historical rdtime sample is not an icount/cycle result.
-
-## 2026-09-29 (later) — R-43's first fix is REFUTED BY SYNTHESIS; R-45 is not implicated; redesign next
-
-`0f5185a6d` routed at WNS −24.495, against R-42's −10.615. All of the worst 500 paths run from the revocation
-lookup into the load/store request (R-42: 0 of 500). The combinational stall gate is the cause, even though
-the fix is correct in simulation. Not flashed; the board stays on R-42. The redesign must never gate the
-load request: replay the missed access through the existing registered exception path instead. Result
-lines: `tests/fpga-repros/R43-revocation-cache-false-deny/results/synth-0f5185a6d.result-lines.txt`. An
-early "3 new loops" reading was withdrawn: they are the same loop families, cut differently.
 
 ## 2026-09-29 — R-43 and R-45 fixed in RTL (capstone-ariane `r43-query-on-miss`, `0f5185a6d`); synthesis next
 

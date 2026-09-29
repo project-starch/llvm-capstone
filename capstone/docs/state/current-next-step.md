@@ -375,7 +375,9 @@ for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
 and state-file merge conflicts remain integration work; the board milestones
 below are a separate track. Build entry points are in the [port catalog](../../ports/README.md).
 
-## 0. CURRENT — 2026-09-29. **Next: synthesize capstone-ariane `0f5185a6d` (R-43 + R-45), then reflash and run the board lane's staged R-43 set.** The staged set, each boot opening with `k800`:
+## 0. CURRENT — 2026-09-29 (evening). **Resident bitstream: `caplifive_r43_8f6a0af98.bit`** (RTL `8f6a0af98`: R-42 + R-43 second fix + R-45), acceptance a1..a10 PASS, board released. **Next, in order:** (1) the revocation-heavy measurements R-43 blocked — R1 (B3/B4) and P1 cell 6 — are unblocked on this bitstream and can be measured for the paper; (2) R-44 (the CPMP's adopt-on-sight, S/U mode) is the remaining authority escape of R-35's class — its fix needs positive evidence for the CPMP entries plus a seed for the hardcoded `cpmp(0..2)` ids, synthesis before any board time, and a first S-mode boot as acceptance; (3) if a tracer capture is taken for any reason, count the cause-`0x4000000000000019` entries (replays) per point to test the a3 cold-ramp mechanism — no cold boot for it alone; (4) R-46 (refetch metadata) stays accepted until a workload carries more than one code capability. Records: `tests/fpga-repros/R43-revocation-cache-false-deny/`, `docs/ref/ISSUES.md` R-43/R-44/R-45/R-46.
+
+## 0. CURRENT — 2026-09-29 (superseded by the entry above). **Next: synthesize capstone-ariane `0f5185a6d` (R-43 + R-45), then reflash and run the board lane's staged R-43 set.** The staged set, each boot opening with `k800`:
 - R1 harnesses B3/B4, which must complete;
 - live16/128/512, which must return 544/4352/17408;
 - the R-35 stale probe, which must still trap 25;

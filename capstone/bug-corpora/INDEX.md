@@ -12,8 +12,8 @@
 |---|---|---:|---|
 | third-party defects, as cases | `capstone/bug-corpora/` | 77 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
-| our own silicon defects | `capstone/tests/fpga-repros/` | 27 | one self-contained report per defect, the folder is the report |
-| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 89 open, 77 resolved | the registry, not reproduced cases |
+| our own silicon defects | `capstone/tests/fpga-repros/` | 28 | one self-contained report per defect, the folder is the report |
+| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 90 open, 77 resolved | the registry, not reproduced cases |
 
 Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 7 components have them: `apr/pools`, `cpython/pymalloc`, `ffmpeg/buffer-pool`, `memcached/allocators`, `postgres/memory-contexts`, `whisper/ggml-context`, `wireshark/wmem`.
 
@@ -86,10 +86,11 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 
 ## Our own silicon defects
 
-27 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 15 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
+28 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 16 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
 
 - `R01-lsu-hazard` -- no heading in 00-README.md
 - `R02-delin` -- no heading in 00-README.md
+- `R12-revnode-exhaustion-reclaimer` -- R-12 — revocation nodes were never reused: the pool ran out at 65,532 allocations and the core DEADLOCKED. Fixed by the M1 reclaimer (`054cea69b`), on silicon since 2026-09-17
 - `R16-entry-stall` -- R-16 — the domain never returns from its FIRST entry (`SHA5` stall)
 - `R18-scalar-store-metadata-clobber` -- R-18 — a scalar in the upper half of a 16-byte cache row is silently zeroed on silicon
 - `R19-movc-zero-metadata-in-slot` -- R-19 — a `movc rd, zero`-sourced store leaves `compress_cap(NULL)` in its OWN bank-1 slot
@@ -101,7 +102,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `R34-lsu-exception-lost-on-immediate-grant` -- R-34 — every exception the load/store unit generates itself (the five capability causes 24–28 AND the misaligned causes 4/6) is LOST when the access is granted in its request cycle; it is delivered only if an exception is still being presented one cycle later
 - `R35-revoked-reference-retains-authority` -- R-35 — on silicon a REVOKED capability still reads AND writes the storage its object has given up, at every age, and the access does not trap
 - `R42-icache-killed-miss-refill` -- R-42 — a speculative I-cache miss killed by a taken-branch redirect costs +1 cycle every loop iteration
-- `R43-revocation-cache-false-deny` -- R-43 — R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live
+- `R43-revocation-cache-false-deny` -- R-43 — R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live. FIXED ON SILICON 2026-09-29 (`8f6a0af98`, `caplifive_r43_8f6a0af98.bit`)
 - `RTL-cap-mcause-off-by-one` -- SPEC VIOLATION — every capability `mcause` from the DATA path is one code too high, and 25 aliases
 - `RTL-domain-trap-vector-unset` -- A domain enters with NO trap vector: `create_domain` never writes the trap-vector context slot
 - `RTL-give-cost-tracks-global-placement` -- Release cost tracks GLOBAL PLACEMENT, not the arm: a 16-byte relocation moves `give_cyc/n` by 83 %

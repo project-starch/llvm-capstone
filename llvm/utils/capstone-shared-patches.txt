@@ -47,6 +47,7 @@ clang/lib/Support/CMakeLists.txt | +1 -0 | CapstoneVIntrinsicUtils.cpp
 llvm/include/llvm/BinaryFormat/Dwarf.def | +2 -0 | HANDLE_DW_CC(0xd1, LLVM_CapstoneVectorCall)
 llvm/include/llvm/BinaryFormat/ELF.h | +32 -1 | EM_CAPSTONE = 259,      // Capstone
 llvm/include/llvm/BinaryFormat/ELFRelocs/Capstone_nonstandard.def | +32 -0 | #ifndef ELF_Capstone_NONSTANDARD_RELOC
+llvm/include/llvm/CodeGen/TargetInstrInfo.h | +19 -0 | /// is safe to move. A target whose arithmetic can fault -- Capstone's
 llvm/include/llvm/CodeGen/ValueTypes.h | +8 -0 | /// Return true if this is a vector value type (Capstone).
 llvm/include/llvm/CodeGen/ValueTypes.td | +69 -34 | bit isCapstoneVecTuple = false;
 llvm/include/llvm/CodeGenTypes/MachineValueType.h | +30 -0 | /// Return true if this is a Capstone vector tuple type where the
@@ -64,6 +65,9 @@ llvm/lib/CodeGen/AtomicExpandPass.cpp | +15 -1 | if (UseSizedLibcall && DL.isNon
 llvm/lib/CodeGen/CodeGenPrepare.cpp | +5 -3 | return ConstantInt::get(IntPtrTy, BaseOffs, /*IsSigned=*/true);
 llvm/lib/CodeGen/CodeGenTargetMachineImpl.cpp | +9 -0 | if (TmpAsmInfo->getExceptionHandlingType() !=
 llvm/lib/CodeGen/DwarfEHPrepare.cpp | +26 -4 | // space 0. On a capability target (Capstone: addrspace(200), declared
+llvm/lib/CodeGen/EarlyIfConversion.cpp | +7 -0 | if (TII->canTrap(MI)) {
+llvm/lib/CodeGen/MachineCSE.cpp | +8 -0 | // capability increment above that test, where kwnames is NULL.
+llvm/lib/CodeGen/MachineLICM.cpp | +16 -1 | if (TII->canTrap(I) && !IsGuaranteedToExecute(I.getParent(), CurLoop)) {
 llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +29 -13 | static bool isIntegerTruncate(SDValue N) {
 llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +116 -14 | return Type.isInteger() || Type.isCheriCapability();
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than

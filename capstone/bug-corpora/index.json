@@ -888,6 +888,11 @@
       "has_sha256sums": false
     },
     {
+      "id": "R12-revnode-exhaustion-reclaimer",
+      "title": "R-12 \u2014 revocation nodes were never reused: the pool ran out at 65,532 allocations and the core DEADLOCKED. Fixed by the M1 reclaimer (`054cea69b`), on silicon since 2026-09-17",
+      "has_sha256sums": true
+    },
+    {
       "id": "R16-entry-stall",
       "title": "R-16 \u2014 the domain never returns from its FIRST entry (`SHA5` stall)",
       "has_sha256sums": false
@@ -944,7 +949,7 @@
     },
     {
       "id": "R43-revocation-cache-false-deny",
-      "title": "R-43 \u2014 R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live",
+      "title": "R-43 \u2014 R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live. FIXED ON SILICON 2026-09-29 (`8f6a0af98`, `caplifive_r43_8f6a0af98.bit`)",
       "has_sha256sums": true
     },
     {
@@ -1014,7 +1019,7 @@
     }
   ],
   "issues": {
-    "open": 89,
+    "open": 90,
     "resolved": 77
   },
   "fixtures": [

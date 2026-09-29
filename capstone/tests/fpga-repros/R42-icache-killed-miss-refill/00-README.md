@@ -11,6 +11,9 @@ iteration instead of **6**. Which loops are hit depends on nothing but code layo
   where R-42 was found: `../../rtl-smoke/ladder-revival-2026-09-22/`, phases 6–10, and
   `docs/ref/fpga-silicon-measurements-for-paper.md` §2. **Any cycle comparison across a rebuild or a
   reflash must hold loop layout fixed** until this fix is on silicon.
+- **R-43** (`../R43-revocation-cache-false-deny/`) was CONFIRMED on this bitstream (boots r42b3/r42b4,
+  the live128/512 sweeps, P1 cell 6): a live capability refused with cause 25. It is R-35's fix denying on
+  a cache miss, not anything in this change — this fix touches only `cva6_icache.sv`.
 - Registry entry: `docs/ref/ISSUES.md` R-42.
 
 **Record, by date:**
@@ -18,10 +21,14 @@ iteration instead of **6**. Which loops are hit depends on nothing but code layo
 - **2026-09-24:** fix `capstone-ariane 6cbdaeeb4`, branch `r42-icache-killed-miss`, one commit on
   `4ad0df694`. Validated in simulation, then SYNTHESIZED: no new loop, bitstream written,
   sha256 `0cd45bb0…2b8c05`.
-- **2026-09-25:** reflash authorized by the project lead and handed to the board lane.
-
-Board results, once run, land as `results/board-*.result-lines.txt`. The pre-registered acceptance is
-below.
+- **2026-09-25:** reflash authorized by the project lead; `caplifive_r42_6cbdaeeb4.bit` verified resident
+  04:16:10. **Board acceptance PASSED** the same morning, all three pre-registered items (below):
+  the ladder 68/68 correct with `ctrsanity` at the slow layout **1.167× → 1.000×**
+  (600,334 vs 600,041 cycles; K1..K3 at 1.000–1.001×, every retval and instret unchanged), `k800 = 4` in
+  every boot, and R-35's stale probe (image `35fb3fec3196841b`, boot r42b2) still trapping cause 25 at
+  `+0x4354`. Result lines: `../../rtl-smoke/ladder-revival-2026-09-22/r42-acceptance-bootA.result-lines.txt`
+  (ladder) and `r42-acceptance-r1boots.result-lines.txt` (r42b2, the R-35 probe). This is the resident
+  bitstream until R-43's fix is flashed.
 
 ---
 
@@ -147,9 +154,9 @@ The timing loss is a trade the project lead accepted when authorizing the reflas
 on paths the change does not touch, in exchange for one cycle per affected loop iteration. The board
 has previously run a flashed bitstream at −12.425.
 
-## Board acceptance — pre-registered before the reflash
+## Board acceptance — pre-registered before the reflash, PASSED 2026-09-25
 
-One boot, ordered by the `board-run` skill:
+One boot, ordered by the `board-run` skill (the readings are in the dated record above):
 
 1. **Control first:** `k800` returns 4.
 2. **The ladder, including the layout case.** `ctrsanity` at its slow start address (the `…1ac` layout,

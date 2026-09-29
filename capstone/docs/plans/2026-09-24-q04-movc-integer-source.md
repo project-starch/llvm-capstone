@@ -152,6 +152,13 @@ choice between `movc` and `mv`, and a fix would be thrown away. The measurement 
 one new case it found (`iconv`) is out of any compiler fix's reach. Doing it anyway is worth it
 only if the reflash is weeks away and a reported program is shown to hit the known shape.
 
+> **Amended 2026-09-25.** "Out of any compiler fix's reach" holds only for a fix that must know the
+> value is an integer. The live-source copy rule (`compiler/movc-live-source-copy`, ISSUES C-32) does
+> not need to know. It copies every `movc` whose source is read again through a stack slot, and the
+> iconv-shaped probe in `movc-null-scalar/run.sh` passes under `CAPSTONE_MOVC_NULL_SCALAR=1` with it:
+> 3/3 calls with the rule, 1/3 without. So (b) is no longer the only way to close this exposure
+> for the board; it is the cheaper one if the RTL can change.
+
 ## What this does not decide
 
 - Nothing about which tagged types are copyable. `type != 1` stays the rule for capabilities.
