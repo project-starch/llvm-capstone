@@ -861,3 +861,50 @@ has no threads. It also sharpens the reading of the inventory's split -- 11 in r
 object slots against 13 in bodies from `mrb_malloc` -- because if the GC-slot ones cluster
 in a gem the port skips, the port's coverage of that class is bounded by its gembox and not
 by the mechanism.
+
+## The target set: blind at the free/malloc interface, and caught anyway
+
+This is the set the work is for -- defects a malloc-layer mechanism cannot see, so CHERI's
+own revocation and bounds do not reach them. The criterion is measured, not asserted: ASan
+silent at the default 1024 slots per GC page **and** at one object per page, which is what
+rules out any release the allocator saw.
+
+**Four qualify, and three are now caught.**
+
+| defect | level | ASan | `level0` | `sublet-hash` |
+|---|---|---|---|---|
+| `a54353ecf` | 3, hash entry array | silent, both | completes, 9 wrong | **FAULT @`ht_delete+0x238`** |
+| `08a0432d1` | 3 | silent, both | completes, 4 wrong | **FAULT @`mrb_hash_assoc+0x278`** |
+| `eb7693857` | 3 | silent, both | FAULT @`mrb_vformat+0x7c0` | **FAULT @`mrb_hash_to_s+0x6a8`** |
+| `1c57532b2` | 4, shared string buffer | silent, both | completes, 3 wrong | not expressible -- see above |
+
+**The fault lands where each fix says the defect is**, which is the part that makes these
+catches rather than coincidences:
+
+* `08a0432d1` repairs *"assoc, rassoc, `==` and `eql?`"* -- it faults in `mrb_hash_assoc`.
+* `eb7693857` repairs *"inspect, `__except` and rehash"* -- it faults in `mrb_hash_to_s`,
+  which is `inspect`. `level0` also faults on this row, at `mrb_vformat`, and that one is
+  the accident the documentation warns about; the two are **different functions**, so the
+  row still discriminates.
+* `a54353ecf` repairs `Hash#[]` and `#delete` -- it faults in `ht_delete`.
+
+### What closed the last two: both hash shapes, not a new mechanism
+
+The first version of patch 0010 refused an entry array above `AR_MAX_SIZE`, so it covered
+only the array shape. **All three of these cases build hashes of 20 keys**, so all three
+lived in the *indexed* shape and only `a54353ecf` was caught at all -- on a small-hash
+sub-test, which is why its fault was in `ar_delete` then and is in `ht_delete` now.
+
+The indexed shape's entry array is the same `hash_entry[]` reached through `ht_ea()` instead
+of `ar_ea()`, so one bound does both: `XS_SLOTS` is 64 slots, 2 KiB a span, 128 KiB for
+`XS_MAX` of them against a region granted in megabytes. That is the whole change, and it
+took the caught count from one to three.
+
+The native gate held across it: `mrbtest` Total 1527, OK 1527, KO 0, Crash 0 with the
+defines off, and the arm's control reaches `SMOKE_DONE` with `MRBD-HEAP alloc=40973
+free=40973` -- the heap's own counters balancing, which is worth reading because a sub-let
+that leaked spans would show there first.
+
+So against the question the work exists to answer: **of the defects a malloc-granularity
+mechanism is blind to, three of four are caught one level up, and the fourth is blocked by
+the instruction set rather than by the port.**
