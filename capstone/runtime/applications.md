@@ -31,7 +31,7 @@ claimed here.
 The Buildroot external package `BR2_PACKAGE_CAPSTONE_RUNTIME` installs
 `capstone-exec`, the small `capstone-job` waitpid collector, the driver and
 Dropbear. Set `BR2_PACKAGE_CAPSTONE_RUNTIME_SOURCE` to this LLVM checkout.
-`S40capstone` loads the driver, checks its process ABI and optionally mounts the
+`S40capstone` loads the driver, selects the process API and optionally mounts the
 9p host share. The serial Linux shell works without the host CLI or SSH.
 See the package's README in `capstone/caplifive-buildroot/package/capstone-runtime`.
 
@@ -270,10 +270,26 @@ Measured on 2026-09-29 in the QEMU guest, `rdtime` at its 10 MHz rate, one hart:
 | Delegated round, `delegate-bench.dom`, 10,000 calls | 1,049 |
 | Native process, same counter, 10,000 calls | 8.2 |
 
-That ratio is the emulator's: each round crosses U, S and M mode twice and
-QEMU flushes its TLB on every supervised switch. This run did not use `icount`; it is a wall-time observation affected by host
+This run did not use `icount`; it is a wall-time observation affected by host
 scheduling, not a hardware cost or completion of the planned per-step cycle
 measurement. It predates the review corrections below.
+
+The step ioctl behind every round used to make ten SBI ecalls: a feature probe,
+the STEP, and eight QUERY calls fetching result, cause, pc and address as
+32-bit halves. With `caplifive-buildroot` 201a8d4 (monitor `capstone-sbi`
+02d9d47) STEP returns the whole event in one ecall, in a1..a5. Measured on
+2026-09-29, same guest, same host, base and new booted back to back, median
+of five runs of 10,000 calls and two of 100,000
+([record](tests/application/results/20260929-step-one-ecall.json)):
+
+| Step protocol | Ticks per round, 10,000 calls | 100,000 calls |
+|---|---|---|
+| Ten ecalls per step | 1,047 | 1,048 |
+| One ecall per step | 893 | 885 |
+
+Still wall time without `icount`, with another guest running on the host. The
+fault records of the four contract fault modes are byte-identical on both
+platforms; the application gate and the binfmt contract pass on the new one.
 
 ### Processes
 
