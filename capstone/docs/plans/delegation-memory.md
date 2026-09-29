@@ -23,6 +23,19 @@ the domain derives its own pointers and allocates objects inside those regions.
 The monitor does not learn filesystems, file descriptors, Linux tasks or mmap
 flags. The domain does not reproduce the operating system's storage services.
 
+**Physical addressing in the current runtime:** the domain receives a
+capability whose bounds refer to a physically contiguous RAM extent. Its data
+accesses do not use the launcher's Linux virtual addresses or Linux page
+tables. The module currently calls `dma_alloc_pages` (using CMA for large
+extents), obtains the physical base with `page_to_phys`, and passes that base
+to the monitor to create a region. Linux therefore chooses and owns the RAM
+allocation; the monitor decides which domain may access that physical extent.
+These are compatible responsibilities. The launcher may have a separate Linux
+virtual mapping of the same pages when preparing or sharing data. For a private
+grant, no Linux *user* mapping may retain access after exclusive transfer; the
+kernel's ordinary mapping and the module's bookkeeping are not the domain's
+pointer and do not disappear merely because the user mapping is removed.
+
 Today an application receives its data, stack, arena and exchange regions at
 startup. Anonymous mmap is allocated inside the arena; file mmap is refused.
 The proposal makes region delivery repeatable during execution, so an allocator
@@ -188,8 +201,8 @@ silently delegate the remaining unsupported VM operations.
 1. Validate the requested operation and reserve tracking capacity. Allocate
    suitable backing, zero anonymous storage, and populate a private file copy
    before making the grant visible.
-2. Remove temporary Linux mappings before an exclusive transfer. The module's
-   mapping/reference checks must prevent retained or newly created aliases
+2. Remove temporary Linux user mappings before an exclusive transfer. The module's
+   mapping/reference checks must prevent retained or newly created user aliases
    through dup, fork or concurrent mapping operations from bypassing exclusivity.
 3. Have the monitor validate authority and geometry, retain the revocation root,
    and prepare delivery to the intended suspended domain/context.
