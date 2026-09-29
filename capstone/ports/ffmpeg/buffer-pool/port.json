@@ -1,0 +1,20 @@
+{
+  "program": "ffmpeg",
+  "role": "allocator-component",
+  "title": "AVBufferPool and AVRefStructPool replay from native decoder recordings",
+  "upstream": {
+    "version": "9.0.1",
+    "pin_source": {
+      "file": "capstone/ports/ffmpeg/buffer-pool/upstream.json",
+      "grep": "\"version\": \"9.0.1\""
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "cheribsd-purecap",
+    "native"
+  ],
+  "corpora": [
+    "capstone/bug-corpora/ffmpeg/pool-repros"
+  ]
+}

@@ -8,7 +8,7 @@
  * child (statement value) borrow *from inside it* via share_child_region, then
  * "closes" the connection by revoking the PARENT. If the hierarchical cascade
  * works, the child borrow the host cached is invalidated. See the header for the
- * mapping to the use-after-close cve-repros rows. */
+ * mapping to the use-after-close capi-repros rows. */
 
 #define print_nobuf(...)  \
   do {                    \

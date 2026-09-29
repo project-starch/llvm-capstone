@@ -186,7 +186,7 @@ Each step stacks on the previous one, is gated, and lands squashed.
 5. **`delegation-signals`** (was 6, moved ahead: it needs no monitor change):
    synchronous delivery. Gate: the libc-test signal group and `popen`;
    CPython's `signal` tests that do not need a second process. Result
-   (2026-09-29, `ports/cpython/interpreter/results/signals-2026-09-29.json`):
+   (2026-09-29, `ports/cpython/app/results/signals-2026-09-29.json`):
    `popen` and `setjmp` pass in libc-test; CPython `test_signal` 25 pass,
    0 fail, 13 skipped, 19 errors that are all an unserved `clone`, `socket`
    or thread start; the port's signal smoke 18/18. The CPython `subprocess`

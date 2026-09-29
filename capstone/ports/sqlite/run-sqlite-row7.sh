@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# row7 -- the LITERAL matched pair for cve-repros/row7_cpython_cursor_dealloc
+# row7 -- the LITERAL matched pair for capi-repros/row7_cpython_cursor_dealloc
 # (HIERARCHICAL-REVOKE). Real SQLite, one domain. The connection gets its own
 # MREV'd sub-arena; the statement is a SPLIT descendant of it. Closing the
 # connection REVOKEs the sub-arena's senior node, sweeping the connection AND its

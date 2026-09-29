@@ -35,10 +35,45 @@ and validation workflow linked from that guide.
 | Whisper / ggml | Context allocator and buffer-epoch replay; not domain speech recognition | [ggml contexts](whisper/ggml-context/README.md); shared CMake layout |
 | Wireshark / wmem | All four wmem allocators with pool-reset epochs and lifetime fixtures; not domain packet dissection | [wmem](wireshark/wmem/README.md); shared CMake layout |
 
-This integration branch includes the pending Whisper port and PostgreSQL/runtime
-PRs. Consult the selected revision's `upstream.json` or fetch script for the
-source pin, and the component's result bundle for the revision actually tested.
-Historical results keep their original source and binary identities.
+Every component carries a `port.json` stating what it is — `full-application`,
+`allocator-component`, `platform-build`, `domain-libc` or `census` — the upstream
+version it pins, and the text in its own recipe that decides that pin.
+`capstone/bug-corpora/tools/check-ports.py` reads that line and refuses a
+declaration the recipe no longer supports, so the version is machine-readable
+without becoming a second source of truth. The generated
+[bug-material index](../bug-corpora/INDEX.md) joins those versions to the
+corpora, which is the shortest answer to "which defects does this release have".
+A component's result bundle still names the revision actually tested, and
+historical results keep their original source and binary identities.
+
+**[INDEX.md](INDEX.md) is the generated list of every component** by role, with its
+pinned version, the targets it runs on, its workload and its corpora. Read it before
+this table: it cannot go stale, and the table above can.
+
+## Naming
+
+**A component is named for what it is:** `app/` for the complete application,
+`<boundary>/` for one allocator (`pools`, `pymalloc`, `buffer-pool`, `wmem`,
+`memory-contexts`), `cheribsd/` for the same release built for another platform.
+`role` in each `port.json` states the same thing, so nothing depends on reading a path.
+
+Three components were renamed to that rule on 2026-09-28 — `cpython/interpreter`,
+`mruby/musl` and `postgres/single-user` are now each `app/` — and four are deferred with
+their reasons. **[renames.json](renames.json) is the path history**, rendered in
+[INDEX.md](INDEX.md#path-history) and checked by `check-ports.py`.
+
+The rename does not touch the evidence. An archived `build-manifest.json` records which
+directory a measured binary was actually built from, so it keeps quoting the old path and
+is never rewritten; `docs/history/` is append-only for the same reason. Eight archived
+files quote a renamed path today, the ledger lists each one, and the checker fails if one
+of them stops quoting it — so the record and its resolution table cannot drift apart.
+
+What is deferred is deferred for a measured reason, not for taste. `perl/musl` has
+another lane working in it. `sqlite`, `micropython` and `nginx` are flat trees, so the
+move would add a directory level that every script inside resolves its own paths
+against — and for `sqlite`, 99 files quote the path and 23 of them are evidence. Neither
+can be claimed to work from a worktree that cannot run the nightly or the board gates
+that drive those scripts.
 
 ## Shared layout for component ports
 

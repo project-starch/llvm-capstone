@@ -27,6 +27,15 @@
       "oracle": "fault at the labelled WRITE probe, a different published address from the read cases",
       "cause": 24
     },
+    "sublet-port": {
+      "fixtures": [
+        44,
+        45
+      ],
+      "oracle": "case.c unchanged against the Sublet port of FFmpeg's own pools (app port, FFAPP_POOL=sublet): the defect faults, cause 24, at an instruction case.c's line table puts on a line that dereferences the stale pointer (33), before the verdict line; the fix completes with VERDICT FIXED",
+      "control": "the same case.c and driver objects (byte-identical), linked against upstream's pools (FFAPP_POOL=stock): the defect completes with VERDICT DEFECT-REPRODUCED, the fix with VERDICT FIXED",
+      "cause": 24
+    },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap, libc revocation enabled",
       "case": "pool-0-38",
@@ -61,7 +70,7 @@
       "role": "the informative negative: revocation exists here, at the backing allocation, and the pool never frees its backing but recycles out of it. This separates 'no mechanism' from 'a mechanism at the wrong point'"
     }
   },
-  "status": "native pair and every arm above run 2026-09-20; all passed. Four systems compared, two matched controls and one intermediate beside them",
+  "status": "native pair and every arm above run 2026-09-20; all passed. Four systems compared, two matched controls and one intermediate beside them; run 2026-09-29 under QEMU against the Sublet port of FFmpeg's own pools (sublet-port arm, fixtures 44/45): the defect faults with cause 24 at case.c:33 x3 and completes with DEFECT-REPRODUCED on upstream's pools x3; the fix completes x3 on both; results/20260929-qemu-sublet-port",
   "comparison": [
     "Capstone (spatial)",
     "Sublet",

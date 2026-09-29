@@ -34,8 +34,8 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   add_test(NAME application-job COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/../tests/application/job-test.py" $<TARGET_FILE:capstone-job>)
-  add_executable(mruby-spawn-test ../../ports/mruby/musl/spawn-shell.c
-    ../../ports/mruby/musl/spawn-shell-test.c)
+  add_executable(mruby-spawn-test ../../ports/mruby/app/spawn-shell.c
+    ../../ports/mruby/app/spawn-shell-test.c)
   target_compile_options(mruby-spawn-test PRIVATE -UNDEBUG)
   add_test(NAME mruby-spawn-shell COMMAND mruby-spawn-test)
   set_tests_properties(mruby-spawn-shell PROPERTIES TIMEOUT 15)

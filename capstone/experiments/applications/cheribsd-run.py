@@ -67,6 +67,10 @@ def policy_environment(point):
             expected[arm] = int(point.get('nested_policy') is not None)
             if point.get('mode') != int(arm == 'poisoncap-temporal'):
                 raise ValueError('PostgreSQL context arm and application mode disagree')
+        elif boundary == ('perl', 'perl-sv-heads'):
+            expected[arm] = int(point.get('nested_policy') is not None)
+            if point.get('mode') != int(arm == 'poisoncap-temporal'):
+                raise ValueError('Perl SV-head arm and application mode disagree')
         else:
             raise ValueError('PoisonCap arm needs a qualified application boundary')
     if arm not in expected or point['revocation'] != expected[arm]:
@@ -74,7 +78,7 @@ def policy_environment(point):
     environment = point['environment']
     if any(k.startswith(('_RUNTIME_', 'MALLOC_', 'EXP_CHERI_')) for k in environment) or \
             'MRB_GC_POISONCAP' in environment or 'PYM_POISONCAP_MODE' in environment or \
-            'PG_POISONCAP_MODE' in environment:
+            'PG_POISONCAP_MODE' in environment or 'PERL_POISONCAP_MODE' in environment:
         raise ValueError('allocator overrides must come from the named study arm')
     environment = dict(environment)
     if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'mruby-gc':
@@ -83,6 +87,8 @@ def policy_environment(point):
         environment['PYM_POISONCAP_MODE'] = '1' if arm == 'poisoncap-temporal' else '0'
     if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'postgres-memory-contexts':
         environment['PG_POISONCAP_MODE'] = '1' if arm == 'poisoncap-temporal' else '0'
+    if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'perl-sv-heads':
+        environment['PERL_POISONCAP_MODE'] = '1' if arm == 'poisoncap-temporal' else '0'
     if arm != 'cheribsd-default':
         switch = 'ENABLE' if expected[arm] else 'DISABLE'
         environment['_RUNTIME_REVOCATION_' + switch] = '1'
@@ -152,8 +158,8 @@ def published_policy_valid(point, stderr):
                     min(row.values()) >= 0 and row['queue_metadata_bytes'] > 0)
         except (KeyError, ValueError):
             return False
-    if boundary == 'postgres-memory-contexts':
-        # Its reports are on stdout and are validated in verdict().
+    if boundary in ('postgres-memory-contexts', 'perl-sv-heads'):
+        # Their reports are validated in verdict().
         return True
     if prefix is None:
         return not point.get('nested_policy')
@@ -184,6 +190,35 @@ def published_policy_valid(point, stderr):
     except (KeyError, ValueError):
         return False
     return True
+
+
+def perl_sv_heads_valid(point, stderr):
+    """One closing PERL_SV_HEADS report that matches the arm, the published
+    policy transfer and the reuse histogram, with nothing left quarantined."""
+    reports = [line for line in stderr.splitlines() if line.startswith('PERL_SV_HEADS ')]
+    if len(reports) != 1:
+        return False
+    try:
+        words = [word.split('=', 1) for word in reports[0].split()[1:]]
+        fields = dict(words)
+        if len(fields) != len(words) or fields.pop('platform') != 'cheribsd-poisoncap':
+            return False
+        row = {k: int(v) for k, v in fields.items()}
+        gap = parse_reuse_gap(stderr, 'PERL_REUSE_GAP')
+        mode = int(point['arm'] == 'poisoncap-temporal')
+        policy = point.get('nested_policy') is not None
+        return (row['mode'] == mode and row['policy'] == 1 and policy and
+                row['queue_limit'] == 4096 and row['minimum_held'] == 16 << 20 and
+                row['issues'] == gap['issues'] and row['releases'] == gap['releases'] and
+                row['issues'] == row['releases'] + row['live'] and
+                row['sweeps'] == row['full_drains'] + row['threshold_drains'] + row['teardown_drains'] and
+                row['queued'] == 0 and 0 <= row['peak_queued'] <= 4096 and
+                row['poison_bytes'] == row['clear_bytes'] == row['zero_bytes'] and
+                (row['sweeps'] > 0) == bool(mode) and
+                (mode or row['poison_bytes'] == 0) and
+                row['pages'] <= row['max_pages'] and min(row.values()) >= 0)
+    except (KeyError, ValueError):
+        return False
 
 
 def verdict(point, rc, stdout, stderr, stdout_raw=None):
@@ -300,6 +335,9 @@ def verdict(point, rc, stdout, stderr, stdout_raw=None):
         report = re.findall(r'^PG_POISONCAP mode=(\d+) sweeps=(\d+) ', stdout, re.M)
         if (len(report) != 1 or int(report[0][0]) != mode or
                 (mode and int(report[0][1]) == 0)):
+            return 'bad-inner-metrics'
+    if point.get('nested_allocator') == 'perl-sv-heads':
+        if not perl_sv_heads_valid(point, stderr):
             return 'bad-inner-metrics'
     if not published_policy_valid(point, stderr):
         return 'bad-inner-policy'

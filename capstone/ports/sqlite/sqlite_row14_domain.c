@@ -1,5 +1,5 @@
 /* row14 -- the LITERAL matched pair for
- * cve-repros/row14_cpython_uninit_connection (UNINIT / use-before-init).
+ * capi-repros/row14_cpython_uninit_connection (UNINIT / use-before-init).
  *
  * before.c allocates a connection wrapper (calloc) and reads through its
  * `sqlite3 *db` field BEFORE sqlite3_open assigns it:
