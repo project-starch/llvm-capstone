@@ -957,7 +957,9 @@ The faulting sequence is the lookaside carve loop:
 **Attribution: consistent with R-43's deny-on-miss, and not a real use-after-revoke.** This was audited
 adversarially before recording. Established:
 - **The refused capability is live by construction.** gp+0x40 is `sublet_stats.split`
-  (`capstone/sublet/sublet.h:45-60`). `sublet_split` is exactly the disassembled
+  (`capstone/runtime/include/sublet/sublet.h:14-23`, the header the build compiles, since
+  `build-sqlite-silicon.sh` puts `capstone/runtime/include` first; an earlier version of this line cited
+  the older `capstone/sublet/sublet.h`, whose code has the same shape). `sublet_split` is exactly the disassembled
   `ldc; cssplit; stc; stc; split++`, and the `.bss` order `sqlite3Stat, vfsList, memsys5Grant,
   sublet_stats.0…` matches the gp-table records. It is a static in the domain's own block, and no
   software path revokes it: the image's 6 `revoke` and 8 `mrev` sites all act on handles loaded from
@@ -994,6 +996,40 @@ outcome as unknown. What the boot adds:
 
 **P1 ⑥ waits for a bitstream with an R-43 fix.** The first fix, `0f5185a6d`, was refuted by synthesis
 (`cf874ab`). The ⑥ / ⑤ and ⑥ / native ratios at -O2 are not measurable on R-42.
+
+**The arm discriminator, boot `p1o2-c6probe`: INCONCLUSIVE, as pre-registered.** The RTL lane asked for
+this boot before spending a synthesis cycle on the R-43 redesign. The pre-registration is on
+`lane/board-p1-o2` at `dfb9ee90`, and its readings are the RTL lane's.
+
+The image `2d0efa02a6797376` is df484d98 plus an LCC validity query on the split counter's capability
+before every `split++`. With the probe define off, the same tree reproduces df484d98 byte-for-byte.
+The query is at all four inlined split sites, in the form
+`lcc live,p,0 ; and t3,live,zero ; cincoffset p,p,t3 ; ld/add/sd through p`. The `cincoffset` makes the
+load wait for the query, because R-45 means an independent load could be checked first.
+
+In QEMU all three arms are identical to the unprobed image's counters, with split=5568, where QEMU's LCC
+sel 0 always answers live.
+
+The pre-registered outcomes were:
+- VANISH: the miss arm;
+- cause 25 at a probed load: a dead node;
+- anything else: inconclusive.
+
+On silicon:
+- **cause 25** (`sw=255` 0x99) at mepc − DBAS = 0x18c7c, i.e. **VA 0x28c7c in `openDatabase`**:
+  `lw a0,0(s8)`, where `s8 = ldc 0x2a0(gp)` at the function's entry. That is a different static global
+  from the split counter;
+- tval 0x827fba70, inside the carved-globals region;
+- `rev_node_head` 466, against 313 unprobed;
+- none of the four probed loads (0x26878, 0x26940, 0x110278, 0x110544) trapped.
+
+**Reading: outcome 3, inconclusive.** With the probed global's node re-read before each access, the run
+allocated more ids before trapping, and the false deny moved to an unprobed live global. The miss arm
+predicts exactly that, since protecting one entry moves the eviction victim. But a defect that writes
+arbitrary live nodes dead would also land on "some live global", so the boot does not separate the arms.
+What it adds is a second live static global refused (the second distinct site of the day), under a
+larger live-id population. The RTL lane's redesigned bitstream, with this image's parent df484d98 in its
+board acceptance, answers the question directly.
 
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 

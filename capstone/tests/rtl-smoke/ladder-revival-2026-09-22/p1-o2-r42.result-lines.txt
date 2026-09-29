@@ -68,3 +68,33 @@
   [wedge] trap tval = 0x00000000827ff530
   FIRST FAILURE: /test-domains/speedtest1.dom:--speedtest1 --arena 2097152 --tables 1750285 --testset main --size 1 --verify --stats did not return, and it WAS created and enter
   => mcause 25 (0x99 = seen|0x19); mepc-DBAS = 0x82416928-0x82400000 = 0x16928 -> VA 0x26928 (setupLookaside: ld t0,0(a5) after cssplit t1,t0,s4 at 0x2691c; a5 = ldc 0x40(gp))
+
+## P1-c6probe (R-43 arm discriminator) on caplifive_r42_6cbdaeeb4.bit (board-c6var.sh, tag p1o2-c6probe, drivers ea530ed8), 2026-09-29
+# image 2d0efa02a6797376 (LCC-probe variant of df484d98 at 4 split sites); pre-registration lane/board-p1-o2 dfb9ee90; relinked k800 589ceee3853c6092
+# fw_payload 192ddc79f903
+  11:50:57 runner ended after 1386 s with rc=0
+    RESULT k800 retval=[0-9-]+    : 1x ['RESULT k800 retval=4']
+    Verification Hash: \d+ [0-9a-f: 0x []
+    SPEEDTEST1-CYCLES \d+         : 0x []
+    Successful lookasides:\s+\d+  : 0x []
+    Lookaside size faults:\s+\d+  : 0x []
+    HEAP \d+ DROPPED \d+ RC \d+   : 0x []
+    sublet: split=\d+ mrev=\d+ del: 0x []
+    ALEN:[0-9A-F]{8}              : 5x ['ALEN:00001000', 'ALEN:00010000', 'ALEN:00010000', 'ALEN:00200000', 'ALEN:001AB800']
+    SQ: released pool rc=\d+      : 0x []
+    RC(LM|PR|SH|RE|EN|CU):[0-9A-F]: 5x ['RCLM:00000000', 'RCLM:00000000', 'RCLM:00000000', 'RCLM:00000000', 'RCLM:00000000']
+    RR/[a-zA-Z-]+                 : 0x []
+    SQ: share-trap=\d+            : 0x []
+    HARD STOP|ENTRY-STALL|ABORT   : 0x []
+    boot banners after this run's load_image (must be 1): 1
+  DBAS:81D60000
+  DBAS:82400000
+  ENT0:00000001
+  ENT1:00000001
+  [wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x99 10011001
+  [wedge] sw=249 rev_node_head[7:0]                                   0xd2 11010010
+  [wedge] sw=250 rev_node_head[15:8]                                  0x01 00000001
+  [wedge] trap mepc = 0x0000000082418c7c
+  [wedge] trap tval = 0x00000000827fba70
+  => mcause 25; mepc-DBAS = 0x18c7c -> VA 0x28c7c = openDatabase: lw a0,0(s8), s8 = ldc 0x2a0(gp) (a static global); NOT one of the 4 probed lds (0x26878/0x26940/0x110278/0x110544); rev_node_head 0x1d2 = 466 (unprobed run: 313)
+  => pre-registered outcome 3: INCONCLUSIVE (trap elsewhere)
