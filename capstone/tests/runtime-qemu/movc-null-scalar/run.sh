@@ -28,6 +28,75 @@ OUT=${OUT:-$CAPSTONE_TMP_ROOT/movc-null-scalar}
 PYTHON=${PYTHON:-python3}
 mkdir -p "$OUT/obj" "$OUT/share"
 
+# ---------------------------------------------------------------------------------------------
+# THE TOOLCHAIN MUST CONTAIN WHAT THIS PROBE TESTS, and `clang --version` cannot tell you that.
+#
+# Both arms below are compiled by $CAPSTONE_CLANG: "rule" with the live-source copy pass, "keep"
+# with +movc-keeps-integer-source to force plain movc. If the toolchain has neither -- an
+# incremental build against the wrong sources, a build dir shared with another checkout, a stale
+# $CAPSTONE_LLVM_BUILD_DIR -- then:
+#   * the "rule" arm is built WITHOUT the pass, loses c32 and iconv under the switch, and this
+#     script reports "rule: LOST a value ... the live-source copy rule missed a copy". That is a
+#     confident, specific, WRONG verdict against the compiler change. It happened on 2026-09-29;
+#     the version string still read the right commit while the pass was absent, because that
+#     string is baked in at configure time and does not track incremental rebuilds.
+#   * the "keep" arm silently becomes a DUPLICATE of "rule", because an unrecognised -mattr is a
+#     warning, not an error. The positive control then cannot fail, so the run cannot mean anything
+#     either way.
+#
+# Exit 2, the code this script already uses for "could not check", because that is what this is:
+# not a wrong reading, an unusable instrument.
+#
+# Redirect into a file and test the file. Do NOT write `llc ... | grep -q X && exit 2`: under this
+# script's `set -o pipefail` the pipeline takes llc's non-zero status rather than grep's zero, so
+# the check can never fire. The first version of this guard was written that way and passed a
+# toolchain it was supposed to reject.
+_idll=$OUT/.identity.ll
+_idout=$OUT/.identity.out
+printf 'define void @x() {\n  ret void\n}\n' > "$_idll"
+
+# THE EXIT STATUS IS THE CONDITION; the message only explains a refusal. An earlier version
+# refused on the message ALONE and so passed everything that failed some other way -- a missing
+# llc, a crash, a bad triple. On CAPSTONE_LLVM_BIN=/nonexistent/bin it printed "pass present"
+# having established nothing. A trivial module through -stop-after=capstone-live-source-copy
+# exits 0 only if that pass exists, so the status is the real check.
+_idrc=0
+"$CAPSTONE_LLVM_BIN/llc" -mtriple=capstone64 -stop-after=capstone-live-source-copy \
+  -o /dev/null "$_idll" > "$_idout" 2>&1 || _idrc=$?
+if [ "$_idrc" -ne 0 ]; then
+  echo "movc-null-scalar: COULD NOT CHECK -- $CAPSTONE_LLVM_BIN/llc exited $_idrc on a trivial" >&2
+  echo "  module with -stop-after=capstone-live-source-copy." >&2
+  if grep -q "not registered" "$_idout"; then
+    echo "  The pass is not registered: this toolchain does not contain the live-source copy" >&2
+    echo "  change. The 'rule' arm would be built without it and this probe would then report the" >&2
+    echo "  compiler as broken. Rebuild the toolchain." >&2
+  else
+    echo "  llc said:" >&2; sed 's/^/    /' "$_idout" >&2
+  fi
+  rm -f "$_idll" "$_idout"; exit 2
+fi
+
+# Same rule for the feature: rc 0 AND no warning. An unknown -mattr is only a WARNING, so rc 0
+# alone would not catch it, and the warning alone would not catch a broken llc.
+_idrc=0
+"$CAPSTONE_LLVM_BIN/llc" -mtriple=capstone64 -mattr=+movc-keeps-integer-source \
+  -o /dev/null "$_idll" > "$_idout" 2>&1 || _idrc=$?
+if [ "$_idrc" -ne 0 ] || grep -q "not a recognized feature" "$_idout"; then
+  echo "movc-null-scalar: COULD NOT CHECK -- $CAPSTONE_LLVM_BIN/llc exited $_idrc for" >&2
+  echo "  -mattr=+movc-keeps-integer-source." >&2
+  if grep -q "not a recognized feature" "$_idout"; then
+    echo "  The feature is not recognised, so the 'keep' arm would be built as a DUPLICATE of" >&2
+    echo "  'rule' -- an unknown -mattr is a warning, not an error -- and the positive control" >&2
+    echo "  could not fail. Rebuild the toolchain." >&2
+  else
+    echo "  llc said:" >&2; sed 's/^/    /' "$_idout" >&2
+  fi
+  rm -f "$_idll" "$_idout"; exit 2
+fi
+rm -f "$_idll" "$_idout"
+echo "toolchain: live-source copy pass present, +movc-keeps-integer-source recognised"
+# ---------------------------------------------------------------------------------------------
+
 # musl and its archive, private to this test (prepare rewrites arch/ in place).
 export MUSL_CACHE_ROOT=$OUT/musl-src
 mkdir -p "$MUSL_CACHE_ROOT"
