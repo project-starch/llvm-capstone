@@ -1,0 +1,263 @@
+hash.c: an entry walk carries an index, not a moving pointer (4.0.0-rc2).
+
+Preparation for sub-letting the hash's entry array, which is the nesting level above
+the GC's object slots: measured on this pin, three defects in that array go unseen by
+revoke-on-free, because a slot is vacated by ar_delete/ht_delete and refilled by a
+later store with nothing released (capstone/bug-corpora/mruby/gc-slot-repros).
+
+Giving each slot its own capability is impossible while a walk increments a pointer
+from slot i to slot i+1, so both walks now carry an INDEX and take their entry from
+ea_get(), which is already the one accessor that turns an index into an entry. The
+same holds for entry_skip_deleted(), which gains an index form beside it. Slot birth
+and slot death were ALREADY funnelled -- ea_set() is the only function that fills a
+slot and entry_delete() the only one that vacates it -- so this is the last piece
+before sublet_take and sublet_give have one site each.
+
+Both walks stayed SINGLE loops deliberately. The obvious index form nests a second
+for inside the first, and five of the nine walk bodies use break or continue with two
+using both, so nesting would change their control flow silently -- and mrbtest would
+not necessarily show it, since it need not reach every break. A single loop keeps
+break and continue bound exactly where they were. The cost is that entry_var is now
+the caller's variable rather than the macro's, which adds one declaration at each of
+the 22 call sites (8 EA_EACH/EA_EACH_USED, 14 H_EACH).
+
+Behaviour is unchanged and was checked rather than assumed: with this patch mrbtest is
+Total 1527, OK 1527, KO 0, Crash 0, Skip 0, and the same tree with the pin's own
+hash.c is Total 1527, OK 1527, KO 0, Crash 0, Skip 0 -- byte-identical counts. The
+seven hash cases in the corpus also return their previous verdicts exactly, which
+covers the delete-during-callback paths the walk macros are reached through.
+
+In this build ea_get() still returns &ea[index], so the seven places that take an
+entry's index back as `entry - ea` keep working. Under a sub-let they will not, and
+that is the next patch's business, not this one's.
+
+diff --git c/src/hash.c w/src/hash.c
+index 1dba928be..371aa66d6 100644
+--- c/src/hash.c
++++ w/src/hash.c
+@@ -170,16 +170,26 @@ DEFINE_GETTER(h, size, uint32_t, size)                          /* h_size
+ DEFINE_ACCESSOR(h, ht, hash_table*, hsh.ht)                     /* h_ht         h_set_ht         */
+ DEFINE_SWITCHER(ht, HT)                                         /* h_ht_on  h_ht_off  h_ht_p     */
+ 
++/* Every entry pointer a walk hands out comes from ea_get(), and a walk carries an
++   INDEX rather than a moving pointer: a level that sub-lets the entry array gives each
++   slot its own capability, and slot i's capability cannot be incremented to reach slot
++   i+1. ea_skip_deleted() is entry_skip_deleted() in index form for the same reason.
++   Both walks stayed SINGLE loops on purpose -- five of the nine bodies use break or
++   continue and two use both, so a nested form would change their control flow silently,
++   which mrbtest would not necessarily show. entry_var is now the caller's variable. */
++static hash_entry *ea_get(hash_entry *ea, uint32_t index);
++static uint32_t ea_skip_deleted(hash_entry *ea, uint32_t index);
++
+ #define EA_EACH_USED(ea, n_used, entry_var)                                   \
+-  for (hash_entry *entry_var = (ea), *ea_end__ = (entry_var) + (n_used);      \
+-       entry_var < ea_end__;                                                  \
+-       entry_var++)
++  for (uint32_t ea_i__ = 0, ea_n__ = (n_used);                                \
++       ea_i__ < ea_n__ ? ((entry_var) = ea_get((ea), ea_i__), TRUE) : FALSE;  \
++       ea_i__++)
+ 
+ #define EA_EACH(ea, size, entry_var)                                          \
+-  for (uint32_t ea_size__ = (size); ea_size__; ea_size__ = 0)                 \
+-    for (hash_entry *entry_var = (ea);                                        \
+-         ea_size__ && (entry_var = entry_skip_deleted(entry_var), TRUE);      \
+-         entry_var++, ea_size__--)
++  for (uint32_t ea_i__ = 0, ea_left__ = (size);                               \
++       ea_left__ ? (ea_i__ = ea_skip_deleted((ea), ea_i__),                   \
++                    (entry_var) = ea_get((ea), ea_i__), TRUE) : FALSE;        \
++       ea_i__++, ea_left__--)
+ 
+ #define IB_CYCLE_BY_KEY(mrb, h, key, it_var)                                  \
+   for (index_buckets_iter it_var[1] = { ib_it_init(mrb, h, key) };            \
+@@ -424,6 +434,15 @@ entry_skip_deleted(hash_entry *e)
+   return e;
+ }
+ 
++/* entry_skip_deleted() in index form: see the note on the walk macros. */
++static uint32_t
++ea_skip_deleted(hash_entry *ea, uint32_t index)
++{
++  for (; entry_deleted_p(ea_get(ea, index)); index++)
++    ;
++  return index;
++}
++
+ static uint32_t
+ ea_next_capa_for(uint32_t size, uint32_t max_capa)
+ {
+@@ -454,6 +473,7 @@ static void
+ ea_compress(hash_entry *ea, uint32_t n_used)
+ {
+   hash_entry *w_entry = ea;
++  hash_entry *r_entry;
+   EA_EACH_USED(ea, n_used, r_entry) {
+     if (entry_deleted_p(r_entry)) continue;
+     if (r_entry != w_entry) *w_entry = *r_entry;
+@@ -485,6 +505,7 @@ static hash_entry*
+ ea_get_by_key(mrb_state *mrb, hash_entry *ea, uint32_t size, mrb_value key,
+               struct RHash *h)
+ {
++  hash_entry *entry;
+   EA_EACH(ea, size, entry) {
+     if (obj_eql(mrb, key, entry->key, h)) return entry;
+   }
+@@ -542,6 +563,7 @@ ar_compress(mrb_state *mrb, struct RHash *h)
+ static mrb_bool
+ ar_get(mrb_state *mrb, struct RHash *h, mrb_value key, mrb_value *valp)
+ {
++  hash_entry *entry;
+   EA_EACH(ar_ea(h), ar_size(h), entry) {
+     if (!obj_eql(mrb, key, entry->key, h)) continue;
+     *valp = entry->val;
+@@ -597,6 +619,7 @@ static void
+ ar_shift(mrb_state *mrb, struct RHash *h, mrb_value *keyp, mrb_value *valp)
+ {
+   uint32_t size = ar_size(h);
++  hash_entry *entry;
+   EA_EACH(ar_ea(h), size, entry) {
+     *keyp = entry->key;
+     *valp = entry->val;
+@@ -612,6 +635,7 @@ ar_rehash(mrb_state *mrb, struct RHash *h)
+   /* see comments in `h_rehash` */
+   uint32_t size = ar_size(h), w_size = 0, ea_capa = ar_ea_capa(h);
+   hash_entry *ea = ar_ea(h), *w_entry;
++  hash_entry *r_entry;
+   EA_EACH(ea, size, r_entry) {
+     if ((w_entry = ea_get_by_key(mrb, ea, w_size, r_entry->key, h))) {
+       w_entry->val = r_entry->val;
+@@ -819,6 +843,7 @@ ib_init(mrb_state *mrb, struct RHash *h, uint32_t ib_bit, size_t ib_byte_size)
+   hash_entry *ea = ht_ea(h);
+   memset(ht_ib(h), 0xff, ib_byte_size);
+   ib_set_bit(h, ib_bit);
++  hash_entry *entry;
+   EA_EACH_USED(ea, ht_ea_n_used(h), entry) {
+     IB_CYCLE_BY_KEY(mrb, h, entry->key, it) {
+       if (!ib_it_empty_p(it)) continue;
+@@ -965,6 +990,7 @@ static void
+ ht_shift(mrb_state *mrb, struct RHash *h, mrb_value *keyp, mrb_value *valp)
+ {
+   hash_entry *ea = ht_ea(h);
++  hash_entry *entry;
+   EA_EACH(ea, ht_size(h), entry) {
+     IB_CYCLE_BY_KEY(mrb, h, entry->key, it) {
+       if (ib_it_get(it) != U32(entry - ea)) continue;
+@@ -993,6 +1019,7 @@ ht_rehash(mrb_state *mrb, struct RHash *h)
+   ht_init(mrb, h, 0, ea, ea_capa, h_ht(h), ib_bit_for(size));
+   ht_set_size(h, size);
+   ht_set_ea_n_used(h, ht_ea_n_used(h));
++  hash_entry *r_entry;
+   EA_EACH(ea, size, r_entry) {
+     IB_CYCLE_BY_KEY(mrb, h, r_entry->key, it) {
+       if (ib_it_active_p(it)) {
+@@ -1125,6 +1152,7 @@ h_replace(mrb_state *mrb, struct RHash *h, struct RHash *orig_h)
+ size_t
+ mrb_gc_mark_hash(mrb_state *mrb, struct RHash *h)
+ {
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     mrb_gc_mark_value(mrb, entry->key);
+     mrb_gc_mark_value(mrb, entry->val);
+@@ -1179,6 +1207,7 @@ mrb_hash_memsize(mrb_value self)
+ MRB_API void
+ mrb_hash_foreach(mrb_state *mrb, struct RHash *h, mrb_hash_foreach_func *func, void *data)
+ {
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     int n;
+     H_CHECK_MODIFIED(mrb, h) {
+@@ -1191,6 +1220,7 @@ mrb_hash_foreach(mrb_state *mrb, struct RHash *h, mrb_hash_foreach_func *func, v
+ mrb_value
+ mrb_hash_first_key(mrb_state *mrb, mrb_value h)
+ {
++  hash_entry *entry;
+   H_EACH(mrb_hash_ptr(h), entry) {
+     return entry->key;
+   }
+@@ -1843,6 +1873,7 @@ mrb_hash_keys(mrb_state *mrb, mrb_value hash)
+ {
+   struct RHash *h = mrb_hash_ptr(hash);
+   mrb_value ary = mrb_ary_new_capa(mrb, (mrb_int)h_size(h));
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     mrb_ary_push(mrb, ary, entry->key);
+   }
+@@ -1867,6 +1898,7 @@ mrb_hash_values(mrb_state *mrb, mrb_value hash)
+ {
+   struct RHash *h = mrb_hash_ptr(hash);
+   mrb_value ary = mrb_ary_new_capa(mrb, (mrb_int)h_size(h));
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     mrb_ary_push(mrb, ary, entry->val);
+   }
+@@ -1929,6 +1961,7 @@ mrb_hash_has_value(mrb_state *mrb, mrb_value hash)
+ {
+   mrb_value val = mrb_get_arg1(mrb);
+   struct RHash *h = mrb_hash_ptr(hash);
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     H_CHECK_MODIFIED(mrb, h) {
+       if (mrb_equal(mrb, val, entry->val)) return mrb_true_value();
+@@ -1967,6 +2000,7 @@ mrb_hash_merge(mrb_state *mrb, mrb_value hash1, mrb_value hash2)
+ 
+   if (h1 == h2) return;
+   if (h_size(h2) == 0) return;
++  hash_entry *entry;
+   H_EACH(h2, entry) {
+     H_CHECK_MODIFIED(mrb, h2) {h_set(mrb, h1, entry->key, entry->val);}
+     mrb_field_write_barrier_value(mrb, (struct RBasic*)h1, entry->key);
+@@ -2024,6 +2058,7 @@ mrb_hash_compact(mrb_state *mrb, mrb_value hash)
+   uint32_t dec = 0;
+ 
+   hash_modify(mrb, hash);
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     if (mrb_nil_p(entry->val)) {
+       entry_delete(entry);
+@@ -2089,6 +2124,7 @@ mrb_hash_except_keys(mrb_state *mrb, mrb_value hash)
+   struct RHash *h = mrb_hash_ptr(hash);
+   int ai = mrb_gc_arena_save(mrb);
+ 
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     mrb_bool found = FALSE;
+     for (mrb_int i = 0; i < klen; i++) {
+@@ -2125,6 +2161,7 @@ mrb_hash_to_s(mrb_state *mrb, mrb_value self)
+ 
+   mrb_int i = 0;
+   struct RHash *h = mrb_hash_ptr(self);
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     if (i++ > 0) mrb_str_cat_lit(mrb, ret, ", ");
+     if (mrb_symbol_p(entry->key)) {
+@@ -2178,6 +2215,7 @@ mrb_hash_assoc(mrb_state *mrb, mrb_value hash)
+ {
+   mrb_value key = mrb_get_arg1(mrb);
+   struct RHash *h = mrb_hash_ptr(hash);
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     if (obj_eql(mrb, entry->key, key, h)) {
+       return mrb_assoc_new(mrb, entry->key, entry->val);
+@@ -2203,6 +2241,7 @@ mrb_hash_rassoc(mrb_state *mrb, mrb_value hash)
+ {
+   mrb_value value = mrb_get_arg1(mrb);
+   struct RHash *h = mrb_hash_ptr(hash);
++  hash_entry *entry;
+   H_EACH(h, entry) {
+     if (obj_eql(mrb, entry->val, value, h)) {
+       return mrb_assoc_new(mrb, entry->key, entry->val);
+@@ -2233,6 +2272,7 @@ mrb_hash_equal(mrb_state *mrb, mrb_value hash)
+   struct RHash *h1 = mrb_hash_ptr(hash);
+   struct RHash *h2 = mrb_hash_ptr(hash2);
+ 
++  hash_entry *entry;
+   H_EACH(h1, entry) {
+     mrb_value val2;
+     mrb_bool found;
+@@ -2281,6 +2321,7 @@ mrb_hash_eql(mrb_state *mrb, mrb_value hash)
+   struct RHash *h1 = mrb_hash_ptr(hash);
+   struct RHash *h2 = mrb_hash_ptr(hash2);
+ 
++  hash_entry *entry;
+   H_EACH(h1, entry) {
+     mrb_value val2;
+     mrb_bool found;

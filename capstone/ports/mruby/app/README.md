@@ -50,6 +50,9 @@ The output is byte-identical to native (`results/2026-09-26/scripts.txt`).
   This version still parses with parse.y, so it needs no Prism patches; its
   0001, 0003 and 0007 are rewritten for its code, 0002 is head's. There is no
   0006 for it yet: `MRBD_BOXING=word` stops with a message.
+  0009 carries an index through the hash's entry walks instead of a moving
+  pointer, so each slot can later be sub-let: behaviour-neutral, and mrbtest is
+  unchanged with and without it.
 
 ## The Sublet heap (`MRBD_HEAP=sublet`)
 
