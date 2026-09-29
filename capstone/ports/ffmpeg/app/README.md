@@ -1,5 +1,18 @@
 # FFmpeg as a full application in a Capstone domain
 
+Current builds use the [shared ABI-v2 SDK and runner](../../common/application/README.md).
+Set `CAPSTONE_VM_STATE` to a running application VM before `host/run-qemu.sh all`.
+The runner checks real process results and compares frame hashes with the native
+reference and changed-input control. `host/run-safety.sh` uses separate stdout,
+stderr, QEMU diagnostics and fault records; set `FFAPP_SAFETY_OUT` to a new output
+directory. The private `ffapp.user` HostCall executable is removed. Historical
+serial logs below retain their original interpretation and binary identities.
+The qualified source setting is `-O1 -fno-omit-frame-pointer`; configure's default
+`-O3 -fomit-frame-pointer` exposed an unaligned capability store in
+`h263_decode_init_vlc` with the selected compiler (C-70 in the
+[issue registry](../../../docs/ref/ISSUES.md)).
+
+
 **Scope.** FFmpeg 9.0.1, configured down to a single-threaded file-to-file program
 (matroska demuxer → mpeg4 decoder), running whole inside one Capstone domain on the
 musl-capstone libc, on QEMU. It prints one framemd5-style line per decoded frame.
@@ -15,7 +28,7 @@ recording from `buffer-pool/host/record.sh:23-34`.
 - **Plan and evidence:** `capstone/docs/plans/2026-09-23-ffmpeg-full-app-port.md`.
 - **Source pin:** `upstream.json`, verified by sha256 before every build.
 
-## Status
+## Historical qualification (before the delegated migration)
 
 | milestone | state |
 |---|---|
@@ -68,23 +81,17 @@ bash host/build-native.sh    # the oracle: stock ffmpeg makes the workload + ref
                              # the native build of this decode core must MATCH it, and the
                              # 1-byte-flipped input must NOT (positive control)
 bash host/build-domain.sh    # M0: runtime objects, cross-configured FFmpeg, 6 images,
-                             # budget gate, negative control, guest host
-bash host/run-qemu.sh all    # M1..M5 + the flipped-input control in ONE boot, then the MD5
-                             # comparison; takes $CAPSTONE_QEMU_LOCK. Also: a single stage 1..5,
-                             # `m2diag`, and `probe` (FFAPP_DIAG images, 9p-vs-/tmp matched pair)
+                             # budget gate and shared application SDK
+bash host/run-qemu.sh all    # M1..M5 + the flipped-input control in the selected VM, then the MD5
+                             # comparison. Also accepts a single stage 1..5.
 ```
 
 **From a git worktree:** it has no LLVM build, and its buildroot submodule is empty. Export
 `CAPSTONE_LLVM_BUILD_DIR=<main clone>/llvm/cmake-build-debug` and
 `CAPSTONE_BUILDROOT_DIR=<main clone>/capstone/caplifive-buildroot`.
 
-Also for a worktree: export `FFAPP_QEMU_BINARY=<main clone>/capstone/capstone-qemu/build/qemu-system-riscv64`.
-`FFAPP_BUILDROOT_DIR` boots a directory whose `build/images/` holds a private rootfs copy. That
-was used while the shared image was corrupt.
-
-**Prerequisite:** `ports/musl-capstone/build-musl-capstone.sh`. If the LLVM build has no
-`llvm-ar`, run it with `CAPSTONE_LLVM_AR=/usr/bin/llvm-ar-18`; the archive format is
-target-independent.
+The recipe builds musl privately. Select the VM with `CAPSTONE_VM_STATE`;
+platform binaries and memory settings belong to that VM's configuration.
 
 All work products go under `$CAPSTONE_TMP_ROOT/ffmpeg-app/` (`FFAPP_WORK`). The tunables are
 `FFAPP_ARENA_BYTES` (1.5 MiB), `FFAPP_STACK_BYTES` (256 KiB) and `FFAPP_JOBS` (48, apollo).
@@ -102,16 +109,13 @@ All work products go under `$CAPSTONE_TMP_ROOT/ffmpeg-app/` (`FFAPP_WORK`). The 
 | `patches/0002-capstone-keep-pointer-provenance.patch` | `av_x_if_null`, `av_stristr`, `avcodec_fill_audio_frame`'s const cast, and `frame.c`'s three `FFALIGN`-on-a-pointer sites. They now align by adding an offset, and NULL stays NULL |
 | `src/shared/ffapp_decode.c` | the decode core, staged `M1..M5` (`ffapp_decode.h` has the codes) |
 | `src/native/ffapp_native.c` | native entry, the oracle's self-check |
-| `src/capstone-domain/ffapp_domain.c` | `capstone_main`: sets `__environ` (`getenv` needs it), compile-time input and stage |
-| `src/linux-guest/ffapp_host.c` | the guest host: musl-capstone stdio-probe's host with a bounded 200k-round loop |
+| `src/capstone-domain/ffapp_domain.c` | ordinary `main`, input path from argv and compile-time stage |
+| `../../common/application/` | shared SDK, launcher transport and safety verification |
 | `host/` | prepare, build, run, and `compare-md5.py` (negative-tested: mismatch, truncation, a control that cannot fire, and an empty reference all fail) |
 
-**Why no CMake yet.** `ports/README.md` describes CMake presets, and this port follows the shell
-precedent of SQLite's domain build instead. A domain image here needs a cross `configure`, runtime
-objects, a budget gate and a link-time control, and none of those is in `capstone-domain.cmake`
-today. Moving them there is shared-infrastructure work, so it goes to `dev` as its own change.
+The shell recipe drives FFmpeg's cross configure and the shared CMake application SDK.
 
-## Known limits
+## Limits of the historical workload qualification
 
 - **One workload:** 320x180, 1 s. 640x360 needs 2.2 MB of native heap and does not fit one
   region.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Require real waitpid distinctions and signal forwarding from the SSH helper."""
 import json
+import os
 from pathlib import Path
 import resource
 import signal
@@ -17,6 +18,16 @@ with tempfile.TemporaryDirectory() as directory:
         assert process.returncode == 139
         assert json.loads(result.read_text()) == {"version": 1, "kind": kind, "value": value}
         result.unlink()
+    user = f"{os.getuid()}:{os.getgid()}"
+    process = subprocess.run([sys.argv[1], str(result), "--user", user, "--",
+                              sys.executable, "-c", "import os; print(os.getuid(), os.getgid())"],
+                             capture_output=True, text=True, timeout=5)
+    assert process.returncode == 0 and process.stdout.strip() == user.replace(":", " ")
+    assert json.loads(result.read_text()) == {"version": 1, "kind": "exit", "value": 0}
+    result.unlink()
+    for invalid in ("-1:0", "0:-1", "4294967295:0", "1", "1:2suffix", "+1:0", "0: 1"):
+        process = subprocess.run([sys.argv[1], str(result), "--user", invalid, "--", "true"])
+        assert process.returncode == 125 and not result.exists()
     for stop in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         # The child reports readiness after installing its own handlers. Start
         # from a new interpreter so inherited Python signal policy cannot hide

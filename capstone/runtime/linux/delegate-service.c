@@ -43,6 +43,7 @@ static const struct { uint16_t wire; long host; } numbers[] = {
   MAP(dup3)
 #endif
   MAP(fcntl) MAP(ioctl) MAP(mkdirat) MAP(unlinkat) MAP(ftruncate) MAP(faccessat)
+  MAP(symlinkat) MAP(sync_file_range) MAP(flock) MAP(fchmodat)
   MAP(chdir) MAP(openat) MAP(close) MAP(pipe2) MAP(getdents64) MAP(lseek)
   MAP(read) MAP(write) MAP(readv) MAP(writev) MAP(preadv) MAP(pwritev) MAP(pread64) MAP(pwrite64)
   MAP(ppoll) MAP(readlinkat) MAP(newfstatat) MAP(fstat) MAP(fsync) MAP(fdatasync)
@@ -96,6 +97,7 @@ static int private_fd(const struct capstone_delegate_host *host, int fd) {
 static unsigned fd_arguments(uint64_t nr) {
   switch (nr) {
   case CAPSTONE_SYS_dup3: return 3;
+  case CAPSTONE_SYS_symlinkat: return 2;
   case CAPSTONE_SYS_renameat2: return 5;
   case CAPSTONE_SYS_dup: case CAPSTONE_SYS_fcntl: case CAPSTONE_SYS_ioctl:
   case CAPSTONE_NR_FCNTL_LOCK: case CAPSTONE_NR_IOCTL_BUF:
@@ -106,7 +108,9 @@ static unsigned fd_arguments(uint64_t nr) {
   case CAPSTONE_SYS_writev: case CAPSTONE_SYS_preadv: case CAPSTONE_SYS_pwritev:
   case CAPSTONE_SYS_pread64: case CAPSTONE_SYS_pwrite64: case CAPSTONE_SYS_readlinkat:
   case CAPSTONE_SYS_newfstatat: case CAPSTONE_SYS_fstat: case CAPSTONE_SYS_fsync:
-  case CAPSTONE_SYS_fdatasync: case CAPSTONE_SYS_utimensat: return 1;
+  case CAPSTONE_SYS_fdatasync: case CAPSTONE_SYS_sync_file_range:
+  case CAPSTONE_SYS_flock: case CAPSTONE_SYS_fchmodat:
+  case CAPSTONE_SYS_utimensat: return 1;
   default: return 0;
   }
 }

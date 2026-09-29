@@ -20,7 +20,6 @@
 #                                every palloc and tuple would put capabilities on 8-byte slots
 #   patches/0001                 the executor's ExprEvalStep guard, for 16-byte pointers
 #   patches/0002                 aset's smallest chunk holds a capability (the mmgr port's)
-#   patches/0003                 bootstrap and single-user input from a named file
 #   level0 arena                 PGSU_ARENA_BYTES, default 64 MiB: the backend's shared
 #                                memory (mmap, shm) and its own heap both come from it
 set -euo pipefail
@@ -78,57 +77,26 @@ RF=("${CF[@]}" -std=c99 -D_XOPEN_SOURCE=700
     -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
 O=$ROOT/runtime
 if stage runtime; then
-  rm -f "$O"/*.o
-  for s in start-musl set_thread_area setjmp; do
-    "$CAPSTONE_CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-      -ffreestanding -O0 -c "$MRT/$s.S" -o "$O/$s.o"
-  done
-  for f in hostcall tls; do
-    "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/$f.c" -o "$O/$f.o"
-  done
-  "$CAPSTONE_CLANG" "${RF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="($ARENA)" -c "$MRT/level0.c" -o "$O/level0.o"
-  source "$MRT/libc_overrides.sh"
-  build_musl_overrides "$CAPSTONE_CLANG" "$O" "$MUSL" "${RF[@]}"
-  CLANG=$CAPSTONE_CLANG OBJ_DIR=$O COMPILER_RT=$RT/compiler-rt/lib/builtins
-  COMMON_FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
-                -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w)
-  source "$RT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
-  # numeric.c's int128 arithmetic needs compiler-rt libcalls.  The shared
-  # softfloat list now includes some of them; do not link duplicate definitions.
-  for b in divti3 udivti3 modti3 umodti3 udivmodti4 multi3 ashlti3 lshrti3; do
-    if [[ " ${CAPSTONE_SOFTFLOAT_BUILTINS[*]} " == *" $b "* ]]; then
-      continue
-    fi
-    "$CAPSTONE_CLANG" "${COMMON_FLAGS[@]}" -c "$RT/compiler-rt/lib/builtins/$b.c" -o "$O/int128-$b.o"
-  done
-  ENTRY_DEFINES=()
-  if [[ $NESTED == sublet ]]; then ENTRY_DEFINES=(-DPGSU_NESTED=1); fi
-  if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then ENTRY_DEFINES+=(-DPG_REUSE_GAP_OBSERVER=1); fi
-  if [[ -n ${PGSU_ARGV0_OVERRIDE:-} ]]; then
-    [[ $PGSU_ARGV0_OVERRIDE =~ ^/mnt/host/[A-Za-z0-9/_-]+\.dom$ ]] || {
-      echo "PGSU_ARGV0_OVERRIDE must name a share-local .dom image" >&2; exit 2;
-    }
-    ENTRY_DEFINES+=("-DPGSU_ARGV0=\"$PGSU_ARGV0_OVERRIDE\"")
-  fi
-  "$CAPSTONE_CLANG" "${CF[@]}" "${ENTRY_DEFINES[@]}" -std=c11 -O1 \
-    -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$O/domain_entry.o"
-  log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, level0 arena $ARENA bytes"
+  EXTRA=()
+  [[ $NESTED == sublet ]] && EXTRA=(-DCAPSTONE_APPLICATION_GRANT_BYTES=67108864)
+  bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
+    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
 fi
-
-# ---- the compiler configure and make are given ------------------------------
-export PGSU_MUSL=$MUSL PGSU_RUNTIME_DIR=$O PGSU_LIBC_ARCHIVE=$ARCHIVE
-export PGSU_LINKER_SCRIPT=$RT/capstone/my_first_domain/link.ld
-export PATH=$SCRIPT_DIR/toolchain:$PATH
+export CAPSTONE_SDK=$O
+export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
+"$O/capstone-cc" --check-toolchain
 {
-  echo "export CAPSTONE_CLANG='$CAPSTONE_CLANG' CAPSTONE_LD_LLD='$CAPSTONE_LD_LLD'"
-  echo "export PGSU_MUSL='$PGSU_MUSL' PGSU_RUNTIME_DIR='$PGSU_RUNTIME_DIR' PGSU_LIBC_ARCHIVE='$PGSU_LIBC_ARCHIVE'"
-  echo "export PGSU_LINKER_SCRIPT='$PGSU_LINKER_SCRIPT'"
-  echo "export PATH='$SCRIPT_DIR/toolchain':\$PATH"
+  printf 'export CAPSTONE_SDK=%q\n' "$O"
+  printf 'export PATH=%q:$PATH\n' "$O:$CAPSTONE_LLVM_BIN"
 } > "$ROOT/capstone-env.sh"
 
 # ---- the source, patched -------------------------------------------------------
 cd "$ROOT/domain"
 MODE_FILE=$ROOT/domain/nested.mode
+PATCH_HASH=$(sha256sum "$SCRIPT_DIR"/patches/*.patch | sha256sum | cut -d' ' -f1)
+if [[ -d postgresql-17.5 && $(cat "$ROOT/domain/patchset.sha256" 2>/dev/null) != "$PATCH_HASH" ]]; then
+  echo "source patch set changed; use a fresh PG_SU_ROOT" >&2; exit 2
+fi
 if [[ -f "$MODE_FILE" && $(cat "$MODE_FILE") != "$NESTED" ]]; then
   echo "prepared source is $(cat "$MODE_FILE"), requested $NESTED" >&2; exit 2
 fi
@@ -138,6 +106,8 @@ fi
 if [[ ! -d postgresql-17.5 ]]; then
   tar xjf "$TARBALL"
   for p in "$SCRIPT_DIR"/patches/*.patch; do
+    # This patch targets CheriBSD's external freelist, not the Capstone backend.
+    case $p in */0018-*) continue ;; esac
     (cd postgresql-17.5 && patch -p1 -s < "$p") || { echo "patch $p did not apply" >&2; exit 2; }
     log "applied $(basename "$p")"
   done
@@ -150,6 +120,7 @@ if [[ ! -d postgresql-17.5 ]]; then
   fi
 fi
 printf '%s\n' "$NESTED" > "$MODE_FILE"
+printf '%s\n' "$PATCH_HASH" > "$ROOT/domain/patchset.sha256"
 cd postgresql-17.5
 
 # ---- configure, with the answers this target needs forced -------------------------
@@ -191,8 +162,8 @@ if stage make; then
     log "objects removed (PGSU_CLEAN=1)"
   fi
   make -C src/backend generated-headers > "$ROOT/domain-genheaders.log" 2>&1
-  export PGSU_SURVEY_LOG=$ROOT/domain-objects.tsv
-  : > "$PGSU_SURVEY_LOG"
+  export CAPSTONE_COMPILE_LOG=$ROOT/domain-objects.tsv
+  : > "$CAPSTONE_COMPILE_LOG"
   make -j"$JOBS" -C src/port libpgport_srv.a > "$ROOT/domain-port.log" 2>&1
   make -j"$JOBS" -C src/common libpgcommon_srv.a > "$ROOT/domain-common.log" 2>&1
   make -k -j"$JOBS" -C src/backend > "$ROOT/domain-make.log" 2>&1 || true
@@ -273,23 +244,17 @@ done
 "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O1 -I"$ROOT/link" -c "$SCRIPT_DIR/toolchain/static_modules.c" \
   -o "$ROOT/link/static_modules.o"
 log "modules linked in: $(grep -c PGSU_MODULE_END "$TABLE"), $(grep -c PGSU_SYMBOL "$TABLE") functions"
+EXTRA=()
 if [[ $NESTED == sublet ]]; then
-  log "patched backend objects are ready; link them with the application SDK and context-pools.o"
-  exit 0
+  EXTRA+=("$ROOT/link/context-pools.o" -O1 -DEXP_PG_CONTEXT_SUBLET
+    -Wl,--wrap=main,--wrap=__capstone_region -I"$RT/capstone/runtime/include"
+    "$RT/capstone/ports/common/application/regions.c"
+    "$RT/capstone/ports/common/application/initialize.c")
+elif [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then
+  EXTRA+=("$ROOT/link/spatial-reuse-gap.o")
 fi
 # shellcheck disable=SC2086
-GAP_OBJECTS=()
-if [[ ${PGSU_GAP_OBSERVER:-0} == 1 ]]; then GAP_OBJECTS+=("$ROOT/link/spatial-reuse-gap.o"); fi
-"$CAPSTONE_LD_LLD" --gc-sections -T "$PGSU_LINKER_SCRIPT" -o "$ROOT/link/postgres.dom" \
-  "$O"/*.o "$ROOT/link/static_modules.o" "${GAP_OBJECTS[@]}" $objs src/port/libpgport_srv.a src/common/libpgcommon_srv.a "$ARCHIVE" \
-  > "$ROOT/link/link.log" 2>&1 && rc=0 || rc=$?
-{ grep -oE 'undefined symbol: [^ ]+' "$ROOT/link/link.log" || true; } | sed 's/undefined symbol: //' | sort -u > "$ROOT/link/undefined.txt"
-{ grep -E 'error:' "$ROOT/link/link.log" | grep -v 'undefined symbol' || true; } | head -5 | sed 's/^/[build-domain] /'
-log "link rc=$rc, $(wc -l < "$ROOT/link/undefined.txt") undefined symbols (link/undefined.txt)"
-if [[ $rc -ne 0 ]]; then
-  # A lower-bound image with the unresolved symbols ignored, to size it and to try.
-  "$CAPSTONE_LD_LLD" --gc-sections --unresolved-symbols=ignore-all -T "$PGSU_LINKER_SCRIPT" \
-    -o "$ROOT/link/postgres-lowerbound.dom" "$O"/*.o $objs src/port/libpgport_srv.a \
-    src/common/libpgcommon_srv.a "$ARCHIVE" > "$ROOT/link/link-lowerbound.log" 2>&1 || true
-fi
-ls -la "$ROOT/link"/*.dom 2>/dev/null | awk '{print "[build-domain] " $5 " " $9}'
+"$O/capstone-cc" -o "$ROOT/link/postgres.dom" "$ROOT/link/static_modules.o" \
+  "${EXTRA[@]}" $objs src/port/libpgport_srv.a src/common/libpgcommon_srv.a \
+  > "$ROOT/link/link.log" 2>&1 || { tail -20 "$ROOT/link/link.log" >&2; exit 2; }
+log "delegated application $ROOT/link/postgres.dom"

@@ -6,7 +6,17 @@ configuration built natively. The goal is a real allocator-heavy interpreter in 
 domain, as the ground on which the Sublet corpus rows for mruby can later run on
 the real program rather than on extracted reproducers.
 
-## Result (2026-09-26)
+## Delegated result (2026-09-29)
+
+The current ABI-v2 recipe passes the regular head suite with 2616 OK,
+zero failures/crashes and 71 skips (23 optional stress cases not run).
+The 4.0.0-rc2 suite has 1638 OK, zero failures/crashes and 10 skips.
+Process IO accounts for the newly passing tests. The protected GC/popen
+smoke passes; the larger GC stress still exhausts revocation nodes at
+both 65,536 and 262,144. See the
+[migration qualification](../../common/application/README.md#verified-migration-2026-09-29).
+
+## Historical result (2026-09-26)
 
 mrbtest, `MRB_NO_BOXING`, switch dispatch, `-O2`, gems: stdlib, stdlib-ext,
 math, metaprog, mruby-io, mruby-errno, mruby-dir, mruby-pack
@@ -17,12 +27,17 @@ math, metaprog, mruby-io, mruby-errno, mruby-dir, mruby-pack
 | native (x86-64, gcc) | 2710 | 2617 | 0 | 0 | 70 |
 | Capstone domain (QEMU) | 2710 | 2604 | 0 | 0 | 83 |
 
-The 13 extra skips in the domain are the whole difference, and none of them is a
-missing piece of the port: 12 need a child process (`IO.popen`, backticks,
-`FileTest.pipe?` on a popen pipe, `IO#close_write` on a popen stream), which a
-domain cannot start (`MRB_NO_IO_POPEN`), and 1 needs a UNIX socket
-(`FileTest.socket?`), which a domain does not have (patch 0007). The exit report
-lists `socket` (198, three calls) as the only unserved syscall.
+The 13 extra skips in this v1 run are the whole difference: 12 need a child
+process (`IO.popen`, backticks, `FileTest.pipe?` on a popen pipe,
+`IO#close_write` on a popen stream) and 1 needs a UNIX socket
+(`FileTest.socket?`). The build disables process IO with `MRB_NO_IO_POPEN`;
+the exit report lists `socket` (198, three calls) as the only unserved syscall.
+
+The current recipe builds ABI v2 exclusively. Patch 0009 replaces the POSIX
+IO HAL's fork path with delegated `posix_spawn`, including pipe closure and
+standard-stream redirection. Process IO is enabled. The historical counts
+above remain evidence for the old image, not measurements of the new recipe.
+See [the shared application build and runner](../../common/application/README.md).
 
 The same holds in the two other arms, word boxing (`MRBD_BOXING=word`, patch
 0006) and direct-threaded dispatch (`MRBD_DISPATCH=direct`): 2604 OK, KO 0,
@@ -90,16 +105,17 @@ grant) and a large `CAPSTONE_REV_NODES`.
 
     CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
       MRBD_TESTS=1 bash build-mruby-domain.sh
-    bash run-mruby-domain.sh $MRBD_ROOT/src/mruby/build/capstone/bin/mrbtest <work> 2400 -- -v
+    python3 ../../common/application/run.py --state "$VM_STATE" \
+      --result "$MRBD_ROOT/mrbtest.json" "$MRBD_ROOT/src/mruby/build/capstone/bin/mrbtest" -v
 
-`build-mruby-domain.sh` builds musl and the port runtime privately, clones mruby
-at `ad98f216eb47` (and its Prism submodule at `c0e37816e97e`), applies
-`patches/`, and runs rake with `build_config.rb`: a native build (the reference,
-and the host `mrbc`) and a `capstone` cross build whose compiler and linker are
-`toolchain/capstone-cc`. `MRUBY_MIRROR=<local clone>` avoids the network.
-`run-mruby-domain.sh` stages the image and its arguments on the share and runs it
-under the libc-test host helper; `toolchain/domain_entry.c` turns the domain's
-entry into `main(argc, argv)` from `/mnt/host/dom-args` and `/mnt/host/dom-env`.
+`build-mruby-domain.sh` builds musl and the application SDK privately, clones
+mruby at `ad98f216eb47` (and Prism at `c0e37816e97e`), applies `patches/`, and
+runs rake with `build_config.rb`. It produces a native reference and the
+Capstone application using the SDK's compiler driver. `MRUBY_MIRROR=<local
+clone>` avoids the network. Use a new root after a patch-set change.
+
+The common runner supplies ordinary argv, environment, cwd and streams.
+There are no argument side files or private entry/HostCall helpers.
 
 Knobs (`build_config.rb`): `MRBD_BOXING=no|word`, `MRBD_DISPATCH=switch|direct`,
 `MRBD_OPT`, `MRBD_TESTS`, `MRBD_DEFINES`.

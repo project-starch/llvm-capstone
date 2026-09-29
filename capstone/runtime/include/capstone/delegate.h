@@ -99,9 +99,10 @@ struct capstone_delegate_shape {
  * and both sides of the boundary agree without a kernel header. */
 enum {
   CAPSTONE_SYS_getcwd = 17, CAPSTONE_SYS_dup = 23, CAPSTONE_SYS_dup3 = 24,
-  CAPSTONE_SYS_fcntl = 25, CAPSTONE_SYS_ioctl = 29, CAPSTONE_SYS_mkdirat = 34,
-  CAPSTONE_SYS_unlinkat = 35, CAPSTONE_SYS_ftruncate = 46,
+  CAPSTONE_SYS_fcntl = 25, CAPSTONE_SYS_ioctl = 29, CAPSTONE_SYS_flock = 32, CAPSTONE_SYS_mkdirat = 34,
+  CAPSTONE_SYS_unlinkat = 35, CAPSTONE_SYS_symlinkat = 36, CAPSTONE_SYS_ftruncate = 46,
   CAPSTONE_SYS_faccessat = 48, CAPSTONE_SYS_chdir = 49, CAPSTONE_SYS_openat = 56,
+  CAPSTONE_SYS_fchmodat = 53,
   CAPSTONE_SYS_close = 57, CAPSTONE_SYS_pipe2 = 59, CAPSTONE_SYS_getdents64 = 61,
   CAPSTONE_SYS_lseek = 62, CAPSTONE_SYS_read = 63, CAPSTONE_SYS_write = 64,
   CAPSTONE_SYS_readv = 65, CAPSTONE_SYS_writev = 66, CAPSTONE_SYS_pread64 = 67,
@@ -109,6 +110,7 @@ enum {
   CAPSTONE_SYS_preadv = 69, CAPSTONE_SYS_pwritev = 70,
   CAPSTONE_SYS_readlinkat = 78, CAPSTONE_SYS_newfstatat = 79,
   CAPSTONE_SYS_fstat = 80, CAPSTONE_SYS_fsync = 82, CAPSTONE_SYS_fdatasync = 83,
+  CAPSTONE_SYS_sync_file_range = 84,
   CAPSTONE_SYS_utimensat = 88, CAPSTONE_SYS_exit = 93,
   CAPSTONE_SYS_exit_group = 94, CAPSTONE_SYS_set_tid_address = 96,
   CAPSTONE_SYS_futex = 98, CAPSTONE_SYS_set_robust_list = 99,

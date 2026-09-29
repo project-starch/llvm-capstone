@@ -104,8 +104,6 @@ void ff_sublet_counts(unsigned long out[3]);
 
 #define FX_MARK(v) (0x100000 * FFAPP_FIXTURE + ((v) & 0xFFFFF))
 
-extern char **__environ;
-static char *ffapp_empty_environ[1] = { 0 };
 
 unsigned char ffapp_fix_global[64];
 
@@ -681,9 +679,9 @@ static int fixture(void)
 #endif
 }
 
-int capstone_main(void)
+int main(int argc, char **argv)
 {
-    __environ = ffapp_empty_environ;
+    (void)argc; (void)argv;
     setvbuf(stdout, NULL, _IOLBF, 0);
 #ifdef FFAPP_POOL_MODE
     ffapp_pool_init();

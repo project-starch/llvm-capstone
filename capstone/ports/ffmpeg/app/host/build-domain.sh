@@ -1,22 +1,6 @@
 #!/usr/bin/env bash
-# M0: FFmpeg (minimal: matroska -> mpeg4) built and linked as a Capstone domain, on the
-# musl-capstone / my_first_domain/link.ld ABI, plus the guest-side host.
-#
-# One image per milestone (FFAPP_STOP_AT = 1..5), so every QEMU run returns a result
-# (src/shared/ffapp_decode.h). Only the domain entry object differs between them.
-#
-# GATES, each of which fails the build rather than warning:
-#   * NEGATIVE CONTROL: the M5 image relinked WITHOUT hostcall.o must come back with
-#     exactly __capstone_hostcall undefined. Anything else means the libc chain this image
-#     depends on is not the one being linked (musl-capstone stdio-probe's control, reused).
-#   * BUDGET: the kernel module's own sizing (modcapstone module/capstone.c:152-161) --
-#     code_len = the PT_LOAD span through p_memsz (so .bss and the level0 arena count), and
-#     with a .capstone_domreq declaration, code_len + 8 KiB + declared data -- rounded to a
-#     power-of-two page count, must fit one order-10 allocation (4 MiB). Without the
-#     declaration the module would size 2*code_len, which does not fit; hence domreq.S.
-#
-# Worktree note: a git worktree has no LLVM build and an empty buildroot submodule. Point
-# CAPSTONE_LLVM_BUILD_DIR and CAPSTONE_BUILDROOT_DIR at the main clone.
+# Build the pinned decoder and safety fixtures as delegated applications.
+# The common SDK owns startup, libc overrides, syscalls, grants, and builtins.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -29,23 +13,15 @@ WORK=${FFAPP_WORK:-$CAPSTONE_TMP_ROOT/ffmpeg-app}
 JOBS=${FFAPP_JOBS:-48}
 ARENA=${FFAPP_ARENA_BYTES:-$((1536 * 1024))}      # level0 heap; native peak is 0.71 MB
 STACK=${FFAPP_STACK_BYTES:-$((256 * 1024))}       # declared stack (dom_data)
-# /tmp, not the 9p share: the host pread()s straight into the shared-region mapping, and a 9p
-# read that large goes zero-copy (it pins the destination pages), which a region mapping
-# refuses -> EFAULT (2026-09-23; the probe images below keep the /mnt/host twin for the
-# matched pair). run-qemu.sh copies the inputs into the guest's /tmp first.
+# Delegated reads use launcher bounce buffers, including inputs on the 9p share.
 # FFAPP_CLIP_SECONDS (build-native.sh): the workload. 1 is the run of record's clip and keeps
 # every path; another length compiles its own input path into the images, and they go to their
 # own directory (domain...-<n>s).
 CLIP=${FFAPP_CLIP_SECONDS:-1}
 SFX=; [ "$CLIP" = 1 ] || SFX="-${CLIP}s"
 INPUT=${FFAPP_INPUT:-/tmp/input$SFX.mkv}
-# The largest block a run may need. 4 MiB was the hard limit while a domain block had to be one
-# buddy-allocator allocation (order 10); since buildroot 2b8ad05 (pinned by #97) a block beyond
-# that is served from CMA instead, so the ceiling is now a budget rather than a wall. It stays a
-# GATE: a boot must reserve cma= for what it loads (run-qemu.sh sizes it), and the guest's module
-# must be the CMA-capable one -- an image over 4 MiB on an older module fails to load and reads as
-# a stall. Raise FFAPP_ORDER_CEILING_MB deliberately, and only together with those two.
-ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-4} * 1024 * 1024 ))
+# Includes the common SDK data/stack reservation; CMA must cover the image.
+ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-256} * 1024 * 1024 ))
 # FFAPP_HEAP: which allocator the images link. It is the only thing the arms differ in; the
 # FFmpeg libraries are shared (built once, under domain/), so an arm cannot differ by accident
 # in anything else.
@@ -59,13 +35,12 @@ ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-4} * 1024 * 1024 ))
 #           The arm differs in three objects -- the allocator, hostcall.o (the parking) and the
 #           guest host (the grant) -- all of them the heap's delivery, none of them FFmpeg.
 HEAP=${FFAPP_HEAP:-level0}
-HEAP_REGION=${FFAPP_HEAP_REGION_BYTES:-$((4 * 1024 * 1024))}   # sublet arm: the granted pool
-HCF=(); HOSTF=(); ENTRYF=()
+HEAP_REGION=${FFAPP_HEAP_REGION_BYTES:-$((8 * 1024 * 1024))}   # sublet arm: the granted pool
+ENTRYF=()
 case $HEAP in
   level0) OUT="$WORK/domain"; HEAPF=() ;;
   shrink) OUT="$WORK/domain-shrink"; HEAPF=(-DCAPSTONE_LEVEL0_SHRINK=1) ;;
   sublet) OUT="$WORK/domain-sublet"; HEAPF=()
-          HCF=(-DCAPSTONE_PROGRAM_REGIONS=1); HOSTF=(-DFFAPP_HEAP_REGION_BYTES="${HEAP_REGION}UL")
           ENTRYF=(-DFFAPP_SUBLET_HEAP=1) ;;
   *) echo "FFAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
 esac
@@ -97,7 +72,6 @@ if [ -n "$POOL" ]; then
   else
     POOLF=(-DFFAPP_POOL_MODE="$POOL" -DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL"
            -I"$APP_DIR/../buffer-pool/src/shared")
-    HOSTF+=(-DFFAPP_POOL_REGION_BYTES="${POOL_REGION}UL")
   fi
 fi
 OUT="$OUT$SFX"
@@ -112,9 +86,18 @@ mkdir -p "$RT" "$XB"
 CLANG=${CAPSTONE_CLANG:?}
 LD_LLD=${CAPSTONE_LD_LLD:?}
 [ -x "$CLANG" ] || { echo "no clang at $CLANG; from a worktree export CAPSTONE_LLVM_BUILD_DIR=<main clone>/llvm/cmake-build-debug" >&2; exit 2; }
-ARCHIVE="$CAPSTONE_TMP_ROOT/musl-capstone-build/libc-capstone.a"
-[ -f "$ARCHIVE" ] || { echo "no $ARCHIVE; run ports/musl-capstone/build-musl-capstone.sh (CAPSTONE_LLVM_AR=llvm-ar-18 if the build has no llvm-ar)" >&2; exit 2; }
+export MUSL_CACHE_ROOT=$WORK/musl-src
+mkdir -p "$MUSL_CACHE_ROOT"
+if [[ ! -f "$MUSL_CACHE_ROOT/musl-1.2.5.tar.gz" && -f "$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5.tar.gz" ]]; then
+  cp "$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5.tar.gz" "$MUSL_CACHE_ROOT/"
+fi
 MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
+ARCHIVE=$WORK/musl-build/libc-capstone.a
+COMPILER_HASH=$(sha256sum "$CLANG" | cut -d' ' -f1)
+if [[ ! -f "$ARCHIVE" || $(cat "$WORK/musl-build/compiler.sha256" 2>/dev/null) != "$COMPILER_HASH" ]]; then
+  OUT_DIR=$WORK/musl-build bash "$MUSL_PORT/build-musl-capstone.sh"
+  printf '%s\n' "$COMPILER_HASH" > "$WORK/musl-build/compiler.sha256"
+fi
 if [ "$POOL" = sublet ] || [ "$POOL" = stock ]; then
   SRC=$(bash "$SCRIPT_DIR/prepare-source.sh" --sublet | tail -1)
 elif [ -n "$POOL" ]; then
@@ -130,67 +113,29 @@ INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
 FLAGS=("${TARGET[@]}" -ffreestanding -fno-builtin -fno-jump-tables -ffunction-sections
        -fdata-sections -O1 -Wno-int-conversion -D_GNU_SOURCE "${INC[@]}")
 
-# --- runtime objects: musl-capstone's, as its stdio-probe links them -----------------
-RTF=("${TARGET[@]}" -ffreestanding -fno-builtin -fno-jump-tables -ffunction-sections
-     -fdata-sections -std=c99 -O1 -w -Wno-int-conversion -D_XOPEN_SOURCE=700
-     "${INC[@]}" -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
-ASM=("${TARGET[@]}" -ffreestanding -O0)
-"$CLANG" "${ASM[@]}" -c "$MUSL_PORT/runtime/start-musl.S"      -o "$RT/start-musl.o"
-"$CLANG" "${ASM[@]}" -c "$MUSL_PORT/runtime/set_thread_area.S" -o "$RT/set_thread_area.o"
-"$CLANG" "${ASM[@]}" -c "$MUSL_PORT/runtime/setjmp.S"          -o "$RT/setjmp.o"
-"$CLANG" "${RTF[@]}" "${HCF[@]}" -c "$MUSL_PORT/runtime/hostcall.c" -o "$RT/hostcall.o"
-"$CLANG" "${RTF[@]}" -c "$MUSL_PORT/runtime/tls.c"             -o "$RT/tls.o"
-if [ "$HEAP" = sublet ]; then
-  "$CLANG" "${RTF[@]}" -I"$REPO_ROOT/capstone/sublet" \
-                       -c "$MUSL_PORT/runtime/sublet_heap.c"   -o "$RT/heap.o"
-else
-  "$CLANG" "${RTF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="$ARENA" "${HEAPF[@]}" \
-                       -c "$MUSL_PORT/runtime/level0.c"        -o "$RT/level0.o"
-fi
-# The libc overrides, from the one list every musl domain links (runtime/libc_overrides.sh).
-# This port used to compile three of them by hand, and missed atexit_capability_safe when it
-# was added to the list.
-source "$MUSL_PORT/runtime/libc_overrides.sh"
-build_musl_overrides "$CLANG" "$RT" "$MUSL" "${RTF[@]}"
-RUNTIME=("$RT/start-musl.o" "$RT/tls.o" "$RT/set_thread_area.o" "$RT/setjmp.o"
-         "${MUSL_OVERRIDE_OBJS[@]}")
-if [ "$HEAP" = sublet ]; then RUNTIME+=("$RT/heap.o"); else RUNTIME+=("$RT/level0.o"); fi
-
-# Soft-float builtins from the shared list (a domain has no FP hardware ABI).
-COMPILER_RT="$REPO_ROOT/compiler-rt/lib/builtins"
-OBJ_DIR="$RT"
-COMMON_FLAGS=("${TARGET[@]}" -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w)
-source "$REPO_ROOT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
-
-# --- FFmpeg, cross-configured for capstone64 --------------------------------------------
-# configure's HAVE_* tests LINK. The real runtime cannot serve them (hostcall.o needs a
-# capstone_main that test programs do not have), so the link tests get empty definitions of
-# exactly the symbols libc-capstone.a leaves undefined, plus the soft-float set. Then a
-# HAVE_x test passes exactly when musl-capstone itself provides x. These stubs are for
-# configure only; they are never linked into a domain image.
-CFGSTUBS="$BASE/cfgstubs.o"
-if [ ! -f "$CFGSTUBS" ]; then
-  OUT_SAVED=$OUT; OUT=$BASE
-  { "$CAPSTONE_LLVM_BIN/llvm-nm" -u "$ARCHIVE" 2>/dev/null | awk 'NF>=2{print $NF}' | sort -u
-    for s in __floatdisf __floatundisf __floatundidf __floatunditf __fixunsdfdi __fixunssfdi \
-             __fixunstfdi __fixunsdfsi __fixunssfsi __powidf2 __powisf2 __divdc3 __divsc3 \
-             __negdf2 __negsf2 __ashlti3 __lshrti3 __ashrti3 __multi3 __divti3 __udivti3 \
-             __modti3 __umodti3 __fixdfti __fixsfti __floattidf __floattisf; do echo "$s"; done
-  } | sort -u > "$OUT/cfgstubs.syms"
-  "$CAPSTONE_LLVM_BIN/llvm-nm" --defined-only "$ARCHIVE" 2>/dev/null | awk 'NF>=3{print $3}' \
-    | sort -u > "$OUT/libc.defined"
-  comm -23 "$OUT/cfgstubs.syms" "$OUT/libc.defined" | while read -r s; do
-    case $s in
-      __init_array_*|__fini_array_*|_DYNAMIC) echo "char $s[1];" ;;
-      __vdsosym) echo "void *__vdsosym(const char *a, const char *b) { return 0; }" ;;
-      *) echo "void $s(void) {}" ;;
-    esac
-  done > "$OUT/cfgstubs.c"
-  "$CLANG" "${FLAGS[@]}" -w -c "$OUT/cfgstubs.c" -o "$CFGSTUBS"
-  OUT=$OUT_SAVED
+# --- shared application SDK ------------------------------------------------
+SDK=$RT/sdk
+SDK_HEAP=$HEAP
+[[ $HEAP == shrink ]] && SDK_HEAP=level0
+SDK_FLAGS="-O1 -DCAPSTONE_SUBLET_HEAP_STATS -DCAPSTONE_LEVEL0_STATS ${HEAPF[*]}"
+GRANT=0
+[[ $HEAP == sublet ]] && GRANT=$HEAP_REGION
+if [[ $POOL == 0 || $POOL == 2 ]]; then GRANT=$((HEAP_REGION + POOL_REGION)); fi
+bash "$REPO_ROOT/capstone/ports/common/application/build-sdk.sh" "$SDK" "$MUSL" "$ARCHIVE" \
+  -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG=22 \
+  -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" -DCAPSTONE_APPLICATION_STACK_BYTES="$STACK" \
+  -DCAPSTONE_APPLICATION_GRANT_BYTES="$GRANT" -DCMAKE_C_FLAGS_RELEASE="$SDK_FLAGS"
+export CAPSTONE_SDK=$SDK
+RUNTIME=()
+if [[ $POOL == 0 || $POOL == 2 ]]; then
+  "$SDK/capstone-cc" -O1 -DEXP_HEAP_AND_POOL -DPORT_HEAP_REGION_BYTES="${HEAP_REGION}UL" \
+    -DPORT_INNER_REGION_BYTES="${POOL_REGION}UL" -I"$REPO_ROOT/capstone/runtime/include" \
+    -c "$REPO_ROOT/capstone/ports/common/application/regions.c" -o "$RT/regions.o"
+  RUNTIME+=("$RT/regions.o" -Wl,--wrap=__capstone_region)
 fi
 
-CONFIGURE_OPTS=(--disable-everything --disable-autodetect --disable-doc --disable-network --disable-asm
+CONFIGURE_OPTS=(--disable-everything --disable-autodetect --disable-doc --disable-network --disable-asm --disable-inline-asm
+  --optflags="${FFAPP_OPT_FLAGS:--O1 -fno-omit-frame-pointer}"
   --disable-pthreads --disable-programs --disable-debug --disable-iconv
   --disable-swresample --disable-swscale --disable-avfilter --disable-avdevice
   --enable-demuxer=matroska --enable-decoder=mpeg4 --enable-parser=mpeg4video
@@ -260,7 +205,8 @@ import json,sys; u=json.load(open(sys.argv[1])); print(u["url"], u["sha256"], u[
   VSLIB=("$VSP/lib/libvidstab.a"); FFEXTRA+=(-I"$VSP/include")
   CFGENV=(env PKG_CONFIG_LIBDIR="$VSP/lib/pkgconfig" PKG_CONFIG_PATH=) ;;
 esac
-CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${FFEXTRA[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" "$TOOLCHAIN_ID" ${VIDSTAB_ID:+"$VIDSTAB_ID"} | sha256sum | cut -c1-12)
+SDK_ID=$(sha256sum "$SDK/capstone-cc" "$SDK/libapplication-runtime.a" | sha256sum | cut -c1-12)
+CONFIG_KEY=$(printf '%s\n' "$SRC" "${FLAGS[*]}" "${FFEXTRA[*]}" "${CONFIGURE_OPTS[*]}" "$CONFIG_EDIT" "$TOOLCHAIN_ID" "$SDK_ID" ${VIDSTAB_ID:+"$VIDSTAB_ID"} | sha256sum | cut -c1-12)
 # The enabled libraries, read from configure's own config.mak, in static link order (avutil
 # last, since everything depends on it). avfilter and swresample appear only when configure
 # turned them on, so the default minimal build is unchanged.
@@ -275,10 +221,10 @@ ff_libdirs() {
 }
 if [ ! -f "$XB/libavformat/libavformat.a" ] || [ "$(cat "$XB/.config-key" 2>/dev/null)" != "$CONFIG_KEY" ]; then
   rm -rf "$XB"; mkdir -p "$XB"
-  ( cd "$XB" && "${CFGENV[@]}" "$SRC/configure" --enable-cross-compile --cc="$CLANG" --ld="$LD_LLD" \
+  ( cd "$XB" && "${CFGENV[@]}" "$SRC/configure" --enable-cross-compile --cc="$SDK/capstone-cc" --ld="$SDK/capstone-cc" \
       --arch=riscv64 --target-os=none \
-      --extra-cflags="${FLAGS[*]}${FFEXTRA[*]:+ ${FFEXTRA[*]}}" --extra-ldflags="-e main --no-warn-mismatch" \
-      --extra-libs="$ARCHIVE $CFGSTUBS" "${CONFIGURE_OPTS[@]}" > configure.log 2>&1 ) \
+      --extra-cflags="${FLAGS[*]}${FFEXTRA[*]:+ ${FFEXTRA[*]}}" --extra-ldflags="" \
+      --extra-libs="" "${CONFIGURE_OPTS[@]}" > configure.log 2>&1 ) \
     || { echo "FFmpeg configure failed; see $XB/configure.log and $XB/ffbuild/config.log" >&2; exit 1; }
   # av_malloc -> plain malloc: with asm off ALIGN is 16 (libavutil/mem.c:65), exactly
   # level0's alignment, and musl's posix_memalign sits on an allocator this image does
@@ -326,9 +272,6 @@ fi
 # --- the program --------------------------------------------------------------------
 APPF=("${FLAGS[@]}" "${POOLF[@]}" -I"$XB" -I"$SRC" -I"$APP_DIR/src/shared")
 "$CLANG" "${APPF[@]}" -c "$APP_DIR/src/shared/ffapp_decode.c" -o "$OUT/ffapp_decode.o"
-"$CLANG" "${ASM[@]}" -DCAPSTONE_DOMREQ_DATA="$STACK" -DCAPSTONE_DOMREQ_STACK="$STACK" \
-  -c "$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OUT/domreq.o"
-LDS="$REPO_ROOT/capstone/my_first_domain/link.ld"
 
 budget() {   # prints: code_len total_bytes verdict
   "$CAPSTONE_LLVM_BIN/llvm-readelf" -lW "$1" | python3 -c '
@@ -348,33 +291,33 @@ pages = (tot - 1) // 4096 + 1
 p2 = 1
 while p2 < pages: p2 *= 2
 alloc = p2 * 4096
-print(code_len, alloc, "FITS" if alloc <= ceiling else "DOES-NOT-FIT")' "$STACK" "$ORDER_CEILING"
+print(code_len, alloc, "FITS" if alloc <= ceiling else "DOES-NOT-FIT")' 33554688 "$ORDER_CEILING"
 }
 
 for stage in 1 2 3 4 5 6; do   # 6 = M2a, open_input only (bisection stage)
   "$CLANG" "${APPF[@]}" "${ENTRYF[@]}" -DFFAPP_STOP_AT="$stage" -DFFAPP_INPUT="\"$INPUT\"" \
     -c "$APP_DIR/src/capstone-domain/ffapp_domain.c" -o "$OUT/ffapp_domain_m$stage.o"
-  "$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_m$stage.dom" \
-    "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
+  "$SDK/capstone-cc" -o "$OUT/ffapp_m$stage.dom" \
+    "${RUNTIME[@]}" \
     "$OUT/ffapp_domain_m$stage.o" "$OUT/ffapp_decode.o" "${FFLIBS[@]}" "$ARCHIVE"
   read -r code_len alloc verdict < <(budget "$OUT/ffapp_m$stage.dom")
   printf 'M%d image %s  code_len=%d  allocation=%d  %s\n' "$stage" "$OUT/ffapp_m$stage.dom" \
     "$code_len" "$alloc" "$verdict"
-  [ "$verdict" = FITS ] || { echo "BUDGET: M$stage needs a $alloc-byte region, over the 4 MiB order ceiling" >&2; exit 1; }
+  [ "$verdict" = FITS ] || { echo "BUDGET: M$stage needs a $alloc-byte region, over the configured allocation ceiling" >&2; exit 1; }
 done
 
 # DIAGNOSTIC image (M2a with FFAPP_DIAG): a separate decode object, so the production images
 # above are byte-identical with or without it. It prints the first bytes a plain fread gets,
 # the registered demuxers, the probe's verdict, and avformat_open_input's error.
 "$CLANG" "${APPF[@]}" -DFFAPP_DIAG -c "$APP_DIR/src/shared/ffapp_decode.c" -o "$OUT/ffapp_decode_diag.o"
-"$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_m6diag.dom" \
-  "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
+"$SDK/capstone-cc" -o "$OUT/ffapp_m6diag.dom" \
+  "${RUNTIME[@]}" \
   "$OUT/ffapp_domain_m6.o" "$OUT/ffapp_decode_diag.o" "${FFLIBS[@]}" "$ARCHIVE"
 # Its matched twin: identical except that it reads the input from the 9p share.
 "$CLANG" "${APPF[@]}" "${ENTRYF[@]}" -DFFAPP_STOP_AT=6 -DFFAPP_INPUT='"/mnt/host/input.mkv"' \
   -c "$APP_DIR/src/capstone-domain/ffapp_domain.c" -o "$OUT/ffapp_domain_m6_9p.o"
-"$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_m6diag9p.dom" \
-  "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
+"$SDK/capstone-cc" -o "$OUT/ffapp_m6diag9p.dom" \
+  "${RUNTIME[@]}" \
   "$OUT/ffapp_domain_m6_9p.o" "$OUT/ffapp_decode_diag.o" "${FFLIBS[@]}" "$ARCHIVE"
 echo "diag images $OUT/ffapp_m6diag.dom ($INPUT) and $OUT/ffapp_m6diag9p.dom (/mnt/host/input.mkv)"
 
@@ -383,8 +326,8 @@ echo "diag images $OUT/ffapp_m6diag.dom ($INPUT) and $OUT/ffapp_m6diag9p.dom (/m
 # comparison could not have failed and proves nothing (host/compare-md5.py --control).
 "$CLANG" "${APPF[@]}" "${ENTRYF[@]}" -DFFAPP_STOP_AT=5 -DFFAPP_INPUT="\"${INPUT%.mkv}.flip.mkv\"" \
   -c "$APP_DIR/src/capstone-domain/ffapp_domain.c" -o "$OUT/ffapp_domain_m5flip.o"
-"$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_m5flip.dom" \
-  "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
+"$SDK/capstone-cc" -o "$OUT/ffapp_m5flip.dom" \
+  "${RUNTIME[@]}" \
   "$OUT/ffapp_domain_m5flip.o" "$OUT/ffapp_decode.o" "${FFLIBS[@]}" "$ARCHIVE"
 echo "control image $OUT/ffapp_m5flip.dom decodes ${INPUT%.mkv}.flip.mkv"
 
@@ -487,8 +430,8 @@ for fx in $FIXTURES; do
   _ahead=FFAPP_LINK_AHEAD_$fx; [ -n "${!_ahead:-}" ] && FIXLINK+=(${!_ahead})
   "$CLANG" "${APPF[@]}" -DFFAPP_FIXTURE="$fx" \
     -c "$APP_DIR/src/capstone-domain/ffapp_safety.c" -o "$OUT/ffapp_safety_$fx.o"
-  "$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_fx$fx.dom" \
-    "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
+  "$SDK/capstone-cc" -o "$OUT/ffapp_fx$fx.dom" \
+    "${RUNTIME[@]}" \
     "$OUT/ffapp_safety_$fx.o" "${FIXLINK[@]}" "${FFLIBS[@]}" "$ARCHIVE"
 done
 echo "safety fixture images ($HEAP heap${POOL:+, pool mode $POOL}): $(ls "$OUT"/ffapp_fx*.dom | wc -l)"
@@ -503,53 +446,9 @@ echo "safety fixture images ($HEAP heap${POOL:+, pool mode $POOL}): $(ls "$OUT"/
 python3 "$SCRIPT_DIR/scan-addi-sp.py" "$OUT/ffapp_m5.dis" \
   || { echo "C-50 GATE: integer sp/s0 address used as a store base (see above)" >&2; exit 1; }
 
-# --- every image, not just M1..M6: budget, and the layout the budget model assumes ------
-# The declaration above covers the STACK only. That is right only while the image has no
-# .capstone_gp_initdesc (the monitor then copies and carves nothing, and .bss -- the heap
-# arena included -- sits inside code_len). If that section ever appears, the stack-only
-# declaration is silently too small, which is how MicroPython failed; so it is a gate.
+# Every fixture uses the same descriptor and delegated runtime as the decoder.
 for img in "$OUT"/ffapp_m*.dom "$OUT"/ffapp_fx*.dom; do
   read -r code_len alloc verdict < <(budget "$img")
-  [ "$verdict" = FITS ] || { echo "BUDGET: $img needs a $alloc-byte region, over the 4 MiB order ceiling" >&2; exit 1; }
-  n=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$img" | grep -c 'capstone_gp_initdesc' || true)
-  [ "$n" = 0 ] || { echo "LAYOUT: $img has .capstone_gp_initdesc; the stack-only domreq no longer covers dom_data" >&2; exit 1; }
+  [[ $verdict == FITS ]] || { echo "image exceeds the declared allocation budget: $img" >&2; exit 1; }
 done
-echo "budget and layout gates: $(ls "$OUT"/ffapp_m*.dom "$OUT"/ffapp_fx*.dom | wc -l) images FIT, none has .capstone_gp_initdesc"
-
-# --- negative control ---------------------------------------------------------------
-cat > "$OUT/stub_main.c" <<'STUB'
-int capstone_main(void);
-void domain_main(unsigned *res, unsigned func) { (void)func; if (res) *res = (unsigned)capstone_main(); }
-unsigned long __capstone_unserved_count(void) { return 0; }
-long __capstone_unserved_at(unsigned long i) { (void)i; return -1; }
-STUB
-"$CLANG" "${FLAGS[@]}" -c "$OUT/stub_main.c" -o "$OUT/stub_main.o"
-set +e
-control=$("$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/nohostcall.dom" \
-  "${RUNTIME[@]}" "$OUT/stub_main.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
-  "$OUT/ffapp_domain_m5.o" "$OUT/ffapp_decode.o" "${FFLIBS[@]}" "$ARCHIVE" 2>&1)
-set -e
-undef=$(printf '%s\n' "$control" | grep -oE 'undefined symbol: [A-Za-z_][A-Za-z0-9_]*' \
-        | sed 's/undefined symbol: //' | sort -u)
-# The sublet arm's heap also takes its region from hostcall.o, so exactly one more symbol.
-want_undef=__capstone_hostcall
-[ "$HEAP" = sublet ] && want_undef=$(printf '__capstone_hostcall\n__capstone_region')
-[ "$undef" = "$want_undef" ] \
-  || { echo "CONTROL FAILED: expected exactly '$(echo $want_undef)' undefined, got: ${undef:-<none>}" >&2; exit 1; }
-echo "control fired: FFmpeg's libc calls reach __capstone_hostcall and nothing else is missing"
-
-# --- guest-side host ------------------------------------------------------------------
-GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
-LIBCAPSTONE_DIR="$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib"
-if [ -x "$GUEST_CC" ] && [ -f "$LIBCAPSTONE_DIR/libcapstone.c" ]; then
-  "$GUEST_CC" -O2 "${HOSTF[@]}" -I"$MUSL_PORT/runtime" -I"$LIBCAPSTONE_DIR" \
-    -I"$REPO_ROOT/capstone/tests/runtime-qemu/hostcall-stdout-probe" \
-    -I"$REPO_ROOT/capstone/tests/runtime-qemu" \
-    -o "$OUT/ffapp.user" "$APP_DIR/src/linux-guest/ffapp_host.c" "$LIBCAPSTONE_DIR/libcapstone.c"
-  echo "built   $OUT/ffapp.user"
-else
-  echo "guest host NOT built: no $GUEST_CC or libcapstone.c (from a worktree, export CAPSTONE_BUILDROOT_DIR=<main clone>/capstone/caplifive-buildroot)" >&2
-  exit 1
-fi
-printf 'pointer round-trip sites flagged by the compiler: %d (list: %s)\n' \
-  "$(wc -l < "$OUT/pointer-roundtrip-sites.txt")" "$OUT/pointer-roundtrip-sites.txt"
+printf 'delegated application and fixtures: %s\n' "$OUT"

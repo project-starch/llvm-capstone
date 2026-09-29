@@ -2,6 +2,34 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-29 — application ports require delegation
+
+The `delegation-ports` branch, stacked on `delegation-spawn`, migrates all
+seven application recipes to the shared ABI-v2 SDK: Perl, mruby, CPython,
+PostgreSQL single-user, SQLite in-memory SQL, the configured FFmpeg decoder
+and offline tshark. The launcher rejects v1 images with exit 126. Private
+application entry points, HostCall launchers, argument side files and the
+PostgreSQL fake-root/named-input patches are removed. Standalone allocator
+and instruction probes are separate targets, not application compatibility.
+
+[Migration instructions and qualification](../../ports/common/application/README.md)
+link the [checked result lines](../../ports/common/application/results/20260929-delegation.json).
+New runs pass 108 mixed starts, six shell/exec checks, Perl 9/9 files with
+493 assertions, both mruby regular suites, and the selected native-matched
+workloads for the other ports. FFmpeg/tshark safety is 41/41. libc-test is
+46 PASS, 4 FAIL, 4 FAULT, 3 NOBUILD, 20 EXCLUDED; all 45 earlier passes remain.
+Two newly buildable TLS tests reach unsupported thread creation and fault.
+
+The qualified compiler is `compiler/sroa-keep-capability-whole` at
+`7d01722aab88`, not the compiler sources on the delegation-only branch.
+The mixed matrix uses 1024 MiB CMA and 768 MiB retained process storage.
+Protected PostgreSQL passes at 262,144 nodes (84,193 high water), after
+exhausting 65,536. The larger protected mruby GC stress exhausts both
+capacities; only its smaller smoke is qualified. FFmpeg uses the measured
+`-O1 -fno-omit-frame-pointer` workaround for C-70. Dynamic memory grants,
+asynchronous signal handlers and general threads remain outstanding.
+Historical memory/performance archives retain their original images and ABI.
+
 ## 2026-09-29 — delegated runtime review
 
 The `delegation-spawn` stack has reviewed syscall marshalling and process

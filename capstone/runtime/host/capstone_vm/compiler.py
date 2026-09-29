@@ -53,6 +53,16 @@ def check_toolchain(cc: str) -> None:
                        r"\s*delin\s+\1\s*$", body, re.MULTILINE)
     if not target or not re.search(r"cjalr\s+ra,\s*0\(" + target[1] + r"\)", body):
         raise ValueError("compiler emits a linear direct-call target (C-46); rebuild the toolchain")
+    # Port patches use this feature macro to select capability-preserving
+    # pointer arithmetic. Without it they compile an integer-only fallback
+    # that links successfully and faults on the first symbol/Datum access.
+    result = subprocess.run([cc, '-fsyntax-only', '-x', 'c', '-target',
+                             'capstone64-unknown-elf', '-'], text=True, capture_output=True,
+                            input='#if __SIZEOF_INTCAP__ != 16\n#error intcap required\n#endif\n'
+                                  '_Static_assert(sizeof(__uintcap_t) == 16, "intcap");\n'
+                                  '__uintcap_t f(void *p) { return (__uintcap_t)p; }\n')
+    if result.returncode:
+        raise ValueError('application SDK requires the intcap compiler extensions; use a qualified toolchain')
 
 
 def expand(arguments: list[str], depth: int = 0) -> list[str]:
@@ -88,7 +98,7 @@ def link_arguments(arguments: list[str]) -> tuple[list[str], list[str], list[str
                 inputs.append(arg)
         elif arg.startswith("-Wl,"):
             inputs.extend(arg[4:].split(","))
-        elif arg.startswith("-L") or arg.endswith((".o", ".a")):
+        elif arg.startswith("-L") or arg.endswith((".o", ".a", ".lo")):
             inputs.append(arg)
         elif arg.endswith((".c", ".s", ".S")):
             # Preserve source/library ordering, including repeated basenames.
@@ -98,7 +108,8 @@ def link_arguments(arguments: list[str]) -> tuple[list[str], list[str], list[str
             raise ValueError("application domains require a static executable")
         elif arg in ("-static", "-no-pie", "-rdynamic", "-nostdlib", "-nodefaultlibs"):
             continue
-        elif arg.startswith(("-D", "-U", "-I", "-std=", "-O", "-g", "-f", "-W", "-m")) or arg in ("-pthread", "-v"):
+        elif arg.startswith(("-D", "-U", "-I", "-std=", "-O", "-g", "-f", "-W", "-m")) or arg in (
+                "-pthread", "-v", "-Qunused-arguments", "-pedantic", "-pedantic-errors", "-pipe", "-ansi"):
             compile_flags.append(arg)
         else:
             raise ValueError(f"unsupported compiler driver argument: {arg}")
@@ -113,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         sdk = Path(os.environ.get("CAPSTONE_SDK", Path(sys.argv[0]).absolute().parent))
         config = json.loads((sdk / "sdk.json").read_text())
-        if config["version"] != 1:
+        if config["version"] != 1 or config.get("application_abi") != 2:
             raise ValueError("unsupported SDK version; rebuild the SDK")
         if arguments == ["--check-toolchain"]:
             check_toolchain(config["cc"])
@@ -125,7 +136,20 @@ def main(argv: list[str] | None = None) -> int:
         for suffix in ("arch/capstone64", "arch/generic", "obj/include", "include"):
             target.extend(("-isystem", str(Path(config["musl"]) / suffix)))
         if any(a in ("-c", "-S", "-E", "-M", "-MM", "--version", "-dumpmachine",
-                     "-dumpversion", "--help") or a.startswith("-print-") for a in arguments) or arguments == ["-v"]:
+                     "-dumpversion", "--help", "-###") or a.startswith(("-print-", "--print-")) for a in arguments) or arguments == ["-v"]:
+            log = os.environ.get("CAPSTONE_COMPILE_LOG")
+            if log and "-c" in arguments and "-o" in arguments:
+                obj = arguments[arguments.index("-o") + 1]
+                result = subprocess.run([*target, *arguments, "-ferror-limit=0"],
+                                        stderr=subprocess.PIPE, text=True)
+                Path(obj + ".err").write_text(result.stderr)
+                source = next((a for a in arguments if a.endswith((".c", ".S", ".s"))), "")
+                first = next((line for line in result.stderr.splitlines() if "error:" in line), "")
+                with open(log, "a") as stream:
+                    stream.write(f"{obj}\t{result.returncode}\t{source}\t{first}\n")
+                if result.returncode:
+                    print(result.stderr, file=sys.stderr, end="")
+                return result.returncode
             return subprocess.call([*target, *arguments])
         flags, sources, inputs, output = link_arguments(arguments)
         with tempfile.TemporaryDirectory(prefix="capstone-cc-") as scratch:

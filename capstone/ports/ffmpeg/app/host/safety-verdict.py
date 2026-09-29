@@ -57,7 +57,7 @@ def section(lines, n):
     return out if seen else None
 
 
-def classify(sec, n):
+def classify(sec, n, application_done=None):
     touch = returned = None
     target = length = None
     fault = None
@@ -89,7 +89,8 @@ def classify(sec, n):
                 fault = (i, 'temporal-untagged-op', int(UNTAGGED_OP.search(line).group(2), 16), line.strip())
             elif HALT.search(line):
                 fault = (i, 'other', None, line.strip())
-    done = next((int(m.group(1)) for m in map(DONE.search, sec) if m), None)
+    done = application_done if application_done is not None else next(
+        (int(m.group(1)) for m in map(DONE.search, sec) if m), None)
     info = {'touch': touch, 'target': target, 'len': length}
     if fault is not None:
         i, kind, addr, text = fault

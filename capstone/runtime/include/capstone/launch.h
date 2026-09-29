@@ -23,8 +23,8 @@ struct capstone_application_descriptor {
 };
 
 /* Descriptor v2: the v1 fields, CAPSTONE_APPLICATION_DELEGATE in flags, and
- * the exchange region the launcher grants. A v1 image is 40 bytes with
- * exchange_bytes reported as 0; a launcher accepts both sizes. */
+ * the exchange region the launcher grants. The prefix retains its wire layout;
+ * applications with the old 40-byte descriptor are rejected. */
 struct capstone_application_descriptor_v2 {
   struct capstone_application_descriptor v1;
   uint64_t exchange_bytes;

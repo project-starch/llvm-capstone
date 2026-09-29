@@ -2,9 +2,12 @@
  * This short-lived Linux parent records waitpid status independently of stdio.
  * It is also usable by other remote harnesses; there is no resident job service.
  */
+#define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
+#include <stdint.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,8 +22,26 @@ static void forward(int signal_number) {
 }
 
 int main(int argc, char **argv) {
-  if (argc < 4 || strcmp(argv[2], "--")) {
-    fputs("usage: capstone-job RESULT.json -- COMMAND [ARG...]\n", stderr);
+  int command = 3, change_user = 0;
+  uid_t uid = 0;
+  gid_t gid = 0;
+  if (argc >= 6 && !strcmp(argv[2], "--user")) {
+    char *end;
+    if (argv[3][0] < '0' || argv[3][0] > '9') return 125;
+    errno = 0;
+    unsigned long u = strtoul(argv[3], &end, 10);
+    if (errno || end == argv[3] || *end != ':' || u >= UINT32_MAX) return 125;
+    const char *group = end + 1;
+    if (*group < '0' || *group > '9') return 125;
+    unsigned long g = strtoul(group, &end, 10);
+    if (errno || end == group || *end || g >= UINT32_MAX) return 125;
+    uid = (uid_t)u;
+    gid = (gid_t)g;
+    change_user = 1;
+    command = 5;
+  }
+  if (argc <= command || strcmp(argv[command - 1], "--")) {
+    fputs("usage: capstone-job RESULT.json [--user UID:GID] -- COMMAND [ARG...]\n", stderr);
     return 125;
   }
   sigset_t blocked, previous;
@@ -43,7 +64,11 @@ int main(int argc, char **argv) {
     sigaction(SIGTERM, &action, NULL);
     sigaction(SIGHUP, &action, NULL);
     sigprocmask(SIG_SETMASK, &previous, NULL);
-    execvp(argv[3], argv + 3);
+    if (change_user && ((geteuid() == 0 && setgroups(0, NULL)) || setgid(gid) || setuid(uid))) {
+      perror("capstone-job: user");
+      _exit(125);
+    }
+    execvp(argv[command], argv + command);
     _exit(errno == ENOENT ? 127 : 126);
   }
   child_pid = child;

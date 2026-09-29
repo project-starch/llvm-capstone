@@ -23,10 +23,10 @@ done
 NATIVE_ENV=(env -u CC -u AR -u RANLIB)
 "${NATIVE_ENV[@]}" cmake -S "$G/src" -B "$G/build" -DCMAKE_INSTALL_PREFIX="$G/install" -DBUILD_GMOCK=ON \
   > "$LOG/gtest-cmake.log" 2>&1
-"${NATIVE_ENV[@]}" cmake --build "$G/build" -j16 --target install > "$LOG/gtest-build.log" 2>&1
+"${NATIVE_ENV[@]}" cmake --build "$G/build" -j"${JOBS:-8}" --target install > "$LOG/gtest-build.log" 2>&1
 "${NATIVE_ENV[@]}" cmake -S "$N" -B "$N/build" -DCARES_BUILD_TESTS=ON -DCARES_STATIC=ON -DCARES_SHARED=OFF \
   -DCMAKE_PREFIX_PATH="$G/install" > "$LOG/native-cmake.log" 2>&1
-"${NATIVE_ENV[@]}" cmake --build "$N/build" -j16 > "$LOG/native-build.log" 2>&1
+"${NATIVE_ENV[@]}" cmake --build "$N/build" -j"${JOBS:-8}" > "$LOG/native-build.log" 2>&1
 "$N/build/bin/arestest" --gtest_filter='-*.Live*' > "$LOG/native-test.log" 2>&1 || true
 tail -3 "$LOG/native-test.log"
 grep -qE "^\[  PASSED  \] [0-9]+ tests" "$LOG/native-test.log" && ! grep -q "^\[  FAILED  \]" "$LOG/native-test.log" \
@@ -35,7 +35,7 @@ echo "c-ares: native test OK"
 
 ( cd "$X" && ./configure --host=riscv64-unknown-linux-musl --prefix="$TS_DEPS_PREFIX" --disable-shared \
     --enable-static --disable-tests > "$LOG/cap-configure.log" 2>&1 )
-( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j16 -C src/lib > "$LOG/cap-build.log" 2>&1 )
+( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j"${JOBS:-8}" -C src/lib > "$LOG/cap-build.log" 2>&1 )
 ( cd "$X" && make -C src/lib install > "$LOG/cap-install.log" 2>&1 && make -C include install >> "$LOG/cap-install.log" 2>&1 )
 touch "$LOG/cast-log.txt"; sort -u "$LOG/cast-log.txt" > "$LOG/cast-sites.txt"
 echo "c-ares: libcares.a installed ($(stat -c %s "$TS_DEPS_PREFIX/lib/libcares.a") bytes); cast sites: $(wc -l < "$LOG/cast-sites.txt")"

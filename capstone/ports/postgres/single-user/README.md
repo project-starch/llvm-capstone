@@ -93,9 +93,11 @@ uses a different on-disk alignment and is not interchangeable. Supply
 `max_connections=10` to `--single`. The Capstone application SDK backend
 uses `dynamic_shared_memory_type=sysv`, because its single-process System V
 segment service is implemented and file-backed `mmap` is not. Pass the
-`--single` arguments and `PG_SINGLE_INPUT=/mnt/host/.../work.sql` directly
-through the shared application runner; set `PGSU_DOMAIN=1` for the domain's
-synthetic uid 0. The CheriBSD backend uses `dynamic_shared_memory_type=posix`
+`--single` arguments through the [shared application runner](../../common/application/README.md),
+using `--stdin work.sql` and `--user UID:GID` for an existing unprivileged guest
+account. The cluster must be writable by that account. The old input-file and
+root-bypass patches are removed. Patch 0019 flushes single-user statistics
+synchronously; SQL timeouts still require the pending signal implementation. The CheriBSD backend uses `dynamic_shared_memory_type=posix`
 with the same SQL input. Disable the guest-wide revocation default for
 setup services: the kernel can panic while SCP stages a cluster. Published-policy
 points explicitly enable libc revocation in each benchmark process;

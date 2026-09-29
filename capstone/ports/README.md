@@ -1,5 +1,12 @@
 # Application and allocator ports
 
+Complete Linux application ports now use the
+[delegated ABI-v2 build and runner](common/application/README.md): Perl, mruby,
+CPython, PostgreSQL single-user, SQLite, FFmpeg and offline tshark. Old application
+images must be rebuilt. The component/allocator and silicon targets described
+below are separate from these application entry points.
+
+
 Start here to choose a component and find its build entry point. A port may
 execute an application, replay one allocator, or only establish that a library
 compiles. Those scopes are different; a directory's existence is not evidence

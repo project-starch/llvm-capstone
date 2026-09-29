@@ -98,10 +98,9 @@ log "building libc-capstone.a with $CAPSTONE_CLANG"
 OUT_DIR=$CPY_ROOT/musl-build bash "$PORTS_DIR/musl-capstone/build-musl-capstone.sh" >&2
 LIBC_ARCHIVE=$CPY_ROOT/musl-build/libc-capstone.a
 
-# The runtime exactly as musl-capstone/libc-test/build-libc-test.sh builds it.
+# The application SDK is the only startup and syscall implementation.
 RT=$CPY_ROOT/runtime
 rm -f "$RT"/*.o
-MRT=$PORTS_DIR/musl-capstone/runtime
 INC=(-nostdinc -isystem "$MUSL_DIR/arch/capstone64" -isystem "$MUSL_DIR/arch/generic"
      -isystem "$MUSL_DIR/obj/include" -isystem "$MUSL_DIR/include"
      -I"$MUSL_DIR/src/include" -I"$MUSL_DIR/src/internal" -I"$MUSL_DIR/obj/src/internal")
@@ -109,22 +108,7 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -Xclang -target-feature -Xclang +a -ffreestanding -fno-builtin -fno-jump-tables
     -ffunction-sections -fdata-sections -std=c99 -O1 -w -Wno-int-conversion
     -D_XOPEN_SOURCE=700 "${INC[@]}")
-ASF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -O0)
-for s in start-musl set_thread_area setjmp; do
-  "$CAPSTONE_CLANG" "${ASF[@]}" -c "$MRT/$s.S" -o "$RT/$s.o"
-done
-for f in hostcall tls string_bounds_safe fputwc_null_safe atomic_libcalls; do
-  "$CAPSTONE_CLANG" "${CF[@]}" -c "$MRT/$f.c" -o "$RT/$f.o"
-done
-# The domain's heap is level0's static arena, 256 KiB by default: enough for
-# stdio, not for an interpreter. pymalloc takes its 1 MiB arenas from it (mmap
-# is off, see config.site), and every larger object comes straight from it.
 CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
-"$CAPSTONE_CLANG" "${CF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="$CPY_HEAP_BYTES" \
-  -c "$MRT/level0.c" -o "$RT/level0.o"
-"$CAPSTONE_CLANG" "${CF[@]}" -I"$MUSL_DIR/src/multibyte" \
-  -c "$MRT/mbsrtowcs_bounds_safe.c" -o "$RT/mbsrtowcs_bounds_safe.o"
-
 # The Sublet arm's allocator side. link-cpython-capstone.py links every *.o in
 # this directory, so compiling them here is the whole wiring; nothing in the link
 # step changes. The adapter and its metadata heap are the component port's,
@@ -134,7 +118,6 @@ CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
 # hostcall.c is rebuilt with CAPSTONE_PROGRAM_REGIONS so it parks the two regions
 # the adapter's init needs; the plain arm never sees any of this and stays
 # byte-identical.
-DOMAIN_ENTRY_FLAGS=()
 if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   PYM=$PORTS_DIR/cpython/pymalloc/src
   # THERE ARE TWO sublet.h AND THE ORDER DECIDES WHICH. capstone/sublet/sublet.h
@@ -153,14 +136,8 @@ if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
     -c "$PYM/shared/backing.c" -o "$RT/pym_backing.o"
   "$CAPSTONE_CLANG" "${CF[@]}" "${GAP_FLAGS[@]}" \
     -c "$SCRIPT_DIR/toolchain/pym_sublet_glue.c" -o "$RT/pym_sublet_glue.o"
-  "$CAPSTONE_CLANG" "${CF[@]}" -DCAPSTONE_PROGRAM_REGIONS=1 \
-    -c "$MRT/hostcall.c" -o "$RT/hostcall.o"
-  DOMAIN_ENTRY_FLAGS=(-DCPY_SUBLET=1)
-  log "Sublet arm: adapter, metadata heap and glue compiled; hostcall.c parks program regions"
+  log "Sublet arm: adapter, metadata heap and glue compiled"
 fi
-"$CAPSTONE_CLANG" "${CF[@]}" "${DOMAIN_ENTRY_FLAGS[@]}" \
-  -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$RT/domain_entry.o"
-
 # compiler-rt's generic builtins, as an ARCHIVE so the linker takes only what is
 # referenced -- which is what a toolchain's libclang_rt.builtins.a is. The
 # benchmarks' hand-picked soft-float list would make configure report a libc
@@ -190,9 +167,16 @@ rm -f "$COMBINED"
 printf 'CREATE %s\nADDLIB %s\nADDLIB %s\nSAVE\nEND\n' \
   "$COMBINED" "$LIBC_ARCHIVE" "$CPY_ROOT/libclang_rt.builtins.a" | "$LLVM_AR" -M
 
+SDK_FLAGS=()
+if [[ ${CPY_SUBLET:-0} == 1 ]]; then
+  SDK_FLAGS=(-DCAPSTONE_APPLICATION_GRANT_BYTES=83886080)
+fi
+bash "$PORTS_DIR/common/application/build-sdk.sh" "$RT" "$MUSL_DIR" "$COMBINED" \
+  -DCAPSTONE_APPLICATION_ARENA_BYTES="$CPY_HEAP_BYTES" "${SDK_FLAGS[@]}"
+export CAPSTONE_SDK=$RT
 export CPY_MUSL=$MUSL_DIR CPY_RUNTIME_DIR=$RT CPY_LIBC_ARCHIVE=$COMBINED
-export CPY_LINKER_SCRIPT=$REPO_ROOT/capstone/my_first_domain/link.ld
-CC=$SCRIPT_DIR/toolchain/capstone-cc
+export CPY_SUBLET=${CPY_SUBLET:-0}
+CC=$RT/capstone-cc
 
 # ---- 4. the link check must be able to say no ----------------------------
 LC=$CPY_ROOT/linkcheck; rm -rf "$LC"; mkdir -p "$LC"
@@ -322,7 +306,7 @@ fi
 cat > "$BUILD_DIR/capstone-env.sh" <<EOF
 export CAPSTONE_CLANG='$CAPSTONE_CLANG' CAPSTONE_LD_LLD='$CAPSTONE_LD_LLD'
 export CPY_MUSL='$MUSL_DIR' CPY_RUNTIME_DIR='$RT' CPY_LIBC_ARCHIVE='$COMBINED'
-export CPY_LINKER_SCRIPT='$CPY_LINKER_SCRIPT'
+export CAPSTONE_SDK='$RT' CPY_SUBLET='$CPY_SUBLET'
 EOF
 printf '%s\n' "${APPLIED[@]}" > "$BUILD_DIR/applied-patches.txt"
 printf '%s\n' "$BUILD_DIR"

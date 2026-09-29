@@ -53,6 +53,12 @@
 #define L0_MAX_MAPS 32
 #define L0_MAX_SEGS 16
 
+/* Match mmap.o's weak fallback too: pthread_mutex_destroy references this
+ * hook even in a single-threaded program. Otherwise the archive extracts
+ * musl's integer-returning mmap.o alongside our capability-safe override.
+ * musl's strong vmlock implementation may still replace this definition. */
+__attribute__((__weak__)) void __vm_wait(void) {}
+
 struct l0_map {
 	void *base;   /* what the caller holds: page-aligned */
 	void *block;  /* what free() takes back */
@@ -80,6 +86,10 @@ static size_t pages(size_t len)
    gets back. Only the address feeds the alignment computation. */
 static void *page_block(size_t len, void **block)
 {
+	/* Account for both page rounding and the extra alignment page before
+	   arithmetic can wrap a huge mapping into a small allocation. */
+	if (len >= PTRDIFF_MAX || len > SIZE_MAX - (2 * L0_PAGE - 1))
+		return 0;
 	size_t want = pages(len);
 	char *raw = malloc(want + L0_PAGE);
 	if (!raw)

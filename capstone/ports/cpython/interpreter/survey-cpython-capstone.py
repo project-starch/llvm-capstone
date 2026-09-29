@@ -173,7 +173,7 @@ def main() -> int:
         return 2
     clang = os.environ.get("CAPSTONE_CLANG", "")
     for var in ("CAPSTONE_CLANG", "CAPSTONE_LD_LLD", "CPY_MUSL", "CPY_RUNTIME_DIR",
-                "CPY_LIBC_ARCHIVE", "CPY_LINKER_SCRIPT"):
+                "CPY_LIBC_ARCHIVE", "CAPSTONE_SDK"):
         if not os.environ.get(var):
             print(f"ERROR: {var} not set; source {build}/capstone-env.sh", file=sys.stderr)
             return 2
@@ -198,7 +198,7 @@ def main() -> int:
             stale.unlink(missing_ok=True)
     log = build / "survey-compile.log"
     log.unlink(missing_ok=True)
-    env = dict(os.environ, CPY_SURVEY_LOG=str(log))
+    env = dict(os.environ, CAPSTONE_COMPILE_LOG=str(log))
     overrides = []
     if args.opt:
         opt = make_var(build, "OPT")
