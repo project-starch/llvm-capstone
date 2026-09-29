@@ -57,6 +57,9 @@ The output is byte-identical to native (`results/2026-09-26/scripts.txt`).
   (`MRBD_HEAP=sublet-hash`, the program's region 2): it catches a defect plain
   `sublet` cannot see, because the slot is vacated and refilled with nothing
   released.
+  0011 sub-lets the shared string buffers above it (`MRBD_HEAP=sublet-str`,
+  region 3), where the revocation point is an ownership transfer -- the un-share
+  in `mrb_str_modify()` -- rather than a free.
 
 ## The Sublet heap (`MRBD_HEAP=sublet`)
 
