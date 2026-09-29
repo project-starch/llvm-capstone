@@ -1,5 +1,5 @@
 /* row2 -- the LITERAL matched pair for
- * cve-repros/row2_rusqlite_hook_closure_uaf (SEALED-CALLBACK / UAF of the
+ * capi-repros/row2_rusqlite_hook_closure_uaf (SEALED-CALLBACK / UAF of the
  * callback context).
  *
  * The SAME row2 program as before.c, real SQLite C API, one Capstone domain:

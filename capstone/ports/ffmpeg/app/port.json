@@ -1,0 +1,23 @@
+{
+  "program": "ffmpeg",
+  "role": "full-application",
+  "title": "FFmpeg as one whole file-to-file decoder inside a Capstone domain",
+  "upstream": {
+    "version": "9.0.1",
+    "pin_source": {
+      "file": "capstone/ports/ffmpeg/app/upstream.json",
+      "grep": "\"version\": \"9.0.1\""
+    }
+  },
+  "targets": [
+    "capstone-domain"
+  ],
+  "workload": "matroska demuxer to mpeg4 decoder, per-frame framemd5",
+  "evidence": [
+    "capstone/ports/ffmpeg/app/results/2026-09-24-qemu-hardening"
+  ],
+  "related": [
+    "capstone/ports/ffmpeg/buffer-pool"
+  ],
+  "note": "Its pool fixtures run the buffer-pool port's Sublet leases inside the whole decoder; the pool corpus's cases belong to that component, not to this one."
+}

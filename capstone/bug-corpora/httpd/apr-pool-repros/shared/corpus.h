@@ -1,7 +1,7 @@
 /* What a case in this corpus needs, so a case.c is a complete translation unit
  * on both targets.
  *
- * The contract is the one in ../../cpython/pymalloc-repros/SCHEMA.md; this
+ * The contract is the one in ../../SCHEMA.md; this
  * header is its APR seam. A case writes its sequence inside APR_CASE(NN). The
  * macro supplies aprp_replay for the port's one-source seam, so the Capstone
  * domain build compiles the file on its own into one program per defect; the

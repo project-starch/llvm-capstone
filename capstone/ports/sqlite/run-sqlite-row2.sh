@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# row2 -- the LITERAL matched pair for cve-repros/row2_rusqlite_hook_closure_uaf
+# row2 -- the LITERAL matched pair for capi-repros/row2_rusqlite_hook_closure_uaf
 # (SEALED-CALLBACK / UAF of the callback context). Real SQLite, one domain.
 # SQLite's whole heap is the revoke-on-free allocator (row3 B2). A SQL function
 # is registered with a context pointer `app`; the host frees `app` (revoke) while

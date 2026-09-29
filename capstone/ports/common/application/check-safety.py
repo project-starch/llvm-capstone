@@ -4,6 +4,12 @@
 Requires exclusive use of the selected VM while collecting QEMU diagnostics.
 The application status and fault record come from capstone-job. Full return
 marks come from the fixture itself, corroborated by the actual 8-bit exit code.
+
+--expect and --verdict judge images this runner boots but the port's own
+classifier cannot, such as a bug corpus's cases: the fixtures are collected as
+usual (fx<n>.json, .stdout, .stderr, .qemu in --out), and the verdict script is
+then run as `<verdict> <out> <expect> <arm> <images> <fixture>...`; its exit
+status is the result.
 """
 import argparse
 import importlib.util
@@ -67,10 +73,13 @@ def main():
     parser.add_argument('--images', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--arm', required=True)
+    parser.add_argument('--expect', type=Path, help="predictions (default: the port's safety-expect.txt)")
+    parser.add_argument('--verdict', type=Path, help='external verdict script over the collected fixtures')
     parser.add_argument('fixtures', nargs='+', type=int)
     args = parser.parse_args()
     expectations = {}
-    for line in (PORTS / args.port / 'app/host/safety-expect.txt').read_text().splitlines():
+    expect = args.expect or PORTS / args.port / 'app/host/safety-expect.txt'
+    for line in expect.read_text().splitlines():
         words = line.split('#', 1)[0].split()
         if len(words) == 4 and words[0] == args.arm:
             expectations.setdefault(int(words[1]), []).append(words[2:])
@@ -92,6 +101,8 @@ def main():
             stream.seek(start)
             diagnostics = stream.read().decode(errors='replace')
         (args.out / f'fx{number}.qemu').write_text(diagnostics)
+        if args.verdict:
+            continue
         result = json.loads(result_path.read_text())
         (got, detail, explanation), info = classify(
             (args.out / f'fx{number}.stdout').read_text(), diagnostics, result, number)
@@ -99,6 +110,9 @@ def main():
         results.append(dict(fixture=number, passed=passed, outcome=got, detail=detail,
                             explanation=explanation, expected=expectations[number], **info))
         print(f'fx{number}: {"AS PREDICTED" if passed else "DIFFERS"}: {got} {detail}', flush=True)
+    if args.verdict:
+        return subprocess.run([sys.executable, str(args.verdict), str(args.out), str(expect), args.arm,
+                               str(args.images), *map(str, args.fixtures)]).returncode
     (args.out / 'verdict.json').write_text(json.dumps(results, indent=2) + '\n')
     return 0 if all(row['passed'] for row in results) else 1
 
