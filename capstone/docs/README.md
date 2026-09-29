@@ -27,7 +27,7 @@ Capstone controls complete the 60-process three-application figure set.
 The wider six-application study remains unfinished.
 
 PostgreSQL complete-backend memory work: the
-[17.5 single-user port](../ports/postgres/single-user/README.md) now completes
+[17.5 single-user port](../ports/postgres/app/README.md) now completes
 the same native-matched SQL qualification and inner reuse checks in all four
 arms. Its metadata-capacity and queue-policy repair is documented in the
 [four-arm campaign](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md).
@@ -140,17 +140,21 @@ separate machine, and a paper lane. Read the roles, not the lane count:
 
 ## Directory layout
 
-**319 markdown files.** Counts are why this index exists: the two `state/` files went two
-weeks stale without anyone noticing, because nothing mapped the tree.
+This index exists because the two `state/` files went two weeks stale without anyone
+noticing: nothing mapped the tree. **File counts are deliberately not kept here** — they
+were, and every one of them drifted (`ref/` said 31 against 38 files, `plans/` 29 live
+against 69, `history/` 196 against 225, and the header claimed 319 markdown files against
+414). Run `find capstone/docs/<dir> -maxdepth 1 -type f | wc -l` for a number; what this
+table is for is the **role** of each directory.
 
-| directory | files | what belongs here | how to read it |
-|---|---|---|---|
-| `state/` | 3 | what is true **right now** | the first thing a new session reads. If it disagrees with `ref/ISSUES.md`, ISSUES.md wins. |
-| `ref/` | 31 | durable quick-reference that rarely changes | `ISSUES.md` is the registry of every OPEN defect and is the authoritative status for them; `ISSUES-ARCHIVE.md` holds the resolved ones verbatim (split 2026-09-09). `SUBAGENTS.md` before delegating. |
-| `design/` | 32 | architecture and **design decisions only** | a bug-fix, root-cause trail or audit is *not* a design decision — those go to `history/`. |
-| `plans/` | 29 live, 24 archived | work in flight | check the status line, then check `plans/archived/README.md` — a plan's own status line does not know it was archived. |
-| `history/` | 196 | dated investigation notes, root-cause trails, superseded coordination docs | append-only. Do not retro-edit a finding; add a dated correction under it. |
-| `patches/` | — | out-of-tree patches | |
+| directory | what belongs here | how to read it |
+|---|---|---|
+| `state/` | what is true **right now** | the first thing a new session reads. If it disagrees with `ref/ISSUES.md`, ISSUES.md wins. |
+| `ref/` | durable quick-reference that rarely changes | `ISSUES.md` is the registry of every OPEN defect and is the authoritative status for them; `ISSUES-ARCHIVE.md` holds the resolved ones verbatim (split 2026-09-09). `SUBAGENTS.md` before delegating. |
+| `design/` | architecture and **design decisions only** | a bug-fix, root-cause trail or audit is *not* a design decision — those go to `history/`. |
+| `plans/` | work in flight | check the status line, then check `plans/archived/README.md` — a plan's own status line does not know it was archived. |
+| `history/` | dated investigation notes, root-cause trails, superseded coordination docs | append-only. Do not retro-edit a finding; add a dated correction under it. |
+| `patches/` | out-of-tree patches | |
 
 ### The files worth knowing by name
 
@@ -166,6 +170,10 @@ weeks stale without anyone noticing, because nothing mapped the tree.
 
 ### Related trees outside this directory
 
+- `capstone/bug-corpora/INDEX.md` — **generated**: every piece of bug material in the repo, in
+  one table. Third-party defects as cases (here and in `xlang/`), our own silicon defects, our
+  own compiler and runtime defects, and the protection fixtures that are none of those. Counts
+  come from each corpus's `corpus.json` and each port's `port.json`, never from typing.
 - `capstone/tests/fpga-repros/` — one folder per silicon defect, each a **self-contained report**
   that may already be a live link held by the hardware side. See its own `README.md`. These are
   evidence and are never pruned.

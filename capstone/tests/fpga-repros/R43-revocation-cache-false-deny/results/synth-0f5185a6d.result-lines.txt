@@ -1,0 +1,35 @@
+# R-43 + R-45 synthesis, capstone-ariane 0f5185a6d (bbd4d1478 R-43 + 0f5185a6d R-45 on 6cbdaeeb4), run by the
+# synth lane 2026-09-28/29, authorized by the lead. Sealed (exit 0, provenance 0f5185a6d8c5), 7h37m to seal.
+# Read against the pre-registered acceptance row (docs/plans/r43-query-on-miss.md). NOT a flash candidate.
+
+== VERDICT: REFUTED ON TIMING. The cause is R-43's combinational load/store stall gate. ==
+routed WNS (clk_out1)             -24.495   (R-42 6cbdaeeb4: -10.615; the board has run -12.425)   -> past the -14 line
+TNS / failing endpoints           -1,600,172.5 / 103,543 of 179,180 = 57.79%   (R-42: 55.23%)
+worst-500 ORDER test              500 of 500 paths have an rvc_ cell BEFORE an i_load_unit / gen_mmu.i_cva6_mmu cell
+                                  (R-42: 0 of 500, same parser; the parser fired on doctored R-42 paths, as a control)
+worst path                        issue fu_data_q cap_metadata -> lsu_i rvc lookup (rvc_ok_id_q, rvc_pend_q) ->
+                                  st_translation_req -> wt_dcache request/grant -> rev_node read grant ->
+                                  revnode_fill_valid_q ... -> scoreboard -> dom_switcher -> i_tracer trace_buf;
+                                  99 logic levels, data 64.156 ns = logic 7.732 + ROUTE 56.424
+route per hop                     0.570 worst / 0.554 mean  (R-42: 0.394 / 0.472): congestion-grade; Route 35-447;
+                                  routing took 4h52m (R-42: ~36 min)
+
+== LOOPS: same families, cut differently (NOT new loops; an earlier "3 new loops" reading was withdrawn) ==
+routed check_timing               1 loop; TIMING-23 arc moved inside the same cluster:
+                                  lsu_bypass_i/cap_clear_addr_q[55]_i_5 (R-42: lsu_i/state_q[3]_i_19)
+synthesis                         7 detections vs 5 -- detections 5-7 are re-detections of cluster 4 as arcs are
+                                  disabled; set_false_path exceptions 52 vs 12 (45 through clear_addr_o belong to the
+                                  EXISTING clear_addr/page_offset_matches loop), plus 1 new through data_req
+LUTLP-1 (drc_routed.rpt)          0; control CFGBVS-1 present; bitgen completed; 239,325 nets routed
+
+== AREA (routed) ==
+top                               LUT 171,503 -> 169,849; FF 93,812 -> 93,942 (+130); LUTRAM unchanged
+lsu_i own cells                   LUT 1,025 -> 1,827 (+802, above the +300..600 prediction); FF 900 -> 1,014 (+114)
+rev_node                          LUT 1,082 -> 1,060; FF 740 -> 761
+
+== WHAT FOLLOWS ==
+- R-45 (the REVOKE/DROP commit flush) is NOT implicated: no worst path runs through it.
+- The redesign must not gate the load/store request from the revocation lookup. Candidate: replay the missed
+  access through the existing registered exception path (a miss marks the access for replay, the probe runs,
+  and commit re-fetches that same instruction instead of trapping), so nothing new enters the load unit.
+- bitstream sha256 513780e2c3fe91ada10844a5a5c470d25bb36f39f43f49bf4b4d351f03bce1fc -- kept, not staged.

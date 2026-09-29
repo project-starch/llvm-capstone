@@ -5,7 +5,7 @@
 **A COMPILER bug, and a residual of a fixed one**: `d5b5de228b38` ("Fix null capability select
 lowering", 2026-03-26) fixed exactly this shape for a single select and left the cascaded path
 beside it unchanged. Found 2026-09-23 when the CPython compile survey ran at `-Os`
-(`capstone/ports/cpython/interpreter/`, `--opt=-Os`): `Objects/dictobject.c`, which compiles at
+(`capstone/ports/cpython/app/`, `--opt=-Os`): `Objects/dictobject.c`, which compiles at
 `-O3`, stops on it. Siblings from the same port: C-50 to C-54.
 
 ## Reproducer

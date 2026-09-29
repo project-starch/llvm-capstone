@@ -40,6 +40,20 @@ cause 30 at both capacities. That stress remains unresolved; larger capacity
 is not a demonstrated fix for it. These controls and failures are retained in
 the result record.
 
+After dev was merged in, the arms dev had added on the HostCall transport were
+ported and re-run on v2 from the merge tree, with the same compiler and platform
+([result lines](results/20260929-dev-merge.json)):
+
+- the FFmpeg pool corpus on the Sublet port of FFmpeg's pools: 36/36 as
+  registered over three rounds of both arms, each fault at the `case.c` line
+  recorded on dev;
+- tshark's wmem `chunks` arm and its `sublet` control: safety 13/13 each, M1-M5
+  and all ten capture verdicts on both, and the chunk layer's revoke identity in
+  15/15 runs;
+- the Perl SV-head variant (`--nested perl`): linked, and run in both adapter
+  modes on a short workload, not the 2026-09-28 smoke;
+- PostgreSQL built from `ports/postgres/app` in a fresh root.
+
 ## Build
 
 Source `capstone/tests/capstone-test-env.sh` after selecting a current
@@ -54,9 +68,9 @@ The source recipes now compile and link through the same SDK:
 | Port | Source recipe | Application output |
 | --- | --- | --- |
 | Perl | `ports/perl/musl/build-perl-domain.sh` | `src/perl-5.36.3/perl` |
-| mruby | `ports/mruby/musl/build-mruby-domain.sh` | `src/mruby/build/capstone/bin/{mruby,mrbtest}` |
-| CPython | `ports/cpython/interpreter/prepare-cpython-capstone.sh`, survey and link scripts | `build/link-attempt/python.dom` |
-| PostgreSQL | `ports/postgres/single-user/build-domain.sh` | `link/postgres.dom` |
+| mruby | `ports/mruby/app/build-mruby-domain.sh` | `src/mruby/build/capstone/bin/{mruby,mrbtest}` |
+| CPython | `ports/cpython/app/prepare-cpython-capstone.sh`, survey and link scripts | `build/link-attempt/python.dom` |
+| PostgreSQL | `ports/postgres/app/build-domain.sh` | `link/postgres.dom` |
 | FFmpeg | `ports/ffmpeg/app/host/build-domain.sh` | `domain/ffapp_m5.dom` and fixtures |
 | tshark | `ports/wireshark/app/deps/build-*.sh`, `host/cross-build.sh`, `host/build-domain.sh` | `domain/tshark_m5.dom` and fixtures |
 | SQLite | `ports/sqlite/build-sqlite-capstone.sh` prepares the library objects; link the application below | `sqlite.dom` |
@@ -78,7 +92,7 @@ python3 capstone/ports/common/application/build.py \
 The output directory must be new. `--libc-root` selects a separate musl build;
 `--musl` and `--libc` select explicit source/archive paths (useful for tshark's
 keyed dependency builds). SQLite needs `--include` pointing at `sqlite3.h`.
-`--heap sublet` selects outer malloc protection. `--nested cpython|mruby|postgres`
+`--heap sublet` selects outer malloc protection. `--nested cpython|mruby|postgres|perl`
 retains the existing inner allocator adapters and requests their static backing
 from the v2 descriptor. The study entry point in `experiments/applications/`
 uses this builder with `--instrument`; normal applications need no study wrapper.

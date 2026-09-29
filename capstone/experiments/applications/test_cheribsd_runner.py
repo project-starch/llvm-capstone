@@ -125,6 +125,39 @@ class VerdictTests(unittest.TestCase):
         self.assertFalse(runner.published_policy_valid(
             dict(point, nested_policy=None), stderr))
 
+    def test_perl_sv_heads_require_closing_report_matching_histogram(self):
+        point = dict(self.point, application='perl', arm='poisoncap-temporal',
+                     nested_allocator='perl-sv-heads', mode=1, reuse_gap='PERL_REUSE_GAP',
+                     nested_policy='published-sqlite-thresholds-corrected-v1')
+        gap = ('PERL_REUSE_GAP attempts=10 issues=10 releases=8 reuses=4 distinct=6 '
+               'capacity=131072 error=0 bins=1,3,' + ','.join(['0'] * 30) + '\n')
+        heads = ('PERL_SV_HEADS platform=cheribsd-poisoncap mode=1 head_bytes=48 per_page=84 '
+                 'pages=1 peak_pages=1 max_pages=8322 issues=10 releases=8 live=2 peak_live=6 '
+                 'retired=0 sidecar_bytes=4096 observer_bytes=4194304 region_bytes=33554432 '
+                 'sweeps=2 full_drains=1 threshold_drains=0 teardown_drains=1 queued=0 '
+                 'peak_queued=4096 poison_bytes=384 clear_bytes=384 zero_bytes=384 policy=1 '
+                 'queue_limit=4096 minimum_held=16777216 queue_metadata_bytes=16384\n')
+        stderr = self.metrics + gap + heads
+        self.assertEqual(runner.verdict(point, 0, 'OK\n', stderr), 'pass')
+        for before, after in [('sweeps=2', 'sweeps=3'),
+                              ('queued=0', 'queued=1'),
+                              ('clear_bytes=384', 'clear_bytes=336'),
+                              ('queue_limit=4096', 'queue_limit=512'),
+                              ('mode=1 head', 'mode=0 head'),
+                              ('releases=8 live', 'releases=7 live'),
+                              ('platform=cheribsd-poisoncap', 'platform=capstone')]:
+            self.assertNotEqual(runner.verdict(point, 0, 'OK\n',
+                                              stderr.replace(before, after)), 'pass', after)
+        self.assertNotEqual(runner.verdict(point, 0, 'OK\n', self.metrics + gap), 'pass')
+        self.assertNotEqual(runner.verdict(point, 0, 'OK\n', stderr + heads), 'pass')
+        spatial = dict(point, arm='poisoncap-spatial', mode=0)
+        quiet = (heads.replace('mode=1', 'mode=0').replace('sweeps=2 full_drains=1', 'sweeps=0 full_drains=0')
+                      .replace('teardown_drains=1', 'teardown_drains=0')
+                      .replace('poison_bytes=384 clear_bytes=384 zero_bytes=384',
+                               'poison_bytes=0 clear_bytes=0 zero_bytes=0'))
+        self.assertEqual(runner.verdict(spatial, 0, 'OK\n', self.metrics + gap + quiet), 'pass')
+        self.assertNotEqual(runner.verdict(spatial, 0, 'OK\n', stderr), 'pass')
+
     def test_postgres_transferred_policy_requires_runtime_and_sweep_evidence(self):
         rows = [f'1: row = "{i}" (typeid = 23, len = 4, typmod = -1, byval = t)' for i in range(20)] + ['1: count = "1500" (typeid = 20, len = 8, typmod = -1, byval = t)', '----']
         stdout = (''.join('\t'+row+'\n' for row in rows) +
@@ -244,6 +277,21 @@ class PolicyTests(unittest.TestCase):
                 runner.policy_environment(dict(point, mode=1-mode))
             with self.assertRaises(ValueError):
                 runner.policy_environment(dict(point, environment={'PYM_POISONCAP_MODE': str(mode)}))
+
+    def test_perl_poisoncap_mode_is_runner_owned(self):
+        for arm, mode in (('poisoncap-spatial', 0), ('poisoncap-temporal', 1)):
+            point = self.point(arm, 1)
+            point.update(application='perl', nested_allocator='perl-sv-heads', mode=mode,
+                         nested_policy='published-sqlite-thresholds-corrected-v1')
+            env = runner.policy_environment(point)
+            self.assertEqual(env['PERL_POISONCAP_MODE'], str(mode))
+            self.assertEqual(env['_RUNTIME_REVOCATION_ENABLE'], '1')
+            with self.assertRaises(ValueError):
+                runner.policy_environment(dict(point, mode=1-mode))
+            with self.assertRaises(ValueError):
+                runner.policy_environment(dict(point, environment={'PERL_POISONCAP_MODE': str(mode)}))
+            with self.assertRaises(ValueError):
+                runner.policy_environment(dict(point, revocation=0))
 
     def test_postgres_guest_timeout_is_inside_su(self):
         point = self.point('poisoncap-spatial', 0)

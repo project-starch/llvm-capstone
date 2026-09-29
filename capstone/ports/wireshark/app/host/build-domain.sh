@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 # Link full tshark, staged starts and allocator fixtures with the shared ABI-v2 SDK.
+#
+# TSAPP_HEAP=chunks is the sublet arm with ONE difference: wmem's BLOCK allocator is the wmem
+# port's chunk port (ports/wireshark/wmem, patches 0001+0002, the source its replay harness tests),
+# so every chunk is a region of its own and a chunk free, a scope reset and a block's end are
+# revokes. Its blocks come LINEAR from the Sublet heap (__capstone_sublet_malloc_linear), its
+# headers live in heap records beside them (src/tsapp-wmem-chunks.c), and the port's own
+# src/allocators/sublet/chunks.c carves and revokes. BLOCK_FAST is the sublet arm's, unchanged.
+# Patch 0007's block size applies to both files; on the ported block allocator its one macro edit
+# is re-anchored, since 0002 changed its context.
 set -euo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$APP/deps/env.sh"
@@ -9,7 +18,8 @@ case $HEAP in
   level0) OUT=$TS_WORK/domain HEAPF=() ;;
   shrink) OUT=$TS_WORK/domain-shrink HEAPF=(-DCAPSTONE_LEVEL0_SHRINK=1) ;;
   sublet) OUT=$TS_WORK/domain-sublet HEAPF=() ;;
-  *) echo "TSAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
+  chunks) OUT=$TS_WORK/domain-chunks HEAPF=() ;;
+  *) echo "TSAPP_HEAP must be level0, shrink, sublet or chunks" >&2; exit 2 ;;
 esac
 ARENA=${TSAPP_ARENA_BYTES:-$((40 << 20))}
 STACK=${TSAPP_STACK_BYTES:-$((1 << 20))}
@@ -44,6 +54,7 @@ done
 SDK=$OUT/sdk
 SDK_HEAP=$HEAP
 [[ $HEAP == shrink ]] && SDK_HEAP=level0
+[[ $HEAP == chunks ]] && SDK_HEAP=sublet
 bash "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh" \
   "$SDK" "$TS_MUSL" "$TS_LIBC_ARCHIVE" \
   -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG=24 \
@@ -51,8 +62,9 @@ bash "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh" \
   -DCMAKE_C_FLAGS_RELEASE="-O1 -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS ${HEAPF[*]}"
 export CAPSTONE_SDK=$SDK
 RT=() HEAPOBJ=()
-if [[ $HEAP == sublet ]]; then
-  "$SDK/capstone-cc" -O1 -DTSAPP_SUBLET_HEAP -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
+if [[ $HEAP == sublet || $HEAP == chunks ]]; then
+  WMEMF=(); [[ $HEAP == chunks ]] && WMEMF=(-DTSAPP_WMEM_CHUNKS)
+  "$SDK/capstone-cc" -O1 -DTSAPP_SUBLET_HEAP "${WMEMF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
   # wmem's block allocators from patch 0007, with their own ninja commands (less the dependency
   # files, which would overwrite ninja's record), on copies: the cross-built tree stays as it is.
   mkdir -p "$OUT/wmem-src/wsutil/wmem"
@@ -61,12 +73,48 @@ if [[ $HEAP == sublet ]]; then
   done
   patch -s -d "$OUT/wmem-src" -p1 < "$APP/patches/0007-capstone-wmem-block-size-for-the-sublet-heap.patch"
   HEAPOBJ=()
+  WPORT=$CAPSTONE_REPO_ROOT/capstone/ports/wireshark/wmem
+  WCF=()
+  if [[ $HEAP == chunks ]]; then
+    # The chunk port's block allocator: upstream + the wmem port's 0001 and 0002, exactly the
+    # source its replay harness builds (0001 touches only the four allocator .c files), then
+    # 0007's one macro edit. xsrc's copy must be upstream's, or this is not the tested source.
+    WC=$OUT/wmem-chunks-src; rm -rf "$WC"; mkdir -p "$WC/wsutil/wmem"
+    for f in wmem_allocator_block wmem_allocator_block_fast wmem_allocator_simple wmem_allocator_strict; do
+      cp "$TS_WORK/xsrc/wsutil/wmem/$f.c" "$WC/wsutil/wmem/"
+    done
+    for p in "$WPORT"/patches/wireshark-4.6.8-0001-*.patch "$WPORT"/patches/wireshark-4.6.8-0002-*.patch; do
+      patch -s -d "$WC" -p1 --batch --forward --fuzz=0 < "$p" || { echo "$(basename "$p") does not apply at fuzz 0" >&2; exit 1; }
+    done
+    python3 - "$WC/wsutil/wmem/wmem_allocator_block.c" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p).read()
+old = "#define WMEM_BLOCK_SIZE (8 * 1024 * 1024)\n"
+new = ("#ifdef CAPSTONE_WMEM_BLOCK_BYTES\n#define WMEM_BLOCK_SIZE (CAPSTONE_WMEM_BLOCK_BYTES)\n"
+       "#else\n#define WMEM_BLOCK_SIZE (8 * 1024 * 1024)\n#endif\n")
+if s.count(old) != 1: sys.exit("0007's block-size anchor is not unique in the ported block allocator")
+open(p, "w").write(s.replace(old, new))
+PY
+    cp "$WC/wsutil/wmem/wmem_allocator_block.c" "$OUT/wmem-src/wsutil/wmem/wmem_allocator_block.c"
+    WCF=(-DWMEM_PORT_HOOKS -DWMEM_PORT_CHUNKS -DWM_DOMAIN -I"$WPORT/src/shared"
+         -I"$CAPSTONE_REPO_ROOT/capstone/runtime/include")
+    # The level below: the port's own chunks.c, unchanged, and this app's backing for it.
+    # TSAPP_WMEM_ABLATE=1: the chunk free's one give stubbed out (the harness's WM_P1_ABLATE), the
+    # matched arm that attributes fixture 13 to that revoke and shows the counter identity can fail.
+    ABL=(); [[ ${TSAPP_WMEM_ABLATE:-0} == 1 ]] && ABL=(-DWM_ABLATE_RETIRE_GIVE)
+    for s in "$WPORT/src/allocators/sublet/chunks.c" "$APP/src/tsapp-wmem-chunks.c"; do
+      "$SDK/capstone-cc" -O1 -std=c11 -DWM_DOMAIN "${ABL[@]}" -I"$WPORT/src/shared" \
+        -I"$CAPSTONE_REPO_ROOT/capstone/runtime/include" -c "$s" -o "$OUT/$(basename "${s%.c}").o"
+      HEAPOBJ+=("$OUT/$(basename "${s%.c}").o")
+    done
+  fi
   for f in wmem_allocator_block wmem_allocator_block_fast; do
     o=wsutil/CMakeFiles/wsutil.dir/wmem/$f.c.o
     c=$(ninja -C "$B" -t commands "$o" | tail -1)
     tail=" -MD -MT $o -MF $o.d -o $o -c $TS_WORK/xsrc/wsutil/wmem/$f.c"
     [[ $c == *"$tail" ]] || { echo "$o's compile command does not end as expected" >&2; exit 1; }
-    ( cd "$B" && eval "${c%"$tail"} -I$TS_WORK/xsrc/wsutil/wmem -DCAPSTONE_WMEM_BLOCK_BYTES=1048576 -o $OUT/$f.o -c $OUT/wmem-src/wsutil/wmem/$f.c" )
+    WF=(); [[ $f == wmem_allocator_block ]] && WF=("${WCF[@]}")
+    ( cd "$B" && eval "${c%"$tail"} -I$TS_WORK/xsrc/wsutil/wmem -DCAPSTONE_WMEM_BLOCK_BYTES=1048576 ${WF[*]} -o $OUT/$f.o -c $OUT/wmem-src/wsutil/wmem/$f.c" )
     HEAPOBJ+=("$OUT/$f.o")
   done
 else
@@ -101,7 +149,7 @@ done
 # overwrite ninja's record for tshark.c.o with the fixture's), for another source and object.
 DEPF=" -MD -MT $TSO -MF $TSO.d -o $TSO -c $TS_WORK/xsrc/tshark.c"
 [[ $CMD == *"$DEPF" ]] || { echo "tshark.c.o's compile command does not end as expected: ${CMD: -200}" >&2; exit 1; }
-for n in $(seq 1 12); do
+for n in $(seq 1 13); do
   ( cd "$B" && eval "${CMD%"$DEPF"} -DTSAPP_FIXTURE=$n -o $OUT/tsapp_fx$n.o -c $APP/src/tsapp-safety.c" ) \
     || { echo "compile failed: fixture $n" >&2; exit 1; }
   link "$OUT/tsapp_fx$n.dom" "$OUT/tsapp_fx$n.o" "${RT[@]}" > "$OUT/link-fx$n.log" 2>&1 \

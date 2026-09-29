@@ -1,0 +1,30 @@
+{
+  "align_bytes": 16,
+  "application": "perl-5.36.3",
+  "application_cflags": "-O1",
+  "binary_sha256": "3a918e90da350029f9090a18dacc22bb9a50fb58dbc093b9b5a409cd765f9d1b",
+  "compiler_sha256": "51b76edd1776d375c32cea00a86a3aec118c5fcf2207a0ae13f8bf9df417b2e4",
+  "compiler_target": "riscv64-unknown-freebsd13, l64pc128d",
+  "config_sha256": "8155abb791d83c334a3e0ab0d1701c1efda41298f562c4eaa1aa18b5b5e17014",
+  "inputs_sha256": {
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../../../experiments/applications/cheribsd-memory.c": "26a1c44ef0768f2a287064a45930066ffc9a09bf2013b27c8663d4211bdbebf8",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../../../experiments/study/reuse-gap-observer.h": "627b0fe3ac30d75b384b35f37e9436c329f9f506afc13b94fb3ab87fc2df1769",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../../common/include/poisoncap-quarantine-policy.h": "ae7bc986b7dd596644c747a78ed8b7ba33ca1641fb094694b0a324e5b5ff2c7a",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0001-body-size-fields-are-u16.patch": "258ac00b497270c8fe9257fd28cbf05a28d2dbff29f30911897f53aac0b4cef7",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0002-poison-padlist-16-byte-pointer.patch": "707e503afd1413c6bd82022e54a9b4e7a9638d99dd1474740c4c379eb2be98db",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0003-stash-cache-needs-a-pointer-sized-slot.patch": "ddc5f543e47ee7563c8c65d2adb4ceadf3ba811cf3647a4732712ea5d7777135",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0004-ptrv-and-function-pointer-casts.patch": "97834a0e1edfa088c477c521d5b8c47bb2faf17eae81a7607219dac725f9ae0b",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0005-multideref-counts-from-a-real-base.patch": "d77f8d3f22a1be3477a7987450037b98a1e04e3f6a66575ac26b643b996e7d7c",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0006-openn-setup-clears-the-mode-buffer.patch": "b25fece2afc47c9f3009e49becf901d7bad526a52fb41b5538884b225adb977b",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../musl/patches/5.36.3/0007-rxres-preserves-capability-pointers.patch": "ac9c8251155242e47804e8b234fb3eeeb16c819574ba75bb99e904d766718662",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../sv-heads/cheribsd.c": "68e14eee559ad2ba6bc60c1087e7d230bc50804e0c7cc14a1dc93c17b3366d76",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../sv-heads/patches/5.36.3/0001-sv-heads-through-a-lifetime-adapter.patch": "6e5c67023416689a9e3f75da103f94fc03c9faea9ec0598d3e0e375fc01959e6",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/../sv-heads/sv-heads.h": "e63539a24e5e2fbeb1f9c9120af382e327765ecb1a9c0b2571b933edd80b9a10",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/ports/perl/cheribsd/build.sh": "fcb98b80f84e7370cf583701f4657841bdd69398b5bc230ac1ae9a36fef5ab5d"
+  },
+  "nested_allocator": "perl-sv-heads: PoisonCap lifetime adapter, PERL_POISONCAP_MODE=0/1",
+  "perl_cross_revision": "c2d8f8b7027ed20cd982c9f2c091463510b89f33",
+  "pointer_bytes": 16,
+  "schema": 1,
+  "source_archive_sha256": "f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a"
+}
