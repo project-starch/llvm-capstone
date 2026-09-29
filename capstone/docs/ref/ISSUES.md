@@ -608,6 +608,11 @@ te by the RTL lane, 2026-09-24.
 >     cause 25 does not separate them. N=1. Audited before recording; see the measurements doc, "P1 -O2
 >     pair on R-42".
 >   - **Why it appears only now:** the carve loop exists only because D′ turned the lookaside back on.
+>   - **The arm discriminator, the same day** (image `2d0efa02`, LCC probes before every split-counter access;
+>     pre-registration `lane/board-p1-o2` `dfb9ee90`): **inconclusive, as pre-registered.** No probed load
+>     trapped. Instead cause 25 hit a DIFFERENT live static global, `lw a0,0(s8)` with `s8 = ldc 0x2a0(gp)` in
+>     openDatabase, at `rev_node_head` 466 against 313. That fits the miss arm, the victim moving once one
+>     entry is protected, but it does not exclude a defect that writes live nodes dead.
 >   - **Consequence:** P1 ⑥ is not measurable on R-42. This image under `board-c6var.sh` joins live512 in
 >     the R-43 redesign's board acceptance, and must complete with its QEMU oracle (`112006 38bb59fd`,
 >     25,010 lookasides).
