@@ -62,7 +62,9 @@ FFAPP_CORPUS_DIR=<this corpus>` `ports/ffmpeg/app/host/build-domain.sh`):
 
 (the delegated application ABI: each image is a `capstone-exec` application, and the verdict
 reads its exit status, the launcher's fault record and the QEMU log over that run;
-`results/20260929-qemu-sublet-port/` was taken on the earlier HostCall transport).
+`results/20260929-qemu-sublet-port/` was taken on the earlier HostCall transport; the same
+predictions re-run on this transport, 36/36 as registered, are in
+`ports/common/application/results/20260929-dev-merge.json`).
 
 and CheriBSD with PoisonCap, where the same three cases are registered as
 `pool-<mode>-<case>`:

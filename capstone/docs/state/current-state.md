@@ -30,6 +30,12 @@ capacities; only its smaller smoke is qualified. FFmpeg uses the measured
 asynchronous signal handlers and general threads remain outstanding.
 Historical memory/performance archives retain their original images and ABI.
 
+dev (through `2909060e`) is merged in. Its two HostCall-era arms are ported to
+v2 rather than kept as a second transport, and pass as registered from the
+merge tree: the FFmpeg pool corpus on the Sublet port (36/36, three rounds of
+both arms) and tshark's wmem `chunks` arm with its `sublet` control (safety
+13/13 each, all stages and capture verdicts). [Result lines](../../ports/common/application/results/20260929-dev-merge.json).
+
 ## 2026-09-29 — delegated runtime review
 
 The `delegation-spawn` stack has reviewed syscall marshalling and process
