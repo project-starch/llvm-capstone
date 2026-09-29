@@ -97,7 +97,13 @@ int main(int argc, char **argv) {
     assert(waitpid(pid, &status, 0) == pid);
     assert(remaining == 1);
   } else if (!strcmp(argv[1], "kill-group")) {
+    /* the scope of kill: this task, its children and its parent; a process
+       group is refused, another process is EPERM, a pid nobody has is ESRCH */
     assert(call(CAPSTONE_SYS_kill, 0, 0, 0, 0) == -EPERM);
+    assert(call(CAPSTONE_SYS_kill, (uint64_t)getpid(), 0, 0, 0) == 0);
+    assert(call(CAPSTONE_SYS_kill, (uint64_t)getppid(), 0, 0, 0) == 0);
+    assert(call(CAPSTONE_SYS_kill, 1, 0, 0, 0) == -EPERM);
+    assert(call(CAPSTONE_SYS_kill, 2147483000, 0, 0, 0) == -ESRCH);
   } else if (!strcmp(argv[1], "pty")) {
     /* the pseudo-terminal requests cross through the buffer entry: unlock
        the pair, read its number back, and the kernel's own answer for the

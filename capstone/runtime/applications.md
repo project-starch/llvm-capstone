@@ -231,7 +231,8 @@ The wire ABI, the shape table and the closed exception groups are in
 [docs/plans/delegation-abi.md](../docs/plans/delegation-abi.md).
 
 What crosses: files, directories, descriptors, time, identity, limits,
-`getrandom`, `wait4`, `kill` confined to the task, `exit_group`. What does not:
+`getrandom`, `wait4`, `kill` confined to the task, its children and its parent,
+`exit_group`. What does not:
 memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
 (`clone` and `fork` are ENOSYS; image exec uses the process service below), and
 threads. Signals cross: the kernel keeps dispositions, mask, pending set and
@@ -367,8 +368,10 @@ application descriptors are inherited. The helper closes its inherited
 descriptors and dies if the launcher dies. File actions cannot overwrite the
 exec-error channel; descriptor overflow is an error rather than truncation.
 `wait4` selects recorded children, including for `waitpid(-1)`, and retains
-stopped/continued children. `kill` accepts this task or a recorded child,
-not process-group targets. A blocking any-child wait polls recorded PIDs at
+stopped/continued children. `kill` accepts this task, a recorded child or the
+task that spawned it (a child domain may signal its parent), not
+process-group targets; a pid nobody has answers ESRCH, any other process
+EPERM. A blocking any-child wait polls recorded PIDs at
 1 ms intervals to avoid reaping the helper or unrelated children. `execve` of a Capstone image replaces the task
 through the launcher's own binary, keeping pid, descriptors, argv[0], the
 unfiltered helper and the recorded children. The replacement image is validated

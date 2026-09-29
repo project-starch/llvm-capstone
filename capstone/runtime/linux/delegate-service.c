@@ -399,10 +399,13 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     if (writes(s->args[i].kind))
       host->bytes_out += bytes[i];
   }
-  /* kill and wait4 are delegated but confined to this task and its children */
+  /* kill and wait4 are delegated but confined to this task, its children and
+     the task that spawned it: a child domain may signal its parent. Anything
+     else is EPERM, or ESRCH when there is no such process, as Linux answers a
+     kill of a pid that has been reaped. */
   if (entry->nr == CAPSTONE_SYS_kill && !child_of(host, (pid_t)a[0]) &&
-      (pid_t)a[0] != getpid())
-    return -EPERM;
+      (pid_t)a[0] != getpid() && (pid_t)a[0] != getppid())
+    return kill((pid_t)a[0], 0) < 0 && errno == ESRCH ? -ESRCH : -EPERM;
   if (entry->nr == CAPSTONE_SYS_wait4 && a[0] > 0 && !child_of(host, (pid_t)a[0]))
     return -ECHILD;
   /* raise() is tkill on the task's own thread; nothing else is a domain's to signal */
