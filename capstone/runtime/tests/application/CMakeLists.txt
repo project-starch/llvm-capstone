@@ -16,4 +16,4 @@ capstone_configure_application(signal-contract
   DATA_BYTES 4194304 STACK_BYTES 262144 ARENA_BYTES 262144)
 add_executable(context-probe context-probe.c context-probe-asm.S)
 capstone_configure_application(context-probe
-  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 CONTEXT_BYTES 262144)
+  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 CONTEXT_BYTES 1048576)

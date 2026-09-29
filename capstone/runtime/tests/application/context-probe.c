@@ -739,6 +739,36 @@ static int exhaust(void)
   return 0;
 }
 
+/* Contexts that can never run again although their seals stay valid: 64 in
+   fresh 16 KiB areas, half faulting and half refused (a user-privilege seal),
+   never forgotten and never revoked. Without their retirement the
+   application's eighth registration finds no descriptor. */
+#define ENDED_AREA 16384
+#define ENDED_CYCLES 64
+static int exhaust_ended(void)
+{
+  static struct capstone_context c;
+  struct capstone_context_event ev;
+  for (unsigned long i = 0; i < ENDED_CYCLES; ++i) {
+    if (i & 1)
+      CHECK(!capstone_context_mint_words(&c, ENDED_AREA, child_enter, 0, PRIV_U_MSTATUS, 0));
+    else
+      CHECK(!capstone_context_mint(&c, ENDED_AREA, child_csr, 0));
+    long id = capstone_context_create(&c, CAPSTONE_CONTEXT_REGISTER);
+    if (id <= 0)
+      printf("context-probe exhaust-ended: cycle %lu: create %ld\n", i, id);
+    CHECK(id > 0);
+    CHECK(!step_to_end((unsigned long)id, &ev, 0));
+    if (i & 1)
+      CHECK(ev.kind == STEP_REFUSED);
+    else
+      CHECK(ev.kind == STEP_FAULT && ev.cause == 2 && ev.pc == (uintptr_t)probe_csr_insn);
+  }
+  CHECK(counter == 0);
+  printf("context-probe exhaust-ended: %d contexts, none forgotten\n", ENDED_CYCLES);
+  return 0;
+}
+
 /* One application of several run at once (run-context.py HOLDERS): a live
    context and six dead registrations it never forgets, eight slots with its
    first context. Five of them claim 40 slots of 32 while all are alive, so
@@ -815,6 +845,7 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "entry-negative")) rc = entry_negative();
   else if (!strcmp(mode, "entry-audit-control")) rc = entry_audit_control();
   else if (!strcmp(mode, "exhaust")) rc = exhaust();
+  else if (!strcmp(mode, "exhaust-ended")) rc = exhaust_ended();
   else if (!strcmp(mode, "hold")) rc = hold();
   else {
     fprintf(stderr, "context-probe: unknown mode %s\n", mode);

@@ -48,6 +48,7 @@ MODES.update({
     "entry-audit-control": ("exit", 0, "PASS", None, None),
     "entry-negative": ("exit", 0, "PASS", None, None),
     "exhaust": ("exit", 0, "PASS", None, None),
+    "exhaust-ended": ("exit", 0, "PASS", None, None),
 })
 EXPLICIT = {"ctl-wfi": ("exit", 0, "PASS", None, None)}
 # A10 across applications: this many `hold` processes at once, 8 slots each,

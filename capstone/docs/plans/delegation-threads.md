@@ -214,9 +214,13 @@ These are generic context-management rules. None of them mentions threads.
   matching dead registrations, without reclaiming application memory or prematurely freeing
   transport still used by a launcher thread. Slot-pressure tests cover all three tables.
   As built: the monitor retires a minted registration whose copy of the seal no longer reads as
-  sealed (a revoked seal reloads untagged) when an adoption finds no descriptor for its
-  application, or no slot, and when a new application block finds no slot; a new block takes a
-  free slot, not the next index. The driver drops every record of a slot the monitor has just
+  sealed (a revoked seal reloads untagged), or whose context has ended with a valid seal (a STEP
+  faulted, and the supervisor never arms that continuation again, or was refused), when an
+  adoption finds no descriptor for its application, or no slot, and when a new application block
+  finds no slot. A slot with an outstanding offer is kept until the offer is adopted: retiring it
+  would discard the offered seal, and an adoption would then register nothing. That case needs a
+  minted parent, which today's launcher never adopts from, so it rests on review, not on a probe.
+  A new block takes a free slot, not the next index. The driver drops every record of a slot the monitor has just
   given a new generation, so its table never holds more records than the monitor has slots.
 - **FORGET is idempotent and cannot be redirected.**
   - A tagged seal that is invalid still names exactly its old slot, because its node is not reused
