@@ -87,8 +87,9 @@ function(capstone_configure_application target)
     if(NOT app_EXCHANGE_BYTES)
       set(app_EXCHANGE_BYTES 262144)
     endif()
-    if(NOT app_EXCHANGE_BYTES MATCHES "^[0-9]+$" OR app_EXCHANGE_BYTES LESS 4096)
-      message(FATAL_ERROR "EXCHANGE_BYTES must be a number of at least 4096")
+    if(NOT app_EXCHANGE_BYTES MATCHES "^[0-9]+$" OR app_EXCHANGE_BYTES LESS 4096 OR
+       app_EXCHANGE_BYTES GREATER 1073741824)
+      message(FATAL_ERROR "EXCHANGE_BYTES must be between 4096 and 1073741824")
     endif()
     target_compile_definitions(${target} PRIVATE CAPSTONE_DELEGATE_RUNTIME=1
       CAPSTONE_APPLICATION_EXCHANGE_BYTES=${app_EXCHANGE_BYTES})

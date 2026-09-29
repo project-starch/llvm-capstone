@@ -2,6 +2,19 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-29 — delegated runtime review
+
+The `delegation-spawn` stack has reviewed syscall marshalling and process
+lifetime fixes, with [checked native and guest evidence](../../runtime/tests/application/results/20260929-delegation-review.json).
+Twenty-one ASan/UBSan native tests and 19 Python tests pass; the v1 application
+gate passes 108 starts, and fresh v2 libc-test has 45/77 PASS. Output tails,
+command pointers, vector offsets, private descriptors, spawn inheritance,
+wait/kill confinement and exec continuation are covered. Fault symbolization
+checks the sealed image SHA-256. See [applications](../../runtime/applications.md#review-verification-2026-09-29).
+Step 4's Perl 9/9 and complete process-group gates have not passed; memory and
+signal delivery remain later steps. The 88-byte entry is not an io_uring SQE,
+and the historical rdtime sample is not an icount/cycle result.
+
 ## 2026-09-29 — R-43 and R-45 fixed in RTL (capstone-ariane `r43-query-on-miss`, `0f5185a6d`); synthesis next
 
 - **R-43:** R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live, which

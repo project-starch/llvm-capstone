@@ -11,6 +11,7 @@
 #include "capstone/spawn.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
@@ -113,7 +114,8 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
                    a->kind == CAPSTONE_ARG_OPT_INOUT;
     if (a->kind == CAPSTONE_ARG_INT)
       continue;
-    if (a->kind == CAPSTONE_ARG_STR) {
+    if (a->kind == CAPSTONE_ARG_STR || a->kind == CAPSTONE_ARG_OPT_STR) {
+      if (a->kind == CAPSTONE_ARG_OPT_STR && !raw[i]) { args[i] = 0; continue; }
       long rc = dl_string((const char *)raw[i], &args[i]);
       if (rc)
         return rc;
@@ -124,11 +126,16 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
         args[i] = 0;
         continue;
       }
-      return -EFAULT;
+      if (!((a->length == CAPSTONE_LEN_ARG || a->length == CAPSTONE_LEN_ARG_SCALED) &&
+            args[a->size] == 0))
+        return -EFAULT;
     }
+    size_t aligned = (dl_used + 15) & ~(size_t)15;
+    if (aligned >= dl_capacity)
+      return -ENOMEM;
     if (a->length == CAPSTONE_LEN_ARG && a->size < CAPSTONE_DELEGATE_ARGS &&
-        args[a->size] > dl_capacity - ((dl_used + 15) & ~(size_t)15))
-      args[a->size] = dl_capacity - ((dl_used + 15) & ~(size_t)15);
+        args[a->size] > dl_capacity - aligned)
+      args[a->size] = dl_capacity - aligned;
     {
       struct capstone_delegate_entry probe = {0};
       memcpy(probe.args, args, sizeof args);
@@ -136,7 +143,7 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
     }
     if (dl_alloc(bytes, &args[i]))
       return -ENOMEM;
-    if (a->kind != CAPSTONE_ARG_OUT && a->kind != CAPSTONE_ARG_OPT_OUT)
+    if (bytes && a->kind != CAPSTONE_ARG_OUT && a->kind != CAPSTONE_ARG_OPT_OUT)
       memcpy(dl_exchange + args[i], raw[i], bytes);
     slots[i].domain = raw[i];
     slots[i].offset = args[i];
@@ -145,35 +152,68 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   }
   result = dl_round(nr, args);
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
-    if (slots[i].domain && slots[i].copy_back)
-      memcpy(slots[i].domain, dl_exchange + slots[i].offset, slots[i].bytes);
+    if (slots[i].domain && slots[i].copy_back) {
+      size_t bytes = capstone_delegate_result_bytes(nr, i, slots[i].bytes, result);
+      if (bytes) memcpy(slots[i].domain, dl_exchange + slots[i].offset, bytes);
+    }
   return result;
 }
 
-/* readv and writev, and their positioned forms, go element by element: the
- * exchange region is one buffer and iovec atomicity is not promised here. */
+/* One kernel vector operation preserves pipe atomicity and file offsets.
+ * Nested pointers are wire offsets as well. A large vector may return a short
+ * prefix; a small vector (including PIPE_BUF writes) fits in one round. */
 static long dl_vector(long fd, const struct iovec *iov, long count, int writing,
                       int positioned, long long offset) {
-  long total = 0;
+  uint64_t args[6] = {(uint64_t)fd, 0, 0, (uint64_t)offset & UINT32_MAX,
+                      (uint64_t)offset >> 32, 0};
+  uint64_t offsets[1024];
+  size_t lengths[1024], total = 0;
+  if (count < 0 || count > 1024)
+    return -EINVAL;
+  if (count && !iov)
+    return -EFAULT;
   for (long i = 0; i < count; ++i) {
-    syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {0};
-    long n;
-    if (!iov[i].iov_len)
-      continue;
-    raw[0] = (syscall_arg_t)fd;
-    raw[1] = iov[i].iov_base;
-    raw[2] = (syscall_arg_t)iov[i].iov_len;
-    if (positioned)
-      raw[3] = (syscall_arg_t)(unsigned long)(offset + total);
-    n = dl_call(positioned ? (writing ? CAPSTONE_SYS_pwrite64 : CAPSTONE_SYS_pread64)
-                           : (writing ? CAPSTONE_SYS_write : CAPSTONE_SYS_read), raw);
-    if (n < 0)
-      return total ? total : n;
-    total += n;
-    if ((size_t)n < iov[i].iov_len)
+    if (iov[i].iov_len > (size_t)LONG_MAX - total)
+      return -EINVAL;
+    total += iov[i].iov_len;
+  }
+  dl_reset();
+  /* Reserve the entire descriptor array; oversized metadata is an error. */
+  if (dl_alloc((size_t)count * 16, &args[1]))
+    return -EMSGSIZE;
+  for (long i = 0; i < count; ++i) {
+    size_t aligned = (dl_used + 15) & ~(size_t)15;
+    size_t room = aligned < dl_capacity ? dl_capacity - aligned : 0;
+    size_t bytes = iov[i].iov_len < room ? iov[i].iov_len : room;
+    if (!bytes && iov[i].iov_len)
+      break;
+    if (bytes && !iov[i].iov_base)
+      return -EFAULT;
+    if (dl_alloc(bytes, &offsets[i]))
+      break;
+    lengths[i] = bytes;
+    uint64_t wire[2] = {offsets[i], bytes};
+    memcpy(dl_exchange + args[1] + (size_t)i * 16, wire, sizeof wire);
+    if (writing && bytes)
+      memcpy(dl_exchange + offsets[i], iov[i].iov_base, bytes);
+    ++args[2];
+    if (bytes < iov[i].iov_len)
       break;
   }
-  return total;
+  if (count && !args[2])
+    return -EMSGSIZE;
+  uint64_t nr = positioned ? (writing ? CAPSTONE_SYS_pwritev : CAPSTONE_SYS_preadv)
+                           : (writing ? CAPSTONE_SYS_writev : CAPSTONE_SYS_readv);
+  long result = dl_round(nr, args);
+  if (!writing && result > 0) {
+    size_t left = (size_t)result;
+    for (size_t i = 0; i < args[2] && left; ++i) {
+      size_t n = lengths[i] < left ? lengths[i] : left;
+      memcpy(iov[i].iov_base, dl_exchange + offsets[i], n);
+      left -= n;
+    }
+  }
+  return result;
 }
 
 /* ioctl and fcntl carry a request-specific third argument. The ones a libc
@@ -189,7 +229,7 @@ static long dl_ioctl(long fd, unsigned long request, void *argp) {
   default: bytes = 0;
   }
   if (bytes && argp) {
-    unsigned char buffer[64];
+    unsigned char buffer[64] = {0};
     long rc;
     memcpy(buffer, argp, bytes);
     raw[2] = buffer;
@@ -198,15 +238,18 @@ static long dl_ioctl(long fd, unsigned long request, void *argp) {
       uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, request, 0, 0, 0, 0};
       if (dl_alloc(64, &args[2]))
         return -ENOMEM;
-      memcpy(dl_exchange + args[2], buffer, bytes);
+      memcpy(dl_exchange + args[2], buffer, sizeof buffer);
       rc = dl_round(CAPSTONE_NR_IOCTL_BUF, args);
       if (rc >= 0)
         memcpy(argp, dl_exchange + args[2], bytes);
       return rc;
     }
   }
-  /* the integer forms, and unknown requests with their argument as a number */
-  raw[2] = (syscall_arg_t)(unsigned long)argp;
+  if (bytes)
+    return -EFAULT;
+  if (request != FIOCLEX && request != FIONCLEX)
+    return -ENOSYS;
+  raw[2] = 0;
   return dl_call(CAPSTONE_SYS_ioctl, raw);
 }
 
@@ -288,8 +331,12 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     break;
   }
   switch (capstone_delegate_group_of((uint64_t)n)) {
-  case CAPSTONE_GROUP_DELEGATED:
-    return dl_call((uint64_t)n, raw);
+  case CAPSTONE_GROUP_DELEGATED: {
+    long rc = dl_call((uint64_t)n, raw);
+    if (rc == -ENOSYS)
+      __capstone_hc_note_unserved(n);
+    return rc;
+  }
   case CAPSTONE_GROUP_SIGNAL:
     /* Accepted and not delivered until the signals branch: recorded as a
        no-op so "served" never quietly means "pretended". */

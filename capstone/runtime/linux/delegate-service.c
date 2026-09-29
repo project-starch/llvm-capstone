@@ -5,6 +5,11 @@
 #include "capstone/spawn.h"
 #include <errno.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/uio.h>
+#include <time.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <linux/audit.h>
 #include <linux/filter.h>
@@ -39,7 +44,7 @@ static const struct { uint16_t wire; long host; } numbers[] = {
 #endif
   MAP(fcntl) MAP(ioctl) MAP(mkdirat) MAP(unlinkat) MAP(ftruncate) MAP(faccessat)
   MAP(chdir) MAP(openat) MAP(close) MAP(pipe2) MAP(getdents64) MAP(lseek)
-  MAP(read) MAP(write) MAP(readv) MAP(writev) MAP(pread64) MAP(pwrite64)
+  MAP(read) MAP(write) MAP(readv) MAP(writev) MAP(preadv) MAP(pwritev) MAP(pread64) MAP(pwrite64)
   MAP(ppoll) MAP(readlinkat) MAP(newfstatat) MAP(fstat) MAP(fsync) MAP(fdatasync)
   MAP(utimensat) MAP(renameat2) MAP(nanosleep) MAP(clock_gettime)
   MAP(clock_nanosleep) MAP(gettimeofday) MAP(times) MAP(getpid) MAP(getppid)
@@ -81,6 +86,31 @@ static void forget_child(struct capstone_delegate_host *host, pid_t pid) {
     }
 }
 
+static int private_fd(const struct capstone_delegate_host *host, int fd) {
+  if (host->spawner && fd == host->spawner->socket) return 1;
+  for (unsigned i = 0; i < host->private_count; ++i)
+    if (host->private_fds[i] == fd) return 1;
+  return 0;
+}
+
+static unsigned fd_arguments(uint64_t nr) {
+  switch (nr) {
+  case CAPSTONE_SYS_dup3: return 3;
+  case CAPSTONE_SYS_renameat2: return 5;
+  case CAPSTONE_SYS_dup: case CAPSTONE_SYS_fcntl: case CAPSTONE_SYS_ioctl:
+  case CAPSTONE_NR_FCNTL_LOCK: case CAPSTONE_NR_IOCTL_BUF:
+  case CAPSTONE_SYS_mkdirat: case CAPSTONE_SYS_unlinkat: case CAPSTONE_SYS_ftruncate:
+  case CAPSTONE_SYS_faccessat: case CAPSTONE_SYS_openat: case CAPSTONE_SYS_close:
+  case CAPSTONE_SYS_getdents64: case CAPSTONE_SYS_lseek:
+  case CAPSTONE_SYS_read: case CAPSTONE_SYS_write: case CAPSTONE_SYS_readv:
+  case CAPSTONE_SYS_writev: case CAPSTONE_SYS_preadv: case CAPSTONE_SYS_pwritev:
+  case CAPSTONE_SYS_pread64: case CAPSTONE_SYS_pwrite64: case CAPSTONE_SYS_readlinkat:
+  case CAPSTONE_SYS_newfstatat: case CAPSTONE_SYS_fstat: case CAPSTONE_SYS_fsync:
+  case CAPSTONE_SYS_fdatasync: case CAPSTONE_SYS_utimensat: return 1;
+  default: return 0;
+  }
+}
+
 /* posix_spawn and execve, as one block in the exchange region. A spawn goes
  * to the unfiltered spawner with the launcher's inheritable descriptors; an
  * exec of a Capstone image is answered by the caller replacing itself. */
@@ -92,12 +122,17 @@ static long spawn(struct capstone_delegate_host *host, const struct capstone_del
   struct capstone_spawn_view view;
   int fds[CAPSTONE_SPAWNER_FDS], numbers[CAPSTONE_SPAWNER_FDS];
   uint64_t cloexec;
-  unsigned count;
+  int count;
   long pid;
   if (capstone_spawn_unpack(block, bytes, argv, CAPSTONE_SPAWN_STRINGS + 1, envp,
                             CAPSTONE_SPAWN_STRINGS + 1, paths, CAPSTONE_SPAWN_ACTIONS, &view))
     return -EINVAL;
   if (view.flags & CAPSTONE_SPAWN_EXEC) {
+    if (view.flags != CAPSTONE_SPAWN_EXEC || view.actions || !view.argc)
+      return -EINVAL;
+    int target = open(view.path, O_RDONLY | O_CLOEXEC);
+    if (target < 0) return -errno;
+    close(target);
     if (!capstone_spawner_is_image(view.path))
       return -ENOSYS; /* a native program cannot take over a filtered task */
     if (bytes > sizeof host->exec_block)
@@ -109,11 +144,27 @@ static long spawn(struct capstone_delegate_host *host, const struct capstone_del
   }
   if (!host->spawner)
     return -ENOSYS;
+  for (unsigned i = 0; i < view.actions; ++i) {
+    struct capstone_spawn_action action;
+    memcpy(&action, &view.action[i], sizeof action);
+    if ((action.cmd != CAPSTONE_SPAWN_CHDIR && private_fd(host, action.fd)) ||
+        (action.cmd == CAPSTONE_SPAWN_DUP2 && private_fd(host, action.srcfd)))
+      return -EBADF;
+  }
   if (host->child_count >= CAPSTONE_DELEGATE_CHILDREN)
     return -EAGAIN;
   count = capstone_spawner_descriptors(fds, numbers, &cloexec, CAPSTONE_SPAWNER_FDS,
                                        host->spawner->socket);
-  pid = capstone_spawner_spawn(host->spawner, block, bytes, fds, numbers, cloexec, count);
+  if (count < 0) return count;
+  unsigned kept = 0;
+  uint64_t kept_cloexec = 0;
+  for (int i = 0; i < count; ++i) {
+    if (private_fd(host, numbers[i])) continue;
+    fds[kept] = fds[i]; numbers[kept] = numbers[i];
+    if ((cloexec >> i) & 1) kept_cloexec |= UINT64_C(1) << kept;
+    ++kept;
+  }
+  pid = capstone_spawner_spawn(host->spawner, block, bytes, fds, numbers, kept_cloexec, kept);
   if (pid > 0)
     host->children[host->child_count++] = (pid_t)pid;
   return pid;
@@ -129,20 +180,188 @@ static int writes(unsigned kind) {
          kind == CAPSTONE_ARG_INOUT || kind == CAPSTONE_ARG_OPT_INOUT;
 }
 
+/* Only integer commands may use the integer entry. A buffer entry is not
+ * permission for an arbitrary ioctl: many commands embed more pointers. */
+static int command_ok(uint64_t nr, uint64_t cmd) {
+  if (nr == CAPSTONE_NR_FCNTL_LOCK)
+    return cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW;
+  if (nr == CAPSTONE_NR_IOCTL_BUF)
+    return cmd == TIOCGWINSZ || cmd == TIOCSWINSZ || cmd == TCGETS ||
+           cmd == TCSETS || cmd == TCSETSW || cmd == TCSETSF ||
+           cmd == FIONREAD || cmd == FIONBIO;
+  if (nr == CAPSTONE_SYS_ioctl)
+    return cmd == FIOCLEX || cmd == FIONCLEX;
+  if (nr == CAPSTONE_SYS_fcntl)
+    switch (cmd) {
+    case F_DUPFD: case F_DUPFD_CLOEXEC: case F_GETFD: case F_SETFD:
+    case F_GETFL: case F_SETFL: case F_GETOWN: case F_SETOWN:
+    case F_GETPIPE_SZ: case F_SETPIPE_SZ: case F_GET_SEALS: case F_ADD_SEALS:
+      return 1;
+    default: return 0;
+    }
+  return 1;
+}
+
+static long vector_call(struct capstone_delegate_host *host,
+                        const struct capstone_delegate_entry *entry) {
+  struct iovec iov[1024];
+  uint64_t offsets[1024];
+  size_t total = 0, count = entry->args[2];
+  int writing = entry->nr == CAPSTONE_SYS_writev || entry->nr == CAPSTONE_SYS_pwritev;
+  if (count > 1024)
+    return -EINVAL;
+  for (size_t i = 0; i < count; ++i) {
+    uint64_t wire[2];
+    memcpy(wire, host->exchange + entry->args[1] + 16 * i, sizeof wire);
+    if (wire[0] > host->exchange_bytes || wire[1] > host->exchange_bytes - wire[0])
+      return -EFAULT;
+    if (wire[1] > (size_t)SSIZE_MAX - total)
+      return -EINVAL;
+    offsets[i] = wire[0];
+    iov[i].iov_base = host->bounce + wire[0];
+    iov[i].iov_len = wire[1];
+    memcpy(iov[i].iov_base, host->exchange + wire[0], wire[1]);
+    total += wire[1];
+  }
+  long r = syscall(host_number(entry->nr), (int)entry->args[0], iov, count,
+                   entry->args[3], entry->args[4]);
+  if (r == -1)
+    return -errno;
+  if (writing)
+    host->bytes_in += (size_t)r;
+  else {
+    size_t left = (size_t)r;
+    for (size_t i = 0; i < count && left; ++i) {
+      size_t n = iov[i].iov_len < left ? iov[i].iov_len : left;
+      memcpy(host->exchange + offsets[i], iov[i].iov_base, n);
+      left -= n;
+    }
+    host->bytes_out += (size_t)r;
+  }
+  return r;
+}
+
+/* Keep the helper and unrelated native children out of waitpid(-1). Polling
+ * recorded children also avoids consuming anyone else's status. A blocking
+ * wait is interruptible; synchronous signal delivery is a separate milestone. */
+static long wait_child(struct capstone_delegate_host *host, pid_t wanted,
+                       int *out, int options, void *usage) {
+  int status;
+  if (options & ~(WNOHANG | WUNTRACED | WCONTINUED))
+    return -EINVAL;
+  for (;;) {
+    unsigned matching = 0;
+    for (unsigned i = 0; i < host->child_count; ++i) {
+      pid_t pid = host->children[i];
+      if (wanted > 0 && wanted != pid)
+        continue;
+      if (wanted == 0 || wanted < -1) {
+        pid_t group = wanted == 0 ? getpgrp() : (pid_t)-(int64_t)wanted;
+        if (getpgid(pid) != group)
+          continue;
+      }
+      ++matching;
+      long r = syscall(SYS_wait4, pid, &status,
+                       options | (wanted <= 0 ? WNOHANG : 0), usage);
+      if (r < 0)
+        return -errno;
+      if (r > 0) {
+        if (out) memcpy(out, &status, sizeof status);
+        if (WIFEXITED(status) || WIFSIGNALED(status))
+          forget_child(host, pid);
+        return r;
+      }
+    }
+    if (!matching)
+      return -ECHILD;
+    if (options & WNOHANG)
+      return 0;
+    struct timespec delay = {0, 1000000};
+    if (nanosleep(&delay, NULL))
+      return -errno;
+  }
+}
+
+/* Native tests run on hosts whose struct stat is not the RV64 wire layout. */
+static long stat_call(uint64_t nr, const long a[6]) {
+#if defined(__riscv) && __riscv_xlen == 64
+  /* The guest already has the wire layout. Keep its raw syscall path; libc
+     may redirect stat through a different syscall and ABI. */
+  long r = syscall(host_number(nr), a[0], a[1], a[2], a[3]);
+  return r == -1 ? -errno : r;
+#else
+  struct stat st;
+  struct rv_stat {
+    uint64_t dev, ino;
+    uint32_t mode, nlink, uid, gid;
+    uint64_t rdev, pad1;
+    int64_t size;
+    int32_t blksize, pad2;
+    int64_t blocks, atime_sec;
+    uint64_t atime_nsec;
+    int64_t mtime_sec;
+    uint64_t mtime_nsec;
+    int64_t ctime_sec;
+    uint64_t ctime_nsec;
+    uint32_t unused[2];
+  } wire = {0};
+  _Static_assert(sizeof wire == 128, "RV64 stat");
+  int r = nr == CAPSTONE_SYS_fstat ? fstat(a[0], &st)
+      : fstatat(a[0], (const char *)a[1], &st, a[3]);
+  if (r < 0) return -errno;
+  wire.dev = st.st_dev; wire.ino = st.st_ino; wire.mode = st.st_mode;
+  wire.nlink = st.st_nlink; wire.uid = st.st_uid; wire.gid = st.st_gid;
+  wire.rdev = st.st_rdev; wire.size = st.st_size; wire.blksize = st.st_blksize;
+  wire.blocks = st.st_blocks;
+  wire.atime_sec = st.st_atim.tv_sec; wire.atime_nsec = st.st_atim.tv_nsec;
+  wire.mtime_sec = st.st_mtim.tv_sec; wire.mtime_nsec = st.st_mtim.tv_nsec;
+  wire.ctime_sec = st.st_ctim.tv_sec; wire.ctime_nsec = st.st_ctim.tv_nsec;
+  memcpy((void *)a[nr == CAPSTONE_SYS_fstat ? 1 : 2], &wire, sizeof wire);
+  return 0;
+#endif
+}
+
 static long run(struct capstone_delegate_host *host, const struct capstone_delegate_shape *s,
                 struct capstone_delegate_entry *entry) {
   long a[CAPSTONE_DELEGATE_ARGS];
   size_t bytes[CAPSTONE_DELEGATE_ARGS] = {0};
   long r;
+  unsigned fd_mask = fd_arguments(entry->nr);
+  for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
+    if ((fd_mask & (1u << i)) && private_fd(host, (int)entry->args[i]))
+      return -EBADF;
+  if (entry->nr == CAPSTONE_SYS_ppoll)
+    for (uint64_t i = 0; i < entry->args[1]; ++i) {
+      int32_t fd;
+      memcpy(&fd, host->exchange + entry->args[0] + 8 * i, sizeof fd);
+      if (private_fd(host, fd)) return -EBADF;
+    }
+  if (!command_ok(entry->nr, entry->args[1]))
+    return -ENOSYS;
+  /* These calls retain pointers past the round or need shared thread memory.
+     Domain addresses must never become launcher addresses. */
+  if (entry->nr == CAPSTONE_SYS_set_tid_address ||
+      entry->nr == CAPSTONE_SYS_set_robust_list || entry->nr == CAPSTONE_SYS_futex)
+    return -ENOSYS;
+  if (entry->nr == CAPSTONE_SYS_ppoll && entry->args[3] && entry->args[4] != 8)
+    return -EINVAL;
+  if (entry->nr == CAPSTONE_SYS_prlimit64 && (pid_t)entry->args[0] != 0 &&
+      (pid_t)entry->args[0] != getpid())
+    return -EPERM;
   if (!host->bounce)
     host->bounce = malloc(host->exchange_bytes);
+  if (!host->bounce)
+    return -ENOMEM;
+  if (entry->nr == CAPSTONE_SYS_readv || entry->nr == CAPSTONE_SYS_writev ||
+      entry->nr == CAPSTONE_SYS_preadv || entry->nr == CAPSTONE_SYS_pwritev)
+    return vector_call(host, entry);
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i) {
     int flagged = (entry->flags >> i) & 1;
     if (!flagged) {
       a[i] = (long)entry->args[i];
       continue;
     }
-    if (s->args[i].kind == CAPSTONE_ARG_STR) {
+    if (s->args[i].kind == CAPSTONE_ARG_STR || s->args[i].kind == CAPSTONE_ARG_OPT_STR) {
       if (!capstone_delegate_string_ok(host->exchange, host->exchange_bytes, entry->args[i]))
         return -EFAULT;
       a[i] = (long)(intptr_t)at(host, entry->args[i]);
@@ -150,9 +369,12 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     }
     bytes[i] = capstone_delegate_arg_bytes(s, entry, i);
     if (host->bounce) {
-      /* the mirror keeps the offsets, so the kernel sees ordinary pages */
+      /* Ordinary pages keep wire offsets. Initialize output padding so
+         kernel structs cannot expose malloc contents. */
       if (reads(s->args[i].kind))
         memcpy(host->bounce + entry->args[i], host->exchange + entry->args[i], bytes[i]);
+      else
+        memset(host->bounce + entry->args[i], 0, bytes[i]);
       a[i] = (long)(intptr_t)(host->bounce + entry->args[i]);
     } else {
       a[i] = (long)(intptr_t)at(host, entry->args[i]);
@@ -164,11 +386,15 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
   }
   /* kill and wait4 are delegated but confined to this task and its children */
   if (entry->nr == CAPSTONE_SYS_kill && !child_of(host, (pid_t)a[0]) &&
-      a[0] != getpid() && a[0] != 0)
+      (pid_t)a[0] != getpid())
     return -EPERM;
   if (entry->nr == CAPSTONE_SYS_wait4 && a[0] > 0 && !child_of(host, (pid_t)a[0]))
     return -ECHILD;
-  {
+  if (entry->nr == CAPSTONE_SYS_wait4)
+    r = wait_child(host, (pid_t)a[0], (int *)a[1], (int)a[2], (void *)a[3]);
+  else if (entry->nr == CAPSTONE_SYS_fstat || entry->nr == CAPSTONE_SYS_newfstatat)
+    r = stat_call(entry->nr, a);
+  else {
     long number = host_number(entry->nr);
     if (number < 0)
       return -ENOSYS;
@@ -178,7 +404,8 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
   if (host->bounce)
     for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
       if (bytes[i] && ((entry->flags >> i) & 1) && writes(s->args[i].kind))
-        memcpy(host->exchange + entry->args[i], host->bounce + entry->args[i], bytes[i]);
+        memcpy(host->exchange + entry->args[i], host->bounce + entry->args[i],
+               capstone_delegate_result_bytes(entry->nr, i, bytes[i], r));
   return r;
 }
 
@@ -198,6 +425,7 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
     return;
   }
   s = capstone_delegate_shape(snapshot.nr);
+  host->last_nr = snapshot.nr;
   if (snapshot.nr == CAPSTONE_NR_SPAWN) {
     ++host->syscalls;
     entry->result = spawn(host, &snapshot);
@@ -224,9 +452,7 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   host->last_nr = snapshot.nr;
   entry->result = run(host, s, &snapshot);
   entry->pending = 0;
-  /* a reaped child leaves the confinement list */
-  if (snapshot.nr == CAPSTONE_SYS_wait4 && entry->result > 0)
-    forget_child(host, (pid_t)entry->result);
+
 }
 
 void capstone_delegate_host_free(struct capstone_delegate_host *host) {
@@ -253,7 +479,7 @@ static const uint16_t launcher_own[] = {
      second filter installation */
   CAPSTONE_SYS_execve, 279 /* memfd_create */, 167 /* prctl */, 277 /* seccomp */,
   CAPSTONE_SYS_clone, 199 /* socketpair */, CAPSTONE_SYS_dup3, CAPSTONE_SYS_pipe2,
-  CAPSTONE_SYS_getcwd
+  CAPSTONE_SYS_getcwd, 154 /* setpgid */, 155 /* getpgid */
 };
 
 int capstone_delegate_seccomp(void) {
@@ -333,6 +559,7 @@ void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host 
     /* the last request served, and the one the domain was preparing */
     PUT(" last="); PUTHEX(host->last_nr);
     PUT(" preparing="); PUTHEX(host->preparing_nr);
+    if (host->image_sha256[0]) { PUT(" sha256="); PUT(host->image_sha256); }
   }
   if (image) { PUT(" image="); PUT(image); }
   PUT("\n");

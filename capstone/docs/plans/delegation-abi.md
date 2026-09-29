@@ -1,12 +1,14 @@
 # Delegated syscalls and the task model
 
-Status: steps 1 to 4 implemented on the stacked branches `delegation-abi`,
-`delegation-libc`, `delegation-launcher` and `delegation-spawn`, 2026-09-29;
-steps 5 and 6 are targets. The contract application runs delegated in the persistent QEMU guest
-with argv, environment, cwd, streams, exit status, fault records and the
-first round-cost measurement, and libc-test holds its 43 passes on the
-delegated runtime; see `runtime/applications.md`. Every number below
-that is not in that document is a gate to be measured, not a result.
+Status: steps 1 to 3 implemented; step 4 has working spawn/exec paths but
+has **not passed its acceptance gate**. The stack is `delegation-abi`,
+`delegation-libc`, `delegation-launcher`, `delegation-spawn` (2026-09-29).
+Perl `t/base` remains 8/9 because the guest lacks `binfmt_misc`; the libc-test
+process/signal coverage is incomplete. Steps 5 and 6 remain unimplemented.
+Review fixes and their native/guest evidence are in `runtime/applications.md`.
+The recorded QEMU `rdtime` sample is a wall-time observation, not the planned
+`icount`/per-step cycle measurement. Numbers elsewhere in this plan remain
+gates rather than verified results.
 
 ## Goal
 
@@ -32,9 +34,9 @@ the persistent-guest application gate with its 1,008 mixed starts.
 
 ## The wire ABI
 
-One versioned request block in the metadata region, laid out as an io_uring
-submission entry so that a later kernel-side or io_uring transport changes
-nothing above it:
+One versioned request block in the metadata region. Its 88-byte layout is
+runtime-specific, **not binary-compatible with an io_uring SQE**. A future
+io_uring transport needs a translation layer:
 
 | Field | Meaning |
 |---|---|
@@ -49,8 +51,9 @@ nothing above it:
 Pointer arguments never cross as capabilities and never as domain addresses.
 The libc copies buffers into the **exchange region** and passes offsets; the
 launcher validates each offset and length against the region and hands the
-kernel its own mapping address. This is the copy every kernel makes at the
-user boundary, once per syscall, and it keeps domain memory invisible to Linux.
+kernel its own mapping address. The current guest also needs an ordinary-memory bounce mirror because the
+9p transport cannot pin the exchange mapping. Buffers therefore pass through
+both the exchange region and that mirror; this is not a zero-copy path.
 An identity mapping of the domain block into the task is an optimization for a
 later branch, not part of this ABI.
 
@@ -123,9 +126,10 @@ launcher refuses anything outside the profile.
 
 ## Faults
 
-The supervised step already returns cause, PC and address. The launcher prints
-them, together with the image hash and load base, on stderr before raising
-SIGSEGV, and writes the same record next to the `capstone-job` result. A
+The supervised step already returns cause, PC and address. The launcher records
+them with the sealed image's SHA-256 and load base before raising SIGSEGV.
+The host CLI collects the separate fault file into the job result; stderr
+receives diagnostics only when explicitly enabled or connected to a terminal. A
 symbolizer on the host maps PC to a line using the retained debug image. A
 fault record without a symbol is a bug in this plan, not an acceptable output.
 

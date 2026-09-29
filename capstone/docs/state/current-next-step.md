@@ -1,3 +1,11 @@
+Delegated runtime (2026-09-29): the reviewed stack has
+[checked syscall/process fixes](../../runtime/applications.md#review-verification-2026-09-29).
+Complete the outstanding step-4 acceptance gates: enable and qualify guest
+binfmt_misc for Perl's shell-launched image, retain the 45 libc-test passes,
+and qualify signal-dependent process behavior with step 6. Region-grant memory
+is still step 5. The current rdtime sample does not discharge the planned
+icount/per-step measurement. Do not label all four steps accepted yet.
+
 Review and implementation priorities (2026-09-28): the completed runtime,
 measurement tools, application integrations and evidence are now organized for
 stacked PR review. The [current baseline](current-state.md#review-baseline-2026-09-28)

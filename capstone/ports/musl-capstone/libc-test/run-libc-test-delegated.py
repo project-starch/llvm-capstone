@@ -14,6 +14,8 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
+import tempfile
 import subprocess
 import sys
 import time
@@ -88,27 +90,44 @@ def build(sdk: Path, suite: Path, share: Path, work: Path, only: set[str]) -> di
     return results
 
 
-def run_one(cli: list[str], name: str, timeout: float, env: dict) -> tuple[str, str]:
-    result_file = Path(os.environ.get("TMPDIR", "/tmp")) / f"lt-{name}-{os.getpid()}.json"
+def run_one(cli: list[str], name: str, timeout: float, env: dict,
+            guest_share: str = "/mnt/host") -> tuple[str, str]:
     started = time.monotonic()
-    try:
-        proc = subprocess.run([*cli, "run", "--cwd", "/tmp", "--result", str(result_file),
-                               f"/mnt/host/lt-{name}.dom"], capture_output=True, text=True,
-                              timeout=timeout, env=env)
-    except subprocess.TimeoutExpired:
-        return "HUNG", f"no result after {timeout:.0f}s"
+    timed_out = False
+    with tempfile.TemporaryDirectory(prefix=f"lt-{name}-") as directory:
+        result_file = Path(directory) / "result.json"
+        command = [*cli, "run", "--cwd", "/tmp", "--result", str(result_file),
+                   f"{guest_share.rstrip('/')}/lt-{name}.dom"]
+        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              text=True, env=env) as proc:
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                # The CLI owns cancellation and confirms the guest's waitpid
+                # status. Killing the CLI directly would orphan the guest job.
+                timed_out = True
+                proc.send_signal(signal.SIGTERM)
+                try:
+                    stdout, stderr = proc.communicate(timeout=20)
+                except subprocess.TimeoutExpired as error:
+                    proc.kill()
+                    proc.communicate()
+                    raise RuntimeError(f"{name}: guest cancellation unconfirmed; stopping suite") from error
+        record = json.loads(result_file.read_text()) if result_file.exists() else None
     elapsed = time.monotonic() - started
-    record = json.loads(result_file.read_text()) if result_file.exists() else None
-    result_file.unlink(missing_ok=True)
-    unserved = re.search(r"UNSERVED syscalls: (.*)", proc.stderr)
-    noop = re.search(r"NO-OP syscalls: (.*)", proc.stderr)
+    if timed_out:
+        if record is None:
+            raise RuntimeError(f"{name}: guest cancellation has no waitpid result; stopping suite")
+        return "HUNG", f"timeout after {timeout:.0f}s; guest reaped ({record['kind']} {record['value']})"
+    unserved = re.search(r"UNSERVED syscalls: (.*)", stderr)
+    noop = re.search(r"NO-OP syscalls: (.*)", stderr)
     extra = f"{elapsed:.1f}s"
     if unserved:
         extra += " UNSERVED " + names(unserved.group(1))
     if noop:
         extra += " NO-OP " + names(noop.group(1))
     if record is None:
-        return "NORESULT", f"cli rc={proc.returncode}: {proc.stderr.strip()[-160:]}"
+        return "NORESULT", f"cli rc={proc.returncode}: {stderr.strip()[-160:]}"
     if record["kind"] == "signal":
         return "FAULT", f"signal {record['value']} {record.get('fault', '')} {extra}"
     status = record["value"]
@@ -123,6 +142,7 @@ def main() -> int:
     parser.add_argument("--sdk", type=Path, required=True, help="application SDK build directory")
     parser.add_argument("--suite", type=Path, default=Path("/tmp/capstone/libc-test"))
     parser.add_argument("--share", type=Path, required=True, help="the VM's shared directory")
+    parser.add_argument("--guest-share", default="/mnt/host", help="Guest path corresponding to --share")
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=90)
     parser.add_argument("--tests", nargs="*", default=[])
@@ -133,7 +153,7 @@ def main() -> int:
     results = build(args.sdk, args.suite, args.share, args.work, set(args.tests))
     for name in sorted(results):
         if results[name][0] == "BUILT":
-            results[name] = run_one(cli, name, args.timeout, env)
+            results[name] = run_one(cli, name, args.timeout, env, args.guest_share)
             print(f"{results[name][0]:<9} {name:<24} {results[name][1]}", flush=True)
     counts = {}
     for verdict, _ in results.values():

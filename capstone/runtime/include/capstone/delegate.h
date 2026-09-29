@@ -1,9 +1,8 @@
 /* Delegated syscall ABI v2: the wire block between a domain and its Linux task.
  *
- * One request per block for now; `count` and the entry layout follow io_uring's
- * submission entry so a later kernel-side or io_uring transport changes the
- * transport and not this header. Pointer arguments cross as byte offsets into
- * the exchange region, never as domain addresses and never as capabilities.
+ * One request per block for now. This is a runtime-specific layout, not an
+ * io_uring SQE; a future transport must translate it to kernel submissions.
+ * Pointer arguments cross as byte offsets into the exchange region, never as domain addresses and never as capabilities.
  * The semantics of every delegated call are Linux's; this header carries only
  * the transport, the per-syscall argument shapes and the closed exception list.
  * See docs/plans/delegation-abi.md.
@@ -41,7 +40,8 @@ enum capstone_delegate_kind {
   CAPSTONE_ARG_STR,       /* exchange offset of a NUL-terminated string */
   CAPSTONE_ARG_OPT_IN,    /* IN, or zero for NULL */
   CAPSTONE_ARG_OPT_OUT,   /* OUT, or zero for NULL */
-  CAPSTONE_ARG_OPT_INOUT  /* INOUT, or zero for NULL */
+  CAPSTONE_ARG_OPT_INOUT, /* INOUT, or zero for NULL */
+  CAPSTONE_ARG_OPT_STR    /* STR, or zero for NULL (utimensat by fd) */
 };
 
 /* Where a buffer argument's length comes from. */
@@ -106,6 +106,7 @@ enum {
   CAPSTONE_SYS_lseek = 62, CAPSTONE_SYS_read = 63, CAPSTONE_SYS_write = 64,
   CAPSTONE_SYS_readv = 65, CAPSTONE_SYS_writev = 66, CAPSTONE_SYS_pread64 = 67,
   CAPSTONE_SYS_pwrite64 = 68, CAPSTONE_SYS_ppoll = 73,
+  CAPSTONE_SYS_preadv = 69, CAPSTONE_SYS_pwritev = 70,
   CAPSTONE_SYS_readlinkat = 78, CAPSTONE_SYS_newfstatat = 79,
   CAPSTONE_SYS_fstat = 80, CAPSTONE_SYS_fsync = 82, CAPSTONE_SYS_fdatasync = 83,
   CAPSTONE_SYS_utimensat = 88, CAPSTONE_SYS_exit = 93,
@@ -157,5 +158,10 @@ size_t capstone_delegate_arg_bytes(const struct capstone_delegate_shape *shape,
 /* A NUL inside [offset, exchange_bytes). */
 int capstone_delegate_string_ok(const char *exchange, size_t exchange_bytes,
                                 uint64_t offset);
+
+/* Bytes an output argument may change for this result (short I/O, errors and
+ * wait4(WNOHANG) must leave the caller's remaining buffer untouched). */
+size_t capstone_delegate_result_bytes(uint64_t nr, unsigned index, size_t bytes,
+                                      int64_t result);
 
 #endif

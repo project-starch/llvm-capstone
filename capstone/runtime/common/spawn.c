@@ -105,6 +105,7 @@ int capstone_spawn_unpack(const void *buffer, size_t bytes, char **argv, size_t 
       (h.flags & ~15u) || h.argc > CAPSTONE_SPAWN_STRINGS ||
       h.envc > CAPSTONE_SPAWN_STRINGS - h.argc || h.actions > CAPSTONE_SPAWN_ACTIONS ||
       h.argc >= argv_slots || h.envc >= env_slots || h.actions > action_slots ||
+      (h.actions && !action_paths) ||
       h.bytes > CAPSTONE_SPAWN_BYTES || h.bytes > bytes)
     return EINVAL;
   first = sizeof h + ((size_t)h.argc + h.envc) * sizeof(uint32_t);

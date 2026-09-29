@@ -32,8 +32,9 @@ long capstone_spawner_spawn(struct capstone_spawner *s, const void *block, size_
                             unsigned count);
 
 /* The launcher's open descriptors except `skip`, with their close-on-exec
- * flags in `cloexec`. Returns the count; numbers[i] == fds[i]. */
-unsigned capstone_spawner_descriptors(int *fds, int *numbers, uint64_t *cloexec,
+ * flags in `cloexec`. Returns the count or negative errno (including EMFILE on overflow);
+ * numbers[i] == fds[i]. */
+int capstone_spawner_descriptors(int *fds, int *numbers, uint64_t *cloexec,
                                       unsigned capacity, int skip);
 
 /* True when the file is a Capstone domain image (ELF machine 259). */
