@@ -240,6 +240,13 @@ bool SSAIfConv::canSpeculateInstrs(MachineBasicBlock *MBB) {
       return false;
     }
 
+    // Nor an instruction that can trap on its operands: the other side of the
+    // diamond may be the path on which the operand was never checked.
+    if (TII->canTrap(MI)) {
+      LLVM_DEBUG(dbgs() << "Won't speculate trapping instruction: " << MI);
+      return false;
+    }
+
     // We never speculate stores, so an AA pointer isn't necessary.
     bool DontMoveAcrossStore = true;
     if (!MI.isSafeToMove(DontMoveAcrossStore)) {

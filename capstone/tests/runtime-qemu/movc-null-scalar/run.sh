@@ -9,9 +9,12 @@
 #                   exit 1 if either reading is wrong;
 #                   exit 2 if it could not check -- a boot that did not finish, or a
 #                   QEMU without the switch (the probe reads b=5 c=5 in both boots).
-#   The c32 line (the SQLite port's setupLookaside, reduced) is reported, not judged:
-#   with the switch on it reads 0x1 while the compiler still copies that pointer with
-#   a movc whose source is read again (C-32), and 0x5000 once it no longer does.
+#   The c32 and iconv lines (C-32's two recorded instances, reduced) are judged per
+#   variant. movc_test.c is built twice: "rule" with the compiler's default live-source
+#   copy rule, and "keep" with +movc-keeps-integer-source (plain movc everywhere). Both
+#   run in each boot. Switch off: both read c32 got=0x5000 and iconv n=3. Switch on:
+#   "rule" must still read 0x5000 and n=3, and "keep" must LOSE them (c32 0x1, n<3) --
+#   the positive control that shows this probe can see the defect at all.
 #
 # Needs: CAPSTONE_LLVM_BUILD_DIR, CAPSTONE_BUILDROOT_DIR and CAPSTONE_QEMU_BINARY (a
 # capstone-qemu with the switch), and a python with pexpect (PYTHON=..., default python3).
@@ -59,13 +62,17 @@ COMMON_FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
               -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w)
 source "$REPO/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
 "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -c "$HERE/entry.c" -o "$O/entry.o"
-"$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O2 -c "$HERE/movc_test.c" -o "$O/movc_test.o"
+"$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O2 -DVARIANT='"rule"' -c "$HERE/movc_test.c" -o "$O/movc_test-rule.o"
+"$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -O2 -DVARIANT='"keep"' -Xclang -target-feature \
+  -Xclang +movc-keeps-integer-source -c "$HERE/movc_test.c" -o "$O/movc_test-keep.o"
 rm -f "$OUT/share"/*.dom
-"$CAPSTONE_LD_LLD" --gc-sections -T "$REPO/capstone/my_first_domain/link.ld" \
-  -o "$OUT/share/movc.dom" "$O/start-musl.o" "$O/hostcall.o" "$O/tls.o" \
-  "$O/set_thread_area.o" "$O/setjmp.o" "${MUSL_OVERRIDE_OBJS[@]}" \
-  "$O/atomic_libcalls.o" "$O/level0.o" \
-  "${softfloat_objs[@]}" "$O/entry.o" "$O/movc_test.o" "$ARCHIVE"
+for v in rule keep; do
+  "$CAPSTONE_LD_LLD" --gc-sections -T "$REPO/capstone/my_first_domain/link.ld" \
+    -o "$OUT/share/movc-$v.dom" "$O/start-musl.o" "$O/hostcall.o" "$O/tls.o" \
+    "$O/set_thread_area.o" "$O/setjmp.o" "${MUSL_OVERRIDE_OBJS[@]}" \
+    "$O/atomic_libcalls.o" "$O/level0.o" \
+    "${softfloat_objs[@]}" "$O/entry.o" "$O/movc_test-$v.o" "$ARCHIVE"
+done
 
 # The host: libc-test's, which runs one .dom to DONE and prints its status.
 GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
@@ -75,7 +82,7 @@ LIBCAPSTONE_DIR=$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib
   -o "$OUT/share/lt.user" "$REPO/capstone/ports/musl-capstone/libc-test/libc_test_host.c" \
   "$LIBCAPSTONE_DIR/libcapstone.c"
 
-GUEST='echo __BOOT_OK__; cp /mnt/host/lt.user /tmp/lt.user && chmod 0755 /tmp/lt.user; echo RUN-BEGIN; /tmp/lt.user /mnt/host/movc.dom 60; echo RUN-END rc=$?; echo __ALL_DONE__'
+GUEST='echo __BOOT_OK__; cp /mnt/host/lt.user /tmp/lt.user && chmod 0755 /tmp/lt.user; echo RUN-BEGIN; /tmp/lt.user /mnt/host/movc-rule.dom 60; /tmp/lt.user /mnt/host/movc-keep.dom 60; echo RUN-END rc=$?; echo __ALL_DONE__'
 boot() { # boot <label> <switch value>; prints the log path
   local log=$OUT/run-$1-$(date +%Y%m%d-%H%M%S).log lock=()
   [[ ${CAPSTONE_QEMU_LOCK_HELD:-0} == 1 ]] || lock=(flock -w 21600 "$CAPSTONE_QEMU_LOCK")
@@ -98,23 +105,33 @@ for arm in off on; do
   fi
   probe=$(grep -aoE 'MOVC-PROBE b=[0-9]+ c=[0-9]+' "$log" | tail -1)
   b=$(sed -E 's/.*b=([0-9]+) c=.*/\1/' <<<"$probe") c=$(sed -E 's/.* c=([0-9]+)/\1/' <<<"$probe")
-  got=$(grep -aoE 'MOVC-C32 got=0x[0-9a-f]+' "$log" | tail -1 | sed 's/.*got=//')
+  got=$(grep -aoE 'MOVC-C32 rule got=0x[0-9a-f]+' "$log" | tail -1 | sed 's/.*got=//')
+  kgot=$(grep -aoE 'MOVC-C32 keep got=0x[0-9a-f]+' "$log" | tail -1 | sed 's/.*got=//')
+  n=$(grep -aoE 'MOVC-ICONV rule n=[0-9]+' "$log" | tail -1 | sed 's/.*n=//')
+  kn=$(grep -aoE 'MOVC-ICONV keep n=[0-9]+' "$log" | tail -1 | sed 's/.*n=//')
+  if [[ -z $got || -z $kgot || -z $n || -z $kn ]]; then
+    echo "  switch $arm: a variant printed no result (rule c32='$got' iconv='$n', keep c32='$kgot' iconv='$kn'), log $log"
+    exit 2
+  fi
   notice=$(grep -ac 'MOVC-NULL-SCALAR first non-zero source nulled' "$log" || true)
-  echo "  switch $arm: probe b=$b c=$c (want b=5 c=$want_c); c32 got=$got; notice lines $notice"
+  echo "  switch $arm: probe b=$b c=$c (want b=5 c=$want_c); rule: c32 $got iconv n=$n; keep: c32 $kgot iconv n=$kn; notice lines $notice"
   if [[ $arm == on && $b == 5 && $c == 5 ]]; then
     echo "  switch on changed nothing: this QEMU ($CAPSTONE_QEMU_BINARY) has no CAPSTONE_MOVC_NULL_SCALAR"
     exit 2
   fi
   [[ $b == 5 && $c == "$want_c" ]] || verdict=1
-  [[ $arm == on && $notice != 1 ]] && { echo "  switch on: expected exactly one first-use notice"; verdict=1; }
+  [[ $arm == on && $notice -lt 1 ]] && { echo "  switch on: expected the first-use notice"; verdict=1; }
   [[ $arm == off && $notice != 0 ]] && { echo "  switch off: a first-use notice was printed"; verdict=1; }
-  [[ $arm == off && $got != 0x5000 ]] && { echo "  switch off: the c32 shape lost its address with QEMU's default -- not this test's question"; verdict=1; }
-  if [[ $arm == on ]]; then
-    case $got in
-      0x1)    echo "  c32: NULLED -- the compiler still copies the bridged pointer with a movc whose source is read again (C-32 open)" ;;
-      0x5000) echo "  c32: survived -- no such movc in this image" ;;
-      *)      echo "  c32: unexpected value $got"; verdict=1 ;;
-    esac
+  if [[ $arm == off ]]; then
+    [[ $got == 0x5000 && $kgot == 0x5000 && $n == 3 && $kn == 3 ]] \
+      || { echo "  switch off: a variant lost a value with QEMU's default -- not this test's question"; verdict=1; }
+  else
+    [[ $got == 0x5000 && $n == 3 ]] \
+      && echo "  rule: c32 and iconv survive the RTL's movc rule" \
+      || { echo "  rule: LOST a value under the RTL's movc rule -- the live-source copy rule missed a copy"; verdict=1; }
+    [[ $kgot == 0x1 && $kn -lt 3 ]] \
+      && echo "  keep (positive control): both nulled, as C-32 predicts" \
+      || { echo "  keep (positive control): expected c32 0x1 and iconv n<3 -- the probe did not see the defect"; verdict=1; }
   fi
   echo "    log $log"
 done

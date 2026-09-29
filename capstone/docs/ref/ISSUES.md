@@ -1716,6 +1716,46 @@ RETURN" rule applied to privilege rather than to control flow.
 > - select and phi attach a capability to an address that did not come from it.
 > Its other gates are clean: Capstone lit 121/121, and an empty llvm CodeGen+Transforms failure-set
 > diff against dev.
+>
+> **2026-09-25: a class fix, on branch `compiler/movc-live-source-copy` (Phase A of
+> `plans/2026-09-25-intcap-implementation.md`). Not on dev, not RTL-simulated, not on a board.**
+> - **What it does.** `CapstoneLiveSourceCopy` runs after the last MachineCopyPropagation. It
+>   rewrites every `movc` whose source is read again as `stc src, slot` + `ldc dst, slot`, through a
+>   16-byte stack slot of its own.
+>   - On RTL, `stc` keeps an untagged or NONLIN source and nulls a LINEAR one, and `ldc` clears the
+>     granule of a LINEAR value. So the pair is a `movc` for every type, except that an integer
+>     survives. It never needs to know the type, which is why it reaches the musl `iconv_open`
+>     instance below that no caller-side analysis could.
+>   - `movc`s with a dead source, or from c0/sp/gp/tp/fp/bp, stay.
+>   - A check-only instance after MakeCompressible refuses any live-source `movc` still left.
+>   - `+movc-keeps-integer-source` turns it off, for a bitstream that implements Q-04 (b).
+> - **QEMU, under the RTL's `movc` (`CAPSTONE_MOVC_NULL_SCALAR=1`, `movc-null-scalar/run.sh`).**
+>   - The C-32 probe reads `0x5000` with the rule. The same source built with the rule off reads
+>     `0x1`, the positive control.
+>   - An iconv-shaped probe (one integer descriptor passed to three calls) makes 3/3 calls with the
+>     rule, and 1/3 with it off.
+>   - exposure.sh with the rule (switch 0 vs switch 1, one QEMU, one compiler): libc-test identical, 44 PASS / 6 FAIL / 5 NOBUILD / 22 EXCLUDED in both arms, and `iconv_open` PASSES under the RTL `movc` (on 2026-09-24, with dev's compiler, it was the one verdict that changed). The musl file/stdio/write probes are identical. Of the 28 hostcall probes run one at a time, 18 are ok in both arms; the only difference, `cwd`, was a boot stall in the on arm (killed) and passed 2/2 when rerun under switch 1. The 26 nightly suites give 19 PASS in each arm; the two that differ swap FLAKE and FAIL (hostcall-all stalled at boot, postgres-sublet has no host tree here), which is environment in both arms. In every on-arm boot (240/240) the firmware executes one integer `movc` (pc 0x80020a50, x9=1), without effect.
+> - **Cost on CPython 3.13.7's core** (129 files, the port's flags, rule against off):
+>   - 30,606 copies rewritten, which matches the 30,625 predicted from MIR; 167 more reuse a store.
+>   - `.text` +3.25 %.
+>   - No function gains a frame.
+>   - Stack +7.6 % (57 KB summed over all functions).
+>   - Shrink-wrap candidates fall from 393 to 157.
+>   - Dynamic cost: CoreMark (10 iterations, `movc-null-scalar/cost-coremark.sh`, QEMU `-icount` over the timed region): 1,644,401 instructions with the rule against 1,630,867 without, +0.83 % (1,353 per iteration). It validates, including under `CAPSTONE_MOVC_NULL_SCALAR=1`. An instruction count, not cycles.
+> - **An adversarial audit refuted the first version, and each finding is now a test**
+>   (`live-source-copy-slot.mir`):
+>   - Sharing the register scavenger's slot was a **miscompile**: in a frame over 2 KiB, a copy
+>     between the scavenger's save and restore overwrote the saved register. The rule now has its own
+>     slot, registered after the scavenger's, and refuses to compile a function in which anything
+>     else touched it. The test's SCAV check fails on the old output.
+>   - Two pre-frame liveness shapes aborted the compile with "no copy slot": a copy BranchFolder
+>     hoists in front of a branch, and a redefinition MachineLateInstrsCleanup deletes.
+> - **Open before any board image uses it:**
+>   - the RTL-sim cases in `tests/rtl-smoke/live-source-copy/` (S-10b's tag route is the risk);
+>   - the cycle cost of an adjacent `stc`/`ldc`.
+>
+>   The S-07 `-capstone-double-ldc` mitigation runs before register allocation, so it does not
+>   cover the rule's `ldc`s.
 
 > **LEAD'S DECISION, 2026-09-25: "D′ now + prototype C".** Options were assembled by the compiler lane and
 > adversarially audited before the decision.
@@ -1752,7 +1792,8 @@ RETURN" rule applied to privilege rather than to control flow.
 > - The paper condition in the measurements doc (§7s arm C) is re-worded to match.
 
 > **2026-09-24: a second instance, in musl, found by measurement and out of reach of any compiler
-> fix.** `CAPSTONE_MOVC_NULL_SCALAR=1` (Q-04) with `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh`
+> fix.** *(Amended 2026-09-25: out of reach of any fix that must know the value is an integer. The
+> live-source copy rule above does not need to, and the iconv-shaped probe passes under it.)* `CAPSTONE_MOVC_NULL_SCALAR=1` (Q-04) with `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh`
 > runs the nightly and libc-test with MOVC keeping and zeroing an integer source. Across the corpus
 > exactly one verdict changes, `iconv_open`, the same in two runs at the same pc. musl's
 > `combine_to_from()` returns a conversion descriptor as an integer, `(void *)(f<<16 | t<<1 | 1)`.
@@ -6918,6 +6959,11 @@ LICM), which LLVM also considers free. Not seen yet; the same trap would follow.
 recorded in `docs/history/23-08-2026_00-30-00_sqlite-lost-tag-two-hypotheses-withdrawn.md`
 (`cincoffsetimm a4, a4, 0xb0` = `&pWInfo->sWC` with `pWInfo` NULL, concluded "a null dereference in
 software") has this shape and was not checked against it.
+*2026-09-25:* the machine-level half of this was reached a second way, through MachineCSE's PRE, and
+is C-66, which also moves this entry's fix out of MachineLICM's hook into a generic one. The IR-level
+half named here was already covered when this was written: C-19 put the rule into
+`isSafeToSpeculativelyExecute`, which SimplifyCFG, LICM and GVN's PRE all ask. The SQLite fault was
+checked against C-66 and is not it (see there).
 
 ### C-62 — with `-g` at `-O1`+, Assignment Tracking asserts on every escaping local, because its offset accumulator is sized at the POINTER width (128) instead of the INDEX width (64) `FIXED 2026-09-23 (external collaborator, f8b140caa818, merged via #75). COMMITTED AS "C-50", a number already taken by an unrelated OPEN defect; renumbered here 2026-09-24`
 
@@ -7101,6 +7147,208 @@ live instance. The compiler lane's sweep
 save loop is one alignment change from live.
 
 ## Infrastructure / procedure
+
+### C-66 — MachineCSE's PRE moves capability arithmetic above the test that guards it: a second hoisting path the C-58 fix does not see `FIX on compiler/c66-machinecse-pre-trapping-cap-arith; found 2026-09-25 by the CPython pymalloc corpus run inside the interpreter`
+
+**What happens.** The CPython interpreter image of #107 (no Sublet, no adapter) halts with cause 24 in
+`_PyArg_UnpackKeywords` on any call without keyword arguments that reaches its keyword walk:
+`cincoffsetimm with an UNTAGGED rs1 -- rd=x16 rs1=x13 val=0x0`, at ELF `0x33e210` =
+`_PyArg_UnpackKeywords+0x500`, `cincoffsetimm a6, a3, 0x30`. `a3` is `kwnames`, NULL. It ended the
+control arm of **6 of the 13** interpreter-corpus candidates (cases 1, 5, 9, 10, 11, 19) before
+their defect ran, and the Sublet arm of three of them (9, 11, 19), so those pairs could not be
+decided at all.
+
+The arithmetic is `&kwnames->ob_item` (`0x30` is `offsetof(PyTupleObject, ob_item)` with 16-byte
+pointers) from `find_keyword` (`Python/getargs.c:2022-2046`), inlined twice. Each inlined loop forms
+it in its own preheader, and each loop is entered only when `nkwargs > 0` -- which implies
+`kwnames != NULL`. The guard is that correlation, not a NULL test, so no known-non-NULL reasoning
+on the operand can see it.
+
+**Where it moves.** `-print-before/-print-after=machine-cse` on `getargs.c`, compiled as the port
+compiles it:
+
+    before  bb.29.for.body.lr.ph.i.us       %37:gpcr  = CIncOffsetImm %101:gpcr, 48
+    before  bb.73.for.body.lr.ph.i424.us    %76:gpcr  = CIncOffsetImm %101:gpcr, 48
+    after   bb.125.for.end                  %678:gpcr = CIncOffsetImm %101:gpcr, 48
+            (%101:gpcr = COPY $c13 -- the fourth argument, kwnames)
+
+`MachineCSEImpl::ProcessBlockPRE` (`llvm/lib/CodeGen/MachineCSE.cpp:822`) finds the two copies in
+blocks where neither dominates the other, duplicates the instruction into their nearest common
+dominator (`TII->duplicate(*CMBB, CMBB->getFirstTerminator(), MI)`, debug location erased -- which
+is why `addr2line` gives `getargs.c:0` for it), and lets CSE delete the originals. `isPRECandidate`
+refuses loads and asks nothing else about speculation. `for.end` lies above the loops' zero-trip
+test, so the copy runs when `nkwargs == 0`.
+
+**Why the C-58 fix did not catch it.** C-58 is the same trap reached through MachineLICM, and it was
+fixed inside MachineLICM's own hook, `TargetInstrInfo::shouldHoist(MI, FromLoop)`, with the
+guaranteed-to-execute test re-derived by reachability because that hook gets no dominator tree. The
+knowledge was right -- `trapsOnUntaggedOperand` lists the ten opcodes that raise on an untagged
+operand -- but only one pass could ask for it. `shouldHoist` occurs zero times in `MachineCSE.cpp`.
+Measured, not inferred: `early-machinelicm` leaves all three copies in their guarded blocks on this
+file; it is `machine-cse` that moves one.
+
+**The asymmetry this is an instance of.** At the IR level the same rule is in ONE predicate that
+every speculating pass asks: C-19 made `isSafeToSpeculativelyExecute` answer false for a GEP on a
+non-integral pointer whose base is not known non-NULL (`llvm/lib/Analysis/ValueTracking.cpp`), and
+SimplifyCFG, LICM, GVN's scalar PRE (`GVN.cpp:3072`, the IR counterpart of this pass),
+SpeculativeExecution and InstCombine's select folds all consult it. At the machine level there was
+no such predicate, so each speculating pass had to be taught separately, and one was.
+
+**The fix: the IR design, one level down.** A generic hook, `TargetInstrInfo::canTrap(MI)` -- true
+when the instruction can trap for some operand values although it neither accesses memory nor has
+unmodeled side effects; false by default, so no other target changes. Every machine pass that runs
+an instruction on a path where it did not run before asks it, the way it already treats loads:
+
+- MachineLICM (`IsLICMCandidate`, both before and after register allocation): a trapping
+  instruction is hoisted only from a block that is guaranteed to execute -- its own dominator-tree
+  test, the one it applies to loads. That test caches its answer, and the cache is now keyed by
+  loop as well as by block (below).
+- MachineCSE (`isPRECandidate`): a trapping instruction is not PRE'd. Ordinary CSE, which replaces
+  an instruction by a dominating copy, is untouched.
+- EarlyIfConversion (`canSpeculateInstrs`): not speculated. Inert on Capstone today -- the target
+  does not enable the pass and cannot insert a select -- and there so that the rule does not depend
+  on that staying true.
+
+Capstone answers once, with the existing `trapsOnUntaggedOperand`. Its `shouldHoist` override and
+`executesOnEveryIteration` are removed: MachineLICM applies its own guaranteed-to-execute test
+instead, with the real dominator tree.
+
+**The speculation cache, and what moving C-58's question into it broke.** An earlier revision of
+this branch, never pushed, said C-58's test (`no-speculative-cap-arith.ll`) shows that the removed
+override and MachineLICM's test agree. They agree only for the loop asked about first.
+`IsGuaranteedToExecute` caches its answer per block (`SpeculationState`, reset once per block in
+`HoistOutOfLoop` and in the post-RA walk). `HoistOutOfLoop` asks about a block for the outermost loop
+first. When the instruction cannot leave that loop, it asks again for each subloop in turn, and it
+got the outermost loop's answer back. A block can run on every iteration of the outer loop that
+reaches its exit without running on every iteration of the subloop. The increment then went into the
+subloop's preheader, above the subloop's own test. C-58's hook recomputed per loop and never did
+this. Routing the question through the cache did: in `c66-machinelicm-subloop-speculation.ll`,
+`CIncOffsetImm %1, 48` lands in `bb.1.outer` without the change below. It stays in `bb.3.body` with
+the change, and with C-58's hook on `a378789289cd`. This was found because the LICM hoist count
+moved when the prediction said it would not. The cause was then read in the code and the test built
+from it.
+
+The cache now also remembers which loop it answered for (`SpeculationLoop`) and recomputes when
+asked about another. That is not a Capstone-only fix. The cache was written for loads, and it moves a
+load the same way on any target. On x86 the load of `p+48` in the same shape goes above `p == NULL`
+into the subloop's preheader under this fork's unmodified MachineLICM (drift base `b3a1c7778245`; not
+checked against upstream main). `c66-machinelicm-subloop-load-x86.ll` FAILS there: on
+`a378789289cd`, whose `MachineLICM.cpp` is the drift base's and dev's, `MOV64rm %3, 1, $noreg, 48`
+lands in `bb.2.outer`. With the change the load stays in `bb.4.body`. Both
+tests carry a control: the same instruction in the subloop's header, which does run on every
+iteration, still goes to the subloop's preheader. So what they show is the rule, not an end to
+subloop hoisting. The negative control was run for the Capstone test too: with only the keyed cache
+reverted and `llc` rebuilt, it fails (`CHECK-NOT: excluded string found`). That run is the only
+evidence for the Capstone test failing: the intermediate binary is gone, and on dev the test passes,
+since C-58's hook is exact. In the lit gate it guards against that intermediate state coming back.
+
+The stale answer also cut the other way, and that changes code on every target. When the outer loop
+can exit before the subloop starts, a load in the subloop's header is not guaranteed for the outer
+loop. That "no" was handed to the subloop, where the load does run on every iteration, and it
+stayed put. Keyed by loop, it goes to the subloop's preheader. This is the third function of the
+x86 test: on dev `MOV64rm %2, 1, $noreg, 48` stays in `bb.3.ihead`, and with the change it moves to
+`bb.2.pre`. The X86 and Generic CodeGen directories were run with the final compiler: 5470 tests,
+5421 pass, and no failure is new. 17 need tools this build does not have (`llvm-dwarfdump`,
+`llvm-profdata`). The other 5 are the TLS tests `emutls*.ll` and `tls-android.ll`, which fail
+identically on dev without C-66.
+
+An adversarial audit re-ran both tests on dev and on `a378789289cd` and confirmed the x86 case is a
+miscompile rather than a legal speculation. The load's memory operand carries no `dereferenceable`
+or `invariant` flag, and the final assembly puts `movq 48(%r9)` ahead of `testq %r9, %r9`. The audit
+also found no caller of `IsGuaranteedToExecute` that asks about a block other than the one whose
+iteration last reset the state. There are three callers: loads, `canTrap`, and `AvoidSpeculation`.
+All three pass the instruction's own block, and the post-RA walk sees top-level loops only.
+
+**What a PRE refused costs.** PRE merges two copies that lie on one path; refusing it costs at most
+one extra capability increment on the paths through both blocks, and nothing on any other path.
+How many it refuses on CPython is measured below, after the end-to-end pair.
+
+**If the ISA changes.** `plans/2026-09-24-scc-cincoffset-untagged.md` asks whether an untagged
+`CINCOFFSET`/`SCC` should compute, as CHERI's do. If it does, those opcodes leave
+`trapsOnUntaggedOperand` and every pass above follows from that one line. That memo also says
+"no program we build needs the change now"; this issue is a program that does.
+
+**Not covered.** A machine pass added later that speculates without asking `canTrap`. The passes
+that can place an instruction on a new path were inventoried for this entry (MachineLICM,
+MachineCSE's PRE, EarlyIfConversion; MachineSink only moves an instruction to a subset of its
+paths, BranchFolding hoists only what every successor already runs); a new one has to be added to
+that list by hand.
+
+**Checked and ruled out: the SQLite fault C-58 lists as unchecked.** `cincoffsetimm a4, a4, 0xb0`
+(`&pWInfo->sWC`, `pWInfo` NULL) in `sqlite3WhereCodeOneLoopStart`
+(`docs/history/23-08-2026_00-30-00_sqlite-lost-tag-two-hypotheses-withdrawn.md`) has this shape but
+not this cause, on two grounds that history records. It was a SILICON fault and "QEMU runs the
+identical path tagged": a code-motion defect is deterministic compiler output, and QEMU traps on an
+untagged `cincoffsetimm` as the silicon does, so a moved increment would have faulted on QEMU too.
+And `pWInfo` is a parameter that `sqlite3WhereBegin` allocates -- never NULL in a correct run --
+whereas this issue needs a value that is legitimately NULL on the path the copy was moved onto. So
+that fault stays what history concluded it was not: a value lost on silicon.
+
+**End to end, one variable.** There are two CPython images from one tree: the port as merged on dev,
+patches 0001-0013, 250 of 250 objects compiled, strict link with 0 undefined symbols.
+- Image A (`c3e07424`) is built entirely by this branch's final compiler.
+- Image B' (`7a2477ef`) is identical except `Python/getargs.o`. That object was recompiled by dev's
+  compiler at `01ec8b0d322a`, the fix's own parent, and relinked. So the two differ in C-66 and in
+  nothing else, and `getargs.o` does differ.
+
+Corpus cases 1 and 9, whose control arm used to end at this trap:
+
+    B', case 1 and case 9  cincoffsetimm with an UNTAGGED rs1 -- rd=x16 rs1=x13 val=0x0,
+                           _PyArg_UnpackKeywords+0x510                                  (this issue)
+    A,  case 9             BEGIN, ARMED ... CPY-CASE-END -- runs through
+    A,  case 1             no untagged cincoffset; faults later, in find_name_in_mro+0xdc,
+                           loading through a register that holds the integer 1
+
+The trap follows `getargs.o` and nothing else. An earlier revision of this paragraph built B from
+`a378789289cd`. That compiler also lacks C-46, C-47 and C-61, so the pair differed in more than
+C-66. It was redone with the fix's parent, and the result is the same.
+
+What case 1 does next is not this issue, and it is worth recording. gh-146613 compares through a
+pointer to a freed key. The block has been reused, and where `ob_type` stood there is now integer
+data. That value has no tag, so the capability machine stops the use-after-free on its own, without
+Sublet. It could not be seen before, because the control arm died here first.
+
+**What refusing the PRE costs, measured.** CPython's 143 core sources were compiled with
+`-mllvm -stats`, with the port's flags, once by dev's compiler (`01ec8b0d322a`) and once by the final
+one. 137 compile under both; the 6 that do not are platform files. The counts, dev against final:
+
+    machine-cse  PRE (partial redundancy made full)   1056 ->   847   (-209)
+    machine-cse  common subexpressions eliminated     64037 -> 63484  (-553, the copies PRE would have merged)
+    machinelicm  hoisted out of loops                24709 -> 24811   (+102, 16 of 115 files)
+    machinelicm  hoisted in low register pressure    13126 -> 13193   (+67)
+    getargs.c    PRE                                    15 ->     7
+
+The LICM change is the keyed cache, and it goes up because the stale cache had also refused
+legitimate subloop hoists. A first comparison against `a378789289cd` put it at +2119. That
+comparison was not one variable: the rest of the difference came from C-46, C-47 and C-61.
+
+**Lit.** The Capstone CodeGen directory, 108 tests, with the final compiler: 107 pass. The one
+failure is `shared-patches-present.test`, the manifest guard, and not on account of this branch.
+The four shared files patched here are in `llvm/utils/capstone-shared-patches.txt` (MachineLICM.cpp
+at +16 -1 with the keyed cache; nothing else moved). What it still reports is `CodeGenDAGPatterns.cpp: diff is +40 -6, manifest
+says +41 -7` -- a file this branch does not touch, whose manifest entry this branch does not touch.
+It fails on dev as it stands, and whether a line of that TableGen patch was lost is a question of
+its own.
+
+**QEMU gates, with the final compiler.**
+- `run-hostcall-all.sh`: 28 of 28.
+- The nightly core tier (`--skip-build`) is 13 of 17 green. The four red suites were each checked
+  against dev without C-66, under identical conditions, and none of them is caused by C-66:
+  - `lit`: the `shared-patches-present` drift described above.
+  - `lit-generic`: the two `dwarf-*` tests need `llvm-dwarfdump`, which is not built.
+  - `beebs`: 5 of 81 benchmarks fail to compile. Freestanding `<string.h>` resolves to the host's
+    glibc header (`bits/libc-header-start.h` not found), and dev's compiler fails on the same line.
+  - `linear-uninit-corpus`: `uninit_init_then_use_ok` stores 16 bytes at its region's end
+    (`va 0x660`, cause 7). Dev's compiler gives the identical signature, so this is the emulator in
+    use (built 2026-09-17), not the code.
+
+**Test.** `llvm/test/CodeGen/Capstone/c66-machinecse-pre-trapping-cap-arith.ll`: two guarded blocks
+form `&kw->field` in sequence, and their nearest common dominator is `%entry`. On `a378789289cd`
+(no fix) the test FAILS as it must -- `CIncOffsetImm %0, 48` is in `bb.0.entry` after
+`machine-cse`. Its control, the same shape with an integer multiply, is PRE'd into `%entry` both
+with and without the fix, which is what shows the test can see PRE at all.
+`c66-machinelicm-subloop-speculation.ll` and `c66-machinelicm-subloop-load-x86.ll`: the speculation
+cache, above, each with its control and each failing without the keyed cache.
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
 
