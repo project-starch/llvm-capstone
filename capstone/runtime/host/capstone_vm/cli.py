@@ -41,6 +41,25 @@ CAPSTONE_TAGWATCH_LO CAPSTONE_TAGWATCH_MAX CAPSTONE_TAGWATCH_VICTIM
 """.split())
 
 
+# Keep the escape sequences literal: binfmt_misc decodes them itself. Letting
+# printf decode the NULs truncates the match before the ELF machine field.
+BINFMT_SETUP = r"""
+binfmt=/proc/sys/fs/binfmt_misc
+if [ -d "$binfmt" ]; then
+    if [ ! -f "$binfmt/register" ]; then
+        mount -t binfmt_misc binfmt_misc "$binfmt"
+    fi
+    if [ -f "$binfmt/capstone" ]; then
+        printf '%s\n' -1 > "$binfmt/capstone"
+    fi
+    printf '%s\n' ':capstone:M:0:\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x01:\xff\xff\xff\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff:/usr/bin/capstone-exec:P' > "$binfmt/register"
+    printf '%s\n' 1 > "$binfmt/status"
+else
+    printf '%s\n' 'capstone-vm: guest lacks binfmt_misc; direct image execution unavailable' >&2
+fi
+"""
+
+
 def qemu_process_environment(recorded: dict[str, str]) -> dict[str, str]:
     """Use only the session's recorded QEMU settings on every boot."""
     environment = {name: value for name, value in os.environ.items()
@@ -158,8 +177,9 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
     The guest still runs an ordinary capstone-exec process, with no job daemon.
     """
     if any(not re.match(r"^[A-Za-z_][A-Za-z_0-9]*=", value) or value.startswith("CAPSTONE_JOB=")
-           for value in environment):
-        raise VMError("Environment must contain NAME=value assignments; CAPSTONE_JOB is reserved")
+           or value.startswith("CAPSTONE_FAULT_RECORD=") for value in environment):
+        raise VMError("Environment must contain NAME=value assignments; CAPSTONE_JOB and "
+                      "CAPSTONE_FAULT_RECORD are reserved")
     job_id = uuid.uuid4().hex
     jobs = state / "assets" / "jobs"
     jobs.mkdir(exist_ok=True)
@@ -169,8 +189,12 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
     script = (f"cd {shlex.quote(cwd)} || exit 125; " if cwd is not None else "")
     script += f"echo $$ > {remote}; exec " + shlex.join([
         "capstone-job", f"/mnt/control/jobs/{job_id}/result.json", "--", "capstone-exec", "--", *words])
+    # The launcher writes a domain fault's record here, off the application
+    # streams; it is reported on the host side and kept in the result.
+    fault_record = f"/mnt/control/jobs/{job_id}/fault"
     command = ssh_command(state, config) + ["exec " + shlex.join(
-        ["env", "CAPSTONE_JOB=" + job_id, *environment, "sh", "-c", script])]
+        ["env", "CAPSTONE_JOB=" + job_id, "CAPSTONE_FAULT_RECORD=" + fault_record,
+         *environment, "sh", "-c", script])]
     previous = {}
 
     def completed() -> int:
@@ -181,6 +205,10 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
         kind, value = record.get("kind"), record.get("value")
         if record.get("version") != 1 or kind not in ("exit", "signal") or type(value) is not int or not 0 <= value <= 255:
             raise VMError("Invalid guest waitpid result")
+        fault_file = job / "fault"
+        if fault_file.exists():
+            record["fault"] = fault_file.read_text().strip()
+            print(f"capstone-vm: {record['fault']}", file=sys.stderr)
         if result_path is not None:
             temporary = result_path.with_name(result_path.name + "." + job_id + ".tmp")
             try:
@@ -328,6 +356,7 @@ elif [ ! -c /dev/capstone ]; then
     insmod /capstone.ko
 fi
 capstone-exec --stats >/dev/null
+""" + BINFMT_SETUP + """
 ifconfig eth0 10.0.2.15 netmask 255.255.255.0 up
 killall dropbear 2>/dev/null || true
 if [ ! -f /etc/dropbear/dropbear_ed25519_host_key ]; then

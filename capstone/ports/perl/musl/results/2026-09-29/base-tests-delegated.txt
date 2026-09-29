@@ -1,0 +1,26 @@
+Perl 5.36.3 upstream t/base on the persistent one-hart Linux guest, delegated runtime (ABI v2)
+Interpreter SHA256: e29188c2c916ede17f37e4cd8c669ef74eddadc879dd74dfae3dcc5c44155811
+Runtime: delegation-spawn branch, patches 0001-0008, SDK heap level0, compiler-c46
+QEMU source commit: 6550f19489e08d2babccab06e89d43467f8e67b6 (the domain-process-runtime pin); kernel and rootfs of 2026-09-26
+Effective QEMU environment: CAPSTONE_GP_NONLIN=1, CAPSTONE_REV_NODES=65536
+Invocation: prove --exec "capstone-vm run --cwd /mnt/host/perl-tests/t -e PERL5LIB=/mnt/host/perl-tests/lib /mnt/host/perl-v2.dom" base/*.t
+
+base/cond.t ....... ok
+base/if.t ......... ok
+base/lex.t ........ ok
+base/num.t ........ ok
+base/pat.t ........ ok
+base/rs.t ......... ok
+base/term.t ....... 
+Failed 1/7 subtests 
+base/translate.t .. ok
+base/while.t ...... ok
+base/term.t     (Wstat: 0 Tests: 7 Failed: 1)
+  Failed test:  2
+Files=9, Tests=493, 29 wallclock secs ( 0.02 usr  0.01 sys +  0.28 cusr  0.06 csys =  0.37 CPU)
+Result: FAIL
+
+term.t test 2: the backtick `$^X -le "print q(hi there)"` runs through /bin/sh, and the shell
+cannot exec a Capstone image: the pinned guest kernel has no binfmt_misc, so exec of the image
+returns ENOEXEC and sh reads it as a script. clone is no longer the cause. The other eight
+files pass unchanged. A shell backtick of a native command passes.

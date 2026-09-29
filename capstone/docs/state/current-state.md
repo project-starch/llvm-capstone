@@ -28,6 +28,23 @@ load request: replay the missed access through the existing registered exception
 lines: `tests/fpga-repros/R43-revocation-cache-false-deny/results/synth-0f5185a6d.result-lines.txt`. An
 early "3 new loops" reading was withdrawn: they are the same loop families, cut differently.
 
+## 2026-09-29 — delegated runtime review
+
+The `delegation-spawn` stack has reviewed syscall marshalling and process
+lifetime fixes, with [checked native and guest evidence](../../runtime/tests/application/results/20260929-delegation-review.json).
+Twenty-one ASan/UBSan native tests and 19 Python tests pass; the v1 application
+gate passes 108 starts, and fresh v2 libc-test has 45/77 PASS. Output tails,
+command pointers, vector offsets, private descriptors, spawn inheritance,
+wait/kill confinement and exec continuation are covered. Fault symbolization
+checks the sealed image SHA-256. See [applications](../../runtime/applications.md#review-verification-2026-09-29).
+The follow-up [binfmt qualification](../../runtime/tests/application/results/20260929-delegation-binfmt.json)
+passes Perl `t/base` 9/9 (493 assertions), direct shell execution with original
+argv[0], 108 application starts, and the same 45 libc-test passes. Buildroot
+`227fdfa` enables the QEMU kernel option; the VM setup mounts and registers the
+format with literal magic escapes. Complete process-group behavior, memory and
+signal delivery remain open. The 88-byte entry is not an io_uring SQE,
+and the historical rdtime sample is not an icount/cycle result.
+
 ## 2026-09-29 — R-43 and R-45 fixed in RTL (capstone-ariane `r43-query-on-miss`, `0f5185a6d`); synthesis next
 
 - **R-43:** R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live, which

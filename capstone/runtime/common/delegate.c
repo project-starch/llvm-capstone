@@ -1,0 +1,250 @@
+#include "capstone/delegate.h"
+#include "capstone/spawn.h"
+#include <errno.h>
+#include <string.h>
+
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+#error "Delegated syscall ABI v2 requires little-endian scalar encoding"
+#endif
+_Static_assert(sizeof(struct capstone_delegate_entry) == 88, "entry ABI");
+
+#define I {CAPSTONE_ARG_INT, CAPSTONE_LEN_NONE, 0, 0, 0}
+#define S {CAPSTONE_ARG_STR, CAPSTONE_LEN_NONE, 0, 0, 0}
+#define IN_ARG(a) {CAPSTONE_ARG_IN, CAPSTONE_LEN_ARG, a, 0, 0}
+#define OUT_ARG(a) {CAPSTONE_ARG_OUT, CAPSTONE_LEN_ARG, a, 0, 0}
+#define IN_FIX(n) {CAPSTONE_ARG_IN, CAPSTONE_LEN_FIXED, n, 0, 0}
+#define OUT_FIX(n) {CAPSTONE_ARG_OUT, CAPSTONE_LEN_FIXED, n, 0, 0}
+#define OPT_IN_FIX(n) {CAPSTONE_ARG_OPT_IN, CAPSTONE_LEN_FIXED, n, 0, 0}
+#define OPT_OUT_FIX(n) {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, n, 0, 0}
+#define INOUT_SCALED(a, s) {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
+#define IN_SCALED(a, s) {CAPSTONE_ARG_IN, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
+
+/* Sizes are the kernel's RV64 layouts, which is what lands in the exchange
+ * region after the libc's marshalling: iovec is two 64-bit words, timespec
+ * two, stat 128 bytes, utsname 390, sysinfo 112, rlimit 16, tms 32, pollfd 8. */
+#define IOVEC 16
+#define TIMESPEC 16
+#define STAT 128
+
+static const struct capstone_delegate_shape shapes[] = {
+  /* files and directories */
+  {CAPSTONE_SYS_getcwd, CAPSTONE_GROUP_DELEGATED, 2, "getcwd", {OUT_ARG(1), I}},
+  {CAPSTONE_SYS_dup, CAPSTONE_GROUP_DELEGATED, 1, "dup", {I}},
+  {CAPSTONE_SYS_dup3, CAPSTONE_GROUP_DELEGATED, 3, "dup3", {I, I, I}},
+  /* fcntl's third argument is a struct flock for the lock commands and an
+   * integer otherwise; ioctl's is a request-specific buffer. The libc decides
+   * per command whether it passes an offset or 0. 64 bytes covers termios. */
+  {CAPSTONE_SYS_fcntl, CAPSTONE_GROUP_DELEGATED, 3, "fcntl", {I, I, I}},
+  {CAPSTONE_SYS_ioctl, CAPSTONE_GROUP_DELEGATED, 3, "ioctl", {I, I, I}},
+  {CAPSTONE_SYS_mkdirat, CAPSTONE_GROUP_DELEGATED, 3, "mkdirat", {I, S, I}},
+  {CAPSTONE_SYS_unlinkat, CAPSTONE_GROUP_DELEGATED, 3, "unlinkat", {I, S, I}},
+  {CAPSTONE_SYS_ftruncate, CAPSTONE_GROUP_DELEGATED, 2, "ftruncate", {I, I}},
+  {CAPSTONE_SYS_faccessat, CAPSTONE_GROUP_DELEGATED, 4, "faccessat", {I, S, I, I}},
+  {CAPSTONE_SYS_chdir, CAPSTONE_GROUP_DELEGATED, 1, "chdir", {S}},
+  {CAPSTONE_SYS_openat, CAPSTONE_GROUP_DELEGATED, 4, "openat", {I, S, I, I}},
+  {CAPSTONE_SYS_close, CAPSTONE_GROUP_DELEGATED, 1, "close", {I}},
+  {CAPSTONE_SYS_pipe2, CAPSTONE_GROUP_DELEGATED, 2, "pipe2", {OUT_FIX(8), I}},
+  {CAPSTONE_SYS_getdents64, CAPSTONE_GROUP_DELEGATED, 3, "getdents64", {I, OUT_ARG(2), I}},
+  {CAPSTONE_SYS_lseek, CAPSTONE_GROUP_DELEGATED, 3, "lseek", {I, I, I}},
+  {CAPSTONE_SYS_read, CAPSTONE_GROUP_DELEGATED, 3, "read", {I, OUT_ARG(2), I}},
+  {CAPSTONE_SYS_write, CAPSTONE_GROUP_DELEGATED, 3, "write", {I, IN_ARG(2), I}},
+  {CAPSTONE_SYS_readv, CAPSTONE_GROUP_DELEGATED, 3, "readv", {I, IN_SCALED(2, IOVEC), I}},
+  {CAPSTONE_SYS_writev, CAPSTONE_GROUP_DELEGATED, 3, "writev", {I, IN_SCALED(2, IOVEC), I}},
+  {CAPSTONE_SYS_preadv, CAPSTONE_GROUP_DELEGATED, 5, "preadv", {I, IN_SCALED(2, IOVEC), I, I, I}},
+  {CAPSTONE_SYS_pwritev, CAPSTONE_GROUP_DELEGATED, 5, "pwritev", {I, IN_SCALED(2, IOVEC), I, I, I}},
+  {CAPSTONE_SYS_pread64, CAPSTONE_GROUP_DELEGATED, 4, "pread64", {I, OUT_ARG(2), I, I}},
+  {CAPSTONE_SYS_pwrite64, CAPSTONE_GROUP_DELEGATED, 4, "pwrite64", {I, IN_ARG(2), I, I}},
+  {CAPSTONE_SYS_ppoll, CAPSTONE_GROUP_DELEGATED, 5, "ppoll",
+   {INOUT_SCALED(1, 8), I, OPT_IN_FIX(TIMESPEC), OPT_IN_FIX(8), I}},
+  {CAPSTONE_SYS_readlinkat, CAPSTONE_GROUP_DELEGATED, 4, "readlinkat", {I, S, OUT_ARG(3), I}},
+  {CAPSTONE_SYS_newfstatat, CAPSTONE_GROUP_DELEGATED, 4, "newfstatat", {I, S, OUT_FIX(STAT), I}},
+  {CAPSTONE_SYS_fstat, CAPSTONE_GROUP_DELEGATED, 2, "fstat", {I, OUT_FIX(STAT)}},
+  {CAPSTONE_SYS_fsync, CAPSTONE_GROUP_DELEGATED, 1, "fsync", {I}},
+  {CAPSTONE_SYS_fdatasync, CAPSTONE_GROUP_DELEGATED, 1, "fdatasync", {I}},
+  {CAPSTONE_SYS_utimensat, CAPSTONE_GROUP_DELEGATED, 4, "utimensat",
+   {I, {CAPSTONE_ARG_OPT_STR, CAPSTONE_LEN_NONE, 0, 0, 0}, OPT_IN_FIX(2 * TIMESPEC), I}},
+  {CAPSTONE_SYS_renameat2, CAPSTONE_GROUP_DELEGATED, 5, "renameat2", {I, S, I, S, I}},
+  /* time */
+  {CAPSTONE_SYS_nanosleep, CAPSTONE_GROUP_DELEGATED, 2, "nanosleep",
+   {IN_FIX(TIMESPEC), OPT_OUT_FIX(TIMESPEC)}},
+  {CAPSTONE_SYS_clock_gettime, CAPSTONE_GROUP_DELEGATED, 2, "clock_gettime", {I, OUT_FIX(TIMESPEC)}},
+  {CAPSTONE_SYS_clock_nanosleep, CAPSTONE_GROUP_DELEGATED, 4, "clock_nanosleep",
+   {I, I, IN_FIX(TIMESPEC), OPT_OUT_FIX(TIMESPEC)}},
+  {CAPSTONE_SYS_gettimeofday, CAPSTONE_GROUP_DELEGATED, 2, "gettimeofday",
+   {OPT_OUT_FIX(16), OPT_OUT_FIX(8)}},
+  {CAPSTONE_SYS_times, CAPSTONE_GROUP_DELEGATED, 1, "times", {OPT_OUT_FIX(32)}},
+  /* identity and limits */
+  {CAPSTONE_SYS_getpid, CAPSTONE_GROUP_DELEGATED, 0, "getpid", {I}},
+  {CAPSTONE_SYS_getppid, CAPSTONE_GROUP_DELEGATED, 0, "getppid", {I}},
+  {CAPSTONE_SYS_getuid, CAPSTONE_GROUP_DELEGATED, 0, "getuid", {I}},
+  {CAPSTONE_SYS_geteuid, CAPSTONE_GROUP_DELEGATED, 0, "geteuid", {I}},
+  {CAPSTONE_SYS_getgid, CAPSTONE_GROUP_DELEGATED, 0, "getgid", {I}},
+  {CAPSTONE_SYS_getegid, CAPSTONE_GROUP_DELEGATED, 0, "getegid", {I}},
+  {CAPSTONE_SYS_gettid, CAPSTONE_GROUP_DELEGATED, 0, "gettid", {I}},
+  {CAPSTONE_SYS_umask, CAPSTONE_GROUP_DELEGATED, 1, "umask", {I}},
+  {CAPSTONE_SYS_uname, CAPSTONE_GROUP_DELEGATED, 1, "uname", {OUT_FIX(390)}},
+  {CAPSTONE_SYS_sysinfo, CAPSTONE_GROUP_DELEGATED, 1, "sysinfo", {OUT_FIX(112)}},
+  {CAPSTONE_SYS_prlimit64, CAPSTONE_GROUP_DELEGATED, 4, "prlimit64",
+   {I, I, OPT_IN_FIX(16), OPT_OUT_FIX(16)}},
+  {CAPSTONE_SYS_getrandom, CAPSTONE_GROUP_DELEGATED, 3, "getrandom", {OUT_ARG(1), I, I}},
+  {CAPSTONE_SYS_sched_yield, CAPSTONE_GROUP_DELEGATED, 0, "sched_yield", {I}},
+  {CAPSTONE_SYS_set_tid_address, CAPSTONE_GROUP_DELEGATED, 1, "set_tid_address", {I}},
+  {CAPSTONE_SYS_set_robust_list, CAPSTONE_GROUP_DELEGATED, 2, "set_robust_list", {I, I}},
+  {CAPSTONE_SYS_futex, CAPSTONE_GROUP_DELEGATED, 6, "futex", {I, I, I, I, I, I}},
+  /* process: delegated members of the task model */
+  {CAPSTONE_SYS_exit, CAPSTONE_GROUP_DELEGATED, 1, "exit", {I}},
+  {CAPSTONE_SYS_exit_group, CAPSTONE_GROUP_DELEGATED, 1, "exit_group", {I}},
+  {CAPSTONE_SYS_kill, CAPSTONE_GROUP_DELEGATED, 2, "kill", {I, I}},
+  {CAPSTONE_SYS_wait4, CAPSTONE_GROUP_DELEGATED, 4, "wait4",
+   {I, OPT_OUT_FIX(4), I, OPT_OUT_FIX(144)}},
+  /* the exception groups */
+  {CAPSTONE_SYS_brk, CAPSTONE_GROUP_MEMORY, 1, "brk", {I}},
+  {CAPSTONE_SYS_munmap, CAPSTONE_GROUP_MEMORY, 2, "munmap", {I, I}},
+  {CAPSTONE_SYS_mremap, CAPSTONE_GROUP_MEMORY, 5, "mremap", {I, I, I, I, I}},
+  {CAPSTONE_SYS_mmap, CAPSTONE_GROUP_MEMORY, 6, "mmap", {I, I, I, I, I, I}},
+  {CAPSTONE_SYS_mprotect, CAPSTONE_GROUP_MEMORY, 3, "mprotect", {I, I, I}},
+  {CAPSTONE_SYS_madvise, CAPSTONE_GROUP_MEMORY, 3, "madvise", {I, I, I}},
+  {CAPSTONE_SYS_clone, CAPSTONE_GROUP_PROCESS, 5, "clone", {I, I, I, I, I}},
+  {CAPSTONE_SYS_execve, CAPSTONE_GROUP_PROCESS, 3, "execve", {S, I, I}},
+  {CAPSTONE_SYS_vfork, CAPSTONE_GROUP_PROCESS, 0, "vfork", {I}},
+  {CAPSTONE_SYS_fork, CAPSTONE_GROUP_PROCESS, 0, "fork", {I}},
+  {CAPSTONE_SYS_rt_sigaction, CAPSTONE_GROUP_SIGNAL, 4, "rt_sigaction", {I, I, I, I}},
+  {CAPSTONE_SYS_rt_sigprocmask, CAPSTONE_GROUP_SIGNAL, 4, "rt_sigprocmask", {I, I, I, I}},
+  {CAPSTONE_SYS_rt_sigreturn, CAPSTONE_GROUP_SIGNAL, 0, "rt_sigreturn", {I}},
+  /* runtime-internal: the pointer forms of fcntl and ioctl, spawn with its
+     block in the exchange region, and hello; looked up by their own numbers */
+  {3, CAPSTONE_GROUP_RUNTIME, 3, "fcntl-lock", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 32, 0, 0}}},
+  {2, CAPSTONE_GROUP_RUNTIME, 3, "ioctl-buffer", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 64, 0, 0}}},
+  {1, CAPSTONE_GROUP_RUNTIME, 2, "spawn", {IN_ARG(1), I}},
+  {0, CAPSTONE_GROUP_RUNTIME, 3, "hello", {I, I, I}},
+  /* not in this branch: sockets stay unknown until a profile admits them */
+};
+
+const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
+  if (nr == CAPSTONE_NR_HELLO)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 1];
+  if (nr == CAPSTONE_NR_SPAWN)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 2];
+  if (nr == CAPSTONE_NR_IOCTL_BUF)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 3];
+  if (nr == CAPSTONE_NR_FCNTL_LOCK)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 4];
+  for (size_t i = 0; i + 4 < sizeof shapes / sizeof shapes[0]; ++i)
+    if (shapes[i].nr == nr)
+      return &shapes[i];
+  return NULL;
+}
+
+enum capstone_delegate_group capstone_delegate_group_of(uint64_t nr) {
+  const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
+  return s ? (enum capstone_delegate_group)s->group : CAPSTONE_GROUP_UNKNOWN;
+}
+
+static int is_offset(const struct capstone_delegate_arg *a) {
+  return a->kind != CAPSTONE_ARG_INT;
+}
+
+static int is_optional(const struct capstone_delegate_arg *a) {
+  return a->kind == CAPSTONE_ARG_OPT_IN || a->kind == CAPSTONE_ARG_OPT_OUT ||
+         a->kind == CAPSTONE_ARG_OPT_INOUT || a->kind == CAPSTONE_ARG_OPT_STR;
+}
+
+size_t capstone_delegate_arg_bytes(const struct capstone_delegate_shape *shape,
+                                   const struct capstone_delegate_entry *entry,
+                                   unsigned index) {
+  const struct capstone_delegate_arg *a;
+  if (!shape || index >= shape->argc)
+    return 0;
+  a = &shape->args[index];
+  switch (a->length) {
+  case CAPSTONE_LEN_FIXED:
+    return a->size;
+  case CAPSTONE_LEN_ARG:
+    return a->size < CAPSTONE_DELEGATE_ARGS ? (size_t)entry->args[a->size] : 0;
+  case CAPSTONE_LEN_ARG_SCALED:
+    if (a->size >= CAPSTONE_DELEGATE_ARGS)
+      return 0;
+    if (entry->args[a->size] > SIZE_MAX / (a->scale ? a->scale : 1))
+      return SIZE_MAX;
+    return (size_t)entry->args[a->size] * a->scale;
+  default:
+    return 0;
+  }
+}
+
+int capstone_delegate_pack(struct capstone_delegate_entry *entry, uint64_t nr,
+                           const uint64_t args[CAPSTONE_DELEGATE_ARGS]) {
+  const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
+  if (!entry || !args || !s ||
+      (s->group != CAPSTONE_GROUP_DELEGATED && s->group != CAPSTONE_GROUP_RUNTIME))
+    return EINVAL;
+  memset(entry, 0, sizeof *entry);
+  entry->version = CAPSTONE_DELEGATE_VERSION;
+  entry->count = 1;
+  entry->nr = nr;
+  for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i) {
+    entry->args[i] = args[i];
+    if (i < s->argc && is_offset(&s->args[i]) &&
+        !(is_optional(&s->args[i]) && args[i] == 0))
+      entry->flags |= UINT64_C(1) << i;
+  }
+  return 0;
+}
+
+int capstone_delegate_validate(const struct capstone_delegate_entry *entry,
+                               size_t exchange_bytes) {
+  const struct capstone_delegate_shape *s;
+  if (!entry || entry->version != CAPSTONE_DELEGATE_VERSION || entry->count != 1 ||
+      (entry->flags >> CAPSTONE_DELEGATE_ARGS))
+    return EINVAL;
+  s = capstone_delegate_shape(entry->nr);
+  if (!s || (s->group != CAPSTONE_GROUP_DELEGATED && s->group != CAPSTONE_GROUP_RUNTIME))
+    return ENOSYS;
+  for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i) {
+    const struct capstone_delegate_arg *a = i < s->argc ? &s->args[i] : NULL;
+    int flagged = (entry->flags >> i) & 1;
+    size_t bytes;
+    if (!a || !is_offset(a)) {
+      if (flagged)
+        return EINVAL;
+      continue;
+    }
+    if (!flagged) {
+      if (is_optional(a) && entry->args[i] == 0)
+        continue;
+      return EINVAL;
+    }
+    if (entry->args[i] >= exchange_bytes)
+      return EFAULT;
+    bytes = capstone_delegate_arg_bytes(s, entry, i);
+    if (bytes > exchange_bytes - entry->args[i])
+      return EFAULT;
+  }
+  return 0;
+}
+
+int capstone_delegate_string_ok(const char *exchange, size_t exchange_bytes,
+                                uint64_t offset) {
+  if (!exchange || offset >= exchange_bytes)
+    return 0;
+  return memchr(exchange + offset, 0, exchange_bytes - offset) != NULL;
+}
+
+size_t capstone_delegate_result_bytes(uint64_t nr, unsigned index, size_t bytes,
+                                      int64_t result) {
+  if (result < 0) {
+    if (result == -EINTR && ((nr == CAPSTONE_SYS_nanosleep && index == 1) ||
+                             (nr == CAPSTONE_SYS_clock_nanosleep && index == 3)))
+      return bytes;
+    return 0;
+  }
+  if (nr == CAPSTONE_SYS_wait4 && result == 0) return 0;
+  if (nr == CAPSTONE_SYS_read || nr == CAPSTONE_SYS_pread64 ||
+      nr == CAPSTONE_SYS_getdents64 || nr == CAPSTONE_SYS_getrandom ||
+      nr == CAPSTONE_SYS_getcwd || nr == CAPSTONE_SYS_readlinkat)
+    return (uint64_t)result < bytes ? (size_t)result : bytes;
+  /* Sleep's remaining-time output is defined only on interruption. */
+  if ((nr == CAPSTONE_SYS_nanosleep && index == 1) ||
+      (nr == CAPSTONE_SYS_clock_nanosleep && index == 3)) return 0;
+  return bytes;
+}
