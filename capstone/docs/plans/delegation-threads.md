@@ -9,9 +9,9 @@ Done so far:
 - The domain half on the unchanged platform: context arena, mint, thread entry, exit and
   re-entry, revoke/remint, entered by a nested unsupervised CALL (record
   `results/20260929-context-probe-domain.json`).
-- Through the monitor, on branches `context-slots` of capstone-qemu (7bbedcd16b: DEAD status,
-  dead-slot removal; pinned as `qemu/context-slots-on-pin`, the same commits on the pinned
-  ac2837aa0e), capstone-sbi (0451a1a: slots with generations, lent descriptors, ADOPT,
+- Through the monitor, on the context-slot branches of capstone-qemu
+  (`qemu/context-slots-on-pin` ee9c93777f: DEAD status, dead-slot removal), capstone-sbi
+  (0451a1a: slots with generations, lent descriptors, ADOPT,
   FORGET; 3f9efa9: the descriptor's offer slot is cleared after the seal is taken out) and
   caplifive-buildroot (11c024a: driver ids and ioctls; f9b2408: the firmware build refuses a
   capstone-c miscompile this work hit), and the launcher's CONTEXT requests here. Passing,
@@ -31,6 +31,14 @@ Done so far:
   (fault at the ldc) and ra-gp (offset 48, no fault) are the controls, with the pre-fix binary as
   the positive control. A store past the loan faults; the loan's write-only permission is not
   enforced on capstone-qemu (Q1, ISSUES Q-14).
+  A follow-up in capstone-qemu 674cdab03c closes a 64-bit overflow in that window check:
+  `addr + size` could wrap to zero for an address near `UINT64_MAX` and pass both upper-bound
+  comparisons. The same flaw in the general `cap_in_bounds` check is fixed too. Both checks now
+  compare offsets and remaining bytes without adding to `addr`. The QEMU unit test covers both
+  window edges, the capability end and wraparound in both checks; compiled against the pre-fix
+  expressions it fails all three of its subtests, against the fix it passes them. On the new binary the
+  context probe passed 36/36, the signal contract 26/26 and the application gate exited 0;
+  see `results/20260930-sealed-return-wrap.json`.
 - A10: dead registrations are retired on shortage in the monitor, and the driver drops a record
   when the monitor reissues its slot. 128 create/exit/revoke cycles never forgetting, and five
   applications claiming 40 of the 32 slots at once, all succeed with their live contexts intact;
@@ -59,9 +67,15 @@ Done so far:
   B12 and B13a to B13d with forced interleavings, each check shown to fire against a seeded
   defect (record `results/20260930-park-native.json`). B6 to B11 and B14 need the domain runtime:
   per-context transport and the WAIT/WAKE/REQUEUE requests.
-- Pins: capstone-qemu a53ac18e3d (`qemu/context-slots-on-pin`), caplifive-buildroot a6c0174
-  (driver, and components/opensbi a4bdd1b: the caplifive-opensbi wrapper at capstone-sbi
-  7e1c34f). Open in Probe A: their upstream pull requests.
+- Pins: capstone-qemu 674cdab03c (`qemu/context-slots-on-pin`, on ac2837aa0e, the head of
+  `qemu/supervisor-switch-cost`); caplifive-buildroot 515a3c6 (`modcapstone/context-slots`, the
+  driver), whose components/opensbi is 702c38f (caplifive-opensbi `wrapper/context-slots`) at
+  capstone-sbi c0dbd04 (`monitor/context-slots`). The wrapper and monitor commits are on the
+  forks only (the `runtime-fork` remotes). `qemu/context-slots` (d220ab6ee9, on 22aec7ee0f with
+  its own copies of the two switch-cost commits) is the frozen predecessor of
+  `qemu/context-slots-on-pin`: its commits are patch-identical to ee9c93777f..a53ac18e3d, it lacks
+  674cdab03c, and nothing pins or extends it. Upstream pull requests: none until the thread
+  runtime and its gates pass (decided 2026-09-30).
 
 ## Scope
 
@@ -666,7 +680,7 @@ Before the change, A12 showed two escapes: `mret` in a supervised context was ca
 with it. Both times the context left C-mode for user mode on the owner's page table and faulted
 at its first fetch there (cause 12) only because the target address was not mapped in the
 launcher; outside C-mode the quantum is not polled either (read from `translate.c`, not
-measured). The contract, now enforced by the supervisor (capstone-qemu `qemu/context-slots`):
+measured). The contract, now enforced by the supervisor (capstone-qemu `qemu/context-slots-on-pin`):
 - A supervised context runs in C-mode only. `mret` and `sret` raise an illegal-instruction fault;
   a fresh supervised entry into a seal whose saved privilege is not C answers REFUSED (step
   event 5) and is not entered; a nested CALL into such a seal faults. A resume restores the
@@ -779,7 +793,7 @@ the global revocation the model assumes, under its actual memory model.
 ## Delivery
 
 One branch per repository, pinned together; each submodule change gets its own upstream pull
-request.
+request, opened once the runtime's gates below pass.
 
 - **capstone-qemu:** the supervisor rules (`DEAD` status, dead-slot removal in the collector and on
   slot shortage, forget of an invalid seal) and the first-entry control-word check (Q3).
