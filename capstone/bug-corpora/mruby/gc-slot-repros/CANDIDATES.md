@@ -802,7 +802,27 @@ touching the other. Worse, the ordering runs the wrong way -- `sublet_handle` ma
 newest sharer the most senior, so revoking the view that un-shares would kill the parent's
 access as well, which is the opposite of what the defect calls for.
 
-**This is a limit of the mechanism, not of the patch.** Level 4 needs one of:
+**Measured, with a control, rather than inferred.** The first version of this section
+argued from `sublet_handle`'s header comment that siblings were not expressible. That was
+wrong in its reason: `hier_sibling_conn_survives_ok` already shows sibling scoping works --
+closing one connection revokes only its subtree -- but it works because those siblings are
+**independent SPLITs off one arena**, which is to say disjoint ranges. Whether two handles
+over the SAME range are independent was untested, so two probes were added to settle it
+(`capstone/tests/runtime-qemu/hier-revoke-probe/`):
+
+    hier_two_handles_no_give_ok   two handles on one node, NEITHER revoked
+                                  -> retval 0x0875005e, the sentinel reads back
+    hier_two_handles_one_node     the same two handles, the SECOND revoked
+                                  -> cause 24, "Cap mem access requires capability"
+
+The control matters: without it a fault could mean either that the revoke reached the alias
+or that taking two handles on one node broke it outright. The control returns cleanly, so
+the node is fine and **the second handle is senior to the alias's derivation**. Two parents
+of one node are not siblings.
+
+So the limit is precise: sibling scoping exists and is what `sublet_split` gives over a
+**partition**; it does not extend to two views of the same bytes, which is what an mruby
+shared string buffer is. Level 4 needs one of:
 
 1. sibling handles on one range, which the instruction set does not offer today;
 2. copy-on-share -- give each view its own bytes when sharing starts, so there is nothing

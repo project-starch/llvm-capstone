@@ -19,7 +19,8 @@ PROBE_DIR="$SCRIPT_DIR/hier-revoke-probe"
 LIBCAPSTONE_C="$CAPSTONE_REPO_ROOT/capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c"
 MODCAPSTONE_INCLUDE="$CAPSTONE_REPO_ROOT/capstone/caplifive-buildroot/package/modcapstone/include"
 
-PROBES=(hier_child_revoked_fault hier_no_close_ok hier_sibling_conn_survives_ok)
+PROBES=(hier_child_revoked_fault hier_no_close_ok hier_sibling_conn_survives_ok
+        hier_two_handles_one_node hier_two_handles_no_give_ok)
 
 mkdir -p "$TMP_ROOT" "$OUT_DIR"
 

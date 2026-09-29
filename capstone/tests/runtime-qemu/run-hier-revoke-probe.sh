@@ -123,6 +123,12 @@ for opt in $OPT_LEVELS; do
   run_fault hier_child_revoked_fault "$msg" "$want" || record $?
   run_ok   hier_no_close_ok 0x0872005e || record $?
   run_ok   hier_sibling_conn_survives_ok 0x0873003c || record $?
+  # Two parents of ONE node are NOT independent: revoking the second reaches an alias
+  # derived through the node, so the probe faults and its no-give control returns. The
+  # sibling scoping above holds for disjoint SPLITS; this says it does not extend to two
+  # handles over the same range, which is what mruby's shared string buffers would need.
+  run_ok   hier_two_handles_no_give_ok 0x0875005e || record $?
+  run_fault hier_two_handles_one_node "$msg" "$want" || record $?
 done
 
 capstone_select_verify || exit 2
