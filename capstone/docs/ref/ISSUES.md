@@ -7203,9 +7203,15 @@ remains.
 
 **IT WAITS ON #120, NOT #123.** `__SIZEOF_INTCAP__` and `__uintcap_t` are introduced by the three
 intcap commits — 3885ec8b8311 ("intcap B.1"), 87e005a71c4e and 772d99ea7b9e — and by no other commit
-in that stack. 7d01722aab88 is the SROA change and introduces neither. The delegation lane's report
-(`/tmp/capstone/deleg-gate/REPORT.md`) says #123 in both its summary and its sequencing
-recommendation; that is the wrong PR to wait on.
+in that stack. 7d01722aab88 is the SROA change and introduces neither. `origin/pr/120`'s head is
+87e005a7 and contains 3885ec8b.
+
+This was first recorded as #123, in the delegation lane's report and briefly here. **That report has
+since been amended and now reads #120 throughout**, so nothing outstanding depends on the wrong
+number — but the root cause is worth keeping, because it will recur on any stacked PR:
+`git log origin/dev..origin/pr/<n>` on a STACKED branch lists the whole stack beneath it, not that
+PR's own content. Attribute a change to a PR by grepping the individual commits for the identifier,
+not by the log range.
 
 **This matters for sequencing**, because #120 is itself blocked: it carries three confirmed intcap
 defects plus a shared-patches manifest regression. So mruby on dev is blocked behind a blocked PR,
