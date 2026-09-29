@@ -4,11 +4,14 @@
 symptom is redirected at once:
 - **R-44** — the SAME optimistic adopt, still present at the **CPMP** (S/U-mode enforcement, live in
   production). A stale capability used from Linux or userspace is R-44, not this folder.
-- **R-43** — the cost of this fix: it **denies on a cache miss**, so a live capability whose id was evicted
-  can be falsely refused.
+- **R-43** (`../R43-revocation-cache-false-deny/`) — the cost of this fix: it **denies on a cache miss**,
+  so a live capability whose id was evicted is falsely refused. Confirmed on silicon 2026-09-25; its second
+  fix (replay) is FIXED ON SILICON 2026-09-29 (`caplifive_r43_8f6a0af98.bit`). R-45 and R-46 are nested there.
+- **R-37 / R-38** — the trackers' invalidate/adopt ORDER, fixed in the same flashed build ("Stage 0",
+  `247b76896`). Nested below.
 - **M-1** (`../RTL-domain-trap-vector-unset/`) — why a fault here wedges the domain and loses its output.
 
-Registry: `docs/ref/ISSUES.md` R-35, R-43, R-44.
+Registry: `docs/ref/ISSUES.md` R-35, R-37, R-38, R-43, R-44.
 
 What closed it, and what did not:
 - Fix `capstone-ariane 4ad0df694`, flashed as `caplifive_r35_4ad0df694.bit` on 2026-09-24.
@@ -21,6 +24,13 @@ What closed it, and what did not:
   tag hit marked live, and the 14-bit generation retires at 16383 and never wraps.
 - Capability loads and stores (LDC/STC) never used this tracker: they are gated by the DYN unit's own
   rev-node query.
+
+**2026-09-29 — the WHY is now readable on silicon.** On `caplifive_r43_8f6a0af98.bit` (R-43's second fix, which adds a
+refusal record) the same stale probe (image `35fb3fec`) still traps 25 at `+0x4354`, and the record reads LATCHED with arm =
+**probe path** (the probe's node read came back not live for this id — dead or, with the index reissued thousands of times,
+most likely a stale generation): the stale access was refused by the probe, NOT by the cache's deny-on-miss. The id byte read
+0x5f from one fresh sample; the full id is unresolved. That closes the "not observable" item below
+(`../R43-revocation-cache-false-deny/results/board-8f6a0af98.result-lines.txt`, a10).
 
 The status paragraphs that follow are the dated history, newest first.
 
@@ -200,6 +210,65 @@ It does NOT cover:
 ```
 
 Details and limits: `results/board-4ad0df694.result-lines.txt`.
+
+## Nested issues: what this fix did NOT cover, and what rode in the same build
+
+### R-44 — the same adopt, still live at the CPMP (S/U mode). OPEN, live in production.
+
+The LSU check above and the CPMP check are gated on **complementary** values of one signal, so the CPMP is
+100 % of S/U-mode capability enforcement — and it still adopts on sight, per entry:
+
+```
+                          capmode && priv == M                 capmode && priv != M
+                                 |                                     |
+                                 v                                     v
+   +------------------------------------------+   +--------------------------------------------------+
+   | LSU cap_violation_detection              |   | CPMP data check, pmp_data_if.sv                  |
+   | (load_store_unit.sv)                     |   |  per entry i: tracked id, valid bit              |
+   |  R-35 FIX: revocation cache, fail closed |   |  entry presents id != tracked ?                  |
+   +------------------------------------------+   |     -> tracked := id, valid := 1   <-- R-35's    |
+                                                  |        "assume live until proven otherwise"      |
+                                                  |  broadcast for tracked index -> valid := 0       |
+                                                  +--------------------------------------------------+
+   Linux and userspace run under the sticky capmode bit, so a stale capability used from S/U mode
+   is re-adopted exactly as R-35's harness was in M mode.
+```
+
+**Why it was deferred, not fixed here.** Copying the fail-closed cache to the CPMP predicts a **boot
+kill**: `cpmp(0..2)` carry hardcoded ids produced with zero rev-node traffic, so a deny-on-miss tracker
+would refuse the first S-mode instruction fetch. Reachability and fault-loop objections were raised and
+refuted; the boot-kill risk was not (measured in simulation by `r12-recl-cpmp.S` probe 4). A fix needs
+positive evidence for the CPMP entries (this fix's taps can feed a second consumer) plus an explicit seed
+for those three ids, synthesis before any board time, and a first S-mode boot as its acceptance. The PC
+tracker in `commit_stage.sv` adopts the same way and is latent (it needs a stale CODE capability, never
+constructed). Registry: `docs/ref/ISSUES.md` R-44.
+
+### R-37 / R-38 — invalidate and adopt in the wrong ORDER. "Stage 0", in the flashed build; unverified on silicon.
+
+Both trackers applied the invalidation broadcast against the wrong id in the cycle an adopt happened:
+
+```
+   same cycle: an ADOPT of id Y into a tracker holding X, and a BROADCAST naming one of them
+
+   LSU (R-37), before:   invalidate (vs X) ... then adopt Y, valid := 1
+                         broadcast names Y  -> nothing matched, the adopt wins -> Y tracked LIVE
+                                               though it was just killed        = false ALLOW (R-35's class)
+   CPMP (R-38), before:  adopt Y ... then invalidate comparing the PRE-adopt X
+                         broadcast names X  -> match, valid := 0 -> the entry now tracks Y, marked invalid,
+                                               and no broadcast for Y ever comes = permanent false DENY
+                         broadcast names Y  -> no match (X != Y)   = a live-looking entry for a dead Y
+                                                                    = false ALLOW (found by audit later)
+
+   Stage 0 (247b76896), both:  adopt first, THEN invalidate against the POST-adopt id (_d)
+```
+
+Cost: 4.593 ns of WNS in the build alone (`247b76896`: −12.900 vs −8.307), localized by audit to the LSU
+half, whose post-adopt value fed `cap_exception` combinationally — an audit argument, never separated by a
+build. The LSU half is now **moot**: this folder's fix replaced that tracker with the cache, which keeps
+the same-cycle property with a single 16-bit comparator against the accessed id. The CPMP half stays and
+**must not be reverted to `_q` as a timing measure** — that reinstates the false allow (see the analytical
+notes below on the two compare widths). Neither is verified on silicon; the flashed build carries both.
+Registry: `docs/ref/ISSUES.md` R-37, R-38.
 
 ## What was observed
 

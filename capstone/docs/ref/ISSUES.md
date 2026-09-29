@@ -567,7 +567,7 @@ one-cycle IDLE detour goes.
 
 te by the RTL lane, 2026-09-24.
 
-### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `OPEN — the first fix (0f5185a6d) is REFUTED BY SYNTHESIS (2026-09-29): correct in RTL simulation, but its combinational load/store stall gate put the revocation lookup in series with the load request -- routed WNS -24.495, all worst-500 paths through it. Redesign needed (replay rather than hold). Confirmed 2026-09-25 on silicon and in simulation. Report folder: tests/fpga-repros/R43-revocation-cache-false-deny/`
+### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `FIXED ON SILICON 2026-09-29 (capstone-ariane 8f6a0af98, caplifive_r43_8f6a0af98.bit, flashed on the lead's word; acceptance a1..a10 all PASS: the R1 warm/cold harnesses, live128/512 and P1 cell 6 complete where R-42 trapped 25, the ladder and cell 5 unchanged, the R-35 probe still traps with the refusal record reading refused-on-the-probe-path, not deny-on-miss; the live128/512 fixtures had trapped in their minting phase on R-42, so their sweeps run on silicon for the first time). The second fix: a miss REPLAYS the access through the existing exception path instead of holding the load request; shipping-build sim passes every arm, the 8-variant batch and the 92-test sweep read clean, lint at baseline; SYNTHESISED and SEALED 2026-09-29: loop membership the same as R-42 (1 loop), LUTLP-1 0, ORDER 0/500, WNS -9.595 against R-42's -10.615, own-cell FF exactly +150, bitstream sha256 61443441...5345 -- a FLASH CANDIDATE, the reflash being the lead's call; the after-audit refuted four documented properties (recorded in the folder) and the mechanism held. The first fix (0f5185a6d) was refuted by synthesis (WNS -24.495, every worst path through its combinational stall gate). Confirmed 2026-09-25 on silicon (R1, live128/512, P1 cell 6) and in simulation. Report folder: tests/fpga-repros/R43-revocation-cache-false-deny/`
 
 > **Scope.** The M-mode LSU revocation cache in `capstone-ariane 4ad0df694` (4 ways x 64 sets, exact
 > 30-bit `{generation, index}` tag). An access whose id is not resident is refused with cause 25
@@ -659,7 +659,7 @@ te by the RTL lane, 2026-09-24.
 > plus an explicit seed for the hardcoded `cpmp(0..2)` ids, so they are not denied at boot. It goes to
 > synthesis before any board time, and a first S-mode boot is its acceptance.
 
-### R-45 — a load/store issued right after REVOKE or DROP could be checked BEFORE the revocation took effect, and was allowed `FIX IN RTL (capstone-ariane branch r43-query-on-miss, 2026-09-28), in the same bitstream as R-43; found while testing R-43; predates it`
+### R-45 — a load/store issued right after REVOKE or DROP could be checked BEFORE the revocation took effect, and was allowed `FIXED IN THE FLASHED BITSTREAM (capstone-ariane 8f6a0af98, caplifive_r43_8f6a0af98.bit, 2026-09-29): verified in RTL simulation (arms 7/7r deny; the noflush build allows 7r); no silicon arm exercises the window on its own; found while testing R-43; predates it`
 
 > **What happens.** REVOKE and DROP change rev-node memory, and the DYN unit completes them only after that
 > (REVOKE waits for `rev_res` at the end of its walk). But nothing holds LSU issue behind an in-flight DYN
