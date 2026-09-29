@@ -18,6 +18,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -216,6 +218,53 @@ int main(int argc, char **argv) {
     if (restart) CHECK(n == 1 && c == 'H');
     else CHECK(n == -1 && errno == EINTR);
     CHECK(!reap(s, &status));
+    return pass();
+  }
+  if (!strcmp(mode, "recv-restart") || !strcmp(mode, "recv-eintr")) {
+    /* The same for a socket: a blocking recv when the signal arrives. With
+       SA_RESTART the handler's byte, written into the pair's other end, is
+       what the restarted recv returns; without it recv fails with EINTR. */
+    int restart = !strcmp(mode, "recv-restart");
+    int pair[2];
+    CHECK(!socketpair(AF_UNIX, SOCK_STREAM, 0, pair));
+    handler_pipe = pair[1];
+    CHECK(!install(SIGUSR1, writing_to_pipe, restart ? SA_RESTART : 0));
+    pid_t s = sender("USR1", "0.3");
+    CHECK(s > 0);
+    char c = 0;
+    ssize_t n = recv(pair[0], &c, 1, 0);
+    int saved = errno;
+    CHECK(count[SIGUSR1] == 1);
+    if (restart) CHECK(n == 1 && c == 'H');
+    else CHECK(n == -1 && saved == EINTR);
+    CHECK(!reap(s, &status));
+    return pass();
+  }
+  if (!strcmp(mode, "epoll-pwait")) {
+    /* epoll_pwait with a mask is a wait under a temporary mask, as ppoll is:
+       the original mask blocks USR1 and USR2, the wait frees them, the
+       handler runs under the temporary mask before the call returns EINTR,
+       and the original mask is back afterwards */
+    sigset_t original, empty, after;
+    sigemptyset(&original); sigaddset(&original, SIGUSR1); sigaddset(&original, SIGUSR2);
+    sigemptyset(&empty);
+    int ep = epoll_create1(0);
+    CHECK(ep >= 0);
+    CHECK(!install(SIGUSR1, counting, 0));
+    CHECK(!sigprocmask(SIG_SETMASK, &original, NULL));
+    pid_t s = sender("USR1", "0.3");
+    CHECK(s > 0);
+    struct epoll_event ev;
+    int r = epoll_pwait(ep, &ev, 1, -1, &empty);
+    int saved = errno;
+    CHECK(!sigprocmask(SIG_BLOCK, NULL, &after));
+    CHECK(r == -1 && saved == EINTR);
+    CHECK(count[SIGUSR1] == 1);
+    CHECK(seen_blocked[SIGUSR1] == 0);
+    CHECK(sigismember(&after, SIGUSR1) && sigismember(&after, SIGUSR2));
+    CHECK(!sigprocmask(SIG_SETMASK, &empty, NULL));
+    CHECK(!reap(s, &status));
+    close(ep);
     return pass();
   }
   if (!strcmp(mode, "handler-write")) {
