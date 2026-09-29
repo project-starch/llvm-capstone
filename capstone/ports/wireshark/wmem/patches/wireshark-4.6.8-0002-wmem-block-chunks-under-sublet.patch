@@ -331,7 +331,7 @@ remainder too small to list. The classes of the hunks are in the sibling
 +{
 +    wmem_block_chunk_t *chunk;
 +
-+    wm_probe(ptr);
++    wm_handback_probe(ptr);
 +    chunk = wm_chunk_at(wm_addr(ptr) - WMEM_CHUNK_HEADER_SIZE);
 +    if (!chunk || !chunk->used) {
 +        wm_fail(260);

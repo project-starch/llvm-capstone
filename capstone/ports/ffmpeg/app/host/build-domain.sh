@@ -491,6 +491,31 @@ for fx in $FIXTURES; do
     "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
     "$OUT/ffapp_safety_$fx.o" "${FIXLINK[@]}" "${FFLIBS[@]}" "$ARCHIVE"
 done
+# FFAPP_CORPUS_DIR: the FFmpeg pool bug corpus (capstone/bug-corpora/ffmpeg/pool-repros), each
+# case.c UNCHANGED against this image's libavutil, on the Sublet port of the pools and on its
+# stock control only (the substitute's arms have the corpus's own runner). Fixture 40 + 2 * case
+# + fixed: the case with upstream's defect, then with the fix. case.c is compiled with -g, so
+# a fault's pc can be named by its source line (the corpus runner's verdict does that).
+if [ -n "${FFAPP_CORPUS_DIR:-}" ]; then
+  { [ "$POOL" = sublet ] || [ "$POOL" = stock ]; } \
+    || { echo "FFAPP_CORPUS_DIR needs FFAPP_POOL=sublet or stock" >&2; exit 2; }
+  CORPUS_CASES=("$FFAPP_CORPUS_DIR"/[0-9][0-9]_*/case.c)
+  [ -f "${CORPUS_CASES[0]}" ] || { echo "no NN_*/case.c under $FFAPP_CORPUS_DIR" >&2; exit 2; }
+  CORPUSF=(-I"$FFAPP_CORPUS_DIR/shared" -I"$APP_DIR/../buffer-pool/src/shared")
+  for c in "${CORPUS_CASES[@]}"; do
+    n=$(basename "$(dirname "$c")"); n=$((10#${n%%_*}))
+    for fixed in 0 1; do
+      fx=$((40 + 2 * n + fixed))
+      "$CLANG" "${APPF[@]}" "${CORPUSF[@]}" -g -c "$c" -o "$OUT/ffapp_corpus_case_$fx.o"
+      "$CLANG" "${APPF[@]}" "${CORPUSF[@]}" -DFFAPP_FIXTURE="$fx" -DFFAPP_CORPUS_FIXED="$fixed" \
+        -c "$APP_DIR/src/capstone-domain/ffapp_corpus.c" -o "$OUT/ffapp_corpus_$fx.o"
+      "$LD_LLD" --gc-sections -T "$LDS" -o "$OUT/ffapp_fx$fx.dom" \
+        "${RUNTIME[@]}" "$RT/hostcall.o" "${softfloat_objs[@]}" "$OUT/domreq.o" \
+        "$OUT/ffapp_corpus_$fx.o" "$OUT/ffapp_corpus_case_$fx.o" "${FFLIBS[@]}" "$ARCHIVE"
+    done
+  done
+  echo "corpus images: ${#CORPUS_CASES[@]} cases x (defect, fix) from $FFAPP_CORPUS_DIR"
+fi
 echo "safety fixture images ($HEAP heap${POOL:+, pool mode $POOL}): $(ls "$OUT"/ffapp_fx*.dom | wc -l)"
 
 # --- C-50 gate: no integer address formed off sp/s0 and used as a store base ------------

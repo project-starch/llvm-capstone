@@ -27,6 +27,15 @@
       "oracle": "fault at the labelled WRITE probe, a different published address from the read cases",
       "cause": 24
     },
+    "sublet-port": {
+      "fixtures": [
+        44,
+        45
+      ],
+      "oracle": "case.c unchanged against the Sublet port of FFmpeg's own pools (app port, FFAPP_POOL=sublet): the defect faults, cause 24, at an instruction case.c's line table puts on a line that dereferences the stale pointer (33), before the verdict line; the fix completes with VERDICT FIXED",
+      "control": "the same images on FFAPP_POOL=stock, upstream's pools: the defect completes with VERDICT DEFECT-REPRODUCED, the fix with VERDICT FIXED",
+      "cause": 24
+    },
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap, libc revocation enabled",
       "case": "pool-0-38",

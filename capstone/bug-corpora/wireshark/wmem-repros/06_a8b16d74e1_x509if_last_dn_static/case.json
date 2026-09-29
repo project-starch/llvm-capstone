@@ -19,6 +19,10 @@
       "oracle": "fault at the labelled read probe",
       "cause": 24
     },
+    "sublet-chunks": {
+      "oracle": "fault at the labelled read probe: the packet pool is BLOCK_FAST, which the chunk port leaves unchanged",
+      "cause": 24
+    },
     "poisoncap-spatial": {
       "mode": 0,
       "oracle": "complete"

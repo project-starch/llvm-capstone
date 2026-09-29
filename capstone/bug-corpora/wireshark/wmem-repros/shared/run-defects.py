@@ -37,12 +37,30 @@ def discover(domain_build):
     return found
 
 
+def oracle_arm(domain_build):
+    """Which case.json arm judges the protected mode: the build decides, never a flag. The
+    wmem port's chunk port (WM_CHUNKS, ON by default since it landed) revokes a chunk at its
+    individual free, which the region-granular hooks do not, so the two builds have different
+    oracles, and judging one build against the other's would read a new detection as a failure
+    or a lost one as a pass. A build from before the option existed is region-granular."""
+    cache = domain_build / "CMakeCache.txt"
+    if not cache.exists():
+        raise SystemExit(f"no {cache}: cannot tell which port this build is")
+    m = re.search(r"^WM_CHUNKS:BOOL=(\w+)$", cache.read_text(), re.M)
+    if m is None:
+        return "sublet"
+    return "sublet-chunks" if m.group(1).upper() in ("ON", "1", "TRUE", "YES") else "sublet"
+
+
 def oracle_site(which):
-    """Which labelled probe the case's sublet oracle names, or None when the
+    """Which labelled probe the case's protected oracle names, or None when the
     oracle says the protected arm completes: a recorded non-detection, which
     is checked as a completion rather than accepted as a fault anywhere."""
     for d in CORPUS.glob(f"{which:02d}_*"):
-        text = json.loads((d / "case.json").read_text())["arms"]["sublet"]["oracle"]
+        arms = json.loads((d / "case.json").read_text())["arms"]
+        if ORACLE_ARM not in arms:
+            raise SystemExit(f"case {which} has no {ORACLE_ARM} oracle")
+        text = arms[ORACLE_ARM]["oracle"]
         if text.startswith("complete"):
             return None
         if "allocator" in text:
@@ -63,6 +81,7 @@ def classify(serial, which, mode, runner_exit, report):
         "case": which,
         "mode": mode,
         "expected": "fault" if mode == "sublet" and site is not None else "complete",
+        "oracle_arm": ORACLE_ARM if mode == "sublet" else "spatial",
         "runner_exit": runner_exit,
     }
     if mode == "sublet" and site is not None:
@@ -111,12 +130,14 @@ p.add_argument(
 )
 a = p.parse_args()
 CORPUS = a.corpus.resolve()
+ORACLE_ARM = oracle_arm(a.domain_build)
 programs = discover(a.domain_build)
 if not programs:
     p.error(f"no NN-*.dom programs in {a.domain_build}/bin; a corpus that built nothing must not look like one that passed")
 cases = [int(c) for c in a.cases.split(",")] if a.cases else sorted(programs)
 a.output.mkdir(parents=True, exist_ok=True)
 print(f"Defect suite artifacts: {a.output}", flush=True)
+print(f"protected mode judged against the case.json arm: {ORACLE_ARM}", flush=True)
 verdicts = []
 status = 0
 for which in cases:

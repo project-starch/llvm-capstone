@@ -18,6 +18,10 @@
     "sublet": {
       "oracle": "complete: the individual recycler free ends no epoch, a recorded non-detection, not a pass"
     },
+    "sublet-chunks": {
+      "oracle": "fault at the labelled read probe: under the chunk port (WM_CHUNKS=ON) the chunk is a region of its own, its individual free revokes it, and its reissue at the same address is a new region, so the registry's stale name faults",
+      "cause": 24
+    },
     "poisoncap-spatial": {
       "mode": 0,
       "oracle": "complete"

@@ -38,7 +38,10 @@ LOG=${LOG_FILE:-$WORK/safety-$ARM-$(printf '%s' "$*" | tr ' ' '-').log}
 # Never overwrite an earlier attempt: a stalled boot's log is the evidence that it stalled
 # before any image loaded (audit, 2026-09-23: two retries overwrote theirs).
 if [ -e "$LOG" ]; then n=2; while [ -e "${LOG%.log}.try$n.log" ]; do n=$((n + 1)); done; LOG=${LOG%.log}.try$n.log; fi
-EXPECT="$SCRIPT_DIR/safety-expect.txt"
+# FFAPP_SAFETY_EXPECT / FFAPP_SAFETY_VERDICT: another set of predictions and the classifier that
+# reads them, for images this script boots but safety-verdict.py cannot judge (the bug corpus's
+# cases, whose fault is named by source line: bug-corpora/ffmpeg/pool-repros/runners/).
+EXPECT="${FFAPP_SAFETY_EXPECT:-$SCRIPT_DIR/safety-expect.txt}"
 
 # A predicted fault anywhere but last would silently cost every fixture after it.
 n=$#; i=0
@@ -74,4 +77,8 @@ else
   CAPSTONE_QEMU_LOCK_HELD=1 flock -x -w "${FFAPP_LOCK_WAIT:-3600}" "$CAPSTONE_QEMU_LOCK" "${smoke[@]}" > "$LOG.smoke" 2>&1
 fi
 echo "run-domain-smoke exit status $? (not the verdict); serial log $LOG"
-python3 "$SCRIPT_DIR/safety-verdict.py" "$LOG" "$EXPECT" "$ARM" "$@"
+if [ -n "${FFAPP_SAFETY_VERDICT:-}" ]; then
+  python3 "$FFAPP_SAFETY_VERDICT" "$LOG" "$EXPECT" "$ARM" "$DOM" "$@"
+else
+  python3 "$SCRIPT_DIR/safety-verdict.py" "$LOG" "$EXPECT" "$ARM" "$@"
+fi
