@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "application-image.h"
+#include "capstone/delegate.h"
 #include <assert.h>
 #include <elf.h>
 #include <errno.h>
@@ -49,10 +50,19 @@ static void fixture(void) {
   memcpy(image + 704, req, sizeof req);
 }
 
+static struct capstone_application_descriptor_v2 loaded;
 static int load(void) {
   assert(pwrite(source, image, sizeof image, 0) == sizeof image);
-  struct capstone_application_descriptor d;
-  return capstone_application_image(path, &d);
+  return capstone_application_image(path, &loaded);
+}
+
+/* Rewrite the fixture's descriptor as v2: 48 bytes, the delegate flag, an
+   exchange size. */
+static void v2(uint64_t flags, uint64_t exchange) {
+  struct capstone_application_descriptor_v2 d = {{CAPSTONE_APPLICATION_MAGIC,
+      CAPSTONE_LAUNCH_VERSION, flags, CAPSTONE_LAUNCH_BYTES, 0}, exchange};
+  sections()[2].sh_size = sizeof d;
+  memcpy(image + 640, &d, sizeof d);
 }
 
 static void reject(void) {
@@ -64,6 +74,17 @@ static void reject(void) {
 int main(void) {
   source = mkstemp(path);
   assert(source >= 0);
+  char hash[65];
+  assert(!capstone_application_hash(source, hash));
+  assert(!strcmp(hash, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+  assert(write(source, "abc", 3) == 3);
+  assert(!capstone_application_hash(source, hash));
+  assert(!strcmp(hash, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));
+  const char *long_input = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+  assert(ftruncate(source, 0) == 0 && lseek(source, 0, SEEK_SET) == 0);
+  assert(write(source, long_input, strlen(long_input)) == (ssize_t)strlen(long_input));
+  assert(!capstone_application_hash(source, hash));
+  assert(!strcmp(hash, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"));
   fixture();
   int snapshot = load();
   assert(snapshot >= 0);
@@ -84,6 +105,24 @@ int main(void) {
   sections()[3].sh_offset = UINT64_MAX; reject();
   sections()[3].sh_type = SHT_NOBITS; reject();
   image[640] ^= 1; reject();
+  /* v1: 40 bytes, no exchange */
+  assert(load() >= 0 && loaded.exchange_bytes == 0 &&
+         loaded.v1.flags == CAPSTONE_APPLICATION_RECOVERY);
+  /* v2: 48 bytes with the flag and a sane exchange size */
+  v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 262144);
+  snapshot = load();
+  assert(snapshot >= 0 && loaded.exchange_bytes == 262144 &&
+         (loaded.v1.flags & CAPSTONE_APPLICATION_DELEGATE));
+  close(snapshot);
+  /* the flag without the size, the size without the flag, an absurd size */
+  v2(CAPSTONE_APPLICATION_RECOVERY, 262144); reject();
+  fixture();
+  struct capstone_application_descriptor d1 = {CAPSTONE_APPLICATION_MAGIC,
+      CAPSTONE_LAUNCH_VERSION, CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE,
+      CAPSTONE_LAUNCH_BYTES, 0};
+  memcpy(image + 640, &d1, sizeof d1); reject();
+  v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 4095); reject();
+  v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, UINT64_C(2) << 30); reject();
   close(source);
   unlink(path);
   return 0;

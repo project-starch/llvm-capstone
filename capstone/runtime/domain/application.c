@@ -7,11 +7,26 @@
 #define CAPSTONE_APPLICATION_HEAP_BYTES 0
 #endif
 
+#ifdef CAPSTONE_DELEGATE_RUNTIME
+#include "capstone/delegate.h"
+#ifndef CAPSTONE_APPLICATION_EXCHANGE_BYTES
+#define CAPSTONE_APPLICATION_EXCHANGE_BYTES CAPSTONE_DELEGATE_DEFAULT_EXCHANGE
+#endif
+/* Descriptor v2 (launch.h): a v1 launcher rejects the size; a v2 launcher
+   accepts both. */
+__attribute__((used, section(".capstone_application")))
+static const struct capstone_application_descriptor_v2 descriptor = {
+    {CAPSTONE_APPLICATION_MAGIC, CAPSTONE_LAUNCH_VERSION,
+     CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE,
+     CAPSTONE_LAUNCH_BYTES, CAPSTONE_APPLICATION_HEAP_BYTES},
+    CAPSTONE_APPLICATION_EXCHANGE_BYTES};
+#else
 __attribute__((used, section(".capstone_application")))
 static const struct capstone_application_descriptor descriptor = {
     CAPSTONE_APPLICATION_MAGIC, CAPSTONE_LAUNCH_VERSION,
     CAPSTONE_APPLICATION_RECOVERY, CAPSTONE_LAUNCH_BYTES,
     CAPSTONE_APPLICATION_HEAP_BYTES};
+#endif
 
 static char storage[CAPSTONE_LAUNCH_BYTES] __attribute__((aligned(16)));
 static char *arguments[CAPSTONE_LAUNCH_STRINGS + 1];

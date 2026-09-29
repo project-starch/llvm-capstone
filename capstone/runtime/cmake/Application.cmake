@@ -2,8 +2,11 @@ include_guard(GLOBAL)
 
 # A normal main(argc, argv), linked against the shared musl application ABI.
 # The caller selects the existing capstone-domain toolchain and musl headers.
+option(CAPSTONE_APPLICATION_DELEGATE
+  "Applications delegate syscalls to their Linux task (ABI v2); OFF selects HostCall v0" ON)
+
 function(capstone_configure_application target)
-  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG" "")
+  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG;EXCHANGE_BYTES" "")
   if(app_UNPARSED_ARGUMENTS OR app_KEYWORDS_MISSING_VALUES)
     message(FATAL_ERROR "Invalid capstone_configure_application arguments")
   endif()
@@ -42,6 +45,14 @@ function(capstone_configure_application target)
       "${PORT_MUSL_ROOT}/obj/src/internal" "${PORT_MUSL_ROOT}/src/multibyte")
     target_compile_definitions(capstone-application-core PRIVATE
       _XOPEN_SOURCE=700 CAPSTONE_APPLICATION_RUNTIME=1 CAPSTONE_DOMAIN_FAULT_RECOVERY=1 CAPSTONE_PROGRAM_REGIONS=1)
+    if(CAPSTONE_APPLICATION_DELEGATE)
+      target_sources(capstone-application-core PRIVATE
+        "${musl}/delegate.c" "${musl}/posix_spawn_delegate.c"
+        "${capstone}/runtime/common/delegate.c" "${capstone}/runtime/common/spawn.c")
+      set_source_files_properties("${musl}/posix_spawn_delegate.c" PROPERTIES
+        INCLUDE_DIRECTORIES "${PORT_MUSL_ROOT}/src/process")
+      target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_DELEGATE_RUNTIME=1)
+    endif()
     target_compile_options(capstone-application-core PRIVATE
       -ffunction-sections -fdata-sections -fno-jump-tables
       "$<$<COMPILE_LANGUAGE:C>:-Wno-int-conversion>")
@@ -71,6 +82,19 @@ function(capstone_configure_application target)
     set(heap "${musl}/level0.c")
   else()
     message(FATAL_ERROR "Unknown application heap: ${app_HEAP}")
+  endif()
+  if(CAPSTONE_APPLICATION_DELEGATE)
+    if(NOT app_EXCHANGE_BYTES)
+      set(app_EXCHANGE_BYTES 262144)
+    endif()
+    if(NOT app_EXCHANGE_BYTES MATCHES "^[0-9]+$" OR app_EXCHANGE_BYTES LESS 4096 OR
+       app_EXCHANGE_BYTES GREATER 1073741824)
+      message(FATAL_ERROR "EXCHANGE_BYTES must be between 4096 and 1073741824")
+    endif()
+    target_compile_definitions(${target} PRIVATE CAPSTONE_DELEGATE_RUNTIME=1
+      CAPSTONE_APPLICATION_EXCHANGE_BYTES=${app_EXCHANGE_BYTES})
+  elseif(app_EXCHANGE_BYTES)
+    message(FATAL_ERROR "EXCHANGE_BYTES needs CAPSTONE_APPLICATION_DELEGATE")
   endif()
   math(EXPR data_bytes "${app_DATA_BYTES} + 256")
   target_sources(${target} PRIVATE "${capstone}/runtime/domain/application.c"
