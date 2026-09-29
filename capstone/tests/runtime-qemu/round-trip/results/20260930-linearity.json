@@ -1,0 +1,67 @@
+{
+  "date": "2026-09-30",
+  "pr": 94,
+  "base_commit": "36c0d3a75663f794627d7141a8cb15e738250f2a",
+  "pass_source_sha256": "ce1f9d13233dc06a404bf34953fe5806db2bd7a8c6affa7b3b2366fa8a008eed",
+  "clang_sha256": "9bf7af3598c790e1688ec834f7c3ba86f567f5a131d371679e3b8a18c85c267e",
+  "llc_sha256": "313fb6c622498f4d3157325afe7a2c99b8cd36bd190dd3c6bd9ee2c6e80be233",
+  "original_llc_sha256": "f80975ca455e67d5d4d82845bd85f3dded789d1433da0a47e8058a895e2662d8",
+  "regressions": {
+    "original_compiler": {
+      "O0": "FileCheck rejects the unsafe rewrites",
+      "O2": "FileCheck rejects the unsafe rewrites"
+    },
+    "fixed_compiler": {
+      "O0": "PASS: all six opaque-source cases retain inttoptr; assembly equals pass-off",
+      "O2": "PASS: all six opaque-source cases retain inttoptr; assembly equals pass-off"
+    },
+    "known_source_controls": "PASS: objects, globals, explicit DELIN and supported derivations still recover",
+    "llvm_capstone_codegen_mc": {
+      "pass": 126,
+      "fail": 1,
+      "failure": "shared-patches-present: histogram diff gives +40 -6; manifest expects Myers +41 -7"
+    },
+    "shared_manifest_direct_myers": {
+      "pass": true,
+      "files": 84
+    },
+    "clang_capstone": {
+      "pass": 24,
+      "fail": 0
+    },
+    "final_focused_lit": {
+      "pass": 3,
+      "fail": 0
+    }
+  },
+  "qemu": {
+    "binary_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+    "round_trip": {
+      "O0_checks_passed": 12,
+      "O2_checks_passed": 12,
+      "runtime_atexit_handler": "ran in both",
+      "pass_off": "fault before first successful round trip"
+    },
+    "exit_hook": {
+      "default_status": 7,
+      "override_hook_status": 42,
+      "old_runtime_control": "fault as required",
+      "unmodified_musl_atexit": "fault before handler as required"
+    },
+    "images_sha256": {
+      "rt-O0.dom": "c10bd58b9a304c5f6ad9724ea20cf1075aea46b2a2957fabe02cddaacd5a70fb",
+      "rt-O2.dom": "2e431a22be158a0c96a19b8cb00df9a93fe35bc26df6ba97458b789d74de6fce",
+      "rt-off.dom": "41dc42e4601b343268d4b930bd066c7c87969521050035b54b255fded202e045",
+      "exit-control.dom": "a02c8c03d81a68e697f9d694e5033a4f0ce31f53dd7bce498504f053a47eb124",
+      "exit-default.dom": "ad73140aba99ea4129cf03dbd290b03cf0ed08765340f22e67d3137a67d37471",
+      "exit-hook.dom": "5d63737945476851da6d9ef38d3fcd2299081267212bf3e30f803cc5ddd02a35",
+      "exit-muslatexit.dom": "5906a94446fb1252c8e524307365d91f81e6a5c79f97539aa06e920400c43f6a"
+    }
+  },
+  "scope": [
+    "QEMU opaque-source checks use NONLIN inputs and verify conservative refusal; live LINEAR preservation is checked in IR and pass-on/off assembly, not on silicon.",
+    "Opaque callback round trips are no longer recovered; retain the capability-safe atexit override.",
+    "Nightly, full hostcall-all, libc-test and BEEBS were not rerun for this follow-up.",
+    "The separate ISel backstop and front-end warning limitations are unchanged."
+  ]
+}

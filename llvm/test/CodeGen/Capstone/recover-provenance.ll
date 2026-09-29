@@ -11,49 +11,16 @@
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-recover-provenance=false \
 ; RUN:     -stop-after=capstone-provenance < %s | FileCheck %s --check-prefix=OFF
 ;
-; The `nonnull` on the parameters below is load-bearing, not decoration: a base
-; that MAY BE NULL is left alone, because `cincoffset` raises UNEXPECTED_OPERAND
-; on a register holding no capability and null holds none. @maybe_null_align
-; pins that, @checked_align pins that a null test is enough, and
-; @identity_may_be_null pins the one exemption -- a rewrite with no offset emits
-; no cincoffset at all.
+; Recovery needs both a capability and proof that an additional use cannot
+; consume it. Positive arithmetic cases use local objects. Null-sensitive
+; cases use a select of null and a global: it is known not to be LINEAR but
+; may still hold no capability. Bare arguments and opaque memory/calls are
+; tested separately in recover-provenance-linear.ll.
 ;
-; MUTATION: drop the `Sub` case's carriesAddress() test in the pass -> @difference
-; is rewritten into a GEP on %p and its IR-NOT line fails. Make walkSlot() return
-; without walking -> @slot_flag and @slot_cursor keep their inttoptr. Walk only
-; Instructions again (not constant expressions) -> @global_align and
-; @global_constant keep theirs. Each of the three below was run: let joinInputs()
-; take the UNION of its inputs again -> @select_foreign, @phi_foreign and
-; @slot_foreign are rewritten and their IR lines fail; drop the
-; holdsCapability() gate -> @maybe_null_align, @carrier_mask_align and
-; @heap_no_deref are rewritten (@select_fallback needs BOTH mutations, its
-; fallback arm being foreign as well); look through a
-; narrowing cast in linearOffset() again -> @truncated_address folds to `%p` and
-; loses its GEP; make isPlainAddressOf() refuse the carrier mask ->
-; @carrier_mask_identity is left to the null gate and keeps its inttoptr, which
-; is the shape that broke musl's atexit() in QEMU before it was pinned here; drop
-; the dominating-dereference rule in holdsCapability() -> @heap_deref keeps its
-; inttoptr; let two different sources agree in joinInputs() -> @select_two_sources
-; is rewritten on whichever arm came last; drop the alloca, the extern-weak test
-; or the stack-slot look-through in holdsCapability() -> @alloca_align,
-; @weak_global_align and @slot_holds_global respectively. All nine were run
-; against the build this branch was gated with.
+; Negative source-finder cases also use known NONLIN local objects, so the
+; linearity gate cannot hide a source-agreement, slot-escape or arithmetic bug.
+; The pass-off run pins the absence of recovery on the align-up control.
 ;
-; Second round, after the review that found integer-made and LINEAR sources,
-; each run at -O2 and -O0 against that change's build: let a constant hold a
-; capability in holdsCapability() -> @sentinel_select and @sentinel_slot are
-; moved; ask isKnownNonZero about an inttoptr again -> @int_source and
-; @int_source_gep; drop the mayBeLinear() refusal -> @linear_live,
-; @linear_identity and @linear_tightened; stop looking through an intrinsic's
-; operands in mayBeLinear() -> @linear_tightened; call DELIN's result linear ->
-; @delinearized keeps its inttoptr; refuse every select -> @two_objects_select;
-; read a cycle back to a phi as no capability -> @phi_cursor. The first round's
-; holdsCapability() mutations were re-run on the restructured function and still
-; fail their tests: the gate (@maybe_null_align, @carrier_mask_align,
-; @heap_no_deref), the alloca (@alloca_align), the extern-weak test
-; (@weak_global_align), the slot look-through (@slot_holds_global) and the
-; dominating access, now accessDominates() (@heap_deref).
-
 ; OFF-LABEL: @align_up(
 ; OFF: inttoptr
 ; IR-LABEL: @align_up(
@@ -61,8 +28,9 @@
 ; IR:       %[[D:.*]] = sub i64 %{{.*}}, %{{.*}}
 ; IR:       getelementptr i8, ptr addrspace(200) %p, i64 %[[D]]
 ; ASM-LABEL: align_up:
-; ASM:       cincoffset a0, a0,
-define ptr addrspace(200) @align_up(ptr addrspace(200) nonnull %p) {
+; ASM:       cincoffset a0, {{[a-z0-9]+}},
+define ptr addrspace(200) @align_up() {
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %i = ptrtoint ptr addrspace(200) %p to i64
   %a = add i64 %i, 63
   %m = and i64 %a, -64
@@ -74,7 +42,8 @@ define ptr addrspace(200) @align_up(ptr addrspace(200) nonnull %p) {
 ; IR-LABEL: @carrier(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
-define ptr addrspace(200) @carrier(ptr addrspace(200) nonnull %p, i64 %n) {
+define ptr addrspace(200) @carrier(i64 %n) {
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %w = ptrtoint ptr addrspace(200) %p to i128
   %t = trunc i128 %w to i64
   %s = add i64 %t, %n
@@ -87,7 +56,8 @@ define ptr addrspace(200) @carrier(ptr addrspace(200) nonnull %p, i64 %n) {
 ; IR-LABEL: @scaled_index(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
-define ptr addrspace(200) @scaled_index(ptr addrspace(200) nonnull %p, i64 %i) {
+define ptr addrspace(200) @scaled_index(i64 %i) {
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   %o = mul i64 %i, 8
   %s = add i64 %a, %o
@@ -99,7 +69,8 @@ define ptr addrspace(200) @scaled_index(ptr addrspace(200) nonnull %p, i64 %i) {
 ; IR-LABEL: @flag_select(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
-define ptr addrspace(200) @flag_select(ptr addrspace(200) nonnull %p, i1 %c) {
+define ptr addrspace(200) @flag_select(i1 %c) {
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   %set = or i64 %a, 1
   %clr = and i64 %a, -2
@@ -113,8 +84,9 @@ define ptr addrspace(200) @flag_select(ptr addrspace(200) nonnull %p, i1 %c) {
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
 ; IR:       load i8
-define i8 @walk(ptr addrspace(200) nonnull %p, i64 %n) {
+define i8 @walk(i64 %n) {
 entry:
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %start = ptrtoint ptr addrspace(200) %p to i64
   br label %loop
 loop:
@@ -134,7 +106,9 @@ exit:
 ; Two pointers: no single owner. Left alone.
 ; IR-LABEL: @two_sources(
 ; IR:       inttoptr
-define ptr addrspace(200) @two_sources(ptr addrspace(200) %p, ptr addrspace(200) %q) {
+define ptr addrspace(200) @two_sources() {
+  %p = alloca [64 x i8], addrspace(200)
+  %q = alloca [64 x i8], addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   %b = ptrtoint ptr addrspace(200) %q to i64
   %x = xor i64 %a, %b
@@ -146,7 +120,9 @@ define ptr addrspace(200) @two_sources(ptr addrspace(200) %p, ptr addrspace(200)
 ; IR-LABEL: @difference(
 ; IR-NOT:   getelementptr
 ; IR:       inttoptr
-define ptr addrspace(200) @difference(ptr addrspace(200) %p, ptr addrspace(200) %q, i64 %r) {
+define ptr addrspace(200) @difference(i64 %r) {
+  %p = alloca [64 x i8], addrspace(200)
+  %q = alloca [64 x i8], addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   %b = ptrtoint ptr addrspace(200) %q to i64
   %d = sub i64 %b, %a
@@ -203,7 +179,8 @@ join:
 ; IR-LABEL: @optnone_align(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
-define ptr addrspace(200) @optnone_align(ptr addrspace(200) nonnull %p) #0 {
+define ptr addrspace(200) @optnone_align() #0 {
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %i = ptrtoint ptr addrspace(200) %p to i64
   %m = and i64 %i, -16
   %r = inttoptr i64 %m to ptr addrspace(200)
@@ -250,7 +227,8 @@ define void @absolute_address() {
 ; IR-LABEL: @slot_flag(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %n,
-define ptr addrspace(200) @slot_flag(ptr addrspace(200) nonnull %n) #0 {
+define ptr addrspace(200) @slot_flag() #0 {
+  %n = alloca [256 x i8], align 64, addrspace(200)
   %t = alloca i64, align 8, addrspace(200)
   %a = ptrtoint ptr addrspace(200) %n to i64
   %s = or i64 %a, 1
@@ -266,8 +244,9 @@ define ptr addrspace(200) @slot_flag(ptr addrspace(200) nonnull %n) #0 {
 ; IR-LABEL: @slot_cursor(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
-define i64 @slot_cursor(ptr addrspace(200) nonnull %p, i64 %end) #0 {
+define i64 @slot_cursor(i64 %end) #0 {
 entry:
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %c = alloca i64, align 8, addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   store i64 %a, ptr addrspace(200) %c
@@ -290,7 +269,8 @@ exit:
 ; IR-LABEL: @slot_escapes(
 ; IR:       inttoptr
 declare void @take(ptr addrspace(200))
-define ptr addrspace(200) @slot_escapes(ptr addrspace(200) %n) #0 {
+define ptr addrspace(200) @slot_escapes() #0 {
+  %n = alloca [256 x i8], align 64, addrspace(200)
   %t = alloca i64, align 8, addrspace(200)
   %a = ptrtoint ptr addrspace(200) %n to i64
   store i64 %a, ptr addrspace(200) %t
@@ -318,7 +298,8 @@ define ptr addrspace(200) @explicit_address(ptr addrspace(200) %p) {
 ; address nobody used.
 ; IR-LABEL: @maybe_null_align(
 ; IR:       inttoptr
-define ptr addrspace(200) @maybe_null_align(ptr addrspace(200) %p) {
+define ptr addrspace(200) @maybe_null_align(i1 %present) {
+  %p = select i1 %present, ptr addrspace(200) @g, ptr addrspace(200) null
   %i = ptrtoint ptr addrspace(200) %p to i64
   %a = add i64 %i, 15
   %m = and i64 %a, -16
@@ -330,8 +311,9 @@ define ptr addrspace(200) @maybe_null_align(ptr addrspace(200) %p) {
 ; IR-LABEL: @checked_align(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
-define ptr addrspace(200) @checked_align(ptr addrspace(200) %p) {
+define ptr addrspace(200) @checked_align(ptr addrspace(200) %raw) {
 entry:
+  %p = call ptr addrspace(200) @llvm.capstone.cap.delin.p200(ptr addrspace(200) %raw)
   %z = icmp eq ptr addrspace(200) %p, null
   br i1 %z, label %out, label %move
 move:
@@ -345,13 +327,13 @@ out:
 }
 
 ; An address that IS the source's asks for no move, so the rewrite is the pointer
-; itself and emits no cincoffset: safe even where null is possible. This is
-; musl's call(), `((void (*)(void))(uintptr_t)p)()`, the shape #86 had to
-; override.
+; itself and emits no cincoffset: safe even where null is possible, provided
+; the source is known not to be LINEAR.
 ; IR-LABEL: @identity_may_be_null(
 ; IR-NOT:   inttoptr
 ; IR:       ret ptr addrspace(200) %p
-define ptr addrspace(200) @identity_may_be_null(ptr addrspace(200) %p) {
+define ptr addrspace(200) @identity_may_be_null(i1 %present) {
+  %p = select i1 %present, ptr addrspace(200) @g, ptr addrspace(200) null
   %i = ptrtoint ptr addrspace(200) %p to i64
   %r = inttoptr i64 %i to ptr addrspace(200)
   ret ptr addrspace(200) %r
@@ -363,7 +345,8 @@ define ptr addrspace(200) @identity_may_be_null(ptr addrspace(200) %p) {
 ; held. Left alone.
 ; IR-LABEL: @select_foreign(
 ; IR:       inttoptr
-define ptr addrspace(200) @select_foreign(i1 %c, ptr addrspace(200) nonnull %p, i64 %x) {
+define ptr addrspace(200) @select_foreign(i1 %c, i64 %x) {
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   %v = select i1 %c, i64 %a, i64 %x
   %r = inttoptr i64 %v to ptr addrspace(200)
@@ -384,8 +367,9 @@ define ptr addrspace(200) @select_fallback(ptr addrspace(200) %p, i64 %fallback)
 ; A phi is the same rule across edges.
 ; IR-LABEL: @phi_foreign(
 ; IR:       inttoptr
-define ptr addrspace(200) @phi_foreign(ptr addrspace(200) nonnull %p, i64 %x, i1 %c) {
+define ptr addrspace(200) @phi_foreign(i64 %x, i1 %c) {
 entry:
+  %p = alloca [256 x i8], align 64, addrspace(200)
   br i1 %c, label %fromp, label %join
 fromp:
   %a = ptrtoint ptr addrspace(200) %p to i64
@@ -399,8 +383,9 @@ join:
 ; And at -O0 the same mixture is two stores into one slot.
 ; IR-LABEL: @slot_foreign(
 ; IR:       inttoptr
-define ptr addrspace(200) @slot_foreign(ptr addrspace(200) nonnull %p, i64 %x, i1 %c) #0 {
+define ptr addrspace(200) @slot_foreign(i64 %x, i1 %c) #0 {
 entry:
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %t = alloca i64, align 8, addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   store i64 %a, ptr addrspace(200) %t
@@ -418,7 +403,8 @@ join:
 ; IR-LABEL: @select_same_source(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
-define ptr addrspace(200) @select_same_source(ptr addrspace(200) nonnull %p, i1 %c) {
+define ptr addrspace(200) @select_same_source(i1 %c) {
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   %u = add i64 %a, 8
   %d = add i64 %a, 16
@@ -432,7 +418,8 @@ define ptr addrspace(200) @select_same_source(ptr addrspace(200) nonnull %p, i1 
 ; IR-LABEL: @select_plain_offset(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
-define ptr addrspace(200) @select_plain_offset(ptr addrspace(200) nonnull %p, i1 %c) {
+define ptr addrspace(200) @select_plain_offset(i1 %c) {
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   %o = select i1 %c, i64 8, i64 16
   %s = add i64 %a, %o
@@ -448,7 +435,8 @@ define ptr addrspace(200) @select_plain_offset(ptr addrspace(200) nonnull %p, i1
 ; IR-NOT:   inttoptr
 ; IR:       sub i64
 ; IR:       getelementptr i8, ptr addrspace(200) %p, i64 %
-define ptr addrspace(200) @truncated_address(ptr addrspace(200) nonnull %p) {
+define ptr addrspace(200) @truncated_address() {
+  %p = alloca [256 x i8], align 64, addrspace(200)
   %i = ptrtoint ptr addrspace(200) %p to i64
   %t = trunc i64 %i to i32
   %w = zext i32 %t to i64
@@ -456,18 +444,15 @@ define ptr addrspace(200) @truncated_address(ptr addrspace(200) nonnull %p) {
   ret ptr addrspace(200) %r
 }
 
-; musl's call() as clang ACTUALLY emits it, and the reason the case above is not
-; enough: `uintptr_t` is the address width, but the ptrtoint goes to the i128
-; carrier and the narrowing is a MASK, not a truncation. The address is still
-; p's own, so the answer is p itself -- no offset, no cincoffset, safe on a
-; source that may be null. Reading the mask as ordinary arithmetic sends this to
-; the null gate instead, a plain argument does not pass it, and musl's own
-; atexit() goes back to calling through `mv`, which drops the tag (cause 24 at
-; the cjalr; measured against an unmodified musl on 2026-09-28).
+; The i128 carrier narrows to uintptr_t with a MASK, not a truncation.
+; It keeps the entire address. With a known NONLIN-or-null source, this
+; identity needs no capability offset. An opaque argument no longer qualifies;
+; musl's callback round trip still requires the runtime's atexit override.
 ; IR-LABEL: @carrier_mask_identity(
 ; IR-NOT:   inttoptr
 ; IR:       ret ptr addrspace(200) %p
-define ptr addrspace(200) @carrier_mask_identity(ptr addrspace(200) %p) {
+define ptr addrspace(200) @carrier_mask_identity(i1 %present) {
+  %p = select i1 %present, ptr addrspace(200) @g, ptr addrspace(200) null
   %i = ptrtoint ptr addrspace(200) %p to i128
   %m = and i128 %i, 18446744073709551615
   %r = inttoptr i128 %m to ptr addrspace(200)
@@ -478,25 +463,24 @@ define ptr addrspace(200) @carrier_mask_identity(ptr addrspace(200) %p) {
 ; moves the pointer, so on a source that may be null it is left alone.
 ; IR-LABEL: @carrier_mask_align(
 ; IR:       inttoptr
-define ptr addrspace(200) @carrier_mask_align(ptr addrspace(200) %p) {
+define ptr addrspace(200) @carrier_mask_align(i1 %present) {
+  %p = select i1 %present, ptr addrspace(200) @g, ptr addrspace(200) null
   %i = ptrtoint ptr addrspace(200) %p to i128
   %m = and i128 %i, -16
   %r = inttoptr i128 %m to ptr addrspace(200)
   ret ptr addrspace(200) %r
 }
 
-; A heap pointer qualifies through the program's OWN dereference: a load or store
-; through it that dominates the cast would have trapped if it held no capability,
-; so by the cast it holds one. Without this nothing a function allocates could
-; ever be moved -- malloc may return null and nothing else says otherwise -- and
-; the pass would stop recovering the flag and cursor shapes that heap-heavy code
-; is made of.
+; After explicit DELIN establishes NONLIN, a dominating access establishes
+; validity independently. Without that access, a call result has no nonnull
+; proof at the cast. An opaque call without DELIN is separately declined.
 declare ptr addrspace(200) @alloc(i64)
 ; IR-LABEL: @heap_deref(
 ; IR-NOT:   inttoptr
 ; IR:       getelementptr i8, ptr addrspace(200) %p,
 define i64 @heap_deref() {
-  %p = call ptr addrspace(200) @alloc(i64 16)
+  %raw = call ptr addrspace(200) @alloc(i64 16)
+  %p = call ptr addrspace(200) @llvm.capstone.cap.delin.p200(ptr addrspace(200) %raw)
   store i64 77, ptr addrspace(200) %p
   %a = ptrtoint ptr addrspace(200) %p to i64
   %t = or i64 %a, 1
@@ -511,7 +495,8 @@ define i64 @heap_deref() {
 ; IR-LABEL: @heap_no_deref(
 ; IR:       inttoptr
 define ptr addrspace(200) @heap_no_deref() {
-  %p = call ptr addrspace(200) @alloc(i64 16)
+  %raw = call ptr addrspace(200) @alloc(i64 16)
+  %p = call ptr addrspace(200) @llvm.capstone.cap.delin.p200(ptr addrspace(200) %raw)
   %a = ptrtoint ptr addrspace(200) %p to i64
   %c = and i64 %a, -16
   %m = inttoptr i64 %c to ptr addrspace(200)
@@ -522,7 +507,9 @@ define ptr addrspace(200) @heap_no_deref() {
 ; through a different operator.
 ; IR-LABEL: @select_two_sources(
 ; IR:       inttoptr
-define ptr addrspace(200) @select_two_sources(ptr addrspace(200) nonnull %p, ptr addrspace(200) nonnull %q, i1 %c) {
+define ptr addrspace(200) @select_two_sources(i1 %c) {
+  %p = alloca [64 x i8], addrspace(200)
+  %q = alloca [64 x i8], addrspace(200)
   %a = ptrtoint ptr addrspace(200) %p to i64
   %b = ptrtoint ptr addrspace(200) %q to i64
   %v = select i1 %c, i64 %a, i64 %b
@@ -813,5 +800,24 @@ loop:
   %c = icmp ult i64 %k1, %n
   br i1 %c, label %loop, label %out
 out:
+  ret void
+}
+
+; Positive control: an explicit DELIN establishes the missing property. Its
+; result is safe through a local slot too, and recovery must remain enabled.
+; IR-LABEL: @nonlinear_argument_slot(
+; IR: %cap = load ptr addrspace(200), ptr addrspace(200) %slot
+; IR-NOT: inttoptr
+; IR: call addrspace(200) void @log(ptr addrspace(200) %cap)
+define void @nonlinear_argument_slot(ptr addrspace(200) %arg,
+                                    ptr addrspace(200) %out) {
+  %d = call ptr addrspace(200) @llvm.capstone.cap.delin.p200(ptr addrspace(200) %arg)
+  %slot = alloca ptr addrspace(200), addrspace(200)
+  store ptr addrspace(200) %d, ptr addrspace(200) %slot
+  %cap = load ptr addrspace(200), ptr addrspace(200) %slot
+  %i = ptrtoint ptr addrspace(200) %cap to i64
+  %r = inttoptr i64 %i to ptr addrspace(200)
+  call void @log(ptr addrspace(200) %r)
+  store ptr addrspace(200) %cap, ptr addrspace(200) %out
   ret void
 }

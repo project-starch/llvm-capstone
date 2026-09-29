@@ -2,6 +2,28 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-30 — provenance recovery requires a proven non-consuming source
+
+PR #94's follow-up refuses bare pointer arguments, loads whose stores are not
+fully visible, ordinary call results and unmodelled intrinsics. `nonnull`, a
+null check and a dominating dereference establish no linearity guarantee.
+Assembly entry points pass LINEAR arguments and allocator globals hold MREV
+results, so the proposed ABI contract cannot justify recovery on those values.
+Identity round trips take the same gate. Local objects, global addresses,
+explicit DELIN results and their supported derivations remain recoverable.
+
+[Checked result lines](../../tests/runtime-qemu/round-trip/results/20260930-linearity.json)
+record the original compiler failing the new regressions at both optimization
+levels, the fixed negative shapes producing identical assembly with the pass
+on/off, and QEMU's 12/12 checks at -O0 and -O2 with the pass-off control halting.
+The QEMU opaque-source checks use NONLIN inputs; they verify conservative
+refusal, not a new silicon or live-LINEAR execution result. The exit-hook suite
+passes its positive arms and both fault controls. Unmodified musl `atexit()`
+again needs the existing capability-safe override: its opaque callback argument
+has no NONLIN proof. Earlier claims that this pass makes that override redundant
+are superseded. The separate ISel backstop issue is outside this change.
+
+
 ## 2026-09-29 (evening) — R-43 FIXED ON SILICON: the replay design `8f6a0af98` is flashed and accepted a1..a10
 
 **Resident bitstream is `caplifive_r43_8f6a0af98.bit`** (RTL `8f6a0af98` = R-42 + R-43 second fix + R-45; sha256

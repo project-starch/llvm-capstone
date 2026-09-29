@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Pointers computed through uintptr_t in a musl domain: CapstoneRecoverProvenance.
 #
-#   bash run.sh     exit 0 only if rt-O0 and rt-O2 pass all ten checks in
-#                   rt_test.c (including musl's own, unmodified atexit()) AND the
+#   bash run.sh     exit 0 only if rt-O0 and rt-O2 pass all twelve checks in
+#                   rt_test.c (including the runtime atexit override) AND the
 #                   control halts:
 #     rt-off        rt_test.c at -O2 with -mllvm -capstone-recover-provenance=false,
 #                   the one difference: its first round-tripped pointer is
@@ -51,10 +51,9 @@ done
 # The libc overrides, from the one list every musl domain links (runtime/libc_overrides.sh).
 source "$MRT/libc_overrides.sh"
 build_musl_overrides "$CAPSTONE_CLANG" "$O" "$MUSL" "${RF[@]}"
-# Except atexit's: this test is about musl's OWN atexit(), which round-trips its handler
-# through uintptr_t and works only because CapstoneRecoverProvenance recovers it.
-keep=(); for o in "${MUSL_OVERRIDE_OBJS[@]}"; do [[ $o == */atexit_capability_safe.o ]] || keep+=("$o"); done
-MUSL_OVERRIDE_OBJS=("${keep[@]}")
+# Keep the capability-safe atexit override. musl's opaque callback argument
+# has no NONLIN proof, so recovering its uintptr_t cast would be unsafe.
+# exit-hook/run.sh retains unmodified musl as an explicit negative control.
 CLANG=$CAPSTONE_CLANG OBJ_DIR=$O COMPILER_RT=$REPO/compiler-rt/lib/builtins
 COMMON_FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
               -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w)
@@ -93,12 +92,12 @@ verdict=0
 for arm in O0 O2; do
   block=$(sed -n "/RUN-BEGIN rt-$arm\$/,/RUN-END rt-$arm /p" "$LOG")
   passes=$(grep -ac 'RT-TEST PASS' <<<"$block" || true)
-  if grep -aq "LT-RESULT rt-$arm.dom status=0 " <<<"$block" && [[ $passes == 10 ]] &&
+  if grep -aq "LT-RESULT rt-$arm.dom status=0 " <<<"$block" && [[ $passes == 12 ]] &&
      grep -aq "RT-TEST atexit handler ran" <<<"$block" &&
      ! grep -aq "halted by capability fault" <<<"$block"; then
-    echo "  rt-$arm: PASS (10 checks, and musl's atexit handler ran)"
+    echo "  rt-$arm: PASS (12 checks, and the runtime atexit handler ran)"
   else
-    echo "  rt-$arm: FAIL ($passes of 10 checks passed)"
+    echo "  rt-$arm: FAIL ($passes of 12 checks passed)"
     grep -aE "RT-TEST|LT-RESULT|halted" <<<"$block" | sed 's/^/    /'
     verdict=1
   fi

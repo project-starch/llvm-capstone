@@ -1,3 +1,10 @@
+Provenance recovery (2026-09-30): PR #94 now conservatively declines opaque
+pointer origins, including identity casts. Retain the runtime's capability-safe
+atexit override. Widening recovery to arguments, arbitrary memory or ordinary
+call results requires an enforced linearity attribute/verifier or a runtime
+type guard; `nonnull` and successful accesses are insufficient. The front-end
+round-trip warning still cannot predict every refusal by the backend pass.
+
 Delegated runtime (2026-09-29): the reviewed stack has
 [checked syscall/process fixes](../../runtime/applications.md#review-verification-2026-09-29).
 Guest binfmt_misc now passes direct shell execution and Perl's full `t/base`

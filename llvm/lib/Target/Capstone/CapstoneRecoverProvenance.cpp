@@ -51,7 +51,7 @@
 // a zero-byte allocation -- is written with the address taken explicitly,
 // `(T *)__builtin_capstone_cap_get_cursor(p)`: an integer produced by a call is
 // not a source, so the result stays untagged. `(T *)(uintptr_t)p` used to give
-// that too and now gives p back.
+// that too and now gives p back when p is proven not to need a consuming move.
 //
 // Not covered, and cannot be here: an integer that went through any other
 // MEMORY (a struct field of type uintptr_t, a list link, an arena address kept
@@ -80,19 +80,17 @@
 // `(T *)(uintptr_t)p` being p itself. This is the question C-19 asks before
 // speculating a GEP on a capability, answered for this target rather than by
 // isKnownNonZero alone; see holdsCapability().
-// What stays: a source that is non-null but UNTAGGED, and whose origin is out of
-// sight here (an argument, a load from memory, a call), still moves its trap
-// from the first use to the cast. Nothing in the IR tells a tagged capability
-// from an untagged one, and only a runtime tag test could, at a branch per round
-// trip.
+// This validity check is separate from linearity: neither a non-null address
+// nor a successful dereference proves that an additional use is non-consuming.
 //
 // The rewrite also adds a USE of the source, and a use is not free for every
 // capability. `cincoffset` with rd != rs1 nulls a LINEAR rs1, so a round trip
 // rebuilt on a LINEAR value that the program goes on using would leave that use
-// reading null. Under the linearity contract (docs/plans/
-// compiler-validation-plan.md, 4.1) only a value a capability builtin produced
-// can be LINEAR in a register; such a value is never a source. See
-// mayBeLinear().
+// reading null. Arguments, loads from unknown memory and ordinary call results
+// can hold LINEAR capabilities too: the proposed linearity contract is not
+// enforced, and assembly entry points pass live LINEAR arguments today. Only
+// sources proven not to need a consuming move may be recovered. See
+// mayBeLinear(), which also covers the no-offset rewrite.
 //
 //===----------------------------------------------------------------------===//
 
@@ -593,29 +591,30 @@ static bool holdsCapability(Value *P, const SimplifyQuery &Q,
 
 // True if P may hold a capability that the rewrite's new use would consume.
 //
-// Under the linearity contract (docs/plans/compiler-validation-plan.md, 4.1)
-// compiled code keeps only NONLIN capabilities, null or untagged values in
-// registers. A LINEAR, UNINIT, REVOKE or SEALED value exists only between the
-// builtin that produced it and exactly one consumer. Reading its address, the
-// ptrtoint, is not a consumer. The rewrite's GEP is one -- `cincoffset rd, rs1`
+// Reading an address with ptrtoint is not a consumer. The rewrite's GEP is
+// one -- `cincoffset rd, rs1`
 // with rd != rs1 nulls a LINEAR rs1 on the RTL and in QEMU -- and so is any use
 // of the value itself, which is what the no-offset rewrite produces. In
 //     log((char *)(((uintptr_t)cap + 15) & ~15)); store(slot, cap);
 // the store would then save null. So a value is refused as a source when any
 // origin of it is a capability builtin other than DELIN, which returns NONLIN,
-// or inline assembly, which is how SPLIT is written. Any other intrinsic --
-// SHRINK, TIGHTEN and SCC among them, which keep their operand's type -- is
-// looked through to its operands. Everything else is NONLIN by the contract: an
-// argument (the domain glue DELINs its entry capabilities), a load from memory,
-// the result of an ordinary call, a local object, a global.
+// or inline assembly, which is how SPLIT is written. SHRINK, TIGHTEN and SCC
+// preserve their operand's type; a call known to return an argument preserves
+// that argument's type too. Local objects and global addresses are
+// NONLIN by construction. Arguments, opaque loads and ordinary call results
+// carry no linearity guarantee: start-fpga-nogp.S passes a LINEAR scratch
+// argument, and revoke-on-free allocators store MREV results in global arrays.
+// A null test or a dominating dereference proves neither case NONLIN.
 static bool mayBeLinear(Value *P, SmallPtrSetImpl<const Value *> &Seen,
                         unsigned Depth = 0) {
   if (Depth > 8)
     return true; // too deep to decide: never rewrite
   if (!Seen.insert(P).second)
     return false; // already on the way to an answer
-  if (isa<Constant>(P) || isa<Argument>(P) || isa<AllocaInst>(P))
+  if (isa<Constant>(P) || isa<AllocaInst>(P))
     return false;
+  if (isa<Argument>(P))
+    return true;
   auto MayBe = [&](Value *V) { return mayBeLinear(V, Seen, Depth + 1); };
   if (auto *GEP = dyn_cast<GEPOperator>(P))
     return MayBe(GEP->getPointerOperand());
@@ -639,9 +638,9 @@ static bool mayBeLinear(Value *P, SmallPtrSetImpl<const Value *> &Seen,
     if (slotStores(LI, Stores))
       return any_of(Stores,
                     [&](StoreInst *S) { return MayBe(S->getValueOperand()); });
-    // A slot written some other way may hold anything; other memory holds
-    // NONLIN capabilities by the contract.
-    return isa<AllocaInst>(LI->getPointerOperand());
+    // Without all stores visible, the loaded capability may be LINEAR,
+    // regardless of whether the storage itself is local, global or indirect.
+    return true;
   }
   case Instruction::Call:
   case Instruction::Invoke: {
@@ -652,6 +651,10 @@ static bool mayBeLinear(Value *P, SmallPtrSetImpl<const Value *> &Seen,
       switch (II->getIntrinsicID()) {
       case Intrinsic::capstone_cap_delin:
         return false;
+      case Intrinsic::capstone_cap_shrink:
+      case Intrinsic::capstone_cap_tighten:
+      case Intrinsic::capstone_cap_scc:
+        return MayBe(II->getArgOperand(0));
       case Intrinsic::capstone_cap_init:
       case Intrinsic::capstone_cap_mrev:
       case Intrinsic::capstone_cap_seal:
@@ -667,14 +670,9 @@ static bool mayBeLinear(Value *P, SmallPtrSetImpl<const Value *> &Seen,
     }
     if (Value *Arg = getArgumentAliasingToReturnedPointer(CB, false))
       return MayBe(Arg);
-    // Any other intrinsic -- SHRINK, TIGHTEN and SCC among them, which keep
-    // their operand's type: whatever capability it returns came in as one of
-    // its operands.
-    if (isa<IntrinsicInst>(CB))
-      return any_of(CB->args(), [&](Value *A) {
-        return A->getType()->isPointerTy() && MayBe(A);
-      });
-    return false; // an ordinary call: NONLIN by the contract
+    // Neither an ordinary call nor an unmodelled intrinsic has an enforced
+    // NONLIN return contract. Pointer operands alone do not prove its result.
+    return true;
   }
   default:
     return true; // an origin not modelled here: do not rewrite

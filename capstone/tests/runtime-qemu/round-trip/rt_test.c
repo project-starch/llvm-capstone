@@ -15,9 +15,11 @@
  *                (at -O0 the tagged integer lives in a stack slot between the two)
  *   cursor       a uintptr_t cursor stepped through an array in a loop (at -O0,
  *                likewise, in a slot)
- *   callback     musl's atexit idiom: a function pointer passed as
- *                (void *)(uintptr_t)f, called back as ((void (*)(void))(uintptr_t)p)()
- *   atexit       musl's own, unmodified atexit(): its handler runs at exit()
+ *   callback     a known function address round-tripped within this function
+ *   atexit       the runtime's capability-safe override runs its handler
+ *   opaque-arg   a non-null argument has no NONLIN guarantee; its round trip
+ *                stays untagged, and the original pointer remains usable
+ *   opaque-load  a pointer loaded from global storage has no NONLIN guarantee
  *   null-source  a pointer that MAY BE NULL is left alone: `cincoffset` on a
  *                register holding no capability raises UNEXPECTED_OPERAND, so
  *                rewriting this would trap at the cast, where the untagged
@@ -32,13 +34,12 @@
  *                on the other, rounded up: the sentinel holds no capability, so
  *                neither does the cursor (at -O0 it lives in a stack slot)
  *
- * The pass only moves a source it can see HOLDS a capability, which is why `flag`
- * uses a LOCAL object and not malloc. A malloc result qualifies at -O2, through
- * the program's own `n->val = 77` dominating the cast, but not at -O0, where the
- * pointer lives in a stack slot and that store goes through a different load of
- * it (both measured 2026-09-28). The same flag shape on the heap is therefore
- * left untagged at -O0 -- the price of not trapping in `null-source`, and the
- * reason both are checked here.
+ * Recovery requires a known NONLIN source as well as a valid capability.
+ * Locals, global addresses and explicit DELIN results can qualify; opaque
+ * arguments, loads and call returns cannot. The opaque tests use live NONLIN
+ * inputs and must still decline: the callee cannot assume that runtime type.
+ * recover-provenance-linear.ll also checks that live argument and MREV-load
+ * shapes have identical assembly with recovery enabled and disabled.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -59,16 +60,6 @@ struct node { long val; struct node *next; };
 
 static int calls;
 static void callback(void) { calls++; }
-
-struct registration { void *arg; };
-__attribute__((noinline)) static void register_cb(struct registration *r, void (*f)(void))
-{
-	r->arg = (void *)(uintptr_t)f;           /* musl atexit(): stores func this way */
-}
-__attribute__((noinline)) static void call_cb(void *p)
-{
-	((void (*)(void))(uintptr_t)p)();        /* musl call(): calls it back this way */
-}
 
 static void at_exit_handler(void) { printf("RT-TEST atexit handler ran\n"); }
 
@@ -115,6 +106,28 @@ static unsigned long cap_type(const void *p)
 	return t;
 }
 
+/* These definitions must keep opaque origins even at -O2. The argument
+   function is external and noinline, and the global load is volatile. */
+__attribute__((noinline)) int opaque_argument(char *p)
+{
+	*p = 'a'; /* Valid and non-null, but that says nothing about linearity. */
+	char *r = (char *)(((uintptr_t)p + 15) & ~(uintptr_t)15);
+	int untagged = cap_type(r) == CAP_TYPE_NONE;
+	*p = 'b';
+	return untagged && *p == 'b';
+}
+
+static char *volatile saved_pointer;
+__attribute__((noinline)) static int opaque_load(void)
+{
+	char *p = saved_pointer;
+	*p = 'c';
+	char *r = (char *)(((uintptr_t)p + 15) & ~(uintptr_t)15);
+	int untagged = cap_type(r) == CAP_TYPE_NONE;
+	*p = 'd';
+	return untagged && *p == 'd';
+}
+
 int main(void)
 {
 	/* The first check touches memory through a round-tripped pointer: in rt-off
@@ -149,10 +162,9 @@ int main(void)
 		sum += *(long *)c;
 	check(sum == 36, "cursor", sum, 36);
 
-	struct registration r;
-	register_cb(&r, callback);
-	call_cb(r.arg);
-	call_cb(r.arg);
+	void *r = (void *)(uintptr_t)callback;
+	((void (*)(void))(uintptr_t)r)();
+	((void (*)(void))(uintptr_t)r)();
 	check(calls == 2, "callback", calls, 2);
 
 	/* Reaching this check at all is the result: if the pass moved a base it
@@ -176,6 +188,12 @@ int main(void)
 	char *sentinel = align_cursor(full);
 	check(cap_type(sentinel) == CAP_TYPE_NONE, "sentinel",
 	      (long)cap_type(sentinel), CAP_TYPE_NONE);
+
+	int arg_ok = opaque_argument(buf);
+	check(arg_ok, "opaque-arg", arg_ok, 1);
+	saved_pointer = buf;
+	int load_ok = opaque_load();
+	check(load_ok, "opaque-load", load_ok, 1);
 
 	atexit(at_exit_handler);
 	printf("RT-TEST-DONE failures=%d\n", failures);
