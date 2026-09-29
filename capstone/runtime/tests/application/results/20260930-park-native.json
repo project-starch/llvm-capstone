@@ -1,0 +1,29 @@
+{
+  "date": "2026-09-30",
+  "purpose": "Probe B, native phase (docs/plans/delegation-threads.md): the launcher's parking queue (runtime/linux/park.c) with ordinary Linux threads; the park code's test hook stops a chosen thread at a named point so each interleaving is forced",
+  "build": "runtime/exec native, gcc, -Wall -Wextra -fsanitize=address,undefined, ctest park-* (one case per run)",
+  "cases": {
+    "b1": "PASS: a WAKE while the waiter is stopped after its unlock and before its first sleep returns 1; the waiter completes WOKEN without ever reaching its sleep",
+    "b2": "PASS: one bucket, B queued before A; WAKE(A, 1) selects only A; a native futex wake of B's word without a notification sends B back to sleep, still queued; WAKE(B, 1) then completes it",
+    "b3-timeout-select": "PASS: the first waiter's deadline passes and it is stopped before the mutex; WAKE selects it and it returns WOKEN (the notification wins); the second waiter is woken by the next WAKE",
+    "b3-timeout-abort": "PASS: the first waiter times out and dequeues itself; the next WAKE selects the second",
+    "b3-eintr-select": "PASS: as b3-timeout-select with a signal (handler without SA_RESTART) ending the sleep",
+    "b3-eintr-abort": "PASS: as b3-timeout-abort, returning EINTR",
+    "b4": "PASS: the waker is held at its last record access (notified set, before the futex wake, mutex held); a native spurious wake meanwhile; the waiter does not return and its record stays NOTIFIED; released, the waker returns 1, the waiter WOKEN and its record IDLE; the same record then waits on another key and is woken",
+    "b5": "PASS: generation preset to UINT64_MAX - 1 in a one-bucket table with waiters on two keys; WAKE(A, 1) returns 1 and the generation reaches UINT64_MAX; the selected waiter is WOKEN, the other two RECHECK; a waiter with the pre-WAKE generation and a new WAIT both return RECHECK; a later WAKE and REQUEUE return 0 and the generation stays UINT64_MAX",
+    "b12": "PASS: the waiter reads the source generation and checks its condition; the releaser changes it and REQUEUEs with nobody queued (returns 0); the waiter's WAIT with the read generation returns RECHECK",
+    "b13a": "PASS: four buckets, two waiters on src, colliding waiters in src's and dst's buckets; REQUEUE(src, dst, 0, 1) returns 1 and moves the first src waiter; WAKE(dst, 1) completes it as WOKEN; the other waiters stay queued",
+    "b13b": "PASS: the moved waiter's deadline expires: TIMEOUT, and nothing is left in dst's queue",
+    "b13c": "PASS: a signal interrupts the moved waiter: EINTR, dequeued from dst's queue; a continuation with the original deadline times out within 200 ms after it",
+    "b13d": "PASS: dst's bucket saturated: the selected src waiter completes as RECHECK and is counted (REQUEUE returns 1); nothing is enqueued in dst"
+  },
+  "controls": {
+    "method": "each check is run against a copy of park.c with one defect seeded (scratch script, not committed); every case must fail with a message, none by hanging",
+    "fired": "15 of 15: no notification store (b1), key-blind WAKE (b2), return on any futex wakeup (b2), abort wins over notification (b3-*-select), abort without dequeue (b3-*-abort, b13b, b13c), record reset outside the mutex (b4), generation wrap (b5), no saturation flush (b5), REQUEUE without generation advance (b12), REQUEUE ignoring a saturated dst (b13d), REQUEUE without dequeue (b13a)",
+    "found_by_them": "two blind spots in the first version of the test, fixed before this record: in b2 A was queued first, so a key-blind WAKE picked it anyway; capstone_park_queued counted QUEUED records only, so a record left in a queue after an abort (state IDLE) was invisible"
+  },
+  "repeats": "the 13 cases 20 times with ctest -j4: all pass",
+  "tsan": "gcc -fsanitize=thread (run under setarch -R: this kernel's address randomisation makes TSan abort at start), 13 cases x 3: no reports on park.c. The test's first stop-point harness raced on its own control struct (reported, fixed with atomics). TSan's power here is limited: the cases are sequenced by semaphores, and no seeded race in park.c was shown to be reported",
+  "native_ctest": "38/38 (the 25 existing tests and 13 park cases)",
+  "not_covered": "B6 to B11 and B14 need the domain runtime integration (per-context transport, WAIT/WAKE/REQUEUE requests); the domain-side memory-order argument is not qualified by this phase"
+}

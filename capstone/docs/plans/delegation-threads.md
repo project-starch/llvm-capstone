@@ -1,6 +1,6 @@
 # Delegated threads: one Linux thread per protected context
 
-Status: PROBE A CASES PASS, 2026-09-30; submodule pins open. Branch `delegation-threads`,
+Status: PROBE A CASES PASS, PROBE B NATIVE PHASE PASSES, 2026-09-30. Branch `delegation-threads`,
 stacked on `delegation-signals` (c460e8c). The contracts below are what Probe A and Probe B test;
 the runtime branch that builds `pthread_create` on them is written after both probes pass.
 
@@ -43,6 +43,10 @@ Done so far:
   both); the new context enters its own entry. With the collector's dead-slot removal disabled
   the same sequence resumes the dead context's continuation instead, which faults on its
   untagged stack: the removal is what prevents the ABA.
+- Probe B, native phase: the launcher's parking queue (`runtime/linux/park.c`) passes B1 to B5,
+  B12 and B13a to B13d with forced interleavings, each check shown to fire against a seeded
+  defect (record `results/20260930-park-native.json`). B6 to B11 and B14 need the domain runtime:
+  per-context transport and the WAIT/WAKE/REQUEUE requests.
 - Pins: capstone-qemu 3589d6af6f (`qemu/context-slots-on-pin`), caplifive-buildroot a6c0174
   (driver, and components/opensbi a4bdd1b: the caplifive-opensbi wrapper at capstone-sbi
   7e1c34f). Open in Probe A: their upstream pull requests.
