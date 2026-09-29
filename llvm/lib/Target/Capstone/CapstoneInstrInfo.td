@@ -2521,6 +2521,13 @@ def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 // outliner, both reasoning about an instruction whose source-destroying write is invisible to
 // them. What bounds it is that they can only hurt when a read of the source OUTLIVES the movc,
 // which is the case C-32 owns.
+//
+// Since 2026-09-25 that case is closed at the end of the pipeline, not here: CapstoneLiveSourceCopy
+// runs after the last MCP and rewrites every MOVC whose source is still read as STC+LDC through a
+// stack slot, and a CheckOnly instance after MakeCompressible fails the build if one survives. The
+// outliner runs later still and only moves instructions, so the MOVCs it sees already have dead
+// sources. This model can stay a pure copy because nothing before that pass needs it not to be.
+// +movc-keeps-integer-source disables the rewrite for a bitstream whose MOVC keeps untagged sources.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "movc", "$rd, $rs1"> {
