@@ -78,6 +78,11 @@ int capstone_context_mint_words(struct capstone_context *c, size_t area_bytes,
                                 unsigned long (*start)(void *), void *arg,
                                 unsigned long mstatus, unsigned long mie);
 
+/* As capstone_context_mint, with the seal's first pc given (probe use, A2: an
+ * instrumented entry that continues at the runtime's own). */
+int capstone_context_mint_entry(struct capstone_context *c, size_t area_bytes,
+                                unsigned long (*start)(void *), void *arg, void *entry);
+
 /* Revoke the parent handle: every capability derived from the area dies, the
  * seal included, wherever it is held. The area stays in c->handle for reuse. */
 void capstone_context_revoke(struct capstone_context *c);

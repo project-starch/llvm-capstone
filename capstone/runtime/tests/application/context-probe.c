@@ -574,6 +574,212 @@ static int ctl_wfi(void)
   return 0;
 }
 
+/* ---- A2: authority at entry. The seal's first pc is probe_entry_audit
+ * (context-probe-asm.S), which records what the first entry delivered in
+ * every register, and in cscratch, before the runtime's entry runs. ---- */
+extern char probe_entry_audit[], probe_entry_leak[], probe_load_insn[], probe_store_insn[];
+extern unsigned long probe_audit[42];
+void probe_main_gp(unsigned long out[3]);
+unsigned long probe_load_through(unsigned long *where);
+#define CAP_TYPE_SEALEDRET 5
+#define CAP_PERMS_WO 2
+/* capstone-qemu reports a data access outside a capability's bounds as an
+   access fault, store 7 and load 5 (op_helper.c _helper_access_with_cap); the
+   RTL's load/store unit raises 28. */
+#define CAUSE_STORE_OUTSIDE_BOUNDS 7
+
+/* The first register other than ra, gp and a1 that entered tagged, or 0. */
+static int audit_extra_tagged(void)
+{
+  for (int i = 1; i < 32; ++i)
+    if (i != 1 && i != 3 && i != 11 && probe_audit[i] != CAPSTONE_CAP_EMPTY)
+      return i;
+  return 0;
+}
+
+/* Positive control: the audit must name the register probe_entry_leak fills. */
+static int entry_audit_control(void)
+{
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint_entry(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1,
+                                     probe_entry_leak));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  printf("context-probe entry-audit-control: extra tagged register x%d\n", audit_extra_tagged());
+  CHECK(audit_extra_tagged() == 9);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+static int entry_audit(void)
+{
+  struct capstone_context_event ev;
+  unsigned long *a = probe_audit, main_gp[3] = {0};
+  CHECK(!capstone_context_mint_entry(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1,
+                                     probe_entry_audit));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  /* The audit handed the entry on intact. */
+  CHECK(*ctx.value == 42 && counter == 1);
+  probe_main_gp(main_gp);
+  printf("context-probe entry-audit: types");
+  for (int i = 1; i < 32; ++i)
+    printf(" %lu", a[i]);
+  printf("\ncontext-probe entry-audit: gp [%#lx, %#lx) perms %lu, main gp type %lu [%#lx, %#lx)\n",
+         a[32], a[33], a[34], main_gp[0], main_gp[1], main_gp[2]);
+  printf("context-probe entry-audit: a1 [%#lx, %#lx) perms %lu; cscratch type %lu [%#lx, %#lx) "
+         "perms %lu; area [%#lx, %#lx)\n", a[35], a[36], a[37], a[38], a[39], a[40], a[41],
+         ctx.area_base, ctx.area_base + ctx.area_bytes);
+  /* Tagged at entry: the return capability, gp and the descriptor loan. */
+  CHECK(audit_extra_tagged() == 0);
+  CHECK(a[1] == CAP_TYPE_SEALEDRET);
+  /* gp: the shared image, no more than the main context entered with. */
+  CHECK(a[3] == CAPSTONE_CAP_NONLINEAR && main_gp[0] == CAPSTONE_CAP_NONLINEAR);
+  CHECK(a[32] >= main_gp[1] && a[33] <= main_gp[2] && a[32] < a[33]);
+  /* a1: the loan, write-only over the 64-byte descriptor, outside the image. */
+  CHECK(a[11] == CAPSTONE_CAP_NONLINEAR);
+  CHECK(a[36] - a[35] == 64);
+  CHECK(a[37] == CAP_PERMS_WO);
+  CHECK(a[36] <= main_gp[1] || a[35] >= main_gp[2]);
+  /* cscratch: the start block, and nothing more of the area. */
+  CHECK(a[38] == CAPSTONE_CAP_NONLINEAR);
+  CHECK(a[39] == ctx.area_base + CAPSTONE_CONTEXT_SEAL_BYTES);
+  CHECK(a[40] == ctx.area_base + CAPSTONE_CONTEXT_SEAL_BYTES + CAPSTONE_CONTEXT_START_BYTES);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+/* A2, negative: a store one word past the 64-byte loan faults in the context.
+   Then a load through the write-only loan, reported and not checked:
+   capstone-qemu has no permission clause on data access, so on this platform
+   the loan's authority is its bounds. */
+static unsigned long child_past_loan(void *arg)
+{
+  unsigned long *d = probe_descriptor();
+  probe_store_through(d + 8, 1);
+  return 1;
+}
+
+static unsigned long child_read_loan(void *arg)
+{
+  return probe_load_through(probe_descriptor());
+}
+
+static int entry_negative(void)
+{
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_past_loan, 0));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  printf("context-probe entry-negative: past the loan: kind %lu cause %lu pc %#lx\n",
+         (unsigned long)ev.kind, (unsigned long)ev.cause, (unsigned long)ev.pc);
+  CHECK(ev.kind == STEP_FAULT && ev.cause == CAUSE_STORE_OUTSIDE_BOUNDS &&
+        ev.pc == (uintptr_t)probe_store_insn);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  capstone_context_revoke(&ctx);
+  CHECK(!capstone_context_remint(&ctx, child_read_loan, 0));
+  id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  printf("context-probe entry-negative: load through the loan (not checked): kind %lu cause %lu "
+         "pc %#lx%s\n", (unsigned long)ev.kind, (unsigned long)ev.cause, (unsigned long)ev.pc,
+         ev.kind == STEP_FAULT && ev.pc == (uintptr_t)probe_load_insn ? " at probe_load_insn" : "");
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+/* ---- A10: Linux never forgets. ---- */
+
+/* The monitor's slot table (process-abi.h CAPSTONE_PROCESS_SLOTS); each
+   application may hold 8 descriptors, one for its first context. */
+#define A10_SLOTS 32
+#define A10_CYCLES (4 * A10_SLOTS)
+
+/* 128 create/exit/revoke cycles in one application, never forgetting, while a
+   live context is stepped once per cycle. Without retirement the eighth
+   registration of this application finds no descriptor. */
+static int exhaust(void)
+{
+  static struct capstone_context live;
+  struct capstone_context_event ev;
+  unsigned long seed = 0x99, slots = 0, max_gen = 0;
+  CHECK(!capstone_context_mint(&live, AREA_BYTES, child_preempt, (void *)(uintptr_t)seed));
+  long live_id = capstone_context_create(&live, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(live_id > 0);
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_second, 0));
+  for (unsigned long i = 0; i < A10_CYCLES; ++i) {
+    if (i)
+      CHECK(!capstone_context_remint(&ctx, child_second, (void *)(uintptr_t)i));
+    long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+    if (id <= 0)
+      printf("context-probe exhaust: cycle %lu: create %ld\n", i, id);
+    CHECK(id > 0);
+    CHECK(!step_to_end((unsigned long)id, &ev, 0));
+    CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+    CHECK(*ctx.value == 1000 + i);
+    capstone_context_revoke(&ctx);
+    slots |= 1ul << ((unsigned long)id & 63);
+    if ((unsigned long)id >> 32 > max_gen)
+      max_gen = (unsigned long)id >> 32;
+    memset(&ev, 0, sizeof ev);
+    CHECK(!capstone_context_step((unsigned long)live_id, &ev));
+    CHECK(ev.kind == STEP_PREEMPTED || ev.kind == STEP_RETURNED);
+  }
+  CHECK(!step_to_end((unsigned long)live_id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*live.value == lcg_rounds(seed, PREEMPT_ROUNDS));
+  printf("context-probe exhaust: %d cycles over %d slots (mask %#lx), highest generation %lu\n",
+         A10_CYCLES, __builtin_popcountl(slots), slots, max_gen);
+  CHECK(capstone_context_forget((unsigned long)live_id) == 0);
+  return 0;
+}
+
+/* One application of several run at once (run-context.py HOLDERS): a live
+   context and six dead registrations it never forgets, eight slots with its
+   first context. Five of them claim 40 slots of 32 while all are alive, so
+   they can only succeed when an adoption or a launch retires another
+   application's dead registrations. The live context must be untouched. */
+#define HOLD_DEAD 6
+#define HOLD_MS 20000
+static int hold(void)
+{
+  static struct capstone_context live;
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint(&live, AREA_BYTES, child_enter, (void *)(uintptr_t)1));
+  long live_id = capstone_context_create(&live, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(live_id > 0);
+  CHECK(!step_to_end((unsigned long)live_id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_second, 0));
+  for (unsigned long i = 0; i < HOLD_DEAD; ++i) {
+    if (i)
+      CHECK(!capstone_context_remint(&ctx, child_second, (void *)(uintptr_t)i));
+    long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+    if (id <= 0)
+      printf("context-probe hold: registration %lu: create %ld\n", i, id);
+    CHECK(id > 0);
+    CHECK(!step_to_end((unsigned long)id, &ev, 0));
+    CHECK(ev.kind == STEP_RETURNED && *ctx.value == 1000 + i);
+    capstone_context_revoke(&ctx);
+  }
+  printf("context-probe hold: holding at %ld\n", monotonic_ms());
+  fflush(stdout);
+  struct timespec pause = {HOLD_MS / 1000, 0};
+  while (nanosleep(&pause, &pause) && errno == EINTR)
+    ;
+  printf("context-probe hold: released at %ld\n", monotonic_ms());
+  CHECK(!step_to_end((unsigned long)live_id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(counter == 1 && *live.value == 42);
+  CHECK(capstone_context_forget((unsigned long)live_id) == 0);
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2) {
@@ -605,6 +811,11 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "ctl-mie")) rc = ctl_words("ctl-mie", CAPSTONE_CONTEXT_MSTATUS, MIE_ALL);
   else if (!strcmp(mode, "ctl-wfi")) rc = ctl_wfi();
   else if (!strcmp(mode, "ctl-priv-nested")) rc = ctl_priv_nested();
+  else if (!strcmp(mode, "entry-audit")) rc = entry_audit();
+  else if (!strcmp(mode, "entry-negative")) rc = entry_negative();
+  else if (!strcmp(mode, "entry-audit-control")) rc = entry_audit_control();
+  else if (!strcmp(mode, "exhaust")) rc = exhaust();
+  else if (!strcmp(mode, "hold")) rc = hold();
   else {
     fprintf(stderr, "context-probe: unknown mode %s\n", mode);
     return 2;

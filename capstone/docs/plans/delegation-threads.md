@@ -14,14 +14,21 @@ Done so far:
   caplifive-buildroot (11c024a: driver ids and ioctls; f9b2408: the firmware build refuses a
   capstone-c miscompile this work hit), and the launcher's CONTEXT requests here. Passing,
   with the signal contract and the application gate unchanged (record
-  `results/20260929-context-probe-monitor.json`, 17/17): A1, A3, A4, A5, A6, A8 (DEAD, FORGET
+  `results/20260929-context-probe-monitor.json`): A1, A3, A4, A5, A6, A8 (DEAD, FORGET
   once, STALE), A11, A13 without the foreign-owner request, A14, and A15 with its control on
   the base platform (there the kept result slot still writes).
 - A12 (Q3 answered below): privilege changes and non-C seals are refused under supervision; this
   closed an escape into user mode that A12 found first.
-- Open in Probe A: A2, A7 (needs an instrument that shows the node was reissued), A9
-  (generation preset), A10 (retiring dead registrations on shortage), A13's foreign-owner
-  request, and the submodule pins.
+- A2: at the first entry instruction only ra (sealed return), gp (exactly the main context's) and
+  a1 (the 64-byte loan) are tagged, and cscratch is exactly the start block; an audit with a
+  planted register names it. A store past the loan faults. The loan's write-only permission is not
+  enforced on capstone-qemu (Q1).
+- A10: dead registrations are retired on shortage in the monitor, and the driver drops a record
+  when the monitor reissues its slot. 128 create/exit/revoke cycles never forgetting, and five
+  applications claiming 40 of the 32 slots at once, all succeed with their live contexts intact;
+  both fail on the previous monitor.
+- Open in Probe A: A7 (needs an instrument that shows the node was reissued), A9 (generation
+  preset), A13's foreign-owner request, and the submodule pins.
 
 ## Scope
 
@@ -206,6 +213,11 @@ These are generic context-management rules. None of them mentions threads.
   supervisor slot alone does not free the other two. Monitor/driver cleanup must retire their
   matching dead registrations, without reclaiming application memory or prematurely freeing
   transport still used by a launcher thread. Slot-pressure tests cover all three tables.
+  As built: the monitor retires a minted registration whose copy of the seal no longer reads as
+  sealed (a revoked seal reloads untagged) when an adoption finds no descriptor for its
+  application, or no slot, and when a new application block finds no slot; a new block takes a
+  free slot, not the next index. The driver drops every record of a slot the monitor has just
+  given a new generation, so its table never holds more records than the monitor has slots.
 - **FORGET is idempotent and cannot be redirected.**
   - A tagged seal that is invalid still names exactly its old slot, because its node is not reused
     before the collector has untagged every copy. FORGET removes that slot.
@@ -545,7 +557,10 @@ survive slot reassignment into another application's descriptor.
 
 - **Descriptor.** One monitor-owned block per context slot: result word, status, offer ticket, and
   a 16-byte capability slot for the offered seal. It is lent as one capability derived under its
-  own revocation handle, which `csshrinkto` and `cstighten` alone do not provide.
+  own revocation handle, which `csshrinkto` and `cstighten` alone do not provide. The loan is
+  write-only, but capstone-qemu checks tag, revocation and bounds on a data access and no
+  permission (`op_helper.c` `_helper_access_with_cap`), so on this platform its authority is its
+  64 bytes: A2 reads through it without a fault.
 - **Loan lifetime.** A loan covers one logical call, including every preemption and resume of it:
   a resume restores the callee's snapshot with the old descriptor capability and delivers no new
   one, so a revoke at a preemption escape would break a regular continuation. The loan is revoked

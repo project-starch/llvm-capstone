@@ -66,7 +66,7 @@ static int arena_take(size_t bytes, capstone_cap_slot *out)
 
 /* Mint into the linear area in *area; the handle is made here, senior to
  * every split below, and ends up in c->handle. */
-static int mint_area(struct capstone_context *c, capstone_cap_slot *area,
+static int mint_area(struct capstone_context *c, capstone_cap_slot *area, void *entry,
                      unsigned long (*start)(void *), void *arg, int split,
                      unsigned long mstatus, unsigned long mie)
 {
@@ -112,7 +112,7 @@ static int mint_area(struct capstone_context *c, capstone_cap_slot *area,
   c->area_bytes = end - base;
   c->stack_base = stack_at;
   c->stack_top = end;
-  __capstone_context_seal(area, __capstone_context_entry, sb, &c->seal, mstatus, mie);
+  __capstone_context_seal(area, entry, sb, &c->seal, mstatus, mie);
   return 0;
 }
 
@@ -125,7 +125,7 @@ int capstone_context_mint(struct capstone_context *c, size_t area_bytes,
   capstone_cap_slot area = {0};
   if (arena_take(area_bytes, &area))
     return -1;
-  return mint_area(c, &area, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
+  return mint_area(c, &area, __capstone_context_entry, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
 }
 
 int capstone_context_mint_words(struct capstone_context *c, size_t area_bytes,
@@ -138,7 +138,19 @@ int capstone_context_mint_words(struct capstone_context *c, size_t area_bytes,
   capstone_cap_slot area = {0};
   if (arena_take(area_bytes, &area))
     return -1;
-  return mint_area(c, &area, start, arg, 0, mstatus, mie);
+  return mint_area(c, &area, __capstone_context_entry, start, arg, 0, mstatus, mie);
+}
+
+int capstone_context_mint_entry(struct capstone_context *c, size_t area_bytes,
+                                unsigned long (*start)(void *), void *arg, void *entry)
+{
+  if (area_bytes & 15)
+    return -1;
+  memset(c, 0, sizeof *c);
+  capstone_cap_slot area = {0};
+  if (arena_take(area_bytes, &area))
+    return -1;
+  return mint_area(c, &area, entry, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
 }
 
 int capstone_context_mint_split(struct capstone_context *c, size_t area_bytes,
@@ -150,7 +162,7 @@ int capstone_context_mint_split(struct capstone_context *c, size_t area_bytes,
   capstone_cap_slot area = {0};
   if (arena_take(area_bytes, &area))
     return -1;
-  return mint_area(c, &area, start, arg, 1, CAPSTONE_CONTEXT_MSTATUS, 0);
+  return mint_area(c, &area, __capstone_context_entry, start, arg, 1, CAPSTONE_CONTEXT_MSTATUS, 0);
 }
 
 void capstone_context_revoke_children(struct capstone_context *c)
@@ -177,7 +189,7 @@ int capstone_context_remint(struct capstone_context *c,
   capstone_cap_slot area = {0};
   capstone_cap_move(&c->handle, &area);
   capstone_cap_clear(&c->seal);
-  return mint_area(c, &area, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
+  return mint_area(c, &area, __capstone_context_entry, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
 }
 
 /* One ticket per offer: a late or repeated request can never consume a later

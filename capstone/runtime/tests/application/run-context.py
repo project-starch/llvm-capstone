@@ -42,7 +42,18 @@ MODES.update({
     "ctl-mie": ("exit", 0, "PASS", None, None),
     "ctl-priv-nested": ("signal", 11, "", "REACHED", (2, "__capstone_context_call_insn")),
 })
+# A2 (authority at entry) and A10 (Linux never forgets).
+MODES.update({
+    "entry-audit": ("exit", 0, "PASS", None, None),
+    "entry-audit-control": ("exit", 0, "PASS", None, None),
+    "entry-negative": ("exit", 0, "PASS", None, None),
+    "exhaust": ("exit", 0, "PASS", None, None),
+})
 EXPLICIT = {"ctl-wfi": ("exit", 0, "PASS", None, None)}
+# A10 across applications: this many `hold` processes at once, 8 slots each,
+# more than the monitor's 32. Every one must pass, and all must have held at
+# the same time, or the case never created the shortage it is about.
+HOLDERS = 5
 # Guest environment per mode.
 ENV = {"rollback-thread": ["CAPSTONE_CONTEXT_TEST_THREAD_FAILS=1"]}
 LINK_BASE = 0x10000   # my_first_domain/link.ld
@@ -74,6 +85,45 @@ def image_symbols(nm, image):
     out = subprocess.run([nm, image], capture_output=True, text=True, check=True).stdout
     return {parts[2]: int(parts[0], 16) for parts in (line.split() for line in out.splitlines())
             if len(parts) == 3}
+
+
+def run_holders(cli, env, args):
+    """HOLDERS concurrent `hold` processes; each passes, and every one reached
+    its hold before any was released (guest CLOCK_MONOTONIC, milliseconds)."""
+    procs = []
+    for i in range(HOLDERS):
+        status = args.state / f"context-hold-{i}.json"
+        status.unlink(missing_ok=True)
+        procs.append((status, subprocess.Popen(
+            [*cli, "run", "--result", str(status), args.image, "hold"],
+            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)))
+    held, released, problems, outs = [], [], [], []
+    for i, (status, proc) in enumerate(procs):
+        try:
+            out, err = proc.communicate(timeout=args.timeout + 60)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, err = proc.communicate()
+            problems.append(f"holder {i}: timeout")
+        record = json.loads(status.read_text()) if status.exists() else {}
+        outs.append(out)
+        got = (record.get("kind"), record.get("value"))
+        if got != ("exit", 0) or "PASS" not in out:
+            problems.append(f"holder {i}: got {got}, stdout={out!r}, stderr={err.strip()[-300:]!r}")
+        for line in out.splitlines():
+            if "hold: holding at " in line:
+                held.append(int(line.rsplit(" ", 1)[1]))
+            if "hold: released at " in line:
+                released.append(int(line.rsplit(" ", 1)[1]))
+    if not problems:
+        if len(held) != HOLDERS or len(released) != HOLDERS:
+            problems.append(f"missing hold marks: {len(held)} held, {len(released)} released")
+        elif max(held) >= min(released):
+            problems.append(f"holds did not overlap: last held {max(held)}, "
+                            f"first released {min(released)}")
+    if not problems:
+        outs.append(f"all {HOLDERS} held together from {max(held)} to {min(released)}")
+    return not problems, "; ".join(problems), "\n".join(outs)
 
 
 def main():
@@ -117,6 +167,11 @@ def main():
         results[mode] = {"pass": ok, "reason": reason, "stdout": out[-400:]}
         failed += not ok
         print(f"{mode}: {'PASS' if ok else 'FAIL ' + reason}", flush=True)
+    if not args.only or "hold" in args.only:
+        ok, reason, out = run_holders(cli, env, args)
+        results["hold"] = {"pass": ok, "reason": reason, "stdout": out[-800:]}
+        failed += not ok
+        print(f"hold: {'PASS' if ok else 'FAIL ' + reason}", flush=True)
     passed = len(results) - failed
     print(f"context probe: {passed}/{len(results)} PASS")
     if args.report:
