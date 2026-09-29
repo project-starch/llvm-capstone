@@ -177,7 +177,7 @@ fixture.
 Liveness decides whether the *pinned tree* still contains the defect, not
 whether the corpus can reproduce it: what the port pins is the allocator, and a
 case transcribes its consumer's call sequence, so `461fb22053` builds and faults
-against the 9.0.1 pool as it stands ([corpus case](../../bug-corpora/ffmpeg/pool-repros/461fb22053_af_join_dedup_bound/README.md),
+against the 9.0.1 pool as it stands ([corpus case](../../bug-corpora/ffmpeg/pool-repros/00_461fb22053_af_join_dedup_bound/PROVENANCE.md),
 probe case 36, spatial completes and Sublet faults at the published PC). Moving
 the pin to n8.1 raises the fidelity tier of three specimens from "reduction of
 code that shipped until n8.1.1" to "reduction of shipping code". It buys that,
@@ -197,6 +197,44 @@ size change). The second is upstream-classified as an out-of-array access; its
 cause is a retained buffer used with updated dimensions, which is a size
 confusion on live memory rather than a stale pointer after release, so it may not
 belong in this class at all.
+
+### vp9, read against the Sublet pool port (2026-09-29): documented, not run
+
+Track B of `docs/plans/2026-09-25-ffmpeg-full-port-and-sublet.md` ran af_join and
+vidstab as FFmpeg's real code. vp9 was scoped to a write-up. Reading it against
+the port gave three findings, and the first corrects this document.
+
+1. **Its own fix classifies it as spatial, not temporal.** `a024f8c541`'s message
+   reads: "Fixes: heap out-of-bounds read and write after avcodec_flush_buffers()".
+   - The resurrected `next_refs[]` are *references*. `ff_progress_frame_ref` takes
+     `av_refstruct_ref(src->progress)` (`decode.c:1954-1960`), and the frame lives
+     inside that object (`src->f == src->progress->f`).
+   - So nothing a surviving entry points at goes back to `progress_frame_pool`
+     while it survives. What goes wrong is an out-of-bounds use of a live, older
+     reference by a decoder whose state has moved past it.
+   - Filing it above as a pool-backed temporal specimen was a misclassification,
+     and so was the corpus README's "predicted miss" of the temporal mechanism. It
+     belongs to the size-confusion-on-live-memory class this document describes for
+     `tdsc`.
+2. **The Sublet port would do nothing to it, by construction.**
+   - The port revokes an entry when the entry goes back to its pool, and these
+     entries never go back while the defect is live. So no revoke precedes the bad
+     access.
+   - Any catch would have to be spatial: the access leaving the capability of the
+     buffer it goes through. Those are the heap's per-object bounds, and the
+     stock-pool control arm has them too. Fixture 14, one byte past a pool buffer,
+     faults on both arms.
+   - So vp9 cannot discriminate the port. Whether capability bounds catch it at all
+     depends on which pointer the out-of-bounds access is derived from, and that is
+     not established here.
+3. **It cannot run in this app port.** `vp9_decode_update_thread_context` is
+   compiled only `#if HAVE_THREADS` (`vp9.c:1874`), and only frame-threaded decoding
+   calls it (`pthread_frame.c`). The app port is `--disable-pthreads`, so the hand-off
+   that resurrects the references never runs.
+
+Status: live at the 9.0.1 pin, where `vp9_decode_flush` (`vp9.c:1831-1849`) lacks the
+fix's `ff_progress_frame_unref(&s->next_refs[i])`. It has not been run, and it is not
+a Track B case for the Sublet port.
 
 ## Unfixed instances: the flush-gap search
 
@@ -249,7 +287,11 @@ rows through a possibly older `linesize` — a size confusion, not this class.
 
 This is a source triage, not a reproduction. Each verdict names the allocation
 site it was read from; none of the four has been built, run, or shown to
-produce a stale access under the port's oracle, and that is the next gate. The
+produce a stale access under the port's oracle, and that is the next gate.
+(Superseded 2026-09-25 for three of them: reductions of af_join, h264_refs and vidstab were
+built and run. They fault under Sublet on capstone-qemu, and complete under the mode-0 control:
+`ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev/`. The fourth, vp9, has
+no domain arm.) The
 count of four is a count of *upstream-fixed, pool-backed consumer* defects found
 by this instrument on this surface — it is not a claim that FFmpeg has only three,
 and the instrument's two discarded predecessors are the reason to treat any

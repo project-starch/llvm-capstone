@@ -9897,10 +9897,101 @@ static void CheckMemaccessSize(Sema &S, unsigned BId, const CallExpr *Call) {
   }
 }
 
+// Capstone: whether a value of type T holds a capability. Every pointer does on
+// this target (there are no integer pointers), and so does any aggregate with
+// one inside. A capability occupies one 16-byte tagged granule: stored at an
+// address that is not 16-aligned it faults, and copied through memory that is
+// not, it loses the tag.
+static bool capstoneTypeHoldsCapability(ASTContext &Ctx, QualType T,
+                                        unsigned Depth = 0) {
+  if (Depth > 16 || T.isNull() || T->isIncompleteType())
+    return false;
+  T = T.getCanonicalType();
+  if (T->isAnyPointerType() || T->isBlockPointerType() ||
+      T->isMemberFunctionPointerType())
+    return true;
+  if (const ArrayType *AT = Ctx.getAsArrayType(T))
+    return capstoneTypeHoldsCapability(Ctx, AT->getElementType(), Depth + 1);
+  if (const auto *RD = T->getAsRecordDecl()) {
+    if (const auto *CXXRD = dyn_cast<CXXRecordDecl>(RD))
+      for (const CXXBaseSpecifier &B : CXXRD->bases())
+        if (capstoneTypeHoldsCapability(Ctx, B.getType(), Depth + 1))
+          return true;
+    for (const FieldDecl *F : RD->fields())
+      if (capstoneTypeHoldsCapability(Ctx, F->getType(), Depth + 1))
+        return true;
+  }
+  return false;
+}
+
+static CharUnits getPresumedAlignmentOfPointer(const Expr *E, Sema &S);
+
+// -Wcapstone-capability-alignment, memcpy/memmove: a capability copied to or
+// from memory whose type promises less than a capability's alignment -- the
+// CPython bytecode cache (a PyObject * memcpy'd into 16-bit code units) is the
+// shape. Warns only when one side's type holds a capability and the other
+// side's pointee is a complete, non-void type whose presumed alignment is
+// below it; a void * side says nothing and is left alone, as a constant length
+// shorter than one capability is. A byte buffer (char, signed/unsigned char)
+// says nothing either -- it is how C spells "any memory", and CPython copies
+// pointers through 16-aligned ones -- so that case is a separate, opt-in
+// diagnostic in the same group.
+static void checkCapstoneCapabilityCopy(Sema &S, const CallExpr *Call) {
+  ASTContext &Ctx = S.Context;
+  CharUnits CapAlign = Ctx.getTypeAlignInChars(Ctx.VoidPtrTy);
+  if (Call->getNumArgs() < 3)
+    return;
+  Expr::EvalResult Len;
+  if (Call->getArg(2)->EvaluateAsInt(Len, Ctx) &&
+      Len.Val.getInt().ult(CapAlign.getQuantity()))
+    return;
+  const Expr *Args[2] = {Call->getArg(0)->IgnoreParenImpCasts(),
+                         Call->getArg(1)->IgnoreParenImpCasts()};
+  QualType Pointee[2];
+  for (unsigned I = 0; I != 2; ++I) {
+    const auto *PT = Args[I]->getType()->getAs<PointerType>();
+    if (!PT)
+      return;
+    Pointee[I] = PT->getPointeeType();
+  }
+  for (unsigned Cap = 0; Cap != 2; ++Cap) {
+    unsigned Other = 1 - Cap;
+    if (!capstoneTypeHoldsCapability(Ctx, Pointee[Cap]))
+      continue;
+    if (Pointee[Other]->isVoidType() || Pointee[Other]->isIncompleteType() ||
+        capstoneTypeHoldsCapability(Ctx, Pointee[Other]))
+      continue;
+    CharUnits OtherAlign = getPresumedAlignmentOfPointer(Args[Other], S);
+    if (OtherAlign >= CapAlign)
+      continue;
+    // %0: 0 = the capability is the source, 1 = it is the destination.
+    if (Pointee[Other]->isCharType())
+      S.Diag(Args[Other]->getExprLoc(), diag::warn_capstone_capability_copy_bytes)
+          << (Cap == 0 ? 1 : 0) << Pointee[Cap]
+          << static_cast<unsigned>(CapAlign.getQuantity())
+          << Args[Other]->getSourceRange();
+    else
+      S.Diag(Args[Other]->getExprLoc(), diag::warn_capstone_capability_copy_align)
+          << (Cap == 0 ? 1 : 0) << Pointee[Cap]
+          << static_cast<unsigned>(OtherAlign.getQuantity())
+          << Args[Other]->getSourceRange();
+    return;
+  }
+}
+
 void Sema::CheckMemaccessArguments(const CallExpr *Call,
                                    unsigned BId,
                                    IdentifierInfo *FnName) {
   assert(BId != 0);
+
+  if ((BId == Builtin::BImemcpy || BId == Builtin::BImemmove ||
+       BId == Builtin::BImempcpy) &&
+      Context.getTargetInfo().getTriple().isCapstone() &&
+      (!Diags.isIgnored(diag::warn_capstone_capability_copy_align,
+                        Call->getBeginLoc()) ||
+       !Diags.isIgnored(diag::warn_capstone_capability_copy_bytes,
+                        Call->getBeginLoc())))
+    checkCapstoneCapabilityCopy(*this, Call);
 
   // It is possible to have a non-standard definition of memset.  Validate
   // we have enough arguments, and if not, abort further checking.
@@ -14574,7 +14665,42 @@ static CharUnits getPresumedAlignmentOfPointer(const Expr *E, Sema &S) {
   return S.Context.getTypeAlignInChars(E->getType()->getPointeeType());
 }
 
+// -Wcapstone-capability-alignment, casts: a pointer to memory presumed less
+// than capability-aligned, cast to a pointer to a type that holds a capability
+// -- an allocator carving objects that contain pointers out of a char or double
+// array at 8-byte steps. The first capability stored through it faults. Off by
+// default: it cannot see an allocator that aligns at run time.
+static void checkCapstoneCapabilityCastAlign(Sema &S, Expr *Op, QualType T,
+                                             SourceRange TRange) {
+  ASTContext &Ctx = S.Context;
+  if (T->isDependentType() || Op->getType()->isDependentType())
+    return;
+  const auto *DestPtr = T->getAs<PointerType>();
+  const auto *SrcPtr = Op->getType()->getAs<PointerType>();
+  if (!DestPtr || !SrcPtr)
+    return;
+  QualType DestPointee = DestPtr->getPointeeType();
+  QualType SrcPointee = SrcPtr->getPointeeType();
+  if (SrcPointee->isIncompleteType() || DestPointee->isIncompleteType() ||
+      !capstoneTypeHoldsCapability(Ctx, DestPointee) ||
+      capstoneTypeHoldsCapability(Ctx, SrcPointee))
+    return;
+  CharUnits CapAlign = Ctx.getTypeAlignInChars(Ctx.VoidPtrTy);
+  CharUnits SrcAlign = getPresumedAlignmentOfPointer(Op, S);
+  if (SrcAlign >= CapAlign)
+    return;
+  S.Diag(TRange.getBegin(), diag::warn_capstone_capability_cast_align)
+      << Op->getType() << T << static_cast<unsigned>(SrcAlign.getQuantity())
+      << static_cast<unsigned>(CapAlign.getQuantity()) << TRange
+      << Op->getSourceRange();
+}
+
 void Sema::CheckCastAlign(Expr *Op, QualType T, SourceRange TRange) {
+  if (Context.getTargetInfo().getTriple().isCapstone() &&
+      !getDiagnostics().isIgnored(diag::warn_capstone_capability_cast_align,
+                                  TRange.getBegin()))
+    checkCapstoneCapabilityCastAlign(*this, Op, T, TRange);
+
   // This is actually a lot of work to potentially be doing on every
   // cast; don't do it if we're ignoring -Wcast_align (as is the default).
   if (getDiagnostics().isIgnored(diag::warn_cast_align, TRange.getBegin()))

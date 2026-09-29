@@ -1,12 +1,19 @@
-# Path, bucket, purpose. Inventory only, not a measured effort claim.
+# Path, bucket, purpose. An inventory of what the adaptation cost beside the allocator, for I1.
+# The per-chunk port's allocator change is patches/...-0002 and IS a measured effort claim: it is
+# counted by capstone/tests/port-effort.py against its sibling .classes file, not here.
 patches/wireshark-4.6.8-0001-wmem-authority-hooks.patch allocator object bounds, block epochs, chunk releases and stale-pointer refusal in the four allocators
 src/shared/shim/glib.h compat the GLib surface wmem uses, mapped onto port services
 src/shared/shim/wsutil/ws_assert.h compat scope assertions kept active
+patches/wireshark-4.6.8-0002-wmem-block-chunks-under-sublet.patch allocator the classified per-chunk port of the block allocator, counted by port-effort.py
 src/shared/wmem-port-hooks.h glue object narrowing for the patched allocators
-src/shared/backing.c allocator one region per system request, size-exact reuse, epoch and widen services
+src/shared/chunks.h glue the chunk authority interface the patched block allocator calls
+src/allocators/sublet/chunks.c allocator per-chunk regions under a block's senior handle: carve, take, give, one revoke per reset and per close
+src/native/chunks.c glue the same interface with no capabilities, so the native replay checks the header move against upstream
+src/shared/backing.c allocator one region per system request, size-exact reuse, epoch and widen services; linear blocks, the header area and the probe for the chunk port
 src/shared/scopes.c allocator the dissection-loop pool lifecycle modelled on upstream's scope layer
 src/shared/freestanding.c compat environment and string services the domain lacks
-src/allocators/sublet/regions.c allocator retained authority and revocation
+src/allocators/sublet/regions.c allocator retained authority and revocation, and the linear regions the chunk port carves
 src/shared/replay.c test event validation and synthetic payload checks across all four allocators
 security-tests/shared/lifetimes.c test live, stale, bounds and refusal controls with labelled access sites
+src/linux-guest/domain-loader.c test prints the chunk port's counts from the report page, or says they are absent
 src/cheribsd/poisoncap.c allocator PoisonCap backing: mapped regions, exact published bounds, invalidation at reset, release and chunk free

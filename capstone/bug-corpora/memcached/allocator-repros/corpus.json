@@ -1,0 +1,39 @@
+{
+  "program": "memcached",
+  "boundary": "slabs and the per-thread object cache",
+  "title": "Temporal defects in consumers of memcached's slab classes and object cache",
+  "upstream": {
+    "version": "1.6.45",
+    "port": "capstone/ports/memcached/allocators"
+  },
+  "cases": 5,
+  "case_schema": "case-json",
+  "case_macro": "MC",
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "cheribsd-revocation",
+    "native-detect",
+    "native-fix-differential"
+  ],
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "true": 1,
+    "false": 4
+  },
+  "runners": [
+    "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",
+    "capstone/bug-corpora/memcached/allocator-repros/runners/cheribsd/run-defects.py",
+    "capstone/bug-corpora/memcached/allocator-repros/runners/poisoncap/run-defects.py",
+    "capstone/bug-corpora/memcached/allocator-repros/runners/run-native.sh"
+  ],
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "advisories": [
+    "CVE-2018-1000127"
+  ],
+  "shape_table": true,
+  "note": "No result bundle is committed in this corpus; its CheriBSD fixtures live with the port."
+}

@@ -1,0 +1,38 @@
+# R-42 matched pair in RTL simulation: the fix (capstone-ariane 6cbdaeeb4) against its parent (4ad0df694).
+# Verilator testharness, cva6-build-rv container, +define+S12_MEM_DELAY=12, seed pinned. Only
+# core/cache_subsystem/cva6_icache.sv differs between the two arms (fix arm sha256 prefix df187d168d3c,
+# base arm c5e26b0a6d58, restored and hash-checked after the pair). Cycles = mcycle delta per arm.
+# Tests: src/r42-loopalign-ctrsanity.S, src/r42-loopalign-warm.S (byte-identical to the board lane's
+# tests/rtl-smoke/ladder-revival-2026-09-22/sim-loopalign-{ctrsanity,warm}.S).
+
+== ctrsanity: a 5-instruction loop, 4000 iterations per arm; loop start offset within a 64-byte block ==
+mode        offset  (mod 16)   base 4ad0df694   fix 6cbdaeeb4   delta
+M-mode      40      8          24034            24034           0
+M-mode      44      12         28035            24036           -3999   <- the slow layout
+M-mode      48      0          24037            24037           0
+M-mode      52      4          24035            24035           0
+M-mode      56      8          24033            24033           0
+capability  40      8          24037            24037           0
+capability  44      12         28035            24036           -3999   <- the slow layout
+capability  48      0          24037            24037           0
+capability  52      4          24035            24035           0
+capability  56      8          24033            24033           0
+# 3,999 = one cycle per taken branch (4000 iterations, the last falls through): COMPLETE recovery.
+# 7.009 -> 6.009 cyc/iter, equal to the fast layouts. Every other arm is unchanged to the cycle.
+# The base column reproduces the board lane's committed table exactly (sim-loopalign.result-lines.txt,
+# at 054cea69b: R-35's fix does not touch this path).
+
+== warm discriminator, 64 iterations ==
+arm                                   base   fix    delta
+A offset 44, next line cold           477    415    -62
+B offset 44, next line warmed once    413    413    0
+C offset 52 (fast control)            410    410    0
+# A recovers 62 of its 64 per-iteration cycles. The remaining 2 cycles over B are one-off, not
+# per-iteration: A's fall-through line starts cold and B's does not.
+
+== neutrality sweep, 92 tests (the capstone suite), same seed and memory delay ==
+tests compared            92
+tests with >=1 trap       48 (the trap counter is not blind: 639,786 traps in total)
+tests whose trap count differs from the baseline arm   0
+# Baseline arm: the preserved f83fe9342 logs (R-35 fix lineage). Its cva6_icache.sv is identical to
+# 4ad0df694's -- no R-35 commit touches the I-cache -- so the I-cache is the only cache-side variable.

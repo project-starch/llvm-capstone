@@ -1,0 +1,245 @@
+# phase 10 REFRESH on caplifive_r35_4ad0df694.bit (R-35 fix, sha256 8db73f8e...382c), 2026-09-24 -- same builds and flags as phase 10 (-DLADDER_PAD=K both halves, K=0..3, spec -O); purpose: R-35 false-deny test + re-measure
+## K=0 capability half:
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6283            5029          YES
+ctrsanity            43260934      43260934      700312          500030        YES
+beebs_cover          1993178309    1993178309    159482          76469         YES
+rv8_primes           99991         99991         6345858         3245855       YES
+rv8_sha512           1390718314    1390718314    543605          460950        YES
+beebs_aha_mont64     2185097489    2185097489    286401          256697        YES
+rv8_sha512s          2842840124    2842840124    118630          75477         YES
+beebs_prime          582955588     582955588     9724            2703          YES
+beebs_crc32          1703161001    1703161001    48257           29723         YES
+beebs_ns             1184999093    1184999093    102675          61299         YES
+beebs_cnt            2356896837    2356896837    114085          69387         YES
+beebs_bs             887447230     887447230     2141            820           YES
+coremark_matrix      14343         14343         53404           31560         YES
+matmult_int          774662735     774662735     19229           9722          YES
+beebs_janne          484656629     484656629     641             198           YES
+beebs_recursion      1579141629    1579141629    19245           3029          YES
+beebs_insertsort     271779359     271779359     2525            962           YES
+## K=0 bare-metal baseline half (extraflags: -DLADDER_PAD=0):
+ctrsanitys: BEST cycles=6040 instret=5021 (15/15 passes at min instret, spread=0) retval=3688591409
+ctrsanity: BEST cycles=600041 instret=500022 (15/15 passes at min instret, spread=0) retval=43260934
+beebs_cover: BEST cycles=162002 instret=76513 (15/15 passes at min instret, spread=0) retval=1993178309
+rv8_primes: BEST cycles=6284080 instret=3245861 (15/15 passes at min instret, spread=57) retval=99991
+rv8_sha512: BEST cycles=540141 instret=462646 (15/15 passes at min instret, spread=135) retval=1390718314
+beebs_aha_mont64: BEST cycles=283612 instret=256622 (15/15 passes at min instret, spread=0) retval=2185097489
+rv8_sha512s: BEST cycles=117035 instret=69108 (15/15 passes at min instret, spread=0) retval=2842840124
+beebs_prime: BEST cycles=9292 instret=2704 (15/15 passes at min instret, spread=0) retval=582955588
+beebs_crc32: BEST cycles=42795 instret=31000 (15/15 passes at min instret, spread=0) retval=1703161001
+beebs_ns: BEST cycles=88451 instret=62097 (15/15 passes at min instret, spread=39) retval=1184999093
+beebs_cnt: BEST cycles=95019 instret=57949 (15/15 passes at min instret, spread=0) retval=2356896837
+beebs_bs: BEST cycles=1470 instret=827 (15/15 passes at min instret, spread=0) retval=887447230
+coremark_matrix: BEST cycles=36523 instret=25673 (15/15 passes at min instret, spread=0) retval=14343
+matmult_int: BEST cycles=11312 instret=7272 (15/15 passes at min instret, spread=39) retval=774662735
+beebs_janne: BEST cycles=319 instret=210 (15/15 passes at min instret, spread=0) retval=484656629
+beebs_recursion: BEST cycles=9703 instret=2019 (15/15 passes at min instret, spread=59) retval=1579141629
+beebs_insertsort: BEST cycles=1203 instret=813 (15/15 passes at min instret, spread=0) retval=271779359
+## K=1 capability half:
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    7311            5029          YES
+ctrsanity            43260934      43260934      600310          500030        YES
+beebs_cover          1993178309    1993178309    159551          76469         YES
+rv8_primes           99991         99991         6333258         3245855       YES
+rv8_sha512           1390718314    1390718314    543677          460950        YES
+beebs_aha_mont64     2185097489    2185097489    286554          256697        YES
+rv8_sha512s          2842840124    2842840124    118678          75477         YES
+beebs_prime          582955588     582955588     9723            2703          YES
+beebs_crc32          1703161001    1703161001    48246           29723         YES
+beebs_ns             1184999093    1184999093    102607          61299         YES
+beebs_cnt            2356896837    2356896837    114032          69387         YES
+beebs_bs             887447230     887447230     2137            820           YES
+coremark_matrix      14343         14343         53300           31560         YES
+matmult_int          774662735     774662735     19145           9722          YES
+beebs_janne          484656629     484656629     575             198           YES
+beebs_recursion      1579141629    1579141629    19029           3029          YES
+beebs_insertsort     271779359     271779359     2573            962           YES
+## K=1 bare-metal baseline half (extraflags: -DLADDER_PAD=1):
+ctrsanitys: BEST cycles=6040 instret=5021 (15/15 passes at min instret, spread=0) retval=3688591409
+ctrsanity: BEST cycles=600041 instret=500022 (15/15 passes at min instret, spread=0) retval=43260934
+beebs_cover: BEST cycles=161052 instret=76513 (15/15 passes at min instret, spread=0) retval=1993178309
+rv8_primes: BEST cycles=6286723 instret=3245861 (15/15 passes at min instret, spread=57) retval=99991
+rv8_sha512: BEST cycles=540137 instret=462646 (15/15 passes at min instret, spread=135) retval=1390718314
+beebs_aha_mont64: BEST cycles=283612 instret=256622 (15/15 passes at min instret, spread=55) retval=2185097489
+rv8_sha512s: BEST cycles=117035 instret=69108 (15/15 passes at min instret, spread=0) retval=2842840124
+beebs_prime: BEST cycles=9281 instret=2704 (15/15 passes at min instret, spread=0) retval=582955588
+beebs_crc32: BEST cycles=42795 instret=31000 (15/15 passes at min instret, spread=0) retval=1703161001
+beebs_ns: BEST cycles=88451 instret=62097 (15/15 passes at min instret, spread=39) retval=1184999093
+beebs_cnt: BEST cycles=95019 instret=57949 (15/15 passes at min instret, spread=0) retval=2356896837
+beebs_bs: BEST cycles=1471 instret=827 (15/15 passes at min instret, spread=0) retval=887447230
+coremark_matrix: BEST cycles=36540 instret=25673 (15/15 passes at min instret, spread=0) retval=14343
+matmult_int: BEST cycles=11376 instret=7272 (15/15 passes at min instret, spread=0) retval=774662735
+beebs_janne: BEST cycles=319 instret=210 (15/15 passes at min instret, spread=0) retval=484656629
+beebs_recursion: BEST cycles=9703 instret=2019 (15/15 passes at min instret, spread=14) retval=1579141629
+beebs_insertsort: BEST cycles=1205 instret=813 (15/15 passes at min instret, spread=0) retval=271779359
+## K=2 capability half:
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6293            5029          YES
+ctrsanity            43260934      43260934      600332          500030        YES
+beebs_cover          1993178309    1993178309    160317          76469         YES
+rv8_primes           99991         99991         6333024         3245855       YES
+rv8_sha512           1390718314    1390718314    543592          460950        YES
+beebs_aha_mont64     2185097489    2185097489    286470          256697        YES
+rv8_sha512s          2842840124    2842840124    118759          75477         YES
+beebs_prime          582955588     582955588     9732            2703          YES
+beebs_crc32          1703161001    1703161001    48311           29723         YES
+beebs_ns             1184999093    1184999093    102718          61299         YES
+beebs_cnt            2356896837    2356896837    114052          69387         YES
+beebs_bs             887447230     887447230     2068            820           YES
+coremark_matrix      14343         14343         53241           31560         YES
+matmult_int          774662735     774662735     19071           9722          YES
+beebs_janne          484656629     484656629     651             198           YES
+beebs_recursion      1579141629    1579141629    19050           3029          YES
+beebs_insertsort     271779359     271779359     2626            962           YES
+## K=2 bare-metal baseline half (extraflags: -DLADDER_PAD=2):
+ctrsanitys: BEST cycles=6040 instret=5021 (15/15 passes at min instret, spread=0) retval=3688591409
+ctrsanity: BEST cycles=600041 instret=500022 (15/15 passes at min instret, spread=0) retval=43260934
+beebs_cover: BEST cycles=161361 instret=76513 (15/15 passes at min instret, spread=0) retval=1993178309
+rv8_primes: BEST cycles=6284080 instret=3245861 (15/15 passes at min instret, spread=231) retval=99991
+rv8_sha512: BEST cycles=540137 instret=462646 (15/15 passes at min instret, spread=0) retval=1390718314
+beebs_aha_mont64: BEST cycles=283612 instret=256622 (15/15 passes at min instret, spread=16) retval=2185097489
+rv8_sha512s: BEST cycles=117035 instret=69108 (15/15 passes at min instret, spread=0) retval=2842840124
+beebs_prime: BEST cycles=9280 instret=2704 (15/15 passes at min instret, spread=0) retval=582955588
+beebs_crc32: BEST cycles=42795 instret=31000 (15/15 passes at min instret, spread=0) retval=1703161001
+beebs_ns: BEST cycles=88451 instret=62097 (15/15 passes at min instret, spread=0) retval=1184999093
+beebs_cnt: BEST cycles=95029 instret=57949 (15/15 passes at min instret, spread=0) retval=2356896837
+beebs_bs: BEST cycles=1470 instret=827 (15/15 passes at min instret, spread=0) retval=887447230
+coremark_matrix: BEST cycles=36536 instret=25673 (15/15 passes at min instret, spread=0) retval=14343
+matmult_int: BEST cycles=11312 instret=7272 (15/15 passes at min instret, spread=0) retval=774662735
+beebs_janne: BEST cycles=319 instret=210 (15/15 passes at min instret, spread=0) retval=484656629
+beebs_recursion: BEST cycles=9704 instret=2019 (15/15 passes at min instret, spread=15) retval=1579141629
+beebs_insertsort: BEST cycles=1203 instret=813 (15/15 passes at min instret, spread=0) retval=271779359
+## K=3 capability half:
+rung                 retval        oracle        cycles(mcycle)  instret       correct
+ctrsanitys           3688591409    3688591409    6334            5029          YES
+ctrsanity            43260934      43260934      600314          500030        YES
+beebs_cover          1993178309    1993178309    159704          76469         YES
+rv8_primes           99991         99991         6335258         3245855       YES
+rv8_sha512           1390718314    1390718314    543684          460950        YES
+beebs_aha_mont64     2185097489    2185097489    286614          256697        YES
+rv8_sha512s          2842840124    2842840124    118690          75477         YES
+beebs_prime          582955588     582955588     9776            2703          YES
+beebs_crc32          1703161001    1703161001    48271           29723         YES
+beebs_ns             1184999093    1184999093    102654          61299         YES
+beebs_cnt            2356896837    2356896837    114068          69387         YES
+beebs_bs             887447230     887447230     2104            820           YES
+coremark_matrix      14343         14343         53204           31560         YES
+matmult_int          774662735     774662735     19055           9722          YES
+beebs_janne          484656629     484656629     621             198           YES
+beebs_recursion      1579141629    1579141629    19217           3029          YES
+beebs_insertsort     271779359     271779359     2604            962           YES
+## K=3 bare-metal baseline half (extraflags: -DLADDER_PAD=3):
+ctrsanitys: BEST cycles=6040 instret=5021 (15/15 passes at min instret, spread=0) retval=3688591409
+ctrsanity: BEST cycles=600041 instret=500022 (15/15 passes at min instret, spread=5) retval=43260934
+beebs_cover: BEST cycles=161503 instret=76513 (15/15 passes at min instret, spread=0) retval=1993178309
+rv8_primes: BEST cycles=6284080 instret=3245861 (15/15 passes at min instret, spread=113) retval=99991
+rv8_sha512: BEST cycles=540137 instret=462646 (15/15 passes at min instret, spread=0) retval=1390718314
+beebs_aha_mont64: BEST cycles=283624 instret=256622 (15/15 passes at min instret, spread=20) retval=2185097489
+rv8_sha512s: BEST cycles=117035 instret=69108 (15/15 passes at min instret, spread=0) retval=2842840124
+beebs_prime: BEST cycles=9280 instret=2704 (15/15 passes at min instret, spread=0) retval=582955588
+beebs_crc32: BEST cycles=42795 instret=31000 (15/15 passes at min instret, spread=39) retval=1703161001
+beebs_ns: BEST cycles=88451 instret=62097 (15/15 passes at min instret, spread=0) retval=1184999093
+beebs_cnt: BEST cycles=95043 instret=57949 (15/15 passes at min instret, spread=0) retval=2356896837
+beebs_bs: BEST cycles=1524 instret=827 (15/15 passes at min instret, spread=4) retval=887447230
+coremark_matrix: BEST cycles=36523 instret=25673 (15/15 passes at min instret, spread=0) retval=14343
+matmult_int: BEST cycles=11312 instret=7272 (15/15 passes at min instret, spread=0) retval=774662735
+beebs_janne: BEST cycles=319 instret=210 (15/15 passes at min instret, spread=38) retval=484656629
+beebs_recursion: BEST cycles=9703 instret=2019 (15/15 passes at min instret, spread=75) retval=1579141629
+beebs_insertsort: BEST cycles=1203 instret=813 (15/15 passes at min instret, spread=0) retval=271779359
+## K=0 pair-halves.py:
+control ctrsanity: clean=15/15  instr ratio=1.00002  baseline CPI=1.2000  cycle ratio=1.1671
+control PASSED -- rows below are admissible (the control's own cycle ratio is reported, not gated)
+
+rung                  cap cyc   base cyc   cycles    cap ins   base ins   instr     CPI boots cap spread
+beebs_cover           159,482    162,002   0.984x     76,469     76,513   0.999   0.985     1          0
+rv8_sha512            543,605    540,141   1.006x    460,950    462,646   0.996   1.010     1          0
+rv8_primes          6,345,858  6,284,080   1.010x  3,245,855  3,245,861   1.000   1.010     1          0
+beebs_aha_mont64      286,401    283,612   1.010x    256,697    256,622   1.000   1.010     1          0
+rv8_sha512s           118,630    117,035   1.014x     75,477     69,108   1.092   0.928     1          0
+ctrsanitys              6,283      6,040   1.040x      5,029      5,021   1.002   1.039     1          0  (control)
+beebs_prime             9,724      9,292   1.046x      2,703      2,704   1.000   1.047     1          0
+beebs_crc32            48,257     42,795   1.128x     29,723     31,000   0.959   1.176     1          0
+beebs_ns              102,675     88,451   1.161x     61,299     62,097   0.987   1.176     1          0
+ctrsanity             700,312    600,041   1.167x    500,030    500,022   1.000   1.167     1          0  (control)
+beebs_cnt             114,085     95,019   1.201x     69,387     57,949   1.197   1.003     1          0
+beebs_bs                2,141      1,470   1.456x        820        827   0.992   1.469     1          0
+coremark_matrix        53,404     36,523   1.462x     31,560     25,673   1.229   1.189     1          0
+matmult_int            19,229     11,312   1.700x      9,722      7,272   1.337   1.271     1          0
+beebs_recursion        19,245      9,703   1.983x      3,029      2,019   1.500   1.322     1          0
+beebs_janne               641        319   2.009x        198        210   0.943   2.131     1          0
+beebs_insertsort        2,525      1,203   2.099x        962        813   1.183   1.774     1          0
+
+17 admissible rows
+## K=1 pair-halves.py:
+control ctrsanity: clean=15/15  instr ratio=1.00002  baseline CPI=1.2000  cycle ratio=1.0004
+control PASSED -- rows below are admissible (the control's own cycle ratio is reported, not gated)
+
+rung                  cap cyc   base cyc   cycles    cap ins   base ins   instr     CPI boots cap spread
+beebs_cover           159,551    161,052   0.991x     76,469     76,513   0.999   0.991     1          0
+ctrsanity             600,310    600,041   1.000x    500,030    500,022   1.000   1.000     1          0  (control)
+rv8_sha512            543,677    540,137   1.007x    460,950    462,646   0.996   1.010     1          0
+rv8_primes          6,333,258  6,286,723   1.007x  3,245,855  3,245,861   1.000   1.007     1          0
+beebs_aha_mont64      286,554    283,612   1.010x    256,697    256,622   1.000   1.010     1          0
+rv8_sha512s           118,678    117,035   1.014x     75,477     69,108   1.092   0.928     1          0
+beebs_prime             9,723      9,281   1.048x      2,703      2,704   1.000   1.048     1          0
+beebs_crc32            48,246     42,795   1.127x     29,723     31,000   0.959   1.176     1          0
+beebs_ns              102,607     88,451   1.160x     61,299     62,097   0.987   1.175     1          0
+beebs_cnt             114,032     95,019   1.200x     69,387     57,949   1.197   1.002     1          0
+ctrsanitys              7,311      6,040   1.210x      5,029      5,021   1.002   1.209     1          0  (control)
+beebs_bs                2,137      1,471   1.453x        820        827   0.992   1.465     1          0
+coremark_matrix        53,300     36,540   1.459x     31,560     25,673   1.229   1.187     1          0
+matmult_int            19,145     11,376   1.683x      9,722      7,272   1.337   1.259     1          0
+beebs_janne               575        319   1.803x        198        210   0.943   1.912     1          0
+beebs_recursion        19,029      9,703   1.961x      3,029      2,019   1.500   1.307     1          0
+beebs_insertsort        2,573      1,205   2.135x        962        813   1.183   1.805     1          0
+
+17 admissible rows
+## K=2 pair-halves.py:
+control ctrsanity: clean=15/15  instr ratio=1.00002  baseline CPI=1.2000  cycle ratio=1.0005
+control PASSED -- rows below are admissible (the control's own cycle ratio is reported, not gated)
+
+rung                  cap cyc   base cyc   cycles    cap ins   base ins   instr     CPI boots cap spread
+beebs_cover           160,317    161,361   0.994x     76,469     76,513   0.999   0.994     1          0
+ctrsanity             600,332    600,041   1.000x    500,030    500,022   1.000   1.000     1          0  (control)
+rv8_sha512            543,592    540,137   1.006x    460,950    462,646   0.996   1.010     1          0
+rv8_primes          6,333,024  6,284,080   1.008x  3,245,855  3,245,861   1.000   1.008     1          0
+beebs_aha_mont64      286,470    283,612   1.010x    256,697    256,622   1.000   1.010     1          0
+rv8_sha512s           118,759    117,035   1.015x     75,477     69,108   1.092   0.929     1          0
+ctrsanitys              6,293      6,040   1.042x      5,029      5,021   1.002   1.040     1          0  (control)
+beebs_prime             9,732      9,280   1.049x      2,703      2,704   1.000   1.049     1          0
+beebs_crc32            48,311     42,795   1.129x     29,723     31,000   0.959   1.177     1          0
+beebs_ns              102,718     88,451   1.161x     61,299     62,097   0.987   1.176     1          0
+beebs_cnt             114,052     95,029   1.200x     69,387     57,949   1.197   1.002     1          0
+beebs_bs                2,068      1,470   1.407x        820        827   0.992   1.419     1          0
+coremark_matrix        53,241     36,536   1.457x     31,560     25,673   1.229   1.185     1          0
+matmult_int            19,071     11,312   1.686x      9,722      7,272   1.337   1.261     1          0
+beebs_recursion        19,050      9,704   1.963x      3,029      2,019   1.500   1.309     1          0
+beebs_janne               651        319   2.041x        198        210   0.943   2.164     1          0
+beebs_insertsort        2,626      1,203   2.183x        962        813   1.183   1.845     1          0
+
+17 admissible rows
+## K=3 pair-halves.py:
+control ctrsanity: clean=15/15  instr ratio=1.00002  baseline CPI=1.2000  cycle ratio=1.0005
+control PASSED -- rows below are admissible (the control's own cycle ratio is reported, not gated)
+
+rung                  cap cyc   base cyc   cycles    cap ins   base ins   instr     CPI boots cap spread
+beebs_cover           159,704    161,503   0.989x     76,469     76,513   0.999   0.989     1          0
+ctrsanity             600,314    600,041   1.000x    500,030    500,022   1.000   1.000     1          0  (control)
+rv8_sha512            543,684    540,137   1.007x    460,950    462,646   0.996   1.010     1          0
+rv8_primes          6,335,258  6,284,080   1.008x  3,245,855  3,245,861   1.000   1.008     1          0
+beebs_aha_mont64      286,614    283,624   1.011x    256,697    256,622   1.000   1.010     1          0
+rv8_sha512s           118,690    117,035   1.014x     75,477     69,108   1.092   0.929     1          0
+ctrsanitys              6,334      6,040   1.049x      5,029      5,021   1.002   1.047     1          0  (control)
+beebs_prime             9,776      9,280   1.053x      2,703      2,704   1.000   1.054     1          0
+beebs_crc32            48,271     42,795   1.128x     29,723     31,000   0.959   1.176     1          0
+beebs_ns              102,654     88,451   1.161x     61,299     62,097   0.987   1.176     1          0
+beebs_cnt             114,068     95,043   1.200x     69,387     57,949   1.197   1.002     1          0
+beebs_bs                2,104      1,524   1.381x        820        827   0.992   1.392     1          0
+coremark_matrix        53,204     36,523   1.457x     31,560     25,673   1.229   1.185     1          0
+matmult_int            19,055     11,312   1.684x      9,722      7,272   1.337   1.260     1          0
+beebs_janne               621        319   1.947x        198        210   0.943   2.065     1          0
+beebs_recursion        19,217      9,703   1.981x      3,029      2,019   1.500   1.320     1          0
+beebs_insertsort        2,604      1,203   2.165x        962        813   1.183   1.829     1          0
+
+17 admissible rows

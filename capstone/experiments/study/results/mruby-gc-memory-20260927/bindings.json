@@ -1,0 +1,340 @@
+{
+  "mruby-poisoncap-ao/bm_ao_render.rb@width8": {
+    "comparison": "nested-poisoncap",
+    "source": {
+      "url": "https://github.com/mruby/mruby",
+      "revision": "9d523e2f74f2e63ca02840937523de61398a617d",
+      "release": "4.0.0-rc2",
+      "benchmark_sha256": "e44efffd6415b9ef875bd92272ad2bd984ab4bc0f078b6e73aa791fd9865180f"
+    },
+    "application_version": "4.0.0-rc2",
+    "profile": "nested",
+    "parameters": {
+      "width": 8
+    },
+    "adaptation": "Pinned mruby GC-slot Sublet and layout-matched PoisonCap spatial/temporal adapter",
+    "nested_allocator": "mruby-gc",
+    "oracle_reference": "/tmp/capstone/mruby-ao-repro/native8-original.ppm",
+    "oracle_reference_sha256": "28060a9790593ace825b7552ab5d1878cf3e95be3be08ee738f28cde4cee5d11",
+    "oracle": {
+      "expected_stdout_sha256": "28060a9790593ace825b7552ab5d1878cf3e95be3be08ee738f28cde4cee5d11",
+      "expected_stdout_bytes": 203,
+      "expected_phases": [
+        "startup",
+        "before",
+        "after",
+        "exit"
+      ]
+    },
+    "input_sha256": {
+      "script": "51a87300b71f38e16a8681006ab989610bc2df35643d43a1575946480cd714cc"
+    },
+    "platform_files": {
+      "capstone_qemu": {
+        "path": "/tmp/capstone/node-reuse/qemu/qemu-system-riscv64",
+        "sha256": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e"
+      },
+      "capstone_kernel": {
+        "path": "/tmp/capstone/br-snap/build/images/Image",
+        "sha256": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd"
+      },
+      "poisoncap_qemu": {
+        "path": "/tmp/capstone/poisoncap-work/sdk/bin/qemu-system-riscv64cheri",
+        "sha256": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9"
+      },
+      "poisoncap_kernel": {
+        "path": "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/boot/kernel/kernel",
+        "sha256": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e"
+      },
+      "poisoncap_libc": {
+        "path": "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/lib/libc.so.7",
+        "sha256": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef"
+      }
+    },
+    "arms": {
+      "capstone": {
+        "binary": "/tmp/capstone/domain-process-runtime/share/study-mruby/mruby-spatial-gaps-v3.dom",
+        "build_manifest": "/tmp/capstone/mruby-capstone-spatial-gaps-v3-build/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 541824,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "capstone/experiments/study/results/mruby-gc-memory-20260927/ao8/summary.json",
+          "sha256": "78d13bb8b2a6cffaa67c156f8e816b84e3bc44d803cfda60c452b9f751f6d4b5"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/mnt/host/study-mruby/ao.rb",
+            "8"
+          ],
+          "files": {
+            "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb": "/mnt/host/study-mruby/ao.rb"
+          }
+        }
+      },
+      "capstone-sublet": {
+        "binary": "/tmp/capstone/domain-process-runtime/share/study-mruby/mruby-sublet-gaps-v3.dom",
+        "build_manifest": "/tmp/capstone/mruby-capstone-sublet-gaps-v3-build/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 750720,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "capstone/experiments/study/results/mruby-gc-memory-20260927/ao8/summary.json",
+          "sha256": "78d13bb8b2a6cffaa67c156f8e816b84e3bc44d803cfda60c452b9f751f6d4b5"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/mnt/host/study-mruby/ao.rb",
+            "8"
+          ],
+          "files": {
+            "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb": "/mnt/host/study-mruby/ao.rb"
+          }
+        }
+      },
+      "poisoncap-spatial": {
+        "binary": "/tmp/capstone/mruby-poisoncap-study-build-v4/mruby",
+        "build_manifest": "/tmp/capstone/mruby-poisoncap-study-build-v4/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 565248,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "capstone/experiments/study/results/mruby-gc-memory-20260927/ao8/summary.json",
+          "sha256": "78d13bb8b2a6cffaa67c156f8e816b84e3bc44d803cfda60c452b9f751f6d4b5"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/tmp/mruby-gc",
+            "/tmp/ao.rb",
+            "8"
+          ],
+          "files": {
+            "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb": "/tmp/ao.rb",
+            "/tmp/capstone/mruby-poisoncap-study-build-v4/mruby": "/tmp/mruby-gc"
+          },
+          "nested_allocator": "mruby-gc"
+        }
+      },
+      "poisoncap-temporal": {
+        "binary": "/tmp/capstone/mruby-poisoncap-study-build-v4/mruby",
+        "build_manifest": "/tmp/capstone/mruby-poisoncap-study-build-v4/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 847872,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "capstone/experiments/study/results/mruby-gc-memory-20260927/ao8/summary.json",
+          "sha256": "78d13bb8b2a6cffaa67c156f8e816b84e3bc44d803cfda60c452b9f751f6d4b5"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/tmp/mruby-gc",
+            "/tmp/ao.rb",
+            "8"
+          ],
+          "files": {
+            "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb": "/tmp/ao.rb",
+            "/tmp/capstone/mruby-poisoncap-study-build-v4/mruby": "/tmp/mruby-gc"
+          },
+          "nested_allocator": "mruby-gc"
+        }
+      }
+    }
+  },
+  "mruby-poisoncap-ao/bm_ao_render.rb@width16": {
+    "comparison": "nested-poisoncap",
+    "source": {
+      "url": "https://github.com/mruby/mruby",
+      "revision": "9d523e2f74f2e63ca02840937523de61398a617d",
+      "release": "4.0.0-rc2",
+      "benchmark_sha256": "e44efffd6415b9ef875bd92272ad2bd984ab4bc0f078b6e73aa791fd9865180f"
+    },
+    "application_version": "4.0.0-rc2",
+    "profile": "nested",
+    "parameters": {
+      "width": 16
+    },
+    "adaptation": "Pinned mruby GC-slot Sublet and layout-matched PoisonCap spatial/temporal adapter",
+    "nested_allocator": "mruby-gc",
+    "oracle_reference": "/tmp/capstone/mruby-ao-repro/native-original.ppm",
+    "oracle_reference_sha256": "cfd73bb1de97514b2adacbda3a377e5172aecbe48819f654071d1996359ca634",
+    "oracle": {
+      "expected_stdout_sha256": "cfd73bb1de97514b2adacbda3a377e5172aecbe48819f654071d1996359ca634",
+      "expected_stdout_bytes": 781,
+      "expected_phases": [
+        "startup",
+        "before",
+        "after",
+        "exit"
+      ]
+    },
+    "input_sha256": {
+      "script": "51a87300b71f38e16a8681006ab989610bc2df35643d43a1575946480cd714cc"
+    },
+    "platform_files": {
+      "capstone_qemu": {
+        "path": "/tmp/capstone/node-reuse/qemu/qemu-system-riscv64",
+        "sha256": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e"
+      },
+      "capstone_kernel": {
+        "path": "/tmp/capstone/br-snap/build/images/Image",
+        "sha256": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd"
+      },
+      "poisoncap_qemu": {
+        "path": "/tmp/capstone/poisoncap-work/sdk/bin/qemu-system-riscv64cheri",
+        "sha256": "61dfbae7cebfc3fb0ef4e9a3750b8550daaa44664decf09c16da9607971ccde9"
+      },
+      "poisoncap_kernel": {
+        "path": "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/boot/kernel/kernel",
+        "sha256": "80a3990df0d526447abfa48004bf6e92e410fe949808b0e201e2533d3177843e"
+      },
+      "poisoncap_libc": {
+        "path": "/tmp/capstone/poisoncap-work/output/rootfs-riscv64-purecap/lib/libc.so.7",
+        "sha256": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef"
+      }
+    },
+    "arms": {
+      "capstone": {
+        "binary": "/tmp/capstone/domain-process-runtime/share/study-mruby/mruby-spatial-gaps-v3.dom",
+        "build_manifest": "/tmp/capstone/mruby-capstone-spatial-gaps-v3-build/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 541824,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "capstone/experiments/study/results/mruby-gc-memory-20260927/summary.json",
+          "sha256": "1a10a6cb3f17fc2d54708621b4d5130e9e04bec69182aea91f96d865c72bd6ce"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/mnt/host/study-mruby/ao.rb",
+            "16"
+          ],
+          "files": {
+            "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb": "/mnt/host/study-mruby/ao.rb"
+          }
+        }
+      },
+      "capstone-sublet": {
+        "binary": "/tmp/capstone/domain-process-runtime/share/study-mruby/mruby-sublet-gaps-v3.dom",
+        "build_manifest": "/tmp/capstone/mruby-capstone-sublet-gaps-v3-build/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 750720,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "capstone/experiments/study/results/mruby-gc-memory-20260927/summary.json",
+          "sha256": "1a10a6cb3f17fc2d54708621b4d5130e9e04bec69182aea91f96d865c72bd6ce"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/mnt/host/study-mruby/ao.rb",
+            "16"
+          ],
+          "files": {
+            "/tmp/capstone/domain-process-runtime/share/study-mruby/ao.rb": "/mnt/host/study-mruby/ao.rb"
+          }
+        }
+      },
+      "poisoncap-spatial": {
+        "binary": "/tmp/capstone/mruby-poisoncap-study-build-v4/mruby",
+        "build_manifest": "/tmp/capstone/mruby-poisoncap-study-build-v4/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 565248,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "capstone/experiments/study/results/mruby-gc-memory-20260927/summary.json",
+          "sha256": "1a10a6cb3f17fc2d54708621b4d5130e9e04bec69182aea91f96d865c72bd6ce"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/tmp/mruby-gc",
+            "/tmp/ao.rb",
+            "16"
+          ],
+          "files": {
+            "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb": "/tmp/ao.rb",
+            "/tmp/capstone/mruby-poisoncap-study-build-v4/mruby": "/tmp/mruby-gc"
+          },
+          "nested_allocator": "mruby-gc"
+        }
+      },
+      "poisoncap-temporal": {
+        "binary": "/tmp/capstone/mruby-poisoncap-study-build-v4/mruby",
+        "build_manifest": "/tmp/capstone/mruby-poisoncap-study-build-v4/manifest.json",
+        "inputs": {
+          "script": "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb"
+        },
+        "resources": {
+          "observer_bytes": 8320,
+          "selected_peak_gc_bytes": 847872,
+          "excluded": "Capstone nodes or PoisonCap shadow/revocation/OS storage"
+        },
+        "qualification_evidence": {
+          "path": "capstone/experiments/study/results/mruby-gc-memory-20260927/summary.json",
+          "sha256": "1a10a6cb3f17fc2d54708621b4d5130e9e04bec69182aea91f96d865c72bd6ce"
+        },
+        "point": {
+          "application": "mruby",
+          "environment": {},
+          "argv": [
+            "/tmp/mruby-gc",
+            "/tmp/ao.rb",
+            "16"
+          ],
+          "files": {
+            "/tmp/capstone/mruby-poisoncap-ao-workload/ao.rb": "/tmp/ao.rb",
+            "/tmp/capstone/mruby-poisoncap-study-build-v4/mruby": "/tmp/mruby-gc"
+          },
+          "nested_allocator": "mruby-gc"
+        }
+      }
+    }
+  }
+}

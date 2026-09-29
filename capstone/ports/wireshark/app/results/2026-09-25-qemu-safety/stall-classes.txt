@@ -1,0 +1,36 @@
+# Every tshark boot in the campaign window (2026-09-25 07:20-08:58), by where it stopped. The
+# setup watchdog's two positive controls (qemu-oracle-20260925-073233-MH9X, -080621-1Pca) are left out.
+qemu-stages-shrink-20260925-072033-Yrnc.log: setup: stopped with no watchdog output (guest wedged, or no watchdog yet)
+qemu-oracle-shrink-20260925-073124-PQUM.log: ran
+qemu-oracle-shrink-20260925-073332-jzo7.log: ran
+qemu-safety-level0-20260925-073526-zKgV.log: ran
+qemu-safety-level0-20260925-073735-Y4Et.log: setup copy: watchdog powered off
+qemu-safety-level0-20260925-074304-ZNZi.log: ran
+qemu-safety-shrink-20260925-074515-qWWf.log: ran
+qemu-safety-shrink-20260925-074725-scK0.log: ran
+qemu-safety-shrink-20260925-074856-R177.log: ran
+qemu-safety-shrink-20260925-074925-28DV.log: ran
+qemu-stages-shrink-20260925-075010-RHd9.log: ran
+qemu-safety-level0-20260925-075217-b5Hb.log: ran
+qemu-safety-level0-20260925-075428-ZZ0y.log: setup copy: watchdog powered off
+qemu-safety-level0-20260925-075955-4Am0.log: setup: stopped with no watchdog output (guest wedged, or no watchdog yet)
+qemu-safety-level0-20260925-081732-PdvK.log: ran
+qemu-safety-shrink-20260925-081957-OmMe.log: setup copy: watchdog powered off
+qemu-safety-shrink-20260925-082525-ii82.log: ran
+qemu-safety-shrink-20260925-082735-Bk5L.log: ran
+qemu-safety-shrink-20260925-082905-5f7d.log: ran
+qemu-safety-shrink-20260925-082934-LQUG.log: ran
+qemu-safety-level0-20260925-083003-sFSX.log: ran
+qemu-safety-level0-20260925-083211-Nil9.log: boot: between init and login
+qemu-safety-level0-20260925-083431-HtcI.log: ran (after a slow setup: watchdog reported, copy completed)
+qemu-safety-shrink-20260925-084136-QnN1.log: boot: between init and login
+qemu-safety-shrink-20260925-084356-VzfP.log: ran (after a slow setup: watchdog reported, copy completed)
+qemu-safety-shrink-20260925-085101-CyxM.log: ran (after a slow setup: watchdog reported, copy completed)
+qemu-safety-shrink-20260925-085725-nx5l.log: ran
+qemu-safety-shrink-20260925-085754-a88Q.log: ran
+
+#  18  ran
+#   5  setup copy: watchdog powered off
+#   3  ran (after a slow setup: watchdog reported, copy completed)
+#   2  setup: stopped with no watchdog output (guest wedged, or no watchdog yet)
+#   2  boot: between init and login

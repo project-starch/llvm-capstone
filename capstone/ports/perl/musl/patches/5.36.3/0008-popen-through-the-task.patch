@@ -1,0 +1,69 @@
+util.c: backticks and piped open through the C library popen, which spawns.
+
+--- a/util.c
++++ b/util.c
+@@ -2850,6 +2850,35 @@
+ 
+     PERL_ARGS_ASSERT_MY_POPEN;
+ 
++#ifdef __CAPSTONE__
++    /* A domain cannot fork. The C library's popen starts the child through
++       the task's spawn service, so the pipe and the child are real. The pid
++       recorded as -2 sends my_pclose through the library's pclose, the same
++       convention the OS/2 port uses. The implicit-fork form, "-", stays on
++       the fork path and fails as fork does. nostdio.h forbids the stdio names
++       so that PerlIO is used instead; here the library FILE is wanted, and
++       PerlIO_importFILE is how it becomes a PerlIO handle. */
++    if (doexec) {
++#undef popen
++#undef pclose
++        FILE *f;
++        PerlIO *io;
++        PERL_FLUSHALL_FOR_CHILD;
++        f = popen(cmd, mode);
++        if (!f)
++            return NULL;
++        io = PerlIO_importFILE(f, mode);
++        if (!io) {
++            pclose(f);
++            return NULL;
++        }
++        sv = *av_fetch(PL_fdpid, PerlIO_fileno(io), TRUE);
++        SvUPGRADE(sv, SVt_IV);
++        SvIV_set(sv, -2);
++        return io;
++    }
++#endif
++
+     PERL_FLUSHALL_FOR_CHILD;
+ #ifdef OS2
+     if (doexec) {
+@@ -3306,6 +3335,19 @@
+ =cut
+ */
+ 
++#ifdef __CAPSTONE__
++/* The library's pclose, for a handle my_popen opened through it. */
++static I32
++my_syspclose(PerlIO *ptr)
++{
++#undef pclose
++    FILE * const f = PerlIO_findFILE(ptr);
++    const I32 result = pclose(f);
++    PerlIO_releaseFILE(ptr, f);
++    return result;
++}
++#endif
++
+ #if (!defined(DOSISH) || defined(HAS_FORK)) && !defined(VMS) && !defined(__LIBCATAMOUNT__) && !defined(__amigaos4__)
+ I32
+ Perl_my_pclose(pTHX_ PerlIO *ptr)
+@@ -3336,7 +3378,7 @@
+     should_wait = pid > 0;
+ #endif
+ 
+-#ifdef OS2
++#if defined(OS2) || defined(__CAPSTONE__)
+     if (pid == -2) {                    /* Opened by popen. */
+         return my_syspclose(ptr);
+     }

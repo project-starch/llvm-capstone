@@ -1,0 +1,60 @@
+# The checks on the S1 instruments, each shown able to fire. Regenerated 2026-09-25 from the committed host/safety-verdict.py.
+
+## safety-verdict.py --self-test (must be all ok, rc 0)
+self-test ok   return: got RETURN 100001
+self-test ok   fault at the target: got FAULT oob
+self-test ok   fault elsewhere: got FAULT-ELSEWHERE oob at 180, target 140
+self-test ok   fault before the touch: got FAULT-BEFORE-TOUCH oob
+self-test ok   fault after a return line: got FAULT-AFTER-RETURN oob
+self-test ok   host failure is not a mark: got NOTHING host reported status -1
+self-test ok   another image's result is not this one's: got NOTHING None
+self-test ok   nothing at all: got NOTHING None
+self-test ok   judge case 1
+self-test ok   judge case 2
+self-test ok   judge case 3
+self-test ok   judge case 4
+self-test ok   judge case 5
+rc=0
+
+## broken classifier 1: sed 's/if touch is None or i < touch:/if False:/' (the self-test must FAIL, rc 1)
+self-test FAIL fault before the touch: got FAULT oob
+rc=1
+
+## broken classifier 2: sed 's/if kind == 'oob' and addr != target:/if False:/' (the self-test must FAIL, rc 1)
+self-test FAIL fault elsewhere: got FAULT oob
+rc=1
+
+## broken classifier 3: sed 's/if done is not None and done >= 0:/if done is not None:/' (the self-test must FAIL, rc 1)
+self-test FAIL host failure is not a mark: got RETURN -1
+rc=1
+
+## setup watchdog, positive control: TSAPP_SETUP_BUDGET=1 run-qemu.sh oracle dhcp (qemu-oracle-20260925-080621-1Pca)
+__TS_SETUP_STALLED__
+total 24664
+-rw-r--r--    1 root     root            37 Sep 25 00:17 domain.argv
+-rw-r--r--    1 root     root            50 Sep 25 00:17 domain.env
+-rwxr-xr-x    1 root     root         23688 Sep 25 00:17 lt.user
+-rw-r--r--    1 root     root        117288 Sep 25 00:17 messages
+-rwxr-xr-x    1 root     root      25104384 Sep 25 00:17 tshark_m5.dom
+drwxr-xr-x    2 root     root            40 Sep 25 00:17 wsconf
+cp 97 wchan=0
+[<0>] generic_perform_write+0x116/0x1b6
+[<0>] __generic_file_write_iter+0xba/0xfa
+[<0>] generic_file_write_iter+0x5a/0xac
+[<0>] do_iter_readv_writev+0xae/0x112
+[<0>] do_iter_write+0x6c/0x138
+[<0>] vfs_iter_write+0x12/0x1e
+[<0>] iter_file_splice_write+0x168/0x2e4
+[<0>] direct_splice_actor+0x1e/0x2c
+[<0>] splice_direct_to_actor+0xa4/0x1a0
+[<0>] do_splice_direct+0x7c/0xb0
+[<0>] do_sendfile+0x234/0x38a
+[<0>] sys_sendfile64+0xce/0xf2
+[<0>] check_syscall_nr+0x3c/0x3c
+MemFree:         8094404 kB
+MemAvailable:    8044800 kB
+Shmem:             37516 kB
+CmaTotal:         524288 kB
+CmaFree:          522240 kB
+__TS_SETUP_STALL_END__
+[    7.698581] reboot: Power down

@@ -1,0 +1,47 @@
+sort_template.h: the generic qsort swaps pointer-sized units, so pointers keep their tag (intcap plan, Phase D).
+
+pg_qsort is sort_template.h with ST_ELEMENT_TYPE_VOID, and its swap moves an element one
+char at a time. On Capstone a pointer copied as bytes comes back without its capability
+tag. bulk_write.c sorts its pending pages with qsort before WAL-logging them, and
+log_newpages then registered an untagged page: XLogRecordAssemble faulted (cause 24) on
+lhu 0xc(page). A probe in XLogRegisterBlock caught the page (0xd9d21000, untagged) with
+log_newpages as caller.
+
+An element that holds a pointer is pointer-aligned, and its size is a multiple of the
+pointer size. So when both element addresses and the size allow it, the swap moves
+void * units, which the compiler copies as capabilities. Anything else keeps the byte
+loop.
+
+--- a/src/include/lib/sort_template.h
++++ b/src/include/lib/sort_template.h
+@@ -281,6 +281,30 @@
+ static inline void
+ ST_SWAPN(ST_POINTER_TYPE * a, ST_POINTER_TYPE * b, size_t n)
+ {
++#if defined(ST_ELEMENT_TYPE_VOID) && defined(__SIZEOF_INTCAP__)
++	/*
++	 * capstone: with a void element type this loop swaps bytes, and a pointer
++	 * moved a byte at a time loses its capability tag (bulk_write's qsort of
++	 * pending pages handed log_newpages an untagged page). An element that
++	 * holds a pointer is pointer-aligned and a multiple of its size, so swap
++	 * in pointer-sized units whenever both elements and the size allow it.
++	 */
++	if ((uintptr_t) a % sizeof(void *) == 0 && (uintptr_t) b % sizeof(void *) == 0 &&
++		n % sizeof(void *) == 0)
++	{
++		void	  **pa = (void **) a;
++		void	  **pb = (void **) b;
++
++		for (size_t i = 0; i < n / sizeof(void *); ++i)
++		{
++			void	   *tmp = pa[i];
++
++			pa[i] = pb[i];
++			pb[i] = tmp;
++		}
++		return;
++	}
++#endif
+ 	for (size_t i = 0; i < n; ++i)
+ 		ST_SWAP(&a[i], &b[i]);
+ }

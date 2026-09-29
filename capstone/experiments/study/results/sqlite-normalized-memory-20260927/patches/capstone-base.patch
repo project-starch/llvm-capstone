@@ -1,0 +1,46 @@
+--- a/sqlite3.c
++++ b/sqlite3.c
+@@ -1692,6 +1692,7 @@
+ ** I/O operations on the open file.
+ */
+ typedef struct sqlite3_file sqlite3_file;
++typedef const char *sqlite3_filename;
+ struct sqlite3_file {
+   const struct sqlite3_io_methods *pMethods;  /* Methods for an open file */
+ };
+@@ -71966,7 +71967,7 @@
+   assert( db!=0 );
+   assert( (pMem->flags & MEM_RowSet)==0 );
+   sqlite3VdbeMemRelease(pMem);
+-  pMem->zMalloc = sqlite3DbMallocRawNN(db, 64);
++  pMem->zMalloc = sqlite3DbMallocRawNN(db, ROUND8(sizeof(RowSet)));
+   if( db->mallocFailed ){
+     pMem->flags = MEM_Null;
+     pMem->szMalloc = 0;
+@@ -80102,7 +80103,7 @@
+   int nByte;
+   VdbeCursor *pCx = 0;
+   nByte = 
+-      ROUND8(sizeof(VdbeCursor)) + 2*sizeof(u32)*nField + 
++      ((ROUND8(sizeof(VdbeCursor)) + 2*sizeof(u32)*nField + 15)&~15) + 
+       (eCurType==CURTYPE_BTREE?sqlite3BtreeCursorSize():0);
+ 
+   assert( iCur>=0 && iCur<p->nCursor );
+@@ -80119,7 +80120,7 @@
+     pCx->aOffset = &pCx->aType[nField];
+     if( eCurType==CURTYPE_BTREE ){
+       pCx->uc.pCursor = (BtCursor*)
+-          &pMem->z[ROUND8(sizeof(VdbeCursor))+2*sizeof(u32)*nField];
++          &pMem->z[(ROUND8(sizeof(VdbeCursor))+2*sizeof(u32)*nField+15)&~15];
+       sqlite3BtreeCursorZero(pCx->uc.pCursor);
+     }
+   }
+@@ -101871,7 +101872,7 @@
+   char *zSql;
+   char *zErrMsg = 0;
+   sqlite3 *db = pParse->db;
+-  char saveBuf[PARSE_TAIL_SZ];
++  char saveBuf[PARSE_TAIL_SZ] __attribute__((aligned(16)));
+ 
+   if( pParse->nErr ) return;
+   assert( pParse->nested<10 );  /* Nesting should only be of limited depth */

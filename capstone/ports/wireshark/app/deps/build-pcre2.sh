@@ -29,6 +29,9 @@ echo "pcre2: native check OK"
 ( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j16 libpcre2-8.la > "$LOG/cap-build.log" 2>&1 )
 ( cd "$X" && make install-libLTLIBRARIES install-includeHEADERS install-nodist_includeHEADERS \
     > "$LOG/cap-install.log" 2>&1 )
+# The pkg-config file too: GLib's glib-2.0.pc requires libpcre2-8, and Wireshark's FindPCRE2 and
+# FindGLIB2 go through pkg-config first.
+mkdir -p "$TS_DEPS_PREFIX/lib/pkgconfig"; cp "$X/libpcre2-8.pc" "$TS_DEPS_PREFIX/lib/pkgconfig/"
 touch "$LOG/cast-log.txt"; sort -u "$LOG/cast-log.txt" > "$LOG/cast-sites.txt"
 echo "pcre2: libpcre2-8.a installed ($(stat -c %s "$TS_DEPS_PREFIX/lib/libpcre2-8.a") bytes); cast sites: $(wc -l < "$LOG/cast-sites.txt")"
 ( cd "$X" && make pcre2test > "$LOG/cap-test-link.log" 2>&1 )

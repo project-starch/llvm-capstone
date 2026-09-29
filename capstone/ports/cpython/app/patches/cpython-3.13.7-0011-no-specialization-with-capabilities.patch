@@ -1,0 +1,38 @@
+Subject: [PATCH 0011] Run the adaptive interpreter without specialization where a pointer is a capability
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Specialized instructions cache PyObject pointers in the instruction stream
+(write_obj/read_obj in pycore_code.h): a memcpy into 16-bit code units, at
+2-byte alignment. A capability cannot survive that. The store keeps the
+address and not the tag, and the pointer read back is an integer that traps
+when used. On the first boot that reached bytecode, the interpreter halted in
+_PyEval_EvalFrameDefault (cause 24, "Cap mem access requires capability") at
+the Py_INCREF of an object it had just read with a 16-byte memcpy from a
+2-byte-aligned address in the code array -- read_obj's shape; which opcode it
+was is not established.
+
+ENABLE_SPECIALIZATION is 0 there, as it already is in the free-threaded build:
+instructions stay adaptive and unspecialized, and nothing writes an object
+into a cache. The cost is speed, not behaviour.
+
+--- a/Include/internal/pycore_code.h
++++ b/Include/internal/pycore_code.h
+@@ -314,6 +314,14 @@
+ #ifdef Py_GIL_DISABLED
+ // gh-115999 tracks progress on addressing this.
+ #define ENABLE_SPECIALIZATION 0
++#elif _Py_SIZEOF_ADDRESS < SIZEOF_VOID_P
++// A pointer is a capability here. Specialized instructions keep PyObject
++// pointers in their inline caches (write_obj/read_obj), which are 16-bit code
++// units: a 2-byte-aligned memcpy there keeps the address and drops the tag, and
++// the pointer read back traps when used. Measured: the interpreter halted at
++// the Py_INCREF of an object just read out of a cache that way. The adaptive
++// instructions run unspecialized instead, as in the free-threaded build.
++#define ENABLE_SPECIALIZATION 0
+ #else
+ #define ENABLE_SPECIALIZATION 1
+ #endif

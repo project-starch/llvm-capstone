@@ -1,0 +1,26 @@
+{
+  "by-metric/01-reuse": [
+    "Wiederverwendung",
+    "Alle fünf Workloads, dieselben Achsen und vier Arme. Die CDF teilt Wiederverwendungen durch alle Allokationen; sie muss daher nicht 100 % erreichen. Gemessen wird derselbe Startadresswert."
+  ],
+  "by-metric/02-address-footprint": [
+    "Adressraumbedarf",
+    "SQLite: Vereinigung bisher allokierter Adressintervalle über 17 Einheiten. FFmpeg: höchste genutzte Pool-Ausdehnung inklusive Padding. Das sind unterschiedliche Adressmetriken, keine Messungen des physischen Working Sets. Für mruby liegt diese Metrik nicht vor."
+  ],
+  "by-metric/03-allocator-memory": [
+    "Allocator-Speicher",
+    "SQLite: Peak aus gehaltenen Bytes plus Metadaten. mruby: GC-Backing am Peak und nach dem Rendern. Die Grenzen der erfassten Allocatoren unterscheiden sich; keine Gesamt-RSS-Messung. Die höheren Sublet-Kosten bei SQLite und nach AO 16 bleiben sichtbar. FFmpeg hat hier noch keine vergleichbare Messung."
+  ],
+  "by-application/01-sqlite": [
+    "SQLite",
+    "SQLite 3.22.0, speedtest1 main: Reuse, Adressabdeckung und Allocator-Peak. 17 vollständige Einheiten pro Prozess; sechs neue PoisonCap-Läufe und sechs archivierte Capstone-Kontrollen."
+  ],
+  "by-application/02-mruby": [
+    "mruby",
+    "AO 8 und AO 16: Reuse, GC-Peak und GC-Backing nach dem Rendern. 24 neue Prozesse. Compiler-Optimierung des Interpreter-Archivs noch nicht angeglichen; siehe Methoden."
+  ],
+  "by-application/03-ffmpeg": [
+    "FFmpeg",
+    "Adaptierte FATE-Eingaben: Xvid mit 20 Frames und Resize mit 150 Frames. Reuse und Pool-Ausdehnung; 24 neue Prozesse. Feste 256-MiB-Reservierung und zusätzliche PoisonCap-Snapshot-Bytes sind nicht Teil der gezeigten Pool-Ausdehnung."
+  ]
+}

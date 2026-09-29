@@ -1,0 +1,2498 @@
+[
+  {
+    "workload": [
+      "ffmpeg",
+      30,
+      1,
+      0
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 730,
+        "min": 730,
+        "max": 730
+      },
+      "unique": {
+        "median": 178,
+        "min": 178,
+        "max": 178
+      },
+      "reused": {
+        "median": 552,
+        "min": 552,
+        "max": 552
+      },
+      "peak": {
+        "median": 722569,
+        "min": 722569,
+        "max": 722569
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 1.0853658536585367,
+        "min": 1.0853658536585367,
+        "max": 1.0853658536585367
+      },
+      "reuse1_fraction": {
+        "median": 0.1780821917808219,
+        "min": 0.1780821917808219,
+        "max": 0.1780821917808219
+      },
+      "reuse8_fraction": {
+        "median": 0.5534246575342465,
+        "min": 0.5534246575342465,
+        "max": 0.5534246575342465
+      },
+      "reuse64_fraction": {
+        "median": 0.7506849315068493,
+        "min": 0.7506849315068493,
+        "max": 0.7506849315068493
+      },
+      "reuse512_fraction": {
+        "median": 0.7561643835616438,
+        "min": 0.7561643835616438,
+        "max": 0.7561643835616438
+      },
+      "reuse4096_fraction": {
+        "median": 0.7561643835616438,
+        "min": 0.7561643835616438,
+        "max": 0.7561643835616438
+      },
+      "reuse_more_fraction": {
+        "median": 0.7561643835616438,
+        "min": 0.7561643835616438,
+        "max": 0.7561643835616438
+      },
+      "released_ledger_first": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_min": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_max": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      30,
+      1,
+      0
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 730,
+        "min": 730,
+        "max": 730
+      },
+      "unique": {
+        "median": 730,
+        "min": 730,
+        "max": 730
+      },
+      "reused": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "peak": {
+        "median": 722535,
+        "min": 722535,
+        "max": 722535
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 4.451219512195122,
+        "min": 4.451219512195122,
+        "max": 4.451219512195122
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse4096_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse_more_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "released_ledger_first": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_ledger_last": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_ledger_min": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_ledger_max": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      30,
+      4,
+      0
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 2920,
+        "min": 2920,
+        "max": 2920
+      },
+      "unique": {
+        "median": 178,
+        "min": 178,
+        "max": 178
+      },
+      "reused": {
+        "median": 2742,
+        "min": 2742,
+        "max": 2742
+      },
+      "peak": {
+        "median": 722569,
+        "min": 722569,
+        "max": 722569
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 1.0853658536585367,
+        "min": 1.0853658536585367,
+        "max": 1.0853658536585367
+      },
+      "reuse1_fraction": {
+        "median": 0.1791095890410959,
+        "min": 0.1791095890410959,
+        "max": 0.1791095890410959
+      },
+      "reuse8_fraction": {
+        "median": 0.5606164383561644,
+        "min": 0.5606164383561644,
+        "max": 0.5606164383561644
+      },
+      "reuse64_fraction": {
+        "median": 0.7938356164383562,
+        "min": 0.7938356164383562,
+        "max": 0.7938356164383562
+      },
+      "reuse512_fraction": {
+        "median": 0.9184931506849315,
+        "min": 0.9184931506849315,
+        "max": 0.9184931506849315
+      },
+      "reuse4096_fraction": {
+        "median": 0.939041095890411,
+        "min": 0.939041095890411,
+        "max": 0.939041095890411
+      },
+      "reuse_more_fraction": {
+        "median": 0.939041095890411,
+        "min": 0.939041095890411,
+        "max": 0.939041095890411
+      },
+      "released_ledger_first": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_min": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_max": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      30,
+      4,
+      0
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 2920,
+        "min": 2920,
+        "max": 2920
+      },
+      "unique": {
+        "median": 2170,
+        "min": 2170,
+        "max": 2170
+      },
+      "reused": {
+        "median": 750,
+        "min": 750,
+        "max": 750
+      },
+      "peak": {
+        "median": 722535,
+        "min": 722535,
+        "max": 722535
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 13.231707317073171,
+        "min": 13.231707317073171,
+        "max": 13.231707317073171
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse4096_fraction": {
+        "median": 0.2568493150684932,
+        "min": 0.2568493150684932,
+        "max": 0.2568493150684932
+      },
+      "reuse_more_fraction": {
+        "median": 0.2568493150684932,
+        "min": 0.2568493150684932,
+        "max": 0.2568493150684932
+      },
+      "released_ledger_first": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_ledger_last": {
+        "median": 8588168,
+        "min": 8588168,
+        "max": 8588168
+      },
+      "released_ledger_min": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_ledger_max": {
+        "median": 8588168,
+        "min": 8588168,
+        "max": 8588168
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 4318400,
+        "min": 4318400,
+        "max": 4318400
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      30,
+      16,
+      0
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 11680,
+        "min": 11680,
+        "max": 11680
+      },
+      "unique": {
+        "median": 178,
+        "min": 178,
+        "max": 178
+      },
+      "reused": {
+        "median": 11502,
+        "min": 11502,
+        "max": 11502
+      },
+      "peak": {
+        "median": 722569,
+        "min": 722569,
+        "max": 722569
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 1.0853658536585367,
+        "min": 1.0853658536585367,
+        "max": 1.0853658536585367
+      },
+      "reuse1_fraction": {
+        "median": 0.1793664383561644,
+        "min": 0.1793664383561644,
+        "max": 0.1793664383561644
+      },
+      "reuse8_fraction": {
+        "median": 0.5624143835616439,
+        "min": 0.5624143835616439,
+        "max": 0.5624143835616439
+      },
+      "reuse64_fraction": {
+        "median": 0.8046232876712329,
+        "min": 0.8046232876712329,
+        "max": 0.8046232876712329
+      },
+      "reuse512_fraction": {
+        "median": 0.9590753424657534,
+        "min": 0.9590753424657534,
+        "max": 0.9590753424657534
+      },
+      "reuse4096_fraction": {
+        "median": 0.9847602739726027,
+        "min": 0.9847602739726027,
+        "max": 0.9847602739726027
+      },
+      "reuse_more_fraction": {
+        "median": 0.9847602739726027,
+        "min": 0.9847602739726027,
+        "max": 0.9847602739726027
+      },
+      "released_ledger_first": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_min": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_max": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      30,
+      16,
+      0
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 11680,
+        "min": 11680,
+        "max": 11680
+      },
+      "unique": {
+        "median": 2803,
+        "min": 2803,
+        "max": 2803
+      },
+      "reused": {
+        "median": 8877,
+        "min": 8877,
+        "max": 8877
+      },
+      "peak": {
+        "median": 722535,
+        "min": 722535,
+        "max": 722535
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 17.091463414634145,
+        "min": 17.091463414634145,
+        "max": 17.091463414634145
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.004794520547945206,
+        "min": 0.004794520547945206,
+        "max": 0.004794520547945206
+      },
+      "reuse4096_fraction": {
+        "median": 0.754708904109589,
+        "min": 0.754708904109589,
+        "max": 0.754708904109589
+      },
+      "reuse_more_fraction": {
+        "median": 0.7600171232876712,
+        "min": 0.7600171232876712,
+        "max": 0.7600171232876712
+      },
+      "released_ledger_first": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_ledger_last": {
+        "median": 8590776,
+        "min": 8590776,
+        "max": 8590776
+      },
+      "released_ledger_min": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_ledger_max": {
+        "median": 8789576,
+        "min": 8789576,
+        "max": 8789576
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 4321008,
+        "min": 4321008,
+        "max": 4321008
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      30,
+      64,
+      0
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 46720,
+        "min": 46720,
+        "max": 46720
+      },
+      "unique": {
+        "median": 178,
+        "min": 178,
+        "max": 178
+      },
+      "reused": {
+        "median": 46542,
+        "min": 46542,
+        "max": 46542
+      },
+      "peak": {
+        "median": 722569,
+        "min": 722569,
+        "max": 722569
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 1.0853658536585367,
+        "min": 1.0853658536585367,
+        "max": 1.0853658536585367
+      },
+      "reuse1_fraction": {
+        "median": 0.1794306506849315,
+        "min": 0.1794306506849315,
+        "max": 0.1794306506849315
+      },
+      "reuse8_fraction": {
+        "median": 0.5628638698630137,
+        "min": 0.5628638698630137,
+        "max": 0.5628638698630137
+      },
+      "reuse64_fraction": {
+        "median": 0.807320205479452,
+        "min": 0.807320205479452,
+        "max": 0.807320205479452
+      },
+      "reuse512_fraction": {
+        "median": 0.9692208904109589,
+        "min": 0.9692208904109589,
+        "max": 0.9692208904109589
+      },
+      "reuse4096_fraction": {
+        "median": 0.9961900684931507,
+        "min": 0.9961900684931507,
+        "max": 0.9961900684931507
+      },
+      "reuse_more_fraction": {
+        "median": 0.9961900684931507,
+        "min": 0.9961900684931507,
+        "max": 0.9961900684931507
+      },
+      "released_ledger_first": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_min": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_max": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      30,
+      64,
+      0
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 46720,
+        "min": 46720,
+        "max": 46720
+      },
+      "unique": {
+        "median": 2982,
+        "min": 2982,
+        "max": 2982
+      },
+      "reused": {
+        "median": 43738,
+        "min": 43738,
+        "max": 43738
+      },
+      "peak": {
+        "median": 722535,
+        "min": 722535,
+        "max": 722535
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 18.182926829268293,
+        "min": 18.182926829268293,
+        "max": 18.182926829268293
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.006335616438356164,
+        "min": 0.006335616438356164,
+        "max": 0.006335616438356164
+      },
+      "reuse4096_fraction": {
+        "median": 0.9300299657534247,
+        "min": 0.9300299657534247,
+        "max": 0.9300299657534247
+      },
+      "reuse_more_fraction": {
+        "median": 0.9361729452054794,
+        "min": 0.9361729452054794,
+        "max": 0.9361729452054794
+      },
+      "released_ledger_first": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_ledger_last": {
+        "median": 8502536,
+        "min": 8502536,
+        "max": 8502536
+      },
+      "released_ledger_min": {
+        "median": 4269768,
+        "min": 4269768,
+        "max": 4269768
+      },
+      "released_ledger_max": {
+        "median": 8789576,
+        "min": 8789576,
+        "max": 8789576
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 4232768,
+        "min": 4232768,
+        "max": 4232768
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      150,
+      1,
+      0
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 2654,
+        "min": 2654,
+        "max": 2654
+      },
+      "unique": {
+        "median": 178,
+        "min": 178,
+        "max": 178
+      },
+      "reused": {
+        "median": 2476,
+        "min": 2476,
+        "max": 2476
+      },
+      "peak": {
+        "median": 724180,
+        "min": 724180,
+        "max": 724180
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 1.0853658536585367,
+        "min": 1.0853658536585367,
+        "max": 1.0853658536585367
+      },
+      "reuse1_fraction": {
+        "median": 0.20874152223059533,
+        "min": 0.20874152223059533,
+        "max": 0.20874152223059533
+      },
+      "reuse8_fraction": {
+        "median": 0.6733232856066315,
+        "min": 0.6733232856066315,
+        "max": 0.6733232856066315
+      },
+      "reuse64_fraction": {
+        "median": 0.9212509419743783,
+        "min": 0.9212509419743783,
+        "max": 0.9212509419743783
+      },
+      "reuse512_fraction": {
+        "median": 0.9325546345139413,
+        "min": 0.9325546345139413,
+        "max": 0.9325546345139413
+      },
+      "reuse4096_fraction": {
+        "median": 0.93293142426526,
+        "min": 0.93293142426526,
+        "max": 0.93293142426526
+      },
+      "reuse_more_fraction": {
+        "median": 0.93293142426526,
+        "min": 0.93293142426526,
+        "max": 0.93293142426526
+      },
+      "released_ledger_first": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_min": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_max": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      150,
+      1,
+      0
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 2654,
+        "min": 2654,
+        "max": 2654
+      },
+      "unique": {
+        "median": 1897,
+        "min": 1897,
+        "max": 1897
+      },
+      "reused": {
+        "median": 756,
+        "min": 756,
+        "max": 756
+      },
+      "peak": {
+        "median": 724146,
+        "min": 724146,
+        "max": 724146
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 11.567073170731707,
+        "min": 11.567073170731707,
+        "max": 11.567073170731707
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.014318010550113038,
+        "min": 0.014318010550113038,
+        "max": 0.014318010550113038
+      },
+      "reuse4096_fraction": {
+        "median": 0.2848530519969857,
+        "min": 0.2848530519969857,
+        "max": 0.2848530519969857
+      },
+      "reuse_more_fraction": {
+        "median": 0.2848530519969857,
+        "min": 0.2848530519969857,
+        "max": 0.2848530519969857
+      },
+      "released_ledger_first": {
+        "median": 9453448,
+        "min": 9453448,
+        "max": 9453448
+      },
+      "released_ledger_last": {
+        "median": 9453448,
+        "min": 9453448,
+        "max": 9453448
+      },
+      "released_ledger_min": {
+        "median": 9453448,
+        "min": 9453448,
+        "max": 9453448
+      },
+      "released_ledger_max": {
+        "median": 9453448,
+        "min": 9453448,
+        "max": 9453448
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      600,
+      1,
+      0
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 9865,
+        "min": 9865,
+        "max": 9865
+      },
+      "unique": {
+        "median": 181,
+        "min": 181,
+        "max": 181
+      },
+      "reused": {
+        "median": 9684,
+        "min": 9684,
+        "max": 9684
+      },
+      "peak": {
+        "median": 725100,
+        "min": 725100,
+        "max": 725100
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 1.103658536585366,
+        "min": 1.103658536585366,
+        "max": 1.103658536585366
+      },
+      "reuse1_fraction": {
+        "median": 0.21692853522554487,
+        "min": 0.21692853522554487,
+        "max": 0.21692853522554487
+      },
+      "reuse8_fraction": {
+        "median": 0.706842372022301,
+        "min": 0.706842372022301,
+        "max": 0.706842372022301
+      },
+      "reuse64_fraction": {
+        "median": 0.9723264064875824,
+        "min": 0.9723264064875824,
+        "max": 0.9723264064875824
+      },
+      "reuse512_fraction": {
+        "median": 0.9806386213887481,
+        "min": 0.9806386213887481,
+        "max": 0.9806386213887481
+      },
+      "reuse4096_fraction": {
+        "median": 0.9816523061327928,
+        "min": 0.9816523061327928,
+        "max": 0.9816523061327928
+      },
+      "reuse_more_fraction": {
+        "median": 0.9816523061327928,
+        "min": 0.9816523061327928,
+        "max": 0.9816523061327928
+      },
+      "released_ledger_first": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_min": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_max": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "ffmpeg",
+      600,
+      1,
+      0
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 9865,
+        "min": 9865,
+        "max": 9865
+      },
+      "unique": {
+        "median": 2334,
+        "min": 2334,
+        "max": 2334
+      },
+      "reused": {
+        "median": 7527,
+        "min": 7527,
+        "max": 7527
+      },
+      "peak": {
+        "median": 725066,
+        "min": 725066,
+        "max": 725066
+      },
+      "peak_blocks": {
+        "median": 164,
+        "min": 164,
+        "max": 164
+      },
+      "unique_per_peak_block": {
+        "median": 14.231707317073171,
+        "min": 14.231707317073171,
+        "max": 14.231707317073171
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.027470856563608717,
+        "min": 0.027470856563608717,
+        "max": 0.027470856563608717
+      },
+      "reuse4096_fraction": {
+        "median": 0.7581348200709579,
+        "min": 0.7581348200709579,
+        "max": 0.7581348200709579
+      },
+      "reuse_more_fraction": {
+        "median": 0.763000506842372,
+        "min": 0.763000506842372,
+        "max": 0.763000506842372
+      },
+      "released_ledger_first": {
+        "median": 10365832,
+        "min": 10365832,
+        "max": 10365832
+      },
+      "released_ledger_last": {
+        "median": 10365832,
+        "min": 10365832,
+        "max": 10365832
+      },
+      "released_ledger_min": {
+        "median": 10365832,
+        "min": 10365832,
+        "max": 10365832
+      },
+      "released_ledger_max": {
+        "median": 10365832,
+        "min": 10365832,
+        "max": 10365832
+      },
+      "released_requested_last": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      32,
+      8,
+      256
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 4553,
+        "min": 4553,
+        "max": 4553
+      },
+      "unique": {
+        "median": 2308,
+        "min": 2308,
+        "max": 2308
+      },
+      "reused": {
+        "median": 2245,
+        "min": 2245,
+        "max": 2245
+      },
+      "peak": {
+        "median": 653835,
+        "min": 653835,
+        "max": 653835
+      },
+      "peak_blocks": {
+        "median": 2308,
+        "min": 2308,
+        "max": 2308
+      },
+      "unique_per_peak_block": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "reuse1_fraction": {
+        "median": 0.01669229079727652,
+        "min": 0.01669229079727652,
+        "max": 0.01669229079727652
+      },
+      "reuse8_fraction": {
+        "median": 0.04744124752910169,
+        "min": 0.04744124752910169,
+        "max": 0.04744124752910169
+      },
+      "reuse64_fraction": {
+        "median": 0.18163848012299583,
+        "min": 0.18163848012299583,
+        "max": 0.18163848012299583
+      },
+      "reuse512_fraction": {
+        "median": 0.47507138150669886,
+        "min": 0.47507138150669886,
+        "max": 0.47507138150669886
+      },
+      "reuse4096_fraction": {
+        "median": 0.49308148473533936,
+        "min": 0.49308148473533936,
+        "max": 0.49308148473533936
+      },
+      "reuse_more_fraction": {
+        "median": 0.49308148473533936,
+        "min": 0.49308148473533936,
+        "max": 0.49308148473533936
+      },
+      "released_ledger_first": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_last": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_min": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_max": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_requested_last": {
+        "median": 582391,
+        "min": 582391,
+        "max": 582391
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      32,
+      8,
+      256
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 4552,
+        "min": 4552,
+        "max": 4552
+      },
+      "unique": {
+        "median": 4551,
+        "min": 4551,
+        "max": 4551
+      },
+      "reused": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "peak": {
+        "median": 652370,
+        "min": 652370,
+        "max": 652370
+      },
+      "peak_blocks": {
+        "median": 2307,
+        "min": 2307,
+        "max": 2307
+      },
+      "unique_per_peak_block": {
+        "median": 1.9726918075422626,
+        "min": 1.9726918075422626,
+        "max": 1.9726918075422626
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse4096_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse_more_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "released_ledger_first": {
+        "median": 1425352,
+        "min": 1425352,
+        "max": 1425352
+      },
+      "released_ledger_last": {
+        "median": 1680264,
+        "min": 1680264,
+        "max": 1680264
+      },
+      "released_ledger_min": {
+        "median": 1425352,
+        "min": 1425352,
+        "max": 1425352
+      },
+      "released_ledger_max": {
+        "median": 1680264,
+        "min": 1680264,
+        "max": 1680264
+      },
+      "released_requested_last": {
+        "median": 580926,
+        "min": 580926,
+        "max": 580926
+      },
+      "released_ledger_growth": {
+        "median": 254912,
+        "min": 254912,
+        "max": 254912
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      128,
+      8,
+      256
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 10911,
+        "min": 10911,
+        "max": 10911
+      },
+      "unique": {
+        "median": 4503,
+        "min": 4503,
+        "max": 4503
+      },
+      "reused": {
+        "median": 6408,
+        "min": 6408,
+        "max": 6408
+      },
+      "peak": {
+        "median": 1409526,
+        "min": 1409526,
+        "max": 1409526
+      },
+      "peak_blocks": {
+        "median": 4503,
+        "min": 4503,
+        "max": 4503
+      },
+      "unique_per_peak_block": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "reuse1_fraction": {
+        "median": 0.008340207130418843,
+        "min": 0.008340207130418843,
+        "max": 0.008340207130418843
+      },
+      "reuse8_fraction": {
+        "median": 0.027586838969846945,
+        "min": 0.027586838969846945,
+        "max": 0.027586838969846945
+      },
+      "reuse64_fraction": {
+        "median": 0.12867748144074787,
+        "min": 0.12867748144074787,
+        "max": 0.12867748144074787
+      },
+      "reuse512_fraction": {
+        "median": 0.5284575199340116,
+        "min": 0.5284575199340116,
+        "max": 0.5284575199340116
+      },
+      "reuse4096_fraction": {
+        "median": 0.5872972229859774,
+        "min": 0.5872972229859774,
+        "max": 0.5872972229859774
+      },
+      "reuse_more_fraction": {
+        "median": 0.5872972229859774,
+        "min": 0.5872972229859774,
+        "max": 0.5872972229859774
+      },
+      "released_ledger_first": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_last": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_min": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_max": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_requested_last": {
+        "median": 582391,
+        "min": 582391,
+        "max": 582391
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      128,
+      8,
+      256
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 10910,
+        "min": 10910,
+        "max": 10910
+      },
+      "unique": {
+        "median": 10909,
+        "min": 10909,
+        "max": 10909
+      },
+      "reused": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "peak": {
+        "median": 1408061,
+        "min": 1408061,
+        "max": 1408061
+      },
+      "peak_blocks": {
+        "median": 4502,
+        "min": 4502,
+        "max": 4502
+      },
+      "unique_per_peak_block": {
+        "median": 2.423145268769436,
+        "min": 2.423145268769436,
+        "max": 2.423145268769436
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse4096_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse_more_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "released_ledger_first": {
+        "median": 1500104,
+        "min": 1500104,
+        "max": 1500104
+      },
+      "released_ledger_last": {
+        "median": 3043720,
+        "min": 3043720,
+        "max": 3043720
+      },
+      "released_ledger_min": {
+        "median": 1500104,
+        "min": 1500104,
+        "max": 1500104
+      },
+      "released_ledger_max": {
+        "median": 3043720,
+        "min": 3043720,
+        "max": 3043720
+      },
+      "released_requested_last": {
+        "median": 580926,
+        "min": 580926,
+        "max": 580926
+      },
+      "released_ledger_growth": {
+        "median": 1543616,
+        "min": 1543616,
+        "max": 1543616
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      128,
+      8,
+      4096
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 33990,
+        "min": 33990,
+        "max": 33990
+      },
+      "unique": {
+        "median": 21150,
+        "min": 21150,
+        "max": 21150
+      },
+      "reused": {
+        "median": 12840,
+        "min": 12840,
+        "max": 12840
+      },
+      "peak": {
+        "median": 6309978,
+        "min": 6309978,
+        "max": 6309978
+      },
+      "peak_blocks": {
+        "median": 21150,
+        "min": 21150,
+        "max": 21150
+      },
+      "unique_per_peak_block": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "reuse1_fraction": {
+        "median": 0.0026184171815239778,
+        "min": 0.0026184171815239778,
+        "max": 0.0026184171815239778
+      },
+      "reuse8_fraction": {
+        "median": 0.009385113268608414,
+        "min": 0.009385113268608414,
+        "max": 0.009385113268608414
+      },
+      "reuse64_fraction": {
+        "median": 0.04660194174757282,
+        "min": 0.04660194174757282,
+        "max": 0.04660194174757282
+      },
+      "reuse512_fraction": {
+        "median": 0.2136510738452486,
+        "min": 0.2136510738452486,
+        "max": 0.2136510738452486
+      },
+      "reuse4096_fraction": {
+        "median": 0.33886437187408064,
+        "min": 0.33886437187408064,
+        "max": 0.33886437187408064
+      },
+      "reuse_more_fraction": {
+        "median": 0.37775816416593117,
+        "min": 0.37775816416593117,
+        "max": 0.37775816416593117
+      },
+      "released_ledger_first": {
+        "median": 10521600,
+        "min": 10521600,
+        "max": 10521600
+      },
+      "released_ledger_last": {
+        "median": 10521600,
+        "min": 10521600,
+        "max": 10521600
+      },
+      "released_ledger_min": {
+        "median": 10521600,
+        "min": 10521600,
+        "max": 10521600
+      },
+      "released_ledger_max": {
+        "median": 10521600,
+        "min": 10521600,
+        "max": 10521600
+      },
+      "released_requested_last": {
+        "median": 5851471,
+        "min": 5851471,
+        "max": 5851471
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      128,
+      8,
+      4096
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 33989,
+        "min": 33989,
+        "max": 33989
+      },
+      "unique": {
+        "median": 33988,
+        "min": 33988,
+        "max": 33988
+      },
+      "reused": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "peak": {
+        "median": 6308513,
+        "min": 6308513,
+        "max": 6308513
+      },
+      "peak_blocks": {
+        "median": 21149,
+        "min": 21149,
+        "max": 21149
+      },
+      "unique_per_peak_block": {
+        "median": 1.6070736205021514,
+        "min": 1.6070736205021514,
+        "max": 1.6070736205021514
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse4096_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse_more_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "released_ledger_first": {
+        "median": 8220472,
+        "min": 8220472,
+        "max": 8220472
+      },
+      "released_ledger_last": {
+        "median": 9214680,
+        "min": 9214680,
+        "max": 9214680
+      },
+      "released_ledger_min": {
+        "median": 8220472,
+        "min": 8220472,
+        "max": 8220472
+      },
+      "released_ledger_max": {
+        "median": 9214680,
+        "min": 9214680,
+        "max": 9214680
+      },
+      "released_requested_last": {
+        "median": 5850006,
+        "min": 5850006,
+        "max": 5850006
+      },
+      "released_ledger_growth": {
+        "median": 994208,
+        "min": 994208,
+        "max": 994208
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      128,
+      32,
+      4096
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 52662,
+        "min": 52662,
+        "max": 52662
+      },
+      "unique": {
+        "median": 21150,
+        "min": 21150,
+        "max": 21150
+      },
+      "reused": {
+        "median": 31512,
+        "min": 31512,
+        "max": 31512
+      },
+      "peak": {
+        "median": 6309978,
+        "min": 6309978,
+        "max": 6309978
+      },
+      "peak_blocks": {
+        "median": 21150,
+        "min": 21150,
+        "max": 21150
+      },
+      "unique_per_peak_block": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "reuse1_fraction": {
+        "median": 0.003057232919372603,
+        "min": 0.003057232919372603,
+        "max": 0.003057232919372603
+      },
+      "reuse8_fraction": {
+        "median": 0.010614864608256428,
+        "min": 0.010614864608256428,
+        "max": 0.010614864608256428
+      },
+      "reuse64_fraction": {
+        "median": 0.05879001936880483,
+        "min": 0.05879001936880483,
+        "max": 0.05879001936880483
+      },
+      "reuse512_fraction": {
+        "median": 0.36986821617105314,
+        "min": 0.36986821617105314,
+        "max": 0.36986821617105314
+      },
+      "reuse4096_fraction": {
+        "median": 0.5545934449887965,
+        "min": 0.5545934449887965,
+        "max": 0.5545934449887965
+      },
+      "reuse_more_fraction": {
+        "median": 0.5983821351258972,
+        "min": 0.5983821351258972,
+        "max": 0.5983821351258972
+      },
+      "released_ledger_first": {
+        "median": 10521600,
+        "min": 10521600,
+        "max": 10521600
+      },
+      "released_ledger_last": {
+        "median": 10521600,
+        "min": 10521600,
+        "max": 10521600
+      },
+      "released_ledger_min": {
+        "median": 10521600,
+        "min": 10521600,
+        "max": 10521600
+      },
+      "released_ledger_max": {
+        "median": 10521600,
+        "min": 10521600,
+        "max": 10521600
+      },
+      "released_requested_last": {
+        "median": 5851471,
+        "min": 5851471,
+        "max": 5851471
+      },
+      "released_ledger_growth": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      128,
+      32,
+      4096
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 52661,
+        "min": 52661,
+        "max": 52661
+      },
+      "unique": {
+        "median": 52660,
+        "min": 52660,
+        "max": 52660
+      },
+      "reused": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "peak": {
+        "median": 6308513,
+        "min": 6308513,
+        "max": 6308513
+      },
+      "peak_blocks": {
+        "median": 21149,
+        "min": 21149,
+        "max": 21149
+      },
+      "unique_per_peak_block": {
+        "median": 2.4899522436048986,
+        "min": 2.4899522436048986,
+        "max": 2.4899522436048986
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse4096_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse_more_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "released_ledger_first": {
+        "median": 8220472,
+        "min": 8220472,
+        "max": 8220472
+      },
+      "released_ledger_last": {
+        "median": 11600184,
+        "min": 11600184,
+        "max": 11600184
+      },
+      "released_ledger_min": {
+        "median": 8220472,
+        "min": 8220472,
+        "max": 8220472
+      },
+      "released_ledger_max": {
+        "median": 11600184,
+        "min": 11600184,
+        "max": 11600184
+      },
+      "released_requested_last": {
+        "median": 5850006,
+        "min": 5850006,
+        "max": 5850006
+      },
+      "released_ledger_growth": {
+        "median": 3379712,
+        "min": 3379712,
+        "max": 3379712
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      512,
+      8,
+      256
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 36320,
+        "min": 36320,
+        "max": 36320
+      },
+      "unique": {
+        "median": 14554,
+        "min": 14554,
+        "max": 14554
+      },
+      "reused": {
+        "median": 21766,
+        "min": 21766,
+        "max": 21766
+      },
+      "peak": {
+        "median": 3054591,
+        "min": 3054591,
+        "max": 3054591
+      },
+      "peak_blocks": {
+        "median": 11210,
+        "min": 11210,
+        "max": 11210
+      },
+      "unique_per_peak_block": {
+        "median": 1.2983050847457627,
+        "min": 1.2983050847457627,
+        "max": 1.2983050847457627
+      },
+      "reuse1_fraction": {
+        "median": 0.002973568281938326,
+        "min": 0.002973568281938326,
+        "max": 0.002973568281938326
+      },
+      "reuse8_fraction": {
+        "median": 0.012059471365638766,
+        "min": 0.012059471365638766,
+        "max": 0.012059471365638766
+      },
+      "reuse64_fraction": {
+        "median": 0.06665748898678414,
+        "min": 0.06665748898678414,
+        "max": 0.06665748898678414
+      },
+      "reuse512_fraction": {
+        "median": 0.2307544052863436,
+        "min": 0.2307544052863436,
+        "max": 0.2307544052863436
+      },
+      "reuse4096_fraction": {
+        "median": 0.49531938325991187,
+        "min": 0.49531938325991187,
+        "max": 0.49531938325991187
+      },
+      "reuse_more_fraction": {
+        "median": 0.599284140969163,
+        "min": 0.599284140969163,
+        "max": 0.599284140969163
+      },
+      "released_ledger_first": {
+        "median": 1223680,
+        "min": 1223680,
+        "max": 1223680
+      },
+      "released_ledger_last": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_min": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_max": {
+        "median": 1223680,
+        "min": 1223680,
+        "max": 1223680
+      },
+      "released_requested_last": {
+        "median": 582391,
+        "min": 582391,
+        "max": 582391
+      },
+      "released_ledger_growth": {
+        "median": -131072,
+        "min": -131072,
+        "max": -131072
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      512,
+      8,
+      256
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 36319,
+        "min": 36319,
+        "max": 36319
+      },
+      "unique": {
+        "median": 36315,
+        "min": 36315,
+        "max": 36315
+      },
+      "reused": {
+        "median": 3,
+        "min": 3,
+        "max": 3
+      },
+      "peak": {
+        "median": 3053126,
+        "min": 3053126,
+        "max": 3053126
+      },
+      "peak_blocks": {
+        "median": 11209,
+        "min": 11209,
+        "max": 11209
+      },
+      "unique_per_peak_block": {
+        "median": 3.2398072977071997,
+        "min": 3.2398072977071997,
+        "max": 3.2398072977071997
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse4096_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse_more_fraction": {
+        "median": 8.260139321016548e-05,
+        "min": 8.260139321016548e-05,
+        "max": 8.260139321016548e-05
+      },
+      "released_ledger_first": {
+        "median": 2282440,
+        "min": 2282440,
+        "max": 2282440
+      },
+      "released_ledger_last": {
+        "median": 10870104,
+        "min": 10870104,
+        "max": 10870104
+      },
+      "released_ledger_min": {
+        "median": 2282440,
+        "min": 2282440,
+        "max": 2282440
+      },
+      "released_ledger_max": {
+        "median": 10870104,
+        "min": 10870104,
+        "max": 10870104
+      },
+      "released_requested_last": {
+        "median": 580926,
+        "min": 580926,
+        "max": 580926
+      },
+      "released_ledger_growth": {
+        "median": 8587664,
+        "min": 8587664,
+        "max": 8587664
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      512,
+      16,
+      256
+    ],
+    "arm": "capstone-sublet",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 61040,
+        "min": 61040,
+        "max": 61040
+      },
+      "unique": {
+        "median": 14554,
+        "min": 14554,
+        "max": 14554
+      },
+      "reused": {
+        "median": 46486,
+        "min": 46486,
+        "max": 46486
+      },
+      "peak": {
+        "median": 3054591,
+        "min": 3054591,
+        "max": 3054591
+      },
+      "peak_blocks": {
+        "median": 11210,
+        "min": 11210,
+        "max": 11210
+      },
+      "unique_per_peak_block": {
+        "median": 1.2983050847457627,
+        "min": 1.2983050847457627,
+        "max": 1.2983050847457627
+      },
+      "reuse1_fraction": {
+        "median": 0.002686762778505898,
+        "min": 0.002686762778505898,
+        "max": 0.002686762778505898
+      },
+      "reuse8_fraction": {
+        "median": 0.01189384010484928,
+        "min": 0.01189384010484928,
+        "max": 0.01189384010484928
+      },
+      "reuse64_fraction": {
+        "median": 0.07203473132372215,
+        "min": 0.07203473132372215,
+        "max": 0.07203473132372215
+      },
+      "reuse512_fraction": {
+        "median": 0.24438073394495413,
+        "min": 0.24438073394495413,
+        "max": 0.24438073394495413
+      },
+      "reuse4096_fraction": {
+        "median": 0.6997051114023591,
+        "min": 0.6997051114023591,
+        "max": 0.6997051114023591
+      },
+      "reuse_more_fraction": {
+        "median": 0.7615661861074705,
+        "min": 0.7615661861074705,
+        "max": 0.7615661861074705
+      },
+      "released_ledger_first": {
+        "median": 1223680,
+        "min": 1223680,
+        "max": 1223680
+      },
+      "released_ledger_last": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_min": {
+        "median": 1092608,
+        "min": 1092608,
+        "max": 1092608
+      },
+      "released_ledger_max": {
+        "median": 1223680,
+        "min": 1223680,
+        "max": 1223680
+      },
+      "released_requested_last": {
+        "median": 582391,
+        "min": 582391,
+        "max": 582391
+      },
+      "released_ledger_growth": {
+        "median": -131072,
+        "min": -131072,
+        "max": -131072
+      }
+    }
+  },
+  {
+    "workload": [
+      "mruby",
+      512,
+      16,
+      256
+    ],
+    "arm": "cheribsd-default",
+    "counts": {
+      "pass": 3
+    },
+    "metrics": {
+      "allocations": {
+        "median": 61039,
+        "min": 61039,
+        "max": 61039
+      },
+      "unique": {
+        "median": 44552,
+        "min": 44552,
+        "max": 44552
+      },
+      "reused": {
+        "median": 16486,
+        "min": 16486,
+        "max": 16486
+      },
+      "peak": {
+        "median": 3053126,
+        "min": 3053126,
+        "max": 3053126
+      },
+      "peak_blocks": {
+        "median": 11209,
+        "min": 11209,
+        "max": 11209
+      },
+      "unique_per_peak_block": {
+        "median": 3.9746632170577216,
+        "min": 3.9746632170577216,
+        "max": 3.9746632170577216
+      },
+      "reuse1_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse8_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse64_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse512_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse4096_fraction": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "reuse_more_fraction": {
+        "median": 0.2700896148364161,
+        "min": 0.2700896148364161,
+        "max": 0.2700896148364161
+      },
+      "released_ledger_first": {
+        "median": 2282440,
+        "min": 2282440,
+        "max": 2282440
+      },
+      "released_ledger_last": {
+        "median": 4725320,
+        "min": 4725320,
+        "max": 4725320
+      },
+      "released_ledger_min": {
+        "median": 2282440,
+        "min": 2282440,
+        "max": 2282440
+      },
+      "released_ledger_max": {
+        "median": 11917272,
+        "min": 11917272,
+        "max": 11917272
+      },
+      "released_requested_last": {
+        "median": 580926,
+        "min": 580926,
+        "max": 580926
+      },
+      "released_ledger_growth": {
+        "median": 2442880,
+        "min": 2442880,
+        "max": 2442880
+      }
+    }
+  }
+]

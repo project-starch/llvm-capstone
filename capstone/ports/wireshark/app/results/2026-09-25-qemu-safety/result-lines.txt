@@ -1,0 +1,217 @@
+# Result lines, regenerated from each boot's serial log by host/safety-verdict.py and the stage and
+# oracle checks of host/run-qemu.sh (logs not committed). Every attempt is kept: a stalled one shows
+# as section-less ERROR lines and was retried, never counted. Tree fc2ee5614405 plus this folder's
+# runner changes; compiler b7b31421e9fa.
+
+## shrink gate: stages (qemu-stages-shrink-20260925-075010-RHd9; the first attempt, -072033-Yrnc, stalled in the setup copy and was stopped)
+M1: STAGE 1 REACHED (LT-RESULT tshark_m1.dom status=101 rounds=18 FAIL)
+M1: output MATCH (unserved: none; expected nothing else)
+M2: STAGE 2 REACHED (LT-RESULT tshark_m2.dom status=102 rounds=356 FAIL)
+M2: output MATCH (stderr MATCH, unserved: 160x3 278x2 134 17; expected nothing else)
+M3: STAGE 3 REACHED (LT-RESULT tshark_m3.dom status=103 rounds=432 FAIL)
+M3: output MATCH (stderr MATCH, unserved: 160x5 278x4 134 17; expected nothing else)
+M4: STAGE 4 REACHED (LT-RESULT tshark_m4.dom status=104 rounds=444 FAIL)
+M4: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135; expected stock stdout's first frame exactly (3774 bytes))
+M5: STAGE 5 REACHED (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+M5: output MATCH (stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit; expected stock stdout exactly)
+
+## shrink gate: oracle A (qemu-oracle-shrink-20260925-073124-PQUM)
+dhcp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+dhcp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=476 PASS)
+dns_port: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=500 PASS)
+dns_port.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=500 PASS)
+dns-ooo: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=482 PASS)
+ntp: stdout DIFFERS (24 diff lines), stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=446 PASS)
+dhcp.flip: flip control FIRES (stock changed 2 lines)
+dns_port.flip: flip control FIRES (stock changed 2 lines)
+
+## shrink gate: oracle B (qemu-oracle-shrink-20260925-073332-jzo7)
+http: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=450 PASS)
+http.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=450 PASS)
+arp: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=444 PASS)
+arp.flip: stdout MATCH, stderr MATCH, unserved: 160x5 278x4 134x4 17 135, fd 1 CLOSED at exit (LT-RESULT tshark_m5.dom status=0 rounds=444 PASS)
+http.flip: flip control FIRES (stock changed 2 lines)
+arp.flip: flip control FIRES (stock changed 2 lines)
+
+
+## level0: qemu-safety-level0-20260925-073526-zKgV.log [1 2 3 4 5 7]
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN arena  got: RETURN 100001  len=41909248
+fx2: AS PREDICTED  predicted: RETURN 2000ee  got: RETURN 2000ee  len=41909248
+fx3: AS PREDICTED  predicted: RETURN *  got: RETURN 300090  len=41909248
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=41909248
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=41909248
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = b8209ba4, pcc_base = b8200000, va = 9ba4, rs1 = x10, cursor = bc396c80, imm = 0, addr = bc396c80, size = 1, bounds = (bc396c40, bc396c80)]
+
+## level0: qemu-safety-level0-20260925-073735-Y4Et.log [6 8 9 10 11 12]  (setup watchdog fired: copy stalled, not counted)
+fx6: ERROR no section in the log -- the image never started
+fx9: ERROR no section in the log -- the image never started
+fx10: ERROR no section in the log -- the image never started
+fx11: ERROR no section in the log -- the image never started
+fx12: ERROR no section in the log -- the image never started
+fx8: ERROR no section in the log -- the image never started
+
+## level0: qemu-safety-level0-20260925-074304-ZNZi.log [6 8 9 10 11 12]
+fx6: AS PREDICTED  predicted: RETURN 600177  got: RETURN 600177  len=41909248
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=41908928
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=41908912
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=41908912
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = b8209ba4, pcc_base = b8200000, va = 9ba4, rs1 = x10, cursor = c01ffc48, imm = 0, addr = c01ffc48, size = 1, bounds = (c01ffc08, c01ffc48)]
+
+## shrink: qemu-safety-shrink-20260925-074515-qWWf.log [1 2 4 5 6 9]
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=64
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=64
+fx6: AS PREDICTED  predicted: RETURN 600177  got: RETURN 600177  len=64
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7: [CAPSTONE] Cap mem access OOB: insn = 00c50023, pc = b8209cc4, pcc_base = b8200000, va = 9cc4, rs1 = x10, cursor = b9b9f200, imm = 0, addr = b9b9f200, size = 1, bounds = (b9b9f190, b9b9f1d0)]  len=64
+
+## shrink: qemu-safety-shrink-20260925-074725-scK0.log [3 10 11 12]
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=2097104
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=8388560
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=8388560
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = c8209c98, pcc_base = c8200000, va = 9c98, rs1 = x10, cursor = c9b9f0d0, imm = 0, addr = c9b9f0d0, size = 1, bounds = (c9b9f090, c9b9f0d0)]  len=64
+
+## shrink: qemu-safety-shrink-20260925-074856-R177.log [7]
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = e0209c98, pcc_base = e0200000, va = 9c98, rs1 = x10, cursor = e4396d80, imm = 0, addr = e4396d80, size = 1, bounds = (e4396d40, e4396d80)]
+
+## shrink: qemu-safety-shrink-20260925-074925-28DV.log [8]
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = e0209c98, pcc_base = e0200000, va = 9c98, rs1 = x10, cursor = e81ffc48, imm = 0, addr = e81ffc48, size = 1, bounds = (e81ffc08, e81ffc48)]
+
+## level0: qemu-safety-level0-20260925-075217-b5Hb.log [1 2 3 4 5 7]
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN arena  got: RETURN 100001  len=41909248
+fx2: AS PREDICTED  predicted: RETURN 2000ee  got: RETURN 2000ee  len=41909248
+fx3: AS PREDICTED  predicted: RETURN *  got: RETURN 300090  len=41909248
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=41909248
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=41909248
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = b8209ba4, pcc_base = b8200000, va = 9ba4, rs1 = x10, cursor = bc396c80, imm = 0, addr = bc396c80, size = 1, bounds = (bc396c40, bc396c80)]
+
+## level0: qemu-safety-level0-20260925-075428-ZZ0y.log [6 8 9 10 11 12]  (setup watchdog fired: copy stalled, not counted)
+fx6: ERROR no section in the log -- the image never started
+fx9: ERROR no section in the log -- the image never started
+fx10: ERROR no section in the log -- the image never started
+fx11: ERROR no section in the log -- the image never started
+fx12: ERROR no section in the log -- the image never started
+fx8: ERROR no section in the log -- the image never started
+
+## level0: qemu-safety-level0-20260925-075955-4Am0.log [6 8 9 10 11 12]
+fx6: ERROR no section in the log -- the image never started
+fx9: ERROR no section in the log -- the image never started
+fx10: ERROR no section in the log -- the image never started
+fx11: ERROR no section in the log -- the image never started
+fx12: ERROR no section in the log -- the image never started
+fx8: ERROR no section in the log -- the image never started
+
+## level0: qemu-safety-level0-20260925-081732-PdvK.log [6 8 9 10 11 12]
+fx6: AS PREDICTED  predicted: RETURN 600177  got: RETURN 600177  len=41909248
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=41908928
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=41908912
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=41908912
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = b8209ba4, pcc_base = b8200000, va = 9ba4, rs1 = x10, cursor = c01ffc48, imm = 0, addr = c01ffc48, size = 1, bounds = (c01ffc08, c01ffc48)]
+
+## shrink: qemu-safety-shrink-20260925-081957-OmMe.log [1 2 4 5 6 9]  (setup watchdog fired: copy stalled, not counted)
+fx1: ERROR no section in the log -- the image never started
+fx4: ERROR no section in the log -- the image never started
+fx5: ERROR no section in the log -- the image never started
+fx6: ERROR no section in the log -- the image never started
+fx9: ERROR no section in the log -- the image never started
+fx2: ERROR no section in the log -- the image never started
+
+## shrink: qemu-safety-shrink-20260925-082525-ii82.log [1 2 4 5 6 9]
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=64
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=64
+fx6: AS PREDICTED  predicted: RETURN 600177  got: RETURN 600177  len=64
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7: [CAPSTONE] Cap mem access OOB: insn = 00c50023, pc = b8209cc4, pcc_base = b8200000, va = 9cc4, rs1 = x10, cursor = b9b9f200, imm = 0, addr = b9b9f200, size = 1, bounds = (b9b9f190, b9b9f1d0)]  len=64
+
+## shrink: qemu-safety-shrink-20260925-082735-Bk5L.log [3 10 11 12]
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=2097104
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=8388560
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=8388560
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = c8209c98, pcc_base = c8200000, va = 9c98, rs1 = x10, cursor = c9b9f0d0, imm = 0, addr = c9b9f0d0, size = 1, bounds = (c9b9f090, c9b9f0d0)]  len=64
+
+## shrink: qemu-safety-shrink-20260925-082905-5f7d.log [7]
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = e0209c98, pcc_base = e0200000, va = 9c98, rs1 = x10, cursor = e4396d80, imm = 0, addr = e4396d80, size = 1, bounds = (e4396d40, e4396d80)]
+
+## shrink: qemu-safety-shrink-20260925-082934-LQUG.log [8]
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = e0209c98, pcc_base = e0200000, va = 9c98, rs1 = x10, cursor = e81ffc48, imm = 0, addr = e81ffc48, size = 1, bounds = (e81ffc08, e81ffc48)]
+
+## level0: qemu-safety-level0-20260925-083003-sFSX.log [1 2 3 4 5 7]
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN arena  got: RETURN 100001  len=41909248
+fx2: AS PREDICTED  predicted: RETURN 2000ee  got: RETURN 2000ee  len=41909248
+fx3: AS PREDICTED  predicted: RETURN *  got: RETURN 300090  len=41909248
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=41909248
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=41909248
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = b8209ba4, pcc_base = b8200000, va = 9ba4, rs1 = x10, cursor = bc396c80, imm = 0, addr = bc396c80, size = 1, bounds = (bc396c40, bc396c80)]
+
+## level0: qemu-safety-level0-20260925-083211-Nil9.log [6 8 9 10 11 12]
+fx6: ERROR no section in the log -- the image never started
+fx9: ERROR no section in the log -- the image never started
+fx10: ERROR no section in the log -- the image never started
+fx11: ERROR no section in the log -- the image never started
+fx12: ERROR no section in the log -- the image never started
+fx8: ERROR no section in the log -- the image never started
+
+## level0: qemu-safety-level0-20260925-083431-HtcI.log [6 8 9 10 11 12]  (setup watchdog fired: copy stalled, not counted)
+fx6: AS PREDICTED  predicted: RETURN 600177  got: RETURN 600177  len=41909248
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=41908928
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=41908912
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=41908912
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = b8209ba4, pcc_base = b8200000, va = 9ba4, rs1 = x10, cursor = c01ffc48, imm = 0, addr = c01ffc48, size = 1, bounds = (c01ffc08, c01ffc48)]
+
+## shrink: qemu-safety-shrink-20260925-084136-QnN1.log [1 2 4 5 6 9]
+fx1: ERROR no section in the log -- the image never started
+fx4: ERROR no section in the log -- the image never started
+fx5: ERROR no section in the log -- the image never started
+fx6: ERROR no section in the log -- the image never started
+fx9: ERROR no section in the log -- the image never started
+fx2: ERROR no section in the log -- the image never started
+
+## shrink: qemu-safety-shrink-20260925-084356-VzfP.log [1 2 4 5 6 9]
+fx1: AS PREDICTED  predicted: RETURN 100001, LEN 64  got: RETURN 100001  len=64
+fx4: AS PREDICTED  predicted: RETURN 4000a0  got: RETURN 4000a0  len=64
+fx5: AS PREDICTED  predicted: RETURN 50015b  got: RETURN 50015b  len=64
+fx6: AS PREDICTED  predicted: RETURN 600177  got: RETURN 600177  len=64
+fx9: AS PREDICTED  predicted: RETURN 90005b  got: RETURN 90005b
+fx2: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 7: [CAPSTONE] Cap mem access OOB: insn = 00c50023, pc = b8209cc4, pcc_base = b8200000, va = 9cc4, rs1 = x10, cursor = b9b9f200, imm = 0, addr = b9b9f200, size = 1, bounds = (b9b9f190, b9b9f1d0)]  len=64
+
+## shrink: qemu-safety-shrink-20260925-085101-CyxM.log [3 10 11 12]
+fx10: AS PREDICTED  predicted: RETURN a0015b  got: RETURN a0015b  len=2097104
+fx11: AS PREDICTED  predicted: RETURN b0015b  got: RETURN b0015b  len=8388560
+fx12: AS PREDICTED  predicted: RETURN c000ee  got: RETURN c000ee  len=8388560
+fx3: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = c8209c98, pcc_base = c8200000, va = 9c98, rs1 = x10, cursor = c9b9f0d0, imm = 0, addr = c9b9f0d0, size = 1, bounds = (c9b9f090, c9b9f0d0)]  len=64
+
+## shrink: qemu-safety-shrink-20260925-085725-nx5l.log [7]
+fx7: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = e0209c98, pcc_base = e0200000, va = 9c98, rs1 = x10, cursor = e4396d80, imm = 0, addr = e4396d80, size = 1, bounds = (e4396d40, e4396d80)]
+
+## shrink: qemu-safety-shrink-20260925-085754-a88Q.log [8]
+fx8: AS PREDICTED  predicted: FAULT oob  got: FAULT oob  [cause 5: [CAPSTONE] Cap mem access OOB: insn = 00054503, pc = e0209c98, pcc_base = e0200000, va = 9c98, rs1 = x10, cursor = e81ffc48, imm = 0, addr = e81ffc48, size = 1, bounds = (e81ffc08, e81ffc48)]
+# host binaries booted: 1 (94132db555f79bbb)
+# per cell: counted runs (a section-less attempt is an ERROR line, never counted)
+# level0 fx1  3 runs, 3 as predicted
+# level0 fx2  3 runs, 3 as predicted
+# level0 fx3  3 runs, 3 as predicted
+# level0 fx4  3 runs, 3 as predicted
+# level0 fx5  3 runs, 3 as predicted
+# level0 fx6  3 runs, 3 as predicted
+# level0 fx7  3 runs, 3 as predicted
+# level0 fx8  3 runs, 3 as predicted
+# level0 fx9  3 runs, 3 as predicted
+# level0 fx10 3 runs, 3 as predicted
+# level0 fx11 3 runs, 3 as predicted
+# level0 fx12 3 runs, 3 as predicted
+# shrink fx1  3 runs, 3 as predicted
+# shrink fx2  3 runs, 3 as predicted
+# shrink fx3  3 runs, 3 as predicted
+# shrink fx4  3 runs, 3 as predicted
+# shrink fx5  3 runs, 3 as predicted
+# shrink fx6  3 runs, 3 as predicted
+# shrink fx7  3 runs, 3 as predicted
+# shrink fx8  3 runs, 3 as predicted
+# shrink fx9  3 runs, 3 as predicted
+# shrink fx10 3 runs, 3 as predicted
+# shrink fx11 3 runs, 3 as predicted
+# shrink fx12 3 runs, 3 as predicted

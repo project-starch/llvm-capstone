@@ -1,0 +1,130 @@
+# CPython 3.13.7 compile survey, 2026-09-23. Output of survey-cpython-capstone.sh --jobs 10,
+# exit 0, with absolute host paths replaced by the variables that produced them.
+build tree     $CPY_ROOT/build
+compiler       $CAPSTONE_LLVM_BUILD_DIR/bin/clang
+compiler rev   d030df93d4a4e5f696a846111868ebc2ef6c21d3
+patches        6  cpython-3.13.7-0001-address-width.patch cpython-3.13.7-0002-freed-pointer-address.patch cpython-3.13.7-0003-radix-tree-address-bits.patch cpython-3.13.7-0004-hash-pointer-address.patch cpython-3.13.7-0005-qsbr-pad-multiple.patch cpython-3.13.7-0006-thread-local-as-global.patch
+surveyed       253 objects (CPython's Makefile list)
+compiled       222
+failed         30
+notrun         1   (a prerequisite failed first)
+               87.7% ok
+
+by group:          ok  fail notrun
+  parser             15     1      0   of 16
+  objects            39     4      0   of 43
+  python             73    11      0   of 84
+  core-modules        4     0      1   of 5
+  stdlib-modules     72    14      0   of 86
+  lib:mpdec          14     0      0   of 14
+  lib:expat           3     0      0   of 3
+  lib:hacl-sha2       1     0      0   of 1
+  program             1     0      0   of 1
+
+failures by FIRST error (one cause per object):
+     26  backend assert: VT.isInteger() && "Shift amount is not an integer type!"
+      2  other: "can't find format code for unsigned integer of same size as void*"
+      1  other: "PyLong_FromVoidPtr: sizeof(long long) < sizeof(void*)"
+      1  other: clang frontend command failed with exit code 139 (use -v to see invocation)
+
+error sites by objects affected (every error in every failing object; 6 distinct):
+     26  <backend>
+         assert VT.isInteger() && "Shift amount is not an integer type!"
+      2  Modules/_multiprocessing/multiprocessing.h:70
+         "can't find format code for unsigned integer of same size as void*"
+      1  Modules/_multiprocessing/clinic/semaphore.c.h:331
+         expected ')'
+      1  Modules/_multiprocessing/semaphore.c:752
+         use of undeclared identifier 'T_POINTER'
+      1  Objects/longobject.c:1361
+         "PyLong_AsVoidPtr: sizeof(long long) < sizeof(void*)"
+      1  Objects/longobject.c:1337
+         "PyLong_FromVoidPtr: sizeof(long long) < sizeof(void*)"
+      1  failing objects with no parsable error site: Python/compile.o
+
+integer->pointer round trips (-Wcapstone-pointer-roundtrip): 62 sites in 15 source files, reached by 175 objects
+     19  Modules/_elementtree.c
+     13  Objects/obmalloc.c
+      8  Python/tracemalloc.c
+      7  Python/gc.c
+      2  Include/internal/pycore_gc.h
+      2  Objects/stringlib/fastsearch.h
+      2  Python/lock.c
+      2  Python/thread_pthread.h
+      1  Include/internal/pycore_object.h
+      1  Modules/signalmodule.c
+      1  Python/compile.c
+      1  Python/crossinterp_data_lookup.h
+      1  Python/marshal.c
+      1  Python/pyarena.c
+      1  Python/symtable.c
+
+failing objects:
+  Modules/_blake2/blake2b_impl.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/_blake2/blake2s_impl.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/_interpchannelsmodule.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/_interpqueuesmodule.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/_multiprocessing/multiprocessing.o
+      $CPY_ROOT/src/Python-3.13.7/Modules/_multiprocessing/multiprocessing.h:70:4: error: "can't find format code for unsigned integer of same size as void*"
+  Modules/_multiprocessing/semaphore.o
+      $CPY_ROOT/src/Python-3.13.7/Modules/_multiprocessing/multiprocessing.h:70:4: error: "can't find format code for unsigned integer of same size as void*"
+  Modules/_threadmodule.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/grpmodule.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/md5module.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/posixmodule.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/rotatingtree.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/sha1module.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/sha2module.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/sha3module.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Objects/longobject.o
+      $CPY_ROOT/src/Python-3.13.7/Objects/longobject.c:1337:5: error: "PyLong_FromVoidPtr: sizeof(long long) < sizeof(void*)"
+  Objects/obmalloc.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Objects/typeobject.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Objects/unicodeobject.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Parser/myreadline.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/ceval.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/ceval_gil.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/compile.o
+      clang: error: clang frontend command failed with exit code 139 (use -v to see invocation)
+  Python/crossinterp.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/import.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/instrumentation.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/lock.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/pylifecycle.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/pystate.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/qsbr.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Python/sysmodule.o
+      clang: llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:1826: SDValue llvm::SelectionDAG::getShiftAmountConstant(uint64_t, EVT, const SDLoc &): Assertion `VT.isInteger() && "Shift amount is not an integer type!"' failed.
+  Modules/getbuildinfo.o
+      NOTRUN
+
+stdlib modules by configure state (only 'yes' is in the denominator):
+  disabled   16  _ctypes_test _sqlite3 _testbuffer _testcapi _testclinic _testclinic_limited _testexternalinspection _testimportmultiple _testinternalcapi _testlimitedcapi _testmultiphase _testsinglephase _xxtestfuzz xxlimited xxlimited_35 xxsubtype
+  missing    13  _bz2 _ctypes _curses _curses_panel _dbm _gdbm _hashlib _lzma _ssl _tkinter _uuid readline zlib
+  n/a         1  _scproxy
+  yes        53  _asyncio _bisect _blake2 _codecs_cn _codecs_hk _codecs_iso2022 _codecs_jp _codecs_kr _codecs_tw _contextvars _csv _datetime _decimal _elementtree _heapq _interpchannels _interpqueues _interpreters _io _json _lsprof _md5 _multibytecodec _multiprocessing _opcode _pickle _posixshmem _posixsubprocess _queue _random _sha1 _sha2 _sha3 _socket _statistics _struct _typing _zoneinfo array binascii cmath fcntl grp math mmap pwd pyexpat resource select syslog termios time unicodedata

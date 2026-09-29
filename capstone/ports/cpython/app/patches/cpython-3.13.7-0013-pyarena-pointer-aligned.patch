@@ -1,0 +1,32 @@
+Subject: [PATCH 0013] Align CPython's arena allocations to a pointer
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+pyarena.c hands out memory for the parser and the compiler (AST nodes, the
+parser's memo) at an 8-byte ALIGNMENT, both for a block's first allocation and
+for rounding each size. Those objects hold pointers. Where a pointer is a
+16-byte capability it must be stored 16-aligned, and a 64-byte memo from
+_PyArena_Malloc came back at an address that was 8 but not 16 aligned: the
+domain halted with "Unaligned cap access" (cause 4) in _PyPegen_update_memo,
+storing the memo's node pointer at +0x10.
+
+ALIGNMENT becomes the larger of a pointer's alignment and 8. Where a pointer
+is 8 bytes or less it stays 8.
+
+--- a/Python/pyarena.c
++++ b/Python/pyarena.c
+@@ -12,7 +12,10 @@
+ */
+ 
+ #define DEFAULT_BLOCK_SIZE 8192
+-#define ALIGNMENT               8
++/* Arena memory holds AST nodes and the parser's memo, which hold pointers, so
++   an allocation is aligned as a pointer is: 16 bytes where a pointer is a
++   capability, 8 everywhere else as before. */
++#define ALIGNMENT               (_Alignof(void *) > 8 ? _Alignof(void *) : 8)
+ 
+ typedef struct _block {
+     /* Total number of bytes owned by this block available to pass out.

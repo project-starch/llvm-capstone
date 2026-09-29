@@ -1,0 +1,12 @@
+[
+  {
+    "arm": "poisoncap-spatial",
+    "oracle_and_every_ledger_equal": true,
+    "tested_short_print_binary_sha256": "22d45ddb0e78457f941aa83ab01d9f602a8216173b9eeeac315a3713209b0cba"
+  },
+  {
+    "arm": "poisoncap-temporal",
+    "oracle_and_every_ledger_equal": true,
+    "tested_short_print_binary_sha256": "19913b33aa467058f58925ba9e4943afa46e2284bef76cc697a9d2fcac11efb6"
+  }
+]

@@ -49,7 +49,21 @@ against `origin/m1-reclaimer`.
 1. `CLAUDE.md` — every hard constraint applies unchanged (no real names anywhere, including commit
    subjects; `precommit-scan.sh` before every commit *and* push, by absolute path, gated on its exit
    status; never edit or push the paper; ask before editing `CLAUDE.md`; reflash ask-first; commit
-   `-o` your own paths after reading `git diff`; no `Co-Authored-By`).
+   `-o` your own paths after reading `git diff`; no `Co-Authored-By`). **Read the file, not this
+   list** — it is a reminder, not a summary, and it has already gone stale once: see below.
+
+   **CHANGED 2026-09-25, AFTER this document was written (`83cde5cecab9`): shared branches take only
+   SQUASHED, logically complete commits.** Work on a lane branch (`lane/<name>`), push it as often as
+   you like — that is what "push at stable points" now means — and land once per logical change with
+   `git checkout <shared> && git merge --squash lane/<name> && git commit -F <msgfile>`. No WIP,
+   fixups, pre-registrations or follow-up corrections directly on a shared branch. Pre-registrations
+   go to the lane branch BEFORE the run and the squashed commit cites their hash; lane branches are
+   never deleted. `dev` is the shared branch here; in `capstone-ariane` it is whatever the parent's
+   pointer tracks — **note that `m1-reclaimer` is a task branch, so R-12 work is unaffected until it
+   lands.** Verified on this host: the pre-push guard has no allowlist (retired 2026-09-16), so lane
+   pushes need no approval, and `PROTECTED_RE` is `^(main|master|fpga-testing.*)$`, so pushing `dev`
+   to land a squash still works. Check your own hook rather than trusting that sentence:
+   `git rev-parse --git-path hooks/pre-push`.
 2. `.claude/skills/rtl-sim/SKILL.md` — a directed test in ~14 s, the worktree A/B recipe, and its
    three traps (delete artifacts before every run; `.S` goes through CPP; SUCCESS at the timeout is
    not a pass).

@@ -537,6 +537,8 @@ private:
   SDValue lowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerCTTZNoTable(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const;
+  SDValue getCapabilityTLSAddr(GlobalAddressSDNode *N,
+                               SelectionDAG &DAG) const;
   SDValue lowerSELECT(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerVASTART(SDValue Op, SelectionDAG &DAG) const;

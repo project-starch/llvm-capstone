@@ -1,9 +1,54 @@
 # Capstone testing matrix and current recommendations
 
+Application benchmark study: the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md)
+uses two matched pairs for the nested boundary; default CheriBSD on/off remains
+separate reference data. The [planner](../../experiments/study/README.md) supports
+PoisonCap plans but blocks execution qualification pending observed inner-policy
+accounting. Twenty host checks pass. Upstream mruby lists passes 4/4 original
+arms; both PoisonCap SQLite modes complete the artifact's 20 active phases at
+size 1. Twelve phases are commented out in that artifact, and the main
+result oracle is missing. These are readiness results, not a memory ranking.
+
+Application memory behavior: [twelve paired workload configurations](../../experiments/applications/results/20260927-reuse/README.md)
+pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU
+controls without in-process collection. The results quantify prompt address
+reuse and post-release retention, include the large-retained-graph counterexample,
+and make no timing or total-RSS claim.
+
+Application memory: [Capstone ports versus default CheriBSD](../../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The original matrix recorded
+six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+passes all 27 Capstone repeats at the same 65,536-node capacity, including all six
+previous failures, using unchanged application binaries. Keep the original data
+and larger-node controls separate. These are memory observations, not timings.
+
+2026-09-26 application-platform run: the installed managed guest passes the common
+acceptance (including exhaustion followed by 1,008 starts). Legacy CoreMark,
+shared-region, stdout/filewrite/fileread pass. The available snapshot fails
+null_blk (null_submit_bio, bad address 0x6f) and file-open-close (borrowed-region
+INIT, cause 29) on both the original and new platforms. These remain baseline
+failures; the historical rows below are not a claim that every gate passed in
+this run. See [current state](../state/current-state.md).
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../../ports/common/host/port_trace/README.md).
 
 This file is the compact map of which test layer to run for which kind of change.
 It is intentionally shorter than the older narrative version.
+
+Perl's [complete upstream `t/base` run](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
+uses host `prove --exec` with `capstone-vm run`: 6/9 files pass; `term.t` has one
+failed assertion and `lex.t`/`rs.t` each terminate by SIGSEGV before TAP. This
+is a port compatibility gate, not a passing full Perl-suite result.
+
+Shared application runtime: run the native startup/image/stream tests and host
+CLI tests, then the [persistent-guest application gate](../../runtime/applications.md#verification).
+It checks actual waitpid signals, no-yield and blocked-I/O cancellation,
+concurrent ownership, dup/fork/VMA lifetime, rollback, memory scrubbing, two real
+interpreters and an unchanged boot ID. `--repeat 200` adds 1,008 mixed starts with
+stable resource counters; `--sublet-image` adds transferred-heap reclamation,
+200,000-cycle in-process reuse, stale-reference rejection after reuse and
+recoverable genuine node exhaustion. It does not add
+fork/threads inside a domain or constitute FPGA validation.
 
 ## Setup once per shell
 
@@ -68,6 +113,9 @@ for build paths, release-layout restrictions and artifact retention.
 | HostCall file handle write proof | first handle-based byte-movement path on top of helper-managed file tokens | handle-based file-service data-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh` |
 | HostCall file handle read proof | first handle-based reverse-direction byte-movement path on top of helper-managed file tokens | handle-based file-service read-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh` |
 | HostCall file handle sync proof | first handle-based durability-oriented path on top of helper-managed file tokens | handle-based file-service sync-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh` |
+| MOVC of an integer, as the RTL does it | capstone-qemu with `CAPSTONE_MOVC_NULL_SCALAR=1` nulls a non-capability MOVC source as the RTL does (probe `b=5 c=0`, against `b=5 c=5` by default), and reports whether the compiler's C-32 shape loses its pointer to it | capstone-qemu MOVC changes; C-32 and other register-copy codegen changes | `capstone/tests/runtime-qemu/movc-null-scalar/run.sh` |
+| MOVC exposure: what zeroing an integer MOVC source changes | the nightly, each hostcall probe, the musl probes and libc-test with `CAPSTONE_MOVC_NULL_SCALAR` off and on, every verdict compared; exits 1 on a difference, 2 if an arm did not measure | a QEMU or compiler change that could move the answer to Q-04 | `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh` |
+| CINCOFFSET and SCC on an integer | case 0 (both on a capability) works, cases 1 and 2 raise 24 today, or give the integer result under `EXPECT=cheri` | the SCC/CINCOFFSET decision; capstone-qemu cap-arithmetic helpers | `capstone/tests/runtime-qemu/untagged-cap-arith/run.sh` |
 | HostCall file handle stat proof | first handle-based narrow metadata path on top of helper-managed file tokens | handle-based file-service stat-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh` |
 | HostCall file handle truncate proof | first handle-based size-mutation path on top of helper-managed file tokens | handle-based file-service truncate-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh` |
 | HostCall path access proof | first SQLite-facing path existence/access path on top of the current HostCall boundary | path-level SQLite/VFS-facing changes | `capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh` |
@@ -78,6 +126,9 @@ for build paths, release-layout restrictions and artifact retention.
 | HostCall exit proof | `exit()` from a musl domain ends with the right status and flushed stdio, with and without a `__capstone_at_exit` hook; the control (a runtime that tests the hook's address, C-56) must halt | runtime exit path or weak-symbol changes | `capstone/tests/runtime-qemu/run-hostcall-exit-hook-probe.sh` |
 | HostCall standard descriptors proof | stdout/stderr are non-tty character devices to fstat/isatty, not seekable, closable (and closed to everything after); stdin and unopened descriptors say EBADF, ioctl included; the control (a runtime whose fstat knows no stdout) must fail | runtime descriptor handling | `capstone/tests/runtime-qemu/run-hostcall-stdio-descriptors-probe.sh` |
 | HostCall return proof | a musl domain that returns without `exit()` still delivers its buffered stdout and runs its `atexit` handlers, with the returned status; the control (a runtime that returns straight to the host) must lose them | runtime `domain_main` / exit-path changes | `capstone/tests/runtime-qemu/run-hostcall-return-flush-probe.sh` |
+| __thread in a musl domain (C-47): local-exec codegen, the TLS segment, and the runtime's block; with an overrun control and an old-runtime control | 9 checks at -O0 and -O2: initial values, .tbss, 64/4096 alignment, a second unit, a kept capability, bounds, errno | compiler codegen or musl-capstone runtime changes | `capstone/tests/runtime-qemu/run-hostcall-thread-local-probe.sh` |
+| HostCall constructors proof | a musl domain runs its constructors (with and without a priority) before `main` and its destructors at exit, printing exactly what the same file prints natively; the control (the runtime before C-64, which ran none and faulted on `.fini_array`) must halt | runtime `domain_main` / exit-path changes, `my_first_domain/link.ld` array placement | `capstone/tests/runtime-qemu/run-hostcall-init-fini-probe.sh` |
+| HostCall unserved-report proof | the runtime's unserved-syscall line reaches the host from a program that closed fd 1; the control (the runtime before I-11, which wrote it through the program's fd 1) must lose it | runtime unserved report / descriptor handling | `capstone/tests/runtime-qemu/run-hostcall-unserved-report-probe.sh` |
 | Pointers computed through uintptr_t in a musl domain (CapstoneRecoverProvenance), with the pass-off control | 5 round-trip shapes plus musl's own atexit() at -O0 and -O2; the same program with the pass off must halt | compiler codegen or musl-capstone runtime changes | `capstone/tests/runtime-qemu/run-hostcall-round-trip-probe.sh` |
 | Second-`PENDING` diagnostic | whether metadata-only multi-`PENDING` re-entry works | targeted runtime/control-flow diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-probe.sh` |
 | Second-`PENDING` payload-reuse diagnostic | whether reusing the same borrowed output payload across rounds triggers the current limitation | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-probe.sh` |

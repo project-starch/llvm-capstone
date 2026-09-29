@@ -71,15 +71,30 @@ grep -aqF "$CFG2" ${C6_QEMU_2MIB_CFG:?set C6_QEMU_2MIB_CFG=<host stdout of the 2
 LPC=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}/lpc
 [ "$(sha256sum $LPC|cut -c1-16)" = 3b93a2b6e2adfa36 ] || fail "lpc on the overlay is not 3b93a2b6e2adfa36"
 [ -f "$B/overlay/test-domains/k800.dom" ] || fail "k800.dom missing from the overlay"
+# K800_IMG/K800_HASH/K800_ORACLES (optional): stage a k800 control relinked off 0x10000. DOMAIN_BASE_VA defaults to
+# 0x10000, so a cell built without it enters where the stock control does and the entry-VA check below
+# refuses the boot. Relink the control, never the cell: the cell is the artifact under measurement.
+if [ -n "${K800_IMG:-}" ]; then
+  [ "$(sha256sum "$K800_IMG"|cut -c1-16)" = "${K800_HASH:?set K800_HASH=<sha256/16> with K800_IMG}" ] || fail "relinked k800 is not $K800_HASH"
+  # Preflight C13 binds every rung's image to the FIRST hash in $PREFLIGHT_ORACLES/<rung>.qemu-pass, and
+  # the default directory vouches for the STOCK k800, so a relinked control without its own record is
+  # refused (boot sw8x-b80s-p1o2-c5, 2026-09-29). The control is this driver's only rung, so the
+  # directory is the relinked k800's alone. The check is unchanged; only the record it reads is.
+  K800_ORACLES=${K800_ORACLES:?set K800_ORACLES=<dir with the relinked k800.oracle and k800.qemu-pass> with K800_IMG}
+  [ "$(grep -oE '[0-9a-f]{64}' "$K800_ORACLES/k800.qemu-pass" 2>/dev/null | head -1 | cut -c1-16)" = "$K800_HASH" ] || fail "$K800_ORACLES/k800.qemu-pass does not vouch for $K800_HASH"
+  [ -f "$K800_ORACLES/k800.oracle" ] || fail "no k800.oracle in $K800_ORACLES"
+  export K800_HASH PREFLIGHT_ORACLES=$K800_ORACLES
+fi
 say "pieces: cell 6 variant ${C6_TAG} ${C6_HASH:?} (pass record present), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36; QEMU -O1 runs on record (${C6_QEMU_DEFAULT} at the 1,419,584 arena; ${C6_QEMU_2MIB} at the 2 MiB arena, 2026-09-15 00:10, same HEAP 1344064 and sublet 5568/37966/32565 as the -O0 2 MiB run — the denominator below)"
 T=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}; TT=${CAPSTONE_BR_TARGET:-$B/build-fpga/target/test-domains}; mkdir -p "$T" "$TT"
-for s in speedtest1.dom sqlite_host_rr.user; do cp -f "$T/$s" $OUT/$s.before 2>/dev/null; done
+for s in speedtest1.dom sqlite_host_rr.user k800.dom; do cp -f "$T/$s" $OUT/$s.before 2>/dev/null; done
 cp -f $IMG "$T/speedtest1.dom" || fail "stage cell 6"
 cp -f $RRH "$T/sqlite_host_rr.user" || fail "stage rr host"
+if [ -n "${K800_IMG:-}" ]; then cp -f "$K800_IMG" "$T/k800.dom" || fail "stage relinked k800"; fi
 STASH=$OUT/retired; mkdir -p $STASH; RESTORED=0
 RETIRE="rtpc bigregion.user trapctl.dom fillsd.dom fillwarm.dom fillcost.dom fillnop.dom speedtest1_seven.dom speedtest1_baseline"
 restore(){ [ "$RESTORED" = 1 ] && return 0; RESTORED=1
-  for s in speedtest1.dom sqlite_host_rr.user; do [ -f $OUT/$s.before ] && { cp -f $OUT/$s.before "$T/$s"; cp -f $OUT/$s.before "$TT/$s"; }; done
+  for s in speedtest1.dom sqlite_host_rr.user k800.dom; do [ -f $OUT/$s.before ] && { cp -f $OUT/$s.before "$T/$s"; cp -f $OUT/$s.before "$TT/$s"; }; done
   for f in $RETIRE; do [ -f "$STASH/$f" ] && { cp -f "$STASH/$f" "$T/$f"; cp -f "$STASH/$f" "$TT/$f"; }; done
   bake restore && say "rebaked with the retired set back" || say "WARN: restore rebake failed -- the next boot MUST rebake"; }
 trap restore EXIT
@@ -94,7 +109,11 @@ for p in sorted(glob.glob(L+'/overlay/test-domains/*')):
     d=open(p,'rb').read()
     if d[:4]!=b'\x7fELF': continue
     e=struct.unpack_from('<Q',d,0x18)[0]; n=p.split('/')[-1]
-    print(f"  entry {e:#012x}  {n}"); seen.setdefault(e,[]).append(n)
+    # Only DOMAINS can collide: R-3 hangs a second domain entered at a reused VA. Host programs (lpc,
+    # sqlite_host*.user) are Linux processes and two identical copies share an entry harmlessly;
+    # counting them refused a valid boot (p1o2-c6, 2026-09-29). Same scope as preflight C15 (*.dom).
+    dom = n.endswith('.dom'); print(f"  entry {e:#012x}  {n}{'' if dom else '  (host program, not checked)'}")
+    if dom: seen.setdefault(e,[]).append(n)
 dup={e:v for e,v in seen.items() if len(v)>1}
 print('entry-VA collisions:', 'none' if not dup else dup); sys.exit(1 if dup else 0)
 PY
@@ -109,6 +128,7 @@ python3 - "$B" <<'PY' | tee -a $LOG
 import sys,hashlib,os
 L=sys.argv[1]
 want={'speedtest1.dom':os.environ['C6_HASH'],'lpc':'3b93a2b6e2adfa36','sqlite_host_rr.user':'2c9e82d101b48160'}
+if os.environ.get('K800_HASH'): want['k800.dom']=os.environ['K800_HASH']
 bad=0
 for d in ('overlay/test-domains','build/target/test-domains'):
     for f,exp in want.items():

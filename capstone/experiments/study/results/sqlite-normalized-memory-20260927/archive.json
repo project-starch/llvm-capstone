@@ -1,0 +1,6 @@
+{
+  "path": "/tmp/capstone/sqlite-normalized-memory-20260927.tar.gz",
+  "sha256": "e7295882958228dbccf02963f2b8dae8f7543c4bcc917139be751619de28dbe8",
+  "bytes": 91482917,
+  "contents": "Scratch source/build/run campaign, including binaries, logs, actual build/run recipes and excluded attempts; guest credentials excluded"
+}

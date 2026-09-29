@@ -1,0 +1,36 @@
+Subject: [PATCH 0005] Pad the QSBR thread state to a multiple of 64, not to 64
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+struct _qsbr_pad (Include/internal/pycore_qsbr.h) pads the per-thread QSBR
+state to 64 bytes against false sharing with
+char __padding[64 - sizeof(struct _qsbr_thread_state)]. It holds three
+pointers, so with 16-byte capabilities the state exceeds 64 bytes, the size
+wraps and the array is "too large (18446744073709551584 elements)" -- in every
+file that includes pycore_interp.h (159 in the fifth survey).
+
+The padding now rounds up to the next multiple of 64. For every state smaller
+than 64 bytes, which is every platform upstream supports, the expression gives
+exactly the old size. The padding is a performance measure; its size does not
+affect correctness.
+
+--- a/Include/internal/pycore_qsbr.h
++++ b/Include/internal/pycore_qsbr.h
+@@ -70,10 +70,12 @@
+     struct _qsbr_thread_state *freelist_next;
+ };
+ 
+-// Padding to avoid false sharing
++// Padding to avoid false sharing: round up to a multiple of 64 bytes. With
++// 16-byte capability pointers the state itself is larger than 64.
+ struct _qsbr_pad {
+     struct _qsbr_thread_state qsbr;
+-    char __padding[64 - sizeof(struct _qsbr_thread_state)];
++    char __padding[64 * (sizeof(struct _qsbr_thread_state) / 64 + 1)
++                   - sizeof(struct _qsbr_thread_state)];
+ };
+ 
+ // Per-interpreter state

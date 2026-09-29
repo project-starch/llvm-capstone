@@ -1,0 +1,26 @@
+{
+  "capstone": {
+    "parent_source_sha256": "472a8433fa6041be2cd4f8db69d9bc2156b8f45ac13c1d2e8ff9e1217ae0f55c",
+    "measured_source_sha256": "e5cc13d942e4d52795e6bd21878406e079b919763afa915605de5fcf004a2bff",
+    "delta_sha256": "6daa8a16b7b076004f45634a2d4e02c5ff0e091f180519501377d39746469c22"
+  },
+  "capstone-sublet": {
+    "parent_source_sha256": "ac3ed97b5fc2ceb15179ac0245c9be750aa1f7880fdf6c57de74de1ac3b95bd6",
+    "measured_source_sha256": "318ea72f0a06a60cffb29dee9303a13ced95437dee5d1048945e86ddf0457ac1",
+    "delta_sha256": "b255b1154de13181b849e90d6a3fd8b55a5befa839fc0052cb7fb0edaa149c89"
+  },
+  "poisoncap-spatial": {
+    "parent_source_sha256": "b80cd4fb9dd58e547d55d57f8c4288e615e24b271a53dfa2fdae267955ade1c9",
+    "measured_source_sha256": "56fd1ab38ffe9a8a99f92b25257987c37af60e7d773bcce4794c43c6b43610aa",
+    "delta_sha256": "73eb76daee8ca0f9d27c74912267224f684ee4b669068ee7e0b80ab4bc705675"
+  },
+  "poisoncap-temporal": {
+    "parent_source_sha256": "d8a21ba8195602f68a2cbd5b1facc943bb813f14b17928c9f687778613946dd2",
+    "measured_source_sha256": "dfb486e2e4144e01ffbb17559acb5233119ea89693e9d288ed2ed47004c672c1",
+    "delta_sha256": "699679f8ac6c051bb4c514fbedcf8916679e9d6a146eafb477fd040277f4b7c5"
+  },
+  "driver": {
+    "parent_sha256": "0d5886bacebe88a94626691e3e40352bd7e1405e9afebdb41ceb05e02c26812e",
+    "measured_sha256": "0d5886bacebe88a94626691e3e40352bd7e1405e9afebdb41ceb05e02c26812e"
+  }
+}

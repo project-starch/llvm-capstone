@@ -103,6 +103,32 @@ static struct l0_block *l0_header(void *p)
 #define l0_readable(p, block) (block)
 #endif
 
+/* CAPSTONE_LEVEL0_STATS: what a port needs to size CAPSTONE_LEVEL0_ARENA_BYTES, opt-in and
+ * compiled out otherwise. Bytes are whole blocks, header included, since that is what the
+ * arena gives up. `peak_end` is the furthest a live block has ever reached into the arena:
+ * first fit leaves holes, so it is the arena size a run needed, and at least `peak_in_use`. */
+#ifdef CAPSTONE_LEVEL0_STATS
+static size_t l0_in_use, l0_peak_in_use, l0_peak_end;
+static void l0_note_alloc(struct l0_block *b)
+{
+	size_t end = (size_t)((char *)b - l0_arena) + sizeof(struct l0_block) + b->size;
+	l0_in_use += sizeof(struct l0_block) + b->size;
+	if (l0_in_use > l0_peak_in_use)
+		l0_peak_in_use = l0_in_use;
+	if (end > l0_peak_end)
+		l0_peak_end = end;
+}
+size_t __capstone_level0_in_use(void) { return l0_in_use; }
+size_t __capstone_level0_peak_in_use(void) { return l0_peak_in_use; }
+size_t __capstone_level0_peak_end(void) { return l0_peak_end; }
+size_t __capstone_level0_arena_bytes(void) { return CAPSTONE_LEVEL0_ARENA_BYTES; }
+#define L0_NOTE_ALLOC(b) l0_note_alloc(b)
+#define L0_NOTE_FREE(b) (l0_in_use -= sizeof(struct l0_block) + (b)->size)
+#else
+#define L0_NOTE_ALLOC(b) ((void)0)
+#define L0_NOTE_FREE(b) ((void)0)
+#endif
+
 static void l0_init(void)
 {
 	l0_head = (struct l0_block *)l0_arena;
@@ -133,6 +159,7 @@ void *malloc(size_t n)
 			b->next = tail;
 		}
 		b->free = 0;
+		L0_NOTE_ALLOC(b);
 		return L0_RETURN((char *)b + sizeof(struct l0_block), n);
 	}
 	/* POSIX: a failed allocation sets errno. libc-test's search_hsearch is
@@ -147,6 +174,7 @@ void free(void *p)
 	if (!p)
 		return;
 	struct l0_block *b = l0_header(p);
+	L0_NOTE_FREE(b);
 	b->free = 1;
 	/* Coalesce forward. One pass is enough because every free does it, so a
 	   run of adjacent free blocks can only ever be two long at rest. */

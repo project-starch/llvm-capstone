@@ -1,0 +1,43 @@
+CAPSTONE (tshark app port): wmem's block sizes for the sublet heap arm. With
+-DCAPSTONE_WMEM_BLOCK_BYTES=<n>, the BLOCK and BLOCK_FAST allocators take their blocks in n-byte
+pieces instead of 8 MiB and 2 MiB. The sublet heap is a buddy allocator over a 16 MiB pool, which
+cannot hold three 8 MiB blocks and a 2 MiB one; the blocks are mostly empty (about 1.5 MB is
+filled at tshark's peak, the plan's M0 item 4). Only host/build-domain.sh's sublet arm defines
+the macro, when it compiles these two files itself; every other build is unchanged.
+
+--- a/wsutil/wmem/wmem_allocator_block.c	2026-09-25 08:22:41.161178967 +0800
++++ b/wsutil/wmem/wmem_allocator_block.c	2026-09-25 08:22:41.177178967 +0800
+@@ -139,7 +139,15 @@
+  * 8MB is a pretty arbitrary value - it's big enough that it should last a while
+  * and small enough that a mostly-unused one doesn't waste *too* much. It's
+  * also a nice power of two, of course. */
++#ifdef CAPSTONE_WMEM_BLOCK_BYTES
++/* capstone64, the sublet heap arm only (the tshark port's host/build-domain.sh, TSAPP_HEAP=sublet):
++ * the domain's heap is a buddy allocator over a 16 MiB pool, and three 8 MiB blocks plus a 2 MiB
++ * one do not fit in it. A block of exactly a power of two fills one buddy block, since that heap
++ * keeps no header in band. Every other build leaves the macro undefined. */
++#define WMEM_BLOCK_SIZE (CAPSTONE_WMEM_BLOCK_BYTES)
++#else
+ #define WMEM_BLOCK_SIZE (8 * 1024 * 1024)
++#endif
+ 
+ /* The header for an entire OS-level 'block' of memory */
+ typedef struct _wmem_block_hdr_t {
+--- a/wsutil/wmem/wmem_allocator_block_fast.c	2026-09-25 08:22:41.163178967 +0800
++++ b/wsutil/wmem/wmem_allocator_block_fast.c	2026-09-25 08:22:41.177178967 +0800
+@@ -39,7 +39,15 @@
+  * 2MB is a pretty arbitrary value - it's big enough that it should last a while
+  * and small enough that a mostly-unused one doesn't waste *too* much. It's
+  * also a nice power of two, of course. */
++#ifdef CAPSTONE_WMEM_BLOCK_BYTES
++/* capstone64, the sublet heap arm only (the tshark port's host/build-domain.sh, TSAPP_HEAP=sublet):
++ * the domain's heap is a buddy allocator over a 16 MiB pool, and three 8 MiB blocks plus a 2 MiB
++ * one do not fit in it. A block of exactly a power of two fills one buddy block, since that heap
++ * keeps no header in band. Every other build leaves the macro undefined. */
++#define WMEM_BLOCK_SIZE (CAPSTONE_WMEM_BLOCK_BYTES)
++#else
+ #define WMEM_BLOCK_SIZE (2 * 1024 * 1024)
++#endif
+ 
+ /* The header for an entire OS-level 'block' of memory */
+ typedef struct _wmem_block_fast_hdr {

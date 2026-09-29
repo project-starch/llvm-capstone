@@ -1,0 +1,519 @@
+#!/usr/bin/env python3
+"""Run application points in one CheriBSD guest over loopback SSH.
+
+The common ports/host CheriBSD Guest owns boot and snapshot lifetime. This
+runner owns only its application processes; no guest restart or case retry.
+"""
+import argparse
+import fcntl
+import os
+import sys
+import hashlib
+import json
+from pathlib import Path, PurePosixPath
+import re
+import shlex
+import subprocess
+import time
+from allocation_metrics import allocation_samples, valid_allocations
+from reuse_gap_metrics import parse_reuse_gap
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def guest_panic(serial_path):
+    if not serial_path.is_file():
+        return None
+    matches = re.findall(rb'panic: [^\r\n]+', serial_path.read_bytes())
+    return matches[-1].decode(errors='replace') if matches else None
+
+
+def samples(stderr):
+    return [dict((k, v if k == 'phase' else int(v))
+                 for k, v in (word.split('=', 1) for word in line.split()[1:]))
+            for line in stderr.splitlines() if line.startswith('EXP-CHERI ')]
+
+
+def policy_environment(point):
+    """Only the named on/off contrast may change the process allocator policy."""
+    expected = {'cheribsd-default': 1, 'cheribsd-revocation-on': 1,
+                'cheribsd-revocation-off': 0}
+    arm = point['arm']
+    if point.get('nested_policy') not in (None, 'published-sqlite-thresholds-corrected-v1'):
+        raise ValueError('unknown nested policy')
+    if arm.startswith('poisoncap-'):
+        if arm not in ('poisoncap-spatial', 'poisoncap-temporal'):
+            raise ValueError('unknown PoisonCap arm')
+        boundary = (point.get('application'), point.get('nested_allocator'))
+        if boundary == ('mruby', 'mruby-gc'):
+            expected[arm] = 1
+        elif boundary == ('ffmpeg', 'ffmpeg-pool'):
+            # Legacy adapter campaigns explicitly isolated the inner pool.
+            # The published-policy transfer keeps the outer libc defaults on.
+            policy = point.get('nested_policy')
+            if policy not in (None, 'published-sqlite-thresholds-corrected-v1'):
+                raise ValueError('unknown FFmpeg nested policy')
+            expected[arm] = int(policy is not None)
+            mode = 2 if arm == 'poisoncap-temporal' else 0
+            if point.get('mode') != mode or not point.get('argv') or point['argv'][-1] != str(mode):
+                raise ValueError('FFmpeg pool arm and application mode disagree')
+        elif boundary == ('cpython', 'cpython-pymalloc'):
+            expected[arm] = int(point.get('nested_policy') is not None)
+            if point.get('mode') != int(arm == 'poisoncap-temporal'):
+                raise ValueError('CPython pymalloc arm and application mode disagree')
+        elif boundary == ('postgres', 'postgres-memory-contexts'):
+            expected[arm] = int(point.get('nested_policy') is not None)
+            if point.get('mode') != int(arm == 'poisoncap-temporal'):
+                raise ValueError('PostgreSQL context arm and application mode disagree')
+        elif boundary == ('perl', 'perl-sv-heads'):
+            expected[arm] = int(point.get('nested_policy') is not None)
+            if point.get('mode') != int(arm == 'poisoncap-temporal'):
+                raise ValueError('Perl SV-head arm and application mode disagree')
+        else:
+            raise ValueError('PoisonCap arm needs a qualified application boundary')
+    if arm not in expected or point['revocation'] != expected[arm]:
+        raise ValueError('arm and expected revocation state disagree')
+    environment = point['environment']
+    if any(k.startswith(('_RUNTIME_', 'MALLOC_', 'EXP_CHERI_')) for k in environment) or \
+            'MRB_GC_POISONCAP' in environment or 'PYM_POISONCAP_MODE' in environment or \
+            'PG_POISONCAP_MODE' in environment or 'PERL_POISONCAP_MODE' in environment:
+        raise ValueError('allocator overrides must come from the named study arm')
+    environment = dict(environment)
+    if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'mruby-gc':
+        environment['MRB_GC_POISONCAP'] = '1' if arm == 'poisoncap-temporal' else '0'
+    if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'cpython-pymalloc':
+        environment['PYM_POISONCAP_MODE'] = '1' if arm == 'poisoncap-temporal' else '0'
+    if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'postgres-memory-contexts':
+        environment['PG_POISONCAP_MODE'] = '1' if arm == 'poisoncap-temporal' else '0'
+    if arm.startswith('poisoncap-') and point.get('nested_allocator') == 'perl-sv-heads':
+        environment['PERL_POISONCAP_MODE'] = '1' if arm == 'poisoncap-temporal' else '0'
+    if arm != 'cheribsd-default':
+        switch = 'ENABLE' if expected[arm] else 'DISABLE'
+        environment['_RUNTIME_REVOCATION_' + switch] = '1'
+    return environment
+
+
+def application_command(point, timeout):
+    environment = policy_environment(point)
+    # Study arms inherit no allocator settings from the SSH server or shell.
+    prefix = ['env'] if point['arm'] == 'cheribsd-default' else [
+        'env', '-i', 'PATH=/sbin:/bin:/usr/sbin:/usr/bin', 'HOME=/root', 'LC_ALL=C']
+    command = shlex.join(['timeout', str(timeout), *prefix,
+                          *[k+'='+str(v) for k, v in environment.items()], *point['argv']])
+    if point.get('stdin_file'):
+        path = point['stdin_file']
+        if not safe_tmp_path(path):
+            raise ValueError('stdin_file must be a staged /tmp path')
+        command += ' < ' + shlex.quote(path)
+    if point.get('run_as'):
+        user = point['run_as']
+        if user not in ('nobody',):
+            raise ValueError('unsupported guest user')
+        command = shlex.join(['su', '-m', user, '-c', command])
+    return command
+
+
+def safe_tmp_path(path):
+    if not isinstance(path, str):
+        return False
+    parts = PurePosixPath(path).parts
+    return len(parts) >= 3 and parts[:2] == ('/', 'tmp') and '..' not in path.split('/')
+
+
+def pg_rows(stdout):
+    rows = []
+    for line in stdout.splitlines():
+        line = re.sub(r'^(backend> )+', '', line)
+        if re.match(r'^\t( ?\d+: |----)', line):
+            rows.append(line.strip())
+    return rows
+
+
+def nested_samples(stderr):
+    return [dict((k, v if k == 'phase' else int(v))
+                 for k, v in (word.split('=', 1) for word in line.split()[1:]))
+            for line in stderr.splitlines() if line.startswith('MRB_GC_STUDY ')]
+
+
+def published_policy_valid(point, stderr):
+    boundary = point.get('nested_allocator')
+    prefix = {'mruby-gc': 'MRB_GC_STUDY ', 'ffmpeg-pool': 'FF2_POISONCAP '}.get(boundary)
+    if boundary == 'cpython-pymalloc':
+        reports = [dict(word.split('=', 1) for word in line.split()[1:])
+                   for line in stderr.splitlines() if line.startswith('PYM_POISONCAP ')]
+        if not point.get('nested_policy'):
+            return not any(row.get('policy') == '1' for row in reports)
+        if len(reports) != 1:
+            return False
+        try:
+            row = {k: int(v) for k, v in reports[0].items()}
+            return (row['policy'] == 1 and row['queue_capacity'] == 4096 and
+                    row['minimum_held'] == 16 << 20 and row['fraction_denominator'] == 4 and
+                    row['mode'] == point['mode'] and
+                    row['sweeps'] == row['capacity_sweeps'] + row['threshold_sweeps'] + row['teardown_sweeps'] and
+                    row['explicit_sweeps'] == row['pending_count'] == row['pending_bytes'] == 0 and
+                    row['poison_bytes'] == row['clear_bytes'] == row['zeroed_bytes'] and
+                    min(row.values()) >= 0 and row['queue_metadata_bytes'] > 0)
+        except (KeyError, ValueError):
+            return False
+    if boundary in ('postgres-memory-contexts', 'perl-sv-heads'):
+        # Their reports are validated in verdict().
+        return True
+    if prefix is None:
+        return not point.get('nested_policy')
+    reports = [dict(word.split('=', 1) for word in line.split()[1:])
+               for line in stderr.splitlines() if line.startswith(prefix)]
+    if not point.get('nested_policy'):
+        return not any(row.get('policy') == '1' for row in reports)
+    if not reports:
+        return False
+    try:
+        for row in reports:
+            if (int(row['policy']) != 1 or int(row['quarantine_limit']) != 4096 or
+                    int(row['minimum_held']) != 16 << 20):
+                return False
+            full, threshold, sweeps = (int(row[k]) for k in
+                                       ('full_drains', 'threshold_drains', 'sweeps'))
+            teardown = int(row['teardown_drains']) if boundary == 'ffmpeg-pool' else 0
+            if min(full, threshold, sweeps, teardown) < 0 or sweeps != full + threshold + teardown:
+                return False
+            if boundary == 'mruby-gc':
+                if not 0 <= int(row['quarantine']) <= int(row['peak_quarantine']) <= 4096:
+                    return False
+            elif (int(row['legacy_reuse_drains']) or
+                  not 0 <= int(row['qcount']) <= 4096 or
+                  not 0 <= int(row['quarantine']) <= int(row['held']) <= int(row['peak_held']) or
+                  not int(row['quarantine']) <= int(row['peak_quarantine']) <= int(row['peak_held'])):
+                return False
+    except (KeyError, ValueError):
+        return False
+    return True
+
+
+def perl_sv_heads_valid(point, stderr):
+    """One closing PERL_SV_HEADS report that matches the arm, the published
+    policy transfer and the reuse histogram, with nothing left quarantined."""
+    reports = [line for line in stderr.splitlines() if line.startswith('PERL_SV_HEADS ')]
+    if len(reports) != 1:
+        return False
+    try:
+        words = [word.split('=', 1) for word in reports[0].split()[1:]]
+        fields = dict(words)
+        if len(fields) != len(words) or fields.pop('platform') != 'cheribsd-poisoncap':
+            return False
+        row = {k: int(v) for k, v in fields.items()}
+        gap = parse_reuse_gap(stderr, 'PERL_REUSE_GAP')
+        mode = int(point['arm'] == 'poisoncap-temporal')
+        policy = point.get('nested_policy') is not None
+        return (row['mode'] == mode and row['policy'] == 1 and policy and
+                row['queue_limit'] == 4096 and row['minimum_held'] == 16 << 20 and
+                row['issues'] == gap['issues'] and row['releases'] == gap['releases'] and
+                row['issues'] == row['releases'] + row['live'] and
+                row['sweeps'] == row['full_drains'] + row['threshold_drains'] + row['teardown_drains'] and
+                row['queued'] == 0 and 0 <= row['peak_queued'] <= 4096 and
+                row['poison_bytes'] == row['clear_bytes'] == row['zero_bytes'] and
+                (row['sweeps'] > 0) == bool(mode) and
+                (mode or row['poison_bytes'] == 0) and
+                row['pages'] <= row['max_pages'] and min(row.values()) >= 0)
+    except (KeyError, ValueError):
+        return False
+
+
+def verdict(point, rc, stdout, stderr, stdout_raw=None):
+    if rc: return 'transport-error'
+    exits = re.findall(r'^EXP-GUEST-EXIT (\d+)$', stderr, re.M)
+    if len(exits) != 1: return 'missing-exit-evidence'
+    if int(exits[0]) != 0: return 'guest-error'
+    if 'expected_stdout_sha256' in point:
+        if stdout_raw is None or hashlib.sha256(stdout_raw).hexdigest() != point['expected_stdout_sha256'] or \
+                len(stdout_raw) != point['expected_stdout_bytes']:
+            return 'oracle-mismatch'
+    elif 'expected_stdout' in point:
+        if stdout != point['expected_stdout']:
+            return 'oracle-mismatch'
+    elif not point.get('expected_pg_rows_sha256'):
+        return 'missing-oracle'
+    if point.get('expected_pg_rows_sha256'):
+        rows = pg_rows(stdout)
+        if (len(rows) != 22 or 'count = "1500"' not in rows[-2] or
+                hashlib.sha256(('\n'.join(rows) + '\n').encode()).hexdigest()
+                != point['expected_pg_rows_sha256']):
+            return 'oracle-mismatch'
+    if point.get('application') == 'postgres':
+        if re.search(r'\b(ERROR|FATAL|PANIC):', stderr):
+            return 'oracle-mismatch'
+    else:
+        try:
+            memory = samples(stderr)
+            if [s['phase'] for s in memory] != point['expected_phases']: return 'missing-phases'
+            if not memory or any(s['heap_error'] or s['shadow_error'] or
+                                 s['revocation'] != point['revocation'] or
+                                 any(v < 0 for k, v in s.items() if k != 'phase') or
+                                 not (0 <= s['allocated'] <= s['active'] <= s['resident'])
+                                 for s in memory): return 'bad-metrics'
+        except (ValueError, KeyError): return 'bad-metrics'
+    if point.get('allocations') and not valid_allocations(stderr, point['expected_phases']):
+        return 'bad-allocation-metrics'
+    if point.get('reuse_gap'):
+        stream = stdout if point.get('reuse_gap_stream') == 'stdout' else stderr
+        try: parse_reuse_gap(stream, point['reuse_gap'])
+        except ValueError: return 'bad-reuse-gap'
+    if (point.get('nested_allocator') == 'postgres-memory-contexts' and
+            point.get('nested_policy')):
+        if re.findall(r'^PG_RUNTIME revocation=(\d+)$', stderr, re.M) != [str(point['revocation'])]:
+            return 'bad-runtime-policy'
+        try:
+            def pg_report(prefix):
+                lines = [re.sub(r'^(backend> )+', '', line) for line in stdout.splitlines()]
+                reports = [line for line in lines if line.startswith(prefix + ' ')]
+                if len(reports) != 1:
+                    raise ValueError('missing or duplicate PostgreSQL report')
+                return {k: int(v) for k, v in (part.split('=') for part in reports[0].split()[1:])}
+            policy = pg_report('PG_POISONCAP_POLICY')
+            state = pg_report('PG_POISONCAP')
+            meta = pg_report('PG_POISONCAP_METADATA')
+            if (policy['queue_capacity'], policy['min_held'], policy['fraction_denominator']) != (4096, 16 << 20, 4):
+                return 'bad-inner-policy'
+            if (state['mode'] != point['mode'] or state['tolerated_double_drops'] or
+                    state['managed_reset_sweeps'] or
+                    state['sweeps'] != policy['capacity_sweeps'] + policy['threshold_sweeps'] or
+                    not 0 <= meta['chunk_live'] <= meta['chunk_peak'] < meta['chunk_capacity']):
+                return 'bad-inner-metrics'
+        except (KeyError, ValueError):
+            return 'bad-inner-metrics'
+    if point.get('nested_allocator') == 'mruby-gc':
+        try:
+            inner = nested_samples(stderr)
+            mode = int(point['arm'] == 'poisoncap-temporal')
+            if [s['phase'] for s in inner] != point['expected_phases'] or \
+                    any(s['mode'] != mode or s['issues'] < s['releases'] or
+                        s['releases'] < s['reissues'] or s['gap15'] > s['reissues'] or
+                        s['slot_bytes'] <= 0 or s['metadata_bytes'] <= 0
+                        for s in inner):
+                return 'bad-inner-metrics'
+            gaps = [line for line in stderr.splitlines() if line.startswith('MRB_GC_GAPS ')]
+            if len(gaps) != 1:
+                return 'bad-inner-metrics'
+            bins = dict((k, int(v)) for k, v in (word.split('=', 1) for word in gaps[0].split()[1:]))
+            if set(bins) != {f'b{i}' for i in range(32)} or sum(bins.values()) != inner[-1]['reissues']:
+                return 'bad-inner-metrics'
+            if inner[-1]['sweeps'] < point.get('expected_min_sweeps', 0):
+                return 'bad-inner-metrics'
+        except (KeyError, ValueError):
+            return 'bad-inner-metrics'
+    if point.get('nested_allocator') == 'ffmpeg-pool':
+        mode = 2 if point['arm'] == 'poisoncap-temporal' else 0
+        if re.findall(r'^FFPOOL-POLICY mode=(\d+)\b', stderr, re.M) != [str(mode)]:
+            return 'bad-inner-metrics'
+        expected = [phase for phase in point['expected_phases']
+                    if phase.startswith(('before-', 'released-'))]
+        phases = re.findall(r'^FFPOOL-MEM phase=([a-z]+-\d+)\b', stderr, re.M)
+        if phases != expected:
+            return 'bad-inner-metrics'
+        totals = re.findall(r'^FF2-GAP-TOTAL issues=(\d+) reuses=(\d+) observer=(\d+)$',
+                            stderr, re.M)
+        pairs = re.findall(r'^FF2-GAP pair=(\d+) a=(\d+) b=(\d+)$', stderr, re.M)
+        if len(totals) != 1 or [int(row[0]) for row in pairs] != list(range(16)):
+            return 'bad-inner-metrics'
+        issues, reuses, observer = map(int, totals[0])
+        if not (issues > 0 and 0 <= reuses <= issues) or observer <= 0 or \
+                sum(int(a) + int(b) for _, a, b in pairs) != reuses:
+            return 'bad-inner-metrics'
+    if point.get('nested_allocator') == 'cpython-pymalloc':
+        mode = int(point['arm'] == 'poisoncap-temporal')
+        policy = re.findall(r'^PYM_INTERPRETER_POLICY mode=(\d+) payload_reservation=(\d+) metadata_reservation=(\d+)$', stderr, re.M)
+        report = re.findall(r'^PYM_POISONCAP mode=(\d+) sweeps=(\d+) poison_bytes=(\d+) clear_bytes=(\d+) ', stderr, re.M)
+        if len(policy) != 1 or len(report) != 1 or \
+                tuple(map(int, policy[0])) != (mode, 64 << 20, 16 << 20) or \
+                int(report[0][0]) != mode or \
+                (mode and (int(report[0][1]) == 0 or int(report[0][2]) == 0)):
+            return 'bad-inner-metrics'
+    if point.get('nested_allocator') == 'postgres-memory-contexts':
+        mode = int(point['arm'] == 'poisoncap-temporal')
+        report = re.findall(r'^PG_POISONCAP mode=(\d+) sweeps=(\d+) ', stdout, re.M)
+        if (len(report) != 1 or int(report[0][0]) != mode or
+                (mode and int(report[0][1]) == 0)):
+            return 'bad-inner-metrics'
+    if point.get('nested_allocator') == 'perl-sv-heads':
+        if not perl_sv_heads_valid(point, stderr):
+            return 'bad-inner-metrics'
+    if not published_policy_valid(point, stderr):
+        return 'bad-inner-policy'
+    return 'pass'
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--key', type=Path, help='Attach to an owned existing guest')
+    p.add_argument('--sdk', type=Path)
+    p.add_argument('--rootfs', type=Path)
+    p.add_argument('--disk', type=Path)
+    p.add_argument('--memory-mib', type=int, default=8192)
+    p.add_argument('--disable-default-revocation', action='store_true',
+                   help='Disable the guest-wide default at boot; arms still set their process policy')
+    p.add_argument('--port', type=int, required=True)
+    p.add_argument('--points', type=Path, required=True)
+    p.add_argument('--out', type=Path, required=True)
+    p.add_argument('--repeat', type=int, default=3)
+    p.add_argument('--timeout', type=int, default=120)
+    args = p.parse_args()
+    args.out.mkdir(parents=True, exist_ok=False)
+    if args.key:
+        execute(args)
+        return
+    if not all((args.sdk, args.rootfs, args.disk)):
+        p.error('supply --key to attach, or --sdk --rootfs --disk to boot')
+    common = Path(__file__).resolve().parents[2]/'ports/common/host/cheribsd'
+    sys.path.insert(0, str(common))
+    from guest import Guest
+    lock_path = Path(os.environ['CAPSTONE_QEMU_LOCK'])
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        vm = args.out/'vm'; vm.mkdir()
+        guest = Guest(args.sdk, args.rootfs, args.disk, vm, args.port,
+                      disable_default_revocation=args.disable_default_revocation)
+        guest.argv[guest.argv.index('-m')+1] = str(args.memory_mib)
+        (vm/'command.json').write_text(json.dumps(guest.argv)+'\n')
+        try:
+            guest.start()
+            args.key = vm/'guest-key'
+            execute(args)
+        finally:
+            guest.close()
+
+
+def execute(args):
+    points = json.loads(args.points.read_text())
+    if args.repeat < 1 or len({p['id'] for p in points}) != len(points):
+        raise ValueError('positive repeats and unique point ids required')
+    (args.out/'runner.py').write_bytes(Path(__file__).read_bytes())
+    (args.out/'points.json').write_bytes(args.points.read_bytes())
+    options = ['-i', str(args.key), '-o', 'IdentitiesOnly=yes', '-o',
+               'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null',
+               '-o', 'LogLevel=ERROR', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5']
+    ssh = ['ssh', *options, '-p', str(args.port), 'root@127.0.0.1']
+    def call(cmd, timeout=20):
+        return subprocess.check_output(ssh+[cmd], text=True, timeout=timeout).strip()
+    boot = call('sysctl -n kern.boottime')
+    platform = call('uname -a; sysctl security.cheri')
+    files = {}
+    for point in points:
+        policy_environment(point)
+    for point in points:
+        for host, guest in point['files'].items():
+            if guest in files and files[guest]['sha256'] != digest(host):
+                raise ValueError('conflicting guest input: '+guest)
+            files[guest] = dict(host=host, sha256=digest(host))
+    for guest, spec in files.items():
+        call('mkdir -p '+shlex.quote(str(Path(guest).parent)))
+        subprocess.run(['scp', '-O', *options, '-P', str(args.port), spec['host'],
+                        'root@127.0.0.1:'+guest], check=True, capture_output=True, timeout=120)
+        if call('sha256 -q '+shlex.quote(guest)) != spec['sha256']:
+            raise RuntimeError('staged input hash mismatch')
+    for point in points:
+        for command in point.get('guest_setup', []):
+            call(command, timeout=120)
+    guest_default = call('sysctl -n security.cheri.runtime_revocation_default')
+    if args.disable_default_revocation and guest_default != '0':
+        raise RuntimeError('guest default revocation was not disabled')
+    manifest = dict(boot=boot, platform=platform, files=files,
+                    guest_default_revocation=guest_default,
+                    process_environments={p['id']: policy_environment(p) for p in points},
+                    runner_sha256=digest(__file__), repeats=args.repeat,
+                    allocation_validator_sha256=digest(Path(__file__).with_name('allocation_metrics.py')),
+                    timing='QEMU host elapsed seconds: diagnostic only')
+    manifest['reuse_gap_validator_sha256'] = digest(Path(__file__).with_name('reuse_gap_metrics.py'))
+    (args.out/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
+    for point in points:
+        for repetition in range(args.repeat):
+            if call('sysctl -n kern.boottime') != boot:
+                raise RuntimeError('guest rebooted')
+            fresh = point.get('fresh_archive')
+            if fresh:
+                if (set(fresh) != {'archive', 'destination', 'owner'} or
+                        fresh['archive'] not in files or
+                        not safe_tmp_path(fresh['destination']) or
+                        fresh['owner'] not in ('nobody',)):
+                    raise ValueError('invalid fresh_archive declaration')
+                dest = shlex.quote(fresh['destination'])
+                archive = shlex.quote(fresh['archive'])
+                command = ('rm -rf -- ' + dest + ' && mkdir -p ' + dest +
+                           ' && tar -xzf ' + archive + ' -C ' + dest +
+                           ' && chown -R ' + fresh['owner'] + ':' + fresh['owner'] + ' ' + dest)
+                call(command, timeout=120)
+            directory = args.out/(point['id']+'-'+str(repetition))
+            directory.mkdir()
+            command = application_command(point, args.timeout)
+            command = 'ulimit -c 0; '+command+'; result=$?; printf "EXP-GUEST-EXIT %s\\n" "$result" >&2; exit 0'
+            (directory/'command.txt').write_text(command+'\n')
+            start = time.monotonic()
+            # Serial kernel panics and host timeouts abort this guest campaign.
+            # A process exit without these signals is checked by the oracle below.
+            process = subprocess.Popen(ssh+[command], stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+            deadline = time.monotonic() + args.timeout + 20
+            serial_path = args.key.parent/'serial.log'
+            failure = None
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    failure = 'host-timeout'
+                    break
+                try:
+                    stdout_raw, stderr_raw = process.communicate(timeout=min(2, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    panic = guest_panic(serial_path)
+                    if panic:
+                        failure = 'guest-panic'
+                        break
+            if not failure and guest_panic(serial_path):
+                failure = 'guest-panic'
+            if failure:
+                process.terminate()
+                try:
+                    stdout_raw, stderr_raw = process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    stdout_raw, stderr_raw = process.communicate()
+                (directory/'stdout').write_bytes(stdout_raw)
+                (directory/'stderr').write_bytes(stderr_raw)
+                record = dict(point=point, repetition=repetition, status=failure,
+                              host_seconds=time.monotonic()-start,
+                              diagnostic=guest_panic(serial_path) if failure == 'guest-panic' else None)
+                with (args.out/'runs.jsonl').open('a') as stream:
+                    stream.write(json.dumps(record)+'\n')
+                raise RuntimeError(failure + (': ' + record['diagnostic']
+                                              if record['diagnostic'] else ''))
+            (directory/'stdout').write_bytes(stdout_raw)
+            (directory/'stderr').write_bytes(stderr_raw)
+            stdout = stdout_raw.decode(errors='replace')
+            stderr = stderr_raw.decode(errors='replace')
+            status = verdict(point, process.returncode, stdout, stderr, stdout_raw)
+            try: memory = samples(stderr)
+            except (ValueError, KeyError): memory = []
+            record = dict(point=point, repetition=repetition, status=status,
+                          effective_environment=policy_environment(point),
+                          memory=memory, host_seconds=time.monotonic()-start,
+                          stdout_sha256=digest(directory/'stdout'),
+                          stderr_sha256=digest(directory/'stderr'))
+            try: record['allocations'] = allocation_samples(stderr)
+            except (ValueError, KeyError): record['allocations'] = []
+            try: record['inner_memory'] = nested_samples(stderr)
+            except (ValueError, KeyError): record['inner_memory'] = []
+            if point.get('reuse_gap'):
+                stream = stdout if point.get('reuse_gap_stream') == 'stdout' else stderr
+                try: record['reuse_gap'] = parse_reuse_gap(stream, point['reuse_gap'])
+                except ValueError as error: record['reuse_gap_error'] = str(error)
+            with (args.out/'runs.jsonl').open('a') as stream:
+                stream.write(json.dumps(record)+'\n')
+            print(point['id'], repetition, status, flush=True)
+            if status in ('transport-error', 'missing-exit-evidence'):
+                raise RuntimeError('lost guest control')
+
+
+if __name__ == '__main__':
+    main()

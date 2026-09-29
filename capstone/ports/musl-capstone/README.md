@@ -270,7 +270,38 @@ Measured 2026-09-17. Against the same tree without the C-48 compiler fix the sam
 31 PASS, 9 FAIL, 7 FAULT, 2 HUNG and 2 NOTRUN, and without the last two replacements below it
 reads 41 PASS and 2 FAULT.
 
-**What the reds are.** None of them is a capability fault any more.
+**Re-measured 2026-09-25: the table above no longer describes dev.**
+- **Setup:** dev `da4c9a59c16c`, clang `b7b31421e9fa` (a dev build without the C-46 fix
+  `5fbdfb139c7d`), musl rebuilt fresh with that compiler, libc-test `7b95dfa`, one test per boot.
+- **Counts:** 37 PASS, 6 FAIL, **6 FAULT**, 1 NOBOOT, 5 NOBUILD, 22 EXCLUDED. The NOBOOT is
+  `ungetc`, a boot-login stall and not a verdict.
+- **The six FAULTs** are fwscanf, memstream, setjmp, string, strtod_simple and tgmath. Each is
+  "cs.cjalr requires capability in rs1", cause 24: C-46, a call through a register whose value the
+  allocator's MOVC had moved away. `setjmp` moved from FAIL to FAULT.
+- **The shared rootfs was ext4-corrupt during the run.** Every boot showed the same two
+  `EXT4-fs error` lines, passing ones included, so the corruption does not single out these six.
+- **Logs:** `/tmp/capstone/libc-clean-0925/musl-libc-test/logs/20260925-043541/`.
+
+**After the C-46 and C-47 fixes, the same day** (merge `3979abd8e9a3`, which went into dev as
+`08e5f91945ef`; the compiler was built from `3979abd8e9a3`; musl rebuilt fresh; same libc-test,
+one test per boot):
+- **Counts:** 43 PASS, 7 FAIL, 2 FAULT, 3 NOBUILD, 22 EXCLUDED.
+- **The six:** fwscanf, memstream, string, strtod_simple and tgmath PASS. `setjmp` returns to its
+  FAIL, on the unserved `rt_sigprocmask` (the table below).
+- **The two FAULTs** are `tls_init` and `tls_local_exec`. C-47 now lets them build, and both halt in
+  `pthread_create.c`: a domain has no threads.
+- **NOBUILD falls from 5 to 3:**
+  - `tls_init_dso` meets C-47's new compile error ("thread-local variable 'tls' is initialized with
+    the address of a global or function");
+  - `tls_align` and `tls_align_dso` fail to link.
+- **The shared rootfs:** the same two EXT4 errors in every boot.
+- **Logs:** `/tmp/capstone/libc-after-0925/musl-libc-test/logs/20260925-061202/`.
+
+So the 2026-09-17 table's 43 PASS / 7 FAIL holds again after the fix. Its FAULT 0 has become 2,
+from two tests that did not build before.
+
+**What the reds were on 2026-09-17.** None of them was a capability fault then. On 2026-09-25 six
+are, see above.
 
 | test | what it is |
 |---|---|

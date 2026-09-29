@@ -1,0 +1,14 @@
+{
+  "scope": "Layout preview; complete SQLite churn runs only; selected allocator accounting",
+  "new_measurements": false,
+  "width_inches": 7.05,
+  "summary": "median and full range of three paired repetitions",
+  "input_sha256": {
+    "runs.json": "74e472d986e1dea6d6e26182752d6761f4a5b10ae78fa645a78bfaffdaf08166",
+    "oracles.json": "46550480e8f8daf5921e2ba867c6a1c46021c460f3e1eecd7323b293832e0889",
+    "unit-ledger.csv": "1ee179a3b8d1c3e0c8a11c49eef0f4c2c498b948d55012ec503ba7a11a685cb2",
+    "validation.json": "78b6d2871bb2d2838c38dd5521f23f6f1ea9ef0712309b47c4be564844947b17",
+    "metrics.json": "1c5d5339e00e49df2b4bd4708983ded7770df74797adfe203f11d3093ff256f4"
+  },
+  "plotter_sha256": "2c0eb4229f6bf25938279a00a9c0ad5308abbe021ed0c090734877fe6090aaba"
+}

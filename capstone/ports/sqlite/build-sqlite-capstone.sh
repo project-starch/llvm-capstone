@@ -41,33 +41,21 @@ done
 
 mkdir -p "$OUT_DIR" "$OBJ_DIR"
 
-# Capstone pointers are 128-bit capabilities. The current Clang constant
-# evaluator asserts on SQLite's traditional function-pointer sentinel
-# ((sqlite3_destructor_type)-1). Use a unique real function as the transient
-# sentinel instead; SQLite only compares this value by identity and never calls
-# it. Keep the official amalgamation immutable in the temporary source cache.
+# Keep the official amalgamation immutable in the temporary source cache; every rewrite below is
+# asserted after the sed, so one that stops matching fails the build instead of passing silently.
+#
+# Two rewrites were retired on 2026-09-24 because the compiler no longer needs them: the
+# SQLITE_TRANSIENT sentinel, replaced by a real function while clang's constant evaluator asserted on
+# ((sqlite3_destructor_type)-1), and memsys5's methods table, filled in at run time while the compiler
+# could not initialise that static table of function pointers. The sentinel was also the cause of gap 9:
+# it changed SQLITE_TRANSIENT inside sqlite3.c only, so a client compiled against sqlite3.h passed -1,
+# which the core stored as a destructor and later called. Measured as a matched pair with the workload
+# binding through SQLITE_TRANSIENT: run-sqlite-memory.sh halted with cause 24 on that xDel call with
+# the rewrite and passes without it. Nothing here depends on an unmerged compiler change: dev's clang
+# and dev + the open compiler PRs build byte-identical silicon domains (-O0, 3.22.0 and 3.53.3) with
+# or without either rewrite, and run-sqlite-memory.sh (-O1) passes without both on each of them.
 sed \
-  -e '/^#define SQLITE_TRANSIENT[[:space:]]/c\
-static void sqlite3CapstoneTransient(void *p) { (void)p; }\
-#define SQLITE_TRANSIENT sqlite3CapstoneTransient' \
   -e 's/sqlite3Atoi64(z, pResult, strlen(z), SQLITE_UTF8)/sqlite3Atoi64(zIn, pResult, strlen(zIn), SQLITE_UTF8)/' \
-  -e '/^SQLITE_PRIVATE const sqlite3_mem_methods \*sqlite3MemGetMemsys5(void){$/,/^}$/c\
-SQLITE_PRIVATE const sqlite3_mem_methods *sqlite3MemGetMemsys5(void){\
-  static sqlite3_mem_methods memsys5Methods;\
-  static int capstoneInitialized;\
-  if( !capstoneInitialized ){\
-    memsys5Methods.xMalloc = memsys5Malloc;\
-    memsys5Methods.xFree = memsys5Free;\
-    memsys5Methods.xRealloc = memsys5Realloc;\
-    memsys5Methods.xSize = memsys5Size;\
-    memsys5Methods.xRoundup = memsys5Roundup;\
-    memsys5Methods.xInit = memsys5Init;\
-    memsys5Methods.xShutdown = memsys5Shutdown;\
-    memsys5Methods.pAppData = 0;\
-    capstoneInitialized = 1;\
-  }\
-  return &memsys5Methods;\
-}' \
   -e 's/#if GCC_VERSION>=4007000 || __has_extension(c_atomic)/#if SQLITE_THREADSAFE \&\& (GCC_VERSION>=4007000 || __has_extension(c_atomic))/' \
   -e '0,/^#define YYDYNSTACK 1$/s//#define YYDYNSTACK 0/' \
   -e 's/^  char saveBuf\[PARSE_TAIL_SZ\];/  char saveBuf[PARSE_TAIL_SZ] __attribute__((aligned(16)));/' \
@@ -75,8 +63,6 @@ SQLITE_PRIVATE const sqlite3_mem_methods *sqlite3MemGetMemsys5(void){\
   -e 's/&pMem->z\[SZ_VDBECURSOR(nField)\]/\&pMem->z[(SZ_VDBECURSOR(nField)+15)\&~15]/' \
   "$SQLITE_SRC_DIR/sqlite3.c" > "$PATCHED_SQLITE"
 
-grep -q '^#define SQLITE_TRANSIENT sqlite3CapstoneTransient$' "$PATCHED_SQLITE"
-grep -q 'memsys5Methods.xInit = memsys5Init' "$PATCHED_SQLITE"
 grep -q 'sqlite3Atoi64(zIn, pResult, strlen(zIn), SQLITE_UTF8)' "$PATCHED_SQLITE"
 grep -q '#if SQLITE_THREADSAFE && (GCC_VERSION>=4007000 || __has_extension(c_atomic))' "$PATCHED_SQLITE"
 grep -q '^#define YYDYNSTACK 0$' "$PATCHED_SQLITE"
@@ -98,17 +84,24 @@ grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
 # the patch's own directory joins the include path too, for anything a program's port keeps
 # beside it. Both join only here, so the unprotected build never sees a Sublet file.
 #
-# TWO include ROOTS, because two conventions now coexist. This lane's code says
-# `#include "sublet.h"`; the collaborator's amalgamation patch says `#include <sublet/sublet.h>`.
-# Adding capstone/ as a root makes the angle form resolve to capstone/sublet/sublet.h without
-# moving the header or rewriting either caller. capstone/runtime/include carries the capability
-# headers the same change introduced.
+# TWO include ROOTS, because two conventions coexist. This lane's code says `#include "sublet.h"`
+# and means capstone/sublet/sublet.h (struct sublet_cap, 13 primitives as raw .insn); the
+# amalgamation patch says `#include <sublet/sublet.h>` and means capstone/runtime/include/sublet/
+# sublet.h (capstone_cap_slot, 7 primitives over <capstone/capability.h>). THESE ARE TWO DIFFERENT
+# HEADERS WITH INCOMPATIBLE TYPE NAMES, not one header reachable two ways.
+#
+# ORDER IS LOAD-BEARING: capstone/runtime/include MUST precede capstone/, because `-I capstone`
+# also resolves <sublet/sublet.h> -- to capstone/sublet/sublet.h, which has never contained
+# capstone_cap_slot. With the roots the other way round the Sublet build fails with "use of
+# undeclared identifier 'capstone_cap_slot'", which is what it did from the PR #48 merge
+# (06a31271f200, 2026-09-18) until this was restored. dac22bcaeca4 had it right with a single
+# root; the merge added two in front of it. Verify with `clang -H` if this is ever touched.
 SUBLET_FLAGS=()
 if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_SUBLET_PATCH"
-  SUBLET_FLAGS=(-I"$REPO_ROOT/capstone/sublet"
+  SUBLET_FLAGS=(-I"$REPO_ROOT/capstone/runtime/include"
+                -I"$REPO_ROOT/capstone/sublet"
                 -I"$REPO_ROOT/capstone"
-                -I"$REPO_ROOT/capstone/runtime/include"
                 -I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
 fi
 if [ -n "${SQLITE_HOOK_PATCH:-}" ]; then

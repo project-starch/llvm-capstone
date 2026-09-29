@@ -217,4 +217,8 @@ const struct sublet_stats *pg_subpool_primitives(void);
 #define PG_CHUNK_MAX 8192u
 #endif
 
+#ifdef PG_POISONCAP
+int pg_poisoncap_defer_reuse(unsigned index);
+#endif
+
 #endif

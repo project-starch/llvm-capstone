@@ -199,6 +199,38 @@ the domain received (0 = the start), so the domain keeps it as the handle's posi
 short buffer gets fewer of them and the next request resumes at the cookie. First consumer is
 musl's `readdir`, and behind it CPython's `os.listdir` and the directory cache of `import`.
 
+`HC_V0_OP_PATH_RENAME = 27` (added 2026-09-24). Request: `PATH_ACCESS`'s layout, the flags word
+(0) at payload offset 0 and the two paths behind it as `old NUL new`, `metadata.offset = 8`,
+`metadata.length` = `strlen(old) + 1 + strlen(new)`; neither path carries a terminating NUL of
+its own, the length bounds the second one. Response: `result = 0`; failure as in section 11
+(`ENOENT` for a missing source, `EISDIR`/`ENOTDIR`/`EXDEV` as `rename(2)` gives them). The
+helper calls `rename(old, new)`, so an existing destination is replaced atomically, which is
+what the consumer relies on: PostgreSQL's `durable_rename` writes `x.tmp` and renames it over
+`x`. musl reaches this through `renameat2` (the only rename syscall on this target); a nonzero
+`renameat2` flag is refused with `EINVAL` on the domain side, and the directory descriptors are
+accepted and not used, as `openat`'s is.
+
+`HC_V0_OP_PATH_MKDIR = 28` (added 2026-09-24). Request: `PATH_ACCESS`'s layout, the mode in the
+flags word at payload offset 0 (the low 12 bits of `mkdirat`'s mode), the path at
+`metadata.offset = 8`, `metadata.length = strlen(path)`. Response: `result = 0`; failure as in
+section 11 (`EEXIST`, `ENOENT` for a missing parent, as `mkdir(2)` gives them). Its counterpart is
+not a new opcode: `PATH_DELETE` now reads its flags word, and `HC_PATH_DELETE_FLAG_DIRECTORY = 1`
+makes the helper call `rmdir(2)` instead of `unlink(2)` (`ENOTEMPTY`, `ENOTDIR`; without the flag a
+directory answers `EISDIR`). musl reaches the pair through `mkdirat` and `unlinkat(...,
+AT_REMOVEDIR)`. First consumer is PostgreSQL's `CREATE DATABASE`, which makes `base/<oid>` under
+its data directory.
+
+`HC_V0_OP_PATH_READLINK = 29` (added 2026-09-24). Request: `PATH_ACCESS`'s layout with a zero
+flags word, the path at `metadata.offset = 8`, `metadata.length = strlen(path)`. Response: the
+link's target at payload offset 0, `metadata.offset = 0`, `metadata.length = result = ` its length
+in bytes, no terminator, as `readlink(2)` returns it; failure as in section 11 (`EINVAL` for a name
+that is not a symbolic link, `ENOENT`). The helper calls `readlink(path, payload, 4096)`, so any
+target Linux can return fits. The domain copies at most the caller's `bufsiz` bytes and returns
+the count copied. musl reaches this through `readlinkat`; its `realpath()` calls `readlink` on
+every component of the path it resolves and takes `EINVAL` as "not a link", which is why the
+opcode exists: PostgreSQL's `find_my_exec` resolves `argv[0]` through `realpath` before the
+backend does anything else.
+
 ## 5. Region contract
 
 ## 5a. Metadata region

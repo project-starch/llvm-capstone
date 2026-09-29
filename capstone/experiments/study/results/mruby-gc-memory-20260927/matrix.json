@@ -1,0 +1,10 @@
+{
+  "mruby-poisoncap-ao/bm_ao_render.rb": {
+    "width8": {
+      "width": 8
+    },
+    "width16": {
+      "width": 16
+    }
+  }
+}

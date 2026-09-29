@@ -1,0 +1,41 @@
+Subject: [PATCH 0003] Size the obmalloc radix tree by address bits
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Depends-On: cpython-3.13.7-0001-address-width.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Include/internal/pycore_obmalloc.h sets POINTER_BITS, the number of address
+bits the arena radix tree indexes, from SIZEOF_VOID_P and stops with #error
+"obmalloc radix tree requires 64-bit or 32-bit pointers" otherwise. The tree
+indexes addresses, so the width is the address width: 64 on capstone64. This
+is the same decision the pymalloc component port made
+(ports/cpython/pymalloc/patches/cpython-3.13.7-0002, "The radix tree indexes 64
+address bits even when capabilities occupy 16 bytes").
+
+The header's two other SIZEOF_VOID_P tests are left alone on purpose: ALIGNMENT
+16 is the alignment a capability needs, and large pools and arenas are the
+64-bit configuration the pymalloc port measured. Every core file includes this
+header: 156 of the third survey's 206 failures.
+
+--- a/Include/internal/pycore_obmalloc.h
++++ b/Include/internal/pycore_obmalloc.h
+@@ -537,7 +537,7 @@
+ 
+ */
+ 
+-#if SIZEOF_VOID_P == 8
++#if _Py_SIZEOF_ADDRESS == 8
+ 
+ /* number of bits in a pointer */
+ #define POINTER_BITS 64
+@@ -556,7 +556,7 @@
+ /* use the top and mid layers of the radix tree */
+ #define USE_INTERIOR_NODES
+ 
+-#elif SIZEOF_VOID_P == 4
++#elif _Py_SIZEOF_ADDRESS == 4
+ 
+ #define POINTER_BITS 32
+ #define IGNORE_BITS 0

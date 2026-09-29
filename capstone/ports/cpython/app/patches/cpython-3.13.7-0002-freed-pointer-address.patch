@@ -1,0 +1,34 @@
+Subject: [PATCH 0002] Compare a pointer's address with the fill bytes at address width
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Depends-On: cpython-3.13.7-0001-address-width.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+_PyMem_IsPtrFreed (Include/internal/pycore_pymem.h) converts a pointer to
+uintptr_t and compares the value with 0xCDCD..., 0xDDDD... and 0xFDFD...,
+choosing the pattern width by SIZEOF_VOID_P and stopping with #error "unknown
+pointer size" otherwise. The value compared IS the address -- the conversion
+yields nothing else -- so the pattern width is the address width. A 16-byte
+capability slot filled with 0xDD reads back with the address 0xDDDDDDDDDDDDDDDD,
+which is the 8-byte arm. Every core file includes this header: 159 of the
+second survey's 206 failures.
+
+--- a/Include/internal/pycore_pymem.h
++++ b/Include/internal/pycore_pymem.h
+@@ -89,12 +89,12 @@
+ static inline int _PyMem_IsPtrFreed(const void *ptr)
+ {
+     uintptr_t value = (uintptr_t)ptr;
+-#if SIZEOF_VOID_P == 8
++#if _Py_SIZEOF_ADDRESS == 8
+     return (value == 0
+             || value == (uintptr_t)0xCDCDCDCDCDCDCDCD
+             || value == (uintptr_t)0xDDDDDDDDDDDDDDDD
+             || value == (uintptr_t)0xFDFDFDFDFDFDFDFD);
+-#elif SIZEOF_VOID_P == 4
++#elif _Py_SIZEOF_ADDRESS == 4
+     return (value == 0
+             || value == (uintptr_t)0xCDCDCDCD
+             || value == (uintptr_t)0xDDDDDDDD

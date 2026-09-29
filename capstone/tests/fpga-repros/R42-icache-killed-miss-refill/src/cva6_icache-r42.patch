@@ -1,0 +1,58 @@
+# R-42 fix: capstone-ariane 6cbdaeeb4 (branch r42-icache-killed-miss) against its parent 4ad0df694.
+# Apply in capstone-ariane with: git apply <this file>
+diff --git a/core/cache_subsystem/cva6_icache.sv b/core/cache_subsystem/cva6_icache.sv
+index d97fed369..69c1cd714 100644
+--- a/core/cache_subsystem/cva6_icache.sv
++++ b/core/cache_subsystem/cva6_icache.sv
+@@ -292,7 +292,51 @@ module cva6_icache
+             end
+             // we have a miss / NC transaction
+           end else if (dreq_i.kill_s2) begin
++            // R-42: a KILLED miss accepts the redirected request in THIS cycle, as a hit does.
++            //
++            // Before this, the killed miss spent one cycle going through IDLE before the next request was
++            // accepted, while a HIT (above) accepts it immediately. A loop whose taken backward branch is
++            // the last word of its 16-byte line fetches PC+4 into a line it never executes; that fetch
++            // misses, the predicted-taken redirect kills it, and the detour costs +1 cycle on EVERY
++            // iteration -- measured 7.009 vs 6.008 cycles/iteration on a 5-instruction loop.
++            //
++            // The killed miss is still ABANDONED. There is no refill and no wrong-path fetch. That is a
++            // deliberate choice over refilling it: the killed fetch is the fall-through, which the loop
++            // never executes, so completing its refill would be a wrong-path prefetch -- blocking the
++            // cache for a miss latency and possibly evicting useful lines.
++            //
++            // Skipping IDLE loses nothing: READ already sets cmp_en_d and cache_rden above,
++            // unconditionally, and catches a pending flush first. The one IDLE-only duty is the
++            // cache-ENABLE transition; with the cache disabled nothing hits, so right-path fetches go
++            // MISS -> IDLE and still process it.
++            //
++            // THE kill_s1 GUARD CARRIES THE CORRECTNESS. In a kill_s1 cycle the frontend presents a stale
++            // fetch address (a mispredict's target goes only to npc_d), so that request must not be
++            // taken; it waits in IDLE for translation, exactly as the hit path does. An audit mutant
++            // without this guard delivered the wrong instruction stream on 200 of 200 seeds.
++            //
++            // !inv_q and !mem_rtrn_vld_i mirror the hit path's accept. On this target neither can fire
++            // here, for two DIFFERENT reasons: inv_q because the AXI adapter never generates invalidations
++            // (wt_axi_adapter.sv returns only ICACHE_IFILL_ACK); mem_rtrn_vld_i because fill acks DO arrive,
++            // but only in MISS/KILL_MISS -- the FSM has at most one fill outstanding and leaves those states
++            // only on its ack, so none can be in flight while in READ. They are kept for parity with the hit
++            // path and with configurations that do invalidate.
++            //
++            // NO COMBINATIONAL LOOP: dreq_o.ready now depends on kill_s2 = kill_s1 | bp_valid, computed in
++            // the frontend. A bit-level trace found that the frontend reads icache ready only into if_ready,
++            // which selects npc_d, a register input, and that none of kill_s2's inputs can see ready in the
++            // same cycle. Lint CANNOT confirm this -- the baseline already carries a struct-level loop between
++            // these two modules -- so it has to be checked in synthesis.
+             state_d = IDLE;
++            if (!inv_q && !mem_rtrn_vld_i) begin
++              dreq_o.ready = 1'b1;
++              if (dreq_i.req) begin
++                state_d = READ;
++              end
++            end
++            if (dreq_i.kill_s1) begin
++              state_d = IDLE;
++            end
+           end else if (!inv_q) begin
+             cmp_en_d = 1'b0;
+             // only count this as a miss if the cache is enabled, and
