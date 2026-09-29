@@ -585,7 +585,7 @@ survive slot reassignment into another application's descriptor.
   own revocation handle, which `csshrinkto` and `cstighten` alone do not provide. The loan is
   write-only, but capstone-qemu checks tag, revocation and bounds on a data access and no
   permission (`op_helper.c` `_helper_access_with_cap`), so on this platform its authority is its
-  64 bytes: A2 reads through it without a fault.
+  64 bytes: A2 reads through it without a fault (ISSUES Q-14).
 - **Loan lifetime.** A loan covers one logical call, including every preemption and resume of it:
   a resume restores the callee's snapshot with the old descriptor capability and delivers no new
   one, so a revoke at a preemption escape would break a regular continuation. The loan is revoked
