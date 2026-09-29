@@ -199,6 +199,39 @@ assumption it corrects and why the replacement is right; all six leave every pla
 
 None of them makes a pointer↔integer ROUND TRIP safe; the census above is where those are.
 
+## Signals, 2026-09-29
+
+On `delegation-signals` the interpreter's `signal` module works against the
+delegated runtime; the record is [results/signals-2026-09-29.json](results/signals-2026-09-29.json).
+
+- [host/signals-smoke.py](host/signals-smoke.py) passes 18/18 in the guest: a
+  handler with `os.kill` on the process itself and `raise_signal`; `alarm` and
+  `setitimer` against `time.sleep`, with the sleep resumed (PEP 475) or the
+  handler's exception propagated out of `sleep` and out of a blocking `read`;
+  `set_wakeup_fd`; `pthread_sigmask`, `sigpending` and delivery on unblock;
+  `sigtimedwait` for `SIGCHLD` with `si_pid` and `si_status`; a child that
+  signals its waiting parent; `SIG_IGN` inheritance and `setsigdef` through
+  `os.posix_spawnp`; `signal.pause`; `faulthandler.enable`; `KeyboardInterrupt`
+  from `SIGINT`. One check documents the deviation: a loop that makes no libc
+  call runs the handler only at the next call, while a loop that polls
+  `time.monotonic()` is interrupted, because every entry into the dispatcher
+  checks the recorded-sequence hint.
+- `python -m unittest test.test_signal`: 25 pass, 0 fail, 13 skipped, 19 errors,
+  every error an unserved `clone` (16, through `subprocess`), `socket` (2) or a
+  thread start (1). `test.test_faulthandler`: 2 pass, 35 errors, all
+  `subprocess`, 9 skipped.
+- Not signals: `subprocess.Popen` runs `_posixsubprocess.fork_exec`, which
+  needs `clone`. The port patch that routes it through `posix_spawn` (the
+  plan's CPython item) is what unlocks the remaining tests; `epoll_create1` is
+  unserved as well.
+
+To run the suite: `PYTHONHOME` on the share holds `lib/python3.13` copied from
+the source `Lib/` (the `test` package included, an empty `lib-dynload`) plus
+`_sysconfigdata__linux_.py`, the native riscv64 build's
+`_sysconfigdata__linux_riscv64-linux-gnu.py` under the name this build looks
+for, since its `sys.implementation._multiarch` is empty. `test.support` needs
+it for `sysconfig.get_config_var`.
+
 ## What this does not establish
 
 * **A complete link.** 29 objects are still absent, so the link above is of what compiles.
