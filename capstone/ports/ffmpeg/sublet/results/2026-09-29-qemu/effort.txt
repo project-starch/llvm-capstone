@@ -1,0 +1,56 @@
+# capstone/tests/port-effort.py over each patch and its .classes (exit 0 for both), then the count
+# under the wider scope that also counts the level below the patches call.
+
+## ffmpeg-9.0.1-0001-avbufferpool-on-sublet.patch
+class       level           +code +comment   +blank    -code -comment   -blank
+hierarchy   allocator          52       11        2        0        0        0
+metadata    allocator           6        2        2        0        0        0
+TOTAL                          58       13        4        0        0        0
+code lines net: +58
+application code, which the claim says is zero: +0/-0
+metadata layout is 10% of the added code, NOT the largest: hierarchy annotation is 89%, which refutes it
+rc=0
+
+## ffmpeg-9.0.1-0002-refstruct-on-sublet.patch
+class       level           +code +comment   +blank    -code -comment   -blank
+hierarchy   allocator          46        7        0        0        0        0
+metadata    allocator          84       14       11        0        0        0
+TOTAL                         130       21       11        0        0        0
+code lines net: +130
+application code, which the claim says is zero: +0/-0
+metadata layout is 64% of the added code, the largest class, as the hypothesis says
+rc=0
+
+## Both scopes, added code lines
+
+| scope | hierarchy | metadata | metadata share | H4 (metadata largest) |
+|---|---|---|---|---|
+| 0001, patch only | 52 | 6 | 10% | refuted, as A3 predicted |
+| 0002, patch only | 46 | 84 | 64% | holds, as B3 predicted |
+| 0001+0002, patch only | 98 | 90 | 48% | refuted |
+| 0001+0002 + ffsublet.c (93) + ffsublet.h (24), v1's files, as hierarchy | 215 | 90 | 30% | refuted |
+| 0001+0002 + ffsublet.c (110) + ffsublet.h (26), v2's files, as hierarchy | 234 | 90 | 28% | refuted |
+
+ffsublet.c and ffsublet.h serve both phases (0002 added only ff_sublet_addr to the header), so the
+wider scope is given for the pair, not per phase. Counted by port-effort.py's own comment rule.
+The heap's linear lend (musl-capstone/runtime/sublet_heap.c, +77/-26 against dev) is the level
+below both this port and any other that borrows linear blocks from the heap, and is in neither
+column.
+
+## v2 (e258f12ff365): the counts are unchanged, 0001 52/6 and 0002 46/84
+code lines net: +58
+  rc=0
+code lines net: +130
+  rc=0
+
+## Without #if/#else/#endif guard lines (the audit: 60 of the 188 patch code lines are guards; SQLite's patch has 2)
+0001-avbufferpool:
+  hierarchy  code   52  guards  16  without guards   36
+  metadata   code    6  guards   4  without guards    2
+  total      code   58  guards  20  without guards   38; metadata share 10% with guards, 5% without
+0002-refstruct:
+  hierarchy  code   46  guards  19  without guards   27
+  metadata   code   84  guards  21  without guards   63
+  total      code  130  guards  40  without guards   90; metadata share 64% with guards, 70% without
+A3 (0001 mostly hierarchy) and B3 (0002 metadata-dominated) hold without the guards too. The unregistered
+pair row (98/90 with guards) becomes 63/65 without them, so that row is not comparable across ports.

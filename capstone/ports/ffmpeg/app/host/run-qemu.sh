@@ -118,7 +118,8 @@ PYB
 REGION_MB=0
 if [ "${FFAPP_HEAP:-level0}" = sublet ]; then
   REGION_MB=4
-  [ -n "${FFAPP_POOL:-}" ] && REGION_MB=8
+  # a pool arm 0|2 has a payload region too; the Sublet port (sublet) takes its pools from the heap
+  case ${FFAPP_POOL:-} in 0|2) REGION_MB=8 ;; esac
 fi
 CMA=$(( (${#SECTIONS[@]} + 1) * (BLOCK_MB * 2 + REGION_MB) ))
 # 1792M is the largest reservation measured to boot (tshark, 2026-09-24). Beyond it the reservation

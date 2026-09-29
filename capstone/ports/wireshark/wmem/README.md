@@ -67,9 +67,11 @@ Carving a chunk takes its range away from any authority over the whole block,
 and upstream keeps its chunk headers and free-list links in exactly those
 ranges (`WMEM_GET_FREE` is `WMEM_CHUNK_TO_DATA`). So they move beside the
 block, into records with upstream's field names, found by address through an
-index. The header bytes stay reserved in the block, so every address handed
-out is the one upstream hands out, and the native replay still matches
-unmodified upstream byte for byte, regions and peak included.
+index. The header bytes stay reserved in the block, so a block's layout is
+upstream's, and the native replay still matches unmodified upstream, regions
+and peak included. Placement is not the same once upstream would have merged
+two free chunks and the port does not: no run compares addresses, and the
+replay's checksum, being a function of the trace, cannot see them.
 
 Given up, because the discipline forbids it: free chunks never rejoin. A join
 needs a handle taken before the split that separated them, and for an

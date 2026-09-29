@@ -130,7 +130,13 @@ echo WM_SECURITY_DONE
             run, "sh /mnt/host/run.sh", "WM_SECURITY_DONE", env=env, timeout_multiplier=1
         )
         serial_path = run / "serial.log"
-        serial = serial_path.read_text(errors="replace") if serial_path.exists() else ""
+        if not serial_path.exists() and result.returncode == 75:
+            # The shared QEMU lock's wait expired (run_guest's flock -E 75): no guest ran, so no
+            # data and no verdict. Any other launch failure without a serial log -- a missing tool,
+            # an image the launcher refuses -- falls through and is recorded as a FAIL.
+            print(f"INFRA mode={mode} case={case}: QEMU lock wait expired, no guest ran", flush=True)
+            raise SystemExit(75)
+        serial = serial_path.read_text(errors="replace")
         stage = f"Print = Scalar(0x{0xCF15000000000000 | case:x})"
         following = serial.split(stage, 1)[-1] if stage in serial else ""
         faults = re.findall(

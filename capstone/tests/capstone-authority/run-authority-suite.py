@@ -170,6 +170,12 @@ def main():
         str(qemu_bin), "-nographic", "-machine", "virt", "-m", "256M", "-smp", "1",
         "-bios", str(fw_jump), "-kernel", str(kernel),
         "-append", "root=/dev/vda rw console=ttyS0 earlycon=sbi",
+        # -snapshot: the guest's writes go to a throwaway overlay, never to the SHARED rootfs.ext2.
+        # Without it every boot mounted that image read-write, and a trapping domain aborts QEMU
+        # (see boot_and_run_one), so the image was left dirty after nearly every run; other lanes'
+        # guests then read an image that was being written, and logged EXT4-fs errors
+        # (2026-09-24, 2026-09-29). run-domain-smoke.py has always booted this way.
+        "-snapshot",
         "-drive", f"file={rootfs},format=raw,id=hd0",
         "-device", "virtio-blk-device,drive=hd0",
         "-virtfs", f"local,path={share_dir},mount_tag=hostshare,security_model=none,id=hostshare",

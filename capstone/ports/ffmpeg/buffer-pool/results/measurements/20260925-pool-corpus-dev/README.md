@@ -60,7 +60,9 @@ fix and not with it.
    their own assertion instead of completing.
 4. **All pool temporal bugs.** The corpus was narrowed to the three this mechanism covers. The fourth
    pool-backed temporal specimen found by the triage (vp9, a refstruct pool) has no domain arm, and
-   is a predicted miss.
+   is a predicted miss. (Correction, 2026-09-29: vp9's own fix calls it a heap out-of-bounds access,
+   and its references keep the memory live, so it is not a temporal specimen. See
+   `docs/ref/ffmpeg-pool-consumer-defects.md`, "vp9, read against the Sublet pool port".)
 5. **Repeatability.** One boot per cell today. The September 19–20 runs recorded the same outcomes in
    prose only.
 

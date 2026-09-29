@@ -127,9 +127,38 @@ return, and a teardown that today frees entries one at a time:
 - `libavutil/refstruct.c`: `refstruct_pool_get_ext` / `pool_return_entry` / `pool_free_entry` +
   `pool_free`.
 
-FFmpeg's pools grow one entry at a time rather than taking one fixed block, so the pool's senior
-handle must be taken **before its first entry**, and every entry carved below it — otherwise the
-one-revoke teardown does not hold. That handle lifecycle is the first thing to build.
+### The one design decision, and the deviation it forces
+
+SQLite's lookaside gets **one** block from memsys5 and carves its slots from it, so one revoke
+destroys the pool. FFmpeg's pools instead grow **one entry at a time**: `pool_alloc_buffer` runs
+whenever the freelist is empty, with no bound. That difference has to be resolved explicitly,
+because the one-revoke property is the whole point of the hierarchy.
+
+Three levels, and where each handle lives:
+
+```
+heap block            sh_cap[i]        the heap's senior handle  (__capstone_sublet_free_linear)
+  └─ pool chunk       pool->handle     the POOL's senior handle, taken on the LINEAR region
+       └─ entries     carved with sublet_split + sublet_take
+```
+
+The pool takes its handle with `sublet_handle` on the linear region it receives, **before carving
+the first entry**; teardown is then `sublet_give_to(&pool->handle, &region)` — one revoke, every
+entry in that chunk dies — followed by `__capstone_sublet_free_linear(base)` to give the block back
+to the heap.
+
+**The deviation, stated rather than implied: the pool allocates in CHUNKS of several entries, not
+one entry per `pool_alloc_buffer`.** Per-entry blocks cannot give one-revoke teardown, because each
+block's senior handle belongs to the heap rather than to the pool; the pool would then need one
+revoke per entry, which is a `free` loop and not a hierarchy. Chunking changes *when* the level
+below is called, and leaves the pool's own policy — its LIFO freelist, and which buffer a `get`
+hands back — untouched. It is the same shape lookaside has, and it is the only part of the port
+that is not a transcription. The measured workload holds ~43 live blocks per 30-frame decode, so a
+small chunk covers it in a handful of allocations.
+
+The alternative considered and rejected: give the POOL the heap's handle (a `malloc_linear` variant
+that transfers it). That makes one revoke work per entry, but the heap can then no longer reclaim
+or merge the block, which breaks the buddy allocator underneath — a worse trade than chunking.
 
 ## Verification, per defect
 
@@ -152,3 +181,19 @@ predicted per arm before the first boot — an exhausted pool mid-decode reads e
 Standing caveats on every result: QEMU only (**Q-11** — the deployed silicon lets a stale access
 retire); M6 and the one-translation-unit `gp`-captable question are untouched; **I-12** guest
 stalls are live.
+
+## Track B outcome (2026-09-29)
+
+| defect | status | where |
+|---|---|---|
+| af_join | **run as FFmpeg's real code**, 12 of 12 as registered: the Sublet port of the pools faults at the stale read, and stock pools read the reissued buffer | `ports/ffmpeg/app/results/2026-09-29-trackb-afjoin/` |
+| vidstab | **run as FFmpeg's and libvidstab's real code**, 12 of 12 as registered: the port faults inside libvidstab's stale copy, and stock pools let it overwrite a live frame | `ports/ffmpeg/app/results/2026-09-29-trackb-vidstab/` |
+| h264_refs | **not run.** Its gate above was not passed, because no malformed stream was produced. Probe case 37 remains its reduction | — |
+| vp9 | **documented, not run.** Its own fix calls it a heap out-of-bounds access on live memory, not a temporal one, and it needs frame threading, which this port does not build | `docs/ref/ffmpeg-pool-consumer-defects.md`, "vp9, read against the Sublet pool port" |
+
+Found on the way and fixed, each with its own record:
+
+- **C-69**, the compiler lowering an under-aligned capability access to integer bytes. App patch
+  0004 is the workaround.
+- The Sublet heap's `malloc(0)`.
+- libavfilter's frame pool rebuilding plane pointers from integers, closed by app patch 0005.

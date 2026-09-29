@@ -1,0 +1,40 @@
+# One line per hunk, per the rule in capstone/tests/port-effort.py: file:new_start, class, level,
+# and why. Classes are hierarchy, metadata, workaround; levels are allocator, application. The rule
+# was fixed before the first ported line, in PREREGISTRATION.md.
+#
+# The split. Upstream keeps a refstruct object's RefCount in the object's own allocation, just below
+# the user's pointer, and a pool's freelist link in that header (ref->opaque.nc). Both leave: every
+# hunk that moves the header out, finds it again by address, or frees the header and the object as
+# two allocations is metadata. Everything that takes a block, carves, takes, gives or revokes is
+# hierarchy, as in 0001.
+#
+# Mixed hunks, and which way they were resolved. Three hunks carry lines of both kinds, and a hunk
+# takes ONE class. Each is classed by what it is for, following 0001's precedent for the same shape,
+# and each resolution goes AGAINST the phase's prediction (B3: metadata > hierarchy), so the split
+# cannot have been tilted toward it:
+#   318  pool_free and pool_free_entry: the block revokes, and an entry's end without a give
+#        (v2), plus rs_free_plain and rs_index_del, 2 metadata lines     -> hierarchy
+#   399  a new entry: carve and take, plus the header's allocation and index entry (0001's buffer.c:388,
+#        which also allocates the entry's record, is hierarchy)          -> hierarchy
+#   429  a failed init: the give, plus rs_index_del, 1 metadata line     -> hierarchy
+#
+# SCOPE. The count covers the patch only, as every port's .classes does. The Sublet calls themselves
+# (sublet_carve/take/give, the heap's linear lend and free) live in the app port's
+# src/capstone-domain/ffsublet.c and the interface in sublet/ffsublet.h, which are outside the patch.
+# The results report the count with that file added as hierarchy as well, because the choice moves
+# the split (the wmem port's audit, 2026-09-29, showed the same choice flipping its H4 outcome).
+#
+# No hunk is a workaround. No hunk is at the application level: every line is inside libavutil's
+# refstruct implementation.
+
+libavutil/refstruct.c:21    hierarchy   allocator   the level below's interface arrives
+libavutil/refstruct.c:68    metadata    allocator   the header leaves the object: its fields for the object, its key and the index chain; the address index; the lookup that reads the pointer through its own authority first; a plain object's end frees both
+libavutil/refstruct.c:194   metadata    allocator   a plain object is two allocations: the header beside it, the object alone and bounded to its size
+libavutil/refstruct.c:307   metadata    allocator   the pool holds the list of blocks it took from the heap
+libavutil/refstruct.c:318   hierarchy   allocator   the pool's end is one revoke per block, and an entry is not given back one by one: a callback gets an alias through a dropped handle (mixed: 2 metadata lines, see header)
+libavutil/refstruct.c:351   hierarchy   allocator   an entry's return is a revoke, before the freelist can reissue or free it
+libavutil/refstruct.c:387   hierarchy   allocator   a reissue is a take: a new handle, a new alias
+libavutil/refstruct.c:400   hierarchy   allocator   a new entry is carved from the pool's block and handed out under its own handle, zeroed as upstream zeroes it (mixed: see header)
+libavutil/refstruct.c:430   hierarchy   allocator   a failed init gives the entry back; its storage stays in the block until the pool's end (mixed: 1 metadata line)
+libavutil/refstruct.c:509   hierarchy   allocator   the pool takes its entry size for the blocks it will carve
+libavutil/refstruct.c:538   metadata    allocator   a pool that cannot be set up is freed as a plain object: header and object both

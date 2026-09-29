@@ -21,7 +21,7 @@ for d in sorted(a.corpus.glob("[0-9][0-9]_*")):
     c = json.loads((d / "case.json").read_text())
     cases[c["case"]] = c
 a.results.mkdir(parents=True, exist_ok=False)
-columns = "case fix name shape mode expected passed cause pc expected_pc site delivered completed runner_exit".split()
+columns = "case fix name shape mode oracle_arm expected passed cause pc expected_pc site delivered completed runner_exit".split()
 lines = ["\t".join(columns)]
 images, tools = {}, {}
 for r in sorted(verdicts, key=lambda r: (r["case"], r["mode"])):
