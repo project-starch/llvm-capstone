@@ -75,13 +75,24 @@
 // open decision (docs/plans/2026-09-24-scc-cincoffset-untagged.md). Until it is
 // taken, a round trip is rebuilt only where the source CERTAINLY HOLDS a
 // capability -- an alloca, a global, a pointer past a null test, or one kept in
-// a stack slot that holds only those -- or where the rewrite adds no offset at
-// all, `(T *)(uintptr_t)p` being p itself. This is the question C-19 asks before
+// a stack slot that holds only those, and never an integer cast to a pointer,
+// however non-zero -- or where the rewrite adds no offset at all,
+// `(T *)(uintptr_t)p` being p itself. This is the question C-19 asks before
 // speculating a GEP on a capability, answered for this target rather than by
 // isKnownNonZero alone; see holdsCapability().
-// What stays: a source that is non-null but UNTAGGED still moves its trap from
-// the first use to the cast. Nothing in the IR tells a tagged capability from an
-// untagged one, and only a runtime tag test could, at a branch per round trip.
+// What stays: a source that is non-null but UNTAGGED, and whose origin is out of
+// sight here (an argument, a load from memory, a call), still moves its trap
+// from the first use to the cast. Nothing in the IR tells a tagged capability
+// from an untagged one, and only a runtime tag test could, at a branch per round
+// trip.
+//
+// The rewrite also adds a USE of the source, and a use is not free for every
+// capability. `cincoffset` with rd != rs1 nulls a LINEAR rs1, so a round trip
+// rebuilt on a LINEAR value that the program goes on using would leave that use
+// reading null. Under the linearity contract (docs/plans/
+// compiler-validation-plan.md, 4.1) only a value a capability builtin produced
+// can be LINEAR in a register; such a value is never a source. See
+// mayBeLinear().
 //
 //===----------------------------------------------------------------------===//
 
@@ -97,6 +108,7 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/IntrinsicsCapstone.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/ReplaceConstant.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -133,6 +145,31 @@ public:
 
 // The capability address space: pointers there are capabilities.
 constexpr unsigned CapAS = 200;
+
+// The stores of the local slot LI reads, when every access to it is visible:
+// the slot is only ever loaded from and stored to by address, with simple
+// accesses of LI's type. At -O0 every local variable is such a slot. False when
+// the slot may be written some other way, or LI does not read a slot at all.
+static bool slotStores(LoadInst *LI, SmallVectorImpl<StoreInst *> &Stores) {
+  auto *A = dyn_cast<AllocaInst>(LI->getPointerOperand());
+  if (!A || !LI->isSimple())
+    return false;
+  for (User *U : A->users()) {
+    if (auto *L = dyn_cast<LoadInst>(U)) {
+      if (!L->isSimple() || L->getType() != LI->getType())
+        return false;
+    } else if (auto *S = dyn_cast<StoreInst>(U)) {
+      if (S->getPointerOperand() != A || !S->isSimple() ||
+          S->getValueOperand()->getType() != LI->getType())
+        return false;
+      Stores.push_back(S);
+    } else if (auto *II = dyn_cast<IntrinsicInst>(U);
+               !II || !II->isLifetimeStartOrEnd()) {
+      return false;
+    }
+  }
+  return true;
+}
 
 struct SourceFinder {
   // Distinct source pointers found so far. More than one ends the search.
@@ -233,21 +270,12 @@ struct SourceFinder {
       HitCycle = true;
       return;
     }
+    SmallVector<StoreInst *, 4> Stores;
+    if (!slotStores(LI, Stores))
+      return;
     SmallVector<Value *, 4> Stored;
-    for (User *U : A->users()) {
-      if (auto *L = dyn_cast<LoadInst>(U)) {
-        if (!L->isSimple() || L->getType() != LI->getType())
-          return;
-      } else if (auto *S = dyn_cast<StoreInst>(U)) {
-        if (S->getPointerOperand() != A || !S->isSimple() ||
-            S->getValueOperand()->getType() != LI->getType())
-          return;
-        Stored.push_back(S->getValueOperand());
-      } else if (auto *II = dyn_cast<IntrinsicInst>(U);
-                 !II || !II->isLifetimeStartOrEnd()) {
-        return;
-      }
-    }
+    for (StoreInst *S : Stores)
+      Stored.push_back(S->getValueOperand());
     // Every store, not just one: a slot written with p on one path and a
     // foreign integer on the other is the -O0 spelling of the select above.
     joinInputs(Stored, A);
@@ -426,91 +454,231 @@ static bool isPlainAddressOf(const Value *X, const Value *P, unsigned IdxBits) {
   return false;
 }
 
+// True if a load or store through P dominates the query point. A load or store
+// through a register holding no capability traps, so if that one ran, P holds
+// one. This is generic LLVM's own deduction, which it restricts to address
+// space 0 because NullPointerIsDefined is true for every other -- so on this
+// target it has to be made here, and without it no HEAP pointer would ever
+// qualify (malloc may return null, and nothing else says otherwise).
+static bool accessDominates(Value *P, const SimplifyQuery &Q,
+                            const DominatorTree &DT) {
+  if (!Q.CxtI)
+    return false;
+  const Function *F = Q.CxtI->getFunction();
+  for (User *U : P->users()) {
+    auto *UI = dyn_cast<Instruction>(U);
+    if (!UI || UI->getFunction() != F)
+      continue;
+    if (getLoadStorePointerOperand(UI) == P && DT.dominates(UI, Q.CxtI))
+      return true;
+    // `p->field` is a GEP of P and then the access; the GEP is a cincoffset
+    // on P, which would have trapped on its own if P held no capability.
+    auto *GEP = dyn_cast<GetElementPtrInst>(UI);
+    if (!GEP || GEP->getPointerOperand() != P)
+      continue;
+    for (User *GU : GEP->users())
+      if (auto *GI = dyn_cast<Instruction>(GU))
+        if (getLoadStorePointerOperand(GI) == GEP && DT.dominates(GI, Q.CxtI))
+          return true;
+  }
+  return false;
+}
+
 // True if P certainly holds a capability here -- certainly not the null pointer,
 // which is `{cursor 0, cap_type 0}` and makes `cincoffset` raise
-// UNEXPECTED_OPERAND.
+// UNEXPECTED_OPERAND, and certainly not an integer spelled as a pointer, which
+// holds no capability either.
 //
-// isKnownNonZero alone cannot answer this on this target. Generic LLVM treats
-// any non-zero address space as one where null may be a valid address, so it
-// declines to call a global there non-null ("Other address spaces may have null
-// as a valid address for a global") and restricts its alloca and its
-// dereference rules to address space 0 -- while every capability pointer here
-// lives in address space 200. Asked alone it would decline a global, an alloca
-// and a pointer the function has already dereferenced, which is nearly every
-// round trip there is. On this target those first two hold a capability by
-// construction: the stack allocation and the linker-materialized address are
-// real capabilities, tag and all. So answer them directly, and keep
-// isKnownNonZero for what it does decide here -- a `nonnull` argument, a pointer
-// past a null test, an `llvm.assume` -- and answer one more the same way: a load
-// or store through the pointer that dominates the cast, which is how a heap
-// pointer qualifies at all.
+// isKnownNonZero cannot answer this on this target, in either direction.
+// Generic LLVM treats any non-zero address space as one where null may be a
+// valid address, so it declines to call a global there non-null ("Other address
+// spaces may have null as a valid address for a global") and restricts its
+// alloca and its dereference rules to address space 0 -- while every capability
+// pointer here lives in address space 200. Asked alone it would decline a
+// global, an alloca and a pointer the function has already dereferenced, which
+// is nearly every round trip there is. And it looks through `inttoptr`, so it
+// calls `(T *)(w | 1)` non-null, and every constant integer cast to a pointer --
+// `(char *)-1`, MAP_FAILED, SIG_IGN -- as well. None of those is a capability.
 //
-// One more shape is needed at -O0, the level this pass exists for: every local
-// pointer lives in a stack slot and each use is a fresh load, which no query
-// about an SSA value can answer. Look through such a slot the way the source
-// search does -- when every store to it is visible and stores a capability, and
-// one of them dominates the load, what the load returns is one of them.
+// So every value whose origin is visible here is decided by what it is made
+// of: an alloca or a global (not extern-weak, not absolute) holds a capability
+// by construction, the stack allocation and the linker-materialized address
+// being real capabilities, tag and all; a GEP holds one if its base does; a
+// select, a phi or a local slot holds one if every input does; a constant or an
+// inttoptr never does. isKnownNonZero is asked only where the origin is out of
+// sight -- an argument, a load from memory, a call -- for what it does decide
+// there: a `nonnull` argument, a pointer past a null test, an `llvm.assume`.
+// One more proof holds for any value: an access through it that dominates the
+// cast (accessDominates), which is how a heap pointer qualifies at all.
+//
+// The local slot is the -O0 shape, the level this pass exists for: every local
+// pointer lives in one and each use is a fresh load, which no query about an
+// SSA value can answer. When every store to it is visible and stores a
+// capability, and one of them dominates the load, what the load returns is one
+// of them. The same rule for the slot and for the select is what makes -O0 and
+// -O2 agree on the same source.
 static bool holdsCapability(Value *P, const SimplifyQuery &Q,
-                            const DominatorTree &DT, unsigned Depth = 0) {
-  if (Depth > 4)
+                            const DominatorTree &DT,
+                            SmallPtrSetImpl<const PHINode *> &OnPath,
+                            unsigned Depth = 0) {
+  if (Depth > 6)
     return false;
   if (isa<AllocaInst>(P))
     return true;
   if (auto *GV = dyn_cast<GlobalValue>(P))
     return !GV->isAbsoluteSymbolRef() && !GV->hasExternalWeakLinkage();
   if (auto *GEP = dyn_cast<GEPOperator>(P))
-    return holdsCapability(GEP->getPointerOperand(), Q, DT, Depth + 1);
-  if (isKnownNonZero(P, Q))
+    return holdsCapability(GEP->getPointerOperand(), Q, DT, OnPath, Depth + 1);
+  // Every other constant is an integer spelled as a pointer: null, `(T *)-1`,
+  // an inttoptr of anything.
+  if (isa<Constant>(P))
+    return false;
+  if (accessDominates(P, Q, DT))
     return true;
-  // An access through P that dominates the cast proves it: a load or store
-  // through a register holding no capability traps, so if that one ran, P holds
-  // one. This is generic LLVM's own deduction, which it restricts to address
-  // space 0 because NullPointerIsDefined is true for every other -- so on this
-  // target it has to be made here, and without it no HEAP pointer would ever
-  // qualify (malloc may return null, and nothing else says otherwise).
-  if (Q.CxtI)
-    for (User *U : P->users()) {
-      auto *UI = dyn_cast<Instruction>(U);
-      if (!UI)
-        continue;
-      if (getLoadStorePointerOperand(UI) == P && DT.dominates(UI, Q.CxtI))
-        return true;
-      // `p->field` is a GEP of P and then the access; the GEP is a cincoffset
-      // on P, which would have trapped on its own if P held no capability.
-      auto *GEP = dyn_cast<GetElementPtrInst>(UI);
-      if (!GEP || GEP->getPointerOperand() != P)
-        continue;
-      for (User *GU : GEP->users())
-        if (auto *GI = dyn_cast<Instruction>(GU))
-          if (getLoadStorePointerOperand(GI) == GEP && DT.dominates(GI, Q.CxtI))
-            return true;
-    }
-  auto *LI = dyn_cast<LoadInst>(P);
-  if (!LI || !LI->isSimple())
-    return false;
-  auto *A = dyn_cast<AllocaInst>(LI->getPointerOperand());
-  if (!A)
-    return false;
-  bool Dominated = false;
-  for (User *U : A->users()) {
-    if (auto *L = dyn_cast<LoadInst>(U)) {
-      if (!L->isSimple() || L->getType() != LI->getType())
-        return false;
-    } else if (auto *S = dyn_cast<StoreInst>(U)) {
-      if (S->getPointerOperand() != A || !S->isSimple() ||
-          S->getValueOperand()->getType() != LI->getType() ||
-          !holdsCapability(S->getValueOperand(), Q.getWithInstruction(S), DT,
-                           Depth + 1))
+  auto *I = dyn_cast<Instruction>(P);
+  if (!I)
+    return isKnownNonZero(P, Q); // an argument
+  auto Holds = [&](Value *V, const SimplifyQuery &VQ) {
+    return holdsCapability(V, VQ, DT, OnPath, Depth + 1);
+  };
+  switch (I->getOpcode()) {
+  case Instruction::IntToPtr:
+    return false; // an integer, however non-zero
+  case Instruction::Freeze:
+    return Holds(I->getOperand(0), Q);
+  case Instruction::Select:
+    return Holds(I->getOperand(1), Q) && Holds(I->getOperand(2), Q);
+  case Instruction::PHI: {
+    auto *PN = cast<PHINode>(I);
+    // Back at a phi already being decided: a cycle, such as a cursor stepped
+    // around a loop, adds no origin of its own.
+    if (!OnPath.insert(PN).second)
+      return true;
+    bool All = true;
+    for (unsigned K = 0, E = PN->getNumIncomingValues(); All && K != E; ++K)
+      All = Holds(PN->getIncomingValue(K),
+                  Q.getWithInstruction(PN->getIncomingBlock(K)->getTerminator()));
+    OnPath.erase(PN);
+    return All;
+  }
+  case Instruction::Load: {
+    auto *LI = cast<LoadInst>(I);
+    SmallVector<StoreInst *, 4> Stores;
+    if (!slotStores(LI, Stores))
+      return isKnownNonZero(P, Q); // memory this function cannot see into
+    bool Dominated = false;
+    for (StoreInst *S : Stores) {
+      if (!Holds(S->getValueOperand(), Q.getWithInstruction(S)))
         return false;
       Dominated |= DT.dominates(S, LI);
-    } else if (auto *II = dyn_cast<IntrinsicInst>(U);
-               !II || !II->isLifetimeStartOrEnd()) {
-      return false;
     }
+    // No store at all means the load reads an uninitialized slot; one that does
+    // not dominate means it may.
+    return Dominated;
   }
-  // No store at all means the load reads an uninitialized slot; one that does
-  // not dominate means it may.
-  return Dominated;
+  case Instruction::Call:
+  case Instruction::Invoke: {
+    auto *CB = cast<CallBase>(I);
+    // A call that returns one of its arguments (`returned`, llvm.ptrmask, ...)
+    // is decided by that argument, which isKnownNonZero would look through
+    // unchecked.
+    if (Value *Arg = getArgumentAliasingToReturnedPointer(CB, false))
+      return Holds(Arg, Q);
+    return isKnownNonZero(P, Q);
+  }
+  default:
+    return false;
+  }
+}
+
+// True if P may hold a capability that the rewrite's new use would consume.
+//
+// Under the linearity contract (docs/plans/compiler-validation-plan.md, 4.1)
+// compiled code keeps only NONLIN capabilities, null or untagged values in
+// registers. A LINEAR, UNINIT, REVOKE or SEALED value exists only between the
+// builtin that produced it and exactly one consumer. Reading its address, the
+// ptrtoint, is not a consumer. The rewrite's GEP is one -- `cincoffset rd, rs1`
+// with rd != rs1 nulls a LINEAR rs1 on the RTL and in QEMU -- and so is any use
+// of the value itself, which is what the no-offset rewrite produces. In
+//     log((char *)(((uintptr_t)cap + 15) & ~15)); store(slot, cap);
+// the store would then save null. So a value is refused as a source when any
+// origin of it is a capability builtin other than DELIN, which returns NONLIN,
+// or inline assembly, which is how SPLIT is written. Any other intrinsic --
+// SHRINK, TIGHTEN and SCC among them, which keep their operand's type -- is
+// looked through to its operands. Everything else is NONLIN by the contract: an
+// argument (the domain glue DELINs its entry capabilities), a load from memory,
+// the result of an ordinary call, a local object, a global.
+static bool mayBeLinear(Value *P, SmallPtrSetImpl<const Value *> &Seen,
+                        unsigned Depth = 0) {
+  if (Depth > 8)
+    return true; // too deep to decide: never rewrite
+  if (!Seen.insert(P).second)
+    return false; // already on the way to an answer
+  if (isa<Constant>(P) || isa<Argument>(P) || isa<AllocaInst>(P))
+    return false;
+  auto MayBe = [&](Value *V) { return mayBeLinear(V, Seen, Depth + 1); };
+  if (auto *GEP = dyn_cast<GEPOperator>(P))
+    return MayBe(GEP->getPointerOperand());
+  auto *I = dyn_cast<Instruction>(P);
+  if (!I)
+    return true;
+  switch (I->getOpcode()) {
+  case Instruction::IntToPtr:
+    return false; // no capability at all
+  case Instruction::Freeze:
+  case Instruction::AddrSpaceCast:
+    return MayBe(I->getOperand(0));
+  case Instruction::Select:
+    return MayBe(I->getOperand(1)) || MayBe(I->getOperand(2));
+  case Instruction::PHI:
+    return any_of(cast<PHINode>(I)->incoming_values(), MayBe);
+  case Instruction::Load: {
+    // At -O0 a builtin's result reaches its uses through a local slot.
+    auto *LI = cast<LoadInst>(I);
+    SmallVector<StoreInst *, 4> Stores;
+    if (slotStores(LI, Stores))
+      return any_of(Stores,
+                    [&](StoreInst *S) { return MayBe(S->getValueOperand()); });
+    // A slot written some other way may hold anything; other memory holds
+    // NONLIN capabilities by the contract.
+    return isa<AllocaInst>(LI->getPointerOperand());
+  }
+  case Instruction::Call:
+  case Instruction::Invoke: {
+    auto *CB = cast<CallBase>(I);
+    if (CB->isInlineAsm())
+      return true;
+    if (auto *II = dyn_cast<IntrinsicInst>(CB)) {
+      switch (II->getIntrinsicID()) {
+      case Intrinsic::capstone_cap_delin:
+        return false;
+      case Intrinsic::capstone_cap_init:
+      case Intrinsic::capstone_cap_mrev:
+      case Intrinsic::capstone_cap_seal:
+      case Intrinsic::capstone_cap_drop:
+      case Intrinsic::capstone_cap_revoke:
+      case Intrinsic::capstone_cap_call:
+      case Intrinsic::capstone_cap_enter:
+      case Intrinsic::capstone_cap_ccsrrw:
+        return true;
+      default:
+        break;
+      }
+    }
+    if (Value *Arg = getArgumentAliasingToReturnedPointer(CB, false))
+      return MayBe(Arg);
+    // Any other intrinsic -- SHRINK, TIGHTEN and SCC among them, which keep
+    // their operand's type: whatever capability it returns came in as one of
+    // its operands.
+    if (isa<IntrinsicInst>(CB))
+      return any_of(CB->args(), [&](Value *A) {
+        return A->getType()->isPointerTy() && MayBe(A);
+      });
+    return false; // an ordinary call: NONLIN by the contract
+  }
+  default:
+    return true; // an origin not modelled here: do not rewrite
+  }
 }
 
 // True if C, a constant, contains the address of a capability: a ptrtoint of
@@ -606,7 +774,14 @@ bool CapstoneRecoverProvenance::runOnFunction(Function &F) {
     bool SameAddress = isPlainAddressOf(X, P, IdxTy->getIntegerBitWidth());
     // Moving a base that may be null is the one way this rewrite can trap where
     // the untagged answer did not (see the note on cincoffset at the top).
-    if (!SameAddress && !holdsCapability(P, SimplifyQuery(DL, &DT, &AC, ITP), DT))
+    SmallPtrSet<const PHINode *, 4> OnPath;
+    if (!SameAddress &&
+        !holdsCapability(P, SimplifyQuery(DL, &DT, &AC, ITP), DT, OnPath))
+      continue;
+    // Either rewrite adds a use of P, which a value that may be LINEAR cannot
+    // take (see the note on linearity at the top).
+    SmallPtrSet<const Value *, 16> Seen;
+    if (mayBeLinear(P, Seen))
       continue;
 
     // InstSimplifyFolder: `0 + e` and the like fold as they are built, since

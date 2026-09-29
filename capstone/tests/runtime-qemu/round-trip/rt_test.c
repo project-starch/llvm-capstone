@@ -25,6 +25,12 @@
  *   select-foreign  a select whose arms are not the same one pointer keeps the
  *                untagged answer: the other arm is the caller's own integer, and
  *                the result must not come back carrying buf's authority at it
+ *   int-source   a pointer made from an integer, `(char *)(w | 1)`, rounded up:
+ *                it holds no capability however non-zero it is, so it is left
+ *                alone rather than moved -- moving it traps at the cast
+ *   sentinel     a cursor that holds a static object on one path and `(char *)-1`
+ *                on the other, rounded up: the sentinel holds no capability, so
+ *                neither does the cursor (at -O0 it lives in a stack slot)
  *
  * The pass only moves a source it can see HOLDS a capability, which is why `flag`
  * uses a LOCAL object and not malloc. A malloc result qualifies at -O2, through
@@ -76,6 +82,23 @@ __attribute__((noinline)) static char *align_maybe_null(char *p)
 __attribute__((noinline)) static char *pick(int c, char *p, uintptr_t x)
 {
 	return (char *)(c ? (uintptr_t)p : x);
+}
+
+/* An integer made into a pointer holds no capability, however non-zero. */
+__attribute__((noinline)) static char *align_from_int(uintptr_t w)
+{
+	char *n = (char *)(w | 1);
+	return (char *)(((uintptr_t)n + 7) & ~(uintptr_t)7);
+}
+
+/* A cursor that is an object on one path and a sentinel on the other. */
+__attribute__((noinline)) static char *align_cursor(int full)
+{
+	static char arena[64];
+	char *cur = arena;
+	if (full)
+		cur = (char *)-1;
+	return (char *)(((uintptr_t)cur + 15) & ~(uintptr_t)15);
 }
 
 /* The one capability query that cannot trap: LCC with zimm==1, the TYPE query,
@@ -141,6 +164,18 @@ int main(void)
 	char *picked = pick(0, buf, __builtin_capstone_cap_get_cursor(other));
 	check(cap_type(picked) == CAP_TYPE_NONE, "select-foreign",
 	      (long)cap_type(picked), CAP_TYPE_NONE);
+
+	/* volatile, so that neither argument is propagated into its callee as a
+	   constant and folded away there: both must reach the pass as values. */
+	volatile uintptr_t seed = 0x1000;
+	char *fromint = align_from_int(seed);
+	check(cap_type(fromint) == CAP_TYPE_NONE, "int-source",
+	      (long)cap_type(fromint), CAP_TYPE_NONE);
+
+	volatile int full = 1;
+	char *sentinel = align_cursor(full);
+	check(cap_type(sentinel) == CAP_TYPE_NONE, "sentinel",
+	      (long)cap_type(sentinel), CAP_TYPE_NONE);
 
 	atexit(at_exit_handler);
 	printf("RT-TEST-DONE failures=%d\n", failures);

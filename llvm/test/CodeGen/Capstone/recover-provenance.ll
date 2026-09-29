@@ -38,6 +38,21 @@
 ; or the stack-slot look-through in holdsCapability() -> @alloca_align,
 ; @weak_global_align and @slot_holds_global respectively. All nine were run
 ; against the build this branch was gated with.
+;
+; Second round, after the review that found integer-made and LINEAR sources,
+; each run at -O2 and -O0 against that change's build: let a constant hold a
+; capability in holdsCapability() -> @sentinel_select and @sentinel_slot are
+; moved; ask isKnownNonZero about an inttoptr again -> @int_source and
+; @int_source_gep; drop the mayBeLinear() refusal -> @linear_live,
+; @linear_identity and @linear_tightened; stop looking through an intrinsic's
+; operands in mayBeLinear() -> @linear_tightened; call DELIN's result linear ->
+; @delinearized keeps its inttoptr; refuse every select -> @two_objects_select;
+; read a cycle back to a phi as no capability -> @phi_cursor. The first round's
+; holdsCapability() mutations were re-run on the restructured function and still
+; fail their tests: the gate (@maybe_null_align, @carrier_mask_align,
+; @heap_no_deref), the alloca (@alloca_align), the extern-weak test
+; (@weak_global_align), the slot look-through (@slot_holds_global) and the
+; dominating access, now accessDominates() (@heap_deref).
 
 ; OFF-LABEL: @align_up(
 ; OFF: inttoptr
@@ -571,4 +586,232 @@ define ptr addrspace(200) @weak_global_align() {
   %m = and i64 add (i64 ptrtoint (ptr addrspace(200) @w to i64), i64 63), -64
   %r = inttoptr i64 %m to ptr addrspace(200)
   ret ptr addrspace(200) %r
+}
+
+; A pointer made from an integer holds no capability, however non-zero the
+; integer is. isKnownNonZero looks through the inttoptr and calls `(ptr)(w | 1)`
+; non-null, so a gate that asked it alone moved this base: `cincoffset` on an
+; untagged register, cause 24, in a function that only compares. Left alone.
+; IR-LABEL: @int_source(
+; IR-NOT:   getelementptr
+; IR:       %r = inttoptr i64 %m
+define i1 @int_source(i64 %w, ptr addrspace(200) %k) {
+  %o = or i64 %w, 1
+  %n = inttoptr i64 %o to ptr addrspace(200)
+  %i = ptrtoint ptr addrspace(200) %n to i64
+  %a = add i64 %i, 7
+  %m = and i64 %a, -8
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  %c = icmp eq ptr addrspace(200) %r, %k
+  ret i1 %c
+}
+
+; The same integer pointer as the base of a GEP: the GEP moves it, it does not
+; make it a capability.
+; IR-LABEL: @int_source_gep(
+; IR-NOT:   getelementptr i8, ptr addrspace(200) %g,
+; IR:       %r = inttoptr i64 %m
+define ptr addrspace(200) @int_source_gep(i64 %w) {
+  %o = or i64 %w, 1
+  %n = inttoptr i64 %o to ptr addrspace(200)
+  %g = getelementptr i8, ptr addrspace(200) %n, i64 16
+  %i = ptrtoint ptr addrspace(200) %g to i64
+  %a = add i64 %i, 15
+  %m = and i64 %a, -16
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}
+
+; -O0: a slot that holds a local object on one path and a sentinel -- `(char *)-1`,
+; MAP_FAILED, SIG_IGN -- on the other. The sentinel is a constant integer spelled
+; as a pointer and holds no capability, so the slot does not either. Before, each
+; store was put to isKnownNonZero, which calls the sentinel non-null, and this
+; trapped whenever %full was set.
+; IR-LABEL: @sentinel_slot(
+; IR-NOT:   getelementptr i8, ptr addrspace(200) %p,
+; IR:       %r = inttoptr i64 %m
+define ptr addrspace(200) @sentinel_slot(i1 %full) #0 {
+entry:
+  %arena = alloca [64 x i8], addrspace(200)
+  %cur = alloca ptr addrspace(200), addrspace(200)
+  store ptr addrspace(200) %arena, ptr addrspace(200) %cur
+  br i1 %full, label %set, label %go
+set:
+  store ptr addrspace(200) inttoptr (i64 -1 to ptr addrspace(200)), ptr addrspace(200) %cur
+  br label %go
+go:
+  %p = load ptr addrspace(200), ptr addrspace(200) %cur
+  %i = ptrtoint ptr addrspace(200) %p to i64
+  %a = add i64 %i, 15
+  %m = and i64 %a, -16
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}
+
+; The SSA spelling of the same slot: a select of the object and the sentinel.
+; Every input must hold a capability, as in the slot.
+; IR-LABEL: @sentinel_select(
+; IR-NOT:   getelementptr i8, ptr addrspace(200) %p,
+; IR:       %r = inttoptr i64 %m
+define ptr addrspace(200) @sentinel_select(i1 %full) {
+  %arena = alloca [64 x i8], addrspace(200)
+  %p = select i1 %full, ptr addrspace(200) inttoptr (i64 -1 to ptr addrspace(200)), ptr addrspace(200) %arena
+  %i = ptrtoint ptr addrspace(200) %p to i64
+  %a = add i64 %i, 15
+  %m = and i64 %a, -16
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}
+
+; The control for the two above: the same slot and the same select with a second
+; object in place of the sentinel. Both still move, so the rule declines the
+; sentinel and not the shape.
+; IR-LABEL: @two_objects_slot(
+; IR-NOT:   inttoptr
+; IR:       getelementptr i8, ptr addrspace(200) %p,
+define ptr addrspace(200) @two_objects_slot(i1 %full) #0 {
+entry:
+  %arena = alloca [64 x i8], addrspace(200)
+  %spare = alloca [64 x i8], addrspace(200)
+  %cur = alloca ptr addrspace(200), addrspace(200)
+  store ptr addrspace(200) %arena, ptr addrspace(200) %cur
+  br i1 %full, label %set, label %go
+set:
+  store ptr addrspace(200) %spare, ptr addrspace(200) %cur
+  br label %go
+go:
+  %p = load ptr addrspace(200), ptr addrspace(200) %cur
+  %i = ptrtoint ptr addrspace(200) %p to i64
+  %a = add i64 %i, 15
+  %m = and i64 %a, -16
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}
+
+; IR-LABEL: @two_objects_select(
+; IR-NOT:   inttoptr
+; IR:       getelementptr i8, ptr addrspace(200) %p,
+define ptr addrspace(200) @two_objects_select(i1 %full) {
+  %arena = alloca [64 x i8], addrspace(200)
+  %spare = alloca [64 x i8], addrspace(200)
+  %p = select i1 %full, ptr addrspace(200) %spare, ptr addrspace(200) %arena
+  %i = ptrtoint ptr addrspace(200) %p to i64
+  %a = add i64 %i, 15
+  %m = and i64 %a, -16
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}
+
+; A capability a builtin produced may be LINEAR, and a LINEAR base is consumed
+; by `cincoffset` when rd != rs1: the register is nulled. The program keeps
+; using %cap after the round trip, so a GEP off it would leave the store below
+; saving null. Under the linearity contract (compiler-validation-plan.md, 4.1)
+; such a value has exactly one consumer and reading its address is not one; the
+; rewrite would add a second. Left alone, with and without an offset.
+declare ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.capstone.cap.delin.p200(ptr addrspace(200))
+declare ptr addrspace(200) @llvm.capstone.cap.tighten.p200(ptr addrspace(200), i64)
+declare void @log(ptr addrspace(200))
+; IR-LABEL: @linear_live(
+; IR-NOT:   getelementptr i8, ptr addrspace(200) %cap,
+; IR:       %r = inttoptr i64 %m
+define void @linear_live(ptr addrspace(200) %u, i64 %v, ptr addrspace(200) %slot) {
+entry:
+  %cap = call ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200) %u, i64 %v)
+  %z = icmp eq ptr addrspace(200) %cap, null
+  br i1 %z, label %keep, label %log
+log:
+  %i = ptrtoint ptr addrspace(200) %cap to i64
+  %a = add i64 %i, 15
+  %m = and i64 %a, -16
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  call void @log(ptr addrspace(200) %r)
+  br label %keep
+keep:
+  store ptr addrspace(200) %cap, ptr addrspace(200) %slot
+  ret void
+}
+
+; No offset is no exemption here: the rewrite would pass %cap itself to @log, a
+; second consumer of a value that may be LINEAR.
+; IR-LABEL: @linear_identity(
+; IR:       %r = inttoptr i64 %i
+define void @linear_identity(ptr addrspace(200) %u, i64 %v, ptr addrspace(200) %slot) {
+  %cap = call ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200) %u, i64 %v)
+  %i = ptrtoint ptr addrspace(200) %cap to i64
+  %r = inttoptr i64 %i to ptr addrspace(200)
+  call void @log(ptr addrspace(200) %r)
+  store ptr addrspace(200) %cap, ptr addrspace(200) %slot
+  ret void
+}
+
+; TIGHTEN keeps its operand's type, so a tightened builtin result may be LINEAR
+; as well.
+; IR-LABEL: @linear_tightened(
+; IR-NOT:   getelementptr i8, ptr addrspace(200) %t,
+; IR:       %r = inttoptr i64 %m
+define void @linear_tightened(ptr addrspace(200) %u, i64 %v, ptr addrspace(200) %slot) {
+entry:
+  %cap = call ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200) %u, i64 %v)
+  %t = call ptr addrspace(200) @llvm.capstone.cap.tighten.p200(ptr addrspace(200) %cap, i64 3)
+  %z = icmp eq ptr addrspace(200) %t, null
+  br i1 %z, label %keep, label %log
+log:
+  %i = ptrtoint ptr addrspace(200) %t to i64
+  %a = add i64 %i, 15
+  %m = and i64 %a, -16
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  call void @log(ptr addrspace(200) %r)
+  br label %keep
+keep:
+  store ptr addrspace(200) %t, ptr addrspace(200) %slot
+  ret void
+}
+
+; The control: DELIN makes the capability NONLIN, which `cincoffset` does not
+; consume, so the same shape after it is moved.
+; IR-LABEL: @delinearized(
+; IR-NOT:   inttoptr
+; IR:       getelementptr i8, ptr addrspace(200) %d,
+define void @delinearized(ptr addrspace(200) %u, i64 %v, ptr addrspace(200) %slot) {
+entry:
+  %cap = call ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200) %u, i64 %v)
+  %d = call ptr addrspace(200) @llvm.capstone.cap.delin.p200(ptr addrspace(200) %cap)
+  %z = icmp eq ptr addrspace(200) %d, null
+  br i1 %z, label %keep, label %log
+log:
+  %i = ptrtoint ptr addrspace(200) %d to i64
+  %a = add i64 %i, 15
+  %m = and i64 %a, -16
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  call void @log(ptr addrspace(200) %r)
+  br label %keep
+keep:
+  store ptr addrspace(200) %d, ptr addrspace(200) %slot
+  ret void
+}
+
+; A cursor stepped through a local object in a loop: the phi's inputs are the
+; object and the cursor itself moved, and a cycle back to the phi adds no origin
+; of its own. So the cursor holds a capability, and its round trip is moved.
+; IR-LABEL: @phi_cursor(
+; IR-NOT:   inttoptr
+; IR:       getelementptr i8, ptr addrspace(200) %p,
+define void @phi_cursor(i64 %n) {
+entry:
+  %buf = alloca [64 x i8], addrspace(200)
+  br label %loop
+loop:
+  %p = phi ptr addrspace(200) [ %buf, %entry ], [ %next, %loop ]
+  %k = phi i64 [ 0, %entry ], [ %k1, %loop ]
+  %i = ptrtoint ptr addrspace(200) %p to i64
+  %m = and i64 %i, -2
+  %r = inttoptr i64 %m to ptr addrspace(200)
+  store i8 0, ptr addrspace(200) %r
+  %next = getelementptr i8, ptr addrspace(200) %p, i64 2
+  %k1 = add i64 %k, 1
+  %c = icmp ult i64 %k1, %n
+  br i1 %c, label %loop, label %out
+out:
+  ret void
 }
