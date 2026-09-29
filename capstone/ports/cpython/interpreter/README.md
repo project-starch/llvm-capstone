@@ -196,6 +196,7 @@ assumption it corrects and why the replacement is right; all six leave every pla
 | 0004 | `pycore_pyhash.h` | the pointer hash is of the address; it is never converted back |
 | 0005 | `pycore_qsbr.h` | false-sharing padding assumed the per-thread state fits in 64 bytes |
 | 0006 | `pyport.h` | opt-in: thread-locals as globals in a process that cannot start a thread |
+| 0015 | `_posixsubprocess.c` | opt-in: `fork_exec` through `posix_spawn` in a process that cannot fork; `preexec_fn`, umask and id changes refused |
 
 None of them makes a pointer↔integer ROUND TRIP safe; the census above is where those are.
 
@@ -220,10 +221,9 @@ delegated runtime; the record is [results/signals-2026-09-29.json](results/signa
   every error an unserved `clone` (16, through `subprocess`), `socket` (2) or a
   thread start (1). `test.test_faulthandler`: 2 pass, 35 errors, all
   `subprocess`, 9 skipped.
-- Not signals: `subprocess.Popen` runs `_posixsubprocess.fork_exec`, which
-  needs `clone`. The port patch that routes it through `posix_spawn` (the
-  plan's CPython item) is what unlocks the remaining tests; `epoll_create1` is
-  unserved as well.
+- Not signals: at that revision `subprocess.Popen` still ran
+  `_posixsubprocess.fork_exec` over `clone`; patch 0015 (below) routes it
+  through `posix_spawn`. `epoll_create1` is unserved as well.
 
 With `delegation-pty-ioctls`, `os.openpty()` and `pty.openpty()` work (musl's
 `openpty` over `/dev/ptmx`, `TIOCSPTLCK` and `TIOCGPTN`); `pty.fork` and
@@ -231,6 +231,48 @@ With `delegation-pty-ioctls`, `os.openpty()` and `pty.openpty()` work (musl's
 `ac_cv_file__dev_ptmx=no` and `ac_cv_file__dev_ptc=no` have no effect on
 that path, since the build has `HAVE_OPENPTY` and uses musl's `openpty`
 directly; they only stop `configure` from probing the build host's `/dev`.
+
+## subprocess without fork, 2026-09-29
+
+Patch 0015 (`-D_Py_FORK_EXEC_POSIX_SPAWN`) keeps `_posixsubprocess.fork_exec`'s
+signature and its contract with `subprocess.py` and expresses the child steps
+of `child_exec` as `posix_spawn` attributes and file actions: the pipe ends
+onto 0, 1 and 2 with the same care when one of them already is a standard
+stream, `cwd` through `posix_spawn_file_actions_addchdir_np`, `pass_fds` kept
+by a dup2 onto itself (which clears `FD_CLOEXEC`), `close_fds` as one close
+action per inheritable descriptor from 3 up read from `/proc/self/fd`,
+`restore_signals` as `SETSIGDEF` of `SIGPIPE`, `SIGXFZ` and `SIGXFSZ`,
+`start_new_session` as `SETSID`, `process_group` as `SETPGROUP`. Exec failure
+is synchronous and raises the error named after the program; the error pipe
+is never written. Refused with ENOSYS: `preexec_fn`, `umask`, `user`, `group`
+and `extra_groups`. The launcher's spawner does the rest.
+
+[host/subprocess-smoke.py](host/subprocess-smoke.py) passes 21/21 in the
+guest: `run` with captured streams and exit status, `check_output`,
+`check_call`, `communicate` in both directions, a 10 KB round trip through
+`cat`, `env` and `cwd`, `FileNotFoundError` for a missing program and a
+missing directory, `pass_fds` kept and an inheritable descriptor closed,
+`restore_signals` both ways, `terminate`, `kill`, `wait(timeout)`,
+`run(timeout)`, `start_new_session`, `process_group`, `preexec_fn` refused,
+a child signalling its waiting parent, `os.popen` and `shell=True`.
+CPython's own suites in the guest, booted with `--process-cache-mib 768`
+(the default 384 MiB refuses a second CPython domain next to its parent):
+`test_subprocess` 344 tests, 237 ok, 7 fail, 56 errors, 38 skipped, up from
+179 ok before the patch; `test_popen` 5/5; `test_faulthandler` 25 ok, 11 fail,
+1 error, 9 skipped, up from 2 ok; `test_signal` without
+`test_interprocess_signal` 37 ok, 2 fail, 4 errors, 13 skipped, up from 25 ok.
+What remains, by cause: 26 refused by design; 24 `select.select` on the
+unserved `pselect6`, which every two-pipe `communicate()` hits because the
+child ends up with `SelectSelector`; the thread tests; children started
+without `PYTHONHOME` (`env={}`, `-E`); `os.getpgid` and `os.getsid`
+unserved; two stderr comparisons that see the domain's
+`UNSERVED syscalls: 20` report; faults that faulthandler cannot report
+because a domain fault is fatal; `signal.pthread_kill(threading.get_ident())`,
+which rebuilds a `pthread_t` from an integer. `test_interprocess_signal` hangs
+for a policy reason: its tester's child sends `os.kill` to its parent, and the
+launcher allows `kill` only to the task itself or a recorded child.
+[host/run-filtered.py](host/run-filtered.py) runs a module without named tests.
+Record: [results/subprocess-2026-09-29.json](results/subprocess-2026-09-29.json).
 
 To run the suite: `PYTHONHOME` on the share holds `lib/python3.13` copied from
 the source `Lib/` (the `test` package included, an empty `lib-dynload`) plus
