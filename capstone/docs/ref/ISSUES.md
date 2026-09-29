@@ -7547,6 +7547,54 @@ No other runner has the watchdog.
 copy. The QEMU monitor's `info registers`, or a host-side stack of the QEMU threads, taken during a
 stall, would show which. No runner collects either yet.
 
+### I-14 — `run-hostcall-all.sh` stops at large-io, and at mmap-shm, on dev since de07a5b5: two harness paths that the persistent-VM commit moved `OPEN — pre-existing on dev since 2026-09-28 (de07a5b5); found 2026-09-29 while gating #124-#127, identical on dev 52c882dd and merged 9ee1fdac; a one-line fix for each, verified locally, NOT applied`
+
+de07a5b5 ("Run applications as recoverable processes in a persistent Linux VM") moved two files that
+hostcall-probe harnesses still read by their old paths:
+- the header, `R088 capstone/tests/runtime-qemu/hostcall-file-service-probe-common.h →
+  capstone/runtime/include/capstone/hostcall-file-service.h`. A plain `git show --stat` on a
+  pathspec does not show this rename; `--name-status -M` does.
+- the override list, into the new `ports/musl-capstone/runtime/libc_overrides.list`, which
+  `libc_overrides.sh:13` now reads with `mapfile`.
+
+`run-hostcall-all.sh` runs `set -euo pipefail`, so its first failing probe ends the suite. Since
+2026-09-28 the suite has run 12 of its 28 probes on dev, unless `CAPSTONE_ONLY` selects past the
+break.
+
+**1. large-io fails to BUILD.**
+
+- `tests/runtime-qemu/large-io/run.sh:92` copies ONLY `host_service.h` from the two control commits
+  (`READ_CTL` e852b395, `STDOUT_CTL` 40eefa09).
+- That header includes `hostcall-file-service-probe-common.h` under its old name, which no longer
+  exists in the tree: `fatal error: hostcall-file-service-probe-common.h: No such file or directory`.
+- **Fix:** copy that header from the same `$rev` into `$O/$arm-inc/` too, one line after :92. Both
+  control commits contain it.
+- **Verified 2026-09-29** on origin/dev ae1b13c2, with the fix as a local edit:
+  - rc 0. The test reads 65536 bytes whole and in pieces, and writes and reads them back.
+  - The read control "FAILS the whole read, as it must without a bounce buffer".
+  - The stdout control "loses the long line, as it must".
+
+**2. mmap-shm stops at its own precheck (rc 2).**
+
+- `tests/runtime-qemu/mmap-shm/run.sh:66` greps `libc_overrides.sh` for the literal name
+  `mmap_shm_level0`.
+- The name moved to `libc_overrides.list:5`, so the precheck reports "libc_overrides.sh does not
+  list mmap_shm_level0; the test would link musl's mmap".
+- The entry was NOT dropped: the build still links `mmap_shm_level0.o`.
+- The control arm filters the built object list, not the file's text, so only the precheck is stale.
+- **Fix:** `grep -qx 'mmap_shm_level0' "$MRT/libc_overrides.list"`.
+- **Verified 2026-09-29** on origin/dev ae1b13c2, with the fix as a local edit:
+  - rc 0. The test's 25 MMAP-SHM checks pass (`failures=0`).
+  - The control halts on musl's `MAP_FAILED` as the harness expects: "C-32: the -1 arrives as NULL
+    through movc". The first attempt was a boot stall (see below); the second is this result.
+
+**These per-probe harnesses report a guest boot stall as a verdict** (see I-12). On 2026-09-29 three
+boots stalled: two at the OpenSBI banner and one after "Starting network … OK". The probe printed
+`test: FAIL`, and mmap-shm also printed "control: did NOT fail mmap -- the test cannot tell the
+override from its absence". Neither printed exit 75.
+- Both lines are artefacts of an empty guest log.
+- Before reading one as a result, check the per-probe `run-*.log` for any `LT-RESULT` line.
+
 ## Compiler / toolchain (ours)
 
 ### C-50 — an integer-valued pointer in an aggregate passed BY VALUE (union or struct) is copied through an address formed with integer `addi` on the frame pointer, which faults `OPEN — COMPILER, caller side (byval copy, CapstoneISelLowering.cpp:24316); found 2026-09-23 by the FFmpeg app port on QEMU, reduced to 12 lines, proven from disassembly and -debug-only=isel; worked around in the port; audited and CORRECTED the same day, see the box`
