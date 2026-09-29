@@ -8368,7 +8368,7 @@ Fix: gate the WB forward on validity, and/or classify by opcode. Both need a bit
 the project lead's call.
 ---
 
-### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` untested on silicon; the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
+### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` COPY ON SILICON 2026-09-25 (boot r42e3b on R-42: R-21 CONFIRMED for both, box below); the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
 
 > **`tighten` and `shrinkto` COPY on silicon: R-21 CONFIRMED for both (2026-09-25, boot r42e3b,
 > `caplifive_r42_6cbdaeeb4.bit`, image `cbf8cb41eb56c477`).** R1 `--series linear`:
