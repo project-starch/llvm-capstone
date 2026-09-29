@@ -21,7 +21,9 @@
 # Knobs: PERLD_FROM=musl|runtime|perl starts at that stage. PERLD_HEAP=level0
 # (default) or sublet picks the domain's malloc, as the mruby port's does.
 # PERL_MIRROR=<dir with the tarballs> and PERL_CROSS_MIRROR=<a perl-cross clone>
-# avoid the network.
+# avoid the network. PERLD_SV_HEADS=1 builds the study variant: SV heads come
+# from the lifetime adapter in ../sv-heads (its patch, -DPERL_SV_HEAD_ADAPTER,
+# and link/perl-sv-heads.o for experiments/applications/build.py --nested perl).
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../../tests/capstone-test-env.sh" >/dev/null
@@ -35,6 +37,8 @@ FROM=${PERLD_FROM:-all}
 HEAP=${PERLD_HEAP:-level0}
 HEAP_LOG=${PERLD_HEAP_LOG:-26}
 case "$HEAP" in level0|sublet) ;; *) echo "PERLD_HEAP=$HEAP? (level0, sublet)" >&2; exit 2 ;; esac
+SV_HEADS=${PERLD_SV_HEADS:-0}
+case "$SV_HEADS" in 0|1) ;; *) echo "PERLD_SV_HEADS=$SV_HEADS? (0, 1)" >&2; exit 2 ;; esac
 
 # The pin. 5.36.3 is the evaluation's release (docs/design/perl-sublet-port-evaluation.md):
 # the SV arena mechanism is the same in every release perl-cross supports, and 5.36
@@ -45,6 +49,12 @@ PERL_CROSS_URL=https://github.com/arsv/perl-cross.git
 PERL_CROSS_COMMIT=c2d8f8b7027ed20cd982c9f2c091463510b89f33
 PATCHES=$SCRIPT_DIR/patches/$PERL_VERSION
 [[ -d "$PATCHES" ]] || { echo "no patches/$PERL_VERSION" >&2; exit 2; }
+PATCH_FILES=("$PATCHES"/*.patch)
+SV_HEAD_FLAGS=
+if [[ $SV_HEADS == 1 ]]; then
+  PATCH_FILES+=("$SCRIPT_DIR"/../sv-heads/patches/$PERL_VERSION/*.patch)
+  SV_HEAD_FLAGS=" -DPERL_SV_HEAD_ADAPTER"
+fi
 
 [[ -f "$MRT/hostcall.c" ]] || { echo "no runtime at $MRT (RUNTIME_REPO=$RT)" >&2; exit 2; }
 mkdir -p "$ROOT/runtime" "$ROOT/src" "$ROOT/dl"
@@ -97,7 +107,7 @@ CC_HASH=$(sha256sum "$CC" | cut -d' ' -f1)
 
 # ---- perl, pinned, patched, cross-built ------------------------------------
 S=$ROOT/src/perl-$PERL_VERSION
-PATCH_HASH=$(sha256sum "$PATCHES"/*.patch | sha256sum | cut -d' ' -f1)
+PATCH_HASH=$(sha256sum "${PATCH_FILES[@]}" | sha256sum | cut -d' ' -f1)
 if [[ -f "$S/.perld-patched" && $(cat "$S/.perld-patchset" 2>/dev/null) != "$PATCH_HASH" ]]; then
   log "source patch set changed; unpacking Perl again"
   rm -rf "$S"
@@ -125,7 +135,7 @@ fi
 # build stopped in the patch step.
 apply_our_patches() {
   [[ -f "$S/.perld-patched" ]] && return 0
-  for p in "$PATCHES"/*.patch; do
+  for p in "${PATCH_FILES[@]}"; do
     (cd "$S" && patch -p1 -s < "$p") || { echo "patch $p did not apply" >&2; exit 2; }
     log "applied $(basename "$p")"
   done
@@ -179,7 +189,7 @@ if stage perl; then
       --with-objdump=llvm-objdump --with-readelf=llvm-readelf --hints=linux \
       -Uusedl -Uusethreads -Uusemymalloc -Ud_nanosleep -Ud_mmap \
       --disable-mod=PerlIO/mmap,Time-HiRes \
-      -Dalignbytes=16 -Doptimize="${PERLD_OPT:--O2}" -Accflags=-D_GNU_SOURCE \
+      -Dalignbytes=16 -Doptimize="${PERLD_OPT:--O2}" -Accflags="-D_GNU_SOURCE$SV_HEAD_FLAGS" \
       > "$ROOT/configure.log" 2>&1) \
     || { tail -5 "$ROOT/configure.log" >&2; echo "configure failed (see $ROOT/configure.log)" >&2; exit 2; }
   # A malformed config.h line reads as a missing configure answer, and every
@@ -197,10 +207,20 @@ PY
   (cd "$S" && make crosspatch > "$ROOT/crosspatch.log" 2>&1) \
     || { tail -5 "$ROOT/crosspatch.log" >&2; echo "make crosspatch failed (see $ROOT/crosspatch.log)" >&2; exit 2; }
   apply_our_patches
+  # The study variant's adapter. This link only proves the image resolves; the
+  # measured image is relinked by experiments/applications/build.py --nested
+  # perl, which also grants the adapter its region.
+  MAKE_VARS=()
+  if [[ $SV_HEADS == 1 ]]; then
+    mkdir -p "$ROOT/link"
+    "$O/capstone-cc" -O1 -I"$RT/capstone/runtime/include" \
+      -c "$SCRIPT_DIR/../sv-heads/capstone.c" -o "$ROOT/link/perl-sv-heads.o"
+    MAKE_VARS=("LIBS=$ROOT/link/perl-sv-heads.o")
+  fi
   # The upstream Makefile cannot see the external SDK archive dependencies.
   # Relink on each requested Perl build; compiled upstream objects remain reusable.
   rm -f "$S/perl"
-  (cd "$S" && make -j"$JOBS" perl > "$ROOT/make.log" 2>&1) \
+  (cd "$S" && make -j"$JOBS" perl "${MAKE_VARS[@]}" > "$ROOT/make.log" 2>&1) \
     || { grep -m5 "error:" "$ROOT/make.log" >&2; echo "make failed (see $ROOT/make.log)" >&2; exit 2; }
   # A size that does not fit its field is silent at run time and fatal: the arena
   # would hand out a slot smaller than the body it is for (patches 0001).
