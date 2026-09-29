@@ -239,7 +239,9 @@ memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
 (`clone` and `fork` are ENOSYS; image exec uses the process service below), and
 threads. Signals cross: the kernel keeps dispositions, mask, pending set and
 restart decisions, and a caught signal runs its domain handler at the domain's
-next round (see Signals below). `ioctl` crosses for the terminal requests a
+next round (see Signals below). Under `CAPSTONE_DELEGATE_STATS` the domain
+reports at exit which syscalls did not cross; without it the application's
+stderr carries application bytes only. `ioctl` crosses for the terminal requests a
 libc uses and nothing else, each with its buffer size known to the libc and
 its number on the launcher's allowlist: the window size, the `termios` set,
 `FIONREAD` and `FIONBIO`, the pseudo-terminal pair (`TIOCSPTLCK`,
@@ -249,7 +251,7 @@ unsigned int to the kernel; musl passes it as an int, so both sides mask it
 before looking it up. The application contract's `pty` mode opens a pair
 through musl's `openpty`, passes bytes through it and reads the foreground
 group; the native edge test covers the entry from the launcher's side. The
-unserved report at exit lists what did not cross.
+unserved report at exit, under `CAPSTONE_DELEGATE_STATS`, lists what did not cross.
 
 The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 `CAPSTONE_APPLICATION_EXCHANGE_BYTES` for the SDK project); larger buffers are
@@ -265,7 +267,8 @@ ENOSYS. Installation failure aborts launch; `CAPSTONE_EXEC_NO_SECCOMP=1`
 disables it explicitly for debugging. The dispatcher separately validates
 command-dependent pointers and excludes launcher-private descriptors.
 `CAPSTONE_DELEGATE_STATS=1` prints rounds, syscalls, refused entries, bytes
-through the exchange region and `rdtime` ticks at exit.
+through the exchange region and `rdtime` ticks at exit, and lets the domain
+print its own report of unserved and no-op syscalls.
 
 A domain fault produces a record with cause, PC, address, the runtime address
 of `domain_main`, the code bounds and the sealed image's SHA-256, written to the file `CAPSTONE_FAULT_RECORD`
