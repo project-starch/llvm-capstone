@@ -31,7 +31,11 @@ refusal record) the same stale probe (image `35fb3fec`) still traps 25 at `+0x43
 most likely a stale generation): the boot's first cause-25 verdict was on the probe path, NOT the cache's deny-on-miss, with
 id 0x5f (95) — fresh on the repetition m1v2-4, the same on a10. That it is the stale access's own verdict is consistent with the
 trap at `+0x4354` but not proven: the record latches the first verdict since reset, and the aed492ab live-alias control that read
-EMPTY is a different fixture (four source commits apart), so it does not scope this boot. That closes the "not observable" item below
+EMPTY is a different fixture (four source commits apart), so it does not scope this boot.
+**And the stale WRITE, which no earlier boot reached, is refused too:** on the same bitstream the write probe (`067cc96f`) traps 25
+at the `sb` through the revoked alias on 2 of 2 boots (`+0x4370`, record LATCHED on the probe arm, id 0x60), while the matched
+live-write control (`9b24aa31`, one define apart) completes with readback 165 — the board lane's record on dev (`7e721ae2`,
+`tests/rtl-smoke/paper-r43v2-2026-09-29/results/m1v2-{1,5,6}`). The "stale write was never reached" limit below is now dated. That closes the "not observable" item below
 (`../R43-revocation-cache-false-deny/results/board-8f6a0af98.result-lines.txt`, a10).
 
 The status paragraphs that follow are the dated history, newest first.
