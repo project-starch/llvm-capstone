@@ -402,3 +402,52 @@ For the broader long-term endpoint requested here, a custom scatter/gather map
 would inherit most MMU obligations while adding another implementation to mature.
 It should displace the existing-MMU direction only on concrete evidence of a
 better security, complexity or performance result.
+
+## 10. Prior work and the scope of the proposal
+
+"Protected mappings" is descriptive terminology in this discussion, not the
+title of a paper or a claim of novelty. The recommendation combines established
+ideas with unresolved Capstone integration work. The closest references are:
+
+- **[Caplification: Bridging Capability-Aware and Capability-Oblivious Software](https://www.comp.nus.edu.sg/~tcarlson/pdfs/yu2025cbcacs.pdf),
+  SACMAT 2025.** The most immediate architectural reference. Caplification places
+  capability authority underneath conventional memory accesses; CapliFive
+  implements this through capability-backed PMP. Its critique of virtual-memory
+  capabilities highlights loss of context independence and trust in an OS that
+  controls mappings. The proposed translation extension must preserve those
+  benefits. Existing caplified PMP does not give today's physical C-mode pointer
+  a contiguous logical interval over scattered frames. The
+  [CapliFive ISA specification](https://capstone.kisp-lab.org/specs-caplifive/main.pdf),
+  section 1.4, distinguishes physical capability execution from lower-privilege
+  virtual-memory accesses.
+- **[Cichlid: Explicit physical memory management for large machines](https://arxiv.org/html/1911.08367),
+  2019 preprint, especially section 3.2.** Separates physical allocation from MMU
+  programming. Capabilities authorize physical frames and translation objects;
+  checked kernel operations construct mappings. This is a close precedent for
+  the proposed control interface, using software capabilities and a trusted
+  kernel rather than Capstone's hardware-enforced linear authority.
+- **[Elasticlave: An Efficient Memory Model for Enclaves](https://www.usenix.org/system/files/sec22-yu-jason.pdf),
+  USENIX Security 2022, section 4.** Shared regions have participant-specific,
+  dynamically adjustable permission views bounded by static maxima, plus
+  controlled exclusive access. This directly precedes the view-permission idea
+  discussed here. It does not by itself supply fine-grained allocator pointer
+  lifetimes or the proposed translation extension.
+- **[Sanctum: Minimal Hardware Extensions for Strong Software Isolation](https://www.usenix.org/system/files/conference/usenixsecurity16/sec16_paper_costan.pdf),
+  USENIX Security 2016, sections 5.2--5.3.** Protected enclave page tables and
+  checks on the walker's physical accesses provide a concrete precedent for
+  translation under an untrusted OS. The trusted monitor and enclave isolation
+  model differ from Capstone's general capability delegation model.
+- **[CheriABI: Enforcing valid pointer provenance and minimizing pointer privilege in the POSIX C run-time environment](https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-932.html),
+  ASPLOS 2019 and extended technical report.** Relevant to fitting fine-grained
+  hardware pointers into POSIX memory management. It establishes neither the
+  proposed hostile-OS protection nor Capstone's linear/revocable ownership.
+  The seL4 mapping reference in section 9 is another concrete precedent for
+  capability-authorized page-table operations.
+
+Accordingly, the research question is narrower than "can capabilities protect
+mappings?": can a translation extension preserve Capstone's context-independent
+delegation, physical exclusivity and object revocation, while supporting
+independent shared attachments and ordinary Linux backing? Protected tables
+alone do not settle capability identity across address spaces or stale-pointer
+behavior on remapping. No novelty or completeness claim for that combination
+is established by this initial literature check.
