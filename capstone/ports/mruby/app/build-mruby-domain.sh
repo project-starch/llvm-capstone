@@ -44,11 +44,23 @@ BOXING=${MRBD_BOXING:-no}
 PIN=${MRBD_PIN:-head}
 HEAP=${MRBD_HEAP:-level0}
 HEAP_LOG=${MRBD_HEAP_LOG:-26}
-case "$HEAP" in level0|sublet|sublet-gc) ;; *) echo "MRBD_HEAP=$HEAP? (level0, sublet, sublet-gc)" >&2; exit 2 ;; esac
+case "$HEAP" in level0|sublet|sublet-gc|sublet-hash) ;; *) echo "MRBD_HEAP=$HEAP? (level0, sublet, sublet-gc, sublet-hash)" >&2; exit 2 ;; esac
 if [[ $HEAP == sublet-gc ]]; then
   [[ -f "$SCRIPT_DIR/patches/$PIN/0008-gc-slots-under-sublet.patch" ]] \
     || { echo "MRBD_HEAP=sublet-gc needs patches/$PIN/0008-gc-slots-under-sublet.patch" >&2; exit 2; }
   export MRBD_GC_SUBLET_INCLUDE=$RT/capstone/sublet
+  export MRBD_SUBLET_DEFINE=MRB_CAPSTONE_GC_SUBLET
+fi
+# sublet-hash is the level above the GC's slots: the hash's entry array, one slot issued
+# and revoked at a time (patch 0010). It needs the program's region 2, which the host
+# grants with MRBD_HASH_REGION_BYTES in run-mruby-domain.sh -- and, because the index is
+# positional, MRBD_GC_REGION_BYTES must be granted before it even when the GC is not
+# sub-let in this arm.
+if [[ $HEAP == sublet-hash ]]; then
+  [[ -f "$SCRIPT_DIR/patches/$PIN/0010-hash-entry-slots-under-sublet.patch" ]] \
+    || { echo "MRBD_HEAP=sublet-hash needs patches/$PIN/0010-hash-entry-slots-under-sublet.patch" >&2; exit 2; }
+  export MRBD_GC_SUBLET_INCLUDE=$RT/capstone/sublet
+  export MRBD_SUBLET_DEFINE=MRB_CAPSTONE_HASH_SUBLET
 fi
 
 # The pinned trees. head: mruby of 2026-09-17 and the Prism its .gitmodules
@@ -102,6 +114,7 @@ if stage runtime; then
   HCF=(); EF=()
   [[ $HEAP == sublet* ]] && { HCF=(-DCAPSTONE_PROGRAM_REGIONS=1); EF=(-DMRBD_SUBLET_HEAP=1); }
   [[ $HEAP == sublet-gc ]] && EF+=(-DMRBD_GC_SUBLET=1)
+  [[ $HEAP == sublet-hash ]] && EF+=(-DMRBD_HASH_SUBLET=1)
   "$CAPSTONE_CLANG" "${RF[@]}" "${HCF[@]}" -c "$MRT/hostcall.c" -o "$O/hostcall.o"
   "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/tls.c" -o "$O/tls.o"
   if [[ $HEAP == sublet* ]]; then

@@ -62,7 +62,7 @@ MRuby::CrossBuild.new('capstone') do |conf|
   # MRBD_HEAP=sublet-gc: every GC object slot under Sublet (patch 0008), which
   # needs sublet.h from the runtime tree; the build script exports its path.
   if (inc = ENV['MRBD_GC_SUBLET_INCLUDE'])
-    conf.cc.defines << 'MRB_CAPSTONE_GC_SUBLET'
+    conf.cc.defines << ENV.fetch('MRBD_SUBLET_DEFINE', 'MRB_CAPSTONE_GC_SUBLET')
     conf.cc.include_paths << inc
   end
   gems.call(conf)

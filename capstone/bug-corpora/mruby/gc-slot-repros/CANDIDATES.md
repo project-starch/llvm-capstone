@@ -730,3 +730,43 @@ allocator, and (1) is what was missing. The attempt is recorded rather than comm
 a sub-let that is wrong produces faults that look exactly like catches, which is the
 trap this file documents twice already, and the control existing is the only reason
 this one was caught in a single run rather than written up as a result.
+
+### Attempt 2: the level is protected, and it catches one nothing else does
+
+The three specification points above were implemented and patch 0010 lands. The control
+passes in the new arm -- `SMOKE_DONE`, `LT-RESULT status=0 rounds=158 PASS` -- so the arm
+is functional before any case is read from it.
+
+| case | `level0` (revoke removed) | `sublet-hash` (patch 0010) |
+|---|---|---|
+| **`a54353ecf`** | completes, 9 wrong | **FAULT cause 24 @`ar_delete+0x74`** |
+| `08a0432d1` | completes, 4 wrong | completes, 4 wrong |
+| `eb7693857` | FAULT 24 @`mrb_vformat+0x7c0` | FAULT 24 @**the same place** |
+| `4663fef45` | completes, 4 wrong | FAULT 24 @`ar_get+0xc0` |
+
+**`a54353ecf` is caught, and by nothing else in this tree.** Plain `sublet` misses it --
+measured above, it completes with the same nine wrong answers in both arms -- because the
+slot is vacated and refilled with nothing released. Under patch 0010 it faults in
+`ar_delete`, which is the defect's own mechanism rather than a nearby accident: the commit
+that fixed it upstream says the defect *"lets `Hash#delete` take it a second time"*, and a
+second take of a slot whose alias has been revoked is exactly where the fault lands.
+
+`4663fef45` faults at `ar_get` here as it does under plain `sublet`, consistently: it was
+already caught, by bounds, and this level does not change that.
+
+Two are unchanged and both are honest negatives. `eb7693857` faults at the same place in
+both arms, which is the accident the documentation warns about and which this level does
+not touch. `08a0432d1` is still missed: its sites are `assoc`, `rassoc`, `==` and `eql?`,
+and whether they reach a vacate on the array shape at all is the next thing to check
+rather than something this run answers.
+
+**So the tally, measured across all three arms:**
+
+| arm | of the ten rows |
+|---|---:|
+| `level0` -- default, revokes nothing | **0** caught |
+| `sublet` -- the system heap, CHERI's baseline | **1** clean, 1 with a weak oracle |
+| `sublet-hash` -- one level above it | **+1**, and that one is invisible to every arm below |
+
+That is the argument in one line: the level above the heap was worth protecting, because a
+defect lives there that the heap's own revocation cannot see.

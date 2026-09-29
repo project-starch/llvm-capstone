@@ -1,0 +1,346 @@
+hash.c: every entry slot issued and revoked on its own, under MRB_CAPSTONE_HASH_SUBLET (4.0.0-rc2).
+
+The nesting level above the GC's object slots (patch 0008). A slot is vacated by
+entry_delete() and refilled by a later ea_set() with nothing released to the allocator
+in between, so revoke-on-free has no event to fire on -- measured at this pin for three
+defects whose scans answer from a refilled slot (a54353ecf, 08a0432d1, eb7693857; see
+capstone/bug-corpora/mruby/gc-slot-repros/CANDIDATES.md). Without the define the
+preprocessed file is identical to before.
+
+Three things make it work, and the first attempt got the first of them wrong -- the
+domain control caught that at ht_set, which is why it is stated first here:
+
+1. THE ARRAY'S STORAGE IS THE CARVED SPAN. ea_resize() and ea_dup() allocate out of the
+   program's region 2 and return the span's base, so there is one array rather than an
+   malloc'd block with a shadow beside it. A fresh array becomes a span and a growing one
+   is re-carved with its live slots re-issued; an malloc'd block this level never owned
+   stays off this level, because ea_resize is not told ea_n_used and so cannot tell a
+   vacated slot from uninitialised memory.
+2. A FREE SLOT IS NEVER READ, as 0008 states for its own slots. Its state is
+   obj[i] == NULL in the sidecar, which is why ea_deleted_p() takes an INDEX rather than
+   a pointer, and why ea_skip_deleted() and ea_compress() are index-based against it.
+   ea_get() returns NULL for a free slot by design.
+3. GROWTH PAST AR_MAX_SIZE LEAVES THIS LEVEL: above 16 entries the hash changes shape,
+   so the live slots are copied out to malloc and the span is dropped.
+
+Slot birth and slot death are one function each -- ea_set() and entry_delete() -- which
+patch 0009 is what made true, so sublet_take and sublet_give have one site each as they
+do in 0008. ea_compress() additionally revokes every slot at or above its write cursor:
+those are no longer the hash's, and revoking them is what makes a scan still holding one
+fault.
+
+Carving follows 0008 exactly: carve the span out of the grant, take a handle senior to
+it, then one split per slot. The grant is carved forward only, again as 0008 does, so a
+dropped span is not returned to it -- which bounds a program to the region's size and is
+why the region is granted separately (MRBD_HASH_REGION_BYTES).
+
+Two limits, stated rather than hidden. entry_delete() keeps its signature and the slot is
+found by searching the live spans for the pointer, which is a walk; a functional arm wants
+the index passed in, which means exposing the walk macros' index at 22 call sites. And
+XS_MAX bounds the tracked spans at 64, beyond which ea_resize falls back to malloc and
+the level is simply not covered for that array rather than failing.
+
+diff --git c/src/hash.c w/src/hash.c
+--- c/src/hash.c
++++ w/src/hash.c
+@@ -414,6 +414,136 @@
+   }
+ }
+ 
++static inline mrb_bool entry_deleted_p(const hash_entry* entry);
++static hash_entry *ea_get(hash_entry *ea, uint32_t index);
++static void ea_set(hash_entry *ea, uint32_t index, mrb_value key, mrb_value val);
++
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++/* ---------------------------------------------------------------------------
++ * The hash entry array, one slot issued and revoked at a time.
++ *
++ * The nesting level above the GC's object slots (patch 0008). A slot is vacated by
++ * entry_delete() and refilled by a later ea_set(), with nothing released to the
++ * allocator in between, so revoke-on-free has no event to fire on -- measured at this
++ * pin for three defects whose scans answer from a refilled slot.
++ *
++ * The array's STORAGE IS the carved span: ea_resize() and ea_dup() allocate out of the
++ * program's region 2 and return the span's base, so there is one array rather than an
++ * malloc'd block plus a shadow. Getting that wrong was the first attempt's defect, and
++ * the domain control caught it at ht_set.
++ *
++ * A FREE SLOT IS NEVER READ, as in 0008: its state is obj[i] == NULL in the sidecar,
++ * which is why ea_deleted_p() takes an index rather than a pointer. The sidecar is
++ * plain memory from .bss, so nothing in it lies inside a slot.
++ *
++ * Only the ARRAY shape is covered: above AR_MAX_SIZE the hash changes shape and leaves
++ * this level, so growth past it copies the live slots out and gives the span back.
++ * ------------------------------------------------------------------------- */
++#include "sublet.h"
++void *__capstone_region(unsigned index);
++
++#define XS_MAX 64                 /* live entry arrays tracked at once */
++#define XS_SLOTS AR_MAX_SIZE      /* a span never holds more; above it, shape changes */
++
++typedef struct xs_arr {
++  hash_entry *base;               /* the span's base, and what ar_ea()/ht_ea() hold */
++  uint32_t capa;
++  sublet_cap handle;              /* senior to every slot */
++  sublet_cap cap[XS_SLOTS];       /* slot i: the region while free, its handle while live */
++  hash_entry *obj[XS_SLOTS];      /* slot i's alias while live, NULL while free */
++} xs_arr;
++
++static xs_arr xs_tab[XS_MAX];
++static sublet_cap xs_grant;
++static int xs_granted;
++static unsigned long xs_spans, xs_issued, xs_released;
++
++static xs_arr *
++xs_find(const hash_entry *ea)
++{
++  if (!ea) return NULL;
++  for (int i = 0; i < XS_MAX; i++) if (xs_tab[i].base == ea) return &xs_tab[i];
++  return NULL;
++}
++
++/* the slot a pointer names. entry_delete() keeps its signature, so the slot is found
++   by range over the live spans; a functional arm would pass the index instead. */
++static xs_arr *
++xs_find_slot(const hash_entry *e, uint32_t *index)
++{
++  for (int i = 0; i < XS_MAX; i++) {
++    xs_arr *a = &xs_tab[i];
++    if (!a->base) continue;
++    for (uint32_t k = 0; k < a->capa; k++)
++      if (a->obj[k] == e) { *index = k; return a; }
++  }
++  return NULL;
++}
++
++/* carve a span of capa slots and split it one node per slot, as 0008 does its page */
++static xs_arr *
++xs_new(uint32_t capa)
++{
++  if (capa == 0 || capa > XS_SLOTS) return NULL;
++  if (!xs_granted) { sublet_store(&xs_grant, __capstone_region(2)); xs_granted = 1; }
++  if (sublet_type(&xs_grant) != SUBLET_TYPE_LIN) return NULL;
++  unsigned long start = sublet_base(&xs_grant);
++  unsigned long bytes = (unsigned long)capa * sizeof(hash_entry);
++  if (sublet_end(&xs_grant) - start < bytes) return NULL;
++  for (int i = 0; i < XS_MAX; i++) {
++    if (xs_tab[i].base) continue;
++    xs_arr *a = &xs_tab[i];
++    sublet_carve(&xs_grant, start + bytes, &a->cap[0]);
++    sublet_handle(&a->cap[0], &a->handle);
++    for (uint32_t k = 0; k + 1 < capa; k++)
++      sublet_split(&a->cap[k], start + (unsigned long)(k + 1) * sizeof(hash_entry), &a->cap[k + 1]);
++    a->base = (hash_entry*)start;
++    a->capa = capa;
++    for (uint32_t k = 0; k < capa; k++) a->obj[k] = NULL;
++    xs_spans++;
++    return a;
++  }
++  return NULL;                    /* the table is full; the caller falls back to malloc */
++}
++
++static hash_entry *
++xs_issue(xs_arr *a, uint32_t index)
++{
++  if (!a->obj[index]) { a->obj[index] = (hash_entry*)sublet_take(&a->cap[index]); xs_issued++; }
++  return a->obj[index];
++}
++
++/* one revoke, after which every stale copy of the slot's alias is dead */
++static void
++xs_release(xs_arr *a, uint32_t index)
++{
++  if (!a->obj[index]) return;
++  a->obj[index] = NULL;
++  sublet_give(&a->cap[index]);
++  xs_released++;
++}
++
++static void
++xs_drop(xs_arr *a)
++{
++  for (uint32_t k = 0; k < a->capa; k++) xs_release(a, k);
++  a->base = NULL;                 /* the span itself is not returned to the grant:
++                                     the grant is carved forward only, as 0008's is */
++}
++#endif  /* MRB_CAPSTONE_HASH_SUBLET */
++
++/* Is slot index vacated? Takes an INDEX because under a sub-let a free slot is never
++   read -- its state is in the sidecar, not in the slot. */
++static mrb_bool
++ea_deleted_p(hash_entry *ea, uint32_t index)
++{
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++  xs_arr *a = xs_find(ea);
++  if (a && index < a->capa) return a->obj[index] == NULL;
++#endif
++  return entry_deleted_p(&ea[index]);
++}
++
+ static inline mrb_bool
+ entry_deleted_p(const hash_entry* entry)
+ {
+@@ -423,6 +553,11 @@
+ static void
+ entry_delete(hash_entry* entry)
+ {
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++  uint32_t i;
++  xs_arr *a = xs_find_slot(entry, &i);
++  if (a) { entry->key = mrb_undef_value(); xs_release(a, i); return; }  /* slot death */
++#endif
+   entry->key = mrb_undef_value();
+ }
+ 
+@@ -434,11 +569,13 @@
+   return e;
+ }
+ 
++
++
+ /* entry_skip_deleted() in index form: see the note on the walk macros. */
+ static uint32_t
+ ea_skip_deleted(hash_entry *ea, uint32_t index)
+ {
+-  for (; entry_deleted_p(ea_get(ea, index)); index++)
++  for (; ea_deleted_p(ea, index); index++)
+     ;
+   return index;
+ }
+@@ -466,19 +603,56 @@
+ static hash_entry*
+ ea_resize(mrb_state *mrb, hash_entry *ea, uint32_t capa)
+ {
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++  /* The array's storage IS the span. A fresh array becomes one, and a growing one is
++     re-carved with its live slots re-issued. An array that is neither -- an malloc'd
++     block this level never owned -- stays off this level, because ea_resize is not told
++     ea_n_used and so cannot tell a vacated slot from uninitialised memory. */
++  xs_arr *old = xs_find(ea);
++  if (capa <= XS_SLOTS && (old || ea == NULL)) {
++    xs_arr *a = xs_new(capa);
++    if (a) {
++      if (old) {
++        for (uint32_t k = 0; k < old->capa && k < capa; k++)
++          if (old->obj[k]) ea_set(a->base, k, old->obj[k]->key, old->obj[k]->val);
++        xs_drop(old);
++      }
++      return a->base;
++    }
++    if (!old) return (hash_entry*)mrb_realloc(mrb, ea, sizeof(hash_entry) * capa);
++  }
++  if (old) {                 /* past AR_MAX_SIZE: leave this level, carrying the live slots */
++    hash_entry *n = (hash_entry*)mrb_malloc(mrb, sizeof(hash_entry) * capa);
++    for (uint32_t k = 0; k < capa; k++) n[k].key = mrb_undef_value();
++    for (uint32_t k = 0; k < old->capa && k < capa; k++)
++      if (old->obj[k]) { n[k].key = old->obj[k]->key; n[k].val = old->obj[k]->val; }
++    xs_drop(old);
++    return n;
++  }
++#endif
+   return (hash_entry*)mrb_realloc(mrb, ea, sizeof(hash_entry) * capa);
+ }
+ 
+ static void
+ ea_compress(hash_entry *ea, uint32_t n_used)
+ {
+-  hash_entry *w_entry = ea;
+-  hash_entry *r_entry;
+-  EA_EACH_USED(ea, n_used, r_entry) {
+-    if (entry_deleted_p(r_entry)) continue;
+-    if (r_entry != w_entry) *w_entry = *r_entry;
+-    w_entry++;
++  uint32_t w = 0;
++  for (uint32_t r = 0; r < n_used; r++) {
++    if (ea_deleted_p(ea, r)) continue;
++    if (r != w) {
++      hash_entry *src = ea_get(ea, r);
++      ea_set(ea, w, src->key, src->val);
++    }
++    w++;
++  }
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++  /* the slots the pack left behind are no longer the hash's: revoke them, which is
++     what makes a scan holding one of them fault */
++  {
++    xs_arr *a = xs_find(ea);
++    if (a) for (uint32_t k = w; k < n_used && k < a->capa; k++) xs_release(a, k);
+   }
++#endif
+ }
+ 
+ /*
+@@ -497,6 +671,26 @@
+ ea_dup(mrb_state *mrb, const hash_entry *ea, uint32_t capa)
+ {
+   size_t byte_size = sizeof(hash_entry) * capa;
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++  {
++    xs_arr *src = xs_find(ea);
++    if (src) {
++      xs_arr *a = capa <= XS_SLOTS ? xs_new(capa) : NULL;
++      if (a) {
++        for (uint32_t k = 0; k < src->capa && k < capa; k++)
++          if (src->obj[k]) ea_set(a->base, k, src->obj[k]->key, src->obj[k]->val);
++        return a->base;
++      }
++      {                        /* no span to be had: a plain copy of the live slots */
++        hash_entry *n = (hash_entry*)mrb_malloc(mrb, byte_size);
++        for (uint32_t k = 0; k < capa; k++) n[k].key = mrb_undef_value();
++        for (uint32_t k = 0; k < src->capa && k < capa; k++)
++          if (src->obj[k]) { n[k].key = src->obj[k]->key; n[k].val = src->obj[k]->val; }
++        return n;
++      }
++    }
++  }
++#endif
+   hash_entry *new_ea = (hash_entry*)mrb_malloc(mrb, byte_size);
+   return (hash_entry*)memcpy(new_ea, ea, byte_size);
+ }
+@@ -515,12 +709,24 @@
+ static hash_entry*
+ ea_get(hash_entry *ea, uint32_t index)
+ {
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++  xs_arr *a = xs_find(ea);
++  if (a && index < a->capa) return a->obj[index];   /* NULL for a free slot, by design */
++#endif
+   return &ea[index];
+ }
+ 
+ static void
+ ea_set(hash_entry *ea, uint32_t index, mrb_value key, mrb_value val)
+ {
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++  xs_arr *a = xs_find(ea);
++  if (a && index < a->capa) {
++    hash_entry *e = xs_issue(a, index);        /* slot birth: the one place */
++    e->key = key; e->val = val;
++    return;
++  }
++#endif
+   ea[index].key = key;
+   ea[index].val = val;
+ }
+@@ -539,6 +745,9 @@
+ static void
+ ar_free(mrb_state *mrb, struct RHash *h)
+ {
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++  { xs_arr *a = xs_find(ar_ea(h)); if (a) { xs_drop(a); return; } }   /* a span is not malloc's */
++#endif
+   mrb_free(mrb, ar_ea(h));
+ }
+ 
+@@ -872,7 +1081,11 @@
+ static void
+ ht_free(mrb_state *mrb, struct RHash *h)
+ {
++#ifdef MRB_CAPSTONE_HASH_SUBLET
++  { xs_arr *a = xs_find(ht_ea(h)); if (a) xs_drop(a); else mrb_free(mrb, ht_ea(h)); }
++#else
+   mrb_free(mrb, ht_ea(h));
++#endif
+   mrb_free(mrb, h_ht(h));
+ }
+ 

@@ -53,6 +53,10 @@ The output is byte-identical to native (`results/2026-09-26/scripts.txt`).
   0009 carries an index through the hash's entry walks instead of a moving
   pointer, so each slot can later be sub-let: behaviour-neutral, and mrbtest is
   unchanged with and without it.
+  0010 then sub-lets that array, one slot issued and revoked at a time
+  (`MRBD_HEAP=sublet-hash`, the program's region 2): it catches a defect plain
+  `sublet` cannot see, because the slot is vacated and refilled with nothing
+  released.
 
 ## The Sublet heap (`MRBD_HEAP=sublet`)
 
