@@ -41,14 +41,26 @@ class HostSupport(unittest.TestCase):
                 )
             self.assertEqual(result.returncode, 75)
             command = execute.call_args.args[0]
+            # -E 75: an expired lock wait exits 75, and only that does (a34caaedb1bc)
             self.assertEqual(
-                command[:5], ["flock", "-x", "-w", "60", env["CAPSTONE_QEMU_LOCK"]]
+                command[:7],
+                ["flock", "-x", "-E", "75", "-w", "60", env["CAPSTONE_QEMU_LOCK"]],
             )
             self.assertEqual(
                 command[command.index("--guest-command") + 1], "run workload"
             )
             self.assertEqual(command[command.index("--success-marker") + 1], "DONE")
             self.assertEqual(command[command.index("--timeout-multiplier") + 1], "60")
+
+    def test_lock_wait_follows_the_environment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary)
+            env = {"CAPSTONE_QEMU_LOCK": str(run / "qemu.lock"), "CAPSTONE_QEMU_LOCK_WAIT": "7200"}
+            with patch("port_support.subprocess.run") as execute:
+                execute.return_value = subprocess.CompletedProcess([], 0)
+                run_guest(run, "run workload", "DONE", env=env)
+            command = execute.call_args.args[0]
+            self.assertEqual(command[command.index("-w") + 1], "7200")
 
     def test_bundle_checksums_are_repeatable(self):
         with tempfile.TemporaryDirectory() as temporary:
