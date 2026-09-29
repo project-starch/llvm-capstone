@@ -68,10 +68,30 @@ def qemu_process_environment(recorded: dict[str, str]) -> dict[str, str]:
     return environment
 
 
+def qmp_connect(path: Path, timeout: float = 5) -> socket.socket:
+    """Connect to QEMU's QMP socket. Its listener has a backlog of one, and a
+    timed connect is non-blocking, so while another command is connected a
+    connect fails at once with EAGAIN instead of waiting: concurrent runs hit
+    this. Retry on a fresh socket within the same timeout."""
+    deadline = time.monotonic() + timeout
+    while True:
+        connection = socket.socket(socket.AF_UNIX)
+        connection.settimeout(timeout)
+        try:
+            connection.connect(str(path))
+            return connection
+        except BlockingIOError:
+            connection.close()
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.02)
+        except BaseException:
+            connection.close()
+            raise
+
+
 def qmp(state: Path, command: str) -> dict:
-    with socket.socket(socket.AF_UNIX) as connection:
-        connection.settimeout(5)
-        connection.connect(str(state / "qmp.sock"))
+    with qmp_connect(state / "qmp.sock") as connection:
         with connection.makefile("rwb", buffering=0) as stream:
             if "QMP" not in json.loads(stream.readline()):
                 raise VMError("Invalid QMP greeting")
