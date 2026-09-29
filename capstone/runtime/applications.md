@@ -295,16 +295,18 @@ and sealed before exec; failure returns errno to the current application; `execv
 native program answers ENOSYS, because the filtered task cannot become one.
 `fork` without `exec` stays ENOSYS by design.
 
-A shell in the guest starts a Capstone image only with `binfmt_misc`, which
-the pinned guest kernel does not build (`CONFIG_BINFMT_MISC` is unset); the
-VM setup script registers the format when the kernel offers it. Until the
-Buildroot kernel configuration changes, a shell command line naming an image
-fails with ENOEXEC, while `posix_spawn` of the image and the launcher's own
-exec work.
+A shell in the guest starts a Capstone image with `binfmt_misc`. Buildroot
+`227fdfa` enables `CONFIG_BINFMT_MISC=y` for QEMU. The VM setup mounts the
+filesystem before registering the ELF machine 259 handler, passes literal
+magic escapes to the kernel, and fails on a registration error. The `P` flag
+preserves the original argv[0]; the launcher distinguishes this invocation
+using the kernel's `AT_FLAGS_PRESERVE_ARGV0` auxiliary-vector bit. Kernels
+without support remain usable through the explicit launcher and report that
+direct image execution is unavailable.
 
-Perl built on this runtime with patch 0008 passes eight of nine `t/base`
-files, 493 assertions, as before; the ninth needs the shell to exec an image,
-see [the result](../ports/perl/musl/results/2026-09-29/base-tests-delegated.txt).
+Perl rebuilt on this runtime with patch 0008 now passes all nine `t/base`
+files and 493 assertions, including the shell-launched image in `term.t`;
+see [the result](../ports/perl/musl/results/2026-09-29/base-tests-binfmt.txt).
 
 musl's libc-test runs against this runtime with
 `ports/musl-capstone/libc-test/run-libc-test-delegated.py`, every functional
@@ -346,9 +348,37 @@ utimensat's nullable path. The remaining failing tests are `mntent`, `setjmp`,
 `sscanf_long`, `strptime`, and `strtold`; the two signal exits remain
 `clocale_mbfuncs` (SIGSEGV) and `popen` (SIGUSR1). A runner timeout now asks the
 CLI to cancel and reap the guest and stops the suite if cleanup cannot be
-confirmed. No new Perl coverage is claimed: its 8/9 gate, binfmt_misc support,
-signal delivery and region-grant memory remain open. Step 4 is implemented in
-part, not accepted against its original gates.
+confirmed. This initial review run did not add Perl coverage. The follow-up
+below closes its binfmt_misc gate; signal delivery and region-grant memory
+remain open. Step 4 is implemented in part, not accepted against all its
+original gates.
+
+### Shell execution qualification (2026-09-29)
+
+The [checked result](tests/application/results/20260929-delegation-binfmt.json)
+records a kernel built from clean pinned Linux `830b3c68c1fb`, the expanded
+Buildroot `227fdfa` QEMU configuration, and the rebuilt Perl/launcher hashes.
+The earlier failed snapshot boot is reproducible (`E2BIG` starting init).
+That snapshot contained local address-tag changes in `pgtable.h` and `uaccess.h`;
+the clean pinned sources boot with the same configuration including binfmt_misc.
+The installed known-good Image and the snapshot build-tree Image also had
+different hashes; a snapshot directory alone did not identify the booted kernel.
+
+Four new host tests cover mount/registration, all 20 bytes of the ELF match,
+native-ELF rejection, stale registration replacement, explicit errors, and
+the older-kernel fallback. All 21 host tests pass. Direct guest exec preserves
+custom argv[0] (a failing control before the `P`/auxv fix), exit status,
+I/O, spawn and in-place exec, including closed standard descriptors and failed
+exec recovery. The complete v1 gate passes another 108 starts with stable
+retained resources; delegated libc-test remains 45/77 PASS. Fresh Perl `t/base`
+passes 9/9 files and all 493 assertions. These are QEMU results, not FPGA results.
+
+Run the direct-exec regression against a provisioned guest with the new kernel:
+
+```sh
+python3 capstone/runtime/tests/application/run-binfmt.py --state "$VM_STATE" \
+  --image /mnt/host/delegate-contract.dom
+```
 
 ## Verification
 

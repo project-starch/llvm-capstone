@@ -41,6 +41,25 @@ CAPSTONE_TAGWATCH_LO CAPSTONE_TAGWATCH_MAX CAPSTONE_TAGWATCH_VICTIM
 """.split())
 
 
+# Keep the escape sequences literal: binfmt_misc decodes them itself. Letting
+# printf decode the NULs truncates the match before the ELF machine field.
+BINFMT_SETUP = r"""
+binfmt=/proc/sys/fs/binfmt_misc
+if [ -d "$binfmt" ]; then
+    if [ ! -f "$binfmt/register" ]; then
+        mount -t binfmt_misc binfmt_misc "$binfmt"
+    fi
+    if [ -f "$binfmt/capstone" ]; then
+        printf '%s\n' -1 > "$binfmt/capstone"
+    fi
+    printf '%s\n' ':capstone:M:0:\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x01:\xff\xff\xff\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff:/usr/bin/capstone-exec:P' > "$binfmt/register"
+    printf '%s\n' 1 > "$binfmt/status"
+else
+    printf '%s\n' 'capstone-vm: guest lacks binfmt_misc; direct image execution unavailable' >&2
+fi
+"""
+
+
 def qemu_process_environment(recorded: dict[str, str]) -> dict[str, str]:
     """Use only the session's recorded QEMU settings on every boot."""
     environment = {name: value for name, value in os.environ.items()
@@ -337,14 +356,7 @@ elif [ ! -c /dev/capstone ]; then
     insmod /capstone.ko
 fi
 capstone-exec --stats >/dev/null
-# A Capstone image runs from any exec, including a shell's, when the kernel
-# has binfmt_misc: ELF machine 259 goes to the launcher. Without it, only
-# the launcher and the spawn service start images.
-if [ -d /proc/sys/fs/binfmt_misc ] || mount -t binfmt_misc none /proc/sys/fs/binfmt_misc 2>/dev/null; then
-    if [ -f /proc/sys/fs/binfmt_misc/register ] && [ ! -f /proc/sys/fs/binfmt_misc/capstone ]; then
-        printf ':capstone:M:0:\\x7fELF\\x02\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x02\\x00\\x03\\x01:\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\xff\\xff\\xff\\xff:/usr/bin/capstone-exec:\n' > /proc/sys/fs/binfmt_misc/register || true
-    fi
-fi
+""" + BINFMT_SETUP + """
 ifconfig eth0 10.0.2.15 netmask 255.255.255.0 up
 killall dropbear 2>/dev/null || true
 if [ ! -f /etc/dropbear/dropbear_ed25519_host_key ]; then

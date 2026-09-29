@@ -9,10 +9,13 @@ nested allocators look like: `docs/design/perl-sublet-port-evaluation.md`.
 
 Built with patches 0001-0008 on the delegated runtime (application ABI v2,
 `docs/plans/delegation-abi.md`), backticks and piped opens go through the C
-library's `popen`, which the task spawns. [`t/base`](results/2026-09-29/base-tests-delegated.txt):
-eight of nine files pass, 493 assertions; `term.t` test 2 still fails, now because
-`/bin/sh` cannot exec a Capstone image on the pinned guest kernel, which has no
-`binfmt_misc`. A backtick of a native command passes.
+library's `popen`, which the task spawns. The rebuilt interpreter passes
+[`t/base`](results/2026-09-29/base-tests-binfmt.txt): all nine files and
+493 assertions, including `term.t` test 2. The QEMU kernel now enables
+`binfmt_misc` (Buildroot `227fdfa`), and the corrected VM setup registers
+Capstone images for direct shell execution. The
+[earlier 8/9 run](results/2026-09-29/base-tests-delegated.txt) used a guest
+without that support. Signal handlers and general fork semantics remain open.
 
 ## Result (2026-09-26)
 
@@ -58,7 +61,7 @@ prove --exec 'capstone-vm --state /tmp/capstone/dev-vm run --cwd /mnt/host/perl-
 ```
 
 The migrated recipe was rebuilt from the pinned tarball and these three files
-pass. The [current complete `t/base` run](results/2026-09-26/base-tests-rebased-qemu.txt)
+pass. The [pre-delegation `t/base` run](results/2026-09-26/base-tests-rebased-qemu.txt)
 has eight passing files. `base/term.t` alone fails test 2: its backtick command
 tries to start another Perl process, and target clone syscall 220 is unserved.
 `prove` reports 9 files, 493 emitted assertions and exit status 1. The
@@ -102,8 +105,9 @@ build script:
 | `-Accflags=-D_GNU_SOURCE` | musl declares `memrchr`, `setresuid`, `setresgid` and `eaccess` only under it while the symbols are in libc either way, so configure's link tests find them and the compile would not |
 
 `d_fork` is left as configured: musl has `fork`, the runtime does not serve it,
-and a program that forks gets an error at run time. `base/term.t` test 2 reaches
-this gap through a backtick command.
+and a program that forks gets an error at run time. Patch 0008 routes backticks
+and piped opens through the delegated `popen` implementation, so `base/term.t`
+does not require general fork support.
 
 ## What perl needed (`patches/5.36.3/`)
 
@@ -122,6 +126,7 @@ in regex state with pointer-typed fields; both are unconditional.
 | 0005 | `op.c` | `S_maybe_multideref` counts its arguments on a first pass by incrementing a pointer from `arg_buf`, which is `NULL` then, and takes `arg - arg_buf` as the count; every write through it is under `if (pass)`. Incrementing a null pointer is undefined in C and harmless elsewhere, and here it is capability arithmetic without a capability: cause 24, reached by any subscript chain. Measured at `-O2` **and** at `-O1`, which is what says it is the program and not the optimiser |
 | 0006 | `doio.c` | `S_openn_setup` does `Zero(mode,sizeof(mode),char)` where `mode` is its own `char *` parameter, so it clears **a pointer's** size, not the buffer's. Both callers pass a `char[PERL_MODE_MAX]`, and PERL_MODE_MAX is 8, so wherever a pointer is 8 bytes the two agree by coincidence; at 16 it writes 16 bytes into an 8-byte stack array. A defect in perl rather than a porting difference, so the patch is unconditional and a no-op elsewhere. Present unchanged in 5.32.1, 5.36.3 and 5.38.2, and worth reporting upstream. Found at the script's first `open()` |
 | 0007 | `pp_ctl.c` | `rxres_save` puts `RX_SAVED_COPY`, `RX_SUBBEG` and an optional copied buffer through `UV` slots. Restoring a 128-bit capability from a 64-bit `UV` keeps its address but loses its tag. `lex.t` then faults in `Perl_pregfree2` when it decrements the saved-copy reference count. Pointer-typed fields preserve the capability; all 120 `lex.t` assertions now pass |
+| 0008 | `util.c` | Route backticks and piped opens through libc's delegated `popen`/`pclose`, preserving the child's wait status without cloning the domain. Shell-launched images additionally require the guest binfmt_misc handler |
 
 ## Open, in the order they matter
 
@@ -133,8 +138,8 @@ in regex state with pointer-typed fields; both are unconditional.
 2. **The test suite.** 2823 `.t` files and `t/TEST` forks per file, which a domain
    cannot do. Host `prove --exec` now runs each file through the shared VM CLI;
    the complete `t/base` result above is the current upstream subset. Define
-   target subprocess semantics for backticks/fork/clone before claiming `term.t`
-   or extending the suite.
+   coverage beyond `t/base`, with explicit exclusions for unsupported fork,
+   signals and threads.
 3. **The library is staged only for development tests.** Set `PERL5LIB` to
    `/mnt/host/perl-tests/lib` for those tests. A rootfs installation and broader
    module loading coverage remain open; `scripts/smoke.pl` uses core builtins.

@@ -3,8 +3,9 @@
 Status: steps 1 to 3 implemented; step 4 has working spawn/exec paths but
 has **not passed its acceptance gate**. The stack is `delegation-abi`,
 `delegation-libc`, `delegation-launcher`, `delegation-spawn` (2026-09-29).
-Perl `t/base` remains 8/9 because the guest lacks `binfmt_misc`; the libc-test
-process/signal coverage is incomplete. Steps 5 and 6 remain unimplemented.
+Perl `t/base` now passes 9/9 (493 assertions) with guest `binfmt_misc` and the
+corrected interpreter registration. The libc-test process/signal coverage is
+incomplete. Steps 5 and 6 remain unimplemented.
 Review fixes and their native/guest evidence are in `runtime/applications.md`.
 The recorded QEMU `rdtime` sample is a wall-time observation, not the planned
 `icount`/per-step cycle measurement. Numbers elsewhere in this plan remain

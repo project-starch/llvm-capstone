@@ -10,6 +10,8 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <signal.h>
+#include <linux/binfmts.h>
+#include <sys/auxv.h>
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -209,8 +211,12 @@ static int fail(struct execution *e, const char *what, int use_errno) {
 }
 
 int main(int argc, char **argv) {
+  /* With binfmt_misc's P flag Linux passes interpreter, image, original argv.
+     AT_FLAGS distinguishes this from the explicit launcher command line. */
+  int binfmt = (getauxval(AT_FLAGS) & AT_FLAGS_PRESERVE_ARGV0) != 0;
+  if (binfmt && argc < 3) return 125;
   struct exec_state resumed = {0};
-  if (argc > 3 && !strcmp(argv[1], "--resume")) {
+  if (!binfmt && argc > 3 && !strcmp(argv[1], "--resume")) {
     char *end;
     long fd = strtol(argv[2], &end, 10);
     if (*end || fd < 3 || fd > 65535 || read((int)fd, &resumed, sizeof resumed) != sizeof resumed ||
@@ -222,9 +228,9 @@ int main(int argc, char **argv) {
     argc -= 2;
     argv += 2;
   }
-  int app_args = argc >= 5 && !strcmp(argv[1], "--application-argv") && !strcmp(argv[3], "--");
-  int literal = argc > 1 && !strcmp(argv[1], "--");
-  if (literal) {
+  int app_args = !binfmt && argc >= 5 && !strcmp(argv[1], "--application-argv") && !strcmp(argv[3], "--");
+  int literal = binfmt || (argc > 1 && !strcmp(argv[1], "--"));
+  if (literal && !binfmt) {
     --argc;
     ++argv;
   }
@@ -262,8 +268,9 @@ int main(int argc, char **argv) {
     return fail(&e, "capstone-exec: image hash", 1);
   char *cwd = getcwd(NULL, 0);
   void *startup = calloc(1, CAPSTONE_LAUNCH_BYTES);
+  int first_arg = app_args ? 4 : binfmt ? 2 : 1;
   int error = !cwd || !startup ? ENOMEM : capstone_launch_pack(startup,
-      CAPSTONE_LAUNCH_BYTES, argc - (app_args ? 4 : 1), argv + (app_args ? 4 : 1), environ, cwd, stdio_mask);
+      CAPSTONE_LAUNCH_BYTES, argc - first_arg, argv + first_arg, environ, cwd, stdio_mask);
   free(cwd);
   if (error) {
     fprintf(stderr, "capstone-exec: startup: %s\n", strerror(error));
