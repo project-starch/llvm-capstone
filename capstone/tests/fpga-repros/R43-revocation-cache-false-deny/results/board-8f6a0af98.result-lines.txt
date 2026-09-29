@@ -1,0 +1,93 @@
+# R-43 second fix on silicon: caplifive_r43_8f6a0af98.bit (sha256 61443441c5c084913de91409738fa550459fc57aab79a2062044f36af5386545,
+# capstone-ariane 8f6a0af98), uploaded through POST /api/bitstreams/upload and flashed by the board lane 2026-09-29 on the
+# lead's direct confirmation; the resident name read back from the console after the flash. Acceptance in the board lane's
+# a1..a10 order, mapped onto the pre-registration in 00-README.md ("Board acceptance"). Result lines as the board lane sent
+# them; the RTL lane's reading follows each block. Cite a boot by its image hash, never by its label.
+
+== a1 -- boot r43a1, 17:29-17:37: B1 workload regression (R1 m1 drop run, image 079b1f3a @0x410000, stock k800, fw f3014878d979) -- PASS ==
+RESULT k800 retval=4 cycles=4527 instret=1089
+SQ: speedtest1-ran=1320222911
+R1 m1 end arm=drop stop=target alloc=160 minted=191 revoked=160 retained=0 released=0   (160 snap lines)
+released pool rc=1
+RESULT k800 retval=4 cycles=4496 instret=1089
+reading    no halt, no stall, one banner; identical to B1 on 054cea69b and on R-42. This arm holds ~160 live ids, so it
+           never evicts: it is the "nothing broke" control, not an R-43 arm.
+refusal record
+           after the opening k800: sw=204 0x02 = {~v,v} = 10 (EMPTY), sw=208 0x00  -> the pre-registered negative control.
+           after the harness and after the closing k800: both apertures 0xfe -> NOT a legal encoding (bits 7:6 set, and
+           valid=0 requires 208 = 0x00): a contaminated running read (the LED stretcher ORs apertures on a running core),
+           which is exactly what the {~v,v} + one-hot encoding was built to expose. Not data.
+           the post-run HALTED read timed out (ActionTimeout), as on every clean boot on record including R-42's, so a
+           passing boot yields only the first running read. The wedge path reads 204..209 directly and is separate.
+
+== a2 -- boot r43a2, 17:38-17:56: B3, the R1 WARM harness, campaign lines 1-12 (image 1b7a04fe237e1580 @0x410000, host 2c9e82d101b48160,
+   fw d8e380ffbbef; control = the RELINKED k800 589ceee3853c6092 @0x20000, its first silicon record) -- PASS ==
+RESULT k800 retval=4 cycles=4521 ran=53406 instret=1089            (opening)
+RESULT k800 retval=4 cycles=4537 instret=1089                      (closing)
+12 invocations: 60 R1 point lines, every one ok=1 bad=0; 12 x speedtest1-ran; 12 x released pool rc=1; 0 refused;
+no halt, no stall, one banner.
+REVOKE cost at n=1/4/16: rv=95/194/850 cycles (E3 on earlier bitstreams: 96/190/885) -> the release path is unchanged.
+reading    THE FIRST REAL-WORKLOAD R-43 READING. On caplifive_r42_6cbdaeeb4 this exact boot trapped cause 25 on invocation 1
+           (a globals capability allowed at +0x4f40 and denied at +0x4ff4 after an mrev). On the replay fix it runs all 12
+           invocations to completion with its oracle values. Full point lines: the board lane's
+           /tmp/capstone/r43-accept/results/a2.result-lines.txt (60 lines, all ok=1 bad=0, counted by the RTL lane).
+
+== a3 -- boot r43a3, 17:56-18:05: B4, the R1 COLD harness, wide series rep 1 (image 46f99c7b5bf2556e @0x410000, host 2c9e82d101b48160,
+   fw a5972aa52368; control = the relinked k800 589ceee3) -- PASS on the acceptance criteria ==
+RESULT k800 retval=4 cycles=4525 ran=53406 instret=1089            (opening)
+RESULT k800 retval=4 cycles=4571 ran=53406 instret=1089            (closing)
+12 points, all ok=1 bad=0, 0 refused; 1 x speedtest1-ran=1320264012; released pool rc=1; no halt, no stall, one banner.
+R1 s=wide a=S nd=512   rv=10972    (n=256)
+R1 s=wide a=S nd=1024  rv=22848    (n=512)
+R1 s=wide a=S nd=2048  rv=48298    (n=1024)
+R1 s=wide a=S nd=4096  rv=110910   (n=2048)
+R1 s=wide a=S nd=16384 rv=461171   (n=8192)   -> rv/nd = 28.15 cycles per node, the cold CONSTANT of 054cea69b unchanged (461,241..461,251)
+reading    On caplifive_r42_6cbdaeeb4 this boot trapped cause 25 on invocation 1; on the replay fix the cold wide series completes.
+change detector (pre-registered by the board lane, vs 054cea69b's five reps of the same image; N=1 on v2)
+           the RAMP is lower: 10 of 12 points BELOW the five-rep min..max, all the same way -- nd 512 -2.8 %, 1024 -5.5 %,
+           1536 -6.3 %, 1792 -4.6 %, 2048 -6.0 %, 2304 -6.7 %, 3072 -2.9 %, 4096 -2.4 %, 8192 -0.4 %; nd 64 and 256 inside;
+           whole-range fit 28.50 cycles/node, R^2 0.99938. Not a correctness reading. The variable is the whole stack
+           054cea69b -> 8f6a0af98 (R-35 fix, R-42, R-43 v2, R-45); R-42 never completed this series.
+           RTL lane's candidate mechanism, stated as a prediction and not as a finding: a replay PROBE is a node READ through
+           the D-cache, so every evicted live id this harness touches pre-warms one node line; a later revoke walk crossing
+           that node hits where it missed on 054cea69b. That predicts exactly the observed shape -- no effect where nothing is
+           evicted (nd 64/256, inside the range), an effect around the D-cache's 2,048-node capacity (the mid-ramp), and none
+           where the walk is far past it (nd 16384: the constant unchanged). Falsifiable without a boot: a tracer capture on
+           this bitstream counts replays as cause-0x4000000000000019 entries; the mid-ramp points must show them and the
+           inside-range points must not. Not worth a cold boot on its own.
+
+== a4 -- boot r43a4, 18:05-18:14: live16 CONTROL (image f1aa05aa4fc2e4ff @0x410000, host 2c9e82d101b48160, fw 85f79ae7c49a, stock k800) -- PASS ==
+R1 m1 live-sweep ok live=16 reads=32 sum=544 expect=544
+k800 retval=4 twice (cycles 4499 / 4530, instret 1089); speedtest1-ran 0x4EB10000; released pool rc=1; no halt, one banner.
+reading    16 ids fit the cache, so this is the "nothing broke" control for the sweep; it passed on R-42 too. The R-43 arms
+           are a5 (live128) and a6 (live512), which trapped 25 on R-42.
+
+== a5 -- boot r43a5, 18:15-18:24: live128 (image 8333c411dce02ea8 @0x410000, host 2c9e82d101b48160, fw 333f5f2b6c78, stock k800) -- PASS ==
+R1 m1 live-sweep ok live=128 reads=256 sum=4352 expect=4352
+k800 retval=4 twice (cycles 4496 / 4503, instret 1089); released pool rc=1; no halt, one banner.
+reading    THE FIRST R-43 SWEEP ARM: on caplifive_r42_6cbdaeeb4 this image (boot r42b6) trapped cause 25 at the sweep's lbu
+           with tval an early alias leaf -- a live capability refused after eviction. On the replay fix it returns 4352/4352.
+
+== a6 -- boot r43a6, 18:24-18:33: live512, THE R-43 TEST (image 1186b02f0df6d80e @0x410000, host 2c9e82d101b48160, fw b67e70db5ff2, stock k800) -- PASS, FIXED as pre-registered ==
+R1 m1 live-sweep ok live=512 reads=1024 sum=17408 expect=17408
+k800 retval=4 twice (cycles 4567 / 4555, instret 1089); released pool rc=1; no halt, one banner.
+refusal record: the first running read after the opening k800 again 204 = 0x02 (EMPTY), 208 = 0x00.
+reading    512 live ids against a 256-entry cache: every id is evicted many times over. On caplifive_r42_6cbdaeeb4 (boot r42b7)
+           this image trapped cause 25 at the sweep's lbu; on the replay fix it returns 17408/17408 with no trap.
+           With a1..a6 all six RETURNING boots pass. Batch 2 (18:34): the ladder K=0, P1 cell 5, P1 cell 6 (df484d98, the
+           pre-#119 image), then the R-35 stale probe LAST (the wedge arm).
+
+== a7 -- the ladder at K=0, capability boot plus the bare baseline (18:34-18:46, fw ) -- PASS, no change against R-42's bootA ==
+17/17 rungs correct (retval and instret as R-42's bootA).
+geomean cap/bare: v2 1.2671 against R-42 1.2705; per-rung v2/R-42 geomean 0.9973.
+movers: beebs_janne -3.2 %, beebs_insertsort -2.1 % -- the two short, boot-variable rungs R-42's record already flags;
+every other rung within +-0.4 %. K=0 did not move, so K=1..3 were not run (pre-registered).
+reading    The replay path costs nothing on the ladder (no rung churns revocation ids), and R-42's one-cycle-per-iteration fix is
+           still in: the ratio is R-42's, not 054cea69b's 1.167x layout case.
+
+== a8 -- P1 cell 5 -O2 (image 5f4b44257c933477, --stats, relinked k800) plus native -O2 (18:47-18:57, fw ba8a2800496b) -- PASS ==
+Verification Hash 112006 38bb59fd on both; Successful lookasides 25,010 (cell 5) / 25,122 (native); HEAP 2097152 DROPPED 0; no cause 25.
+cell 5:  1,157,324,017 cycles  (R-42: 1,156,628,454, +0.06 %)
+native:    856,285,087 cycles  (R-42:   856,120,199, +0.02 %)
+ratio cell5/native 1.3516 (R-42: 1.3510)
+reading    The replay design costs cell 5 nothing measurable: the SQLite domain that already ran on R-42 runs the same.
