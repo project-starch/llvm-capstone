@@ -322,6 +322,26 @@ musl's thread setup itself, and no longer opens a `fcntl` round after every
 either way: the nine launches, not the rounds, are what remains of that figure
 ([record](tests/application/results/20260929-libc-rounds.json)).
 
+A launch, measured in the guest with `CAPSTONE_DELEGATE_STATS=1` (the
+launcher prints `launch ticks` per stage), perl.dom warm on the 9p share:
+
+| Stage | Before | After |
+|---|---|---|
+| image read over 9p into a memfd | 1.1 s | 0.5 s |
+| SHA-256 of the image | 2.0 s | 0 (computed only for a fault record) |
+| domain: loader copy and `DOM_CREATE` | 1.9 s | 0.5 s (copy the file-backed 14.5 MB, not the 82 MB memsz; zero fresh blocks only) |
+| regions, heap included | 4.0 s | 4.2 s |
+| total before the first instruction | 9.0 s | 5.2 s |
+| wall in the guest, `perl -e 1` | 12.0 s | 6.9 s |
+
+`capstone-vm` keeps one SSH connection per VM (`ControlMaster`), so a
+command costs 0.1 to 0.3 s of host time instead of 0.5 to 1.1 s. Perl
+`t/base` through `prove` from the host: 35 s -> 23 s. What remains of a
+launch is the heap region: the monitor's reclaim fills a released region with
+zero capabilities granule by granule and does so again when the region is
+prepared for the next owner, 4 s for the 64 MiB Perl heap in QEMU
+([record](tests/application/results/20260929-launch-cost.json)).
+
 ### Processes
 
 `posix_spawn`, and with it `posix_spawnp`, `popen` and `system`, cross as one

@@ -148,7 +148,12 @@ def ssh_command(state: Path, config: dict, *, terminal: bool = False) -> list[st
         "-o", "PasswordAuthentication=no", "-o", "BatchMode=yes",
         "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=5",
         "-o", "UserKnownHostsFile=" + str(state / "known_hosts"),
-        "-o", "GlobalKnownHostsFile=/dev/null", "-l", "root", "127.0.0.1",
+        "-o", "GlobalKnownHostsFile=/dev/null",
+        # One TCP connection and key exchange per VM, not per command: every
+        # run and exec is a session on the master, which stays for a minute.
+        "-o", "ControlMaster=auto", "-o", "ControlPath=" + str(state / "ssh.sock"),
+        "-o", "ControlPersist=60",
+        "-l", "root", "127.0.0.1",
     ]
 
 
