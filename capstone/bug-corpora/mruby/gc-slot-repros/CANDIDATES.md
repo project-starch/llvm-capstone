@@ -762,11 +762,16 @@ rather than something this run answers.
 
 **So the tally, measured across all three arms:**
 
-| arm | of the ten rows |
-|---|---:|
-| `level0` -- default, revokes nothing | **0** caught |
-| `sublet` -- the system heap, CHERI's baseline | **1** clean, 1 with a weak oracle |
-| `sublet-hash` -- one level above it | **+1**, and that one is invisible to every arm below |
+| arm | caught | of |
+|---|---:|---|
+| `level0` -- default, revokes nothing | **0** | 10 rows |
+| `sublet` -- the system heap, CHERI's baseline | **1** clean, 1 with a weak oracle | 10 rows |
+| `sublet-hash` -- the heap plus the hash entry array | **4** | the 4 hash rows run in it |
+
+Read the third row against the second: of those four, **three are invisible to every arm
+below it** -- ASan-silent at both page sizes, so a malloc-granularity mechanism has no event
+to fire on. That count was 1 until patch 0010 covered the indexed shape as well as the array
+shape; the section below has the per-row detail.
 
 That is the argument in one line: the level above the heap was worth protecting, because a
 defect lives there that the heap's own revocation cannot see.
