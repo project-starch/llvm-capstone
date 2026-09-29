@@ -5172,7 +5172,13 @@ the registry: R-21 is not present on `caplifive_r30r31_1bfff7776` for `cincoffse
 note had already recorded that half gone at 5097eb166) nor for `scc` (not in that note), and **R-22 is not
 present at all** — the entry's source analysis describes an earlier revision, and which change fixed it
 is not read here (the RTL lane's to confirm from source). The scope, claim by claim, since R-21 makes five: `cincoffset` and `scc` measured conformant here;
-`tighten` and `shrinkto` NOT probed on silicon (open by the entry's source table); `init`'s DUPLICATION —
+`tighten` and `shrinkto` not probed on this bitstream. **They were probed later, on
+`caplifive_r42_6cbdaeeb4.bit` (2026-09-25, boot r42e3b, image `cbf8cb41eb56c477`), and both COPY:** arm 8
+(`tighten`, LINEAR) and arm 10 (`shrinkto`, LINEAR) read 0, so the linear source survives the operation
+and R-21 is PRESENT on R-42 for those two. Their NONLIN controls (arms 9, 11) read 1, and on the same boot
+arms 2, 3, 4 and 6 (`cincoffset`, `scc`, `ldc`, `stc`) read 7 again, as in the table above. (The first
+boot, r42e3, trapped cause 29 at the `tighten` because the harness encoded permission immediate 12, which
+is Q-13, not the linear source.) Result lines: `r42-e3-linear.result-lines.txt`; registry: R-21. `init`'s DUPLICATION —
 the worst of the five, a second live copy rather than a missing clear — was not re-probed here because it
 is R-25, fixed and confirmed on silicon 2026-09-09 (boot sw41 returned through the consumed-source store on
 the r25r26r27 bitstream, an ancestor of the deployed one). **Origin (the RTL lane, from the history):** one
@@ -5468,7 +5474,16 @@ same two images as before the reflash:
 | ~43k earlier live-alias accesses in each run | commit | commit |
 
 So Condition 3 is now **measured on silicon, and holds on this probe**: a revoked reference no longer reads
-another object's storage, and the live path is unchanged. Limits the numbers must carry:
+another object's storage, and the live path is unchanged.
+
+**A second reading, on `caplifive_r42_6cbdaeeb4.bit` (2026-09-25, boot r42b2, the R-42 acceptance B2):** the
+same stale-probe image `35fb3fec3196841b` traps cause 25 at `+0x4354` with `tval 0xac100000`, identical to
+the reading on `4ad0df694` (`ladder-revival-2026-09-22/r42-acceptance-r1boots.result-lines.txt`). So the
+stale arm reads the same on two bitstreams, N=1 on each. The live-alias image `aed492ab985653f3` has
+not been run on R-42. The deny arm is no more observable on R-42 than it was on `4ad0df694`: R-42 keeps
+deny-on-miss (R-43), so this reading cannot tell recognised-as-revoked from denied-on-miss either.
+
+Limits the numbers must carry:
 - **Why** the access was denied is not observable. Cause 25 has three arms on this RTL, one of them
   deny-on-miss, which is the expected route for an id reissued thousands of times. The silicon shows
   *denied*, not *recognised as revoked*.
