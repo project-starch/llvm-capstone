@@ -650,3 +650,44 @@ The prediction worth committing before that runs, in the spirit of
 
 If rows 2-4 fault under `sublet` as it stands, the entry array is being reallocated
 where this reading says it is reused, and the reading is wrong.
+
+## Protecting the levels above the heap: what it costs, measured
+
+CHERI protects the system heap; the levels a program builds above it are the contribution,
+so the question is what each one costs. Counting the sites that would have to go through a
+per-slot alias instead of through the container:
+
+| level | reuse point | sites | file |
+|---|---|---:|---:|
+| 1 malloc blocks | `free` | -- | **done**: `runtime/sublet_heap.c` |
+| 2 GC object slots | sweep to `page->freelist` | **1** | **done**: patch 0008, 438 lines |
+| 3 hash entry array | `ar_delete`/`ht_delete` vacate, store refills | 50 | `src/hash.c`, 2354 lines |
+| 4 shared string buffer | `mrb_str_modify` un-shares | 64 | `src/string.c`, 3576 lines |
+| 5 VM data stack windows | `ci->stack = ci[-1].stack + n` | **219** | `src/vm.c`, 3712 lines |
+| 6 ci stack frames | `cipop` does `c->ci--` | **191** | `src/vm.c`, 3712 lines |
+
+**Patch 0008 was 438 lines because the GC has exactly one site that hands out a slot.**
+`mrb_obj_alloc` is the only way an object is born, so the access discipline was already
+funnelled and the patch only had to wrap it. None of levels 3 to 6 is funnelled: they are
+touched directly in 50 to 219 places. The cost of sub-letting a level is set by whether the
+program routes access to it through one accessor, not by the level's size -- which is why
+the GC came first and would have come first even if it were the largest.
+
+So each remaining level is two pieces of work, not one:
+
+1. **funnel the accesses** -- introduce an accessor and rewrite the 50 (hash) or 64 (string)
+   direct touches to use it. Mechanical, testable against `mrbtest` on its own, and defensible
+   upstream on its own merits since it is a refactor with no capability content;
+2. **sub-let the funnelled level** -- which is then 0008-shaped and 0008-sized.
+
+Levels 3 and 4 are worth doing in that order; **3 first**, because three defects measured in
+this file go unseen precisely there. Levels 5 and 6, at 219 and 191 sites inside the
+interpreter loop, are a different magnitude and should not be attempted before 3 and 4 have
+shown the pattern holds.
+
+**The regions they need are open.** `HC_PROGRAM_REGIONS` was 2, with region 0 the Sublet heap
+and region 1 the GC slots, so no third level could be sub-let at all. Branch
+`runtime/program-regions-for-nested-sublet` raises it to 6 and adds the host's third grant,
+`LT_HASH_REGION_BYTES`, with an `#error` if it is set out of turn -- the grant order is what
+fixes the index `__capstone_region` hands out. Checked in all three configurations, including
+that the out-of-turn guard fires.
