@@ -91,3 +91,30 @@ cell 5:  1,157,324,017 cycles  (R-42: 1,156,628,454, +0.06 %)
 native:    856,285,087 cycles  (R-42:   856,120,199, +0.02 %)
 ratio cell5/native 1.3516 (R-42: 1.3510)
 reading    The replay design costs cell 5 nothing measurable: the SQLite domain that already ran on R-42 runs the same.
+
+== a9 -- P1 cell 6 -O2 (image df484d98b489aeab, 2 MiB arena, --stats, relinked k800; 18:58-19:08, fw 956f4e09b49b) -- PASS: THE REAL WORKLOAD ==
+Verification Hash 112006 38bb59fd; Successful lookasides 25,010; HEAP 1344064 DROPPED 0.
+sublet: split=5568 mrev=37970 delin=32569 revoke=37970 init=5401 -- exactly as pre-registered.
+1,241,773,854 cycles (CPI 3.641, in band); k800 retval=4 twice; no cause 25; the region probe reached RR/done.
+against a8 on the same bitstream: cell6/cell5 = 1.0730, cell6/native = 1.4502 (N=1).
+reading    On caplifive_r42_6cbdaeeb4 this image stopped in setupLookaside with cause 25 (a load through the domain's globals
+           capability, ldc 0x40(gp), refused after 466 rev-node heads of churn -- R-43's silicon signature) and the LCC-probe
+           variant moved the refusal to another live global. On the replay fix the same image completes with its oracle hash
+           and lookaside count. This is the arm the redesign was built for.
+
+== a10 -- the R-35 stale probe, LAST (image 35fb3fec3196841b, 19:09-19:23, fw fca2b05bde11) -- PASS on every pre-registered count ==
+opening k800 retval=4; ENT1.
+trap log sw=255 0x99 = seen, mcause 25; mepc 0x81a04354 - DBAS 0x81A00000 = +0x4354; tval 0xac100000
+           -> identical to 4ad0df694 and 6cbdaeeb4: R-35 is NOT reopened by the replay design.
+refusal record (wedge dump): 204 = 0x11 = {00, arm 0100, ~v 0, v 1} = LATCHED, arm one-hot = PROBE DEAD;
+           id from 205/206/207/208 = 5f/00/00/00 = 0x5f (95, generation 0); parity bits 0/0 agree (id[14:0] = 0x5f has six
+           ones, id[29:15] = 0). The runner's decoder reads the same: "LATCHED -- arm = probe resolved DEAD, revnode id = 0x5f, parity ok".
+reading    The record's POSITIVE control fires, and it reads what no earlier bitstream could: this stale access was refused
+           because its probe found the node DEAD -- an observed revocation -- and not by a deny-on-miss. That closes the
+           question R-35's own folder left open ("cause 25 cannot separate observed revocation from the cache's deny-on-miss").
+
+== VERDICT (2026-09-29, board released after a10) ==
+a1..a10 all PASS: every arm that trapped cause 25 on caplifive_r42_6cbdaeeb4 -- the R1 warm and cold harnesses, live128, live512,
+P1 cell 6 -- completes with its oracle on caplifive_r43_8f6a0af98; the ladder and P1 cell 5 are unchanged within noise; the R-35
+probe still traps and the refusal record attributes it to an observed DEAD node. The a3 cold-ramp reading stands as N=1 with a
+candidate mechanism. R-43 is FIXED ON SILICON.

@@ -1,4 +1,4 @@
-# R-43 — R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live
+# R-43 — R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live. FIXED ON SILICON 2026-09-29 (`8f6a0af98`, `caplifive_r43_8f6a0af98.bit`)
 
 **What it is.** R-35's fix (`capstone-ariane 4ad0df694`) lets an M-mode load/store through only when the
 capability's exact 30-bit revnode id is resident in a 4-way × 64-set cache and marked live, and it
@@ -31,8 +31,15 @@ cause 25. Long-lived capabilities (a domain's own globals) are the first casualt
   R-42 (1 loop, same `lsu_i/state_q[3]` family), LUTLP-1 = 0, ORDER **0/500**, probe-before-arbiter 0/500,
   WNS **−9.595** against R-42's −10.615 (inside the null), routing converged in 26 min with no excursion,
   own-cell FF exactly +150. One calibration miss (own-cell LUT +154 against a +400..+900 band), adjudicated in
-  `results/synth-8f6a0af98.result-lines.txt`. Bitstream sha256 `61443441…5345`. **Flash candidate; the
-  reflash is the lead's call.**
+  `results/synth-8f6a0af98.result-lines.txt`. Bitstream sha256 `61443441…5345`.
+- **2026-09-29, flashed and ACCEPTED:** the lead ordered the flash; `caplifive_r43_8f6a0af98.bit` resident (name read back). Board
+  acceptance **a1..a10 all PASS**: the R1 warm (B3) and cold (B4) harnesses, live128 and live512 — every arm that trapped 25 on R-42 —
+  complete with their oracles (live512 = 17408/17408); **P1 cell 6 `-O2` completes** with hash 112006 38bb59fd and 25,010 lookasides;
+  the ladder and P1 cell 5 unchanged within noise; the R-35 probe still traps 25 at `+0x4354`, and the refusal record reads LATCHED,
+  arm = **probe DEAD**, id 0x5f, parity ok — the positive control fires and attributes R-35's denial to an observed revocation.
+  The variant batch read clean (sweep 0 differences, lint at baseline). **R-43 is FIXED ON SILICON.** One N=1 note: the cold
+  revoke ramp reads 2–7 % lower mid-range than 054cea69b (constant unchanged), with a candidate mechanism recorded.
+  `results/board-8f6a0af98.result-lines.txt`.
 
 Registry: `docs/ref/ISSUES.md` R-43, R-45, R-46. Plan and pre-registration: `docs/plans/r43-query-on-miss.md`.
 
@@ -249,6 +256,7 @@ own restore applied to the ordinary refetch. Registry: `docs/ref/ISSUES.md` R-46
 | synthesis, first fix (`0f5185a6d`) | **REFUTED**: WNS −24.495, ORDER 500/500, route 56.4 ns on the worst path; R-45 not implicated | `results/synth-0f5185a6d.result-lines.txt` |
 | RTL sim, second fix (`8f6a0af98`, shipping build, 2026-09-29) | every arm as above, plus 2d (two back-to-back loads through an evicted alias) and 2e (evicted load then `ebreak`: value intact, then cause 3); 7 replays, at most 1 per pc; 0 marker leaks into `exception_o`; 0 timeouts; refusal record latched id `0x616` arm `0001`; R-35 fixture 7; lint PASS **Variants (2026-09-29 evening):** tieoff denies every miss; `mgen` allows arms 5/6; `mto` 6 timeouts, the record latches the TIMEOUT bit; `noflush` allows 7r (arm 7 stays denied — its probe is served after the walk); `flushproxy` verdicts identical; `noleakgate` 10 leaks, the marker reaches the causes; `noclear` identical to shipping — the vacuous control, replaced by arm 6b. All as predicted or re-registered. **Neutrality:** 92-test sweep 0 trap-count and 0 trap-PC differences (48 tests trap, 639,786 traps, both sides); lint gate PASS with every hazard counter at baseline; the watched sources hash identically before and after the batch | `results/sim-replay-8f6a0af98.result-lines.txt` |
 | RTL sim, arm 6b on `8f6a0af98` (test commit `5aa316e0d`, after-audit finding 1) | shipping: 6b cause **25** (probe → stale generation → DEAD); `noclear`: 6b cause **0**, ALLOWED — the clear's control now fires; arm 6 reads 25 on both, as predicted; every other arm identical | `results/sim-arm6b-8f6a0af98.result-lines.txt` |
+| board, `caplifive_r43_8f6a0af98.bit` (2026-09-29, a1..a10) | **all PASS**: B1 control; R1 warm B3 (12 invocations, 60 point lines ok) and cold B4 (12 points; cold constant 28.15 cycles/node unchanged, mid-ramp 2–7 % lower at N=1); live16/128/512 → 544/4352/17408; ladder K=0 unchanged vs R-42's bootA (17/17); P1 cell 5 +0.06 %; **P1 cell 6 completes** (112006 38bb59fd, 25,010 lookasides, sublet counts as pre-registered); R-35 probe traps 25 at +0x4354 with the refusal record LATCHED / probe DEAD / id 0x5f / parity ok; passing boots read EMPTY (10) | `results/board-8f6a0af98.result-lines.txt` |
 | synthesis, second fix | pre-registered (final wording sent to the synth lane 2026-09-29, before any number existed): loop MEMBERSHIP the same as R-42 (arc names renumber on unrelated edits, so names are reported beside it, not graded); LUTLP-1 = 0; ORDER test 0/500; `commit_stage_i`-before-`i_frontend` 0/500; the new names `commit_pc_metadata` / `replay_commit` 0/500 with a netlist-survival check; WNS within a few ns of −10.615; `lsu_i` OWN cells FF **+140..+160** (150 flop bits are declared; the refuted build's 114 declared bits measured +114 exactly) and LUT +400..+900 (a wide sanity band — the refuted build's +802 was mostly logic v2 keeps; two earlier, inconsistent LUT numbers were withdrawn). **Sealed 2026-09-29: all met** — membership SAME, 1 loop, LUTLP-1 0, ORDER 0/500, commit-before-frontend 0/500, probe-before-arbiter 0/500, `replay_commit` survives on 0/500, `commit_pc_metadata` absorbed by name with its logic present (512 pc_metadata flops in the frontend's fan-in), WNS −9.595, FF +150 exactly; **LUT +154 MISSED the band** — the "+802 was mostly restructuring around the gate" branch, with every compare and the counter shown present in the netlist | `results/synth-8f6a0af98.result-lines.txt` |
 
 Values come from the CAPPRINT registers in the retirement trace and from the `R43 ...` trace lines;

@@ -6,7 +6,7 @@ symptom is redirected at once:
   production). A stale capability used from Linux or userspace is R-44, not this folder.
 - **R-43** (`../R43-revocation-cache-false-deny/`) — the cost of this fix: it **denies on a cache miss**,
   so a live capability whose id was evicted is falsely refused. Confirmed on silicon 2026-09-25; its second
-  fix is in synthesis. R-45 and R-46 are nested there.
+  fix (replay) is FIXED ON SILICON 2026-09-29 (`caplifive_r43_8f6a0af98.bit`). R-45 and R-46 are nested there.
 - **R-37 / R-38** — the trackers' invalidate/adopt ORDER, fixed in the same flashed build ("Stage 0",
   `247b76896`). Nested below.
 - **M-1** (`../RTL-domain-trap-vector-unset/`) — why a fault here wedges the domain and loses its output.
@@ -24,6 +24,12 @@ What closed it, and what did not:
   tag hit marked live, and the 14-bit generation retires at 16383 and never wraps.
 - Capability loads and stores (LDC/STC) never used this tracker: they are gated by the DYN unit's own
   rev-node query.
+
+**2026-09-29 — the WHY is now readable on silicon.** On `caplifive_r43_8f6a0af98.bit` (R-43's second fix, which adds a
+refusal record) the same stale probe (image `35fb3fec`) still traps 25 at `+0x4354`, and the record reads LATCHED with arm =
+**probe DEAD**, id 0x5f, parity ok: the stale access was refused because the rev-node unit reported its node DEAD — an observed
+revocation — not by the cache's deny-on-miss. That closes the "not observable" item below
+(`../R43-revocation-cache-false-deny/results/board-8f6a0af98.result-lines.txt`, a10).
 
 The status paragraphs that follow are the dated history, newest first.
 
