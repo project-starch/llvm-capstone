@@ -1,8 +1,9 @@
 # Delegated threads: one Linux thread per protected context
 
-Status: PROBE A CASES PASS, PROBE B NATIVE PHASE PASSES, 2026-09-30. Branch `delegation-threads`,
-stacked on `delegation-signals` (c460e8c). The contracts below are what Probe A and Probe B test;
-the runtime branch that builds `pthread_create` on them is written after both probes pass.
+Status: PROBE A OPEN (A2 refuted 2026-09-30), PROBE B NATIVE PHASE PASSES. Branch
+`delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
+Probe A and Probe B test; the runtime branch that builds `pthread_create` on them is written after
+both probes pass.
 
 Done so far:
 - The domain half on the unchanged platform: context arena, mint, thread entry, exit and
@@ -20,10 +21,14 @@ Done so far:
   the base platform (there the kept result slot still writes).
 - A12 (Q3 answered below): privilege changes and non-C seals are refused under supervision; this
   closed an escape into user mode that A12 found first.
-- A2: at the first entry instruction only ra (sealed return), gp (exactly the main context's) and
-  a1 (the 64-byte loan) are tagged, and cscratch is exactly the start block; an audit with a
-  planted register names it. A store past the loan faults. The loan's write-only permission is not
-  enforced on capstone-qemu (Q1).
+- A2: REFUTED by an independent review (2026-09-30). The audit checked which registers are tagged
+  at the first entry instruction, not what is reachable through them: through the return
+  capability `ra` a context can load the caller's saved state, including monitor capabilities.
+  capstone-qemu does not implement the spec's access rule for synchronous sealed-return
+  capabilities (the saved pc, ctvec and cscratch slots are excluded; `mem-access-insn.adoc`,
+  `existing-insn.adoc`). A2 is open until capstone-qemu enforces that rule and A2 audits what `ra`
+  reaches, with the review's probe as its positive control. The loan's write-only permission is
+  not enforced on capstone-qemu either (Q1, ISSUES Q-14).
 - A10: dead registrations are retired on shortage in the monitor, and the driver drops a record
   when the monitor reissues its slot. 128 create/exit/revoke cycles never forgetting, and five
   applications claiming 40 of the 32 slots at once, all succeed with their live contexts intact;
