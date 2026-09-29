@@ -25,7 +25,17 @@ MODES = {
     "adopt-preempt": ("exit", 0, "PASS", None, None),
     "adopt-reenter": ("exit", 0, "PASS", None, None),
     "adopt-dead": ("exit", 0, "PASS", None, None),
+    "reenter-revoked": ("exit", 0, "PASS", None, None),
+    "done-preempted": ("exit", 0, "PASS", None, None),
+    "rollback-thread": ("exit", 0, "PASS", None, None),
+    "duplicate-adopt": ("exit", 0, "PASS", None, None),
+    "two-steppers": ("exit", 0, "PASS", None, None),
+    "loan-preempt": ("exit", 0, "PASS", None, None),
+    # Negative: the loan ended with the call; a kept copy reloads untagged.
+    "loan-after-return": ("signal", 11, "", "REACHED", (24, "probe_store_insn")),
 }
+# Guest environment per mode.
+ENV = {"rollback-thread": ["CAPSTONE_CONTEXT_TEST_THREAD_FAILS=1"]}
 LINK_BASE = 0x10000   # my_first_domain/link.ld
 
 
@@ -77,7 +87,8 @@ def main():
         status = args.state / f"context-{mode}.json"
         status.unlink(missing_ok=True)
         try:
-            result = subprocess.run([*cli, "run", "--result", str(status), args.image, mode],
+            extra = [word for value in ENV.get(mode, []) for word in ("-e", value)]
+            result = subprocess.run([*cli, "run", *extra, "--result", str(status), args.image, mode],
                                     env=env, capture_output=True, text=True, timeout=args.timeout)
             record = json.loads(status.read_text()) if status.exists() else {}
             got = (record.get("kind"), record.get("value"))

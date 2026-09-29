@@ -306,6 +306,171 @@ static int adopt_dead(void)
   return 0;
 }
 
+/* ---- Probe-only helpers (context-probe-asm.S) ---- */
+void probe_exit_delayed(unsigned long value, unsigned long loops) __attribute__((noreturn));
+void *probe_descriptor(void);
+void probe_store_through(unsigned long *where, unsigned long value);
+extern char probe_exit_delay_begin[], probe_exit_delay_end[];
+long __capstone_context_offer(capstone_cap_slot *seal, unsigned long ticket);
+long __capstone_delegate_context(uint64_t nr, uint64_t a, uint64_t b, void *event);
+
+#define DELAY_LOOPS 30000000ul
+static unsigned long child_delayed(void *arg)
+{
+  probe_exit_delayed(4242, (unsigned long)(uintptr_t)arg);
+}
+
+/* A4: the start block, TLS block and stack are revoked while the seal stays
+   valid; every later entry still reports EXITED from registers alone. */
+static int reenter_revoked(void)
+{
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint_split(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*ctx.value == 42);
+  capstone_context_revoke_children(&ctx);
+  for (int i = 0; i < 3; ++i) {
+    CHECK(!step_to_end((unsigned long)id, &ev, 0));
+    CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  }
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+/* A6: the context is preempted between publishing done and its final switch.
+   The joiner sees done, copies the value, revokes and reuses the area; the old
+   context then steps DEAD and never runs again, and the new one is intact. */
+static int done_preempted(void)
+{
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_delayed, (void *)(uintptr_t)DELAY_LOOPS));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  do {
+    memset(&ev, 0, sizeof ev);
+    CHECK(!capstone_context_step((unsigned long)id, &ev));
+  } while (ev.kind == STEP_PREEMPTED && *ctx.done == 0);
+  CHECK(ev.kind == STEP_PREEMPTED && *ctx.done == 1);
+  CHECK(ev.pc >= (uintptr_t)probe_exit_delay_begin && ev.pc < (uintptr_t)probe_exit_delay_end);
+  unsigned long value = *ctx.value;
+  capstone_context_revoke(&ctx);
+  CHECK(!capstone_context_remint(&ctx, child_second, (void *)(uintptr_t)9));
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  CHECK(ev.kind == STEP_DEAD);
+  long id2 = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id2 > 0);
+  CHECK(!step_to_end((unsigned long)id2, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*ctx.value == 1009 && value == 4242);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  CHECK(capstone_context_forget((unsigned long)id2) == 0);
+  return 0;
+}
+
+/* A11: the launcher fails to start the Linux thread (run with
+   CAPSTONE_CONTEXT_TEST_THREAD_FAILS=1): the registration is taken back and
+   no child runs. An old ticket cannot consume a newer offer. */
+static int rollback_thread(void)
+{
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1));
+  CHECK(capstone_context_create(&ctx, CAPSTONE_CONTEXT_THREAD) == -EAGAIN);
+  for (int i = 0; i < 50; ++i)
+    sched_yield();
+  CHECK(counter == 0 && *ctx.done == 0);
+  capstone_context_revoke(&ctx);
+  CHECK(!capstone_context_remint(&ctx, child_enter, (void *)(uintptr_t)1));
+  /* A new offer under ticket 1001; a request carrying the old ticket must not
+     consume it, the right ticket then does. */
+  CHECK(!__capstone_context_offer(&ctx.seal, 1001));
+  CHECK(__capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, 1000, CAPSTONE_CONTEXT_REGISTER, 0) == -ESTALE);
+  long id = __capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, 1001, CAPSTONE_CONTEXT_REGISTER, 0);
+  CHECK(id > 0);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+/* A13: an offer is registered once; two launcher threads stepping one
+   context serialise into one continuous execution. */
+static int duplicate_adopt(void)
+{
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1));
+  CHECK(!__capstone_context_offer(&ctx.seal, 77));
+  long id = __capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, 77, CAPSTONE_CONTEXT_REGISTER, 0);
+  CHECK(id > 0);
+  CHECK(__capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, 77, CAPSTONE_CONTEXT_REGISTER, 0) == -ENOENT);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+static int two_steppers(void)
+{
+  struct capstone_context_event ev;
+  unsigned long seed = 0x77, mine = 0;
+  unsigned long want = lcg_rounds(seed, PREEMPT_ROUNDS);
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_preempt, (void *)(uintptr_t)seed));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_THREAD);
+  CHECK(id > 0);
+  while (!*ctx.done) {
+    memset(&ev, 0, sizeof ev);
+    if (capstone_context_step((unsigned long)id, &ev))
+      break;
+    if (ev.kind != STEP_PREEMPTED && ev.kind != STEP_RETURNED)
+      break;
+    ++mine;
+  }
+  long t0 = monotonic_ms();
+  while (!*ctx.done && monotonic_ms() - t0 < 30000)
+    sched_yield();
+  CHECK(*ctx.done == 1 && *ctx.value == want);
+  printf("context-probe two-steppers: %lu steps from the main thread\n", mine);
+  CHECK(mine > 0);
+  return 0;
+}
+
+/* A14: the loan survives preemption: a copy of the descriptor taken before a
+   long computation still writes after many resumes. */
+static unsigned long child_loan(void *arg)
+{
+  unsigned long *d = probe_descriptor();
+  unsigned long x = lcg_rounds((unsigned long)(uintptr_t)arg, PREEMPT_ROUNDS);
+  probe_store_through(d, 0x5a5a);
+  return x;
+}
+
+static int loan_preempt(void)
+{
+  struct capstone_context_event ev;
+  unsigned long preemptions = 0;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_loan, (void *)(uintptr_t)3));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, &preemptions));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*ctx.value == lcg_rounds(3, PREEMPT_ROUNDS));
+  CHECK(preemptions >= 2);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+/* A15 (negative): a copy of this call's descriptor, kept past a cooperative
+   return, has no authority in the next call. Expected: a fault at
+   probe_store_insn. On a monitor that does not revoke the loan it prints
+   REACHED instead. */
+static void *volatile saved_descriptor;
+static int loan_after_return(void)
+{
+  saved_descriptor = probe_descriptor();
+  CHECK(saved_descriptor != 0);
+  sched_yield();
+  fflush(stdout);
+  probe_store_through((unsigned long *)saved_descriptor, 0x1234);
+  printf("context-probe loan-after-return: REACHED\n");
+  return 1;
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2) {
@@ -324,6 +489,13 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "adopt-preempt")) rc = adopt_preempt();
   else if (!strcmp(mode, "adopt-reenter")) rc = adopt_reenter();
   else if (!strcmp(mode, "adopt-dead")) rc = adopt_dead();
+  else if (!strcmp(mode, "reenter-revoked")) rc = reenter_revoked();
+  else if (!strcmp(mode, "done-preempted")) rc = done_preempted();
+  else if (!strcmp(mode, "rollback-thread")) rc = rollback_thread();
+  else if (!strcmp(mode, "duplicate-adopt")) rc = duplicate_adopt();
+  else if (!strcmp(mode, "two-steppers")) rc = two_steppers();
+  else if (!strcmp(mode, "loan-preempt")) rc = loan_preempt();
+  else if (!strcmp(mode, "loan-after-return")) rc = loan_after_return();
   else {
     fprintf(stderr, "context-probe: unknown mode %s\n", mode);
     return 2;

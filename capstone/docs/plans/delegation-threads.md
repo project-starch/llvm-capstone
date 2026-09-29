@@ -10,16 +10,16 @@ Done so far:
   `results/20260929-context-probe-domain.json`).
 - Through the monitor, on branches `context-slots` of capstone-qemu (7bbedcd16b: DEAD status,
   dead-slot removal), capstone-sbi (0451a1a: slots with generations, lent descriptors, ADOPT,
-  FORGET) and caplifive-buildroot (11c024a: driver ids and ioctls; f9b2408: the firmware build
-  refuses a capstone-c miscompile this work hit), and the launcher's CONTEXT requests here:
-  A1, A3, A4 (without revoked children yet), A5 and A8 in their first form pass, with the
-  signal contract and the application gate unchanged (record
-  `results/20260929-context-probe-monitor.json`, 10/10).
-- Open in Probe A: A2, A6, A7 (needs an instrument that shows the node was reissued), A9
-  (generation preset), A10 (retiring dead registrations on shortage), A11, A12 (Q3 first),
-  A13, A14/A15, and the submodule pins.
-The architecture is agreed; the numbered questions at the end identify implementation choices
-and evidence still needed. A proposed default there is not a measured result.
+  FORGET; 3f9efa9: the descriptor's offer slot is cleared after the seal is taken out) and
+  caplifive-buildroot (11c024a: driver ids and ioctls; f9b2408: the firmware build refuses a
+  capstone-c miscompile this work hit), and the launcher's CONTEXT requests here. Passing,
+  with the signal contract and the application gate unchanged (record
+  `results/20260929-context-probe-monitor.json`, 17/17): A1, A3, A4, A5, A6, A8 (DEAD, FORGET
+  once, STALE), A11, A13 without the foreign-owner request, A14, and A15 with its control on
+  the base platform (there the kept result slot still writes).
+- Open in Probe A: A2, A7 (needs an instrument that shows the node was reissued), A9
+  (generation preset), A10 (retiring dead registrations on shortage), A12 (Q3 first), A13's
+  foreign-owner request, and the submodule pins.
 
 ## Scope
 

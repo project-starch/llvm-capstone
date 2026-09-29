@@ -66,7 +66,7 @@ static int arena_take(size_t bytes, capstone_cap_slot *out)
 /* Mint into the linear area in *area; the handle is made here, senior to
  * every split below, and ends up in c->handle. */
 static int mint_area(struct capstone_context *c, capstone_cap_slot *area,
-                     unsigned long (*start)(void *), void *arg)
+                     unsigned long (*start)(void *), void *arg, int split)
 {
   size_t tls = tls_bytes();
   unsigned long base = capstone_cap_base(area);
@@ -82,6 +82,11 @@ static int mint_area(struct capstone_context *c, capstone_cap_slot *area,
   capstone_cap_split(area, start_at, &start_s);
   capstone_cap_split(&start_s, tls_at, &tls_s);
   capstone_cap_split(&tls_s, stack_at, &stack_s);
+  if (split) {
+    capstone_cap_make_handle(&start_s, &c->child[0]);
+    capstone_cap_make_handle(&tls_s, &c->child[1]);
+    capstone_cap_make_handle(&stack_s, &c->child[2]);
+  }
   unsigned long *sb = capstone_cap_delinearize(&start_s);
   char *tls_block = capstone_cap_delinearize(&tls_s);
   char *stack = capstone_cap_delinearize(&stack_s);
@@ -118,7 +123,25 @@ int capstone_context_mint(struct capstone_context *c, size_t area_bytes,
   capstone_cap_slot area = {0};
   if (arena_take(area_bytes, &area))
     return -1;
-  return mint_area(c, &area, start, arg);
+  return mint_area(c, &area, start, arg, 0);
+}
+
+int capstone_context_mint_split(struct capstone_context *c, size_t area_bytes,
+                                unsigned long (*start)(void *), void *arg)
+{
+  if (area_bytes & 15)
+    return -1;
+  memset(c, 0, sizeof *c);
+  capstone_cap_slot area = {0};
+  if (arena_take(area_bytes, &area))
+    return -1;
+  return mint_area(c, &area, start, arg, 1);
+}
+
+void capstone_context_revoke_children(struct capstone_context *c)
+{
+  for (int i = 0; i < 3; ++i)
+    capstone_cap_revoke(&c->child[i]);
 }
 
 void capstone_context_revoke(struct capstone_context *c)
@@ -139,7 +162,7 @@ int capstone_context_remint(struct capstone_context *c,
   capstone_cap_slot area = {0};
   capstone_cap_move(&c->handle, &area);
   capstone_cap_clear(&c->seal);
-  return mint_area(c, &area, start, arg);
+  return mint_area(c, &area, start, arg, 0);
 }
 
 /* One ticket per offer: a late or repeated request can never consume a later

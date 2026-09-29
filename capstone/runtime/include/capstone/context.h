@@ -54,6 +54,9 @@ struct capstone_context {
   void *tp;
   unsigned long area_base, area_bytes;
   unsigned long stack_base, stack_top;
+  /* capstone_context_mint_split only: handles over the start block, the TLS
+     block and the stack, each junior to `handle` (probe use, A4). */
+  capstone_cap_slot child[3];
 };
 
 /* Take area_bytes from the context arena and mint a context whose first
@@ -61,6 +64,13 @@ struct capstone_context {
  * -1 when the arena cannot supply the area or the area is too small. */
 int capstone_context_mint(struct capstone_context *c, size_t area_bytes,
                           unsigned long (*start)(void *), void *arg);
+
+/* As capstone_context_mint, and keep a handle over each of the start block,
+ * the TLS block and the stack, so that they can be revoked while the seal
+ * stays valid (capstone_context_revoke_children). */
+int capstone_context_mint_split(struct capstone_context *c, size_t area_bytes,
+                                unsigned long (*start)(void *), void *arg);
+void capstone_context_revoke_children(struct capstone_context *c);
 
 /* Revoke the parent handle: every capability derived from the area dies, the
  * seal included, wherever it is held. The area stays in c->handle for reuse. */

@@ -2,16 +2,28 @@
   "date": "2026-09-29",
   "purpose": "Probe A through the monitor (docs/plans/delegation-threads.md): the application mints a context, offers the seal through its invocation descriptor, the launcher has the monitor ADOPT it and steps it, from its main thread (REGISTER) or from a Linux thread of its own (THREAD); a revoked context steps DEAD, forgets once and is STALE afterwards",
   "platform": {
-    "qemu": {"sha256": "05c566e8d9d85f774fc27b582b67b3e334dd227e590a826bca983dcc3cc8146e", "source": "capstone-qemu 7bbedcd16b (qemu/context-slots, on the pinned d6cca7f76b)"},
-    "firmware": {"sha256": "5ff2f288c37d149c49e1696f7760d6184a306ee87dc83abd5e3d16b9a58fd78c", "monitor": "capstone-sbi 0451a1a (monitor/context-slots, on the pinned a810177) in caplifive-opensbi 853197a's wrapper; build recipe reproduces the base firmware's disassembly exactly (0 of 49168 lines differ) from the unchanged monitor"},
-    "module": {"sha256": "cc6d8cd6ca38c86220480b01a215b4aa1896d9fbebee8b0c6a7a545e55521039", "source": "modcapstone at caplifive-buildroot 11c024a (modcapstone/context-slots, on the pinned d60365e)"},
-    "launcher": {"sha256": "d5313532543c1254bd473181125b338e8927c550a3b44c7f5c638152163b040e", "source": "capstone-exec built from this branch against that libcapstone"},
+    "qemu": {
+      "sha256": "05c566e8d9d85f774fc27b582b67b3e334dd227e590a826bca983dcc3cc8146e",
+      "source": "capstone-qemu 7bbedcd16b (qemu/context-slots, on the pinned d6cca7f76b)"
+    },
+    "firmware": {
+      "sha256": "d22c80655ef790d544e1eb296b68489cd24de5bc40b0c91ad0103a6cc2dd4689",
+      "monitor": "capstone-sbi monitor/context-slots with the offer-slot clear (see notes), in caplifive-opensbi 853197a's wrapper; build recipe reproduces the base firmware's disassembly exactly (0 of 49168 lines differ) from the unchanged monitor"
+    },
+    "module": {
+      "sha256": "cc6d8cd6ca38c86220480b01a215b4aa1896d9fbebee8b0c6a7a545e55521039",
+      "source": "modcapstone at caplifive-buildroot 11c024a (modcapstone/context-slots, on the pinned d60365e)"
+    },
+    "launcher": {
+      "sha256": "d5313532543c1254bd473181125b338e8927c550a3b44c7f5c638152163b040e",
+      "source": "capstone-exec built from this branch against that libcapstone"
+    },
     "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
     "rootfs_sha256": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
     "vm": "one hart, 8 GiB, CMA 1024 MiB, process cache 384 MiB, CAPSTONE_GP_NONLIN=1, CAPSTONE_REV_NODES=65536"
   },
   "images": {
-    "context-probe.dom": "81a8b48d84e945d7a5f49306de2424630e27d2a3d2f5f74ce51c55c6dd3bc85e",
+    "context-probe.dom": "139af532807ce43492af1fddb9df79dd1fa86fc99581e87738af3c00ae6a36c8",
     "signal-contract.dom": "3d06c5f54f782cae923f903adef40c95e5866523a8073d0d7d49cc790d163cdc",
     "application-contract.dom": "1eeaf487320ce3fa15cf6c065f86a0d7a100b253961397ad8a1824746f90c291",
     "perl.dom": "4c2e7a0972d6613454c2bd516e7692ad84053e34239d2c2a7bfde83c61c74602",
@@ -19,16 +31,26 @@
   },
   "context_probe": {
     "modes": {
-      "nested-enter": "PASS", "nested-preempt": "PASS (child ran 8055 ms)", "nested-reenter": "PASS",
-      "remint": "PASS", "revoked-call": "PASS (cause 24 at __capstone_context_call_insn)",
+      "nested-enter": "PASS",
+      "nested-preempt": "PASS (child ran 8081 ms)",
+      "nested-reenter": "PASS",
+      "remint": "PASS",
+      "revoked-call": "PASS (cause 24 at __capstone_context_call_insn)",
       "adopt-enter": "PASS: ADOPT, the seal left the application's slot, STEP to RETURNED with EXITED in the result word; own stack and TLS, one counter, constructors once; FORGET 0",
       "adopt-thread": "PASS: a launcher thread steps the context while the main context yields; done and the return value observed",
-      "adopt-preempt": "PASS: 1564 PREEMPTED steps, then RETURNED with EXITED and the parent's LCG value",
+      "adopt-preempt": "PASS: 1538 PREEMPTED steps, then RETURNED with EXITED and the parent's LCG value",
       "adopt-reenter": "PASS: three further steps of the exited context each RETURNED with EXITED",
-      "adopt-dead": "PASS: after the domain revoked the area, two steps DEAD, FORGET 0, FORGET again ESTALE, STEP refused; the same area minted anew as id 0x600000001 after 0x500000001 (slot 1, next generation) returns 1007"
+      "adopt-dead": "PASS: after the domain revoked the area, two steps DEAD, FORGET 0, FORGET again ESTALE, STEP refused; the same area minted anew as id 0x600000001 after 0x500000001 (slot 1, next generation) returns 1007",
+      "reenter-revoked": "PASS (A4): the start block, TLS block and stack revoked through their own handles while the seal stays valid; three further steps each RETURNED with EXITED",
+      "done-preempted": "PASS (A6): stepped until done was published and the last event was PREEMPTED with its pc inside probe_exit_delay_begin..end; the joiner copied 4242, revoked, minted anew into the same area; the old id then steps DEAD and the new context returns 1009",
+      "rollback-thread": "PASS (A11), run with CAPSTONE_CONTEXT_TEST_THREAD_FAILS=1: CONTEXT_CREATE in thread mode answers EAGAIN and no child ran; after a new offer under ticket 1001, the old ticket 1000 gets ESTALE and 1001 is adopted",
+      "duplicate-adopt": "PASS (A13, first part): a second CONTEXT_CREATE with the consumed ticket gets ENOENT",
+      "two-steppers": "PASS (A13, second part): a launcher thread and the main thread step one context, 781 of the steps from the main thread; one continuous execution, the parent's LCG value",
+      "loan-preempt": "PASS (A14): a copy of the descriptor taken before 40,000,000 LCG rounds still writes after the resumes",
+      "loan-after-return": "PASS (A15, negative): a copy of the main context's descriptor kept past a delegated round faults at probe_store_insn with cause 24 (it reloads untagged); CONTROL on the base platform: the same image prints REACHED, the result slot there survives the call"
     },
-    "passed": 10,
-    "total": 10
+    "passed": 17,
+    "total": 17
   },
   "regression": {
     "signal_contract": "26/26 PASS",
@@ -38,6 +60,8 @@
   "method": "capstone-vm, one boot for the probe, the signal contract and the application gate; perl.dom and mruby.dom are the delegation-signals images, so the gate's real-application checks do not exercise this branch's runtime, but every launch, share, step and destroy in the gate runs on the new monitor, driver and supervisor",
   "notes": [
     "first boot on this platform halted in the monitor: capstone-c had generated cincoffset t0, t0, t0 in create_domain (an array capability used as its own offset after a spilled index was lost); the build now refuses that pattern (check-cincoffset, positive-controlled on that output) and the slot bookkeeping moved into small functions",
-    "a minted context has no transport of its own yet: its launcher thread ends at the first return without EXITED; per-context transport is Probe B's runtime integration"
+    "a minted context has no transport of its own yet: its launcher thread ends at the first return without EXITED; per-context transport is Probe B's runtime integration",
+    "the first run of duplicate-adopt and rollback-thread failed and found a monitor defect: ldc copies and does not clear its source, so the descriptor kept a second copy of an adopted seal and the next call offered it again under ticket 0; loan_end now clears the slot after loading it, and both modes pass",
+    "A13's foreign-owner request is not covered yet"
   ]
 }
