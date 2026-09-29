@@ -43,6 +43,12 @@ struct capstone_delegate_host {
   int exit_status;
   /* signals: the ring, the classes, the masks; initialized by the launcher */
   struct capstone_signal_state signals;
+  /* contexts (docs/plans/delegation-threads.md): the launcher answers the
+     CONTEXT requests through this hook; NULL answers ENOSYS. It writes a step
+     event, when asked for one, into the exchange region at the offset in
+     args[2]. */
+  long (*context)(struct capstone_delegate_host *host, const struct capstone_delegate_entry *request);
+  void *context_state;
 };
 
 /* Service one entry in place: validate, run, write result. Never returns an

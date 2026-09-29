@@ -19,6 +19,12 @@ MODES = {
     # Negative: a revoked seal reloads untagged (capstone-qemu, ISSUES Q-11), so
     # entering it must fault at the CALL itself: cause 24, unexpected operand.
     "revoked-call": ("signal", 11, "", "REACHED", (24, "__capstone_context_call_insn")),
+    # Through the monitor: ADOPT, STEP, FORGET.
+    "adopt-enter": ("exit", 0, "PASS", None, None),
+    "adopt-thread": ("exit", 0, "PASS", None, None),
+    "adopt-preempt": ("exit", 0, "PASS", None, None),
+    "adopt-reenter": ("exit", 0, "PASS", None, None),
+    "adopt-dead": ("exit", 0, "PASS", None, None),
 }
 LINK_BASE = 0x10000   # my_first_domain/link.ld
 

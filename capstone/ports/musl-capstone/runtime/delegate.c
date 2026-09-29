@@ -549,6 +549,16 @@ long __capstone_delegate_spawn(const void *block, unsigned long bytes) {
   return dl_call(CAPSTONE_NR_SPAWN, raw);
 }
 
+/* Context requests (docs/plans/delegation-threads.md): two integers in, an
+   optional 48-byte event out. */
+long __capstone_delegate_context(uint64_t nr, uint64_t a, uint64_t b, void *event) {
+  syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {(syscall_arg_t)a, (syscall_arg_t)b,
+                                               (syscall_arg_t)event, 0, 0, 0};
+  if (!__capstone_delegate_ready())
+    return -EIO;
+  return dl_call(nr, raw);
+}
+
 /* The unserved report's writer: two is the task's stderr. */
 void __capstone_delegate_write2(const char *buf, unsigned long n) {
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {(syscall_arg_t)2, (syscall_arg_t)buf,

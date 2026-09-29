@@ -410,6 +410,35 @@ __capstone_context_seal:
   li t1, 0
   ret
 
+/* long __capstone_context_offer(capstone_cap_slot *seal, unsigned long ticket)
+ *
+ * Move a minted seal, with its ticket, into the invocation descriptor the
+ * current call entry lent this context (recovery-block slot 16). The monitor
+ * takes it out when the call returns, before it revokes the loan; the launcher
+ * then asks it to ADOPT the offer under the ticket. -1 when the current entry
+ * carried no descriptor (a region share); the seal then stays where it is. */
+  .global __capstone_context_offer
+__capstone_context_offer:
+  ccsrrw(t0, cscratch, x0)
+  ld t1, 64(t0)
+  bnez t1, .Lcontext_offer_none
+  ldc(t2, t0, 16)
+  ccsrrw(x0, cscratch, t0)
+  ldc(t3, a0, 0)
+  stc(x0, a0, 0)
+  sd a1, 16(t2)
+  stc(t3, t2, 32)
+  li t0, 0
+  li t2, 0
+  li t3, 0
+  li a0, 0
+  ret
+.Lcontext_offer_none:
+  ccsrrw(x0, cscratch, t0)
+  li t0, 0
+  li a0, -1
+  ret
+
 /* void __capstone_context_call(capstone_cap_slot *seal, unsigned long request,
  *                              unsigned long *result)
  *

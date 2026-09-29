@@ -42,9 +42,12 @@
 #include <stddef.h>
 #include <capstone/capability-slot.h>
 
+struct capstone_context_event;
+
 struct capstone_context {
   capstone_cap_slot handle;        /* revocation handle over the whole area */
   capstone_cap_slot seal;          /* the minted seal until it is handed off */
+  unsigned long id;                /* (generation << 32) | slot, once adopted */
   volatile unsigned long *done;    /* completion word, valid until revoke */
   volatile unsigned long *value;   /* the start function's return value */
   unsigned long *start;            /* start block alias */
@@ -66,6 +69,19 @@ void capstone_context_revoke(struct capstone_context *c);
 /* Mint again into the area a previous revoke returned. */
 int capstone_context_remint(struct capstone_context *c,
                             unsigned long (*start)(void *), void *arg);
+
+/* Offer the minted seal through the current call's descriptor and ask the
+ * launcher to register it (CAPSTONE_CONTEXT_REGISTER) or to run it on a
+ * launcher thread of its own (CAPSTONE_CONTEXT_THREAD). The seal leaves
+ * c->seal either way. Returns the context id, or -errno: ESTALE, ENOENT,
+ * ENOSPC (no slot: revoke the area), EINVAL (no descriptor in this entry). */
+long capstone_context_create(struct capstone_context *c, unsigned mode);
+
+/* Step a registered context once from this context's launcher thread. */
+long capstone_context_step(unsigned long id, struct capstone_context_event *event);
+
+/* Remove a context's registration. */
+long capstone_context_forget(unsigned long id);
 
 /* Leave the current context for good (see start-musl.S). */
 void __capstone_context_exit(unsigned long value) __attribute__((noreturn));

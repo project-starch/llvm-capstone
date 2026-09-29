@@ -15,11 +15,13 @@
  * The seal region stays linear until it is sealed; the other three children
  * are delinearized into aliases, which the handle still covers. Linear values
  * never sit in C variables here, only in capstone_cap_slot records. */
+#include <errno.h>
 #include <stdint.h>
 #include <string.h>
 #include "pthread_impl.h"
 #include <capstone/capability.h>
 #include <capstone/context.h>
+#include <capstone/delegate.h>
 
 /* Every image links this; an application with CONTEXT_BYTES links domreq.S's
    strong definition instead. start-musl.S reads it at the first entry. */
@@ -31,6 +33,8 @@ size_t __capstone_tls_block_bytes(void);
 char *__capstone_tls_block_init(char *mem, size_t bytes);
 void __capstone_context_seal(capstone_cap_slot *region, void *entry,
                              void *start_block, capstone_cap_slot *out);
+long __capstone_context_offer(capstone_cap_slot *seal, unsigned long ticket);
+long __capstone_delegate_context(uint64_t nr, uint64_t a, uint64_t b, void *event);
 
 #define MIN_STACK_BYTES 8192
 
@@ -136,4 +140,29 @@ int capstone_context_remint(struct capstone_context *c,
   capstone_cap_move(&c->handle, &area);
   capstone_cap_clear(&c->seal);
   return mint_area(c, &area, start, arg);
+}
+
+/* One ticket per offer: a late or repeated request can never consume a later
+   offer of this application. */
+static unsigned long next_ticket = 1;
+
+long capstone_context_create(struct capstone_context *c, unsigned mode)
+{
+  unsigned long ticket = next_ticket++;
+  if (__capstone_context_offer(&c->seal, ticket))
+    return -EINVAL;
+  long id = __capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, ticket, mode, 0);
+  if (id >= 0)
+    c->id = (unsigned long)id;
+  return id;
+}
+
+long capstone_context_step(unsigned long id, struct capstone_context_event *event)
+{
+  return __capstone_delegate_context(CAPSTONE_NR_CONTEXT_STEP, id, 0, event);
+}
+
+long capstone_context_forget(unsigned long id)
+{
+  return __capstone_delegate_context(CAPSTONE_NR_CONTEXT_FORGET, id, 0, 0);
 }
