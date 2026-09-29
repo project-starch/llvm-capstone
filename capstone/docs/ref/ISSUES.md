@@ -7150,6 +7150,70 @@ live instance. The compiler lane's sweep
 `add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
 save loop is one alignment change from live.
 
+### C-71 — the ISel backstop turns a maybe-null or integer round trip into `cincoffsetimm` `OPEN — COMPILER, pre-existing, MEDIUM: reachable from C today; found 2026-09-29 in the #94 and #120 reviews`
+
+**What happens.** `recoverCapabilityFromAddressArith` (CapstoneISelLowering.cpp) rewrites a single
+`add`/`sub` under an `inttoptr` back into a capability increment, without requiring the base to hold
+a capability. On a maybe-null or integer-valued base that emits a capability instruction on a
+register holding no capability, which raises UNEXPECTED_OPERAND (cause 24) on silicon.
+
+    define ptr addrspace(200) @f(ptr addrspace(200) %p) {   ; %p may be null
+      %i = ptrtoint ptr addrspace(200) %p to i64
+      %a = add i64 %i, 8
+      %r = inttoptr i64 %a to ptr addrspace(200)
+      ret ptr addrspace(200) %r
+    }
+    ->  cincoffsetimm  a0, a0, 8
+
+Note the mnemonic is `cincoffsetimm`, the immediate form. Grepping output for `cincoffset a0, a0,`
+finds nothing and reads as absence.
+
+**It is PRE-EXISTING and reproduces on dev.** Measured with a toolchain built from 93ac30d4 that
+contains zero occurrences of `capstone-recover-provenance`, and again on one whose llvm/clang is
+byte-identical to dev — so it is not #94's IR pass and not #118/#119. #94's only change to
+CapstoneISelLowering.cpp is a single hunk in which every line is a comment.
+
+**Two live consumers.**
+- #94's declined shapes still reach it. So "C-32-style round trips are fixed" holds for the IR pass
+  only: the pass may decline a shape and the backstop then rewrites it anyway, after instruction
+  selection begins.
+- `__intcap` arithmetic reaches it: `__intcap f(__intcap ic) { return (long)ic + 1; }` gives
+  `cincoffsetimm a0, a0, 1`, a capability instruction on a type meant to hold integers. That half
+  needs #120 to reproduce, since dev's clang does not accept `__intcap` at all.
+
+**Reproducer and evidence.** `~/capstone-artifacts/pr94-review-2026-09-29/`:
+`repro/a1-backstop-single-add.ll` with `output/a1-on-DEV.s`, the asm from the pass-free toolchain.
+
+**Why it is filed rather than fixed.** The fix is a change to argument/address lowering that would
+have to decide what a round trip on a base that MAY be null should become. `llvm/test/CodeGen/
+Capstone/ptr-arith.ll` CHECKs `cincoffset` on a plain `%p` today, so the current behaviour is
+pinned by a test and changing it is a deliberate decision, not a repair.
+
+### C-72 — the mruby port fails its first `puts` on dev, pending intcap `OPEN — PORT, blocked on #120; found 2026-09-29 by the delegation lane on dev 009066ed`
+
+**What happens.** `mruby.dom -e 'puts "mruby: #{6*7}"'` takes a domain fault, cause 24, in
+`mrb_packed_int_decode`: an untagged `cincoffset`, from a `uintptr_t` round trip. It reproduces with
+no delegation code involved, so it is the port, not the caller.
+
+**Why it is not simply a port bug.** The port already carries the fix. Patches 0002, 0003 and 0006
+guard it with `#ifdef __SIZEOF_INTCAP__`, and dev's compiler does not define that macro — verified
+directly: a `#ifdef __SIZEOF_INTCAP__` probe compiled by a toolchain whose llvm/clang is identical
+to dev's yields `has_intcap = 0`. So the guarded code is compiled out and the unguarded round trip
+remains.
+
+**IT WAITS ON #120, NOT #123.** `__SIZEOF_INTCAP__` and `__uintcap_t` are introduced by the three
+intcap commits — 3885ec8b8311 ("intcap B.1"), 87e005a71c4e and 772d99ea7b9e — and by no other commit
+in that stack. 7d01722aab88 is the SROA change and introduces neither. The delegation lane's report
+(`/tmp/capstone/deleg-gate/REPORT.md`) says #123 in both its summary and its sequencing
+recommendation; that is the wrong PR to wait on.
+
+**This matters for sequencing**, because #120 is itself blocked: it carries three confirmed intcap
+defects plus a shared-patches manifest regression. So mruby on dev is blocked behind a blocked PR,
+and anything depending on mruby needs either #120 landing or the port's one-file fallback.
+
+**Related.** The faulting shape is the same family as C-71 and C-32: an address computed through an
+integer, turned back into a capability operation on a register that holds none.
+
 ## Infrastructure / procedure
 
 ### C-66 — MachineCSE's PRE moves capability arithmetic above the test that guards it: a second hoisting path the C-58 fix does not see `FIX on compiler/c66-machinecse-pre-trapping-cap-arith; found 2026-09-25 by the CPython pymalloc corpus run inside the interpreter`
