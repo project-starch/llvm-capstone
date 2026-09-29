@@ -93,7 +93,9 @@ static int inspect(const unsigned char *data, size_t size,
       out->v1.heap_bytes > 256u * 1024u * 1024u)
     return ENOEXEC;
   if (out->v1.flags != (CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE) ||
-      out->exchange_bytes < 4096 || out->exchange_bytes > 1024u * 1024u * 1024u)
+      out->exchange_bytes < 4096 || out->exchange_bytes > 1024u * 1024u * 1024u ||
+      out->exchange_bytes % 4096 || out->contexts > CAPSTONE_DELEGATE_CONTEXTS_MAX ||
+      (1 + out->contexts) * out->exchange_bytes > 1024u * 1024u * 1024u)
     return ENOEXEC;
   return 0;
 }

@@ -40,9 +40,16 @@ struct capstone_delegate_entry {
 #define CAPSTONE_ROUND_DONE 0u
 #define CAPSTONE_ROUND_RETRY 1u
 
-/* The META region: the entry at offset 0, the signal handover block at
- * CAPSTONE_SIGNAL_OFFSET. See docs/plans/delegation-signals.md. */
+/* One transport per context: a META block of CAPSTONE_DELEGATE_META_BYTES
+ * (the entry at offset 0, the signal handover block at CAPSTONE_SIGNAL_OFFSET)
+ * and an exchange region of the descriptor's exchange_bytes. The launcher
+ * grants 1 + contexts of each as two regions, transport i at i times the block
+ * size in both; transport 0 is the first context's. See
+ * docs/plans/delegation-signals.md and docs/plans/delegation-threads.md. */
 #define CAPSTONE_DELEGATE_META_BYTES 16384u
+/* Contexts besides the first with a transport of their own: the monitor lends
+ * each application 8 invocation descriptors (process-abi.h). */
+#define CAPSTONE_DELEGATE_CONTEXTS_MAX 7u
 #define CAPSTONE_SIGNAL_OFFSET 4096u
 #define CAPSTONE_SIGNAL_EVENTS 64u
 #define CAPSTONE_SIGNAL_WAIT 1u  /* accepted inside a wait with a temporary mask */
@@ -132,14 +139,24 @@ enum capstone_delegate_group {
 #define CAPSTONE_NR_SIGDONE UINT64_C(0xC0DE0006)   /* seq */
 #define CAPSTONE_NR_SIGPOLL UINT64_C(0xC0DE0007)
 
-/* Contexts (docs/plans/delegation-threads.md). CONTEXT_CREATE: ticket, mode;
- * the seal is already in the requesting context's invocation descriptor, the
- * result is the new context's id or -errno. CONTEXT_STEP: id, 0, event; the
- * launcher steps that context once and writes a capstone_context_event.
- * CONTEXT_FORGET: id. Arguments are integers; the event is an optional output. */
+/* Contexts (docs/plans/delegation-threads.md).
+ * CONTEXT_RESERVE: no arguments; the result is a free transport index, 1 to
+ * the descriptor's contexts, or -EAGAIN when every one is in use (-ENOSYS for
+ * an application that declares none). The creator puts the index into the
+ * new context's start block before CONTEXT_CREATE, so the context has its
+ * transport at its first entry.
+ * CONTEXT_CREATE: ticket, mode, transport; the seal is already in the
+ * requesting context's invocation descriptor, the result is the new context's
+ * id or -errno. It consumes a reservation whatever its outcome: THREAD mode
+ * names the reserved transport, which the launcher thread serves until the
+ * context ends; REGISTER mode names none (0), and that context makes no
+ * delegated call.
+ * CONTEXT_STEP: id, 0, event; the launcher steps a REGISTER context once and
+ * writes a capstone_context_event. CONTEXT_FORGET: id. */
 #define CAPSTONE_NR_CONTEXT_CREATE UINT64_C(0xC0DE0008)
 #define CAPSTONE_NR_CONTEXT_STEP UINT64_C(0xC0DE0009)
 #define CAPSTONE_NR_CONTEXT_FORGET UINT64_C(0xC0DE000A)
+#define CAPSTONE_NR_CONTEXT_RESERVE UINT64_C(0xC0DE000B)
 #define CAPSTONE_CONTEXT_REGISTER 0u   /* register only; the application steps it */
 #define CAPSTONE_CONTEXT_THREAD 1u     /* a launcher thread steps it until it ends */
 struct capstone_context_event {

@@ -138,13 +138,13 @@ probe_wfi_insn:
  * words 38..41 cscratch's type, base, end and permissions. It clobbers only
  * t0..t3 (untagged at entry) and restores cscratch. x5 comes from cscratch,
  * which the first instruction swaps with it; x6 and x7 are stashed in the
- * start block at 176 and 192. ---- */
+ * start block at 224 and 240, which the runtime leaves free. ---- */
 #define lcc(rd, rs, field) .insn r 0x5b, 0x1, 0x04, rd, rs, field
   .global probe_entry_audit
 probe_entry_audit:
   ccsrrw(t0, cscratch, t0)        /* t0: start block; cscratch: x5 as entered */
-  stc(t1, t0, 176)
-  stc(t2, t0, 192)
+  stc(t1, t0, 224)
+  stc(t2, t0, 240)
 .Lpcrel_audit:
   auipc t1, %pcrel_hi(probe_audit)
   addi t1, t1, %pcrel_lo(.Lpcrel_audit)
@@ -205,14 +205,14 @@ probe_entry_audit:
   sd t2, 240(t1)
   lcc(t2, x31, x1)
   sd t2, 248(t1)
-  ldc(t2, t0, 176)
+  ldc(t2, t0, 224)
   lcc(t2, t2, x1)
   sd t2, 48(t1)                   /* x6 */
-  ldc(t2, t0, 192)
+  ldc(t2, t0, 240)
   lcc(t2, t2, x1)
   sd t2, 56(t1)                   /* x7 */
-  stc(x0, t0, 176)
-  stc(x0, t0, 192)
+  stc(x0, t0, 224)
+  stc(x0, t0, 240)
   li t3, 7
   lcc(t2, gp, x1)
   beq t2, t3, 1f

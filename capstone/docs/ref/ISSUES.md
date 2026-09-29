@@ -7130,6 +7130,33 @@ live instance. The compiler lane's sweep
 `add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
 save loop is one alignment change from live.
 
+### C-73 — capstone-c mis-allocates registers in long monitor functions, and cannot build two other shapes `WORKED AROUND 2026-09-29 in the monitor's code and by a build check; no reduced reproducer`
+
+capstone-c (the compiler of the capstone-sbi monitor, `jasonyu1996/capstone-c`) has three defects that
+shaped the context-slot monitor (capstone-sbi `0451a1a` and later, delegation-threads):
+
+- **Register misallocation.** In a long function that stores into many arrays in a row it spills an
+  index, loads an array capability into the same register and uses that capability as its own offset:
+  `cincoffset t0, t0, t0`. The first build of the context-slot monitor did this in `create_domain` and
+  `context_adopt` (five sites), and the monitor halted at its first store through the result.
+- **A global larger than 2048 bytes does not assemble**: every global gets an exactly sized capability
+  at start-up, sized with an `addi` immediate (`illegal operands 'addi t1,t1,-8192'`). The descriptor
+  pool is therefore two 128-capability halves.
+- **Passing one variable as two arguments of one call crashes the compiler** (`codegen.rs:635`, unwrap
+  on `None`).
+
+**Workarounds.** Slot bookkeeping lives in small functions with few live values; the pool is split;
+no call passes one variable twice. caplifive-buildroot `f9b2408` runs `scripts/check-monitor-asm.py`
+on every regenerated monitor `.c.S` and fails the build on `cincoffset(r, x, x)`; it exits 2 on input
+without a function, fired on the miscompiled build (five sites) and on a minimal file with the
+pattern, and passes the fixed monitor and the interrupt handler.
+
+**Reproducer.** None reduced: the miscompiled long functions were rewritten before they were
+committed. The build check makes a recurrence visible at the next monitor build.
+
+**Impact.** Any monitor change can meet the first defect; the check turns it into a build failure
+instead of a halted monitor. Only the monitor is compiled by capstone-c.
+
 ## Infrastructure / procedure
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`

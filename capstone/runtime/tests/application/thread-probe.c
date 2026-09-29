@@ -1,0 +1,577 @@
+/* Probe B, domain phase, first part: a transport per context
+ * (docs/plans/delegation-threads.md).
+ *
+ * Every context the launcher runs on a thread of its own gets its own entry
+ * block and exchange region, reserved before it is minted, so its delegated
+ * calls are served by that thread and a call that blocks in Linux blocks only
+ * that context (B7). The modes also cover what ends with a context (a fault or
+ * exit() in it ends the process), the reservation's lifetime, the reuse of
+ * transports, contexts at once, and the calls a further context may not make
+ * yet (signal state stays with the first context).
+ *
+ * Every mode prints "thread-probe <mode>: PASS" and exits 0, or fails the
+ * CHECK naming the broken property. exit-child exits 7 from the child, and
+ * fault-child must end in a domain fault. */
+#include <errno.h>
+#include <fcntl.h>
+#include <sched.h>
+#include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <capstone/capability.h>
+#include <capstone/context.h>
+#include <capstone/delegate.h>
+
+#define CHECK(test) do { if (!(test)) { \
+  fprintf(stderr, "thread-probe:%d: %s\n", __LINE__, #test); return 1; \
+} } while (0)
+
+/* The image declares CONTEXTS 7; each thread area holds a TLS block, a
+   start block, a seal region and the stack. */
+#define TRANSPORTS 7
+#define AREA_BYTES (128 * 1024)
+
+long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c);
+
+static const char *mode;
+
+static long monotonic_ms(void)
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+/* Until the context has published done, at most `ms`. The waiting context's
+   own thread yields in Linux, so the child's thread gets the hart. */
+static int wait_done(struct capstone_context *c, long ms)
+{
+  long t0 = monotonic_ms();
+  while (!*c->done && monotonic_ms() - t0 < ms)
+    sched_yield();
+  return *c->done == 1;
+}
+
+/* Mint and create a THREAD context; a transport may still be winding down
+   from a context that just ended, so EAGAIN is retried for a while. */
+static long start_thread(struct capstone_context *c, unsigned long (*fn)(void *), void *arg)
+{
+  if (capstone_context_mint(c, AREA_BYTES, fn, arg))
+    return -ENOMEM;
+  long t0 = monotonic_ms(), id;
+  while ((id = capstone_context_create(c, CAPSTONE_CONTEXT_THREAD)) == -EAGAIN &&
+         monotonic_ms() - t0 < 5000) {
+    sched_yield();
+    if (capstone_cap_type(&c->seal) != CAPSTONE_CAP_EMPTY)
+      continue;
+    return -EIO;   /* the seal was offered and is gone: cannot retry */
+  }
+  return id;
+}
+
+/* The child's side of `transport`: delegated calls through its own
+   transport, a local answer, and a result that needs all of them. */
+static char child_line[64];
+static volatile long child_pid, child_written, child_read;
+static unsigned long child_calls(void *arg)
+{
+  int fds[2];
+  char buf[32] = {0};
+  child_pid = getpid();
+  if (pipe(fds)) return 100 + errno;
+  child_written = write(fds[1], child_line, strlen(child_line));
+  child_read = read(fds[0], buf, sizeof buf - 1);
+  close(fds[0]);
+  close(fds[1]);
+  if (strcmp(buf, child_line)) return 2;
+  printf("thread-probe child: %s", buf);
+  fflush(stdout);
+  return 42 + (unsigned long)(uintptr_t)arg;
+}
+
+static int transport(void)
+{
+  struct capstone_context c;
+  strcpy(child_line, "through its own transport\n");
+  long id = start_thread(&c, child_calls, (void *)(uintptr_t)1);
+  CHECK(id > 0);
+  /* the first context keeps making calls meanwhile */
+  for (int i = 0; i < 20 && !*c.done; ++i)
+    CHECK(write(1, "", 0) == 0);
+  CHECK(wait_done(&c, 20000));
+  CHECK(*c.value == 43);
+  CHECK(child_pid == getpid());
+  CHECK(child_written == (long)strlen(child_line) && child_read == child_written);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+/* B7: context 1 in a delegated read on an empty pipe; context 2 (the first)
+   runs and writes; the read returns the data. The child says when it is about
+   to read; the first context then computes for several quanta and checks the
+   child has not come back before the write. */
+static int pipe_fds[2];
+static volatile int b7_reading;
+static volatile long b7_got;
+static char b7_buf[32];
+static unsigned long b7_reader(void *arg)
+{
+  (void)arg;
+  b7_reading = 1;
+  b7_got = read(pipe_fds[0], b7_buf, sizeof b7_buf - 1);
+  return 7;
+}
+
+static volatile unsigned long spin_sink;
+static void spin_ms(long ms)
+{
+  long t0 = monotonic_ms();
+  unsigned long x = 1;
+  while (monotonic_ms() - t0 < ms)
+    for (int i = 0; i < 100000; ++i)
+      x = x * 6364136223846793005u + 1442695040888963407u;
+  spin_sink = x;
+}
+
+static int blocking(void)
+{
+  struct capstone_context c;
+  CHECK(!pipe(pipe_fds));
+  long id = start_thread(&c, b7_reader, 0);
+  CHECK(id > 0);
+  long t0 = monotonic_ms();
+  while (!b7_reading && monotonic_ms() - t0 < 20000)
+    sched_yield();
+  CHECK(b7_reading);
+  /* the child is in read (or about to be); this context keeps the hart */
+  spin_ms(100);
+  CHECK(!*c.done && b7_got == 0);
+  CHECK(write(pipe_fds[1], "b7 data", 7) == 7);
+  CHECK(wait_done(&c, 20000));
+  CHECK(*c.value == 7 && b7_got == 7 && !memcmp(b7_buf, "b7 data", 7));
+  capstone_context_revoke(&c);
+  close(pipe_fds[0]);
+  close(pipe_fds[1]);
+  return 0;
+}
+
+/* exit() in a further context ends the process with its status. */
+static unsigned long exiter(void *arg)
+{
+  (void)arg;
+  exit(7);
+}
+
+static int exit_child(void)
+{
+  struct capstone_context c;
+  long id = start_thread(&c, exiter, 0);
+  CHECK(id > 0);
+  long t0 = monotonic_ms();
+  while (monotonic_ms() - t0 < 20000)
+    sched_yield();
+  fprintf(stderr, "thread-probe exit-child: REACHED\n");
+  return 1;
+}
+
+/* A fault in a further context ends the process with a domain fault. */
+void probe_fault_store(volatile int *where);
+static unsigned long faulter(void *arg)
+{
+  probe_fault_store((volatile int *)arg);
+  return 0;
+}
+
+static int fault_child(void)
+{
+  struct capstone_context c;
+  long id = start_thread(&c, faulter, 0);
+  CHECK(id > 0);
+  long t0 = monotonic_ms();
+  while (monotonic_ms() - t0 < 20000)
+    sched_yield();
+  fprintf(stderr, "thread-probe fault-child: REACHED\n");
+  return 1;
+}
+
+/* Every transport can be reserved once; CREATE gives a reservation back
+   whatever its outcome, here a request with no offer. */
+static int reserve(void)
+{
+  long got[TRANSPORTS];
+  for (int i = 0; i < TRANSPORTS; ++i) {
+    got[i] = __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_RESERVE, 0, 0, 0);
+    CHECK(got[i] >= 1 && got[i] <= TRANSPORTS);
+    for (int j = 0; j < i; ++j)
+      CHECK(got[j] != got[i]);
+  }
+  CHECK(__capstone_delegate_ints(CAPSTONE_NR_CONTEXT_RESERVE, 0, 0, 0) == -EAGAIN);
+  for (int i = 0; i < TRANSPORTS; ++i)
+    CHECK(__capstone_delegate_ints(CAPSTONE_NR_CONTEXT_CREATE, 900 + i, CAPSTONE_CONTEXT_THREAD,
+                                   (uint64_t)got[i]) == -ENOENT);
+  /* a transport that is not reserved, a REGISTER request naming one */
+  CHECK(__capstone_delegate_ints(CAPSTONE_NR_CONTEXT_CREATE, 950, CAPSTONE_CONTEXT_THREAD, 1) ==
+        -EINVAL);
+  long again = __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_RESERVE, 0, 0, 0);
+  CHECK(again >= 1);
+  CHECK(__capstone_delegate_ints(CAPSTONE_NR_CONTEXT_CREATE, 951, CAPSTONE_CONTEXT_REGISTER,
+                                 (uint64_t)again) == -EINVAL);
+  for (int i = 0; i < TRANSPORTS; ++i)
+    CHECK(__capstone_delegate_ints(CAPSTONE_NR_CONTEXT_RESERVE, 0, 0, 0) >= 1);
+  CHECK(__capstone_delegate_ints(CAPSTONE_NR_CONTEXT_RESERVE, 0, 0, 0) == -EAGAIN);
+  return 0;
+}
+
+/* Four times as many sequential contexts as there are transports, in one
+   area: every transport, registration and slot is given back and reused. */
+static int reuse(void)
+{
+  struct capstone_context c;
+  for (int round = 0; round < 4 * TRANSPORTS; ++round) {
+    snprintf(child_line, sizeof child_line, "reuse round %d\n", round);
+    long id;
+    if (round == 0) {
+      id = start_thread(&c, child_calls, (void *)(uintptr_t)round);
+    } else {
+      CHECK(!capstone_context_remint(&c, child_calls, (void *)(uintptr_t)round));
+      long t0 = monotonic_ms();
+      while ((id = capstone_context_create(&c, CAPSTONE_CONTEXT_THREAD)) == -EAGAIN &&
+             capstone_cap_type(&c.seal) != CAPSTONE_CAP_EMPTY && monotonic_ms() - t0 < 5000)
+        sched_yield();
+    }
+    CHECK(id > 0);
+    CHECK(wait_done(&c, 20000));
+    CHECK(*c.value == 42 + (unsigned long)round);
+    capstone_context_revoke(&c);
+  }
+  return 0;
+}
+
+/* Every transport at once: each child writes its own pattern through a pipe
+   of its own and reads it back, many times; the first context does the same.
+   Transports that shared anything would mix the patterns. */
+#define ROUNDS 40
+static volatile int loop_errors[TRANSPORTS + 1];
+static int pattern_loop(int who)
+{
+  int fds[2];
+  char out[48], in[48];
+  if (pipe(fds)) return 1;
+  for (int r = 0; r < ROUNDS; ++r) {
+    int n = snprintf(out, sizeof out, "context %d round %d %08x", who, r,
+                     (unsigned)(who * 2654435761u + (unsigned)r));
+    memset(in, 0, sizeof in);
+    if (write(fds[1], out, (size_t)n) != n || read(fds[0], in, sizeof in) != n ||
+        memcmp(in, out, (size_t)n)) {
+      ++loop_errors[who];
+    }
+  }
+  close(fds[0]);
+  close(fds[1]);
+  return loop_errors[who];
+}
+
+static unsigned long looper(void *arg)
+{
+  return pattern_loop((int)(uintptr_t)arg) ? 1 : 100 + (unsigned long)(uintptr_t)arg;
+}
+
+static int concurrent(void)
+{
+  static struct capstone_context c[TRANSPORTS];
+  for (int i = 0; i < TRANSPORTS; ++i)
+    CHECK(start_thread(&c[i], looper, (void *)(uintptr_t)(i + 1)) > 0);
+  CHECK(pattern_loop(0) == 0);
+  for (int i = 0; i < TRANSPORTS; ++i) {
+    CHECK(wait_done(&c[i], 60000));
+    CHECK(*c[i].value == 101 + (unsigned long)i);
+    CHECK(loop_errors[i + 1] == 0);
+    capstone_context_revoke(&c[i]);
+  }
+  return 0;
+}
+
+/* A further context preempted many times while the first context makes
+   rounds: its loan and continuation survive every preemption, and the first
+   context's rounds are served meanwhile. */
+static unsigned long computer(void *arg)
+{
+  (void)arg;
+  spin_ms(300);
+  return 11;
+}
+
+static int preempted(void)
+{
+  struct capstone_context c;
+  long id = start_thread(&c, computer, 0);
+  CHECK(id > 0);
+  unsigned long rounds = 0;
+  long t0 = monotonic_ms();
+  while (!*c.done && monotonic_ms() - t0 < 20000) {
+    sched_yield();
+    ++rounds;
+  }
+  CHECK(*c.done == 1 && *c.value == 11);
+  printf("thread-probe preempted: %lu rounds meanwhile\n", rounds);
+  CHECK(rounds > 0);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+/* More delegated rounds than the platform has revocation nodes (65536 in the
+   VM), from one context: every round's loan must give its node back. */
+static int many_rounds(void)
+{
+  long slowest = 0, fastest = 1L << 40, t0 = monotonic_ms(), start = t0;
+  for (long i = 1; i <= 100000; ++i) {
+    CHECK(sched_yield() == 0);
+    if (i % 10000 == 0) {
+      long t = monotonic_ms(), block = t - t0;
+      if (block > slowest) slowest = block;
+      if (block < fastest) fastest = block;
+      t0 = t;
+    }
+  }
+  printf("thread-probe many-rounds: 100000 rounds in %ld ms; 10000-round blocks %ld to %ld ms\n",
+         monotonic_ms() - start, fastest, slowest);
+  return 0;
+}
+
+/* Signal state stays with the first context for now: a further context's
+   signal requests answer ENOSYS, visibly, instead of acting on the first
+   context's state. */
+static volatile long sig_action_rc, sig_action_errno, sig_mask_rc, sig_mask_errno;
+static void on_usr1(int sig) { (void)sig; }
+static unsigned long signaller(void *arg)
+{
+  (void)arg;
+  struct sigaction sa = {0};
+  sigset_t set;
+  sa.sa_handler = on_usr1;
+  sig_action_rc = sigaction(SIGUSR1, &sa, 0);
+  sig_action_errno = errno;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR2);
+  sig_mask_rc = sigprocmask(SIG_BLOCK, &set, 0);
+  sig_mask_errno = errno;
+  return 5;
+}
+
+static int signals_refused(void)
+{
+  struct capstone_context c;
+  long id = start_thread(&c, signaller, 0);
+  CHECK(id > 0);
+  CHECK(wait_done(&c, 20000));
+  CHECK(*c.value == 5);
+  CHECK(sig_action_rc == -1 && sig_action_errno == ENOSYS);
+  CHECK(sig_mask_rc == -1 && sig_mask_errno == ENOSYS);
+  /* the first context's own requests still work */
+  struct sigaction sa = {0};
+  sa.sa_handler = on_usr1;
+  CHECK(sigaction(SIGUSR1, &sa, 0) == 0);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+/* Signals stay with the first context: an event accepted for it runs in it,
+   never in a further context that happens to finish a round meanwhile. Two
+   signals per burst, and a handler that takes a while, so that one event waits
+   while the first context runs the other. */
+static __thread int who;
+static volatile int handled_by[3];
+static volatile int stop_rounds;
+static int devnull = -1;
+static void on_burst(int sig)
+{
+  (void)sig;
+  handled_by[who == 2 ? 2 : 1]++;
+  spin_ms(30);
+}
+
+static unsigned long rounds_until_stopped(void *arg)
+{
+  (void)arg;
+  who = 2;
+  while (!stop_rounds)
+    if (write(devnull, "", 0) < 0)
+      return 1;
+  return 3;
+}
+
+static int signal_first_only(void)
+{
+  struct capstone_context c;
+  struct sigaction sa = {0};
+  who = 1;
+  sa.sa_handler = on_burst;
+  CHECK(sigaction(SIGUSR1, &sa, 0) == 0 && sigaction(SIGUSR2, &sa, 0) == 0);
+  devnull = open("/dev/null", O_WRONLY);
+  CHECK(devnull >= 0);
+  long id = start_thread(&c, rounds_until_stopped, 0);
+  CHECK(id > 0);
+  /* Both signals pending at once, published by the one round that unblocks
+     them: while the first handler computes for several quanta, the other
+     event waits in the first context's list and the other context makes
+     rounds. */
+  sigset_t both;
+  sigemptyset(&both);
+  sigaddset(&both, SIGUSR1);
+  sigaddset(&both, SIGUSR2);
+  for (int i = 0; i < 10; ++i) {
+    CHECK(sigprocmask(SIG_BLOCK, &both, 0) == 0);
+    CHECK(kill(getpid(), SIGUSR1) == 0 && kill(getpid(), SIGUSR2) == 0);
+    CHECK(sigprocmask(SIG_UNBLOCK, &both, 0) == 0);
+  }
+  stop_rounds = 1;
+  CHECK(wait_done(&c, 20000) && *c.value == 3);
+  printf("thread-probe signal-first-only: %d handlers in the first context, %d in the other\n",
+         handled_by[1], handled_by[2]);
+  CHECK(handled_by[1] > 0 && handled_by[2] == 0);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+/* A write to a pipe without a reader in a further context: Linux sends
+   SIGPIPE to the writing thread, and its default action ends the process. */
+static volatile long pipe_rc, pipe_errno;
+static unsigned long broken_pipe_writer(void *arg)
+{
+  (void)arg;
+  int fds[2];
+  if (pipe(fds)) return 1;
+  close(fds[0]);
+  pipe_rc = write(fds[1], "x", 1);
+  pipe_errno = errno;
+  return 2;
+}
+
+static int sigpipe_child(int ignored)
+{
+  struct capstone_context c;
+  if (ignored)
+    CHECK(signal(SIGPIPE, SIG_IGN) != SIG_ERR);
+  long id = start_thread(&c, broken_pipe_writer, 0);
+  CHECK(id > 0);
+  CHECK(wait_done(&c, 20000));
+  if (!ignored) {
+    /* the process should be gone by now */
+    long t0 = monotonic_ms();
+    while (monotonic_ms() - t0 < 2000)
+      sched_yield();
+    fprintf(stderr, "thread-probe sigpipe-child: REACHED (write %ld, errno %ld)\n",
+            pipe_rc, pipe_errno);
+    return 1;
+  }
+  CHECK(pipe_rc == -1 && pipe_errno == EPIPE);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+/* Exec in place from a further context: the new image starts with the
+   application's signal mask, not with the context thread's full block. */
+static const char *self_path;
+static volatile long exec_rc, exec_errno;
+static unsigned long execer(void *arg)
+{
+  (void)arg;
+  char *const args[] = {(char *)self_path, "print-mask", 0};
+  exec_rc = execv(self_path, args);
+  exec_errno = errno;
+  return 4;
+}
+
+static int exec_child(void)
+{
+  struct capstone_context c;
+  long id = start_thread(&c, execer, 0);
+  CHECK(id > 0);
+  CHECK(wait_done(&c, 20000));
+  fprintf(stderr, "thread-probe exec-child: REACHED (execv %ld, errno %ld)\n", exec_rc, exec_errno);
+  return 1;
+}
+
+/* The launcher's blocked mask, as the program it runs sees it. */
+static int print_mask(void)
+{
+  char buf[4096] = {0};
+  int fd = open("/proc/self/status", O_RDONLY);
+  CHECK(fd >= 0);
+  long n = read(fd, buf, sizeof buf - 1);
+  close(fd);
+  CHECK(n > 0);
+  char *line = strstr(buf, "SigBlk:");
+  CHECK(line);
+  char *end = strchr(line, '\n');
+  if (end) *end = 0;
+  printf("thread-probe print-mask: %s\n", line);
+  return 0;
+}
+
+/* A REGISTER context has no transport: its calls fail with EIO instead of
+   using anyone else's. */
+static volatile long unserved_rc, unserved_errno;
+static unsigned long no_transport_child(void *arg)
+{
+  (void)arg;
+  unserved_rc = write(1, "x", 1);
+  unserved_errno = errno;
+  return 9;
+}
+
+static int no_transport(void)
+{
+  struct capstone_context c;
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint(&c, AREA_BYTES, no_transport_child, 0));
+  long id = capstone_context_create(&c, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  do {
+    memset(&ev, 0, sizeof ev);
+    CHECK(capstone_context_step((unsigned long)id, &ev) == 0);
+  } while (ev.kind == 1);
+  CHECK(ev.kind == 0 && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*c.value == 9 && unserved_rc == -1 && unserved_errno == EIO);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+int main(int argc, char **argv)
+{
+  int rc;
+  if (argc < 2) {
+    fprintf(stderr, "usage: thread-probe MODE\n");
+    return 2;
+  }
+  mode = argv[1];
+  self_path = argv[0];
+  if (!strcmp(mode, "transport")) rc = transport();
+  else if (!strcmp(mode, "blocking")) rc = blocking();
+  else if (!strcmp(mode, "exit-child")) rc = exit_child();
+  else if (!strcmp(mode, "fault-child")) rc = fault_child();
+  else if (!strcmp(mode, "reserve")) rc = reserve();
+  else if (!strcmp(mode, "reuse")) rc = reuse();
+  else if (!strcmp(mode, "concurrent")) rc = concurrent();
+  else if (!strcmp(mode, "signals-refused")) rc = signals_refused();
+  else if (!strcmp(mode, "no-transport")) rc = no_transport();
+  else if (!strcmp(mode, "preempted")) rc = preempted();
+  else if (!strcmp(mode, "many-rounds")) rc = many_rounds();
+  else if (!strcmp(mode, "signal-first-only")) rc = signal_first_only();
+  else if (!strcmp(mode, "sigpipe-child")) rc = sigpipe_child(0);
+  else if (!strcmp(mode, "sigpipe-ignored")) rc = sigpipe_child(1);
+  else if (!strcmp(mode, "exec-child")) rc = exec_child();
+  else if (!strcmp(mode, "print-mask")) rc = print_mask();
+  else {
+    fprintf(stderr, "thread-probe: unknown mode %s\n", mode);
+    return 2;
+  }
+  if (!rc)
+    printf("thread-probe %s: PASS\n", mode);
+  return rc;
+}

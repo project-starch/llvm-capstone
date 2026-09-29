@@ -392,8 +392,7 @@ static int rollback_thread(void)
   return 0;
 }
 
-/* A13: an offer is registered once; two launcher threads stepping one
-   context serialise into one continuous execution. */
+/* A13: an offer is registered once, and a THREAD context has one stepper. */
 static int duplicate_adopt(void)
 {
   CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1));
@@ -405,28 +404,33 @@ static int duplicate_adopt(void)
   return 0;
 }
 
+/* A THREAD context has one stepper, its own launcher thread, which also
+   serves its transport: a STEP the application asks for is refused, however
+   often, and the context runs on to its end. (Before a transport per context,
+   the application's steps and the thread's interleaved; a step from another
+   thread would now hand one of the context's requests to the wrong thread.) */
 static int two_steppers(void)
 {
   struct capstone_context_event ev;
-  unsigned long seed = 0x77, mine = 0;
+  unsigned long seed = 0x77, refused = 0;
   unsigned long want = lcg_rounds(seed, PREEMPT_ROUNDS);
   CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_preempt, (void *)(uintptr_t)seed));
   long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_THREAD);
   CHECK(id > 0);
   while (!*ctx.done) {
     memset(&ev, 0, sizeof ev);
-    if (capstone_context_step((unsigned long)id, &ev))
+    long r = capstone_context_step((unsigned long)id, &ev);
+    if (r != -EINVAL) {
+      /* only once the context has ended and its thread has forgotten it */
+      CHECK(*ctx.done && r < 0);
       break;
-    if (ev.kind != STEP_PREEMPTED && ev.kind != STEP_RETURNED)
-      break;
-    ++mine;
+    }
+    CHECK(ev.kind == 0 && ev.result == 0);
+    ++refused;
   }
-  long t0 = monotonic_ms();
-  while (!*ctx.done && monotonic_ms() - t0 < 30000)
-    sched_yield();
   CHECK(*ctx.done == 1 && *ctx.value == want);
-  printf("context-probe two-steppers: %lu steps from the main thread\n", mine);
-  CHECK(mine > 0);
+  printf("context-probe two-steppers: %lu steps refused\n", refused);
+  CHECK(refused > 0);
   return 0;
 }
 

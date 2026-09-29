@@ -7,7 +7,7 @@ if(DEFINED CAPSTONE_APPLICATION_DELEGATE AND NOT CAPSTONE_APPLICATION_DELEGATE)
 endif()
 
 function(capstone_configure_application target)
-  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG;EXCHANGE_BYTES;GRANT_BYTES;CONTEXT_BYTES" "")
+  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG;EXCHANGE_BYTES;GRANT_BYTES;CONTEXT_BYTES;CONTEXTS" "")
   if(app_UNPARSED_ARGUMENTS OR app_KEYWORDS_MISSING_VALUES)
     message(FATAL_ERROR "Invalid capstone_configure_application arguments")
   endif()
@@ -97,8 +97,27 @@ function(capstone_configure_application target)
      app_EXCHANGE_BYTES GREATER 1073741824)
     message(FATAL_ERROR "EXCHANGE_BYTES must be between 4096 and 1073741824")
   endif()
+  math(EXPR exchange_rest "${app_EXCHANGE_BYTES} % 4096")
+  if(NOT exchange_rest EQUAL 0)
+    message(FATAL_ERROR "EXCHANGE_BYTES must be a multiple of 4096")
+  endif()
+  # CONTEXTS: how many contexts besides the first may run at once with a
+  # transport of their own (docs/plans/delegation-threads.md); the launcher
+  # grants 1 + CONTEXTS entry blocks and exchange regions. At most 7: the
+  # monitor lends each application 8 invocation descriptors.
+  if(NOT app_CONTEXTS)
+    set(app_CONTEXTS 0)
+  endif()
+  if(NOT app_CONTEXTS MATCHES "^[0-7]$")
+    message(FATAL_ERROR "CONTEXTS must be between 0 and 7")
+  endif()
+  math(EXPR exchange_total "(1 + ${app_CONTEXTS}) * ${app_EXCHANGE_BYTES}")
+  if(exchange_total GREATER 1073741824)
+    message(FATAL_ERROR "(1 + CONTEXTS) * EXCHANGE_BYTES must be at most 1073741824")
+  endif()
   target_compile_definitions(${target} PRIVATE CAPSTONE_DELEGATE_RUNTIME=1
-    CAPSTONE_APPLICATION_EXCHANGE_BYTES=${app_EXCHANGE_BYTES})
+    CAPSTONE_APPLICATION_EXCHANGE_BYTES=${app_EXCHANGE_BYTES}
+    CAPSTONE_APPLICATION_CONTEXTS=${app_CONTEXTS})
   # CONTEXT_BYTES: the linear arena _start splits off the data region for
   # minted contexts (docs/plans/delegation-threads.md). 0 leaves the data
   # region as it was.
