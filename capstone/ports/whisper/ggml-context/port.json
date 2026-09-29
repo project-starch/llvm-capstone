@@ -1,0 +1,18 @@
+{
+  "program": "whisper.cpp",
+  "role": "allocator-component",
+  "title": "ggml's context allocator and buffer epochs, replayed",
+  "upstream": {
+    "version": "1.9.4",
+    "pin_source": {
+      "file": "capstone/ports/whisper/ggml-context/upstream.json",
+      "grep": "\"version\": \"1.9.4\""
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "cheribsd-purecap",
+    "native"
+  ],
+  "note": "The defect survey found no consumer-side temporal defect, so there is no corpus: see docs/ref/whisper-ggml-defects.md."
+}

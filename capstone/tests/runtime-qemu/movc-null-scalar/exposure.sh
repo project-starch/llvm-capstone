@@ -45,6 +45,9 @@ if [[ $rc != 0 ]]; then
   exit 2
 fi
 
+# Every runner below is started under the QEMU lock with CAPSTONE_QEMU_LOCK_HELD=1. A runner that
+# takes the lock itself (capstone_with_qemu_lock, e.g. the cwd probe's) would otherwise wait on its
+# own parent: flock on a second open of the file blocks, and the run stalled for its full timeout.
 for arm in off on; do
   v=0; [[ $arm == on ]] && v=1
   export CAPSTONE_MOVC_NULL_SCALAR=$v CAPSTONE_TMP_ROOT=$DEST/$arm
@@ -56,7 +59,7 @@ for arm in off on; do
   # arms, so every probe also runs on its own.
   echo "== arm $arm: each hostcall probe on its own"
   for r in $(grep -o 'run-hostcall-[a-z0-9-]*-probe\.sh' "$REPO/capstone/tests/runtime-qemu/run-hostcall-all.sh" | sort -u); do
-    flock -w 21600 "$CAPSTONE_QEMU_LOCK" bash "$REPO/capstone/tests/runtime-qemu/$r" > "$DEST/hostcall-$arm-${r%.sh}.txt" 2>&1
+    CAPSTONE_QEMU_LOCK_HELD=1 flock -w 21600 "$CAPSTONE_QEMU_LOCK" bash "$REPO/capstone/tests/runtime-qemu/$r" > "$DEST/hostcall-$arm-${r%.sh}.txt" 2>&1
     echo "rc=$?" >> "$DEST/hostcall-$arm-${r%.sh}.txt"
   done
   echo "== arm $arm: musl, and its file/stdio/write probes"
@@ -66,17 +69,17 @@ for arm in off on; do
     exit 2
   fi
   for p in file stdio write; do
-    flock -w 21600 "$CAPSTONE_QEMU_LOCK" bash "$REPO/capstone/ports/musl-capstone/$p-probe/run-$p-probe.sh" \
+    CAPSTONE_QEMU_LOCK_HELD=1 flock -w 21600 "$CAPSTONE_QEMU_LOCK" bash "$REPO/capstone/ports/musl-capstone/$p-probe/run-$p-probe.sh" \
       > "$DEST/probe-$arm-$p.txt" 2>&1
     echo "rc=$?" >> "$DEST/probe-$arm-$p.txt"
   done
   echo "== arm $arm: libc-test, chunked"
-  CHUNK=10 RUN_ID=movc-$arm flock -w 21600 "$CAPSTONE_QEMU_LOCK" bash "$LIBC" > "$DEST/libc-$arm.txt" 2>&1
+  CHUNK=10 RUN_ID=movc-$arm CAPSTONE_QEMU_LOCK_HELD=1 flock -w 21600 "$CAPSTONE_QEMU_LOCK" bash "$LIBC" > "$DEST/libc-$arm.txt" 2>&1
   echo "rc=$?" >> "$DEST/libc-$arm.txt"
   notrun=$(awk '$1 == "NOTRUN" { print $2 }' "$CAPSTONE_TMP_ROOT/musl-libc-test/logs/movc-$arm/results.txt" 2>/dev/null | tr '\n' ' ')
   if [[ -n ${notrun// /} ]]; then
     echo "== arm $arm: libc-test, the NOTRUN tests one per boot: $notrun"
-    CHUNK=1 RUN_ID=movc-$arm-notrun TESTS="$notrun" flock -w 21600 "$CAPSTONE_QEMU_LOCK" bash "$LIBC" \
+    CHUNK=1 RUN_ID=movc-$arm-notrun TESTS="$notrun" CAPSTONE_QEMU_LOCK_HELD=1 flock -w 21600 "$CAPSTONE_QEMU_LOCK" bash "$LIBC" \
       > "$DEST/libc-$arm-notrun.txt" 2>&1
     echo "rc=$?" >> "$DEST/libc-$arm-notrun.txt"
   fi

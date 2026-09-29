@@ -1,0 +1,8 @@
+# Positive control on Capstone, 2026-09-28, campaign platform (262,144 nodes)
+# perl -e '$x = *foo; *x = $x; print "done\n"' -- S_glob_assign_glob reads the freed source glob
+734ddd346771fef8751aa808b189fb9c13a4d8353d71b56b70094e2f29cdde29  experiments/perl-svh.dom
+== PERL_SUBLET_MODE=0 rc=0 exit={"version": 1, "kind": "exit", "value": 0} stdout=done 
+PERL_REUSE_GAP attempts=624 issues=624 releases=36 reuses=9 distinct=615 capacity=131072 error=0 bins=9,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PERL_SV_HEADS platform=capstone mode=0 head_bytes=48 per_page=84 pages=8 peak_pages=8 max_pages=8322 issues=624 releases=36 live=588 peak_live=615 retired=0 sidecar_bytes=180256 observer_bytes=4194304
+== PERL_SUBLET_MODE=1 rc=139 exit={"version": 1, "kind": "signal", "value": 11} stdout=
+capstone-vm: application terminated by signal 11

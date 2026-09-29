@@ -41,7 +41,7 @@ def inputs(app, root):
         return [src / 'mrbgems/mruby-bin-mruby/tools/mruby/mruby.o', src / 'lib/libmruby.a',
                 root / 'runtime/spawn-shell.o']
     if app == 'cpython':
-        path = REPO / 'capstone/ports/cpython/interpreter/survey-cpython-capstone.py'
+        path = REPO / 'capstone/ports/cpython/app/survey-cpython-capstone.py'
         spec = importlib.util.spec_from_file_location('survey', path)
         survey = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(survey)
@@ -78,7 +78,7 @@ def main():
     p.add_argument('--musl', type=Path, help='Explicit musl source directory')
     p.add_argument('--libc', type=Path, help='Explicit Capstone libc archive')
     p.add_argument('--include', type=Path, action='append', default=[])
-    p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres'], default='none')
+    p.add_argument('--nested', choices=['none', 'cpython', 'mruby', 'postgres', 'perl'], default='none')
     p.add_argument('--gc-gaps', action='store_true', help='mruby GC-slot aggregate observer is present in the input archive')
     p.add_argument('--reuse-gap', action='store_true',
                    help='retain the PostgreSQL inner-chunk reuse report in the final image')
@@ -107,6 +107,9 @@ def main():
         objects += [root / 'runtime' / n for n in ('pym_backing.o', 'pym_block_lifetimes.o', 'pym_sublet_glue.o')]
     if args.nested == 'postgres':
         objects += [root / 'link/context-pools.o']
+    if args.nested == 'perl':
+        # Built by ports/perl/musl/build-perl-domain.sh with PERLD_SV_HEADS=1.
+        objects += [root / 'link/perl-sv-heads.o']
     if args.reuse_gap and args.app == 'postgres' and args.nested == 'none':
         objects += [root / 'link/spatial-reuse-gap.o']
     if args.nested != 'none' and (args.heap != 'level0' or args.app != args.nested):

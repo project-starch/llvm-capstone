@@ -1,0 +1,30 @@
+# PRE-REGISTERED predictions for the corpus's cases on the Sublet port of FFmpeg's own pools
+# (run-sublet-port.sh), written 2026-09-29 BEFORE any of these images was built. A cell that
+# differs is a finding, never an edit to this file.
+#
+# Fixture 40 + 2 * case + fixed: the case.c with upstream's defect (fixed 0) or with the fix (1),
+# each against the app port's libavutil. poolsublet is the Sublet port of the pools (a return is
+# a revoke); poolstock is the same patched source with the port's macro at 0, upstream's pools.
+#
+#   COMPLETE <verdict>  the case's own verdict line, capstone_main = 0, no fault
+#   FAULT <lines>       one capability fault (cause 24/25) after the case started, before any
+#                       verdict, at an instruction case.c's line table puts on one of <lines>:
+#                       the lines that dereference the stale pointer (the compiler may load it
+#                       once for all of them); value_hi, where reported, non-zero
+#
+# arm        fixture  outcome   detail
+# case 0, af_join (461fb22053): stale read of input 1's plane after its buffer is reissued
+poolstock    40       COMPLETE  DEFECT-REPRODUCED
+poolstock    41       COMPLETE  FIXED
+poolsublet   40       FAULT     85,86,89
+poolsublet   41       COMPLETE  FIXED
+# case 1, h264_refs (1886c3269d): a ref_list record past ref_count still names reissued storage
+poolstock    42       COMPLETE  DEFECT-REPRODUCED
+poolstock    43       COMPLETE  FIXED
+poolsublet   42       FAULT     48,49,52
+poolsublet   43       COMPLETE  FIXED
+# case 2, vidstab (316531e61c): a parked plane pointer written through after the buffer is reissued
+poolstock    44       COMPLETE  DEFECT-REPRODUCED
+poolstock    45       COMPLETE  FIXED
+poolsublet   44       FAULT     33
+poolsublet   45       COMPLETE  FIXED

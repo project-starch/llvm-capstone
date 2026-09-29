@@ -2,14 +2,17 @@
 
 ## Current review entry point
 
-Start with the [five-application reuse figure](results/reuse-five-applications-20260928/README.md)
-and its PNG, PDF, CSV and provenance. SQLite, mruby, FFmpeg, PostgreSQL and
-CPython have checked four-arm inner-reuse evidence; Perl currently has only
-[interpreter qualification](../../ports/perl/cheribsd/README.md).
-The [PostgreSQL](results/postgres-reuse-four-arm-20260928/README.md) and
-[CPython](results/cpython-reuse-four-arm-20260928/README.md) archive validators
+Start with the [six-application reuse figure](results/reuse-six-applications-20260928/README.md)
+and its PNG, PDF, CSV and provenance. SQLite, mruby, FFmpeg, PostgreSQL,
+CPython and Perl have checked four-arm inner-reuse evidence; Perl's boundary is
+its SV-head allocator ([adapter](../../ports/perl/sv-heads/README.md)).
+The [PostgreSQL](results/postgres-reuse-four-arm-20260928/README.md),
+[CPython](results/cpython-reuse-four-arm-20260928/README.md) and
+[Perl](results/perl-reuse-four-arm-20260928/README.md) archive validators
 recheck 12 processes each. The current figure pools all three repetitions in
-each arm and retains the observed-reuse-only scope.
+each arm and retains the observed-reuse-only scope. The earlier
+[five-application figure](results/reuse-five-applications-20260928/README.md)
+remains as published.
 
 The campaign descriptions below preserve earlier policy and qualification
 states. Their then-unresolved CPython/PostgreSQL blockers are superseded by

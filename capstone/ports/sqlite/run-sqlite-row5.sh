@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# row5 -- the LITERAL matched pair for cve-repros/row5_php_destruction_order
+# row5 -- the LITERAL matched pair for capi-repros/row5_php_destruction_order
 # (HIERARCHICAL-REVOKE, PHP binding). Real SQLite, one domain. The connection gets
 # its own MREV'd sub-arena; its db_object wrapper AND statement are SPLIT
 # descendants. The DB object's free handler (which runs FIRST, the #69971 wrong
