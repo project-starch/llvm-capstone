@@ -472,7 +472,73 @@ fix turns it green, and in the `level0` domain the parent comes back corrupted w
 case in this corpus whose trigger depends on a size class has to be re-derived for
 16-byte pointers rather than copied from upstream.
 
-### What blocks `sublet` and `sublet-gc`
+### `sublet` measured: what revocation catches, and what it cannot
+
+The `sublet` blocker was not a setup error. Three hypotheses were eliminated rather than
+guessed at: `b338c156c8d1`'s diff is entirely inside `#ifdef LT_GC_REGION_BYTES`, so for the
+plain `sublet` arm the host helper is byte-identical to the recorded `9704639b4a3a`;
+**`mrbtest` under `sublet` gives Total 1648, OK 1632, KO 0, Crash 0**, exactly the recorded
+control, so the setup is right; and a bisection found the real limit.
+
+**Under `sublet` a script recursing ~40 deep faults in `stack_extend_alloc`; 20 is fine.**
+`1 + 1`, method definitions, endless methods, blocks, a 2000-element array and 20000-object
+GC churn all pass. So the first reallocation past `STACK_INIT_SIZE = 128` fails under the
+buddy heap, and `scripts/smoke.rb` faulted only because of its one `deep(500)` line.
+`results/2026-09-26/scripts.txt` shows why nobody had hit it: the script runs are recorded
+in the default arm only, and with a different QEMU ("the shared build 408fd83945") than the
+`sublet` mrbtest runs. **Scripts under `sublet` had never been run.** With `smoke.rb` minus
+its two `deep` lines as the control, both arms reach `SMOKE_DONE`, and the matched pair is
+valid.
+
+| case | `level0` (revoke removed) | `sublet` (revoke on free) |
+|---|---|---|
+| `1c57532b2` string, 117-byte | completes, 3 wrong | completes, 3 wrong |
+| `a54353ecf` | completes, 9 wrong | completes, 9 wrong |
+| `08a0432d1` | completes, 4 wrong | completes, 4 wrong |
+| `fb4974528` | completes, 2 wrong | completes, 2 wrong |
+| `606d9a6b2` | completes, 2 wrong | completes, 2 wrong |
+| **`4663fef45`** | **completes, 4 wrong** | **FAULT cause 5 @`ar_get`** |
+| **`0cf969a2b`** | **completes, PASS** | **FAULT cause 24 @`mrb_iv_foreach`** |
+| `eb7693857` | FAULT 24 @`mrb_vformat` | FAULT 24 @`mrb_vformat` |
+| `39aecc143` | FAULT 24 @`mrb_vm_exec` | FAULT 24 @`stack_extend_alloc` |
+| `af6f23ddb` | FAULT 24 @`realloc` | FAULT 7 @`memcpy` |
+
+**Two rows discriminate, by the criterion `HOW-TO-RUN-ON-QEMU.md` section 3 sets** -- the same
+program completes with the revoke removed and faults with it in, and the fault lands in the
+defect's own function.
+
+`4663fef45` (`GHSA-2778-fvwg-5m8w`) is the clean one. `level0` answers four questions wrongly;
+`sublet` faults at **`ar_get`**, which is where ASan natively reported its read one element
+past the 80-byte entry array (`src/hash.c:545`). Its cause, 5, sits **outside** the capability
+range the corrected table gives (24 + exception_code, so 24 to 30), and its `badaddr` equals
+its `tval` at a concrete in-region address rather than the page-aligned high value the cause-24
+faults carry. Both fit the prediction committed earlier for this row: it faults under `sublet`
+**by bounds, not by revocation**, because its entry array is never freed.
+
+`0cf969a2b` (`GHSA-j6fq-xj4w-877x`) is the stronger shape and the weaker evidence. `level0`
+does not merely miss it, it **passes** -- its upstream test's assertions cannot see the defect,
+which is why its native oracle was ASan -- and `sublet` faults at `mrb_iv_foreach`, the walk
+the upstream fix repairs. But its fault signature, cause 24 with `tval = 0` and a page-aligned
+`badaddr = 0xffffff9cbbb000`, is the same shape this build produces in the **no-revocation**
+arm on two other cases, so the signature alone proves nothing and the location match is doing
+the work. What would settle it is what the corpus's `arms` spec already asks for -- a fault at
+a **labelled** read probe -- which this case, extracted from a Ruby test, does not have.
+
+**Five rows are missed by both arms, and they are exactly the five predicted to be.** The
+hash-entry-array rows and the shared-string-buffer row have no allocator event for
+revoke-on-free to fire on: the slot is vacated and refilled, or the buffer is handed to the
+parent, and nothing is released. Revocation cannot see them, which is this corpus's whole
+argument, now measured rather than predicted.
+
+**Three rows fault in both arms and discriminate nothing.** `eb7693857` faults at the same
+place in both, which is the accident the documentation warns about. `39aecc143`'s `sublet`
+fault is at `stack_extend_alloc` -- the arm's own measured limit above, not a catch.
+`af6f23ddb` corrupts the heap badly enough to die either way.
+
+So of ten rows run in both arms: **one clean catch, one catch needing a labelled probe, five
+invisible to revocation by construction, three that fault regardless.**
+
+### What still blocks `sublet-gc`
 
 Both arms build, and both fail their **own** control: `scripts/smoke.rb` halts at
 `cause = 24` in `stack_extend_alloc +0x194`, the VM stack's `mrb_realloc`. So the cases
