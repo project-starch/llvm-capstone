@@ -349,7 +349,7 @@ a patch may change how a test reaches memory, never what it checks. `fetch-libc-
 the tree to the pinned commit and applies them, so a run depends on the commit and the patch set
 and on nothing that happened in the tree before.
 
-## Patches to musl: three round-count decisions
+## Patches to musl: three round-count decisions, and one capability
 
 Under the delegated runtime every syscall is a round trip through the launcher, so the
 port's cost model is the number of rounds, and `musl-patches/` holds the three places where
@@ -359,6 +359,10 @@ them; each patch is one decision and says so in its name:
 - `0001` `BUFSIZ` 8 KiB, glibc's size, instead of 1 KiB: one `writev` per 8 KiB of stdio
   output, one `read` per 8 KiB of input.
 - `0002` a 32 KiB `getdents64` buffer instead of 2 KiB: one round per 32 KiB of directory.
+- `0004` `pselect` keeps the mask a capability: `syscall_arg_t` is `void *` on capstone64
+  and `pselect.c` built the kernel's `{mask, size}` pair through `uintptr_t`, so the
+  delegated runtime received an address it could not read; `select` (a null mask) never
+  showed it.
 - `0003` no `fcntl(F_SETFD, FD_CLOEXEC)` after an `open` that already asked for `O_CLOEXEC`,
   in `open`, `fopen` and `__fopen_rb_ca`. Linux honours the flag; the second call was
   musl's fallback for kernels that did not. The sites that set the flag on a descriptor
