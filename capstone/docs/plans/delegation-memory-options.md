@@ -457,6 +457,10 @@ is established by this initial literature check.
 
 ## 11. Fit for this stack with 128-bit pointers
 
+The [addressing design](../design/delegated-memory-addressing.md) expands this
+proposal into a worked mapping example, the Linux/domain pointer distinction,
+grant lifecycle, cross-ABI sharing rules and outstanding ISA/ABI decisions.
+
 **Constraint:** application pointers remain 128-bit tagged capabilities. Their
 16-byte footprint is accepted. The design should preserve fine bounds and
 revocation instead of optimizing for a conventional 64-bit pointer ABI. This

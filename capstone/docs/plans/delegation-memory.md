@@ -20,6 +20,9 @@ Their [long-term recommendation](delegation-memory-options.md#9-recommended-long
 is capability-authorized virtual memory using existing MMU machinery, subject to
 a new composition argument preserving physical ownership and revocation. That
 recommendation does not change the physical-grant scope of this first stage.
+The [addressing design](../design/delegated-memory-addressing.md) details how
+64-bit Linux pointers, proposed translated 128-bit domain capabilities and
+physical backing capabilities would coexist, with an example and lifetime rules.
 
 ## 1. Purpose and philosophy
 
