@@ -1,0 +1,506 @@
+hash.c: the same entry slots under PoisonCap, under MRB_POISONCAP_HASH (4.0.0-rc2).
+
+The second mechanism at the level patch 0010 sublets, so the two can be measured against
+one defect set on one platform. Nothing changes without the define; the arm builds for
+CheriBSD purecap with the PoisonCap SDK and is selected at run time by MRB_POISON_MODE.
+
+WHAT IT MEASURES, AND WHY IT EXISTS
+
+0010's header says the level exists because a slot is vacated by entry_delete() and
+refilled by a later ea_set() with nothing released to the allocator in between, so
+revocation keyed to free() has nothing to fire on. That was an argument. This patch makes
+it a measurement, and the measurement corrected the argument:
+
+  - On CheriBSD purecap at this pin, with libc revocation OFF and again ON
+    (_RUNTIME_REVOCATION_ENABLE=1), all three reuse-not-free defects reproduce unchanged.
+    Revocation at the malloc/free interface makes no difference to any of them, because
+    no free() is ever called. That is the claim, now measured rather than asserted.
+  - With the per-slot adapter below, PoisonCap catches three of them. So the mechanism is
+    NOT blind to the class -- what it needs is hooks at the nested level, which is exactly
+    what Sublet needs too. The level is the finding, not the primitive.
+
+THE ARM, AND WHAT DIFFERS FROM 0010
+
+The level, the event and the two invariants are 0010's. Only the taking-back differs:
+
+    0010  sublet_take / sublet_give on a node split out of a linear region
+    here  an exactly-bounded alias per slot, and at slot death cpoison over the slot's
+          16-byte lines, one synchronous cheri_revoke sweep, cclearpoison, zero
+
+MRB_POISON_MODE=0 publishes and never invalidates; =1 invalidates at slot death. Poison,
+sweep and clear are separate calls so a drop of many slots pays ONE sweep, while
+revocation is still complete before the caller returns.
+
+Per-slot poison is sound where a whole-span poison would not be: a slot's alias is bounded
+to its own sizeof(hash_entry) bytes, so poisoning slot i intersects slot i's alias and no
+other. Surviving slots keep theirs, which is why nothing has to be re-published and the
+hash never re-fetches its array pointer -- the difference from the APR node adapter
+(ports/apr/pools/src/cheribsd/node-poison.c), which poisons a whole node and republishes it.
+
+THE CONTROL HAD TO BE FIXED BEFORE IT MEASURED ANYTHING, TWICE
+
+Both errors made mode 1 look better than it is, and both are why liveness lives in live[]
+rather than in the alias slot:
+
+ 1. A vacated slot returned NULL from ea_get(), so a re-read faulted on the NULL rather
+    than on anything revoked. Mode 0 then faulted on a54353ecf and on eb7693857's rehash-ht,
+    which pristine purecap runs to completion -- an artifact of the sidecar counted as a catch.
+ 2. With NULL gone from mode 0 but kept in mode 1, a mode-1 fault still could not be
+    attributed to revocation: a NULL dereference on purecap raises the same in-address-space
+    security exception as a revoked capability, with the same message. So NEITHER mode stores
+    NULL. Mode 0 hands back a valid alias for a vacated slot (upstream behaviour under
+    per-slot bounds); mode 1 hands back the same alias after the sweep has revoked it. The
+    pair then differs in one variable, the sweep, and nothing else.
+
+MEASURED (CheriBSD purecap, pver-214a1a2d9, guest revocation default 0)
+
+  instrument      hash-sanity -- births, deaths, compaction, AR->HT growth, dup, free --
+                  PASSES in both modes, issued=released=917, sweeps 0 (m0) vs 278 (m1).
+                  The mechanism fires and does not break the interpreter.
+  caught          m0 completes, m1 faults: a54353ecf, 08a0432d1, and eb7693857's inspect,
+                  rehash-ar and rehash-ht paths.
+  already spatial CHERI bounds alone fault on 4663fef45's h[]/key?/[]= paths and on
+                  eb7693857's __except path, on PRISTINE upstream -- no adapter involved.
+                  These are out-of-bounds reads, so they are not this level's to claim.
+  missed          4663fef45's indexed-shape path (m1 sweeps=23, still NO_RAISE), and
+                  1c57532b2, which is the shared-string-buffer level and has no adapter
+                  in either mechanism.
+
+LIMITS, STATED
+
+The sub-case split that separates "caught here" from "CHERI already had it" was run for
+this arm. The Sublet arm's published tally is at WHOLE-CASE granularity, so the two are not
+yet a like-for-like head-to-head; that re-measurement is open. entry_delete() keeps its
+signature, so the slot is found by searching the live spans, as in 0010. XP_MAX spans and
+XP_SLOTS slots bound what is covered; past either, ea_resize falls back to malloc and the
+array is simply not covered rather than failing. Dropped spans keep their mapping and are
+reused, which bounds the process at XP_MAX pages and is safe because a drop revokes every
+slot in the span.
+
+diff --git c/src/hash.c w/src/hash.c
+index 3b37d8326..31603fb5f 100644
+--- c/src/hash.c
++++ w/src/hash.c
+@@ -540,6 +540,284 @@ xs_drop(xs_arr *a)
+ }
+ #endif  /* MRB_CAPSTONE_HASH_SUBLET */
+ 
++#ifdef MRB_POISONCAP_HASH
++/* ---------------------------------------------------------------------------
++ * The same entry-array slots as patch 0010, invalidated with PoisonCap instead
++ * of a sub-let, so the two mechanisms can be measured against one defect set.
++ *
++ * The level is the same and so is the event: entry_delete() vacates a slot and a
++ * later ea_set() refills it with nothing released to the allocator in between, so
++ * revocation keyed to free() has nothing to fire on. Measured on CheriBSD purecap
++ * at this pin, with libc revocation both off and on, the three reuse-not-free
++ * defects (a54353ecf, 08a0432d1, eb7693857) reproduce unchanged.
++ *
++ * What differs from 0010 is only HOW a slot is taken back:
++ *
++ *   0010  sublet_take / sublet_give on a node split out of a linear region
++ *   here  an exactly-bounded alias, and at slot death cpoison over the slot's
++ *         16-byte lines, one synchronous sweep, cclearpoison, zero
++ *
++ * Three things this shares with 0010, and they are what make it work:
++ *
++ * 1. THE ARRAY'S STORAGE IS THE SPAN. ea_resize() and ea_dup() map it, so there
++ *    is one array rather than an malloc'd block with a shadow beside it.
++ * 2. A FREE SLOT IS NEVER READ. Its state is obj[i] == NULL in the sidecar, which
++ *    is why ea_deleted_p() takes an INDEX. base is an address-only pointer, never
++ *    dereferenced -- the same untagged identity key 0010 uses -- so a sweep has
++ *    nothing to take from it and every real access goes through obj[i].
++ * 3. BOTH SHAPES ARE COVERED: the indexed shape's entry array is the same
++ *    hash_entry[] reached through ht_ea(), and all three defects build 20-key
++ *    hashes, so the array shape alone would have left every one of them out.
++ *
++ * Why per-slot poison is sound where a whole-span poison would not be: a slot's
++ * alias is bounded to its own sizeof(hash_entry) bytes, so poisoning slot i and
++ * sweeping intersects slot i's alias and no other. Surviving slots keep theirs,
++ * which is why nothing has to be re-published and the hash never has to re-fetch
++ * its array pointer -- the difference from the APR node adapter, which poisons a
++ * whole node and republishes it.
++ *
++ * MRB_POISON_MODE selects the arm: 0 publishes exact bounds and invalidates
++ * nothing (the spatial control -- upstream behaviour under CHERI bounds), 1
++ * invalidates at slot death. MRB_POISON_REPORT=1 prints the counters at exit.
++ * ------------------------------------------------------------------------- */
++#include <cheri/cheric.h>
++#include <cheri/revoke.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/mman.h>
++#include <unistd.h>
++
++#ifndef CHERI_PERM_POISON
++#error "MRB_POISONCAP_HASH requires the PoisonCap SDK"
++#endif
++
++#define XP_MAX 64                 /* live entry arrays tracked at once */
++#define XP_SLOTS 64               /* slots per span; see 0010's note on both shapes */
++#define XP_AUTH (CHERI_PERM_POISON | CHERI_PERM_SW_VMEM)
++#define XP_PAGE 4096UL
++mrb_static_assert(sizeof(hash_entry) % 16 == 0);  /* poison works in 16-byte lines */
++
++typedef struct xp_arr {
++  hash_entry *base;               /* address-only identity key; never dereferenced */
++  void *region;                   /* the manager's cap: poison + mapping authority */
++  size_t mapped;
++  uint32_t capa;
++  hash_entry *obj[XP_SLOTS];      /* slot i's alias; NULL while free in mode 1 only */
++  unsigned char live[XP_SLOTS];   /* liveness, so mode 0 need not NULL an alias */
++} xp_arr;
++
++static xp_arr xp_tab[XP_MAX];
++static unsigned xp_mode, xp_ready;
++static unsigned long xp_spans, xp_issued, xp_released, xp_sweeps, xp_poisoned;
++
++static void
++xp_refuse(const char *why)
++{
++  fprintf(stderr, "MRB_POISONCAP_HASH refused: %s\n", why);
++  exit(1);
++}
++
++static void
++xp_report(void)
++{
++  fprintf(stderr, "MRB_POISONCAP_HASH mode=%u spans=%lu issued=%lu released=%lu "
++          "sweeps=%lu poison_bytes=%lu entry_bytes=%lu pointer_bytes=%lu\n",
++          xp_mode, xp_spans, xp_issued, xp_released, xp_sweeps, xp_poisoned,
++          (unsigned long)sizeof(hash_entry), (unsigned long)sizeof(void*));
++  fflush(stderr);
++}
++
++static void
++xp_init(void)
++{
++  const char *m;
++  if (xp_ready) return;
++  xp_ready = 1;
++  if (!feature_present("cheri_caprevoke_poison"))
++    xp_refuse("platform lacks cheri_caprevoke_poison");
++  m = getenv("MRB_POISON_MODE");
++  if (!m || (m[0] != '0' && m[0] != '1') || m[1])
++    xp_refuse("set MRB_POISON_MODE to 0 (control) or 1 (invalidate at slot death)");
++  xp_mode = (unsigned)(m[0] - '0');
++  if (getenv("MRB_POISON_REPORT")) atexit(xp_report);
++}
++
++/* Exact bounds over one slot, neither poison nor mapping authority: revocable by
++   a sweep, and unable to poison anything itself. */
++static void *
++xp_publish(void *manager, size_t n)
++{
++  void *bounded = cheri_setboundsexact(manager, n);
++  if (!cheri_gettag(bounded))
++    xp_refuse("unrepresentable bounds");        /* slots are 16-byte multiples */
++  return cheri_clearperm(bounded, XP_AUTH);
++}
++
++/* Poison, sweep and clear are separate so a drop of many slots pays ONE sweep;
++   revocation is still complete before the caller returns. */
++static void
++xp_poison(void *p, size_t n)
++{
++  if ((cheri_getaddress(p) & 15) || (n & 15) ||
++      (cheri_getperm(p) & XP_AUTH) != XP_AUTH)
++    xp_refuse("poison geometry or authority");
++  for (size_t i = 0; i < n; i += 16) {
++    void *q = (unsigned char *)p + i;
++    __asm__ volatile("cpoison %0, 0(%0)" : : "C"(q) : "memory");
++  }
++  xp_poisoned += n;
++}
++
++static void
++xp_sweep(void)
++{
++  struct cheri_revoke_syscall_info info = {0};
++  if (cheri_revoke(CHERI_REVOKE_LAST_PASS | CHERI_REVOKE_IGNORE_START |
++                   CHERI_REVOKE_TAKE_STATS, 0, &info))
++    xp_refuse("sweep failed; the slot cannot be reused");
++  xp_sweeps++;
++}
++
++static void
++xp_clear(void *p, size_t n)
++{
++  for (size_t i = 0; i < n; i += 16) {
++    void *q = (unsigned char *)p + i;
++    __asm__ volatile("cclearpoison %0, 0(%0)" : : "C"(q) : "memory");
++  }
++  memset(p, 0, n);  /* clearing access state does not erase a capability in memory */
++}
++
++static void *
++xp_slot(xp_arr *a, uint32_t index)
++{
++  return (unsigned char *)a->region + (size_t)index * sizeof(hash_entry);
++}
++
++static xp_arr *
++xp_find(const hash_entry *ea)
++{
++  if (!ea) return NULL;
++  for (int i = 0; i < XP_MAX; i++)
++    if (xp_tab[i].base &&
++        cheri_getaddress(xp_tab[i].base) == cheri_getaddress(ea))
++      return &xp_tab[i];
++  return NULL;
++}
++
++/* the slot a pointer names. entry_delete() keeps its signature, so the slot is
++   found by searching the live spans; a functional arm would pass the index. */
++static xp_arr *
++xp_find_slot(const hash_entry *e, uint32_t *index)
++{
++  for (int i = 0; i < XP_MAX; i++) {
++    xp_arr *a = &xp_tab[i];
++    if (!a->base) continue;
++    for (uint32_t k = 0; k < a->capa; k++)
++      if (a->live[k] && cheri_getaddress(a->obj[k]) == cheri_getaddress(e)) {
++        *index = k;
++        return a;
++      }
++  }
++  return NULL;
++}
++
++/* A dropped span keeps its mapping and is reused, which bounds the process at
++   XP_MAX pages. Reuse is safe because a drop revokes every slot in it. */
++static xp_arr *
++xp_new(uint32_t capa)
++{
++  size_t bytes, need;
++  xp_init();                      /* mode must be known before a slot is published */
++  if (capa == 0 || capa > XP_SLOTS) return NULL;
++  bytes = (size_t)capa * sizeof(hash_entry);
++  need = (bytes + XP_PAGE - 1) & ~(XP_PAGE - 1);
++  for (int i = 0; i < XP_MAX; i++) {
++    xp_arr *a = &xp_tab[i];
++    if (a->base) continue;
++    if (a->region == NULL) {
++      void *region = mmap(NULL, need, PROT_READ | PROT_WRITE,
++                          MAP_PRIVATE | MAP_ANON, -1, 0);
++      if (region == MAP_FAILED) return NULL;
++      if ((cheri_getperm(region) & XP_AUTH) != XP_AUTH)
++        xp_refuse("mapping lacks poison authority");
++      a->region = region;
++      a->mapped = need;
++    }
++    else if (a->mapped < need) continue;      /* too small; try another record */
++    a->capa = capa;
++    a->base = (hash_entry *)(uintptr_t)cheri_getaddress(a->region);
++    for (uint32_t k = 0; k < capa; k++) {
++      /* BOTH modes publish every slot, and NEITHER ever stores a NULL here. That is
++         what makes the pair measure one variable. A NULL alias would fault on
++         dereference exactly as a revoked one does -- same SIGPROT, same message --
++         so a mode-1 fault could not be attributed to revocation, and mode 0 would
++         fault on two defects that pristine purecap runs to completion. Liveness
++         lives in live[] instead, so mode 0 hands back a VALID alias for a vacated
++         slot (upstream behaviour, under per-slot bounds) and mode 1 hands back the
++         same alias after the sweep has REVOKED it. */
++      a->obj[k] = (hash_entry *)xp_publish(xp_slot(a, k), sizeof(hash_entry));
++      a->live[k] = 0;
++    }
++    xp_spans++;
++    return a;
++  }
++  return NULL;                    /* the table is full; the caller falls back to malloc */
++}
++
++static hash_entry *
++xp_issue(xp_arr *a, uint32_t index)
++{
++  if (!a->live[index]) {         /* slot birth: the sweep left the old alias untagged */
++    a->obj[index] = (hash_entry *)xp_publish(xp_slot(a, index), sizeof(hash_entry));
++    a->live[index] = 1;
++    xp_issued++;
++  }
++  return a->obj[index];
++}
++
++/* Slot death. In mode 1 every stale copy of this slot's alias is dead when this
++   returns; in mode 0 nothing is revoked, which is the control. */
++static void
++xp_release(xp_arr *a, uint32_t index)
++{
++  if (!a->live[index]) return;
++  a->live[index] = 0;
++  xp_released++;
++  if (!xp_mode) return;          /* the control leaves the alias valid */
++  xp_poison(xp_slot(a, index), sizeof(hash_entry));
++  xp_sweep();
++  xp_clear(xp_slot(a, index), sizeof(hash_entry));
++}
++
++/* Every live slot at once, for ONE sweep rather than one per slot. */
++static void
++xp_release_range(xp_arr *a, uint32_t from, uint32_t to)
++{
++  uint32_t n = 0;
++  if (to > a->capa) to = a->capa;
++  for (uint32_t k = from; k < to; k++) {
++    if (!a->live[k]) continue;
++    a->live[k] = 0;
++    xp_released++;
++    if (!xp_mode) continue;
++    xp_poison(xp_slot(a, k), sizeof(hash_entry));
++    n++;
++  }
++  if (!n) return;
++  xp_sweep();
++  for (uint32_t k = from; k < to; k++) xp_clear(xp_slot(a, k), sizeof(hash_entry));
++}
++
++static void
++xp_drop(xp_arr *a)
++{
++  xp_release_range(a, 0, a->capa);
++  a->base = NULL;                 /* the mapping is kept for the next span */
++}
++#endif  /* MRB_POISONCAP_HASH */
++
+ /* Is slot index vacated? Takes an INDEX because under a sub-let a free slot is never
+    read -- its state is in the sidecar, not in the slot. */
+ static mrb_bool
+@@ -548,6 +826,10 @@ ea_deleted_p(hash_entry *ea, uint32_t index)
+ #ifdef MRB_CAPSTONE_HASH_SUBLET
+   xs_arr *a = xs_find(ea);
+   if (a && index < a->capa) return a->obj[index] == NULL;
++#endif
++#ifdef MRB_POISONCAP_HASH
++  { xp_arr *a = xp_find(ea);
++    if (a && index < a->capa) return !a->live[index]; }
+ #endif
+   return entry_deleted_p(&ea[index]);
+ }
+@@ -565,6 +847,10 @@ entry_delete(hash_entry* entry)
+   uint32_t i;
+   xs_arr *a = xs_find_slot(entry, &i);
+   if (a) { entry->key = mrb_undef_value(); xs_release(a, i); return; }  /* slot death */
++#endif
++#ifdef MRB_POISONCAP_HASH
++  { uint32_t i; xp_arr *a = xp_find_slot(entry, &i);
++    if (a) { entry->key = mrb_undef_value(); xp_release(a, i); return; } }  /* slot death */
+ #endif
+   entry->key = mrb_undef_value();
+ }
+@@ -638,6 +924,31 @@ ea_resize(mrb_state *mrb, hash_entry *ea, uint32_t capa)
+     xs_drop(old);
+     return n;
+   }
++#endif
++#ifdef MRB_POISONCAP_HASH
++  /* The array's storage IS the span, exactly as in 0010; an malloc'd block this
++     level never owned stays off it, because ea_resize is not told ea_n_used. */
++  { xp_arr *old = xp_find(ea);
++    if (capa <= XP_SLOTS && (old || ea == NULL)) {
++      xp_arr *a = xp_new(capa);
++      if (a) {
++        if (old) {
++          for (uint32_t k = 0; k < old->capa && k < capa; k++)
++            if (old->live[k]) ea_set(a->base, k, old->obj[k]->key, old->obj[k]->val);
++          xp_drop(old);
++        }
++        return a->base;
++      }
++      if (!old) return (hash_entry*)mrb_realloc(mrb, ea, sizeof(hash_entry) * capa);
++    }
++    if (old) {               /* past XP_SLOTS: leave this level with the live slots */
++      hash_entry *n = (hash_entry*)mrb_malloc(mrb, sizeof(hash_entry) * capa);
++      for (uint32_t k = 0; k < capa; k++) n[k].key = mrb_undef_value();
++      for (uint32_t k = 0; k < old->capa && k < capa; k++)
++        if (old->live[k]) { n[k].key = old->obj[k]->key; n[k].val = old->obj[k]->val; }
++      xp_drop(old);
++      return n;
++    } }
+ #endif
+   return (hash_entry*)mrb_realloc(mrb, ea, sizeof(hash_entry) * capa);
+ }
+@@ -662,6 +973,11 @@ ea_compress(hash_entry *ea, uint32_t n_used)
+     if (a) for (uint32_t k = w; k < n_used && k < a->capa; k++) xs_release(a, k);
+   }
+ #endif
++#ifdef MRB_POISONCAP_HASH
++  /* the slots the pack left behind are no longer the hash's; one sweep for all */
++  { xp_arr *a = xp_find(ea);
++    if (a) xp_release_range(a, w, n_used); }
++#endif
+ }
+ 
+ /*
+@@ -699,6 +1015,26 @@ ea_dup(mrb_state *mrb, const hash_entry *ea, uint32_t capa)
+       }
+     }
+   }
++#endif
++#ifdef MRB_POISONCAP_HASH
++  {
++    xp_arr *src = xp_find(ea);
++    if (src) {
++      xp_arr *a = capa <= XP_SLOTS ? xp_new(capa) : NULL;
++      if (a) {
++        for (uint32_t k = 0; k < src->capa && k < capa; k++)
++          if (src->live[k]) ea_set(a->base, k, src->obj[k]->key, src->obj[k]->val);
++        return a->base;
++      }
++      {                        /* no span to be had: a plain copy of the live slots */
++        hash_entry *n = (hash_entry*)mrb_malloc(mrb, byte_size);
++        for (uint32_t k = 0; k < capa; k++) n[k].key = mrb_undef_value();
++        for (uint32_t k = 0; k < src->capa && k < capa; k++)
++          if (src->live[k]) { n[k].key = src->obj[k]->key; n[k].val = src->obj[k]->val; }
++        return n;
++      }
++    }
++  }
+ #endif
+   hash_entry *new_ea = (hash_entry*)mrb_malloc(mrb, byte_size);
+   return (hash_entry*)memcpy(new_ea, ea, byte_size);
+@@ -721,6 +1057,10 @@ ea_get(hash_entry *ea, uint32_t index)
+ #ifdef MRB_CAPSTONE_HASH_SUBLET
+   xs_arr *a = xs_find(ea);
+   if (a && index < a->capa) return a->obj[index];   /* NULL for a free slot, by design */
++#endif
++#ifdef MRB_POISONCAP_HASH
++  { xp_arr *a = xp_find(ea);
++    if (a && index < a->capa) return a->obj[index]; }  /* revoked if mode 1 freed it */
+ #endif
+   return &ea[index];
+ }
+@@ -735,6 +1075,14 @@ ea_set(hash_entry *ea, uint32_t index, mrb_value key, mrb_value val)
+     e->key = key; e->val = val;
+     return;
+   }
++#endif
++#ifdef MRB_POISONCAP_HASH
++  { xp_arr *a = xp_find(ea);
++    if (a && index < a->capa) {
++      hash_entry *e = xp_issue(a, index);     /* slot birth: the one place */
++      e->key = key; e->val = val;
++      return;
++    } }
+ #endif
+   ea[index].key = key;
+   ea[index].val = val;
+@@ -756,6 +1104,9 @@ ar_free(mrb_state *mrb, struct RHash *h)
+ {
+ #ifdef MRB_CAPSTONE_HASH_SUBLET
+   { xs_arr *a = xs_find(ar_ea(h)); if (a) { xs_drop(a); return; } }   /* a span is not malloc's */
++#endif
++#ifdef MRB_POISONCAP_HASH
++  { xp_arr *a = xp_find(ar_ea(h)); if (a) { xp_drop(a); return; } }   /* not malloc's */
+ #endif
+   mrb_free(mrb, ar_ea(h));
+ }
+@@ -1092,6 +1443,8 @@ ht_free(mrb_state *mrb, struct RHash *h)
+ {
+ #ifdef MRB_CAPSTONE_HASH_SUBLET
+   { xs_arr *a = xs_find(ht_ea(h)); if (a) xs_drop(a); else mrb_free(mrb, ht_ea(h)); }
++#elif defined(MRB_POISONCAP_HASH)
++  { xp_arr *a = xp_find(ht_ea(h)); if (a) xp_drop(a); else mrb_free(mrb, ht_ea(h)); }
+ #else
+   mrb_free(mrb, ht_ea(h));
+ #endif

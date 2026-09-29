@@ -973,11 +973,84 @@ it". It is: level 4 needs the shared buffer to know its viewers, which mruby's b
 does not record, and that is a change to mruby rather than to either defense. Copy-on-share
 remains the alternative, and it is the one upstream's own fix effectively takes.
 
-**Not measured:** PoisonCap on any of these four defects. No mruby PoisonCap adapter exists,
-and the corpus has no `poisoncap-protected` arm yet. What is measured elsewhere in this tree
-is that PoisonCap does catch a nested-allocator reuse case -- `httpd/apr-pool-repros`, two
-recycling levels neither reaching malloc, mode 0 completes and mode 1 faults with SIGPROT at
-the labelled probe -- and that it needed an adapter to do it
-(`ports/apr/pools/src/cheribsd/node-poison.c`, `-DAPRP_POISONCAP=ON`). So against PoisonCap
-the argument for levels 2 and 3 is a **cost and coverage** comparison, not a blindness one,
-and the protocol for it is already written in `docs/plans/sublet-poisoncap-memory-study.md`.
+### Measured: PoisonCap on the four, with an adapter at the same level
+
+Superseding the "not measured" note this section used to end with, which said no mruby
+PoisonCap adapter existed and the corpus had no arm for it. Both are now false. The prior
+art that made it worth building: elsewhere in this tree PoisonCap already catches a
+nested-allocator reuse case -- `httpd/apr-pool-repros`, two recycling levels neither reaching
+malloc, mode 0 completing and mode 1 faulting with SIGPROT at the labelled probe -- and it
+needed an adapter to do it (`ports/apr/pools/src/cheribsd/node-poison.c`,
+`-DAPRP_POISONCAP=ON`), which is what this one is modelled on. The protocol is
+`docs/plans/sublet-poisoncap-memory-study.md`.
+
+The adapter is patch
+`0012-hash-entry-slots-under-poison.patch`: the same per-slot level as 0010, with an
+exactly-bounded alias per slot and, at slot death, `cpoison` over the slot's 16-byte lines,
+one synchronous `cheri_revoke` sweep, `cclearpoison`, zero. Reproduce with
+`probe/build-cheribsd-arms.sh` and `probe/measure-poisoncap.py`.
+
+Four arms, because two of them are what make the other two readable. `baseline` is the pin
+with the purecap porting patches only -- no adapter -- run once with libc revocation
+disabled per process and once with it enabled; `m0` and `m1` are the adapter publishing
+per-slot bounds without and with invalidation.
+
+| defect / path | baseline revoff | baseline revon | poison m0 | poison m1 |
+|---|---|---|---|---|
+| `a54353ecf` | completed | completed | completed | **FAULT** |
+| `08a0432d1` | completed | completed | completed | **FAULT** |
+| `eb7693857` `inspect` | completed | completed | completed | **FAULT** |
+| `eb7693857` `rehash` AR | completed | completed | completed | **FAULT** |
+| `eb7693857` `rehash` HT | completed | completed | completed | **FAULT** |
+| `eb7693857` `__except` | FAULT | FAULT | FAULT | FAULT |
+| `1c57532b2` | completed | completed | completed | completed |
+| `4663fef45` `[]`/`key?`/`[]=` | FAULT | FAULT | FAULT | FAULT |
+| `4663fef45` indexed shape | completed | completed | completed | completed |
+| `hash-sanity` (control) | completed | completed | completed, sweeps=0 | completed, sweeps=278 |
+
+**Three of the four are caught, and they are the same three `sublet-hash` catches.** So the
+comparison against PoisonCap at this level is a cost-and-coverage one, as this section
+already said it would be -- not a blindness one. What PoisonCap needs is hooks at the
+nested level, which is exactly what Sublet needs; the level is the finding, not the primitive.
+
+**Libc revocation makes no difference to any case, measured.** `revoff` and `revon` agree on
+every row, including the three the corpus exists for. That is the claim these defects were
+selected to test -- nothing is released to the allocator, so a mechanism keyed to `free()`
+has no event -- and it is now measured on CheriBSD rather than argued from the ASan result.
+
+**`1c57532b2` is missed here too**, for the reason above it: level 4 needs the shared buffer
+to know its viewers, and `mrb_shared_string` records a refcount and no sharer list. Neither
+mechanism has an adapter at that level.
+
+**`4663fef45` is not this level's to claim.** Its array-shape paths fault on the PRISTINE
+baseline with no adapter present, because the defect is an out-of-bounds read and CHERI
+bounds the entry array; its indexed-shape path is missed by everything here. Both readings
+needed the sub-case split -- at whole-case granularity the row just says FAULT everywhere,
+which would have credited the adapter with a catch that plain purecap already makes.
+
+#### Two control errors, both of which had made mode 1 look better than it is
+
+Recorded because the second one is invisible from the result side, and both were found by
+comparing against the pristine baseline rather than by reading the adapter:
+
+1. A vacated slot returned `NULL` from `ea_get()`, so a re-read faulted on the NULL. Mode 0
+   then faulted on `a54353ecf` and on `eb7693857`'s `rehash` HT path -- two defects the
+   pristine baseline runs to completion. An artifact of the sidecar, counted as a catch.
+2. With `NULL` gone from mode 0 but kept in mode 1, a mode-1 fault still could not be
+   attributed to revocation: **a NULL dereference on purecap raises the same in-address-space
+   security exception as a revoked capability, with the same message and the same exit status
+   162.** So neither mode stores `NULL`; liveness moved to a side bitmap. Mode 0 hands back a
+   valid alias for a vacated slot, mode 1 the same alias after the sweep revoked it, and the
+   pair then differs in the sweep and nothing else.
+
+The counts above are from after both fixes. The first fix moved two rows from "caught" to
+"control also faults"; the second changed no row but is what makes the remaining ones
+attributable.
+
+#### What is still open
+
+The `sublet-hash` tally earlier in this document is at WHOLE-CASE granularity, so the
+three-versus-three above is not yet a like-for-like head-to-head -- the Sublet arm needs
+re-measuring against the same sub-case split. Until that is done, "the same three" is a
+statement about which DEFECTS each catches, not about which paths.
+
