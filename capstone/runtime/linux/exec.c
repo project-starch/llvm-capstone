@@ -294,11 +294,22 @@ static long context_request(struct capstone_delegate_host *host,
     pthread_t thread;
     if (capstone_adopt(service->first, request->args[0], &child)) return -errno;
     if (request->args[1] == CAPSTONE_CONTEXT_THREAD) {
-      /* A failed thread start takes the registration back: no context runs
+      /* Block every signal in this (the handler) thread across the create, so
+         the child inherits a full block and starts already blocked. The
+         launcher's signal trampoline has one producer thread (signals.c); a
+         caught signal delivered to the child before context_thread could block
+         would race the main thread's trampoline on the ring. context_thread's
+         own sigfillset then only maintains that state.
+         A failed thread start takes the registration back: no context runs
          after a reported failure. CAPSTONE_CONTEXT_TEST_THREAD_FAILS makes the
          start fail, for the rollback probe. */
-      if (getenv("CAPSTONE_CONTEXT_TEST_THREAD_FAILS") ||
-          pthread_create(&thread, NULL, context_thread, (void *)(uintptr_t)child)) {
+      sigset_t all, prev;
+      sigfillset(&all);
+      pthread_sigmask(SIG_BLOCK, &all, &prev);
+      int failed = getenv("CAPSTONE_CONTEXT_TEST_THREAD_FAILS") ||
+                   pthread_create(&thread, NULL, context_thread, (void *)(uintptr_t)child);
+      pthread_sigmask(SIG_SETMASK, &prev, NULL);
+      if (failed) {
         capstone_forget(child);
         return -EAGAIN;
       }

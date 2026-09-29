@@ -15,8 +15,8 @@
       "source": "modcapstone at caplifive-buildroot modcapstone/context-slots e3a43d4; the pinned a6c0174 builds the same code (0 of 3818 disassembly lines differ; 26 bytes of build path differ)"
     },
     "launcher": {
-      "sha256": "da83c9b92a088a89c4c014fc4d914acfada71d739d63a7c6867d5786db82f04c",
-      "source": "capstone-exec built from this branch against that libcapstone"
+      "sha256": "46364b723e7a04dd9b3ac6a897c28f148d7c08d12cb7f1401fe86b04b707a1d9",
+      "source": "capstone-exec built from this branch against that libcapstone, with the P1 signal-mask fix (a new THREAD-mode context inherits a full signal block at creation). The P0 modes above were measured on launcher da83c9b9 and re-run on this one: context probe 33/33, signal contract 26/26, application gate exit 0 with 21 PASS lines"
     },
     "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
     "rootfs_sha256": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
@@ -86,7 +86,8 @@
     "an adversarial review of 8a2d5dc found that an adoption could retire its own dead offering slot and register a null seal, and that ended contexts were never retired; 658063f fixes both. The first is not reachable through today's launcher, which adopts only from an application's first context, and rests on the review",
     "the first full run on 658063f failed hold on the host side: five concurrent capstone-vm runs each connect to QEMU's QMP socket, whose listener has a backlog of one, and a timed connect to a full backlog fails at once with EAGAIN; capstone_vm now retries within its timeout (unit test fails without the retry), and the run was repeated",
     "A2 retracted 2026-09-30: an independent review loaded the caller's saved state through the return capability ra, monitor capabilities included, on the platform of this record. capstone-qemu does not enforce the spec's access rule for synchronous sealed-return capabilities; entry-audit never looked at what ra reaches",
-    "A2 reinstated 2026-09-30 after the P0 fix: capstone-qemu a53ac18e3d enforces the spec's sealed-return access window, and the ra-slot0/16/32 modes (fault) with ra-gp (no fault) are its controls, the pre-fix binary 9b6eac4b being the positive control"
+    "A2 reinstated 2026-09-30 after the P0 fix: capstone-qemu a53ac18e3d enforces the spec's sealed-return access window, and the ra-slot0/16/32 modes (fault) with ra-gp (no fault) are its controls, the pre-fix binary 9b6eac4b being the positive control",
+    "P1 (review 2026-09-30): a THREAD-mode context's Linux thread blocked signals only after it started; the launcher's signal trampoline has one producer, so a caught signal in that window could race the ring. The launcher now blocks every signal around pthread_create so the child starts blocked (exec.c). Code-level fix; the deterministic adversarial probe is Probe B's B8 (signals during a stepping context), domain phase. Validated by the full regression on the new launcher"
   ],
   "generations": {
     "case": "A9, in boots of their own with a test firmware whose slots start at generation 0x7ffffff9 (the monitor built with -DCAPSTONE_TEST_GEN_PRESET=0x7ffffff9, applied at the first assignment); run-context.py --only gen-exhaust gen-launch",

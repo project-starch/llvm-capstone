@@ -50,6 +50,11 @@ Done so far:
   both); the new context enters its own entry. With the collector's dead-slot removal disabled
   the same sequence resumes the dead context's continuation instead, which faults on its
   untagged stack: the removal is what prevents the ABA.
+- P1 (review 2026-09-30): a THREAD-mode context's launcher thread blocked signals only after it
+  started; a caught signal in the window between pthread_create and that block could race the
+  single-producer signal trampoline. The launcher now blocks every signal around the create so the
+  child starts blocked. The deterministic race probe is Probe B's B8 (signals during a stepping
+  context), domain phase.
 - Probe B, native phase: the launcher's parking queue (`runtime/linux/park.c`) passes B1 to B5,
   B12 and B13a to B13d with forced interleavings, each check shown to fire against a seeded
   defect (record `results/20260930-park-native.json`). B6 to B11 and B14 need the domain runtime:
