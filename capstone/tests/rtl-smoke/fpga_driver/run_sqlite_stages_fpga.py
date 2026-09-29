@@ -31,6 +31,8 @@ from fpga_driver import config as C
 from fpga_driver.fpga_console import FpgaConsole, ActionTimeout
 from fpga_driver.safe_cleanup import release_board, hard_exit, install_release_on_signal
 from fpga_driver.preflight import require_preflight
+from fpga_driver.refusal_record import (REFUSAL_RECORD, RefusalSkip, rr_label, decode_lines,
+                                        bitstream_note)
 from fpga_driver.run_ladder_perf_fpga import cold_boot, nvbit, install_resilient_emit
 from fpga_driver.run_sqlite_baked_fpga import (
     IMG, IMG_NAME, BITSTREAM, assert_firmware_embeds_current_initramfs)
@@ -856,6 +858,9 @@ def main():
     # and no JTAG upload. The gate encodes C1-C14, every one a failure that already
     # cost board time, and until 2026-08-19 nothing called it from here.
     require_preflight()
+    _rr_note = bitstream_note()
+    if _rr_note:
+        print(_rr_note, flush=True)
     if not URL:
         raise SystemExit("FPGA_URL not set")
     # Verify the firmware against the domains THIS run will execute, not against the
@@ -2332,6 +2337,7 @@ def main():
                 tval_bytes = {}
                 traplog_v = None
                 s07a_bytes = {}
+                rr_bytes = {}
                 try:
                     for sw, label, kind in ((255, "TRAP LOG {seen,mcause[6:0]}", "trap"),
                                             (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,"
@@ -2515,12 +2521,20 @@ def main():
                                             (206, "s07 ldc0_paddr[19:12]", "s07a"),
                                             (207, "s07 stc_paddr[11:4]", "s07a"),
                                             (209, "s07 stc_paddr[19:12]", "s07a")):
+                        # REFUSAL RECORD (fpga_driver/refusal_record.py): on a refusal-record
+                        # bitstream 204..208 carry the R-43 record, not the S-07 recorder, so
+                        # they get their own kind and no S-07 decode ever sees them.
+                        if REFUSAL_RECORD and 204 <= sw <= 209:
+                            kind = "rr"
+                            label = rr_label(sw, label)
                         for bit in range(8):
                             console.set_switch(bit, bool(sw & (1 << bit)))
                         time.sleep(1.2)
                         st = console.latest(C.LISTEN.get("led_state", "led_state"))
                         bits = st.get("states") if isinstance(st, dict) else None
                         v = sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
+                        if kind == "rr":
+                            rr_bytes[sw] = v
                         line = (f"  [wedge] sw={sw:3} {label:52} "
                                 f"{'UNREAD' if v is None else f'0x{v:02x} {v:08b}'}")
                         # STALENESS, decided here rather than per-domain: with the clear skipped
@@ -2640,6 +2654,11 @@ def main():
                     else:
                         print(f"  [wedge] trap mepc {_mnote}", flush=True)
 
+                    if REFUSAL_RECORD:
+                        for _l in decode_lines(rr_bytes, "wedge (single running sample per "
+                                                         "aperture; VOID if contaminated)"):
+                            print(_l, flush=True)
+                            transcript.append(_l + "\n")
                     # S-07 recorded granule addresses. Reported together because the ONLY
                     # thing that makes the tag-history byte readable is whether the recorded LDC
                     # granule is the subject's -- and whether it equals the recorded STC granule,
@@ -3491,6 +3510,8 @@ def main():
         # Without this, every 0x00 is an argued negative: "no displacement happened" and "the
         # detector does not work in this bitstream" are otherwise indistinguishable.
         try:
+            if REFUSAL_RECORD:
+                raise RefusalSkip()
             def _sw(_v):
                 for _b in range(8):
                     console.set_switch(_b, bool(_v & (1 << _b)))
@@ -3530,6 +3551,11 @@ def main():
                         "0x00 read this boot is an ARGUED negative and carries no verdict")):
                 print(_t, flush=True)
                 transcript.append(_t + "\n")
+        except RefusalSkip:
+            _t = ("  [s07] SELFTEST SKIPPED -- REFUSAL_RECORD=1: 204..208 carry the R-43 refusal "
+                  "record on this bitstream, so the S-07 trigger and its reads mean nothing here")
+            print(_t, flush=True)
+            transcript.append(_t + "\n")
         except Exception as exc:
             _t = (f"  [s07] SELFTEST could not be run ({type(exc).__name__}) -- treat this "
                   f"boot's zeros as argued, not controlled")
@@ -3569,7 +3595,8 @@ def main():
                 try:
                     console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
                     _hits = {}
-                    for _ap in (204, 208, 224):
+                    for _ap in ((204, 205, 206, 207, 208, 224) if REFUSAL_RECORD
+                                else (204, 208, 224)):
                         _hits[_ap] = settled_halted_read(console, C, _ap)
                     # A KNOWN EXPECTED VALUE, not merely "an event arrived". The selftest ran
                     # immediately above and, when it passes, leaves 204 bit 6 (ldc_seen) SET --
@@ -3593,7 +3620,15 @@ def main():
                                    f"ago. Contamination can only add bits, so this cannot be the "
                                    f"stretcher: the halted read is returning a wrong value and no "
                                    f"halted reading this boot can be trusted.")
+                    if REFUSAL_RECORD:
+                        _refmsg = ("  [s07] halted 204 vs selftest reference: N/A -- 204 carries "
+                                   "the refusal record on this bitstream")
                     print(_refmsg, flush=True)
+                    if REFUSAL_RECORD:
+                        for _l in decode_lines({_a: _hits.get(_a) for _a in (204, 205, 206, 207, 208)},
+                                               "post-run, core HALTED, settled reads"):
+                            print(_l, flush=True)
+                            transcript.append(_l + "\n")
                     transcript.append(_refmsg + "\n")
 
                     _n_fresh = sum(1 for _v in _hits.values() if _v is not None)
@@ -3601,13 +3636,13 @@ def main():
                         f"sw={_a}:" + ("VOID" if _v is None else f"0x{_v:02x}")
                         for _a, _v in _hits.items())
                     if _n_fresh == 0:
-                        _t = ("  [s07] HEALTHY-HALT CONTROL: no fresh led_state event on ANY of 3 "
+                        _t = ("  [s07] HEALTHY-HALT CONTROL: no fresh led_state event on ANY of the "
                               "apertures with the core halted and healthy -- " + _detail
                               + ".  The halted read is structurally impossible, not a wedge "
                                 "artifact. 'halt, settle, sample, resume' cannot be built and the "
                                 "LED path needs an RTL replacement.")
                     elif _n_fresh == len(_hits):
-                        _t = ("  [s07] HEALTHY-HALT CONTROL: fresh events on ALL 3 apertures while "
+                        _t = ("  [s07] HEALTHY-HALT CONTROL: fresh events on ALL the apertures while "
                               "halted -- " + _detail
                               + ".  The halted read WORKS on a healthy core, so boot 5's failure "
                                 "was the total-wedge state (or the removed cache fallback), NOT a "
