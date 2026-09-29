@@ -17,9 +17,11 @@ Done so far:
   `results/20260929-context-probe-monitor.json`, 17/17): A1, A3, A4, A5, A6, A8 (DEAD, FORGET
   once, STALE), A11, A13 without the foreign-owner request, A14, and A15 with its control on
   the base platform (there the kept result slot still writes).
+- A12 (Q3 answered below): privilege changes and non-C seals are refused under supervision; this
+  closed an escape into user mode that A12 found first.
 - Open in Probe A: A2, A7 (needs an instrument that shows the node was reissued), A9
-  (generation preset), A10 (retiring dead registrations on shortage), A12 (Q3 first), A13's
-  foreign-owner request, and the submodule pins.
+  (generation preset), A10 (retiring dead registrations on shortage), A13's foreign-owner
+  request, and the submodule pins.
 
 ## Scope
 
@@ -600,6 +602,22 @@ Recommended starting point:
   confirms this for the main and a sibling context rather than assuming it.
 - `mret`, `sret` and a direct, unsupervised CALL of a minted seal from inside a supervised context
   are not covered by either check. A12 establishes what they do before the contract names them.
+
+**Answer (2026-09-29; evidence: A12 in `results/20260929-context-probe-monitor.json`).**
+Before the change, A12 showed two escapes: `mret` in a supervised context was carried out
+(domains run at `PRV_C`, which is `PRV_M`), and a seal minted with user privilege was entered
+with it. Both times the context left C-mode for user mode on the owner's page table and faulted
+at its first fetch there (cause 12) only because the target address was not mapped in the
+launcher; outside C-mode the quantum is not polled either (read from `translate.c`, not
+measured). The contract, now enforced by the supervisor (capstone-qemu `qemu/context-slots`):
+- A supervised context runs in C-mode only. `mret` and `sret` raise an illegal-instruction fault;
+  a fresh supervised entry into a seal whose saved privilege is not C answers REFUSED (step
+  event 5) and is not entered; a nested CALL into such a seal faults. A resume restores the
+  supervisor's own snapshot and is not checked.
+- CSRs above user level stay refused (`riscv_csrrw_check`), shown for a machine CSR.
+- `mie`, `mideleg`, `medeleg` and `mip` in a seal are admitted: with a seal enabling machine
+  interrupts the context still ran confined and was preempted 2096 times.
+- `wfi` is a no-op on this platform and returns.
 
 ### Q4. Who notifies joiners and reclaims detached or main contexts? (before B10/B11)
 

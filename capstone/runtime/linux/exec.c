@@ -521,7 +521,8 @@ int main(int argc, char **argv) {
       continue;
     if (step.event == CAPSTONE_STEP_FAULT)
       fault(&e, &step);
-    if (step.event == CAPSTONE_STEP_DEAD || step.event == CAPSTONE_STEP_STALE)
+    if (step.event == CAPSTONE_STEP_DEAD || step.event == CAPSTONE_STEP_STALE ||
+        step.event == CAPSTONE_STEP_REFUSED)
       return fail(&e, "capstone-exec: the application's first context is gone", 0);
     struct capstone_delegate_entry *entry = e.maps[REGION_META];
     /* A return with no request means the domain left its entry instead of

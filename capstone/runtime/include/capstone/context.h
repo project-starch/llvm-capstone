@@ -72,6 +72,12 @@ int capstone_context_mint_split(struct capstone_context *c, size_t area_bytes,
                                 unsigned long (*start)(void *), void *arg);
 void capstone_context_revoke_children(struct capstone_context *c);
 
+/* As capstone_context_mint, with the seal's mstatus/privilege word and mie
+ * word given (probe use, A12: what a supervised first entry does with them). */
+int capstone_context_mint_words(struct capstone_context *c, size_t area_bytes,
+                                unsigned long (*start)(void *), void *arg,
+                                unsigned long mstatus, unsigned long mie);
+
 /* Revoke the parent handle: every capability derived from the area dies, the
  * seal included, wherever it is held. The area stays in c->handle for reuse. */
 void capstone_context_revoke(struct capstone_context *c);

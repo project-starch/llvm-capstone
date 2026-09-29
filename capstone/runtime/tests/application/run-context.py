@@ -34,6 +34,15 @@ MODES = {
     # Negative: the loan ended with the call; a kept copy reloads untagged.
     "loan-after-return": ("signal", 11, "", "REACHED", (24, "probe_store_insn")),
 }
+# A12 (Q3). ctl-wfi may hold the hart for good; it runs only when named with --only.
+MODES.update({
+    "ctl-csr": ("exit", 0, "PASS", None, None),
+    "ctl-mret": ("exit", 0, "PASS", None, None),
+    "ctl-priv": ("exit", 0, "PASS", None, None),
+    "ctl-mie": ("exit", 0, "PASS", None, None),
+    "ctl-priv-nested": ("signal", 11, "", "REACHED", (2, "__capstone_context_call_insn")),
+})
+EXPLICIT = {"ctl-wfi": ("exit", 0, "PASS", None, None)}
 # Guest environment per mode.
 ENV = {"rollback-thread": ["CAPSTONE_CONTEXT_TEST_THREAD_FAILS=1"]}
 LINK_BASE = 0x10000   # my_first_domain/link.ld
@@ -81,7 +90,10 @@ def main():
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[2] / "host"))
     cli = [sys.executable, "-m", "capstone_vm", "--state", str(args.state)]
     results, failed = {}, 0
-    for mode, (kind, value, needle, forbidden, fault) in MODES.items():
+    selected = dict(MODES)
+    if args.only:
+        selected.update({m: e for m, e in EXPLICIT.items() if m in args.only})
+    for mode, (kind, value, needle, forbidden, fault) in selected.items():
         if args.only and mode not in args.only:
             continue
         status = args.state / f"context-{mode}.json"

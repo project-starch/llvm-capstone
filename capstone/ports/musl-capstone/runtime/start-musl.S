@@ -387,11 +387,13 @@ __capstone_context_exit:
   domreturn(ra, t2, x0)
 
 /* void __capstone_context_seal(capstone_cap_slot *region, void *entry,
- *                              void *start_block, capstone_cap_slot *out)
+ *                              void *start_block, capstone_cap_slot *out,
+ *                              unsigned long mstatus, unsigned long mie)
  *
  * Fill a LINEAR seal region with the synchronous context a first CALL loads
- * (pc, ctvec, cscratch, then the control words create_domain writes) and
- * seal it into *out. ctvec stays null: the entry installs the runtime's own. */
+ * (pc, ctvec, cscratch, then the control words) and seal it into *out. The
+ * runtime passes the words create_domain writes; a probe may pass others
+ * (A12). ctvec stays null: the entry installs the runtime's own. */
   .global __capstone_context_seal
 __capstone_context_seal:
   ldc(t0, a0, 0)
@@ -399,12 +401,11 @@ __capstone_context_seal:
   stc(a1, t0, 0)
   stc(x0, t0, 16)
   stc(a2, t0, 32)
-  li t1, CAPSTONE_CONTEXT_MSTATUS
-  sd t1, 48(t0)
+  sd a4, 48(t0)
   sd x0, 56(t0)
   sd x0, 64(t0)
   sd x0, 72(t0)
-  sd x0, 80(t0)
+  sd a5, 80(t0)
   .insn r 0x5b, 0x1, 0x7, t0, t0, x0   /* seal t0 in place */
   stc(t0, a3, 0)
   li t1, 0

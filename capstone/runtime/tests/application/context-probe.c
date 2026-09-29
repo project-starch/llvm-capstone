@@ -471,6 +471,109 @@ static int loan_after_return(void)
   return 1;
 }
 
+/* ---- A12: control state (Q3). Each mode passes on a clean refusal, or on
+ * confined execution that is still preempted; it fails when a long run
+ * outside the supervisor's reach is never preempted. ---- */
+void probe_csr_read(void);
+void probe_mret_to_user(unsigned long loops) __attribute__((noreturn));
+void probe_wfi(void);
+extern char probe_csr_insn[], probe_mret_insn[], probe_umode_ecall[], probe_wfi_insn[];
+#define STEP_REFUSED 5
+#define UMODE_LOOPS 300000000ul
+#define PRIV_U_MSTATUS 0x800000000ul   /* (0 << 38) | (2 << 34): user privilege */
+#define MIE_ALL 0x888ul                 /* MSIE, MTIE, MEIE */
+
+static unsigned long child_csr(void *arg) { probe_csr_read(); return 1; }
+static unsigned long child_mret(void *arg) { probe_mret_to_user(UMODE_LOOPS); }
+static unsigned long child_wfi(void *arg) { probe_wfi(); return 3; }
+
+static int step_report(const char *what, unsigned long id, struct capstone_context_event *ev,
+                       unsigned long *preemptions)
+{
+  long t0 = monotonic_ms();
+  int r = step_to_end(id, ev, preemptions);
+  long ms = monotonic_ms() - t0;
+  printf("context-probe %s: kind %lu cause %lu pc %#lx result %#lx, %lu preemptions in %ld ms\n",
+         what, (unsigned long)ev->kind, (unsigned long)ev->cause, (unsigned long)ev->pc,
+         (unsigned long)ev->result, *preemptions, ms);
+  return r;
+}
+
+static int ctl_csr(void)
+{
+  struct capstone_context_event ev;
+  unsigned long pre = 0;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_csr, 0));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_report("ctl-csr", (unsigned long)id, &ev, &pre));
+  CHECK(ev.kind == STEP_FAULT && ev.cause == 2 && ev.pc == (uintptr_t)probe_csr_insn);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+static int ctl_mret(void)
+{
+  struct capstone_context_event ev;
+  unsigned long pre = 0;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_mret, 0));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_report("ctl-mret", (unsigned long)id, &ev, &pre));
+  capstone_context_forget((unsigned long)id);
+  if (ev.kind == STEP_FAULT && ev.pc == (uintptr_t)probe_mret_insn)
+    return 0;                                         /* refused at the mret */
+  CHECK(ev.kind == STEP_FAULT && ev.pc == (uintptr_t)probe_umode_ecall);
+  CHECK(pre > 0);                                     /* ran outside C-mode: still preempted? */
+  return 0;
+}
+
+static int ctl_words(const char *what, unsigned long mstatus, unsigned long mie)
+{
+  struct capstone_context_event ev;
+  unsigned long pre = 0, seed = 0x55;
+  CHECK(!capstone_context_mint_words(&ctx, AREA_BYTES, child_preempt, (void *)(uintptr_t)seed,
+                                     mstatus, mie));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_report(what, (unsigned long)id, &ev, &pre));
+  capstone_context_forget((unsigned long)id);
+  if (ev.kind == STEP_REFUSED)
+    return 0;                                         /* refused at the first entry */
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*ctx.value == lcg_rounds(seed, PREEMPT_ROUNDS));
+  CHECK(pre >= 2);
+  return 0;
+}
+
+/* A12, nested (negative): the main context enters a seal minted with user
+   privilege by a direct CALL. Expected: a fault at the CALL (cause 2). */
+static int ctl_priv_nested(void)
+{
+  unsigned long result = 0;
+  CHECK(!capstone_context_mint_words(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1,
+                                     PRIV_U_MSTATUS, 0));
+  fflush(stdout);
+  __capstone_context_call(&ctx.seal, 0, &result);
+  printf("context-probe ctl-priv-nested: REACHED result=%lx counter=%lu\n", result, counter);
+  return 1;
+}
+
+static int ctl_wfi(void)
+{
+  struct capstone_context_event ev;
+  unsigned long pre = 0;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_wfi, 0));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_report("ctl-wfi", (unsigned long)id, &ev, &pre));
+  capstone_context_forget((unsigned long)id);
+  if (ev.kind == STEP_FAULT && ev.pc == (uintptr_t)probe_wfi_insn)
+    return 0;
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2) {
@@ -496,6 +599,12 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "two-steppers")) rc = two_steppers();
   else if (!strcmp(mode, "loan-preempt")) rc = loan_preempt();
   else if (!strcmp(mode, "loan-after-return")) rc = loan_after_return();
+  else if (!strcmp(mode, "ctl-csr")) rc = ctl_csr();
+  else if (!strcmp(mode, "ctl-mret")) rc = ctl_mret();
+  else if (!strcmp(mode, "ctl-priv")) rc = ctl_words("ctl-priv", PRIV_U_MSTATUS, 0);
+  else if (!strcmp(mode, "ctl-mie")) rc = ctl_words("ctl-mie", CAPSTONE_CONTEXT_MSTATUS, MIE_ALL);
+  else if (!strcmp(mode, "ctl-wfi")) rc = ctl_wfi();
+  else if (!strcmp(mode, "ctl-priv-nested")) rc = ctl_priv_nested();
   else {
     fprintf(stderr, "context-probe: unknown mode %s\n", mode);
     return 2;

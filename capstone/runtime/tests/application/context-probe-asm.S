@@ -79,3 +79,45 @@ probe_store_through:
 probe_store_insn:
   sd a1, 0(a0)
   ret
+
+/* ---- A12: control state a supervised context must not be able to use to
+ * escape the supervisor. Each probe instruction carries a label so that a
+ * fault can be located. ---- */
+
+/* void probe_csr_read(void): read a machine CSR. */
+  .global probe_csr_read
+probe_csr_read:
+  .global probe_csr_insn
+probe_csr_insn:
+  csrr t0, mstatus
+  li t0, 0
+  ret
+
+/* void probe_mret_to_user(unsigned long loops), never returns normally:
+ * point cepc at a loop and execute mret. If mret is carried out, the loop
+ * runs outside C-mode for `loops` iterations and then executes ecall. */
+  .global probe_mret_to_user
+probe_mret_to_user:
+  mv t5, a0
+  lla t0, probe_umode_loop
+  ccsrrw(x0, 0x002, t0)
+  .global probe_mret_insn
+probe_mret_insn:
+  mret
+  .global probe_umode_loop
+probe_umode_loop:
+  addi t5, t5, -1
+  bnez t5, probe_umode_loop
+  .global probe_umode_ecall
+probe_umode_ecall:
+  ecall
+4:
+  j 4b
+
+/* void probe_wfi(void): wait for an interrupt the context has masked. */
+  .global probe_wfi
+probe_wfi:
+  .global probe_wfi_insn
+probe_wfi_insn:
+  wfi
+  ret
