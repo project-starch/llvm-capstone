@@ -23,7 +23,7 @@ no libc call, which synchronous delivery never interrupts. `op/alarm.t` and
 pre-signals image as well (cause 24, open, not a signal gap), and the static
 image reads as miniperl to `test.pl`, which skips `sigsystem.t` and
 `signame_canonical.t`. General fork semantics remain open. Record:
-`ports/cpython/interpreter/results/signals-2026-09-29.json`.
+`ports/cpython/app/results/signals-2026-09-29.json`.
 
 ## Result (2026-09-26)
 
@@ -55,7 +55,11 @@ runner. The old `run-perl-domain.sh` interface has been removed. Use ordinary
 argv, `run --cwd DIR -e NAME=value`, or `capstone-exec` in the Linux guest shell.
 
 `PERLD_HEAP=level0` remains the default; `PERLD_HEAP=sublet` selects the common
-revoking heap with `PERLD_HEAP_LOG`. The image declares its additional heap grant;
+revoking heap with `PERLD_HEAP_LOG`. That changes outer malloc only. For
+per-head protection, `PERLD_SV_HEADS=1` builds the study variant of
+[`../sv-heads`](../sv-heads/README.md), whose Sublet backend revokes every
+released SV head; `experiments/applications/build.py --nested perl` relinks it
+with its region grant. The image declares its additional heap grant;
 the launcher supplies it and the monitor reclaims it, including after SIGKILL.
 No caller-side `PERLD_HEAP_REGION_BYTES` is needed.
 

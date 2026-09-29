@@ -35,9 +35,11 @@ The [qualification evidence](results/2026-09-28/) records the existing
 regexes, closures, methods, files and packing complete. These are two smoke
 processes, not the complete Perl test suite or a memory benchmark.
 
-Perl still uses its upstream inner SV-head/body allocators. A complete
-Sublet/PoisonCap comparison must add their lifetime adapters and the common
-reuse observer, then qualify the same pinned workload in all four arms. The
-current Capstone `PERLD_HEAP=sublet` switch changes outer malloc and does not
-establish protection or observations for individual SV slots. Perl is therefore
-not yet admitted to the cross-application reuse plot.
+This qualification binary keeps Perl's upstream inner allocators.
+`PERL_CHERI_SV_HEADS=1` builds the study variant instead: patch 0001 and the
+PoisonCap backend of [`../sv-heads`](../sv-heads/README.md) replace the SV-head
+arenas, and the common phase observer is linked in. One binary carries the
+spatial control and PoisonCap (`PERL_POISONCAP_MODE=0/1`, which the CheriBSD
+runner sets from the arm). Its [four-arm campaign](../../../experiments/study/results/perl-reuse-four-arm-20260928/README.md)
+admits Perl's SV heads to the cross-application reuse figure; SV bodies, hash
+entries and OP slabs remain upstream's.

@@ -1,0 +1,21 @@
+{
+  "case": 10,
+  "upstream_fix": "sqlite3-ruby list",
+  "title": "Statement reuse reads a statement handle from a binding wrapper that connection teardown already freed.",
+  "consumer": "Ruby",
+  "class": "use-after-close",
+  "verdict": "literal-traceable",
+  "primitive": "H,R",
+  "live_in_pin": null,
+  "live_note": "The defect is in the binding, not in SQLite: this corpus pins no binding release, and the host arm builds the 3.53.3 amalgamation, so whether a row is live in a given binding version is not established here.",
+  "arms": {
+    "host-asan": {
+      "oracle": "heap-use-after-free",
+      "observed": "use-after-free (stmt reuse after close)"
+    }
+  },
+  "capstone_column": {
+    "ledger_status": "family (H)"
+  },
+  "status": "host ASan arm recorded, oracle 'heap-use-after-free'; NOTE.md records why it is not reproduced"
+}

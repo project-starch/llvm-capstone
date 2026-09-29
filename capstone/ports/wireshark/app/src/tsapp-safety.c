@@ -49,6 +49,10 @@
  *  11 wmem_block_reset the same after wmem_free_all on a BLOCK allocator, the kind a file scope is.
  *  12 wmem_neighbour  fixture 2 inside one BLOCK allocator: writes through the first wmem
  *                     allocation at the second's first byte.
+ *  13 wmem_chunk_free one allocation of a BLOCK allocator freed with wmem_free while its block
+ *                     lives on, then read. Added with the chunks arm, where that free is a revoke;
+ *                     elsewhere the free changes nothing the old pointer can see, except that
+ *                     upstream writes its free-list links into the chunk's first bytes.
  * On every heap arm of this port, 10-12 are predicted to return: a wmem block is one g_malloc,
  * and every allocation carved from it carries the whole block's bounds. That is the gap the
  * wmem hooks (ports/wireshark/wmem) are for; it is measured here, not assumed.
@@ -66,7 +70,7 @@
 #include <wsutil/wmem/wmem.h>
 
 #ifndef TSAPP_FIXTURE
-#error "TSAPP_FIXTURE selects the fixture (1..12)"
+#error "TSAPP_FIXTURE selects the fixture (1..13)"
 #endif
 
 #define FX_MARK(v) (0x100000 * TSAPP_FIXTURE + ((v) & 0xFFFFF))
@@ -262,6 +266,20 @@ static int fixture(void)
     tsapp_fix_poke(p, idx, 0xEE);
     v = tsapp_fix_touch(q, 0);
     printf("TSAPP-FIX 12 returned q[0]=%02x (0x5b untouched, 0xee overwritten through p)\n", v);
+    return FX_MARK(v);
+
+#elif TSAPP_FIXTURE == 13
+    wmem_allocator_t *a = wmem_allocator_new(WMEM_ALLOCATOR_BLOCK);
+    unsigned char *p = wmem_alloc(a, 64), *keep = wmem_alloc(a, 64);
+    fill(p, 0xA0, 64);
+    fill(keep, 0x5B, 64);               /* the block stays live, with p's neighbour in use */
+    show("p", p);
+    unsigned long p_addr = cur(p);
+    wmem_free(a, p);                    /* one chunk back, inside a block that lives on */
+    idx = 0;
+    touching(p_addr);
+    v = tsapp_fix_touch(p, idx);
+    printf("TSAPP-FIX 13 returned p[0]=%02x (0xa0 = its own byte, unless a free-list link covers it)\n", v);
     return FX_MARK(v);
 
 #else

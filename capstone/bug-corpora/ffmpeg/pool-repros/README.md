@@ -23,7 +23,7 @@ further pool-backed specimens it found that are not built here, are in
 ## The contract
 
 The layout and the `case.json` fields are the corpus contract in
-[`cpython/pymalloc-repros/SCHEMA.md`](../../cpython/pymalloc-repros/SCHEMA.md),
+[`SCHEMA.md`](../../SCHEMA.md),
 which is the authority; it is referenced rather than copied, because a contract
 that exists twice is two contracts. One directory per case,
 `NN_<upstream-fix>_<slug>/` holding `case.c`, `case.json` and `PROVENANCE.md`;
@@ -53,6 +53,19 @@ guest a per-case script would have to reinvent. A Capstone domain:
     bash ../../../ports/ffmpeg/buffer-pool/security-tests/qemu/run.sh <out> \
       --cases 36,37,38 --modes 0,2 --rounds 1
 
+and against the Sublet port of FFmpeg's own pools, each `case.c` unchanged, in the FFmpeg app
+port's domain (build first with `FFAPP_HEAP=sublet FFAPP_POOL=sublet|stock
+FFAPP_CORPUS_DIR=<this corpus>` `ports/ffmpeg/app/host/build-domain.sh`):
+
+    CAPSTONE_VM_STATE=<running VM> FFAPP_CORPUS_OUT=<new dir> \
+      bash runners/run-sublet-port.sh <poolsublet|poolstock> [rounds]
+
+(the delegated application ABI: each image is a `capstone-exec` application, and the verdict
+reads its exit status, the launcher's fault record and the QEMU log over that run;
+`results/20260929-qemu-sublet-port/` was taken on the earlier HostCall transport; the same
+predictions re-run on this transport, 36/36 as registered, are in
+`ports/common/application/results/20260929-dev-merge.json`).
+
 and CheriBSD with PoisonCap, where the same three cases are registered as
 `pool-<mode>-<case>`:
 
@@ -77,6 +90,12 @@ for any subset, so a partial run cannot later read as a full one.
 | **Sublet** | the last return to the pool | **fault**, cause 24 | **fault**, cause 24 | **fault**, cause 24 |
 | **CHERI default** | `free()` → quarantine → sweep | — | — | — |
 | **PoisonCap** | the lease return: poison, then sweep before reissue | **SIGPROT** 162 | **SIGPROT** 162 | **SIGPROT** 162 |
+| **Sublet port of FFmpeg's own pools** (2026-09-29) | FFmpeg's own `buffer.c`: the return to the pool is a revoke | **fault**, cause 24, at `case.c:85` | **fault**, cause 24, at `case.c:48` | **fault**, cause 24, at `case.c:33` |
+
+The last row is the Sublet port of FFmpeg's own pools (`ports/ffmpeg/sublet`), not the
+buffer-pool port's substitute that the `Sublet` row measures. Each `case.c` runs unchanged against
+it, in the FFmpeg app port's domain, with upstream's pools as the one-macro control:
+[`results/20260929-qemu-sublet-port/`](results/20260929-qemu-sublet-port/README.md), N = 3 per cell.
 
 It catches whoever listens for the moment the inner allocator takes the storage
 back. The other two listen for an event that never happens here: Capstone
@@ -127,17 +146,17 @@ emulators.
 
 ## Where this corpus deviates from the contract, and why
 
-`tests/check-corpus.py` in the pymalloc corpus enforces
-[SCHEMA.md](../../cpython/pymalloc-repros/SCHEMA.md). Run against these cases it
-reports exactly three kinds of problem, all of them deliberate. They are listed
-here rather than silenced, and no copy of that checker is shipped beside them: a
-fork would be a second contract, and a checker that fails by design is noise.
+[`../../tools/check-corpus.py`](../../tools/check-corpus.py) enforces
+[SCHEMA.md](../../SCHEMA.md) over every corpus, this one included, reading the
+`corpus.json` beside these cases. The deviations this section used to list are
+now part of the contract instead of complaints: the extra arms are declared
+arms, and the case macro is declared (`FF2`) rather than assumed to be the
+pymalloc corpus's `PYC`. What each one means is unchanged.
 
-| what it reports | why |
+| arm | what it is |
 |---|---|
-| `arm 'native-fix-differential' is not in SCHEMA.md` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
-| `arm 'cheribsd-revocation' is not in SCHEMA.md` | stock CheriBSD with `libc` revocation enabled is a fourth system the contract does not yet name. It is the arm that makes the blindness claim a measurement |
-| `case.c declares no PYC_CASE` | the macro is the corpus's seam to its allocator; here it is `FF2_CASE`/`APR_CASE`. The rule the checker means — a case declares the number its directory carries, and the driver refuses a fixture that names another — is implemented |
+| `native-fix-differential` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
+| `cheribsd-revocation` | stock CheriBSD with `libc` revocation enabled: a fourth system, and the arm that makes the blindness claim a measurement |
 
 `poisoncap-protected` carries `si_code: null` with a note. The runner records a
 process exit status; 162 is 128+34 so the signal is derived, but `si_code` is not

@@ -60,7 +60,7 @@ equal within-pair metadata capacities, transferred thresholds, verified outer
 process revocation, disabled guest-service default and raw repeat variation.
 CPython still needs the revoker VM-map locking repair plus deferred pymalloc
 publication; Perl needs the complete CheriBSD inner-allocator port. Keep this
-study off a PR. Standard pgbench workloads, equal-scope total memory ledgers,
+study off a PR (superseded 2026-09-28: the review stack is merged into dev). Standard pgbench workloads, equal-scope total memory ledgers,
 and the fixed-follow-up reuse metric remain later milestones.
 
 CPython reuse follow-up (2026-09-28): the
@@ -89,7 +89,7 @@ ranking. Do not relabel the old outer-disabled SQLite
 data. The next wider
 milestone remains complete qualified PoisonCap arms for PostgreSQL, CPython
 and Perl, followed by normalized compiler settings and equal-scope full
-memory accounting. Keep the study off a PR.
+memory accounting. Keep the study off a PR (superseded 2026-09-28: the review stack is merged into dev).
 
 Three-application paper figures (2026-09-28): the [checked figure set](../../experiments/study/results/application-memory-paper-20260928/README.md)
 contains common four-arm reuse/difference panels, SQLite/mruby/FFmpeg memory
@@ -98,8 +98,9 @@ reproduce exactly; 12 separate SQLite memory processes pass their raw oracle
 and ledger checks. No new guest measurements were run. The next memory
 milestone is equal-scope allocator/metadata accounting and original-layout
 controls for mruby/FFmpeg, followed by consistent optimized-build campaigns.
-Keep the measured reuse advantage separate from total-memory claims and keep
-the study off a PR while these measurement gaps remain.
+Keep the measured reuse advantage separate from total-memory claims. The
+instruction to keep the study off a PR is superseded 2026-09-28: the review stack is merged into dev; the measurement gaps it named
+remain.
 
 FFmpeg FATE follow-up (2026-09-28): the [archived four-arm qualification](../../experiments/study/results/ffmpeg-fate-four-arm-20260928/README.md)
 passes 24/24 complete decoder processes on two adapted FATE inputs, each with
@@ -130,7 +131,7 @@ lower bound. Before a paper plot, use a common phase/work-size schedule and
 account for live payload, reusable and withheld backing, metadata, and
 Capstone node storage in each pair. `work.sql` is a qualification workload,
 not pgbench. Keep this study off a PR until the broader experiment set is
-ready. See the [complete-backend port](../../ports/postgres/single-user/README.md).
+ready (superseded 2026-09-28: the review stack is merged into dev; the experiment set is still incomplete). See the [complete-backend port](../../ports/postgres/app/README.md).
 
 A fresh-guest policy diagnostic on 2026-09-28 tested bounded chunk and whole-block
 quarantines at the same 17.5 `work.sql` input. The mode-0 control from the
@@ -181,7 +182,7 @@ edits were removed from the branch; scratch evidence remains under
 quarantine with explicit retained-pool accounting and complete the VM probe
 before accepting a protected process. Then add inner-pymalloc
 issue/release, backing and metadata ledgers; the present outer counters cannot
-support a four-arm CPython memory figure. The [CheriBSD port](../../ports/cpython/interpreter/cheribsd/README.md)
+support a four-arm CPython memory figure. The [CheriBSD port](../../ports/cpython/app/cheribsd/README.md)
 records the build and runtime selection.
 
 Nested application memory study (2026-09-27): the [normalized SQLite campaign](../../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
@@ -200,7 +201,7 @@ inside one process. Apply the same unit/oracle/ledger contract to other ports;
 no cross-application generalization is established by SQLite alone. Use the
 [metric specification](../../experiments/study/memory-metrics.md) and preserve
 all burst failures and the metadata counterexample. Keep this study off a PR
-until the broader experiment set is ready.
+until the broader experiment set is ready (superseded 2026-09-28: the review stack is merged into dev).
 
 The [measured four-arm SQLite reuse CDF](../../experiments/study/results/sqlite-reuse-gaps-20260927/README.md)
 fills the release-gap slot for memsys5, and the [FFmpeg whole-decoder
@@ -381,7 +382,9 @@ for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
 and state-file merge conflicts remain integration work; the board milestones
 below are a separate track. Build entry points are in the [port catalog](../../ports/README.md).
 
-## 0. CURRENT — 2026-09-29. **Next: synthesize capstone-ariane `0f5185a6d` (R-43 + R-45), then reflash and run the board lane's staged R-43 set.** The staged set, each boot opening with `k800`:
+## 0. CURRENT — 2026-09-29 (evening). **Resident bitstream: `caplifive_r43_8f6a0af98.bit`** (RTL `8f6a0af98`: R-42 + R-43 second fix + R-45), acceptance a1..a10 PASS, board released. **Next, in order:** (1) the revocation-heavy measurements R-43 blocked — R1 (B3/B4) and P1 cell 6 — are unblocked on this bitstream and can be measured for the paper; (2) R-44 (the CPMP's adopt-on-sight, S/U mode) is the remaining authority escape of R-35's class — its fix needs positive evidence for the CPMP entries plus a seed for the hardcoded `cpmp(0..2)` ids, synthesis before any board time, and a first S-mode boot as acceptance; (3) if a tracer capture is taken for any reason, count the cause-`0x4000000000000019` entries (replays) per point to test the a3 cold-ramp mechanism — no cold boot for it alone; (4) R-46 (refetch metadata) stays accepted until a workload carries more than one code capability. Records: `tests/fpga-repros/R43-revocation-cache-false-deny/`, `docs/ref/ISSUES.md` R-43/R-44/R-45/R-46.
+
+## 0. CURRENT — 2026-09-29 (superseded by the entry above). **Next: synthesize capstone-ariane `0f5185a6d` (R-43 + R-45), then reflash and run the board lane's staged R-43 set.** The staged set, each boot opening with `k800`:
 - R1 harnesses B3/B4, which must complete;
 - live16/128/512, which must return 544/4352/17408;
 - the R-35 stale probe, which must still trap 25;

@@ -12,7 +12,7 @@ set -uo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
-REPROS="$REPO_ROOT/capstone/bug-corpora/sqlite/cve-repros"
+REPROS="$REPO_ROOT/capstone/bug-corpora/sqlite/capi-repros"
 source "$REPO_ROOT/capstone/tests/capstone-test-env.sh" 2>/dev/null || true
 
 CHERI_SDK=${CHERI_SDK:-$HOME/cheri/output/sdk}
