@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
+import time
 
 # mode -> (expected kind, expected value, stdout must contain, stdout must not
 # contain, expected fault: (cause, symbol the faulting pc must equal) or None)
@@ -133,6 +135,65 @@ def run_holders(cli, env, args):
     return not problems, "; ".join(problems), "\n".join(outs)
 
 
+def run_foreign(cli, env, args):
+    """A13's foreign-owner request: a victim application publishes its context
+    id (stdout) and its own id (the launcher's stats line); a foreign
+    application names both in STEP and FORGET and must be refused; the victim
+    then still steps and forgets its context."""
+    status = args.state / "context-victim.json"
+    status.unlink(missing_ok=True)
+    victim = subprocess.Popen([*cli, "run", "-e", "CAPSTONE_DELEGATE_STATS=1", "--result",
+                               str(status), args.image, "victim"],
+                              env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    lines = {"out": [], "err": []}
+
+    def pump(stream, into):
+        for line in stream:
+            into.append(line)
+
+    pumps = [threading.Thread(target=pump, args=(victim.stdout, lines["out"]), daemon=True),
+             threading.Thread(target=pump, args=(victim.stderr, lines["err"]), daemon=True)]
+    for thread in pumps:
+        thread.start()
+    context = app = None
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and (context is None or app is None):
+        for line in list(lines["out"]):
+            if "victim: context " in line:
+                context = line.rsplit(" ", 1)[1].strip()
+        for line in list(lines["err"]):
+            if "capstone-exec: domain id=" in line:
+                app = line.rsplit("=", 1)[1].strip()
+        time.sleep(0.1)
+    problems, out = [], ""
+    if context is None or app is None:
+        problems.append(f"victim published no ids: out={lines['out']!r} err={lines['err']!r}")
+    else:
+        fstatus = args.state / "context-foreign.json"
+        fstatus.unlink(missing_ok=True)
+        result = subprocess.run([*cli, "run", "--result", str(fstatus), args.image, "foreign",
+                                 context, app], env=env, capture_output=True, text=True,
+                                timeout=args.timeout)
+        record = json.loads(fstatus.read_text()) if fstatus.exists() else {}
+        out = result.stdout
+        if (record.get("kind"), record.get("value")) != ("exit", 0) or "PASS" not in result.stdout:
+            problems.append(f"foreign: {record}, stdout={result.stdout!r}, "
+                            f"stderr={result.stderr.strip()[-300:]!r}")
+    try:
+        victim.wait(timeout=args.timeout + 30)
+    except subprocess.TimeoutExpired:
+        victim.kill()
+        victim.wait()
+        problems.append("victim: timeout")
+    for thread in pumps:
+        thread.join(5)
+    record = json.loads(status.read_text()) if status.exists() else {}
+    victim_out = "".join(lines["out"])
+    if (record.get("kind"), record.get("value")) != ("exit", 0) or "PASS" not in victim_out:
+        problems.append(f"victim: {record}, stdout={victim_out!r}")
+    return not problems, "; ".join(problems), victim_out + out
+
+
 def run_gen_launches(cli, env, args):
     """GEN_LAUNCHES launches of one image in a row. Each passes; the launcher's
     application ids are new and positive, a slot's generations rise, a slot
@@ -223,6 +284,11 @@ def main():
         results["gen-launch"] = {"pass": ok, "reason": reason, "stdout": out[-800:]}
         failed += not ok
         print(f"gen-launch: {'PASS' if ok else 'FAIL ' + reason}", flush=True)
+    if not args.only or "foreign" in args.only:
+        ok, reason, out = run_foreign(cli, env, args)
+        results["foreign"] = {"pass": ok, "reason": reason, "stdout": out[-800:]}
+        failed += not ok
+        print(f"foreign: {'PASS' if ok else 'FAIL ' + reason}", flush=True)
     if not args.only or "hold" in args.only:
         ok, reason, out = run_holders(cli, env, args)
         results["hold"] = {"pass": ok, "reason": reason, "stdout": out[-800:]}

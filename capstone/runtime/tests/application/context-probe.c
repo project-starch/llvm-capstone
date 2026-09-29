@@ -871,6 +871,48 @@ static int gen_exhaust(void)
   return 0;
 }
 
+/* ---- A13, foreign owner: two applications (run-context.py run_foreign).
+ * The victim registers a context, publishes its id and waits; the foreign
+ * application names that id and the victim's own first context in STEP and
+ * FORGET. Every request is refused, and afterwards the victim still steps and
+ * forgets its context: a FORGET that had acted would make the victim's fail. */
+#define VICTIM_MS 15000
+static int victim(void)
+{
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  printf("context-probe victim: context %#lx\n", (unsigned long)id);
+  fflush(stdout);
+  struct timespec pause = {VICTIM_MS / 1000, 0};
+  while (nanosleep(&pause, &pause) && errno == EINTR)
+    ;
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(counter == 1 && *ctx.value == 42);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+static int foreign(int argc, char **argv)
+{
+  struct capstone_context_event ev;
+  CHECK(argc == 4);
+  unsigned long ids[2] = {strtoul(argv[2], 0, 0), strtoul(argv[3], 0, 0)};
+  for (int i = 0; i < 2; ++i) {
+    long step = capstone_context_step(ids[i], &ev);
+    long forget = capstone_context_forget(ids[i]);
+    printf("context-probe foreign: %#lx: STEP %ld FORGET %ld\n", ids[i], step, forget);
+    CHECK(ids[i] != 0);
+    CHECK(step == -EPERM);
+    CHECK(forget == -ESTALE);
+  }
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2) {
@@ -910,6 +952,8 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "hold")) rc = hold();
   else if (!strcmp(mode, "gen-exhaust")) rc = gen_exhaust();
   else if (!strcmp(mode, "gen-launch")) rc = 0;
+  else if (!strcmp(mode, "victim")) rc = victim();
+  else if (!strcmp(mode, "foreign")) rc = foreign(argc, argv);
   else {
     fprintf(stderr, "context-probe: unknown mode %s\n", mode);
     return 2;

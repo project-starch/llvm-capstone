@@ -34,8 +34,11 @@ Done so far:
   run through the last generations and on to other slots. On the previous monitor (limit
   0xffffffff, no move) the first adoption at generation 0x80000000 fails with EIO, and the cached
   block can no longer be launched at all (ENOSPC).
-- Open in Probe A: A7 (needs an instrument that shows the node was reissued), A13's
-  foreign-owner request, and the submodule pins.
+- A13's foreign-owner request: an application naming another application's context or first
+  context in STEP gets EPERM and in FORGET ESTALE (the driver's owner check), and the owner then
+  still steps and forgets that context.
+- Open in Probe A: A7 (needs an instrument that shows the node was reissued) and the submodule
+  pins.
 
 ## Scope
 
