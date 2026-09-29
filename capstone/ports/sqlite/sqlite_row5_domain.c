@@ -1,5 +1,5 @@
 /* row5 -- the LITERAL matched pair for
- * cve-repros/row5_php_destruction_order (HIERARCHICAL-REVOKE), PHP binding.
+ * capi-repros/row5_php_destruction_order (HIERARCHICAL-REVOKE), PHP binding.
  *
  * The SAME row5 program as before-faithful.c, real SQLite C API, one Capstone
  * domain. PHP bug #69971: at request shutdown the Zend GC frees the DB object

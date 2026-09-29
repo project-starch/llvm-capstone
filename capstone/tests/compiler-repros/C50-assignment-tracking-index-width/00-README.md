@@ -4,7 +4,7 @@
 
 **A COMPILER bug, in generic LLVM code, reachable on capstone64 because a pointer is 128 bits
 wide and its index is 64.** Found 2026-09-23 by the CPython compile survey
-(`capstone/ports/cpython/interpreter/`), where it alone failed 146 of 253 objects: CPython builds
+(`capstone/ports/cpython/app/`), where it alone failed 146 of 253 objects: CPython builds
 with `-g -O3`, and no port here had built with `-g` and optimisation before. Sibling issues found
 by the same survey: C-51 (`llvm.ptrmask` on a capability, reached by every 8- and 16-bit atomic,
 `../C51-ptrmask-on-capability/`)

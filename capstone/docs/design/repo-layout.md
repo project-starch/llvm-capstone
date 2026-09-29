@@ -41,7 +41,7 @@ one path in this repository that everything sources, and a tidy-up that relocate
 symmetry costs more than every other move here put together.
 
 **Case material never lives inside a port.** A port directory that grows a `cases/` or
-`cve-repros/` is the thing this layout exists to prevent: it makes "does it run" and "what
+`capi-repros/` is the thing this layout exists to prevent: it makes "does it run" and "what
 did we measure" share a branch, a review and a diff. The same holds for an instrument or a
 probe: the port offers the seam (`SPEEDTEST1_HOOK_SRC`, `SPEEDTEST1_PROBE_SRC` in the SQLite
 runner), the experiment supplies what goes in it.

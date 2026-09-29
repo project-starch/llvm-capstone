@@ -1,0 +1,75 @@
+# The FFmpeg pool corpus on the Sublet port of FFmpeg's own pools, capstone-qemu, 2026-09-29. Verdict lines only, in the order run.
+# Predictions: ../../runners/sublet-port-expect.txt and PREDICTIONS.md (60491a5b4ad8). Fixture 40 + 2 * case + fixed.
+# Compiler 3979abd8 (clang sha256 1c1436586f99c53c...), emulator sha256 6e5e136a070b0ee9...; private repaired rootfs.
+
+## 1. Three rounds per arm
+=== poolsublet round 1 case 0
+fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued
+fx40: AS PREDICTED  predicted: FAULT 85,86,89  got: cause 24 at image 0x19630, case.c:85, value_hi 12988e00340
+=== poolsublet round 1 case 1
+fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list
+fx42: AS PREDICTED  predicted: FAULT 48,49,52  got: cause 24 at image 0x19320, case.c:48, value_hi 227888011c0
+=== poolsublet round 1 case 2
+fx45: ERROR no section in the log -- the image never started
+fx44: ERROR no section in the log -- the image never started
+=== poolsublet round 2 case 0
+fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued
+fx40: AS PREDICTED  predicted: FAULT 85,86,89  got: cause 24 at image 0x19630, case.c:85, value_hi 12b88e00340
+=== poolsublet round 2 case 1
+fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list
+fx42: AS PREDICTED  predicted: FAULT 48,49,52  got: cause 24 at image 0x19320, case.c:48, value_hi 227888011c0
+=== poolsublet round 2 case 2
+fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames
+fx44: AS PREDICTED  predicted: FAULT 33  got: cause 24 at image 0x19218, case.c:33, value_hi 10388d00300
+=== poolsublet round 3 case 0
+fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued
+fx40: AS PREDICTED  predicted: FAULT 85,86,89  got: cause 24 at image 0x19630, case.c:85, value_hi 12b88e00340
+=== poolsublet round 3 case 1
+fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list
+fx42: AS PREDICTED  predicted: FAULT 48,49,52  got: cause 24 at image 0x19320, case.c:48, value_hi 227888011c0
+=== poolsublet round 3 case 2
+fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames
+fx44: AS PREDICTED  predicted: FAULT 33  got: cause 24 at image 0x19218, case.c:33, value_hi 10388d00300
+=== poolstock round 1 case 0
+fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued
+fx40: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED stale pointer reads the new owner's payload
+=== poolstock round 1 case 1
+fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list
+fx42: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage
+=== poolstock round 1 case 2
+fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames
+fx44: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner
+=== poolstock round 2 case 0
+fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued
+fx40: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED stale pointer reads the new owner's payload
+=== poolstock round 2 case 1
+fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list
+fx42: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage
+=== poolstock round 2 case 2
+fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames
+fx44: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner
+=== poolstock round 3 case 0
+fx41: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED output holds a reference, storage not reissued
+fx40: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED stale pointer reads the new owner's payload
+=== poolstock round 3 case 1
+fx43: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED the reset covers the whole list
+fx42: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage
+=== poolstock round 3 case 2
+fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames
+fx44: AS PREDICTED  predicted: COMPLETE DEFECT-REPRODUCED  got: VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner
+
+## 2. Retry of the one stalled boot (poolsublet round 1, case 2)
+=== poolsublet case 2, retry
+fx45: AS PREDICTED  predicted: COMPLETE FIXED  got: VERDICT FIXED nothing is carried across frames
+fx44: AS PREDICTED  predicted: FAULT 33  got: cause 24 at image 0x19218, case.c:33, value_hi 10588d00300
+
+## 3. Totals
+poolsublet: defect 9 / 9 FAULT cause 24 at a dereference of the stale pointer (case.c:85, :48, :33), value_hi non-zero; fix 9 / 9 VERDICT FIXED
+poolstock:  defect 9 / 9 VERDICT DEFECT-REPRODUCED; fix 9 / 9 VERDICT FIXED
+poolsublet round 1 case 2: a guest stall before any section (serial log ends in the firmware banner); retried in section 2
+
+## 4. The verdict's own controls (sublet-port-verdict.py against the real logs)
+wrong predictions all DIFFER: fx40 FAULT 33 -> 'case.c line 85, not one of [33]'; fx41 COMPLETE DEFECT-REPRODUCED -> 'VERDICT FIXED ...';
+  poolstock fx44 FAULT 33 -> 'the case printed its verdict, so nothing stopped it'; poolsublet fx44 COMPLETE -> 'faulted: cause 24'
+an image with its debug information stripped -> 'ERROR: ... no case.c line information; the fault cannot be attributed'
+before any boot: case.c's line table resolves on every built image (484 / 245 / 240 case.c addresses; the stale lines map to 8 / 8 / 4 of them)

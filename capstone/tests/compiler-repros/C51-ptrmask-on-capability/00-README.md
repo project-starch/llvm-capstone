@@ -3,7 +3,7 @@
 **Fixed** by `9335700f339d`, the commit before this folder on its branch. Measured 2026-09-23: `./run.sh` reports ABSENT with that compiler and PRESENT with `dev`'s (`1a08706b6344`, whose compiler sources are those of `d030df93d4a4`). Regression test: `llvm/test/CodeGen/Capstone/ptrmask-cap-subword-atomics.ll`. In QEMU: `capstone/tests/runtime-qemu/subword-atomics/run.sh`. Everything below is the investigation as it was recorded before the fix.
 
 **A COMPILER bug.** Found 2026-09-23 by the CPython compile survey
-(`capstone/ports/cpython/interpreter/`): CPython 3.13's `PyMutex` is one byte locked by
+(`capstone/ports/cpython/app/`): CPython 3.13's `PyMutex` is one byte locked by
 compare-exchange, and 26 of 253 objects stop on it. Sibling issues from the same survey: C-50
 (`../C50-assignment-tracking-index-width/`, a debug-info assert under `-g`) and C-52
 (`../C52-greedy-regalloc-segfault/`, a register allocator segfault).
