@@ -771,31 +771,51 @@ rather than something this run answers.
 That is the argument in one line: the level above the heap was worth protecting, because a
 defect lives there that the heap's own revocation cannot see.
 
-### Level 4, the shared string buffer: patch written, native gates green, domain arm queued
+### Level 4, the shared string buffer: not expressible with the current primitive
 
-`patches/4.0.0-rc2/0011` sub-lets the shared string buffer, and it is a different KIND of
-site rather than a fourth copy of the same one. The revocation point is
-`str_unshare_buffer()` -- an **ownership transfer** -- not a release, because `str_decref`
-frees the buffer only when the last reference goes and the parent still holds it. Three
-hooks: the buffer becomes a carved span out of region 3 when a string is first shared, each
-sharer gets an alias of its own, and the view's alias is revoked before
-`str_init_modifiable` installs its new buffer.
+Patch 0011 was written, passed every native gate, and is **withdrawn**: the mechanism
+cannot express what this level needs, and that is the result rather than a setback.
 
-That last point is the whole of row 1's mechanism: `str_lstrip_bang` cached `RSTR_PTR(s)`
-*before* `mrb_str_modify()`, so the write went through the stale pointer into the parent's
-buffer. Measured, that write is in bounds at every granularity, so nothing else can see it.
+The native gates were green -- both modes compiled, `mrbtest` was Total 1527, OK 1527,
+KO 0, Crash 0 with the defines off, the string case still reproduced natively, and the
+stack `0001..0011` applied to a fresh pin. The `sublet-str` domain arm built, and its
+control passed: `MRBD-RUN-END rc=0`, `LT-RESULT status=0 rounds=158 PASS`.
 
-Native gates, all green: both modes compile, `mrbtest` is Total 1527, OK 1527, KO 0,
-Crash 0 with the defines off, and the string case still reproduces natively with the parent
-corrupted -- so the arm measures the defect that is there, not one the patch introduced.
-The full stack `0001..0011` applies in order to a fresh pin. The runtime's fourth grant is
-on `runtime/program-regions-for-nested-sublet`, and its out-of-turn guard fired during this
-work when the hash arm was run with only its own grant, which would otherwise have handed
-that region index 1 and read as a capability bug in the patch.
+Then the case itself did not fault -- **QEMU asserted**:
 
-**The domain measurement is queued, not done.** `MRBD_HEAP=sublet-str` builds, but the run
-is waiting on `~/.capstone-locks/qemu.lock`, held since 09:48 by another lane's QEMU
-(`/tmp/capstone/delegation-abi/share`, a different rootfs). QEMU here is a shared
-serialized resource and `flock -w 3600` is the queue, so the run waits rather than taking
-it. No catch is claimed for level 4 until its control passes in that arm and `1c57532b2`
-faults there while `level0` completes -- the same rule the other two levels were held to.
+    qemu-system-riscv64: target/riscv/op_helper.c:1092:
+      helper_csmrev: Assertion `rs1_v->val.cap.type == CAP_TYPE_LIN' failed.
+
+`sublet_give` was handed an alias where it needs a handle, which is a symptom of the real
+problem. Reading the primitives settles it:
+
+* `sublet_take(slot)` leaves the **handle** in the slot and returns the **alias**.
+* `sublet_split(lo, mid, hi)` **partitions** a range -- two sharers of the same bytes are
+  not a partition.
+* `sublet_handle(slot, handle)` makes the new handle **senior** to what the slot holds,
+  and `sublet_give_to` revokes a handle so that *"every capability derived below it dies"*.
+
+So the primitive gives a **hierarchy**, and every use of it in this tree is a chain --
+`sublet_heap.c`, the PostgreSQL subpool, the FFmpeg payload capabilities, patch 0008.
+Level 4 needs **siblings**: two RStrings viewing the same bytes, each revocable without
+touching the other. Worse, the ordering runs the wrong way -- `sublet_handle` makes the
+newest sharer the most senior, so revoking the view that un-shares would kill the parent's
+access as well, which is the opposite of what the defect calls for.
+
+**This is a limit of the mechanism, not of the patch.** Level 4 needs one of:
+
+1. sibling handles on one range, which the instruction set does not offer today;
+2. copy-on-share -- give each view its own bytes when sharing starts, so there is nothing
+   to revoke. That is what upstream's own fix does at un-share time anyway, and it is a
+   cost decision (a copy per substring) rather than a capability one;
+3. accepting that the parent loses access too, which for `Hash#[]`-style read-only parents
+   may be tolerable and is worth measuring before being dismissed.
+
+Recorded with the patch withdrawn rather than committed, for the reason this file gives
+twice already: a sub-let that is wrong produces faults that look like catches. This one
+produced an emulator assertion instead, which is a kinder failure and only because the
+operand type is checked.
+
+The levels above it are unaffected by this: 5 and 6 reuse *disjoint* windows of one block,
+which is a partition and therefore is what `sublet_split` expresses.
+
