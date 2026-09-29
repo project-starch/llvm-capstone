@@ -1,8 +1,15 @@
 # Delegated sockets: rows like files, one length rule, one packed block
 
-Status: PLAN, 2026-09-30, on `delegation-sockets` (over `delegation-cheap-rows`).
-Nothing is implemented yet; the contract in the second-to-last section is the
-definition of done, and it runs natively on Linux before it runs in the guest.
+Status: IMPLEMENTED, 2026-09-30, on `delegation-sockets` (over
+`delegation-cheap-rows`). The contract below passes 11 of 11 in the guest and
+natively; the application gate, the binfmt contract, the signal contract (30
+modes, three of them new) and the Perl and mruby round counts are unchanged on
+the same images; CPython's `test_epoll` is 10 of 10, `test_selectors` 77 of
+121, `test_socket` 96 of 740 with 350 of the errors threads. The record is
+`runtime/tests/application/results/20260930-sockets.json`. Three commits
+rather than the five planned: the word rule, the block and the rows share
+files with the launcher's and the libc's call sites, and a commit that builds
+is worth more than one that splits them.
 
 ## Responsibility
 
@@ -189,7 +196,10 @@ wait for a profile goes.
 ## Deviations, named
 
 1. `epoll_event.data` carries 64 bits; a program that stores pointers there
-   indexes through a table instead.
+   indexes through a table instead. musl's `struct epoll_event` on capstone64
+   is 32 bytes, because the data union holds a pointer; the libc converts to
+   and from the kernel's 16 (found in the guest: the first run returned the
+   wrong data word).
 2. `sendmmsg` and `recvmmsg` are unknown.
 3. A datagram longer than the exchange region's room: EMSGSIZE on send,
    `MSG_TRUNC` on receive, Linux's own signals at a size Linux would not
@@ -204,6 +214,20 @@ wait for a profile goes.
 6. Threads are not this branch: CPython's `socketserver` mixins and
    `asyncio`'s executor-backed `getaddrinfo` keep failing on `clone`, and the
    qualification names those errors as that class.
+
+Two findings on the way that are not socket-specific. A file action names a
+descriptor in the child's table, where the launcher's own never arrive, so
+the spawn block's check of a `DUP2` target or a `CLOSE` against the
+launcher's private descriptors was wrong; only a `DUP2` source and an
+`FCHDIR` directory are checked now (found by the `inherit` mode, whose
+listener landed on descriptor 3). And every copy between the caller's memory
+and the exchange region is a data copy, `dl_bytes`, never the libc's
+tag-preserving `memcpy`: a buffer that held a pointer before the call
+carried its tag into the region, the launcher's stores changed the bytes,
+capstone-qemu kept the granule's tag, and the copy back loaded the old
+pointer instead of the kernel's bytes (found through CPython's `recv_fds`,
+whose control buffer is pymalloc's, and through `inet-dgram`'s address on an
+uninitialized stack slot). The contract's `tagged-buffer` mode guards it.
 
 ## Contract tests: the definition of done
 

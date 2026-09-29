@@ -306,6 +306,24 @@ stops there in both runs: the domain faults before any fcntl round, musl's
 `fcntl()` narrowing the `struct flock` pointer through `unsigned long`, the
 class of musl patch 0004; a fifth patch, not a row. Record:
 `runtime/tests/application/results/20260930-cheap-rows.json`.
+
+With `delegation-sockets` (nineteen socket and epoll rows, the word length
+rule, the msghdr block, the datagram rule, and the data-copy rule for every
+buffer crossing the exchange region): [host/socket-smoke.py](host/socket-smoke.py),
+16 CPython checks over the rows, 16 pass; `test_epoll` 10 of 10, from a
+suite that did not import; `test_selectors` 121 tests, 77 ok, 1 fail, 43
+skipped, from 6 ok; `test_socket` 740 tests, 96 ok, 2 fail, 356 errors, 286
+skipped, from 22 ok, and 350 of the errors are threads, the rest the Linux
+abstract namespace (4: the build targets `capstone64-unknown-elf`, which
+defines no `__linux__`, so CPython's abstract-namespace code is compiled
+out while the kernel binds and connects the names; a configuration item for
+the port), `getservbyname` without `/etc/services` in the image,
+`if_nametoindex` (`SIOCGIFINDEX` is not an admitted ioctl), `sethostname`
+and `testMaxName`; `test_asyncio.test_sock_lowlevel` 12 of
+39 with every error a thread, `test_asyncio.test_streams` 53 of 74,
+`test_socketserver` 8 of 27, all three from an ENOSYS at import. The
+socket contract passes 11 of 11 in the guest. Record:
+`runtime/tests/application/results/20260930-sockets.json`.
 [host/run-filtered.py](host/run-filtered.py) runs a module without named tests.
 Record: [results/subprocess-2026-09-29.json](results/subprocess-2026-09-29.json).
 
