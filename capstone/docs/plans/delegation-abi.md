@@ -34,7 +34,7 @@ nothing above it:
 
 | Field | Meaning |
 |---|---|
-| `version` | 2 |
+| `version` | 2; the entry is 88 bytes, little-endian |
 | `count` | entries in this batch, 1 for now |
 | `nr` | Linux syscall number, RV64 table |
 | `args[6]` | integers, or offsets into the exchange region for pointer arguments |
