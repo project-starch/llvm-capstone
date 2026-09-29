@@ -189,12 +189,15 @@ static int writes(unsigned kind) {
 /* Only integer commands may use the integer entry. A buffer entry is not
  * permission for an arbitrary ioctl: many commands embed more pointers. */
 static int command_ok(uint64_t nr, uint64_t cmd) {
+  if (nr == CAPSTONE_NR_IOCTL_BUF || nr == CAPSTONE_SYS_ioctl)
+    cmd &= 0xffffffffu;   /* an ioctl request is an unsigned int to the kernel */
   if (nr == CAPSTONE_NR_FCNTL_LOCK)
     return cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW;
   if (nr == CAPSTONE_NR_IOCTL_BUF)
     return cmd == TIOCGWINSZ || cmd == TIOCSWINSZ || cmd == TCGETS ||
            cmd == TCSETS || cmd == TCSETSW || cmd == TCSETSF ||
-           cmd == FIONREAD || cmd == FIONBIO;
+           cmd == FIONREAD || cmd == FIONBIO ||
+           cmd == TIOCSPTLCK || cmd == TIOCGPTN || cmd == TIOCGPGRP || cmd == TIOCSPGRP;
   if (nr == CAPSTONE_SYS_ioctl)
     return cmd == FIOCLEX || cmd == FIONCLEX;
   if (nr == CAPSTONE_SYS_fcntl)

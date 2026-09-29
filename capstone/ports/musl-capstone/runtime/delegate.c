@@ -359,12 +359,19 @@ static long dl_vector(long fd, const struct iovec *iov, long count, int writing,
  * uses are listed; anything else passes 0 and the kernel says EFAULT or
  * EINVAL, which is visible rather than a silent domain address. */
 static long dl_ioctl(long fd, unsigned long request, void *argp) {
+  /* musl passes the request as an int, so a request with bit 31 set (every
+     _IOR one, TIOCGPTN among them) arrives sign-extended; the kernel reads
+     an unsigned int, and so do the tables here and in the launcher */
+  request &= 0xffffffffu;
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {(syscall_arg_t)fd, (syscall_arg_t)request, 0, 0, 0, 0};
   size_t bytes = 0;
   switch (request) {
   case TIOCGWINSZ: case TIOCSWINSZ: bytes = 8; break;
   case TCGETS: case TCSETS: case TCSETSW: case TCSETSF: bytes = 60; break;
   case FIONREAD: case FIONBIO: case FIOCLEX: case FIONCLEX: bytes = request == FIOCLEX || request == FIONCLEX ? 0 : 4; break;
+  /* the pseudo-terminal pair (unlockpt, ptsname) and the foreground process
+     group (tcgetpgrp, tcsetpgrp): one int each, no pointer inside */
+  case TIOCSPTLCK: case TIOCGPTN: case TIOCGPGRP: case TIOCSPGRP: bytes = 4; break;
   default: bytes = 0;
   }
   if (bytes && argp) {

@@ -98,6 +98,30 @@ int main(int argc, char **argv) {
     assert(remaining == 1);
   } else if (!strcmp(argv[1], "kill-group")) {
     assert(call(CAPSTONE_SYS_kill, 0, 0, 0, 0) == -EPERM);
+  } else if (!strcmp(argv[1], "pty")) {
+    /* the pseudo-terminal requests cross through the buffer entry: unlock
+       the pair, read its number back, and the kernel's own answer for the
+       foreground group; a request outside the list and the integer entry
+       for a pointer request stay refused */
+    int master = open("/dev/ptmx", O_RDWR | O_NOCTTY | O_CLOEXEC), number = -1, unlock = 0;
+    assert(master >= 0);
+    assert(!ioctl(master, TIOCGPTN, &number) && number >= 0);
+    memcpy(exchange + 64, &unlock, sizeof unlock);
+    assert(call(CAPSTONE_NR_IOCTL_BUF, master, TIOCSPTLCK, 64, 0) == 0);
+    memset(exchange + 64, 0xff, 4);
+    assert(call(CAPSTONE_NR_IOCTL_BUF, master, TIOCGPTN, 64, 0) == 0);
+    assert(!memcmp(exchange + 64, &number, sizeof number));
+    /* the master's TIOCGPGRP is answered for its slave: no foreground group yet */
+    memset(exchange + 64, 0xff, 4);
+    assert(call(CAPSTONE_NR_IOCTL_BUF, master, TIOCGPGRP, 64, 0) == 0);
+    assert(!memcmp(exchange + 64, &(int){0}, sizeof(int)));
+    /* the request as musl's int-taking ioctl would send it: sign-extended */
+    memset(exchange + 64, 0xff, 4);
+    assert(call(CAPSTONE_NR_IOCTL_BUF, master, (uint64_t)(long)(int)TIOCGPTN, 64, 0) == 0);
+    assert(!memcmp(exchange + 64, &number, sizeof number));
+    assert(call(CAPSTONE_NR_IOCTL_BUF, master, TIOCSTI, 64, 0) == -ENOSYS);
+    assert(call(CAPSTONE_SYS_ioctl, master, TIOCGPTN, 64, 0) == -ENOSYS);
+    close(master);
   } else {
     abort();
   }

@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <pty.h>
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -157,6 +158,21 @@ int main(int argc, char **argv) {
     char *next[] = {argv[0], "healthy", "", "argument with spaces\nand newline", NULL};
     execv(argv[0], next);
     return 59;
+  }
+  if (!strcmp(argv[1], "pty")) {
+    /* a pseudo-terminal pair through musl's openpty: /dev/ptmx, unlockpt and
+       ptsname over the terminal ioctls, then the slave; bytes cross it, the
+       slave is a terminal, and the healthy checks follow */
+    int master, slave;
+    char name[64], line[16];
+    if (openpty(&master, &slave, name, NULL, NULL)) { perror("openpty"); return 60; }
+    if (strncmp(name, "/dev/pts/", 9) || !isatty(slave)) return 61;
+    if (write(master, "ping\n", 5) != 5) return 62;
+    ssize_t got = read(slave, line, sizeof line);
+    if (got != 5 || memcmp(line, "ping\n", 5)) return 63;
+    if (tcgetpgrp(master) != 0) return 64;   /* answered for the slave: no foreground group */
+    close(slave);
+    close(master);
   }
   char input[16];
   ssize_t n = read(0, input, sizeof input);
