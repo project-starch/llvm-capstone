@@ -337,6 +337,14 @@ elif [ ! -c /dev/capstone ]; then
     insmod /capstone.ko
 fi
 capstone-exec --stats >/dev/null
+# A Capstone image runs from any exec, including a shell's, when the kernel
+# has binfmt_misc: ELF machine 259 goes to the launcher. Without it, only
+# the launcher and the spawn service start images.
+if [ -d /proc/sys/fs/binfmt_misc ] || mount -t binfmt_misc none /proc/sys/fs/binfmt_misc 2>/dev/null; then
+    if [ -f /proc/sys/fs/binfmt_misc/register ] && [ ! -f /proc/sys/fs/binfmt_misc/capstone ]; then
+        printf ':capstone:M:0:\\x7fELF\\x02\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x02\\x00\\x03\\x01:\\xff\\xff\\xff\\xff\\xff\\xff\\xff\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\xff\\xff\\xff\\xff:/usr/bin/capstone-exec:\n' > /proc/sys/fs/binfmt_misc/register || true
+    fi
+fi
 ifconfig eth0 10.0.2.15 netmask 255.255.255.0 up
 killall dropbear 2>/dev/null || true
 if [ ! -f /etc/dropbear/dropbear_ed25519_host_key ]; then

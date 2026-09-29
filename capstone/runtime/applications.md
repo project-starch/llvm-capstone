@@ -268,16 +268,46 @@ That ratio is the emulator's: each round crosses U, S and M mode twice and
 QEMU flushes its TLB on every supervised switch. It is the number the plan
 requires before any transport optimization, not a hardware cost.
 
+### Processes
+
+`posix_spawn`, and with it `posix_spawnp`, `popen` and `system`, cross as one
+request: the path, argv, environment, working directory and file actions in a
+block in the exchange region. The launcher hands it to its **spawner**, a child
+it forked before installing the seccomp filter, so the programs it starts are
+not filtered. The spawner forks each child as the launcher's own child, puts
+the launcher's descriptors at their numbers with their close-on-exec flags,
+applies the actions, and execs: a native program directly, a Capstone image
+through the launcher. `wait4` and `kill` are delegated and confined to the
+task and its recorded children. `execve` of a Capstone image replaces the task
+through the launcher's own binary, keeping pid and descriptors; `execve` of a
+native program answers ENOSYS, because the filtered task cannot become one.
+`fork` without `exec` stays ENOSYS by design.
+
+A shell in the guest starts a Capstone image only with `binfmt_misc`, which
+the pinned guest kernel does not build (`CONFIG_BINFMT_MISC` is unset); the
+VM setup script registers the format when the kernel offers it. Until the
+Buildroot kernel configuration changes, a shell command line naming an image
+fails with ENOEXEC, while `posix_spawn` of the image and the launcher's own
+exec work.
+
+Perl built on this runtime with patch 0008 passes eight of nine `t/base`
+files, 493 assertions, as before; the ninth needs the shell to exec an image,
+see [the result](../ports/perl/musl/results/2026-09-29/base-tests-delegated.txt).
+
 musl's libc-test runs against this runtime with
 `ports/musl-capstone/libc-test/run-libc-test-delegated.py`, every functional
 test built by the SDK driver and run through `capstone-vm run` in one boot.
-On 2026-09-29: 43 PASS, 6 FAIL, 1 FAULT, 5 NOBUILD, 22 EXCLUDED of 77, the
-same pass count as the HostCall v0 runtime's last run. `fscanf` passes now
-that `pipe2` is a Linux pipe; `clocale_mbfuncs` faults with cause 5 on a
-locale-table walk, the class the quarantine list records for `mbc`. The five
-NOBUILD are the thread-local tests the compiler cannot lower. The exclusions
-are the old runner's: processes, threads, sockets, SysV IPC and dynamic
-loading, of which processes are the next branch.
+On 2026-09-29, before the spawn branch: 43 PASS, 6 FAIL, 1 FAULT, 5 NOBUILD,
+22 EXCLUDED of 77, the pass count of the HostCall v0 runtime's last run.
+`fscanf` passes now that `pipe2` is a Linux pipe; `clocale_mbfuncs` faults
+with cause 5 on a locale-table walk, the class the quarantine list records for
+`mbc`. The five NOBUILD are the thread-local tests the compiler cannot lower.
+With the spawn branch, `popen` and `spawn` leave the excluded set: 44 PASS,
+6 FAIL, 2 FAULT, 5 NOBUILD, 20 EXCLUDED. `spawn` passes; `popen`'s child
+sends SIGUSR1 to the task, which has no handler installed for the domain yet,
+so the task dies of it: that is the signals branch. The remaining exclusions
+are threads, sockets, SysV IPC, dynamic loading, `vfork` itself, `wordexp`
+and the `fcntl` test's forked child.
 
 ## Verification
 

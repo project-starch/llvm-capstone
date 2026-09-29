@@ -5,6 +5,15 @@ with this repo's port runtime, and the same release built natively as the
 reference its output is compared with. Why perl, which release, and what its four
 nested allocators look like: `docs/design/perl-sublet-port-evaluation.md`.
 
+## Result (2026-09-29, delegated runtime)
+
+Built with patches 0001-0008 on the delegated runtime (application ABI v2,
+`docs/plans/delegation-abi.md`), backticks and piped opens go through the C
+library's `popen`, which the task spawns. [`t/base`](results/2026-09-29/base-tests-delegated.txt):
+eight of nine files pass, 493 assertions; `term.t` test 2 still fails, now because
+`/bin/sh` cannot exec a Capstone image on the pinned guest kernel, which has no
+`binfmt_misc`. A backtick of a native command passes.
+
 ## Result (2026-09-26)
 
 **`scripts/smoke.pl` runs in a domain and its output is byte-identical to the

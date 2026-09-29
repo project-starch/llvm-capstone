@@ -1,6 +1,8 @@
 /* Native test of the launcher's dispatcher: entries in, real syscalls out,
  * through an exchange buffer, with the failures the wire ABI promises. */
 #include "../../linux/delegate-service.h"
+#include "capstone/spawn.h"
+#include <sys/wait.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -59,6 +61,15 @@ int main(void) {
     memcpy(&st, exchange + 512, sizeof st < 128 ? sizeof st : 128);
     (void)st;
   }
+  /* the pointer form of fcntl runs as fcntl with the buffer's address */
+  {
+    struct flock lock = {.l_type = F_WRLCK, .l_whence = SEEK_SET};
+    memcpy(exchange + 768, &lock, sizeof lock);
+    x = entry(CAPSTONE_NR_FCNTL_LOCK, (uint64_t)fd, F_GETLK, 768, 0, 0, 0);
+    assert(serve(&x) == 0);
+    memcpy(&lock, exchange + 768, sizeof lock);
+    assert(lock.l_type == F_UNLCK);
+  }
   x = entry(CAPSTONE_SYS_close, (uint64_t)fd, 0, 0, 0, 0, 0);
   assert(serve(&x) == 0);
   /* an unterminated string is EFAULT before any syscall runs */
@@ -90,7 +101,7 @@ int main(void) {
   x = entry(CAPSTONE_SYS_exit_group, 42, 0, 0, 0, 0, 0);
   assert(serve(&x) == 0 && host.exiting && host.exit_status == 42);
   /* five refused by the validator; the string and kill refusals are the runnerâs */
-  assert(host.refused == 5 && host.rounds == 16 && host.syscalls == 9);
+  assert(host.refused == 5 && host.rounds == 17 && host.syscalls == 10);
   close(tmp);
   unlink(path);
   /* the fault record writes without blocking, even to a full pipe */
@@ -115,8 +126,44 @@ int main(void) {
     assert(n > 0);
     line[n] = 0;
     assert(strstr(line, "cause=24 pc=0x80001300 address=0x1234 entry=0x80001234"));
-    assert(strstr(line, "code=0x80000000-0x80010000 image=image.dom"));
+    assert(strstr(line, "code=0x80000000-0x80010000 last=0x"));
+    assert(strstr(line, " image=image.dom"));
   }
+  /* spawn through the service, then wait4 through the service: the status
+     must land in the exchange region where the entry pointed */
+  {
+    struct capstone_spawner spawner;
+    struct capstone_delegate_host h2 = {.exchange = exchange, .exchange_bytes = EXCHANGE};
+    char *argv[] = {"sh", "-c", "exit 3", NULL};
+    char *envp[] = {"PATH=/usr/bin:/bin", NULL};
+    size_t bytes;
+    long pid;
+    assert(!capstone_spawner_start(&spawner));
+    h2.spawner = &spawner;
+    assert(!capstone_spawn_pack(exchange + 1024, EXCHANGE - 1024, CAPSTONE_SPAWN_SEARCH_PATH, 0,
+                                "sh", argv, envp, NULL, 0, NULL, &bytes));
+    x = entry(CAPSTONE_NR_SPAWN, 1024, bytes, 0, 0, 0, 0);
+    capstone_delegate_serve(&h2, &x);
+    pid = (long)x.result;
+    assert(pid > 0 && h2.child_count == 1);
+    memset(exchange + 16, 0x66, 4);
+    x = entry(CAPSTONE_SYS_wait4, (uint64_t)pid, 16, 0, 0, 0, 0);
+    capstone_delegate_serve(&h2, &x);
+    assert((long)x.result == pid);
+    {
+      int status;
+      memcpy(&status, exchange + 16, sizeof status);
+      assert(WIFEXITED(status) && WEXITSTATUS(status) == 3);
+    }
+    assert(h2.child_count == 0);
+    /* a second wait for the same pid is refused: not a child any more */
+    x = entry(CAPSTONE_SYS_wait4, (uint64_t)pid, 16, 0, 0, 0, 0);
+    capstone_delegate_serve(&h2, &x);
+    assert((long)x.result == -ECHILD);
+    capstone_spawner_stop(&spawner);
+    capstone_delegate_host_free(&h2);
+  }
+  capstone_delegate_host_free(&host);
   puts("delegate-service-test: ok");
   return 0;
 }

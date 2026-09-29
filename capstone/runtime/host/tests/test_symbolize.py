@@ -4,7 +4,7 @@ import unittest
 from capstone_vm import symbolize
 
 LINE = ("capstone-exec: domain fault cause=24 pc=0xe0204764 address=0x0 entry=0xe02006c8 "
-        "code=0xe0200000-0xe0268000 image=/mnt/host/contract-v2.dom")
+        "code=0xe0200000-0xe0268000 last=0x40 preparing=0x19 image=/mnt/host/contract-v2.dom")
 
 
 def fake_run(args, **_):

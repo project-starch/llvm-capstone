@@ -3,6 +3,7 @@
 #include "capstone/application-service.h"
 #include "capstone/delegate.h"
 #include "capstone/linux-domain-fault.h"
+#include "capstone/spawn.h"
 #include "delegate-service.h"
 #include "host-service.h"
 #include "libcapstone.h"
@@ -21,6 +22,7 @@ enum { REGION_META, REGION_DATA, REGION_STARTUP, REGIONS };
 struct execution {
   struct hc_host host;
   struct capstone_delegate_host delegate;
+  struct capstone_spawner spawner;
   void *maps[REGIONS];
   size_t sizes[REGIONS];
   int image, device_open, delegated;
@@ -49,6 +51,10 @@ static void cleanup(void *context) {
     capstone_cleanup();
   if (e->image >= 0)
     close(e->image);
+  if (e->delegated) {
+    capstone_spawner_stop(&e->spawner);
+    capstone_delegate_host_free(&e->delegate);
+  }
 }
 
 /* Counters on request, to stderr, so a run can be costed without a tool. */
@@ -107,6 +113,8 @@ static int print_stats(void) {
 /* A fault ends the process with SIGSEGV after cleanup; the record goes out
  * first, without blocking, so a full pipe cannot swallow the diagnosis. */
 static void fault(struct execution *e, const struct ioctl_dom_step_args *step) {
+  if (e->delegated && e->maps[REGION_META])
+    e->delegate.preparing_nr = ((struct capstone_delegate_entry *)e->maps[REGION_META])->nr;
   /* Application streams carry application bytes only. The record goes to the
      file CAPSTONE_FAULT_RECORD names, which the host CLI reads back, and to
      stderr only when that is a terminal or diagnostics were asked for. */
@@ -126,6 +134,27 @@ static void fault(struct execution *e, const struct ioctl_dom_step_args *step) {
                                    step ? step->address : 0);
   report_stats(e);
   capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, cleanup, e);
+}
+
+/* execve of a Capstone image: this task replaces itself through its own
+ * binary, keeping pid and descriptors. The device closes on exec, which
+ * destroys the domain. Only reached when the request named an image. */
+static void exec_in_place(struct execution *e) {
+  static char *argv[CAPSTONE_SPAWN_STRINGS + 3], *envp[CAPSTONE_SPAWN_STRINGS + 1];
+  static const char *paths[CAPSTONE_SPAWN_ACTIONS];
+  struct capstone_spawn_view view;
+  if (capstone_spawn_unpack(e->delegate.exec_block, e->delegate.exec_bytes, argv + 2,
+                            CAPSTONE_SPAWN_STRINGS + 1, envp, CAPSTONE_SPAWN_STRINGS + 1, paths,
+                            CAPSTONE_SPAWN_ACTIONS, &view))
+    return;
+  argv[0] = e->spawner.self;
+  argv[1] = "--";
+  argv[2] = (char *)view.path;
+  report_stats(e);
+  capstone_spawner_stop(&e->spawner);
+  execve(e->spawner.self, argv, envp);
+  /* still here: the exec failed; the domain sees the error next round */
+  e->delegate.exec_requested = 0;
 }
 
 static int fail(struct execution *e, const char *what, int use_errno) {
@@ -219,6 +248,11 @@ int main(int argc, char **argv) {
   if (e.delegated) {
     e.delegate.exchange = e.maps[REGION_DATA];
     e.delegate.exchange_bytes = e.sizes[REGION_DATA];
+    /* The spawner forks now, before the filter, so its children are not filtered. */
+    if (capstone_spawner_start(&e.spawner) == 0)
+      e.delegate.spawner = &e.spawner;
+    else
+      fprintf(stderr, "capstone-exec: no spawner: %s (spawn answers ENOSYS)\n", strerror(errno));
     if (!getenv("CAPSTONE_EXEC_NO_SECCOMP")) {
       int rc = capstone_delegate_seccomp();
       if (rc)
@@ -248,6 +282,8 @@ int main(int argc, char **argv) {
         return fail(&e, "capstone-exec: invalid runtime state", 0);
       }
       capstone_delegate_serve(&e.delegate, entry);
+      if (e.delegate.exec_requested)
+        exec_in_place(&e);
       if (e.delegate.exiting) {
         int status = e.delegate.exit_status;
         report_stats(&e);

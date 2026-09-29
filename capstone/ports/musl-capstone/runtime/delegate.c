@@ -8,6 +8,7 @@
  * are a table here and a mask there. See docs/plans/delegation-abi.md.
  */
 #include "capstone/delegate.h"
+#include "capstone/spawn.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -20,11 +21,13 @@ typedef void *syscall_arg_t;
    states; the casts are the port's convention, not an accident. */
 #pragma clang diagnostic ignored "-Wint-to-void-pointer-cast"
 #pragma clang diagnostic ignored "-Wvoid-pointer-to-int-cast"
+#pragma clang diagnostic ignored "-Wcapstone-pointer-roundtrip"
 extern void __capstone_yield(void);
 extern int __capstone_at_exit(int status);
 void __capstone_hc_note_unserved(long n);
 void __capstone_hc_note_noop(long n);
 void __capstone_hc_report_unserved(void);
+long __capstone_delegate_spawn(const void *block, unsigned long bytes);
 
 static volatile struct capstone_delegate_entry *dl_entry;
 static char *dl_exchange;
@@ -54,6 +57,11 @@ void __capstone_delegate_regions(void *entry, void *exchange) {
 int __capstone_delegate_ready(void) {
   return dl_entry && dl_exchange && cap_bytes((void *)dl_entry) >= sizeof *dl_entry;
 }
+
+/* Offset 0 means NULL for an optional buffer, so no buffer ever lives there:
+   the first 16 bytes of the exchange region stay unused. */
+#define DL_FIRST 16
+static void dl_reset(void) { dl_used = DL_FIRST; }
 
 static int dl_alloc(size_t bytes, uint64_t *offset) {
   size_t aligned = (dl_used + 15) & ~(size_t)15;
@@ -94,7 +102,8 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   long result;
   if (!s)
     return -ENOSYS;
-  dl_used = 0;
+  dl_reset();
+  dl_entry->nr = nr; /* named in a fault record if the copy below faults */
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
     args[i] = (uint64_t)(unsigned long)raw[i];
   for (unsigned i = 0; i < s->argc; ++i) {
@@ -184,19 +193,20 @@ static long dl_ioctl(long fd, unsigned long request, void *argp) {
     long rc;
     memcpy(buffer, argp, bytes);
     raw[2] = buffer;
-    /* the shape's fixed 64 bytes are what the wire reserves */
-    dl_used = 0;
+    dl_reset();
     {
       uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, request, 0, 0, 0, 0};
       if (dl_alloc(64, &args[2]))
         return -ENOMEM;
       memcpy(dl_exchange + args[2], buffer, bytes);
-      rc = dl_round(CAPSTONE_SYS_ioctl, args);
+      rc = dl_round(CAPSTONE_NR_IOCTL_BUF, args);
       if (rc >= 0)
         memcpy(argp, dl_exchange + args[2], bytes);
       return rc;
     }
   }
+  /* the integer forms, and unknown requests with their argument as a number */
+  raw[2] = (syscall_arg_t)(unsigned long)argp;
   return dl_call(CAPSTONE_SYS_ioctl, raw);
 }
 
@@ -206,19 +216,19 @@ static long dl_fcntl(long fd, long cmd, void *arg) {
     long rc;
     if (!arg)
       return -EFAULT;
-    dl_used = 0;
+    dl_reset();
     if (dl_alloc(32, &args[2]))
       return -ENOMEM;
     memcpy(dl_exchange + args[2], arg, 32);
-    rc = dl_round(CAPSTONE_SYS_fcntl, args);
+    rc = dl_round(CAPSTONE_NR_FCNTL_LOCK, args);
     if (rc >= 0 && cmd == F_GETLK)
       memcpy(arg, dl_exchange + args[2], 32);
     return rc;
   }
   {
-    /* the integer commands carry an integer in a pointer slot; it is passed
-       as the number it is, and the wire shape leaves it unflagged */
-    syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {(syscall_arg_t)fd, (syscall_arg_t)cmd, arg, 0, 0, 0};
+    /* the integer commands: the value travels as the number it is */
+    syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {(syscall_arg_t)fd, (syscall_arg_t)cmd,
+                                                 (syscall_arg_t)(unsigned long)arg, 0, 0, 0};
     return dl_call(CAPSTONE_SYS_fcntl, raw);
   }
 }
@@ -250,6 +260,21 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     return dl_ioctl((long)a, (unsigned long)b, c);
   case SYS_fcntl:
     return dl_fcntl((long)a, (long)b, c);
+  case SYS_execve: {
+    /* exec in place: the task replaces itself with the named image */
+    static char block[CAPSTONE_SPAWN_BYTES];
+    size_t bytes;
+    int error = capstone_spawn_pack(block, sizeof block, CAPSTONE_SPAWN_EXEC, 0, (const char *)a,
+                                    (char *const *)b, (char *const *)c, NULL, 0, NULL, &bytes);
+    if (error)
+      return -error;
+    {
+      long rc = __capstone_delegate_spawn(block, bytes);
+      if (rc == -ENOSYS)
+        __capstone_hc_note_unserved(n);
+      return rc;
+    }
+  }
   case SYS_exit:
   case SYS_exit_group: {
     /* The program's last words before the task ends it: the at-exit hook,
@@ -282,6 +307,16 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     __capstone_hc_note_unserved(n);
     return -ENOSYS;
   }
+}
+
+/* posix_spawn's request: the packed block crosses as an IN buffer. */
+long __capstone_delegate_spawn(const void *block, unsigned long bytes) {
+  syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {(syscall_arg_t)block, (syscall_arg_t)bytes, 0, 0, 0, 0};
+  if (!__capstone_delegate_ready())
+    return -EIO;
+  if (bytes > dl_capacity - 16)
+    return -E2BIG;
+  return dl_call(CAPSTONE_NR_SPAWN, raw);
 }
 
 /* The unserved report's writer: two is the task's stderr. */

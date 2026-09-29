@@ -2,13 +2,16 @@
 #define _GNU_SOURCE
 #endif
 #include "delegate-service.h"
+#include "capstone/spawn.h"
 #include <errno.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 #include <linux/audit.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
@@ -48,6 +51,10 @@ static const struct { uint16_t wire; long host; } numbers[] = {
 #undef MAP
 
 static long host_number(uint64_t nr) {
+  if (nr == CAPSTONE_NR_FCNTL_LOCK)
+    nr = CAPSTONE_SYS_fcntl;
+  else if (nr == CAPSTONE_NR_IOCTL_BUF)
+    nr = CAPSTONE_SYS_ioctl;
 #if defined(__riscv) && __riscv_xlen == 64
   (void)numbers;
   return (long)nr;
@@ -59,40 +66,120 @@ static long host_number(uint64_t nr) {
 #endif
 }
 
+static int child_of(const struct capstone_delegate_host *host, pid_t pid) {
+  for (unsigned i = 0; i < host->child_count; ++i)
+    if (host->children[i] == pid)
+      return 1;
+  return 0;
+}
+
+static void forget_child(struct capstone_delegate_host *host, pid_t pid) {
+  for (unsigned i = 0; i < host->child_count; ++i)
+    if (host->children[i] == pid) {
+      host->children[i] = host->children[--host->child_count];
+      return;
+    }
+}
+
+/* posix_spawn and execve, as one block in the exchange region. A spawn goes
+ * to the unfiltered spawner with the launcher's inheritable descriptors; an
+ * exec of a Capstone image is answered by the caller replacing itself. */
+static long spawn(struct capstone_delegate_host *host, const struct capstone_delegate_entry *entry) {
+  const char *block = host->exchange + entry->args[0];
+  size_t bytes = (size_t)entry->args[1];
+  static char *argv[CAPSTONE_SPAWN_STRINGS + 1], *envp[CAPSTONE_SPAWN_STRINGS + 1];
+  static const char *paths[CAPSTONE_SPAWN_ACTIONS];
+  struct capstone_spawn_view view;
+  int fds[CAPSTONE_SPAWNER_FDS], numbers[CAPSTONE_SPAWNER_FDS];
+  uint64_t cloexec;
+  unsigned count;
+  long pid;
+  if (capstone_spawn_unpack(block, bytes, argv, CAPSTONE_SPAWN_STRINGS + 1, envp,
+                            CAPSTONE_SPAWN_STRINGS + 1, paths, CAPSTONE_SPAWN_ACTIONS, &view))
+    return -EINVAL;
+  if (view.flags & CAPSTONE_SPAWN_EXEC) {
+    if (!capstone_spawner_is_image(view.path))
+      return -ENOSYS; /* a native program cannot take over a filtered task */
+    if (bytes > sizeof host->exec_block)
+      return -E2BIG;
+    memcpy(host->exec_block, block, bytes);
+    host->exec_bytes = bytes;
+    host->exec_requested = 1;
+    return 0;
+  }
+  if (!host->spawner)
+    return -ENOSYS;
+  if (host->child_count >= CAPSTONE_DELEGATE_CHILDREN)
+    return -EAGAIN;
+  count = capstone_spawner_descriptors(fds, numbers, &cloexec, CAPSTONE_SPAWNER_FDS,
+                                       host->spawner->socket);
+  pid = capstone_spawner_spawn(host->spawner, block, bytes, fds, numbers, cloexec, count);
+  if (pid > 0)
+    host->children[host->child_count++] = (pid_t)pid;
+  return pid;
+}
+
+static int reads(unsigned kind) {
+  return kind == CAPSTONE_ARG_IN || kind == CAPSTONE_ARG_OPT_IN ||
+         kind == CAPSTONE_ARG_INOUT || kind == CAPSTONE_ARG_OPT_INOUT;
+}
+
+static int writes(unsigned kind) {
+  return kind == CAPSTONE_ARG_OUT || kind == CAPSTONE_ARG_OPT_OUT ||
+         kind == CAPSTONE_ARG_INOUT || kind == CAPSTONE_ARG_OPT_INOUT;
+}
+
 static long run(struct capstone_delegate_host *host, const struct capstone_delegate_shape *s,
                 struct capstone_delegate_entry *entry) {
   long a[CAPSTONE_DELEGATE_ARGS];
+  size_t bytes[CAPSTONE_DELEGATE_ARGS] = {0};
+  long r;
+  if (!host->bounce)
+    host->bounce = malloc(host->exchange_bytes);
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i) {
     int flagged = (entry->flags >> i) & 1;
     if (!flagged) {
       a[i] = (long)entry->args[i];
       continue;
     }
-    if (s->args[i].kind == CAPSTONE_ARG_STR &&
-        !capstone_delegate_string_ok(host->exchange, host->exchange_bytes, entry->args[i]))
-      return -EFAULT;
-    a[i] = (long)(intptr_t)at(host, entry->args[i]);
-    {
-      size_t bytes = capstone_delegate_arg_bytes(s, entry, i);
-      if (s->args[i].kind == CAPSTONE_ARG_IN || s->args[i].kind == CAPSTONE_ARG_OPT_IN ||
-          s->args[i].kind == CAPSTONE_ARG_INOUT || s->args[i].kind == CAPSTONE_ARG_OPT_INOUT)
-        host->bytes_in += bytes;
-      if (s->args[i].kind == CAPSTONE_ARG_OUT || s->args[i].kind == CAPSTONE_ARG_OPT_OUT ||
-          s->args[i].kind == CAPSTONE_ARG_INOUT || s->args[i].kind == CAPSTONE_ARG_OPT_INOUT)
-        host->bytes_out += bytes;
+    if (s->args[i].kind == CAPSTONE_ARG_STR) {
+      if (!capstone_delegate_string_ok(host->exchange, host->exchange_bytes, entry->args[i]))
+        return -EFAULT;
+      a[i] = (long)(intptr_t)at(host, entry->args[i]);
+      continue;
     }
+    bytes[i] = capstone_delegate_arg_bytes(s, entry, i);
+    if (host->bounce) {
+      /* the mirror keeps the offsets, so the kernel sees ordinary pages */
+      if (reads(s->args[i].kind))
+        memcpy(host->bounce + entry->args[i], host->exchange + entry->args[i], bytes[i]);
+      a[i] = (long)(intptr_t)(host->bounce + entry->args[i]);
+    } else {
+      a[i] = (long)(intptr_t)at(host, entry->args[i]);
+    }
+    if (reads(s->args[i].kind))
+      host->bytes_in += bytes[i];
+    if (writes(s->args[i].kind))
+      host->bytes_out += bytes[i];
   }
-  /* kill is delegated but confined: this task and, later, its children */
-  if (entry->nr == CAPSTONE_SYS_kill && a[0] != getpid() && a[0] != 0)
+  /* kill and wait4 are delegated but confined to this task and its children */
+  if (entry->nr == CAPSTONE_SYS_kill && !child_of(host, (pid_t)a[0]) &&
+      a[0] != getpid() && a[0] != 0)
     return -EPERM;
+  if (entry->nr == CAPSTONE_SYS_wait4 && a[0] > 0 && !child_of(host, (pid_t)a[0]))
+    return -ECHILD;
   {
     long number = host_number(entry->nr);
-    long r;
     if (number < 0)
       return -ENOSYS;
     r = syscall(number, a[0], a[1], a[2], a[3], a[4], a[5]);
-    return r == -1 ? -errno : r;
+    r = r == -1 ? -errno : r;
   }
+  if (host->bounce)
+    for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
+      if (bytes[i] && ((entry->flags >> i) & 1) && writes(s->args[i].kind))
+        memcpy(host->exchange + entry->args[i], host->bounce + entry->args[i], bytes[i]);
+  return r;
 }
 
 void capstone_delegate_serve(struct capstone_delegate_host *host,
@@ -111,6 +198,12 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
     return;
   }
   s = capstone_delegate_shape(snapshot.nr);
+  if (snapshot.nr == CAPSTONE_NR_SPAWN) {
+    ++host->syscalls;
+    entry->result = spawn(host, &snapshot);
+    entry->pending = 0;
+    return;
+  }
   if (snapshot.nr == CAPSTONE_NR_HELLO) {
     host->entry_address = snapshot.args[0];
     host->code_base = snapshot.args[1];
@@ -128,8 +221,17 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
     return;
   }
   ++host->syscalls;
+  host->last_nr = snapshot.nr;
   entry->result = run(host, s, &snapshot);
   entry->pending = 0;
+  /* a reaped child leaves the confinement list */
+  if (snapshot.nr == CAPSTONE_SYS_wait4 && entry->result > 0)
+    forget_child(host, (pid_t)entry->result);
+}
+
+void capstone_delegate_host_free(struct capstone_delegate_host *host) {
+  free(host->bounce);
+  host->bounce = NULL;
 }
 
 /* Every delegated number, plus the launcher's own: the device ioctls, its
@@ -144,7 +246,14 @@ static const uint16_t launcher_own[] = {
   CAPSTONE_SYS_kill, CAPSTONE_SYS_brk, CAPSTONE_SYS_mprotect, CAPSTONE_SYS_futex,
   CAPSTONE_SYS_madvise, CAPSTONE_SYS_mremap, CAPSTONE_SYS_openat, CAPSTONE_SYS_newfstatat,
   CAPSTONE_SYS_fstat, CAPSTONE_SYS_lseek, CAPSTONE_SYS_getrandom, CAPSTONE_SYS_clock_gettime,
-  131 /* tgkill, which raise() uses */
+  131 /* tgkill, which raise() uses */, 211 /* sendmsg */, 212 /* recvmsg */,
+  206 /* sendto */, 207 /* recvfrom */, CAPSTONE_SYS_readlinkat, CAPSTONE_SYS_getdents64,
+  /* exec in place restarts this program under the inherited filter: its own
+     startup needs the image memfd, the spawner fork and socket, and the
+     second filter installation */
+  CAPSTONE_SYS_execve, 279 /* memfd_create */, 167 /* prctl */, 277 /* seccomp */,
+  CAPSTONE_SYS_clone, 199 /* socketpair */, CAPSTONE_SYS_dup3, CAPSTONE_SYS_pipe2,
+  CAPSTONE_SYS_getcwd
 };
 
 int capstone_delegate_seccomp(void) {
@@ -219,6 +328,11 @@ void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host 
     PUT(" code="); PUTHEX(host->code_base); PUT("-"); PUTHEX(host->code_end);
   } else {
     PUT(" entry=unknown");
+  }
+  if (host) {
+    /* the last request served, and the one the domain was preparing */
+    PUT(" last="); PUTHEX(host->last_nr);
+    PUT(" preparing="); PUTHEX(host->preparing_nr);
   }
   if (image) { PUT(" image="); PUT(image); }
   PUT("\n");

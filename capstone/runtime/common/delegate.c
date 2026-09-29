@@ -1,4 +1,5 @@
 #include "capstone/delegate.h"
+#include "capstone/spawn.h"
 #include <errno.h>
 #include <string.h>
 
@@ -17,7 +18,6 @@ _Static_assert(sizeof(struct capstone_delegate_entry) == 88, "entry ABI");
 #define OPT_OUT_FIX(n) {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, n, 0, 0}
 #define INOUT_SCALED(a, s) {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
 #define IN_SCALED(a, s) {CAPSTONE_ARG_IN, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
-#define OPT_INOUT_FIX(n) {CAPSTONE_ARG_OPT_INOUT, CAPSTONE_LEN_FIXED, n, 0, 0}
 
 /* Sizes are the kernel's RV64 layouts, which is what lands in the exchange
  * region after the libc's marshalling: iovec is two 64-bit words, timespec
@@ -34,8 +34,8 @@ static const struct capstone_delegate_shape shapes[] = {
   /* fcntl's third argument is a struct flock for the lock commands and an
    * integer otherwise; ioctl's is a request-specific buffer. The libc decides
    * per command whether it passes an offset or 0. 64 bytes covers termios. */
-  {CAPSTONE_SYS_fcntl, CAPSTONE_GROUP_DELEGATED, 3, "fcntl", {I, I, OPT_INOUT_FIX(32)}},
-  {CAPSTONE_SYS_ioctl, CAPSTONE_GROUP_DELEGATED, 3, "ioctl", {I, I, OPT_INOUT_FIX(64)}},
+  {CAPSTONE_SYS_fcntl, CAPSTONE_GROUP_DELEGATED, 3, "fcntl", {I, I, I}},
+  {CAPSTONE_SYS_ioctl, CAPSTONE_GROUP_DELEGATED, 3, "ioctl", {I, I, I}},
   {CAPSTONE_SYS_mkdirat, CAPSTONE_GROUP_DELEGATED, 3, "mkdirat", {I, S, I}},
   {CAPSTONE_SYS_unlinkat, CAPSTONE_GROUP_DELEGATED, 3, "unlinkat", {I, S, I}},
   {CAPSTONE_SYS_ftruncate, CAPSTONE_GROUP_DELEGATED, 2, "ftruncate", {I, I}},
@@ -109,7 +109,11 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_rt_sigaction, CAPSTONE_GROUP_SIGNAL, 4, "rt_sigaction", {I, I, I, I}},
   {CAPSTONE_SYS_rt_sigprocmask, CAPSTONE_GROUP_SIGNAL, 4, "rt_sigprocmask", {I, I, I, I}},
   {CAPSTONE_SYS_rt_sigreturn, CAPSTONE_GROUP_SIGNAL, 0, "rt_sigreturn", {I}},
-  /* runtime-internal */
+  /* runtime-internal: the pointer forms of fcntl and ioctl, spawn with its
+     block in the exchange region, and hello; looked up by their own numbers */
+  {3, CAPSTONE_GROUP_RUNTIME, 3, "fcntl-lock", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 32, 0, 0}}},
+  {2, CAPSTONE_GROUP_RUNTIME, 3, "ioctl-buffer", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 64, 0, 0}}},
+  {1, CAPSTONE_GROUP_RUNTIME, 2, "spawn", {IN_ARG(1), I}},
   {0, CAPSTONE_GROUP_RUNTIME, 3, "hello", {I, I, I}},
   /* not in this branch: sockets stay unknown until a profile admits them */
 };
@@ -117,8 +121,13 @@ static const struct capstone_delegate_shape shapes[] = {
 const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
   if (nr == CAPSTONE_NR_HELLO)
     return &shapes[sizeof shapes / sizeof shapes[0] - 1];
-
-  for (size_t i = 0; i + 1 < sizeof shapes / sizeof shapes[0]; ++i)
+  if (nr == CAPSTONE_NR_SPAWN)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 2];
+  if (nr == CAPSTONE_NR_IOCTL_BUF)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 3];
+  if (nr == CAPSTONE_NR_FCNTL_LOCK)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 4];
+  for (size_t i = 0; i + 4 < sizeof shapes / sizeof shapes[0]; ++i)
     if (shapes[i].nr == nr)
       return &shapes[i];
   return NULL;

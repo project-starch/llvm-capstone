@@ -1,8 +1,8 @@
 # Delegated syscalls and the task model
 
-Status: steps 1 to 3 implemented on the stacked branches `delegation-abi`,
-`delegation-libc` and `delegation-launcher`, 2026-09-29; steps 4 to 6 are
-targets. The contract application runs delegated in the persistent QEMU guest
+Status: steps 1 to 4 implemented on the stacked branches `delegation-abi`,
+`delegation-libc`, `delegation-launcher` and `delegation-spawn`, 2026-09-29;
+steps 5 and 6 are targets. The contract application runs delegated in the persistent QEMU guest
 with argv, environment, cwd, streams, exit status, fault records and the
 first round-cost measurement, and libc-test holds its 43 passes on the
 delegated runtime; see `runtime/applications.md`. Every number below
@@ -98,9 +98,10 @@ is a later branch and needs the sibling-context primitive.
   PID. The launcher records only children it started.
 - **Wait and kill.** `wait4` and `kill` are delegated, restricted to recorded
   children. `capstone-job` already records waitpid status; it stays.
-- **Exec in place.** `execve` ends the step loop, closes the device, which
-  destroys the domain, reopens it, creates the new domain and continues with the
-  same PID and descriptors.
+- **Exec in place.** `execve` of a Capstone image replaces the task through the
+  launcher's own binary: same PID and descriptors, the device closes on exec and
+  destroys the domain. A native program cannot take over a seccomp-filtered
+  task, so that form answers ENOSYS.
 - **Pipes and descriptors.** `pipe2` is a Linux pipe. `dup`, `dup3`, `fcntl`
   including `F_SETFL`, `ppoll` and `lseek` are delegated, so shared offsets,
   non-blocking mode and real waiting come from Linux. The domain-side pipe

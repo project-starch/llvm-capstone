@@ -1,12 +1,16 @@
+#include <errno.h>
+#include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <capstone/capability.h>
 
 void *__capstone_region(unsigned);
 static volatile unsigned char *volatile saved_allocation;
 
+extern char **environ;
 static int constructed;
 __attribute__((constructor)) static void initialize(void) {
   const char *value = getenv("CAPSTONE_CONTRACT");
@@ -103,6 +107,57 @@ int main(int argc, char **argv) {
   }
   if (!strcmp(argv[1], "exit139"))
     return 139;
+  if (!strcmp(argv[1], "spawn")) {
+    /* popen and system go through posix_spawn; the child is a native program */
+    char line[64];
+    FILE *child = popen("echo from a child; exit 3", "r");
+    if (!child) { perror("popen"); return 50; }
+    if (!fgets(line, sizeof line, child) || strcmp(line, "from a child\n")) return 51;
+    int status = pclose(child);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 3) {
+      fprintf(stderr, "pclose: status=%d errno=%d\n", status, errno);
+      return 52;
+    }
+    status = system("exit 7");
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 7) return 53;
+    if (system("echo stdout\n >/dev/null") != 0) return 54;
+    puts("spawn: ok");
+    return 0;
+  }
+  if (!strcmp(argv[1], "spawn-image")) {
+    /* a Capstone image as the child, spawned directly: the launcher starts
+       it through itself, with our pipe as its stdout and our stdin */
+    char line[64];
+    int p[2];
+    pid_t pid;
+    int status;
+    posix_spawn_file_actions_t fa;
+    char *next[] = {argv[0], "healthy", "", "argument with spaces\nand newline", NULL};
+    if (pipe(p)) return 55;
+    posix_spawn_file_actions_init(&fa);
+    posix_spawn_file_actions_adddup2(&fa, p[1], 1);
+    posix_spawn_file_actions_addclose(&fa, p[0]);
+    posix_spawn_file_actions_addclose(&fa, p[1]);
+    if (posix_spawn(&pid, argv[0], &fa, NULL, next, environ)) { perror("posix_spawn"); return 55; }
+    close(p[1]);
+    FILE *child = fdopen(p[0], "r");
+    if (!child) return 55;
+    if (!fgets(line, sizeof line, child) || strcmp(line, "stdout\n")) {
+      fprintf(stderr, "spawn-image: first line %s errno=%d\n", line, errno);
+      return 56;
+    }
+    if (!fgets(line, sizeof line, child) || strcmp(line, "application: ok\n")) return 57;
+    fclose(child);
+    if (waitpid(pid, &status, 0) != pid || !WIFEXITED(status) || WEXITSTATUS(status) != 0) return 58;
+    puts("spawn-image: ok");
+    return 0;
+  }
+  if (!strcmp(argv[1], "exec")) {
+    /* replace this task with the same image in healthy mode: pid and streams stay */
+    char *next[] = {argv[0], "healthy", "", "argument with spaces\nand newline", NULL};
+    execv(argv[0], next);
+    return 59;
+  }
   char input[16];
   ssize_t n = read(0, input, sizeof input);
   if (n != 6 || memcmp(input, "input\n", 6))

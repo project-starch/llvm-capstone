@@ -25,8 +25,8 @@ EXCLUDE = {
     "pthread_cancel-points": "threads", "pthread_cancel": "threads",
     "pthread_cond": "threads", "pthread_mutex": "threads", "pthread_mutex_pi": "threads",
     "pthread_robust": "threads", "pthread_tsd": "threads", "sem_init": "threads",
-    "sem_open": "threads and shared memory", "vfork": "processes", "spawn": "processes",
-    "popen": "processes", "wordexp": "processes", "fcntl": "processes: forks a child",
+    "sem_open": "threads and shared memory", "vfork": "processes: vfork itself",
+    "wordexp": "processes: musl forks a shell", "fcntl": "processes: forks a child",
     "socket": "network", "ipc_msg": "SysV IPC", "ipc_sem": "SysV IPC", "ipc_shm": "SysV IPC",
 }
 SYSNAME = {25: "fcntl", 29: "ioctl", 34: "mkdirat", 35: "unlinkat", 48: "faccessat", 49: "chdir",

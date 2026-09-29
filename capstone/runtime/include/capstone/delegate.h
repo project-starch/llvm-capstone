@@ -19,7 +19,9 @@
 
 /* Fixed-width, little-endian, 88 bytes. `flags` bit i says args[i] is an
  * offset into the exchange region; the shape table says how many bytes that
- * offset must cover. `pending` is written by the launcher on every return. */
+ * offset must cover. An optional buffer argument of 0 is NULL, so the libc
+ * never places a buffer at offset 0. `pending` is written by the launcher on
+ * every return. */
 struct capstone_delegate_entry {
   uint32_t version;
   uint32_t count;
@@ -73,6 +75,12 @@ enum capstone_delegate_group {
  * args[1] and args[2] the code capability's base and end, so a fault record
  * can be symbolized against the image's link addresses. */
 #define CAPSTONE_NR_HELLO UINT64_C(0xC0DE0001)
+/* fcntl and ioctl carry an integer or a pointer in their third argument by
+ * command. The integer forms travel as the Linux number; the pointer forms
+ * the libc uses travel as these, whose third argument is a fixed buffer, and
+ * the launcher runs the Linux call with the buffer's address. */
+#define CAPSTONE_NR_FCNTL_LOCK UINT64_C(0xC0DE0003)  /* F_GETLK, F_SETLK, F_SETLKW: 32 bytes */
+#define CAPSTONE_NR_IOCTL_BUF UINT64_C(0xC0DE0004)   /* a request with a buffer: 64 bytes */
 
 /* Descriptor flag: the image speaks this ABI. Images without it use the
  * HostCall v0 application runtime; a launcher must accept both. */
