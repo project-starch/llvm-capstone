@@ -26,6 +26,7 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 | File | last touched |
 |------|------|
 | [delegation-memory.md](delegation-memory.md) — dynamic region grants, mapping semantics and allocator pools (proposal) | 2026-09-30 |
+| [delegation-memory-options.md](delegation-memory-options.md) — protected views, translation and alternative memory models (exploration) | 2026-09-30 |
 | `backend-compiler-fixes.md` | 2026-06-22 |
 | `beebs-deferred-benchmarks.md` | 2026-07-20 |
 | `benchmark-bringup.md` | 2026-06-19 |

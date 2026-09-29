@@ -14,6 +14,8 @@ branches are parallel work, not prerequisites or evidence for this proposal.
 This develops memory step 5 of [the delegation plan](delegation-abi.md).
 The [signal plan](delegation-signals.md) supplies the existing round, restart
 and handler-delivery contract that memory operations must preserve.
+The [architectural alternatives](delegation-memory-options.md) explore protected
+views, permission changes, translation and file-blind paging beyond this baseline.
 
 ## 1. Purpose and philosophy
 
@@ -35,6 +37,10 @@ virtual mapping of the same pages when preparing or sharing data. For a private
 grant, no Linux *user* mapping may retain access after exclusive transfer; the
 kernel's ordinary mapping and the module's bookkeeping are not the domain's
 pointer and do not disappear merely because the user mapping is removed.
+Their existence is not permission to access the transferred memory: Linux's
+accesses must still pass the CPMP capability check, and obsolete authority must
+be removed on transfer. Kernel privilege or a surviving direct-map PTE cannot
+by itself restore the domain's exclusive physical authority.
 
 Today an application receives its data, stack, arena and exchange regions at
 startup. Anonymous mmap is allocated inside the arena; file mmap is refused.
@@ -468,9 +474,11 @@ revoke transitions against the real resume assembly.
 Keeping file copies in the current static arena may be a temporary compatibility
 step, but preserves the fixed-size problem and cannot provide coherent sharing.
 Delegating page faults to the launcher would require a separate VM/fault design;
-it is outside this proposal. Running domains under Linux page tables is also
-outside scope and would change the ISA/monitor boundary. Neither is needed to
-prove dynamic physical-region grants.
+it is outside this initial proposal, but does not inherently require file
+semantics in the monitor. Running domains with protected address translation
+would also change the ISA/monitor boundary. Both are considered in the
+[architectural alternatives](delegation-memory-options.md); neither is needed
+to prove dynamic physical-region grants.
 
 Primary references for the Linux semantics discussed here:
 
