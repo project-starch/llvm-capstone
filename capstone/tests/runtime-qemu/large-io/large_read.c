@@ -1,7 +1,12 @@
-/* A domain reads a 64 KiB file from the 9p share, whole and in odd pieces, and
- * writes one back, through the hostcall file service. run.sh stages the file
- * with a known byte pattern; every check prints one line and main returns the
- * number that failed. */
+/* An application reads a 64 KiB file from the 9p share, whole and in odd
+ * pieces, and writes one back: large_read <input> <output>, both on the share.
+ * ../run-delegated-probes.py stages the input with a known byte pattern and
+ * checks the output on the host side. Every delegated read and write crosses
+ * the exchange region, and the launcher runs read(2) and write(2) on its bounce
+ * buffer (runtime/linux/delegate-service.c), whose pages 9p's zero-copy path
+ * pins above 1024 bytes: the path the HostCall v0 host once failed with EFAULT
+ * when it read straight into a shared region. Every check prints one line and
+ * main returns the number that failed. */
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -27,10 +32,14 @@ static int pattern_ok(const unsigned char *p, long off, long n)
 	return 1;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
 	char detail[96];
-	int fd = open("/mnt/host/large.bin", O_RDONLY);
+	if (argc != 3) {
+		fprintf(stderr, "usage: large_read <input> <output>\n");
+		return 64;
+	}
+	int fd = open(argv[1], O_RDONLY);
 	snprintf(detail, sizeof detail, "errno=%d", fd < 0 ? errno : 0);
 	check("open", fd >= 0, detail);
 	if (fd < 0)
@@ -40,8 +49,7 @@ int main(void)
 	snprintf(detail, sizeof detail, "n=%zd errno=%d (want %d)", n, n < 0 ? errno : 0, SIZE);
 	check("read-whole", n == SIZE && pattern_ok(buf, 0, SIZE), detail);
 
-	/* Odd sizes and offsets: the service chunks at the payload size. The sizes
-	   below take 14 reads to cover the file. */
+	/* Odd sizes and offsets. The sizes below take 14 reads to cover the file. */
 	long total = 0, bad = 0;
 	lseek(fd, 0, SEEK_SET);
 	for (int k = 1; total < SIZE; k++) {
@@ -55,7 +63,7 @@ int main(void)
 	check("read-pieces", total == SIZE && bad == 0, detail);
 	close(fd);
 
-	fd = open("/mnt/host/written.bin", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	fd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	for (long i = 0; i < SIZE; i++)
 		buf[i] = (unsigned char)(i * 7 + 3);
 	n = fd < 0 ? -1 : write(fd, buf, SIZE);
@@ -63,7 +71,7 @@ int main(void)
 	check("write-whole", n == SIZE, detail);
 	if (fd >= 0)
 		close(fd);
-	fd = open("/mnt/host/written.bin", O_RDONLY);
+	fd = open(argv[2], O_RDONLY);
 	memset(buf, 0, SIZE);
 	n = fd < 0 ? -1 : read(fd, buf, SIZE);
 	snprintf(detail, sizeof detail, "n=%zd", n);
