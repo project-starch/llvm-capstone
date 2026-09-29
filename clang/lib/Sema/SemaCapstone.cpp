@@ -21,20 +21,78 @@ using namespace clang;
 
 SemaCapstone::SemaCapstone(Sema &S) : SemaBase(S) {}
 
+// How many pointer-to-integer casts an integer expression is built from,
+// looking through the operators an address computation uses. One means the
+// value is an address computed from one pointer right here, which the backend
+// turns back into that pointer moved (CapstoneRecoverProvenance).
+//
+// The answer has to agree with what that pass will do, or the warning goes
+// silent on a round trip that then traps untagged. Two shapes carry a pointer
+// and are still counted as unrecoverable, because the pass declines them: an
+// address that flows INTO a multiply, shift, divide or remainder is not that
+// pointer's address moved any more, and a conditional whose arms are not both
+// the same one pointer would give that pointer's authority at a foreign
+// address. Which arm holds which pointer is not decidable here, so any pointer
+// inside a conditional disqualifies it: `c ? (uintptr_t)p : (uintptr_t)q`
+// counts two pointers in the pass and would count one here. A warning one time
+// too many beats a trap with no warning at all.
+//
+// Still silent, and not fixable in the front end: a round trip the pass declines
+// because the pointer may be NULL (it may not move a base that holds no
+// capability). Whether a pointer can be null is not visible here.
+static constexpr unsigned Disqualified = 2; // any count but one
+
+static unsigned countPointerSources(const Expr *E) {
+  E = E->IgnoreParens();
+  if (const auto *CE = dyn_cast<CastExpr>(E)) {
+    if (CE->getSubExpr()->IgnoreParens()->getType()->isPointerType())
+      return 1;
+    return countPointerSources(CE->getSubExpr());
+  }
+  if (const auto *BO = dyn_cast<BinaryOperator>(E)) {
+    switch (BO->getOpcode()) {
+    case BO_Add: case BO_Sub: case BO_And: case BO_Or: case BO_Xor:
+      return countPointerSources(BO->getLHS()) +
+             countPointerSources(BO->getRHS());
+    case BO_Mul: case BO_Shl: case BO_Shr: case BO_Div: case BO_Rem: {
+      // On plain integers these are fine and common -- `(uintptr_t)p + i * 8`
+      // keeps its one source through the multiply's operands. With an address
+      // inside one, the result is not an address the pass will rebuild.
+      unsigned N = countPointerSources(BO->getLHS()) +
+                   countPointerSources(BO->getRHS());
+      return N ? Disqualified : 0;
+    }
+    default:
+      return 0;
+    }
+  }
+  if (const auto *UO = dyn_cast<UnaryOperator>(E))
+    return countPointerSources(UO->getSubExpr());
+  if (const auto *CO = dyn_cast<ConditionalOperator>(E)) {
+    unsigned N = countPointerSources(CO->getTrueExpr()) +
+                 countPointerSources(CO->getFalseExpr());
+    return N ? Disqualified : 0;
+  }
+  return 0;
+}
+
 void SemaCapstone::checkPointerRoundTrip(Expr *Src, QualType DestTy,
                                          SourceRange OpRange) {
   if (!DestTy->isPointerType() || !Src->getType()->isIntegerType())
     return;
-  // (a) `(T *)(integer)p`: the integer is an explicit cast of a pointer.
-  if (const auto *CE = dyn_cast<CastExpr>(Src->IgnoreParenImpCasts())) {
-    if (CE->getSubExpr()->IgnoreParenImpCasts()->getType()->isPointerType()) {
-      Diag(OpRange.getBegin(), diag::warn_capstone_pointer_roundtrip)
-          << 0 << Src->getType() << DestTy << Src->getSourceRange();
-      return;
-    }
-  }
-  // (b) `(T *)x` with x of a type spelled uintptr_t / intptr_t: the typedef's
-  // whole purpose is to hold a pointer, and on this target it cannot.
+  // An integer computed in this very expression from one pointer --
+  // `(T *)(uintptr_t)p`, `(T *)(((uintptr_t)p + 15) & ~15)` -- is not
+  // diagnosed: the backend (CapstoneRecoverProvenance) rebuilds the result from
+  // that pointer's capability.
+  //
+  // `(T *)x` with x of a type spelled uintptr_t / intptr_t: the typedef's whole
+  // purpose is to hold a pointer, and on this target it can hold only the
+  // address. Whether this cast gets the capability back depends on where x came
+  // from -- computed from one pointer in the same function, yes; loaded from a
+  // struct field or passed in, no -- which the front end cannot see, so the
+  // warning says which case is safe.
+  if (countPointerSources(Src) == 1)
+    return; // e.g. (T *)(((uintptr_t)p + 15) & ~15): computed right here.
   for (QualType T = Src->getType();;) {
     const auto *TT = T->getAs<TypedefType>();
     if (!TT)
@@ -42,7 +100,7 @@ void SemaCapstone::checkPointerRoundTrip(Expr *Src, QualType DestTy,
     StringRef Name = TT->getDecl()->getName();
     if (Name == "uintptr_t" || Name == "intptr_t") {
       Diag(OpRange.getBegin(), diag::warn_capstone_pointer_roundtrip)
-          << 1 << Src->getType() << DestTy << Src->getSourceRange();
+          << Src->getType() << DestTy << Src->getSourceRange();
       return;
     }
     T = TT->desugar();
