@@ -45,12 +45,19 @@ grep -aq "BASELINE-WARM CYCLES $NATIVE_QEMU " ${QEMU_LOG_BASELINE:?} || fail "th
 LPC=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}/lpc
 [ "$(sha256sum $LPC|cut -c1-16)" = 3b93a2b6e2adfa36 ] || fail "lpc on the overlay is not 3b93a2b6e2adfa36"
 [ -f "$B/overlay/test-domains/k800.dom" ] || fail "k800.dom missing from the overlay"
-# K800_IMG/K800_HASH (optional): stage a k800 control relinked off 0x10000. DOMAIN_BASE_VA defaults to
+# K800_IMG/K800_HASH/K800_ORACLES (optional): stage a k800 control relinked off 0x10000. DOMAIN_BASE_VA defaults to
 # 0x10000, so a cell built without it enters where the stock control does and the entry-VA check below
 # refuses the boot. Relink the control, never the cell: the cell is the artifact under measurement.
 if [ -n "${K800_IMG:-}" ]; then
   [ "$(sha256sum "$K800_IMG"|cut -c1-16)" = "${K800_HASH:?set K800_HASH=<sha256/16> with K800_IMG}" ] || fail "relinked k800 is not $K800_HASH"
-  export K800_HASH
+  # Preflight C13 binds every rung's image to the FIRST hash in $PREFLIGHT_ORACLES/<rung>.qemu-pass, and
+  # the default directory vouches for the STOCK k800, so a relinked control without its own record is
+  # refused (boot sw8x-b80s-p1o2-c5, 2026-09-29). The control is this driver's only rung, so the
+  # directory is the relinked k800's alone. The check is unchanged; only the record it reads is.
+  K800_ORACLES=${K800_ORACLES:?set K800_ORACLES=<dir with the relinked k800.oracle and k800.qemu-pass> with K800_IMG}
+  [ "$(grep -oE '[0-9a-f]{64}' "$K800_ORACLES/k800.qemu-pass" 2>/dev/null | head -1 | cut -c1-16)" = "$K800_HASH" ] || fail "$K800_ORACLES/k800.qemu-pass does not vouch for $K800_HASH"
+  [ -f "$K800_ORACLES/k800.oracle" ] || fail "no k800.oracle in $K800_ORACLES"
+  export K800_HASH PREFLIGHT_ORACLES=$K800_ORACLES
 fi
 say "pieces: cell 5 variant $C5_TAG $C5_HASH (pass record present), readback host $SQLITE_HOST_HASH, native -O2 $NATIVE_HASH, lpc 3b93a2b6e2adfa36; QEMU runs on record ($C5_QEMU / $NATIVE_QEMU)"
 T=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}; TT=${CAPSTONE_BR_TARGET:-$B/build-fpga/target/test-domains}; mkdir -p "$T" "$TT"

@@ -46,12 +46,19 @@ RRH=${R1_HOST:?set R1_HOST=<path to sqlite_host_rr.user, the readback host>}
 LPC=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}/lpc
 [ "$(sha256sum $LPC|cut -c1-16)" = 3b93a2b6e2adfa36 ] || fail "lpc on the overlay is not 3b93a2b6e2adfa36"
 [ -f "$B/overlay/test-domains/k800.dom" ] || fail "k800.dom missing from the overlay"
-# K800_IMG/K800_HASH (optional): stage a k800 control relinked off 0x10000 in place of the stock one.
+# K800_IMG/K800_HASH/K800_ORACLES (optional): stage a k800 control relinked off 0x10000 in place of the stock one.
 # The harness sits at 0x410000 and collides with neither, so here the knob only gives a relinked control
 # a silicon record before a boot whose frozen image enters at 0x10000 has to depend on it.
 if [ -n "${K800_IMG:-}" ]; then
   [ "$(sha256sum "$K800_IMG"|cut -c1-16)" = "${K800_HASH:?set K800_HASH=<sha256/16> with K800_IMG}" ] || fail "relinked k800 is not $K800_HASH"
-  export K800_HASH
+  # Preflight C13 binds every rung's image to the FIRST hash in $PREFLIGHT_ORACLES/<rung>.qemu-pass, and
+  # the default directory vouches for the STOCK k800, so a relinked control without its own record is
+  # refused (boot sw8x-b80s-p1o2-c5, 2026-09-29). The control is this driver's only rung, so the
+  # directory is the relinked k800's alone. The check is unchanged; only the record it reads is.
+  K800_ORACLES=${K800_ORACLES:?set K800_ORACLES=<dir with the relinked k800.oracle and k800.qemu-pass> with K800_IMG}
+  [ "$(grep -oE '[0-9a-f]{64}' "$K800_ORACLES/k800.qemu-pass" 2>/dev/null | head -1 | cut -c1-16)" = "$K800_HASH" ] || fail "$K800_ORACLES/k800.qemu-pass does not vouch for $K800_HASH"
+  [ -f "$K800_ORACLES/k800.oracle" ] || fail "no k800.oracle in $K800_ORACLES"
+  export K800_HASH PREFLIGHT_ORACLES=$K800_ORACLES
 fi
 say "pieces: R1 harness $R1_HASH (E4 build: latency + calib; emulator run on record), rr host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36"
 T=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}; TT=${CAPSTONE_BR_TARGET:-$B/build-fpga/target/test-domains}; mkdir -p "$T" "$TT"
