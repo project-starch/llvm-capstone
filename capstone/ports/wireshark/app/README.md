@@ -25,5 +25,14 @@ Safety fixtures use `common/application/check-safety.py --port wireshark`, with
 SIGSEGV, matching PC diagnostic and the fixture's target address. It does not
 accept an arbitrary crash. Run this check with exclusive use of the selected VM.
 
+`TSAPP_DOMAIN_ENV=NAME=value,...` adds environment to the domain; the delegated
+runtime prints its unserved-syscall report under `CAPSTONE_DELEGATE_STATS=1`.
+
+The full build of PR #128 lives in `/tmp/capstone/delegation-ports/tshark-source`
+(dependencies, cross build, native stock tshark); its compile commands embed that
+path, so a later runtime is qualified by setting `TS_WORK` to it and running
+`host/build-domain.sh`, which relinks the images in seconds
+(`results/2026-09-30-qemu-tshark-current-stack`).
+
 There is no private libc-test launcher and no argv/environment side files.
 Historical result directories describe their original binaries and transport.

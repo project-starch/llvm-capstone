@@ -28,6 +28,9 @@ def main():
         parser.error('TSAPP_HEAP must be level0, shrink, sublet or chunks')
     images = Path(os.environ.get('TSAPP_DOMAIN_DIR', work / ('domain' + ('-' + heap if heap != 'level0' else ''))))
     stock = Path(os.environ.get('TSAPP_STOCK', work / 'native-stock/run/tshark'))
+    # TSAPP_DOMAIN_ENV: extra NAME=value pairs for the domain, comma-separated; the delegated
+    # runtime prints its unserved-syscall report to stderr under CAPSTONE_DELEGATE_STATS=1
+    extra_env = [e for e in os.environ.get('TSAPP_DOMAIN_ENV', '').split(',') if e]
     vm = VM(args.state, work / 'runs')
     passed = True
     try:
@@ -48,7 +51,8 @@ def main():
             for stage in (range(1, 6) if args.mode == 'stages' else [5]):
                 name = capture + '-m' + str(stage)
                 result = vm.run(name, images / f'tshark_m{stage}.dom', ['-r', guest, '-V', '-n'],
-                                ['TZ=UTC', 'HOME=' + guest_config, 'WIRESHARK_CONFIG_DIR=' + guest_config], args.user)
+                                ['TZ=UTC', 'HOME=' + guest_config, 'WIRESHARK_CONFIG_DIR=' + guest_config] + extra_env,
+                                args.user)
                 want = 100 + stage if stage < 5 else 0
                 if result.get('kind') != 'exit' or result.get('value') != want or result.get('fault'):
                     raise RuntimeError(f'{name} failed: {result}')
