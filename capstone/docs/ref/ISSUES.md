@@ -7547,7 +7547,7 @@ No other runner has the watchdog.
 copy. The QEMU monitor's `info registers`, or a host-side stack of the QEMU threads, taken during a
 stall, would show which. No runner collects either yet.
 
-### I-14 — `run-hostcall-all.sh` stops at large-io, and at mmap-shm, on dev since de07a5b5: two harness paths that the persistent-VM commit moved `OPEN — pre-existing on dev since 2026-09-28 (de07a5b5); found 2026-09-29 while gating #124-#127, identical on dev 52c882dd and merged 9ee1fdac; a one-line fix for each, verified locally, NOT applied`
+### I-14 — `run-hostcall-all.sh` stops at large-io, and at mmap-shm, on dev since de07a5b5: two harness paths that the persistent-VM commit moved `FIXED 2026-09-30 by #129 (merge 34f22b8b): hostcall-all runs 28/28 on dev + #129; was pre-existing on dev since 2026-09-28 (de07a5b5), found 2026-09-29 while gating #124-#127`
 
 de07a5b5 ("Run applications as recoverable processes in a persistent Linux VM") moved two files that
 hostcall-probe harnesses still read by their old paths:
@@ -7557,9 +7557,24 @@ hostcall-probe harnesses still read by their old paths:
 - the override list, into the new `ports/musl-capstone/runtime/libc_overrides.list`, which
   `libc_overrides.sh:13` now reads with `mapfile`.
 
-`run-hostcall-all.sh` runs `set -euo pipefail`, so its first failing probe ends the suite. Since
-2026-09-28 the suite has run 12 of its 28 probes on dev, unless `CAPSTONE_ONLY` selects past the
-break.
+`run-hostcall-all.sh` runs `set -euo pipefail`, so its first failing probe ends the suite. From
+2026-09-28 until #129 the suite ran 12 of its 28 probes on dev, unless `CAPSTONE_ONLY` selected past
+the break.
+
+**FIXED by #129 (merge 34f22b8b, head 4c9d8548).** Gated on dev 8f24b908 + 4c9d8548: all 28 probes
+PASS, run one per leg in suite order. Every control failed as the probe requires. Three guest boot
+stalls (I-12) were retried, not counted: one in the first full-suite attempt (exit 75) and two
+per-probe, each ending at the OpenSBI banner. #129's fixes differ from the one-liners recorded
+below; both were verified:
+- **large-io.** #129 restores two headers from `de07a5b5^`: the common header, and the old
+  `hostcall_stdout_probe.h`, which then carried the opcodes. That is exactly what the controls
+  were built against until 2026-09-28.
+  - The one-liner below instead copies only the common header, from each control's own commit.
+    It also passed, twice.
+  - So #129's message ("restoring only the removed header is not enough") holds for its choice
+    of version only. Its review notes this.
+- **mmap-shm.** #129 asks the list the script loaded (`MUSL_OVERRIDES`), not a file's text, so
+  it cannot go stale if the list moves again.
 
 **1. large-io fails to BUILD.**
 
@@ -7567,8 +7582,8 @@ break.
   (`READ_CTL` e852b395, `STDOUT_CTL` 40eefa09).
 - That header includes `hostcall-file-service-probe-common.h` under its old name, which no longer
   exists in the tree: `fatal error: hostcall-file-service-probe-common.h: No such file or directory`.
-- **Fix:** copy that header from the same `$rev` into `$O/$arm-inc/` too, one line after :92. Both
-  control commits contain it.
+- **Fix (one-liner, not the one landed):** copy that header from the same `$rev` into
+  `$O/$arm-inc/` too, one line after :92. Both control commits contain it.
 - **Verified 2026-09-29** on origin/dev ae1b13c2, with the fix as a local edit:
   - rc 0. The test reads 65536 bytes whole and in pieces, and writes and reads them back.
   - The read control "FAILS the whole read, as it must without a bounce buffer".
@@ -7582,7 +7597,7 @@ break.
   list mmap_shm_level0; the test would link musl's mmap".
 - The entry was NOT dropped: the build still links `mmap_shm_level0.o`.
 - The control arm filters the built object list, not the file's text, so only the precheck is stale.
-- **Fix:** `grep -qx 'mmap_shm_level0' "$MRT/libc_overrides.list"`.
+- **Fix (one-liner, not the one landed):** `grep -qx 'mmap_shm_level0' "$MRT/libc_overrides.list"`.
 - **Verified 2026-09-29** on origin/dev ae1b13c2, with the fix as a local edit:
   - rc 0. The test's 25 MMAP-SHM checks pass (`failures=0`).
   - The control halts on musl's `MAP_FAILED` as the harness expects: "C-32: the -1 arrives as NULL
