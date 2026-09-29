@@ -242,8 +242,9 @@ int main(void) {
   {
     struct capstone_delegate_host h3 = {.exchange = exchange, .exchange_bytes = EXCHANGE};
     const uint64_t numbers[] = {CAPSTONE_NR_CONTEXT_RESERVE, CAPSTONE_NR_CONTEXT_CREATE,
-                                CAPSTONE_NR_CONTEXT_STEP, CAPSTONE_NR_CONTEXT_FORGET};
-    for (unsigned i = 0; i < 4; ++i) {
+                                CAPSTONE_NR_CONTEXT_STEP, CAPSTONE_NR_CONTEXT_FORGET,
+                                CAPSTONE_NR_CONTEXT_EXITING};
+    for (unsigned i = 0; i < sizeof numbers / sizeof numbers[0]; ++i) {
       x = entry(numbers[i], 0, 0, 0, 0, 0, 0);
       capstone_delegate_serve(&h3, &x);
       assert((long)x.result == -ENOSYS);
@@ -295,6 +296,10 @@ int main(void) {
   /* runtime numbers resolve by their low bits, apart from Linux's */
   assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_CONTEXT_RESERVE)->name, "context-reserve"));
   assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_CONTEXT_CREATE)->name, "context-create"));
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_CONTEXT_EXITING)->name, "context-exiting"));
+  /* a thread's end is the domain's (CONTEXT_EXITING); only exit_group crosses */
+  assert(!capstone_delegate_shape(CAPSTONE_SYS_exit));
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_SYS_exit_group)->name, "exit_group"));
   assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_HELLO)->name, "hello"));
   assert(capstone_delegate_shape(CAPSTONE_SYS_write)->group == CAPSTONE_GROUP_DELEGATED);
   assert(!capstone_delegate_shape(UINT64_C(0xC0DE0000) + CAPSTONE_SYS_write));

@@ -77,6 +77,10 @@ static int dl_clock(long clock, struct timespec *ts) {
 }
 
 int __capstone_context_tid(void);   /* tls.c: the calling context's */
+long __capstone_set_tid_address(volatile int *word);   /* context.c */
+static __thread void *dl_robust_head;
+static __thread size_t dl_robust_len;
+long __capstone_thread_exit(int status);    /* context.c */
 static long dl_identity(long n, long *answer) {
   const struct capstone_launch_task *t = __capstone_launch_task();
   if (!t || !t->pid)
@@ -332,14 +336,20 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
  * the launcher answers RECHECK instead of sleeping. A relative timeout becomes
  * one absolute CLOCK_MONOTONIC deadline at entry, kept across every round.
  * After a round that delivered signals (RETRY) the word is compared again, as
- * Linux does when it restarts the call. WAIT, WAKE and REQUEUE are served;
- * every other operation (PI, WAKE_OP, CMP_REQUEUE, WAIT_BITSET, and any with
- * the realtime clock flag, which Linux refuses on these three) answers
- * ENOSYS and is reported as unserved. */
+ * Linux does when it restarts the call. WAIT, WAKE, REQUEUE and the
+ * priority-inheritance lock and unlock (below) are served; every other
+ * operation (TRYLOCK_PI, WAKE_OP, CMP_REQUEUE, WAIT_BITSET, and any with the
+ * realtime clock flag, which Linux refuses on these) answers ENOSYS and is
+ * reported as unserved. */
 #define DL_FUTEX_WAIT 0
 #define DL_FUTEX_WAKE 1
 #define DL_FUTEX_REQUEUE 3
+#define DL_FUTEX_LOCK_PI 6
+#define DL_FUTEX_UNLOCK_PI 7
 #define DL_FUTEX_PRIVATE 128
+#define DL_FUTEX_WAITERS 0x80000000u
+#define DL_FUTEX_OWNER_DIED 0x40000000u
+#define DL_FUTEX_TID_MASK 0x3fffffffu
 
 /* Test only (thread-probe): runs after the compare and before the WAIT
    request when set, to hold a context in the window the generation protects
@@ -350,6 +360,9 @@ static uint64_t dl_park_key(volatile int *word) {
   return (uint64_t)__builtin_capstone_cap_get_cursor((void *)word);
 }
 
+/* A word's key, for the launcher's wake at a context's end (context.c). */
+uint64_t __capstone_park_key(volatile int *word) { return dl_park_key(word); }
+
 /* The generation of word's bucket now (thread-probe's control case builds a
    wait with the order reversed from it). */
 uint64_t __capstone_park_generation(volatile int *word) {
@@ -357,26 +370,12 @@ uint64_t __capstone_park_generation(volatile int *word) {
                      : 0;
 }
 
-static long dl_futex_wait(volatile int *word, int val, const struct timespec *timeout) {
-  uint64_t key = dl_park_key(word), deadline = 0;
+/* Sleep while *word == val, until deadline (absolute CLOCK_MONOTONIC
+   nanoseconds, 0 for none): 0 (woken, or look again), -EAGAIN (the word
+   differs), -ETIMEDOUT or -EINTR. */
+static long dl_futex_wait_until(volatile int *word, int val, uint64_t deadline) {
+  uint64_t key = dl_park_key(word);
   long r;
-  if (!dl_park_gen)
-    return -ENOSYS;
-  if (timeout) {
-    struct timespec now;
-    if (timeout->tv_sec < 0 || timeout->tv_nsec < 0 || timeout->tv_nsec >= 1000000000L)
-      return -EINVAL;
-    if (clock_gettime(CLOCK_MONOTONIC, &now))
-      return -errno;
-    uint64_t at = (uint64_t)now.tv_sec * 1000000000u + (uint64_t)now.tv_nsec, span;
-    if ((uint64_t)timeout->tv_sec >= UINT64_MAX / 1000000000u)
-      span = UINT64_MAX;
-    else
-      span = (uint64_t)timeout->tv_sec * 1000000000u + (uint64_t)timeout->tv_nsec;
-    deadline = span > UINT64_MAX - at ? UINT64_MAX : at + span;
-    if (!deadline)
-      deadline = 1;
-  }
   for (;;) {
     /* acquire: the generation before the word, as the plan's Parking requires */
     uint64_t gen = __atomic_load_n(&dl_park_gen[capstone_park_bucket_of(key, CAPSTONE_PARK_BUCKETS)],
@@ -394,6 +393,94 @@ static long dl_futex_wait(volatile int *word, int val, const struct timespec *ti
   return r == CAPSTONE_PARK_RESULT_WOKEN || r == CAPSTONE_PARK_RESULT_RECHECK ? 0 : r;
 }
 
+static long dl_futex_wait(volatile int *word, int val, const struct timespec *timeout) {
+  uint64_t deadline = 0;
+  if (timeout) {
+    struct timespec now;
+    if (timeout->tv_sec < 0 || timeout->tv_nsec < 0 || timeout->tv_nsec >= 1000000000L)
+      return -EINVAL;
+    if (clock_gettime(CLOCK_MONOTONIC, &now))
+      return -errno;
+    uint64_t at = (uint64_t)now.tv_sec * 1000000000u + (uint64_t)now.tv_nsec, span;
+    if ((uint64_t)timeout->tv_sec >= UINT64_MAX / 1000000000u)
+      span = UINT64_MAX;
+    else
+      span = (uint64_t)timeout->tv_sec * 1000000000u + (uint64_t)timeout->tv_nsec;
+    deadline = span > UINT64_MAX - at ? UINT64_MAX : at + span;
+    if (!deadline)
+      deadline = 1;
+  }
+  return dl_futex_wait_until(word, val, deadline);
+}
+
+/* Priority-inheritance futexes, musl's PTHREAD_PRIO_INHERIT mutexes. The word
+ * holds the owner's tid with FUTEX_WAITERS and FUTEX_OWNER_DIED, as on Linux,
+ * and only the domain changes it; the launcher parks and wakes as for WAIT.
+ * Two differences from Linux, neither visible to musl: an unlock frees the
+ * word and wakes one waiter to take it, where Linux hands it over, so a
+ * waiter that took it keeps FUTEX_WAITERS set for whoever may still sleep;
+ * and no priority is inherited, because every context runs on a launcher
+ * thread of the same priority. LOCK_PI's timeout is absolute CLOCK_REALTIME,
+ * made one CLOCK_MONOTONIC deadline at entry; a signal restarts the wait, as
+ * Linux restarts the call. */
+static long dl_futex_lock_pi(volatile int *word, const struct timespec *at) {
+  unsigned tid = (unsigned)__capstone_context_tid() & DL_FUTEX_TID_MASK;
+  volatile unsigned *w = (volatile unsigned *)word;
+  uint64_t deadline = 0;
+  int waited = 0;
+  if (at) {
+    struct timespec real, mono;
+    if (at->tv_nsec < 0 || at->tv_nsec >= 1000000000L)
+      return -EINVAL;
+    if (clock_gettime(CLOCK_REALTIME, &real) || clock_gettime(CLOCK_MONOTONIC, &mono))
+      return -errno;
+    uint64_t now = (uint64_t)mono.tv_sec * 1000000000u + (uint64_t)mono.tv_nsec, left;
+    if (at->tv_sec < real.tv_sec || (at->tv_sec == real.tv_sec && at->tv_nsec <= real.tv_nsec))
+      left = 0;
+    else if ((uint64_t)at->tv_sec - (uint64_t)real.tv_sec >= UINT64_MAX / 1000000000u - 1)
+      left = UINT64_MAX;   /* saturates, as a relative WAIT's deadline does */
+    else
+      left = ((uint64_t)at->tv_sec - (uint64_t)real.tv_sec) * 1000000000u +
+             (uint64_t)at->tv_nsec - (uint64_t)real.tv_nsec;
+    deadline = !left ? 1 : left > UINT64_MAX - now ? UINT64_MAX : now + left;
+  }
+  for (;;) {
+    unsigned v = __atomic_load_n(w, __ATOMIC_ACQUIRE);
+    unsigned owner = v & DL_FUTEX_TID_MASK;
+    if (owner == tid)
+      return -EDEADLK;
+    if (!owner) {
+      unsigned mine = tid | (v & DL_FUTEX_OWNER_DIED) | (waited ? DL_FUTEX_WAITERS : 0);
+      if (__atomic_compare_exchange_n(w, &v, mine, 0, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+        return 0;
+      continue;
+    }
+    if (!(v & DL_FUTEX_WAITERS)) {
+      if (!__atomic_compare_exchange_n(w, &v, v | DL_FUTEX_WAITERS, 0, __ATOMIC_RELAXED,
+                                       __ATOMIC_RELAXED))
+        continue;
+      v |= DL_FUTEX_WAITERS;
+    }
+    waited = 1;
+    long r = dl_futex_wait_until(word, (int)v, deadline);
+    if (r == -ETIMEDOUT || r == -ENOSYS || r == -EIO)
+      return r;
+  }
+}
+
+static long dl_futex_unlock_pi(volatile int *word) {
+  unsigned tid = (unsigned)__capstone_context_tid() & DL_FUTEX_TID_MASK;
+  volatile unsigned *w = (volatile unsigned *)word;
+  unsigned v = __atomic_load_n(w, __ATOMIC_RELAXED);
+  do {
+    if ((v & DL_FUTEX_TID_MASK) != tid)
+      return -EPERM;
+  } while (!__atomic_compare_exchange_n(w, &v, 0, 0, __ATOMIC_RELEASE, __ATOMIC_RELAXED));
+  if (v & DL_FUTEX_WAITERS)
+    __capstone_delegate_ints(CAPSTONE_NR_PARK_WAKE, dl_park_key(word), 1, 0);
+  return 0;
+}
+
 static long dl_futex(volatile int *word, long op, long val, void *arg4, volatile int *word2) {
   long cmd = op & ~(long)DL_FUTEX_PRIVATE;
   if (!dl_park_gen)
@@ -404,6 +491,10 @@ static long dl_futex(volatile int *word, long op, long val, void *arg4, volatile
   switch (cmd) {
   case DL_FUTEX_WAIT:
     return dl_futex_wait(word, (int)val, (const struct timespec *)arg4);
+  case DL_FUTEX_LOCK_PI:
+    return dl_futex_lock_pi(word, (const struct timespec *)arg4);
+  case DL_FUTEX_UNLOCK_PI:
+    return dl_futex_unlock_pi(word);
   case DL_FUTEX_WAKE:
     /* Linux wakes one when asked for none or fewer */
     return __capstone_delegate_ints(CAPSTONE_NR_PARK_WAKE, dl_park_key(word),
@@ -603,6 +694,16 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d,
                               syscall_arg_t e, syscall_arg_t f) {
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {a, b, c, d, e, f};
+  /* musl's thread setup: the tid is the context's runtime identity (the pid
+     for the first context), and the word to clear at the context's end is the
+     runtime's to keep (context.c). The first context asks before its
+     transport exists. Neither reaches Linux. */
+  if (n == SYS_set_tid_address)
+    return __capstone_set_tid_address((volatile int *)a);
+  /* One context ends (context.c); exit_group ends them all. A further
+     context ends even when its transport could not be installed. */
+  if (n == SYS_exit)
+    return __capstone_thread_exit((int)(long)a);
   if (!__capstone_delegate_ready())
     return -EIO;
   /* The hint: the launcher's trampoline accepted a signal since the last
@@ -669,14 +770,23 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     if (dl_clock((long)a, (struct timespec *)b))
       return 0;
     break;
-  /* musl's thread setup: the tid is the context's runtime identity (the pid
-     for the first context), and there is no robust list to register. Neither
-     reaches Linux. */
-  case SYS_set_tid_address:
-    return __capstone_context_tid();
+  /* The robust list: musl walks a thread's list itself when the thread ends
+     (pthread_exit); Linux's walk matters only when a whole process dies,
+     which ends every context of a domain with it. So the head is kept here,
+     per context, and answered to the calling context: musl asks for its own
+     (pid 0) to learn that robust mutexes are supported. */
   case SYS_set_robust_list:
+    dl_robust_head = (void *)a;
+    dl_robust_len = (size_t)(unsigned long)b;
     return 0;
-  case SYS_exit:
+  case SYS_get_robust_list:
+    if ((long)a && (long)a != __capstone_context_tid())
+      return -ESRCH;
+    if (!b || !c)
+      return -EFAULT;
+    *(void **)b = dl_robust_head;
+    *(size_t *)c = dl_robust_len;
+    return 0;
   case SYS_exit_group: {
     /* The program's last words before the task ends it: the at-exit hook,
        then the unserved report, then the real exit_group. Nothing resumes. */

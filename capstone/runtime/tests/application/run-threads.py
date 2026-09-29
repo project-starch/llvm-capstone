@@ -61,11 +61,32 @@ MODES = {
     "fault-child": ("signal", 11, "", "REACHED", (24, "probe_fault_store_insn")),
 }
 
+# T4: musl's threads (pthread-probe.dom).
+PTHREAD_MODES = {
+    "join-values": ("exit", 0, "PASS", None, None),
+    "join-parked": ("exit", 0, "PASS", None, None),
+    "detach-many": ("exit", 0, "PASS", None, None),
+    "reserve-waits": ("exit", 0, "PASS", None, None),
+    # the last thread's return ends the application with 0 after main left
+    "main-exit": ("exit", 0, "main-exit: PASS", None, None),
+    "tsd": ("exit", 0, "PASS", None, None),
+    "cond": ("exit", 0, "PASS", None, None),
+    "clone-refused": ("exit", 0, "PASS", None, None),
+    "pi-mutex": ("exit", 0, "PASS", None, None),
+    "user-stack": ("exit", 0, "PASS", None, None),
+    "main-exit-more": ("exit", 0, "main-exit-more: PASS", None, None),
+    # exit() in a thread ends the application with its status.
+    "exit-thread": ("exit", 5, "", "REACHED", None),
+}
+SUITES = {"thread": ("/mnt/host/thread-probe.dom", MODES),
+          "pthread": ("/mnt/host/pthread-probe.dom", PTHREAD_MODES)}
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state", type=Path, required=True)
-    parser.add_argument("--image", default="/mnt/host/thread-probe.dom")
+    parser.add_argument("--suite", choices=sorted(SUITES), default="thread")
+    parser.add_argument("--image", help="default: the suite's probe on the share")
     parser.add_argument("--only", nargs="*", default=None)
     parser.add_argument("--timeout", type=float, default=120)
     parser.add_argument("--report", type=Path)
@@ -75,14 +96,16 @@ def main():
     symbols = run_context.image_symbols(args.nm, args.host_image)
     env = dict(os.environ, PYTHONPATH=str(HERE.parents[1] / "host"))
     cli = [sys.executable, "-m", "capstone_vm", "--state", str(args.state)]
+    image, modes = SUITES[args.suite]
+    image = args.image or image
     results, failed = {}, 0
-    for mode, (kind, value, needle, forbidden, fault) in MODES.items():
+    for mode, (kind, value, needle, forbidden, fault) in modes.items():
         if args.only and mode not in args.only:
             continue
         status = args.state / f"threads-{mode}.json"
         status.unlink(missing_ok=True)
         try:
-            result = subprocess.run([*cli, "run", "--result", str(status), args.image, mode],
+            result = subprocess.run([*cli, "run", "--result", str(status), image, mode],
                                     env=env, capture_output=True, text=True, timeout=args.timeout)
             record = json.loads(status.read_text()) if status.exists() else {}
             got = (record.get("kind"), record.get("value"))
@@ -100,7 +123,7 @@ def main():
         failed += not ok
         print(f"{mode}: {'PASS' if ok else 'FAIL ' + reason}", flush=True)
     passed = len(results) - failed
-    print(f"thread probe: {passed}/{len(results)} PASS")
+    print(f"{args.suite} probe: {passed}/{len(results)} PASS")
     if args.report:
         args.report.write_text(json.dumps({"modes": results, "passed": passed,
                                            "total": len(results)}, indent=2) + "\n")

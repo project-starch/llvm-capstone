@@ -44,6 +44,7 @@
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
+#include <sys/syscall.h>
 #include <capstone/lock.h>
 
 #ifndef MAP_HUGETLB
@@ -299,6 +300,45 @@ int __munmap(void *start, size_t len)
 int munmap(void *start, size_t len)
 {
 	return __munmap(start, len);
+}
+
+/* musl's pthread_create maps a thread's stack PROT_NONE and opens all of it
+ * but the guard page with mprotect(PROT_READ | PROT_WRITE). A mapping here is
+ * heap memory, readable and writable whatever it was mapped with, and what
+ * confines it is its capability's bounds, not page protection. So a request
+ * that leaves pages of one mapping readable and writable states what is
+ * already true and answers 0. Any other protection would need page tables the
+ * domain does not have: ENOSYS, reported as unserved. A guard page is
+ * therefore not enforced by a fault; overrunning a stack stays inside the
+ * mapping's bounds. */
+void __capstone_hc_note_unserved(long n);
+
+static int mprotect_held(void *addr, size_t len, int prot)
+{
+	uintptr_t at = (uintptr_t)addr;
+	if (prot == (PROT_READ | PROT_WRITE))
+		for (int i = 0; i < L0_MAX_MAPS; i++) {
+			uintptr_t base = (uintptr_t)maps[i].base;
+			if (maps[i].base && at >= base && len <= maps[i].len &&
+			    at - base <= maps[i].len - len)
+				return 0;
+		}
+	__capstone_hc_note_unserved(SYS_mprotect);
+	errno = ENOSYS;
+	return -1;
+}
+
+int __mprotect(void *addr, size_t len, int prot)
+{
+	capstone_lock(&maps_lock);
+	int r = mprotect_held(addr, len, prot);
+	capstone_unlock(&maps_lock);
+	return r;
+}
+
+int mprotect(void *addr, size_t len, int prot)
+{
+	return __mprotect(addr, len, prot);
 }
 
 int shmget(key_t key, size_t size, int flag)

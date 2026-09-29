@@ -323,14 +323,16 @@ static long exec_locked(struct execution *e, struct capstone_delegate_host *host
  * the main thread and keeps the signals: a context thread blocks every signal
  * (its host refuses the signal requests), so the signal ring keeps one
  * producer. */
-enum { TRANSPORT_FREE, TRANSPORT_RESERVED, TRANSPORT_LIVE };
+enum { TRANSPORT_FREE, TRANSPORT_RESERVED, TRANSPORT_LIVE, TRANSPORT_EXITING };
 struct context_service {
   pthread_mutex_t lock;
+  pthread_cond_t released;   /* a transport became free */
   struct execution *e;
   dom_id_t first;
   unsigned transports;   /* 1 + the descriptor's contexts; transport 0 is the first's */
   unsigned char state[1 + CAPSTONE_DELEGATE_CONTEXTS_MAX];
   dom_id_t live[1 + CAPSTONE_DELEGATE_CONTEXTS_MAX];
+  uint64_t wake[1 + CAPSTONE_DELEGATE_CONTEXTS_MAX];   /* CONTEXT_EXITING's key */
 };
 
 struct context_thread {
@@ -346,11 +348,16 @@ static struct capstone_delegate_entry *transport_entry(struct execution *e, unsi
                                             (size_t)transport * CAPSTONE_DELEGATE_META_BYTES);
 }
 
-static void transport_release(struct context_service *service, unsigned transport) {
+/* Returns the key CONTEXT_EXITING named, 0 for none. */
+static uint64_t transport_release(struct context_service *service, unsigned transport) {
   pthread_mutex_lock(&service->lock);
+  uint64_t key = service->wake[transport];
   service->state[transport] = TRANSPORT_FREE;
   service->live[transport] = 0;
+  service->wake[transport] = 0;
+  pthread_cond_broadcast(&service->released);
   pthread_mutex_unlock(&service->lock);
+  return key;
 }
 
 /* A write to a pipe without a reader, or past the file size limit, makes
@@ -406,9 +413,15 @@ static void *context_thread(void *arg) {
     if (t->host.exiting)
       process_end(e, t->host.exit_status);
   }
+  /* The context can never run again: its transport is free for the next
+     one, then its clear word's waiters are woken (a joiner already saw the
+     word and went on: the wake is harmless). Free first, so a joiner that
+     makes a thread at once finds the transport. */
   capstone_forget(t->id);
   capstone_delegate_host_free(&t->host);
-  transport_release(t->service, t->transport);
+  uint64_t key = transport_release(t->service, t->transport);
+  if (key)
+    capstone_park_wake(e->delegate.park, key, 1);
   free(t);
   return NULL;
 }
@@ -455,15 +468,38 @@ static long context_request(struct capstone_delegate_host *host,
                             const struct capstone_delegate_entry *request) {
   struct context_service *service = host->context_state;
   if (request->nr == CAPSTONE_NR_CONTEXT_RESERVE) {
+    /* A context that announced its end frees its transport within its last
+       steps, without waiting on anything: wait for it rather than answer
+       EAGAIN for a thread that has already finished. */
     long found = service->transports > 1 ? -EAGAIN : -ENOSYS;
     pthread_mutex_lock(&service->lock);
-    for (unsigned i = 1; i < service->transports && found < 0; ++i)
-      if (service->state[i] == TRANSPORT_FREE) {
-        service->state[i] = TRANSPORT_RESERVED;
-        found = i;
+    for (;;) {
+      int exiting = 0;
+      for (unsigned i = 1; i < service->transports && found < 0; ++i) {
+        exiting |= service->state[i] == TRANSPORT_EXITING;
+        if (service->state[i] == TRANSPORT_FREE) {
+          service->state[i] = TRANSPORT_RESERVED;
+          found = i;
+        }
       }
+      if (found > 0 || !exiting)
+        break;
+      pthread_cond_wait(&service->released, &service->lock);
+    }
     pthread_mutex_unlock(&service->lock);
     return found;
+  }
+  if (request->nr == CAPSTONE_NR_CONTEXT_EXITING) {
+    long r = -EINVAL;   /* the first context, or a REGISTER one: no transport of its own */
+    pthread_mutex_lock(&service->lock);
+    for (unsigned i = 1; i < service->transports; ++i)
+      if (service->state[i] == TRANSPORT_LIVE && service->live[i] == (dom_id_t)host->context_id) {
+        service->state[i] = TRANSPORT_EXITING;
+        service->wake[i] = request->args[0];
+        r = 0;
+      }
+    pthread_mutex_unlock(&service->lock);
+    return r;
   }
   if (request->nr == CAPSTONE_NR_CONTEXT_CREATE) {
     uint64_t mode = request->args[1], transport = request->args[2];
@@ -698,6 +734,7 @@ int main(int argc, char **argv) {
   e.delegate.context_id = domain;
   struct context_service contexts = {.e = &e, .first = domain, .transports = (unsigned)transports};
   pthread_mutex_init(&contexts.lock, NULL);
+  pthread_cond_init(&contexts.released, NULL);
   contexts.state[0] = TRANSPORT_LIVE;
   contexts.live[0] = domain;
   e.delegate.context = context_request;
