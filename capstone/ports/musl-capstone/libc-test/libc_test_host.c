@@ -211,6 +211,23 @@ int main(int argc, char **argv) {
   }
   shared_region_annotated(dom, gr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, 0x3UL /* REV_TRANSFERRED */);
 #endif
+#ifdef LT_HASH_REGION_BYTES
+#ifndef LT_GC_REGION_BYTES
+#error "LT_HASH_REGION_BYTES is the program's third region: the order fixes the index, so it needs LT_GC_REGION_BYTES for the second"
+#endif
+  /* A third transferred region, the program's region 2: the next nesting level above the GC's
+     object slots. First consumer is mruby's hash entry array, whose slots ar_delete and ht_delete
+     vacate and a later store reuses, with no release reaching the allocator -- which is why
+     revoke-on-free cannot see a scan that answers from a refilled slot. Every further level a
+     program sub-lets is another region added exactly like this one, in order, since the order is
+     what fixes the index __capstone_region hands out. */
+  region_id_t xr = create_region(LT_HASH_REGION_BYTES);
+  if (xr == (region_id_t)-1) {
+    fprintf(stderr, "libc-test %s: create_region(%lu) for the third program region failed\n", name, (unsigned long)LT_HASH_REGION_BYTES);
+    capstone_cleanup(); return 3;
+  }
+  shared_region_annotated(dom, xr, HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT, 0x3UL /* REV_TRANSFERRED */);
+#endif
 
   static struct hc_host host;
   host.tag = name; host.verbose = 0;

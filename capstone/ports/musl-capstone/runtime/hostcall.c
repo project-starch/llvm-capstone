@@ -62,7 +62,15 @@ static unsigned hc_shared_region_count;
    revokes; without this they would be counted and dropped. Opt-in, so every domain built
    without it is byte-identical to before. A linear capability moves when it is loaded on
    hardware that enforces linearity, so the slot is read once and cleared. */
-#define HC_PROGRAM_REGIONS 2
+/* Each nesting level a program sub-lets needs a region of its own, because a level's
+   slots must be held LINEARLY to be carved and revoked one at a time, and a linear
+   capability cannot be shared with a second level. Region 0 is the Sublet heap
+   (sublet_heap.c), 1 the GC object slots (mruby's patch 0008), and the rest are for the
+   levels a program builds above malloc -- mruby has at least four more (its hash entry
+   array, its shared string buffers, the VM data stack's register windows and the ci
+   stack's frames). Raising this costs one pointer of .bss per region and nothing else:
+   a region nobody grants stays 0 and __capstone_region hands out 0 for it. */
+#define HC_PROGRAM_REGIONS 6
 static void *hc_program_region[HC_PROGRAM_REGIONS];
 
 void *__capstone_region(unsigned index) {
