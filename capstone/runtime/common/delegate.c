@@ -23,6 +23,11 @@ _Static_assert(CAPSTONE_SIGNAL_OFFSET + sizeof(struct capstone_signal_block) <= 
 #define INOUT_SCALED(a, s) {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
 #define IN_SCALED(a, s) {CAPSTONE_ARG_IN, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
 #define OUT_SCALED(a, s) {CAPSTONE_ARG_OUT, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
+#define OPT_IN_ARG(a) {CAPSTONE_ARG_OPT_IN, CAPSTONE_LEN_ARG, a, 0, 0}
+#define INOUT_FIX(n) {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, n, 0, 0}
+/* a buffer whose length is the 32-bit word at the offset in argument a */
+#define INOUT_WORD(a) {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_WORD, a, 0, 0}
+#define OPT_INOUT_WORD(a) {CAPSTONE_ARG_OPT_INOUT, CAPSTONE_LEN_WORD, a, 0, 0}
 
 /* Sizes are the kernel's RV64 layouts, which is what lands in the exchange
  * region after the libc's marshalling: iovec is two 64-bit words, timespec
@@ -35,6 +40,10 @@ _Static_assert(CAPSTONE_SIGNAL_OFFSET + sizeof(struct capstone_signal_block) <= 
 #define STATFS 120
 #define STATX 256
 #define RUSAGE 144
+/* epoll_event is 16 bytes on riscv64 (12, packed, on x86_64: the launcher
+ * converts on such a host); the msghdr block is capstone/msghdr.h */
+#define EPOLL_EVENT 16
+#define MSGHDR 64
 
 static const struct capstone_delegate_shape shapes[] = {
   /* files and directories */
@@ -164,6 +173,37 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_setitimer, CAPSTONE_GROUP_DELEGATED, 3, "setitimer", {I, OPT_IN_FIX(32), OPT_OUT_FIX(32)}},
   {CAPSTONE_SYS_wait4, CAPSTONE_GROUP_DELEGATED, 4, "wait4",
    {I, OPT_OUT_FIX(4), I, OPT_OUT_FIX(144)}},
+  /* sockets: descriptors like files. Linux decides family, protocol, port
+     and option; the launcher checks offsets, lengths and its private
+     descriptors, SCM_RIGHTS included. Address and option buffers whose
+     length the caller passes behind a pointer take the word rule, and are
+     INOUT so the bytes the kernel does not write stay the caller's. */
+  {CAPSTONE_SYS_socket, CAPSTONE_GROUP_DELEGATED, 3, "socket", {I, I, I}},
+  {CAPSTONE_SYS_socketpair, CAPSTONE_GROUP_DELEGATED, 4, "socketpair", {I, I, I, OUT_FIX(8)}},
+  {CAPSTONE_SYS_bind, CAPSTONE_GROUP_DELEGATED, 3, "bind", {I, IN_ARG(2), I}},
+  {CAPSTONE_SYS_listen, CAPSTONE_GROUP_DELEGATED, 2, "listen", {I, I}},
+  {CAPSTONE_SYS_accept, CAPSTONE_GROUP_DELEGATED, 3, "accept", {I, OPT_INOUT_WORD(2), OPT_INOUT_FIX(4)}},
+  {CAPSTONE_SYS_accept4, CAPSTONE_GROUP_DELEGATED, 4, "accept4", {I, OPT_INOUT_WORD(2), OPT_INOUT_FIX(4), I}},
+  {CAPSTONE_SYS_connect, CAPSTONE_GROUP_DELEGATED, 3, "connect", {I, IN_ARG(2), I}},
+  {CAPSTONE_SYS_getsockname, CAPSTONE_GROUP_DELEGATED, 3, "getsockname", {I, INOUT_WORD(2), INOUT_FIX(4)}},
+  {CAPSTONE_SYS_getpeername, CAPSTONE_GROUP_DELEGATED, 3, "getpeername", {I, INOUT_WORD(2), INOUT_FIX(4)}},
+  {CAPSTONE_SYS_sendto, CAPSTONE_GROUP_DELEGATED, 6, "sendto", {I, IN_ARG(2), I, I, OPT_IN_ARG(5), I}},
+  {CAPSTONE_SYS_recvfrom, CAPSTONE_GROUP_DELEGATED, 6, "recvfrom",
+   {I, OUT_ARG(2), I, I, OPT_INOUT_WORD(5), OPT_INOUT_FIX(4)}},
+  {CAPSTONE_SYS_setsockopt, CAPSTONE_GROUP_DELEGATED, 5, "setsockopt", {I, I, I, IN_ARG(4), I}},
+  {CAPSTONE_SYS_getsockopt, CAPSTONE_GROUP_DELEGATED, 5, "getsockopt",
+   {I, I, I, OPT_INOUT_WORD(4), OPT_INOUT_FIX(4)}},
+  {CAPSTONE_SYS_shutdown, CAPSTONE_GROUP_DELEGATED, 2, "shutdown", {I, I}},
+  /* msghdr holds pointers: the libc flattens it into the block, the launcher
+     rebuilds it; recvmsg writes the lengths and flags back into the block */
+  {CAPSTONE_SYS_sendmsg, CAPSTONE_GROUP_DELEGATED, 3, "sendmsg", {I, IN_FIX(MSGHDR), I}},
+  {CAPSTONE_SYS_recvmsg, CAPSTONE_GROUP_DELEGATED, 3, "recvmsg", {I, INOUT_FIX(MSGHDR), I}},
+  {CAPSTONE_SYS_epoll_create1, CAPSTONE_GROUP_DELEGATED, 1, "epoll_create1", {I}},
+  {CAPSTONE_SYS_epoll_ctl, CAPSTONE_GROUP_DELEGATED, 4, "epoll_ctl", {I, I, I, OPT_IN_FIX(EPOLL_EVENT)}},
+  /* the events the kernel counted come back; with a mask it is a wait under
+     a temporary mask like ppoll, and the set size must be 8 */
+  {CAPSTONE_SYS_epoll_pwait, CAPSTONE_GROUP_DELEGATED, 6, "epoll_pwait",
+   {I, OUT_SCALED(2, EPOLL_EVENT), I, I, OPT_IN_FIX(8), I}},
   /* the exception groups */
   {CAPSTONE_SYS_brk, CAPSTONE_GROUP_MEMORY, 1, "brk", {I}},
   {CAPSTONE_SYS_munmap, CAPSTONE_GROUP_MEMORY, 2, "munmap", {I, I}},
@@ -187,7 +227,6 @@ static const struct capstone_delegate_shape shapes[] = {
   {2, CAPSTONE_GROUP_RUNTIME, 3, "ioctl-buffer", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 64, 0, 0}}},
   {1, CAPSTONE_GROUP_RUNTIME, 2, "spawn", {IN_ARG(1), I}},
   {0, CAPSTONE_GROUP_RUNTIME, 3, "hello", {I, I, I}},
-  /* not in this branch: sockets stay unknown until a profile admits them */
 };
 
 const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
@@ -227,12 +266,24 @@ static int is_optional(const struct capstone_delegate_arg *a) {
 
 size_t capstone_delegate_arg_bytes(const struct capstone_delegate_shape *shape,
                                    const struct capstone_delegate_entry *entry,
+                                   const void *exchange, size_t exchange_bytes,
                                    unsigned index) {
   const struct capstone_delegate_arg *a;
   if (!shape || index >= shape->argc)
     return 0;
   a = &shape->args[index];
   switch (a->length) {
+  case CAPSTONE_LEN_WORD: {
+    uint32_t word;
+    uint64_t at;
+    if (a->size >= CAPSTONE_DELEGATE_ARGS || !exchange)
+      return 0;
+    at = entry->args[a->size];
+    if (at == 0 || at > exchange_bytes || exchange_bytes - at < sizeof word)
+      return 0;
+    memcpy(&word, (const char *)exchange + at, sizeof word);
+    return word;
+  }
   case CAPSTONE_LEN_FIXED:
     return a->size;
   case CAPSTONE_LEN_ARG:
@@ -268,7 +319,8 @@ int capstone_delegate_pack(struct capstone_delegate_entry *entry, uint64_t nr,
 }
 
 int capstone_delegate_validate(const struct capstone_delegate_entry *entry,
-                               size_t exchange_bytes) {
+                               const void *exchange, size_t exchange_bytes,
+                               size_t lengths[CAPSTONE_DELEGATE_ARGS]) {
   const struct capstone_delegate_shape *s;
   if (!entry || entry->version != CAPSTONE_DELEGATE_VERSION || entry->count != 1 ||
       (entry->flags >> CAPSTONE_DELEGATE_ARGS))
@@ -276,26 +328,38 @@ int capstone_delegate_validate(const struct capstone_delegate_entry *entry,
   s = capstone_delegate_shape(entry->nr);
   if (!s || (s->group != CAPSTONE_GROUP_DELEGATED && s->group != CAPSTONE_GROUP_RUNTIME))
     return ENOSYS;
-  for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i) {
-    const struct capstone_delegate_arg *a = i < s->argc ? &s->args[i] : NULL;
-    int flagged = (entry->flags >> i) & 1;
-    size_t bytes;
-    if (!a || !is_offset(a)) {
-      if (flagged)
-        return EINVAL;
-      continue;
-    }
-    if (!flagged) {
-      if (is_optional(a) && entry->args[i] == 0)
+  /* Two passes: a word length is read only after the word's own four bytes
+     have been bounded in the first. */
+  for (unsigned pass = 0; pass < 2; ++pass)
+    for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i) {
+      const struct capstone_delegate_arg *a = i < s->argc ? &s->args[i] : NULL;
+      int flagged = (entry->flags >> i) & 1;
+      size_t bytes;
+      if (lengths && pass == 0)
+        lengths[i] = 0;
+      if (!a || !is_offset(a)) {
+        if (flagged)
+          return EINVAL;
         continue;
-      return EINVAL;
+      }
+      if ((a->length == CAPSTONE_LEN_WORD) != (pass == 1))
+        continue;
+      if (!flagged) {
+        if (is_optional(a) && entry->args[i] == 0)
+          continue;
+        return EINVAL;
+      }
+      if (entry->args[i] >= exchange_bytes)
+        return EFAULT;
+      if (a->length == CAPSTONE_LEN_WORD && a->size < CAPSTONE_DELEGATE_ARGS &&
+          entry->args[a->size] && !((entry->flags >> a->size) & 1))
+        return EINVAL;   /* a word that is not a checked buffer */
+      bytes = capstone_delegate_arg_bytes(s, entry, exchange, exchange_bytes, i);
+      if (bytes > exchange_bytes - entry->args[i])
+        return EFAULT;
+      if (lengths)
+        lengths[i] = bytes;
     }
-    if (entry->args[i] >= exchange_bytes)
-      return EFAULT;
-    bytes = capstone_delegate_arg_bytes(s, entry, i);
-    if (bytes > exchange_bytes - entry->args[i])
-      return EFAULT;
-  }
   return 0;
 }
 
@@ -320,11 +384,14 @@ size_t capstone_delegate_result_bytes(uint64_t nr, unsigned index, size_t bytes,
   if (nr == CAPSTONE_SYS_read || nr == CAPSTONE_SYS_pread64 ||
       nr == CAPSTONE_SYS_getdents64 || nr == CAPSTONE_SYS_getrandom ||
       nr == CAPSTONE_SYS_getcwd || nr == CAPSTONE_SYS_readlinkat ||
-      nr == CAPSTONE_SYS_sched_getaffinity)
+      nr == CAPSTONE_SYS_sched_getaffinity || (nr == CAPSTONE_SYS_recvfrom && index == 1))
     return (uint64_t)result < bytes ? (size_t)result : bytes;
-  /* getgroups writes the entries it counts, four bytes each */
+  /* getgroups writes the entries it counts, four bytes each; epoll_pwait the
+     events it counts, sixteen each */
   if (nr == CAPSTONE_SYS_getgroups)
     return (uint64_t)result * 4 < bytes ? (size_t)result * 4 : bytes;
+  if (nr == CAPSTONE_SYS_epoll_pwait && index == 1)
+    return (uint64_t)result * 16 < bytes ? (size_t)result * 16 : bytes;
   /* Sleep's remaining-time output is defined only on interruption. */
   if ((nr == CAPSTONE_SYS_nanosleep && index == 1) ||
       (nr == CAPSTONE_SYS_clock_nanosleep && index == 3)) return 0;

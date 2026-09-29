@@ -88,10 +88,14 @@ enum capstone_delegate_kind {
 
 /* Where a buffer argument's length comes from. */
 enum capstone_delegate_length {
-  CAPSTONE_LEN_NONE = 0,  /* an integer, or a string */
-  CAPSTONE_LEN_FIXED,     /* `size` bytes */
-  CAPSTONE_LEN_ARG,       /* args[size] bytes */
-  CAPSTONE_LEN_ARG_SCALED /* args[size] elements of `scale` bytes */
+  CAPSTONE_LEN_NONE = 0,   /* an integer, or a string */
+  CAPSTONE_LEN_FIXED,      /* `size` bytes */
+  CAPSTONE_LEN_ARG,        /* args[size] bytes */
+  CAPSTONE_LEN_ARG_SCALED, /* args[size] elements of `scale` bytes */
+  /* the 32-bit value at exchange offset args[size], a length the caller passes
+     behind a pointer (socklen_t *); args[size] is itself a four-byte INOUT
+     buffer the kernel updates, and 0 there (NULL) means a length of 0 */
+  CAPSTONE_LEN_WORD
 };
 
 struct capstone_delegate_arg {
@@ -199,6 +203,13 @@ enum {
   CAPSTONE_SYS_getcpu = 168, CAPSTONE_SYS_readahead = 213, CAPSTONE_SYS_fadvise64 = 223,
   CAPSTONE_SYS_syncfs = 267, CAPSTONE_SYS_memfd_create = 279, CAPSTONE_SYS_copy_file_range = 285,
   CAPSTONE_SYS_statx = 291, CAPSTONE_SYS_faccessat2 = 439,
+  /* sockets and epoll: descriptors like files */
+  CAPSTONE_SYS_epoll_create1 = 20, CAPSTONE_SYS_epoll_ctl = 21, CAPSTONE_SYS_epoll_pwait = 22,
+  CAPSTONE_SYS_socketpair = 199, CAPSTONE_SYS_bind = 200, CAPSTONE_SYS_listen = 201,
+  CAPSTONE_SYS_accept = 202, CAPSTONE_SYS_connect = 203, CAPSTONE_SYS_getsockname = 204,
+  CAPSTONE_SYS_getpeername = 205, CAPSTONE_SYS_sendto = 206, CAPSTONE_SYS_recvfrom = 207,
+  CAPSTONE_SYS_setsockopt = 208, CAPSTONE_SYS_getsockopt = 209, CAPSTONE_SYS_shutdown = 210,
+  CAPSTONE_SYS_sendmsg = 211, CAPSTONE_SYS_recvmsg = 212, CAPSTONE_SYS_accept4 = 242,
   CAPSTONE_SYS_vfork = 1071, CAPSTONE_SYS_fork = 1079
 };
 
@@ -214,17 +225,23 @@ int capstone_delegate_pack(struct capstone_delegate_entry *entry, uint64_t nr,
 
 /* The launcher's check before it touches the exchange region: version, count,
  * group, and every flagged argument inside [0, exchange_bytes) for the length
- * the shape implies. Returns 0, or the errno the request must be answered with
+ * the shape implies. A length given as a word in the region is read from
+ * `exchange` once its own four bytes are bounded, and every resolved length
+ * is written to `lengths` (when given) so the caller uses the length that
+ * was checked. Returns 0, or the errno the request must be answered with
  * (EINVAL for a malformed block, EFAULT for an offset outside the region,
  * ENOSYS for an unknown or excepted number). RUNTIME requests pass. */
 int capstone_delegate_validate(const struct capstone_delegate_entry *entry,
-                               size_t exchange_bytes);
+                               const void *exchange, size_t exchange_bytes,
+                               size_t lengths[CAPSTONE_DELEGATE_ARGS]);
 
 /* Bytes the argument at `index` covers in the exchange region, per the shape,
  * or 0 when it is not a buffer. Strings report 0: the launcher bounds them
- * with capstone_delegate_string_ok. */
+ * with capstone_delegate_string_ok. A word length needs `exchange`; it is 0
+ * when the word's own bytes are not inside the region. */
 size_t capstone_delegate_arg_bytes(const struct capstone_delegate_shape *shape,
                                    const struct capstone_delegate_entry *entry,
+                                   const void *exchange, size_t exchange_bytes,
                                    unsigned index);
 
 /* A NUL inside [offset, exchange_bytes). */

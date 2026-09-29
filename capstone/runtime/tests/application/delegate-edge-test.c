@@ -86,6 +86,46 @@ int main(int argc, char **argv) {
     long result = call(CAPSTONE_SYS_wait4, -1, 16, WNOHANG, 0);
     capstone_spawner_stop(&spawner);
     assert(result == -ECHILD);
+  } else if (!strcmp(argv[1], "spawn-target")) {
+    /* a file action names descriptors in the child's table, where the
+       launcher's own never arrive: dup2 onto a number the launcher uses
+       privately, or closing it there, is the application's business; a
+       DUP2 source or an FCHDIR directory that is the launcher's is refused */
+    struct capstone_spawner spawner;
+    int mine = open("/dev/null", O_RDONLY), p[2];
+    char *args[] = {"sh", "-c", "echo out >&$CAPSTONE_TARGET; exit 5", NULL};
+    char env[32], *envp[] = {"PATH=/usr/bin:/bin", env, NULL};
+    size_t bytes;
+    assert(mine >= 0 && !pipe(p));
+    snprintf(env, sizeof env, "CAPSTONE_TARGET=%d", mine);
+    host.private_fds[host.private_count++] = mine;
+    assert(!capstone_spawner_start(&spawner));
+    host.spawner = &spawner;
+    struct capstone_spawn_action onto_mine[] = {{CAPSTONE_SPAWN_DUP2, (uint32_t)mine, (uint32_t)p[1], 0, 0, 0},
+                                                {CAPSTONE_SPAWN_CLOSE, (uint32_t)p[1], 0, 0, 0, 0}};
+    const char *no_paths[] = {NULL, NULL};
+    assert(!capstone_spawn_pack(exchange + 1024, sizeof exchange - 1024, CAPSTONE_SPAWN_SEARCH_PATH, 0,
+                                "sh", args, envp, onto_mine, 2, no_paths, &bytes));
+    long pid = call(CAPSTONE_NR_SPAWN, 1024, bytes, 0, 0);
+    assert(pid > 0);
+    close(p[1]);
+    char out[8] = {0};
+    assert(read(p[0], out, sizeof out) == 4 && !memcmp(out, "out\n", 4));
+    assert(call(CAPSTONE_SYS_wait4, (uint64_t)pid, 16, 0, 0) == pid);
+    int status;
+    memcpy(&status, exchange + 16, sizeof status);
+    assert(WIFEXITED(status) && WEXITSTATUS(status) == 5);
+    struct capstone_spawn_action from_mine[] = {{CAPSTONE_SPAWN_DUP2, 1, (uint32_t)mine, 0, 0, 0}};
+    assert(!capstone_spawn_pack(exchange + 1024, sizeof exchange - 1024, CAPSTONE_SPAWN_SEARCH_PATH, 0,
+                                "sh", args, envp, from_mine, 1, no_paths, &bytes));
+    assert(call(CAPSTONE_NR_SPAWN, 1024, bytes, 0, 0) == -EBADF);
+    struct capstone_spawn_action into_mine[] = {{CAPSTONE_SPAWN_FCHDIR, (uint32_t)mine, 0, 0, 0, 0}};
+    assert(!capstone_spawn_pack(exchange + 1024, sizeof exchange - 1024, CAPSTONE_SPAWN_SEARCH_PATH, 0,
+                                "sh", args, envp, into_mine, 1, no_paths, &bytes));
+    assert(call(CAPSTONE_NR_SPAWN, 1024, bytes, 0, 0) == -EBADF);
+    capstone_spawner_stop(&spawner);
+    assert(fcntl(mine, F_GETFD) >= 0);
+    close(mine); close(p[0]);
   } else if (!strcmp(argv[1], "wait-stopped")) {
     pid_t pid = fork();
     assert(pid >= 0);
