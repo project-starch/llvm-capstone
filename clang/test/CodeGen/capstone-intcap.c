@@ -1,8 +1,11 @@
 // __intcap / __uintcap_t on capstone64 (intcap plan, Phase B.1): an integer whose
 // representation is a capability. A pointer converted to it keeps the whole
 // capability and converts back unchanged; its integer value is the address; an
-// integer converted to it becomes an untagged capability (inttoptr, which the
-// backend bridges into a capability register).
+// integer converted to it becomes an untagged capability: the address of null
+// (llvm.capstone.cap.set.address on null, which the backend selects as the
+// integer bridge). Not inttoptr: the backend recovers provenance for the
+// uintptr_t round-trip shape inttoptr(address of p + k), and would turn
+// `(__intcap)((long)ic + 1)` into an offset on ic.
 //
 // The uintptr_t functions are the control: the same round trip through an
 // ordinary integer goes ptrtoint -> inttoptr and loses the capability.
@@ -36,13 +39,15 @@ __uintcap_t from_ptr(void *p) { return (__uintcap_t)p; }
 void *to_ptr(__uintcap_t u) { return (void *)u; }
 
 // CHECK-LABEL: define {{.*}}ptr addrspace(200) @from_ulong(i64
-// CHECK: inttoptr i64 %{{.*}} to ptr addrspace(200)
+// CHECK-NOT: inttoptr
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) null, i64 %{{.*}})
 __uintcap_t from_ulong(unsigned long x) { return x; }
 
 // A signed int widens by sign extension first.
 // CHECK-LABEL: define {{.*}}ptr addrspace(200) @from_int(i32
-// CHECK: sext i32 %{{.*}} to i64
-// CHECK: inttoptr i64 %{{.*}} to ptr addrspace(200)
+// CHECK: [[W:%.*]] = sext i32 %{{.*}} to i64
+// CHECK-NOT: inttoptr
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) null, i64 [[W]])
 __intcap from_int(int x) { return x; }
 
 // CHECK-LABEL: define {{.*}}i64 @to_ulong(ptr addrspace(200)
@@ -155,3 +160,30 @@ char subscript(char *p, __uintcap_t u) { return p[u]; }
 // CHECK-NOT: llvm.capstone.cap.set.address
 // CHECK: ret ptr addrspace(200)
 char *advance(char *p, __intcap i) { return p - i; }
+
+// An integer computed from an __intcap's address and converted back carries no
+// provenance: it is the address of null, never an offset on ic.
+// CHECK-LABEL: define {{.*}}ptr addrspace(200) @address_plus_one(ptr addrspace(200)
+// CHECK: [[A:%.*]] = ptrtoint ptr addrspace(200) %{{.*}} to i64
+// CHECK: [[S:%.*]] = add nsw i64 [[A]], 1
+// CHECK-NOT: inttoptr
+// CHECK: call {{.*}}ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) null, i64 [[S]])
+__intcap address_plus_one(__intcap ic) { return (long)ic + 1; }
+
+// A shift count is not converted to the shifted type, so an __intcap count
+// reaches the shift as a capability: it shifts by the address.
+// CHECK-LABEL: define {{.*}}i64 @shl_by(i64
+// CHECK: [[C:%.*]] = ptrtoint ptr addrspace(200) %{{.*}} to i64
+// CHECK: shl i64 %{{.*}}, [[C]]
+long shl_by(long n, __intcap s) { return n << s; }
+// CHECK-LABEL: define {{.*}}i64 @shr_assign_by(i64
+// CHECK: [[C:%.*]] = ptrtoint ptr addrspace(200) %{{.*}} to i64
+// CHECK: ashr i64 %{{.*}}, [[C]]
+long shr_assign_by(long n, __intcap s) { n >>= s; return n; }
+
+// Only a shift count is read as its address. A pointer difference also has an
+// integer result and pointer operands; it stays a pointer difference.
+// CHECK-LABEL: define {{.*}}i64 @pdiff(
+// CHECK: %sub.ptr.sub = sub i64
+// CHECK: sdiv exact i64 %sub.ptr.sub, 4
+long pdiff(int *p, int *q) { return p - q; }

@@ -6,7 +6,8 @@
 #include <unistd.h>
 
 #include "../../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
-#include "../hostcall-file-service-probe-common.h"
+#include "../hostcall-stdout-probe/hostcall_stdout_probe.h"
+#include "../../../runtime/include/capstone/hostcall-file-service.h"
 
 #define print_nobuf(...)         \
   do {                           \
@@ -15,7 +16,7 @@
   } while (0)
 
 static struct hostcall_file_service_handle_slot
-    handle_slots[HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES];
+    handle_slots[HC_FILE_SERVICE_MAX_HANDLES];
 
 static int fail_cleanup(const char *message, unsigned long observed,
                         struct hostcall_v0 *metadata) {
@@ -29,7 +30,7 @@ static int fail_cleanup(const char *message, unsigned long observed,
             metadata->length, metadata->result, metadata->error);
   }
   hostcall_cleanup_open_handles(handle_slots,
-                                HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES);
+                                HC_FILE_SERVICE_MAX_HANDLES);
   capstone_cleanup();
   return 1;
 }
@@ -131,7 +132,7 @@ int main(int argc, char **argv) {
   }
 
   handle_token = hostcall_allocate_handle_token(
-      handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, fd);
+      handle_slots, HC_FILE_SERVICE_MAX_HANDLES, fd);
   if (!handle_token) {
     int saved_errno = errno;
     close(fd);
@@ -184,7 +185,7 @@ int main(int argc, char **argv) {
       "hostcall-file-handle-write-probe: servicing HC_V0_OP_FILE_WRITE for token %llu\n",
       handle_token);
   fd = hostcall_lookup_handle_fd(handle_slots,
-                                 HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES,
+                                 HC_FILE_SERVICE_MAX_HANDLES,
                                  handle_token);
   if (fd < 0) {
     metadata->result = -1;
@@ -235,7 +236,7 @@ int main(int argc, char **argv) {
       "hostcall-file-handle-write-probe: servicing HC_V0_OP_FILE_CLOSE for token %llu\n",
       handle_token);
   if (hostcall_close_handle_token(handle_slots,
-                                  HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES,
+                                  HC_FILE_SERVICE_MAX_HANDLES,
                                   handle_token) < 0) {
     metadata->result = -1;
     metadata->error = errno;

@@ -1,0 +1,44 @@
+{
+  "platform": "QEMU supervised CALL, one hart",
+  "boot_id": "fde91933-5eff-4afc-acbf-36619b60bd91",
+  "mixed_starts": 1008,
+  "sublet": true,
+  "before": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 138559488,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 65285,
+    "nodes_live": 68,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 466056,
+    "tag_pages": 650,
+    "node_capacity": 65536
+  },
+  "after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 138559488,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 65285,
+    "nodes_live": 68,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 477144,
+    "tag_pages": 650,
+    "node_capacity": 65536
+  },
+  "binaries": {
+    "qemu": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e",
+    "kernel": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "firmware": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+    "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f"
+  },
+  "environment": {
+    "CAPSTONE_REV_NODES": "65536",
+    "CAPSTONE_GP_NONLIN": "1"
+  }
+}

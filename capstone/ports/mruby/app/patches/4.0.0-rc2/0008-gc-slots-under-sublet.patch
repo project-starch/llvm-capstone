@@ -1,0 +1,438 @@
+gc.c: every GC object slot issued and revoked on its own, under MRB_CAPSTONE_GC_SUBLET (4.0.0-rc2).
+
+The third arm of the port (docs/design/mruby-gc-sublet-port-plan.md). Without
+the define the preprocessed file is identical to before. With it, a heap page's
+1024 80-byte slots are carved from the program's region 1, which the GC holds
+linearly: a handle senior to the page, then one split per slot. mrb_obj_alloc
+takes a slot (sublet_take: its handle stays in the sidecar, the object gets an
+alias bounded to the slot); the sweep frees a dead object through the GC's own
+alias and then revokes the slot (sublet_give), after which every stale copy of
+that object's capability is dead, and the next object in the slot gets a new
+alias under a new handle.
+
+The page header becomes a sidecar from mrb_malloc, and no free slot is read or
+written: its state is obj[i] == NULL, its free-list link next_free[i]. The five
+sites that read free slots (the sweep, the gray rescan, free_heap,
+gc_each_objects, allocation) and heap_p / mrb_object_dead_p, which may be handed
+a dead object, answer from the sidecar; the latter locate the slot from the
+address as an integer. So does obj_free's fiber case, which walks a dying
+fiber's frames and tests each frame's env with heap_p and is_dead: that env may
+have been swept earlier in the same sweep, its slot revoked, and the first run
+of this arm faulted there reading it (cause 24, obj_free, mrbtest's Enumerator
+tests); it now tests and uses the slot through the GC's own alias. Two deviations, both stated in the code: an all-dead page
+is kept rather than freed whole (its slots are each revoked), and
+mrb_gc_add_region refuses the embedder's buffer. Needs sublet.h on the include
+path and a host that grants region 1 (libc-test's LT_GC_REGION_BYTES).
+mrb_capstone_gc_sublet_stats reports the arm's own counts (pages, slots issued
+and revoked, this file's Sublet primitives).
+
+diff --git c/src/gc.c w/src/gc.c
+index 0e7a10342..a5e40598e 100644
+--- c/src/gc.c
++++ w/src/gc.c
+@@ -166,6 +166,7 @@ struct RVALUE {
+ #define MRB_HEAP_PAGE_SIZE 1024
+ #endif
+ 
++#ifndef MRB_CAPSTONE_GC_SUBLET
+ typedef struct mrb_heap_page {
+   RVALUE *freelist;
+   struct mrb_heap_page *next;
+@@ -174,6 +175,130 @@ typedef struct mrb_heap_page {
+   mrb_bool region:1;             /* from contiguous region, not malloc */
+   RVALUE objects[MRB_HEAP_PAGE_SIZE];
+ } mrb_heap_page;
++#else
++/* Capstone: every object slot issued and revoked on its own (Sublet), after
++   docs/design/mruby-gc-sublet-port-plan.md. The slots live in a region the GC
++   holds linearly, carved from the program's region 1; this struct is the page's
++   SIDECAR, from mrb_malloc, and nothing in it lies inside a slot. A free slot is
++   never read or written: its state is obj[i] == NULL, its free-list link is
++   next_free[i], and cap[i] holds its region, linear, until the next take. */
++#include <stdio.h>
++#include <stdlib.h>
++#include "sublet.h"
++#define GCS_NIL 0xFFFFu
++#define GCS_PAGE_BYTES ((unsigned long)MRB_HEAP_PAGE_SIZE * sizeof(RVALUE))
++typedef struct mrb_heap_page {
++  struct mrb_heap_page *next;
++  struct mrb_heap_page *free_next;
++  mrb_bool old:1;
++  mrb_bool region:1;             /* never set: the arm refuses mrb_gc_add_region */
++  uint16_t free_head;            /* first free slot, GCS_NIL when the page is full */
++  unsigned long base;            /* slot 0's address, an integer: heap_p derives nothing */
++  sublet_cap handle;             /* senior to every slot's node */
++  sublet_cap cap[MRB_HEAP_PAGE_SIZE];   /* slot i: region while free, handle while live */
++  RVALUE *obj[MRB_HEAP_PAGE_SIZE];      /* slot i's alias while live, NULL while free */
++  uint16_t next_free[MRB_HEAP_PAGE_SIZE];
++} mrb_heap_page;
++mrb_static_assert(sizeof(RVALUE) % 16 == 0);  /* a Sublet region is whole capabilities */
++mrb_static_assert(MRB_HEAP_PAGE_SIZE <= GCS_NIL);
++
++void *__capstone_region(unsigned index);
++static sublet_cap gcs_grant;     /* what is left of region 1, linear */
++static int gcs_granted;
++static unsigned long gcs_pages, gcs_issued, gcs_released;
++
++/* What the arm spent, for the program to report (the port's domain entry prints
++   it as MRBD-GC): pages carved, slots issued and revoked, and this file's own
++   Sublet primitive counts, which sublet.h keeps per translation unit. */
++void
++mrb_capstone_gc_sublet_stats(unsigned long out[7])
++{
++  out[0] = gcs_pages;
++  out[1] = gcs_issued;
++  out[2] = gcs_released;
++  out[3] = sublet_stats.split;
++  out[4] = sublet_stats.mrev;
++  out[5] = sublet_stats.delin;
++  out[6] = sublet_stats.revoke;
++}
++
++static void
++gcs_take_grant(void)
++{
++  if (gcs_granted) return;
++  void *r = __capstone_region(1);
++  if (r == NULL) {
++    fputs("mruby: MRB_CAPSTONE_GC_SUBLET needs the program's region 1 (the host's second grant)\n", stderr);
++    abort();
++  }
++  sublet_store(&gcs_grant, r);
++  gcs_granted = 1;
++}
++
++/* The page's slots, carved from the grant: a handle senior to the whole region
++   first, then the region split into its slots, each slot's region in cap[i]. */
++static int
++gcs_page_carve(mrb_heap_page *page)
++{
++  gcs_take_grant();
++  unsigned long start = sublet_base(&gcs_grant);
++  if (sublet_end(&gcs_grant) - start < GCS_PAGE_BYTES) return 0;
++  sublet_carve(&gcs_grant, start + GCS_PAGE_BYTES, &page->cap[0]);
++  sublet_handle(&page->cap[0], &page->handle);
++  for (int i = 0; i + 1 < MRB_HEAP_PAGE_SIZE; i++)
++    sublet_split(&page->cap[i], start + (unsigned long)(i + 1) * sizeof(RVALUE), &page->cap[i + 1]);
++  page->base = start;
++  gcs_pages++;
++  return 1;
++}
++
++/* Slot i goes out: its handle stays in cap[i], the GC keeps the alias. */
++static RVALUE*
++gcs_issue(mrb_heap_page *page, uint16_t i)
++{
++  RVALUE *p = (RVALUE*)sublet_take(&page->cap[i]);
++  page->obj[i] = p;
++  gcs_issued++;
++  return p;
++}
++
++/* Slot i comes back: one revoke, after which every copy of its alias is dead,
++   the GC's own included. */
++static void
++gcs_release(mrb_heap_page *page, uint16_t i)
++{
++  page->obj[i] = NULL;
++  sublet_give(&page->cap[i]);
++  gcs_released++;
++  page->next_free[i] = page->free_head;
++  page->free_head = i;
++}
++
++/* The GC's alias of the live object in the slot an address falls in, or NULL
++   when the slot is free: for a caller holding a pointer that may be dead. */
++static mrb_heap_page* gcs_locate(mrb_gc *gc, const void *object, uint16_t *index);
++static struct RBasic*
++gcs_live_alias(mrb_gc *gc, const void *object)
++{
++  uint16_t i;
++  mrb_heap_page *page = gcs_locate(gc, object, &i);
++  return page && page->obj[i] ? &page->obj[i]->as.basic : NULL;
++}
++
++/* The page and slot an address falls in, from integers only. */
++static mrb_heap_page*
++gcs_locate(mrb_gc *gc, const void *object, uint16_t *index)
++{
++  unsigned long addr = (unsigned long)(uintptr_t)object;
++  for (mrb_heap_page *page = gc->heaps; page; page = page->next) {
++    if (addr - page->base < GCS_PAGE_BYTES) {
++      *index = (uint16_t)((addr - page->base) / sizeof(RVALUE));
++      return page;
++    }
++  }
++  return NULL;
++}
++#endif
+ 
+ typedef struct mrb_heap_region {
+   struct mrb_heap_region *next;
+@@ -295,6 +420,10 @@ mrb_temp_alloc(mrb_state *mrb, size_t size)
+ static mrb_bool
+ heap_p(mrb_gc *gc, const struct RBasic *object)
+ {
++#ifdef MRB_CAPSTONE_GC_SUBLET
++  uint16_t i;
++  return gcs_locate(gc, object, &i) != NULL;
++#else
+   mrb_heap_page* page;
+   mrb_heap_region *region;
+ 
+@@ -319,14 +448,24 @@ heap_p(mrb_gc *gc, const struct RBasic *object)
+     page = page->next;
+   }
+   return FALSE;
++#endif
+ }
+ 
+ MRB_API mrb_bool
+ mrb_object_dead_p(mrb_state *mrb, struct RBasic *object)
+ {
+   mrb_gc *gc = &mrb->gc;
++#ifdef MRB_CAPSTONE_GC_SUBLET
++  /* The object may be dead already, its slot revoked: answer from the sidecar,
++     and read the object only through the GC's own alias of a live slot. */
++  uint16_t i;
++  mrb_heap_page *page = gcs_locate(gc, object, &i);
++  if (page == NULL || page->obj[i] == NULL) return TRUE;
++  return is_dead(gc, &page->obj[i]->as.basic);
++#else
+   if (!heap_p(gc, object)) return TRUE;
+   return is_dead(gc, object);
++#endif
+ }
+ 
+ static void
+@@ -338,6 +477,7 @@ link_heap_page(mrb_gc *gc, mrb_heap_page *page)
+   gc->free_heaps = page;
+ }
+ 
++#ifndef MRB_CAPSTONE_GC_SUBLET
+ static void
+ init_heap_page(mrb_heap_page *page)
+ {
+@@ -351,18 +491,35 @@ init_heap_page(mrb_heap_page *page)
+   }
+   page->freelist = prev;
+ }
++#endif
+ 
+ static void
+ add_heap(mrb_state *mrb, mrb_gc *gc)
+ {
+   mrb_heap_page *page = (mrb_heap_page*)mrb_calloc(mrb, 1, sizeof(mrb_heap_page));
++#ifdef MRB_CAPSTONE_GC_SUBLET
++  if (!gcs_page_carve(page)) {
++    mrb_free(mrb, page);
++    mrb_raise_nomemory(mrb);
++  }
++  for (int i = 0; i < MRB_HEAP_PAGE_SIZE; i++)
++    page->next_free[i] = (uint16_t)(i + 1 < MRB_HEAP_PAGE_SIZE ? i + 1 : GCS_NIL);
++  page->free_head = 0;
++#else
+   init_heap_page(page);
++#endif
+   link_heap_page(gc, page);
+ }
+ 
+ MRB_API int
+ mrb_gc_add_region(mrb_state *mrb, void *start, size_t size)
+ {
++#ifdef MRB_CAPSTONE_GC_SUBLET
++  /* The embedder's own buffer is not under Sublet; mixing its slots with
++     revoked ones in one heap would measure neither. Refused: no pages added. */
++  (void)mrb; (void)start; (void)size;
++  return 0;
++#else
+   mrb_gc *gc = &mrb->gc;
+   uint8_t *base = (uint8_t*)start;
+   mrb_heap_region *region;
+@@ -400,6 +557,7 @@ mrb_gc_add_region(mrb_state *mrb, void *start, size_t size)
+     link_heap_page(gc, page);
+   }
+   return page_count;
++#endif
+ }
+ 
+ #define DEFAULT_GC_INTERVAL_RATIO 200
+@@ -443,6 +601,16 @@ free_heap(mrb_state *mrb, mrb_gc *gc)
+   while (page) {
+     tmp = page;
+     page = page->next;
++#ifdef MRB_CAPSTONE_GC_SUBLET
++    (void)p; (void)e;
++    for (int i = 0; i < MRB_HEAP_PAGE_SIZE; i++) {
++      if (tmp->obj[i] && tmp->obj[i]->as.free.tt != MRB_TT_FREE)
++        obj_free(mrb, &tmp->obj[i]->as.basic, TRUE);
++    }
++    /* The page's region is not returned: the state is closing, and the grant
++       dies with the domain. */
++    mrb_free(mrb, tmp);
++#else
+     for (p = tmp->objects, e=p+MRB_HEAP_PAGE_SIZE; p<e; p++) {
+       if (p->as.free.tt != MRB_TT_FREE)
+         obj_free(mrb, &p->as.basic, TRUE);
+@@ -450,6 +618,7 @@ free_heap(mrb_state *mrb, mrb_gc *gc)
+     if (!tmp->region) {
+       mrb_free(mrb, tmp);
+     }
++#endif
+   }
+ }
+ 
+@@ -601,11 +770,21 @@ mrb_obj_alloc(mrb_state *mrb, enum mrb_vtype ttype, struct RClass *cls)
+     add_heap(mrb, gc);
+   }
+ 
++#ifdef MRB_CAPSTONE_GC_SUBLET
++  mrb_heap_page *page = gc->free_heaps;
++  uint16_t slot = page->free_head;
++  page->free_head = page->next_free[slot];
++  if (page->free_head == GCS_NIL) {
++    gc->free_heaps = page->free_next;
++  }
++  RVALUE *p = gcs_issue(page, slot);
++#else
+   RVALUE *p = gc->free_heaps->freelist;
+   gc->free_heaps->freelist = p->as.free.next;
+   if (gc->free_heaps->freelist == NULL) {
+     gc->free_heaps = gc->free_heaps->free_next;
+   }
++#endif
+ 
+   gc->live++;
+   gc_protect(mrb, gc, &p->as.basic);
+@@ -901,10 +1080,20 @@ obj_free(mrb_state *mrb, struct RBasic *obj, mrb_bool end)
+ 
+           while (ce <= ci) {
+             struct REnv *e = ci->u.env;
++#ifdef MRB_CAPSTONE_GC_SUBLET
++            /* e may be dead already, swept earlier in this sweep and its slot
++               revoked: test and use the slot through the GC's own alias. */
++            if (e) e = (struct REnv*)gcs_live_alias(&mrb->gc, e);
++            if (e && !is_dead(&mrb->gc, (struct RBasic*)e) &&
++                e->tt == MRB_TT_ENV && MRB_ENV_ONSTACK_P(e)) {
++              mrb_env_unshare(mrb, e, TRUE);
++            }
++#else
+             if (e && heap_p(&mrb->gc, (struct RBasic*)e) && !is_dead(&mrb->gc, (struct RBasic*)e) &&
+                 e->tt == MRB_TT_ENV && MRB_ENV_ONSTACK_P(e)) {
+               mrb_env_unshare(mrb, e, TRUE);
+             }
++#endif
+             ci--;
+           }
+         }
+@@ -1072,9 +1261,15 @@ gc_gray_rescan(mrb_state *mrb, mrb_gc *gc)
+ 
+   gc->gray_overflow = FALSE;
+   while (page) {
++#ifdef MRB_CAPSTONE_GC_SUBLET
++    for (int i = 0; i < MRB_HEAP_PAGE_SIZE; i++) {
++      RVALUE *p = page->obj[i];
++      if (p == NULL) continue;             /* free: revoked, not to be read */
++#else
+     RVALUE *p = page->objects;
+     RVALUE *e = p + MRB_HEAP_PAGE_SIZE;
+     for (; p < e; p++) {
++#endif
+       if (is_gray(&p->as.basic) && p->as.basic.tt != MRB_TT_FREE) {
+         if (gc->gray_stack_top >= MRB_GRAY_STACK_SIZE) {
+           gc->gray_overflow = TRUE;
+@@ -1178,6 +1373,41 @@ incremental_sweep_phase(mrb_state *mrb, mrb_gc *gc, size_t limit)
+   size_t tried_sweep = 0;
+ 
+   while (page && (tried_sweep < limit)) {
++#ifdef MRB_CAPSTONE_GC_SUBLET
++    size_t freed = 0;
++    mrb_bool dead_slot = TRUE;
++    /* Only live slots are read; a free one is known from the sidecar. A dead
++       object is freed through the GC's alias, then its slot is revoked. */
++    int i = 0, e = MRB_HEAP_PAGE_SIZE;
++    if (is_minor_gc(gc) && page->old) {
++      i = e;
++      dead_slot = FALSE;
++    }
++    for (; i < e; i++) {
++      RVALUE *p = page->obj[i];
++      if (p == NULL) continue;
++      if (is_dead(gc, &p->as.basic)) {
++        if (p->as.basic.tt != MRB_TT_FREE) {
++          obj_free(mrb, &p->as.basic, FALSE);
++          if (p->as.basic.tt == MRB_TT_FREE) {
++            gcs_release(page, (uint16_t)i);
++            freed++;
++          }
++          else {
++            dead_slot = FALSE;
++          }
++        }
++      }
++      else {
++        if (!is_generational(gc))
++          paint_partial_white(gc, &p->as.basic); /* next gc target */
++        dead_slot = FALSE;
++      }
++    }
++    /* Deviation: an all-dead page is kept, its slots revoked one by one, rather
++       than freed whole; its region stays the GC's for reuse. */
++    dead_slot = FALSE;
++#else
+     RVALUE *p = page->objects;
+     RVALUE *e = p + MRB_HEAP_PAGE_SIZE;
+     size_t freed = 0;
+@@ -1209,6 +1439,7 @@ incremental_sweep_phase(mrb_state *mrb, mrb_gc *gc, size_t limit)
+       }
+       p++;
+     }
++#endif
+ 
+     /* free dead slot */
+     if (dead_slot && !page->region) {
+@@ -1222,7 +1453,11 @@ incremental_sweep_phase(mrb_state *mrb, mrb_gc *gc, size_t limit)
+       page = next;
+     }
+     else {
++#ifdef MRB_CAPSTONE_GC_SUBLET
++      if (page->free_head == GCS_NIL && is_minor_gc(gc))
++#else
+       if (page->freelist == NULL && is_minor_gc(gc))
++#endif
+         page->old = TRUE;
+       else
+         page->old = FALSE;
+@@ -1238,7 +1473,11 @@ incremental_sweep_phase(mrb_state *mrb, mrb_gc *gc, size_t limit)
+   /* rebuild free_heaps link */
+   gc->free_heaps = NULL;
+   for (mrb_heap_page *p = gc->heaps; p; p=p->next) {
++#ifdef MRB_CAPSTONE_GC_SUBLET
++    if (p->free_head != GCS_NIL) {
++#else
+     if (p->freelist) {
++#endif
+       p->free_next = gc->free_heaps;
+       gc->free_heaps = p;
+     }
+@@ -1643,11 +1882,20 @@ gc_each_objects(mrb_state *mrb, mrb_gc *gc, mrb_each_object_callback *callback,
+   while (page != NULL) {
+     RVALUE *p;
+ 
++#ifdef MRB_CAPSTONE_GC_SUBLET
++    (void)p;
++    for (int i=0; i < MRB_HEAP_PAGE_SIZE; i++) {
++      if (page->obj[i] == NULL) continue;  /* free: the callbacks skip MRB_TT_FREE anyway */
++      if ((*callback)(mrb, &page->obj[i]->as.basic, data) == MRB_EACH_OBJ_BREAK)
++        return;
++    }
++#else
+     p = page->objects;
+     for (int i=0; i < MRB_HEAP_PAGE_SIZE; i++) {
+       if ((*callback)(mrb, &p[i].as.basic, data) == MRB_EACH_OBJ_BREAK)
+         return;
+     }
++#endif
+     page = page->next;
+   }
+ }

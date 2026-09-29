@@ -1,9 +1,54 @@
 # Capstone testing matrix and current recommendations
 
+Application benchmark study: the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md)
+uses two matched pairs for the nested boundary; default CheriBSD on/off remains
+separate reference data. The [planner](../../experiments/study/README.md) supports
+PoisonCap plans but blocks execution qualification pending observed inner-policy
+accounting. Twenty host checks pass. Upstream mruby lists passes 4/4 original
+arms; both PoisonCap SQLite modes complete the artifact's 20 active phases at
+size 1. Twelve phases are commented out in that artifact, and the main
+result oracle is missing. These are readiness results, not a memory ranking.
+
+Application memory behavior: [twelve paired workload configurations](../../experiments/applications/results/20260927-reuse/README.md)
+pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU
+controls without in-process collection. The results quantify prompt address
+reuse and post-release retention, include the large-retained-graph counterexample,
+and make no timing or total-RSS claim.
+
+Application memory: [Capstone ports versus default CheriBSD](../../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The original matrix recorded
+six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+passes all 27 Capstone repeats at the same 65,536-node capacity, including all six
+previous failures, using unchanged application binaries. Keep the original data
+and larger-node controls separate. These are memory observations, not timings.
+
+2026-09-26 application-platform run: the installed managed guest passes the common
+acceptance (including exhaustion followed by 1,008 starts). Legacy CoreMark,
+shared-region, stdout/filewrite/fileread pass. The available snapshot fails
+null_blk (null_submit_bio, bad address 0x6f) and file-open-close (borrowed-region
+INIT, cause 29) on both the original and new platforms. These remain baseline
+failures; the historical rows below are not a claim that every gate passed in
+this run. See [current state](../state/current-state.md).
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../../ports/common/host/port_trace/README.md).
 
 This file is the compact map of which test layer to run for which kind of change.
 It is intentionally shorter than the older narrative version.
+
+Perl's [complete upstream `t/base` run](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
+uses host `prove --exec` with `capstone-vm run`: 6/9 files pass; `term.t` has one
+failed assertion and `lex.t`/`rs.t` each terminate by SIGSEGV before TAP. This
+is a port compatibility gate, not a passing full Perl-suite result.
+
+Shared application runtime: run the native startup/image/stream tests and host
+CLI tests, then the [persistent-guest application gate](../../runtime/applications.md#verification).
+It checks actual waitpid signals, no-yield and blocked-I/O cancellation,
+concurrent ownership, dup/fork/VMA lifetime, rollback, memory scrubbing, two real
+interpreters and an unchanged boot ID. `--repeat 200` adds 1,008 mixed starts with
+stable resource counters; `--sublet-image` adds transferred-heap reclamation,
+200,000-cycle in-process reuse, stale-reference rejection after reuse and
+recoverable genuine node exhaustion. It does not add
+fork/threads inside a domain or constitute FPGA validation.
 
 ## Setup once per shell
 

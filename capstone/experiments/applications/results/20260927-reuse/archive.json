@@ -1,0 +1,17 @@
+{
+  "path": "$HOME/capstone-artifacts/application-reuse-metrics-2026-09-27.tar.gz",
+  "bytes": 1355076,
+  "sha256": "30164bcdb4688e9a1b11495fbb229599bcb403dad953ad35e93a280492f9451b",
+  "payload_files": 147,
+  "all_payload_hashes_verified_after_archive": true,
+  "excludes": [
+    "SSH keys and VM control credentials",
+    "VM boot consoles",
+    "base kernel, firmware, rootfs and application binaries identified in inherited archives",
+    "downloaded papers, identified by URL and hash"
+  ],
+  "inherited_archives": {
+    "application-default-cheribsd-memory-2026-09-27.tar.gz": "f2a8c3e6f05ed664a25abfac1d77e76228b7fd4b9b5dd5649a07bb2ca9229e7c",
+    "runtime-node-reuse-2026-09-27.tar.gz": "7fe32e609f4f4acaf99233aabfff066a79428ae3bd62d2298d7f231aa59b75c2"
+  }
+}

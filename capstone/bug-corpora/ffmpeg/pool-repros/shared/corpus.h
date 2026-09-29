@@ -1,7 +1,7 @@
 /* What a case in this corpus needs, so a case.c is a complete translation unit.
  *
  * The contract is the one in
- * ../../cpython/pymalloc-repros/SCHEMA.md; this header is its FFmpeg seam.
+ * ../../SCHEMA.md; this header is its FFmpeg seam.
  * shared/driver.c supplies main(), the arenas and the pool; a case supplies
  * its sequence inside FF2_CASE(NN) and reports its own verdict line.
  */

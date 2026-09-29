@@ -1,0 +1,52 @@
+# R-43 (probe on miss) + R-45 (flush at REVOKE/DROP commit): RTL simulation result lines, 2026-09-28.
+# capstone-ariane branch r43-query-on-miss on 6cbdaeeb4. Verilator testharness, cva6-build-rv container pinned to
+# CPUs 0-7,32-39, +define+S12_MEM_DELAY=12+R43_TRACE, --sv_seed 1, --iss_timeout 7200, 20M-cycle limit.
+# Source of the variant batch and of the COMMITTED fix (capstone-ariane bbd4d1478 R-43 + 0f5185a6d R-45).
+# The variants ran on the source one step earlier; the only later changes were the post-acceptance probe
+# bound (1,023 -> 65,535 cycles) and comments. The committed source was re-run (shipping build: every arm as
+# below; R-35 fixture 7 traps; lint gate PASS). Committed source hashes:
+#   f2f57965f97a3fa4  core/load_store_unit.sv
+#   18e3a7c2ad79d228  core/ex_stage.sv
+#   38e6dbc5f6a4ee64  core/commit_stage.sv
+#   2c872c505e6008e8  core/load_unit.sv
+#   2c39fca35cf38a68  core/anvil_build/capstone_rev_node.anvil
+#   11e9db63291ec64d  core/anvil_build/capstone_unit.anvilh
+#   8ed267b136db2e6e  verif/tests/custom/capstone/r43-evict-live.S
+# Values are the CAPPRINT registers read from the RETIREMENT trace, so re-executed and speculative prints are
+# excluded (cva6.py's return code and "SUCCESS" line carry no information here). Probe/verdict lines are
+# R43_TRACE's. Each variant is a temporary patch, applied and restored with a hash check (RESTORE VERIFIED).
+
+== SHIPPING BUILD, test r43-evict-live.S (cause 0x19 = 25) ==
+arm  condition                                                  result
+2    live alias, evicted, load                                  allowed (ALLOW record)
+2s   live alias, evicted, store + readback                      allowed, readback e5e5e5e5e5e5e5
+5    revoked; its index reissued at g+1; OLD capability read     25  (probe: tap at g+1 -> DEAD)
+6    allowed, revoked, churned (dead entry evicted, reissued)    25  (probe -> DEAD)
+7    REVOKE, no barrier, read an EVICTED alias at once (R-45)    25  (the REVOKE-commit flush re-executes it)
+7r   the same, alias RESIDENT (the case open on 6cbdaeeb4)       25
+8    live alias at a nonzero generation, evicted                 allowed, sentinel (probe 0x20419 -> ALLOW)
+9a   AMO through an evicted live alias                           allowed, old 5, memory 6
+9b   DROP, evict, access                                         25  (probe -> DEAD)
+
+== VARIANTS, same test (each must break exactly as predicted) ==
+tieoff        probe disabled                       every miss denies (arms 2, 2s, 8, 9a -> 25), 0 probes  = deny-on-miss
+noflush       R-45 flush removed                   arms 7 and 7r ALLOWED   -> the flush is what closes R-45
+mgen          resolve ignores the generation       arms 5 and 6 ALLOWED    -> the generation compare is load-bearing
+mto           rev-node never gets the probe        every probe-dependent access denies after the timeout; run completes
+              (pre-accept bound shortened)          (also the first verdict with a stall AND an invalidation: denied)
+flushproxy    probe state cleared once mid-probe   fired once; verdicts identical to shipping; no hang
+noclear       broadcast clear of the ALLOW record  arm 6 DENIED -- the REVOKE-commit flush ALSO clears the record
+              removed                              (flush_i), so this single removal is masked; see noclearflush
+noclearflush  broadcast clear AND the flush        arm 6 ALLOWED, and 9b (DROP) too -> at least ONE of the two clears is required; the
+              removed                              record's clearing is load-bearing (arms 7/7r also allowed: no flush)
+
+== NEUTRALITY (final source) ==
+r35-rotate-stale (R-35 acceptance)   exactly 7 traps at the same PCs (shipping and tieoff)
+92-test sweep                        0 trap-count differences; 48 tests trap; 639,786 traps in total
+rtl-lint-gate                        PASS: LATCH 52, MULTIDRIVEN 3, UNOPTFLAT 40, BLKSEQ 2, UNDRIVEN 25 at baseline;
+                                     UNUSEDSIGNAL 737 (re-baselined from 736 for one warning: the probe read's
+                                     94-bit return value in the generated rev-node SV, unused by design)
+
+== NOT CREATED IN SIMULATION (fail-closed by source, stated as residuals) ==
+samp=0   a miss while the owning unit is mid-transaction (WAIT_GNT): the verdict there is a deny. A 2x2-cache
+         build did not produce one either. The ALLOW record keeps an access allowed at accept allowed after.

@@ -1,0 +1,9 @@
+{
+  "path": "/tmp/capstone/sqlite-reuse-gap-20260927.tar.gz",
+  "bytes": 25464303,
+  "sha256": "655f0e05e71f11acb08ec4ff4f272bba82681978a2ac02d7ca48942b5ec9b2da",
+  "excludes": [
+    "cheri-vm private SSH material",
+    "temporary patch rejects"
+  ]
+}

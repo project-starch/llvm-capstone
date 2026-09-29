@@ -1,0 +1,315 @@
+{
+  "mruby-poisoncap": {
+    "path": "/tmp/capstone/mruby-published-policy-20260928-build/manifest.json",
+    "sha256": "8b9c81055d72e240aa535ffccc3cbf3e80a4cc3fc0a21b72641ae44bfeeceb49",
+    "manifest": {
+      "app": "mruby",
+      "platform": "poisoncap",
+      "allocations": false,
+      "nested_pool": null,
+      "nested_gc": "poisoncap",
+      "pool_reuse_gaps": false,
+      "image_sha256": "7221a8bdcc5e652da96494cc8e1f07b675a253252c58026d111c8ecc977a9f84",
+      "compiler_driver_sha256": "a7171704b03fcec2ee3869981c24e0997ae619078e2f01f9290dd3beb63b0450",
+      "source": "/tmp/capstone/application-cheri/mruby-src",
+      "source_manifest_sha256": "dc68b424744e78d9eee896f80cc648938c86cf9654971b70d23dee9e289cdce1",
+      "commands_sha256": "0cd4e539198da638d6bfc878083fadede223396e28c6ec53f202b314f739734b",
+      "builder_sha256": "9d4a9f603a2f627f2c808fb2c852f39f83db03f54f5faa7acb7dba722abe66e4",
+      "adapter_sources": {
+        "prepare-mruby-poisoncap.py": "b46a4d3862c505e223f9ca72f48e23eead34b215f16a751fccc0ca9215804527",
+        "mruby-poisoncap-gc.inc": "c420ca4858c70316730870d18dd448168412721e9f0c776a81053b5e3f051fcf"
+      },
+      "experiment_sources": {
+        "allocations.c": "b0e82df8e28b0fd466669ad49d0feefdac2dce774d3a170f3c16f93346e40239",
+        "cheribsd-memory.c": "26a1c44ef0768f2a287064a45930066ffc9a09bf2013b27c8663d4211bdbebf8",
+        "memory.c": "d1d1ac7d0c91a7fb4f5f6a3702228dc3eae2f4a1e8fda6896b7e51952f1aa283",
+        "mruby-cheribsd.rb": "c67e24c1a2deb83493a90f9921c71c0a28c7d470e33aa369e4dcc8d787bb675a",
+        "regions.c": "7e46aeb14acc831971eb9c7922aae8998b88e75daa82e44bc2fbd4ed68364a8a",
+        "workloads/calibrate.c": "fdcb2dfe7f98a6c8be0bc089500bac60e66047f15efd408f1b49f494a8526f59",
+        "workloads/decode.c": "f633a1c609249dffd02dc975adf2d140f6a5a9ae568c996ebf00ec508829ceb3",
+        "workloads/files.c": "10c35f4ff861087e1e053c81ddf33dc9c3fd2572318c1611809bd7eba853c4b9",
+        "workloads/records.rb": "f5ddecb27bc27fecbf5e9bb7e3ba0b3a8a0aa778594873352b699f6d040b1efb",
+        "workloads/sqlite.c": "6984de7ae8b154b4f9f34f4ecfd049819314f946c9e12c82f11debad0e20eed3"
+      },
+      "repository_revision": "8d41485ca43e94223a7226c567cedd49aad68bd2"
+    }
+  },
+  "mruby-policy-audit": {
+    "path": "/tmp/capstone/mruby-published-policy-20260928-build/policy-build-audit.json",
+    "sha256": "50a4643a374a1da82662040826878ba3f2762867c66e82c7a35a6e6d51d54b53",
+    "manifest": {
+      "schema": 1,
+      "nested_policy": "published-sqlite-thresholds-corrected-v1",
+      "audit": "Post-build verification of preserved prepared inputs; original build manifest remains unchanged.",
+      "prepared_inputs": {
+        "capstone/experiments/study/mruby-poisoncap-gc.inc": {
+          "prepared_copy": "/tmp/capstone/mruby-published-policy-20260928-build/source/src/mruby-poisoncap-gc.inc",
+          "sha256": "c420ca4858c70316730870d18dd448168412721e9f0c776a81053b5e3f051fcf"
+        },
+        "capstone/ports/common/include/poisoncap-quarantine-policy.h": {
+          "prepared_copy": "/tmp/capstone/mruby-published-policy-20260928-build/source/src/poisoncap-quarantine-policy.h",
+          "sha256": "ae7bc986b7dd596644c747a78ed8b7ba33ca1641fb094694b0a324e5b5ff2c7a"
+        }
+      },
+      "binary_sha256": "7221a8bdcc5e652da96494cc8e1f07b675a253252c58026d111c8ecc977a9f84",
+      "commands_sha256": "0cd4e539198da638d6bfc878083fadede223396e28c6ec53f202b314f739734b",
+      "prepared_gc_sha256": "b5b4595c1b7f32313419241f50e06eb6d5c73f6d7365932207568b7ef8a089d2",
+      "manifest_sha256": "8b9c81055d72e240aa535ffccc3cbf3e80a4cc3fc0a21b72641ae44bfeeceb49"
+    }
+  },
+  "ffmpeg-poisoncap": {
+    "path": "/tmp/capstone/ffmpeg-published-policy-20260928-build-v2/manifest.json",
+    "sha256": "2834b14a6e86b8f9324d4c642c263499173b9227b6fd7c5491b62ea7564157dd",
+    "manifest": {
+      "app": "ffmpeg",
+      "platform": "poisoncap",
+      "allocations": false,
+      "nested_policy": "published-sqlite-thresholds-corrected-v1",
+      "quarantine_policy_sha256": "ae7bc986b7dd596644c747a78ed8b7ba33ca1641fb094694b0a324e5b5ff2c7a",
+      "nested_pool": "poisoncap",
+      "nested_gc": null,
+      "pool_reuse_gaps": true,
+      "image_sha256": "424236d96d6ae4ff5301ab8fdd83df55bd48e596d65f1ba6c749fbbce2060927",
+      "compiler_driver_sha256": "a7171704b03fcec2ee3869981c24e0997ae619078e2f01f9290dd3beb63b0450",
+      "source": "/tmp/capstone/ffmpeg-published-policy-20260928-source/src-9.0.1-pool-ca2016322e2a",
+      "source_manifest_sha256": "1697504533786433cb20681deec9b6f16c479c436d8f2e5e04e8db9c77602eac",
+      "commands_sha256": "f6703cc845f200ddc9cee8cdf16ddc4e4353c44a11a034d535bf5b437203b4f3",
+      "builder_sha256": "176fa6e0261c6e2f7d388b403b5297cac934c65da53de3ee776f7564c727f156",
+      "adapter_sources": {},
+      "nested_adapter_inputs": {
+        "capstone/ports/ffmpeg/buffer-pool/src/shared/pool-allocator.c": "6ebf80fef6318d1824d888c343e3f44f80d63c271c6345579fea7bb0e4a2857a",
+        "capstone/ports/ffmpeg/buffer-pool/src/shared/payload-backend.h": "06a782584de800563107b4ef15777d4417a79470c0b0db27bdf556a4d807ef08",
+        "capstone/ports/ffmpeg/buffer-pool/src/shared/trace.h": "607ac32588e3c8156512987a2f0c017b49fe8c92bd36850ff894cc987c2e30c4",
+        "capstone/ports/ffmpeg/buffer-pool/src/cheribsd/poisoncap-payload.c": "969d28bef15ffe9e9e0015c939355f58dae0e4c4cc2179ee03b928bf24e87b97",
+        "capstone/experiments/study/ffmpeg-poisoncap-decode.c": "75ce3b82e7aabad55bd3082910d925198011be05c79c305c3d5a6cb8a1d7032e",
+        "capstone/ports/common/include/poisoncap-quarantine-policy.h": "ae7bc986b7dd596644c747a78ed8b7ba33ca1641fb094694b0a324e5b5ff2c7a"
+      },
+      "experiment_sources": {
+        "allocations.c": "b0e82df8e28b0fd466669ad49d0feefdac2dce774d3a170f3c16f93346e40239",
+        "cheribsd-memory.c": "26a1c44ef0768f2a287064a45930066ffc9a09bf2013b27c8663d4211bdbebf8",
+        "memory.c": "d1d1ac7d0c91a7fb4f5f6a3702228dc3eae2f4a1e8fda6896b7e51952f1aa283",
+        "mruby-cheribsd.rb": "c67e24c1a2deb83493a90f9921c71c0a28c7d470e33aa369e4dcc8d787bb675a",
+        "regions.c": "7e46aeb14acc831971eb9c7922aae8998b88e75daa82e44bc2fbd4ed68364a8a",
+        "workloads/calibrate.c": "fdcb2dfe7f98a6c8be0bc089500bac60e66047f15efd408f1b49f494a8526f59",
+        "workloads/decode.c": "f633a1c609249dffd02dc975adf2d140f6a5a9ae568c996ebf00ec508829ceb3",
+        "workloads/files.c": "10c35f4ff861087e1e053c81ddf33dc9c3fd2572318c1611809bd7eba853c4b9",
+        "workloads/records.rb": "f5ddecb27bc27fecbf5e9bb7e3ba0b3a8a0aa778594873352b699f6d040b1efb",
+        "workloads/sqlite.c": "6984de7ae8b154b4f9f34f4ecfd049819314f946c9e12c82f11debad0e20eed3"
+      },
+      "repository_revision": "8d41485ca43e94223a7226c567cedd49aad68bd2"
+    }
+  },
+  "ffmpeg-capstone": {
+    "path": "/tmp/capstone/ffmpeg-published-policy-20260928-capstone-build-v4/manifest.json",
+    "sha256": "55056049dbbe0b99ae5b3606dee6d005228993b22f0c853b58863e84f4b3066a",
+    "manifest": {
+      "source": "/tmp/capstone/ffmpeg-published-policy-20260928-source/src-9.0.1-pool-ca2016322e2a",
+      "library_build": "/tmp/capstone/ffmpeg-published-policy-20260928-capstone-libraries",
+      "source_version": "9.0.1",
+      "compiler_sha256": "c2bc95ed7aa4efaf05178fedf91543bf22148fbfcc873c405fbb719b5e9890d7",
+      "image_sha256": "b33737b57c528df42e5a44e700d9ff92e4a7bc40938a0f64d2dc61e898d8fdb8",
+      "commands_sha256": "fb48f55cad62ed2874caec5b2e810fbbd8dd42a6799a6c4849030d3c37ca00ed",
+      "observer_sources": {
+        "capstone/experiments/study/ffmpeg-capstone-reuse.c": "3ed92270a06983deaa246c588f6542a8cf4e2fa745cbd92bac576dfe478f5775",
+        "capstone/experiments/applications/workloads/decode.c": "f633a1c609249dffd02dc975adf2d140f6a5a9ae568c996ebf00ec508829ceb3",
+        "capstone/ports/ffmpeg/buffer-pool/src/shared/pool-allocator.c": "6ebf80fef6318d1824d888c343e3f44f80d63c271c6345579fea7bb0e4a2857a",
+        "capstone/ports/ffmpeg/buffer-pool/src/capstone-domain/payload-capabilities.c": "2b817a63ff0739e8b42ae5e5ce02aa2a45c150592819e60bb7b957407f48db33",
+        "capstone/ports/ffmpeg/buffer-pool/src/allocators/sublet/pool-leases.c": "e18b12d580e5541c06a3832efaa4b02e6f048d0c0e4ccc2c8e935dcea4df4301"
+      },
+      "libraries": {
+        "libavformat": "fdfdd489ad220029fbd6ab5ab4d0bb3ff6e187c7f31ef742be3fea1bc917b66d",
+        "libavcodec": "f9eb6d939618d1ae091dccbe465a96469570f8ffa0d691396f181b6e564f15be",
+        "libavutil": "c8da00a21101150018a15c0288c99d3744dcfd2c4163e24a11e52fbd95fedb53"
+      }
+    }
+  },
+  "ffmpeg-capstone-sdk": {
+    "path": "/tmp/capstone/ffmpeg-published-policy-20260928-sdk-v2/sdk.json",
+    "sha256": "ef61131bf5555691bbaf2736e1d5a6ee9679a799bd630ac981cfd40b86f57909",
+    "manifest": {
+      "version": 1,
+      "cc": "/tmp/capstone/domain-process-runtime/compiler-c46/bin/clang",
+      "ld": "/tmp/capstone/domain-process-runtime/compiler-c46/bin/ld.lld",
+      "musl": "/tmp/capstone/domain-process-runtime/perl-port/musl-src/musl-1.2.5",
+      "script": "/home/biecho/llvm-capstone-poisoncap-study/capstone/my_first_domain/link.ld",
+      "runtime": "/tmp/capstone/ffmpeg-published-policy-20260928-sdk-v2/libapplication-runtime.a",
+      "libc": "/tmp/capstone/domain-process-runtime/perl-port/musl-build/libc-capstone.a",
+      "builtins": "/tmp/capstone/ffmpeg-published-policy-20260928-sdk-v2/libcapstone-application-builtins.a"
+    }
+  },
+  "libc-abi-fix": {
+    "path": "/tmp/capstone/poisoncap-posix-output-fix/binary-diff.json",
+    "sha256": "73a25e2a291eb0018f7c5251d496707fd8dc1597e3e5774644f6e02dd39908ae",
+    "manifest": {
+      "before_sha256": "6726fdb03485e2680412ddd2fb962ced9bbcb7fc74e106e54896d7298c785fef",
+      "after_sha256": "823a0709fd99d863d5a56ad0d94f5639cf5cb35447e2b3fd256698fe2519025c",
+      "before_text_bytes": 1083550,
+      "after_text_bytes": 1083550,
+      "different_text_bytes": 6
+    }
+  },
+  "ffmpeg-capstone-excluded-configuration": {
+    "path": "/tmp/capstone/ffmpeg-published-policy-20260928-capstone-build-v3/manifest.json",
+    "sha256": "691e8b431fd4bf0c84c7a20facb648fed2855ac5a8601094083b0d3303b9b39b",
+    "manifest": {
+      "source": "/tmp/capstone/ffmpeg-published-policy-20260928-source/src-9.0.1-pool-ca2016322e2a",
+      "library_build": "/tmp/capstone/ffmpeg-published-policy-20260928-capstone-libraries",
+      "source_version": "9.0.1",
+      "compiler_sha256": "c2bc95ed7aa4efaf05178fedf91543bf22148fbfcc873c405fbb719b5e9890d7",
+      "image_sha256": "6608693c5f1bf8c598931ef2c9de8988514c5752a0fdd411cd2ff9cee8ff76d6",
+      "commands_sha256": "d64a043852170061149f8df5540e52a01b3ca6ed0905f60b917cae5b8dca4254",
+      "observer_sources": {
+        "capstone/experiments/study/ffmpeg-capstone-reuse.c": "3ed92270a06983deaa246c588f6542a8cf4e2fa745cbd92bac576dfe478f5775",
+        "capstone/experiments/applications/workloads/decode.c": "f633a1c609249dffd02dc975adf2d140f6a5a9ae568c996ebf00ec508829ceb3",
+        "capstone/ports/ffmpeg/buffer-pool/src/shared/pool-allocator.c": "6ebf80fef6318d1824d888c343e3f44f80d63c271c6345579fea7bb0e4a2857a",
+        "capstone/ports/ffmpeg/buffer-pool/src/capstone-domain/payload-capabilities.c": "2b817a63ff0739e8b42ae5e5ce02aa2a45c150592819e60bb7b957407f48db33",
+        "capstone/ports/ffmpeg/buffer-pool/src/allocators/sublet/pool-leases.c": "e18b12d580e5541c06a3832efaa4b02e6f048d0c0e4ccc2c8e935dcea4df4301"
+      },
+      "libraries": {
+        "libavformat": "fdfdd489ad220029fbd6ab5ab4d0bb3ff6e187c7f31ef742be3fea1bc917b66d",
+        "libavcodec": "f9eb6d939618d1ae091dccbe465a96469570f8ffa0d691396f181b6e564f15be",
+        "libavutil": "c8da00a21101150018a15c0288c99d3744dcfd2c4163e24a11e52fbd95fedb53"
+      }
+    }
+  },
+  "ffmpeg-capstone-sdk-excluded-configuration": {
+    "path": "/tmp/capstone/ffmpeg-published-policy-20260928-sdk/sdk.json",
+    "sha256": "c9b40d6697ff53e30e11a5886d24ff9a3684a3af1bab80f40441675ea8ed054e",
+    "manifest": {
+      "version": 1,
+      "cc": "/tmp/capstone/domain-process-runtime/compiler-c46/bin/clang",
+      "ld": "/tmp/capstone/domain-process-runtime/compiler-c46/bin/ld.lld",
+      "musl": "/tmp/capstone/domain-process-runtime/perl-port/musl-src/musl-1.2.5",
+      "script": "/home/biecho/llvm-capstone-poisoncap-study/capstone/my_first_domain/link.ld",
+      "runtime": "/tmp/capstone/ffmpeg-published-policy-20260928-sdk/libapplication-runtime.a",
+      "libc": "/tmp/capstone/domain-process-runtime/perl-port/musl-build/libc-capstone.a",
+      "builtins": "/tmp/capstone/ffmpeg-published-policy-20260928-sdk/libcapstone-application-builtins.a"
+    }
+  },
+  "sqlite-poison-retirement": {
+    "path": "/tmp/capstone/sqlite-published-policy-20260928-build/manifest.json",
+    "sha256": "e5e49eccaf8ac34665581adc53ffb6e633109f6aca0a20d33027e57618bb424c",
+    "manifest": {
+      "input_root": "/tmp/capstone/sqlite-reuse-gap-20260927",
+      "changes": "explicit poison retirement before nested reuse; identical thresholds, geometry and observers",
+      "files": {
+        "poisoncap-temporal.patch": "4a1bafca6ea8fdd7aa1f9db9d22b78bbee1c1c757d7418003cdc8e3100671082",
+        "poisoncap-temporal.c": "5e8d8fdf6e4cdbcba7f46b96a35ec9e78e1c94450ab3810b2992f2d419bbc1b6",
+        "poisoncap-spatial-tu.c": "2f8fc0d97f12a7475299ebdfbe2eed69ae2e840453a2b8b4b5db529974588a59",
+        "poisoncap-spatial-argv.json": "a24b6f1d12377d0ddda6cf35d55790d69f7b09ad08a2a17f0d431c04d372b7b2",
+        "poisoncap-spatial.c": "56fd1ab38ffe9a8a99f92b25257987c37af60e7d773bcce4794c43c6b43610aa",
+        "poisoncap-spatial-build.log": "ade264f9a22210f0147e06635e7f83beff743903546c45dcfc1e42657bb586e5",
+        "poisoncap-temporal-argv.json": "b9f31664c3de9b7035b565e70e18212d99c971c1291ae9f46078d4affb9c3e74",
+        "speedtest1-shared.c": "98ee1eed173d0c0954c2b8f415a6c4feef6d4cbb93e687d496205313cbbc9a51",
+        "poisoncap-temporal-tu.c": "35fe08c79f3ab4c84c8350d291c801e714ea8877bf016768625c45a52414486f",
+        "poisoncap-spatial.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "poisoncap-temporal": "79d6d056e2ca13f21fa58e58108f469deca8cbd2aed0872bc223fcb9fe3f090c",
+        "poisoncap-temporal-build.log": "210cc0adc02dbfb54ce1f1f272ce92a8d3e23998dc837cc6ae36b234ac24e67e",
+        "sqlite3.h": "a9eac62fa30ba19c080674b086e14d2dc9eefe736b49aa32c65d4b50d31d5e18",
+        "poisoncap-spatial": "59fa7a6e9f6c6e9e4e5bb04c7fb7c7088a49b6436661777e85692f86cd0f8c27"
+      }
+    }
+  },
+  "libc-poison-retirement": {
+    "directory": "/tmp/capstone/poisoncap-retire-payload-fix",
+    "libc_sha256": "a22e5b4a61f854c7006ec3abf1a5ba25ce043eaaa1c3fcd9f1a74e3eb95cc690",
+    "baseline": "same output-constraint correction and existing poison retirement; now clears retired payload as well",
+    "checks": {
+      "before_reuse_exit": 255,
+      "after_reuse_exit": 0,
+      "after_valid_allocations": 64,
+      "ffmpeg_resize_frames": 150,
+      "ffmpeg_resize_sha256": "939f2e7a46ace2030fc688ff809d666473d17ca5944e442d0722c6f02ce7e14c"
+    },
+    "files": {
+      "reuse-before.stderr": "30a733b9f859b87c572d5746a55329a01479628927907f3808d5754115d4656e",
+      "command.json": "012a27acad6d05f394f4218fc3f38dc35c5df749c54c108d965e823f85d22d16",
+      "reuse-after.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reuse-after.stderr": "6baa015a66e1cac7b7cd8ec6a387ec9d01b25cdb0b0fc3e558a684527ebddf29",
+      "build.log": "bcaf42d07b4feb9357a168f471c3ebfa331f498a156e19658be2a8c7577b8369",
+      "reuse-before.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reuse-check.c": "4b9b81552fc245f8761d02f1558db10d037f14f828f078424f0745644db7075b",
+      "sqlite-command.json": "e4da3d10eb3f53e629bf43506f4528f009343ceaa34541d02ed070a85c60e308",
+      "mrs.c": "45c099775ff00b33e452555d18ab715e5499f0c6add46f3c2161a9bf7e211755",
+      "ffmpeg-command.json": "b0219b8de16314e32cf873ec93b45d850ab9ffe942f3b2946a3d95a23ac35c6a",
+      "sqlite-stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reuse-check": "9113ca50019fdb40b93bee9c58043909211d2ac14699edb67730fad232301311",
+      "libc.so.7": "a22e5b4a61f854c7006ec3abf1a5ba25ce043eaaa1c3fcd9f1a74e3eb95cc690",
+      "sqlite-stdout": "792a911a78c7916f96fa3c3f41d3a9cd5f536e7162decff52809112c06c46cd9",
+      "ffmpeg-stdout": "939f2e7a46ace2030fc688ff809d666473d17ca5944e442d0722c6f02ce7e14c",
+      "ffmpeg-stderr": "4b4c6cd514da9700b4fec2bea1e73de24857497062c5a9dc09954bb8f34c0034"
+    }
+  },
+  "mruby-capstone-spatial": {
+    "path": "/tmp/capstone/mruby-capstone-spatial-gaps-v3-build/manifest.json",
+    "sha256": "dfa816699e5f086eee92e7e6416cee89fe056f15bb85a5da96470cff4603cf9a",
+    "manifest": {
+      "application": "mruby",
+      "allocations": false,
+      "gc_gaps": true,
+      "allocations_sha256": null,
+      "heap": "level0",
+      "nested": "none",
+      "recipe_revision": "7d1a16f9e5f61c30c50bb49a7ea41fea53a23bb3",
+      "runtime_revision": "7d1a16f9e5f61c30c50bb49a7ea41fea53a23bb3",
+      "runtime_dirty": true,
+      "arena_bytes": 67108864,
+      "heap_log": 26,
+      "image_sha256": "2363a9542fb6434120c7e9c8111adbc19350c592228d5d9e44ffe4424b0e5eee",
+      "compiler_sha256": "0e2bc4e53f8b76f8b5534b8f5866c221e02b6fbaa0b1a7785286ac9eaef2549c",
+      "runtime_archive_sha256": "540dfc2ab698d831d42054fe55f9b17b3eebcef2e455867870a53f081fa6cdab",
+      "builtins_archive_sha256": "cc45c5c5dc07bf8a8a1dbf94aee9f292f15ea246f05181b33dc0c9cd0888fbeb",
+      "inputs": [
+        {
+          "path": "libc-capstone.a",
+          "sha256": "5a4820c72d85293e1f7e1b126f213544b06bce1a2269ac612705e5565a199521"
+        },
+        {
+          "path": "src/mruby/build/capstone/mrbgems/mruby-bin-mruby/tools/mruby/mruby.o",
+          "sha256": "fcdd6a97f45824d71f715c22800857266d6d0a7bf88c20258fefd37407bf9a3f"
+        },
+        {
+          "path": "src/mruby/build/capstone/lib/libmruby.a",
+          "sha256": "8403cc4f737a8a4308db3e3212d0237309c9aa65bee6a6e9339d9543e0a6dcc6"
+        }
+      ],
+      "instrument_sha256": "e1ddc02f908c4c79a73e32d43264ace0d07ed7cfc3e82abe420ac76ed0b4bca9"
+    }
+  },
+  "mruby-capstone-sublet": {
+    "path": "/tmp/capstone/mruby-capstone-sublet-gaps-v3-build/manifest.json",
+    "sha256": "9280499f7c528b5701eba1b240ff4e79507ac18cf59f26cfd88ce2c333a503ad",
+    "manifest": {
+      "application": "mruby",
+      "allocations": false,
+      "gc_gaps": true,
+      "allocations_sha256": null,
+      "heap": "level0",
+      "nested": "mruby",
+      "recipe_revision": "7d1a16f9e5f61c30c50bb49a7ea41fea53a23bb3",
+      "runtime_revision": "7d1a16f9e5f61c30c50bb49a7ea41fea53a23bb3",
+      "runtime_dirty": true,
+      "arena_bytes": 67108864,
+      "heap_log": 26,
+      "image_sha256": "bdc3812cc50e2bed212cbe0261ecd0663f7e74cd6cd96e38788dcb5316234ec7",
+      "compiler_sha256": "0e2bc4e53f8b76f8b5534b8f5866c221e02b6fbaa0b1a7785286ac9eaef2549c",
+      "runtime_archive_sha256": "b5275b5115e2ea6e38a4053e269f380f66e1c886964572582ced6d0f25eafcf3",
+      "builtins_archive_sha256": "cc45c5c5dc07bf8a8a1dbf94aee9f292f15ea246f05181b33dc0c9cd0888fbeb",
+      "inputs": [
+        {
+          "path": "libc-capstone.a",
+          "sha256": "5a4820c72d85293e1f7e1b126f213544b06bce1a2269ac612705e5565a199521"
+        },
+        {
+          "path": "src/mruby/build/capstone/mrbgems/mruby-bin-mruby/tools/mruby/mruby.o",
+          "sha256": "fcdd6a97f45824d71f715c22800857266d6d0a7bf88c20258fefd37407bf9a3f"
+        },
+        {
+          "path": "src/mruby/build/capstone/lib/libmruby.a",
+          "sha256": "a70af95fcfaad037d0278f20910cafab236609804694bdc9d2374cec7246e451"
+        }
+      ],
+      "instrument_sha256": "e1ddc02f908c4c79a73e32d43264ace0d07ed7cfc3e82abe420ac76ed0b4bca9"
+    }
+  }
+}

@@ -15,8 +15,10 @@ The host's stdout is, in order:
      "capstone-domain: UNSERVED syscalls: <nr>[x<times>] ..." line, which domain_main
      (runtime/hostcall.c, hc_report_unserved) writes after the exit hook has returned;
   5. one "LT-RESULT ..." line, on a line of its own because the host prints it after the
-     domain has returned.
-This removes 1, the "domain_entry: " lines of 2, and 3 to 5, and nothing else. Any other shape is
+     domain has returned;
+  6. since dev's libc_test_host of 2026-09-28, the host's own tables after it: "LT-HIST <image> ..."
+     and "LT-FILE <image> ..." lines, for the same image as the LT-RESULT line.
+This removes 1, the "domain_entry: " lines of 2, and 3 to 6, and nothing else. Any other shape is
 an error (exit 1, reason on <out>.err), never a pass-through. The unserved list is a finding, not
 noise: it is printed as `unserved: <list>` or `unserved: none`.
 
@@ -50,9 +52,18 @@ end = next((i for i, l in enumerate(lines) if re.fullmatch(rb'Loadable size = [0
 if end is None or end > 20:
     fail('the loader banner does not end in "Loadable size = <n>"')
 body = lines[end + 1:]
-# The data ends with "\n", so the last element is empty; the LT-RESULT line is the one before it.
+# The data ends with "\n", so the last element is empty; the LT-RESULT line is the one before it,
+# or before the host's LT-HIST/LT-FILE tables, which are removed only after an LT-RESULT line for
+# the same image. A domain's own line that happens to start so is never removed: it is not after the
+# host's result line.
+host_tail = []
+while len(body) >= 3 and body[-1] == b'' and re.match(rb'LT-(HIST|FILE) \S+ ', body[-2]):
+    host_tail.append(body.pop(-2))
 if len(body) < 2 or body[-1] != b'' or not body[-2].startswith(b'LT-RESULT '):
-    fail('the output does not end with an LT-RESULT line')
+    fail('the output does not end with an LT-RESULT line (and the host tables after it)')
+result_image = body[-2].split(b' ')[1]
+if any(l.split(b' ')[1] != result_image for l in host_tail):
+    fail('an LT-HIST/LT-FILE line names another image than the LT-RESULT line')
 body = body[:-2]
 unserved = 'none'
 if body and body[-1].startswith(b'capstone-domain: UNSERVED syscalls:'):

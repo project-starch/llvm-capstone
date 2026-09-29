@@ -49,3 +49,42 @@ loop:
 exit:
   ret void
 }
+
+; The address of null is how clang converts an integer into an __intcap. There
+; is no type to dispatch on: it selects to the integer bridge, with no lcc and
+; no branch.
+; CHECK-LABEL: from_int:
+; CHECK-NOT:  lcc
+; CHECK-NOT:  scc
+; CHECK:      li a0, 41
+; CHECK-NEXT: cjalr zero, 0(ra)
+define ptr addrspace(200) @from_int() addrspace(200) {
+  %r = call ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) null, i64 41)
+  ret ptr addrspace(200) %r
+}
+
+; `(__intcap)((long)ic + 1)`: the sum is an integer. Through set_address on
+; null it stays one: no cincoffset on ic, which would trap on an untagged ic.
+; CHECK-LABEL: plus_one:
+; CHECK-NOT:  cincoffset
+; CHECK-NOT:  lcc
+; CHECK:      addi a0, a0, 1
+; CHECK-NEXT: cjalr zero, 0(ra)
+define ptr addrspace(200) @plus_one(ptr addrspace(200) %ic) addrspace(200) {
+  %a = ptrtoint ptr addrspace(200) %ic to i64
+  %s = add nsw i64 %a, 1
+  %r = call ptr addrspace(200) @llvm.capstone.cap.set.address.p200(ptr addrspace(200) null, i64 %s)
+  ret ptr addrspace(200) %r
+}
+
+; The control: the same sum through inttoptr is the uintptr_t round-trip shape,
+; and the backend rebuilds it as an offset on ic (ptr-arith.ll). This is what
+; clang emitted before it used set_address on null.
+; CHECK-LABEL: plus_one_inttoptr:
+; CHECK:      cincoffsetimm a0, a0, 1
+define ptr addrspace(200) @plus_one_inttoptr(ptr addrspace(200) %ic) addrspace(200) {
+  %a = ptrtoint ptr addrspace(200) %ic to i64
+  %s = add nsw i64 %a, 1
+  %r = inttoptr i64 %s to ptr addrspace(200)
+  ret ptr addrspace(200) %r
+}

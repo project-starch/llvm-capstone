@@ -16,7 +16,7 @@ capstone/native size ratio (1.30), the whole static image is **~11.5 MiB, an est
 any heap. A domain is one contiguous kernel allocation, capped at **4 MiB** by `MAX_ORDER`
 (`ports/musl-capstone/README.md`). `-Os` was measured to save 5.4 %. The mruby port's tests stop
 at image size too (commit `10322a2fb795`, by its subject). Results:
-`ports/cpython/interpreter/results/link-2026-09-23-d030df93d4a4.txt`.
+`ports/cpython/app/results/link-2026-09-23-d030df93d4a4.txt`.
 
 **Options.**
 

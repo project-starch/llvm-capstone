@@ -1,5 +1,84 @@
 # Capstone project documentation
 
+Inner-reuse expansion: [CPython](../experiments/study/results/cpython-reuse-four-arm-20260928/README.md)
+and [PostgreSQL](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
+now each validate 12/12 complete processes across four arms. The
+[first reuse figure](../experiments/study/results/reuse-five-applications-20260928/README.md)
+contains SQLite, mruby, FFmpeg, PostgreSQL and CPython. CPython required a
+VM-object poison-probe repair and deferred pymalloc publication at the
+published quarantine thresholds. The [Perl CheriBSD recipe](../ports/perl/cheribsd/README.md)
+now builds 5.36.3 and passes the 17-section smoke with both libc policy switches;
+its inner SV adapters and four-arm reuse measurements remain to be implemented.
+
+Published-threshold memory comparison: the
+[fresh mruby/FFmpeg campaign](../experiments/study/results/published-policy-20260928/README.md)
+validates 48 complete application processes with the audited PoisonCap
+thresholds transferred from SQLite and outer libc defaults enabled. Its
+reuse and selected-memory plots replace the historical custom-policy
+comparisons for those workloads, with runtime repairs and countercosts
+explicitly reported. Six new outer-default SQLite runs plus six archived
+Capstone controls complete the 60-process three-application figure set.
+The wider six-application study remains unfinished.
+
+PostgreSQL complete-backend memory work: the
+[17.5 single-user port](../ports/postgres/app/README.md) now completes
+the same native-matched SQL qualification and inner reuse checks in all four
+arms. Its metadata-capacity and queue-policy repair is documented in the
+[four-arm campaign](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md).
+Standard pgbench workloads and total-memory ledgers remain later work.
+
+Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
+uses two matched pairs for the nested boundary; default CheriBSD on/off remains
+separate reference data. The [SQLite 3.22.0 pilot](../experiments/study/results/sqlite-322-memory-20260927/README.md)
+now has 32/32 native-matched SQL phases in all four nested arms, selected
+application-visible backing measurements, a policy-path audit and three memory
+figures. These are exploratory: the SQLite source forks and build options are
+not normalized across platforms, as the pilot's build audit explains. The
+published PoisonCap path has unrevoked full-queue drains; the
+protected comparator uses a separately identified correction. The
+[normalized SQLite campaign](../experiments/study/results/sqlite-normalized-memory-20260927/README.md)
+adds a matched build gate, 12 complete repeated-work processes, paired
+protection-cost plots and explicit negative results. Its
+[reuse-gap follow-up](../experiments/study/results/sqlite-reuse-gaps-20260927/README.md)
+measures logical memsys5 address reuse in four arms. The
+[whole FFmpeg decoder pool pilot](../experiments/study/results/ffmpeg-pool-memory-20260927/README.md)
+adds 24 exact-output attempts over three workload sizes and four nested arms,
+with separate memory ledgers and two further figures. The
+[memory follow-up](../experiments/study/results/memory-followup-20260927/README.md)
+adds SQLite budget attempts, a size-2 scaling attempt, and a selective FFmpeg
+adapter. It leaves the protected PoisonCap minimum unresolved after kernel
+panics and removes the original FFmpeg snapshot advantage as an adapter
+artifact. The
+[FFmpeg lease-gap campaign](../experiments/study/results/ffmpeg-reuse-gaps-20260927/README.md)
+repeats the four full-decoder arms at three workload sizes; all 36 runs pass
+frame oracles and all four arms have equal observed pool reuse bins. The
+[mruby GC-slot campaign](../experiments/study/results/mruby-gc-memory-20260927/README.md)
+adds a complete interpreter benchmark: 24/24 AO-render processes at two widths
+match native PPM oracles, and Sublet preserves prompt slot reuse where the explicit
+PoisonCap temporal adapter delays it. The selected GC-page metadata and
+post-render retention countercosts are reported alongside the advantage. The
+[full-application campaign contract](plans/application-memory-campaign.md)
+fixes the same four memory experiments for each admitted benchmark. The
+[planner](../experiments/study/README.md) now admits a pinned mruby four-arm
+binding for subsequent runs; other PoisonCap application boundaries still
+need registered adapters. The measured AO campaign used the shared guest
+runners directly.
+
+Application memory behavior: [twelve paired workload configurations](../experiments/applications/results/20260927-reuse/README.md)
+pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU
+controls without in-process collection. The results quantify prompt address
+reuse and post-release retention, include the large-retained-graph counterexample,
+and make no timing or total-RSS claim.
+
+Application memory: [Capstone ports versus default CheriBSD](../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The original matrix recorded
+six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../runtime/tests/application/results/20260927-node-reuse/README.md)
+passes all 27 Capstone repeats at the same 65,536-node capacity, including all six
+previous failures, using unchanged application binaries. Keep the original data
+and larger-node controls separate. These are memory observations, not timings.
+
+Application execution: [shared launcher, persistent Linux shell, build commands and limits](../runtime/applications.md).
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../ports/common/host/port_trace/README.md).
 
 Everything durable the project knows about itself: architecture, the issue registry, the test
@@ -55,17 +134,21 @@ separate machine, and a paper lane. Read the roles, not the lane count:
 
 ## Directory layout
 
-**319 markdown files.** Counts are why this index exists: the two `state/` files went two
-weeks stale without anyone noticing, because nothing mapped the tree.
+This index exists because the two `state/` files went two weeks stale without anyone
+noticing: nothing mapped the tree. **File counts are deliberately not kept here** — they
+were, and every one of them drifted (`ref/` said 31 against 38 files, `plans/` 29 live
+against 69, `history/` 196 against 225, and the header claimed 319 markdown files against
+414). Run `find capstone/docs/<dir> -maxdepth 1 -type f | wc -l` for a number; what this
+table is for is the **role** of each directory.
 
-| directory | files | what belongs here | how to read it |
-|---|---|---|---|
-| `state/` | 3 | what is true **right now** | the first thing a new session reads. If it disagrees with `ref/ISSUES.md`, ISSUES.md wins. |
-| `ref/` | 31 | durable quick-reference that rarely changes | `ISSUES.md` is the registry of every OPEN defect and is the authoritative status for them; `ISSUES-ARCHIVE.md` holds the resolved ones verbatim (split 2026-09-09). `SUBAGENTS.md` before delegating. |
-| `design/` | 32 | architecture and **design decisions only** | a bug-fix, root-cause trail or audit is *not* a design decision — those go to `history/`. |
-| `plans/` | 29 live, 24 archived | work in flight | check the status line, then check `plans/archived/README.md` — a plan's own status line does not know it was archived. |
-| `history/` | 196 | dated investigation notes, root-cause trails, superseded coordination docs | append-only. Do not retro-edit a finding; add a dated correction under it. |
-| `patches/` | — | out-of-tree patches | |
+| directory | what belongs here | how to read it |
+|---|---|---|
+| `state/` | what is true **right now** | the first thing a new session reads. If it disagrees with `ref/ISSUES.md`, ISSUES.md wins. |
+| `ref/` | durable quick-reference that rarely changes | `ISSUES.md` is the registry of every OPEN defect and is the authoritative status for them; `ISSUES-ARCHIVE.md` holds the resolved ones verbatim (split 2026-09-09). `SUBAGENTS.md` before delegating. |
+| `design/` | architecture and **design decisions only** | a bug-fix, root-cause trail or audit is *not* a design decision — those go to `history/`. |
+| `plans/` | work in flight | check the status line, then check `plans/archived/README.md` — a plan's own status line does not know it was archived. |
+| `history/` | dated investigation notes, root-cause trails, superseded coordination docs | append-only. Do not retro-edit a finding; add a dated correction under it. |
+| `patches/` | out-of-tree patches | |
 
 ### The files worth knowing by name
 
@@ -81,6 +164,10 @@ weeks stale without anyone noticing, because nothing mapped the tree.
 
 ### Related trees outside this directory
 
+- `capstone/bug-corpora/INDEX.md` — **generated**: every piece of bug material in the repo, in
+  one table. Third-party defects as cases (here and in `xlang/`), our own silicon defects, our
+  own compiler and runtime defects, and the protection fixtures that are none of those. Counts
+  come from each corpus's `corpus.json` and each port's `port.json`, never from typing.
 - `capstone/tests/fpga-repros/` — one folder per silicon defect, each a **self-contained report**
   that may already be a live link held by the hardware side. See its own `README.md`. These are
   evidence and are never pruned.
@@ -88,6 +175,20 @@ weeks stale without anyone noticing, because nothing mapped the tree.
 - `CLAUDE.md` (repo root) — the permanent rules. Read it before the docs, not after.
 
 ## Current verified baseline
+
+The `domain-process-runtime` application stack supports a persistent Linux guest,
+ordinary application arguments/streams, trusted fault/preemption return and owned
+resource reuse. The installed QEMU guest passes exhaustion/recovery followed by
+1,008 mixed starts in the same boot, with stable retained resources. Perl uses
+the shared SDK; Perl and mruby execute through the common launcher. See
+[applications](../runtime/applications.md), the
+[checked acceptance](../runtime/tests/application/results/20260926-qemu-rebased.json)
+and [current state](state/current-state.md) for scope and remaining failures.
+This is a one-hart QEMU platform extension, not a new FPGA result.
+The current [Perl `t/base` result](../ports/perl/musl/results/2026-09-26/base-tests-rebased-qemu.txt)
+is 8/9 files passing; the remaining case requires target subprocess creation.
+Upstream Perl coverage remains incomplete.
+
 
 Opt-in [generic client-fault recovery](../runtime/domain-faults.md) and its
 [standalone tests](../runtime/tests/fault-recovery/README.md) are independent of
@@ -99,8 +200,10 @@ are in [the component README](../ports/postgres/memory-contexts/README.md).
 This is allocator-level coverage, not a protected server or consumer-defect suite.
 
 
-> **Scope note added 2026-09-04.** This list is the **QEMU/runtime** baseline and it is still
-> accurate, but it accumulated before any of the silicon work and says nothing about it. For
+> **Historical baseline list (scope updated 2026-09-26).** The list below records earlier
+> QEMU/runtime validation. The available legacy snapshot currently fails null_blk and
+> the borrowed-region file-open-close proof on both old and new platforms; see current state.
+> It accumulated before the silicon work and says nothing about it. For
 > what is verified **on the board** — the resident bitstream, S-06/S-07/S-08/S-12, and SQLite's
 > logic tests running in a capability domain — read `state/current-state.md`. For the status of
 > any individual defect, `ref/ISSUES.md` outranks both.
@@ -168,6 +271,9 @@ Use these only when the task actually needs them:
 - `design/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
 - `design/research-decisions-log.md` — paper-worthy implementation decisions and tradeoffs, cited by commit hash
 - `plans/backend-compiler-fixes.md` — known backend bugs and workarounds (from CoreMark bring-up)
+- [Domain applications as Linux commands](plans/domain-process-runtime.md) — implemented
+  shared launcher, owned lifecycle, shell I/O, common SDK and persistent development VM;
+  architecture, verified acceptance and platform limits
 - `history/README.md` — historical index and note selection guide
 
 ## History rules

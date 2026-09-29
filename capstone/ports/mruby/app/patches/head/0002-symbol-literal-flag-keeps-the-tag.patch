@@ -1,0 +1,50 @@
+symbol.c: the literal-string flag is set and cleared on a capability-carrying integer.
+
+The symbol table marks a literal name by setting the pointer's low bit, through
+uintptr_t. On capstone64 uintptr_t is 8 bytes, so the untagged pointer that comes
+back faults at its first use: mrb_packed_int_decode, called by sym_check on the
+untagged name, stopped every run (cause 24) before any Ruby executed. The bit
+arithmetic now runs on __uintcap_t, which keeps the capability; natively it is
+uintptr_t as before.
+
+--- a/src/symbol.c
++++ b/src/symbol.c
+@@ -92,26 +92,34 @@
+ /* LSB pointer tagging for literal flags */
+ #define SYMTBL_LITERAL_FLAG ((uintptr_t)1)
+ 
++/* capstone: the literal flag lives in the pointer's low bit; do the bit
++   arithmetic on a capability-carrying integer so the pointer keeps its tag. */
++#ifdef __SIZEOF_INTCAP__
++typedef __uintcap_t symtbl_uptr;
++#else
++typedef uintptr_t symtbl_uptr;
++#endif
++
+ /* Extract clean pointer for memory operations */
+ static inline const char*
+ symtbl_get_ptr(const char *tagged_ptr)
+ {
+-  return (const char*)((uintptr_t)tagged_ptr & ~SYMTBL_LITERAL_FLAG);
++  return (const char*)((symtbl_uptr)tagged_ptr & ~SYMTBL_LITERAL_FLAG);
+ }
+ 
+ /* Check if symbol is literal by testing LSB */
+ static inline mrb_bool
+ symtbl_is_literal(const char *tagged_ptr)
+ {
+-  return ((uintptr_t)tagged_ptr & SYMTBL_LITERAL_FLAG) != 0;
++  return ((symtbl_uptr)tagged_ptr & SYMTBL_LITERAL_FLAG) != 0;
+ }
+ 
+ /* Create tagged pointer for literal string - with alignment verification */
+ static inline const char*
+ symtbl_tag_literal(const char *ptr)
+ {
+-  mrb_assert(((uintptr_t)ptr & 1) == 0);  /* Assert alignment */
+-  return (const char*)((uintptr_t)ptr | SYMTBL_LITERAL_FLAG);
++  mrb_assert(((symtbl_uptr)ptr & 1) == 0);  /* Assert alignment */
++  return (const char*)((symtbl_uptr)ptr | SYMTBL_LITERAL_FLAG);
+ }
+ 
+ static void

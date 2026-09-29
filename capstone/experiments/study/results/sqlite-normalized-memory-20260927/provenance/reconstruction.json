@@ -1,0 +1,22 @@
+[
+  {
+    "arm": "capstone",
+    "measured_source_reconstructed": true,
+    "driver_reconstructed": true
+  },
+  {
+    "arm": "capstone-sublet",
+    "measured_source_reconstructed": true,
+    "driver_reconstructed": true
+  },
+  {
+    "arm": "poisoncap-spatial",
+    "measured_source_reconstructed": true,
+    "driver_reconstructed": true
+  },
+  {
+    "arm": "poisoncap-temporal",
+    "measured_source_reconstructed": true,
+    "driver_reconstructed": true
+  }
+]

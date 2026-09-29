@@ -1,0 +1,18 @@
+{
+  "upstream": {
+    "path": "/tmp/capstone/poisoncap-plots/capstone-322/sqlite-src/sqlite-amalgamation-3220000/sqlite3.c",
+    "sha256": "7991acd0d8c78435d47523a43aeeb117f0aa264c4d7d0d10410f0128ed1f6004"
+  },
+  "capstone_source": {
+    "path": "/tmp/capstone/poisoncap-plots/capstone-spatial-base.c",
+    "sha256": "b446615b077da4765a1313709950e91dbb1c8f8b8c00e18c31823860b2a26d77"
+  },
+  "poisoncap_source": {
+    "path": "/tmp/capstone/poisoncap-study/sqlite-build/sqlite3.c",
+    "sha256": "23a5692948a2845d847edc71a4c5ad6a959be5e9d6ca79006e750e79f16c291e"
+  },
+  "driver": {
+    "path": "/tmp/capstone/poisoncap-plots/sqlite-src-3220000/test/speedtest1.c",
+    "sha256": "c4a646ea8d3c21d71ed369b8ef782f8ee672b26804eb106b45dfa493f30b2361"
+  }
+}

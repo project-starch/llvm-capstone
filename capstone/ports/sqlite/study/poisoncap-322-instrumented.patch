@@ -1,0 +1,152 @@
+--- a/sqlite3.c
++++ b/sqlite3.c
+@@ -23128,6 +23128,11 @@
+ 
+ static void* mem5_heap_cap;
+ static uintptr_t mem5_heap_base;
++/* Rounded-capacity accounting independent of SQLITE_DEBUG. */
++static size_t study_held, study_peak_held, study_live, study_peak_live;
++static size_t study_oom_requests, study_clear_bytes, study_poison_bytes;
++static size_t study_peak_quarantine, study_full_drains, study_threshold_drains;
++static size_t study_revokes, study_revoke_errors;
+ 
+ /*
+ ** Maximum size of any allocation is ((1<<LOGMAX)*mem5.szAtom). Since
+@@ -23302,7 +23307,7 @@
+   assert( nByte>0 );
+ 
+   /* No more than 1GiB per allocation */
+-  if( nByte > 0x40000000 ) return 0;
++  if( nByte > 0x40000000 ){ study_oom_requests++; return 0; }
+ 
+ #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
+   /* Keep track of the maximum allocation request.  Even unfulfilled
+@@ -23324,6 +23329,7 @@
+   if( iBin>LOGMAX ){
+     testcase( sqlite3GlobalConfig.xLog!=0 );
+     sqlite3_log(SQLITE_NOMEM, "failed to allocate %u bytes", nByte);
++    study_oom_requests++;
+     //printf("malloc early return\n");
+     //for(int k =0 ; k < LOGMAX ; k++)
+     //  printf("freelist[%d] = %d\n", k, mem5.aiFreelist[k]);
+@@ -23340,6 +23346,8 @@
+     memsys5Link(i+newSize, iBin);
+   }
+   mem5.aCtrl[i] = iLogsize;
++  study_held += (size_t)iFullSz;
++  if( study_peak_held<study_held ) study_peak_held = study_held;
+ 
+ #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
+   /* Update allocator performance statistics. */
+@@ -23393,6 +23401,7 @@
+ 
+   iLogsize = mem5.aCtrl[iBlock] & CTRL_LOGSIZE;
+   size = 1<<iLogsize;
++  study_held -= (size_t)size*mem5.szAtom;
+   assert( iBlock+size-1<(u32)mem5.nBlock );
+ 
+   mem5.aCtrl[iBlock] |= CTRL_FREE;
+@@ -23456,6 +23465,16 @@
+ static size_t total_alloc_size = 0;
+ static size_t quarantine_size = 0;
+ static size_t revocation_count = 0;
++void sqlite3_study_report(int phase){
++  printf("STUDY-MEM phase=%d heap=%d atom=%d blocks=%d links=%zu ctrl=%d qtable=%zu live=%zu peak_live=%zu held=%zu peak_held=%zu quarantine=%zu peak_quarantine=%zu qcount=%zu full_drains=%zu threshold_drains=%zu revokes=%zu revoke_errors=%zu poison_bytes=%zu clear_bytes=%zu oom=%zu\n",
++    phase, sqlite3GlobalConfig.nHeap, mem5.szAtom, mem5.nBlock,
++    (size_t)mem5.nBlock*sizeof(Mem5Link), mem5.nBlock,
++    sizeof(quarantine), study_live, study_peak_live, study_held,
++    study_peak_held, quarantine_size, study_peak_quarantine, q_count,
++    study_full_drains, study_threshold_drains, study_revokes,
++    study_revoke_errors, study_poison_bytes, study_clear_bytes,
++    study_oom_requests);
++}
+ 
+ /*
+ ** Allocate nBytes of memory.
+@@ -23482,9 +23501,13 @@
+ 
+   
+ 
++  if( !p ) return 0; /* SQLite must see OOM instead of a capability fault. */
+   size_t alloc_size = memsys5Size(p);
++  study_live += alloc_size;
++  if( study_peak_live<study_live ) study_peak_live=study_live;
+ #ifdef NESTED_TEMPORAL
+   total_alloc_size += alloc_size;
++  study_clear_bytes += alloc_size;
+   clear_region(cheri_setoffset(mem5_heap_cap, cheri_getoffset(p)), alloc_size);
+   //for(int i = 0 ; i< alloc_size; i+=16){
+   //  void *addr = (char*) p + i;
+@@ -23540,8 +23563,15 @@
+   crsi.epochs.enqueue = 0xC0FFEE;
+   crsi.epochs.dequeue = 0xB00;
+ 
+-  cheri_revoke(CHERI_REVOKE_LAST_PASS | CHERI_REVOKE_IGNORE_START |
++  int rc = cheri_revoke(CHERI_REVOKE_LAST_PASS | CHERI_REVOKE_IGNORE_START |
+             CHERI_REVOKE_TAKE_STATS , 0, &crsi);
++  study_revokes++;
++  if( rc!=0 ){
++    study_revoke_errors++;
++#ifdef SQLITE_STUDY_CORRECT_FULL_QUEUE
++    abort(); /* Never release a retained block after a failed pass. */
++#endif
++  }
+   quarantine_flush();
+ 
+ }
+@@ -23552,6 +23582,7 @@
+     return ;
+ 
+   if(quarantine_size*4  >= total_alloc_size){
++    study_threshold_drains++;
+     //quarantine_flush();
+     quarantine_revoke();
+   }
+@@ -23561,7 +23592,12 @@
+ static void quarantine_insert(void* base, size_t size){
+   //cheri_revoke_epoch_t now = cheri_revoke_get_epoch();
+   if (q_count == QUARANTINE_MAX){
+-    quarantine_flush();
++    study_full_drains++;
++#ifdef SQLITE_STUDY_CORRECT_FULL_QUEUE
++    quarantine_revoke();
++#else
++    quarantine_flush(); /* Published policy: record this unrevoked drain. */
++#endif
+   }
+   
+   quarantine[q_tail].ptr = base;
+@@ -23570,6 +23606,8 @@
+ 
+   q_tail = (q_tail + 1) % QUARANTINE_MAX;
+   quarantine_size += size;
++  if( study_peak_quarantine<quarantine_size )
++    study_peak_quarantine=quarantine_size;
+   q_count +=1;
+ }
+ 
+@@ -23584,6 +23622,7 @@
+   uintptr_t offset = addr - heap_base; 
+   offset &= ~(mem5.szAtom -1);
+   void *p = cheri_setoffset(mem5_heap_cap, offset);
++  study_live -= (size_t)memsys5Size(p);
+ 
+   memsys5Enter();
+ #ifdef NESTED_TEMPORAL
+@@ -23592,6 +23631,7 @@
+   size_t size = mem5.szAtom * (1 << iLogsize);
+   void *bounded = cheri_setbounds(p, size);
+   quarantine_insert(p, size);
++  study_poison_bytes += size;
+   for(size_t i =0 ; i< size;i+=16)
+     cpoison(bounded + i);
+   check_and_flush();
+@@ -72320,7 +72360,7 @@
+   assert( db!=0 );
+   assert( (pMem->flags & MEM_RowSet)==0 );
+   sqlite3VdbeMemRelease(pMem);
+-  pMem->zMalloc = sqlite3DbMallocRawNN(db, 64);
++  pMem->zMalloc = sqlite3DbMallocRawNN(db, ROUND8(sizeof(RowSet)));
+   if( db->mallocFailed ){
+     pMem->flags = MEM_Null;
+     pMem->szMalloc = 0;

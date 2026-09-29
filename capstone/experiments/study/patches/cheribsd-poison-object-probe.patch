@@ -1,0 +1,395 @@
+--- a/sys/arm64/arm64/cheri_revoke_machdep.c
++++ b/sys/arm64/arm64/cheri_revoke_machdep.c
+@@ -108,7 +108,7 @@
+ 		 */
+ 
+ 		CHERI_REVOKE_STATS_BUMP(crst, caps_found_revoked);
+-	} else if (cheri_gettag(cut) && ctp(crshadow, cut, perms, start, end)) {
++	} else if (cheri_gettag(cut) && ctp(crc->map, crshadow, cut, perms, start, end)) {
+ 		void * __capability cscratch;
+ 		int stxr_status = 1;
+ 
+@@ -267,7 +267,7 @@
+ 		    (vm_offset_t)vm_cheri_revoke_tlb_fault;
+ 		enable_user_memory_access();
+ #endif
+-		res = crc->map->vm_cheri_revoke_test(crc->crshadow, cut,
++		res = crc->map->vm_cheri_revoke_test(crc->map, crc->crshadow, cut,
+ 		    cheri_getperm(cut), start, end);
+ #ifdef CHERI_CAPREVOKE_FAST_COPYIN
+ 		disable_user_memory_access();
+@@ -341,7 +341,7 @@
+ 
+ 	*res |= VM_CHERI_REVOKE_PAGE_HASCAPS;
+ 
+-	if (ctp(crshadow, cut, cheri_getperm(cut), start, end)) {
++	if (ctp(vmcrc->map, crshadow, cut, cheri_getperm(cut), start, end)) {
+ 		*res |= VM_CHERI_REVOKE_PAGE_DIRTY;
+ 
+ 		/* One dirty answer is as good as any other; stop early */
+--- a/sys/arm64/arm64/cheri_revoke_machdep_tests.c
++++ b/sys/arm64/arm64/cheri_revoke_machdep_tests.c
+@@ -127,7 +127,8 @@
+ // TODO: if ((perms & CHERI_PERMS_HWALL_CID) != 0)
+ 
+ static unsigned long
+-vm_cheri_revoke_test_just_mem(const uint8_t * __capability crshadow,
++vm_cheri_revoke_test_just_mem(struct vm_map *map __unused,
++    const uint8_t * __capability crshadow,
+     uintcap_t cut, unsigned long perms, vm_offset_t start, vm_offset_t end)
+ {
+ 	if ((perms & (CHERI_PERMS_HWALL_MEMORY | CHERI_PERM_SW_VMEM)) != 0) {
+@@ -142,7 +143,8 @@
+ }
+ 
+ static unsigned long
+-vm_cheri_revoke_test_just_mem_fine(const uint8_t * __capability crshadow,
++vm_cheri_revoke_test_just_mem_fine(struct vm_map *map __unused,
++    const uint8_t * __capability crshadow,
+     uintcap_t cut, unsigned long perms, vm_offset_t start, vm_offset_t end)
+ {
+ 	/*
+@@ -163,7 +165,8 @@
+ }
+ 
+ static unsigned long
+-vm_cheri_revoke_test_mem_fine_range(const uint8_t * __capability crshadow,
++vm_cheri_revoke_test_mem_fine_range(struct vm_map *map __unused,
++    const uint8_t * __capability crshadow,
+     uintcap_t cut, unsigned long perms, vm_offset_t start, vm_offset_t end)
+ {
+ 	/*
+--- a/sys/riscv/riscv/cheri_revoke_machdep.c
++++ b/sys/riscv/riscv/cheri_revoke_machdep.c
+@@ -36,6 +36,8 @@
+ #include <sys/param.h>
+ #include <sys/systm.h>
+ #include <sys/kernel.h>
++#include <sys/lock.h>
++#include <sys/rwlock.h>
+ #include <sys/unistd.h>
+ #include <sys/proc.h>
+ #include <sys/sysent.h>
+@@ -53,6 +55,7 @@
+ #include <vm/vm_map.h>
+ #include <vm/vm_object.h>
+ #include <vm/vm_page.h>
++#include <vm/vm_pager.h>
+ #include <vm/vm_param.h>
+ #include <vm/vm_cheri_revoke.h>
+ 
+@@ -113,7 +116,7 @@
+ 		 */
+ 	}
+ #endif
+-	else if (cheri_gettag(cut) && ctp(crshadow, cut, perms, start, end)) {
++	else if (cheri_gettag(cut) && ctp(crc->map, crshadow, cut, perms, start, end)) {
+ 		void * __capability cscratch;
+ 		int ok;
+ 
+@@ -376,7 +379,7 @@
+ 		    (vm_pointer_t)vm_cheri_revoke_tlb_fault;
+ 		enable_user_memory_access();
+ #endif
+-		res = crc->map->vm_cheri_revoke_test(crc->crshadow, cut,
++		res = crc->map->vm_cheri_revoke_test(crc->map, crc->crshadow, cut,
+ 		    cheri_getperm(cut), start, end);
+ #ifdef CHERI_CAPREVOKE_FAST_COPYIN
+ 		disable_user_memory_access();
+@@ -442,7 +445,7 @@
+ 
+ 	*res |= VM_CHERI_REVOKE_PAGE_HASCAPS;
+ 
+-	if (ctp(crshadow, cut, cheri_getperm(cut), start, end)) {
++	if (ctp(vmcrc->map, crshadow, cut, cheri_getperm(cut), start, end)) {
+ 		*res |= VM_CHERI_REVOKE_PAGE_DIRTY;
+ 
+ 		/* One dirty answer is as good as any other; stop eary */
+@@ -512,41 +515,113 @@
+ 
+ #ifdef CHERI_CAPREVOKE_POISON
+ /*
+- * Emulate poison probe via the direct map
++ * A poison predicate runs with the map read-locked during the sweep, or with
++ * its source page busy on the fault path.  Entering vm_fault() here can try
++ * to upgrade a recursively held map lock, or busy the source page twice.
++ * Resolve the target through the object chain instead.  This reads backing
++ * without installing a user PTE or recursively scanning another page.
++ *
++ * Unknown object types, partial pages and pager failures are errors.  Only
++ * an absent mapping, a capability-free object, or proven zero-fill backing
++ * establishes the absence of poison without reading a resident page.
+  */
++static int
++vm_cheri_revoke_poison_hold(struct vm_map *map, vm_offset_t vaddr,
++    vm_page_t *mp)
++{
++	vm_map_entry_t entry;
++	vm_object_t object, next;
++	vm_pindex_t index;
++	vm_page_t m;
++	int result = KERN_SUCCESS;
++
++	*mp = pmap_extract_and_hold(map->pmap, vaddr, VM_PROT_READ);
++	if (*mp != NULL)
++		return (KERN_SUCCESS);
++
++	vm_map_lock_read(map);
++	if (!vm_map_lookup_entry(map, vaddr, &entry))
++		goto out_map;
++	if ((entry->eflags & MAP_ENTRY_IS_SUB_MAP) != 0) {
++		result = KERN_FAILURE;
++		goto out_map;
++	}
++	object = entry->object.vm_object;
++	if (object == NULL)
++		goto out_map;
++	index = OFF_TO_IDX(entry->offset + vaddr - entry->start);
++	VM_OBJECT_WLOCK(object);
++	vm_object_pip_add(object, 1);
++	for (;;) {
++		if (index >= object->size) {
++			result = KERN_FAILURE;
++			break;
++		}
++		if ((object->flags & OBJ_NOCAP) != 0 ||
++		    (object->type == OBJT_VNODE &&
++		    (object->flags & OBJ_HASCAP) == 0))
++			break;
++		m = vm_page_lookup(object, index);
++		if (m != NULL) {
++			if (!vm_page_all_valid(m)) {
++				result = KERN_FAILURE;
++				break;
++			}
++			/* The source page may already be busy in this thread. */
++			vm_page_wire(m);
++			*mp = m;
++			break;
++		}
++		if (object->type != OBJT_SWAP) {
++			result = KERN_FAILURE;
++			break;
++		}
++		if (vm_pager_has_page(object, index, NULL, NULL)) {
++			/* No PTE is exposed, so page-in does not trigger revocation. */
++			if (vm_page_grab_valid(&m, object, index,
++			    VM_ALLOC_NORMAL | VM_ALLOC_WIRED) != VM_PAGER_OK) {
++				result = KERN_FAILURE;
++				break;
++			}
++			vm_page_xunbusy(m);
++			*mp = m;
++			break;
++		}
++		next = object->backing_object;
++		if (next == NULL)
++			break; /* No resident or swapped copy: zero-fill backing. */
++		index += OFF_TO_IDX(object->backing_object_offset);
++		VM_OBJECT_WLOCK(next);
++		vm_object_pip_add(next, 1);
++		vm_object_pip_wakeup(object);
++		VM_OBJECT_WUNLOCK(object);
++		object = next;
++	}
++	vm_object_pip_wakeup(object);
++	VM_OBJECT_WUNLOCK(object);
++out_map:
++	vm_map_unlock_read(map);
++	return (result);
++}
++
+ int
+ vm_cheri_revoke_probe_poison(struct vm_map *map, vm_offset_t vaddr,
+     uintcap_t *poison)
+ {
+-	uintcap_t *probe;
++	uintcap_t *probe, value;
+ 	vm_page_t m;
+-
+-	m = pmap_extract_and_hold(map->pmap, vaddr, VM_PROT_READ);
+-	if (m == NULL) {
+-		/* We expect to always find the page here */
+-		panic("Poison probe missing page %#lx", vaddr);
+-	}
+-
+-	/* Now that we are holding the page, we can look in the DMAP */
+-	/* XXX-AM: should set bounds but probably not worth it */
++	int error;
++
++	*poison = (uintcap_t)NULL;
++	error = vm_cheri_revoke_poison_hold(map, vaddr, &m);
++	if (error != KERN_SUCCESS || m == NULL)
++		return (error);
+ 	probe = (uintcap_t *)PHYS_TO_DMAP(VM_PAGE_TO_PHYS(m) +
+ 	    (vaddr & PAGE_MASK));
+-
+-	/*
+-	 * XXX-AM: this is very much open to races of anything overwriting
+-	 * poison. The expectation is that the allocators do not touch
+-	 * the poison until the revocation is done.
+-	 * If we miss setting the poison, this is fine, because surely
+-	 * we will pick it up in the next revocation pass.
+-	 */
+-	if (cheri_is_poison(*probe)) {
+-		*poison = *probe;
+-	} else {
+-		*poison = (uintcap_t)NULL;
+-	}
+-
++	value = *probe;
++	if (cheri_gettag(value) && cheri_is_poison(value))
++		*poison = value;
+ 	vm_page_unwire_in_situ(m);
+-
+ 	return (KERN_SUCCESS);
+ }
+ #endif
+--- a/sys/riscv/riscv/cheri_revoke_machdep_tests.c
++++ b/sys/riscv/riscv/cheri_revoke_machdep_tests.c
+@@ -129,7 +129,8 @@
+ // TODO: if ((perms & CHERI_PERMS_HWALL_CID) != 0)
+ 
+ static unsigned long
+-vm_cheri_revoke_test_just_mem(const uint8_t * __capability crshadow,
++vm_cheri_revoke_test_just_mem(struct vm_map *map __unused,
++    const uint8_t * __capability crshadow,
+     uintcap_t cut, unsigned long perms, vm_offset_t start, vm_offset_t end)
+ {
+ 	if ((perms & (CHERI_PERMS_HWALL_MEMORY | CHERI_PERM_SW_VMEM)) != 0) {
+@@ -144,7 +145,8 @@
+ }
+ 
+ static unsigned long
+-vm_cheri_revoke_test_just_mem_fine(const uint8_t * __capability crshadow,
++vm_cheri_revoke_test_just_mem_fine(struct vm_map *map __unused,
++    const uint8_t * __capability crshadow,
+     uintcap_t cut, unsigned long perms, vm_offset_t start, vm_offset_t end)
+ {
+ 	/*
+@@ -165,7 +167,8 @@
+ }
+ 
+ static unsigned long
+-vm_cheri_revoke_test_mem_fine_range(const uint8_t * __capability crshadow,
++vm_cheri_revoke_test_mem_fine_range(struct vm_map *map __unused,
++    const uint8_t * __capability crshadow,
+     uintcap_t cut, unsigned long perms, vm_offset_t start, vm_offset_t end)
+ {
+ 	/*
+@@ -185,11 +188,12 @@
+ 
+ #ifdef CHERI_CAPREVOKE_POISON
+ static unsigned long
+-vm_cheri_revoke_test_poison(const uint8_t * __capability crshadow __unused,
++vm_cheri_revoke_test_poison(struct vm_map *map,
++    const uint8_t * __capability crshadow __unused,
+     uintcap_t cut, unsigned long perms, vm_offset_t start __unused,
+     vm_offset_t end __unused)
+ {
+-	void * __capability rw_cut;
++	vm_offset_t rw_cut;
+ 	uintcap_t poison;
+ 
+ 	/*
+@@ -215,65 +219,11 @@
+ 		KASSERT(cheri_is_poison(cut) == 0,
+ 		    ("Attempt to check poison on poison cap %#lp",
+ 			(void * __capability)cut));
+-		/*
+-		 * We must tolerate page faults at this stage.
+-		 * These are user page faults coming from kernel space.
+-		 * To do this we either need CAPREVOKE_FAST_COPYIN to
+-		 * install a custom pcb_onfault, or we have to fuecap.
+-		 * Both a quite expensive if we get a page fault, and
+-		 * this also means that we may get a recursive
+-		 * page scan because the revoker needs to observe
+-		 * that page.
+-		 * The recursive page scan can occur regardless of
+-		 * FAST_COPYIN and MUST be avoided, because the poison
+-		 * lookup needs to be computationally bounded.
+-		 * The page scan can be triggered in multiple ways:
+-		 * 1. recursive CRG fault due to the capability load.
+-		 * 2. recursive page scan due to mapping a CAPDIRTY page.
+-		 */
+-
+-		/*
+-		 * Note: we need to re-derive the cut capability,
+-		 * because we will try to load poison from it, so:
+-		 * - It can not be sealed
+-		 * - It must permit LOAD_CAP
+-		 * - It must be valid
+-		 *
+-		 * XXX-AM: We should use cheri_capability_build_user_rwx, but
+-		 * it will lock the curthread map and lookup the mapping to
+-		 * check that the reservation layout is sensible.
+-		 * We use the userspace root cap here to avoid doing
+-		 * this in the revoker loop.
+-		 *
+-		 * XXX-AM: It is unclear what to do if the original capability
+-		 * has length < sizeof(uintcap_t).
+-		 * This may occur due to delegation of an allocation sub-object,
+-		 * and therefore it should be revoked.
+-		 * At the same time, accessing outside the bounds means that
+-		 * we are potentially doing an OOB access from the kernel and
+-		 * violating monotonicity.
+-		 * Similarly, we need to round the address to a capability
+-		 * boundary.
+-		 */
+-		rw_cut = cheri_setoffset(userspace_root_cap, cheri_getbase(cut));
+-		rw_cut = rounddown2(rw_cut, sizeof(uintcap_t));
+-		rw_cut = cheri_setbounds(rw_cut, sizeof(uintcap_t));
+-
+-		/*
+-		 * The poison probe can fail legitimately in some
+-		 * cases.
+-		 * - The page is not mapped (e.g. stack guard page)
+-		 * In these cases, we accept that the capability
+-		 * can not be poisoned, because poisoning requires
+-		 * that the memory has been mapped to write poison into.
+-		 *
+-		 * XXX-AM: It is unclear whether this failure mode
+-		 * can cause invalid poison detection in corner
+-		 * cases.
+-		 * Currently this is indistinguishable from no-poison
+-		 * in the fupoison return value.
+-		 */
+-		poison = fupoison(rw_cut);
++		/* Resolve through the VM object, without a recursive user fault. */
++		rw_cut = rounddown2(cheri_getbase(cut), sizeof(uintcap_t));
++		if (vm_cheri_revoke_probe_poison(map,
++		    (vm_offset_t)rw_cut, &poison) != KERN_SUCCESS)
++			panic("Unresolved poison probe %#lx", (vm_offset_t)rw_cut);
+ 
+ 		KASSERT((void * __capability)poison == NULL ||
+ 		    cheri_gettag(poison),
+--- a/sys/vm/vm_fault.c
++++ b/sys/vm/vm_fault.c
+@@ -824,8 +824,16 @@
+ 				 * go ahead and mutate the page returned.
+ 				 */
+ 
++#ifdef CHERI_CAPREVOKE_POISON
++				/* Probe targets may belong to this same object.  The
++				 * populated pages remain xbusy while it is unlocked. */
++				VM_OBJECT_WUNLOCK(fs->first_object);
++#endif
+ 				vmfcres = vm_fault_cheri_revoke(fs, &m[i],
+ 				    true);
++#ifdef CHERI_CAPREVOKE_POISON
++				VM_OBJECT_WLOCK(fs->first_object);
++#endif
+ 				switch(vmfcres) {
+ 				case VFCR_NEED_WRITE:
+ 					panic("cheri_revoke populate R/O?");
+--- a/sys/vm/vm_map.h
++++ b/sys/vm/vm_map.h
+@@ -202,7 +202,7 @@
+  * Returns any nonzero value to indicate revocation required.
+  */
+ typedef unsigned long (*vm_cheri_revoke_test_fn)(
+-    const uint8_t * __capability shadow, uintcap_t cut, unsigned long cutperm,
++    struct vm_map *map, const uint8_t * __capability shadow, uintcap_t cut, unsigned long cutperm,
+     vm_offset_t start, vm_offset_t end);
+ 
+ #ifdef CHERI_CAPREVOKE_STATS
