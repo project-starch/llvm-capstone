@@ -112,21 +112,36 @@ What makes it hold, each checked in source by the before-audit:
 - **ALLOW** is set only by a live probe resolution, keyed by the exact 30-bit id, cleared by any
   invalidation of its index (broadcast or a dead write), never by a flush.
 - **DEAD** is set by a dead/stale resolution or a timeout, cleared only by a write to its index, never by
-  flush or pop. A dead 30-bit id never becomes live again, so a stale DEAD cannot falsely deny.
+  flush or pop. A DEAD from a *resolution* cannot falsely deny: a dead 30-bit id never becomes live again.
+  A DEAD from a *timeout* is different, and the first version of this paragraph got it wrong (after-audit,
+  2026-09-29): it records an id that may be LIVE (the rev-node simply did not answer within the bound), and
+  every later miss on that exact id is then denied without a new probe until a write reaches that index.
+  Fail-closed, and it needs a rev-node that stays silent for ~1M cycles, but it is a persistent false deny
+  of R-43's own class; the first fix cleared DEAD on pop precisely for this, the second does not. It reads
+  as arm bit 5 (timeout) in the refusal record. Accepted for this bitstream as a wedged-rev-node-only case.
 - **A stale generation denies, never stalls**: the tap installs the node's CURRENT generation, so the
   resolution compares all 30 bits (the `mgen` mutant, which drops that compare, must ALLOW arms 5/6).
 - **Younger rev-node operations cannot run twice**: DROP/REVOKE/MREV/SPLIT/DELIN issue only when every
   older instruction has committed, and a marked head is uncommitted.
-- **Bound:** at most 3 replays per dynamic access (the trace counts them: 7 replays in the test, at most 1
-  per pc). Timeouts fail closed: ~1M cycles before the rev-node accepts the probe (it is served only in
-  IDLE, never during a walk, and silicon walks cost up to 11,811 cycles), 65,535 after.
+- **Each WAIT is bounded; the NUMBER of replays per access is not bounded by any mechanism.** The RTL has
+  no replay counter (after-audit, 2026-09-29; an earlier version of this line claimed "at most 3 replays").
+  What is bounded is one wait: ~1M cycles before the rev-node accepts the probe (it is served only in IDLE,
+  never during a walk, and silicon walks cost up to 11,811 cycles), 65,535 after; both fail closed. Observed
+  in simulation: 7 replays in the test, at most 1 per pc. The livelock shape — a younger miss's live
+  resolution overwriting the one-entry ALLOW while the head's own id is evicted again, on every replay —
+  needs a repeated timing race; it is neither observed nor excluded. Also latent: the replay's re-fetch rides
+  the controller's `flush_commit` branch, which is gated on `CVA6Cfg.RVA` (1 on this target).
 
 ### The refusal record — observation only, batched into the same bitstream
 
 If a live capability is still refused on silicon, nothing today says WHY. So the build carries a sticky
 record of the FIRST cause-25 verdict since reset — the 30-bit id and which arm produced it — readable
-through the debug-switch mux at values **204..208** (bank `3'b110`, registers `01100..10000`; all
-UART-safe, `(value & 3) == 0`):
+through the debug-switch mux at values **204..208** (bank `3'b110`, registers `01100..10000`). **Only 204
+and 208 are UART-safe** (`(value & 3) == 0`); the first version of this sentence said all five were, which
+is wrong: 205 sets `sw[0]` (console TX handed to the tracer), 206 sets `sw[1]` (arms the one-shot trace
+dump, which outlives the switch value), 207 sets both. Read 204 and 208 freely; read 205..207 only after
+the boot's console capture is finished, then park at 0. The values themselves are unaffected (LEDs are a
+different pin):
 
 ```
    204 = { 2'b00, arm[3:0], ~v, v }      arm one-hot: bit2 hit-dead, bit3 same-cycle invalidation,
@@ -139,6 +154,42 @@ stretcher ORs apertures on a running core, and a corrupted read shows as `11`, `
 Positive control: the R-35 stale probe (image `35fb3fec`, the last acceptance arm) must latch its own id;
 negative: a passing boot reads `10` (empty). In simulation the record latched the test's first denial
 (id `0x616`, arm `0001` = hit-dead) and nothing else.
+
+**The marker IS visible in one place: the hardware tracer.** It is not architectural — every architectural
+consumer (the CSR file's trap entry, `mcause`/`mepc`, single-step, RVFI, the perf counters, the frontend and
+the controller) reads `exception_o` or `ex_commit.valid`, which the strip clears — but `tracer.sv` reads the
+head's `ex` field directly and counts any cause with bit 63 clear as a real exception. A trace capture that
+enables the Capstone causes therefore logs every replay as an exception entry with cause
+`0x4000000000000019` at the access pc. Decode those entries as replays; they are a free replay count on
+silicon. (After-audit, 2026-09-29. The simulation leak detector watches `exception_o` only, so its "0 leaks"
+is a statement about the architectural path, which is the one that matters.)
+
+### What the after-audit of `8f6a0af98` found (2026-09-29) — the mechanism held; four documented properties did not
+
+The audit attacked interrupts, debug and halt during the wait, every other consumer of the exception struct
+(store buffer, AMO, register writeback, WAW clear, RVFI), the flush paths that could clear the probe under a
+surviving head (none: every `flush_ex` is paired with `flush_id`, and a mispredict flushes only unissued
+instructions), the new cross-module signals (all flop-sourced or flop-sunk), the aperture decode, and both
+pre-registered arms the batch does not build (an interrupt during the wait — taken on the re-decoded head with
+`mepc` = its pc; a younger CJALR before the replay — its metadata cannot reach the refetch, since CJALR is
+never predicted and the issue flush clears branch state). All SUPPORTED, with quoted lines. What it refuted:
+
+1. **The `noclear` positive control is VACUOUS on v2.** Arm 6's pre-read of alias C HITS (C is fresh and
+   resident), and v2 sets ALLOW only from a live *probe*, so the record never holds C and the mutant is denied
+   through probe → DEAD exactly like the shipping build (ship trace: pre-read `hit=1 ok=0`; the arm-6 access
+   `hit=0 … replay=1`, then `probe-resolved … -> DEAD`). The control that "proves the clear is load-bearing"
+   could not fire. **Re-registered as arm 6b** (test commit after `8f6a0af98`): C2 is evicted BEFORE its first
+   read, so that read probes and sets ALLOW(C2); then revoke, churn, read. Shipping: cause 25 via DEAD;
+   `noclear`: cause 0 (ALLOWED). Results: `results/sim-arm6b-*.result-lines.txt`.
+2. **A timeout-DEAD can falsely deny a live id** until a write reaches its index (see the DEAD bullet above).
+3. **Only 204 and 208 of the apertures are UART-safe** (see the record above).
+4. **"At most 3 replays" was an observation, not a mechanism** (see the bound bullet above).
+
+Two more things worth knowing: the marker reaches the hardware tracer (above); and a marked load's stale
+result is forwardable to younger, speculative instructions for the whole wait (upstream forwarding has no
+`ex_valid` term) — those instructions are flushed by the replay and non-idempotent loads wait for commit, so
+it is a longer window on existing semantics, not a new path. Interrupt and debug-halt latency can extend by up
+to one pre-acceptance bound (~1M cycles) while a head waits on a silent rev-node.
 
 ## R-45, nested: the revocation ORDERING window, closed in the same bitstream
 
@@ -191,6 +242,7 @@ own restore applied to the ordinary refetch. Registry: `docs/ref/ISSUES.md` R-46
 | RTL sim, first fix + R-45 (2026-09-28): arms 2/2s/5/6/7/7r/8/9a/9b and the mutants tieoff / noflush / mgen / mto / flushproxy / noclear / noclearflush | every arm and every mutant as pre-registered; R-35 fixture 7 traps; 92-test sweep 0 differences; lint PASS (UNUSEDSIGNAL re-baselined 736→737, the probe read's unused return value) | `results/sim-query-on-miss.result-lines.txt` |
 | synthesis, first fix (`0f5185a6d`) | **REFUTED**: WNS −24.495, ORDER 500/500, route 56.4 ns on the worst path; R-45 not implicated | `results/synth-0f5185a6d.result-lines.txt` |
 | RTL sim, second fix (`8f6a0af98`, shipping build, 2026-09-29) | every arm as above, plus 2d (two back-to-back loads through an evicted alias) and 2e (evicted load then `ebreak`: value intact, then cause 3); 7 replays, at most 1 per pc; 0 marker leaks into `exception_o`; 0 timeouts; refusal record latched id `0x616` arm `0001`; R-35 fixture 7; lint PASS | `results/sim-replay-8f6a0af98.result-lines.txt` — written when the variant batch (tieoff / noclear / mgen / mto / noflush / flushproxy / noleakgate + sweep) finishes |
+| RTL sim, arm 6b on `8f6a0af98` (test commit `5aa316e0d`, after-audit finding 1) | shipping: 6b cause **25** (probe → stale generation → DEAD); `noclear`: 6b cause **0**, ALLOWED — the clear's control now fires; arm 6 reads 25 on both, as predicted; every other arm identical | `results/sim-arm6b-8f6a0af98.result-lines.txt` |
 | synthesis, second fix | pre-registered (final wording sent to the synth lane 2026-09-29, before any number existed): loop MEMBERSHIP the same as R-42 (arc names renumber on unrelated edits, so names are reported beside it, not graded); LUTLP-1 = 0; ORDER test 0/500; `commit_stage_i`-before-`i_frontend` 0/500; the new names `commit_pc_metadata` / `replay_commit` 0/500 with a netlist-survival check; WNS within a few ns of −10.615; `lsu_i` OWN cells FF **+140..+160** (150 flop bits are declared; the refuted build's 114 declared bits measured +114 exactly) and LUT +400..+900 (a wide sanity band — the refuted build's +802 was mostly logic v2 keeps; two earlier, inconsistent LUT numbers were withdrawn) | `results/synth-8f6a0af98.result-lines.txt`, once run |
 
 Values come from the CAPPRINT registers in the retirement trace and from the `R43 ...` trace lines;
@@ -205,7 +257,8 @@ One boot each, ordered by the `board-run` skill, `k800` first in every boot:
 3. **P1 cell 6 `-O2`** completes with its oracle: hash `112006 38bb59fd`, lookasides 25,010.
 4. **The R-35 stale probe** (image `35fb3fec3196841b`) STILL traps cause 25 at `+0x4354`, last in its boot,
    and the refusal record reads LATCHED with its id — the record's positive control. A passing boot before
-   it reads `10` (empty) — the negative control.
+   it reads `10` (empty) — the negative control. Read order: 204, 208 (safe at any time), then 205, 206, 207
+   only after the console capture is finished, then park at 0 (206/207 arm a trace dump).
 5. The ladder (every retval as `../R42-…`'s bootA) and P1 cell 5.
 
 **Refuted if** any live arm traps 25 (read the record: the arm bit says whether it was DEAD, a timeout or a

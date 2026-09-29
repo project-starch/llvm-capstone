@@ -56,17 +56,26 @@ Rules that make it hold (from the before-audit):
 - **ALLOW** is set only by a live probe resolution, keyed by the exact 30-bit id, cleared by any
   invalidation of its index (broadcast or a dead write), never by a flush.
 - **DEAD** is set by a dead/stale resolution or a timeout, cleared only by a write to its index, never by
-  flush or pop; a dead 30-bit id never becomes live again, so a stale DEAD cannot falsely deny.
+  flush or pop; a dead 30-bit id never becomes live again, so a stale RESOLVED DEAD cannot falsely deny.
+  *Corrected by the after-audit (2026-09-29): a TIMEOUT DEAD records an id that may be live and denies every
+  later miss on it until a write reaches its index — fail-closed, wedged-rev-node-only, accepted for this
+  bitstream; the first version cleared DEAD on pop for exactly this case.*
 - **Younger rev-node operations cannot run twice:** DROP/REVOKE/MREV/SPLIT/DELIN issue only when every
   older instruction has committed (`issue_read_operands.sv`), and a marked head is uncommitted.
-- **Bound:** at most 3 replays per dynamic access; the trace counts them.
+- **Bound:** each wait is bounded by the two timeouts; the number of replays per access is NOT bounded by a
+  mechanism (*after-audit, 2026-09-29: this line used to claim "at most 3 replays"; that was the observed
+  count, at most 1 per pc, not an enforced bound*).
+- **The `noclear` control of the first version is VACUOUS on v2** (arm 6's pre-read hits, so the record never
+  holds C); re-registered as **arm 6b**, whose pre-read is a miss: shipping cause 25, `noclear` cause 0.
 - **Timeouts** (fail closed, unchanged): ~1M cycles before the rev-node accepts the probe, 65,535 after.
 - **R-45** (the REVOKE/DROP commit flush) is unchanged; **R-46** stays accepted for the ordinary refetch and
   is closed on the replay refetch.
 
-**The refusal record** (observation only, batched in): the FIRST cause-25 verdict since reset, `{v,~v}`
+**The refusal record** (observation only, batched in): the FIRST cause-25 verdict since reset, `{~v, v}`
 + one-hot arm (hit-dead / same-cycle invalidation / probe DEAD / timeout) + 30-bit id with two parity bits,
-at switch values 204..208 (bank 110, regs 01100..10000).
+at switch values 204..208 (bank 110, regs 01100..10000). Only 204 and 208 are UART-safe; 205..207 carry
+`sw[0]`/`sw[1]` and are read after the console capture ends. The marker is also visible to the hardware
+tracer as a cause-`0x4000000000000019` entry per replay (not architectural).
 
 ## Design — FIRST VERSION (REVISED 2026-09-25 after the before-audit) — REFUTED BY SYNTHESIS, kept as history
 
