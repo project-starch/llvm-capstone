@@ -304,8 +304,28 @@ fi
 QEMU_PASS_DIR=${CAPSTONE_QEMU_PASS_DIR:-$HOME/capstone-artifacts/qemu-pass}
 mkdir -p "$QEMU_PASS_DIR"
 _dom_sha=$(sha256sum "$DOM" | cut -d' ' -f1)
-printf '%s  sqlite_silicon.dom\nargs=%s\ncma_mb=%s\nlog=%s\nwhen=%s\n' "$_dom_sha" "$SPEEDTEST1_ARGS" \
-  "${SPEEDTEST1_CMA_MB:-none}" "${SPEEDTEST1_LOG_FILE:-$OUT_DIR/sqlite-speedtest1.log}" "$(date -u +%FT%TZ)" \
-  > "$QEMU_PASS_DIR/$_dom_sha"
-echo "== QEMU pass recorded: $QEMU_PASS_DIR/${_dom_sha:0:16}..."
+#
+# THE NEW RUN IS PREPENDED, NEVER TRUNCATED OVER THE OLD ONE. One record per image hash means the
+# last passing run used to own the file, so an exploratory re-run silently replaced a curated
+# record -- on 2026-09-29 it replaced both P1 -O2 records, whose log= pointed into the staged
+# artifact folder and whose note= lines explained which mode each run used. No gate caught it,
+# because every reader tests only that the file exists.
+#
+# Prepended rather than appended on purpose: preflight-board-run.sh:548 reports the record with
+# `grep -m1 '^args='`, so appending would make it describe the OLDEST run of the image. Newest
+# first keeps that read meaning what it has always meant, and still discards nothing. Blocks are
+# blank-line separated and each is self-describing, so this is idempotent over any number of runs.
+_rec=$QEMU_PASS_DIR/$_dom_sha
+_prev=""
+# if-form, not `[ -f ] && ...`: safe under this script's `set -euo pipefail` either way
+# (bash exempts the left operand of &&), but this needs no knowledge of that rule to read.
+if [ -f "$_rec" ]; then _prev=$(tail -n +2 -- "$_rec"); fi
+{
+  printf '%s  sqlite_silicon.dom\n' "$_dom_sha"
+  printf 'args=%s\ncma_mb=%s\nlog=%s\nwhen=%s\n' "$SPEEDTEST1_ARGS" \
+    "${SPEEDTEST1_CMA_MB:-none}" "${SPEEDTEST1_LOG_FILE:-$OUT_DIR/sqlite-speedtest1.log}" \
+    "$(date -u +%FT%TZ)"
+  if [ -n "$_prev" ]; then printf '\n%s\n' "$_prev"; fi
+} > "$_rec.tmp$$" && mv -f "$_rec.tmp$$" "$_rec"
+echo "== QEMU pass recorded: $QEMU_PASS_DIR/${_dom_sha:0:16}...$([ -n "$_prev" ] && echo " (earlier runs of this image kept below it)")"
 echo "__CAPSTONE_SPEEDTEST1_QEMU_RAN__"
