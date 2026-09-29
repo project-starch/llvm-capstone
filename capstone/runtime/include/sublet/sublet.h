@@ -19,7 +19,24 @@ static struct sublet_stats sublet_stats;
 static inline void sublet_split(capstone_cap_slot *lo, unsigned long mid,
                                 capstone_cap_slot *hi) {
   capstone_cap_split(lo, mid, hi);
+#ifdef SUBLET_R43_LCC_PROBE
+  /* R-43 arm discriminator, OFF unless SUBLET_R43_LCC_PROBE is defined. Reads the LCC node
+   * validity of &sublet_stats.split immediately before the counter access that trapped cause 25
+   * on R-42, and makes that access data-dependent on the read so the LSU cannot issue ahead of it
+   * (R-45: issue is not held behind an in-flight DYN op). `split += __live` keeps the counter
+   * identical when every probe reads live, so a completed run still prints split=5568 and any
+   * shortfall is a dead reading. rs2 is the SELECTOR field for lcc (literal x0 = selector 0) and a
+   * REGISTER for cincoffset -- not an "r" operand, which would encode a register number. */
+  { unsigned long __live; unsigned long *__p = &sublet_stats.split;
+    __asm__ volatile(
+      ".insn r 0x5b, 0x1, 0x04, %0, %1, x0\n"   /* lcc        __live, __p, sel 0 (node validity) */
+      "and   t3, %0, x0\n"                      /* t3 = 0, but dependent on __live              */
+      ".insn r 0x5b, 0x1, 0x0c, %1, %1, t3\n"   /* cincoffset __p, __p, t3 -- __p awaits the lcc */
+      : "=&r"(__live), "+r"(__p) : : "t3", "memory");
+    *__p += __live; }
+#else
   sublet_stats.split++;
+#endif
 }
 
 /* Keep a senior handle before splitting a region, so one revoke can reclaim
