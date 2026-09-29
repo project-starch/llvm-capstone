@@ -596,6 +596,21 @@ te by the RTL lane, 2026-09-24.
 >   on `6cbdaeeb4`): alias A reads fine after 16 new live nodes; after 512 more the same read traps 25
 >   while `LCC(A) = 1`; after that `LCC` it reads fine again, because the LCC's node read re-installed it
 >   through the read tap. Arms 1 and 2 differ only in the number of nodes minted.
+> - **Board, boot p1o2-c6, 2026-09-29: the first REAL WORKLOAD instance, the P1 cell ⑥ -O2 image**
+>   (`df484d98b489aeab`, the Sublet port with D′).
+>   - **What happened:** cause 25 at VA 0x26928 in `setupLookaside`'s lookaside carve loop. The trap is the
+>     `sublet_stats.split++` load through the gp capability of a static global (`ldc a5,0x40(gp)`), right
+>     after a `cssplit` minted a revocation id. tval 0x827ff530 is that global's address. `rev_node_head`
+>     is 313.
+>   - **Why it is not a real revoke:** no software path revokes the global, and QEMU, which enforces
+>     revocation, runs the image to completion.
+>   - **What is not established:** the miss arm, as opposed to the two dead arms, is inferred, because
+>     cause 25 does not separate them. N=1. Audited before recording; see the measurements doc, "P1 -O2
+>     pair on R-42".
+>   - **Why it appears only now:** the carve loop exists only because D′ turned the lookaside back on.
+>   - **Consequence:** P1 ⑥ is not measurable on R-42. This image under `board-c6var.sh` joins live512 in
+>     the R-43 redesign's board acceptance, and must complete with its QEMU oracle (`112006 38bb59fd`,
+>     25,010 lookasides).
 > - Not affected: the ladder, the small m1 drop run (about 160 ids), and the live16 sweep (board, passed).
 >
 > **First experiments** *(written at filing; the sweep images exist, and the simulation test supersedes

@@ -1,0 +1,70 @@
+## P1-c5 on caplifive_r42_6cbdaeeb4.bit (board-b80s.sh, tag p1o2-c5), 2026-09-29
+# images: cell5 5f4b44257c933477, native 9a80c1cd2a576ed2, relinked k800 589ceee3853c6092, host 2c9e82d101b48160, lpc 3b93a2b6e2adfa36
+# fw_payload 2b55c0051f29 ; pre-registration lane/board-p1-o2 c280ca25 + lane/compiler-p1-prereg 10c0e4fe
+  09:29:04 runner ended after 626 s with rc=0
+    RESULT k800 retval=[0-9-]+    : 2x ['RESULT k800 retval=4', 'RESULT k800 retval=4']
+    Verification Hash: \d+ [0-9a-f: 2x ['Verification Hash: 112006 38bb59fd', 'Verification Hash: 112006 38bb59fd']
+    SPEEDTEST1-CYCLES \d+         : 2x ['SPEEDTEST1-CYCLES 1156628454', 'SPEEDTEST1-CYCLES 856112043']
+    BASELINE-WARM CYCLES \d+ INSTR: 1x ['BASELINE-WARM CYCLES 856120199 INSTRS 253515542']
+    Successful lookasides:\s+\d+  : 2x ['Successful lookasides:       25010', 'Successful lookasides:       25122']
+    Lookaside Slots Used:\s+\d+ \(: 2x ['Lookaside Slots Used:        1 (max 154)', 'Lookaside Slots Used:        1 (max 134)']
+    Lookaside size faults:\s+\d+  : 2x ['Lookaside size faults:       157', 'Lookaside size faults:       15']
+    Lookaside OOM faults:\s+\d+   : 2x ['Lookaside OOM faults:        0', 'Lookaside OOM faults:        0']
+    Schema Heap Usage:\s+\d+      : 2x ['Schema Heap Usage:           16448', 'Schema Heap Usage:           9920']
+    HEAP \d+ DROPPED \d+ RC \d+   : 2x ['HEAP 2097152 DROPPED 0 RC 0', 'HEAP 2097152 DROPPED 0 RC 0']
+    sublet: split=\d+ mrev=\d+ del: 0x []
+    ALEN:[0-9A-F]{8}              : 4x ['ALEN:00001000', 'ALEN:00010000', 'ALEN:00010000', 'ALEN:00001000']
+    SQ: released pool rc=\d+      : 0x []
+    RC(LM|PR|SH|RE|EN|CU):[0-9A-F]: 4x ['RCLM:00000000', 'RCLM:00000000', 'RCLM:00000000', 'RCLM:00000000']
+    RR/[a-zA-Z-]+                 : 0x []
+    SQ: share-trap=\d+            : 0x []
+    HARD STOP|ENTRY-STALL|ABORT   : 0x []
+    cell 5 p1o2-c5 cycles 1,156,628,454; CPI vs QEMU 330,731,081: 3.497; in band: True
+    native -O2 warm cycles 856,120,199; CPI vs QEMU 240,714,705: 3.557; in band: True; ratio cell5/native-O2: 1.3510
+    boot banners after this run's load_image (must be 1): 1
+  RESULT k800 retval=4 cycles=4509 ran=53406 instret=1089
+  Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+  Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+  SPEEDTEST1-CYCLES 1156628454 HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0
+  BASELINE-WARM CYCLES 856120199 INSTRS 253515542
+
+## P1-c6 on caplifive_r42_6cbdaeeb4.bit (board-c6var.sh, tag p1o2-c6, drivers ea530ed8), 2026-09-29
+# image cell6 df484d98b489aeab --arena 2097152 --tables 1750285 --testset main --size 1 --verify --stats; relinked k800 589ceee3853c6092; host 2c9e82d101b48160
+# fw_payload 69946e5bbfa9; first attempt refused by the drivers' entry-VA false positive (fixed ea530ed8), no boot spent
+  09:56:50 runner ended after 1391 s with rc=0
+    RESULT k800 retval=[0-9-]+    : 1x ['RESULT k800 retval=4']
+    Verification Hash: \d+ [0-9a-f: 0x []
+    SPEEDTEST1-CYCLES \d+         : 0x []
+    Successful lookasides:\s+\d+  : 0x []
+    Lookaside size faults:\s+\d+  : 0x []
+    HEAP \d+ DROPPED \d+ RC \d+   : 0x []
+    sublet: split=\d+ mrev=\d+ del: 0x []
+    ALEN:[0-9A-F]{8}              : 5x ['ALEN:00001000', 'ALEN:00010000', 'ALEN:00010000', 'ALEN:00200000', 'ALEN:001AB800']
+    SQ: released pool rc=\d+      : 0x []
+    RC(LM|PR|SH|RE|EN|CU):[0-9A-F]: 5x ['RCLM:00000000', 'RCLM:00000000', 'RCLM:00000000', 'RCLM:00000000', 'RCLM:00000000']
+    RR/[a-zA-Z-]+                 : 0x []
+    SQ: share-trap=\d+            : 0x []
+    HARD STOP|ENTRY-STALL|ABORT   : 0x []
+    boot banners after this run's load_image (must be 1): 1
+  DBAS:81D60000
+  DBAS:82400000
+  SQ: A/dom-ok
+  SQ: B/mkregion1
+  SQ: C/mkregion2
+  SQ: D/mapped
+  SQ: E/sh
+  SQ: G/enter
+  SQ: A/dom-ok
+  SQ: G/enter
+  ALEN:00001000
+  ALEN:00010000
+  ALEN:00010000
+  ALEN:00200000
+  ALEN:001AB800
+  ENT0:00000001
+  ENT1:00000001
+  [wedge] sw=255 TRAP LOG {seen,mcause[6:0]}                          0x99 10011001
+  [wedge] trap mepc = 0x0000000082416928
+  [wedge] trap tval = 0x00000000827ff530
+  FIRST FAILURE: /test-domains/speedtest1.dom:--speedtest1 --arena 2097152 --tables 1750285 --testset main --size 1 --verify --stats did not return, and it WAS created and enter
+  => mcause 25 (0x99 = seen|0x19); mepc-DBAS = 0x82416928-0x82400000 = 0x16928 -> VA 0x26928 (setupLookaside: ld t0,0(a5) after cssplit t1,t0,s4 at 0x2691c; a5 = ldc 0x40(gp))
