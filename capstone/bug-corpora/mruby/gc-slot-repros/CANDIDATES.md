@@ -819,3 +819,45 @@ operand type is checked.
 The levels above it are unaffected by this: 5 and 6 reuse *disjoint* windows of one block,
 which is a partition and therefore is what `sublet_split` expresses.
 
+## Research past the commit messages: the issue tracker, and what it yields
+
+The inventory's own sources are NVD, OSS-Fuzz, issues and PRs; this file had swept only
+commit messages. The tracker was swept next -- 122 issues created after the pin, 20 of them
+with a memory-safety title -- and the result is two more defects and one structural reason
+the rest are missing.
+
+**Two new rows, both confirmed live at the pin** by the reproducer in the issue itself:
+
+| row | issue | what the issue says | at the pin |
+|---|---|---|---|
+| 11 | **#7100** | `Hash#__except` retains Array **and** Hash storage across Ruby callbacks that can resize either owner | ASan `heap-use-after-free` |
+| 12 | **#7101** | `Struct#==` and `#eql?` cache both member-storage pointers; a callback replaces one through `initialize_copy` | ASan `heap-use-after-free` |
+
+Both are **level 1**: ASan sees them at either page size, because the callback *resizes* the
+owner and that is a real release. `mruby-struct` is in `stdlib-ext` and the hash path is
+core, so both are reachable in the domain. #7100 is notable beside `eb7693857`, which is
+also about `__except` but is ASan-silent -- the same method carries a level-1 defect and a
+level-3 one, which is a good argument that the levels are a property of the reuse and not of
+the call site.
+
+**Three do not reproduce at the pin, each for a stated reason.** #6906
+(`mark_context_stack`, callinfo-stack realloc during incremental GC) needs
+`GC.malloc_threshold`, which the pin does not have -- the same wall `eb701fa5b` hit. #7044
+(`OP_ADDILV` corrupting locals) and #7346 (`mrb_gc_(un)register` hanging) run without
+reproducing.
+
+**And the structural finding, which is why the inventory's eleven are still missing.** The
+two reports that carry the reused-GC-slot signature exactly --
+`Assertion failed: ((obj)->tt != MRB_TT_FREE), function mrb_gc_mark`, #6870 and its reopen
+#6886 -- are both in `mruby-task`, through `mrb_task_mark_all` (`task.c:95`). So are #6872
+and #6887. **`mruby-task` is in none of the port's four gemboxes** -- checked against
+`stdlib`, `stdlib-ext`, `math` and `metaprog`, all zero -- so four of the candidates whose
+evidence is the assertion this corpus is named for cannot be reached by the port as it
+builds today.
+
+That is a concrete next action rather than a shrug: adding `mruby-task` to the port's gembox
+would put them in range, and it is one line plus whatever the gem needs from a domain that
+has no threads. It also sharpens the reading of the inventory's split -- 11 in reused GC
+object slots against 13 in bodies from `mrb_malloc` -- because if the GC-slot ones cluster
+in a gem the port skips, the port's coverage of that class is bounded by its gembox and not
+by the mechanism.
