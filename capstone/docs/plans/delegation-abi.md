@@ -40,7 +40,9 @@ round is no longer what a program waits for. What is left, in this order:
   for a vanished pid, the domain's unserved report only under
   `CAPSTONE_DELEGATE_STATS`, and musl's `pselect` mask kept a capability.
 - **Memory**, step 5: the region grant at the resume label; `mmap` of files,
-  `mprotect`.
+  `mprotect`. The [memory proposal](delegation-memory.md) develops the runtime
+  grant and pool path, with explicit limits for shared files and `mprotect`;
+  it is a design, not an implemented extension to the baseline below.
 - **Threads**: the sibling-context primitive in the monitor plus capability TLS
   in the compiler (C-47); last.
 
