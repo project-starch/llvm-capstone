@@ -276,6 +276,42 @@ probe_next_node:
   lcc(a0, sp, x9)
   ret
 
+/* ---- A2 negative (P0, review 2026-09-30): a minted seal's entry that reads,
+ * through the sealed-return capability ra it enters with, one capability slot
+ * of the caller's saved state, then continues at the runtime entry. Offsets 0,
+ * 16 and 32 are the saved pc, ctvec and cscratch -- monitor capabilities in a
+ * supervised context -- which the spec's sealed-return access window excludes;
+ * they must fault at the labelled ldc. Offset 48 is the first general-purpose
+ * slot, inside the window, and must not fault. Each reads into t0 only. ---- */
+  .global probe_entry_ra_slot0
+probe_entry_ra_slot0:
+  .global probe_ra_slot0_insn
+probe_ra_slot0_insn:
+  ldc(t0, ra, 0)
+  li t0, 0
+  j __capstone_context_entry
+  .global probe_entry_ra_slot16
+probe_entry_ra_slot16:
+  .global probe_ra_slot16_insn
+probe_ra_slot16_insn:
+  ldc(t0, ra, 16)
+  li t0, 0
+  j __capstone_context_entry
+  .global probe_entry_ra_slot32
+probe_entry_ra_slot32:
+  .global probe_ra_slot32_insn
+probe_ra_slot32_insn:
+  ldc(t0, ra, 32)
+  li t0, 0
+  j __capstone_context_entry
+  .global probe_entry_ra_gp
+probe_entry_ra_gp:
+  .global probe_ra_gp_insn
+probe_ra_gp_insn:
+  ldc(t0, ra, 48)
+  li t0, 0
+  j __capstone_context_entry
+
 /* void probe_main_gp(unsigned long out[3]): type, base and end of the gp this
  * context entered with (its recovery block, slot 32). */
   .global probe_main_gp

@@ -3,8 +3,8 @@
   "purpose": "Probe A through the monitor (docs/plans/delegation-threads.md): the application mints a context, offers the seal through its invocation descriptor, the launcher has the monitor ADOPT it and steps it, from its main thread (REGISTER) or from a Linux thread of its own (THREAD); a revoked context steps DEAD, forgets once and is STALE afterwards; dead registrations are retired on shortage",
   "platform": {
     "qemu": {
-      "sha256": "9b6eac4bdaf11f410ea708988c605d2f321102cfcc728d6c560788ec5f7050b9",
-      "source": "capstone-qemu qemu/context-slots-on-pin 3589d6af6f (the context-slots commits on the pinned ac2837aa0e; tree identical to qemu/context-slots b7ae148c09): DEAD status, privilege refusal, and A7's test-only node instruments, off unless CAPSTONE_TEST_NODE_QUERY is set"
+      "sha256": "f5e33e6776935117a2a8d1f4f7b94fc5155f2c38e12ab8c5aeba1566bd3bd8bf",
+      "source": "capstone-qemu qemu/context-slots-on-pin a53ac18e3d (the context-slots commits on the pinned ac2837aa0e; tree identical to qemu/context-slots d220ab6ee9): DEAD status, privilege refusal, A7's test-only node instruments (off unless CAPSTONE_TEST_NODE_QUERY), and the sealed-return access window (P0/A2). Pre-P0 binary 9b6eac4b is 3589d6af6f"
     },
     "firmware": {
       "sha256": "468808c7606b606449e05547c10fd1d0688fc2ba0feb0edf071a7d03f43b166e",
@@ -23,7 +23,7 @@
     "vm": "one hart, 8 GiB, CMA 1024 MiB, process cache 384 MiB, CAPSTONE_GP_NONLIN=1, CAPSTONE_REV_NODES=65536"
   },
   "images": {
-    "context-probe.dom": "146dca984c0cb505f14eac0735de8c91c9c841381fe86c8899af5b6e2ffa9009",
+    "context-probe.dom": "fd448577aad1369c93be802530a87bb9e240724f13776ef86f48236da8c7ece7",
     "signal-contract.dom": "92f77fdf1e22db28b2c2cf03fee336d2b8006ab7f2f8df6b2a1c24154037299a",
     "application-contract.dom": "9a19faf13c1d42ee43be1b127cb5a79b6f700886dd43ee288ba5675a36c7c329",
     "perl.dom": "4c2e7a0972d6613454c2bd516e7692ad84053e34239d2c2a7bfde83c61c74602",
@@ -54,16 +54,20 @@
       "ctl-mie": "PASS (A12): a seal enabling machine interrupts (mie 0x888) runs confined: 2072 preemptions in 8289 ms, the parent's value",
       "ctl-priv-nested": "PASS (A12, negative): the main context's direct CALL of a user-privilege seal faults with cause 2 at __capstone_context_call_insn",
       "ctl-wfi": "PASS (A12, run explicitly, second boot of the same files): wfi is a no-op on this platform; the context returns EXITED",
-      "entry-audit": "REFUTED as a pass of A2 (review 2026-09-30); the reading below is correct as far as it goes, but it checks register tags only. PASS (A2): at the first instruction of the seal's entry the LCC types of x1..x31 are 5 (x1, sealed return), 1 (x3, gp), 1 (x11, a1) and 7 (untagged) for every other register; gp is [0xc0200000, 0xc02b7000) RWX, exactly the main context's entry gp; a1 is [0xc05ffe40, 0xc05ffe80), 64 bytes, write-only, outside gp; cscratch is [0xc02b8400, 0xc02b8500), exactly the start block of the area [0xc02b8000, 0xc02c8000); the context then runs child_enter to 42",
+      "entry-audit": "PASS as a register-tag audit; A2 as a whole is closed by the sealed-return access window (P0, capstone-qemu a53ac18e3d) with the ra-slot* modes as its controls. At the first entry instruction the LCC types of x1..x31 are 5 (x1, sealed return), 1 (x3, gp), 1 (x11, a1) and 7 (untagged) for every other register; gp equals the main context's entry gp; a1 is a 64-byte write-only descriptor outside gp; cscratch is exactly the start block",
       "entry-audit-control": "PASS (A2, positive control): an entry that copies gp into s1 before the audit is reported as extra tagged register x9",
       "entry-negative": "PASS (A2, negative): a store one word past the loan faults with cause 7 at probe_store_insn (capstone-qemu reports an out-of-bounds data access as an access fault). Observed, not checked: a load through the write-only loan returns normally (kind 0), since capstone-qemu has no permission clause on data access",
+      "ra-slot0": "PASS (A2 negative, P0): reading seal offset 0 (the caller's saved pc) through the sealed-return capability ra faults with cause 5 at the ldc; before the fix (binary 9b6eac4b) it returned and the context ran to completion",
+      "ra-slot16": "PASS (A2 negative, P0): offset 16 (ctvec) through ra faults with cause 5 at the ldc; before the fix it did not",
+      "ra-slot32": "PASS (A2 negative, P0): offset 32 (cscratch, a monitor capability in a supervised context) through ra faults with cause 5 at the ldc; before the fix it returned an RWX capability on monitor memory and a scalar load through it succeeded (the refutation of A2, review 2026-09-30)",
+      "ra-gp": "PASS (A2 control, P0): reading offset 48 (the first general-purpose slot, inside the sealed-return window) through ra does not fault; the context runs to 42",
       "exhaust": "PASS (A10): 128 create/exit/revoke cycles in one application without FORGET, the live context stepped once per cycle and then to completion with its value; the dead registrations used 6 slots (mask 0xfc), highest generation 23. CONTROL on the firmware and module before A10 (825f2cd1, d47f7b44, image 92a5cb35, the same source for this mode): cycle 6 gets ENOSPC",
       "exhaust-ended": "PASS (A10): 64 contexts in fresh 16 KiB areas, half faulting at probe_csr_insn and half refused, never forgotten or revoked; every registration succeeds. CONTROL: cycle 7, the eighth registration, gets ENOSPC on 8a2d5dc (firmware 73047f7c, which retires only revoked seals) and on the firmware before A10 (image 92a5cb35)",
       "hold": "PASS (A10, across applications): five applications at once, each with a live context and six dead registrations it never forgets, 40 slot claims against 32 slots, all held together (guest monotonic 120726 to 140580 ms); every one passes and its live context still returns 42, so another application's dead registrations were retired, by an adoption or by a launch (which of the two is not recorded). CONTROL on the firmware and module before A10 (image 92a5cb35): holders 1 and 3 get ENOSPC at dead registration 5, their seventh adoption",
       "foreign": "PASS (A13, foreign owner): a victim application registers context 0x2100000001 and waits; a second application sends STEP and FORGET for it and for the victim's first context 0x1c00000000: STEP -1 (EPERM) and FORGET -116 (ESTALE) each time; the victim then steps its context to EXITED and forgets it with 0, so no foreign request acted"
     },
-    "passed": 30,
-    "total": 30
+    "passed": 34,
+    "total": 34
   },
   "regression": {
     "signal_contract": "26/26 PASS",
@@ -81,7 +85,8 @@
     "A2 found that capstone-qemu enforces no capability permission on a data access (op_helper.c _helper_access_with_cap checks tag, revocation, UNINIT loads and bounds), so the loan's write-only restriction holds only in the loan's metadata on this platform (ISSUES Q-14)",
     "an adversarial review of 8a2d5dc found that an adoption could retire its own dead offering slot and register a null seal, and that ended contexts were never retired; 658063f fixes both. The first is not reachable through today's launcher, which adopts only from an application's first context, and rests on the review",
     "the first full run on 658063f failed hold on the host side: five concurrent capstone-vm runs each connect to QEMU's QMP socket, whose listener has a backlog of one, and a timed connect to a full backlog fails at once with EAGAIN; capstone_vm now retries within its timeout (unit test fails without the retry), and the run was repeated",
-    "A2 retracted 2026-09-30: an independent review loaded the caller's saved state through the return capability ra, monitor capabilities included, on the platform of this record. capstone-qemu does not enforce the spec's access rule for synchronous sealed-return capabilities; entry-audit never looked at what ra reaches"
+    "A2 retracted 2026-09-30: an independent review loaded the caller's saved state through the return capability ra, monitor capabilities included, on the platform of this record. capstone-qemu does not enforce the spec's access rule for synchronous sealed-return capabilities; entry-audit never looked at what ra reaches",
+    "A2 reinstated 2026-09-30 after the P0 fix: capstone-qemu a53ac18e3d enforces the spec's sealed-return access window, and the ra-slot0/16/32 modes (fault) with ra-gp (no fault) are its controls, the pre-fix binary 9b6eac4b being the positive control"
   ],
   "generations": {
     "case": "A9, in boots of their own with a test firmware whose slots start at generation 0x7ffffff9 (the monitor built with -DCAPSTONE_TEST_GEN_PRESET=0x7ffffff9, applied at the first assignment); run-context.py --only gen-exhaust gen-launch",
@@ -91,14 +96,15 @@
     "gen-launch": "PASS: eight launches of one application, ids 0x7ffffffb00000000 .. 0x7fffffff00000000 on slot 0, then 0x7ffffffc00000003, 0x7ffffffd00000003, 0x7ffffffe00000003: the cached block left the exhausted slot and stayed on slot 3",
     "control": "the same preset on 658063f's rules (limit 0xffffffff, no move; firmware 4eded5db): gen-exhaust cycle 6 gets EIO (generation 0x80000000 makes the id negative), and the sixth launch fails with ENOSPC ('cannot create domain'), after which that application cannot launch again in the boot",
     "first_attempt": "the preset was first applied at the monitor's first dpi_call, which this platform never takes: gen-exhaust then ran 64 ids from generation 1 with no slot at the last generation, gen-launch ids 0x200000000..0x900000000, and both failed their 'condition created' checks instead of passing",
-    "qemu_sha256": "abbd5d67d61fef93ddc25aa22636d1b42f2f0809493abf5ea7cce1f4521e1f5b (before A7's instruments)",
+    "qemu_sha256": "f5e33e6776935117a2a8d1f4f7b94fc5155f2c38e12ab8c5aeba1566bd3bd8bf",
     "launcher_sha256": "da83c9b92a088a89c4c014fc4d914acfada71d739d63a7c6867d5786db82f04c"
   },
   "capability_aba": {
     "case": "A7, in a boot of its own with CAPSTONE_TEST_NODE_QUERY=1 (run-context.py --only aba), same files as above",
-    "aba": "PASS: context A's seal on node 79 at 0xc02bc000; A preempted once, its area revoked, STEP DEAD; after 130379 burnt allocations (handle made, revoked, carried on) the next allocation is node 79, which only a collection can have released; the remint's handle, the restored area and the new seal all on node 79 at 0xc02bc000; the new context's first STEP RETURNED with EXITED and its own value 1005",
+    "aba": "PASS: context A's seal on node 79 at 0xc02bd000; A preempted once, its area revoked, STEP DEAD; after 130379 burnt allocations (handle made, revoked, carried on) the next allocation is node 79, which only a collection can have released; the remint's handle, the restored area and the new seal all on node 79 at 0xc02bd000; the new context's first STEP RETURNED with EXITED and its own value 1005",
     "control": "with CAPSTONE_TEST_KEEP_DEAD_SLOTS=1 as well (the collector skips drop_dead), the same sequence to the same node and base, and the new context's first STEP faults with cause 24 in lcg_rounds (pc 0xc0229f50), code only A runs, on A's stack capability that the collector had untagged: the old continuation was resumed",
     "image_sha256": "146dca984c0cb505f14eac0735de8c91c9c841381fe86c8899af5b6e2ffa9009",
-    "first_attempt": "the first run faulted with cause 26 at the MREV of the burn loop: a revoke can leave the handle uninitialised; the burn now reinitialises a 16-byte scratch granule"
+    "first_attempt": "the first run faulted with cause 26 at the MREV of the burn loop: a revoke can leave the handle uninitialised; the burn now reinitialises a 16-byte scratch granule",
+    "qemu_sha256": "f5e33e6776935117a2a8d1f4f7b94fc5155f2c38e12ab8c5aeba1566bd3bd8bf (with the P0 sealed-return window)"
   }
 }

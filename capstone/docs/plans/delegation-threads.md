@@ -1,6 +1,6 @@
 # Delegated threads: one Linux thread per protected context
 
-Status: PROBE A OPEN (A2 refuted 2026-09-30), PROBE B NATIVE PHASE PASSES. Branch
+Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES. Branch
 `delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
 Probe A and Probe B test; the runtime branch that builds `pthread_create` on them is written after
 both probes pass.
@@ -21,14 +21,16 @@ Done so far:
   the base platform (there the kept result slot still writes).
 - A12 (Q3 answered below): privilege changes and non-C seals are refused under supervision; this
   closed an escape into user mode that A12 found first.
-- A2: REFUTED by an independent review (2026-09-30). The audit checked which registers are tagged
-  at the first entry instruction, not what is reachable through them: through the return
-  capability `ra` a context can load the caller's saved state, including monitor capabilities.
-  capstone-qemu does not implement the spec's access rule for synchronous sealed-return
-  capabilities (the saved pc, ctvec and cscratch slots are excluded; `mem-access-insn.adoc`,
-  `existing-insn.adoc`). A2 is open until capstone-qemu enforces that rule and A2 audits what `ra`
-  reaches, with the review's probe as its positive control. The loan's write-only permission is
-  not enforced on capstone-qemu either (Q1, ISSUES Q-14).
+- A2: at the first entry instruction only ra (sealed return), gp (exactly the main context's) and
+  a1 (the 64-byte write-only descriptor loan) are tagged, and cscratch is exactly the start block.
+  An independent review (2026-09-30) first refuted A2: a context could load the caller's saved
+  state -- the monitor's saved pc, ctvec and cscratch -- through the sealed-return capability ra,
+  because capstone-qemu checked no type or window on the data-access path. Fixed in capstone-qemu
+  (P0): a sealed-return operand may reach only the general-purpose slots, the window
+  [base + 3*CLEN, base + 64*CLEN); the first three capability slots fault. The ra-slot0/16/32 modes
+  (fault at the ldc) and ra-gp (offset 48, no fault) are the controls, with the pre-fix binary as
+  the positive control. A store past the loan faults; the loan's write-only permission is not
+  enforced on capstone-qemu (Q1, ISSUES Q-14).
 - A10: dead registrations are retired on shortage in the monitor, and the driver drops a record
   when the monitor reissues its slot. 128 create/exit/revoke cycles never forgetting, and five
   applications claiming 40 of the 32 slots at once, all succeed with their live contexts intact;
@@ -52,7 +54,7 @@ Done so far:
   B12 and B13a to B13d with forced interleavings, each check shown to fire against a seeded
   defect (record `results/20260930-park-native.json`). B6 to B11 and B14 need the domain runtime:
   per-context transport and the WAIT/WAKE/REQUEUE requests.
-- Pins: capstone-qemu 3589d6af6f (`qemu/context-slots-on-pin`), caplifive-buildroot a6c0174
+- Pins: capstone-qemu a53ac18e3d (`qemu/context-slots-on-pin`), caplifive-buildroot a6c0174
   (driver, and components/opensbi a4bdd1b: the caplifive-opensbi wrapper at capstone-sbi
   7e1c34f). Open in Probe A: their upstream pull requests.
 

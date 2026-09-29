@@ -990,6 +990,55 @@ static int foreign(int argc, char **argv)
   return 0;
 }
 
+/* ---- A2 negative (P0): access to the saved-state slots of the caller through
+ * the sealed-return capability the context enters with. On a capstone-qemu that
+ * enforces the spec's sealed-return access window, slots 0, 16 and 32 fault at
+ * the labelled ldc; the first general-purpose slot (48) does not. Each mode
+ * mints one context with an instrumented entry and steps it once. ---- */
+extern char probe_entry_ra_slot0[], probe_entry_ra_slot16[], probe_entry_ra_slot32[],
+    probe_entry_ra_gp[];
+extern char probe_ra_slot0_insn[], probe_ra_slot16_insn[], probe_ra_slot32_insn[],
+    probe_ra_gp_insn[];
+#define CAUSE_LOAD_ACCESS 5
+
+static int ra_slot(void *entry, char *insn)
+{
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint_entry(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1, entry));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  printf("context-probe ra-slot: kind %lu cause %lu pc %#lx (want fault %d at %p)\n",
+         (unsigned long)ev.kind, (unsigned long)ev.cause, (unsigned long)ev.pc,
+         CAUSE_LOAD_ACCESS, (void *)insn);
+  CHECK(ev.kind == STEP_FAULT && ev.cause == CAUSE_LOAD_ACCESS && ev.pc == (uintptr_t)insn);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+static int ra_slot0(void) { return ra_slot(probe_entry_ra_slot0, probe_ra_slot0_insn); }
+static int ra_slot16(void) { return ra_slot(probe_entry_ra_slot16, probe_ra_slot16_insn); }
+static int ra_slot32(void) { return ra_slot(probe_entry_ra_slot32, probe_ra_slot32_insn); }
+
+/* The general-purpose control: reading the first GP slot (offset 48) through ra
+   does not fault, and the context runs to its value. */
+static int ra_gp(void)
+{
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint_entry(&ctx, AREA_BYTES, child_enter, (void *)(uintptr_t)1,
+                                     probe_entry_ra_gp));
+  long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  printf("context-probe ra-gp: kind %lu cause %lu result %#lx value %lu\n",
+         (unsigned long)ev.kind, (unsigned long)ev.cause, (unsigned long)ev.result,
+         ev.kind == STEP_RETURNED ? *ctx.value : 0);
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*ctx.value == 42 && counter == 1);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2) {
@@ -1023,6 +1072,10 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "ctl-priv-nested")) rc = ctl_priv_nested();
   else if (!strcmp(mode, "entry-audit")) rc = entry_audit();
   else if (!strcmp(mode, "entry-negative")) rc = entry_negative();
+  else if (!strcmp(mode, "ra-slot0")) rc = ra_slot0();
+  else if (!strcmp(mode, "ra-slot16")) rc = ra_slot16();
+  else if (!strcmp(mode, "ra-slot32")) rc = ra_slot32();
+  else if (!strcmp(mode, "ra-gp")) rc = ra_gp();
   else if (!strcmp(mode, "entry-audit-control")) rc = entry_audit_control();
   else if (!strcmp(mode, "exhaust")) rc = exhaust();
   else if (!strcmp(mode, "exhaust-ended")) rc = exhaust_ended();

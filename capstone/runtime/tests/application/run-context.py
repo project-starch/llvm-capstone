@@ -49,6 +49,10 @@ MODES.update({
     "entry-audit": ("exit", 0, "PASS", None, None),
     "entry-audit-control": ("exit", 0, "PASS", None, None),
     "entry-negative": ("exit", 0, "PASS", None, None),
+    "ra-slot0": ("exit", 0, "PASS", None, None),
+    "ra-slot16": ("exit", 0, "PASS", None, None),
+    "ra-slot32": ("exit", 0, "PASS", None, None),
+    "ra-gp": ("exit", 0, "PASS", None, None),
     "exhaust": ("exit", 0, "PASS", None, None),
     "exhaust-ended": ("exit", 0, "PASS", None, None),
 })

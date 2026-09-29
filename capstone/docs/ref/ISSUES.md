@@ -846,6 +846,12 @@ loan, a read-only share or an execute-only mapping. On this platform such an aut
 bounds. Any probe that asserts a permission fault needs the board, or a capstone-qemu that checks
 permissions.
 
+**Partly addressed 2026-09-30 (capstone-qemu a53ac18e3d, `_helper_access_with_cap`):** the access
+path now checks the operand TYPE and, for a sealed-return operand, the spec's access window (P0/A2,
+delegation-threads). The permission bits (27) are still not checked, and an out-of-window or
+out-of-bounds access is still reported as an access fault (5/7) rather than 27/28. So this entry
+stays open for the permission check and the cause number.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
