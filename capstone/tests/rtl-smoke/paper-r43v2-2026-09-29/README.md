@@ -134,3 +134,23 @@ cap's positive control (s1 at 16) aborted.
 **Refuted if** a touch cell returns a mark, whether `C300xx`, `C5005B` or `CB01xx`. That is unsafe-success on
 v2, which would contradict a10 and be a defect in its own right. The pilot is **not** the full E1 matrix
 (12-15 boots), which runs only if asked. N = 1 per touch cell.
+
+## Results (2026-09-29, all 12 boots)
+
+Every boot read as pre-registered. The result lines, one file per boot, are in `results/`; the summary and the
+readings are in the measurements doc, section "Part A on R-43 v2".
+- **H1:** latency 9.000 / 40.83 / 48.16-48.17 cycles per load, identical to E4. Timer 2 / 1. Nodes regression ok at
+  every n. The linear family reads as on R-42.
+- **M1:**
+  - the stale read is refused 3/3, counting a10;
+  - the stale WRITE is refused 2/2, a first on any bitstream;
+  - each refusal is on the probe-path arm;
+  - the live-alias read control reads EMPTY, and the write control completes with readback 165.
+- **S1/S2 pilot:** s3, s5 and s11 stop at the access with cause 25 at their pre-registered `lbu` (+0x6734,
+  +0x6924, +0x6794). The returning cells read their marks, and s10 reads CA0180.
+
+**Instrument.** The wedge dump's record reads were fixed mid-campaign (dev `ae1b13c2`), and from m1v2-4 on every
+byte is fresh. `rr-aperture-check.py` here reports the switch value at which each record byte was actually taken:
+exit 1 if any was read at the wrong aperture. It is validated two-sided: it flags m1v2-2, and it passes a10. The
+pilot's first three launches refused before any boot, on cells left staged by an earlier refusal. The E1
+driver arms its cleanup only after its source checks.

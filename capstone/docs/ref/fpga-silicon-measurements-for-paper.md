@@ -1031,6 +1031,116 @@ What it adds is a second live static global refused (the second distinct site of
 larger live-id population. The RTL lane's redesigned bitstream, with this image's parent df484d98 in its
 board acceptance, answers the question directly.
 
+### R-43 v2 acceptance (`caplifive_r43_8f6a0af.bit`, capstone-ariane 8f6a0af98, 2026-09-29): every image R-43 stopped now completes
+
+The board was reflashed on 2026-09-29 to the R-43 redesign, which REPLAYS a revocation-cache miss through the
+exception path after probing the rev-node unit, instead of refusing it. It also closes R-45. The resident name
+`caplifive_r43_8f6a0af.bit` was read back from the board after the power cycle. The sealed `.bit` hash matched the
+synth lane's.
+
+The ten acceptance boots, pre-registered in `tests/fpga-repros/R43-revocation-cache-false-deny/`
+("Board acceptance"), all passed. k800 opened every boot with 4:
+
+| boot | image | on R-42 (`6cbdaeeb4`) | on v2 |
+|---|---|---|---|
+| a1 B1 workload | `079b1f3a` | passed | passes, identical (`R1 m1 end … alloc=160`) |
+| a2 R1 warm, 12 invocations | `1b7a04fe` | trapped 25 on invocation 1 | **60/60 points ok** |
+| a3 R1 cold, wide | `46f99c7b` | trapped 25 on invocation 1 | **12/12 points ok** |
+| a4 / a5 live16 / live128 | `f1aa05aa` / `8333c411` | passed / trapped 25 in the fixture | sum 544 / 4352 |
+| a6 live512 | `1186b02f` | trapped 25 **in its fixture's minting phase** (+0x33fc); the sweep never ran | **sum 17408**: the sweep ran on silicon for the first time |
+| a7 ladder K=0, 17 rungs | — | geomean cap/bare 1.2705 | 1.2671 (per-rung 0.997) |
+| a8 P1 cell ⑤ -O2 | `5f4b4425` | 1,156,628,454 cycles | 1,157,324,017 (+0.06 %) |
+| a9 P1 cell ⑥ -O2 | `df484d98` | trapped 25 at `setupLookaside` | **completes**: oracle `112006 38bb59fd`, lookasides 25,010, `sublet 5568/37970/32569/37970/5401` |
+| a10 R-35 stale probe, last | `35fb3fec` | cause 25 at +0x4354 | cause 25 at +0x4354; refusal record LATCHED, **probe-path** arm |
+
+**Readings.**
+- **R-43 is fixed for every workload it stopped.**
+  - a6's 512 live ids over 64 sets × 4 ways force at least 256 of its 1,024 reads to miss (pigeonhole), and all
+    resolved correctly. That is inferred from the geometry: no replay was observed.
+  - a9's verification hash is the strong evidence that replayed loads return correct data.
+- **Cost where nothing misses is unchanged against R-42.** The K=0 ladder moves only in `beebs_janne` −3.2 %,
+  `beebs_insertsort` −2.1 % and `beebs_bs` +1.0 %, the short boot-variable rungs. Cell ⑤ moves +0.06 %. The
+  replay cost itself has no R-42 comparison, because R-42 trapped on every workload that misses.
+- **P1 cell ⑥ on v2** (a9, N=1): cell ⑥ / cell ⑤ = **1.0730**, cell ⑥ / native -O2 = **1.4502**. The image predates
+  #119 and still completes. v2 numbers only.
+- **a3's cold ramp** (N=1, same image as 054cea69b's five repetitions): 10 of 12 points fall below 054cea69b's range,
+  by up to 6.7 % mid-ramp (nd 512-4,096), converging to −0.02 % at nd 16,384.
+  - The RTL lane's candidate mechanism: replay probes pre-warm node lines that a later revoke walk then hits. It
+    is a prediction and is not tested.
+  - a3 also used the relinked k800 where all five earlier reps used the stock one.
+- **a10's refusal record** reads LATCHED with arm `0100`, the probe path. So R-35's refusal on v2 is **not a
+  deny-on-miss**: the probe resolved the id as not live.
+  - Arm `0100` cannot separate a dead node from a stale generation or an invalidation during the resolve, and the
+    index here was reissued thousands of times. So "found its node dead" is NOT claimed.
+
+Result lines: the R-43 folder's `results/board-8f6a0af98.result-lines.txt`.
+
+**Corrections made before this record landed (the claim-audit of 2026-09-29):**
+- a6's R-42 control was first written as "trapped at the sweep lbu". The sweep never ran on R-42.
+- a1's post-workload reads of 204/208 were first called stretcher contamination. They were taken with the switches
+  at 16 and 0, a runner defect in the per-domain path, so no passing boot has a post-workload record read.
+- a10's record id was first given as 0x5f "parity ok" from cached bytes. It is read properly on m1v2-4 below.
+
+### Part A on R-43 v2 (2026-09-29): H1 calibration, M1 condition 3 including the stale WRITE, and the S1/S2 pilot
+
+Pre-registered before the first boot at `lane/board-r42-paper` 25f0b401,
+`tests/rtl-smoke/paper-r43v2-2026-09-29/README.md`, whose result lines sit beside it. It took 12 boots. The pilot's
+first three launches refused before any boot, because staged cells had been left over.
+
+**H1, three boots** (image `da9c54e5`, the R1 harness rebuilt with #119):
+
+| working set | cycles per dependent load, median (min..max), 9 traversals over 3 boots | E4 on 1bfff7776 (1 boot) |
+|---|---|---|
+| 4 KiB / 16 KiB | **9.000** (9.000..9.001) / 9.000 | 9.00 |
+| 64 KiB | **40.834** (40.769..40.890) | 40.8 |
+| 256 KiB / 1 MiB | **48.164** (48.159..48.167) / **48.174** (48.170..48.174) | 48.2 |
+
+- **Latency:** identical to E4. v2's revocation-cache check costs a load that hits it nothing.
+- **Timer:** `cyc_cyc` = 2 and `ret_ret` = 1 in all nine domains.
+- **Nodes regression:** `ok=1` at every n on all three boots.
+  - REVOKE medians are 145 / 193 / 724 / 2,881 / 11,274 for n = 1…256, against E4's single cold 1bfff7776 run of
+    126 / 182 / 731 / 2,838 / 11,714. That is +15 % at n = 1 and −3.7 % at n = 256.
+  - This is a change detector firing across bitstreams, not attributed.
+- **Linear family:** 7,1,7,7,7,1,7,1,0,1,0,1 on all three boots. R-21 (`tighten`/`shrinkto` copy a linear source)
+  is present on v2, N = 3.
+
+**M1 condition 3, six boots plus a10.** The refusal record now names the arm:
+
+| arm | image | boots | reading |
+|---|---|---|---|
+| stale READ | `35fb3fec` | a10, m1v2-3, m1v2-4 | cause 25 at +0x4354 on all three; record LATCHED, arm `0100` (probe path); id **0x5f (95)**, read fresh at verified apertures on m1v2-4 (void on m1v2-3, an instrument fault, below) |
+| live-alias read control | `aed492ab` | m1v2-2 | the dereference commits; the mint traps **26** at +0x4360; record **EMPTY** |
+| stale WRITE (0xA5 through the revoked alias) | `067cc96f` | m1v2-5, m1v2-6 | cause 25 at **+0x4370**, the store itself, and no `stale-write ok`; record LATCHED, arm `0100`, id 0x60 (96) |
+| write control (the same store through the live alias) | `9b24aa31` | m1v2-1 | returns: `stale-write ok`, `readback via_live_alias=165 wrote=165` |
+
+**Reading.** On v2 a revoked reference is refused for a READ (3/3) and, **for the first time on any bitstream, for a
+WRITE** (2/2). The matched live controls commit or complete. The live-alias control's EMPTY record shows the run
+refuses nothing before its probe, so the stale boots' LATCHED record belongs to the stale access. Each refusal came
+from the probe path (the id resolved as not live), not from a deny-on-miss. **Not established:** generation wrap,
+stale references held in memory rather than in a register, and anything beyond N ≤ 3 per arm.
+
+**S1/S2 pilot, three boots.** These are nginx use-after-destroy cells rebuilt with #119 at new entry VAs. Each boot
+ran the five returning cells, then ONE touch cell:
+
+| cell | E1 on 1bfff7776 (2026-09-14) | v2 |
+|---|---|---|
+| s1 / s2 / s4 / s6 | C10000 / C20000 / C40001 / C600FB | the same, all three boots |
+| s10 (the reloaded stale pointer's type) | CA0180 | CA0180, all three boots (tagged type 1; the emulator reads CA0780) |
+| s3 (touch after destroy) | **returned** C30000 (read the fill) | **cause 25 at +0x6734**, the stale `lbu`; record LATCHED, arm `0001` (hit-dead), id 260 |
+| s5 (read after the address is reused) | **returned** C5005B (read the new occupant) | **cause 25 at +0x6924**, the stale `lbu`; record LATCHED, arm `0100` (probe path, where s3 and s11 read hit-dead), id 260 |
+| s11 (type read, then touch) | **returned** CB0100 | **cause 25 at +0x6794**, the stale `lbu`; record LATCHED, hit-dead, id 260 |
+
+**Reading.** The touch cells that were unsafe-success on 1bfff7776 **stop at the access** on v2, at the exact
+pre-registered instruction. The paper's `tab:safety` rows that say "stops at access" now have silicon evidence, on
+this bitstream, at N = 1 per cell. This is a pilot, not the full E1 matrix (12-15 boots), which has not been run.
+
+**Instrument, stated so the id readings can be weighed.** The wedge dump's record reads were fixed mid-campaign (dev
+`ae1b13c2`): each byte is read fresh or reported unread, with the switch model reset first. From m1v2-4 onward,
+every record byte came back fresh, and a switch-trace check (`tests/rtl-smoke/paper-r43v2-2026-09-29/rr-aperture-check.py`,
+validated two-sided) confirms it was read at its labelled aperture. m1v2-2's and m1v2-3's bytes 205 and 208 were
+read at the wrong apertures by the first version of that fix. Their verdicts rest on 204 alone, which was read
+correctly.
+
 ### Rungs that do NOT appear in the table, and why (2026-07-28, superseded above)
 
 Eight rows are measured. Coverage is bounded by silicon failures, not by effort, and the
@@ -5482,6 +5592,10 @@ the reading on `4ad0df694` (`ladder-revival-2026-09-22/r42-acceptance-r1boots.re
 stale arm reads the same on two bitstreams, N=1 on each. The live-alias image `aed492ab985653f3` has
 not been run on R-42. The deny arm is no more observable on R-42 than it was on `4ad0df694`: R-42 keeps
 deny-on-miss (R-43), so this reading cannot tell recognised-as-revoked from denied-on-miss either.
+
+**On R-43 v2 the question is answered.** See "Part A on R-43 v2" in the R-42/v2 part of this doc: the stale
+read is refused 3/3 and the stale WRITE 2/2, the refusal record names the probe-path arm (not a deny-on-miss),
+and the matched live-alias control reads EMPTY.
 
 Limits the numbers must carry:
 - **Why** the access was denied is not observable. Cause 25 has three arms on this RTL, one of them
