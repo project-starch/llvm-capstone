@@ -1,8 +1,15 @@
 # Delegated threads: one Linux thread per protected context
 
-Status: PLAN, 2026-09-29. Branch `delegation-threads`, stacked on `delegation-signals` (90eab46).
-Nothing here is implemented. The contracts below are what Probe A and Probe B test; the runtime
+Status: PROBE A IN PROGRESS, 2026-09-29. Branch `delegation-threads`, stacked on
+`delegation-signals` (c460e8c). The contracts below are what Probe A and Probe B test; the runtime
 branch that builds `pthread_create` on them is written after both probes pass.
+
+Done so far, the domain half of Probe A on the unchanged platform: the context arena, mint,
+thread entry, exit and re-entry, and revoke/remint, entered by a nested unsupervised CALL
+(`runtime/tests/application/context-probe.c`, `run-context.py`; record
+`results/20260929-context-probe-domain.json`, 5/5, signal contract and application gate
+unchanged). Next: the QEMU supervisor rules, the monitor's descriptor and ADOPT, the driver,
+and the launcher.
 The architecture is agreed; the numbered questions at the end identify implementation choices
 and evidence still needed. A proposed default there is not a measured result.
 
