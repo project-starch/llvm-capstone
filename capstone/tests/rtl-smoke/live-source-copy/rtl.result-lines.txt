@@ -32,8 +32,12 @@ delay 40   *** SUCCESS *** (tohost = 0) after 10513 cycles; 3 exceptions at the 
 trace      17 retirements of the loop-head STC (all legs ran), cold_bad entered exactly ONCE (the control), 17 fences retired
            inside the loop, at both latencies. So 16 cold misses over memory that held a tag read the integer, untagged.
 
-== NOT RUN HERE ==
-8f6a0af98  (R-43 v2, in synthesis): follows once the verification batch releases that worktree.
+== THE SAME TWO TESTS ON 8f6a0af98 (the R-43 redesign; worktree HEAD at 8f6a0af98 15:07-16:31 per its reflog, outputs 16:28) ==
+delay 0    c24  *** SUCCESS *** (tohost = 0) after 1860 cycles;   3 exceptions at +0x30, +0x16e, +0x172
+           cold *** SUCCESS *** (tohost = 0) after 3019 cycles;   3 exceptions at the same three sites
+delay 40   c24  *** SUCCESS *** (tohost = 0) after 6013 cycles;   3 exceptions at the same three sites
+           cold *** SUCCESS *** (tohost = 0) after 10525 cycles;  3 exceptions at the same three sites
+vs 6cbdaeeb4  +12 cycles on every run, the trap sites unchanged. Seed 1 (+ntb_random_seed=1); delay 40 = +define+S12_MEM_DELAY=40.
 
 Files: the RTL lane's run directories (cva6.py output, .log.iss, the retirement .log and
 trace_rvfi_hart_00.dasm for the passing runs); the patched variant's code is this folder's lsc-stc-ldc-slot.S

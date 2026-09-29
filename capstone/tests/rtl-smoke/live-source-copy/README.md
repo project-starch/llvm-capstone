@@ -33,9 +33,9 @@ On the host with the RTL build, per the `rtl-sim` skill:
    - Record the realised delay. `S12_MEM_DELAY=40` realises as 8 cycles (R-27 README).
    - Pin `--sv_seed` and record it with the result.
 
-## What was run: PASS on `6cbdaeeb4` at both latencies (2026-09-29, RTL lane)
+## What was run: PASS on `6cbdaeeb4` and on `8f6a0af98`, at both latencies (2026-09-29, RTL lane)
 
-Result lines: `rtl-6cbdaeeb4.result-lines.txt` in this folder. `--sv_seed 1`; the verdict is read
+Result lines: `rtl.result-lines.txt` in this folder. `--sv_seed 1`; the verdict is read
 from tohost, and the trap sites from the retirement trace.
 
 - **The test as first written failed case 0 at both latencies**, on a cause number rather than on the
@@ -50,7 +50,10 @@ from tohost, and the trap sites from the retirement trace.
   that skips the integer store and must count as bad. Result: exactly one bad leg (the control) and
   no extra traps, at both latencies. So 16 cold misses over a granule that held a tag read the integer
   back, untagged.
-- **Not run:** the R-43 redesign `8f6a0af98`, and any board.
+- **The same two tests on `8f6a0af98`**, the R-43 redesign that will replace R-42, also pass at both
+  latencies: c24 at 1,860 and 6,013 cycles, and the cold extension at 3,019 and 10,525. Each run has
+  3 exceptions, at the same three sites. Every run is 12 cycles longer than on `6cbdaeeb4`.
+- **Not run:** any board.
 
 ## Predicted reading, written before any run
 

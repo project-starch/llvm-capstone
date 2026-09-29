@@ -1719,7 +1719,8 @@ RETURN" rule applied to privilege rather than to control flow.
 >
 > **2026-09-25: a class fix, on branch `compiler/movc-live-source-copy` (Phase A of
 > `plans/2026-09-25-intcap-implementation.md`). On dev since 2026-09-29 (#119). RTL-simulated on
-> `6cbdaeeb4`: PASS at both latencies (`tests/rtl-smoke/live-source-copy/`). Not on a board.**
+> `6cbdaeeb4` and on the R-43 redesign `8f6a0af98`: PASS at both latencies
+> (`tests/rtl-smoke/live-source-copy/`). Not on a board.**
 > - **What it does.** `CapstoneLiveSourceCopy` runs after the last MachineCopyPropagation. It
 >   rewrites every `movc` whose source is read again as `stc src, slot` + `ldc dst, slot`, through a
 >   16-byte stack slot of its own.
