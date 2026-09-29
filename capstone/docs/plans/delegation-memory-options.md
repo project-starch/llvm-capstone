@@ -314,6 +314,9 @@ and permission policy. It need not become a second general translation mechanism
 beside the MMU. Candidate C, implemented through the existing walker and protected
 mapping operations, is the preferred direction. Exact capability encoding,
 translation-context binding and caching still require design and measurement.
+The [128-bit refinement](#11-fit-for-this-stack-with-128-bit-pointers) below
+recommends capability-bound translation identity rather than selecting a
+pointer's meaning through the current process address space.
 
 ### Responsibility boundaries
 
@@ -451,3 +454,109 @@ independent shared attachments and ordinary Linux backing? Protected tables
 alone do not settle capability identity across address spaces or stale-pointer
 behavior on remapping. No novelty or completeness claim for that combination
 is established by this initial literature check.
+
+## 11. Fit for this stack with 128-bit pointers
+
+**Constraint:** application pointers remain 128-bit tagged capabilities. Their
+16-byte footprint is accepted. The design should preserve fine bounds and
+revocation instead of optimizing for a conventional 64-bit pointer ABI. This
+does not imply that extra identity fields fit unused bits: metadata placement
+and access cost still need an implementation.
+
+**Recommended fit:** extend the Capstone/CapliFive authority model with
+capability-bound translation. A pointer has a stable association with a logical
+memory object and its access grant. The associated protected translation maps
+logical pages to authorized physical backing. Passing the pointer to another
+domain preserves that association; the recipient's current Linux page table or
+ASID cannot change which object it designates. Authorized page relocation may
+change backing while preserving the logical object and contents.
+
+This makes section 9 more specific. Reuse conventional page-walker/TLB machinery,
+but select and protect its translation context through the capability's binding.
+It is not enough to enable the current satp for C-mode loads. Per-application
+address spaces can organize mappings without becoming ambient authority that
+reinterprets a transferred capability. The exact logical-address layout and
+pointer-to-integer conversion contract remain ABI design items.
+
+### Proposed representation strategy
+
+Conceptually, a data capability retains its cursor, compressed bounds, type,
+permissions and revocation identity. Protected metadata associates that identity
+with a grant and translation context. Grant state holds lifetime and mutable
+permission information; translation state binds logical pages to backing.
+
+```text
+128-bit tagged data capability
+  -> object validity + inherited grant/translation binding
+  -> bounds + capability rights + current grant/page rights
+  -> existing page-walker/TLB machinery, with protected context and cache keys
+  -> authorized physical backing
+```
+
+The inspected QEMU compression implementation already has a revocation-node ID
+in the 128-bit representation (`target/riscv/cap_compress.c`), and validity and
+revocation state live separately (`cap_rev_tree.h`). This makes adding a binding
+to the protected node metadata a concrete prototype candidate. It does not prove
+that the same implementation is suitable for silicon or has negligible cost.
+No extra inline view-ID field or specific new bit layout is assumed.
+
+Derivation operations must preserve the binding, including SPLIT and MREV when
+they allocate nodes. Ordinary pointer arithmetic and bounds attenuation should
+retain their local character, without a monitor round trip. Physical capabilities
+can keep a direct-address binding; translated capabilities use a protected map.
+This address interpretation is separate from linear/non-linear capability type.
+
+Do not traverse an unbounded ancestor chain on every load. A direct association
+or bounded cache is a candidate, to be measured alongside the revocation lookup.
+TLB/cache entries must distinguish translation identity and mapping generation;
+a cached translation cannot bypass current object validity or permissions.
+
+Node and grant identifiers must not be reused while stale capabilities can
+acquire authority through them. The current emulator's reference-counted node
+reuse illustrates one lifetime mechanism, not proof for all memory/register
+paths or a finite-generation wraparound argument for this extension.
+
+### Ownership and sharing rules
+
+Physical backing authority must be moved into or otherwise safely encapsulated
+by the mapping object. An independently usable physical linear capability
+cannot survive beside a purported exclusive translated grant to the same bytes.
+Translation must not introduce two separately derivable exclusive logical ranges
+over one physical range; a repeated-frame alias requires shared semantics or
+rejection. A scalar PTE is never sufficient to mint physical authority.
+
+Shared backing permits separate grants with their own permission ceilings and
+detach lifetimes. Passing an existing pointer passes its existing grant; it does
+not silently create a recipient-specific grant. Creating an independent grant
+requires the appropriate management authority. Thus access remains a property
+of the presented capability, rather than the current domain's numeric identity.
+
+Shared grants do not become exclusive merely because their handles can be
+passed linearly. Ending one shared grant preserves the others. Exclusive
+reclamation still requires withdrawing every conflicting access path and
+completing invalidation and scrub. Object lifetime across multiple grants and
+partial-unmap/reuse retain the proof obligations described above.
+
+Linux continues to provide frames and storage policy. Monitor operations bind,
+protect and detach authorized logical ranges; they do not learn file semantics.
+The domain continues to derive fine pointers and manage allocator pools. The
+existing scalar syscall rows and resume-slot capability delivery remain useful
+at the software boundary; a translation extension changes the authority behind
+the delivered capability, not the rule that integers cannot create pointers.
+
+### Decision and first acceptance experiment
+
+Use CapliFive as the authority foundation, Cichlid as a precedent for the mapping
+control interface, and Elasticlave as a precedent for grant permission policy.
+Adopt neither a new general OS nor a process-relative pointer model wholesale.
+Physical grants are the immediately implementable stage; capability-bound
+translation is the preferred extension to model under the accepted 128-bit ABI.
+
+The first translation experiment should grant one logical interval backed by
+three nonadjacent resident pages, derive bounded 128-bit pointers and pass one
+to a second domain with different current translation state. Require the same
+object to be accessed in both contexts. Reject unauthorized backing and duplicate
+exclusive frame aliases. Then exercise object revoke, independent shared detach,
+RW-to-R-to-RW protection, saved pointers and reuse. Pair denials with successful
+authorized accesses, and measure metadata/cache cost and invalidation completion.
+No file mapping or demand paging is needed to establish this core contract.
