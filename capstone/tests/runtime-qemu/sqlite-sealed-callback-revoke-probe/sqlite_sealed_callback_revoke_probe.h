@@ -1,7 +1,7 @@
 #ifndef CAPSTONE_TESTS_RUNTIME_QEMU_SQLITE_SEALED_CALLBACK_REVOKE_PROBE_H
 #define CAPSTONE_TESTS_RUNTIME_QEMU_SQLITE_SEALED_CALLBACK_REVOKE_PROBE_H
 
-/* Stage-2 "after" for the SEALED-CALLBACK shape (cve-repros rows 1/2/6/16:
+/* Stage-2 "after" for the SEALED-CALLBACK shape (capi-repros rows 1/2/6/16:
  * cpython progress-handler UAF, rusqlite hook-closure UAF, php UDF UAF, datasette
  * authorizer-context UAF). A host registers a callback whose context pointer
  * (SQLite's `pApp`) is later freed/replaced while the engine still holds the

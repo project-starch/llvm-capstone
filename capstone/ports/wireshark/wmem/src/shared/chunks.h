@@ -72,7 +72,7 @@ void wm_chunk_forget(struct wm_chunk_auth *c);
 void wm_block_forget(struct wm_block_auth *b);
 /* A pointer handed back to the allocator faults here, on its own authority,
  * before anything is looked up by its address. */
-void wm_probe(const void *p);
+void wm_handback_probe(const void *p);
 /* Write the counts to the report page, beyond the header (domain only). */
 void wm_chunk_report(void *report_page);
 #endif

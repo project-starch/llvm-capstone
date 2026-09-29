@@ -1,0 +1,19 @@
+{
+  "program": "sqlite",
+  "boundary": "borrowed row data across a step or a reset",
+  "title": "Row 3: reuse without any allocator event, built on real SQLite",
+  "cases": 2,
+  "case_schema": "xlang-row",
+  "case_glob": "sqlite-*",
+  "case_doc": "EVIDENCE.txt",
+  "status": "built",
+  "live_in_pin_recorded": false,
+  "live_in_pin_note": "These are documented API contracts rather than fixed defects, so there is no upstream fix against which a pin could be live.",
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "inventory": "capstone/docs/ref/paper-bug-inventory.md",
+  "advisories": [],
+  "related": [
+    "capstone/bug-corpora/sqlite/capi-repros"
+  ],
+  "note": "Host-verified: ASan is silent on both, and one is silent only while lookaside is on. Neither has a Capstone or CHERI column yet."
+}

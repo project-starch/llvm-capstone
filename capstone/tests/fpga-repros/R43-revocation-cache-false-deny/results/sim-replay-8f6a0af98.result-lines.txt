@@ -1,0 +1,62 @@
+# R-43 second fix (replay) + R-45: RTL simulation result lines on the committed 8f6a0af98, RTL lane, 2026-09-29.
+# Verilator testharness, cva6-build-rv container pinned to CPUs 0-7,32-39; +define+S12_MEM_DELAY=12+R43_TRACE; --sv_seed 1;
+# --iss_timeout 7200; 20M-cycle limit. Every build on the FINAL committed source (hashes recorded in the batch log and
+# checked against the commit's blobs: load_store_unit 9d81e2f9, ex_stage e3735eed, commit_stage fed83e7a, load_unit 809ff8ba,
+# frontend ef093c0b, cva6 827a4e2d, ariane_pkg 241a2702, r43-evict-live.S ce02046a). Each variant is a temporary patch
+# (.r43-variant.py), applied and restored with a hash check (RESTORE VERIFIED). Values are the CAPPRINT registers read from
+# the RETIREMENT trace (re-executed and speculative prints excluded); probe/verdict/replay lines are R43_TRACE's.
+# cva6.py's return code and its "SUCCESS" line carry no information here. Cause 0x19 = 25.
+
+== SHIPPING BUILD, r43-evict-live.S (arms as in the test; 2d and 2e are new in the second fix) ==
+arm  condition                                                       result
+2    live alias, evicted, load                                       allowed (miss -> replay -> probe ALLOW -> hit on re-execution)
+2s   live alias, evicted, store + readback                           allowed; readback e5e5e5e5e5e5e5
+2d   two back-to-back loads through an evicted alias                 both SENT_E, cause 0 (the younger re-executes after the replay flush)
+2e   evicted load followed at once by ebreak                         value SENT_E, then cause 3 (the load completes first; one trap)
+5    revoked; its index reissued at g+1; OLD capability read          25 (probe: tap at g+1 -> DEAD)
+6    allowed, revoked, churned (dead entry evicted, index reissued)   25 (probe -> DEAD)
+7    REVOKE with no barrier, read an EVICTED alias at once (R-45)     25
+7r   the same with the alias RESIDENT (the case open on 6cbdaeeb4)    25 (the REVOKE-commit flush re-executes it after the walk)
+8    live alias at a nonzero generation, evicted                      allowed, sentinel (probe -> ALLOW)
+9a   AMO through an evicted live alias                                allowed; old 5, memory 6
+9b   DROP, evict, access                                              25 (probe -> DEAD)
+trace      8 probes (5 ALLOW / 3 DEAD); 7 replays, at most 1 per pc; 0 marker leaks into exception_o; 0 timeouts; the
+           refusal record latched the FIRST denial: id 0x616, arm 0001 (hit-dead), and nothing after it.
+r35-rotate-stale (R-35's acceptance fixture)   exactly 7 traps (shipping and tieoff)
+
+== VARIANTS, same test (each must break exactly as predicted; every other arm must stay as above) ==
+tieoff        probe disabled (R43_PROBE_TIEOFF)     every miss denies: arms 2, 2s, 2d, 8, 9a -> 25; 0 probes; 0 replays = R-35's deny-on-miss,
+                                                    with R-45's flush still in (7r denies).                                    AS PREDICTED
+noclear       ALLOW record ignores invalidations    IDENTICAL to shipping, arm 6 = 25 on both -> this control is VACUOUS on the replay
+                                                    design (arm 6's pre-read hits; the record is set only by a live probe) -- the
+                                                    after-audit's finding, confirmed. Replaced by arm 6b: sim-arm6b-8f6a0af98.result-lines.txt
+                                                    (shipping 25, noclear 0 ALLOWED).                                          RE-REGISTERED
+mgen          resolution ignores the generation     arms 5 and 6 ALLOWED (cause 0); everything else unchanged -> the 30-bit compare is
+                                                    load-bearing.                                                              AS PREDICTED
+mto           rev-node never receives the probe     6 timeouts; arms 2s, 2d, 8, 9a denied through timeout-DEAD (cause 25), 2e value 0;
+              (pre-accept bound shortened)          run completes; the record latched id 3 with arm 1000 = the TIMEOUT bit (its positive
+                                                    control). Arms 2 and 7 resolved through the read tap from UNRELATED node reads of the
+                                                    same indices (2 and 0x819) -- the same behaviour the first fix's mto showed; the tap
+                                                    installs on any read by design.                                            AS PREDICTED
+noflush       R-45's REVOKE/DROP commit flush off   arm 7r ALLOWED (cause 0) -> the flush is what closes R-45 for a resident entry.
+                                                    Arm 7 (evicted) stays 25: its access replays and its probe is served only after
+                                                    the walk, so the ordering window is closed by the probe there. (The first fix's
+                                                    noflush allowed both; the replay design allows only 7r.)                    AS PREDICTED
+flushproxy    probe state cleared once mid-probe    fired once (id 2): commit replayed at once; the re-executed access HIT, because the
+                                                    cancelled probe's node read had already installed the entry through the tap.
+                                                    Verdicts identical to shipping; 7 resolutions instead of 8; no hang.         AS PREDICTED
+noleakgate    commit's marker strip removed         10 marker leaks; the CAPPRINT causes read 0x4000000000000019 on arms 2, 2d, 5, 6,
+                                                    8, 9a, 9b; 0 replays -> the strip is what keeps the marker out of mcause, and the
+                                                    leak detector fires.                                                       AS PREDICTED
+
+== NEUTRALITY on the restored shipping source: written when the batch's sweep and lint gate end (they run after the variants) ==
+92-test sweep     baseline = the first fix's sweep (itself 0 trap-count differences against R-42), same seed 20260922, S12_MEM_DELAY=12:
+                  92 of the 95 listed tests produce a log on both sides (rand, perf_tcache_random, perf_riscv_random never build);
+                  48 tests trap; 639,786 traps in total on both sides; 0 count differences; 0 trap-PC differences.
+                  (An unscoped count of the output directory shows one extra difference, r43-evict-live 7 vs 15: that is the
+                  R-43 test's own log left by the last variant build, not a sweep test -- the directory accumulates the day's logs.)
+rtl-lint-gate     PASS on the restored shipping source: LATCH 52, MULTIDRIVEN 3, COMBDLY 0, UNOPTFLAT 40, BLKSEQ 2, UNDRIVEN 25,
+                  ANVIL_UNOPTFLAT 0 -- every hazard counter at the committed baseline; UNUSEDSIGNAL 737 (re-baselined from 736 for
+                  the probe read's unused 94-bit return value in the generated rev-node SV).
+source            the ten watched files hash identically before and after the batch (RESTORE VERIFIED): every variant was a
+                  temporary patch, and the shipping source that was swept and linted is the committed 8f6a0af98.

@@ -23,8 +23,17 @@
 ; written, measured to produce a byte-identical -O2 image, and removed.  See the
 ; pseudo's definition in CapstoneInstrInfo.td.)
 ;
+; 2026-09-25: CapstoneLiveSourceCopy closes the class design A could not. A MOVC whose source is
+; read again after it becomes STC+LDC through a stack slot, which leaves an untagged source intact
+; on the RTL as on QEMU. So the residue arms below (bridged_phi_residue, bridged_callarg_plus_phi)
+; and real_cap_copy's saved-across-the-call copy now go through the slot by default (RULE). The
+; old pins still hold under +movc-keeps-integer-source (KEEP), the setting for a bitstream whose
+; MOVC leaves an untagged source alone. They are kept as the control that shows the RULE checks
+; can fail.
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs < %s \
-; RUN:   | FileCheck %s --check-prefixes=CHECK,O2
+; RUN:   | FileCheck %s --check-prefixes=CHECK,O2,RULE
+; RUN: llc -mtriple=capstone64 -mattr=+m,+movc-keeps-integer-source -O2 -verify-machineinstrs < %s \
+; RUN:   | FileCheck %s --check-prefixes=CHECK,O2,KEEP
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O0 -verify-machineinstrs < %s \
 ; RUN:   | FileCheck %s --check-prefix=O0
 ; RUN: %llc_cap -O1 < %s -o /dev/null
@@ -50,6 +59,12 @@ define ptr addrspace(200) @bridged_copied_live(i64 %x) {
 ; across a call must still be copied with movc.  If this arm ever stops emitting
 ; one, the negative check above has stopped meaning anything.
 ; CHECK-LABEL: real_cap_copy:
+; KEEP: movc a0, s0
+; KEEP-NEXT: cjalr ra
+; RULE: delin [[F1:a[0-9]]]
+; RULE-NEXT: stc s0, [[S1:[0-9]+\(sp\)]]
+; RULE-NEXT: ldc a0, [[S1]]
+; RULE-NEXT: cjalr ra, 0([[F1]])
 ; O2: movc
 define ptr addrspace(200) @real_cap_copy(ptr addrspace(200) %p) {
   call void @use(ptr addrspace(200) %p)
@@ -64,7 +79,12 @@ define ptr addrspace(200) @real_cap_copy(ptr addrspace(200) %p) {
 ; recorded here so that a later change which removes it is noticed as a change
 ; rather than assumed to have always been true.
 ; CHECK-LABEL: bridged_phi_residue:
-; O2: movc
+; KEEP: movc a0, s0
+; KEEP-NEXT: cjalr ra
+; RULE: delin [[F2:a[0-9]]]
+; RULE-NEXT: stc s0, [[S2:[0-9]+\(sp\)]]
+; RULE-NEXT: ldc a0, [[S2]]
+; RULE-NEXT: cjalr ra, 0([[F2]])
 define ptr addrspace(200) @bridged_phi_residue(i64 %x, i64 %y, i1 %c) {
 entry:
   br i1 %c, label %a, label %b
@@ -105,8 +125,13 @@ join:
 ; removed the copy this arm exists to catch.  Pinning the call-argument copy by its
 ; position is what makes the arm able to fail.
 ; CHECK-LABEL: bridged_callarg_plus_phi:
-; O2: movc
-; O2-NEXT: cjalr
+; KEEP: movc
+; KEEP-NEXT: cjalr
+; RULE: mv s0, a0
+; RULE: delin [[F3:a[0-9]]]
+; RULE-NEXT: stc s0, [[S3:[0-9]+\(sp\)]]
+; RULE-NEXT: ldc a0, [[S3]]
+; RULE-NEXT: cjalr ra, 0([[F3]])
 define ptr addrspace(200) @bridged_callarg_plus_phi(i64 %x, i1 %c) {
 entry:
   br i1 %c, label %then, label %nul

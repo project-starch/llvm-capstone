@@ -1,7 +1,7 @@
 # CPython interpreter port — what stands between here and a running interpreter
 
 Branch `cpython/6-integration`, stacked on `cpython/3`..`5`. Component
-`capstone/ports/cpython/interpreter/` ([README](../../ports/cpython/interpreter/README.md)).
+`capstone/ports/cpython/app/` ([README](../../ports/cpython/app/README.md)).
 First written 2026-09-23 against clang `d030df93d4a4` (= `origin/dev`); rewritten the same day
 after the compiler fixes landed on their branches. "Integration compiler" below is `4c7f04e3d817`:
 `origin/dev` with the C-50, C-51, C-52, C-54, C-55 and C-58 branches merged, a local build that is

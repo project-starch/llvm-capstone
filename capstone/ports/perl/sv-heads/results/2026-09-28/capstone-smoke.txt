@@ -1,0 +1,18 @@
+# scripts/smoke.pl (../musl/scripts) on Capstone, both adapter modes, 2026-09-28
+# Qualification only: a separate boot of the campaign platform with CAPSTONE_REV_NODES=1048576.
+# The campaign's 262,144 nodes do not suffice: every carved head holds its own handle.
+# Oracle: ../../cheribsd/results/2026-09-28/native.stdout (native 5.36.3).
+734ddd346771fef8751aa808b189fb9c13a4d8353d71b56b70094e2f29cdde29  experiments/perl-svh.dom
+e9c8ae1da38eaaa24d17ab301186bdb76ed8c6ea567aad139fb490f34bd93640  smoke/smoke.pl
+vm-before {"version":1,"live_domains":0,"live_regions":0,"live_bytes":0,"cached_bytes":0,"poisoned_blocks":0,"nodes_high_water":44,"nodes_live":44,"nodes_retired":0,"nodes_allocated_total":44,"tag_pages":4,"node_capacity":1048576}
+== PERL_SUBLET_MODE=0 mode 0 rc=0 seconds=707 exit={"version": 1, "kind": "exit", "value": 0}
+stdout: identical to the native oracle (18 lines, sha256 a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e)
+PERL_REUSE_GAP attempts=260197 issues=166166 releases=35094 reuses=35094 distinct=131072 capacity=131072 error=1 bins=17577,15457,20,8,8,16,32,64,128,256,512,1016,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PERL_SV_HEADS platform=capstone mode=0 head_bytes=48 per_page=84 pages=1999 peak_pages=1999 max_pages=8322 issues=260197 releases=256290 live=3907 peak_live=167854 retired=0 sidecar_bytes=11928352 observer_bytes=4194304 region_bytes=33554432 split=167916 mrev=167916 delin=167916 revoke=0 init=0
+vm-after {"version":1,"live_domains":0,"live_regions":0,"live_bytes":0,"cached_bytes":167845888,"poisoned_blocks":0,"nodes_high_water":335897,"nodes_live":57,"nodes_retired":0,"nodes_allocated_total":335897,"tag_pages":9677,"node_capacity":1048576}
+== PERL_SUBLET_MODE=1 mode 1 rc=0 seconds=711 exit={"version": 1, "kind": "exit", "value": 0}
+stdout: identical to the native oracle (18 lines, sha256 a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e)
+PERL_REUSE_GAP attempts=260197 issues=166166 releases=35094 reuses=35094 distinct=131072 capacity=131072 error=1 bins=17577,15457,20,8,8,16,32,64,128,256,512,1016,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+PERL_SV_HEADS platform=capstone mode=1 head_bytes=48 per_page=84 pages=1999 peak_pages=1999 max_pages=8322 issues=260197 releases=256290 live=3907 peak_live=167854 retired=0 sidecar_bytes=11928352 observer_bytes=4194304 region_bytes=33554432 split=167916 mrev=424206 delin=424206 revoke=256290 init=0
+vm-after {"version":1,"live_domains":0,"live_regions":0,"live_bytes":0,"cached_bytes":167845888,"poisoned_blocks":0,"nodes_high_water":592192,"nodes_live":57,"nodes_retired":0,"nodes_allocated_total":928032,"tag_pages":9677,"node_capacity":1048576}
+# PERL_REUSE_GAP error=1: the observer's 131,072-entry table is full; not a measurement.
