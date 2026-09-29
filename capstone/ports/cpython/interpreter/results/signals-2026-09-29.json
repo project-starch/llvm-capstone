@@ -196,6 +196,35 @@
   "every test_signal error is an unserved clone (subprocess), socket or thread start; no signal assertion failed",
   "subprocess.Popen uses _posixsubprocess.fork_exec (clone); the port patch that routes it through posix_spawn is docs/plans/delegation-abi.md's CPython item, not this branch",
   "epoll_create1 (20) is unserved and shows in every CPython run's unserved list; selectors falls back for the tested paths",
-  "os.posix_spawnp with setsigdef/setsigmask, sigtimedwait with si_pid and si_status, set_wakeup_fd, faulthandler.enable, alarm and setitimer against sleep and blocking read, KeyboardInterrupt from SIGINT all pass in the smoke"
- ]
+  "os.posix_spawnp with setsigdef/setsigmask, sigtimedwait with si_pid and si_status, set_wakeup_fd, faulthandler.enable, alarm and setitimer against sleep and blocking read, KeyboardInterrupt from SIGINT all pass in the smoke",
+  "libc-test regression: sigaltstack, sigreturn and sigprocmask-internal pass; raise-race is a threads test"
+ ],
+ "libc_test_signal_regression": {
+  "what": "libc-test's src/regression tests that exercise signals (its src/functional set has none beyond popen, setjmp and the excluded vfork), staged into a temporary suite directory's src/functional and run with run-libc-test-delegated.py against the perl5 SDK built from this tree",
+  "results": {
+   "raise-race": "FAULT",
+   "sigaltstack": "PASS",
+   "sigprocmask-internal": "PASS",
+   "sigreturn": "PASS"
+  },
+  "raise-race": "needs pthread_create, which fails without clone; the test then calls pthread_kill on the handle pthread_create never filled and faults inside pthread_kill (cause 24): a consequence of no threads, not of signals",
+  "raw": {
+   "raise-race": [
+    "FAULT",
+    "signal 11 capstone-exec: domain fault cause=24 pc=0xc0213808 address=0x0 entry=0xc020052c code=0xc0200000-0xc4260000 last=0x87 preparing=0x87 sha256=ad365fc217445daed7ec3161d2ecf8840574b79a5a7f727486beec871cc8a1fa image=/mnt/host/lt-raise-race.dom 1.1s"
+   ],
+   "sigaltstack": [
+    "PASS",
+    "0.6s"
+   ],
+   "sigprocmask-internal": [
+    "PASS",
+    "0.6s"
+   ],
+   "sigreturn": [
+    "PASS",
+    "0.6s"
+   ]
+  }
+ }
 }
