@@ -22,7 +22,55 @@ and that includes the paper's R1 measurements.
 **The same test shows the remedy's mechanism.** After the `LCC`, whose node read passes the cache's
 read tap, the same alias reads fine again. A node read resolves a miss.
 
-## Design (REVISED 2026-09-25 after the before-audit)
+## Design — SECOND VERSION (2026-09-29): REPLAY a missed access, never hold the request
+
+The first version (`0f5185a6d`) held a missed load/store by gating its request with a combinational term
+built from the revocation lookup. It was correct in simulation and **refuted by synthesis**: WNS −24.495,
+with all of the worst 500 paths through that gate (`tests/fpga-repros/R43-revocation-cache-false-deny/
+results/synth-0f5185a6d.result-lines.txt`). Everything below the gate is kept; the gate is replaced.
+
+```
+   M-mode load/store, revocation-cache MISS (no hit, no ALLOW/DEAD record)
+          |
+          v
+   LSU: mark the access with an INTERNAL replay cause on the EXISTING registered exception path
+        (cap_exception -> MMU flop -> the load/store unit finishes WITHOUT a memory operation)
+        and start the probe (probe_ep -> rev-node reads the node -> the read tap installs it)
+          |
+          v
+   commit: the marked head is NOT an exception (stripped from exception_o, commit_ack stays 0);
+           wait while the LSU's REGISTERED probe-pending flag is set;
+           then flush and re-fetch THE SAME pc (frontend: pc_commit + 0, and restore the head's own
+           PC-capability metadata, so R-46 cannot fire on the replay)
+          |
+          v
+   the re-executed access: hits, or matches the ALLOW record (set by a live probe) -> allowed;
+                            matches the DEAD record (dead / stale / timeout)         -> cause 25
+```
+
+Rules that make it hold (from the before-audit):
+- **Nothing new enters the load unit's request path.** The only new wire from the LSU is the probe-pending
+  flag, a flop, to commit. Commit's replay term reads the head and that flop, never `commit_ack` or
+  `pc_cap_ex_valid`.
+- **The probe outlives the access's pop.** It clears only on resolve, timeout or a flush.
+- **ALLOW** is set only by a live probe resolution, keyed by the exact 30-bit id, cleared by any
+  invalidation of its index (broadcast or a dead write), never by a flush.
+- **DEAD** is set by a dead/stale resolution or a timeout, cleared only by a write to its index, never by
+  flush or pop; a dead 30-bit id never becomes live again, so a stale DEAD cannot falsely deny.
+- **Younger rev-node operations cannot run twice:** DROP/REVOKE/MREV/SPLIT/DELIN issue only when every
+  older instruction has committed (`issue_read_operands.sv`), and a marked head is uncommitted.
+- **Bound:** at most 3 replays per dynamic access; the trace counts them.
+- **Timeouts** (fail closed, unchanged): ~1M cycles before the rev-node accepts the probe, 65,535 after.
+- **R-45** (the REVOKE/DROP commit flush) is unchanged; **R-46** stays accepted for the ordinary refetch and
+  is closed on the replay refetch.
+
+**The refusal record** (observation only, batched in): the FIRST cause-25 verdict since reset, `{v,~v}`
++ one-hot arm (hit-dead / same-cycle invalidation / probe DEAD / timeout) + 30-bit id with two parity bits,
+at switch values 204..208 (bank 110, regs 01100..10000).
+
+## Design — FIRST VERSION (REVISED 2026-09-25 after the before-audit) — REFUTED BY SYNTHESIS, kept as history
+
+
 
 *Correction: an earlier version of this heading, and the commit that added it, said the first draft is in
 git history. It is not: the draft was revised before it was ever committed, and only the revised design
