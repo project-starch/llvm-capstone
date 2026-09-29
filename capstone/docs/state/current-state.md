@@ -8,7 +8,8 @@ Minimal snapshot. Read first in every session.
 `61443441…5345`), flashed on the lead's word, name read back from the console. Every arm that trapped cause 25 on R-42
 now completes with its oracle: the R1 warm and cold harnesses, live128/512 (4352 / 17408), and **P1 cell 6 `-O2`**
 (112006 38bb59fd, 25,010 lookasides). The ladder and P1 cell 5 are unchanged within noise; the R-35 probe still traps
-25 at `+0x4354` and the new refusal record attributes it to an observed DEAD node (arm probe-DEAD, id 0x5f, parity ok).
+25 at `+0x4354` and the new refusal record reads it as refused on the probe path (arm 0100: not live — dead or a stale
+generation), not by deny-on-miss; the id byte is one fresh sample (0x5f), the full id unresolved.
 Synthesis: loops the same as R-42, ORDER 0/500, WNS −9.595 (inside the null of −10.615). Simulation: the 8-variant batch
 as predicted, the 92-test sweep 0 differences, lint at baseline. The after-audit refuted four documented properties
 (recorded, none a defect); the `noclear` control was vacuous and is replaced by arm 6b (`capstone-ariane 5aa316e0d`).

@@ -14,9 +14,10 @@ reading    no halt, no stall, one banner; identical to B1 on 054cea69b and on R-
            never evicts: it is the "nothing broke" control, not an R-43 arm.
 refusal record
            after the opening k800: sw=204 0x02 = {~v,v} = 10 (EMPTY), sw=208 0x00  -> the pre-registered negative control.
-           after the harness and after the closing k800: both apertures 0xfe -> NOT a legal encoding (bits 7:6 set, and
-           valid=0 requires 208 = 0x00): a contaminated running read (the LED stretcher ORs apertures on a running core),
-           which is exactly what the {~v,v} + one-hot encoding was built to expose. Not data.
+           after the harness and after the closing k800: both apertures 0xfe. RETRACTED by the board lane the same evening:
+           those per-domain reads were taken with the switches at 16 and then 0, never at 204/208 (a driver defect in the
+           per-domain path), so they are not reads of the record and say nothing about contamination. No passing v2 boot has
+           a post-workload record read; EMPTY was read only after the opening k800, with the switch confirmed at 204.
            the post-run HALTED read timed out (ActionTimeout), as on every clean boot on record including R-42's, so a
            passing boot yields only the first running read. The wedge path reads 204..209 directly and is separate.
 
@@ -41,7 +42,9 @@ R1 s=wide a=S nd=512   rv=10972    (n=256)
 R1 s=wide a=S nd=1024  rv=22848    (n=512)
 R1 s=wide a=S nd=2048  rv=48298    (n=1024)
 R1 s=wide a=S nd=4096  rv=110910   (n=2048)
-R1 s=wide a=S nd=16384 rv=461171   (n=8192)   -> rv/nd = 28.15 cycles per node, the cold CONSTANT of 054cea69b unchanged (461,241..461,251)
+R1 s=wide a=S nd=16384 rv=461171   (n=8192)   -> rv/nd = 28.15 cycles per node: the cold CONSTANT within 0.02 % of 054cea69b's
+                                                   five reps (461,241..461,251; this point is 70 cycles BELOW that range, and this boot
+                                                   used the relinked k800 where all five earlier reps used the stock one)
 reading    On caplifive_r42_6cbdaeeb4 this boot trapped cause 25 on invocation 1; on the replay fix the cold wide series completes.
 change detector (pre-registered by the board lane, vs 054cea69b's five reps of the same image; N=1 on v2)
            the RAMP is lower: 10 of 12 points BELOW the five-rep min..max, all the same way -- nd 512 -2.8 %, 1024 -5.5 %,
@@ -65,23 +68,28 @@ reading    16 ids fit the cache, so this is the "nothing broke" control for the 
 == a5 -- boot r43a5, 18:15-18:24: live128 (image 8333c411dce02ea8 @0x410000, host 2c9e82d101b48160, fw 333f5f2b6c78, stock k800) -- PASS ==
 R1 m1 live-sweep ok live=128 reads=256 sum=4352 expect=4352
 k800 retval=4 twice (cycles 4496 / 4503, instret 1089); released pool rc=1; no halt, one banner.
-reading    THE FIRST R-43 SWEEP ARM: on caplifive_r42_6cbdaeeb4 this image (boot r42b6) trapped cause 25 at the sweep's lbu
-           with tval an early alias leaf -- a live capability refused after eviction. On the replay fix it returns 4352/4352.
+reading    THE FIRST R-43 FIXTURE ARM: on caplifive_r42_6cbdaeeb4 this image (boot r42b6) trapped cause 25 at +0x3488, in the
+           MINTING phase, before the sweep began ("at the sweep's lbu" was the pre-registration's expectation, not the decoded
+           pc). On the replay fix the fixture completes and the 128-id sweep runs on silicon for the first time: 4352/4352.
 
 == a6 -- boot r43a6, 18:24-18:33: live512, THE R-43 TEST (image 1186b02f0df6d80e @0x410000, host 2c9e82d101b48160, fw b67e70db5ff2, stock k800) -- PASS, FIXED as pre-registered ==
 R1 m1 live-sweep ok live=512 reads=1024 sum=17408 expect=17408
 k800 retval=4 twice (cycles 4567 / 4555, instret 1089); released pool rc=1; no halt, one banner.
 refusal record: the first running read after the opening k800 again 204 = 0x02 (EMPTY), 208 = 0x00.
-reading    512 live ids against a 256-entry cache: every id is evicted many times over. On caplifive_r42_6cbdaeeb4 (boot r42b7)
-           this image trapped cause 25 at the sweep's lbu; on the replay fix it returns 17408/17408 with no trap.
+reading    512 live ids against a 256-entry cache: by pigeonhole at least 256 of the sweep's 1,024 reads are misses, and on v2 a
+           miss ends only in a silent replay->ALLOW or a trap; no trap and sum 17408 means every one resolved ALLOW. On
+           caplifive_r42_6cbdaeeb4 (boot r42b7) this image trapped cause 25 at +0x33fc -- run_m1's ld t0,0(s8), a counter
+           increment in the MINTING phase, before the sweep (the board lane's re-disassembly of 1186b02f; "at the sweep's lbu"
+           was the expectation text). So on v2 the fixture that false-denied completes AND the 512-id sweep runs on silicon
+           for the first time.
            With a1..a6 all six RETURNING boots pass. Batch 2 (18:34): the ladder K=0, P1 cell 5, P1 cell 6 (df484d98, the
            pre-#119 image), then the R-35 stale probe LAST (the wedge arm).
 
 == a7 -- the ladder at K=0, capability boot plus the bare baseline (18:34-18:46, fw ) -- PASS, no change against R-42's bootA ==
 17/17 rungs correct (retval and instret as R-42's bootA).
 geomean cap/bare: v2 1.2671 against R-42 1.2705; per-rung v2/R-42 geomean 0.9973.
-movers: beebs_janne -3.2 %, beebs_insertsort -2.1 % -- the two short, boot-variable rungs R-42's record already flags;
-every other rung within +-0.4 %. K=0 did not move, so K=1..3 were not run (pre-registered).
+movers: beebs_janne -3.2 %, beebs_insertsort -2.1 % (the two short, boot-variable rungs R-42's record already flags) and
+beebs_bs +1.04 %; every other rung within +-0.4 %. K=0 did not move, so K=1..3 were not run (pre-registered).
 reading    The replay path costs nothing on the ladder (no rung churns revocation ids), and R-42's one-cycle-per-iteration fix is
            still in: the ratio is R-42's, not 054cea69b's 1.167x layout case.
 
@@ -106,15 +114,22 @@ reading    On caplifive_r42_6cbdaeeb4 this image stopped in setupLookaside with 
 opening k800 retval=4; ENT1.
 trap log sw=255 0x99 = seen, mcause 25; mepc 0x81a04354 - DBAS 0x81A00000 = +0x4354; tval 0xac100000
            -> identical to 4ad0df694 and 6cbdaeeb4: R-35 is NOT reopened by the replay design.
-refusal record (wedge dump): 204 = 0x11 = {00, arm 0100, ~v 0, v 1} = LATCHED, arm one-hot = PROBE DEAD;
-           id from 205/206/207/208 = 5f/00/00/00 = 0x5f (95, generation 0); parity bits 0/0 agree (id[14:0] = 0x5f has six
-           ones, id[29:15] = 0). The runner's decoder reads the same: "LATCHED -- arm = probe resolved DEAD, revnode id = 0x5f, parity ok".
+refusal record (wedge dump): 204 = 0x11 = {00, arm 0100, ~v 0, v 1} = LATCHED, arm one-hot = the PROBE PATH (bit 4: the DEAD
+           record matched -- set when the probe's node read comes back not live for this id: a dead node, a STALE GENERATION, or
+           an invalidation during the resolve; load_store_unit.sv:1316). With this index reissued thousands of times a stale
+           generation is the likely case. id: only byte 205 produced a fresh led_state event (0x5f); 206/207/208 produced none,
+           so their 00s may be cached values, and the parity with them -- the id is UNRESOLVED (the runner's decoder printed
+           "arm = probe resolved DEAD, id 0x5f, parity ok" from those bytes; retracted by the board lane the same evening).
 reading    The record's POSITIVE control fires, and it reads what no earlier bitstream could: this stale access was refused
-           because its probe found the node DEAD -- an observed revocation -- and not by a deny-on-miss. That closes the
-           question R-35's own folder left open ("cause 25 cannot separate observed revocation from the cache's deny-on-miss").
+           on the PROBE PATH, recognised as not live -- and NOT by a deny-on-miss. That closes the question R-35's own folder
+           left open ("cause 25 cannot separate observed revocation from the cache's deny-on-miss"). Discriminator running
+           tonight (board lane, pre-registered): the live-alias control aed492ab on v2 wedges with cause 26 at its mint, and
+           its record must read 204 = 0x02 (EMPTY).
 
 == VERDICT (2026-09-29, board released after a10) ==
 a1..a10 all PASS: every arm that trapped cause 25 on caplifive_r42_6cbdaeeb4 -- the R1 warm and cold harnesses, live128, live512,
-P1 cell 6 -- completes with its oracle on caplifive_r43_8f6a0af98; the ladder and P1 cell 5 are unchanged within noise; the R-35
-probe still traps and the refusal record attributes it to an observed DEAD node. The a3 cold-ramp reading stands as N=1 with a
-candidate mechanism. R-43 is FIXED ON SILICON.
+P1 cell 6 -- completes with its oracle on caplifive_r43_8f6a0af98 (the live128/512 fixtures had trapped in their minting phase on
+R-42, so their sweeps run on silicon for the first time here); the ladder and P1 cell 5 are unchanged within noise; the R-35 probe
+still traps and the refusal record reads it as refused on the probe path, not by deny-on-miss. The a3 cold-ramp reading stands
+as N=1 with a candidate mechanism. R-43 is FIXED ON SILICON. Two of the board lane's readings were retracted the same evening
+(a1's "contaminated" reads, a5/a6's "at the sweep lbu") and are corrected above.

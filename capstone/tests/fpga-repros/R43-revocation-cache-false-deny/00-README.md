@@ -34,9 +34,13 @@ cause 25. Long-lived capabilities (a domain's own globals) are the first casualt
   `results/synth-8f6a0af98.result-lines.txt`. Bitstream sha256 `61443441…5345`.
 - **2026-09-29, flashed and ACCEPTED:** the lead ordered the flash; `caplifive_r43_8f6a0af98.bit` resident (name read back). Board
   acceptance **a1..a10 all PASS**: the R1 warm (B3) and cold (B4) harnesses, live128 and live512 — every arm that trapped 25 on R-42 —
-  complete with their oracles (live512 = 17408/17408); **P1 cell 6 `-O2` completes** with hash 112006 38bb59fd and 25,010 lookasides;
-  the ladder and P1 cell 5 unchanged within noise; the R-35 probe still traps 25 at `+0x4354`, and the refusal record reads LATCHED,
-  arm = **probe DEAD**, id 0x5f, parity ok — the positive control fires and attributes R-35's denial to an observed revocation.
+  complete with their oracles (live512 = 17408/17408: the 512-id sweep runs on silicon for the first time, and by pigeonhole at least
+  256 of its 1,024 reads are misses, all resolved ALLOW); **P1 cell 6 `-O2` completes** with hash 112006 38bb59fd and 25,010 lookasides;
+  the ladder and P1 cell 5 unchanged within noise (three short rungs move ≤ 3.2 %); the R-35 probe still traps 25 at `+0x4354`, and the
+  refusal record reads LATCHED with arm = **probe path** (`0100`: the probe's node read came back not live for this id — dead, a stale
+  generation, or invalidated during the resolve; with the index reissued thousands of times a stale generation is the likely case) —
+  the positive control fires and says R-35's denial was NOT a deny-on-miss. The id is UNRESOLVED: only byte 205 (0x5f) produced a
+  fresh event; 206..208 may be cached, and the parity with them.
   The variant batch read clean (sweep 0 differences, lint at baseline). **R-43 is FIXED ON SILICON.** One N=1 note: the cold
   revoke ramp reads 2–7 % lower mid-range than 054cea69b (constant unchanged), with a candidate mechanism recorded.
   `results/board-8f6a0af98.result-lines.txt`.
@@ -59,8 +63,10 @@ Registry: `docs/ref/ISSUES.md` R-43, R-45, R-46. Plan and pre-registration: `doc
 
 On silicon (`caplifive_r42_6cbdaeeb4.bit`) this killed both R1 harness runs on their first invocation
 (boot r42b3: a globals capability allowed at `+0x4f40` and denied at `+0x4ff4`, one `mrev` later), the
-live128 and live512 sweeps (cause 25 at the sweep's `lbu`, `tval` an early alias leaf), and P1 cell 6 at
-`-O2`. The live16 sweep passed (544/544), because 16 ids fit. The emulator runs every one of them to
+live128 and live512 fixtures (cause 25 in the MINTING phase, before either sweep began: r42b6 at `+0x3488`, r42b7 at
+`+0x33fc`, run_m1's `ld t0,0(s8)`, a counter increment through a live capability — the board lane's re-disassembly of
+`1186b02f`; an earlier reading "at the sweep's lbu" was the pre-registration's expectation, not the decoded pc), and P1
+cell 6 at `-O2`. The live16 fixture passed (544/544), because 16 ids fit. The emulator runs every one of them to
 completion.
 
 ## The first fix, and why synthesis refused it — REFUTED, kept as the trail
@@ -166,7 +172,9 @@ Valid is encoded `{~v, v}` and the arm is one-hot **so that a contaminated read 
 stretcher ORs apertures on a running core, and a corrupted read shows as `11`, `00` or a non-one-hot arm.
 Positive control: the R-35 stale probe (image `35fb3fec`, the last acceptance arm) must latch its own id;
 negative: a passing boot reads `10` (empty). In simulation the record latched the test's first denial
-(id `0x616`, arm `0001` = hit-dead) and nothing else.
+(id `0x616`, arm `0001` = hit-dead) and nothing else. On the board the encoding's contamination check has NOT yet been
+exercised: the a1 reads that looked contaminated were taken with the switches at 16 and 0, not at 204/208 (a driver defect),
+so they were not reads of the record at all.
 
 **The marker IS visible in one place: the hardware tracer.** It is not architectural — every architectural
 consumer (the CSR file's trap entry, `mcause`/`mepc`, single-step, RVFI, the perf counters, the frontend and
@@ -256,7 +264,7 @@ own restore applied to the ordinary refetch. Registry: `docs/ref/ISSUES.md` R-46
 | synthesis, first fix (`0f5185a6d`) | **REFUTED**: WNS −24.495, ORDER 500/500, route 56.4 ns on the worst path; R-45 not implicated | `results/synth-0f5185a6d.result-lines.txt` |
 | RTL sim, second fix (`8f6a0af98`, shipping build, 2026-09-29) | every arm as above, plus 2d (two back-to-back loads through an evicted alias) and 2e (evicted load then `ebreak`: value intact, then cause 3); 7 replays, at most 1 per pc; 0 marker leaks into `exception_o`; 0 timeouts; refusal record latched id `0x616` arm `0001`; R-35 fixture 7; lint PASS **Variants (2026-09-29 evening):** tieoff denies every miss; `mgen` allows arms 5/6; `mto` 6 timeouts, the record latches the TIMEOUT bit; `noflush` allows 7r (arm 7 stays denied — its probe is served after the walk); `flushproxy` verdicts identical; `noleakgate` 10 leaks, the marker reaches the causes; `noclear` identical to shipping — the vacuous control, replaced by arm 6b. All as predicted or re-registered. **Neutrality:** 92-test sweep 0 trap-count and 0 trap-PC differences (48 tests trap, 639,786 traps, both sides); lint gate PASS with every hazard counter at baseline; the watched sources hash identically before and after the batch | `results/sim-replay-8f6a0af98.result-lines.txt` |
 | RTL sim, arm 6b on `8f6a0af98` (test commit `5aa316e0d`, after-audit finding 1) | shipping: 6b cause **25** (probe → stale generation → DEAD); `noclear`: 6b cause **0**, ALLOWED — the clear's control now fires; arm 6 reads 25 on both, as predicted; every other arm identical | `results/sim-arm6b-8f6a0af98.result-lines.txt` |
-| board, `caplifive_r43_8f6a0af98.bit` (2026-09-29, a1..a10) | **all PASS**: B1 control; R1 warm B3 (12 invocations, 60 point lines ok) and cold B4 (12 points; cold constant 28.15 cycles/node unchanged, mid-ramp 2–7 % lower at N=1); live16/128/512 → 544/4352/17408; ladder K=0 unchanged vs R-42's bootA (17/17); P1 cell 5 +0.06 %; **P1 cell 6 completes** (112006 38bb59fd, 25,010 lookasides, sublet counts as pre-registered); R-35 probe traps 25 at +0x4354 with the refusal record LATCHED / probe DEAD / id 0x5f / parity ok; passing boots read EMPTY (10) | `results/board-8f6a0af98.result-lines.txt` |
+| board, `caplifive_r43_8f6a0af98.bit` (2026-09-29, a1..a10) | **all PASS**: B1 control; R1 warm B3 (12 invocations, 60 point lines ok) and cold B4 (12 points; cold constant 28.15 cycles/node unchanged, mid-ramp 2–7 % lower at N=1); live16/128/512 → 544/4352/17408; ladder K=0 unchanged vs R-42's bootA (17/17); P1 cell 5 +0.06 %; **P1 cell 6 completes** (112006 38bb59fd, 25,010 lookasides, sublet counts as pre-registered); R-35 probe traps 25 at +0x4354 with the refusal record LATCHED, arm 0100 = probe path (not live: dead or stale generation), id unresolved (one fresh byte, 0x5f); the opening-k800 reads on passing boots read EMPTY (10), and no passing boot has a post-workload read (a driver defect) | `results/board-8f6a0af98.result-lines.txt` |
 | synthesis, second fix | pre-registered (final wording sent to the synth lane 2026-09-29, before any number existed): loop MEMBERSHIP the same as R-42 (arc names renumber on unrelated edits, so names are reported beside it, not graded); LUTLP-1 = 0; ORDER test 0/500; `commit_stage_i`-before-`i_frontend` 0/500; the new names `commit_pc_metadata` / `replay_commit` 0/500 with a netlist-survival check; WNS within a few ns of −10.615; `lsu_i` OWN cells FF **+140..+160** (150 flop bits are declared; the refuted build's 114 declared bits measured +114 exactly) and LUT +400..+900 (a wide sanity band — the refuted build's +802 was mostly logic v2 keeps; two earlier, inconsistent LUT numbers were withdrawn). **Sealed 2026-09-29: all met** — membership SAME, 1 loop, LUTLP-1 0, ORDER 0/500, commit-before-frontend 0/500, probe-before-arbiter 0/500, `replay_commit` survives on 0/500, `commit_pc_metadata` absorbed by name with its logic present (512 pc_metadata flops in the frontend's fan-in), WNS −9.595, FF +150 exactly; **LUT +154 MISSED the band** — the "+802 was mostly restructuring around the gate" branch, with every compare and the counter shown present in the netlist | `results/synth-8f6a0af98.result-lines.txt` |
 
 Values come from the CAPPRINT registers in the retirement trace and from the `R43 ...` trace lines;
