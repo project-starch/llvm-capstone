@@ -86,10 +86,23 @@ python3 -c "import sys; sys.stdout.buffer.write(bytes((i*7+3) & 255 for i in ran
 # first on the include path). Each control is checked to still be the thing it controls.
 GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
 LIBCAPSTONE_DIR=$CAPSTONE_BUILDROOT_DIR/package/modcapstone/userspace/lib
+# The controls' host_service.h includes two probe headers that de07a5b5 changed
+# under it: hostcall-file-service-probe-common.h left the tree, and the opcodes left
+# hostcall_stdout_probe.h for runtime/include/capstone/hostcall.h. Both are restored
+# next to it at their last version before that commit (DELEGATION_BASE), which is
+# what the controls were built against until then, laid out as the old includes
+# expect: the common header reaches the other as
+# "hostcall-stdout-probe/hostcall_stdout_probe.h", host_service.h by its bare name.
+DELEGATION_BASE=de07a5b52d53^
 for arm in readctl outctl; do
-  mkdir -p "$O/$arm-inc"
+  mkdir -p "$O/$arm-inc/hostcall-stdout-probe"
   rev=$READ_CTL; [[ $arm == outctl ]] && rev=$STDOUT_CTL
   git -C "$REPO" show "$rev:capstone/ports/musl-capstone/runtime/host_service.h" > "$O/$arm-inc/host_service.h"
+  git -C "$REPO" show "$DELEGATION_BASE:capstone/tests/runtime-qemu/hostcall-file-service-probe-common.h" \
+    > "$O/$arm-inc/hostcall-file-service-probe-common.h"
+  git -C "$REPO" show "$DELEGATION_BASE:capstone/tests/runtime-qemu/hostcall-stdout-probe/hostcall_stdout_probe.h" \
+    > "$O/$arm-inc/hostcall-stdout-probe/hostcall_stdout_probe.h"
+  cp "$O/$arm-inc/hostcall-stdout-probe/hostcall_stdout_probe.h" "$O/$arm-inc/hostcall_stdout_probe.h"
 done
 grep -q 'pread(fd, payload' "$O/readctl-inc/host_service.h" \
   || { echo "read control ($READ_CTL) does not pread into the region; it controls nothing" >&2; exit 2; }
