@@ -567,7 +567,7 @@ one-cycle IDLE detour goes.
 
 te by the RTL lane, 2026-09-24.
 
-### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `FIX IN RTL (capstone-ariane branch r43-query-on-miss, 2026-09-29): probe the rev-node on a miss; verified in RTL simulation with seven deliberately broken builds, lint PASS, sweep neutral; NOT yet synthesized or on silicon. Confirmed 2026-09-25 on silicon (both R1 harness runs) and in simulation. Report folder: tests/fpga-repros/R43-revocation-cache-false-deny/`
+### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `OPEN — the first fix (0f5185a6d) is REFUTED BY SYNTHESIS (2026-09-29): correct in RTL simulation, but its combinational load/store stall gate put the revocation lookup in series with the load request -- routed WNS -24.495, all worst-500 paths through it. Redesign needed (replay rather than hold). Confirmed 2026-09-25 on silicon and in simulation. Report folder: tests/fpga-repros/R43-revocation-cache-false-deny/`
 
 > **Scope.** The M-mode LSU revocation cache in `capstone-ariane 4ad0df694` (4 ways x 64 sets, exact
 > 30-bit `{generation, index}` tag). An access whose id is not resident is refused with cause 25

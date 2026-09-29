@@ -2,6 +2,15 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-29 (later) — R-43's first fix is REFUTED BY SYNTHESIS; R-45 is not implicated; redesign next
+
+`0f5185a6d` routed at WNS −24.495, against R-42's −10.615. All of the worst 500 paths run from the revocation
+lookup into the load/store request (R-42: 0 of 500). The combinational stall gate is the cause, even though
+the fix is correct in simulation. Not flashed; the board stays on R-42. The redesign must never gate the
+load request: replay the missed access through the existing registered exception path instead. Result
+lines: `tests/fpga-repros/R43-revocation-cache-false-deny/results/synth-0f5185a6d.result-lines.txt`. An
+early "3 new loops" reading was withdrawn: they are the same loop families, cut differently.
+
 ## 2026-09-29 — R-43 and R-45 fixed in RTL (capstone-ariane `r43-query-on-miss`, `0f5185a6d`); synthesis next
 
 - **R-43:** R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live, which
