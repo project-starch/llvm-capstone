@@ -3595,9 +3595,16 @@ def main():
                 try:
                     console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
                     _hits = {}
-                    for _ap in ((204, 205, 206, 207, 208, 224) if REFUSAL_RECORD
+                    # Refusal record: the UART-safe apertures first ((v & 3) == 0: 204, 208, 224),
+                    # then 205/206/207, which take the console TX pin (sw[0]) or ARM the one-shot
+                    # trace dump (sw[1], outlives the switch value), and park at 0 at once. The
+                    # values read are unaffected either way (LEDs are their own pin); the order only
+                    # keeps an armed dump from being replayed by a later odd value. (RTL lane, 8f6a0af.)
+                    for _ap in ((204, 208, 224, 205, 206, 207) if REFUSAL_RECORD
                                 else (204, 208, 224)):
                         _hits[_ap] = settled_halted_read(console, C, _ap)
+                    if REFUSAL_RECORD:
+                        set_switch_value(console, 0)
                     # A KNOWN EXPECTED VALUE, not merely "an event arrived". The selftest ran
                     # immediately above and, when it passes, leaves 204 bit 6 (ldc_seen) SET --
                     # that is what "post-204 = 0x41" means. So the halted read of 204 has a
