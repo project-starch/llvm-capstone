@@ -55,21 +55,42 @@ _idll=$OUT/.identity.ll
 _idout=$OUT/.identity.out
 printf 'define void @x() {\n  ret void\n}\n' > "$_idll"
 
+# THE EXIT STATUS IS THE CONDITION; the message only explains a refusal. An earlier version
+# refused on the message ALONE and so passed everything that failed some other way -- a missing
+# llc, a crash, a bad triple. On CAPSTONE_LLVM_BIN=/nonexistent/bin it printed "pass present"
+# having established nothing. A trivial module through -stop-after=capstone-live-source-copy
+# exits 0 only if that pass exists, so the status is the real check.
+_idrc=0
 "$CAPSTONE_LLVM_BIN/llc" -mtriple=capstone64 -stop-after=capstone-live-source-copy \
-  -o /dev/null "$_idll" > "$_idout" 2>&1 || true
-if grep -q "not registered" "$_idout"; then
-  echo "movc-null-scalar: COULD NOT CHECK -- $CAPSTONE_CLANG does not contain the live-source" >&2
-  echo "  copy pass (capstone-live-source-copy is not registered). The 'rule' arm would be built" >&2
-  echo "  without it and this probe would report the compiler as broken. Rebuild the toolchain." >&2
+  -o /dev/null "$_idll" > "$_idout" 2>&1 || _idrc=$?
+if [ "$_idrc" -ne 0 ]; then
+  echo "movc-null-scalar: COULD NOT CHECK -- $CAPSTONE_LLVM_BIN/llc exited $_idrc on a trivial" >&2
+  echo "  module with -stop-after=capstone-live-source-copy." >&2
+  if grep -q "not registered" "$_idout"; then
+    echo "  The pass is not registered: this toolchain does not contain the live-source copy" >&2
+    echo "  change. The 'rule' arm would be built without it and this probe would then report the" >&2
+    echo "  compiler as broken. Rebuild the toolchain." >&2
+  else
+    echo "  llc said:" >&2; sed 's/^/    /' "$_idout" >&2
+  fi
   rm -f "$_idll" "$_idout"; exit 2
 fi
 
+# Same rule for the feature: rc 0 AND no warning. An unknown -mattr is only a WARNING, so rc 0
+# alone would not catch it, and the warning alone would not catch a broken llc.
+_idrc=0
 "$CAPSTONE_LLVM_BIN/llc" -mtriple=capstone64 -mattr=+movc-keeps-integer-source \
-  -o /dev/null "$_idll" > "$_idout" 2>&1 || true
-if grep -q "not a recognized feature" "$_idout"; then
-  echo "movc-null-scalar: COULD NOT CHECK -- $CAPSTONE_CLANG does not know" >&2
-  echo "  +movc-keeps-integer-source, so the 'keep' arm would be a duplicate of 'rule' and the" >&2
-  echo "  positive control could not fail. Rebuild the toolchain." >&2
+  -o /dev/null "$_idll" > "$_idout" 2>&1 || _idrc=$?
+if [ "$_idrc" -ne 0 ] || grep -q "not a recognized feature" "$_idout"; then
+  echo "movc-null-scalar: COULD NOT CHECK -- $CAPSTONE_LLVM_BIN/llc exited $_idrc for" >&2
+  echo "  -mattr=+movc-keeps-integer-source." >&2
+  if grep -q "not a recognized feature" "$_idout"; then
+    echo "  The feature is not recognised, so the 'keep' arm would be built as a DUPLICATE of" >&2
+    echo "  'rule' -- an unknown -mattr is a warning, not an error -- and the positive control" >&2
+    echo "  could not fail. Rebuild the toolchain." >&2
+  else
+    echo "  llc said:" >&2; sed 's/^/    /' "$_idout" >&2
+  fi
   rm -f "$_idll" "$_idout"; exit 2
 fi
 rm -f "$_idll" "$_idout"
