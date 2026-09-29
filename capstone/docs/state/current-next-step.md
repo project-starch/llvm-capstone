@@ -1,3 +1,5 @@
+PR #94 rebase/coverage follow-up (2026-09-30): [the measured musl/SQLite corpus](../../tests/runtime-qemu/round-trip/results/20260930-rebase-coverage.md) has zero additional recovery. The remaining review decision is whether the narrow known-source mechanism merits inclusion; do not justify a broader default-on benefit with the earlier, less conservative results. No argument attribute exemption is implemented.
+
 Provenance recovery (2026-09-30): PR #94 now conservatively declines opaque
 pointer origins, including identity casts. Retain the runtime's capability-safe
 atexit override. Widening recovery to arguments, arbitrary memory or ordinary

@@ -23,8 +23,8 @@ SemaCapstone::SemaCapstone(Sema &S) : SemaBase(S) {}
 
 // How many pointer-to-integer casts an integer expression is built from,
 // looking through the operators an address computation uses. One means the
-// value is an address computed from one pointer right here, which the backend
-// turns back into that pointer moved (CapstoneRecoverProvenance).
+// value is an address computed from one pointer right here, which may be
+// recovered by CapstoneRecoverProvenance if its source is proven safe.
 //
 // The answer has to agree with what that pass will do, or the warning goes
 // silent on a round trip that then traps untagged. Two shapes carry a pointer
@@ -37,9 +37,9 @@ SemaCapstone::SemaCapstone(Sema &S) : SemaBase(S) {}
 // counts two pointers in the pass and would count one here. A warning one time
 // too many beats a trap with no warning at all.
 //
-// Still silent, and not fixable in the front end: a round trip the pass declines
-// because the pointer may be NULL (it may not move a base that holds no
-// capability). Whether a pointer can be null is not visible here.
+// This syntactic check cannot prove capability validity or NONLIN origin.
+// It can stay silent when the backend declines a possibly-null or possibly-
+// consuming source, including a bare argument. Silence is not a recovery proof.
 static constexpr unsigned Disqualified = 2; // any count but one
 
 static unsigned countPointerSources(const Expr *E) {
@@ -85,15 +85,14 @@ void SemaCapstone::checkPointerRoundTrip(Expr *Src, QualType DestTy,
     return;
   // An integer computed in this very expression from one pointer --
   // `(T *)(uintptr_t)p`, `(T *)(((uintptr_t)p + 15) & ~15)` -- is not
-  // diagnosed: the backend (CapstoneRecoverProvenance) rebuilds the result from
-  // that pointer's capability.
+  // diagnosed here. Recovery still requires the backend to prove that the
+  // source is a valid, non-consuming capability.
   //
   // `(T *)x` with x of a type spelled uintptr_t / intptr_t: the typedef's whole
   // purpose is to hold a pointer, and on this target it can hold only the
   // address. Whether this cast gets the capability back depends on where x came
-  // from -- computed from one pointer in the same function, yes; loaded from a
-  // struct field or passed in, no -- which the front end cannot see, so the
-  // warning says which case is safe.
+  // from and whether that source is proven non-consuming. The front end
+  // cannot establish those facts; this warning describes a necessary condition.
   if (countPointerSources(Src) == 1)
     return; // e.g. (T *)(((uintptr_t)p + 15) & ~15): computed right here.
   for (QualType T = Src->getType();;) {

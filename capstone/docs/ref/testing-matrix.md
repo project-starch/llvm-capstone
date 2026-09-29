@@ -1,5 +1,8 @@
 # Capstone testing matrix and current recommendations
 
+PR #94 coverage survey: [procedure and checked results](../../tests/runtime-qemu/round-trip/results/20260930-rebase-coverage.md). `tests/provenance-recovery-survey.py` compares pass-on/off IR and assembly with positive controls; this is static coverage, not application execution.
+
+
 Application benchmark study: the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
 separate reference data. The [planner](../../experiments/study/README.md) supports

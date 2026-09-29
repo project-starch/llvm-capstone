@@ -1,5 +1,8 @@
 # Prompt for continuing this Capstone work in a new chat
 
+PR #94 is rebased onto dev `7b73c7a88a1e`; its [coverage measurement](../tests/runtime-qemu/round-trip/results/20260930-rebase-coverage.md) finds no additional recovery in musl/SQLite. Keep the NONLIN gate and atexit override; broader practical benefit remains unproven.
+
+
 Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
 separate reference data. The [planner](../experiments/study/README.md) supports

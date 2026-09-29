@@ -1,5 +1,8 @@
 # Capstone test/run instructions for future agent sessions
 
+PR #94 rebase gate and static coverage: [reproduction and results](../../tests/runtime-qemu/round-trip/results/20260930-rebase-coverage.md). Use a Python environment with `pexpect` for QEMU. The manifest requires Myers; lit drops `GIT_CONFIG_*`, so use a temporary Git wrapper through `--path` for that check.
+
+
 Application benchmark study: the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
 separate reference data. The [planner](../../experiments/study/README.md) supports

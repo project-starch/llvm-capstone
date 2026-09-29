@@ -176,6 +176,8 @@ table is for is the **role** of each directory.
 
 ## Current verified baseline
 
+PR #94: [rebase validation and measured recovery coverage](../tests/runtime-qemu/round-trip/results/20260930-rebase-coverage.md). The conservative pass changes no assembly in the measured musl/SQLite corpora; targeted known-source fixtures still recover.
+
 The `domain-process-runtime` application stack supports a persistent Linux guest,
 ordinary application arguments/streams, trusted fault/preemption return and owned
 resource reuse. The installed QEMU guest passes exhaustion/recovery followed by

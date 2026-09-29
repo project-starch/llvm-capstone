@@ -20,9 +20,10 @@
 // call frame's cincoffsetimm trip the implicit-check-nots (performed
 // 2026-09-04).
 // The control below is a uintptr_t round trip with the provenance pass OFF: with
-// it on (the default), align_down's result is rebuilt as the argument's
-// capability moved -- a cincoffset -- which recover-provenance.ll and
-// cap-addr-bitmask.ll cover. Here it has to stay the one-`andi` integer shape.
+// it on, the opaque argument also declines because it has no NONLIN proof.
+// recover-provenance.ll covers known-source recovery; cap-addr-bitmask.ll
+// checks the argument form with the pass on and off. This remains an integer
+// shape in both modes.
 // RUN: %clang_cc1 -triple capstone64-unknown-elf -target-feature +m -ffreestanding \
 // RUN:   -O2 -mframe-pointer=none -mllvm -capstone-recover-provenance=false -S -o - %s \
 // RUN:   | FileCheck %s --implicit-check-not=cincoffset --implicit-check-not=lcc \

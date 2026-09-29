@@ -4,6 +4,8 @@ Minimal snapshot. Read first in every session.
 
 ## 2026-09-30 — provenance recovery requires a proven non-consuming source
 
+Rebased onto dev `7b73c7a88a1e` with the intcap Sema exemption preserved. [Rebase checks and coverage](../../tests/runtime-qemu/round-trip/results/20260930-rebase-coverage.md): 28 Clang tests pass; all 128 LLVM tests pass when the manifest check uses Myers; QEMU round-trip and exit-hook pass. The pass changes zero casts and zero assembly units in 1355 musl units at -O1 and SQLite at -O0/-O2. Broad porting benefit is therefore unproven.
+
 PR #94's follow-up refuses bare pointer arguments, loads whose stores are not
 fully visible, ordinary call results and unmodelled intrinsics. `nonnull`, a
 null check and a dominating dereference establish no linearity guarantee.

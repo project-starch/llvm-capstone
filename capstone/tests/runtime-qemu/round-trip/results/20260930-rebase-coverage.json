@@ -1,0 +1,271 @@
+{
+  "date": "2026-09-30",
+  "pr": 94,
+  "base_dev": "7b73c7a88a1e93a5ae2b80b09513ea13f842533c",
+  "rebased_code_revision": "2c716ba345a2b693021be3e19679851217cfeffa",
+  "source_sha256": {
+    "llvm/lib/Target/Capstone/CapstoneRecoverProvenance.cpp": "ce1f9d13233dc06a404bf34953fe5806db2bd7a8c6affa7b3b2366fa8a008eed",
+    "clang/lib/Sema/SemaCapstone.cpp": "e3adf7286dbfac909119181f8fac1fde9d69ff2ccb8e171213b48a007a62cf00",
+    "llvm/utils/capstone-shared-patches.txt": "a520147877d6038d42f52e3425fbc75221b214dac07578492ea97fae043ddaa6",
+    "capstone/tests/provenance-recovery-survey.py": "63195e904482ef74c9c75a24e169c33fcfd63ebb5409a5d201b9786cca67a971"
+  },
+  "compiler_version": "clang version 22.0.0git (https://github.com/project-starch/llvm-capstone 2c716ba345a2b693021be3e19679851217cfeffa)",
+  "compiler_sha256": "0b2f9130a7e638e47337b9abe001cfd468b0916cadeea397728c438749f499a3",
+  "llc_sha256": "45e7a57fffd038671d001fe1e9a29355af8a367aedb36303ad11f94e0c560cb6",
+  "build_scope": "Rebased code plus comment-only Sema/test corrections and the regenerated manifest; final evidence commit adds no compiler behavior change.",
+  "static_coverage": {
+    "musl_version": "1.2.5",
+    "musl_flags": "survey-musl-capstone.py compile_flags(), -O1; 169 foreign-architecture sources excluded",
+    "musl_source_manifest_sha256": "9d683c1157167fe9172d4c9e26fccaa0cd4127c48bb24da46c664a05aab636bf",
+    "sqlite_version": "3.53.3",
+    "sqlite_flags": "build-sqlite-capstone.sh deployed SQLITE_DEFINES, current six source rewrites and adapted headers; -O0/-O2",
+    "method": "Compile each C unit once to optimized IR; llc runs that same IR with recovery on/off. Count inttoptr occurrences immediately after capstone-provenance and compare complete assembly text.",
+    "denominator": "inttoptr occurrences include ordinary integer-to-pointer conversions, not just recoverable round trips.",
+    "groups": {
+      "musl": {
+        "units": 1361,
+        "compiled": 1355,
+        "inttoptr_off": 1102,
+        "inttoptr_on": 1102,
+        "recovered": 0,
+        "units_with_recovery": 0,
+        "units_with_changed_assembly": 0
+      },
+      "sqlite": {
+        "units": 2,
+        "compiled": 2,
+        "inttoptr_off": 110,
+        "inttoptr_on": 110,
+        "recovered": 0,
+        "units_with_recovery": 0,
+        "units_with_changed_assembly": 0
+      },
+      "control": {
+        "units": 2,
+        "compiled": 2,
+        "inttoptr_off": 108,
+        "inttoptr_on": 60,
+        "recovered": 48,
+        "units_with_recovery": 2,
+        "units_with_changed_assembly": 2
+      }
+    },
+    "sqlite_units": [
+      {
+        "source": "sqlite/O0",
+        "source_sha256": "3b2007721ca31ea37f0d0d3f484d70db8bd1b1d922d03c41b0d329a4dea0c15c",
+        "optimization": "O0",
+        "inttoptr_off": 46,
+        "inttoptr_on": 46,
+        "recovered": 0,
+        "recovered_functions": {},
+        "backend_status": {
+          "on": 0,
+          "off": 0
+        },
+        "status": "ok",
+        "assembly_equal": true,
+        "cincoffset": {
+          "on": 83700,
+          "off": 83700
+        }
+      },
+      {
+        "source": "sqlite/O2",
+        "source_sha256": "3b2007721ca31ea37f0d0d3f484d70db8bd1b1d922d03c41b0d329a4dea0c15c",
+        "optimization": "O2",
+        "inttoptr_off": 64,
+        "inttoptr_on": 64,
+        "recovered": 0,
+        "recovered_functions": {},
+        "backend_status": {
+          "on": 0,
+          "off": 0
+        },
+        "status": "ok",
+        "assembly_equal": true,
+        "cincoffset": {
+          "on": 25864,
+          "off": 25864
+        }
+      }
+    ],
+    "controls_pass": true,
+    "recovery_controls": [
+      {
+        "source": "control/O0",
+        "source_sha256": "b17da5a2fa7dbddc7530b5a68975d2c8884dd5448e3f2bd1de12f4917517ae7d",
+        "optimization": "O0",
+        "inttoptr_off": 54,
+        "inttoptr_on": 30,
+        "recovered": 24,
+        "recovered_functions": {
+          "align_up": 1,
+          "carrier": 1,
+          "scaled_index": 1,
+          "flag_select": 1,
+          "walk": 1,
+          "optnone_align": 1,
+          "global_align": 1,
+          "global_constant": 1,
+          "slot_flag": 1,
+          "slot_cursor": 1,
+          "checked_align": 1,
+          "identity_may_be_null": 1,
+          "select_same_source": 1,
+          "select_plain_offset": 1,
+          "truncated_address": 1,
+          "carrier_mask_identity": 1,
+          "heap_deref": 1,
+          "alloca_align": 1,
+          "slot_holds_global": 1,
+          "two_objects_slot": 1,
+          "two_objects_select": 1,
+          "delinearized": 1,
+          "phi_cursor": 1,
+          "nonlinear_argument_slot": 1
+        },
+        "backend_status": {
+          "on": 0,
+          "off": 0
+        },
+        "status": "ok",
+        "assembly_equal": false,
+        "cincoffset": {
+          "on": 197,
+          "off": 179
+        }
+      },
+      {
+        "source": "control/O2",
+        "source_sha256": "b17da5a2fa7dbddc7530b5a68975d2c8884dd5448e3f2bd1de12f4917517ae7d",
+        "optimization": "O2",
+        "inttoptr_off": 54,
+        "inttoptr_on": 30,
+        "recovered": 24,
+        "recovered_functions": {
+          "align_up": 1,
+          "carrier": 1,
+          "scaled_index": 1,
+          "flag_select": 1,
+          "walk": 1,
+          "optnone_align": 1,
+          "global_align": 1,
+          "global_constant": 1,
+          "slot_flag": 1,
+          "slot_cursor": 1,
+          "checked_align": 1,
+          "identity_may_be_null": 1,
+          "select_same_source": 1,
+          "select_plain_offset": 1,
+          "truncated_address": 1,
+          "carrier_mask_identity": 1,
+          "heap_deref": 1,
+          "alloca_align": 1,
+          "slot_holds_global": 1,
+          "two_objects_slot": 1,
+          "two_objects_select": 1,
+          "delinearized": 1,
+          "phi_cursor": 1,
+          "nonlinear_argument_slot": 1
+        },
+        "backend_status": {
+          "on": 0,
+          "off": 0
+        },
+        "status": "ok",
+        "assembly_equal": false,
+        "cincoffset": {
+          "on": 181,
+          "off": 164
+        }
+      }
+    ],
+    "frontend_failures": [
+      {
+        "source": "musl/src/malloc/mallocng/aligned_alloc.c",
+        "source_sha256": "8a1c955672db354c52fe3d743725d3a1dffd4d758ec792ff7a38c35fb9762348",
+        "optimization": "O1",
+        "status": "frontend-failed"
+      },
+      {
+        "source": "musl/src/malloc/mallocng/donate.c",
+        "source_sha256": "c4c7137621a51c70b92350c641797aa99ff1cca36f4da5d2f7fba263c1f002fa",
+        "optimization": "O1",
+        "status": "frontend-failed"
+      },
+      {
+        "source": "musl/src/malloc/mallocng/free.c",
+        "source_sha256": "c8c06d9847b3cfce57fd1067e8c886370bdfb81c0d198573871721b20a7e817b",
+        "optimization": "O1",
+        "status": "frontend-failed"
+      },
+      {
+        "source": "musl/src/malloc/mallocng/malloc.c",
+        "source_sha256": "ea50e97cccc60331d7306f6226949d2af94797ce2d39d474d226aa53cfb830d3",
+        "optimization": "O1",
+        "status": "frontend-failed"
+      },
+      {
+        "source": "musl/src/malloc/mallocng/malloc_usable_size.c",
+        "source_sha256": "03ae4274f35aa0fb93771414ddf3f55b64f82a96484b8fbf4194c57f3b192c63",
+        "optimization": "O1",
+        "status": "frontend-failed"
+      },
+      {
+        "source": "musl/src/malloc/mallocng/realloc.c",
+        "source_sha256": "b8ef6d11c48a1c188b8ba888b6d857c46f151f615612c014a2195944fbcbc858",
+        "optimization": "O1",
+        "status": "frontend-failed"
+      }
+    ],
+    "frontend_failure_reason": "All six mallocng files fail the existing pointer-size static assertion; 1355 units compile in both modes.",
+    "backend_failures": 0,
+    "interpretation": "No additional recovery or assembly change in the measured musl/SQLite corpora. The positive fixtures demonstrate a working narrow mechanism, but these measurements do not establish broad porting benefit."
+  },
+  "validation": {
+    "llvm_codegen_mc": {
+      "passed": 128,
+      "failed": 0,
+      "configuration": "Full suite with a git -c diff.algorithm=myers wrapper on the lit path; lit drops GIT_CONFIG_* overrides.",
+      "initial_environment_failure": "The first build on the earlier dev snapshot passed 127/128; histogram-versus-Myers manifest mismatch was the sole failure and passed a targeted Myers rerun."
+    },
+    "shared_manifest_myers": {
+      "passed": true,
+      "files": 110
+    },
+    "clang_capstone": {
+      "passed": 28,
+      "failed": 0
+    },
+    "qemu_round_trip": {
+      "O0_passed": 12,
+      "O2_passed": 12,
+      "atexit_handler": "runs in both",
+      "pass_off": "fault before the first successful round trip"
+    },
+    "qemu_exit_hook": {
+      "default_status": 7,
+      "override_status": 42,
+      "old_runtime_control": "fault as required",
+      "unmodified_musl": "fault before handler as required"
+    },
+    "qemu_sha256": "ce93cb32c4027fcfe46378ef6cfe992fc5b966d8b2a1d79ec452873dc4142db0",
+    "image_sha256": {
+      "rt-O0.dom": "c10bd58b9a304c5f6ad9724ea20cf1075aea46b2a2957fabe02cddaacd5a70fb",
+      "rt-O2.dom": "2e431a22be158a0c96a19b8cb00df9a93fe35bc26df6ba97458b789d74de6fce",
+      "rt-off.dom": "41dc42e4601b343268d4b930bd066c7c87969521050035b54b255fded202e045",
+      "exit-control.dom": "a02c8c03d81a68e697f9d694e5033a4f0ce31f53dd7bce498504f053a47eb124",
+      "exit-default.dom": "ad73140aba99ea4129cf03dbd290b03cf0ed08765340f22e67d3137a67d37471",
+      "exit-hook.dom": "5d63737945476851da6d9ef38d3fcd2299081267212bf3e30f803cc5ddd02a35",
+      "exit-muslatexit.dom": "5906a94446fb1252c8e524307365d91f81e6a5c79f97539aa06e920400c43f6a"
+    }
+  },
+  "limits": [
+    "Static compiler coverage, not performance or execution coverage of musl and SQLite.",
+    "QEMU refusal probes use NONLIN inputs; potentially live LINEAR preservation is pinned in IR and identical on/off assembly. No silicon run.",
+    "Full nightly, hostcall-all, libc-test execution and BEEBS were not rerun.",
+    "The separate ISel backstop C-71, warning precision and the LTO escape-hatch limitation are unchanged.",
+    "DELIN is an existing explicit proof. No new NONLIN attribute, verifier or runtime guard is added."
+  ]
+}
