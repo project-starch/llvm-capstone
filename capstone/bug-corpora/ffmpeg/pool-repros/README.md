@@ -53,6 +53,12 @@ guest a per-case script would have to reinvent. A Capstone domain:
     bash ../../../ports/ffmpeg/buffer-pool/security-tests/qemu/run.sh <out> \
       --cases 36,37,38 --modes 0,2 --rounds 1
 
+and against the Sublet port of FFmpeg's own pools, each `case.c` unchanged, in the FFmpeg app
+port's domain (build first with `FFAPP_HEAP=sublet FFAPP_POOL=sublet|stock
+FFAPP_CORPUS_DIR=<this corpus>` `ports/ffmpeg/app/host/build-domain.sh`):
+
+    bash runners/run-sublet-port.sh <poolsublet|poolstock> [rounds]
+
 and CheriBSD with PoisonCap, where the same three cases are registered as
 `pool-<mode>-<case>`:
 
@@ -77,6 +83,12 @@ for any subset, so a partial run cannot later read as a full one.
 | **Sublet** | the last return to the pool | **fault**, cause 24 | **fault**, cause 24 | **fault**, cause 24 |
 | **CHERI default** | `free()` → quarantine → sweep | — | — | — |
 | **PoisonCap** | the lease return: poison, then sweep before reissue | **SIGPROT** 162 | **SIGPROT** 162 | **SIGPROT** 162 |
+| **Sublet port of FFmpeg's own pools** (2026-09-29) | FFmpeg's own `buffer.c`: the return to the pool is a revoke | **fault**, cause 24, at `case.c:85` | **fault**, cause 24, at `case.c:48` | **fault**, cause 24, at `case.c:33` |
+
+The last row is the Sublet port of FFmpeg's own pools (`ports/ffmpeg/sublet`), not the
+buffer-pool port's substitute that the `Sublet` row measures. Each `case.c` runs unchanged against
+it, in the FFmpeg app port's domain, with upstream's pools as the one-macro control:
+[`results/20260929-qemu-sublet-port/`](results/20260929-qemu-sublet-port/README.md), N = 3 per cell.
 
 It catches whoever listens for the moment the inner allocator takes the storage
 back. The other two listen for an event that never happens here: Capstone
