@@ -8,8 +8,9 @@ QEMU_BINARY="$REPO_ROOT/capstone/capstone-qemu/build/qemu-system-riscv64"
 
 # -snapshot unless CAPSTONE_ROOTFS_WRITABLE=1: the guest remounts / read-write, and without it an
 # interactive session writes the SHARED rootfs.ext2 that every lane boots, which an unclean exit
-# leaves corrupt. Set CAPSTONE_ROOTFS_WRITABLE=1 only to change that image on purpose, with the
-# QEMU lock held and no other guest running.
+# leaves corrupt (ISSUES-ARCHIVE I-13). Set CAPSTONE_ROOTFS_WRITABLE=1 only to change that image on
+# purpose, with the QEMU lock held and no other guest running. The image is kept read-only on
+# disk, so that also needs `chmod u+w` first, and `chmod a-w` after.
 SNAPSHOT=(-snapshot)
 [ "${CAPSTONE_ROOTFS_WRITABLE:-0}" = 1 ] && SNAPSHOT=()
 

@@ -7264,7 +7264,9 @@ listed tools are fresh", NOT as "lit can run".**
 Some QEMU guest boots stop, or crawl, before any domain starts. The tshark safety campaign
 (`ports/wireshark/app/results/2026-09-25-qemu-safety/stall-classes.txt`) had 28 boots, and 7 of
 them never reached a domain. All ran on the port's PRIVATE rootfs, so the shared rootfs's ext4
-corruption is not the cause. FFmpeg's hardening round counted 9 such boots: 7 before login, 1 at
+corruption is not the cause. (That corruption is itself fixed: ISSUES-ARCHIVE I-13. On 2026-09-29, 7
+of 80 corpus boots on a private, `e2fsck`-clean rootfs still stalled: 6 with the serial log ending
+in the firmware banner, 1 at init.) FFmpeg's hardening round counted 9 such boots: 7 before login, 1 at
 login, 1 in the 9p copy. The shapes, told apart by a setup watchdog in
 `ports/wireshark/app/host/run-qemu.sh`:
 - **A slow 9p copy, 6 of the 28.** The guest's copy of the domain images from the 9p share

@@ -171,10 +171,12 @@ def main():
         "-bios", str(fw_jump), "-kernel", str(kernel),
         "-append", "root=/dev/vda rw console=ttyS0 earlycon=sbi",
         # -snapshot: the guest's writes go to a throwaway overlay, never to the SHARED rootfs.ext2.
-        # Without it every boot mounted that image read-write, and a trapping domain aborts QEMU
-        # (see boot_and_run_one), so the image was left dirty after nearly every run; other lanes'
-        # guests then read an image that was being written, and logged EXT4-fs errors
-        # (2026-09-24, 2026-09-29). run-domain-smoke.py has always booted this way.
+        # Without it every boot mounted that image read-write, and EVERY boot ends uncleanly:
+        # boot_and_run_one's `finally` terminates QEMU with no sync or poweroff, and a trapping
+        # domain aborts it anyway. So each run left the image dirty, and other lanes' guests read
+        # an image that was being written and logged EXT4-fs errors (ISSUES-ARCHIVE I-13).
+        # run-domain-smoke.py has always booted this way. The shared image is also read-only on
+        # disk now, so a launcher without -snapshot fails to start instead of corrupting it.
         "-snapshot",
         "-drive", f"file={rootfs},format=raw,id=hd0",
         "-device", "virtio-blk-device,drive=hd0",
