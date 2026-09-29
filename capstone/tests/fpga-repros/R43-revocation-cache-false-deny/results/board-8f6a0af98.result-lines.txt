@@ -139,8 +139,11 @@ as N=1 with a candidate mechanism. R-43 is FIXED ON SILICON. Two of the board la
 opening k800 retval=4; ENT1.
 trap log sw=255 0x9a = seen, mcause 26; mepc 0x81a04360 - DBAS = +0x4360 = the mint, where the auditor predicted it; tval 0xac100000.
 refusal record 204 = 0x02 = EMPTY: no cause-25 LSU denial since reset (the switch trace confirms the read was taken at 204).
-reading    The identical run with a LIVE alias refuses nothing and wedges only at its later mint (cause 26, as on every bitstream
-           since 4ad0df694), so a10's LATCHED record belongs to the STALE access and to nothing else: the record is specific.
+reading    RETRACTED by the board lane the same night, as argued: aed492ab is NOT the identical run -- its Part A auditor checked
+           provenance, and aed492ab (single-age deref through `oldest`, 42 globals, 672-byte cap table) and 35fb3fec (multi-age
+           deref, 43 globals, 688-byte table) are four source commits apart. So m1v2-2's EMPTY is a live-alias control of a
+           DIFFERENT fixture and does not show that 35fb3fec's run refuses nothing before its stale access. What stands: m1v2-2
+           read EMPTY, fresh, at 204; the live-alias mint wedges with cause 26 as on every bitstream since 4ad0df694.
            Caveat (board lane's own regression, fixed from m1v2-4): this boot's 205..208 bytes are VOID -- the wedge-dump change
            walked from a stale switch model, so "208" was read at 210 and "205" at 207; reproduced two-sided without the fix.
            a10 predates the change and its 204/205 reads were confirmed at the right apertures, so a10 is unaffected.
@@ -151,6 +154,10 @@ m1v2-4     the first boot with the fixed wedge-dump reads: every record byte rea
            m1v2-2's 208@210 and 205@207). trap 0x99 (cause 25), mepc +0x4354, tval 0xac100000; 204 = 0x11 (LATCHED, arm 0100 =
            probe path); 205 = 0x5f, 206/207/208 = 00/00/00, all fresh -> id = 0x5f (95, generation 0), parity consistent.
 m1v2-3     cause 25 at +0x4354, 204 = 0x11; ran the pre-fix runner, so its id bytes are VOID.
-reading    The stale read is 3/3 on v2 (a10, m1v2-3, m1v2-4), and the refused access's id reads 95 on both boots with a fresh
-           read. That is the id of the access the probe path refused, reproducibly; whether it is k=0's node is not shown by an
-           independent source. The stale-WRITE pair (067cc96f) runs next.
+reading    The stale read is 3/3 on v2 (a10, m1v2-3, m1v2-4), each trapping 25 at the stale lbu with the record LATCHED on the
+           probe arm, and the id reads 95 on both boots that read it. SCOPE (board lane, after its auditor): the record latches
+           the FIRST cause-25 verdict since reset (load_store_unit.sv, the rvc_den_v_q latch), verdicts included and not only
+           retired ones, so on this evidence "the boot's first refusal was on the probe path, id 0x5f" -- not provably the stale
+           access's own verdict, though the trap that ended the boot is that access. The cheap settler the auditor names: a
+           RETURNING build of the same source with the probe tied off, reading 204 at the end of the same workload. The
+           stale-WRITE pair (067cc96f) runs next.
