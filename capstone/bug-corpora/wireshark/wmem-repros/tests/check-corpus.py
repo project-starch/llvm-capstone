@@ -24,7 +24,7 @@ REQUIRED = {"case", "upstream_fix", "title", "consumer", "live_in_pin", "live_pr
             "arms", "status"}
 OPTIONAL = {"distinguishing", "sibling_issue", "size_class", "size_note", "layer_note",
             "note"}
-ARMS = {"spatial", "sublet", "poisoncap-spatial", "poisoncap-protected", "native-detect"}
+ARMS = {"spatial", "sublet", "sublet-chunks", "poisoncap-spatial", "poisoncap-protected", "native-detect"}
 
 
 def shapes(readme):

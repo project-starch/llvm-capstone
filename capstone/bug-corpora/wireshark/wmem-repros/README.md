@@ -57,6 +57,15 @@ reset; Sublet lends whole regions, a chunk inside a live block has no epoch of
 its own, and the protected arm is expected — and checked — to complete. It is
 kept because hiding it would misstate what the mechanism covers.
 
+**Since the chunk port (2026-09-29), case 12 is caught too.**
+
+- The port's default build (`WM_CHUNKS=ON`, `a34caaedb1bc`) gives every chunk of the block
+  allocator a region of its own, so the individual free is a revoke. Case 12 then faults at its
+  read probe.
+- The region-granular build (`WM_CHUNKS=OFF`) still completes it. The two builds have separate
+  oracles, `sublet-chunks` and `sublet`, and the runner picks one from the build.
+- Result: [`results/20260929-qemu-chunk-port/`](results/20260929-qemu-chunk-port/README.md).
+
 Every `case.json` says how liveness at the 4.6.8 pin was established, and
 each `PROVENANCE.md` quotes the pre-fix code from the fix's parent by line.
 Where a report's pool was the separate `wmem_packet_scope()` of older
@@ -136,6 +145,15 @@ Capstone lacks. The shipped port keeps region granularity for that reason:
 the allocator's policy stays byte-identical to upstream, and this one case
 is the price. `docs/design/capability-merge-primitive-proposal.md` states the
 trade, the missing primitive, and what a per-chunk port would cost.
+
+**Measured 2026-09-29, with the chunk port** (`results/20260929-qemu-chunk-port/`):
+
+- **Sublet catches 13 / 13**, each at the labelled read probe. Case 12 faults on the chunk build
+  ×3 and completes on the region-granular build ×3, one option apart.
+- The spatial arm completes 13 / 13, and the negative control fails 26 / 26.
+- The chunk port pays for this differently from what that paragraph foresaw. It does not merge
+  freed neighbours, and a reset returns each block UNINIT and pays a capability-initialising fill;
+  see `ports/wireshark/wmem/results/20260929-qemu-chunk-port/`.
 
 ## Building and running
 
