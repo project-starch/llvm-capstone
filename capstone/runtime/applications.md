@@ -217,6 +217,68 @@ fcntl use Linux objects; other file operations retain the existing host service.
 The launcher uses its Linux filesystem authority and is not a filesystem sandbox.
 No claim of a complete hostile-code or QEMU security audit is made.
 
+## Delegated syscalls (application ABI v2)
+
+An application built with the default `CAPSTONE_APPLICATION_DELEGATE=ON` speaks
+ABI v2: every Linux service is the Linux syscall itself, run by the launcher
+task. The domain fills an 88-byte entry in the entry region, copies pointer
+arguments into the exchange region as offsets, and yields; the launcher
+validates the entry against the shape table, runs `syscall()` under its own
+credentials, descriptors and working directory, and writes the result back.
+The wire ABI, the shape table and the closed exception groups are in
+`include/capstone/delegate.h`; the design is
+[docs/plans/delegation-abi.md](../docs/plans/delegation-abi.md).
+
+What crosses: files, directories, descriptors, time, identity, limits,
+`getrandom`, `wait4`, `kill` confined to the task, `exit_group`. What does not:
+memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
+(`clone`, `fork`, `execve` are ENOSYS and recorded until the spawn branch), and
+signals (`rt_sigaction` and `rt_sigprocmask` are accepted and recorded as
+no-ops until the signals branch). The unserved report at exit lists both.
+
+The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
+`CAPSTONE_APPLICATION_EXCHANGE_BYTES` for the SDK project); larger buffers are
+chunked, so a big read or write is a short one. A v2 image's descriptor is 48
+bytes; `capstone-exec` accepts v1 and v2 images and keeps HostCall v0 for the
+former. Building with `CAPSTONE_APPLICATION_DELEGATE=OFF` produces a v1 image.
+
+The launcher installs a seccomp filter from the same shape table before the
+first step: the delegated numbers plus its own, everything else answers
+ENOSYS. `CAPSTONE_EXEC_NO_SECCOMP=1` disables it for debugging.
+`CAPSTONE_DELEGATE_STATS=1` prints rounds, syscalls, refused entries, bytes
+through the exchange region and `rdtime` ticks at exit.
+
+A domain fault produces a record with cause, PC, address, the runtime address
+of `domain_main` and the code bounds, written to the file `CAPSTONE_FAULT_RECORD`
+names and to stderr only when stderr is a terminal or
+`CAPSTONE_EXEC_DIAGNOSTICS=1` is set; application streams carry application
+bytes only. `capstone-vm run` collects the record into its result JSON and
+prints it. `python3 -m capstone_vm.symbolize --image IMAGE "RECORD"` maps the PC
+to `function+offset` from the symbol table, and to a line when the image has
+debug information.
+
+Measured on 2026-09-29 in the QEMU guest, `rdtime` at its 10 MHz rate, one hart:
+
+| Loop of `getpid` | Ticks per call |
+|---|---|
+| Delegated round, `delegate-bench.dom`, 10,000 calls | 1,049 |
+| Native process, same counter, 10,000 calls | 8.2 |
+
+That ratio is the emulator's: each round crosses U, S and M mode twice and
+QEMU flushes its TLB on every supervised switch. It is the number the plan
+requires before any transport optimization, not a hardware cost.
+
+musl's libc-test runs against this runtime with
+`ports/musl-capstone/libc-test/run-libc-test-delegated.py`, every functional
+test built by the SDK driver and run through `capstone-vm run` in one boot.
+On 2026-09-29: 43 PASS, 6 FAIL, 1 FAULT, 5 NOBUILD, 22 EXCLUDED of 77, the
+same pass count as the HostCall v0 runtime's last run. `fscanf` passes now
+that `pipe2` is a Linux pipe; `clocale_mbfuncs` faults with cause 5 on a
+locale-table walk, the class the quarantine list records for `mbc`. The five
+NOBUILD are the thread-local tests the compiler cannot lower. The exclusions
+are the old runner's: processes, threads, sockets, SysV IPC and dynamic
+loading, of which processes are the next branch.
+
 ## Verification
 
 ```sh

@@ -1464,23 +1464,10 @@ void domain_main(unsigned *res, unsigned func) {
     return;
   }
 
-#ifdef CAPSTONE_APPLICATION_RUNTIME
-  size_t startup_bytes = hc_startup ?
-      __builtin_capstone_cap_get_end(hc_startup) -
-      __builtin_capstone_cap_get_cursor(hc_startup) : 0;
-  int startup_error = __capstone_application_prepare(hc_startup, startup_bytes);
-  if (startup_error) {
-    hc_metadata->result = -startup_error;
-    hc_metadata->phase = HC_V0_PHASE_ERROR;
-    return;
-  }
-  unsigned stdio_mask = __capstone_application_stdio();
-  for (unsigned i = 0; i < 3; ++i)
-    hc_stdio_closed[i] = !(stdio_mask & (1u << i));
-#endif
 #ifdef CAPSTONE_DELEGATE_RUNTIME
-  /* Region 0 is the entry block, region 1 the exchange region. The first
-     request tells the launcher where this image runs, for fault records. */
+  /* Region 0 is the entry block, region 1 the exchange region. Before the
+     startup block is applied, because its chdir() is already a delegated
+     call. The first request tells the launcher where this image runs. */
   {
     extern void __capstone_delegate_regions(void *, void *);
     extern long __capstone_delegate_hello(unsigned long, unsigned long, unsigned long);
@@ -1497,6 +1484,21 @@ void domain_main(unsigned *res, unsigned func) {
                               (unsigned long)__builtin_capstone_cap_get_end(anchor));
   }
 #endif
+#ifdef CAPSTONE_APPLICATION_RUNTIME
+  size_t startup_bytes = hc_startup ?
+      __builtin_capstone_cap_get_end(hc_startup) -
+      __builtin_capstone_cap_get_cursor(hc_startup) : 0;
+  int startup_error = __capstone_application_prepare(hc_startup, startup_bytes);
+  if (startup_error) {
+    hc_metadata->result = -startup_error;
+    hc_metadata->phase = HC_V0_PHASE_ERROR;
+    return;
+  }
+  unsigned stdio_mask = __capstone_application_stdio();
+  for (unsigned i = 0; i < 3; ++i)
+    hc_stdio_closed[i] = !(stdio_mask & (1u << i));
+#endif
+
 
   /* exit() has to be able to end the program from anywhere. musl's _Exit is
      `__syscall(SYS_exit_group, ec); for (;;) __syscall(SYS_exit, ec);`, so a

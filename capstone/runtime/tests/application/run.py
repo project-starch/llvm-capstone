@@ -103,9 +103,14 @@ def main():
                                      "/mnt/host/application-contract.dom", mode, "",
                                      "argument with spaces\nand newline"], env=env, capture_output=True, timeout=30)
             assert result.returncode == 139
-            assert json.loads(status.read_text()) == {"version": 1, "kind": kind,
-                                                      "value": 139 if kind == "exit" else 11}
-        print("SSH preserves exit 139 versus actual SIGSEGV: PASS")
+            record = json.loads(status.read_text())
+            assert {key: record.get(key) for key in ("version", "kind", "value")} == {
+                "version": 1, "kind": kind, "value": 139 if kind == "exit" else 11}
+            # A signal death from a domain fault carries its record; an exit does not.
+            assert ("fault" in record) == (kind == "signal"), record
+            if kind == "signal":
+                assert "cause=" in record["fault"] and "pc=0x" in record["fault"], record
+        print("SSH preserves exit 139 versus actual SIGSEGV, with the fault record: PASS")
 
     allocation_progress = {}
     if args.sublet_image:
