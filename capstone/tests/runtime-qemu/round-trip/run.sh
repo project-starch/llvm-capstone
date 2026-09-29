@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pointers computed through uintptr_t in a musl domain: CapstoneRecoverProvenance.
 #
-#   bash run.sh     exit 0 only if rt-O0 and rt-O2 pass all seven checks in
+#   bash run.sh     exit 0 only if rt-O0 and rt-O2 pass all ten checks in
 #                   rt_test.c (including musl's own, unmodified atexit()) AND the
 #                   control halts:
 #     rt-off        rt_test.c at -O2 with -mllvm -capstone-recover-provenance=false,
@@ -93,12 +93,12 @@ verdict=0
 for arm in O0 O2; do
   block=$(sed -n "/RUN-BEGIN rt-$arm\$/,/RUN-END rt-$arm /p" "$LOG")
   passes=$(grep -ac 'RT-TEST PASS' <<<"$block" || true)
-  if grep -aq "LT-RESULT rt-$arm.dom status=0 " <<<"$block" && [[ $passes == 8 ]] &&
+  if grep -aq "LT-RESULT rt-$arm.dom status=0 " <<<"$block" && [[ $passes == 10 ]] &&
      grep -aq "RT-TEST atexit handler ran" <<<"$block" &&
      ! grep -aq "halted by capability fault" <<<"$block"; then
-    echo "  rt-$arm: PASS (8 checks, and musl's atexit handler ran)"
+    echo "  rt-$arm: PASS (10 checks, and musl's atexit handler ran)"
   else
-    echo "  rt-$arm: FAIL ($passes of 8 checks passed)"
+    echo "  rt-$arm: FAIL ($passes of 10 checks passed)"
     grep -aE "RT-TEST|LT-RESULT|halted" <<<"$block" | sed 's/^/    /'
     verdict=1
   fi
