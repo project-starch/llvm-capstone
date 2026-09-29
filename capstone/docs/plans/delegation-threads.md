@@ -1,15 +1,16 @@
 # Delegated threads: one Linux thread per protected context
 
-Status: PROBE A IN PROGRESS, 2026-09-29. Branch `delegation-threads`, stacked on
-`delegation-signals` (c460e8c). The contracts below are what Probe A and Probe B test; the runtime
-branch that builds `pthread_create` on them is written after both probes pass.
+Status: PROBE A CASES PASS, 2026-09-30; submodule pins open. Branch `delegation-threads`,
+stacked on `delegation-signals` (c460e8c). The contracts below are what Probe A and Probe B test;
+the runtime branch that builds `pthread_create` on them is written after both probes pass.
 
 Done so far:
 - The domain half on the unchanged platform: context arena, mint, thread entry, exit and
   re-entry, revoke/remint, entered by a nested unsupervised CALL (record
   `results/20260929-context-probe-domain.json`).
 - Through the monitor, on branches `context-slots` of capstone-qemu (7bbedcd16b: DEAD status,
-  dead-slot removal), capstone-sbi (0451a1a: slots with generations, lent descriptors, ADOPT,
+  dead-slot removal; pinned as `qemu/context-slots-on-pin`, the same commits on the pinned
+  ac2837aa0e), capstone-sbi (0451a1a: slots with generations, lent descriptors, ADOPT,
   FORGET; 3f9efa9: the descriptor's offer slot is cleared after the seal is taken out) and
   caplifive-buildroot (11c024a: driver ids and ioctls; f9b2408: the firmware build refuses a
   capstone-c miscompile this work hit), and the launcher's CONTEXT requests here. Passing,
@@ -37,8 +38,14 @@ Done so far:
 - A13's foreign-owner request: an application naming another application's context or first
   context in STEP gets EPERM and in FORGET ESTALE (the driver's owner check), and the owner then
   still steps and forgets that context.
-- Open in Probe A: A7 (needs an instrument that shows the node was reissued) and the submodule
-  pins.
+- A7: a paused context's area is revoked, the collector releases its seal's node, and a new seal
+  is minted with that node and those bounds (capstone-qemu's test-only node instruments show
+  both); the new context enters its own entry. With the collector's dead-slot removal disabled
+  the same sequence resumes the dead context's continuation instead, which faults on its
+  untagged stack: the removal is what prevents the ABA.
+- Pins: capstone-qemu 3589d6af6f (`qemu/context-slots-on-pin`), caplifive-buildroot a6c0174
+  (driver, and components/opensbi a4bdd1b: the caplifive-opensbi wrapper at capstone-sbi
+  7e1c34f). Open in Probe A: their upstream pull requests.
 
 ## Scope
 

@@ -256,6 +256,26 @@ probe_entry_leak:
   .insn r 0x5b, 0x1, 0xc, s1, gp, x0   /* cincoffset s1, gp, 0 */
   j probe_entry_audit
 
+/* ---- A7: revocation-node instruments of capstone-qemu (LCC fields 8 and 9,
+ * answered only with CAPSTONE_TEST_NODE_QUERY; 0 otherwise). ---- */
+
+/* unsigned long probe_node_of(capstone_cap_slot *slot): the revocation node
+ * of the capability in slot, which stays in place. */
+  .global probe_node_of
+probe_node_of:
+  ldc(t0, a0, 0)
+  lcc(t1, t0, x8)
+  stc(t0, a0, 0)
+  mv a0, t1
+  li t0, 0
+  ret
+
+/* unsigned long probe_next_node(void): the node the next allocation takes. */
+  .global probe_next_node
+probe_next_node:
+  lcc(a0, sp, x9)
+  ret
+
 /* void probe_main_gp(unsigned long out[3]): type, base and end of the gp this
  * context entered with (its recovery block, slot 32). */
   .global probe_main_gp

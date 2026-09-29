@@ -871,6 +871,83 @@ static int gen_exhaust(void)
   return 0;
 }
 
+/* ---- A7: capability ABA. Needs capstone-qemu's node instruments
+ * (CAPSTONE_TEST_NODE_QUERY at boot; run-context.py --only aba). ---- */
+unsigned long probe_node_of(capstone_cap_slot *slot);
+unsigned long probe_next_node(void);
+#define BURN_MAX (1ul << 22)
+
+/* One node allocated (the handle) and one invalidated (the old scratch). The
+   scratch is one 16-byte granule, so re-initialising a handle the revoke left
+   uninitialised is a single store. */
+static void burn_once(capstone_cap_slot *scratch)
+{
+  capstone_cap_slot h = {0};
+  capstone_cap_make_handle(scratch, &h);
+  capstone_cap_revoke(&h);
+  if (capstone_cap_type(&h) == CAPSTONE_CAP_UNINITIALIZED)
+    capstone_cap_initialize_zero(&h);
+  capstone_cap_move(&h, scratch);
+}
+
+/* Context A is paused mid-computation, its area revoked. Allocations are
+   burnt until the next one takes A's seal node, which only a collection can
+   have released. A remint then gives the handle that node, its revoke gives
+   it to the area, and a second remint mints a seal with A's node and A's
+   bounds. Stepping that context must enter its own entry and return its own
+   value, not resume A's continuation. */
+static int aba(void)
+{
+  struct capstone_context_event ev;
+  static struct capstone_context scratch;
+  unsigned long burns = 0;
+  CHECK(!capstone_context_mint(&scratch, 16384, child_second, 0));
+  capstone_context_revoke(&scratch);
+  capstone_cap_slot rest = {0};
+  capstone_cap_split(&scratch.handle, capstone_cap_base(&scratch.handle) + 16, &rest);
+  CHECK(capstone_cap_type(&scratch.handle) == CAPSTONE_CAP_LINEAR);
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_preempt, (void *)(uintptr_t)0x31));
+  unsigned long a_node = probe_node_of(&ctx.seal);
+  unsigned long a_base = capstone_cap_base(&ctx.seal);
+  CHECK(a_node != 0 && probe_next_node() != 0);       /* the instrument answers */
+  long a = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(a > 0);
+  memset(&ev, 0, sizeof ev);
+  CHECK(!capstone_context_step((unsigned long)a, &ev));
+  CHECK(ev.kind == STEP_PREEMPTED);
+  capstone_context_revoke(&ctx);
+  CHECK(!step_to_end((unsigned long)a, &ev, 0));
+  CHECK(ev.kind == STEP_DEAD);
+  while (probe_next_node() != a_node && burns < BURN_MAX) {
+    burn_once(&scratch.handle);
+    ++burns;
+  }
+  CHECK(probe_next_node() == a_node);
+  CHECK(!capstone_context_remint(&ctx, child_second, 0));
+  unsigned long handle_node = probe_node_of(&ctx.handle);
+  capstone_context_revoke(&ctx);
+  unsigned long area_node = probe_node_of(&ctx.handle);
+  CHECK(!capstone_context_remint(&ctx, child_second, (void *)(uintptr_t)5));
+  unsigned long b_node = probe_node_of(&ctx.seal);
+  unsigned long b_base = capstone_cap_base(&ctx.seal);
+  long b = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(b > 0);
+  memset(&ev, 0, sizeof ev);
+  CHECK(!capstone_context_step((unsigned long)b, &ev));
+  printf("context-probe aba: A node %lu base %#lx; %lu burns; handle %lu, area %lu, new seal node %lu "
+         "base %#lx; ids %#lx, %#lx; first step kind %lu cause %lu pc %#lx result %#lx value %lu\n",
+         a_node, a_base, burns, handle_node, area_node, b_node, b_base, (unsigned long)a,
+         (unsigned long)b, (unsigned long)ev.kind, (unsigned long)ev.cause, (unsigned long)ev.pc,
+         (unsigned long)ev.result, ev.kind == STEP_RETURNED ? *ctx.value : 0);
+  CHECK(handle_node == a_node && area_node == a_node);
+  CHECK(b_node == a_node && b_base == a_base);           /* the ABA condition */
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*ctx.value == 1005);
+  CHECK(capstone_context_forget((unsigned long)a) == 0);
+  CHECK(capstone_context_forget((unsigned long)b) == 0);
+  return 0;
+}
+
 /* ---- A13, foreign owner: two applications (run-context.py run_foreign).
  * The victim registers a context, publishes its id and waits; the foreign
  * application names that id and the victim's own first context in STEP and
@@ -953,6 +1030,7 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "gen-exhaust")) rc = gen_exhaust();
   else if (!strcmp(mode, "gen-launch")) rc = 0;
   else if (!strcmp(mode, "victim")) rc = victim();
+  else if (!strcmp(mode, "aba")) rc = aba();
   else if (!strcmp(mode, "foreign")) rc = foreign(argc, argv);
   else {
     fprintf(stderr, "context-probe: unknown mode %s\n", mode);

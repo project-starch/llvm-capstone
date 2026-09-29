@@ -57,6 +57,9 @@ EXPLICIT = {"ctl-wfi": ("exit", 0, "PASS", None, None)}
 # boot of its own: only with --only. gen-launch is launched GEN_LAUNCHES times
 # and each launch's application id is read from the launcher.
 EXPLICIT.update({"gen-exhaust": ("exit", 0, "PASS", None, None)})
+# A7 needs capstone-qemu's node instruments: CAPSTONE_TEST_NODE_QUERY=1 at
+# boot. Only with --only.
+EXPLICIT.update({"aba": ("exit", 0, "PASS", None, None)})
 GEN_LAUNCHES = 8
 GEN_LAST = 0x7fffffff
 # A10 across applications: this many `hold` processes at once, 8 slots each,
