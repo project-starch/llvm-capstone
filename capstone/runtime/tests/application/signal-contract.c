@@ -9,6 +9,7 @@
  * signal that arrives during one is the "domain computes" case. */
 #define _GNU_SOURCE
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -29,12 +30,28 @@ extern char **environ;
 static const char *mode;
 
 static volatile sig_atomic_t count[65], depth[65], max_depth[65];
+static volatile long handler_ms;
 static volatile sig_atomic_t seen_blocked[65];   /* was `probe_signal` blocked when this handler ran */
 static volatile int probe_signal = SIGUSR2;
 static volatile int inner_raised;
 static volatile int handler_pipe = -1;           /* before-read: the handler writes here */
 static volatile intptr_t handler_sp[65];         /* altstack: a local's address inside the handler */
 static sigjmp_buf escape;
+
+static long monotonic_ms(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  return (long)t.tv_sec * 1000 + t.tv_nsec / 1000000;
+}
+
+static void timed_handler(int sig) { handler_ms = monotonic_ms(); count[sig]++; }
+static void jump_once(int sig) { if (++count[sig] == 1) siglongjmp(escape, 1); }
+static int deep_raise(void) {
+  volatile char space[32768];
+  space[0] = 1; space[sizeof space - 1] = 2;
+  CHECK(!raise(SIGUSR1));
+  return count[SIGUSR1] + space[0] + space[sizeof space - 1] - 3;
+}
 
 static void note(int sig) {
   sigset_t now;
@@ -65,9 +82,9 @@ static void writing_to_stdout(int sig) {
   done(sig);
 }
 
-static void raising_other(int sig) {  /* A: raises B inside */
+static void raising_other(int sig) {  /* A: raises B inside, once */
   note(sig);
-  raise(SIGUSR2);
+  if (!inner_raised) { inner_raised = 1; raise(SIGUSR2); }
   done(sig);
 }
 static void raising_back(int sig) {   /* B: raises A inside; A must not re-enter */
@@ -90,7 +107,7 @@ static void on_altstack(int sig) {
   handler_sp[sig] = (intptr_t)&local;
   if (!sigaltstack(NULL, &query) && (query.ss_flags & SS_ONSTACK)) seen_blocked[sig] = 2;
   if (sig == SIGUSR1) raise(SIGUSR2);  /* nested, also SA_ONSTACK */
-  else siglongjmp(escape, 1);
+  else if (!inner_raised) { inner_raised = 1; siglongjmp(escape, 1); }  /* once; the second B returns */
   done(sig);
 }
 
@@ -258,6 +275,8 @@ int main(int argc, char **argv) {
        the child counts exactly the bytes the writes reported. */
     int data[2], back[2];
     CHECK(!pipe(data) && !pipe(back));
+    /* the child must not inherit our ends, or it never sees end of file */
+    CHECK(!fcntl(data[1], F_SETFD, FD_CLOEXEC) && !fcntl(back[0], F_SETFD, FD_CLOEXEC));
     CHECK(!install(SIGUSR1, counting, SA_RESTART));
     char command[128];
     snprintf(command, sizeof command, "sleep 0.3; kill -USR1 %ld; sleep 0.3; wc -c", (long)getpid());
@@ -307,6 +326,20 @@ int main(int argc, char **argv) {
     CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 7);
     return pass();
   }
+  if (!strcmp(mode, "wait-pid")) {
+    /* A positive-PID wait must return to the domain for the handler while
+       the child is still alive, even when SA_RESTART will finish the wait. */
+    CHECK(!install(SIGUSR1, timed_handler, SA_RESTART));
+    char command[128];
+    snprintf(command, sizeof command, "sleep 0.2; kill -USR1 %ld; sleep 1.2; exit 7", (long)getpid());
+    pid_t p = child(command, -1);
+    CHECK(p > 0);
+    long start = monotonic_ms();
+    CHECK(waitpid(p, &status, 0) == p);
+    CHECK(count[SIGUSR1] == 1 && handler_ms - start < 1000);
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 7);
+    return pass();
+  }
   if (!strcmp(mode, "spawn-interrupted")) {
     /* Signals arriving around spawn requests never duplicate a child. */
     CHECK(!install(SIGUSR1, counting, SA_RESTART));
@@ -331,7 +364,7 @@ int main(int argc, char **argv) {
     pid_t s = child("sleep 0.2; kill -USR1 $PPID; sleep 0.3; kill -USR1 $PPID", -1);
     CHECK(s > 0);
     struct timespec t = {2, 0};
-    nanosleep(&t, NULL);
+    while (nanosleep(&t, &t) < 0 && errno == EINTR) ;   /* the first instance interrupts this */
     fprintf(stderr, "signal-contract: still alive after two SIGUSR1 (count %d)\n", (int)count[SIGUSR1]);
     return 2;
   }
@@ -357,6 +390,25 @@ int main(int argc, char **argv) {
     busy_ms(1500);
     CHECK(!reap(s, &status));
     CHECK(count[rt] == 100);
+    return pass();
+  }
+  if (!strcmp(mode, "rt-burst")) {
+    /* SA_NODEFER permits many accepted events. sa_mask keeps the signal
+       blocked inside each handler, so the domain accumulates a full queue. */
+    int rt = SIGRTMIN + 3;
+    struct sigaction sa = {.sa_handler = counting, .sa_flags = SA_NODEFER};
+    sigemptyset(&sa.sa_mask); sigaddset(&sa.sa_mask, rt);
+    CHECK(!sigaction(rt, &sa, NULL));
+    sigset_t held, empty;
+    sigemptyset(&held); sigaddset(&held, rt); sigemptyset(&empty);
+    CHECK(!sigprocmask(SIG_BLOCK, &held, NULL));
+    char command[160];
+    snprintf(command, sizeof command,
+             "i=0; while [ $i -lt 400 ]; do kill -%d %ld; i=$((i+1)); done", rt, (long)getpid());
+    pid_t p = child(command, -1);
+    CHECK(p > 0 && !reap(p, &status));
+    CHECK(!sigprocmask(SIG_SETMASK, &empty, NULL));
+    CHECK(count[rt] == 400);
     return pass();
   }
   if (!strcmp(mode, "hint")) {
@@ -389,7 +441,68 @@ int main(int argc, char **argv) {
     sigset_t now;
     CHECK(!sigprocmask(SIG_SETMASK, NULL, &now));
     CHECK(!sigprocmask(SIG_UNBLOCK, &now, NULL));    /* leave with a clean mask after the jump */
-    CHECK(!raise(SIGUSR1) || 1);                       /* the stack is usable again */
+    CHECK(!raise(SIGUSR1));                            /* the stack is usable again: A, then B, both return */
+    CHECK(count[SIGUSR1] == 1 && count[SIGUSR2] == 1);  /* the first pair left through the jump */
+    return pass();
+  }
+  if (!strcmp(mode, "jump-deep")) {
+    CHECK(!install(SIGUSR1, jump_once, 0));
+    if (!sigsetjmp(escape, 1)) CHECK(!raise(SIGUSR1));
+    CHECK(deep_raise() == 2);
+    return pass();
+  }
+  if (!strcmp(mode, "waitinfo")) {
+    sigset_t held;
+    sigemptyset(&held); sigaddset(&held, SIGCHLD);
+    CHECK(!sigprocmask(SIG_BLOCK, &held, NULL));
+    pid_t p = child("exit 7", -1);
+    CHECK(p > 0);
+    siginfo_t info;
+    memset(&info, 0xa5, sizeof info);
+    struct timespec limit = {3, 0};
+    CHECK(sigtimedwait(&held, &info, &limit) == SIGCHLD);
+    CHECK(info.si_pid == p && info.si_status == 7);
+    CHECK(!reap(p, &status));
+    return pass();
+  }
+  if (!strcmp(mode, "inherit-start")) {
+    /* A second domain starts with the first task's ignored set and mask. */
+    sigset_t held;
+    sigemptyset(&held); sigaddset(&held, SIGUSR2);
+    CHECK(signal(SIGPIPE, SIG_IGN) != SIG_ERR);
+    CHECK(!sigprocmask(SIG_BLOCK, &held, NULL));
+    char *args[] = {argv[0], "inherit-child", NULL};
+    pid_t p;
+    CHECK(!posix_spawn(&p, argv[0], NULL, NULL, args, environ));
+    CHECK(!reap(p, &status));
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    return pass();
+  }
+  if (!strcmp(mode, "inherit-child")) {
+    struct sigaction sa;
+    CHECK(!sigaction(SIGPIPE, NULL, &sa) && sa.sa_handler == SIG_IGN);
+    if (!sigsetjmp(escape, 1)) {
+      sigset_t empty;
+      sigemptyset(&empty);
+      CHECK(!sigprocmask(SIG_SETMASK, &empty, NULL));
+      siglongjmp(escape, 1);
+    }
+    sigset_t now;
+    CHECK(!sigprocmask(SIG_BLOCK, NULL, &now) && sigismember(&now, SIGUSR2));
+    pid_t p = child("kill -PIPE $$; exit 0", -1);
+    CHECK(p > 0 && !reap(p, &status));
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    return pass();
+  }
+  if (!strcmp(mode, "abort-caught")) {
+    /* musl's sigaction blocks every signal around a SIGABRT installation with
+       an unsigned long[1] as the old-set buffer: the kernel writes sigsetsize
+       bytes there, and so must the runtime. Then the handler runs, and the
+       default action ends the process on the second raise. */
+    CHECK(!install(SIGABRT, counting, 0));
+    CHECK(!raise(SIGABRT));
+    CHECK(count[SIGABRT] == 1);
+    CHECK(signal(SIGABRT, SIG_DFL) != SIG_ERR);
     return pass();
   }
   if (!strcmp(mode, "ign-inherit")) {

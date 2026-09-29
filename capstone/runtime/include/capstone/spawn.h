@@ -24,6 +24,8 @@
 #define CAPSTONE_SPAWN_SETPGROUP 2u     /* setpgid(0, pgroup) in the child */
 #define CAPSTONE_SPAWN_SETSID 4u
 #define CAPSTONE_SPAWN_EXEC 8u          /* replace the caller: execve, not spawn */
+#define CAPSTONE_SPAWN_SETSIGDEF 16u    /* POSIX_SPAWN_SETSIGDEF: sigdefault names the signals reset to default */
+#define CAPSTONE_SPAWN_SETSIGMASK 32u   /* POSIX_SPAWN_SETSIGMASK: sigmask is the child's mask */
 
 /* file action commands, musl's numbering */
 #define CAPSTONE_SPAWN_CLOSE 1u
@@ -36,6 +38,7 @@ struct capstone_spawn_header {
   unsigned char magic[8];   /* "CPSPAWN1" */
   uint32_t version, bytes, flags, pgroup;
   uint32_t path, argc, envc, actions;  /* path: string offset; counts */
+  uint64_t sigdefault, sigmask;        /* bit n-1 = signal n; see the SETSIG flags */
   /* then: uint32_t argv[argc], envp[envc]; struct capstone_spawn_action[actions]; strings */
 };
 
@@ -45,6 +48,7 @@ struct capstone_spawn_action {
 
 struct capstone_spawn_view {
   uint32_t flags, pgroup, argc, envc, actions;
+  uint64_t sigdefault, sigmask;
   const char *path;
   const struct capstone_spawn_action *action; /* actions entries */
 };
@@ -54,6 +58,8 @@ int capstone_spawn_pack(void *buffer, size_t capacity, uint32_t flags, uint32_t 
                         const char *path, char *const argv[], char *const envp[],
                         const struct capstone_spawn_action *actions, unsigned action_count,
                         const char *const action_paths[], size_t *bytes);
+/* Set the signal attributes of a packed block: the SETSIG flags and their sets. */
+void capstone_spawn_set_signals(void *buffer, uint32_t flags, uint64_t sigdefault, uint64_t sigmask);
 int capstone_spawn_unpack(const void *buffer, size_t bytes, char **argv, size_t argv_slots,
                           char **envp, size_t env_slots, const char **action_paths,
                           size_t action_slots, struct capstone_spawn_view *view);

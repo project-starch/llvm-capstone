@@ -5,6 +5,7 @@
 #define CAPSTONE_LINUX_DELEGATE_SERVICE_H
 
 #include "capstone/delegate.h"
+#include "signals.h"
 #include "spawner.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -40,6 +41,8 @@ struct capstone_delegate_host {
   /* set by exit or exit_group: the process must end with this status */
   int exiting;
   int exit_status;
+  /* signals: the ring, the classes, the masks; initialized by the launcher */
+  struct capstone_signal_state signals;
 };
 
 /* Service one entry in place: validate, run, write result. Never returns an

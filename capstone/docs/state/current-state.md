@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-29 — delegated signals
+
+On `delegation-signals`, synchronous delivery passes the 26-mode
+[signal contract](../../runtime/tests/application/results/20260929-signal-contract.json)
+and 25 native tests. The same launcher passes the application gate, six binfmt
+cases and Perl `t/base` (9 files, 493 assertions). The contract covers
+positive-PID waits, realtime queue capacity and payloads, jumps out of
+handlers, `sigtimedwait` output and inherited signal state. Asynchronous
+delivery into a computing domain remains the later bell; the other named
+deviations are in [the signal plan](../plans/delegation-signals.md).
+
 ## 2026-09-29 — application ports require delegation
 
 The `delegation-ports` branch, stacked on `delegation-spawn`, migrates all

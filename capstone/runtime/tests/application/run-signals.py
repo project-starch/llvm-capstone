@@ -19,12 +19,18 @@ MODES = {
     "nest": ("exit", 0, "PASS"),
     "retry-partial": ("exit", 0, "PASS"),
     "wait-restart": ("exit", 0, "PASS"), "wait-eintr": ("exit", 0, "PASS"),
+    "wait-pid": ("exit", 0, "PASS"),
     "spawn-interrupted": ("exit", 0, "PASS"),
     "resethand-die": ("signal", 10, ""), "resethand-reinstall": ("exit", 0, "PASS"),
     "rt-queue": ("exit", 0, "PASS"),
+    "rt-burst": ("exit", 0, "PASS"),
     "hint": ("exit", 0, "PASS"),
     "altstack": ("exit", 0, "PASS"),
+    "jump-deep": ("exit", 0, "PASS"),
+    "waitinfo": ("exit", 0, "PASS"),
+    "inherit-start": ("exit", 0, "PASS"),
     "ign-inherit": ("exit", 0, "PASS"),
+    "abort-caught": ("exit", 0, "PASS"),
 }
 
 

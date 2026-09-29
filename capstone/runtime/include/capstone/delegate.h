@@ -16,10 +16,11 @@
 #define CAPSTONE_DELEGATE_VERSION 2u
 #define CAPSTONE_DELEGATE_ARGS 6u
 
-/* Fixed-width, little-endian, 88 bytes. `flags` bit i says args[i] is an
+/* Fixed-width, little-endian, 96 bytes. `flags` bit i says args[i] is an
  * offset into the exchange region; the shape table says how many bytes that
  * offset must cover. An optional buffer argument of 0 is NULL, so the libc
- * never places a buffer at offset 0. `pending` is written by the launcher on
+ * never places a buffer at offset 0. The launcher writes `result`, `pending`
+ * (bit n-1 set: a signal n event was published this round) and `status` on
  * every return. */
 struct capstone_delegate_entry {
   uint32_t version;
@@ -29,6 +30,47 @@ struct capstone_delegate_entry {
   uint64_t flags;
   int64_t result;
   uint64_t pending;
+  uint64_t status;
+};
+
+/* Round status. RETRY: the call has no result for the application yet, either
+ * because signals were accepted before it entered the kernel or because Linux
+ * prepared a restart; the libc delivers the published events and issues the
+ * call again from its caller's buffers. Only DONE carries output data. */
+#define CAPSTONE_ROUND_DONE 0u
+#define CAPSTONE_ROUND_RETRY 1u
+
+/* The META region: the entry at offset 0, the signal handover block at
+ * CAPSTONE_SIGNAL_OFFSET. See docs/plans/delegation-signals.md. */
+#define CAPSTONE_DELEGATE_META_BYTES 16384u
+#define CAPSTONE_SIGNAL_OFFSET 4096u
+#define CAPSTONE_SIGNAL_EVENTS 64u
+#define CAPSTONE_SIGNAL_WAIT 1u  /* accepted inside a wait with a temporary mask */
+#define CAPSTONE_SIGNAL_DEFER 2u /* its own signal remains blocked until SIGDONE */
+
+/* One accepted signal. `mask` is the mask the domain handler is based on: the
+ * wait's temporary mask for a WAIT event, otherwise the task's mask at
+ * acceptance. `info` is the kernel's siginfo, RV64 layout, 128 bytes. */
+struct capstone_signal_event {
+  uint64_t seq;
+  uint32_t signo, flags;
+  uint64_t mask;
+  uint64_t generation;
+  unsigned char info[128];
+};
+
+/* Written by the launcher; read by the libc between rounds. `recorded` counts
+ * every accepted event and is written by the trampoline itself, so the libc
+ * can see between rounds that something waits (the hint). `published` counts
+ * the events handed over so far; events[0..count) are those published by the
+ * round that just ended, in acceptance order. */
+struct capstone_signal_block {
+  uint64_t recorded;
+  uint64_t published;
+  uint32_t count, reserved;
+  struct capstone_signal_event events[CAPSTONE_SIGNAL_EVENTS];
+  /* Appended after events so existing images retain the handover offsets. */
+  uint64_t initial_mask, initial_ignored; /* inherited state at launcher startup */
 };
 
 /* How one argument of one syscall is interpreted. */
@@ -81,6 +123,17 @@ enum capstone_delegate_group {
  * the launcher runs the Linux call with the buffer's address. */
 #define CAPSTONE_NR_FCNTL_LOCK UINT64_C(0xC0DE0003)  /* F_GETLK, F_SETLK, F_SETLKW: 32 bytes */
 #define CAPSTONE_NR_IOCTL_BUF UINT64_C(0xC0DE0004)   /* a request with a buffer: 64 bytes */
+/* Signals: the domain keeps its handlers, the task keeps Linux's state.
+ * SIGACTION carries a disposition class instead of a handler pointer, plus
+ * the flags Linux applies itself; SIGDONE acknowledges an event's sequence
+ * number after its handler ran; SIGPOLL publishes accepted events without a
+ * call, the answer to the hint. */
+#define CAPSTONE_NR_SIGACTION UINT64_C(0xC0DE0005) /* signo, class, flags */
+#define CAPSTONE_NR_SIGDONE UINT64_C(0xC0DE0006)   /* seq */
+#define CAPSTONE_NR_SIGPOLL UINT64_C(0xC0DE0007)
+#define CAPSTONE_SIGNAL_DEFAULT 0u
+#define CAPSTONE_SIGNAL_IGNORE 1u
+#define CAPSTONE_SIGNAL_CAUGHT 2u
 
 /* Descriptor flag: the image speaks this ABI. Images without it use the
  * HostCall v0 application runtime; a launcher must accept both. */
@@ -116,8 +169,11 @@ enum {
   CAPSTONE_SYS_futex = 98, CAPSTONE_SYS_set_robust_list = 99,
   CAPSTONE_SYS_nanosleep = 101, CAPSTONE_SYS_clock_gettime = 113,
   CAPSTONE_SYS_clock_nanosleep = 115, CAPSTONE_SYS_sched_yield = 124,
-  CAPSTONE_SYS_kill = 129, CAPSTONE_SYS_rt_sigaction = 134,
-  CAPSTONE_SYS_rt_sigprocmask = 135, CAPSTONE_SYS_rt_sigreturn = 139,
+  CAPSTONE_SYS_kill = 129, CAPSTONE_SYS_tkill = 130, CAPSTONE_SYS_sigaltstack = 132,
+  CAPSTONE_SYS_rt_sigsuspend = 133, CAPSTONE_SYS_rt_sigaction = 134,
+  CAPSTONE_SYS_rt_sigprocmask = 135, CAPSTONE_SYS_rt_sigpending = 136,
+  CAPSTONE_SYS_rt_sigtimedwait = 137, CAPSTONE_SYS_rt_sigreturn = 139,
+  CAPSTONE_SYS_getitimer = 102, CAPSTONE_SYS_setitimer = 103,
   CAPSTONE_SYS_times = 153, CAPSTONE_SYS_uname = 160, CAPSTONE_SYS_umask = 166,
   CAPSTONE_SYS_gettimeofday = 169, CAPSTONE_SYS_getpid = 172,
   CAPSTONE_SYS_getppid = 173, CAPSTONE_SYS_getuid = 174,

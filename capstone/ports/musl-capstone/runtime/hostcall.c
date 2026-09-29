@@ -18,6 +18,7 @@
  * legal write() result, so the chunk loop returns the byte count actually
  * serviced rather than looping until everything is placed.
  */
+#include "capstone/launch.h"
 #include <errno.h>
 #include <sys/syscall.h>
 /* syscall_arg_t and the __capstone_hostcall prototype both live in the arch
@@ -1432,6 +1433,12 @@ void domain_main(unsigned *res, unsigned func) {
       __builtin_capstone_cap_get_end(hc_startup) -
       __builtin_capstone_cap_get_cursor(hc_startup) : 0;
   int startup_error = __capstone_application_prepare(hc_startup, startup_bytes);
+  if (!startup_error) {
+    extern const struct capstone_launch_task *__capstone_launch_task(void);
+    extern void __capstone_set_tid(int);
+    const struct capstone_launch_task *task = __capstone_launch_task();
+    if (task && task->pid) __capstone_set_tid((int)task->pid);
+  }
   if (startup_error)
     _Exit(125);
 #endif

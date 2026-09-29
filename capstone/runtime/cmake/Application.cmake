@@ -47,7 +47,7 @@ function(capstone_configure_application target)
     target_compile_definitions(capstone-application-core PRIVATE
       _XOPEN_SOURCE=700 CAPSTONE_APPLICATION_RUNTIME=1 CAPSTONE_DOMAIN_FAULT_RECOVERY=1 CAPSTONE_PROGRAM_REGIONS=1)
     target_sources(capstone-application-core PRIVATE
-        "${musl}/delegate.c" "${musl}/posix_spawn_delegate.c"
+        "${musl}/delegate.c" "${musl}/posix_spawn_delegate.c" "${musl}/signals.c" "${musl}/altstack.S"
         "${capstone}/runtime/common/delegate.c" "${capstone}/runtime/common/spawn.c")
     set_source_files_properties("${musl}/posix_spawn_delegate.c" PROPERTIES
         INCLUDE_DIRECTORIES "${PORT_MUSL_ROOT}/src/process")

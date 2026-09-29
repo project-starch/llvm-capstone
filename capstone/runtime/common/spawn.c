@@ -5,7 +5,7 @@
 #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
 #error "Capstone spawn v1 requires little-endian scalar encoding"
 #endif
-_Static_assert(sizeof(struct capstone_spawn_header) == 40, "spawn header ABI");
+_Static_assert(sizeof(struct capstone_spawn_header) == 56, "spawn header ABI");
 _Static_assert(sizeof(struct capstone_spawn_action) == 24, "spawn action ABI");
 static const unsigned char magic[8] = {'C', 'P', 'S', 'P', 'A', 'W', 'N', '1'};
 
@@ -29,7 +29,7 @@ int capstone_spawn_pack(void *buffer, size_t capacity, uint32_t flags, uint32_t 
   size_t used;
   int error;
   if (!buffer || !path || !argv || !bytes || action_count > CAPSTONE_SPAWN_ACTIONS ||
-      (action_count && !actions) || (flags & ~15u))
+      (action_count && !actions) || (flags & ~63u))
     return EINVAL;
   if (capacity > CAPSTONE_SPAWN_BYTES)
     capacity = CAPSTONE_SPAWN_BYTES;
@@ -102,7 +102,7 @@ int capstone_spawn_unpack(const void *buffer, size_t bytes, char **argv, size_t 
     return EINVAL;
   memcpy(&h, buffer, sizeof h);
   if (memcmp(h.magic, magic, sizeof magic) || h.version != CAPSTONE_SPAWN_VERSION ||
-      (h.flags & ~15u) || h.argc > CAPSTONE_SPAWN_STRINGS ||
+      (h.flags & ~63u) || h.argc > CAPSTONE_SPAWN_STRINGS ||
       h.envc > CAPSTONE_SPAWN_STRINGS - h.argc || h.actions > CAPSTONE_SPAWN_ACTIONS ||
       h.argc >= argv_slots || h.envc >= env_slots || h.actions > action_slots ||
       (h.actions && !action_paths) ||
@@ -149,8 +149,19 @@ int capstone_spawn_unpack(const void *buffer, size_t bytes, char **argv, size_t 
   }
   view->flags = h.flags;
   view->pgroup = h.pgroup;
+  view->sigdefault = h.sigdefault;
+  view->sigmask = h.sigmask;
   view->argc = h.argc;
   view->envc = h.envc;
   view->actions = h.actions;
   return 0;
+}
+
+void capstone_spawn_set_signals(void *buffer, uint32_t flags, uint64_t sigdefault, uint64_t sigmask) {
+  struct capstone_spawn_header h;
+  memcpy(&h, buffer, sizeof h);
+  h.flags |= flags & (CAPSTONE_SPAWN_SETSIGDEF | CAPSTONE_SPAWN_SETSIGMASK);
+  h.sigdefault = sigdefault;
+  h.sigmask = sigmask;
+  memcpy(buffer, &h, sizeof h);
 }

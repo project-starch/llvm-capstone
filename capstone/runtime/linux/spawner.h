@@ -29,7 +29,7 @@ void capstone_spawner_stop(struct capstone_spawner *s);
  * exec has already been reaped. */
 long capstone_spawner_spawn(struct capstone_spawner *s, const void *block, size_t bytes,
                             const int *fds, const int *numbers, uint64_t cloexec,
-                            unsigned count);
+                            unsigned count, uint64_t ignored, uint64_t logical_mask);
 
 /* The launcher's open descriptors except `skip`, with their close-on-exec
  * flags in `cloexec`. Returns the count or negative errno (including EMFILE on overflow);

@@ -14,22 +14,19 @@ rounds; their measurements are in `runtime/applications.md` and the
 | `delegation-no-smode-swap` | monitor invoke without the 16 CPMP + 9 CSR swaps | 527 |
 | `delegation-qemu-switch-cost` | QEMU: flush only when translation state changes; quantum timer | 262 |
 | `delegation-libc-rounds` | identity and clocks from the launch record; no CLOEXEC fcntl; 8 KiB stdio; 32 KiB getdents | rounds 43 -> 26 for `perl -e` |
+| `delegation-launch-cost` | lazy image hash, file-backed copy only, one SSH connection per VM | Perl launch 12.0 -> 6.9 s in the guest |
+| `delegation-signals` | synchronous signal delivery, Linux keeps the state (`docs/plans/delegation-signals.md`) | 21/21 contract modes; `perl -e` 30 rounds; `t/base` 22 s |
 
 Those are QEMU wall-time figures; the first two rows also hold on hardware, the
 third is emulator-only. With a round at ~26 us and `perl -e` at 26 rounds, the
 round is no longer what a program waits for. What is left, in this order:
 
-- **Launch cost** (`delegation-launch-cost`): a Perl launch is ~4 s in the
-  guest before the first instruction of the program; the launcher hashes the
-  whole image byte by byte on every start, memsets and copies the whole memsz
-  including `.bss`, and the host runner opens one SSH session per process.
-  Measure the split first, then hash only for a fault record, copy only filesz,
-  reuse the SSH connection.
-- **Signals**, step 6 before step 5: the wire block already carries `pending`.
-  Synchronous delivery unlocks `popen`, `SIGCHLD`, `SIGPIPE`, Ctrl-C, timers,
-  Perl `%SIG` and CPython's `signal` module. Same branch: the ~25 shape rows
-  that are integers and buffers only (`pselect6`, `statx`, `statfs`,
-  `getrusage`, `getrlimit`, `truncate`, `fallocate`, `fchown`, `linkat`, ...).
+- Done above the table: launch cost and signals (step 6 before step 5), the
+  latter with its own plan and contract.
+- **Cheap shape rows**: the ~25 rows that are integers and buffers only
+  (`pselect6`, `statx`, `statfs`, `getrusage`, `getrlimit`, `truncate`,
+  `fallocate`, `fchown`, `linkat`, ...), plus `timer_create` with an opaque
+  `sigevent` token now that delivery exists.
 - **Memory**, step 5: the region grant at the resume label; `mmap` of files,
   `mprotect`.
 - **Threads**: the sibling-context primitive in the monitor plus capability TLS
