@@ -1,6 +1,6 @@
 /* What a case in this corpus needs, so a case.c is a complete translation unit.
  *
- * The contract is the one in ../../cpython/pymalloc-repros/SCHEMA.md; this
+ * The contract is the one in ../../SCHEMA.md; this
  * header is its PostgreSQL seam. shared/driver.c supplies the entry point, the
  * root context and the labelled probes; a case supplies only its sequence,
  * inside PG_CASE(NN).

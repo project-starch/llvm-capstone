@@ -1,0 +1,51 @@
+# R-43 second fix (replay) + R-45, capstone-ariane 8f6a0af98, synthesised by the synth lane 2026-09-29, authorised by the
+# lead. SEALED: exit 0, 2h08m end to end, PROVENANCE 8f6a0af98dd9. Graded against the RTL lane's pre-registration, which
+# was sent before any number existed (00-README.md, "synthesis, second fix"). Reference build: R-42 6cbdaeeb4 (resident).
+
+== VERDICT: every binding prediction met; one calibration miss (own-cell LUT band), adjudicated below. FLASH CANDIDATE. ==
+
+loops (binding)                membership SAME as R-42; per-loop source files SAME; check_timing 1 loop, TIMING-23 on
+                               lsu_i/state_q[3]_i_18 (R-42: _i_19 -- a synthesis LUT index rename, the hazard named in
+                               advance). Refuted build: DIFFERENT (lost ldbuf_valid_q, rd_ack_q, rd_cap_q).   AS PREDICTED
+LUTLP-1 (drc_routed.rpt)       0; CFGBVS-1 control present; bitgen completed; 241,063 nets routed, 0 errors.   AS PREDICTED
+ORDER (rvc_ before load unit)  0 of 500 (R-42 0; refuted build 500); no rvc_ cell on any worst-500 path.        AS PREDICTED
+commit_stage_i before frontend 0 of 500; both names on 0 worst paths, both present in failing-endpoints
+                               (i_frontend 294 lines, commit_stage_i 56), so the zeros are informative.        AS PREDICTED
+probe before arbiter           0 of 500, no A-side hit (R-42 0; refuted build 500; B alone saturates 500/500). AS PREDICTED
+replay_commit                  survives (1 net, LUT6-driven, 67 loads; R-42 has 0); on 0 of 500 worst paths.   AS PREDICTED
+commit_pc_metadata             does NOT survive BY NAME (0 nets, either port name): absorbed into its driver as a pure
+                               pass-through of commit_instr_i[0].pc_metadata. The LOGIC is present: the fan-in of
+                               i_frontend/npc_metadata_q_reg[*]/D has 512 scoreboard mem_q[..][pc_metadata] flops
+                               plus mem_q[..][ex][cause] and commit_pointer_q (R-42: 0 pc_metadata flops there).
+                               The name-count is uninformative; the structural stand-in (i_frontend 0/500) holds.
+WNS clk_out1                   -9.595 (R-42 -10.615; delta +1.020, inside the 3.74 ns same-RTL null: "no timing cost
+                               detected", not an improvement). TNS -425,638.8; failing 93,381/178,982 = 52.17%
+                               (R-42 55.23%). WHS +0.047.                                                     AS PREDICTED
+worst path                     the same family as R-42 (csr_regfile cpmp_q -> issue_read_operands fu_data_q), 110 levels;
+                               endpoints 473 scoreboard mem_q + 27 fu_data_q (R-42 471 + 27); NO tracer endpoints
+                               (refuted build: 434). Route/hop 0.371 worst / 0.432 mean (R-42 0.394 / 0.472).
+routing                        253,178 -> 76,346 -> 22,535 -> 6,625 -> 1,011 -> 162 -> 100 -> 45 -> 10 -> 0 in ~26 min,
+                               no second-pass excursion (R-42 37 min with one; refuted build 4h52m). synth_design 44 min.
+area, lsu_i OWN cells          FF +150 (900 -> 1,050): IN BAND +140..+160, and exactly the 150 declared bits (ok 1+30,
+                               dead 1+30+1, pend 1+30, sent 1, wait 20, den 1+4+30): the refusal record is NOT pruned;
+                               0 of 790 lsu_i rvc_* flops unloaded.                                            AS PREDICTED
+                               LUT +154 (1,025 -> 1,179): BELOW the +400..+900 band.                              MISSED
+area, other                    lsu_i total LUT +121 / FF +158; top LUT -209 / FF +124; i_load_unit identical (530/269);
+                               rev_node +55 / +21; commit_stage 6 / 37 unchanged (replay_commit is combinational);
+                               i_frontend LUT -89 / FF +0; csr_buffer_i FF 83 -> 35 is timing-driven replication
+                               (70 vs 22 csr_address replicas over the same 12+1 base flops), not lost logic.
+bitstream                      sha256 61443441c5c084913de91409738fa550459fc57aab79a2062044f36af5386545, 11,443,722 B,
+                               ~/scratch/capstone-r43v2/corev_apu/fpga/work-fpga/ariane_xilinx.bit on the synth host;
+                               identical copy in ~/scratch/capstone-artifacts-r43v2/synth-8f6a0af98-exit0.tar.gz.
+                               Not staged, not renamed: the board lane names it caplifive_r43_8f6a0af.bit on pull.
+                               Flashing is the lead's call.
+memory                         synthesis peak 22.03 GB, collector 33.28 GB.
+
+== THE MISS, ADJUDICATED (RTL lane) ==
+The band's lower edge encoded the hypothesis "below +400 means a compare or the timeout counter was optimised away,
+i.e. a verdict path is dead". The netlist refutes that hypothesis directly: rvc_ok_match (1 load), rvc_dead_match (2),
+rvc_timeout (24), rvc_resolve (8), the set/kill nets and rvc_lu_hit all exist with loads, and the 20-bit wait counter is
+whole; independently, every verdict path fires in simulation (ALLOW: arms 2/2s/8/9a; DEAD: 5/6/6b/9b; timeout: the mto
+build). So the reading is the other branch of the pre-registration's own text: most of the refuted build's +802 was
+restructuring around the removed stall gate, and the band was calibrated on that number. A missed prediction about
+this lane's model of Vivado, not about the design; recorded as such.

@@ -1,0 +1,17 @@
+{
+  "program": "perl",
+  "role": "platform-build",
+  "title": "The same Perl release, cross-built for CheriBSD purecap",
+  "upstream": {
+    "version": "5.36.3",
+    "pin_source": {
+      "file": "capstone/ports/perl/cheribsd/build.sh",
+      "grep": "perl-5.36.3.tar.gz"
+    }
+  },
+  "targets": [
+    "cheribsd-purecap"
+  ],
+  "workload": "the 17-section smoke, under both libc revocation switches",
+  "note": "No inner SV lifetime adapter yet, which is why Perl is not a measured application in the reuse study."
+}

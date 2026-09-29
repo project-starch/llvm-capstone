@@ -1,5 +1,5 @@
 /* row3 fork B2 -- the LITERAL matched pair for
- * cve-repros/row3_diesel_colname_cached.
+ * capi-repros/row3_diesel_colname_cached.
  *
  * The SAME row3 program as before.c, real SQLite C API, one Capstone domain:
  *

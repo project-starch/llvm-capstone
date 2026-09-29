@@ -7,7 +7,7 @@ unmodified but for the capability-ABI and Sublet patches the port applies. The
 consumers are reduced, the allocator is not.
 
 The layout is the contract in
-[`../../cpython/pymalloc-repros/SCHEMA.md`](../../cpython/pymalloc-repros/SCHEMA.md):
+[`../../SCHEMA.md`](../../SCHEMA.md):
 one directory per case, `NN_<upstream-fix>_<slug>/`, holding a `case.c` that is
 a complete translation unit, a `case.json` of machine-readable claims, and a
 `PROVENANCE.md`. Case numbers are dense from zero. One program per case,

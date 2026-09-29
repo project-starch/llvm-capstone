@@ -30,10 +30,14 @@
  *
  * First consumer is PostgreSQL's single-user backend: one MAP_SHARED|MAP_ANONYMOUS
  * mapping for its shared memory and one small System V segment as its
- * data-directory interlock (capstone/ports/postgres/single-user/).
+ * data-directory interlock (capstone/ports/postgres/app/).
  *
  * __mmap and __munmap are defined too: musl's own objects call those names, and
- * a reference to one would otherwise pull musl's mmap.o in beside this file.
+ * a reference to one would otherwise pull musl's mmap.o in beside this file. So is
+ * __vm_wait, mmap.o's third symbol: musl's pthread_create.c, pthread_mutex_destroy.c
+ * and pthread_barrier_destroy.c call it, so any program using pthreads (GLib, in
+ * the tshark port) pulled mmap.o in and failed on a duplicate __mmap. Weak and empty,
+ * exactly as mmap.o's own; vmlock.c's strong definition wins where it is linked.
  */
 #define _GNU_SOURCE /* MAP_ANONYMOUS, MAP_HUGETLB */
 #include <errno.h>
@@ -45,6 +49,9 @@
 #include <sys/mman.h>
 #include <sys/shm.h>
 
+/* mmap.o's no-op, for the pthread objects that call it (see the note above). */
+__attribute__((__weak__)) void __vm_wait(void) { }
+
 #ifndef MAP_HUGETLB
 #define MAP_HUGETLB 0x40000
 #endif
@@ -52,12 +59,6 @@
 #define L0_PAGE 4096UL
 #define L0_MAX_MAPS 32
 #define L0_MAX_SEGS 16
-
-/* Match mmap.o's weak fallback too: pthread_mutex_destroy references this
- * hook even in a single-threaded program. Otherwise the archive extracts
- * musl's integer-returning mmap.o alongside our capability-safe override.
- * musl's strong vmlock implementation may still replace this definition. */
-__attribute__((__weak__)) void __vm_wait(void) {}
 
 struct l0_map {
 	void *base;   /* what the caller holds: page-aligned */
