@@ -1039,6 +1039,59 @@ static int ra_gp(void)
   return 0;
 }
 
+/* ---- P2 (review 2026-09-30): a first, still-valid offer is kept; a second is
+ * dropped and its ticket is STALE. Once the first is revoked the next offer
+ * replaces it. Two minted seals; offers are placed with __capstone_context_offer
+ * and moved by the monitor at the end of the offering context's next delegated
+ * round, so a sched_yield follows each offer. ---- */
+static struct capstone_context ctx_b;
+
+static int offer_keep(void)
+{
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_second, 0));
+  CHECK(!capstone_context_mint(&ctx_b, AREA_BYTES, child_second, (void *)(uintptr_t)1));
+  CHECK(!__capstone_context_offer(&ctx.seal, 100));
+  sched_yield();
+  CHECK(!__capstone_context_offer(&ctx_b.seal, 200));
+  sched_yield();
+  /* The first offer stays: its ticket adopts, the second is STALE. */
+  CHECK(__capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, 200, CAPSTONE_CONTEXT_REGISTER, 0)
+        == -ESTALE);
+  long id = __capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, 100, CAPSTONE_CONTEXT_REGISTER, 0);
+  printf("context-probe offer-keep: adopt 200 ESTALE, adopt 100 -> %ld\n", id);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*ctx.value == 1000);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
+static int offer_replace(void)
+{
+  struct capstone_context_event ev;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_second, 0));
+  CHECK(!capstone_context_mint(&ctx_b, AREA_BYTES, child_second, (void *)(uintptr_t)1));
+  CHECK(!__capstone_context_offer(&ctx.seal, 100));
+  sched_yield();
+  /* The first offer is revoked before the second arrives. */
+  capstone_context_revoke(&ctx);
+  CHECK(!__capstone_context_offer(&ctx_b.seal, 200));
+  sched_yield();
+  /* The revoked first offer is gone; the second replaces it. */
+  CHECK(__capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, 100, CAPSTONE_CONTEXT_REGISTER, 0)
+        == -ESTALE);
+  long id = __capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, 200, CAPSTONE_CONTEXT_REGISTER, 0);
+  printf("context-probe offer-replace: adopt 100 ESTALE, adopt 200 -> %ld\n", id);
+  CHECK(id > 0);
+  CHECK(!step_to_end((unsigned long)id, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED);
+  CHECK(*ctx_b.value == 1001);
+  CHECK(capstone_context_forget((unsigned long)id) == 0);
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2) {
@@ -1076,6 +1129,8 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "ra-slot16")) rc = ra_slot16();
   else if (!strcmp(mode, "ra-slot32")) rc = ra_slot32();
   else if (!strcmp(mode, "ra-gp")) rc = ra_gp();
+  else if (!strcmp(mode, "offer-keep")) rc = offer_keep();
+  else if (!strcmp(mode, "offer-replace")) rc = offer_replace();
   else if (!strcmp(mode, "entry-audit-control")) rc = entry_audit_control();
   else if (!strcmp(mode, "exhaust")) rc = exhaust();
   else if (!strcmp(mode, "exhaust-ended")) rc = exhaust_ended();

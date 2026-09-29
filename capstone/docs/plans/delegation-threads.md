@@ -612,6 +612,11 @@ survive slot reassignment into another application's descriptor.
   when ticket and slot match. It answers `STALE` for an old ticket, `EMPTY` for no offer, and
   `FULL` when no context slot is free, leaving the offer in place. After `FULL`, the domain revokes
   the thread area, and the monitor clears the now invalid offer at the next offer or call.
+  - **One offer at a time (P2, decided 2026-09-30).** A first, still-valid offer is kept: while one
+    is outstanding a second offer of the same context is dropped and its ticket is `STALE`, so the
+    `FULL` the domain saw stays repeatable. Once the first offer's seal is revoked (it reads
+    untagged) the next offer replaces it. `offer-keep` and `offer-replace` test the two cases; the
+    pre-fix monitor overwrote the first offer and fails `offer-keep`.
 - **FORGET by id.** On capstone-qemu a revoked seal reloads untagged (Q-11). The monitor therefore
   cannot rely on the tagged-invalid case for its own copy: its FORGET works on `(k, g)`, and the
   supervisor slot is removed by the collector.

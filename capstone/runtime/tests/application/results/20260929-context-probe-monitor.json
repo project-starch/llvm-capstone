@@ -7,8 +7,8 @@
       "source": "capstone-qemu qemu/context-slots-on-pin a53ac18e3d (the context-slots commits on the pinned ac2837aa0e; tree identical to qemu/context-slots d220ab6ee9): DEAD status, privilege refusal, A7's test-only node instruments (off unless CAPSTONE_TEST_NODE_QUERY), and the sealed-return access window (P0/A2). Pre-P0 binary 9b6eac4b is 3589d6af6f"
     },
     "firmware": {
-      "sha256": "468808c7606b606449e05547c10fd1d0688fc2ba0feb0edf071a7d03f43b166e",
-      "monitor": "capstone-sbi monitor/context-slots 7e1c34f, in caplifive-opensbi wrapper/context-slots a4bdd1b (buildroot components/opensbi at a6c0174); build recipe reproduces the base firmware's disassembly exactly (0 of 49168 lines differ) from the unchanged monitor"
+      "sha256": "8ceee8ebebb0d7ec505461b6d27d9f7471f3f5d0c78030fc1d6762436eb0bb26",
+      "monitor": "capstone-sbi monitor/context-slots c0dbd04, in caplifive-opensbi wrapper/context-slots 702c38f (buildroot components/opensbi at 515a3c6); build recipe reproduces the base firmware's disassembly exactly (0 of 49168 lines differ) from the unchanged monitor"
     },
     "module": {
       "sha256": "6ab096ce9bf8e480a0c2d04d190d1f489b41ee754b5e1b0679e6ac44d265c7bc",
@@ -23,7 +23,7 @@
     "vm": "one hart, 8 GiB, CMA 1024 MiB, process cache 384 MiB, CAPSTONE_GP_NONLIN=1, CAPSTONE_REV_NODES=65536"
   },
   "images": {
-    "context-probe.dom": "fd448577aad1369c93be802530a87bb9e240724f13776ef86f48236da8c7ece7",
+    "context-probe.dom": "843ad0cd7c4d607f6d4f45e5f80381bfc336a06f1cd239589f505b8dcf6c3726",
     "signal-contract.dom": "92f77fdf1e22db28b2c2cf03fee336d2b8006ab7f2f8df6b2a1c24154037299a",
     "application-contract.dom": "9a19faf13c1d42ee43be1b127cb5a79b6f700886dd43ee288ba5675a36c7c329",
     "perl.dom": "4c2e7a0972d6613454c2bd516e7692ad84053e34239d2c2a7bfde83c61c74602",
@@ -61,13 +61,15 @@
       "ra-slot16": "PASS (A2 negative, P0): offset 16 (ctvec) through ra faults with cause 5 at the ldc; before the fix it did not",
       "ra-slot32": "PASS (A2 negative, P0): offset 32 (cscratch, a monitor capability in a supervised context) through ra faults with cause 5 at the ldc; before the fix it returned an RWX capability on monitor memory and a scalar load through it succeeded (the refutation of A2, review 2026-09-30)",
       "ra-gp": "PASS (A2 control, P0): reading offset 48 (the first general-purpose slot, inside the sealed-return window) through ra does not fault; the context runs to 42",
+      "offer-keep": "PASS (P2): a first offer (ticket 100) is kept while a second (ticket 200) is offered; ADOPT 200 gets ESTALE and ADOPT 100 adopts the first. On the pre-P2 monitor (7e1c34f, firmware 468808c7) the second offer overwrote the first and ADOPT 200 succeeded, so this mode fails there",
+      "offer-replace": "PASS (P2): the first offer (ticket 100) is revoked before the second (ticket 200) is offered; the revoked offer is replaced, ADOPT 100 gets ESTALE and ADOPT 200 adopts the second",
       "exhaust": "PASS (A10): 128 create/exit/revoke cycles in one application without FORGET, the live context stepped once per cycle and then to completion with its value; the dead registrations used 6 slots (mask 0xfc), highest generation 23. CONTROL on the firmware and module before A10 (825f2cd1, d47f7b44, image 92a5cb35, the same source for this mode): cycle 6 gets ENOSPC",
       "exhaust-ended": "PASS (A10): 64 contexts in fresh 16 KiB areas, half faulting at probe_csr_insn and half refused, never forgotten or revoked; every registration succeeds. CONTROL: cycle 7, the eighth registration, gets ENOSPC on 8a2d5dc (firmware 73047f7c, which retires only revoked seals) and on the firmware before A10 (image 92a5cb35)",
       "hold": "PASS (A10, across applications): five applications at once, each with a live context and six dead registrations it never forgets, 40 slot claims against 32 slots, all held together (guest monotonic 120726 to 140580 ms); every one passes and its live context still returns 42, so another application's dead registrations were retired, by an adoption or by a launch (which of the two is not recorded). CONTROL on the firmware and module before A10 (image 92a5cb35): holders 1 and 3 get ENOSPC at dead registration 5, their seventh adoption",
       "foreign": "PASS (A13, foreign owner): a victim application registers context 0x2100000001 and waits; a second application sends STEP and FORGET for it and for the victim's first context 0x1c00000000: STEP -1 (EPERM) and FORGET -116 (ESTALE) each time; the victim then steps its context to EXITED and forgets it with 0, so no foreign request acted"
     },
-    "passed": 34,
-    "total": 34
+    "passed": 36,
+    "total": 36
   },
   "regression": {
     "signal_contract": "26/26 PASS",
@@ -87,7 +89,8 @@
     "the first full run on 658063f failed hold on the host side: five concurrent capstone-vm runs each connect to QEMU's QMP socket, whose listener has a backlog of one, and a timed connect to a full backlog fails at once with EAGAIN; capstone_vm now retries within its timeout (unit test fails without the retry), and the run was repeated",
     "A2 retracted 2026-09-30: an independent review loaded the caller's saved state through the return capability ra, monitor capabilities included, on the platform of this record. capstone-qemu does not enforce the spec's access rule for synchronous sealed-return capabilities; entry-audit never looked at what ra reaches",
     "A2 reinstated 2026-09-30 after the P0 fix: capstone-qemu a53ac18e3d enforces the spec's sealed-return access window, and the ra-slot0/16/32 modes (fault) with ra-gp (no fault) are its controls, the pre-fix binary 9b6eac4b being the positive control",
-    "P1 (review 2026-09-30): a THREAD-mode context's Linux thread blocked signals only after it started; the launcher's signal trampoline has one producer, so a caught signal in that window could race the ring. The launcher now blocks every signal around pthread_create so the child starts blocked (exec.c). Code-level fix; the deterministic adversarial probe is Probe B's B8 (signals during a stepping context), domain phase. Validated by the full regression on the new launcher"
+    "P1 (review 2026-09-30): a THREAD-mode context's Linux thread blocked signals only after it started; the launcher's signal trampoline has one producer, so a caught signal in that window could race the ring. The launcher now blocks every signal around pthread_create so the child starts blocked (exec.c). Code-level fix; the deterministic adversarial probe is Probe B's B8 (signals during a stepping context), domain phase. Validated by the full regression on the new launcher",
+    "P2 (review 2026-09-30, decided by the user): loan_end kept a first still-valid offer and dropped a second (offer_valid), so a FULL stays repeatable; a revoked offer is replaced on the next call. offer-keep and offer-replace test both, with the pre-P2 monitor failing offer-keep"
   ],
   "generations": {
     "case": "A9, in boots of their own with a test firmware whose slots start at generation 0x7ffffff9 (the monitor built with -DCAPSTONE_TEST_GEN_PRESET=0x7ffffff9, applied at the first assignment); run-context.py --only gen-exhaust gen-launch",
