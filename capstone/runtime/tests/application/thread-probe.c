@@ -12,6 +12,7 @@
  * Every mode prints "thread-probe <mode>: PASS" and exits 0, or fails the
  * CHECK naming the broken property. exit-child exits 7 from the child, and
  * fault-child must end in a domain fault. */
+#define _GNU_SOURCE   /* syscall(), for futex as musl issues it */
 #include <errno.h>
 #include <fcntl.h>
 #include <sched.h>
@@ -22,6 +23,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/syscall.h>
 #include <capstone/capability.h>
 #include <capstone/context.h>
 #include <capstone/delegate.h>
@@ -36,6 +38,24 @@
 #define AREA_BYTES (128 * 1024)
 
 long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c);
+uint64_t __capstone_park_generation(volatile int *word);
+extern void (*__capstone_futex_test_gap)(void);
+
+/* futex as musl issues it (FUTEX_PRIVATE_FLAG set). */
+#define F_WAIT 0
+#define F_WAKE 1
+#define F_REQUEUE 3
+#define F_WAKE_OP 5
+#define F_PRIVATE 128
+static long fwait(volatile int *w, int val, const struct timespec *to)
+{
+  return syscall(SYS_futex, w, F_WAIT | F_PRIVATE, val, to);
+}
+static long fwake(volatile int *w, int n) { return syscall(SYS_futex, w, F_WAKE | F_PRIVATE, n); }
+static long frequeue(volatile int *a, int nwake, long nmove, volatile int *b)
+{
+  return syscall(SYS_futex, a, F_REQUEUE | F_PRIVATE, nwake, nmove, b);
+}
 
 static const char *mode;
 
@@ -513,6 +533,274 @@ static int print_mask(void)
   return 0;
 }
 
+/* ---- T2: parking through the launcher (B6, B12 in the domain) ---- */
+
+/* The value check, a timeout that keeps its budget, a WAKE of nobody, and an
+   operation that is not served. */
+static int futex_basic(void)
+{
+  static volatile int w = 5;
+  CHECK(fwait(&w, 4, 0) == -1 && errno == EAGAIN);
+  struct timespec to = {0, 50 * 1000000L};
+  long t0 = monotonic_ms();
+  CHECK(fwait(&w, 5, &to) == -1 && errno == ETIMEDOUT);
+  long waited = monotonic_ms() - t0;
+  printf("thread-probe futex-basic: timed out after %ld ms of 50\n", waited);
+  CHECK(waited >= 50 && waited < 5000);
+  CHECK(fwake(&w, 1) == 0);
+  CHECK(syscall(SYS_futex, &w, F_WAKE_OP | F_PRIVATE, 1, 0, &w, 0) == -1 && errno == ENOSYS);
+  /* Linux's argument checks: the realtime clock flag outside WAIT_BITSET,
+     a misaligned word, negative REQUEUE counts */
+  CHECK(syscall(SYS_futex, &w, F_WAKE | F_PRIVATE | 256, 1) == -1 && errno == ENOSYS);
+  static volatile int pair[2];
+  CHECK(syscall(SYS_futex, (volatile char *)pair + 1, F_WAKE | F_PRIVATE, 1) == -1 &&
+        errno == EINVAL);
+  CHECK(frequeue(&w, -1, 1, &w) == -1 && errno == EINVAL);
+  CHECK(frequeue(&w, 0, -1, &w) == -1 && errno == EINVAL);
+  return 0;
+}
+
+/* A waiter parked in another context is selected by WAKE (1, not 0: it was
+   queued) and sees the value that was stored before the wake. */
+static volatile int fword, fready;
+static volatile long fresult, fseen;
+static unsigned long futex_waiter(void *arg)
+{
+  (void)arg;
+  fready = 1;
+  fresult = fwait(&fword, 0, 0);
+  fseen = fword;
+  return 6;
+}
+
+static int futex_wake(void)
+{
+  struct capstone_context c;
+  CHECK(start_thread(&c, futex_waiter, 0) > 0);
+  long t0 = monotonic_ms();
+  while (!fready && monotonic_ms() - t0 < 20000)
+    sched_yield();
+  spin_ms(50);
+  fword = 1;
+  CHECK(fwake(&fword, 1) == 1);
+  CHECK(wait_done(&c, 20000) && *c.value == 6);
+  CHECK(fresult == 0 && fseen == 1);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+/* REQUEUE as musl's condition variables issue it: no wake, one moved. The
+   moved waiter answers a WAKE on the destination, the other one on the
+   source; nobody is left. */
+static volatile int qa, qb, qready[2];
+static volatile long qres[2];
+static unsigned long queue_waiter(void *arg)
+{
+  int i = (int)(uintptr_t)arg;
+  qready[i] = 1;
+  qres[i] = fwait(&qa, 0, 0);
+  return 10 + (unsigned long)i;
+}
+
+static int futex_requeue(void)
+{
+  struct capstone_context c[2];
+  for (int i = 0; i < 2; ++i)
+    CHECK(start_thread(&c[i], queue_waiter, (void *)(uintptr_t)i) > 0);
+  long t0 = monotonic_ms();
+  while (!(qready[0] && qready[1]) && monotonic_ms() - t0 < 20000)
+    sched_yield();
+  spin_ms(100);
+  CHECK(frequeue(&qa, 0, 1, &qb) == 1);
+  CHECK(fwake(&qa, 1) == 1);
+  CHECK(fwake(&qb, 1) == 1);
+  for (int i = 0; i < 2; ++i) {
+    CHECK(wait_done(&c[i], 20000) && *c[i].value == 10 + (unsigned long)i);
+    CHECK(qres[i] == 0);
+    capstone_context_revoke(&c[i]);
+  }
+  CHECK(fwake(&qa, 1) == 0 && fwake(&qb, 1) == 0);
+  return 0;
+}
+
+/* B6 and B12: the window between the waiter's compare and its WAIT request.
+   The waiter (a further context) compares the lock word (2, held), then
+   stops there for four quanta (the runtime's test gap); meanwhile the first
+   context releases the word and WAKEs (B6) or REQUEUEs (B12) with nobody
+   queued. Because the waiter read the bucket's generation before its
+   compare, its WAIT answers RECHECK and returns at once instead of sleeping
+   through the release. The control builds the same wait with the generation
+   read after the window and must lose the wake: a 500 ms deadline expires. */
+static volatile int m6, other6, in_gap;
+static volatile long w6_rc, w6_errno, w6_ms;
+static void gap_hold(void)
+{
+  if (who == 2) {
+    in_gap = 1;
+    spin_ms(20);
+  }
+}
+
+static unsigned long window_waiter(void *arg)
+{
+  int reversed = (int)(uintptr_t)arg;
+  who = 2;
+  long t0 = monotonic_ms();
+  if (!reversed) {
+    w6_rc = fwait(&m6, 2, 0);
+    w6_errno = errno;
+  } else {
+    struct timespec now;
+    if (m6 != 2) return 1;
+    in_gap = 1;
+    spin_ms(20);
+    uint64_t gen = __capstone_park_generation(&m6);
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    uint64_t deadline = (uint64_t)now.tv_sec * 1000000000u + (uint64_t)now.tv_nsec + 500000000u;
+    w6_rc = __capstone_delegate_ints(CAPSTONE_NR_PARK_WAIT,
+                                     (uint64_t)__builtin_capstone_cap_get_cursor((void *)&m6),
+                                     gen, deadline);
+  }
+  w6_ms = monotonic_ms() - t0;
+  return 12;
+}
+
+static int window(int requeue, int reversed)
+{
+  struct capstone_context c;
+  who = 1;
+  m6 = 2;
+  __capstone_futex_test_gap = gap_hold;
+  CHECK(start_thread(&c, window_waiter, (void *)(uintptr_t)reversed) > 0);
+  long t0 = monotonic_ms();
+  while (!in_gap && monotonic_ms() - t0 < 20000)
+    sched_yield();
+  CHECK(in_gap);
+  m6 = 0;
+  long selected = requeue ? frequeue(&m6, 0, 1, &other6) : fwake(&m6, 1);
+  CHECK(wait_done(&c, 20000) && *c.value == 12);
+  __capstone_futex_test_gap = 0;
+  printf("thread-probe %s%s: %s selected %ld, the waiter returned %ld after %ld ms\n",
+         requeue ? "b12" : "b6", reversed ? "-control" : "", requeue ? "REQUEUE" : "WAKE",
+         selected, w6_rc, w6_ms);
+  CHECK(selected == 0);
+  if (reversed)
+    CHECK(w6_rc == -ETIMEDOUT && w6_ms >= 500);     /* the wake was lost */
+  else
+    CHECK(w6_rc == 0 && w6_ms < 500);               /* RECHECK, no sleep */
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+/* B6's counter: two contexts take a futex mutex (Drepper's three-state lock)
+   400 times each around an increment, holding it across preemptions so that
+   they contend and park; the count is exact and nobody sleeps through a
+   release. */
+#define B6_ROUNDS 400
+static volatile int mtx, parked_waits;
+static volatile unsigned long b6_count;
+static void mtx_lock(void)
+{
+  int c = 0;
+  if (__atomic_compare_exchange_n(&mtx, &c, 1, 0, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+    return;
+  if (c != 2)
+    c = __atomic_exchange_n(&mtx, 2, __ATOMIC_ACQUIRE);
+  while (c != 0) {
+    fwait(&mtx, 2, 0);
+    __atomic_fetch_add(&parked_waits, 1, __ATOMIC_RELAXED);
+    c = __atomic_exchange_n(&mtx, 2, __ATOMIC_ACQUIRE);
+  }
+}
+static void mtx_unlock(void)
+{
+  if (__atomic_fetch_sub(&mtx, 1, __ATOMIC_RELEASE) != 1) {
+    __atomic_store_n(&mtx, 0, __ATOMIC_RELEASE);
+    fwake(&mtx, 1);
+  }
+}
+static int counting(void)
+{
+  for (int i = 0; i < B6_ROUNDS; ++i) {
+    mtx_lock();
+    unsigned long v = b6_count;
+    spin_ms(1);                  /* hold it: a quantum ends inside now and then */
+    b6_count = v + 1;
+    mtx_unlock();
+  }
+  return 0;
+}
+static unsigned long counter_thread(void *arg)
+{
+  (void)arg;
+  counting();
+  return 13;
+}
+
+static int b6_count_mode(void)
+{
+  struct capstone_context c;
+  CHECK(start_thread(&c, counter_thread, 0) > 0);
+  counting();
+  CHECK(wait_done(&c, 120000) && *c.value == 13);
+  printf("thread-probe b6-count: count %lu of %d, %d waits parked\n", b6_count, 2 * B6_ROUNDS,
+         parked_waits);
+  CHECK(b6_count == 2 * B6_ROUNDS);
+  CHECK(parked_waits > 0);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+/* The first context parked when a signal arrives, three ways, each as Linux
+   answers the same futex call (checked natively): an untimed wait under
+   SA_RESTART runs the handler at once and goes on to the wake; without
+   SA_RESTART it fails with EINTR; a timed wait fails with EINTR even under
+   SA_RESTART (Linux restarts it through a restart block, which a handler
+   turns into EINTR). The record is out of the queue before the handler runs. */
+static volatile int ps_word, ps_handled;
+static volatile long ps_handled_at;
+static long ps_start;
+static void on_park_signal(int sig)
+{
+  (void)sig;
+  ps_handled++;
+  ps_handled_at = monotonic_ms() - ps_start;
+}
+static unsigned long signal_then_wake(void *arg)
+{
+  (void)arg;
+  spin_ms(200);
+  kill(getpid(), SIGUSR1);
+  spin_ms(300);
+  ps_word = 1;
+  fwake(&ps_word, 1);
+  return 14;
+}
+
+static int park_signal(int restart, int timed)
+{
+  struct capstone_context c;
+  struct sigaction sa = {0};
+  sa.sa_handler = on_park_signal;
+  sa.sa_flags = restart ? SA_RESTART : 0;
+  CHECK(sigaction(SIGUSR1, &sa, 0) == 0);
+  ps_start = monotonic_ms();
+  CHECK(start_thread(&c, signal_then_wake, 0) > 0);
+  struct timespec to = {3, 0};
+  long rc = fwait(&ps_word, 0, timed ? &to : 0);
+  long err = errno, took = monotonic_ms() - ps_start;
+  CHECK(wait_done(&c, 20000) && *c.value == 14);
+  printf("thread-probe park-signal%s: futex %ld (errno %ld) after %ld ms, handler at %ld ms\n",
+         timed ? "-timed" : restart ? "" : "-eintr", rc, err, took, ps_handled_at);
+  CHECK(ps_handled == 1);
+  if (restart && !timed)
+    CHECK(rc == 0 && took >= 450 && took < 2500 && ps_handled_at < 400);  /* before the wake */
+  else
+    CHECK(rc == -1 && err == EINTR && took < 450);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
 /* A REGISTER context has no transport: its calls fail with EIO instead of
    using anyone else's. */
 static volatile long unserved_rc, unserved_errno;
@@ -567,6 +855,16 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "sigpipe-ignored")) rc = sigpipe_child(1);
   else if (!strcmp(mode, "exec-child")) rc = exec_child();
   else if (!strcmp(mode, "print-mask")) rc = print_mask();
+  else if (!strcmp(mode, "futex-basic")) rc = futex_basic();
+  else if (!strcmp(mode, "futex-wake")) rc = futex_wake();
+  else if (!strcmp(mode, "futex-requeue")) rc = futex_requeue();
+  else if (!strcmp(mode, "b6")) rc = window(0, 0);
+  else if (!strcmp(mode, "b6-control")) rc = window(0, 1);
+  else if (!strcmp(mode, "b12")) rc = window(1, 0);
+  else if (!strcmp(mode, "b6-count")) rc = b6_count_mode();
+  else if (!strcmp(mode, "park-signal")) rc = park_signal(1, 0);
+  else if (!strcmp(mode, "park-signal-eintr")) rc = park_signal(0, 0);
+  else if (!strcmp(mode, "park-signal-timed")) rc = park_signal(1, 1);
   else {
     fprintf(stderr, "thread-probe: unknown mode %s\n", mode);
     return 2;

@@ -651,10 +651,11 @@ int main(int argc, char **argv) {
   launch_mark(LAUNCH_DOMAIN);
   /* One transport per context that may run at once: the first context's,
      and the descriptor's contexts, each an entry block and an exchange
-     slice at the same index of the two regions. */
+     slice at the same index of the two regions. The park table follows the
+     last entry block. */
   size_t transports = 1 + (size_t)descriptor.contexts;
   e.slice_bytes = (size_t)descriptor.exchange_bytes;
-  e.sizes[REGION_META] = transports * CAPSTONE_DELEGATE_META_BYTES;
+  e.sizes[REGION_META] = transports * CAPSTONE_DELEGATE_META_BYTES + CAPSTONE_PARK_BYTES;
   e.sizes[REGION_DATA] = transports * e.slice_bytes;
   e.sizes[REGION_STARTUP] = CAPSTONE_LAUNCH_BYTES;
   for (unsigned i = 0; i < REGIONS; ++i) {
@@ -688,6 +689,12 @@ int main(int argc, char **argv) {
   e.delegate.exchange = e.maps[REGION_DATA];
   e.delegate.exchange_bytes = e.slice_bytes;
   pthread_mutex_init(&e.delegate.lock, NULL);
+  struct capstone_park park;
+  if (capstone_park_init(&park, (_Atomic uint64_t *)((char *)e.maps[REGION_META] +
+                                                     transports * CAPSTONE_DELEGATE_META_BYTES),
+                         CAPSTONE_PARK_BUCKETS))
+    return fail(&e, "capstone-exec: park table", 1);
+  e.delegate.park = &park;
   e.delegate.context_id = domain;
   struct context_service contexts = {.e = &e, .first = domain, .transports = (unsigned)transports};
   pthread_mutex_init(&contexts.lock, NULL);

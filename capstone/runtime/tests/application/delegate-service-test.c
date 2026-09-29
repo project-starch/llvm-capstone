@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <unistd.h>
+#include <time.h>
 
 #define EXCHANGE 4096
 static char exchange[EXCHANGE];
@@ -253,6 +254,43 @@ int main(void) {
       h3.context = NULL;
     }
     capstone_delegate_host_free(&h3);
+  }
+  /* parking: without a queue ENOSYS; a WAIT whose generation is stale answers
+     RECHECK without sleeping, a WAKE with nobody queued selects none, and a
+     WAIT with a past deadline times out; a further context uses the owner's
+     queue */
+  {
+    static _Atomic uint64_t table[CAPSTONE_PARK_BUCKETS];
+    struct capstone_park park;
+    struct capstone_delegate_host h4 = {.exchange = exchange, .exchange_bytes = EXCHANGE};
+    x = entry(CAPSTONE_NR_PARK_WAKE, 0x5000, 1, 0, 0, 0, 0);
+    capstone_delegate_serve(&h4, &x);
+    assert((long)x.result == -ENOSYS);
+    assert(!capstone_park_init(&park, table, CAPSTONE_PARK_BUCKETS));
+    h4.park = &park;
+    x = entry(CAPSTONE_NR_PARK_WAKE, 0x5000, 1, 0, 0, 0, 0);
+    capstone_delegate_serve(&h4, &x);
+    assert((long)x.result == 0);
+    unsigned b = capstone_park_bucket_of(0x5000, CAPSTONE_PARK_BUCKETS);
+    assert(table[b] == 1);   /* the WAKE advanced the key's generation */
+    x = entry(CAPSTONE_NR_PARK_WAIT, 0x5000, 0, 0, 0, 0, 0);
+    capstone_delegate_serve(&h4, &x);
+    assert((long)x.result == CAPSTONE_PARK_RESULT_RECHECK && x.status == CAPSTONE_ROUND_DONE);
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    uint64_t past = (uint64_t)now.tv_sec * 1000000000u + (uint64_t)now.tv_nsec - 1;
+    struct capstone_delegate_host further = {.exchange = exchange, .exchange_bytes = EXCHANGE,
+                                             .owner = &h4};
+    x = entry(CAPSTONE_NR_PARK_WAIT, 0x5000, 1, past, 0, 0, 0);
+    capstone_delegate_serve(&further, &x);
+    assert((long)x.result == -ETIMEDOUT);
+    assert(capstone_park_queued(&park, b, 0x5000) == 0);
+    x = entry(CAPSTONE_NR_PARK_REQUEUE, 0x5000, 0x6000, 1, 1, 0, 0);
+    capstone_delegate_serve(&further, &x);
+    assert((long)x.result == 0 && table[b] == 2);
+    capstone_park_destroy(&park);
+    capstone_delegate_host_free(&further);
+    capstone_delegate_host_free(&h4);
   }
   /* runtime numbers resolve by their low bits, apart from Linux's */
   assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_CONTEXT_RESERVE)->name, "context-reserve"));

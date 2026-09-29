@@ -5,6 +5,7 @@
 #define CAPSTONE_LINUX_DELEGATE_SERVICE_H
 
 #include "capstone/delegate.h"
+#include "park.h"
 #include "signals.h"
 #include "spawner.h"
 #include <pthread.h>
@@ -60,6 +61,10 @@ struct capstone_delegate_host {
   struct capstone_delegate_host *owner;
   pthread_mutex_t lock;
   uint64_t context_id;      /* the context this host serves */
+  /* parking: the process's queue (the owner's, NULL answers ENOSYS) and this
+     host's own wait record, one per serving thread */
+  struct capstone_park *park;
+  struct capstone_park_record park_record;
 };
 
 /* Service one entry in place: validate, run, write result. Never returns an

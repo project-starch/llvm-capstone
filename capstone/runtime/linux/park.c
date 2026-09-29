@@ -1,6 +1,9 @@
 /* The launcher's parking queue; see park.h. */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include "park.h"
+#include "capstone/delegate.h"
 
 #include <errno.h>
 #include <linux/futex.h>
@@ -36,7 +39,7 @@ void capstone_park_destroy(struct capstone_park *park) {
 }
 
 unsigned capstone_park_bucket(const struct capstone_park *park, uint64_t key) {
-  return (unsigned)((key * 0x9E3779B97F4A7C15ull) >> 32) & (park->buckets - 1);
+  return capstone_park_bucket_of(key, park->buckets);
 }
 
 static void enqueue(struct capstone_park *park, unsigned bucket, struct capstone_park_record *r) {
@@ -93,10 +96,28 @@ static void flush(struct capstone_park *park, unsigned bucket) {
     complete(park, park->queues[bucket].head, CAPSTONE_PARK_RECHECK);
 }
 
+static long futex_sleep(void *context, _Atomic uint32_t *word, const struct timespec *deadline) {
+  (void)context;
+  /* FUTEX_WAIT_BITSET takes an absolute CLOCK_MONOTONIC deadline, so
+     spurious wakeups and retries keep the original budget. */
+  if (syscall(SYS_futex, word, FUTEX_WAIT_BITSET | FUTEX_PRIVATE_FLAG, 0, deadline, NULL,
+              FUTEX_BITSET_MATCH_ANY) == -1)
+    return -errno;
+  return 0;
+}
+
 enum capstone_park_outcome capstone_park_wait(struct capstone_park *park,
                                               struct capstone_park_record *record,
                                               uint64_t key, uint64_t gen,
                                               const struct timespec *deadline) {
+  return capstone_park_wait_with(park, record, key, gen, deadline, futex_sleep, NULL);
+}
+
+enum capstone_park_outcome capstone_park_wait_with(struct capstone_park *park,
+                                                   struct capstone_park_record *record,
+                                                   uint64_t key, uint64_t gen,
+                                                   const struct timespec *deadline,
+                                                   capstone_park_sleep_fn sleep, void *context) {
   unsigned bucket = capstone_park_bucket(park, key);
   int aborted = 0, outcome;
   pthread_mutex_lock(&park->lock);
@@ -114,12 +135,9 @@ enum capstone_park_outcome capstone_park_wait(struct capstone_park *park,
   hook(CAPSTONE_PARK_ENQUEUED, record);
   while (!atomic_load_explicit(&record->notified, memory_order_acquire)) {
     hook(CAPSTONE_PARK_SLEEPING, record);
-    /* FUTEX_WAIT_BITSET takes an absolute CLOCK_MONOTONIC deadline, so
-       spurious wakeups and retries keep the original budget. */
-    if (syscall(SYS_futex, &record->notified, FUTEX_WAIT_BITSET | FUTEX_PRIVATE_FLAG, 0,
-                deadline, NULL, FUTEX_BITSET_MATCH_ANY) == -1 &&
-        (errno == ETIMEDOUT || errno == EINTR)) {
-      aborted = errno;
+    long r = sleep(context, &record->notified, deadline);
+    if (r == -ETIMEDOUT || r == -EINTR || r == CAPSTONE_PARK_SLEEP_RETRY) {
+      aborted = r == CAPSTONE_PARK_SLEEP_RETRY ? -1 : (int)-r;
       break;
     }
   }
@@ -133,7 +151,8 @@ enum capstone_park_outcome capstone_park_wait(struct capstone_park *park,
   } else {
     dequeue(park, record);
     record->state = CAPSTONE_PARK_ABORTED;
-    outcome = aborted == ETIMEDOUT ? CAPSTONE_PARK_TIMEOUT : CAPSTONE_PARK_EINTR;
+    outcome = aborted == ETIMEDOUT ? CAPSTONE_PARK_TIMEOUT
+            : aborted == EINTR ? CAPSTONE_PARK_EINTR : CAPSTONE_PARK_RETRY;
   }
   record->state = CAPSTONE_PARK_IDLE;
   pthread_mutex_unlock(&park->lock);

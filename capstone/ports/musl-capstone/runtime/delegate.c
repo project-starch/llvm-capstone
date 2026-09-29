@@ -119,6 +119,9 @@ static __thread uint64_t dl_status;  /* of the last round: DONE or RETRY */
    size, transport i at i times the block size in both. */
 static char *dl_meta_region, *dl_data_region;
 static size_t dl_transports, dl_slice_bytes;
+/* The park table after the last META block: one generation word per bucket,
+   written only by the launcher. */
+static volatile uint64_t *dl_park_gen;
 
 /* Install transport `index` for the calling context: bounded capabilities to
    its entry block and its exchange slice. -1 when there is no such transport. */
@@ -147,9 +150,15 @@ void __capstone_delegate_regions(void *meta, void *exchange) {
   dl_data_region = exchange;
   dl_transports = count;
   dl_slice_bytes = slice;
-  if (!meta || !exchange || cap_bytes(meta) / CAPSTONE_DELEGATE_META_BYTES < count ||
+  if (!meta || !exchange ||
+      cap_bytes(meta) < count * CAPSTONE_DELEGATE_META_BYTES + CAPSTONE_PARK_BYTES ||
       cap_bytes(exchange) / slice < count)
     dl_transports = 0;
+  if (dl_transports) {
+    char *table = (char *)meta + count * CAPSTONE_DELEGATE_META_BYTES;
+    dl_park_gen = (volatile uint64_t *)__builtin_capstone_cap_shrink(table, table,
+                                                                     table + CAPSTONE_PARK_BYTES);
+  }
   if (dl_install(0)) {
     dl_entry = 0;
     dl_exchange = 0;
@@ -308,6 +317,110 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   do result = dl_call_once(s, nr, raw);
   while (dl_settle());
   return result;
+}
+
+/* futex (docs/plans/delegation-threads.md, "Parking"). The lock word stays in
+ * the domain; the launcher only parks and wakes threads by key, the word's
+ * address. FUTEX_WAIT reads the bucket's generation before it compares the
+ * word, so a WAKE between the compare and the sleep moves the generation and
+ * the launcher answers RECHECK instead of sleeping. A relative timeout becomes
+ * one absolute CLOCK_MONOTONIC deadline at entry, kept across every round.
+ * After a round that delivered signals (RETRY) the word is compared again, as
+ * Linux does when it restarts the call. WAIT, WAKE and REQUEUE are served;
+ * every other operation (PI, WAKE_OP, CMP_REQUEUE, WAIT_BITSET, and any with
+ * the realtime clock flag, which Linux refuses on these three) answers
+ * ENOSYS and is reported as unserved. */
+#define DL_FUTEX_WAIT 0
+#define DL_FUTEX_WAKE 1
+#define DL_FUTEX_REQUEUE 3
+#define DL_FUTEX_PRIVATE 128
+
+/* Test only (thread-probe): runs after the compare and before the WAIT
+   request when set, to hold a context in the window the generation protects
+   across a quantum. */
+void (*__capstone_futex_test_gap)(void);
+
+static uint64_t dl_park_key(volatile int *word) {
+  return (uint64_t)__builtin_capstone_cap_get_cursor((void *)word);
+}
+
+/* The generation of word's bucket now (thread-probe's control case builds a
+   wait with the order reversed from it). */
+uint64_t __capstone_park_generation(volatile int *word) {
+  return dl_park_gen ? dl_park_gen[capstone_park_bucket_of(dl_park_key(word), CAPSTONE_PARK_BUCKETS)]
+                     : 0;
+}
+
+static long dl_futex_wait(volatile int *word, int val, const struct timespec *timeout) {
+  uint64_t key = dl_park_key(word), deadline = 0;
+  long r;
+  if (!dl_park_gen)
+    return -ENOSYS;
+  if (timeout) {
+    struct timespec now;
+    if (timeout->tv_sec < 0 || timeout->tv_nsec < 0 || timeout->tv_nsec >= 1000000000L)
+      return -EINVAL;
+    if (clock_gettime(CLOCK_MONOTONIC, &now))
+      return -errno;
+    uint64_t at = (uint64_t)now.tv_sec * 1000000000u + (uint64_t)now.tv_nsec, span;
+    if ((uint64_t)timeout->tv_sec >= UINT64_MAX / 1000000000u)
+      span = UINT64_MAX;
+    else
+      span = (uint64_t)timeout->tv_sec * 1000000000u + (uint64_t)timeout->tv_nsec;
+    deadline = span > UINT64_MAX - at ? UINT64_MAX : at + span;
+    if (!deadline)
+      deadline = 1;
+  }
+  for (;;) {
+    /* acquire: the generation before the word, as the plan's Parking requires */
+    uint64_t gen = __atomic_load_n(&dl_park_gen[capstone_park_bucket_of(key, CAPSTONE_PARK_BUCKETS)],
+                                   __ATOMIC_ACQUIRE);
+    if (*word != val)
+      return -EAGAIN;
+    if (__capstone_futex_test_gap)
+      __capstone_futex_test_gap();
+    uint64_t args[CAPSTONE_DELEGATE_ARGS] = {key, gen, deadline, 0, 0, 0};
+    dl_reset();
+    r = dl_round(CAPSTONE_NR_PARK_WAIT, args);
+    if (!dl_settle())
+      break;
+  }
+  return r == CAPSTONE_PARK_RESULT_WOKEN || r == CAPSTONE_PARK_RESULT_RECHECK ? 0 : r;
+}
+
+static long dl_futex(volatile int *word, long op, long val, void *arg4, volatile int *word2) {
+  long cmd = op & ~(long)DL_FUTEX_PRIVATE;
+  if (!dl_park_gen)
+    return -ENOSYS;
+  /* Linux's own argument checks, as far as the served operations reach */
+  if (dl_park_key(word) & 3)
+    return -EINVAL;
+  switch (cmd) {
+  case DL_FUTEX_WAIT:
+    return dl_futex_wait(word, (int)val, (const struct timespec *)arg4);
+  case DL_FUTEX_WAKE:
+    /* Linux wakes one when asked for none or fewer */
+    return __capstone_delegate_ints(CAPSTONE_NR_PARK_WAKE, dl_park_key(word),
+                                    (int)val <= 0 ? 1 : (uint64_t)(int)val, 0);
+  case DL_FUTEX_REQUEUE: {
+    int nwake = (int)val, nmove = (int)(long)(uintptr_t)arg4;
+    if (nwake < 0 || nmove < 0)
+      return -EINVAL;
+    if (dl_park_key(word2) & 3)
+      return -EINVAL;
+    uint64_t args[CAPSTONE_DELEGATE_ARGS] = {dl_park_key(word), dl_park_key(word2),
+                                             (uint64_t)nwake, (uint64_t)nmove, 0, 0};
+    long r;
+    do {
+      dl_reset();
+      r = dl_round(CAPSTONE_NR_PARK_REQUEUE, args);
+    } while (dl_settle());
+    return r;
+  }
+  default:
+    __capstone_hc_note_unserved(SYS_futex);
+    return -ENOSYS;
+  }
 }
 
 /* rt_sigtimedwait returns the kernel's 128-byte siginfo. Translate it into
@@ -506,6 +619,8 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     break;
   }
   switch (n) {
+  case SYS_futex:
+    return dl_futex((volatile int *)a, (long)b, (long)c, d, (volatile int *)e);
   case SYS_rt_sigtimedwait:
     return dl_sigtimedwait(raw);
   case SYS_readv:
