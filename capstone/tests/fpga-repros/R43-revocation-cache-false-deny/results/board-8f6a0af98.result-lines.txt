@@ -133,3 +133,14 @@ R-42, so their sweeps run on silicon for the first time here); the ladder and P1
 still traps and the refusal record reads it as refused on the probe path, not by deny-on-miss. The a3 cold-ramp reading stands
 as N=1 with a candidate mechanism. R-43 is FIXED ON SILICON. Two of the board lane's readings were retracted the same evening
 (a1's "contaminated" reads, a5/a6's "at the sweep lbu") and are corrected above.
+
+== Part A discriminator for a10 -- boot m1v2-2, 20:21-20:35: the LIVE-ALIAS control (image aed492ab985653f3, M1_STALE_TAKE_LIVE, frozen;
+   list m1-staletake.txt; stock k800) -- PASS as pre-registered ==
+opening k800 retval=4; ENT1.
+trap log sw=255 0x9a = seen, mcause 26; mepc 0x81a04360 - DBAS = +0x4360 = the mint, where the auditor predicted it; tval 0xac100000.
+refusal record 204 = 0x02 = EMPTY: no cause-25 LSU denial since reset (the switch trace confirms the read was taken at 204).
+reading    The identical run with a LIVE alias refuses nothing and wedges only at its later mint (cause 26, as on every bitstream
+           since 4ad0df694), so a10's LATCHED record belongs to the STALE access and to nothing else: the record is specific.
+           Caveat (board lane's own regression, fixed from m1v2-4): this boot's 205..208 bytes are VOID -- the wedge-dump change
+           walked from a stale switch model, so "208" was read at 210 and "205" at 207; reproduced two-sided without the fix.
+           a10 predates the change and its 204/205 reads were confirmed at the right apertures, so a10 is unaffected.
