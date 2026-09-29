@@ -51,6 +51,12 @@ MODES.update({
     "exhaust-ended": ("exit", 0, "PASS", None, None),
 })
 EXPLICIT = {"ctl-wfi": ("exit", 0, "PASS", None, None)}
+# A9 needs the test firmware whose slots start near the last generation, in a
+# boot of its own: only with --only. gen-launch is launched GEN_LAUNCHES times
+# and each launch's application id is read from the launcher.
+EXPLICIT.update({"gen-exhaust": ("exit", 0, "PASS", None, None)})
+GEN_LAUNCHES = 8
+GEN_LAST = 0x7fffffff
 # A10 across applications: this many `hold` processes at once, 8 slots each,
 # more than the monitor's 32. Every one must pass, and all must have held at
 # the same time, or the case never created the shortage it is about.
@@ -127,6 +133,50 @@ def run_holders(cli, env, args):
     return not problems, "; ".join(problems), "\n".join(outs)
 
 
+def run_gen_launches(cli, env, args):
+    """GEN_LAUNCHES launches of one image in a row. Each passes; the launcher's
+    application ids are new and positive, a slot's generations rise, a slot
+    that had GEN_LAST is not used again, and at least one slot reached it with
+    a launch after it (else the case never created its condition)."""
+    ids, problems, outs = [], [], []
+    for i in range(GEN_LAUNCHES):
+        status = args.state / f"context-gen-launch-{i}.json"
+        status.unlink(missing_ok=True)
+        try:
+            result = subprocess.run([*cli, "run", "-e", "CAPSTONE_DELEGATE_STATS=1", "--result",
+                                     str(status), args.image, "gen-launch"],
+                                    env=env, capture_output=True, text=True, timeout=args.timeout)
+        except subprocess.TimeoutExpired:
+            problems.append(f"launch {i}: timeout")
+            break
+        record = json.loads(status.read_text()) if status.exists() else {}
+        got = (record.get("kind"), record.get("value"))
+        found = [line.rsplit("=", 1)[1] for line in result.stderr.splitlines()
+                 if "capstone-exec: domain id=" in line]
+        if got != ("exit", 0) or "PASS" not in result.stdout or len(found) != 1:
+            problems.append(f"launch {i}: got {got}, ids {found}, "
+                            f"stderr={result.stderr.strip()[-300:]!r}")
+            break
+        ids.append(int(found[0], 16))
+    outs.append("ids " + " ".join(hex(i) for i in ids))
+    retired, last = set(), {}
+    for n, value in enumerate(ids):
+        slot, gen = value & 0xffffffff, value >> 32
+        if value <= 0 or gen > GEN_LAST or value in ids[:n]:
+            problems.append(f"id {value:#x} is not new, or outside the generation range")
+        if slot in retired:
+            problems.append(f"slot {slot} used again after its last generation")
+        if slot in last and gen <= last[slot]:
+            problems.append(f"slot {slot} generation {gen:#x} after {last[slot]:#x}")
+        last[slot] = gen
+        if gen == GEN_LAST:
+            retired.add(slot)
+    first = next((n for n, value in enumerate(ids) if value >> 32 == GEN_LAST), None)
+    if not problems and (first is None or first == len(ids) - 1):
+        problems.append("no slot reached the last generation with a launch after it")
+    return not problems, "; ".join(problems), "\n".join(outs)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state", type=Path, required=True)
@@ -168,6 +218,11 @@ def main():
         results[mode] = {"pass": ok, "reason": reason, "stdout": out[-400:]}
         failed += not ok
         print(f"{mode}: {'PASS' if ok else 'FAIL ' + reason}", flush=True)
+    if args.only and "gen-launch" in args.only:
+        ok, reason, out = run_gen_launches(cli, env, args)
+        results["gen-launch"] = {"pass": ok, "reason": reason, "stdout": out[-800:]}
+        failed += not ok
+        print(f"gen-launch: {'PASS' if ok else 'FAIL ' + reason}", flush=True)
     if not args.only or "hold" in args.only:
         ok, reason, out = run_holders(cli, env, args)
         results["hold"] = {"pass": ok, "reason": reason, "stdout": out[-800:]}

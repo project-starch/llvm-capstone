@@ -27,8 +27,15 @@ Done so far:
   when the monitor reissues its slot. 128 create/exit/revoke cycles never forgetting, and five
   applications claiming 40 of the 32 slots at once, all succeed with their live contexts intact;
   both fail on the previous monitor.
-- Open in Probe A: A7 (needs an instrument that shows the node was reissued), A9 (generation
-  preset), A13's foreign-owner request, and the submodule pins.
+- A9: generations stop at 0x7fffffff, so every id is a positive long (the driver takes a negative
+  SBI value for an error, and ids reach the domain as long); a slot that had the last generation
+  is never assigned again, and a cached application block moves off it. A test firmware starts
+  every slot near the end (CAPSTONE_TEST_GEN_PRESET): contexts and relaunches of one application
+  run through the last generations and on to other slots. On the previous monitor (limit
+  0xffffffff, no move) the first adoption at generation 0x80000000 fails with EIO, and the cached
+  block can no longer be launched at all (ENOSPC).
+- Open in Probe A: A7 (needs an instrument that shows the node was reissued), A13's
+  foreign-owner request, and the submodule pins.
 
 ## Scope
 

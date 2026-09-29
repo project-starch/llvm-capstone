@@ -459,6 +459,8 @@ int main(int argc, char **argv) {
     free(startup);
     return fail(&e, "capstone-exec: cannot create domain", 1);
   }
+  if (getenv("CAPSTONE_DELEGATE_STATS"))
+    fprintf(stderr, "capstone-exec: domain id=%#lx\n", (unsigned long)domain);
   launch_mark(LAUNCH_DOMAIN);
   e.sizes[REGION_META] = CAPSTONE_DELEGATE_META_BYTES;
   e.sizes[REGION_DATA] = (size_t)descriptor.exchange_bytes;

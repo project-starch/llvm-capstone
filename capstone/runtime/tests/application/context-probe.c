@@ -810,6 +810,67 @@ static int hold(void)
   return 0;
 }
 
+/* ---- A9: generations. These modes need the test firmware whose slots start
+ * near the last generation (CAPSTONE_TEST_GEN_PRESET), in a boot of their
+ * own (run-context.py --only gen-exhaust gen-launch). ---- */
+#define GEN_LAST 0x7ffffffful
+#define GEN_MAX_CYCLES 64
+
+/* Contexts through slots until two slots have had their last generation:
+   every id is new and positive, a slot's generations only rise, and a slot
+   that had the last one never returns. Then a late FORGET and STEP with the
+   previous id of the slot now in use leave its replacement untouched. */
+static int gen_exhaust(void)
+{
+  struct capstone_context_event ev;
+  static unsigned long ids[GEN_MAX_CYCLES];
+  unsigned long retired = 0, n = 0;
+  CHECK(!capstone_context_mint(&ctx, AREA_BYTES, child_second, 0));
+  for (unsigned long i = 0; i < GEN_MAX_CYCLES; ++i) {
+    if (i)
+      CHECK(!capstone_context_remint(&ctx, child_second, (void *)(uintptr_t)i));
+    long id = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+    if (id <= 0)
+      printf("context-probe gen-exhaust: cycle %lu: create %ld\n", i, id);
+    CHECK(id > 0);
+    unsigned long slot = (unsigned long)id & 0xffffffff, gen = (unsigned long)id >> 32;
+    CHECK(slot < 64 && gen <= GEN_LAST);
+    CHECK(!(retired & (1ul << slot)));
+    for (unsigned long j = 0; j < i; ++j) {
+      CHECK(ids[j] != (unsigned long)id);
+      if ((ids[j] & 0xffffffff) == slot)
+        CHECK((ids[j] >> 32) < gen);
+    }
+    ids[i] = (unsigned long)id;
+    n = i + 1;
+    CHECK(!step_to_end((unsigned long)id, &ev, 0));
+    CHECK(ev.kind == STEP_RETURNED && *ctx.value == 1000 + i);
+    CHECK(capstone_context_forget((unsigned long)id) == 0);
+    capstone_context_revoke(&ctx);
+    if (gen == GEN_LAST)
+      retired |= 1ul << slot;
+    else if (__builtin_popcountl(retired) >= 2)
+      break;
+  }
+  printf("context-probe gen-exhaust: %lu ids from %#lx to %#lx, slots at the last generation %#lx\n",
+         n, ids[0], ids[n - 1], retired);
+  CHECK(__builtin_popcountl(retired) >= 2);
+  /* The replacement in the slot of the last id, then late requests with that id. */
+  unsigned long old = ids[n - 1];
+  CHECK(!capstone_context_remint(&ctx, child_second, (void *)(uintptr_t)77));
+  long live = capstone_context_create(&ctx, CAPSTONE_CONTEXT_REGISTER);
+  CHECK(live > 0);
+  printf("context-probe gen-exhaust: replacement %#lx after %#lx\n", (unsigned long)live, old);
+  CHECK(((unsigned long)live & 0xffffffff) == (old & 0xffffffff));
+  CHECK(((unsigned long)live >> 32) == (old >> 32) + 1);
+  CHECK(capstone_context_forget(old) == -ESTALE);
+  CHECK(capstone_context_step(old, &ev) < 0);
+  CHECK(!step_to_end((unsigned long)live, &ev, 0));
+  CHECK(ev.kind == STEP_RETURNED && ev.result == CAPSTONE_CONTEXT_EXITED && *ctx.value == 1077);
+  CHECK(capstone_context_forget((unsigned long)live) == 0);
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2) {
@@ -847,6 +908,8 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "exhaust")) rc = exhaust();
   else if (!strcmp(mode, "exhaust-ended")) rc = exhaust_ended();
   else if (!strcmp(mode, "hold")) rc = hold();
+  else if (!strcmp(mode, "gen-exhaust")) rc = gen_exhaust();
+  else if (!strcmp(mode, "gen-launch")) rc = 0;
   else {
     fprintf(stderr, "context-probe: unknown mode %s\n", mode);
     return 2;
