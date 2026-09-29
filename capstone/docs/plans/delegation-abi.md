@@ -1,8 +1,12 @@
 # Delegated syscalls and the task model
 
-Status: PLAN, 2026-09-29. Branch `delegation-abi`, from `dev`. Nothing here is
-implemented yet; every claim of behaviour below is a target, and every number a
-gate to be measured, not a result.
+Status: steps 1 to 3 implemented on the stacked branches `delegation-abi`,
+`delegation-libc` and `delegation-launcher`, 2026-09-29; steps 4 to 6 are
+targets. The contract application runs delegated in the persistent QEMU guest
+with argv, environment, cwd, streams, exit status, fault records and the
+first round-cost measurement, and libc-test holds its 43 passes on the
+delegated runtime; see `runtime/applications.md`. Every number below
+that is not in that document is a gate to be measured, not a result.
 
 ## Goal
 

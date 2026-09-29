@@ -12,13 +12,8 @@
 #ifndef CAPSTONE_APPLICATION_EXCHANGE_BYTES
 #define CAPSTONE_APPLICATION_EXCHANGE_BYTES CAPSTONE_DELEGATE_DEFAULT_EXCHANGE
 #endif
-/* Descriptor v2: the v1 fields, the delegate flag, and the exchange region
-   the launcher must grant. A v1 launcher rejects the size; a v2 launcher
+/* Descriptor v2 (launch.h): a v1 launcher rejects the size; a v2 launcher
    accepts both. */
-struct capstone_application_descriptor_v2 {
-  struct capstone_application_descriptor v1;
-  uint64_t exchange_bytes;
-};
 __attribute__((used, section(".capstone_application")))
 static const struct capstone_application_descriptor_v2 descriptor = {
     {CAPSTONE_APPLICATION_MAGIC, CAPSTONE_LAUNCH_VERSION,

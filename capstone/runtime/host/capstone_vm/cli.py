@@ -158,8 +158,9 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
     The guest still runs an ordinary capstone-exec process, with no job daemon.
     """
     if any(not re.match(r"^[A-Za-z_][A-Za-z_0-9]*=", value) or value.startswith("CAPSTONE_JOB=")
-           for value in environment):
-        raise VMError("Environment must contain NAME=value assignments; CAPSTONE_JOB is reserved")
+           or value.startswith("CAPSTONE_FAULT_RECORD=") for value in environment):
+        raise VMError("Environment must contain NAME=value assignments; CAPSTONE_JOB and "
+                      "CAPSTONE_FAULT_RECORD are reserved")
     job_id = uuid.uuid4().hex
     jobs = state / "assets" / "jobs"
     jobs.mkdir(exist_ok=True)
@@ -169,8 +170,12 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
     script = (f"cd {shlex.quote(cwd)} || exit 125; " if cwd is not None else "")
     script += f"echo $$ > {remote}; exec " + shlex.join([
         "capstone-job", f"/mnt/control/jobs/{job_id}/result.json", "--", "capstone-exec", "--", *words])
+    # The launcher writes a domain fault's record here, off the application
+    # streams; it is reported on the host side and kept in the result.
+    fault_record = f"/mnt/control/jobs/{job_id}/fault"
     command = ssh_command(state, config) + ["exec " + shlex.join(
-        ["env", "CAPSTONE_JOB=" + job_id, *environment, "sh", "-c", script])]
+        ["env", "CAPSTONE_JOB=" + job_id, "CAPSTONE_FAULT_RECORD=" + fault_record,
+         *environment, "sh", "-c", script])]
     previous = {}
 
     def completed() -> int:
@@ -181,6 +186,10 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
         kind, value = record.get("kind"), record.get("value")
         if record.get("version") != 1 or kind not in ("exit", "signal") or type(value) is not int or not 0 <= value <= 255:
             raise VMError("Invalid guest waitpid result")
+        fault_file = job / "fault"
+        if fault_file.exists():
+            record["fault"] = fault_file.read_text().strip()
+            print(f"capstone-vm: {record['fault']}", file=sys.stderr)
         if result_path is not None:
             temporary = result_path.with_name(result_path.name + "." + job_id + ".tmp")
             try:
