@@ -232,7 +232,9 @@ The wire ABI, the shape table and the closed exception groups are in
 
 What crosses: files, directories, descriptors, time, identity, limits,
 `getrandom`, `wait4`, `kill` confined to the task, its children and its parent,
-`exit_group`. What does not:
+`getpgid`, `getsid`, `ppoll` and `pselect6` (the fd_sets, the timeout and the
+mask, which the libc flattens out of the kernel's pointer pair and the
+launcher rebuilds), `exit_group`. What does not:
 memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
 (`clone` and `fork` are ENOSYS; image exec uses the process service below), and
 threads. Signals cross: the kernel keeps dispositions, mask, pending set and
@@ -428,7 +430,8 @@ backpressure while the ring is nearly full; nothing is dropped.
 
 The libc runs accepted events after every round, in acceptance order, under
 `current ∪ sa_mask ∪ {sig}`; an event accepted inside `rt_sigsuspend` or a
-masked `ppoll` runs under that call's temporary mask before the call returns.
+masked `ppoll` or `pselect6` runs under that call's temporary mask before the
+call returns.
 Nested delivery happens at the end of a handler's own rounds. `sigaction` on a
 signal with runnable events runs them under the old installation first.
 `sigaltstack`, `sigsetjmp` with a saved mask and `siglongjmp` are the libc's;

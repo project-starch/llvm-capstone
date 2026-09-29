@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
     CHECK(!reap(w, &status) && !reap(s, &status));
     return pass();
   }
-  if (!strcmp(mode, "sigsuspend") || !strcmp(mode, "ppoll")) {
+  if (!strcmp(mode, "sigsuspend") || !strcmp(mode, "ppoll") || !strcmp(mode, "pselect")) {
     /* Original mask blocks USR1 and USR2; the wait unblocks everything. The
        handler runs under the temporary mask (USR2 free) before the call
        returns, and the original mask is back afterwards. */
@@ -247,7 +247,8 @@ int main(int argc, char **argv) {
     CHECK(!sigprocmask(SIG_SETMASK, &original, NULL));
     pid_t s = sender("USR1", "0.3");
     CHECK(s > 0);
-    int r = !strcmp(mode, "ppoll") ? ppoll(NULL, 0, NULL, &empty) : sigsuspend(&empty);
+    int r = !strcmp(mode, "ppoll") ? ppoll(NULL, 0, NULL, &empty)
+          : !strcmp(mode, "pselect") ? pselect(0, NULL, NULL, NULL, NULL, &empty) : sigsuspend(&empty);
     int saved = errno;
     CHECK(!sigprocmask(SIG_BLOCK, NULL, &after));
     CHECK(r == -1 && saved == EINTR);

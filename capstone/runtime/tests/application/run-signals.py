@@ -15,7 +15,7 @@ MODES = {
     "before-read": ("exit", 0, "PASS"),
     "during-read-restart": ("exit", 0, "PASS"), "during-read-eintr": ("exit", 0, "PASS"),
     "handler-write": ("exit", 0, "H\n"),
-    "sigsuspend": ("exit", 0, "PASS"), "ppoll": ("exit", 0, "PASS"),
+    "sigsuspend": ("exit", 0, "PASS"), "ppoll": ("exit", 0, "PASS"), "pselect": ("exit", 0, "PASS"),
     "nest": ("exit", 0, "PASS"),
     "retry-partial": ("exit", 0, "PASS"),
     "wait-restart": ("exit", 0, "PASS"), "wait-eintr": ("exit", 0, "PASS"),

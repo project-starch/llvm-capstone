@@ -19,6 +19,7 @@ _Static_assert(CAPSTONE_SIGNAL_OFFSET + sizeof(struct capstone_signal_block) <= 
 #define OUT_FIX(n) {CAPSTONE_ARG_OUT, CAPSTONE_LEN_FIXED, n, 0, 0}
 #define OPT_IN_FIX(n) {CAPSTONE_ARG_OPT_IN, CAPSTONE_LEN_FIXED, n, 0, 0}
 #define OPT_OUT_FIX(n) {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, n, 0, 0}
+#define OPT_INOUT_FIX(n) {CAPSTONE_ARG_OPT_INOUT, CAPSTONE_LEN_FIXED, n, 0, 0}
 #define INOUT_SCALED(a, s) {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
 #define IN_SCALED(a, s) {CAPSTONE_ARG_IN, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
 
@@ -62,6 +63,11 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_pwrite64, CAPSTONE_GROUP_DELEGATED, 4, "pwrite64", {I, IN_ARG(2), I, I}},
   {CAPSTONE_SYS_ppoll, CAPSTONE_GROUP_DELEGATED, 5, "ppoll",
    {INOUT_SCALED(1, 8), I, OPT_IN_FIX(TIMESPEC), OPT_IN_FIX(8), I}},
+  /* three fd_sets of FD_SETSIZE bits, the timeout the kernel may update, and
+     the mask itself where the kernel takes a {sigset_t *, size} pair: the
+     libc flattens the pair on the way out, the launcher rebuilds it */
+  {CAPSTONE_SYS_pselect6, CAPSTONE_GROUP_DELEGATED, 6, "pselect6",
+   {I, OPT_INOUT_FIX(128), OPT_INOUT_FIX(128), OPT_INOUT_FIX(128), OPT_INOUT_FIX(TIMESPEC), OPT_IN_FIX(8)}},
   {CAPSTONE_SYS_readlinkat, CAPSTONE_GROUP_DELEGATED, 4, "readlinkat", {I, S, OUT_ARG(3), I}},
   {CAPSTONE_SYS_newfstatat, CAPSTONE_GROUP_DELEGATED, 4, "newfstatat", {I, S, OUT_FIX(STAT), I}},
   {CAPSTONE_SYS_fstat, CAPSTONE_GROUP_DELEGATED, 2, "fstat", {I, OUT_FIX(STAT)}},
@@ -82,6 +88,8 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_times, CAPSTONE_GROUP_DELEGATED, 1, "times", {OPT_OUT_FIX(32)}},
   /* identity and limits */
   {CAPSTONE_SYS_getpid, CAPSTONE_GROUP_DELEGATED, 0, "getpid", {I}},
+  {CAPSTONE_SYS_getpgid, CAPSTONE_GROUP_DELEGATED, 1, "getpgid", {I}},
+  {CAPSTONE_SYS_getsid, CAPSTONE_GROUP_DELEGATED, 1, "getsid", {I}},
   {CAPSTONE_SYS_getppid, CAPSTONE_GROUP_DELEGATED, 0, "getppid", {I}},
   {CAPSTONE_SYS_getuid, CAPSTONE_GROUP_DELEGATED, 0, "getuid", {I}},
   {CAPSTONE_SYS_geteuid, CAPSTONE_GROUP_DELEGATED, 0, "geteuid", {I}},

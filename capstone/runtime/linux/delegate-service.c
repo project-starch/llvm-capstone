@@ -53,6 +53,7 @@ static const struct { uint16_t wire; long host; } numbers[] = {
   MAP(uname) MAP(sysinfo) MAP(prlimit64) MAP(getrandom) MAP(sched_yield)
   MAP(set_tid_address) MAP(set_robust_list) MAP(futex) MAP(exit) MAP(exit_group)
   MAP(kill) MAP(wait4) MAP(tkill) MAP(rt_sigsuspend) MAP(rt_sigpending)
+  MAP(pselect6) MAP(getpgid) MAP(getsid)
   MAP(rt_sigtimedwait) MAP(getitimer) MAP(setitimer)
 };
 #undef MAP
@@ -423,8 +424,10 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     int has_wait = 0;
     uint64_t wait_mask = 0;
     if (entry->nr == CAPSTONE_SYS_rt_sigsuspend ||
-        (entry->nr == CAPSTONE_SYS_ppoll && entry->args[3])) {
-      void *mask = (void *)a[entry->nr == CAPSTONE_SYS_ppoll ? 3 : 0];
+        (entry->nr == CAPSTONE_SYS_ppoll && entry->args[3]) ||
+        (entry->nr == CAPSTONE_SYS_pselect6 && entry->args[5])) {
+      void *mask = (void *)a[entry->nr == CAPSTONE_SYS_ppoll ? 3
+                              : entry->nr == CAPSTONE_SYS_pselect6 ? 5 : 0];
       memcpy(&wait_mask, mask, sizeof wait_mask);
       /* A temporary kernel mask must not undo the runtime's backpressure.
          Keep the domain's requested mask in wait_mask for handler delivery. */
@@ -432,6 +435,11 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
       memcpy(mask, &physical_wait, sizeof physical_wait);
       has_wait = 1;
     }
+    /* pselect6's sixth argument is a {sigset_t *, size} pair to the kernel;
+       on the wire it is the mask itself, or 0 */
+    struct { void *ss; size_t len; } sig6 = {(void *)a[5], 8};
+    if (entry->nr == CAPSTONE_SYS_pselect6)
+      a[5] = (uint64_t)(uintptr_t)&sig6;
     r = capstone_signals_call(&host->signals, number, a, has_wait, wait_mask);
   }
   if (r == CAPSTONE_STUB_RETRY)

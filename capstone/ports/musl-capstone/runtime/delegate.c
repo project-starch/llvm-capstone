@@ -464,6 +464,14 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
   switch (n) {
   case SYS_rt_sigtimedwait:
     return dl_sigtimedwait(raw);
+  case SYS_pselect6: {
+    /* the sixth argument is {const sigset_t *, size_t}; the wire carries the
+       mask itself, and the launcher rebuilds the pair for the kernel */
+    const struct { const sigset_t *ss; size_t len; } *sig = (const void *)f;
+    if (sig && sig->ss && sig->len != 8) return -EINVAL;
+    raw[5] = sig && sig->ss ? (syscall_arg_t)sig->ss : 0;
+    return dl_call(CAPSTONE_SYS_pselect6, raw);
+  }
   case SYS_readv:
     return dl_vector((long)a, (const struct iovec *)b, (long)c, 0, 0, 0);
   case SYS_writev:
