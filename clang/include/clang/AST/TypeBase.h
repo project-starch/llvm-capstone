@@ -2600,6 +2600,14 @@ public:
   bool isFunctionNoProtoType() const { return getAs<FunctionNoProtoType>(); }
   bool isFunctionProtoType() const { return getAs<FunctionProtoType>(); }
   bool isPointerType() const;
+  /// Capstone: true for __intcap_t and __uintcap_t, and for an enum or _Atomic
+  /// whose underlying type is one of them.
+  bool isIntCapType() const;
+  /// Capstone: true for a type whose representation is a capability. On a
+  /// target that SupportsCapabilities that is every pointer and reference, and,
+  /// when IncludeIntCap, __intcap_t and __uintcap_t.
+  bool isCHERICapabilityType(const ASTContext &Context,
+                             bool IncludeIntCap = true) const;
   bool isPointerOrReferenceType() const;
   bool isSignableType(const ASTContext &Ctx) const;
   bool isSignablePointerType() const;
