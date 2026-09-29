@@ -1,0 +1,32 @@
+--- a/src/fcntl/open.c
++++ b/src/fcntl/open.c
+@@ -14,8 +14,6 @@
+ 	}
+ 
+ 	int fd = __sys_open_cp(filename, flags, mode);
+-	if (fd>=0 && (flags & O_CLOEXEC))
+-		__syscall(SYS_fcntl, fd, F_SETFD, FD_CLOEXEC);
+ 
+ 	return __syscall_ret(fd);
+ }
+--- a/src/stdio/fopen.c
++++ b/src/stdio/fopen.c
+@@ -20,8 +20,6 @@
+ 
+ 	fd = sys_open(filename, flags, 0666);
+ 	if (fd < 0) return 0;
+-	if (flags & O_CLOEXEC)
+-		__syscall(SYS_fcntl, fd, F_SETFD, FD_CLOEXEC);
+ 
+ 	f = __fdopen(fd, mode);
+ 	if (f) return f;
+--- a/src/stdio/__fopen_rb_ca.c
++++ b/src/stdio/__fopen_rb_ca.c
+@@ -8,7 +8,6 @@
+ 
+ 	f->fd = sys_open(filename, O_RDONLY|O_CLOEXEC);
+ 	if (f->fd < 0) return 0;
+-	__syscall(SYS_fcntl, f->fd, F_SETFD, FD_CLOEXEC);
+ 
+ 	f->flags = F_NOWR | F_PERM;
+ 	f->buf = buf + UNGET;

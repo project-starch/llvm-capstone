@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <unistd.h>
 
 extern char **environ;
@@ -54,6 +55,39 @@ static void cleanup(void *context) {
     close(e->image);
   capstone_spawner_stop(&e->spawner);
   capstone_delegate_host_free(&e->delegate);
+}
+
+/* The RISC-V timebase from the device tree, big-endian; 0 when unreadable, and
+ * the libc then delegates every clock_gettime. */
+static uint64_t timebase_frequency(void) {
+  unsigned char raw[8];
+  int fd = open("/proc/device-tree/cpus/timebase-frequency", O_RDONLY | O_CLOEXEC);
+  if (fd < 0)
+    return 0;
+  ssize_t n = read(fd, raw, sizeof raw);
+  close(fd);
+  uint64_t value = 0;
+  if (n != 4 && n != 8)
+    return 0;
+  for (ssize_t i = 0; i < n; ++i)
+    value = value << 8 | raw[i];
+  return value;
+}
+
+/* What the domain may answer itself: identity, and the clocks paired with the
+ * counter it can read. The three reads sit together so the pairing is tight. */
+static struct capstone_launch_task task_record(void) {
+  struct capstone_launch_task t = {
+      .pid = (uint32_t)getpid(), .ppid = (uint32_t)getppid(),
+      .uid = getuid(), .euid = geteuid(), .gid = getgid(), .egid = getegid(),
+      .ticks_per_second = timebase_frequency()};
+  struct timespec realtime, monotonic;
+  clock_gettime(CLOCK_MONOTONIC, &monotonic);
+  clock_gettime(CLOCK_REALTIME, &realtime);
+  t.ticks = ticks();
+  t.realtime_ns = (uint64_t)realtime.tv_sec * 1000000000u + (uint64_t)realtime.tv_nsec;
+  t.monotonic_ns = (uint64_t)monotonic.tv_sec * 1000000000u + (uint64_t)monotonic.tv_nsec;
+  return t;
 }
 
 /* Counters on request, to stderr, so a run can be costed without a tool. */
@@ -265,8 +299,10 @@ int main(int argc, char **argv) {
   char *cwd = getcwd(NULL, 0);
   void *startup = calloc(1, CAPSTONE_LAUNCH_BYTES);
   int first_arg = app_args ? 4 : binfmt ? 2 : 1;
+  struct capstone_launch_task task = task_record();
   int error = !cwd || !startup ? ENOMEM : capstone_launch_pack(startup,
-      CAPSTONE_LAUNCH_BYTES, argc - first_arg, argv + first_arg, environ, cwd, stdio_mask);
+      CAPSTONE_LAUNCH_BYTES, argc - first_arg, argv + first_arg, environ, cwd, stdio_mask,
+      &task);
   free(cwd);
   if (error) {
     fprintf(stderr, "capstone-exec: startup: %s\n", strerror(error));

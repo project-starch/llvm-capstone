@@ -9,6 +9,7 @@
  */
 #include "capstone/delegate.h"
 #include "capstone/spawn.h"
+#include "capstone/launch.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -16,6 +17,7 @@
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
+#include <time.h>
 
 typedef void *syscall_arg_t;
 /* Integers travel in pointer-typed argument slots, as musl's syscall_arch.h
@@ -29,6 +31,52 @@ void __capstone_hc_note_unserved(long n);
 void __capstone_hc_note_noop(long n);
 void __capstone_hc_report_unserved(void);
 long __capstone_delegate_spawn(const void *block, unsigned long bytes);
+const struct capstone_launch_task *__capstone_launch_task(void);
+
+/* Answered without a round, from the launch record (see launch.h): the task's
+ * identity, which cannot change under a domain, and the two clocks as rdtime
+ * since the launcher read them, the way a vDSO answers. Neither invents state:
+ * the values are Linux's, read once by the task itself. Every other clock, and
+ * everything when the record is missing, is a round. */
+static int dl_clock(long clock, struct timespec *ts) {
+  const struct capstone_launch_task *t = __capstone_launch_task();
+  uint64_t base, now, elapsed, ns;
+  if (!t || !t->ticks_per_second || !ts)
+    return 0;
+  switch (clock) {
+  case CLOCK_REALTIME: case CLOCK_REALTIME_COARSE:
+    base = t->realtime_ns;
+    break;
+  case CLOCK_MONOTONIC: case CLOCK_MONOTONIC_COARSE: case CLOCK_MONOTONIC_RAW:
+  case CLOCK_BOOTTIME:
+    base = t->monotonic_ns;
+    break;
+  default:
+    return 0;
+  }
+  __asm__ volatile("rdtime %0" : "=r"(now));
+  elapsed = now - t->ticks;
+  ns = base + elapsed / t->ticks_per_second * 1000000000u +
+       elapsed % t->ticks_per_second * 1000000000u / t->ticks_per_second;
+  ts->tv_sec = (time_t)(ns / 1000000000u);
+  ts->tv_nsec = (long)(ns % 1000000000u);
+  return 1;
+}
+
+static long dl_identity(long n, long *answer) {
+  const struct capstone_launch_task *t = __capstone_launch_task();
+  if (!t || !t->pid)
+    return 0;
+  switch (n) {
+  case SYS_getpid: case SYS_gettid: *answer = t->pid; return 1;
+  case SYS_getppid: *answer = t->ppid; return 1;
+  case SYS_getuid: *answer = t->uid; return 1;
+  case SYS_geteuid: *answer = t->euid; return 1;
+  case SYS_getgid: *answer = t->gid; return 1;
+  case SYS_getegid: *answer = t->egid; return 1;
+  default: return 0;
+  }
+}
 
 static volatile struct capstone_delegate_entry *dl_entry;
 static char *dl_exchange;
@@ -318,6 +366,25 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
       return rc;
     }
   }
+  case SYS_getpid: case SYS_gettid: case SYS_getppid:
+  case SYS_getuid: case SYS_geteuid: case SYS_getgid: case SYS_getegid: {
+    long answer;
+    if (dl_identity(n, &answer))
+      return answer;
+    break;
+  }
+  case SYS_clock_gettime:
+    if (dl_clock((long)a, (struct timespec *)b))
+      return 0;
+    break;
+  /* musl's thread setup, for the one thread a domain has: the tid it stores is
+     the pid, and there is no robust list to register. Neither reaches Linux. */
+  case SYS_set_tid_address: {
+    const struct capstone_launch_task *t = __capstone_launch_task();
+    return t && t->pid ? (long)t->pid : 1;
+  }
+  case SYS_set_robust_list:
+    return 0;
   case SYS_exit:
   case SYS_exit_group: {
     /* The program's last words before the task ends it: the at-exit hook,
