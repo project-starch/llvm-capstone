@@ -1,6 +1,6 @@
 # C-51 — `llvm.ptrmask` on a capability crashes isel; every 8- and 16-bit atomic reaches it
 
-**Fixed** by `9335700f339d`, the commit before this folder on its branch. Measured 2026-09-23: `./run.sh` reports ABSENT with that compiler and PRESENT with `dev`'s (`1a08706b6344`, whose compiler sources are those of `d030df93d4a4`). Regression test: `llvm/test/CodeGen/Capstone/ptrmask-cap-subword-atomics.ll`. In QEMU: `capstone/tests/runtime-qemu/subword-atomics/run.sh`. Everything below is the investigation as it was recorded before the fix.
+**Fixed** by `9335700f339d`, the commit before this folder on its branch. Measured 2026-09-23: `./run.sh` reports ABSENT with that compiler and PRESENT with `dev`'s (`1a08706b6344`, whose compiler sources are those of `d030df93d4a4`). Regression test: `llvm/test/CodeGen/Capstone/ptrmask-cap-subword-atomics.ll`. In QEMU: `capstone/tests/runtime-qemu/run-delegated-probes.py --only subword-O0 subword-O2`, a delegated application. Everything below is the investigation as it was recorded before the fix.
 
 **A COMPILER bug.** Found 2026-09-23 by the CPython compile survey
 (`capstone/ports/cpython/interpreter/`): CPython 3.13's `PyMutex` is one byte locked by

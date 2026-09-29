@@ -1,10 +1,11 @@
 /* Constructors and destructors in a musl domain (ISSUES C-64).
  *
  * One of each with a priority and two without, and one constructor reads the
- * environment, which in C exists before any constructor runs. The order they
- * print in is the order they ran; run.sh compares it with the same file built natively, so the
- * reference is the toolchain's, not an order written down here. Before C-64 no
- * constructor ran in a domain, and exit() halted (cause 24) on the first
+ * environment, which in C exists before any constructor runs; the launcher
+ * passes INIT_FINI_ENV. The order they print in is the order they ran;
+ * ../run-delegated-probes.py compares it with the same file built natively, so
+ * the reference is the toolchain's, not an order written down here. Before C-64
+ * no constructor ran in a domain, and exit() halted (cause 24) on the first
  * .fini_array slot, loaded through an integer address.
  */
 #include <stdio.h>

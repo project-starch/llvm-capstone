@@ -2,7 +2,8 @@
  *
  * MOVC on the RTL writes cnull over its source unless the source is a non-linear
  * capability, so an INTEGER source is zeroed; capstone-qemu keeps it by default
- * (Q-04). run.sh boots this domain twice, with the switch off and on.
+ * (Q-04). ../run-delegated-probes.py runs it in a guest whose QEMU has the
+ * switch off and in one that has it on.
  *
  *   probe   two hand-written movc of one integer: the first copies it, and on the
  *           RTL also zeroes it, so the second copies zero. b=5 c=5 means the source
