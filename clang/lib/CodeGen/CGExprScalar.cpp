@@ -908,17 +908,36 @@ public:
     }
     return isa<IntegerLiteral>(E) || isa<CharacterLiteral>(E);
   }
+  // The address of an __intcap value, as a 64-bit integer. A value made by
+  // llvm.capstone.cap.set.address holds the address it was given, whatever its
+  // source, so that operand is read back directly: `u + 1` stays an add of the
+  // constant, not of the address of the null-based capability holding 1.
+  Value *EmitIntCapAddress(Value *V) {
+    if (auto *II = dyn_cast<llvm::IntrinsicInst>(V))
+      if (II->getIntrinsicID() == llvm::Intrinsic::capstone_cap_set_address)
+        return II->getArgOperand(1);
+    return Builder.CreatePtrToInt(V, CGF.Int64Ty, "intcap.addr");
+  }
   Value *EmitIntCapBinOp(Value *(ScalarExprEmitter::*Func)(const BinOpInfo &),
                          const BinOpInfo &Ops) {
-    if (!Ops.Ty->isIntCapType())
-      return (this->*Func)(Ops);
+    auto Addr = [&](Value *V) {
+      return V->getType()->isPointerTy() ? EmitIntCapAddress(V) : V;
+    };
+    if (!Ops.Ty->isIntCapType()) {
+      // The count of a shift is not converted to the shifted type, so an
+      // __intcap count arrives as a capability: shift by its address. Only
+      // that operand: a pointer difference also has an integer result and
+      // pointer operands, and must reach EmitSub as it is.
+      const auto *BO = dyn_cast<BinaryOperator>(Ops.E);
+      if (!BO || !(BO->isShiftOp() || BO->isShiftAssignOp()) ||
+          !BO->getRHS()->getType()->isIntCapType())
+        return (this->*Func)(Ops);
+      BinOpInfo IntOps = Ops;
+      IntOps.RHS = Addr(Ops.RHS);
+      return (this->*Func)(IntOps);
+    }
     ASTContext &C = CGF.getContext();
     BinOpInfo IntOps = Ops;
-    auto Addr = [&](Value *V) {
-      return V->getType()->isPointerTy()
-                 ? Builder.CreatePtrToInt(V, CGF.Int64Ty, "intcap.addr")
-                 : V;
-    };
     IntOps.LHS = Addr(Ops.LHS);
     IntOps.RHS = Addr(Ops.RHS);
     IntOps.Ty = Ops.Ty->isSignedIntegerOrEnumerationType() ? C.LongTy
@@ -1588,8 +1607,10 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   // Capstone __intcap: its LLVM type is a capability pointer, and its integer
   // value is the address. Between two intcaps nothing changes. Out of one, take
   // the address and continue as a 64-bit integer. Into one, convert to a 64-bit
-  // integer first and bridge it into a capability register with inttoptr,
-  // which gives an untagged value: an integer carries no provenance.
+  // integer first and set it as the address of null, which gives an untagged
+  // value: an integer carries no provenance. Not inttoptr: the backend
+  // recovers provenance for inttoptr(address of p + k), the uintptr_t round
+  // trip, and would turn `(__intcap)((long)ic + 1)` into an offset on ic.
   if (SrcType->isIntCapType() || DstType->isIntCapType()) {
     QualType AddrTy = [&](QualType T) {
       return T->isSignedIntegerOrEnumerationType() ? CGF.getContext().LongTy
@@ -1598,11 +1619,15 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     if (SrcType->isIntCapType() && DstType->isIntCapType())
       return Src;
     if (SrcType->isIntCapType()) {
-      Src = Builder.CreatePtrToInt(Src, ConvertType(AddrTy), "intcap.addr");
+      Src = EmitIntCapAddress(Src);
       return EmitScalarConversion(Src, AddrTy, DstType, Loc, Opts);
     }
     Value *Int = EmitScalarConversion(Src, SrcType, AddrTy, Loc, Opts);
-    return Builder.CreateIntToPtr(Int, ConvertType(DstType), "intcap.from.int");
+    auto *CapTy = cast<llvm::PointerType>(ConvertType(DstType));
+    return Builder.CreateIntrinsic(llvm::Intrinsic::capstone_cap_set_address,
+                                   {CapTy},
+                                   {llvm::ConstantPointerNull::get(CapTy), Int},
+                                   nullptr, "intcap.from.int");
   }
 
   // All conversions involving fixed point types should be handled by the
@@ -2976,7 +3001,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_IntegralToBoolean:
     if (E->getType()->isIntCapType())
       return EmitIntToBoolConversion(
-          Builder.CreatePtrToInt(Visit(E), CGF.Int64Ty, "intcap.addr"));
+          EmitIntCapAddress(Visit(E)));
     return EmitIntToBoolConversion(Visit(E));
   case CK_PointerToBoolean:
     return EmitPointerToBoolConversion(Visit(E), E->getType());
@@ -3236,8 +3261,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
 
   // Capstone __intcap: step the address, keep the operand's authority.
   } else if (type->isIntCapType()) {
-    llvm::Value *Addr =
-        Builder.CreatePtrToInt(value, CGF.Int64Ty, "intcap.addr");
+    llvm::Value *Addr = EmitIntCapAddress(value);
     Addr = Builder.CreateAdd(Addr, llvm::ConstantInt::get(CGF.Int64Ty, amount, true),
                              isInc ? "inc" : "dec");
     value = Builder.CreateIntrinsic(llvm::Intrinsic::capstone_cap_set_address,
@@ -3551,7 +3575,7 @@ Value *ScalarExprEmitter::VisitMinus(const UnaryOperator *E,
 
   // Capstone __intcap: negate the address, keep the operand's authority.
   if (E->getType()->isIntCapType()) {
-    Value *Addr = Builder.CreatePtrToInt(Op, CGF.Int64Ty, "intcap.addr");
+    Value *Addr = EmitIntCapAddress(Op);
     return Builder.CreateIntrinsic(llvm::Intrinsic::capstone_cap_set_address,
                                    {Op->getType()},
                                    {Op, Builder.CreateNeg(Addr, "neg")},
@@ -3574,7 +3598,7 @@ Value *ScalarExprEmitter::VisitUnaryNot(const UnaryOperator *E) {
   Value *Op = Visit(E->getSubExpr());
   // Capstone __intcap: complement the address, keep the operand's authority.
   if (E->getType()->isIntCapType()) {
-    Value *Addr = Builder.CreatePtrToInt(Op, CGF.Int64Ty, "intcap.addr");
+    Value *Addr = EmitIntCapAddress(Op);
     return Builder.CreateIntrinsic(llvm::Intrinsic::capstone_cap_set_address,
                                    {Op->getType()},
                                    {Op, Builder.CreateNot(Addr, "not")},

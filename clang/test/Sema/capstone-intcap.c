@@ -1,6 +1,6 @@
 // __intcap on capstone64: the type, its spellings, conversions and binary
 // and unary arithmetic are accepted; pointer arithmetic with an __intcap operand,
-// an __intcap subscript and _Atomic read-modify-write are refused for now.
+// an __intcap subscript and atomic read-modify-write are refused for now.
 // Other targets have no capabilities and reject the keyword.
 //
 // RUN: %clang_cc1 -triple capstone64-unknown-elf -ffreestanding -fsyntax-only -verify=cap %s
@@ -27,6 +27,11 @@ void ainc(_Atomic __uintcap_t *a) { (*a)++; }         // cap-error {{operator '+
 char *ptradd(char *p, __uintcap_t u) { return p + u; } // cap-error {{operator '+' on '__uintcap_t'}}
 char sub(char *p, __uintcap_t u) { return p[u]; }    // cap-error {{operator '[]' on '__uintcap_t'}}
 void atom(_Atomic __uintcap_t *a) { *a += 1; }       // cap-error {{operator '+=' on '_Atomic(__uintcap_t)'}}
+// The atomic builtins: moves and compares are accepted, read-modify-write is not.
+__uintcap_t aload(__uintcap_t *p) { return __atomic_load_n(p, __ATOMIC_SEQ_CST); }
+void axchg(_Atomic __uintcap_t *a, __uintcap_t v) { __c11_atomic_exchange(a, v, __ATOMIC_SEQ_CST); }
+__uintcap_t afetch(__uintcap_t *p) { return __atomic_fetch_add(p, 1, __ATOMIC_SEQ_CST); } // cap-error {{atomic read-modify-write through '__uintcap_t *' (aka 'unsigned __intcap *') is not supported yet on Capstone}}
+__uintcap_t c11fetch(_Atomic __uintcap_t *a) { return __c11_atomic_fetch_or(a, 1, __ATOMIC_SEQ_CST); } // cap-error {{atomic read-modify-write through '_Atomic(__uintcap_t) *' is not supported yet on Capstone}}
 #else
 __intcap e; // x86-error {{__intcap is not supported on this target}}
 #endif

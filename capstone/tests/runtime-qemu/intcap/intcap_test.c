@@ -5,8 +5,9 @@
  * copied, spilled and reloaded; under CAPSTONE_MOVC_NULL_SCALAR=1 that also
  * exercises the live-source copy rule for integers held in capability registers.
  *
- * The integer cases (int, arith, cmp, switch) must print "ok" in both variants.
- * The pointer cases (ptr, ptrarith) dereference a pointer that went through D:
+ * The integer cases (int, arith, cmp, switch, fromint, shift) must print "ok" in
+ * both variants. The pointer cases (ptr, ptrarith, atomic) dereference a pointer
+ * that went through D:
  * with __uintcap_t it keeps its capability and reads the byte; with unsigned long
  * it is untagged and the first dereference faults, ending the domain. That fault
  * is the control's expected result, so the pointer cases run last.
@@ -72,6 +73,17 @@ int main(void)
 	default: s = 3; break;
 	}
 	check("switch", s, 2);
+
+	/* fromint: an integer computed from a D holding a plain number, converted
+	   back. It carries no provenance; clang once emitted it as inttoptr, which
+	   the backend rebuilt as cincoffset on the untagged D, a cause-24 trap. */
+	D u = idp((D)41UL);
+	D w = (D)((unsigned long)u + 1);
+	check("fromint", (unsigned long)idp(w), 42);
+
+	/* shift: a D as the shift count shifts by its value (it once crashed clang). */
+	unsigned long one = 1;
+	check("shift", one << idp((D)4UL), 16);
 	printf("INTCAP " VARIANT " integers done bad=%d\n", bad);
 	fflush(stdout);
 
@@ -86,6 +98,13 @@ int main(void)
 	D q = idp((D)(void *)buf);
 	q = q + 20;
 	check("ptrarith", *(char *)(void *)q, 0x54);
+
+	/* atomic: a pointer stored and loaded atomically as D keeps its capability
+	   (C-54: never as an i128, which splits it into integer halves). */
+	static _Atomic D ga;
+	__c11_atomic_store(&ga, (D)(void *)&buf[9], __ATOMIC_SEQ_CST);
+	D r = __c11_atomic_load(&ga, __ATOMIC_SEQ_CST);
+	check("atomic", *(char *)(void *)idp(r), 0x49);
 
 	printf("INTCAP " VARIANT " END bad=%d\n", bad);
 	return bad;

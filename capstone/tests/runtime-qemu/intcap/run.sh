@@ -3,8 +3,8 @@
 # __uintcap_t ("intcap") and D = unsigned long ("uptr", the control), both run in each of two
 # boots: CAPSTONE_MOVC_NULL_SCALAR=0 (QEMU's default movc) and =1 (the RTL's movc).
 #
-#   exit 0 if, in both boots, "intcap" prints ok for all six cases and END bad=0, and "uptr"
-#          prints ok for the four integer cases and then faults at its first dereference
+#   exit 0 if, in both boots, "intcap" prints ok for all nine cases and END bad=0, and "uptr"
+#          prints ok for the six integer cases and then faults at its first dereference
 #          (no "ptr ok", no END) -- the control showing the pointer cases can fail;
 #   exit 1 if any of that is wrong;
 #   exit 2 if it could not check (a boot that did not reach the end of the guest command).
@@ -100,10 +100,10 @@ for arm in off on; do
   ok_u=$(grep -aoE 'INTCAP uptr [a-z]+ ok' "$log" | awk '{print $3}' | sort -u | tr '\n' ' ' || true)
   end_u=$(grep -aoE 'INTCAP uptr END bad=[0-9]+' "$log" | tail -1 || true)
   echo "  switch $arm: intcap ok [$ok_i] ${end_i:-no END} ${bad_i}; uptr ok [$ok_u] ${end_u:-no END (faulted)}"
-  [[ $ok_i == "arith cmp int ptr ptrarith switch " && $end_i == "INTCAP intcap END bad=0" ]] \
-    || { echo "  intcap: expected all six cases ok and END bad=0"; verdict=1; }
-  [[ $ok_u == "arith cmp int switch " && -z $end_u ]] \
-    || { echo "  uptr (control): expected the four integer cases ok and a fault at the first dereference"; verdict=1; }
+  [[ $ok_i == "arith atomic cmp fromint int ptr ptrarith shift switch " && $end_i == "INTCAP intcap END bad=0" ]] \
+    || { echo "  intcap: expected all nine cases ok and END bad=0"; verdict=1; }
+  [[ $ok_u == "arith cmp fromint int shift switch " && -z $end_u ]] \
+    || { echo "  uptr (control): expected the six integer cases ok and a fault at the first dereference"; verdict=1; }
   echo "    log $log"
 done
 echo "  compiler $("$CAPSTONE_CLANG" --version | grep -oE '[0-9a-f]{40}' | cut -c1-12), qemu $CAPSTONE_QEMU_BINARY"
