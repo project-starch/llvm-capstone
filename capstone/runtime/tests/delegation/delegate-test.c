@@ -35,6 +35,8 @@ static void groups(void) {
   assert(capstone_delegate_group_of(CAPSTONE_SYS_rt_sigaction) == CAPSTONE_GROUP_SIGNAL);
   assert(capstone_delegate_group_of(CAPSTONE_SYS_socket) == CAPSTONE_GROUP_UNKNOWN);
   assert(capstone_delegate_group_of(999999) == CAPSTONE_GROUP_UNKNOWN);
+  assert(capstone_delegate_group_of(CAPSTONE_NR_HELLO) == CAPSTONE_GROUP_RUNTIME);
+  assert(capstone_delegate_group_of(0) == CAPSTONE_GROUP_UNKNOWN); /* not io_setup */
   /* exit_group and wait4 are task-model calls that pass through */
   assert(capstone_delegate_group_of(CAPSTONE_SYS_exit_group) == CAPSTONE_GROUP_DELEGATED);
   assert(capstone_delegate_group_of(CAPSTONE_SYS_wait4) == CAPSTONE_GROUP_DELEGATED);
@@ -55,6 +57,15 @@ static void flags_follow_the_shape(void) {
   assert(e.flags == 0xa); /* both paths; offset 0 is a valid string offset */
   e = pack(CAPSTONE_SYS_getpid, 0, 0, 0, 0, 0, 0);
   assert(e.flags == 0);
+  e = pack(CAPSTONE_NR_HELLO, 0x80001000, 0x80000000, 0x80010000, 0, 0, 0);
+  assert(e.flags == 0 && !capstone_delegate_validate(&e, EXCHANGE));
+  /* ioctl and fcntl: the libc chooses an offset or 0 per command */
+  e = pack(CAPSTONE_SYS_ioctl, 1, 0x5413, 0, 0, 0, 0);
+  assert(e.flags == 0);
+  e = pack(CAPSTONE_SYS_ioctl, 1, 0x5413, 64, 0, 0, 0);
+  assert(e.flags == 0x4 && !capstone_delegate_validate(&e, EXCHANGE));
+  e = pack(CAPSTONE_SYS_ioctl, 1, 0x5413, EXCHANGE - 63, 0, 0, 0);
+  assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
   /* optional buffers: NULL is not flagged, non-NULL is */
   e = pack(CAPSTONE_SYS_nanosleep, 0, 0, 0, 0, 0, 0);
   assert(e.flags == 0x1);
