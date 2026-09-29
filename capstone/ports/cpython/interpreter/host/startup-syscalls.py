@@ -2,9 +2,11 @@
 """Which syscalls does CPython itself make while starting, that a domain does not serve?
 
 Runs a NATIVE CPython 3.13.7 under `strace -f -k` (a stack per syscall), keeps
-the syscalls the domain leaves unserved -- read from the domain-support.txt that
-link-cpython-capstone.py writes -- and attributes each call to the first CPython
-function on its stack, or to the loader/libc when there is none.
+the syscalls the domain leaves unserved -- read from a domain-support.txt, the
+output of musl-capstone/check-domain-support.py on the linked image
+(`check-domain-support.py python.dom --sdk <SDK> > domain-support.txt`) -- and
+attributes each call to the first CPython function on its stack, or to the
+loader/libc when there is none.
 
 This is an APPROXIMATION of the domain, and says so in its output: the native
 run uses glibc and a dynamic loader, the domain musl and a static image. Calls

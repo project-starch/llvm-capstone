@@ -1,9 +1,17 @@
 #ifndef CAPSTONE_HOSTCALL_H
 #define CAPSTONE_HOSTCALL_H
 
-/* Shared HostCall v0 wire ABI. Snapshot mutable requests before servicing them. */
+/* The HostCall v0 wire ABI: the bare-domain HostCall transport between a
+ * domain and a host helper that services it over two shared regions (a
+ * metadata block and a payload region). It is not an application ABI: the
+ * application runtime speaks only the delegated ABI (delegate.h). This header
+ * is included by the S-mode wire probes in tests/runtime-qemu/hostcall-*-probe
+ * and their helpers; CoreMark (benchmarks/coremark) and the FPGA gates carry
+ * their own copy of the same layout. The wire spec is
+ * docs/design/hostcall-file-service-v0-wire-spec.md.
+ * Snapshot mutable requests before servicing them. */
 #define HC_V0_REGION_SIZE 4096UL
-/* Common domain/helper capacity; database backends keep many relations open. */
+/* Handle capacity of the reference file service (hostcall-file-service.h). */
 #define HC_V0_FILE_SLOTS 128
 
 typedef unsigned long long hostcall_u64_t;
@@ -50,33 +58,28 @@ struct hostcall_v0 {
 /* First SQLite-facing path-service opcode. */
 #define HC_V0_OP_PATH_ACCESS 23ULL
 #define HC_V0_OP_PATH_DELETE 24ULL
-/* Time. A domain has no clock of its own: rdtime is a counter whose frequency
- * lives in a device tree the domain cannot read, so wall-clock and monotonic
- * time both come from the helper. Request: clock_id at payload offset 0.
- * Response: seconds and nanoseconds at payload offset 0, length 16. First
- * consumer is musl's clock_gettime, and behind it mkstemp's __randname. */
+/* Opcodes 25 to 29 were served only by the musl runtime's HostCall v0 mode,
+ * removed on 2026-09-30; no domain sends them now. The numbers stay reserved.
+ *
+ * Time. Request: clock_id at payload offset 0. Response: seconds and
+ * nanoseconds at payload offset 0, length 16. */
 #define HC_V0_OP_CLOCK_GETTIME 25ULL
 /* Directories. Request: handle (from FILE_OPEN of a directory) and the listing
  * position, at payload offset 0. Response: linux_dirent64 records in the payload
  * from metadata.offset, result = their byte count, 0 at the end. The position is
- * a directory cookie (a record's d_off), not a byte offset; the domain keeps it.
- * First consumer is musl's readdir, and behind it CPython's os.listdir and
- * import's directory cache. */
+ * a directory cookie (a record's d_off), not a byte offset; the domain keeps it. */
 #define HC_V0_OP_DIR_READ 26ULL
 /* Rename. Request: PATH_ACCESS's layout with two paths behind the flags word,
  * "old NUL new", metadata.length covering both and the NUL. Response: result 0.
- * The helper's rename(2); a flag (renameat2's) is refused on the domain side.
- * First consumer is PostgreSQL's durable_rename. */
+ * The helper's rename(2). */
 #define HC_V0_OP_PATH_RENAME 27ULL
 /* Make a directory. Request: PATH_ACCESS's layout, the mode in the flags word.
  * Response: result 0. The helper's mkdir(2). The matching removal is
- * PATH_DELETE with HC_PATH_DELETE_FLAG_DIRECTORY, the helper's rmdir(2).
- * First consumer is PostgreSQL's CREATE DATABASE (base/<oid>). */
+ * PATH_DELETE with HC_PATH_DELETE_FLAG_DIRECTORY, the helper's rmdir(2). */
 #define HC_V0_OP_PATH_MKDIR 28ULL
 /* Read a symbolic link. Request: PATH_ACCESS's layout, flags 0. Response: the
  * link's target at payload offset 0, result = its length, no terminator, as
- * readlink(2). A name that is not a link answers EINVAL, which is what musl's
- * realpath() asks each path component and expects for the common case. */
+ * readlink(2); a name that is not a link answers EINVAL. */
 #define HC_V0_OP_PATH_READLINK 29ULL
 
 #define HC_V0_RET_DONE 0UL

@@ -144,14 +144,11 @@ The following is already verified:
 The validated path today is still the **split host/domain runtime path**, not a full hosted
 `capstone64-unknown-linux-gnu` Linux user-space.
 
-The preferred near-term direction remains:
-
-- split host-enclave execution,
-- shared regions + synchronous multi-round HostCall,
-- then a small reusable service surface,
-- with `FILE_SYNC`, `FILE_STAT_BASIC`, `FILE_TRUNCATE`, and the first SQLite-facing `PATH_ACCESS` and `PATH_DELETE` proofs already validated,
-- and only then deciding whether any lock-oriented semantic is actually required,
-- only later broader hosted user-space ambitions.
+Applications run on the delegated runtime (application ABI v2, `runtime/applications.md`),
+the only application runtime: each Linux call crosses once, into the launcher's task. The bare
+HostCall transport (shared regions + a synchronous multi-round protocol, with the `FILE_*` and
+`PATH_*` proofs above) remains only for the S-mode wire probes and the FPGA gates; the musl
+runtime's HostCall v0 mode was removed on 2026-09-30.
 
 ## What to avoid spending time on right now
 

@@ -63,7 +63,7 @@ handle, senior to every slot's, is what frees the page whole.
 A slot can be split off and revoked only by an allocator holding the page
 linearly. The Sublet heap's `malloc` hands out aliases, not linear blocks, so
 the GC heap needs a source of its own: the runtime's second program region
-(`hostcall.c` parks two under `CAPSTONE_PROGRAM_REGIONS`; the FFmpeg pool port
+(`hostcall.c` parks two for `__capstone_region`; the FFmpeg pool port
 uses region 1 the same way). The GC takes it with `__capstone_region(1)` and
 lends itself pages from it; the libc-test host helper needs a second grant beside
 `LT_HEAP_REGION_BYTES`.

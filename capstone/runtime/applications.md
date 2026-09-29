@@ -242,8 +242,8 @@ cross.
 The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 `CAPSTONE_APPLICATION_EXCHANGE_BYTES` for the SDK project); larger buffers are
 chunked, so a big read or write is a short one. A v2 image's descriptor is 48
-bytes. `capstone-exec` rejects v1 images with exit 126. The SDK rejects
-`CAPSTONE_APPLICATION_DELEGATE=OFF`; rebuild old applications.
+bytes. `capstone-exec` refuses any image without it (a v1 image, or one
+without the delegation flag) with exit 126; rebuild old applications.
 `CAPSTONE_APPLICATION_GRANT_BYTES` declares shared backing for existing inner
 allocators, including a Sublet outer heap where selected.
 

@@ -30,8 +30,8 @@ ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-256} * 1024 * 1024 ))
 #   shrink  the same allocator with CAPSTONE_LEVEL0_SHRINK: per-object bounds, still no
 #           revocation.                                                           -> domain-shrink/
 #   sublet  musl-capstone's sublet_heap.c instead of level0: a buddy heap over a LINEAR region the
-#           host transfers (a third shared region, parked by hostcall.c under
-#           CAPSTONE_PROGRAM_REGIONS), per-object bounds, and every free revokes.  -> domain-sublet/
+#           launcher transfers (a program region, parked by hostcall.c's
+#           __capstone_region), per-object bounds, and every free revokes.         -> domain-sublet/
 #           The arm differs in three objects -- the allocator, hostcall.o (the parking) and the
 #           guest host (the grant) -- all of them the heap's delivery, none of them FFmpeg.
 HEAP=${FFAPP_HEAP:-level0}

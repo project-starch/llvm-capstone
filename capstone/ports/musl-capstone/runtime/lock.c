@@ -3,8 +3,7 @@
 #include "lock.h"            /* musl's __lock and __unlock */
 #include <capstone/lock.h>
 
-/* signals.c, in a delegated application; absent from HostCall v0 builds */
-__attribute__((__weak__)) void __capstone_signals_deliver(void);
+void __capstone_signals_deliver(void);   /* signals.c */
 extern int __capstone_tls_ready;   /* tls.c */
 
 /* Per context: its TLS block. Every lock and unlock is counted, whether or not
@@ -25,7 +24,7 @@ void capstone_lock(volatile int *word)
 void capstone_unlock(volatile int *word)
 {
 	__unlock(word);
-	if (__capstone_tls_ready && !--depth && __capstone_signals_deliver)
+	if (__capstone_tls_ready && !--depth)
 		__capstone_signals_deliver();
 }
 

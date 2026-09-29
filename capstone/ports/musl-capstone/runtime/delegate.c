@@ -1,4 +1,4 @@
-/* The delegated syscall stub: musl's syscall entry under CAPSTONE_DELEGATE_RUNTIME.
+/* The delegated syscall stub: musl's syscall entry in every application.
  *
  * Every Linux call becomes one entry in the entry region and one yield. Pointer
  * arguments are copied into the exchange region and cross as offsets; nothing

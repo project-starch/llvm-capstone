@@ -177,6 +177,11 @@ To avoid churn with those diagnostics, reserve a separate block for the file-ser
 
 These values are a recommendation for the next implementation patch series.
 
+Opcodes 25 to 29 below were served only for the musl runtime's HostCall v0 mode, by the
+helper in `host_service.h`. Both were removed on 2026-09-30 (the application runtime is the
+delegated ABI v2, `plans/delegation-abi.md`); no domain sends these opcodes now and the numbers
+stay reserved. The text records what they were.
+
 `HC_V0_OP_CLOCK_GETTIME = 25` (added 2026-09-16). Request: `hc_clock_gettime_req_v0`
 (`clock_id`) at payload offset 0, `metadata.offset = 0`, `metadata.length = 0`. Response:
 `hc_clock_gettime_resp_v0` (`sec`, `nsec`) at payload offset 0, `metadata.length = 16`,
@@ -191,7 +196,7 @@ take (at most the region size minus 16). The handle comes from an ordinary `FILE
 directory: musl's `opendir` passes `O_DIRECTORY`, which the helper hands to `open` unchanged.
 Response: the helper seeks the directory to `cookie`, calls `getdents64`, and places the records
 in the payload at `metadata.offset` (through its bounce buffer: the region is never handed to a
-syscall, see `hc_host_bounce` in `host_service.h`); `result` = the byte count, 0 at the end of the listing, `metadata.length` the
+syscall, see `hc_host_bounce` in the removed `host_service.h`); `result` = the byte count, 0 at the end of the listing, `metadata.length` the
 same. The records are `linux_dirent64` and travel unconverted: the domain's musl `struct dirent`
 has the same 64-bit layout. The cookie is not a byte offset. It is the `d_off` of the last record
 the domain received (0 = the start), so the domain keeps it as the handle's position and

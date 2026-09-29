@@ -57,7 +57,9 @@ pointer carried through `memcpy` or a union, so the census is a lower bound.
 
     source $CPY_ROOT/build/capstone-env.sh
     python3 link-cpython-capstone.py $CPY_ROOT/build --native <native CPython 3.13.7 build>
-    python3 host/startup-syscalls.py <native>/python $CPY_ROOT/build/link-attempt/domain-support.txt
+    python3 ../../musl-capstone/check-domain-support.py $CPY_ROOT/build/link-attempt/python.dom \
+        --sdk "$CAPSTONE_SDK" > domain-support.txt
+    python3 host/startup-syscalls.py <native>/python domain-support.txt
 
 `link-cpython-capstone.py` links, after a survey, what CPython's Makefile would link for a static
 interpreter, the way every musl domain here is linked. Two absent objects get a measured per-file
@@ -86,7 +88,10 @@ objects (1.30) adds ~3.1 MiB: **~11.5 MiB for the whole static image, an estimat
 heap. A domain gets 4 MiB.
 
 **Linking is not working.** `musl-capstone/check-domain-support.py` on that image: 100 linked
-libc symbols need one of **53 syscalls the domain does not serve**. Which of those CPython
+libc symbols need one of **53 syscalls the domain does not serve**. (Measured against the
+HostCall v0 served set of 2026-09-23. The checker now reads the delegated runtime's shape table,
+and `link-cpython-capstone.py` no longer writes `domain-support.txt`: run the checker on the
+image, as above.) Which of those CPython
 itself makes while starting (`-S -I -c pass`), measured natively under `strace -k` and
 attributed to the first CPython frame -- glibc and a dynamic loader, so an approximation:
 

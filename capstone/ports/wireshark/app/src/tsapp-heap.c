@@ -14,15 +14,16 @@
  *              mrev=<n> delin=<n> revoke=<n> init=<n> unserved=... stdout=open|closed
  * where split + mrev is the revocation-node spend (sublet_heap.c).
  *
- * The unserved syscalls are reported HERE, on fd 2, as well as by the runtime. The runtime's own
- * line goes to fd 1 after the program has finished, and a program that closed fd 1 loses it
- * without a trace: the full tshark run reported none while its first four stages reported fifteen
- * (2026-09-24). `stdout=` says whether fd 1 was still open when the program exited.
+ * The unserved syscalls are reported HERE, on fd 2, as well as by the runtime, whose own line
+ * also goes to the task's fd 2 once the program has finished. (When that line went to fd 1, a
+ * program that closed fd 1 lost it without a trace: the full tshark run reported none while its
+ * first four stages reported fifteen, 2026-09-24.) `stdout=` says whether fd 1 was still open
+ * when the program exited.
  *
- * It is the runtime's __capstone_at_exit (hostcall.c), which runs inside the exit syscall, after
- * musl's exit() has flushed stdout. So the line comes after all of tshark's own output, and
- * host/domain-stdout.py takes it out before the oracle compares. Linked only into the images
- * build-domain.sh makes, never through deps/capstone-cc.
+ * It is the runtime's __capstone_at_exit (hostcall.c), which runs inside the exit_group call,
+ * after musl's exit() has flushed stdout. So the line comes after all of tshark's own output, on
+ * stderr, which host/run.py keeps apart from the stdout the oracle compares. Linked only into the
+ * images build-domain.sh makes, never through deps/capstone-cc.
  */
 #include <stddef.h>
 #include <stdio.h>
