@@ -41,6 +41,7 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   set_tests_properties(mruby-spawn-shell PROPERTIES TIMEOUT 15)
   add_executable(mapping-test ../tests/application/mapping-test.c)
   target_compile_options(mapping-test PRIVATE -UNDEBUG)
+  target_include_directories(mapping-test PRIVATE ../include)
   add_test(NAME application-mappings COMMAND mapping-test)
   add_test(NAME application-safety-classifier
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../../ports/common/application/check-safety-test.py)

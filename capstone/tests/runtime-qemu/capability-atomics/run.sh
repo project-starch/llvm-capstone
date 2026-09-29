@@ -43,7 +43,7 @@ for s in start-musl set_thread_area setjmp; do
   "$CAPSTONE_CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
     -ffreestanding -O0 -c "$MRT/$s.S" -o "$O/$s.o"
 done
-for f in hostcall tls level0 atomic_libcalls; do
+for f in hostcall tls level0 atomic_libcalls lock; do
   "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/$f.c" -o "$O/$f.o"
 done
 # The libc overrides come from the one list every musl domain links (runtime/libc_overrides.sh),
@@ -58,7 +58,7 @@ source "$REPO/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
 "$CAPSTONE_CLANG" "${CF[@]}" -std=c11 -c "$HERE/entry.c" -o "$O/entry.o"
 RUNTIME=("$O/start-musl.o" "$O/hostcall.o" "$O/tls.o" "$O/set_thread_area.o" "$O/setjmp.o"
          "${MUSL_OVERRIDE_OBJS[@]}"
-         "$O/level0.o" "$O/atomic_libcalls.o" "${softfloat_objs[@]}" "$O/entry.o")
+         "$O/level0.o" "$O/atomic_libcalls.o" "$O/lock.o" "${softfloat_objs[@]}" "$O/entry.o")
 
 rm -f "$OUT/share"/*.dom
 for lvl in O0 O2; do

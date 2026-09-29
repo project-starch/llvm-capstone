@@ -801,6 +801,437 @@ static int park_signal(int restart, int timed)
   return 0;
 }
 
+/* ---- T3: runtime locks and identities (Q6, Q2's first part) ---- */
+
+/* Every context has its own thread identity: the first context's is the pid,
+   a minted one's lies above Linux's pid range, and no two are the same. */
+static volatile long tids[TRANSPORTS + 1];
+static unsigned long tid_child(void *arg)
+{
+  tids[(uintptr_t)arg] = syscall(SYS_gettid);
+  return 20;
+}
+
+static int tid_identity(void)
+{
+  struct capstone_context c[3];
+  tids[0] = syscall(SYS_gettid);
+  CHECK(tids[0] == getpid());
+  for (int i = 1; i <= 3; ++i)
+    CHECK(start_thread(&c[i - 1], tid_child, (void *)(uintptr_t)i) > 0);
+  for (int i = 1; i <= 3; ++i) {
+    CHECK(wait_done(&c[i - 1], 20000));
+    /* above Linux's pid range, and inside the 30 bits musl keeps in a lock
+       word (bit 30 is MAYBE_WAITERS, 0x3fffffff a marker) */
+    CHECK(tids[i] >= 0x400000 && tids[i] <= 0x3ffffffe);
+    for (int j = 0; j < i; ++j)
+      CHECK(tids[i] != tids[j]);
+    capstone_context_revoke(&c[i - 1]);
+  }
+  printf("thread-probe tid-identity: %ld %ld %ld %ld\n", tids[0], tids[1], tids[2], tids[3]);
+  return 0;
+}
+
+/* stdio from every context at once into one FILE: musl locks it per call once
+   a second context exists, by thread identity, so every line comes out whole
+   and each context's lines in order. Enough lines that quanta end inside
+   fprintf many times. */
+#define LINES 1500
+static FILE *shared_file;
+static void print_lines(int who)
+{
+  for (int i = 0; i < LINES; ++i)
+    fprintf(shared_file, "L %d %d %d ........................................\n", who, i,
+            who * 10000 + i);
+}
+static unsigned long line_printer(void *arg)
+{
+  print_lines((int)(uintptr_t)arg);
+  return 21;
+}
+
+static int stdio_lines(void)
+{
+  struct capstone_context c[TRANSPORTS];
+  char path[] = "/tmp/thread-probe-stdio-XXXXXX";
+  int fd = mkstemp(path);
+  CHECK(fd >= 0);
+  shared_file = fdopen(fd, "w+");
+  CHECK(shared_file);
+  for (int i = 0; i < TRANSPORTS; ++i)
+    CHECK(start_thread(&c[i], line_printer, (void *)(uintptr_t)(i + 1)) > 0);
+  print_lines(0);
+  for (int i = 0; i < TRANSPORTS; ++i) {
+    CHECK(wait_done(&c[i], 120000) && *c[i].value == 21);
+    capstone_context_revoke(&c[i]);
+  }
+  CHECK(fflush(shared_file) == 0 && fseek(shared_file, 0, SEEK_SET) == 0);
+  int seen[TRANSPORTS + 1] = {0}, bad = 0;
+  long lines = 0;
+  char line[128];
+  while (fgets(line, sizeof line, shared_file)) {
+    int who, i, check, used = 0;
+    ++lines;
+    if (sscanf(line, "L %d %d %d %n", &who, &i, &check, &used) != 3 || who < 0 ||
+        who > TRANSPORTS || check != who * 10000 + i || i != seen[who] ||
+        strcmp(line + used, "........................................\n")) {
+      ++bad;
+      continue;
+    }
+    ++seen[who];
+  }
+  fclose(shared_file);
+  unlink(path);
+  printf("thread-probe stdio-lines: %ld lines, %d malformed or out of order\n", lines, bad);
+  CHECK(bad == 0);
+  for (int w = 0; w <= TRANSPORTS; ++w)
+    CHECK(seen[w] == LINES);
+  return 0;
+}
+
+/* The heap from every context at once: blocks of varying size, each filled
+   with its owner's pattern, checked before it is freed or grown. */
+#define HEAP_ROUNDS 1500
+static volatile int heap_errors[TRANSPORTS + 1];
+static void heap_work(int who)
+{
+  unsigned char *live[8] = {0};
+  size_t size[8] = {0};
+  for (int i = 0; i < HEAP_ROUNDS; ++i) {
+    int k = i % 8;
+    if (live[k]) {
+      for (size_t j = 0; j < size[k]; ++j)
+        if (live[k][j] != (unsigned char)(who * 31 + k)) { ++heap_errors[who]; break; }
+      if (i % 5 == 0) {
+        size_t grown = size[k] * 2 + 1;
+        unsigned char *q = realloc(live[k], grown);
+        if (!q) { ++heap_errors[who]; continue; }
+        for (size_t j = 0; j < size[k]; ++j)
+          if (q[j] != (unsigned char)(who * 31 + k)) { ++heap_errors[who]; break; }
+        free(q);
+      } else {
+        free(live[k]);
+      }
+    }
+    size[k] = (size_t)((i * 37 + who * 11) % 500 + 1);
+    live[k] = malloc(size[k]);
+    if (!live[k]) { ++heap_errors[who]; continue; }
+    memset(live[k], who * 31 + k, size[k]);
+  }
+  for (int k = 0; k < 8; ++k)
+    free(live[k]);
+}
+static unsigned long heap_worker(void *arg)
+{
+  heap_work((int)(uintptr_t)arg);
+  return 22;
+}
+
+static int heap_stress(void)
+{
+  struct capstone_context c[TRANSPORTS];
+  for (int i = 0; i < TRANSPORTS; ++i)
+    CHECK(start_thread(&c[i], heap_worker, (void *)(uintptr_t)(i + 1)) > 0);
+  heap_work(0);
+  for (int i = 0; i < TRANSPORTS; ++i) {
+    CHECK(wait_done(&c[i], 120000) && *c[i].value == 22);
+    capstone_context_revoke(&c[i]);
+  }
+  int total = 0;
+  for (int w = 0; w <= TRANSPORTS; ++w)
+    total += heap_errors[w];
+  printf("thread-probe heap-stress: %d contexts, %d rounds each, %d errors\n", TRANSPORTS + 1,
+         HEAP_ROUNDS, total);
+  CHECK(total == 0);
+  return 0;
+}
+
+/* stdio calls that take a FILE's lock again while they hold it (puts through
+   fwrite, perror, fclose through fflush, putc inside flockfile) from a minted
+   context: musl's recursive check compares its thread identity with the lock
+   word's owner, so an identity that collides with the word's flag bits would
+   make the context wait for itself. */
+static unsigned long nested_stdio(void *arg)
+{
+  (void)arg;
+  puts("thread-probe stdio-nested: puts from a minted context");
+  errno = ENOENT;
+  perror("thread-probe stdio-nested: perror");
+  FILE *f = fopen("/dev/null", "w");
+  if (!f) return 1;
+  fputs("x", f);
+  if (fclose(f)) return 2;
+  flockfile(stdout);
+  putc('.', stdout);
+  putc('\n', stdout);
+  funlockfile(stdout);
+  fflush(stdout);
+  return 25;
+}
+
+static int stdio_nested(void)
+{
+  struct capstone_context c[2];
+  for (int i = 0; i < 2; ++i)
+    CHECK(start_thread(&c[i], nested_stdio, 0) > 0);
+  for (int i = 0; i < 2; ++i) {
+    CHECK(wait_done(&c[i], 20000) && *c[i].value == 25);
+    capstone_context_revoke(&c[i]);
+  }
+  return 0;
+}
+
+/* posix_spawn from every context at once: the request is packed in one static
+   block, so each child's exit status must be the one its own request asked for. */
+#include <spawn.h>
+#include <sys/wait.h>
+extern char **environ;
+static volatile int spawn_errors[TRANSPORTS + 1];
+static void spawn_work(int who)
+{
+  for (int k = 0; k < 3; ++k) {
+    int want = who * 3 + k + 1, status = 0;
+    char code[16];
+    snprintf(code, sizeof code, "exit %d", want);
+    char *args[] = {"sh", "-c", code, 0};
+    pid_t pid;
+    if (posix_spawn(&pid, "/bin/sh", 0, 0, args, environ) ||
+        waitpid(pid, &status, 0) != pid || !WIFEXITED(status) || WEXITSTATUS(status) != want)
+      ++spawn_errors[who];
+  }
+}
+static unsigned long spawner(void *arg)
+{
+  spawn_work((int)(uintptr_t)arg);
+  return 26;
+}
+
+static int spawn_concurrent(void)
+{
+  struct capstone_context c[TRANSPORTS];
+  for (int i = 0; i < TRANSPORTS; ++i)
+    CHECK(start_thread(&c[i], spawner, (void *)(uintptr_t)(i + 1)) > 0);
+  spawn_work(0);
+  int total = 0;
+  for (int i = 0; i < TRANSPORTS; ++i) {
+    CHECK(wait_done(&c[i], 120000) && *c[i].value == 26);
+    capstone_context_revoke(&c[i]);
+  }
+  for (int w = 0; w <= TRANSPORTS; ++w)
+    total += spawn_errors[w];
+  printf("thread-probe spawn-concurrent: %d spawns, %d wrong\n", 3 * (TRANSPORTS + 1), total);
+  CHECK(total == 0);
+  return 0;
+}
+
+/* Anonymous mappings from every context at once, through the runtime's
+   mapping table: each mapping holds its owner's pattern until it is unmapped. */
+#include <sys/mman.h>
+static volatile int map_errors[TRANSPORTS + 1];
+static void map_work(int who)
+{
+  for (int i = 0; i < 200; ++i) {
+    size_t len = (size_t)(4096 * (1 + (i + who) % 3));
+    unsigned char *m = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (m == MAP_FAILED) { ++map_errors[who]; continue; }
+    memset(m, who + 1, len);
+    for (size_t j = 0; j < len; j += 512)
+      if (m[j] != who + 1) { ++map_errors[who]; break; }
+    if (munmap(m, len)) ++map_errors[who];
+  }
+}
+static unsigned long mapper(void *arg)
+{
+  map_work((int)(uintptr_t)arg);
+  return 27;
+}
+
+static int mmap_concurrent(void)
+{
+  struct capstone_context c[TRANSPORTS];
+  for (int i = 0; i < TRANSPORTS; ++i)
+    CHECK(start_thread(&c[i], mapper, (void *)(uintptr_t)(i + 1)) > 0);
+  map_work(0);
+  int total = 0;
+  for (int i = 0; i < TRANSPORTS; ++i) {
+    CHECK(wait_done(&c[i], 120000) && *c[i].value == 27);
+    capstone_context_revoke(&c[i]);
+  }
+  for (int w = 0; w <= TRANSPORTS; ++w)
+    total += map_errors[w];
+  printf("thread-probe mmap-concurrent: %d contexts, 200 mappings each, %d errors\n",
+         TRANSPORTS + 1, total);
+  CHECK(total == 0);
+  return 0;
+}
+
+/* Contexts that create contexts: three at once each mint (from the one arena)
+   and create a THREAD context of its own, which makes a delegated call; the
+   creator waits for it and revokes it. */
+static unsigned long grandchild(void *arg)
+{
+  char line[48];
+  int n = snprintf(line, sizeof line, "grandchild of %d\n", (int)(uintptr_t)arg);
+  return write(devnull, line, (size_t)n) == n ? 30 : 1;
+}
+static unsigned long creator(void *arg)
+{
+  struct capstone_context g;
+  if (start_thread(&g, grandchild, arg) <= 0) return 1;
+  if (!wait_done(&g, 60000)) return 2;
+  unsigned long v = *g.value;
+  capstone_context_revoke(&g);
+  return v == 30 ? 31 : 3;
+}
+
+static int nested_create(void)
+{
+  struct capstone_context c[3];
+  devnull = open("/dev/null", O_WRONLY);
+  CHECK(devnull >= 0);
+  for (int i = 0; i < 3; ++i)
+    CHECK(start_thread(&c[i], creator, (void *)(uintptr_t)i) > 0);
+  for (int i = 0; i < 3; ++i) {
+    CHECK(wait_done(&c[i], 120000));
+    printf("thread-probe nested-create: creator %d returned %lu\n", i, *c[i].value);
+    CHECK(*c[i].value == 31);
+    capstone_context_revoke(&c[i]);
+  }
+  return 0;
+}
+
+/* B9: two contexts on scalar and capability-valued atomics while quanta end
+   inside them. The capability operations go through the runtime's generic
+   atomics, which hold its leaf spin lock.
+   - exchange: every value stored is a distinct tagged capability to one cell
+     of an array (cell i: stored once, by one context); the history is
+     linearizable only if every stored value but the last comes back from
+     exactly one exchange, tagged, with the array's bounds;
+   - compare-and-swap: both contexts advance one shared capability by one
+     cell per successful CAS; the cursor ends exactly 2 * rounds cells on, a
+     lost update would leave it short;
+   - fetch_add on a scalar counter: exact. */
+#define B9_ROUNDS 20000
+unsigned long __capstone_spin_contended(void);
+static int b9_cells[2 * B9_ROUNDS + 1];
+static int *volatile b9_slot, *volatile b9_cursor;
+static volatile int b9_counter;
+static unsigned char b9_returned[2 * B9_ROUNDS];
+static volatile int b9_bad[2];
+static long b9_index(int *p)
+{
+  if (!__builtin_capstone_cap_get_tag(p) ||
+      __builtin_capstone_cap_get_base(p) != __builtin_capstone_cap_get_base(b9_cells) ||
+      __builtin_capstone_cap_get_end(p) != __builtin_capstone_cap_get_end(b9_cells))
+    return -1;
+  return (long)(__builtin_capstone_cap_get_cursor(p) - __builtin_capstone_cap_get_cursor(b9_cells)) /
+         (long)sizeof(int);
+}
+static void b9_work(int who)
+{
+  for (int i = 0; i < B9_ROUNDS; ++i) {
+    __atomic_fetch_add(&b9_counter, 1, __ATOMIC_RELAXED);
+    int *old = __atomic_exchange_n(&b9_slot, &b9_cells[who * B9_ROUNDS + i], __ATOMIC_SEQ_CST);
+    if (old) {
+      long k = b9_index(old);
+      if (k < 0 || k >= 2 * B9_ROUNDS || b9_returned[k]++)
+        ++b9_bad[who];
+    }
+    int *expected = __atomic_load_n(&b9_cursor, __ATOMIC_ACQUIRE);
+    while (!__atomic_compare_exchange_n(&b9_cursor, &expected, expected + 1, 0,
+                                        __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST))
+      ;
+  }
+}
+static unsigned long b9_worker(void *arg)
+{
+  (void)arg;
+  b9_work(1);
+  return 23;
+}
+
+static int b9(void)
+{
+  struct capstone_context c;
+  unsigned long before = __capstone_spin_contended();
+  b9_cursor = b9_cells;
+  CHECK(start_thread(&c, b9_worker, 0) > 0);
+  b9_work(0);
+  CHECK(wait_done(&c, 120000) && *c.value == 23);
+  unsigned long contended = __capstone_spin_contended() - before;
+  long last = b9_index(b9_slot), missing = 0;
+  for (long k = 0; k < 2 * B9_ROUNDS; ++k)
+    if (b9_returned[k] != (k == last ? 0 : 1))
+      ++missing;
+  long advanced = b9_index(b9_cursor);
+  printf("thread-probe b9: counter %d of %d; exchange: %d and %d bad, %ld cells not returned "
+         "exactly once; cursor %ld of %d; the lock found taken %lu times\n", b9_counter,
+         2 * B9_ROUNDS, b9_bad[0], b9_bad[1], missing, advanced, 2 * B9_ROUNDS, contended);
+  CHECK(b9_counter == 2 * B9_ROUNDS);
+  CHECK(b9_bad[0] == 0 && b9_bad[1] == 0 && last >= 0 && missing == 0);
+  CHECK(advanced == 2 * B9_ROUNDS);
+  CHECK(contended > 0);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
+/* B14: no handler while a runtime-internal lock is held. The first context
+   holds lock A and waits for lock B, which a further context holds; that
+   context sends SIGUSR1 meanwhile, so the event arrives in one of the first
+   context's rounds inside the wait. The handler takes A itself: run there, it
+   would wait for its own context forever. It must run once, after A is
+   released, with no lock held. */
+#include <capstone/lock.h>
+static volatile int lock_a, lock_b, b_held, a_released, b14_handled, b14_depth = -1;
+static void on_b14(int sig)
+{
+  (void)sig;
+  b14_depth = __capstone_lock_depth();
+  if (!a_released) return;           /* too early: leave the counters unset */
+  capstone_lock(&lock_a);
+  capstone_unlock(&lock_a);
+  b14_handled++;
+}
+static unsigned long b_holder(void *arg)
+{
+  (void)arg;
+  capstone_lock(&lock_b);
+  b_held = 1;
+  spin_ms(100);
+  kill(getpid(), SIGUSR1);
+  spin_ms(100);
+  capstone_unlock(&lock_b);
+  return 24;
+}
+
+static int b14(void)
+{
+  struct capstone_context c;
+  struct sigaction sa = {0};
+  sa.sa_handler = on_b14;
+  sa.sa_flags = SA_RESTART;
+  CHECK(sigaction(SIGUSR1, &sa, 0) == 0);
+  CHECK(start_thread(&c, b_holder, 0) > 0);   /* the runtime's locks are on from here */
+  long t0 = monotonic_ms();
+  while (!b_held && monotonic_ms() - t0 < 20000)
+    sched_yield();
+  CHECK(b_held);
+  capstone_lock(&lock_a);
+  capstone_lock(&lock_b);                      /* waits for the other context */
+  capstone_unlock(&lock_b);
+  int handled_inside = b14_handled || b14_depth >= 0;
+  a_released = 1;
+  capstone_unlock(&lock_a);                    /* the handler runs here, at depth 0 */
+  int at_release = b14_handled;                /* before any further round */
+  CHECK(wait_done(&c, 20000) && *c.value == 24);
+  printf("thread-probe b14: handler ran %d time(s), at lock depth %d, %s, %s\n", b14_handled,
+         b14_depth, handled_inside ? "while a lock was held" : "after the last release",
+         at_release ? "by that release" : "only at a later round");
+  CHECK(!handled_inside && b14_handled == 1 && b14_depth == 0 && at_release == 1);
+  capstone_context_revoke(&c);
+  return 0;
+}
+
 /* A REGISTER context has no transport: its calls fail with EIO instead of
    using anyone else's. */
 static volatile long unserved_rc, unserved_errno;
@@ -865,6 +1296,15 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "park-signal")) rc = park_signal(1, 0);
   else if (!strcmp(mode, "park-signal-eintr")) rc = park_signal(0, 0);
   else if (!strcmp(mode, "park-signal-timed")) rc = park_signal(1, 1);
+  else if (!strcmp(mode, "tid-identity")) rc = tid_identity();
+  else if (!strcmp(mode, "stdio-lines")) rc = stdio_lines();
+  else if (!strcmp(mode, "heap-stress")) rc = heap_stress();
+  else if (!strcmp(mode, "b9")) rc = b9();
+  else if (!strcmp(mode, "b14")) rc = b14();
+  else if (!strcmp(mode, "stdio-nested")) rc = stdio_nested();
+  else if (!strcmp(mode, "spawn-concurrent")) rc = spawn_concurrent();
+  else if (!strcmp(mode, "mmap-concurrent")) rc = mmap_concurrent();
+  else if (!strcmp(mode, "nested-create")) rc = nested_create();
   else {
     fprintf(stderr, "thread-probe: unknown mode %s\n", mode);
     return 2;

@@ -44,6 +44,16 @@ MODES = {
     "park-signal": ("exit", 0, "PASS", None, None),
     "park-signal-eintr": ("exit", 0, "PASS", None, None),
     "park-signal-timed": ("exit", 0, "PASS", None, None),
+    # T3: runtime locks and identities (Q6, Q2's first part).
+    "tid-identity": ("exit", 0, "PASS", None, None),
+    "stdio-lines": ("exit", 0, "PASS", None, None),
+    "heap-stress": ("exit", 0, "PASS", None, None),
+    "b9": ("exit", 0, "PASS", None, None),
+    "b14": ("exit", 0, "PASS", None, None),
+    "stdio-nested": ("exit", 0, "PASS", None, None),
+    "spawn-concurrent": ("exit", 0, "PASS", None, None),
+    "mmap-concurrent": ("exit", 0, "PASS", None, None),
+    "nested-create": ("exit", 0, "PASS", None, None),
     # exit() in a further context ends the process with its status.
     "exit-child": ("exit", 7, "", "REACHED", None),
     # A fault in a further context ends the process: a store through a null

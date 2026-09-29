@@ -44,6 +44,7 @@
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
+#include <capstone/lock.h>
 
 #ifndef MAP_HUGETLB
 #define MAP_HUGETLB 0x40000
@@ -101,7 +102,7 @@ static void *page_block(size_t len, void **block)
 	return base;
 }
 
-void *__mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
+static void *mmap_held(void *start, size_t len, int prot, int flags, int fd, off_t off)
 {
 	(void)start; (void)prot; (void)fd; (void)off;
 	if (len == 0 || (flags & MAP_FIXED)) {
@@ -134,12 +135,8 @@ void *__mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
 	return base;
 }
 
-void *mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
-{
-	return __mmap(start, len, prot, flags, fd, off);
-}
 
-int __munmap(void *start, size_t len)
+static int munmap_held(void *start, size_t len)
 {
 	for (int i = 0; i < L0_MAX_MAPS; i++) {
 		if (!maps[i].base || maps[i].base != start)
@@ -157,10 +154,6 @@ int __munmap(void *start, size_t len)
 	return -1;
 }
 
-int munmap(void *start, size_t len)
-{
-	return __munmap(start, len);
-}
 
 static struct l0_seg *seg_of(int id)
 {
@@ -175,7 +168,7 @@ static void seg_drop(struct l0_seg *s)
 	memset(s, 0, sizeof *s);
 }
 
-int shmget(key_t key, size_t size, int flag)
+static int shmget_held(key_t key, size_t size, int flag)
 {
 	int i;
 	if (key != IPC_PRIVATE) {
@@ -223,7 +216,7 @@ int shmget(key_t key, size_t size, int flag)
 	return i + 1;
 }
 
-void *shmat(int id, const void *addr, int flag)
+static void *shmat_held(int id, const void *addr, int flag)
 {
 	(void)flag;
 	struct l0_seg *s = seg_of(id);
@@ -235,7 +228,7 @@ void *shmat(int id, const void *addr, int flag)
 	return s->base;
 }
 
-int shmdt(const void *addr)
+static int shmdt_held(const void *addr)
 {
 	for (int i = 0; i < L0_MAX_SEGS; i++) {
 		struct l0_seg *s = &segs[i];
@@ -251,7 +244,7 @@ int shmdt(const void *addr)
 	return -1;
 }
 
-int shmctl(int id, int cmd, struct shmid_ds *buf)
+static int shmctl_held(int id, int cmd, struct shmid_ds *buf)
 {
 	struct l0_seg *s = seg_of(id);
 	if (!s) {
@@ -276,4 +269,66 @@ int shmctl(int id, int cmd, struct shmid_ds *buf)
 	}
 	errno = EINVAL;
 	return -1;
+}
+
+/* One lock over the mapping and segment tables (capstone/lock.h, Q6): several
+   contexts of one application share them. Taken before the heap's. */
+static volatile int maps_lock;
+
+void *__mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
+{
+	capstone_lock(&maps_lock);
+	void *r = mmap_held(start, len, prot, flags, fd, off);
+	capstone_unlock(&maps_lock);
+	return r;
+}
+
+void *mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
+{
+	return __mmap(start, len, prot, flags, fd, off);
+}
+
+int __munmap(void *start, size_t len)
+{
+	capstone_lock(&maps_lock);
+	int r = munmap_held(start, len);
+	capstone_unlock(&maps_lock);
+	return r;
+}
+
+int munmap(void *start, size_t len)
+{
+	return __munmap(start, len);
+}
+
+int shmget(key_t key, size_t size, int flag)
+{
+	capstone_lock(&maps_lock);
+	int r = shmget_held(key, size, flag);
+	capstone_unlock(&maps_lock);
+	return r;
+}
+
+void *shmat(int id, const void *addr, int flag)
+{
+	capstone_lock(&maps_lock);
+	void *r = shmat_held(id, addr, flag);
+	capstone_unlock(&maps_lock);
+	return r;
+}
+
+int shmdt(const void *addr)
+{
+	capstone_lock(&maps_lock);
+	int r = shmdt_held(addr);
+	capstone_unlock(&maps_lock);
+	return r;
+}
+
+int shmctl(int id, int cmd, struct shmid_ds *buf)
+{
+	capstone_lock(&maps_lock);
+	int r = shmctl_held(id, cmd, buf);
+	capstone_unlock(&maps_lock);
+	return r;
 }

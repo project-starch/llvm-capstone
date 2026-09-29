@@ -19,6 +19,7 @@
 #include <sys/uio.h>
 #include <signal.h>
 #include <time.h>
+#include <capstone/lock.h>
 
 typedef void *syscall_arg_t;
 /* Integers travel in pointer-typed argument slots, as musl's syscall_arch.h
@@ -75,12 +76,14 @@ static int dl_clock(long clock, struct timespec *ts) {
   return 1;
 }
 
+int __capstone_context_tid(void);   /* tls.c: the calling context's */
 static long dl_identity(long n, long *answer) {
   const struct capstone_launch_task *t = __capstone_launch_task();
   if (!t || !t->pid)
     return 0;
   switch (n) {
-  case SYS_getpid: case SYS_gettid: *answer = t->pid; return 1;
+  case SYS_getpid: *answer = t->pid; return 1;
+  case SYS_gettid: *answer = __capstone_context_tid(); return 1;
   case SYS_getppid: *answer = t->ppid; return 1;
   case SYS_getuid: *answer = t->uid; return 1;
   case SYS_geteuid: *answer = t->euid; return 1;
@@ -113,6 +116,9 @@ static size_t cap_bytes(void *cap) {
 }
 
 static __thread uint64_t dl_status;  /* of the last round: DONE or RETRY */
+
+/* posix_spawn's and execve's one request block (capstone/lock.h, Q6). */
+volatile int __capstone_spawn_lock;
 
 /* The two regions every transport is cut from, for the whole application:
    META blocks of CAPSTONE_DELEGATE_META_BYTES and exchange slices of equal
@@ -638,19 +644,19 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_fcntl:
     return dl_fcntl((long)a, (long)b, c);
   case SYS_execve: {
-    /* exec in place: the task replaces itself with the named image */
+    /* exec in place: the task replaces itself with the named image. The
+       block is static and one at a time, as posix_spawn's. */
     static char block[CAPSTONE_SPAWN_BYTES];
     size_t bytes;
+    long rc;
+    capstone_lock(&__capstone_spawn_lock);
     int error = capstone_spawn_pack(block, sizeof block, CAPSTONE_SPAWN_EXEC, 0, (const char *)a,
                                     (char *const *)b, (char *const *)c, NULL, 0, NULL, &bytes);
-    if (error)
-      return -error;
-    {
-      long rc = __capstone_delegate_spawn(block, bytes);
-      if (rc == -ENOSYS)
-        __capstone_hc_note_unserved(n);
-      return rc;
-    }
+    rc = error ? -error : __capstone_delegate_spawn(block, bytes);
+    capstone_unlock(&__capstone_spawn_lock);
+    if (rc == -ENOSYS)
+      __capstone_hc_note_unserved(n);
+    return rc;
   }
   case SYS_getpid: case SYS_gettid: case SYS_getppid:
   case SYS_getuid: case SYS_geteuid: case SYS_getgid: case SYS_getegid: {
@@ -663,12 +669,11 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     if (dl_clock((long)a, (struct timespec *)b))
       return 0;
     break;
-  /* musl's thread setup, for the one thread a domain has: the tid it stores is
-     the pid, and there is no robust list to register. Neither reaches Linux. */
-  case SYS_set_tid_address: {
-    const struct capstone_launch_task *t = __capstone_launch_task();
-    return t && t->pid ? (long)t->pid : 1;
-  }
+  /* musl's thread setup: the tid is the context's runtime identity (the pid
+     for the first context), and there is no robust list to register. Neither
+     reaches Linux. */
+  case SYS_set_tid_address:
+    return __capstone_context_tid();
   case SYS_set_robust_list:
     return 0;
   case SYS_exit:
