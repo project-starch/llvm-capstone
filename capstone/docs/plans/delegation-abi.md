@@ -29,7 +29,10 @@ round is no longer what a program waits for. What is left, in this order:
   `sigevent` token now that delivery exists. Done ahead of it, on
   `delegation-pty-ioctls`: the pseudo-terminal and foreground-group
   `ioctl` requests, with the 32-bit request mask that any `_IOR` request
-  needed.
+  needed; on `delegation-runtime-rows`: `pselect6` (mask flattened out of the
+  kernel's pointer pair), `getpgid`, `getsid`, `kill` to the parent with ESRCH
+  for a vanished pid, the domain's unserved report only under
+  `CAPSTONE_DELEGATE_STATS`, and musl's `pselect` mask kept a capability.
 - **Memory**, step 5: the region grant at the resume label; `mmap` of files,
   `mprotect`.
 - **Threads**: the sibling-context primitive in the monitor plus capability TLS
@@ -196,10 +199,15 @@ Each step stacks on the previous one, is gated, and lands squashed.
    patch (`fork_exec` through `posix_spawn`) is `delegation-cpython-subprocess`,
    CPython patch 0015: the port's subprocess smoke 21/21, `test_subprocess`
    237 ok of 344 (from 179), `test_popen` 5/5. Found on the way, each its own
-   small runtime item: `kill` to the parent process (a child domain signalling
-   its parent gets EPERM), `pselect6`, `getpgid` and `getsid` rows, ESRCH for
-   a vanished pid, and the domain's unserved report only under
-   `CAPSTONE_DELEGATE_STATS`, since it lands on the application's stderr.
+   small runtime item, all done on `delegation-runtime-rows`: `kill` to the
+   parent process (a child domain signalling its parent got EPERM), `pselect6`,
+   `getpgid` and `getsid` rows, ESRCH for a vanished pid, and the domain's
+   unserved report only under `CAPSTONE_DELEGATE_STATS`, since it lands on the
+   application's stderr. Result: `test_subprocess` 282 ok of 344 with every remaining error
+   refused by design, a thread or a descriptor limit; `test_signal` 38 ok of
+   57 with the inter-process test passing; the signal contract 27/27 with
+   `pselect`; gate, binfmt and libc-test unchanged
+   (`runtime/tests/application/results/20260930-runtime-rows.json`).
 6. **`delegation-memory`** (was 5): region grant at the resume label, chunk
    allocator, heap declared as initial size. Gate: CPython built without
    `ac_cv_func_mmap=no`.

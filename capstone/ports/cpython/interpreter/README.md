@@ -261,25 +261,35 @@ CPython's own suites in the guest, booted with `--process-cache-mib 768`
 179 ok before the patch; `test_popen` 5/5; `test_faulthandler` 25 ok, 11 fail,
 1 error, 9 skipped, up from 2 ok; `test_signal` without
 `test_interprocess_signal` 37 ok, 2 fail, 4 errors, 13 skipped, up from 25 ok.
-What remains, by cause: 26 refused by design; 24 `select.select` on the
-unserved `pselect6`, which every two-pipe `communicate()` hits because the
-child ends up with `SelectSelector`; the thread tests; children started
-without `PYTHONHOME` (`env={}`, `-E`); `os.getpgid` and `os.getsid`
-unserved; two stderr comparisons that see the domain's
-`UNSERVED syscalls: 20` report; faults that faulthandler cannot report
-because a domain fault is fatal; `signal.pthread_kill(threading.get_ident())`,
-which rebuilds a `pthread_t` from an integer. `test_interprocess_signal` hangs
-for a policy reason: its tester's child sends `os.kill` to its parent, and the
-launcher allows `kill` only to the task itself or a recorded child.
+What remained then, by cause: 26 refused by design; 24 `select.select` on the
+unserved `pselect6`; the thread tests; children started without `PYTHONHOME`
+(`env={}`, `-E`, `-I`, which is also why `test_interprocess_signal` hung: its
+sender never started); `os.getpgid` and `os.getsid` unserved; two stderr
+comparisons that saw the domain's `UNSERVED syscalls: 20` report; faults that
+faulthandler cannot report because a domain fault is fatal;
+`signal.pthread_kill(threading.get_ident())`, which rebuilds a `pthread_t`
+from an integer; and `kill` to the parent, which the launcher refused.
+With `delegation-runtime-rows` (`pselect6`, `getpgid`, `getsid`, `kill` to the
+parent with ESRCH for a vanished pid, the unserved report only under
+`CAPSTONE_DELEGATE_STATS`, musl's `pselect` mask kept a capability) and the
+stdlib beside the image: `test_subprocess` 282 ok, 0 fail, 32 errors, 38
+skipped, the errors being 26 refused by design, 4 threads and 2 descriptor
+limits; `test_signal` complete, 57 tests, 38 ok, 2 fail, 4 errors, 13 skipped,
+`test_interprocess_signal` included; `test_faulthandler` 26 ok. A child's
+stderr is empty again. Record:
+`runtime/tests/application/results/20260930-runtime-rows.json`.
 [host/run-filtered.py](host/run-filtered.py) runs a module without named tests.
 Record: [results/subprocess-2026-09-29.json](results/subprocess-2026-09-29.json).
 
-To run the suite: `PYTHONHOME` on the share holds `lib/python3.13` copied from
-the source `Lib/` (the `test` package included, an empty `lib-dynload`) plus
-`_sysconfigdata__linux_.py`, the native riscv64 build's
+To run the suite: put `lib/python3.13` next to the image on the share, copied
+from the source `Lib/` (the `test` package included, an empty `lib-dynload`)
+plus `_sysconfigdata__linux_.py`, the native riscv64 build's
 `_sysconfigdata__linux_riscv64-linux-gnu.py` under the name this build looks
-for, since its `sys.implementation._multiarch` is empty. `test.support` needs
-it for `sysconfig.get_config_var`.
+for, since its `sys.implementation._multiarch` is empty (`test.support` needs
+it for `sysconfig.get_config_var`). The interpreter finds that tree from
+`sys.executable`, so no `PYTHONHOME` is needed and children started with `-I`,
+`-E` or an empty environment find it too; a `PYTHONHOME` elsewhere works as
+well, but not for those children.
 
 ## What this does not establish
 
