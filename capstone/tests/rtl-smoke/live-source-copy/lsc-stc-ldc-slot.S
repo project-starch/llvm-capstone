@@ -20,7 +20,7 @@
 #   - several ldcs from one stc all read the stored value (the slot-reuse shape).
 # Plus the S-07 shape: an ldc whose base is the register the previous ldc just wrote.
 #
-# Detectors. LCC with selector x0 traps (cause 25, UNEXPECTED_OPERAND) on a NOT_CAP operand,
+# Detectors. LCC with selector x0 traps (cause 24, UNEXPECTED_OPERAND) on a NOT_CAP operand,
 # so a counted trap means "this register holds no capability". LCC with selector x1 answers
 # the type minus one for a capability (LINEAR 0, NONLIN 1) and 7 for a NOT_CAP operand.
 # Case 0 proves the trap detector fires before anything relies on it.
@@ -303,7 +303,8 @@ RVTEST_FAIL
 trap_handler:
 csrr t0, mcause
 bltz t0, unexpected_trap
-li   t1, 25
+li   t1, 24        # UNEXPECTED_OPERAND_TYPE (riscv_pkg.sv:358 since the R-24 fix c77c65324; 25 is
+                   # INVALID_CAPABILITY). The first version expected 25 and failed case 0 on 6cbdaeeb4.
 bne  t0, t1, unexpected_trap
 la   t2, trap_count
 lw   t3, 0(t2)

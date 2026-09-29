@@ -1718,14 +1718,18 @@ RETURN" rule applied to privilege rather than to control flow.
 > diff against dev.
 >
 > **2026-09-25: a class fix, on branch `compiler/movc-live-source-copy` (Phase A of
-> `plans/2026-09-25-intcap-implementation.md`). Not on dev, not RTL-simulated, not on a board.**
+> `plans/2026-09-25-intcap-implementation.md`). On dev since 2026-09-29 (#119). RTL-simulated on
+> `6cbdaeeb4` and on the R-43 redesign `8f6a0af98`: PASS at both latencies
+> (`tests/rtl-smoke/live-source-copy/`). Not on a board.**
 > - **What it does.** `CapstoneLiveSourceCopy` runs after the last MachineCopyPropagation. It
 >   rewrites every `movc` whose source is read again as `stc src, slot` + `ldc dst, slot`, through a
 >   16-byte stack slot of its own.
->   - On RTL, `stc` keeps an untagged or NONLIN source and nulls a LINEAR one, and `ldc` clears the
->     granule of a LINEAR value. So the pair is a `movc` for every type, except that an integer
->     survives. It never needs to know the type, which is why it reaches the musl `iconv_open`
->     instance below that no caller-side analysis could.
+>   - On RTL, `stc` keeps an untagged or NONLIN source and nulls every other tagged type, and `ldc`
+>     clears the granule of a tagged non-NONLIN value when its base has W (`load_unit.sv:214-218`);
+>     the slot is sp-relative, and sp has W because every spill already stores through it. So the
+>     pair is a `movc` for every type, except that an integer survives. It never needs to know the
+>     type, which is why it reaches the musl `iconv_open` instance below that no caller-side analysis
+>     could.
 >   - `movc`s with a dead source, or from c0/sp/gp/tp/fp/bp, stay.
 >   - A check-only instance after MakeCompressible refuses any live-source `movc` still left.
 >   - `+movc-keeps-integer-source` turns it off, for a bitstream that implements Q-04 (b).
