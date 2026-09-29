@@ -232,7 +232,7 @@ The wire ABI, the shape table and the closed exception groups are in
 What crosses: files, directories, descriptors, time, identity, limits,
 `getrandom`, `wait4`, `kill` confined to the task, `exit_group`. What does not:
 memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
-(`clone`, `fork`, `execve` are ENOSYS and recorded until the spawn branch), and
+(`clone` and `fork` are ENOSYS; image exec uses the process service below), and
 signals (`rt_sigaction` and `rt_sigprocmask` are accepted and recorded as
 no-ops until the signals branch). The unserved report at exit lists both.
 
@@ -244,18 +244,21 @@ former. Building with `CAPSTONE_APPLICATION_DELEGATE=OFF` produces a v1 image.
 
 The launcher installs a seccomp filter from the same shape table before the
 first step: the delegated numbers plus its own, everything else answers
-ENOSYS. `CAPSTONE_EXEC_NO_SECCOMP=1` disables it for debugging.
+ENOSYS. Installation failure aborts launch; `CAPSTONE_EXEC_NO_SECCOMP=1`
+disables it explicitly for debugging. The dispatcher separately validates
+command-dependent pointers and excludes launcher-private descriptors.
 `CAPSTONE_DELEGATE_STATS=1` prints rounds, syscalls, refused entries, bytes
 through the exchange region and `rdtime` ticks at exit.
 
 A domain fault produces a record with cause, PC, address, the runtime address
-of `domain_main` and the code bounds, written to the file `CAPSTONE_FAULT_RECORD`
+of `domain_main`, the code bounds and the sealed image's SHA-256, written to the file `CAPSTONE_FAULT_RECORD`
 names and to stderr only when stderr is a terminal or
 `CAPSTONE_EXEC_DIAGNOSTICS=1` is set; application streams carry application
 bytes only. `capstone-vm run` collects the record into its result JSON and
 prints it. `python3 -m capstone_vm.symbolize --image IMAGE "RECORD"` maps the PC
 to `function+offset` from the symbol table, and to a line when the image has
-debug information.
+debug information. A mismatching image hash is rejected; older records without
+a hash remain readable.
 
 Measured on 2026-09-29 in the QEMU guest, `rdtime` at its 10 MHz rate, one hart:
 
@@ -265,19 +268,117 @@ Measured on 2026-09-29 in the QEMU guest, `rdtime` at its 10 MHz rate, one hart:
 | Native process, same counter, 10,000 calls | 8.2 |
 
 That ratio is the emulator's: each round crosses U, S and M mode twice and
-QEMU flushes its TLB on every supervised switch. It is the number the plan
-requires before any transport optimization, not a hardware cost.
+QEMU flushes its TLB on every supervised switch. This run did not use `icount`; it is a wall-time observation affected by host
+scheduling, not a hardware cost or completion of the planned per-step cycle
+measurement. It predates the review corrections below.
+
+### Processes
+
+`posix_spawn`, and with it `posix_spawnp`, `popen` and `system`, cross as one
+request: the path, argv, environment, working directory and file actions in a
+block in the exchange region. The launcher hands it to its **spawner**, a child
+it forked before installing the seccomp filter, so the programs it starts are
+not filtered. The spawner forks each child as the launcher's own child, puts
+the launcher's descriptors at their numbers with their close-on-exec flags,
+applies the actions, and execs: a native program directly, a Capstone image
+through the launcher. Each request carries the current cwd and umask; only
+application descriptors are inherited. The helper closes its inherited
+descriptors and dies if the launcher dies. File actions cannot overwrite the
+exec-error channel; descriptor overflow is an error rather than truncation.
+`wait4` selects recorded children, including for `waitpid(-1)`, and retains
+stopped/continued children. `kill` accepts this task or a recorded child,
+not process-group targets. A blocking any-child wait polls recorded PIDs at
+1 ms intervals to avoid reaping the helper or unrelated children. `execve` of a Capstone image replaces the task
+through the launcher's own binary, keeping pid, descriptors, argv[0], the
+unfiltered helper and the recorded children. The replacement image is validated
+and sealed before exec; failure returns errno to the current application; `execve` of a
+native program answers ENOSYS, because the filtered task cannot become one.
+`fork` without `exec` stays ENOSYS by design.
+
+A shell in the guest starts a Capstone image with `binfmt_misc`. Buildroot
+`227fdfa` enables `CONFIG_BINFMT_MISC=y` for QEMU. The VM setup mounts the
+filesystem before registering the ELF machine 259 handler, passes literal
+magic escapes to the kernel, and fails on a registration error. The `P` flag
+preserves the original argv[0]; the launcher distinguishes this invocation
+using the kernel's `AT_FLAGS_PRESERVE_ARGV0` auxiliary-vector bit. Kernels
+without support remain usable through the explicit launcher and report that
+direct image execution is unavailable.
+
+Perl rebuilt on this runtime with patch 0008 now passes all nine `t/base`
+files and 493 assertions, including the shell-launched image in `term.t`;
+see [the result](../ports/perl/musl/results/2026-09-29/base-tests-binfmt.txt).
 
 musl's libc-test runs against this runtime with
 `ports/musl-capstone/libc-test/run-libc-test-delegated.py`, every functional
 test built by the SDK driver and run through `capstone-vm run` in one boot.
-On 2026-09-29: 43 PASS, 6 FAIL, 1 FAULT, 5 NOBUILD, 22 EXCLUDED of 77, the
-same pass count as the HostCall v0 runtime's last run. `fscanf` passes now
-that `pipe2` is a Linux pipe; `clocale_mbfuncs` faults with cause 5 on a
-locale-table walk, the class the quarantine list records for `mbc`. The five
-NOBUILD are the thread-local tests the compiler cannot lower. The exclusions
-are the old runner's: processes, threads, sockets, SysV IPC and dynamic
-loading, of which processes are the next branch.
+On 2026-09-29, before the spawn branch: 43 PASS, 6 FAIL, 1 FAULT, 5 NOBUILD,
+22 EXCLUDED of 77, the pass count of the HostCall v0 runtime's last run.
+`fscanf` passes now that `pipe2` is a Linux pipe; `clocale_mbfuncs` faults
+with cause 5 on a locale-table walk, the class the quarantine list records for
+`mbc`. The five NOBUILD are the thread-local tests the compiler cannot lower.
+With the spawn branch, `popen` and `spawn` leave the excluded set: 44 PASS,
+6 FAIL, 2 FAULT, 5 NOBUILD, 20 EXCLUDED. `spawn` passes; `popen`'s child
+sends SIGUSR1 to the task, which has no handler installed for the domain yet,
+so the task dies of it: that is the signals branch. The remaining exclusions
+are threads, sockets, SysV IPC, dynamic loading, `vfork` itself, `wordexp`
+and the `fcntl` test's forked child.
+
+### Review verification (2026-09-29)
+
+The [checked result](tests/application/results/20260929-delegation-review.json)
+records the launcher/image identities and individual libc-test verdicts.
+Thirteen additional native cases cover output tails, raw-pointer rejection,
+nested iovec offsets, RV64 stat bounds, private descriptors, wait/kill scope,
+current cwd/umask, stale inherited descriptors, error-pipe collisions and
+explicit FD overflow. All thirteen fail against the original dispatcher/spawner implementation;
+all now pass alongside the existing eight native tests with ASan/UBSan.
+The host tests pass 17/17 and the runner cancellation tests 2/2.
+
+Fresh guest contracts pass scalar/vector I/O, current process state, image
+spawn with a custom argv[0], PATH independent of child envp, exec with existing
+children, spawn after exec, exec with closed standard descriptors, and recovery
+from a rejected image. The deliberate fault is SIGSEGV and resolves to
+`main+0x95c` after verifying the sealed image hash. The unchanged v1 application
+gate passes 108 mixed starts in the same boot with stable retained resources.
+Both v1 and v2 SDK builds succeed.
+
+The fresh delegated libc-test result is **45 PASS, 5 FAIL, 2 FAULT, 5 NOBUILD,
+20 EXCLUDED** (77 total). `utime` gains its pass because futimens now carries
+utimensat's nullable path. The remaining failing tests are `mntent`, `setjmp`,
+`sscanf_long`, `strptime`, and `strtold`; the two signal exits remain
+`clocale_mbfuncs` (SIGSEGV) and `popen` (SIGUSR1). A runner timeout now asks the
+CLI to cancel and reap the guest and stops the suite if cleanup cannot be
+confirmed. This initial review run did not add Perl coverage. The follow-up
+below closes its binfmt_misc gate; signal delivery and region-grant memory
+remain open. Step 4 is implemented in part, not accepted against all its
+original gates.
+
+### Shell execution qualification (2026-09-29)
+
+The [checked result](tests/application/results/20260929-delegation-binfmt.json)
+records a kernel built from clean pinned Linux `830b3c68c1fb`, the expanded
+Buildroot `227fdfa` QEMU configuration, and the rebuilt Perl/launcher hashes.
+The earlier failed snapshot boot is reproducible (`E2BIG` starting init).
+That snapshot contained local address-tag changes in `pgtable.h` and `uaccess.h`;
+the clean pinned sources boot with the same configuration including binfmt_misc.
+The installed known-good Image and the snapshot build-tree Image also had
+different hashes; a snapshot directory alone did not identify the booted kernel.
+
+Four new host tests cover mount/registration, all 20 bytes of the ELF match,
+native-ELF rejection, stale registration replacement, explicit errors, and
+the older-kernel fallback. All 21 host tests pass. Direct guest exec preserves
+custom argv[0] (a failing control before the `P`/auxv fix), exit status,
+I/O, spawn and in-place exec, including closed standard descriptors and failed
+exec recovery. The complete v1 gate passes another 108 starts with stable
+retained resources; delegated libc-test remains 45/77 PASS. Fresh Perl `t/base`
+passes 9/9 files and all 493 assertions. These are QEMU results, not FPGA results.
+
+Run the direct-exec regression against a provisioned guest with the new kernel:
+
+```sh
+python3 capstone/runtime/tests/application/run-binfmt.py --state "$VM_STATE" \
+  --image /mnt/host/delegate-contract.dom
+```
 
 ## Verification
 

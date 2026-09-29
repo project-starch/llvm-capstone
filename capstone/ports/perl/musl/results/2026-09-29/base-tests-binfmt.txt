@@ -1,0 +1,25 @@
+Perl 5.36.3 upstream t/base, delegated runtime (ABI v2), QEMU Linux guest
+Buildroot commit: 227fdfaca0234325a0a5c0b689206e92a6657b86
+Kernel source commit: 830b3c68c1fb1e9176028d02ef86f3cf76aa2476 (clean), CONFIG_BINFMT_MISC=y
+Patches 0001-0008; rebuilt runtime; SDK heap level0; compiler-c46
+Platform, source and artifact hashes: capstone/runtime/tests/application/results/20260929-delegation-binfmt.json
+Interpreter SHA256: a1b1ee8404ce97b394fb75c915a52b4cdd518b712a1019c33eee35082975fdde
+Effective QEMU environment: CAPSTONE_GP_NONLIN=1, CAPSTONE_REV_NODES=65536
+Invocation (from the host copy of t/):
+  prove --exec 'capstone-vm --state "$VM_STATE" run --cwd /mnt/host/perl-tests/t -e PERL5LIB=/mnt/host/perl-tests/lib /mnt/host/review-perl-v2.dom' base/*.t
+
+base/cond.t: PASS
+base/if.t: PASS
+base/lex.t: PASS
+base/num.t: PASS
+base/pat.t: PASS
+base/rs.t: PASS
+base/term.t: PASS
+base/translate.t: PASS
+base/while.t: PASS
+Files=9, Tests=493, Result=PASS, prove exit=0
+
+term.t test 2 now runs the nested Perl image through /bin/sh and binfmt_misc.
+The VM registers the complete ELF magic/machine match with literal escapes
+and preserves argv[0] using P plus AT_FLAGS_PRESERVE_ARGV0 in the launcher.
+The complete upstream Perl suite and guest signal handlers remain unqualified.

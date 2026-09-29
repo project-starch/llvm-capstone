@@ -9,6 +9,8 @@ for a line; without it the function name still resolves from the symbol table.
 from __future__ import annotations
 
 import argparse
+import hashlib
+from pathlib import Path
 import os
 import re
 import subprocess
@@ -17,7 +19,9 @@ import sys
 RECORD = re.compile(
     r"capstone-exec: domain fault cause=(?P<cause>\d+) pc=0x(?P<pc>[0-9a-f]+) "
     r"address=0x(?P<address>[0-9a-f]+) entry=0x(?P<entry>[0-9a-f]+) "
-    r"code=0x(?P<base>[0-9a-f]+)-0x(?P<end>[0-9a-f]+)(?: image=(?P<image>\S+))?")
+    r"code=0x(?P<base>[0-9a-f]+)-0x(?P<end>[0-9a-f]+)"
+    r"(?: last=0x[0-9a-f]+ preparing=0x[0-9a-f]+)?(?: sha256=(?P<sha256>[0-9a-f]{64}))?"
+    r"(?: image=(?P<image>.*))?$")
 
 
 def parse(line: str) -> dict | None:
@@ -25,7 +29,7 @@ def parse(line: str) -> dict | None:
     if not match:
         return None
     fields = match.groupdict()
-    return {key: (int(value, 16) if key != "image" and value is not None else value)
+    return {key: (int(value, 16) if key not in ("image", "sha256") and value is not None else value)
             for key, value in fields.items()} | {"cause": int(fields["cause"])}
 
 
@@ -64,6 +68,11 @@ def containing(table: list[tuple[int, int, str]], address: int) -> str:
 
 
 def symbolize(record: dict, image: str, run=subprocess.run) -> str:
+    if record.get("sha256"):
+        with Path(image).open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if digest != record["sha256"]:
+            raise ValueError("Image SHA-256 does not match the fault record")
     table = symbols(image, run)
     slide = record["entry"] - link_address(table, "domain_main")
     link_pc = record["pc"] - slide

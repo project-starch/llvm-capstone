@@ -59,13 +59,19 @@ static void flags_follow_the_shape(void) {
   assert(e.flags == 0);
   e = pack(CAPSTONE_NR_HELLO, 0x80001000, 0x80000000, 0x80010000, 0, 0, 0);
   assert(e.flags == 0 && !capstone_delegate_validate(&e, EXCHANGE));
-  /* ioctl and fcntl: the libc chooses an offset or 0 per command */
-  e = pack(CAPSTONE_SYS_ioctl, 1, 0x5413, 0, 0, 0, 0);
+  /* ioctl and fcntl carry integers as the Linux numbers; the pointer forms
+     have their own numbers with a fixed buffer, never confused with a value */
+  e = pack(CAPSTONE_SYS_fcntl, 1, 2 /* F_SETFD */, 1, 0, 0, 0);
+  assert(e.flags == 0 && !capstone_delegate_validate(&e, EXCHANGE));
+  e = pack(CAPSTONE_SYS_ioctl, 1, 0x5413, 1, 0, 0, 0);
   assert(e.flags == 0);
-  e = pack(CAPSTONE_SYS_ioctl, 1, 0x5413, 64, 0, 0, 0);
+  e = pack(CAPSTONE_NR_IOCTL_BUF, 1, 0x5413, 64, 0, 0, 0);
   assert(e.flags == 0x4 && !capstone_delegate_validate(&e, EXCHANGE));
-  e = pack(CAPSTONE_SYS_ioctl, 1, 0x5413, EXCHANGE - 63, 0, 0, 0);
+  e = pack(CAPSTONE_NR_IOCTL_BUF, 1, 0x5413, EXCHANGE - 63, 0, 0, 0);
   assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
+  e = pack(CAPSTONE_NR_FCNTL_LOCK, 1, 5, 32, 0, 0, 0);
+  assert(e.flags == 0x4 && !capstone_delegate_validate(&e, EXCHANGE));
+  assert(capstone_delegate_group_of(CAPSTONE_NR_FCNTL_LOCK) == CAPSTONE_GROUP_RUNTIME);
   /* optional buffers: NULL is not flagged, non-NULL is */
   e = pack(CAPSTONE_SYS_nanosleep, 0, 0, 0, 0, 0, 0);
   assert(e.flags == 0x1);

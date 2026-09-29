@@ -1,0 +1,190 @@
+{
+  "date": "2026-09-29",
+  "reviewed_base": "c9ec5ac69d28",
+  "native": {
+    "asan_ubsan_pass": 21,
+    "host_python_pass": 17,
+    "runner_python_pass": 2,
+    "original_failing_regressions": 13,
+    "negative_control": "Original dispatcher/spawner C sources at reviewed_base, using the current host-struct layout for the private-fd test; all 13 new cases abort on their assertions."
+  },
+  "sdk_builds": [
+    "v1",
+    "v2"
+  ],
+  "source_sha256": {
+    "capstone/runtime/linux/delegate-service.c": "b078b47f7ea785d41d889f4ec4954fb073b5e0c369419ee4d922fed3440bdb0b",
+    "capstone/runtime/linux/spawner.c": "989339f47ac77032d202d04b29fa81679986d62533fa8ae3bb0abff1e6a5e074",
+    "capstone/runtime/linux/exec.c": "17c61d82eba4f5ffe3fcc77f34f95787e9a7f3099a0dac1dc050c17a668e946d",
+    "capstone/runtime/linux/image-hash.c": "9a9fe2f2f68e8a8d814a2f36dd699136df12438de4f83a48c4d8171208353aa9",
+    "capstone/runtime/common/delegate.c": "284112ea221c73e6393299e5a302f4836d73df31c725b10ca18e650e9242398e",
+    "capstone/runtime/common/spawn.c": "dcdd64b728bf393b1c76d27cf8b88e88d0c73e7e1e9a276884f89bce69bcddeb",
+    "capstone/ports/musl-capstone/runtime/delegate.c": "394650b68342c7531a20ba03b708c2f214a7f46938325da041fc7f36e79cf6c2",
+    "capstone/ports/musl-capstone/runtime/posix_spawn_delegate.c": "7bdc0cdc97cea413b2d08790d0f630b3a6da7269aa016e18bafca2df7c525c37"
+  },
+  "artifact_sha256": {
+    "launcher": "485551f5fae64cb8a914bf672f9330d92b831ecf4f9dc61d5e514b53763ae502",
+    "delegate-contract": "94d1eb42a34c8f2e0cd6f12389cf5c0d19a796bbf4b07d235ef6c8b6f79fe55e",
+    "application-contract-v2": "8112482ebde913eebb7f19fe907ef1321ac3179f536cc3f06ca3a049fa9eaf87",
+    "compiler": "0e2bc4e53f8b76f8b5534b8f5866c221e02b6fbaa0b1a7785286ac9eaef2549c"
+  },
+  "platform_sha256": {
+    "qemu": "f9795d413ad1910a954dc918fcf469a2a13725a50d48d249dbe8a70cd741f85d",
+    "kernel": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "firmware": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+    "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+    "job_helper": "5be7879d33c2483570de238bc9b16a730f22cd20d8d2f531547a0bdbbb803cef"
+  },
+  "contracts": {
+    "io": {
+      "exit": 0,
+      "stdout": "delegate-contract: io and spawn ok"
+    },
+    "exec": {
+      "exit": 0,
+      "stdout": "delegate-contract: exec ok"
+    },
+    "exec-closed": {
+      "exit": 0,
+      "stdout": ""
+    },
+    "exec-error": {
+      "exit": 0,
+      "stdout": "delegate-contract: failed exec preserved task"
+    },
+    "fault": {
+      "kind": "signal",
+      "value": 11,
+      "symbol": "cause 24 at 0xe02064f8 (link 0x164f8): main+0x95c; address 0x0",
+      "sha256": "8112482ebde913eebb7f19fe907ef1321ac3179f536cc3f06ca3a049fa9eaf87"
+    }
+  },
+  "application_gate": {
+    "boot_id": "37eb913f-17f5-4ee5-811f-517c440a3557",
+    "mixed_starts": 108,
+    "before": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 172707840,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 98,
+      "nodes_live": 79,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 5245,
+      "tag_pages": 1148,
+      "node_capacity": 65536
+    },
+    "after": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 172707840,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 98,
+      "nodes_live": 79,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 6433,
+      "tag_pages": 1148,
+      "node_capacity": 65536
+    },
+    "sublet": false
+  },
+  "libc_test": {
+    "summary": {
+      "PASS": 45,
+      "FAULT": 2,
+      "EXCLUDED": 20,
+      "FAIL": 5,
+      "NOBUILD": 5
+    },
+    "verdicts": {
+      "argv": "PASS",
+      "basename": "PASS",
+      "clocale_mbfuncs": "FAULT",
+      "clock_gettime": "PASS",
+      "crypt": "PASS",
+      "dirname": "PASS",
+      "dlopen": "EXCLUDED",
+      "dlopen_dso": "EXCLUDED",
+      "env": "PASS",
+      "fcntl": "EXCLUDED",
+      "fdopen": "PASS",
+      "fnmatch": "PASS",
+      "fscanf": "PASS",
+      "fwscanf": "PASS",
+      "iconv_open": "PASS",
+      "inet_pton": "PASS",
+      "ipc_msg": "EXCLUDED",
+      "ipc_sem": "EXCLUDED",
+      "ipc_shm": "EXCLUDED",
+      "mbc": "PASS",
+      "memstream": "PASS",
+      "mntent": "FAIL",
+      "popen": "FAULT",
+      "pthread_cancel-points": "EXCLUDED",
+      "pthread_cancel": "EXCLUDED",
+      "pthread_cond": "EXCLUDED",
+      "pthread_mutex": "EXCLUDED",
+      "pthread_mutex_pi": "EXCLUDED",
+      "pthread_robust": "EXCLUDED",
+      "pthread_tsd": "EXCLUDED",
+      "qsort": "PASS",
+      "random": "PASS",
+      "search_hsearch": "PASS",
+      "search_insque": "PASS",
+      "search_lsearch": "PASS",
+      "search_tsearch": "PASS",
+      "sem_init": "EXCLUDED",
+      "sem_open": "EXCLUDED",
+      "setjmp": "FAIL",
+      "snprintf": "PASS",
+      "socket": "EXCLUDED",
+      "spawn": "PASS",
+      "sscanf": "PASS",
+      "sscanf_long": "FAIL",
+      "stat": "PASS",
+      "strftime": "PASS",
+      "string": "PASS",
+      "string_memcpy": "PASS",
+      "string_memmem": "PASS",
+      "string_memset": "PASS",
+      "string_strchr": "PASS",
+      "string_strcspn": "PASS",
+      "string_strstr": "PASS",
+      "strptime": "FAIL",
+      "strtod": "PASS",
+      "strtod_long": "PASS",
+      "strtod_simple": "PASS",
+      "strtof": "PASS",
+      "strtol": "PASS",
+      "strtold": "FAIL",
+      "swprintf": "PASS",
+      "tgmath": "PASS",
+      "time": "PASS",
+      "tls_align": "NOBUILD",
+      "tls_align_dlopen": "EXCLUDED",
+      "tls_align_dso": "NOBUILD",
+      "tls_init": "NOBUILD",
+      "tls_init_dlopen": "EXCLUDED",
+      "tls_init_dso": "NOBUILD",
+      "tls_local_exec": "NOBUILD",
+      "udiv": "PASS",
+      "ungetc": "PASS",
+      "utime": "PASS",
+      "vfork": "EXCLUDED",
+      "wcsstr": "PASS",
+      "wcstol": "PASS",
+      "wordexp": "EXCLUDED"
+    }
+  },
+  "limits": [
+    "Perl t/base remains 8/9; not rerun in this review",
+    "Guest CONFIG_BINFMT_MISC is unset",
+    "Memory grants and synchronous signal delivery are unimplemented",
+    "No FPGA or new timing measurement",
+    "Pinned compiler snapshot builds; freshness cannot be checked without build.ninja"
+  ]
+}

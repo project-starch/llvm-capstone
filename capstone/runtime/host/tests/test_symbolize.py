@@ -1,10 +1,13 @@
 import subprocess
+import hashlib
+import tempfile
+from pathlib import Path
 import unittest
 
 from capstone_vm import symbolize
 
 LINE = ("capstone-exec: domain fault cause=24 pc=0xe0204764 address=0x0 entry=0xe02006c8 "
-        "code=0xe0200000-0xe0268000 image=/mnt/host/contract-v2.dom")
+        "code=0xe0200000-0xe0268000 last=0x40 preparing=0x19 image=/mnt/host/contract-v2.dom")
 
 
 def fake_run(args, **_):
@@ -38,6 +41,19 @@ class SymbolizeTest(unittest.TestCase):
             return subprocess.CompletedProcess(args, 0, stdout="?? at ??:0:0\n", stderr="")
         text = symbolize.symbolize(symbolize.parse(LINE), "image.dom", run=no_lines)
         self.assertIn(": main+0x840;", text)
+
+    def test_hash_and_spaces(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "image with spaces.dom"
+            image.write_bytes(b"sealed image")
+            digest = hashlib.sha256(image.read_bytes()).hexdigest()
+            line = LINE.split(" image=")[0] + f" sha256={digest} image={image}"
+            record = symbolize.parse(line)
+            self.assertEqual(record["image"], str(image))
+            self.assertIn("main+0x840", symbolize.symbolize(record, str(image), run=fake_run))
+            image.write_bytes(b"different image")
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                symbolize.symbolize(record, str(image), run=fake_run)
 
     def test_missing_anchor(self):
         def no_anchor(args, **_):

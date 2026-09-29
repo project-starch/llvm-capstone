@@ -74,6 +74,17 @@ static void reject(void) {
 int main(void) {
   source = mkstemp(path);
   assert(source >= 0);
+  char hash[65];
+  assert(!capstone_application_hash(source, hash));
+  assert(!strcmp(hash, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+  assert(write(source, "abc", 3) == 3);
+  assert(!capstone_application_hash(source, hash));
+  assert(!strcmp(hash, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));
+  const char *long_input = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+  assert(ftruncate(source, 0) == 0 && lseek(source, 0, SEEK_SET) == 0);
+  assert(write(source, long_input, strlen(long_input)) == (ssize_t)strlen(long_input));
+  assert(!capstone_application_hash(source, hash));
+  assert(!strcmp(hash, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"));
   fixture();
   int snapshot = load();
   assert(snapshot >= 0);

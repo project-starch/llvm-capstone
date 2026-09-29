@@ -1,0 +1,228 @@
+{
+  "date": "2026-09-29",
+  "runtime_base": "385c57ae8c73e37133ef37cfe7c0bdbf28898193",
+  "buildroot_commit": "227fdfaca0234325a0a5c0b689206e92a6657b86",
+  "kernel": {
+    "source_commit": "830b3c68c1fb1e9176028d02ef86f3cf76aa2476",
+    "tracked_source_differences": [],
+    "config_sha256": "9c7247993f725f3f4313605a8ec1785177d6fe9906692b3c8f181231f0aa59e1",
+    "config_origin": "configs/kernel.config at buildroot_commit, expanded with ARCH=riscv olddefconfig; byte-identical to the booted build configuration",
+    "compiler": "riscv64-buildroot-linux-gnu-gcc 12.3.0, binutils 2.40",
+    "binfmt_misc": "y",
+    "successful_boots": 2
+  },
+  "platform_sha256": {
+    "qemu": "f9795d413ad1910a954dc918fcf469a2a13725a50d48d249dbe8a70cd741f85d",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "firmware": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+    "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+    "launcher": "da98ad7c72f3467958094c94d8e7116a22f80bf57870824d81cd41742e586e06",
+    "job_helper": "5be7879d33c2483570de238bc9b16a730f22cd20d8d2f531547a0bdbbb803cef"
+  },
+  "source_sha256": {
+    "capstone/runtime/host/capstone_vm/cli.py": "531e27eba8d157ad7bb322a5381ba184718f4b56318d6fe58e30a20dc177b660",
+    "capstone/runtime/linux/exec.c": "0fdda7345e9d59b4ce479de214802c9707708d9c2fb9b8fc7ecec96c986f0faa",
+    "capstone/runtime/tests/application/run-binfmt.py": "bc3f80ab00a4db92cf00d0962948a2768cd4eb97018c05469e9f680de8e4651a"
+  },
+  "environment": {
+    "CAPSTONE_GP_NONLIN": "1",
+    "CAPSTONE_REV_NODES": "65536"
+  },
+  "artifact_sha256": {
+    "perl": "a1b1ee8404ce97b394fb75c915a52b4cdd518b712a1019c33eee35082975fdde",
+    "delegate_contract": "94d1eb42a34c8f2e0cd6f12389cf5c0d19a796bbf4b07d235ef6c8b6f79fe55e",
+    "compiler": "0e2bc4e53f8b76f8b5534b8f5866c221e02b6fbaa0b1a7785286ac9eaef2549c"
+  },
+  "native": {
+    "asan_ubsan_pass": 21,
+    "host_python_pass": 21
+  },
+  "negative_controls": {
+    "snapshot_kernel": "Same configuration with local pgtable.h/uaccess.h address-tag edits: boot reaches the rootfs, but init fails with E2BIG. Clean pinned sources boot. No individual attribution between the two header edits is claimed.",
+    "argv0": "Native shell exec -a with custom argv zero reaches the domain with the image path and fails its argv[0] assertion before the P/AT_FLAGS fix; the corrected invocation exits 7 as expected."
+  },
+  "direct_exec": {
+    "native-elf": {
+      "exit": 0,
+      "stdout": ""
+    },
+    "original-argv0": {
+      "exit": 7,
+      "stdout": ""
+    },
+    "io": {
+      "exit": 0,
+      "stdout": "delegate-contract: io and spawn ok\n"
+    },
+    "exec": {
+      "exit": 0,
+      "stdout": "delegate-contract: exec ok\n"
+    },
+    "exec-closed": {
+      "exit": 0,
+      "stdout": ""
+    },
+    "exec-error": {
+      "exit": 0,
+      "stdout": "delegate-contract: failed exec preserved task\n"
+    }
+  },
+  "application_gate": {
+    "boot_id": "39019fe5-5a10-42aa-a3a9-99c036d725ce",
+    "mixed_starts": 108,
+    "before": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 139075584,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 81,
+      "nodes_live": 67,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 583,
+      "tag_pages": 655,
+      "node_capacity": 65536
+    },
+    "after": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 139075584,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 81,
+      "nodes_live": 67,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 1771,
+      "tag_pages": 655,
+      "node_capacity": 65536
+    }
+  },
+  "libc_test": {
+    "summary": {
+      "PASS": 45,
+      "FAULT": 2,
+      "EXCLUDED": 20,
+      "FAIL": 5,
+      "NOBUILD": 5
+    },
+    "verdicts": {
+      "argv": "PASS",
+      "basename": "PASS",
+      "clocale_mbfuncs": "FAULT",
+      "clock_gettime": "PASS",
+      "crypt": "PASS",
+      "dirname": "PASS",
+      "dlopen": "EXCLUDED",
+      "dlopen_dso": "EXCLUDED",
+      "env": "PASS",
+      "fcntl": "EXCLUDED",
+      "fdopen": "PASS",
+      "fnmatch": "PASS",
+      "fscanf": "PASS",
+      "fwscanf": "PASS",
+      "iconv_open": "PASS",
+      "inet_pton": "PASS",
+      "ipc_msg": "EXCLUDED",
+      "ipc_sem": "EXCLUDED",
+      "ipc_shm": "EXCLUDED",
+      "mbc": "PASS",
+      "memstream": "PASS",
+      "mntent": "FAIL",
+      "popen": "FAULT",
+      "pthread_cancel-points": "EXCLUDED",
+      "pthread_cancel": "EXCLUDED",
+      "pthread_cond": "EXCLUDED",
+      "pthread_mutex": "EXCLUDED",
+      "pthread_mutex_pi": "EXCLUDED",
+      "pthread_robust": "EXCLUDED",
+      "pthread_tsd": "EXCLUDED",
+      "qsort": "PASS",
+      "random": "PASS",
+      "search_hsearch": "PASS",
+      "search_insque": "PASS",
+      "search_lsearch": "PASS",
+      "search_tsearch": "PASS",
+      "sem_init": "EXCLUDED",
+      "sem_open": "EXCLUDED",
+      "setjmp": "FAIL",
+      "snprintf": "PASS",
+      "socket": "EXCLUDED",
+      "spawn": "PASS",
+      "sscanf": "PASS",
+      "sscanf_long": "FAIL",
+      "stat": "PASS",
+      "strftime": "PASS",
+      "string": "PASS",
+      "string_memcpy": "PASS",
+      "string_memmem": "PASS",
+      "string_memset": "PASS",
+      "string_strchr": "PASS",
+      "string_strcspn": "PASS",
+      "string_strstr": "PASS",
+      "strptime": "FAIL",
+      "strtod": "PASS",
+      "strtod_long": "PASS",
+      "strtod_simple": "PASS",
+      "strtof": "PASS",
+      "strtol": "PASS",
+      "strtold": "FAIL",
+      "swprintf": "PASS",
+      "tgmath": "PASS",
+      "time": "PASS",
+      "tls_align": "NOBUILD",
+      "tls_align_dlopen": "EXCLUDED",
+      "tls_align_dso": "NOBUILD",
+      "tls_init": "NOBUILD",
+      "tls_init_dlopen": "EXCLUDED",
+      "tls_init_dso": "NOBUILD",
+      "tls_local_exec": "NOBUILD",
+      "udiv": "PASS",
+      "ungetc": "PASS",
+      "utime": "PASS",
+      "vfork": "EXCLUDED",
+      "wcsstr": "PASS",
+      "wcstol": "PASS",
+      "wordexp": "EXCLUDED"
+    }
+  },
+  "perl": {
+    "version": "5.36.3",
+    "patches": "0001-0008",
+    "heap": "level0",
+    "files": {
+      "base/cond.t": "PASS",
+      "base/if.t": "PASS",
+      "base/lex.t": "PASS",
+      "base/num.t": "PASS",
+      "base/pat.t": "PASS",
+      "base/rs.t": "PASS",
+      "base/term.t": "PASS",
+      "base/translate.t": "PASS",
+      "base/while.t": "PASS"
+    },
+    "assertions": 493,
+    "prove_exit": 0
+  },
+  "final_stats": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 273293312,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 86,
+    "nodes_live": 69,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 2454,
+    "tag_pages": 1460,
+    "node_capacity": 65536
+  },
+  "limits": [
+    "QEMU one-hart guest; no FPGA claim.",
+    "The full Perl suite was not run.",
+    "Process-group/signal coverage and region-grant memory remain open.",
+    "Pinned compiler binary; freshness cannot be checked because its build.ninja is absent."
+  ]
+}
