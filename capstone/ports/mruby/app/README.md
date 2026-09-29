@@ -152,6 +152,9 @@ The two `__uintcap_t` patches (and 0006) need the compiler's `__intcap` type.
 
 ### Port runtime (`runtime/hostcall-more-files`, `runtime/hostcall-mruby-io`)
 
+These were services of the HostCall v0 runtime, removed on 2026-09-30; under the
+delegated runtime every one of them is Linux's own call. What the port needed then:
+
 128 open files instead of 8; and for mruby-io: `symlink`, `lstat`
 (`AT_SYMLINK_NOFOLLOW`), `chmod`, `flock` through the helper, `dup`/`dup3`/
 `F_DUPFD` sharing one file position, `FD_CLOEXEC` kept per descriptor, and

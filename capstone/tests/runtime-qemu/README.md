@@ -79,9 +79,9 @@ replace the musl probes of the HostCall v0 application runtime, removed on
 | `init-fini` | `init-fini/ctors.c` | constructors and destructors print exactly what the file prints natively (C-64), one reading the launcher's environment |
 | `exit-default`, `exit-hook` | `exit-hook/exit_test.c` | status 7, and 42 through `__capstone_at_exit` (C-56); both flush stdout and run the `atexit` handler |
 | `return-flush` | `return-flush/return_flush.c` | returning 5 from `main` delivers three buffered lines and the `atexit` line |
-| `unserved-report` | `unserved-report/closefd1.c` | stderr has exactly `capstone-domain: UNSERVED syscalls: 214x2` after fd 1 is closed (I-11) |
+| `unserved-report` | `unserved-report/closefd1.c` | stderr has exactly `capstone-domain: UNSERVED syscalls: 214x2` after fd 1 is closed (I-11); the runner sets `CAPSTONE_DELEGATE_STATS=1`, without which the runtime prints no report |
 | `large-read`, `big-stdout` | `large-io/` | a 64 KiB file on the 9p share read whole and in 14 pieces and written back; a 5000-byte line with the launcher's stdout on a 9p file |
-| `mmap-shm`, `mmap-shm-control` | `mmap-shm/mmap_shm.c` | every mmap/shm check passes; the control's raw `SYS_mmap` gets ENOSYS and an unserved report |
+| `mmap-shm`, `mmap-shm-control` | `mmap-shm/mmap_shm.c` | every mmap/shm check passes; the control's raw `SYS_mmap` gets ENOSYS and an unserved report (with `CAPSTONE_DELEGATE_STATS=1`) |
 | `tls-O0`, `tls-O2`, `tls-overrun` | `thread-local/` | nine checks at each level (C-47); the overrun ends in SIGSEGV with a fault record |
 | `cap-atomics-O0/O2`, `subword-O0/O2` | `capability-atomics/`, `subword-atomics/` | the DONE line with no failure (C-54, C-51) |
 | `movc-rule`, `movc-keep` | `movc-null-scalar/movc_test.c` | `b=5 c=5` in a guest without `CAPSTONE_MOVC_NULL_SCALAR`, `b=5 c=0` in one with it (Q-04); C-32's two values (`c32 0x5000`, `iconv n=3`) survive in both variants without the switch, and with it survive in `rule` (the live-source copy rule) and are lost in `keep` (`+movc-keeps-integer-source`, the positive control) |

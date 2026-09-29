@@ -8,31 +8,14 @@ stubs, and the next workload would need its own.
 
 ## Status
 
-**A domain runs musl.** The table below describes the original HostCall v0
-port: musl's functional suite ran under QEMU with one boot per test. The
-delegated application ABI v2 runs the suite in one guest boot and currently
-records **46 PASS, 4 FAIL, 4 FAULT, 3 NOBUILD, 20 EXCLUDED** of 77;
-see [the port migration results](../common/application/results/20260929-delegation.json).
+**A domain runs musl**, as a delegated application (ABI v2, the only application runtime:
+[applications.md](../../runtime/applications.md)). The delegated libc-test runner runs musl's
+functional suite in one guest boot and currently records **46 PASS, 4 FAIL, 4 FAULT, 3 NOBUILD,
+20 EXCLUDED** of 77; see [the port migration results](../common/application/results/20260929-delegation.json).
 All 45 earlier delegated passes remain green; `sscanf_long` now passes.
 `tls_init` and `tls_local_exec` now build but fault in `pthread_join` after
 unsupported thread creation. They are not TLS-initialization passes. The
 existing exclusions are retained for comparison.
-
-| | |
-|---|---|
-| sources the compiler accepts | 1355 / 1361 (99.6 %) |
-| `write` to stdout, `errno` on failure | works |
-| `open` `read` `write` `close` `lseek` incl. SEEK_END | works |
-| `writev` `readv` `fstat` `fsync` `ftruncate` `unlink` `access` | works |
-| `fopen` `fprintf("%f")` `fgets` `fseek` `printf` `fflush` | works |
-| `malloc` `calloc` `realloc` `free` | works, from this port's own level 0, under all five names musl calls it by |
-| `exit` from anywhere | works, and it has to: a refused exit is an unbreakable loop |
-| `setjmp` `longjmp` `sigsetjmp` | works, from this port's own assembly |
-| `clock_gettime` | works, through a new HostCall opcode (`CLOCK_GETTIME`, 25) |
-| `stat` `getuid` `getgid` | works, path stat as open, fstat, close |
-| real pthreads | **no**, and C-47 is only one of five: `pthread_create` also needs `clone`, two `mmap`s for the stack, `futex` (eight files under `src/thread` use it) and somewhere for the second thread to run, and a domain holds the only hart |
-| `fork`, `exec`, `pipe`, `socket`, `dlopen` | not served by this HostCall v0 image |
-| musl's own test suite | 77 tests accounted for, see below |
 
 In v2, pipes, `posix_spawn`, `popen`, `system`, wait and Capstone-image
 `execve` work as delegated operations. `fork`, `clone`, sockets, `dlopen`,
@@ -40,13 +23,15 @@ file `mmap` and native `execve` remain unserved inside the domain; signal
 handling is incomplete. See the [process qualification](../../runtime/applications.md#processes)
 and [shell execution result](../../runtime/applications.md#shell-execution-qualification-2026-09-29).
 
-Three probes, each green under QEMU with zero faults:
-
-| probe | what it establishes |
-|---|---|
-| `write-probe/` | musl's `write` reaches the hostcall, and its error reaches `errno` |
-| `file-probe/` | the file service, with an exact round count that a stale descriptor would break |
-| `stdio-probe/` | the layer above, where musl stops calling `write` and starts calling `writev` |
+**History: the HostCall v0 port.** Until 2026-09-30 the runtime had a second mode, HostCall v0:
+`runtime/hostcall.c` translated Linux syscalls into HostCall v0 opcodes that a helper served, and
+kept a file table, file positions, pipes and the working directory inside the domain. It was
+exercised by the `write-probe/`, `file-probe/`, `stdio-probe/` and `yield-probe/` probes and by a
+libc-test runner with one QEMU boot per test. That mode, its probes and its runner were removed;
+the sections below that describe it (the 2026-08-14 and 2026-09-17/25 measurements) are kept as
+the record of what the port found, and the current results are the delegated ones above. The
+runtime probes that still matter run as delegated applications
+(`tests/runtime-qemu/run-delegated-probes.py`).
 
 ## What running it cost, and why compiling did not predict it
 
@@ -67,11 +52,11 @@ line. **Every file involved is on the compiling side of the 99.6 %.**
 | link | eleven undefined `__*tf*` for any program that links `printf` |
 
 The last one is the only one a link would have caught. The others need a domain
-that actually runs, which is what the probes are for.
+that actually runs, which is what the probes of the v0 port were for.
 
-**What is not served is recorded, not merely refused.** The default arm of
-`__capstone_hostcall` keeps the syscall numbers it turned away, and a probe
-prints them after its work is done. `-ENOSYS` alone is invisible: musl turns most
+**What is not served is recorded, not merely refused.** The delegated stub
+(`runtime/delegate.c`) keeps the syscall numbers it turned away, and the runtime
+reports them when the program exits. `-ENOSYS` alone is invisible: musl turns most
 of them into a plausible failure and the caller continues, so a missing opcode
 surfaces later as wrong behaviour somewhere unrelated. A full stdio run currently
 reports an empty list, which is the only state in which the list is worth reading.
@@ -98,9 +83,9 @@ syscall_arg_t`, and pointers reach the boundary intact. **This one change fixes
 
 **2. No `ecall`.** A domain cannot trap to Linux: its caller is a user process,
 not a kernel, and the trap vector belongs to the monitor. The boundary is a call
-to `__capstone_hostcall()`, which is declared here and not yet implemented.
-Keeping it an extern call is what lets the whole libc compile before any
-transport exists.
+to `__capstone_hostcall()`, which is declared here; `runtime/hostcall.c` hands
+every call to the delegated stub (`runtime/delegate.c`). Keeping it an extern
+call is what let the whole libc compile before any transport existed.
 
 ## Measured, 2026-08-14
 
@@ -150,22 +135,22 @@ needed the replacement work the old table planned.
 |---:|---|---|---|
 | 6 | `src/malloc/mallocng` | `sizeof(void*)` static assert; a 16-byte pointer makes the assert expression zero, so its negative-size array reports `array is too large (2^64-1 elements)` | Nothing. Every port here brings its own level 0, so no domain links musl's allocator. `src/malloc/mallocng/malloc.c` is now the survey's MUST_FAIL control for exactly that reason: it fails structurally and it blocks no milestone. |
 
-So the compile side of this port is finished for practical purposes. **What remains is
-the transport**, which a compile count never measured: `runtime/hostcall.c` translates
-Linux syscall numbers to HostCall v0 opcodes and the probe harness beside it
-(`tests/runtime-qemu/run-hostcall-stdout-probe.sh`) exercises that protocol from a
-hand-written guest. musl's own `write()` has still not been run through it end to end.
-That single path, not the 91 files, is now the libc question.
+So the compile side of this port is finished for practical purposes. **What remained was
+the transport**, which a compile count never measured: at the time `runtime/hostcall.c`
+translated Linux syscall numbers to HostCall v0 opcodes and the probe harness beside it
+(`tests/runtime-qemu/run-hostcall-stdout-probe.sh`) exercised that protocol from a
+hand-written guest. (The transport is now the delegated ABI v2; the v0 mode was removed on
+2026-09-30.)
 
 `__syscall_cp` needs **no patch**, contrary to an earlier plan here: musl
 weak-aliases `__syscall_cp_c` to a `sccp` that calls `__syscall` directly
 (`src/thread/__syscall_cp.c`), and the strong definition lives in
 `pthread_cancel.c`. As long as that object is not linked, the alias wins and
-cancellation points route through our hostcall like any other syscall.
+cancellation points route through `__capstone_hostcall` like any other syscall.
 
 ## Using something that is not there
 
-A domain's hostcall answers what it knows and returns `-ENOSYS` for the rest. musl turns that
+The delegated runtime runs what it knows and returns `-ENOSYS` for the rest. musl turns that
 into an ordinary failed call, so a program that does not check its return values gets a
 plausible wrong answer rather than a stop. Two things now make that loud.
 
@@ -173,18 +158,22 @@ plausible wrong answer rather than a stop. Two things now make that loud.
 calls cannot work, without booting anything:
 
 ```bash
-python3 capstone/ports/musl-capstone/check-domain-support.py my.dom \
-  --baseline some-other.dom --port-objects "$OBJ"/level0.o "$OBJ"/hostcall.o ...
+python3 capstone/ports/musl-capstone/check-domain-support.py my.dom --sdk <SDK> \
+  --baseline some-other.dom
 ```
 
-The served set comes out of `runtime/hostcall.c`'s own `case SYS_x:` labels, so it cannot drift
-from the implementation, and a source is reported only when **every** syscall it names is
-unserved. That second rule is what makes it usable: musl's `fstatat` tries `statx` and falls
+The served set comes out of the delegated runtime's own tables, so it cannot drift from the
+implementation: the numbers the shape table (`runtime/common/delegate.c`) delegates to Linux,
+plus the ones the domain's stub (`runtime/delegate.c`) answers itself. `--sdk` names the
+musl tree, the libc archive and the runtime archive the image was linked with; whatever the
+runtime archive defines (level0's mmap, the libc overrides) is not musl's and is not read. A
+source is reported only when **every** syscall it names is unserved. That second rule is what makes it usable: musl's `fstatat` tries `statx` and falls
 back to `newfstatat`, `clock_gettime` falls back to `gettimeofday`, and a checker that reported
 mentions called both of them broken. `--baseline` subtracts what any musl image links anyway,
 so what is left is what your program brought.
 
-Checked against the suite, it names exactly what running found and nothing else:
+Checked on 2026-09-17 against the suite and the HostCall v0 served set of that time, it named
+exactly what running found and nothing else:
 
 | image | says |
 |---|---|
@@ -198,36 +187,39 @@ is the discrimination that makes the tool worth running. A line means the call c
 the program makes it, not that it will: the check reads each symbol's own source rather than a
 call graph, and a linked symbol need not be reachable.
 
-**After the run.** Every domain now prints what it was refused, on its way out:
+**After the run.** Every domain prints what it was refused, on its way out, on the task's
+stderr:
 
 ```
-capstone-domain: UNSERVED syscalls: 59
+capstone-domain: UNSERVED syscalls: 214x2
 ```
 
-by `write(2)` rather than stdio, because on the `exit()` path musl's stdio has already been
-taken apart. That report is exact, where the static check is early: it lists what the program
-actually asked for. Numbers rather than names, because a table of three hundred names is not
+through the stub inside `exit_group` rather than through stdio or the program's descriptors,
+because on the `exit()` path musl's stdio has already been taken apart and the program may have
+closed fd 1 (ISSUES I-11; `tests/runtime-qemu/run-delegated-probes.py --only unserved-report`).
+That report is exact, where the static check is early: it lists what the program actually asked
+for. Numbers rather than names, because a table of three hundred names is not
 worth the bytes in every image when the suite's runner prints them by name and the static check
 says which call needs each one.
 
 ## libc-test: musl's own suite, in a domain
 
-`libc-test/` builds every functional test of musl's libc-test as its own pure-capability
-domain and runs it under QEMU in its own boot. The result is one table that accounts for
-all 77 sources, not only the ones that produced a domain.
+`libc-test/run-libc-test-delegated.py` builds every functional test of musl's libc-test with the
+application SDK's `capstone-cc`, one delegated application per test, stages the images on the
+guest's share and runs them one after another in one running guest. The result accounts for all
+77 sources, not only the ones that produced an image.
 
 ```bash
-bash capstone/ports/musl-capstone/libc-test/run-libc-test.sh   # builds, one boot per test, summarises
-cat  "$CAPSTONE_TMP_ROOT/musl-libc-test/logs/latest/results.txt"   # one directory per run, with toolchain.txt
+bash capstone/ports/musl-capstone/libc-test/fetch-libc-test.sh     # the pinned, patched suite
+python3 capstone/ports/musl-capstone/libc-test/run-libc-test-delegated.py --state <capstone_vm state> \
+  --sdk <SDK> --share <the guest's share> --work <dir> --report <dir>/libc-test.json
 ```
 
-Verdicts: `PASS` and `FAIL` are the test's own, `t_status` folded with the unserved-syscall
-count so a test that "passed" while a syscall it needed was refused does not pass.
-`NOBUILD` carries the first compile or link error, `EXCLUDED` the reason from
-`build-libc-test.sh`, `FAULT` a capability fault, `HUNG` a test that never came back and took its
-chunk's guest with it, `NOBOOT` a boot that never reached a shell, `NOTRUN` a chunk-mate of one
-that hung. A `FAIL` that says `UNSERVED` names the syscalls the domain asked for and the host
-refused, so the row says what the test needed and not only that it failed.
+Verdicts: `PASS` is exit 0 with no unserved syscall, so a test that "passed" while a syscall it
+needed was refused does not pass; `FAIL` carries the status and the unserved names; `FAULT` a
+domain fault with its record; `HUNG` a test that outlived its timeout (the guest reaps it);
+`NOBUILD` the first compile or link error; `EXCLUDED` the reason in the runner. A fault ends the
+application, not the guest, so no test is lost to another's.
 
 **Signals.** The functional set exercises signals only through `popen`, `setjmp` and the
 excluded `vfork`; the signal tests proper are in `src/regression`: `sigaltstack`,
@@ -237,15 +229,9 @@ three pass through `run-libc-test-delegated.py`, staged into a suite directory's
 faults inside `pthread_kill` on the handle `pthread_create` never filled. Record:
 `ports/cpython/app/results/signals-2026-09-29.json`.
 
-**Why one boot per test.** A domain that never comes back takes the guest with it: a fault
-after a yield does (M-1), and so does a domain that spins, because it holds the only hart.
-Nothing inside the guest can recover it, not `alarm()` in the host process, which is inside the
-ioctl, not `kill -9` from the shell. The unit of loss is the boot, so the only lever is how much
-rides on one, and boot-to-login here is about twenty seconds. `CHUNK=10` gets batching back
-where a boot is expensive; there `quarantine.txt` orders known faulters last so they cost only
-the tail of their chunk. Quarantine is ordering, not exclusion. Every run writes its own
-`logs/<RUN_ID>/` with the toolchain that built the domains beside the chunk logs, so two
-compilers are two tables and not one overwritten.
+**History: the v0 runner.** Until 2026-09-30 `libc-test/run-libc-test.sh` built each test as a
+HostCall v0 domain and ran it in its own QEMU boot, because a domain that never came back took
+the guest with it (M-1). The measurements below are from that runner.
 
 **What the suite found that no probe would have.** One compiler defect, C-48: outgoing
 stack-passed varargs were packed at 8 bytes while `va_arg` reads at 16, so `inet_ntop` printed
@@ -385,19 +371,11 @@ bash capstone/ports/musl-capstone/survey-musl-capstone.sh          # fetch, prep
 bash capstone/ports/musl-capstone/survey-musl-capstone.sh --list-failures
 
 bash capstone/ports/musl-capstone/build-musl-capstone.sh           # libc-capstone.a
-bash capstone/ports/musl-capstone/write-probe/run-write-probe.sh   # each boots QEMU once
-bash capstone/ports/musl-capstone/file-probe/run-file-probe.sh
-bash capstone/ports/musl-capstone/stdio-probe/run-stdio-probe.sh
+bash capstone/ports/common/application/build-sdk.sh <SDK> <musl tree> <libc-capstone.a>
 
-bash capstone/ports/musl-capstone/libc-test/run-libc-test.sh      # one boot per test
-TESTS="inet_pton mntent" bash capstone/ports/musl-capstone/libc-test/run-libc-test.sh
+# in a running capstone_vm guest (see above for the arguments)
+python3 capstone/ports/musl-capstone/libc-test/run-libc-test-delegated.py ... --tests inet_pton mntent
 ```
-
-`MUSL_WRITE_PROBE_BADFD=1` adds the write probe's negative control, which reads
-`errno` after a refused descriptor and so cannot pass unless the thread pointer
-survives the domain boundary. A worktree has the buildroot submodule present and
-empty, so point `CAPSTONE_BUILDROOT_DIR` at the main clone before building the
-guest side.
 
 Exit codes: `0` pass, `1` regression against the pinned `BASELINE_OK`, `2` the
 harness could not measure (unprepared tree, no compiler, empty file list, or a

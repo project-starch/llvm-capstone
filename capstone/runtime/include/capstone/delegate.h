@@ -139,8 +139,8 @@ enum capstone_delegate_group {
 #define CAPSTONE_SIGNAL_IGNORE 1u
 #define CAPSTONE_SIGNAL_CAUGHT 2u
 
-/* Descriptor flag: the image speaks this ABI. Images without it use the
- * HostCall v0 application runtime; a launcher must accept both. */
+/* Descriptor flag: the image speaks this ABI, the only application ABI.
+ * capstone-exec refuses an image without it (ENOEXEC, exit 126). */
 #define CAPSTONE_APPLICATION_DELEGATE 2u
 #define CAPSTONE_DELEGATE_DEFAULT_EXCHANGE 262144u
 

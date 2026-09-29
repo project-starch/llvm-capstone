@@ -186,9 +186,9 @@ Each step stacks on the previous one, is gated, and lands squashed.
    marshalling table as a header, native unit tests for pack, unpack and bounds
    validation.
 2. **`delegation-libc`**: the musl dispatcher becomes a stub plus the exception
-   table; HostCall v0 stays behind `CAPSTONE_APPLICATION_RUNTIME` for legacy
-   probes. Gate: libc-test file, time, directory and descriptor groups at or
-   above today's count.
+   table; HostCall v0 stayed behind `CAPSTONE_APPLICATION_RUNTIME` for legacy
+   probes until 2026-09-30, when that mode was removed (below). Gate: libc-test
+   file, time, directory and descriptor groups at or above today's count.
 3. **`delegation-launcher`**: generic dispatcher, seccomp profile, fault record.
    Gate: the application contract program, `perl.dom` and `mruby.dom` through
    the persistent-guest gate; `capstone-exec --stats` shows the new counters.
@@ -252,5 +252,29 @@ correct by construction on a Linux pipe with `O_NONBLOCK`.
 **FFmpeg and tshark** keep their app ports; their file service calls map one to
 one onto delegated `openat`, `pread`, `pwrite` and `close`.
 
-The legacy probes under `tests/runtime-qemu` and the FPGA gates keep HostCall
-v0. They are evidence for silicon claims and are not migrated by this plan.
+The S-mode wire probes (`tests/runtime-qemu/hostcall-*-probe`, run by
+`run-hostcall-all.sh`: an S-mode payload and a helper, no musl, no
+`capstone-exec`) and the FPGA gates keep the bare HostCall transport. They are
+evidence for silicon claims and are not migrated by this plan.
+
+The musl runtime's HostCall v0 mode, and every probe that ran a musl program on
+it, were removed on 2026-09-30: the delegated runtime is the only application
+runtime, and `capstone-exec` refuses an image without the v2 descriptor. Their
+features are covered by delegated tests:
+
+- `tests/runtime-qemu/run-delegated-probes.py`, the probes converted to
+  delegated applications: `init-fini` (constructors and destructors, C-64),
+  `exit-default` and `exit-hook` (exit status and the at-exit hook, C-56),
+  `return-flush` (returning from `main`), `unserved-report` (the report on the
+  task's stderr after fd 1 is closed, I-11), `large-read` and `big-stdout`
+  (64 KiB and 5000-byte transfers through 9p), `mmap-shm` and its control
+  (the domain's mmap and System V shared memory), `tls-O0`, `tls-O2` and
+  `tls-overrun` (C-47), `cap-atomics-*` (C-54), `subword-*` (C-51), `movc`
+  (Q-04) and `arith-0..2` (untagged CINCOFFSET and SCC);
+- the probes of the v0 emulation itself (working directory, directory
+  listing, mkdir and rmdir, readlink, rename, pread and pwrite, pipes and
+  poll, pid and timers, standard descriptors) and the musl write, stdio, file
+  and yield probes are Linux's own behaviour under v2, covered by the
+  delegated libc-test (`ports/musl-capstone/libc-test/run-libc-test-delegated.py`,
+  which also replaces the v0 libc-test runner) and the application gate
+  (`runtime/tests/application/run.py`).

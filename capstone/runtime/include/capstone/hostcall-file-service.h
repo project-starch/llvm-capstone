@@ -7,6 +7,11 @@
 
 #include "hostcall.h"
 
+/* The helper side of the HostCall v0 file service (hostcall.h): handle tokens,
+ * request snapshots and bounds, and full-length file I/O. Used by the S-mode
+ * wire probes' helpers in tests/runtime-qemu/hostcall-*-probe; no application
+ * runtime is served by it. */
+
 #define HC_FILE_SERVICE_MAX_HANDLES HC_V0_FILE_SLOTS
 
 struct hostcall_file_service_handle_slot {
