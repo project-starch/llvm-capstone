@@ -933,3 +933,51 @@ that leaked spans would show there first.
 So against the question the work exists to answer: **of the defects a malloc-granularity
 mechanism is blind to, three of four are caught one level up, and the fourth is blocked by
 the instruction set rather than by the port.**
+
+## PoisonCap, and why level 4 is out of reach for it too -- for a third reason
+
+PoisonCap runs on this machine. The published stack is complete under
+`/tmp/capstone/poisoncap-work` -- its own QEMU, firmware, kernel, and a 7.3 GB
+`published-platform/cheribsd-riscv64-purecap.img` whose `libc.so.7` matches the
+`SHA256SUMS` beside it. Booted through `ports/common/host/cheribsd/guest.py` on port 10438
+it answers: `FreeBSD 15.0-CURRENT #0 pver-214a1a2d9-dirty`, the guest libc's sha256 equal to
+the published one, and `security.cheri.runtime_revocation_default: 0`, which is the outer
+policy the study plan fixes. There is no compiler in the guest, so a probe has to be
+cross-built with the SDK and copied in.
+
+**The mechanism, from its own source.** `published-platform/mrs.c` is Brett Gutstein's MRS
+with a poison-version extension: `cpoisonline` is an instruction, and allocation does
+`cheri_poison_set_version(region, pver + 1)` with `cheri_poison_set` per 16-byte line. So a
+**version is stamped on the memory region** and a capability carrying an older version faults.
+That is a different lever from Sublet's, which partitions **authority** into capability nodes.
+
+**What this changes about the level-4 claim, which is now on its third reading.** The first
+said "not expressible" and argued it from a header comment -- wrong reason. The second
+measured it: `hier_two_handles_one_node` faults while its no-give control returns, so two
+handles on one node are not siblings, and Sublet's sibling scoping needs a **partition**. That
+measurement stands. But reading `mrs.c` shows the obstacle is not really about which lever
+either mechanism pulls:
+
+* Sublet could revoke the span's handle and **re-issue** an alias to the survivor.
+* PoisonCap could bump the region's version and **re-issue** the survivor a capability
+  carrying the new one.
+
+Both work *if* the allocator can re-issue to the viewers that should survive. And that is
+where mruby stops it: **`mrb_shared_string` is `{ int refcnt; mrb_int capa; char *ptr; }` --
+a refcount with no list of sharers.** No back-pointer to any `RString` exists, so at the
+un-share neither mechanism can find the survivors to re-issue to. Checked: zero
+`shared->next`-style fields in `src/string.c`.
+
+So the honest statement is **not** "the ISA cannot do it" and **not** "PoisonCap cannot do
+it". It is: level 4 needs the shared buffer to know its viewers, which mruby's bookkeeping
+does not record, and that is a change to mruby rather than to either defense. Copy-on-share
+remains the alternative, and it is the one upstream's own fix effectively takes.
+
+**Not measured:** PoisonCap on any of these four defects. No mruby PoisonCap adapter exists,
+and the corpus has no `poisoncap-protected` arm yet. What is measured elsewhere in this tree
+is that PoisonCap does catch a nested-allocator reuse case -- `httpd/apr-pool-repros`, two
+recycling levels neither reaching malloc, mode 0 completes and mode 1 faults with SIGPROT at
+the labelled probe -- and that it needed an adapter to do it
+(`ports/apr/pools/src/cheribsd/node-poison.c`, `-DAPRP_POISONCAP=ON`). So against PoisonCap
+the argument for levels 2 and 3 is a **cost and coverage** comparison, not a blindness one,
+and the protocol for it is already written in `docs/plans/sublet-poisoncap-memory-study.md`.
