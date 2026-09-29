@@ -11,7 +11,7 @@
  *   wm_block_release   the block must come back whole and LINEAR -- the port has revoked its senior
  *                      handle -- and goes back to the heap, whose revoke ends it
  *   wm_meta_alloc      the records and the index the headers moved into: ordinary heap objects
- *   wm_probe           a pointer handed back to the allocator is read through its own authority
+ *   wm_handback_probe  a pointer handed back to the allocator is read through its own authority
  *                      before its header is looked up
  *   wm_fail            one line on stderr, then exit 96: the oracle then DIFFERS, never passes
  *
@@ -82,7 +82,7 @@ void *wm_meta_alloc(size_t n)
 	return p;
 }
 
-void wm_probe(const void *p)
+void wm_handback_probe(const void *p)
 {
 	(void)*(const volatile unsigned char *)p;
 }
