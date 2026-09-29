@@ -3,7 +3,7 @@
 **Fixed** by `fc987bb99d8d`, the commit before this folder on its branch. Measured 2026-09-23: `./run.sh` reports ABSENT with that compiler and PRESENT with `dev`'s (`1a08706b6344`, whose compiler sources are those of `d030df93d4a4`). Regression test: `llvm/test/CodeGen/Capstone/frame-base-register-capability.ll`. Everything below is the investigation as it was recorded before the fix.
 
 **A COMPILER bug.** Found 2026-09-23 by the CPython compile survey
-(`capstone/ports/cpython/interpreter/`): `Python/compile.c` is the one object it stops, and that
+(`capstone/ports/cpython/app/`): `Python/compile.c` is the one object it stops, and that
 object is the bytecode compiler, so an interpreter cannot link without it. Sibling issues from
 the same survey: C-50 (`../C50-assignment-tracking-index-width/`) and C-51
 (`../C51-ptrmask-on-capability/`).

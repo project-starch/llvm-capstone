@@ -109,7 +109,7 @@ was forgotten somewhere: it is case 2, which upstream left in deliberately.
 ## The contract
 
 The layout and the `case.json` fields are the corpus contract in
-[`cpython/pymalloc-repros/SCHEMA.md`](../../cpython/pymalloc-repros/SCHEMA.md),
+[`SCHEMA.md`](../../SCHEMA.md),
 referenced rather than copied. Where this corpus differs:
 
 * **`native-fix-differential`** is an extra axis beside protection: natively
@@ -169,16 +169,16 @@ live, and comparisons are of addresses, never of pointers.
 
 ## Where this corpus deviates from the contract, and why
 
-`tests/check-corpus.py` in the pymalloc corpus enforces
-[SCHEMA.md](../../cpython/pymalloc-repros/SCHEMA.md). Run against these cases it
+[`../../tools/check-corpus.py`](../../tools/check-corpus.py) enforces
+[SCHEMA.md](../../SCHEMA.md). Run against these cases it
 reports three kinds of problem, all deliberate. They are listed here rather than
 silenced, and no copy of that checker is shipped beside them: a fork would be a
 second contract, and a checker that fails by design is noise.
 
 | what it reports | why |
 |---|---|
-| `arm 'cheribsd-revocation' is not in SCHEMA.md` | the contract's CheriBSD arms are the PoisonCap pair. This one has no adapter at all: it is the platform as shipped, and calling it `poisoncap-spatial` would claim an adapter that is not in the binary |
-| `arm 'native-fix-differential' is not in SCHEMA.md` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
+| `cheribsd-revocation` | the contract's CheriBSD arms are the PoisonCap pair. This one has no adapter at all: it is the platform as shipped, and calling it `poisoncap-spatial` would claim an adapter that is not in the binary |
+| `native-fix-differential` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
 | `case.c declares no PYC_CASE` | the macro is the corpus's seam to its allocator; here it is `MC_CASE`. The rule the checker means -- a case declares the number its directory carries, and the driver refuses a fixture that names another -- is implemented |
 
 Extending the checker to know these is a change to the pymalloc corpus and

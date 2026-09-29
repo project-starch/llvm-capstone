@@ -1,0 +1,43 @@
+{
+  "program": "wireshark",
+  "boundary": "wmem (block, block_fast)",
+  "title": "Dissector-side temporal defects in consumers of Wireshark's wmem pools",
+  "upstream": {
+    "version": "4.6.8",
+    "port": "capstone/ports/wireshark/wmem"
+  },
+  "cases": 13,
+  "case_schema": "case-json",
+  "case_macro": "WM",
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "native-detect"
+  ],
+  "arm_keys": {
+    "sublet-chunks": [
+      "oracle",
+      "cause"
+    ]
+  },
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "false": 13
+  },
+  "runners": [
+    "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py"
+  ],
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "evidence": [
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu-negative-control",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port"
+  ],
+  "advisories": [],
+  "shape_table": true,
+  "note": "No triage inventory under docs/ref/ yet; the README carries the selection."
+}

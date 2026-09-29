@@ -1,0 +1,36 @@
+{
+  "program": "cross-language FFI (12 of 15 rows are mruby or an mruby gem)",
+  "boundary": "handles held across a language boundary",
+  "title": "Corpus B: cross-language FFI memory-safety defects, as distilled C shims",
+  "cases": 15,
+  "case_schema": "xlang-row",
+  "case_table": "xlang/capstone/rows.tsv",
+  "case_dir_column": "key",
+  "status": "measured",
+  "live_in_pin_recorded": false,
+  "live_in_pin_note": "Each row is pinned to its own vulnerable upstream commit, named in its target.md, rather than to a release this project ports.",
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "inventory": "capstone/docs/ref/paper-bug-inventory.md",
+  "evidence": [
+    "xlang/capstone/rows.tsv",
+    "xlang/cheri/rows.tsv"
+  ],
+  "advisories": [
+    "CVE-2017-9527",
+    "CVE-2018-10191",
+    "CVE-2018-10199",
+    "CVE-2020-6838",
+    "CVE-2020-6840",
+    "CVE-2022-1071",
+    "CVE-2022-1106",
+    "CVE-2022-1934",
+    "CVE-2026-1979",
+    "GHSA-f56g-chqp-22m9",
+    "RUSTSEC-2022-0070"
+  ],
+  "related": [
+    "capstone/bug-corpora",
+    "capstone/bug-corpora/mruby/gc-slot-repros"
+  ],
+  "note": "Rows 8 and 13 are one upstream defect, so 15 rows are 14 distinct fixes. The advisory list is the front-page table's; rows 8, 12, 13 and 14 carry their CVE id in that table but not yet in their own target.md."
+}

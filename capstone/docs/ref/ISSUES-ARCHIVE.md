@@ -4452,3 +4452,53 @@ reports `unserved=160x2 stdout=closed` (log `qemu-oracle-20260925-002557-yPoh`).
 
 **FIXED 2026-09-25:** `hc_report_unserved` calls `hc_stdout_bytes`, the WRITE_STDOUT rounds without the descriptor check, so a program's `close(1)` cannot drop it. The full tshark run now ends with the runtime's line, identical to the port's fd-2 report. As first written: **the fix:** write the report to fd 2, or let the runtime's own report bypass the program's
 closed flag. Until then, a missing line is not evidence that nothing was unserved.
+
+### I-13 — the shared guest `rootfs.ext2` was corrupted by launchers that booted it read-write without `-snapshot` `FIXED 2026-09-29 — e387cda9198d; the image repaired and made read-only`
+
+**Symptom.** Guests booting `caplifive-buildroot/build/images/rootfs.ext2` logged `EXT4-fs error
+(device vda): mb_free_blocks ... freeing already freed block; block bitmap corrupt` on 2026-09-23,
+09-24 and 09-29, and boots stalled around it. `e2fsck -fn` on the image returned 4. It had leaked
+57,816 blocks: in-use went from 73,247 to 15,431 on repair, matching the free-count discrepancy
+measured beforehand.
+
+**Cause.** Two launchers attached the shared image writable, without `-snapshot`:
+
+- **`tests/capstone-authority/run-authority-suite.py`** booted it `root=/dev/vda rw`. Every boot ended
+  uncleanly: `boot_and_run_one`'s `finally` calls `child.terminate(force=True)` with no sync or
+  poweroff, and a trapping domain aborts QEMU anyway. So each run left the image dirty.
+  - Its wrapper takes no QEMU lock, so it could also write the image while other lanes' guests,
+    which do use `-snapshot`, were reading it. Those guests then logged the errors too.
+  - The 2026-09-28 run that left the image as found: `/tmp/capstone/prmerge/reg-new/capstone-authority-suite.log`.
+    Its mtime, 19:25:22, is two seconds after the image's, 19:25:20. It booted 32 domains against
+    the main clone's image, from a scratch worktree with `CAPSTONE_BUILDROOT_DIR` pointed there.
+- **`utils/run-qemu.sh`**, the interactive launcher: the guest remounts `/` read-write, and there was
+  no `-snapshot`.
+- `run-domain-smoke.py`, the fuzz batch and `capstone_vm` always passed `-snapshot`. The CheriBSD
+  launchers boot their own images.
+
+**Repro, two-sided (2026-09-29, private copies of a clean image, one run of two domains each):**
+
+    AUTHORITY_ONLY=forge_inttoptr,global_inbounds AUTHORITY_NO_BUILD=1 SHARE_DIR=<built> \
+      CAPSTONE_BUILDROOT_DIR=<copy> python3 capstone/tests/capstone-authority/run-authority-suite.py
+
+- As it was: the copy's hash changed and `e2fsck -fn` returned 4.
+- With `-snapshot`: the copy stayed byte-identical and `e2fsck`-clean.
+- The suite passed both times.
+
+**Fix.**
+
+- `e387cda9198d` adds `-snapshot` to both launchers. `utils/run-qemu.sh` can opt out with
+  `CAPSTONE_ROOTFS_WRITABLE=1`.
+- The shared image was repaired with `e2fsck -fy` while holding the QEMU lock, after checking
+  nothing had it open. `/capstone.ko` is byte-identical before and after, and two orphan inodes
+  went to `lost+found`. The corrupt copy is at `/tmp/capstone/rootfs-shared-backup-20260929/`.
+- The shared image is now **read-only on disk** (`chmod a-w`). Both halves were tested on a copy:
+  - a launcher without `-snapshot` fails to start with `Could not open ... Permission denied`,
+    instead of corrupting the image;
+  - `run-domain-smoke.py` boots and runs normally, the guest's write going to the overlay and the
+    image unchanged.
+
+**Residual.** On 2026-09-29, 21 worktrees still carried the old launchers, among them the three under
+`/tmp/capstone/prmerge/`, from which the 2026-09-28 run came. With the image read-only they now fail
+loudly. Syncing them to `e387cda9198d` or later is each lane's.
+

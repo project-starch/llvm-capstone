@@ -1,6 +1,6 @@
 # SQLite sealed-callback context-revoke probe (callback UAF)
 
-The Stage-2 **"after"** for the SEALED-CALLBACK class (cve-repros rows 1/2/6/16:
+The Stage-2 **"after"** for the SEALED-CALLBACK class (capi-repros rows 1/2/6/16:
 cpython progress-handler UAF, rusqlite hook-closure UAF, php UDF UAF, datasette
 authorizer-context UAF, primitive **S** with L/R/H). A host registers a callback
 whose context pointer (SQLite's `pApp`) is later freed/replaced while the engine

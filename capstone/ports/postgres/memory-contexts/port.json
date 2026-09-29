@@ -1,0 +1,21 @@
+{
+  "program": "postgres",
+  "role": "allocator-component",
+  "title": "PostgreSQL's memory contexts, replayed against aset, slab and generation",
+  "upstream": {
+    "version": "17.0",
+    "pin_source": {
+      "file": "capstone/ports/postgres/memory-contexts/upstream.json",
+      "grep": "\"version\": \"17.0\""
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "cheribsd-purecap",
+    "linux-guest",
+    "native"
+  ],
+  "corpora": [
+    "capstone/bug-corpora/postgres/mmgr-repros"
+  ]
+}

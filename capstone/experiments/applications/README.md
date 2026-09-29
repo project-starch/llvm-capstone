@@ -24,7 +24,10 @@ before every repetition. The archive must be declared in the point's
 `files` mapping. `expected_pg_rows_sha256` hashes
 the 22 normalized native SQL result rows, ignoring prompts and log timing.
 An opt-in `reuse_gap` report may come from `stdout` for PostgreSQL or
-`stderr` for CPython; the runner rejects missing or inconsistent histograms.
+`stderr` for CPython and Perl; the runner rejects missing or inconsistent
+histograms. Perl's `perl-sv-heads` boundary also requires one closing
+`PERL_SV_HEADS` ledger that matches the arm, its histogram and the published
+policy, with nothing left quarantined.
 The timeout wraps the backend inside `su`, so it owns the process that may
 otherwise outlive a timed-out shell. The runner records every attempt and
 keeps the four-arm study incomplete when a protected process lacks its oracle.
@@ -52,8 +55,9 @@ libraries. SQLite takes the existing amalgamation and VFS objects, with
 ninja link command; its dependencies must already be built.
 
 `--heap sublet --heap-log N` selects the common Sublet malloc implementation.
-The separate `--nested cpython` and `--nested mruby` modes select already-built
-ports of pymalloc and GC slots while leaving their outer malloc as level0.
+The separate `--nested cpython`, `--nested mruby` and `--nested perl` modes
+select already-built ports of pymalloc, GC slots and SV heads while leaving
+their outer malloc as level0.
 They allocate the grants described in `regions.c`; they do not silently
 fall back if a protected port's region is absent. Record the supplied source
 revision, object hashes, protection contract and build manifest together.

@@ -1,5 +1,5 @@
 /* row9 -- the LITERAL matched pair for
- * cve-repros/row9_ruby_finalize_after_dbfree (HIERARCHICAL-REVOKE), Ruby binding.
+ * capi-repros/row9_ruby_finalize_after_dbfree (HIERARCHICAL-REVOKE), Ruby binding.
  *
  * The SAME row9 program as before-faithful.c, real SQLite C API, one Capstone
  * domain. sqlite3-ruby issue #49: a Statement outlives its Database; the Database

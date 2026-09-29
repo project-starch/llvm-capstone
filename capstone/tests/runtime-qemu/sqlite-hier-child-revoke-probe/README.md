@@ -1,6 +1,6 @@
 # SQLite hierarchical derived-child revoke probe (use-after-close)
 
-The Stage-2 **"after"** for the use-after-close class (cve-repros rows
+The Stage-2 **"after"** for the use-after-close class (capi-repros rows
 4/5/7/8/9/10/12, HIERARCHICAL-REVOKE): a statement/value pointer that lives
 *inside* a SQLite connection, dereferenced after `sqlite3_close(connection)`. The
 proposal's **H** primitive — closing the connection invalidates every pointer

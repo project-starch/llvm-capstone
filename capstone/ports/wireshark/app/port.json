@@ -1,0 +1,20 @@
+{
+  "program": "wireshark",
+  "role": "full-application",
+  "title": "tshark as a whole application in a domain -- dependencies built, not running",
+  "upstream": {
+    "version": "4.6.8",
+    "pin_source": {
+      "file": "capstone/ports/wireshark/app/upstream.json",
+      "grep": "\"version\": \"4.6.8\""
+    }
+  },
+  "targets": [
+    "capstone-domain"
+  ],
+  "status": "in progress",
+  "evidence": [
+    "capstone/ports/wireshark/app/results/2026-09-24-qemu-cma-domain-block"
+  ],
+  "note": "The seven dependencies cross-build and a CMA domain block covers its size; the port found three runtime gaps (C-64, C-65, I-11) and has no README."
+}
