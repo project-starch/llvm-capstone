@@ -24,8 +24,8 @@ def main():
         parser.error('oracle needs capture names')
     work = Path(os.environ.get('TS_WORK', '/tmp/capstone/tshark-app'))
     heap = os.environ.get('TSAPP_HEAP', 'level0')
-    if heap not in ('level0', 'shrink', 'sublet'):
-        parser.error('TSAPP_HEAP must be level0, shrink or sublet')
+    if heap not in ('level0', 'shrink', 'sublet', 'chunks'):
+        parser.error('TSAPP_HEAP must be level0, shrink, sublet or chunks')
     images = Path(os.environ.get('TSAPP_DOMAIN_DIR', work / ('domain' + ('-' + heap if heap != 'level0' else ''))))
     stock = Path(os.environ.get('TSAPP_STOCK', work / 'native-stock/run/tshark'))
     vm = VM(args.state, work / 'runs')

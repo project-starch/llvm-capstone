@@ -1,7 +1,7 @@
 # C-53 — an inline-asm `"m"` INPUT operand crashes isel; `"=m"` outputs compile
 
 **A COMPILER bug.** Found 2026-09-23 by CPython's `configure`, whose x87 and mc68881 FPU checks
-use one (`capstone/ports/cpython/interpreter/`). CPython on capstone64 never needs those checks
+use one (`capstone/ports/cpython/app/`). CPython on capstone64 never needs those checks
 to say yes, so this blocks nothing there today; `prepare-cpython-capstone.sh` records the two
 crashed checks as reviewed. Siblings from the same port: C-50, C-51, C-52, C-54.
 

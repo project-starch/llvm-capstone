@@ -54,9 +54,9 @@ The source recipes now compile and link through the same SDK:
 | Port | Source recipe | Application output |
 | --- | --- | --- |
 | Perl | `ports/perl/musl/build-perl-domain.sh` | `src/perl-5.36.3/perl` |
-| mruby | `ports/mruby/musl/build-mruby-domain.sh` | `src/mruby/build/capstone/bin/{mruby,mrbtest}` |
-| CPython | `ports/cpython/interpreter/prepare-cpython-capstone.sh`, survey and link scripts | `build/link-attempt/python.dom` |
-| PostgreSQL | `ports/postgres/single-user/build-domain.sh` | `link/postgres.dom` |
+| mruby | `ports/mruby/app/build-mruby-domain.sh` | `src/mruby/build/capstone/bin/{mruby,mrbtest}` |
+| CPython | `ports/cpython/app/prepare-cpython-capstone.sh`, survey and link scripts | `build/link-attempt/python.dom` |
+| PostgreSQL | `ports/postgres/app/build-domain.sh` | `link/postgres.dom` |
 | FFmpeg | `ports/ffmpeg/app/host/build-domain.sh` | `domain/ffapp_m5.dom` and fixtures |
 | tshark | `ports/wireshark/app/deps/build-*.sh`, `host/cross-build.sh`, `host/build-domain.sh` | `domain/tshark_m5.dom` and fixtures |
 | SQLite | `ports/sqlite/build-sqlite-capstone.sh` prepares the library objects; link the application below | `sqlite.dom` |

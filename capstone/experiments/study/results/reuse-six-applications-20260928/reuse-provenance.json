@@ -1,0 +1,29 @@
+{
+  "workloads": [
+    "sqlite-main",
+    "mruby-ao8",
+    "mruby-ao16",
+    "ffmpeg-xvid",
+    "ffmpeg-resize",
+    "postgres-work",
+    "cpython-objects8",
+    "perl-records512"
+  ],
+  "processes_per_cell": 3,
+  "inputs_sha256": {
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/plot-application-memory-paper.py": "beb3d62dfa89c4a3c5cbf43b4af50e5834276e332ac22a0681403a7f839542b4",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/published-policy-20260928/summary.json": "2556899a8395aca4663e6425deb9d173da95d9597b790c5f044d4ff7fc143666",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/published-policy-20260928/sqlite-summary.json": "11c3fb3a864b131593e74868f587248de2eed307150dfd5e11ecc76f8dc2d8ae",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/postgres-reuse-four-arm-20260928/reuse-summary.json": "f30d7fe1c7f3bffb2656fac65705dca243f0697b75423d32a9b4253ac27bf8e3",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/postgres-reuse-four-arm-20260928/validate.py": "20e026a56ea4261ffc248bfdf0c76f5585d56e62f23306fd4874f17e2388a312",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/postgres-reuse-four-arm-20260928/cheribsd-raw.tar.gz": "bd4d845a041ad903fc1a52dcd4464760a8598b5b3d3b773ab91c3c9e42c90996",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/cpython-reuse-four-arm-20260928/reuse-summary.json": "a515921b1debda642507a01d161ea60d88b552c80953be8ff5840ac3726feea2",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/cpython-reuse-four-arm-20260928/validate.py": "437713478962b3d97485ef9d485b29b19c5432c7fd7b751035b8426b96a51389",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/cpython-reuse-four-arm-20260928/cheribsd-raw.tar.gz": "13bb95cd13cdc83954c658eeef26823d72f87da38f458efb481ca016d25f6e95",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/perl-reuse-four-arm-20260928/reuse-summary.json": "8e07eca94e20300b2e9b51932f5fecd402e09d0f7da3360332982cf115b90759",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/perl-reuse-four-arm-20260928/validate.py": "bec97b63ff02b4f986fa2a592dd6e9b81845468e2c3f6ad54b52960909181cff",
+    "/home/biecho/llvm-capstone-perl-reuse/capstone/experiments/study/results/perl-reuse-four-arm-20260928/cheribsd-raw.tar.gz": "67e5fe650c45b87cb96cfb44fd5487c50d52d5d85c048a80d27e469aa34fda2f"
+  },
+  "metric": "Pooled three-process conditional distribution of observed same-start release-to-reissue gaps; successful lifetime index.",
+  "scope": "Per-application inner allocators; no physical working-set or total-memory inference."
+}

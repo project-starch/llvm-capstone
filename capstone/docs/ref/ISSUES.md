@@ -567,7 +567,7 @@ one-cycle IDLE detour goes.
 
 te by the RTL lane, 2026-09-24.
 
-### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `FIX IN RTL (capstone-ariane branch r43-query-on-miss, 2026-09-29): probe the rev-node on a miss; verified in RTL simulation with seven deliberately broken builds, lint PASS, sweep neutral; NOT yet synthesized or on silicon. Confirmed 2026-09-25 on silicon (both R1 harness runs) and in simulation. Report folder: tests/fpga-repros/R43-revocation-cache-false-deny/`
+### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `OPEN — the first fix (0f5185a6d) is REFUTED BY SYNTHESIS (2026-09-29): correct in RTL simulation, but its combinational load/store stall gate put the revocation lookup in series with the load request -- routed WNS -24.495, all worst-500 paths through it. Redesign needed (replay rather than hold). Confirmed 2026-09-25 on silicon and in simulation. Report folder: tests/fpga-repros/R43-revocation-cache-false-deny/`
 
 > **Scope.** The M-mode LSU revocation cache in `capstone-ariane 4ad0df694` (4 ways x 64 sets, exact
 > 30-bit `{generation, index}` tag). An access whose id is not resident is refused with cause 25
@@ -596,6 +596,26 @@ te by the RTL lane, 2026-09-24.
 >   on `6cbdaeeb4`): alias A reads fine after 16 new live nodes; after 512 more the same read traps 25
 >   while `LCC(A) = 1`; after that `LCC` it reads fine again, because the LCC's node read re-installed it
 >   through the read tap. Arms 1 and 2 differ only in the number of nodes minted.
+> - **Board, boot p1o2-c6, 2026-09-29: the first REAL WORKLOAD instance, the P1 cell ⑥ -O2 image**
+>   (`df484d98b489aeab`, the Sublet port with D′).
+>   - **What happened:** cause 25 at VA 0x26928 in `setupLookaside`'s lookaside carve loop. The trap is the
+>     `sublet_stats.split++` load through the gp capability of a static global (`ldc a5,0x40(gp)`), right
+>     after a `cssplit` minted a revocation id. tval 0x827ff530 is that global's address. `rev_node_head`
+>     is 313.
+>   - **Why it is not a real revoke:** no software path revokes the global, and QEMU, which enforces
+>     revocation, runs the image to completion.
+>   - **What is not established:** the miss arm, as opposed to the two dead arms, is inferred, because
+>     cause 25 does not separate them. N=1. Audited before recording; see the measurements doc, "P1 -O2
+>     pair on R-42".
+>   - **Why it appears only now:** the carve loop exists only because D′ turned the lookaside back on.
+>   - **The arm discriminator, the same day** (image `2d0efa02`, LCC probes before every split-counter access;
+>     pre-registration `lane/board-p1-o2` `dfb9ee90`): **inconclusive, as pre-registered.** No probed load
+>     trapped. Instead cause 25 hit a DIFFERENT live static global, `lw a0,0(s8)` with `s8 = ldc 0x2a0(gp)` in
+>     openDatabase, at `rev_node_head` 466 against 313. That fits the miss arm, the victim moving once one
+>     entry is protected, but it does not exclude a defect that writes live nodes dead.
+>   - **Consequence:** P1 ⑥ is not measurable on R-42. This image under `board-c6var.sh` joins live512 in
+>     the R-43 redesign's board acceptance, and must complete with its QEMU oracle (`112006 38bb59fd`,
+>     25,010 lookasides).
 > - Not affected: the ladder, the small m1 drop run (about 160 ids), and the live16 sweep (board, passed).
 >
 > **First experiments** *(written at filing; the sweep images exist, and the simulation test supersedes
@@ -7265,7 +7285,9 @@ listed tools are fresh", NOT as "lit can run".**
 Some QEMU guest boots stop, or crawl, before any domain starts. The tshark safety campaign
 (`ports/wireshark/app/results/2026-09-25-qemu-safety/stall-classes.txt`) had 28 boots, and 7 of
 them never reached a domain. All ran on the port's PRIVATE rootfs, so the shared rootfs's ext4
-corruption is not the cause. FFmpeg's hardening round counted 9 such boots: 7 before login, 1 at
+corruption is not the cause. (That corruption is itself fixed: ISSUES-ARCHIVE I-13. On 2026-09-29, 7
+of 80 corpus boots on a private, `e2fsck`-clean rootfs still stalled: 6 with the serial log ending
+in the firmware banner, 1 at init.) FFmpeg's hardening round counted 9 such boots: 7 before login, 1 at
 login, 1 in the 9p copy. The shapes, told apart by a setup watchdog in
 `ports/wireshark/app/host/run-qemu.sh`:
 - **A slow 9p copy, 6 of the 28.** The guest's copy of the domain images from the 9p share
