@@ -64,8 +64,20 @@ enum capstone_delegate_group {
   CAPSTONE_GROUP_MEMORY,   /* served by the domain allocator or ENOSYS */
   CAPSTONE_GROUP_PROCESS,  /* the spawn service, or ENOSYS for fork */
   CAPSTONE_GROUP_SIGNAL,   /* domain table and launcher mask */
+  CAPSTONE_GROUP_RUNTIME,  /* runtime-internal, answered by the launcher itself */
   CAPSTONE_GROUP_UNKNOWN   /* not in the table: ENOSYS, recorded */
 };
+
+/* Runtime-internal request numbers, above every Linux number. HELLO is the
+ * first request of every run: args[0] is the runtime address of domain_main,
+ * args[1] and args[2] the code capability's base and end, so a fault record
+ * can be symbolized against the image's link addresses. */
+#define CAPSTONE_NR_HELLO UINT64_C(0xC0DE0001)
+
+/* Descriptor flag: the image speaks this ABI. Images without it use the
+ * HostCall v0 application runtime; a launcher must accept both. */
+#define CAPSTONE_APPLICATION_DELEGATE 2u
+#define CAPSTONE_DELEGATE_DEFAULT_EXCHANGE 262144u
 
 struct capstone_delegate_shape {
   uint16_t nr;
@@ -113,10 +125,9 @@ enum {
 const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr);
 enum capstone_delegate_group capstone_delegate_group_of(uint64_t nr);
 
-/* Fill an entry for one call. `offsets` says which arguments are exchange
- * offsets; the shape decides, so callers pass the raw values and this sets
- * `flags`. Returns EINVAL for a group other than DELEGATED or an argument
- * count above the shape's. */
+/* Fill an entry for one call. The shape decides which arguments are exchange
+ * offsets, so callers pass the raw values and this sets `flags`. Returns
+ * EINVAL for a group other than DELEGATED or RUNTIME. */
 int capstone_delegate_pack(struct capstone_delegate_entry *entry, uint64_t nr,
                            const uint64_t args[CAPSTONE_DELEGATE_ARGS]);
 
@@ -124,7 +135,7 @@ int capstone_delegate_pack(struct capstone_delegate_entry *entry, uint64_t nr,
  * group, and every flagged argument inside [0, exchange_bytes) for the length
  * the shape implies. Returns 0, or the errno the request must be answered with
  * (EINVAL for a malformed block, EFAULT for an offset outside the region,
- * ENOSYS for an unknown or excepted number). */
+ * ENOSYS for an unknown or excepted number). RUNTIME requests pass. */
 int capstone_delegate_validate(const struct capstone_delegate_entry *entry,
                                size_t exchange_bytes);
 

@@ -929,9 +929,28 @@ static long hc_write(long fd, const char *buf, unsigned long count) {
   return hc_stdout_bytes(buf, count);
 }
 
+#ifdef CAPSTONE_DELEGATE_RUNTIME
+/* The delegated runtime (delegate.c): every call is Linux's, run by the task.
+   The dispatcher below stays for the HostCall v0 application runtime and the
+   legacy probes; under delegation it is never entered. */
+long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
+                              syscall_arg_t c, syscall_arg_t d,
+                              syscall_arg_t e, syscall_arg_t f);
+void __capstone_delegate_write2(const char *buf, unsigned long n);
+void __capstone_hc_note_unserved(long n) {
+  if (hc_unserved_n < HC_UNSERVED_MAX)
+    hc_unserved[hc_unserved_n] = n;
+  hc_unserved_n++;
+}
+void __capstone_hc_note_noop(long n) { hc_note_noop(n); }
+#endif
+
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                          syscall_arg_t c, syscall_arg_t d, syscall_arg_t e,
                          syscall_arg_t f) {
+#ifdef CAPSTONE_DELEGATE_RUNTIME
+  return __capstone_delegate_call(n, a, b, c, d, e, f);
+#endif
   (void)f;
   switch (n) {
   case SYS_write:
@@ -1301,7 +1320,9 @@ static void hc_report_list(const char *head, const long *list,
       buf[p++] = more[i];
   }
   buf[p++] = '\n';
-#ifdef CAPSTONE_APPLICATION_RUNTIME
+#if defined(CAPSTONE_DELEGATE_RUNTIME)
+  __capstone_delegate_write2(buf, p);
+#elif defined(CAPSTONE_APPLICATION_RUNTIME)
   (void)hc_stdio_request(2, CAPSTONE_APP_WRITE, 0, buf, p);
 #else
   hc_stdout_bytes(buf, p);
@@ -1313,6 +1334,9 @@ static void hc_report_unserved(void) {
                  HC_UNSERVED_MAX);
   hc_report_list("capstone-domain: NO-OP syscalls:", hc_noop, hc_noop_n, HC_NOOP_MAX);
 }
+#ifdef CAPSTONE_DELEGATE_RUNTIME
+void __capstone_hc_report_unserved(void) { hc_report_unserved(); }
+#endif
 
 unsigned long __capstone_unserved_count(void) { return hc_unserved_n; }
 long __capstone_unserved_at(unsigned long i) {
@@ -1453,6 +1477,25 @@ void domain_main(unsigned *res, unsigned func) {
   unsigned stdio_mask = __capstone_application_stdio();
   for (unsigned i = 0; i < 3; ++i)
     hc_stdio_closed[i] = !(stdio_mask & (1u << i));
+#endif
+#ifdef CAPSTONE_DELEGATE_RUNTIME
+  /* Region 0 is the entry block, region 1 the exchange region. The first
+     request tells the launcher where this image runs, for fault records. */
+  {
+    extern void __capstone_delegate_regions(void *, void *);
+    extern long __capstone_delegate_hello(unsigned long, unsigned long, unsigned long);
+    extern int __capstone_delegate_ready(void);
+    void (*anchor)(unsigned *, unsigned) = domain_main;
+    __capstone_delegate_regions((void *)hc_metadata, (void *)hc_payload);
+    if (!__capstone_delegate_ready()) {
+      if (res)
+        *res = (unsigned)-1;
+      return;
+    }
+    __capstone_delegate_hello((unsigned long)__builtin_capstone_cap_get_cursor(anchor),
+                              (unsigned long)__builtin_capstone_cap_get_base(anchor),
+                              (unsigned long)__builtin_capstone_cap_get_end(anchor));
+  }
 #endif
 
   /* exit() has to be able to end the program from anywhere. musl's _Exit is

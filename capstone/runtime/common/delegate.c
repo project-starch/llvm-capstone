@@ -16,7 +16,8 @@ _Static_assert(sizeof(struct capstone_delegate_entry) == 88, "entry ABI");
 #define OPT_IN_FIX(n) {CAPSTONE_ARG_OPT_IN, CAPSTONE_LEN_FIXED, n, 0, 0}
 #define OPT_OUT_FIX(n) {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, n, 0, 0}
 #define INOUT_SCALED(a, s) {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_ARG_SCALED, a, s}
-#define IN_SCALED(a, s) {CAPSTONE_ARG_IN, CAPSTONE_LEN_ARG_SCALED, a, s}
+#define IN_SCALED(a, s) {CAPSTONE_ARG_IN, CAPSTONE_LEN_ARG_SCALED, a, s, 0}
+#define OPT_INOUT_FIX(n) {CAPSTONE_ARG_OPT_INOUT, CAPSTONE_LEN_FIXED, n, 0, 0}
 
 /* Sizes are the kernel's RV64 layouts, which is what lands in the exchange
  * region after the libc's marshalling: iovec is two 64-bit words, timespec
@@ -30,8 +31,11 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_getcwd, CAPSTONE_GROUP_DELEGATED, 2, "getcwd", {OUT_ARG(1), I}},
   {CAPSTONE_SYS_dup, CAPSTONE_GROUP_DELEGATED, 1, "dup", {I}},
   {CAPSTONE_SYS_dup3, CAPSTONE_GROUP_DELEGATED, 3, "dup3", {I, I, I}},
-  {CAPSTONE_SYS_fcntl, CAPSTONE_GROUP_DELEGATED, 3, "fcntl", {I, I, I}},
-  {CAPSTONE_SYS_ioctl, CAPSTONE_GROUP_DELEGATED, 3, "ioctl", {I, I, I}},
+  /* fcntl's third argument is a struct flock for the lock commands and an
+   * integer otherwise; ioctl's is a request-specific buffer. The libc decides
+   * per command whether it passes an offset or 0. 64 bytes covers termios. */
+  {CAPSTONE_SYS_fcntl, CAPSTONE_GROUP_DELEGATED, 3, "fcntl", {I, I, OPT_INOUT_FIX(32)}},
+  {CAPSTONE_SYS_ioctl, CAPSTONE_GROUP_DELEGATED, 3, "ioctl", {I, I, OPT_INOUT_FIX(64)}},
   {CAPSTONE_SYS_mkdirat, CAPSTONE_GROUP_DELEGATED, 3, "mkdirat", {I, S, I}},
   {CAPSTONE_SYS_unlinkat, CAPSTONE_GROUP_DELEGATED, 3, "unlinkat", {I, S, I}},
   {CAPSTONE_SYS_ftruncate, CAPSTONE_GROUP_DELEGATED, 2, "ftruncate", {I, I}},
@@ -105,11 +109,16 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_rt_sigaction, CAPSTONE_GROUP_SIGNAL, 4, "rt_sigaction", {I, I, I, I}},
   {CAPSTONE_SYS_rt_sigprocmask, CAPSTONE_GROUP_SIGNAL, 4, "rt_sigprocmask", {I, I, I, I}},
   {CAPSTONE_SYS_rt_sigreturn, CAPSTONE_GROUP_SIGNAL, 0, "rt_sigreturn", {I}},
+  /* runtime-internal */
+  {0, CAPSTONE_GROUP_RUNTIME, 3, "hello", {I, I, I}},
   /* not in this branch: sockets stay unknown until a profile admits them */
 };
 
 const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
-  for (size_t i = 0; i < sizeof shapes / sizeof shapes[0]; ++i)
+  if (nr == CAPSTONE_NR_HELLO)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 1];
+
+  for (size_t i = 0; i + 1 < sizeof shapes / sizeof shapes[0]; ++i)
     if (shapes[i].nr == nr)
       return &shapes[i];
   return NULL;
@@ -155,7 +164,8 @@ size_t capstone_delegate_arg_bytes(const struct capstone_delegate_shape *shape,
 int capstone_delegate_pack(struct capstone_delegate_entry *entry, uint64_t nr,
                            const uint64_t args[CAPSTONE_DELEGATE_ARGS]) {
   const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
-  if (!entry || !args || !s || s->group != CAPSTONE_GROUP_DELEGATED)
+  if (!entry || !args || !s ||
+      (s->group != CAPSTONE_GROUP_DELEGATED && s->group != CAPSTONE_GROUP_RUNTIME))
     return EINVAL;
   memset(entry, 0, sizeof *entry);
   entry->version = CAPSTONE_DELEGATE_VERSION;
@@ -177,7 +187,7 @@ int capstone_delegate_validate(const struct capstone_delegate_entry *entry,
       (entry->flags >> CAPSTONE_DELEGATE_ARGS))
     return EINVAL;
   s = capstone_delegate_shape(entry->nr);
-  if (!s || s->group != CAPSTONE_GROUP_DELEGATED)
+  if (!s || (s->group != CAPSTONE_GROUP_DELEGATED && s->group != CAPSTONE_GROUP_RUNTIME))
     return ENOSYS;
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i) {
     const struct capstone_delegate_arg *a = i < s->argc ? &s->args[i] : NULL;
