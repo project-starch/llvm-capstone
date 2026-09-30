@@ -1,3 +1,11 @@
+Trusted Linux memory design (2026-09-30): on `memory-trusted-linux`, close the
+process-local lifetime context, privileged cloning and VM-retirement contracts
+in the [new design](../design/trusted-linux-memory.md). Validate these in a
+small model before implementation. Qualify dynamic allocation over ordinary
+page tables before eager-copy fork; COW needs separate handling of linear
+capability loads that mutate their source. This is independent of the
+caplified mapping implementation lanes and does not change their status.
+
 Application ports (2026-09-29): the seven application recipes now require
 the [shared delegated SDK](../../ports/common/application/README.md), with
 v1 rejection qualified. Use the recorded compiler and memory settings when

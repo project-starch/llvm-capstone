@@ -2,6 +2,16 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-30 — trusted Linux memory design
+
+`memory-trusted-linux` starts from `dev` at `4439dd0a55f9`, without the
+caplified mapping implementation stack. The
+[new design direction](../design/trusted-linux-memory.md) trusts Linux and
+relevant firmware, uses ordinary process page tables, and retains Capstone
+object bounds and lifetimes. Dynamic malloc/free and fork with independently
+cloned private lifetime state are targets. This is a documentation change;
+it adds no implementation or qualification result.
+
 ## 2026-09-29 — delegated signals
 
 On `delegation-signals`, synchronous delivery passes the 26-mode

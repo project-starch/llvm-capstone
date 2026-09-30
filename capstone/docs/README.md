@@ -1,5 +1,11 @@
 # Capstone project documentation
 
+Memory design direction on `memory-trusted-linux`:
+[trusted Linux, ordinary virtual memory and Capstone object lifetimes](design/trusted-linux-memory.md).
+The proposal separates translation from pointer authority and defines dynamic
+malloc/free and the requirements for independent fork lifetimes. It branches
+from `dev`; the design is not an implemented kernel or hardware extension.
+
 Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
 Seven application recipes are migrated, with new QEMU functional and safety
 qualification, explicit compiler/resource requirements and preserved negative
