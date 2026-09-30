@@ -780,6 +780,32 @@
     {
       "program": "sqlite",
       "role": "full-application",
+      "title": "SQLite 3.22.0 as an ordinary program: the shell and speedtest1 on the delegated runtime, with the unix VFS and musl",
+      "upstream": {
+        "version": "3.22.0",
+        "pin_source": {
+          "file": "capstone/ports/sqlite/app/prepare-sources.sh",
+          "grep": "SQLITE_VERSION=3220000 SQLITE_YEAR=2018",
+          "version": "3220000"
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "native"
+      ],
+      "workload": "work.sql.in and again.sql on a database file, with a second writer refused while the first holds a transaction; speedtest1 main at size 1 with the per-phase result oracle; each byte for byte against the native build of the same release",
+      "evidence": [
+        "capstone/ports/sqlite/app/results/20260930-sqlite-322-app.json"
+      ],
+      "related": [
+        "capstone/ports/sqlite"
+      ],
+      "note": "3.22.0 only, the PoisonCap anchor release; the freestanding builds in the parent directory also pin 3.53.3.",
+      "where": "capstone/ports/sqlite/app"
+    },
+    {
+      "program": "sqlite",
+      "role": "full-application",
       "title": "SQLite in a Capstone domain: the in-memory workload and speedtest1",
       "upstream": {
         "version": [
@@ -1098,8 +1124,8 @@
       },
       {
         "from": "capstone/ports/sqlite",
-        "to": "capstone/ports/sqlite/app",
-        "reason": "99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them"
+        "to": "capstone/ports/sqlite/freestanding",
+        "reason": "99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them; the target is freestanding/ since 2026-09-30, when app/ became the ordinary-program build of 3.22.0"
       },
       {
         "from": "capstone/ports/micropython",
@@ -1134,6 +1160,7 @@
     "`capstone/ports/micropython` is a complete application with no corpus.",
     "`capstone/ports/perl/musl` is a complete application with no corpus.",
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
+    "`capstone/ports/sqlite/app` is a complete application with no corpus.",
     "`capstone/ports/wireshark/app` is a complete application with no corpus."
   ]
 }
