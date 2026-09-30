@@ -79,6 +79,9 @@ void capstone_signals_publish(struct capstone_signal_state *s, struct capstone_d
 /* The ignored signals, for a spawned child to inherit. */
 uint64_t capstone_signals_ignored(const struct capstone_signal_state *s);
 
+/* The domain's logical mask as a sigset, for a thread that execs in its name. */
+void capstone_signals_logical_set(const struct capstone_signal_state *s, sigset_t *set);
+
 /* Run one Linux system call for the domain through the stub: skipped when
  * events wait, turned into RETRY when the trampoline redirected it. `nr` is
  * the host's number. For rt_sigsuspend and ppoll with a mask, `wait_mask`

@@ -7,6 +7,7 @@
 #include "capstone/delegate.h"
 #include "signals.h"
 #include "spawner.h"
+#include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
@@ -49,6 +50,16 @@ struct capstone_delegate_host {
      args[2]. */
   long (*context)(struct capstone_delegate_host *host, const struct capstone_delegate_entry *request);
   void *context_state;
+  /* A further context's host (docs/plans/delegation-threads.md) serves that
+     context's own transport, counters and exec request, and shares the rest
+     with the first context's host, `owner`: the spawner, the children, the
+     private descriptors, HELLO's code range and the signal dispositions. NULL
+     for the first context. `lock` is the owner's, for the children and the
+     spawner. A further context's signal requests answer ENOSYS: signals stay
+     with the first context until they are per context. */
+  struct capstone_delegate_host *owner;
+  pthread_mutex_t lock;
+  uint64_t context_id;      /* the context this host serves */
 };
 
 /* Service one entry in place: validate, run, write result. Never returns an

@@ -256,6 +256,10 @@ void capstone_signals_publish(struct capstone_signal_state *s, struct capstone_d
   }
 }
 
+void capstone_signals_logical_set(const struct capstone_signal_state *s, sigset_t *set) {
+  set_of(s->logical, set);
+}
+
 uint64_t capstone_signals_ignored(const struct capstone_signal_state *s) {
   uint64_t m = 0;
   for (int sig = 1; sig <= CAPSTONE_SIGNAL_MAX; ++sig)

@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "application-image.h"
+#include "capstone/context.h"
 #include "capstone/delegate.h"
 #include "capstone/linux-domain-fault.h"
 #include "capstone/spawn.h"
@@ -27,7 +28,8 @@ extern char **environ;
 enum { REGION_META, REGION_DATA, REGION_STARTUP, REGIONS };
 
 struct execution {
-  struct capstone_delegate_host delegate;
+  struct capstone_delegate_host delegate;   /* the first context's, and the process's */
+  size_t slice_bytes;                       /* one transport's exchange region */
   struct capstone_spawner spawner;
   void *maps[REGIONS];
   size_t sizes[REGIONS];
@@ -163,11 +165,28 @@ static int print_stats(void) {
   return 0;
 }
 
-/* A fault ends the process with SIGSEGV after cleanup; the record goes out
- * first, without blocking, so a full pipe cannot swallow the diagnosis. */
-static void fault(struct execution *e, const struct ioctl_dom_step_args *step) {
-  if (e->maps[REGION_META])
-    e->delegate.preparing_nr = ((struct capstone_delegate_entry *)e->maps[REGION_META])->nr;
+/* Held by the thread that ends or replaces the process: by exit, by fault or
+   by exec in place. Any other thread that gets to one of them meanwhile waits:
+   an end that has begun takes it with the process, and an exec that failed
+   gives it back. */
+static pthread_mutex_t ending = PTHREAD_MUTEX_INITIALIZER;
+static void end_alone(void) {
+  pthread_mutex_lock(&ending);
+}
+
+/* A fault in any context ends the process with SIGSEGV; the record goes out
+ * first, without blocking, so a full pipe cannot swallow the diagnosis. It
+ * names the faulting context's last request. `host` is NULL for a fault before
+ * the first context ran. Nothing is unmapped or closed first: another context
+ * thread may still be serving its transport. */
+static void fault(struct execution *e, struct capstone_delegate_host *host,
+                  const struct capstone_delegate_entry *entry,
+                  const struct ioctl_dom_step_args *step) {
+  end_alone();
+  if (!host)
+    host = &e->delegate;
+  if (entry)
+    host->preparing_nr = entry->nr;
   /* The record names the image by its SHA-256. Hashing 20 MB byte by byte
      costs a launch two seconds in the guest, so it happens here, on the one
      path that prints it; the image descriptor is still open. */
@@ -182,17 +201,29 @@ static void fault(struct execution *e, const struct ioctl_dom_step_args *step) {
   if (record && *record)
     fd = open(record, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
   if (fd >= 0) {
-    capstone_delegate_fault_record(fd, &e->delegate, e->path,
+    capstone_delegate_fault_record(fd, host, e->path,
                                    step ? step->cause : 0, step ? step->pc : 0,
                                    step ? step->address : 0);
     close(fd);
   }
   if (isatty(2) || getenv("CAPSTONE_EXEC_DIAGNOSTICS"))
-    capstone_delegate_fault_record(2, &e->delegate, e->path,
+    capstone_delegate_fault_record(2, host, e->path,
                                    step ? step->cause : 0, step ? step->pc : 0,
                                    step ? step->address : 0);
   report_stats(e);
-  capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, cleanup, e);
+  capstone_spawner_stop(&e->spawner);
+  capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, NULL, NULL);
+}
+
+/* The way out by exit or exit_group, from any context: report and exit with
+   `status`. Nothing is unmapped or closed first, for the reason above;
+   exit_group ends every thread before the kernel releases the mappings and
+   the device. */
+static void process_end(struct execution *e, int status) {
+  end_alone();
+  report_stats(e);
+  capstone_spawner_stop(&e->spawner);
+  _exit(status);
 }
 
 /* Preserve the unfiltered helper and owned children across exec. Forking a
@@ -216,13 +247,27 @@ static int above_stdio(int fd) {
   return parked;
 }
 
-static long exec_in_place(struct execution *e) {
+/* Exec in place from any context, as Linux's execve from any thread: the new
+ * image replaces the whole process. The request is the serving host's; the
+ * children and the spawner are the process's, under its lock, which a
+ * successful execve never releases. */
+static long exec_locked(struct execution *e, struct capstone_delegate_host *host);
+static long exec_in_place(struct execution *e, struct capstone_delegate_host *host) {
+  host->exec_requested = 0;
+  pthread_mutex_lock(&ending);
+  pthread_mutex_lock(&e->delegate.lock);
+  long r = exec_locked(e, host);
+  pthread_mutex_unlock(&e->delegate.lock);
+  pthread_mutex_unlock(&ending);
+  return r;
+}
+
+static long exec_locked(struct execution *e, struct capstone_delegate_host *host) {
   static char *argv[CAPSTONE_SPAWN_STRINGS + 7], *envp[CAPSTONE_SPAWN_STRINGS + 1];
   static const char *paths[CAPSTONE_SPAWN_ACTIONS];
   struct capstone_spawn_view view;
   struct capstone_application_descriptor_v2 descriptor;
-  e->delegate.exec_requested = 0;
-  if (capstone_spawn_unpack(e->delegate.exec_block, e->delegate.exec_bytes, argv + 6,
+  if (capstone_spawn_unpack(host->exec_block, host->exec_bytes, argv + 6,
                             CAPSTONE_SPAWN_STRINGS + 1, envp, CAPSTONE_SPAWN_STRINGS + 1, paths,
                             CAPSTONE_SPAWN_ACTIONS, &view))
     return -EINVAL;
@@ -249,8 +294,19 @@ static long exec_in_place(struct execution *e) {
     argv[4] = (char *)view.path;
     argv[5] = "--";
     report_stats(e);
+    /* execve keeps the calling thread's mask. A further context's thread
+       blocks every signal; the new image must start with the application's
+       mask, as if the first context's thread had called it. Set just before
+       the call and taken back if it fails. */
+    sigset_t logical, kept;
+    if (host->owner) {
+      capstone_signals_logical_set(&e->delegate.signals, &logical);
+      pthread_sigmask(SIG_SETMASK, &logical, &kept);
+    }
     execve(e->spawner.self, argv, envp);
     error = errno;
+    if (host->owner)
+      pthread_sigmask(SIG_SETMASK, &kept, NULL);
   }
   close(fd);
   close(checked);
@@ -261,72 +317,192 @@ static long exec_in_place(struct execution *e) {
 /* Contexts the application minted (docs/plans/delegation-threads.md). The
  * launcher registers an offered seal with ADOPT and, in thread mode, steps it
  * from a Linux thread of its own until it ends; Linux schedules that thread
- * like any other. The first context stays on the main thread. A context
- * thread blocks every signal, so the signal ring keeps one producer, and
- * serves no delegated call: a minted context has no transport of its own yet,
- * so a round that returns without EXITED ends the thread like an exit does. */
+ * like any other. The thread serves the context's delegated calls through the
+ * transport the application reserved for it before the request, so a call
+ * that blocks in Linux blocks only that context. The first context stays on
+ * the main thread and keeps the signals: a context thread blocks every signal
+ * (its host refuses the signal requests), so the signal ring keeps one
+ * producer. */
+enum { TRANSPORT_FREE, TRANSPORT_RESERVED, TRANSPORT_LIVE };
 struct context_service {
+  pthread_mutex_t lock;
+  struct execution *e;
   dom_id_t first;
+  unsigned transports;   /* 1 + the descriptor's contexts; transport 0 is the first's */
+  unsigned char state[1 + CAPSTONE_DELEGATE_CONTEXTS_MAX];
+  dom_id_t live[1 + CAPSTONE_DELEGATE_CONTEXTS_MAX];
 };
 
+struct context_thread {
+  struct context_service *service;
+  dom_id_t id;
+  unsigned transport;
+  struct capstone_delegate_host host;
+};
+
+
+static struct capstone_delegate_entry *transport_entry(struct execution *e, unsigned transport) {
+  return (struct capstone_delegate_entry *)((char *)e->maps[REGION_META] +
+                                            (size_t)transport * CAPSTONE_DELEGATE_META_BYTES);
+}
+
+static void transport_release(struct context_service *service, unsigned transport) {
+  pthread_mutex_lock(&service->lock);
+  service->state[transport] = TRANSPORT_FREE;
+  service->live[transport] = 0;
+  pthread_mutex_unlock(&service->lock);
+}
+
+/* A write to a pipe without a reader, or past the file size limit, makes
+   Linux send SIGPIPE or SIGXFSZ to the calling thread. A context thread
+   blocks every signal, so the signal would stay pending there and its action
+   (by default the end of the process) would never happen. Take it from the
+   thread and send it to the process, which Linux delivers to the first
+   context's thread under the application's disposition and mask. */
+static void forward_synchronous(void) {
+  sigset_t sync;
+  siginfo_t info;
+  struct timespec now = {0, 0};
+  int sig;
+  sigemptyset(&sync);
+  sigaddset(&sync, SIGPIPE);
+  sigaddset(&sync, SIGXFSZ);
+  while ((sig = sigtimedwait(&sync, &info, &now)) > 0)
+    kill(getpid(), sig);
+}
+
 static void *context_thread(void *arg) {
-  dom_id_t id = (dom_id_t)(uintptr_t)arg;
+  struct context_thread *t = arg;
+  struct execution *e = t->service->e;
   struct ioctl_dom_step_args step;
-  sigset_t all;
-  sigfillset(&all);
-  pthread_sigmask(SIG_BLOCK, &all, NULL);
+  struct capstone_delegate_entry *entry = transport_entry(e, t->transport);
   for (;;) {
-    if (capstone_step(id, &step)) {
+    if (capstone_step(t->id, &step)) {
       if (errno == EINTR) continue;
-      break;
+      /* as for the first context: the driver or the monitor refused a step
+         that should have run, and the context would never run again */
+      fprintf(stderr, "capstone-exec: context %#lx: step: %s\n", (unsigned long)t->id,
+              strerror(errno));
+      process_end(e, 125);
     }
-    if (step.event != CAPSTONE_STEP_PREEMPTED) break;
+    if (step.event == CAPSTONE_STEP_PREEMPTED)
+      continue;
+    if (step.event == CAPSTONE_STEP_FAULT)
+      fault(e, &t->host, entry, &step);   /* a fault in any context ends the process */
+    if (step.event != CAPSTONE_STEP_RETURNED)
+      break;                       /* dead, stale or refused: it can never run */
+    if (step.result == CAPSTONE_CONTEXT_EXITED)
+      break;
+    if (entry->version != CAPSTONE_DELEGATE_VERSION) {
+      fprintf(stderr, "capstone-exec: context %#lx returned without a request\n",
+              (unsigned long)t->id);
+      process_end(e, 125);
+    }
+    capstone_delegate_serve(&t->host, entry);
+    if (entry->result == -EPIPE || entry->result == -EFBIG)
+      forward_synchronous();
+    if (t->host.exec_requested)
+      entry->result = exec_in_place(e, &t->host);
+    if (t->host.exiting)
+      process_end(e, t->host.exit_status);
   }
-  capstone_forget(id);
+  capstone_forget(t->id);
+  capstone_delegate_host_free(&t->host);
+  transport_release(t->service, t->transport);
+  free(t);
   return NULL;
+}
+
+/* Start a THREAD context on the transport it reserved. The creating thread
+   blocks every signal across pthread_create, so the new thread starts with
+   all of them blocked (signals.c has one producer thread). A failed start
+   takes the registration back: no context runs after a reported failure.
+   CAPSTONE_CONTEXT_TEST_THREAD_FAILS makes the start fail, for the rollback
+   probe. */
+static long context_start(struct context_service *service, struct capstone_delegate_host *creator,
+                          dom_id_t child, unsigned transport) {
+  struct execution *e = service->e;
+  struct context_thread *t = calloc(1, sizeof *t);
+  if (!t) return -ENOMEM;
+  t->service = service;
+  t->id = child;
+  t->transport = transport;
+  t->host.owner = creator->owner ? creator->owner : creator;
+  t->host.exchange = (char *)e->maps[REGION_DATA] + (size_t)transport * e->slice_bytes;
+  t->host.exchange_bytes = e->slice_bytes;
+  t->host.context = t->host.owner->context;
+  t->host.context_state = service;
+  t->host.context_id = child;
+  pthread_mutex_lock(&service->lock);
+  service->live[transport] = child;
+  pthread_mutex_unlock(&service->lock);
+  sigset_t all, prev;
+  pthread_t thread;
+  sigfillset(&all);
+  pthread_sigmask(SIG_BLOCK, &all, &prev);
+  int failed = getenv("CAPSTONE_CONTEXT_TEST_THREAD_FAILS") ||
+               pthread_create(&thread, NULL, context_thread, t);
+  pthread_sigmask(SIG_SETMASK, &prev, NULL);
+  if (failed) {
+    free(t);
+    return -EAGAIN;
+  }
+  pthread_detach(thread);
+  return 0;
 }
 
 static long context_request(struct capstone_delegate_host *host,
                             const struct capstone_delegate_entry *request) {
   struct context_service *service = host->context_state;
-  if (request->nr == CAPSTONE_NR_CONTEXT_CREATE) {
-    dom_id_t child;
-    pthread_t thread;
-    if (capstone_adopt(service->first, request->args[0], &child)) return -errno;
-    if (request->args[1] == CAPSTONE_CONTEXT_THREAD) {
-      /* Block every signal in this (the handler) thread across the create, so
-         the child inherits a full block and starts already blocked. The
-         launcher's signal trampoline has one producer thread (signals.c); a
-         caught signal delivered to the child before context_thread could block
-         would race the main thread's trampoline on the ring. context_thread's
-         own sigfillset then only maintains that state.
-         A failed thread start takes the registration back: no context runs
-         after a reported failure. CAPSTONE_CONTEXT_TEST_THREAD_FAILS makes the
-         start fail, for the rollback probe. */
-      sigset_t all, prev;
-      sigfillset(&all);
-      pthread_sigmask(SIG_BLOCK, &all, &prev);
-      int failed = getenv("CAPSTONE_CONTEXT_TEST_THREAD_FAILS") ||
-                   pthread_create(&thread, NULL, context_thread, (void *)(uintptr_t)child);
-      pthread_sigmask(SIG_SETMASK, &prev, NULL);
-      if (failed) {
-        capstone_forget(child);
-        return -EAGAIN;
+  if (request->nr == CAPSTONE_NR_CONTEXT_RESERVE) {
+    long found = service->transports > 1 ? -EAGAIN : -ENOSYS;
+    pthread_mutex_lock(&service->lock);
+    for (unsigned i = 1; i < service->transports && found < 0; ++i)
+      if (service->state[i] == TRANSPORT_FREE) {
+        service->state[i] = TRANSPORT_RESERVED;
+        found = i;
       }
-      pthread_detach(thread);
-    } else if (request->args[1] != CAPSTONE_CONTEXT_REGISTER) {
-      capstone_forget(child);
-      return -EINVAL;
-    }
-    return (long)child;
+    pthread_mutex_unlock(&service->lock);
+    return found;
   }
-  /* STEP and FORGET name a minted context; the first context is the one
-     making this request and is stepped by the main loop alone. */
-  if ((dom_id_t)request->args[0] == service->first) return -EINVAL;
+  if (request->nr == CAPSTONE_NR_CONTEXT_CREATE) {
+    uint64_t mode = request->args[1], transport = request->args[2];
+    int thread = mode == CAPSTONE_CONTEXT_THREAD;
+    long r = 0;
+    dom_id_t child;
+    /* The request consumes a reservation whatever its outcome: a THREAD
+       request claims it at once, so a second request naming the same
+       transport finds it no longer reserved. */
+    pthread_mutex_lock(&service->lock);
+    int reserved = transport && transport < service->transports &&
+                   service->state[transport] == TRANSPORT_RESERVED;
+    if (reserved)
+      service->state[transport] = thread ? TRANSPORT_LIVE : TRANSPORT_FREE;
+    pthread_mutex_unlock(&service->lock);
+    if ((thread && !reserved) || (!thread && mode != CAPSTONE_CONTEXT_REGISTER) ||
+        (!thread && transport))
+      r = -EINVAL;
+    else if (capstone_adopt((dom_id_t)host->context_id, request->args[0], &child))
+      r = -errno;
+    else if (thread && (r = context_start(service, host, child, (unsigned)transport)))
+      capstone_forget(child);
+    if (thread && r && reserved)
+      transport_release(service, (unsigned)transport);
+    return r ? r : (long)child;
+  }
+  /* STEP and FORGET name a REGISTER context: not the requester itself, and
+     not one a context thread steps. */
+  dom_id_t id = (dom_id_t)request->args[0];
+  int threaded = id == (dom_id_t)host->context_id;
+  pthread_mutex_lock(&service->lock);
+  for (unsigned i = 0; i < service->transports; ++i)
+    threaded |= service->live[i] == id;
+  pthread_mutex_unlock(&service->lock);
+  if (threaded) return -EINVAL;
   if (request->nr == CAPSTONE_NR_CONTEXT_STEP) {
     struct ioctl_dom_step_args step;
     struct capstone_context_event event = {0};
-    while (capstone_step((dom_id_t)request->args[0], &step))
+    while (capstone_step(id, &step))
       if (errno != EINTR) return -errno;
     event.kind = step.event;
     event.result = step.result;
@@ -338,7 +514,7 @@ static long context_request(struct capstone_delegate_host *host,
     return 0;
   }
   if (request->nr == CAPSTONE_NR_CONTEXT_FORGET)
-    return capstone_forget((dom_id_t)request->args[0]) ? -errno : 0;
+    return capstone_forget(id) ? -errno : 0;
   return -ENOSYS;
 }
 
@@ -401,7 +577,7 @@ int main(int argc, char **argv) {
   errno = image_error;
   if (e.image < 0) {
     int error = errno;
-    fprintf(stderr, "capstone-exec: %s: %s (requires delegated application ABI v2)\n",
+    fprintf(stderr, "capstone-exec: %s: %s (requires an image built against this runtime's application descriptor)\n",
             e.path, strerror(error));
     return error == ENOENT ? 127 : 126;
   }
@@ -473,8 +649,13 @@ int main(int argc, char **argv) {
   if (getenv("CAPSTONE_DELEGATE_STATS"))
     fprintf(stderr, "capstone-exec: domain id=%#lx\n", (unsigned long)domain);
   launch_mark(LAUNCH_DOMAIN);
-  e.sizes[REGION_META] = CAPSTONE_DELEGATE_META_BYTES;
-  e.sizes[REGION_DATA] = (size_t)descriptor.exchange_bytes;
+  /* One transport per context that may run at once: the first context's,
+     and the descriptor's contexts, each an entry block and an exchange
+     slice at the same index of the two regions. */
+  size_t transports = 1 + (size_t)descriptor.contexts;
+  e.slice_bytes = (size_t)descriptor.exchange_bytes;
+  e.sizes[REGION_META] = transports * CAPSTONE_DELEGATE_META_BYTES;
+  e.sizes[REGION_DATA] = transports * e.slice_bytes;
   e.sizes[REGION_STARTUP] = CAPSTONE_LAUNCH_BYTES;
   for (unsigned i = 0; i < REGIONS; ++i) {
     region_id_t region = create_region(e.sizes[i]);
@@ -488,7 +669,7 @@ int main(int argc, char **argv) {
       memcpy(e.maps[i], startup, CAPSTONE_LAUNCH_BYTES);
     if (capstone_share(domain, region, i == REGION_STARTUP ? 0 : 1, 2)) {
       if (errno == EFAULT)
-        fault(&e, NULL);
+        fault(&e, NULL, NULL, NULL);
       free(startup);
       return fail(&e, "capstone-exec: share launch region", 1);
     }
@@ -500,13 +681,18 @@ int main(int argc, char **argv) {
       return fail(&e, "capstone-exec: cannot allocate application heap", 1);
     if (capstone_share(domain, heap, 1, 3)) {
       if (errno == EFAULT)
-        fault(&e, NULL);
+        fault(&e, NULL, NULL, NULL);
       return fail(&e, "capstone-exec: share heap", 1);
     }
   }
   e.delegate.exchange = e.maps[REGION_DATA];
-  e.delegate.exchange_bytes = e.sizes[REGION_DATA];
-  struct context_service contexts = {.first = domain};
+  e.delegate.exchange_bytes = e.slice_bytes;
+  pthread_mutex_init(&e.delegate.lock, NULL);
+  e.delegate.context_id = domain;
+  struct context_service contexts = {.e = &e, .first = domain, .transports = (unsigned)transports};
+  pthread_mutex_init(&contexts.lock, NULL);
+  contexts.state[0] = TRANSPORT_LIVE;
+  contexts.live[0] = domain;
   e.delegate.context = context_request;
   e.delegate.context_state = &contexts;
   capstone_signals_init(&e.delegate.signals,
@@ -527,33 +713,35 @@ int main(int argc, char **argv) {
     struct ioctl_dom_step_args step;
     /* EINTR from the driver's interruptible lock: the domain was not entered
        and the signal is in the ring. */
+    /* From here on other context threads may be running: every way out
+       goes through process_end or fault, never through cleanup(). */
+    struct capstone_delegate_entry *entry = transport_entry(&e, 0);
     while (capstone_step(domain, &step))
-      if (errno != EINTR)
-        return fail(&e, "capstone-exec: enter domain", 1);
+      if (errno != EINTR) {
+        perror("capstone-exec: enter domain");
+        process_end(&e, 125);
+      }
     if (step.event == CAPSTONE_STEP_PREEMPTED)
       continue;
     if (step.event == CAPSTONE_STEP_FAULT)
-      fault(&e, &step);
+      fault(&e, &e.delegate, entry, &step);
     if (step.event == CAPSTONE_STEP_DEAD || step.event == CAPSTONE_STEP_STALE ||
-        step.event == CAPSTONE_STEP_REFUSED)
-      return fail(&e, "capstone-exec: the application's first context is gone", 0);
-    struct capstone_delegate_entry *entry = e.maps[REGION_META];
+        step.event == CAPSTONE_STEP_REFUSED) {
+      fprintf(stderr, "capstone-exec: the application's first context is gone\n");
+      process_end(&e, 125);
+    }
     /* A return with no request means the domain left its entry instead of
        yielding: re-entering would restart it from the top, forever. */
     if (entry->version != CAPSTONE_DELEGATE_VERSION) {
       fprintf(stderr, "capstone-exec: domain returned without a request (entry version %u, "
               "rounds so far %llu)\n", entry->version, (unsigned long long)e.delegate.rounds);
-      report_stats(&e);
-      return fail(&e, "capstone-exec: invalid runtime state", 0);
+      fprintf(stderr, "capstone-exec: invalid runtime state\n");
+      process_end(&e, 125);
     }
     capstone_delegate_serve(&e.delegate, entry);
     if (e.delegate.exec_requested)
-      entry->result = exec_in_place(&e);
-    if (e.delegate.exiting) {
-      int status = e.delegate.exit_status;
-      report_stats(&e);
-      cleanup(&e);
-      return status;
-    }
+      entry->result = exec_in_place(&e, &e.delegate);
+    if (e.delegate.exiting)
+      process_end(&e, e.delegate.exit_status);
   }
 }

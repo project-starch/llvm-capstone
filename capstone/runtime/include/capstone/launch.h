@@ -35,12 +35,16 @@ struct capstone_application_descriptor {
   uint64_t magic, version, flags, launch_bytes, heap_bytes;
 };
 
-/* Descriptor v2: the v1 fields, CAPSTONE_APPLICATION_DELEGATE in flags, and
- * the exchange region the launcher grants. The prefix retains its wire layout;
- * applications with the old 40-byte descriptor are rejected. */
+/* Descriptor v2: the v1 fields, CAPSTONE_APPLICATION_DELEGATE in flags, the
+ * exchange region the launcher grants each context, and how many contexts
+ * besides the first the application may run at once with a transport of their
+ * own (0 to CAPSTONE_DELEGATE_CONTEXTS_MAX, delegate.h). The launcher sizes
+ * the META and exchange regions for 1 + contexts transports. A descriptor of
+ * any other size is rejected. */
 struct capstone_application_descriptor_v2 {
   struct capstone_application_descriptor v1;
   uint64_t exchange_bytes;
+  uint64_t contexts;
 };
 
 struct capstone_launch_view {

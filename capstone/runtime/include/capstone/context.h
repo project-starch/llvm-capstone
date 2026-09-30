@@ -20,7 +20,10 @@
 #define CAPSTONE_CONTEXT_MSTATUS 0xC800000000
 
 /* Start block: the recovery-block slots of the entry glue, then the context's
- * own. Offsets in bytes. */
+ * own. Offsets in bytes. The entry glue calls the function in SLOT_START with
+ * the capability in SLOT_ARG: the runtime's __capstone_context_run with the
+ * start block itself, which installs the transport named in WORD_TRANSPORT
+ * and then calls the application's function (SLOT_USER_START, SLOT_USER_ARG). */
 #define CAPSTONE_CONTEXT_SLOT_RETURN 0
 #define CAPSTONE_CONTEXT_SLOT_RESULT 16
 #define CAPSTONE_CONTEXT_SLOT_GP 32
@@ -32,6 +35,10 @@
 #define CAPSTONE_CONTEXT_SLOT_ARG 128
 #define CAPSTONE_CONTEXT_WORD_DONE 160
 #define CAPSTONE_CONTEXT_WORD_VALUE 168
+#define CAPSTONE_CONTEXT_SLOT_USER_START 176
+#define CAPSTONE_CONTEXT_SLOT_USER_ARG 192
+#define CAPSTONE_CONTEXT_WORD_TRANSPORT 208
+/* 224 to 255 are free; context-probe's entry audit parks two registers there. */
 #define CAPSTONE_CONTEXT_START_BYTES 256
 
 /* A seal region must hold at least 33 capabilities (QEMU CAP_SEALED_SIZE_MIN);
@@ -93,9 +100,13 @@ int capstone_context_remint(struct capstone_context *c,
 
 /* Offer the minted seal through the current call's descriptor and ask the
  * launcher to register it (CAPSTONE_CONTEXT_REGISTER) or to run it on a
- * launcher thread of its own (CAPSTONE_CONTEXT_THREAD). The seal leaves
- * c->seal either way. Returns the context id, or -errno: ESTALE, ENOENT,
- * ENOSPC (no slot: revoke the area), EINVAL (no descriptor in this entry). */
+ * launcher thread of its own (CAPSTONE_CONTEXT_THREAD). A THREAD context gets
+ * a transport of its own, reserved and written into its start block before
+ * the request, so its first entry can already make delegated calls; a
+ * REGISTER context has none. The seal leaves c->seal either way. Returns the
+ * context id, or -errno: EAGAIN (every transport in use), ESTALE, ENOENT,
+ * ENOSPC (no slot), EINVAL (no descriptor in this entry). On an error the
+ * caller revokes the area. */
 long capstone_context_create(struct capstone_context *c, unsigned mode);
 
 /* Step a registered context once from this context's launcher thread. */

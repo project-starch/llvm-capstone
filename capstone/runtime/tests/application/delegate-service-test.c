@@ -3,6 +3,7 @@
 #include "../../linux/delegate-service.h"
 #include "capstone/spawn.h"
 #include <sys/wait.h>
+#include <signal.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -23,6 +24,11 @@ static struct capstone_delegate_entry entry(uint64_t nr, uint64_t a, uint64_t b,
   uint64_t args[CAPSTONE_DELEGATE_ARGS] = {a, b, c, d, e, f};
   assert(!capstone_delegate_pack(&x, nr, args));
   return x;
+}
+
+static long context_hook(struct capstone_delegate_host *h, const struct capstone_delegate_entry *r) {
+  (void)h;
+  return 1000 + (long)(r->nr & 0xff);
 }
 
 static long serve(struct capstone_delegate_entry *x) {
@@ -189,9 +195,72 @@ int main(void) {
     x = entry(CAPSTONE_SYS_wait4, (uint64_t)pid, 16, 0, 0, 0, 0);
     capstone_delegate_serve(&h2, &x);
     assert((long)x.result == -ECHILD);
+    {
+      /* A further context's host: its own exchange region, the owner's
+         children and spawner, and no signal requests (delegation-threads). */
+      static char other[EXCHANGE];
+      struct capstone_delegate_host further = {.exchange = other, .exchange_bytes = EXCHANGE,
+                                               .owner = &h2};
+      assert(!capstone_spawn_pack(other + 1024, EXCHANGE - 1024, CAPSTONE_SPAWN_SEARCH_PATH, 0,
+                                  "sh", argv, envp, NULL, 0, NULL, &bytes));
+      x = entry(CAPSTONE_NR_SPAWN, 1024, bytes, 0, 0, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      pid = (long)x.result;
+      assert(pid > 0 && h2.child_count == 1 && further.child_count == 0);
+      x = entry(CAPSTONE_SYS_wait4, (uint64_t)pid, 16, 0, 0, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == pid && h2.child_count == 0);
+      memcpy(other + 64, "further\n", 8);
+      int p2[2];
+      assert(!pipe(p2));
+      x = entry(CAPSTONE_SYS_write, (uint64_t)p2[1], 64, 8, 0, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == 8 && further.bytes_in == 8);
+      close(p2[0]);
+      close(p2[1]);
+      uint64_t mask = 0;
+      memcpy(other + 32, &mask, sizeof mask);
+      struct capstone_delegate_entry refused[] = {
+          entry(CAPSTONE_NR_HELLO, 1, 2, 3, 0, 0, 0),
+          entry(CAPSTONE_NR_SIGACTION, SIGUSR1, CAPSTONE_SIGNAL_CAUGHT, 0, 0, 0, 0),
+          entry(CAPSTONE_NR_SIGPOLL, 0, 0, 0, 0, 0, 0),
+          entry(CAPSTONE_SYS_rt_sigprocmask, SIG_BLOCK, 32, 0, 8, 0, 0),
+          entry(CAPSTONE_SYS_rt_sigsuspend, 32, 8, 0, 0, 0, 0),
+      };
+      for (unsigned i = 0; i < sizeof refused / sizeof refused[0]; ++i) {
+        capstone_delegate_serve(&further, &refused[i]);
+        assert((long)refused[i].result == -ENOSYS);
+      }
+      assert(!h2.hello_seen && further.refused == 5);
+      capstone_delegate_host_free(&further);
+    }
     capstone_spawner_stop(&spawner);
     capstone_delegate_host_free(&h2);
   }
+  /* every context request reaches the launcher's hook; without one, ENOSYS */
+  {
+    struct capstone_delegate_host h3 = {.exchange = exchange, .exchange_bytes = EXCHANGE};
+    const uint64_t numbers[] = {CAPSTONE_NR_CONTEXT_RESERVE, CAPSTONE_NR_CONTEXT_CREATE,
+                                CAPSTONE_NR_CONTEXT_STEP, CAPSTONE_NR_CONTEXT_FORGET};
+    for (unsigned i = 0; i < 4; ++i) {
+      x = entry(numbers[i], 0, 0, 0, 0, 0, 0);
+      capstone_delegate_serve(&h3, &x);
+      assert((long)x.result == -ENOSYS);
+      h3.context = context_hook;
+      x = entry(numbers[i], 0, 0, 0, 0, 0, 0);
+      capstone_delegate_serve(&h3, &x);
+      assert((long)x.result == 1000 + (long)(numbers[i] & 0xff));
+      h3.context = NULL;
+    }
+    capstone_delegate_host_free(&h3);
+  }
+  /* runtime numbers resolve by their low bits, apart from Linux's */
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_CONTEXT_RESERVE)->name, "context-reserve"));
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_CONTEXT_CREATE)->name, "context-create"));
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_HELLO)->name, "hello"));
+  assert(capstone_delegate_shape(CAPSTONE_SYS_write)->group == CAPSTONE_GROUP_DELEGATED);
+  assert(!capstone_delegate_shape(UINT64_C(0xC0DE0000) + CAPSTONE_SYS_write));
+  assert(!capstone_delegate_shape(UINT64_C(0xC0DE00FF)));
   capstone_delegate_host_free(&host);
   puts("delegate-service-test: ok");
   return 0;

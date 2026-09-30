@@ -127,45 +127,29 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_fork, CAPSTONE_GROUP_PROCESS, 0, "fork", {I}},
   {CAPSTONE_SYS_rt_sigaction, CAPSTONE_GROUP_SIGNAL, 4, "rt_sigaction", {I, I, I, I}},
   {CAPSTONE_SYS_rt_sigreturn, CAPSTONE_GROUP_SIGNAL, 0, "rt_sigreturn", {I}},
-  /* runtime-internal: the pointer forms of fcntl and ioctl, spawn with its
-     block in the exchange region, the signal requests and hello; looked up
-     by their own numbers */
-  {10, CAPSTONE_GROUP_RUNTIME, 3, "context-forget", {I, I, {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, 48, 0, 0}}},
-  {9, CAPSTONE_GROUP_RUNTIME, 3, "context-step", {I, I, {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, 48, 0, 0}}},
-  {8, CAPSTONE_GROUP_RUNTIME, 3, "context-create", {I, I, {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, 48, 0, 0}}},
-  {7, CAPSTONE_GROUP_RUNTIME, 0, "sigpoll", {I}},
-  {6, CAPSTONE_GROUP_RUNTIME, 1, "sigdone", {I}},
-  {5, CAPSTONE_GROUP_RUNTIME, 3, "sigaction", {I, I, I}},
+  /* runtime-internal, numbered by the low 16 bits of their CAPSTONE_NR_*: the
+     pointer forms of fcntl and ioctl, spawn with its block in the exchange
+     region, the signal requests, hello and the context requests */
+  {1, CAPSTONE_GROUP_RUNTIME, 3, "hello", {I, I, I}},
+  {2, CAPSTONE_GROUP_RUNTIME, 2, "spawn", {IN_ARG(1), I}},
   {3, CAPSTONE_GROUP_RUNTIME, 3, "fcntl-lock", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 32, 0, 0}}},
-  {2, CAPSTONE_GROUP_RUNTIME, 3, "ioctl-buffer", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 64, 0, 0}}},
-  {1, CAPSTONE_GROUP_RUNTIME, 2, "spawn", {IN_ARG(1), I}},
-  {0, CAPSTONE_GROUP_RUNTIME, 3, "hello", {I, I, I}},
+  {4, CAPSTONE_GROUP_RUNTIME, 3, "ioctl-buffer", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 64, 0, 0}}},
+  {5, CAPSTONE_GROUP_RUNTIME, 3, "sigaction", {I, I, I}},
+  {6, CAPSTONE_GROUP_RUNTIME, 1, "sigdone", {I}},
+  {7, CAPSTONE_GROUP_RUNTIME, 0, "sigpoll", {I}},
+  {8, CAPSTONE_GROUP_RUNTIME, 3, "context-create", {I, I, I}},
+  {9, CAPSTONE_GROUP_RUNTIME, 3, "context-step", {I, I, {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, 48, 0, 0}}},
+  {10, CAPSTONE_GROUP_RUNTIME, 1, "context-forget", {I}},
+  {11, CAPSTONE_GROUP_RUNTIME, 0, "context-reserve", {I}},
   /* not in this branch: sockets stay unknown until a profile admits them */
 };
 
 const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
-  if (nr == CAPSTONE_NR_HELLO)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 1];
-  if (nr == CAPSTONE_NR_SPAWN)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 2];
-  if (nr == CAPSTONE_NR_IOCTL_BUF)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 3];
-  if (nr == CAPSTONE_NR_FCNTL_LOCK)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 4];
-  if (nr == CAPSTONE_NR_SIGACTION)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 5];
-  if (nr == CAPSTONE_NR_SIGDONE)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 6];
-  if (nr == CAPSTONE_NR_SIGPOLL)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 7];
-  if (nr == CAPSTONE_NR_CONTEXT_CREATE)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 8];
-  if (nr == CAPSTONE_NR_CONTEXT_STEP)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 9];
-  if (nr == CAPSTONE_NR_CONTEXT_FORGET)
-    return &shapes[sizeof shapes / sizeof shapes[0] - 10];
-  for (size_t i = 0; i + 10 < sizeof shapes / sizeof shapes[0]; ++i)
-    if (shapes[i].nr == nr)
+  /* Runtime requests live above every Linux number, at 0xC0DE0000 + n. */
+  int runtime = (nr >> 16) == 0xC0DE;
+  uint64_t key = runtime ? (nr & 0xffff) : nr;
+  for (size_t i = 0; i < sizeof shapes / sizeof shapes[0]; ++i)
+    if (shapes[i].nr == key && (shapes[i].group == CAPSTONE_GROUP_RUNTIME) == runtime)
       return &shapes[i];
   return NULL;
 }
