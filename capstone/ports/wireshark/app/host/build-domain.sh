@@ -157,6 +157,29 @@ for n in $(seq 1 13); do
   gates "$OUT/tsapp_fx$n.dom" "fixture $n"
 done
 
+# NEGATIVE CONTROL, chunks arm: M5 relinked without chunks.o comes back with EXACTLY the chunk
+# port's twelve entry points undefined. It shows the LINK gate can fire, and pins that the ported
+# block allocator and its backing (tsapp-wmem-chunks.o) reach the chunk port through every entry
+# point chunks.o defines; a link that fell back to upstream's allocator would reference none. It is
+# the ABI-v2 successor of the v0 control, "M5 without hostcall.o", which the chunks arm's T1 names
+# (wmem/PREREGISTRATION-tshark-step2.md). That one has no v2 form on any arm: an ABI-v2 SDK links
+# its runtime archive whole, so there is no runtime object to leave out; level0 and sublet
+# therefore run no link control (README.md).
+if [[ $HEAP == chunks ]]; then
+  KEEP=("${HEAPOBJ[@]}") NOCH=()
+  for o in "${HEAPOBJ[@]}"; do [ "$(basename "$o")" = chunks.o ] || NOCH+=("$o"); done
+  [ ${#NOCH[@]} -lt ${#KEEP[@]} ] || { echo "CONTROL: chunks.o is not among the heap objects" >&2; exit 1; }
+  HEAPOBJ=("${NOCH[@]}")
+  set +e; ctl=$(link "$OUT/nochunks.dom" "$OUT/tshark_m5.o" 2>&1); set -e
+  HEAPOBJ=("${KEEP[@]}")
+  und=$(printf '%s\n' "$ctl" | grep -oE 'undefined symbol: [A-Za-z_][A-Za-z0-9_]*' | sed 's/undefined symbol: //' | LC_ALL=C sort -u | tr '\n' ' ')
+  want="wm_block_close wm_block_forget wm_block_open wm_block_reset wm_chunk_adopt wm_chunk_bytes wm_chunk_forget wm_chunk_issue wm_chunk_report wm_chunk_retire wm_chunk_split wm_chunks_init "
+  [ "$und" = "$want" ] \
+    || { echo "CONTROL FAILED: without chunks.o expected exactly ${want}undefined, got: ${und:-<none>}"; exit 1; }
+  rm -f "$OUT/nochunks.dom"
+  echo "control fired: without chunks.o exactly the chunk port's 12 entry points are missing"
+fi
+
 for n in 1 2 3 4 5; do
   python3 - "$OUT/tshark_m$n.dom" 33554688 <<'PY'
 import subprocess, sys
