@@ -105,13 +105,13 @@ function(capstone_configure_application target)
   endif()
   # CONTEXTS: how many contexts besides the first may run at once with a
   # transport of their own (docs/plans/delegation-threads.md); the launcher
-  # grants 1 + CONTEXTS entry blocks and exchange regions. At most 7: the
-  # monitor lends each application 8 invocation descriptors.
+  # grants 1 + CONTEXTS entry blocks and exchange regions. At most 15: the
+  # monitor lends each application 16 invocation descriptors.
   if(NOT app_CONTEXTS)
     set(app_CONTEXTS 0)
   endif()
-  if(NOT app_CONTEXTS MATCHES "^[0-7]$")
-    message(FATAL_ERROR "CONTEXTS must be between 0 and 7")
+  if(NOT app_CONTEXTS MATCHES "^([0-9]|1[0-5])$")
+    message(FATAL_ERROR "CONTEXTS must be between 0 and 15")
   endif()
   math(EXPR exchange_total "(1 + ${app_CONTEXTS}) * ${app_EXCHANGE_BYTES}")
   if(exchange_total GREATER 1073741824)
