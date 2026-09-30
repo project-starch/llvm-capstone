@@ -132,6 +132,27 @@ The output is byte-identical to native (`results/2026-09-26/scripts.txt`).
   0001 and 0003 are rewritten for its code, 0002 is head's. There is no
   0006 for it yet: `MRBD_BOXING=word` stops with a message.
 
+## Patch 0010: envadjust, and what it unblocked (2026-09-30)
+
+At the 4.0.0-rc2 pin, `stack_extend_alloc()` hands the old VM stack to
+`mrb_realloc()` and then calls `envadjust()`, which moved every frame's pointer
+with `ci->stack += delta` -- pointer arithmetic on a pointer `realloc` has
+already freed. On an ordinary allocator that computes the right address; with
+`MRBD_HEAP=sublet` or `sublet-gc`, where `free` revokes, the result is derived
+from a revoked capability, carries no tag, and the next write through it faults
+with cause 24. Both revoking arms died at ~40 frames of Ruby recursion, shallow
+enough that `scripts/smoke.rb` stopped at M8, so neither arm could report
+anything.
+
+Upstream fixed the same defect in `e5c82761f` (2026-07-24), found when another
+memory-safe C implementation trapped on that write; `patches/4.0.0-rc2/0010`
+backports it. Only this pin needs it -- `head` already carries it.
+
+With 0010 all three arms complete `scripts/smoke.rb` and `deep(500)`, and the
+[release corpus](../../../bug-corpora/mruby/release-differential) runs in each:
+`sublet` catches one case the control completes, and `sublet-gc` catches four,
+three of which revoke-on-free cannot see.
+
 ## The Sublet heap (`MRBD_HEAP=sublet`)
 
 mruby's `mrb_malloc` sits on the domain's `malloc`. `MRBD_HEAP=sublet` links
