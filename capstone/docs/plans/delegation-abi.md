@@ -185,7 +185,12 @@ Each step stacks on the previous one, is gated, and lands squashed.
    excluded set.
 5. **`delegation-signals`** (was 6, moved ahead: it needs no monitor change):
    synchronous delivery. Gate: the libc-test signal group and `popen`;
-   CPython's `signal` tests that do not need a second process.
+   CPython's `signal` tests that do not need a second process. Result
+   (2026-09-29, `ports/cpython/app/results/signals-2026-09-29.json`):
+   `popen` and `setjmp` pass in libc-test; CPython `test_signal` 25 pass,
+   0 fail, 13 skipped, 19 errors that are all an unserved `clone`, `socket`
+   or thread start; the port's signal smoke 18/18. The CPython `subprocess`
+   patch (`fork_exec` through `posix_spawn`) is the next port item.
 6. **`delegation-memory`** (was 5): region grant at the resume label, chunk
    allocator, heap declared as initial size. Gate: CPython built without
    `ac_cv_func_mmap=no`.

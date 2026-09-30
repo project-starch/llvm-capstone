@@ -229,6 +229,14 @@ chunk's guest with it, `NOBOOT` a boot that never reached a shell, `NOTRUN` a ch
 that hung. A `FAIL` that says `UNSERVED` names the syscalls the domain asked for and the host
 refused, so the row says what the test needed and not only that it failed.
 
+**Signals.** The functional set exercises signals only through `popen`, `setjmp` and the
+excluded `vfork`; the signal tests proper are in `src/regression`: `sigaltstack`,
+`sigreturn`, `sigprocmask-internal` and `raise-race`. On `delegation-signals` the first
+three pass through `run-libc-test-delegated.py`, staged into a suite directory's
+`src/functional`; `raise-race` needs `pthread_create`, which fails without `clone`, and then
+faults inside `pthread_kill` on the handle `pthread_create` never filled. Record:
+`ports/cpython/app/results/signals-2026-09-29.json`.
+
 **Why one boot per test.** A domain that never comes back takes the guest with it: a fault
 after a yield does (M-1), and so does a domain that spins, because it holds the only hart.
 Nothing inside the guest can recover it, not `alarm()` in the host process, which is inside the
