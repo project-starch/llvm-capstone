@@ -7162,20 +7162,34 @@ is a weak alias. On 7d01722aab88 the initializer writes the first and not the se
 (`llvm/test/CodeGen/Capstone/static-cap-global-init-alias.ll` on the fix branch fails there at the
 alias's store).
 
-**Reach, measured.** `tests/capinit-unwritten-slots.py` lists the data slots that hold an address
-(`R_Capstone_64` in a data section) inside an object no `PCREL_HI20` of the object's
-`__capstone_cap_init` addresses: the
-delegation-threads musl archive, 10 of 1355 objects' slots, all `atfork_locks`; the application SDK,
-1 (`__capstone_init_fini_anchor_link`, an integer by design); CPython 3.13.7's 250 objects, none
-outside `.gct`, which the loader fills; GLib and pcre2, one `.init_array` slot, which the runtime's
-constructor walk reads as a link address by design. The census reports only the alias slot of the
-reproducer, and nothing on objects whose initializers are known good (`stdout.o`, `atexit.o`,
-CPython's `_struct.o`).
+**Reach and scanner correction (2026-09-30).** The original
+`tests/capinit-unwritten-slots.py` used an object-level heuristic: any `PCREL_HI20`
+reference from `__capstone_cap_init` exempted every slot in that object. It found the ten
+`atfork_locks` slots, but missed C-75 in a mixed table whose non-alias slot was initialized.
+A reference used only as a stored value could hide an entirely unwritten object too.
+Its original clean scans did not establish the absence of other untagged pointers.
+
+The corrected scanner follows exact store destinations through the straight-line initializer,
+including address arithmetic and stack spills. Unsupported code is INCOMPLETE (exit 2),
+uncovered address slots exit 1, and a complete scan with none exits 0. Duplicate archive
+members are inspected separately. It checks **store coverage**, not the stored value's tag,
+bounds or authority; an integer address constant is also a candidate to review. The loader's
+`.gct` and the runtime's link-address constructor arrays are excluded explicitly.
+Eight executable controls in `tests/capinit-unwritten-slots-test.py` cover mixed alias tables,
+source-only references, spills, large offsets, scalar overwrites, unsupported control flow
+and duplicate members. The mixed table built with the pre-C-75 compiler now reports its
+missing slot at offset 16; the fixed build reports none.
+
+A new scan of 1,629 objects (1,355 musl, 24 SDK archive members, 250 linked CPython objects)
+has no incomplete analyses and one uncovered integer address anchor in the SDK's
+`hostcall.c.obj` (`__capstone_init_fini_anchor_link`, intentional). This is a coverage result,
+not proof that every stored pointer is tagged.
 
 **Fix.** `needsMaterialization` accepts any `GlobalValue`. The store names the alias, and the link
 resolves it as it resolves the static relocation, so a strong definition still wins. The musl
 archive built by 7d01722aab88 and by the fix, from one source path: of 1355 objects exactly one
-differs, `src_process_fork.o`, and the census finds nothing in the second.
+differs, `src_process_fork.o`; the corrected store-coverage scan reports no uncovered
+address slots in the fixed musl archive.
 
 ### C-73 — capstone-c mis-allocates registers in long monitor functions, and cannot build two other shapes `WORKED AROUND 2026-09-29 in the monitor's code and by a build check; no reduced reproducer`
 
