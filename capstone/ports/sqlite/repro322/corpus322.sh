@@ -31,6 +31,7 @@ case_mem5design.c   mem5design
 case_agginfo.c      agginfo
 case_backupattach.c backupattach
 case_blobwrite.c    blobwrite
+case_writable_schema.c wschema
 EOF
    ;;
    coreT) cat <<EOF
