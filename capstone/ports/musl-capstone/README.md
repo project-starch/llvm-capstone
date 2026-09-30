@@ -18,9 +18,10 @@ unsupported thread creation. They are not TLS-initialization passes. The
 existing exclusions are retained for comparison.
 
 In v2, pipes, `posix_spawn`, `popen`, `system`, wait and Capstone-image
-`execve` work as delegated operations. `fork`, `clone`, sockets, `dlopen`,
-file `mmap` and native `execve` remain unserved inside the domain; signal
-handling is incomplete. See the [process qualification](../../runtime/applications.md#processes)
+`execve` work as delegated operations, and sockets and epoll are delegated
+rows like files. `fork`, `clone`, `dlopen`, file `mmap` and native `execve`
+remain unserved inside the domain; a caught signal runs its handler at the
+domain's next delegated call, not asynchronously. See the [process qualification](../../runtime/applications.md#processes)
 and [shell execution result](../../runtime/applications.md#shell-execution-qualification-2026-09-29).
 
 **History: the HostCall v0 port.** Until 2026-09-30 the runtime had a second mode, HostCall v0:
