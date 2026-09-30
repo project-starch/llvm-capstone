@@ -25,6 +25,7 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 
 | File | last touched |
 |------|------|
+| [sublet-heap-qualification.md](sublet-heap-qualification.md) — qualify libc malloc/free protection with the existing Sublet heap and minimal changes (plan) | 2026-09-30 |
 | `backend-compiler-fixes.md` | 2026-06-22 |
 | `beebs-deferred-benchmarks.md` | 2026-07-20 |
 | `benchmark-bringup.md` | 2026-06-19 |
