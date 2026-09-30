@@ -8,9 +8,14 @@ Minimal snapshot. Read first in every session.
 caplified mapping implementation stack. The
 [new design direction](../design/trusted-linux-memory.md) trusts Linux and
 relevant firmware, uses ordinary process page tables, and retains Capstone
-object bounds and lifetimes. Dynamic malloc/free and fork with independently
-cloned private lifetime state are targets. This is a documentation change;
-it adds no implementation or qualification result.
+object bounds and lifetimes. The
+[application compatibility plan](../plans/trusted-linux-application-compatibility.md)
+sets ordinary Linux OS functionality as the target for all seven application
+ports. It defines M0–M7 gates for the inventory, execution/ABI choice, VM,
+threads, processes, libraries, application parity and measured benefit.
+Dynamic malloc/free and fork with independently cloned private lifetime state
+remain design targets; the final execution mode and hardware choice are open.
+This is a documentation change, with no new implementation or qualification.
 
 ## 2026-09-29 — delegated signals
 

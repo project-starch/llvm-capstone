@@ -7,10 +7,18 @@ Linux capability ABI, working `fork()`, or measured hardware savings.
 
 ## 1. What we want
 
-Run applications with the familiar libc interfaces, including dynamic
-`malloc()`/`free()`, and support a path to ordinary process creation with
-`fork()`/`exec()`. Linux manages virtual memory. Capstone enforces the authority
-and lifetime of pointers to objects inside that memory.
+Applications should use the same operating-system functions as ordinary Linux
+processes, through familiar libc interfaces. Linux manages virtual memory,
+files, networking, scheduling and processes. Our contribution enforces the
+authority and lifetime of pointers to objects inside that memory. Missing IPv6,
+file mappings, threads, `fork()` or dynamic loading are integration gaps to
+close, not accepted properties of the protection model.
+
+Additional application changes must follow from capability representation,
+object boundaries or lifetimes. This is source and functional compatibility,
+not binary compatibility with existing 64-bit libraries. The
+[application compatibility milestones](../plans/trusted-linux-application-compatibility.md)
+turn this goal into shared platform work and acceptance gates for every port.
 
 Linux is trusted for confidentiality, integrity and isolation between processes.
 Firmware that can change execution state or memory ownership is trusted too.
@@ -47,11 +55,19 @@ that root. There is no need to switch roots for each pointer or each `malloc()`.
 Linux's page tables already provide this address-space structure.
 [Linux page-table documentation](https://docs.kernel.org/mm/page_tables.html)
 
-The preferred execution target is a capability-enabled user process scheduled
-by Linux. The existing delegated launcher can be a migration aid; reproducing
-its grant/return transport is not a requirement of the new design. Integrating
-capability execution with user privilege, faults and Linux context switches is
-work to specify and implement, not an existing feature asserted here.
+A capability-enabled user process scheduled by Linux is the preferred
+integration direction to investigate. The final execution mode and hardware
+mechanism remain open until the milestone plan's M1 decision. Current Caplifive
+capability execution uses C-mode; trusting Linux does not change that mode into
+Linux user mode or supply ordinary translation to its accesses.
+[Caplifive modes](https://capstone.kisp-lab.org/specs-caplifive/)
+
+The existing module, monitor and delegated launcher can remain a migration
+bridge. Their removal is not a prerequisite for restoring OS functionality.
+Integrating capability execution with user privilege, faults and Linux context
+switches is work to specify and implement, not an existing feature asserted
+here. Capstone is the current research platform, not a settled processor choice
+for every implementation of this goal.
 
 ## 3. Follow one access
 
@@ -252,11 +268,14 @@ kernel costs must be measured separately.
 | Linear ownership | Clone private ownership into distinct namespaces; reject unsupported external handles. COW never duplicates or loses authority through an implicit write. |
 | Completion | Delay an already checked access across free/unmap on another hart; reuse is blocked until the old access completes or is cancelled. |
 
-First close the process-local lifetime, privileged cloning and VM-retirement
-contracts in a small executable model. Next qualify one process with ordinary
-translation and dynamically growing malloc/free. Then add eager-copy fork,
-including tags, registers, stale aliases and failure rollback. COW, shared
-tagged memory, swap and multi-threaded cloning follow their own contracts.
+Use the [milestone plan](../plans/trusted-linux-application-compatibility.md)
+to order this work. Close the execution/ABI decision and process-local lifetime,
+privileged cloning and VM-retirement contracts before implementing their new
+mechanisms. Qualify ordinary translation and a growing heap before eager-copy
+fork, including tags, registers, stale aliases and failure rollback. COW,
+shared tagged memory, swap and multi-threaded cloning need their own contracts;
+first-prototype exclusions do not waive the final application compatibility
+gates. Existing I/O and thread integration can progress in parallel.
 
 The earlier mapping model and emulator results concern a different threat model
 and context semantics. They remain useful evidence for those implementations;

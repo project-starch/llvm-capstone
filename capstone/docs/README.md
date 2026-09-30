@@ -2,9 +2,12 @@
 
 Memory design direction on `memory-trusted-linux`:
 [trusted Linux, ordinary virtual memory and Capstone object lifetimes](design/trusted-linux-memory.md).
-The proposal separates translation from pointer authority and defines dynamic
-malloc/free and the requirements for independent fork lifetimes. It branches
-from `dev`; the design is not an implemented kernel or hardware extension.
+The [application compatibility milestones](plans/trusted-linux-application-compatibility.md)
+make ordinary Linux OS functionality the target for all seven application
+ports. They separate an execution/ABI decision from VM, threads, processes and
+loader work, with common acceptance gates and a measured-benefit decision.
+This branch starts from `dev`; the design and plan add no implementation or
+qualification result.
 
 Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
 Seven application recipes are migrated, with new QEMU functional and safety

@@ -6,6 +6,10 @@ CPython, PostgreSQL single-user, SQLite, FFmpeg and offline tshark. Old applicat
 images must be rebuilt. The component/allocator and silicon targets described
 below are separate from these application entry points.
 
+The [trusted Linux compatibility plan](../docs/plans/trusted-linux-application-compatibility.md)
+defines the next target: ordinary Linux OS functionality for every application,
+with capability changes justified by pointer representation, object bounds or
+lifetimes. Its milestones are proposed work, not additional qualified features.
 
 Start here to choose a component and find its build entry point. A port may
 execute an application, replay one allocator, or only establish that a library

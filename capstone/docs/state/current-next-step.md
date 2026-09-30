@@ -1,10 +1,13 @@
-Trusted Linux memory design (2026-09-30): on `memory-trusted-linux`, close the
-process-local lifetime context, privileged cloning and VM-retirement contracts
-in the [new design](../design/trusted-linux-memory.md). Validate these in a
-small model before implementation. Qualify dynamic allocation over ordinary
-page tables before eager-copy fork; COW needs separate handling of linear
-capability loads that mutate their source. This is independent of the
-caplified mapping implementation lanes and does not change their status.
+Trusted Linux application compatibility (2026-09-30): follow the
+[M0–M7 plan](../plans/trusted-linux-application-compatibility.md) on
+`memory-trusted-linux`. First inventory every feature exclusion across the
+seven application ports and establish native target profiles. Integrate the
+existing thread work with current I/O services and qualify IPv6 end-to-end.
+In parallel, close the execution/ABI and lifetime-context decision with a
+minimal prototype before implementing new VM mechanisms. Linux OS feature
+parity is the fixed goal; current Capstone C-mode is not already Linux user
+mode. The plan is independent of the caplified mapping implementation lanes
+and introduces no new qualification result.
 
 Application ports (2026-09-29): the seven application recipes now require
 the [shared delegated SDK](../../ports/common/application/README.md), with
