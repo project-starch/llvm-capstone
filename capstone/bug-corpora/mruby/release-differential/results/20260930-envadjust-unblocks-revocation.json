@@ -20,7 +20,8 @@
    "sublet": "a0b298510de220ab8e2563076ac36863e126165f8e34b746e918e46077a6b774",
    "sublet-gc": "703ddb70849183db249041f16bfc251bf866089af9af40707d09e0e915d72605"
   },
-  "env": "CAPSTONE_REV_NODES=16777216 for both revoking arms"
+  "env": "CAPSTONE_REV_NODES=16777216 for both revoking arms",
+  "node_pool_note": "CAPSTONE_REV_NODES=16777216 was needed on this kit. dev's sublet_heap.c (PR #158) says the 65,536-identity pool bounds live identities rather than allocations per boot, because capstone-qemu recycles retired identities since 22aec7ee0f. That commit is NOT in the capstone-qemu this kit's emulator was built from (it is not an ancestor of the checked-out HEAD 408fd83945), and the A/B here shows the older behaviour: same images, the control dies at M5 on the 65,536 default and completes at 16,777,216. So this figure is a property of the kit's emulator, not a contradiction of that comment"
  },
  "corpus_165": {
   "level0_control": {

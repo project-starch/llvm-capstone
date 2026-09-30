@@ -174,6 +174,12 @@ and it is reachable at all only because the port now builds `mruby-task`.
     CAPSTONE_REV_NODES=16777216 bash probe/run-arm.sh sublet
     bash probe/depth-probe.sh
 
+The node figure is this kit's. `sublet_heap.c` records that capstone-qemu
+recycles retired identities since `22aec7ee0f`, which makes the 65,536-identity
+pool bound live identities rather than allocations per boot; that commit is not
+in the emulator this kit was built from, and on it the 65,536 default is not
+enough for these runs.
+
 The harness (`probe/harness.rb`, `probe/footer.rb`) and the four-arm build config
 are taken from the GC-slot corpus's own probe on `corpus/mruby-gc-slot-reuse`,
 where they were written; the extraction, the sweep and the domain runner are new
