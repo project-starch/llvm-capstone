@@ -157,9 +157,9 @@ already have such a path for Windows.
 
 The launcher installs a seccomp filter derived from its allowlist before the
 first step. The set of syscalls a domain can reach is then enforced by the
-kernel, not by runtime code. The default profile is the delegated set above
-minus sockets; a port that needs more says so in its descriptor and the
-launcher refuses anything outside the profile.
+kernel, not by runtime code. The allowlist is the table's delegated group, one
+version and no profile: sockets are rows like files, planned in
+[delegation-sockets.md](delegation-sockets.md).
 
 ## Faults
 
@@ -218,8 +218,9 @@ Each step stacks on the previous one, is gated, and lands squashed.
    allocator, heap declared as initial size. Gate: CPython built without
    `ac_cv_func_mmap=no`.
 
-Out of scope for the whole stack: threads, sockets, asynchronous signals, the
+Out of scope for the whole stack: threads, asynchronous signals (the bell), the
 identity mapping, io_uring, any monitor change beyond the grant, any ISA change.
+Sockets have their own plan, [delegation-sockets.md](delegation-sockets.md).
 
 ## What the existing applications become
 

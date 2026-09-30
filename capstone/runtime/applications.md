@@ -242,10 +242,32 @@ only: `statfs`, `fstatfs`, `statx`, `truncate`, `fallocate`, `linkat`,
 `setsid`, `setpgid` among the task and its children, and for the task
 itself `getpriority`, `setpriority`, `sched_getaffinity`,
 `sched_setaffinity`, `sched_get_priority_max`, `sched_get_priority_min` and
-`sched_rr_get_interval`; `exit_group`. What does not:
-memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
-(`clone` and `fork` are ENOSYS; image exec uses the process service below), and
-threads. Signals cross: the kernel keeps dispositions, mask, pending set and
+`sched_rr_get_interval`; sockets and epoll (below); `exit_group`. What does
+not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS),
+processes (`clone` and `fork` are ENOSYS; image exec uses the process service
+below), and threads.
+
+Sockets are descriptors like files: `socket`, `socketpair`, `bind`, `listen`,
+`accept`, `accept4`, `connect`, `getsockname`, `getpeername`, `sendto`,
+`recvfrom`, `setsockopt`, `getsockopt`, `shutdown`, `sendmsg`, `recvmsg`,
+`epoll_create1`, `epoll_ctl` and `epoll_pwait` cross, and the launcher looks
+at no family, port or option: what a domain's socket reaches is what the
+launcher's process reaches, decided in Linux (a network namespace, a firewall,
+an outer seccomp filter), never in the launcher. Two things the wire cannot
+carry as they are the libc converts: a length behind a pointer (`socklen_t *`)
+travels as a four-byte word in the region whose value sizes the address or
+option buffer, read once by the validator, clamped to the region's room by the
+libc while the kernel reports the true length; and `msghdr` is flattened into
+a 64-byte block with offsets in place of pointers, the way `readv`'s iovec
+array crosses, `SCM_RIGHTS` descriptors included, the launcher refusing its
+own descriptors inside one as in every other position. A datagram is never
+cut to the region: a message the room cannot hold is EMSGSIZE from the libc,
+the kernel's own answer for one too long for its protocol, and a stream send
+of that size is short as a write is. `epoll_event.data` crosses as its 64
+bits, so a capability stored there loses its tag; a descriptor or an index
+survives. Not rows: `sendmmsg` and `recvmmsg`, and socket ioctls beyond
+`FIONBIO` and `FIONREAD`. The contract is `tests/application/socket-contract.c`
+with `run-sockets.py`, the design [docs/plans/delegation-sockets.md](../docs/plans/delegation-sockets.md). Signals cross: the kernel keeps dispositions, mask, pending set and
 restart decisions, and a caught signal runs its domain handler at the domain's
 next round (see Signals below). Under `CAPSTONE_DELEGATE_STATS` the domain
 reports at exit which syscalls did not cross; without it the application's
