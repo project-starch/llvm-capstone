@@ -1,0 +1,6 @@
+# Caches and outputs that live next to the container scripts, never in git.
+# home/ carries $HOME for the container: the QEMU lock, ccache, the Buildroot
+# download cache. tmp/ is $CAPSTONE_TMP_ROOT (/tmp/capstone), where every test
+# script writes its artifacts and logs.
+home/
+tmp/

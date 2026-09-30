@@ -1,0 +1,116 @@
+# Build environment for the Capstone LLVM fork and the Capstone QEMU.
+#
+# This image carries DEPENDENCIES ONLY. No project source is copied in: run.sh
+# bind-mounts the llvm-capstone working copy at /work/llvm-capstone, so every build
+# artifact lands in the host tree and survives the container.
+#
+# ubuntu:22.04 is not incidental. It is what capstone/capstone-qemu/Dockerfile already
+# targets, and all three legs of the build have a floor it clears and a ceiling that
+# newer releases risk:
+#
+#   gcc 11.4   -- llvm/cmake/modules/CheckCompilerVersion.cmake wants GCC >= 7.4
+#   cmake 3.22 -- llvm/CMakeLists.txt wants cmake_minimum_required(3.20)
+#   python3.10 -- still ships distutils, which older Buildroot host packages import
+#
+# 24.04 buys nothing here (LLVM 22 builds fine on gcc 11) and its python 3.12 is the
+# known breakage point for Buildroot trees of this vintage.
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# One layer, three groups.
+#
+# QEMU -- the list from capstone/capstone-qemu/Dockerfile. Note what is NOT here:
+#   meson. QEMU vendors python/wheels/meson-0.63.3-py3-none-any.whl and installs it into
+#   its own pyvenv (configure:1036-1040), so Ubuntu's meson 0.61 -- which is below
+#   meson.build's `meson_version: >=0.63.0` floor -- never gets a chance to be wrong.
+#   python3-venv and python3-pip are what that mkvenv step needs.
+#   libfdt-dev and libslirp-dev keep configure on the system libraries instead of
+#   falling back to meson subprojects, which would want the network.
+#
+# LLVM -- cmake/ninja/python3 plus:
+#   lld    for -DLLVM_USE_LINKER=lld (the bfd linker is the slowest part of a debug-info
+#          build by a wide margin)
+#   ccache for -DLLVM_CCACHE_BUILD=ON; the cache lives in the container's $HOME, which
+#          run.sh maps to a host directory, so it survives between runs
+#
+# python3-pexpect -- the ONLY non-stdlib import in
+#   capstone/tests/runtime-qemu/run-domain-smoke.py, which drives the guest over the
+#   serial console. Every runtime test funnels through it, including the
+#   capstone-revoke-probes and capstone-mrev-codegen runners in capstone-qemu, so
+#   without it they fail as "no boot/fault after 3 attempts" -- which reads like a
+#   guest problem rather than a missing host package.
+#
+# Buildroot -- its host-tool prerequisites. Most overlap the QEMU list; the ones that do
+#   not are bc, cpio, unzip, rsync, file, wget, perl, bzip2, patch and gawk.
+#
+# Deliberately absent: any -dev package for a QEMU feature outside riscv64-softmmu
+# (SDL, GTK, SPICE, USB). configure.sh builds one target; pulling in more would only
+# lengthen the build and widen what can break.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        ca-certificates \
+        curl \
+        wget \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-pexpect \
+        ninja-build \
+        cmake \
+        lld \
+        ccache \
+        pkg-config \
+        libglib2.0-dev \
+        libfdt-dev \
+        libpixman-1-dev \
+        libslirp-dev \
+        zlib1g-dev \
+        libssl-dev \
+        libncurses5-dev \
+        bc \
+        cpio \
+        unzip \
+        rsync \
+        file \
+        perl \
+        bzip2 \
+        patch \
+        gawk \
+        sed \
+        findutils \
+        diffutils \
+        binutils \
+        make \
+        tar \
+        expect \
+    && rm -rf /var/lib/apt/lists/*
+
+# Rust, for capstone-c -- the compiler that generates the OpenSBI monitor assembly.
+# caplifive-buildroot/Makefile's $(CAPSTONE_S_OUTPUT) rule shells out to `cargo run` inside
+# $CAPSTONE_CC_PATH, so cargo has to be here or the Buildroot build dies at OpenSBI with
+#   lib/sbi/sbi_capstone_init.S:85: fatal error: sbi_capstone_dom.c.S: No such file
+#
+# rustup rather than the distro package: jammy's rustc can be below the 1.70 floor that
+# capstone-c's clap 4.4 dependency requires, and the failure is a wall of trait errors
+# rather than a clear "too old". Pinned, not `latest`, so a rebuild of this image a year
+# from now still produces the same monitor -- capstone-c's own Dockerfile uses
+# `FROM rust:latest`, which is exactly the unrecorded-compiler problem that
+# caplifive-buildroot/Makefile's check-cc target exists to prevent.
+#
+# Installed into /opt so it is not inside the bind-mounted $HOME. CARGO_HOME is NOT set
+# here: run.sh points it at the container's writable home so the registry cache persists
+# and so a build as uid 1000 can write it.
+ENV RUSTUP_HOME=/opt/rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | env CARGO_HOME=/opt/cargo sh -s -- -y --no-modify-path --profile minimal \
+            --default-toolchain 1.83.0 \
+    && chmod -R a+rX /opt/cargo /opt/rustup
+ENV PATH=/opt/cargo/bin:$PATH
+
+# Matches run.sh's bind mount. Set here too so `podman run <image>` without run.sh still
+# lands somewhere sensible rather than /.
+WORKDIR /work/llvm-capstone
+
+CMD ["/bin/bash"]
