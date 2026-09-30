@@ -10,7 +10,8 @@ and GLib's `GCond` passes. CPython's earlier gate-pass claim was premature: subp
 errors prevented child assertions from running. The review qualification below records the
 subprocess-enabled results and explicit exclusions. Open: asynchronous delivery (the doorbell). Branch
 `delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
-Probe A and Probe B test.
+Probe A and Probe B test. The model as built, written for a reader rather than as a probe log, is
+[docs/design/delegated-threads-model.md](../design/delegated-threads-model.md).
 
 Done so far:
 - The domain half on the unchanged platform: context arena, mint, thread entry, exit and
@@ -358,7 +359,12 @@ Done so far:
   transport; a STEP the application asks for is refused (EINVAL). Before, the application's steps
   and the thread's interleaved; with a transport per context, a step from another thread would hand
   one of the context's requests to the wrong thread. `two-steppers` now checks the refusal. The
-  driver's serialisation of concurrent STEPs is still there, but no launcher path exercises it.
+  driver's serialisation of two STEPs of one context is still there, but no launcher path issues
+  them. Across contexts the same mutex serialises every step, so at most one context executes
+  domain code at a time (the model, section 5.3). Found by the model's review, not closed: between
+  ADOPT and the new thread's registration in the launcher, a CONTEXT_STEP naming the new id would
+  pass the one-stepper check. Only a context of the same application can send it, and the runtime
+  never does.
 - Pins: capstone-qemu 674cdab03c (`qemu/context-slots-on-pin`, on ac2837aa0e, the head of
   `qemu/supervisor-switch-cost`); caplifive-buildroot 8fd1ea1 (`modcapstone/context-slots`, the
   driver), whose components/opensbi is cf344cf (caplifive-opensbi `wrapper/context-slots`) at
@@ -366,8 +372,10 @@ Done so far:
   forks only (the `runtime-fork` remotes). `qemu/context-slots` (d220ab6ee9, on 22aec7ee0f with
   its own copies of the two switch-cost commits) is the frozen predecessor of
   `qemu/context-slots-on-pin`: its commits are patch-identical to ee9c93777f..a53ac18e3d, it lacks
-  674cdab03c, and nothing pins or extends it. Upstream pull requests: none until the thread
-  runtime and its gates pass (decided 2026-09-30).
+  674cdab03c, and nothing pins or extends it. Upstream pull requests were held until the thread
+  runtime and its gates passed, and were opened on 2026-09-30: llvm-capstone #148 to #156 (one
+  per step, stacked on #135) and the documentation after them, the compiler fix #147,
+  caplifive-sbi #3, caplifive-opensbi #3, caplifive-buildroot #9 and capstone-qemu #12.
 
 ## Scope
 
@@ -386,10 +394,11 @@ Done so far:
   asynchronously sealed context). That path fits this design: a handler domain can save the context,
   hand back an opaque continuation and leave the choice to Linux, so it needs platform work but no
   scheduler in the monitor. Also out of scope: the bell (asynchronous entry into a running context,
-  a separate operation from adoption); `FUTEX_CMP_REQUEUE`, `FUTEX_WAKE_OP`, PI and robust futexes
-  (they answer ENOSYS visibly); asynchronous cancellation; `fork` in a threaded process (already
-  ENOSYS); sockets. Plain `FUTEX_REQUEUE` is in scope: musl's condition variables issue it
-  (`unlock_requeue` in `pthread_cond_timedwait.c`, zero wakes and one requeue).
+  a separate operation from adoption); `FUTEX_CMP_REQUEUE` and `FUTEX_WAKE_OP` (they answer ENOSYS
+  visibly; PI and robust futexes, first listed here, came with T4); asynchronous cancellation;
+  `fork` in a threaded process (already ENOSYS); sockets. Plain `FUTEX_REQUEUE` is in scope:
+  musl's condition variables issue it (`unlock_requeue` in `pthread_cond_timedwait.c`, zero wakes
+  and one requeue).
 
 ## Responsibility
 
@@ -945,12 +954,13 @@ Recommended starting point:
 
 **Answer, first part: the transport (2026-09-30, T1; evidence `results/20260930-transport.json`).**
 - **Declared, not negotiated.** The image declares how many contexts besides the first may run at
-  once with a transport of their own: `CONTEXTS` (0 to 7; the monitor lends each application 8
-  descriptors), a field of the application descriptor. The launcher grants 1 + CONTEXTS transports
-  as two regions shared at launch: META blocks of 16 KiB (entry at 0, signal handover at 4096) and
-  exchange slices of the declared `EXCHANGE_BYTES` (a multiple of 4096), transport i at i times the
-  block size in both. Transport 0 is the first context's, byte for byte where it was. No region is
-  shared later: a share reaches only an application's first context, and only between calls.
+  once with a transport of their own: `CONTEXTS` (0 to 7; the monitor lent each application 8
+  descriptors; 0 to 15 and 16 descriptors since T5), a field of the application descriptor. The
+  launcher grants 1 + CONTEXTS transports as two regions shared at launch: META blocks of 16 KiB
+  (entry at 0, signal handover at 4096) and exchange slices of the declared `EXCHANGE_BYTES` (a
+  multiple of 4096), transport i at i times the block size in both. Transport 0 is the first
+  context's, byte for byte where it was. No region is shared later: a share reaches only an
+  application's first context, and only between calls.
 - **Reserved before the request.** `CONTEXT_RESERVE` returns a free transport index; the creator
   writes it into the child's start block (`WORD_TRANSPORT`) and then asks `CONTEXT_CREATE(ticket,
   THREAD, index)`. The launcher binds the transport to the adopted context before it starts the
