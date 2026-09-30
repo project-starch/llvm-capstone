@@ -37,6 +37,11 @@
 #define LDC(rd, rs1, imm)            .insn i 0x5B, 0x3, rd, imm(rs1)
 #define STC(rs1, rs2, imm)           .insn s 0x5B, 0x4, rs2, imm(rs1)
 #define CCSRRW(rd, ccsr, rs1)        .insn i 0x5B, 0x7, rd, ccsr(rs1)
+/* The supervisor's node collector: clears stale tags and frees dead nodes
+ * (rd = count reclaimed); with a query in rs1 it reports instead
+ * (2 = live nodes, 7 = nodes available). */
+#define SUPERVISOR_GC(rd)            .insn r 0x5B, 0x1, 0x23, rd, x0, x0
+#define SUPERVISOR_GC_QUERY(rd, rs1) .insn r 0x5B, 0x1, 0x23, rd, rs1, x0
 
 #define CCSR_CTVEC 0
 #define CCSR_CIH   1
