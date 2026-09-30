@@ -26,6 +26,10 @@ capstone_configure_application(thread-probe
 # default 128 KiB stack), its area from the context arena; the most contexts
 # an application may have (T5), with 45 KiB of signal list each (B8).
 add_executable(pthread-probe pthread-probe.c pthread-kill-probe.c)
+add_executable(level0-realloc-probe level0-realloc-probe.c)
+capstone_configure_application(level0-realloc-probe
+  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 1048576)
+target_compile_definitions(level0-realloc-probe PRIVATE CAPSTONE_LEVEL0_STATS=1)
 capstone_configure_application(pthread-probe
   DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 8388608 CONTEXT_BYTES 131072 CONTEXTS 15)
 # The same probe on the Sublet heap, for its lock (heap-stress).
