@@ -256,6 +256,17 @@ Done so far:
   request and the call, both fail. Found by GLib's `thread6` (a thread's name read back empty)
   and `thread7` (it sets a thread's CPU set), and by CPython's `ThreadPoolExecutor()`, whose
   default worker count asks for the CPU set.
+- The CPython gate: CPython 3.13.7 with C11 thread-locals (patch 0006 and its define are gone) and
+  patch 0016, which keeps the join handle and the raw mutex's waiter link as pointers (without it
+  the first `Thread.join` faults in `pthread_join`, and a contended `_PyRawMutex` at
+  `waiter->next`). In the guest `test_threading` runs all 212 tests: 28 errors, all fork (26
+  through `subprocess`, 1 `os.fork`) or sixteen threads at once, 13 skipped; `test_thread`
+  (without `test_forkinthread`, which blocks for good when fork is refused), `test_threading_local`
+  and `test_queue` pass; the thread pool fails only on a process pool and a fork. Found on the
+  way: C-75, a compiler defect (`compiler/cap-init-alias`): a pointer slot whose initializer
+  names an alias was never tagged, so musl's `fork()` faulted on its table of lock pointers once a
+  second thread existed; libc-test's `raise-race` had met it since T4. Record
+  `ports/cpython/interpreter/results/threads-2026-09-30.json`.
 - An independent review of B8 (2026-09-30) found five defects, all fixed: a delivery read the
   shared handler table unlocked while another context could change it (the action is now copied
   under a leaf lock); glibc's `sigaddset` refuses signals 32 and 33, so the trampoline could not
@@ -1213,4 +1224,5 @@ runtime as generally thread-capable. Gates:
   `pthread_cancel` waits for the doorbell, `sem_open` for file mappings, not threads);
 - GLib's `GCond` in the tshark deps (the `pthread_cond_t` size fix, e2c9ad3; the layout itself is
   fixed by musl patch 0004);
-- CPython's basic `threading` tests.
+- CPython's basic `threading` tests: pass 2026-09-30, the errors left are fork's and the fifteen-thread
+  limit's (`ports/cpython/interpreter/results/threads-2026-09-30.json`).
