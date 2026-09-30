@@ -1,7 +1,8 @@
 # Caplified mapping tables: translated domain memory without a trusted mapper
 
-Status: DESIGN CANDIDATE, 2026-09-30. Nothing here is implemented, measured or
-qualified. The document fixes a small, checkable first stage of translated
+Status: DESIGN CANDIDATE, 2026-09-30. The translation mechanism is not implemented
+or hardware-qualified. A bounded executable contract model is available (§10.1).
+The document fixes a small, checkable first stage of translated
 domain memory and states what later stages must prove. It is the outcome of a
 review exchange over the [physical-grant plan](../plans/delegation-memory.md),
 the [alternatives](../plans/delegation-memory-options.md) and the
@@ -112,7 +113,8 @@ in CheriBSD, and the domain derives every pointer into the mapping from it.
 **Page-table capability.** Linear. Names one table page. Not dereferenceable by
 ordinary loads and stores; used in place by the walker and by the mapping
 instructions only. It is produced only inside CREATE and POPULATE, from an
-exclusive physical page the monitor supplies, linear or UNINIT: the instruction
+exclusive physical page the monitor supplies, linear or UNINIT, with write
+permission retained for initialization and later table updates: the instruction
 consumes the page, writes every slot to none, which clears any capability tag
 the page carried, and only then publishes the page as part of the table.
 Requiring UNINIT pages would not be enough. UNINIT forbids the holder's reads
@@ -212,7 +214,8 @@ PTEs can sit under a table page the tree no longer reaches. Frames and table
 pages left behind, reachable or not, return through their frame and table-page
 handles, one REVOKE each, yielding UNINIT, before or after DESTROY. UNMAP
 remains the optional orderly return for frames still reachable before DESTROY,
-without a REVOKE and its drain. A traversal from the root could not be the
+without invoking REVOKE; UNMAP still obeys the completion protocol of §8.
+A traversal from the root could not be the
 return path: a page revoked from above cuts its subtree off the tree while the
 subtree's pages stay valid, so a traversal would miss them, and a page returned
 once through its handle and again by traversal would be two overlapping UNINIT
@@ -519,6 +522,18 @@ to Stage 1 by this section.
 ## 10. Experiments
 
 ### 10.1 Executable model
+
+The [host executable model](../../tests/mapping-model/README.md) implements this
+experiment for PRIVATE under the capability-selected root. Its
+[result record](../../tests/mapping-model/results.json) pins source hashes,
+search bounds, operation coverage and eight faulty comparison traces. It checks
+named contracts, exhausts forty fixed two-hart interleaving workloads, explores
+a bounded lifecycle action alphabet and runs reproducible random sequences.
+The README defines the abstraction: two-level word-addressed tables, atomic
+memory effects and no revocation-node reuse, compressed encoding, cross-page
+instructions or hardware cache/coherence model. These bounded results do not
+discharge §10.2 or §10.3 and are not an unbounded proof. The requirements below
+remain the contract for extending the model and refining an implementation.
 
 Before an emulator change, a small executable model: nodes, capabilities with
 kind and binding, a table tree of at least two levels, a TLB with node and (id,

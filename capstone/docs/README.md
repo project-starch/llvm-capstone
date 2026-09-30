@@ -1,5 +1,10 @@
 # Capstone project documentation
 
+Translated memory: the [caplified mapping candidate](design/caplified-mapping-tables.md)
+has a [host executable contract model](../tests/mapping-model/README.md) with bounded
+interleaving, lifecycle and adversarial comparison checks. This is design validation;
+the runtime, QEMU and RTL do not implement the proposed translation mechanism.
+
 Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
 Seven application recipes are migrated, with new QEMU functional and safety
 qualification, explicit compiler/resource requirements and preserved negative

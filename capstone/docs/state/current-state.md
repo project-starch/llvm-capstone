@@ -2,6 +2,18 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-30 — caplified mapping contract model
+
+The [translated-memory candidate](../design/caplified-mapping-tables.md) now has
+a [host executable model](../../tests/mapping-model/README.md) on
+`delegation-memory`. The checked [record](../../tests/mapping-model/results.json)
+covers eight contract scenarios, eight deliberately faulty variants, forty
+two-hart interleaving workloads, bounded lifecycle exploration and seeded
+adversarial traces. Source hashes, bounds and operation coverage are recorded.
+These are abstract Stage-1 results, not a translation implementation, an
+unbounded proof, QEMU qualification or RTL measurements. The lane remains
+separate from `dev`.
+
 ## 2026-09-29 — delegated signals
 
 On `delegation-signals`, synchronous delivery passes the 26-mode

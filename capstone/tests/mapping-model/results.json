@@ -1,0 +1,966 @@
+{
+  "contract": "00626a232bda",
+  "interleavings": [
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "load",
+      "states": 558,
+      "terminals": 26,
+      "victim": "frame",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "load",
+      "states": 88,
+      "terminals": 5,
+      "victim": "frame",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "load",
+      "states": 558,
+      "terminals": 26,
+      "victim": "table",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "load",
+      "states": 88,
+      "terminals": 5,
+      "victim": "table",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "load",
+      "states": 558,
+      "terminals": 26,
+      "victim": "root",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "load",
+      "states": 88,
+      "terminals": 5,
+      "victim": "root",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_detach": 82,
+        "cancel": 252,
+        "drain": 150,
+        "finish": 17,
+        "invalidate": 330,
+        "memory_step": 90,
+        "walk": 162
+      },
+      "edges": 1083,
+      "max_depth": 14,
+      "operation": "load",
+      "states": 432,
+      "terminals": 17,
+      "victim": "detach",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_detach": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "load",
+      "states": 88,
+      "terminals": 5,
+      "victim": "detach",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "store",
+      "states": 558,
+      "terminals": 26,
+      "victim": "frame",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "store",
+      "states": 88,
+      "terminals": 5,
+      "victim": "frame",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "store",
+      "states": 558,
+      "terminals": 26,
+      "victim": "table",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "store",
+      "states": 88,
+      "terminals": 5,
+      "victim": "table",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "store",
+      "states": 558,
+      "terminals": 26,
+      "victim": "root",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "store",
+      "states": 88,
+      "terminals": 5,
+      "victim": "root",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_detach": 82,
+        "cancel": 252,
+        "drain": 150,
+        "finish": 17,
+        "invalidate": 330,
+        "memory_step": 90,
+        "walk": 162
+      },
+      "edges": 1083,
+      "max_depth": 14,
+      "operation": "store",
+      "states": 432,
+      "terminals": 17,
+      "victim": "detach",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_detach": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "store",
+      "states": 88,
+      "terminals": 5,
+      "victim": "detach",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "amo",
+      "states": 558,
+      "terminals": 26,
+      "victim": "frame",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "amo",
+      "states": 88,
+      "terminals": 5,
+      "victim": "frame",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "amo",
+      "states": 558,
+      "terminals": 26,
+      "victim": "table",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "amo",
+      "states": 88,
+      "terminals": 5,
+      "victim": "table",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "amo",
+      "states": 558,
+      "terminals": 26,
+      "victim": "root",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "amo",
+      "states": 88,
+      "terminals": 5,
+      "victim": "root",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_detach": 82,
+        "cancel": 252,
+        "drain": 150,
+        "finish": 17,
+        "invalidate": 330,
+        "memory_step": 90,
+        "walk": 162
+      },
+      "edges": 1083,
+      "max_depth": 14,
+      "operation": "amo",
+      "states": 432,
+      "terminals": 17,
+      "victim": "detach",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_detach": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "amo",
+      "states": 88,
+      "terminals": 5,
+      "victim": "detach",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 28,
+        "cancel": 103,
+        "drain": 88,
+        "finish": 11,
+        "invalidate": 149,
+        "memory_step": 70,
+        "walk": 33
+      },
+      "edges": 482,
+      "max_depth": 11,
+      "operation": "cload",
+      "states": 216,
+      "terminals": 11,
+      "victim": "frame",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "cload",
+      "states": 88,
+      "terminals": 5,
+      "victim": "frame",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 28,
+        "cancel": 103,
+        "drain": 88,
+        "finish": 11,
+        "invalidate": 149,
+        "memory_step": 70,
+        "walk": 33
+      },
+      "edges": 482,
+      "max_depth": 11,
+      "operation": "cload",
+      "states": 216,
+      "terminals": 11,
+      "victim": "table",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "cload",
+      "states": 88,
+      "terminals": 5,
+      "victim": "table",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 28,
+        "cancel": 103,
+        "drain": 88,
+        "finish": 11,
+        "invalidate": 149,
+        "memory_step": 70,
+        "walk": 33
+      },
+      "edges": 482,
+      "max_depth": 11,
+      "operation": "cload",
+      "states": 216,
+      "terminals": 11,
+      "victim": "root",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "cload",
+      "states": 88,
+      "terminals": 5,
+      "victim": "root",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_detach": 28,
+        "cancel": 97,
+        "drain": 74,
+        "finish": 9,
+        "invalidate": 132,
+        "memory_step": 64,
+        "walk": 33
+      },
+      "edges": 437,
+      "max_depth": 11,
+      "operation": "cload",
+      "states": 190,
+      "terminals": 9,
+      "victim": "detach",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_detach": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "cload",
+      "states": 88,
+      "terminals": 5,
+      "victim": "detach",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "cstore",
+      "states": 558,
+      "terminals": 26,
+      "victim": "frame",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "cstore",
+      "states": 88,
+      "terminals": 5,
+      "victim": "frame",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "cstore",
+      "states": 558,
+      "terminals": 26,
+      "victim": "table",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "cstore",
+      "states": 88,
+      "terminals": 5,
+      "victim": "table",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_revoke": 82,
+        "cancel": 282,
+        "drain": 216,
+        "finish": 26,
+        "invalidate": 426,
+        "memory_step": 102,
+        "walk": 180
+      },
+      "edges": 1314,
+      "max_depth": 14,
+      "operation": "cstore",
+      "states": 558,
+      "terminals": 26,
+      "victim": "root",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_revoke": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "cstore",
+      "states": 88,
+      "terminals": 5,
+      "victim": "root",
+      "warm": true
+    },
+    {
+      "coverage": {
+        "begin_detach": 82,
+        "cancel": 252,
+        "drain": 150,
+        "finish": 17,
+        "invalidate": 330,
+        "memory_step": 90,
+        "walk": 162
+      },
+      "edges": 1083,
+      "max_depth": 14,
+      "operation": "cstore",
+      "states": 432,
+      "terminals": 17,
+      "victim": "detach",
+      "warm": false
+    },
+    {
+      "coverage": {
+        "begin_detach": 10,
+        "cancel": 38,
+        "drain": 38,
+        "finish": 5,
+        "invalidate": 54,
+        "memory_step": 38
+      },
+      "edges": 183,
+      "max_depth": 8,
+      "operation": "cstore",
+      "states": 88,
+      "terminals": 5,
+      "victim": "detach",
+      "warm": true
+    }
+  ],
+  "lifecycle": {
+    "coverage": {
+      "abort": 188,
+      "begin_detach": 1134,
+      "begin_revoke": 9142,
+      "cancel": 360,
+      "delin": 1142,
+      "drain": 40,
+      "drop": 1226,
+      "invalidate": 1280,
+      "issue": 4428,
+      "move": 1216,
+      "mrev": 1076,
+      "prepare_populate": 1828,
+      "publish": 108,
+      "split": 962,
+      "walk": 984
+    },
+    "depth_bound": 3,
+    "edges": 25114,
+    "max_depth": 3,
+    "states": 19899,
+    "terminals": 0
+  },
+  "mutations": [
+    {
+      "control": "Refused",
+      "trace": [
+        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "publish()",
+        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "publish()",
+        "issue(0, 'd0:p0', 'store', 0, 99, None, None)",
+        "walk(0,)",
+        "walk(0,)",
+        "walk(0,)",
+        "memory_step(0,)",
+        "delin('d0:p0',)",
+        "begin_revoke('m:d0', 'm:escaped')",
+        "invalidate(0,)",
+        "drain(0,)",
+        "invalidate(1,)",
+        "drain(1,)",
+        "finish()"
+      ],
+      "variant": "plain_detach",
+      "violation": "I3: monitor obtained logical data authority"
+    },
+    {
+      "control": "safe",
+      "trace": [
+        "delin('m:p2',)",
+        "physical_store_cap('m:p0', 1, 'm:p2')",
+        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "publish()"
+      ],
+      "variant": "uncleared_create",
+      "violation": "I4: invalid PRIVATE table entry"
+    },
+    {
+      "control": "safe",
+      "trace": [
+        "delin('m:p2',)",
+        "physical_store_cap('m:p1', 1, 'm:p2')",
+        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d0', 0, 'm:p3', ('m:p1',))",
+        "publish()"
+      ],
+      "variant": "uncleared_populate",
+      "violation": "I4: invalid PRIVATE table entry"
+    },
+    {
+      "control": "Refused",
+      "trace": [
+        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "publish()",
+        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "publish()",
+        "issue(0, 'd0:p0', 'store', 0, 99)",
+        "walk(0,)",
+        "walk(0,)",
+        "walk(0,)",
+        "begin_revoke('m:h2', 'm:reclaimed')",
+        "invalidate(0,)",
+        "drain(0,)",
+        "invalidate(1,)",
+        "drain(1,)",
+        "finish()"
+      ],
+      "variant": "walk_only_drain",
+      "violation": "I6: outstanding access after return"
+    },
+    {
+      "control": "safe",
+      "trace": [
+        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "publish()",
+        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "publish()",
+        "issue(1, 'd1:p1', 'store', 0, 99, None, None)",
+        "walk(0,)",
+        "walk(0,)",
+        "walk(0,)"
+      ],
+      "variant": "weak_binding",
+      "violation": "goal: live pointer redirected to another mapping"
+    },
+    {
+      "control": "safe",
+      "trace": [
+        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "publish()",
+        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "publish()",
+        "begin_revoke('m:h0', 'm:root')",
+        "invalidate(0,)",
+        "drain(0,)",
+        "invalidate(1,)",
+        "drain(1,)",
+        "finish()",
+        "begin_detach('m:d0', 'm:t0')",
+        "invalidate(0,)",
+        "drain(0,)",
+        "invalidate(1,)",
+        "drain(1,)",
+        "finish()",
+        "destroy('m:t0',)"
+      ],
+      "variant": "duplicate_return",
+      "violation": "I1: overlapping physical authority"
+    },
+    {
+      "control": "safe",
+      "trace": [
+        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "publish()",
+        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "publish()",
+        "begin_revoke('m:h0', 'm:root')"
+      ],
+      "variant": "root_release",
+      "violation": "I5: registry reservation released without DESTROY"
+    },
+    {
+      "control": "safe",
+      "trace": [
+        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "publish()",
+        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "publish()",
+        "begin_detach('m:d0', 'm:t0')",
+        "invalidate(0,)",
+        "drain(0,)",
+        "invalidate(1,)",
+        "drain(1,)",
+        "finish()",
+        "destroy('m:t0',)",
+        "prepare_create(0, 'm:p3', 'd0:pnew', 'm:dnew', 16, 'rw')",
+        "publish()",
+        "prepare_populate('m:dnew', 0, 'm:p5', ('m:p4',))",
+        "publish()",
+        "begin_revoke('m:h0', 'm:oldroot')"
+      ],
+      "variant": "stale_record",
+      "violation": "I5: registry reservation released without DESTROY"
+    }
+  ],
+  "python": "3.12.3",
+  "random": {
+    "coverage": {
+      "abort": 8,
+      "begin_detach": 41,
+      "begin_revoke": 322,
+      "begin_unmap": 2,
+      "cancel": 18,
+      "delin": 27,
+      "destroy": 14,
+      "drain": 748,
+      "drop": 35,
+      "finish": 367,
+      "invalidate": 760,
+      "issue": 223,
+      "memory_step": 24,
+      "move": 27,
+      "mrev": 15,
+      "prepare_create": 5,
+      "prepare_populate": 16,
+      "publish": 13,
+      "scrub": 187,
+      "split": 15,
+      "walk": 333
+    },
+    "seeds": 32,
+    "step_bound": 100,
+    "steps": 3200
+  },
+  "scenarios": [
+    {
+      "name": "check_permissions_and_inputs",
+      "refusals": 19
+    },
+    {
+      "name": "check_reclamation",
+      "refusals": 11
+    },
+    {
+      "name": "check_cut_subtree_and_generation",
+      "refusals": 2
+    },
+    {
+      "name": "check_old_root_and_present_destroy",
+      "refusals": 0
+    },
+    {
+      "name": "check_pointer_tree_and_contexts",
+      "refusals": 5
+    },
+    {
+      "name": "check_capability_transfers",
+      "refusals": 0
+    },
+    {
+      "name": "check_preparation_races",
+      "refusals": 3
+    },
+    {
+      "name": "check_generation_exhaustion_and_tokens",
+      "refusals": 1
+    }
+  ],
+  "schema": 1,
+  "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
+  "source_sha256": {
+    "check.py": "0348a79d54445fda8a7de35adb12f3609b4f7ff319abfa0074c243309568994d",
+    "model.py": "1aface618545ea838cf2177d3f7784bb760d437f99ebaf2c7d0b2089cb25dcd2"
+  }
+}

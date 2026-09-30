@@ -1,0 +1,643 @@
+#!/usr/bin/env python3
+"""Contract scenarios, bounded state exploration, and seeded adversarial traces."""
+
+import argparse
+from collections import Counter, deque
+import hashlib
+import json
+from pathlib import Path
+import random
+import sys
+
+from model import Action, Cap, HARTS, Machine, MUTANTS, Refused, Violation, Word, WORDS
+
+
+class Script:
+    def __init__(self, mutant=None):
+        self.machine = Machine(mutant)
+        self.trace = []
+        self.refusals = 0
+
+    def step(self, name, *args):
+        action = Action(name, args)
+        self.trace.append(str(action))
+        result = action.apply(self.machine)
+        self.machine.check()
+        return result
+
+    def refused(self, name, *args):
+        before = self.machine.key()
+        try:
+            self.step(name, *args)
+        except Refused:
+            assert self.machine.key() == before, "refusal changed state"
+            self.refusals += 1
+        else:
+            raise AssertionError("expected refusal: " + str(self.trace[-1]))
+
+    def pages(self, count=16):
+        for page in range(count):
+            self.machine.bootstrap(page, "m:p%d" % page, "m:h%d" % page)
+        self.machine.check()
+
+    def create(self, ident, page, suffix=None, rights="rw"):
+        suffix = str(ident) if suffix is None else suffix
+        self.step("prepare_create", ident, "m:p%d" % page,
+                  "d%d:p%s" % (ident, suffix), "m:d" + suffix, 4 * WORDS, rights)
+        self.step("publish")
+
+    def populate(self, suffix, address, frame, table=None):
+        pages = () if table is None else ("m:p%d" % table,)
+        self.step("prepare_populate", "m:d" + str(suffix), address,
+                  "m:p%d" % frame, pages)
+        self.step("publish")
+
+    def barrier(self):
+        for hart in HARTS:
+            self.step("invalidate", hart)
+            for request, access in list(self.machine.accesses.items()):
+                if access.hart == hart and access.phase == "checked":
+                    self.step("cancel", request)
+            self.step("drain", hart)
+        self.step("finish")
+
+    def access(self, hart, location, operation="load", address=0, value=7,
+               source=None, destination=None):
+        request = self.step("issue", hart, location, operation, address, value,
+                            source, destination)
+        while self.machine.accesses[request].phase in ("root", "leaf", "fill"):
+            self.step("walk", request)
+        if self.machine.accesses[request].phase == "checked":
+            self.step("memory_step", request)
+        return self.machine.accesses[request]
+
+    def zero(self, location):
+        cap = self.machine.wallet[location]
+        method = "scrub_logical" if cap.kind == "logical_uninit" else "scrub"
+        for _ in range(cap.hi - cap.cursor):
+            self.step(method, location)
+        self.step("init", location)
+
+
+def fixture(mutant=None):
+    s = Script(mutant)
+    s.pages()
+    s.create(0, 0)
+    s.populate(0, 0, 2, 1)
+    s.create(1, 8)
+    s.populate(1, 0, 10, 9)
+    return s
+
+
+def check_permissions_and_inputs():
+    s = fixture()
+    s.refused("prepare_create", 0, "m:p3", "d0:new", "m:new")
+    s.refused("prepare_create", 2, "m:p3", "d0:new", "m:new")
+    s.refused("prepare_create", 0, "d0:p0", "d0:new", "m:new")
+    s.refused("prepare_populate", "m:d0", 0, "m:p3", ())
+    s.refused("prepare_populate", "m:d0", 8, "m:p3", ())
+    s.refused("prepare_populate", "m:d0", 8, "m:p3", ("m:p3",))
+    s.refused("prepare_populate", "m:d0", 8, "d0:p0", ("m:p3",))
+    s.refused("prepare_populate", "m:d1", 16, "m:p3", ("m:p4",))
+    s.step("delin", "m:p3")
+    s.refused("prepare_populate", "m:d0", 8, "m:p3", ("m:p4",))
+    s.refused("prepare_populate", "m:d0", 8, "m:p4", ("m:p3",))
+    s.refused("physical_read", "m:d0", 0)
+    s.refused("begin_unmap", "m:d0", 0, "m:out")
+    s.populate(0, 4, 5)
+    s.populate(0, 8, 6, 4)
+    for address, value in ((0, 11), (4, 22), (8, 33)):
+        assert s.access(0, "d0:p0", "store", address, value).phase == "done"
+        assert s.access(0, "d0:p0", "load", address).result.value == value
+    s.step("narrow", "d0:p0", 4, 8, "r")
+    s.refused("issue", 0, "d0:p0", "store", 4)
+    s.refused("issue", 0, "d0:p0", "load", 3)
+    s.step("cursor", "d0:p0", 8)
+    s.refused("issue", 0, "d0:p0")
+    assert s.access(0, "d0:p0", "load", 7).phase == "done"
+    t = Script()
+    t.pages(3)
+    t.create(0, 0, rights="r")
+    t.refused("prepare_create", 1, "d0:p0", "d1:wrong", "m:wrong")
+    t.refused("prepare_populate", "m:d0", 0, "m:p2", ("m:p1",))
+    t.step("narrow", "m:p2", 0, WORDS, "r")
+    t.populate(0, 0, 2, 1)
+    assert t.access(0, "d0:p0").phase == "done"
+    u = Script()
+    u.pages(4)
+    u.step("narrow", "m:p0", 0, WORDS, "r")
+    u.refused("prepare_create", 0, "m:p0", "d0:p0", "m:d0")
+    u.create(0, 1)
+    u.step("narrow", "m:p2", 0, WORDS, "r")
+    u.refused("prepare_populate", "m:d0", 0, "m:p3", ("m:p2",))
+    return s.refusals + t.refusals + u.refusals
+
+
+def check_reclamation():
+    s = fixture()
+    s.populate(0, 4, 3)
+    s.access(0, "d0:p0", "store", 0, 99)
+    s.step("begin_revoke", "m:h2", "m:reclaimed")
+    s.barrier()
+    assert s.access(0, "d0:p0", "load", 0).phase == "fault"
+    assert s.access(0, "d0:p0", "load", 4).phase == "done"
+    s.refused("prepare_populate", "m:d0", 0, "m:p4", ())
+    s.refused("physical_read", "m:reclaimed")
+    s.refused("init", "m:reclaimed")
+    s.zero("m:reclaimed")
+    for offset in range(WORDS):
+        assert s.step("physical_read", "m:reclaimed", offset) == Word()
+    s.step("begin_detach", "m:d0", "m:t0")
+    s.barrier()
+    s.step("move", "m:t0", "stored:token")
+    s.step("move", "stored:token", "m:t0")
+    s.refused("physical_read", "m:t0")
+    s.refused("begin_unmap", "m:t0", 0, "m:again")
+    s.step("begin_unmap", "m:t0", 4, "m:unmapped")
+    s.barrier()
+    s.refused("begin_unmap", "m:t0", 4, "m:twice")
+    s.step("destroy", "m:t0")
+    s.refused("destroy", "m:t0")
+    for page in (0, 1):
+        s.step("begin_revoke", "m:h%d" % page, "m:table%d" % page)
+        s.barrier()
+        s.refused("begin_revoke", "m:table%d" % page, "m:twice")
+        s.refused("physical_read", "m:table%d" % page)
+        s.zero("m:table%d" % page)
+    assert s.access(1, "d1:p1").phase == "done"
+    return s.refusals
+
+
+def check_cut_subtree_and_generation():
+    s = fixture()
+    s.populate(0, 8, 4, 3)
+    old_binding = s.machine.registry[0].binding
+    s.step("begin_revoke", "m:h0", "m:root")
+    s.barrier()
+    s.refused("prepare_create", 0, "m:p5", "d0:new", "m:new")
+    assert s.access(0, "d0:p0").phase == "fault"
+    assert s.access(1, "d1:p1").phase == "done"
+    s.step("begin_detach", "m:d0", "m:t0")
+    s.barrier()
+    # Present PTEs and two lower tables survive root loss. No traversal needed.
+    s.step("destroy", "m:t0")
+    s.create(0, 5, "new")
+    s.populate("new", 0, 7, 6)
+    new_binding = s.machine.registry[0].binding
+    assert new_binding != old_binding
+    for page in (1, 2, 3, 4):
+        s.step("begin_revoke", "m:h%d" % page, "m:old%d" % page)
+        s.barrier()
+        assert s.machine.registry[0].binding == new_binding
+        assert s.access(0, "d0:pnew").phase == "done"
+    s.refused("issue", 0, "d0:p0")
+    return s.refusals
+
+
+def check_old_root_and_present_destroy():
+    s = fixture()
+    s.step("begin_detach", "m:d0", "m:t0")
+    s.barrier()
+    s.step("destroy", "m:t0")
+    s.create(0, 3, "new")
+    s.populate("new", 0, 5, 4)
+    new_root = s.machine.registry[0].root
+    for page in (0, 1, 2):
+        s.step("begin_revoke", "m:h%d" % page, "m:old%d" % page)
+        s.barrier()
+        assert s.machine.registry[0].root == new_root
+        assert s.access(0, "d0:pnew").phase == "done"
+    return s.refusals
+
+
+def check_pointer_tree_and_contexts():
+    s = fixture()
+    s.step("split", "d0:p0", WORDS, "d0:rest")
+    s.populate(0, WORDS, 3)
+    s.step("mrev", "d0:p0", "d0:object")
+    s.step("delin", "d0:p0")
+    s.step("move", "d0:p0", "d0:old")
+    s.step("move", "d0:p0", "d1:foreign")
+    s.access(0, "d0:p0", "store", 0, 18)
+    assert s.access(1, "d1:foreign").result.value == 18
+    s.step("begin_revoke", "d0:object", "d0:new")
+    s.barrier()
+    s.refused("issue", 0, "d0:old")
+    s.refused("issue", 1, "d1:foreign")
+    assert s.access(0, "d0:new").result.value == 18
+    s.step("mrev", "d0:new", "d0:second")
+    s.step("move", "d0:new", "d1:loan")
+    s.step("begin_revoke", "d0:second", "d0:uninit")
+    s.barrier()
+    assert s.machine.wallet["d0:uninit"].kind == "logical_uninit"
+    s.refused("issue", 0, "d0:uninit")
+    s.zero("d0:uninit")
+    assert s.access(0, "d0:uninit").result == Word()
+    assert s.access(0, "d0:rest", "load", WORDS).phase == "done"
+    s.step("drop", "d0:uninit")
+    s.barrier()
+    s.refused("issue", 0, "d0:uninit")
+    s.step("begin_detach", "m:d0", "m:t0")
+    s.barrier()
+    s.refused("issue", 0, "d0:rest", "load", WORDS)
+    return s.refusals
+
+
+def check_capability_transfers():
+    s = fixture()
+    stored = s.machine.wallet["d1:p1"]
+    s.step("move", "d1:p1", "d0:payload")
+    assert s.access(0, "d0:p0", "cstore", source="d0:payload").phase == "done"
+    assert "d1:p1" not in s.machine.wallet
+    s.step("delin", "d0:p0")
+    s.step("move", "d0:p0", "d1:foreign")
+    requests = [s.step("issue", h, "d%d:%s" % (h, "p0" if h == 0 else "foreign"),
+                       "cload", 0, 0, None, "h%d:loaded" % h) for h in HARTS]
+    for request in requests:
+        while s.machine.accesses[request].phase != "checked":
+            s.step("walk", request)
+    s.step("memory_step", requests[0])
+    s.step("memory_step", requests[1])
+    assert s.machine.wallet["h0:loaded"] == stored
+    assert s.machine.accesses[requests[1]].phase == "fault"
+    # The moved capability still names mapping 1 from context 0.
+    assert s.access(0, "h0:loaded").phase == "done"
+    assert s.access(0, "d0:p0", "cstore", source="h0:loaded").phase == "done"
+    s.step("narrow", "d0:p0", 0, 16, "r")
+    assert s.access(0, "d0:p0", "cload", destination="h0:denied").phase == "fault"
+    assert isinstance(s.machine.memory[2][0], Cap)
+    return s.refusals
+
+
+def check_preparation_races():
+    s = fixture()
+    s.step("prepare_populate", "m:d0", 8, "m:p3", ("m:p4",))
+    s.step("begin_revoke", "m:h4", "m:reclaimed")
+    s.barrier()
+    s.refused("publish")
+    s.step("abort")
+    assert s.machine.memory[0][1] == Word()
+    assert s.machine.live(s.machine.wallet["m:p3"].node)
+    assert not s.machine.live(s.machine.wallet["m:p4"].node)
+    s.step("prepare_populate", "m:d0", 8, "m:p3", ("m:p5",))
+    s.step("begin_detach", "m:d0", "m:t0")
+    s.barrier()
+    s.refused("publish")
+    s.step("abort")
+    assert s.machine.memory[0][1] == Word()
+    t = Script()
+    t.pages(1)
+    t.step("prepare_create", 0, "m:p0", "d0:p", "m:d")
+    t.step("begin_revoke", "m:h0", "m:root")
+    t.barrier()
+    t.refused("publish")
+    t.step("abort")
+    assert not t.machine.registry
+    return s.refusals + t.refusals
+
+
+def check_generation_exhaustion_and_tokens():
+    s = fixture()
+    for ident in (0, 1):
+        s.step("begin_detach", "m:d%d" % ident, "m:t%d" % ident)
+        s.barrier()
+    # A token selects its own mapping. There is no independent target-id operand.
+    s.step("begin_unmap", "m:t1", 0, "m:from1")
+    s.barrier()
+    assert s.machine.wallet["m:from1"].page == 10
+    assert isinstance(s.machine.memory[1][0], Cap)
+    s.step("destroy", "m:t0")
+    for generation, page in ((2, 3), (3, 4)):
+        suffix = "g%d" % generation
+        s.create(0, page, suffix)
+        assert s.machine.registry[0].binding == (0, generation)
+        s.step("begin_detach", "m:d" + suffix, "m:t" + suffix)
+        s.barrier()
+        s.step("destroy", "m:t" + suffix)
+    s.refused("prepare_create", 0, "m:p5", "d0:wrapped", "m:wrapped")
+    return s.refusals
+
+
+SCENARIOS = (
+    check_permissions_and_inputs, check_reclamation,
+    check_cut_subtree_and_generation, check_old_root_and_present_destroy,
+    check_pointer_tree_and_contexts, check_capability_transfers,
+    check_preparation_races, check_generation_exhaustion_and_tokens,
+)
+
+
+def mutation_script(name, mutant):
+    """Return the full reproducible trace and its FIRST refusal/violation."""
+    s = Script(mutant) if name.startswith("uncleared") else fixture(mutant)
+    try:
+        if name.startswith("uncleared"):
+            s.pages()
+            s.step("delin", "m:p2")
+            page = "m:p0" if name == "uncleared_create" else "m:p1"
+            s.step("physical_store_cap", page, 1, "m:p2")
+            s.create(0, 0)
+            if name == "uncleared_populate":
+                s.populate(0, 0, 3, 1)
+            assert s.machine.memory[int(page[3:])][1] == Word()
+        elif name == "plain_detach":
+            s.access(0, "d0:p0", "store", 0, 99)
+            s.step("delin", "d0:p0")
+            s.step("begin_revoke", "m:d0", "m:escaped")
+            s.barrier()
+        elif name == "walk_only_drain":
+            request = s.step("issue", 0, "d0:p0", "store", 0, 99)
+            for _ in range(3):
+                s.step("walk", request)
+            s.step("begin_revoke", "m:h2", "m:reclaimed")
+            for hart in HARTS:
+                s.step("invalidate", hart)
+                s.step("drain", hart)
+            s.step("finish")
+        elif name == "weak_binding":
+            s.access(1, "d1:p1", "store", 0, 99)
+        elif name == "duplicate_return":
+            s.step("begin_revoke", "m:h0", "m:root")
+            s.barrier()
+            s.step("begin_detach", "m:d0", "m:t0")
+            s.barrier()
+            s.step("destroy", "m:t0")
+        elif name == "root_release":
+            s.step("begin_revoke", "m:h0", "m:root")
+            s.barrier()
+        elif name == "stale_record":
+            s.step("begin_detach", "m:d0", "m:t0")
+            s.barrier()
+            s.step("destroy", "m:t0")
+            s.create(0, 3, "new")
+            s.populate("new", 0, 5, 4)
+            s.step("begin_revoke", "m:h0", "m:oldroot")
+            s.barrier()
+            assert s.access(0, "d0:pnew").phase == "done"
+    except (Violation, Refused) as error:
+        return type(error).__name__, str(error), s.trace
+    return "safe", "", s.trace
+
+
+EXPECTED_MUTATIONS = {
+    "plain_detach": "I3:",
+    "uncleared_create": "I4:",
+    "uncleared_populate": "I4:",
+    "walk_only_drain": "I6:",
+    "weak_binding": "goal: live pointer redirected",
+    "duplicate_return": "I1:",
+    "root_release": "I5: registry reservation",
+    "stale_record": "I5: registry reservation",
+}
+
+
+def mutations():
+    results = []
+    for name in MUTANTS:
+        good, reason, _ = mutation_script(name, None)
+        expected_control = {
+            "plain_detach": ("Refused", "wrong capability kind"),
+            "walk_only_drain": ("Refused", "data access outstanding"),
+        }.get(name, ("safe", ""))
+        assert (good, reason) == expected_control, (name, "correct model failed", good, reason)
+        bad, reason, trace = mutation_script(name, name)
+        assert bad == "Violation" and reason.startswith(EXPECTED_MUTATIONS[name]), (
+            name, "mutation not detected by intended property", bad, reason)
+        results.append({"variant": name, "control": good, "violation": reason,
+                        "trace": trace})
+    return results
+
+
+def schedule_actions(machine, trigger):
+    actions = []
+    if not machine.completed and machine.barrier is None:
+        actions.append(trigger)
+    for request, access in machine.accesses.items():
+        if access.phase in ("root", "leaf", "fill"):
+            actions.append(Action("walk", (request,)))
+        if access.phase == "checked":
+            actions.append(Action("memory_step", (request,)))
+        if access.phase not in ("done", "fault", "cancelled"):
+            actions.append(Action("cancel", (request,)))
+    if machine.barrier:
+        for hart in HARTS:
+            actions.append(Action("invalidate", (hart,)))
+            actions.append(Action("drain", (hart,)))
+        actions.append(Action("finish"))
+    return actions
+
+
+def lifecycle_actions(machine):
+    actions = []
+    if machine.preparation:
+        actions += [Action("publish"), Action("abort")]
+    if machine.barrier:
+        actions += schedule_actions(machine, Action("finish"))
+        return actions
+    for location, cap in list(machine.wallet.items()):
+        if not machine.live(cap.node):
+            continue
+        if cap.kind == "detach":
+            actions.append(Action("begin_detach", (location, "m:token%d" % cap.binding[0])))
+            for address in (0, WORDS, 2 * WORDS):
+                for frame, table in (("m:p3", ()), ("m:p4", ("m:p5",))):
+                    actions.append(Action("prepare_populate", (location, address, frame, table)))
+        if cap.kind in ("rev_phys", "rev_logical"):
+            output = location.split(":", 1)[0] + ":back:" + location
+            actions.append(Action("begin_revoke", (location, output)))
+        if cap.kind == "token":
+            actions += [Action("destroy", (location,)),
+                        Action("begin_unmap", (location, 0, "m:unmapped"))]
+        if cap.kind == "uninit":
+            actions += [Action("scrub", (location,)), Action("init", (location,))]
+        if cap.kind == "logical" and location.startswith(("d0:", "d1:")):
+            hart = int(location[1])
+            actions += [Action("delin", (location,)), Action("drop", (location,)),
+                        Action("split", (location, WORDS, location + ":split")),
+                        Action("mrev", (location, location + ":rev")),
+                        Action("move", (location, "d%d:copy" % (1 - hart)))]
+            for address in (0, WORDS, 2 * WORDS):
+                for operation in ("load", "store", "amo"):
+                    actions.append(Action("issue", (hart, location, operation, address)))
+    actions += [Action("prepare_create", (i, "m:p6", "d%d:new" % i, "m:new%d" % i))
+                for i in range(2)]
+    for request, access in machine.accesses.items():
+        if access.phase in ("root", "leaf", "fill"):
+            actions.append(Action("walk", (request,)))
+        if access.phase == "checked":
+            actions.append(Action("memory_step", (request,)))
+    return actions
+
+
+def successors(machine, actions):
+    for action in actions:
+        next_machine = machine.clone()
+        try:
+            action.apply(next_machine)
+        except Refused:
+            assert next_machine.key() == machine.key(), "non-atomic refusal: %s" % action
+            continue
+        try:
+            next_machine.check()
+        except Violation as error:
+            raise Violation("%s after %s" % (error, action)) from error
+        yield action, next_machine
+
+
+def explore(seed, actions, depth=None, limit=100000):
+    queue = deque([(seed, 0)])
+    seen = {seed.key()}
+    edges = 0
+    terminals = 0
+    max_depth = 0
+    coverage = Counter()
+    while queue:
+        state, distance = queue.popleft()
+        max_depth = max(max_depth, distance)
+        if depth is not None and distance == depth:
+            continue
+        count = 0
+        for action, child in successors(state, actions(state)):
+            count += 1
+            edges += 1
+            coverage[action.operation] += 1
+            key = child.key()
+            if key not in seen:
+                if len(seen) == limit:
+                    raise RuntimeError("state limit reached; exploration INCOMPLETE")
+                seen.add(key)
+                queue.append((child, distance + 1))
+        if not count:
+            terminals += 1
+            if depth is None:
+                assert state.completed and state.barrier is None, "unfinished barrier deadlock"
+                assert all(a.phase in ("done", "fault", "cancelled")
+                           for a in state.accesses.values()), "unfinished data access"
+    return {"states": len(seen), "edges": edges, "terminals": terminals,
+            "max_depth": max_depth, "coverage": dict(sorted(coverage.items()))}
+
+
+def interleavings():
+    results = []
+    for operation in ("load", "store", "amo", "cload", "cstore"):
+        for victim in ("frame", "table", "root", "detach"):
+            for warm in (False, True):
+                s = fixture()
+                if operation == "cload":
+                    s.step("move", "d1:p1", "d0:payload")
+                    s.access(0, "d0:p0", "cstore", source="d0:payload")
+                s.step("delin", "d0:p0")
+                s.step("move", "d0:p0", "d1:foreign")
+                if warm:
+                    s.access(0, "d0:p0")
+                    s.access(1, "d1:foreign")
+                for hart, location in ((0, "d0:p0"), (1, "d1:foreign")):
+                    source = None
+                    if operation == "cstore":
+                        # Two distinct linear logical capabilities, one per hart.
+                        if hart == 0:
+                            s.step("split", "d1:p1", WORDS, "d1:rest")
+                            s.step("move", "d1:p1", "d0:payload")
+                        source = "d0:payload" if hart == 0 else "d1:rest"
+                    s.step("issue", hart, location, operation, 0, 99, source)
+                if victim == "detach":
+                    trigger = Action("begin_detach", ("m:d0", "m:token"))
+                else:
+                    page = {"frame": 2, "table": 1, "root": 0}[victim]
+                    trigger = Action("begin_revoke", ("m:h%d" % page, "m:reclaimed"))
+                result = explore(s.machine, lambda m: schedule_actions(m, trigger))
+                assert result["coverage"].get("memory_step", 0) > 0
+                assert result["coverage"].get("finish", 0) > 0
+                result.update(operation=operation, victim=victim, warm=warm)
+                results.append(result)
+    return results
+
+
+def randomized(seed_count, steps):
+    aggregate = Counter()
+    total = 0
+    for seed in range(seed_count):
+        rng = random.Random(seed)
+        machine = fixture().machine
+        trace = []
+        for _ in range(steps):
+            actions = lifecycle_actions(machine)
+            rng.shuffle(actions)
+            if rng.random() < 0.6:
+                # Uniform choice over all operand combinations starved the
+                # walkers: many revocation candidates, only one next walk step.
+                # Bias toward progress, retaining races in the other 40%.
+                progress = {"walk", "memory_step", "publish", "finish"}
+                actions.sort(key=lambda a: a.operation not in progress)
+            for action in actions:
+                child = machine.clone()
+                try:
+                    action.apply(child)
+                except Refused:
+                    assert child.key() == machine.key(), "refusal changed state"
+                    continue
+                trace.append(str(action))
+                try:
+                    child.check()
+                except Violation as error:
+                    raise Violation("seed=%d trace=%s: %s" % (seed, trace, error)) from error
+                aggregate[action.operation] += 1
+                total += 1
+                machine = child
+                break
+            else:
+                break
+    assert aggregate["memory_step"] > 0, "random run performed no data access"
+    return {"seeds": seed_count, "step_bound": steps, "steps": total,
+            "coverage": dict(sorted(aggregate.items()))}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    if not __debug__:
+        parser.error("run without -O/PYTHONOPTIMIZE; the harness needs assertions")
+    parser.add_argument("--output", type=Path, help="write deterministic JSON result lines")
+    parser.add_argument("--depth", type=int, default=3, help="lifecycle BFS depth")
+    parser.add_argument("--seeds", type=int, default=32)
+    parser.add_argument("--steps", type=int, default=100)
+    parser.add_argument("--replay", choices=MUTANTS)
+    parser.add_argument("--scenarios-only", action="store_true")
+    args = parser.parse_args()
+    if args.replay:
+        good = mutation_script(args.replay, None)
+        bad = mutation_script(args.replay, args.replay)
+        print(json.dumps({"control": good, "mutant": bad}, indent=2))
+        return 0 if good[0] in ("safe", "Refused") and bad[0] == "Violation" else 1
+    if args.depth < 1 or args.seeds < 1 or args.steps < 1:
+        parser.error("bounds must be positive")
+    result = {"schema": 1, "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
+              "contract": "00626a232bda", "scenarios": [], "mutations": [],
+              "python": sys.version.split()[0],
+              "source_sha256": {name: hashlib.sha256(
+                  Path(__file__).with_name(name).read_bytes()).hexdigest()
+                  for name in ("model.py", "check.py")}}
+    for scenario in SCENARIOS:
+        refusals = scenario()
+        result["scenarios"].append({"name": scenario.__name__, "refusals": refusals})
+        print("PASS", scenario.__name__, flush=True)
+    result["mutations"] = mutations()
+    print("PASS mutation controls %d/%d" % (len(result["mutations"]), len(MUTANTS)), flush=True)
+    if not args.scenarios_only:
+        result["interleavings"] = interleavings()
+        print("PASS interleaving families %d" % len(result["interleavings"]), flush=True)
+        result["lifecycle"] = explore(fixture().machine, lifecycle_actions, depth=args.depth)
+        result["lifecycle"]["depth_bound"] = args.depth
+        print("PASS lifecycle states %d" % result["lifecycle"]["states"], flush=True)
+        result["random"] = randomized(args.seeds, args.steps)
+        print("PASS seeded steps %d" % result["random"]["steps"], flush=True)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (AssertionError, Violation, RuntimeError) as failure:
+        print("FAIL:", failure, file=sys.stderr)
+        raise

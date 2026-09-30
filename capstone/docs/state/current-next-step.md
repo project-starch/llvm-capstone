@@ -1,3 +1,12 @@
+Translated memory (2026-09-30): the
+[executable Stage-1 contract model](../../tests/mapping-model/README.md) and its
+bounded controls are available on `delegation-memory`. Next review the model's
+abstraction boundaries and specify the capability-checking walker, protected
+binding lookup and complete access drain under
+[candidate §10.3](../design/caplified-mapping-tables.md#103-rtl-question).
+The model does not qualify RTL node reuse, cache coherence or cross-page
+instructions. No PR or merge to `dev` is part of this work.
+
 Application ports (2026-09-29): the seven application recipes now require
 the [shared delegated SDK](../../ports/common/application/README.md), with
 v1 rejection qualified. Use the recorded compiler and memory settings when
