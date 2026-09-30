@@ -73,6 +73,10 @@ either.
 
 ## 3. Security goal and trust
 
+The [system philosophy](system-philosophy.md) defines the wider protection model,
+including startup trust, object-level memory safety and hostile syscall replies.
+This section states the mapping-specific contract within that model.
+
 **Goal.** Even a malicious mapping monitor, holding no matching data authority,
 can neither read delegated contents, nor redirect live pointers of a PRIVATE
 mapping to other contents, nor duplicate exclusive authority. It can withdraw

@@ -1,5 +1,11 @@
 # Capstone project documentation
 
+**System direction:** [system philosophy and protection model](design/system-philosophy.md)
+defines the central goal: use Linux services while keeping private memory protected
+from Linux and the monitor, contain application memory errors, and treat syscall
+replies as adversarial inputs. It separates design goals, trust assumptions and
+qualified guarantees.
+
 Translated memory: the [caplified mapping candidate](design/caplified-mapping-tables.md)
 has a [host executable contract model](../tests/mapping-model/README.md) with bounded
 interleaving, lifecycle and adversarial comparison checks. This is design validation;

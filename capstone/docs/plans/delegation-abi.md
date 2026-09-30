@@ -51,6 +51,12 @@ numbers in it are gates, not results, except where the table above says so.
 
 ## Goal
 
+The [system philosophy](../design/system-philosophy.md) defines the security
+boundary: Linux and the monitor may be malicious. Domain-side marshalling and
+reply validation must preserve memory and authority safety even when syscall
+results lie. The transport and functional qualifications below do not by
+themselves establish a complete adversarial syscall contract.
+
 A Capstone application is the user half of one Linux task. Every operating-system
 service it uses is the Linux syscall itself, executed by the task that owns the
 domain, under that task's credentials, descriptor table, working directory and
