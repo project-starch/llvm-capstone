@@ -28,7 +28,7 @@
    "cpython-rows.dom": "239a5c74cd188353bd398dee5727a2e305a17a7745219c99a062abefeec61321",
    "cpython-base.dom": "0b55fd535043d4b8cd7dbef7056b17a2da0243f3658d752c480c3ed30d8d74d0"
   },
-  "gate_this_launcher": "run.py --repeat 1: 22 PASS, 0 FAIL; application healthy passes the new block (eventfd count 5, a 10 ms timerfd read once, SIGUSR1 blocked, raised and read from a signalfd, getresuid/getresgid)",
+  "gate_this_launcher": "run.py --repeat 1: 25 PASS, 0 FAIL; application healthy passes the new block (eventfd count 5, a 10 ms timerfd read once, SIGUSR1 blocked, raised and read from a signalfd, getresuid/getresgid)",
   "gate_144_launcher_control": "the same images: application healthy FAIL, wait status 16640 (exit 65, the eventfd check: the launcher answers ENOSYS)",
   "signal_contract": "30/30 PASS",
   "socket_contract": "11/11 PASS",
@@ -49,6 +49,7 @@
    "base": "Ran 15 tests in 0.994s; FAILED (errors=15)",
    "what": "test.test_os.TimerfdTests (12) and EventfdTests (3); base is the same objects relinked with #144's runtime, whose shape table has no such rows"
   },
-  "cpython_test_os_full": "both images stop at the same place, TestSendfile.test_invalid_offset: its asyncio teardown cannot start a thread (threads are not on #144) and the run ends there; up to that point the only difference is EventfdTests, 3 ERROR in base and 3 ok with the rows"
+  "cpython_test_os_full": "both images stop at the same place, TestSendfile.test_invalid_offset: its asyncio teardown cannot start a thread (threads are not on #144) and the run ends there; up to that point the only difference is EventfdTests, 3 ERROR in base and 3 ok with the rows",
+  "gate_note": "first measured as 22 PASS on the delegation-v0-removal-stack base. Rebasing onto dev brought in PR #158 (heap qualification), whose supervisor.c adds three 'overlapping cpu / application loop' checks (wait status 15, 9 and 2), so the same run is 25 PASS, 0 FAIL on dev. Re-measured after the rebase; the healthy path and the new rows are unchanged. #158 also adds heap modes to contract.c, in their own argv[1] modes, so they do not collide with the exit codes this change uses in the healthy path"
  }
 }
