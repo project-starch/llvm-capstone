@@ -9,9 +9,12 @@ from pathlib import Path
 import random
 import sys
 
-from model import (Action, ADDRESS_LIMIT, Cap, HARTS, LOGICAL_BASE, Machine,
-                   MUTANTS, PAGES, PHYSICAL_LIMIT, Refused, ResumeSlot,
-                   Violation, Word, WORDS)
+from model import (Action, ADDRESS_LIMIT, ARCH_LOGICAL_BASE, ARCH_LOGICAL_LIMIT,
+                   ARCH_PAGE, ARCH_PHYSICAL_BITS, ARCH_PHYSICAL_LIMIT,
+                   BINDING_GEN_BITS, BINDING_ID_BITS, Cap, HARTS, LOGICAL_BASE,
+                   Machine, MUTANTS, PAGES, PHYSICAL_LIMIT, Refused, ResumeSlot,
+                   Violation, Word, WORDS, arch_kind, arch_partition_ok,
+                   exactly_representable, pack_binding, unpack_binding)
 
 
 def base(ident):
@@ -473,12 +476,61 @@ def check_anonymous_initialization():
     return s.refusals
 
 
+def check_architectural_partition():
+    """The decided 64-bit partition, checked with the real constants.
+
+    The walked geometry above is finite; this scenario applies the same range
+    rule, kind classification, representability rule and binding word to the
+    architectural numbers of the encoding decision. Pure arithmetic, no walk.
+    """
+    P, L, T, K = ARCH_PHYSICAL_LIMIT, ARCH_LOGICAL_BASE, ARCH_LOGICAL_LIMIT, ARCH_PAGE
+    assert P == 1 << 56 and L == 1 << 57 and T == 1 << 63 and K == 4096
+    refused = 0
+    for lo, hi, ok in ((0, K, False), (P - K, P, False), (P, P + K, False),
+                       (L - K, L, False), (L, L + K, True), (L, L + K - 1, False),
+                       (L + 1, L + 1 + K, False), (T - K, T, False),
+                       (T - 2 * K, T - K, True), ((1 << 64) - K, 1 << 64, False),
+                       (L + K, L, False), (L, L + (1 << 40), True)):
+        assert arch_partition_ok(lo, hi) is ok, (hex(lo), hex(hi))
+        refused += not ok
+    # Kind follows the region; the guard octant and the top half are no kind.
+    for address, kind in ((0, "physical"), (0x80000000, "physical"),
+                          (0xBC3BFFFF, "physical"), (P - 1, "physical"),
+                          (P, None), (L - 1, None), (L, "logical"),
+                          (T - 1, "logical"), (T, None), ((1 << 64) - 1, None)):
+        assert arch_kind(address) == kind, hex(address)
+    # A range that passes the rule never straddles the two regions, so a
+    # capability's bounds fix its kind and narrowing cannot change it.
+    assert arch_kind(L) == arch_kind(L + (1 << 40) - 1) == "logical"
+    # Exact representability under the compressed-bounds grain: power-of-two
+    # aligned mapping ranges are exact; a page offset inside a 1 GiB range is not.
+    assert exactly_representable(L, L + (1 << 30))
+    assert exactly_representable(L + (1 << 21), L + (1 << 21) + (1 << 30))
+    assert not exactly_representable(L + K, L + K + (1 << 30))
+    assert exactly_representable(L + K, L + 2 * K)
+    # Binding word: nonzero for every valid (id, gen), round-trips, and refuses
+    # generation zero and the exhausted generation.
+    assert pack_binding(0, 1) != 0
+    top = pack_binding((1 << BINDING_ID_BITS) - 1, (1 << BINDING_GEN_BITS) - 1)
+    assert top < (1 << 32) and unpack_binding(top) == ((1 << BINDING_ID_BITS) - 1,
+                                                       (1 << BINDING_GEN_BITS) - 1)
+    for ident, generation in ((0, 0), (0, 1 << BINDING_GEN_BITS), (1 << BINDING_ID_BITS, 1)):
+        try:
+            pack_binding(ident, generation)
+        except Refused:
+            refused += 1
+        else:
+            raise AssertionError("binding accepted out of range")
+    return refused
+
+
 SCENARIOS = (
     check_permissions_and_inputs, check_reclamation,
     check_cut_subtree_and_generation, check_old_root_and_present_destroy,
     check_pointer_tree_and_contexts, check_capability_transfers,
     check_preparation_races, check_generation_exhaustion_and_tokens,
     check_protected_delivery, check_address_geometry, check_anonymous_initialization,
+    check_architectural_partition,
 )
 
 
@@ -995,9 +1047,16 @@ def main():
         return 0 if good[0] in ("safe", "Refused") and bad[0] == "Violation" else 1
     if args.depth < 1 or args.seeds < 1 or args.steps < 1:
         parser.error("bounds must be positive")
-    result = {"schema": 3, "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
+    result = {"schema": 4, "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
               "contract_base": "00626a232bda",
-              "contract_revision": "global ranges, protected delivery, anonymous zeroing", "scenarios": [], "mutations": [],
+              "contract_revision": "global ranges, protected delivery, anonymous zeroing, architectural partition",
+              "partition": {"physical_bits": ARCH_PHYSICAL_BITS,
+                            "logical_base": hex(ARCH_LOGICAL_BASE),
+                            "logical_limit": hex(ARCH_LOGICAL_LIMIT),
+                            "page": ARCH_PAGE,
+                            "binding_bits": [BINDING_ID_BITS, BINDING_GEN_BITS],
+                            "registry_entries": 1 << BINDING_ID_BITS},
+              "scenarios": [], "mutations": [],
               "python": sys.version.split()[0],
               "source_sha256": {name: hashlib.sha256(
                   Path(__file__).with_name(name).read_bytes()).hexdigest()

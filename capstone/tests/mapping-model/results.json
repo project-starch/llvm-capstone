@@ -1,6 +1,6 @@
 {
   "contract_base": "00626a232bda",
-  "contract_revision": "global ranges, protected delivery, anonymous zeroing",
+  "contract_revision": "global ranges, protected delivery, anonymous zeroing, architectural partition",
   "interleavings": [
     {
       "barrier_mode": "global",
@@ -1170,6 +1170,17 @@
       "violation": "I4: anonymous frame not zeroed before publication"
     }
   ],
+  "partition": {
+    "binding_bits": [
+      12,
+      20
+    ],
+    "logical_base": "0x200000000000000",
+    "logical_limit": "0x8000000000000000",
+    "page": 4096,
+    "physical_bits": 56,
+    "registry_entries": 4096
+  },
   "python": "3.12.3",
   "random": {
     "coverage": {
@@ -3453,13 +3464,17 @@
     {
       "name": "check_anonymous_initialization",
       "refusals": 1
+    },
+    {
+      "name": "check_architectural_partition",
+      "refusals": 12
     }
   ],
-  "schema": 3,
+  "schema": 4,
   "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
   "source_sha256": {
-    "check.py": "9846c4a54ab351ac8497c7758e73eda0d372586c1270e2471781883b50c2e44c",
-    "model.py": "ccf620c1d0fa517bafa15fb46ad1a0b6a436e02da76c5750ff60e0d8650c414a"
+    "check.py": "c48d7131118b4701edcf5298c54189cf7db86e85e6582c2a44f3616bdfd45d0e",
+    "model.py": "2b91c24fb19e72a28eda6381c8813afd752a4b1ed585efbd95e938b53fde3d2f"
   },
   "table_record_controls": {
     "trace": [

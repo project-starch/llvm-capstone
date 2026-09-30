@@ -152,16 +152,18 @@ operations must leave the complete state unchanged.
 
 [check.py](check.py) runs these complementary checks:
 
-1. Eleven named contract scenarios cover permission/type refusal, sparse backing,
+1. Twelve named contract scenarios cover permission/type refusal, sparse backing,
    scrub-before-read, explicit and implicit locked slots, normal and orphaned
    reclamation, late old-generation handles, generation exhaustion, object reuse,
-   cross-context pointers, capability transfers and publication races. The three
+   cross-context pointers, capability transfers and publication races. The four
    additional scenarios check typed recipient delivery and loss of its authority,
    numeric address separation and reservation lifetime across domains, and dirty
    anonymous frames with both supplier data and stored capabilities. Address
    comparisons use the numeric cursor projection, including aliases with different
    bounds/rights and one-past equality at a SPLIT boundary. Geometry and recipient
-   negative tests invoke the instruction with absolute operands directly.
+   negative tests invoke the instruction with absolute operands directly. The
+   fourth applies the range rule, kind classification, grain rule and binding
+   word to the architectural constants of the encoding decision; it walks nothing.
 2. Forty schedule families exhaust **all enabled interleavings to terminal
    states for their fixed initial workloads**: five operations (load, store,
    atomic read-modify-write, capability load and capability store), four removal
@@ -264,8 +266,14 @@ to this model; none changes production enforcement.
   index their respective tables. The harness's `offset_action` converts convenient
   relative test offsets to absolute operands before execution; traces record the
   latter. It may inspect ghost setup history, but no instruction consults that
-  history or the adapter. The architecture's actual partition and 128-bit bounds
-  encoding remain unqualified; these constants are finite model geometry only.
+  history or the adapter. The architectural partition is decided in the
+  [encoding decision](../../docs/design/caplified-mapping-encoding-decision.md);
+  `check_architectural_partition` applies the model's range rule, kind
+  classification, compressed-bounds grain rule and 32-bit binding word to those
+  constants (physical below `2^56`, logical in `[2^57, 2^63)`, 4 KiB pages, 12-bit
+  id, 20-bit generation), and the record's `partition` field repeats them. The
+  walked geometry stays finite, and the 128-bit encoding at those addresses
+  remains unqualified on QEMU, whose side table keeps fat bounds, and on RTL.
 - Revocation-node identities are monotonic and never reused. This experiment
   does not qualify the RTL/QEMU node reclaimer or finite node-generation encoding.
 - A memory effect, including the move/clear of a linear capability, is one

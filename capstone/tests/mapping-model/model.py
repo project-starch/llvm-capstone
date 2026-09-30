@@ -17,6 +17,69 @@ PHYSICAL_BASE = WORDS
 PHYSICAL_LIMIT = PHYSICAL_BASE + 16 * WORDS
 LOGICAL_BASE = 128
 ADDRESS_LIMIT = 256
+
+# The architectural partition decided in
+# docs/design/caplified-mapping-encoding-decision.md. The finite constants above
+# stand in for it inside the walked geometry; partition_ok() is the one range
+# rule, applied with either set of constants.
+ARCH_PHYSICAL_BITS = 56            # CVA6 PLEN and QEMU TARGET_PHYS_ADDR_SPACE_BITS
+ARCH_PHYSICAL_LIMIT = 1 << ARCH_PHYSICAL_BITS
+ARCH_LOGICAL_BASE = 1 << 57        # [2^56, 2^57) is a guard octant, never valid
+ARCH_LOGICAL_LIMIT = 1 << 63       # one-past cursors stay below 2^63, no wrap
+ARCH_PAGE = 4096
+BINDING_ID_BITS = 12               # registry entries system-wide
+BINDING_GEN_BITS = 20              # generations per id before the id retires
+
+
+def partition_ok(lo, hi, base=LOGICAL_BASE, limit=ADDRESS_LIMIT, page=WORDS,
+                 window=None):
+    """CREATE's range rule, independent of table geometry.
+
+    [lo, hi) must lie inside [base, limit) with hi strictly below limit, so the
+    one-past cursor hi is representable without wrap; both ends page-aligned;
+    with a window, the range fits one aligned window (finite model only).
+    """
+    if not (base <= lo < hi < limit):
+        return False
+    if lo % page or hi % page:
+        return False
+    return window is None or (lo % window == 0 and hi - lo <= window)
+
+
+def arch_partition_ok(lo, hi):
+    return partition_ok(lo, hi, ARCH_LOGICAL_BASE, ARCH_LOGICAL_LIMIT, ARCH_PAGE)
+
+
+def arch_kind(address):
+    """Kind by region: the bounds of a capability decide, not an encoding bit."""
+    if 0 <= address < ARCH_PHYSICAL_LIMIT:
+        return "physical"
+    if ARCH_LOGICAL_BASE <= address < ARCH_LOGICAL_LIMIT:
+        return "logical"
+    return None
+
+
+def exactly_representable(lo, hi):
+    """CHERI-128 grain rule of cap_compress.c: below 4 KiB exact, above it
+    base and top must be multiples of 2^(E+3) with E = highest bit of the
+    length minus 12. Spec-derived; the current QEMU keeps fat bounds exact."""
+    length = hi - lo
+    if length < 4096:
+        return True
+    grain = 1 << (length.bit_length() - 1 - 12 + 3)
+    return lo % grain == 0 and hi % grain == 0
+
+
+def pack_binding(ident, generation):
+    """The 32-bit binding word stored in a revocation node; zero means none."""
+    require(0 <= ident < (1 << BINDING_ID_BITS), "id out of range")
+    require(1 <= generation < (1 << BINDING_GEN_BITS), "generation exhausted")
+    return ident | (generation << BINDING_ID_BITS)
+
+
+def unpack_binding(word):
+    require(word != 0, "no binding")
+    return word & ((1 << BINDING_ID_BITS) - 1), word >> BINDING_ID_BITS
 HARTS = (0, 1)
 LOCKED = "locked"
 MUTANTS = (
@@ -308,9 +371,7 @@ class Machine:
         return replace(cap, kind="table", binding=binding, cursor=0)
 
     def create_range(self, lo, hi):
-        require(LOGICAL_BASE <= lo < hi < ADDRESS_LIMIT and
-                lo % (PAGES * WORDS) == 0 and hi % WORDS == 0 and
-                hi - lo <= PAGES * WORDS, "invalid mapping geometry")
+        require(partition_ok(lo, hi, window=PAGES * WORDS), "invalid mapping geometry")
         require(all(hi <= m.lo or m.hi <= lo for m in self.registry.values()),
                 "logical range reserved")
 

@@ -4,10 +4,12 @@ bounded controls are available on `delegation-memory`. Coverage follow-up adds
 completed lifecycle operations, per-seed data requirements and an optional
 table-record experiment with foreign issue during barriers. The contract also
 checks protected CREATE delivery, global range reservation and anonymous frame
-zeroing. Next review the restricted alphabets and record lifetime, then specify
-the physical/logical address partition and bounds encoding, protected recipient
-delivery, ordered page clearing, capability-checking walker, binding lookup and
-complete access drain under
+zeroing. The [encoding decision](../design/caplified-mapping-encoding-decision.md)
+on `delegation-memory-encoding` fixes the physical/logical partition, the binding
+word in the revocation node, the registry size and the `ty` widening, and the
+model checks those constants. Next review the restricted alphabets and record
+lifetime, then specify protected recipient delivery, ordered page clearing, the
+capability-checking walker, the binding lookup and the complete access drain under
 [candidate §10.3](../design/caplified-mapping-tables.md#103-rtl-question).
 The first prototype remains global. The optional record still needs bounded
 storage/reclamation and node-reuse handling. The model does not qualify RTL node

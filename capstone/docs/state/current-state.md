@@ -19,6 +19,9 @@ ranges above physical addresses, preserving address comparisons after D3 transfe
 POPULATE zeros anonymous frame bytes and tags before publication; initialization
 and UNINIT scrubbing require retained write authority. The syscall boundary
 explicitly treats pool buffers as permanently shared, attacker-controlled input.
+The [encoding decision](../design/caplified-mapping-encoding-decision.md) (M0)
+fixes the address partition, binding placement, registry size and type codes
+from the sources; it is a decision, not an implementation or a cost measurement.
 These are abstract Stage-1 results, not a translation implementation, an
 unbounded proof, QEMU qualification or RTL measurements. The lane remains
 separate from `dev`.

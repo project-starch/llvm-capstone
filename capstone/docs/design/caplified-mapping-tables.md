@@ -118,9 +118,12 @@ The architecture must reserve the logical region strictly above its entire
 physical address range, including representable physical one-past addresses;
 zero is excluded. Ranges and one-past cursors must be representable in the 64-bit
 cursor without wrap and satisfy the eventual bounds encoding. Exhaustion fails
-allocation. The numerical partition and compressed-bounds layout still require
-an encoding decision (§10.3); a region above currently installed RAM alone is
-insufficient. The current compiler's `lowerSETCC` compares the low 64-bit cursor
+allocation. The numerical partition and compressed-bounds layout are fixed in
+the [encoding decision](caplified-mapping-encoding-decision.md): logical ranges
+lie in `[2^57, 2^63)` above the 56-bit physical width, the binding is a 32-bit
+word in the revocation node, and the kind follows the region; a region above
+currently installed RAM alone would have been insufficient. The current
+compiler's `lowerSETCC` compares the low 64-bit cursor
 ([source](../../../llvm/lib/Target/Capstone/CapstoneISelLowering.cpp)); globally
 disjoint ranges preserve address equality and null checks without a binding-aware
 comparison. The same address remains equal after bounds or permission attenuation;
@@ -687,10 +690,12 @@ allows issue for other bindings during a scoped barrier. Physical frame REVOKE
 still uses the global fallback. The experiment checks interleavings and
 generation isolation; it does not supply a bounded hardware record, its
 reclamation protocol, node-reuse handling, lookup latency or a refinement proof.
-The implementation also needs a representable 64-bit physical/logical partition,
-bounded global range-overlap checks at CREATE, protected recipient delivery and
-ordered clearing of table and data pages. The model does not estimate these
-costs or certify the current compressed encoding at the chosen logical addresses.
+The implementation also needs bounded global range-overlap checks at CREATE,
+protected recipient delivery and ordered clearing of table and data pages. The
+partition, the binding placement and the registry size are decided in the
+[encoding decision](caplified-mapping-encoding-decision.md); their hardware cost
+is not. The model does not estimate these costs or certify the current
+compressed encoding at the chosen logical addresses.
 
 ### 10.4 Extension checks before an implementation or ABI claim
 
