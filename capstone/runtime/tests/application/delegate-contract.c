@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <elf.h>
+#include <malloc.h>
 #include <fcntl.h>
 #include <spawn.h>
 #include <stdio.h>
@@ -62,6 +63,32 @@ int main(int argc, char **argv) {
       CHECK(fcntl(fd, F_SETLK, &byte) == 0);
     }
     return 8;
+  }
+  if (!strcmp(argv[1], "usable-size")) {
+    /* malloc_usable_size, answered by the runtime's heap: at least what was asked for, and
+       every byte it reports is the block's own. Filling a whole reported block must leave
+       its neighbour, allocated after it, untouched. */
+    CHECK(malloc_usable_size(NULL) == 0);
+    for (size_t n = 1; n <= 5000; n = n * 3 + 1) {
+      unsigned char *a = malloc(n), *b = malloc(n);
+      CHECK(a && b);
+      memset(b, 0x5a, n);
+      size_t usable = malloc_usable_size(a);
+      CHECK(usable >= n);
+      memset(a, 0xa5, usable);
+      for (size_t i = 0; i < n; ++i)
+        CHECK(b[i] == 0x5a);
+      if (usable >= sizeof(void *)) {
+        /* a pointer stored in the last aligned slot it reports survives */
+        void **slot = (void **)(a + ((usable - sizeof(void *)) & ~(sizeof(void *) - 1)));
+        *slot = b;
+        CHECK(*slot == b && **(unsigned char **)slot == 0x5a);
+      }
+      free(a);
+      free(b);
+    }
+    puts("delegate-contract: usable size ok");
+    return 0;
   }
   CHECK(argc == 3);
   char *image = argv[2];
