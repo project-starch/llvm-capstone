@@ -1,0 +1,2901 @@
+{
+ "pin": "9d523e2f74f2e63ca02840937523de61398a617d",
+ "window_to": "origin/master 727ae28ada35 (2026-09-30)",
+ "rows": [
+  {
+   "case": "01df203a7",
+   "fix": "01df203a7ab05e5aebcacf6d636caff5562ad5ab",
+   "subject": "variable.c: a def self. method looks constants up from the class body",
+   "test_files": [
+    "test/t/module.rb"
+   ],
+   "src_files": [
+    "src/variable.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: EXCEPTION,NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "02d5569af",
+   "fix": "02d5569afcf3878b1951e01d259fb5dbf5c184ca",
+   "subject": "mruby-socket: reject a big integer getaddrinfo hint instead of ignoring it",
+   "test_files": [
+    "mrbgems/mruby-socket/test/addrinfo.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-socket/src/socket.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "03f242d09",
+   "fix": "03f242d09ab21244b1405984d0e0d97cb7dc5dcc",
+   "subject": "class.c: mrb_mod_visibility() writes to the origin's table on a prepended class",
+   "test_files": [
+    "test/t/module.rb"
+   ],
+   "src_files": [
+    "src/class.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 11",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "0521da287",
+   "fix": "0521da287ecf5d8a67fa313d71c5b3be8f89af79",
+   "subject": "mruby-regexp: bound the numeric `\\k` backreference accumulator",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "0654bd470",
+   "fix": "0654bd470b3efbd3ad5641096bfc2b3a1f02cae8",
+   "subject": "mruby-compiler: keep a pattern's failure jumps when a guard needs none",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "TIMEOUT",
+   "pin_host_detail": "",
+   "pin_stress": "TIMEOUT",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "WATCHDOG"
+  },
+  {
+   "case": "06ed794af",
+   "fix": "06ed794af7cf0d6911097c056654ac813dbf43bb",
+   "subject": "mruby-regexp: refuse a set as an end of a range in a class",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "5 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "08a0432d1",
+   "fix": "08a0432d1e08113a359a88a471dee2451f8d66cc",
+   "subject": "hash.c: check the vacated slot in assoc, rassoc, == and eql? too",
+   "test_files": [
+    "test/t/hash.rb"
+   ],
+   "src_files": [
+    "src/hash.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "0a5d3565b",
+   "fix": "0a5d3565b40a86da2bc90ca006e13621a175cc37",
+   "subject": "mruby-io: let go of the write descriptor IO#close_write closed",
+   "test_files": [
+    "mrbgems/mruby-io/test/io.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-io/src/io.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "0a70368c9",
+   "fix": "0a70368c90c4fa1533d4794b42b107695154f701",
+   "subject": "mruby-pack: return from `unpack1` at the first value",
+   "test_files": [
+    "mrbgems/mruby-pack/test/pack.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-pack/src/pack.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "0edcf9706",
+   "fix": "0edcf970612acbd78a0eaf078cc2b171cfd57296",
+   "subject": "array.c: sort an array holding an Integer too wide to store inline",
+   "test_files": [
+    "test/t/array.rb"
+   ],
+   "src_files": [
+    "src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "PASS"
+  },
+  {
+   "case": "115de82c3",
+   "fix": "115de82c327f69c9c58c8bea95bba9e98fe9f693",
+   "subject": "Feature: Scheduler Driven GC",
+   "test_files": [
+    "mrbgems/mruby-task/test/gc_task.rb",
+    "test/t/gc.rb"
+   ],
+   "src_files": [
+    "include/mruby.h",
+    "include/mruby/gc.h",
+    "mrbgems/mruby-task/include/task.h",
+    "mrbgems/mruby-task/src/gc.c",
+    "mrbgems/mruby-task/src/task.c",
+    "src/gc.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "8 failures: EXCEPTION,NO_RAISE,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "1260c77f0",
+   "fix": "1260c77f085ee7d1788271e792bf7ff0f270f733",
+   "subject": "codegen: reserve the block slot for operators emitted by pattern matching",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 6",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "PASS"
+  },
+  {
+   "case": "13e017c2f",
+   "fix": "13e017c2f81d3a3b69e042c75994f4f5cf684e41",
+   "subject": "vm.c: refresh regs before storing the OP_GETIDX0 Hash result",
+   "test_files": [
+    "test/t/hash.rb"
+   ],
+   "src_files": [
+    "src/vm.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 11",
+   "pin_stress": "CRASH",
+   "asan": "heap-use-after-free",
+   "asan_page1": "heap-use-after-free",
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "16151a0da",
+   "fix": "16151a0daad0c74bcc502a790c83192d396717ab",
+   "subject": "proc.c: mark Proc#dup / Proc#clone copies as orphan blocks",
+   "test_files": [
+    "test/t/proc.rb"
+   ],
+   "src_files": [
+    "src/proc.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "1737589f0",
+   "fix": "1737589f004d6b6409e8d4222ed5064af03ca802",
+   "subject": "mruby-io: reject a recursive array in File.join",
+   "test_files": [
+    "mrbgems/mruby-io/test/file.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-io/src/file.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 11",
+   "pin_stress": "CRASH",
+   "asan": "stack-overflow",
+   "asan_page1": "stack-overflow",
+   "domain_level0": "WATCHDOG"
+  },
+  {
+   "case": "18c44e8ab",
+   "fix": "18c44e8ab834717e2ca050806799c4b7e51b671c",
+   "subject": "mruby-compiler: reserve the registers a multiple assignment target assigns from",
+   "test_files": [
+    "test/t/codegen.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "1b4c2a58a",
+   "fix": "1b4c2a58a9f04df30345b1a59aed6419f2553ffd",
+   "subject": "mruby-bigint: fix ~ of a positive Bigint and >> of a negative one",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-bigint/core/bigint.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "11 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "1c57532b2",
+   "fix": "1c57532b2695ec69168d7962216536bfd51eda88",
+   "subject": "fix use-after-free in String#lstrip!/rstrip!/strip!",
+   "test_files": [
+    "mrbgems/mruby-string-ext/test/string.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-string-ext/src/string.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "5 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "PASS"
+  },
+  {
+   "case": "1cda974ed",
+   "fix": "1cda974eddbccfb30e0a6dd9d8a76ed3fb9c6b03",
+   "subject": "vm.c: honor a `String#+` redefinition",
+   "test_files": [
+    "test/t/string.rb"
+   ],
+   "src_files": [
+    "include/mruby.h",
+    "src/class.c",
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "1d931d825",
+   "fix": "1d931d8252f124c9e69cda48f2f09e34d71ab0ad",
+   "subject": "mruby-struct: keep a positional hash positional in the default mode",
+   "test_files": [
+    "mrbgems/mruby-struct/test/struct.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-struct/src/struct.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: EXCEPTION,NOT_EQUAL,NOT_NIL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "1ee6d4619",
+   "fix": "1ee6d46191ffadbea6780d39b466317b2053e60e",
+   "subject": "Fix Integer#pow(e, m) with a negative base, and Bigint#remainder",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb",
+    "mrbgems/mruby-numeric-ext/test/numeric.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-bigint/core/bigint.c",
+    "mrbgems/mruby-numeric-ext/src/numeric_ext.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "9 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "1f48100ac",
+   "fix": "1f48100acac0f1bcc0cd1e7a91ef57507b894956",
+   "subject": "Fix `Integer#==` reading a Bigint receiver as `mrb_int`",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "src/numeric.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "8 failures: NOT_FALSE,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "206b9f747",
+   "fix": "206b9f74779cef53e3e56188f1cc41ab752f4e86",
+   "subject": "mruby-bigint: pre-reduce base in mpz_powm_montgomery to satisfy REDC",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-bigint/core/bigint.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "5 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "28a04e082",
+   "fix": "28a04e082a6919381d7230137e024f0f4aaecd12",
+   "subject": "mruby-regexp: reject a reversed character class range",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb",
+    "mrbgems/mruby-regexp/test/regexp_utf8.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "11 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "296607189",
+   "fix": "296607189dd27dd39bdd2e1e80fa053133d6375c",
+   "subject": "mruby-pack: clamp the uuencode line length to 63",
+   "test_files": [
+    "mrbgems/mruby-pack/test/pack.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-pack/src/pack.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "12 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "2a8a7c0ed",
+   "fix": "2a8a7c0ed37190c5f8284cc6f1f9ef4c7507b1f2",
+   "subject": "mruby-struct: let a bare Struct.new answer a memberless struct",
+   "test_files": [
+    "mrbgems/mruby-struct/test/struct.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-struct/src/struct.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "2b5a0ed3b",
+   "fix": "2b5a0ed3be5b0c829bf1002f7afcf36b3d2be2a3",
+   "subject": "mruby-compiler: rebase the source array a multiple assignment reads from",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb",
+    "test/t/codegen.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NOT_EQUAL,NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "2c922f724",
+   "fix": "2c922f724431f9bcffb1c6dfef9f31ab9a02ae1b",
+   "subject": "mruby-eval: give an eval string the visibility in effect around the call",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "include/mruby/internal.h",
+    "mrbgems/mruby-eval/src/eval.c",
+    "src/class.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "9 failures: EXCEPTION,NOT_INCLUDE,NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "2e8b46147",
+   "fix": "2e8b46147d5e03d479d5b1d98579205c1040fef6",
+   "subject": "object.c: compare what a Float holds bit for bit under `MRB_NO_BOXING`",
+   "test_files": [
+    "test/t/float.rb"
+   ],
+   "src_files": [
+    "src/object.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_FALSE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "300cc9532",
+   "fix": "300cc953292f625db46332679283ea516ae9342d",
+   "subject": "mruby-eval: give a string `class_eval` a scope of its own instead of the caller's env",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-eval/src/eval.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "5 failures: NOT_EQUAL,NOT_FALSE,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "306d265cd",
+   "fix": "306d265cd04907b453ba7c6932966f44b65ae0d8",
+   "subject": "Feature: Task#close",
+   "test_files": [
+    "mrbgems/mruby-task/test/task.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-task/include/task.h",
+    "mrbgems/mruby-task/src/task.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "30c6f801c",
+   "fix": "30c6f801c34cce5f317af37a07bb4f2b37812485",
+   "subject": "mruby-rational: ask about a Rational operand before a Bigint one",
+   "test_files": [
+    "mrbgems/mruby-rational/test/rational.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-rational/src/rational.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: EXCEPTION,NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "31ec4b9b6",
+   "fix": "31ec4b9b6fc79343fa827d4e8ffeba310f13fb17",
+   "subject": "mruby-binding: let a binding answer for the method it was taken from",
+   "test_files": [
+    "mrbgems/mruby-eval/test/binding.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-binding/src/binding.c",
+    "mrbgems/mruby-eval/src/eval.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "3272955bf",
+   "fix": "3272955bf193bfc34f78f929b5ff58b636eda094",
+   "subject": "mruby-env: add ENV object for environment variable access",
+   "test_files": [
+    "mrbgems/mruby-env/test/env.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-env/src/env.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "36 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "39aecc143",
+   "fix": "39aecc143f92ec365bf04c88abc62ffe09b6c74c",
+   "subject": "vm.c: keep the block alive while `OP_ENTER` lays out a short argument list",
+   "test_files": [
+    "test/t/gc.rb"
+   ],
+   "src_files": [
+    "src/vm.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 11",
+   "pin_stress": "FEATURE_GAP",
+   "asan": null,
+   "asan_page1": "heap-use-after-free",
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "39d0b512a",
+   "fix": "39d0b512afa36c272fe70e0346d5b8518591a72b",
+   "subject": "array.c: take a comparison block's answer in every form it has",
+   "test_files": [
+    "test/t/array.rb"
+   ],
+   "src_files": [
+    "src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "3b81a74ac",
+   "fix": "3b81a74ac2f3eae0c99a10b691773540aeafd225",
+   "subject": "mruby-compiler: refuse a string literal wider than the pool length field",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "3d0ec2771",
+   "fix": "3d0ec2771560730d05b4a1e0af031c26b1296cb7",
+   "subject": "proc.c: let a `def` in a method written in a given block add to that class",
+   "test_files": [
+    "mrbgems/mruby-class-ext/test/module.rb",
+    "mrbgems/mruby-eval/test/eval.rb",
+    "mrbgems/mruby-object-ext/test/object.rb",
+    "test/t/class.rb"
+   ],
+   "src_files": [
+    "include/mruby/internal.h",
+    "src/proc.c",
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: EXCEPTION,NOT_FALSE,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "41a0af60a",
+   "fix": "41a0af60ad6634354767fba9784c887d073d774e",
+   "subject": "variable.c: pass over a method given its class in the constant and class variable walks",
+   "test_files": [
+    "test/t/module.rb"
+   ],
+   "src_files": [
+    "src/variable.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: EXCEPTION,NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "4507b4a63",
+   "fix": "4507b4a633dcaeb9ac89aa5a30c083951d225cdb",
+   "subject": "mruby-bigint: gate mpz_mod's Barrett path on the algorithm's precondition",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-bigint/core/bigint.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "4663fef45",
+   "fix": "4663fef455d7e678acaf13712be0513b640145c0",
+   "subject": "hash.c: see a delete made from inside an eql? callback",
+   "test_files": [
+    "test/t/hash.rb"
+   ],
+   "src_files": [
+    "src/hash.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NO_RAISE",
+   "pin_stress": "CRASH",
+   "asan": "heap-buffer-overflow",
+   "asan_page1": "heap-buffer-overflow",
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "4855e963b",
+   "fix": "4855e963b74d5e60a6e5f2d5cf58f3115c008aab",
+   "subject": "mruby-pack: say what `unpack(\"U\")` expected of a sequence cut short",
+   "test_files": [
+    "mrbgems/mruby-pack/test/pack.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-pack/src/pack.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "49c557c13",
+   "fix": "49c557c13f1b023e619e35c5e0d6256dba0d2bb4",
+   "subject": "numeric.c: compare a pair of Integers as Integers however each is stored",
+   "test_files": [
+    "test/t/integer.rb"
+   ],
+   "src_files": [
+    "src/numeric.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "5 failures: NOT_EQUAL,NOT_FALSE,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "PASS"
+  },
+  {
+   "case": "4b0ad2e2c",
+   "fix": "4b0ad2e2cc14699a42b63d303f1bd9ef3fd7ac45",
+   "subject": "mruby-bigint: scale the fraction between digits in mrb_bint_new_float()",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-bigint/core/bigint.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "12 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "4b95cb13e",
+   "fix": "4b95cb13e49f3e65eec97b91fc5a9d2c557490e4",
+   "subject": "numeric.c: compare an Integer with a Float without rounding either one",
+   "test_files": [
+    "test/t/float.rb",
+    "test/t/integer.rb"
+   ],
+   "src_files": [
+    "include/mruby/internal.h",
+    "src/numeric.c",
+    "src/object.c",
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "19 failures: NOT_EQUAL,NOT_FALSE,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "4bb0ab4fb",
+   "fix": "4bb0ab4fb1a324ccf876cc72c1474441d9db05e9",
+   "subject": "mruby-compiler: refuse a symbol name wider than the symbol length field",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "504596459",
+   "fix": "504596459b2309698b3a90f5879c5ca5f8799093",
+   "subject": "take a recursive pair as equal in #== and #eql?",
+   "test_files": [
+    "mrbgems/mruby-struct/test/struct.rb",
+    "test/t/array.rb",
+    "test/t/hash.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-struct/src/struct.c",
+    "src/array.c",
+    "src/hash.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "7 failures: NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "5484823a1",
+   "fix": "5484823a108c9aadac5f628bdd2f2a3849f662ab",
+   "subject": "mruby-compiler: load self for the nil check of `self&.m`",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "54a4a823b",
+   "fix": "54a4a823b845acd56c20abce624ad1bfe25dbbc1",
+   "subject": "mruby-regexp: name a group name the pattern ends inside as CRuby does",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "16 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "55ae46dcf",
+   "fix": "55ae46dcfd256cd18d2006f94046546544f97229",
+   "subject": "vm.c: ask a class's own `==` about the receiver itself",
+   "test_files": [
+    "test/t/basicobject.rb"
+   ],
+   "src_files": [
+    "include/mruby.h",
+    "include/mruby/class.h",
+    "include/mruby/internal.h",
+    "src/class.c",
+    "src/gc.c",
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "11 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "55f0228bf",
+   "fix": "55f0228bf89d5bc4d5f092faa8bc86f8bc6694c1",
+   "subject": "Store compressed aspec on cfunc RProc for correct arity/parameters",
+   "test_files": [
+    "mrbgems/mruby-method/test/method.rb"
+   ],
+   "src_files": [
+    "include/mruby/proc.h",
+    "mrbgems/mruby-method/src/method.c",
+    "mrbgems/mruby-proc-ext/src/proc.c",
+    "src/proc.c",
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "5634ac6f5",
+   "fix": "5634ac6f5862a7fd6a21df47d33e4c25db281fcf",
+   "subject": "mruby-regexp: do not truncate a POSIX bracket class name length",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "59552ecb8",
+   "fix": "59552ecb8e0be2d4de78dc2d56eba2024260f639",
+   "subject": "mruby-sprintf: protect format string from mutation during callbacks",
+   "test_files": [
+    "mrbgems/mruby-sprintf/test/sprintf.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-sprintf/src/sprintf.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": "heap-use-after-free",
+   "asan_page1": "heap-use-after-free",
+   "domain_level0": "PASS"
+  },
+  {
+   "case": "5b3fa52a2",
+   "fix": "5b3fa52a2a36c33a2294c496f1d38b07613e5acd",
+   "subject": "mruby-struct: dispatch `.new` through `Class#new`",
+   "test_files": [
+    "mrbgems/mruby-struct/test/struct.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-struct/src/struct.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "5c5431a69",
+   "fix": "5c5431a6917bc3419bfe40a2e845ee010fe64743",
+   "subject": "mruby-compiler: find a string's enclosing method on the proc chain",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 6",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "5e77136c3",
+   "fix": "5e77136c37200b6a696e6b2a00d434dc8b2b9130",
+   "subject": "class.c: let a visibility take the names `attr_*` define",
+   "test_files": [
+    "test/t/module.rb"
+   ],
+   "src_files": [
+    "src/class.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: EXCEPTION,NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "606d9a6b2",
+   "fix": "606d9a6b2c02cc4fe916a55e1c03db6ec5a667a9",
+   "subject": "hash.c: keep the pair a scan carries into a set alive across it",
+   "test_files": [
+    "test/t/hash.rb"
+   ],
+   "src_files": [
+    "src/hash.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 6",
+   "pin_stress": "CRASH",
+   "asan": "heap-use-after-free",
+   "asan_page1": "heap-use-after-free",
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "619797cea",
+   "fix": "619797ceab13afd53ea08b8f260e38afcbfb2474",
+   "subject": "mruby-sprintf: reject an oversized float precision or width",
+   "test_files": [
+    "mrbgems/mruby-sprintf/test/sprintf.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-sprintf/src/sprintf.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "61b1a4447",
+   "fix": "61b1a444720d08fd6cbc8d48b754e4a9ee987da7",
+   "subject": "mruby-sprintf: keep the last character of a signed float padded with 0",
+   "test_files": [
+    "mrbgems/mruby-sprintf/test/sprintf.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-sprintf/src/sprintf.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "8 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "623397e7c",
+   "fix": "623397e7c46e918db6ae4456cbbd74e00bf7c5a5",
+   "subject": "bigint: compare a big integer against a Float exactly",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-bigint/core/bigint.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NOT_FALSE,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "628ccec60",
+   "fix": "628ccec600e09a6671765b2800058c358974a740",
+   "subject": "mruby-task: mark the main task's values during GC",
+   "test_files": [
+    "mrbgems/mruby-task/test/gc_task.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-task/src/task.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_EQUAL",
+   "pin_stress": "PASS",
+   "asan": null,
+   "asan_page1": "heap-use-after-free",
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "653bb9762",
+   "fix": "653bb9762085661dc587e6b1ed742c83103321f5",
+   "subject": "mruby-enum-ext: count an Array in C",
+   "test_files": [
+    "mrbgems/mruby-enum-ext/test/enum.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-enum-ext/src/enum.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "656e20bb4",
+   "fix": "656e20bb4aa0e6cda28263b23294f45d72014e98",
+   "subject": "mruby-compiler: count a forwarded block's level from the running frame",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "6722d3550",
+   "fix": "6722d3550e9f205aa0bc4d4518d355dd4f27d06d",
+   "subject": "mruby-array-ext: walk an Array in C for max and min",
+   "test_files": [
+    "mrbgems/mruby-array-ext/test/array.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-array-ext/src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "5 failures: NO_RAISE,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "6773aec8b",
+   "fix": "6773aec8bcfe4d20add51a0d826ea0c0cbc3d6f0",
+   "subject": "numeric.c: make `Numeric#eql?` require the same type",
+   "test_files": [
+    "mrbgems/mruby-complex/test/complex.rb",
+    "mrbgems/mruby-rational/test/rational.rb"
+   ],
+   "src_files": [
+    "src/numeric.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NOT_FALSE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "680084ac1",
+   "fix": "680084ac127587509b013df1650520b8c1b9c413",
+   "subject": "mruby-compiler: bind a pattern capture to a local of an enclosing scope",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 6",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "6a7bd9591",
+   "fix": "6a7bd9591ff83ea01bbfbe827c631c7a96a08ac9",
+   "subject": "Accept a number too big for mrb_int in Integer()",
+   "test_files": [
+    "mrbgems/mruby-kernel-ext/test/kernel.rb"
+   ],
+   "src_files": [
+    "src/string.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "6aacdfdf0",
+   "fix": "6aacdfdf0093a9b44c33cf5d68922b98ce82a32b",
+   "subject": "mruby-struct: take a C fast path through `.new` for the default `initialize`",
+   "test_files": [
+    "mrbgems/mruby-struct/test/struct.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-struct/src/struct.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "6ebf8b2b4",
+   "fix": "6ebf8b2b47bba0b73aa724c2c4f7d9398778352b",
+   "subject": "mruby-regexp: say `invalid POSIX bracket type` as CRuby does",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "6fb855015",
+   "fix": "6fb855015ed1aacb9c19875ba294da4d4cbc6f36",
+   "subject": "class.c: check frozen before the origin walk in `mrb_define_method_raw()`",
+   "test_files": [
+    "test/t/module.rb"
+   ],
+   "src_files": [
+    "src/class.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "6 failures: NOT_FALSE,NOT_TRUE,NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "727ae28ad",
+   "fix": "727ae28ada351fc3d756ead85adc4c488092fc4e",
+   "subject": "mruby-bigint: hand Barrett reduction the magnitudes of its operands",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-bigint/core/bigint.c"
+   ],
+   "pin_host": "TIMEOUT",
+   "pin_host_detail": "",
+   "pin_stress": "TIMEOUT",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "WATCHDOG"
+  },
+  {
+   "case": "735b94535",
+   "fix": "735b94535cd1b52bd215e78a243f94f86b5c708f",
+   "subject": "numeric.c: raise TypeError for non-Integer bitwise operands",
+   "test_files": [
+    "test/t/integer.rb"
+   ],
+   "src_files": [
+    "src/numeric.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "6 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "748591801",
+   "fix": "7485918015b1a8510d2ff6497a93b3bb80128f54",
+   "subject": "mruby-regexp: raise when a repeat range's upper bound is below its lower",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "10 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "75b038b69",
+   "fix": "75b038b6942dc32f93fe5877e7ae25715b6b0aff",
+   "subject": "mruby-array-ext: compare with `eql?` on the linear set-operation paths",
+   "test_files": [
+    "mrbgems/mruby-array-ext/test/array.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-array-ext/src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "12 failures: NOT_EQUAL,NOT_FALSE,NOT_NIL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "77d1d928f",
+   "fix": "77d1d928f279e3410ca8378cbd47146909bf6305",
+   "subject": "class.c: keep a private method out of what method_defined? reports",
+   "test_files": [
+    "test/t/module.rb"
+   ],
+   "src_files": [
+    "include/mruby.h",
+    "src/class.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 11",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "7862266f5",
+   "fix": "7862266f51cc1d84c55115342db96a01d3f08a2f",
+   "subject": "mruby-string-ext: check the receiver of `succ!` before the empty return",
+   "test_files": [
+    "mrbgems/mruby-string-ext/test/string.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-string-ext/src/string.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "7bb8f3836",
+   "fix": "7bb8f38364d7e1598f6750d65a8050dba23964a6",
+   "subject": "proc.c: leave a method the class it was written in",
+   "test_files": [
+    "mrbgems/mruby-metaprog/test/metaprog.rb"
+   ],
+   "src_files": [
+    "include/mruby/internal.h",
+    "src/class.c",
+    "src/proc.c",
+    "src/variable.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "7bbfb3188",
+   "fix": "7bbfb31883d23fd78ed15f6979bd1eb82fe69d11",
+   "subject": "numeric.c: answer a comparison against a NaN as unordered",
+   "test_files": [
+    "mrbgems/mruby-compar-ext/test/compar.rb",
+    "mrbgems/mruby-range-ext/test/range.rb",
+    "test/t/float.rb",
+    "test/t/integer.rb",
+    "test/t/range.rb"
+   ],
+   "src_files": [
+    "src/numeric.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "27 failures: NOT_FALSE,NOT_NIL,NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "7c0c643eb",
+   "fix": "7c0c643eb11f0309a0f45f90a790de0efd3e2707",
+   "subject": "mruby-enum-ext: walk an Array in C for minmax",
+   "test_files": [
+    "mrbgems/mruby-enum-ext/test/enum.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-enum-ext/src/enum.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "7cbf44f21",
+   "fix": "7cbf44f21f02fcabd6c4cb729d066fe342ca641b",
+   "subject": "vm.c: define a constant, class or module on the cref",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb",
+    "test/t/module.rb"
+   ],
+   "src_files": [
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "11 failures: EXCEPTION,NOT_FALSE,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "7e0417185",
+   "fix": "7e041718568b2e8bd5de1e0c1422068ef3ec4677",
+   "subject": "mruby-regexp: say `too short escape sequence` for a backslash at the end",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "8 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "847cd89c2",
+   "fix": "847cd89c25422e61cdb9e8c7de9b72ba56db904d",
+   "subject": "mruby-regexp: keep the Regexp out of a literal search's match",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/match_data.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/regexp.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: EXCEPTION,NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "84cc5aa60",
+   "fix": "84cc5aa60130a575c93bdae56e84d8298f71f997",
+   "subject": "khash.h: raise instead of using freed buckets when a callback mutates",
+   "test_files": [
+    "mrbgems/mruby-set/test/set.rb"
+   ],
+   "src_files": [
+    "include/mruby/khash.h"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": "heap-use-after-free",
+   "asan_page1": "heap-use-after-free",
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "8551deba4",
+   "fix": "8551deba46588c7dc9eedfc6d3454ef9d97c9516",
+   "subject": "class.c: give an eval string in a method the visibility of the body",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "include/mruby/internal.h",
+    "src/class.c",
+    "src/proc.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NOT_FALSE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "8909b7998",
+   "fix": "8909b79988e27378cad8976f26ab0007e9d5268a",
+   "subject": "mruby-bigint: let `mpz_get_int()` answer the smallest Integer",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-bigint/core/bigint.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NOT_EQUAL,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "8b0c2ef6f",
+   "fix": "8b0c2ef6ffad08dee7795361b9586709805a1f80",
+   "subject": "array.c: take an `Array` element for equal to itself in `#==`",
+   "test_files": [
+    "test/t/array.rb"
+   ],
+   "src_files": [
+    "src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "8da00e9ba",
+   "fix": "8da00e9bab76423083af44c38115981edb0bc74c",
+   "subject": "vm.c: let a `def` in a method add to the class it was written in",
+   "test_files": [
+    "mrbgems/mruby-eval/test/binding.rb",
+    "mrbgems/mruby-metaprog/test/metaprog.rb",
+    "test/t/methods.rb",
+    "test/t/module.rb"
+   ],
+   "src_files": [
+    "include/mruby.h",
+    "include/mruby/internal.h",
+    "include/mruby/proc.h",
+    "src/proc.c",
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "10 failures: EXCEPTION,NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "8e767351a",
+   "fix": "8e767351af145fd658329380e63aef40de9bf11a",
+   "subject": "range.c: refuse a range bounded by a NaN",
+   "test_files": [
+    "test/t/range.rb"
+   ],
+   "src_files": [
+    "src/range.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "6 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "90e568e8e",
+   "fix": "90e568e8e7212032e107bddef56f49cde8b141e5",
+   "subject": "vm.c: check visibility on the send an operator instruction falls back to",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "14 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "921afaf03",
+   "fix": "921afaf035cc2c502fa063bbef206bb50f5292c8",
+   "subject": "numeric.c: convert with `Integer.__ensure()` instead of `Kernel#__to_int`",
+   "test_files": [
+    "mrbgems/mruby-enum-ext/test/enum.rb",
+    "test/t/integer.rb"
+   ],
+   "src_files": [
+    "src/kernel.c",
+    "src/numeric.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "6 failures: EXCEPTION,NO_RAISE,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "93eb74a59",
+   "fix": "93eb74a591c74a6222b9228c5508ea6a1a85dc17",
+   "subject": "kernel.c: bound the case splat walk by the array's current length",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "src/kernel.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "CRASH",
+   "asan": "heap-buffer-overflow",
+   "asan_page1": "heap-buffer-overflow",
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "94993eede",
+   "fix": "94993eedeea669204472113ec273f173c8f93945",
+   "subject": "class.c: prepare the method table before changing a visibility",
+   "test_files": [
+    "test/t/class.rb"
+   ],
+   "src_files": [
+    "src/class.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 11",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "94bef8f9b",
+   "fix": "94bef8f9b980e43cefe8d30d210cedd6ec6c761d",
+   "subject": "mruby-compiler: let `return` in a string given to `eval` leave the method",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "97ef20933",
+   "fix": "97ef20933d61f5db6254c7389806fc328e47ef33",
+   "subject": "mruby-compiler: resolve a defined? constant path of any depth",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c",
+    "src/kernel.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "990fe5afe",
+   "fix": "990fe5afec577bc43bd21676c23c8806ef37145b",
+   "subject": "etc.c: give every NaN an identity of its own",
+   "test_files": [
+    "mrbgems/mruby-array-ext/test/array.rb",
+    "mrbgems/mruby-enum-ext/test/enum.rb",
+    "mrbgems/mruby-pack/test/pack.rb",
+    "test/t/float.rb"
+   ],
+   "src_files": [
+    "include/mruby.h",
+    "include/mruby/boxing_nan.h",
+    "include/mruby/boxing_no.h",
+    "include/mruby/boxing_word.h",
+    "include/mruby/value.h",
+    "src/etc.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "12 failures: EQUAL,NOT_EQUAL,NOT_FALSE,NOT_NIL,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "9b44d5d56",
+   "fix": "9b44d5d56372a04012d7b874a990ac8c8222b286",
+   "subject": "mruby-compiler: ask the receiver for defined?(recv.meth)",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "9b6a551ec",
+   "fix": "9b6a551ec8456cb6f177c28cdeb72b9f70067d47",
+   "subject": "mruby-eval: run a string under the class the calling frame runs under",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-eval/src/eval.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 6",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "9ee68194b",
+   "fix": "9ee68194b4317a7c95d552596f01cf27a8cb328c",
+   "subject": "mruby-socket: reject out-of-range getaddrinfo hints",
+   "test_files": [
+    "mrbgems/mruby-socket/test/addrinfo.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-socket/src/socket.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "9ef064f65",
+   "fix": "9ef064f6506c5bc1e0a1712fd21457088fac1342",
+   "subject": "mruby-compiler: give an assignment to a captured local its value",
+   "test_files": [
+    "test/t/codegen.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "7 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "9f3a1ccb9",
+   "fix": "9f3a1ccb9f6122b35d1db79869b7e00fdbdc0ab7",
+   "subject": "vm.c: deliver the keywords of a method with 15 or more parameters",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: EXCEPTION,NOT_EQUAL,NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "a27d14158",
+   "fix": "a27d141581257b1e0f271694869c8a061ae90ba2",
+   "subject": "vm.c: honor a `Symbol#==` redefinition",
+   "test_files": [
+    "test/t/symbol.rb"
+   ],
+   "src_files": [
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "a54353ecf",
+   "fix": "a54353ecfb65a831535b72bd520182971d6e8e7d",
+   "subject": "hash.c: see the matched entry vacated by an eql? callback",
+   "test_files": [
+    "test/t/hash.rb"
+   ],
+   "src_files": [
+    "src/hash.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "9 failures: NOT_EQUAL,NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "a5f6411b1",
+   "fix": "a5f6411b114c9f84338688bcd3d408f6d973684d",
+   "subject": "khash.h: stop the probe where a table has no empty bucket left",
+   "test_files": [
+    "mrbgems/mruby-set/test/set.rb"
+   ],
+   "src_files": [
+    "include/mruby/khash.h"
+   ],
+   "pin_host": "TIMEOUT",
+   "pin_host_detail": "",
+   "pin_stress": "TIMEOUT",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "WATCHDOG"
+  },
+  {
+   "case": "a7805f789",
+   "fix": "a7805f7890ca3d3627367ac0d80b92057f1dd584",
+   "subject": "mruby-eval: refuse a long filename before the binding pass parses",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-eval/src/eval.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "a852ae127",
+   "fix": "a852ae12771e77322b4878494ea058afbe0875be",
+   "subject": "mruby-metaprog: pass over a method given its class in Module.nesting and Module.constants",
+   "test_files": [
+    "mrbgems/mruby-metaprog/test/metaprog.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-metaprog/src/metaprog.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NOT_EQUAL,NOT_FALSE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "a97d9609a",
+   "fix": "a97d9609a0de2a2c6558c27547fc209e2cd780ea",
+   "subject": "mruby-regexp: read `\\k<name>` in a sub or gsub replacement",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/string_regexp.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/regexp.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "24 failures: EXCEPTION,NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "aba5514d3",
+   "fix": "aba5514d339c93c3838d96bf34bdf1df2a70c26f",
+   "subject": "mruby-compiler: keep what deconstruct answered across the clauses of a case",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: EXCEPTION,NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "ad52a24e1",
+   "fix": "ad52a24e13c5f84780aa50f7b97b3fb1d564156f",
+   "subject": "mruby-process: name the signal in a `kill` refusal past the lookup width",
+   "test_files": [
+    "mrbgems/mruby-process/test/process.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-process/src/process.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "af6f23ddb",
+   "fix": "af6f23ddb3f2e2dd92625c102c0d463ba62e09ee",
+   "subject": "mruby-string-ext: fix String#prepend with self-referencing arguments",
+   "test_files": [
+    "mrbgems/mruby-string-ext/test/string.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-string-ext/src/string.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 6",
+   "pin_stress": "CRASH",
+   "asan": "heap-buffer-overflow",
+   "asan_page1": "heap-buffer-overflow",
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "af911acad",
+   "fix": "af911acad4f6da0cf5b9b366f28f56c4531a5c56",
+   "subject": "mruby-bigint: keep a negative value's sign in mpz_add_int on carry",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-bigint/core/bigint.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "5 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "b04b6c20a",
+   "fix": "b04b6c20a397ba4ffbef01e28e47d7681546bd5d",
+   "subject": "mruby-struct: give `Struct#to_h` its block form",
+   "test_files": [
+    "mrbgems/mruby-struct/test/struct.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-struct/src/struct.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NOT_EQUAL,NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "b0b1de54e",
+   "fix": "b0b1de54e577f68432a9993c054d7cf8f6a97e96",
+   "subject": "mruby-eval: name the string's frame for the method that called `eval`",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-eval/src/eval.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "b2d2cd15e",
+   "fix": "b2d2cd15e2463bcc4941b5a293802f3a9a83ae96",
+   "subject": "mruby-compiler: hold `#deconstruct_keys` to the Hash it has to answer",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c",
+    "src/kernel.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 6",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "b4f645050",
+   "fix": "b4f6450509112abb2d465f00538076068da83236",
+   "subject": "mruby-compiler: do not flip + and - opcode for negative literal",
+   "test_files": [
+    "test/t/literals.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/core/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "b70a53d39",
+   "fix": "b70a53d392ee162c7b816f9f1ca4b9d7fcb7ae46",
+   "subject": "mruby-array-ext: answer `#intersection` with no argument from the receiver",
+   "test_files": [
+    "mrbgems/mruby-array-ext/test/array.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-array-ext/src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "b756e6fa3",
+   "fix": "b756e6fa356caf83e30d82deba2c09865a99e417",
+   "subject": "mruby-data: call #initialize with keyword arguments",
+   "test_files": [
+    "mrbgems/mruby-data/test/data.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-data/src/data.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "b7df80fc4",
+   "fix": "b7df80fc4e81b2054273007ee481fae48e8b7eaf",
+   "subject": "mruby-compiler: name the exception as `$!` in a rescue modifier and an ensure",
+   "test_files": [
+    "test/t/codegen.rb",
+    "test/t/exception.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c",
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: EXCEPTION,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "b8a2158c5",
+   "fix": "b8a2158c5971e23d000dc8bed3a6511ee4e64fc0",
+   "subject": "mruby-regexp: reject an empty group name",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "6 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "be4e03a20",
+   "fix": "be4e03a201c9e5838ad769fd8259745181c85317",
+   "subject": "Read a Bigint from a hexadecimal string as a Float in Float()",
+   "test_files": [
+    "mrbgems/mruby-kernel-ext/test/kernel.rb"
+   ],
+   "src_files": [
+    "src/string.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "be85f1618",
+   "fix": "be85f1618e66df4145138f5881c29dcb2b3dfa6c",
+   "subject": "mruby-array-ext: narrow `Array#intersection` by every argument",
+   "test_files": [
+    "mrbgems/mruby-array-ext/test/array.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-array-ext/src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "bef45e223",
+   "fix": "bef45e223bf013f6e3a919ddb20bdc7dfc4e6c99",
+   "subject": "hash.c: reload the key array in the pattern matching helpers",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "src/hash.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": "heap-use-after-free",
+   "asan_page1": "heap-use-after-free",
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "c05a266a5",
+   "fix": "c05a266a5670ddc92a34b8f28545aa44caa5706d",
+   "subject": "kernel.c: raise without arguments re-raises the exception being rescued",
+   "test_files": [
+    "test/t/exception.rb"
+   ],
+   "src_files": [
+    "src/kernel.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "c101b8bfa",
+   "fix": "c101b8bfa1049ff2ca4a8798e5c0056a38e6f6e5",
+   "subject": "mruby-rational: demote a reduced Rational's halves that fit `mrb_int`",
+   "test_files": [
+    "mrbgems/mruby-rational/test/rational.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-rational/src/rational.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "6 failures: EQUAL,NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "c24487183",
+   "fix": "c24487183a60529398e0866acb000a0e33d6fde7",
+   "subject": "mruby-regexp: slice `MatchData#[]` with a start and length or a Range",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/match_data.rb",
+    "mrbgems/mruby-regexp/test/string_index.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/regexp.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "8 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "c5960d0a8",
+   "fix": "c5960d0a8c63c27562d8d2a3b2d9753209167320",
+   "subject": "mruby-data: give `Data#to_h` its block form",
+   "test_files": [
+    "mrbgems/mruby-data/test/data.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-data/src/data.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NOT_EQUAL,NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "c8e5aec5d",
+   "fix": "c8e5aec5dc77edfe1771a146c81d772ca6affd4c",
+   "subject": "mruby-regexp: compile the copy's own pattern in dup and clone",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/regexp.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "6 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "cbe0940ce",
+   "fix": "cbe0940ce1902b4ff9ea8da3b6bb53b92cf8205e",
+   "subject": "numeric: compare a big integer against a Float exactly in `<=>`",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb"
+   ],
+   "src_files": [
+    "src/numeric.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "10 failures: NOT_EQUAL,NOT_NIL,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "cc8d613be",
+   "fix": "cc8d613be23d61308c7e68b0aee208ae3354d322",
+   "subject": "array.c: refuse to sort an array holding a NaN",
+   "test_files": [
+    "test/t/array.rb"
+   ],
+   "src_files": [
+    "src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "cd5d88456",
+   "fix": "cd5d8845664bde73cb74fe57b2e5b7e8ce5d1ac7",
+   "subject": "codegen.c: keep `x + 0` a send",
+   "test_files": [
+    "test/t/codegen.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "cddaec726",
+   "fix": "cddaec72646e1b792d80ff5950480ac9cf17bfa1",
+   "subject": "mruby-compiler: bail out of array-literal pattern match opt on splat",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/core/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NOT_EQUAL,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "d215e0a5f",
+   "fix": "d215e0a5f37f2c405a2621806a74c64841036ab9",
+   "subject": "mruby-string-ext: strip leading NUL in `strip` and `lstrip`",
+   "test_files": [
+    "mrbgems/mruby-string-ext/test/string.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-string-ext/src/string.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "12 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "d2e8e1ffe",
+   "fix": "d2e8e1ffed36d03850df3def4509bbdf8b767577",
+   "subject": "numeric.c: make `Integer#eql?` answer false for a Float, big integers included",
+   "test_files": [
+    "mrbgems/mruby-bigint/test/bigint.rb",
+    "test/t/integer.rb"
+   ],
+   "src_files": [
+    "src/numeric.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_FALSE,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "d4aad5dff",
+   "fix": "d4aad5dff93bdcf72b782dcde43e4028880bec95",
+   "subject": "mruby-compiler: implement brace-less variable interpolation",
+   "test_files": [
+    "test/t/syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "7 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "d66fbf029",
+   "fix": "d66fbf0297883d4fcdc73aea21b697eee5b42a4e",
+   "subject": "class.c: make module_function turn the instance method private",
+   "test_files": [
+    "test/t/module.rb"
+   ],
+   "src_files": [
+    "src/class.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "d8911416c",
+   "fix": "d8911416c1e6730215fae1d111174e5da82dde9e",
+   "subject": "add alias support to mruby-method and mruby-prox-ext",
+   "test_files": [
+    "mrbgems/mruby-method/test/method.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-proc-ext/src/proc.c",
+    "src/proc.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 11",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "d92978aad",
+   "fix": "d92978aadd05d4b7d7f55e8f4582d70656b898bc",
+   "subject": "mruby-random: build and pass tests under MRB_NO_FLOAT",
+   "test_files": [
+    "mrbgems/mruby-random/test/random.rb",
+    "mrbgems/mruby-sprintf/test/sprintf.rb",
+    "test/t/integer.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-random/src/random.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "3 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "da2a3b90c",
+   "fix": "da2a3b90c28156597727f0f6c0e2e0412bbffd4a",
+   "subject": "codegen.c: fix crash on block parameter with trailing comma",
+   "test_files": [
+    "test/t/proc.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "dbfda0ef2",
+   "fix": "dbfda0ef2636c308162b566abdcc0b654ee848cd",
+   "subject": "mruby-regexp: reject a hex escape with no digit",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "14 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "e2b4585e4",
+   "fix": "e2b4585e4e7e14a5b2a6a023aac8cd59f0d493c6",
+   "subject": "gc.c: reject a GC ratio that overflows the int it is stored in",
+   "test_files": [
+    "test/t/gc.rb"
+   ],
+   "src_files": [
+    "src/gc.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "e8758974f",
+   "fix": "e8758974f807fa6f56cdc11c869951cddd75e75e",
+   "subject": "mruby-compiler: refuse a local variable name too long for a symbol",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "e8ee4b997",
+   "fix": "e8ee4b997050c8cbf0d980e6348b08d7ba1c1d7d",
+   "subject": "proc.c: let the walks for local variables pass a `define_method` scope",
+   "test_files": [
+    "mrbgems/mruby-binding/test/binding.rb",
+    "mrbgems/mruby-eval/test/eval.rb",
+    "mrbgems/mruby-metaprog/test/metaprog.rb"
+   ],
+   "src_files": [
+    "include/mruby/proc.h",
+    "mrbgems/mruby-binding/src/binding.c",
+    "mrbgems/mruby-compiler/include/mrc_proc.h",
+    "mrbgems/mruby-compiler/src/codegen.c",
+    "src/proc.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: EXCEPTION,NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "eaca460c7",
+   "fix": "eaca460c74596d807ce1292c1177cdf94ae892b6",
+   "subject": "array: check a frozen receiver where a destructive call writes nothing",
+   "test_files": [
+    "mrbgems/mruby-array-ext/test/array.rb",
+    "test/t/array.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-array-ext/src/array.c",
+    "src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "16 failures: NO_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "eb7693857",
+   "fix": "eb7693857eb7cad626ede0955b73779b7d3aa5cb",
+   "subject": "hash.c: check the vacated slot in inspect, __except and rehash too",
+   "test_files": [
+    "test/t/hash.rb"
+   ],
+   "src_files": [
+    "src/hash.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "4 failures: NO_RAISE,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "ebfdf8ae4",
+   "fix": "ebfdf8ae433c0258bb25b38ea12eb633e1363ca2",
+   "subject": "Fix Class inherited hook ordering",
+   "test_files": [
+    "test/t/class.rb"
+   ],
+   "src_files": [
+    "src/class.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "ec0b80976",
+   "fix": "ec0b80976ae26e826ed036681601c9c2585cf8ec",
+   "subject": "mruby-compiler: refuse a forwarded layout that does not fit beside the level",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "ec2387379",
+   "fix": "ec2387379bf84906066e72946aa1e98bc7073d9e",
+   "subject": "mruby-compiler: refuse a `super` or a `yield` past fifteen nested blocks",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb",
+    "test/t/codegen.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "ec89364c4",
+   "fix": "ec89364c44d74387a85d814c938201f0a477974c",
+   "subject": "guard mrb_int overflow in ary_insert and ary_fill_exec",
+   "test_files": [
+    "mrbgems/mruby-array-ext/test/array.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-array-ext/src/array.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL,WRONG_RAISE",
+   "pin_stress": "CRASH",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "SIGNAL(11)"
+  },
+  {
+   "case": "eccb4b63c",
+   "fix": "eccb4b63c21e84e90c6b5a8831fce8539f96fbb6",
+   "subject": "mruby-rational: keep Kernel#Rational exact for a Rational operand",
+   "test_files": [
+    "mrbgems/mruby-rational/test/rational.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-rational/src/rational.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "eec381dd6",
+   "fix": "eec381dd6504390c9b53847a13adbbd59e85aa6e",
+   "subject": "mruby-regexp: say `invalid pattern in look-behind` as CRuby does",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "12 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "eefa944d0",
+   "fix": "eefa944d008aeb3730f91c4d7d32bc6254cf6112",
+   "subject": "mruby-data: let a `Data` with no members answer for itself",
+   "test_files": [
+    "mrbgems/mruby-data/test/data.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-data/src/data.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "f1232334c",
+   "fix": "f1232334c0571bd47f393ba3cba20eb1703eeea6",
+   "subject": "Fix execute_task() so unhandled task exceptions become task results",
+   "test_files": [
+    "mrbgems/mruby-task/test/task.rb"
+   ],
+   "src_files": [
+    "include/mruby.h",
+    "mrbgems/mruby-task/src/task.c",
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: EXCEPTION",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "f20eeefaa",
+   "fix": "f20eeefaacfdb7a97616a64b48066f72ea64066c",
+   "subject": "vm.c: mark a frame given a class by class_exec and instance_exec",
+   "test_files": [
+    "mrbgems/mruby-class-ext/test/module.rb",
+    "mrbgems/mruby-object-ext/test/object.rb"
+   ],
+   "src_files": [
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "1 failures: NOT_FALSE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "f271c7a37",
+   "fix": "f271c7a37de13d665a3217d185de0e98360ce858",
+   "subject": "mruby-regexp: take away the MatchData constructor",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/match_data.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/regexp.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "5 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "f2e3c65a4",
+   "fix": "f2e3c65a42ca8d5b7a61f1c13fc69860c8864938",
+   "subject": "mruby-string-ext: read `String#casecmp`'s bytes as unsigned",
+   "test_files": [
+    "mrbgems/mruby-string-ext/test/string.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-string-ext/src/string.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "f33a26408",
+   "fix": "f33a2640853fa0c52af7c6c53eb7eb7aec460736",
+   "subject": "mruby-compiler: record where a generator error is in the diagnostic list",
+   "test_files": [
+    "mrbgems/mruby-eval/test/eval.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "f4a8cdd91",
+   "fix": "f4a8cdd91088f3f5af5c226e6b50abff097b6fbc",
+   "subject": "mruby-regexp: accept a Symbol on the Regexp side of a match",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/regexp.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "11 failures: EXCEPTION,WRONG_RAISE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "f525917fb",
+   "fix": "f525917fbed243a35100c393dc30493b7eabf2b4",
+   "subject": "mruby-regexp: move the `String#match` pattern check into C",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/regexp.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "8 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "f5ca90685",
+   "fix": "f5ca90685273e2e9b7a6aed1dcdf1dc15be4ff1a",
+   "subject": "mruby-compiler: fix bare nil? in if/unless to use self as receiver",
+   "test_files": [
+    "test/t/codegen.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/core/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "fa3dead08",
+   "fix": "fa3dead087ddb3042919a68f57a64eacafcbd695",
+   "subject": "vm.c: honor a comparison operator redefined on Integer or Float",
+   "test_files": [
+    "test/t/float.rb",
+    "test/t/integer.rb"
+   ],
+   "src_files": [
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "14 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "fa802172e",
+   "fix": "fa802172e0be939c63d1ca6aaabceebc25ccfad8",
+   "subject": "vm.c: answer `==` against a NaN by value, not by representation",
+   "test_files": [
+    "test/t/float.rb"
+   ],
+   "src_files": [
+    "src/kernel.c",
+    "src/vm.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "6 failures: NOT_EQUAL,NOT_FALSE,NOT_TRUE",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "PASS"
+  },
+  {
+   "case": "fad01b0ef",
+   "fix": "fad01b0ef58e74da33909a865c32f7668e77db12",
+   "subject": "codegen.c: stop folding operators on two Integer literals",
+   "test_files": [
+    "test/t/integer.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-compiler/src/codegen.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "2 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "fad5b98f2",
+   "fix": "fad5b98f25408f964ea1f39ce85bf777da0174f2",
+   "subject": "mruby-regexp: say `unmatched close parenthesis` as CRuby does",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "8 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "fadbd00ed",
+   "fix": "fadbd00ed4336ab9df3c4fa42c3486fb1d82e21c",
+   "subject": "mruby-regexp: say `too big number for repeat range` as CRuby does",
+   "test_files": [
+    "mrbgems/mruby-regexp/test/regexp_syntax.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-regexp/src/re_compile.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "10 failures: ",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "fb4974528",
+   "fix": "fb4974528a10b388d3eeec678da612ab59820d71",
+   "subject": "mruby-hash-ext: keep what a walk carries out of a hash alive",
+   "test_files": [
+    "mrbgems/mruby-hash-ext/test/hash.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-hash-ext/src/hash_ext.c"
+   ],
+   "pin_host": "CRASH",
+   "pin_host_detail": "signal 11",
+   "pin_stress": "CRASH",
+   "asan": "heap-buffer-overflow",
+   "asan_page1": "heap-use-after-free",
+   "domain_level0": "FAIL"
+  },
+  {
+   "case": "ffc32621d",
+   "fix": "ffc32621d024367b4b7953bc4fd9101f341b4d31",
+   "subject": "mruby-pack: answer nil for what a fixed size directive finds past the end",
+   "test_files": [
+    "mrbgems/mruby-pack/test/pack.rb"
+   ],
+   "src_files": [
+    "mrbgems/mruby-pack/src/pack.c"
+   ],
+   "pin_host": "FAIL",
+   "pin_host_detail": "5 failures: NOT_EQUAL",
+   "pin_stress": "FAIL",
+   "asan": null,
+   "asan_page1": null,
+   "domain_level0": "FAIL"
+  }
+ ]
+}

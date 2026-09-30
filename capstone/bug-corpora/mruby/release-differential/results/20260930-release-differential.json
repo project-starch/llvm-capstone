@@ -1,0 +1,99 @@
+{
+ "date": "2026-09-30",
+ "what": "165 defects live in mruby 4.0.0-rc2 by differential test extraction, classified by four native arms and run in a Capstone domain",
+ "window": {
+  "pin": "9d523e2f74f2e63ca02840937523de61398a617d (4.0.0-rc2, 2026-03-12)",
+  "to": "origin/master 727ae28ada35 (2026-09-30)",
+  "commits": 2571,
+  "candidate_commits": 674,
+  "rule": "a commit touching both a source file and a Ruby test file; the lines it added to the test become the case"
+ },
+ "advisory_route": {
+  "cve_ghsa": "44 published for mruby, 43 already fixed at the pin; the one live (CVE-2026-79590, a NULL to memcpy in Prism) is not a reuse defect",
+  "oss_fuzz_osv": "78 published, 73 fixed at the pin",
+  "reading": "the pin is recent, so its live defects are the ones found after it; upstream's own regression tests are the instrument that reaches them"
+ },
+ "sweep": {
+  "pin": {
+   "PASS": 80,
+   "FAIL": 189,
+   "CRASH": 17,
+   "TIMEOUT": 3,
+   "FEATURE_GAP": 211,
+   "NORUN": 174
+  },
+  "master": {
+   "PASS": 394,
+   "FAIL": 70,
+   "FEATURE_GAP": 83,
+   "NORUN": 127
+  },
+  "candidates": 165,
+  "control": "the twelve rows the GC-slot corpus found by hand are all 12 rediscovered; 0cf969a2b only once the window runs to master rather than to the port's head pin, its fix having landed the day after that pin"
+ },
+ "native_classification": {
+  "asan_sees": 10,
+  "asan_page1_only": 2,
+  "asan_page1_only_rows": [
+   "39aecc143 (OP_ENTER, a short argument list)",
+   "628ccec60 (mruby-task does not mark the main task's values)"
+  ],
+  "asan_blind_both": 153,
+  "stress_crashes": 17,
+  "stress_note": "MRB_GC_STRESS changes no verdict, so no row depends on a collection at every allocation"
+ },
+ "domain": {
+  "arm": "level0 (capability bounds and tags; free only marks) -- the control for the revoking arms, so a fault is the defect reaching a check, not a revocation catch",
+  "control": "the port's scripts/smoke.rb completes (SMOKE_DONE)",
+  "launcher_sha256": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94",
+  "image_sha256": "e1f86b04acda59fc77d3204b434ba748f003f5077edc53c2f9fb122a15a9e56f",
+  "faults": 17,
+  "faults_sigsegv": 13,
+  "faults_watchdog": 4,
+  "complete": 148,
+  "watchdog": "45 s per case, implemented in the guest loop because this guest has no timeout(1); three of the four killed cases loop forever at the pin natively too",
+  "overlap": {
+   "domain_faults_asan_sees": 7,
+   "domain_faults_asan_silent": 10,
+   "asan_sees_domain_completes": 4
+  },
+  "silent_to_trap": [
+   "4663fef45",
+   "84cc5aa60",
+   "93eb74a59",
+   "bef45e223",
+   "eb7693857",
+   "ec89364c4"
+  ],
+  "silent_to_trap_note": "for these six the native build returns a wrong answer with no diagnostic and the domain traps: silent corruption converted into a fault by bounds and tags, with no revocation in the arm"
+ },
+ "revoking_arms_blocked": {
+  "arms": [
+   "sublet (revoke on free)",
+   "sublet-gc (every GC object slot issued and revoked on its own)"
+  ],
+  "both_build": true,
+  "verdict": "neither can report anything about this corpus: both fail their own control",
+  "bracket": "one recursion depth per run, the same script in all three arms: level0 completes at 20, 40, 60, 100, 200 and 500 frames; sublet and sublet-gc complete at 20 and fault at 40 and above",
+  "reading": "the VM stack's repeated growth under the buddy heap, between 20 and 40 frames of Ruby recursion, independent of this corpus. The GC-slot corpus records the same wall at stack_extend_alloc",
+  "images": {
+   "sublet": "36865c3ca851ccd793647678a2c202e8f1f4f22d77fee740b1cf9b82321cfbc7",
+   "sublet-gc": "12fbc5845297f0f8ed8a904d69161e14a7b8de0593c86e8b06976aac10780b63"
+  },
+  "env": "CAPSTONE_REV_NODES=16777216"
+ },
+ "platform": {
+  "qemu_sha256": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+  "firmware_fw_jump_sha256": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+  "module_sha256": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "note": "the #144 platform; guest --cma-mib 1024 --process-cache-mib 768",
+  "compiler": "lane/compiler-stack-20260929 68c75ed3",
+  "native": "x86-64, gcc, the pin's own tree; four builds from probe/corpus_config.rb with the port's gem set"
+ },
+ "not_measured": [
+  "no case is cut to the corpus schema; cases is 0 and the corpus is triaged",
+  "no domain fault is attributed to a defect yet: that needs the matched pair, the pin plus that one fix, which must stop faulting",
+  "24 further defects are live at the pin with a reproducer in their issue rather than in a test, the mruby-task assertion lane among them (#6862, #6863, #6868, #6870, #6886, #6887); extract.py cannot see them and they are not in the 165"
+ ]
+}
