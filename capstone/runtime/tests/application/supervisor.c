@@ -24,11 +24,22 @@ static double now(void) {
   return t.tv_sec + t.tv_nsec / 1e9;
 }
 
+static int heap_fault(const char *mode) {
+  const char *modes[] = {"fault-stale", "fault-reused", "fault-bounds",
+    "fault-bounds-large", "fault-double-free", "fault-double-free-reused"};
+  for (unsigned i = 0; i < sizeof modes / sizeof modes[0]; ++i)
+    if (!strcmp(mode, modes[i])) return 1;
+  return 0;
+}
+
 static int run(const char *launcher, const char *image, const char *mode, int stop) {
   int clear = open("contract.out", O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (clear < 0) return 0;
   close(clear);
   clear = open("contract.err", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (clear < 0) return 0;
+  close(clear);
+  clear = open("contract.fault", O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (clear < 0) return 0;
   close(clear);
   pid_t child = fork();
@@ -41,6 +52,7 @@ static int run(const char *launcher, const char *image, const char *mode, int st
         dup2(out, 1) < 0 || dup2(err, 2) < 0) _exit(124);
     close(in); close(out); close(err);
     setenv("CAPSTONE_CONTRACT", "environment with spaces", 1);
+    setenv("CAPSTONE_FAULT_RECORD", "/tmp/contract.fault", 1);
     execl(launcher, launcher, image, mode, "",
           "argument with spaces\nand newline", (char *)NULL);
     _exit(124);
@@ -92,13 +104,25 @@ static int run(const char *launcher, const char *image, const char *mode, int st
   int fault = !strncmp(mode, "fault", 5), exited = !strcmp(mode, "exit139");
   int passed = stop ? WIFSIGNALED(status) && WTERMSIG(status) == stop : fault ? WIFSIGNALED(status) && WTERMSIG(status) == SIGSEGV
                      : WIFEXITED(status) && WEXITSTATUS(status) == (exited ? 139 : 0);
-  passed = passed && check_file("contract.out", fault || exited || stop ?
+  int heap = heap_fault(mode);
+  passed = passed && check_file("contract.out", heap ? "stdout\nheap: ready\n" : fault || exited || stop ?
       "stdout\n" : "stdout\napplication: ok\n") && check_file("contract.err", "stderr\n");
   if (stop)
     printf("application %s: %s (wait status=%d, stopped in %.2f s)\n", mode,
            passed ? "PASS" : "FAIL", status, took);
   else
     printf("application %s: %s (wait status=%d)\n", mode, passed ? "PASS" : "FAIL", status);
+  if (heap) {
+    int survived = check_file("contract.out", "stdout\nheap: ready\nheap: survived\n");
+    int ready = survived || check_file("contract.out", "stdout\nheap: ready\n");
+    printf("heap evidence %s: ready=%d survived=%d stderr=%d\n", mode, ready, survived,
+           check_file("contract.err", "stderr\n"));
+    FILE *record = fopen("contract.fault", "r");
+    if (!record) return 0;
+    char line[1024];
+    while (fgets(line, sizeof line, record)) fputs(line, stdout);
+    fclose(record);
+  }
   fflush(stdout);
   return passed;
 }
