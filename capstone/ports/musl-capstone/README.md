@@ -8,9 +8,15 @@ stubs, and the next workload would need its own.
 
 ## Status
 
-**A domain runs musl.** Not compiles, runs: musl's own functional test suite
-builds and runs inside a pure-capability domain under QEMU, one boot per test,
-and the table below accounts for every one of its 77 sources.
+**A domain runs musl.** The table below describes the original HostCall v0
+port: musl's functional suite ran under QEMU with one boot per test. The
+delegated application ABI v2 runs the suite in one guest boot and currently
+records **46 PASS, 4 FAIL, 4 FAULT, 3 NOBUILD, 20 EXCLUDED** of 77;
+see [the port migration results](../common/application/results/20260929-delegation.json).
+All 45 earlier delegated passes remain green; `sscanf_long` now passes.
+`tls_init` and `tls_local_exec` now build but fault in `pthread_join` after
+unsupported thread creation. They are not TLS-initialization passes. The
+existing exclusions are retained for comparison.
 
 | | |
 |---|---|
@@ -25,8 +31,14 @@ and the table below accounts for every one of its 77 sources.
 | `clock_gettime` | works, through a new HostCall opcode (`CLOCK_GETTIME`, 25) |
 | `stat` `getuid` `getgid` | works, path stat as open, fstat, close |
 | real pthreads | **no**, and C-47 is only one of five: `pthread_create` also needs `clone`, two `mmap`s for the stack, `futex` (eight files under `src/thread` use it) and somewhere for the second thread to run, and a domain holds the only hart |
-| `fork` `exec` `pipe` `socket` `dlopen` | **no**, and none of them is on the way: a domain is one process |
+| `fork`, `exec`, `pipe`, `socket`, `dlopen` | not served by this HostCall v0 image |
 | musl's own test suite | 77 tests accounted for, see below |
+
+In v2, pipes, `posix_spawn`, `popen`, `system`, wait and Capstone-image
+`execve` work as delegated operations. `fork`, `clone`, sockets, `dlopen`,
+file `mmap` and native `execve` remain unserved inside the domain; signal
+handling is incomplete. See the [process qualification](../../runtime/applications.md#processes)
+and [shell execution result](../../runtime/applications.md#shell-execution-qualification-2026-09-29).
 
 Three probes, each green under QEMU with zero faults:
 

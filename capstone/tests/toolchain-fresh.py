@@ -220,12 +220,14 @@ def drift_check(repo_root, suites, targets):
 
 def identity(build):
     so = os.path.join(build, 'lib', 'libLLVMCapstoneCodeGen.so')
+    if not os.path.exists(so):
+        so = os.path.join(build, 'lib', 'libLLVMCapstoneCodeGen.a')
     try:
         st = os.stat(so)
         h = hashlib.sha256(open(so, 'rb').read()).hexdigest()[:16]
-        ident = f'libLLVMCapstoneCodeGen.so {h} built {time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime))}'
+        ident = f'{os.path.basename(so)} {h} built {time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime))}'
     except OSError:
-        ident = 'libLLVMCapstoneCodeGen.so MISSING'
+        ident = 'libLLVMCapstoneCodeGen (.so or .a) MISSING'
     try:
         v = subprocess.run([os.path.join(build, 'bin', 'clang'), '--version'], capture_output=True,
                            text=True, timeout=30).stdout

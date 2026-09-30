@@ -14,12 +14,13 @@ is not the status above.
 
 ## The compile survey, 2026-09-23
 
-The first step of porting the whole interpreter, not only its allocator
-([pymalloc](../pymalloc/README.md)), into a pure-capability musl domain: **how much of CPython
-compiles for `capstone64`, and what stops the rest**, then what a first link of it says.
-Nothing has run yet. A file
-that compiles is not a file that is correct; the round-trip census below is the first list of
-the difference.
+The current source recipe builds the whole interpreter with the shared delegated
+ABI-v2 application SDK. Build with `prepare-cpython-capstone.sh`, run the compile
+survey, and link with `link-cpython-capstone.py`. Use the
+[common runner](../../common/application/README.md) with a normal standard-library
+directory (`PYTHONHOME` containing `lib/python3.13`). The private compiler driver,
+startup and VM runner have been removed. The dated survey below describes the
+earlier bring-up, including failures subsequently fixed in the compiler/port.
 
 ## Result, 2026-09-23
 

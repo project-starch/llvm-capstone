@@ -1,5 +1,11 @@
 # Capstone project documentation
 
+Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
+Seven application recipes are migrated, with new QEMU functional and safety
+qualification, explicit compiler/resource requirements and preserved negative
+results. The launcher rejects old images; historical measurement archives
+retain their original ABI and binary identities.
+
 Inner-reuse expansion: [CPython](../experiments/study/results/cpython-reuse-four-arm-20260928/README.md)
 and [PostgreSQL](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
 now each validate 12/12 complete processes across four arms. The

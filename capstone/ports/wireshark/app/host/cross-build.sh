@@ -84,6 +84,8 @@ PKG_CONFIG_LIBDIR="$P/lib/pkgconfig" PKG_CONFIG_SYSROOT_DIR= cmake "${ARGS[@]}" 
   || { tail -30 "$LOG/configure.log"; exit 1; }
 echo "cross-build: configured"
 grep -q 'COMMAND = /usr/bin/clang\|/usr/bin/clang ' "$B/build.ninja" && echo "cross-build: lemon is built by host clang"
-( TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" ninja -C "$B" -k 0 tshark > "$LOG/build.log" 2>&1 ) || true
+( TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" ninja -j"${JOBS:-8}" -C "$B" -k 0 tshark > "$LOG/build.log" 2>&1 ) || true
 grep -E "^FAILED: " "$LOG/build.log" | sed 's/^FAILED: //' > "$LOG/failed.txt" || true
 echo "cross-build: $(wc -l < "$LOG/failed.txt") failed build steps; tshark $( [ -f "$B/run/tshark" ] && echo LINKED || echo 'NOT linked')"
+
+[ -f "$B/run/tshark" ] && [ ! -s "$LOG/failed.txt" ]

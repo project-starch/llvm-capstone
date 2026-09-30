@@ -7122,6 +7122,27 @@ With a private musl build, `run.sh c65` returns with `sizeof = 64` and "broadcas
 musl build fails the same 6 objects as without the patch. The wait paths need a futex and were not
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
 
+### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `OPEN — COMPILER, observed 2026-09-29; port workaround qualified; not reduced`
+
+FFmpeg 9.0.1 built by `compiler/sroa-keep-capability-whole` at `7d01722aab88`
+(clang SHA-256 `0a0f12b14f4447928853aa88c511e11696d48b6625c2585d719ec009e26d8ac1`)
+faults in the delegated decoder's `h263_decode_init_vlc+0xa8` with cause 6.
+QEMU records `STC` at `sp+0x38`, with `sp=0xe81ff300` and effective address
+`0xe81ff338`: the 16-byte capability store is only 8-byte aligned. This is an
+observed instruction/alignment failure; the optimization or lowering pass
+responsible has not been isolated, and equivalence to C-50 is not established.
+This is separate from the C-69 byte-copy lowering defect recorded in the
+[af_join qualification](../../ports/ffmpeg/app/results/2026-09-29-trackb-afjoin/README.md).
+
+Reproduce with the [full decoder recipe](../../ports/ffmpeg/app/README.md), a
+fresh `FFAPP_WORK`, this compiler and
+`FFAPP_OPT_FLAGS='-O3 -fomit-frame-pointer'`, then `host/run-qemu.sh all` in the
+delegated VM. These are FFmpeg configure's former defaults. The source recipe
+now explicitly selects `-O1 -fno-omit-frame-pointer`; that combined setting
+passes all five stages and the 30-frame native oracle with the changed-input
+control, including the Sublet heap/pool arm. Neither flag has been qualified
+independently as the minimum workaround. No compiler fix is claimed.
+
 ### C-68 — `LowerCall` asserts on a split scalar integer argument wider than 128 bits: an integer `ADD` built over a capability stack slot `OPEN — COMPILER, crash, low priority: pre-existing, not reachable from C; found 2026-09-28 by the compiler lane's frame-index sweep; reproduced by the board lane`
 
 **What happens.** A call passing a scalar integer wider than 128 bits that ends up split or

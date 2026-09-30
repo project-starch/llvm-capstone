@@ -11,7 +11,7 @@
 #
 # Gems: stdlib, stdlib-ext, math and metaprog, and from stdlib-io only what a
 # domain can serve: mruby-io, mruby-errno, mruby-dir, mruby-pack. Not mruby-socket,
-# mruby-process or mruby-signal: a domain has no sockets, processes or signals.
+# mruby-process or mruby-signal: general fork and signal handlers are not served.
 
 boxing   = ENV.fetch('MRBD_BOXING', 'no')
 dispatch = ENV.fetch('MRBD_DISPATCH', 'switch')
@@ -50,15 +50,18 @@ MRuby::CrossBuild.new('capstone') do |conf|
   conf.ports 'posix' if conf.respond_to?(:ports)
   conf.cc.command = 'capstone-cc'
   conf.cc.flags = opt + common
-  # A domain cannot spawn a process: mruby-io's own veto over IO.popen, backticks
-  # and friends, under which their tests skip rather than fail.
+  # The POSIX IO HAL uses delegated posix_spawn (patch 0009).
   # capstone64-unknown-elf defines neither __unix__ nor __linux__, and mruby reads
   # the platform from them: without the two below, IO#pread/#pwrite would be left
   # out (the runtime serves pread64/pwrite64) and a String would be capped at
   # 1 MiB, where the native build has no cap.
-  conf.cc.defines += defines + %w(MRB_NO_IO_POPEN MRB_WITH_IO_PREAD_PWRITE MRB_STR_LENGTH_MAX=0)
+  conf.cc.defines += defines + %w(MRB_CAPSTONE_DELEGATE MRB_WITH_IO_PREAD_PWRITE MRB_STR_LENGTH_MAX=0)
   conf.archiver.command = ENV.fetch('LLVM_AR')
   conf.linker.command = 'capstone-cc'
+  conf.linker.flags << ENV.fetch('MRBD_SPAWN_OBJECT')
+  if (region = ENV['MRBD_REGION_OBJECT'])
+    conf.linker.flags += ['-Wl,--wrap=__capstone_region', region]
+  end
   # MRBD_HEAP=sublet-gc: every GC object slot under Sublet (patch 0008), which
   # needs sublet.h from the runtime tree; the build script exports its path.
   if (inc = ENV['MRBD_GC_SUBLET_INCLUDE'])

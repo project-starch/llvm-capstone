@@ -22,7 +22,7 @@ GPGE_TESTS="t-version t-strerror t-syserror t-lock t-printf t-b64 t-argparse t-l
 # The native build is also installed into a native-only prefix: libgcrypt's native check links it.
 NP=$TS_DEPS_BUILD/native-prefix
 ( cd "$N" && env -u CC -u AR -u RANLIB ./configure --prefix="$NP" "${OPTS[@]}" > "$LOG/native-configure.log" 2>&1 &&
-  env -u CC -u AR -u RANLIB make -j16 -C src > "$LOG/native-build.log" 2>&1 &&
+  env -u CC -u AR -u RANLIB make -j"${JOBS:-8}" -C src > "$LOG/native-build.log" 2>&1 &&
   env -u CC -u AR -u RANLIB make -C tests $GPGE_TESTS > "$LOG/native-tests-build.log" 2>&1 ) || true
 : > "$LOG/native-check.log"
 for tst in $GPGE_TESTS; do   # each test program run directly; exit status 0 is a pass, as automake counts it
@@ -42,7 +42,7 @@ echo "libgpg-error: native check OK ($npass of $nwant tests PASS; t-poll not bui
 
 ( cd "$X" && ./configure --host=riscv64-unknown-linux-musl --prefix="$TS_DEPS_PREFIX" "${OPTS[@]}" \
     > "$LOG/cap-configure.log" 2>&1 )
-( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j16 -C src > "$LOG/cap-build.log" 2>&1 )
+( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j"${JOBS:-8}" -C src > "$LOG/cap-build.log" 2>&1 )
 ( cd "$X" && make -C src install > "$LOG/cap-install.log" 2>&1 )
 touch "$LOG/cast-log.txt"; sort -u "$LOG/cast-log.txt" > "$LOG/cast-sites.txt"
 echo "libgpg-error: libgpg-error.a installed ($(stat -c %s "$TS_DEPS_PREFIX/lib/libgpg-error.a") bytes); cast sites: $(wc -l < "$LOG/cast-sites.txt")"

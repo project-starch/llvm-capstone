@@ -100,11 +100,10 @@ Exclude old port entry adapters and runtime objects. Resource settings are
 `CAPSTONE_APPLICATION_{DATA,STACK,ARENA}_BYTES`, `CAPSTONE_APPLICATION_HEAP` and
 `CAPSTONE_APPLICATION_HEAP_LOG`.
 
-Perl's build recipe now uses this SDK; its private compiler wrapper, entry
-adapter and VM runner were removed. Perl and mruby objects were also linked
-through the identical SDK driver and executed successfully. Other ports can
-adopt either build interface while retaining their upstream patches and build
-recipes. Historical hardware gates and loaders for older ABIs remain explicit.
+The [shared port build and run interface](../ports/common/application/README.md)
+covers Perl, mruby, CPython, PostgreSQL, SQLite, FFmpeg and tshark. Application
+recipes use this SDK; private argv/env files and application HostCall launchers
+are retired. Historical hardware and allocator probe targets remain separate.
 
 ## Host session and commands
 
@@ -124,7 +123,10 @@ capstone-vm --state "$CAPSTONE_TMP_ROOT/dev-vm" shell
 ```
 
 QEMU needs user networking (`--enable-slirp`). Defaults are one hart, 8 GiB RAM,
-640 MiB CMA, `CAPSTONE_GP_NONLIN=1` and 65,536 revocation nodes. Explicit supported
+512 MiB CMA, a 384 MiB retained process-storage limit, `CAPSTONE_GP_NONLIN=1`
+and 65,536 revocation nodes. `--cma-mib` and `--process-cache-mib` configure
+the two memory limits; the mixed application-port matrix uses 1024 and 768.
+They are recorded and preserved across explicit restarts. Explicit supported
 emulator environment settings are recorded in the session identity and passed
 to QEMU on every boot or restart. The rootfs
 runs as a disposable snapshot; files on the host share remain persistent.
@@ -219,8 +221,7 @@ No claim of a complete hostile-code or QEMU security audit is made.
 
 ## Delegated syscalls (application ABI v2)
 
-An application built with the default `CAPSTONE_APPLICATION_DELEGATE=ON` speaks
-ABI v2: every Linux service is the Linux syscall itself, run by the launcher
+Every application built by the SDK speaks ABI v2: every Linux service is the Linux syscall itself, run by the launcher
 task. The domain fills an 88-byte entry in the entry region, copies pointer
 arguments into the exchange region as offsets, and yields; the launcher
 validates the entry against the shape table, runs `syscall()` under its own
@@ -239,8 +240,10 @@ no-ops until the signals branch). The unserved report at exit lists both.
 The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 `CAPSTONE_APPLICATION_EXCHANGE_BYTES` for the SDK project); larger buffers are
 chunked, so a big read or write is a short one. A v2 image's descriptor is 48
-bytes; `capstone-exec` accepts v1 and v2 images and keeps HostCall v0 for the
-former. Building with `CAPSTONE_APPLICATION_DELEGATE=OFF` produces a v1 image.
+bytes. `capstone-exec` rejects v1 images with exit 126. The SDK rejects
+`CAPSTONE_APPLICATION_DELEGATE=OFF`; rebuild old applications.
+`CAPSTONE_APPLICATION_GRANT_BYTES` declares shared backing for existing inner
+allocators, including a Sublet outer heap where selected.
 
 The launcher installs a seccomp filter from the same shape table before the
 first step: the delegated numbers plus its own, everything else answers
@@ -340,7 +343,8 @@ children, spawn after exec, exec with closed standard descriptors, and recovery
 from a rejected image. The deliberate fault is SIGSEGV and resolves to
 `main+0x95c` after verifying the sealed image hash. The unchanged v1 application
 gate passes 108 mixed starts in the same boot with stable retained resources.
-Both v1 and v2 SDK builds succeed.
+At that review revision both SDK variants built. The subsequent port migration
+removes v1 application support; this historical result remains tied to its hashes.
 
 The fresh delegated libc-test result is **45 PASS, 5 FAIL, 2 FAULT, 5 NOBUILD,
 20 EXCLUDED** (77 total). `utime` gains its pass because futimens now carries

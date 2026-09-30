@@ -125,7 +125,7 @@ def main() -> int:
     native = pathlib.Path(args.native).resolve()
     out = pathlib.Path(args.out).resolve() if args.out else build / "link-attempt"
     for var in ("CAPSTONE_CLANG", "CAPSTONE_LD_LLD", "CPY_RUNTIME_DIR", "CPY_LIBC_ARCHIVE",
-                "CPY_LINKER_SCRIPT"):
+                "CAPSTONE_SDK"):
         if not os.environ.get(var):
             print(f"ERROR: {var} not set; source {build}/capstone-env.sh", file=sys.stderr)
             return 2
@@ -154,7 +154,7 @@ def main() -> int:
     archive_objs = {o for _, var in ARCHIVES for o in survey.make_var(build, var)}
 
     out.mkdir(parents=True, exist_ok=True)
-    env = {k: v for k, v in os.environ.items() if k != "CPY_SURVEY_LOG"}
+    env = {k: v for k, v in os.environ.items() if k != "CAPSTONE_COMPILE_LOG"}
     workarounds = {}
 
     # C-52: compile.c at -O1+ crashes the Greedy allocator; the basic one compiles it.
@@ -204,9 +204,16 @@ def main() -> int:
                 return 2
             archives.append(str(name))
 
-    runtime = sorted(str(p) for p in pathlib.Path(os.environ["CPY_RUNTIME_DIR"]).glob("*.o"))
-    base = [os.environ["CAPSTONE_LD_LLD"], "--gc-sections", "-T", os.environ["CPY_LINKER_SCRIPT"],
-            "--error-limit=0", *runtime, *present, *archives, os.environ["CPY_LIBC_ARCHIVE"]]
+    sdk = pathlib.Path(os.environ["CAPSTONE_SDK"])
+    nested = []
+    if os.environ.get("CPY_SUBLET") == "1":
+        common = HERE.parents[1] / "common/application"
+        nested = [str(sdk / name) for name in
+                  ("pym_backing.o", "pym_block_lifetimes.o", "pym_sublet_glue.o")]
+        nested += ["-O1", "-DEXP_PYMALLOC", "-Wl,--wrap=main,--wrap=__capstone_region",
+                   "-I", str(HERE.parents[2] / "runtime/include"),
+                   str(common / "regions.c"), str(common / "initialize.c")]
+    base = [str(sdk / "capstone-cc"), "-Wl,--error-limit=0", *nested, *present, *archives]
     strict = run([*base, "-o", str(out / "python.dom")])
     (out / "link-strict.log").write_text(strict.stdout + strict.stderr)
     undefined = parse_undefined(strict.stderr)
@@ -276,12 +283,12 @@ def main() -> int:
     if ctl_cc.returncode == 0:
         # -u keeps the caller alive: with --gc-sections lld reports only the
         # undefined symbols that live code references.
-        ctl = run([*base, "-u", "capstone_link_control_caller", str(ctl_obj),
+        ctl = run([*base, "-Wl,--undefined=capstone_link_control_caller", str(ctl_obj),
                    "-o", str(out / "link-control.dom")])
         ctl_undefined = set(parse_undefined(ctl.stderr)) if ctl.returncode else set()
         (out / "link-control.dom").unlink(missing_ok=True)
 
-    loose = run([*base, "--unresolved-symbols=ignore-all", "--noinhibit-exec",
+    loose = run([*base, "-Wl,--unresolved-symbols=ignore-all", "-Wl,--noinhibit-exec",
                  "-o", str(out / "python-lowerbound.dom")])
     (out / "link-lowerbound.log").write_text(loose.stdout + loose.stderr)
     image = out / "python-lowerbound.dom"
@@ -324,30 +331,8 @@ def main() -> int:
                 print(f"  absent objects: {gone:,} bytes native x {cap / nat:.2f} "
                       f"(capstone/native over the present ones) = ~{est / 2**20:.1f} MiB more, "
                       f"so ~{(sum(memsz) + est) / 2**20:.1f} MiB for the whole image (estimate)")
-        # Linking is not working: which linked libc calls need a syscall the
-        # domain's hostcall does not serve (musl-capstone's own checker).
-        checker = HERE.parent.parent / "musl-capstone" / "check-domain-support.py"
-        root = pathlib.Path(os.environ["CPY_RUNTIME_DIR"]).parent
-        baseline = root / "linkcheck" / "has.dom"
-        if checker.is_file() and baseline.is_file() and os.environ.get("CPY_MUSL"):
-            chk = run([sys.executable, str(checker), str(image), "--musl", os.environ["CPY_MUSL"],
-                       "--archive", str(root / "musl-build" / "libc-capstone.a"),
-                       "--baseline", str(baseline), "--nm", nm, "--port-objects", *runtime])
-            (out / "domain-support.txt").write_text(chk.stdout + chk.stderr)
-            need = collections.Counter()
-            rows = 0
-            for line in chk.stdout.splitlines():
-                m = re.match(r"\s+(\S+)\s+needs (.+?)\s+src/", line)
-                if m:
-                    rows += 1
-                    need.update(m.group(2).split())
-            print(f"\nlinked libc calls that need an UNSERVED syscall (check-domain-support.py, "
-                  f"exit {chk.returncode}): {rows} symbols, {len(need)} syscalls")
-            print("  " + " ".join(sorted(need)))
-            print(f"  full list: {out / 'domain-support.txt'}")
-        else:
-            print("\nWARNING: check-domain-support.py not run (checker, baseline image or CPY_MUSL "
-                  "missing)", file=sys.stderr)
+        print("\nRuntime coverage is determined by the delegated syscall shape table and guest tests;")
+        print("the retired HostCall switch is not an ABI-v2 support oracle.")
     else:
         print(f"\nno lower-bound image; see {out / 'link-lowerbound.log'}")
 

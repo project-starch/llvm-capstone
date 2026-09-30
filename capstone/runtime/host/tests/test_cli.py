@@ -64,7 +64,8 @@ class TransportTests(unittest.TestCase):
             state = Path(directory)
             identity = {"files": {k: {"path": "/tmp/" + k, "sha256": "old"}
                         for k in ("qemu", "kernel", "firmware", "rootfs")},
-                        "share": "/tmp/share", "memory": "4G",
+                        "share": "/tmp/share", "memory": "4G", "cma_mib": 1024,
+                        "process_cache_mib": 768,
                         "environment": {"CAPSTONE_REV_NODES": "65536"}}
             (state / "config.json").write_text(json.dumps({"identity": identity}))
             with patch.object(cli, "running", return_value=False), patch.object(cli, "start", return_value=0) as start:
@@ -72,6 +73,8 @@ class TransportTests(unittest.TestCase):
                 args, received = start.call_args.args
                 self.assertEqual(received, state)
                 self.assertEqual(args.environment, identity["environment"])
+                self.assertEqual(args.cma_mib, 1024)
+                self.assertEqual(args.process_cache_mib, 768)
                 self.assertEqual(args.rootfs, Path("/tmp/rootfs"))
                 self.assertEqual(args.port, 0)
                 self.assertFalse(hasattr(args, "launcher"))
