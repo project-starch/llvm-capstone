@@ -6534,6 +6534,90 @@ the transcript, never a verdict. Audit of the archive (2026-09-15 08:10, §7r): 
 changes and no cited number is a truncated fragment. Related: M-10 (the emulator console's silent
 truncation of a long command), the transcript-marker note in the board-run skill.
 
+### M-12 — `capstone-exec` dies by SIGSEGV when a caught signal (seen: SIGALRM) arrives after `cleanup()` has unmapped the domain's regions: its signal trampoline stays installed and stores into the unmapped signal block `OPEN — found 2026-09-30 gating #163; mechanism audited; on dev 8c08aa1d, QEMU`
+
+**Symptom.** An application that exits while a timer it armed is still pending ends with the
+launcher killed by SIGSEGV, not with its own exit status. `capstone-vm` reports "application
+terminated by signal 11", the task record is `{"kind": "signal", "value": 11}` with no `fault` key
+(no domain fault), and the guest kernel logs `capstone-exec[pid]: unhandled signal 11 code 0x1
+(SEGV_MAPERR) at <page-aligned address>`. The application's own output is complete: PostgreSQL
+`--single` had already written its shutdown checkpoint.
+
+**Mechanism** (source: `runtime/linux/exec.c`, `runtime/linux/signals.c` at tree 824162ec).
+1. `setitimer` is a delegated row, so the timer is armed in the launcher process itself, and so is
+   the SIGALRM it raises. The domain catches SIGALRM, so the launcher's `trampoline`
+   (signals.c:57) is installed for it.
+2. On the exit request, `exec.c:458-463` calls `report_stats`, then `cleanup()`.
+   `cleanup()` (exec.c:47-58) first munmaps every region, REGION_META included (exec.c:49-51).
+   It then closes the device, stops the spawner and frees the host state.
+3. The signal block lives in REGION_META at `CAPSTONE_SIGNAL_OFFSET` (4096), and
+   `capstone_signals_init` (exec.c:421) points `s->block` at it.
+4. Nothing on the exit path blocks signals, resets the handler, clears `active` (written only at
+   signals.c:144) or `s->block`, or disarms the process's interval timers.
+5. A SIGALRM that falls due after the munmap and before the process exits runs the trampoline,
+   and `if (s->block) s->block->recorded = head + 1;` (signals.c:113) stores to the unmapped page.
+   A SIGALRM before the munmap is recorded harmlessly.
+
+**Evidence.**
+- **Located to the instruction.** Every crash's pc is offset `0xecb8` into the launcher's
+  executable mapping. The launcher is `c80922427dbb`, a -O0 build, with its R-E segment at vaddr 0.
+  That instruction is `sd a4, 0(a5)` in `trampoline`: `a5` is `s->block`, loaded from `s + 0xb438`,
+  and `a4` is `head + 1`.
+- **The audit's register reading** (two PostgreSQL crashes):
+  - the store address is META+0x1000, page-aligned;
+  - `a0 = bit(14)`, so the signal was SIGALRM, read from registers rather than inferred;
+  - `head` was 0, so this was the first caught signal;
+  - the stack depth places delivery inside `cleanup()`, after the munmap loop. Which `close()` was
+    running is not resolved.
+- **Minimal reproducer.** Built with the application SDK's `capstone-cc -O1` and run as
+  `<image> N [disarm]`:
+
+  ```c
+  static void on_alarm(int s) { (void)s; }
+  int main(int argc, char **argv) {
+    int ms = argc > 1 ? atoi(argv[1]) : 100;
+    struct sigaction sa = {0};
+    sa.sa_handler = on_alarm;
+    sigaction(SIGALRM, &sa, 0);
+    struct itimerval it = {{0, 0}, {ms / 1000, (ms % 1000) * 1000}};
+    setitimer(ITIMER_REAL, &it, 0);
+    if (argc > 2) {                     /* the control: disarm before exiting */
+      struct itimerval zero = {{0, 0}, {0, 0}};
+      setitimer(ITIMER_REAL, &zero, 0);
+    }
+    return 0;
+  }
+  ```
+
+  One boot, dev's launcher, per-run dmesg:
+
+  | N (ms) | 5 | 10 | 20 | 50 | 100 | 150 | 200 | 250 | 100, disarmed before exit |
+  |---|---|---|---|---|---|---|---|---|---|
+  | result | exit 0 | exit 0 | **SIGSEGV 3/3** | **SIGSEGV** | **SIGSEGV 3/3** | **SIGSEGV** | **SIGSEGV** | exit 0 | exit 0, 3/3 |
+
+  Every crash was at pc offset `0xecb8`. At 5 and 10 ms the alarm arrives while the domain still
+  runs; at 250 ms the launcher is already gone. So `cleanup()` runs for between ~10–20 ms and
+  ~200–250 ms of wall time on this platform. The window is inferred from these points, not timed.
+- **PostgreSQL** (the #163 build and dev's alike): `SET statement_timeout = 300; SELECT 1;` then EOF
+  crashes, because PostgreSQL leaves its interval timer running after a statement and the alarm
+  falls due during teardown.
+  - The matched variant that waits 0.6 s past the alarm before exiting exits 0 (2/2).
+  - `work.sql`, which arms no timer, exits 0 on every run (11/11).
+  - What decides it is where the alarm falls due relative to the munmap, not how soon the process
+    exits after arming: `SET 300; SELECT pg_sleep(0.1); SET 0` exited 0.
+
+**Scope, from reading the code, untested.** Any signal the domain has made *caught* reaches
+signals.c:113 in the same window, for example SIGCHLD from an application child, or a caught
+SIGTERM, SIGINT or SIGHUP. The helper's own death is not one: it uses exit signal 0,
+spawner.c:300-302. QEMU only. The launcher tested was a -O0 build; the defect is at source level,
+but its timing may differ in an optimised build.
+
+**What would fix it** (proposal, not done): make the launcher stop taking domain signals before the
+regions go away. For example, at the top of `cleanup()`, block every signal and disarm
+`ITIMER_REAL`/`ITIMER_VIRTUAL`/`ITIMER_PROF`, or clear `active` (or `s->block`) before the munmap.
+The test is the reproducer above: 20 and 100 ms must exit 0, and the disarmed control must stay
+exit 0.
+
 ### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
 
 > **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
