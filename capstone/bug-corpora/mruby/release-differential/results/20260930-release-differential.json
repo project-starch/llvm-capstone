@@ -43,7 +43,7 @@
   "stress_note": "MRB_GC_STRESS changes no verdict, so no row depends on a collection at every allocation"
  },
  "domain": {
-  "arm": "level0 (capability bounds and tags; free only marks) -- the control for the revoking arms, so a fault is the defect reaching a check, not a revocation catch",
+  "arm": "level0, the port's default heap: pointers carry the ARENA's bounds (CAPSTONE_LEVEL0_SHRINK, which narrows to each object, is opt-in and off here), tags are enforced, and free only marks. It is the control for the revoking arms, so a fault is the defect reaching a tag or arena check, not a revocation catch",
   "control": "the port's scripts/smoke.rb completes (SMOKE_DONE)",
   "launcher_sha256": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94",
   "image_sha256": "e1f86b04acda59fc77d3204b434ba748f003f5077edc53c2f9fb122a15a9e56f",
@@ -65,7 +65,7 @@
    "eb7693857",
    "ec89364c4"
   ],
-  "silent_to_trap_note": "for these six the native build returns a wrong answer with no diagnostic and the domain traps: silent corruption converted into a fault by bounds and tags, with no revocation in the arm"
+  "silent_to_trap_note": "for these six the native build returns a wrong answer with no diagnostic and the domain traps. What traps is tag integrity and the arena's bounds, not per-object bounds: a capability rebuilt from an integer or derived from a dead one carries no tag, and an access that leaves the arena faults"
  },
  "revoking_arms_blocked": {
   "arms": [

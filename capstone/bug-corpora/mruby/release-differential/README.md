@@ -66,7 +66,7 @@ defects are in range.
 | `stress` (`+ MRB_GC_STRESS`) | does it need a collection at every allocation? |
 | `asan` | **is the defect visible to a malloc-layer sanitizer at all?** |
 | `asan-page1` (`+ MRB_HEAP_PAGE_SIZE=1`) | one object per GC page, so a slot release becomes a page release: **is the reuse inside a GC page?** |
-| `level0` domain | capability bounds and tags, `free` only marks. The revocation control. |
+| `level0` domain | the port's default heap: **the arena's** bounds, tag integrity, and `free` only marks. The revocation control. |
 
 Over the 165:
 
@@ -104,8 +104,12 @@ The interesting part is the overlap with ASan:
 Six rows are worth naming separately, because for them the native build returns a
 **wrong answer and no diagnostic** while the domain **traps**: `4663fef45`,
 `84cc5aa60`, `93eb74a59`, `bef45e223`, `eb7693857`, `ec89364c4`. That is silent
-corruption converted into a fault, by bounds and tags alone, with no revocation
-in the arm.
+corruption converted into a fault with no revocation in the arm. Note what does
+the work: `CAPSTONE_LEVEL0_SHRINK` is opt-in and **off** in these builds, so
+level0 hands out the whole arena's bounds, not each object's. These six do not
+fault because an object's bounds were exceeded — they fault because a
+capability that was rebuilt from an integer or derived from a dead one carries
+no tag, or because the access left the arena altogether.
 
 The four in the last row are the honest other direction: `606d9a6b2` and
 `fb4974528` abort natively and only answer wrongly in the domain, and
@@ -136,7 +140,7 @@ With that patch **all three arms complete their control**, and the 165 run in ea
 
 | | completes | faults | watchdog |
 |---|---:|---:|---:|
-| `level0` (control: bounds and tags, no revocation) | 148 | 13 | 4 |
+| `level0` (control: arena bounds, tags, no revocation) | 148 | 13 | 4 |
 | `sublet` (revoke on free) | 147 | 15 | 3 |
 | `sublet-gc` (per GC object slot) | 144 | 18 | 3 |
 
@@ -187,7 +191,8 @@ every commit in the window.
   for none of the 17 yet.
 - Of the 153 ASan-blind rows, exactly **one** is caught by a mechanism here
   (`628ccec60`, by `sublet-gc`). The other 152 are still caught by nothing in
-  this set: not ASan, not capability bounds, not revocation at either layer.
+  this set: not ASan, not level0's tags and arena bounds, not revocation at
+  either layer.
   That is the honest size of the remaining gap.
 - 24 further defects are live at the pin with a reproducer in their issue rather
   than in a test, so `extract.py` cannot see them; the whole `mruby-task`
