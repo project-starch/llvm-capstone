@@ -210,6 +210,37 @@ def check_movc(variant):
     return check
 
 
+INTCAP_INTEGER = ["arith", "cmp", "fromint", "int", "shift", "switch"]
+INTCAP_POINTER = ["atomic", "ptr", "ptrarith"]
+
+
+def check_intcap(variant):
+    def check(record, out, err, ctx):
+        ok = sorted(set(re.findall(rf"^INTCAP {variant} ([a-z]+) ok$", out, re.M)))
+        bad = lines(out, rf"INTCAP {variant} [a-z]+ BAD")
+        end = lines(out, rf"INTCAP {variant} END ")
+        if variant == "intcap":
+            problems = exits(record, 0)
+            if ok != sorted(INTCAP_INTEGER + INTCAP_POINTER):
+                problems.append(f"ok for {ok}, want all nine cases")
+            if end != ["INTCAP intcap END bad=0"]:
+                problems.append(f"end {end}, want ['INTCAP intcap END bad=0']")
+        else:
+            # The control: an unsigned long drops the tag, so the integer
+            # cases pass and the first dereference faults.
+            problems = faults(record)
+            if ok != INTCAP_INTEGER:
+                problems.append(f"ok for {ok}, want the six integer cases")
+            if f"INTCAP {variant} integers done bad=0" not in out.splitlines():
+                problems.append("did not finish the integer cases")
+            if end:
+                problems.append(f"reached the end: {end}; the pointer cases cannot fail")
+        if bad:
+            problems.append(f"bad: {bad}")
+        return problems
+    return check
+
+
 def check_arith(case):
     def check(record, out, err, ctx):
         if case == 0:
@@ -261,10 +292,14 @@ VARIANTS = {
     "movc-keep": (["movc-null-scalar/movc_test.c"],
                   ["-O2", '-DVARIANT="keep"', "-Xclang", "-target-feature",
                    "-Xclang", "+movc-keeps-integer-source"], [], [], check_movc("keep")),
+    "intcap": (["intcap/intcap_test.c"], ["-O2", '-DVARIANT="intcap"', "-DUSE_INTCAP"], [], [],
+               check_intcap("intcap")),
     "arith-0": (["untagged-cap-arith/arith_test.c"], ["-O2", "-DCASE=0"], [], [], check_arith(0)),
     # expected to fault: after everything that returns
     "tls-overrun": (["thread-local/tls_test.c", "thread-local/tls_other.c"], ["-O2", "-DOVERRUN"],
                     [], [], check_tls_overrun),
+    "intcap-uptr": (["intcap/intcap_test.c"], ["-O2", '-DVARIANT="uptr"'], [], [],
+                    check_intcap("uptr")),
     "arith-1": (["untagged-cap-arith/arith_test.c"], ["-O2", "-DCASE=1"], [], [], check_arith(1)),
     # a QEMU without the scc fix aborts here: last
     "arith-2": (["untagged-cap-arith/arith_test.c"], ["-O2", "-DCASE=2"], [], [], check_arith(2)),
@@ -450,6 +485,10 @@ def self_test():
     rf = "RETURN-FLUSH line 1\nRETURN-FLUSH line 2\nRETURN-FLUSH line 3\nRETURN-FLUSH atexit handler ran\n"
     movc = lambda c, v, got, n: (f"MOVC-PROBE b=5 c={c}\nMOVC-C32 {v} got={got} want=0x5000 called=1\n"
                                  f"MOVC-ICONV {v} n={n}\n")
+    INT, ALL = INTCAP_INTEGER, INTCAP_INTEGER + INTCAP_POINTER
+    intcap = lambda v, cases: ("".join(f"INTCAP {v} {c} ok\n" for c in cases if c in INT)
+                               + f"INTCAP {v} integers done bad=0\n"
+                               + "".join(f"INTCAP {v} {c} ok\n" for c in cases if c not in INT))
     tls = "".join(f"TLS-TEST PASS c{i} got=0 want=0\n" for i in range(9)) + "TLS-TEST-DONE failures=0\n"
     cases = [
         # (name, check, record, stdout, stderr, context update, must pass)
@@ -518,6 +557,18 @@ def self_test():
          movc("5", "rule", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 1}, False),
         ("movc-rule: the other variant's lines", check_movc("rule"), ok_exit(0),
          movc("5", "keep", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0}, False),
+        ("intcap", check_intcap("intcap"), ok_exit(0), intcap("intcap", ALL) + "INTCAP intcap END bad=0\n",
+         "", {}, True),
+        ("intcap: the pointer lost its tag", check_intcap("intcap"), segv, intcap("intcap", INT), "", {},
+         False),
+        ("intcap: a case printed BAD", check_intcap("intcap"), ok_exit(1),
+         intcap("intcap", ALL).replace("shift ok", "shift BAD got=0x0 want=0x10")
+         + "INTCAP intcap END bad=1\n", "", {}, False),
+        ("intcap-uptr", check_intcap("uptr"), segv, intcap("uptr", INT), "", {}, True),
+        ("intcap-uptr: the pointer cases passed", check_intcap("uptr"), ok_exit(0),
+         intcap("uptr", ALL) + "INTCAP uptr END bad=0\n", "", {}, False),
+        ("intcap-uptr: faulted among the integers", check_intcap("uptr"), segv,
+         "INTCAP uptr int ok\n", "", {}, False),
         ("arith-0", check_arith(0), ok_exit(0), "ARITH-CASE 0 cinc=1 scc=1\n", "", {}, True),
         ("arith-1 trap", check_arith(1), segv, "", "", {}, True),
         ("arith-1 trap: printed a result", check_arith(1), ok_exit(0), "ARITH-CASE 1 result=0x5008\n", "",

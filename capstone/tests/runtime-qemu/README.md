@@ -84,7 +84,8 @@ replace the musl probes of the HostCall v0 application runtime, removed on
 | `mmap-shm`, `mmap-shm-control` | `mmap-shm/mmap_shm.c` | every mmap/shm check passes; the control's raw `SYS_mmap` gets ENOSYS and an unserved report |
 | `tls-O0`, `tls-O2`, `tls-overrun` | `thread-local/` | nine checks at each level (C-47); the overrun ends in SIGSEGV with a fault record |
 | `cap-atomics-O0/O2`, `subword-O0/O2` | `capability-atomics/`, `subword-atomics/` | the DONE line with no failure (C-54, C-51) |
-| `movc` | `movc-null-scalar/movc_test.c` | `b=5 c=5` in a guest without `CAPSTONE_MOVC_NULL_SCALAR`, `b=5 c=0` in one with it (Q-04) |
+| `movc-rule`, `movc-keep` | `movc-null-scalar/movc_test.c` | `b=5 c=5` in a guest without `CAPSTONE_MOVC_NULL_SCALAR`, `b=5 c=0` in one with it (Q-04); C-32's two values (`c32 0x5000`, `iconv n=3`) survive in both variants without the switch, and with it survive in `rule` (the live-source copy rule) and are lost in `keep` (`+movc-keeps-integer-source`, the positive control) |
+| `intcap`, `intcap-uptr` | `intcap/intcap_test.c` | with `__uintcap_t`, all nine cases ok and `END bad=0`; the `unsigned long` control passes the six integer cases and ends in SIGSEGV at its first dereference |
 | `arith-0..2` | `untagged-cap-arith/arith_test.c` | case 0 stores through both results; cases 1 and 2 end in SIGSEGV with cause 24 (`--arith-expect cheri`: they print the integer result); case 2 runs last |
 
 ```bash
@@ -101,8 +102,9 @@ The v0 probes' controls linked a pinned older runtime file (hostcall.c, tls.c or
 helper's host_service.h). An SDK links its runtime archive whole, so those controls
 cannot be rebuilt; `--self-test` shows that each check fails on the symptom its
 control produced. `mmap-shm-control` and `tls-overrun` remain controls that run.
-`movc` is judged by the switch the guest's QEMU was started with, which `capstone_vm`
-records in the state directory.
+`movc-rule` and `movc-keep` are judged by the switch the guest's QEMU was started with,
+which `capstone_vm` records in the state directory; the build refuses (exit 2) a toolchain
+whose `llc` lacks the live-source copy pass or `+movc-keeps-integer-source`.
 
 Removed with the v0 runtime, as the v0 emulation's own tests (under v2 these are
 Linux's behaviour, covered by the delegated libc-test and the application gate):
