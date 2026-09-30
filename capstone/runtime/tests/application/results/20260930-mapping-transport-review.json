@@ -1,0 +1,65 @@
+{
+ "date": "2026-09-30",
+ "purpose": "M2 review corrections: own revocation handle in the libc, delivery acceptance checks, immediate take of the delivery, GRANT node admission and refusals in the monitor, region reuse through the process cache; lying-launcher and node-pressure gate cases",
+ "method": "run-mapping-gate.sh: boot 1 runs fifteen cases (basic, refresh, two, errors, cycle, large, signal without injection, ro-store, alias-fault, then under capstone-exec-adversary: release-noop alias-fault, widen ro-refused, signal injection, double grant, grant to a preempted domain); boot 2 runs budget with CAPSTONE_REV_NODES=512. Each case requires its exit status; markers per case. Controls: the same cases against the previous libc (image built from b5318db86d41 with the new contract source), and against the previous monitor, driver and launcher (876a04b / df907c2 / b5318db86d41 build). SQLite memory gate with the lane module and a host rebuilt against the lane libcapstone.",
+ "platform": {
+  "qemu": "capstone-qemu qemu/mapping-stage1 599425356d",
+  "qemu_binary_sha256": "a1310819b2b5994503cd2d9c79b879bb99965108264be95160882e1406647c43",
+  "monitor": "capstone-sbi sbi/mapping-transport e3f3c81 via caplifive-opensbi opensbi/mapping-transport 462c271; caplifive-buildroot buildroot/mapping-transport a0ee780 (driver f53d939)",
+  "fw_jump_sha256": "7f961c5ef8e045bd95bcbaff00b18304f5f87b33eaa463bcfdcfa80b6f81beb9",
+  "capstone_ko_sha256": "227c0058002133f417f7e023adf98a0581639e9dc7aa53347a633320de0bd561",
+  "capstone_exec_sha256": "906b66e4aef4f0d29710daa390c92118e8a4d63478e600413ef08d372f76fe74",
+  "capstone_exec_adversary_sha256": "2e10fd924417363405b23d1505bcb5e9bc31dd9e0f613da4b6f771e632072202",
+  "mapping_contract_dom_sha256": "f53b6cef282638ae0c12725acdc160784ca6eae633f2f451599af7f76a63126a",
+  "sqlite_host_user_sha256": "f83e6a38a3830d06e8012049f08c2c3f04e08685b44005857d1dc2d7aff8a022",
+  "kernel_sha256": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd"
+ },
+ "gate": {
+  "boot1": {
+   "basic": "OK",
+   "refresh": "OK",
+   "two": "OK",
+   "errors": "OK",
+   "cycle": "OK",
+   "large": "OK",
+   "signal-none": "OK",
+   "ro-store": "OK",
+   "alias-fault": "OK",
+   "alias-fault-release-noop": "OK",
+   "ro-widened": "OK",
+   "signal-injected": "OK",
+   "double-grant": "OK",
+   "preempted-grant": "OK"
+  },
+  "boot1_notes": {
+   "errors": "32 mappings before exhaustion, errno 12 (ENOMEM, libc table)",
+   "ro-store": "domain fault cause 27, launcher exit 139",
+   "alias-fault": "domain fault cause 24, exit 139, with the honest and the release-noop launcher",
+   "double-grant": "adversary: second grant before entry refused (errno 28)",
+   "preempted-grant": "adversary: grant to a preempted domain refused (errno 28)"
+  },
+  "boot2_budget": "OK: 2 MiB grant refused errno 28 (ENOSPC) with 512 nodes; 4 KiB grants before and after work"
+ },
+ "controls": {
+  "previous_libc_image_sha256": "40689c631d12c8203449ef3abecd447d0a2105b1f27e640353a147b040cc37e7",
+  "previous_libc": {
+   "alias-fault-release-noop": "BAD exit 1 (alias still readable)",
+   "ro-widened": "BAD exit 1 (RW accepted for RO)",
+   "signal-injected": "BAD exit 1 (mmap EIO)",
+   "other cases": "OK"
+  },
+  "previous_fw_sha256": "0a1310f69892289a87f2e19220d09faa2a2610588de67c35d63cb9dfe32e4b86",
+  "previous_monitor_driver_launcher": {
+   "cycle": "4 KiB grant 78 failed errno 12",
+   "budget_512_nodes": "monitor halted, cause 30, pc 0x800253ea",
+   "double-grant (with the new driver and adversary)": "monitor halted, cause 29, delivery slot occupied"
+  },
+  "first_version_of_this_correction": {
+   "preempted-grant": "monitor halted, cause 29, delivery slot occupied (the async field is not set on a preempted context)"
+  }
+ },
+ "sqlite_memory_gate": "PASS (row name=alpha value=11, EXTENDED, MEMORY) with the lane module and rebuilt host",
+ "native_runtime_tests": "52 of 52",
+ "bare_metal_mapping_qemu": "58 of 58; lcc-valid-after-revoke and revoke-invalid-handle fail on c128-qemu-merge 408fd83945 (exit 4, exit 1)",
+ "not_measured": "RTL; more than one vCPU; the 256 MiB limit; generation exhaustion; domain-side node exhaustion at the libc's MREV (admitted by the monitor, not forced)"
+}

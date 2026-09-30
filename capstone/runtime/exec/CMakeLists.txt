@@ -23,6 +23,16 @@ if(CAPSTONE_LIBCAPSTONE_DIR)
     "${CAPSTONE_LIBCAPSTONE_DIR}/../../include")
   target_link_libraries(capstone-exec PRIVATE Capstone::Launch Capstone::Delegate Capstone::LinuxFaultPolicy)
   install(TARGETS capstone-exec RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+  # The mapping contract's lying launcher (runtime/tests/application/run-mapping-gate.sh):
+  # the same sources with CAPSTONE_EXEC_ADVERSARY. Never installed.
+  add_executable(capstone-exec-adversary ../linux/exec.c ../linux/application-image.c ../linux/image-hash.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    "${CAPSTONE_LIBCAPSTONE_DIR}/libcapstone.c")
+  target_compile_definitions(capstone-exec-adversary PRIVATE _POSIX_C_SOURCE=200809L CAPSTONE_EXEC_ADVERSARY)
+  target_include_directories(capstone-exec-adversary PRIVATE
+    "${CAPSTONE_LIBCAPSTONE_DIR}"
+    "${CAPSTONE_LIBCAPSTONE_DIR}/../../include")
+  target_link_libraries(capstone-exec-adversary PRIVATE Capstone::Launch Capstone::Delegate Capstone::LinuxFaultPolicy)
   if(BUILD_TESTING)
     add_executable(application-supervisor ../tests/application/supervisor.c)
     add_executable(application-process-test ../tests/application/process-test.c)

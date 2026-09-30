@@ -24,6 +24,49 @@ extern char **environ;
 /* Delegation entry block, exchange buffer, and immutable startup data. */
 enum { REGION_META, REGION_DATA, REGION_STARTUP, REGIONS };
 
+#ifdef CAPSTONE_EXEC_ADVERSARY
+/* capstone-exec-adversary only (runtime/exec/CMakeLists.txt): a launcher that
+   lies in the ways the mapping contract must survive, selected by
+   CAPSTONE_ADVERSARY. The production launcher is built without this. */
+static const char *adversary(void) {
+  const char *mode = getenv("CAPSTONE_ADVERSARY");
+  return mode ? mode : "";
+}
+/* widen: a read-only request reaches the monitor as read-write. */
+static uint64_t adversary_prot(uint64_t prot) {
+  return strcmp(adversary(), "widen") ? prot : CAPSTONE_DELEGATE_MAP_RW;
+}
+/* signal: a signal arrives between the grant and the domain's resume.
+   double: a second grant before the domain was entered again, while the first
+   delivery still occupies the context; the monitor must refuse it. */
+static void adversary_after_grant(dom_id_t domain) {
+  unsigned long binding;
+  if (!strcmp(adversary(), "signal"))
+    kill(getpid(), SIGUSR1);
+  if (!strcmp(adversary(), "double")) {
+    int rc = capstone_map_grant(domain, 4096, CAPSTONE_DELEGATE_MAP_RW, &binding);
+    fprintf(stderr, "capstone-exec-adversary: second grant before entry %s (errno %d)\n",
+            rc ? "refused" : "ACCEPTED", rc ? errno : 0);
+  }
+}
+/* preempt: a grant while the domain is preempted mid-computation; there is no
+   free register to deliver into, and the monitor must refuse it. Once. */
+static void adversary_on_preempt(dom_id_t domain) {
+  static int done;
+  unsigned long binding;
+  if (done || strcmp(adversary(), "preempt"))
+    return;
+  done = 1;
+  int rc = capstone_map_grant(domain, 4096, CAPSTONE_DELEGATE_MAP_RW, &binding);
+  fprintf(stderr, "capstone-exec-adversary: grant to a preempted domain %s (errno %d)\n",
+          rc ? "refused" : "ACCEPTED", rc ? errno : 0);
+}
+/* release-noop: RELEASE is answered with success and never performed. */
+static int adversary_skip_release(void) {
+  return !strcmp(adversary(), "release-noop");
+}
+#endif
+
 struct execution {
   struct capstone_delegate_host delegate;
   struct capstone_spawner spawner;
@@ -35,32 +78,34 @@ struct execution {
   dom_id_t domain;
 };
 
-/* Translated mappings (docs/plans/mapping-transport-m2.md): a GRANT row takes
-   a managed region large enough for the frames, one leaf table page per 256
-   frames and the root page, and hands it to the module, which withdraws it
-   from Linux and asks the monitor to build the mapping. The launcher never
-   maps the region: no VMA may exist over frames the domain owns. A region the
-   module refused stays in the process cache, as every managed region does. */
+/* Translated mappings (docs/plans/mapping-transport-m2.md): the driver takes
+   the backing region from this process's cache, builds the mapping through
+   the monitor and returns the region to the cache at RELEASE. The launcher
+   never maps that region. */
 static long map_grant_service(void *context, uint64_t len, uint64_t prot) {
   struct execution *e = context;
-  unsigned long pages, leaves, binding;
-  region_id_t region;
-  if (!len || len % 4096 || len > CAPSTONE_MAP_MAX_BYTES)
+  unsigned long binding;
+  if (!len || len % 4096 || len > CAPSTONE_DELEGATE_MAP_MAX_BYTES)
     return -EINVAL;
-  if (prot != CAPSTONE_MAP_PROT_R && prot != CAPSTONE_MAP_PROT_RW)
+  if (prot != CAPSTONE_DELEGATE_MAP_R && prot != CAPSTONE_DELEGATE_MAP_RW)
     return -EINVAL;
-  pages = len / 4096;
-  leaves = (pages + 255) / 256;
-  region = create_region((1 + leaves + pages) * 4096);
-  if ((long)region < 0)
-    return -ENOMEM;
-  if (capstone_map_grant(e->domain, region, len, prot, &binding))
+#ifdef CAPSTONE_EXEC_ADVERSARY
+  prot = adversary_prot(prot);
+#endif
+  if (capstone_map_grant(e->domain, len, prot, &binding))
     return -(errno ? errno : EIO);
+#ifdef CAPSTONE_EXEC_ADVERSARY
+  adversary_after_grant(e->domain);
+#endif
   return (long)binding;
 }
 
 static long map_release_service(void *context, uint64_t binding) {
   struct execution *e = context;
+#ifdef CAPSTONE_EXEC_ADVERSARY
+  if (adversary_skip_release())
+    return 0;
+#endif
   if (capstone_map_release(e->domain, binding))
     return -(errno ? errno : EIO);
   return 0;
@@ -475,8 +520,12 @@ int main(int argc, char **argv) {
     while (capstone_step(domain, &step))
       if (errno != EINTR)
         return fail(&e, "capstone-exec: enter domain", 1);
-    if (step.event == CAPSTONE_STEP_PREEMPTED)
+    if (step.event == CAPSTONE_STEP_PREEMPTED) {
+#ifdef CAPSTONE_EXEC_ADVERSARY
+      adversary_on_preempt(domain);
+#endif
       continue;
+    }
     if (step.event == CAPSTONE_STEP_FAULT)
       fault(&e, &step);
     struct capstone_delegate_entry *entry = e.maps[REGION_META];

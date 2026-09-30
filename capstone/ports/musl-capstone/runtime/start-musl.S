@@ -347,7 +347,7 @@ __capstone_yield:
   ccsrrw(t0, cscratch, x0)
   /* A translated mapping the monitor granted during this round arrives in a2
      (docs/plans/mapping-transport-m2.md): park it in recovery slot 96 before
-     any C code can clobber the register. __capstone_map_take_raw collects it;
+     any C code can clobber the register. __capstone_map_take collects it;
      a round that granted nothing leaves a2 untagged and the slot untagged. */
   stc(a2, t0, 96)
   stc(ra, t0, 0)
@@ -387,19 +387,20 @@ __capstone_yield:
   cincoffsetimm(sp, sp, 256)
   ret
 
-/* void *__capstone_map_take_raw(void): the capability parked in recovery slot
-   96 by .Lyield_resume, or an untagged value when nothing was delivered. The
-   slot is cleared either way. Without fault recovery there is no slot and
+/* void __capstone_map_take(capstone_cap_slot *out): move what .Lyield_resume
+   parked in recovery slot 96 into *out and clear slot 96. An untagged value
+   means nothing was delivered. Without fault recovery there is no slot and
    nothing is ever delivered. */
-  .global __capstone_map_take_raw
-__capstone_map_take_raw:
+  .global __capstone_map_take
+__capstone_map_take:
 #ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
   ccsrrw(t0, cscratch, x0)
-  ldc(a0, t0, 96)
+  ldc(t1, t0, 96)
   stc(x0, t0, 96)
   ccsrrw(x0, cscratch, t0)
+  stc(t1, a0, 0)
 #else
-  li a0, 0
+  stc(x0, a0, 0)
 #endif
   ret
 

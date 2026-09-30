@@ -173,50 +173,111 @@ long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c) {
   return r;
 }
 
-/* Translated mappings (docs/plans/mapping-transport-m2.md). The monitor
- * delivers the mapping capability into a2 of the resuming domain; start-musl.S
- * parks it in recovery slot 96 and __capstone_map_take_raw returns it. The
- * capability is accepted only when it is what the row's result promises: a
- * tagged linear capability whose binding word (LCC selector 8) equals the
- * result and whose bounds cover the request from its cursor. Anything else is
- * no delivery: the mapping is released again and the call fails with EIO. */
-extern void *__capstone_map_take_raw(void);
+/* Translated mappings (docs/plans/mapping-transport-m2.md).
+ *
+ * DELIVERY. The monitor writes the mapping capability into a2 of the resuming
+ * domain; start-musl.S parks a2 in recovery slot 96 on every resume, and
+ * __capstone_map_take moves it into a slot of ours. The GRANT loop takes it
+ * right after its own round, before dl_settle can run a signal handler: a
+ * handler's syscalls, and the SIGDONE that acknowledges it, are rounds of
+ * their own whose resumes overwrite slot 96.
+ *
+ * ACCEPTANCE. The launcher and the monitor are untrusted, so the capability is
+ * accepted only if it is what this request asked for: LINEAR, a logical
+ * capability (binding nonzero and equal to the row's result, base in the
+ * logical region at 2^57 and above), exactly the requested permissions, cursor
+ * at base, bounds covering the length. A physical capability is refused even
+ * with a matching binding of 0: whoever handed it over may hold a revocation
+ * handle above it and reclaim it readable once it is delinearized; above a
+ * logical capability there is only the mapping-senior handle, which REVOKE
+ * refuses. Anything else is released again and the call fails with EIO.
+ *
+ * LIFETIME. Before the capability is delinearized for the caller, the libc
+ * derives its own revocation handle above it (MREV) and keeps it here. munmap
+ * revokes that handle first, which kills every alias the program made, and
+ * only then asks the launcher to RELEASE; a launcher that only claims to have
+ * released cannot keep an alias alive. If the mapping was already taken away
+ * from above, the handle is invalid (LCC 0) and there is nothing to revoke. */
+#include "capstone/capability.h"
 
-static unsigned long map_field(void *cap, unsigned selector) {
-  unsigned long v;
-  switch (selector) {
-  case 1: __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x1" : "=r"(v) : "r"(cap)); break;
-  default: __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x8" : "=r"(v) : "r"(cap)); break;
-  }
-  return v;
+#define MAP_SLOTS 32
+extern void __capstone_map_take(capstone_cap_slot *out);
+static capstone_cap_slot map_handle[MAP_SLOTS];
+static unsigned long map_binding[MAP_SLOTS];
+static unsigned char map_used[MAP_SLOTS];
+
+#define MAP_FIELD(slot, sel) ({ unsigned long v_; \
+  __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n" \
+                   ".insn r 0x5b, 0x1, 0x04, %0, t0, x" #sel "\n" \
+                   ".insn s 0x5b, 0x4, t0, 0(%1)\n" \
+                   : "=&r"(v_) : "r"(slot) : "t0", "memory"); v_; })
+
+static int map_acceptable(capstone_cap_slot *got, long binding, unsigned long len,
+                          unsigned long prot) {
+  unsigned long base, end;
+  if (capstone_cap_type(got) != CAPSTONE_CAP_LINEAR)
+    return 0;
+  base = capstone_cap_base(got);
+  end = capstone_cap_end(got);
+  return binding > 0 && MAP_FIELD(got, 8) == (unsigned long)binding &&
+         MAP_FIELD(got, 5) == prot && MAP_FIELD(got, 2) == base &&
+         base >= (UINT64_C(1) << 57) && end > base && end - base >= len;
 }
 
 long __capstone_map_release(unsigned long binding) {
-  return __capstone_delegate_ints(CAPSTONE_NR_MAP_RELEASE, binding, 0, 0);
+  for (unsigned i = 0; i < MAP_SLOTS; ++i) {
+    if (!map_used[i] || map_binding[i] != binding)
+      continue;
+    if (capstone_cap_type(&map_handle[i]) == 2 && MAP_FIELD(&map_handle[i], 0) == 1)
+      capstone_cap_revoke(&map_handle[i]);
+    capstone_cap_clear(&map_handle[i]); /* what REVOKE handed back, or a dead handle */
+    map_used[i] = 0;
+    map_binding[i] = 0;
+    /* The mapping is gone for this domain whatever the launcher answers; the
+       row only returns the storage. A lying launcher costs storage, not
+       authority. */
+    (void)__capstone_delegate_ints(CAPSTONE_NR_MAP_RELEASE, binding, 0, 0);
+    return 0;
+  }
+  return -EINVAL;
 }
 
 void *__capstone_map_grant(unsigned long len, unsigned long prot, unsigned long *binding) {
-  void *cap;
+  uint64_t args[CAPSTONE_DELEGATE_ARGS] = {len, prot, 0, 0, 0, 0};
+  capstone_cap_slot got = {0};
+  unsigned i;
   long r;
-  (void)__capstone_map_take_raw(); /* a stale delivery is nobody's mapping */
-  r = __capstone_delegate_ints(CAPSTONE_NR_MAP_GRANT, len, prot, 0);
-  if (r < 0) {
-    errno = (int)-r;
-    return 0;
-  }
-  cap = __capstone_map_take_raw();
-  if (!__builtin_capstone_cap_get_tag(cap) || map_field(cap, 1) != 0 ||
-      map_field(cap, 8) != (unsigned long)r ||
-      __builtin_capstone_cap_get_cursor(cap) != __builtin_capstone_cap_get_base(cap) ||
-      __builtin_capstone_cap_get_end(cap) - __builtin_capstone_cap_get_base(cap) < len) {
-    __capstone_map_release((unsigned long)r);
+  if (!__capstone_delegate_ready()) {
     errno = EIO;
     return 0;
   }
+  __capstone_map_take(&got); /* a stale delivery is nobody's mapping */
+  capstone_cap_clear(&got);
+  do {
+    dl_reset();
+    r = dl_round(CAPSTONE_NR_MAP_GRANT, args);
+    capstone_cap_clear(&got); /* a RETRY round's delivery, if any, is dropped */
+    __capstone_map_take(&got);
+  } while (dl_settle());
+  if (r < 0) {
+    capstone_cap_clear(&got);
+    errno = (int)-r;
+    return 0;
+  }
+  for (i = 0; i < MAP_SLOTS && map_used[i]; ++i)
+    ;
+  if (i == MAP_SLOTS || !map_acceptable(&got, r, len, prot)) {
+    capstone_cap_clear(&got);
+    (void)__capstone_delegate_ints(CAPSTONE_NR_MAP_RELEASE, (uint64_t)r, 0, 0);
+    errno = i == MAP_SLOTS ? ENOMEM : EIO;
+    return 0;
+  }
+  capstone_cap_make_handle(&got, &map_handle[i]);
+  map_binding[i] = (unsigned long)r;
+  map_used[i] = 1;
   *binding = (unsigned long)r;
-  /* Programs copy what mmap returns; a linear value would move instead. The
-   * delinearized capability names the same mapping and dies with it. */
-  return __builtin_capstone_cap_delin(cap);
+  /* Programs copy what mmap returns; a linear value would move instead. */
+  return capstone_cap_delinearize(&got);
 }
 
 static long dl_string(const char *s, uint64_t *offset) {

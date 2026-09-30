@@ -62,6 +62,8 @@ Rows refer to the design's §10.2 table; scenarios to the
 | destroy-node-reclamation (+control) | CREATE, DETACH, DESTROY rounds leak no node (32-node pool) | node lifetime |
 | populate-rom-frame, create-unbacked-root | pages must be writable RAM before any effect | initialisation must not be silent |
 | create-deliver-x1, create-deliver-x3, create-deliver-x5 | x1 and x3 are refused as delivery registers; x5 works | delivery contract |
+| lcc-valid-after-revoke | `lcc 0` reads a node's validity: 0 for an alias and a nested handle after their senior was revoked | spec LCC table; the libc's check before it revokes its mapping handle |
+| revoke-invalid-handle | REVOKE of a handle whose node was revoked raises Invalid capability (25) | spec REVOKE, RTL `capstone_dyn_unit.anvil` |
 
 The codec itself has a unit test in the emulator, `tests/unit/test-cap-compress`,
 which round-trips reservations from 4 KiB to 1 TiB across the logical region.

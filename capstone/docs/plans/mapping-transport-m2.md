@@ -50,23 +50,48 @@ given.
 | `CAPSTONE_NR_MAP_RELEASE` | the binding word | 0 or `-errno` |
 
 **Delivery.** CREATE names a2 (x12) as the delivery register. `.Lyield_resume`
-stores a2 into recovery slot 96 before anything else runs; `dl_round`'s caller
-takes it with `__capstone_map_take()`, which loads the slot, clears it, and
-checks tag, linear type, binding equal to the row's result, base and length;
-anything else is "no delivery" and the row fails with EIO. The launcher and the
-monitor never hold the mapping capability: CREATE writes it into the context.
+stores a2 into recovery slot 96 before anything else runs, on every resume.
+The GRANT loop moves it into a slot of its own with `__capstone_map_take`
+right after its own round, before `dl_settle` can run a signal handler: a
+handler's syscalls and the SIGDONE that acknowledges it are rounds of their
+own and overwrite slot 96. The launcher and the monitor never hold the
+mapping capability: CREATE writes it into the context.
 
-**Launcher.** `capstone_delegate_serve` handles the two numbers: for GRANT it
-rounds `len` to pages, computes the chunk size (frames plus one leaf table per
-256 pages plus the root page), creates a managed region of that size through
-the module (`REGION_CREATE`), then calls the new `IOCTL_MAP_GRANT {dom_id,
-region_id, len, prot}`; the result is the binding word or an error, and on
-error the region is reset. For RELEASE it calls `IOCTL_MAP_RELEASE {dom_id,
-binding}`.
+**Acceptance.** The libc accepts the capability only if it is what the request
+asked for: LINEAR; logical (binding nonzero and equal to the row's result,
+base at 2^57 or above); exactly the requested permissions; cursor at base;
+bounds covering the length. Anything else is released with a RELEASE row and
+`mmap` fails with EIO. A physical capability is refused even with a binding
+of 0 that matches a forged result: whoever handed it over may hold a
+revocation handle above it and reclaim it readable once it is delinearized;
+above a logical capability there is only the mapping-senior handle, which
+REVOKE refuses.
+
+**Lifetime.** Before it delinearizes the capability for the caller, the libc
+derives its own revocation handle above it (MREV) and keeps it. `munmap`
+revokes that handle first, which kills every alias the program made, and then
+sends RELEASE; `munmap` succeeds once the local revocation is done, whatever
+the launcher answers. A launcher that only claims to have released cannot keep
+an alias alive; a lying launcher costs storage, not authority. When the
+mapping was already taken away from above, the handle is invalid (LCC 0 reads
+0) and there is nothing to revoke. This needs the emulator to answer LCC 0
+with the node's validity and REVOKE to refuse an invalid handle, as the spec
+and the RTL do (`capstone-qemu` 59942535).
+
+**Launcher.** `capstone_delegate_serve` hands the two numbers to hooks the
+launcher installs: GRANT checks length and protection and calls
+`IOCTL_MAP_GRANT {version, dom_id, len, prot}`, whose result is the binding
+word; RELEASE calls `IOCTL_MAP_RELEASE {version, dom_id, binding}`. The
+launcher never creates or maps the backing region.
 
 **Module.** Two ioctls (20 and 21) forwarding to two SBI functions (0x30 and
-0x31) with the same arguments; the module records which region backs which
-mapping so that `process_release` resets it like any other region.
+0x31). GRANT takes a region of the needed size (frames, one leaf table page
+per 256 frames, the root page) from the caller's process cache through the
+same path `REGION_CREATE` uses, marks it shared and transferred so Linux
+cannot map it, and passes its id to the monitor; a refusal and a successful
+RELEASE return the block to the cache, where the next grant reuses it. The
+module records which region backs which mapping, and `process_release`
+releases every mapping before it destroys domains and resets regions.
 
 **Monitor.**
 - `map_grant(dom, region, len, prot)`: checks the region is managed, owned and
@@ -81,6 +106,13 @@ mapping so that `process_release` resets it like any other region.
   `lcc 8` from the detach handle. The chunk's MREV root, kept by
   `managed_create_region`, is the revocation-from-above handle for the whole
   mapping.
+- Before any state change, `map_grant` admits its whole node demand (one
+  SPLIT per page and table page and one for the root page, two for CREATE,
+  one for the libc's revocation handle) on top of the monitor's 288-node
+  reserve, running the collector once when it falls short, and refuses a
+  grant while a delivery to the domain is still pending or while the domain's
+  last step did not return at a round (preempted, faulted, never entered):
+  CREATE would fault the monitor on an occupied delivery slot.
 - `map_release(dom, binding)`: finds the entry, `csmapdetach`, `csmapdestroy`,
   then reclaims the chunk with the existing `managed_reset_region` path
   (revoke the root, scrub, re-arm), and frees the entry.
@@ -107,10 +139,11 @@ as today. The System V shm emulation stays `malloc`-backed. A mapping table of
 Found while making the transport work (2026-09-30):
 
 - The libc delinearizes the delivered mapping capability after checking it
-  (tag, LINEAR type, binding equal to the row's result, cursor at base,
-  bounds covering the request). Programs copy what `mmap` returns, and a
-  linear value would move instead; the delinearized capability names the
-  same mapping and dies with it, which is what the alias-fault mode checks.
+  (section 2, Acceptance) and after deriving its own revocation handle above
+  it (section 2, Lifetime). Programs copy what `mmap` returns, and a linear
+  value would move instead; the delinearized capability names the same
+  mapping and dies with the libc's revocation, which is what the alias-fault
+  mode checks, with an honest and with a lying launcher.
 - GRANT withdraws the region from Linux the way a TRANSFERRED share does
   (`managed_unmap`: the CPMP association goes, the slot is not live until
   RELEASE has reset it); the driver marks the block shared and transferred
@@ -190,6 +223,32 @@ on the two monitor defects of section 3 (a refused populate, then the
 compiler's register clash). `run-mapping-gate.sh` in the tests directory
 runs the contract gate.
 
+### Review corrections, 2026-09-30
+
+The review of the result above reproduced five defects the five modes did not
+exercise; each is corrected and has a gate case now, and each case fails on
+the previous stack:
+
+| Finding | Correction | Gate case | Control on the previous stack |
+|---|---|---|---|
+| 1. A launcher that only claims RELEASE leaves aliases live | the libc revokes its own handle before RELEASE | alias-fault under `release-noop` | the alias reads 9, exit 1 |
+| 2. Delivered permissions not checked | exact permission, logical kind and binding checks | ro-refused under `widen`; ro-store (cause 27) | the widened mapping is accepted, exit 1 |
+| 3. Node exhaustion faults the monitor in GRANT | node admission before any change | budget, second boot with 512 nodes: 2 MiB refused (ENOSPC), small grants work | monitor halts with cause 30 at 0x800253ea |
+| 4. Released backings not reused | GRANT takes its region from the process cache, RELEASE returns it | cycle: 300 grants of 4 KiB and 60 of 64 KiB, one live at a time | grant 78 fails with ENOMEM |
+| 5. A signal during delivery loses the mapping | take the delivery right after the round | signal under `signal` (handler with a syscall) | mmap fails with EIO, exit 1 |
+
+Two monitor faults of the same class as finding 3 were found while fixing it
+and are refusals now: a second grant before the domain was entered again
+(control: the previous monitor halts with cause 29, delivery slot occupied)
+and a grant to a preempted domain (control: the first version of this
+correction, which tested the context's async field, halted the same way).
+The lying launcher is `capstone-exec-adversary`, the production launcher's
+sources built with `CAPSTONE_EXEC_ADVERSARY` and never installed.
+`run-mapping-gate.sh` runs all fifteen cases in one boot and the budget case
+in a second. Platform and hashes:
+`runtime/tests/application/results/20260930-mapping-transport-review.json`.
+The SQLite memory gate passes on the corrected platform.
+
 Not in M2: growth of a mapping, shared mappings, file mappings, delivery to a
-preempted domain (the paused-resume path), and any change to the allocators
+preempted domain (refused now, not served), and any change to the allocators
 (M3).
