@@ -1,0 +1,25 @@
+{
+ "date": "2026-09-30",
+ "change": "level0: malloc_usable_size",
+ "platform": "as 20260930-fcntl-lock-pointer.json (the #144 platform, the dev 330014ea compiler)",
+ "why": "SQLite 3.22.0 built as an ordinary program keeps an 8-byte size header in front of every block unless it can ask the heap for a block's size (HAVE_MALLOC_USABLE_SIZE, which configure defines on Linux). With the header, the shell's first mutex faulted: capstone-exec: domain fault cause=6 in pthread_mutex_init, a 16-byte store to an address 8 bytes off its boundary in the level0 arena (-O2 and -O0 alike). musl's own malloc_usable_size (oldmalloc) reads a chunk header level0 does not keep.",
+ "images": {
+  "patched_delegate_contract_sha256": "ab2580a52e01725e01a83cea01855c433368a59a6b80ea7b1d0348a2c1c78612",
+  "control_delegate_contract_sha256": "56c707bcf3c051c6e8074469e0288e129fad16dd3c19f37d90280d4758d6960f",
+  "control": "the same contract source with level0.c as on musl-fcntl-lock-pointer: malloc_usable_size resolves to musl's src/malloc/oldmalloc/malloc_usable_size.o"
+ },
+ "usable_size_mode": "malloc_usable_size(NULL) == 0; for sizes 1, 4, 13, 40, 121, 364, 1093, 3280: two blocks, the reported size of the first at least the request, the whole reported range written, the neighbour allocated after it unchanged, a pointer stored in the last aligned slot reported read back",
+ "binfmt_contract": {
+  "native-elf": "PASS",
+  "original-argv0": "PASS",
+  "io": "PASS",
+  "exec": "PASS",
+  "exec-closed": "PASS",
+  "exec-error": "PASS",
+  "lock": "PASS",
+  "usable-size": "PASS"
+ },
+ "control": "usable-size: status 255, capstone-exec: domain fault cause=7 (a store access fault while writing the size oldmalloc reported)",
+ "libc_test": "not rerun: the change adds a function, and no libc-test source calls malloc_usable_size",
+ "not_covered": "the Sublet heap (sublet_heap.c) has no malloc_usable_size yet; a program built with --heap sublet that calls it links musl's oldmalloc version"
+}
