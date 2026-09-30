@@ -40,3 +40,15 @@
   .quad 0x5145524d4f445043      /* 'C','P','D','O','M','R','E','Q' in memory */
   .quad CAPSTONE_DOMREQ_DATA
   .quad CAPSTONE_DOMREQ_STACK
+
+/* The context arena (docs/plans/delegation-threads.md): a strong definition
+   only when the application asked for one; the runtime's weak 0 otherwise.
+   Allocated, unlike the section above, because start-musl.S reads it at the
+   first entry. */
+#if defined(CAPSTONE_CONTEXT_ARENA_BYTES) && CAPSTONE_CONTEXT_ARENA_BYTES
+.section .rodata.capstone_context_arena,"a",@progbits
+  .balign 8
+  .global __capstone_context_arena_bytes
+__capstone_context_arena_bytes:
+  .quad CAPSTONE_CONTEXT_ARENA_BYTES
+#endif

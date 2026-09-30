@@ -48,6 +48,7 @@
 #endif
 
 #include "../../../runtime/include/capstone/domain-fault.h"
+#include "../../../runtime/include/capstone/context.h"
 
 .text
 
@@ -83,6 +84,31 @@ __test_entry:
   split(t2, sp, t1)
   delin(t2)
   ccsrrw(x0, cscratch, t2)
+  /* Context arena (docs/plans/delegation-threads.md). An application built
+     with CONTEXT_BYTES gets the lowest bytes of its data region as ONE LINEAR
+     capability, parked in __capstone_context_arena; the runtime carves the
+     thread areas it seals out of it (context.c). This is the only point at
+     which the data region is still linear. With 0 bytes, which is every other
+     application, the region below is split exactly as before. */
+  delin(gp)
+  .Lpcrel_arena_bytes:
+  auipc t3, %pcrel_hi(__capstone_context_arena_bytes)
+  addi t3, t3, %pcrel_lo(.Lpcrel_arena_bytes)
+  cincoffset t3, gp, t3
+  ld t4, 0(t3)
+  beqz t4, .Lno_context_arena
+  lcc(t1, sp, 3)
+  add t1, t1, t4
+  split(t5, sp, t1)              /* sp: the arena, t5: the stack above it */
+  .Lpcrel_arena_slot:
+  auipc t3, %pcrel_hi(__capstone_context_arena)
+  addi t3, t3, %pcrel_lo(.Lpcrel_arena_slot)
+  cincoffset t3, gp, t3
+  stc(sp, t3, 0)                 /* moves the linear arena out of sp */
+  .insn r 0x5b, 0x1, 0xa, sp, t5, x0   /* movc sp, t5 */
+.Lno_context_arena:
+  li t3, 0
+  li t4, 0
 #endif
   lcc(t1, sp, 4)
   scc(sp, sp, t1)
@@ -254,6 +280,227 @@ test:
   li ra, 0
   lla t2, .Lmusl_faulted_reentry
   j .Lmusl_scrub_return
+
+/* ---- Minted contexts (docs/plans/delegation-threads.md) ------------------
+ *
+ * A context the runtime mints (context.c) enters here on its first CALL. Its
+ * cscratch is its own start block, laid out like the recovery block above:
+ * slots 0..80 are the entry glue's (return capability, result slot, gp, sp,
+ * request, suspended sp), so the yield and the fault handler above serve a
+ * minted context unchanged. Slots 96..128 carry tp, the start function and
+ * its argument; 160 is the completion word and 168 the return value
+ * (include/capstone/context.h). The capability-global initializers never run
+ * here: they ran once, on the application's first entry. */
+  .global __capstone_context_entry
+  .balign 16
+__capstone_context_entry:
+  ccsrrw(t0, cscratch, x0)
+  stc(ra, t0, 0)
+  li ra, 0
+  delin(gp)
+  stc(gp, t0, 32)
+  sd a0, 64(t0)
+  bnez a0, .Lcontext_no_result
+  stc(a1, t0, 16)
+.Lcontext_no_result:
+  lla t1, .Lmusl_fault
+  cincoffset(t1, gp, t1)
+  .insn r 0x5b, 0x1, 0x2, t1, t1, x1
+  ccsrrw(x0, ctvec, t1)
+  ldc(sp, t0, 48)
+  ldc(tp, t0, 96)
+  ldc(t1, t0, 112)
+  ldc(a0, t0, 128)
+  ccsrrw(x0, cscratch, t0)
+  li t0, 0
+  .insn i 0x5b, 0x5, ra, 0(t1)
+  /* The start function returned: its value is the context's. */
+
+/* void __capstone_context_exit(unsigned long value), never returns.
+ *
+ * Everything the final switch needs is loaded into registers BEFORE the
+ * completion word is published; after that store nothing touches the stack,
+ * the TLS block or the start block, no libc function runs and the syscall
+ * dispatcher is never entered, so no signal is delivered here. A joiner that
+ * sees done == 1 may revoke the thread area at once. */
+  .global __capstone_context_exit
+__capstone_context_exit:
+  ccsrrw(t0, cscratch, x0)
+  ldc(t1, t0, 0)
+  stc(x0, t0, 0)
+  ld t3, 64(t0)
+  ldc(t2, t0, 16)
+  sd a0, 168(t0)
+  fence rw, w
+  li t4, 1
+  sd t4, 160(t0)
+  /* No access to the thread area below this line. */
+  ccsrrw(x0, cscratch, t0)
+  li t0, 0
+  bnez t3, .Lcontext_exit_switch
+  li t4, CAPSTONE_CONTEXT_EXITED
+  sd t4, 0(t2)
+.Lcontext_exit_switch:
+  li t2, 0
+  li t3, 0
+  li t4, 0
+  li sp, 0
+  li gp, 0
+  li tp, 0
+  li s0, 0
+  li s1, 0
+  li s2, 0
+  li s3, 0
+  li s4, 0
+  li s5, 0
+  li s6, 0
+  li s7, 0
+  li s8, 0
+  li s9, 0
+  li s10, 0
+  li s11, 0
+  li a0, 0
+  li a1, 0
+  li a2, 0
+  li a3, 0
+  li a4, 0
+  li a5, 0
+  li a6, 0
+  li a7, 0
+  li t5, 0
+  li t6, 0
+  lla t2, .Lcontext_reentry
+  domreturn(t1, t2, x0)
+
+/* Every later entry into an exited context lands here. It uses only the
+ * return capability and result slot this entry delivered, reports EXITED
+ * again and returns: no stack, no TLS, no start block. */
+.Lcontext_reentry:
+  bnez a0, .Lcontext_reentry_switch
+  li t4, CAPSTONE_CONTEXT_EXITED
+  sd t4, 0(a1)
+.Lcontext_reentry_switch:
+  li a0, 0
+  li a1, 0
+  li t4, 0
+  lla t2, .Lcontext_reentry
+  domreturn(ra, t2, x0)
+
+/* void __capstone_context_seal(capstone_cap_slot *region, void *entry,
+ *                              void *start_block, capstone_cap_slot *out,
+ *                              unsigned long mstatus, unsigned long mie)
+ *
+ * Fill a LINEAR seal region with the synchronous context a first CALL loads
+ * (pc, ctvec, cscratch, then the control words) and seal it into *out. The
+ * runtime passes the words create_domain writes; a probe may pass others
+ * (A12). ctvec stays null: the entry installs the runtime's own. */
+  .global __capstone_context_seal
+__capstone_context_seal:
+  ldc(t0, a0, 0)
+  stc(x0, a0, 0)
+  stc(a1, t0, 0)
+  stc(x0, t0, 16)
+  stc(a2, t0, 32)
+  sd a4, 48(t0)
+  sd x0, 56(t0)
+  sd x0, 64(t0)
+  sd x0, 72(t0)
+  sd a5, 80(t0)
+  .insn r 0x5b, 0x1, 0x7, t0, t0, x0   /* seal t0 in place */
+  stc(t0, a3, 0)
+  li t1, 0
+  ret
+
+/* long __capstone_context_offer(capstone_cap_slot *seal, unsigned long ticket)
+ *
+ * Move a minted seal, with its ticket, into the invocation descriptor the
+ * current call entry lent this context (recovery-block slot 16). The monitor
+ * takes it out when the call returns, before it revokes the loan; the launcher
+ * then asks it to ADOPT the offer under the ticket. -1 when the current entry
+ * carried no descriptor (a region share); the seal then stays where it is. */
+  .global __capstone_context_offer
+__capstone_context_offer:
+  ccsrrw(t0, cscratch, x0)
+  ld t1, 64(t0)
+  bnez t1, .Lcontext_offer_none
+  ldc(t2, t0, 16)
+  ccsrrw(x0, cscratch, t0)
+  ldc(t3, a0, 0)
+  stc(x0, a0, 0)
+  sd a1, 16(t2)
+  stc(t3, t2, 32)
+  li t0, 0
+  li t2, 0
+  li t3, 0
+  li a0, 0
+  ret
+.Lcontext_offer_none:
+  ccsrrw(x0, cscratch, t0)
+  li t0, 0
+  li a0, -1
+  ret
+
+/* void __capstone_context_call(capstone_cap_slot *seal, unsigned long request,
+ *                              unsigned long *result)
+ *
+ * Enter a minted context directly with CALL (a nested, unsupervised entry
+ * from this context) and return when it yields or exits; the seal comes back
+ * into *seal. The CALL exchanges only pc, ctvec, cscratch and the control
+ * words, so everything this caller needs is saved on its stack and sp
+ * travels in the recovery block's suspended-sp slot, as in the yield. */
+  .global __capstone_context_call
+__capstone_context_call:
+  cincoffsetimm(sp, sp, -256)
+  stc(ra, sp, 0)
+  stc(gp, sp, 16)
+  stc(s0, sp, 32)
+  stc(s1, sp, 48)
+  stc(s2, sp, 64)
+  stc(s3, sp, 80)
+  stc(s4, sp, 96)
+  stc(s5, sp, 112)
+  stc(s6, sp, 128)
+  stc(s7, sp, 144)
+  stc(s8, sp, 160)
+  stc(s9, sp, 176)
+  stc(s10, sp, 192)
+  stc(s11, sp, 208)
+  stc(tp, sp, 224)
+  stc(a0, sp, 240)
+  ccsrrw(t0, cscratch, x0)
+  stc(sp, t0, 80)
+  ccsrrw(x0, cscratch, t0)
+  ldc(t3, a0, 0)
+  stc(x0, a0, 0)
+  mv a0, a1
+  .insn r 0x5b, 0x1, 0xa, a1, a2, x0   /* movc a1, a2 */
+  /* Named so that a probe can match a fault at exactly this CALL. */
+  .global __capstone_context_call_insn
+__capstone_context_call_insn:
+  .insn r 0x5b, 0x1, 0x20, t3, t3, x0  /* call t3 */
+  ccsrrw(t0, cscratch, x0)
+  ldc(sp, t0, 80)
+  ccsrrw(x0, cscratch, t0)
+  li t0, 0
+  ldc(a0, sp, 240)
+  stc(t3, a0, 0)
+  ldc(ra, sp, 0)
+  ldc(gp, sp, 16)
+  ldc(s0, sp, 32)
+  ldc(s1, sp, 48)
+  ldc(s2, sp, 64)
+  ldc(s3, sp, 80)
+  ldc(s4, sp, 96)
+  ldc(s5, sp, 112)
+  ldc(s6, sp, 128)
+  ldc(s7, sp, 144)
+  ldc(s8, sp, 160)
+  ldc(s9, sp, 176)
+  ldc(s10, sp, 192)
+  ldc(s11, sp, 208)
+  ldc(tp, sp, 224)
+  cincoffsetimm(sp, sp, 256)
+  ret
 #endif
 
 .Ltest_ret:
@@ -394,4 +641,11 @@ __capstone_gct_start:
   .align 4
   .global __capstone_dom_ret
 __capstone_dom_ret:
+  .zero 16
+
+/* The linear context arena _start splits off (see there); empty without
+   CONTEXT_BYTES. */
+  .align 4
+  .global __capstone_context_arena
+__capstone_context_arena:
   .zero 16

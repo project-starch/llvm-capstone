@@ -131,6 +131,23 @@ enum capstone_delegate_group {
 #define CAPSTONE_NR_SIGACTION UINT64_C(0xC0DE0005) /* signo, class, flags */
 #define CAPSTONE_NR_SIGDONE UINT64_C(0xC0DE0006)   /* seq */
 #define CAPSTONE_NR_SIGPOLL UINT64_C(0xC0DE0007)
+
+/* Contexts (docs/plans/delegation-threads.md). CONTEXT_CREATE: ticket, mode;
+ * the seal is already in the requesting context's invocation descriptor, the
+ * result is the new context's id or -errno. CONTEXT_STEP: id, 0, event; the
+ * launcher steps that context once and writes a capstone_context_event.
+ * CONTEXT_FORGET: id. Arguments are integers; the event is an optional output. */
+#define CAPSTONE_NR_CONTEXT_CREATE UINT64_C(0xC0DE0008)
+#define CAPSTONE_NR_CONTEXT_STEP UINT64_C(0xC0DE0009)
+#define CAPSTONE_NR_CONTEXT_FORGET UINT64_C(0xC0DE000A)
+#define CAPSTONE_CONTEXT_REGISTER 0u   /* register only; the application steps it */
+#define CAPSTONE_CONTEXT_THREAD 1u     /* a launcher thread steps it until it ends */
+struct capstone_context_event {
+  uint64_t kind;     /* the driver's step event: returned, preempted, fault, dead, stale */
+  uint64_t result;   /* the context's result word */
+  uint64_t cause, pc, address;
+  uint64_t reserved;
+};
 #define CAPSTONE_SIGNAL_DEFAULT 0u
 #define CAPSTONE_SIGNAL_IGNORE 1u
 #define CAPSTONE_SIGNAL_CAUGHT 2u

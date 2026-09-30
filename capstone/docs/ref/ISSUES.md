@@ -845,6 +845,35 @@ A program that passes an invalid immediate therefore runs on the emulator and tr
 first instance was E3's R1 harness encoding a register NUMBER (12) into the immediate field; see
 R-21's box. **Which behaviour is intended is a spec question**, and neither source reads as the
 specification. The RTL's refusal is the safer default.
+## Q-14 — capstone-qemu enforces no capability permission on a data load or store, and reports an out-of-bounds access as an access fault `OPEN — model divergence; found 2026-09-30 by Probe A case A2 (delegation-threads)`
+
+**What the emulator checks.** `_helper_access_with_cap` (`target/riscv/op_helper.c:1611`, capstone-qemu
+3589d6af6f) refuses an untagged base (24), a revoked one (25), a load through an UNINIT capability
+(26) and an access outside the bounds. It reads no permission bit: the bounds check carries the
+comment `// TODO: bounds check only for now` (`:1723`). An out-of-bounds access raises the standard
+access fault, store 7 or load 5 (`:1754`), not 28.
+
+**What the RTL's load/store unit does**, per R-34's table (`load_store_unit.sv:974-990`): 27 for a
+load without read permission or a store without write permission, 28 for out of bounds.
+
+**Found by:** the delegated-threads probe lends each context a 64-byte write-only descriptor. A load
+through it returned normally on capstone-qemu (`entry-negative`,
+`runtime/tests/application/results/20260929-context-probe-monitor.json`); a store one word past it
+faulted with cause 7 at the store.
+
+**Consequence:** no QEMU run is evidence that a permission restriction holds, whether a write-only
+loan, a read-only share or an execute-only mapping. On this platform such an authority is exactly its
+bounds. Any probe that asserts a permission fault needs the board, or a capstone-qemu that checks
+permissions.
+
+**Partly addressed 2026-09-30 (capstone-qemu a53ac18e3d, `_helper_access_with_cap`):** the access
+path now checks the operand TYPE and, for a sealed-return operand, the spec's access window (P0/A2,
+delegation-threads). The permission bits (27) are still not checked, and an out-of-window or
+out-of-bounds access is still reported as an access fault (5/7) rather than 27/28. So this entry
+stays open for the permission check and the cause number. Follow-up 674cdab03c removes an
+unsigned-overflow acceptance at the upper edge of the sealed-return window and from the general
+bounds check.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
