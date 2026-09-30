@@ -90,10 +90,28 @@ static struct capstone_launch_task task_record(void) {
   return t;
 }
 
+/* Where a launch spends its time before the program's first instruction:
+ * rdtime at each stage boundary, printed with the counters. */
+enum { LAUNCH_START, LAUNCH_IMAGE, LAUNCH_HASH, LAUNCH_SPAWNER, LAUNCH_DEVICE,
+       LAUNCH_DOMAIN, LAUNCH_REGIONS, LAUNCH_SECCOMP, LAUNCH_STAGES };
+static unsigned long launch_stamp[LAUNCH_STAGES];
+static void launch_mark(int stage) { launch_stamp[stage] = ticks(); }
+
 /* Counters on request, to stderr, so a run can be costed without a tool. */
 static void report_stats(const struct execution *e) {
   if (!getenv("CAPSTONE_DELEGATE_STATS"))
     return;
+  if (launch_stamp[LAUNCH_SECCOMP])
+    fprintf(stderr, "capstone-exec: launch ticks image=%lu hash=%lu spawner=%lu device=%lu "
+            "domain=%lu regions=%lu seccomp=%lu total=%lu\n",
+            launch_stamp[LAUNCH_IMAGE] - launch_stamp[LAUNCH_START],
+            launch_stamp[LAUNCH_HASH] - launch_stamp[LAUNCH_IMAGE],
+            launch_stamp[LAUNCH_SPAWNER] - launch_stamp[LAUNCH_HASH],
+            launch_stamp[LAUNCH_DEVICE] - launch_stamp[LAUNCH_SPAWNER],
+            launch_stamp[LAUNCH_DOMAIN] - launch_stamp[LAUNCH_DEVICE],
+            launch_stamp[LAUNCH_REGIONS] - launch_stamp[LAUNCH_DOMAIN],
+            launch_stamp[LAUNCH_SECCOMP] - launch_stamp[LAUNCH_REGIONS],
+            launch_stamp[LAUNCH_SECCOMP] - launch_stamp[LAUNCH_START]);
   fprintf(stderr, "capstone-exec: delegate rounds=%llu syscalls=%llu refused=%llu "
           "bytes_in=%llu bytes_out=%llu ticks=%lu\n",
           (unsigned long long)e->delegate.rounds, (unsigned long long)e->delegate.syscalls,
@@ -148,6 +166,12 @@ static int print_stats(void) {
 static void fault(struct execution *e, const struct ioctl_dom_step_args *step) {
   if (e->maps[REGION_META])
     e->delegate.preparing_nr = ((struct capstone_delegate_entry *)e->maps[REGION_META])->nr;
+  /* The record names the image by its SHA-256. Hashing 20 MB byte by byte
+     costs a launch two seconds in the guest, so it happens here, on the one
+     path that prints it; the image descriptor is still open. */
+  if (!e->delegate.image_sha256[0] && e->image >= 0 &&
+      capstone_application_hash(e->image, e->delegate.image_sha256))
+    e->delegate.image_sha256[0] = 0;
   /* Application streams carry application bytes only. The record goes to the
      file CAPSTONE_FAULT_RECORD names, which the host CLI reads back, and to
      stderr only when that is a terminal or diagnostics were asked for. */
@@ -279,6 +303,7 @@ int main(int argc, char **argv) {
     memcpy(e.delegate.children, resumed.children, sizeof resumed.children);
   }
   unsigned stdio_mask;
+  launch_mark(LAUNCH_START);
   if (reserve_stdio(&stdio_mask))
     return 125;
   struct capstone_application_descriptor_v2 descriptor;
@@ -294,8 +319,8 @@ int main(int argc, char **argv) {
             e.path, strerror(error));
     return error == ENOENT ? 127 : 126;
   }
-  if (capstone_application_hash(e.image, e.delegate.image_sha256))
-    return fail(&e, "capstone-exec: image hash", 1);
+  launch_mark(LAUNCH_IMAGE);
+  launch_mark(LAUNCH_HASH); /* the hash is computed only for a fault record */
   char *cwd = getcwd(NULL, 0);
   void *startup = calloc(1, CAPSTONE_LAUNCH_BYTES);
   int first_arg = app_args ? 4 : binfmt ? 2 : 1;
@@ -317,6 +342,7 @@ int main(int argc, char **argv) {
     return fail(&e, "capstone-exec: spawner", 1);
   }
   e.delegate.spawner = &e.spawner;
+  launch_mark(LAUNCH_SPAWNER);
   capstone_set_verbose(0);
   /* Find descriptors opened by libcapstone without exposing its private fd
      through the application's direct Linux descriptor namespace. */
@@ -336,6 +362,7 @@ int main(int argc, char **argv) {
     return fail(&e, "capstone-exec: device", 1);
   }
   e.device_open = 1;
+  launch_mark(LAUNCH_DEVICE);
   e.delegate.private_fds[e.delegate.private_count++] = e.image;
   fd_dir = opendir("/proc/self/fd");
   if (!fd_dir) { free(startup); return fail(&e, "capstone-exec: descriptors", 1); }
@@ -357,6 +384,7 @@ int main(int argc, char **argv) {
     free(startup);
     return fail(&e, "capstone-exec: cannot create domain", 1);
   }
+  launch_mark(LAUNCH_DOMAIN);
   e.sizes[REGION_META] = 4096;
   e.sizes[REGION_DATA] = (size_t)descriptor.exchange_bytes;
   e.sizes[REGION_STARTUP] = CAPSTONE_LAUNCH_BYTES;
@@ -390,6 +418,7 @@ int main(int argc, char **argv) {
   }
   e.delegate.exchange = e.maps[REGION_DATA];
   e.delegate.exchange_bytes = e.sizes[REGION_DATA];
+  launch_mark(LAUNCH_REGIONS);
   if (!getenv("CAPSTONE_EXEC_NO_SECCOMP")) {
     int rc = capstone_delegate_seccomp();
     if (rc) {
@@ -399,6 +428,7 @@ int main(int argc, char **argv) {
   }
   for (int fd = 0; fd < 3; ++fd)
     if (!(stdio_mask & (1u << fd))) close(fd);
+  launch_mark(LAUNCH_SECCOMP);
   e.ticks_start = ticks();
   for (;;) {
     struct ioctl_dom_step_args step;
