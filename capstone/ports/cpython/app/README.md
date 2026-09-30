@@ -312,6 +312,19 @@ stops there in both runs: the domain faults before any fcntl round, musl's
 class of musl patch 0004; a fifth patch, not a row. Record:
 `runtime/tests/application/results/20260930-cheap-rows.json`.
 
+With the fifth patch, `musl-patches/0005`, `test_lockf`
+passes and `test_posix` runs to its end: 170 tests, 113 ok, 1 fail, 18
+errors, 38 skipped. The errors are ENOSYS from calls that are not rows
+(`getresuid`, `getresgid`, `setresuid`, `setresgid`, `setgroups`,
+`initgroups`, `waitid`, `fexecve`, `preadv` with flags), EOPNOTSUPP
+(`posix_fallocate` on the file system, `POSIX_SPAWN_RESETIDS` refused by the
+spawner), and two CPython build items (`_testcapi`, `makedev`); the failure
+is `test_register_at_fork`. The same objects linked without the patch fault
+at `test_lockf` as before. `test_fcntl`: 12 tests, 6 ok, 3 skipped, 3
+errors (`F_NOTIFY` not an admitted command; two lock tests need
+`_multiprocessing`, which is not built). Record:
+`runtime/tests/application/results/20260930-cpython-lockf.json`.
+
 With `delegation-sockets` (nineteen socket and epoll rows, the word length
 rule, the msghdr block, the datagram rule, and the data-copy rule for every
 buffer crossing the exchange region): [host/socket-smoke.py](host/socket-smoke.py),
