@@ -335,7 +335,7 @@ a patch may change how a test reaches memory, never what it checks. `fetch-libc-
 the tree to the pinned commit and applies them, so a run depends on the commit and the patch set
 and on nothing that happened in the tree before.
 
-## Patches to musl: three round-count decisions, and one capability
+## Patches to musl: three round-count decisions, and two capabilities
 
 Under the delegated runtime every syscall is a round trip through the launcher, so the
 port's cost model is the number of rounds, and `musl-patches/` holds the three places where
@@ -349,13 +349,19 @@ them; each patch is one decision and says so in its name:
   and `pselect.c` built the kernel's `{mask, size}` pair through `uintptr_t`, so the
   delegated runtime received an address it could not read; `select` (a null mask) never
   showed it.
+- `0005` `fcntl` keeps a lock command's argument a capability. It read its variadic argument
+  as `unsigned long` and passed `(void *)arg` for `F_GETLK`, `F_SETLK`, `F_SETLKW` and the
+  `F_*OWN_EX` commands, so the `struct flock` pointer arrived untagged and the runtime's first
+  read of it faulted (CPython's `test_lockf`, SQLite's first lock). It reads the argument as
+  `syscall_arg_t`, as musl's `syscall()` does.
 - `0003` no `fcntl(F_SETFD, FD_CLOEXEC)` after an `open` that already asked for `O_CLOEXEC`,
   in `open`, `fopen` and `__fopen_rb_ca`. Linux honours the flag; the second call was
   musl's fallback for kernels that did not. The sites that set the flag on a descriptor
   they did not open (`fdopendir`, `fdopen` with `e`, `freopen` on an open stream) keep it.
 
 The rule for `libc-test/patches/` is unchanged: tests are patched only in how they reach
-memory, never in what they check. These three patch the library, and only its round count.
+memory, never in what they check. Of the library patches, 0001 to 0003 change only its round
+count, and 0004 and 0005 only keep a pointer a capability.
 The rest of the saving is in the runtime: identity (`getpid` and friends) and the two clocks
 come from the launch record the task writes (`runtime/include/capstone/launch.h`), `set_tid_address`
 and `set_robust_list` are answered in the domain, and the domain no longer `chdir`s to the

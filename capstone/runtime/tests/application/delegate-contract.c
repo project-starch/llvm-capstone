@@ -40,8 +40,59 @@ int main(int argc, char **argv) {
     puts("delegate-contract: exec ok");
     return 0;
   }
+  if (!strcmp(argv[1], "lock-child")) {
+    /* argv[2]: the file; argv[3]: the pid that holds a write lock on its bytes 0 to 99, or 0
+       once it has released them. Another process's view of those locks, through the
+       struct flock pointer fcntl takes (musl patch 0005). */
+    CHECK(argc == 4);
+    pid_t owner = (pid_t)atoi(argv[3]);
+    int fd = open(argv[2], O_RDWR);
+    CHECK(fd >= 0);
+    struct flock probe = {.l_type = F_WRLCK, .l_whence = SEEK_SET, .l_start = 10, .l_len = 1};
+    CHECK(fcntl(fd, F_GETLK, &probe) == 0);
+    struct flock byte = {.l_type = F_WRLCK, .l_whence = SEEK_SET, .l_start = 10, .l_len = 1};
+    if (owner) {
+      CHECK(probe.l_type == F_WRLCK && probe.l_pid == owner && probe.l_start == 0 &&
+            probe.l_len == 100);
+      CHECK(fcntl(fd, F_SETLK, &byte) == -1 && (errno == EAGAIN || errno == EACCES));
+      struct flock beyond = {.l_type = F_WRLCK, .l_whence = SEEK_SET, .l_start = 100, .l_len = 1};
+      CHECK(fcntl(fd, F_SETLK, &beyond) == 0);
+    } else {
+      CHECK(probe.l_type == F_UNLCK);
+      CHECK(fcntl(fd, F_SETLK, &byte) == 0);
+    }
+    return 8;
+  }
   CHECK(argc == 3);
   char *image = argv[2];
+  if (!strcmp(argv[1], "lock")) {
+    /* POSIX record locks: one this process holds, as a second process sees it, and after
+       its release through F_SETLKW (musl's cancellable path). A process never conflicts
+       with its own locks, so F_GETLK here reports none. */
+    char path[] = "/tmp/capstone-lock-XXXXXX";
+    int fd = mkstemp(path);
+    CHECK(fd >= 0);
+    CHECK(!ftruncate(fd, 4096));
+    struct flock mine = {.l_type = F_WRLCK, .l_whence = SEEK_SET, .l_start = 0, .l_len = 100};
+    CHECK(fcntl(fd, F_SETLK, &mine) == 0);
+    struct flock own = {.l_type = F_WRLCK, .l_whence = SEEK_SET, .l_start = 10, .l_len = 1};
+    CHECK(fcntl(fd, F_GETLK, &own) == 0 && own.l_type == F_UNLCK);
+    char number[32];
+    snprintf(number, sizeof number, "%d", (int)getpid());
+    char *held[] = {"lock-child", "lock-child", path, number, NULL};
+    pid_t pid;
+    CHECK(!posix_spawn(&pid, image, NULL, NULL, held, environ));
+    CHECK(waited(pid, 8));
+    struct flock off = {.l_type = F_UNLCK, .l_whence = SEEK_SET, .l_start = 0, .l_len = 100};
+    CHECK(fcntl(fd, F_SETLKW, &off) == 0);
+    char *freed[] = {"lock-child", "lock-child", path, "0", NULL};
+    CHECK(!posix_spawn(&pid, image, NULL, NULL, freed, environ));
+    CHECK(waited(pid, 8));
+    close(fd);
+    CHECK(!unlink(path));
+    puts("delegate-contract: record locks ok");
+    return 0;
+  }
   if (!strcmp(argv[1], "exec-error")) {
     char path[] = "/tmp/capstone-bad-exec-XXXXXX";
     int fd = mkstemp(path);
