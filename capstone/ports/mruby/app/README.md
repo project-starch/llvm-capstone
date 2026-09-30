@@ -6,6 +6,33 @@ configuration built natively. The goal is a real allocator-heavy interpreter in 
 domain, as the ground on which the Sublet corpus rows for mruby can later run on
 the real program rather than on extracted reproducers.
 
+## Delegated result with stdlib-io (2026-09-30)
+
+The build takes mruby's whole `stdlib-io` gembox: at head `mruby-socket`,
+`mruby-env`, `mruby-signal` and `mruby-process` join `mruby-io`,
+`mruby-errno` and `mruby-dir`; 4.0.0-rc2's gembox adds `mruby-socket`.
+Patch 0007 is gone. mrbtest in the domain against the same configuration
+natively (`results/2026-09-30/mrbtest-stdlib-io.json`):
+
+| | Total | OK | KO | Crash | Skip |
+|---|---:|---:|---:|---:|---:|
+| head, native | 2858 | 2761 | 0 | 0 | 74 |
+| head, domain | 2858 | 2760 | 0 | 1 | 74 |
+| 4.0.0-rc2, native | 1682 | 1673 | 0 | 0 | 9 |
+| 4.0.0-rc2, domain | 1682 | 1673 | 0 | 0 | 9 |
+
+Every test but one has the status it has natively. The one is
+`Process.kill passes the pid selectors on`: `Process.kill(0, 0)`, signal 0
+to the caller's own process group, is refused with EPERM, because the
+launcher confines `kill` to the task, its children and its parent. The
+control, head with the previous configuration on the same compiler and
+runtime, has 2710 tests, 2617 OK, 70 skips in both builds: `socket()` is a
+delegated call now, so `FileTest.socket?` passed with 0007 still applied,
+and the patch no longer fired. `mruby-process` makes no child of its own
+(pid, ppid, waitpid, kill; its tests make children with `IO.popen`, patch
+0009), and `mruby-signal` is a table of signal names that installs no
+handler.
+
 ## Delegated result (2026-09-29)
 
 The current ABI-v2 recipe passes the regular head suite with 2616 OK,
@@ -63,7 +90,7 @@ The output is byte-identical to native (`results/2026-09-26/scripts.txt`).
   mrbtest in the domain: OK 1632, KO 0, Crash 0 (native OK 1639); the 7 extra
   skips are popen and sockets (`results/2026-09-26/mrbtest-4.0.0-rc2.txt`).
   This version still parses with parse.y, so it needs no Prism patches; its
-  0001, 0003 and 0007 are rewritten for its code, 0002 is head's. There is no
+  0001 and 0003 are rewritten for its code, 0002 is head's. There is no
   0006 for it yet: `MRBD_BOXING=word` stops with a message.
 
 ## The Sublet heap (`MRBD_HEAP=sublet`)
@@ -132,7 +159,6 @@ Knobs (`build_config.rb`): `MRBD_BOXING=no|word`, `MRBD_DISPATCH=switch|direct`,
 | 0004 | `mruby-compiler/src/ccontext.c` | The Prism arena answered 8 bytes off a 16-byte boundary; misaligned capability store. |
 | 0005 | `prism/src/util/pm_constant_pool.c` | The constants array followed 8-byte buckets unaligned. |
 | 0006 | `include/mruby/boxing_word.h` | `MRB_WORD_BOXING` only: the boxed word becomes `__uintcap_t`. |
-| 0007 | mruby-io's tests | The test setup raised when `socket()` failed; it now skips the one socket test. |
 
 The two `__uintcap_t` patches (and 0006) need the compiler's `__intcap` type.
 
