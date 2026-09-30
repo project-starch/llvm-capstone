@@ -18,6 +18,7 @@ case "$GROUP" in
   core) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_COUNTOFVIEW_OPTIMIZATION" ;;
   coreT) CF="-USQLITE_OMIT_INCRBLOB -USQLITE_OMIT_TEMPDB" ;;
   fts5) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS5 $MATHINC" ;;
+  fts5S) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS5 -USQLITE_OMIT_SHARED_CACHE $MATHINC" ;;
   fts3) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 $MATHINC" ;;
   *) echo "unknown group $GROUP" >&2; exit 2 ;;
 esac
@@ -33,6 +34,10 @@ EOF
    ;;
    coreT) cat <<EOF
 case_detach_trigger.c detachtrig
+EOF
+   ;;
+   fts5S) cat <<EOF
+case_fts5rank.c        fts5rank
 EOF
    ;;
    fts5) cat <<EOF
@@ -57,7 +62,7 @@ EOF
 do_build() {
   mkdir -p "$SHARE" "$OBJ"
   local EXTRA_SRC=""
-  case "$GROUP" in fts5|fts3) EXTRA_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
+  case "$GROUP" in fts5|fts5S|fts3) EXTRA_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
   while read -r file tag extra; do
     [ -z "${file:-}" ] && continue
     echo "== build $tag ($file) =="
