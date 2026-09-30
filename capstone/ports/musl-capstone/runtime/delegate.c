@@ -108,6 +108,15 @@ struct dl_slot {
   unsigned char copy_back;
 };
 
+/* Keep the checked pointer and its copy-back coordinates together. Allocate
+ * only as many records as the validated vector needs, including for messages;
+ * a one-element call must not reserve 1024 capability slots on the stack. */
+struct dl_iov_slot {
+  void *base;
+  uint64_t offset;
+  size_t bytes;
+};
+
 static size_t cap_bytes(void *cap) {
   return (size_t)(__builtin_capstone_cap_get_end(cap) -
                   __builtin_capstone_cap_get_cursor(cap));
@@ -396,9 +405,7 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
                            int positioned, long long offset) {
   uint64_t args[6] = {(uint64_t)fd, 0, 0, (uint64_t)offset & UINT32_MAX,
                       (uint64_t)offset >> 32, 0};
-  uint64_t offsets[1024];
-  size_t lengths[1024], total = 0;
-  void *bases[1024];
+  size_t total = 0;
   dl_status = CAPSTONE_ROUND_DONE;
   if (count < 0 || count > 1024)
     return -EINVAL;
@@ -406,6 +413,7 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
     return -EFAULT;
   if (count && !dl_buffer_ok(iov, (size_t)count * sizeof *iov, 4))
     return -EFAULT;
+  struct dl_iov_slot slots[count ? (size_t)count : 1];
   for (long i = 0; i < count; ++i) {
     struct iovec current = iov[i];
     if (current.iov_len > (size_t)LONG_MAX - total)
@@ -431,14 +439,14 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
     size_t bytes = current.iov_len < room ? current.iov_len : room;
     if (!bytes && current.iov_len)
       break;
-    if (dl_alloc(bytes, &offsets[i]))
+    if (dl_alloc(bytes, &slots[i].offset))
       break;
-    bases[i] = current.iov_base;
-    lengths[i] = bytes;
-    uint64_t wire[2] = {offsets[i], bytes};
+    slots[i].base = current.iov_base;
+    slots[i].bytes = bytes;
+    uint64_t wire[2] = {slots[i].offset, bytes};
     memcpy(dl_exchange + args[1] + (size_t)i * 16, wire, sizeof wire);
     if (writing && bytes)
-      dl_bytes(dl_exchange + offsets[i], bases[i], bytes);
+      dl_bytes(dl_exchange + slots[i].offset, slots[i].base, bytes);
     ++args[2];
     if (bytes < current.iov_len)
       break;
@@ -453,8 +461,8 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
   if (!writing && result > 0) {
     size_t left = (size_t)result;
     for (size_t i = 0; i < args[2] && left; ++i) {
-      size_t n = lengths[i] < left ? lengths[i] : left;
-      dl_bytes(bases[i], dl_exchange + offsets[i], n);
+      size_t n = slots[i].bytes < left ? slots[i].bytes : left;
+      dl_bytes(slots[i].base, dl_exchange + slots[i].offset, n);
       left -= n;
     }
   }
@@ -553,14 +561,13 @@ static long dl_msg_once(uint64_t nr, long fd, struct msghdr *msg, long flags) {
   int sending = nr == CAPSTONE_SYS_sendmsg;
   struct capstone_msghdr_block b = {0};
   uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, 0, (uint64_t)flags, 0, 0, 0};
-  uint64_t offsets[CAPSTONE_MSGHDR_IOVS];
-  size_t lengths[CAPSTONE_MSGHDR_IOVS], count = (size_t)msg->msg_iovlen, fitted = 0;
-  void *bases[CAPSTONE_MSGHDR_IOVS];
+  size_t count = (size_t)msg->msg_iovlen, fitted = 0;
   dl_status = CAPSTONE_ROUND_DONE;
   if (msg->msg_iovlen < 0 || count > CAPSTONE_MSGHDR_IOVS)
     return -EMSGSIZE;
   if (count && !msg->msg_iov)
     return -EFAULT;
+  struct dl_iov_slot slots[count ? count : 1];
   dl_reset();
   if (dl_alloc(CAPSTONE_MSGHDR_BYTES, &args[1]))
     return -ENOMEM;
@@ -593,14 +600,14 @@ static long dl_msg_once(uint64_t nr, long fd, struct msghdr *msg, long flags) {
     size_t bytes = current.iov_len < room ? current.iov_len : room;
     if (!bytes && current.iov_len)
       break;
-    if (dl_alloc(bytes, &offsets[i]))
+    if (dl_alloc(bytes, &slots[i].offset))
       break;
-    bases[i] = current.iov_base;
-    lengths[i] = bytes;
-    uint64_t pair[2] = {offsets[i], bytes};
+    slots[i].base = current.iov_base;
+    slots[i].bytes = bytes;
+    uint64_t pair[2] = {slots[i].offset, bytes};
     memcpy(dl_exchange + b.iov + 16 * i, pair, sizeof pair);
     if (sending && bytes)
-      dl_bytes(dl_exchange + offsets[i], bases[i], bytes);
+      dl_bytes(dl_exchange + slots[i].offset, slots[i].base, bytes);
     ++fitted;
     if (bytes < current.iov_len)
       break;
@@ -618,8 +625,8 @@ static long dl_msg_once(uint64_t nr, long fd, struct msghdr *msg, long flags) {
     size_t left = (size_t)result;
     dl_bytes(&back, dl_exchange + args[1], sizeof back);
     for (size_t i = 0; i < fitted && left; ++i) {
-      size_t n = lengths[i] < left ? lengths[i] : left;
-      dl_bytes(bases[i], dl_exchange + offsets[i], n);
+      size_t n = slots[i].bytes < left ? slots[i].bytes : left;
+      dl_bytes(slots[i].base, dl_exchange + slots[i].offset, n);
       left -= n;
     }
     if (msg->msg_name) {

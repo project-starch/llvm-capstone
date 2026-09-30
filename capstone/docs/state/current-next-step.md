@@ -9,6 +9,13 @@ the existing thread work with current I/O services and qualify IPv6 end-to-end.
 Linux OS feature parity remains the goal; the bridge result does not establish
 Linux user-mode execution or close M1.
 
+The 2026-10-01 review fixes retain small I/O snapshots and explicit unbounded
+test controls. Preserve the new 32 KiB stack gates. The current launcher's
+UDP receive failure also occurs with the pre-fix image; resolve that separate
+integration gap before claiming its complete socket contract. The
+[record](../../runtime/tests/application/results/20261001-syscall-bounds-review-fixes.json)
+distinguishes it from the snapshot launcher's passing socket run.
+
 Application ports (2026-09-29): the seven application recipes now require
 the [shared delegated SDK](../../ports/common/application/README.md), with
 v1 rejection qualified. Use the recorded compiler and memory settings when

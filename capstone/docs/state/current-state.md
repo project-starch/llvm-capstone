@@ -2,6 +2,24 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — syscall bounds review corrections
+
+Vector and message I/O now reserve snapshot space for the validated element
+count, rather than 1024 entries on every call. New tests exercise both copy
+directions with 32 KiB stack capabilities; replacing only the runtime with
+the pre-fix code faults in both tests. The 1024-element case and invalid
+counts are checked separately. Unprotected heap qualification and the
+FFmpeg/tshark `level0` comparison arms now explicitly disable object bounds;
+ordinary applications keep them enabled.
+
+The [review-fix record](../../runtime/tests/application/results/20261001-syscall-bounds-review-fixes.json)
+separates launcher identities: direct execution passes 12/12, the snapshot
+launcher's sockets pass 11/11, and the current launcher passes both heap
+sequences and all 22 heap cases. The current launcher has a UDP receive
+failure also reproduced with the unchanged pre-fix socket image; its socket
+result is 10/11, not an all-green platform qualification. Full FFmpeg/tshark
+workloads and RTL were not rerun.
+
 ## 2026-09-30 — delegated syscall buffer bounds prototype
 
 The `trusted-linux-syscall-bounds` lane adds per-object bounds to the default

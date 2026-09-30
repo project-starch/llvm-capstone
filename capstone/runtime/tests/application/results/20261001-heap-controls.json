@@ -1,0 +1,367 @@
+{
+  "date": "2026-10-01",
+  "platform": "QEMU supervised CALL, one hart",
+  "verdicts": {
+    "sublet": {
+      "sequence": "PASS",
+      "fault-stale": {
+        "supervisor": "PASS",
+        "wait_status": 11,
+        "nodes_allocated": 39,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "fault": {
+          "cause": 24,
+          "link_pc": "0x1d4ac",
+          "site": "capstone_heap_fault_load"
+        },
+        "operation_reached": true
+      },
+      "fault-reused": {
+        "supervisor": "PASS",
+        "wait_status": 11,
+        "nodes_allocated": 200064,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "fault": {
+          "cause": 24,
+          "link_pc": "0x1d4ac",
+          "site": "capstone_heap_fault_load"
+        },
+        "operation_reached": true
+      },
+      "fault-bounds": {
+        "supervisor": "PASS",
+        "wait_status": 11,
+        "nodes_allocated": 39,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "fault": {
+          "cause": 5,
+          "link_pc": "0x1d4ac",
+          "site": "capstone_heap_fault_load"
+        },
+        "operation_reached": true
+      },
+      "fault-bounds-large": {
+        "supervisor": "PASS",
+        "wait_status": 11,
+        "nodes_allocated": 29,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "fault": {
+          "cause": 5,
+          "link_pc": "0x1d4ac",
+          "site": "capstone_heap_fault_load"
+        },
+        "operation_reached": true
+      },
+      "fault-double-free": {
+        "supervisor": "PASS",
+        "wait_status": 11,
+        "nodes_allocated": 39,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "fault": {
+          "cause": 24,
+          "link_pc": "0x20d94",
+          "site": "free"
+        },
+        "operation_reached": true
+      },
+      "fault-double-free-reused": {
+        "supervisor": "PASS",
+        "wait_status": 11,
+        "nodes_allocated": 64,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "fault": {
+          "cause": 24,
+          "link_pc": "0x20d94",
+          "site": "free"
+        },
+        "operation_reached": true
+      },
+      "healthy": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 13,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      },
+      "churn": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 200064,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      },
+      "heap-bounds": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 54,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      },
+      "heap-neighbour": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 41,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      },
+      "heap-companion": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 91,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      }
+    },
+    "level0": {
+      "sequence": "PASS",
+      "fault-stale": {
+        "supervisor": "FAIL",
+        "wait_status": 23040,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "operation_survived": true,
+        "operation_reached": true
+      },
+      "fault-reused": {
+        "supervisor": "FAIL",
+        "wait_status": 23040,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "operation_survived": true,
+        "operation_reached": true
+      },
+      "fault-bounds": {
+        "supervisor": "FAIL",
+        "wait_status": 23040,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "operation_survived": true,
+        "operation_reached": true
+      },
+      "fault-bounds-large": {
+        "supervisor": "FAIL",
+        "wait_status": 23040,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "operation_survived": true,
+        "operation_reached": true
+      },
+      "fault-double-free": {
+        "supervisor": "FAIL",
+        "wait_status": 23040,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "operation_survived": true,
+        "operation_reached": true
+      },
+      "fault-double-free-reused": {
+        "supervisor": "FAIL",
+        "wait_status": 23040,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        },
+        "operation_survived": true,
+        "operation_reached": true
+      },
+      "healthy": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      },
+      "churn": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      },
+      "heap-bounds": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      },
+      "heap-neighbour": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      },
+      "heap-companion": {
+        "supervisor": "PASS",
+        "wait_status": 0,
+        "nodes_allocated": 11,
+        "live_after": {
+          "live_domains": 0,
+          "live_regions": 0,
+          "live_bytes": 0
+        }
+      }
+    }
+  },
+  "symbols": {
+    "sublet": {
+      "entry_points": {
+        "malloc": {
+          "object": "sublet_heap.c.obj",
+          "address": "0x20054",
+          "size": 484
+        },
+        "free": {
+          "object": "sublet_heap.c.obj",
+          "address": "0x20d4c",
+          "size": 1504
+        },
+        "calloc": {
+          "object": "sublet_heap.c.obj",
+          "address": "0x2132c",
+          "size": 584
+        },
+        "realloc": {
+          "object": "sublet_heap.c.obj",
+          "address": "0x21574",
+          "size": 1052
+        },
+        "__libc_malloc": {
+          "object": "sublet_heap.c.obj",
+          "address": "0x21990",
+          "size": 484
+        },
+        "__libc_free": {
+          "object": "sublet_heap.c.obj",
+          "address": "0x21b74",
+          "size": 52
+        }
+      },
+      "sha256": "094e74cbb7aeaca9c5c054d52ee84dcd4f62da7f0d5d2bdb7f4b44e3853835a8",
+      "map_sha256": "b2e6c144ff874a65d240965973ff98a83bd76a48c3e58c730fc4571beaaf2cdb",
+      "guest_sha256": "094e74cbb7aeaca9c5c054d52ee84dcd4f62da7f0d5d2bdb7f4b44e3853835a8"
+    },
+    "level0": {
+      "entry_points": {
+        "malloc": {
+          "object": "level0.c.obj",
+          "address": "0x20054",
+          "size": 324
+        },
+        "free": {
+          "object": "level0.c.obj",
+          "address": "0x20198",
+          "size": 176
+        },
+        "calloc": {
+          "object": "level0.c.obj",
+          "address": "0x20248",
+          "size": 380
+        },
+        "realloc": {
+          "object": "level0.c.obj",
+          "address": "0x203c4",
+          "size": 912
+        },
+        "__libc_malloc": {
+          "object": "level0.c.obj",
+          "address": "0x20754",
+          "size": 324
+        },
+        "__libc_free": {
+          "object": "level0.c.obj",
+          "address": "0x20898",
+          "size": 176
+        }
+      },
+      "sha256": "bd0437bd2f0ab39499aa5b8c3a265d79a21b4bc23b2147d1acba265fce993fb5",
+      "map_sha256": "545c4abba50ef6d0fb91de2de6fbbbb88ec41a855e2ae656c350f6b41c6800d3",
+      "guest_sha256": "bd0437bd2f0ab39499aa5b8c3a265d79a21b4bc23b2147d1acba265fce993fb5"
+    }
+  },
+  "sha256": {},
+  "platform_sha256": {
+    "qemu": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "firmware": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+    "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+    "launcher": "408c1264825eede116b0cf8876813d6a379b4677037545d21700f7e3b1c472d6",
+    "module": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+    "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168"
+  },
+  "scope": "Current launcher; both application sequences and 22 heap cases. The level0 control explicitly disables object bounds."
+}

@@ -13,6 +13,9 @@ The `trusted-linux-syscall-bounds` lane adds a bounded-buffer prototype to
 the current delegated runtime. Its [one-hart result](../runtime/tests/application/results/20260930-syscall-buffer-bounds.json)
 covers the direct-exec and socket contracts; the Linux user-mode ABI decision
 remains open.
+The [review corrections](../runtime/tests/application/results/20261001-syscall-bounds-review-fixes.json)
+add constrained-stack I/O gates and restore explicitly unbounded comparison
+arms; the record keeps the two tested launcher configurations separate.
 
 Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
 Seven application recipes are migrated, with new QEMU functional and safety

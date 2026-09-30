@@ -98,7 +98,8 @@ int main(int argc, char **argv) {
   }
   /* The heap qualification (docs/plans/capstone-heap-protection.md). Every
    * fault-* case below must end in SIGSEGV on the HEAP=sublet build and run to
-   * completion on the HEAP=level0 build, which is the control. The heap-*
+   * completion on the HEAP=level0 build with CAPSTONE_LEVEL0_OBJECT_BOUNDS=0,
+   * which is the unprotected control. The heap-*
    * cases fall through to the ordinary tail on success and return a distinct
    * code on the first failed check. */
   if (!strcmp(argv[1], "fault-bounds")) {

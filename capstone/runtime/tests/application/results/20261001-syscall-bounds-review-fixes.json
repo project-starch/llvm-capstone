@@ -1,0 +1,267 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "base_commit": "4715ec129b60af60ba44bf2bc5609c2515ed17a0",
+  "platform": "Capstone QEMU, one hart; separate snapshot and current launcher runs",
+  "platform_sha256": {
+    "snapshot": {
+      "qemu": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+      "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "firmware": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+      "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+      "launcher": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94",
+      "module": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+      "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168"
+    },
+    "current": {
+      "qemu": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+      "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "firmware": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+      "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+      "launcher": "408c1264825eede116b0cf8876813d6a379b4677037545d21700f7e3b1c472d6",
+      "module": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+      "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168"
+    }
+  },
+  "toolchain_sha256": {
+    "clang": "b69603574ae422d3bd78c7aae679d613526d5ee0f0a20e4a7005ccae993adcae",
+    "patched_musl_archive": "7d42620dcc77e72d7dd9945626df0e3b5ba9e5352c9e335f8eda7648cdb8cf44"
+  },
+  "source_sha256": {
+    "capstone/ports/musl-capstone/runtime/delegate.c": "1d694395b34a56dd8ee7ab8c6f6fd204ed530fde3857291dee3cc252dfd56ea4",
+    "capstone/ports/musl-capstone/runtime/level0.c": "aabb0b833a8d76ab620d848d88a0555cf1d03c6e141c29c764b2b5ef9a182bb6",
+    "capstone/ports/ffmpeg/app/host/build-domain.sh": "1a24334804de06c6b9f25cd2161fee6da20d6c17cea5d89f3c45e4989057028f",
+    "capstone/ports/wireshark/app/host/build-domain.sh": "870716238b3aec4a34504ee6e0ba91e5106079b82a45921100a9014d7272e04b",
+    "capstone/runtime/tests/application/CMakeLists.txt": "dfdf453c417c5ee20cd40e74f544145903560ff77daeaffd2777c83f21fba463",
+    "capstone/runtime/tests/application/delegate-contract.c": "c34144855aaee9f4b999aace6ae5c0c03e9ec1628effcbf48ea7010aaf489453",
+    "capstone/runtime/tests/application/bounded-stack.S": "c868395438f0a884f83832854c8ecbbabe061c3be0415ae0d7b5459fa5968bf9",
+    "capstone/runtime/tests/application/contract.c": "39c56b170355942fc07bbdd48538e5e73152dc7a5a0645b3acdc29281b34355e",
+    "capstone/runtime/tests/application/run-binfmt.py": "c7cd0aea89d927918d1dd48e49e2be528f1872466a6becbd5d3e9ae29db2a31c",
+    "capstone/runtime/tests/application/run-heap.py": "4e2811b595e17d4236dd29907bc28e9af9ecb48121c3d4cf6f4fad30ae13a424",
+    "capstone/runtime/tests/application/supervisor.c": "da5165a66b80973a4c53487ee051e06eecb08c7e7fc740904a859b11d2fa416a"
+  },
+  "image_sha256": {
+    "delegate": "ef0ea9ea950fc68b9b4611f36789c809c47ebb97a7c9b7b23ae519c836e2c123",
+    "sockets": "556777b6806190f6494984bb0e176e11a46bd9755a0f4d870b772d751f71f23b",
+    "pre_fix_runtime_control": "8d00209f80daf34ce02ef6d33466cddb92237a59e02fd85147177023b7510da6",
+    "pre_fix_sockets": "1b37963f57fc0cd34e0d8b7885ba70e786e66612928eff24254150a0e9547f6c",
+    "heap_unbounded": "bd0437bd2f0ab39499aa5b8c3a265d79a21b4bc23b2147d1acba265fce993fb5",
+    "heap_sublet": "094e74cbb7aeaca9c5c054d52ee84dcd4f62da7f0d5d2bdb7f4b44e3853835a8"
+  },
+  "build": {
+    "type": "Release",
+    "c_flags": "-O3 -DNDEBUG",
+    "targets": [
+      "delegate-contract",
+      "socket-contract",
+      "application-contract-unbounded",
+      "application-contract-sublet"
+    ],
+    "unbounded_heap_definition": "CAPSTONE_LEVEL0_OBJECT_BOUNDS=0",
+    "stack_control": "Same delegate-contract sources, stack helper, toolchain and flags; substitute only delegate.c from base_commit."
+  },
+  "direct_exec_current_launcher": {
+    "native-elf": {
+      "exit": 0,
+      "stdout": ""
+    },
+    "original-argv0": {
+      "exit": 7,
+      "stdout": ""
+    },
+    "io": {
+      "exit": 0,
+      "stdout": "delegate-contract: io and spawn ok\n"
+    },
+    "exec": {
+      "exit": 0,
+      "stdout": "delegate-contract: exec ok\n"
+    },
+    "exec-closed": {
+      "exit": 0,
+      "stdout": ""
+    },
+    "exec-error": {
+      "exit": 0,
+      "stdout": "delegate-contract: failed exec preserved task\n"
+    },
+    "lock": {
+      "exit": 0,
+      "stdout": "delegate-contract: record locks ok\n"
+    },
+    "usable-size": {
+      "exit": 0,
+      "stdout": "delegate-contract: usable size ok\n"
+    },
+    "buffer-bounds": {
+      "exit": 0,
+      "stdout": "delegate-contract: buffer bounds ok\n"
+    },
+    "vector-stack": {
+      "exit": 0,
+      "stdout": "delegate-contract: vector stack ok\n"
+    },
+    "message-stack": {
+      "exit": 0,
+      "stdout": "delegate-contract: message stack ok\n"
+    },
+    "vector-limit": {
+      "exit": 0,
+      "stdout": "delegate-contract: vector limit ok\n"
+    }
+  },
+  "stack_control_current_launcher": {
+    "vector-stack": {
+      "kind": "signal",
+      "value": 11,
+      "cause": 7,
+      "link_pc": "0x19d30",
+      "symbol": "dl_vector"
+    },
+    "message-stack": {
+      "kind": "signal",
+      "value": 11,
+      "cause": 7,
+      "link_pc": "0x1ab08",
+      "symbol": "dl_msg"
+    }
+  },
+  "sockets_snapshot_launcher": {
+    "unix-stream": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract unix-stream: PASS"
+    },
+    "unix-dgram": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract unix-dgram: PASS"
+    },
+    "inet-stream": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract inet-stream: PASS"
+    },
+    "inet-dgram": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract inet-dgram: 16000-byte datagram crosses\nsocket-contract inet-dgram: 40000-byte datagram: EMSGSIZE\nsocket-contract inet-dgram: 40000 stream bytes in 3 sends\nsocket-contract inet-dgram: PASS"
+    },
+    "scm-rights": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract scm-rights: PASS"
+    },
+    "epoll": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract epoll: PASS"
+    },
+    "select-poll": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract select-poll: PASS"
+    },
+    "nonblock": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract nonblock: PASS"
+    },
+    "inherit": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract inherit: PASS"
+    },
+    "hosts": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract hosts: PASS"
+    },
+    "tagged-buffer": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract tagged-buffer: PASS"
+    }
+  },
+  "sockets_current_launcher": {
+    "unix-stream": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract unix-stream: PASS"
+    },
+    "unix-dgram": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract unix-dgram: PASS"
+    },
+    "inet-stream": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract inet-stream: PASS"
+    },
+    "inet-dgram": {
+      "pass": false,
+      "reason": "got ('exit', 1), stdout='socket-contract inet-dgram: 16000-byte datagram crosses\\n', stderr='socket-contract:198: recv(b, back, sizeof back, 0) == (ssize_t)fits && !memcmp(back, big, fits) (errno 14)'",
+      "stdout": "socket-contract inet-dgram: 16000-byte datagram crosses"
+    },
+    "scm-rights": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract scm-rights: PASS"
+    },
+    "epoll": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract epoll: PASS"
+    },
+    "select-poll": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract select-poll: PASS"
+    },
+    "nonblock": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract nonblock: PASS"
+    },
+    "inherit": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract inherit: PASS"
+    },
+    "hosts": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract hosts: PASS"
+    },
+    "tagged-buffer": {
+      "pass": true,
+      "reason": "",
+      "stdout": "socket-contract tagged-buffer: PASS"
+    }
+  },
+  "current_launcher_udp_baseline": {
+    "inet-dgram": {
+      "pass": false,
+      "reason": "got ('exit', 1), stdout='socket-contract inet-dgram: 16000-byte datagram crosses\\n', stderr='socket-contract:198: recv(b, back, sizeof back, 0) == (ssize_t)fits && !memcmp(back, big, fits) (errno 14)'",
+      "stdout": "socket-contract inet-dgram: 16000-byte datagram crosses"
+    }
+  },
+  "heap_current_launcher_record": "20261001-heap-controls.json",
+  "native_checks": {
+    "heap_gate_self_tests": 16,
+    "recipe_shell_syntax": "PASS",
+    "ffmpeg_and_tshark_arm_flags": {
+      "level0": "CAPSTONE_LEVEL0_OBJECT_BOUNDS=0",
+      "shrink": "CAPSTONE_LEVEL0_OBJECT_BOUNDS=1"
+    }
+  },
+  "scope": [
+    "New stack modes cover zero, one and four elements, both data directions, and invalid counts on an explicitly bounded 32 KiB stack. The maximum 1024-element case runs on the ordinary stack.",
+    "Both old-runtime controls fault at stores in the I/O runtime; the same tests pass with the corrected runtime. Guest ELF hashes were checked.",
+    "Both heap application sequences and all 22 heap cases pass with the current launcher, including operation-PC and cleanup checks. The unbounded controls reach exit 90.",
+    "The snapshot launcher passes all 11 socket cases. The current launcher passes 10; inet-dgram fails at socket-contract.c:198 with EFAULT for both the corrected and unchanged pre-fix images.",
+    "The initial full heap attempt on the snapshot launcher stopped in the healthy eventfd test (exit 65), before heap qualification. It is not a passing heap run.",
+    "Port recipe flag selection and shell syntax were checked. Full FFmpeg/tshark workloads, concurrency and RTL were not rerun."
+  ]
+}

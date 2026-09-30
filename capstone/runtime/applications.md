@@ -593,14 +593,18 @@ before the intended threshold. Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
 The libc heap qualification runs the heap cases of `contract.c` once on the
-`HEAP=sublet` image and once on a `HEAP=level0` image of the same source,
-which is the control: every `fault-*` case must be a SIGSEGV on the first and
+`application-contract-sublet` target and once on the
+`application-contract-unbounded` target from `runtime/tests/application`.
+The latter explicitly sets `CAPSTONE_LEVEL0_OBJECT_BOUNDS=0`; ordinary level0
+applications now have object bounds by default and are not unprotected
+controls. Every `fault-*` case must be a SIGSEGV on the first and
 must reach the survival marker and exit 90 on the second; every `heap-*` case
 must complete on both. The protected fault must occur at the intended byte
 probe with the expected QEMU cause. Churn must allocate at least 200,000
 nodes. A setup error, unrelated fault or early exhaustion fails the gate.
 
-Build each image with an LLD map, using
+Both qualification targets emit an LLD map beside their ELF. When building
+the same source through a separate application project, request a map using
 `-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake
 configuration. The runner requires both ELFs and maps (default map path:
 `<elf>.map`; override with `--sublet-map` and `--control-map`). It checks the
@@ -611,15 +615,22 @@ guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 ```sh
 python3 capstone/runtime/tests/application/run-heap.py \
   --state "$CAPSTONE_TMP_ROOT/dev-vm" \
-  --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/application-contract.dom \
-  --sublet-elf <build>/contract-sublet.dom --control-elf <build>/application-contract.dom \
+  --sublet-image /mnt/host/application-contract-sublet.dom --control-image /mnt/host/application-contract-unbounded.dom \
+  --sublet-elf <build>/application-contract-sublet.dom --control-elf <build>/application-contract-unbounded.dom \
   --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \
   --platform <kernel> <firmware> <rootfs> <qemu> <launcher> --report heap.json
 
 python3 -m unittest discover -s capstone/runtime/tests/application -p test_heap_qualification.py
 ```
 
-It needs the emulator the tree pins (in-process node reuse): on the base
+`run-binfmt.py` also checks delegated vector and message I/O with a stack
+capability explicitly narrowed to 32 KiB (`vector-stack`, `message-stack`).
+Both modes cover zero, one and four elements; `vector-limit` checks 1024
+elements on the ordinary stack. Invalid counts must fail before allocating
+the variable-sized snapshots. The assembler helper is necessary because
+`STACK_BYTES` alone need not bound the loader's backing capability exactly.
+
+The heap gate needs the emulator the tree pins (in-process node reuse): on the base
 emulator the 200,000-cycle churn case exhausts the node pool after about
 65,000 allocations, on any image. The
 [2026-09-30 record on the platform dev pins](tests/application/results/20260930-heap-qualification-on-dev.json)

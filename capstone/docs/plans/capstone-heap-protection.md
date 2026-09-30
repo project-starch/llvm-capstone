@@ -42,7 +42,10 @@ provides the required path:
 [Application.cmake](../../runtime/cmake/Application.cmake) already selects
 this source with the current option `HEAP sublet` and a configured `HEAP_LOG`.
 The implementation names remain unchanged. Use that selection
-for the qualification target and retain `HEAP level0` as a test control.
+for the qualification target and retain `HEAP level0` with explicit
+`CAPSTONE_LEVEL0_OBJECT_BOUNDS=0` as the unprotected test control. The ordinary
+level0 default now provides spatial bounds; use the
+`application-contract-unbounded` target for this qualification.
 Check the linked allocation symbols so public calls and musl's internal calls
 reach the selected heap. Application source changes are not required.
 

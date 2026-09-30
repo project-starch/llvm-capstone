@@ -15,8 +15,8 @@ source "$APP/deps/env.sh"
 B=$TS_WORK/xbuild
 HEAP=${TSAPP_HEAP:-level0}
 case $HEAP in
-  level0) OUT=$TS_WORK/domain HEAPF=() ;;
-  shrink) OUT=$TS_WORK/domain-shrink HEAPF=(-DCAPSTONE_LEVEL0_SHRINK=1) ;;
+  level0) OUT=$TS_WORK/domain HEAPF=(-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) ;;
+  shrink) OUT=$TS_WORK/domain-shrink HEAPF=(-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=1) ;;
   sublet) OUT=$TS_WORK/domain-sublet HEAPF=() ;;
   chunks) OUT=$TS_WORK/domain-chunks HEAPF=() ;;
   *) echo "TSAPP_HEAP must be level0, shrink, sublet or chunks" >&2; exit 2 ;;

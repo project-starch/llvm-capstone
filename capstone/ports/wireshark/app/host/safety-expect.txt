@@ -19,7 +19,8 @@
 #   coalescing on every free, so at rest no two free blocks are adjacent. So a block freed and
 #   asked for again at the same size comes back at the same address (5, 6). free writes only
 #   headers, so a freed payload keeps its bytes (4).
-# - shrink (CAPSTONE_LEVEL0_SHRINK) narrows each returned pointer to the bytes asked for, and
+# - level0 explicitly sets CAPSTONE_LEVEL0_OBJECT_BOUNDS=0 for its unprotected control.
+# - shrink (CAPSTONE_LEVEL0_OBJECT_BOUNDS=1) narrows each returned pointer to the bytes asked for, and
 #   changes nothing else: no temporal safety (4, 5, 6 as on level0).
 # - wmem (10-12): a BLOCK_FAST or BLOCK allocator carves its allocations out of one g_malloc'd
 #   block (2 or 8 MiB), and every allocation carries that block's bounds on BOTH arms, since
