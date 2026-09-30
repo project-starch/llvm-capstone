@@ -16,6 +16,7 @@ OBJ=$ROOT/obj
 MATHINC="-include $SCRIPT_DIR/repro322_math_decl.h"
 case "$GROUP" in
   core) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_COUNTOFVIEW_OPTIMIZATION" ;;
+  coreT) CF="-USQLITE_OMIT_INCRBLOB -USQLITE_OMIT_TEMPDB" ;;
   fts5) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS5 $MATHINC" ;;
   fts3) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 $MATHINC" ;;
   *) echo "unknown group $GROUP" >&2; exit 2 ;;
@@ -28,6 +29,10 @@ case_mem5design.c   mem5design
 case_agginfo.c      agginfo
 case_backupattach.c backupattach
 case_blobwrite.c    blobwrite
+EOF
+   ;;
+   coreT) cat <<EOF
+case_detach_trigger.c detachtrig
 EOF
    ;;
    fts5) cat <<EOF
