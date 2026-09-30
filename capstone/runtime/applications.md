@@ -311,6 +311,17 @@ flag test. Both rows are QEMU-only savings and say nothing about hardware; the
 control for them is an unmodified build of the previous pin at 512 / 509
 ([record](tests/application/results/20260929-qemu-switch-cost.json)).
 
+The number of rounds is the other half of the cost. The libc now answers
+identity and the two clocks from the launch record the task writes at start
+(`launch.h`: pid, ppid, the ids, and the clocks paired with `rdtime`), answers
+musl's thread setup itself, and no longer opens a `fcntl` round after every
+`O_CLOEXEC` open; stdio buffers are 8 KiB and the `getdents64` buffer 32 KiB
+(`ports/musl-capstone/musl-patches/`). Measured 2026-09-29 with
+`CAPSTONE_DELEGATE_STATS=1`: `perl -e 'print ...'` 43 -> 26 rounds, `mruby -e
+'puts 1'` 6 -> 4, the getpid benchmark 10,003 -> 2. Perl `t/base` takes 35 s
+either way: the nine launches, not the rounds, are what remains of that figure
+([record](tests/application/results/20260929-libc-rounds.json)).
+
 ### Processes
 
 `posix_spawn`, and with it `posix_spawnp`, `popen` and `system`, cross as one

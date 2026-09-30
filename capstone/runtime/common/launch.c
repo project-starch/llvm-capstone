@@ -3,9 +3,9 @@
 #include <string.h>
 
 #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
-#error "Capstone launch v1 requires little-endian scalar encoding"
+#error "Capstone launch requires little-endian scalar encoding"
 #endif
-_Static_assert(sizeof(struct capstone_launch_header) == 40, "launch header ABI");
+_Static_assert(sizeof(struct capstone_launch_header) == 88, "launch header ABI");
 static const unsigned char magic[8] = {'C', 'P', 'L', 'A', 'U', 'N', 'C', 'H'};
 
 static int append(char *data, size_t capacity, size_t *used,
@@ -22,8 +22,9 @@ static int append(char *data, size_t capacity, size_t *used,
 
 int capstone_launch_pack(void *buffer, size_t capacity, int argc,
                          char *const argv[], char *const envp[],
-                         const char *cwd, unsigned stdio_mask) {
-  if (!buffer || !argv || !envp || !cwd || argc < 1 ||
+                         const char *cwd, unsigned stdio_mask,
+                         const struct capstone_launch_task *task) {
+  if (!buffer || !argv || !envp || !cwd || !task || argc < 1 ||
       (unsigned)argc > CAPSTONE_LAUNCH_STRINGS || (stdio_mask & ~7u))
     return EINVAL;
   if (capacity > CAPSTONE_LAUNCH_BYTES)
@@ -44,6 +45,16 @@ int capstone_launch_pack(void *buffer, size_t capacity, int argc,
   h.argc = (unsigned)argc;
   h.envc = envc;
   h.stdio_mask = stdio_mask;
+  h.pid = task->pid;
+  h.ppid = task->ppid;
+  h.uid = task->uid;
+  h.euid = task->euid;
+  h.gid = task->gid;
+  h.egid = task->egid;
+  h.realtime_ns = task->realtime_ns;
+  h.monotonic_ns = task->monotonic_ns;
+  h.ticks = task->ticks;
+  h.ticks_per_second = task->ticks_per_second;
   int error = append(buffer, capacity, &used, cwd, &h.cwd);
   if (error)
     return error;
@@ -77,7 +88,7 @@ int capstone_launch_unpack(void *buffer, size_t capacity,
     return EINVAL;
   memcpy(&h, buffer, sizeof h);
   if (memcmp(h.magic, magic, sizeof magic) ||
-      h.version != CAPSTONE_LAUNCH_VERSION || h.reserved0 || h.reserved1 ||
+      h.version != CAPSTONE_LAUNCH_VERSION ||
       (h.stdio_mask & ~7u) || !h.argc ||
       h.argc > CAPSTONE_LAUNCH_STRINGS ||
       h.envc > CAPSTONE_LAUNCH_STRINGS - h.argc ||
@@ -109,6 +120,8 @@ int capstone_launch_unpack(void *buffer, size_t capacity,
   }
   argv[h.argc] = NULL;
   envp[h.envc] = NULL;
-  *view = (struct capstone_launch_view){h.argc, h.envc, h.stdio_mask, cwd};
+  *view = (struct capstone_launch_view){h.argc, h.envc, h.stdio_mask, cwd,
+      {h.pid, h.ppid, h.uid, h.euid, h.gid, h.egid,
+       h.realtime_ns, h.monotonic_ns, h.ticks, h.ticks_per_second}};
   return 0;
 }

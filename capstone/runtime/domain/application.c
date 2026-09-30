@@ -1,7 +1,6 @@
 #include "capstone/launch.h"
 #include <errno.h>
 #include <string.h>
-#include <unistd.h>
 
 #ifndef CAPSTONE_APPLICATION_HEAP_BYTES
 #define CAPSTONE_APPLICATION_HEAP_BYTES 0
@@ -37,10 +36,14 @@ int __capstone_application_prepare(const void *region, size_t bytes) {
       CAPSTONE_LAUNCH_STRINGS + 1, environment, CAPSTONE_LAUNCH_STRINGS + 1, &launch);
   if (error)
     return error;
-  if (chdir(launch.cwd))
-    return errno;
+  /* No chdir: the domain is the user half of the task that packed this block,
+     and that task already runs in launch.cwd. */
   prepared = 1;
   return 0;
+}
+
+const struct capstone_launch_task *__capstone_launch_task(void) {
+  return prepared ? &launch.task : NULL;
 }
 
 char **__capstone_domain_environ(void) { return environment; }
