@@ -1,0 +1,95 @@
+{
+ "date": "2026-09-30",
+ "change": "mruby port patch 0010 backports upstream e5c82761f (envadjust rebases off the new stack). It unblocks MRBD_HEAP=sublet and sublet-gc, which until now failed their own control, and the 165-case corpus then runs in all three arms.",
+ "defect": {
+  "where": "src/vm.c, envadjust(), at the 4.0.0-rc2 pin",
+  "what": "stack_extend_alloc() hands the old VM stack to mrb_realloc() and then calls envadjust(), which moved each frame with ci->stack += delta -- pointer arithmetic on a pointer realloc has already freed",
+  "why_it_matters_here": "on an allocator whose free revokes, the result is derived from a revoked capability, carries no tag, and the next write through it faults (cause 24)",
+  "upstream": "e5c82761f 'vm.c: fix envadjust rebasing stack pointers off a freed pointer' (2026-07-24), found when another memory-safe C implementation trapped on the same write. Its diff does not apply at this pin because it rewrites the byte-level form from d95ebe4a2, which landed after the pin; the expression it settles on is used verbatim.",
+  "pins": "only 4.0.0-rc2 needs it: the port's head pin ad98f216e carries both d95ebe4a2 and e5c82761f (checked with merge-base --is-ancestor)"
+ },
+ "before": {
+  "symptom": "sublet and sublet-gc faulted at ~40 frames of Ruby recursion, shallow enough that the port's own scripts/smoke.rb stopped at M8",
+  "bracket": "one recursion depth per run, same script in all three arms: level0 completed at 20/40/60/100/200/500; sublet and sublet-gc completed at 20 and faulted at 40 and above",
+  "fault": "cause=24 address=0x0, pc in mrb_vm_exec"
+ },
+ "after": {
+  "controls": "all three arms complete scripts/smoke.rb (SMOKE_DONE) and deep(500)",
+  "images": {
+   "level0": "269c979b58637ec633dbc2c657c5ad19bc45fa142fcbaaf5d50e346e8fc77ec5",
+   "sublet": "a0b298510de220ab8e2563076ac36863e126165f8e34b746e918e46077a6b774",
+   "sublet-gc": "703ddb70849183db249041f16bfc251bf866089af9af40707d09e0e915d72605"
+  },
+  "env": "CAPSTONE_REV_NODES=16777216 for both revoking arms"
+ },
+ "corpus_165": {
+  "level0_control": {
+   "FAIL": 142,
+   "FAULT(11)": 13,
+   "WATCHDOG": 4,
+   "PASS": 6
+  },
+  "sublet": {
+   "FAIL": 142,
+   "FAULT(11)": 15,
+   "WATCHDOG": 3,
+   "PASS": 5
+  },
+  "sublet_gc": {
+   "FAIL": 139,
+   "FAULT(11)": 18,
+   "WATCHDOG": 3,
+   "PASS": 5
+  },
+  "criterion": "a catch is a case the control runs to completion and a revoking arm faults on; level0 revokes nothing, so its own faults are the defect reaching a bounds or tag check and are not catches",
+  "caught_by_sublet_only": 1,
+  "caught_by_sublet_gc": 4,
+  "caught": [
+   {
+    "case": "59552ecb8",
+    "subject": "mruby-sprintf: protect format string from mutation during call",
+    "level0": "PASS",
+    "sublet": "FAULT",
+    "sublet_gc": "FAULT",
+    "asan": "heap-use-after-free",
+    "note": "the control completes silently and both revoking arms fault: the cleanest catch in the set"
+   },
+   {
+    "case": "606d9a6b2",
+    "subject": "hash.c: keep the pair a scan carries into a set alive across it",
+    "level0": "FAIL",
+    "sublet": "FAIL",
+    "sublet_gc": "FAULT",
+    "asan": "heap-use-after-free",
+    "note": "revoke-on-free does not reach it; per-slot revocation does"
+   },
+   {
+    "case": "628ccec60",
+    "subject": "mruby-task: mark the main task's values during GC",
+    "level0": "FAIL",
+    "sublet": "FAIL",
+    "sublet_gc": "FAULT",
+    "asan": null,
+    "note": "ASan is blind to it at the default page size and revoke-on-free misses it; only per-GC-slot revocation catches it. Reachable at all only because the port now builds mruby-task"
+   },
+   {
+    "case": "fb4974528",
+    "subject": "mruby-hash-ext: keep what a walk carries out of a hash alive",
+    "level0": "FAIL",
+    "sublet": "FAIL",
+    "sublet_gc": "FAULT",
+    "asan": "heap-buffer-overflow",
+    "note": "same shape: the slot layer sees it, the heap layer does not"
+   }
+  ]
+ },
+ "instrument_note": "the first run of the revoking arms was void and is not reported: run-arm.sh set CAPSTONE_REV_NODES only for arms named exactly sublet or sublet-gc, and these are named fx-sublet, so both ran on the 65536 default and their control stopped at M5. The arm-name match is now a glob, and the control is read before any case verdict.",
+ "platform": {
+  "qemu_sha256": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "module_sha256": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+  "launcher_sha256": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94",
+  "compiler": "lane/compiler-stack-20260929 68c75ed3",
+  "note": "the #144 platform"
+ }
+}

@@ -112,25 +112,52 @@ The four in the last row are the honest other direction: `606d9a6b2` and
 `628ccec60` is the `mruby-task` GC-slot row, whose reuse a bounds check has no
 event to fire on.
 
-## The revoking arms are blocked, and by what
+## The revoking arms: what revocation catches
 
 `sublet` (revoke on free) and `sublet-gc` (every GC object slot issued and
-revoked on its own) both build, and **neither can report anything about this
-corpus, because both fail their own control.** `probe/depth-probe.sh` brackets
-it — one recursion depth per run, the same script in all three arms:
+revoked on its own) were both **blocked** when this corpus was first measured:
+each failed its own control, faulting at ~40 frames of Ruby recursion — shallow
+enough that the port's own `scripts/smoke.rb` stopped at M8. `probe/depth-probe.sh`
+bracketed it, one depth per run in all three arms, and `level0` completed at every
+depth.
 
-| depth | `level0` | `sublet` | `sublet-gc` |
-|---:|---|---|---|
-| 20 | ok | ok | ok |
-| 40 | ok | **fault** | **fault** |
-| 60, 100, 200, 500 | ok | fault | fault |
+That was mruby's own defect, not the heap's. `stack_extend_alloc()` hands the old
+VM stack to `mrb_realloc()` and then calls `envadjust()`, which moved every
+frame's pointer with `ci->stack += delta` — pointer arithmetic on a pointer
+`realloc` has already freed. On an ordinary allocator it computes the right
+address; where `free` revokes, the result is derived from a revoked capability,
+carries no tag, and the next write through it faults. Upstream fixed exactly this
+in `e5c82761f` (2026-07-24) after another memory-safe C implementation trapped on
+the same write, and the port backports it as
+[patch 0010](../../../ports/mruby/app/patches/4.0.0-rc2/0010-envadjust-rebases-off-the-new-stack.patch).
+Only the `4.0.0-rc2` pin needs it; the `head` pin already carries the fix.
 
-So the wall is the VM stack's repeated growth under the buddy heap, at somewhere
-between 20 and 40 frames of Ruby recursion, and it is independent of this corpus:
-`level0` runs every depth. Until it is fixed, no revocation claim can be made
-about these 165 — which is the point of running the control first. The GC-slot
-corpus records the same wall at `stack_extend_alloc`, so this brackets a fault
-that was already known rather than finding a new one.
+With that patch **all three arms complete their control**, and the 165 run in each:
+
+| | completes | faults | watchdog |
+|---|---:|---:|---:|
+| `level0` (control: bounds and tags, no revocation) | 148 | 13 | 4 |
+| `sublet` (revoke on free) | 147 | 15 | 3 |
+| `sublet-gc` (per GC object slot) | 144 | 18 | 3 |
+
+A **catch** is a case the control runs to completion and a revoking arm faults
+on. `level0` revokes nothing, so its own 13 faults are the defect reaching a
+bounds or tag check, and are not catches. Four cases are caught:
+
+| case | level0 | sublet | sublet-gc | ASan | what it is |
+|---|---|---|---|---|---|
+| `59552ecb8` | **completes, silently** | **fault** | **fault** | use-after-free | `mruby-sprintf`, format string mutated during the call |
+| `606d9a6b2` | wrong answer | wrong answer | **fault** | use-after-free | `hash.c`, the pair a scan carries into a set |
+| `628ccec60` | wrong answer | wrong answer | **fault** | **silent** | `mruby-task` does not mark the main task's values |
+| `fb4974528` | wrong answer | wrong answer | **fault** | heap-buffer-overflow | `mruby-hash-ext`, what a walk carries out of a hash |
+
+Three of the four are caught **only** by `sublet-gc`: revoke-on-free never sees
+them, because the reuse happens inside a GC page the allocator still owns. That
+is the case for per-slot revocation, measured on real defects rather than argued.
+
+`628ccec60` is the one to look at hardest. ASan is blind to it at the default
+page size, revoke-on-free misses it, and per-GC-slot revocation faults on it —
+and it is reachable at all only because the port now builds `mruby-task`.
 
 ## Reproducing
 
@@ -138,8 +165,9 @@ that was already known rather than finding a new one.
     python3 probe/extract.py                       # needs a full mruby clone; see the script
     python3 probe/run-sweep.py <arm>/bin/mruby verdicts.json
 
-    # the domain arms, one boot each
+    # the domain arms, one boot each; the revoking arms need the node pool
     bash probe/run-arm.sh level0
+    CAPSTONE_REV_NODES=16777216 bash probe/run-arm.sh sublet
     bash probe/depth-probe.sh
 
 The harness (`probe/harness.rb`, `probe/footer.rb`) and the four-arm build config
@@ -157,9 +185,10 @@ every commit in the window.
 - A domain fault is **not** attributed to a specific defect until its matched
   pair runs: the pin plus that one fix, which must stop faulting. That is done
   for none of the 17 yet.
-- The 153 ASan-blind rows are the reason a per-slot mechanism is interesting,
-  but this corpus has not shown that any mechanism catches them. It has shown
-  that neither ASan nor capability bounds do.
+- Of the 153 ASan-blind rows, exactly **one** is caught by a mechanism here
+  (`628ccec60`, by `sublet-gc`). The other 152 are still caught by nothing in
+  this set: not ASan, not capability bounds, not revocation at either layer.
+  That is the honest size of the remaining gap.
 - 24 further defects are live at the pin with a reproducer in their issue rather
   than in a test, so `extract.py` cannot see them; the whole `mruby-task`
   assertion lane (mruby #6862, #6863, #6868, #6870, #6886, #6887) is among them.
