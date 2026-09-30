@@ -126,9 +126,10 @@ CPython uses an ordinary standard-library directory (`PYTHONHOME` with
 PostgreSQL uses real stdin and an unprivileged account, with the pinned 16-byte
 MAXALIGN cluster and installed share files. Its qualified small configuration
 uses `shared_buffers=4MB`, `max_connections=10`, GMT, and
-`dynamic_shared_memory_type=sysv`. Single-user statistics flush synchronously
-instead of scheduling an idle SIGALRM. Statement/transaction/lock timeouts,
-server mode and general signal handling remain outside this qualification.
+`dynamic_shared_memory_type=sysv`. SIGALRM timers work: `statement_timeout`
+cancels a statement at the backend's next delegated call (the measurement is in
+`ports/postgres/app/README.md`). Lock and idle-transaction timeouts and server mode
+remain outside this qualification.
 
 mruby's `IO.popen` uses `posix_spawn` with standard-stream file actions and
 closes other descriptors in the child. It preserves the native build's POSIX
