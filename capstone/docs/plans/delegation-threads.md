@@ -2,9 +2,10 @@
 
 Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES,
 PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1, B7), parking through the launcher
-(T2, B6 and B12) and the runtime locks (T3, Q6, B9 and B14) pass. Branch `delegation-threads`,
-stacked on `delegation-signals` (c460e8c). The contracts below are what Probe A and Probe B test;
-the runtime that builds `pthread_create` on them is written after both probes pass.
+(T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14) and musl's own threads on minted
+contexts (T4, Q4, B10 and B11) pass; signals per context (B8) and cancellation are next. Branch
+`delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
+Probe A and Probe B test.
 
 Done so far:
 - The domain half on the unchanged platform: context arena, mint, thread entry, exit and
@@ -130,6 +131,71 @@ Done so far:
   first context's signal state through `longjmp`; and a lock depth that could go negative. All are
   fixed; stdio-nested, the Sublet image, spawn-concurrent, mmap-concurrent and nested-create were
   added for the gaps it named.
+- Probe B, domain phase, T4: musl's threads on minted contexts (Q4 answered below). musl's
+  `pthread_create`, `join`, `detach` and `exit` run unchanged; the runtime supplies `__clone`, a
+  thread's end and its reaping (`context.c`). `__clone` mints a context whose area is only a seal
+  region and a start block (1280 bytes of the context arena), entered on the stack and thread
+  pointer musl built in its own mapping, and runs it on a launcher thread. A thread ends with
+  `SYS_exit`: CONTEXT_EXITING names the word to wake, then the context stores 0 into its
+  CLONE_CHILD_CLEARTID word (musl's thread-list lock) and 1 into its completion word, in that
+  order and after its last use of the stack and TLS, and returns EXITED; the launcher frees the
+  transport and then wakes the word once, as Linux does. `pthread-probe` passes 12 of 12: 60
+  rounds of seven threads held together by a barrier, each joined with its value and its own
+  identity, in seven records (areas reused); B10, a joiner parked on the thread-list lock while
+  the child holds 40 ms between its announcement and its clear, released by the launcher's wake
+  (41 to 46 ms); B11, 300 detached threads, at most six at once, in one record, their mappings
+  back on the heap; a reservation that waits for an ending context's transport (a thread made 47
+  ms later, while an eighth at once is refused EAGAIN); `pthread_exit` in the main thread while
+  another runs (the application ends 0 with the other's output); `exit` in a thread (status 5);
+  thread-specific data with destructors; a condition variable over 2000 turns; `clone` for a child
+  process refused; priority-inheritance mutexes (a timed lock that expires, one whose deadline is
+  the end of time and waits); a thread on a stack the application gave it, told its own stack by
+  `pthread_getattr_np`; three threads made after the main thread left. Each check fired against a
+  seeded defect: no
+  clear (the join never returns), no reaping (EAGAIN at round 7, and at detached thread 27), the
+  main thread's exit as `exit_group` (status 0 without the other thread's line), a launcher without
+  the wake (the join never returns), a launcher whose reservation does not wait (EAGAIN after 14
+  ms), the PI deadline computed without saturation (the far deadline expired after 1 ms), musl
+  without patch 0005 (the user stack faults, cause 24). A first version of the reservation mode could not fire: a musl thread holds the thread-list
+  lock until its clear, so the creator waited in `pthread_create` for that lock, not in the
+  reservation; the mode now ends a context of the runtime's own interface, which holds no lock.
+  Record `results/20260930-pthreads.json`.
+- Found by T4 and fixed (the first four shown failing before, by the probe or libc-test):
+  `libc.page_size` was never set (a domain has no auxv), so `PAGE_SIZE`, `sysconf(_SC_PAGESIZE)`
+  and every `pthread_create`'s mapping size were 0; `pthread_cond_t` put `_c_head` over `_c_clock`
+  and `_c_tail` 32 bytes past the object at 16-byte pointers (C-65), the defect e2c9ad3 worked around in
+  GLib (musl patch 0004 lays it out pointers first; a signal faulted in the probe before);
+  `get_robust_list` answered ENOSYS, so `pthread_mutexattr_setrobust` refused and an orphaned
+  robust mutex blocked for good; PI futexes answered ENOSYS, so `setprotocol` refused and a PI lock
+  slept for good. Added before any run: `mprotect`, which answered ENOSYS (reported unserved) for
+  musl's thread stacks, now answers 0 for read-write pages inside one mapping, which states what is
+  true; guard pages are not enforced, the mapping's capability bounds are. The TLS blocks are now musl's own layout (`__copy_tls`, tp page-aligned), one
+  layout for every context. The application SDK declares seven contexts and a 64 KiB context
+  arena by default; it declared none, so no SDK application could make a thread. The start cost of
+  seven contexts is not measurable: 20 starts of the same program took 10.63 s with them and 10.60
+  to 10.63 s without (after a first round of 11.31 s).
+- An independent review of T4 (2026-09-30) found two defects. The main thread's `SYS_exit` took a
+  musl lock after musl's `pthread_exit` had set `need_locks` to -1, and a preemption between that
+  lock's load and store could switch musl's locking off for good while two threads ran; the path
+  now takes no lock (an atomic count of the threads `__clone` made replaces the scan of the
+  records). `pthread_attr_t` kept the stack address as a long, so `pthread_attr_setstack` built an
+  untagged stack and `pthread_getattr_np` returned one; musl patch 0005 keeps it as a pointer. It
+  also found `SYS_exit` served only after the transport check, the PI deadline arithmetic
+  overflowing, and stale comments; all are fixed. Its two further risks are B8's: after the main
+  thread's `pthread_exit` no signal handler runs any more, and a minted thread cannot be signalled
+  (`raise`, `abort`, `pthread_kill`), and `sched_*` given a thread's identity name no Linux thread.
+  The race itself has no probe; `main-exit-more` makes threads and uses the heap after the main
+  thread left.
+- Open after T4: the first context's `pthread_getattr_np` derives the stack from `libc.auxv`, which
+  a domain lacks; level0 has no `aligned_alloc` or `posix_memalign` (musl's allocator object then
+  collides with it at link time); `sem_open` needs file mappings.
+- libc-test on this runtime (delegated runner, `results/20260930-pthreads.json`): 56 PASS, 3 FAIL,
+  1 FAULT, 5 NOBUILD, 12 EXCLUDED of 77, against 46, 4, 4, 3 and 20 on 2026-09-29, none worse.
+  `pthread_cond`, `pthread_mutex`, `pthread_mutex_pi`, `pthread_robust`, `pthread_tsd`, `sem_init`,
+  `tls_init` and `tls_local_exec` pass; `popen` and `setjmp` pass too, which this run does not
+  attribute. `pthread_cancel` and `pthread_cancel-points` do not build (musl's cancellation points,
+  `__syscall_cp_asm`), and cancelling a thread needs its signal (B8). `sem_open` stays excluded, for
+  a reason that is not threads: it maps a /dev/shm file MAP_SHARED, and a domain maps no files.
 - An independent review of T1 (2026-09-30) found five defects. Fixed, each with a probe mode that
   failed before and passes after: a further context ran one of the first context's pending signal
   events, which then stayed blocked (now only the context with the handover block touches signal
@@ -850,6 +916,31 @@ Recommended starting point:
   exit; the application ends with status 0 when its last context has exited. `exit` and
   `exit_group` end the application at once.
 
+**Answer (2026-09-30, T4; evidence `results/20260930-pthreads.json`).**
+- **The joiner's word is musl's.** musl's `pthread_exit` stores `DT_EXITED` and wakes the joiner
+  itself; its join then waits on the thread-list lock, which the ending thread holds from its
+  unlink to its end and which Linux releases through CLONE_CHILD_CLEARTID. That clear word is the
+  completion key: the context names it in CONTEXT_EXITING (its last request), stores 0 into it
+  after its last use of the stack and TLS, then publishes `done` and returns EXITED; the launcher
+  frees the transport and wakes the key once on EXITED and on DEAD. A joiner that saw the word
+  clear before the final return goes on and may free musl's mapping at once; the wake is then
+  redundant. A reservation that finds no transport free waits while one is ending.
+- **Reaping.** One record per area, outside every area, under one lock (`clones_lock`, before the
+  arena, map and heap locks). The reaper runs at every `__clone`, revokes each area whose `done`
+  is 1 and keeps it for the next thread, and gives a detached thread's mapping (recorded by
+  `__unmapself`) back to the heap. Join frees a joinable thread's mapping itself (musl). The bound:
+  a finished, unreaped thread keeps one area and at most one mapping until the next thread is made;
+  records never exceed the contexts alive at once plus those between their clear and their `done`
+  when a thread is made (seven in 60 rounds of seven, one for 300 detached threads). The reaper
+  revokes only contexts that published `done`, which never park again, so no parked record
+  survives a reaped context (Q5's open point).
+- **Main context.** `SYS_exit` in the first context clears and wakes its word itself (its stack and
+  TLS are never freed) and then waits for good, its signals as musl left them (all blocked), while
+  another thread lives; the last thread's `pthread_exit` finds itself alone and calls `exit(0)`, as
+  on Linux. Alone, the first context's `SYS_exit` ends the application with its status. `exit`
+  and `exit_group` end the application from any context. Only `exit_group` crosses to the
+  launcher; a thread's end is the domain's.
+
 ### Q5. What is the park API's timeout and signal contract? (before accepting Probe B)
 
 Specify deadline representation, clock, allowed counts, result codes and the mapping to libc's
@@ -902,7 +993,8 @@ Recommended starting point:
   interrupted.
 - **Open for Q4 and B11:** a context revoked while its thread is parked leaves its record queued,
   and a WAKE can select that record instead of a live waiter. Reaping a parked context has to abort
-  its wait first.
+  its wait first. (T4's reaper revokes only contexts that published completion, which never park
+  again; an application revoking a live context through the context interface still can.)
 - **Counts:** WAKE returns the records it selected; REQUEUE woken plus moved.
 
 ### Q6. How are the first runtime locks bootstrapped? (before concurrent libc)
@@ -952,9 +1044,10 @@ Recommended starting point:
   first context has a TLS block; a round's delivery is skipped while the count is not zero, and
   the last release delivers what waited. A spin lock makes no round while held, so no handler can
   run under it and it is not counted.
-- **Not yet:** a minted context has no thread-specific data array (`pthread_key`, T4); contexts are
-  not in musl's thread list, so `__synccall` (setuid and relatives) acts on the calling context
-  only; a REGISTER context holding a runtime lock runs again only when its stepper steps it.
+- **Not yet:** `__synccall` (setuid and relatives) signals every thread in musl's list and needs
+  signals per context (B8); a REGISTER context holding a runtime lock runs again only when its
+  stepper steps it. (Thread-specific data came with T4: musl's `pthread_create` gives each thread
+  its array.)
 - **Progress on one hart:** a spinner spins until the scheduler preempts it and the holder runs;
   a `capstone_lock` waiter parks.
 - **Measured cost:** none measurable on a single context's rounds: 100000 rounds took 9134 ms with
@@ -994,6 +1087,8 @@ After both probes, `delegation-threads-runtime` builds musl's `__clone`, and wit
 `pthread_create`, `join`, `detach` and `exit`, on mint and adopt. The minimal integration needed by
 B6 to B11 is not yet a complete pthread implementation. Resolve Q2, Q4 and Q6 before treating that
 runtime as generally thread-capable. Gates:
-- the libc-test thread group leaves the excluded set;
-- GLib's `GCond` in the tshark deps (the `pthread_cond_t` size fix, e2c9ad3);
+- the libc-test thread group leaves the excluded set (T4: six of the nine pass; the two cancellation
+  tests need B8; `sem_open` is excluded for file mappings, not threads);
+- GLib's `GCond` in the tshark deps (the `pthread_cond_t` size fix, e2c9ad3; the layout itself is
+  fixed by musl patch 0004);
 - CPython's basic `threading` tests.

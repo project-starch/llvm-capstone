@@ -143,9 +143,10 @@ enum capstone_delegate_group {
 /* Contexts (docs/plans/delegation-threads.md).
  * CONTEXT_RESERVE: no arguments; the result is a free transport index, 1 to
  * the descriptor's contexts, or -EAGAIN when every one is in use (-ENOSYS for
- * an application that declares none). The creator puts the index into the
- * new context's start block before CONTEXT_CREATE, so the context has its
- * transport at its first entry.
+ * an application that declares none). While a transport's context has
+ * announced its end (CONTEXT_EXITING) and none is free, it waits for that one.
+ * The creator puts the index into the new context's start block before
+ * CONTEXT_CREATE, so the context has its transport at its first entry.
  * CONTEXT_CREATE: ticket, mode, transport; the seal is already in the
  * requesting context's invocation descriptor, the result is the new context's
  * id or -errno. It consumes a reservation whatever its outcome: THREAD mode
@@ -158,6 +159,12 @@ enum capstone_delegate_group {
 #define CAPSTONE_NR_CONTEXT_STEP UINT64_C(0xC0DE0009)
 #define CAPSTONE_NR_CONTEXT_FORGET UINT64_C(0xC0DE000A)
 #define CAPSTONE_NR_CONTEXT_RESERVE UINT64_C(0xC0DE000B)
+/* CONTEXT_EXITING: key; a THREAD context's last request. Its transport is
+ * ending, and once the context has returned for good (EXITED, or DEAD) the
+ * launcher frees the transport and then wakes one waiter on key (0: none),
+ * the word the context cleared on its way out, as Linux does for
+ * CLONE_CHILD_CLEARTID. -EINVAL from a context without a transport of its own. */
+#define CAPSTONE_NR_CONTEXT_EXITING UINT64_C(0xC0DE000F)
 #define CAPSTONE_CONTEXT_REGISTER 0u   /* register only; the application steps it */
 #define CAPSTONE_CONTEXT_THREAD 1u     /* a launcher thread steps it until it ends */
 

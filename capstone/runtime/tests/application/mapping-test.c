@@ -9,11 +9,16 @@
 #define shmdt port_shmdt
 #define shmctl port_shmctl
 #define __vm_wait port_vm_wait
+#define mprotect port_mprotect
+#define __mprotect port_internal_mprotect
 /* The runtime's locks (capstone/lock.h) are the domain's; one native thread
    needs none. */
 #include <capstone/lock.h>
 void capstone_lock(volatile int *word) { (void)word; }
 void capstone_unlock(volatile int *word) { (void)word; }
+/* hostcall.c's unserved report: count what mprotect refuses. */
+static int unserved;
+void __capstone_hc_note_unserved(long n) { (void)n; ++unserved; }
 #include "../../../ports/musl-capstone/runtime/mmap_shm_level0.c"
 #include <assert.h>
 
@@ -38,5 +43,16 @@ int main(void) {
   p[4096] = 17;
   assert(shmctl(id, IPC_RMID, NULL) == 0 && p[4096] == 17);
   assert(shmdt(p) == 0);
+  /* mprotect answers 0 only for read-write pages inside one mapping (a
+     thread stack past its guard page), and reports everything else. */
+  p = mmap(NULL, 3 * 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  assert(p != MAP_FAILED);
+  assert(mprotect(p + 4096, 2 * 4096, PROT_READ | PROT_WRITE) == 0 && unserved == 0);
+  assert(mprotect(p, 3 * 4096, PROT_READ | PROT_WRITE) == 0 && unserved == 0);
+  errno = 0;
+  assert(mprotect(p + 4096, 3 * 4096, PROT_READ | PROT_WRITE) == -1 && errno == ENOSYS);
+  assert(mprotect(p, 4096, PROT_NONE) == -1 && errno == ENOSYS);
+  assert(mprotect(p, 4096, PROT_READ) == -1 && errno == ENOSYS && unserved == 3);
+  assert(munmap(p, 3 * 4096) == 0);
   return 0;
 }

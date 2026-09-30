@@ -7099,7 +7099,7 @@ configuration in which C++ compiles today.** C-61 alone does not make C++ "nearl
 
 **Fix: none yet. The ABI decision is the lead's.**
 
-### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `OPEN — LIBC ABI (musl-capstone); found 2026-09-24 by the tshark port; WORKED AROUND for GLib only (ports/wireshark/app/deps/patches/glib-0008); source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
+### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `FIXED 2026-09-30 by musl-patches/0004 (delegation-threads, T4); found 2026-09-24 by the tshark port; GLib's workaround (ports/wireshark/app/deps/patches/glib-0008) still in place until the GCond gate; source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
 
 **What happens.** On capstone64, `pthread_cond_t` (`include/alltypes.h.in:88`) is `int __i[12]`,
 48 bytes, and its pointer view `__p[12*sizeof(int)/sizeof(void*)]` holds three 16-byte pointers.
@@ -7144,6 +7144,17 @@ upstream tree untouched:
 With a private musl build, `run.sh c65` returns with `sizeof = 64` and "broadcast returned". The
 musl build fails the same 6 objects as without the patch. The wait paths need a futex and were not
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
+
+**Fixed (2026-09-30).** That branch is in no local clone any more. The same layout landed as
+`ports/musl-capstone/musl-patches/0004-pthread-cond-capability-layout.patch`, in the port's patch
+mechanism rather than as overlays: with 16-byte pointers `pthread_cond_t` and `cnd_t` are 64 bytes,
+`_c_shared`, `_c_head` and `_c_tail` are `__p[0..2]`, the four ints `__i[12..15]`; other pointer
+sizes are unchanged. With threads the wait paths now run: `pthread-probe cond` (2000 turns between
+two threads) faulted in `__private_cond_signal` at `ldc a0, 0x50(s3)` against the unpatched archive
+and passes against the patched one, and libc-test's `pthread_cond` passes
+(`runtime/tests/application/results/20260930-pthreads.json`). Every image relinks against the new
+libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
+(perl and mruby embed none).
 
 ### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `OPEN — COMPILER, observed 2026-09-29; port workaround qualified; not reduced`
 

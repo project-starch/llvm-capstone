@@ -11,12 +11,15 @@ stubs, and the next workload would need its own.
 **A domain runs musl.** The table below describes the original HostCall v0
 port: musl's functional suite ran under QEMU with one boot per test. The
 delegated application ABI v2 runs the suite in one guest boot and currently
-records **46 PASS, 4 FAIL, 4 FAULT, 3 NOBUILD, 20 EXCLUDED** of 77;
-see [the port migration results](../common/application/results/20260929-delegation.json).
-All 45 earlier delegated passes remain green; `sscanf_long` now passes.
-`tls_init` and `tls_local_exec` now build but fault in `pthread_join` after
-unsupported thread creation. They are not TLS-initialization passes. The
-existing exclusions are retained for comparison.
+records **56 PASS, 3 FAIL, 1 FAULT, 5 NOBUILD, 12 EXCLUDED** of 77 with
+threads (2026-09-30, [record](../../runtime/tests/application/results/20260930-pthreads.json)),
+against 46, 4, 4, 3 and 20 at [the port migration](../common/application/results/20260929-delegation.json).
+musl's own `pthread_create`, `join`, `detach` and `exit` run on minted contexts
+(docs/plans/delegation-threads.md, T4): `pthread_cond`, `pthread_mutex`,
+`pthread_mutex_pi`, `pthread_robust`, `pthread_tsd`, `sem_init`, `tls_init`
+and `tls_local_exec` pass. `pthread_cancel` and `pthread_cancel-points` do
+not build yet (cancellation points need signals per thread); `sem_open` is
+excluded because it maps a file MAP_SHARED, which a domain does not serve.
 
 | | |
 |---|---|
