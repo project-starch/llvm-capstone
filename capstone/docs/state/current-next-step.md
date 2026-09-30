@@ -1,4 +1,13 @@
-Translated memory (2026-09-30): the
+Translated memory, emulator (2026-09-30): Stage 1 of the caplified mapping
+tables runs on `qemu/mapping-stage1` with 45 bare-metal tests on
+`delegation-memory-qemu` ([plan](../plans/mapping-qemu-stage1.md),
+[harness](../../tests/mapping-qemu/README.md)). Next is M2, the delivery
+transport in monitor, module, launcher and libc against these instructions,
+then M3 (allocators). The emulator's new permission and handle-type checks
+apply to every domain; keep the SQLite memory gate in every rerun. Two-hart
+rows and the fault-in-domain exit path remain untested.
+
+Translated memory, model (2026-09-30): the
 [executable Stage-1 contract model](../../tests/mapping-model/README.md) and its
 bounded controls are available on `delegation-memory`. Coverage follow-up adds
 completed lifecycle operations, per-seed data requirements and an optional

@@ -1,7 +1,9 @@
 # M1: Stage-1 caplified mapping tables in capstone-qemu
 
-Status: PLAN, 2026-09-30, lane `delegation-memory-qemu` (parent) and
-`qemu/mapping-stage1` (capstone-qemu, from `c128-qemu-merge` b277660a45). It
+Status: IMPLEMENTED ON THE LANE, 2026-09-30: commits 1-5 of §3 are on
+`qemu/mapping-stage1` (capstone-qemu, from `c128-qemu-merge` b277660a45) with
+their tests on `delegation-memory-qemu` (parent), 45 bare-metal tests passing;
+§4 records the regression result. Written as a plan on the same day. It
 implements Stage 1 of the [mapping candidate](../design/caplified-mapping-tables.md)
 under the [encoding decision](../design/caplified-mapping-encoding-decision.md)
 in the emulator only. Nothing here qualifies RTL, and the emulator runs one
@@ -121,3 +123,16 @@ nodes. REVOKE refuses a node whose flag is set.
 The candidate's §10.2 rows that need two harts (the §8 window, foreign issue
 during a barrier) are recorded as not testable here. No number in this plan is
 a measurement.
+
+## 4. Result
+
+Commits 1-5 landed as planned; [the harness README](../../tests/mapping-qemu/README.md)
+maps every test to its §10.2 row or model scenario. Deviations from §2, all
+recorded in the emulator's commit messages: atomics already took the
+capability-checked path on `c128-qemu-merge`, so only floating-point accesses
+were routed; UNMAP writes a tagged UNINIT marker without a node as the locked
+state rather than a bit in the entry; the two-level walker refuses a mapping
+above 256 MiB at CREATE. The permission and type checks changed the emulator
+for every existing domain, which is what commit 6's regression run on the
+prebuilt SQLite memory gate checks; its outcome is in the parent commit that
+bumps the submodule pin.

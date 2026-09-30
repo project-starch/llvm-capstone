@@ -22,6 +22,12 @@ explicitly treats pool buffers as permanently shared, attacker-controlled input.
 The [encoding decision](../design/caplified-mapping-encoding-decision.md) (M0)
 fixes the address partition, binding placement, registry size and type codes
 from the sources; it is a decision, not an implementation or a cost measurement.
+The emulator prototype (M1, [plan](../plans/mapping-qemu-stage1.md)) implements
+CREATE, POPULATE, DETACH, UNMAP and DESTROY, the binding in revocation nodes,
+the delivery slot of sealed contexts, translation on the capability access path
+with a conservatively flushed cache, and closes the emulator's missing
+permission and handle-type checks; 45 bare-metal tests pass. It is an emulator
+implementation at one vCPU, not RTL and not a cost measurement.
 These are abstract Stage-1 results, not a translation implementation, an
 unbounded proof, QEMU qualification or RTL measurements. The lane remains
 separate from `dev`.
