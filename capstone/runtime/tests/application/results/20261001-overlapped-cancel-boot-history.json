@@ -39,5 +39,24 @@
   "Order effects: with both legs, signals then sockets, the reading is signals' 0.25 s, not sockets' 0.08 s; sockets then signals was not run.",
   "Each composition is one boot. The three cancellations in a boot agree closely, but boots were not repeated per composition."
  ],
- "next_experiment": "one boot per case: a single caught signal delivered to a throwaway domain, then v1; and sockets then signals, then v1"
+ "next_experiment": "one boot per case: a single caught signal delivered to a throwaway domain, then v1; and sockets then signals, then v1",
+ "addendum_mechanism_probe": {
+  "status": "pre-registered 2026-10-01, before either boot; results to be added below this line",
+  "method": "as the bisect: one capstone-vm boot per composition, the named legs in order and then v1, nothing else in the boot; same images (dev 8c08aa1d, #147 compiler), launcher and platform",
+  "already_known": [
+   "A delivered signal that nobody catches is not enough. The contract leg runs application-supervisor, which sends SIGTERM, SIGKILL and SIGINT to looping domains with no handler installed (supervisor.c \"loop\"), and v1 read 3.50-3.53 s after it. Two v1 runs in one boot (dev 330014ea + #140 + #145) both read 3.50-3.56 s, though v1 runs the same supervisor.",
+   "Order is not neutral: the all-seven composition ran signals before sockets and read 0.25 s, signals' value, not sockets' 0.08 s."
+  ],
+  "boot_1": {
+   "composition": "run-signals.py --only self, then v1",
+   "what_it_runs": "one throwaway domain that installs a SIGUSR1 handler, raises SIGUSR1 once and checks the handler ran once (signal-contract.c, mode \"self\")",
+   "prediction": "if one caught signal is enough: 0.20-0.30 s. If not: 3.4-3.9 s, as every v1-first boot. A reading outside both bands is reported as unexplained, not fitted.",
+   "cannot_distinguish": "if it reads 3.5 s: whether the effect needs a signal delivered from outside while the domain runs, more than one signal, or another case of the contract. That is not settled by this run and is not chased further here."
+  },
+  "boot_2": {
+   "composition": "run-sockets.py, then run-signals.py, then v1",
+   "prediction": "if signals wins in either order: 0.20-0.30 s. If the first of the two sets it (signals first gave 0.25 s): 0.07-0.10 s. \"Sockets wins in either order\" is already refuted by the all-seven reading.",
+   "cannot_distinguish": "N = 1 boot, and the all-seven reading it is compared with had other legs around the pair (each inert alone, and sockets then tbase kept 0.08 s)."
+  }
+ }
 }
