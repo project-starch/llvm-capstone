@@ -5,14 +5,18 @@ Usage: capinit-unwritten-slots.py FILE... (tools from $CAPSTONE_LLVM_BIN).
 
 Every allocated data R_Capstone_64 relocation is a candidate pointer slot. Track
 addresses through the straight-line __capstone_cap_init, including stack spills,
-and require an stc to that exact slot. A reference to the containing object, as
-either a source or destination, does not establish another slot's coverage.
+and require an stc of the relocation's target plus addend to that exact slot.
+A reference to the containing object, as either a source or destination, does
+not establish another slot's coverage.
 
-This checks store coverage, not the stored capability's tag, bounds or authority.
+This checks store coverage and symbolic cursor values, not capability tags,
+bounds or authority. Nonlocal symbol identities are preserved: a weak alias
+cannot be replaced by its current aliasee, which a strong definition may override.
 Integer address constants are candidates too and need separate review. Excluded:
 the loader's .gct and the runtime's link-address init/fini arrays.
-Exit 0: all candidates covered; 1: uncovered candidates; 2: incomplete analysis
-or invalid input. Unsupported instructions/control flow cannot yield a clean scan.
+Exit 0: all candidates matched; 1: uncovered or wrong-value candidates;
+2: incomplete analysis or invalid input. Unsupported instructions/control flow
+cannot yield a clean scan.
 """
 import argparse
 from collections import Counter
@@ -53,7 +57,7 @@ def parse(blob):
     syms = []
     for off in range(st[4], st[4] + st[5], 24):
         n, info, other, shndx, value, size = struct.unpack_from('<IBBHQQ', blob, off)
-        syms.append((name(st[6], n), info & 0xf, shndx, value, size))
+        syms.append((name(st[6], n), info & 0xf, shndx, value, size, info >> 4))
     relas = []
     for s in secs:
         if s[1] == SHT_RELA:
@@ -67,6 +71,7 @@ def parse(blob):
 class Address:
     section: object
     offset: int
+    identity: object = None
 
 
 @dataclass(frozen=True)
@@ -80,8 +85,14 @@ def add(a, b):
     if isinstance(b, Address) and isinstance(a, int):
         a, b = b, a
     if isinstance(a, Address) and isinstance(b, int):
-        return Address(a.section, a.offset + b)
+        return Address(a.section, a.offset + b, a.identity)
     return None
+
+
+def symbol(syms, sym, delta):
+    _, _, sh, value, _, binding = syms[sym]
+    return Address(sh if sh else f'extern:{sym}', value + delta,
+                   sym if binding else None)
 
 
 def disassemble(path):
@@ -101,18 +112,14 @@ def disassemble(path):
 
 
 def stores(path, names, syms, relas):
-    """Exact stc destinations; reject an initializer we cannot model."""
-    inits = [(sh, v, v + sz) for n, t, sh, v, sz in syms if n == '__capstone_cap_init']
+    """Exact stc destinations and values; reject code we cannot model."""
+    inits = [(sh, v, v + sz) for n, t, sh, v, sz, _ in syms if n == '__capstone_cap_init']
     if not inits:
-        return set()
+        return {}
     code = disassemble(path)
     reloc = {(sh, off): (typ, sym, delta) for sh, off, typ, sym, delta in relas
              if typ in (R_PCREL_HI20, R_PCREL_LO12_I)}
-    covered = set()
-
-    def symbol(sym, delta):
-        _, _, sh, value, _ = syms[sym]
-        return Address(sh if sh else f'extern:{sym}', value + delta)
+    covered = {}
 
     for sh, start, end in inits:
         regs = {'zero': 0, 'sp': Address('stack', 0), 'gp': Address('gp', 0)}
@@ -129,11 +136,11 @@ def stores(path, names, syms, relas):
             if r and r[0] == R_PCREL_HI20 and op == 'auipc':
                 regs[rd] = High(Address(sh, pc))
             elif r and r[0] == R_PCREL_LO12_I and op in ('addi', 'mv'):
-                high_pc = symbol(r[1], r[2])
+                high_pc = symbol(syms, r[1], r[2])
                 high = reloc.get((high_pc.section, high_pc.offset))
                 if regs.get(args[1]) != High(high_pc) or not high or high[0] != R_PCREL_HI20:
                     raise ValueError(f'{where}: unmatched PC-relative address')
-                regs[rd] = symbol(high[1], high[2])
+                regs[rd] = symbol(syms, high[1], high[2])
             elif r:
                 raise ValueError(f'{where}: unsupported relocated instruction {op}')
             elif op in ('stc', 'sd', 'sw', 'sh', 'sb', 'ldc', 'ld', 'lw', 'lwu'):
@@ -141,6 +148,8 @@ def stores(path, names, syms, relas):
                 dest = add(regs.get(m[2]), int(m[1], 0)) if m else None
                 if not isinstance(dest, Address):
                     raise ValueError(f'{where}: unknown memory address in {op}')
+                # Locate storage by section/offset; retain symbol identity in values.
+                dest = Address(dest.section, dest.offset)
                 width = {'stc': 16, 'ldc': 16, 'sd': 8, 'ld': 8,
                          'sw': 4, 'lw': 4, 'lwu': 4, 'sh': 2, 'sb': 1}[op]
                 if op.startswith('l'):
@@ -150,13 +159,15 @@ def stores(path, names, syms, relas):
                     def overlaps(a, size):
                         return (a.section == dest.section and a.offset < dest.offset + width
                                 and dest.offset < a.offset + size)
-                    covered.difference_update(a for a in list(covered) if overlaps(a, 16))
+                    for a in list(covered):
+                        if overlaps(a, 16):
+                            del covered[a]
                     for key in list(memory):
                         if overlaps(*key):
                             del memory[key]
                     memory[dest, width] = regs.get(rd)
                     if op == 'stc' and isinstance(dest.section, int):
-                        covered.add(dest)
+                        covered[dest] = regs.get(rd)
             elif op in ('mv', 'movc'):
                 regs[rd] = regs.get(args[1])
             elif op == 'auipc':
@@ -199,7 +210,7 @@ def stores(path, names, syms, relas):
 
 def census(label, path):
     secs, names, syms, relas = parse(path.read_bytes())
-    candidates = [(sec, off, sym) for sec, off, typ, sym, delta in relas
+    candidates = [(sec, off, sym, delta) for sec, off, typ, sym, delta in relas
                   if typ == R_64 and secs[sec][2] & SHF_ALLOC and not secs[sec][2] & SHF_EXEC
                   and not names[sec].startswith(('.eh_frame', '.capstone_cap_init', '.gct',
                                                  '.init_array', '.fini_array'))]
@@ -207,14 +218,24 @@ def census(label, path):
         return []
     covered = stores(path, names, syms, relas)
     out = []
-    for sec, off, sym in candidates:
-        if Address(sec, off) in covered:
-            continue
-        box = next(((v, n) for n, t, sh, v, sz in syms
+    for sec, off, sym, delta in candidates:
+        slot = Address(sec, off)
+        expected = symbol(syms, sym, delta)
+        if slot in covered:
+            actual = covered[slot]
+            if actual is None or isinstance(actual, High):
+                raise ValueError(f'{names[sec]}+{off:#x}: unknown stored value')
+            if actual == expected:
+                continue
+        box = next(((v, n) for n, t, sh, v, sz, _ in syms
                     if sh == sec and t in (0, 1) and v <= off < v + sz), (0, '?'))
-        tn, _, sh, _, _ = syms[sym]
+        tn, _, sh, _, _, _ = syms[sym]
         target = tn or (names[sh] if sh < len(names) else '?')
-        out.append((label, names[sec], box[1], off - box[0], target))
+        target += f'{delta:+d}' if delta else ''
+        row = (label, names[sec], box[1], off - box[0], target)
+        if slot in covered:
+            row += (f'WRONG_VALUE: {actual!r}',)
+        out.append(row)
     return out
 
 
@@ -262,10 +283,20 @@ def main():
         except (ValueError, OSError, subprocess.CalledProcessError) as exc:
             incomplete += 1
             print(f'{path}: INCOMPLETE: {exc}', file=sys.stderr)
-    print(f'# objects analyzed: {seen}, uncovered address slots: {uncovered}, '
+    print(f'# objects analyzed: {seen}, uncovered or wrong-value address slots: {uncovered}, '
           f'incomplete objects/archives: {incomplete}', file=sys.stderr)
     return 2 if incomplete or not seen else 1 if uncovered else 0
 
 
+def cli():
+    try:
+        return main()
+    except Exception as exc:
+        # Reserve exit 1 for a completed analysis that found bad slots. This
+        # also covers unexpected analyzer/tool failures outside per-file guards.
+        print(f'INCOMPLETE: {type(exc).__name__}: {exc}', file=sys.stderr)
+        return 2
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(cli())

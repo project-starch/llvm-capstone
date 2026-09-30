@@ -27,10 +27,10 @@ class StoreCoverage(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
 
-    def assemble(self, body, name='test', extra=''):
+    def assemble(self, body, name='test', extra='', target='target'):
         source = self.root / (name + '.s')
         obj = source.with_suffix('.o')
-        source.write_text('''
+        source.write_text(('''
 .data
 .p2align 4
 .type table, @object
@@ -50,10 +50,13 @@ __capstone_cap_init:
 .Ltable:
 auipc a0, %pcrel_hi(table)
 addi a0, a0, %pcrel_lo(.Ltable)
+.Ltarget:
+auipc a3, %pcrel_hi(target)
+addi a3, a3, %pcrel_lo(.Ltarget)
 ''' + body + '''
 cjalr zero, 0(ra)
 .size __capstone_cap_init, .-__capstone_cap_init
-''')
+''').replace('.quad target\n', '.quad ' + target + '\n'))
         subprocess.run([tool('clang'), '-target', 'capstone64-unknown-elf', '-c',
                         str(source), '-o', str(obj)], check=True, capture_output=True)
         return obj
@@ -65,7 +68,7 @@ cjalr zero, 0(ra)
         return run.stdout, run.stderr
 
     def test_partial_table(self):
-        out, _ = self.scan(self.assemble('stc a0, 0(a0)'), 1)
+        out, _ = self.scan(self.assemble('stc a3, 0(a0)'), 1)
         self.assertIn('\ttable\t16\ttarget', out)
         self.assertNotIn('\ttable\t0\t', out)
 
@@ -92,8 +95,8 @@ cincoffsetimm sp, sp, -16
 stc a0, 0(sp)
 li a0, 0
 ldc a1, 0(sp)
-stc a1, 0(a1)
-stc a1, 16(a1)
+stc a3, 0(a1)
+stc a3, 16(a1)
 cincoffsetimm sp, sp, 16
 '''), 0)
 
@@ -101,9 +104,9 @@ cincoffsetimm sp, sp, 16
         obj = self.assemble('''
 li a2, 4096
 cincoffset a1, a0, a2
-stc a0, -2048(a1)
-stc a0, 0(a0)
-stc a0, 16(a0)
+stc a3, -2048(a1)
+stc a3, 0(a0)
+stc a3, 16(a0)
 ''', extra='''.zero 2012
 .type distant, @object
 distant: .quad target
@@ -113,19 +116,73 @@ distant: .quad target
         self.scan(obj, 0)
 
     def test_scalar_overwrite_removes_coverage(self):
-        out, _ = self.scan(self.assemble('stc a0, 0(a0)\nstc a0, 16(a0)\nsd zero, 8(a0)'), 1)
+        out, _ = self.scan(self.assemble('stc a3, 0(a0)\nstc a3, 16(a0)\nsd zero, 8(a0)'), 1)
         self.assertIn('\ttable\t0\ttarget', out)
         self.assertNotIn('\ttable\t16\t', out)
 
+    def test_wrong_value_in_right_slot(self):
+        out, _ = self.scan(self.assemble('stc a0, 0(a0)\nstc a3, 16(a0)'), 1)
+        self.assertIn('\ttable\t0\ttarget\tWRONG_VALUE', out)
+        self.assertNotIn('\ttable\t16\t', out)
+
+    def test_target_addend_and_spilled_value(self):
+        body = '''
+cincoffsetimm sp, sp, -16
+cincoffsetimm a3, a3, 4
+stc a3, 0(sp)
+li a3, 0
+ldc a4, 0(sp)
+stc a4, 0(a0)
+stc a4, 16(a0)
+cincoffsetimm sp, sp, 16
+'''
+        self.scan(self.assemble(body, target='target+4'), 0)
+        out, _ = self.scan(self.assemble(body.replace('a3, a3, 4', 'a3, a3, 8'),
+                                          target='target+4'), 1)
+        self.assertEqual(out.count('target+4\tWRONG_VALUE'), 2)
+
+    def test_weak_alias_identity_is_preserved(self):
+        extra = '.weak alias\n.set alias, target\n'
+        body = 'stc a3, 0(a0)\nstc a3, 16(a0)'
+        # Both have the same section and offset, but a strong definition can
+        # replace alias. Storing its current aliasee would change link semantics.
+        out, _ = self.scan(self.assemble(body, extra=extra, target='alias'), 1)
+        self.assertEqual(out.count('alias\tWRONG_VALUE'), 2)
+        self.scan(self.assemble('''
+.Lalias:
+auipc a3, %pcrel_hi(alias)
+addi a3, a3, %pcrel_lo(.Lalias)
+''' + body, extra=extra, target='alias'), 0)
+
+    def test_unknown_stored_value_is_incomplete(self):
+        _, err = self.scan(self.assemble('ldc a3, 0(a0)\nstc a3, 0(a0)'), 2)
+        self.assertIn('unknown stored value', err)
+
+    def test_unexpected_exception_is_incomplete(self):
+        script = '''
+import runpy, sys
+ns = runpy.run_path(sys.argv[1])
+def fail():
+    raise RuntimeError('injected analyzer failure')
+ns['cli'].__globals__['main'] = fail
+sys.exit(ns['cli']())
+'''
+        run = subprocess.run([sys.executable, '-c', script,
+                              str(HERE / 'capinit-unwritten-slots.py')],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn('INCOMPLETE: RuntimeError: injected analyzer failure', run.stderr)
+        self.assertNotIn('Traceback', run.stderr)
+
     def test_unknown_control_flow_is_incomplete(self):
-        _, err = self.scan(self.assemble('beq a0, zero, .Lend\nstc a0, 0(a0)\n.Lend:'), 2)
+        _, err = self.scan(self.assemble('beq a0, zero, .Lend\nstc a3, 0(a0)\n.Lend:'), 2)
         self.assertIn('INCOMPLETE', err)
 
     def test_duplicate_archive_members_are_all_read(self):
-        bad = self.assemble('stc a0, 0(a0)', 'same')
+        bad = self.assemble('stc a3, 0(a0)', 'same')
         archive = self.root / 'dup.a'
         subprocess.run([tool('llvm-ar'), 'qc', str(archive), str(bad)], check=True)
-        good = self.assemble('stc a0, 0(a0)\nstc a0, 16(a0)', 'same')
+        good = self.assemble('stc a3, 0(a0)\nstc a3, 16(a0)', 'same')
         subprocess.run([tool('llvm-ar'), 'q', str(archive), str(good)], check=True)
         out, err = self.scan(archive, 1)
         self.assertIn('(same.o#1)', out)

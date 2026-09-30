@@ -7141,7 +7141,7 @@ live instance. The compiler lane's sweep
 `add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
 save loop is one alignment change from live.
 
-### C-75 — a pointer slot whose initializer names an alias is never tagged: `__capstone_cap_init` skipped every `GlobalAlias` `FIXED 2026-09-30 on compiler/cap-init-alias (a6e8d967140b, on 7d01722aab88); found by delegation-threads, a fork in CPython's test_threading while the test's threads ran`
+### C-75 — a pointer slot whose initializer names an alias is never tagged: `__capstone_cap_init` skipped every `GlobalAlias` `FIXED 2026-09-30 on compiler/cap-init-alias (a6e8d967140b and gp-captable function-alias follow-up fd82fef2a70d, on 7d01722aab88; gp-captable variable aliases remain open); found by delegation-threads, a fork in CPython's test_threading while the test's threads ran`
 
 **What happens.** `CapstoneCapGlobalInit` stores a tagged capability over each pointer slot of an
 initialized global, because a tag cannot live in the image. Its `needsMaterialization` accepted a
@@ -7172,17 +7172,22 @@ Its original clean scans did not establish the absence of other untagged pointer
 The corrected scanner follows exact store destinations through the straight-line initializer,
 including address arithmetic and stack spills. Unsupported code is INCOMPLETE (exit 2),
 uncovered address slots exit 1, and a complete scan with none exits 0. Duplicate archive
-members are inspected separately. It checks **store coverage**, not the stored value's tag,
-bounds or authority; an integer address constant is also a candidate to review. The loader's
-`.gct` and the runtime's link-address constructor arrays are excluded explicitly.
-Eight executable controls in `tests/capinit-unwritten-slots-test.py` cover mixed alias tables,
-source-only references, spills, large offsets, scalar overwrites, unsupported control flow
-and duplicate members. The mixed table built with the pre-C-75 compiler now reports its
-missing slot at offset 16; the fixed build reports none.
+members are inspected separately. It checks **store coverage and symbolic cursor values**:
+the final store must match the relocation target plus addend. Nonlocal symbol identities
+remain distinct, so a weak alias cannot be replaced by its current aliasee. A wrong value
+exits 1; an unknown value or unexpected internal exception is INCOMPLETE (exit 2).
+It does not check the stored value's tag, bounds or authority; an integer address constant
+is also a candidate to review. The loader's `.gct` and the runtime's link-address
+constructor arrays are excluded explicitly.
+Thirteen executable controls in `tests/capinit-unwritten-slots-test.py` cover mixed alias tables,
+source-only references, destination/value spills, large offsets, scalar overwrites,
+unsupported control flow, duplicate members, wrong values/addends, weak-alias identity,
+unknown stored values and an injected unexpected exception. The mixed table built with the
+pre-C-75 compiler now reports its missing slot at offset 16; the fixed build reports none.
 
 A new scan of 1,629 objects (1,355 musl, 24 SDK archive members, 250 linked CPython objects)
-has no incomplete analyses and one uncovered integer address anchor in the SDK's
-`hostcall.c.obj` (`__capstone_init_fini_anchor_link`, intentional). This is a coverage result,
+has no wrong stored values or incomplete analyses and one uncovered integer address anchor
+in the SDK's `hostcall.c.obj` (`__capstone_init_fini_anchor_link`, intentional). This is a coverage result,
 not proof that every stored pointer is tagged.
 
 **Fix.** `needsMaterialization` accepts any `GlobalValue`. The store names the alias, and the link
@@ -7190,6 +7195,19 @@ resolves it as it resolves the static relocation, so a strong definition still w
 archive built by 7d01722aab88 and by the fix, from one source path: of 1355 objects exactly one
 differs, `src_process_fork.o`; the corrected store-coverage scan reports no uncovered
 address slots in the fixed musl archive.
+
+**Non-default gp-captable follow-up and remaining gap.** `fd82fef2a70d` makes
+`selectLGA` look through aliases with `getAliaseeObject()` when identifying function
+addresses. Previously a function alias went through `scc gp`, giving its code address
+the cap table's data bounds. The regression is
+`llvm/test/CodeGen/Capstone/static-cap-global-init-alias-gp-captable.ll`; the follow-up
+records 153 passing compiler tests and one unsupported test, with no musl object changed
+apart from the compiler version comment. **A variable alias under gp-captable remains
+unsupported:** the cap table assigns slots to variables, not aliases, so the alias still
+falls through to derivation from the cap-table-bounded gp. A weak alias cannot simply
+use its aliasee's slot because a strong definition may replace it at link time. The
+threading qualification uses the default ABI; neither that run nor this scanner's
+cursor comparison establishes correct bounds for the non-default mode.
 
 ### C-73 — capstone-c mis-allocates registers in long monitor functions, and cannot build two other shapes `WORKED AROUND 2026-09-29 in the monitor's code and by a build check; no reduced reproducer`
 
