@@ -382,27 +382,29 @@ static unsigned long signaller(void *arg)
   return 5;
 }
 
-static int signals_refused(void)
+/* Signals are each context's (B8): a further context installs a handler for
+   the process and blocks a signal in its own mask, which leaves the first
+   context's mask as it was. */
+static int signals_own(void)
 {
   struct capstone_context c;
+  sigset_t now;
   long id = start_thread(&c, signaller, 0);
   CHECK(id > 0);
   CHECK(wait_done(&c, 20000));
   CHECK(*c.value == 5);
-  CHECK(sig_action_rc == -1 && sig_action_errno == ENOSYS);
-  CHECK(sig_mask_rc == -1 && sig_mask_errno == ENOSYS);
-  /* the first context's own requests still work */
-  struct sigaction sa = {0};
-  sa.sa_handler = on_usr1;
-  CHECK(sigaction(SIGUSR1, &sa, 0) == 0);
+  CHECK(sig_action_rc == 0 && sig_mask_rc == 0);
+  CHECK(sigprocmask(SIG_BLOCK, 0, &now) == 0 && !sigismember(&now, SIGUSR2));
+  struct sigaction old;
+  CHECK(sigaction(SIGUSR1, 0, &old) == 0 && old.sa_handler == on_usr1);
   capstone_context_revoke(&c);
   return 0;
 }
 
-/* Signals stay with the first context: an event accepted for it runs in it,
-   never in a further context that happens to finish a round meanwhile. Two
-   signals per burst, and a handler that takes a while, so that one event waits
-   while the first context runs the other. */
+/* A signal sent to the process reaches a context that does not block it
+   (Linux picks the thread): the first context blocks both signals, the other
+   does not, and every handler runs in the other. Two signals per burst, and a
+   handler that takes a while. */
 static __thread int who;
 static volatile int handled_by[3];
 static volatile int stop_rounds;
@@ -424,7 +426,7 @@ static unsigned long rounds_until_stopped(void *arg)
   return 3;
 }
 
-static int signal_first_only(void)
+static int signal_unblocked_context(void)
 {
   struct capstone_context c;
   struct sigaction sa = {0};
@@ -435,24 +437,23 @@ static int signal_first_only(void)
   CHECK(devnull >= 0);
   long id = start_thread(&c, rounds_until_stopped, 0);
   CHECK(id > 0);
-  /* Both signals pending at once, published by the one round that unblocks
-     them: while the first handler computes for several quanta, the other
-     event waits in the first context's list and the other context makes
-     rounds. */
   sigset_t both;
   sigemptyset(&both);
   sigaddset(&both, SIGUSR1);
   sigaddset(&both, SIGUSR2);
+  CHECK(sigprocmask(SIG_BLOCK, &both, 0) == 0);
   for (int i = 0; i < 10; ++i) {
-    CHECK(sigprocmask(SIG_BLOCK, &both, 0) == 0);
     CHECK(kill(getpid(), SIGUSR1) == 0 && kill(getpid(), SIGUSR2) == 0);
-    CHECK(sigprocmask(SIG_UNBLOCK, &both, 0) == 0);
+    long t0 = monotonic_ms();
+    while (handled_by[2] < 2 * (i + 1) && monotonic_ms() - t0 < 5000)
+      sched_yield();
   }
   stop_rounds = 1;
   CHECK(wait_done(&c, 20000) && *c.value == 3);
-  printf("thread-probe signal-first-only: %d handlers in the first context, %d in the other\n",
+  printf("thread-probe signal-unblocked-context: %d handlers in the first context, %d in the other\n",
          handled_by[1], handled_by[2]);
-  CHECK(handled_by[1] > 0 && handled_by[2] == 0);
+  CHECK(handled_by[1] == 0 && handled_by[2] == 20);
+  CHECK(sigprocmask(SIG_UNBLOCK, &both, 0) == 0);
   capstone_context_revoke(&c);
   return 0;
 }
@@ -1277,11 +1278,11 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "reserve")) rc = reserve();
   else if (!strcmp(mode, "reuse")) rc = reuse();
   else if (!strcmp(mode, "concurrent")) rc = concurrent();
-  else if (!strcmp(mode, "signals-refused")) rc = signals_refused();
+  else if (!strcmp(mode, "signals-own")) rc = signals_own();
   else if (!strcmp(mode, "no-transport")) rc = no_transport();
   else if (!strcmp(mode, "preempted")) rc = preempted();
   else if (!strcmp(mode, "many-rounds")) rc = many_rounds();
-  else if (!strcmp(mode, "signal-first-only")) rc = signal_first_only();
+  else if (!strcmp(mode, "signal-unblocked-context")) rc = signal_unblocked_context();
   else if (!strcmp(mode, "sigpipe-child")) rc = sigpipe_child(0);
   else if (!strcmp(mode, "sigpipe-ignored")) rc = sigpipe_child(1);
   else if (!strcmp(mode, "exec-child")) rc = exec_child();

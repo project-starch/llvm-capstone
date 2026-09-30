@@ -219,20 +219,19 @@ int main(void) {
       assert((long)x.result == 8 && further.bytes_in == 8);
       close(p2[0]);
       close(p2[1]);
-      uint64_t mask = 0;
-      memcpy(other + 32, &mask, sizeof mask);
-      struct capstone_delegate_entry refused[] = {
-          entry(CAPSTONE_NR_HELLO, 1, 2, 3, 0, 0, 0),
-          entry(CAPSTONE_NR_SIGACTION, SIGUSR1, CAPSTONE_SIGNAL_CAUGHT, 0, 0, 0, 0),
-          entry(CAPSTONE_NR_SIGPOLL, 0, 0, 0, 0, 0, 0),
-          entry(CAPSTONE_SYS_rt_sigprocmask, SIG_BLOCK, 32, 0, 8, 0, 0),
-          entry(CAPSTONE_SYS_rt_sigsuspend, 32, 8, 0, 0, 0, 0),
-      };
-      for (unsigned i = 0; i < sizeof refused / sizeof refused[0]; ++i) {
-        capstone_delegate_serve(&further, &refused[i]);
-        assert((long)refused[i].result == -ENOSYS);
-      }
-      assert(!h2.hello_seen && further.refused == 5);
+      /* HELLO is the first context's; signals are each context's own (B8):
+         a further context's mask moves without the first context's */
+      x = entry(CAPSTONE_NR_HELLO, 1, 2, 3, 0, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == -ENOSYS && !h2.hello_seen && further.refused == 1);
+      uint64_t usr2 = UINT64_C(1) << (SIGUSR2 - 1);
+      memcpy(other + 32, &usr2, sizeof usr2);
+      x = entry(CAPSTONE_SYS_rt_sigprocmask, SIG_BLOCK, 32, 0, 8, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == 0 && (further.signals.logical & usr2) && !(h2.signals.logical & usr2));
+      x = entry(CAPSTONE_SYS_rt_sigprocmask, SIG_UNBLOCK, 32, 0, 8, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == 0 && !(further.signals.logical & usr2) && further.refused == 1);
       capstone_delegate_host_free(&further);
     }
     capstone_spawner_stop(&spawner);

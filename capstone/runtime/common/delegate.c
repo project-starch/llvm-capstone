@@ -136,7 +136,7 @@ static const struct capstone_delegate_shape shapes[] = {
   {5, CAPSTONE_GROUP_RUNTIME, 3, "sigaction", {I, I, I}},
   {6, CAPSTONE_GROUP_RUNTIME, 1, "sigdone", {I}},
   {7, CAPSTONE_GROUP_RUNTIME, 0, "sigpoll", {I}},
-  {8, CAPSTONE_GROUP_RUNTIME, 3, "context-create", {I, I, I}},
+  {8, CAPSTONE_GROUP_RUNTIME, 4, "context-create", {I, I, I, I}},
   {9, CAPSTONE_GROUP_RUNTIME, 3, "context-step", {I, I, {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, 48, 0, 0}}},
   {10, CAPSTONE_GROUP_RUNTIME, 1, "context-forget", {I}},
   {11, CAPSTONE_GROUP_RUNTIME, 0, "context-reserve", {I}},
