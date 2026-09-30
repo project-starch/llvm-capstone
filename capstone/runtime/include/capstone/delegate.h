@@ -44,7 +44,8 @@ struct capstone_delegate_entry {
  * (the entry at offset 0, the signal handover block at CAPSTONE_SIGNAL_OFFSET)
  * and an exchange region of the descriptor's exchange_bytes. The launcher
  * grants 1 + contexts of each as two regions, transport i at i times the block
- * size in both; transport 0 is the first context's. See
+ * size in both; transport 0 is the first context's. After the last META block
+ * the META region holds the park table (CAPSTONE_PARK_BYTES). See
  * docs/plans/delegation-signals.md and docs/plans/delegation-threads.md. */
 #define CAPSTONE_DELEGATE_META_BYTES 16384u
 /* Contexts besides the first with a transport of their own: the monitor lends
@@ -159,6 +160,34 @@ enum capstone_delegate_group {
 #define CAPSTONE_NR_CONTEXT_RESERVE UINT64_C(0xC0DE000B)
 #define CAPSTONE_CONTEXT_REGISTER 0u   /* register only; the application steps it */
 #define CAPSTONE_CONTEXT_THREAD 1u     /* a launcher thread steps it until it ends */
+
+/* Parking (docs/plans/delegation-threads.md, "Parking"). The domain keeps the
+ * lock words; Linux only puts launcher threads to sleep and wakes them. A key
+ * is the domain address of a lock word as an integer; the launcher never
+ * dereferences it. The park table has one generation word per bucket; only
+ * the launcher writes one, and it never wraps (it stops at UINT64_MAX).
+ * PARK_WAIT: key, gen, deadline (absolute CLOCK_MONOTONIC nanoseconds, 0 for
+ *   none); sleeps only while the key's bucket still has generation gen. The
+ *   result is CAPSTONE_PARK_RESULT_WOKEN or _RECHECK, or -ETIMEDOUT or
+ *   -EINTR; a signal accepted meanwhile under SA_RESTART ends it as a RETRY
+ *   round, after which the caller checks its lock word again.
+ * PARK_WAKE: key, n; the result is how many waiters on key it selected.
+ * PARK_REQUEUE: src, dst, nwake, nmove; wakes up to nwake waiters on src,
+ *   moves up to nmove more to dst, and returns woken plus moved. */
+#define CAPSTONE_NR_PARK_WAIT UINT64_C(0xC0DE000C)
+#define CAPSTONE_NR_PARK_WAKE UINT64_C(0xC0DE000D)
+#define CAPSTONE_NR_PARK_REQUEUE UINT64_C(0xC0DE000E)
+#define CAPSTONE_PARK_RESULT_WOKEN 0
+#define CAPSTONE_PARK_RESULT_RECHECK 1
+#define CAPSTONE_PARK_BUCKETS 256u
+#define CAPSTONE_PARK_BYTES 4096u
+
+_Static_assert(CAPSTONE_PARK_BUCKETS * 8u <= CAPSTONE_PARK_BYTES, "the park table fits its page");
+
+/* The bucket of a key, the same on both sides of the boundary. */
+static inline unsigned capstone_park_bucket_of(uint64_t key, unsigned buckets) {
+  return (unsigned)((key * UINT64_C(0x9E3779B97F4A7C15)) >> 32) & (buckets - 1);
+}
 struct capstone_context_event {
   uint64_t kind;     /* the driver's step event: returned, preempted, fault, dead, stale */
   uint64_t result;   /* the context's result word */

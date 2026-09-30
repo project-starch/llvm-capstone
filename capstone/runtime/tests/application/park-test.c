@@ -342,6 +342,52 @@ static void b13(char variant) {
   }
 }
 
+/* A sleep that ends as RETRY (the launcher's signal stub under SA_RESTART):
+   the wait is aborted like EINTR, its record leaves the queue, and a later
+   WAKE selects nobody. The second sleep of the record would really sleep. */
+static int retry_sleeps;
+static long retrying_sleep(void *context, _Atomic uint32_t *word, const struct timespec *deadline) {
+  (void)context; (void)word; (void)deadline;
+  ++retry_sleeps;
+  return CAPSTONE_PARK_SLEEP_RETRY;
+}
+
+static void retry(void) {
+  setup(1);
+  struct capstone_park_record record = {0};
+  CHECK(capstone_park_wait_with(&park, &record, 0x3000, 0, NULL, retrying_sleep, NULL) ==
+        CAPSTONE_PARK_RETRY);
+  CHECK(retry_sleeps == 1 && record.state == CAPSTONE_PARK_IDLE);
+  CHECK(capstone_park_queued(&park, 0, 0x3000) == 0);
+  CHECK(capstone_park_wake(&park, 0x3000, 1) == 0);
+}
+
+/* The other two orders against RETRY: a WAKE that selected the record before
+   the sleep ended as RETRY wins (WOKEN); a REQUEUE that moved it and then
+   RETRY leaves it in neither queue. The sleep does the waker's part itself,
+   so the order is fixed. */
+static int wake_first;
+static long waking_then_retrying(void *context, _Atomic uint32_t *word,
+                                 const struct timespec *deadline) {
+  (void)word; (void)deadline;
+  if (wake_first)
+    CHECK(capstone_park_wake(&park, 0x3000, 1) == 1);
+  else
+    CHECK(capstone_park_requeue(&park, 0x3000, (uint64_t)(uintptr_t)context, 0, 1) == 1);
+  return CAPSTONE_PARK_SLEEP_RETRY;
+}
+
+static void retry_after(int wake) {
+  setup(1);
+  wake_first = wake;
+  struct capstone_park_record record = {0};
+  enum capstone_park_outcome o = capstone_park_wait_with(&park, &record, 0x3000, 0, NULL,
+                                                         waking_then_retrying, (void *)0x4000);
+  CHECK(o == (wake ? CAPSTONE_PARK_WOKEN : CAPSTONE_PARK_RETRY));
+  CHECK(record.state == CAPSTONE_PARK_IDLE);
+  CHECK(capstone_park_queued(&park, 0, 0x3000) == 0 && capstone_park_queued(&park, 0, 0x4000) == 0);
+}
+
 int main(int argc, char **argv) {
   CHECK(argc == 2);
   const char *c = argv[1];
@@ -358,6 +404,9 @@ int main(int argc, char **argv) {
   else if (!strcmp(c, "b13b")) b13('b');
   else if (!strcmp(c, "b13c")) b13('c');
   else if (!strcmp(c, "b13d")) b13('d');
+  else if (!strcmp(c, "retry")) retry();
+  else if (!strcmp(c, "retry-woken")) retry_after(1);
+  else if (!strcmp(c, "retry-requeued")) retry_after(0);
   else {
     fprintf(stderr, "park-test: unknown case %s\n", c);
     return 2;

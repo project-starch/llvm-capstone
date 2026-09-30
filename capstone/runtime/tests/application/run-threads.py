@@ -33,6 +33,17 @@ MODES = {
     "sigpipe-child": ("signal", 13, "", "REACHED", None),
     # The exec'd image prints its launcher's blocked mask: nothing blocked.
     "exec-child": ("exit", 0, "SigBlk:\t0000000000000000", "REACHED", None),
+    # T2: parking through the launcher.
+    "futex-basic": ("exit", 0, "PASS", None, None),
+    "futex-wake": ("exit", 0, "PASS", None, None),
+    "futex-requeue": ("exit", 0, "PASS", None, None),
+    "b6": ("exit", 0, "PASS", None, None),
+    "b6-control": ("exit", 0, "PASS", None, None),
+    "b12": ("exit", 0, "PASS", None, None),
+    "b6-count": ("exit", 0, "PASS", None, None),
+    "park-signal": ("exit", 0, "PASS", None, None),
+    "park-signal-eintr": ("exit", 0, "PASS", None, None),
+    "park-signal-timed": ("exit", 0, "PASS", None, None),
     # exit() in a further context ends the process with its status.
     "exit-child": ("exit", 7, "", "REACHED", None),
     # A fault in a further context ends the process: a store through a null

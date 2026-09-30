@@ -12,6 +12,7 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <linux/audit.h>
+#include <linux/futex.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
 #include <stddef.h>
@@ -479,6 +480,48 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
   return r;
 }
 
+/* Parking (docs/plans/delegation-threads.md). The sleep goes through the
+   signal stub: on the first context's thread, which takes the domain's
+   signals, an accepted signal ends it as a RETRY round even under SA_RESTART,
+   so the handler runs before the caller checks its lock word again; a further
+   context's thread blocks every signal and its stub never sees an event. */
+_Static_assert(CAPSTONE_PARK_SLEEP_RETRY == CAPSTONE_STUB_RETRY, "one retry answer");
+
+static long park_sleep(void *context, _Atomic uint32_t *word, const struct timespec *deadline) {
+  struct capstone_delegate_host *host = context;
+  long args[6] = {(long)(intptr_t)word, FUTEX_WAIT_BITSET | FUTEX_PRIVATE_FLAG, 0,
+                  (long)(intptr_t)deadline, 0, (long)FUTEX_BITSET_MATCH_ANY};
+  return capstone_signals_call(&host->signals, SYS_futex, args, 0, 0);
+}
+
+static unsigned count_of(uint64_t n) { return n > UINT_MAX ? UINT_MAX : (unsigned)n; }
+
+static long park_request(struct capstone_delegate_host *host,
+                         const struct capstone_delegate_entry *e) {
+  struct capstone_park *park = shared(host)->park;
+  if (!park)
+    return -ENOSYS;
+  if (e->nr == CAPSTONE_NR_PARK_WAKE)
+    return (long)capstone_park_wake(park, e->args[0], count_of(e->args[1]));
+  if (e->nr == CAPSTONE_NR_PARK_REQUEUE)
+    return (long)capstone_park_requeue(park, e->args[0], e->args[1], count_of(e->args[2]),
+                                       count_of(e->args[3]));
+  struct timespec deadline, *at = NULL;
+  if (e->args[2]) {
+    deadline.tv_sec = (time_t)(e->args[2] / 1000000000u);
+    deadline.tv_nsec = (long)(e->args[2] % 1000000000u);
+    at = &deadline;
+  }
+  switch (capstone_park_wait_with(park, &host->park_record, e->args[0], e->args[1], at,
+                                  park_sleep, host)) {
+  case CAPSTONE_PARK_WOKEN: return CAPSTONE_PARK_RESULT_WOKEN;
+  case CAPSTONE_PARK_RECHECK: return CAPSTONE_PARK_RESULT_RECHECK;
+  case CAPSTONE_PARK_TIMEOUT: return -ETIMEDOUT;
+  case CAPSTONE_PARK_EINTR: return -EINTR;
+  default: return CAPSTONE_STUB_RETRY;
+  }
+}
+
 /* Requests only the first context may make, for now: HELLO, and everything
    that reads or changes signal state. Signals are the first context's until
    they are per context (docs/plans/delegation-threads.md); a further context's
@@ -542,6 +585,9 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   } else if (snapshot.nr == CAPSTONE_NR_CONTEXT_CREATE || snapshot.nr == CAPSTONE_NR_CONTEXT_STEP ||
              snapshot.nr == CAPSTONE_NR_CONTEXT_FORGET || snapshot.nr == CAPSTONE_NR_CONTEXT_RESERVE) {
     r = host->context ? host->context(host, &snapshot) : -ENOSYS;
+  } else if (snapshot.nr == CAPSTONE_NR_PARK_WAIT || snapshot.nr == CAPSTONE_NR_PARK_WAKE ||
+             snapshot.nr == CAPSTONE_NR_PARK_REQUEUE) {
+    r = park_request(host, &snapshot);
   } else if (snapshot.nr == CAPSTONE_SYS_rt_sigprocmask) {
     /* the logical mask is the domain's; the kernel gets the physical one */
     uint64_t set = 0, old = 0;

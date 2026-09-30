@@ -141,6 +141,9 @@ static const struct capstone_delegate_shape shapes[] = {
   {9, CAPSTONE_GROUP_RUNTIME, 3, "context-step", {I, I, {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, 48, 0, 0}}},
   {10, CAPSTONE_GROUP_RUNTIME, 1, "context-forget", {I}},
   {11, CAPSTONE_GROUP_RUNTIME, 0, "context-reserve", {I}},
+  {12, CAPSTONE_GROUP_RUNTIME, 3, "park-wait", {I, I, I}},
+  {13, CAPSTONE_GROUP_RUNTIME, 2, "park-wake", {I, I}},
+  {14, CAPSTONE_GROUP_RUNTIME, 4, "park-requeue", {I, I, I, I}},
   /* not in this branch: sockets stay unknown until a profile admits them */
 };
 
