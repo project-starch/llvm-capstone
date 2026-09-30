@@ -40,6 +40,7 @@ case_fts5probe.c fts5probe
 case_fts5vocab_eof.c   fts5vocabeof
 case_fts5structwrite.c fts5structwrite
 case_fts5near.c        fts5near
+case_fts5inplace.c     fts5inplace
 EOF
    ;;
    fts3) cat <<EOF
