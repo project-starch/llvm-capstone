@@ -1,3 +1,11 @@
+Threading review (2026-09-30): use the
+[subprocess-enabled CPython gate](../../ports/cpython/interpreter/README.md#review-qualification-with-subprocess-enabled)
+and its result record when integrating `delegation-threads`. Keep fork exclusions explicit;
+do not count a subprocess-creation error as a tested threading assertion. Preserve the
+level0 shrinking-realloc fix: it removes the recursive output capture's memory exhaustion and
+allows all five suites to pass at 64 MiB with their recorded exclusions. The capability scanner
+now checks store coverage, not tag correctness. Asynchronous delivery remains a separate milestone.
+
 Application ports (2026-09-29): the seven application recipes now require
 the [shared delegated SDK](../../ports/common/application/README.md), with
 v1 rejection qualified. Use the recorded compiler and memory settings when

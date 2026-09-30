@@ -1,5 +1,17 @@
 # Capstone test/run instructions for future agent sessions
 
+Threading review checks (2026-09-30), after sourcing `capstone/tests/capstone-test-env.sh`:
+run `python3 capstone/tests/capinit-unwritten-slots-test.py` with the recorded Capstone toolchain;
+run the native runtime CTest suite for the signal/read controls; run `run-threads.py --suite pthread`
+in the provisioned guest for `kill-thread` and `kill-thread-early`.
+For CPython, use `ports/cpython/interpreter/host/run-thread-gate.py` in the domain, with patch 0015
+and real TLS. It verifies fork refusal before applying upstream fork skips. Follow the
+[port instructions](../../ports/cpython/interpreter/README.md#review-qualification-with-subprocess-enabled)
+and preserve the measured heap/guest settings in the result record. The level0 allocator control
+is `level0-realloc-shrink` in native CTest and `level0-realloc-probe.dom` in the guest.
+Scanner exit 1 needs review of uncovered address constants; exit 2 is incomplete analysis,
+never a clean census.
+
 Application benchmark study: the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
 separate reference data. The [planner](../../experiments/study/README.md) supports

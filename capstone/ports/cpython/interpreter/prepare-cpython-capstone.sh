@@ -211,6 +211,12 @@ ac_cv_buggy_getaddrinfo=no
 # takes them from malloc. The mmap module goes with it, which a domain cannot
 # use anyway.
 ac_cv_func_mmap=no
+# musl exports epoll functions, but this delegated syscall profile does not
+# serve them. Advertising select.epoll makes selectors probe epoll_create1,
+# leaving an UNSERVED diagnostic on otherwise successful child-process tests.
+# select.poll remains available through the delegated poll implementation.
+ac_cv_func_epoll_create=no
+ac_cv_func_epoll_create1=no
 # Left to itself this check CRASHES the compiler (C-51: its conftest uses
 # _Py_atomic_or_uint8), configure reads the crash as "libatomic needed", and
 # LIBS gains a -latomic no capstone64 library provides. With +a every width the
@@ -230,8 +236,11 @@ log "configuring CPython for riscv64-unknown-linux-musl via $CC"
 # MODULE_BUILDTYPE=static: no dlopen in a domain, so every module is built in.
 # --with-pkg-config=no: the host's pkg-config would hand over host library flags.
 # RANLIB is `llvm-ar s`: not every LLVM build here has the llvm-ranlib link.
+# Patch 0015 implements subprocess creation through the launcher's posix_spawn.
+# C11 thread-locals remain enabled; this does not enable fork without exec.
 (cd "$BUILD_DIR" && \
   CONFIG_SITE="$BUILD_DIR/config.site" MODULE_BUILDTYPE=static \
+  CPPFLAGS="-D_Py_FORK_EXEC_POSIX_SPAWN" \
   CC="$CC" AR="$LLVM_AR" RANLIB="$LLVM_AR s" READELF=: \
   "$CPY_SRC/configure" \
     --host=riscv64-unknown-linux-musl \
@@ -257,6 +266,14 @@ if grep -qE '^[a-z_]' <(sed -n '/^\*shared\*$/,$p' "$BUILD_DIR/Modules/Setup.std
 fi
 grep -q "loading site script $BUILD_DIR/config.site" "$BUILD_DIR/configure.log" \
   || { echo "configure did not read $BUILD_DIR/config.site" >&2; exit 2; }
+grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_FORK_EXEC_POSIX_SPAWN' "$BUILD_DIR/Makefile" \
+  || { echo "configure did not enable patch 0015 (posix_spawn)" >&2; exit 2; }
+if grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_THREAD_LOCAL_AS_GLOBAL' "$BUILD_DIR/Makefile"; then
+  echo "threading requires real thread-locals" >&2; exit 2
+fi
+if grep -qE '^#define HAVE_EPOLL( |_)' "$BUILD_DIR/pyconfig.h"; then
+  echo "configure advertised epoll, which this runtime does not serve" >&2; exit 2
+fi
 # A configure check whose conftest crashes the compiler reads as "feature
 # absent", silently. Every such check must be one whose answer is right anyway.
 python3 - "$BUILD_DIR/config.log" <<'PY' || exit 2

@@ -1,5 +1,10 @@
 # Prompt for continuing this Capstone work in a new chat
 
+For the delegated threading lane, start with the
+[review qualification](../ports/cpython/interpreter/README.md#review-qualification-with-subprocess-enabled)
+and [thread plan](plans/delegation-threads.md). The earlier CPython subprocess errors were
+blocked tests, not passes. Use the current gate's explicit fork skips and recorded resource settings.
+
 Application benchmark study: the [Sublet/PoisonCap design](plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
 separate reference data. The [planner](../experiments/study/README.md) supports

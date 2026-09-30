@@ -4,9 +4,11 @@ Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 
 PROBE B DOMAIN PHASE PASSES: a transport per context (T1, B7), parking through the launcher
 (T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14), musl's own threads on minted contexts
 (T4, Q4, B10 and B11), signals per context with cancellation (B8), fifteen threads per application
-(T5) and a thread's name and CPU set. The gates pass: libc-test's thread group (seven of nine;
-`pthread_cancel`'s asynchronous case waits for the doorbell, `sem_open` for file-backed mappings),
-GLib's `GCond` and CPython's `threading`. Open: asynchronous delivery (the doorbell). Branch
+(T5) and a thread's name and CPU set. libc-test's thread group passes seven of nine
+(`pthread_cancel`'s asynchronous case waits for the doorbell, `sem_open` for file-backed mappings),
+and GLib's `GCond` passes. CPython's earlier gate-pass claim was premature: subprocess creation
+errors prevented child assertions from running. The review qualification below records the
+subprocess-enabled results and explicit exclusions. Open: asynchronous delivery (the doorbell). Branch
 `delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
 Probe A and Probe B test.
 
@@ -268,9 +270,10 @@ Done so far:
   `runtime/tests/application/results/20260930-kill-thread-review.json`. This removes a known
   test race; the earlier intermittent timeout's exact schedule was not recorded, so its
   individual cause remains unproven. This is synchronous delivery, not the doorbell.
-- The CPython gate: CPython 3.13.7 with C11 thread-locals (patch 0006 and its define are gone) and
-  patch 0016, which keeps the join handle and the raw mutex's waiter link as pointers (without it
-  the first `Thread.join` faults in `pthread_join`, and a contended `_PyRawMutex` at
+- Initial CPython evidence, before subprocess patch 0015: CPython 3.13.7 with C11 thread-locals
+  (patch 0006 and its define are gone) and patch 0016, which keeps the join handle and the raw
+  mutex's waiter link as pointers (without it the first `Thread.join` faults in `pthread_join`,
+  and a contended `_PyRawMutex` at
   `waiter->next`). In the guest `test_threading` runs all 212 tests: 28 errors, all fork (26
   through `subprocess`, 1 `os.fork`) or sixteen threads at once, 13 skipped; `test_thread`
   (without `test_forkinthread`, which blocks for good when fork is refused), `test_threading_local`
@@ -279,6 +282,22 @@ Done so far:
   names an alias was never tagged, so musl's `fork()` faulted on its table of lock pointers once a
   second thread existed; libc-test's `raise-race` had met it since T4. Record
   `ports/cpython/interpreter/results/threads-2026-09-30.json`.
+- CPython review qualification with patch 0015: subprocess now goes through the launcher's
+  `posix_spawn`, while fork remains ENOSYS. `host/run-thread-gate.py` checks refusal beside
+  four live threads, then enables upstream's explicit no-fork skips before loading tests.
+  Configure disables unsupported epoll so `selectors` does not emit an UNSERVED diagnostic
+  on child stderr. The rerun exposed level0 retaining the full 32 KiB allocation after
+  CPython shrank a short-read buffer: capturing a recursive child's output exhausted the
+  parent at 128 MiB and 192 MiB. Level0 now releases and coalesces the unused tail. The native
+  control fails at allocation 31 before the fix. Afterwards, native and domain controls retain
+  4,096 buffers, preserve pointers through regrowth and recover a 900 KiB free block.
+  With the fix, all five CPython suites pass at 64 MiB: 448 tests, 38 reported skips, no
+  errors or failures. Subprocess smoke passes 21/21; of the 26 earlier creation errors,
+  18 now pass, seven skip actual fork and one skips the root-only rlimit check. Native
+  ASan/UBSan CTest passes 45/45 and the rebuilt pthread probe passes 29/29. Record
+  `ports/cpython/interpreter/results/thread-review-2026-09-30.json` preserves the failed
+  runs and every explicit exclusion. This qualifies the supported threading profile, not
+  asynchronous delivery, fork or the omitted optional/resource-dependent tests.
 - An independent review of B8 (2026-09-30) found five defects, all fixed: a delivery read the
   shared handler table unlocked while another context could change it (the action is now copied
   under a leaf lock); glibc's `sigaddset` refuses signals 32 and 33, so the trampoline could not
@@ -1238,5 +1257,7 @@ runtime as generally thread-capable. Gates:
   fixed by musl patch 0004): pass 2026-09-30, glib-0008 is gone and GLib's own `cond` test passes
   in a domain, with `thread`, `rec-mutex` and `asyncqueue`; `mutex`, `once` and `rwlock` stop only
   at their hundred-thread tests (`runtime/tests/application/results/20260930-glib-threads.json`);
-- CPython's basic `threading` tests: pass 2026-09-30, the errors left are fork's and the fifteen-thread
-  limit's (`ports/cpython/interpreter/results/threads-2026-09-30.json`).
+- CPython's basic `threading` tests: the subprocess-enabled review run passes all five modules
+  (448 tests, 38 reported skips) after the level0 shrinking-realloc fix. Use
+  `ports/cpython/interpreter/results/thread-review-2026-09-30.json` for the explicit exclusions;
+  subprocess errors in the original `threads-2026-09-30.json` were blocked tests, not passes.

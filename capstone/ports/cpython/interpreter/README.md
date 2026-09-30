@@ -213,7 +213,8 @@ and patch 0016 keeps two thread words as pointers: the join handle (`PyThread_ha
 the raw mutex's directed test: CPython's thread suites never reach its waiter branch, natively
 either.
 
-Results in the guest, the survey's 250 objects linked by `common/application/build.py`
+Initial results, before subprocess patch 0015, with the survey's 250 objects linked by
+`common/application/build.py`
 (record [results/threads-2026-09-30.json](results/threads-2026-09-30.json)):
 
 | suite | ran | result | errors, by cause |
@@ -225,9 +226,60 @@ Results in the guest, the survey's 250 objects linked by `common/application/bui
 | `test.test_concurrent_futures.test_thread_pool` | 17 | 2 errors | a process pool (`_multiprocessing` is n/a), a fork |
 | `host/rawmutex-test.c` | | 160000 of 160000, twice | |
 
-Fork is refused by design (`docs/plans/delegation-abi.md`); the `subprocess` errors go once
-patch 0015 (`fork_exec` through `posix_spawn`, another lane) is here. Run a module without named
-tests with `host/run-filtered.py MODULE TEST...`.
+Those 26 subprocess errors occurred before the child reached its assertions. Seven of those
+tests also fork inside the child, so enabling subprocess alone cannot make all 26 pass.
+Fork remains refused by design (`docs/plans/delegation-abi.md`).
+
+### Review qualification with subprocess enabled
+
+Patch 0015 is now included, with `-D_Py_FORK_EXEC_POSIX_SPAWN` checked in configure's output.
+The existing launcher runs the spawn; there is no domain fork implementation. Configure also
+disables `select.epoll`: musl exports its functions, but this runtime does not serve them.
+Advertising that feature made `selectors` probe `epoll_create1` and left an unexpected UNSERVED
+diagnostic on an otherwise successful child's stderr. The supported `select.poll` remains.
+
+Run `host/run-thread-gate.py` inside the domain, optionally with one or more test module names.
+It first verifies `os.fork()` returns ENOSYS beside four live threads and joins all four. It then
+sets upstream's `test.support.has_fork_support` to false **before loading tests**, so upstream's
+own fork decorators report explicit skips. Subprocess-only tests remain enabled. Unlike the
+initial `test_thread` run, `test_forkinthread` is now reported as a skip rather than omitted.
+The runner prints `THREAD_GATE_RESULT` JSON with every skip, error and failure and returns a
+failing status for any unexpected result.
+
+The final rerun uses one fresh interpreter per module, a 64 MiB level0 arena, guest CMA of
+1024 MiB and process cache of 768 MiB. All five suites pass with explicit upstream exclusions:
+
+| suite | ran | skipped | errors / failures |
+|---|---:|---:|---:|
+| `test_threading` | 212 | 26 | 0 / 0 |
+| `test_thread` | 35 | 2 | 0 / 0 |
+| `test_threading_local` | 22 | 2 | 0 / 0 |
+| `test_queue` | 162 | 6 | 0 / 0 |
+| `test_concurrent_futures.test_thread_pool` | 17 | 2 | 0 / 0 |
+
+`host/subprocess-smoke.py` passes 21/21 with no UNSERVED diagnostic. Of the original 26
+subprocess-creation errors in `test_threading`, 18 now pass, seven explicitly skip actual fork,
+and one skips because RLIMIT_NPROC has no effect as root.
+
+The rerun also exposed a level0 allocator limitation: CPython allocates a 32 KiB buffer for
+`os.read`, then shrinks it to the actual short read. The allocator kept the full block even
+after shrinking. Capturing the recursive exception child's stderr exhausted the parent;
+`test_threading` had four MemoryErrors followed by two thread-creation errors at both 128 MiB
+and 192 MiB. The recursive test failed alone too; the other five passed separately. Running
+the child directly produced about 600 KiB and ended with SIGINT.
+
+Level0 now splits and coalesces the unused tail under its heap lock. The
+[directed allocator control](../../../runtime/tests/application/results/20260930-level0-realloc-review.json)
+fails at allocation 31 before the fix; afterwards it retains 4,096 short reads in 1 MiB,
+preserves capability payloads through shrink and regrowth, and recovers a 900 KiB free block.
+The complete CPython run then passes at the original 64 MiB. Native ASan/UBSan CTest passes
+45/45 and the rebuilt domain pthread probe passes 29/29.
+
+[results/thread-review-2026-09-30.json](results/thread-review-2026-09-30.json) contains the
+build hashes, every skip, the outcomes of all 26 formerly blocked tests, and the failed
+64/128/192 MiB runs. The original gate-pass claim was premature; this subprocess-enabled
+result replaces it. Fork, unavailable optional test modules and resource exclusions remain
+explicit in the record. This does not establish unrestricted CPython or asynchronous delivery.
 
 ## What this does not establish
 
