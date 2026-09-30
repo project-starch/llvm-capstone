@@ -1,4 +1,4 @@
-# Protect libc malloc/free with the existing Sublet heap
+# Protect libc malloc/free with Capstone
 
 Status: PLAN, 2026-09-30. The allocator and build selection already exist.
 This plan adds no implementation or test result. Its first milestone is to
@@ -11,8 +11,9 @@ allocation has bounded, copyable capability pointers. After `free` completes,
 all aliases of that allocation are invalid, including when its address is
 reused. A stale `free` must not revoke a newer allocation at that address.
 
-Use the alias path of Sublet. The allocator retains a revocation handle and
-is trusted: revoking non-linear aliases can return readable authority. This
+Use Capstone's non-linear capabilities for ordinary, copyable C pointers.
+The allocator retains a revocation handle and is trusted: revoking
+non-linear aliases can return readable authority. This
 is protection against stale application pointers, not confidentiality from a
 malicious allocator. Objects carved inside an application's own pool share
 that pool's lifetime unless the application adds its own protection; they
@@ -25,7 +26,7 @@ inside that padding.
 
 ## 2. Reuse the existing implementation
 
-[sublet_heap.c](../../ports/musl-capstone/runtime/sublet_heap.c) already
+The [existing heap implementation](../../ports/musl-capstone/runtime/sublet_heap.c) already
 provides the required path:
 
 - `malloc` takes a buddy block, creates the allocation's revocation handle,
@@ -39,13 +40,14 @@ provides the required path:
 - `free(NULL)` remains a no-op; `malloc(0)` keeps its current one-byte policy.
 
 [Application.cmake](../../runtime/cmake/Application.cmake) already selects
-this source with `HEAP sublet` and a configured `HEAP_LOG`. Use that selection
+this source with the current option `HEAP sublet` and a configured `HEAP_LOG`.
+The implementation names remain unchanged. Use that selection
 for the qualification target and retain `HEAP level0` as a test control.
 Check the linked allocation symbols so public calls and musl's internal calls
 reach the selected heap. Application source changes are not required.
 
 Keep the buddy layout, current backing pool, metadata tables and
-[Sublet primitives](../../sublet/sublet.h). Change runtime code only to fix
+[capability operations](../../sublet/sublet.h). Change runtime code only to fix
 a concrete failure of the contract above. This milestone does not require
 new size classes, a pagemap, a mallocng port, compiler changes or translated
 memory. It qualifies the current single-threaded use; concurrent allocation
@@ -74,7 +76,7 @@ claim. No application-wide benchmark campaign is required for this milestone.
 
 ## 4. Next action and completion
 
-1. Select the existing Sublet heap for the qualification target and verify
+1. Select the existing Capstone-protected heap for the qualification target and verify
    symbol resolution.
 2. Run the focused checks, adding only missing contract cases.
 3. Fix only demonstrated gaps and update misleading comments alongside the
@@ -96,6 +98,38 @@ a required workload from running, measure it and choose a separate change
 then. Slabs and size-class tuning are not prerequisites for malloc/free
 protection.
 
+### Result, 2026-09-30
+
+The milestone ran on QEMU
+([record](../../runtime/tests/application/results/20260930-heap-qualification.json),
+runner `runtime/tests/application/run-heap.py`). Both images built from this
+tree's `contract.c`, one with `HEAP sublet`, one with `HEAP level0`; the
+symbol check shows each defines the six allocation entry points from its own
+heap object only.
+
+| Case | `HEAP=sublet` | `HEAP=level0`, the control |
+|---|---|---|
+| fault-stale, fault-reused, fault-bounds, fault-bounds-large, fault-double-free, fault-double-free-reused | SIGSEGV, PASS | completes, FAIL as required |
+| healthy, churn, heap-bounds, heap-neighbour, heap-companion | PASS | PASS |
+| the supervisor's own application sequence | PASS | PASS |
+
+The four new cases cover the table of §3: the byte past a 24-byte and a
+5000-byte allocation, a double free, a double free after the address was
+reissued, a live neighbour across a free and the freed address returning,
+and `free(NULL)`, `malloc(0)`, zeroed `calloc`, `realloc` keeping bytes and a
+stored capability, and a failed `realloc` leaving the original usable. No gap
+was demonstrated, so no runtime code changed; the two comments named in
+step 3 were corrected.
+
+One instrument finding: on the emulator without in-process node reuse
+(capstone-qemu 6550f194) the existing churn case faults with cause 30,
+INSUF_RESOURCES, after 65,228 node allocations, on this image and on the
+2026-09-27 image alike. The qualification requires the emulator the tree
+pins, 22aec7ee, and the record names it.
+
+Not covered: silicon, where the compressed-store rounding and the R-35/R-45
+fixes would have to be exercised; threads; the ports' own allocators.
+
 ## 5. Deferred: size classes below the atom
 
 Recorded so the reasoning is not redone when memory use forces the change.
@@ -113,19 +147,10 @@ Recorded so the reasoning is not redone when memory use forces the change.
   stored intermediate must be representable, not only the finished slots.
 - musl's mallocng, once it builds for a 16-byte pointer, is the unmodified
   control of the level0 class, not a safe allocator: it revokes nothing on
-  `free` and reads its metadata from the bytes before the pointer. Giving it
-  the discipline would be a new allocator with mallocng's size classes.
+  `free` and reads its metadata from the bytes before the pointer. Adding
+  per-allocation capability bounds and revocation would require changing its
+  metadata and allocation paths.
 - Any slab code needs a native harness around the emulator's
   `cap_compress.c` run over the construction sequence before measurement,
   because QEMU's exact side table hides the rounding. A first-fit carve is
   the harness's positive control.
-
-## 6. Pointers
-
-This is phase 2 of the bounded-heap work
-(`docs/design/heap-temporal-safety-revoke-on-free-proposal.md`, suspended
-2026-07-06) as the Sublet primitives made it: the existing
-`sublet_heap.c` is the implementation that proposal lacked. `govslot`
-(tag `2-reference-model`) is a different mechanism, lifetimes for
-capability-oblivious Linux processes; its executable-model method is worth
-borrowing for §5, its mechanism is not.

@@ -413,6 +413,26 @@ exhaustion and recovery. Allocation-progress checks reject faults that happen
 before the intended threshold. Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
+The libc heap qualification runs the heap cases of `contract.c` once on the
+`HEAP=sublet` image and once on a `HEAP=level0` image of the same source,
+which is the control: every `fault-*` case must be a SIGSEGV on the first and
+must complete on the second, every `heap-*` case must complete on both.
+
+```sh
+python3 capstone/runtime/tests/application/run-heap.py \
+  --state "$CAPSTONE_TMP_ROOT/dev-vm" \
+  --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/application-contract.dom \
+  --sublet-elf <build>/contract-sublet.dom --control-elf <build>/application-contract.dom \
+  --platform <kernel> <firmware> <rootfs> <qemu> <launcher> --report heap.json
+```
+
+It needs the emulator the tree pins (in-process node reuse): on the base
+emulator the 200,000-cycle churn case exhausts the node pool after about
+65,000 allocations, on any image. The
+[2026-09-30 record](tests/application/results/20260930-heap-qualification.json)
+is the first run; the plan is
+[capstone-heap-protection.md](../docs/plans/capstone-heap-protection.md).
+
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu-rebased.json)
 records 1,008 mixed starts after node exhaustion, with stable pool/node/tag counts.
 The [2026-09-27 node-reuse results](tests/application/results/20260927-node-reuse/README.md)

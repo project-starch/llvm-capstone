@@ -1,0 +1,348 @@
+{
+ "date": "2026-09-30",
+ "platform": "QEMU supervised CALL, one hart",
+ "verdicts": {
+  "sublet": {
+   "sequence": "PASS",
+   "fault-stale": {
+    "supervisor": "PASS",
+    "wait_status": 11,
+    "expected": "PASS"
+   },
+   "fault-reused": {
+    "supervisor": "PASS",
+    "wait_status": 11,
+    "expected": "PASS"
+   },
+   "fault-bounds": {
+    "supervisor": "PASS",
+    "wait_status": 11,
+    "expected": "PASS"
+   },
+   "fault-bounds-large": {
+    "supervisor": "PASS",
+    "wait_status": 11,
+    "expected": "PASS"
+   },
+   "fault-double-free": {
+    "supervisor": "PASS",
+    "wait_status": 11,
+    "expected": "PASS"
+   },
+   "fault-double-free-reused": {
+    "supervisor": "PASS",
+    "wait_status": 11,
+    "expected": "PASS"
+   },
+   "healthy": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   },
+   "churn": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   },
+   "heap-bounds": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   },
+   "heap-neighbour": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   },
+   "heap-companion": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   }
+  },
+  "level0": {
+   "sequence": "PASS",
+   "fault-stale": {
+    "supervisor": "FAIL",
+    "wait_status": 10752,
+    "expected": "FAIL"
+   },
+   "fault-reused": {
+    "supervisor": "FAIL",
+    "wait_status": 23040,
+    "expected": "FAIL"
+   },
+   "fault-bounds": {
+    "supervisor": "FAIL",
+    "wait_status": 0,
+    "expected": "FAIL"
+   },
+   "fault-bounds-large": {
+    "supervisor": "FAIL",
+    "wait_status": 0,
+    "expected": "FAIL"
+   },
+   "fault-double-free": {
+    "supervisor": "FAIL",
+    "wait_status": 15872,
+    "expected": "FAIL"
+   },
+   "fault-double-free-reused": {
+    "supervisor": "FAIL",
+    "wait_status": 15872,
+    "expected": "FAIL"
+   },
+   "healthy": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   },
+   "churn": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   },
+   "heap-bounds": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   },
+   "heap-neighbour": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   },
+   "heap-companion": {
+    "supervisor": "PASS",
+    "wait_status": 0,
+    "expected": "PASS"
+   }
+  }
+ },
+ "symbols": {
+  "sublet": {
+   "missing": [],
+   "heap_objects": [
+    "sublet_heap.c.obj"
+   ],
+   "sha256": "9d80a289f1f718143af28924bb441f17620201ebae90d21107d2a1406b93f2dd"
+  },
+  "level0": {
+   "missing": [],
+   "heap_objects": [
+    "level0.c.obj"
+   ],
+   "sha256": "c9116576a1bf400befde50cd4774bc16fdce0bb471e544ada5790b31c5d05a11"
+  }
+ },
+ "stats": {
+  "sublet": {
+   "fault-stale": {
+    "nodes_allocated": 39,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-reused": {
+    "nodes_allocated": 200064,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-bounds": {
+    "nodes_allocated": 39,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-bounds-large": {
+    "nodes_allocated": 29,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-double-free": {
+    "nodes_allocated": 39,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-double-free-reused": {
+    "nodes_allocated": 64,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "healthy": {
+    "nodes_allocated": 13,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "churn": {
+    "nodes_allocated": 200064,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "heap-bounds": {
+    "nodes_allocated": 54,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "heap-neighbour": {
+    "nodes_allocated": 41,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "heap-companion": {
+    "nodes_allocated": 91,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   }
+  },
+  "level0": {
+   "fault-stale": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-reused": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-bounds": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-bounds-large": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-double-free": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "fault-double-free-reused": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "healthy": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "churn": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "heap-bounds": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "heap-neighbour": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   },
+   "heap-companion": {
+    "nodes_allocated": 11,
+    "live_after": {
+     "live_domains": 0,
+     "live_regions": 0,
+     "live_bytes": 0
+    }
+   }
+  }
+ },
+ "sha256": {
+  "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "fw_jump.elf": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+  "rootfs.ext2": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+  "qemu-system-riscv64": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e",
+  "capstone-exec": "8de3701cf9752fe6e511475b0098bd96a6134913e4e47a981feaeb619d1f09ed",
+  "capstone-job": "5be7879d33c2483570de238bc9b16a730f22cd20d8d2f531547a0bdbbb803cef",
+  "application-supervisor": "ea290393180432810bd2fc8b5f4a63f9a24be8cba9fa88f9a444cb46451b1453",
+  "contract-sublet.dom": "9d80a289f1f718143af28924bb441f17620201ebae90d21107d2a1406b93f2dd",
+  "application-contract.dom": "c9116576a1bf400befde50cd4774bc16fdce0bb471e544ada5790b31c5d05a11"
+ },
+ "boot_id": "d4acf289-9273-4ad7-9b02-06b2d3fa4ef2",
+ "purpose": "libc malloc/free protection qualified with the existing Sublet heap (docs/plans, heap qualification): every fault case is a SIGSEGV on the HEAP=sublet image and completes on the HEAP=level0 control; every completing case passes on both",
+ "method": "runtime/tests/application/run-heap.py against a VM booted by capstone_vm; contract.c modes fault-stale, fault-reused, fault-bounds, fault-bounds-large, fault-double-free, fault-double-free-reused, healthy, churn, heap-bounds, heap-neighbour, heap-companion, each in its own supervisor attempt; the supervisor's verdict line is the evidence; the level0 image is the control and must FAIL the fault cases",
+ "source": {
+  "llvm_branch": "heap-qualification at 266422ee57c4 plus this change",
+  "toolchain": "clang 22.0.0git 56c39b13369d (C-46 fix, /tmp/capstone/c46-toolchain)",
+  "musl": "musl 1.2.5 prepared by ports/musl-capstone, 1355 objects archived, 6 not compiled (the survey's known set)",
+  "buildroot_pin": "227fdfaca023 (libcapstone for the launcher build)",
+  "capstone_qemu": "22aec7ee0fe1 (in-process node reuse), binary ed89e9751c73",
+  "launcher": "capstone-exec and capstone-job built from this tree with runtime/exec, overriding the rootfs copies; capstone-job byte-identical to the 2026-09-29 dev result"
+ },
+ "environment": {
+  "CAPSTONE_GP_NONLIN": "1",
+  "CAPSTONE_REV_NODES": "65536"
+ },
+ "instrument_note": "A first attempt on the base emulator (capstone-qemu 6550f194, binary f9795d41, without in-process node reuse) faulted churn with cause 30 INSUF_RESOURCES after 65,228 node allocations on both this image and the 2026-09-27 contract-sublet image, exactly the old emulator's documented behaviour; the qualification therefore requires the emulator dev pins, and this record is from it",
+ "limits": "QEMU only, one hart, single-threaded application; QEMU's exact fat-bounds side table means fault-bounds-large shows the narrowed alias, not compressed-store rounding; no silicon result"
+}
