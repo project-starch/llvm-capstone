@@ -181,6 +181,8 @@ int main(int argc, char **argv) {
   char cwd[1024];
   if (!getcwd(cwd, sizeof cwd) || strcmp(cwd, "/tmp"))
     return 45;
+  if (getsid(0) <= 0 || getpgid(0) <= 0)
+    return 46;
   puts("application: ok");
   return 0;
 }

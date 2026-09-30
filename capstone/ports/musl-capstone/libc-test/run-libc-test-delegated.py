@@ -97,6 +97,7 @@ def run_one(cli: list[str], name: str, timeout: float, env: dict,
     with tempfile.TemporaryDirectory(prefix=f"lt-{name}-") as directory:
         result_file = Path(directory) / "result.json"
         command = [*cli, "run", "--cwd", "/tmp", "--result", str(result_file),
+                   "-e", "CAPSTONE_DELEGATE_STATS=1",   # the domain's unserved report
                    f"{guest_share.rstrip('/')}/lt-{name}.dom"]
         with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, env=env) as proc:

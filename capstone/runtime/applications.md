@@ -231,12 +231,17 @@ The wire ABI, the shape table and the closed exception groups are in
 [docs/plans/delegation-abi.md](../docs/plans/delegation-abi.md).
 
 What crosses: files, directories, descriptors, time, identity, limits,
-`getrandom`, `wait4`, `kill` confined to the task, `exit_group`. What does not:
+`getrandom`, `wait4`, `kill` confined to the task, its children and its parent,
+`getpgid`, `getsid`, `ppoll` and `pselect6` (the fd_sets, the timeout and the
+mask, which the libc flattens out of the kernel's pointer pair and the
+launcher rebuilds), `exit_group`. What does not:
 memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
 (`clone` and `fork` are ENOSYS; image exec uses the process service below), and
 threads. Signals cross: the kernel keeps dispositions, mask, pending set and
 restart decisions, and a caught signal runs its domain handler at the domain's
-next round (see Signals below). `ioctl` crosses for the terminal requests a
+next round (see Signals below). Under `CAPSTONE_DELEGATE_STATS` the domain
+reports at exit which syscalls did not cross; without it the application's
+stderr carries application bytes only. `ioctl` crosses for the terminal requests a
 libc uses and nothing else, each with its buffer size known to the libc and
 its number on the launcher's allowlist: the window size, the `termios` set,
 `FIONREAD` and `FIONBIO`, the pseudo-terminal pair (`TIOCSPTLCK`,
@@ -246,7 +251,7 @@ unsigned int to the kernel; musl passes it as an int, so both sides mask it
 before looking it up. The application contract's `pty` mode opens a pair
 through musl's `openpty`, passes bytes through it and reads the foreground
 group; the native edge test covers the entry from the launcher's side. The
-unserved report at exit lists what did not cross.
+unserved report at exit, under `CAPSTONE_DELEGATE_STATS`, lists what did not cross.
 
 The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 `CAPSTONE_APPLICATION_EXCHANGE_BYTES` for the SDK project); larger buffers are
@@ -262,7 +267,8 @@ ENOSYS. Installation failure aborts launch; `CAPSTONE_EXEC_NO_SECCOMP=1`
 disables it explicitly for debugging. The dispatcher separately validates
 command-dependent pointers and excludes launcher-private descriptors.
 `CAPSTONE_DELEGATE_STATS=1` prints rounds, syscalls, refused entries, bytes
-through the exchange region and `rdtime` ticks at exit.
+through the exchange region and `rdtime` ticks at exit, and lets the domain
+print its own report of unserved and no-op syscalls.
 
 A domain fault produces a record with cause, PC, address, the runtime address
 of `domain_main`, the code bounds and the sealed image's SHA-256, written to the file `CAPSTONE_FAULT_RECORD`
@@ -367,8 +373,10 @@ application descriptors are inherited. The helper closes its inherited
 descriptors and dies if the launcher dies. File actions cannot overwrite the
 exec-error channel; descriptor overflow is an error rather than truncation.
 `wait4` selects recorded children, including for `waitpid(-1)`, and retains
-stopped/continued children. `kill` accepts this task or a recorded child,
-not process-group targets. A blocking any-child wait polls recorded PIDs at
+stopped/continued children. `kill` accepts this task, a recorded child or the
+task that spawned it (a child domain may signal its parent), not
+process-group targets; a pid nobody has answers ESRCH, any other process
+EPERM. A blocking any-child wait polls recorded PIDs at
 1 ms intervals to avoid reaping the helper or unrelated children. `execve` of a Capstone image replaces the task
 through the launcher's own binary, keeping pid, descriptors, argv[0], the
 unfiltered helper and the recorded children. The replacement image is validated
@@ -425,7 +433,8 @@ backpressure while the ring is nearly full; nothing is dropped.
 
 The libc runs accepted events after every round, in acceptance order, under
 `current ∪ sa_mask ∪ {sig}`; an event accepted inside `rt_sigsuspend` or a
-masked `ppoll` runs under that call's temporary mask before the call returns.
+masked `ppoll` or `pselect6` runs under that call's temporary mask before the
+call returns.
 Nested delivery happens at the end of a handler's own rounds. `sigaction` on a
 signal with runnable events runs them under the old installation first.
 `sigaltstack`, `sigsetjmp` with a saved mask and `siglongjmp` are the libc's;

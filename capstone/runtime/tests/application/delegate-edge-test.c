@@ -17,12 +17,15 @@
 static char exchange[4096];
 static struct capstone_delegate_host host = {.exchange = exchange, .exchange_bytes = sizeof exchange};
 
-static long call(uint64_t nr, uint64_t a, uint64_t b, uint64_t c, uint64_t d) {
+static long call6(uint64_t nr, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f) {
   struct capstone_delegate_entry entry;
-  uint64_t args[6] = {a, b, c, d, 0, 0};
+  uint64_t args[6] = {a, b, c, d, e, f};
   assert(!capstone_delegate_pack(&entry, nr, args));
   capstone_delegate_serve(&host, &entry);
   return entry.result;
+}
+static long call(uint64_t nr, uint64_t a, uint64_t b, uint64_t c, uint64_t d) {
+  return call6(nr, a, b, c, d, 0, 0);
 }
 
 int main(int argc, char **argv) {
@@ -97,7 +100,35 @@ int main(int argc, char **argv) {
     assert(waitpid(pid, &status, 0) == pid);
     assert(remaining == 1);
   } else if (!strcmp(argv[1], "kill-group")) {
+    /* the scope of kill: this task, its children and its parent; a process
+       group is refused, another process is EPERM, a pid nobody has is ESRCH */
     assert(call(CAPSTONE_SYS_kill, 0, 0, 0, 0) == -EPERM);
+    assert(call(CAPSTONE_SYS_kill, (uint64_t)getpid(), 0, 0, 0) == 0);
+    assert(call(CAPSTONE_SYS_kill, (uint64_t)getppid(), 0, 0, 0) == 0);
+    assert(call(CAPSTONE_SYS_kill, 1, 0, 0, 0) == -EPERM);
+    assert(call(CAPSTONE_SYS_kill, 2147483000, 0, 0, 0) == -ESRCH);
+  } else if (!strcmp(argv[1], "pselect")) {
+    /* three fd_sets and a timeout through the buffers, the mask as the sixth
+       argument: a readable pipe end is reported, an empty one times out, and a
+       mask of a blocked signal is accepted */
+    int p[2];
+    struct timespec zero = {0, 0};
+    uint64_t mask = 0;
+    assert(!pipe(p));
+    memset(exchange + 128, 0, 128);
+    exchange[128 + p[0] / 8] |= (char)(1u << (p[0] % 8));
+    memcpy(exchange + 384, &zero, sizeof zero);
+    assert(write(p[1], "x", 1) == 1);
+    assert(call6(CAPSTONE_SYS_pselect6, (uint64_t)p[0] + 1, 128, 0, 0, 384, 0) == 1);
+    assert(exchange[128 + p[0] / 8] & (char)(1u << (p[0] % 8)));
+    assert(read(p[0], (char[1]){0}, 1) == 1);
+    exchange[128 + p[0] / 8] |= (char)(1u << (p[0] % 8));
+    memcpy(exchange + 384, &zero, sizeof zero);
+    memcpy(exchange + 512, &mask, sizeof mask);
+    assert(call6(CAPSTONE_SYS_pselect6, (uint64_t)p[0] + 1, 128, 0, 0, 384, 512) == 0);
+    assert(call(CAPSTONE_SYS_getpgid, 0, 0, 0, 0) == getpgrp());
+    assert(call(CAPSTONE_SYS_getsid, 0, 0, 0, 0) == getsid(0));
+    close(p[0]); close(p[1]);
   } else if (!strcmp(argv[1], "pty")) {
     /* the pseudo-terminal requests cross through the buffer entry: unlock
        the pair, read its number back, and the kernel's own answer for the

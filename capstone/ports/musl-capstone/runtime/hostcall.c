@@ -1277,7 +1277,13 @@ static void hc_report_unserved(void) {
   hc_report_list("capstone-domain: NO-OP syscalls:", hc_noop, hc_noop_n, HC_NOOP_MAX);
 }
 #ifdef CAPSTONE_DELEGATE_RUNTIME
-void __capstone_hc_report_unserved(void) { hc_report_unserved(); }
+/* The report is a diagnostic and lands on the application's stderr, which
+   otherwise carries application bytes only; it is printed under the same
+   switch as the launcher's counters. */
+void __capstone_hc_report_unserved(void) {
+  if (getenv("CAPSTONE_DELEGATE_STATS"))
+    hc_report_unserved();
+}
 #endif
 
 unsigned long __capstone_unserved_count(void) { return hc_unserved_n; }
