@@ -46,6 +46,7 @@ static int run(const char *launcher, const char *image, const char *mode, int st
     _exit(124);
   }
   int status = 0;
+  double stopped = 0;
   double deadline = now() +
       ((!strcmp(mode, "churn") || !strcmp(mode, "fault-reused")) ? 120 : 20);
   if (stop) {
@@ -60,7 +61,14 @@ static int run(const char *launcher, const char *image, const char *mode, int st
     nanosleep(&running, NULL);
     if (waitpid(child, &status, WNOHANG) != 0) return 0;
     kill(child, stop);
-    deadline = now() + 5;
+    /* The check is that cancellation completes, not that it is quick. The
+       board lane measured (#135, 2026-09-30) a looping domain stopping in
+       ~0.04 s alone, ~3.5 s while another CPU-bound domain shares the hart
+       and ~7.3 s on a loaded host; 1 of 3 gate runs failed the old 5 s
+       limit. 30 s still catches a domain that never stops; the time taken
+       is printed with the verdict. */
+    stopped = now();
+    deadline = stopped + 30;
   }
   for (;;) {
     pid_t result = waitpid(child, &status, WNOHANG);
@@ -80,12 +88,17 @@ static int run(const char *launcher, const char *image, const char *mode, int st
     struct timespec pause = {.tv_nsec = 1000000};
     nanosleep(&pause, NULL);
   }
+  double took = now() - stopped;
   int fault = !strncmp(mode, "fault", 5), exited = !strcmp(mode, "exit139");
   int passed = stop ? WIFSIGNALED(status) && WTERMSIG(status) == stop : fault ? WIFSIGNALED(status) && WTERMSIG(status) == SIGSEGV
                      : WIFEXITED(status) && WEXITSTATUS(status) == (exited ? 139 : 0);
   passed = passed && check_file("contract.out", fault || exited || stop ?
       "stdout\n" : "stdout\napplication: ok\n") && check_file("contract.err", "stderr\n");
-  printf("application %s: %s (wait status=%d)\n", mode, passed ? "PASS" : "FAIL", status);
+  if (stop)
+    printf("application %s: %s (wait status=%d, stopped in %.2f s)\n", mode,
+           passed ? "PASS" : "FAIL", status, took);
+  else
+    printf("application %s: %s (wait status=%d)\n", mode, passed ? "PASS" : "FAIL", status);
   fflush(stdout);
   return passed;
 }
