@@ -55,6 +55,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, native | -- | 0 |
 | `capstone/ports/postgres/app` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
 | `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-domain, cheribsd-purecap, linux-guest, native | `mmgr-repros` | 8 |
+| `capstone/ports/sqlite/app` | full-application | 3.22.0 | capstone-domain, native | -- | 0 |
 | `capstone/ports/sqlite` | full-application | 3.53.3, 3.22.0 | capstone-domain, silicon, native | `capi-repros` | 19 |
 | `capstone/ports/whisper/ggml-context` | allocator-component | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | 0 |
 | `capstone/ports/wireshark/app` | full-application | 4.6.8 | capstone-domain | -- | 0 |
@@ -82,6 +83,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/ports/micropython` is a complete application with no corpus.
 - `capstone/ports/perl/musl` is a complete application with no corpus.
 - `capstone/ports/postgres/app` is a complete application with no corpus.
+- `capstone/ports/sqlite/app` is a complete application with no corpus.
 - `capstone/ports/wireshark/app` is a complete application with no corpus.
 
 ## Our own silicon defects
