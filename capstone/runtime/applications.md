@@ -595,7 +595,7 @@ see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 The libc heap qualification runs the heap cases of `contract.c` once on the
 `HEAP=sublet` image and once on a `HEAP=level0` image of the same source,
 which is the control. That control must be built with
-`-DCAPSTONE_LEVEL0_SHRINK=0`: level0 bounds each object by default, and an arm
+`-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`: level0 bounds each object by default, and an arm
 that bounds them is not the unprotected arm this measurement needs -- with
 bounds on, `fault-bounds` and `fault-bounds-large` fault there too, on cause 5.
 Every `fault-*` case must be a SIGSEGV on the first and
@@ -604,7 +604,7 @@ must complete on both. The protected fault must occur at the intended byte
 probe with the expected QEMU cause. Churn must allocate at least 200,000
 nodes. A setup error, unrelated fault or early exhaustion fails the gate.
 
-Build the control with `-DCAPSTONE_LEVEL0_SHRINK=0` in `CMAKE_C_FLAGS`; the
+Build the control with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0` in `CMAKE_C_FLAGS`; the
 default `application-contract.dom` is no longer unprotected. Build each image
 with an LLD map, using
 `-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake

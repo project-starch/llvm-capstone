@@ -1,8 +1,8 @@
 {
  "date": "2026-09-30",
- "change": "CAPSTONE_LEVEL0_SHRINK is on by default: level0, the heap every application port links unless it asks for another, now narrows each returned pointer to the bytes requested. -DCAPSTONE_LEVEL0_SHRINK=0 restores the old behaviour and is what the heap qualification's control needs.",
+ "change": "CAPSTONE_LEVEL0_OBJECT_BOUNDS is on by default: level0, the heap every application port links unless it asks for another, now narrows each returned pointer to the bytes requested. -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0 restores the old behaviour and is what the heap qualification's control and the FFmpeg and wireshark level0 arms need.",
  "what_it_does_not_give": "temporal safety. free still only marks the block free, so a stale pointer keeps working and reads whatever occupies the memory next. That is sublet_heap.c's job and is unchanged here.",
- "prior_state": "the switch has existed since 2026-09-23 (5e7157e20bb0, 'per-object heap bounds (opt-in)') and was defined nowhere: no build, no gate, no port turned it on. The threads lane's 'Qualify level0 shrink across the application and libc gates' (92d21b84) is a different shrink -- realloc releasing an unused tail (7795986d) -- and did not bound objects.",
+ "prior_state": "the switch has existed since 2026-09-23 (5e7157e20bb0, 'per-object heap bounds (opt-in)'). CORRECTION to this record's first version, which said it was defined nowhere: two ports do define it. ports/ffmpeg/app/host/build-domain.sh and ports/wireshark/app/host/build-domain.sh each build a 'shrink' arm with it, as the middle of three arms between their unprotected level0 arm and their sublet arm. No BUILD default, no gate and no shipped image turned it on, which is what made the default reachable; but the claim 'no port turned it on' was wrong and is withdrawn. The threads lane's 'Qualify level0 shrink across the application and libc gates' (92d21b84) is still a different shrink -- realloc's tail (7795986d) -- and does not bound objects.",
  "platform": {
   "qemu_sha256": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
   "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
@@ -43,7 +43,8 @@
     "control": "completes"
    }
   },
-  "reading": "the protection fires on both size classes and the control misses both, so the check is meaningful and the legitimate heap paths are unaffected"
+  "reading": "the protection fires on both size classes and the control misses both, so the check is meaningful and the legitimate heap paths are unaffected",
+  "rerun_after_rename": "re-run with the renamed flag: same verdicts, and the two contract images keep the sha256 they had before the rename, so the rename changes no code and the opt-out still takes effect"
  },
  "regression": {
   "application_gate": "run.py --repeat 1 on the bounds image: 25 PASS, 0 FAIL",
@@ -73,5 +74,7 @@
   "libc-test has not been re-run against the bounded heap",
   "no port other than mruby was rebuilt against it; Perl, CPython, SQLite, FFmpeg and tshark are untouched here",
   "silicon: level0.c already records that a narrowed capability of 4 KiB or more, stored and reloaded, is rounded outward to its representable granule because block bases are only 16-aligned. capstone-qemu keeps full precision, so this measurement does not see it, and a large object's bounds on the board may be wider than the request"
- ]
+ ],
+ "naming": "the switch was CAPSTONE_LEVEL0_SHRINK and is renamed. 'Shrink' named the instruction rather than the property, and it collided with the other shrink in this allocator -- realloc releasing an unused tail (7795986d) -- which already cost one wrong reading of the threads lane's 92d21b84. It is also not 'unbounded' when off: a pointer still carries the ARENA's bounds. The name now says which bounds.",
+ "ports_with_a_shrink_arm": "FFmpeg and wireshark compare three arms: level0 (whole-arena bounds), shrink (per-object bounds, no revocation) and sublet (per-object bounds plus revocation). With bounds on by default their first two arms would have become the same build, and their recorded arm descriptions would have been false. Both build scripts now pass -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0 for the level0 arm and nothing for the shrink arm, so the three arms still differ exactly as their READMEs describe. Neither port was rebuilt or re-run here."
 }

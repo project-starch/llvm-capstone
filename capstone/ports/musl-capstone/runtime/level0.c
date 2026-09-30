@@ -56,11 +56,11 @@ static size_t l0_round(size_t n)
 	return (n + (L0_ALIGN - 1)) & ~(size_t)(L0_ALIGN - 1);
 }
 
-/* CAPSTONE_LEVEL0_SHRINK: per-object heap bounds, ON by default since 2026-09-30. An
+/* CAPSTONE_LEVEL0_OBJECT_BOUNDS: per-object heap bounds, ON by default since 2026-09-30. An
  * ordinary program calling an ordinary malloc gets a pointer bounded to the object it asked
  * for, so an overflow from one object into the next faults; malloc narrows the returned
  * capability to exactly the n bytes requested (the rv8 allocators' shrink,
- * benchmarks/rv8/adapted/rv8_malloc.c). Build with -DCAPSTONE_LEVEL0_SHRINK=0 for the old
+ * benchmarks/rv8/adapted/rv8_malloc.c). Build with -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0 for the old
  * behaviour, where every pointer carries the bounds of the WHOLE ARENA and that overflow is
  * not a fault. The switch remains because the heap qualification needs an unprotected arm as
  * its control (runtime/tests/application/run-heap.py).
@@ -77,10 +77,13 @@ static size_t l0_round(size_t n)
  * rounded outward to its representable granule (the RTL's encoder), since block bases here are
  * only 16-aligned; capstone-qemu keeps full precision for stored capabilities (cap_mem_map.h)
  * and does not show that. */
-#ifndef CAPSTONE_LEVEL0_SHRINK
-#define CAPSTONE_LEVEL0_SHRINK 1
+/* The name says the property, not the instruction that implements it: with it off a pointer
+   still carries the ARENA's bounds, so it is never unbounded, and "shrink" is already taken by
+   realloc releasing an unused tail (a different thing entirely). */
+#ifndef CAPSTONE_LEVEL0_OBJECT_BOUNDS
+#define CAPSTONE_LEVEL0_OBJECT_BOUNDS 1
 #endif
-#if CAPSTONE_LEVEL0_SHRINK
+#if CAPSTONE_LEVEL0_OBJECT_BOUNDS
 static void *l0_narrow(void *p, size_t n)
 {
 	unsigned long c = __builtin_capstone_cap_get_cursor(p);
@@ -233,7 +236,7 @@ void *realloc(void *p, size_t n)
    Linux (HAVE_MALLOC_USABLE_SIZE). Otherwise it puts an 8-byte size header in front of
    every block, so every structure it allocates that holds a capability starts 8 bytes off
    its 16-byte boundary, and its first mutex faults (a misaligned store, cause 6). This is
-   the block's payload, and with CAPSTONE_LEVEL0_SHRINK no more than the pointer's bounds,
+   the block's payload, and with CAPSTONE_LEVEL0_OBJECT_BOUNDS no more than the pointer's bounds,
    which are the request. musl's own malloc_usable_size reads mallocng's metadata, which
    this heap does not keep. */
 size_t malloc_usable_size(void *p)
