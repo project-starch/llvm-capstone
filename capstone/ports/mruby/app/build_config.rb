@@ -33,6 +33,10 @@ gems = lambda do |conf|
   conf.gembox 'metaprog'
   conf.gembox 'stdlib-io'
   %w(mruby-pack mruby-bin-mruby).each { |g| conf.gem :core => g }
+  # mruby-task's timer HAL: at head the port layer (conf.ports 'posix') carries
+  # it, at 4.0.0-rc2 it is the separate hal-posix-task gem, which depends on
+  # mruby-task and so brings it in.
+  conf.gem :core => (File.directory?("#{MRUBY_ROOT}/mrbgems/hal-posix-task") ? 'hal-posix-task' : 'mruby-task')
 end
 
 # The host build makes mrbc for both, and is the native reference.
