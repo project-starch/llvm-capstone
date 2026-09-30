@@ -534,6 +534,7 @@ static int install(int sig, void (*fn)(int), int flags)
 /* Pipes shared by the cancellation and handler-call modes below. The directed
    kill-thread modes live in pthread-kill-probe.c, also exercised natively. */
 static int pipefd[2];
+static volatile int reader_tid;
 extern int capstone_probe_kill_thread(int early);
 
 /* ---- mask-routing: a signal sent to the process runs in the one thread that
