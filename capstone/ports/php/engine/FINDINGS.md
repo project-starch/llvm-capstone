@@ -459,6 +459,53 @@ one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` i
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
 
+### RETRACTED: "p arrives untagged" was WRONG -- csdebugprint disproves it
+
+The section below deduced, from a whole-STACK tag watch finding no kill at `_estrndup`'s `p`
+slot, that `p` must already be untagged on arrival. **That deduction is wrong**, and it was
+wrong for a scoping reason: the watch window was `0x101dcd000-0x102000000`, the stack only, and
+the reasoning treated "no kill in the window" as "no kill anywhere".
+
+`csdebugprint` (`.insn r 0x5b, 0x1, 0x43`, spliced into a diagnostic COPY of `zend_alloc.c` by
+`PHP_DIAG_ALLOC=1`) settles it by direct observation instead. Over a full trigger run
+`_estrndup` is reached 9 times and **every one receives a TAGGED capability -- 9 Cap, 0
+Scalar.** And the faulting value is the very pointer one of them received:
+
+    line 2762  Print = Cap(1, 0x7, cursor 0x101d9fda0, base 0x101d9fd40, end 0x101d9fdb0)
+    line 2914  cincoffset with an UNTAGGED rs1 -- val=0x101d9fda0
+
+Same cursor, tagged on receipt, untagged at use. So the tag is lost AFTER `_estrndup` has it.
+
+### Localised: the tag dies inside memcpy, on memcpy's OWN spill of `d`
+
+The faulting pc `0x101c971a0` is `memcpy`, and the instruction before it is
+`a7194: ldc a0, 0x0(a0)` -- `d` reloaded from memcpy's own frame slot **with a correct,
+tag-preserving `ldc`, returning an untagged value**. memcpy's prologue is also correct:
+`movc` the arguments, `stc a1` to `s0-0x30`, `ldc` it back at `a6fec`, and the one `sd` at
+`a6fe8` stores `n`, a scalar. A slot-width scan of the whole body shows `d` at `s0-0x60` and `s`
+at `s0-0x70`, each `stc`/`ldc` plus one `ld` that feeds the `(uintptr_t)d & 15` alignment
+arithmetic -- legitimate, the same shape as a null test.
+
+So within ONE memcpy invocation: `stc` of `d` into `s0-0x60` (which must add a map entry),
+then `ldc` of `d` from `s0-0x60` returning tag 0.
+
+A granule-targeted watch (`CAPSTONE_TAGWATCH_GRANULE=0x101fff7f0`, that slot at the faulting
+frame's `s0-0x60`) shows the granule is heavily reused and killed repeatedly by 4- and 8-byte
+stores -- but from the ALLOCATOR's own frames (`_emalloc`, `zend_arena_carve`), which run and
+return BEFORE memcpy's frame exists. Nothing is reported between memcpy's `stc` and its `ldc`.
+
+### What is needed next, and why the current instrument cannot answer it
+
+**The tag watch reports REMOVALS only.** It cannot show whether the `stc` ever ADDED the entry.
+The two remaining possibilities are exactly (a) the add never happened, and (b) a removal on a
+path the watch does not report -- and they are indistinguishable with a removal-only probe.
+
+So the next instrument must log **both** `cap_mem_map_add` and `cap_mem_map_remove` for a single
+granule, in order, which is a few lines in `cap_mem_map.c`. That is a QEMU change rather than an
+env var, but it is small, local, and answers (a) vs (b) in one run. The store-address watch
+remains the alternative for (b) specifically, since it reports at any privilege.
+
+### Superseded reasoning, kept for the record
 ### SETTLED: the tag was never killed in p's slot -- p arrives untagged
 
 The granule pass answers it. `_estrndup`'s `p` slot is computable from the fault registers:
@@ -496,6 +543,61 @@ Read together: the block was allocated and used during parsing, its capability c
 the stack, then the block was FREED and HANDED OUT AGAIN to `_estrndup` -- and the pointer
 returned the second time had no tag. **The suspect is now the free-and-reuse path, not the
 fresh-carve path.**
+
+### The MECHANISM, from reading QEMU: the tag is not in memory at all
+
+`capstone_helper.c`: `store_capregval` writes the compressed 128 bits to memory and separately
+calls `cap_mem_map_add`; `load_capregval` then takes the tag **entirely** from
+`cap_mem_map_query`. So the tag lives only in `env->cm_map`, a side table keyed by 16-byte
+granule -- NOT in the stored bytes.
+
+That is exactly the observed symptom: **drop a map entry and `ldc` returns the same 128 bits with
+`tag = false` -- the address preserved bit-for-bit, the tag gone.** It also explains why every
+static inspection of the generated code came back clean: the codegen is correct; nothing in it
+loses a tag.
+
+Everything that could drop an entry was then checked, and each is excluded:
+
+| path | verdict |
+|---|---|
+| `helper_remove_cap_mem_map` (any plain store) | calls `tagwatch_report` BEFORE removing -- watched |
+| untagged `stc` over a tagged granule | also calls `tagwatch_report` ("untagged stc") -- watched |
+| `cap_mem_map_clear` | only from `helper_csdebugclearcmmap`, a debug instruction this port never executes |
+| map eviction under pressure | none: `add_entry` DOUBLES the heap array, and the header records that the old fixed 512-entry ceiling with its abort was removed for exactly this reason |
+
+And no capability op silently untags: `helper_csshrink` raises `UNEXP_OP_TYPE` /
+`UNEXP_CAP_TYPE` / `ILLEGAL_OP_VAL` and otherwise only mutates bounds and cursor, keeping the
+tag; `csdelin`, `cssplit`, `csmrev` and `cstighten` assert rather than degrade. A `movc` of a
+non-copyable source nulls it, but that yields ZERO, and our dead value carries the correct
+address.
+
+### Compiler output: the whole producer chain is clean
+
+`_estrndup` -> PHP's `_emalloc` (`0x7d610`) -> our `malloc` (`0xaba50`) -> our static `_emalloc`
+(`0xabc70`) -> arena. All four inspected:
+
+  * `_estrndup` stores `p` with `stc` and loads it with **`ldc`** into a0 at `7ead8` for the memcpy;
+  * PHP's `_emalloc` keeps `p` at `s0-0x50` with `stc`/`ldc` (eleven `ldc`s); its single `ld` there
+    feeds `bnez`, the `if (!p)` null test, which needs no tag;
+  * our `malloc` is a tail call -- `return _emalloc(n ? n : 1)` -- and a0 passes through
+    UNTOUCHED to `cjalr zero, 0(ra)`; the `sd`/`ld` on `-0x38(s0)` is the ternary, a scalar;
+  * our static `_emalloc` is covered by `ZEND_CAP_TAG_GUARD`, which never fires.
+
+### Where that leaves it, stated as a deduction
+
+Every in-domain removal path is watched and reported nothing at `p`'s granule; the map cannot
+evict; no op silently untags; and no instruction in the producer chain drops a tag. By
+elimination the `stc` that wrote `p`'s slot **wrote an already-untagged value**, so the tag was
+missing one step earlier still.
+
+The one link never DIRECTLY observed is the tag of a0 at the instant PHP's `_emalloc` returns.
+Two ways to see it, both cheap:
+  * `helper_csdebugprint` exists as a debug instruction -- a print placed around the call
+    boundary reports a register's tag and type without touching PHP's source;
+  * `tagwatch_report` returns early unless `env->priv == PRV_C`, so anything at another
+    privilege is invisible to it by construction. The store-address watch
+    (`origin/diag/store-address-watch`, +2 commits) reports stores BY ADDRESS with no map query
+    and at any privilege, which is the one instrument that covers what is left.
 
 ### The geometry, and why no sweep reproduces it
 

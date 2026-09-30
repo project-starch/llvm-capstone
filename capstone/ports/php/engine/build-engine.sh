@@ -75,6 +75,27 @@ CF+=(-mllvm -capstone-shrink-stack=false)
 # shellcheck disable=SC2206
 [ -n "${EXTRA_CF:-}" ] && CF+=(${EXTRA_CF})
 
+# PHP_DIAG_ALLOC=1: compile a PATCHED COPY of Zend/zend_alloc.c instead of the pristine one,
+# with a csdebugprint (.insn r 0x5b,0x1,0x43 -- prints "Print = Cap(...)" when tagged and
+# "Print = Scalar(0x..)" when not) on the pointer _emalloc hands back inside _estrndup.
+#
+# WHY A COPY AND A FLAG. Every Zend TU is normally byte-identical to the corpus tree and the
+# matched-pair result depends on that, so the experiment arms must never see this. It exists to
+# answer one question the tag watch cannot: is the pointer ALREADY untagged when _estrndup
+# receives it, or does it lose the tag afterwards? Everything else in the producer chain has been
+# eliminated, and this is the one link never directly observed.
+ZEND_ALLOC_SRC="$P/Zend/zend_alloc.c"
+if [ "${PHP_DIAG_ALLOC:-0}" = "1" ]; then
+  ZEND_ALLOC_SRC="$OUT/zend_alloc_diag.c"
+  sed "/_emalloc(length+1/r $HERE/diag/estrndup-probe.inc" \
+      "$P/Zend/zend_alloc.c" > "$ZEND_ALLOC_SRC"
+  if ! grep -q "0x43" "$ZEND_ALLOC_SRC"; then
+    echo "  PHP_DIAG_ALLOC: the probe did not splice in -- refusing to build a silent no-op" >&2
+    exit 2
+  fi
+  echo "  PHP_DIAG_ALLOC: probing _estrndup's view of _emalloc (diagnostic build, NOT an experiment arm)"
+fi
+
 TUS="zend_language_scanner zend_language_parser zend_compile zend_execute zend_execute_API
  zend_opcode zend_operators zend_variables zend_hash zend_API zend_alloc zend_mm zend
  zend_llist zend_ptr_stack zend_stack zend_constants zend_list zend_qsort zend_stream
@@ -91,7 +112,8 @@ ZCF=("${CF[@]}")
 # __cyg_profile hooks' void* params do not match the capability pointer type. The depth
 # watchdog lives in malloc() instead -- see libc/php_capstone_malloc.c.
 for t in $TUS; do
-  "$CAPSTONE_CLANG" "${ZCF[@]}" -c "$P/Zend/$t.c" -o "$OUT/obj/$t.o" 2>"$OUT/log/$t.log" \
+  _src="$P/Zend/$t.c"; [ "$t" = "zend_alloc" ] && _src="$ZEND_ALLOC_SRC"
+  "$CAPSTONE_CLANG" "${ZCF[@]}" -c "$_src" -o "$OUT/obj/$t.o" 2>"$OUT/log/$t.log" \
     || { echo "FAILED $t"; head -5 "$OUT/log/$t.log"; exit 1; }
   OBJS+=("$OUT/obj/$t.o")
 done
