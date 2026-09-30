@@ -179,12 +179,13 @@ void __capstone_delegate_regions(void *meta, void *exchange) {
   __capstone_signals_regions((void *)dl_entry, CAPSTONE_DELEGATE_META_BYTES);
 }
 
-/* A further context, at its first entry: the transport its creator reserved.
-   Signals stay with the first context for now; this one has no handover
-   block, so no event is ever taken or delivered here. */
+/* A further context, at its first entry: the transport its creator reserved,
+   and with it the context's signal handover block (B8). */
+void __capstone_signals_attach(void *meta);
 int __capstone_delegate_transport(unsigned long index) {
   if (index == 0 || dl_install(index))
     return -1;
+  __capstone_signals_attach((void *)dl_entry);
   return 0;
 }
 
@@ -195,7 +196,9 @@ int __capstone_delegate_ready(void) {
 /* Offset 0 means NULL for an optional buffer, so no buffer ever lives there:
    the first 16 bytes of the exchange region stay unused. */
 #define DL_FIRST 16
-static void dl_reset(void) { dl_used = DL_FIRST; }
+/* A call's attempt starts with no round made: a loop that ends before its
+   round never sees an earlier round's RETRY. */
+static void dl_reset(void) { dl_used = DL_FIRST; dl_status = CAPSTONE_ROUND_DONE; }
 
 static int dl_alloc(size_t bytes, uint64_t *offset) {
   size_t aligned = (dl_used + 15) & ~(size_t)15;
@@ -219,28 +222,55 @@ static long dl_round(uint64_t nr, const uint64_t args[CAPSTONE_DELEGATE_ARGS]) {
   __capstone_yield();
   dl_status = dl_entry->status;
   __capstone_signals_take();
-  return (long)dl_entry->result;
+  /* A RETRY round has no result of its own. When it is not issued again (a
+     cancellation point whose thread is being cancelled, below), the call was
+     interrupted. */
+  return dl_status == CAPSTONE_ROUND_RETRY ? -EINTR : (long)dl_entry->result;
 }
 
-/* After a round's data is safe: deliver, and say whether the call must be
- * issued again because it has no result yet. */
+/* signals.c: cancellation points */
+void __capstone_cp_result(void);
+int __capstone_cp_cancelled(void);
+int __capstone_cp_enter(void);
+int __capstone_cp_leave(int saved);
+int __capstone_cp_pause(void);
+
+/* After a call's round, once its data is safe: deliver, and say whether the
+ * call must be issued again because it has no result yet. A cancellation
+ * point is not: its thread's cancellation handler abandoned it. */
 static int dl_settle(void) {
+  int retry = dl_status == CAPSTONE_ROUND_RETRY;
+  if (!retry)
+    __capstone_cp_result();
+  __capstone_signals_deliver();
+  if (retry && __capstone_cp_cancelled())
+    return 0;
+  return retry;
+}
+
+/* The same for the runtime's own requests (SIGPOLL, SIGDONE, ...), made
+ * inside a call and never its result. */
+static int dl_settle_own(void) {
   int retry = dl_status == CAPSTONE_ROUND_RETRY;
   __capstone_signals_deliver();
   return retry;
 }
 
 /* Runtime requests with integer arguments only. */
-long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c) {
-  uint64_t args[CAPSTONE_DELEGATE_ARGS] = {a, b, c, 0, 0, 0};
+long __capstone_delegate_ints4(uint64_t nr, uint64_t a, uint64_t b, uint64_t c, uint64_t d) {
+  uint64_t args[CAPSTONE_DELEGATE_ARGS] = {a, b, c, d, 0, 0};
   long r;
   if (!__capstone_delegate_ready())
     return -EIO;
   do {
     dl_reset();
     r = dl_round(nr, args);
-  } while (dl_settle());
+  } while (dl_settle_own());
   return r;
+}
+
+long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c) {
+  return __capstone_delegate_ints4(nr, a, b, c, 0);
 }
 
 static long dl_string(const char *s, uint64_t *offset) {
@@ -310,7 +340,7 @@ static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
   }
   result = dl_round(nr, args);
   if (dl_status == CAPSTONE_ROUND_RETRY)
-    return 0;   /* no result, no output: the caller issues the call again */
+    return -EINTR;   /* no result, no output: issued again, unless cancelled (dl_settle) */
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
     if (slots[i].domain && slots[i].copy_back) {
       size_t bytes = capstone_delegate_result_bytes(nr, i, slots[i].bytes, result);
@@ -399,7 +429,10 @@ static long dl_futex_wait(volatile int *word, int val, const struct timespec *ti
     struct timespec now;
     if (timeout->tv_sec < 0 || timeout->tv_nsec < 0 || timeout->tv_nsec >= 1000000000L)
       return -EINVAL;
-    if (clock_gettime(CLOCK_MONOTONIC, &now))
+    int cp = __capstone_cp_pause();   /* the runtime's own read, not the call's round */
+    int failed = clock_gettime(CLOCK_MONOTONIC, &now);
+    (void)__capstone_cp_leave(cp);
+    if (failed)
       return -errno;
     uint64_t at = (uint64_t)now.tv_sec * 1000000000u + (uint64_t)now.tv_nsec, span;
     if ((uint64_t)timeout->tv_sec >= UINT64_MAX / 1000000000u)
@@ -432,7 +465,10 @@ static long dl_futex_lock_pi(volatile int *word, const struct timespec *at) {
     struct timespec real, mono;
     if (at->tv_nsec < 0 || at->tv_nsec >= 1000000000L)
       return -EINVAL;
-    if (clock_gettime(CLOCK_REALTIME, &real) || clock_gettime(CLOCK_MONOTONIC, &mono))
+    int cp = __capstone_cp_pause();
+    int failed = clock_gettime(CLOCK_REALTIME, &real) || clock_gettime(CLOCK_MONOTONIC, &mono);
+    (void)__capstone_cp_leave(cp);
+    if (failed)
       return -errno;
     uint64_t now = (uint64_t)mono.tv_sec * 1000000000u + (uint64_t)mono.tv_nsec, left;
     if (at->tv_sec < real.tv_sec || (at->tv_sec == real.tv_sec && at->tv_nsec <= real.tv_nsec))
@@ -554,6 +590,7 @@ long __capstone_delegate_procmask(int how, const uint64_t *set, uint64_t *old) {
  * prefix; a small vector (including PIPE_BUF writes) fits in one round. */
 static long dl_vector_once(long fd, const struct iovec *iov, long count, int writing,
                            int positioned, long long offset) {
+  dl_reset();
   uint64_t args[6] = {(uint64_t)fd, 0, 0, (uint64_t)offset & UINT32_MAX,
                       (uint64_t)offset >> 32, 0};
   uint64_t offsets[1024];
@@ -596,7 +633,7 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
                            : (writing ? CAPSTONE_SYS_writev : CAPSTONE_SYS_readv);
   long result = dl_round(nr, args);
   if (dl_status == CAPSTONE_ROUND_RETRY)
-    return 0;
+    return -EINTR;   /* as dl_call_once */
   if (!writing && result > 0) {
     size_t left = (size_t)result;
     for (size_t i = 0; i < args[2] && left; ++i) {
@@ -711,6 +748,9 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
      runs at the next entry into this dispatcher and not at the next yield. */
   if (__capstone_signals_hint())
     __capstone_delegate_ints(CAPSTONE_NR_SIGPOLL, 0, 0, 0);
+  /* a cancellation point cancelled before its call was made makes none */
+  if (__capstone_cp_cancelled())
+    return -EINTR;
   /* Signals: handlers are domain addresses and stay here; the class, the
      flags, the mask and the alternate stack are what crosses or what the
      domain keeps. */
@@ -853,4 +893,23 @@ void __capstone_delegate_write2(const char *buf, unsigned long n) {
     raw[1] = (syscall_arg_t)buf;
     raw[2] = (syscall_arg_t)n;
   }
+}
+
+/* musl's cancellation point (src/thread/pthread_cancel.c calls it for every
+ * call that is one). Linked in only with pthread_cancel.o, which alone calls
+ * it: __cancel is a weak reference. A pending cancellation is taken at entry,
+ * as musl's own __cp_begin does; during the call signals.c shows a
+ * cancellation handler where the call stands. */
+__attribute__((__weak__)) long __cancel(void);
+long __syscall_cp_asm(volatile int *cancel, syscall_arg_t nr, syscall_arg_t u, syscall_arg_t v,
+                      syscall_arg_t w, syscall_arg_t x, syscall_arg_t y, syscall_arg_t z) {
+  if (*cancel)
+    return __cancel();
+  int saved = __capstone_cp_enter();
+  long r = __capstone_delegate_call((long)nr, u, v, w, x, y, z);
+  /* abandoned for a cancellation: what musl's __cp_cancel does, whatever the
+     call (a close included, which __syscall_cp_c does not cancel on EINTR) */
+  if (__capstone_cp_leave(saved))
+    return __cancel();
+  return r;
 }

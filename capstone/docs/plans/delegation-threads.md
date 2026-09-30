@@ -3,7 +3,8 @@
 Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES,
 PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1, B7), parking through the launcher
 (T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14) and musl's own threads on minted
-contexts (T4, Q4, B10 and B11) pass; signals per context (B8) and cancellation are next. Branch
+contexts (T4, Q4, B10 and B11) and signals per context with cancellation (B8) pass; more contexts
+per application (T5) and the gates are next. Branch
 `delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
 Probe A and Probe B test.
 
@@ -196,6 +197,59 @@ Done so far:
   attribute. `pthread_cancel` and `pthread_cancel-points` do not build (musl's cancellation points,
   `__syscall_cp_asm`), and cancelling a thread needs its signal (B8). `sem_open` stays excluded, for
   a reason that is not threads: it maps a /dev/shm file MAP_SHARED, and a domain maps no files.
+- Probe B, domain phase, B8: signals per context and cancellation ("Signals per context" below).
+  `pthread-probe` adds 14 modes (26 of 26 pass): `pthread_kill` into a thread blocked in `read`
+  (its handler runs there, the read answers EINTR); a signal sent to the process runs in the one
+  thread that does not block it; `raise` in a thread; `sigwait` in a thread; `pthread_cancel` of a
+  thread blocked in `sem_wait` and in `read` (cleanup run, `PTHREAD_CANCELED`), with cancellation
+  disabled until the thread enables it, and with the cancellation handler installed before the
+  first thread existed; `abort` in a thread (SIGABRT); a signal after the main thread's
+  `pthread_exit`, which now runs in the thread that is left; a signal to a thread parked in a futex
+  wait whose handler makes a delegated call (the wait goes on to its wake); a sigreturn mask left
+  by a handler during `sigsuspend`; `setuid` answering at once while another thread computes; a
+  handler switched 600 times while its signal is taken. `thread-probe`'s two signal modes now
+  check the new contract (a further context's own handler and mask; a signal sent to the process
+  runs in the context that does not block it, 20 of 20). Each check fired against a seeded defect:
+  a launcher without the `tkill` mapping (four modes fail), one whose context thread keeps its
+  creation mask (the context that never sets one takes nothing, 0 of 20), one that does not apply
+  a further context's `rt_sigprocmask` (routing and the main-exit signal fail), one without the
+  glibc settle below (SIGSEGV in glibc's setxid handler), a runtime without the cancellation
+  accounting (both cancel modes hang), one with the earlier sigreturn mask, one with musl's own
+  `__synccall` (hangs). Two first controls did not fire, each for a reason named in the record:
+  musl sets every new thread's mask itself, and the first `setuid` mode's computing loop read a
+  clock, which enters the dispatcher. The probes found two runtime defects before any review: a
+  cancellation delivered at the SIGPOLL round a cancellation point makes first was shown
+  `__cp_end` and hung the thread, and a RETRY round that was not issued again made a cancelled
+  `read` return 0 (end of file). libc-test: 57 PASS, 3 FAIL, 1 FAULT, 3 NOBUILD, 13 EXCLUDED of 77;
+  `pthread_cancel-points` passes, `pthread_cancel` is excluded (its first case cancels a thread in
+  `for (;;);`, the doorbell's). Of the libc-test regression tests about signals and threads, 11 of
+  16 pass: `sigaltstack`, `sigreturn`, `sigprocmask-internal`, the cancellation and robust-mutex
+  regressions among them; `raise-race` and `pthread_exit-dtor` fork, `pthread_atfork-errno-clobber`
+  forks, `flockfile-list` defines its own `malloc` (the heap does not yield to one), and
+  `pthread_cond-smasher` runs ten threads at once, more than seven (T5). A round costs about 1 to
+  3 percent more: 100000 rounds took 9304 to 9463 ms in four runs, against 9189 and 9241 ms at T4.
+  Record `results/20260930-signals-per-context.json`.
+- An independent review of B8 (2026-09-30) found five defects, all fixed: a delivery read the
+  shared handler table unlocked while another context could change it (the action is now copied
+  under a leaf lock); glibc's `sigaddset` refuses signals 32 and 33, so the trampoline could not
+  block musl's SIGCANCEL (bits are set directly); the first design kept a signal that reached a
+  launcher thread before it attached by requeueing it, which the seccomp filter and the kernel
+  refuse (such a signal now waits in a small per-thread list that attach moves into the ring);
+  the creator read the new thread's record after the thread could have freed it (the handshake
+  now uses the creator's own frame); and a cancelled `close` returned 0 without cancelling (a
+  cancelled cancellation point now calls musl's `__cancel` itself, as `__cp_cancel` does). Fixed
+  from its risks: glibc installs its own handler on 33 at its first `pthread_create` (the launcher
+  now has that happen at start and restores the process's dispositions), the trampoline read the
+  shared flags twice, a round status could outlive an abandoned cancellation point, a
+  `sigsuspend` handler was shown the wait's mask, and `__synccall` waited for every thread to make
+  a call (it now runs its function once in the caller: set*id is not served, and one hart orders
+  memory for every context). Named, not fixed: a SIGACTION changes the kernel's disposition just
+  before the generation the trampoline stamps, and the domain keeps one previous installation, so
+  in that window an event can run the old handler or be dropped; and a signal sent to the process
+  that one context has taken stays with that context, where Linux could hand it to another thread
+  that `sigwait`s. The spawn helper and exec in place now carry signals 32 and 33 in the masks
+  they hand on, and exec in place keeps every signal blocked until the new launcher sets the
+  caller's mask, so a pending signal survives it.
 - An independent review of T1 (2026-09-30) found five defects. Fixed, each with a probe mode that
   failed before and passes after: a further context ran one of the first context's pending signal
   events, which then stayed blocked (now only the context with the handover block touches signal
@@ -812,24 +866,21 @@ Recommended starting point:
   installs the transport (bounded capabilities to its entry block and exchange slice, cut from the
   first context's region capabilities by the declared sizes) into the context's TLS block and then
   calls the application's function. The delegation state (`dl_*`) is `__thread`.
-- **Signals stay with the first context for now.** A further context's handover block is not
-  installed, its launcher thread blocks every signal, and its signal requests (SIGACTION, SIGDONE,
-  SIGPOLL, `rt_sigprocmask`, `rt_sigsuspend`, `rt_sigtimedwait`, `rt_sigpending`, `ppoll` with a
-  mask, and `sigaltstack`, which stays in the domain) answer ENOSYS, visibly, before any state is
-  touched; only the first context takes and runs events. A signal Linux sends to a further
-  context's thread because of its own call (SIGPIPE, SIGXFSZ) is forwarded to the process, which
-  Linux delivers to the first context's thread under the application's disposition and mask. A
-  thread that execs in place takes the application's logical mask first. Signals per context are
-  B8's work.
+- **Signals** were the first context's in T1 (a further context's signal requests answered
+  ENOSYS, its thread blocked every signal, its SIGPIPE was forwarded to the process). B8 made them
+  every context's own; see "Signals per context" below.
 - **What ends with a context and what with the process.** The context's thread stops at the first
   step that is neither a preemption nor a request (EXITED in every probe mode; DEAD, STALE and
   REFUSED take the same path), forgets the context and frees its transport. `exit()` or a fault in
   any context ends the process, as in Linux; nothing is unmapped first, since other threads may
   still be serving. Exec in place is served from any context as from the first (not yet run with
   more than one context).
-- **Open in Q2:** the translations of a thread identity to a Linux tid (`tkill`, `tgkill`,
-  `pthread_kill`, `sched_*`, `SIGEV_THREAD_ID`), and the start of a child before its creator's
-  reply as seen by musl.
+- **Open in Q2** after T1: the translations of a thread identity to a Linux tid (`tkill`,
+  `tgkill`, `pthread_kill`, `sched_*`, `SIGEV_THREAD_ID`), and the start of a child before its
+  creator's reply as seen by musl. B8 answers `tkill` (and with it `raise` and `pthread_kill`);
+  `tgkill`, `rt_tgsigqueueinfo`, `sched_*` with a thread and `SIGEV_THREAD_ID` are not on the wire
+  and stay reported as unserved, so `PTHREAD_EXPLICIT_SCHED` answers ENOSYS. musl's start of a
+  child before its creator's reply is T4's (the child waits for the thread-list lock).
 
 **Answer, second part: the thread identity (2026-09-30, T3; evidence
 `results/20260930-runtime-locks.json`).** The first context's identity is the pid, as Linux gives
@@ -840,8 +891,8 @@ a lock word (bit 30 is `MAYBE_WAITERS`, 0x3fffffff a marker). It is written into
 life, so a recursive lock (musl's `__lockfile`, a recursive mutex) never takes a new context for
 an old owner; when the range runs out, minting fails.
 `gettid` and `set_tid_address` answer it without a round. Linux tids are not visible to the domain.
-Until signals are per context (B8), `tkill` and `tgkill` reach only the first context's thread, as
-before; another context's `raise` is refused.
+Since B8, `tkill` reaches the launcher thread serving the context it names (the pid: the first
+context's); another identity answers ESRCH.
 - **One identity inside the domain.** `t->tid` and every tid the domain sees is a protected runtime
   identity, never reused while its `struct pthread` is live. Linux reuses tids after thread exit
   even without malice. The launcher translates runtime identity to Linux tid for its own contexts
@@ -989,8 +1040,9 @@ Recommended starting point:
   call. A timed wait interrupted in its sleep answers EINTR even under SA_RESTART, as Linux does (it
   restarts a timed futex wait through a restart block, which a handler turns into EINTR; checked
   natively). A signal accepted before the sleep begins ends any wait as RETRY, deadline kept, as a
-  signal before the call would. A further context's thread blocks every signal and is never
-  interrupted.
+  signal before the call would. (Before B8 this held on the first context's thread only; a
+  further context's thread blocked every signal and was never interrupted; since B8 every
+  context's thread takes its own signals.)
 - **Open for Q4 and B11:** a context revoked while its thread is parked leaves its record queued,
   and a WAKE can select that record instead of a live waiter. Reaping a parked context has to abort
   its wait first. (T4's reaper revokes only contexts that published completion, which never park
@@ -1055,6 +1107,49 @@ Recommended starting point:
   runtimes. (A T3 image from before the review's fixes took 9863 ms; the final one does not
   reproduce that, and the difference is not explained.)
 
+### Signals per context (B8)
+
+**Answer (2026-09-30, B8; evidence `results/20260930-signals-per-context.json`).** Linux keeps the
+dispositions per process and the mask, the pending signals and the alternate stack per thread;
+so does this runtime, one context per thread.
+- **Launcher.** One disposition table per process, shared by every context's state; each
+  context keeps its ring, in-flight set, backpressure, logical mask and handover block (in its
+  transport's META block). Each context thread's kernel mask is its context's logical mask with
+  the in-flight and backpressure signals added, set on that thread, so Linux itself picks the
+  thread for a signal sent to the process, and the trampoline records into the ring of the context
+  its thread serves (`__thread` state, attached before the thread's first step; a signal that
+  reaches a launcher thread before it attached is kept pending, on that thread if Linux sent it
+  there and on the process otherwise). A new context's mask is its creator's, as a new thread's
+  is. The masks and the actions go to the kernel directly: glibc filters its own internal signals
+  (32 and 33) out of every mask and refuses them in `sigaction`, and a domain's musl uses them
+  (its timer and cancel signals); the launcher uses neither glibc feature behind them.
+- **Requests.** Every signal request is every context's own (only HELLO stays the first
+  context's). SIGACTION changes the shared table under the owner's lock. `tkill` names a context
+  by its thread identity (CONTEXT_CREATE now carries it) and becomes `tgkill` to the launcher
+  thread that serves it, sent under the service lock that thread takes to leave the table, so
+  the Linux tid named is never one Linux gave to another thread. A spawned child and an exec in
+  place start with the calling context's mask. The SIGPIPE forwarding of T1 is gone: the writing
+  thread's own mask and the process's disposition decide.
+- **Domain.** The handler table is shared (changed under a lock, request and table together);
+  the mask mirror, the events (on the heap, 256 per context, taken when the transport is
+  installed), the alternate stack and the delivery state are the context's. A context that ends
+  gives its events back, freed by the reaper for a musl thread (which may take no musl lock at its
+  end) and at once otherwise. A handler's sigreturn mask is honoured: the bits it changed in
+  `uc_sigmask` are applied over the mask from before the delivery.
+- **Cancellation.** musl's `cancel_handler` moves the interrupted pc from
+  `[__cp_begin, __cp_end)` to `__cp_cancel`. A delegated call is rounds, not instructions, so
+  `__syscall_cp_asm` is C: it marks the context as inside a cancellation point, a handler that
+  runs before the call's own round has its result (at the SIGPOLL round before it, or at a RETRY
+  round) is shown `__cp_begin`, one after it `__cp_end`, and a handler that moved it to
+  `__cp_cancel` ends the call with EINTR without issuing it again, on which musl's
+  `__syscall_cp_c` cancels. The three symbols are consecutive bytes nothing executes. A RETRY
+  round that is not issued again now answers EINTR everywhere (it answered 0 in the general call
+  and in readv/writev, which a cancelled `read` returned as end of file).
+- **Delivery is synchronous.** A context takes its signals at its next delegated call; one that
+  computes without calls takes them later, and asynchronous cancellation of such a thread does not
+  happen (libc-test's `pthread_cancel` starts with exactly that, `for (;;);`). That needs the
+  doorbell of delegation-signals.md ("The bell, later"), which this branch does not build.
+
 ## Relation to the Capstone paper
 
 The paper (https://arxiv.org/abs/2302.13863) already covers three things:
@@ -1087,8 +1182,8 @@ After both probes, `delegation-threads-runtime` builds musl's `__clone`, and wit
 `pthread_create`, `join`, `detach` and `exit`, on mint and adopt. The minimal integration needed by
 B6 to B11 is not yet a complete pthread implementation. Resolve Q2, Q4 and Q6 before treating that
 runtime as generally thread-capable. Gates:
-- the libc-test thread group leaves the excluded set (T4: six of the nine pass; the two cancellation
-  tests need B8; `sem_open` is excluded for file mappings, not threads);
+- the libc-test thread group leaves the excluded set (seven of the nine pass after B8;
+  `pthread_cancel` waits for the doorbell, `sem_open` for file mappings, not threads);
 - GLib's `GCond` in the tshark deps (the `pthread_cond_t` size fix, e2c9ad3; the layout itself is
   fixed by musl patch 0004);
 - CPython's basic `threading` tests.

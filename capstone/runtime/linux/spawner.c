@@ -23,7 +23,7 @@ struct request {
   uint32_t bytes, count;
   uint64_t cloexec;
   mode_t mask;
-  sigset_t sigmask;      /* the launcher's logical mask: what the child inherits */
+  uint64_t sigmask;      /* the spawning context's mask, bit n-1 = signal n: what the child inherits */
   uint64_t ignored;      /* the launcher's ignored signals, bit n-1 = signal n */
   int32_t numbers[CAPSTONE_SPAWNER_FDS];
 };
@@ -32,23 +32,37 @@ struct request {
  * the helper's clone, not the launcher's: ignored signals stay ignored, caught
  * ones fall back to default, SETSIGDEF names those reset to default anyway,
  * and the mask is the launcher's unless SETSIGMASK gives one. */
+/* The kernel's disposition and mask, as the launcher sets them
+   (signals.c): glibc refuses its internal signals 32 and 33, which a
+   domain's musl uses. */
+static void child_disposition(int sig, int ignored) {
+#if defined(__riscv) && __riscv_xlen == 64
+  struct { void *handler; unsigned long flags; uint64_t mask; } k = {
+      ignored ? (void *)SIG_IGN : (void *)SIG_DFL, 0, 0};
+  syscall(SYS_rt_sigaction, sig, &k, NULL, sizeof k.mask);
+#else
+  signal(sig, ignored ? SIG_IGN : SIG_DFL);
+#endif
+}
+
 static void child_signals(const struct request *req, const struct capstone_spawn_view *view) {
-  sigset_t mask;
   for (int sig = 1; sig <= 64; ++sig) {
     if (sig == SIGKILL || sig == SIGSTOP) continue;
     int ignored = (req->ignored >> (sig - 1)) & 1;
     if ((view->flags & CAPSTONE_SPAWN_SETSIGDEF) && ((view->sigdefault >> (sig - 1)) & 1))
       ignored = 0;
-    signal(sig, ignored ? SIG_IGN : SIG_DFL);
+    child_disposition(sig, ignored);
   }
-  if (view->flags & CAPSTONE_SPAWN_SETSIGMASK) {
-    sigemptyset(&mask);
-    for (int sig = 1; sig <= 64; ++sig)
-      if ((view->sigmask >> (sig - 1)) & 1) sigaddset(&mask, sig);
-  } else {
-    mask = req->sigmask;
-  }
-  sigprocmask(SIG_SETMASK, &mask, NULL);
+  uint64_t mask = view->flags & CAPSTONE_SPAWN_SETSIGMASK ? view->sigmask : req->sigmask;
+#if defined(__riscv) && __riscv_xlen == 64
+  syscall(SYS_rt_sigprocmask, SIG_SETMASK, &mask, NULL, sizeof mask);
+#else
+  sigset_t set;
+  sigemptyset(&set);
+  for (int sig = 1; sig <= 64; ++sig)
+    if ((mask >> (sig - 1)) & 1) sigaddset(&set, sig);
+  sigprocmask(SIG_SETMASK, &set, NULL);
+#endif
 }
 
 struct reply {
@@ -371,9 +385,7 @@ long capstone_spawner_spawn(struct capstone_spawner *s, const void *block, size_
   if (cwd < 0) return -errno;
   req.mask = umask(0);
   umask(req.mask);
-  sigemptyset(&req.sigmask);
-  for (int sig = 1; sig <= 64; ++sig)
-    if ((logical_mask >> (sig - 1)) & 1) sigaddset(&req.sigmask, sig);
+  req.sigmask = logical_mask;
   for (unsigned i = 0; i < count; ++i) passed[i] = fds[i];
   passed[count] = cwd;
   {

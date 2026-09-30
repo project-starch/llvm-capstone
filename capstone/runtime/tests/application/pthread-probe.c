@@ -22,7 +22,9 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <semaphore.h>
 #include <sys/syscall.h>
+#include <ucontext.h>
 #include <capstone/context.h>
 #include <capstone/delegate.h>
 
@@ -511,6 +513,408 @@ static int main_exit_more(void)
   pthread_exit(0);
 }
 
+/* ==== B8: signals per thread. ==== */
+static volatile int handler_tid, handler_runs, handler_calls_ok;
+static void on_signal(int sig)
+{
+  (void)sig;
+  handler_tid = (int)syscall(SYS_gettid);
+  ++handler_runs;
+}
+
+static int install(int sig, void (*fn)(int), int flags)
+{
+  struct sigaction sa = {0};
+  sa.sa_handler = fn;
+  sa.sa_flags = flags;
+  return sigaction(sig, &sa, 0);
+}
+
+/* ---- kill-thread: pthread_kill reaches the thread named, in a read it is
+   blocked in; without SA_RESTART the read answers EINTR there. */
+static int pipefd[2];
+static volatile int reader_tid, read_rc, read_errno;
+static void *reads_pipe(void *arg)
+{
+  (void)arg;
+  char c;
+  reader_tid = (int)syscall(SYS_gettid);
+  read_rc = (int)read(pipefd[0], &c, 1);
+  read_errno = errno;
+  return 0;
+}
+
+static int kill_thread(void)
+{
+  pthread_t t;
+  CHECK(pipe(pipefd) == 0 && install(SIGUSR1, on_signal, 0) == 0);
+  CHECK(pthread_create(&t, 0, reads_pipe, 0) == 0);
+  sleep_ms(40);
+  CHECK(pthread_kill(t, SIGUSR1) == 0);
+  CHECK(pthread_join(t, 0) == 0);
+  printf("kill-thread: handler in %d, reader %d, main %d, read %d errno %d\n", handler_tid,
+         reader_tid, (int)syscall(SYS_gettid), read_rc, read_errno);
+  CHECK(handler_runs == 1 && handler_tid == reader_tid);
+  CHECK(read_rc == -1 && read_errno == EINTR);
+  return 0;
+}
+
+/* ---- mask-routing: a signal sent to the process runs in the one thread that
+   does not block it. */
+static volatile int routed_ready;
+static void *unblocks_usr2(void *arg)
+{
+  (void)arg;
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR2);
+  pthread_sigmask(SIG_UNBLOCK, &set, 0);
+  reader_tid = (int)syscall(SYS_gettid);
+  routed_ready = 1;
+  long t0 = monotonic_ms();
+  while (!handler_runs && monotonic_ms() - t0 < 5000)
+    sched_yield();   /* a round each time: where the handler runs */
+  return 0;
+}
+
+static int mask_routing(void)
+{
+  pthread_t t;
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR2);
+  CHECK(install(SIGUSR2, on_signal, 0) == 0);
+  CHECK(pthread_sigmask(SIG_BLOCK, &set, 0) == 0);
+  CHECK(pthread_create(&t, 0, unblocks_usr2, 0) == 0);
+  while (!routed_ready)
+    sched_yield();
+  CHECK(kill(getpid(), SIGUSR2) == 0);
+  CHECK(pthread_join(t, 0) == 0);
+  printf("mask-routing: handler in %d, the unblocking thread %d\n", handler_tid, reader_tid);
+  CHECK(handler_runs == 1 && handler_tid == reader_tid);
+  return 0;
+}
+
+/* ---- raise-thread: raise in a thread runs the handler there before it returns. */
+static volatile int raised_in, ran_before_return;
+static void *raises(void *arg)
+{
+  (void)arg;
+  raised_in = (int)syscall(SYS_gettid);
+  raise(SIGUSR1);
+  ran_before_return = handler_runs == 1;
+  return 0;
+}
+
+static int raise_thread(void)
+{
+  pthread_t t;
+  CHECK(install(SIGUSR1, on_signal, 0) == 0);
+  CHECK(pthread_create(&t, 0, raises, 0) == 0 && pthread_join(t, 0) == 0);
+  CHECK(ran_before_return && handler_tid == raised_in);
+  return 0;
+}
+
+/* ---- sigwait-thread: a thread that blocks SIGUSR1 takes it with sigwait. */
+static volatile int waited_sig = -1;
+static void *waits_for_usr1(void *arg)
+{
+  (void)arg;
+  sigset_t set;
+  int sig;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  if (sigwait(&set, &sig) == 0)
+    waited_sig = sig;
+  return 0;
+}
+
+static int sigwait_thread(void)
+{
+  pthread_t t;
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  CHECK(pthread_sigmask(SIG_BLOCK, &set, 0) == 0);   /* the thread inherits it */
+  CHECK(pthread_create(&t, 0, waits_for_usr1, 0) == 0);
+  sleep_ms(30);
+  CHECK(pthread_kill(t, SIGUSR1) == 0);
+  CHECK(pthread_join(t, 0) == 0);
+  CHECK(waited_sig == SIGUSR1);
+  return 0;
+}
+
+/* ---- cancel-sem, cancel-read: pthread_cancel of a thread blocked in a
+   cancellation point; its cleanup handler runs and join sees PTHREAD_CANCELED. */
+static volatile int cleaned;
+static void cleanup(void *arg) { (void)arg; cleaned = 1; }
+static sem_t never;
+static void *waits_sem(void *arg)
+{
+  (void)arg;
+  pthread_cleanup_push(cleanup, 0);
+  sem_wait(&never);
+  pthread_cleanup_pop(0);
+  return (void *)1;
+}
+
+static volatile long forever_rc = -2, forever_errno;
+static void *reads_forever(void *arg)
+{
+  (void)arg;
+  char c;
+  pthread_cleanup_push(cleanup, 0);
+  forever_rc = read(pipefd[0], &c, 1);
+  forever_errno = errno;
+  pthread_cleanup_pop(0);
+  return (void *)1;
+}
+
+static int cancel_blocked(void *(*fn)(void *))
+{
+  pthread_t t;
+  void *v;
+  CHECK(sem_init(&never, 0, 0) == 0 && pipe(pipefd) == 0);
+  CHECK(pthread_create(&t, 0, fn, 0) == 0);
+  sleep_ms(40);
+  CHECK(pthread_cancel(t) == 0);
+  CHECK(pthread_join(t, &v) == 0);
+  if (v != PTHREAD_CANCELED)
+    fprintf(stderr, "cancel: the thread returned %p, its read %ld (errno %ld)\n", v, forever_rc,
+            forever_errno);
+  CHECK(v == PTHREAD_CANCELED && cleaned);
+  return 0;
+}
+
+/* ---- cancel-disabled: a cancellation requested while disabled waits for
+   the thread to enable it and reach a cancellation point. */
+static volatile int passed_disabled;
+static void *disables(void *arg)
+{
+  (void)arg;
+  int old;
+  pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old);
+  sleep_ms(80);   /* nanosleep is a cancellation point, but not now */
+  passed_disabled = 1;
+  pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old);
+  pthread_testcancel();
+  return (void *)1;
+}
+
+static int cancel_disabled(void)
+{
+  pthread_t t;
+  void *v;
+  CHECK(pthread_create(&t, 0, disables, 0) == 0);
+  sleep_ms(20);
+  CHECK(pthread_cancel(t) == 0);
+  CHECK(pthread_join(t, &v) == 0);
+  CHECK(v == PTHREAD_CANCELED && passed_disabled);
+  return 0;
+}
+
+/* ---- abort-thread: abort in a thread ends the application with SIGABRT. */
+static void *aborts(void *arg)
+{
+  (void)arg;
+  abort();
+}
+
+static int abort_thread(void)
+{
+  pthread_t t;
+  CHECK(pthread_create(&t, 0, aborts, 0) == 0);
+  pthread_join(t, 0);
+  printf("REACHED\n");
+  return 1;
+}
+
+/* ---- main-exit-signal: after the main thread left (its signals blocked by
+   pthread_exit), a signal sent to the process runs in the thread that is left. */
+static volatile int term_seen;
+static void on_term(int sig)
+{
+  (void)sig;
+  term_seen = (int)syscall(SYS_gettid);
+}
+
+static void *stays(void *arg)
+{
+  (void)arg;
+  sleep_ms(30);
+  kill(getpid(), SIGTERM);
+  long t0 = monotonic_ms();
+  while (!term_seen && monotonic_ms() - t0 < 5000)
+    sched_yield();
+  if (term_seen == (int)syscall(SYS_gettid))
+    printf("pthread-probe main-exit-signal: PASS\n");
+  return 0;
+}
+
+static int main_exit_signal(void)
+{
+  pthread_t t;
+  CHECK(install(SIGTERM, on_term, 0) == 0);
+  CHECK(pthread_create(&t, 0, stays, 0) == 0);
+  pthread_exit(0);
+}
+
+/* ---- park-signal-thread (B8's continuation): a thread parked in a futex
+   wait takes a signal whose handler makes a delegated call; under SA_RESTART
+   the wait goes on and ends with the wake, the handler having run once. */
+static volatile int parked_word;
+static void on_signal_calls(int sig)
+{
+  (void)sig;
+  handler_tid = (int)syscall(SYS_gettid);
+  ++handler_runs;
+  handler_calls_ok = write(pipefd[1], "h", 1) == 1;
+}
+
+static volatile int waiter_tid, wait_rc = -2;
+static void *parks(void *arg)
+{
+  (void)arg;
+  waiter_tid = (int)syscall(SYS_gettid);
+  while (__atomic_load_n(&parked_word, __ATOMIC_ACQUIRE) == 0)
+    wait_rc = (int)syscall(SYS_futex, &parked_word, F_WAIT | F_PRIVATE, 0, 0);
+  return 0;
+}
+
+static int park_signal_thread(void)
+{
+  pthread_t t;
+  char c;
+  CHECK(pipe(pipefd) == 0 && install(SIGUSR1, on_signal_calls, SA_RESTART) == 0);
+  CHECK(pthread_create(&t, 0, parks, 0) == 0);
+  sleep_ms(40);
+  CHECK(pthread_kill(t, SIGUSR1) == 0);
+  CHECK(read(pipefd[0], &c, 1) == 1 && c == 'h');   /* the handler's call arrived */
+  sleep_ms(20);
+  __atomic_store_n(&parked_word, 1, __ATOMIC_RELEASE);
+  fwake(&parked_word);
+  CHECK(pthread_join(t, 0) == 0);
+  printf("park-signal-thread: handler in %d, waiter %d, wait answered %d\n", handler_tid,
+         waiter_tid, wait_rc);
+  CHECK(handler_runs == 1 && handler_tid == waiter_tid && handler_calls_ok && wait_rc == 0);
+  return 0;
+}
+
+/* ---- cancel-installed-early: the cancellation handler is installed before
+   the first thread exists (musl installs it at the first pthread_cancel); a
+   thread made afterwards is cancelled through it. */
+static int cancel_installed_early(void)
+{
+  int old;
+  pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old);   /* for good: its own request stays pending */
+  CHECK(pthread_cancel(pthread_self()) == 0);
+  return cancel_blocked(waits_sem);
+}
+
+/* ---- sigreturn-mask: a handler that runs during sigsuspend and adds
+   SIGUSR2 to its uc_sigmask leaves SIGUSR2 blocked after the wait: the mask
+   it is shown is the one from before the wait, and the one it leaves is
+   the one the wait returns to. */
+static void on_usr1_blocks_usr2(int sig, siginfo_t *si, void *context)
+{
+  (void)sig;
+  (void)si;
+  ucontext_t *uc = context;
+  sigaddset(&uc->uc_sigmask, SIGUSR2);
+  ++handler_runs;
+}
+
+static int sigreturn_mask(void)
+{
+  struct sigaction sa = {0};
+  sigset_t block, wait_mask, after;
+  sa.sa_sigaction = on_usr1_blocks_usr2;
+  sa.sa_flags = SA_SIGINFO;
+  CHECK(sigaction(SIGUSR1, &sa, 0) == 0);
+  sigemptyset(&block);
+  sigaddset(&block, SIGUSR1);
+  CHECK(sigprocmask(SIG_BLOCK, &block, 0) == 0);
+  CHECK(kill(getpid(), SIGUSR1) == 0);
+  sigemptyset(&wait_mask);
+  sigaddset(&wait_mask, SIGUSR2);   /* the wait blocks SIGUSR2, which is otherwise open */
+  sigsuspend(&wait_mask);
+  CHECK(sigprocmask(SIG_BLOCK, 0, &after) == 0);
+  printf("sigreturn-mask: handler ran %d, SIGUSR2 blocked after the wait %d, SIGUSR1 %d\n",
+         handler_runs, sigismember(&after, SIGUSR2), sigismember(&after, SIGUSR1));
+  CHECK(handler_runs == 1 && sigismember(&after, SIGUSR2) == 1 && sigismember(&after, SIGUSR1) == 1);
+  return 0;
+}
+
+/* ---- setuid-threads: setuid answers at once while another thread computes
+   without a single call (it answers ENOSYS here, 0 on Linux for one's own
+   uid). */
+static volatile int spin_until;
+static volatile long spun;
+static void *computes(void *arg)
+{
+  (void)arg;
+  /* no call at all, not even a clock read: every entry into the dispatcher
+     would take a signal */
+  while (!__atomic_load_n(&spin_until, __ATOMIC_RELAXED) && spun < 300000000)
+    ++spun;
+  return 0;
+}
+
+static int setuid_threads(void)
+{
+  pthread_t t;
+  CHECK(pthread_create(&t, 0, computes, 0) == 0);
+  sleep_ms(20);
+  long t0 = monotonic_ms();
+  errno = 0;
+  int r = setuid(getuid());
+  long took = monotonic_ms() - t0;
+  int e = errno;
+  __atomic_store_n(&spin_until, 1, __ATOMIC_RELAXED);
+  CHECK(pthread_join(t, 0) == 0);
+  printf("setuid-threads: answered %d (errno %d) after %ld ms, the other thread spun %ld times\n", r, e,
+         took, spun);
+  CHECK((r == 0 || e == ENOSYS) && took < 1000);
+  return 0;
+}
+
+/* ---- sigaction-race: one thread takes SIGUSR1 again and again while the
+   main thread switches its handler between two, and to SIG_IGN and back:
+   every run is one of the two handlers, none is a call through SIG_IGN. */
+static volatile int race_a, race_b, race_stop;
+static void race_one(int sig) { (void)sig; ++race_a; }
+static void race_two(int sig) { (void)sig; ++race_b; }
+static void *takes_usr1(void *arg)
+{
+  (void)arg;
+  while (!__atomic_load_n(&race_stop, __ATOMIC_ACQUIRE))
+    if (write(pipefd[1], "", 0) < 0)   /* a round each time, where handlers run */
+      return (void *)1;
+  return 0;
+}
+
+static int sigaction_race(void)
+{
+  pthread_t t;
+  sigset_t set;
+  CHECK(pipe(pipefd) == 0);
+  CHECK(install(SIGUSR1, race_one, SA_RESTART) == 0);
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  CHECK(pthread_create(&t, 0, takes_usr1, 0) == 0);
+  CHECK(pthread_sigmask(SIG_BLOCK, &set, 0) == 0);   /* SIGUSR1 goes to the thread */
+  for (int i = 0; i < 600; ++i) {
+    pthread_kill(t, SIGUSR1);
+    install(SIGUSR1, (i % 3) == 0 ? race_one : (i % 3) == 1 ? race_two : SIG_IGN, SA_RESTART);
+  }
+  __atomic_store_n(&race_stop, 1, __ATOMIC_RELEASE);
+  void *v;
+  CHECK(pthread_join(t, &v) == 0 && v == 0);
+  printf("sigaction-race: %d and %d runs of the two handlers for 600 signals\n", race_a, race_b);
+  CHECK(race_a + race_b > 0 && race_a + race_b <= 600);
+  return 0;
+}
+
 /* ---- clone-refused: clone() for anything but a thread is not a context. */
 static int child_fn(void *arg) { (void)arg; return 0; }
 static int clone_refused(void)
@@ -541,6 +945,20 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "pi-mutex")) rc = pi_mutex();
   else if (!strcmp(mode, "user-stack")) rc = user_stack();
   else if (!strcmp(mode, "main-exit-more")) rc = main_exit_more();
+  else if (!strcmp(mode, "kill-thread")) rc = kill_thread();
+  else if (!strcmp(mode, "mask-routing")) rc = mask_routing();
+  else if (!strcmp(mode, "raise-thread")) rc = raise_thread();
+  else if (!strcmp(mode, "sigwait-thread")) rc = sigwait_thread();
+  else if (!strcmp(mode, "cancel-sem")) rc = cancel_blocked(waits_sem);
+  else if (!strcmp(mode, "cancel-read")) rc = cancel_blocked(reads_forever);
+  else if (!strcmp(mode, "cancel-disabled")) rc = cancel_disabled();
+  else if (!strcmp(mode, "abort-thread")) rc = abort_thread();
+  else if (!strcmp(mode, "main-exit-signal")) rc = main_exit_signal();
+  else if (!strcmp(mode, "park-signal-thread")) rc = park_signal_thread();
+  else if (!strcmp(mode, "cancel-installed-early")) rc = cancel_installed_early();
+  else if (!strcmp(mode, "sigreturn-mask")) rc = sigreturn_mask();
+  else if (!strcmp(mode, "setuid-threads")) rc = setuid_threads();
+  else if (!strcmp(mode, "sigaction-race")) rc = sigaction_race();
   else {
     fprintf(stderr, "pthread-probe: unknown mode %s\n", mode);
     return 2;

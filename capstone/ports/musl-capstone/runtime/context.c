@@ -44,9 +44,11 @@ void __capstone_context_seal(capstone_cap_slot *region, void *entry,
 long __capstone_context_offer(capstone_cap_slot *seal, unsigned long ticket);
 long __capstone_delegate_context(uint64_t nr, uint64_t a, uint64_t b, void *event);
 long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c);
+long __capstone_delegate_ints4(uint64_t nr, uint64_t a, uint64_t b, uint64_t c, uint64_t d);
 int __capstone_delegate_transport(unsigned long index);
 unsigned long __capstone_context_run(void *start_block);
 uint64_t __capstone_park_key(volatile int *word);
+void *__capstone_signals_detach(void);
 int __capstone_context_tid(void);
 void __capstone_hc_note_unserved(long n);
 _Noreturn void __capstone_context_exit_clear(unsigned long value, volatile int *clear);
@@ -249,7 +251,9 @@ unsigned long __capstone_context_run(void *start_block)
     __capstone_delegate_transport(transport);   /* a bad index: every call gets -EIO */
   unsigned long (*start)(void *) =
       (unsigned long (*)(void *))slot[CAPSTONE_CONTEXT_SLOT_USER_START / 16];
-  return start(slot[CAPSTONE_CONTEXT_SLOT_USER_ARG / 16]);
+  unsigned long value = start(slot[CAPSTONE_CONTEXT_SLOT_USER_ARG / 16]);
+  free(__capstone_signals_detach());   /* returning ends the context */
+  return value;
 }
 
 /* One ticket per offer of this context: a late or repeated request can never
@@ -308,9 +312,11 @@ static long create(struct capstone_context *c, unsigned mode)
   }
   /* The request consumes the reservation whatever its outcome, so it is made
      even when there is nothing to offer; it then fails to adopt. */
+  /* the thread identity the context's struct pthread carries: tkill names it */
+  long tid = c->tp ? ((struct pthread *)((char *)c->tp - sizeof(struct pthread)))->tid : 0;
   int offered = __capstone_context_offer(&c->seal, ticket) == 0;
-  long id = __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_CREATE, ticket, mode,
-                                     (unsigned long)transport);
+  long id = __capstone_delegate_ints4(CAPSTONE_NR_CONTEXT_CREATE, ticket, mode,
+                                      (unsigned long)transport, (unsigned long)tid);
   if (!offered)
     return id < 0 ? id : -EINVAL;
   if (id >= 0)
@@ -370,6 +376,7 @@ struct clone_record {
   int (*func)(void *);
   void *arg;
   volatile int *clear;         /* CLONE_CHILD_CLEARTID */
+  void *signal_events;         /* the ended thread's signal list, for the reaper to free */
   void *unmap_base;            /* __unmapself: the mapping the reaper frees */
   size_t unmap_size;
   int live;                    /* created, and not yet reaped */
@@ -393,6 +400,8 @@ static void reap_held(void)
     capstone_context_revoke(&r->c);
     if (r->unmap_base)
       __munmap(r->unmap_base, r->unmap_size);
+    free(r->signal_events);
+    r->signal_events = 0;
     r->unmap_base = 0;
     r->live = 0;
   }
@@ -559,6 +568,14 @@ long __capstone_thread_exit(int status)
     if (self_clone && __atomic_sub_fetch(&clones_running, 1, __ATOMIC_SEQ_CST) == 0 &&
         __atomic_load_n(&first_ended, __ATOMIC_SEQ_CST))
       _Exit(__atomic_load_n(&first_status, __ATOMIC_RELAXED));
+    /* No more signals here; the list is freed where a lock may be taken: by
+       the reaper for a musl thread (which may take no musl lock now, above),
+       at once for a context of the runtime's own interface. */
+    void *signal_events = __capstone_signals_detach();
+    if (self_clone)
+      self_clone->signal_events = signal_events;
+    else
+      free(signal_events);
     __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_EXITING, clear ? __capstone_park_key(clear) : 0, 0, 0);
     if (__capstone_thread_exit_test_gap)
       __capstone_thread_exit_test_gap();
@@ -577,3 +594,22 @@ long __capstone_thread_exit(int status)
   for (;;)
     __syscall(SYS_futex, &forever, FUTEX_WAIT | FUTEX_PRIVATE, 0, 0);
 }
+
+/* musl's __synccall runs a function in every thread with the others held,
+ * by signalling each one; its callers are setuid, setgid, setgroups and
+ * their relatives (setrlimit only when prlimit64 fails, and it is served).
+ * A context takes a signal at its next delegated call, so one computing
+ * without calls would hold every other for good. None of those calls is
+ * served (they answer ENOSYS, reported); were one served, the launcher would
+ * have to apply it to each of its own threads, since Linux keeps credentials
+ * per thread, not the domain to each context. So the function runs once, in
+ * the caller. The thread-list lock's weak stand-ins are synccall.o's, for a
+ * program that makes no thread. */
+void __synccall(void (*func)(void *), void *ctx)
+{
+  func(ctx);
+}
+
+static void no_list_lock(void) {}
+__attribute__((__weak__, __alias__("no_list_lock"))) void __tl_lock(void);
+__attribute__((__weak__, __alias__("no_list_lock"))) void __tl_unlock(void);

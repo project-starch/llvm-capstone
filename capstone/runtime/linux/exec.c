@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -235,6 +236,7 @@ struct exec_state {
   unsigned child_count;
   int image;
   pid_t children[CAPSTONE_DELEGATE_CHILDREN];
+  uint64_t mask;   /* the calling context's mask, the new image's */
 };
 #define EXEC_STATE_MAGIC UINT64_C(0x4350455845433031)
 
@@ -275,7 +277,8 @@ static long exec_locked(struct execution *e, struct capstone_delegate_host *host
   if (checked < 0) return -errno;
   if (!view.argc) { close(checked); return -EINVAL; }
   struct exec_state state = {.magic = EXEC_STATE_MAGIC, .spawner = e->spawner,
-                            .child_count = e->delegate.child_count, .image = checked};
+                            .child_count = e->delegate.child_count, .image = checked,
+                            .mask = host->signals.logical};
   memcpy(state.children, e->delegate.children, sizeof state.children);
   int fd = above_stdio(memfd_create("capstone-exec-state", MFD_CLOEXEC));
   if (fd < 0) { int error = errno; close(checked); return -error; }
@@ -294,19 +297,15 @@ static long exec_locked(struct execution *e, struct capstone_delegate_host *host
     argv[4] = (char *)view.path;
     argv[5] = "--";
     report_stats(e);
-    /* execve keeps the calling thread's mask. A further context's thread
-       blocks every signal; the new image must start with the application's
-       mask, as if the first context's thread had called it. Set just before
-       the call and taken back if it fails. */
-    sigset_t logical, kept;
-    if (host->owner) {
-      capstone_signals_logical_set(&e->delegate.signals, &logical);
-      pthread_sigmask(SIG_SETMASK, &logical, &kept);
-    }
+    /* execve keeps the calling thread's mask and the pending signals. Every
+       signal stays blocked across it, so that one arriving now stays pending
+       instead of reaching this image's trampoline; the new launcher sets the
+       calling context's mask (the state's) before anything else. Taken back
+       if the call fails. */
+    uint64_t kept = capstone_signals_set_kernel_mask(~UINT64_C(0));
     execve(e->spawner.self, argv, envp);
     error = errno;
-    if (host->owner)
-      pthread_sigmask(SIG_SETMASK, &kept, NULL);
+    capstone_signals_set_kernel_mask(kept);
   }
   close(fd);
   close(checked);
@@ -320,9 +319,9 @@ static long exec_locked(struct execution *e, struct capstone_delegate_host *host
  * like any other. The thread serves the context's delegated calls through the
  * transport the application reserved for it before the request, so a call
  * that blocks in Linux blocks only that context. The first context stays on
- * the main thread and keeps the signals: a context thread blocks every signal
- * (its host refuses the signal requests), so the signal ring keeps one
- * producer. */
+ * the main thread. Signals are per context (B8): each thread's kernel mask is
+ * its context's, its trampoline records into its context's ring, and tkill
+ * reaches the thread that serves the context named. */
 enum { TRANSPORT_FREE, TRANSPORT_RESERVED, TRANSPORT_LIVE, TRANSPORT_EXITING };
 struct context_service {
   pthread_mutex_t lock;
@@ -333,14 +332,38 @@ struct context_service {
   unsigned char state[1 + CAPSTONE_DELEGATE_CONTEXTS_MAX];
   dom_id_t live[1 + CAPSTONE_DELEGATE_CONTEXTS_MAX];
   uint64_t wake[1 + CAPSTONE_DELEGATE_CONTEXTS_MAX];   /* CONTEXT_EXITING's key */
+  struct context_thread *threads[1 + CAPSTONE_DELEGATE_CONTEXTS_MAX];
+  pthread_cond_t attached;   /* a new context thread serves its signals */
 };
 
 struct context_thread {
   struct context_service *service;
   dom_id_t id;
   unsigned transport;
+  long tid;          /* the context's thread identity, the runtime's */
+  pid_t linux_tid;   /* the thread that serves it, once attached */
+  int *attached;     /* the creator's flag, set once and dropped at attach */
   struct capstone_delegate_host host;
 };
+
+/* capstone_delegate_host.tkill: to the Linux thread serving the context whose
+   thread identity is tid, the first context's being the pid. Sent under the
+   service lock, which a context thread takes to leave the table before it
+   ends: the Linux tid named is never one Linux has given to another thread. */
+static long context_tkill(struct capstone_delegate_host *host, long tid, int sig) {
+  struct context_service *service = host->context_state;
+  long r = -ESRCH;
+  if (tid == getpid())
+    return syscall(SYS_tgkill, getpid(), getpid(), sig) ? -errno : 0;
+  pthread_mutex_lock(&service->lock);
+  for (unsigned i = 1; i < service->transports; ++i) {
+    struct context_thread *t = service->threads[i];
+    if (t && t->tid == tid && t->linux_tid)
+      r = syscall(SYS_tgkill, getpid(), t->linux_tid, sig) ? -errno : 0;
+  }
+  pthread_mutex_unlock(&service->lock);
+  return r;
+}
 
 
 static struct capstone_delegate_entry *transport_entry(struct execution *e, unsigned transport) {
@@ -355,27 +378,10 @@ static uint64_t transport_release(struct context_service *service, unsigned tran
   service->state[transport] = TRANSPORT_FREE;
   service->live[transport] = 0;
   service->wake[transport] = 0;
+  service->threads[transport] = NULL;
   pthread_cond_broadcast(&service->released);
   pthread_mutex_unlock(&service->lock);
   return key;
-}
-
-/* A write to a pipe without a reader, or past the file size limit, makes
-   Linux send SIGPIPE or SIGXFSZ to the calling thread. A context thread
-   blocks every signal, so the signal would stay pending there and its action
-   (by default the end of the process) would never happen. Take it from the
-   thread and send it to the process, which Linux delivers to the first
-   context's thread under the application's disposition and mask. */
-static void forward_synchronous(void) {
-  sigset_t sync;
-  siginfo_t info;
-  struct timespec now = {0, 0};
-  int sig;
-  sigemptyset(&sync);
-  sigaddset(&sync, SIGPIPE);
-  sigaddset(&sync, SIGXFSZ);
-  while ((sig = sigtimedwait(&sync, &info, &now)) > 0)
-    kill(getpid(), sig);
 }
 
 static void *context_thread(void *arg) {
@@ -383,6 +389,15 @@ static void *context_thread(void *arg) {
   struct execution *e = t->service->e;
   struct ioctl_dom_step_args step;
   struct capstone_delegate_entry *entry = transport_entry(e, t->transport);
+  /* Serve the context's signals before its first step, and let the creator
+     go on: a tkill for it from now on reaches this thread. */
+  capstone_signals_attach(&t->host.signals);
+  pthread_mutex_lock(&t->service->lock);
+  t->linux_tid = (pid_t)syscall(SYS_gettid);
+  *t->attached = 1;   /* the creator's own frame: it may not read t again */
+  t->attached = NULL;
+  pthread_cond_broadcast(&t->service->attached);
+  pthread_mutex_unlock(&t->service->lock);
   for (;;) {
     if (capstone_step(t->id, &step)) {
       if (errno == EINTR) continue;
@@ -406,8 +421,6 @@ static void *context_thread(void *arg) {
       process_end(e, 125);
     }
     capstone_delegate_serve(&t->host, entry);
-    if (entry->result == -EPIPE || entry->result == -EFBIG)
-      forward_synchronous();
     if (t->host.exec_requested)
       entry->result = exec_in_place(e, &t->host);
     if (t->host.exiting)
@@ -417,6 +430,10 @@ static void *context_thread(void *arg) {
      one, then its clear word's waiters are woken (a joiner already saw the
      word and went on: the wake is harmless). Free first, so a joiner that
      makes a thread at once finds the transport. */
+  /* This thread serves no context any more: a signal that still reaches it
+     is kept blocked, as Linux drops a thread's own pending signals when it
+     ends; the state goes with the thread record. */
+  capstone_signals_detach();
   capstone_forget(t->id);
   capstone_delegate_host_free(&t->host);
   uint64_t key = transport_release(t->service, t->transport);
@@ -428,39 +445,58 @@ static void *context_thread(void *arg) {
 
 /* Start a THREAD context on the transport it reserved. The creating thread
    blocks every signal across pthread_create, so the new thread starts with
-   all of them blocked (signals.c has one producer thread). A failed start
+   them blocked until it attached to its context's signal state. A failed start
    takes the registration back: no context runs after a reported failure.
    CAPSTONE_CONTEXT_TEST_THREAD_FAILS makes the start fail, for the rollback
    probe. */
 static long context_start(struct context_service *service, struct capstone_delegate_host *creator,
-                          dom_id_t child, unsigned transport) {
+                          dom_id_t child, unsigned transport, long tid) {
   struct execution *e = service->e;
   struct context_thread *t = calloc(1, sizeof *t);
   if (!t) return -ENOMEM;
   t->service = service;
   t->id = child;
   t->transport = transport;
+  t->tid = tid;
   t->host.owner = creator->owner ? creator->owner : creator;
   t->host.exchange = (char *)e->maps[REGION_DATA] + (size_t)transport * e->slice_bytes;
   t->host.exchange_bytes = e->slice_bytes;
   t->host.context = t->host.owner->context;
   t->host.context_state = service;
   t->host.context_id = child;
+  t->host.tkill = context_tkill;
+  /* the creator's mask, as a new thread inherits it; the process's dispositions */
+  capstone_signals_init_context(&t->host.signals,
+      (struct capstone_signal_block *)((char *)transport_entry(e, transport) + CAPSTONE_SIGNAL_OFFSET),
+      &creator->signals);
   pthread_mutex_lock(&service->lock);
   service->live[transport] = child;
+  service->threads[transport] = t;
   pthread_mutex_unlock(&service->lock);
-  sigset_t all, prev;
+  /* The thread starts with every signal blocked but the C library's own,
+     which it unblocks in every new thread; one that arrives there before
+     the thread attached is kept (signals.c). The creator waits until it
+     attached, on a flag in this frame: the thread may run its context to the
+     end and free its record before this reads anything. */
   pthread_t thread;
-  sigfillset(&all);
-  pthread_sigmask(SIG_BLOCK, &all, &prev);
+  int attached = 0;
+  t->attached = &attached;
+  uint64_t prev = capstone_signals_set_kernel_mask(~UINT64_C(0));
   int failed = getenv("CAPSTONE_CONTEXT_TEST_THREAD_FAILS") ||
                pthread_create(&thread, NULL, context_thread, t);
-  pthread_sigmask(SIG_SETMASK, &prev, NULL);
+  capstone_signals_set_kernel_mask(prev);
   if (failed) {
+    pthread_mutex_lock(&service->lock);
+    service->threads[transport] = NULL;
+    pthread_mutex_unlock(&service->lock);
     free(t);
     return -EAGAIN;
   }
   pthread_detach(thread);
+  pthread_mutex_lock(&service->lock);
+  while (!attached)
+    pthread_cond_wait(&service->attached, &service->lock);
+  pthread_mutex_unlock(&service->lock);
   return 0;
 }
 
@@ -520,7 +556,8 @@ static long context_request(struct capstone_delegate_host *host,
       r = -EINVAL;
     else if (capstone_adopt((dom_id_t)host->context_id, request->args[0], &child))
       r = -errno;
-    else if (thread && (r = context_start(service, host, child, (unsigned)transport)))
+    else if (thread && (r = context_start(service, host, child, (unsigned)transport,
+                                          (long)request->args[3])))
       capstone_forget(child);
     if (thread && r && reserved)
       transport_release(service, (unsigned)transport);
@@ -593,6 +630,9 @@ int main(int argc, char **argv) {
     fprintf(argc < 2 ? stderr : stdout, "usage: capstone-exec [--] PROGRAM [ARG...]\n       capstone-exec --stats\n");
     return argc < 2 ? 2 : 0;
   }
+  capstone_signals_settle_libc();
+  if (resumed.magic)
+    capstone_signals_set_kernel_mask(resumed.mask);   /* exec in place: the caller's mask */
   struct execution e = {.image = -1, .path = app_args ? argv[2] : argv[1],
                         .spawner = {.socket = -1}};
   if (resumed.magic) {
@@ -735,9 +775,11 @@ int main(int argc, char **argv) {
   struct context_service contexts = {.e = &e, .first = domain, .transports = (unsigned)transports};
   pthread_mutex_init(&contexts.lock, NULL);
   pthread_cond_init(&contexts.released, NULL);
+  pthread_cond_init(&contexts.attached, NULL);
   contexts.state[0] = TRANSPORT_LIVE;
   contexts.live[0] = domain;
   e.delegate.context = context_request;
+  e.delegate.tkill = context_tkill;
   e.delegate.context_state = &contexts;
   capstone_signals_init(&e.delegate.signals,
       (struct capstone_signal_block *)((char *)e.maps[REGION_META] + CAPSTONE_SIGNAL_OFFSET));

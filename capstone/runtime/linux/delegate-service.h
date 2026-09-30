@@ -43,7 +43,8 @@ struct capstone_delegate_host {
   /* set by exit or exit_group: the process must end with this status */
   int exiting;
   int exit_status;
-  /* signals: the ring, the classes, the masks; initialized by the launcher */
+  /* signals: this context's ring, mask and handover block, and the process's
+     dispositions; initialized by the launcher */
   struct capstone_signal_state signals;
   /* contexts (docs/plans/delegation-threads.md): the launcher answers the
      CONTEXT requests through this hook; NULL answers ENOSYS. It writes a step
@@ -55,12 +56,16 @@ struct capstone_delegate_host {
      context's own transport, counters and exec request, and shares the rest
      with the first context's host, `owner`: the spawner, the children, the
      private descriptors, HELLO's code range and the signal dispositions. NULL
-     for the first context. `lock` is the owner's, for the children and the
-     spawner. A further context's signal requests answer ENOSYS: signals stay
-     with the first context until they are per context. */
+     for the first context. `lock` is the owner's, for the children, the
+     spawner and the dispositions. */
   struct capstone_delegate_host *owner;
   pthread_mutex_t lock;
   uint64_t context_id;      /* the context this host serves */
+  /* tkill: send sig to the Linux thread that serves the context with thread
+     identity tid (the runtime's, docs/plans/delegation-threads.md Q2); 0 or
+     -errno (-ESRCH for no such context). NULL reaches only the first context
+     (the pid). */
+  long (*tkill)(struct capstone_delegate_host *host, long tid, int sig);
   /* parking: the process's queue (the owner's, NULL answers ENOSYS) and this
      host's own wait record, one per serving thread */
   struct capstone_park *park;
