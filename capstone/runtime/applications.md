@@ -231,7 +231,8 @@ The wire ABI, the shape table and the closed exception groups are in
 [docs/plans/delegation-abi.md](../docs/plans/delegation-abi.md).
 
 What crosses: files, directories, descriptors, time, identity, limits,
-`getrandom`, `wait4`, `kill` confined to the task, its children and its parent,
+`getrandom`, `wait4`, `kill` confined to the task, its children and its parent
+(and signal 0 to the task's own group, which signals nothing),
 `getpgid`, `getsid`, `ppoll` and `pselect6` (the fd_sets, the timeout and the
 mask, which the libc flattens out of the kernel's pointer pair and the
 launcher rebuilds), and the plain rows, integers, strings and flat buffers
@@ -242,7 +243,13 @@ only: `statfs`, `fstatfs`, `statx`, `truncate`, `fallocate`, `linkat`,
 `setsid`, `setpgid` among the task and its children, and for the task
 itself `getpriority`, `setpriority`, `sched_getaffinity`,
 `sched_setaffinity`, `sched_get_priority_max`, `sched_get_priority_min` and
-`sched_rr_get_interval`; sockets and epoll (below); `exit_group`. What does
+`sched_rr_get_interval`; `getresuid` and `getresgid`; the descriptor rows
+`eventfd2`, `timerfd_create`, `timerfd_settime`, `timerfd_gettime` and
+`signalfd4`, whose descriptors are then read, written and polled like any
+other (a signalfd reads what Linux holds pending, the signals the domain
+blocks, as `rt_sigtimedwait` does); `fcntl`'s integer commands, among them
+directory notification (`F_NOTIFY`, `F_SETSIG`, `F_GETSIG`); sockets and
+epoll (below); `exit_group`. What does
 not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS),
 processes (`clone` and `fork` are ENOSYS; image exec uses the process service
 below), and threads.

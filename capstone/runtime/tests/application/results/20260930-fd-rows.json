@@ -1,0 +1,54 @@
+{
+ "date": "2026-09-30",
+ "change": "delegated rows eventfd2, timerfd_create, timerfd_settime, timerfd_gettime, signalfd4, getresuid, getresgid; fcntl F_NOTIFY, F_SETSIG, F_GETSIG; kill signal 0 to the task's own group",
+ "platform": {
+  "qemu_sha256": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+  "firmware_fw_jump_sha256": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+  "module_sha256": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "note": "the platform of the delegation-v0-removal-stack checks (#144); guest --cma-mib 1024 --process-cache-mib 768",
+  "compiler": "lane/compiler-stack-20260929 68c75ed3 for the launcher's contracts; CPython objects as the cheap-rows record, relinked with the delegation-ports compiler-qualified toolchain",
+  "libc": "the #144 kit's libc-capstone.a (musl-patches 0001-0004)"
+ },
+ "launchers": {
+  "this_branch_sha256": "81a966503e86fec6562342cf9173017d5cdd28c89f297cfcde1c0f5973341b23",
+  "base_144_sha256": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94"
+ },
+ "native": {
+  "build": "exec/ as a Debug build, ctest with stdout on /dev/null, as the cheap-rows record (the spawner cases need that)",
+  "this_branch": "66 run, 0 failed: the 25 earlier delegate-row-* cases, five new (eventfd, timerfd, signalfd, getresid, fcntl-notify), private extended to timerfd_settime, timerfd_gettime and signalfd4, and the delegate-kill-group edge case now asserting kill(0, 0) == 0 while kill(0, SIGTERM), kill(-1, 0) and kill(-pgrp, 0) stay EPERM",
+  "control": "the same tests against #144's common/delegate.c and linux/delegate-service.c: 66 run, 7 failed, exactly the changed cases: an unknown row cannot be packed (eventfd, timerfd, signalfd, getresid, private), F_NOTIFY refused (fcntl-notify), kill(0, 0) refused (kill-group)"
+ },
+ "guest": {
+  "images": {
+   "application-contract.dom": "bdeebb0dbf162999d2befc1ac47af335c0e35ad996a5cf3bfead495181e303ee",
+   "delegate-contract.dom": "6ec1ad7096e3a12ba8716546c122cd515e62fe8fd65758c58f5a0189750c6977",
+   "signal-contract.dom": "71b8ea86cf89ce07ae0176efa6eb676dbbdac03065601b675819feb718684a69",
+   "socket-contract.dom": "7b752e8ca39f2d8146481eb5ddafa7d3f13db923b18b34d5951e679d1c36110f",
+   "cpython-rows.dom": "239a5c74cd188353bd398dee5727a2e305a17a7745219c99a062abefeec61321",
+   "cpython-base.dom": "0b55fd535043d4b8cd7dbef7056b17a2da0243f3658d752c480c3ed30d8d74d0"
+  },
+  "gate_this_launcher": "run.py --repeat 1: 22 PASS, 0 FAIL; application healthy passes the new block (eventfd count 5, a 10 ms timerfd read once, SIGUSR1 blocked, raised and read from a signalfd, getresuid/getresgid)",
+  "gate_144_launcher_control": "the same images: application healthy FAIL, wait status 16640 (exit 65, the eventfd check: the launcher answers ENOSYS)",
+  "signal_contract": "30/30 PASS",
+  "socket_contract": "11/11 PASS",
+  "binfmt": "exec, exec-closed, exec-error PASS",
+  "mruby_head_stdlib_io": {
+   "image": "ports/mruby/app/results/2026-09-30/mrbtest-stdlib-io.json's head image, 8461beb2...",
+   "domain": {
+    "total": 2858,
+    "ok": 2761,
+    "ko": 0,
+    "crash": 0,
+    "skip": 74
+   },
+   "note": "native 2858/2761/0/0/74; on #144's launcher the same image crashed one test (Process.kill(0, 0), EPERM); here it passes"
+  },
+  "cpython_fd_tests": {
+   "rows": "Ran 15 tests in 12.050s; OK",
+   "base": "Ran 15 tests in 0.994s; FAILED (errors=15)",
+   "what": "test.test_os.TimerfdTests (12) and EventfdTests (3); base is the same objects relinked with #144's runtime, whose shape table has no such rows"
+  },
+  "cpython_test_os_full": "both images stop at the same place, TestSendfile.test_invalid_offset: its asyncio teardown cannot start a thread (threads are not on #144) and the run ends there; up to that point the only difference is EventfdTests, 3 ERROR in base and 3 ok with the rows"
+ }
+}

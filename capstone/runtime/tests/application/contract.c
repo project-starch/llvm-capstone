@@ -6,9 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <sys/eventfd.h>
 #include <sys/resource.h>
+#include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
+#include <sys/timerfd.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <capstone/capability.h>
@@ -339,6 +343,30 @@ int main(int argc, char **argv) {
       linked.st_size != 2 || linked.st_nlink != 2 || unlink("contract.link") ||
       unlink("contract.rows"))
     return 48;
+  /* the descriptor rows: an event counter, a timer that expires once, a
+     signal this task blocks and then reads from a signalfd, and the ids */
+  uint64_t count = 2;
+  int event = eventfd(3, EFD_CLOEXEC);
+  if (event < 0 || write(event, &count, 8) != 8 || read(event, &count, 8) != 8 || count != 5 ||
+      close(event))
+    return 65;
+  struct itimerspec expiry = {{0, 0}, {0, 10 * 1000 * 1000}}, left;
+  int timer = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+  if (timer < 0 || timerfd_settime(timer, 0, &expiry, NULL) || timerfd_gettime(timer, &left) ||
+      read(timer, &count, 8) != 8 || count != 1 || close(timer))
+    return 66;
+  sigset_t usr1, before;
+  struct signalfd_siginfo info;
+  sigemptyset(&usr1);
+  sigaddset(&usr1, SIGUSR1);
+  int sigs = sigprocmask(SIG_BLOCK, &usr1, &before) ? -1 : signalfd(-1, &usr1, SFD_NONBLOCK | SFD_CLOEXEC);
+  if (sigs < 0 || kill(getpid(), SIGUSR1) || read(sigs, &info, sizeof info) != sizeof info ||
+      info.ssi_signo != SIGUSR1 || close(sigs) || sigprocmask(SIG_SETMASK, &before, NULL))
+    return 67;
+  uid_t r, e, s;
+  gid_t gr, ge, gs;
+  if (getresuid(&r, &e, &s) || e != geteuid() || getresgid(&gr, &ge, &gs) || ge != getegid())
+    return 68;
   puts("application: ok");
   return 0;
 }

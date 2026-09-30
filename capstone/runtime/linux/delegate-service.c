@@ -69,6 +69,8 @@ static const struct { uint16_t wire; long host; } numbers[] = {
   MAP(socket) MAP(socketpair) MAP(bind) MAP(listen) MAP(accept) MAP(accept4) MAP(connect)
   MAP(getsockname) MAP(getpeername) MAP(sendto) MAP(recvfrom) MAP(setsockopt) MAP(getsockopt)
   MAP(shutdown) MAP(sendmsg) MAP(recvmsg) MAP(epoll_create1) MAP(epoll_ctl) MAP(epoll_pwait)
+  MAP(eventfd2) MAP(timerfd_create) MAP(timerfd_settime) MAP(timerfd_gettime) MAP(signalfd4)
+  MAP(getresuid) MAP(getresgid)
 };
 #undef MAP
 
@@ -139,7 +141,8 @@ static unsigned fd_arguments(uint64_t nr) {
   case CAPSTONE_SYS_statx: case CAPSTONE_SYS_fallocate: case CAPSTONE_SYS_fchdir:
   case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown: case CAPSTONE_SYS_fchownat:
   case CAPSTONE_SYS_faccessat2: case CAPSTONE_SYS_readahead: case CAPSTONE_SYS_fadvise64:
-  case CAPSTONE_SYS_syncfs: return 1;
+  case CAPSTONE_SYS_syncfs: case CAPSTONE_SYS_timerfd_settime: case CAPSTONE_SYS_timerfd_gettime:
+  case CAPSTONE_SYS_signalfd4: return 1;
   default: return 0;
   }
 }
@@ -236,6 +239,8 @@ static int command_ok(uint64_t nr, uint64_t cmd) {
     case F_DUPFD: case F_DUPFD_CLOEXEC: case F_GETFD: case F_SETFD:
     case F_GETFL: case F_SETFL: case F_GETOWN: case F_SETOWN:
     case F_GETPIPE_SZ: case F_SETPIPE_SZ: case F_GET_SEALS: case F_ADD_SEALS:
+    /* directory notification: the signal comes to this task like any other */
+    case F_NOTIFY: case F_SETSIG: case F_GETSIG:
       return 1;
     default: return 0;
     }
@@ -514,7 +519,8 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
       entry->nr == CAPSTONE_SYS_set_robust_list || entry->nr == CAPSTONE_SYS_futex)
     return -ENOSYS;
   if ((entry->nr == CAPSTONE_SYS_ppoll && entry->args[3] && entry->args[4] != 8) ||
-      (entry->nr == CAPSTONE_SYS_epoll_pwait && entry->args[4] && entry->args[5] != 8))
+      (entry->nr == CAPSTONE_SYS_epoll_pwait && entry->args[4] && entry->args[5] != 8) ||
+      (entry->nr == CAPSTONE_SYS_signalfd4 && entry->args[2] != 8))
     return -EINVAL;
   if (entry->nr == CAPSTONE_SYS_prlimit64 && !self_pid((pid_t)entry->args[0]))
     return -EPERM;
@@ -580,9 +586,11 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
   /* kill and wait4 are delegated but confined to this task, its children and
      the task that spawned it: a child domain may signal its parent. Anything
      else is EPERM, or ESRCH when there is no such process, as Linux answers a
-     kill of a pid that has been reaped. */
+     kill of a pid that has been reaped. Signal 0 to the task's own group
+     signals nothing and asks only what Linux always answers, since the task
+     is in its group: that goes through. */
   if (entry->nr == CAPSTONE_SYS_kill && !child_of(host, (pid_t)a[0]) &&
-      (pid_t)a[0] != getpid() && (pid_t)a[0] != getppid())
+      (pid_t)a[0] != getpid() && (pid_t)a[0] != getppid() && (a[0] != 0 || a[1] != 0))
     return kill((pid_t)a[0], 0) < 0 && errno == ESRCH ? -ESRCH : -EPERM;
   if (entry->nr == CAPSTONE_SYS_wait4 && a[0] > 0 && !child_of(host, (pid_t)a[0]))
     return -ECHILD;

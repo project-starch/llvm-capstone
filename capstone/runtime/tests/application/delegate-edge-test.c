@@ -141,8 +141,13 @@ int main(int argc, char **argv) {
     assert(remaining == 1);
   } else if (!strcmp(argv[1], "kill-group")) {
     /* the scope of kill: this task, its children and its parent; a process
-       group is refused, another process is EPERM, a pid nobody has is ESRCH */
-    assert(call(CAPSTONE_SYS_kill, 0, 0, 0, 0) == -EPERM);
+       group is refused, another process is EPERM, a pid nobody has is ESRCH.
+       Signal 0 to the own group signals nothing and Linux answers it with 0,
+       since the task is in its group: that one goes through. */
+    assert(call(CAPSTONE_SYS_kill, 0, 0, 0, 0) == 0);
+    assert(call(CAPSTONE_SYS_kill, 0, SIGTERM, 0, 0) == -EPERM);
+    assert(call(CAPSTONE_SYS_kill, (uint64_t)-1, 0, 0, 0) == -EPERM);
+    assert(call(CAPSTONE_SYS_kill, (uint64_t)-(int64_t)getpgrp(), 0, 0, 0) == -EPERM);
     assert(call(CAPSTONE_SYS_kill, (uint64_t)getpid(), 0, 0, 0) == 0);
     assert(call(CAPSTONE_SYS_kill, (uint64_t)getppid(), 0, 0, 0) == 0);
     assert(call(CAPSTONE_SYS_kill, 1, 0, 0, 0) == -EPERM);
