@@ -1632,7 +1632,9 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   if (CapstoneGpCaptable) {
     bool IsCodeSymbol = false;
     if (auto *GA = dyn_cast<GlobalAddressSDNode>(Symbol))
-      IsCodeSymbol = isa<Function>(GA->getGlobal());
+      // An alias of a function is a code symbol as well (C-75: the initializer
+      // now stores alias slots, and a function alias went through gp here).
+      IsCodeSymbol = isa_and_nonnull<Function>(GA->getGlobal()->getAliaseeObject());
     else if (isa<BlockAddressSDNode>(Symbol) || isa<ExternalSymbolSDNode>(Symbol))
       IsCodeSymbol = true;
 
