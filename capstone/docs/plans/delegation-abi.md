@@ -1,15 +1,42 @@
 # Delegated syscalls and the task model
 
-Status: steps 1 to 3 implemented; step 4 has working spawn/exec paths but
-has **not passed its acceptance gate**. The stack is `delegation-abi`,
-`delegation-libc`, `delegation-launcher`, `delegation-spawn` (2026-09-29).
-Perl `t/base` now passes 9/9 (493 assertions) with guest `binfmt_misc` and the
-corrected interpreter registration. The libc-test process/signal coverage is
-incomplete. Steps 5 and 6 remain unimplemented.
-Review fixes and their native/guest evidence are in `runtime/applications.md`.
-The recorded QEMU `rdtime` sample is a wall-time observation, not the planned
-`icount`/per-step cycle measurement. Numbers elsewhere in this plan remain
-gates rather than verified results.
+Status, 2026-09-29: steps 1 to 4 implemented on the stack `delegation-abi`,
+`delegation-libc`, `delegation-launcher`, `delegation-spawn`, `delegation-ports`;
+Perl `t/base` 9/9 with guest `binfmt_misc`. Steps 5 and 6 are open. Above the
+stack, the same day, five branches cut the cost of a round and the number of
+rounds; their measurements are in `runtime/applications.md` and the
+`runtime/tests/application/results/20260929-*.json` records:
+
+| Branch | What | getpid round, rdtime ticks (10 MHz) |
+|---|---|---|
+| (pinned stack) | ten SBI ecalls per step | 1,047 |
+| `delegation-step-one-ecall` | STEP returns the event in a1..a5; no probe, no QUERY | 893 |
+| `delegation-no-smode-swap` | monitor invoke without the 16 CPMP + 9 CSR swaps | 527 |
+| `delegation-qemu-switch-cost` | QEMU: flush only when translation state changes; quantum timer | 262 |
+| `delegation-libc-rounds` | identity and clocks from the launch record; no CLOEXEC fcntl; 8 KiB stdio; 32 KiB getdents | rounds 43 -> 26 for `perl -e` |
+
+Those are QEMU wall-time figures; the first two rows also hold on hardware, the
+third is emulator-only. With a round at ~26 us and `perl -e` at 26 rounds, the
+round is no longer what a program waits for. What is left, in this order:
+
+- **Launch cost** (`delegation-launch-cost`): a Perl launch is ~4 s in the
+  guest before the first instruction of the program; the launcher hashes the
+  whole image byte by byte on every start, memsets and copies the whole memsz
+  including `.bss`, and the host runner opens one SSH session per process.
+  Measure the split first, then hash only for a fault record, copy only filesz,
+  reuse the SSH connection.
+- **Signals**, step 6 before step 5: the wire block already carries `pending`.
+  Synchronous delivery unlocks `popen`, `SIGCHLD`, `SIGPIPE`, Ctrl-C, timers,
+  Perl `%SIG` and CPython's `signal` module. Same branch: the ~25 shape rows
+  that are integers and buffers only (`pselect6`, `statx`, `statfs`,
+  `getrusage`, `getrlimit`, `truncate`, `fallocate`, `fchown`, `linkat`, ...).
+- **Memory**, step 5: the region grant at the resume label; `mmap` of files,
+  `mprotect`.
+- **Threads**: the sibling-context primitive in the monitor plus capability TLS
+  in the compiler (C-47); last.
+
+Everything below this line is the plan as written on 2026-09-29 morning; the
+numbers in it are gates, not results, except where the table above says so.
 
 ## Goal
 
@@ -159,10 +186,12 @@ Each step stacks on the previous one, is gated, and lands squashed.
 4. **`delegation-spawn`**: spawn of native programs, wait, host pipes, exec in
    place. Gate: Perl `t/base` 9 of 9; the libc-test process group leaves the
    excluded set.
-5. **`delegation-memory`**: region grant at the resume label, chunk allocator,
-   heap declared as initial size. Gate: CPython built without `ac_cv_func_mmap=no`.
-6. **`delegation-signals`**: synchronous delivery. Gate: the libc-test signal
-   group; CPython's `signal` tests that do not need a second process.
+5. **`delegation-signals`** (was 6, moved ahead: it needs no monitor change):
+   synchronous delivery. Gate: the libc-test signal group and `popen`;
+   CPython's `signal` tests that do not need a second process.
+6. **`delegation-memory`** (was 5): region grant at the resume label, chunk
+   allocator, heap declared as initial size. Gate: CPython built without
+   `ac_cv_func_mmap=no`.
 
 Out of scope for the whole stack: threads, sockets, asynchronous signals, the
 identity mapping, io_uring, any monitor change beyond the grant, any ISA change.

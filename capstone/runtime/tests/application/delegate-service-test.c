@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <unistd.h>
 
 #define EXCHANGE 4096
@@ -54,6 +55,34 @@ int main(void) {
   x = entry(CAPSTONE_SYS_openat, (uint64_t)-100, 256, O_RDONLY, 0, 0, 0);
   long fd = serve(&x);
   assert(fd >= 0);
+  /* Two independent string offsets, and symlinkat's dirfd is argument 1. */
+  char link_path[128], target[128];
+  snprintf(link_path, sizeof link_path, "%s-link", path);
+  strcpy(exchange + 1024, link_path);
+  host.private_fds[0] = tmp;
+  host.private_count = 1;
+  x = entry(CAPSTONE_SYS_symlinkat, 256, (uint64_t)tmp, 1024, 0, 0, 0);
+  assert(serve(&x) == -EBADF);
+  host.private_count = 0;
+  x = entry(CAPSTONE_SYS_symlinkat, 256, (uint64_t)AT_FDCWD, 1024, 0, 0, 0);
+  assert(serve(&x) == 0);
+  ssize_t target_length = readlink(link_path, target, sizeof target);
+  assert(target_length == (ssize_t)strlen(path) && !memcmp(target, path, target_length));
+  assert(unlink(link_path) == 0);
+  x = entry(CAPSTONE_SYS_sync_file_range, (uint64_t)tmp, 0, 0, 0, 0, 0);
+  assert(serve(&x) == 0);
+  x = entry(CAPSTONE_SYS_flock, (uint64_t)tmp, LOCK_EX | LOCK_NB, 0, 0, 0, 0);
+  assert(serve(&x) == 0);
+  int competing = open(path, O_RDWR);
+  assert(competing >= 0);
+  assert(flock(competing, LOCK_EX | LOCK_NB) == -1 && errno == EWOULDBLOCK);
+  x = entry(CAPSTONE_SYS_flock, (uint64_t)tmp, LOCK_UN, 0, 0, 0, 0);
+  assert(serve(&x) == 0 && flock(competing, LOCK_EX | LOCK_NB) == 0);
+  close(competing);
+  x = entry(CAPSTONE_SYS_fchmodat, (uint64_t)AT_FDCWD, 256, 0640, 0, 0, 0);
+  assert(serve(&x) == 0);
+  struct stat changed_mode;
+  assert(stat(path, &changed_mode) == 0 && (changed_mode.st_mode & 0777) == 0640);
   x = entry(CAPSTONE_SYS_fstat, (uint64_t)fd, 512, 0, 0, 0, 0);
   assert(serve(&x) == 0);
   {
@@ -101,7 +130,7 @@ int main(void) {
   x = entry(CAPSTONE_SYS_exit_group, 42, 0, 0, 0, 0, 0);
   assert(serve(&x) == 0 && host.exiting && host.exit_status == 42);
   /* five refused by the validator; the string and kill refusals are the runnerâs */
-  assert(host.refused == 5 && host.rounds == 17 && host.syscalls == 10);
+  assert(host.refused == 5 && host.rounds == 23 && host.syscalls == 16);
   close(tmp);
   unlink(path);
   /* the fault record writes without blocking, even to a full pipe */

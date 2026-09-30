@@ -8,9 +8,15 @@ stubs, and the next workload would need its own.
 
 ## Status
 
-**A domain runs musl.** Not compiles, runs: musl's own functional test suite
-builds and runs inside a pure-capability domain under QEMU, one boot per test,
-and the table below accounts for every one of its 77 sources.
+**A domain runs musl.** The table below describes the original HostCall v0
+port: musl's functional suite ran under QEMU with one boot per test. The
+delegated application ABI v2 runs the suite in one guest boot and currently
+records **46 PASS, 4 FAIL, 4 FAULT, 3 NOBUILD, 20 EXCLUDED** of 77;
+see [the port migration results](../common/application/results/20260929-delegation.json).
+All 45 earlier delegated passes remain green; `sscanf_long` now passes.
+`tls_init` and `tls_local_exec` now build but fault in `pthread_join` after
+unsupported thread creation. They are not TLS-initialization passes. The
+existing exclusions are retained for comparison.
 
 | | |
 |---|---|
@@ -25,8 +31,14 @@ and the table below accounts for every one of its 77 sources.
 | `clock_gettime` | works, through a new HostCall opcode (`CLOCK_GETTIME`, 25) |
 | `stat` `getuid` `getgid` | works, path stat as open, fstat, close |
 | real pthreads | **no**, and C-47 is only one of five: `pthread_create` also needs `clone`, two `mmap`s for the stack, `futex` (eight files under `src/thread` use it) and somewhere for the second thread to run, and a domain holds the only hart |
-| `fork` `exec` `pipe` `socket` `dlopen` | **no**, and none of them is on the way: a domain is one process |
+| `fork`, `exec`, `pipe`, `socket`, `dlopen` | not served by this HostCall v0 image |
 | musl's own test suite | 77 tests accounted for, see below |
+
+In v2, pipes, `posix_spawn`, `popen`, `system`, wait and Capstone-image
+`execve` work as delegated operations. `fork`, `clone`, sockets, `dlopen`,
+file `mmap` and native `execve` remain unserved inside the domain; signal
+handling is incomplete. See the [process qualification](../../runtime/applications.md#processes)
+and [shell execution result](../../runtime/applications.md#shell-execution-qualification-2026-09-29).
 
 Three probes, each green under QEMU with zero faults:
 
@@ -328,6 +340,30 @@ the test measures anything; both would fault under CHERI too. The rule in `patch
 a patch may change how a test reaches memory, never what it checks. `fetch-libc-test.sh` resets
 the tree to the pinned commit and applies them, so a run depends on the commit and the patch set
 and on nothing that happened in the tree before.
+
+## Patches to musl: three round-count decisions
+
+Under the delegated runtime every syscall is a round trip through the launcher, so the
+port's cost model is the number of rounds, and `musl-patches/` holds the three places where
+upstream musl spends one for nothing on this platform. `prepare-musl-capstone.sh` applies
+them; each patch is one decision and says so in its name:
+
+- `0001` `BUFSIZ` 8 KiB, glibc's size, instead of 1 KiB: one `writev` per 8 KiB of stdio
+  output, one `read` per 8 KiB of input.
+- `0002` a 32 KiB `getdents64` buffer instead of 2 KiB: one round per 32 KiB of directory.
+- `0003` no `fcntl(F_SETFD, FD_CLOEXEC)` after an `open` that already asked for `O_CLOEXEC`,
+  in `open`, `fopen` and `__fopen_rb_ca`. Linux honours the flag; the second call was
+  musl's fallback for kernels that did not. The sites that set the flag on a descriptor
+  they did not open (`fdopendir`, `fdopen` with `e`, `freopen` on an open stream) keep it.
+
+The rule for `libc-test/patches/` is unchanged: tests are patched only in how they reach
+memory, never in what they check. These three patch the library, and only its round count.
+The rest of the saving is in the runtime: identity (`getpid` and friends) and the two clocks
+come from the launch record the task writes (`runtime/include/capstone/launch.h`), `set_tid_address`
+and `set_robust_list` are answered in the domain, and the domain no longer `chdir`s to the
+directory its own task already runs in. Measured 2026-09-29: `perl -e 'print ...'` 43 -> 26
+rounds, `mruby -e 'puts 1'` 6 -> 4, with the interpreters' own run time unchanged
+(`runtime/tests/application/results/20260929-libc-rounds.json`).
 
 ## Run
 

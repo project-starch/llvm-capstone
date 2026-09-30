@@ -40,11 +40,12 @@ static void fixture(void) {
   sections()[1] = (Elf64_Shdr){.sh_name = 1, .sh_type = SHT_STRTAB,
       .sh_offset = 512, .sh_size = sizeof names};
   sections()[2] = (Elf64_Shdr){.sh_name = 11, .sh_type = SHT_PROGBITS,
-      .sh_offset = 640, .sh_size = sizeof(struct capstone_application_descriptor)};
+      .sh_offset = 640, .sh_size = sizeof(struct capstone_application_descriptor_v2)};
   sections()[3] = (Elf64_Shdr){.sh_name = 33, .sh_type = SHT_PROGBITS,
       .sh_offset = 704, .sh_size = 24};
-  struct capstone_application_descriptor d = {CAPSTONE_APPLICATION_MAGIC,
-      CAPSTONE_LAUNCH_VERSION, CAPSTONE_APPLICATION_RECOVERY, CAPSTONE_LAUNCH_BYTES, 0};
+  struct capstone_application_descriptor_v2 d = {{CAPSTONE_APPLICATION_MAGIC,
+      CAPSTONE_LAUNCH_VERSION, CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE,
+      CAPSTONE_LAUNCH_BYTES, 0}, 262144};
   memcpy(image + 640, &d, sizeof d);
   const uint64_t req[] = {UINT64_C(0x5145524d4f445043), 4096 + 256, 4096};
   memcpy(image + 704, req, sizeof req);
@@ -105,9 +106,10 @@ int main(void) {
   sections()[3].sh_offset = UINT64_MAX; reject();
   sections()[3].sh_type = SHT_NOBITS; reject();
   image[640] ^= 1; reject();
-  /* v1: 40 bytes, no exchange */
-  assert(load() >= 0 && loaded.exchange_bytes == 0 &&
-         loaded.v1.flags == CAPSTONE_APPLICATION_RECOVERY);
+  /* Legacy images must be rejected, never silently use a second runtime. */
+  sections()[2].sh_size = sizeof(struct capstone_application_descriptor);
+  ((struct capstone_application_descriptor *)(image + 640))->flags = CAPSTONE_APPLICATION_RECOVERY;
+  reject();
   /* v2: 48 bytes with the flag and a sane exchange size */
   v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 262144);
   snapshot = load();
@@ -120,6 +122,7 @@ int main(void) {
   struct capstone_application_descriptor d1 = {CAPSTONE_APPLICATION_MAGIC,
       CAPSTONE_LAUNCH_VERSION, CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE,
       CAPSTONE_LAUNCH_BYTES, 0};
+  sections()[2].sh_size = sizeof d1;
   memcpy(image + 640, &d1, sizeof d1); reject();
   v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 4095); reject();
   v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, UINT64_C(2) << 30); reject();

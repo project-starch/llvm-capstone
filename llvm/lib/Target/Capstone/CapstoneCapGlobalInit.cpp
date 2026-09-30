@@ -130,7 +130,13 @@ static bool needsMaterialization(Constant *FieldInit) {
   // instruction access fault, pc = tval = the link-time label). Materialized
   // here, ISel builds it as in the function itself: pc-relative, derived from
   // the code root, tagged.
-  return isa<GlobalVariable>(C) || isa<Function>(C) || isa<BlockAddress>(C);
+  //
+  // An alias is a symbol like any other global's (musl's fork(): a table of
+  // &__atexit_lockptr and nine more, each a weak alias of one dummy that a
+  // strong definition elsewhere may replace). Its slot was left out, so it kept
+  // the link-time address untagged; the store names the alias, and the link
+  // resolves it as it resolves the static relocation.
+  return isa<GlobalValue>(C) || isa<BlockAddress>(C);
 }
 
 namespace {

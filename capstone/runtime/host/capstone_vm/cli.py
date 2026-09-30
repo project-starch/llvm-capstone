@@ -148,7 +148,12 @@ def ssh_command(state: Path, config: dict, *, terminal: bool = False) -> list[st
         "-o", "PasswordAuthentication=no", "-o", "BatchMode=yes",
         "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=5",
         "-o", "UserKnownHostsFile=" + str(state / "known_hosts"),
-        "-o", "GlobalKnownHostsFile=/dev/null", "-l", "root", "127.0.0.1",
+        "-o", "GlobalKnownHostsFile=/dev/null",
+        # One TCP connection and key exchange per VM, not per command: every
+        # run and exec is a session on the master, which stays for a minute.
+        "-o", "ControlMaster=auto", "-o", "ControlPath=" + str(state / "ssh.sock"),
+        "-o", "ControlPersist=60",
+        "-l", "root", "127.0.0.1",
     ]
 
 
@@ -169,7 +174,7 @@ class InterruptedRun(Exception):
         self.signum = signum
 
 
-def run_application(state: Path, config: dict, words: list[str], *, cwd: str | None = None, environment: list[str] = (), result_path: Path | None = None) -> int:
+def run_application(state: Path, config: dict, words: list[str], *, cwd: str | None = None, environment: list[str] = (), result_path: Path | None = None, user: str | None = None) -> int:
     """Forward host interruption without putting pipes through a pseudo-terminal.
 
     The short-lived PID file identifies this SSH command. Verify its random
@@ -180,6 +185,9 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
            or value.startswith("CAPSTONE_FAULT_RECORD=") for value in environment):
         raise VMError("Environment must contain NAME=value assignments; CAPSTONE_JOB and "
                       "CAPSTONE_FAULT_RECORD are reserved")
+    if user is not None and (not re.fullmatch(r"[0-9]+:[0-9]+", user) or
+                             any(int(n) >= 2**32 - 1 for n in user.split(":"))):
+        raise VMError("User must be numeric UID:GID")
     job_id = uuid.uuid4().hex
     jobs = state / "assets" / "jobs"
     jobs.mkdir(exist_ok=True)
@@ -188,7 +196,8 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
     remote = f"/mnt/control/jobs/{job_id}/pid"
     script = (f"cd {shlex.quote(cwd)} || exit 125; " if cwd is not None else "")
     script += f"echo $$ > {remote}; exec " + shlex.join([
-        "capstone-job", f"/mnt/control/jobs/{job_id}/result.json", "--", "capstone-exec", "--", *words])
+        "capstone-job", f"/mnt/control/jobs/{job_id}/result.json",
+        *(["--user", user] if user is not None else []), "--", "capstone-exec", "--", *words])
     # The launcher writes a domain fault's record here, off the application
     # streams; it is reported on the host side and kept in the result.
     fault_record = f"/mnt/control/jobs/{job_id}/fault"
@@ -295,9 +304,14 @@ def start(args: argparse.Namespace, state: Path) -> int:
             raise VMError("Invalid QEMU environment in session configuration")
         environment.setdefault("CAPSTONE_GP_NONLIN", "1")
         environment.setdefault("CAPSTONE_REV_NODES", "65536")
+        if not 64 <= args.cma_mib <= 4096:
+            raise VMError("CMA reservation must be between 64 and 4096 MiB")
+        if not 64 <= args.process_cache_mib <= args.cma_mib:
+            raise VMError("Process cache must be between 64 MiB and the CMA reservation")
         identity_config = {"files": {name: {"path": str(path), "sha256": fingerprint(path)}
                                      for name, path in files.items()},
-                           "share": str(share), "memory": args.memory,
+                           "share": str(share), "memory": args.memory, "cma_mib": args.cma_mib,
+                           "process_cache_mib": args.process_cache_mib,
                            "environment": environment}
         if running(state):
             old = json.loads((state / "config.json").read_text())
@@ -349,11 +363,13 @@ test -x /usr/bin/capstone-job
 cp /mnt/control/authorized_keys /root/.ssh/authorized_keys
 chmod 0700 /root/.ssh
 chmod 0600 /root/.ssh/authorized_keys
-if [ -f /mnt/control/module ]; then
+""" + f"process_cache_bytes={args.process_cache_mib * 1024 * 1024}\n" + """
+current_cache=$(cat /sys/module/capstone/parameters/process_cache_bytes 2>/dev/null || true)
+if [ -f /mnt/control/module ] || [ ! -c /dev/capstone ] || [ "$current_cache" != "$process_cache_bytes" ]; then
     if [ -c /dev/capstone ]; then rmmod capstone; fi
-    insmod /mnt/control/module
-elif [ ! -c /dev/capstone ]; then
-    insmod /capstone.ko
+    module=/capstone.ko
+    if [ -f /mnt/control/module ]; then module=/mnt/control/module; fi
+    insmod "$module" process_cache_bytes="$process_cache_bytes"
 fi
 capstone-exec --stats >/dev/null
 """ + BINFMT_SETUP + """
@@ -376,7 +392,7 @@ dropbear -s -g -p 22
             str(files["qemu"]), "-M", "virt-capstone", "-m", args.memory,
             "-smp", "1", "-display", "none", "-monitor", "none",
             "-bios", str(files["firmware"]), "-kernel", str(files["kernel"]),
-            "-append", "root=/dev/vda rw cma=512M", "-snapshot",
+            "-append", f"root=/dev/vda rw cma={args.cma_mib}M", "-snapshot",
             "-drive", f"file={files['rootfs']},format=raw,id=hd0,if=none",
             "-device", "virtio-blk-device,drive=hd0",
             "-virtfs", f"local,path={share},mount_tag=hostshare,security_model=none,id=hostshare",
@@ -449,6 +465,10 @@ def main(argv: list[str] | None = None) -> int:
         up.add_argument("--" + option, type=Path, help="Override the installed guest component")
     up.add_argument("--port", type=int, default=0)
     up.add_argument("--memory", default="8G")
+    up.add_argument("--cma-mib", type=int, default=512,
+                    help="Contiguous domain-memory reserve; use 1024 for the full port matrix")
+    up.add_argument("--process-cache-mib", type=int, default=384,
+                    help="Retained domain-storage limit; use 768 for the full port matrix")
     up.add_argument("--boot-timeout", type=float, default=120)
     sub.add_parser("down", help="Stop this VM and discard its temporary disk changes")
     sub.add_parser("restart", help="Explicitly restart using the recorded files and settings")
@@ -458,6 +478,7 @@ def main(argv: list[str] | None = None) -> int:
         cmd = sub.add_parser(name, help="Run guest argv" if name == "exec" else "Run a Capstone application")
         if name == "run":
             cmd.add_argument("--cwd", help="Guest working directory")
+            cmd.add_argument("--user", help="Run as numeric guest UID:GID")
             cmd.add_argument("--result", type=Path, help="Write the actual guest exit/signal result as JSON")
             cmd.add_argument("-e", "--env", action="append", default=[], help="Guest NAME=value")
         cmd.add_argument("command", nargs=argparse.REMAINDER)
@@ -478,6 +499,8 @@ def main(argv: list[str] | None = None) -> int:
                     time.sleep(0.05)
             settings = {key: Path(value["path"]) for key, value in config["files"].items()}
             settings.update(share=Path(config["share"]), memory=config["memory"],
+                            cma_mib=config.get("cma_mib", 512),
+                            process_cache_mib=config.get("process_cache_mib", 384),
                             environment=config["environment"], port=0, boot_timeout=120)
             return start(argparse.Namespace(**settings), state)
         if args.action == "status":
@@ -503,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
             if not words:
                 raise VMError("An executable and optional arguments are required")
             if args.action == "run":
-                return run_application(state, config, words, cwd=args.cwd, environment=args.env, result_path=args.result)
+                return run_application(state, config, words, cwd=args.cwd, environment=args.env, result_path=args.result, user=args.user)
             command.append("exec " + shlex.join(words))
         return subprocess.call(command)
     except (VMError, OSError, ValueError, subprocess.CalledProcessError) as error:

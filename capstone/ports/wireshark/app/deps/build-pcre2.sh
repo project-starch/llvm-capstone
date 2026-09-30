@@ -17,8 +17,8 @@ OPTS=(--disable-shared --enable-static --disable-jit --enable-pcre2-8 --disable-
       --disable-pcre2test-libedit --disable-pcre2test-libreadline)
 
 ( cd "$N" && env -u CC -u AR -u RANLIB ./configure "${OPTS[@]}" > "$LOG/native-configure.log" 2>&1 &&
-  env -u CC -u AR -u RANLIB make -j16 > "$LOG/native-build.log" 2>&1 &&
-  env -u CC -u AR -u RANLIB make check -j16 > "$LOG/native-check.log" 2>&1 ) || true
+  env -u CC -u AR -u RANLIB make -j"${JOBS:-8}" > "$LOG/native-build.log" 2>&1 &&
+  env -u CC -u AR -u RANLIB make check -j"${JOBS:-8}" > "$LOG/native-check.log" 2>&1 ) || true
 grep -E "^# (TOTAL|PASS|FAIL|ERROR):" "$LOG/native-check.log" | tr '\n' ' '; echo
 grep -qE "^# FAIL: +0$" "$LOG/native-check.log" && grep -qE "^# ERROR: +0$" "$LOG/native-check.log" \
   || { echo "pcre2: NATIVE CHECK FAILED" >&2; exit 1; }
@@ -26,7 +26,7 @@ echo "pcre2: native check OK"
 
 ( cd "$X" && ./configure --host=riscv64-unknown-linux-musl --prefix="$TS_DEPS_PREFIX" "${OPTS[@]}" \
     > "$LOG/cap-configure.log" 2>&1 )
-( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j16 libpcre2-8.la > "$LOG/cap-build.log" 2>&1 )
+( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j"${JOBS:-8}" libpcre2-8.la > "$LOG/cap-build.log" 2>&1 )
 ( cd "$X" && make install-libLTLIBRARIES install-includeHEADERS install-nodist_includeHEADERS \
     > "$LOG/cap-install.log" 2>&1 )
 # The pkg-config file too: GLib's glib-2.0.pc requires libpcre2-8, and Wireshark's FindPCRE2 and

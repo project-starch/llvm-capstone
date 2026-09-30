@@ -14,16 +14,16 @@ tar -xf "$TAR" -C "$N" --strip-components=1
 tar -xf "$TAR" -C "$X" --strip-components=1
 
 ( cd "$N" && env -u CC -u AR -u RANLIB ./configure --static > "$LOG/native-configure.log" 2>&1 &&
-  env -u CC -u AR -u RANLIB make -j16 test > "$LOG/native-test.log" 2>&1 )
+  env -u CC -u AR -u RANLIB make -j"${JOBS:-8}" test > "$LOG/native-test.log" 2>&1 )
 grep -q '\*\*\* zlib test OK \*\*\*' "$LOG/native-test.log" || { echo "zlib: NATIVE TEST FAILED" >&2; exit 1; }
 echo "zlib: native test OK"
 
 ( cd "$X" && CHOST=riscv64-capstone ./configure --static --prefix="$TS_DEPS_PREFIX" > "$LOG/cap-configure.log" 2>&1 )
-( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j16 libz.a > "$LOG/cap-build.log" 2>&1 && make install > "$LOG/cap-install.log" 2>&1 )
+( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j"${JOBS:-8}" libz.a > "$LOG/cap-build.log" 2>&1 && make install > "$LOG/cap-install.log" 2>&1 )
 touch "$LOG/cast-log.txt"; sort -u "$LOG/cast-log.txt" > "$LOG/cast-sites.txt"
 echo "zlib: libz.a installed ($(stat -c %s "$TS_DEPS_PREFIX/lib/libz.a") bytes); cast sites: $(wc -l < "$LOG/cast-sites.txt")"
 ( cd "$X" && make example minigzip > "$LOG/cap-tests-link.log" 2>&1 )
 for t in example minigzip; do
-  "$CAPSTONE_LLVM_BIN/llvm-readelf" -h "$X/$t" | grep -q "Machine:.*" || { echo "zlib: $t did not link" >&2; exit 1; }
+  "$CAPSTONE_LLVM_BIN/llvm-readelf" -h "$X/$t" | grep "Machine:.*" >/dev/null || { echo "zlib: $t did not link" >&2; exit 1; }
 done
 echo "zlib: example and minigzip link as domains: $(file -b "$X/example" | cut -c1-60)"

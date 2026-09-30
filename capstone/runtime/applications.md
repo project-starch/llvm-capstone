@@ -31,7 +31,7 @@ claimed here.
 The Buildroot external package `BR2_PACKAGE_CAPSTONE_RUNTIME` installs
 `capstone-exec`, the small `capstone-job` waitpid collector, the driver and
 Dropbear. Set `BR2_PACKAGE_CAPSTONE_RUNTIME_SOURCE` to this LLVM checkout.
-`S40capstone` loads the driver, checks its process ABI and optionally mounts the
+`S40capstone` loads the driver, selects the process API and optionally mounts the
 9p host share. The serial Linux shell works without the host CLI or SSH.
 See the package's README in `capstone/caplifive-buildroot/package/capstone-runtime`.
 
@@ -100,11 +100,10 @@ Exclude old port entry adapters and runtime objects. Resource settings are
 `CAPSTONE_APPLICATION_{DATA,STACK,ARENA}_BYTES`, `CAPSTONE_APPLICATION_HEAP` and
 `CAPSTONE_APPLICATION_HEAP_LOG`.
 
-Perl's build recipe now uses this SDK; its private compiler wrapper, entry
-adapter and VM runner were removed. Perl and mruby objects were also linked
-through the identical SDK driver and executed successfully. Other ports can
-adopt either build interface while retaining their upstream patches and build
-recipes. Historical hardware gates and loaders for older ABIs remain explicit.
+The [shared port build and run interface](../ports/common/application/README.md)
+covers Perl, mruby, CPython, PostgreSQL, SQLite, FFmpeg and tshark. Application
+recipes use this SDK; private argv/env files and application HostCall launchers
+are retired. Historical hardware and allocator probe targets remain separate.
 
 ## Host session and commands
 
@@ -124,7 +123,10 @@ capstone-vm --state "$CAPSTONE_TMP_ROOT/dev-vm" shell
 ```
 
 QEMU needs user networking (`--enable-slirp`). Defaults are one hart, 8 GiB RAM,
-640 MiB CMA, `CAPSTONE_GP_NONLIN=1` and 65,536 revocation nodes. Explicit supported
+512 MiB CMA, a 384 MiB retained process-storage limit, `CAPSTONE_GP_NONLIN=1`
+and 65,536 revocation nodes. `--cma-mib` and `--process-cache-mib` configure
+the two memory limits; the mixed application-port matrix uses 1024 and 768.
+They are recorded and preserved across explicit restarts. Explicit supported
 emulator environment settings are recorded in the session identity and passed
 to QEMU on every boot or restart. The rootfs
 runs as a disposable snapshot; files on the host share remain persistent.
@@ -219,8 +221,7 @@ No claim of a complete hostile-code or QEMU security audit is made.
 
 ## Delegated syscalls (application ABI v2)
 
-An application built with the default `CAPSTONE_APPLICATION_DELEGATE=ON` speaks
-ABI v2: every Linux service is the Linux syscall itself, run by the launcher
+Every application built by the SDK speaks ABI v2: every Linux service is the Linux syscall itself, run by the launcher
 task. The domain fills an 88-byte entry in the entry region, copies pointer
 arguments into the exchange region as offsets, and yields; the launcher
 validates the entry against the shape table, runs `syscall()` under its own
@@ -239,8 +240,10 @@ no-ops until the signals branch). The unserved report at exit lists both.
 The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 `CAPSTONE_APPLICATION_EXCHANGE_BYTES` for the SDK project); larger buffers are
 chunked, so a big read or write is a short one. A v2 image's descriptor is 48
-bytes; `capstone-exec` accepts v1 and v2 images and keeps HostCall v0 for the
-former. Building with `CAPSTONE_APPLICATION_DELEGATE=OFF` produces a v1 image.
+bytes. `capstone-exec` rejects v1 images with exit 126. The SDK rejects
+`CAPSTONE_APPLICATION_DELEGATE=OFF`; rebuild old applications.
+`CAPSTONE_APPLICATION_GRANT_BYTES` declares shared backing for existing inner
+allocators, including a Sublet outer heap where selected.
 
 The launcher installs a seccomp filter from the same shape table before the
 first step: the delegated numbers plus its own, everything else answers
@@ -267,10 +270,77 @@ Measured on 2026-09-29 in the QEMU guest, `rdtime` at its 10 MHz rate, one hart:
 | Delegated round, `delegate-bench.dom`, 10,000 calls | 1,049 |
 | Native process, same counter, 10,000 calls | 8.2 |
 
-That ratio is the emulator's: each round crosses U, S and M mode twice and
-QEMU flushes its TLB on every supervised switch. This run did not use `icount`; it is a wall-time observation affected by host
+This run did not use `icount`; it is a wall-time observation affected by host
 scheduling, not a hardware cost or completion of the planned per-step cycle
 measurement. It predates the review corrections below.
+
+The step ioctl behind every round used to make ten SBI ecalls: a feature probe,
+the STEP, and eight QUERY calls fetching result, cause, pc and address as
+32-bit halves. With `caplifive-buildroot` 201a8d4 (monitor `capstone-sbi`
+02d9d47) STEP returns the whole event in one ecall, in a1..a5. Measured on
+2026-09-29, same guest, same host, base and new booted back to back, median
+of five runs of 10,000 calls and two of 100,000
+([record](tests/application/results/20260929-step-one-ecall.json)):
+
+| Step protocol | Ticks per round, 10,000 calls | 100,000 calls |
+|---|---|---|
+| Ten ecalls per step | 1,047 | 1,048 |
+| One ecall per step | 893 | 885 |
+| One ecall, no S-mode swap around the CALL | 527 | 519 |
+| plus QEMU: TLB flush only when translation state changes | 351 | 345 |
+| plus QEMU: quantum timer instead of a clock read per block | 303 | 262 |
+
+Still wall time without `icount`, with another guest running on the host. The
+fault records of the four contract fault modes are byte-identical on both
+platforms; the application gate and the binfmt contract pass on the new one.
+
+The third row is `caplifive-buildroot` c3507a5 (monitor `capstone-sbi`
+a810177): the monitor's supervised invoke uses `__domcall`, so the compiler
+no longer swaps the sixteen CPMP CCSRs and nine S-mode CSRs out and back
+around every step. The supervisor snapshots and restores that state itself,
+and each CPMP write is a full TLB flush in QEMU
+([record](tests/application/results/20260929-no-smode-swap.json)).
+
+The last two rows are emulator changes, `capstone-qemu` ac2837aa: the
+supervisor's `restore_state` flushed the TLB on every switch although
+satp, the CPMP registers and the mstatus translation bits never change across
+a supervised switch, and every C-mode translation block began with a helper
+that read the virtual clock to enforce the 5 ms quantum, 771 times per
+round. The flush is now conditional and the quantum is a timer with an inline
+flag test. Both rows are QEMU-only savings and say nothing about hardware; the
+control for them is an unmodified build of the previous pin at 512 / 509
+([record](tests/application/results/20260929-qemu-switch-cost.json)).
+
+The number of rounds is the other half of the cost. The libc now answers
+identity and the two clocks from the launch record the task writes at start
+(`launch.h`: pid, ppid, the ids, and the clocks paired with `rdtime`), answers
+musl's thread setup itself, and no longer opens a `fcntl` round after every
+`O_CLOEXEC` open; stdio buffers are 8 KiB and the `getdents64` buffer 32 KiB
+(`ports/musl-capstone/musl-patches/`). Measured 2026-09-29 with
+`CAPSTONE_DELEGATE_STATS=1`: `perl -e 'print ...'` 43 -> 26 rounds, `mruby -e
+'puts 1'` 6 -> 4, the getpid benchmark 10,003 -> 2. Perl `t/base` takes 35 s
+either way: the nine launches, not the rounds, are what remains of that figure
+([record](tests/application/results/20260929-libc-rounds.json)).
+
+A launch, measured in the guest with `CAPSTONE_DELEGATE_STATS=1` (the
+launcher prints `launch ticks` per stage), perl.dom warm on the 9p share:
+
+| Stage | Before | After |
+|---|---|---|
+| image read over 9p into a memfd | 1.1 s | 0.5 s |
+| SHA-256 of the image | 2.0 s | 0 (computed only for a fault record) |
+| domain: loader copy and `DOM_CREATE` | 1.9 s | 0.5 s (copy the file-backed 14.5 MB, not the 82 MB memsz; zero fresh blocks only) |
+| regions, heap included | 4.0 s | 4.2 s |
+| total before the first instruction | 9.0 s | 5.2 s |
+| wall in the guest, `perl -e 1` | 12.0 s | 6.9 s |
+
+`capstone-vm` keeps one SSH connection per VM (`ControlMaster`), so a
+command costs 0.1 to 0.3 s of host time instead of 0.5 to 1.1 s. Perl
+`t/base` through `prove` from the host: 35 s -> 23 s. What remains of a
+launch is the heap region: the monitor's reclaim fills a released region with
+zero capabilities granule by granule and does so again when the region is
+prepared for the next owner, 4 s for the 64 MiB Perl heap in QEMU
+([record](tests/application/results/20260929-launch-cost.json)).
 
 ### Processes
 
@@ -340,7 +410,8 @@ children, spawn after exec, exec with closed standard descriptors, and recovery
 from a rejected image. The deliberate fault is SIGSEGV and resolves to
 `main+0x95c` after verifying the sealed image hash. The unchanged v1 application
 gate passes 108 mixed starts in the same boot with stable retained resources.
-Both v1 and v2 SDK builds succeed.
+At that review revision both SDK variants built. The subsequent port migration
+removes v1 application support; this historical result remains tied to its hashes.
 
 The fresh delegated libc-test result is **45 PASS, 5 FAIL, 2 FAULT, 5 NOBUILD,
 20 EXCLUDED** (77 total). `utime` gains its pass because futimens now carries

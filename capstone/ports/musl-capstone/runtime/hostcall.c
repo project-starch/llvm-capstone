@@ -41,10 +41,11 @@ static long hc_write(long fd, const char *buf, unsigned long count);
 static long hc_file_rw(long fd, char *buf, unsigned long count, int writing);
 
 #include "../../../runtime/include/capstone/hostcall.h"
+#if defined(CAPSTONE_APPLICATION_RUNTIME) && !defined(CAPSTONE_DELEGATE_RUNTIME)
+#error "Application images require syscall delegation"
+#endif
 #ifdef CAPSTONE_APPLICATION_RUNTIME
-#include "../../../runtime/include/capstone/application-service.h"
 extern int __capstone_application_prepare(const void *, size_t);
-extern unsigned __capstone_application_stdio(void);
 static void *hc_startup;
 #endif
 
@@ -168,37 +169,7 @@ static long hc_umask = 022;
    takes a descriptor asks this and hc_slot, so all of them agree on which
    descriptors exist: fstat, fcntl, ioctl, lseek, write and close. */
 static int hc_stdio_closed[3];
-#ifdef CAPSTONE_APPLICATION_RUNTIME
-static int hc_is_stdio(long fd) { return fd >= 0 && fd <= 2 && !hc_stdio_closed[fd]; }
-
-static long hc_stdio_request(long fd, unsigned op, unsigned long value,
-                             char *data, unsigned long length) {
-  if (!hc_is_stdio(fd))
-    return -EBADF;
-  struct capstone_app_fd_request request = {(unsigned long)fd, value};
-  unsigned long room = HC_PAYLOAD_SIZE - sizeof request;
-  if (length > room)
-    length = room;
-  memcpy((void *)hc_payload, &request, sizeof request);
-  if (op == CAPSTONE_APP_WRITE && length)
-    memcpy((char *)hc_payload + sizeof request, data, length);
-  if (hc_round(op, sizeof request, length))
-    return -EIO;
-  if (hc_metadata->error)
-    return -(long)(hc_metadata->error < 0 ? -hc_metadata->error : hc_metadata->error);
-  long n = (long)hc_metadata->result;
-  if ((op == CAPSTONE_APP_READ || op == CAPSTONE_APP_WRITE) &&
-      (n < 0 || (unsigned long)n > length))
-    return -EIO;
-  if (op == CAPSTONE_APP_READ && n > 0)
-    memcpy(data, (const char *)hc_payload + sizeof request, (size_t)n);
-  if (op == CAPSTONE_APP_STAT)
-    memcpy(data, (const char *)hc_payload + sizeof request, sizeof(struct capstone_app_stat));
-  return n;
-}
-#else
 static int hc_is_stdio(long fd) { return (fd == 1 || fd == 2) && !hc_stdio_closed[fd]; }
-#endif
 
 static struct hc_file *hc_slot(long fd) {
   if (fd < HC_FD_BASE || fd >= HC_FD_BASE + HC_MAX_FILES)
@@ -675,11 +646,6 @@ static long hc_getcwd(char *buf, unsigned long size) {
 
 static long hc_close(long fd) {
   if (hc_is_stdio(fd)) {
-#ifdef CAPSTONE_APPLICATION_RUNTIME
-    long result = hc_stdio_request(fd, CAPSTONE_APP_CLOSE, 0, 0, 0);
-    if (result < 0)
-      return result;
-#endif
     hc_stdio_closed[fd] = 1;
     return 0;
   }
@@ -808,10 +774,6 @@ static long hc_writev(long fd, const struct iovec *iov, long count) {
 
 /* read(): a pipe end answers from its queue, everything else is a file. */
 static long hc_read(long fd, char *buf, unsigned long count) {
-#ifdef CAPSTONE_APPLICATION_RUNTIME
-  if (hc_is_stdio(fd))
-    return hc_stdio_request(fd, CAPSTONE_APP_READ, 0, buf, count);
-#endif
   int writing;
   struct hc_pipe *p = hc_pipe_end(fd, &writing);
   if (p)
@@ -912,10 +874,6 @@ static long hc_stdout_bytes(const char *buf, unsigned long count) {
 }
 
 static long hc_write(long fd, const char *buf, unsigned long count) {
-#ifdef CAPSTONE_APPLICATION_RUNTIME
-  if (hc_is_stdio(fd))
-    return hc_stdio_request(fd, CAPSTONE_APP_WRITE, 0, (char *)buf, count);
-#endif
   int writing;
   struct hc_pipe *p = hc_pipe_end(fd, &writing);
   if (p)
@@ -931,8 +889,8 @@ static long hc_write(long fd, const char *buf, unsigned long count) {
 
 #ifdef CAPSTONE_DELEGATE_RUNTIME
 /* The delegated runtime (delegate.c): every call is Linux's, run by the task.
-   The dispatcher below stays for the HostCall v0 application runtime and the
-   legacy probes; under delegation it is never entered. */
+   The dispatcher below belongs only to standalone HostCall probe targets.
+   Application images always use delegation. */
 long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d,
                               syscall_arg_t e, syscall_arg_t f);
@@ -1061,16 +1019,6 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     return hc_path_rename((const char *)b, (const char *)d, (long)e);
 
   case SYS_fstat: {
-#ifdef CAPSTONE_APPLICATION_RUNTIME
-    if (hc_is_stdio((long)a)) {
-      struct capstone_app_stat out;
-      long rc = hc_stdio_request((long)a, CAPSTONE_APP_STAT, 0, (char *)&out, sizeof out);
-      if (rc < 0)
-        return rc;
-      hc_fill_stat((struct stat *)b, out.size, out.mode);
-      return 0;
-    }
-#else
     /* stdout and stderr exist in every domain -- the service writes them --
        so fstat describes them: a character device, and not a terminal (the
        tty ioctl answers ENOTTY). Answering EBADF made programs that check a
@@ -1081,7 +1029,6 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
       hc_fill_stat((struct stat *)b, 0, S_IFCHR | 0620);
       return 0;
     }
-#endif
     {
       int writing;
       struct hc_pipe *p = hc_pipe_end((long)a, &writing);
@@ -1133,10 +1080,6 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
      EBADF, and a 0 for a descriptor nobody opened sent it on to fstatat(fd, "")
      and ENOENT, so fstat(0) reported the wrong error. */
   case SYS_fcntl:
-#ifdef CAPSTONE_APPLICATION_RUNTIME
-    if (hc_is_stdio((long)a))
-      return hc_stdio_request((long)a, CAPSTONE_APP_FCNTL, (unsigned long)b, 0, 0);
-#endif
     if (hc_pipe_exists((long)a)) {
       /* A pipe here never blocks (see hc_pipes), so F_GETFL says O_NONBLOCK
          whatever was set; the other commands are accepted as for a file. */
@@ -1322,8 +1265,6 @@ static void hc_report_list(const char *head, const long *list,
   buf[p++] = '\n';
 #if defined(CAPSTONE_DELEGATE_RUNTIME)
   __capstone_delegate_write2(buf, p);
-#elif defined(CAPSTONE_APPLICATION_RUNTIME)
-  (void)hc_stdio_request(2, CAPSTONE_APP_WRITE, 0, buf, p);
 #else
   hc_stdout_bytes(buf, p);
 #endif
@@ -1455,10 +1396,12 @@ void domain_main(unsigned *res, unsigned func) {
      more than the program's own status: it means every later error report
      would have faulted instead. */
   if (__capstone_init_tls() != 0) {
+#ifndef CAPSTONE_DELEGATE_RUNTIME
     if (hc_metadata) {
       hc_metadata->result = -1;
       hc_metadata->phase = HC_V0_PHASE_ERROR;
     }
+#endif
     if (res)
       *res = (unsigned)-1;
     return;
@@ -1489,17 +1432,16 @@ void domain_main(unsigned *res, unsigned func) {
       __builtin_capstone_cap_get_end(hc_startup) -
       __builtin_capstone_cap_get_cursor(hc_startup) : 0;
   int startup_error = __capstone_application_prepare(hc_startup, startup_bytes);
-  if (startup_error) {
-    hc_metadata->result = -startup_error;
-    hc_metadata->phase = HC_V0_PHASE_ERROR;
-    return;
-  }
-  unsigned stdio_mask = __capstone_application_stdio();
-  for (unsigned i = 0; i < 3; ++i)
-    hc_stdio_closed[i] = !(stdio_mask & (1u << i));
+  if (startup_error)
+    _Exit(125);
 #endif
 
 
+#ifdef CAPSTONE_DELEGATE_RUNTIME
+  __environ = __capstone_domain_environ();
+  hc_run_init_array();
+  exit(capstone_main());
+#else
   /* exit() has to be able to end the program from anywhere. musl's _Exit is
      `__syscall(SYS_exit_group, ec); for (;;) __syscall(SYS_exit, ec);`, so a
      refused exit is not an error the program sees, it is an unbreakable loop,
@@ -1535,4 +1477,5 @@ void domain_main(unsigned *res, unsigned func) {
   }
   if (res)
     *res = (unsigned)status;
+#endif
 }

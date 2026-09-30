@@ -1,12 +1,13 @@
 #define _GNU_SOURCE
 #include "application-image.h"
-#include "capstone/application-service.h"
 #include "capstone/delegate.h"
 #include "capstone/linux-domain-fault.h"
 #include "capstone/spawn.h"
 #include "delegate-service.h"
-#include "host-service.h"
 #include "libcapstone.h"
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <signal.h>
@@ -15,21 +16,20 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <unistd.h>
 
 extern char **environ;
 
-/* Region roles. Both ABIs share the first three slots: v1 reads them as
- * metadata, payload and startup; v2 as entry block, exchange and startup. */
+/* Delegation entry block, exchange buffer, and immutable startup data. */
 enum { REGION_META, REGION_DATA, REGION_STARTUP, REGIONS };
 
 struct execution {
-  struct hc_host host;
   struct capstone_delegate_host delegate;
   struct capstone_spawner spawner;
   void *maps[REGIONS];
   size_t sizes[REGIONS];
-  int image, device_open, delegated;
+  int image, device_open;
   const char *path;
   unsigned long ticks_start;
 };
@@ -46,8 +46,6 @@ static unsigned long ticks(void) {
 
 static void cleanup(void *context) {
   struct execution *e = context;
-  if (!e->delegated)
-    hostcall_cleanup_open_handles(e->host.slots, HC_FILE_SERVICE_MAX_HANDLES);
   for (unsigned i = 0; i < REGIONS; ++i)
     if (e->maps[i] && e->maps[i] != MAP_FAILED)
       munmap(e->maps[i], e->sizes[i]);
@@ -59,10 +57,61 @@ static void cleanup(void *context) {
   capstone_delegate_host_free(&e->delegate);
 }
 
+/* The RISC-V timebase from the device tree, big-endian; 0 when unreadable, and
+ * the libc then delegates every clock_gettime. */
+static uint64_t timebase_frequency(void) {
+  unsigned char raw[8];
+  int fd = open("/proc/device-tree/cpus/timebase-frequency", O_RDONLY | O_CLOEXEC);
+  if (fd < 0)
+    return 0;
+  ssize_t n = read(fd, raw, sizeof raw);
+  close(fd);
+  uint64_t value = 0;
+  if (n != 4 && n != 8)
+    return 0;
+  for (ssize_t i = 0; i < n; ++i)
+    value = value << 8 | raw[i];
+  return value;
+}
+
+/* What the domain may answer itself: identity, and the clocks paired with the
+ * counter it can read. The three reads sit together so the pairing is tight. */
+static struct capstone_launch_task task_record(void) {
+  struct capstone_launch_task t = {
+      .pid = (uint32_t)getpid(), .ppid = (uint32_t)getppid(),
+      .uid = getuid(), .euid = geteuid(), .gid = getgid(), .egid = getegid(),
+      .ticks_per_second = timebase_frequency()};
+  struct timespec realtime, monotonic;
+  clock_gettime(CLOCK_MONOTONIC, &monotonic);
+  clock_gettime(CLOCK_REALTIME, &realtime);
+  t.ticks = ticks();
+  t.realtime_ns = (uint64_t)realtime.tv_sec * 1000000000u + (uint64_t)realtime.tv_nsec;
+  t.monotonic_ns = (uint64_t)monotonic.tv_sec * 1000000000u + (uint64_t)monotonic.tv_nsec;
+  return t;
+}
+
+/* Where a launch spends its time before the program's first instruction:
+ * rdtime at each stage boundary, printed with the counters. */
+enum { LAUNCH_START, LAUNCH_IMAGE, LAUNCH_HASH, LAUNCH_SPAWNER, LAUNCH_DEVICE,
+       LAUNCH_DOMAIN, LAUNCH_REGIONS, LAUNCH_SECCOMP, LAUNCH_STAGES };
+static unsigned long launch_stamp[LAUNCH_STAGES];
+static void launch_mark(int stage) { launch_stamp[stage] = ticks(); }
+
 /* Counters on request, to stderr, so a run can be costed without a tool. */
 static void report_stats(const struct execution *e) {
-  if (!e->delegated || !getenv("CAPSTONE_DELEGATE_STATS"))
+  if (!getenv("CAPSTONE_DELEGATE_STATS"))
     return;
+  if (launch_stamp[LAUNCH_SECCOMP])
+    fprintf(stderr, "capstone-exec: launch ticks image=%lu hash=%lu spawner=%lu device=%lu "
+            "domain=%lu regions=%lu seccomp=%lu total=%lu\n",
+            launch_stamp[LAUNCH_IMAGE] - launch_stamp[LAUNCH_START],
+            launch_stamp[LAUNCH_HASH] - launch_stamp[LAUNCH_IMAGE],
+            launch_stamp[LAUNCH_SPAWNER] - launch_stamp[LAUNCH_HASH],
+            launch_stamp[LAUNCH_DEVICE] - launch_stamp[LAUNCH_SPAWNER],
+            launch_stamp[LAUNCH_DOMAIN] - launch_stamp[LAUNCH_DEVICE],
+            launch_stamp[LAUNCH_REGIONS] - launch_stamp[LAUNCH_DOMAIN],
+            launch_stamp[LAUNCH_SECCOMP] - launch_stamp[LAUNCH_REGIONS],
+            launch_stamp[LAUNCH_SECCOMP] - launch_stamp[LAUNCH_START]);
   fprintf(stderr, "capstone-exec: delegate rounds=%llu syscalls=%llu refused=%llu "
           "bytes_in=%llu bytes_out=%llu ticks=%lu\n",
           (unsigned long long)e->delegate.rounds, (unsigned long long)e->delegate.syscalls,
@@ -115,8 +164,14 @@ static int print_stats(void) {
 /* A fault ends the process with SIGSEGV after cleanup; the record goes out
  * first, without blocking, so a full pipe cannot swallow the diagnosis. */
 static void fault(struct execution *e, const struct ioctl_dom_step_args *step) {
-  if (e->delegated && e->maps[REGION_META])
+  if (e->maps[REGION_META])
     e->delegate.preparing_nr = ((struct capstone_delegate_entry *)e->maps[REGION_META])->nr;
+  /* The record names the image by its SHA-256. Hashing 20 MB byte by byte
+     costs a launch two seconds in the guest, so it happens here, on the one
+     path that prints it; the image descriptor is still open. */
+  if (!e->delegate.image_sha256[0] && e->image >= 0 &&
+      capstone_application_hash(e->image, e->delegate.image_sha256))
+    e->delegate.image_sha256[0] = 0;
   /* Application streams carry application bytes only. The record goes to the
      file CAPSTONE_FAULT_RECORD names, which the host CLI reads back, and to
      stderr only when that is a terminal or diagnostics were asked for. */
@@ -125,13 +180,13 @@ static void fault(struct execution *e, const struct ioctl_dom_step_args *step) {
   if (record && *record)
     fd = open(record, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
   if (fd >= 0) {
-    capstone_delegate_fault_record(fd, e->delegated ? &e->delegate : NULL, e->path,
+    capstone_delegate_fault_record(fd, &e->delegate, e->path,
                                    step ? step->cause : 0, step ? step->pc : 0,
                                    step ? step->address : 0);
     close(fd);
   }
   if (isatty(2) || getenv("CAPSTONE_EXEC_DIAGNOSTICS"))
-    capstone_delegate_fault_record(2, e->delegated ? &e->delegate : NULL, e->path,
+    capstone_delegate_fault_record(2, &e->delegate, e->path,
                                    step ? step->cause : 0, step ? step->pc : 0,
                                    step ? step->address : 0);
   report_stats(e);
@@ -248,6 +303,7 @@ int main(int argc, char **argv) {
     memcpy(e.delegate.children, resumed.children, sizeof resumed.children);
   }
   unsigned stdio_mask;
+  launch_mark(LAUNCH_START);
   if (reserve_stdio(&stdio_mask))
     return 125;
   struct capstone_application_descriptor_v2 descriptor;
@@ -259,33 +315,34 @@ int main(int argc, char **argv) {
   errno = image_error;
   if (e.image < 0) {
     int error = errno;
-    fprintf(stderr, "capstone-exec: %s: %s (requires application ABI v1 or v2)\n",
+    fprintf(stderr, "capstone-exec: %s: %s (requires delegated application ABI v2)\n",
             e.path, strerror(error));
     return error == ENOENT ? 127 : 126;
   }
-  e.delegated = (descriptor.v1.flags & CAPSTONE_APPLICATION_DELEGATE) != 0;
-  if (e.delegated && capstone_application_hash(e.image, e.delegate.image_sha256))
-    return fail(&e, "capstone-exec: image hash", 1);
+  launch_mark(LAUNCH_IMAGE);
+  launch_mark(LAUNCH_HASH); /* the hash is computed only for a fault record */
   char *cwd = getcwd(NULL, 0);
   void *startup = calloc(1, CAPSTONE_LAUNCH_BYTES);
   int first_arg = app_args ? 4 : binfmt ? 2 : 1;
+  struct capstone_launch_task task = task_record();
   int error = !cwd || !startup ? ENOMEM : capstone_launch_pack(startup,
-      CAPSTONE_LAUNCH_BYTES, argc - first_arg, argv + first_arg, environ, cwd, stdio_mask);
+      CAPSTONE_LAUNCH_BYTES, argc - first_arg, argv + first_arg, environ, cwd, stdio_mask,
+      &task);
   free(cwd);
   if (error) {
     fprintf(stderr, "capstone-exec: startup: %s\n", strerror(error));
     free(startup);
     return fail(&e, "capstone-exec: startup", 0);
   }
-  if (e.delegated) {
-    /* Fork before device setup: the helper inherits no domain mappings. */
-    int spawn_error = e.spawner.socket >= 0 ? 0 : capstone_spawner_start(&e.spawner);
-    if (spawn_error) {
-      errno = spawn_error;
-      return fail(&e, "capstone-exec: spawner", 1);
-    }
-    e.delegate.spawner = &e.spawner;
+  /* Fork before device setup: the helper inherits no domain mappings. */
+  int spawn_error = e.spawner.socket >= 0 ? 0 : capstone_spawner_start(&e.spawner);
+  if (spawn_error) {
+    free(startup);
+    errno = spawn_error;
+    return fail(&e, "capstone-exec: spawner", 1);
   }
+  e.delegate.spawner = &e.spawner;
+  launch_mark(LAUNCH_SPAWNER);
   capstone_set_verbose(0);
   /* Find descriptors opened by libcapstone without exposing its private fd
      through the application's direct Linux descriptor namespace. */
@@ -305,6 +362,7 @@ int main(int argc, char **argv) {
     return fail(&e, "capstone-exec: device", 1);
   }
   e.device_open = 1;
+  launch_mark(LAUNCH_DEVICE);
   e.delegate.private_fds[e.delegate.private_count++] = e.image;
   fd_dir = opendir("/proc/self/fd");
   if (!fd_dir) { free(startup); return fail(&e, "capstone-exec: descriptors", 1); }
@@ -324,10 +382,11 @@ int main(int argc, char **argv) {
   dom_id_t domain = create_dom(image_path, NULL);
   if ((long)domain < 0) {
     free(startup);
-    return fail(&e, "capstone-exec: cannot create domain", 0);
+    return fail(&e, "capstone-exec: cannot create domain", 1);
   }
-  e.sizes[REGION_META] = HC_V0_REGION_SIZE;
-  e.sizes[REGION_DATA] = e.delegated ? (size_t)descriptor.exchange_bytes : HC_V0_REGION_SIZE;
+  launch_mark(LAUNCH_DOMAIN);
+  e.sizes[REGION_META] = 4096;
+  e.sizes[REGION_DATA] = (size_t)descriptor.exchange_bytes;
   e.sizes[REGION_STARTUP] = CAPSTONE_LAUNCH_BYTES;
   for (unsigned i = 0; i < REGIONS; ++i) {
     region_id_t region = create_region(e.sizes[i]);
@@ -350,30 +409,27 @@ int main(int argc, char **argv) {
   if (descriptor.v1.heap_bytes) {
     region_id_t heap = create_region((unsigned long)descriptor.v1.heap_bytes);
     if ((long)heap < 0)
-      return fail(&e, "capstone-exec: cannot allocate application heap", 0);
+      return fail(&e, "capstone-exec: cannot allocate application heap", 1);
     if (capstone_share(domain, heap, 1, 3)) {
       if (errno == EFAULT)
         fault(&e, NULL);
       return fail(&e, "capstone-exec: share heap", 1);
     }
   }
-  if (e.delegated) {
-    e.delegate.exchange = e.maps[REGION_DATA];
-    e.delegate.exchange_bytes = e.sizes[REGION_DATA];
-    if (!getenv("CAPSTONE_EXEC_NO_SECCOMP")) {
-      int rc = capstone_delegate_seccomp();
-      if (rc) {
-        errno = rc;
-        return fail(&e, "capstone-exec: seccomp filter", 1);
-      }
+  e.delegate.exchange = e.maps[REGION_DATA];
+  e.delegate.exchange_bytes = e.sizes[REGION_DATA];
+  launch_mark(LAUNCH_REGIONS);
+  if (!getenv("CAPSTONE_EXEC_NO_SECCOMP")) {
+    int rc = capstone_delegate_seccomp();
+    if (rc) {
+      errno = rc;
+      return fail(&e, "capstone-exec: seccomp filter", 1);
     }
   }
-  if (e.delegated)
-    for (int fd = 0; fd < 3; ++fd)
-      if (!(stdio_mask & (1u << fd))) close(fd);
+  for (int fd = 0; fd < 3; ++fd)
+    if (!(stdio_mask & (1u << fd))) close(fd);
+  launch_mark(LAUNCH_SECCOMP);
   e.ticks_start = ticks();
-  struct hostcall_v0 *metadata = e.maps[REGION_META];
-  char *payload = e.maps[REGION_DATA];
   for (;;) {
     struct ioctl_dom_step_args step;
     if (capstone_step(domain, &step))
@@ -382,42 +438,23 @@ int main(int argc, char **argv) {
       continue;
     if (step.event == CAPSTONE_STEP_FAULT)
       fault(&e, &step);
-    if (e.delegated) {
-      struct capstone_delegate_entry *entry = e.maps[REGION_META];
-      /* A return with no request means the domain left its entry instead of
-         yielding: re-entering would restart it from the top, forever. */
-      if (entry->version != CAPSTONE_DELEGATE_VERSION) {
-        fprintf(stderr, "capstone-exec: domain returned without a request (entry version %u, "
-                "rounds so far %llu)\n", entry->version, (unsigned long long)e.delegate.rounds);
-        report_stats(&e);
-        return fail(&e, "capstone-exec: invalid runtime state", 0);
-      }
-      capstone_delegate_serve(&e.delegate, entry);
-      if (e.delegate.exec_requested)
-        entry->result = exec_in_place(&e);
-      if (e.delegate.exiting) {
-        int status = e.delegate.exit_status;
-        report_stats(&e);
-        cleanup(&e);
-        return status;
-      }
-      continue;
+    struct capstone_delegate_entry *entry = e.maps[REGION_META];
+    /* A return with no request means the domain left its entry instead of
+       yielding: re-entering would restart it from the top, forever. */
+    if (entry->version != CAPSTONE_DELEGATE_VERSION) {
+      fprintf(stderr, "capstone-exec: domain returned without a request (entry version %u, "
+              "rounds so far %llu)\n", entry->version, (unsigned long long)e.delegate.rounds);
+      report_stats(&e);
+      return fail(&e, "capstone-exec: invalid runtime state", 0);
     }
-    struct hostcall_v0 request;
-    hostcall_snapshot_request(&request, metadata);
-    if (request.phase == HC_V0_PHASE_DONE) {
-      int status = (unsigned char)request.result;
+    capstone_delegate_serve(&e.delegate, entry);
+    if (e.delegate.exec_requested)
+      entry->result = exec_in_place(&e);
+    if (e.delegate.exiting) {
+      int status = e.delegate.exit_status;
+      report_stats(&e);
       cleanup(&e);
       return status;
     }
-    if (request.phase != HC_V0_PHASE_REQ || !hostcall_payload_range_valid(&request)) {
-      fprintf(stderr, "capstone-exec: invalid runtime state (phase=%llu, result=%lld)\n",
-              request.phase, request.result);
-      return fail(&e, "capstone-exec: invalid runtime state", 0);
-    }
-    if (capstone_application_service(&stdio_mask, &request, metadata, payload) < 0 &&
-        hc_host_service(&e.host, &request, metadata, payload) < 0)
-      hc_host_error(metadata, ENOSYS);
-    metadata->phase = HC_V0_PHASE_RESP;
   }
 }

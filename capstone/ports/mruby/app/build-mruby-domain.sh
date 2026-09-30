@@ -23,9 +23,9 @@
 # (which reports the heap's counters) -- and in the host (the grant); mruby is
 # the same. sublet-gc is sublet plus every GC object slot issued and revoked on
 # its own (patches/4.0.0-rc2/0008, MRB_CAPSTONE_GC_SUBLET): the GC carves its
-# pages from a second grant (run-mruby-domain.sh MRBD_GC_REGION_BYTES).
+# pages from a 32 MiB pool split from the descriptor's combined grant.
 # MRBD_HEAP_LOG sets its pool, 2^26 = 64 MiB by default; the host must
-# grant twice that (run-mruby-domain.sh, MRBD_HEAP_REGION_BYTES), since a CMA
+# grant twice that (requested by the descriptor), since a CMA
 # region is only 1 MiB-aligned and the pool is a self-aligned block inside it.
 # Knobs (see build_config.rb): MRBD_BOXING, MRBD_DISPATCH, MRBD_OPT, MRBD_TESTS,
 # MRBD_DEFINES. MRBD_FROM=runtime|mruby starts at that stage. MRUBY_MIRROR=<a
@@ -84,54 +84,42 @@ ARCHIVE=$ROOT/musl-build/libc-capstone.a
 [[ -f "$ARCHIVE" ]] || { echo "no $ARCHIVE" >&2; exit 2; }
 log "musl $MUSL, archive $ARCHIVE"
 
-# ---- the runtime, as the PostgreSQL port builds it --------------------------
-INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
-     -isystem "$MUSL/obj/include" -isystem "$MUSL/include")
-CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
-    -Xclang -target-feature -Xclang +a -ffreestanding -fno-builtin -fno-jump-tables
-    -ffunction-sections -fdata-sections -O1 -w -Wno-int-conversion "${INC[@]}")
-RF=("${CF[@]}" -std=c99 -D_XOPEN_SOURCE=700
-    -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
+# ---- shared delegated application SDK --------------------------------------
 O=$ROOT/runtime
+SDK_HEAP=$HEAP
+[[ $HEAP == sublet-gc ]] && SDK_HEAP=sublet
 if stage runtime; then
-  rm -f "$O"/*.o
-  for s in start-musl set_thread_area setjmp; do
-    "$CAPSTONE_CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-      -ffreestanding -O0 -c "$MRT/$s.S" -o "$O/$s.o"
-  done
-  HCF=(); EF=()
-  [[ $HEAP == sublet* ]] && { HCF=(-DCAPSTONE_PROGRAM_REGIONS=1); EF=(-DMRBD_SUBLET_HEAP=1); }
-  [[ $HEAP == sublet-gc ]] && EF+=(-DMRBD_GC_SUBLET=1)
-  "$CAPSTONE_CLANG" "${RF[@]}" "${HCF[@]}" -c "$MRT/hostcall.c" -o "$O/hostcall.o"
-  "$CAPSTONE_CLANG" "${RF[@]}" -c "$MRT/tls.c" -o "$O/tls.o"
-  if [[ $HEAP == sublet* ]]; then
-    "$CAPSTONE_CLANG" "${RF[@]}" -I"$RT/capstone/sublet" -DCAPSTONE_SUBLET_HEAP_LOG="$HEAP_LOG" \
-      -c "$MRT/sublet_heap.c" -o "$O/heap.o"
-  else
-    "$CAPSTONE_CLANG" "${RF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="($ARENA)" -c "$MRT/level0.c" -o "$O/level0.o"
+  EXTRA=()
+  if [[ $HEAP == sublet-gc ]]; then
+    EXTRA=(-DCAPSTONE_APPLICATION_GRANT_BYTES="$(( (2 << HEAP_LOG) + (32 << 20) ))")
   fi
-  source "$MRT/libc_overrides.sh"
-  build_musl_overrides "$CAPSTONE_CLANG" "$O" "$MUSL" "${RF[@]}"
-  CLANG=$CAPSTONE_CLANG OBJ_DIR=$O COMPILER_RT=$RT/compiler-rt/lib/builtins
-  COMMON_FLAGS=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
-                -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w)
-  source "$RT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
-  "$CAPSTONE_CLANG" "${CF[@]}" "${EF[@]}" -std=c11 -O1 -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$O/domain_entry.o"
-  echo "$HEAP" > "$O/.heap"
-  if [[ $HEAP == sublet* ]]; then log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, sublet heap pool 2^$HEAP_LOG"
-  else log "runtime: $(ls "$O"/*.o | wc -l) objects from $MRT, level0 arena $ARENA bytes"; fi
+  bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
+    -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
+    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
+  printf '%s\n' "$HEAP" > "$O/.heap"
 fi
-
-# ---- the compiler and linker rake is given ----------------------------------
-[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" ]] \
-  || { echo "the runtime in $O was built for MRBD_HEAP=$(cat "$O/.heap" 2>/dev/null); rebuild it (MRBD_FROM=runtime)" >&2; exit 2; }
-export MRBD_MUSL=$MUSL MRBD_RUNTIME_DIR=$O MRBD_LIBC_ARCHIVE=$ARCHIVE
-export MRBD_LINKER_SCRIPT=$RT/capstone/my_first_domain/link.ld
-export PATH=$SCRIPT_DIR/toolchain:$PATH
+[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" && -x "$O/capstone-cc" ]] \
+  || { echo "rebuild the application SDK (MRBD_FROM=runtime)" >&2; exit 2; }
+export CAPSTONE_SDK=$O
+export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
 export LLVM_AR=$CAPSTONE_LLVM_BIN/llvm-ar
+"$O/capstone-cc" --check-toolchain
+"$O/capstone-cc" -O1 -c "$SCRIPT_DIR/spawn-shell.c" -o "$O/spawn-shell.o"
+export MRBD_SPAWN_OBJECT=$O/spawn-shell.o
+# The GC adapter takes region 1; the common application descriptor grants one pool.
+if [[ $HEAP == sublet-gc ]]; then
+  "$O/capstone-cc" -O1 -I"$RT/capstone/runtime/include" -DEXP_HEAP_AND_POOL \
+    -DPORT_HEAP_REGION_BYTES="$((2 << HEAP_LOG))UL" -DPORT_INNER_REGION_BYTES=33554432UL \
+    -c "$RT/capstone/ports/common/application/regions.c" -o "$O/regions.o"
+  export MRBD_REGION_OBJECT=$O/regions.o
+fi
 
 # ---- mruby, pinned and patched ----------------------------------------------
 M=$ROOT/src/mruby
+PATCH_HASH=$(sha256sum "$PATCHES"/*.patch | sha256sum | cut -d' ' -f1)
+if [[ -d "$M/.git" && $(cat "$M/.mrbd-patchset" 2>/dev/null) != "$PATCH_HASH" ]]; then
+  echo "patch set changed; use a fresh MRBD_ROOT" >&2; exit 2
+fi
 if [[ ! -d "$M/.git" ]]; then
   git clone -q "${MRUBY_MIRROR:-$MRUBY_URL}" "$M"
   git -C "$M" checkout -q "$MRUBY_COMMIT"
@@ -153,18 +141,26 @@ if [[ ! -d "$M/.git" ]]; then
     log "applied $(basename "$p")"
   done
   echo "$PIN $BOXING" > "$M/.mrbd-boxing"
+  printf '%s\n' "$PATCH_HASH" > "$M/.mrbd-patchset"
 fi
 [[ $(cat "$M/.mrbd-boxing") == "$PIN $BOXING" ]] \
   || { echo "the tree at $M was patched for MRBD_PIN MRBD_BOXING = $(cat "$M/.mrbd-boxing"); remove it to rebuild" >&2; exit 2; }
 
 if stage mruby; then
-  export MRBD_SURVEY_LOG=$ROOT/objects.tsv
-  : > "$MRBD_SURVEY_LOG"
+  COMPILER_HASH=$(sha256sum "$CAPSTONE_CLANG" | cut -d' ' -f1)
+  if [[ $(cat "$ROOT/.compiler-sha256" 2>/dev/null) != "$COMPILER_HASH" ]]; then
+    rm -rf "$M/build/capstone"
+  fi
+  export CAPSTONE_COMPILE_LOG=$ROOT/objects.tsv
+  : > "$CAPSTONE_COMPILE_LOG"
+  # Rake does not track the SDK archive as an upstream dependency.
+  rm -f "$M/build/capstone/bin/mruby" "$M/build/capstone/bin/mrbtest"
   targets=(all)
   [[ ${MRBD_TESTS:-0} == 1 ]] && targets+=(test:build:lib)
   (cd "$M" && MRUBY_CONFIG="$SCRIPT_DIR/build_config.rb" rake -j"$JOBS" "${targets[@]}") \
     > "$ROOT/rake.log" 2>&1 || { tail -5 "$ROOT/rake.log" >&2; echo "rake failed (see $ROOT/rake.log)" >&2; exit 2; }
-  failed=$(awk -F'\t' '$2 != 0' "$MRBD_SURVEY_LOG" | wc -l)
-  log "capstone objects compiled: $(wc -l < "$MRBD_SURVEY_LOG"), failed: $failed"
+  failed=$(awk -F'\t' '$2 != 0' "$CAPSTONE_COMPILE_LOG" | wc -l)
+  printf '%s\n' "$COMPILER_HASH" > "$ROOT/.compiler-sha256"
+  log "capstone objects compiled: $(wc -l < "$CAPSTONE_COMPILE_LOG"), failed: $failed"
 fi
 ls -la "$M/build/capstone/bin/" "$M/build/native/bin/" 2>/dev/null | awk '/mruby|mrbtest/ {print "[build-mruby] " $NF}'

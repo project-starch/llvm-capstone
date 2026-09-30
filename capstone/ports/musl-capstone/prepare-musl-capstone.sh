@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Stage a musl source tree with our arch/capstone64 port in place.
 #
-# The upstream tree stays byte-identical: arch/capstone64 is a copy of upstream
-# arch/riscv64 with the files from arch-capstone64/ overlaid on top. Nothing
-# under src/ or include/ is touched, so `diff -r arch/riscv64 arch/capstone64`
-# is the entire delta and is auditable in one command.
+# arch/capstone64 is a copy of upstream arch/riscv64 with the files from
+# arch-capstone64/ overlaid on top, and musl-patches/*.patch are applied to src/ and
+# include/. The delta to upstream is therefore `diff -r arch/riscv64
+# arch/capstone64` plus musl-patches/, each patch one decision:
+# 0001 stdio buffers of 8 KiB (glibc's size) instead of 1 KiB, 0002 a 32 KiB
+# getdents buffer instead of 2 KiB, 0003 no fcntl(F_SETFD) round after an open
+# that already asked for O_CLOEXEC. Every delegated syscall is a round trip
+# through the launcher, so the number of rounds is the port's cost model.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -12,6 +16,18 @@ source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 
 MUSL_SRC_DIR=$(bash "$SCRIPT_DIR/fetch-musl.sh" | tail -1)
 ARCH_DIR="$MUSL_SRC_DIR/arch/capstone64"
+
+# Patches apply once: a patch that is already in (reverse applies cleanly) is
+# skipped, one that fits neither way is an error, not a silent partial tree.
+for patch in "$SCRIPT_DIR"/musl-patches/*.patch; do
+  if patch -d "$MUSL_SRC_DIR" -p1 -R --dry-run -s -f < "$patch" > /dev/null 2>&1; then
+    continue
+  fi
+  patch -d "$MUSL_SRC_DIR" -p1 -N -s -f < "$patch" || {
+    echo "prepare failed: $patch does not apply to $MUSL_SRC_DIR" >&2
+    exit 1
+  }
+done
 
 rm -rf "$ARCH_DIR"
 cp -r "$MUSL_SRC_DIR/arch/riscv64" "$ARCH_DIR"

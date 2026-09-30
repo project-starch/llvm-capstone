@@ -1,0 +1,24 @@
+Publish single-user statistics synchronously instead of scheduling SIGALRM.
+
+The delegated runtime correctly refuses setitimer until signal delivery exists.
+A standalone backend can publish its statistics before reading the next command;
+there is no need for a deferred idle wakeup. Statement/transaction/lock timeouts
+still require real signal support and are not claimed by this port.
+
+--- a/src/backend/tcop/postgres.c
++++ b/src/backend/tcop/postgres.c
+@@ -4666,7 +4666,14 @@
+ 				 * performance impact. That's OK because pgstat_report_stat()
+ 				 * won't have us wake up sooner than a prior call.
+ 				 */
++				/* A single-user Capstone backend has no asynchronous signal
++				 * delivery yet. Flush statistics synchronously, so no idle
++				 * SIGALRM is needed to publish deferred statistics. */
++#ifdef __CAPSTONE__
++				stats_timeout = pgstat_report_stat(!IsUnderPostmaster);
++#else
+ 				stats_timeout = pgstat_report_stat(false);
++#endif
+ 				if (stats_timeout > 0)
+ 				{
+ 					if (!get_timeout_active(IDLE_STATS_UPDATE_TIMEOUT))

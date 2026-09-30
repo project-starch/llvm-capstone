@@ -80,17 +80,10 @@ log "musl $MUSL, archive $ARCHIVE"
 # ---- shared application SDK (also usable by other upstream build systems) ----
 O=$ROOT/runtime
 if stage runtime; then
-  cmake -S "$RT/capstone/runtime/application" -B "$O" -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE="$RT/capstone/ports/common/cmake/toolchains/capstone-domain.cmake" \
-    -DCAPSTONE_LLVM_BUILD_DIR="$CAPSTONE_LLVM_BUILD_DIR" \
-    -DPORT_HEADER_PROVIDER=musl -DPORT_C11_ATOMICS=ON \
-    -DPORT_MUSL_ROOT="$MUSL" -DCAPSTONE_MUSL_ARCHIVE="$ARCHIVE" \
-    -DCAPSTONE_APPLICATION_SDK=ON -DCAPSTONE_APPLICATION_HEAP="$HEAP" \
-    -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
+  bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
+    -DCAPSTONE_APPLICATION_HEAP="$HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
     -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
-    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" \
-    -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS_RELEASE=-O1
-  cmake --build "$O" -j"$JOBS"
+    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA"
   printf '%s\n' "$HEAP" > "$O/.heap"
 fi
 [[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" && -x "$O/capstone-cc" ]] \

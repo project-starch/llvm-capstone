@@ -87,6 +87,10 @@ static size_t pages(size_t len)
    gets back. Only the address feeds the alignment computation. */
 static void *page_block(size_t len, void **block)
 {
+	/* Account for both page rounding and the extra alignment page before
+	   arithmetic can wrap a huge mapping into a small allocation. */
+	if (len >= PTRDIFF_MAX || len > SIZE_MAX - (2 * L0_PAGE - 1))
+		return 0;
 	size_t want = pages(len);
 	char *raw = malloc(want + L0_PAGE);
 	if (!raw)
