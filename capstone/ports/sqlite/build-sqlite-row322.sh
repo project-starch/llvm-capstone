@@ -93,6 +93,9 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
 ADAPTED_322_DIR="$OUT_DIR/sqlite-322-adapted"
 bash "$SCRIPT_DIR/adapt-sqlite-322.sh" "$SQLITE_SRC_DIR" "$ADAPTED_322_DIR"
 cp -f "$ADAPTED_322_DIR/sqlite3.c" "$PATCHED_SQLITE"
+# FTS5 tokenizer fix (2026-09-30): make aBuiltin[] static so its function pointers
+# init via __cap_relocs, not gp-relative data caps (see fts5-static-patch.py).
+python3 "$SCRIPT_DIR/fts5-static-patch.py" "$PATCHED_SQLITE"
 
 # The VFS is a SEPARATE TU that includes only sqlite3.h; 3.22.0's header has no
 # sqlite3_filename (added in 3.41.0). Backport the typedef into a private header dir and
