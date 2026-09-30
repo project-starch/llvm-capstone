@@ -32,8 +32,9 @@
   fprintf(stderr, "pthread-probe:%d: %s\n", __LINE__, #test); return 1; \
 } } while (0)
 
-/* The image declares CONTEXTS 7: seven threads besides the first at once. */
-#define THREADS 7
+/* The image declares CONTEXTS 15, the most (T5): fifteen threads besides the
+   first at once. */
+#define THREADS 15
 
 extern void (*__capstone_thread_exit_test_gap)(void);
 void __capstone_clone_stats(unsigned *made, unsigned *live);
@@ -107,7 +108,7 @@ static int join_values(void)
   }
   unsigned made, live;
   __capstone_clone_stats(&made, &live);
-  printf("join-values: 420 threads, records made %u, live %u\n", made, live);
+  printf("join-values: %d threads, records made %u, live %u\n", 60 * THREADS, made, live);
   /* seven at once; areas are reused, not taken anew */
   CHECK(made >= THREADS && made <= 2 * THREADS);
   return 0;

@@ -23,10 +23,11 @@ add_executable(thread-probe thread-probe.c thread-probe-asm.S)
 capstone_configure_application(thread-probe
   DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 1048576 CONTEXT_BYTES 1048576 CONTEXTS 7)
 # musl's threads (T4): each thread's stack and TLS come from the heap (musl's
-# default 128 KiB stack), its area from the context arena.
+# default 128 KiB stack), its area from the context arena; the most contexts
+# an application may have (T5), with 45 KiB of signal list each (B8).
 add_executable(pthread-probe pthread-probe.c)
 capstone_configure_application(pthread-probe
-  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 4194304 CONTEXT_BYTES 65536 CONTEXTS 7)
+  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 8388608 CONTEXT_BYTES 131072 CONTEXTS 15)
 # The same probe on the Sublet heap, for its lock (heap-stress).
 add_executable(thread-probe-sublet thread-probe.c thread-probe-asm.S)
 capstone_configure_application(thread-probe-sublet
