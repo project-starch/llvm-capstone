@@ -7116,6 +7116,28 @@ With a private musl build, `run.sh c65` returns with `sizeof = 64` and "broadcas
 musl build fails the same 6 objects as without the patch. The wait paths need a futex and were not
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
 
+### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER/ABI, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism not verified`
+
+**What happens.** `tests/runtime-qemu/subword-atomics`, built by the application SDK's
+`capstone-cc` and run with `run-delegated-probes.py`, faults at its last case, an 8-bit
+`__atomic_compare_exchange_n` on `static uint8_t lone_byte`: cause 5 at the load-reserved of the
+lowered sequence, the address `lone_byte` itself (the variable sits at the end of `.bss`, 16-byte
+aligned; in the stack run below, link address 0x40629d0 plus the load base 0xc01f0000 is the
+fault address 0xc42529d0). Every earlier case passes, the capability-address 32-bit control and
+the PyMutex-shaped byte inside a struct included. The same source at -O2 passes (`subword-O2`).
+Under the retired HostCall v0 harness both levels passed. Seen twice, with two compilers:
+- on `delegation-v0-removal` (the threads lane), compiler 7d01722aab88;
+- on `delegation-v0-removal-stack` (the delegation stack, #142, with dev 330014ea merged), with a
+  compiler built from dev 330014ea's compiler sources (68c75ed3); record
+  `tests/runtime-qemu/results/20260930-delegated-probes-stack.json`.
+
+**What the probe says it tests.** Its comment names this as the risk case: the aligned word around
+a lone byte reaches past the variable, and if the capability for the variable is bounded to it, the
+LR/SC on that word is out of bounds. That is the likely mechanism, and it is **not verified**: which
+capability each optimization level uses for `&lone_byte` (an exact per-variable one at -O0, a wider
+one at -O2?) has not been read out of the images. Relevant for CPython: `PyMutex` is one byte; a
+standalone static one would be exposed at a level that bounds it alone.
+
 ### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `OPEN — COMPILER, observed 2026-09-29; port workaround qualified; not reduced`
 
 FFmpeg 9.0.1 built by `compiler/sroa-keep-capability-whole` at `7d01722aab88`

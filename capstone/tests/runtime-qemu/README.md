@@ -106,6 +106,12 @@ control produced. `mmap-shm-control` and `tls-overrun` remain controls that run.
 which `capstone_vm` records in the state directory; the build refuses (exit 2) a toolchain
 whose `llc` lacks the live-source copy pass or `+movc-keeps-integer-source`.
 
+First run on a VM (2026-09-30, the delegation stack with dev 330014ea merged; record
+`results/20260930-delegated-probes-stack.json`): 22 of the 23 variants pass in a guest without
+the MOVC switch, and `movc-rule`, `movc-keep`, `intcap` and `intcap-uptr` pass in one with
+`CAPSTONE_MOVC_NULL_SCALAR=1`. `subword-O0` faults at its last case, the 8-bit compare-exchange
+on a lone one-byte global (ISSUES C-74); `subword-O2` passes.
+
 Removed with the v0 runtime, as the v0 emulation's own tests (under v2 these are
 Linux's behaviour, covered by the delegated libc-test and the application gate):
 `cwd`, `dir-read`, `mkdir-rmdir`, `path-readlink`, `path-rename`, `pread-pwrite`,
