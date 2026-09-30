@@ -1,8 +1,8 @@
 # Delegated threads: one Linux thread per protected context
 
 Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES,
-PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1, B7) and parking through the launcher
-(T2, B6 and B12) pass. Branch `delegation-threads`,
+PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1, B7), parking through the launcher
+(T2, B6 and B12) and the runtime locks (T3, Q6, B9 and B14) pass. Branch `delegation-threads`,
 stacked on `delegation-signals` (c460e8c). The contracts below are what Probe A and Probe B test;
 the runtime that builds `pthread_create` on them is written after both probes pass.
 
@@ -106,6 +106,30 @@ Done so far:
   to the wake; untimed without SA_RESTART and timed: EINTR). The promptness check fired against a
   launcher whose park sleep bypassed the signal stub (handler only at the wake, 533 ms). Record
   `results/20260930-park-domain.json`.
+- Probe B, domain phase, T3: the runtime locks (Q6 answered below) and each context's thread
+  identity (Q2, second part). `thread-probe` adds nine modes (34 of 34 pass): distinct identities
+  (the pid, then 2^22 upwards), 12000 lines from eight contexts into one FILE with none malformed or
+  out of order, stdio calls that retake a FILE lock (`puts`, `perror`, `fclose`, `putc` inside
+  `flockfile`) from minted contexts, eight contexts on the level0 heap and on the Sublet heap (1500
+  rounds each, no corrupted block), B9 (a linearizable exchange chain of 40000 distinct
+  capabilities, a CAS cursor advanced exactly 40000 cells, a scalar counter exact, the atomics lock
+  found taken 16 times), B14 (a signal arriving while the first context holds lock A and waits for
+  lock B runs its handler once, at lock depth 0, by the release of A), 24 concurrent spawns each
+  with its own exit status, 1600 concurrent anonymous mappings, and three contexts at once each
+  creating a context of its own. Each lock check fired against a runtime seeded with the defect it
+  is about: the depth rule off (the handler ran at depth 1), the heap lock off (a fault), the
+  atomics lock off (duplicated exchanges, the cursor 34779 of 40000), every minted context with
+  thread identity 0 (21873 lines for 12000, 21130 malformed), identities from 0x40000000 (the
+  nested stdio calls waited for themselves). Record `results/20260930-runtime-locks.json`.
+- An independent review of T3 (2026-09-30) found the identity range defect above: the first
+  version counted from 0x40000000, which is musl's `MAYBE_WAITERS` bit, so a minted context
+  waited for itself in every nested FILE lock and recursive mutexes broke; the probes then passed
+  because none retook a lock. It also found builds outside `capstone_configure_application` that
+  compile runtime files one by one (libc-test, the stdio/file/write probes, the capability-atomics
+  QEMU test, the native mapping test) without the new `lock.c`; a further context reaching the
+  first context's signal state through `longjmp`; and a lock depth that could go negative. All are
+  fixed; stdio-nested, the Sublet image, spawn-concurrent, mmap-concurrent and nested-create were
+  added for the gaps it named.
 - An independent review of T1 (2026-09-30) found five defects. Fixed, each with a probe mode that
   failed before and passes after: a further context ran one of the first context's pending signal
   events, which then stayed blocked (now only the context with the handover block touches signal
@@ -737,8 +761,21 @@ Recommended starting point:
   any context ends the process, as in Linux; nothing is unmapped first, since other threads may
   still be serving. Exec in place is served from any context as from the first (not yet run with
   more than one context).
-- **Open in Q2:** the thread identity (`t->tid`, the translations), and the start of a child before
-  its creator's reply as seen by musl.
+- **Open in Q2:** the translations of a thread identity to a Linux tid (`tkill`, `tgkill`,
+  `pthread_kill`, `sched_*`, `SIGEV_THREAD_ID`), and the start of a child before its creator's
+  reply as seen by musl.
+
+**Answer, second part: the thread identity (2026-09-30, T3; evidence
+`results/20260930-runtime-locks.json`).** The first context's identity is the pid, as Linux gives
+a process's first thread. A minted context gets one from a process-wide counter from 2^22 to
+0x3ffffffe: above Linux's pids (below `PID_MAX_LIMIT`, 2^22), and inside the 30 bits musl keeps in
+a lock word (bit 30 is `MAYBE_WAITERS`, 0x3fffffff a marker). It is written into the context's
+`struct pthread` before the seal is offered and never given to another context in the process's
+life, so a recursive lock (musl's `__lockfile`, a recursive mutex) never takes a new context for
+an old owner; when the range runs out, minting fails.
+`gettid` and `set_tid_address` answer it without a round. Linux tids are not visible to the domain.
+Until signals are per context (B8), `tkill` and `tgkill` reach only the first context's thread, as
+before; another context's `raise` is refused.
 - **One identity inside the domain.** `t->tid` and every tid the domain sees is a protected runtime
   identity, never reused while its `struct pthread` is live. Linux reuses tids after thread exit
   even without malice. The launcher translates runtime identity to Linux tid for its own contexts
@@ -896,6 +933,34 @@ Recommended starting point:
   application never saw.
 - **Ordering:** the generic-atomics lock is a leaf lock; the allocator lock may be held while
   taking it, never the reverse.
+
+**Answer (2026-09-30, T3; evidence `results/20260930-runtime-locks.json`).**
+- **Two kinds** (`capstone/lock.h`): `capstone_lock` is musl's `__lock`, a futex lock through T2's
+  parking, a no-op while the application has one context; `capstone_spin_lock` is the leaf spin
+  lock on a scalar word. Neither allocates or calls the generic atomics.
+- **Covered state:** the heap (level0 and the Sublet heap, one lock each over their tables, public
+  entries taking it once), the mmap/shm tables, the context arena, the static posix_spawn and
+  execve request blocks (one lock for both), and the unserved-call notes (spin); the
+  capability-width atomics (spin). musl's
+  own locks (stdio's FILE locks, its internal `__lock` users) are switched on at the first THREAD
+  context exactly as musl's first `pthread_create` does: FILE lock words leave -1,
+  `libc.threaded`, `threads_minus_1` and `need_locks` are set. The count only rises for now, since
+  a context's end is not seen by the runtime yet (Q4): correct, only slower.
+- **Order:** maps, then heap, then atomics; the spawn and arena locks take no other.
+- **No handler under a lock:** each context counts the `capstone_lock`s it holds, whether or not
+  musl really took them (it does not while the application has one context), from the moment the
+  first context has a TLS block; a round's delivery is skipped while the count is not zero, and
+  the last release delivers what waited. A spin lock makes no round while held, so no handler can
+  run under it and it is not counted.
+- **Not yet:** a minted context has no thread-specific data array (`pthread_key`, T4); contexts are
+  not in musl's thread list, so `__synccall` (setuid and relatives) acts on the calling context
+  only; a REGISTER context holding a runtime lock runs again only when its stepper steps it.
+- **Progress on one hart:** a spinner spins until the scheduler preempts it and the holder runs;
+  a `capstone_lock` waiter parks.
+- **Measured cost:** none measurable on a single context's rounds: 100000 rounds took 9134 ms with
+  T2's probe image and 9239 ms with T3's on this runtime, against 9069 to 9152 ms on the T1 and T2
+  runtimes. (A T3 image from before the review's fixes took 9863 ms; the final one does not
+  reproduce that, and the difference is not explained.)
 
 ## Relation to the Capstone paper
 

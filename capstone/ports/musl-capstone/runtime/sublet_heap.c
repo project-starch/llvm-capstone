@@ -62,6 +62,7 @@
 #include <unistd.h>
 
 #include "sublet.h"
+#include <capstone/lock.h>
 
 #ifndef CAPSTONE_SUBLET_HEAP_LOG
 #define CAPSTONE_SUBLET_HEAP_LOG 22    /* the pool: 4 MiB, one naturally aligned buddy block */
@@ -262,7 +263,12 @@ static int sh_carve_block(size_t n, unsigned *idx)
 	return 0;
 }
 
-void *malloc(size_t n)
+/* One lock over the buddy tables (capstone/lock.h, Q6): several contexts of
+   one application share this heap. The public entries take it once; sh_
+   functions run with it held. */
+static volatile int sh_lock;
+
+static void *sh_malloc(size_t n)
 {
 	unsigned i;
 	if (sh_carve_block(n, &i) < 0)
@@ -270,10 +276,8 @@ void *malloc(size_t n)
 	return sh_narrow(sublet_take(&sh_cap[i]), n);
 }
 
-void free(void *p)
+static void sh_free(void *p)
 {
-	if (!p)
-		return;
 	/* The stale-pointer probe. A freed object's alias is revoked, so this read faults here,
 	   before anything below can revoke a handle that now belongs to someone else. */
 	(void)*(volatile const char *)p;
@@ -333,15 +337,18 @@ void free(void *p)
 unsigned long __capstone_sublet_malloc_linear(size_t n, sublet_cap *out)
 {
 	unsigned i;
-	if (sh_carve_block(n, &i) < 0)
-		return 0;
-	/* Reads the base before moving the region out, as the header requires. */
-	return sublet_take_linear(&sh_cap[i], out);
+	unsigned long base = 0;
+	capstone_lock(&sh_lock);
+	if (sh_carve_block(n, &i) == 0)
+		/* Reads the base before moving the region out, as the header requires. */
+		base = sublet_take_linear(&sh_cap[i], out);
+	capstone_unlock(&sh_lock);
+	return base;
 }
 
 /* Reclaim a block lent by __capstone_sublet_malloc_linear. One revoke kills the lent region and
    every capability the borrower carved from it; the buddy merge below is free's, unchanged. */
-void __capstone_sublet_free_linear(unsigned long base)
+static void sh_free_linear(unsigned long base)
 {
 	unsigned i;
 	if (sh_state <= 0 || base < sh_base ||
@@ -378,6 +385,30 @@ void __capstone_sublet_free_linear(unsigned long base)
 	sh_push(i, k);
 }
 
+void __capstone_sublet_free_linear(unsigned long base)
+{
+	capstone_lock(&sh_lock);
+	sh_free_linear(base);
+	capstone_unlock(&sh_lock);
+}
+
+void *malloc(size_t n)
+{
+	capstone_lock(&sh_lock);
+	void *p = sh_malloc(n);
+	capstone_unlock(&sh_lock);
+	return p;
+}
+
+void free(void *p)
+{
+	if (!p)
+		return;
+	capstone_lock(&sh_lock);
+	sh_free(p);
+	capstone_unlock(&sh_lock);
+}
+
 void *calloc(size_t n, size_t m)
 {
 	if (m && n > (size_t)-1 / m) {
@@ -401,12 +432,14 @@ void *realloc(void *p, size_t n)
 	}
 	(void)*(volatile const char *)p;  /* same probe as free, before anything is copied */
 	size_t old = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_cursor(p);
-	char *q = malloc(n);
-	if (!q)
-		return 0;
-	/* memmove, not a byte loop: the block may hold capabilities (see level0.c) */
-	memmove(q, p, old < n ? old : n);
-	free(p);
+	capstone_lock(&sh_lock);
+	char *q = sh_malloc(n);
+	if (q) {
+		/* memmove, not a byte loop: the block may hold capabilities (see level0.c) */
+		memmove(q, p, old < n ? old : n);
+		sh_free(p);
+	}
+	capstone_unlock(&sh_lock);
 	return q;
 }
 

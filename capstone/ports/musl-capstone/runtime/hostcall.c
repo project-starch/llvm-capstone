@@ -42,6 +42,7 @@ static long hc_write(long fd, const char *buf, unsigned long count);
 static long hc_file_rw(long fd, char *buf, unsigned long count, int writing);
 
 #include "../../../runtime/include/capstone/hostcall.h"
+#include <capstone/lock.h>
 #if defined(CAPSTONE_APPLICATION_RUNTIME) && !defined(CAPSTONE_DELEGATE_RUNTIME)
 #error "Application images require syscall delegation"
 #endif
@@ -896,12 +897,20 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d,
                               syscall_arg_t e, syscall_arg_t f);
 void __capstone_delegate_write2(const char *buf, unsigned long n);
+/* Any context may note: a leaf lock over the two lists. */
+static volatile int hc_note_lock;
 void __capstone_hc_note_unserved(long n) {
+  capstone_spin_lock(&hc_note_lock);
   if (hc_unserved_n < HC_UNSERVED_MAX)
     hc_unserved[hc_unserved_n] = n;
   hc_unserved_n++;
+  capstone_spin_unlock(&hc_note_lock);
 }
-void __capstone_hc_note_noop(long n) { hc_note_noop(n); }
+void __capstone_hc_note_noop(long n) {
+  capstone_spin_lock(&hc_note_lock);
+  hc_note_noop(n);
+  capstone_spin_unlock(&hc_note_lock);
+}
 #endif
 
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,

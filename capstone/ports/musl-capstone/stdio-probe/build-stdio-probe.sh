@@ -71,6 +71,7 @@ source "$REPO_ROOT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
   -ffreestanding -O0 -c "$PORT_DIR/runtime/start-musl.S" -o "$OUT_DIR/start-musl.o"
 "$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/hostcall.c"             -o "$OUT_DIR/hostcall.o"
 "$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/level0.c" -o "$OUT_DIR/level0.o"
+"$CLANG" "${CF[@]}" -c "$PORT_DIR/runtime/lock.c" -o "$OUT_DIR/lock.o"
 # The libc overrides, from the one list every musl domain links
 # (runtime/libc_overrides.sh). A probe that never calls them pays nothing:
 # --gc-sections drops what is unreachable.
@@ -88,7 +89,7 @@ build_musl_overrides "$CLANG" "$OUT_DIR" "$MUSL" "${CF[@]}"
 
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
   "$OUT_DIR/start-musl.o" "$OUT_DIR/hostcall.o" "$OUT_DIR/tls.o" \
-  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/setjmp.o" "${MUSL_OVERRIDE_OBJS[@]}" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/stdio_probe.o" "$ARCHIVE"
+  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/setjmp.o" "${MUSL_OVERRIDE_OBJS[@]}" "$OUT_DIR/level0.o" "$OUT_DIR/lock.o" "${softfloat_objs[@]}" "$OUT_DIR/stdio_probe.o" "$ARCHIVE"
 
 # THE CONTROL. domain_main present so --gc-sections keeps the chain alive, no
 # hostcall implementation, so the reference musl's write makes has nothing to
@@ -107,7 +108,7 @@ STUB
 set +e
 control=$("$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DIR/nohostcall.dom" \
   "$OUT_DIR/start-musl.o" "$OUT_DIR/stub_main.o" "$OUT_DIR/tls.o" \
-  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/setjmp.o" "${MUSL_OVERRIDE_OBJS[@]}" "$OUT_DIR/level0.o" "${softfloat_objs[@]}" "$OUT_DIR/stdio_probe.o" "$ARCHIVE" 2>&1)
+  "$OUT_DIR/set_thread_area.o" "$OUT_DIR/setjmp.o" "${MUSL_OVERRIDE_OBJS[@]}" "$OUT_DIR/level0.o" "$OUT_DIR/lock.o" "${softfloat_objs[@]}" "$OUT_DIR/stdio_probe.o" "$ARCHIVE" 2>&1)
 set -e
 undef=$(printf '%s\n' "$control" | grep -oE 'undefined symbol: [A-Za-z_][A-Za-z0-9_]*' | sed 's/undefined symbol: //' | sort -u)
 if [ "$undef" != "__capstone_hostcall" ]; then

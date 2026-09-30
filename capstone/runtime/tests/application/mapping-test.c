@@ -9,6 +9,11 @@
 #define shmdt port_shmdt
 #define shmctl port_shmctl
 #define __vm_wait port_vm_wait
+/* The runtime's locks (capstone/lock.h) are the domain's; one native thread
+   needs none. */
+#include <capstone/lock.h>
+void capstone_lock(volatile int *word) { (void)word; }
+void capstone_unlock(volatile int *word) { (void)word; }
 #include "../../../ports/musl-capstone/runtime/mmap_shm_level0.c"
 #include <assert.h>
 
