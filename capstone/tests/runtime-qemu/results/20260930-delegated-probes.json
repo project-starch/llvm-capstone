@@ -1,0 +1,299 @@
+{
+ "sdk": "/tmp/capstone/v0-lane/rb-sdk",
+ "cc": "/tmp/capstone/delegation-ports/compiler-qualified/bin/clang",
+ "state": "/tmp/capstone/threads/vm-t1",
+ "vm_files": {
+  "qemu": "1283cd3400d4bc5470f0ae9f557abb60f7316c86cdee4ce8cd97e7a1f36f8196",
+  "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "firmware": "295647f3aacc8c585c4b4938c10a74c0cb676e2037f2faf7c882525d9c867a50",
+  "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+  "launcher": "8dd8f3f18c3b30756fba41243116f62458dba85c4911eae8acc448c6aa26ef9d",
+  "module": "6ab096ce9bf8e480a0c2d04d190d1f489b41ee754b5e1b0679e6ac44d265c7bc",
+  "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168"
+ },
+ "qemu_environment": {
+  "CAPSTONE_GP_NONLIN": "1",
+  "CAPSTONE_REV_NODES": "65536"
+ },
+ "arith_expect": "trap",
+ "results": {
+  "init-fini": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 1.48,
+   "stdout_tail": "CTOR p 1\nCTOR a 2 env=before-main\nCTOR b 3\nMAIN 4\nDTOR b 5\nDTOR a 6\nDTOR p 7\n",
+   "stderr_tail": ""
+  },
+  "exit-default": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 7
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "EXIT-TEST before exit\nEXIT-TEST atexit handler ran\n",
+   "stderr_tail": ""
+  },
+  "exit-hook": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 42
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "EXIT-TEST before exit\nEXIT-TEST atexit handler ran\n",
+   "stderr_tail": ""
+  },
+  "return-flush": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 5
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "RETURN-FLUSH line 1\nRETURN-FLUSH line 2\nRETURN-FLUSH line 3\nRETURN-FLUSH atexit handler ran\n",
+   "stderr_tail": ""
+  },
+  "unserved-report": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "UNSERVED-TEST two brk calls (-1 -1), closing fd 1\n",
+   "stderr_tail": "capstone-domain: UNSERVED syscalls: 214x2\n"
+  },
+  "large-read": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.65,
+   "stdout_tail": "LARGE-READ PASS open errno=0\nLARGE-READ PASS read-whole n=65536 errno=0 (want 65536)\nLARGE-READ PASS read-pieces total=65536 bad=0\nLARGE-READ PASS write-whole n=65536 errno=0\nLARGE-READ PASS write-readback n=65536\nLARGE-READ-DONE failures=0\n",
+   "stderr_tail": ""
+  },
+  "big-stdout": {
+   "verdict": "PASS",
+   "record": {
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.59,
+   "stdout_tail": "",
+   "stderr_tail": ""
+  },
+  "mmap-shm": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.63,
+   "stdout_tail": "rrno=19 (want ENODEV=19)\nMMAP-SHM PASS map-fixed-refused errno=22 (want EINVAL=22)\nMMAP-SHM PASS hugetlb-refused errno=12 (want ENOMEM=12)\nMMAP-SHM PASS beyond-arena-enomem errno=12 (want ENOMEM=12)\nMMAP-SHM PASS shmget-private id=1 errno=0\nMMAP-SHM PASS shmat p=ok zero=1\nMMAP-SHM PASS shmctl-stat-attached rc=0 segsz=56 nattch=1\nMMAP-SHM PASS shmdt rc=0 nattch=0\nMMAP-SHM PASS shmctl-rmid rmid=0 stat-after=-1 errno=22 (want EINVAL=22)\nMMAP-SHM PASS shmget-key id=1 errno=0\nMMAP-SHM PASS shmget-excl-refused rc=-1 errno=17 (want EEXIST=17)\nMMAP-SHM PASS shmget-lookup rc=1 (want 1)\nMMAP-SHM PASS shmget-missing rc=-1 errno=2 (want ENOENT=2)\nMMAP-SHM PASS shmat-key-writable p=ok ok=1\nMMAP-SHM PASS rmid-then-detach-frees rmid=0 dt=0 lookup-after=-1 errno=2 (want ENOENT=2)\nMMAP-SHM-DONE failures=0\n",
+   "stderr_tail": ""
+  },
+  "mmap-shm-control": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "MMAP-SHM-CONTROL rc=-1 errno=38\n",
+   "stderr_tail": "capstone-domain: UNSERVED syscalls: 222\n"
+  },
+  "tls-O0": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "TLS-TEST PASS initialized got=41 want=41\nTLS-TEST PASS initialized-write got=42 want=42\nTLS-TEST PASS zeroed got=0 want=0\nTLS-TEST PASS align64 got=7 want=7\nTLS-TEST PASS align4096 got=9 want=9\nTLS-TEST PASS other-tu got=1234 want=1234\nTLS-TEST PASS capability got=107 want=107\nTLS-TEST PASS bounds got=100004 want=100004\nTLS-TEST PASS errno got=9 want=9\nTLS-TEST-DONE failures=0\n",
+   "stderr_tail": ""
+  },
+  "tls-O2": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "TLS-TEST PASS initialized got=41 want=41\nTLS-TEST PASS initialized-write got=42 want=42\nTLS-TEST PASS zeroed got=0 want=0\nTLS-TEST PASS align64 got=7 want=7\nTLS-TEST PASS align4096 got=9 want=9\nTLS-TEST PASS other-tu got=1234 want=1234\nTLS-TEST PASS capability got=107 want=107\nTLS-TEST PASS bounds got=100004 want=100004\nTLS-TEST PASS errno got=9 want=9\nTLS-TEST-DONE failures=0\n",
+   "stderr_tail": ""
+  },
+  "cap-atomics-O0": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.63,
+   "stdout_tail": "ok   control: long store and fetch_add\nok   pointer store, load, dereference\nok   pointer exchange: old and new dereference\nok   pointer compare-exchange succeeds, stored pointer dereferences\nok   pointer compare-exchange fails, returned pointer dereferences\nok   malloc\nok   heap pointer through atomic store and load\nCAP-ATOMICS-DONE failures=0\n",
+   "stderr_tail": ""
+  },
+  "cap-atomics-O2": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "ok   control: long store and fetch_add\nok   pointer store, load, dereference\nok   pointer exchange: old and new dereference\nok   pointer compare-exchange succeeds, stored pointer dereferences\nok   pointer compare-exchange fails, returned pointer dereferences\nok   malloc\nok   heap pointer through atomic store and load\nCAP-ATOMICS-DONE failures=0\n",
+   "stderr_tail": ""
+  },
+  "subword-O0": {
+   "verdict": "FAIL",
+   "record": {
+    "version": 1,
+    "kind": "signal",
+    "value": 11,
+    "fault": "capstone-exec: domain fault cause=5 pc=0xc020c848 address=0xc4241d60 entry=0xc0200c78 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=a9534da382b9ae8c1d9b24157ec159510974fc37c66e1ac5443e09541ff70ace image=/mnt/host/runtime-probes-e5koozgu/subword-O0.dom"
+   },
+   "problems": [
+    "got signal 11, want exit 0",
+    "unexpected fault record: capstone-exec: domain fault cause=5 pc=0xc020c848 address=0xc4241d60 entry=0xc0200c78 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=a9534da382b9ae8c1d9b24157ec159510974fc37c66e1ac5443e09541ff70ace image=/mnt/host/runtime-probes-e5koozgu/subword-O0.dom",
+    "no 'SUBWORD-ATOMICS-DONE failures=0'"
+   ],
+   "seconds": 0.66,
+   "stdout_tail": "ok   control: 32-bit compare-exchange\n",
+   "stderr_tail": "capstone-vm: capstone-exec: domain fault cause=5 pc=0xc020c848 address=0xc4241d60 entry=0xc0200c78 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=a9534da382b9ae8c1d9b24157ec159510974fc37c66e1ac5443e09541ff70ace image=/mnt/host/runtime-probes-e5koozgu/subword-O0.dom\ncapstone-vm: application terminated by signal 11\n"
+  },
+  "subword-O2": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "ok   control: 32-bit compare-exchange\nok   8-bit compare-exchange, lane 0\nok   8-bit compare-exchange, lane 1\nok   8-bit compare-exchange, lane 2\nok   8-bit compare-exchange, lane 3\nok   8-bit lanes independent, next word untouched\nok   8-bit compare-exchange fails and returns the old value\nok   8-bit fetch_add\nok   8-bit exchange\nok   8-bit fetch_nand\nok   8-bit signed fetch_max\nok   8-bit signed fetch_min\nok   16-bit fetch_add, both halves\nok   16-bit compare-exchange, upper half\nok   16-bit unsigned fetch_max\nok   PyMutex lock\nok   PyMutex unlock, neighbour intact\nok   8-bit compare-exchange on a lone one-byte global\nSUBWORD-ATOMICS-DONE failures=0\n",
+   "stderr_tail": ""
+  },
+  "movc": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.61,
+   "stdout_tail": "MOVC-PROBE b=5 c=5\nMOVC-C32 got=0x5000 want=0x5000 called=1\n",
+   "stderr_tail": ""
+  },
+  "arith-0": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "ARITH-CASE 0 cinc=1 scc=1\n",
+   "stderr_tail": ""
+  },
+  "tls-overrun": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "signal",
+    "value": 11,
+    "fault": "capstone-exec: domain fault cause=7 pc=0xc020a838 address=0xc0240184 entry=0xc0200c78 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=329870d5f17f99c147e23b329ff984650a30e4ec7a5424bb218c148f18c96643 image=/mnt/host/runtime-probes-e5koozgu/tls-overrun.dom"
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "TLS-TEST overrun: writing zeroed[100]\n",
+   "stderr_tail": "capstone-vm: capstone-exec: domain fault cause=7 pc=0xc020a838 address=0xc0240184 entry=0xc0200c78 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=329870d5f17f99c147e23b329ff984650a30e4ec7a5424bb218c148f18c96643 image=/mnt/host/runtime-probes-e5koozgu/tls-overrun.dom\ncapstone-vm: application terminated by signal 11\n"
+  },
+  "arith-1": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "signal",
+    "value": 11,
+    "fault": "capstone-exec: domain fault cause=24 pc=0xc020a768 address=0x0 entry=0xc0200c78 code=0xc0200000-0xc4250000 last=0xc0de0001 preparing=0xc0de0001 sha256=6fded3f23899be2011cc1ab89feea51bbe21d7342a4244d5212fb45ef99d4179 image=/mnt/host/runtime-probes-e5koozgu/arith-1.dom"
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "",
+   "stderr_tail": "capstone-vm: capstone-exec: domain fault cause=24 pc=0xc020a768 address=0x0 entry=0xc0200c78 code=0xc0200000-0xc4250000 last=0xc0de0001 preparing=0xc0de0001 sha256=6fded3f23899be2011cc1ab89feea51bbe21d7342a4244d5212fb45ef99d4179 image=/mnt/host/runtime-probes-e5koozgu/arith-1.dom\ncapstone-vm: application terminated by signal 11\n"
+  },
+  "arith-2": {
+   "verdict": "PASS",
+   "record": {
+    "version": 1,
+    "kind": "signal",
+    "value": 11,
+    "fault": "capstone-exec: domain fault cause=24 pc=0xc020a768 address=0x0 entry=0xc0200c78 code=0xc0200000-0xc4250000 last=0xc0de0001 preparing=0xc0de0001 sha256=b0b96a91b2357a5aa6b1f4687dfadfbbaf579a26d83aaeed25ff3628fee1de74 image=/mnt/host/runtime-probes-e5koozgu/arith-2.dom"
+   },
+   "problems": [],
+   "seconds": 0.62,
+   "stdout_tail": "",
+   "stderr_tail": "capstone-vm: capstone-exec: domain fault cause=24 pc=0xc020a768 address=0x0 entry=0xc0200c78 code=0xc0200000-0xc4250000 last=0xc0de0001 preparing=0xc0de0001 sha256=b0b96a91b2357a5aa6b1f4687dfadfbbaf579a26d83aaeed25ff3628fee1de74 image=/mnt/host/runtime-probes-e5koozgu/arith-2.dom\ncapstone-vm: application terminated by signal 11\n"
+  }
+ },
+ "movc_runs": {
+  "rb-movc-off": {
+   "movc": {
+    "verdict": "PASS",
+    "record": {
+     "version": 1,
+     "kind": "exit",
+     "value": 0
+    },
+    "problems": [],
+    "seconds": 1.24,
+    "stdout_tail": "MOVC-PROBE b=5 c=5\nMOVC-C32 got=0x5000 want=0x5000 called=1\n",
+    "stderr_tail": ""
+   }
+  },
+  "rb-movc-on": {
+   "movc": {
+    "verdict": "PASS",
+    "record": {
+     "version": 1,
+     "kind": "exit",
+     "value": 0
+    },
+    "problems": [],
+    "seconds": 1.4,
+    "stdout_tail": "MOVC-PROBE b=5 c=0\nMOVC-C32 got=0x5000 want=0x5000 called=1\n",
+    "stderr_tail": ""
+   }
+  }
+ },
+ "note": "Run 2026-09-30 on the delegation-v0-removal branch rebased onto delegation-threads cf1aac16: capstone-qemu 674cdab03c, firmware 295647f3, module 6ab096ce, launcher 8dd8f3f1. 19 of 20 variants pass; subword-O0 faults (ISSUES C-74). movc ran in a normal guest and in one brought up with CAPSTONE_MOVC_NULL_SCALAR=1, and passed in both."
+}

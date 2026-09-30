@@ -7141,6 +7141,25 @@ live instance. The compiler lane's sweep
 `add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
 save loop is one alignment change from live.
 
+### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER/ABI, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism not verified`
+
+**What happens.** `tests/runtime-qemu/subword-atomics`, built by the application SDK's
+`capstone-cc` (compiler 7d01722aab88, which has C-51's fix) and run with
+`run-delegated-probes.py --only subword-O0`, faults at its last case, an 8-bit
+`__atomic_compare_exchange_n` on `static uint8_t lone_byte`: cause 5 at the load-reserved of the
+lowered sequence, the address `lone_byte` itself (the variable sits at the end of `.bss`, 16-byte
+aligned). Every earlier case passes, the capability-address 32-bit control and the PyMutex-shaped
+byte inside a struct included. The same source at -O2 passes (`subword-O2`, 19 of 20 variants of
+the run pass; record `tests/runtime-qemu/results/20260930-delegated-probes.json` on
+`delegation-v0-removal`). Under the retired HostCall v0 harness both levels passed.
+
+**What the probe says it tests.** Its comment names this as the risk case: the aligned word around
+a lone byte reaches past the variable, and if the capability for the variable is bounded to it, the
+LR/SC on that word is out of bounds. That is the likely mechanism, and it is **not verified**: which
+capability each optimization level uses for `&lone_byte` (an exact per-variable one at -O0, a wider
+one at -O2?) has not been read out of the images. Relevant for CPython: `PyMutex` is one byte; a
+standalone static one would be exposed at a level that bounds it alone.
+
 ### C-73 — capstone-c mis-allocates registers in long monitor functions, and cannot build two other shapes `WORKED AROUND 2026-09-29 in the monitor's code and by a build check; no reduced reproducer`
 
 capstone-c (the compiler of the capstone-sbi monitor, `jasonyu1996/capstone-c`) has three defects that

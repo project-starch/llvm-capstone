@@ -104,6 +104,12 @@ control produced. `mmap-shm-control` and `tls-overrun` remain controls that run.
 `movc` is judged by the switch the guest's QEMU was started with, which `capstone_vm`
 records in the state directory.
 
+First run on a VM (2026-09-30, on `delegation-threads` cf1aac16; record
+`results/20260930-delegated-probes.json`): 19 of the 20 variants pass, and `movc` passes in
+a normal guest and in one started with `CAPSTONE_MOVC_NULL_SCALAR=1`. `subword-O0` faults
+at its last case, the 8-bit compare-exchange on a lone one-byte global (ISSUES C-74);
+`subword-O2` passes.
+
 Removed with the v0 runtime, as the v0 emulation's own tests (under v2 these are
 Linux's behaviour, covered by the delegated libc-test and the application gate):
 `cwd`, `dir-read`, `mkdir-rmdir`, `path-readlink`, `path-rename`, `pread-pwrite`,
