@@ -514,7 +514,7 @@ python3 -m unittest discover -s capstone/runtime/tests/application -p test_heap_
 It needs the emulator the tree pins (in-process node reuse): on the base
 emulator the 200,000-cycle churn case exhausts the node pool after about
 65,000 allocations, on any image. The
-[checked 2026-09-30 record](tests/application/results/20260930-heap-qualification-reviewed.json)
+[2026-09-30 record on the platform dev pins](tests/application/results/20260930-heap-qualification-on-dev.json)
 supersedes the first run's weaker verdict and filename checks; the plan is
 [capstone-heap-protection.md](../docs/plans/capstone-heap-protection.md).
 

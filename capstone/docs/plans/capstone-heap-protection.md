@@ -101,7 +101,7 @@ protection.
 ### Result, 2026-09-30
 
 The milestone ran on QEMU
-([checked record](../../runtime/tests/application/results/20260930-heap-qualification-reviewed.json),
+([checked record](../../runtime/tests/application/results/20260930-heap-qualification-on-dev.json),
 runner `runtime/tests/application/run-heap.py`). Both images built from this
 tree's `contract.c`, one with `HEAP sublet`, one with `HEAP level0`; the
 symbol check matches all six allocation entry points, including their ELF
@@ -146,6 +146,14 @@ One instrument finding: on the emulator without in-process node reuse
 INSUF_RESOURCES, after 65,228 node allocations, on this image and on the
 2026-09-27 image alike. The qualification requires the emulator the tree
 pins, 22aec7ee, and the record names it.
+
+Re-run after merging dev 884d9434 into the lane, on the platform dev pins
+(capstone-qemu ac2837aa, the module of caplifive-buildroot d60365e3, the
+capstone-sbi a810177 firmware, launcher and images from the merged tree with
+the intcap-capable toolchain the SDK now requires): every check passes
+unchanged, churn allocates 200,064 nodes. That record is the current one;
+the two earlier records of the pre-merge platform are kept and marked
+superseded.
 
 Not covered: silicon, where the compressed-store rounding and the R-35/R-45
 fixes would have to be exercised; threads; the ports' own allocators.
