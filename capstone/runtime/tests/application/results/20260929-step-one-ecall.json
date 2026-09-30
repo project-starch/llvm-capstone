@@ -1,0 +1,121 @@
+{
+ "date": "2026-09-29",
+ "purpose": "one STEP ecall per delegated round instead of ten (CAPABILITIES probe + STEP + 8 QUERY halves)",
+ "method": "delegate-bench.dom (getpid loop) through capstone-vm run with CAPSTONE_DELEGATE_STATS=1; ticks are rdtime at 10 MHz from after seccomp install to exit, divided by rounds; wall time in the QEMU guest without icount; base and new booted back to back on the same host while another session's guest ran at one full CPU (QEMU pid 133495) and the CHERI QEMU pid 2537404 was live",
+ "platform": {
+  "qemu": "/tmp/capstone/domain-process-runtime/qemu-process/qemu-system-riscv64 (capstone-qemu 22aec7ee)",
+  "kernel": {
+   "path": "/tmp/capstone/delegation-binfmt-linux/arch/riscv/boot/Image",
+   "sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "launcher": {
+   "path": "/tmp/capstone/delegation-review-guest/capstone-exec",
+   "sha256": "991bc7dc5eabd3989a1f3426a3555eda1787e6ecb3a19812d525fc1661a8eabe"
+  },
+  "bench_image_sha256": "d92ecbc17ed3768c427c4447e5ec8ec0ed758e8dd398dd3ef676efe7d72322bc",
+  "base": {
+   "monitor": "capstone-sbi 4701bdf via caplifive-opensbi 3514060",
+   "module": "modcapstone at caplifive-buildroot 227fdfa",
+   "fw_jump_sha256": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+   "capstone_ko_sha256": "600b51cbc91a292755f036a9c5dc66dd01ce74c611c5c9a0e16ebdbfd3da4a0a"
+  },
+  "new": {
+   "monitor": "capstone-sbi 02d9d47 via caplifive-opensbi b18c7ba",
+   "module": "modcapstone at caplifive-buildroot 201a8d4",
+   "fw_jump_sha256": "ef4a2914360bc4d770bb284a9c9a1ce4cb042a9502edf3b9d1ac76a40e9a6a8b",
+   "capstone_ko_sha256": "ffe576224bb9b6a2158880bc7421ff924040a2bd4fb601206e04b5ddf8e2eef9"
+  }
+ },
+ "delegate_bench": {
+  "base": [
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 10715539
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 10261768
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 10533867
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 10477164
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 10449242
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 104385969
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 105287871
+   }
+  ],
+  "new": [
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 8935743
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 9493547
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 9583432
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 8847087
+   },
+   {
+    "calls": 10000,
+    "rounds": 10003,
+    "ticks": 8608566
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 88650497
+   },
+   {
+    "calls": 100000,
+    "rounds": 100003,
+    "ticks": 88272694
+   }
+  ]
+ },
+ "ticks_per_round_median": {
+  "base_10000": 1047.4,
+  "base_100000": 1048.3,
+  "new_10000": 893.3,
+  "new_100000": 884.6
+ },
+ "fault_records_identical_base_vs_new": {
+  "fault-vector": "cause=24 pc=0xc0206318 address=0x0",
+  "fault-privcsr": "cause=2 pc=0xc02062e8 address=0x30401073",
+  "fault-debugcap": "cause=2 pc=0xc02062f4 address=0x0",
+  "fault-capenter": "cause=2 pc=0xc0206300 address=0x0"
+ },
+ "new_platform_gates": {
+  "application_gate_run_py": "PASS (resource reuse after 13 mixed starts; real applications, SSH streams, unchanged boot ID)",
+  "run_binfmt_delegate_contract": "PASS (exec-closed, exec-error)"
+ }
+}
