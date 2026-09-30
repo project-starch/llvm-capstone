@@ -26,8 +26,19 @@ read against translated memory.
 | The process ABI numbers 0x21-0x2a are taken; an unpinned branch takes 0x2b and ioctls 14 and 15 | module `include/process-abi.h`, `capstone.h:92-127` |
 | Firmware builds standalone: capstone-c turns `sbi_capstone_dom.c` into assembly, OpenSBI links it with the Buildroot cross toolchain; the module builds out of tree against `build-qemu/build/linux-custom`; `capstone-exec` is a CMake target over `runtime/linux`; domains are applications built with `capstone_configure_application`; the gate boots the images with `run-domain-smoke.py` | Buildroot `Makefile:186-195`, `package/modcapstone/module/Makefile`, `runtime/exec/CMakeLists.txt`, `runtime/cmake/Application.cmake` |
 
-The firmware built this way from the unchanged monitor boots and passes the
-SQLite memory gate (verified before any change).
+The firmware built this way from the M2 monitor (`sbi/mapping-transport`
+7c6ba0b5) boots the gate images and passes the SQLite memory gate.
+
+Correction, 2026-09-30: an earlier version of this paragraph claimed the same
+for the unchanged monitor, "verified before any change". That run had booted
+the pinned snapshot firmware, not the rebuilt one: `run-domain-smoke.py` reads
+`CAPSTONE_BUILDROOT_DIR/build/images/fw_jump.elf`, and the rebuilt file had
+been copied into a sibling `images/` directory that nothing reads. The claim
+was unverified and is withdrawn. The gate directory now carries its own
+`build/images` with the lane's firmware and links to the snapshot's kernel and
+root filesystem; a positive control with a truncated `fw_jump.elf` at that path
+fails the gate (exit 75, no serial output), so the gate does boot what it is
+given.
 
 ## 2. Protocol
 
