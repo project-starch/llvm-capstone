@@ -7116,7 +7116,7 @@ With a private musl build, `run.sh c65` returns with `sizeof = 64` and "broadcas
 musl build fails the same 6 objects as without the patch. The wait paths need a futex and were not
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
 
-### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER/ABI, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism not verified`
+### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism read out of the code 2026-09-30`
 
 **What happens.** `tests/runtime-qemu/subword-atomics`, built by the application SDK's
 `capstone-cc` and run with `run-delegated-probes.py`, faults at its last case, an 8-bit
@@ -7131,12 +7131,24 @@ Under the retired HostCall v0 harness both levels passed. Seen twice, with two c
   compiler built from dev 330014ea's compiler sources (68c75ed3); record
   `tests/runtime-qemu/results/20260930-delegated-probes-stack.json`.
 
-**What the probe says it tests.** Its comment names this as the risk case: the aligned word around
-a lone byte reaches past the variable, and if the capability for the variable is bounded to it, the
-LR/SC on that word is out of bounds. That is the likely mechanism, and it is **not verified**: which
-capability each optimization level uses for `&lone_byte` (an exact per-variable one at -O0, a wider
-one at -O2?) has not been read out of the images. Relevant for CPython: `PyMutex` is one byte; a
-standalone static one would be exposed at a level that bounds it alone.
+**The mechanism, read out of the code.** It is the risk case the probe's comment names: the aligned
+word around a lone byte reaches past the variable, and the capability for the variable is bounded
+to it. From `capstone-cc -S` of the probe and the faulting image (fault pc 0x1d2b0 in the image):
+- **-O0:** `&lone_byte` is `cincoffset gp` + `delin`, then `shrink` to `[addr, addr+1)`, one byte.
+  AtomicExpand's masked loop then moves the cursor to `addr & ~3` (`andi -4`, `cincoffset`) and
+  runs `lr.w.aqrl` on that word. The variable is 16-byte aligned, so the word starts at the byte
+  itself and its other three bytes lie past the one-byte bound: cause 5 at the byte's address.
+- **-O2:** GlobalMerge puts `lone_byte` into `.L_MergedGlobals` (`lone_byte = .L_MergedGlobals`, 48
+  bytes, with `word32` and the others). The capability is shrunk to the merged block, the word lies
+  inside it, and the same loop succeeds. The -O2 pass is GlobalMerge's luck, not a fix.
+
+So any object smaller than 4 bytes whose capability is bounded to it alone (a static or global
+`uint8_t`/`uint16_t` at -O0, and at any level once it is not merged, or one allocated alone) cannot
+be the target of an 8- or 16-bit atomic. The expansion cannot repair it: it only has the narrow
+capability, and nothing widens one. The fix belongs where the bound is set: an object smaller than
+4 bytes gets 4-byte alignment and padding and a bound of the containing word, at least when its
+address can reach an atomic. Not decided and not implemented. Relevant for CPython: `PyMutex` is
+one byte; a standalone static one is exposed wherever it is bounded alone.
 
 ### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `OPEN — COMPILER, observed 2026-09-29; port workaround qualified; not reduced`
 
