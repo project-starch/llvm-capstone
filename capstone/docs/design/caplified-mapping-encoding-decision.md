@@ -23,6 +23,12 @@ and records them in its result.
 | SPLIT and MREV allocate a new node for the derived capability | `target/riscv/cap_rev_tree.c:107`, `target/riscv/op_helper.c:1144` |
 | The current QEMU keeps exact fat bounds in a side table on tagged stores, so compressed-bounds rounding is not observable there | [capability bounds model](capability-bounds-model.md), correction of 2026-06-29 |
 | The compiler compares capabilities by their 64-bit cursor, lowers `ptrtoint` to a bare `mv` and `inttoptr` to an untagged capability carrying the integer as its address | `llvm/lib/Target/Capstone/CapstoneISelLowering.cpp:7992` and `:8003` (`lowerSETCC`), `:2264`, `:8084-8087` |
+| The RTL's second word is `revnode_id:30 perm:3 cap_type:3 bounds:28`, and the 28th bounds bit selects between two bounds codecs, `full` (`iE:1 t:9 tE:3 b:11 bE:3`) and `cursorless` (`t:21 e:6`); there is no free bit | capstone-ariane `core/include/ariane_pkg.sv:612-642` (structs) and `:665-666` (`decompress_bounds`) at `f6ec6c1` |
+| The RTL's packed 3-bit type field is fully assigned: `NOT_CAP, LINEAR, NONLIN, REVOKE, UNINIT, SEALED, SEALEDRET, EXIT`; `EXIT` occurs nowhere else in the core, and QEMU has no EXIT type. The type query answers `cap_type - 1`, the spec numbering 0..6 with 7 meaning "not a capability"; the compiler's tag test is `LCC(type) < 7` | capstone-ariane `core/include/ariane_pkg.sv:654-663`, `core/anvil_build/capstone_dyn_unit.anvil` (the S-06 comment on the type query); capstone-qemu `target/riscv/op_helper.c:910-927`; `llvm/lib/Target/Capstone/CapstoneISelDAGToDAG.cpp:1744-1752` |
+| `LCC` selectors are Table 8 of the spec: 0 valid, 1 type, 2 cursor, 3 base, 4 end, 5 perms; none reads protected node metadata | `CapstoneISelDAGToDAG.cpp:1740-1741` |
+| Every type but NONLIN moves linearly, REV included | `target/riscv/op_helper.c:1202` |
+| QEMU's genesis leaves one capability ending at `2^63`, and the debug mint takes raw bounds | `target/riscv/op_helper.c:3021` (`helper_cscapenter`, "TODO: should be 2**64") and `:3039-3040` (`helper_csdebuggencap`), same at `408fd839`; the RTL's CAPENTER code capability is `[0x80000000, 0x80800000)`, `core/commit_stage.sv:200-201` |
+| QEMU's full codec shifts a 32-bit `1` by `E + 14` when decoding, undefined for `E >= 17`, that is for lengths of 512 MiB and more; the fat-bounds side table hides it | `target/riscv/cap_compress.c:102-103` at `ac2837aa`; noted in the bounds model as "int-shift UB" |
 
 ## 2. Decisions
 
@@ -46,12 +52,19 @@ does. The partition is the same on QEMU and the FPGA because both use PLEN 56.
 
 A capability is logical if its bounds lie inside the logical region and
 physical if they lie inside the physical region. No capability straddles the
-regions: genesis physical capabilities lie below `2^56`, CREATE produces ranges
-inside the logical region, and SHRINK, SHRINKTO and SPLIT only narrow. The
-walker and the LSU classify by address (`address >= 2^57`), which costs no bit
-of the 128-bit format. The binding word of E3 is the second witness: it is
-nonzero exactly for logical capabilities, and a capability whose region and
-binding disagree is a hardware fault, never an access.
+regions once genesis and minting are confined to the physical region, CREATE
+produces ranges inside the logical region, and SHRINK, SHRINKTO and SPLIT only
+narrow. That confinement is a change, not a fact: at the pinned QEMU the third
+genesis capability of `helper_cscapenter` ends at `2^63`, and
+`helper_csdebuggencap` mints whatever bounds it is given. M1 bounds the genesis
+capabilities to `[0, 2^56)`, makes the debug mint refuse any range outside the
+physical region, and gives both a zero binding; M4 checks the RTL's genesis set
+beyond the code capability. Until then the region invariant does not hold at
+start, and no claim of this document does either. The walker and the LSU
+classify by address (`address >= 2^57`), which costs no bit of the 128-bit
+format. The binding word of E3 is the second witness: it is nonzero exactly for
+logical capabilities, and a capability whose region and binding disagree is a
+hardware fault, never an access.
 
 ### E3 The binding lives in the revocation node
 
@@ -78,11 +91,12 @@ An entry holds gen (20 bits), state, class, max protection, the range as two
 64-bit addresses, and the root page-table capability with its tag; 64 bytes per
 entry, 256 KiB in total. Both widths are build constants: the id width bounds
 the mappings alive system-wide, the gen width bounds how often one id can be
-reused before it retires (`2^20` CREATEs; an exhausted id keeps its entry
-reserved, as the RTL's revocation generation retires rather than wraps). CREATE
-scans all entries for range overlap; that is a bounded loop in a rare
-instruction, and an interval structure is an optimisation for later.
-Sixteen-bit ids (4 MiB of protected memory) are deferred until a measured need.
+reused before it retires (`2^20 - 1` CREATEs, generation zero being "no
+binding"; an exhausted id keeps its entry reserved, as the RTL's revocation
+generation retires rather than wraps). CREATE scans all entries for range
+overlap; that is a bounded loop in a rare instruction, and an interval
+structure is an optimisation for later. Sixteen-bit ids (4 MiB of protected
+memory) are deferred until a measured need.
 
 ### E5 Capability kinds and the `ty` field
 
@@ -90,32 +104,75 @@ The candidate needs two kinds the ISA lacks, and reuses two it has:
 
 | Candidate object | Encoding |
 |---|---|
-| Page-table capability | New type `TABLE`. Exists only in table slots and registry entries, written by CREATE and POPULATE; never in a register |
-| Teardown token | New type `TOKEN`; linear; its node is the mapping's senior node, whose entry is DETACHED |
+| Page-table capability | No type code. The linear physical capability CREATE or POPULATE consumed, stored by hardware in its slot or registry entry; the walker reads slots by level. It is unreachable because no software capability covers a table page while it is one |
+| Teardown token | No type code. The detach handle's REV, returned by DETACH, with the registry entry now DETACHED |
 | Detach handle | Existing `REV` whose node carries a protected "mapping senior" flag set by CREATE. REVOKE refuses such a node; DETACH requires it |
 | Domain handle | The existing `SEALED` capability of the target domain |
 | Resume destination | A capability slot index inside that sealed domain context, read by the domain at resume |
 
-The two spare `ty` codes would suffice for TABLE and TOKEN, but leave nothing
-for later stages. The field therefore widens from 3 to 4 bits, taking the bit
-the RTL never uses: `revnode_id` shrinks from 31 to the RTL's 30 bits. The
-exact placement of the 33 low bits after this shuffle is an implementation
-detail of `cap_compress.c` and of the RTL's field constants, not part of this
-decision.
+There is no bit to widen `ty`, and no code to spare inside it. The RTL's second
+word is full: 30 node bits, 3 permission bits, 3 type bits and 28 bounds bits,
+the last of which selects between its two bounds codecs and does not exist in
+QEMU, which spends it as a 31st node bit. Its eight type codes are all
+assigned, the spec numbering runs 0..6 with `EXIT` at 6 (unreferenced in the
+RTL beyond its enum and absent from QEMU, but a spec type nonetheless), and 7
+is the total type query's answer for "not a capability", which the compiler's
+tag test relies on. So the decision adds no type at all:
 
-### E6 Representability
+- **Table pages need no type.** A table page is protected by the absence of
+  authority, not by a code: the linear capability that covered it was consumed
+  by CREATE or POPULATE, the registry and the revocation-node table are
+  hardware-private memory, and the parent slot that holds the page's capability
+  lies in another table page, up to the root in the registry. No software
+  capability covers a table page while it is one, so no load, store or LDC can
+  reach a slot; I2 holds by authority. The walker knows the level it is
+  reading: non-leaf slots hold page-table capabilities, leaf slots hold PTEs,
+  both stored as the linear physical capabilities they were. The only authority
+  over the page is the table-page handle, whose REVOKE returns UNINIT, so the
+  contents are gone before anyone reads them.
+- **The token needs no type.** The detach handle is a REV capability whose node
+  carries the protected mapping-senior flag while the registry entry is ACTIVE;
+  DETACH returns the same REV with the entry now DETACHED, and that is the
+  token. REVOKE refuses a flagged node in either state; DETACH requires ACTIVE;
+  UNMAP and DESTROY require DETACHED. A Stage-3 range token from SURRENDER is
+  the same encoding with narrower bounds. REV moves linearly, as everything but
+  NONLIN does, so the token has one holder.
 
-Under the compressed-bounds rule of `cap_compress.c`, a range shorter than 4
-KiB is exact and a longer one is exact only if both ends are multiples of
-`2^(E+3)`, where `E` is the highest set bit of the length minus 12. The
-monitor's range allocator therefore hands out mapping ranges whose ends are
-aligned to that grain, and the mapping capability's bounds are exact. This is a
-convenience, not a security condition: the walker checks every access against
-the registry entry's range through the capability's binding, so bounds that had
-rounded outward could never reach another mapping. Objects inside a mapping
-round as they do today. On the current QEMU the side table keeps fat bounds
-exact, so the rule is checked by the model's arithmetic and by the RTL, not by
-QEMU.
+The type field, the compiler's tag test and the RTL's word are untouched. A
+later kind that must be register-visible, should Stage 4 need one, requires a
+layout decision, dropping `cursorless`, narrowing the node id or retiring
+`EXIT`, with its cost; that decision is not taken here.
+
+### E6 Representability: an allocator rule, not a codec guarantee
+
+This decision does not fix a bounds codec, and it does not claim exact mapping
+bounds from the existing ones. QEMU's full codec has undefined behaviour when
+decoding lengths of 512 MiB and more (`cap_compress.c:102-103`), which the
+fat-bounds side table hides; an independent UBSan run of that codec turned `[L
++ 1 GiB, L + 2 GiB)` into `[L + 1 GiB, L + 3 GiB)` for `L = 2^57`. The RTL has
+two codecs, and its cursorless decode rebuilds the far end from the cursor's
+high bits, so a range that crosses the codec's alignment window can lose its
+top; the review's hand computation of `[2^58 - 4096, 2^58 + 4096)` with the
+cursor at the start gives an end of `2^58`. Neither codec has been
+round-tripped at logical addresses.
+
+Two things are decided. First, the monitor's range allocator reserves naturally
+aligned power-of-two ranges with the base aligned to twice the size: a request
+of `n` bytes reserves `2^k >= n` at a base that is a multiple of `2^(k+1)`.
+Read against both codecs, this keeps the range and its one-past end inside one
+alignment window, so a correct decoder reproduces the bounds exactly; it is
+derived from reading the codecs, not from testing them, and it is what the
+model's `reservation_ok` rule checks. The usable length is the request;
+POPULATE backs only those pages, and the reservation above them stays none.
+Second, M1 fixes the QEMU codec's shift and adds round-trip tests over bases
+across the logical region, with the cursor at the start, inside, at the end and
+one past, for the full codec; M4 repeats them for both RTL codecs. Until those
+tests pass, "exact" is a target.
+
+None of this is a security condition: the walker checks every access against
+the registry entry's range through the capability's binding, so bounds that
+decoded outward could never reach another mapping. Objects inside a mapping
+round as they do today.
 
 ### E7 The compiler is unchanged for Stage 1
 
@@ -134,8 +191,14 @@ compares equal to `NULL`.
 index)`, with the range checked by E1 and E4, the root page converted as §4 of
 the candidate requires, and the mapping capability written into the named slot
 of the sealed domain context inside the instruction. The monitor never holds
-the result; the libc checks the delivered bounds, rights and binding against
-its pending request.
+the result. The libc checks the delivered bounds and rights against its pending
+request; the range alone identifies the mapping, since ranges are globally
+unique (E1). To compare the binding with the (id, gen) the completion reported,
+software needs a read the ISA lacks: the binding lives in the node (E3) and the
+`LCC` fields stop at perms. M1 adds field 6, the binding word, read-only,
+answering 0 for a physical capability and trapping on an untagged operand like
+every field but the type. It is a consistency check for the libc and a
+diagnostic, not the authority; the walker's binding check is.
 
 ## 3. Consequences for the milestones
 
@@ -150,9 +213,10 @@ its pending request.
   reservation in monitor memory. Per-domain arenas inside the logical region
   are an allocator convenience; global disjointness is enforced by CREATE
   regardless.
-- **M4, RTL:** node memory and TLB tag widths of E3, the registry lookup on the
-  access path, the CREATE loop, and the field shuffle of E5. These are the cost
-  questions of §10.3; none is answered here.
+- **M4, RTL:** node memory and TLB tag widths of E3 plus the mapping-senior
+  flag, the registry lookup on the access path, the CREATE loop, the genesis
+  set, and round trips of both bounds codecs at logical addresses. These are
+  the cost questions of §10.3; none is answered here.
 
 ## 4. Alternatives rejected
 
@@ -171,6 +235,9 @@ its pending request.
 
 ## 5. Open after this decision
 
-The bit placement inside `cap_compress.c` after E5; the monitor's range
-allocator policy; the RTL cost of E3 and E4; the future of QEMU's fat-bounds
-side table, which decides whether representability can ever be tested there.
+The bounds codec at logical addresses, to be fixed and round-tripped in M1
+(QEMU, after the shift fix) and M4 (both RTL codecs); the RTL's genesis set
+beyond its code capability; the placement of the mapping-senior flag and the
+binding word in RTL node memory and their cost (E3, E4); a layout decision for
+any later register-visible kind; the future of QEMU's fat-bounds side table,
+which decides whether representability can be tested there at all.

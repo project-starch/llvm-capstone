@@ -14,7 +14,7 @@ from model import (Action, ADDRESS_LIMIT, ARCH_LOGICAL_BASE, ARCH_LOGICAL_LIMIT,
                    BINDING_GEN_BITS, BINDING_ID_BITS, Cap, HARTS, LOGICAL_BASE,
                    Machine, MUTANTS, PAGES, PHYSICAL_LIMIT, Refused, ResumeSlot,
                    Violation, Word, WORDS, arch_kind, arch_partition_ok,
-                   exactly_representable, pack_binding, unpack_binding)
+                   pack_binding, reservation_ok, unpack_binding)
 
 
 def base(ident):
@@ -480,8 +480,9 @@ def check_architectural_partition():
     """The decided 64-bit partition, checked with the real constants.
 
     The walked geometry above is finite; this scenario applies the same range
-    rule, kind classification, representability rule and binding word to the
-    architectural numbers of the encoding decision. Pure arithmetic, no walk.
+    rule, kind classification, allocator reservation rule and binding word to
+    the architectural numbers of the encoding decision. Pure arithmetic, no
+    walk, and no statement about any bounds codec.
     """
     P, L, T, K = ARCH_PHYSICAL_LIMIT, ARCH_LOGICAL_BASE, ARCH_LOGICAL_LIMIT, ARCH_PAGE
     assert P == 1 << 56 and L == 1 << 57 and T == 1 << 63 and K == 4096
@@ -502,12 +503,19 @@ def check_architectural_partition():
     # A range that passes the rule never straddles the two regions, so a
     # capability's bounds fix its kind and narrowing cannot change it.
     assert arch_kind(L) == arch_kind(L + (1 << 40) - 1) == "logical"
-    # Exact representability under the compressed-bounds grain: power-of-two
-    # aligned mapping ranges are exact; a page offset inside a 1 GiB range is not.
-    assert exactly_representable(L, L + (1 << 30))
-    assert exactly_representable(L + (1 << 21), L + (1 << 21) + (1 << 30))
-    assert not exactly_representable(L + K, L + K + (1 << 30))
-    assert exactly_representable(L + K, L + 2 * K)
+    # The allocator's reservation rule: power-of-two size, base aligned to
+    # twice the size. The review's window-crossing example is rejected, as is
+    # a second 1 GiB reservation placed directly behind the first.
+    assert reservation_ok(L, L + (1 << 30))
+    assert reservation_ok(L + (1 << 31), L + (1 << 31) + (1 << 30))
+    assert not reservation_ok((1 << 58) - K, (1 << 58) + K)
+    assert not reservation_ok(L + (1 << 30), L + (1 << 31))
+    assert not reservation_ok(L, L + 3 * K)
+    assert reservation_ok(L + 2 * K, L + 3 * K)
+    # Every reservation is also a valid partition range, not the converse.
+    for lo, hi in ((L, L + (1 << 30)), (L + 2 * K, L + 3 * K)):
+        assert arch_partition_ok(lo, hi)
+    assert arch_partition_ok((1 << 58) - K, (1 << 58) + K)
     # Binding word: nonzero for every valid (id, gen), round-trips, and refuses
     # generation zero and the exhausted generation.
     assert pack_binding(0, 1) != 0

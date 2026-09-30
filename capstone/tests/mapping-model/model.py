@@ -59,15 +59,16 @@ def arch_kind(address):
     return None
 
 
-def exactly_representable(lo, hi):
-    """CHERI-128 grain rule of cap_compress.c: below 4 KiB exact, above it
-    base and top must be multiples of 2^(E+3) with E = highest bit of the
-    length minus 12. Spec-derived; the current QEMU keeps fat bounds exact."""
-    length = hi - lo
-    if length < 4096:
-        return True
-    grain = 1 << (length.bit_length() - 1 - 12 + 3)
-    return lo % grain == 0 and hi % grain == 0
+def reservation_ok(lo, hi):
+    """The monitor's allocation rule of the encoding decision (E6): a
+    reservation is a power of two in size, with its base aligned to twice
+    that size, so the range and its one-past end stay inside one alignment
+    window of either bounds codec. Derived from reading the codecs, not from
+    testing them; it certifies no codec and is not a security condition."""
+    size = hi - lo
+    if size <= 0 or size & (size - 1):
+        return False
+    return lo % (2 * size) == 0
 
 
 def pack_binding(ident, generation):

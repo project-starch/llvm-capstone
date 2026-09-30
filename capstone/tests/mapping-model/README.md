@@ -162,8 +162,9 @@ operations must leave the complete state unchanged.
    comparisons use the numeric cursor projection, including aliases with different
    bounds/rights and one-past equality at a SPLIT boundary. Geometry and recipient
    negative tests invoke the instruction with absolute operands directly. The
-   fourth applies the range rule, kind classification, grain rule and binding
-   word to the architectural constants of the encoding decision; it walks nothing.
+   fourth applies the range rule, kind classification, allocator reservation
+   rule and binding word to the architectural constants of the encoding
+   decision; it walks nothing and certifies no bounds codec.
 2. Forty schedule families exhaust **all enabled interleavings to terminal
    states for their fixed initial workloads**: five operations (load, store,
    atomic read-modify-write, capability load and capability store), four removal
@@ -269,11 +270,13 @@ to this model; none changes production enforcement.
   history or the adapter. The architectural partition is decided in the
   [encoding decision](../../docs/design/caplified-mapping-encoding-decision.md);
   `check_architectural_partition` applies the model's range rule, kind
-  classification, compressed-bounds grain rule and 32-bit binding word to those
-  constants (physical below `2^56`, logical in `[2^57, 2^63)`, 4 KiB pages, 12-bit
-  id, 20-bit generation), and the record's `partition` field repeats them. The
-  walked geometry stays finite, and the 128-bit encoding at those addresses
-  remains unqualified on QEMU, whose side table keeps fat bounds, and on RTL.
+  classification, the allocator's reservation rule (power-of-two size, base
+  aligned to twice the size) and the 32-bit binding word to those constants
+  (physical below `2^56`, logical in `[2^57, 2^63)`, 4 KiB pages, 12-bit id,
+  20-bit generation), and the record's `partition` field repeats them. The
+  walked geometry stays finite. No bounds codec is checked: QEMU's has a known
+  decode fault above 512 MiB hidden by its fat-bounds side table, the RTL has
+  two, and their round trips at logical addresses belong to M1 and M4.
 - Revocation-node identities are monotonic and never reused. This experiment
   does not qualify the RTL/QEMU node reclaimer or finite node-generation encoding.
 - A memory effect, including the move/clear of a linear capability, is one
