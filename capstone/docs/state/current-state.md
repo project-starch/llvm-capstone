@@ -2,19 +2,6 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-09-30 — delegated threading review qualification
-
-The [threading lane](../plans/delegation-threads.md) now audits capability stores per slot,
-including duplicate archive members, and tests signal interruption only after observing the
-worker's blocked read. Native controls include early delivery and a deliberately missing signal.
-CPython includes spawn patch 0015, keeps real TLS and patch 0016, and disables unsupported epoll
-in configure. Use the [current gate record](../../ports/cpython/interpreter/results/thread-review-2026-09-30.json)
-for actual results and limits. After fixing level0 to release the unused tail of a shrinking
-allocation, all five modules pass at 64 MiB (448 tests, 38 explicit skips), as does subprocess
-smoke (21/21). Native ASan/UBSan CTest passes 45/45 and the rebuilt guest pthread probe 29/29.
-The earlier 26 subprocess errors did not exercise their child assertions. Fork remains ENOSYS.
-The asynchronous doorbell and the limits in the thread plan remain separate.
-
 ## 2026-09-29 — delegated signals
 
 On `delegation-signals`, synchronous delivery passes the 26-mode

@@ -176,5 +176,10 @@
   "limits": [
     "The original intermittent timeout was not captured with scheduler evidence; this fixes a demonstrable race in its test, not a retrospective proof of that timeout's cause.",
     "Delivery before the read is forced through sched_yield in the domain. This does not test asynchronous delivery to a context making no delegated calls."
-  ]
+  ],
+  "source_qualification": {
+    "probe_revision": "06a0846e8ee4",
+    "superseded_attribution": "7777c481 alone removes reader_tid still used by mask-routing and does not build the domain probe; its commit-message claim of 29 passing modes requires 06a0846e.",
+    "landing": "Combine 7777c481 and 06a0846e into one buildable logical change; preserve pushed lane history."
+  }
 }

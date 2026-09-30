@@ -864,7 +864,14 @@
       "value": 2
     },
     "captured_bytes": 613603,
-    "classification": "Same child script run directly, outside subprocess.communicate, to distinguish child behavior from parent capture exhaustion."
+    "classification": "Same child script run directly, outside subprocess.communicate, to distinguish child behavior from parent capture exhaustion.",
+    "signal_origin": {
+      "trigger": "CPython 3.13.7 Lib/test/test_threading.py:test_print_exception_gh_102056 starts a worker that calls _thread.interrupt_main() after one second.",
+      "python_delivery": "Modules/_threadmodule.c:thread_PyThread_interrupt_main defaults to SIGINT and calls PyErr_SetInterruptEx; the Python handler raises KeyboardInterrupt.",
+      "process_termination": "Modules/main.c:Py_RunMain sees unhandled_keyboard_interrupt and calls exit_sigint, which sets SIG_DFL and calls kill(getpid(), SIGINT).",
+      "oracle": "The upstream test uses assert_python_failure. Both the native control and the directly run domain child report signal 2.",
+      "scope": "The test triggers its own interrupt; this result does not qualify asynchronous delivery into a computing domain."
+    }
   },
   "before_realloc_fix": {
     "build": {

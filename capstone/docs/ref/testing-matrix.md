@@ -1,14 +1,5 @@
 # Capstone testing matrix and current recommendations
 
-Delegated threading review (2026-09-30): native `pthread-kill-read`,
-`pthread-kill-before-read` and `pthread-kill-missing-signal` test the blocked-read handshake
-and bounded failure. The guest pthread probe includes `kill-thread-early`.
-`tests/capinit-unwritten-slots-test.py` has eight scanner controls; an incomplete scan exits 2.
-The [CPython gate record](../../ports/cpython/interpreter/results/thread-review-2026-09-30.json)
-reports subprocess-enabled coverage (448 tests, 38 reported skips), explicit upstream exclusions
-and resource settings. `level0-realloc-shrink` and its domain probe verify released shrink tails,
-capability payloads and coalescing; native ASan/UBSan CTest passes 45/45.
-
 Application benchmark study: the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md)
 uses two matched pairs for the nested boundary; default CheriBSD on/off remains
 separate reference data. The [planner](../../experiments/study/README.md) supports

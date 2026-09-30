@@ -266,20 +266,40 @@ The rerun also exposed a level0 allocator limitation: CPython allocates a 32 KiB
 after shrinking. Capturing the recursive exception child's stderr exhausted the parent;
 `test_threading` had four MemoryErrors followed by two thread-creation errors at both 128 MiB
 and 192 MiB. The recursive test failed alone too; the other five passed separately. Running
-the child directly produced about 600 KiB and ended with SIGINT.
+the child directly produced about 600 KiB and ended with SIGINT. The signal originates
+in the test itself: `test_print_exception_gh_102056` starts a worker that calls
+`_thread.interrupt_main()` after one second. This schedules SIGINT's Python handler;
+the resulting unhandled `KeyboardInterrupt` makes `Py_RunMain` call `exit_sigint`
+(`Modules/main.c`), restore `SIG_DFL` and call `kill(getpid(), SIGINT)`. Both the native
+control and the domain child report signal 2. The test uses `assert_python_failure`;
+this termination is expected and does not require asynchronous domain delivery.
 
 Level0 now splits and coalesces the unused tail under its heap lock. The
 [directed allocator control](../../../runtime/tests/application/results/20260930-level0-realloc-review.json)
 fails at allocation 31 before the fix; afterwards it retains 4,096 short reads in 1 MiB,
 preserves capability payloads through shrink and regrowth, and recovers a 900 KiB free block.
 The complete CPython run then passes at the original 64 MiB. Native ASan/UBSan CTest passes
-45/45 and the rebuilt domain pthread probe passes 29/29.
+45/45 and the rebuilt domain pthread probe passes 29/29. The subsequent
+[allocator regression run](../../../runtime/tests/application/results/20260930-level0-application-regressions.json)
+relinks Perl and mruby with the new allocator: application gate 21/21, libc-test 57 PASS
+and selected regressions 12/16, with every libc verdict unchanged from the earlier run.
 
 [results/thread-review-2026-09-30.json](results/thread-review-2026-09-30.json) contains the
 build hashes, every skip, the outcomes of all 26 formerly blocked tests, and the failed
 64/128/192 MiB runs. The original gate-pass claim was premature; this subprocess-enabled
 result replaces it. Fork, unavailable optional test modules and resource exclusions remain
 explicit in the record. This does not establish unrestricted CPython or asynchronous delivery.
+
+### Integrating the process lane
+
+These results are on `delegation-threads`, not yet on `dev`. Resolve the preparation
+script and README conflicts by retaining this lane's real TLS: CPython patch 0006
+stays deleted and `_Py_THREAD_LOCAL_AS_GLOBAL` stays absent. Keep patch 0016, spawn
+patch 0015, `-D_Py_FORK_EXEC_POSIX_SPAWN` and the unsupported-epoll guard. Patch 0015
+and `host/subprocess-smoke.py` are byte-identical to process-lane `dae66593`.
+Rebuild and run the gate after integration; the current record does not qualify an
+as-yet unbuilt merge. The [thread plan](../../../docs/plans/delegation-threads.md)
+also records which signal-probe commits must land together.
 
 ## What this does not establish
 

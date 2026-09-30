@@ -267,8 +267,12 @@ Done so far:
   interrupts the observed read. Error cleanup releases the worker and writes a byte before
   joining. Native ASan/UBSan CTest passes 44/44, including the deliberately missing second
   signal returning failure in 3.01 s; the guest pthread probe passes 29/29. Record
-  `runtime/tests/application/results/20260930-kill-thread-review.json`. This removes a known
-  test race; the earlier intermittent timeout's exact schedule was not recorded, so its
+  `runtime/tests/application/results/20260930-kill-thread-review.json`. The guest result
+  belongs to `06a0846e`, which restores `reader_tid` for `mask-routing`; `7777c481` alone
+  does not build the domain probe. Land the pair together as one logical change so the
+  shared branch remains buildable at every commit. Keep the pushed lane history intact.
+  This removes a known test race; the earlier intermittent timeout's exact schedule
+  was not recorded, so its
   individual cause remains unproven. This is synchronous delivery, not the doorbell.
 - Initial CPython evidence, before subprocess patch 0015: CPython 3.13.7 with C11 thread-locals
   (patch 0006 and its define are gone) and patch 0016, which keeps the join handle and the raw
@@ -298,6 +302,28 @@ Done so far:
   `ports/cpython/interpreter/results/thread-review-2026-09-30.json` preserves the failed
   runs and every explicit exclusion. This qualifies the supported threading profile, not
   asynchronous delivery, fork or the omitted optional/resource-dependent tests.
+- Allocator regression follow-up (2026-09-30, source `8d1a09fb`, including `7795986d`):
+  rebuilt the SDK and application contract and relinked Perl/mruby against the new level0.
+  Port object hashes match the previous run; the runtime archives and images are fresh.
+  The application gate passes all 21 result lines. libc-test functional is 57 PASS,
+  3 FAIL, 1 FAULT, 3 NOBUILD, 13 EXCLUDED; the selected regressions are 12 PASS,
+  3 FAIL on refused fork and 1 NOBUILD because the test replaces malloc. Every verdict
+  matches the preceding T5/C-75 run, with no lost pass. This closes the missing
+  application/libc regression run after the shrinking-realloc change; it does not
+  qualify every application port. Shrinking invalidates the released tail: accesses
+  beyond the new requested size are not supported. Pins, per-test results and hashes:
+  `runtime/tests/application/results/20260930-level0-application-regressions.json`.
+- Process-lane integration: retain this lane's real TLS and pointer-preserving patch 0016
+  when resolving `prepare-cpython-capstone.sh` and the CPython README. Keep CPython patch
+  0006 deleted and `_Py_THREAD_LOCAL_AS_GLOBAL` absent. Patch 0015 and
+  `host/subprocess-smoke.py` match process-lane `dae66593` byte for byte; keep the spawn
+  configure define and the unsupported-epoll guard. See the port README for the gate.
+- Scanner follow-up: stored cursor values now have to match the relocation target and
+  addend, preserving nonlocal symbol identity (including weak aliases). Unknown values
+  and unexpected analyzer exceptions are INCOMPLETE (exit 2). Thirteen controls pass;
+  the repeated 1,629-object scan has no wrong values or incomplete analyses and retains
+  only the intentional SDK integer-address anchor. Tags, bounds and authority remain
+  outside this check. Run `tests/capinit-unwritten-slots-test.py` with the pinned compiler.
 - An independent review of B8 (2026-09-30) found five defects, all fixed: a delivery read the
   shared handler table unlocked while another context could change it (the action is now copied
   under a leaf lock); glibc's `sigaddset` refuses signals 32 and 33, so the trampoline could not

@@ -1,9 +1,8 @@
 # Capstone project documentation
 
-Delegated threading review (2026-09-30): the [thread plan](plans/delegation-threads.md)
-and [CPython gate](../ports/cpython/interpreter/README.md#review-qualification-with-subprocess-enabled)
-track the corrected capability-store audit, deterministic signal/read probe and subprocess-enabled
-qualification. Fork remains ENOSYS; asynchronous delivery is a separate milestone.
+Lane-only work on `delegation-threads` (not landed on `dev`):
+[thread plan and integration constraints](plans/delegation-threads.md),
+[CPython qualification](../ports/cpython/interpreter/README.md#review-qualification-with-subprocess-enabled).
 
 Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
 Seven application recipes are migrated, with new QEMU functional and safety
