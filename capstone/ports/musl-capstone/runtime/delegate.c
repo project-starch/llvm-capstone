@@ -17,6 +17,7 @@
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
+#include <signal.h>
 #include <time.h>
 
 typedef void *syscall_arg_t;
@@ -32,6 +33,17 @@ void __capstone_hc_note_noop(long n);
 void __capstone_hc_report_unserved(void);
 long __capstone_delegate_spawn(const void *block, unsigned long bytes);
 const struct capstone_launch_task *__capstone_launch_task(void);
+/* signals.c */
+struct k_sigaction;
+void __capstone_signals_regions(void *meta, unsigned long bytes);
+int __capstone_signals_hint(void);
+void __capstone_signals_take(void);
+void __capstone_signals_deliver(void);
+void __capstone_sigmask_note(int how, uint64_t m);
+long __capstone_sigaction(int sig, const struct k_sigaction *new, struct k_sigaction *old);
+long __capstone_sigprocmask(int how, const sigset_t *set, sigset_t *old, unsigned long size);
+long __capstone_sigaltstack(const stack_t *ss, stack_t *old);
+void __capstone_siginfo_translate(const unsigned char *raw, int sig, siginfo_t *si);
 
 /* Answered without a round, from the launch record (see launch.h): the task's
  * identity, which cannot change under a domain, and the two clocks as rdtime
@@ -95,9 +107,12 @@ static size_t cap_bytes(void *cap) {
                   __builtin_capstone_cap_get_cursor(cap));
 }
 
+static uint64_t dl_status;  /* of the last round: DONE or RETRY */
+
 void __capstone_delegate_regions(void *entry, void *exchange) {
   dl_entry = entry;
   dl_exchange = exchange;
+  __capstone_signals_regions(entry, entry ? cap_bytes(entry) : 0);
   dl_capacity = exchange ? cap_bytes(exchange) : 0;
   if (dl_capacity > 0x40000000u)
     dl_capacity = 0x40000000u;
@@ -121,14 +136,41 @@ static int dl_alloc(size_t bytes, uint64_t *offset) {
   return 0;
 }
 
-/* One round trip. args are already offsets where the shape says so. */
+/* One round trip. args are already offsets where the shape says so. The
+ * events the launcher published are taken here; they run in dl_settle, once
+ * the caller has its output data back and the exchange region is free. */
 static long dl_round(uint64_t nr, const uint64_t args[CAPSTONE_DELEGATE_ARGS]) {
   struct capstone_delegate_entry e;
-  if (capstone_delegate_pack(&e, nr, args))
+  if (capstone_delegate_pack(&e, nr, args)) {
+    dl_status = CAPSTONE_ROUND_DONE;
     return -EINVAL;
+  }
   memcpy((void *)dl_entry, &e, sizeof e);
   __capstone_yield();
+  dl_status = dl_entry->status;
+  __capstone_signals_take();
   return (long)dl_entry->result;
+}
+
+/* After a round's data is safe: deliver, and say whether the call must be
+ * issued again because it has no result yet. */
+static int dl_settle(void) {
+  int retry = dl_status == CAPSTONE_ROUND_RETRY;
+  __capstone_signals_deliver();
+  return retry;
+}
+
+/* Runtime requests with integer arguments only. */
+long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c) {
+  uint64_t args[CAPSTONE_DELEGATE_ARGS] = {a, b, c, 0, 0, 0};
+  long r;
+  if (!__capstone_delegate_ready())
+    return -EIO;
+  do {
+    dl_reset();
+    r = dl_round(nr, args);
+  } while (dl_settle());
+  return r;
 }
 
 static long dl_string(const char *s, uint64_t *offset) {
@@ -144,13 +186,11 @@ static long dl_string(const char *s, uint64_t *offset) {
 
 /* Buffers whose length is another argument are clamped to what fits: a short
  * read, write or listing is a result every caller already handles. */
-static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
-  const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
+static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
+                         syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   uint64_t args[CAPSTONE_DELEGATE_ARGS];
   struct dl_slot slots[CAPSTONE_DELEGATE_ARGS] = {{0}};
   long result;
-  if (!s)
-    return -ENOSYS;
   dl_reset();
   dl_entry->nr = nr; /* named in a fault record if the copy below faults */
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
@@ -199,6 +239,8 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
     slots[i].copy_back = a->kind != CAPSTONE_ARG_IN && a->kind != CAPSTONE_ARG_OPT_IN;
   }
   result = dl_round(nr, args);
+  if (dl_status == CAPSTONE_ROUND_RETRY)
+    return 0;   /* no result, no output: the caller issues the call again */
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
     if (slots[i].domain && slots[i].copy_back) {
       size_t bytes = capstone_delegate_result_bytes(nr, i, slots[i].bytes, result);
@@ -207,11 +249,50 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   return result;
 }
 
+static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
+  long result;
+  if (!s)
+    return -ENOSYS;
+  do result = dl_call_once(s, nr, raw);
+  while (dl_settle());
+  return result;
+}
+
+/* rt_sigtimedwait returns the kernel's 128-byte siginfo. Translate it into
+ * musl's capability layout before a handler from this round can inspect the
+ * caller's output buffer. */
+static long dl_sigtimedwait(syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  const struct capstone_delegate_shape *shape = capstone_delegate_shape(CAPSTONE_SYS_rt_sigtimedwait);
+  siginfo_t *out = (siginfo_t *)raw[1];
+  unsigned char wire[128];
+  long result;
+  raw[1] = out ? (syscall_arg_t)wire : 0;
+  do {
+    result = dl_call_once(shape, CAPSTONE_SYS_rt_sigtimedwait, raw);
+    if (result > 0 && dl_status != CAPSTONE_ROUND_RETRY && out)
+      __capstone_siginfo_translate(wire, (int)result, out);
+  } while (dl_settle());
+  return result;
+}
+
+/* rt_sigprocmask for signals.c: two eight-byte buffers, and the mirror. */
+long __capstone_delegate_procmask(int how, const uint64_t *set, uint64_t *old) {
+  uint64_t in = set ? *set : 0, out = 0;
+  syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {(syscall_arg_t)(long)how, set ? (syscall_arg_t)&in : 0,
+                                               old ? (syscall_arg_t)&out : 0, (syscall_arg_t)8, 0, 0};
+  long r = dl_call(CAPSTONE_SYS_rt_sigprocmask, raw);
+  if (r) return r;
+  if (set) __capstone_sigmask_note(how, in);
+  if (old) *old = out;
+  return 0;
+}
+
 /* One kernel vector operation preserves pipe atomicity and file offsets.
  * Nested pointers are wire offsets as well. A large vector may return a short
  * prefix; a small vector (including PIPE_BUF writes) fits in one round. */
-static long dl_vector(long fd, const struct iovec *iov, long count, int writing,
-                      int positioned, long long offset) {
+static long dl_vector_once(long fd, const struct iovec *iov, long count, int writing,
+                           int positioned, long long offset) {
   uint64_t args[6] = {(uint64_t)fd, 0, 0, (uint64_t)offset & UINT32_MAX,
                       (uint64_t)offset >> 32, 0};
   uint64_t offsets[1024];
@@ -253,6 +334,8 @@ static long dl_vector(long fd, const struct iovec *iov, long count, int writing,
   uint64_t nr = positioned ? (writing ? CAPSTONE_SYS_pwritev : CAPSTONE_SYS_preadv)
                            : (writing ? CAPSTONE_SYS_writev : CAPSTONE_SYS_readv);
   long result = dl_round(nr, args);
+  if (dl_status == CAPSTONE_ROUND_RETRY)
+    return 0;
   if (!writing && result > 0) {
     size_t left = (size_t)result;
     for (size_t i = 0; i < args[2] && left; ++i) {
@@ -261,6 +344,14 @@ static long dl_vector(long fd, const struct iovec *iov, long count, int writing,
       left -= n;
     }
   }
+  return result;
+}
+
+static long dl_vector(long fd, const struct iovec *iov, long count, int writing,
+                      int positioned, long long offset) {
+  long result;
+  do result = dl_vector_once(fd, iov, count, writing, positioned, offset);
+  while (dl_settle());
   return result;
 }
 
@@ -284,12 +375,15 @@ static long dl_ioctl(long fd, unsigned long request, void *argp) {
     dl_reset();
     {
       uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, request, 0, 0, 0, 0};
-      if (dl_alloc(64, &args[2]))
-        return -ENOMEM;
-      memcpy(dl_exchange + args[2], buffer, sizeof buffer);
-      rc = dl_round(CAPSTONE_NR_IOCTL_BUF, args);
-      if (rc >= 0)
-        memcpy(argp, dl_exchange + args[2], bytes);
+      do {
+        dl_reset();
+        if (dl_alloc(64, &args[2]))
+          return -ENOMEM;
+        memcpy(dl_exchange + args[2], buffer, sizeof buffer);
+        rc = dl_round(CAPSTONE_NR_IOCTL_BUF, args);
+        if (rc >= 0 && dl_status != CAPSTONE_ROUND_RETRY)
+          memcpy(argp, dl_exchange + args[2], bytes);
+      } while (dl_settle());
       return rc;
     }
   }
@@ -307,13 +401,15 @@ static long dl_fcntl(long fd, long cmd, void *arg) {
     long rc;
     if (!arg)
       return -EFAULT;
-    dl_reset();
-    if (dl_alloc(32, &args[2]))
-      return -ENOMEM;
-    memcpy(dl_exchange + args[2], arg, 32);
-    rc = dl_round(CAPSTONE_NR_FCNTL_LOCK, args);
-    if (rc >= 0 && cmd == F_GETLK)
-      memcpy(arg, dl_exchange + args[2], 32);
+    do {
+      dl_reset();
+      if (dl_alloc(32, &args[2]))
+        return -ENOMEM;
+      memcpy(dl_exchange + args[2], arg, 32);
+      rc = dl_round(CAPSTONE_NR_FCNTL_LOCK, args);
+      if (rc >= 0 && cmd == F_GETLK && dl_status != CAPSTONE_ROUND_RETRY)
+        memcpy(arg, dl_exchange + args[2], 32);
+    } while (dl_settle());
     return rc;
   }
   {
@@ -327,7 +423,10 @@ static long dl_fcntl(long fd, long cmd, void *arg) {
 long __capstone_delegate_hello(unsigned long entry_address, unsigned long code_base,
                                unsigned long code_end) {
   uint64_t args[CAPSTONE_DELEGATE_ARGS] = {entry_address, code_base, code_end, 0, 0, 0};
-  return dl_round(CAPSTONE_NR_HELLO, args);
+  long r;
+  do r = dl_round(CAPSTONE_NR_HELLO, args);
+  while (dl_settle());
+  return r;
 }
 
 long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
@@ -336,7 +435,28 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {a, b, c, d, e, f};
   if (!__capstone_delegate_ready())
     return -EIO;
+  /* The hint: the launcher's trampoline accepted a signal since the last
+     round. Fetch it before this call, local answers included, so the handler
+     runs at the next entry into this dispatcher and not at the next yield. */
+  if (__capstone_signals_hint())
+    __capstone_delegate_ints(CAPSTONE_NR_SIGPOLL, 0, 0, 0);
+  /* Signals: handlers are domain addresses and stay here; the class, the
+     flags, the mask and the alternate stack are what crosses or what the
+     domain keeps. */
   switch (n) {
+  case SYS_rt_sigaction:
+    if ((unsigned long)d != 8) return -EINVAL;
+    return __capstone_sigaction((int)(long)a, (const struct k_sigaction *)b, (struct k_sigaction *)c);
+  case SYS_rt_sigprocmask:
+    return __capstone_sigprocmask((int)(long)a, (const sigset_t *)b, (sigset_t *)c, (unsigned long)d);
+  case SYS_sigaltstack:
+    return __capstone_sigaltstack((const stack_t *)a, (stack_t *)b);
+  default:
+    break;
+  }
+  switch (n) {
+  case SYS_rt_sigtimedwait:
+    return dl_sigtimedwait(raw);
   case SYS_readv:
     return dl_vector((long)a, (const struct iovec *)b, (long)c, 0, 0, 0);
   case SYS_writev:
@@ -405,12 +525,8 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     return rc;
   }
   case CAPSTONE_GROUP_SIGNAL:
-    /* Accepted and not delivered until the signals branch: recorded as a
-       no-op so "served" never quietly means "pretended". */
-    if (n == SYS_rt_sigaction || n == SYS_rt_sigprocmask) {
-      __capstone_hc_note_noop(n);
-      return 0;
-    }
+    /* rt_sigreturn: no kernel frame exists here; handlers return to the
+       dispatcher that invoked them */
     __capstone_hc_note_unserved(n);
     return -ENOSYS;
   case CAPSTONE_GROUP_MEMORY:

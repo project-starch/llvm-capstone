@@ -222,8 +222,8 @@ No claim of a complete hostile-code or QEMU security audit is made.
 ## Delegated syscalls (application ABI v2)
 
 Every application built by the SDK speaks ABI v2: every Linux service is the Linux syscall itself, run by the launcher
-task. The domain fills an 88-byte entry in the entry region, copies pointer
-arguments into the exchange region as offsets, and yields; the launcher
+task. The domain fills a 96-byte entry at the start of the 16 KiB META region,
+copies pointer arguments into the exchange region as offsets, and yields; the launcher
 validates the entry against the shape table, runs `syscall()` under its own
 credentials, descriptors and working directory, and writes the result back.
 The wire ABI, the shape table and the closed exception groups are in
@@ -234,8 +234,10 @@ What crosses: files, directories, descriptors, time, identity, limits,
 `getrandom`, `wait4`, `kill` confined to the task, `exit_group`. What does not:
 memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
 (`clone` and `fork` are ENOSYS; image exec uses the process service below), and
-signals (`rt_sigaction` and `rt_sigprocmask` are accepted and recorded as
-no-ops until the signals branch). The unserved report at exit lists both.
+threads. Signals cross: the kernel keeps dispositions, mask, pending set and
+restart decisions, and a caught signal runs its domain handler at the domain's
+next round (see Signals below). The unserved report at exit lists what did not
+cross.
 
 The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 `CAPSTONE_APPLICATION_EXCHANGE_BYTES` for the SDK project); larger buffers are
@@ -392,6 +394,57 @@ sends SIGUSR1 to the task, which has no handler installed for the domain yet,
 so the task dies of it: that is the signals branch. The remaining exclusions
 are threads, sockets, SysV IPC, dynamic loading, `vfork` itself, `wordexp`
 and the `fcntl` test's forked child.
+
+### Signals (2026-09-29)
+
+Linux owns every signal decision; the runtime carries a caught signal into the
+domain. `rt_sigaction` is delegated with the handler replaced by a class
+(default, ignore, caught): a caught signal installs the launcher's trampoline
+with `SA_SIGINFO`, the domain's `SA_RESTART`, `SA_RESETHAND`, `SA_NOCLDSTOP`
+and `SA_NOCLDWAIT` mirrored, and every signal masked while it records. The
+trampoline appends `{seq, signo, siginfo, mask}` to a lock-free ring, bumps a
+recorded-sequence word in the META region, keeps the signal blocked in the
+kernel until the domain handler is done (unless `SA_NODEFER`), and when the
+interrupted pc lies inside the launcher's syscall stub before its `ecall`
+redirects it to a `retry` exit, so the round reports `RETRY` with no result and
+no output and the libc marshals the call again after the handler. A completed
+call reports its result, `-EINTR` included; the kernel's own restart decision
+(`SA_RESTART`) lands in the same stub range. `wait4` polling and the spawn
+protocol have their own continuation points. The kernel mask the launcher
+applies is the domain's mask plus the in-flight signals plus caught-signal
+backpressure while the ring is nearly full; nothing is dropped.
+
+The libc runs accepted events after every round, in acceptance order, under
+`current ∪ sa_mask ∪ {sig}`; an event accepted inside `rt_sigsuspend` or a
+masked `ppoll` runs under that call's temporary mask before the call returns.
+Nested delivery happens at the end of a handler's own rounds. `sigaction` on a
+signal with runnable events runs them under the old installation first.
+`sigaltstack`, `sigsetjmp` with a saved mask and `siglongjmp` are the libc's;
+a handler abandoned through `siglongjmp` is acknowledged when the jump is
+seen. The recorded-sequence word is checked at every entry into the syscall
+dispatcher, so a signal accepted during pure computation runs at the next
+libc call, not before: delivery is synchronous. A domain fault stays fatal
+whatever the `SIGSEGV` action, `ucontext` carries no register image, and
+`timer_create` is not served yet.
+
+`tests/application/signal-contract.c` is the definition of done, one mode per
+case of the plan, driven by `run-signals.py`:
+26/26 modes pass in the guest (self delivery with and without `SA_NODEFER`, a
+signal before and during a blocking read with restart and with `EINTR`, a
+handler that writes, `sigsuspend`, `ppoll`, nesting A -> B, `RETRY` after a
+partial write, `waitpid(-1)` restarted and interrupted, a spawn interrupted
+after its request, `SA_RESETHAND` dying and reinstalled, a realtime queue
+through the ring, the hint, `sigaltstack` with a nested `siglongjmp`,
+`SIG_IGN` inheritance with `SETSIGDEF`, and a caught `SIGABRT` through musl's
+own sigaction path, plus positive-PID wait timing, a 400-signal `SA_NODEFER`
+burst, a deep-stack `siglongjmp`, translated `sigtimedwait` status, and
+inherited state in a second domain). The native suite (25/25) checks all 400
+queued payloads and the spare overflow record. The application gate (21 PASS
+lines), the binfmt contract and Perl `t/base` (9 files, 493 tests, 23 s) pass
+on the same images; `perl -e` makes 30 rounds instead of 26, the signal
+calls Perl makes that the previous runtime answered locally as no-ops.
+libc-test with the SDK built from this commit: 48 PASS, 4 FAIL, 2 FAULT, 3 NOBUILD, 20 EXCLUDED of 77; `popen` (SIGUSR1 from its child) and `setjmp` (six `sigprocmask` calls that were no-ops) pass now, `tls_local_exec` fails instead of faulting, the rest is unchanged: `clocale_mbfuncs` faults at startup as before, `mntent`, `strptime` and `strtold` fail as before, the TLS tests do not build.
+Record: [20260929-signal-contract.json](tests/application/results/20260929-signal-contract.json).
 
 ### Review verification (2026-09-29)
 

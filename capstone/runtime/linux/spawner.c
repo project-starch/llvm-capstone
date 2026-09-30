@@ -23,9 +23,33 @@ struct request {
   uint32_t bytes, count;
   uint64_t cloexec;
   mode_t mask;
-  sigset_t sigmask;
+  sigset_t sigmask;      /* the launcher's logical mask: what the child inherits */
+  uint64_t ignored;      /* the launcher's ignored signals, bit n-1 = signal n */
   int32_t numbers[CAPSTONE_SPAWNER_FDS];
 };
+
+/* Linux inheritance across fork and exec, applied by hand because the child is
+ * the helper's clone, not the launcher's: ignored signals stay ignored, caught
+ * ones fall back to default, SETSIGDEF names those reset to default anyway,
+ * and the mask is the launcher's unless SETSIGMASK gives one. */
+static void child_signals(const struct request *req, const struct capstone_spawn_view *view) {
+  sigset_t mask;
+  for (int sig = 1; sig <= 64; ++sig) {
+    if (sig == SIGKILL || sig == SIGSTOP) continue;
+    int ignored = (req->ignored >> (sig - 1)) & 1;
+    if ((view->flags & CAPSTONE_SPAWN_SETSIGDEF) && ((view->sigdefault >> (sig - 1)) & 1))
+      ignored = 0;
+    signal(sig, ignored ? SIG_IGN : SIG_DFL);
+  }
+  if (view->flags & CAPSTONE_SPAWN_SETSIGMASK) {
+    sigemptyset(&mask);
+    for (int sig = 1; sig <= 64; ++sig)
+      if ((view->sigmask >> (sig - 1)) & 1) sigaddset(&mask, sig);
+  } else {
+    mask = req->sigmask;
+  }
+  sigprocmask(SIG_SETMASK, &mask, NULL);
+}
 
 struct reply {
   int64_t pid;
@@ -161,7 +185,7 @@ static void child(const struct request *req, const int *received, const char *bl
   if (view.flags & CAPSTONE_SPAWN_SETPGROUP) {
     if (setpgid(0, (pid_t)view.pgroup)) { error = errno; goto fail; }
   }
-  sigprocmask(SIG_SETMASK, &req->sigmask, NULL);
+  child_signals(req, &view);
   /* Resolve PATH before image detection, using the caller's environment. */
   const char *program = view.path;
   char resolved[PATH_MAX];
@@ -273,7 +297,9 @@ int capstone_spawner_start(struct capstone_spawner *s) {
   s->self[n] = 0;
   if (socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, pair))
     return errno;
-  s->pid = fork();
+  /* No exit signal: the helper's death is not a SIGCHLD the application
+     could mistake for a child of its own. Waited with __WALL. */
+  s->pid = (pid_t)syscall(SYS_clone, 0, 0, 0, 0, 0);
   if (s->pid < 0) {
     int error = errno;
     close(pair[0]);
@@ -282,6 +308,17 @@ int capstone_spawner_start(struct capstone_spawner *s) {
   }
   if (s->pid == 0) {
     if (prctl(PR_SET_PDEATHSIG, SIGKILL) || getppid() != parent) _exit(125);
+    /* The helper keeps none of the launcher's dispositions (they would record
+       into a copy of its ring) and survives the terminal's signals: an
+       application that handles Ctrl-C must not lose its spawner to it. Each
+       child gets the launcher's view back from child_signals(). */
+    for (int sig = 1; sig <= 64; ++sig)
+      if (sig != SIGKILL && sig != SIGSTOP) signal(sig, SIG_DFL);
+    signal(SIGINT, SIG_IGN); signal(SIGQUIT, SIG_IGN); signal(SIGTSTP, SIG_IGN);
+    signal(SIGTTIN, SIG_IGN); signal(SIGTTOU, SIG_IGN);
+    sigset_t none;
+    sigemptyset(&none);
+    sigprocmask(SIG_SETMASK, &none, NULL);
     close(pair[0]);
     /* The helper owns only its socket. Inherited pipes and device files would
        keep applications alive and resurrect descriptors the caller closed. */
@@ -309,15 +346,16 @@ void capstone_spawner_stop(struct capstone_spawner *s) {
     s->socket = -1;
   }
   if (s->pid > 0) {
-    while (waitpid(s->pid, NULL, 0) < 0 && errno == EINTR) {}
+    while (waitpid(s->pid, NULL, __WALL) < 0 && errno == EINTR) {}
     s->pid = 0;
   }
 }
 
 long capstone_spawner_spawn(struct capstone_spawner *s, const void *block, size_t bytes,
                             const int *fds, const int *numbers, uint64_t cloexec,
-                            unsigned count) {
-  struct request req = {.bytes = (uint32_t)bytes, .count = count, .cloexec = cloexec};
+                            unsigned count, uint64_t ignored, uint64_t logical_mask) {
+  struct request req = {.bytes = (uint32_t)bytes, .count = count, .cloexec = cloexec,
+                        .ignored = ignored};
   struct iovec iov[2] = {{&req, sizeof req}, {(void *)block, bytes}};
   char control[CMSG_SPACE(sizeof(int) * (CAPSTONE_SPAWNER_FDS + 1))];
   struct msghdr msg = {.msg_iov = iov, .msg_iovlen = 2};
@@ -333,7 +371,9 @@ long capstone_spawner_spawn(struct capstone_spawner *s, const void *block, size_
   if (cwd < 0) return -errno;
   req.mask = umask(0);
   umask(req.mask);
-  sigprocmask(SIG_SETMASK, NULL, &req.sigmask);
+  sigemptyset(&req.sigmask);
+  for (int sig = 1; sig <= 64; ++sig)
+    if ((logical_mask >> (sig - 1)) & 1) sigaddset(&req.sigmask, sig);
   for (unsigned i = 0; i < count; ++i) passed[i] = fds[i];
   passed[count] = cwd;
   {
@@ -356,7 +396,7 @@ long capstone_spawner_spawn(struct capstone_spawner *s, const void *block, size_
   if (n != (ssize_t)sizeof reply) return -EIO;
   if (reply.error) {
     if (reply.pid > 0)
-      while (waitpid((pid_t)reply.pid, NULL, 0) < 0 && errno == EINTR) {}
+      while (waitpid((pid_t)reply.pid, NULL, __WALL) < 0 && errno == EINTR) {}
     return -reply.error;
   }
   return (long)reply.pid;

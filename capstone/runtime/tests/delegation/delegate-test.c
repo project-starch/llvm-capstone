@@ -19,7 +19,8 @@ static struct capstone_delegate_entry pack(uint64_t nr, uint64_t a, uint64_t b,
 
 static void wire_layout(void) {
   struct capstone_delegate_entry e;
-  assert(sizeof e == 88);
+  assert(sizeof e == 96);
+  assert(offsetof(struct capstone_delegate_entry, status) == 88);
   assert(offsetof(struct capstone_delegate_entry, nr) == 8);
   assert(offsetof(struct capstone_delegate_entry, args) == 16);
   assert(offsetof(struct capstone_delegate_entry, flags) == 64);

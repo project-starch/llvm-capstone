@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(capstone_exec LANGUAGES C)
+project(capstone_exec LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
@@ -15,7 +15,7 @@ if(CAPSTONE_LIBCAPSTONE_DIR)
     message(FATAL_ERROR "CAPSTONE_LIBCAPSTONE_DIR must contain libcapstone.c")
   endif()
   add_executable(capstone-exec ../linux/exec.c ../linux/application-image.c ../linux/image-hash.c
-    ../linux/delegate-service.c ../linux/spawner.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
     "${CAPSTONE_LIBCAPSTONE_DIR}/libcapstone.c")
   target_compile_definitions(capstone-exec PRIVATE _POSIX_C_SOURCE=200809L)
   target_include_directories(capstone-exec PRIVATE
@@ -58,7 +58,17 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   target_link_libraries(application-image-test PRIVATE Capstone::Runtime)
   add_test(NAME application-image COMMAND application-image-test)
   add_executable(delegate-service-test ../tests/application/delegate-service-test.c
-    ../linux/delegate-service.c ../linux/spawner.c)
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
+  add_executable(signal-service-test ../tests/application/signal-service-test.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
+  target_link_libraries(signal-service-test PRIVATE Capstone::Delegate)
+  add_test(NAME signal-service COMMAND signal-service-test)
+  set_tests_properties(signal-service PROPERTIES TIMEOUT 30)
+  add_executable(signal-overflow-test ../tests/application/signal-overflow-test.c
+    ../linux/signals.c ../linux/stub.S)
+  target_link_libraries(signal-overflow-test PRIVATE Capstone::Delegate)
+  add_test(NAME signal-overflow COMMAND signal-overflow-test)
+  set_tests_properties(signal-overflow PROPERTIES TIMEOUT 30)
   add_executable(spawner-test ../tests/application/spawner-test.c ../linux/spawner.c)
   target_compile_definitions(spawner-test PRIVATE _GNU_SOURCE)
   target_link_libraries(spawner-test PRIVATE Capstone::Delegate)
@@ -74,7 +84,7 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   target_link_libraries(delegate-service-test PRIVATE Capstone::Delegate)
   add_test(NAME delegate-service COMMAND delegate-service-test)
   add_executable(delegate-edge-test ../tests/application/delegate-edge-test.c
-    ../linux/delegate-service.c ../linux/spawner.c)
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
   target_compile_options(delegate-edge-test PRIVATE -UNDEBUG)
   target_link_libraries(delegate-edge-test PRIVATE Capstone::Delegate)
   foreach(case short-read raw-pointer vector stat-boundary private-fd wait-empty wait-stopped kill-group)

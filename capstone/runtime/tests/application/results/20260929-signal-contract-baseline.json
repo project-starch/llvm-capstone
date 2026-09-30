@@ -1,0 +1,88 @@
+{
+ "date": "2026-09-29",
+ "purpose": "baseline of the signal contract before any signal work: the definition of done for delegation-signals",
+ "platform": "monitor capstone-sbi a810177, capstone-qemu ac2837aa, modcapstone d60365e, launcher from delegation-launch-cost, libc from delegation-libc-rounds; signal-contract.dom built from this commit",
+ "result": "1/20 PASS (resethand-die passes because the default action already ends the process); every other mode fails for the reason the plan predicts: tkill (130), rt_sigsuspend (133) and sigaltstack (132) are unserved, an external signal ends the process because the kernel disposition stays default, SIG_IGN is not inherited by a spawned child",
+ "modes": {
+  "self": {
+   "pass": false,
+   "reason": "got ('exit', 1), stdout='', stderr='signal-contract:157: !raise(SIGUSR1) (errno 38)\\ncapstone-domain: UNSERVED syscalls: 130\\ncapstone-domain: NO-OP syscalls: 135x3 134'"
+  },
+  "self-nodefer": {
+   "pass": false,
+   "reason": "got ('exit', 1), stdout='', stderr='signal-contract:164: !raise(SIGUSR1) (errno 38)\\ncapstone-domain: UNSERVED syscalls: 130\\ncapstone-domain: NO-OP syscalls: 135x3 134'"
+  },
+  "self-defer": {
+   "pass": false,
+   "reason": "got ('exit', 1), stdout='', stderr='signal-contract:164: !raise(SIGUSR1) (errno 38)\\ncapstone-domain: UNSERVED syscalls: 130\\ncapstone-domain: NO-OP syscalls: 135x3 134'"
+  },
+  "before-read": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "during-read-restart": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "during-read-eintr": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "handler-write": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "sigsuspend": {
+   "pass": false,
+   "reason": "got ('exit', 1), stdout='', stderr='signal-contract:236: r == -1 && saved == EINTR (errno 38)\\ncapstone-domain: UNSERVED syscalls: 133\\ncapstone-domain: NO-OP syscalls: 135x3 134'"
+  },
+  "ppoll": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "nest": {
+   "pass": false,
+   "reason": "got ('exit', 1), stdout='', stderr='signal-contract:249: !raise(SIGUSR1) (errno 38)\\ncapstone-domain: UNSERVED syscalls: 130\\ncapstone-domain: NO-OP syscalls: 135x3 134x2'"
+  },
+  "retry-partial": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "wait-restart": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "wait-eintr": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "spawn-interrupted": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "resethand-die": {
+   "pass": true,
+   "reason": ""
+  },
+  "resethand-reinstall": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "rt-queue": {
+   "pass": false,
+   "reason": "got ('signal', 38), stdout='', stderr='capstone-vm: application terminated by signal 38'"
+  },
+  "hint": {
+   "pass": false,
+   "reason": "got ('signal', 10), stdout='', stderr='capstone-vm: application terminated by signal 10'"
+  },
+  "altstack": {
+   "pass": false,
+   "reason": "got ('exit', 1), stdout='', stderr='signal-contract:378: !sigaltstack(&alt, NULL) (errno 38)\\ncapstone-domain: UNSERVED syscalls: 132'"
+  },
+  "ign-inherit": {
+   "pass": false,
+   "reason": "got ('exit', 1), stdout='', stderr='signal-contract:402: !reap(a, &status) && WIFEXITED(status) && WEXITSTATUS(status) == 0 (errno 0)\\ncapstone-domain: NO-OP syscalls: 134'"
+  }
+ }
+}

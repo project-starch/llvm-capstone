@@ -385,7 +385,7 @@ int main(int argc, char **argv) {
     return fail(&e, "capstone-exec: cannot create domain", 1);
   }
   launch_mark(LAUNCH_DOMAIN);
-  e.sizes[REGION_META] = 4096;
+  e.sizes[REGION_META] = CAPSTONE_DELEGATE_META_BYTES;
   e.sizes[REGION_DATA] = (size_t)descriptor.exchange_bytes;
   e.sizes[REGION_STARTUP] = CAPSTONE_LAUNCH_BYTES;
   for (unsigned i = 0; i < REGIONS; ++i) {
@@ -418,6 +418,8 @@ int main(int argc, char **argv) {
   }
   e.delegate.exchange = e.maps[REGION_DATA];
   e.delegate.exchange_bytes = e.sizes[REGION_DATA];
+  capstone_signals_init(&e.delegate.signals,
+      (struct capstone_signal_block *)((char *)e.maps[REGION_META] + CAPSTONE_SIGNAL_OFFSET));
   launch_mark(LAUNCH_REGIONS);
   if (!getenv("CAPSTONE_EXEC_NO_SECCOMP")) {
     int rc = capstone_delegate_seccomp();
@@ -432,8 +434,11 @@ int main(int argc, char **argv) {
   e.ticks_start = ticks();
   for (;;) {
     struct ioctl_dom_step_args step;
-    if (capstone_step(domain, &step))
-      return fail(&e, "capstone-exec: enter domain", 1);
+    /* EINTR from the driver's interruptible lock: the domain was not entered
+       and the signal is in the ring. */
+    while (capstone_step(domain, &step))
+      if (errno != EINTR)
+        return fail(&e, "capstone-exec: enter domain", 1);
     if (step.event == CAPSTONE_STEP_PREEMPTED)
       continue;
     if (step.event == CAPSTONE_STEP_FAULT)

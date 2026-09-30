@@ -52,7 +52,8 @@ static const struct { uint16_t wire; long host; } numbers[] = {
   MAP(getuid) MAP(geteuid) MAP(getgid) MAP(getegid) MAP(gettid) MAP(umask)
   MAP(uname) MAP(sysinfo) MAP(prlimit64) MAP(getrandom) MAP(sched_yield)
   MAP(set_tid_address) MAP(set_robust_list) MAP(futex) MAP(exit) MAP(exit_group)
-  MAP(kill) MAP(wait4)
+  MAP(kill) MAP(wait4) MAP(tkill) MAP(rt_sigsuspend) MAP(rt_sigpending)
+  MAP(rt_sigtimedwait) MAP(getitimer) MAP(setitimer)
 };
 #undef MAP
 
@@ -168,7 +169,8 @@ static long spawn(struct capstone_delegate_host *host, const struct capstone_del
     if ((cloexec >> i) & 1) kept_cloexec |= UINT64_C(1) << kept;
     ++kept;
   }
-  pid = capstone_spawner_spawn(host->spawner, block, bytes, fds, numbers, kept_cloexec, kept);
+  pid = capstone_spawner_spawn(host->spawner, block, bytes, fds, numbers, kept_cloexec, kept,
+                               capstone_signals_ignored(&host->signals), host->signals.logical);
   if (pid > 0)
     host->children[host->child_count++] = (pid_t)pid;
   return pid;
@@ -227,10 +229,11 @@ static long vector_call(struct capstone_delegate_host *host,
     memcpy(iov[i].iov_base, host->exchange + wire[0], wire[1]);
     total += wire[1];
   }
-  long r = syscall(host_number(entry->nr), (int)entry->args[0], iov, count,
-                   entry->args[3], entry->args[4]);
-  if (r == -1)
-    return -errno;
+  long argv[6] = {(long)(int)entry->args[0], (long)(intptr_t)iov, (long)count,
+                  (long)entry->args[3], (long)entry->args[4], 0};
+  long r = capstone_signals_call(&host->signals, host_number(entry->nr), argv, 0, 0);
+  if (r < 0)
+    return r;
   if (writing)
     host->bytes_in += (size_t)r;
   else {
@@ -266,7 +269,7 @@ static long wait_child(struct capstone_delegate_host *host, pid_t wanted,
       }
       ++matching;
       long r = syscall(SYS_wait4, pid, &status,
-                       options | (wanted <= 0 ? WNOHANG : 0), usage);
+                       options | WNOHANG, usage);
       if (r < 0)
         return -errno;
       if (r > 0) {
@@ -280,19 +283,24 @@ static long wait_child(struct capstone_delegate_host *host, pid_t wanted,
       return -ECHILD;
     if (options & WNOHANG)
       return 0;
+    /* A signal accepted while waiting: Linux would restart wait4 under
+       SA_RESTART and fail it with EINTR otherwise. The handler runs in the
+       domain first either way, so RETRY is the restart. */
+    if (capstone_signals_waiting(&host->signals))
+      return capstone_signals_restartable(&host->signals) ? CAPSTONE_STUB_RETRY : -EINTR;
     struct timespec delay = {0, 1000000};
-    if (nanosleep(&delay, NULL))
+    if (nanosleep(&delay, NULL) && errno != EINTR)
       return -errno;
   }
 }
 
 /* Native tests run on hosts whose struct stat is not the RV64 wire layout. */
-static long stat_call(uint64_t nr, const long a[6]) {
+static long stat_call(struct capstone_delegate_host *host, uint64_t nr, const long a[6]) {
+  (void)host;
 #if defined(__riscv) && __riscv_xlen == 64
   /* The guest already has the wire layout. Keep its raw syscall path; libc
      may redirect stat through a different syscall and ABI. */
-  long r = syscall(host_number(nr), a[0], a[1], a[2], a[3]);
-  return r == -1 ? -errno : r;
+  return capstone_signals_call(&host->signals, host_number(nr), a, 0, 0);
 #else
   struct stat st;
   struct rv_stat {
@@ -394,17 +402,34 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     return -EPERM;
   if (entry->nr == CAPSTONE_SYS_wait4 && a[0] > 0 && !child_of(host, (pid_t)a[0]))
     return -ECHILD;
+  /* raise() is tkill on the task's own thread; nothing else is a domain's to signal */
+  if (entry->nr == CAPSTONE_SYS_tkill && (pid_t)a[0] != getpid())
+    return -EPERM;
   if (entry->nr == CAPSTONE_SYS_wait4)
     r = wait_child(host, (pid_t)a[0], (int *)a[1], (int)a[2], (void *)a[3]);
   else if (entry->nr == CAPSTONE_SYS_fstat || entry->nr == CAPSTONE_SYS_newfstatat)
-    r = stat_call(entry->nr, a);
+    r = stat_call(host, entry->nr, a);
   else {
     long number = host_number(entry->nr);
     if (number < 0)
       return -ENOSYS;
-    r = syscall(number, a[0], a[1], a[2], a[3], a[4], a[5]);
-    r = r == -1 ? -errno : r;
+    /* A wait with a temporary mask classifies the events it accepts. */
+    int has_wait = 0;
+    uint64_t wait_mask = 0;
+    if (entry->nr == CAPSTONE_SYS_rt_sigsuspend ||
+        (entry->nr == CAPSTONE_SYS_ppoll && entry->args[3])) {
+      void *mask = (void *)a[entry->nr == CAPSTONE_SYS_ppoll ? 3 : 0];
+      memcpy(&wait_mask, mask, sizeof wait_mask);
+      /* A temporary kernel mask must not undo the runtime's backpressure.
+         Keep the domain's requested mask in wait_mask for handler delivery. */
+      uint64_t physical_wait = wait_mask | host->signals.backpressure;
+      memcpy(mask, &physical_wait, sizeof physical_wait);
+      has_wait = 1;
+    }
+    r = capstone_signals_call(&host->signals, number, a, has_wait, wait_mask);
   }
+  if (r == CAPSTONE_STUB_RETRY)
+    return r;
   if (host->bounce)
     for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
       if (bytes[i] && ((entry->flags >> i) & 1) && writes(s->args[i].kind))
@@ -425,38 +450,51 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   if (error) {
     ++host->refused;
     entry->result = -error;
-    entry->pending = 0;
+    capstone_signals_publish(&host->signals, entry, 0);
     return;
   }
   s = capstone_delegate_shape(snapshot.nr);
   host->last_nr = snapshot.nr;
+  long r;
   if (snapshot.nr == CAPSTONE_NR_SPAWN) {
     ++host->syscalls;
-    entry->result = spawn(host, &snapshot);
-    entry->pending = 0;
-    return;
-  }
-  if (snapshot.nr == CAPSTONE_NR_HELLO) {
+    r = spawn(host, &snapshot);
+  } else if (snapshot.nr == CAPSTONE_NR_HELLO) {
     host->entry_address = snapshot.args[0];
     host->code_base = snapshot.args[1];
     host->code_end = snapshot.args[2];
     host->hello_seen = 1;
-    entry->result = 0;
-    entry->pending = 0;
-    return;
-  }
-  if (snapshot.nr == CAPSTONE_SYS_exit_group || snapshot.nr == CAPSTONE_SYS_exit) {
+    r = 0;
+  } else if (snapshot.nr == CAPSTONE_SYS_exit_group || snapshot.nr == CAPSTONE_SYS_exit) {
     host->exiting = 1;
     host->exit_status = (int)snapshot.args[0] & 0xff;
-    entry->result = 0;
-    entry->pending = 0;
-    return;
+    r = 0;
+  } else if (snapshot.nr == CAPSTONE_NR_SIGACTION) {
+    r = capstone_signals_action(&host->signals, (int)snapshot.args[0],
+                                (unsigned)snapshot.args[1], (unsigned)snapshot.args[2]);
+  } else if (snapshot.nr == CAPSTONE_NR_SIGDONE) {
+    r = capstone_signals_done(&host->signals, snapshot.args[0]);
+  } else if (snapshot.nr == CAPSTONE_NR_SIGPOLL) {
+    r = 0;
+  } else if (snapshot.nr == CAPSTONE_SYS_rt_sigprocmask) {
+    /* the logical mask is the domain's; the kernel gets the physical one */
+    uint64_t set = 0, old = 0;
+    ++host->syscalls;
+    if (snapshot.args[3] != 8)
+      r = -EINVAL;
+    else {
+      if (snapshot.args[1]) memcpy(&set, host->exchange + snapshot.args[1], sizeof set);
+      r = capstone_signals_procmask(&host->signals, (int)snapshot.args[0],
+                                    snapshot.args[1] ? &set : NULL, &old);
+      if (!r && snapshot.args[2]) memcpy(host->exchange + snapshot.args[2], &old, sizeof old);
+    }
+  } else {
+    ++host->syscalls;
+    host->last_nr = snapshot.nr;
+    r = run(host, s, &snapshot);
   }
-  ++host->syscalls;
-  host->last_nr = snapshot.nr;
-  entry->result = run(host, s, &snapshot);
-  entry->pending = 0;
-
+  entry->result = r == CAPSTONE_STUB_RETRY ? 0 : r;
+  capstone_signals_publish(&host->signals, entry, r == CAPSTONE_STUB_RETRY);
 }
 
 void capstone_delegate_host_free(struct capstone_delegate_host *host) {

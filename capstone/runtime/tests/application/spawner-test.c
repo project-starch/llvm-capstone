@@ -34,7 +34,7 @@ int main(void) {
   fds[1] = 0; numbers[1] = 0;
   fds[2] = 2; numbers[2] = 2;
   count = 3;
-  long pid = capstone_spawner_spawn(&s, block, bytes, fds, numbers, 1, count);
+  long pid = capstone_spawner_spawn(&s, block, bytes, fds, numbers, 1, count, 0, 0);
   assert(pid > 0);
   close(out[1]);
   ssize_t n = read(out[0], buffer, sizeof buffer - 1);
@@ -47,9 +47,19 @@ int main(void) {
   char *missing[] = {"no-such-program", NULL};
   assert(!capstone_spawn_pack(block, sizeof block, 0, 0, "/no/such/program", missing, envp,
                               NULL, 0, NULL, &bytes));
-  assert(capstone_spawner_spawn(&s, block, bytes, NULL, NULL, 0, 0) == -ENOENT);
-  /* the failed child was reaped: the only child left is the spawner, still running */
-  assert(waitpid(-1, &status, WNOHANG) == 0);
+  assert(capstone_spawner_spawn(&s, block, bytes, NULL, NULL, 0, 0, 0, 0) == -ENOENT);
+  /* the failed child was reaped: the only child left is the spawner, still
+     running, and cloned without an exit signal so that a plain wait never
+     sees it; only __WALL does */
+  assert(waitpid(-1, &status, WNOHANG) == -1 && errno == ECHILD);
+  /* A child whose exec failed keeps the helper's exit signal, none: under
+     CLONE_PARENT a child takes its creator's, and only a successful exec
+     resets it to SIGCHLD. Checked for 200 ms, so that an unreaped child has
+     exited and shows here, not only when it happens to be fast. */
+  for (int i = 0; i < 20; ++i) {
+    assert(waitpid(-1, &status, WNOHANG | __WALL) == 0);
+    usleep(10000);
+  }
   /* the descriptor set carries every open one with its flag, except the skip */
   {
     uint64_t cloexec = 0;
@@ -63,7 +73,7 @@ int main(void) {
     assert(seen_pipe);
   }
   /* an unterminated block is refused before any fork */
-  assert(capstone_spawner_spawn(&s, block, 8, NULL, NULL, 0, 0) == -EINVAL);
+  assert(capstone_spawner_spawn(&s, block, 8, NULL, NULL, 0, 0, 0, 0) == -EINVAL);
   assert(!capstone_spawner_is_image("/bin/sh"));
   capstone_spawner_stop(&s);
   assert(s.socket == -1);

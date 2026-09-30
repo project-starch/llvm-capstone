@@ -6,7 +6,10 @@
 #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
 #error "Delegated syscall ABI v2 requires little-endian scalar encoding"
 #endif
-_Static_assert(sizeof(struct capstone_delegate_entry) == 88, "entry ABI");
+_Static_assert(sizeof(struct capstone_delegate_entry) == 96, "entry ABI");
+_Static_assert(sizeof(struct capstone_signal_event) == 160, "signal event ABI");
+_Static_assert(offsetof(struct capstone_signal_block, events) == 24, "signal handover ABI");
+_Static_assert(CAPSTONE_SIGNAL_OFFSET + sizeof(struct capstone_signal_block) <= CAPSTONE_DELEGATE_META_BYTES, "signal block fits the META region");
 
 #define I {CAPSTONE_ARG_INT, CAPSTONE_LEN_NONE, 0, 0, 0}
 #define S {CAPSTONE_ARG_STR, CAPSTONE_LEN_NONE, 0, 0, 0}
@@ -99,6 +102,16 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_exit, CAPSTONE_GROUP_DELEGATED, 1, "exit", {I}},
   {CAPSTONE_SYS_exit_group, CAPSTONE_GROUP_DELEGATED, 1, "exit_group", {I}},
   {CAPSTONE_SYS_kill, CAPSTONE_GROUP_DELEGATED, 2, "kill", {I, I}},
+  {CAPSTONE_SYS_tkill, CAPSTONE_GROUP_DELEGATED, 2, "tkill", {I, I}},
+  /* signals: Linux keeps mask and pending set; the launcher applies its physical mask */
+  {CAPSTONE_SYS_rt_sigprocmask, CAPSTONE_GROUP_DELEGATED, 4, "rt_sigprocmask",
+   {I, OPT_IN_FIX(8), OPT_OUT_FIX(8), I}},
+  {CAPSTONE_SYS_rt_sigsuspend, CAPSTONE_GROUP_DELEGATED, 2, "rt_sigsuspend", {IN_FIX(8), I}},
+  {CAPSTONE_SYS_rt_sigpending, CAPSTONE_GROUP_DELEGATED, 2, "rt_sigpending", {OUT_FIX(8), I}},
+  {CAPSTONE_SYS_rt_sigtimedwait, CAPSTONE_GROUP_DELEGATED, 4, "rt_sigtimedwait",
+   {IN_FIX(8), OPT_OUT_FIX(128), OPT_IN_FIX(TIMESPEC), I}},
+  {CAPSTONE_SYS_getitimer, CAPSTONE_GROUP_DELEGATED, 2, "getitimer", {I, OUT_FIX(32)}},
+  {CAPSTONE_SYS_setitimer, CAPSTONE_GROUP_DELEGATED, 3, "setitimer", {I, OPT_IN_FIX(32), OPT_OUT_FIX(32)}},
   {CAPSTONE_SYS_wait4, CAPSTONE_GROUP_DELEGATED, 4, "wait4",
    {I, OPT_OUT_FIX(4), I, OPT_OUT_FIX(144)}},
   /* the exception groups */
@@ -113,10 +126,13 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_vfork, CAPSTONE_GROUP_PROCESS, 0, "vfork", {I}},
   {CAPSTONE_SYS_fork, CAPSTONE_GROUP_PROCESS, 0, "fork", {I}},
   {CAPSTONE_SYS_rt_sigaction, CAPSTONE_GROUP_SIGNAL, 4, "rt_sigaction", {I, I, I, I}},
-  {CAPSTONE_SYS_rt_sigprocmask, CAPSTONE_GROUP_SIGNAL, 4, "rt_sigprocmask", {I, I, I, I}},
   {CAPSTONE_SYS_rt_sigreturn, CAPSTONE_GROUP_SIGNAL, 0, "rt_sigreturn", {I}},
   /* runtime-internal: the pointer forms of fcntl and ioctl, spawn with its
-     block in the exchange region, and hello; looked up by their own numbers */
+     block in the exchange region, the signal requests and hello; looked up
+     by their own numbers */
+  {7, CAPSTONE_GROUP_RUNTIME, 0, "sigpoll", {I}},
+  {6, CAPSTONE_GROUP_RUNTIME, 1, "sigdone", {I}},
+  {5, CAPSTONE_GROUP_RUNTIME, 3, "sigaction", {I, I, I}},
   {3, CAPSTONE_GROUP_RUNTIME, 3, "fcntl-lock", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 32, 0, 0}}},
   {2, CAPSTONE_GROUP_RUNTIME, 3, "ioctl-buffer", {I, I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 64, 0, 0}}},
   {1, CAPSTONE_GROUP_RUNTIME, 2, "spawn", {IN_ARG(1), I}},
@@ -133,7 +149,13 @@ const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
     return &shapes[sizeof shapes / sizeof shapes[0] - 3];
   if (nr == CAPSTONE_NR_FCNTL_LOCK)
     return &shapes[sizeof shapes / sizeof shapes[0] - 4];
-  for (size_t i = 0; i + 4 < sizeof shapes / sizeof shapes[0]; ++i)
+  if (nr == CAPSTONE_NR_SIGACTION)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 5];
+  if (nr == CAPSTONE_NR_SIGDONE)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 6];
+  if (nr == CAPSTONE_NR_SIGPOLL)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 7];
+  for (size_t i = 0; i + 7 < sizeof shapes / sizeof shapes[0]; ++i)
     if (shapes[i].nr == nr)
       return &shapes[i];
   return NULL;
@@ -243,6 +265,8 @@ size_t capstone_delegate_result_bytes(uint64_t nr, unsigned index, size_t bytes,
     return 0;
   }
   if (nr == CAPSTONE_SYS_wait4 && result == 0) return 0;
+  /* sigtimedwait's siginfo is written only for the signal it returns */
+  if (nr == CAPSTONE_SYS_rt_sigtimedwait && index == 1 && result <= 0) return 0;
   if (nr == CAPSTONE_SYS_read || nr == CAPSTONE_SYS_pread64 ||
       nr == CAPSTONE_SYS_getdents64 || nr == CAPSTONE_SYS_getrandom ||
       nr == CAPSTONE_SYS_getcwd || nr == CAPSTONE_SYS_readlinkat)
