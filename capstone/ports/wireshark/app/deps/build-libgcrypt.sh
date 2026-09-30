@@ -32,9 +32,13 @@ OPTS=(--disable-shared --enable-static --disable-asm --disable-jent-support --di
 # threads, and libgpg-error is built --disable-threads (build-libgpg-error.sh), so those locks are
 # no-ops and it aborts on "Assertion `pool_is_locked' failed". A domain runs one thread. Any other
 # failure, or t-lock passing (the no-threads build would then not be what it claims), fails the gate.
-npass=$(grep -c '^PASS:' "$LOG/native-check.log" || true)
-fails=$(grep -E '^(FAIL|ERROR):' "$LOG/native-check.log" | awk '{print $2}' | sort | tr '\n' ' ')
-echo "libgcrypt: native check: PASS $npass, SKIP $(grep -c '^SKIP:' "$LOG/native-check.log" || true), FAIL/ERROR: ${fails:-none}"
+# The log is not always text: one run carried 39 NUL bytes, and GNU grep then reports "binary file
+# matches" instead of printing lines, so the failure list came back empty. Strip NULs (a NUL glued
+# to the start of a result line would otherwise hide that line even from grep -a) and read as text.
+tr -d '\000' < "$LOG/native-check.log" > "$LOG/native-check.txt"
+npass=$(grep -a -c '^PASS:' "$LOG/native-check.txt" || true)
+fails=$(grep -a -E '^(FAIL|ERROR):' "$LOG/native-check.txt" | awk '{print $2}' | sort | tr '\n' ' ')
+echo "libgcrypt: native check: PASS $npass, SKIP $(grep -a -c '^SKIP:' "$LOG/native-check.txt" || true), FAIL/ERROR: ${fails:-none}"
 [ "$fails" = "t-lock " ] && [ "$npass" -ge 30 ] || { echo "libgcrypt: NATIVE CHECK FAILED" >&2; exit 1; }
 echo "libgcrypt: native check OK (t-lock fails as expected without threads)"
 
