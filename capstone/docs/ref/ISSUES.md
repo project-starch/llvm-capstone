@@ -1711,11 +1711,17 @@ RETURN" rule applied to privilege rather than to control flow.
 >   there (the objects differ in exactly `.text.setupLookaside` and its relocations), but it does not
 >   remove the C-32 shape.
 >
-> #94 itself is held (review comment issuecomment-5869761874) for two measured defects:
-> - it emits `cincoffset` on NULL or untagged sources, which raises cause 24 on the RTL and in QEMU;
-> - select and phi attach a capability to an address that did not come from it.
-> Its other gates are clean: Capstone lit 121/121, and an empty llvm CodeGen+Transforms failure-set
-> diff against dev.
+> **#94 was closed unmerged on 2026-09-30.** Three review rounds each found a real defect:
+> - `cincoffset` on a NULL or untagged source (cause 24);
+> - select and phi attaching a capability to a foreign address;
+> - integer-made and sentinel sources, and a LINEAR source consumed by the new `cincoffset`.
+>
+> Fixing them left the pass rebuilding only sources it can prove tagged and NONLIN. Bare arguments,
+> opaque loads and call results are declined, and those are where the motivating round trips come
+> from (musl's `atexit` callback, CPython's alignment macros). It recovered 0 round trips in musl
+> 1.2.5 and the SQLite port at -O0 and -O2, with byte-identical assembly. The closing comment
+> (issuecomment-5902419443) gives the reasons and the route back (a guarded rewrite, unmeasured). The
+> branch `compiler/recover-provenance` keeps the pass, its lit cases and the QEMU round-trip probe.
 >
 > **2026-09-25: a class fix, on branch `compiler/movc-live-source-copy` (Phase A of
 > `plans/2026-09-25-intcap-implementation.md`). On dev since 2026-09-29 (#119). RTL-simulated on
