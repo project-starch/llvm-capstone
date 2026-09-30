@@ -531,34 +531,10 @@ static int install(int sig, void (*fn)(int), int flags)
   return sigaction(sig, &sa, 0);
 }
 
-/* ---- kill-thread: pthread_kill reaches the thread named, in a read it is
-   blocked in; without SA_RESTART the read answers EINTR there. */
+/* Pipes shared by the cancellation and handler-call modes below. The directed
+   kill-thread modes live in pthread-kill-probe.c, also exercised natively. */
 static int pipefd[2];
-static volatile int reader_tid, read_rc, read_errno;
-static void *reads_pipe(void *arg)
-{
-  (void)arg;
-  char c;
-  reader_tid = (int)syscall(SYS_gettid);
-  read_rc = (int)read(pipefd[0], &c, 1);
-  read_errno = errno;
-  return 0;
-}
-
-static int kill_thread(void)
-{
-  pthread_t t;
-  CHECK(pipe(pipefd) == 0 && install(SIGUSR1, on_signal, 0) == 0);
-  CHECK(pthread_create(&t, 0, reads_pipe, 0) == 0);
-  sleep_ms(40);
-  CHECK(pthread_kill(t, SIGUSR1) == 0);
-  CHECK(pthread_join(t, 0) == 0);
-  printf("kill-thread: handler in %d, reader %d, main %d, read %d errno %d\n", handler_tid,
-         reader_tid, (int)syscall(SYS_gettid), read_rc, read_errno);
-  CHECK(handler_runs == 1 && handler_tid == reader_tid);
-  CHECK(read_rc == -1 && read_errno == EINTR);
-  return 0;
-}
+extern int capstone_probe_kill_thread(int early);
 
 /* ---- mask-routing: a signal sent to the process runs in the one thread that
    does not block it. */
@@ -1026,7 +1002,8 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "pi-mutex")) rc = pi_mutex();
   else if (!strcmp(mode, "user-stack")) rc = user_stack();
   else if (!strcmp(mode, "main-exit-more")) rc = main_exit_more();
-  else if (!strcmp(mode, "kill-thread")) rc = kill_thread();
+  else if (!strcmp(mode, "kill-thread")) rc = capstone_probe_kill_thread(0);
+  else if (!strcmp(mode, "kill-thread-early")) rc = capstone_probe_kill_thread(1);
   else if (!strcmp(mode, "mask-routing")) rc = mask_routing();
   else if (!strcmp(mode, "raise-thread")) rc = raise_thread();
   else if (!strcmp(mode, "sigwait-thread")) rc = sigwait_thread();

@@ -32,6 +32,19 @@ endif()
 
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  find_package(Threads REQUIRED)
+  add_executable(pthread-kill-probe ../tests/application/pthread-kill-probe.c)
+  target_compile_definitions(pthread-kill-probe PRIVATE CAPSTONE_KILL_PROBE_MAIN)
+  target_link_libraries(pthread-kill-probe PRIVATE Threads::Threads)
+  add_test(NAME pthread-kill-read COMMAND pthread-kill-probe)
+  add_test(NAME pthread-kill-before-read COMMAND pthread-kill-probe early)
+  set_tests_properties(pthread-kill-read pthread-kill-before-read PROPERTIES TIMEOUT 15)
+  add_executable(pthread-kill-no-signal ../tests/application/pthread-kill-probe.c)
+  target_compile_definitions(pthread-kill-no-signal PRIVATE
+    CAPSTONE_KILL_PROBE_MAIN CAPSTONE_KILL_PROBE_NO_SIGNAL)
+  target_link_libraries(pthread-kill-no-signal PRIVATE Threads::Threads)
+  add_test(NAME pthread-kill-missing-signal COMMAND pthread-kill-no-signal early)
+  set_tests_properties(pthread-kill-missing-signal PROPERTIES WILL_FAIL TRUE TIMEOUT 15)
   add_test(NAME application-job COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/../tests/application/job-test.py" $<TARGET_FILE:capstone-job>)
   add_executable(mruby-spawn-test ../../ports/mruby/musl/spawn-shell.c

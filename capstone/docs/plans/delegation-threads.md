@@ -258,6 +258,16 @@ Done so far:
   request and the call, both fail. Found by GLib's `thread6` (a thread's name read back empty)
   and `thread7` (it sets a thread's CPU set), and by CPython's `ThreadPoolExecutor()`, whose
   default worker count asks for the CPU set.
+- Signal/read probe review (2026-09-30): `kill-thread` no longer guesses that the
+  worker has entered `read` after sleeping 40 ms. It names the worker, observes that Linux
+  thread blocked in the empty-pipe `read` through `/proc/self/task`, then signals it.
+  `kill-thread-early` forces one delivery before the read, then verifies a second delivery
+  interrupts the observed read. Error cleanup releases the worker and writes a byte before
+  joining. Native ASan/UBSan CTest passes 44/44, including the deliberately missing second
+  signal returning failure in 3.01 s; the guest pthread probe passes 29/29. Record
+  `runtime/tests/application/results/20260930-kill-thread-review.json`. This removes a known
+  test race; the earlier intermittent timeout's exact schedule was not recorded, so its
+  individual cause remains unproven. This is synchronous delivery, not the doorbell.
 - The CPython gate: CPython 3.13.7 with C11 thread-locals (patch 0006 and its define are gone) and
   patch 0016, which keeps the join handle and the raw mutex's waiter link as pointers (without it
   the first `Thread.join` faults in `pthread_join`, and a contended `_PyRawMutex` at
