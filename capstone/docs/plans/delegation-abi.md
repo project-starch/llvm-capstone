@@ -26,7 +26,10 @@ round is no longer what a program waits for. What is left, in this order:
 - **Cheap shape rows**: the ~25 rows that are integers and buffers only
   (`pselect6`, `statx`, `statfs`, `getrusage`, `getrlimit`, `truncate`,
   `fallocate`, `fchown`, `linkat`, ...), plus `timer_create` with an opaque
-  `sigevent` token now that delivery exists.
+  `sigevent` token now that delivery exists. Done ahead of it, on
+  `delegation-pty-ioctls`: the pseudo-terminal and foreground-group
+  `ioctl` requests, with the 32-bit request mask that any `_IOR` request
+  needed.
 - **Memory**, step 5: the region grant at the resume label; `mmap` of files,
   `mprotect`.
 - **Threads**: the sibling-context primitive in the monitor plus capability TLS

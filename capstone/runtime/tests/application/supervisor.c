@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[3], "--mode")) return 2;
     return run(argv[1], argv[2], argv[4], 0) ? 0 : 1;
   }
-  const char *modes[] = {"healthy", "fault", "fault-stack", "fault-vector", "exit139"};
+  const char *modes[] = {"healthy", "pty", "fault", "fault-stack", "fault-vector", "exit139"};
   for (unsigned i = 0; i < count; ++i)
     for (unsigned j = 0; j < sizeof modes / sizeof modes[0]; ++j)
       if (!run(argv[1], argv[2], modes[j], 0)) return 1;

@@ -239,6 +239,13 @@ delegated runtime; the record is [results/signals-2026-09-29.json](results/signa
   plan's CPython item) is what unlocks the remaining tests; `epoll_create1` is
   unserved as well.
 
+With `delegation-pty-ioctls`, `os.openpty()` and `pty.openpty()` work (musl's
+`openpty` over `/dev/ptmx`, `TIOCSPTLCK` and `TIOCGPTN`); `pty.fork` and
+`pty.spawn` still need `fork`. The two `config.site` answers
+`ac_cv_file__dev_ptmx=no` and `ac_cv_file__dev_ptc=no` have no effect on
+that path, since the build has `HAVE_OPENPTY` and uses musl's `openpty`
+directly; they only stop `configure` from probing the build host's `/dev`.
+
 To run the suite: `PYTHONHOME` on the share holds `lib/python3.13` copied from
 the source `Lib/` (the `test` package included, an empty `lib-dynload`) plus
 `_sysconfigdata__linux_.py`, the native riscv64 build's
