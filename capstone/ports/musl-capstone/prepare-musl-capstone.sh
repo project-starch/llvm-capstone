@@ -11,7 +11,8 @@
 # through the launcher, so the number of rounds is the port's cost model.
 # 0004 lays out pthread_cond_t and cnd_t for 16-byte pointers, which the
 # upstream layout put over its own ints and past the object's end; 0005 keeps
-# a thread attribute's stack address as a pointer rather than a long.
+# a thread attribute's stack address as a pointer rather than a long; 0006 keeps
+# prctl's arguments and the thread-name calls' name pointers.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)

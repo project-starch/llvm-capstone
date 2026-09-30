@@ -1,0 +1,128 @@
+{
+ "date": "2026-09-30",
+ "stage": "A thread's name and CPU set on the Linux thread that serves it; musl patch 0006",
+ "platform": {
+  "capstone-qemu": "674cdab03c",
+  "capstone-sbi": "4674ab6",
+  "caplifive-opensbi": "cf344cf",
+  "caplifive-buildroot": "8fd1ea1",
+  "firmware_fw_jump_sha256": "ae41a8c6d22877f779750bcd4aba040b4ecf5015ce25fff6d47f773139cf05dc",
+  "module_sha256": "649f410893eeb40a825232452974ac3161bb667163457c42f628c325dd7e6d97",
+  "launcher_sha256": "4c1b0ad0d67af32eb62a5acdf0ff07969b86c582b26b21ecbf7bd4519a015ad7",
+  "control_launcher_sha256": "7b24812d8edf353b78127550673a18d894a8e11b88f49a4bad217b87442814c9",
+  "compiler": "compiler/cap-init-alias fd82fef2a70d (on 7d01722aab88); the clang binary's version string reads a6e8d967140b, its parent, as it was built before the commit",
+  "clang_sha256": "94a99e60a823f93518485487230fed4fd09f1742862e8e9c07b8adf0ae14d6c8",
+  "libc_archive_sha256": "a2b8ca72bd3c21cec0a77a9ae2713d9e7cfc127ef09d0fb43e81d996b5a2f035",
+  "pthread_probe_sha256": "db9e858e26bc9c245ddc0a8b7f3d620689f4eba109190011ac6e697b9c0f7704"
+ },
+ "native_ctest": "41/41",
+ "pthread_probe": {
+  "passed": "28/28",
+  "modes": {
+   "join-values": {
+    "pass": true,
+    "stdout": [
+     "join-values: 900 threads, records made 15, live 15",
+     "pthread-probe join-values: PASS"
+    ]
+   },
+   "reserve-waits": {
+    "pass": true,
+    "stdout": [
+     "reserve-waits: create answered 0 after 48 ms",
+     "pthread-probe reserve-waits: PASS"
+    ]
+   },
+   "thread-name": {
+    "pass": true,
+    "stdout": [
+     "thread-name: main was 'capstone-exec'; naming another thread: No such file or directory",
+     "pthread-probe thread-name: PASS"
+    ]
+   },
+   "affinity": {
+    "pass": true,
+    "stdout": [
+     "affinity: 1 CPUs; another thread's set: No such process",
+     "pthread-probe affinity: PASS"
+    ]
+   },
+   "kill-thread": {
+    "pass": true,
+    "stdout": [
+     "kill-thread: handler in 4194304, reader 4194304, main 1444, read -1 errno 4",
+     "pthread-probe kill-thread: PASS"
+    ]
+   }
+  }
+ },
+ "control": {
+  "launcher": "without THREAD_NAME and without the sched_*affinity shapes",
+  "thread-name": {
+   "result": {
+    "version": 1,
+    "kind": "exit",
+    "value": 1
+   },
+   "last_lines": [
+    "pthread-probe:945: pthread_getname_np(pthread_self(), before, sizeof before) == 0"
+   ]
+  },
+  "affinity": {
+   "result": {
+    "version": 1,
+    "kind": "exit",
+    "value": 1
+   },
+   "last_lines": [
+    "pthread-probe:984: sched_getaffinity(0, sizeof set, &set) == 0",
+    "capstone-domain: UNSERVED syscalls: 123"
+   ]
+  }
+ },
+ "regression": {
+  "thread_probe": "34/34",
+  "many_rounds": "thread-probe many-rounds: 100000 rounds in 9546 ms; 10000-round blocks 949 to 995 ms",
+  "many_rounds_note": "T5 measured 9395 ms with blocks 938 to 941 ms; the wider block spread here came while another session used the host, so no difference is attributed",
+  "context_probe": "35/35",
+  "signal_contract": "26/26",
+  "application_gate_pass_lines": 21,
+  "explicit": {
+   "aba": "1/1",
+   "gen": "2/2",
+   "wfi": "1/1"
+  }
+ },
+ "libc_test": {
+  "PASS": 57,
+  "FAULT": 1,
+  "EXCLUDED": 13,
+  "FAIL": 3,
+  "NOBUILD": 3
+ },
+ "libc_test_regression_selection": {
+  "summary": {
+   "NOBUILD": 1,
+   "PASS": 12,
+   "FAIL": 3
+  },
+  "not_pass": {
+   "flockfile-list": [
+    "NOBUILD",
+    "error: duplicate symbol: malloc"
+   ],
+   "pthread_atfork-errno-clobber": [
+    "FAIL",
+    "status=0 0.6s UNSERVED clone"
+   ],
+   "pthread_exit-dtor": [
+    "FAIL",
+    "status=1 0.7s UNSERVED clone"
+   ],
+   "raise-race": [
+    "FAIL",
+    "status=1 1.1s UNSERVED clonex16 ..."
+   ]
+  }
+ }
+}

@@ -7029,7 +7029,7 @@ configuration in which C++ compiles today.** C-61 alone does not make C++ "nearl
 
 **Fix: none yet. The ABI decision is the lead's.**
 
-### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `FIXED 2026-09-30 by musl-patches/0004 (delegation-threads, T4); found 2026-09-24 by the tshark port; GLib's workaround (ports/wireshark/app/deps/patches/glib-0008) still in place until the GCond gate; source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
+### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `FIXED 2026-09-30 by musl-patches/0004 (delegation-threads, T4); found 2026-09-24 by the tshark port; GLib's workaround (ports/wireshark/app/deps/patches/glib-0008) removed 2026-09-30, GLib's cond test passing 4 of 4 in a domain with threads; source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
 
 **What happens.** On capstone64, `pthread_cond_t` (`include/alltypes.h.in:88`) is `int __i[12]`,
 48 bytes, and its pointer view `__p[12*sizeof(int)/sizeof(void*)]` holds three 16-byte pointers.
@@ -7140,6 +7140,42 @@ live instance. The compiler lane's sweep
 **latent, checked, not fixed**. They are quiet only because their offsets never take the
 `add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
 save loop is one alignment change from live.
+
+### C-75 — a pointer slot whose initializer names an alias is never tagged: `__capstone_cap_init` skipped every `GlobalAlias` `FIXED 2026-09-30 on compiler/cap-init-alias (a6e8d967140b, on 7d01722aab88); found by delegation-threads, a fork in CPython's test_threading while the test's threads ran`
+
+**What happens.** `CapstoneCapGlobalInit` stores a tagged capability over each pointer slot of an
+initialized global, because a tag cannot live in the image. Its `needsMaterialization` accepted a
+slot whose value was a `GlobalVariable`, a `Function` or a `BlockAddress`; a `GlobalAlias` fell
+through, so the slot kept its link-time address, untagged. musl's `fork()` has such a table:
+`atfork_locks` (`src/process/fork.c`) is `&__at_quick_exit_lockptr` and nine more, each
+`weak_alias(dummy_lockptr, …)` that a strong definition elsewhere may replace. `fork()` walks it only
+while `need_locks` is set, that is once a second thread exists, so no single-threaded run met it.
+`test_clear_threads_states_after_fork` did: cause 24, address 0, at `fork+0x168`, the second `ldc`
+of `**atfork_locks[i]`. After the fix `os.fork()` there answers ENOSYS, as the delegated runtime
+answers every fork (`docs/plans/delegation-abi.md`, Processes). libc-test's `raise-race`, which forks
+beside threads, had faulted the same way since T4 and was recorded only as a FAULT: the image the
+T5 run used (`794dc291`, rebuilt byte for byte from `sdk-t4`) symbolizes to `fork+0x168`, address 0.
+With the fix it fails on the refused fork.
+
+**Reproducer.** Six lines: a table of `&real_ptr` beside a table of `&alias_ptr`, where `alias_ptr`
+is a weak alias. On 7d01722aab88 the initializer writes the first and not the second
+(`llvm/test/CodeGen/Capstone/static-cap-global-init-alias.ll` on the fix branch fails there at the
+alias's store).
+
+**Reach, measured.** `tests/capinit-unwritten-slots.py` lists the data slots that hold an address
+(`R_Capstone_64` in a data section) inside an object no `PCREL_HI20` of the object's
+`__capstone_cap_init` addresses: the
+delegation-threads musl archive, 10 of 1355 objects' slots, all `atfork_locks`; the application SDK,
+1 (`__capstone_init_fini_anchor_link`, an integer by design); CPython 3.13.7's 250 objects, none
+outside `.gct`, which the loader fills; GLib and pcre2, one `.init_array` slot, which the runtime's
+constructor walk reads as a link address by design. The census reports only the alias slot of the
+reproducer, and nothing on objects whose initializers are known good (`stdout.o`, `atexit.o`,
+CPython's `_struct.o`).
+
+**Fix.** `needsMaterialization` accepts any `GlobalValue`. The store names the alias, and the link
+resolves it as it resolves the static relocation, so a strong definition still wins. The musl
+archive built by 7d01722aab88 and by the fix, from one source path: of 1355 objects exactly one
+differs, `src_process_fork.o`, and the census finds nothing in the second.
 
 ### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER/ABI, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism not verified`
 

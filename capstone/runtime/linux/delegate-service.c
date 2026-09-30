@@ -51,7 +51,8 @@ static const struct { uint16_t wire; long host; } numbers[] = {
   MAP(utimensat) MAP(renameat2) MAP(nanosleep) MAP(clock_gettime)
   MAP(clock_nanosleep) MAP(gettimeofday) MAP(times) MAP(getpid) MAP(getppid)
   MAP(getuid) MAP(geteuid) MAP(getgid) MAP(getegid) MAP(gettid) MAP(umask)
-  MAP(uname) MAP(sysinfo) MAP(prlimit64) MAP(getrandom) MAP(sched_yield)
+  MAP(uname) MAP(sysinfo) MAP(prlimit64) MAP(getrandom) MAP(sched_yield) MAP(sched_getaffinity)
+  MAP(sched_setaffinity)
   MAP(set_tid_address) MAP(set_robust_list) MAP(futex) MAP(exit) MAP(exit_group)
   MAP(kill) MAP(wait4) MAP(tkill) MAP(rt_sigsuspend) MAP(rt_sigpending)
   MAP(rt_sigtimedwait) MAP(getitimer) MAP(setitimer)
@@ -393,6 +394,11 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     }
   if (!command_ok(entry->nr, entry->args[1]))
     return -ENOSYS;
+  /* The CPU set of the Linux thread serving this context is its thread's;
+     no other task's is the domain's to read or to set. */
+  if ((entry->nr == CAPSTONE_SYS_sched_getaffinity || entry->nr == CAPSTONE_SYS_sched_setaffinity) &&
+      entry->args[0] != 0)
+    return -ESRCH;
   /* These calls retain pointers past the round or need shared thread memory.
      Domain addresses must never become launcher addresses. */
   if (entry->nr == CAPSTONE_SYS_set_tid_address ||
@@ -590,6 +596,21 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   } else if (snapshot.nr == CAPSTONE_NR_PARK_WAIT || snapshot.nr == CAPSTONE_NR_PARK_WAKE ||
              snapshot.nr == CAPSTONE_NR_PARK_REQUEUE) {
     r = park_request(host, &snapshot);
+  } else if (snapshot.nr == CAPSTONE_NR_THREAD_NAME) {
+    /* this thread serves the context alone, so its name is the context's */
+    char name[CAPSTONE_THREAD_NAME_BYTES];
+    ++host->syscalls;
+    memcpy(name, host->exchange + snapshot.args[1], sizeof name);
+    if (snapshot.args[0] == CAPSTONE_THREAD_NAME_SET) {
+      name[sizeof name - 1] = 0;
+      r = prctl(PR_SET_NAME, name) ? -errno : 0;
+    } else if (snapshot.args[0] == CAPSTONE_THREAD_NAME_GET) {
+      r = prctl(PR_GET_NAME, name) ? -errno : 0;
+      if (!r)
+        memcpy(host->exchange + snapshot.args[1], name, sizeof name);
+    } else {
+      r = -EINVAL;
+    }
   } else if (snapshot.nr == CAPSTONE_SYS_rt_sigprocmask) {
     /* the logical mask is the domain's; the kernel gets the physical one */
     uint64_t set = 0, old = 0;

@@ -229,13 +229,8 @@ log "configuring CPython for riscv64-unknown-linux-musl via $CC"
 # MODULE_BUILDTYPE=static: no dlopen in a domain, so every module is built in.
 # --with-pkg-config=no: the host's pkg-config would hand over host library flags.
 # RANLIB is `llvm-ar s`: not every LLVM build here has the llvm-ranlib link.
-# -D_Py_THREAD_LOCAL_AS_GLOBAL: a domain has one hart and no clone, so each
-#   thread-local has one instance; patches/...-0006 makes it a global, because
-#   capstone64 cannot lower TLS (ISSUES.md C-47). Only valid while nothing can
-#   start a thread.
 (cd "$BUILD_DIR" && \
   CONFIG_SITE="$BUILD_DIR/config.site" MODULE_BUILDTYPE=static \
-  CPPFLAGS="-D_Py_THREAD_LOCAL_AS_GLOBAL" \
   CC="$CC" AR="$LLVM_AR" RANLIB="$LLVM_AR s" READELF=: \
   "$CPY_SRC/configure" \
     --host=riscv64-unknown-linux-musl \
@@ -261,8 +256,6 @@ if grep -qE '^[a-z_]' <(sed -n '/^\*shared\*$/,$p' "$BUILD_DIR/Modules/Setup.std
 fi
 grep -q "loading site script $BUILD_DIR/config.site" "$BUILD_DIR/configure.log" \
   || { echo "configure did not read $BUILD_DIR/config.site" >&2; exit 2; }
-grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_THREAD_LOCAL_AS_GLOBAL' "$BUILD_DIR/Makefile" \
-  || { echo "configure did not carry -D_Py_THREAD_LOCAL_AS_GLOBAL into the Makefile" >&2; exit 2; }
 # A configure check whose conftest crashes the compiler reads as "feature
 # absent", silently. Every such check must be one whose answer is right anyway.
 python3 - "$BUILD_DIR/config.log" <<'PY' || exit 2

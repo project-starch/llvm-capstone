@@ -51,7 +51,10 @@ the GC list links `_gc_next`/`_gc_prev` as `uintptr_t` with flag bits, which is 
 object -- then `Objects/obmalloc.c` (13; the pymalloc port already carries the replacement,
 `../pymalloc/patches/cpython-3.13.7-0002`). `Modules/_elementtree.c` (19) and
 `Python/tracemalloc.c` (8) are off the startup path. The warning sees explicit casts only, not a
-pointer carried through `memcpy` or a union, so the census is a lower bound.
+pointer carried through `memcpy` or a union, and only a cast from `uintptr_t` or `intptr_t`:
+`(void *)(unsigned long)x` gets clang's generic `-Wint-to-void-pointer-cast` instead (checked
+2026-09-30 through the SDK's `capstone-cc`). `signal.pthread_kill`'s `(pthread_t)thread_id` is such
+a site. The census is a lower bound.
 
 ## First link, 2026-09-23
 
@@ -156,7 +159,7 @@ What keeps the number honest:
   links a real domain image against the archive musl compiled to; `prepare` refuses to continue
   unless `strlen` links and both an undefined function and `-lz` are refused.
 * **Settings are read back.** `prepare` checks in what `configure` wrote that the static module
-  build, `config.site`, the thread-local define and the absence of computed gotos all took effect.
+  build, `config.site` and the absence of computed gotos all took effect.
   (The first of these checks was added after a comment line inside a continued command silently
   dropped two environment settings.)
 
@@ -168,7 +171,6 @@ What keeps the number honest:
 | `CC=toolchain/capstone-cc` | compiles with the flags the working musl domains use (`+m +a`, `-ffreestanding -fno-builtin -fno-jump-tables`, musl headers); links a real domain image so `HAVE_*` answers are about this libc |
 | `MODULE_BUILDTYPE=static` | no `dlopen` in a domain; every module is built in |
 | `--without-computed-gotos` | a table of `&&label` values is emitted without capability-init records and loads untagged; the first dispatch faults. It compiles cleanly, so no compile survey could flag it; the flag selects CPython's `switch` dispatch instead. `docs/history/05-08-2026_06-00-00_gp-captable-lua-bringup.md` |
-| `-D_Py_THREAD_LOCAL_AS_GLOBAL` (+ patch 0006) | capstone64 cannot lower TLS (C-47); a domain has one hart and no clone, so a thread-local has one instance |
 | `-Xclang -fexperimental-assignment-tracking=disabled` | C-50; keeps `-g` |
 | `--with-pkg-config=no` | the host's pkg-config would hand over host library flags |
 | `config.site` | no `/dev/ptmx` or `/dev/ptc`; `getaddrinfo` not buggy (it is never run) |
@@ -200,9 +202,37 @@ assumption it corrects and why the replacement is right; all six leave every pla
 | 0003 | `pycore_obmalloc.h` | the radix tree indexes 64 address bits (as `../pymalloc` decided) |
 | 0004 | `pycore_pyhash.h` | the pointer hash is of the address; it is never converted back |
 | 0005 | `pycore_qsbr.h` | false-sharing padding assumed the per-thread state fits in 64 bytes |
-| 0006 | `pyport.h` | opt-in: thread-locals as globals in a process that cannot start a thread |
+| 0016 | `pycore_pythread.h`, `pycore_lock.h`, `lock.c` | a thread's join handle and a raw mutex's waiter link were pointers kept in integers |
 
 None of them makes a pointer↔integer ROUND TRIP safe; the census above is where those are.
+
+## Threads on the delegated runtime (2026-09-30)
+
+On `delegation-threads`, where musl's own `pthread_create` runs on minted contexts, `threading`
+works: thread-locals are C11 thread-locals (C-47 is fixed, so patch 0006 and
+`-D_Py_THREAD_LOCAL_AS_GLOBAL` are gone; `_Py_tss_tstate` is a TLS symbol in `Python/pystate.o`),
+and patch 0016 keeps two thread words as pointers: the join handle (`PyThread_handle_t`, a
+`pthread_t`) and the raw mutex's waiter link. Without it the first `Thread.join` faults in
+`pthread_join`, and a contended `_PyRawMutex` faults at `waiter->next`.
+`host/rawmutex-test.c`, linked with `host/link-rawmutex.py` in place of `Programs/python.o`, is
+the raw mutex's directed test: CPython's thread suites never reach its waiter branch, natively
+either.
+
+Results in the guest, the survey's 250 objects linked by `common/application/build.py`
+(record [results/threads-2026-09-30.json](results/threads-2026-09-30.json)):
+
+| suite | ran | result | errors, by cause |
+|---|---:|---|---|
+| `test.test_threading` | 212 | 28 errors, 13 skipped | 26 `subprocess` (fork_exec needs fork), 1 `os.fork`, 1 sixteen threads at once (fifteen per application) |
+| `test.test_thread` | 34 | OK | `test_forkinthread` left out: with fork refused it blocks for good |
+| `test.test_threading_local` | 22 | OK, 2 skipped | |
+| `test.test_queue` | 162 | OK, 6 skipped | |
+| `test.test_concurrent_futures.test_thread_pool` | 17 | 2 errors | a process pool (`_multiprocessing` is n/a), a fork |
+| `host/rawmutex-test.c` | | 160000 of 160000, twice | |
+
+Fork is refused by design (`docs/plans/delegation-abi.md`); the `subprocess` errors go once
+patch 0015 (`fork_exec` through `posix_spawn`, another lane) is here. Run a module without named
+tests with `host/run-filtered.py MODULE TEST...`.
 
 ## What this does not establish
 

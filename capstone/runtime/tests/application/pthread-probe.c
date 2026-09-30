@@ -918,6 +918,84 @@ static int sigaction_race(void)
 
 /* ---- clone-refused: clone() for anything but a thread is not a context. */
 static int child_fn(void *arg) { (void)arg; return 0; }
+/* A thread's name is the name of the Linux thread that serves its context: a
+   thread names itself and reads it back, main keeps its own, and naming another
+   thread (musl writes /proc/self/task/<tid>/comm; a minted thread's tid, from
+   0x400000, names no Linux task) is refused rather than landing on another. */
+static pthread_barrier_t named_met;
+
+static void *named(void *arg)
+{
+  char name[16];
+  (void)arg;
+  if (pthread_setname_np(pthread_self(), "probe-worker")) return (void *)1;
+  pthread_barrier_wait(&named_met);   /* main tries to rename this thread */
+  pthread_barrier_wait(&named_met);
+  if (pthread_getname_np(pthread_self(), name, sizeof name)) return (void *)2;
+  if (strcmp(name, "probe-worker")) return (void *)3;
+  return 0;
+}
+
+static int thread_name(void)
+{
+  char before[16], after[16];
+  pthread_t t;
+  void *r;
+  CHECK(pthread_barrier_init(&named_met, 0, 2) == 0);
+  CHECK(pthread_getname_np(pthread_self(), before, sizeof before) == 0);
+  CHECK(pthread_create(&t, 0, named, 0) == 0);
+  pthread_barrier_wait(&named_met);
+  int other = pthread_setname_np(t, "renamed");
+  pthread_barrier_wait(&named_met);
+  CHECK(pthread_join(t, &r) == 0);
+  CHECK(r == 0);
+  CHECK(other != 0);
+  CHECK(pthread_getname_np(pthread_self(), after, sizeof after) == 0);
+  CHECK(!strcmp(before, after));
+  CHECK(pthread_setname_np(pthread_self(), "probe-main") == 0);
+  CHECK(pthread_getname_np(pthread_self(), after, sizeof after) == 0);
+  CHECK(!strcmp(after, "probe-main"));
+  printf("thread-name: main was '%s'; naming another thread: %s\n", before, strerror(other));
+  return 0;
+}
+
+/* A thread's CPU set is its Linux thread's: the caller's own is read and set, by
+   0 or by pthread_self, in main and in a thread; another thread's is ESRCH. */
+static void *affinity_worker(void *arg)
+{
+  cpu_set_t set;
+  (void)arg;
+  CPU_ZERO(&set);
+  if (sched_getaffinity(0, sizeof set, &set) || CPU_COUNT(&set) < 1) return (void *)1;
+  CPU_ZERO(&set);
+  if (pthread_getaffinity_np(pthread_self(), sizeof set, &set) || CPU_COUNT(&set) < 1) return (void *)2;
+  if (pthread_setaffinity_np(pthread_self(), sizeof set, &set)) return (void *)3;
+  pthread_barrier_wait(&named_met);
+  pthread_barrier_wait(&named_met);
+  return 0;
+}
+
+static int affinity(void)
+{
+  cpu_set_t set;
+  pthread_t t;
+  void *r;
+  CPU_ZERO(&set);
+  CHECK(sched_getaffinity(0, sizeof set, &set) == 0);
+  int cpus = CPU_COUNT(&set);
+  CHECK(cpus >= 1);
+  CHECK(pthread_barrier_init(&named_met, 0, 2) == 0);
+  CHECK(pthread_create(&t, 0, affinity_worker, 0) == 0);
+  pthread_barrier_wait(&named_met);
+  int other = pthread_getaffinity_np(t, sizeof set, &set);
+  pthread_barrier_wait(&named_met);
+  CHECK(pthread_join(t, &r) == 0);
+  CHECK(r == 0);
+  CHECK(other == ESRCH);
+  printf("affinity: %d CPUs; another thread's set: %s\n", cpus, strerror(other));
+  return 0;
+}
+
 static int clone_refused(void)
 {
   static char stack[4096] __attribute__((aligned(16)));
@@ -943,6 +1021,8 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "tsd")) rc = tsd();
   else if (!strcmp(mode, "cond")) rc = cond();
   else if (!strcmp(mode, "clone-refused")) rc = clone_refused();
+  else if (!strcmp(mode, "thread-name")) rc = thread_name();
+  else if (!strcmp(mode, "affinity")) rc = affinity();
   else if (!strcmp(mode, "pi-mutex")) rc = pi_mutex();
   else if (!strcmp(mode, "user-stack")) rc = user_stack();
   else if (!strcmp(mode, "main-exit-more")) rc = main_exit_more();

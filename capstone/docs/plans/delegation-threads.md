@@ -1,10 +1,12 @@
 # Delegated threads: one Linux thread per protected context
 
 Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES,
-PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1, B7), parking through the launcher
-(T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14) and musl's own threads on minted
-contexts (T4, Q4, B10 and B11), signals per context with cancellation (B8) and fifteen threads per
-application (T5) pass; the gates are next. Branch
+PROBE B DOMAIN PHASE PASSES: a transport per context (T1, B7), parking through the launcher
+(T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14), musl's own threads on minted contexts
+(T4, Q4, B10 and B11), signals per context with cancellation (B8), fifteen threads per application
+(T5) and a thread's name and CPU set. The gates pass: libc-test's thread group (seven of nine;
+`pthread_cancel`'s asynchronous case waits for the doorbell, `sem_open` for file-backed mappings),
+GLib's `GCond` and CPython's `threading`. Open: asynchronous delivery (the doorbell). Branch
 `delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
 Probe A and Probe B test.
 
@@ -243,6 +245,30 @@ Done so far:
   regression selection 12 of 16); libc-test, the context probe with A7, A9 and ctl-wfi, the signal
   contract and the application gate as before. 100000 rounds took 9395 ms. Record
   `results/20260930-contexts-per-application.json`.
+- A thread's name and CPU set: `pthread_setname_np` and `pthread_getname_np` on the calling thread
+  (musl's `prctl(PR_SET_NAME/PR_GET_NAME)`) are the runtime request `THREAD_NAME`, and
+  `sched_getaffinity` and `sched_setaffinity` of the calling thread (pid 0 or its own tid) are
+  delegated. The launcher thread that serves a context runs them on itself, so a name shows in
+  `/proc/<pid>/task/*/comm` and the CPU set is that thread's. Naming or asking about another thread is refused: a minted
+  thread's tid, from `0x400000`, names no Linux task (ENOENT), and the launcher answers ESRCH for
+  any pid but 0. musl patch 0006 keeps the name a pointer: `prctl` read its arguments as
+  `unsigned long` and the thread-name calls passed `(unsigned long)name`, so the first request
+  faulted (cause 24); GLib names every thread it creates, so its thread tests faulted too.
+  `pthread-probe` adds `thread-name` and `affinity` (28 of 28 pass); on a launcher without the
+  request and the call, both fail. Found by GLib's `thread6` (a thread's name read back empty)
+  and `thread7` (it sets a thread's CPU set), and by CPython's `ThreadPoolExecutor()`, whose
+  default worker count asks for the CPU set.
+- The CPython gate: CPython 3.13.7 with C11 thread-locals (patch 0006 and its define are gone) and
+  patch 0016, which keeps the join handle and the raw mutex's waiter link as pointers (without it
+  the first `Thread.join` faults in `pthread_join`, and a contended `_PyRawMutex` at
+  `waiter->next`). In the guest `test_threading` runs all 212 tests: 28 errors, all fork (26
+  through `subprocess`, 1 `os.fork`) or sixteen threads at once, 13 skipped; `test_thread`
+  (without `test_forkinthread`, which blocks for good when fork is refused), `test_threading_local`
+  and `test_queue` pass; the thread pool fails only on a process pool and a fork. Found on the
+  way: C-75, a compiler defect (`compiler/cap-init-alias`): a pointer slot whose initializer
+  names an alias was never tagged, so musl's `fork()` faulted on its table of lock pointers once a
+  second thread existed; libc-test's `raise-race` had met it since T4. Record
+  `ports/cpython/interpreter/results/threads-2026-09-30.json`.
 - An independent review of B8 (2026-09-30) found five defects, all fixed: a delivery read the
   shared handler table unlocked while another context could change it (the action is now copied
   under a leaf lock); glibc's `sigaddset` refuses signals 32 and 33, so the trampoline could not
@@ -1199,5 +1225,8 @@ runtime as generally thread-capable. Gates:
 - the libc-test thread group leaves the excluded set (seven of the nine pass after B8;
   `pthread_cancel` waits for the doorbell, `sem_open` for file mappings, not threads);
 - GLib's `GCond` in the tshark deps (the `pthread_cond_t` size fix, e2c9ad3; the layout itself is
-  fixed by musl patch 0004);
-- CPython's basic `threading` tests.
+  fixed by musl patch 0004): pass 2026-09-30, glib-0008 is gone and GLib's own `cond` test passes
+  in a domain, with `thread`, `rec-mutex` and `asyncqueue`; `mutex`, `once` and `rwlock` stop only
+  at their hundred-thread tests (`runtime/tests/application/results/20260930-glib-threads.json`);
+- CPython's basic `threading` tests: pass 2026-09-30, the errors left are fork's and the fifteen-thread
+  limit's (`ports/cpython/interpreter/results/threads-2026-09-30.json`).
