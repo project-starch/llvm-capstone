@@ -459,6 +459,68 @@ one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` i
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
 
+### SETTLED: the tag was never killed in p's slot -- p arrives untagged
+
+The granule pass answers it. `_estrndup`'s `p` slot is computable from the fault registers:
+memcpy's `sp = 0x101fff7b0` with a `-0xa0` frame puts `_estrndup`'s `sp` at `0x101fff850`, its
+`s0` at `sp + 0x80 = 0x101fff8d0`, and `p` at `s0 - 0x60` = **`0x101fff870`**.
+
+A whole-stack tag watch (`LO=0x101dcd000 HI=0x102000000 MAX=40000`) recorded **1751 kills,
+COMPLETE, not truncated**. Not one of them is at `0x101fff870`. A tag watch reports a scalar
+store only when the map HELD a capability at that granule, so:
+
+**No capability tag was ever destroyed in the slot `_estrndup` reads. The value was already
+untagged when it was stored there.** The tag died upstream of `_estrndup`, and NOT by an
+in-memory clobber -- which retires the "something wrote over the live pointer" reading for good.
+
+### What the same run does show, and where it points
+
+Filtering the 1751 kills to narrow capabilities (span < 4 KiB) whose bounds CONTAIN the dead
+pointer `0x101d9fd90` gives exactly six, all of one object:
+
+    bounds = (0x101d9fd30, 0x101d9fda0)   span 112 bytes,  dead pointer at base + 0x60
+
+    pc 101c96fe0  size 8   memcpy                     (beebs_freestanding_string.c:152)
+    pc 101c976ac  size 8   memset                     (beebs_freestanding_string.c:336)
+    pc 101c9bc8c  size 8   _emalloc                   (zend_capstone_alloc.h:269)
+    pc 101c0fd9c  size 8   zend_language_parser.c:2671
+    pc 101c14318  size 16  zend_language_parser.c:3475   (16-byte: REPLACES, does not destroy)
+    pc 101c0cfcc  size 4   zend_language_scanner.c:5349
+
+So a 112-byte capability over that block DID exist and was tagged. Every one of these kills is
+at `0x101ffb5xx`-`0x101ffc7xx` -- roughly 0x3000 BELOW `_estrndup`'s frame, i.e. in deeper
+frames, during the parse. They are stale stack copies being overwritten by ordinary slot reuse,
+which is benign.
+
+Read together: the block was allocated and used during parsing, its capability copied around
+the stack, then the block was FREED and HANDED OUT AGAIN to `_estrndup` -- and the pointer
+returned the second time had no tag. **The suspect is now the free-and-reuse path, not the
+fresh-carve path.**
+
+### The geometry, and why no sweep reproduces it
+
+The 112 bytes is NOT the request. The dead pointer sits at `base + 0x60`, so the layout is a
+**16-byte payload behind 96 bytes of header + MEM_HEADER_PADDING**, and the capability spans
+`96 + REAL_SIZE(16) = 112` -- exactly what the control arm's bound should be. (A 96-byte header
+is worth a look in its own right.) So the failing allocation is `_emalloc(16)`, i.e. an
+`estrndup` of a 15-character string, which is one of url.c's path/scheme copies.
+
+Payload 16 was ALREADY covered, clean, by the fresh-then-cached sweep over 1..64. A second sweep
+over 64..512 in step 4, allocating / freeing / re-allocating and checking the tag of both the
+fresh and the reused pointer, is **also clean -- no size returns untagged**.
+
+**So the fault is STATE-DEPENDENT and no isolated allocate/free/re-allocate sequence reproduces
+it.** It needs the real history: the block allocated and used during the parse, its capability
+copied across several frames, freed, and handed out again. That is a different line of attack
+from sweeping sizes, and the cheap static and sweep-based options are now exhausted.
+
+Two candidates for it, in order of cost:
+  * a ring buffer in .bss recording (address, tag) for every pointer our malloc returns, dumped
+    through php_fault_report on the fault -- localises the producing call without a pin move;
+  * the store-address watch (`origin/diag/store-address-watch`, +2 commits), which reports
+    stores BY ADDRESS with no map query and so can see a write to a granule the capability map
+    does not track -- the one thing a tag watch cannot do by construction.
+
 **Still available if the granule pass does not settle it:** the store-address watch on
 `origin/diag/store-address-watch`, +2 commits from our pin. It reports stores BY ADDRESS with
 no map query, so it catches a write to a granule the map does not track -- which is precisely

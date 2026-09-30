@@ -148,6 +148,33 @@ void domain_main(unsigned *res, unsigned func)
     }
     st |= ST_REGISTERED;           *res = st;
 
+#ifdef RUNG_E_REUSE
+    /* Does the FREE-AND-REUSE path hand back an UNTAGGED pointer?
+     *
+     * The granule pass showed the tag is never killed in _estrndup's p slot -- p arrives
+     * untagged -- and that the block involved is 112 bytes, allocated and used during the
+     * parse, then freed and handed out again. 112 is above the 1..64 the earlier sweep
+     * covered, and above PHP's own cache (real_size < 88), so it is served by the PORT's
+     * cache and carve path.
+     *
+     * Each size: allocate, free, allocate again, and check the tag of BOTH. The second one is
+     * the reuse. Reported: bits 16..31 = first size whose REUSED pointer is untagged, bit 10
+     * = the first allocation was already untagged (would mean the fresh path, not reuse). */
+    {
+        unsigned bad_reuse = 0, bad_fresh = 0, n;
+        for (n = 64u; n <= 512u && !bad_reuse && !bad_fresh; n += 4u) {
+            void *a = emalloc(n);
+            if (!a || !__builtin_capstone_cap_get_tag(a)) { bad_fresh = n; break; }
+            efree(a);
+            void *b = emalloc(n);
+            if (!b || !__builtin_capstone_cap_get_tag(b)) { bad_reuse = n; break; }
+            efree(b);
+        }
+        *res = st | (bad_fresh ? 0x400u : 0u)
+                  | (((bad_reuse ? bad_reuse : bad_fresh) & 0xFFFFu) << 16);
+        return;
+    }
+#endif
 #ifdef RUNG_E_CACHEPROBE
     /* Does PHP's OWN allocator cache hold UNTAGGED pointers?
      *
