@@ -26,8 +26,10 @@ the runner rejects disabled assertions.
 `--scenarios-only` runs the named contracts and all mutation controls.
 `--replay walk_only_drain` prints the correct and broken traces for that
 variant. `--depth`, `--seeds` and `--steps` set the lifecycle search and random
-trace bounds; defaults are 3, 32 and 100. A state-limit failure is an incomplete
+trace bounds; defaults are 6, 32 and 100. A state-limit failure is an incomplete
 search and a failing exit, never a passing bounded result.
+Depths below 6 explicitly disable the lifecycle completion gate in the record.
+Short random traces can fail the per-seed data-coverage requirements.
 
 The checked [result record](results.json) includes source SHA-256 values, Python
 version, exact search bounds, state/edge counts, operation coverage and the
@@ -59,18 +61,31 @@ preparation, but revocation, DETACH and ordinary accesses can interleave with
 it. This abstracts internal zeroing and publication circuitry.
 
 DETACH, UNMAP and REVOKE separate break, per-hart invalidation, per-hart drain
-acknowledgement and final return. All use a conservative global barrier:
+acknowledgement and final return. The default uses a conservative global barrier:
 new accesses wait; old walks may progress until their hart invalidates them;
 checked accesses may complete or cancel. A hart cannot acknowledge drain with
 a checked access outstanding. No return occurs before both acknowledgements.
 This over-invalidates compared with a targeted implementation; it makes no
 performance claim. DROP of a linear logical capability uses the same barrier.
 
+A separate `table_record` experiment represents the optional §10.3 optimization.
+CREATE and POPULATE write protected `node -> (id, gen)` records for table pages.
+REVOKE examines the affected live nodes before breaking them; a matching record
+selects the mapping scope. Logical operations and UNMAP already know their
+binding. An unindexed physical revoke (including frame revoke) falls back to
+the global barrier. Issue, invalidation and drain use the same scope, so foreign
+walks and checked effects can proceed during a scoped barrier, including after
+that hart acknowledged drain. Returns may coexist with a foreign pending access.
+This is implementation state, separate from the checker’s ghost table ownership.
+Records persist in this finite experiment; no record reclamation, node reuse or
+hardware lookup cost is modeled. The default global mode never consults them.
+
 DESTROY consumes a whole-mapping token, requires completed DETACH, and releases
 only the registry entry. Frames and lower tables can remain present. Their
 senior physical handles work after root loss, after DESTROY and after a new
 generation takes the id. Root revoke leaves a reserved registry entry holding
-a dead root. No reverse index is consulted for correct revocation.
+a dead root. No reverse index is used to remove registry entries; even a scoped
+old-generation revoke leaves a new generation's registration intact.
 
 Logical SPLIT, DELIN, MREV, REVOKE, DROP, bounds/rights attenuation and cursor
 movement are modeled. Moving and storing a linear capability removes the source;
@@ -102,6 +117,11 @@ to authorize an operation. It checks after every successful microstep:
 | I7 | Logical binding and physical/logical kind agree with protected node identity across derivation and storage |
 | Goal clauses | Physical exclusivity, correct mapping selection for each access, and no monitor observation of domain-written words |
 
+The observation oracle records **physical** monitor reads. Logical disclosure is
+caught earlier by I3, at acquisition of a live logical capability by the monitor,
+before it can issue a read. The observation oracle alone is not a check of both
+read paths.
+
 The environment supplies only existing capabilities to instructions. Private
 domain programs can pass logical authority between the two domain contexts;
 they do not deliberately grant private data authority to the monitor. That is
@@ -111,7 +131,7 @@ operations must leave the complete state unchanged.
 
 ## Searches and controls
 
-[check.py](check.py) runs three complementary explorations:
+[check.py](check.py) runs these complementary checks:
 
 1. Eight named contract scenarios cover permission/type refusal, sparse backing,
    scrub-before-read, explicit and implicit locked slots, normal and orphaned
@@ -122,16 +142,65 @@ operations must leave the complete state unchanged.
    atomic read-modify-write, capability load and capability store), four removal
    events (frame/table/root revoke and DETACH), and cold/warm TLBs. Both harts
    have an outstanding access. Live completions as well as cancellations are
-   explored; a terminal unfinished barrier is an error. UNMAP is separately
+   explored; a terminal unfinished barrier is an error. Each workload has one
+   removal event and one initially outstanding access per hart. UNMAP is separately
    exercised after DETACH: a pre-DETACH access must already be drained there.
-3. A breadth-first lifecycle search explores its finite action alphabet through
-   depth 3 from two populated mappings. Seeded traces exercise longer sequences,
-   checking each microstep. They favor access progress in 60% of steps to avoid
-   the many revocation operands starving walks. A random campaign with zero
-   executed data accesses fails rather than becoming a vacuous pass.
+3. The same forty workloads run again with `table_record`. Fifteen additional
+   workloads combine each of the five data operations with table/root revoke or
+   DETACH, followed by a second table/root revoke. One victim store is outstanding
+   on hart 0; hart 1 issues one access to mapping 1 after the first break, at any
+   enabled point during/between/after the two barriers. Every terminal must have
+   completed both removals and resolved both accesses. Each family must reach
+   foreign issue during a barrier, issue after that hart's drain, foreign memory
+   completion during a barrier, and return with foreign work pending. These are
+   edge-coverage counts, not counts of distinct executions. Direct controls check
+   global refusal, affected-mapping refusal, preserved foreign TLB entries,
+   global frame fallback, and old-generation record isolation. An intentionally
+   misattributed table record must fail I6 with a victim store still outstanding.
+   The late capability-load workload has a warm foreign TLB from its payload
+   store during setup; the other late-access workloads start with it cold.
+4. Three breadth-first lifecycle searches start in ACTIVE, DETACHED and DESTROYED
+   states, each reached by explicit setup instructions from two populated mappings.
+   Their depth-6 bounds exclude setup. The alphabet uses one representative
+   frame/table/root/logical revocation operand, mapping 0 for lifecycle changes,
+   one store at offset zero, two POPULATE shapes, CREATE, DESTROY and UNMAP.
+   It permits at most one additional barrier and one additional access per path;
+   preparation, walking, invalidation, drain and return remain separate microsteps.
+   The gate requires completed revoke, detach and unmap, a memory effect, destroy
+   and publication across the searches. Counts include the depth frontier, whose
+   successors are not explored. This is neither a full lifecycle from one start
+   nor exhaustive exploration of the broader random-action alphabet.
+5. Seeded 100-step traces select weighted opcode groups, then shuffle operands
+   within each group. REVOKE is capped at two per trace; REVOKE/DETACH/DROP together
+   at three. Accesses use offset zero. Mapping 1 and its backing stay live as a
+   data-control workload, while mapping 0 can be dismantled and recreated.
+   Every seed must complete at least four memory effects including a load and a
+   store. The record includes each seed's operation and effect counts, not just
+   aggregate nonzero coverage. The policy is constrained random testing, not
+   uniform adversarial sampling or a claim about arbitrary revocation rates.
 
 These are bounded experiments, not exhaustive exploration of all possible
 programs or an induction proof. The record reports the bounds and coverage.
+
+The checked default record contains:
+
+| Search | Families | Sum of states |
+|---|---:|---:|
+| Global removal interleavings | 40 | 11,022 |
+| Same workloads with table records | 40 | 11,022 |
+| Late foreign issue and two removals | 15 | 21,683 |
+| Reduced lifecycle, depth 6 | 3 | 1,343 |
+
+State totals sum separate families, not one deduplicated state space. The random
+campaign completes 581 memory effects in 3,200 steps, at least eight per seed;
+all 32 seeds include loads, stores and REVOKE, with at most two REVOKEs each.
+
+The earlier record at `de39f471` remains valid for its narrower workloads. Its
+depth-3 lifecycle search checked only prefixes (zero finish, memory step,
+DESTROY and UNMAP); 20 of 32 random seeds had no memory effect, with 24 total.
+The independent review also found depth 4 exceeded 100,000 states with the old
+alphabet. Those results do not supply lifecycle-completion or foreign-issue
+coverage; the new checks address those specific gaps with explicit restrictions.
 
 All eight broken variants must fail at their intended property while their
 correct control either completes safely or refuses the unsafe instruction:
@@ -171,6 +240,8 @@ to this model; none changes production enforcement.
   boundary. It does not prove their RTL realization or close R-44.
 
 The next gate is review of these abstraction boundaries and a concrete walker,
-protected binding lookup and global completion protocol against §10.3. Any
+protected binding lookup and completion protocol against §10.3. The record
+experiment additionally needs a bounded record lifetime and a node-reuse protocol.
+The global prototype remains the default. Any
 QEMU or RTL implementation must establish refinement to the modeled contract
 and add the omitted access shapes before claiming them.

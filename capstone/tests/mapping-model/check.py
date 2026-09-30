@@ -13,8 +13,8 @@ from model import Action, Cap, HARTS, Machine, MUTANTS, Refused, Violation, Word
 
 
 class Script:
-    def __init__(self, mutant=None):
-        self.machine = Machine(mutant)
+    def __init__(self, mutant=None, barrier_mode="global"):
+        self.machine = Machine(mutant, barrier_mode=barrier_mode)
         self.trace = []
         self.refusals = 0
 
@@ -79,8 +79,8 @@ class Script:
         self.step("init", location)
 
 
-def fixture(mutant=None):
-    s = Script(mutant)
+def fixture(mutant=None, barrier_mode="global"):
+    s = Script(mutant, barrier_mode)
     s.pages()
     s.create(0, 0)
     s.populate(0, 0, 2, 1)
@@ -483,23 +483,39 @@ def successors(machine, actions):
         yield action, next_machine
 
 
-def explore(seed, actions, depth=None, limit=100000):
+def explore(seed, actions, depth=None, limit=100000, terminal_check=None):
     queue = deque([(seed, 0)])
     seen = {seed.key()}
     edges = 0
     terminals = 0
     max_depth = 0
+    frontier = 0
     coverage = Counter()
     while queue:
         state, distance = queue.popleft()
         max_depth = max(max_depth, distance)
         if depth is not None and distance == depth:
+            frontier += 1
             continue
         count = 0
         for action, child in successors(state, actions(state)):
             count += 1
             edges += 1
             coverage[action.operation] += 1
+            if action.operation == "finish":
+                coverage["finish_" + state.barrier.operation] += 1
+            if state.barrier and action.operation == "issue":
+                coverage["issue_during_barrier"] += 1
+                if action.arguments[0] in state.barrier.drained:
+                    coverage["issue_after_hart_drain"] += 1
+            if state.barrier and action.operation == "memory_step":
+                access = state.accesses[action.arguments[0]]
+                if not state._blocked(access.cap.binding):
+                    coverage["foreign_memory_during_barrier"] += 1
+            if action.operation == "finish" and any(
+                    a.phase not in ("done", "fault", "cancelled") and
+                    not state._blocked(a.cap.binding) for a in state.accesses.values()):
+                coverage["finish_with_foreign_pending"] += 1
             key = child.key()
             if key not in seen:
                 if len(seen) == limit:
@@ -512,16 +528,19 @@ def explore(seed, actions, depth=None, limit=100000):
                 assert state.completed and state.barrier is None, "unfinished barrier deadlock"
                 assert all(a.phase in ("done", "fault", "cancelled")
                            for a in state.accesses.values()), "unfinished data access"
+                if terminal_check:
+                    terminal_check(state)
     return {"states": len(seen), "edges": edges, "terminals": terminals,
-            "max_depth": max_depth, "coverage": dict(sorted(coverage.items()))}
+            "max_depth": max_depth, "depth_frontier": frontier,
+            "coverage": dict(sorted(coverage.items()))}
 
 
-def interleavings():
+def interleavings(barrier_mode="global"):
     results = []
     for operation in ("load", "store", "amo", "cload", "cstore"):
         for victim in ("frame", "table", "root", "detach"):
             for warm in (False, True):
-                s = fixture()
+                s = fixture(barrier_mode=barrier_mode)
                 if operation == "cload":
                     s.step("move", "d1:p1", "d0:payload")
                     s.access(0, "d0:p0", "cstore", source="d0:payload")
@@ -547,27 +566,209 @@ def interleavings():
                 result = explore(s.machine, lambda m: schedule_actions(m, trigger))
                 assert result["coverage"].get("memory_step", 0) > 0
                 assert result["coverage"].get("finish", 0) > 0
-                result.update(operation=operation, victim=victim, warm=warm)
+                result.update(operation=operation, victim=victim, warm=warm,
+                              barrier_mode=barrier_mode, removal_bound=1)
                 results.append(result)
     return results
+
+
+def check_table_record():
+    """Refusal/permission controls for the optional protected record."""
+    for mode in ("global", "table_record"):
+        s = fixture(barrier_mode=mode)
+        s.step("begin_revoke", "m:h1", "m:table")
+        s.refused("issue", 0, "d0:p0", "store")
+        if mode == "global":
+            s.refused("issue", 1, "d1:p1", "store")
+            s.barrier()
+            continue
+        assert s.machine.barrier.scope == frozenset(((0, 1),))
+        req = s.step("issue", 1, "d1:p1", "store")
+        for _ in range(3):
+            s.step("walk", req)
+        s.step("invalidate", 1)
+        assert (1, 1, 1, 0) in s.machine.tlb
+        s.step("drain", 1)  # Foreign checked store does not hold up this return.
+        s.step("memory_step", req)
+        req = s.step("issue", 1, "d1:p1", "load")
+        s.step("invalidate", 0)
+        s.step("drain", 0)
+        s.step("finish")
+        s.step("memory_step", req)
+        assert s.machine.accesses[req].result == Word(7, True)
+        s.step("begin_revoke", "m:h2", "m:frame")
+        assert s.machine.barrier.scope is None  # Unindexed frame => global fallback.
+        s.refused("issue", 1, "d1:p1")
+        s.barrier()
+
+    s = fixture(barrier_mode="table_record")
+    s.step("begin_detach", "m:d0", "m:token")
+    s.barrier()
+    s.step("destroy", "m:token")
+    s.create(0, 6, "new")
+    s.populate("new", 0, 4, 5)
+    s.step("begin_revoke", "m:h0", "m:oldroot")
+    assert s.machine.barrier.scope == frozenset(((0, 1),))
+    assert s.machine.registry[0].binding == (0, 2)
+    assert s.access(0, "d0:pnew", "store").phase == "done"
+    s.barrier()
+    assert s.access(0, "d0:pnew").result == Word(7, True)
+
+    # Fault injection is confined to setup: misattribute a root record. A
+    # checked victim store must make this scoped return fail at I6.
+    s = fixture(barrier_mode="table_record")
+    req = s.step("issue", 0, "d0:p0", "store")
+    for _ in range(3):
+        s.step("walk", req)
+    s.machine.table_bindings[s.machine.registry[0].root.node] = (1, 1)
+    s.step("begin_revoke", "m:h0", "m:badroot")
+    for hart in HARTS:
+        s.step("invalidate", hart)
+        s.step("drain", hart)
+    try:
+        s.step("finish")
+    except Violation as error:
+        assert str(error).startswith("I6:"), str(error)
+        return {"wrong_record_control": str(error), "trace": s.trace}
+    raise AssertionError("misattributed table record escaped completion oracle")
+
+
+def record_interference():
+    results = []
+    for operation in ("load", "store", "amo", "cload", "cstore"):
+        for victim in ("table", "root", "detach"):
+            s = fixture(barrier_mode="table_record")
+            if operation in ("cload", "cstore"):
+                s.step("move", "m:p11", "d1:payload")
+                if operation == "cload":
+                    s.access(1, "d1:p1", "cstore", source="d1:payload")
+            s.step("issue", 0, "d0:p0", "store")
+            issued = s.machine.next_access
+            first = (Action("begin_detach", ("m:d0", "m:token")) if victim == "detach"
+                     else Action("begin_revoke", ("m:h1" if victim == "table" else "m:h0",
+                                                  "m:first")))
+            second = Action("begin_revoke", ("m:h1" if victim == "root" else "m:h0", "m:second"))
+
+            def actions(m):
+                result = schedule_actions(m, first)
+                if m.barrier is None and len(m.completed) == 1:
+                    result.append(second)
+                # One late access, scheduled during either barrier or between /
+                # after them. Before the first break only the victim is issued.
+                if m.next_access == issued and (m.barrier or m.completed):
+                    source = "d1:payload" if operation == "cstore" else None
+                    result.append(Action("issue", (1, "d1:p1", operation, 0, 99, source)))
+                return result
+
+            def terminal(m):
+                assert len(m.completed) == 2, "second removal missing"
+                assert m.next_access == issued + 1, "late foreign issue missing"
+
+            result = explore(s.machine, actions, terminal_check=terminal)
+            for event in ("issue_during_barrier", "issue_after_hart_drain",
+                          "foreign_memory_during_barrier", "finish_with_foreign_pending"):
+                assert result["coverage"].get(event, 0), "missing scoped interleaving: " + event
+            result.update(operation=operation, first_victim=victim,
+                          barrier_mode="table_record", removal_bound=2,
+                          late_access_bound=1)
+            results.append(result)
+    return results
+
+
+def lifecycle(depth):
+    """Reduced alphabets, explicit microsteps, three reachable starting states."""
+    results = []
+    aggregate = Counter()
+    for phase in ("active", "detached", "destroyed"):
+        s = fixture()
+        s.step("mrev", "d0:p0", "d0:rev")
+        if phase != "active":
+            s.step("begin_detach", "m:d0", "m:token0")
+            s.barrier()
+        if phase == "destroyed":
+            s.step("destroy", "m:token0")
+        initial_completed = len(s.machine.completed)
+
+        def actions(m):
+            result = schedule_actions(m, Action("finish"))
+            if m.preparation:
+                result += [Action("publish"), Action("abort")]
+            if m.barrier:
+                return result
+            # One candidate per removal kind; at most one new barrier per path.
+            if len(m.completed) == initial_completed:
+                for handle in ("m:h0", "m:h1", "m:h2", "d0:rev"):
+                    result.append(Action("begin_revoke", (handle, handle + ":back")))
+                result += [Action("begin_detach", ("m:d0", "m:token0")),
+                           Action("begin_unmap", ("m:token0", 0, "m:unmapped"))]
+            result += [Action("destroy", ("m:token0",)),
+                       Action("prepare_create", (0, "m:p6", "d0:new", "m:new0"))]
+            # A used leaf and a missing lower table exercise both publications.
+            handle = "m:new0" if "m:new0" in m.wallet else "m:d0"
+            result += [Action("prepare_populate", (handle, WORDS, "m:p3", ())),
+                       Action("prepare_populate", (handle, 2 * WORDS, "m:p4", ("m:p5",)))]
+            if not m.accesses:
+                pointer = "d0:new" if "d0:new" in m.wallet else "d0:p0"
+                result.append(Action("issue", (0, pointer, "store", 0)))
+            return result
+
+        result = explore(s.machine, actions, depth=depth)
+        result.update(initial_state=phase, depth_bound=depth,
+                      setup_steps=len(s.trace), additional_barrier_bound=1,
+                      additional_access_bound=1)
+        aggregate.update(result["coverage"])
+        results.append(result)
+    required = ("finish_revoke", "finish_detach", "finish_unmap", "memory_step",
+                "destroy", "begin_unmap", "publish")
+    if depth >= 6:
+        assert all(aggregate[k] for k in required), "lifecycle completion coverage missing"
+    return {"families": results, "depth_bound": depth,
+            "completion_gate": depth >= 6,
+            "states": sum(r["states"] for r in results),
+            "coverage": dict(sorted(aggregate.items()))}
 
 
 def randomized(seed_count, steps):
     aggregate = Counter()
     total = 0
+    records = []
+    revoke_limit = 2
+    removal_limit = 3
+    minimum_effects = 4
     for seed in range(seed_count):
         rng = random.Random(seed)
         machine = fixture().machine
         trace = []
+        coverage = Counter()
         for _ in range(steps):
-            actions = lifecycle_actions(machine)
-            rng.shuffle(actions)
-            if rng.random() < 0.6:
-                # Uniform choice over all operand combinations starved the
-                # walkers: many revocation candidates, only one next walk step.
-                # Bias toward progress, retaining races in the other 40%.
-                progress = {"walk", "memory_step", "publish", "finish"}
-                actions.sort(key=lambda a: a.operation not in progress)
+            groups = {}
+            for action in lifecycle_actions(machine):
+                op = action.operation
+                if op == "issue" and action.arguments[3] != 0:
+                    continue
+                if op == "begin_revoke" and coverage[op] >= revoke_limit:
+                    continue
+                if op in ("begin_revoke", "begin_detach", "drop") and sum(
+                        coverage[k] for k in ("begin_revoke", "begin_detach", "drop")) >= removal_limit:
+                    continue
+                cap = machine.wallet.get(action.arguments[0]) if action.arguments else None
+                # Keep mapping 1 backed and its pointer live, so each trace must
+                # exercise data even after adversarial teardown of mapping 0.
+                if cap and op != "issue" and (cap.binding == (1, 1) or
+                                              cap.page in (8, 9, 10)):
+                    continue
+                groups.setdefault(op, []).append(action)
+            # Choose opcode groups by weight, then operands uniformly within
+            # the group. Many REVOKE operands no longer multiply its weight.
+            weights = {"issue": 6, "walk": 8, "memory_step": 8,
+                       "publish": 4, "finish": 4, "begin_revoke": 1.5,
+                       "cancel": 0.2}
+            order = sorted(groups, key=lambda op: rng.random() ** (1 / weights.get(op, 1)),
+                           reverse=True)
+            actions = []
+            for op in order:
+                rng.shuffle(groups[op])
+                actions.extend(groups[op])
             for action in actions:
                 child = machine.clone()
                 try:
@@ -581,13 +782,25 @@ def randomized(seed_count, steps):
                 except Violation as error:
                     raise Violation("seed=%d trace=%s: %s" % (seed, trace, error)) from error
                 aggregate[action.operation] += 1
+                coverage[action.operation] += 1
                 total += 1
                 machine = child
                 break
             else:
                 break
-    assert aggregate["memory_step"] > 0, "random run performed no data access"
+        effects = Counter(effect[3] for effect in machine.effects)
+        assert len(machine.effects) >= minimum_effects, (
+            "seed=%d completed only %d data effects; minimum=%d" %
+            (seed, len(machine.effects), minimum_effects))
+        assert effects["load"] and effects["store"], "seed=%d missed load/store effects" % seed
+        records.append({"seed": seed, "steps": len(trace), "effects": dict(sorted(effects.items())),
+                        "memory_effects": len(machine.effects),
+                        "coverage": dict(sorted(coverage.items()))})
     return {"seeds": seed_count, "step_bound": steps, "steps": total,
+            "per_seed": records, "minimum_effects_required": minimum_effects,
+            "minimum_effects_measured": min(r["memory_effects"] for r in records),
+            "revoke_limit": revoke_limit, "removal_limit": removal_limit,
+            "protected_control_mapping": [1, 1],
             "coverage": dict(sorted(aggregate.items()))}
 
 
@@ -596,7 +809,7 @@ def main():
     if not __debug__:
         parser.error("run without -O/PYTHONOPTIMIZE; the harness needs assertions")
     parser.add_argument("--output", type=Path, help="write deterministic JSON result lines")
-    parser.add_argument("--depth", type=int, default=3, help="lifecycle BFS depth")
+    parser.add_argument("--depth", type=int, default=6, help="reduced lifecycle BFS depth")
     parser.add_argument("--seeds", type=int, default=32)
     parser.add_argument("--steps", type=int, default=100)
     parser.add_argument("--replay", choices=MUTANTS)
@@ -609,7 +822,7 @@ def main():
         return 0 if good[0] in ("safe", "Refused") and bad[0] == "Violation" else 1
     if args.depth < 1 or args.seeds < 1 or args.steps < 1:
         parser.error("bounds must be positive")
-    result = {"schema": 1, "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
+    result = {"schema": 2, "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
               "contract": "00626a232bda", "scenarios": [], "mutations": [],
               "python": sys.version.split()[0],
               "source_sha256": {name: hashlib.sha256(
@@ -621,11 +834,16 @@ def main():
         print("PASS", scenario.__name__, flush=True)
     result["mutations"] = mutations()
     print("PASS mutation controls %d/%d" % (len(result["mutations"]), len(MUTANTS)), flush=True)
+    result["table_record_controls"] = check_table_record()
+    print("PASS table-record scope and fault-injection controls", flush=True)
     if not args.scenarios_only:
         result["interleavings"] = interleavings()
         print("PASS interleaving families %d" % len(result["interleavings"]), flush=True)
-        result["lifecycle"] = explore(fixture().machine, lifecycle_actions, depth=args.depth)
-        result["lifecycle"]["depth_bound"] = args.depth
+        result["record_interleavings"] = interleavings("table_record")
+        print("PASS table-record repeated families %d" % len(result["record_interleavings"]), flush=True)
+        result["record_interference"] = record_interference()
+        print("PASS table-record interference families %d" % len(result["record_interference"]), flush=True)
+        result["lifecycle"] = lifecycle(args.depth)
         print("PASS lifecycle states %d" % result["lifecycle"]["states"], flush=True)
         result["random"] = randomized(args.seeds, args.steps)
         print("PASS seeded steps %d" % result["random"]["steps"], flush=True)

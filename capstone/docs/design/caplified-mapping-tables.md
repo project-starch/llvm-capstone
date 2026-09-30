@@ -262,9 +262,11 @@ keyed by (id, gen) rather than by id, of which nodes are table pages of which
 mapping, consulted for the revoked node and for every ancestor the REVOKE
 invalidates; or, conservatively, a global translation invalidation with the
 full drain of §8 on every REVOKE, since without such a record REVOKE cannot
-tell a table page's node from any other. The first prototype and the model take
-the conservative strategy; the record is the optimisation, and §10.3 owns its
-cost. Under either strategy a REVOKE of an old generation's table-page handle,
+tell a table page's node from any other. The first prototype and the model's
+default take the conservative strategy. A separate model experiment exercises
+the protected table-record alternative with foreign issue during barriers;
+the record remains an optimisation, and §10.3 owns its cost. Under either
+strategy a REVOKE of an old generation's table-page handle,
 after DESTROY and a new CREATE for the same id, must not touch the new
 generation's entry; §10.2 tests this. The frames in PTEs below, and the table
 pages below, are recoverable only through their own handles, each returning
@@ -527,8 +529,16 @@ The [host executable model](../../tests/mapping-model/README.md) implements this
 experiment for PRIVATE under the capability-selected root. Its
 [result record](../../tests/mapping-model/results.json) pins source hashes,
 search bounds, operation coverage and eight faulty comparison traces. It checks
-named contracts, exhausts forty fixed two-hart interleaving workloads, explores
-a bounded lifecycle action alphabet and runs reproducible random sequences.
+named contracts, exhausts forty fixed two-hart interleaving workloads in both
+global and table-record modes, and explores fifteen further table-record
+workloads with foreign issue and two successive removals. Three reduced
+lifecycle alphabets run to depth six from ACTIVE, DETACHED and DESTROYED seeds;
+coverage gates require memory effects and completed removal operations. Random
+sequences cap revocations and require data effects per seed. The record states
+the seed setup, bounds, depth frontier and per-seed coverage; these are restricted
+workloads, not full lifecycle enumeration. In particular, the earlier depth-three
+search covered prefixes only, and aggregate nonzero random coverage hid empty
+seeds. The README retains those limits alongside the replacement checks.
 The README defines the abstraction: two-level word-addressed tables, atomic
 memory effects and no revocation-node reuse, compressed encoding, cross-page
 instructions or hardware cache/coherence model. These bounded results do not
@@ -598,6 +608,12 @@ against a walk in flight (2), shared backing under a linear logical pointer
 Whether a capability-checking walker, a node tag in the TLB and the drain of
 §8 fit CVA6 is a question for the RTL lane before this candidate becomes a
 target. No cost is claimed here.
+
+The optional model experiment records table-node bindings at conversion and
+allows issue for other bindings during a scoped barrier. Physical frame REVOKE
+still uses the global fallback. The experiment checks interleavings and
+generation isolation; it does not supply a bounded hardware record, its
+reclamation protocol, node-reuse handling, lookup latency or a refinement proof.
 
 ### 10.4 Extension checks before an implementation or ABI claim
 

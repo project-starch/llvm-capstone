@@ -117,6 +117,7 @@ class Barrier:
     binding: tuple | None
     affected: set
     return_kind: str
+    scope: frozenset | None = None
     invalidated: set = field(default_factory=set)
     drained: set = field(default_factory=set)
 
@@ -137,9 +138,11 @@ def freeze(value):
 
 
 class Machine:
-    def __init__(self, mutant=None, ids=2, generations=3):
+    def __init__(self, mutant=None, ids=2, generations=3, barrier_mode="global"):
         require(mutant is None or mutant in MUTANTS, "unknown mutant")
+        require(barrier_mode in ("global", "table_record"), "unknown barrier mode")
         self.mutant = mutant
+        self.barrier_mode = barrier_mode
         self.ids = ids
         self.generations = generations
         self.nodes = {}
@@ -153,6 +156,9 @@ class Machine:
         self.tlb = {}
         self.accesses = {}
         self.next_access = 0
+        # Protected implementation state for the optional scoped experiment.
+        # Unlike table_owners below, instructions may consult this record.
+        self.table_bindings = {}
         # Ghost state below is an oracle, not authority available to instructions.
         self.mappings = {}
         self.reservations = {}
@@ -269,6 +275,8 @@ class Machine:
         if self.mutant != "uncleared_" + operation:
             self.memory[cap.page] = [Word() for _ in range(WORDS)]
         self.table_owners[cap.node] = (binding, cap.page)
+        if self.barrier_mode == "table_record":
+            self.table_bindings[cap.node] = binding
         return replace(cap, kind="table", binding=binding, cursor=0)
 
     def prepare_create(self, ident, root, pointer, handle, hi=PAGES * WORDS,
@@ -414,6 +422,7 @@ class Machine:
         if cap.linear:
             self.nodes[cap.node].valid = False
             self.barrier = Barrier("drop", "", cap, cap.binding, {cap.node}, "discard")
+            self.barrier.scope = self._scope(cap.binding, {cap.node})
         del self.wallet[location]
 
     def narrow(self, location, lo, hi, rights):
@@ -427,6 +436,20 @@ class Machine:
         # Forming a one-past pointer is legal; its use is checked at issue.
         require(cap.lo <= address <= cap.hi, "unrepresentable cursor")
         self.wallet[location] = replace(cap, cursor=address)
+
+    def _scope(self, binding, affected):
+        if self.barrier_mode == "global":
+            return None
+        if binding is not None:
+            return frozenset((binding,))
+        bindings = frozenset(self.table_bindings[n] for n in affected
+                             if n in self.table_bindings)
+        # No frame-to-mapping index: unclassified physical REVOKE remains global.
+        return bindings or None
+
+    def _blocked(self, binding):
+        return self.barrier is not None and (
+            self.barrier.scope is None or binding in self.barrier.scope)
 
     def begin_revoke(self, handle, output):
         require(self.barrier is None, "barrier busy")
@@ -443,6 +466,7 @@ class Machine:
         kind = ("uninit" if uninit else "physical") if physical else (
             "logical_uninit" if uninit else "logical")
         self.barrier = Barrier("revoke", output, cap, cap.binding, affected, kind)
+        self.barrier.scope = self._scope(cap.binding, affected)
         del self.wallet[handle]
         for node in affected:
             self.nodes[node].valid = False
@@ -462,6 +486,7 @@ class Machine:
         self.vacant(output)
         affected = {n for n in self.descendants(cap.node) if self.live(n)}
         self.barrier = Barrier("detach", output, cap, cap.binding, affected, "token")
+        self.barrier.scope = self._scope(cap.binding, affected)
         del self.wallet[handle]
         mapping.state = "DETACHING"
         for node in affected:
@@ -480,14 +505,17 @@ class Machine:
         self.memory[table.page][index] = LOCKED
         self.barrier = Barrier("unmap", output, frame, cap.binding,
                                {frame.node}, "uninit")
+        self.barrier.scope = self._scope(cap.binding, {frame.node})
 
     def invalidate(self, hart):
         b = self.barrier
         require(b is not None and hart in HARTS, "no barrier/hart")
         require(hart not in b.invalidated, "already invalidated")
-        self.tlb = {k: v for k, v in self.tlb.items() if k[0] != hart}
+        self.tlb = {k: v for k, v in self.tlb.items()
+                    if k[0] != hart or not self._blocked(v.binding)}
         for request, access in list(self.accesses.items()):
-            if access.hart == hart and access.phase in ("root", "leaf", "fill"):
+            if access.hart == hart and self._blocked(access.cap.binding) and \
+                    access.phase in ("root", "leaf", "fill"):
                 self.cancel(request)
         b.invalidated.add(hart)
 
@@ -496,7 +524,8 @@ class Machine:
         require(b is not None and hart in b.invalidated, "invalidate first")
         require(hart not in b.drained, "already drained")
         if self.mutant != "walk_only_drain":
-            require(not any(a.hart == hart and a.phase == "checked"
+            require(not any(a.hart == hart and a.phase == "checked" and
+                            self._blocked(a.cap.binding)
                             for a in self.accesses.values()), "data access outstanding")
         b.drained.add(hart)
 
@@ -570,7 +599,6 @@ class Machine:
 
     def issue(self, hart, location, operation="load", address=None, value=7,
               source=None, destination=None):
-        require(self.barrier is None, "new accesses blocked during barrier")
         require(hart in HARTS and operation in ("load", "store", "amo", "cload", "cstore"),
                 "unsupported access")
         require(location.startswith(("d%d:" % hart, "h%d:" % hart, "m:")),
@@ -578,6 +606,7 @@ class Machine:
         require(not any(a.hart == hart and a.phase not in ("done", "fault", "cancelled")
                         for a in self.accesses.values()), "hart access busy")
         cap = self.get(location, ("logical",))
+        require(not self._blocked(cap.binding), "new accesses blocked during barrier")
         address = cap.cursor if address is None else address
         require(cap.lo <= address < cap.hi, "logical bounds")
         needed = "r" if operation in ("load", "cload") else "w"
