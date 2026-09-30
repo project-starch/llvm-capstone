@@ -1,9 +1,14 @@
+#define _GNU_SOURCE
 #include <errno.h>
+#include <fcntl.h>
 #include <pty.h>
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <capstone/capability.h>
@@ -183,6 +188,23 @@ int main(int argc, char **argv) {
     return 45;
   if (getsid(0) <= 0 || getpgid(0) <= 0)
     return 46;
+  /* the plain rows: a file system's block size, this task's usage, the
+     processor count musl reads from sched_getaffinity, a scratch file cut by
+     truncate, measured by statx, given a second name by linkat */
+  struct statfs fs;
+  struct rusage usage;
+  struct stat linked;
+  struct statx sx;
+  int rows = open("contract.rows", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (statfs("/", &fs) || fs.f_bsize <= 0 || getrusage(RUSAGE_SELF, &usage) ||
+      sysconf(_SC_NPROCESSORS_ONLN) < 1)
+    return 47;
+  if (rows < 0 || write(rows, "hello", 5) != 5 || close(rows) || truncate("contract.rows", 2) ||
+      statx(AT_FDCWD, "contract.rows", 0, STATX_SIZE, &sx) || sx.stx_size != 2 ||
+      link("contract.rows", "contract.link") || stat("contract.link", &linked) ||
+      linked.st_size != 2 || linked.st_nlink != 2 || unlink("contract.link") ||
+      unlink("contract.rows"))
+    return 48;
   puts("application: ok");
   return 0;
 }

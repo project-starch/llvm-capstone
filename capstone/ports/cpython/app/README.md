@@ -292,6 +292,20 @@ limits; `test_signal` complete, 57 tests, 38 ok, 2 fail, 4 errors, 13 skipped,
 `test_interprocess_signal` included; `test_faulthandler` 26 ok. A child's
 stderr is empty again. Record:
 `runtime/tests/application/results/20260930-runtime-rows.json`.
+
+With `delegation-cheap-rows`, the 32 plain rows (`statfs`, `statx`, `truncate`,
+`linkat`, `fchown`, `getrusage`, `sched_getaffinity`, `setpgid`, ...):
+[host/rows-smoke.py](host/rows-smoke.py), 28 CPython checks over the rows,
+28 pass where 4 of 30 did before, the rest ENOSYS; `test_os` 366 tests,
+256 ok, 2 fail, 38 errors, 70 skipped, from 229 ok, 6 fail, 60 errors; the
+37 ENOSYS left are `timerfd_create` (12), `socket.socketpair` (5, the
+sendfile tests' setup), `os.spawn*` and `fork` (17), `eventfd` (3); the
+other three are `setreuid`, `setregid` and a `pathconf` on a bad
+descriptor. `test_posix` 29 ok of the 45 before `test_lockf`, from 22, and
+stops there in both runs: the domain faults before any fcntl round, musl's
+`fcntl()` narrowing the `struct flock` pointer through `unsigned long`, the
+class of musl patch 0004; a fifth patch, not a row. Record:
+`runtime/tests/application/results/20260930-cheap-rows.json`.
 [host/run-filtered.py](host/run-filtered.py) runs a module without named tests.
 Record: [results/subprocess-2026-09-29.json](results/subprocess-2026-09-29.json).
 

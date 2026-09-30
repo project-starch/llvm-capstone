@@ -234,7 +234,15 @@ What crosses: files, directories, descriptors, time, identity, limits,
 `getrandom`, `wait4`, `kill` confined to the task, its children and its parent,
 `getpgid`, `getsid`, `ppoll` and `pselect6` (the fd_sets, the timeout and the
 mask, which the libc flattens out of the kernel's pointer pair and the
-launcher rebuilds), `exit_group`. What does not:
+launcher rebuilds), and the plain rows, integers, strings and flat buffers
+only: `statfs`, `fstatfs`, `statx`, `truncate`, `fallocate`, `linkat`,
+`mknodat`, `fchdir`, `fchmod`, `fchown`, `fchownat`, `faccessat2`,
+`sendfile`, `copy_file_range`, `readahead`, `fadvise64`, `sync`, `syncfs`,
+`memfd_create`, `clock_getres`, `getgroups`, `getrusage`, `getcpu`,
+`setsid`, `setpgid` among the task and its children, and for the task
+itself `getpriority`, `setpriority`, `sched_getaffinity`,
+`sched_setaffinity`, `sched_get_priority_max`, `sched_get_priority_min` and
+`sched_rr_get_interval`; `exit_group`. What does not:
 memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
 (`clone` and `fork` are ENOSYS; image exec uses the process service below), and
 threads. Signals cross: the kernel keeps dispositions, mask, pending set and
