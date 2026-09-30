@@ -17,7 +17,7 @@ for src in "${tests[@]}"; do
   expect=$(sed -nE 's#^// EXPECT: *([0-9a-fx]+).*#\1#p' "$src" | head -1)
   [ -n "$expect" ] || { echo "MISSING-EXPECT $name"; fail=$((fail + 1)); continue; }
   expect=$((expect))
-  if ! "$CLANG" -target riscv64-unknown-elf -march=rv64imac_zicsr -mabi=lp64 -nostdlib \
+  if ! "$CLANG" -target riscv64-unknown-elf -march=rv64imafdc_zicsr -mabi=lp64 -nostdlib \
         -fuse-ld=lld -Wl,-T,"$HERE/link.ld" -I"$HERE" -o "$OUT/$name.elf" "$src" \
         > "$OUT/$name.build.log" 2>&1; then
     echo "BUILD-FAIL $name (see $OUT/$name.build.log)"; fail=$((fail + 1)); continue

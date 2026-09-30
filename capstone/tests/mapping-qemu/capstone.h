@@ -118,6 +118,11 @@ _test_body:
 #define PAGE_B 0x80201000
 #define PAGE_C 0x80202000
 #define PAGE_D 0x80203000
+#define PAGE_E 0x80204000
+#define PAGE_F 0x80205000
+#define PAGE_G 0x80206000
+#define PAGE_H 0x80207000
+#define PAGE_I 0x80208000
 
 /* Build a sealed synchronous context in the page at `page`: saved PC over
  * [entry, entry_end) (RWX), a fresh execute-only trap vector over the
@@ -143,5 +148,22 @@ _test_body:
 #define CREATE_ARGS(id, offset, size, perms, reg)                       \
     li a0, id; li a1, 1; slli a1, a1, 57; li t0, offset; add a1, a1, t0; \
     li a2, size; add a2, a1, a2; li a3, perms; li a4, reg
+
+/* Monitor-side setup shared by the POPULATE tests: a sealed context in
+ * PAGE_C, mapping id 0 over [2^57, 2^57 + 1 MiB) with rights `perms`,
+ * delivered into x28 (t3); root page PAGE_A. Leaves the detach handle in s2. */
+#define SETUP_MAPPING(perms)                          \
+    MAKE_CONTEXT(s0, PAGE_C, _dom, _dom_end);         \
+    MINT_PAGE(s1, PAGE_A);                            \
+    CREATE_ARGS(0, 0, 0x100000, perms, 28);           \
+    MAPCREATE(s2, s1, s0)
+
+/* POPULATE page `offset` of mapping s2 with frame `page`; `treg` is the
+ * register number holding a table page, or 0. Clobbers t0, t1, a0, a5. */
+#define POPULATE(framereg, page, offset, treg)        \
+    MINT_PAGE(framereg, page);                        \
+    li a0, 1; slli a0, a0, 57; li t0, offset; add a0, a0, t0; \
+    li a5, treg;                                      \
+    MAPPOPULATE(s2, framereg)
 
 #endif
