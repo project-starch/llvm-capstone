@@ -564,3 +564,18 @@ exclusive frame aliases. Then exercise object revoke, independent shared detach,
 RW-to-R-to-RW protection, saved pointers and reuse. Pair denials with successful
 authorized accesses, and measure metadata/cache cost and invalidation completion.
 No file mapping or demand paging is needed to establish this core contract.
+
+## 12. Candidate C′: caplified mapping tables
+
+A review of sections 9 and 11 separated three decisions that this document had
+bundled: whether table entries are capabilities, who writes the tables, and
+what a logical capability means outside its context. The [caplified mapping
+tables design](../design/caplified-mapping-tables.md) takes the first, chooses
+the monitor for the second under hardware rules that reduce its power to
+revocation, and takes the third as capability-selected roots, recording the
+ambient alternative and the reason it was rejected. It fixes a five-transition
+first stage for private, resident, exclusive mappings, the invariants behind
+the security goal, the completion protocol, and the conditions for shared
+backing, partial unmap and physical exports. Where it and sections 9 and 11
+disagree, the design document is the current position; its §11 lists the
+differences.

@@ -8,7 +8,10 @@ The [physical-grant plan](../plans/delegation-memory.md) remains the first
 implementation stage. The [alternatives and prior work](../plans/delegation-memory-options.md)
 explain the architectural recommendation. This document specifies the intended
 meaning of physical and translated capabilities, their lifetime boundaries,
-and the questions an implementation must resolve.
+and the questions an implementation must resolve. The later
+[caplified mapping tables candidate](caplified-mapping-tables.md) narrows this
+to a first stage with capability-bearing table entries; its §11 records where
+it supersedes sections 3, 6 and 8 here.
 
 ## 1. The proposed change
 
