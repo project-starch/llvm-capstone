@@ -6,6 +6,45 @@ configuration built natively. The goal is a real allocator-heavy interpreter in 
 domain, as the ground on which the Sublet corpus rows for mruby can later run on
 the real program rather than on extracted reproducers.
 
+## mruby-task, and the GC-slot corpus (2026-09-30)
+
+The build also takes `mruby-task`, at 4.0.0-rc2 through `hal-posix-task` and at
+head through the gem itself, the port layer carrying its HAL. The gem was left
+out as a service a domain does not have; what its POSIX HAL actually uses is
+`sigaction(SIGALRM)` with `setitimer(ITIMER_REAL)` for the tick and
+`clock_gettime` with `nanosleep` for a sleeping task. All four are delegated,
+and none of them is a thread, so the scheduler runs in a domain.
+
+That matters beyond the gem. The [GC-slot
+corpus](../../../bug-corpora/mruby/gc-slot-repros) is for the defects that
+reuse a GC object slot without the allocator seeing a release, and its survey
+on `corpus/mruby-gc-slot-reuse` names this gem as the reason four candidates
+cannot be reached: mruby #6870, #6886, #6872 and #6887, the reports carrying
+that corpus's `MRB_TT_FREE` assertion exactly, all go through
+`mrb_task_mark_all`, and the gem was in none of the port's gemboxes. It is in
+all of them now, so those four are in range of the port.
+
+mrbtest with the gem (`results/2026-09-30/mrbtest-task.json`):
+
+| | Total | OK | KO | Crash | Skip |
+|---|---:|---:|---:|---:|---:|
+| head, native | 2936 | 2838 | 0 | 0 | 74 |
+| head, domain | 2936 | 2837 | 0 | 1 | 74 |
+| 4.0.0-rc2, native | 1710 | 1701 | 0 | 0 | 9 |
+| 4.0.0-rc2, domain | 1710 | 1701 | 0 | 0 | 9 |
+
+4.0.0-rc2 matches native test for test. head's one difference is the
+`Process.kill(0, 0)` crash the next section describes, which the gem does not
+introduce. Three task workloads also run to completion in the domain.
+
+A reproduction of #6886 was attempted and does not yet stand up; the record
+holds the arms and the control. The defect is live at the pin -- upstream
+`456a8687a` adds `mrb_task_mark_all` to `final_marking_phase`, and the pin
+calls it from `root_scan_phase` only -- but no Ruby workload written to that
+mechanism fires, while a control with task marking compiled out does. The
+corpus reached the same conclusion for its `realloc-vmstack` rows: this shape
+needs a C-level case rather than a script.
+
 ## Delegated result with stdlib-io (2026-09-30)
 
 The build takes mruby's whole `stdlib-io` gembox: at head `mruby-socket`,
