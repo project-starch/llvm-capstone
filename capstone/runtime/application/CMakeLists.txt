@@ -28,7 +28,7 @@ set(CAPSTONE_APPLICATION_EXCHANGE_BYTES 262144 CACHE STRING "Exchange region for
 # Threads (docs/plans/delegation-threads.md): how many run at once besides the
 # first, each with a transport of its own, and the context arena their areas
 # come from (a musl thread's area is 1280 bytes; its stack and TLS are heap).
-set(CAPSTONE_APPLICATION_CONTEXTS 7 CACHE STRING "Threads at once besides the first (0 to 7)")
+set(CAPSTONE_APPLICATION_CONTEXTS 15 CACHE STRING "Threads at once besides the first (0 to 15)")
 set(CAPSTONE_APPLICATION_CONTEXT_BYTES 65536 CACHE STRING "Context arena for thread areas")
 option(CAPSTONE_APPLICATION_SDK "Build a reusable compiler SDK instead of an application" OFF)
 if(NOT CAPSTONE_APPLICATION_INPUTS AND NOT CAPSTONE_APPLICATION_SDK)
