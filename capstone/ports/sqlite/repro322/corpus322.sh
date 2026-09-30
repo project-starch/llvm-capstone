@@ -20,6 +20,7 @@ case "$GROUP" in
   fts5) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS5 $MATHINC" ;;
   fts5S) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS5 -USQLITE_OMIT_SHARED_CACHE $MATHINC" ;;
   fts3) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 $MATHINC" ;;
+  ext) CF="-USQLITE_OMIT_INCRBLOB $MATHINC" ;;
   *) echo "unknown group $GROUP" >&2; exit 2 ;;
 esac
 
@@ -38,6 +39,11 @@ EOF
    ;;
    fts5S) cat <<EOF
 case_fts5rank.c        fts5rank
+EOF
+   ;;
+   ext) cat <<EOF
+case_expert_rem.c   expertrem   -DSQLITE_HEAP_SIZE=1048576
+case_spellfix_oom.c spellfixoom
 EOF
    ;;
    fts5) cat <<EOF
@@ -59,18 +65,33 @@ EOF
   esac
 }
 
+# The extension sources the ext group compiles as extra TUs.
+EXT_SRC_DIR=${EXT_SRC_DIR:-$HOME/sqlite-versions/sqlite-3.22.0-full/ext}
+
 do_build() {
   mkdir -p "$SHARE" "$OBJ"
-  local EXTRA_SRC=""
-  case "$GROUP" in fts5|fts5S|fts3) EXTRA_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
+  local BASE_SRC=""
+  case "$GROUP" in fts5|fts5S|fts3) BASE_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
   while read -r file tag extra; do
     [ -z "${file:-}" ] && continue
+    # ext cases each pull in their own extension TU (and its include/defines)
+    local EXTRA_SRC="$BASE_SRC" EXTRA_INC=""
+    if [ "$GROUP" = ext ]; then
+      case "$tag" in
+        expertrem)   EXTRA_SRC="$EXT_SRC_DIR/expert/sqlite3expert.c"
+                     EXTRA_INC="-I$EXT_SRC_DIR/expert" ;;
+        # spellfix.c calls qsort; repro322_fts_stubs.c has the tag-preserving one.
+        # -DSQLITE_CORE makes SQLITE_EXTENSION_INIT2 a no-op so the init is called directly.
+        spellfixoom) EXTRA_SRC="$EXT_SRC_DIR/misc/spellfix.c $SCRIPT_DIR/repro322_fts_stubs.c"
+                     EXTRA_INC="-DSQLITE_CORE -I$EXT_SRC_DIR/misc" ;;
+      esac
+    fi
     echo "== build $tag ($file) =="
     if CORPUS_CACHE_SQLITE=1 \
        OUT_DIR="$OBJ" OBJ_DIR="$OBJ" OUT_DOM="$SHARE/$tag.dom" \
        DOMAIN_SRC="$SCRIPT_DIR/$file" \
        DOMAIN_OPT_LEVEL="-O0" SQLITE_OPT_LEVEL="-O0" \
-       DOMAIN_EXTRA_FLAGS="-DSQLITE_HEAP_SIZE=262144 ${extra:-}" \
+       DOMAIN_EXTRA_FLAGS="-DSQLITE_HEAP_SIZE=262144 $EXTRA_INC ${extra:-}" \
        DOMAIN_EXTRA_SRC="$EXTRA_SRC" \
        SQLITE_CFLAGS_EXTRA="$CF" \
        bash "$PORTS_DIR/build-sqlite-row322.sh" > "$SHARE/build-$tag.log" 2>&1
@@ -97,7 +118,7 @@ do_run() {
     local rc=1
     for attempt in 1 2 3 4; do
       python3 "$PORTS_DIR/../../tests/runtime-qemu/run-domain-smoke.py" \
-        --share-dir "$SHARE" --log-file "$log" --timeout-multiplier 8 \
+        --share-dir "$SHARE" --log-file "$log" --timeout-multiplier "${CORPUS_TIMEOUT_MULT:-8}" \
         --guest-command "$gc" --success-marker "==ALLDONE==" > "$SHARE/boot$boot-attempt$attempt.log" 2>&1
       rc=$?
       [ $rc -eq 75 ] && { echo "  infra flake, retry"; continue; }
