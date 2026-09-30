@@ -1,10 +1,12 @@
 # Delegated threads: one Linux thread per protected context
 
 Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES,
-PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1, B7), parking through the launcher
-(T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14) and musl's own threads on minted
-contexts (T4, Q4, B10 and B11), signals per context with cancellation (B8) and fifteen threads per
-application (T5) pass; the gates are next. Branch
+PROBE B DOMAIN PHASE PASSES: a transport per context (T1, B7), parking through the launcher
+(T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14), musl's own threads on minted contexts
+(T4, Q4, B10 and B11), signals per context with cancellation (B8), fifteen threads per application
+(T5) and a thread's name and CPU set. The gates pass: libc-test's thread group (seven of nine;
+`pthread_cancel`'s asynchronous case waits for the doorbell, `sem_open` for file-backed mappings),
+GLib's `GCond` and CPython's `threading`. Open: asynchronous delivery (the doorbell). Branch
 `delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
 Probe A and Probe B test.
 
@@ -1223,6 +1225,8 @@ runtime as generally thread-capable. Gates:
 - the libc-test thread group leaves the excluded set (seven of the nine pass after B8;
   `pthread_cancel` waits for the doorbell, `sem_open` for file mappings, not threads);
 - GLib's `GCond` in the tshark deps (the `pthread_cond_t` size fix, e2c9ad3; the layout itself is
-  fixed by musl patch 0004);
+  fixed by musl patch 0004): pass 2026-09-30, glib-0008 is gone and GLib's own `cond` test passes
+  in a domain, with `thread`, `rec-mutex` and `asyncqueue`; `mutex`, `once` and `rwlock` stop only
+  at their hundred-thread tests (`runtime/tests/application/results/20260930-glib-threads.json`);
 - CPython's basic `threading` tests: pass 2026-09-30, the errors left are fork's and the fifteen-thread
   limit's (`ports/cpython/interpreter/results/threads-2026-09-30.json`).
