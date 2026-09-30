@@ -9,14 +9,18 @@
 #include <fcntl.h>
 #include <grp.h>
 #include <sched.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/eventfd.h>
 #include <sys/resource.h>
+#include <sys/signalfd.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
+#include <sys/timerfd.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -264,6 +268,88 @@ int main(int argc, char **argv) {
     }
     int status;
     assert(waitpid(pid, &status, 0) == pid && WIFEXITED(status) && !WEXITSTATUS(status));
+  } else if (!strcmp(c, "eventfd")) {
+    /* a counter: two writes add, a read takes the sum; in semaphore mode one */
+    uint64_t v = 3;
+    long fd = call(CAPSTONE_SYS_eventfd2, 5, EFD_CLOEXEC, 0, 0);
+    assert(fd >= 0 && (fcntl((int)fd, F_GETFD) & FD_CLOEXEC));
+    assert(write((int)fd, &v, 8) == 8);
+    memset(exchange + 64, 0, 8);
+    assert(call(CAPSTONE_SYS_read, (uint64_t)fd, 64, 8, 0) == 8);
+    memcpy(&v, exchange + 64, 8);
+    assert(v == 8);
+    close((int)fd);
+    fd = call(CAPSTONE_SYS_eventfd2, 2, EFD_SEMAPHORE | EFD_NONBLOCK, 0, 0);
+    assert(fd >= 0 && read((int)fd, &v, 8) == 8 && v == 1 && read((int)fd, &v, 8) == 8 && v == 1);
+    assert(read((int)fd, &v, 8) == -1 && errno == EAGAIN);
+    close((int)fd);
+    assert(call(CAPSTONE_SYS_eventfd2, 0, 0x7fffffff, 0, 0) == -EINVAL);
+  } else if (!strcmp(c, "timerfd")) {
+    /* armed through the row, read back through it, then it expires and the
+       read counts the expiries */
+    struct itimerspec in = {{0, 0}, {0, 20 * 1000 * 1000}}, now;
+    uint64_t n = 0;
+    assert(sizeof in == 32);
+    long fd = call(CAPSTONE_SYS_timerfd_create, CLOCK_MONOTONIC, TFD_CLOEXEC, 0, 0);
+    assert(fd >= 0);
+    memcpy(exchange + 64, &in, sizeof in);
+    memset(exchange + 128, 0xff, sizeof now);
+    assert(call(CAPSTONE_SYS_timerfd_settime, (uint64_t)fd, 0, 64, 128) == 0);
+    memcpy(&now, exchange + 128, sizeof now);
+    assert(!now.it_value.tv_sec && !now.it_value.tv_nsec);   /* the old setting: disarmed */
+    assert(call(CAPSTONE_SYS_timerfd_gettime, (uint64_t)fd, 128, 0, 0) == 0);
+    memcpy(&now, exchange + 128, sizeof now);
+    assert(!now.it_value.tv_sec && now.it_value.tv_nsec > 0 && now.it_value.tv_nsec <= 20 * 1000 * 1000);
+    assert(read((int)fd, &n, 8) == 8 && n == 1);
+    assert(call(CAPSTONE_SYS_timerfd_settime, (uint64_t)fd, 0, 64, 0) == 0);   /* no old setting asked */
+    in.it_value.tv_nsec = 1000 * 1000 * 1000;
+    memcpy(exchange + 64, &in, sizeof in);
+    assert(call(CAPSTONE_SYS_timerfd_settime, (uint64_t)fd, 0, 64, 0) == -EINVAL);
+    close((int)fd);
+    assert(call(CAPSTONE_SYS_timerfd_create, 9999, 0, 0, 0) == -EINVAL);
+  } else if (!strcmp(c, "signalfd")) {
+    /* a blocked signal stays pending, and the descriptor reads it */
+    sigset_t block;
+    uint64_t mask = 1ull << (SIGUSR1 - 1);
+    struct signalfd_siginfo si;
+    assert(sizeof si == 128);
+    sigemptyset(&block);
+    sigaddset(&block, SIGUSR1);
+    assert(!sigprocmask(SIG_BLOCK, &block, NULL));
+    memcpy(exchange + 64, &mask, 8);
+    long fd = call(CAPSTONE_SYS_signalfd4, (uint64_t)-1, 64, 8, SFD_NONBLOCK | SFD_CLOEXEC);
+    assert(fd >= 0);
+    assert(call(CAPSTONE_SYS_read, (uint64_t)fd, 256, sizeof si, 0) == -EAGAIN);
+    assert(!kill(getpid(), SIGUSR1));
+    assert(call(CAPSTONE_SYS_read, (uint64_t)fd, 256, sizeof si, 0) == sizeof si);
+    memcpy(&si, exchange + 256, sizeof si);
+    assert(si.ssi_signo == SIGUSR1 && si.ssi_pid == (uint32_t)getpid());
+    /* the same descriptor, its mask replaced; a mask of another size is refused */
+    mask = 1ull << (SIGUSR2 - 1);
+    memcpy(exchange + 64, &mask, 8);
+    assert(call(CAPSTONE_SYS_signalfd4, (uint64_t)fd, 64, 8, 0) == fd);
+    assert(call(CAPSTONE_SYS_signalfd4, (uint64_t)-1, 64, 16, 0) == -EINVAL);
+    close((int)fd);
+  } else if (!strcmp(c, "getresid")) {
+    uid_t r, e, s, ids[3];
+    gid_t gr, ge, gs;
+    assert(call(CAPSTONE_SYS_getresuid, 64, 68, 72, 0) == 0);
+    memcpy(ids, exchange + 64, sizeof ids);
+    assert(!getresuid(&r, &e, &s) && ids[0] == r && ids[1] == e && ids[2] == s);
+    assert(call(CAPSTONE_SYS_getresgid, 64, 68, 72, 0) == 0);
+    memcpy(ids, exchange + 64, sizeof ids);
+    assert(!getresgid(&gr, &ge, &gs) && ids[0] == gr && ids[1] == ge && ids[2] == gs);
+  } else if (!strcmp(c, "fcntl-notify")) {
+    /* directory notification is an integer command; its signal can be chosen */
+    int fd = open("/tmp", O_RDONLY | O_DIRECTORY);
+    assert(fd >= 0);
+    long r = call(CAPSTONE_SYS_fcntl, fd, F_NOTIFY, DN_CREATE, 0);
+    assert(r == 0 || r == -EINVAL);   /* EINVAL where the file system has no dnotify */
+    assert(call(CAPSTONE_SYS_fcntl, fd, F_SETSIG, SIGUSR2, 0) == 0);
+    assert(call(CAPSTONE_SYS_fcntl, fd, F_GETSIG, 0, 0) == SIGUSR2);
+    assert(fcntl(fd, F_GETSIG) == SIGUSR2);
+    assert(call(CAPSTONE_SYS_fcntl, fd, F_SETLEASE, F_RDLCK, 0) == -ENOSYS);   /* still not a command */
+    close(fd);
   } else if (!strcmp(c, "private")) {
     /* the launcher's own descriptors stay out of reach in every fd position */
     int fd = temp(path), fd2 = temp(other);
@@ -279,6 +365,10 @@ int main(int argc, char **argv) {
     assert(call6(CAPSTONE_SYS_copy_file_range, fd2, 0, fd, 0, 1, 0) == -EBADF);
     assert(call(CAPSTONE_SYS_fchdir, fd, 0, 0, 0) == -EBADF);
     assert(call(CAPSTONE_SYS_syncfs, fd, 0, 0, 0) == -EBADF);
+    assert(call(CAPSTONE_SYS_timerfd_gettime, fd, 64, 0, 0) == -EBADF);
+    memset(exchange + 64, 0, 32);
+    assert(call(CAPSTONE_SYS_timerfd_settime, fd, 0, 64, 0) == -EBADF);
+    assert(call(CAPSTONE_SYS_signalfd4, fd, 64, 8, 0) == -EBADF);
     assert(fcntl(fd, F_GETFD) >= 0);
     close(fd); close(fd2); unlink(path); unlink(other);
   } else {

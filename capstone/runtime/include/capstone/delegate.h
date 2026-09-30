@@ -210,6 +210,10 @@ enum {
   CAPSTONE_SYS_getpeername = 205, CAPSTONE_SYS_sendto = 206, CAPSTONE_SYS_recvfrom = 207,
   CAPSTONE_SYS_setsockopt = 208, CAPSTONE_SYS_getsockopt = 209, CAPSTONE_SYS_shutdown = 210,
   CAPSTONE_SYS_sendmsg = 211, CAPSTONE_SYS_recvmsg = 212, CAPSTONE_SYS_accept4 = 242,
+  /* event, timer and signal descriptors; the ids that are read, not set */
+  CAPSTONE_SYS_eventfd2 = 19, CAPSTONE_SYS_signalfd4 = 74, CAPSTONE_SYS_timerfd_create = 85,
+  CAPSTONE_SYS_timerfd_settime = 86, CAPSTONE_SYS_timerfd_gettime = 87,
+  CAPSTONE_SYS_getresuid = 148, CAPSTONE_SYS_getresgid = 150,
   CAPSTONE_SYS_vfork = 1071, CAPSTONE_SYS_fork = 1079
 };
 

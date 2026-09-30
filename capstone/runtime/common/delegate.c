@@ -43,6 +43,8 @@ _Static_assert(CAPSTONE_SIGNAL_OFFSET + sizeof(struct capstone_signal_block) <= 
 /* epoll_event is 16 bytes on riscv64 (12, packed, on x86_64: the launcher
  * converts on such a host); the msghdr block is capstone/msghdr.h */
 #define EPOLL_EVENT 16
+/* itimerspec is two timespecs */
+#define ITIMERSPEC 32
 #define MSGHDR 64
 
 static const struct capstone_delegate_shape shapes[] = {
@@ -113,6 +115,13 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_sync, CAPSTONE_GROUP_DELEGATED, 0, "sync", {I}},
   {CAPSTONE_SYS_syncfs, CAPSTONE_GROUP_DELEGATED, 1, "syncfs", {I}},
   {CAPSTONE_SYS_memfd_create, CAPSTONE_GROUP_DELEGATED, 2, "memfd_create", {S, I}},
+  /* event and timer descriptors: made here, then read, written and polled
+     through the file rows like any descriptor */
+  {CAPSTONE_SYS_eventfd2, CAPSTONE_GROUP_DELEGATED, 2, "eventfd2", {I, I}},
+  {CAPSTONE_SYS_timerfd_create, CAPSTONE_GROUP_DELEGATED, 2, "timerfd_create", {I, I}},
+  {CAPSTONE_SYS_timerfd_settime, CAPSTONE_GROUP_DELEGATED, 4, "timerfd_settime",
+   {I, I, IN_FIX(ITIMERSPEC), OPT_OUT_FIX(ITIMERSPEC)}},
+  {CAPSTONE_SYS_timerfd_gettime, CAPSTONE_GROUP_DELEGATED, 2, "timerfd_gettime", {I, OUT_FIX(ITIMERSPEC)}},
   /* time */
   {CAPSTONE_SYS_nanosleep, CAPSTONE_GROUP_DELEGATED, 2, "nanosleep",
    {IN_FIX(TIMESPEC), OPT_OUT_FIX(TIMESPEC)}},
@@ -139,6 +148,8 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_prlimit64, CAPSTONE_GROUP_DELEGATED, 4, "prlimit64",
    {I, I, OPT_IN_FIX(16), OPT_OUT_FIX(16)}},
   {CAPSTONE_SYS_getrandom, CAPSTONE_GROUP_DELEGATED, 3, "getrandom", {OUT_ARG(1), I, I}},
+  {CAPSTONE_SYS_getresuid, CAPSTONE_GROUP_DELEGATED, 3, "getresuid", {OUT_FIX(4), OUT_FIX(4), OUT_FIX(4)}},
+  {CAPSTONE_SYS_getresgid, CAPSTONE_GROUP_DELEGATED, 3, "getresgid", {OUT_FIX(4), OUT_FIX(4), OUT_FIX(4)}},
   {CAPSTONE_SYS_getgroups, CAPSTONE_GROUP_DELEGATED, 2, "getgroups", {I, OUT_SCALED(0, 4)}},
   {CAPSTONE_SYS_getrusage, CAPSTONE_GROUP_DELEGATED, 2, "getrusage", {I, OUT_FIX(RUSAGE)}},
   {CAPSTONE_SYS_getpriority, CAPSTONE_GROUP_DELEGATED, 2, "getpriority", {I, I}},
@@ -171,6 +182,10 @@ static const struct capstone_delegate_shape shapes[] = {
    {IN_FIX(8), OPT_OUT_FIX(128), OPT_IN_FIX(TIMESPEC), I}},
   {CAPSTONE_SYS_getitimer, CAPSTONE_GROUP_DELEGATED, 2, "getitimer", {I, OUT_FIX(32)}},
   {CAPSTONE_SYS_setitimer, CAPSTONE_GROUP_DELEGATED, 3, "setitimer", {I, OPT_IN_FIX(32), OPT_OUT_FIX(32)}},
+  /* a descriptor that reads the pending signals in its mask; what is pending
+     is Linux's, as for rt_sigtimedwait: the signals the domain blocks, which
+     the launcher's physical mask blocks too. The mask's size must be 8. */
+  {CAPSTONE_SYS_signalfd4, CAPSTONE_GROUP_DELEGATED, 4, "signalfd4", {I, IN_FIX(8), I, I}},
   {CAPSTONE_SYS_wait4, CAPSTONE_GROUP_DELEGATED, 4, "wait4",
    {I, OPT_OUT_FIX(4), I, OPT_OUT_FIX(144)}},
   /* sockets: descriptors like files. Linux decides family, protocol, port

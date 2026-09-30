@@ -39,6 +39,10 @@ round is no longer what a program waits for. What is left, in this order:
   kernel's pointer pair), `getpgid`, `getsid`, `kill` to the parent with ESRCH
   for a vanished pid, the domain's unserved report only under
   `CAPSTONE_DELEGATE_STATS`, and musl's `pselect` mask kept a capability.
+  On `delegation-fd-rows`: `eventfd2`, the three `timerfd` calls,
+  `signalfd4` (mask size 8, what Linux holds pending), `getresuid`,
+  `getresgid`, `fcntl`'s `F_NOTIFY`, `F_SETSIG` and `F_GETSIG`, and signal 0
+  to the task's own group.
 - **Memory**, step 5: the region grant at the resume label; `mmap` of files,
   `mprotect`.
 - **Threads**: the sibling-context primitive in the monitor plus capability TLS
