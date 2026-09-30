@@ -14,7 +14,7 @@ flags, as a VMA), PTE, table entry, root table, populate, unmap, destroy,
 PRIVATE and SHARED, max protection (Linux's `VM_MAYREAD`/`VM_MAYWRITE`), and
 the PTE states none, present and locked. Where Linux has no such concept the
 name is new: frame handle, detach handle, teardown token, and the locked
-state itself, which exists because this design does not reuse addresses.
+state itself, which prevents reuse of a table slot within one generation.
 
 ## 1. Scope
 
@@ -25,7 +25,7 @@ that the monitor gains no data authority beyond what a revocation-root holder
 already has: it can withdraw access and it can stall; it cannot read delegated
 contents, redirect live pointers or duplicate exclusive authority.
 
-Stage 1 covers PRIVATE, resident mappings and five transitions. Shared
+Stage 1 covers anonymous PRIVATE, resident mappings and five transitions. Shared
 backing, repopulation after eviction, permission changes, partial unmap,
 physical exports, demand paging and file mappings are later stages with their
 own conditions (§9). Nothing in Stage 1 is claimed for them.
@@ -103,8 +103,32 @@ invariants.
 **Physical data capability.** Today's capability: cursor and bounds are
 physical addresses.
 
-**Logical data capability.** Cursor and bounds are addresses in the logical
-space of one mapping. It carries the mapping id and generation (id, gen). The
+**Logical data capability.** Cursor and bounds are addresses in a common logical
+namespace, not offsets in an independently numbered mapping. All mappings occupy
+globally disjoint half-open ranges, including mappings created for different
+domains. D3 permits their capabilities to meet in one context after transfer:
+disjointness only within the original recipient domain would leave two distinct
+objects comparing equal there. CREATE checks overlap against every reserved
+registry entry; domain libc may propose ranges but an honest allocator or monitor
+is not a security precondition. Root revocation and DETACH retain the reservation;
+only DESTROY releases it. Reuse after DESTROY cannot revive old capabilities,
+whose nodes and binding are dead. Integer addresses carry no authority.
+
+The architecture must reserve the logical region strictly above its entire
+physical address range, including representable physical one-past addresses;
+zero is excluded. Ranges and one-past cursors must be representable in the 64-bit
+cursor without wrap and satisfy the eventual bounds encoding. Exhaustion fails
+allocation. The numerical partition and compressed-bounds layout still require
+an encoding decision (§10.3); a region above currently installed RAM alone is
+insufficient. The current compiler's `lowerSETCC` compares the low 64-bit cursor
+([source](../../../llvm/lib/Target/Capstone/CapstoneISelLowering.cpp)); globally
+disjoint ranges preserve address equality and null checks without a binding-aware
+comparison. The same address remains equal after bounds or permission attenuation;
+node identity or all 128 representation bits would be the wrong equality test.
+This does not define otherwise undefined C ordering between unrelated objects,
+nor promise distinct numeric values for one-past and adjacent-start pointers.
+
+The capability carries the mapping id and generation (id, gen). The
 physical/logical distinction is unforgeable and inherited by every
 derivation. Whether it is an inline bit or protected metadata is an encoding
 question to settle after the semantics; nothing below depends on it.
@@ -113,6 +137,15 @@ question to settle after the semantics; nothing below depends on it.
 domain: linear, bounds equal to the mapping's range, rights equal to its max
 protection, bound to (id, gen). It is what `mmap` returns in this runtime, as
 in CheriBSD, and the domain derives every pointer into the mapping from it.
+CREATE takes the monitor's domain handle and a protected resume destination for
+that domain. It writes the new capability directly into that slot inside the
+instruction, exactly once, without a monitor-readable intermediate register or
+buffer. A raw software destination, a slot belonging to another domain, missing
+recipient authority or an occupied slot is rejected without effects. Even a
+temporary monitor-readable result would permit DELIN and a retained copy before
+delivery. Hardware enforces the recipient binding; domain libc checks the returned
+bounds, rights and binding against its pending request before exposing the result
+to its caller. The model covers delivery, not the complete libc request protocol.
 
 **Page-table capability.** Linear. Names one table page. Not dereferenceable by
 ordinary loads and stores; used in place by the walker and by the mapping
@@ -140,8 +173,19 @@ translation. Table ownership (the monitor), the translation context the
 capability selects and the executing domain context are three different things;
 one holder of the root table does not imply one executing context.
 
-**PTE.** A physical frame capability stored in a leaf-level slot. Used in
-place by the walker. It leaves the slot only through UNMAP or through
+**PTE.** A physical frame capability stored in a leaf-level slot. Stage-1
+POPULATE consumes an exclusive frame with retained write authority, writes zero
+to every byte and clears every tag before publishing it. Anonymous memory must
+not expose supplier-chosen data, including stored capabilities. UNINIT alone
+does not establish zero contents. The PTE retains the supplied physical rights,
+including W for initialization and subsequent UNINIT scrubbing; effective data
+rights are limited by both the PTE and the logical capability, whose ceiling is
+the mapping's max protection. Thus an R-only mapping can use an enclosed RW
+physical frame without granting the domain W. A read-only supplied frame cannot
+be initialized and is refused, even for an R-only mapping. Scrubbing physical or
+logical UNINIT also requires retained W; a domain cannot obtain W by revoking its
+own R-only logical object and attempting initialization through the result.
+Used in place by the walker, a PTE leaves its slot only through UNMAP or through
 revocation from above (§5.2); it cannot be loaded.
 
 **Frame handle.** The senior revocation handle the monitor keeps over every
@@ -168,14 +212,14 @@ PTE state (locked). The token is linear so that it has one holder, which is a
 convenience, not what enforces either rejection. Consumed by DESTROY. Whether
 it is a new capability type, a sealed variant or protected state is open.
 
-**Mapping** = (id, gen, class, max protection, root table, PTEs, state). The
+**Mapping** = (id, gen, range, class, max protection, root table, PTEs, state). The
 state is protected and takes the values ACTIVE (from CREATE), DETACHED (from
 DETACH, the teardown token exists) and DESTROYED (from DESTROY). POPULATE
 requires ACTIVE. It does not require that the mapping capability still exists:
 SPLIT replaces a capability by its parts (Capstone §4.4), and those parts need
 backing as much as the whole did. The class is fixed at CREATE and never
 inferred from the frames later supplied. The id indexes the registry, protected
-mapping state of bounded size, one entry per id holding gen, class, max
+mapping state of bounded size, one entry per id holding gen, range, class, max
 protection, root table and state; CREATE reserves the entry and only DESTROY
 frees it. gen is a finite counter per id: an exhausted id is retired, never
 wrapped, as the revocation-node generation field on the RTL already is (R-35).
@@ -186,8 +230,11 @@ Stage 1 defines one class:
 | PRIVATE | Linear frames only | locked | UNINIT(F) | 1 |
 | SHARED | Non-linear frames only | refillable | nothing | 2 |
 
-PRIVATE is Linux's `MAP_PRIVATE` as the domain sees it, without copy-on-write
-and without `fork` (§9.5).
+Stage-1 PRIVATE supplies anonymous zero-filled memory as seen by the domain,
+without copy-on-write or `fork` (§9.5). Later content-bearing private mappings,
+such as M4 file data, need a distinct initialization contract: Linux-supplied
+bytes are untrusted input and tags must be cleared before admission. They cannot
+silently reuse anonymous POPULATE while promising preservation of their bytes.
 
 **PTE states.** none (never used), present, locked (unmapped, or revoked from
 above). Table-entry slots have the same states. A slot is locked either because
@@ -204,10 +251,18 @@ CREATE binds, POPULATE supplies backing, DETACH ends accesses, DESTROY ends the
 identity; physical reclamation is separate and goes through the frame and
 table-page handles (§5.2).
 
+CREATE's table clearing and POPULATE's table/data initialization complete before
+publication. Hardware must order them after earlier accesses through the supplied
+authority and before any walker or domain access can observe the pages. A late
+supplier store must not restore old bytes or tags after initialization. This is
+an instruction completion obligation, not a request for Linux to call `memset`.
+The executable model abstracts this ordering as atomic initialization at publish;
+physical supplier store buffers and multi-beat clearing need implementation tests.
+
 | Transition | Before | After | Ends | Completion enforced by |
 |---|---|---|---|---|
-| CREATE(id, range, root page, max protection, PRIVATE) | One exclusive physical page, linear or UNINIT, for the root table, held by the monitor; the registry entry for id free | The mapping (id, gen), ACTIVE, in the registry entry for id; the page converted into the root page-table capability with every slot none (§4) and held by the entry; the detach handle at the monitor; the mapping capability, linear, logical, empty, rights ≤ max protection, delivered through the resume slot | The page is consumed | Instruction; gen is fresh for id; rejects an id whose entry is in use |
-| POPULATE(detach handle, v, F, table pages) | The detach handle names the mapping, ACTIVE; F linear, physical, held by the monitor; PTE(v) none; one exclusive physical page for every level of the path whose entry is none | PTE(v) = F, present; table entries on the path present, the supplied pages converted with every slot none (§4) and published; the detach handle unchanged | F and the supplied pages are consumed; the monitor keeps nothing | Instruction, all or nothing: it rejects, consuming nothing, a non-linear or non-physical F, a PTE that is not none, rights above max protection, a mapping not ACTIVE, and a path that needs more pages than were supplied; no half-published path exists |
+| CREATE(id, range, root page, max protection, PRIVATE, domain handle, resume slot) | One exclusive writable physical or UNINIT root page; id free; range representable, above physical addresses and globally unreserved; recipient domain handle and its empty protected slot | ACTIVE registry entry reserving id and range; cleared root table held by the entry; detach handle at the monitor; linear logical mapping capability delivered once inside the instruction to that domain's slot, bounds = range, rights = max protection | Root page consumed | Instruction; fresh gen; checks range and recipient at publication; no monitor-readable intermediate result |
+| POPULATE(detach handle, v, F, table pages) | Handle names an ACTIVE mapping; F linear physical with W and the mapping's required rights; PTE(v) none; one exclusive writable physical or UNINIT page per missing path level | F zeroed and tags cleared, then PTE(v) = F; cleared table pages linked on the path; detach handle unchanged; effective access rights bounded by the logical capability and PTE | F and table pages consumed; monitor keeps handles only | Instruction, all or nothing; rejects invalid kind/linearity, missing write or mapping rights, used PTE, inactive mapping or wrong table-page supply; no partial path or uninitialized frame is published |
 | DETACH(detach handle) | The detach handle; mapping ACTIVE | The teardown token at the monitor; mapping DETACHED; no descendant of the mapping capability's node exists | The mapping capability and every logical capability derived from it | The protocol of §8 in full, on every hart, for every access through a capability of (id, gen); R-45's fix covers only the issuing hart's younger instructions (§8); the returned authority is converted to the token inside the instruction and never exposed |
 | UNMAP(v, token) | Token bound to this mapping; mapping DETACHED; PTE(v) present | UNINIT(F) at the monitor; PTE(v) locked | TLB entries and walk results for the PTE's node | Break-before-make with drain, §8; rejects a token bound elsewhere and PTEs that are none or locked |
 | DESTROY(token) | The whole-mapping token, not a Stage 3 range token (§9.2); mapping DETACHED | Mapping DESTROYED; token consumed; the registry entry for id freed for a new generation; PTEs, table entries and table pages stay where they are and return through their frame and table-page handles (§5.2), before or after this step | Every binding to (id, gen); the generation is retired | Node and generation discipline: gen is never reused for id; a repetition is rejected by the mapping state; the instruction has no output, waits for nothing and has nothing to interrupt or resume |
@@ -294,10 +349,13 @@ effect on the invariants is in §7.
   the frame handles and the table-page handles, none of which gives data
   access. After DETACH it holds the teardown token. After UNMAP it holds
   UNINIT(F); after revoking a table-page handle, UNINIT over that page.
+  CREATE delivers logical authority directly to a protected domain resume slot;
+  the monitor never holds that authority as a delivery intermediary.
 - **I4 Class discipline.** PRIVATE accepts linear frames only; POPULATE
   consumes them, and POPULATE is the only way an entry enters a table, because
   CREATE and POPULATE set every slot of a page to none before the page becomes
-  part of a table (§4).
+  part of a table (§4). Before admitting an anonymous data frame, POPULATE also
+  clears its bytes and tags using the supplied write authority.
 - **I5 No repopulation within a generation.** Locked PTEs and locked
   table-entry slots stay locked; replacing the root table is a new
   generation, and every logical capability is bound to (id, gen).
@@ -442,7 +500,7 @@ the node (§4).
 Rejected: ambient root with a bound check, where the root table is moved into
 the executing context's register and an access checks its (id, gen) against the
 installed root. It needs fewer mechanisms, but each mapping has its own root
-table and its own logical space, so a context could use one translated mapping
+table covering its own range, so a context could use one translated mapping
 at a time and a compiler could not switch roots per pointer; Stage 1 would have
 been one translated mapping per context, the heap, and the several
 independently managed mappings of §9.5 would have needed a different root
@@ -468,7 +526,7 @@ as well as SHARED mappings in scope.
 | Allocation on first access | Logical bounds may cover PTEs that are none; POPULATE supplies backing | Fault classification, protected continuation, response binding, cancellation and restart |
 | Private swap or page migration | Logical identity is distinct from physical backing | An authorized page lifecycle that preserves object identity and contents; protected transfer of capabilities (§9.6) |
 | Executable private mappings, including a `dlopen`-style loader | Separate mappings and max protections | A loading-to-execution transition, instruction-fetch checks and cache completion; loader and ABI rules remain separate work |
-| Authorized snapshots and `fork()` | A child can receive separate mappings and frames at the same logical addresses | Consistent state capture, authorized capability rebinding, private object/revocation lifetimes and rules for external resources |
+| Authorized snapshots and `fork()` | A child can receive separate mappings and frames | Same-address cloning conflicts with Stage 1's global range reservation; resolve namespace, pointer comparison and transfer rules before promising it, alongside consistent capture, capability rebinding, object lifetimes and external-resource rules |
 | Copy-on-write | Translation could select distinct backing after separation | A distinct backing-ownership and write-fault contract, including implicit writes when loading linear capabilities |
 
 The immutable class chosen at CREATE remains a contract. Future pageable or
@@ -532,7 +590,7 @@ to Stage 1 by this section.
 The [host executable model](../../tests/mapping-model/README.md) implements this
 experiment for PRIVATE under the capability-selected root. Its
 [result record](../../tests/mapping-model/results.json) pins source hashes,
-search bounds, operation coverage and eight faulty comparison traces. It checks
+search bounds, operation coverage and ten faulty comparison traces. It checks
 named contracts, exhausts forty fixed two-hart interleaving workloads in both
 global and table-record modes, and explores fifteen further table-record
 workloads with foreign issue and two successive removals. Three reduced
@@ -571,6 +629,11 @@ instead of leaving it reserved, or a table-page record keyed by id alone, so
 that an old generation's handle reaches the new generation's entry. One run,
 under the capability-selected root of §9.4; the rejected ambient variant is not
 modelled.
+Two further variants allow CREATE to deliver to a monitor wallet and allow
+POPULATE to retain supplier bytes/tags in an anonymous frame. The correct model
+must refuse the former inside CREATE and initialize the latter before publication.
+Named controls also exercise global overlap rejection, physical/logical and null
+separation, cross-domain pointer transfer and address equality after attenuation.
 
 ### 10.2 Adversarial-monitor tests for the emulator
 
@@ -579,6 +642,12 @@ monitor code:
 
 | Test | Expected |
 |---|---|
+| CREATE with a raw monitor destination, a foreign resume slot, a non-domain recipient handle or an occupied protected slot | Rejected inside the instruction; no logical capability appears at the monitor, even temporarily |
+| CREATE in a range reserved by another mapping, including a mapping delivered to another domain or with a revoked root | Rejected until the reserving mapping is DESTROYED |
+| CREATE at zero, in the physical address region, or with unrepresentable/wrapping bounds | Rejected; logical and physical pointer values cannot collide |
+| Transfer capabilities from two mappings into one context; compare them, their attenuated aliases and null | Distinct in-bounds mapping addresses stay distinct, equal addresses stay equal under attenuation, valid logical pointers are nonzero |
+| POPULATE with supplier bytes and tags in an anonymous frame | All bytes are zero and all tags clear before the first domain access; a supplied frame lacking W is rejected |
+| CREATE or POPULATE while older supplier writes are pending | Initialization is ordered after those accesses and before publication; no late write restores old contents or tags |
 | POPULATE with a non-linear frame into PRIVATE | Rejected |
 | POPULATE with a logical capability, or any non-physical kind, as F | Rejected |
 | POPULATE whose path needs a table page that was not supplied | Rejected; nothing consumed, no partial path |
@@ -618,6 +687,10 @@ allows issue for other bindings during a scoped barrier. Physical frame REVOKE
 still uses the global fallback. The experiment checks interleavings and
 generation isolation; it does not supply a bounded hardware record, its
 reclamation protocol, node-reuse handling, lookup latency or a refinement proof.
+The implementation also needs a representable 64-bit physical/logical partition,
+bounded global range-overlap checks at CREATE, protected recipient delivery and
+ordered clearing of table and data pages. The model does not estimate these
+costs or certify the current compressed encoding at the chosen logical addresses.
 
 ### 10.4 Extension checks before an implementation or ABI claim
 
@@ -634,7 +707,9 @@ claiming the corresponding feature:
   absent. Repeat with outstanding accesses and cancellation before frame reuse.
 - Fork: clone private objects with capabilities in memory and registers under
   the registry rule of §9.4; preserve child alias relationships and independent
-  free. Reject duplication of external linear resources and snapshot requests
+  free. First resolve how same-address cloning could coexist with §4's global
+  range rule and cross-domain capability transfer; Stage 1 does not allow it.
+  Reject duplication of external linear resources and snapshot requests
   that present only monitor handles. Establish full-copy semantics before COW.
 - COW: separate private copies before an ordinary store or the implicit write
   of a linear-capability load. Check both backing authority and capabilities
@@ -652,6 +727,9 @@ claiming the corresponding feature:
 - [Addressing §3](delegated-memory-addressing.md): the per-access node-to-grant
   binding is D3's taken variant, now stated with the registry's lifetime in
   §9.4.
+- [Addressing §5 and §8](delegated-memory-addressing.md): logical ranges now
+  occupy a globally disjoint region above physical addresses; CREATE enforces
+  that reservation so address-only comparisons survive cross-context transfer.
 - [Addressing §6](delegated-memory-addressing.md): "physical authority
   encapsulated by the mapping object" becomes the linear PTE plus I2; the
   ownership rules are the transitions of §5, not a sentence.
@@ -661,8 +739,9 @@ claiming the corresponding feature:
   growing logical interval with lazy backing; the pool index may become
   unnecessary, the growth mechanism does not, and under this candidate it is
   POPULATE's table-page operand. Re-plan M3 only once §9.2 has a
-  contract. M1 and M2 are unchanged: the resume-slot delivery is the frame path
-  of POPULATE.
+  contract. The current physical M1 and M2 path is unchanged; in this translated
+  candidate CREATE delivers logical authority to the protected resume slot and
+  POPULATE installs backing without delivering a physical frame to the domain.
 - `ports/musl-capstone/runtime/sublet_heap.c`, header comment: the statement
   that a stale capability's load retires on the RTL predates the R-35 and R-45
   fixes recorded in ISSUES.md.
@@ -679,10 +758,19 @@ application. The contract must cover kind, rights per direction, the full
 length with overflow, node validity, the pool membership of the frames, and
 the values the launcher uses being the ones the monitor reported at STEP. A
 per-context in-flight table in the libc keeps an object from being freed and
-reissued during the kernel's access; it holds under the assumption of §3,
-cooperating components and completion reported by the launcher. The details
-belong to the [options document](../plans/delegation-memory-options.md), not
-here.
+reissued prematurely between cooperating components. A completion reported by
+the launcher or Linux is not evidence that a malicious kernel stopped accessing
+the buffer. Pool buffers remain shared and their bytes are attacker-controlled
+input; private code must validate replies and avoid trusting mutable shared
+metadata (§3 and the system philosophy).
+
+Exclusive reclamation requires the share/revoke path on the physical frame node
+and a completed drain of outstanding accesses (§8, Stage 2's additional sharing
+contract), not an in-flight flag or a successful syscall reply. Linux isolation
+on the affected RTL additionally requires R-44. Stage 1 neither implements that
+sharing transition nor turns permanently shared pool buffers into private memory.
+Further syscall mechanics belong to the
+[options document](../plans/delegation-memory-options.md).
 
 ## 13. References
 

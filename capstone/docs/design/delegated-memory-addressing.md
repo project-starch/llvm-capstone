@@ -11,7 +11,9 @@ meaning of physical and translated capabilities, their lifetime boundaries,
 and the questions an implementation must resolve. The later
 [caplified mapping tables candidate](caplified-mapping-tables.md) narrows this
 to a first stage with capability-bearing table entries; its §11 records where
-it supersedes sections 3, 6 and 8 here.
+it supersedes sections 3, 5, 6 and 8 here. In particular, its §4 now fixes
+globally disjoint logical ranges above physical addresses, protected recipient
+delivery and zero initialization of anonymous backing.
 
 ## 1. The proposed change
 
@@ -152,18 +154,20 @@ grant permission to modify the structures controlling its translation.
 
 ## 5. Worked example: three scattered pages
 
-Use 4 KiB pages for this example. These illustrative addresses are not an ABI,
-board memory layout or proof of capability-bound representability:
+Use 4 KiB pages for this example. Let `L` be a page-aligned base in the logical
+region, above the architectural physical address range, reserved globally by
+CREATE as required by the later mapping candidate. These illustrative addresses
+are not an ABI, board memory layout or proof of capability-bound representability:
 
 | Logical range in object M | Physical backing |
 |---|---|
-| `0x40000000 .. 0x40000fff` | Page at `0x82000000` |
-| `0x40001000 .. 0x40001fff` | Page at `0x86000000` |
-| `0x40002000 .. 0x40002fff` | Page at `0x8a000000` |
+| `L .. L + 0x0fff` | Page at `0x82000000` |
+| `L + 0x1000 .. L + 0x1fff` | Page at `0x86000000` |
+| `L + 0x2000 .. L + 0x2fff` | Page at `0x8a000000` |
 
 The resulting object has a contiguous logical length of 12 KiB. The physical
 pages are not adjacent. A root data capability delivered to the domain has
-logical bounds `[0x40000000, 0x40003000)` and a binding to object M through grant G.
+logical bounds `[L, L + 0x3000)` and a binding to object M through grant G.
 Let `p` be a `char *` holding that capability:
 
 | Access | Required interpretation |
@@ -296,7 +300,7 @@ contracts, described in the alternatives document.
 
 | Area | Question to resolve |
 |---|---|
-| Logical namespace | Are cursors object-relative or drawn from a larger logical address space, and how are intervals reserved? |
+| Logical namespace | The later mapping candidate §4 chooses globally disjoint ranges above physical addresses, reserved by CREATE until DESTROY; the architectural partition and representable bounds remain to be fixed |
 | C ABI | How do pointer equality, ordering where defined, hashing, integer conversions, serialization and relocation preserve the intended identity? |
 | 128-bit representation | How is the protected binding encoded or reached, and what bounds remain representable? |
 | Translation hardware | How does C-mode select the bound context and retain physical authority through the walker and TLB? |
@@ -305,9 +309,9 @@ contracts, described in the alternatives document.
 | Partial unmap | How can an old capability retain access to surviving bytes without gaining access to a new allocation in a reused hole? |
 | Code and special storage | How do translated instruction fetch, sealed contexts, capability stores, atomics and device access interact with the new interpretation? |
 
-The example chooses a logical base for clarity; it does not settle the namespace
-or C ABI. The ISA change must define both before treating existing application
-behavior as compatible. Retaining 128-bit width alone is not proof of unchanged
+The mapping candidate settles the namespace rule needed for current address-only
+equality and null checks, including cross-domain transfers. It does not settle
+every C ABI question in the table. Retaining 128-bit width alone is not proof of unchanged
 pointer semantics, object layout requirements or instruction behavior.
 
 ## 9. First implementation experiment and acceptance criteria

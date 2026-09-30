@@ -2,8 +2,9 @@
 
 This is a Python standard-library reference model of
 [the mapping candidate](../../docs/design/caplified-mapping-tables.md), based on
-contract commit `00626a232bda`, with the table-page write-permission precondition
-made explicit during modeling in design §4. It implements the experiment in §10.1, including
+contract commit `00626a232bda`, extended by the candidate's protected CREATE
+delivery, globally disjoint logical ranges and anonymous frame initialization.
+It implements the experiment in §10.1, including
 deliberately broken comparison variants. It does not implement translation in
 QEMU, the compiler, the runtime or RTL. Passing this model does not qualify any
 of those layers or establish an unbounded hardware proof.
@@ -44,13 +45,28 @@ words and protected registry entries. Walk snapshots and cached translations
 are not extra software-owned capabilities. Revocation nodes have parents,
 liveness and linearity; logical nodes carry their immutable mapping binding.
 Mappings have finite ids and generations. Exhaustion refuses creation instead
-of wrapping. Physical page identities are distinct even when logical offsets
-are equal.
+of wrapping. Physical page identities are distinct even when offsets within
+their pages are equal. Logical ranges occupy a separate, globally reserved
+numeric region. CREATE checks every registry entry for overlap, including dead
+roots and DETACHED mappings; DESTROY releases the range with the id. This is
+protected instruction state, not the ghost reservation oracle.
+
+CREATE takes a bootstrapped domain handle and a typed `ResumeSlot`. Preparation
+and publication both check that the slot belongs to that handle's domain. A raw
+wallet name, mismatched recipient or occupied slot is refused before publication.
+The published capability is stored directly in the domain wallet representing
+that protected slot; it never appears in a monitor wallet. The model abstracts
+resume consumption as ordinary linear movement from that location. It does not
+model domain creation, trap-register sealing or libc's pending-request validation.
 
 CREATE consumes one exclusive, writable physical root page. POPULATE consumes one
-exclusive frame and, if necessary, one additional writable table page. Requiring
-retained write permission for table pages prevents conversion from increasing
-a read-only supplier's authority, even when its page is currently UNINIT.
+exclusive writable data frame and, if necessary, one additional writable table
+page. Requiring retained write permission prevents initialization from increasing
+a read-only supplier's authority, even when a table page is currently UNINIT.
+POPULATE zeros every data word and clears tags before linking the frame. The PTE
+retains the supplied rights; the logical capability limits effective access to
+the mapping's max protection. An R-only mapping can therefore enclose an RW frame
+for zeroing and later UNINIT scrubbing without allowing domain stores.
 Both expose
 `prepare` and `publish` microsteps. Preparation holds the operands outside
 software access; publication rechecks authority and atomically clears tags,
@@ -58,7 +74,9 @@ links tables and publishes the result. A concurrent revoke or DETACH can make
 publication fail. The caller can abort and recover the original operands;
 operands revoked in the meantime are still dead. There is one outstanding
 preparation, but revocation, DETACH and ordinary accesses can interleave with
-it. This abstracts internal zeroing and publication circuitry.
+it. This abstracts internal zeroing and publication circuitry, including ordering
+against earlier physical supplier accesses. Supplier stores in this model are
+atomic; it does not explore their store buffers or multi-beat page clearing.
 
 DETACH, UNMAP and REVOKE separate break, per-hart invalidation, per-hart drain
 acknowledgement and final return. The default uses a conservative global barrier:
@@ -91,7 +109,8 @@ Logical SPLIT, DELIN, MREV, REVOKE, DROP, bounds/rights attenuation and cursor
 movement are modeled. Moving and storing a linear capability removes the source;
 non-linear capabilities can be copied. A linear capability load additionally
 needs write permission because it clears its memory source. UNINIT scrubbing
-advances one word at a time; INIT requires the cursor at the end. Logical
+requires retained W and advances one word at a time; INIT requires the cursor at
+the end. Revoking a read-only object does not create write authority. Logical
 UNINIT also has a checked synchronous word-store abstraction for allocator
 reclamation.
 
@@ -111,11 +130,11 @@ to authorize an operation. It checks after every successful microstep:
 | I1 | No live linear node has two storage locations; no exclusive physical page has overlapping usable capabilities |
 | I2 | Table capabilities occur only in registry/table storage; ordinary instructions cannot load or dereference them |
 | I3 | The monitor receives no logical data capability through its management handles; UNINIT remains unreadable |
-| I4 | Every table entry is an admitted, linear physical frame or table capability, published by POPULATE; unused slots are clear |
+| I4 | Every table entry is an admitted, linear physical frame or table capability, published by POPULATE; unused slots are clear; a ghost snapshot records all anonymous frame words and tags as clear at admission |
 | I5 | Used slots never change target or return to none; roots stay fixed; only DESTROY releases a registry reservation |
 | I6 | A completed operation leaves no relevant old walk, checked access or cached translation that could act later |
 | I7 | Logical binding and physical/logical kind agree with protected node identity across derivation and storage |
-| Goal clauses | Physical exclusivity, correct mapping selection for each access, and no monitor observation of domain-written words |
+| Goal clauses | Physical exclusivity, correct mapping selection, no monitor observation of domain-written words, and globally disjoint reserved logical ranges above physical addresses without wrap |
 
 The observation oracle records **physical** monitor reads. Logical disclosure is
 caught earlier by I3, at acquisition of a live logical capability by the monitor,
@@ -133,10 +152,16 @@ operations must leave the complete state unchanged.
 
 [check.py](check.py) runs these complementary checks:
 
-1. Eight named contract scenarios cover permission/type refusal, sparse backing,
+1. Eleven named contract scenarios cover permission/type refusal, sparse backing,
    scrub-before-read, explicit and implicit locked slots, normal and orphaned
    reclamation, late old-generation handles, generation exhaustion, object reuse,
-   cross-context pointers, capability transfers and publication races.
+   cross-context pointers, capability transfers and publication races. The three
+   additional scenarios check typed recipient delivery and loss of its authority,
+   numeric address separation and reservation lifetime across domains, and dirty
+   anonymous frames with both supplier data and stored capabilities. Address
+   comparisons use the numeric cursor projection, including aliases with different
+   bounds/rights and one-past equality at a SPLIT boundary. Geometry and recipient
+   negative tests invoke the instruction with absolute operands directly.
 2. Forty schedule families exhaust **all enabled interleavings to terminal
    states for their fixed initial workloads**: five operations (load, store,
    atomic read-modify-write, capability load and capability store), four removal
@@ -201,8 +226,11 @@ DESTROY and UNMAP); 20 of 32 random seeds had no memory effect, with 24 total.
 The independent review also found depth 4 exceeded 100,000 states with the old
 alphabet. Those results do not supply lifecycle-completion or foreign-issue
 coverage; the new checks address those specific gaps with explicit restrictions.
+Earlier records also did not establish protected CREATE delivery, globally
+distinct pointer addresses or zero-filled anonymous frames. Their passing
+workloads remain evidence for those workloads, not for the added contracts.
 
-All eight broken variants must fail at their intended property while their
+All ten broken variants must fail at their intended property while their
 correct control either completes safely or refuses the unsafe instruction:
 
 | Variant | Witness |
@@ -215,6 +243,8 @@ correct control either completes safely or refuses the unsafe instruction:
 | `duplicate_return` | Saved-root reclamation returns a second capability after senior-handle reclamation (I1) |
 | `root_release` | Root revoke frees a still-owned registry entry (I5) |
 | `stale_record` | Old-root cleanup keyed only by id deletes the new generation's entry (I5) |
+| `monitor_delivery` | CREATE accepts a monitor wallet as destination and exposes readable logical authority (I3); the control refuses inside CREATE |
+| `unzeroed_frame` | POPULATE publishes supplier value 4242 and a stored capability in an anonymous frame (I4); the control clears both before publication |
 
 `weak_binding` removes id selection on the data path. There is no claim that
 removing only the generation comparison has been exposed independently: old
@@ -227,7 +257,15 @@ to this model; none changes production enforcement.
 - Two harts/contexts, two mapping ids, three generations per id, two table levels
   with fanout two, four words per page; the standard fixture has sixteen pages.
   Addresses and bounds count words, not bytes. Physical overlaps reduce to page
-  identity; sub-page physical grants and compressed bounds are excluded.
+  identity; sub-page physical grants and compressed bounds are excluded. Physical
+  pages have numeric addresses `[4, 68)`; logical addresses start at 128 and remain
+  below 256, including one-past cursors. Each logical range fits an aligned
+  sixteen-word window. Fixtures choose bases 128 and 160, and low address bits
+  index their respective tables. The harness's `offset_action` converts convenient
+  relative test offsets to absolute operands before execution; traces record the
+  latter. It may inspect ghost setup history, but no instruction consults that
+  history or the adapter. The architecture's actual partition and 128-bit bounds
+  encoding remain unqualified; these constants are finite model geometry only.
 - Revocation-node identities are monotonic and never reused. This experiment
   does not qualify the RTL/QEMU node reclaimer or finite node-generation encoding.
 - A memory effect, including the move/clear of a linear capability, is one

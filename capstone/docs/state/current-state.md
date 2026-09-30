@@ -7,13 +7,18 @@ Minimal snapshot. Read first in every session.
 The [translated-memory candidate](../design/caplified-mapping-tables.md) now has
 a [host executable model](../../tests/mapping-model/README.md) on
 `delegation-memory`. The checked [record](../../tests/mapping-model/results.json)
-covers eight contract scenarios, eight deliberately faulty variants, forty
+covers eleven contract scenarios, ten deliberately faulty variants, forty
 two-hart workloads in both global and table-record modes, and fifteen additional
 scoped-barrier workloads with foreign issue and two successive removals. Three
 reduced lifecycle searches reach completion operations at depth six; random
 traces require data effects per seed and cap revocations. The earlier depth-three
 search covered prefixes only and its random aggregate concealed empty seeds.
 Source hashes, exact restrictions, depth frontiers and per-seed counts are recorded.
+CREATE now enforces protected recipient delivery and globally disjoint logical
+ranges above physical addresses, preserving address comparisons after D3 transfer.
+POPULATE zeros anonymous frame bytes and tags before publication; initialization
+and UNINIT scrubbing require retained write authority. The syscall boundary
+explicitly treats pool buffers as permanently shared, attacker-controlled input.
 These are abstract Stage-1 results, not a translation implementation, an
 unbounded proof, QEMU qualification or RTL measurements. The lane remains
 separate from `dev`.

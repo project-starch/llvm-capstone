@@ -12,12 +12,17 @@ from dataclasses import dataclass, field, fields, is_dataclass, replace
 WORDS = 4
 FANOUT = 2
 PAGES = FANOUT * FANOUT
+# A finite stand-in for the architectural physical/logical address partition.
+PHYSICAL_BASE = WORDS
+PHYSICAL_LIMIT = PHYSICAL_BASE + 16 * WORDS
+LOGICAL_BASE = 128
+ADDRESS_LIMIT = 256
 HARTS = (0, 1)
 LOCKED = "locked"
 MUTANTS = (
     "plain_detach", "uncleared_create", "uncleared_populate",
     "walk_only_drain", "weak_binding", "duplicate_return",
-    "root_release", "stale_record",
+    "root_release", "stale_record", "monitor_delivery", "unzeroed_frame",
 )
 
 
@@ -56,6 +61,18 @@ class Cap:
     rights: str = "rw"
     linear: bool = True
     cursor: int = 0
+    domain: int | None = None
+
+
+@dataclass(frozen=True)
+class ResumeSlot:
+    """Protected destination, not an arbitrary software capability address."""
+    domain: int
+    name: str
+
+    @property
+    def location(self):
+        return "d%d:%s" % (self.domain, self.name)
 
 
 @dataclass
@@ -71,6 +88,7 @@ class Mapping:
     binding: tuple
     root: Cap
     pointer_root: int
+    lo: int
     hi: int
     rights: str
     state: str = "ACTIVE"
@@ -169,6 +187,7 @@ class Machine:
         self.completed = []
         self.observations = []
         self.effects = []
+        self.admission_images = []
 
     def key(self):
         # Exact textual equality, not a lossy hash. Keeping nested Python
@@ -206,6 +225,8 @@ class Machine:
     def bootstrap(self, page, location, handle):
         """Fixture-only initial authority, before adversarial execution starts."""
         require(page not in self.memory, "already bootstrapped")
+        require(0 <= page < (PHYSICAL_LIMIT - PHYSICAL_BASE) // WORDS,
+                "physical address limit")
         require(location not in self.wallet and handle not in self.wallet,
                 "occupied bootstrap output")
         senior = self.node()
@@ -213,6 +234,11 @@ class Machine:
         self.wallet[handle] = Cap(senior, "rev_phys", page=page)
         self.wallet[location] = Cap(junior, "physical", page=page)
         self.memory[page] = [Word() for _ in range(WORDS)]
+
+    def bootstrap_domain(self, domain, handle):
+        """Fixture-only recipient authority; domain creation is outside scope."""
+        require(domain in HARTS and handle not in self.wallet, "invalid domain setup")
+        self.wallet[handle] = Cap(self.node(), "domain", domain=domain)
 
     def get(self, location, kinds=None):
         require(location in self.wallet, "empty capability location")
@@ -248,13 +274,15 @@ class Machine:
         return self.memory[cap.page]
 
     def indices(self, address):
-        require(0 <= address < PAGES * WORDS, "unsupported geometry")
-        page = address // WORDS
+        require(LOGICAL_BASE <= address < ADDRESS_LIMIT, "unsupported geometry")
+        # Each modeled range fits one aligned four-page window. The binding
+        # selects the root; its low address bits select slots within that root.
+        page = (address // WORDS) % PAGES
         return page // FANOUT, page % FANOUT
 
     def leaf(self, mapping, address):
         top, low = self.indices(address)
-        require(address < mapping.hi, "outside mapping")
+        require(mapping.lo <= address < mapping.hi, "outside mapping")
         entry = self.table(mapping.root)[top]
         require(isinstance(entry, Cap), "missing/locked table entry")
         return entry, low, self.table(entry)[low]
@@ -279,7 +307,23 @@ class Machine:
             self.table_bindings[cap.node] = binding
         return replace(cap, kind="table", binding=binding, cursor=0)
 
-    def prepare_create(self, ident, root, pointer, handle, hi=PAGES * WORDS,
+    def create_range(self, lo, hi):
+        require(LOGICAL_BASE <= lo < hi < ADDRESS_LIMIT and
+                lo % (PAGES * WORDS) == 0 and hi % WORDS == 0 and
+                hi - lo <= PAGES * WORDS, "invalid mapping geometry")
+        require(all(hi <= m.lo or m.hi <= lo for m in self.registry.values()),
+                "logical range reserved")
+
+    def delivery(self, recipient, pointer):
+        cap = self.get(recipient, ("domain",))
+        if self.mutant == "monitor_delivery" and isinstance(pointer, str):
+            return pointer
+        require(isinstance(pointer, ResumeSlot), "protected resume slot required")
+        require(pointer.domain == cap.domain and bool(pointer.name),
+                "resume slot belongs to another domain")
+        return pointer.location
+
+    def prepare_create(self, ident, root, recipient, pointer, handle, lo, hi,
                        rights="rw"):
         require(self.preparation is None, "preparation busy")
         require(self.barrier is None, "revocation busy")
@@ -287,16 +331,16 @@ class Machine:
                 "mapping id unavailable")
         require(self.last_generation[ident] < self.generations,
                 "generation exhausted; id retired")
-        require(0 < hi <= PAGES * WORDS and hi % WORDS == 0,
-                "invalid mapping geometry")
+        self.create_range(lo, hi)
+        destination = self.delivery(recipient, pointer)
         require(rights in ("r", "rw"), "unsupported protection")
         cap = self.get(root)
         self.physical_page(cap, uninit=True)
-        require(len({root, pointer, handle}) == 3, "aliased operands")
-        self.vacant(pointer)
+        require(len({root, recipient, destination, handle}) == 4, "aliased operands")
+        self.vacant(destination)
         self.vacant(handle)
-        self.preparation = Preparation("create", (ident, root, pointer, handle,
-                                                   hi, rights), {root: cap})
+        self.preparation = Preparation("create", (ident, root, recipient, pointer,
+                                                   handle, lo, hi, rights), {root: cap})
         del self.wallet[root]
 
     def populate_plan(self, handle, address, frame, pages):
@@ -304,10 +348,11 @@ class Machine:
                 "detach handle required")
         mapping = self.mapping(handle.binding)
         require(mapping.state == "ACTIVE", "mapping not active")
-        require(address % WORDS == 0 and 0 <= address < mapping.hi,
+        require(address % WORDS == 0 and mapping.lo <= address < mapping.hi,
                 "page address outside mapping")
         self.physical_page(frame)
-        require(set(frame.rights) <= set(mapping.rights), "excess frame rights")
+        require("w" in frame.rights, "anonymous frame must retain write authority")
+        require(set(mapping.rights) <= set(frame.rights), "insufficient frame rights")
         top, low = self.indices(address)
         entry = self.table(mapping.root)[top]
         if entry == Word():
@@ -346,10 +391,12 @@ class Machine:
         require(self.barrier is None, "revocation busy")
         p = self.preparation
         if p.operation == "create":
-            ident, root, pointer, handle, hi, rights = p.arguments
+            ident, root, recipient, pointer, handle, lo, hi, rights = p.arguments
             require(ident not in self.registry, "mapping id unavailable")
+            self.create_range(lo, hi)
+            destination = self.delivery(recipient, pointer)
             self.physical_page(p.held[root], uninit=True)
-            require(pointer not in self.wallet and handle not in self.wallet,
+            require(destination not in self.wallet and handle not in self.wallet,
                     "occupied publication output")
             generation = self.last_generation[ident] + 1
             require(generation <= self.generations, "generation exhausted")
@@ -357,13 +404,13 @@ class Machine:
             senior = self.node(binding=binding)
             junior = self.node(parent=senior, binding=binding)
             root_cap = self.convert(p.held[root], binding, "create")
-            mapping = Mapping(binding, root_cap, senior, hi, rights)
+            mapping = Mapping(binding, root_cap, senior, lo, hi, rights)
             self.registry[ident] = mapping
             self.last_generation[ident] = generation
-            self.wallet[pointer] = Cap(junior, "logical", binding=binding,
-                                       hi=hi, rights=rights)
+            self.wallet[destination] = Cap(junior, "logical", binding=binding,
+                                           lo=lo, hi=hi, rights=rights, cursor=lo)
             self.wallet[handle] = Cap(senior, "detach", binding=binding,
-                                      hi=hi, rights=rights)
+                                      lo=lo, hi=hi, rights=rights, cursor=lo)
             self.mappings[binding] = mapping
             self.reservations[ident] = binding
             self.roots[binding] = root_cap
@@ -371,6 +418,10 @@ class Machine:
             handle, address, frame, pages = p.arguments
             mapping, top, low, entry = self.populate_plan(
                 self.get(handle), address, p.held[frame], [p.held[x] for x in pages])
+            if self.mutant != "unzeroed_frame":
+                self.memory[p.held[frame].page] = [Word() for _ in range(WORDS)]
+            # Independent admission evidence, never consulted by an instruction.
+            self.admission_images.append(tuple(self.memory[p.held[frame].page]))
             if pages:
                 entry = self.convert(p.held[pages[0]], mapping.binding, "populate")
                 self.memory[mapping.root.page][top] = entry
@@ -545,7 +596,7 @@ class Machine:
         require(self.barrier is None, "barrier busy")
         cap = self.get(token, ("token",))
         mapping = self.mapping(cap.binding)
-        require(mapping.state == "DETACHED" and cap.lo == 0 and
+        require(mapping.state == "DETACHED" and cap.lo == mapping.lo and
                 cap.hi == mapping.hi, "whole-mapping token required")
         mapping.state = "DESTROYED"
         del self.registry[cap.binding[0]]
@@ -558,6 +609,7 @@ class Machine:
 
     def scrub(self, location):
         cap = self.get(location, ("uninit",))
+        require("w" in cap.rights, "scrub requires retained write authority")
         require(cap.cursor < cap.hi, "scrub complete")
         self.memory[cap.page][cap.cursor] = Word()
         self.wallet[location] = replace(cap, cursor=cap.cursor + 1)
@@ -571,6 +623,7 @@ class Machine:
     def scrub_logical(self, location):
         require(self.barrier is None, "barrier busy")
         cap = self.get(location, ("logical_uninit",))
+        require("w" in cap.rights, "scrub requires retained write authority")
         require(cap.cursor < cap.hi, "scrub complete")
         mapping = self.mapping(cap.binding)
         require(mapping.state == "ACTIVE", "mapping not active")
@@ -596,6 +649,18 @@ class Machine:
         self.memory[page.page][offset] = cap
         if cap.linear:
             del self.wallet[source]
+
+    def physical_store(self, location, offset, value):
+        cap = self.get(location, ("physical",))
+        require("w" in cap.rights and cap.lo <= offset < cap.hi, "store denied")
+        self.memory[cap.page][offset] = Word(value)
+
+    def address_value(self, location):
+        """Numeric cursor projection used by the existing comparison lowering."""
+        cap = self.get(location, ("logical", "physical"))
+        if cap.kind == "physical":
+            return PHYSICAL_BASE + cap.page * WORDS + cap.cursor
+        return cap.cursor
 
     def issue(self, hart, location, operation="load", address=None, value=7,
               source=None, destination=None):
@@ -781,6 +846,14 @@ class Machine:
                               "I5: previously used slot replaced or cleared")
         invariant({i: m.binding for i, m in self.registry.items()} == self.reservations,
                   "I5: registry reservation released without DESTROY")
+        for image in self.admission_images:
+            invariant(all(word == Word() for word in image),
+                      "I4: anonymous frame not zeroed before publication")
+        ranges = sorted((m.lo, m.hi) for m in self.registry.values())
+        invariant(all(PHYSICAL_LIMIT < lo < hi < ADDRESS_LIMIT for lo, hi in ranges),
+                  "goal: logical address overlaps physical space or wraps")
+        invariant(all(a[1] <= b[0] for a, b in zip(ranges, ranges[1:])),
+                  "goal: distinct mappings have overlapping addresses")
         for binding, mapping in self.mappings.items():
             invariant(mapping.root == self.roots[binding], "I5: root changed")
             if mapping.state in ("DETACHED", "DESTROYED"):
@@ -815,7 +888,8 @@ class Action:
 
     def apply(self, machine):
         require(not self.operation.startswith("_") and self.operation not in
-                ("node", "bootstrap", "convert"), "not an execution action")
+                ("node", "bootstrap", "bootstrap_domain", "convert"),
+                "not an execution action")
         return getattr(machine, self.operation)(*self.arguments)
 
     def __str__(self):

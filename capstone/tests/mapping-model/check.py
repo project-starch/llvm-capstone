@@ -9,7 +9,43 @@ from pathlib import Path
 import random
 import sys
 
-from model import Action, Cap, HARTS, Machine, MUTANTS, Refused, Violation, Word, WORDS
+from model import (Action, ADDRESS_LIMIT, Cap, HARTS, LOGICAL_BASE, Machine,
+                   MUTANTS, PAGES, PHYSICAL_LIMIT, Refused, ResumeSlot,
+                   Violation, Word, WORDS)
+
+
+def base(ident):
+    return LOGICAL_BASE + ident * 2 * PAGES * WORDS
+
+
+def create_action(ident, root, pointer, handle, size=PAGES * WORDS, rights="rw"):
+    """Fixture recipe; the instruction receives an explicit recipient and range."""
+    domain, name = pointer.split(":", 1)
+    target = ResumeSlot(int(domain[1:]), name) if domain.startswith("d") else pointer
+    recipient = "m:domain%d" % (target.domain if isinstance(target, ResumeSlot) else 0)
+    return Action("prepare_create", (ident, root, recipient, target, handle,
+                                     base(ident), base(ident) + size, rights))
+
+
+def offset_action(machine, name, arguments):
+    """Test recipes use mapping-relative offsets; execution traces are absolute.
+
+    This is a harness convenience only. Machine instructions never call it and
+    must independently reject invalid recipients, geometry and operands.
+    """
+    if name == "prepare_create":
+        return create_action(*arguments)
+    args = list(arguments)
+    location_index = 1 if name == "issue" else 0
+    positions = {"issue": (3,), "prepare_populate": (1,), "begin_unmap": (1,),
+                 "narrow": (1, 2), "split": (1,), "cursor": (1,)}.get(name, ())
+    cap = machine.wallet.get(args[location_index]) if positions else None
+    if cap and cap.binding in machine.mappings:
+        lo = machine.mappings[cap.binding].lo
+        for position in positions:
+            if position < len(args) and args[position] is not None:
+                args[position] += lo
+    return Action(name, tuple(args))
 
 
 class Script:
@@ -19,16 +55,21 @@ class Script:
         self.refusals = 0
 
     def step(self, name, *args):
-        action = Action(name, args)
+        return self.exact(offset_action(self.machine, name, args))
+
+    def exact(self, action):
         self.trace.append(str(action))
         result = action.apply(self.machine)
         self.machine.check()
         return result
 
     def refused(self, name, *args):
+        self.refused_action(offset_action(self.machine, name, args))
+
+    def refused_action(self, action):
         before = self.machine.key()
         try:
-            self.step(name, *args)
+            self.exact(action)
         except Refused:
             assert self.machine.key() == before, "refusal changed state"
             self.refusals += 1
@@ -36,6 +77,8 @@ class Script:
             raise AssertionError("expected refusal: " + str(self.trace[-1]))
 
     def pages(self, count=16):
+        for domain in HARTS:
+            self.machine.bootstrap_domain(domain, "m:domain%d" % domain)
         for page in range(count):
             self.machine.bootstrap(page, "m:p%d" % page, "m:h%d" % page)
         self.machine.check()
@@ -119,10 +162,22 @@ def check_permissions_and_inputs():
     t.pages(3)
     t.create(0, 0, rights="r")
     t.refused("prepare_create", 1, "d0:p0", "d1:wrong", "m:wrong")
-    t.refused("prepare_populate", "m:d0", 0, "m:p2", ("m:p1",))
-    t.step("narrow", "m:p2", 0, WORDS, "r")
     t.populate(0, 0, 2, 1)
     assert t.access(0, "d0:p0").phase == "done"
+    t.refused("issue", 0, "d0:p0", "store")
+    # The unreadable PTE retains the original frame's W for initialization and
+    # return scrubbing; the logical capability supplies the R-only ceiling.
+    assert t.machine.memory[1][0].rights == "rw"
+    t.step("mrev", "d0:p0", "d0:readrev")
+    t.step("begin_revoke", "d0:readrev", "d0:readuninit")
+    t.barrier()
+    t.refused("scrub_logical", "d0:readuninit")
+    t.refused("init", "d0:readuninit")
+    t.step("begin_detach", "m:d0", "m:t0")
+    t.barrier()
+    t.step("begin_unmap", "m:t0", 0, "m:returned")
+    t.barrier()
+    t.zero("m:returned")
     u = Script()
     u.pages(4)
     u.step("narrow", "m:p0", 0, WORDS, "r")
@@ -130,6 +185,11 @@ def check_permissions_and_inputs():
     u.create(0, 1)
     u.step("narrow", "m:p2", 0, WORDS, "r")
     u.refused("prepare_populate", "m:d0", 0, "m:p3", ("m:p2",))
+    u.refused("prepare_populate", "m:d0", 0, "m:p2", ("m:p3",))
+    u.step("mrev", "m:p2", "m:readrev")
+    u.step("begin_revoke", "m:readrev", "m:readuninit")
+    u.barrier()
+    u.refused("scrub", "m:readuninit")
     return s.refusals + t.refusals + u.refusals
 
 
@@ -318,19 +378,126 @@ def check_generation_exhaustion_and_tokens():
     return s.refusals
 
 
+def check_protected_delivery():
+    s = Script()
+    s.pages(6)
+    valid = create_action(0, "m:p0", "d0:resume", "m:d0")
+    ident, root, recipient, slot, handle, lo, hi, rights = valid.arguments
+    for destination in ("m:leak", "d0:resume", ResumeSlot(1, "resume")):
+        s.refused_action(Action("prepare_create", (ident, root, recipient,
+                         destination, handle, lo, hi, rights)))
+    s.refused_action(Action("prepare_create", (ident, root, "m:p1", slot,
+                                              handle, lo, hi, rights)))
+    # Lost recipient authority between preparation and publication cannot
+    # redirect the result or leave a partial table conversion behind.
+    s.exact(valid)
+    s.step("move", "m:domain0", "m:held_domain")
+    s.refused("publish")
+    s.step("abort")
+    s.step("move", "m:held_domain", "m:domain0")
+    s.exact(valid)
+    s.step("publish")
+    s.refused("publish")
+    assert s.machine.wallet["d0:resume"].linear
+    s.refused("delin", "m:d0")
+    # A second id cannot overwrite the occupied protected slot.
+    s.refused_action(create_action(1, "m:p1", "d0:resume", "m:d1"))
+    assert sum(cap.kind == "logical" for cap in s.machine.wallet.values()) == 1
+    return s.refusals
+
+
+def check_address_geometry():
+    s = fixture()
+    s.step("move", "d1:p1", "d0:imported")
+    own = s.step("address_value", "d0:p0")
+    foreign = s.step("address_value", "d0:imported")
+    physical = s.step("address_value", "m:p3")
+    assert 0 < physical < PHYSICAL_LIMIT < own < foreign
+    assert s.access(0, "d0:imported", "store", 0, 23).phase == "done"
+    assert s.access(0, "d0:imported").result.value == 23
+    assert s.access(0, "d0:p0").result == Word()
+    s.step("split", "d0:p0", WORDS, "d0:rest")
+    s.step("cursor", "d0:p0", WORDS)  # Legal one-past equality at a split.
+    assert s.step("address_value", "d0:p0") == s.step("address_value", "d0:rest")
+    s.step("delin", "d0:rest")
+    s.step("move", "d0:rest", "d1:alias")
+    s.step("narrow", "d1:alias", WORDS, 2 * WORDS, "r")
+    assert s.step("address_value", "d0:rest") == s.step("address_value", "d1:alias")
+
+    t = Script()
+    t.pages(6)
+    t.create(0, 0)
+    candidate = create_action(1, "m:p1", "d1:new", "m:dnew")
+
+    def at(lo, hi):
+        args = list(candidate.arguments)
+        args[5:7] = lo, hi
+        return Action("prepare_create", tuple(args))
+
+    for lo, hi in ((0, 16), (PHYSICAL_LIMIT, PHYSICAL_LIMIT + 16),
+                   (base(0), base(0) + WORDS), (base(0), base(0) + 16),
+                   (ADDRESS_LIMIT - 16, ADDRESS_LIMIT),
+                   (ADDRESS_LIMIT, ADDRESS_LIMIT + 16)):
+        t.refused_action(at(lo, hi))
+    t.step("begin_revoke", "m:h0", "m:oldroot")
+    t.barrier()
+    t.refused_action(at(base(0), base(0) + 16))
+    t.step("begin_detach", "m:d0", "m:t0")
+    t.barrier()
+    t.refused_action(at(base(0), base(0) + 16))
+    t.step("destroy", "m:t0")
+    t.exact(at(base(0), base(0) + 16))
+    t.step("publish")
+    t.populate("new", 0, 3, 2)
+    t.refused("issue", 0, "d0:p0")
+    assert t.access(1, "d1:new").result == Word()
+    return s.refusals + t.refusals
+
+
+def check_anonymous_initialization():
+    s = fixture()
+    s.step("physical_store", "m:p3", 0, 4242)
+    s.step("delin", "m:p7")
+    s.step("physical_store_cap", "m:p3", 1, "m:p7")
+    before = tuple(s.machine.memory[3])
+    s.refused("prepare_populate", "m:d0", 8, "m:p3", ())
+    assert tuple(s.machine.memory[3]) == before
+    s.step("prepare_populate", "m:d0", 4, "m:p3", ())
+    assert tuple(s.machine.memory[3]) == before
+    s.step("abort")
+    assert tuple(s.machine.memory[3]) == before
+    s.populate(0, 4, 3)
+    for address in range(4, 8):
+        assert s.access(0, "d0:p0", "load", address).result == Word()
+    assert s.access(0, "d0:p0", "cload", 5, destination="d0:injected").phase == "fault"
+    return s.refusals
+
+
 SCENARIOS = (
     check_permissions_and_inputs, check_reclamation,
     check_cut_subtree_and_generation, check_old_root_and_present_destroy,
     check_pointer_tree_and_contexts, check_capability_transfers,
     check_preparation_races, check_generation_exhaustion_and_tokens,
+    check_protected_delivery, check_address_geometry, check_anonymous_initialization,
 )
 
 
 def mutation_script(name, mutant):
     """Return the full reproducible trace and its FIRST refusal/violation."""
-    s = Script(mutant) if name.startswith("uncleared") else fixture(mutant)
+    s = Script(mutant) if name.startswith("uncleared") or name == "monitor_delivery" \
+        else fixture(mutant)
     try:
-        if name.startswith("uncleared"):
+        if name == "monitor_delivery":
+            s.pages(2)
+            s.step("prepare_create", 0, "m:p0", "m:leak", "m:d0")
+            s.step("publish")
+        elif name == "unzeroed_frame":
+            s.step("physical_store", "m:p3", 0, 4242)
+            s.step("delin", "m:p7")
+            s.step("physical_store_cap", "m:p3", 1, "m:p7")
+            s.populate(0, 4, 3)
+            assert s.access(0, "d0:p0", "load", 4).result == Word()
+        elif name.startswith("uncleared"):
             s.pages()
             s.step("delin", "m:p2")
             page = "m:p0" if name == "uncleared_create" else "m:p1"
@@ -387,6 +554,8 @@ EXPECTED_MUTATIONS = {
     "duplicate_return": "I1:",
     "root_release": "I5: registry reservation",
     "stale_record": "I5: registry reservation",
+    "monitor_delivery": "I3:",
+    "unzeroed_frame": "I4: anonymous frame not zeroed",
 }
 
 
@@ -397,6 +566,7 @@ def mutations():
         expected_control = {
             "plain_detach": ("Refused", "wrong capability kind"),
             "walk_only_drain": ("Refused", "data access outstanding"),
+            "monitor_delivery": ("Refused", "protected resume slot required"),
         }.get(name, ("safe", ""))
         assert (good, reason) == expected_control, (name, "correct model failed", good, reason)
         bad, reason, trace = mutation_script(name, name)
@@ -438,7 +608,8 @@ def lifecycle_actions(machine):
             continue
         if cap.kind == "detach":
             actions.append(Action("begin_detach", (location, "m:token%d" % cap.binding[0])))
-            for address in (0, WORDS, 2 * WORDS):
+            for address in (base(cap.binding[0]), base(cap.binding[0]) + WORDS,
+                            base(cap.binding[0]) + 2 * WORDS):
                 for frame, table in (("m:p3", ()), ("m:p4", ("m:p5",))):
                     actions.append(Action("prepare_populate", (location, address, frame, table)))
         if cap.kind in ("rev_phys", "rev_logical"):
@@ -446,19 +617,20 @@ def lifecycle_actions(machine):
             actions.append(Action("begin_revoke", (location, output)))
         if cap.kind == "token":
             actions += [Action("destroy", (location,)),
-                        Action("begin_unmap", (location, 0, "m:unmapped"))]
+                        Action("begin_unmap", (location, base(cap.binding[0]), "m:unmapped"))]
         if cap.kind == "uninit":
             actions += [Action("scrub", (location,)), Action("init", (location,))]
         if cap.kind == "logical" and location.startswith(("d0:", "d1:")):
             hart = int(location[1])
             actions += [Action("delin", (location,)), Action("drop", (location,)),
-                        Action("split", (location, WORDS, location + ":split")),
+                        Action("split", (location, base(cap.binding[0]) + WORDS, location + ":split")),
                         Action("mrev", (location, location + ":rev")),
                         Action("move", (location, "d%d:copy" % (1 - hart)))]
-            for address in (0, WORDS, 2 * WORDS):
+            for address in (base(cap.binding[0]), base(cap.binding[0]) + WORDS,
+                            base(cap.binding[0]) + 2 * WORDS):
                 for operation in ("load", "store", "amo"):
                     actions.append(Action("issue", (hart, location, operation, address)))
-    actions += [Action("prepare_create", (i, "m:p6", "d%d:new" % i, "m:new%d" % i))
+    actions += [create_action(i, "m:p6", "d%d:new" % i, "m:new%d" % i)
                 for i in range(2)]
     for request, access in machine.accesses.items():
         if access.phase in ("root", "leaf", "fill"):
@@ -587,7 +759,7 @@ def check_table_record():
         for _ in range(3):
             s.step("walk", req)
         s.step("invalidate", 1)
-        assert (1, 1, 1, 0) in s.machine.tlb
+        assert (1, 1, 1, base(1) // WORDS) in s.machine.tlb
         s.step("drain", 1)  # Foreign checked store does not hold up this return.
         s.step("memory_step", req)
         req = s.step("issue", 1, "d1:p1", "load")
@@ -657,7 +829,7 @@ def record_interference():
                 # after them. Before the first break only the victim is issued.
                 if m.next_access == issued and (m.barrier or m.completed):
                     source = "d1:payload" if operation == "cstore" else None
-                    result.append(Action("issue", (1, "d1:p1", operation, 0, 99, source)))
+                    result.append(Action("issue", (1, "d1:p1", operation, base(1), 99, source)))
                 return result
 
             def terminal(m):
@@ -700,16 +872,16 @@ def lifecycle(depth):
                 for handle in ("m:h0", "m:h1", "m:h2", "d0:rev"):
                     result.append(Action("begin_revoke", (handle, handle + ":back")))
                 result += [Action("begin_detach", ("m:d0", "m:token0")),
-                           Action("begin_unmap", ("m:token0", 0, "m:unmapped"))]
+                           Action("begin_unmap", ("m:token0", base(0), "m:unmapped"))]
             result += [Action("destroy", ("m:token0",)),
-                       Action("prepare_create", (0, "m:p6", "d0:new", "m:new0"))]
+                       create_action(0, "m:p6", "d0:new", "m:new0")]
             # A used leaf and a missing lower table exercise both publications.
             handle = "m:new0" if "m:new0" in m.wallet else "m:d0"
-            result += [Action("prepare_populate", (handle, WORDS, "m:p3", ())),
-                       Action("prepare_populate", (handle, 2 * WORDS, "m:p4", ("m:p5",)))]
+            result += [Action("prepare_populate", (handle, base(0) + WORDS, "m:p3", ())),
+                       Action("prepare_populate", (handle, base(0) + 2 * WORDS, "m:p4", ("m:p5",)))]
             if not m.accesses:
                 pointer = "d0:new" if "d0:new" in m.wallet else "d0:p0"
-                result.append(Action("issue", (0, pointer, "store", 0)))
+                result.append(Action("issue", (0, pointer, "store", base(0))))
             return result
 
         result = explore(s.machine, actions, depth=depth)
@@ -744,7 +916,8 @@ def randomized(seed_count, steps):
             groups = {}
             for action in lifecycle_actions(machine):
                 op = action.operation
-                if op == "issue" and action.arguments[3] != 0:
+                if op == "issue" and action.arguments[3] != base(
+                        machine.wallet[action.arguments[1]].binding[0]):
                     continue
                 if op == "begin_revoke" and coverage[op] >= revoke_limit:
                     continue
@@ -822,8 +995,9 @@ def main():
         return 0 if good[0] in ("safe", "Refused") and bad[0] == "Violation" else 1
     if args.depth < 1 or args.seeds < 1 or args.steps < 1:
         parser.error("bounds must be positive")
-    result = {"schema": 2, "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
-              "contract": "00626a232bda", "scenarios": [], "mutations": [],
+    result = {"schema": 3, "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
+              "contract_base": "00626a232bda",
+              "contract_revision": "global ranges, protected delivery, anonymous zeroing", "scenarios": [], "mutations": [],
               "python": sys.version.split()[0],
               "source_sha256": {name: hashlib.sha256(
                   Path(__file__).with_name(name).read_bytes()).hexdigest()

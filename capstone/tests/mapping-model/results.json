@@ -1,5 +1,6 @@
 {
-  "contract": "00626a232bda",
+  "contract_base": "00626a232bda",
+  "contract_revision": "global ranges, protected delivery, anonymous zeroing",
   "interleavings": [
     {
       "barrier_mode": "global",
@@ -976,15 +977,15 @@
     {
       "control": "Refused",
       "trace": [
-        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
         "publish()",
-        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "prepare_populate('m:d0', 128, 'm:p2', ('m:p1',))",
         "publish()",
-        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "prepare_create(1, 'm:p8', 'm:domain1', ResumeSlot(domain=1, name='p1'), 'm:d1', 160, 176, 'rw')",
         "publish()",
-        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "prepare_populate('m:d1', 160, 'm:p10', ('m:p9',))",
         "publish()",
-        "issue(0, 'd0:p0', 'store', 0, 99, None, None)",
+        "issue(0, 'd0:p0', 'store', 128, 99, None, None)",
         "walk(0,)",
         "walk(0,)",
         "walk(0,)",
@@ -1005,7 +1006,7 @@
       "trace": [
         "delin('m:p2',)",
         "physical_store_cap('m:p0', 1, 'm:p2')",
-        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
         "publish()"
       ],
       "variant": "uncleared_create",
@@ -1016,9 +1017,9 @@
       "trace": [
         "delin('m:p2',)",
         "physical_store_cap('m:p1', 1, 'm:p2')",
-        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
         "publish()",
-        "prepare_populate('m:d0', 0, 'm:p3', ('m:p1',))",
+        "prepare_populate('m:d0', 128, 'm:p3', ('m:p1',))",
         "publish()"
       ],
       "variant": "uncleared_populate",
@@ -1027,15 +1028,15 @@
     {
       "control": "Refused",
       "trace": [
-        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
         "publish()",
-        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "prepare_populate('m:d0', 128, 'm:p2', ('m:p1',))",
         "publish()",
-        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "prepare_create(1, 'm:p8', 'm:domain1', ResumeSlot(domain=1, name='p1'), 'm:d1', 160, 176, 'rw')",
         "publish()",
-        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "prepare_populate('m:d1', 160, 'm:p10', ('m:p9',))",
         "publish()",
-        "issue(0, 'd0:p0', 'store', 0, 99)",
+        "issue(0, 'd0:p0', 'store', 128, 99)",
         "walk(0,)",
         "walk(0,)",
         "walk(0,)",
@@ -1052,15 +1053,15 @@
     {
       "control": "safe",
       "trace": [
-        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
         "publish()",
-        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "prepare_populate('m:d0', 128, 'm:p2', ('m:p1',))",
         "publish()",
-        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "prepare_create(1, 'm:p8', 'm:domain1', ResumeSlot(domain=1, name='p1'), 'm:d1', 160, 176, 'rw')",
         "publish()",
-        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "prepare_populate('m:d1', 160, 'm:p10', ('m:p9',))",
         "publish()",
-        "issue(1, 'd1:p1', 'store', 0, 99, None, None)",
+        "issue(1, 'd1:p1', 'store', 160, 99, None, None)",
         "walk(0,)",
         "walk(0,)",
         "walk(0,)"
@@ -1071,13 +1072,13 @@
     {
       "control": "safe",
       "trace": [
-        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
         "publish()",
-        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "prepare_populate('m:d0', 128, 'm:p2', ('m:p1',))",
         "publish()",
-        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "prepare_create(1, 'm:p8', 'm:domain1', ResumeSlot(domain=1, name='p1'), 'm:d1', 160, 176, 'rw')",
         "publish()",
-        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "prepare_populate('m:d1', 160, 'm:p10', ('m:p9',))",
         "publish()",
         "begin_revoke('m:h0', 'm:root')",
         "invalidate(0,)",
@@ -1099,13 +1100,13 @@
     {
       "control": "safe",
       "trace": [
-        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
         "publish()",
-        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "prepare_populate('m:d0', 128, 'm:p2', ('m:p1',))",
         "publish()",
-        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "prepare_create(1, 'm:p8', 'm:domain1', ResumeSlot(domain=1, name='p1'), 'm:d1', 160, 176, 'rw')",
         "publish()",
-        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "prepare_populate('m:d1', 160, 'm:p10', ('m:p9',))",
         "publish()",
         "begin_revoke('m:h0', 'm:root')"
       ],
@@ -1115,13 +1116,13 @@
     {
       "control": "safe",
       "trace": [
-        "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+        "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
         "publish()",
-        "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+        "prepare_populate('m:d0', 128, 'm:p2', ('m:p1',))",
         "publish()",
-        "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+        "prepare_create(1, 'm:p8', 'm:domain1', ResumeSlot(domain=1, name='p1'), 'm:d1', 160, 176, 'rw')",
         "publish()",
-        "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+        "prepare_populate('m:d1', 160, 'm:p10', ('m:p9',))",
         "publish()",
         "begin_detach('m:d0', 'm:t0')",
         "invalidate(0,)",
@@ -1130,14 +1131,43 @@
         "drain(1,)",
         "finish()",
         "destroy('m:t0',)",
-        "prepare_create(0, 'm:p3', 'd0:pnew', 'm:dnew', 16, 'rw')",
+        "prepare_create(0, 'm:p3', 'm:domain0', ResumeSlot(domain=0, name='pnew'), 'm:dnew', 128, 144, 'rw')",
         "publish()",
-        "prepare_populate('m:dnew', 0, 'm:p5', ('m:p4',))",
+        "prepare_populate('m:dnew', 128, 'm:p5', ('m:p4',))",
         "publish()",
         "begin_revoke('m:h0', 'm:oldroot')"
       ],
       "variant": "stale_record",
       "violation": "I5: registry reservation released without DESTROY"
+    },
+    {
+      "control": "Refused",
+      "trace": [
+        "prepare_create(0, 'm:p0', 'm:domain0', 'm:leak', 'm:d0', 128, 144, 'rw')",
+        "publish()"
+      ],
+      "variant": "monitor_delivery",
+      "violation": "I3: monitor obtained logical data authority"
+    },
+    {
+      "control": "safe",
+      "trace": [
+        "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
+        "publish()",
+        "prepare_populate('m:d0', 128, 'm:p2', ('m:p1',))",
+        "publish()",
+        "prepare_create(1, 'm:p8', 'm:domain1', ResumeSlot(domain=1, name='p1'), 'm:d1', 160, 176, 'rw')",
+        "publish()",
+        "prepare_populate('m:d1', 160, 'm:p10', ('m:p9',))",
+        "publish()",
+        "physical_store('m:p3', 0, 4242)",
+        "delin('m:p7',)",
+        "physical_store_cap('m:p3', 1, 'm:p7')",
+        "prepare_populate('m:d0', 132, 'm:p3', ())",
+        "publish()"
+      ],
+      "variant": "unzeroed_frame",
+      "violation": "I4: anonymous frame not zeroed before publication"
     }
   ],
   "python": "3.12.3",
@@ -3382,7 +3412,7 @@
   "scenarios": [
     {
       "name": "check_permissions_and_inputs",
-      "refusals": 19
+      "refusals": 23
     },
     {
       "name": "check_reclamation",
@@ -3411,23 +3441,35 @@
     {
       "name": "check_generation_exhaustion_and_tokens",
       "refusals": 1
+    },
+    {
+      "name": "check_protected_delivery",
+      "refusals": 8
+    },
+    {
+      "name": "check_address_geometry",
+      "refusals": 9
+    },
+    {
+      "name": "check_anonymous_initialization",
+      "refusals": 1
     }
   ],
-  "schema": 2,
+  "schema": 3,
   "scope": "Stage-1 abstract model; not QEMU/RTL qualification",
   "source_sha256": {
-    "check.py": "30cd0094dec79d86158eef6e956eb4d1e80b2ecd7dacc0f923fe52c95d2b71ba",
-    "model.py": "75d257484156415f8501a2fc7492bf8314ff096563d642c7c17657f0d48f4e21"
+    "check.py": "9846c4a54ab351ac8497c7758e73eda0d372586c1270e2471781883b50c2e44c",
+    "model.py": "ccf620c1d0fa517bafa15fb46ad1a0b6a436e02da76c5750ff60e0d8650c414a"
   },
   "table_record_controls": {
     "trace": [
-      "prepare_create(0, 'm:p0', 'd0:p0', 'm:d0', 16, 'rw')",
+      "prepare_create(0, 'm:p0', 'm:domain0', ResumeSlot(domain=0, name='p0'), 'm:d0', 128, 144, 'rw')",
       "publish()",
-      "prepare_populate('m:d0', 0, 'm:p2', ('m:p1',))",
+      "prepare_populate('m:d0', 128, 'm:p2', ('m:p1',))",
       "publish()",
-      "prepare_create(1, 'm:p8', 'd1:p1', 'm:d1', 16, 'rw')",
+      "prepare_create(1, 'm:p8', 'm:domain1', ResumeSlot(domain=1, name='p1'), 'm:d1', 160, 176, 'rw')",
       "publish()",
-      "prepare_populate('m:d1', 0, 'm:p10', ('m:p9',))",
+      "prepare_populate('m:d1', 160, 'm:p10', ('m:p9',))",
       "publish()",
       "issue(0, 'd0:p0', 'store')",
       "walk(0,)",

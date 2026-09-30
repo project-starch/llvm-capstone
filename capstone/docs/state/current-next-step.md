@@ -2,9 +2,12 @@ Translated memory (2026-09-30): the
 [executable Stage-1 contract model](../../tests/mapping-model/README.md) and its
 bounded controls are available on `delegation-memory`. Coverage follow-up adds
 completed lifecycle operations, per-seed data requirements and an optional
-table-record experiment with foreign issue during barriers. Next review the
-restricted alphabets and record lifetime, then specify the capability-checking
-walker, protected binding lookup and complete access drain under
+table-record experiment with foreign issue during barriers. The contract also
+checks protected CREATE delivery, global range reservation and anonymous frame
+zeroing. Next review the restricted alphabets and record lifetime, then specify
+the physical/logical address partition and bounds encoding, protected recipient
+delivery, ordered page clearing, capability-checking walker, binding lookup and
+complete access drain under
 [candidate §10.3](../design/caplified-mapping-tables.md#103-rtl-question).
 The first prototype remains global. The optional record still needs bounded
 storage/reclamation and node-reuse handling. The model does not qualify RTL node

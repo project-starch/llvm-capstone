@@ -479,7 +479,11 @@ This makes section 9 more specific. Reuse conventional page-walker/TLB machinery
 but select and protect its translation context through the capability's binding.
 It is not enough to enable the current satp for C-mode loads. Per-application
 address spaces can organize mappings without becoming ambient authority that
-reinterprets a transferred capability. The exact logical-address layout and
+reinterprets a transferred capability. The later
+[mapping candidate §4](../design/caplified-mapping-tables.md#4-objects-and-capability-kinds)
+requires globally disjoint logical ranges above physical addresses, checked by
+CREATE and reserved until DESTROY, so address-only comparisons survive transfer.
+The exact numerical partition, compressed bounds and the remaining
 pointer-to-integer conversion contract remain ABI design items.
 
 ### Proposed representation strategy
