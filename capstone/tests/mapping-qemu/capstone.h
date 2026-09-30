@@ -166,4 +166,15 @@ _test_body:
     li a5, treg;                                      \
     MAPPOPULATE(s2, framereg)
 
+/* Return from a called domain to the monitor; the domain resumes at `label`
+ * on the next call. x1 holds the sealed-return capability from the call. */
+#define DOM_RETURN(label) lla t0, label; RETURN(x1, t0, x0)
+
+/* Two populated pages (PAGE_E at offset 0 with leaf table PAGE_F, PAGE_G at
+ * 0x1000) under SETUP_MAPPING. */
+#define POPULATE_TWO_PAGES        \
+    MINT_PAGE(s4, PAGE_F);        \
+    POPULATE(s3, PAGE_E, 0, 20);  \
+    POPULATE(s3, PAGE_G, 0x1000, 0)
+
 #endif
