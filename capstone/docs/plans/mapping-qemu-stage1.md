@@ -136,3 +136,17 @@ above 256 MiB at CREATE. The permission and type checks changed the emulator
 for every existing domain, which is what commit 6's regression run on the
 prebuilt SQLite memory gate checks; its outcome is in the parent commit that
 bumps the submodule pin.
+
+A review of that state found five faults, each with a measured probe, and the
+E6 codec item still open; four further emulator commits closed them. Locked
+slots and the registry's root no longer depend on a tag or a node number,
+which the supervisor's node collector clears and recycles: an untagged slot
+is none only when its words are zero, table-page nodes carry the mapping's
+binding and are live only with it, and DESTROY invalidates the senior node
+so the collector reclaims it. Every page an instruction takes, the delivery
+slot included, must be writable RAM before any effect. x1 and x3 are refused
+as delivery registers because cscall writes them after delivery; delivery
+through the supervisor's paused-resume path is not implemented. The codec's
+32-bit shift is fixed and `tests/unit/test-cap-compress` round-trips
+reservations up to 1 TiB across the logical region; the RTL's two codecs stay
+with M4.

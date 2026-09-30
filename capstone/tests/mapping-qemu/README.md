@@ -57,9 +57,18 @@ Rows refer to the design's §10.2 table; scenarios to the
 | destroy-then-create | a freed id and range come back with the next generation | CREATE twice for one id, then DESTROY the first |
 | frame-revoke-locks | a frame revoked from above returns UNINIT, its page faults, the neighbour lives | revoke the frame handle of a mapped frame |
 | table-revoke-subtree | a leaf table revoked after a warm cache makes its subtree fault | revoke a table page with a warm TLB |
+| gc-repopulate-locked (+control) | a revoked PTE stays locked after the node collector cleared its tag | I5 under the collector |
+| gc-revive-root (+control) | a revoked root stays dead after its node number was recycled | registry root under the collector |
+| destroy-node-reclamation (+control) | CREATE, DETACH, DESTROY rounds leak no node (32-node pool) | node lifetime |
+| populate-rom-frame, create-unbacked-root | pages must be writable RAM before any effect | initialisation must not be silent |
+| create-deliver-x1, create-deliver-x3, create-deliver-x5 | x1 and x3 are refused as delivery registers; x5 works | delivery contract |
+
+The codec itself has a unit test in the emulator, `tests/unit/test-cap-compress`,
+which round-trips reservations from 4 KiB to 1 TiB across the logical region.
 
 Not testable at one vCPU, as the plan records: the §8 window, foreign issue
 during a barrier, and every two-hart row. Not covered yet: the fault-in-domain
 exit path (a domain with an invalid trap vector exits the emulator with 0),
-the registry's generation exhaustion at 2^20-1, and the second-level limit of
-256 MiB per mapping.
+the registry's generation exhaustion at 2^20-1, the second-level limit of
+256 MiB per mapping, and delivery to a context resumed through the
+supervisor's paused-call path, which bypasses cscall.
