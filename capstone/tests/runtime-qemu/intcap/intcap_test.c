@@ -1,4 +1,5 @@
-/* __intcap end to end (intcap plan, Phases B and C), on QEMU.
+/* __intcap end to end (intcap plan, Phases B and C), as a delegated application:
+ * ../run-delegated-probes.py builds variants "intcap" and "intcap-uptr" from it.
  *
  * D is __uintcap_t (VARIANT "intcap") or unsigned long (VARIANT "uptr", the control).
  * Every value goes through volatile function pointers and across calls, so it is

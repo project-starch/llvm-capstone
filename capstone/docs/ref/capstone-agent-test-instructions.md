@@ -174,7 +174,24 @@ sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-all.txt"
 
 Expected: the aggregate prints each child wrapper before running it and stops on
 the first failure. Use the individual HostCall wrappers below for focused reruns
-and diagnosis.
+and diagnosis. These are the bare HostCall wire probes (an S-mode payload and a
+helper, no musl); no application runs on HostCall v0 any more.
+
+### Delegated runtime probes
+
+The runtime probes that run musl programs (constructors, exit paths, the unserved
+report, large I/O, mmap/shm, `__thread`, capability and sub-word atomics, MOVC,
+untagged CINCOFFSET/SCC) are delegated applications. Build them with an
+application SDK and run them in a running `capstone-vm` guest:
+
+```bash
+python3 capstone/tests/runtime-qemu/run-delegated-probes.py --sdk <SDK> \
+  --work "$CAPSTONE_TMP_ROOT/delegated-probes" --state <capstone-vm state> \
+  --report "$CAPSTONE_TMP_ROOT/delegated-probes.json"
+```
+
+Expected: one `PASS` line per variant and `N of N variants pass`, exit 0. The
+variants and what each checks are in `tests/runtime-qemu/README.md`.
 
 ### HostCall stdout proof
 

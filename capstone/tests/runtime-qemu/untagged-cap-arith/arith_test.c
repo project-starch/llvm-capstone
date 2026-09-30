@@ -7,8 +7,9 @@
  *   case 1  cincoffset on the integer 0x5000, by 8
  *   case 2  scc on the integer 0x5000, to 0x6000
  *
- * Today, spec and RTL: cases 1 and 2 raise Unexpected operand type (24). Under CHERI's rule they
- * would print 0x5008 and 0x6000. A QEMU without the scc fix aborts the whole machine at case 2.
+ * Today, spec and RTL: cases 1 and 2 raise Unexpected operand type (24): the application ends
+ * with SIGSEGV and a fault record naming cause 24. Under CHERI's rule they would print 0x5008 and
+ * 0x6000. A QEMU without the scc fix aborts the whole machine at case 2, so it runs last.
  */
 #include <stdio.h>
 

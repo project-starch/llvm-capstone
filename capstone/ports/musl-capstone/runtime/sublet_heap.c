@@ -6,8 +6,8 @@
  * after free both simply work. Measured on the FFmpeg app port, 2026-09-23
  * (ports/ffmpeg/app/host/safety-expect.txt).
  *
- * WHAT THIS IS. A binary buddy allocator over one LINEAR region the host transfers to the
- * domain (hostcall.c, CAPSTONE_PROGRAM_REGIONS), following the Sublet recipe exactly as the
+ * WHAT THIS IS. A binary buddy allocator over one LINEAR region the launcher transfers to the
+ * domain (hostcall.c's __capstone_region), following the Sublet recipe exactly as the
  * SQLite memsys5 patch applies it (ports/sqlite/sublet/sublet-3530300.patch):
  *   - every block has its own revocation node: split with sublet_split, and a handle senior
  *     to both halves taken first (sublet_handle), so that one revoke merges them again;
@@ -79,8 +79,8 @@
 #define SH_OUT  0x40u   /*                                  checked out to the program */
 #define SH_ORD  0x3Fu
 
-/* Handed over by hostcall.c: the first region the host shares after the two HostCall v0
-   regions, or null if it shared none. Taken once. */
+/* Handed over by hostcall.c: the first region the launcher shares after its own three,
+   or null if it shared none. Taken once. */
 void *__capstone_region(unsigned index);
 
 static sublet_cap sh_grant;

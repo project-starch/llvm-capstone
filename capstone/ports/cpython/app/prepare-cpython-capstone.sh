@@ -115,9 +115,8 @@ CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
 # program-independent and taken as they are -- 40/40 arms of the pymalloc defect
 # corpus stand on that code -- and PYMALLOC_DOMAIN selects backing.c's domain
 # form, whose arenas come from the shared region rather than from a native heap.
-# hostcall.c is rebuilt with CAPSTONE_PROGRAM_REGIONS so it parks the two regions
-# the adapter's init needs; the plain arm never sees any of this and stays
-# byte-identical.
+# hostcall.c parks the two program regions the adapter's init needs
+# (__capstone_region); the plain arm never asks for them.
 if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   PYM=$PORTS_DIR/cpython/pymalloc/src
   # THERE ARE TWO sublet.h AND THE ORDER DECIDES WHICH. capstone/sublet/sublet.h

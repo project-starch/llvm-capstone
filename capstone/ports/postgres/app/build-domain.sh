@@ -67,7 +67,7 @@ ARCHIVE=$ROOT/musl-build/libc-capstone.a
 [[ -f "$ARCHIVE" ]] || { echo "no $ARCHIVE" >&2; exit 2; }
 log "musl $MUSL, archive $ARCHIVE"
 
-# ---- the runtime, as musl-capstone/libc-test/build-libc-test.sh builds it ----
+# ---- the runtime: the shared application SDK --------------------------------
 INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
      -isystem "$MUSL/obj/include" -isystem "$MUSL/include")
 CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
