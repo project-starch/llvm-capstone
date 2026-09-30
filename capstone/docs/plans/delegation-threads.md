@@ -1,10 +1,14 @@
 # Delegated threads: one Linux thread per protected context
 
 Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES,
-PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1, B7), parking through the launcher
-(T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14) and musl's own threads on minted
-contexts (T4, Q4, B10 and B11), signals per context with cancellation (B8) and fifteen threads per
-application (T5) pass; the gates are next. Branch
+PROBE B DOMAIN PHASE PASSES: a transport per context (T1, B7), parking through the launcher
+(T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14), musl's own threads on minted contexts
+(T4, Q4, B10 and B11), signals per context with cancellation (B8), fifteen threads per application
+(T5) and a thread's name and CPU set. libc-test's thread group passes seven of nine
+(`pthread_cancel`'s asynchronous case waits for the doorbell, `sem_open` for file-backed mappings),
+and GLib's `GCond` passes. CPython's earlier gate-pass claim was premature: subprocess creation
+errors prevented child assertions from running. The review qualification below records the
+subprocess-enabled results and explicit exclusions. Open: asynchronous delivery (the doorbell). Branch
 `delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
 Probe A and Probe B test.
 
@@ -256,6 +260,70 @@ Done so far:
   request and the call, both fail. Found by GLib's `thread6` (a thread's name read back empty)
   and `thread7` (it sets a thread's CPU set), and by CPython's `ThreadPoolExecutor()`, whose
   default worker count asks for the CPU set.
+- Signal/read probe review (2026-09-30): `kill-thread` no longer guesses that the
+  worker has entered `read` after sleeping 40 ms. It names the worker, observes that Linux
+  thread blocked in the empty-pipe `read` through `/proc/self/task`, then signals it.
+  `kill-thread-early` forces one delivery before the read, then verifies a second delivery
+  interrupts the observed read. Error cleanup releases the worker and writes a byte before
+  joining. Native ASan/UBSan CTest passes 44/44, including the deliberately missing second
+  signal returning failure in 3.01 s; the guest pthread probe passes 29/29. Record
+  `runtime/tests/application/results/20260930-kill-thread-review.json`. The guest result
+  belongs to `06a0846e`, which restores `reader_tid` for `mask-routing`; `7777c481` alone
+  does not build the domain probe. Land the pair together as one logical change so the
+  shared branch remains buildable at every commit. Keep the pushed lane history intact.
+  This removes a known test race; the earlier intermittent timeout's exact schedule
+  was not recorded, so its
+  individual cause remains unproven. This is synchronous delivery, not the doorbell.
+- Initial CPython evidence, before subprocess patch 0015: CPython 3.13.7 with C11 thread-locals
+  (patch 0006 and its define are gone) and patch 0016, which keeps the join handle and the raw
+  mutex's waiter link as pointers (without it the first `Thread.join` faults in `pthread_join`,
+  and a contended `_PyRawMutex` at
+  `waiter->next`). In the guest `test_threading` runs all 212 tests: 28 errors, all fork (26
+  through `subprocess`, 1 `os.fork`) or sixteen threads at once, 13 skipped; `test_thread`
+  (without `test_forkinthread`, which blocks for good when fork is refused), `test_threading_local`
+  and `test_queue` pass; the thread pool fails only on a process pool and a fork. Found on the
+  way: C-75, a compiler defect (`compiler/cap-init-alias`): a pointer slot whose initializer
+  names an alias was never tagged, so musl's `fork()` faulted on its table of lock pointers once a
+  second thread existed; libc-test's `raise-race` had met it since T4. Record
+  `ports/cpython/app/results/threads-2026-09-30.json`.
+- CPython review qualification with patch 0015: subprocess now goes through the launcher's
+  `posix_spawn`, while fork remains ENOSYS. `host/run-thread-gate.py` checks refusal beside
+  four live threads, then enables upstream's explicit no-fork skips before loading tests.
+  Configure disables unsupported epoll so `selectors` does not emit an UNSERVED diagnostic
+  on child stderr. The rerun exposed level0 retaining the full 32 KiB allocation after
+  CPython shrank a short-read buffer: capturing a recursive child's output exhausted the
+  parent at 128 MiB and 192 MiB. Level0 now releases and coalesces the unused tail. The native
+  control fails at allocation 31 before the fix. Afterwards, native and domain controls retain
+  4,096 buffers, preserve pointers through regrowth and recover a 900 KiB free block.
+  With the fix, all five CPython suites pass at 64 MiB: 448 tests, 38 reported skips, no
+  errors or failures. Subprocess smoke passes 21/21; of the 26 earlier creation errors,
+  18 now pass, seven skip actual fork and one skips the root-only rlimit check. Native
+  ASan/UBSan CTest passes 45/45 and the rebuilt pthread probe passes 29/29. Record
+  `ports/cpython/app/results/thread-review-2026-09-30.json` preserves the failed
+  runs and every explicit exclusion. This qualifies the supported threading profile, not
+  asynchronous delivery, fork or the omitted optional/resource-dependent tests.
+- Allocator regression follow-up (2026-09-30, source `8d1a09fb`, including `7795986d`):
+  rebuilt the SDK and application contract and relinked Perl/mruby against the new level0.
+  Port object hashes match the previous run; the runtime archives and images are fresh.
+  The application gate passes all 21 result lines. libc-test functional is 57 PASS,
+  3 FAIL, 1 FAULT, 3 NOBUILD, 13 EXCLUDED; the selected regressions are 12 PASS,
+  3 FAIL on refused fork and 1 NOBUILD because the test replaces malloc. Every verdict
+  matches the preceding T5/C-75 run, with no lost pass. This closes the missing
+  application/libc regression run after the shrinking-realloc change; it does not
+  qualify every application port. Shrinking invalidates the released tail: accesses
+  beyond the new requested size are not supported. Pins, per-test results and hashes:
+  `runtime/tests/application/results/20260930-level0-application-regressions.json`.
+- Process-lane integration: retain this lane's real TLS and pointer-preserving patch 0016
+  when resolving `prepare-cpython-capstone.sh` and the CPython README. Keep CPython patch
+  0006 deleted and `_Py_THREAD_LOCAL_AS_GLOBAL` absent. Patch 0015 and
+  `host/subprocess-smoke.py` match process-lane `dae66593` byte for byte; keep the spawn
+  configure define and the unsupported-epoll guard. See the port README for the gate.
+- Scanner follow-up: stored cursor values now have to match the relocation target and
+  addend, preserving nonlocal symbol identity (including weak aliases). Unknown values
+  and unexpected analyzer exceptions are INCOMPLETE (exit 2). Thirteen controls pass;
+  the repeated 1,629-object scan has no wrong values or incomplete analyses and retains
+  only the intentional SDK integer-address anchor. Tags, bounds and authority remain
+  outside this check. Run `tests/capinit-unwritten-slots-test.py` with the pinned compiler.
 - An independent review of B8 (2026-09-30) found five defects, all fixed: a delivery read the
   shared handler table unlocked while another context could change it (the action is now copied
   under a leaf lock); glibc's `sigaddset` refuses signals 32 and 33, so the trampoline could not
@@ -1212,5 +1280,10 @@ runtime as generally thread-capable. Gates:
 - the libc-test thread group leaves the excluded set (seven of the nine pass after B8;
   `pthread_cancel` waits for the doorbell, `sem_open` for file mappings, not threads);
 - GLib's `GCond` in the tshark deps (the `pthread_cond_t` size fix, e2c9ad3; the layout itself is
-  fixed by musl patch 0004);
-- CPython's basic `threading` tests.
+  fixed by musl patch 0004): pass 2026-09-30, glib-0008 is gone and GLib's own `cond` test passes
+  in a domain, with `thread`, `rec-mutex` and `asyncqueue`; `mutex`, `once` and `rwlock` stop only
+  at their hundred-thread tests (`runtime/tests/application/results/20260930-glib-threads.json`);
+- CPython's basic `threading` tests: the subprocess-enabled review run passes all five modules
+  (448 tests, 38 reported skips) after the level0 shrinking-realloc fix. Use
+  `ports/cpython/app/results/thread-review-2026-09-30.json` for the explicit exclusions;
+  subprocess errors in the original `threads-2026-09-30.json` were blocked tests, not passes.

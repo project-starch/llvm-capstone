@@ -19,7 +19,8 @@
 #   1. native: GLib's own glib test suite passes on the host with the port's patches applied
 #      (they are __CAPSTONE__-guarded except gqsort's copy, which the qsort tests cover);
 #   2. cross: libglib-2.0.a builds with 0 failures and the cast census on, and is installed;
-#   3. GLib's own tests for qsort, hash tables, arrays, lists, strings, UTF-8 and GRegex link as
+#   3. GLib's own tests for qsort, hash tables, arrays, lists, strings, UTF-8, GRegex and the
+#      thread primitives (GCond, GMutex, GOnce, GThread, GRecMutex, GRWLock, GAsyncQueue) link as
 #      capstone64 domains.
 set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/env.sh"
@@ -67,9 +68,6 @@ cat > "$X/capstone64.cross" <<CROSSEOF
 c = '$CC'
 ar = '$AR'
 pkg-config = 'pkg-config'
-
-[built-in options]
-c_args = ['-DCAPSTONE_SINGLE_THREAD_DOMAIN']
 
 [properties]
 needs_exe_wrapper = true
@@ -135,12 +133,14 @@ Cflags: -I\${prefix}/include/glib-2.0 -I\${prefix}/lib/glib-2.0/include
 PCEOF
 echo "glib: installed into $TS_DEPS_PREFIX"
 
-# 3. GLib's own tests link as domains.
-GT=(sort hash array-test slist list string strfuncs utf8-misc regex)
+# 3. GLib's own tests link as domains, with the flags glib/tests/meson.build gives them
+#    (test_cargs): without G_LOG_DOMAIN a test expecting GLib's own critical waits for it
+#    under the wrong domain.
+GT=(sort hash array-test slist list string strfuncs utf8-misc regex cond mutex once thread rec-mutex rwlock asyncqueue)
 nlink=0
 for t in "${GT[@]}"; do
   if "$CC" -O1 -I"$I" -I"$TS_DEPS_PREFIX/lib/glib-2.0/include" -I"$TS_DEPS_PREFIX/include" -I"$X/build/glib" -I"$X/glib" -I"$X/build" \
-       -DGLIB_DISABLE_DEPRECATION_WARNINGS -o "$LOG/$t.dom" "$X/glib/tests/$t.c" -lglib-2.0 -lpcre2-8 \
+       -DGLIB_DISABLE_DEPRECATION_WARNINGS '-DG_LOG_DOMAIN="GLib"' -UG_DISABLE_ASSERT -o "$LOG/$t.dom" "$X/glib/tests/$t.c" -lglib-2.0 -lpcre2-8 \
        > "$LOG/link-$t.log" 2>&1; then nlink=$((nlink + 1)); else echo "glib: $t did not link (see $LOG/link-$t.log)" >&2; fi
 done
 echo "glib: $nlink of ${#GT[@]} GLib test programs link as domains"

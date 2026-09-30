@@ -65,7 +65,10 @@ the GC list links `_gc_next`/`_gc_prev` as `uintptr_t` with flag bits, which is 
 object -- then `Objects/obmalloc.c` (13; the pymalloc port already carries the replacement,
 `../pymalloc/patches/cpython-3.13.7-0002`). `Modules/_elementtree.c` (19) and
 `Python/tracemalloc.c` (8) are off the startup path. The warning sees explicit casts only, not a
-pointer carried through `memcpy` or a union, so the census is a lower bound.
+pointer carried through `memcpy` or a union, and only a cast from `uintptr_t` or `intptr_t`:
+`(void *)(unsigned long)x` gets clang's generic `-Wint-to-void-pointer-cast` instead (checked
+2026-09-30 through the SDK's `capstone-cc`). `signal.pthread_kill`'s `(pthread_t)thread_id` is such
+a site. The census is a lower bound.
 
 ## First link, 2026-09-23
 
@@ -165,7 +168,7 @@ What keeps the number honest:
   links a real domain image against the archive musl compiled to; `prepare` refuses to continue
   unless `strlen` links and both an undefined function and `-lz` are refused.
 * **Settings are read back.** `prepare` checks in what `configure` wrote that the static module
-  build, `config.site`, the thread-local define and the absence of computed gotos all took effect.
+  build, `config.site` and the absence of computed gotos all took effect.
   (The first of these checks was added after a comment line inside a continued command silently
   dropped two environment settings.)
 
@@ -177,7 +180,6 @@ What keeps the number honest:
 | `CC=toolchain/capstone-cc` | compiles with the flags the working musl domains use (`+m +a`, `-ffreestanding -fno-builtin -fno-jump-tables`, musl headers); links a real domain image so `HAVE_*` answers are about this libc |
 | `MODULE_BUILDTYPE=static` | no `dlopen` in a domain; every module is built in |
 | `--without-computed-gotos` | a table of `&&label` values is emitted without capability-init records and loads untagged; the first dispatch faults. It compiles cleanly, so no compile survey could flag it; the flag selects CPython's `switch` dispatch instead. `docs/history/05-08-2026_06-00-00_gp-captable-lua-bringup.md` |
-| `-D_Py_THREAD_LOCAL_AS_GLOBAL` (+ patch 0006) | capstone64 cannot lower TLS (C-47); a domain has one hart and no clone, so a thread-local has one instance |
 | `-Xclang -fexperimental-assignment-tracking=disabled` | C-50; keeps `-g` |
 | `--with-pkg-config=no` | the host's pkg-config would hand over host library flags |
 | `config.site` | no `/dev/ptmx` or `/dev/ptc`; `getaddrinfo` not buggy (it is never run) |
@@ -209,9 +211,109 @@ assumption it corrects and why the replacement is right; all six leave every pla
 | 0003 | `pycore_obmalloc.h` | the radix tree indexes 64 address bits (as `../pymalloc` decided) |
 | 0004 | `pycore_pyhash.h` | the pointer hash is of the address; it is never converted back |
 | 0005 | `pycore_qsbr.h` | false-sharing padding assumed the per-thread state fits in 64 bytes |
-| 0006 | `pyport.h` | opt-in: thread-locals as globals in a process that cannot start a thread |
+| 0016 | `pycore_pythread.h`, `pycore_lock.h`, `lock.c` | a thread's join handle and a raw mutex's waiter link were pointers kept in integers |
 
 None of them makes a pointer↔integer ROUND TRIP safe; the census above is where those are.
+
+## Threads on the delegated runtime (2026-09-30)
+
+On `delegation-threads`, where musl's own `pthread_create` runs on minted contexts, `threading`
+works: thread-locals are C11 thread-locals (C-47 is fixed, so patch 0006 and
+`-D_Py_THREAD_LOCAL_AS_GLOBAL` are gone; `_Py_tss_tstate` is a TLS symbol in `Python/pystate.o`),
+and patch 0016 keeps two thread words as pointers: the join handle (`PyThread_handle_t`, a
+`pthread_t`) and the raw mutex's waiter link. Without it the first `Thread.join` faults in
+`pthread_join`, and a contended `_PyRawMutex` faults at `waiter->next`.
+`host/rawmutex-test.c`, linked with `host/link-rawmutex.py` in place of `Programs/python.o`, is
+the raw mutex's directed test: CPython's thread suites never reach its waiter branch, natively
+either.
+
+Initial results, before subprocess patch 0015, with the survey's 250 objects linked by
+`common/application/build.py`
+(record [results/threads-2026-09-30.json](results/threads-2026-09-30.json)):
+
+| suite | ran | result | errors, by cause |
+|---|---:|---|---|
+| `test.test_threading` | 212 | 28 errors, 13 skipped | 26 `subprocess` (fork_exec needs fork), 1 `os.fork`, 1 sixteen threads at once (fifteen per application) |
+| `test.test_thread` | 34 | OK | `test_forkinthread` left out: with fork refused it blocks for good |
+| `test.test_threading_local` | 22 | OK, 2 skipped | |
+| `test.test_queue` | 162 | OK, 6 skipped | |
+| `test.test_concurrent_futures.test_thread_pool` | 17 | 2 errors | a process pool (`_multiprocessing` is n/a), a fork |
+| `host/rawmutex-test.c` | | 160000 of 160000, twice | |
+
+Those 26 subprocess errors occurred before the child reached its assertions. Seven of those
+tests also fork inside the child, so enabling subprocess alone cannot make all 26 pass.
+Fork remains refused by design (`docs/plans/delegation-abi.md`).
+
+### Review qualification with subprocess enabled
+
+Patch 0015 is now included, with `-D_Py_FORK_EXEC_POSIX_SPAWN` checked in configure's output.
+The existing launcher runs the spawn; there is no domain fork implementation. Configure also
+disables `select.epoll`: musl exports its functions, but this runtime does not serve them.
+Advertising that feature made `selectors` probe `epoll_create1` and left an unexpected UNSERVED
+diagnostic on an otherwise successful child's stderr. The supported `select.poll` remains.
+
+Run `host/run-thread-gate.py` inside the domain, optionally with one or more test module names.
+It first verifies `os.fork()` returns ENOSYS beside four live threads and joins all four. It then
+sets upstream's `test.support.has_fork_support` to false **before loading tests**, so upstream's
+own fork decorators report explicit skips. Subprocess-only tests remain enabled. Unlike the
+initial `test_thread` run, `test_forkinthread` is now reported as a skip rather than omitted.
+The runner prints `THREAD_GATE_RESULT` JSON with every skip, error and failure and returns a
+failing status for any unexpected result.
+
+The final rerun uses one fresh interpreter per module, a 64 MiB level0 arena, guest CMA of
+1024 MiB and process cache of 768 MiB. All five suites pass with explicit upstream exclusions:
+
+| suite | ran | skipped | errors / failures |
+|---|---:|---:|---:|
+| `test_threading` | 212 | 26 | 0 / 0 |
+| `test_thread` | 35 | 2 | 0 / 0 |
+| `test_threading_local` | 22 | 2 | 0 / 0 |
+| `test_queue` | 162 | 6 | 0 / 0 |
+| `test_concurrent_futures.test_thread_pool` | 17 | 2 | 0 / 0 |
+
+`host/subprocess-smoke.py` passes 21/21 with no UNSERVED diagnostic. Of the original 26
+subprocess-creation errors in `test_threading`, 18 now pass, seven explicitly skip actual fork,
+and one skips because RLIMIT_NPROC has no effect as root.
+
+The rerun also exposed a level0 allocator limitation: CPython allocates a 32 KiB buffer for
+`os.read`, then shrinks it to the actual short read. The allocator kept the full block even
+after shrinking. Capturing the recursive exception child's stderr exhausted the parent;
+`test_threading` had four MemoryErrors followed by two thread-creation errors at both 128 MiB
+and 192 MiB. The recursive test failed alone too; the other five passed separately. Running
+the child directly produced about 600 KiB and ended with SIGINT. The signal originates
+in the test itself: `test_print_exception_gh_102056` starts a worker that calls
+`_thread.interrupt_main()` after one second. This schedules SIGINT's Python handler;
+the resulting unhandled `KeyboardInterrupt` makes `Py_RunMain` call `exit_sigint`
+(`Modules/main.c`), restore `SIG_DFL` and call `kill(getpid(), SIGINT)`. Both the native
+control and the domain child report signal 2. The test uses `assert_python_failure`;
+this termination is expected and does not require asynchronous domain delivery.
+
+Level0 now splits and coalesces the unused tail under its heap lock. The
+[directed allocator control](../../../runtime/tests/application/results/20260930-level0-realloc-review.json)
+fails at allocation 31 before the fix; afterwards it retains 4,096 short reads in 1 MiB,
+preserves capability payloads through shrink and regrowth, and recovers a 900 KiB free block.
+The complete CPython run then passes at the original 64 MiB. Native ASan/UBSan CTest passes
+45/45 and the rebuilt domain pthread probe passes 29/29. The subsequent
+[allocator regression run](../../../runtime/tests/application/results/20260930-level0-application-regressions.json)
+relinks Perl and mruby with the new allocator: application gate 21/21, libc-test 57 PASS
+and selected regressions 12/16, with every libc verdict unchanged from the earlier run.
+
+[results/thread-review-2026-09-30.json](results/thread-review-2026-09-30.json) contains the
+build hashes, every skip, the outcomes of all 26 formerly blocked tests, and the failed
+64/128/192 MiB runs. The original gate-pass claim was premature; this subprocess-enabled
+result replaces it. Fork, unavailable optional test modules and resource exclusions remain
+explicit in the record. This does not establish unrestricted CPython or asynchronous delivery.
+
+### Integrating the process lane
+
+These results are on `delegation-threads`, not yet on `dev`. Resolve the preparation
+script and README conflicts by retaining this lane's real TLS: CPython patch 0006
+stays deleted and `_Py_THREAD_LOCAL_AS_GLOBAL` stays absent. Keep patch 0016, spawn
+patch 0015, `-D_Py_FORK_EXEC_POSIX_SPAWN` and the unsupported-epoll guard. Patch 0015
+and `host/subprocess-smoke.py` are byte-identical to process-lane `dae66593`.
+Rebuild and run the gate after integration; the current record does not qualify an
+as-yet unbuilt merge. The [thread plan](../../../docs/plans/delegation-threads.md)
+also records which signal-probe commits must land together.
 
 ## What this does not establish
 

@@ -1,5 +1,9 @@
 # Capstone project documentation
 
+Lane-only work on `delegation-threads` (not landed on `dev`):
+[thread plan and integration constraints](plans/delegation-threads.md),
+[CPython qualification](../ports/cpython/app/README.md#review-qualification-with-subprocess-enabled).
+
 Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
 Seven application recipes are migrated, with new QEMU functional and safety
 qualification, explicit compiler/resource requirements and preserved negative

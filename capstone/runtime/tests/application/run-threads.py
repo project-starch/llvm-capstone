@@ -79,6 +79,7 @@ PTHREAD_MODES = {
     "main-exit-more": ("exit", 0, "main-exit-more: PASS", None, None),
     # B8: signals per thread, and cancellation.
     "kill-thread": ("exit", 0, "PASS", None, None),
+    "kill-thread-early": ("exit", 0, "PASS", None, None),
     "mask-routing": ("exit", 0, "PASS", None, None),
     "raise-thread": ("exit", 0, "PASS", None, None),
     "sigwait-thread": ("exit", 0, "PASS", None, None),
