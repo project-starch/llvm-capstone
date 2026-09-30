@@ -56,11 +56,14 @@ static size_t l0_round(size_t n)
 	return (n + (L0_ALIGN - 1)) & ~(size_t)(L0_ALIGN - 1);
 }
 
-/* CAPSTONE_LEVEL0_SHRINK: per-object heap bounds, opt-in. Without it every pointer this
- * allocator returns carries the bounds of the WHOLE ARENA, so an overflow from one object
- * into the next is not a fault -- which is the default, and which is what every port built
- * on this file has had. With it, malloc narrows the returned capability to exactly the n
- * bytes asked for (the rv8 allocators' shrink, benchmarks/rv8/adapted/rv8_malloc.c).
+/* CAPSTONE_LEVEL0_SHRINK: per-object heap bounds, ON by default since 2026-09-30. An
+ * ordinary program calling an ordinary malloc gets a pointer bounded to the object it asked
+ * for, so an overflow from one object into the next faults; malloc narrows the returned
+ * capability to exactly the n bytes requested (the rv8 allocators' shrink,
+ * benchmarks/rv8/adapted/rv8_malloc.c). Build with -DCAPSTONE_LEVEL0_SHRINK=0 for the old
+ * behaviour, where every pointer carries the bounds of the WHOLE ARENA and that overflow is
+ * not a fault. The switch remains because the heap qualification needs an unprotected arm as
+ * its control (runtime/tests/application/run-heap.py).
  *
  * Two things follow, and both are the reason this is a macro and not a one-line change:
  *  - the header sits BELOW the payload, outside a narrowed pointer, so free and realloc
@@ -74,7 +77,10 @@ static size_t l0_round(size_t n)
  * rounded outward to its representable granule (the RTL's encoder), since block bases here are
  * only 16-aligned; capstone-qemu keeps full precision for stored capabilities (cap_mem_map.h)
  * and does not show that. */
-#if defined(CAPSTONE_LEVEL0_SHRINK) && CAPSTONE_LEVEL0_SHRINK
+#ifndef CAPSTONE_LEVEL0_SHRINK
+#define CAPSTONE_LEVEL0_SHRINK 1
+#endif
+#if CAPSTONE_LEVEL0_SHRINK
 static void *l0_narrow(void *p, size_t n)
 {
 	unsigned long c = __builtin_capstone_cap_get_cursor(p);

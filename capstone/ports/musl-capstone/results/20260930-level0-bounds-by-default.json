@@ -1,0 +1,77 @@
+{
+ "date": "2026-09-30",
+ "change": "CAPSTONE_LEVEL0_SHRINK is on by default: level0, the heap every application port links unless it asks for another, now narrows each returned pointer to the bytes requested. -DCAPSTONE_LEVEL0_SHRINK=0 restores the old behaviour and is what the heap qualification's control needs.",
+ "what_it_does_not_give": "temporal safety. free still only marks the block free, so a stale pointer keeps working and reads whatever occupies the memory next. That is sublet_heap.c's job and is unchanged here.",
+ "prior_state": "the switch has existed since 2026-09-23 (5e7157e20bb0, 'per-object heap bounds (opt-in)') and was defined nowhere: no build, no gate, no port turned it on. The threads lane's 'Qualify level0 shrink across the application and libc gates' (92d21b84) is a different shrink -- realloc releasing an unused tail (7795986d) -- and did not bound objects.",
+ "platform": {
+  "qemu_sha256": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "module_sha256": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+  "launcher_sha256": "81a966503e86fec6562342cf9173017d5cdd28c89f297cfcde1c0f5973341b23",
+  "compiler": "lane/compiler-stack-68c75ed3",
+  "libc": "the #144 kit's libc-capstone.a"
+ },
+ "matched_pair": {
+  "method": "one contract source, two images: the default (bounds) and -DCAPSTONE_LEVEL0_SHRINK=0 (the control). Run through application-supervisor, which is what run-heap.py uses.",
+  "images": {
+   "bounds": "a75d4088b74853b3ff5527d14730bb990db378e8d1cfbf1dcce6ecde6ba35bd2",
+   "control": "315ab4b980d4d15d108586560f5307b6d09499f82890655a2837612d54106c05"
+  },
+  "cases": {
+   "fault-bounds (one byte past a 24-byte object)": {
+    "bounds": "SIGSEGV, cause=5",
+    "control": "survives, exit 90"
+   },
+   "fault-bounds-large (one byte past a 5000-byte object)": {
+    "bounds": "SIGSEGV, cause=5",
+    "control": "survives, exit 90"
+   },
+   "heap-bounds": {
+    "bounds": "completes",
+    "control": "completes"
+   },
+   "heap-neighbour": {
+    "bounds": "completes",
+    "control": "completes"
+   },
+   "heap-companion (realloc keeps a stored capability; a failed realloc leaves the original usable)": {
+    "bounds": "completes",
+    "control": "completes"
+   },
+   "healthy": {
+    "bounds": "completes",
+    "control": "completes"
+   }
+  },
+  "reading": "the protection fires on both size classes and the control misses both, so the check is meaningful and the legitimate heap paths are unaffected"
+ },
+ "regression": {
+  "application_gate": "run.py --repeat 1 on the bounds image: 25 PASS, 0 FAIL",
+  "gate_caveat": "the gate's perl.dom and mruby.dom come from the #144 kit and were built against the unbounded heap, so the gate proves the contract image, not those two ports",
+  "mruby": {
+   "pin": "4.0.0-rc2, rebuilt against this runtime",
+   "native": {
+    "total": 1648,
+    "ok": 1639,
+    "ko": 0,
+    "crash": 0,
+    "skip": 9
+   },
+   "domain": {
+    "total": 1648,
+    "ok": 1639,
+    "ko": 0,
+    "crash": 0,
+    "skip": 9
+   },
+   "per_test": "1609 tests compared one by one, 0 differ",
+   "reading": "a real interpreter whose every malloc is now bounded passes its own suite exactly as it does natively"
+  }
+ },
+ "consequence_for_the_heap_qualification": "run-heap.py hard-codes level0 as the unprotected control (control = label == 'level0' and mode in FAULTS, then 'control faulted' must not fire). With bounds on by default that control must be built with -DCAPSTONE_LEVEL0_SHRINK=0, or its two bounds cases fault on both arms and the gate fails. applications.md now says so and names the control image contract-noshrink.dom.",
+ "not_measured": [
+  "libc-test has not been re-run against the bounded heap",
+  "no port other than mruby was rebuilt against it; Perl, CPython, SQLite, FFmpeg and tshark are untouched here",
+  "silicon: level0.c already records that a narrowed capability of 4 KiB or more, stored and reloaded, is rounded outward to its representable granule because block bases are only 16-aligned. capstone-qemu keeps full precision, so this measurement does not see it, and a large object's bounds on the board may be wider than the request"
+ ]
+}

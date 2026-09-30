@@ -594,13 +594,19 @@ see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
 The libc heap qualification runs the heap cases of `contract.c` once on the
 `HEAP=sublet` image and once on a `HEAP=level0` image of the same source,
-which is the control: every `fault-*` case must be a SIGSEGV on the first and
+which is the control. That control must be built with
+`-DCAPSTONE_LEVEL0_SHRINK=0`: level0 bounds each object by default, and an arm
+that bounds them is not the unprotected arm this measurement needs -- with
+bounds on, `fault-bounds` and `fault-bounds-large` fault there too, on cause 5.
+Every `fault-*` case must be a SIGSEGV on the first and
 must reach the survival marker and exit 90 on the second; every `heap-*` case
 must complete on both. The protected fault must occur at the intended byte
 probe with the expected QEMU cause. Churn must allocate at least 200,000
 nodes. A setup error, unrelated fault or early exhaustion fails the gate.
 
-Build each image with an LLD map, using
+Build the control with `-DCAPSTONE_LEVEL0_SHRINK=0` in `CMAKE_C_FLAGS`; the
+default `application-contract.dom` is no longer unprotected. Build each image
+with an LLD map, using
 `-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake
 configuration. The runner requires both ELFs and maps (default map path:
 `<elf>.map`; override with `--sublet-map` and `--control-map`). It checks the
@@ -611,7 +617,7 @@ guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 ```sh
 python3 capstone/runtime/tests/application/run-heap.py \
   --state "$CAPSTONE_TMP_ROOT/dev-vm" \
-  --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/application-contract.dom \
+  --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/contract-noshrink.dom \
   --sublet-elf <build>/contract-sublet.dom --control-elf <build>/application-contract.dom \
   --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \
   --platform <kernel> <firmware> <rootfs> <qemu> <launcher> --report heap.json
