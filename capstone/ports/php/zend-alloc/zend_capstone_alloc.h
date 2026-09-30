@@ -91,6 +91,42 @@ typedef struct _zend_mem_header {
 #  define ZEND_CAP_BOUND_BYTES(size) ((unsigned long)(size))
 #endif
 
+/* ZEND_CAP_TAG_GUARD: diagnostic only, OFF by default so the CRASH-008 and UAF suites are
+ * byte-identical without it. When on, _emalloc checks that the pointer it is about to hand
+ * out is actually TAGGED, and if not reports the REQUESTED SIZE through the fault channel
+ * (php_fault_report mints a cap over [v,v+8) and stores at +64, so the monitor prints
+ * badaddr = v+64) and returns NULL instead. An untagged pointer handed to a caller shows up
+ * far away as a cause-24 inside memcpy with no indication of which allocation produced it. */
+#if defined(ZEND_CAP_TAG_GUARD)
+extern void php_fault_report(unsigned long);
+#  define ZEND_CAP_CHECK_TAG(ptr, size)                                        \
+    do {                                                                       \
+        if (!__builtin_capstone_cap_get_tag((void *)(ptr))) {                   \
+            php_fault_report((unsigned long)(size));                           \
+            return (void *)0;                                                  \
+        }                                                                      \
+    } while (0)
+#else
+#  define ZEND_CAP_CHECK_TAG(ptr, size) do { } while (0)
+#endif
+
+/* ZEND_CAP_ARENA_TRACE: diagnostic only, OFF by default. Answers one question -- does the
+ * arena actually RUN OUT during a run, or is a downstream fault something else? Both
+ * exhaustion modes are reported separately, because they are different bugs:
+ *
+ *   0x5E000000 | KB-remaining   the BYTE arena is too small to carve the request
+ *   0x51000000 | slots-in-use   the SLOT TABLE (ZEND_MAX_SLOTS) is full
+ *
+ * Reported through php_fault_report, which mints a capability over [v, v+8) and stores at
+ * +64, so the monitor prints `badaddr = v + 64`. That channel survives a domain that then
+ * wedges or faults, which an ordinary return value does not. */
+#if defined(ZEND_CAP_ARENA_TRACE)
+extern void php_fault_report(unsigned long);
+#  define ZEND_ARENA_NOTE(v) php_fault_report((unsigned long)(v))
+#else
+#  define ZEND_ARENA_NOTE(v) do { } while (0)
+#endif
+
 #ifndef ZEND_ARENA_BYTES
 #  define ZEND_ARENA_BYTES 16384
 #endif
@@ -191,7 +227,10 @@ static void *zend_arena_carve(unsigned long bytes, unsigned long bound_bytes)
     unsigned long base = __builtin_capstone_cap_get_base(cur);
     unsigned long end  = __builtin_capstone_cap_get_end(cur);
     /* cssplit asserts base < mid < end, so the arena must keep a non-empty head. */
-    if (end <= base || end - base <= bytes) { return (void *)0; }
+    if (end <= base || end - base <= bytes) {
+        ZEND_ARENA_NOTE(0x5E000000UL | (((end > base) ? (end - base) : 0UL) >> 10));
+        return (void *)0;
+    }
 
     void *hi   = zend_split(&cur, end - bytes); /* [end-bytes, end), fresh node, LIN */
     zend_arena_lin = cur;
@@ -202,7 +241,10 @@ static void *zend_arena_carve(unsigned long bytes, unsigned long bound_bytes)
     unsigned i;
     for (i = 0; i < zend_nslots; ++i) { if (zend_slots[i].base == 0) { break; } }
     if (i == zend_nslots) {
-        if (zend_nslots >= ZEND_MAX_SLOTS) { return (void *)0; }
+        if (zend_nslots >= ZEND_MAX_SLOTS) {
+            ZEND_ARENA_NOTE(0x51000000UL | (unsigned long)zend_nslots);
+            return (void *)0;
+        }
         i = zend_nslots++;
     }
     zend_slots[i].rev  = rev;
@@ -245,7 +287,10 @@ static void *_emalloc(size_t size)
         unsigned i;
         for (i = 0; i < zend_nslots; ++i) { if (zend_slots[i].base == 0) { break; } }
         if (i == zend_nslots) {
-            if (zend_nslots >= ZEND_MAX_SLOTS) { return (void *)0; }
+            if (zend_nslots >= ZEND_MAX_SLOTS) {
+            ZEND_ARENA_NOTE(0x51000000UL | (unsigned long)zend_nslots);
+            return (void *)0;
+        }
             i = zend_nslots++;
         }
 #if defined(ZEND_TEMPORAL) && !defined(ZEND_NO_REVOKE)
@@ -272,6 +317,7 @@ static void *_emalloc(size_t size)
         unsigned long bb = __builtin_capstone_cap_get_cursor(blk);
         p = (zend_mem_header *) __builtin_capstone_cap_shrink(blk, bb,
                 bb + sizeof(zend_mem_header) + MEM_HEADER_PADDING + ZEND_CAP_BOUND_BYTES(size));
+        ZEND_CAP_CHECK_TAG(p, size);
         p->cached = 0;
         p->size   = size;
         return (void *)((char *)p + sizeof(zend_mem_header) + MEM_HEADER_PADDING);
@@ -286,6 +332,7 @@ static void *_emalloc(size_t size)
         return (void *)0;
     }
 
+    ZEND_CAP_CHECK_TAG(p, size);
     p->cached = 0;
     ADD_POINTER_TO_LIST(p);             /* :200 */
     p->size = size;                     /* :201 -- the TRUE size */
