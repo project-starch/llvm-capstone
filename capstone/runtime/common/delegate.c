@@ -180,6 +180,8 @@ static const struct capstone_delegate_shape shapes[] = {
   /* runtime-internal: the pointer forms of fcntl and ioctl, spawn with its
      block in the exchange region, the signal requests and hello; looked up
      by their own numbers */
+  {9, CAPSTONE_GROUP_RUNTIME, 1, "map-release", {I}},
+  {8, CAPSTONE_GROUP_RUNTIME, 2, "map-grant", {I, I}},
   {7, CAPSTONE_GROUP_RUNTIME, 0, "sigpoll", {I}},
   {6, CAPSTONE_GROUP_RUNTIME, 1, "sigdone", {I}},
   {5, CAPSTONE_GROUP_RUNTIME, 3, "sigaction", {I, I, I}},
@@ -205,7 +207,11 @@ const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
     return &shapes[sizeof shapes / sizeof shapes[0] - 6];
   if (nr == CAPSTONE_NR_SIGPOLL)
     return &shapes[sizeof shapes / sizeof shapes[0] - 7];
-  for (size_t i = 0; i + 7 < sizeof shapes / sizeof shapes[0]; ++i)
+  if (nr == CAPSTONE_NR_MAP_GRANT)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 8];
+  if (nr == CAPSTONE_NR_MAP_RELEASE)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 9];
+  for (size_t i = 0; i + 9 < sizeof shapes / sizeof shapes[0]; ++i)
     if (shapes[i].nr == nr)
       return &shapes[i];
   return NULL;

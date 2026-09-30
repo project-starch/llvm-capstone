@@ -43,6 +43,12 @@ struct capstone_delegate_host {
   int exit_status;
   /* signals: the ring, the classes, the masks; initialized by the launcher */
   struct capstone_signal_state signals;
+  /* translated mappings (docs/plans/mapping-transport-m2.md): installed by the
+     launcher, which owns the device and the domain; NULL answers ENOSYS.
+     grant returns the binding word or -errno, release 0 or -errno. */
+  long (*map_grant)(void *context, uint64_t len, uint64_t prot);
+  long (*map_release)(void *context, uint64_t binding);
+  void *map_context;
 };
 
 /* Service one entry in place: validate, run, write result. Never returns an

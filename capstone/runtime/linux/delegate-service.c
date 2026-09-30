@@ -517,6 +517,11 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
     r = capstone_signals_done(&host->signals, snapshot.args[0]);
   } else if (snapshot.nr == CAPSTONE_NR_SIGPOLL) {
     r = 0;
+  } else if (snapshot.nr == CAPSTONE_NR_MAP_GRANT) {
+    r = host->map_grant ? host->map_grant(host->map_context, snapshot.args[0], snapshot.args[1])
+                        : -ENOSYS;
+  } else if (snapshot.nr == CAPSTONE_NR_MAP_RELEASE) {
+    r = host->map_release ? host->map_release(host->map_context, snapshot.args[0]) : -ENOSYS;
   } else if (snapshot.nr == CAPSTONE_SYS_rt_sigprocmask) {
     /* the logical mask is the domain's; the kernel gets the physical one */
     uint64_t set = 0, old = 0;

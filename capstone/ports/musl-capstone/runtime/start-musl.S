@@ -345,6 +345,11 @@ __capstone_yield:
   /* The resuming CALL supplies a NEW result pointer and return capability.
      Install both before touching the suspended application's stack. */
   ccsrrw(t0, cscratch, x0)
+  /* A translated mapping the monitor granted during this round arrives in a2
+     (docs/plans/mapping-transport-m2.md): park it in recovery slot 96 before
+     any C code can clobber the register. __capstone_map_take_raw collects it;
+     a round that granted nothing leaves a2 untagged and the slot untagged. */
+  stc(a2, t0, 96)
   stc(ra, t0, 0)
   li ra, 0
   stc(a1, t0, 16)
@@ -380,6 +385,22 @@ __capstone_yield:
   ldc(s11, sp, 208)
   ldc(tp, sp, 224)
   cincoffsetimm(sp, sp, 256)
+  ret
+
+/* void *__capstone_map_take_raw(void): the capability parked in recovery slot
+   96 by .Lyield_resume, or an untagged value when nothing was delivered. The
+   slot is cleared either way. Without fault recovery there is no slot and
+   nothing is ever delivered. */
+  .global __capstone_map_take_raw
+__capstone_map_take_raw:
+#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
+  ccsrrw(t0, cscratch, x0)
+  ldc(a0, t0, 96)
+  stc(x0, t0, 96)
+  ccsrrw(x0, cscratch, t0)
+#else
+  li a0, 0
+#endif
   ret
 
   .align 4

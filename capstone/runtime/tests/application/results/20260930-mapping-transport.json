@@ -1,0 +1,30 @@
+{
+ "date": "2026-09-30",
+ "purpose": "M2 transport of translated mappings: GRANT/RELEASE rows, driver ioctls 20/21, SBI 0x30/0x31, delivery in a2; mapping-contract.dom in the QEMU gate",
+ "method": "run-domain-smoke.py with the lane's fw_jump.elf in CAPSTONE_BUILDROOT_DIR/build/images, the snapshot kernel and rootfs, the lane's capstone.ko and capstone-exec loaded from the 9p share (rmmod; insmod), mapping-contract.dom built with capstone-domain.cmake; one guest command runs basic, refresh, two, errors, then alias-fault; markers per mode; the SQLite memory gate with the same firmware, once with the rootfs module and once with the lane's module and a host rebuilt against the lane's libcapstone.c",
+ "platform": {
+  "monitor": "capstone-sbi sbi/mapping-transport 876a04b via caplifive-opensbi opensbi/mapping-transport 8700163; caplifive-buildroot buildroot/mapping-transport 7241d75 (driver df907c2)",
+  "qemu": "capstone-qemu qemu/mapping-stage1 69e9d460",
+  "fw_jump_sha256": "0a1310f69892289a87f2e19220d09faa2a2610588de67c35d63cb9dfe32e4b86",
+  "capstone_ko_sha256": "f3390f71eea0ac302f494f36f2d9259488e8020a50a5f4179855ba37f0aa5339",
+  "capstone_exec_sha256": "149e3c3be3a7b3e8269768f87799add0a152345ffb8118e2e4d32118fc0aac82",
+  "mapping_contract_dom_sha256": "cd90d114727a0b79b3a4fe780119b0e45a87d391b98e7748c22aa3f0b91c5b91",
+  "sqlite_host_user_sha256": "507a5394321d48623a64883a0787cd68158747d5da2f704fa3f2f306fd07c320",
+  "kernel_sha256": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd"
+ },
+ "mapping_contract": {
+  "basic": "PASS",
+  "refresh": "PASS",
+  "two": "PASS",
+  "errors": "PASS; 32 mappings before exhaustion, errno 12 (ENOMEM, the libc table); recovery after release",
+  "alias-fault": "domain fault cause=24 at the alias read; capstone-exec exits 139 (SIGSEGV)"
+ },
+ "sqlite_memory_gate": {
+  "rootfs_module": "PASS (row name=alpha value=11, EXTENDED, MEMORY markers)",
+  "lane_module_rebuilt_host": "PASS",
+  "lane_module_2026-09-26_host": "create_dom failed: ioctl_dom_create_args without copy_len against a driver that requires it (existing ABI rule, not a change of this lane)"
+ },
+ "native_runtime_tests": "52 of 52 pass (runtime/exec, BUILD_TESTING=ON, includes delegate-wire-contract with the two new rows and application-mappings)",
+ "gate_controls": "the first three contract runs failed the gate (refused populate: the handle's low word read as the page address; then cincoffset t1,t1,t1 in _map_grant.70); a truncated fw_jump.elf at the boot path fails the SQLite gate with exit 75",
+ "not_measured": "delivery to a preempted domain; more than one leaf table (mappings above 1 MiB); the 256 MiB limit; generation exhaustion; RTL"
+}

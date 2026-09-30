@@ -134,6 +134,16 @@ enum capstone_delegate_group {
 #define CAPSTONE_SIGNAL_DEFAULT 0u
 #define CAPSTONE_SIGNAL_IGNORE 1u
 #define CAPSTONE_SIGNAL_CAUGHT 2u
+/* Translated mappings (docs/plans/mapping-transport-m2.md). GRANT carries the
+ * length in bytes (a page multiple) and the protection (CAPSTONE_MAP_PROT_R or
+ * _RW); its result is the mapping's binding word, and the mapping capability
+ * itself arrives in a2 when the domain resumes, never through the entry.
+ * RELEASE carries the binding word. */
+#define CAPSTONE_NR_MAP_GRANT UINT64_C(0xC0DE0008)   /* len, prot */
+#define CAPSTONE_NR_MAP_RELEASE UINT64_C(0xC0DE0009) /* binding */
+#define CAPSTONE_MAP_PROT_R 4u
+#define CAPSTONE_MAP_PROT_RW 6u
+#define CAPSTONE_MAP_MAX_BYTES (UINT64_C(256) << 20)
 
 /* Descriptor flag: the image speaks this ABI. Images without it use the
  * HostCall v0 application runtime; a launcher must accept both. */

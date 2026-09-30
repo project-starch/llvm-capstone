@@ -173,6 +173,52 @@ long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c) {
   return r;
 }
 
+/* Translated mappings (docs/plans/mapping-transport-m2.md). The monitor
+ * delivers the mapping capability into a2 of the resuming domain; start-musl.S
+ * parks it in recovery slot 96 and __capstone_map_take_raw returns it. The
+ * capability is accepted only when it is what the row's result promises: a
+ * tagged linear capability whose binding word (LCC selector 8) equals the
+ * result and whose bounds cover the request from its cursor. Anything else is
+ * no delivery: the mapping is released again and the call fails with EIO. */
+extern void *__capstone_map_take_raw(void);
+
+static unsigned long map_field(void *cap, unsigned selector) {
+  unsigned long v;
+  switch (selector) {
+  case 1: __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x1" : "=r"(v) : "r"(cap)); break;
+  default: __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x8" : "=r"(v) : "r"(cap)); break;
+  }
+  return v;
+}
+
+long __capstone_map_release(unsigned long binding) {
+  return __capstone_delegate_ints(CAPSTONE_NR_MAP_RELEASE, binding, 0, 0);
+}
+
+void *__capstone_map_grant(unsigned long len, unsigned long prot, unsigned long *binding) {
+  void *cap;
+  long r;
+  (void)__capstone_map_take_raw(); /* a stale delivery is nobody's mapping */
+  r = __capstone_delegate_ints(CAPSTONE_NR_MAP_GRANT, len, prot, 0);
+  if (r < 0) {
+    errno = (int)-r;
+    return 0;
+  }
+  cap = __capstone_map_take_raw();
+  if (!__builtin_capstone_cap_get_tag(cap) || map_field(cap, 1) != 0 ||
+      map_field(cap, 8) != (unsigned long)r ||
+      __builtin_capstone_cap_get_cursor(cap) != __builtin_capstone_cap_get_base(cap) ||
+      __builtin_capstone_cap_get_end(cap) - __builtin_capstone_cap_get_base(cap) < len) {
+    __capstone_map_release((unsigned long)r);
+    errno = EIO;
+    return 0;
+  }
+  *binding = (unsigned long)r;
+  /* Programs copy what mmap returns; a linear value would move instead. The
+   * delinearized capability names the same mapping and dies with it. */
+  return __builtin_capstone_cap_delin(cap);
+}
+
 static long dl_string(const char *s, uint64_t *offset) {
   size_t n;
   if (!s)

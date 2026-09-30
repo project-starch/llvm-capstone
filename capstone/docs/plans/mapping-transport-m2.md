@@ -84,10 +84,16 @@ mapping so that `process_release` resets it like any other region.
 - `map_release(dom, binding)`: finds the entry, `csmapdetach`, `csmapdestroy`,
   then reclaims the chunk with the existing `managed_reset_region` path
   (revoke the root, scrub, re-arm), and frees the entry.
-- The instructions and their fixed-register operands live in assembly
-  functions in `sbi_capstone.S`, called from C with the C convention so that
-  a0-a7 carry exactly what the instruction reads; the SEALED handle is written
-  back through a capability pointer because passing it moves it.
+- The instructions and their fixed-register operands live in C functions with
+  inline assembly, not in `sbi_capstone.S` as first planned: capstone-c calls
+  no function it did not compile (a prototype at file scope registers a global
+  variable and the call site panics), pins no inline-assembly operand to a
+  register and has no clobber list. Each wrapper is a function of its own, so
+  that a0-a7 hold nothing live on entry; its template parks every operand in
+  the red zone below sp (scalars at -8..-32, capabilities at -48 and below),
+  loads the fixed registers from there, and uses tp, which the compiler never
+  allocates, as scratch. The SEALED handle is read from and written back to
+  the domain table inside the wrapper, so nothing passes it by value.
 
 **Libc.** `mmap(NULL, len, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)` issues
 GRANT and returns the delivered capability's cursor; other flags keep today's
@@ -97,6 +103,32 @@ as today. The System V shm emulation stays `malloc`-backed. A mapping table of
 32 entries, as today.
 
 ## 3. Deviations from the design, recorded
+
+Found while making the transport work (2026-09-30):
+
+- The libc delinearizes the delivered mapping capability after checking it
+  (tag, LINEAR type, binding equal to the row's result, cursor at base,
+  bounds covering the request). Programs copy what `mmap` returns, and a
+  linear value would move instead; the delinearized capability names the
+  same mapping and dies with it, which is what the alias-fault mode checks.
+- GRANT withdraws the region from Linux the way a TRANSFERRED share does
+  (`managed_unmap`: the CPMP association goes, the slot is not live until
+  RELEASE has reset it); the driver marks the block shared and transferred
+  meanwhile, so `mmap` of it is refused. RELEASE resets the region into the
+  prepared state, a linear chunk as after `REGION_CREATE`, so the driver can
+  grant or share it again; a reset region (delinearized) cannot be granted.
+- The driver releases every mapping of a process before it destroys the
+  domains and resets the regions: a mapping outlives its domain in the
+  monitor's table, and the region reset would revoke the frames beneath a
+  live mapping.
+- The first limit a domain meets is the libc's 32-entry mapping table
+  (ENOMEM), before the driver's and the monitor's 32 entries and the
+  region table.
+- capstone-c keeps every temporary of a basic block live until the block
+  ends; a block with seven indexed global stores exhausted the registers and
+  the spill path handed the offset and the table capability one register
+  (`cincoffset t1, t1, t1`). Each indexed store in the monitor's mapping
+  table sits in a block of its own.
 
 Frames come from one contiguous chunk per mapping, not scattered pages; the
 scattered case is exercised by M1's bare-metal tests. UNMAP is not used: a
@@ -124,6 +156,39 @@ one region (the module's CMA limit applies).
    release of an unknown binding, release twice; a `munmap` of a partial
    range refused. Then the SQLite memory gate and the application gate on the
    new firmware, module and launcher; pins bumped on the parent lane.
+
+### Result, 2026-09-30
+
+All six steps done. Monitor `capstone-sbi` `sbi/mapping-transport` 876a04b
+(7c6ba0b + the four corrections of section 3), wrapper `caplifive-opensbi`
+`opensbi/mapping-transport` 8700163, driver and library `caplifive-buildroot`
+`buildroot/mapping-transport` 7241d75 (df907c2 + the pin), and on this lane
+the libc rows, the a2 stash, the `mmap`/`munmap` routing, the launcher
+services and `runtime/tests/application/mapping-contract.c`. Native runtime
+tests: 52 of 52 pass (`runtime/exec`, `BUILD_TESTING=ON`).
+
+QEMU gate (`run-domain-smoke.py`, `capstone-qemu` 69e9d460, the snapshot
+kernel and root filesystem, the lane's `fw_jump.elf`, `capstone.ko` and
+`capstone-exec` from the share, `mapping-contract.dom` built with
+`capstone-domain.cmake`), see
+`runtime/tests/application/results/20260930-mapping-transport.json`:
+
+| Mode | Outcome |
+|---|---|
+| basic | PASS |
+| refresh | PASS (released storage comes back zero) |
+| two | PASS |
+| errors | PASS: 32 mappings before ENOMEM, then recovery |
+| alias-fault | domain fault cause 24 at the alias read, launcher exits with SIGSEGV (139) |
+
+The SQLite memory gate passes with this firmware both with the root
+filesystem's module and with the lane's module plus a host rebuilt against
+the lane's `libcapstone.c` (the 2026-09-26 host fails `create_dom` against
+the lane's module: its `ioctl_dom_create_args` predates `copy_len`, the
+existing ABI rule). The gate fired on the way: the first three runs failed
+on the two monitor defects of section 3 (a refused populate, then the
+compiler's register clash). `run-mapping-gate.sh` in the tests directory
+runs the contract gate.
 
 Not in M2: growth of a mapping, shared mappings, file mappings, delivery to a
 preempted domain (the paused-resume path), and any change to the allocators

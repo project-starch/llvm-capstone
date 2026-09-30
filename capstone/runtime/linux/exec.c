@@ -32,7 +32,39 @@ struct execution {
   int image, device_open;
   const char *path;
   unsigned long ticks_start;
+  dom_id_t domain;
 };
+
+/* Translated mappings (docs/plans/mapping-transport-m2.md): a GRANT row takes
+   a managed region large enough for the frames, one leaf table page per 256
+   frames and the root page, and hands it to the module, which withdraws it
+   from Linux and asks the monitor to build the mapping. The launcher never
+   maps the region: no VMA may exist over frames the domain owns. A region the
+   module refused stays in the process cache, as every managed region does. */
+static long map_grant_service(void *context, uint64_t len, uint64_t prot) {
+  struct execution *e = context;
+  unsigned long pages, leaves, binding;
+  region_id_t region;
+  if (!len || len % 4096 || len > CAPSTONE_MAP_MAX_BYTES)
+    return -EINVAL;
+  if (prot != CAPSTONE_MAP_PROT_R && prot != CAPSTONE_MAP_PROT_RW)
+    return -EINVAL;
+  pages = len / 4096;
+  leaves = (pages + 255) / 256;
+  region = create_region((1 + leaves + pages) * 4096);
+  if ((long)region < 0)
+    return -ENOMEM;
+  if (capstone_map_grant(e->domain, region, len, prot, &binding))
+    return -(errno ? errno : EIO);
+  return (long)binding;
+}
+
+static long map_release_service(void *context, uint64_t binding) {
+  struct execution *e = context;
+  if (capstone_map_release(e->domain, binding))
+    return -(errno ? errno : EIO);
+  return 0;
+}
 
 static unsigned long ticks(void) {
 #if defined(__riscv)
@@ -384,6 +416,10 @@ int main(int argc, char **argv) {
     free(startup);
     return fail(&e, "capstone-exec: cannot create domain", 1);
   }
+  e.domain = domain;
+  e.delegate.map_grant = map_grant_service;
+  e.delegate.map_release = map_release_service;
+  e.delegate.map_context = &e;
   launch_mark(LAUNCH_DOMAIN);
   e.sizes[REGION_META] = CAPSTONE_DELEGATE_META_BYTES;
   e.sizes[REGION_DATA] = (size_t)descriptor.exchange_bytes;

@@ -28,6 +28,17 @@
  * The memory is level0's, so a domain that maps megabytes sizes
  * CAPSTONE_LEVEL0_ARENA_BYTES for them, as every port already does for malloc.
  *
+ * TRANSLATED MAPPINGS (docs/plans/mapping-transport-m2.md). A private
+ * anonymous mapping that is readable or writable and names no address is a
+ * GRANT row instead: the monitor builds a mapping the domain reaches only
+ * through the capability it delivers, and the pages come zeroed from a fresh
+ * or reclaimed region. That capability is LINEAR: handing it to a function
+ * moves it, so a program that needs a second name for the mapping
+ * delinearizes one. munmap of the whole mapping is a RELEASE row; the
+ * capability is dead afterwards, as are all aliases derived from it. Every
+ * other form (MAP_SHARED, PROT_NONE, executable) keeps the level0 path, and
+ * the System V calls stay level0-backed.
+ *
  * First consumer is PostgreSQL's single-user backend: one MAP_SHARED|MAP_ANONYMOUS
  * mapping for its shared memory and one small System V segment as its
  * data-directory interlock (capstone/ports/postgres/app/).
@@ -62,10 +73,45 @@ __attribute__((__weak__)) void __vm_wait(void) { }
 
 struct l0_map {
 	void *base;   /* what the caller holds: page-aligned */
-	void *block;  /* what free() takes back */
+	void *block;  /* what free() takes back; NULL for a translated mapping */
 	size_t len;   /* whole pages */
+	unsigned long binding; /* the translated mapping's binding word, else 0 */
+	int translated;
 };
 static struct l0_map maps[L0_MAX_MAPS];
+
+/* The rows exist only in the delegated runtime; the native mapping-test and
+   the HostCall runtime keep every mapping on level0. */
+#ifdef CAPSTONE_DELEGATE_RUNTIME
+extern void *__capstone_map_grant(unsigned long len, unsigned long prot, unsigned long *binding);
+extern long __capstone_map_release(unsigned long binding);
+
+/* The protection a GRANT row takes: R or RW; anything else keeps level0. */
+static unsigned long translated_prot(int prot)
+{
+	if (prot == PROT_READ)
+		return 4;
+	if (prot == (PROT_READ | PROT_WRITE) || prot == PROT_WRITE)
+		return 6;
+	return 0;
+}
+#else
+static void *__capstone_map_grant(unsigned long len, unsigned long prot, unsigned long *binding)
+{
+	(void)len; (void)prot; (void)binding;
+	return 0;
+}
+static long __capstone_map_release(unsigned long binding)
+{
+	(void)binding;
+	return -ENOSYS;
+}
+static unsigned long translated_prot(int prot)
+{
+	(void)prot;
+	return 0;
+}
+#endif
 
 struct l0_seg {
 	key_t key;
@@ -124,6 +170,22 @@ void *__mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
 		errno = ENOMEM;
 		return MAP_FAILED;
 	}
+	if (!start && (flags & MAP_PRIVATE) && !(flags & MAP_SHARED) && translated_prot(prot)) {
+		unsigned long binding;
+		if (len > PTRDIFF_MAX || pages(len) < len) {
+			errno = ENOMEM;
+			return MAP_FAILED;
+		}
+		void *cap = __capstone_map_grant(pages(len), translated_prot(prot), &binding);
+		if (!cap)
+			return MAP_FAILED; /* errno from the row: ENOMEM, ENOSPC, EIO */
+		maps[i].base = cap;
+		maps[i].block = 0;
+		maps[i].len = pages(len);
+		maps[i].binding = binding;
+		maps[i].translated = 1;
+		return maps[i].base;
+	}
 	void *block, *base = page_block(len, &block);
 	if (!base) {
 		errno = ENOMEM;
@@ -132,6 +194,8 @@ void *__mmap(void *start, size_t len, int prot, int flags, int fd, off_t off)
 	maps[i].base = base;
 	maps[i].block = block;
 	maps[i].len = pages(len);
+	maps[i].binding = 0;
+	maps[i].translated = 0;
 	return base;
 }
 
@@ -149,9 +213,19 @@ int __munmap(void *start, size_t len)
 			errno = EINVAL; /* a partial unmap has no service here */
 			return -1;
 		}
-		free(maps[i].block);
+		if (maps[i].translated) {
+			long r = __capstone_map_release(maps[i].binding);
+			if (r < 0) {
+				errno = (int)-r;
+				return -1;
+			}
+		} else {
+			free(maps[i].block);
+		}
 		maps[i].base = maps[i].block = 0;
 		maps[i].len = 0;
+		maps[i].binding = 0;
+		maps[i].translated = 0;
 		return 0;
 	}
 	errno = EINVAL;
