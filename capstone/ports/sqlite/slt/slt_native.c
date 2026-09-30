@@ -17,6 +17,15 @@
 #include <string.h>
 
 #include "sqlite3.h"
+
+/* Test only (check-negative-control.sh): with SLT_FAIL_RUNNER_ALLOC set, every allocation the
+   runner makes for itself fails, while SQLite's own do not. Each record that has to store
+   values must then be counted as oom: never as a pass, and never as skipped for size. */
+static int fail_runner_alloc;
+static void *slt_native_realloc(void *p, sqlite3_uint64 n) {
+  return fail_runner_alloc ? 0 : sqlite3_realloc64(p, n);
+}
+#define SLT_REALLOC(p, n) slt_native_realloc((p), (n))
 #include "slt_runner.h"
 
 static void out_stdout(void *ctx, const char *text) {
@@ -45,6 +54,7 @@ int main(int argc, char **argv) {
   slt_stats tot;
   const char *env = getenv("SLT_MAX_VALUES");
   if (env) max_values = (unsigned)strtoul(env, 0, 0);
+  fail_runner_alloc = getenv("SLT_FAIL_RUNNER_ALLOC") != 0;
   memset(&tot, 0, sizeof tot);
   tot.completed = 1;
 
