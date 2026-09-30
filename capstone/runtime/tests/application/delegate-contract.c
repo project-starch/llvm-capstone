@@ -90,6 +90,37 @@ int main(int argc, char **argv) {
     puts("delegate-contract: usable size ok");
     return 0;
   }
+  if (!strcmp(argv[1], "buffer-bounds")) {
+    int fds[2];
+    char *p = malloc(16);
+    const char contents[] = "0123456789abcdefghijklmnopqrstuv";
+    CHECK(p && !pipe(fds));
+    CHECK(write(fds[1], contents, sizeof contents - 1) == sizeof contents - 1);
+    /* Rejection must happen before the file offset or pipe contents change. */
+    errno = 0;
+    CHECK(read(fds[0], p, 4096) == -1 && errno == EFAULT);
+    errno = 0;
+    CHECK(read(fds[0], (void *)0x1000, 1) == -1 && errno == EFAULT);
+    char *readonly = __builtin_capstone_cap_tighten(p, 4);
+    errno = 0;
+    CHECK(read(fds[0], readonly, 1) == -1 && errno == EFAULT);
+    struct iovec iov[2] = {{p, 16}, {p, 17}};
+    errno = 0;
+    CHECK(readv(fds[0], iov, 2) == -1 && errno == EFAULT);
+    CHECK(read(fds[0], p, 16) == 16 && !memcmp(p, contents, 16));
+    CHECK(read(fds[0], p, 16) == 16 && !memcmp(p, contents + 16, 16));
+    errno = 0;
+    CHECK(write(fds[1], p, 4096) == -1 && errno == EFAULT);
+    char *writeonly = __builtin_capstone_cap_tighten(p, 2);
+    errno = 0;
+    CHECK(write(fds[1], writeonly, 1) == -1 && errno == EFAULT);
+    CHECK(!close(fds[1]));
+    CHECK(read(fds[0], p, 16) == 0);
+    CHECK(!close(fds[0]));
+    free(p);
+    puts("delegate-contract: buffer bounds ok");
+    return 0;
+  }
   CHECK(argc == 3);
   char *image = argv[2];
   if (!strcmp(argv[1], "lock")) {

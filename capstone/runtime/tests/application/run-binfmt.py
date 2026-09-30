@@ -36,7 +36,8 @@ def main():
                          ('exec-closed', ''),
                          ('exec-error', 'delegate-contract: failed exec preserved task\n'),
                          ('lock', 'delegate-contract: record locks ok\n'),
-                         ('usable-size', 'delegate-contract: usable size ok\n')]:
+                         ('usable-size', 'delegate-contract: usable size ok\n'),
+                         ('buffer-bounds', 'delegate-contract: buffer bounds ok\n')]:
         check(mode, ['sh', '-c', 'exec "$@"', 'binfmt-test', args.image, mode, args.image],
               0, stdout)
     if args.report:

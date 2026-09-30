@@ -6,8 +6,13 @@ The [application compatibility milestones](plans/trusted-linux-application-compa
 make ordinary Linux OS functionality the target for all seven application
 ports. They separate an execution/ABI decision from VM, threads, processes and
 loader work, with common acceptance gates and a measured-benefit decision.
-This branch starts from `dev`; the design and plan add no implementation or
-qualification result.
+The `memory-trusted-linux` base starts from `dev`; its initial design and plan
+added no implementation or qualification result.
+
+The `trusted-linux-syscall-bounds` lane adds a bounded-buffer prototype to
+the current delegated runtime. Its [one-hart result](../runtime/tests/application/results/20260930-syscall-buffer-bounds.json)
+covers the direct-exec and socket contracts; the Linux user-mode ABI decision
+remains open.
 
 Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
 Seven application recipes are migrated, with new QEMU functional and safety

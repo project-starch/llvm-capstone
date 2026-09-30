@@ -113,6 +113,13 @@ extensive OS duplication, change the integration choice before building on it.
 [CHERI's MMU integration](https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/)
 is prior art, not a new contribution claimed here.
 
+The `trusted-linux-syscall-bounds` lane is an interim bridge slice: object
+bounds in the default heap, requested-span checks at the delegated buffer
+boundary and an end-to-end `read`/`readv` test. Its one-hart result is recorded
+in [the buffer boundary result](../../runtime/tests/application/results/20260930-syscall-buffer-bounds.json).
+The Linux user-mode ABI, concurrent revocation/copy-fault recovery and the
+full M1 gate remain open.
+
 ### M2 — Real virtual memory and a growing protected heap
 
 **Work:** Connect libc allocation to Linux anonymous and file-backed mappings;

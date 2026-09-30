@@ -166,6 +166,34 @@ coherent kernel/libc contract. A page-table update alone cannot implement
 temporal safety. By contrast, moving the backing of the *same* live allocation
 may preserve its lifetime if bytes, tags and authority remain equivalent.
 
+### Buffer syscalls
+
+A syscall that reads or writes application memory must use the authority of
+the caller's buffer capability. For `read(fd, p, n)`, our chosen boundary
+validates a writable data capability covering the *requested* `[p, p+n)`
+before issuing I/O; `write` requires readable authority. A range failure
+returns `EFAULT` before file or pipe state changes. This is our boundary
+contract, not a claim that every Linux implementation prevalidates the entire
+requested count. Overflow-safe range validation uses `n <= end(p)-cursor(p)`
+after checking `base(p) <= cursor(p) <= end(p)`. Nested pointer arguments such
+as `iovec` require checks for both the descriptor array and each buffer.
+
+The current C-mode bridge has a first implementation of this check for its
+shaped buffers and its vector/message paths. Linux still receives a separate
+exchange buffer. The bridge copies output through the original caller
+capability, never a pointer recreated from its integer address. This gives a
+concrete spatial check for `malloc(16); read(fd, p, 4096)` when `malloc`
+returns object bounds. It does not turn the bridge into the intended native
+Linux capability ABI or close M1's execution-mode decision.
+
+Prevalidation is not a lifetime reservation. If another thread frees the
+object while the call blocks, the final copy must encounter the revoked
+original capability, and reuse must wait for already checked accesses to
+complete. The present domain fault path cannot yet turn such a copy fault
+into a recoverable `EFAULT`; multi-hart completion and asynchronous/direct I/O
+remain M1/M3 contracts. Pinning a physical page would not pin the allocator
+object within it.
+
 ## 5. Fork: possible, with independent lifetimes
 
 The new address-space semantics remove an obstacle to `fork()`: parent and

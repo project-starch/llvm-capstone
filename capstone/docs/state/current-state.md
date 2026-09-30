@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-09-30 — delegated syscall buffer bounds prototype
+
+The `trusted-linux-syscall-bounds` lane adds per-object bounds to the default
+level0 heap and checks requested buffer spans before delegated syscalls use
+their exchange region. The [recorded one-hart test](../../runtime/tests/application/results/20260930-syscall-buffer-bounds.json)
+shows `malloc(16); read(fd, p, 4096)` returning `EFAULT` without consuming
+pipe data; a deliberately unbounded heap build misses that check. The direct
+exec contract passes its nine modes, and the socket contract passes 11/11 in
+the pinned guest. The bridge still lacks recoverable copy faults after
+concurrent revocation and is not a native Linux capability ABI.
+
 ## 2026-09-30 — trusted Linux memory design
 
 `memory-trusted-linux` starts from `dev` at `4439dd0a55f9`, without the

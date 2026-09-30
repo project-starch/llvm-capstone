@@ -1,13 +1,13 @@
 Trusted Linux application compatibility (2026-09-30): follow the
 [M0–M7 plan](../plans/trusted-linux-application-compatibility.md) on
-`memory-trusted-linux`. First inventory every feature exclusion across the
-seven application ports and establish native target profiles. Integrate the
-existing thread work with current I/O services and qualify IPv6 end-to-end.
-In parallel, close the execution/ABI and lifetime-context decision with a
-minimal prototype before implementing new VM mechanisms. Linux OS feature
-parity is the fixed goal; current Capstone C-mode is not already Linux user
-mode. The plan is independent of the caplified mapping implementation lanes
-and introduces no new qualification result.
+`memory-trusted-linux` and its implementation lanes. The
+`trusted-linux-syscall-bounds` lane now demonstrates requested-span checks
+through the current C-mode bridge, with direct-exec and socket contracts in a
+one-hart guest. Next, decide M1's native Linux execution and capability ABI,
+including recoverable copy faults and concurrent object retirement. Integrate
+the existing thread work with current I/O services and qualify IPv6 end-to-end.
+Linux OS feature parity remains the goal; the bridge result does not establish
+Linux user-mode execution or close M1.
 
 Application ports (2026-09-29): the seven application recipes now require
 the [shared delegated SDK](../../ports/common/application/README.md), with

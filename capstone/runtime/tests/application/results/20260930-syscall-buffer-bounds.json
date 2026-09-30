@@ -1,0 +1,82 @@
+{
+  "schema": 1,
+  "date": "2026-09-30",
+  "base_commit": "6ba9673ab2dc7c4182c907d04a8c8bc6b758160d",
+  "platform": "Capstone QEMU, one hart, own VM state and shared directory",
+  "platform_sha256": {
+    "qemu": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "firmware": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+    "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+    "launcher": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94",
+    "module": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+    "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168"
+  },
+  "toolchain_sha256": {
+    "clang": "b69603574ae422d3bd78c7aae679d613526d5ee0f0a20e4a7005ccae993adcae",
+    "patched_musl_archive": "7d42620dcc77e72d7dd9945626df0e3b5ba9e5352c9e335f8eda7648cdb8cf44"
+  },
+  "source_sha256": {
+    "capstone/ports/musl-capstone/runtime/delegate.c": "fea0c9d163430b6a29e65b2c22270793805ce37cc4e54c14c105a4610ff56f3b",
+    "capstone/ports/musl-capstone/runtime/level0.c": "aabb0b833a8d76ab620d848d88a0555cf1d03c6e141c29c764b2b5ef9a182bb6",
+    "capstone/runtime/tests/application/delegate-contract.c": "81c778a866b7e588611cd53df77ca925d645fc7e6b12ddb4b552a6edd4de19fe",
+    "capstone/runtime/tests/application/run-binfmt.py": "8b04854d70b2479053b17e8e6fa6729f860e9a65bfe75badca134b0840aadde9"
+  },
+  "images": {
+    "object_bounds": {
+      "sha256": "5048a434efc5a321e497bf91c74d9fbdf0cf6ca55f086df0aeca249fc8355a8c",
+      "mode": "buffer-bounds",
+      "exit": 0,
+      "stdout": "delegate-contract: buffer bounds ok",
+      "checks": [
+        "oversized read EFAULT before pipe consumption",
+        "untagged buffer EFAULT",
+        "read-only destination EFAULT",
+        "invalid second readv element EFAULT before pipe consumption",
+        "two in-bounds reads preserve the original pipe bytes",
+        "oversized write EFAULT",
+        "write-only source EFAULT",
+        "no output from rejected write"
+      ]
+    },
+    "unbounded_control": {
+      "sha256": "a72bf79da2a2b5a3488cdbe13d8b29048cdf5665fcc7b835553d6050539e6e5d",
+      "difference": "CAPSTONE_LEVEL0_OBJECT_BOUNDS=0",
+      "mode": "buffer-bounds",
+      "exit": 1,
+      "first_failed_check": "read(fd, malloc(16), 4096) returned without EFAULT; errno 0"
+    },
+    "socket_contract": {
+      "sha256": "1b37963f57fc0cd34e0d8b7885ba70e786e66612928eff24254150a0e9547f6c",
+      "passed": [
+        "unix-stream",
+        "unix-dgram",
+        "inet-stream",
+        "inet-dgram",
+        "scm-rights",
+        "epoll",
+        "select-poll",
+        "nonblock",
+        "inherit",
+        "hosts",
+        "tagged-buffer"
+      ]
+    }
+  },
+  "direct_exec_modes_passed": [
+    "native-elf",
+    "original-argv0",
+    "io",
+    "exec",
+    "exec-closed",
+    "exec-error",
+    "lock",
+    "usable-size",
+    "buffer-bounds"
+  ],
+  "scope": [
+    "All 9 direct-exec modes and all 11 socket modes pass on the pinned guest.",
+    "The bounded-heap and unbounded-heap images differ only by the object-bounds build switch.",
+    "Concurrent revocation, recoverable copy faults, native Linux capability ABI, all seven application ports and RTL are not qualified."
+  ]
+}
