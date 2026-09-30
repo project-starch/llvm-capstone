@@ -416,21 +416,35 @@ see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 The libc heap qualification runs the heap cases of `contract.c` once on the
 `HEAP=sublet` image and once on a `HEAP=level0` image of the same source,
 which is the control: every `fault-*` case must be a SIGSEGV on the first and
-must complete on the second, every `heap-*` case must complete on both.
+must reach the survival marker and exit 90 on the second; every `heap-*` case
+must complete on both. The protected fault must occur at the intended byte
+probe with the expected QEMU cause. Churn must allocate at least 200,000
+nodes. A setup error, unrelated fault or early exhaustion fails the gate.
+
+Build each image with an LLD map, using
+`-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake
+configuration. The runner requires both ELFs and maps (default map path:
+`<elf>.map`; override with `--sublet-map` and `--control-map`). It checks the
+allocation symbols' input objects, addresses and sizes, then matches the
+guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
+`llvm-objdump`.
 
 ```sh
 python3 capstone/runtime/tests/application/run-heap.py \
   --state "$CAPSTONE_TMP_ROOT/dev-vm" \
   --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/application-contract.dom \
   --sublet-elf <build>/contract-sublet.dom --control-elf <build>/application-contract.dom \
+  --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \
   --platform <kernel> <firmware> <rootfs> <qemu> <launcher> --report heap.json
+
+python3 -m unittest discover -s capstone/runtime/tests/application -p test_heap_qualification.py
 ```
 
 It needs the emulator the tree pins (in-process node reuse): on the base
 emulator the 200,000-cycle churn case exhausts the node pool after about
 65,000 allocations, on any image. The
-[2026-09-30 record](tests/application/results/20260930-heap-qualification.json)
-is the first run; the plan is
+[checked 2026-09-30 record](tests/application/results/20260930-heap-qualification-reviewed.json)
+supersedes the first run's weaker verdict and filename checks; the plan is
 [capstone-heap-protection.md](../docs/plans/capstone-heap-protection.md).
 
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu-rebased.json)

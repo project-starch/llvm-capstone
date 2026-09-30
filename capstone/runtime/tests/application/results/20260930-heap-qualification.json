@@ -344,5 +344,7 @@
   "CAPSTONE_REV_NODES": "65536"
  },
  "instrument_note": "A first attempt on the base emulator (capstone-qemu 6550f194, binary f9795d41, without in-process node reuse) faulted churn with cause 30 INSUF_RESOURCES after 65,228 node allocations on both this image and the 2026-09-27 contract-sublet image, exactly the old emulator's documented behaviour; the qualification therefore requires the emulator dev pins, and this record is from it",
- "limits": "QEMU only, one hart, single-threaded application; QEMU's exact fat-bounds side table means fault-bounds-large shows the narrowed alias, not compressed-store rounding; no silicon result"
+ "limits": "QEMU only, one hart, single-threaded application; QEMU's exact fat-bounds side table means fault-bounds-large shows the narrowed alias, not compressed-store rounding; no silicon result",
+ "qualification_status": "Superseded: the original runner did not distinguish control setup errors from survival, identify the protected fault instruction/cause, or verify linked object provenance.",
+ "superseded_by": "20260930-heap-qualification-reviewed.json"
 }

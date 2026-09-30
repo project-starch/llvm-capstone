@@ -1,8 +1,8 @@
 # Protect libc malloc/free with Capstone
 
-Status: PLAN, 2026-09-30. The allocator and build selection already exist.
-This plan adds no implementation or test result. Its first milestone is to
-verify ordinary libc heap protection with the smallest necessary changes.
+Status: QEMU qualification completed, 2026-09-30, within the scope below.
+The allocator and build selection already existed; this milestone adds
+contract tests and checks their evidence without changing allocator behavior.
 
 ## 1. Goal and contract
 
@@ -101,25 +101,45 @@ protection.
 ### Result, 2026-09-30
 
 The milestone ran on QEMU
-([record](../../runtime/tests/application/results/20260930-heap-qualification.json),
+([checked record](../../runtime/tests/application/results/20260930-heap-qualification-reviewed.json),
 runner `runtime/tests/application/run-heap.py`). Both images built from this
 tree's `contract.c`, one with `HEAP sublet`, one with `HEAP level0`; the
-symbol check shows each defines the six allocation entry points from its own
-heap object only.
+symbol check matches all six allocation entry points, including their ELF
+addresses and sizes, to their input objects in each image's linker map.
+Guest image hashes must match the checked host ELFs.
 
 | Case | `HEAP=sublet` | `HEAP=level0`, the control |
 |---|---|---|
-| fault-stale, fault-reused, fault-bounds, fault-bounds-large, fault-double-free, fault-double-free-reused | SIGSEGV, PASS | completes, FAIL as required |
+| fault-stale, fault-reused, fault-bounds, fault-bounds-large, fault-double-free, fault-double-free-reused | SIGSEGV at the intended byte probe, PASS | operation survives, sentinel exit 90; supervisor FAIL as required |
 | healthy, churn, heap-bounds, heap-neighbour, heap-companion | PASS | PASS |
 | the supervisor's own application sequence | PASS | PASS |
 
-The four new cases cover the table of §3: the byte past a 24-byte and a
+The added cases cover the table of §3: the byte past a 24-byte and a
 5000-byte allocation, a double free, a double free after the address was
 reissued, a live neighbour across a free and the freed address returning,
 and `free(NULL)`, `malloc(0)`, zeroed `calloc`, `realloc` keeping bytes and a
 stored capability, and a failed `realloc` leaving the original usable. No gap
 was demonstrated, so no runtime code changed; the two comments named in
 step 3 were corrected.
+
+The runner requires the pre-operation marker, exact output and wait status,
+and a launcher fault record identifying the checked ELF. Bounds failures
+must be QEMU load access faults (cause 5); stale pointers must fail the tag
+or node check (24 or 25). Both are checked at the exact load instruction;
+stale `free` must stop at its initial byte probe, before allocator metadata
+is accessed. Every unprotected control must print its survival marker and
+exit 90, so allocation failure or failure to reuse the address cannot pass.
+The protected churn and stale-after-churn attempts each allocated 200,064
+nodes; the runner requires at least 200,000. Cleanup counters return to zero.
+
+This record supersedes the
+[initial run](../../runtime/tests/application/results/20260930-heap-qualification.json).
+Its runner accepted any control FAIL, any protected SIGSEGV, and a matching
+object filename in the build directory. Those were insufficient oracles.
+Sixteen host regression tests now reject setup errors, unrelated faults,
+insufficient progress and incorrect link provenance, with passing controls;
+the existing 21 host tests also pass. These are test-instrument fixes, with
+no change to the allocator or to the qualification's platform scope.
 
 One instrument finding: on the emulator without in-process node reuse
 (capstone-qemu 6550f194) the existing churn case faults with cause 30,

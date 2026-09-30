@@ -10,6 +10,21 @@
 void *__capstone_region(unsigned);
 static volatile unsigned char *volatile saved_allocation;
 
+/* A single, identifiable load site for the heap fault oracle. The runner
+ * checks its linked PC as well as the architectural exception cause. */
+__attribute__((noinline)) unsigned char capstone_heap_fault_load(volatile const unsigned char *p) {
+  return *p;
+}
+
+static int heap_fault_ready(void) {
+  return write(1, "heap: ready\n", 12) == 12;
+}
+
+static int heap_fault_survived(void) {
+  if (write(1, "heap: survived\n", 15) != 15) return 68;
+  return 90; /* only the unprotected control may reach this sentinel */
+}
+
 extern char **environ;
 static int constructed;
 __attribute__((constructor)) static void initialize(void) {
@@ -29,7 +44,9 @@ int main(int argc, char **argv) {
     if (!stale) return 46;
     *stale = 42;
     free((void *)stale);
-    return *stale;
+    if (!heap_fault_ready()) return 68;
+    (void)capstone_heap_fault_load(stale);
+    return heap_fault_survived();
   }
   if (!strcmp(argv[1], "fault-exhaust")) {
     /* Keep adding valid tree ancestors without revoking them. Unlike malloc/
@@ -63,9 +80,13 @@ int main(int argc, char **argv) {
       if (held[i & 255] != 0x5a) return 48;
     }
     free(held);
-    if (!strcmp(argv[1], "fault-reused")) return *saved_allocation;
+    if (!strcmp(argv[1], "fault-reused")) {
+      if (!heap_fault_ready()) return 68;
+      (void)capstone_heap_fault_load(saved_allocation);
+      return heap_fault_survived();
+    }
   }
-  /* The heap qualification (docs/plans/sublet-heap-qualification.md). Every
+  /* The heap qualification (docs/plans/capstone-heap-protection.md). Every
    * fault-* case below must end in SIGSEGV on the HEAP=sublet build and run to
    * completion on the HEAP=level0 build, which is the control. The heap-*
    * cases fall through to the ordinary tail on success and return a distinct
@@ -76,7 +97,9 @@ int main(int argc, char **argv) {
     if (!p) return 46;
     p[0] = 1; p[23] = 2;
     if (p[0] != 1 || p[23] != 2) return 61;
-    return p[24];
+    if (!heap_fault_ready()) return 68;
+    (void)capstone_heap_fault_load(p + 24);
+    return heap_fault_survived();
   }
   if (!strcmp(argv[1], "fault-bounds-large")) {
     /* 5000 is a multiple of the 8-byte grain the heap rounds to above 4096
@@ -85,27 +108,32 @@ int main(int argc, char **argv) {
     if (!p) return 46;
     p[4999] = 3;
     if (p[4999] != 3) return 61;
-    return p[5000];
+    if (!heap_fault_ready()) return 68;
+    (void)capstone_heap_fault_load(p + 5000);
+    return heap_fault_survived();
   }
   if (!strcmp(argv[1], "fault-double-free")) {
     unsigned char *p = malloc(64);
     if (!p) return 46;
     free(p);
+    if (!heap_fault_ready()) return 68;
     free(p);   /* the probe read in free faults on the revoked alias */
-    return 62;
+    return heap_fault_survived();
   }
   if (!strcmp(argv[1], "fault-double-free-reused")) {
     /* free, get the same address back, then free the old alias: it must
        fault at the probe, before it could revoke the new owner's handle */
     unsigned char *p = malloc(64);
     if (!p) return 46;
+    unsigned long address = __builtin_capstone_cap_get_cursor(p);
     free(p);
     unsigned char *q = malloc(64);
     if (!q) return 46;
-    if (__builtin_capstone_cap_get_cursor(q) != __builtin_capstone_cap_get_cursor(p)) return 63;
+    if (__builtin_capstone_cap_get_cursor(q) != address) return 63;
     memset(q, 0x5a, 64);
+    if (!heap_fault_ready()) return 68;
     free(p);
-    return 62;
+    return heap_fault_survived();
   }
   if (!strcmp(argv[1], "heap-bounds")) {
     volatile unsigned char *p = malloc(24);
@@ -127,12 +155,13 @@ int main(int argc, char **argv) {
     if (!a || !b) return 46;
     memset(a, 0x11, 64);
     memset(b, 0x22, 64);
+    unsigned long address = __builtin_capstone_cap_get_cursor(a);
     free(a);
     for (unsigned i = 0; i < 64; ++i)
       if (b[i] != 0x22) return 64;
     unsigned char *c = malloc(64);
     if (!c) return 46;
-    if (__builtin_capstone_cap_get_cursor(c) != __builtin_capstone_cap_get_cursor(a)) return 63;
+    if (__builtin_capstone_cap_get_cursor(c) != address) return 63;
     memset(c, 0x33, 64);
     for (unsigned i = 0; i < 64; ++i)
       if (b[i] != 0x22) return 64;
