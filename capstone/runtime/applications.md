@@ -287,6 +287,8 @@ of five runs of 10,000 calls and two of 100,000
 | Ten ecalls per step | 1,047 | 1,048 |
 | One ecall per step | 893 | 885 |
 | One ecall, no S-mode swap around the CALL | 527 | 519 |
+| plus QEMU: TLB flush only when translation state changes | 351 | 345 |
+| plus QEMU: quantum timer instead of a clock read per block | 303 | 262 |
 
 Still wall time without `icount`, with another guest running on the host. The
 fault records of the four contract fault modes are byte-identical on both
@@ -298,6 +300,16 @@ no longer swaps the sixteen CPMP CCSRs and nine S-mode CSRs out and back
 around every step. The supervisor snapshots and restores that state itself,
 and each CPMP write is a full TLB flush in QEMU
 ([record](tests/application/results/20260929-no-smode-swap.json)).
+
+The last two rows are emulator changes, `capstone-qemu` ac2837aa: the
+supervisor's `restore_state` flushed the TLB on every switch although
+satp, the CPMP registers and the mstatus translation bits never change across
+a supervised switch, and every C-mode translation block began with a helper
+that read the virtual clock to enforce the 5 ms quantum, 771 times per
+round. The flush is now conditional and the quantum is a timer with an inline
+flag test. Both rows are QEMU-only savings and say nothing about hardware; the
+control for them is an unmodified build of the previous pin at 512 / 509
+([record](tests/application/results/20260929-qemu-switch-cost.json)).
 
 ### Processes
 
