@@ -7,5 +7,7 @@ TEST_PROLOGUE
     li t1, PAGE_A + 4096
     DEBUGGENCAP(t2, t0, t1)
     MREV(t3, t2)
+    EXPECT_FAULT_AT(site)
+site:
     lw t4, 0(t3)
     FAIL(1)

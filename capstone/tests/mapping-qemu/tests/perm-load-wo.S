@@ -6,5 +6,7 @@ TEST_PROLOGUE
     li t1, PAGE_A + 4096
     DEBUGGENCAP(t2, t0, t1)
     TIGHTEN(t2, t2, PERM_WO)
+    EXPECT_FAULT_AT(site)
+site:
     lw t4, 0(t2)
     FAIL(1)

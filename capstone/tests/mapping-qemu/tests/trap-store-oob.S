@@ -8,5 +8,7 @@ TEST_PROLOGUE
     li t3, 0x77
     li t4, 4096
     CINCOFFSET(t2, t2, t4)
+    EXPECT_FAULT_AT(site)
+site:
     sw t3, 0(t2)
     FAIL(1)

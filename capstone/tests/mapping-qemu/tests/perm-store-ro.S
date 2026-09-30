@@ -8,5 +8,7 @@ TEST_PROLOGUE
     DEBUGGENCAP(t2, t0, t1)
     TIGHTEN(t2, t2, PERM_RO)
     li t3, 0x77
+    EXPECT_FAULT_AT(site)
+site:
     sw t3, 0(t2)
     FAIL(1)

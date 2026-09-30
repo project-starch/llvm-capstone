@@ -64,10 +64,14 @@
 
 /* Enter capability mode, keep the low genesis capability in s10 with its
  * cursor on the test device, and install an execute-only trap vector that
- * reports 0x40 + mcause. After this a0 is null; a1 is the genesis capability
- * over [_code_end, 2^56) (2^63 before the E2 fix), RWX, linear. Tests must
- * not touch s10 or s11.
+ * reports 0x40 + mcause. A test that expects a fault names the faulting
+ * instruction with EXPECT_FAULT_AT(label); a fault anywhere else then exits
+ * with 0x3f instead of the cause, so a refusal test cannot pass on a fault in
+ * its setup. After the prologue a0 is null; a1 is the genesis capability over
+ * [_code_end, 2^56), RWX, linear. Tests must not touch s10 or s11.
  */
+#define EXPECT_FAULT_AT(label) lla s11, label
+#define WRONG_SITE 0x3f
 #define TEST_PROLOGUE                          \
     .section .text.start, "ax";                \
     .globl _start;                             \
@@ -83,10 +87,21 @@ _start:                                        \
     DEBUGGENCAP(t2, t0, t1);                   \
     TIGHTEN(t2, t2, PERM_XO);                  \
     CCSRRW(x0, CCSR_CTVEC, t2);                \
+    li s11, 0;                                 \
     j _test_body;                              \
     .align 4;                                  \
 _trap_handler:                                 \
-    csrr t0, mcause;                           \
+    CCSRRW(t2, CCSR_CEPC, x0);                 \
+    LCC(t3, t2, x1);                           \
+    li t4, 7;                                  \
+    beq t3, t4, 97f;                           \
+    LCC(t2, t2, x2);                           \
+97: beqz s11, 96f;                             \
+    beq t2, s11, 96f;                          \
+    li t0, (0x3f << 16) | 0x3333;              \
+    sw t0, 0(s10);                             \
+95: j 95b;                                     \
+96: csrr t0, mcause;                           \
     andi t0, t0, 0x3f;                         \
     addi t0, t0, 0x40;                         \
     slli t0, t0, 16;                           \
@@ -103,5 +118,30 @@ _test_body:
 #define PAGE_B 0x80201000
 #define PAGE_C 0x80202000
 #define PAGE_D 0x80203000
+
+/* Build a sealed synchronous context in the page at `page`: saved PC over
+ * [entry, entry_end) (RWX), a fresh execute-only trap vector over the
+ * prologue's handler, mstatus kept with privilege 3. Leaves the SEALED handle
+ * in capreg. Clobbers t0, t1, t2. */
+#define MAKE_CONTEXT(capreg, page, entry, entry_end)                   \
+    li t0, page; li t1, (page) + 4096; DEBUGGENCAP(capreg, t0, t1);    \
+    lla t0, entry; lla t1, entry_end; DEBUGGENCAP(t2, t0, t1);         \
+    STC(capreg, t2, 0);                                                \
+    lla t0, _trap_handler; lla t1, _trap_handler_end;                  \
+    DEBUGGENCAP(t2, t0, t1); TIGHTEN(t2, t2, PERM_XO);                 \
+    STC(capreg, t2, 0x10);                                             \
+    csrr t0, mstatus; li t1, 3; slli t1, t1, 38; or t0, t0, t1;        \
+    sd t0, 0x30(capreg);                                               \
+    SEAL(capreg, capreg)
+
+/* Mint one page as a linear RWX capability into capreg. Clobbers t0, t1. */
+#define MINT_PAGE(capreg, page) \
+    li t0, page; li t1, (page) + 4096; DEBUGGENCAP(capreg, t0, t1)
+
+/* CREATE operands: a1/a2 = [2^57 + offset, +size), a0 = id, a3 = perms,
+ * a4 = delivery register number. Clobbers t0. */
+#define CREATE_ARGS(id, offset, size, perms, reg)                       \
+    li a0, id; li a1, 1; slli a1, a1, 57; li t0, offset; add a1, a1, t0; \
+    li a2, size; add a2, a1, a2; li a3, perms; li a4, reg
 
 #endif

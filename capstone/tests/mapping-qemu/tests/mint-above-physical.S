@@ -7,5 +7,7 @@ TEST_PROLOGUE
     slli t0, t0, 57
     li t1, 4096
     add t1, t0, t1
+    EXPECT_FAULT_AT(site)
+site:
     DEBUGGENCAP(t2, t0, t1)
     FAIL(1)
