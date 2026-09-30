@@ -243,6 +243,19 @@ Done so far:
   regression selection 12 of 16); libc-test, the context probe with A7, A9 and ctl-wfi, the signal
   contract and the application gate as before. 100000 rounds took 9395 ms. Record
   `results/20260930-contexts-per-application.json`.
+- A thread's name and CPU set: `pthread_setname_np` and `pthread_getname_np` on the calling thread
+  (musl's `prctl(PR_SET_NAME/PR_GET_NAME)`) are the runtime request `THREAD_NAME`, and
+  `sched_getaffinity` and `sched_setaffinity` of the calling thread (pid 0 or its own tid) are
+  delegated. The launcher thread that serves a context runs them on itself, so a name shows in
+  `/proc/<pid>/task/*/comm` and the CPU set is that thread's. Naming or asking about another thread is refused: a minted
+  thread's tid, from `0x400000`, names no Linux task (ENOENT), and the launcher answers ESRCH for
+  any pid but 0. musl patch 0006 keeps the name a pointer: `prctl` read its arguments as
+  `unsigned long` and the thread-name calls passed `(unsigned long)name`, so the first request
+  faulted (cause 24); GLib names every thread it creates, so its thread tests faulted too.
+  `pthread-probe` adds `thread-name` and `affinity` (28 of 28 pass); on a launcher without the
+  request and the call, both fail. Found by GLib's `thread6` (a thread's name read back empty)
+  and `thread7` (it sets a thread's CPU set), and by CPython's `ThreadPoolExecutor()`, whose
+  default worker count asks for the CPU set.
 - An independent review of B8 (2026-09-30) found five defects, all fixed: a delivery read the
   shared handler table unlocked while another context could change it (the action is now copied
   under a leaf lock); glibc's `sigaddset` refuses signals 32 and 33, so the trampoline could not

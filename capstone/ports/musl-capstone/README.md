@@ -344,12 +344,13 @@ a patch may change how a test reaches memory, never what it checks. `fetch-libc-
 the tree to the pinned commit and applies them, so a run depends on the commit and the patch set
 and on nothing that happened in the tree before.
 
-## Patches to musl: three round-count decisions
+## Patches to musl: round counts and pointers
 
 Under the delegated runtime every syscall is a round trip through the launcher, so the
 port's cost model is the number of rounds, and `musl-patches/` holds the three places where
-upstream musl spends one for nothing on this platform. `prepare-musl-capstone.sh` applies
-them; each patch is one decision and says so in its name:
+upstream musl spends one for nothing on this platform, and three where it keeps a pointer
+in a `long`, which on capstone64 holds an address and not a capability.
+`prepare-musl-capstone.sh` applies them; each patch is one decision and says so in its name:
 
 - `0001` `BUFSIZ` 8 KiB, glibc's size, instead of 1 KiB: one `writev` per 8 KiB of stdio
   output, one `read` per 8 KiB of input.
@@ -358,6 +359,11 @@ them; each patch is one decision and says so in its name:
   in `open`, `fopen` and `__fopen_rb_ca`. Linux honours the flag; the second call was
   musl's fallback for kernels that did not. The sites that set the flag on a descriptor
   they did not open (`fdopendir`, `fdopen` with `e`, `freopen` on an open stream) keep it.
+- `0004` `pthread_cond_t` and `cnd_t` laid out pointers first: the upstream macros put
+  `_c_tail` 32 bytes past the object with 16-byte pointers (C-65).
+- `0005` a thread attribute keeps its stack address as a pointer.
+- `0006` `prctl` reads its arguments as `syscall_arg_t`, as musl's `syscall()` does, and the
+  thread-name calls pass the name as a pointer.
 
 The rule for `libc-test/patches/` is unchanged: tests are patched only in how they reach
 memory, never in what they check. These three patch the library, and only its round count.

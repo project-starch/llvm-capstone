@@ -95,6 +95,8 @@ static const struct capstone_delegate_shape shapes[] = {
    {I, I, OPT_IN_FIX(16), OPT_OUT_FIX(16)}},
   {CAPSTONE_SYS_getrandom, CAPSTONE_GROUP_DELEGATED, 3, "getrandom", {OUT_ARG(1), I, I}},
   {CAPSTONE_SYS_sched_yield, CAPSTONE_GROUP_DELEGATED, 0, "sched_yield", {I}},
+  {CAPSTONE_SYS_sched_getaffinity, CAPSTONE_GROUP_DELEGATED, 3, "sched_getaffinity", {I, I, OUT_ARG(1)}},
+  {CAPSTONE_SYS_sched_setaffinity, CAPSTONE_GROUP_DELEGATED, 3, "sched_setaffinity", {I, I, IN_ARG(1)}},
   {CAPSTONE_SYS_set_tid_address, CAPSTONE_GROUP_DELEGATED, 1, "set_tid_address", {I}},
   {CAPSTONE_SYS_set_robust_list, CAPSTONE_GROUP_DELEGATED, 2, "set_robust_list", {I, I}},
   {CAPSTONE_SYS_futex, CAPSTONE_GROUP_DELEGATED, 6, "futex", {I, I, I, I, I, I}},
@@ -144,6 +146,7 @@ static const struct capstone_delegate_shape shapes[] = {
   {13, CAPSTONE_GROUP_RUNTIME, 2, "park-wake", {I, I}},
   {14, CAPSTONE_GROUP_RUNTIME, 4, "park-requeue", {I, I, I, I}},
   {15, CAPSTONE_GROUP_RUNTIME, 1, "context-exiting", {I}},
+  {16, CAPSTONE_GROUP_RUNTIME, 2, "thread-name", {I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 16, 0, 0}}},
   /* not in this branch: sockets stay unknown until a profile admits them */
 };
 
@@ -265,7 +268,8 @@ size_t capstone_delegate_result_bytes(uint64_t nr, unsigned index, size_t bytes,
   if (nr == CAPSTONE_SYS_rt_sigtimedwait && index == 1 && result <= 0) return 0;
   if (nr == CAPSTONE_SYS_read || nr == CAPSTONE_SYS_pread64 ||
       nr == CAPSTONE_SYS_getdents64 || nr == CAPSTONE_SYS_getrandom ||
-      nr == CAPSTONE_SYS_getcwd || nr == CAPSTONE_SYS_readlinkat)
+      nr == CAPSTONE_SYS_getcwd || nr == CAPSTONE_SYS_readlinkat ||
+      nr == CAPSTONE_SYS_sched_getaffinity)
     return (uint64_t)result < bytes ? (size_t)result : bytes;
   /* Sleep's remaining-time output is defined only on interruption. */
   if ((nr == CAPSTONE_SYS_nanosleep && index == 1) ||

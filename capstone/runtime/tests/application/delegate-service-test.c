@@ -10,7 +10,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/file.h>
 #include <unistd.h>
 #include <time.h>
@@ -45,6 +47,27 @@ int main(void) {
   /* HELLO is answered by the launcher itself */
   x = entry(CAPSTONE_NR_HELLO, 0x80001234, 0x80000000, 0x80010000, 0, 0, 0);
   assert(serve(&x) == 0 && host.hello_seen && host.entry_address == 0x80001234);
+  /* THREAD_NAME names the thread serving the request, as Linux shows it */
+  {
+    char own[16] = {0}, comm[64] = {0}, proc[64];
+    assert(!prctl(PR_GET_NAME, own));
+    memset(exchange + 512, 0, 16);
+    strcpy(exchange + 512, "svc-test");
+    x = entry(CAPSTONE_NR_THREAD_NAME, CAPSTONE_THREAD_NAME_SET, 512, 0, 0, 0, 0);
+    assert(serve(&x) == 0);
+    memset(exchange + 512, 0, 16);
+    x = entry(CAPSTONE_NR_THREAD_NAME, CAPSTONE_THREAD_NAME_GET, 512, 0, 0, 0, 0);
+    assert(serve(&x) == 0 && !strcmp(exchange + 512, "svc-test"));
+    snprintf(proc, sizeof proc, "/proc/self/task/%ld/comm", (long)syscall(SYS_gettid));
+    int cf = open(proc, O_RDONLY);
+    assert(cf >= 0 && read(cf, comm, sizeof comm - 1) > 0 && !strcmp(comm, "svc-test\n"));
+    close(cf);
+    x = entry(CAPSTONE_NR_THREAD_NAME, 2, 512, 0, 0, 0, 0);
+    assert(serve(&x) == -EINVAL);
+    x = entry(CAPSTONE_NR_THREAD_NAME, CAPSTONE_THREAD_NAME_GET, EXCHANGE - 8, 0, 0, 0, 0);
+    assert(serve(&x) == -EFAULT);
+    assert(!prctl(PR_SET_NAME, own));
+  }
   /* write through the exchange region to a pipe, then read it back */
   int fds[2];
   assert(!pipe(fds));
@@ -54,6 +77,22 @@ int main(void) {
   x = entry(CAPSTONE_SYS_read, (uint64_t)fds[0], 128, 32, 0, 0, 0);
   assert(serve(&x) == 6 && !memcmp(exchange + 128, "hello\n", 6));
   assert(host.bytes_in == 6 && host.bytes_out == 32);
+  /* sched_getaffinity: the serving thread's CPU set, and no other task's */
+  memset(exchange + 512, 0, 128);
+  x = entry(CAPSTONE_SYS_sched_getaffinity, 0, 128, 512, 0, 0, 0);
+  {
+    long got = serve(&x);
+    int any = 0;
+    assert(got > 0 && got <= 128);
+    for (long i = 0; i < got; ++i) any |= exchange[512 + i];
+    assert(any);
+  }
+  x = entry(CAPSTONE_SYS_sched_getaffinity, 1, 128, 512, 0, 0, 0);
+  assert(serve(&x) == -ESRCH);
+  x = entry(CAPSTONE_SYS_sched_setaffinity, 0, 128, 512, 0, 0, 0);  /* the set just read */
+  assert(serve(&x) == 0);
+  x = entry(CAPSTONE_SYS_sched_setaffinity, 1, 128, 512, 0, 0, 0);
+  assert(serve(&x) == -ESRCH);
   /* a string argument: openat of a path in the exchange region */
   char path[] = "/tmp/capstone-delegate-XXXXXX";
   int tmp = mkstemp(path);
@@ -136,8 +175,8 @@ int main(void) {
   /* exit_group ends the run, and does not run */
   x = entry(CAPSTONE_SYS_exit_group, 42, 0, 0, 0, 0, 0);
   assert(serve(&x) == 0 && host.exiting && host.exit_status == 42);
-  /* five refused by the validator; the string and kill refusals are the runnerâs */
-  assert(host.refused == 5 && host.rounds == 23 && host.syscalls == 16);
+  /* six refused by the validator; the string and kill refusals are the runnerâs */
+  assert(host.refused == 6 && host.rounds == 31 && host.syscalls == 23);
   close(tmp);
   unlink(path);
   /* the fault record writes without blocking, even to a full pipe */

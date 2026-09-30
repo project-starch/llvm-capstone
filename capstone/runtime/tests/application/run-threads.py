@@ -72,6 +72,8 @@ PTHREAD_MODES = {
     "tsd": ("exit", 0, "PASS", None, None),
     "cond": ("exit", 0, "PASS", None, None),
     "clone-refused": ("exit", 0, "PASS", None, None),
+    "thread-name": ("exit", 0, "PASS", None, None),
+    "affinity": ("exit", 0, "PASS", None, None),
     "pi-mutex": ("exit", 0, "PASS", None, None),
     "user-stack": ("exit", 0, "PASS", None, None),
     "main-exit-more": ("exit", 0, "main-exit-more: PASS", None, None),

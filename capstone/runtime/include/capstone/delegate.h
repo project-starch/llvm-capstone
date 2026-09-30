@@ -166,6 +166,14 @@ enum capstone_delegate_group {
  * the word the context cleared on its way out, as Linux does for
  * CLONE_CHILD_CLEARTID. -EINVAL from a context without a transport of its own. */
 #define CAPSTONE_NR_CONTEXT_EXITING UINT64_C(0xC0DE000F)
+/* THREAD_NAME: the calling thread's name, which is the name of the Linux
+ * thread that serves its context (prctl PR_SET_NAME and PR_GET_NAME there).
+ * args[0] 0 sets it from the 16-byte buffer at args[1], 1 reads it into that
+ * buffer. */
+#define CAPSTONE_NR_THREAD_NAME UINT64_C(0xC0DE0010)
+#define CAPSTONE_THREAD_NAME_SET 0u
+#define CAPSTONE_THREAD_NAME_GET 1u
+#define CAPSTONE_THREAD_NAME_BYTES 16u
 #define CAPSTONE_CONTEXT_REGISTER 0u   /* register only; the application steps it */
 #define CAPSTONE_CONTEXT_THREAD 1u     /* a launcher thread steps it until it ends */
 
@@ -239,7 +247,9 @@ enum {
   CAPSTONE_SYS_exit_group = 94, CAPSTONE_SYS_set_tid_address = 96,
   CAPSTONE_SYS_futex = 98, CAPSTONE_SYS_set_robust_list = 99,
   CAPSTONE_SYS_nanosleep = 101, CAPSTONE_SYS_clock_gettime = 113,
-  CAPSTONE_SYS_clock_nanosleep = 115, CAPSTONE_SYS_sched_yield = 124,
+  CAPSTONE_SYS_clock_nanosleep = 115, CAPSTONE_SYS_sched_setaffinity = 122,
+  CAPSTONE_SYS_sched_getaffinity = 123,
+  CAPSTONE_SYS_sched_yield = 124,
   CAPSTONE_SYS_kill = 129, CAPSTONE_SYS_tkill = 130, CAPSTONE_SYS_sigaltstack = 132,
   CAPSTONE_SYS_rt_sigsuspend = 133, CAPSTONE_SYS_rt_sigaction = 134,
   CAPSTONE_SYS_rt_sigprocmask = 135, CAPSTONE_SYS_rt_sigpending = 136,
