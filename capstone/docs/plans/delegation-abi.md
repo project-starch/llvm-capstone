@@ -193,7 +193,13 @@ Each step stacks on the previous one, is gated, and lands squashed.
    `popen` and `setjmp` pass in libc-test; CPython `test_signal` 25 pass,
    0 fail, 13 skipped, 19 errors that are all an unserved `clone`, `socket`
    or thread start; the port's signal smoke 18/18. The CPython `subprocess`
-   patch (`fork_exec` through `posix_spawn`) is the next port item.
+   patch (`fork_exec` through `posix_spawn`) is `delegation-cpython-subprocess`,
+   CPython patch 0015: the port's subprocess smoke 21/21, `test_subprocess`
+   237 ok of 344 (from 179), `test_popen` 5/5. Found on the way, each its own
+   small runtime item: `kill` to the parent process (a child domain signalling
+   its parent gets EPERM), `pselect6`, `getpgid` and `getsid` rows, ESRCH for
+   a vanished pid, and the domain's unserved report only under
+   `CAPSTONE_DELEGATE_STATS`, since it lands on the application's stderr.
 6. **`delegation-memory`** (was 5): region grant at the resume label, chunk
    allocator, heap declared as initial size. Gate: CPython built without
    `ac_cv_func_mmap=no`.
