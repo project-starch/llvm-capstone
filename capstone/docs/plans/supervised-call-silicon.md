@@ -146,6 +146,24 @@ the after-audit, synthesis, silicon.
   in taken exceptions, CAPPRINT count and retired count; `revocation` loses its three phantom mid-switch traps
   with readings and retired count unchanged; the mid-switch detector fires 0 of 92 times (5 of 97 before).
   Not landed on the submodule's shared branch and the parent's pointer not bumped: synthesis is the lead's call.
+- **Step 9 pre-registration, FINAL (2026-10-01, written before any synthesis number exists; supersedes the
+  "~476 FFs" of revision 1.1):** own-cell flop delta = csr_regfile supervision state 524 bits (armed 1, active 1,
+  base 64, save base 64, seal 129, rd 5, csupquantum 32, counter 32, resume 1, event valid 1 + kind 2 + cause 64
+  + epc 64 + tval 64) + commit escape flops 259 (escape_q 1, pc 64, pc metadata 64, cause 64, tval 64, kind 2) +
+  ex_stage's CALL pc latch 128 + the rev-node's free_len 16 + the switcher's phase 2 and its widened request
+  register 137 = **1066**. The scoreboard entry's `dom_switch_req_t` grew by 137 bits and `cap_wbdata_t` by 1
+  (sup_arm_en), i.e. 138 bits per entry: the request's new fields are constant 0 at every pack site (commit is
+  their only writer, on its own output), so opt_design should prune those flops -- a delta near +1066 confirms
+  it, a delta near +2170 means they were NOT pruned and the walk fields must move off the entry type. ORDER-like
+  test (0/500 cells before the load unit, the D-cache arbiter and i_frontend): the only NEW combinational inputs
+  are `csr_exception_i.valid` and the 64-bit `foreign_return` compare into `dom_switch_valid_o`/`commit_lsu_o`
+  (the after-audit's 1b); `exception_o.valid` gains flop-sourced terms only, the foreign-RETURN compare having
+  been kept out of its cone; the escape request itself is issued from flops. Loop membership: the 40 UNOPTFLAT
+  names unchanged (verified by name against the prerequisite tree). LUTLP-1 = 0. WNS within the null band of
+  -9.595 +/- 3.74. `timing-forensics.tcl` startpoint census unchanged under commit_stage/csr_regfile's dom-switch
+  names. If the reading would be uninformative the build does not go: here it is not -- the design is inert
+  unless cssupervise runs, so the bitstream's first job is the R-43 acceptance list unchanged, then the first
+  capstone-exec program.
 - **Final ladder on the audited tree (`all4`, every test, 2026-10-01 evening):** identical to the readings below
   where they overlap, plus the audit's arms: the x1 sentinel 0x1234 survives 53 resumes (quantum 64) and 103
   (quantum 16) with the count exactly 400 both times; CCSRRW cpmp0 with a tagged capability escapes (5) and the
