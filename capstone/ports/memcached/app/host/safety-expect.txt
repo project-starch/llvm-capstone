@@ -137,3 +137,52 @@ slabsublet1   8  FAULT  oob
 slabsublet1   9  FAULT  oob
 slabsublet1  10  FAULT  temporal
 slabsublet1  11  FAULT  temporal
+
+# FIXTURES 12-16: the five cases of bug-corpora/memcached/allocator-repros, performed in-process
+# inside the running server, registered 2026-10-02 BEFORE any of them had booted and pushed before
+# their first run. Each fixture performs its own premature free through memcached's real allocator;
+# none goes through the upstream consumer path, and none needs a defect to be live in 1.6.45.
+#   12 case 00  cache.c object: a read buffer returned to its cache and THEN copied out of
+#   13 case 01  cache.c object: a pending-IO list walked while the body frees and reissues the entry
+#   14 case 02  slabs chunk: tail repair assigns refcount = 1 over a holder's reference, then unlinks
+#   15 case 03  slabs chunk: CVE-2018-1000127's unsigned-short refcount wrap past the holders
+#   16 case 04  slabs chunk: an unlocked decrement loses a concurrent get, so the next release frees
+#
+# WHAT EACH PREDICTION RESTS ON:
+# - EVERY ONE of these reads index 0 of its OWN unit (12: byte 0 of a 16384-byte object; 14-16: byte 0
+#   of the item payload inside a chunk of class slabs_clsid(sizeof(item)+64)), so none is an overflow
+#   and the verdict can only be RETURN or FAULT temporal -- never oob. Derived per fixture from the
+#   bounds each one prints, not copied from fixture 10.
+# - The marks encode (reuse << 8) | value. For 12 and 13 the value is the case's own `damage` flag
+#   (12: the copied bytes differ from the command, because the free list's link was written over
+#   them; 13: the walk returned 1 of 3 IOs, because the reissued object was zeroed by its new owner),
+#   since byte 0 of a freed cache object is part of a pointer and is not predictable. For 14-16 it is
+#   the byte the NEW item wrote at that address (0x5c, 0x2e, 0x91 -- each case's own OTHER value).
+# - `sublet` is the NEGATIVE CONTROL and must RETURN all five. Neither allocator calls free on these
+#   paths: cache_free pushes the object onto a STAILQ and do_slabs_free pushes the chunk onto its
+#   class's slots list, so the runtime Sublet heap never revokes and the stale alias still names live
+#   storage. Both lists are LIFO, so the next allocation returns the same unit (reuse = 1).
+# - `slabsublet0` must RETURN the same marks: it bounds each unit to itself but renews nothing.
+# - `slabsublet1` must FAULT temporal at the printed address on all five: mcs_object_release and
+#   mcs_chunk_release revoke the unit, and the reissue revokes it again, so the holder's alias reloads
+#   untagged.
+# - A RETURN whose value differs from the prediction, or a fault that is oob rather than temporal, is
+#   a finding about the port or about the reduction -- never an edit here.
+
+sublet       12  RETURN c00101
+sublet       13  RETURN d00101
+sublet       14  RETURN e0015c
+sublet       15  RETURN f0012e
+sublet       16  RETURN 1000191
+
+slabsublet0  12  RETURN c00101
+slabsublet0  13  RETURN d00101
+slabsublet0  14  RETURN e0015c
+slabsublet0  15  RETURN f0012e
+slabsublet0  16  RETURN 1000191
+
+slabsublet1  12  FAULT  temporal
+slabsublet1  13  FAULT  temporal
+slabsublet1  14  FAULT  temporal
+slabsublet1  15  FAULT  temporal
+slabsublet1  16  FAULT  temporal
