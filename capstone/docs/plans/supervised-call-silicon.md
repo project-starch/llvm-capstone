@@ -25,6 +25,56 @@ estimate sent to the board lane on 2026-10-01 concluded: no firmware-only path; 
 decoded; "collect" is a no-op on silicon because the revoke walk already frees); a CALL by a supervised domain is
 ILLEGAL in v1 (no context stack). Naming: "trap-vector defect" = registry M-1; "node reclaimer" = R-12 / study M1.
 
+## REVISION 1.2 (2026-10-01, the implementation on capstone-ariane branch `sup-call`)
+
+Implemented as designed in 1.1 with the following refinements, each forced by the RTL or by a test:
+
+- **SAVE runs BEFORE the 0..7 exchange, RESTORE after it, and a resume's RESTORE starts at id 8.** The walks
+  and the exchange both cover ids 3..7 (mstatus, mideleg, medeleg, mip, mie at +48..+87, inside the SEALEDRET
+  window). With SAVE after the exchange, the armed CALL would have saved the domain's image as "the monitor's",
+  and the escape would have saved the monitor's values as "the domain's". So: armed CALL = SAVE the monitor's
+  3..66 into the private area, THEN the ordinary exchange (arguments in a0..a7, as before), then (resume only)
+  RESTORE the domain's 8..66 from its seal -- its 3..7 come from the exchange, out of the seal's slots 3..7 that
+  the escape's SAVE wrote. Escape and supervised RETURN = SAVE the domain's 3..66 into its seal region, exchange
+  0..7, RESTORE the monitor's 3..66 from the private area, which overrides whatever the exchange brought in from
+  the writable window. The request carries `save_en/save_base/restore_en/restore_base/restore_lo`.
+  Found by self-review; the tests of 1.1 could not see it (both sides had MIE = 0), so every test now reads the
+  monitor's `mie` back (0x888) and the MTIP test resumes the domain and demands a second timer escape.
+- **The resume flag is a CSR, `csupctl` (0x7C4, bit 0), consumed by the armed CALL;** `csupquantum` is 0x7C3.
+  The read-only set: `csupstatus` 0xFC0 = {kind[1:0], valid} (read-to-clear), `csupcause` 0xFC1, `csupepc`
+  0xFC2, `csuptval` 0xFC3, `csnodefree` 0xFC4 = 65535 - head + free_len (the rev-node exports `free_len`).
+  All have addr[9:8] = 2'b11, so the supervision gate covers them.
+- **`cssupervise rd, rs1(seal), rs2(save area)`**: statuses 0 armed / 1 dead node / 2 refused (rd in {x0, rs1,
+  rs2}; rs1 not a synchronous SEALED; rs2 not LINEAR RW; either region < 1024 B or not 16-B aligned -- the
+  seal's size CANNOT be checked here: a SEALED capability carries no end bound in a register, so its 1 KiB minimum is
+  SEAL's to enforce, S-11) / 3 an unread event (assigned by commit,
+  which also drops the arm). rs1 = x0 is the forget form. The arm's data (seal base, save base, the seal) rides
+  in the result pack's dom_switch fields with `dom_switch_en = 0` and a new `sup_arm_en` bit, so the scoreboard
+  entry grows by one bit plus the request's new fields. Status 3 is a write-data override at commit.
+- **The escape at commit**: `escape_d` (combinational, decision cycle T) strips `exception_o` and loads flops
+  (pc, pc metadata, cause, tval, kind); `escape_q` issues the RETURN-shaped request at T+1 from the flops alone
+  and is held until the switcher acknowledges. Both T and T+1 force every commit side effect off. The strip also
+  fires while the switcher is busy (M7, below). A RETURN through a seal that is not the supervised one, or to a
+  caller other than the supervising rd, is `foreign_return`: an escape with kind 2, cause 26.
+- **Guards**: decoder -- SRET, MRET, WFI, CALL, CAPENTER, CSSUPERVISE, CAPCREATE/CAPTYPE/CAPNODE/CAPPERM/
+  CAPBOUND (CAPPRINT stays legal) are illegal under supervision; CSR file -- every plain CSR with addr[9:8] != 0
+  and 0x800/0x801/0x802/0x804/0x810/0x811, and CCSRRW to CIH and CPMP0..15, raise a privilege violation (so the
+  domain cannot read mstatus/mie either; fcsr and the user counters stay legal); `wfi_d` is forced low.
+- **The quantum**: a 32-bit down-counter in the CSR file, loaded from csupquantum at the armed CALL, counting
+  only while `sup_active && !dom_switch_active`, holding at zero; `irq_ctrl.sup_quantum` is injected by the
+  decoder after the ordinary interrupt block with cause 0x8000_0000_0000_0010.
+- **M7, the busy-exception detector over the 92-test corpus on the unmodified RTL (sweep0, 97 runs):** 5 hits,
+  the 4 sup-strip arms by design and `revocation` (2): an ILLEGAL_INSTRUCTION on a speculatively fetched
+  `0x0000` word past the callee's RETURN, delivered to the CSR file in the middle of a switch and visible in the
+  retirement trace as two taken traps. The strip makes those two traps disappear; the step-8 neutrality run must
+  therefore show exactly that difference in `revocation` and no other.
+- **Lint**: 0 errors; LATCH 52, MULTIDRIVEN 3, UNOPTFLAT 40, BLKSEQ 2, UNDRIVEN 25 all at baseline; UNUSEDSIGNAL
+  rises only by renumbered Anvil wires and bit-range shifts of the widened scoreboard entry (compared by name).
+- **Verification so far** (retirement-trace readings, capprint-readings.py): step 0 and step 1 as recorded in
+  d38887426; step 3 (five synchronous faults: ecall 11, illegal 2, `csrw mepc` 2 under the gate, misaligned load
+  4, mret 2) escapes with the right cause/epc/tval, the seal back SEALED, x7/x29 restored, no trap, csupstatus
+  read-to-clear -- on the 1.1 walk order; the 1.2 re-run with the mie readings and steps 2, 4, 5, 6, 7 follows.
+
 ## REVISION 1.1 (2026-10-01, after the before-audit) — the monitor's continuation lives in a PRIVATE save area, not in the seal
 
 The audit refuted the design below on its central premise, and both critical findings are verified in source:
@@ -92,7 +142,7 @@ The switcher already implements a full context exchange — `is_full=1` walks id
 cscratch/mscratch, mstatus, mideleg, medeleg, mip, mie, offsetmmu, CPMP0..15, x1..x31 with metadata, mcause..satp
 (`core/anvil_build/capstone_dom_switcher.anvil:113-126`; ids: frontend 0, csr_regfile 1..25 & 57..66, GPRs 26..56 via
 `issue_read_operands.sv:1568-1569`). Nothing sets `is_full=1` today; CALL/RETURN use ids 0..7 (`capstone_dyn_unit.anvil:311,346`).
-The seal is 96 × 16 B = 1536 B; full mode needs 944 B. SEAL is MEANT to require ≥ 1024 B (`capstone_flu_unit.anvil:207-215`) but that check is inert on every bitstream so far (S-11 / R-32, the Anvil relational-precedence fold; QEMU raises since 2026-09-26 with a 528-byte minimum), so `cssupervise` checks the seal's and the save area's size and alignment itself. [Corrected 2026-10-01; the full-mode slot map was measured the same day after the switcher's own instance of the fold was fixed.]
+The seal is 96 × 16 B = 1536 B; full mode needs 944 B. SEAL is MEANT to require ≥ 1024 B (`capstone_flu_unit.anvil:207-215`) but that check is inert on every bitstream so far (S-11 / R-32, the Anvil relational-precedence fold; QEMU raises since 2026-09-26 with a 528-byte minimum), so `cssupervise` checks the save area's size and alignment and the seal's alignment itself; the seal's SIZE cannot be checked from a register (a SEALED capability has no end bound there, `decompress_cap_metadata`), so the walks rely on SEAL's minimum, i.e. on S-11 being fixed or on the monitor sealing >= 1 KiB as it does today. [Corrected 2026-10-01; the full-mode slot map was measured the same day after the switcher's own instance of the fold was fixed.]
 
 ```
    monitor                                   supervised domain (runs in M-mode, capmode on)
