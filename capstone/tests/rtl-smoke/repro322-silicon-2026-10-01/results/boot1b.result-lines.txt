@@ -1,0 +1,16 @@
+# boot r322-b1b, 2026-10-01 16:23-16:47, caplifive_r43_8f6a0af.bit, REFUSAL_RECORD=1
+# fw_payload 569475657d284c58 (monitor 2dcd3a5, buildroot d04bd83), host sqlite_host.user 2c9e82d101b48160
+# images: v2 (cells.tsv, SHA256SUMS). Every returning cell's domain output compared line by line with the
+# emulator's reading of the same image (CAPSTONE_GP_FABRICATE=0, same host): IDENTICAL, 7/7.
+control: RESULT k800 retval=4                                   (k800.dom b2d60e525f807ea4)
+base322      148b1c999e05397e @0x410000:  returned; rows alpha 11 / beta 22 / gamma 33, EXTENDED_PASSED, MEMORY_PASSED
+wschema      c56f2628cd09f69c @0x810000:  returned; CONTROL insert rc=0, poisoned insert rc=11 (malformed), NOTRAP done
+blobwrite    ffd40551852631aa @0xc10000:  returned; write rc=0, NOTRAP done
+mem5design   73928e4e83ac50cb @0x1010000: returned; before=2779054080 after=4294967295 (in-band metadata overwrote caller data), NOTRAP done
+blobclose    61b839e7bbb9ac48 @0x1410000: returned; NOTRAP done
+jsonstatic   d3c42593742294cb @0x1810000: returned; cross_rows=6, max=[3,4,5], rows=1, NOTRAP done
+jsonroot     d203202e979146d4 @0x1c10000: returned; cross_rows=6, three root=$.bb pairs, max={"bb":[3,4,5]}, rows=1, NOTRAP done
+backupattach 7695f88f547bda1f @0x2010000: WEDGED, as pre-registered
+    trap log 0x98 -> mcause 24 = UNEXPECTED_OPERAND_TYPE (riscv_pkg.sv:358 at 8f6a0af98)
+    trap mepc 0x84806c64 -> offset 0x6c64 into the 4 MiB-aligned block -> VA 0x2016c64 = sqlite3BtreeUpdateMeta+0x48,
+    the emulator's fault instruction exactly; trap tval 0x0 (emulator: 0x0); refusal record EMPTY [204:02 205-208:00]
