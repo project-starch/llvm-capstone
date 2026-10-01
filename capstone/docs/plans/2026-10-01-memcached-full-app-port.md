@@ -1,6 +1,8 @@
 # memcached 1.6.45 as a full application on the delegated runtime
 
-**Status:** M0–M5, the Safety fixtures and S1 (Sublet inside the slabs) done (2026-10-01); stretch S2 open. Lane branches `memcached-app`, `slab-sublet`.
+**Status:** M0–M5, the Safety fixtures and S1 (Sublet inside the slabs) done (2026-10-01). Open and
+awaiting the project lead: stretch S2 (upstream `t/*.t`) and corpus case 02 over the protocol.
+Lane branches `memcached-app`, `slab-sublet`.
 
 ## Why memcached, and why now
 
@@ -408,8 +410,13 @@ the oracle never frees its large values, so that hook never ran. Fixture 11 (bel
 it. The predictions did not rest on either sentence. Details and the limits (QEMU only,
 `-m 48`, no page mover) are in `ports/memcached/app/results/2026-10-01-qemu-slab-sublet/`.
 
-**S1 is done.** Open: stretch S2 (upstream `t/*.t`), and corpus case 02 over the protocol (paused,
-see the Safety section above).
+**S1 is done.** Open: stretch S2 (upstream `t/*.t` against the domain) and corpus case 02 over the
+protocol. Both are paused awaiting the project lead; neither is blocked by the platform.
+
+For S2 one risk is retired: the plan's risk 7 asked whether the guest's SSH server would refuse
+port forwarding. It does not. The guest dropbear is built with `DROPBEAR_SVR_LOCALTCPFWD` and
+`DROPBEAR_SVR_REMOTETCPFWD` (`default_options.h:71-72`), and the `dropbearmulti` the VM runs carries
+both `direct-tcpip` and `tcpip-forward`. So a host-side harness can reach a domain server's port.
 
 ## Milestones
 
@@ -424,4 +431,5 @@ see the Safety section above).
 | M4 | SIGTERM and SIGUSR1 | exit statuses and stderr match native |
 | M5 | level0, shrink, sublet; N = 3 | identical; null, positive and identity controls fire |
 | Safety | fixtures pre-registered in `host/safety-expect.txt`; corpus case 02 over the protocol | outcomes as predicted — **fixtures done, 90/90**; case 02 open |
-| S1 | Sublet inside slabs.c and cache.c (patch 0006, `host/build-slab-sublet.sh`) | oracle identical on both modes; fixtures 9 and 10 flip to FAULT — **done, 6/6 and 60/60** |
+| S1 | Sublet inside slabs.c and cache.c (patch 0006, `host/build-slab-sublet.sh`) | oracle identical on both modes; fixtures 9, 10 and 11 flip to FAULT — **done: oracle 6/6, fixtures 60/60 then 18/18** |
+| S2 | upstream `t/*.t` against the domain server | open; the guest's SSH forwarding is confirmed available |
