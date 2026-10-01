@@ -459,6 +459,73 @@ one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` i
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
 
+## FIXED: the rung E fault was OUR realloc, copying byte by byte
+
+`libc/php_capstone_malloc.c`'s `realloc` was
+
+    for (unsigned long i = 0; i < cp; i++) { q[i] = s[i]; }
+
+**A byte loop.** Byte stores register no capability tag, so every capability inside a reallocated
+block came out with its address intact and its tag gone. It is now `memcpy(q, p, cp)`, which is
+correct here because both blocks start at `base + 96` (16-aligned), so beebs' memcpy sees
+`da == sa == 0` and takes its `ldc`/`stc` chunk path.
+
+**The control arm now completes**: `retval = 4351` -- ENTERED SINKED STARTED COMPILER EXECUTOR
+REGISTERED EVALED **ISARRAY**, with BAILED and ERRORS absent. `parse_url("file:///")` returns a
+real array, executed by the real engine in a domain.
+
+Why it took fourteen eliminations to find: the defect is **silent by construction**. The
+destination of a realloc copy is a FRESH allocation, so there is no live tag to destroy and a tag
+watch reports nothing; and an `stc` of the resulting untagged value registers nothing either, so it
+propagates through arbitrarily many correct copies with no signal. PHP reallocs capability-bearing
+memory constantly -- `get_next_op` grows `op_array->opcodes`, `zend_hash` grows its buckets,
+`zend_prepare_string_for_scanning` reallocs the script text.
+
+## BUT THE TRIGGERS MISS, AND THE MATCHED PAIR IS INERT -- the seam is one layer too low
+
+Both triggers now return a verdict, and the verdict is **MISSED**: control passes, and the fault arm
+completes too. That is not a result about PHP. The arithmetic says why, and it is a design error in
+this port, not a measurement:
+
+    sizeof(zend_mem_header) = 48      MEM_HEADER_PADDING = 0        (measured on this target)
+
+    PHP's _emalloc(9)  asks our malloc for   48 + REAL_SIZE(9)   = 64
+    our allocator bounds                     96 + BOUND_BYTES(64)
+      fault arm    BOUND_BYTES(64) = 64                  -> end = base + 160
+      control arm  BOUND_BYTES(64) = REAL_SIZE(64) = 64  -> end = base + 160   IDENTICAL
+    PHP returns p + 48 = base + 144, capability still ends at base + 160
+      => 16 bytes reachable for a 9-byte string; `*(e+5)` at index 9 is well inside
+
+So two compounding faults:
+
+1. **The bound is applied to PHP's whole block, not the user's string.** With `ZEND_MM` undefined,
+   PHP's own `_emalloc` still wraps our `malloc` and adds its own 48-byte `zend_mem_header` INSIDE
+   our capability. The user's 9-byte request ends up with 16 reachable bytes.
+2. **`REAL_SIZE` is the identity on PHP's request.** PHP always asks for `48 + REAL_SIZE(n)`, which
+   is a multiple of 8, so `REAL_SIZE` of it changes nothing. **The fault and control arms therefore
+   apply the SAME bound** -- rung E was never a matched pair. The build gate compares file bytes
+   (which do differ, the macro is used elsewhere) and `cmp` cannot see that the behaviour is
+   identical, which is exactly the "MISS indistinguishable from a broken build" failure the gate
+   exists to prevent. The gate needs strengthening to compare the BOUND, not the bytes.
+
+**This refutes a premise of the plan**, which argued: "ZEND_MM is left undefined ... so
+`ZEND_DO_MALLOC` is plain `malloc` ... Every emalloc block therefore gets its own precisely-bounded
+capability." It does not: PHP's `_emalloc` is still in the picture and its header sits inside our
+bound.
+
+### The fix, and why `ports/php/zend-alloc/` already gets this right
+
+The capability-bounding allocator must **be** PHP's `_emalloc`, not sit under it -- i.e. supply
+`_emalloc`/`_efree`/`_erealloc`/`_ecalloc`/`_estrndup` from the ported header as the external
+symbols and stop compiling `Zend/zend_alloc.c`'s versions, so the bound is computed from the
+caller's own `size`. That is precisely the configuration CRASH-008 runs in, where the ported
+allocator IS the allocator -- and it is why that suite catches its bug while rung E cannot.
+
+Cost: `zend_alloc.c` stops being byte-identical from the corpus tree (it is dropped, not edited),
+and the ported allocator must grow the few entry points the engine needs beyond malloc/free. Both
+are smaller than they sound, and the alternative is an experiment whose two arms are the same
+program.
+
 ## THE REASON EVERY TAG WATCH CAME BACK SILENT
 
 `store_capregval` adds a map entry only when the stored register is TAGGED; for an untagged value

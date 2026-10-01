@@ -14,6 +14,7 @@
  * allocation inside ONE capability and catch NOTHING. The point of the port would be lost.
  * Do not "fix" this by enabling ZEND_MM.
  */
+#include <string.h>   /* memcpy -- realloc needs the TAG-PRESERVING copy, see below */
 #include "../../zend-alloc/zend_capstone_alloc.h"
 
 /* STACK-DEPTH WATCHDOG, sited in malloc.
@@ -99,8 +100,27 @@ void *realloc(void *p, size_t n)
     unsigned long cp  = old < (unsigned long)n ? old : (unsigned long)n;
     unsigned char *q = (unsigned char *) _emalloc(n);
     if (!q) { return (void *)0; }
-    const unsigned char *s = (const unsigned char *)p;
-    for (unsigned long i = 0; i < cp; i++) { q[i] = s[i]; }
+    /* MUST BE A TAG-PRESERVING COPY, NOT A BYTE LOOP.
+     *
+     * This was `for (i = 0; i < cp; i++) q[i] = s[i];`, and that single byte loop was the root
+     * cause of the rung E cause-24 fault. Byte stores register no capability tag, so every
+     * capability inside a reallocated block came out with its address intact and its tag gone.
+     *
+     * It is silent by construction, which is why fourteen other candidates were eliminated
+     * before it was found: the destination is a FRESH allocation, so there is no live tag to
+     * destroy and a tag watch reports nothing; and an stc of the resulting untagged value
+     * registers nothing either, so it then propagates through arbitrarily many correct copies
+     * with no signal at all.
+     *
+     * PHP reallocs capability-bearing memory constantly -- get_next_op grows
+     * op_array->opcodes, whose znodes hold zvals holding string pointers; zend_hash grows its
+     * bucket array; zend_prepare_string_for_scanning does STR_REALLOC on the script text.
+     *
+     * memcpy is correct here: both blocks come from this allocator at base + header + padding,
+     * which is 16-aligned, so beebs' memcpy sees da == sa == 0 and takes its ldc/stc chunk
+     * path. Any tail shorter than a granule goes byte-wise, which is safe because a capability
+     * is never stored straddling a granule boundary. */
+    memcpy(q, p, cp);
     _efree(p);
     return q;
 }
