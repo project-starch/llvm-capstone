@@ -36,6 +36,9 @@ _start:
     /* Runner control: the correct cause at a different instruction fails. */
     sd zero, 0(zero)
 #endif
+#ifdef CAPSTONE_PREFAULT_PAGE
+    sd zero, 0(s0) /* Control: remove the fault at the named tagged store. */
+#endif
     li t0, 0x5566
     .globl protected_first_store
 protected_first_store:
@@ -45,6 +48,18 @@ protected_first_store:
     blez a0, fail
     ld t1, 0(s2)
     bne t1, t0, fail
+
+    /* This prototype cannot preserve tagged registers in a CLONE_VM child.
+     * It must refuse the syscall before creating a runnable sibling. */
+    li a0, 0x111       /* CLONE_VM | SIGCHLD */
+    li a1, 0
+    li a2, 0
+    li a3, 0
+    li a4, 0
+    li a7, 220
+    ecall
+    li t1, -95         /* -EOPNOTSUPP */
+    bne a0, t1, fail
 
     /* clone(SIGCHLD, NULL, ...) creates a child with a distinct mm.  The
      * parent then blocks in wait4, forcing a switch away and back. */

@@ -5,7 +5,11 @@ ordinary Linux [feasibility control](../../tests/trusted-linux-feasibility/READM
 passes the OS operations needed by the guest probe. A bounded Linux-selected
 process now preserves tagged `s2` across a page-fault retry, `getpid`, and a
 switch away and back through `clone`/`wait4`. The same scalar address without
-the tag faults at its first store; the QEMU bare-metal suite passes 73/73.
+the tag faults at its first store; the QEMU bare-metal suite passes 74/74.
+The protected first store has exactly one observed cause-15 page fault and
+retries successfully. The prototype rejects `CLONE_VM` with `EOPNOTSUPP`
+before a runnable same-`mm` child exists; scalar `copy_thread` cannot transfer its
+tagged register. Legacy and Linux revocation trees use disjoint node IDs.
 This is one protected `mm` on one hart, with a debug-minted page capability
 and no protected libc or checked buffer syscall. The next M1 step is the
 complete tagged register and syscall argument contract, then allocator

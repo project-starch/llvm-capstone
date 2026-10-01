@@ -87,7 +87,7 @@ index 186abd146eaf..0f6b3f7c4e04 100644
 +	add a4, a1, a4
 +#endif
 diff --git a/arch/riscv/kernel/process.c b/arch/riscv/kernel/process.c
-index 8955f2432c2d..242d77aa0156 100644
+index 8955f2432c2d..385a9830348e 100644
 --- a/arch/riscv/kernel/process.c
 +++ b/arch/riscv/kernel/process.c
 @@ -17,0 +18,6 @@
@@ -186,6 +186,17 @@ index 8955f2432c2d..242d77aa0156 100644
 +		     : : "r"(mode) : "memory");
 +}
 +#endif
+@@ -166,0 +261,10 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++	struct mm_struct *owner = READ_ONCE(capstone_owner_mm);
++
++	/* copy_thread uses scalar pt_regs copies.  Until tagged context cloning
++	 * exists, a child sharing this mm must not enter protected U with an
++	 * untagged copy of s2.  A separate-mm fork remains an ordinary child. */
++	if ((clone_flags & CLONE_VM) && owner && current->mm == owner)
++		return -EOPNOTSUPP;
++#endif
++
 diff --git a/include/uapi/linux/prctl.h b/include/uapi/linux/prctl.h
 index a5e06dcbba13..4e05c22a22ff 100644
 --- a/include/uapi/linux/prctl.h

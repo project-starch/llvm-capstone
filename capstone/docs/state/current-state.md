@@ -2,6 +2,20 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-02 — bounded Linux process review fixes
+
+The [one-register Linux gate](../../tests/trusted-linux-feasibility/README.md)
+now requires a cause-15 page fault at the named first tagged store and a
+successful retry. Its prefault control fails that oracle. The protected task
+requires a same-`mm` `CLONE_VM` attempt to return `EOPNOTSUPP` before a child
+exists; a separate-`mm` fork still drives a task switch. QEMU's legacy and
+Linux lifetime trees use disjoint node-ID bands, with a foreign-capability
+fault checked in bare metal. The current QEMU suite passes 74/74, and the
+[process record](../../tests/trusted-linux-feasibility/protected-result.json)
+hashes the QEMU binary and rebuilt kernel actually used. This remains a
+one-register, one-`mm`, one-hart prototype, not protected `malloc` or a full
+Linux ABI.
+
 ## 2026-10-01 — tagged S-mode context candidate
 
 The pinned QEMU [context candidate](../design/trusted-linux-execution-boundary.md)

@@ -310,18 +310,27 @@ anonymous page directly into a protected `pt_regs` slot. The trap entry saves
 `s2` with `CSSTC`; return restores it with `CSLDC`. Other user registers still
 use Linux's scalar context path. On a trap to M-mode OpenSBI, QEMU temporarily
 selects the firmware's original tree and restores the Linux tree on `MRET`.
-This keeps firmware's legacy Capstone node IDs separate from Linux's new ones.
+The two trees now allocate disjoint node-ID bands: legacy IDs below `2^30`,
+Linux IDs from `2^30` to `2^31 - 1`. A foreign or out-of-range ID fails closed
+when the Linux tree exists. A bare-metal guest reads through a fresh Linux
+capability and faults at the named load through a retained legacy capability
+for the same object.
 
 The [guest gate](../../tests/trusted-linux-feasibility/README.md) executes an
-ordinary `mmap`, the first-store page fault and retry, `getpid`, then
-`clone`/`wait4`. A kernel counter confirms a switch away from the protected
+ordinary `mmap`, exactly one cause-15 page fault at the named first store,
+its retry, `getpid`, then `clone`/`wait4`. It first requires
+`clone(CLONE_VM|SIGCHLD)` to fail with `EOPNOTSUPP` before a runnable child
+exists, because this prototype's
+scalar `copy_thread` cannot preserve the tagged `s2` in a child sharing the
+protected `mm`. A kernel counter confirms a switch away from the protected
 `mm` before the parent uses `s2` again. The separately built kernel `Image`,
 QEMU binary and boot inputs are hashed in the [result](../../tests/trusted-linux-feasibility/protected-result.json).
 Replacing the delivered `s2` with the same scalar address passes a separate
 [control](../../tests/trusted-linux-feasibility/protected-strip-control.json)
 only when it faults at the first store (cause 24, exit 132); omitting the
-guest binary also fails the gate.
-The QEMU bare-metal suite remains 73/73, including the full-span CPMP check
+guest binary also fails the gate. Prefaulting the page at a different store
+fails the named-page-fault oracle.
+The QEMU bare-metal suite passes 74/74, including the full-span CPMP check
 for a protected context slot.
 
 This establishes that Linux can own scheduling and page faults while one

@@ -19,6 +19,11 @@ The [stacked QEMU context candidate](design/trusted-linux-execution-boundary.md)
 boots the existing Linux guest with experimental CPU support enabled and
 passes 70/70 bare-metal checks after the `x0` and fault-oracle review fixes.
 It still lacks a protected Linux process ABI.
+The current [one-register Linux gate](../tests/trusted-linux-feasibility/README.md)
+passes with an exact first-store page-fault oracle and explicit refusal of
+same-`mm` clones; the pinned QEMU suite now passes 74/74 with disjoint
+legacy/Linux revocation IDs. Full tagged context and protected allocation
+remain open.
 
 The `trusted-linux-syscall-bounds` lane adds a bounded-buffer prototype to
 the current delegated runtime. Its [one-hart result](../runtime/tests/application/results/20260930-syscall-buffer-bounds.json)

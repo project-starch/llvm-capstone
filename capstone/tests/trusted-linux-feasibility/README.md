@@ -83,8 +83,11 @@ preservation, or safe retirement.
 `protected.S` runs as an ordinary Linux U-mode process. It `mmap`s one page,
 asks the experimental kernel to select a protected lifetime namespace, and
 receives a tagged capability in `s2`. Its first store faults in the page through
-Linux's normal lazy allocation, then retries. It dereferences `s2` after
-`getpid`, creates a child with a separate `mm`, and blocks in `wait4`.
+Linux's normal lazy allocation, then retries. The runner requires exactly
+one cause-15 store-page-fault at the named first store; a successful final
+load establishes that Linux retried it. It dereferences `s2` after `getpid`,
+requires `clone(CLONE_VM|SIGCHLD)` to return `EOPNOTSUPP` without creating a
+runnable child, then creates a child with a separate `mm` and blocks in `wait4`.
 The parent requires the kernel's switch-away counter to be positive and
 reads/writes through `s2` again. The child runs unprotected. The shell reports
 the final exit code; this process deliberately uses no user-buffer syscall or
@@ -94,7 +97,7 @@ The exact [kernel patch](linux-trusted-u.patch) applies to
 `transcapstone-linux` revision `830b3c68c1fb1e9176028d02ef86f3cf76aa2476`;
 `git apply --unidiff-zero --check` can verify the zero-context patch before
 application. It is also committed
-locally on `riscv/trusted-u-entry` as `a56307461a68`; the original repository
+locally on `riscv/trusted-u-entry` as `0c9d8d9d1e0d`; the original repository
 denied the push, so the patch makes this gate reviewable without that remote.
 Build the patched source with `CONFIG_CAPSTONE_TRUSTED_U=y` and the
 same Buildroot cross-compiler used for the guest image. This option is
@@ -120,14 +123,19 @@ Run the same command with `--control-strip-protected-tag`, a separate scratch
 log and record. This control passes only if the guest faults with cause 24 at
 the named first `s2` store and exits 132. Adding
 `--control-wrong-fault-site` to that run must fail even though the earlier
-fault has the same cause. `--control-missing-protected` must also fail.
+fault has the same cause. `--control-prefault-protected-page` must fail the
+page-fault oracle: it faults the page at a different store first, so the named
+store no longer faults. `--control-missing-protected` must also fail.
 The [positive record](protected-result.json) and
 [control record](protected-strip-control.json) include hashes of the kernel image, QEMU binary,
 firmware, rootfs, compiler, sources and guest binaries. The raw serial log
-remains in scratch space. This gate checks one tagged register, one protected
-`mm`, one possible hart, syscall entry/return, a Linux page-fault retry and a
-task switch. It does not check `tp`/`sp` or other capability registers,
-signals, ptrace, protected fork inheritance, checked syscall copies, frame
+and QEMU's interrupt trace remain in scratch space. This gate checks one
+tagged register, one protected `mm`, one possible hart, syscall entry/return,
+a Linux page-fault retry, a task switch and refusal of a same-`mm` clone.
+The current `copy_thread` uses scalar register copies, so a shared-`mm` child
+would inherit protection without `s2` authority; the refusal is required by
+this bounded prototype. It does not check `tp`/`sp` or other capability
+registers, signals, ptrace, protected fork inheritance, checked syscall copies, frame
 reclaim, object revocation or a real allocator. M1 remains open.
 
 The next gate must extend this one-register process to full tagged register

@@ -44,7 +44,8 @@ def symbol_address(binary, name):
 
 
 def run_guest(qemu, images, disk, log_path, timeout, kernel_module=False,
-              protected=False, strip_fault_pc=None):
+              protected=False, strip_fault_pc=None, first_store_pc=None,
+              interrupt_log=None):
     command = [str(qemu), "-M", "virt-capstone", "-m", "2G", "-smp", "1",
                "-nographic", "-monitor", "none", "-serial", "stdio",
                "-bios", str(images / "fw_jump.elf"),
@@ -55,6 +56,8 @@ def run_guest(qemu, images, disk, log_path, timeout, kernel_module=False,
                "-drive", f"file={disk},format=raw,id=probe,readonly=on",
                "-device", "virtio-blk-device,drive=probe",
                "-cpu", "rv64,sstc=false,h=false,x-capstone-u-mode=true"]
+    if interrupt_log is not None:
+        command += ["-d", "int", "-D", str(interrupt_log)]
     lock_path = os.environ.get("CAPSTONE_QEMU_LOCK")
     lock = None
     if lock_path and os.environ.get("CAPSTONE_QEMU_LOCK_HELD") != "1":
@@ -111,12 +114,16 @@ def run_guest(qemu, images, disk, log_path, timeout, kernel_module=False,
                         final_line = (b"CAPSTONE_PROTECTED_EXIT:132" if strip_fault_pc is not None
                                       else b"CAPSTONE_PROTECTED_EXIT:0" if protected
                                       else b"CAPSTONE_PROBE_EXIT:0")
-                        if any(line.strip().startswith(b"CAPSTONE_PROTECTED_EXIT:")
+                        # Serial chunks can end just after the colon (or a
+                        # prefix of the status). Judge only newline-terminated
+                        # shell results, never a partial output fragment.
+                        complete_lines = [line.strip() for line in
+                                          output.split(b"\n")[:-1]]
+                        if any(line.startswith(b"CAPSTONE_PROTECTED_EXIT:")
                                if protected else
-                               line.strip().startswith(b"CAPSTONE_PROBE_EXIT:")
-                               for line in output.splitlines()):
-                            complete = any(line.strip() == final_line
-                                           for line in output.splitlines())
+                               line.startswith(b"CAPSTONE_PROBE_EXIT:")
+                               for line in complete_lines):
+                            complete = final_line in complete_lines
                             break
                 if guest.poll() is not None:
                     break
@@ -147,7 +154,25 @@ def run_guest(qemu, images, disk, log_path, timeout, kernel_module=False,
     if (not complete or len(valid) != 1 or not module_ok or not protected_ok or
             b"CAPSTONE_FEASIBILITY_FAIL:" in output):
         raise RuntimeError(f"guest did not complete the requested Linux gate; see {log_path}")
-    return int(valid[0].group(1))
+    first_store_faults = None
+    if first_store_pc is not None:
+        pattern = re.compile(
+            r"riscv_cpu_do_interrupt: hart:0, async:0, "
+            r"cause:0*([0-9a-f]+), epc:0x0*([0-9a-f]+), .*"
+            r"desc=store_page_fault$")
+        first_store_faults = 0
+        with interrupt_log.open(encoding="ascii", errors="replace") as events:
+            for line in events:
+                match = pattern.fullmatch(line.strip())
+                if (match and int(match.group(1), 16) == 15 and
+                        int(match.group(2), 16) == first_store_pc):
+                    first_store_faults += 1
+        expected = 0 if strip_fault_pc is not None else 1
+        if first_store_faults != expected:
+            raise RuntimeError(
+                f"expected {expected} page fault(s) at protected_first_store, "
+                f"observed {first_store_faults}; see {log_path}")
+    return int(valid[0].group(1)), first_store_faults
 
 
 def main():
@@ -167,6 +192,8 @@ def main():
                         help="replace the delivered s2 capability with a scalar address")
     parser.add_argument("--control-wrong-fault-site", action="store_true",
                         help="fault before the stripped-tag store to test the oracle")
+    parser.add_argument("--control-prefault-protected-page", action="store_true",
+                        help="prefault the page; the named-store fault oracle must reject it")
     parser.add_argument("--timeout", type=int, default=150)
     parser.add_argument("--control-missing-probe", action="store_true",
                         help="omit the guest binary; the run must fail")
@@ -183,6 +210,8 @@ def main():
         parser.error("--control-strip-protected-tag requires --protected")
     if args.control_wrong_fault_site and not args.control_strip_protected_tag:
         parser.error("--control-wrong-fault-site requires --control-strip-protected-tag")
+    if args.control_prefault_protected_page and not args.protected:
+        parser.error("--control-prefault-protected-page requires --protected")
     inputs = {name: args.image_dir / name for name in
               ("fw_jump.elf", "Image", "rootfs.ext2")}
     inputs.update(qemu=args.qemu, compiler=args.cc, source=HERE / "probe.c")
@@ -206,6 +235,7 @@ def main():
         probe_hash = digest(probe)
         protected_hash = None
         strip_fault_pc = None
+        first_store_pc = None
         if args.protected:
             protected_elf = staging / "protected"
             protected_command = [str(args.cc), "-nostdlib", "-static", "-no-pie",
@@ -214,12 +244,15 @@ def main():
                 protected_command.append("-DCAPSTONE_STRIP_S2")
             if args.control_wrong_fault_site:
                 protected_command.append("-DCAPSTONE_WRONG_FAULT_SITE")
+            if args.control_prefault_protected_page:
+                protected_command.append("-DCAPSTONE_PREFAULT_PAGE")
             protected_command += ["-o", str(protected_elf), str(HERE / "protected.S")]
             command_result(protected_command)
             protected_hash = digest(protected_elf)
+            first_store_pc = symbol_address(protected_elf,
+                                            "protected_first_store")
             if args.control_strip_protected_tag:
-                strip_fault_pc = symbol_address(protected_elf,
-                                                "protected_first_store")
+                strip_fault_pc = first_store_pc
             if args.control_missing_protected:
                 protected_elf.unlink()
         if args.control_missing_probe:
@@ -231,11 +264,12 @@ def main():
         with disk.open("wb") as stream:
             stream.truncate(32 * 1024 * 1024)
         command_result(["/sbin/mkfs.ext4", "-F", "-q", "-d", str(staging), str(disk)])
-        same_address = run_guest(args.qemu, args.image_dir, disk, args.log,
-                                 args.timeout, bool(args.kernel_module),
-                                 args.protected, strip_fault_pc)
+        same_address, first_store_faults = run_guest(
+            args.qemu, args.image_dir, disk, args.log, args.timeout,
+            bool(args.kernel_module), args.protected, strip_fault_pc,
+            first_store_pc, scratch / "interrupts.log" if args.protected else None)
         if args.record:
-            record = {"schema": 1, "status": "PASS",
+            record = {"schema": 2, "status": "PASS",
                       "scope": ("stripped_tag_control" if strip_fault_pc is not None else
                                 "single_register_linux_process" if args.protected else
                                 "linux_s_context_preselect" if args.kernel_module else
@@ -249,6 +283,10 @@ def main():
             if args.protected:
                 record["protected_binary_sha256"] = protected_hash
                 record["protected_scope"] = "one tagged s2, one mm, one hart; no libc or checked syscall copy"
+                record["first_store_page_faults"] = first_store_faults
+                record["first_store_page_fault_cause"] = 15
+                if strip_fault_pc is None:
+                    record["clone_vm"] = "rejected with EOPNOTSUPP before a runnable child exists"
                 if strip_fault_pc is not None:
                     record["fault_site"] = "protected_first_store"
                     record["fault_cause"] = 24
