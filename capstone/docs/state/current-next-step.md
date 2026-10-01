@@ -5,9 +5,10 @@ gate is done (the after-audit's four findings fixed and re-measured, the
 difference). The lead decides on synthesis (pre-registration in the plan); the runtime lane builds the FPGA monitor's
 `supervised_invoke` against the CSR-based events (csupctl.resume before a
 resume CALL; status 3 means an unread event). Before silicon: why an unguarded
-`mret` trapped instead of escaping (mutant-only), and whether a SEALED
-capability survives an STC/LDC round trip on silicon (it does not in
-simulation; the monitor keeps its handles that way). R-47 (CALL's parked
+`mret` trapped instead of escaping (mutant-only). (The earlier line here, "a
+SEALED capability does not survive an STC/LDC round trip in simulation", is
+RETRACTED: the test had overwritten the seal with an integer; repaired, it
+survives and the dead-node status is measured.) R-47 (CALL's parked
 return pc after a jump or branch) is fixed on the same branch and must land
 with it; until then, never place a branch right after a CALL.
 
