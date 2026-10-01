@@ -32,7 +32,7 @@
 > different cause code from the RTL's `ILLEGAL_OPERAND_VALUE`. (2) The **second instance** of the same fold, the
 > domain switcher's full-mode slot sizing (`capstone_dom_switcher.anvil`, the 2026-08-23 note), is **fixed** on
 > `capstone-ariane` branch `sup-call` (`d38887426`), confirmed by the switcher's own trace: ids 0-2 at 0/16/32,
-> 3-8 at 48..88 by 8, 9-56 at 96..848 by 16, 57-66 at 864..936 by 8. The SEAL instance here is deliberately NOT
+> 3-8 at 48..88 by 8, 9-56 at 96..848 by 16, 57-66 at 864..936 by 8. [Superseded the same evening by the top callout: fixed.] The SEAL instance here was at that hour deliberately NOT
 > fixed on that branch: the threshold (1024 vs QEMU's 528, plus the `+1` below) is a contract decision.
 > (3) What the dead check costs a CALL, measured in simulation (`verif/tests/custom/capstone/sup-sealsize.S` on
 > `sup-call`, retirement-trace readings): a **64-byte** seal is accepted (LCC type 4), and the CALL's 8-register
@@ -45,7 +45,7 @@
 > alignment itself; the seal's SIZE it cannot check (corrected 2026-10-01: a SEALED capability carries no end bound in a
 > register -- `ariane_pkg.sv` `decompress_cap_metadata` returns `bound_end = 0` for SEALED/SEALEDRET, that field
 > holds reg_id/async -- so the 1024-byte minimum the switch's walks rely on is SEAL's alone to enforce, i.e. this
-> very defect; until it is fixed the resident monitor's 1536-byte seals and the runtime's 1024-byte seals are the guarantee).
+> very defect; until it was fixed that evening -- the top callout -- the resident monitor's 1536-byte seals and the runtime's 1024-byte seals were the guarantee).
 
 > **2026-09-10: CONFIRMED ON THE RTL BY A DIRECTED TEST.** `verif/tests/custom/capstone/seal-minsize-boundary.S` (`capstone-ariane` `f6ec6c198`), 670 cycles: a **1022-byte** region seals without raising, where the spec requires ≥ 1024. Its negative control — sealing a NON-LINEAR capability, which SEAL rejects on a different branch (`UNEXPECTED_CAP_TYPE`, mcause 27) — is the **only** exception in the whole run, so "no arm raised" cannot be the instrument failing to reach SEAL. Until now this folder rested on reading the generated Verilog; it now rests on the hardware.
 >

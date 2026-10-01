@@ -189,7 +189,7 @@ the after-audit, synthesis, silicon.
   rationale: a SEALED capability carries no bounds in a register, its effective base is its CURSOR
   (`decompress_cap_metadata`), so a check on start/end bounds nothing once the cursor is advanced before SEAL --
   a 1024-byte region sealed with the cursor at +960 would put the exchange, the SEALEDRET window and the walks
-  past the region. The fix, batched into this bitstream as the LAST RTL commit on the branch so the lead can veto
+  past the region. The fix, batched into this bitstream as its own commit (c0c546542, with only the bracket test 36a641e0b above it) so the lead can veto
   it alone: `func SEAL` sets the result's cursor := `rs1.metadata.start` -- the spec says the cursor does not
   apply to a sealed capability, and QEMU's CALL uses `bounds.base`, so silicon and QEMU now agree on where a
   seal's exchange lands. Never check the cursor instead: the resident monitor seals its interrupt-handler region
