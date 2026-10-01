@@ -2,6 +2,21 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — S-mode vector stores and strengthened scrub qualification
+
+The stacked QEMU [lane `ed8b9f956e`](https://github.com/project-starch/capstone-qemu/commit/ed8b9f956e)
+clears physical tags after each completed S-mode vector store element, using
+the TLB's physical destination. Its 57/57 bare-metal gate includes a
+CPMP-refused store that preserves bytes and tags, and a scrub test checking
+all 512 words and 256 granules of a seeded 4-KiB frame. The new fault test
+detects an early-tag-clear source mutation that passed the previous 54 checks;
+the scrub oracle now rejects both a two-word overwrite and a skipped interior
+word. The [record](https://github.com/project-starch/capstone-qemu/blob/ed8b9f956e/tests/trusted-linux-u-access/result.json)
+binds the historical Linux smoke to its original binary and record at
+`a417a3ed8b`, explicitly marking it as not rerun for this slice. Linux reclaim,
+tag-preserving kernel copies and process context transfer remain open. M1 is
+not closed; the parent QEMU pin is unchanged.
+
 ## 2026-10-01 — experimental physical tags for U-mode QEMU
 
 The stacked QEMU [lane `a417a3ed8b`](https://github.com/project-starch/capstone-qemu/commit/a417a3ed8b)

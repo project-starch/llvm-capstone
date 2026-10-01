@@ -12,8 +12,8 @@ namespaces, preserved PTE rights and pending accesses on both harts. Next,
 extend the [QEMU U-mode access slice](../design/trusted-linux-execution-boundary.md)
 into a real Linux process. The stacked [physical-tag slice](../design/trusted-linux-execution-boundary.md)
 passes 51/51; its [S-mode kernel-write follow-up](../design/trusted-linux-execution-boundary.md)
-passes 54/54: 46 U-mode guest cases, two configuration rejections, four
-legacy-path executions and two harness controls. Review found that the
+passes 57/57: 47 U-mode guest cases, two configuration rejections, four
+legacy-path executions and four harness controls. Review found that the
 previous two-hart handoff admitted a revoked cross-hart capability and that
 post-store PTE walking could clear the wrong frame's tag. Stores now capture
 their physical destination before writing; QEMU refuses more than one possible
@@ -21,10 +21,13 @@ hart until a shared lifetime namespace exists.
 Keep the experiment behind `x-capstone-u-mode=true` while process selection is absent;
 the old 23/23 gate accepted pre-U-mode setup failures and is superseded.
 Old/fresh capabilities at one virtual address are still debug-minted.
-The follow-up closes the S-mode vector-store tag gap and tests a full-page
-S-mode overwrite with tags at both frame edges. It does not exercise Linux's
-actual page reclaim or define capability-tag preservation for `fork`/COW and
-other kernel copies. Qualify those paths next; then add protected
+The follow-up closes the S-mode vector-store tag gap, checks all bytes and
+tags after a full-page overwrite, and verifies that a CPMP-refused vector
+store preserves both bytes and tags. The gate rejects an early-tag-clear
+source mutation and two incomplete scrubs. The historical Linux smoke is
+bound to its original binary; it was not rerun for this slice. These tests do
+not exercise Linux's actual page reclaim or define capability-tag preservation
+for `fork`/COW and other kernel copies. Qualify those paths next; then add protected
 per-process lifetime selection, shared revocation state and tagged context
 save/restore. The physical tag map passes S-mode scalar, FP, atomic and vector
 stores through a stale cached translation on one hart; Linux context switching

@@ -215,15 +215,20 @@ store used the cached translation to the old frame, then checks that U mode
 sees the tag cleared. A fresh post-store PTE walk cleared the new frame and
 left the written old frame tagged.
 
-The stacked [S-mode kernel-write slice `988d78387e`](https://github.com/project-starch/capstone-qemu/commit/988d78387e)
+The stacked [S-mode kernel-write slice `ed8b9f956e`](https://github.com/project-starch/capstone-qemu/commit/ed8b9f956e)
 adds the same physical-destination capture to each executed S-mode vector
-store element. Its gate passes **54/54**; the new vector test failed on the
+store element. Its gate passes **57/57**; the original vector test failed on the
 pre-hook binary. A stale-TLB vector test checks the frame actually written.
 An S-mode loop also overwrites every word of a 4-KiB frame, and U mode then
-finds zero bytes and absent tags at both edge granules. This establishes one
-scrub mechanism, not Linux's actual frame-reclaim path. The parent QEMU pin is
-unchanged. The [result record](https://github.com/project-starch/capstone-qemu/blob/988d78387e/tests/trusted-linux-u-access/result.json)
-contains source and binary hashes.
+checks all 512 words for zero and all 256 granules for absent tags. Two
+incomplete-scrub controls are rejected. A CPMP-refused vector store checks the
+exact fault and preservation of bytes and tags; it detects an early-tag-clear
+source mutation that passed the former 54-check gate. The old scrub oracle
+also accepted a two-word overwrite; checking only the edges was insufficient.
+This establishes a scrub mechanism, not Linux's actual frame-reclaim path.
+The parent QEMU pin is unchanged. The [result record](https://github.com/project-starch/capstone-qemu/blob/ed8b9f956e/tests/trusted-linux-u-access/result.json)
+contains source and binary hashes. Its historical Linux smoke is explicitly
+bound to the binary recorded at `a417a3ed8b`; it was not rerun for this slice.
 
 A byte copy of a capability-bearing page clears destination tags under this
 store rule. Linux `fork`/COW and any other operation that must preserve live
