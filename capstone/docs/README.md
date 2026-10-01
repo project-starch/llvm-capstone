@@ -8,6 +8,9 @@ ports. They separate an execution/ABI decision from VM, threads, processes and
 loader work, with common acceptance gates and a measured-benefit decision.
 The `memory-trusted-linux` base starts from `dev`; its initial design and plan
 added no implementation or qualification result.
+The [M1 execution-boundary proposal](design/trusted-linux-execution-boundary.md)
+selects Linux U-mode capability processes as the target to test. Its model,
+kernel/user ABI and prototype gate remain open.
 
 The `trusted-linux-syscall-bounds` lane adds a bounded-buffer prototype to
 the current delegated runtime. Its [one-hart result](../runtime/tests/application/results/20260930-syscall-buffer-bounds.json)
@@ -16,6 +19,9 @@ remains open.
 The [review corrections](../runtime/tests/application/results/20261001-syscall-bounds-review-fixes.json)
 add constrained-stack I/O gates and restore explicitly unbounded comparison
 arms; the record keeps the two tested launcher configurations separate.
+The [fresh-guest UDP recheck](../runtime/tests/application/results/20261001-udp-recheck.json)
+passes 11/11 sockets on the previously failing launcher identity, including
+after heap qualification. The earlier failure remains unexplained.
 
 Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
 Seven application recipes are migrated, with new QEMU functional and safety

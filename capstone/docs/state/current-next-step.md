@@ -3,18 +3,23 @@ Trusted Linux application compatibility (2026-09-30): follow the
 `memory-trusted-linux` and its implementation lanes. The
 `trusted-linux-syscall-bounds` lane now demonstrates requested-span checks
 through the current C-mode bridge, with direct-exec and socket contracts in a
-one-hart guest. Next, decide M1's native Linux execution and capability ABI,
-including recoverable copy faults and concurrent object retirement. Integrate
+one-hart guest. The [M1 boundary proposal](../design/trusted-linux-execution-boundary.md)
+chooses Linux U-mode capability processes as the target. Next, model context
+isolation and retirement, then demonstrate ordinary page translation and a
+recoverable buffer-copy fault in a small prototype. The kernel/user ABI and
+two-hart completion contract remain open. Integrate
 the existing thread work with current I/O services and qualify IPv6 end-to-end.
 Linux OS feature parity remains the goal; the bridge result does not establish
 Linux user-mode execution or close M1.
 
 The 2026-10-01 review fixes retain small I/O snapshots and explicit unbounded
-test controls. Preserve the new 32 KiB stack gates. The current launcher's
-UDP receive failure also occurs with the pre-fix image; resolve that separate
-integration gap before claiming its complete socket contract. The
-[record](../../runtime/tests/application/results/20261001-syscall-bounds-review-fixes.json)
-distinguishes it from the snapshot launcher's passing socket run.
+test controls. Preserve the new 32 KiB stack gates. The earlier current-launcher
+UDP receive failure also occurred with the pre-fix image, but a
+[fresh-guest recheck](../../runtime/tests/application/results/20261001-udp-recheck.json)
+on the same launcher and socket hashes passes 11/11 sockets before and after
+heap qualification. Its cause remains unknown; retain the
+[failure record](../../runtime/tests/application/results/20261001-syscall-bounds-review-fixes.json)
+and require a reproducer before claiming a repair.
 
 Application ports (2026-09-29): the seven application recipes now require
 the [shared delegated SDK](../../ports/common/application/README.md), with

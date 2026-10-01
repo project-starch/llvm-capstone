@@ -2,6 +2,21 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — trusted-Linux M1 boundary and UDP recheck
+
+The [M1 proposal](../design/trusted-linux-execution-boundary.md) selects
+capability execution in Linux U-mode as the target for a model and prototype.
+It documents context, translation, syscall-copy and retirement transitions;
+it is not an implemented Linux capability ABI. On the pinned QEMU, `PRV_C`
+aliases M-mode and capability access types bypass ordinary page translation,
+so compiler/libc changes alone cannot close the gate.
+
+The [UDP recheck](../../runtime/tests/application/results/20261001-udp-recheck.json)
+uses the same launcher and socket-image hashes as the prior failure. A fresh
+guest passes 12/12 isolated UDP repetitions and 11/11 sockets before and after
+full heap qualification. The earlier 10/11 result remains recorded and
+unexplained; this is not a source-level repair.
+
 ## 2026-10-01 — syscall bounds review corrections
 
 Vector and message I/O now reserve snapshot space for the validated element

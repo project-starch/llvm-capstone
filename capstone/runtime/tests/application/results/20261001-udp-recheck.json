@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "purpose": "Recheck the previously reported inet-dgram failure with the same launcher and image identities",
+  "platform": "Capstone QEMU, one hart, fresh guest",
+  "sha256": {
+    "qemu": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "firmware": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+    "rootfs": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+    "launcher": "408c1264825eede116b0cf8876813d6a379b4677037545d21700f7e3b1c472d6",
+    "module": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+    "job_helper": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168",
+    "socket_image": "556777b6806190f6494984bb0e176e11a46bd9755a0f4d870b772d751f71f23b"
+  },
+  "results": {
+    "inet_dgram_fresh_guest_repeats": "12/12 PASS with installed launcher and capstone-vm run",
+    "full_socket_suite_fresh_guest": "11/11 PASS",
+    "heap_qualification": "Both application sequences and all 22 heap cases PASS",
+    "full_socket_suite_after_heap": "11/11 PASS",
+    "same_launcher_direct_guest_invocations": "10/10 inet-dgram PASS"
+  },
+  "interpretation": "The previous 10/11 socket result remains a genuine recorded failure, but this recheck did not reproduce it with the same launcher, platform and socket image. Optimization flags alone do not establish its cause. No runtime fix or complete absence of a UDP defect is claimed."
+}
