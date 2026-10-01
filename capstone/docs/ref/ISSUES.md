@@ -689,6 +689,46 @@ te by the RTL lane, 2026-09-24.
 >
 > **Related:** R-26 (the same class: a committed state change that younger instructions checked too early).
 
+### R-47 — CALL parks the WRONG return pc when a jump or branch reaches issue before the dyn unit responds: the caller resumes past that instruction, or mid-instruction `FIXED on capstone-ariane sup-call 727ea6e93 (audited 2026-10-01), not yet landed; OPEN on every bitstream so far`
+
+> **What happens.** `core/ex_stage.sv` builds CALL's domain-switch request when the dyn unit RESPONDS and
+> packs the caller's parked return pc as `pc_i + 4`. `pc_i` is `issue_read_operands.sv`'s `pc_o`, which is
+> updated only by control-flow-class instructions (fu CTRL_FLOW: jal/jalr/branches; CJALR, CBNZ; CALL,
+> RETURN) and is updated whenever one is PRESENTED at the issue boundary, acked or not (the `pc_o <=` block
+> guarded by `fu == CTRL_FLOW || is_cap_ctr_flow || is_cap_dom_switch`; commit 6bd545b65, 2025-05-07, added
+> CALL/RETURN to that set and changed `pc_next` to `pc_i + 4`). The dyn unit answers several cycles after the
+> CALL issues (the request handshake plus a revocation-node validity query), so a jump or branch that reaches
+> issue inside that window -- stalled, flushed or issued -- overwrites `pc_o`, and the parked pc becomes THAT
+> instruction's pc + 4. ALU, CSR and capability instructions never touch `pc_o`; a CAPSTONE_DYN op in between
+> shields the window because issue holds it until the unit is ready again. P's PC-capability metadata is
+> packed too (latent under one code capability).
+>
+> **Measured** (2026-10-01, unmodified RTL = 8f6a0af98 + a sim-only display; `verif/tests/custom/capstone/
+> call-retpc.S` on `sup-call`; the parked pc is the seal's slot 0 as the switcher reads it at each RETURN):
+> a `c.j` and a 4-byte `j` after the CALL parked CALL + 8 in both layouts tried (the caller resumed past them:
+> readings 2 and 4 where 0 was right); a 4-byte taken `beq` parked CALL + 8 in the six-arm layout and CALL + 4
+> in the seven-arm one -- an extra 4-byte instruction earlier in the file shifted fetch alignment, so whether
+> the branch reaches issue in time is decided by fetch timing; a 4-byte `addi`, a `c.addi` and a `csrr` always
+> parked CALL + 4. With the compressed jump the parked address was mid-instruction and the supervised-CALL
+> monitor trapped on an illegal instruction (tval 0x0004), which is how the ladder found it.
+>
+> **Why it was never seen.** No CALL in the directed corpus is followed by control flow inside the window
+> (nops, `li`, CAPPRINT, labels). The resident monitor's seven CALLs and the musl runtime's are each followed
+> by `ccsrrw sp, cscratch, x0` and then `ldc`, a CAPSTONE_DYN op that holds issue until after the response
+> (the shape capstone-c's `synchronous_restore_context` emits), so they are shielded by code shape, not by
+> design; a compiler-generated `if (ret)` right after an inline-asm CALL is the shape that fails. Commit
+> `030378a66` (2026-04-21, "Fixed an issue that caused the instruction after CALL to be executed", controller
+> `flush_ex_o = 1'b1`) addressed a different symptom and never touched `pc_next`.
+>
+> **Fix** (`sup-call` 727ea6e93): latch `pc_i` and `pc_metadata_i` when the dyn unit accepts the request
+> (`|capstone_dyn_valid_i`, the registered ack of a CAPSTONE_DYN issue, the condition `capstone_dyn_ftval_q`
+> already uses). At that edge `pc_o` is the CALL's own pc because CALL is in `pc_o`'s update set; the unit
+> serialises ops; a same-cycle response is never a domain switch. Verified in isolation: that hunk alone on
+> the unmodified tree parks CALL + 4 for all seven arms (the stray mcause 28 that remains there is the separate
+> mid-switch exception hazard, which the supervised-CALL change strips). The audit's two untested predictions
+> stand as such: CALL;CALL corrupts the first's parked pc; control flow two or three instructions after the
+> CALL triggers it when fetch timing lets it reach issue in time (one layout measured: it did not).
+
 ### R-46 — a commit-stage refetch keeps the PC-capability metadata, so a younger CJALR's target metadata can leak into the refetched code `OPEN — accepted for the R-43/R-45 bitstream by the project lead (2026-09-29); predates R-45, which makes it routine`
 
 > **What happens.** On a commit-stage refetch, `frontend.sv` (the `set_pc_commit_i` branch) redirects the PC
