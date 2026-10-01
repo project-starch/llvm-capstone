@@ -120,6 +120,13 @@ in [the buffer boundary result](../../runtime/tests/application/results/20260930
 The Linux user-mode ABI, concurrent revocation/copy-fault recovery and the
 full M1 gate remain open.
 
+The [ordinary Linux feasibility control](../../tests/trusted-linux-feasibility/README.md)
+now runs `mmap`, `mprotect`, `malloc/free`, `fork`, a pipe `read`, and `munmap`
+under the experimental QEMU CPU property. Its record explicitly marks the
+process unprotected. It establishes that the guest and runner can exercise
+these OS calls before M1 adds per-process selection and tagged context transfer;
+it does not satisfy any protected-process part of the M1 exit gate.
+
 ### M2 — Real virtual memory and a growing protected heap
 
 **Work:** Connect libc allocation to Linux anonymous and file-backed mappings;

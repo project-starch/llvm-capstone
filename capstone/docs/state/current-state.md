@@ -2,6 +2,16 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — ordinary Linux feasibility control
+
+The [trusted-Linux feasibility gate](../../tests/trusted-linux-feasibility/README.md)
+now runs a real Linux process using anonymous `mmap`, `mprotect`, `malloc/free`,
+`fork`, pipe `read`, and `munmap` on the QEMU binary with experimental CPU
+support enabled. The pinned result records `protected_process: false`; Linux
+has not selected a capability context or preserved tagged registers. This is
+the control for the next M1 process experiment, not evidence of protected
+Linux allocation or syscall buffers.
+
 ## 2026-10-01 — runtime opt-in for experimental U-mode execution
 
 The stacked QEMU [lane `fafae833fe`](https://github.com/project-starch/capstone-qemu/commit/fafae833fe2bea70427e6ce49ad48a07ee7039fa)

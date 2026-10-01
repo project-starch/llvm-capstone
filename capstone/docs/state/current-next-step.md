@@ -1,6 +1,10 @@
 Trusted Linux application compatibility (2026-10-01): follow the
 [M0–M7 plan](../plans/trusted-linux-application-compatibility.md) on
 `memory-trusted-linux` and its implementation lanes. The
+ordinary Linux [feasibility control](../../tests/trusted-linux-feasibility/README.md)
+passes the OS operations needed by the next guest probe but runs unprotected.
+The next M1 implementation step is a Linux-selected process context with
+tagged register preservation through syscall and scheduling boundaries. The
 `trusted-linux-syscall-bounds` lane demonstrates requested-span checks through
 the current C-mode bridge; it is not the target Linux process ABI. The
 [M1 boundary proposal](../design/trusted-linux-execution-boundary.md) chooses

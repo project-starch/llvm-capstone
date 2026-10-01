@@ -1,0 +1,16 @@
+{
+  "probe_binary_sha256": "d36f523d62fcbcbcc20cdbf3b894f97c3b236a190142076a61a4b088201518b2",
+  "protected_process": false,
+  "same_address_observed": true,
+  "schema": 1,
+  "scope": "ordinary_linux_only",
+  "sha256": {
+    "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "compiler": "1e1308b723db462043d5d5bff44c0ea35ee658cb4131d011614b817e26abc420",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "qemu": "167974547b4e3caf6012d2fef86e90c53e4dd7206d3c017644de70369f4da570",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "source": "2a17ccd4d93b49c6ed9b56cb02739fdcc21279b1f9506f3d8f1a92e76a155b96"
+  },
+  "status": "PASS"
+}
