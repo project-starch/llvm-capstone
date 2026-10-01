@@ -5,7 +5,7 @@ include_guard(GLOBAL)
 # capstone-domain toolchain and musl headers.
 
 function(capstone_configure_application target)
-  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG;EXCHANGE_BYTES;GRANT_BYTES" "")
+  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG;EXCHANGE_BYTES;GRANT_BYTES;CONTEXT_BYTES" "")
   if(app_UNPARSED_ARGUMENTS OR app_KEYWORDS_MISSING_VALUES)
     message(FATAL_ERROR "Invalid capstone_configure_application arguments")
   endif()
@@ -33,7 +33,7 @@ function(capstone_configure_application target)
   if(NOT TARGET capstone-application-core)
     add_library(capstone-application-core OBJECT
       "${musl}/start-musl.S" "${musl}/set_thread_area.S" "${musl}/setjmp.S"
-      "${musl}/hostcall.c" "${musl}/tls.c" "${musl}/atomic_libcalls.c"
+      "${musl}/hostcall.c" "${musl}/tls.c" "${musl}/atomic_libcalls.c" "${musl}/context.c"
       "${capstone}/runtime/common/launch.c")
     file(STRINGS "${musl}/libc_overrides.list" overrides)
     foreach(source IN LISTS overrides)
@@ -96,12 +96,26 @@ function(capstone_configure_application target)
   endif()
   target_compile_definitions(${target} PRIVATE
     CAPSTONE_APPLICATION_EXCHANGE_BYTES=${app_EXCHANGE_BYTES})
-  math(EXPR data_bytes "${app_DATA_BYTES} + 256")
+  # CONTEXT_BYTES: the linear arena _start splits off the data region for
+  # minted contexts (docs/plans/delegation-threads.md). 0 leaves the data
+  # region as it was.
+  if(NOT app_CONTEXT_BYTES)
+    set(app_CONTEXT_BYTES 0)
+  endif()
+  if(NOT app_CONTEXT_BYTES MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "CONTEXT_BYTES must be numeric")
+  endif()
+  math(EXPR context_rest "${app_CONTEXT_BYTES} % 4096")
+  if(NOT context_rest EQUAL 0)
+    message(FATAL_ERROR "CONTEXT_BYTES must be a multiple of 4096")
+  endif()
+  math(EXPR data_bytes "${app_DATA_BYTES} + 256 + ${app_CONTEXT_BYTES}")
   target_sources(${target} PRIVATE "${capstone}/runtime/domain/application.c"
     "${heap}" "${capstone}/runtime/domain/domreq.S"
     "${capstone}/runtime/domain/gct-section-end.S")
   target_compile_definitions(${target} PRIVATE _XOPEN_SOURCE=700
     CAPSTONE_DOMREQ_DATA=${data_bytes} CAPSTONE_DOMREQ_STACK=${app_STACK_BYTES}
+    CAPSTONE_CONTEXT_ARENA_BYTES=${app_CONTEXT_BYTES}
     CAPSTONE_LEVEL0_ARENA_BYTES=${app_ARENA_BYTES})
   target_compile_options(${target} PRIVATE -ffunction-sections -fdata-sections -fno-jump-tables)
   target_sources(${target} PRIVATE $<TARGET_OBJECTS:capstone-application-core>)

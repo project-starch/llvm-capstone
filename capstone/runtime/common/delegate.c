@@ -235,6 +235,9 @@ static const struct capstone_delegate_shape shapes[] = {
   /* runtime-internal: the pointer forms of fcntl and ioctl, spawn with its
      block in the exchange region, the signal requests and hello; looked up
      by their own numbers */
+  {10, CAPSTONE_GROUP_RUNTIME, 3, "context-forget", {I, I, {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, 48, 0, 0}}},
+  {9, CAPSTONE_GROUP_RUNTIME, 3, "context-step", {I, I, {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, 48, 0, 0}}},
+  {8, CAPSTONE_GROUP_RUNTIME, 3, "context-create", {I, I, {CAPSTONE_ARG_OPT_OUT, CAPSTONE_LEN_FIXED, 48, 0, 0}}},
   {7, CAPSTONE_GROUP_RUNTIME, 0, "sigpoll", {I}},
   {6, CAPSTONE_GROUP_RUNTIME, 1, "sigdone", {I}},
   {5, CAPSTONE_GROUP_RUNTIME, 3, "sigaction", {I, I, I}},
@@ -259,7 +262,13 @@ const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
     return &shapes[sizeof shapes / sizeof shapes[0] - 6];
   if (nr == CAPSTONE_NR_SIGPOLL)
     return &shapes[sizeof shapes / sizeof shapes[0] - 7];
-  for (size_t i = 0; i + 7 < sizeof shapes / sizeof shapes[0]; ++i)
+  if (nr == CAPSTONE_NR_CONTEXT_CREATE)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 8];
+  if (nr == CAPSTONE_NR_CONTEXT_STEP)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 9];
+  if (nr == CAPSTONE_NR_CONTEXT_FORGET)
+    return &shapes[sizeof shapes / sizeof shapes[0] - 10];
+  for (size_t i = 0; i + 10 < sizeof shapes / sizeof shapes[0]; ++i)
     if (shapes[i].nr == nr)
       return &shapes[i];
   return NULL;

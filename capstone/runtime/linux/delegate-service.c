@@ -681,6 +681,9 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
     r = capstone_signals_done(&host->signals, snapshot.args[0]);
   } else if (snapshot.nr == CAPSTONE_NR_SIGPOLL) {
     r = 0;
+  } else if (snapshot.nr == CAPSTONE_NR_CONTEXT_CREATE || snapshot.nr == CAPSTONE_NR_CONTEXT_STEP ||
+             snapshot.nr == CAPSTONE_NR_CONTEXT_FORGET) {
+    r = host->context ? host->context(host, &snapshot) : -ENOSYS;
   } else if (snapshot.nr == CAPSTONE_SYS_rt_sigprocmask) {
     /* the logical mask is the domain's; the kernel gets the physical one */
     uint64_t set = 0, old = 0;

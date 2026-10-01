@@ -96,6 +96,14 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME delegate-${case} COMMAND delegate-edge-test ${case})
     set_tests_properties(delegate-${case} PROPERTIES TIMEOUT 15)
   endforeach()
+  # Probe B, native phase: the launcher's parking queue (docs/plans/delegation-threads.md).
+  add_executable(park-test ../tests/application/park-test.c ../linux/park.c)
+  target_compile_options(park-test PRIVATE -UNDEBUG)
+  foreach(case b1 b2 b3-timeout-select b3-timeout-abort b3-eintr-select b3-eintr-abort b4 b5 b12
+          b13a b13b b13c b13d)
+    add_test(NAME park-${case} COMMAND park-test ${case})
+    set_tests_properties(park-${case} PROPERTIES TIMEOUT 15)
+  endforeach()
   add_executable(delegate-rows-test ../tests/application/delegate-rows-test.c
     ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
   target_compile_options(delegate-rows-test PRIVATE -UNDEBUG)

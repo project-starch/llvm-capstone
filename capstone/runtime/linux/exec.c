@@ -18,6 +18,8 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <stdint.h>
 
 extern char **environ;
 
@@ -256,6 +258,90 @@ static long exec_in_place(struct execution *e) {
   return -error;
 }
 
+/* Contexts the application minted (docs/plans/delegation-threads.md). The
+ * launcher registers an offered seal with ADOPT and, in thread mode, steps it
+ * from a Linux thread of its own until it ends; Linux schedules that thread
+ * like any other. The first context stays on the main thread. A context
+ * thread blocks every signal, so the signal ring keeps one producer, and
+ * serves no delegated call: a minted context has no transport of its own yet,
+ * so a round that returns without EXITED ends the thread like an exit does. */
+struct context_service {
+  dom_id_t first;
+};
+
+static void *context_thread(void *arg) {
+  dom_id_t id = (dom_id_t)(uintptr_t)arg;
+  struct ioctl_dom_step_args step;
+  sigset_t all;
+  sigfillset(&all);
+  pthread_sigmask(SIG_BLOCK, &all, NULL);
+  for (;;) {
+    if (capstone_step(id, &step)) {
+      if (errno == EINTR) continue;
+      break;
+    }
+    if (step.event != CAPSTONE_STEP_PREEMPTED) break;
+  }
+  capstone_forget(id);
+  return NULL;
+}
+
+static long context_request(struct capstone_delegate_host *host,
+                            const struct capstone_delegate_entry *request) {
+  struct context_service *service = host->context_state;
+  if (request->nr == CAPSTONE_NR_CONTEXT_CREATE) {
+    dom_id_t child;
+    pthread_t thread;
+    if (capstone_adopt(service->first, request->args[0], &child)) return -errno;
+    if (request->args[1] == CAPSTONE_CONTEXT_THREAD) {
+      /* Block every signal in this (the handler) thread across the create, so
+         the child inherits a full block and starts already blocked. The
+         launcher's signal trampoline has one producer thread (signals.c); a
+         caught signal delivered to the child before context_thread could block
+         would race the main thread's trampoline on the ring. context_thread's
+         own sigfillset then only maintains that state.
+         A failed thread start takes the registration back: no context runs
+         after a reported failure. CAPSTONE_CONTEXT_TEST_THREAD_FAILS makes the
+         start fail, for the rollback probe. */
+      sigset_t all, prev;
+      sigfillset(&all);
+      pthread_sigmask(SIG_BLOCK, &all, &prev);
+      int failed = getenv("CAPSTONE_CONTEXT_TEST_THREAD_FAILS") ||
+                   pthread_create(&thread, NULL, context_thread, (void *)(uintptr_t)child);
+      pthread_sigmask(SIG_SETMASK, &prev, NULL);
+      if (failed) {
+        capstone_forget(child);
+        return -EAGAIN;
+      }
+      pthread_detach(thread);
+    } else if (request->args[1] != CAPSTONE_CONTEXT_REGISTER) {
+      capstone_forget(child);
+      return -EINVAL;
+    }
+    return (long)child;
+  }
+  /* STEP and FORGET name a minted context; the first context is the one
+     making this request and is stepped by the main loop alone. */
+  if ((dom_id_t)request->args[0] == service->first) return -EINVAL;
+  if (request->nr == CAPSTONE_NR_CONTEXT_STEP) {
+    struct ioctl_dom_step_args step;
+    struct capstone_context_event event = {0};
+    while (capstone_step((dom_id_t)request->args[0], &step))
+      if (errno != EINTR) return -errno;
+    event.kind = step.event;
+    event.result = step.result;
+    event.cause = step.cause;
+    event.pc = step.pc;
+    event.address = step.address;
+    if (request->args[2])
+      memcpy(host->exchange + request->args[2], &event, sizeof event);
+    return 0;
+  }
+  if (request->nr == CAPSTONE_NR_CONTEXT_FORGET)
+    return capstone_forget((dom_id_t)request->args[0]) ? -errno : 0;
+  return -ENOSYS;
+}
+
 static int fail(struct execution *e, const char *what, int use_errno) {
   if (use_errno)
     perror(what);
@@ -384,6 +470,8 @@ int main(int argc, char **argv) {
     free(startup);
     return fail(&e, "capstone-exec: cannot create domain", 1);
   }
+  if (getenv("CAPSTONE_DELEGATE_STATS"))
+    fprintf(stderr, "capstone-exec: domain id=%#lx\n", (unsigned long)domain);
   launch_mark(LAUNCH_DOMAIN);
   e.sizes[REGION_META] = CAPSTONE_DELEGATE_META_BYTES;
   e.sizes[REGION_DATA] = (size_t)descriptor.exchange_bytes;
@@ -418,6 +506,9 @@ int main(int argc, char **argv) {
   }
   e.delegate.exchange = e.maps[REGION_DATA];
   e.delegate.exchange_bytes = e.sizes[REGION_DATA];
+  struct context_service contexts = {.first = domain};
+  e.delegate.context = context_request;
+  e.delegate.context_state = &contexts;
   capstone_signals_init(&e.delegate.signals,
       (struct capstone_signal_block *)((char *)e.maps[REGION_META] + CAPSTONE_SIGNAL_OFFSET));
   launch_mark(LAUNCH_REGIONS);
@@ -443,6 +534,9 @@ int main(int argc, char **argv) {
       continue;
     if (step.event == CAPSTONE_STEP_FAULT)
       fault(&e, &step);
+    if (step.event == CAPSTONE_STEP_DEAD || step.event == CAPSTONE_STEP_STALE ||
+        step.event == CAPSTONE_STEP_REFUSED)
+      return fail(&e, "capstone-exec: the application's first context is gone", 0);
     struct capstone_delegate_entry *entry = e.maps[REGION_META];
     /* A return with no request means the domain left its entry instead of
        yielding: re-entering would restart it from the top, forever. */

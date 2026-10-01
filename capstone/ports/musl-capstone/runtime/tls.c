@@ -90,6 +90,39 @@ int __capstone_init_tls(void)
 	return __init_tp(tp - sizeof(struct pthread));
 }
 
+/* A further context's TLS block (context.c): struct pthread, the page-offset
+ * slack above, and the segment, laid out as __capstone_init_tls lays out the
+ * first thread's. __init_tp is not used: it installs tp for the CALLING
+ * context. The fields set are the ones __init_tp sets, except tid, which is
+ * the runtime's to assign. */
+size_t __capstone_tls_block_bytes(void)
+{
+	size_t memsz = __capstone_tls_end - __capstone_tls_image;
+	return sizeof(struct pthread) + (memsz ? 4095 + memsz : 0);
+}
+
+char *__capstone_tls_block_init(char *mem, size_t bytes)
+{
+	size_t tdata = __capstone_tdata_end - __capstone_tls_image;
+	size_t memsz = __capstone_tls_end - __capstone_tls_image;
+	if (bytes < __capstone_tls_block_bytes())
+		return 0;
+	memset(mem, 0, bytes);
+	char *tp = mem + sizeof(struct pthread);
+	if (memsz) {
+		size_t page_off = (uintptr_t)__capstone_tls_image & 4095;
+		tp += (page_off - ((uintptr_t)tp & 4095)) & 4095;
+		memcpy(tp, __capstone_tls_image, tdata);
+	}
+	struct pthread *td = (struct pthread *)(tp - sizeof(struct pthread));
+	td->self = td;
+	td->detach_state = DT_JOINABLE;
+	td->locale = &libc.global_locale;
+	td->robust_list.head = &td->robust_list.head;
+	td->next = td->prev = td;
+	return tp;
+}
+
 /* The thread pointer is installed before the launch record is applied, so
  * set_tid_address answered the placeholder 1. Once the record is in, the one
  * thread's tid is the task's pid: raise() and pthread_kill() send there. */
