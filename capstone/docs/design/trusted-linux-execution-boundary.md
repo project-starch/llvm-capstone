@@ -54,6 +54,34 @@ key and cannot substitute for `c` or for node generations.
 | `munmap(range)` / replacement | Linux plus lifetime interface | Retire authority affected by the range and complete older accesses before its virtual address or backing can name an unrelated object. Define partial-range treatment before implementation. |
 | `read(fd,p,n) -> k / error` | libc, Linux, capability copy path | Validate the requested writable span; Linux performs the file operation and writes through checked authority. An invalid requested span returns `EFAULT` before consuming input under the chosen boundary contract. A blocked call must not copy into reused storage after concurrent `free`. |
 
+The central lifetime contract is visible even when the allocator immediately
+reuses the exact address:
+
+```c
+p = malloc(64);
+free(p);
+q = malloc(64);   // assume the same virtual address as p
+*p;              // capability fault: retired object identity
+*q;              // succeeds: fresh object identity
+```
+
+These are requirements on the two memory accesses, not on optimizing C code
+with undefined behavior. `free` completes retirement before returning storage
+for reuse. A new allocation must have an identity distinguishable from every
+retained pointer to an older allocation, even at identical bounds and address.
+The model advances a generation without wrapping; exhaustion refuses allocation.
+`munmap` followed by `mmap` must preserve this distinction too. `malloc` within
+an arena leaves Linux's VMA and PTE permissions unchanged; it cannot restore
+write permission removed by Linux.
+
+A private process clone needs a fresh address-space instance `c`, even when
+the numerical PID or ASID is reused. It copies live and dead lifetime state
+into the child's independently owned namespace: inherited `p` remains stale,
+inherited `q` remains valid, and private writes stay private. An old context
+with no live objects or VMAs is still an old instance. Reusing its storage
+requires a separate instance-identity protocol; the bounded model instead
+claims a previously unused context and never recycles it.
+
 For `load(p,w)`, success therefore means
 
 ```text
@@ -93,10 +121,14 @@ need their own completion rules; a pinned physical page alone is insufficient.
 
 1. A bounded state model covers two address spaces with equal virtual
    addresses and node numbers, a context switch/ASID reuse, a pending checked
-   store crossing `free` or `munmap`, and an `mmap`/page-fault retry. Check that
-   no stale or foreign authorization reaches a byte and that failed
-   transitions preserve state. Counterexample variants should omit the
-   lifetime-context change, cache invalidation, and access drain separately.
+   store crossing `free` or `munmap`, and an `mmap`/page-fault retry. Include
+   both harts with pending accesses to the same retiring context. Follow reuse
+   with accesses through retained old and fresh pointers: the old must fault,
+   the fresh must complete. Check that no stale or foreign authorization reaches
+   a byte and that failed transitions preserve state. Counterexample variants
+   should omit the lifetime-context change, generation advance, cache
+   invalidation, and access drain separately; denying all new accesses must
+   also fail the gate.
 2. A QEMU prototype runs a small U-mode process with an ordinary Linux
    mapping, a fresh `malloc` object, a restartable page fault, preemption and
    `read(fd,p,n)`. Both object authority and Linux PTE permissions must be
@@ -117,10 +149,14 @@ The next implementation experiment is the access/fault path in item 2.
 Adding more delegated syscall shapes improves the bridge but does not
 settle M1.
 
-The first [executable boundary model](../../models/trusted-linux-m1/README.md)
-now covers the finite cases in item 1 with explicit per-hart invalidation and
+The reviewed [executable boundary model](../../models/trusted-linux-m1/README.md)
+covers the finite cases in item 1 with explicit per-hart invalidation and
 drain transitions. Its [record](../../models/trusted-linux-m1/result.json)
-contains 11 families, 10,089 named-event schedules and counterexamples for
-10 injected faults. These bounded checks leave capability encoding, tag save,
-multi-page translation, kernel copy recovery and the QEMU/RTL implementation
-untested. Item 2 is the next implementation gate.
+contains 19 families, 90,735 named-event schedules and counterexamples for
+18 distinct injected faults. It now checks the retained `p`/fresh `q` contract
+after allocation and remap, private-clone namespace freshness, unchanged PTE
+rights on object reuse, and pending accesses on both harts. Its globally
+visible retirement break is an assumed contract, not an implemented mechanism.
+Capability encoding, tag save, multi-page translation, kernel copy recovery
+and the QEMU/RTL implementation remain untested. Item 2 is the next
+implementation gate, including the same old/fresh-pointer accesses.

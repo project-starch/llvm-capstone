@@ -2,17 +2,31 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-10-01 — executable trusted-Linux M1 boundary model
+## 2026-10-01 — reviewed trusted-Linux M1 boundary model
 
-The [finite model](../../models/trusted-linux-m1/README.md) explores 11
-families and 10,089 named-event schedules. Both `free` and `unmap` families
-reach successful issue, per-hart invalidation/drain, completion and reuse.
-All correct schedules remain safe under the modeled properties; 10 injected
-variants produce the intended counterexamples. The deterministic
-[record](../../models/trusted-linux-m1/result.json) includes the model source
-hash. Register/tag state, multi-page behavior, recoverable kernel-copy faults
-and hardware timing remain outside its bounds. M1 still needs the Linux U-mode
-translation and fault prototype.
+The [finite model](../../models/trusted-linux-m1/README.md) now explores 19
+families and 90,735 named-event schedules. The central contract retains both
+results of `malloc(64); free; malloc(64)` at the same address: the old pointer
+faults and the new pointer completes. Remap also advances the identity;
+allocator reuse preserves PTE rights; private cloning requires a virgin
+namespace and preserves stale versus fresh inherited pointers.
+
+The review found that the original 10,089-schedule gate stopped at reuse and
+did not place a retiring context's pending access on hart 1. It also exposed
+remap identity revival, reused clone contexts and allocator PTE-rights changes.
+Those defects and coverage gaps are corrected. Each of the two-hart `free`
+and `unmap` families now has 40,320 orderings and 80 complete lifecycles with
+post-reuse access. All correct families pass; 18 distinct injected faults
+produce intended counterexamples, including refusal of all fresh accesses.
+Four supplemental source mutations that previously escaped the gate now fail.
+
+The deterministic schema-2 [record](../../models/trusted-linux-m1/result.json)
+includes the model source hash and per-action outcomes. Register/tag state,
+multi-page behavior, context-instance recycling, recoverable kernel-copy
+faults and hardware timing remain outside its bounds. The globally visible
+retirement break is still an assumed hardware/ABI contract. M1 needs the
+Linux U-mode translation and fault prototype, including the same retained
+old/fresh-pointer test.
 
 ## 2026-10-01 — trusted-Linux M1 boundary and UDP recheck
 

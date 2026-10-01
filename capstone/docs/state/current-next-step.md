@@ -6,9 +6,13 @@ through the current C-mode bridge, with direct-exec and socket contracts in a
 one-hart guest. The [M1 boundary proposal](../design/trusted-linux-execution-boundary.md)
 chooses Linux U-mode capability processes as the target. The finite
 [boundary model](../../models/trusted-linux-m1/README.md) now covers context,
-fault, retirement and private-clone schedules. Next, review its explicit
-bounds and demonstrate ordinary page translation and a recoverable buffer-copy
-fault in a small U-mode prototype. The kernel/user ABI and two-hart completion
+fault, retirement and private-clone schedules, with the review gaps closed:
+old/fresh accesses after address reuse, remap identities, virgin clone
+namespaces, preserved PTE rights and pending accesses on both harts. Next,
+demonstrate ordinary page translation, `malloc(64); free; malloc(64)` at the
+same address with an old-pointer fault and a successful fresh-pointer access,
+and a recoverable buffer-copy fault in a small U-mode prototype. The kernel/user
+ABI and implementation of the global retirement break and two-hart completion
 contract remain open. Integrate the existing thread work with current I/O
 services and qualify IPv6 end-to-end.
 Linux OS feature parity remains the goal; the bridge result does not establish

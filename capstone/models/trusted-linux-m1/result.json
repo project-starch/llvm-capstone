@@ -3,6 +3,7 @@
     "contexts": 2,
     "generations": 2,
     "harts": 2,
+    "object_bytes": 64,
     "objects_per_context": 1,
     "pages_per_context": 1,
     "pending_accesses_per_hart": 1
@@ -10,85 +11,426 @@
   "checks": {
     "bad_read_no_input_consumption": "PASS",
     "cached_issue_after_retire_rejected": "PASS",
+    "generation_exhaustion_no_wrap": "PASS",
     "private_clone_writes_independent": "PASS",
+    "read_only_fault_resolution": "PASS",
     "unrelated_issue_during_retirement": "PASS",
-    "untagged_pointer": "PASS"
+    "untagged_pointer": "PASS",
+    "valid_read_consumes_input": "PASS"
   },
   "families": {
     "asid_reuse": {
       "correct": {
+        "actions": {
+          "access1": {
+            "cap_fault": 1
+          },
+          "complete0": {
+            "completed": 1
+          },
+          "switch1": {
+            "switch": 1
+          },
+          "warm": {
+            "issued": 1
+          }
+        },
         "counterexample": null,
         "outcomes": {
+          "cap_fault": 1,
           "completed": 1,
           "issued": 1,
-          "refused": 1,
           "switch": 1
         },
         "schedules": 1,
         "states": 4,
+        "successful_schedules": 1,
+        "violations": []
+      },
+      "variants": {
+        "stale_asid_cache": {
+          "actions": {
+            "access1": {
+              "authorized": 1
+            },
+            "complete0": {
+              "completed": 1
+            },
+            "switch1": {
+              "switch": 1
+            },
+            "warm": {
+              "issued": 1
+            }
+          },
+          "counterexample": {
+            "property": "object_authority",
+            "trace": [
+              {
+                "action": "warm",
+                "outcome": "issued"
+              },
+              {
+                "action": "complete0",
+                "outcome": "completed"
+              },
+              {
+                "action": "switch1",
+                "outcome": "switch"
+              },
+              {
+                "action": "access1",
+                "outcome": "authorized"
+              }
+            ]
+          },
+          "outcomes": {
+            "authorized": 1,
+            "completed": 1,
+            "issued": 1,
+            "switch": 1
+          },
+          "schedules": 1,
+          "states": 4,
+          "successful_schedules": 0,
+          "violations": [
+            "object_authority"
+          ]
+        }
+      }
+    },
+    "clone_preserves_stale_and_fresh": {
+      "correct": {
+        "actions": {
+          "clone": {
+            "cloned": 1
+          },
+          "complete0": {
+            "completed": 1
+          },
+          "complete1": {
+            "completed": 1
+          },
+          "drain0": {
+            "drained": 1
+          },
+          "drain1": {
+            "drained": 1
+          },
+          "finish0": {
+            "finished": 1
+          },
+          "invalidate0": {
+            "invalidated": 1
+          },
+          "invalidate1": {
+            "invalidated": 1
+          },
+          "load_p0": {
+            "cap_fault": 1
+          },
+          "load_p1": {
+            "cap_fault": 1
+          },
+          "load_q0": {
+            "issued": 1
+          },
+          "retire0": {
+            "retiring": 1
+          },
+          "reuse0": {
+            "allocated": 1
+          },
+          "store_q1": {
+            "issued": 1
+          }
+        },
+        "counterexample": null,
+        "outcomes": {
+          "allocated": 1,
+          "cap_fault": 2,
+          "cloned": 1,
+          "completed": 2,
+          "drained": 2,
+          "finished": 1,
+          "invalidated": 2,
+          "issued": 2,
+          "retiring": 1
+        },
+        "schedules": 1,
+        "states": 13,
+        "successful_schedules": 1,
+        "violations": []
+      },
+      "variants": {}
+    },
+    "clone_rejects_used_context": {
+      "correct": {
+        "actions": {
+          "clone": {
+            "refused": 1
+          },
+          "drain_child0": {
+            "drained": 1
+          },
+          "drain_child1": {
+            "drained": 1
+          },
+          "finish_child": {
+            "finished": 1
+          },
+          "invalidate_child0": {
+            "invalidated": 1
+          },
+          "invalidate_child1": {
+            "invalidated": 1
+          },
+          "load_p1": {
+            "cap_fault": 1
+          },
+          "unmap1": {
+            "retiring": 1
+          }
+        },
+        "counterexample": null,
+        "outcomes": {
+          "cap_fault": 1,
+          "drained": 2,
+          "finished": 1,
+          "invalidated": 2,
+          "refused": 1,
+          "retiring": 1
+        },
+        "schedules": 1,
+        "states": 7,
         "successful_schedules": 0,
         "violations": []
       },
-      "injected": {
-        "counterexample": {
-          "action": "access1",
-          "property": "object_authority",
-          "schedule": [
-            "warm",
-            "complete0",
-            "switch1",
-            "access1"
+      "variants": {
+        "clone_reuses_context": {
+          "actions": {
+            "clone": {
+              "cloned": 1
+            },
+            "drain_child0": {
+              "drained": 1
+            },
+            "drain_child1": {
+              "drained": 1
+            },
+            "finish_child": {
+              "finished": 1
+            },
+            "invalidate_child0": {
+              "invalidated": 1
+            },
+            "invalidate_child1": {
+              "invalidated": 1
+            },
+            "unmap1": {
+              "retiring": 1
+            }
+          },
+          "counterexample": {
+            "property": "reused_context_instance",
+            "trace": [
+              {
+                "action": "unmap1",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate_child0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate_child1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain_child0",
+                "outcome": "drained"
+              },
+              {
+                "action": "drain_child1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish_child",
+                "outcome": "finished"
+              },
+              {
+                "action": "clone",
+                "outcome": "cloned"
+              }
+            ]
+          },
+          "outcomes": {
+            "cloned": 1,
+            "drained": 2,
+            "finished": 1,
+            "invalidated": 2,
+            "retiring": 1
+          },
+          "schedules": 1,
+          "states": 8,
+          "successful_schedules": 0,
+          "violations": [
+            "reused_context_instance"
           ]
-        },
-        "outcomes": {
-          "completed": 1,
-          "issued": 2,
-          "switch": 1
-        },
-        "schedules": 1,
-        "states": 5,
-        "successful_schedules": 1,
-        "violations": [
-          "object_authority"
-        ]
-      },
-      "variant": "stale_asid_cache"
+        }
+      }
     },
     "dead_clone": {
       "correct": {
+        "actions": {
+          "clone": {
+            "cloned": 1
+          },
+          "issue1": {
+            "cap_fault": 1
+          }
+        },
         "counterexample": null,
         "outcomes": {
-          "cloned": 1,
-          "refused": 1
-        },
-        "schedules": 1,
-        "states": 2,
-        "successful_schedules": 0,
-        "violations": []
-      },
-      "injected": {
-        "counterexample": {
-          "action": "clone",
-          "property": "revived_dead_identity",
-          "schedule": [
-            "clone",
-            "issue1"
-          ]
-        },
-        "outcomes": {
+          "cap_fault": 1,
           "cloned": 1
         },
         "schedules": 1,
         "states": 2,
-        "successful_schedules": 0,
-        "violations": [
-          "revived_dead_identity"
-        ]
+        "successful_schedules": 1,
+        "violations": []
       },
-      "variant": "clone_revives_dead_node"
+      "variants": {
+        "clone_revives_dead_node": {
+          "actions": {
+            "clone": {
+              "cloned": 1
+            }
+          },
+          "counterexample": {
+            "property": "revived_dead_identity",
+            "trace": [
+              {
+                "action": "clone",
+                "outcome": "cloned"
+              }
+            ]
+          },
+          "outcomes": {
+            "cloned": 1
+          },
+          "schedules": 1,
+          "states": 2,
+          "successful_schedules": 0,
+          "violations": [
+            "revived_dead_identity"
+          ]
+        }
+      }
     },
-    "fault_retry": {
+    "fault_retry_live": {
       "correct": {
+        "actions": {
+          "complete0": {
+            "completed": 1
+          },
+          "issue0": {
+            "page_fault": 1
+          },
+          "mmap0": {
+            "mapped": 1
+          },
+          "resolve0": {
+            "resolved": 1
+          },
+          "retry0": {
+            "issued": 1
+          }
+        },
+        "counterexample": null,
+        "outcomes": {
+          "completed": 1,
+          "issued": 1,
+          "mapped": 1,
+          "page_fault": 1,
+          "resolved": 1
+        },
+        "schedules": 1,
+        "states": 6,
+        "successful_schedules": 1,
+        "violations": []
+      },
+      "variants": {
+        "retry_always_denies": {
+          "actions": {
+            "issue0": {
+              "page_fault": 1
+            },
+            "mmap0": {
+              "mapped": 1
+            },
+            "resolve0": {
+              "resolved": 1
+            },
+            "retry0": {
+              "retry_denied": 1
+            }
+          },
+          "counterexample": {
+            "property": "functional_contract",
+            "trace": [
+              {
+                "action": "mmap0",
+                "outcome": "mapped"
+              },
+              {
+                "action": "issue0",
+                "outcome": "page_fault"
+              },
+              {
+                "action": "resolve0",
+                "outcome": "resolved"
+              },
+              {
+                "action": "retry0",
+                "outcome": "retry_denied"
+              }
+            ]
+          },
+          "outcomes": {
+            "mapped": 1,
+            "page_fault": 1,
+            "resolved": 1,
+            "retry_denied": 1
+          },
+          "schedules": 1,
+          "states": 5,
+          "successful_schedules": 0,
+          "violations": [
+            "functional_contract"
+          ]
+        }
+      }
+    },
+    "fault_retry_retired": {
+      "correct": {
+        "actions": {
+          "issue0": {
+            "page_fault": 1
+          },
+          "mmap0": {
+            "mapped": 1
+          },
+          "resolve0": {
+            "resolved": 1
+          },
+          "retire0": {
+            "retiring": 1
+          },
+          "retry0": {
+            "retry_denied": 1
+          }
+        },
         "counterexample": null,
         "outcomes": {
           "mapped": 1,
@@ -102,160 +444,977 @@
         "successful_schedules": 1,
         "violations": []
       },
-      "injected": {
-        "counterexample": {
-          "action": "retry0",
-          "property": "object_authority",
-          "schedule": [
-            "mmap0",
-            "issue0",
-            "retire0",
-            "resolve0",
-            "retry0"
+      "variants": {
+        "fault_retry_skips_liveness": {
+          "actions": {
+            "issue0": {
+              "page_fault": 1
+            },
+            "mmap0": {
+              "mapped": 1
+            },
+            "resolve0": {
+              "resolved": 1
+            },
+            "retire0": {
+              "retiring": 1
+            },
+            "retry0": {
+              "authorized": 1
+            }
+          },
+          "counterexample": {
+            "property": "object_authority",
+            "trace": [
+              {
+                "action": "mmap0",
+                "outcome": "mapped"
+              },
+              {
+                "action": "issue0",
+                "outcome": "page_fault"
+              },
+              {
+                "action": "retire0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "resolve0",
+                "outcome": "resolved"
+              },
+              {
+                "action": "retry0",
+                "outcome": "authorized"
+              }
+            ]
+          },
+          "outcomes": {
+            "authorized": 1,
+            "mapped": 1,
+            "page_fault": 1,
+            "resolved": 1,
+            "retiring": 1
+          },
+          "schedules": 1,
+          "states": 6,
+          "successful_schedules": 0,
+          "violations": [
+            "object_authority"
+          ]
+        }
+      }
+    },
+    "free_completion": {
+      "correct": {
+        "actions": {
+          "complete0": {
+            "completed": 5060,
+            "refused": 5020
+          },
+          "drain0": {
+            "drained": 1680,
+            "refused": 3360
+          },
+          "drain1": {
+            "drained": 2520,
+            "refused": 2520
+          },
+          "finish0": {
+            "finished": 140,
+            "refused": 4900
+          },
+          "invalidate0": {
+            "invalidated": 5040
+          },
+          "invalidate1": {
+            "invalidated": 5040
+          },
+          "issue0": {
+            "issued": 5040
+          },
+          "load_p0": {
+            "cap_fault": 5040
+          },
+          "load_q0": {
+            "issued": 20,
+            "refused": 5020
+          },
+          "retire0": {
+            "retiring": 5040
+          },
+          "reuse0": {
+            "allocated": 20,
+            "refused": 5020
+          }
+        },
+        "counterexample": null,
+        "outcomes": {
+          "allocated": 20,
+          "cap_fault": 5040,
+          "completed": 5060,
+          "drained": 4200,
+          "finished": 140,
+          "invalidated": 10080,
+          "issued": 5060,
+          "refused": 25840,
+          "retiring": 5040
+        },
+        "schedules": 5040,
+        "states": 21,
+        "successful_schedules": 20,
+        "violations": []
+      },
+      "variants": {
+        "no_free_drain": {
+          "actions": {
+            "complete0": {
+              "completed": 4640,
+              "refused": 3480
+            },
+            "drain0": {
+              "drained": 1344,
+              "refused": 3276
+            },
+            "drain1": {
+              "drained": 2100,
+              "refused": 2520
+            },
+            "finish0": {
+              "finished": 1680,
+              "refused": 3360
+            },
+            "invalidate0": {
+              "invalidated": 5040
+            },
+            "invalidate1": {
+              "invalidated": 5040
+            },
+            "issue0": {
+              "issued": 5040
+            },
+            "load_p0": {
+              "cap_fault": 3500
+            },
+            "load_q0": {
+              "issued": 20,
+              "refused": 3480
+            },
+            "retire0": {
+              "retiring": 5040
+            },
+            "reuse0": {
+              "allocated": 20,
+              "refused": 4620
+            }
+          },
+          "counterexample": {
+            "property": "reuse_authorized_with_access_pending",
+            "trace": [
+              {
+                "action": "issue0",
+                "outcome": "issued"
+              },
+              {
+                "action": "retire0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "refused"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish0",
+                "outcome": "finished"
+              }
+            ]
+          },
+          "outcomes": {
+            "allocated": 20,
+            "cap_fault": 3500,
+            "completed": 4640,
+            "drained": 3444,
+            "finished": 1680,
+            "invalidated": 10080,
+            "issued": 5060,
+            "refused": 20736,
+            "retiring": 5040
+          },
+          "schedules": 5040,
+          "states": 26,
+          "successful_schedules": 20,
+          "violations": [
+            "finish_without_drain_ack",
+            "reuse_authorized_with_access_pending"
+          ]
+        }
+      }
+    },
+    "lifetime_switch": {
+      "correct": {
+        "actions": {
+          "access1": {
+            "cap_fault": 1
+          },
+          "complete0": {
+            "completed": 1
+          },
+          "switch1": {
+            "switch": 1
+          },
+          "warm": {
+            "issued": 1
+          }
+        },
+        "counterexample": null,
+        "outcomes": {
+          "cap_fault": 1,
+          "completed": 1,
+          "issued": 1,
+          "switch": 1
+        },
+        "schedules": 1,
+        "states": 4,
+        "successful_schedules": 1,
+        "violations": []
+      },
+      "variants": {
+        "stale_lifetime_selector": {
+          "actions": {
+            "access1": {
+              "authorized": 1
+            },
+            "complete0": {
+              "completed": 1
+            },
+            "switch1": {
+              "switch": 1
+            },
+            "warm": {
+              "issued": 1
+            }
+          },
+          "counterexample": {
+            "property": "object_authority",
+            "trace": [
+              {
+                "action": "warm",
+                "outcome": "issued"
+              },
+              {
+                "action": "complete0",
+                "outcome": "completed"
+              },
+              {
+                "action": "switch1",
+                "outcome": "switch"
+              },
+              {
+                "action": "access1",
+                "outcome": "authorized"
+              }
+            ]
+          },
+          "outcomes": {
+            "authorized": 1,
+            "completed": 1,
+            "issued": 1,
+            "switch": 1
+          },
+          "schedules": 1,
+          "states": 4,
+          "successful_schedules": 0,
+          "violations": [
+            "object_authority"
+          ]
+        }
+      }
+    },
+    "malloc64_same_address": {
+      "correct": {
+        "actions": {
+          "complete0": {
+            "completed": 2
+          },
+          "drain0": {
+            "drained": 1
+          },
+          "drain1": {
+            "drained": 1
+          },
+          "finish0": {
+            "finished": 1
+          },
+          "invalidate0": {
+            "invalidated": 1
+          },
+          "invalidate1": {
+            "invalidated": 1
+          },
+          "load_p0": {
+            "cap_fault": 1
+          },
+          "load_q0": {
+            "issued": 1
+          },
+          "retire0": {
+            "retiring": 1
+          },
+          "reuse0": {
+            "allocated": 2
+          },
+          "warm": {
+            "issued": 1
+          }
+        },
+        "counterexample": null,
+        "outcomes": {
+          "allocated": 2,
+          "cap_fault": 1,
+          "completed": 2,
+          "drained": 2,
+          "finished": 1,
+          "invalidated": 2,
+          "issued": 2,
+          "retiring": 1
+        },
+        "schedules": 1,
+        "states": 13,
+        "successful_schedules": 1,
+        "violations": []
+      },
+      "variants": {
+        "invalidate_keeps_cache": {
+          "actions": {
+            "complete0": {
+              "completed": 1
+            },
+            "drain0": {
+              "drained": 1
+            },
+            "drain1": {
+              "drained": 1
+            },
+            "finish0": {
+              "finished": 1
+            },
+            "invalidate0": {
+              "invalidated": 1
+            },
+            "invalidate1": {
+              "invalidated": 1
+            },
+            "load_p0": {
+              "authorized": 1
+            },
+            "retire0": {
+              "retiring": 1
+            },
+            "reuse0": {
+              "allocated": 2
+            },
+            "warm": {
+              "issued": 1
+            }
+          },
+          "counterexample": {
+            "property": "stale_allocation",
+            "trace": [
+              {
+                "action": "reuse0",
+                "outcome": "allocated"
+              },
+              {
+                "action": "warm",
+                "outcome": "issued"
+              },
+              {
+                "action": "complete0",
+                "outcome": "completed"
+              },
+              {
+                "action": "retire0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "drained"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish0",
+                "outcome": "finished"
+              },
+              {
+                "action": "reuse0",
+                "outcome": "allocated"
+              },
+              {
+                "action": "load_p0",
+                "outcome": "authorized"
+              }
+            ]
+          },
+          "outcomes": {
+            "allocated": 2,
+            "authorized": 1,
+            "completed": 1,
+            "drained": 2,
+            "finished": 1,
+            "invalidated": 2,
+            "issued": 1,
+            "retiring": 1
+          },
+          "schedules": 1,
+          "states": 11,
+          "successful_schedules": 0,
+          "violations": [
+            "stale_allocation"
           ]
         },
+        "rejects_fresh_generation": {
+          "actions": {
+            "complete0": {
+              "completed": 1
+            },
+            "drain0": {
+              "drained": 1
+            },
+            "drain1": {
+              "drained": 1
+            },
+            "finish0": {
+              "finished": 1
+            },
+            "invalidate0": {
+              "invalidated": 1
+            },
+            "invalidate1": {
+              "invalidated": 1
+            },
+            "load_p0": {
+              "cap_fault": 1
+            },
+            "load_q0": {
+              "cap_fault": 1
+            },
+            "retire0": {
+              "retiring": 1
+            },
+            "reuse0": {
+              "allocated": 2
+            },
+            "warm": {
+              "issued": 1
+            }
+          },
+          "counterexample": {
+            "property": "functional_contract",
+            "trace": [
+              {
+                "action": "reuse0",
+                "outcome": "allocated"
+              },
+              {
+                "action": "warm",
+                "outcome": "issued"
+              },
+              {
+                "action": "complete0",
+                "outcome": "completed"
+              },
+              {
+                "action": "retire0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "drained"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish0",
+                "outcome": "finished"
+              },
+              {
+                "action": "reuse0",
+                "outcome": "allocated"
+              },
+              {
+                "action": "load_p0",
+                "outcome": "cap_fault"
+              },
+              {
+                "action": "load_q0",
+                "outcome": "cap_fault"
+              }
+            ]
+          },
+          "outcomes": {
+            "allocated": 2,
+            "cap_fault": 2,
+            "completed": 1,
+            "drained": 2,
+            "finished": 1,
+            "invalidated": 2,
+            "issued": 1,
+            "retiring": 1
+          },
+          "schedules": 1,
+          "states": 11,
+          "successful_schedules": 0,
+          "violations": [
+            "functional_contract"
+          ]
+        },
+        "reuse_keeps_generation": {
+          "actions": {
+            "complete0": {
+              "completed": 1
+            },
+            "drain0": {
+              "drained": 1
+            },
+            "drain1": {
+              "drained": 1
+            },
+            "finish0": {
+              "finished": 1
+            },
+            "invalidate0": {
+              "invalidated": 1
+            },
+            "invalidate1": {
+              "invalidated": 1
+            },
+            "load_p0": {
+              "authorized": 1
+            },
+            "retire0": {
+              "retiring": 1
+            },
+            "reuse0": {
+              "allocated": 2
+            },
+            "warm": {
+              "issued": 1
+            }
+          },
+          "counterexample": {
+            "property": "stale_allocation",
+            "trace": [
+              {
+                "action": "reuse0",
+                "outcome": "allocated"
+              },
+              {
+                "action": "warm",
+                "outcome": "issued"
+              },
+              {
+                "action": "complete0",
+                "outcome": "completed"
+              },
+              {
+                "action": "retire0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "drained"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish0",
+                "outcome": "finished"
+              },
+              {
+                "action": "reuse0",
+                "outcome": "allocated"
+              },
+              {
+                "action": "load_p0",
+                "outcome": "authorized"
+              }
+            ]
+          },
+          "outcomes": {
+            "allocated": 2,
+            "authorized": 1,
+            "completed": 1,
+            "drained": 2,
+            "finished": 1,
+            "invalidated": 2,
+            "issued": 1,
+            "retiring": 1
+          },
+          "schedules": 1,
+          "states": 11,
+          "successful_schedules": 0,
+          "violations": [
+            "stale_allocation"
+          ]
+        }
+      }
+    },
+    "mmap_same_address": {
+      "correct": {
+        "actions": {
+          "complete0": {
+            "completed": 2
+          },
+          "drain0": {
+            "drained": 1
+          },
+          "drain1": {
+            "drained": 1
+          },
+          "finish0": {
+            "finished": 1
+          },
+          "invalidate0": {
+            "invalidated": 1
+          },
+          "invalidate1": {
+            "invalidated": 1
+          },
+          "load_p0": {
+            "cap_fault": 1
+          },
+          "load_q0": {
+            "page_fault": 1
+          },
+          "mmap0": {
+            "mapped": 1
+          },
+          "resolve0": {
+            "resolved": 1
+          },
+          "retry0": {
+            "issued": 1
+          },
+          "unmap0": {
+            "retiring": 1
+          },
+          "warm": {
+            "issued": 1
+          }
+        },
+        "counterexample": null,
         "outcomes": {
-          "issued": 1,
+          "cap_fault": 1,
+          "completed": 2,
+          "drained": 2,
+          "finished": 1,
+          "invalidated": 2,
+          "issued": 2,
           "mapped": 1,
           "page_fault": 1,
           "resolved": 1,
           "retiring": 1
         },
         "schedules": 1,
-        "states": 6,
+        "states": 14,
         "successful_schedules": 1,
-        "violations": [
-          "object_authority"
-        ]
-      },
-      "variant": "fault_retry_skips_liveness"
-    },
-    "free_completion": {
-      "correct": {
-        "counterexample": null,
-        "outcomes": {
-          "completed": 5040,
-          "drained": 4200,
-          "finished": 140,
-          "invalidated": 10080,
-          "issued": 5040,
-          "refused": 15800,
-          "retiring": 5040,
-          "reused": 20
-        },
-        "schedules": 5040,
-        "states": 19,
-        "successful_schedules": 20,
         "violations": []
       },
-      "injected": {
-        "counterexample": {
-          "action": "finish0",
-          "property": "reuse_authorized_with_access_pending",
-          "schedule": [
-            "issue0",
-            "retire0",
-            "invalidate0",
-            "invalidate1",
-            "drain0",
-            "drain1",
-            "finish0",
-            "complete0",
-            "reuse0"
+      "variants": {
+        "invalidate_keeps_cache": {
+          "actions": {
+            "complete0": {
+              "completed": 1
+            },
+            "drain0": {
+              "drained": 1
+            },
+            "drain1": {
+              "drained": 1
+            },
+            "finish0": {
+              "finished": 1
+            },
+            "invalidate0": {
+              "invalidated": 1
+            },
+            "invalidate1": {
+              "invalidated": 1
+            },
+            "load_p0": {
+              "authorized": 1
+            },
+            "mmap0": {
+              "mapped": 1
+            },
+            "unmap0": {
+              "retiring": 1
+            },
+            "warm": {
+              "issued": 1
+            }
+          },
+          "counterexample": {
+            "property": "stale_allocation",
+            "trace": [
+              {
+                "action": "warm",
+                "outcome": "issued"
+              },
+              {
+                "action": "complete0",
+                "outcome": "completed"
+              },
+              {
+                "action": "unmap0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "drained"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish0",
+                "outcome": "finished"
+              },
+              {
+                "action": "mmap0",
+                "outcome": "mapped"
+              },
+              {
+                "action": "load_p0",
+                "outcome": "authorized"
+              }
+            ]
+          },
+          "outcomes": {
+            "authorized": 1,
+            "completed": 1,
+            "drained": 2,
+            "finished": 1,
+            "invalidated": 2,
+            "issued": 1,
+            "mapped": 1,
+            "retiring": 1
+          },
+          "schedules": 1,
+          "states": 10,
+          "successful_schedules": 0,
+          "violations": [
+            "stale_allocation"
           ]
         },
-        "outcomes": {
-          "completed": 4620,
-          "drained": 3444,
-          "finished": 1680,
-          "invalidated": 10080,
-          "issued": 5040,
-          "refused": 13776,
-          "retiring": 5040,
-          "reused": 20
-        },
-        "schedules": 5040,
-        "states": 24,
-        "successful_schedules": 20,
-        "violations": [
-          "finish_without_drain_ack",
-          "reuse_authorized_with_access_pending"
-        ]
-      },
-      "variant": "no_free_drain"
-    },
-    "lifetime_switch": {
-      "correct": {
-        "counterexample": null,
-        "outcomes": {
-          "completed": 1,
-          "issued": 1,
-          "refused": 1,
-          "switch": 1
-        },
-        "schedules": 1,
-        "states": 4,
-        "successful_schedules": 0,
-        "violations": []
-      },
-      "injected": {
-        "counterexample": {
-          "action": "access1",
-          "property": "object_authority",
-          "schedule": [
-            "warm",
-            "complete0",
-            "switch1",
-            "access1"
+        "mmap_keeps_generation": {
+          "actions": {
+            "complete0": {
+              "completed": 1
+            },
+            "drain0": {
+              "drained": 1
+            },
+            "drain1": {
+              "drained": 1
+            },
+            "finish0": {
+              "finished": 1
+            },
+            "invalidate0": {
+              "invalidated": 1
+            },
+            "invalidate1": {
+              "invalidated": 1
+            },
+            "load_p0": {
+              "authorized": 1
+            },
+            "mmap0": {
+              "mapped": 1
+            },
+            "unmap0": {
+              "retiring": 1
+            },
+            "warm": {
+              "issued": 1
+            }
+          },
+          "counterexample": {
+            "property": "stale_allocation",
+            "trace": [
+              {
+                "action": "warm",
+                "outcome": "issued"
+              },
+              {
+                "action": "complete0",
+                "outcome": "completed"
+              },
+              {
+                "action": "unmap0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "drained"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish0",
+                "outcome": "finished"
+              },
+              {
+                "action": "mmap0",
+                "outcome": "mapped"
+              },
+              {
+                "action": "load_p0",
+                "outcome": "authorized"
+              }
+            ]
+          },
+          "outcomes": {
+            "authorized": 1,
+            "completed": 1,
+            "drained": 2,
+            "finished": 1,
+            "invalidated": 2,
+            "issued": 1,
+            "mapped": 1,
+            "retiring": 1
+          },
+          "schedules": 1,
+          "states": 10,
+          "successful_schedules": 0,
+          "violations": [
+            "stale_allocation"
           ]
-        },
-        "outcomes": {
-          "completed": 1,
-          "issued": 2,
-          "switch": 1
-        },
-        "schedules": 1,
-        "states": 5,
-        "successful_schedules": 1,
-        "violations": [
-          "object_authority"
-        ]
-      },
-      "variant": "stale_lifetime_selector"
+        }
+      }
     },
     "page_write": {
       "correct": {
+        "actions": {
+          "issue0": {
+            "page_permission_fault": 1
+          }
+        },
         "counterexample": null,
         "outcomes": {
-          "refused": 1
+          "page_permission_fault": 1
         },
         "schedules": 1,
         "states": 1,
-        "successful_schedules": 0,
+        "successful_schedules": 1,
         "violations": []
       },
-      "injected": {
-        "counterexample": {
-          "action": "issue0",
-          "property": "page_permission",
-          "schedule": [
-            "issue0"
+      "variants": {
+        "pte_write_bypass": {
+          "actions": {
+            "issue0": {
+              "issued": 1
+            }
+          },
+          "counterexample": {
+            "property": "page_permission",
+            "trace": [
+              {
+                "action": "issue0",
+                "outcome": "issued"
+              }
+            ]
+          },
+          "outcomes": {
+            "issued": 1
+          },
+          "schedules": 1,
+          "states": 2,
+          "successful_schedules": 0,
+          "violations": [
+            "page_permission"
           ]
-        },
-        "outcomes": {
-          "issued": 1
-        },
-        "schedules": 1,
-        "states": 2,
-        "successful_schedules": 1,
-        "violations": [
-          "page_permission"
-        ]
-      },
-      "variant": "pte_write_bypass"
+        }
+      }
     },
     "private_clone": {
       "correct": {
+        "actions": {
+          "clone": {
+            "cloned": 1
+          },
+          "complete1": {
+            "completed": 1
+          },
+          "issue1": {
+            "issued": 1
+          },
+          "retire0": {
+            "retiring": 1
+          }
+        },
         "counterexample": null,
         "outcomes": {
           "cloned": 1,
@@ -268,31 +1427,169 @@
         "successful_schedules": 1,
         "violations": []
       },
-      "injected": {
-        "counterexample": {
-          "action": "clone",
-          "property": "private_backing_shared",
-          "schedule": [
-            "clone",
-            "retire0",
-            "issue1",
-            "complete1"
+      "variants": {
+        "clone_shares_backing": {
+          "actions": {
+            "clone": {
+              "cloned": 1
+            }
+          },
+          "counterexample": {
+            "property": "private_backing_shared",
+            "trace": [
+              {
+                "action": "clone",
+                "outcome": "cloned"
+              }
+            ]
+          },
+          "outcomes": {
+            "cloned": 1
+          },
+          "schedules": 1,
+          "states": 2,
+          "successful_schedules": 0,
+          "violations": [
+            "private_backing_shared"
           ]
+        }
+      }
+    },
+    "reuse_preserves_ro": {
+      "correct": {
+        "actions": {
+          "complete0": {
+            "completed": 1
+          },
+          "drain0": {
+            "drained": 1
+          },
+          "drain1": {
+            "drained": 1
+          },
+          "finish0": {
+            "finished": 1
+          },
+          "invalidate0": {
+            "invalidated": 1
+          },
+          "invalidate1": {
+            "invalidated": 1
+          },
+          "load_p0": {
+            "cap_fault": 1
+          },
+          "load_q0": {
+            "issued": 1
+          },
+          "retire0": {
+            "retiring": 1
+          },
+          "reuse0": {
+            "allocated": 1
+          },
+          "store_q0": {
+            "page_permission_fault": 1
+          }
         },
+        "counterexample": null,
         "outcomes": {
-          "cloned": 1
+          "allocated": 1,
+          "cap_fault": 1,
+          "completed": 1,
+          "drained": 2,
+          "finished": 1,
+          "invalidated": 2,
+          "issued": 1,
+          "page_permission_fault": 1,
+          "retiring": 1
         },
         "schedules": 1,
-        "states": 2,
-        "successful_schedules": 0,
-        "violations": [
-          "private_backing_shared"
-        ]
+        "states": 10,
+        "successful_schedules": 1,
+        "violations": []
       },
-      "variant": "clone_shares_backing"
+      "variants": {
+        "reuse_grants_write": {
+          "actions": {
+            "drain0": {
+              "drained": 1
+            },
+            "drain1": {
+              "drained": 1
+            },
+            "finish0": {
+              "finished": 1
+            },
+            "invalidate0": {
+              "invalidated": 1
+            },
+            "invalidate1": {
+              "invalidated": 1
+            },
+            "retire0": {
+              "retiring": 1
+            },
+            "reuse0": {
+              "allocated": 1
+            }
+          },
+          "counterexample": {
+            "property": "allocator_changed_page_permissions",
+            "trace": [
+              {
+                "action": "retire0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "drained"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish0",
+                "outcome": "finished"
+              },
+              {
+                "action": "reuse0",
+                "outcome": "allocated"
+              }
+            ]
+          },
+          "outcomes": {
+            "allocated": 1,
+            "drained": 2,
+            "finished": 1,
+            "invalidated": 2,
+            "retiring": 1
+          },
+          "schedules": 1,
+          "states": 8,
+          "successful_schedules": 0,
+          "violations": [
+            "allocator_changed_page_permissions"
+          ]
+        }
+      }
     },
     "syscall_span": {
       "correct": {
+        "actions": {
+          "bad_read": {
+            "EFAULT": 1
+          }
+        },
         "counterexample": null,
         "outcomes": {
           "EFAULT": 1
@@ -302,28 +1599,50 @@
         "successful_schedules": 1,
         "violations": []
       },
-      "injected": {
-        "counterexample": {
-          "action": "bad_read",
-          "property": "syscall_consumed_on_bad_span",
-          "schedule": [
-            "bad_read"
+      "variants": {
+        "syscall_clamps_request": {
+          "actions": {
+            "bad_read": {
+              "read:32": 1
+            }
+          },
+          "counterexample": {
+            "property": "syscall_consumed_on_bad_span",
+            "trace": [
+              {
+                "action": "bad_read",
+                "outcome": "read:32"
+              }
+            ]
+          },
+          "outcomes": {
+            "read:32": 1
+          },
+          "schedules": 1,
+          "states": 2,
+          "successful_schedules": 0,
+          "violations": [
+            "syscall_consumed_on_bad_span"
           ]
-        },
-        "outcomes": {
-          "read:16": 1
-        },
-        "schedules": 1,
-        "states": 2,
-        "successful_schedules": 1,
-        "violations": [
-          "syscall_consumed_on_bad_span"
-        ]
-      },
-      "variant": "syscall_clamps_request"
+        }
+      }
     },
     "translation_switch": {
       "correct": {
+        "actions": {
+          "access1": {
+            "issued": 1
+          },
+          "complete0": {
+            "completed": 1
+          },
+          "switch1": {
+            "switch": 1
+          },
+          "warm": {
+            "issued": 1
+          }
+        },
         "counterexample": null,
         "outcomes": {
           "completed": 1,
@@ -335,87 +1654,645 @@
         "successful_schedules": 1,
         "violations": []
       },
-      "injected": {
-        "counterexample": {
-          "action": "access1",
-          "property": "foreign_translation",
-          "schedule": [
-            "warm",
-            "complete0",
-            "switch1",
-            "access1"
+      "variants": {
+        "stale_translation_selector": {
+          "actions": {
+            "access1": {
+              "issued": 1
+            },
+            "complete0": {
+              "completed": 1
+            },
+            "switch1": {
+              "switch": 1
+            },
+            "warm": {
+              "issued": 1
+            }
+          },
+          "counterexample": {
+            "property": "foreign_translation",
+            "trace": [
+              {
+                "action": "warm",
+                "outcome": "issued"
+              },
+              {
+                "action": "complete0",
+                "outcome": "completed"
+              },
+              {
+                "action": "switch1",
+                "outcome": "switch"
+              },
+              {
+                "action": "access1",
+                "outcome": "issued"
+              }
+            ]
+          },
+          "outcomes": {
+            "completed": 1,
+            "issued": 2,
+            "switch": 1
+          },
+          "schedules": 1,
+          "states": 5,
+          "successful_schedules": 0,
+          "violations": [
+            "foreign_translation"
           ]
+        }
+      }
+    },
+    "two_hart_free": {
+      "correct": {
+        "actions": {
+          "complete0": {
+            "completed": 40400,
+            "refused": 40240
+          },
+          "complete1": {
+            "completed": 40400,
+            "refused": 40240
+          },
+          "drain0": {
+            "drained": 13440,
+            "refused": 26880
+          },
+          "drain1": {
+            "drained": 13440,
+            "refused": 26880
+          },
+          "finish0": {
+            "finished": 640,
+            "refused": 39680
+          },
+          "invalidate0": {
+            "invalidated": 40320
+          },
+          "invalidate1": {
+            "invalidated": 40320
+          },
+          "issue0": {
+            "issued": 40320
+          },
+          "issue1": {
+            "issued": 40320
+          },
+          "load_p0": {
+            "cap_fault": 40320
+          },
+          "load_q0": {
+            "issued": 80,
+            "refused": 40240
+          },
+          "load_q1": {
+            "issued": 80,
+            "refused": 40240
+          },
+          "retire0": {
+            "retiring": 40320
+          },
+          "reuse0": {
+            "allocated": 80,
+            "refused": 40240
+          }
         },
+        "counterexample": null,
         "outcomes": {
-          "completed": 1,
-          "issued": 2,
-          "switch": 1
+          "allocated": 80,
+          "cap_fault": 40320,
+          "completed": 80800,
+          "drained": 26880,
+          "finished": 640,
+          "invalidated": 80640,
+          "issued": 80800,
+          "refused": 294640,
+          "retiring": 40320
         },
-        "schedules": 1,
-        "states": 5,
-        "successful_schedules": 1,
-        "violations": [
-          "foreign_translation"
-        ]
+        "schedules": 40320,
+        "states": 34,
+        "successful_schedules": 80,
+        "violations": []
       },
-      "variant": "stale_translation_selector"
+      "variants": {
+        "drain_ignores_hart1": {
+          "actions": {
+            "complete0": {
+              "completed": 37040,
+              "refused": 33520
+            },
+            "complete1": {
+              "completed": 33680,
+              "refused": 33520
+            },
+            "drain0": {
+              "drained": 11648,
+              "refused": 25312
+            },
+            "drain1": {
+              "drained": 20160,
+              "refused": 20160
+            },
+            "finish0": {
+              "finished": 640,
+              "refused": 36320
+            },
+            "invalidate0": {
+              "invalidated": 36960
+            },
+            "invalidate1": {
+              "invalidated": 40320
+            },
+            "issue0": {
+              "issued": 40320
+            },
+            "issue1": {
+              "issued": 40320
+            },
+            "load_p0": {
+              "cap_fault": 33600
+            },
+            "load_q0": {
+              "issued": 80,
+              "refused": 33520
+            },
+            "load_q1": {
+              "issued": 80,
+              "refused": 33520
+            },
+            "retire0": {
+              "retiring": 40320
+            },
+            "reuse0": {
+              "allocated": 80,
+              "refused": 36880
+            }
+          },
+          "counterexample": {
+            "property": "drain_ack_with_access_pending",
+            "trace": [
+              {
+                "action": "issue0",
+                "outcome": "issued"
+              },
+              {
+                "action": "issue1",
+                "outcome": "issued"
+              },
+              {
+                "action": "retire0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "refused"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              }
+            ]
+          },
+          "outcomes": {
+            "allocated": 80,
+            "cap_fault": 33600,
+            "completed": 70720,
+            "drained": 31808,
+            "finished": 640,
+            "invalidated": 77280,
+            "issued": 80800,
+            "refused": 252752,
+            "retiring": 40320
+          },
+          "schedules": 40320,
+          "states": 39,
+          "successful_schedules": 80,
+          "violations": [
+            "drain_ack_with_access_pending"
+          ]
+        }
+      }
+    },
+    "two_hart_unmap": {
+      "correct": {
+        "actions": {
+          "complete0": {
+            "completed": 40400,
+            "refused": 40240
+          },
+          "complete1": {
+            "completed": 40400,
+            "refused": 40240
+          },
+          "drain0": {
+            "drained": 13440,
+            "refused": 26880
+          },
+          "drain1": {
+            "drained": 13440,
+            "refused": 26880
+          },
+          "finish0": {
+            "finished": 640,
+            "refused": 39680
+          },
+          "invalidate0": {
+            "invalidated": 40320
+          },
+          "invalidate1": {
+            "invalidated": 40320
+          },
+          "issue0": {
+            "issued": 40320
+          },
+          "issue1": {
+            "issued": 40320
+          },
+          "load_p0": {
+            "cap_fault": 40320
+          },
+          "load_q0": {
+            "page_fault": 80,
+            "refused": 40240
+          },
+          "load_q1": {
+            "issued": 80,
+            "refused": 40240
+          },
+          "mmap0": {
+            "mapped": 80,
+            "refused": 40240
+          },
+          "resolve0": {
+            "refused": 40240,
+            "resolved": 80
+          },
+          "retry0": {
+            "issued": 80,
+            "refused": 40240
+          },
+          "unmap0": {
+            "retiring": 40320
+          }
+        },
+        "counterexample": null,
+        "outcomes": {
+          "cap_fault": 40320,
+          "completed": 80800,
+          "drained": 26880,
+          "finished": 640,
+          "invalidated": 80640,
+          "issued": 80800,
+          "mapped": 80,
+          "page_fault": 80,
+          "refused": 375120,
+          "resolved": 80,
+          "retiring": 40320
+        },
+        "schedules": 40320,
+        "states": 36,
+        "successful_schedules": 80,
+        "violations": []
+      },
+      "variants": {
+        "drain_ignores_hart1": {
+          "actions": {
+            "complete0": {
+              "completed": 37040,
+              "refused": 33520
+            },
+            "complete1": {
+              "completed": 33680,
+              "refused": 33520
+            },
+            "drain0": {
+              "drained": 11648,
+              "refused": 25312
+            },
+            "drain1": {
+              "drained": 20160,
+              "refused": 20160
+            },
+            "finish0": {
+              "finished": 640,
+              "refused": 36320
+            },
+            "invalidate0": {
+              "invalidated": 36960
+            },
+            "invalidate1": {
+              "invalidated": 40320
+            },
+            "issue0": {
+              "issued": 40320
+            },
+            "issue1": {
+              "issued": 40320
+            },
+            "load_p0": {
+              "cap_fault": 33600
+            },
+            "load_q0": {
+              "page_fault": 80,
+              "refused": 33520
+            },
+            "load_q1": {
+              "issued": 80,
+              "refused": 33520
+            },
+            "mmap0": {
+              "mapped": 80,
+              "refused": 36880
+            },
+            "resolve0": {
+              "refused": 33520,
+              "resolved": 80
+            },
+            "retry0": {
+              "issued": 80,
+              "refused": 33520
+            },
+            "unmap0": {
+              "retiring": 40320
+            }
+          },
+          "counterexample": {
+            "property": "drain_ack_with_access_pending",
+            "trace": [
+              {
+                "action": "issue0",
+                "outcome": "issued"
+              },
+              {
+                "action": "issue1",
+                "outcome": "issued"
+              },
+              {
+                "action": "unmap0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "refused"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              }
+            ]
+          },
+          "outcomes": {
+            "cap_fault": 33600,
+            "completed": 70720,
+            "drained": 31808,
+            "finished": 640,
+            "invalidated": 77280,
+            "issued": 80800,
+            "mapped": 80,
+            "page_fault": 80,
+            "refused": 319792,
+            "resolved": 80,
+            "retiring": 40320
+          },
+          "schedules": 40320,
+          "states": 41,
+          "successful_schedules": 80,
+          "violations": [
+            "drain_ack_with_access_pending"
+          ]
+        }
+      }
     },
     "unmap_completion": {
       "correct": {
+        "actions": {
+          "complete0": {
+            "completed": 5060,
+            "refused": 5020
+          },
+          "drain0": {
+            "drained": 1680,
+            "refused": 3360
+          },
+          "drain1": {
+            "drained": 2520,
+            "refused": 2520
+          },
+          "finish0": {
+            "finished": 140,
+            "refused": 4900
+          },
+          "invalidate0": {
+            "invalidated": 5040
+          },
+          "invalidate1": {
+            "invalidated": 5040
+          },
+          "issue0": {
+            "issued": 5040
+          },
+          "load_p0": {
+            "cap_fault": 5040
+          },
+          "load_q0": {
+            "page_fault": 20,
+            "refused": 5020
+          },
+          "mmap0": {
+            "mapped": 20,
+            "refused": 5020
+          },
+          "resolve0": {
+            "refused": 5020,
+            "resolved": 20
+          },
+          "retry0": {
+            "issued": 20,
+            "refused": 5020
+          },
+          "unmap0": {
+            "retiring": 5040
+          }
+        },
         "counterexample": null,
         "outcomes": {
-          "completed": 5040,
+          "cap_fault": 5040,
+          "completed": 5060,
           "drained": 4200,
           "finished": 140,
           "invalidated": 10080,
-          "issued": 5040,
-          "refused": 15800,
-          "retiring": 5040,
-          "reused": 20
+          "issued": 5060,
+          "mapped": 20,
+          "page_fault": 20,
+          "refused": 35880,
+          "resolved": 20,
+          "retiring": 5040
         },
         "schedules": 5040,
-        "states": 19,
+        "states": 23,
         "successful_schedules": 20,
         "violations": []
       },
-      "injected": {
-        "counterexample": {
-          "action": "finish_unmap0",
-          "property": "reuse_authorized_with_access_pending",
-          "schedule": [
-            "issue0",
-            "unmap0",
-            "invalidate0",
-            "invalidate1",
-            "drain0",
-            "drain1",
-            "finish_unmap0",
-            "complete0",
-            "reuse0"
+      "variants": {
+        "no_unmap_drain": {
+          "actions": {
+            "complete0": {
+              "completed": 4640,
+              "refused": 3480
+            },
+            "drain0": {
+              "drained": 1344,
+              "refused": 3276
+            },
+            "drain1": {
+              "drained": 2100,
+              "refused": 2520
+            },
+            "finish0": {
+              "finished": 1680,
+              "refused": 3360
+            },
+            "invalidate0": {
+              "invalidated": 5040
+            },
+            "invalidate1": {
+              "invalidated": 5040
+            },
+            "issue0": {
+              "issued": 5040
+            },
+            "load_p0": {
+              "cap_fault": 3500
+            },
+            "load_q0": {
+              "page_fault": 20,
+              "refused": 3480
+            },
+            "mmap0": {
+              "mapped": 20,
+              "refused": 4620
+            },
+            "resolve0": {
+              "refused": 3480,
+              "resolved": 20
+            },
+            "retry0": {
+              "issued": 20,
+              "refused": 3480
+            },
+            "unmap0": {
+              "retiring": 5040
+            }
+          },
+          "counterexample": {
+            "property": "reuse_authorized_with_access_pending",
+            "trace": [
+              {
+                "action": "issue0",
+                "outcome": "issued"
+              },
+              {
+                "action": "unmap0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "drain0",
+                "outcome": "refused"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish0",
+                "outcome": "finished"
+              }
+            ]
+          },
+          "outcomes": {
+            "cap_fault": 3500,
+            "completed": 4640,
+            "drained": 3444,
+            "finished": 1680,
+            "invalidated": 10080,
+            "issued": 5060,
+            "mapped": 20,
+            "page_fault": 20,
+            "refused": 27696,
+            "resolved": 20,
+            "retiring": 5040
+          },
+          "schedules": 5040,
+          "states": 28,
+          "successful_schedules": 20,
+          "violations": [
+            "finish_without_drain_ack",
+            "reuse_authorized_with_access_pending"
           ]
-        },
-        "outcomes": {
-          "completed": 4620,
-          "drained": 3444,
-          "finished": 1680,
-          "invalidated": 10080,
-          "issued": 5040,
-          "refused": 13776,
-          "retiring": 5040,
-          "reused": 20
-        },
-        "schedules": 5040,
-        "states": 24,
-        "successful_schedules": 20,
-        "violations": [
-          "finish_without_drain_ack",
-          "reuse_authorized_with_access_pending"
-        ]
-      },
-      "variant": "no_unmap_drain"
+        }
+      }
     },
     "unrelated_context": {
       "correct": {
+        "actions": {
+          "complete0": {
+            "completed": 1
+          },
+          "complete1": {
+            "completed": 1
+          },
+          "drain0": {
+            "drained": 1
+          },
+          "drain1": {
+            "drained": 1
+          },
+          "finish0": {
+            "finished": 1,
+            "refused": 1
+          },
+          "invalidate0": {
+            "invalidated": 1
+          },
+          "invalidate1": {
+            "invalidated": 1
+          },
+          "issue0": {
+            "issued": 1
+          },
+          "issue1": {
+            "issued": 1
+          },
+          "retire0": {
+            "retiring": 1
+          }
+        },
         "counterexample": null,
         "outcomes": {
           "completed": 2,
@@ -431,42 +2308,97 @@
         "successful_schedules": 0,
         "violations": []
       },
-      "injected": {
-        "counterexample": {
-          "action": "finish0",
-          "property": "reuse_authorized_with_access_pending",
-          "schedule": [
-            "issue0",
-            "retire0",
-            "issue1",
-            "invalidate0",
-            "invalidate1",
-            "complete1",
-            "drain1",
-            "finish0",
-            "complete0",
-            "drain0",
-            "finish0"
+      "variants": {
+        "no_free_drain": {
+          "actions": {
+            "complete1": {
+              "completed": 1
+            },
+            "drain1": {
+              "drained": 1
+            },
+            "finish0": {
+              "finished": 1
+            },
+            "invalidate0": {
+              "invalidated": 1
+            },
+            "invalidate1": {
+              "invalidated": 1
+            },
+            "issue0": {
+              "issued": 1
+            },
+            "issue1": {
+              "issued": 1
+            },
+            "retire0": {
+              "retiring": 1
+            }
+          },
+          "counterexample": {
+            "property": "reuse_authorized_with_access_pending",
+            "trace": [
+              {
+                "action": "issue0",
+                "outcome": "issued"
+              },
+              {
+                "action": "retire0",
+                "outcome": "retiring"
+              },
+              {
+                "action": "issue1",
+                "outcome": "issued"
+              },
+              {
+                "action": "invalidate0",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "invalidate1",
+                "outcome": "invalidated"
+              },
+              {
+                "action": "complete1",
+                "outcome": "completed"
+              },
+              {
+                "action": "drain1",
+                "outcome": "drained"
+              },
+              {
+                "action": "finish0",
+                "outcome": "finished"
+              }
+            ]
+          },
+          "outcomes": {
+            "completed": 1,
+            "drained": 1,
+            "finished": 1,
+            "invalidated": 2,
+            "issued": 2,
+            "retiring": 1
+          },
+          "schedules": 1,
+          "states": 9,
+          "successful_schedules": 0,
+          "violations": [
+            "reuse_authorized_with_access_pending"
           ]
-        },
-        "outcomes": {
-          "completed": 1,
-          "drained": 1,
-          "finished": 1,
-          "invalidated": 2,
-          "issued": 2,
-          "retiring": 1
-        },
-        "schedules": 1,
-        "states": 9,
-        "successful_schedules": 0,
-        "violations": [
-          "reuse_authorized_with_access_pending"
-        ]
-      },
-      "variant": "no_free_drain"
+        }
+      }
     }
   },
-  "model_sha256": "a615ea820ade76cd4dc6a01f838480e1e778d90826f0f3184f39004402f072d3",
-  "schema": 1
+  "malloc64_contract": {
+    "address_p": 4096,
+    "address_q": 4096,
+    "dereference_p": "cap_fault",
+    "dereference_q": "issued_then_completed",
+    "generation_p": 0,
+    "generation_q": 1
+  },
+  "model_sha256": "9efcdeb00f649d00ef61edd65e05aa91334e3aed2bb87ab239133c245d251c8a",
+  "schema": 2
 }
