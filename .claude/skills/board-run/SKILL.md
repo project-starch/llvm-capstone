@@ -75,6 +75,18 @@ Each of these has cost real board time when skipped.
    `.capstone_gp_initdesc`, so lld orphan-places it, `globals_off` reads as ~0x3f0 and the
    monitor aborts with `capstone_error 0xB10B`. Use the DEFAULT `link-gpfree.ld` plus
    `DOMAIN_WINDOW`.
+6. **Under the silicon (gp-captable) ABI, list every `delin` outside `_start` and justify each
+   one.** The RTL's DELIN raises UNEXPECTED_CAPABILITY_TYPE on any non-LINEAR operand, a wedge, while
+   QEMU's helper returns early, so the emulator never shows it. String literals, cap-table globals
+   and monitor-shared regions all arrive NON-linear in the silicon build. This cost boots three
+   times: S-02, S-15, and the repro322 corpus's print helper (2026-10-01, every case wedged at its
+   first print). The known-good case is `sublet_take` de-linearising a linear grant. Anything else
+   needs a reason, or the `#ifdef CAPSTONE_GP_CAPTABLE_ABI` guard `sqlite_capstone_domain.c` uses:
+   ```bash
+   llvm-objdump -d --no-show-raw-insn <x>.dom | awk '/^[0-9a-f]+ </{fn=$2} /\tdelin\t/{print fn}' | sort | uniq -c
+   ```
+   Not a preflight gate on purpose: whether a `delin` is safe depends on its operand's type, which a
+   static scan cannot see, and images that run correctly on silicon have one in `sublet_take`.
 
 ## 1. Bake it in — never UART
 

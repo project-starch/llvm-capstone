@@ -15,6 +15,7 @@
 |---|---|---|---|---|
 | `cpython/app` | 3.13.7 | capstone-domain, cheribsd-purecap | objects.py JSON/GC qualification workload | `pymalloc-repros` |
 | `ffmpeg/app` | 9.0.1 | capstone-domain | matroska demuxer to mpeg4 decoder, per-frame framemd5 | -- |
+| `memcached/app` | 1.6.45 | capstone-domain, native | mc-harness: a fixed text- and meta-protocol script over one connection and 2 x -t concurrent ones, compared byte for byte with the native server | `allocator-repros` |
 | `micropython` | 2e3304a | capstone-domain, silicon | the registered upstream test selection | -- |
 | `mruby/app` | 4.0.0-rc2 | capstone-domain, native | mrbtest, and the upstream ao-render benchmark for the study | `gc-slot-repros` |
 | `perl/musl` | 5.36.3 | capstone-domain, native | scripts/smoke.pl, byte-identical to the native reference | -- |
@@ -56,6 +57,7 @@ A directory under `ports/` is an upstream **program**; a directory inside it is 
 |---|---|---|
 | cpython | `cpython/app` · `cpython/pymalloc` | 3.13.7 |
 | ffmpeg | `ffmpeg/app` · `ffmpeg/buffer-pool` | 9.0.1 |
+| memcached | `memcached/allocators` · `memcached/app` | 1.6.45 |
 | perl | `perl/cheribsd` · `perl/musl` | 5.36.3 |
 | postgres | `postgres/app` (17.5) · `postgres/memory-contexts` (17.0) | **differs, see the note in its port.json** |
 | sqlite | `sqlite/app` (3.22.0) · `sqlite` (3.53.3, 3.22.0) | **differs, see the note in its port.json** |

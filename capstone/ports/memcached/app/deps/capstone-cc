@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Dependency-specific include paths and cast census; compile/link through the SDK.
+set -uo pipefail
+
+: "${CAPSTONE_CLANG:?}" "${CAPSTONE_LD_LLD:?}" "${MC_MUSL:?musl source tree}"
+: "${MC_RUNTIME_DIR:?prepared runtime objects}" "${MC_LIBC_ARCHIVE:?libc-capstone.a}"
+: "${MC_DEPS_PREFIX:?install prefix}"
+
+TARGET=(-isystem "$("$CAPSTONE_CLANG" -print-resource-dir)/include")
+[[ "${MC_CENSUS:-0}" == 1 ]] && TARGET+=(-Wvoid-pointer-to-int-cast -Wpointer-to-int-cast
+                                         -Wint-to-void-pointer-cast -Wint-to-pointer-cast)
+
+mode=link
+out=""
+prev=""
+# ... and the linker (meson runs `cc -Wl,--version`): it is ld.lld, which links every domain.
+for a in "$@"; do
+  case "$a" in -Wl,--version|-Wl,-v) exec "$CAPSTONE_LD_LLD" --version ;; esac
+done
+for a in "$@"; do
+  case "$a" in
+    -c|-S|-E|-M|-MM) mode=compile ;;
+    # A build system asking about the compiler (meson runs --version to identify it): answer
+    # as the capstone64 clang, never as a link.
+    --version|-v|-dumpversion|-dumpmachine|-print-*|--print-*|-###) mode=compile ;;
+  esac
+  [[ "$prev" == "-o" ]] && out="$a"
+  prev="$a"
+done
+
+if [[ "$mode" == compile ]]; then
+  if [[ -n "${MC_CENSUS_LOG:-}" ]]; then
+    # One compile's cast warnings, appended whole under a lock: a parallel make interleaves
+    # stderr, and grepping a -j16 build log split and merged warning lines (libgcrypt, 34 of 119).
+    err=$(mktemp "${TMPDIR:-/tmp}/mc-cc-err.XXXXXX")
+    "$MC_RUNTIME_DIR/capstone-cc" "${TARGET[@]}" "$@" 2> "$err"
+    rc=$?
+    cat "$err" >&2
+    # ANSI colour codes stripped first: meson turns diagnostics colour on, and a coloured line
+    # parses as nothing (GLib's first census read 63 lines and 0 sites).
+    sed 's/\x1b\[[0-9;]*m//g' "$err" |
+      grep -E 'warning: .*\[-W(void-pointer-to-int-cast|pointer-to-int-cast|int-to-void-pointer-cast|int-to-pointer-cast)\]' |
+      flock "$MC_CENSUS_LOG.lock" tee -a "$MC_CENSUS_LOG" > /dev/null
+    rm -f "$err"
+    exit $rc
+  fi
+  exec "$MC_RUNTIME_DIR/capstone-cc" "${TARGET[@]}" "$@"
+fi
+
+exec "$MC_RUNTIME_DIR/capstone-cc" "${TARGET[@]}" -L"$MC_DEPS_PREFIX/lib" "$@"

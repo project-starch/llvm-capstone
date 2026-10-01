@@ -3025,15 +3025,28 @@ if (( ${#_builtin_skipped[@]} )); then
   echo "   builtins with no own source file (expected: symbols inside comparedf2.c): ${_builtin_skipped[*]}"
 fi
 
+# DOMAIN_BASE_VA relocates the entry VA (default 0x10000), as build-ladder-domain.sh does. Without
+# it every SQLite image enters at 0x10000, so only one may be staged per boot (R-3: a second domain
+# at the same VA in one boot hangs), and a SQLite boot cannot carry a known-good control beside the
+# image under test. The default path runs the original single sed, so every recorded image is
+# byte-identical; a non-default base goes through placeholders for the reason given in
+# build-ladder-domain.sh (a global `s/0x10000/` would also rewrite a window whose text contains it).
+DOMAIN_BASE_VA=${DOMAIN_BASE_VA:-0x10000}
 # Two-pass link: pass 1 only to measure .text, pass 2 with the real globals offset.
 link() {  # $1 = globals offset literal, $2 = output
   local lds="$OBJ_DIR/link.ld"
-  sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
+  if [[ "$DOMAIN_BASE_VA" == "0x10000" ]]; then
+    sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
+  else
+    sed -e "s/0x10000 + 0x1000/@BASE@ + @WIN@/" \
+        -e "s/0x10000/@BASE@/g" \
+        -e "s/@WIN@/$1/" \
+        -e "s/@BASE@/$DOMAIN_BASE_VA/g" "$GPFREE/link-gpfree.ld" > "$lds"
+  fi
   # VERIFY, because a sed whose pattern stops matching is a SILENT no-op: the build would
-  # succeed and quietly link at the DEFAULT window. (No base-VA substitution here -- SQLite
-  # images have no DOMAIN_BASE_VA knob, which is why exactly one may be staged per boot.)
-  grep -q -- "0x10000 + $1" "$lds" || {
-    echo "build-sqlite-silicon.sh: linker-script substitution FAILED (wanted '0x10000 + $1')" >&2
+  # succeed and quietly link at the DEFAULT window or base.
+  grep -q -- "$DOMAIN_BASE_VA + $1" "$lds" || {
+    echo "build-sqlite-silicon.sh: linker-script substitution FAILED (wanted '$DOMAIN_BASE_VA + $1')" >&2
     echo "  the '0x10000 + 0x1000' pattern in $GPFREE/link-gpfree.ld has probably changed." >&2
     exit 1; }
   # INTERP_BUILD_LIMIT=<N> (diagnostic only) clamps how many carve iterations the glue

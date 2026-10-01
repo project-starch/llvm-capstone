@@ -23,7 +23,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sys/uio.h>
 #include <ucontext.h>
 #include <capstone/context.h>
 #include <capstone/delegate.h>
@@ -981,6 +983,96 @@ static int clone_refused(void)
   return 0;
 }
 
+/* ---- sendmsg-concurrent, recvmsg-concurrent: the launcher serves each context
+   on its own Linux thread, so the msghdr it rebuilds for one context's call must
+   not be the one another context's call rebuilds. Each thread moves messages of
+   its own bytes through its own socket pair, many iovecs each, and must read
+   back exactly what it sent. sendmsg-concurrent sends with sendmsg and reads
+   with read; recvmsg-concurrent writes with write and receives with recvmsg,
+   so a failure names the path. A byte's top two bits name the thread that wrote
+   it, so a mixed message says whose bytes it carried. ROUNDS is argv[2]. */
+#define SM_THREADS 4
+#define SM_IOVS 32
+#define SM_CHUNK 1024
+#define SM_BYTES (SM_IOVS * SM_CHUNK)
+static int sm_recv, sm_rounds = 300;
+static pthread_barrier_t sm_start;
+struct sm_result { long mixed, failed; int round, offset, seen; };
+static struct sm_result sm_res[SM_THREADS];
+
+static unsigned char sm_byte(int k, int round, int i) { return (unsigned char)(k * 64 + ((round * 7 + i) & 63)); }
+
+static void *sm_worker(void *arg)
+{
+  int k = (int)(intptr_t)arg, sv[2];
+  struct sm_result *res = &sm_res[k];
+  unsigned char *out = malloc(SM_BYTES), *in = malloc(SM_BYTES);
+  struct iovec iov[SM_IOVS];
+  if (!out || !in || socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) { res->failed++; return 0; }
+  pthread_barrier_wait(&sm_start);
+  for (int r = 0; r < sm_rounds; ++r) {
+    for (int i = 0; i < SM_IOVS; ++i) memset(out + i * SM_CHUNK, sm_byte(k, r, i), SM_CHUNK);
+    memset(in, 0xff, SM_BYTES);
+    size_t got = 0;
+    struct msghdr m;
+    memset(&m, 0, sizeof m);
+    m.msg_iov = iov;
+    m.msg_iovlen = SM_IOVS;
+    if (!sm_recv) {
+      for (int i = 0; i < SM_IOVS; ++i) { iov[i].iov_base = out + i * SM_CHUNK; iov[i].iov_len = SM_CHUNK; }
+      if (sendmsg(sv[0], &m, 0) != SM_BYTES) { res->failed++; continue; }
+      while (got < SM_BYTES) {
+        ssize_t n = read(sv[1], in + got, SM_BYTES - got);
+        if (n <= 0) break;
+        got += (size_t)n;
+      }
+    } else {
+      for (size_t put = 0; put < SM_BYTES;) {
+        ssize_t n = write(sv[0], out + put, SM_BYTES - put);
+        if (n <= 0) break;
+        put += (size_t)n;
+      }
+      for (int i = 0; i < SM_IOVS; ++i) { iov[i].iov_base = in + i * SM_CHUNK; iov[i].iov_len = SM_CHUNK; }
+      ssize_t n = recvmsg(sv[1], &m, MSG_WAITALL);
+      got = n > 0 ? (size_t)n : 0;
+    }
+    if (got != SM_BYTES) { res->failed++; continue; }
+    if (memcmp(in, out, SM_BYTES)) {
+      if (!res->mixed++) {
+        int j = 0;
+        while (in[j] == out[j]) ++j;
+        res->round = r; res->offset = j; res->seen = in[j];
+      }
+    }
+  }
+  close(sv[0]); close(sv[1]); free(out); free(in);
+  return 0;
+}
+
+static int msg_concurrent(int receiving, int argc, char **argv)
+{
+  pthread_t t[SM_THREADS];
+  long mixed = 0, failed = 0;
+  sm_recv = receiving;
+  if (argc > 2) sm_rounds = atoi(argv[2]);
+  CHECK(sm_rounds > 0);
+  CHECK(pthread_barrier_init(&sm_start, 0, SM_THREADS) == 0);
+  for (int k = 0; k < SM_THREADS; ++k) CHECK(pthread_create(&t[k], 0, sm_worker, (void *)(intptr_t)k) == 0);
+  for (int k = 0; k < SM_THREADS; ++k) CHECK(pthread_join(t[k], 0) == 0);
+  for (int k = 0; k < SM_THREADS; ++k) {
+    struct sm_result *res = &sm_res[k];
+    mixed += res->mixed; failed += res->failed;
+    if (res->mixed)
+      printf("%s: thread %d: %ld mixed messages; the first, round %d, byte %d is 0x%02x (its top bits name thread %d)\n",
+             receiving ? "recvmsg" : "sendmsg", k, res->mixed, res->round, res->offset, res->seen, res->seen / 64);
+  }
+  printf("%s-concurrent: %d threads x %d rounds of %d bytes in %d iovecs: %ld mixed, %ld failed\n",
+         receiving ? "recvmsg" : "sendmsg", SM_THREADS, sm_rounds, SM_BYTES, SM_IOVS, mixed, failed);
+  CHECK(failed == 0);
+  CHECK(mixed == 0);
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   int rc;
@@ -1018,6 +1110,8 @@ int main(int argc, char **argv)
   else if (!strcmp(mode, "sigreturn-mask")) rc = sigreturn_mask();
   else if (!strcmp(mode, "setuid-threads")) rc = setuid_threads();
   else if (!strcmp(mode, "sigaction-race")) rc = sigaction_race();
+  else if (!strcmp(mode, "sendmsg-concurrent")) rc = msg_concurrent(0, argc, argv);
+  else if (!strcmp(mode, "recvmsg-concurrent")) rc = msg_concurrent(1, argc, argv);
   else {
     fprintf(stderr, "pthread-probe: unknown mode %s\n", mode);
     return 2;

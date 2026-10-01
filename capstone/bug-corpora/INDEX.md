@@ -13,7 +13,7 @@
 | third-party defects, as cases | `capstone/bug-corpora/` | 77 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 28 | one self-contained report per defect, the folder is the report |
-| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 92 open, 77 resolved | the registry, not reproduced cases |
+| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 96 open, 77 resolved | the registry, not reproduced cases |
 
 Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 7 components have them: `apr/pools`, `cpython/pymalloc`, `ffmpeg/buffer-pool`, `memcached/allocators`, `postgres/memory-contexts`, `whisper/ggml-context`, `wireshark/wmem`.
 
@@ -48,6 +48,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | -- | 0 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 3 |
 | `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 5 |
+| `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, native | `allocator-repros` | 5 |
 | `capstone/ports/micropython` | full-application | 2e3304a | capstone-domain, silicon | -- | 0 |
 | `capstone/ports/mruby/app` | full-application | 4.0.0-rc2 | capstone-domain, native | `gc-slot-repros` | 0 |
 | `capstone/ports/musl-capstone` | domain-libc | 1.2.5 | capstone-domain | -- | 0 |
