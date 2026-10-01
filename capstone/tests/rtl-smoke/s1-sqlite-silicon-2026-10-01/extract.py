@@ -48,8 +48,10 @@ def main(out, boot):
     text = open(bt, errors="replace").read().replace("\r", "")
     parts = re.split(r"^===== (.+) =====$", text, flags=re.M)
     # The monitor's share-trace markers (ECSA:, SHA0:, ...) are interleaved into the UART and can splice
-    # a domain line mid-token (s1sql-b2a, sbp3: "...SIBLING__ meECSA:00000007\n...mory b[0]=b"). Read every
-    # block through fpga_driver.transcript.strip_markers, which deletes them with their newline.
+    # a domain line mid-token. The host's own next monitor call in the SAME invocation (the pool release)
+    # lands while the tty is still draining the probe text: s1sql-b2a sbp3 read "...SIBLING__ me" +
+    # "ECSA:00000007" ... + "msys5 b[0]=b", and s1sql-b3a sbp4 the same. Read every block through
+    # fpga_driver.transcript.strip_markers, which deletes the markers with their newline.
     blocks = [(lab, strip_markers(body)) for lab, body in zip(parts[1::2], parts[2::2])]
     if not blocks: nodata(f"no ===== blocks in {bt}")
     lines, bad = [f"# {os.path.basename(out.rstrip('/'))}, boot {boot}: {len(blocks)} blocks, {len(order)} cells + k800"], 0
@@ -67,6 +69,7 @@ def main(out, boot):
             lines.append(f"{name}: MISMATCH -- block {i+1} ran [{label[:90]}]"); bad += 1; continue
         if want.startswith("FAULT"):
             unsafe = "NOTRAP" in body
+            bad += 1 if unsafe else 0      # the work order's first refutation: the gate must fire on it
             lines.append(f"{name}: {'UNSAFE-SUCCESS (NOTRAP printed)' if unsafe else 'no NOTRAP line'}; "
                          f"returned={'SQ: H/return' in body}; S1-PROBE={'S1-PROBE ' + probe in body}")
             continue
