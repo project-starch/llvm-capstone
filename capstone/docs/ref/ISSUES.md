@@ -729,6 +729,23 @@ te by the RTL lane, 2026-09-24.
 > stand as such: CALL;CALL corrupts the first's parked pc; control flow two or three instructions after the
 > CALL triggers it when fetch timing lets it reach issue in time (one layout measured: it did not).
 
+### R-48 — the SEALEDRET window moves with its cursor: `CINCOFFSET` does not refuse a SEALEDRET, and the +48..+1008 LDC/STC window is computed from the cursor `UNVERIFIED (source read only, 2026-10-01); no run has shown it; found by the after-audit of the supervised-CALL decisions`
+
+> **What the source says.** `capstone_flu_unit.anvil` lets `CINCOFFSET`/`CINCOFFSETIMM` move the cursor of every type
+> but UNINIT and SEALED, so a callee can move the cursor of the SEALEDRET it received in x1; `capstone_dyn_unit.anvil`
+> allows LDC/STC through a SEALEDRET inside `[cursor+48, cursor+1008]`, computed from the CURSOR. A callee that moves
+> the cursor would move the window off its own seal region. Whether CPMP or anything else stops the resulting accesses
+> is UNRESOLVED; nothing has been run.
+>
+> **What would settle it:** a directed test -- in a callee, `CINCOFFSET ra, ra, 2048` then `LDC` through it, read what
+> comes back (and whether a trap fires); the negative control is the same LDC without the CINCOFFSET.
+>
+> **Why it is filed now:** the same audit established that a SEALED capability's effective base IS its cursor
+> (`decompress_cap_metadata`), which is why SEAL now sets the sealed cursor to the region's start (R-32, S-11); this is
+> the SEALEDRET half of the same fact, not touched by that fix. Pre-existing on every bitstream; outside the
+> supervised-CALL change (the supervised domain's writable window holds only its own images, which the next escape
+> rewrites before any resume).
+
 ### R-46 — a commit-stage refetch keeps the PC-capability metadata, so a younger CJALR's target metadata can leak into the refetched code `OPEN — accepted for the R-43/R-45 bitstream by the project lead (2026-09-29); predates R-45, which makes it routine`
 
 > **What happens.** On a commit-stage refetch, `frontend.sv` (the `set_pc_commit_i` branch) redirects the PC
@@ -914,7 +931,7 @@ stays open for the permission check and the cause number. Follow-up 674cdab03c r
 unsigned-overflow acceptance at the upper edge of the sealed-return window and from the general
 bounds check.
 
-## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
+## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED on capstone-ariane sup-call (2026-10-01, audited): the fold corrected, the +1 dropped, 1024 B / 16-B aligned, and the sealed cursor set to the region's start (the only base a SEALED capability carries), pending the bitstream; SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
 > overlooked.** That ruling fixed each document's *outlier arithmetic* and moved no convention: the

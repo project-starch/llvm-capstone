@@ -8,9 +8,20 @@ resume CALL; status 3 means an unread event). Before silicon: why an unguarded
 `mret` trapped instead of escaping (mutant-only). (The earlier line here, "a
 SEALED capability does not survive an STC/LDC round trip in simulation", is
 RETRACTED: the test had overwritten the seal with an integer; repaired, it
-survives and the dead-node status is measured.) R-47 (CALL's parked
-return pc after a jump or branch) is fixed on the same branch and must land
-with it; until then, never place a branch right after a CALL.
+survives and the dead-node status is measured.) R-47 (CALL's parked return pc
+after a jump or branch) is fixed on the same branch and must land with it;
+until then, never place a branch right after a CALL. Two decisions taken on
+the lead's delegation, audited, in the same bitstream: a CALL of another seal
+while armed fails CLOSED (illegal-instruction trap at the CALL; the arm
+persists across the trap and across every exception on a CALL head -- the
+monitor's `supervised_invoke` CALLs the seal it armed, and its trap path
+forgets with `cssupervise x0`, the silicon forget form; QEMU's `cssupervise
+rd, d, x0` is a refusal here), and S-11 is fixed at 1024 bytes / 16-byte
+alignment with R-32's off-by-one corrected and the sealed cursor set to the
+region's start (a SEALED capability's base is its cursor) -- every known
+sealer complies; the runtime lane should raise QEMU's `CAP_SEALED_SIZE_MIN`
+from 528 to 1024. The cursor fix is the last RTL commit on the branch, so the
+lead can veto it alone (a veto costs one revert and a 75-minute re-sweep).
 
 Application ports (2026-09-29): the seven application recipes now require
 the [shared delegated SDK](../../ports/common/application/README.md), with
