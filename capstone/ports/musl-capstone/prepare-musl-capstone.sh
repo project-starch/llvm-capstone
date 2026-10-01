@@ -12,7 +12,8 @@
 # 0004 and 0005 keep a pointer a capability (pselect's mask, fcntl's lock
 # argument). 0006 lays out pthread_cond_t and cnd_t for 16-byte pointers, which
 # the upstream layout put over its own ints and past the object's end; 0007
-# keeps a thread attribute's stack address as a pointer rather than a long.
+# keeps a thread attribute's stack address as a pointer rather than a long; 0008
+# keeps prctl's arguments and the thread-name calls' name pointers.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)

@@ -249,6 +249,7 @@ static const struct capstone_delegate_shape shapes[] = {
   {13, CAPSTONE_GROUP_RUNTIME, 2, "park-wake", {I, I}},
   {14, CAPSTONE_GROUP_RUNTIME, 4, "park-requeue", {I, I, I, I}},
   {15, CAPSTONE_GROUP_RUNTIME, 1, "context-exiting", {I}},
+  {16, CAPSTONE_GROUP_RUNTIME, 2, "thread-name", {I, {CAPSTONE_ARG_INOUT, CAPSTONE_LEN_FIXED, 16, 0, 0}}},
 };
 
 const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {

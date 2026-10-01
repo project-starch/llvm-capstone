@@ -18,6 +18,7 @@
 #include <limits.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <signal.h>
@@ -744,6 +745,38 @@ static long dl_ioctl(long fd, unsigned long request, void *argp) {
   return dl_call(CAPSTONE_SYS_ioctl, raw);
 }
 
+/* prctl serves a thread's name and nothing else: the launcher thread that
+   serves this context sets or reads it on itself (THREAD_NAME). A name is read
+   up to its NUL or 15 bytes, never past a short string. */
+static long dl_prctl(long option, void *arg) {
+  uint64_t args[CAPSTONE_DELEGATE_ARGS] = {0, 0, 0, 0, 0, 0};
+  char name[CAPSTONE_THREAD_NAME_BYTES] = {0};
+  long rc;
+  if (option == PR_SET_NAME) {
+    if (!arg)
+      return -EFAULT;
+    memcpy(name, arg, strnlen(arg, sizeof name - 1));
+    args[0] = CAPSTONE_THREAD_NAME_SET;
+  } else if (option == PR_GET_NAME) {
+    if (!arg)
+      return -EFAULT;
+    args[0] = CAPSTONE_THREAD_NAME_GET;
+  } else {
+    __capstone_hc_note_unserved(SYS_prctl);
+    return -ENOSYS;
+  }
+  do {
+    dl_reset();
+    if (dl_alloc(sizeof name, &args[1]))
+      return -ENOMEM;
+    memcpy(dl_exchange + args[1], name, sizeof name);
+    rc = dl_round(CAPSTONE_NR_THREAD_NAME, args);
+    if (rc >= 0 && option == PR_GET_NAME && dl_status != CAPSTONE_ROUND_RETRY)
+      memcpy(arg, dl_exchange + args[1], sizeof name);
+  } while (dl_settle());
+  return rc;
+}
+
 /* Sockets. A datagram is one unit: a message the exchange region cannot hold
  * is EMSGSIZE, the kernel's own answer for a datagram too long for its
  * protocol, never a short send. A stream send may be short, as a write may,
@@ -1026,6 +1059,8 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     return dl_ioctl((long)a, (unsigned long)b, c);
   case SYS_fcntl:
     return dl_fcntl((long)a, (long)b, c);
+  case SYS_prctl:
+    return dl_prctl((long)a, b);
   case SYS_execve: {
     /* exec in place: the task replaces itself with the named image. The
        block is static and one at a time, as posix_spawn's. */
@@ -1051,6 +1086,14 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
   case SYS_clock_gettime:
     if (dl_clock((long)a, (struct timespec *)b))
       return 0;
+    break;
+  /* A thread's CPU set is the one of the Linux thread that serves its context:
+     the caller's own, named by 0 or by its tid, and no other thread's. */
+  case SYS_sched_getaffinity:
+  case SYS_sched_setaffinity:
+    if ((long)a && (long)a != __capstone_context_tid())
+      return -ESRCH;
+    raw[0] = 0;
     break;
   /* The robust list: musl walks a thread's list itself when the thread ends
      (pthread_exit); Linux's walk matters only when a whole process dies,

@@ -568,9 +568,14 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
   if (entry->nr == CAPSTONE_SYS_prlimit64 && !self_pid((pid_t)entry->args[0]))
     return -EPERM;
   /* scheduling and priority: this task only; a process group is formed by
-     the task or a child, or a child joins the task's group or a child's */
-  if ((entry->nr == CAPSTONE_SYS_sched_getaffinity || entry->nr == CAPSTONE_SYS_sched_setaffinity ||
-       entry->nr == CAPSTONE_SYS_sched_rr_get_interval) && !self_pid((pid_t)entry->args[0]))
+     the task or a child, or a child joins the task's group or a child's. A
+     CPU set is the one of the Linux thread serving this context, named by 0:
+     with several contexts, getpid() names the first context's thread, which
+     is not this one's to read or to set. */
+  if ((entry->nr == CAPSTONE_SYS_sched_getaffinity || entry->nr == CAPSTONE_SYS_sched_setaffinity) &&
+      entry->args[0] != 0)
+    return -EPERM;
+  if (entry->nr == CAPSTONE_SYS_sched_rr_get_interval && !self_pid((pid_t)entry->args[0]))
     return -EPERM;
   if ((entry->nr == CAPSTONE_SYS_getpriority || entry->nr == CAPSTONE_SYS_setpriority) &&
       (entry->args[0] != PRIO_PROCESS || !self_pid((pid_t)entry->args[1])))
@@ -795,6 +800,21 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   } else if (snapshot.nr == CAPSTONE_NR_PARK_WAIT || snapshot.nr == CAPSTONE_NR_PARK_WAKE ||
              snapshot.nr == CAPSTONE_NR_PARK_REQUEUE) {
     r = park_request(host, &snapshot);
+  } else if (snapshot.nr == CAPSTONE_NR_THREAD_NAME) {
+    /* this thread serves the context alone, so its name is the context's */
+    char name[CAPSTONE_THREAD_NAME_BYTES];
+    ++host->syscalls;
+    memcpy(name, host->exchange + snapshot.args[1], sizeof name);
+    if (snapshot.args[0] == CAPSTONE_THREAD_NAME_SET) {
+      name[sizeof name - 1] = 0;
+      r = prctl(PR_SET_NAME, name) ? -errno : 0;
+    } else if (snapshot.args[0] == CAPSTONE_THREAD_NAME_GET) {
+      r = prctl(PR_GET_NAME, name) ? -errno : 0;
+      if (!r)
+        memcpy(host->exchange + snapshot.args[1], name, sizeof name);
+    } else {
+      r = -EINVAL;
+    }
   } else if (snapshot.nr == CAPSTONE_SYS_rt_sigprocmask) {
     /* the logical mask is the domain's; the kernel gets the physical one */
     uint64_t set = 0, old = 0;

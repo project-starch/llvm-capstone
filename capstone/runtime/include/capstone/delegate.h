@@ -170,6 +170,14 @@ enum capstone_delegate_group {
  * the word the context cleared on its way out, as Linux does for
  * CLONE_CHILD_CLEARTID. -EINVAL from a context without a transport of its own. */
 #define CAPSTONE_NR_CONTEXT_EXITING UINT64_C(0xC0DE000F)
+/* THREAD_NAME: the calling thread's name, which is the name of the Linux
+ * thread that serves its context (prctl PR_SET_NAME and PR_GET_NAME there).
+ * args[0] 0 sets it from the 16-byte buffer at args[1], 1 reads it into that
+ * buffer. */
+#define CAPSTONE_NR_THREAD_NAME UINT64_C(0xC0DE0010)
+#define CAPSTONE_THREAD_NAME_SET 0u
+#define CAPSTONE_THREAD_NAME_GET 1u
+#define CAPSTONE_THREAD_NAME_BYTES 16u
 #define CAPSTONE_CONTEXT_REGISTER 0u   /* register only; the application steps it */
 #define CAPSTONE_CONTEXT_THREAD 1u     /* a launcher thread steps it until it ends */
 
