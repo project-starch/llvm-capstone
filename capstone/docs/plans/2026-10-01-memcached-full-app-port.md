@@ -338,6 +338,50 @@ probe), and doctored the classifier's inputs to show its gates fire.
 
 Corpus case 02 over the protocol is open: paused, awaiting the lead.
 
+## S1 — Sublet inside memcached's own allocators — PRE-REGISTERED before its first boot
+
+The gap the safety fixtures measured: slab items are bounded to their 1 MiB page and never revoked.
+The allocators component port (`ports/memcached/allocators`, patch 0002) hooks exactly the
+transitions the slab reuses chunks on. S1 carries those hooks into the server:
+
+- **patch 0006** (`-DMC_CAPSTONE_SLAB_SUBLET` only): the component's hooks, hunk for hunk, on the
+  app's own `slabs.c` and `cache.c`, each behind the define with upstream's line in the `#else`;
+  plus the adapter's init before `slabs_init` in `main`. `host/build-slab-sublet.sh` has a DRIFT
+  gate: patch 0006's hook calls equal patch 0002's, name for name and count for count, and a
+  self-test shows the gate refuses a patch missing one hook;
+- **the glue** `src/slab-sublet/mcapp-slab-sublet.c`: the component's ledger, metadata heap and
+  Sublet authority compiled unchanged (the ledger takes the item layout from the app's
+  `memcached.h` through a one-line `mc_slabs_shim.h`); the 64 MiB payload lent LINEAR by the
+  Sublet runtime heap at `HEAP_LOG 27`; 16 MiB of metadata from `malloc`; one lock around every
+  hook (the ledger is unlocked statics, and `cache.c` runs without `slabs_lock`); the mode from
+  `MC_SLAB_SUBLET_MODE`, required (0 spatial: per-chunk bounds; 1 sublet: revoke on every release
+  and issue); an adapter refusal is one line and exit 97;
+- **two images** on one build: `memcached-slabsublet.dom` for the oracle and
+  `memcached-safety-slabsublet.dom` with the fixture hook. HEADERS, ARM and LINK gates as in the
+  script's header.
+
+**Run settings, native and domain alike:** `-m 48` (the adapter's page half is 48 MiB) and
+`-o no_slab_reassign` (the page mover is not hooked and walks a page by pointer arithmetic).
+`CAPSTONE_REV_NODES=16777216`: carving is eager, about two nodes per chunk, so this is a QEMU-only
+arm; silicon's pool of 65,536 cannot hold it. In 1.6.45 the server itself never calls `cache.c`
+(`cache_create` appears only in `testapp.c`), so the slab hooks are the ones that matter at run time.
+
+The launcher is the fixed one (63e8a39a…, PR #176), as for the M5 second series. The runtime is
+the one `deps/env.sh` built for this tree.
+
+| | prediction |
+|---|---|
+| W1 | oracle, mode 0, 3 runs in one boot: transcript identical to native (same flags), identity 128, exit 0 on SIGTERM, stderr empty |
+| W2 | oracle, mode 1, 3 runs: the same. Phase 2's 900 KB value is a chunked item, so the chunked release hook runs on every arm |
+| S1 | safety fixtures 1–8 on both arms: the sublet arm's verdicts |
+| S2 | fixture 9: **FAULT oob** on both arms (per-chunk bounds) |
+| S3 | fixture 10: RETURN `a0015b` in mode 0; **FAULT temporal** in mode 1 |
+| R | one oracle run with `MC_SLAB_SUBLET_REPORT=1`: the exit line shows pages > 0 and chunk_releases > 0 |
+
+S2 and S3 are the positive controls that the hooks are live; the plain sublet arm's RETURN on 9
+and 10 stays the negative control. An oracle difference, or an adapter refusal, is a finding about
+memcached or the hooks, not an edit to the predictions.
+
 ## Milestones
 
 | | content | gate |
@@ -351,3 +395,4 @@ Corpus case 02 over the protocol is open: paused, awaiting the lead.
 | M4 | SIGTERM and SIGUSR1 | exit statuses and stderr match native |
 | M5 | level0, shrink, sublet; N = 3 | identical; null, positive and identity controls fire |
 | Safety | fixtures pre-registered in `host/safety-expect.txt`; corpus case 02 over the protocol | outcomes as predicted — **fixtures done, 90/90**; case 02 open |
+| S1 | Sublet inside slabs.c and cache.c (patch 0006, `host/build-slab-sublet.sh`) | oracle identical on both modes; fixtures 9 and 10 flip to FAULT |

@@ -10,7 +10,11 @@
 #             per connection a worker sets up; per-worker counts equal native's, every worker present,
 #             the stderr otherwise compared as above, and a control that the gate fails on no markers.
 #   run-oracle.sh <results-dir> [--stop TERM|USR1] [--arm level0|shrink|sublet] [--runs N] [--marker]
-#             [--alternate STOCK-EXEC FIXED-EXEC]   (N domain runs, one boot)
+#             [--alternate STOCK-EXEC FIXED-EXEC] [--image DOM] [--server-opts "OPTS"] [--env NAME=VALUE]...
+#             (N domain runs, one boot)
+#   --image runs that domain image in place of the arm's; --server-opts appends OPTS to the server's
+#   flags, native and domain alike (a later -m overrides the default); --env sets NAME=VALUE for the
+#   server, native and domain alike (the slabsublet arm's MC_SLAB_SUBLET_MODE).
 #   --alternate runs odd-numbered runs under STOCK-EXEC and even-numbered ones under FIXED-EXEC (two
 #   capstone-exec binaries copied to the share), so a launcher pair is compared within one boot.
 # Env: MC_WORK (build-native.sh, build-domain.sh outputs), CAPSTONE_VM_UP_ARGS (capstone-vm up platform
@@ -18,14 +22,20 @@
 # Port 21299, not memcached's 11211: on a shared host 11211 may belong to someone else's server.
 set -uo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-R=${1:?results dir}; shift; STOP=TERM; ARM=shrink; RUNS=1; MARKER=0; ALT_STOCK=; ALT_FIXED=
+R=${1:?results dir}; shift; STOP=TERM; ARM=shrink; RUNS=1; MARKER=0; ALT_STOCK=; ALT_FIXED=; IMAGE=; OPTS=; ENVS=()
 while [ $# -gt 0 ]; do case $1 in --stop) STOP=$2; shift 2 ;; --arm) ARM=$2; shift 2 ;; --runs) RUNS=$2; shift 2 ;;
   --marker) MARKER=1; shift ;;
   --alternate) ALT_STOCK=$2; ALT_FIXED=$3; shift 3 ;;
+  --image) IMAGE=$2; shift 2 ;;
+  --server-opts) OPTS=$2; shift 2 ;;
+  --env) ENVS+=("$2"); shift 2 ;;
   *) echo "unknown option $1" >&2; exit 2 ;; esac; done
 : "${MC_WORK:?}" "${CAPSTONE_VM_UP_ARGS:?}" "${CAPSTONE_BUILDROOT_DIR:?}"
 PORT=21299; NTHREADS=4; FLAGS=(-l 127.0.0.1 -p "$PORT" -U 0 -m 64 -t "$NTHREADS")
+# shellcheck disable=SC2206
+[ -n "$OPTS" ] && FLAGS+=($OPTS)
 NAT=$MC_WORK/native/bin/memcached; DOM=$MC_WORK/domain/memcached-$ARM.dom
+[ -n "$IMAGE" ] && DOM=$IMAGE
 if [ "$MARKER" = 1 ]; then
   [ "$ARM" = shrink ] || { echo "--marker: the marker domain image is built on the shrink runtime only" >&2; exit 2; }
   NAT=$MC_WORK/marker/memcached-native; DOM=$MC_WORK/marker/memcached.dom
@@ -41,12 +51,13 @@ if [ -n "$ALT_STOCK" ]; then
   echo "alternate: stock $(sha256sum < "$ALT_STOCK" | cut -c1-16) fixed $(sha256sum < "$ALT_FIXED" | cut -c1-16)" | tee -a "$R/inputs.txt"
 fi
 { echo "native memcached $(sha256sum < "$NAT" | cut -c1-16)"; echo "domain memcached.dom $(sha256sum < "$DOM" | cut -c1-16)";
+  echo "server flags: ${FLAGS[*]}"; echo "server env: ${ENVS[*]:-none}";
   echo "harness host $(sha256sum < "$R/bin/mc-harness-host" | cut -c1-16) guest $(sha256sum < "$R/share/mc-harness" | cut -c1-16)"; } | tee "$R/inputs.txt"
 
 for v in null1 null2 value cas; do
   rm -rf "$R/native-$v"; mkdir -p "$R/native-$v"
   p=none; case $v in value|cas) p=$v ;; esac
-  "$R/bin/mc-harness-host" --out "$R/native-$v" --port "$PORT" --stop "$STOP" --perturb "$p" -- "$NAT" "${FLAGS[@]}" \
+  env ${ENVS[@]+"${ENVS[@]}"} "$R/bin/mc-harness-host" --out "$R/native-$v" --port "$PORT" --stop "$STOP" --perturb "$p" -- "$NAT" "${FLAGS[@]}" \
     > "$R/native-$v/harness.log" 2>&1 || { echo "native $v: harness failed"; cat "$R/native-$v/harness.log"; exit 3; }
 done
 verdict() { printf '%-9s %-4s %s\n' "$1" "$2" "$3" | tee -a "$R/verdicts.txt"; }
@@ -100,7 +111,7 @@ EXEC=/usr/bin/capstone-exec; LBL=$ARM
 if [ -n "$ALT_STOCK" ]; then if [ $((n % 2)) = 1 ]; then EXEC=/mnt/host/exec-stock; LBL=$ARM/stock; else EXEC=/mnt/host/exec-fixed; LBL=$ARM/fixed; fi; fi
 rm -rf "$R/share/domain-run$n"
 capstone-vm --state "$VM" exec sh -c "
-  rm -rf /tmp/mc /tmp/mc-fault.txt; mkdir -p /tmp/mc && CAPSTONE_FAULT_RECORD=/tmp/mc-fault.txt /mnt/host/mc-harness --out /tmp/mc --port $PORT --stop $STOP $SIGCHILD -- \
+  rm -rf /tmp/mc /tmp/mc-fault.txt; mkdir -p /tmp/mc && CAPSTONE_FAULT_RECORD=/tmp/mc-fault.txt ${ENVS[*]} /mnt/host/mc-harness --out /tmp/mc --port $PORT --stop $STOP $SIGCHILD -- \
     /usr/bin/capstone-job /tmp/mc/job.json --user 65534:65534 -- $EXEC /mnt/host/memcached.dom ${FLAGS[*]}
   echo harness rc=\$?
   if [ -s /tmp/mc-fault.txt ]; then cp /tmp/mc-fault.txt /tmp/mc/fault.txt; fi
