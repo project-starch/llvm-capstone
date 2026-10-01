@@ -459,6 +459,78 @@ one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` i
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
 
+## ROOT CAUSE CLASS FOUND: an 8-byte union write kills a 16-byte capability in the same slot
+
+`zvalue_value` is a union. Two of its members matter here:
+
+    long  lval;                             8 bytes
+    struct { char *val; int len; } str;     val is a CAPABILITY -- 16 bytes
+
+On x86-64 `lval` and `str.val` are BOTH 8 bytes, so writing one and reading the other is the same
+bits and PHP's `zval.type` discriminates. **Under 16-byte capabilities they are different sizes.**
+An 8-byte store to `lval` overwrites only half of `str.val` and, because the tag lives in a
+side table keyed by 16-byte granule, it also DESTROYS THE TAG of the capability sharing that slot.
+
+Observed, with the pc and the store width from the tag watch:
+
+| source | store | effect |
+|---|---|---|
+| `zend_language_parser.c:2671` -- `yyval.u.constant.value.lval = 1` | **size 8** (`sd`) | kills the granule's tag |
+| `zend_language_parser.c:3475` -- `*++yyvsp = yyval` | **size 16** (`stc`) | correct capability copy |
+
+Confirmed at the instruction: `1fd98: li a0, 0x1` then **`1fd9c: sd a0, 0x10(a1)`** -- an 8-byte
+store of the literal into the union at znode offset 0x10, which is where `value` begins. Line
+3475's copy is `ldc`/`stc` pairs, i.e. correct.
+
+So the parser's own semantic-value handling writes `lval` into a union that elsewhere carries a
+capability, and the capability's tag does not survive it.
+
+**ONE LOOSE END, stated rather than smoothed over.** An `sd` at granule+0 would clobber the low 8
+bytes too, and our dead pointer kept its CORRECT address. So the copy that was actually read did
+not have that store land on its low half. The logs show why that is possible: many kills are
+`granule = ...f0` with `store addr = ...f8`, i.e. an 8-byte store at granule+8.
+`cap_mem_map_remove_range` rounds DOWN to the granule, so such a store removes the whole granule's
+tag while leaving bytes [granule, granule+8) -- the address -- untouched. Address preserved, tag
+gone, which is exactly the observed value. Pinning down which copy took which store is a refinement
+on the mechanism, not a question about whether the mechanism is real. Every link in the chain is individually
+correct, which is why so much inspection found nothing:
+
+  * the scanner stores the string with `movc` + **`stc`** at offset 0 (`17ca0`, `190d4`), and the
+    length with `sw` at offset 0x10 -- tag registered;
+  * `_zval_copy_ctor` reads it back with **`ldc`** (`6d014`) -- right instruction;
+  * `zval` is 48 bytes, 16-aligned, `value` at offset 0 -- no misalignment;
+  * `compile_string` uses only `ldc`/`stc` (23/22, zero `ld`/`sd`);
+  * `_estrndup`, PHP's `_emalloc`, our `malloc` and `memcpy` all handle the pointer correctly.
+
+The defect is not in any one of them. It is the **union aliasing a capability with a scalar**, which
+the plan named as the main porting hazard ("unions containing pointers (`zvalue_value`, `znode.u`,
+`temp_variable` -- ~28 union declarations in the required headers)") and which was the one thing
+never checked, because every search was for a mishandled POINTER rather than a correctly-handled
+SCALAR landing on top of one.
+
+**This also explains the state-dependence.** It fires only when a reduction writes `lval` into a
+semantic value whose slot currently holds a string capability, which depends on the grammar path
+the input takes -- so no isolated allocate/free/reallocate sweep could ever reproduce it, and two
+of the three `_estrndup` callers in the same run pass a perfectly good tagged pointer.
+
+### Why this is NOT the corpus bug, and what it means for the experiment
+
+`parse_url`'s over-read is a Phase 3 result about PHP. This is a PORTING defect in the control
+arm: it fires on the stock-bounds build, which is supposed to be the boring baseline, so it blocks
+the matched pair rather than being a finding about PHP. It needs fixing before either trigger can
+return a verdict.
+
+The fix is not a compiler change. Candidate directions, in order of fidelity:
+  * widen the union's scalar members so a write covers the whole 16-byte granule -- cheap, but it
+    edits PHP's headers and so weakens "byte-identical from the corpus tree";
+  * make the capability-bearing member not share storage (move `str.val` out of the union) -- a
+    bigger edit, same fidelity cost;
+  * accept it and bound the experiment's claim to paths that do not cross this hazard -- honest,
+    but it is exactly the Zend VM paths the corpus triggers use.
+
+That is a design decision about the port's fidelity, not a bug to patch blind, so it belongs with
+the project lead.
+
 ### LOCALISED to one field read: _zval_copy_ctor's `zvalue->value.str.val`
 
 A three-print probe per `_estrndup` call (p, then s, then `__builtin_return_address(0)`) settles
