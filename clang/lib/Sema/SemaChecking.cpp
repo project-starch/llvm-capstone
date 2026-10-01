@@ -4343,6 +4343,14 @@ ExprResult Sema::BuildAtomicExpr(SourceRange CallRange, SourceRange ExprRange,
 
   // For an arithmetic operation, the implied arithmetic must be well-formed.
   if (Form == Arithmetic) {
+    // Capstone: an atomic read-modify-write of an __intcap would compute on all
+    // 128 bits of the capability instead of on its address, and lose the tag.
+    // Refused, as ++, -- and compound assignment on an _Atomic __intcap are.
+    if (ValType->isIntCapType()) {
+      Diag(ExprRange.getBegin(), diag::err_capstone_intcap_atomic_rmw)
+          << Ptr->getType() << Ptr->getSourceRange();
+      return ExprError();
+    }
     // GCC does not enforce these rules for GNU atomics, but we do to help catch
     // trivial type errors.
     auto IsAllowedValueType = [&](QualType ValType,
@@ -9908,7 +9916,7 @@ static bool capstoneTypeHoldsCapability(ASTContext &Ctx, QualType T,
     return false;
   T = T.getCanonicalType();
   if (T->isAnyPointerType() || T->isBlockPointerType() ||
-      T->isMemberFunctionPointerType())
+      T->isMemberFunctionPointerType() || T->isIntCapType())
     return true;
   if (const ArrayType *AT = Ctx.getAsArrayType(T))
     return capstoneTypeHoldsCapability(Ctx, AT->getElementType(), Depth + 1);

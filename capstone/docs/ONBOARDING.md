@@ -139,6 +139,13 @@ bash capstone/tests/runtime-qemu/run-coremark.sh
 
 All should exit 0 and print a `PASSED` or `validated` marker.
 
+The `run-hostcall-*` probes are the bare HostCall wire probes (an S-mode payload
+and a helper, no musl). Applications run on the delegated runtime instead
+(`runtime/applications.md`); the runtime probes that run musl programs are
+delegated applications, built with an application SDK and run in a persistent
+`capstone-vm` guest by `capstone/tests/runtime-qemu/run-delegated-probes.py`
+(see `tests/runtime-qemu/README.md`).
+
 ---
 
 ## 6. Null-block kernel module tests

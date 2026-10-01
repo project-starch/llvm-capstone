@@ -134,6 +134,10 @@ EXTENDED_SUITES=(
   "sqlite-borrow-revoke|bash $RUNTIME_DIR/run-sqlite-borrow-revoke-probe.sh"
   "sqlite-hier-revoke|bash $RUNTIME_DIR/run-sqlite-hier-revoke-probe.sh"
   "sqlite-sealed-callback|bash $RUNTIME_DIR/run-sqlite-sealed-callback-revoke-probe.sh"
+  # hostcall-all is the bare HostCall wire probes (S-mode payloads, no musl). The probes that
+  # ran musl programs on the removed HostCall v0 application runtime are delegated applications
+  # now (runtime-qemu/run-delegated-probes.py) and need a capstone_vm guest, which holds the QEMU
+  # lock for as long as it runs: they run outside the nightly, which takes that lock itself.
   "hostcall-all|bash $RUNTIME_DIR/run-hostcall-all.sh"
   "nullblk-all|bash $RUNTIME_DIR/run-nullblk-all.sh"
 )
