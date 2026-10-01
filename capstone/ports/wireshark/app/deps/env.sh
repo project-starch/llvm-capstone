@@ -18,7 +18,10 @@ _ts_key=$( {
   { echo "$_b"; ldd "$_b" | awk '/=> \//{print $3}' | grep -E 'libLLVM|libclang' || true; } | xargs stat -L -c '%n %s %Y'
   cat "$_ts_musl_port"/runtime/*.c "$_ts_musl_port"/runtime/*.S "$_ts_musl_port/runtime/libc_overrides.list" \
       "$TS_DEPS_DIR/capstone-cc" "$TS_DEPS_DIR/env.sh"
-  (cd "$CAPSTONE_REPO_ROOT" && rg --files capstone/runtime capstone/ports/common/application) |
+  # git ls-files, not rg. A script does not see an interactive rg: on apollo `rg` is "command not
+  # found", the listing is empty, and the key silently left out all 163 runtime and SDK sources,
+  # so a change there reused the old runtime (2026-10-01).
+  (cd "$CAPSTONE_REPO_ROOT" && git ls-files capstone/runtime capstone/ports/common/application) |
     sort | while IFS= read -r path; do cat "$CAPSTONE_REPO_ROOT/$path"; done
   cat "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh"
 } | sha256sum | cut -c1-16)
