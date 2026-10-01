@@ -20,6 +20,11 @@ function(capstone_configure_application target)
   if(NOT PORT_HEADER_PROVIDER STREQUAL "musl" OR NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "capstone64")
     message(FATAL_ERROR "Applications require the capstone-domain toolchain with musl headers")
   endif()
+  # Contexts of one application share lock words (docs/plans/delegation-threads.md):
+  # the runtime and the application are built with the atomic ISA, as musl is.
+  if(NOT PORT_C11_ATOMICS)
+    message(FATAL_ERROR "Applications require PORT_C11_ATOMICS=ON (the A extension)")
+  endif()
   if(NOT EXISTS "${CAPSTONE_MUSL_ARCHIVE}")
     message(FATAL_ERROR "Set CAPSTONE_MUSL_ARCHIVE to the built Capstone musl archive")
   endif()

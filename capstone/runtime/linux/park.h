@@ -27,6 +27,7 @@ enum capstone_park_outcome {
   CAPSTONE_PARK_RECHECK, /* the generation moved, or the bucket is saturated */
   CAPSTONE_PARK_TIMEOUT,
   CAPSTONE_PARK_EINTR,
+  CAPSTONE_PARK_RETRY,   /* the sleep answered CAPSTONE_PARK_SLEEP_RETRY: aborted like EINTR */
 };
 
 enum capstone_park_state {
@@ -77,6 +78,20 @@ enum capstone_park_outcome capstone_park_wait(struct capstone_park *park,
                                               struct capstone_park_record *record,
                                               uint64_t key, uint64_t gen,
                                               const struct timespec *deadline);
+
+/* The sleep capstone_park_wait uses: FUTEX_WAIT_BITSET on the record's word
+ * while it is 0, until deadline. Returns 0 (woken, or the word changed),
+ * -ETIMEDOUT, -EINTR, or CAPSTONE_PARK_SLEEP_RETRY: a caller whose thread takes
+ * signals for a domain supplies a sleep that ends there when one is accepted,
+ * even under SA_RESTART (the launcher's signal stub). */
+#define CAPSTONE_PARK_SLEEP_RETRY (-0x10000L)
+typedef long (*capstone_park_sleep_fn)(void *context, _Atomic uint32_t *word,
+                                       const struct timespec *deadline);
+enum capstone_park_outcome capstone_park_wait_with(struct capstone_park *park,
+                                                   struct capstone_park_record *record,
+                                                   uint64_t key, uint64_t gen,
+                                                   const struct timespec *deadline,
+                                                   capstone_park_sleep_fn sleep, void *context);
 
 /* Advance key's generation and complete up to n records waiting on key as
  * WOKEN. Returns how many were selected. */

@@ -45,7 +45,7 @@ static void fixture(void) {
       .sh_offset = 704, .sh_size = 24};
   struct capstone_application_descriptor_v2 d = {{CAPSTONE_APPLICATION_MAGIC,
       CAPSTONE_LAUNCH_VERSION, CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE,
-      CAPSTONE_LAUNCH_BYTES, 0}, 262144};
+      CAPSTONE_LAUNCH_BYTES, 0}, 262144, 0};
   memcpy(image + 640, &d, sizeof d);
   const uint64_t req[] = {UINT64_C(0x5145524d4f445043), 4096 + 256, 4096};
   memcpy(image + 704, req, sizeof req);

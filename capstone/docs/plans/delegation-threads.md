@@ -1,7 +1,8 @@
 # Delegated threads: one Linux thread per protected context
 
 Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES,
-PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1) and B7 pass. Branch `delegation-threads`,
+PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1, B7) and parking through the launcher
+(T2, B6 and B12) pass. Branch `delegation-threads`,
 stacked on `delegation-signals` (c460e8c). The contracts below are what Probe A and Probe B test;
 the runtime that builds `pthread_create` on them is written after both probes pass.
 
@@ -92,6 +93,19 @@ Done so far:
   `retry-partial` sent a write of 0x7fff0 bytes against a 0x40000-byte exchange region and got
   EFAULT. The runtime now cuts
   its transports by the sizes the image declared.
+- Probe B, domain phase, T2: parking through the launcher (Q5 answered below). futex WAIT, WAKE
+  and REQUEUE from any context are served by the launcher's park queue; the lock word stays in the
+  domain. `thread-probe` adds ten modes (25 of 25 pass): the value check, a timeout that keeps its
+  budget, WAKE selecting a parked waiter in another context, REQUEUE as musl's condition variables
+  issue it, B6 and B12 with a waiter held across four quanta in the window between its compare and
+  its WAIT while the other context releases and WAKEs or REQUEUEs with nobody queued (the WAIT
+  answers RECHECK at once), B6's control with the generation read after that window instead (the
+  wake is lost: its 500 ms deadline expires), two contexts counting 800 increments under a futex
+  mutex with 796 parked waits, and a signal while the first context is parked, answered as Linux
+  answers the same futex call natively (untimed under SA_RESTART: handler at once, the wait goes on
+  to the wake; untimed without SA_RESTART and timed: EINTR). The promptness check fired against a
+  launcher whose park sleep bypassed the signal stub (handler only at the wake, 533 ms). Record
+  `results/20260930-park-domain.json`.
 - An independent review of T1 (2026-09-30) found five defects. Fixed, each with a probe mode that
   failed before and passes after: a further context ran one of the first context's pending signal
   events, which then stayed blocked (now only the context with the handover block touches signal
@@ -827,6 +841,33 @@ Recommended starting point:
   RECHECK and counted once, so the result is at most `nwake + nmove`. Records completed only because
   a bucket is saturated, but never selected, count for neither WAKE nor REQUEUE.
 
+**Answer (2026-09-30, T2; evidence `results/20260930-park-domain.json`).**
+- **Served:** `FUTEX_WAIT`, `FUTEX_WAKE`, `FUTEX_REQUEUE`, with or without `FUTEX_PRIVATE_FLAG`,
+  with Linux's argument checks (a misaligned word and negative REQUEUE counts are EINVAL; WAKE
+  asked for none or fewer wakes one). Everything else (PI, `WAKE_OP`, `CMP_REQUEUE`, `WAIT_BITSET`,
+  and any operation with the realtime clock flag) answers ENOSYS and is reported as unserved.
+- **Wire:** `PARK_WAIT(key, gen, deadline)`, `PARK_WAKE(key, n)`, `PARK_REQUEUE(src, dst, nwake,
+  nmove)`; the key is the word's address; the park table (256 generation words, 4 KiB) follows the
+  last META block, and both sides compute the bucket with `capstone_park_bucket_of`.
+- **Domain order:** generation load with acquire, compare of the word, request; a changed word
+  answers EAGAIN without a round. A relative timeout becomes one absolute `CLOCK_MONOTONIC` deadline
+  at entry, kept across every round. The domain's clock is the launch record's, extrapolated with
+  `rdtime`, and the launcher sleeps on the kernel's: the deadline can be off by the microseconds
+  between the two reads at launch and by any clock slew since, a named deviation.
+- **Results:** WOKEN and RECHECK map to 0, TIMEOUT to `-ETIMEDOUT`, an interruption to `-EINTR`.
+  On the first context's thread the park sleep goes through the signal stub: an untimed wait
+  interrupted under SA_RESTART ends as a RETRY round, its record already out of the queue; the
+  handler runs, and the domain compares the word again before it waits again, as Linux restarts the
+  call. A timed wait interrupted in its sleep answers EINTR even under SA_RESTART, as Linux does (it
+  restarts a timed futex wait through a restart block, which a handler turns into EINTR; checked
+  natively). A signal accepted before the sleep begins ends any wait as RETRY, deadline kept, as a
+  signal before the call would. A further context's thread blocks every signal and is never
+  interrupted.
+- **Open for Q4 and B11:** a context revoked while its thread is parked leaves its record queued,
+  and a WAKE can select that record instead of a live waiter. Reaping a parked context has to abort
+  its wait first.
+- **Counts:** WAKE returns the records it selected; REQUEUE woken plus moved.
+
 ### Q6. How are the first runtime locks bootstrapped? (before concurrent libc)
 
 Which scalar atomic primitive protects generic capability atomics and allocator metadata without
@@ -834,6 +875,10 @@ depending on those same services? Specify lock ordering, when signal handlers ma
 the holder makes progress after preemption on one hart. Name the shared runtime tables covered by
 the audit and verify that pointer atomics preserve tags as well as values. Probe A's preallocated
 assembly harness does not discharge this requirement.
+
+First part, settled with T2: every application is built with the A extension
+(`PORT_C11_ATOMICS=ON`, required by `capstone_configure_application`, as musl already is), so the
+runtime and the application have scalar atomics.
 
 Recommended starting point:
 - **Primitive:** a spinlock on an aligned 4-byte word with scalar LR/SC. It is correct under

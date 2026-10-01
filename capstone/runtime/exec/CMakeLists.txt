@@ -16,7 +16,7 @@ if(CAPSTONE_LIBCAPSTONE_DIR)
   endif()
   add_executable(capstone-exec ../linux/exec.c ../linux/application-image.c ../linux/image-hash.c
     ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
-    "${CAPSTONE_LIBCAPSTONE_DIR}/libcapstone.c")
+    ../linux/park.c "${CAPSTONE_LIBCAPSTONE_DIR}/libcapstone.c")
   target_compile_definitions(capstone-exec PRIVATE _POSIX_C_SOURCE=200809L)
   target_include_directories(capstone-exec PRIVATE
     "${CAPSTONE_LIBCAPSTONE_DIR}"
@@ -63,9 +63,11 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   target_link_libraries(application-image-test PRIVATE Capstone::Runtime)
   add_test(NAME application-image COMMAND application-image-test)
   add_executable(delegate-service-test ../tests/application/delegate-service-test.c
-    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
   add_executable(signal-service-test ../tests/application/signal-service-test.c
-    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
   target_link_libraries(signal-service-test PRIVATE Capstone::Delegate)
   add_test(NAME signal-service COMMAND signal-service-test)
   set_tests_properties(signal-service PROPERTIES TIMEOUT 30)
@@ -89,7 +91,8 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   target_link_libraries(delegate-service-test PRIVATE Capstone::Delegate)
   add_test(NAME delegate-service COMMAND delegate-service-test)
   add_executable(delegate-edge-test ../tests/application/delegate-edge-test.c
-    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
   target_compile_options(delegate-edge-test PRIVATE -UNDEBUG)
   target_link_libraries(delegate-edge-test PRIVATE Capstone::Delegate)
   foreach(case short-read raw-pointer vector stat-boundary private-fd wait-empty wait-stopped kill-group pty pselect spawn-target)
@@ -99,13 +102,15 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   # Probe B, native phase: the launcher's parking queue (docs/plans/delegation-threads.md).
   add_executable(park-test ../tests/application/park-test.c ../linux/park.c)
   target_compile_options(park-test PRIVATE -UNDEBUG)
+  target_link_libraries(park-test PRIVATE Capstone::Delegate)
   foreach(case b1 b2 b3-timeout-select b3-timeout-abort b3-eintr-select b3-eintr-abort b4 b5 b12
-          b13a b13b b13c b13d)
+          b13a b13b b13c b13d retry retry-woken retry-requeued)
     add_test(NAME park-${case} COMMAND park-test ${case})
     set_tests_properties(park-${case} PROPERTIES TIMEOUT 15)
   endforeach()
   add_executable(delegate-rows-test ../tests/application/delegate-rows-test.c
-    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
   target_compile_options(delegate-rows-test PRIVATE -UNDEBUG)
   target_link_libraries(delegate-rows-test PRIVATE Capstone::Delegate)
   foreach(case statfs statx truncate fallocate fchdir fchmod fchown linkat mknodat faccessat2
@@ -116,7 +121,8 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     set_tests_properties(delegate-row-${case} PROPERTIES TIMEOUT 15)
   endforeach()
   add_executable(delegate-socket-test ../tests/application/delegate-socket-test.c
-    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S)
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
   target_compile_options(delegate-socket-test PRIVATE -UNDEBUG)
   target_link_libraries(delegate-socket-test PRIVATE Capstone::Delegate)
   foreach(case unix-stream word-truncated inet dgram socketpair-msg private epoll)

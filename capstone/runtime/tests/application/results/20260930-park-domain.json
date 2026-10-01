@@ -1,0 +1,77 @@
+{
+  "date": "2026-09-30",
+  "scope": "Probe B domain phase T2: futex through the launcher's park queue (docs/plans/delegation-threads.md, Parking and Q5), with the full regression",
+  "platform": {
+    "qemu_source": "capstone-qemu qemu/context-slots-on-pin 674cdab03c",
+    "qemu_binary_sha256": "1283cd3400d4bc5470f0ae9f557abb60f7316c86cdee4ce8cd97e7a1f36f8196",
+    "firmware_sha256": "295647f3aacc8c585c4b4938c10a74c0cb676e2037f2faf7c882525d9c867a50",
+    "monitor": "capstone-sbi dd812db through caplifive-buildroot cffac39 (unchanged since T1)",
+    "module_sha256": "6ab096ce9bf8e480a0c2d04d190d1f489b41ee754b5e1b0679e6ac44d265c7bc",
+    "launcher_sha256": "74911a9c1758b22db5783fc26c3ea05e1bb0b336b9ae0690488ed2057cb976e8"
+  },
+  "images_sha256": {
+    "application-contract.dom": "4bd266b45968d68d98a2c7aacc34a31707c46f2da9ac8651f15cbd7dd590649a",
+    "context-probe.dom": "f8bfc3e910e37951d9b7730546faa3a24652903582e2cee59185c6df3d05e1d9",
+    "context-review.dom": "4c9e32a0536d06cfce75c4d943b3f5faaf7e14c6e8740e384cf5f5036f3824a5",
+    "delegate-bench.dom": "ba0b7aac45b321f560853449825861a9e1643c4403ec1a2002340b8d626f0990",
+    "delegate-contract.dom": "1bcbbcff36a9afbb9ed67b9ad382c1427e2e1aa985a2799d4178aa800cf0e5fe",
+    "mruby.dom": "162401dbfa4bd4c14ff2c0cf6a1dce48c95b9ec8ae2ad3594c7385f19a423ebc",
+    "perl.dom": "3bd1e3f2bdf01a287788747136e3a700aee0d7ed16da8a02b7afb7eed2552043",
+    "signal-contract.dom": "4f76d85cb46ebd5754df2746d0e3bcc9df819038a4dddbfc8b8a4bb91c016273",
+    "thread-probe.dom": "1b182693b3d7ce4e54219be8a4bf10702e89a94cdaf7242bb0640fcd08ad09d7"
+  },
+  "images_note": "probe images built with PORT_C11_ATOMICS=ON (now required); perl.dom and mruby.dom relinked on this runtime with ports/common/application/build.py as in 20260930-transport.json",
+  "thread_probe": {
+    "transport": "PASS",
+    "blocking": "PASS",
+    "reserve": "PASS",
+    "reuse": "PASS",
+    "concurrent": "PASS",
+    "signals-refused": "PASS",
+    "no-transport": "PASS",
+    "preempted": "PASS",
+    "many-rounds": "PASS",
+    "signal-first-only": "PASS",
+    "sigpipe-ignored": "PASS",
+    "sigpipe-child": "PASS",
+    "exec-child": "PASS",
+    "futex-basic": "PASS",
+    "futex-wake": "PASS",
+    "futex-requeue": "PASS",
+    "b6": "PASS",
+    "b6-control": "PASS",
+    "b12": "PASS",
+    "b6-count": "PASS",
+    "park-signal": "PASS",
+    "park-signal-eintr": "PASS",
+    "park-signal-timed": "PASS",
+    "exit-child": "PASS",
+    "fault-child": "PASS"
+  },
+  "t2_measurements": {
+    "futex-basic": "thread-probe futex-basic: timed out after 51 ms of 50",
+    "b6": "thread-probe b6: WAKE selected 0, the waiter returned 0 after 38 ms",
+    "b6-control": "thread-probe b6-control: WAKE selected 0, the waiter returned -110 after 534 ms",
+    "b12": "thread-probe b12: REQUEUE selected 0, the waiter returned 0 after 38 ms",
+    "b6-count": "thread-probe b6-count: count 800 of 800, 796 waits parked",
+    "park-signal": "thread-probe park-signal: futex 0 (errno 0) after 531 ms, handler at 225 ms",
+    "park-signal-eintr": "thread-probe park-signal-eintr: futex -1 (errno 4) after 208 ms, handler at 208 ms",
+    "park-signal-timed": "thread-probe park-signal-timed: futex -1 (errno 4) after 208 ms, handler at 208 ms"
+  },
+  "controls": {
+    "b6-control": "the same window with the generation read after it instead of before: the WAIT sleeps through the release and its 500 ms deadline expires (thread-probe b6-control: WAKE selected 0, the waiter returned -110 after 535 ms)",
+    "park-signal": "with the launcher's park sleep calling futex directly instead of through the signal stub, the handler ran only at the wake: thread-probe park-signal: futex 0 (errno 0) after 534 ms, handler at 533 ms (FAIL: handler not before 400 ms)",
+    "application_atomics": "capstone_configure_application without PORT_C11_ATOMICS stops the configure with 'Applications require PORT_C11_ATOMICS=ON (the A extension)'",
+    "linux_oracle": "the same futex call natively (x86-64 Linux, a signal 200 ms into a wait, a wake at 500 ms): untimed SA_RESTART returned 0 after 501 ms; untimed without SA_RESTART, and timed with SA_RESTART, returned EINTR after 200 and 201 ms"
+  },
+  "native": "ctest in the native build of runtime/exec: 41/41 PASS, including park-test retry, retry-woken (a WAKE before the sleep's RETRY wins: WOKEN) and retry-requeued (REQUEUE then RETRY: in neither queue), and delegate-service's park block",
+  "regression": {
+    "context_probe": "35/35 PASS; aba (A7), gen-exhaust and gen-launch (A9, preset firmware), ctl-wfi PASS in boots of their own on the same launcher",
+    "aba": "context-probe aba: A node 78 base 0xc02c1000; 130381 burns; handle 78, area 78, new seal node 78 base 0xc02c1000; ids 0x100000001, 0x100000002; first step kind 0 cause 0 pc 0 result 0x4558495445444558 value 1005",
+    "signal_contract": "26/26 PASS",
+    "application_gate": "exit 0, 21 PASS lines"
+  },
+  "review": {
+    "what": "An independent review of T2 (2026-09-30) found no lost or double wake and no RETRY or deadline defect. Fixed after it: the realtime clock flag answered ENOSYS on WAIT only (now on every operation, reported as unserved), WAKE with n <= 0 selected nobody (Linux wakes one), negative REQUEUE counts and misaligned words were not EINVAL, and the generation load had no acquire. Open for Q4/B11: a context revoked while parked leaves its record queued."
+  }
+}
