@@ -2,7 +2,8 @@
 # sendmsg and recvmsg from four contexts at once, under two launchers in one boot: the arms differ
 # only in the capstone-exec binary that runs pthread-probe.dom (pthread-probe.c, msg_concurrent).
 #   run-msg-race.sh <out-dir> <pthread-probe.dom> <stock capstone-exec> <fixed capstone-exec>
-# Env: CAPSTONE_VM_UP_ARGS (capstone-vm up platform arguments), capstone-vm on PATH. Arms alternate
+# Env: CAPSTONE_VM_UP_ARGS (capstone-vm up platform arguments), capstone-vm on PATH; MSG_RACE_ARMS
+# (launcher:mode:rounds ...) replaces the default arms. Arms alternate
 # stock and fixed, so boot history (what ran earlier in the boot) is not what separates them.
 set -uo pipefail
 OUT=${1:?out dir}; DOM=${2:?probe}; STOCK=${3:?stock launcher}; FIXED=${4:?fixed launcher}
@@ -19,7 +20,7 @@ for attempt in $(seq 1 2400); do
   grep -q "Another Capstone VM owns" "$OUT/up.log" || { tail -3 "$OUT/up.log"; exit 3; }
   sleep 3
 done
-ARMS="stock:sendmsg:300 fixed:sendmsg:300 stock:recvmsg:300 fixed:recvmsg:300 stock:sendmsg:1000 fixed:sendmsg:1000 stock:recvmsg:1000 fixed:recvmsg:1000"
+ARMS=${MSG_RACE_ARMS:-"stock:sendmsg:300 fixed:sendmsg:300 stock:recvmsg:300 fixed:recvmsg:300 stock:sendmsg:1000 fixed:sendmsg:1000 stock:recvmsg:1000 fixed:recvmsg:1000"}
 capstone-vm --state "$VM" exec sh -c "
   for arm in $ARMS; do
     l=\${arm%%:*}; rest=\${arm#*:}; mode=\${rest%%:*}; rounds=\${rest#*:}

@@ -13,8 +13,12 @@ transcript that differed from native in phase 3, where eight connections run at 
 The server's counters at the end (`curr_items` 328, `cmd_set` 345, `cmd_get` 342) equal native's, so
 every request was read and executed correctly. The bytes went wrong on the way out.
 
-The binary decodes as little-endian `{offset, length}` pairs (0x420/8, 0x430/14, …): the wire form of
-a msghdr's iovec table, sent as if it were data.
+The binary is not text. Its first 16 bytes are one little-endian `{offset, length}` pair, `{0x420, 8}`:
+the wire form of an entry in a msghdr's iovec table. The rest are fragments of the same kind, cut at
+irregular boundaries: offsets stepping by 0x10 (0x430 … 0x5d0) and lengths of 5 to 62.
+
+That is what a reply looks like when its iovecs are each read from the wrong place in a region that
+holds such a table. It is consistent with the mechanism below, not proof of it.
 
 The other eight M5 runs (level0 3/3, shrink 2/3, sublet 3/3) were identical to native.
 
@@ -34,7 +38,7 @@ contexts in sendmsg at once write the same `view` and `iov`.
 
 If thread A is preempted between filling `iov` and the kernel copying it at `sendmsg` entry, and
 thread B fills it meanwhile, then A's socket carries B's bytes. A view mixed between the two calls
-sends whatever lies at the other call's offsets, such as an iovec pair table. recvmsg has the same
+sends whatever lies at the other call's offsets, which can be an iovec pair table. recvmsg has the same
 window after the call, where it copies `iov` back into the exchange region.
 
 Everything else per call is per context:
@@ -42,8 +46,10 @@ Everything else per call is per context:
 - the bounce buffer is per `host` (`delegate-service.c`, `host->bounce = malloc(...)`);
 - `vector_call` (readv/writev) keeps its iovec array on the stack.
 
-The threads plan's lock audit (Q6/T3, `delegation-threads.md`) covered the domain's shared state:
-the heap, mmap tables, spawn blocks and stdio. It did not cover the launcher's function statics.
+The threads plan's lock audit (Q6/T3, `delegation-threads.md`) listed the heap, mmap tables, spawn
+blocks and stdio. It did not list the launcher's function statics. Nor did it list a domain-side
+one found by this note's audit (`dl_epoll_pwait`, below), so "the domain's shared state is audited"
+is not a claim this note can make.
 
 The statics date from 1115299cd43e (delegated sockets), when one thread served every call.
 
@@ -84,6 +90,40 @@ How the readings are read:
   locals stop it. They do not prove it was the only cause of the memcached transcript. That needs
   memcached runs on the fixed launcher, in lane `memcached-app`.
 
+### Result, first pair (2026-10-01; predictions committed first, 1ac724c19edc)
+
+The inputs were probe 7683fb05…, stock e7e27f49…, fixed 63e8a39a…. The first attempt at this boot
+ran nothing: all eight arms exited 127, because the guest's busybox has no `timeout` applet. The
+script now uses a shell watchdog, and the boot below is the second.
+
+| arm | rounds | stock: mixed / messages | fixed: mixed / messages |
+|---|---|---|---|
+| sendmsg | 300 | 0 / 1200 | 0 / 1200 |
+| recvmsg | 300 | 3 / 1200 | 0 / 1200 |
+| sendmsg | 1000 | 4 / 4000 | 0 / 4000 |
+| recvmsg | 1000 | 30 / 4000 | 0 / 4000 |
+| **total** | | **37 / 10400** | **0 / 10400** |
+
+No arm in either launcher had a failed call.
+
+Every mixed message carried another thread's bytes. For example:
+- sendmsg, thread 1, round 483: byte 0 is 0x35, which is thread 0's;
+- recvmsg, thread 2, round 235: byte 31744, iovec 31, is 0x0c, which is thread 0's.
+
+So a message was mixed in part, from whichever iovecs the other call had rewritten.
+
+All three predictions hold:
+- **R1** (stock sendmsg mixes): 4 in the 1000-round arm, none in the 300-round arm;
+- **R2** (fixed: zero);
+- **R3** (stock recvmsg mixes).
+
+Weight:
+- **recvmsg** (33 against 0) is strong on its own.
+- **sendmsg** (4 against 0) is thin on its own. With equal rates, all four landing in stock has
+  probability 1/16, and the four need not be independent events. Treating every mixed message as
+  independent overstates both figures.
+- The second pair supplies the sendmsg evidence.
+
 ## Second pair, window widened — PRE-REGISTERED before its boot
 
 The first pair's sendmsg arms can only show mixing if a launcher thread is preempted inside the
@@ -111,3 +151,87 @@ fixed sendmsg, stock recvmsg, fixed recvmsg.
 | D1 | stock+delay, sendmsg: mixed > 0, in at least 10% of its 1200 messages |
 | D2 | fixed+delay: mixed 0 and failed 0, sendmsg and recvmsg |
 | D3 | stock+delay, recvmsg: mixed > 0 |
+
+### Result, second pair (2026-10-01; predictions committed first, 6806764cfaa4)
+
+The inputs were probe 7683fb05… (the same image), stock+delay e92dedfd…, fixed+delay 584078a4….
+One boot.
+
+| arm | rounds | stock+delay: mixed / messages | fixed+delay: mixed / messages |
+|---|---|---|---|
+| sendmsg | 300 | 54 / 1200 | 0 / 1200 |
+| recvmsg | 300 | 13 / 1200 | 0 / 1200 |
+
+No call failed in either launcher.
+
+- **D1 holds in kind and misses its bound:** stock sendmsg mixes, but in 4.5% of messages, not the
+  ≥ 10% predicted. The bound assumed every sleep would meet another context's call. It is recorded
+  as missed, not moved.
+- **D2 holds:** the fixed launcher mixes nothing with the window held open 400 µs per call.
+- **D3 holds.**
+
+## Conclusion
+
+The two function statics in `msg_call` mix concurrent sendmsg and recvmsg calls from different
+contexts. Making them per-call locals stops it in both matched pairs.
+
+| | sendmsg | recvmsg |
+|---|---|---|
+| production window | stock 4/5200, fixed 0/5200 | stock 33/5200, fixed 0/5200 |
+| window held open | stock 54/1200, fixed 0/1200 | stock 13/1200, fixed 0/1200 |
+
+An independent audit (claim-auditor, 2026-10-01) normalised the immediates in both binaries'
+disassembly. Of 266 functions, only `msg_call` differs, plus a linker relaxation in
+`capstone_spawner_spawn`. The only data difference is that the two statics are gone.
+
+**What this does not show.** The memcached transcript failure has this race's signature:
+- connection 4 carried connection 7's replies at equal length, while 7's own were intact;
+- connection 5 carried exchange-wire offset/length pairs;
+- the two connections are on different workers under round-robin dispatch;
+- the server's counters equal native's.
+
+Nothing traced that run, though, so the race is the *candidate* cause, not a shown one.
+
+Nine clean memcached runs on the fixed launcher do not show the fix resolves it. At a rate of one
+run in nine, nine clean runs happen about a third of the time anyway, and the harness binary also
+changed between those runs.
+
+The discriminating experiment is memcached itself under the two delay variants, alternating in one
+boot. It is pre-registered below.
+
+## A separate defect found by the same audit: `dl_epoll_pwait`'s static result buffer
+
+`ports/musl-capstone/runtime/delegate.c` (`dl_epoll_pwait`):
+`static struct dl_epoll_wire wire[1024];` receives every context's epoll results, and they are then
+copied into the caller's array. The compiled runtime holds it in `.bss`, process-wide, with no lock;
+the transport (`dl_entry`, `dl_exchange`) is in `.tbss`.
+
+Two contexts in `epoll_pwait` at once can therefore hand one context the other's events, if one is
+preempted between the copy into `wire` and the copy out.
+
+For libevent's level-triggered registrations, memcached's case, this is probably benign:
+- a foreign fd is dropped (`evmap.c`: no context for it in this base);
+- a lost readiness is reported again by the next wait.
+
+An edge-triggered or one-shot user could lose an event for good. This is **not fixed here**: it is
+a separate change to the domain runtime, for the threads lane to take or assign.
+
+## memcached under the delay pair — PRE-REGISTERED before its boot
+
+This is the experiment the audit named as the one that ties the memcached failure to the mechanism,
+or fails to. It uses lane `memcached-app`'s `run-oracle.sh --alternate`:
+- the shrink image 1c67f7bd…, M5's;
+- one boot, ten runs alternating stock+delay (e92dedfd…, odd runs) and fixed+delay (584078a4…,
+  even runs);
+- each run is the full oracle script, compared with the native transcript.
+
+| | prediction |
+|---|---|
+| MD1 | stock+delay: at least 1 of its 5 runs differs from native in phase 3 in this race's shape: a connection carrying another connection's replies, or non-text bytes in place of its own. Phase-4 counters stay equal to native's |
+| MD2 | fixed+delay: 5 of 5 identical to native |
+
+How the readings are read:
+- **If MD1 fails**, the delay does not create memcached's triggering condition, and MD2's clean runs
+  are void.
+- **MD1 and MD2 together** tie the memcached failure's shape to the shared msghdr. They still do not
+  prove the one failure on dev's launcher had no other contributor.
