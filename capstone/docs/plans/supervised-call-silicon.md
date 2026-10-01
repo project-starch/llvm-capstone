@@ -98,8 +98,54 @@ the after-audit, synthesis, silicon.
   101 and completion; `no-set-ra`: the resume CALL faults on a null seal, cause 24; `no-mret-guard`: the
   domain's mret executes, drops to U-mode with MPP = 0 and the run ends in a trap at mepc = 0 (cause 1) instead
   of a kind-2 escape -- UNRESOLVED why that fault trapped rather than escaped (the guard makes it unreachable;
-  worth a look before silicon). The remaining four (`status-swap`, `no-csr-gate`, `no-mint-guard`,
-  `no-foreign-check`) are running.
+  worth a look before silicon); `status-swap` (2 <-> 1 in the dyn unit): the five refusals read 1; `no-csr-gate`:
+  the domain's `csrw mepc` lands (the monitor reads 0x1234 back) and `csrw mie` runs, both ending in a quantum
+  escape instead of a fault; `no-mint-guard`: CAPCREATE runs and the quantum ends the domain; `no-foreign-check`:
+  the RETURN through the other domain's SEALEDRET is honoured and the core ends up in that domain's old spin loop
+  with supervision cleared, never returning to the monitor (1.98 M retirements to the ceiling). One mutant-only
+  observation stays UNRESOLVED: with the plain-CSR gate removed, a domain that READ csupstatus was never
+  preempted (the quantum did not fire, 1.9 M cycles); the real gate makes that read a fault, and the legal
+  `csrr cycle` followed by a spin IS preempted (step-6 arm 11, csupstatus 3), so the quantum survives a legal CSR
+  read. (`csrr fcsr` with FS = Off in the image is itself illegal and escapes as cause 2, arm 12.)
+- **The after-audit of the diff (2026-10-01) REFUTED readiness and found four defects, all fixed the same day,
+  each with a discriminating arm added before the ladder was re-run:** (3C) a RESUME re-wrote the domain's x1 with
+  a fresh SEALEDRET after the RESTORE walk, because the switcher's set_ra write runs last and the armed-CALL request
+  kept CALL's set_ra = 1 -- any program preempted with a live return address would have crashed on its next `ret`
+  (fix: set_ra = 0 on a resume; the quantum test now carries a plain sentinel in x1 across every resume);
+  (4A) a CCSRRW to CIH or CPMP that the gate refused raised the exception but still performed its write, because
+  csr_op_logic clears only csr_we on a violation and commit asserts ccsr_we regardless (fix: the capability-CSR
+  block and the R-26 flush are gated on !privilege_violation; the guards test writes a tagged capability into
+  CPMP0 from the domain and the monitor reads it back empty); (4B) CEPC/mepc were neither blocked nor walked, so
+  the domain could plant the monitor's mepc and read its tagged cepc through the legal CCSRRW CEPC (fix: id 25,
+  the reserved slot, now carries {cepc_tag, cepc, mepc} in both walks; the guards test plants both and the
+  monitor reads its own back); (4D) the supervision CSR gate had no debug-mode exception, so a JTAG halt during a
+  supervised domain would loop in the debug ROM on its first `csrw dscratch0` (fix: nothing of the gate, the
+  decoder guards or the counter applies in debug mode, H5). Also from the audit: the escape flops are now loaded
+  every cycle while no escape is pending (the decision no longer enables ~260 flops), the foreign-RETURN compare
+  is no longer in the trap strip's cone (it only enters the decision), and the pre-existing PC-capability
+  override also drops a faulting cssupervise's arm. Confirmed refutations worth keeping: the head cannot change
+  between T and T+1 (commit_drop is constant 0 on this config, one commit port), the walk order is right slot by
+  slot, a marked instruction cannot escape again in the monitor, the counter cannot run during a walk, the
+  free-list counter cannot underflow. Residuals recorded: a legal CSR or AMO head that escapes on a PC-capability
+  fault performs its side effect at T (only matters if a kind-2 event were resumed, which the contract forbids);
+  quantum 0 or any quantum shorter than the post-switch refetch latency livelocks by construction (the contract's
+  >= 50k minimum is the only floor); while armed, a CALL of another seal silently disarms, so the monitor must
+  mask interrupts between cssupervise and CALL (QEMU fails closed instead); and the first entry installs neither
+  the seal's CPMP slots nor the GPRs -- the domain runs with the monitor's CPMP0..15 and x2..x31, as today.
+- **A pre-existing property met on the way (UNRESOLVED, outside this change):** a SEALED capability stored
+  with STC and reloaded with LDC through a live NONLIN base reads back untagged (LCC 7) in simulation, with the
+  store drained by 300 iterations and a fence (so not S-07's write-buffer window), and without any revocation.
+  No corpus test round-trips a sealed capability through memory, while the resident monitor keeps its sealed
+  handles in `domains[]`. Consequence here: cssupervise's dead-node status (1) could not be exercised -- a
+  revoked seal is nulled in its register and the memory copy cannot be shown to reload; the status is live code
+  but unreached. What the monitor's compiled store/reload actually is, and whether silicon agrees, is the next
+  question for whoever picks this up.
+- **Final ladder on the audited tree (`all4`, every test, 2026-10-01 evening):** identical to the readings below
+  where they overlap, plus the audit's arms: the x1 sentinel 0x1234 survives 53 resumes (quantum 64) and 103
+  (quantum 16) with the count exactly 400 both times; CCSRRW cpmp0 with a tagged capability escapes (5) and the
+  monitor reads CPMP0 back empty (LCC 7); CCSRRW cepc with a capability is legal, the domain is preempted (3),
+  and the monitor reads its own mepc (0) and an empty cepc back; a legal `csrr cycle` before a spin is preempted
+  (3); every earlier arm unchanged; the 8-register control unchanged; all seven CALL shapes park CALL + 4.
 - **Verification, steps 0-7 (repaired tree):** step 2 -- statuses 0/0/2/2/2/2/2 as listed, the 512-B seal 0
   (above); step 3 -- ecall 11, illegal 2, `csrw mepc` 2, misaligned load 4 with tval 0x3001 equal to the
   reference trap's mtval, mret 2: csupstatus 5, epc = the faulting pc, seal back SEALED, x7/x29/x30 and mie
@@ -334,8 +380,7 @@ Values from the CAPPRINT registers in the retirement trace and `SUP_TRACE` `$dis
 on return `x[rd]` is the SEALED seal; `events[0..3]` is replaced by `csrr csupstatus/csupcause/csupepc/csuptval` (kind 0
 returned, 1 preempted — cause M_TIMER or the quantum cause — 2 fault); resume = `cssupervise` + the same CALL (the quantum
 re-arms per CALL); kind 2 → never CALL that seal again; `cssupervisor_gc` mode 0 → no-op, the census = `csrr csnodefree`.
-The monitor must populate seal slots 3 (mstatus), 7 (mie) and 9..24 (CPMP) for the domain's confinement — the full exchange
-installs them where the 8-register CALL never did; slot 25 stays zero. Minimum quantum ≥ ~50k cycles (it counts only
+The monitor must populate seal slots 3 (mstatus) and 7 (mie) as it does today. [Superseded by revision 1.1/1.2: the first entry is the ordinary 8-register exchange, so slots 9..24 (CPMP) and the GPR slots are NOT installed on entry -- the domain runs with the monitor's CPMP0..15 and x2..x31 until it is first preempted; slot 25 carries cepc/mepc.] Minimum quantum ≥ ~50k cycles (it counts only
 outside the exchange, but must exceed the longest uninterruptible stall, e.g. a REVOKE walk). A `TARGET=fpga` define
 (e.g. `CAPSTONE_SUPERVISOR_CSR_EVENTS`) selects this form.
 
