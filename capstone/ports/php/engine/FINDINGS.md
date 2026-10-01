@@ -459,6 +459,58 @@ one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` i
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
 
+### LOCALISED to one field read: _zval_copy_ctor's `zvalue->value.str.val`
+
+A three-print probe per `_estrndup` call (p, then s, then `__builtin_return_address(0)`) settles
+which operand and which caller. The failing triple:
+
+    Print = Cap(1, 0x7, 0x101d9fea0, 0x101d9fe40, 0x101d9feb0)   p  -- destination, TAGGED
+    Print = Scalar(0x101d9fdc0)                                  s  -- SOURCE, UNTAGGED
+    Print = Scalar(0x101c5d030)                                  ra -- the caller
+    cincoffset with an UNTAGGED rs1 -- val=0x101d9fdc0           the fault, same value
+
+and the triple BEFORE it shows that same address handed out tagged:
+
+    Print = Cap(1, 0x7, 0x101d9fdc0, 0x101d9fd60, 0x101d9fdd0)   p of an earlier call
+
+So a string `_estrndup` allocated and returned TAGGED comes back later as an UNTAGGED `s`. The
+tag dies while the caller holds it. Over the run: 17 Cap prints, 10 Scalar.
+
+**The caller is `Zend/zend_variables.c:137`** -- `_zval_copy_ctor`'s
+`zvalue->value.str.val = estrndup(zvalue->value.str.val, zvalue->value.str.len)`. So the untagged
+pointer is read out of a **`zval`'s `value` union** (`zvalue_value`), which is one of the ~28
+pointer-bearing unions the plan flagged as the main porting hazard.
+
+Two earlier callers in the same run pass a TAGGED `s` (`zend_language_scanner.c:4643` and
+`:4788`), so this is not every call -- it is this path.
+
+### The static-alignment hypothesis is MEASURED AND DEAD
+
+`cap_mem_map_add` silently no-ops on an unaligned address (`if (addr_is_aligned(addr))` with no
+else), so a capability stored to an under-aligned slot registers no tag and reads back untagged
+with its address intact -- every symptom here, including the tag watch's silence. Measured on
+this target, though, the layout gives it no opening:
+
+    sizeof(zval) 48    _Alignof(zval) 16    offsetof(zval, value) 0
+    sizeof(zvalue_value) 32   _Alignof 16   sizeof(char *) 16
+    sizeof(Bucket) 128        _Alignof 16
+
+48 is a multiple of 16, `value` sits at offset 0, and a heap zval from our allocator starts at
+`base + 96`, itself 16-aligned. So no zval array stride or field offset misaligns the union.
+`-Wcapstone-capability-alignment` (on dev, postdating our clang) would still be the systematic
+check for the rest of the port, but it does not explain this fault.
+
+### What is left, stated narrowly
+
+The field is 16-aligned and the reader uses the right instruction, so the remaining question is
+**who writes `value.str.val`, and with what store**. If some path writes that union member with
+an 8-byte store -- plausible where a union is also written as `lval`, a `long` -- then no map
+entry is ever added, nothing is killed, and the next read is untagged with the correct address.
+That is consistent with every observation and with the tag watch reporting nothing.
+
+The next step is therefore to disassemble the writers of `value.str.val` on the scanner path that
+produced this string, rather than any further runtime watching.
+
 ### RETRACTED: "p arrives untagged" was WRONG -- csdebugprint disproves it
 
 The section below deduced, from a whole-STACK tag watch finding no kill at `_estrndup`'s `p`
