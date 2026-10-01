@@ -52,9 +52,10 @@ the after-audit, synthesis, silicon.
   aligned) / 3 an unread event (assigned by commit, which also drops the arm). rs1 = x0 is the forget form.
   **The seal's SIZE cannot be checked** (corrected the same day): a SEALED capability carries no end bound in a
   register (`decompress_cap_metadata` gives 0 for SEALED/SEALEDRET, the field holds reg_id/async); a 512-byte
-  seal arms with status 0. The 1 KiB minimum the walks rely on is SEAL's alone (S-11). **Status 1 is unreachable
-  in practice**: a revocation broadcast nulls the seal in its register (LCC reads 7, cssupervise refuses with 2),
-  and the memory-parked copy is what a monitor would hold -- its reload behaviour is being measured.
+  seal arms with status 0. The 1 KiB minimum the walks rely on is SEAL's alone (S-11). **Status 1 is reachable
+  and measured** (2026-10-01 evening, after the `sup-arm.S` repair recorded below): a seal parked in memory with
+  STC, its node REVOKEd through the MREV handle, reloaded with LDC, reads SEALED (LCC 4) and `cssupervise` on it
+  returns 1; without the revocation the seal survives the STC/LDC round trip (LCC 4) and arms.
 - **The escape at commit**: `escape_d` (combinational, decision cycle T) strips `exception_o` and loads flops
   (pc, pc metadata, cause, tval, kind); `escape_q` issues the RETURN-shaped request at T+1 from the flops alone
   and is held until the switcher acknowledges. T and T+1 force every commit side effect off. The strip also fires
@@ -132,14 +133,18 @@ the after-audit, synthesis, silicon.
   >= 50k minimum is the only floor); while armed, a CALL of another seal silently disarms, so the monitor must
   mask interrupts between cssupervise and CALL (QEMU fails closed instead); and the first entry installs neither
   the seal's CPMP slots nor the GPRs -- the domain runs with the monitor's CPMP0..15 and x2..x31, as today.
-- **A pre-existing property met on the way (UNRESOLVED, outside this change):** a SEALED capability stored
-  with STC and reloaded with LDC through a live NONLIN base reads back untagged (LCC 7) in simulation, with the
-  store drained by 300 iterations and a fence (so not S-07's write-buffer window), and without any revocation.
-  No corpus test round-trips a sealed capability through memory, while the resident monitor keeps its sealed
-  handles in `domains[]`. Consequence here: cssupervise's dead-node status (1) could not be exercised -- a
-  revoked seal is nulled in its register and the memory copy cannot be shown to reload; the status is live code
-  but unreached. What the monitor's compiled store/reload actually is, and whether silicon agrees, is the next
-  question for whoever picks this up.
+- **RETRACTED (2026-10-01 evening, by the after-audit of the delegated decisions): "a SEALED capability stored
+  with STC and reloaded with LDC reads back untagged (LCC 7) in simulation", and with it "status 1 is
+  unreachable".** Both came from `sup-arm.S`, where the rd == rs2 block had overwritten the seal register with
+  an integer (`lla a3, savearea2`) before the STC, so the round trip, the dead-node arm and the rd == rs2
+  refusal itself were readings of an integer; the auditor found it in the trace's register write at the STC
+  (x13 = the address of savearea2, not the seal). Repaired (those bounds now go through t1/t2), the arms read:
+  rd == rs2 refused with 2; the seal after an STC/LDC round trip SEALED (LCC 4); after a REVOKE of its MREV
+  handle still SEALED on reload (4); `cssupervise` on it 1 -- the dead node IS detected; its type still SEALED
+  (4); mcause 0 (run fix3, 2026-10-01 evening, 1384 retirements). Nothing about sealed capabilities in memory is
+  open from this plan, and the "next question for whoever picks this up" is withdrawn. The line "a revocation
+  broadcast nulls the seal in its register (LCC reads 7)" was measured on the same integer and is withdrawn
+  too: unmeasured, and not needed by the design.
 - **Landed on the lane branch:** `capstone-ariane` `sup-call` = d38887426 (prerequisites) + 1dbf379b1 (S-11 in
   simulation, the Anvil lint) + 727ea6e93 (R-47) + 03b70667e (the implementation, tests, runner and mutant
   patcher). **Step 8 on that exact tree:** the 92-test corpus against the unmodified RTL -- 91 tests identical
