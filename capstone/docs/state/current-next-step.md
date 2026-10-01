@@ -1,3 +1,16 @@
+Supervised CALL (2026-10-01): the RTL is on capstone-ariane `sup-call`
+([plan, revision 1.2](../plans/supervised-call-silicon.md)); every simulation
+gate is done (the after-audit's four findings fixed and re-measured, the
+92-test neutrality run clean with `revocation`'s phantom traps as the only
+difference). The lead decides on synthesis (pre-registration in the plan); the runtime lane builds the FPGA monitor's
+`supervised_invoke` against the CSR-based events (csupctl.resume before a
+resume CALL; status 3 means an unread event). Before silicon: why an unguarded
+`mret` trapped instead of escaping (mutant-only), and whether a SEALED
+capability survives an STC/LDC round trip on silicon (it does not in
+simulation; the monitor keeps its handles that way). R-47 (CALL's parked
+return pc after a jump or branch) is fixed on the same branch and must land
+with it; until then, never place a branch right after a CALL.
+
 Application ports (2026-09-29): the seven application recipes now require
 the [shared delegated SDK](../../ports/common/application/README.md), with
 v1 rejection qualified. Use the recorded compiler and memory settings when

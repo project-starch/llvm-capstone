@@ -1,5 +1,31 @@
 # Current Capstone state
 
+## 2026-10-01 — Supervised CALL implemented in RTL (capstone-ariane `sup-call`), verified through step 7 in simulation; R-47 found and fixed; S-11 amended
+
+- **The supervised-CALL platform extension** (the primitive the delegated application runtime needs on silicon)
+  is implemented on `capstone-ariane` branch `sup-call` per `docs/plans/supervised-call-silicon.md` (revisions 1.1
+  and 1.2): `cssupervise`, the escape at commit, the SAVE/RESTORE walks around the existing 8-register exchange,
+  the quantum, the guards, the event CSRs (csupquantum 0x7C3, csupctl 0x7C4, csupstatus..csnodefree 0xFC0..0xFC4).
+  Steps 2-7 of the ladder read as pre-registered in simulation (five synchronous faults, exactly-once resume
+  under two quanta, a real timer interrupt escaping the domain twice, all ten guards, a hostile domain and a
+  foreign RETURN), with ten mutant positive controls, an adversarial after-audit whose four findings are fixed
+  with discriminating arms, and the 92-test neutrality sweep on the committed tree (91 identical, `revocation`'s
+  phantom mid-switch traps gone). Lint at baseline. Commits: d38887426, 1dbf379b1, 727ea6e93, 03b70667e on
+  `sup-call`, pushed, not landed on the submodule's shared branch. **Not synthesized, not on silicon**: synthesis
+  is the lead's call; the FPGA monitor build (`supervised_invoke` with the CSR-based events, csupctl.resume
+  before a resume, interrupts masked between cssupervise and CALL) is the runtime lane's.
+- **R-47 (new, fixed on `sup-call`, OPEN on every bitstream):** CALL parks the wrong return pc when a jump or
+  branch reaches issue before the dyn unit responds -- the caller resumes past that instruction, or
+  mid-instruction after a compressed one. Nothing resident is hit only because the monitor's and the runtime's
+  CALLs are followed by an `ldc` that holds issue. Registry entry on dev.
+- **S-11 amended on dev** (the Anvil relational-precedence fold, read from the compiler's own grammar): QEMU now
+  raises on an undersized SEAL (since 2026-09-26, minimum 528 B); the switcher's instance of the fold is fixed
+  on `sup-call` and the full-mode slot map measured; a 64-byte seal makes the switch write 24 bytes past the
+  capability's end (measured); `cssupervise` CANNOT check a seal's size (a SEALED capability carries no end
+  bound in a register), so the 1 KiB minimum is SEAL's alone -- the resident monitor's 1536-byte seals are the
+  guarantee until S-11 is fixed. A deterministic lint for the fold is on `sup-call`.
+- **Resident bitstream unchanged:** `caplifive_r43_8f6a0af98.bit`.
+
 Minimal snapshot. Read first in every session.
 
 ## 2026-09-29 — delegated signals

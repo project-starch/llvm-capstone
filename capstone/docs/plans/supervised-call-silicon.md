@@ -25,6 +25,145 @@ estimate sent to the board lane on 2026-10-01 concluded: no firmware-only path; 
 decoded; "collect" is a no-op on silicon because the revoke walk already frees); a CALL by a supervised domain is
 ILLEGAL in v1 (no context stack). Naming: "trap-vector defect" = registry M-1; "node reclaimer" = R-12 / study M1.
 
+## REVISION 1.2 (2026-10-01, the implementation on capstone-ariane branch `sup-call`)
+
+Implemented as designed in 1.1 with the refinements below, each forced by the RTL or by a test, and verified
+through step 7 of the ladder in simulation (retirement-trace readings, `capprint-readings.py`; every number
+below is a measured reading). Not yet: the mutant controls (running), the step-8 neutrality sweep (running),
+the after-audit, synthesis, silicon.
+
+- **SAVE runs BEFORE the 0..7 exchange, RESTORE after it, and a resume's RESTORE starts at id 8.** The walks
+  and the exchange both cover ids 3..7 (mstatus, mideleg, medeleg, mip, mie at +48..+87, inside the SEALEDRET
+  window). With SAVE after the exchange the armed CALL would save the domain's image as "the monitor's" and the
+  escape would save the monitor's values as "the domain's". So: armed CALL = SAVE the monitor's 3..66 into the
+  private area, THEN the ordinary exchange (arguments in a0..a7 as before), then (resume only) RESTORE the
+  domain's 8..66 from its seal: its 3..7 come from the exchange, out of the seal's slots 3..7 that the escape's
+  SAVE wrote. Escape and supervised RETURN = SAVE the domain's 3..66 into its seal region, exchange 0..7,
+  RESTORE the monitor's 3..66 from the private area, overriding whatever the exchange brought in from the
+  writable window. The request carries `save_en/save_base/restore_en/restore_base/restore_lo`. Found by
+  self-review; the tests of 1.1 could not see it (both sides had MIE = 0), so the tests now read the monitor's
+  `mie` back (0x888) and the MTIP test resumes the domain and demands a second timer escape.
+- **The CSR map.** `csupquantum` 0x7C3 (M RW), `csupctl` 0x7C4 (bit 0 = resume, consumed by the armed CALL),
+  read-only `csupstatus` 0xFC0 = {kind[1:0], valid} (read-to-clear), `csupcause` 0xFC1, `csupepc` 0xFC2,
+  `csuptval` 0xFC3, `csnodefree` 0xFC4 = 65535 - head + free_len (the rev-node exports `free_len`). All have
+  addr[9:8] = 2'b11, so the supervision gate covers them.
+- **`cssupervise rd, rs1(seal), rs2(save area)`**: statuses 0 armed / 1 dead node / 2 refused (rd in {x0, rs1,
+  rs2}; rs1 not a synchronous SEALED or not 16-B aligned; rs2 not LINEAR RW, smaller than 1024 B or not 16-B
+  aligned) / 3 an unread event (assigned by commit, which also drops the arm). rs1 = x0 is the forget form.
+  **The seal's SIZE cannot be checked** (corrected the same day): a SEALED capability carries no end bound in a
+  register (`decompress_cap_metadata` gives 0 for SEALED/SEALEDRET, the field holds reg_id/async); a 512-byte
+  seal arms with status 0. The 1 KiB minimum the walks rely on is SEAL's alone (S-11). **Status 1 is unreachable
+  in practice**: a revocation broadcast nulls the seal in its register (LCC reads 7, cssupervise refuses with 2),
+  and the memory-parked copy is what a monitor would hold -- its reload behaviour is being measured.
+- **The escape at commit**: `escape_d` (combinational, decision cycle T) strips `exception_o` and loads flops
+  (pc, pc metadata, cause, tval, kind); `escape_q` issues the RETURN-shaped request at T+1 from the flops alone
+  and is held until the switcher acknowledges. T and T+1 force every commit side effect off. The strip also fires
+  while the switcher is busy (M7 below). A RETURN through a seal that is not the supervised one, or to a caller
+  other than the supervising rd, is `foreign_return`: an escape with kind 2, cause 26.
+- **Guards**: decoder -- SRET, MRET, WFI, CALL, CAPENTER, CSSUPERVISE, CAPCREATE/CAPTYPE/CAPNODE/CAPPERM/CAPBOUND
+  (CAPPRINT stays legal) are illegal under supervision; CSR file -- every plain CSR with addr[9:8] != 0 and
+  0x800/0x801/0x802/0x804/0x810/0x811, and CCSRRW to CIH and CPMP0..15 (CCSRRW is its own op code: the first
+  form of the gate, keyed on the four plain CSR ops, let `CCSRRW cpmp0` through -- caught by step 6); `wfi_d`
+  forced low. The domain cannot read mstatus/mie either; fcsr and the user counters stay legal.
+- **The quantum**: a 32-bit down-counter in the CSR file, loaded from csupquantum at the armed CALL, counting only
+  while `sup_active && !dom_switch_active`, holding at zero; `irq_ctrl.sup_quantum` is injected by the decoder
+  after the ordinary interrupt block, cause 0x8000_0000_0000_0010.
+- **Two pre-existing defects found by the ladder, both fixed on the branch:**
+  (a) **CALL parks the wrong return pc after a jump or taken branch** (registry entry pending the audit):
+  `ex_stage.sv` packed `pc_i + 4` at the dyn unit's response, and `pc_i` is the issue stage's pc, which a branch
+  unit-resolved jump after the CALL has already advanced. Measured on the unmodified RTL (`call-retpc.S`, the
+  parked pc read from the seal's slot 0): `c.j`, a 4-byte `j` and a taken `beq` after CALL park CALL + 8 (the
+  caller resumed past them, readings 2/4/6 for 0), `addi`, `c.addi` and `csrr` park CALL + 4. First seen as the
+  supervised monitor resuming at CALL + 8, mid-instruction. The corpus pads every CALL with nops. Fix: latch the
+  pc and its metadata when the dyn unit accepts the request (the `capstone_dyn_ftval_q` precedent); all six shapes
+  then park CALL + 4. (b) **A busy-exception hazard** (step 0, M7 below).
+- **M7, the busy-exception detector over the 92-test corpus on the unmodified RTL (sweep0, 97 runs):** 5 hits,
+  the 4 sup-strip arms by design and `revocation` (2): an ILLEGAL_INSTRUCTION on a speculatively fetched `0x0000`
+  word past the callee's RETURN, delivered to the CSR file in the middle of a switch and visible in the
+  retirement trace as two taken traps; `call-retpc.S` on the unmodified RTL likewise ends with a stray mcause 28
+  from a trap taken during a switch. The strip removes both; the step-8 run must show exactly those differences.
+- **Lint**: 0 errors; LATCH 52, MULTIDRIVEN 3, UNOPTFLAT 40, BLKSEQ 2, UNDRIVEN 25 at baseline; UNUSEDSIGNAL
+  rises only by renumbered Anvil wires and bit-range shifts of the widened scoreboard entry (compared by name).
+- **A lane-only retraction, for the record.** For one afternoon the supervision state machine sat between the
+  CSR file's `if (csr_we) ... end` and its `else if` for the switcher's register writes, so the else-if attached
+  to an always-true `if` and NO switcher write of a CSR executed: lint clean, every GPR-based reading green, and
+  "mie 0x888 restored" trivially true. The hostile domain's mtvec reading and the MTIP arm caught it; every
+  CSR-side reading below is from the repaired tree (`all3`).
+- **Positive controls (one mutant per build, `verif/tests/custom/capstone/sup-variant.py`):** `no-strip` (the
+  escape no longer strips `exception_o`): the five step-3 faults are TAKEN as traps -- 5 taken-exception lines
+  in the retirement trace against 1 (the reference) -- while the monitor's readings stay green because mcause is
+  restored from the private area, which is why the test now also reads the shared `mepc`; `resume-plus4`:
+  the stored count is 300, not 400 (each resume skipped two compressed addis); `count-in-switch` (the quantum
+  counts during the walks): quantum 16 never completes, 283 escapes until the simulation's ceiling against
+  101 and completion; `no-set-ra`: the resume CALL faults on a null seal, cause 24; `no-mret-guard`: the
+  domain's mret executes, drops to U-mode with MPP = 0 and the run ends in a trap at mepc = 0 (cause 1) instead
+  of a kind-2 escape -- UNRESOLVED why that fault trapped rather than escaped (the guard makes it unreachable;
+  worth a look before silicon); `status-swap` (2 <-> 1 in the dyn unit): the five refusals read 1; `no-csr-gate`:
+  the domain's `csrw mepc` lands (the monitor reads 0x1234 back) and `csrw mie` runs, both ending in a quantum
+  escape instead of a fault; `no-mint-guard`: CAPCREATE runs and the quantum ends the domain; `no-foreign-check`:
+  the RETURN through the other domain's SEALEDRET is honoured and the core ends up in that domain's old spin loop
+  with supervision cleared, never returning to the monitor (1.98 M retirements to the ceiling). One mutant-only
+  observation stays UNRESOLVED: with the plain-CSR gate removed, a domain that READ csupstatus was never
+  preempted (the quantum did not fire, 1.9 M cycles); the real gate makes that read a fault, and the legal
+  `csrr cycle` followed by a spin IS preempted (step-6 arm 11, csupstatus 3), so the quantum survives a legal CSR
+  read. (`csrr fcsr` with FS = Off in the image is itself illegal and escapes as cause 2, arm 12.)
+- **The after-audit of the diff (2026-10-01) REFUTED readiness and found four defects, all fixed the same day,
+  each with a discriminating arm added before the ladder was re-run:** (3C) a RESUME re-wrote the domain's x1 with
+  a fresh SEALEDRET after the RESTORE walk, because the switcher's set_ra write runs last and the armed-CALL request
+  kept CALL's set_ra = 1 -- any program preempted with a live return address would have crashed on its next `ret`
+  (fix: set_ra = 0 on a resume; the quantum test now carries a plain sentinel in x1 across every resume);
+  (4A) a CCSRRW to CIH or CPMP that the gate refused raised the exception but still performed its write, because
+  csr_op_logic clears only csr_we on a violation and commit asserts ccsr_we regardless (fix: the capability-CSR
+  block and the R-26 flush are gated on !privilege_violation; the guards test writes a tagged capability into
+  CPMP0 from the domain and the monitor reads it back empty); (4B) CEPC/mepc were neither blocked nor walked, so
+  the domain could plant the monitor's mepc and read its tagged cepc through the legal CCSRRW CEPC (fix: id 25,
+  the reserved slot, now carries {cepc_tag, cepc, mepc} in both walks; the guards test plants both and the
+  monitor reads its own back); (4D) the supervision CSR gate had no debug-mode exception, so a JTAG halt during a
+  supervised domain would loop in the debug ROM on its first `csrw dscratch0` (fix: nothing of the gate, the
+  decoder guards or the counter applies in debug mode, H5). Also from the audit: the escape flops are now loaded
+  every cycle while no escape is pending (the decision no longer enables ~260 flops), the foreign-RETURN compare
+  is no longer in the trap strip's cone (it only enters the decision), and the pre-existing PC-capability
+  override also drops a faulting cssupervise's arm. Confirmed refutations worth keeping: the head cannot change
+  between T and T+1 (commit_drop is constant 0 on this config, one commit port), the walk order is right slot by
+  slot, a marked instruction cannot escape again in the monitor, the counter cannot run during a walk, the
+  free-list counter cannot underflow. Residuals recorded: a legal CSR or AMO head that escapes on a PC-capability
+  fault performs its side effect at T (only matters if a kind-2 event were resumed, which the contract forbids);
+  quantum 0 or any quantum shorter than the post-switch refetch latency livelocks by construction (the contract's
+  >= 50k minimum is the only floor); while armed, a CALL of another seal silently disarms, so the monitor must
+  mask interrupts between cssupervise and CALL (QEMU fails closed instead); and the first entry installs neither
+  the seal's CPMP slots nor the GPRs -- the domain runs with the monitor's CPMP0..15 and x2..x31, as today.
+- **A pre-existing property met on the way (UNRESOLVED, outside this change):** a SEALED capability stored
+  with STC and reloaded with LDC through a live NONLIN base reads back untagged (LCC 7) in simulation, with the
+  store drained by 300 iterations and a fence (so not S-07's write-buffer window), and without any revocation.
+  No corpus test round-trips a sealed capability through memory, while the resident monitor keeps its sealed
+  handles in `domains[]`. Consequence here: cssupervise's dead-node status (1) could not be exercised -- a
+  revoked seal is nulled in its register and the memory copy cannot be shown to reload; the status is live code
+  but unreached. What the monitor's compiled store/reload actually is, and whether silicon agrees, is the next
+  question for whoever picks this up.
+- **Landed on the lane branch:** `capstone-ariane` `sup-call` = d38887426 (prerequisites) + 1dbf379b1 (S-11 in
+  simulation, the Anvil lint) + 727ea6e93 (R-47) + 03b70667e (the implementation, tests, runner and mutant
+  patcher). **Step 8 on that exact tree:** the 92-test corpus against the unmodified RTL -- 91 tests identical
+  in taken exceptions, CAPPRINT count and retired count; `revocation` loses its three phantom mid-switch traps
+  with readings and retired count unchanged; the mid-switch detector fires 0 of 92 times (5 of 97 before).
+  Not landed on the submodule's shared branch and the parent's pointer not bumped: synthesis is the lead's call.
+- **Final ladder on the audited tree (`all4`, every test, 2026-10-01 evening):** identical to the readings below
+  where they overlap, plus the audit's arms: the x1 sentinel 0x1234 survives 53 resumes (quantum 64) and 103
+  (quantum 16) with the count exactly 400 both times; CCSRRW cpmp0 with a tagged capability escapes (5) and the
+  monitor reads CPMP0 back empty (LCC 7); CCSRRW cepc with a capability is legal, the domain is preempted (3),
+  and the monitor reads its own mepc (0) and an empty cepc back; a legal `csrr cycle` before a spin is preempted
+  (3); every earlier arm unchanged; the 8-register control unchanged; all seven CALL shapes park CALL + 4.
+- **Verification, steps 0-7 (repaired tree):** step 2 -- statuses 0/0/2/2/2/2/2 as listed, the 512-B seal 0
+  (above); step 3 -- ecall 11, illegal 2, `csrw mepc` 2, misaligned load 4 with tval 0x3001 equal to the
+  reference trap's mtval, mret 2: csupstatus 5, epc = the faulting pc, seal back SEALED, x7/x29/x30 and mie
+  0x888 restored, mcause 0, csupstatus 4 after the read; step 4 -- quantum 64: 52 resumes, the stored count
+  exactly 400; quantum 16: 101 resumes, exactly 400; mie 0x888, no trap; step 5 -- a monitor-side reference
+  trap (mcause 0x8000000000000007 after 243 spin iterations), then the domain escapes on MTIP with that cause,
+  mip.MTIP still pending in the monitor, and a second MTIP escape after a resume (the domain's mie survived);
+  with mie = 0 in the image the quantum fires instead; step 6 -- all ten guards: 5/2/epc 0/SEALED/mcause 0, mepc
+  0 after the blocked `csrw mepc`, and the legal control returns with csupstatus 1; step 7 -- the hostile domain
+  gives back ra, sp, gp, tp, x8, x22, x30, x31 and mtvec exactly, kind 1; the foreign RETURN escapes with
+  kind 2 cause 26 at its own pc, registers intact.
+
 ## REVISION 1.1 (2026-10-01, after the before-audit) — the monitor's continuation lives in a PRIVATE save area, not in the seal
 
 The audit refuted the design below on its central premise, and both critical findings are verified in source:
@@ -92,7 +231,7 @@ The switcher already implements a full context exchange — `is_full=1` walks id
 cscratch/mscratch, mstatus, mideleg, medeleg, mip, mie, offsetmmu, CPMP0..15, x1..x31 with metadata, mcause..satp
 (`core/anvil_build/capstone_dom_switcher.anvil:113-126`; ids: frontend 0, csr_regfile 1..25 & 57..66, GPRs 26..56 via
 `issue_read_operands.sv:1568-1569`). Nothing sets `is_full=1` today; CALL/RETURN use ids 0..7 (`capstone_dyn_unit.anvil:311,346`).
-The seal is 96 × 16 B = 1536 B; full mode needs 944 B. SEAL is MEANT to require ≥ 1024 B (`capstone_flu_unit.anvil:207-215`) but that check is inert on every bitstream so far (S-11 / R-32, the Anvil relational-precedence fold; QEMU raises since 2026-09-26 with a 528-byte minimum), so `cssupervise` checks the seal's and the save area's size and alignment itself. [Corrected 2026-10-01; the full-mode slot map was measured the same day after the switcher's own instance of the fold was fixed.]
+The seal is 96 × 16 B = 1536 B; full mode needs 944 B. SEAL is MEANT to require ≥ 1024 B (`capstone_flu_unit.anvil:207-215`) but that check is inert on every bitstream so far (S-11 / R-32, the Anvil relational-precedence fold; QEMU raises since 2026-09-26 with a 528-byte minimum), so `cssupervise` checks the save area's size and alignment and the seal's alignment itself; the seal's SIZE cannot be checked from a register (a SEALED capability has no end bound there, `decompress_cap_metadata`), so the walks rely on SEAL's minimum, i.e. on S-11 being fixed or on the monitor sealing >= 1 KiB as it does today. [Corrected 2026-10-01; the full-mode slot map was measured the same day after the switcher's own instance of the fold was fixed.]
 
 ```
    monitor                                   supervised domain (runs in M-mode, capmode on)
@@ -247,8 +386,7 @@ Values from the CAPPRINT registers in the retirement trace and `SUP_TRACE` `$dis
 on return `x[rd]` is the SEALED seal; `events[0..3]` is replaced by `csrr csupstatus/csupcause/csupepc/csuptval` (kind 0
 returned, 1 preempted — cause M_TIMER or the quantum cause — 2 fault); resume = `cssupervise` + the same CALL (the quantum
 re-arms per CALL); kind 2 → never CALL that seal again; `cssupervisor_gc` mode 0 → no-op, the census = `csrr csnodefree`.
-The monitor must populate seal slots 3 (mstatus), 7 (mie) and 9..24 (CPMP) for the domain's confinement — the full exchange
-installs them where the 8-register CALL never did; slot 25 stays zero. Minimum quantum ≥ ~50k cycles (it counts only
+The monitor must populate seal slots 3 (mstatus) and 7 (mie) as it does today. [Superseded by revision 1.1/1.2: the first entry is the ordinary 8-register exchange, so slots 9..24 (CPMP) and the GPR slots are NOT installed on entry -- the domain runs with the monitor's CPMP0..15 and x2..x31 until it is first preempted; slot 25 carries cepc/mepc.] Minimum quantum ≥ ~50k cycles (it counts only
 outside the exchange, but must exceed the longest uninterruptible stall, e.g. a REVOKE walk). A `TARGET=fpga` define
 (e.g. `CAPSTONE_SUPERVISOR_CSR_EVENTS`) selects this form.
 
