@@ -222,17 +222,29 @@ the after-audit, synthesis, silicon.
   base 64, save base 64, seal 129, rd 5, csupquantum 32, counter 32, resume 1, event valid 1 + kind 2 + cause 64
   + epc 64 + tval 64) + commit escape flops 259 (escape_q 1, pc 64, pc metadata 64, cause 64, tval 64, kind 2) +
   ex_stage's CALL pc latch 128 + the rev-node's free_len 16 + the switcher's phase 2 and its widened request
-  register 137 + the fail-closed flop `sup_mismatch_q` 1 = **1067**. The scoreboard entry's `dom_switch_req_t` grew by 137 bits and `cap_wbdata_t` by 1
+  register 137 + the fail-closed flop `sup_mismatch_q` 1 = **1065** (corrected 2026-10-02 at the synthesis handoff: the earlier
+  1066/1067 was a mis-sum of these same rows; the rows are what is graded, per module against 8f6a0af98). The scoreboard entry's `dom_switch_req_t` grew by 137 bits and `cap_wbdata_t` by 1
   (sup_arm_en), i.e. 138 bits per entry: the request's new fields are constant 0 at every pack site (commit is
-  their only writer, on its own output), so opt_design should prune those flops -- a delta near +1067 confirms
-  it, a delta near +2171 means they were NOT pruned and the walk fields must move off the entry type. ORDER-like
+  their only writer, on its own output), so opt_design should prune those flops -- a delta near +1065 confirms
+  it, a delta near +2169 means they were NOT pruned and the walk fields must move off the entry type. ORDER-like
   test (0/500 cells before the load unit, the D-cache arbiter and i_frontend): the only NEW combinational inputs
   are `csr_exception_i.valid` and the 64-bit `foreign_return` compare into `dom_switch_valid_o`/`commit_lsu_o`
   (the after-audit's 1b); `exception_o.valid` gains flop-sourced terms only, the foreign-RETURN compare having
   been kept out of its cone; the escape request itself is issued from flops. Loop membership: the 40 UNOPTFLAT
   names unchanged (verified by name against the prerequisite tree). LUTLP-1 = 0. WNS within the null band of
   -9.595 +/- 3.74. `timing-forensics.tcl` startpoint census unchanged under commit_stage/csr_regfile's dom-switch
-  names. If the reading would be uninformative the build does not go: here it is not -- the design is inert
+  names. **Pinned for the synth lane at the handoff (2026-10-02, build started 18:15 UTC on 36a641e0b, before any
+  number):** flop rows per module against 8f6a0af98 -- csr_regfile +524, commit_stage +260, ex_stage own +128, the
+  rev-node instance +16, the dom-switcher instance +137, scoreboard and issue_read_operands 0 (a +1104 in the
+  scoreboard = the entry's request fields not pruned); ORDER-like A = cells matching `sup_|esc_|escape|quantum|
+  mismatch`, B = i_load_unit, the D-cache arbiter, i_frontend, three counts -- 0/500 before the first two; before
+  i_frontend not zero by design, through `exception_o` (the strip) or the dom-switcher's redirect only, any other
+  route a finding; A's netlist survival checked on the named flops before any zero is reported; the census =
+  failing-endpoint startpoints of `failing_endpoints_worst2000` grouped by module, dom-switch names = the switcher
+  instance and commit_stage/csr_regfile cells matching `dom_switch|dom_`, expectation qualitative (no new module
+  group, the dom-switch groups within v2's band); WNS -9.595 +/- 3.74 is the binding number; loop membership on the
+  synth side = synthesis-stage membership against 8f6a0af98 with the fixed comparator plus the routed TIMING-23 arc.
+  If the reading would be uninformative the build does not go: here it is not -- the design is inert
   unless cssupervise runs, so the bitstream's first job is the R-43 acceptance list unchanged, then the first
   capstone-exec program.
 - **Final ladder on the audited tree (`all4`, every test, 2026-10-01 evening):** identical to the readings below
