@@ -131,6 +131,37 @@ shows tagged register preservation across one bare-metal U-to-S trap and
 detects a scalar save; Linux's `pt_regs` and task switching still use scalar
 register slots. The next gate must run the same round trip in a Linux-selected
 process, then add a checked buffer syscall and allocator lifetime test.
+A kernel module now proves that the booted Linux image can execute S-mode
+STC/LDC before selecting a protected process; its saved value is untagged.
+The QEMU bare-metal gate checks a tagged value in that order. Neither result
+initialises a Linux-owned revocation namespace or preserves a tagged Linux
+`pt_regs` frame. Those are the next code changes.
+
+The live guest image and its prepared source report Linux 6.1.0, despite the
+Buildroot configuration naming 6.1.26. Patch and rebuild the source matched
+to the image, and verify the booted `Image` hash before assessing results.
+The first protected-process slice needs these contracts together:
+
+1. A privileged Linux interface creates a lifetime namespace and binds it to
+   one address-space instance. The current QEMU tree is initialized only by
+   `cscapenter`, which also changes execution state, so that instruction is
+   not an ordinary Linux process initializer. Selection and retirement need
+   their own precise failure and reuse rules.
+2. On U-to-S entry, preserve tagged `tp` before Linux's first scalar
+   `sscratch` exchange and tagged `sp` before loading the kernel stack. Save
+   the remaining user registers in a tagged frame before any scalar overwrite;
+   keep Linux's scalar `pt_regs` for syscall dispatch. The frame belongs to
+   the task across scheduling. Update the saved `a0` to the syscall result
+   before restoring it; distinguish a fresh capability return explicitly.
+3. Select the task's namespace and protected-U mode before its final return
+   to U, and clear that selection for ordinary tasks. Check both paths across
+   a real syscall, involuntary scheduling and a page-fault retry. Keep signal
+   frames, fork and ptrace as explicit gates before claiming a general ABI.
+
+The S-mode instruction gate makes item 2 executable, but does not choose the
+namespace representation or pay for the complete 31-register save on every
+trap. Compare that cost with automatic trap capture and metadata propagation
+using one matched guest workload before freezing the ISA.
 
 ### M2 — Real virtual memory and a growing protected heap
 

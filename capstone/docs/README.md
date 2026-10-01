@@ -17,7 +17,7 @@ accesses on both harts. These are finite model checks; the kernel/user ABI and
 prototype gate remain open.
 The [stacked QEMU context candidate](design/trusted-linux-execution-boundary.md)
 boots the existing Linux guest with experimental CPU support enabled and
-passes 69/69 bare-metal checks after the `x0` and fault-oracle review fixes.
+passes 70/70 bare-metal checks after the `x0` and fault-oracle review fixes.
 It still lacks a protected Linux process ABI.
 
 The `trusted-linux-syscall-bounds` lane adds a bounded-buffer prototype to

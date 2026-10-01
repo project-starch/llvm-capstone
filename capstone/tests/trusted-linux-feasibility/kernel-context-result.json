@@ -1,0 +1,39 @@
+{
+  "controls": {
+    "S_translation_requires_active_U_mutation": "rejected",
+    "missing_module": "rejected while ordinary Linux probe passed"
+  },
+  "kernel_module": "PASS: S-mode STC/LDC round-trip of an untagged scalar",
+  "kernel_release": "6.1.0 (guest banner and module vermagic)",
+  "limits": [
+    "Linux did not select a protected process or save tagged pt_regs",
+    "The module does not initialise a Linux process lifetime namespace",
+    "QEMU simulation does not measure RTL cost"
+  ],
+  "module_binary_sha256": "b2d5cb5c72d92b0988b8f401505fdb75f4c79cae3e5f030b5bd1e19d3854076d",
+  "ordinary_probe": "PASS: mmap, mprotect, malloc/free, fork, read, munmap",
+  "probe_binary_sha256": "d36f523d62fcbcbcc20cdbf3b894f97c3b236a190142076a61a4b088201518b2",
+  "protected_process": false,
+  "qemu_revision": "ffb0e58759a52395c6f90d71460265f0fb97a000",
+  "schema": 1,
+  "scope": "linux_s_context_before_protected_u_selection",
+  "sha256": {
+    "Image": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd",
+    "compiler": "1e1308b723db462043d5d5bff44c0ea35ee658cb4131d011614b817e26abc420",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "kernel_entry_source": "4a658511862aa073d3acb05ab6da97d38c921313cca79804def62ab0e8e50251",
+    "kernel_makefile_source": "102ba5bcc746ab94a8c2e4df539e481d52b69c817ae0ecf721a9b1bb3438905e",
+    "kernel_module": "b2d5cb5c72d92b0988b8f401505fdb75f4c79cae3e5f030b5bd1e19d3854076d",
+    "module_makefile": "aecd76b517e300e6de873cec2ab4c4b17820668b843f81ef0998f3906b0d2e6b",
+    "module_source": "3d0a1f94adb0e9b63a4ff0637ed0441c0fe548c1c67df738224cded73a757334",
+    "qemu": "c4cf341addd68c187fabfbcf7787975badb899bec4336d058efe0e649794c0af",
+    "qemu_S_translator": "292bb9797f36d893204fd5387d27a7c4f6715097b9e0ec6dd639d06b821ea9c7",
+    "qemu_tag_helper": "f14b6210e8105f20566caef86c0597d80a80ef5699c2c123143655634b0d1cb5",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "950e91071a439096dee2137b4e3294628b5d5beb3224349c6b155f9c8439f59e",
+    "source": "2a17ccd4d93b49c6ed9b56cb02739fdcc21279b1f9506f3d8f1a92e76a155b96"
+  },
+  "source_provenance": "Prepared Buildroot kernel source used for the booted Image; the current Buildroot config version string is not the tested source version.",
+  "status": "PASS",
+  "tagged_value_tested_in_linux": false
+}

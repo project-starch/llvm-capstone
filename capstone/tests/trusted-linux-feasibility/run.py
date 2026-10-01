@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import select
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -35,7 +36,7 @@ def command_result(command):
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
 
 
-def run_guest(qemu, images, disk, log_path, timeout):
+def run_guest(qemu, images, disk, log_path, timeout, kernel_module=False):
     command = [str(qemu), "-M", "virt-capstone", "-m", "2G", "-smp", "1",
                "-nographic", "-monitor", "none", "-serial", "stdio",
                "-bios", str(images / "fw_jump.elf"),
@@ -79,11 +80,17 @@ def run_guest(qemu, images, disk, log_path, timeout):
                         logged_in = True
                         output = b""
                     if logged_in and not command_sent and b"# " in output:
-                        guest.stdin.write(
-                            b"mkdir -p /mnt/probe; "
-                            b"mount -t ext4 -o ro /dev/vdb /mnt/probe && "
-                            b"/mnt/probe/probe; rc=$?; "
-                            b"printf 'CAPSTONE_PROBE_EXIT:%d\\n' \"$rc\"\n")
+                        script = (b"mkdir -p /mnt/probe; "
+                                  b"mount -t ext4 -o ro /dev/vdb /mnt/probe && ")
+                        if kernel_module:
+                            script += (b"insmod /mnt/probe/capstone_s_context.ko; "
+                                       b"module_rc=$?; "
+                                       b"printf 'CAPSTONE_MODULE_EXIT:%d\\n' "
+                                       b"\"$module_rc\"; ")
+                        script += (b"/mnt/probe/probe; rc=$?; "
+                                   b"printf 'CAPSTONE_PROBE_EXIT:%d\\n' "
+                                   b"\"$rc\"\n")
+                        guest.stdin.write(script)
                         guest.stdin.flush()
                         command_sent = True
                         output = b""
@@ -108,7 +115,13 @@ def run_guest(qemu, images, disk, log_path, timeout):
 
     markers = [MARKER.fullmatch(line.strip()) for line in output.splitlines()]
     valid = [match for match in markers if match]
-    if not complete or len(valid) != 1 or b"CAPSTONE_FEASIBILITY_FAIL:" in output:
+    module_ok = not kernel_module or (
+        sum(line.strip() == b"CAPSTONE_MODULE_EXIT:0"
+            for line in output.splitlines()) == 1 and
+        sum(line.strip().endswith(b"CAPSTONE_S_CONTEXT_PRESELECT_OK")
+            for line in output.splitlines()) == 1)
+    if (not complete or len(valid) != 1 or not module_ok or
+            b"CAPSTONE_FEASIBILITY_FAIL:" in output):
         raise RuntimeError(f"guest did not complete the ordinary Linux control; see {log_path}")
     return int(valid[0].group(1))
 
@@ -120,15 +133,23 @@ def main():
     parser.add_argument("--cc", type=Path, required=True)
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--record", type=Path)
+    parser.add_argument("--kernel-module", type=Path,
+                        help="run the S-mode context candidate in the actual Linux kernel")
     parser.add_argument("--timeout", type=int, default=150)
     parser.add_argument("--control-missing-probe", action="store_true",
                         help="omit the guest binary; the run must fail")
+    parser.add_argument("--control-missing-module", action="store_true",
+                        help="omit the requested kernel module; the run must fail")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
+    if args.control_missing_module and not args.kernel_module:
+        parser.error("--control-missing-module requires --kernel-module")
     inputs = {name: args.image_dir / name for name in
               ("fw_jump.elf", "Image", "rootfs.ext2")}
     inputs.update(qemu=args.qemu, compiler=args.cc, source=HERE / "probe.c")
+    if args.kernel_module:
+        inputs["kernel_module"] = args.kernel_module
     for name, path in inputs.items():
         if not path.is_file():
             parser.error(f"missing {name}: {path}")
@@ -145,22 +166,30 @@ def main():
         probe_hash = digest(probe)
         if args.control_missing_probe:
             probe.unlink()
+        if args.kernel_module and not args.control_missing_module:
+            shutil.copyfile(args.kernel_module,
+                            staging / "capstone_s_context.ko")
         disk = scratch / "probe.ext4"
         with disk.open("wb") as stream:
             stream.truncate(32 * 1024 * 1024)
         command_result(["/sbin/mkfs.ext4", "-F", "-q", "-d", str(staging), str(disk)])
         same_address = run_guest(args.qemu, args.image_dir, disk, args.log,
-                                 args.timeout)
+                                 args.timeout, bool(args.kernel_module))
         if args.record:
-            record = {"schema": 1, "status": "PASS", "scope": "ordinary_linux_only",
+            record = {"schema": 1, "status": "PASS",
+                      "scope": "linux_s_context_preselect" if args.kernel_module else "ordinary_linux_only",
                       "protected_process": False,
                       "same_address_observed": bool(same_address),
                       "sha256": {name: digest(path) for name, path in inputs.items()},
                       "probe_binary_sha256": probe_hash}
+            if args.kernel_module:
+                record["kernel_context_module"] = "PASS: S-mode STC/LDC executed before protected U selection"
             args.record.parent.mkdir(parents=True, exist_ok=True)
             args.record.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
     print("PASS ordinary Linux mmap/mprotect, malloc/free, fork, read, munmap"
           f" (same_address={same_address}; protection not enabled)")
+    if args.kernel_module:
+        print("PASS Linux S-mode tagged context instructions before U selection")
     return 0
 
 

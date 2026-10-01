@@ -5,10 +5,12 @@ Minimal snapshot. Read first in every session.
 ## 2026-10-01 — tagged S-mode context candidate
 
 The pinned QEMU [context candidate](../design/trusted-linux-execution-boundary.md)
-passes 69/69 bare-metal checks. The reviewed LDC helper discards `x0` after
+passes 70/70 bare-metal checks. The reviewed LDC helper discards `x0` after
 memory checks; S/U authority regressions and an S alignment-fault test pass.
 The scalar-spill control now requires the precise U fault and rejects wrong
-causes/sites, setup faults and a no-fault tagged spill. Trusted S mode selects
+causes/sites, setup faults and a no-fault tagged spill. A Linux module also
+executes S-mode STC/LDC before a task selects protected U mode; that module
+saves an untagged scalar. Trusted S mode selects
 the protected U path;
 S-mode tagged spill/load preserves register identity across virtual aliases
 and a U-to-S ECALL, with scalar-spill and unsupported-CPU controls. Ordinary

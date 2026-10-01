@@ -265,7 +265,7 @@ scalar. The existing capability `CSCRATCH` can swap tagged user `tp` before
 the handler clobbers it. Physical tag lookup follows the TLB-selected frame,
 including when two kernel virtual addresses alias the slot.
 
-The corrected bare-metal gate passes **69/69**: the context cases save and restore a tagged
+The corrected bare-metal gate passes **70/70**: the context cases save and restore a tagged
 register across virtual aliases and a U-to-S ECALL, then dereference it after
 `SRET`. A scalar `sd`/`ld` in the handler loses authority and faults at the U
 load; the handler requires cause 24, the named instruction, U-mode source
@@ -283,6 +283,17 @@ prior binary; an additional test requires a misaligned S-mode LDC into `x0`
 to retain its exact fault. The earlier 62-check result did not test these cases,
 and its scalar-spill control accepted unrelated exit-1 failures. The corrected
 record identifies the prior binary and the new source and binary hashes.
+
+The next QEMU candidate permits trusted S-mode STC/LDC whenever the CPU
+property is enabled, including before a task selects protected U execution.
+The bare-metal case saves a tagged capability before selection. A module in
+the booted Linux kernel executes the same instructions on an untagged scalar;
+a mutation restoring the active-U precondition and a missing-module control
+both fail the kernel gate. These checks establish instruction availability,
+not Linux `pt_regs` or task context transfer. The real process gate must also
+provide a kernel-owned lifetime namespace: the current QEMU revocation tree
+is initialised by `cscapenter`, which ordinary Linux has not executed. Its
+privileged memory authority and frame-tag policy need explicit contracts.
 It does not implement Linux `pt_regs`, a protected
 task selector, per-process lifetime namespaces, checked syscall copies or a
 protected `malloc` process. The use of S-mode `CSSTC`/`CSLDC` and `CSCRATCH`

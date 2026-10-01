@@ -34,10 +34,47 @@ python3 capstone/tests/trusted-linux-feasibility/run.py \
   --record "$CAPSTONE_TMP_ROOT/trusted-linux-feasibility/baseline.json"
 ```
 
-The initial `result.json` records one passing run with the experimental CPU
+The current `result.json` records a passing run with the experimental CPU
 property enabled. It used the available Buildroot **glibc** toolchain and
 guest images, so it is an OS/control baseline, not the project's target musl
 application profile. The result reports `protected_process: false` by design.
+
+The next candidate uses `kernel-context/capstone_s_context.c`. It executes
+S-mode STC/LDC from a module loaded into the **actual booted Linux kernel**,
+before any protected U-mode process is selected. It saves an untagged scalar;
+the bare-metal QEMU gate separately checks a tagged capability. Build the
+module against the same prepared kernel source as `Image`, in scratch space:
+
+On the tested host, that prepared source and the booted image report Linux
+6.1.0. The Buildroot configuration still names 6.1.26, so use the image and
+prepared source identities in the result record when reproducing this gate.
+
+```sh
+source capstone/tests/capstone-test-env.sh
+module_build="$CAPSTONE_TMP_ROOT/trusted-linux-kernel-context"
+mkdir -p "$module_build"
+cp capstone/tests/trusted-linux-feasibility/kernel-context/{Makefile,capstone_s_context.c} "$module_build/"
+make -C /path/to/buildroot/build/build/linux-custom ARCH=riscv \
+  CROSS_COMPILE=/path/to/buildroot/build/host/bin/riscv64-buildroot-linux-gnu- \
+  M="$module_build" -j90 modules
+python3 capstone/tests/trusted-linux-feasibility/run.py \
+  --image-dir /path/to/buildroot/build/images \
+  --qemu /path/to/qemu-system-riscv64 \
+  --cc /path/to/buildroot/build/host/bin/riscv64-buildroot-linux-gnu-gcc \
+  --kernel-module "$module_build/capstone_s_context.ko" \
+  --log "$CAPSTONE_TMP_ROOT/trusted-linux-kernel-context.log" \
+  --record "$CAPSTONE_TMP_ROOT/trusted-linux-kernel-context.json"
+```
+
+The runner requires the module's kernel marker, successful `insmod`, and the
+ordinary Linux probe's marker and exit status. `--control-missing-module`
+omits the module from the guest disk; the ordinary probe still completes, but
+the combined gate must fail. A QEMU source mutation that restores the prior
+S-mode requirement for active protected U execution also fails this gate.
+The [pinned candidate result](kernel-context-result.json) records the input
+hashes and controls. The next gate needs a Linux-selected process with a
+tagged register saved at trap entry and restored after a syscall and scheduling.
+
 It is not evidence for a tagged kernel copy, protected `malloc`, preserved
 capability registers, preemption of a protected process, or safe retirement.
 
