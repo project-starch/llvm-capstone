@@ -1,0 +1,56 @@
+name: Capstone native suite
+
+# The runtime's host-side tests: the launcher, the delegate service, the
+# spawner and the native tests that compile a runtime file directly, built with
+# the host compiler under ASan/UBSan, plus the host Python tests and the heap
+# gate's oracle tests. No Capstone toolchain and no guest: what a domain does
+# is the gates' job (runtime/applications.md). On a pull request this runs on
+# the merge of the PR into its base, which is what lands.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - 'capstone/runtime/**'
+      - 'capstone/ports/**'
+      - '.github/workflows/capstone-native.yml'
+  push:
+    branches:
+      - dev
+    paths:
+      - 'capstone/runtime/**'
+      - 'capstone/ports/**'
+      - '.github/workflows/capstone-native.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Runtime native suite and host tests
+    if: github.repository_owner == 'project-starch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the runtime and the ports
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            capstone/runtime
+            capstone/ports
+      - name: Build (ASan/UBSan)
+        run: |
+          cmake -S capstone/runtime/exec -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS='-Wall -Wextra -fsanitize=address,undefined'
+          cmake --build build -j4
+      - name: Native suite
+        run: ctest --test-dir build --output-on-failure -j4
+      - name: Host tests
+        run: PYTHONPATH=capstone/runtime/host python3 -m unittest discover -s capstone/runtime/host/tests
+      - name: Heap gate oracle tests
+        run: python3 -m unittest discover -s capstone/runtime/tests/application -p test_heap_qualification.py
