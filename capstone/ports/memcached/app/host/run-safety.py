@@ -2,7 +2,11 @@
 """The memcached Safety milestone: run fixtures in the safety image of one heap arm, one guest boot,
 and judge each against host/safety-expect.txt.
 
-    run-safety.py --arm level0|shrink|sublet --out DIR [--expect FILE] FIXTURE...
+    run-safety.py --arm level0|shrink|sublet|slabsublet0|slabsublet1 --out DIR [--expect FILE] FIXTURE...
+
+slabsublet0 and slabsublet1 run host/build-slab-sublet.sh's safety image (Sublet inside memcached's
+slab and cache allocators) with MC_SLAB_SUBLET_MODE=0 (spatial) or 1 (sublet), and the arm's server
+flags -m 48 -o no_slab_reassign (the adapter's page half is 48 MiB, and the page mover is not hooked).
 
 Env: MC_WORK (host/build-safety.sh's images), CAPSTONE_VM_UP_ARGS (capstone-vm up platform arguments),
 CAPSTONE_BUILDROOT_DIR (the guest cross compiler), capstone-vm on PATH.
@@ -39,6 +43,7 @@ spec.loader.exec_module(check_safety)
 
 PORT = 21299
 FLAGS = ['-l', '127.0.0.1', '-p', str(PORT), '-U', '0', '-m', '64', '-t', '4']
+SLAB_SUBLET_FLAGS = ['-m', '48', '-o', 'no_slab_reassign']
 
 
 def vm(state, *args, **kw):
@@ -47,9 +52,11 @@ def vm(state, *args, **kw):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--arm', choices=['level0', 'shrink', 'sublet'], required=True)
+    parser.add_argument('--arm', choices=['level0', 'shrink', 'sublet', 'slabsublet0', 'slabsublet1'], required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--expect', type=Path, default=APP / 'host/safety-expect.txt')
+    parser.add_argument('--env', action='append', default=[], metavar='NAME=VALUE',
+                        help='more server environment (e.g. MC_SLAB_SUBLET_REPORT=1 for the adapter counters on stderr)')
     parser.add_argument('fixtures', nargs='+', type=int)
     args = parser.parse_args()
 
@@ -64,6 +71,12 @@ def main():
 
     work = Path(os.environ['MC_WORK'])
     image = work / 'safety' / f'memcached-safety-{args.arm}.dom'
+    flags, env = list(FLAGS), ''
+    if args.arm.startswith('slabsublet'):
+        image = work / 'slabsublet' / 'memcached-safety-slabsublet.dom'
+        flags += SLAB_SUBLET_FLAGS
+        env = f'MC_SLAB_SUBLET_MODE={args.arm[-1]} '
+    env += ''.join(f'{e} ' for e in args.env)
     if not image.is_file():
         parser.error(f'no {image}: run host/build-safety.sh')
     args.out.mkdir(parents=True, exist_ok=False)
@@ -75,6 +88,8 @@ def main():
                     str(APP / 'host/mc-harness/mc-harness.c'), '-lpthread'], check=True)
     inputs = {name: subprocess.run(['sha256sum', str(share / name)], capture_output=True, text=True,
                                    check=True).stdout.split()[0] for name in ('memcached-safety.dom', 'mc-harness')}
+    inputs['server_flags'] = ' '.join(flags)
+    inputs['server_env'] = env.strip() or 'none'
     (args.out / 'inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
     print(f'safety {args.arm}: image {inputs["memcached-safety.dom"][:16]} harness {inputs["mc-harness"][:16]}', flush=True)
 
@@ -100,9 +115,9 @@ def main():
         for number in args.fixtures:
             start = qemu_log.stat().st_size if qemu_log.exists() else 0
             script = (f'rm -rf /tmp/fx /tmp/fx-fault.txt; mkdir -p /tmp/fx && '
-                      f'CAPSTONE_FAULT_RECORD=/tmp/fx-fault.txt /mnt/host/mc-harness --out /tmp/fx --port {PORT} '
+                      f'CAPSTONE_FAULT_RECORD=/tmp/fx-fault.txt {env}/mnt/host/mc-harness --out /tmp/fx --port {PORT} '
                       f'--fixture {number} -- /usr/bin/capstone-job /tmp/fx/job.json --user 65534:65534 -- '
-                      f'/usr/bin/capstone-exec /mnt/host/memcached-safety.dom {" ".join(FLAGS)}; '
+                      f'/usr/bin/capstone-exec /mnt/host/memcached-safety.dom {" ".join(flags)}; '
                       f'echo harness rc=$?; if [ -s /tmp/fx-fault.txt ]; then cp /tmp/fx-fault.txt /tmp/fx/fault.txt; fi; '
                       f'rm -rf /mnt/host/fx{number}; cp -r /tmp/fx /mnt/host/fx{number}; true')
             run = vm(state, 'exec', 'sh', '-c', script, capture_output=True, text=True)
