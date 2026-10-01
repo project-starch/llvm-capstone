@@ -121,7 +121,10 @@ static int run_case(void){
   kv("sizeof_pointer", (unsigned long)sizeof(void *));
   kv("sizeof_Mem5Link_bytes", 8);
 
-  out_text("mem5tag -- ABI offsets of the structs the 6 FAULT cases free\n");
+  out_text("mem5tag -- ABI offsets of the structs freed by the FAULT cases this probe explains\n"
+          "mem5tag    (RtreeNode: rtreecursor, rtreeinode0; EditDist3Config: spellfixoom;\n"
+          "mem5tag     Schema: detachtrig; Btree: backupattach -- 5 of the 7 faults.\n"
+          "mem5tag     fts5inplace and fts3snipor fault by other sub-mechanisms.)\n");
   kv("RtreeNode.pParent", __builtin_offsetof(struct R_RtreeNode, pParent));
   kv("RtreeNode.iNode",   __builtin_offsetof(struct R_RtreeNode, iNode));
   kv("RtreeNode.nRef",    __builtin_offsetof(struct R_RtreeNode, nRef));
