@@ -68,12 +68,21 @@ extern char __capstone_tls_image[], __capstone_tdata_end[], __capstone_tls_end[]
  * exactly as before. */
 static char *__capstone_tp;
 
+/* Set once the first context has its thread pointer; every context minted
+   later has its TLS block from its first instruction (lock.c counts locks per
+   context from here on). */
+int __capstone_tls_ready;
+
 int __capstone_init_tls(void)
 {
 	size_t tdata = __capstone_tdata_end - __capstone_tls_image;
 	size_t memsz = __capstone_tls_end - __capstone_tls_image;
-	if (memsz == 0)
-		return __init_tp(&__capstone_main_thread);
+	if (memsz == 0) {
+		if (__init_tp(&__capstone_main_thread))
+			return -1;
+		__capstone_tls_ready = 1;
+		return 0;
+	}
 	if (__capstone_tp)
 		return __init_tp(__capstone_tp - sizeof(struct pthread));
 
@@ -87,7 +96,10 @@ int __capstone_init_tls(void)
 	tp += (page_off - ((uintptr_t)tp & 4095)) & 4095;
 	memcpy(tp, __capstone_tls_image, tdata);
 	__capstone_tp = tp;
-	return __init_tp(tp - sizeof(struct pthread));
+	if (__init_tp(tp - sizeof(struct pthread)))
+		return -1;
+	__capstone_tls_ready = 1;
+	return 0;
 }
 
 /* A further context's TLS block (context.c): struct pthread, the page-offset
@@ -121,6 +133,16 @@ char *__capstone_tls_block_init(char *mem, size_t bytes)
 	td->robust_list.head = &td->robust_list.head;
 	td->next = td->prev = td;
 	return tp;
+}
+
+/* The calling context's thread identity: the pid for the first context once
+ * the launch record is in (set below), before that 1, and for a minted
+ * context the runtime identity context.c gave it. musl compares these in its
+ * recursive locks, so no two live contexts share one. */
+int __capstone_context_tid(void)
+{
+	int tid = __pthread_self()->tid;
+	return tid ? tid : 1;
 }
 
 /* The thread pointer is installed before the launch record is applied, so

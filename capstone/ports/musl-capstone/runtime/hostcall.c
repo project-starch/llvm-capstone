@@ -24,6 +24,7 @@
  * signature drift between the two a compile error instead of a silent ABI
  * mismatch at the one boundary that cannot be debugged from C. */
 #include <syscall_arch.h>
+#include <capstone/lock.h>
 
 extern int __capstone_application_prepare(const void *, size_t);
 static void *hc_startup;
@@ -87,15 +88,21 @@ static unsigned long hc_unserved_n;
 static long hc_noop[HC_NOOP_MAX];
 static unsigned long hc_noop_n;
 
+/* Any context may note: a leaf lock over the two lists. */
+static volatile int hc_note_lock;
 void __capstone_hc_note_unserved(long n) {
+  capstone_spin_lock(&hc_note_lock);
   if (hc_unserved_n < HC_UNSERVED_MAX)
     hc_unserved[hc_unserved_n] = n;
   hc_unserved_n++;
+  capstone_spin_unlock(&hc_note_lock);
 }
 void __capstone_hc_note_noop(long n) {
+  capstone_spin_lock(&hc_note_lock);
   if (hc_noop_n < HC_NOOP_MAX)
     hc_noop[hc_noop_n] = n;
   hc_noop_n++;
+  capstone_spin_unlock(&hc_note_lock);
 }
 
 /* The delegated stub (delegate.c): every call is Linux's, run by the task. */

@@ -106,7 +106,7 @@ void __capstone_sigsetjmp_save(unsigned long *buf) { buf[29] = logical; }
 /* musl's siglongjmp is a longjmp; here the saved mask comes back first. */
 void siglongjmp(sigjmp_buf buf, int val) {
   unsigned long *raw = (unsigned long *)buf;
-  if (raw[28]) {
+  if (raw[28] && signal_context()) {
     uint64_t saved = raw[29];
     transition++;
     __capstone_delegate_procmask(SIG_SETMASK, &saved, 0);
@@ -197,6 +197,7 @@ static void acknowledge(struct pending *p) {
  * alternate stack is a separate stack: jumping from it to the normal stack
  * abandons every handler currently on it. */
 void __capstone_longjmp_reap(void *buf) {
+  if (!signal_context()) return;   /* only the first context runs handlers */
   void *target = *(void **)((char *)buf + 208); /* sp: setjmp.S slot 13 */
   uintptr_t sp = (uintptr_t)target, base = (uintptr_t)alt.ss_sp;
   int target_alt = alt_enabled && sp >= base && sp < base + alt.ss_size;
@@ -267,9 +268,13 @@ static struct pending *next_runnable(int only_sig) {
 }
 
 /* After every round: run what is runnable, in acceptance order. */
+int __capstone_lock_depth(void);   /* lock.c */
+
 void __capstone_signals_deliver(void) {
   struct pending *p;
-  if (transition || !signal_context()) return;
+  /* never while this context holds a runtime-internal lock (Q6): the handler
+     could want it; the events run when the last one is released */
+  if (transition || !signal_context() || __capstone_lock_depth()) return;
   while ((p = next_runnable(0)))
     run_event(p);
 }

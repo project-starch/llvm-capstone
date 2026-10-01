@@ -39,6 +39,7 @@ function(capstone_configure_application target)
     add_library(capstone-application-core OBJECT
       "${musl}/start-musl.S" "${musl}/set_thread_area.S" "${musl}/setjmp.S"
       "${musl}/hostcall.c" "${musl}/tls.c" "${musl}/atomic_libcalls.c" "${musl}/context.c"
+      "${musl}/lock.c"
       "${capstone}/runtime/common/launch.c")
     file(STRINGS "${musl}/libc_overrides.list" overrides)
     foreach(source IN LISTS overrides)

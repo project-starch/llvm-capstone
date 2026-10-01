@@ -19,7 +19,9 @@
 #include <stdint.h>
 #include <string.h>
 #include "pthread_impl.h"
+#include "stdio_impl.h"
 #include <capstone/capability.h>
+#include <capstone/lock.h>
 #include <capstone/context.h>
 #include <capstone/delegate.h>
 
@@ -47,8 +49,11 @@ static size_t tls_bytes(void)
   return (__capstone_tls_block_bytes() + 15) & ~(size_t)15;
 }
 
+/* Several contexts may mint at once (capstone/lock.h, Q6). */
+static volatile int arena_lock;
+
 /* Move the front `bytes` of the arena into *out. */
-static int arena_take(size_t bytes, capstone_cap_slot *out)
+static int arena_take_held(size_t bytes, capstone_cap_slot *out)
 {
   if (capstone_cap_type(&__capstone_context_arena) != CAPSTONE_CAP_LINEAR)
     return -1;
@@ -66,6 +71,24 @@ static int arena_take(size_t bytes, capstone_cap_slot *out)
   capstone_cap_move(&rest, &__capstone_context_arena);
   return 0;
 }
+
+static int arena_take(size_t bytes, capstone_cap_slot *out)
+{
+  capstone_lock(&arena_lock);
+  int r = arena_take_held(bytes, out);
+  capstone_unlock(&arena_lock);
+  return r;
+}
+
+/* Thread identities of minted contexts: from 2^22 up, above Linux's pid range
+   (pids stay below PID_MAX_LIMIT, 2^22), so none is a pid; below 0x3fffffff,
+   since musl keeps a tid in 30 bits of a lock word (bit 30 is MAYBE_WAITERS,
+   0x3fffffff putc's marker and a mutex's "not recoverable"); and never reused
+   in the process's life, so a recursive lock never takes a new context for an
+   old owner (Q2). When they run out, minting fails. */
+#define TID_FIRST 0x400000u
+#define TID_LAST 0x3ffffffeu
+static unsigned next_tid = TID_FIRST;
 
 /* Mint into the linear area in *area; the handle is made here, senior to
  * every split below, and ends up in c->handle. */
@@ -98,8 +121,10 @@ static int mint_area(struct capstone_context *c, capstone_cap_slot *area, void *
 
   memset(sb, 0, CAPSTONE_CONTEXT_START_BYTES);
   char *tp = __capstone_tls_block_init(tls_block, tls);
-  if (!tp)
+  unsigned tid = __atomic_fetch_add(&next_tid, 1, __ATOMIC_RELAXED);
+  if (!tp || tid < TID_FIRST || tid > TID_LAST)
     return -1;
+  ((struct pthread *)(tp - sizeof(struct pthread)))->tid = (int)tid;
   char *top = stack + (end - stack_at);
   void **slot = (void **)sb;
   slot[CAPSTONE_CONTEXT_SLOT_SP / 16] = top;
@@ -217,11 +242,46 @@ unsigned long __capstone_context_run(void *start_block)
    count is the context's own and needs no atomic. */
 static __thread unsigned long next_ticket = 1;
 
+/* musl's own switch at its first pthread_create, before a second context can
+   run: stdio locks every FILE from now on (its lock word leaves -1), and
+   libc.need_locks turns musl's internal locks and the runtime's on. The
+   count only rises: a context's end is not seen here (Q4), so the locks stay
+   on, which is correct and only slower. */
+#pragma weak __ofl_lock
+#pragma weak __ofl_unlock
+#pragma weak __stdin_used
+#pragma weak __stdout_used
+#pragma weak __stderr_used
+static void lock_file(FILE *volatile *used)
+{
+  if (used && *used && (*used)->lock < 0)
+    (*used)->lock = 0;
+}
+
+static void threads_begin(void)
+{
+  if (!libc.threaded) {
+    if (__ofl_lock) {
+      for (FILE *f = *__ofl_lock(); f; f = f->next)
+        if (f->lock < 0)
+          f->lock = 0;
+      __ofl_unlock();
+    }
+    lock_file(&__stdin_used);
+    lock_file(&__stdout_used);
+    lock_file(&__stderr_used);
+    libc.threaded = 1;
+  }
+  if (!__atomic_fetch_add(&libc.threads_minus_1, 1, __ATOMIC_RELAXED))
+    libc.need_locks = 1;
+}
+
 long capstone_context_create(struct capstone_context *c, unsigned mode)
 {
   unsigned long ticket = next_ticket++;
   long transport = 0;
   if (mode == CAPSTONE_CONTEXT_THREAD) {
+    threads_begin();
     /* Before the request, not after it: the launcher may start the context
        before this context has the request's answer. */
     transport = __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_RESERVE, 0, 0, 0);

@@ -20,6 +20,11 @@ capstone_configure_application(context-probe
 add_executable(thread-probe thread-probe.c thread-probe-asm.S)
 capstone_configure_application(thread-probe
   DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 CONTEXT_BYTES 1048576 CONTEXTS 7)
+# The same probe on the Sublet heap, for its lock (heap-stress).
+add_executable(thread-probe-sublet thread-probe.c thread-probe-asm.S)
+capstone_configure_application(thread-probe-sublet
+  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 CONTEXT_BYTES 1048576 CONTEXTS 7
+  HEAP sublet HEAP_LOG 22)
 # a 16 KiB exchange region on purpose: the datagram rule is exercised below
 # the kernel's own limits
 add_executable(socket-contract socket-contract.c)
