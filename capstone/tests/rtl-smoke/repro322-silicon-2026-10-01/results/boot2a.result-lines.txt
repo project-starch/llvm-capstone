@@ -1,0 +1,8 @@
+# boot r322-b2a, 2026-10-01 ~16:50-17:09, caplifive_r43_8f6a0af.bit, REFUSAL_RECORD=1
+# fw_payload c9a0982b95ab821a (monitor 2dcd3a5, buildroot d04bd83), host sqlite_host.user 2c9e82d101b48160; v2 images
+control: RESULT k800 retval=4                                   (k800.dom b2d60e525f807ea4)
+base322    148b1c999e05397e @0x410000:  returned; rows alpha 11 / beta 22 / gamma 33, EXTENDED_PASSED, MEMORY_PASSED
+detachtrig 5c498cc21a6148cd @0x2410000: WEDGED, as pre-registered
+    trap log 0x98 -> mcause 24 = UNEXPECTED_OPERAND_TYPE (riscv_pkg.sv:358 at 8f6a0af98)
+    trap mepc 0x828a7d7c -> offset 0xa7d7c into the 4 MiB-aligned block -> VA 0x24b7d7c = sqlite3DropTriggerPtr+0x154,
+    the emulator's fault instruction exactly; trap tval 0x0 (emulator: 0x0); refusal record EMPTY [204:02 205-208:00]

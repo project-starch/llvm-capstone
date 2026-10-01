@@ -150,3 +150,40 @@ The pre-registered readings above stand unchanged for v2. Boots 1b and 2 run the
 
 What would have caught this before the boot: a scan of the staged silicon images for `delin` outside the entry
 glue. S-02 and S-15 both had this shape, and nothing checks for it.
+
+## Results (2026-10-01): batch 1 reads as pre-registered on silicon
+
+Result lines: `results/boot1b.result-lines.txt` and `results/boot2a.result-lines.txt` (v2 images);
+`results/boot1a.result-lines.txt` (v1, above).
+
+| cell | row | silicon (R-43 v2) | against the emulator |
+|---|---|---|---|
+| base322 | - | returned, all five markers, in all three boots (1a, 1b, 2a) | identical |
+| wschema | 8 | returned; poisoned insert rc=11, NOTRAP done | domain output identical, line for line |
+| blobwrite | 20 | returned; write rc=0, NOTRAP done | identical |
+| mem5design | 25 | returned; before=2779054080 after=4294967295 | identical |
+| blobclose | 5 | returned; NOTRAP done | identical |
+| jsonstatic | #174 | returned; cross_rows=6, max=[3,4,5], rows=1 | identical |
+| jsonroot | #174 | returned; cross_rows=6, max={"bb":[3,4,5]}, rows=1 | identical |
+| backupattach | 15 | wedged, mcause 24, `sqlite3BtreeUpdateMeta+0x48`, tval 0 | the same instruction |
+| detachtrig | 4 | wedged, mcause 24, `sqlite3DropTriggerPtr+0x154`, tval 0 | the same instruction |
+
+Each boot's k800 control returned 4, and every refusal record read EMPTY (nothing revoked, as expected). The
+domain-output comparison was shown to fire: before command-echo fragments were excluded, it flagged them.
+
+**What this establishes:**
+- SQLite 3.22.0 runs on silicon. Its base domain completed in all three boots.
+- The corpus's control-arm verdicts for these eight rows are not an emulator artifact. The six returning rows
+  run their freed-then-used paths to the same output on the RTL. The two FAULT rows fault at the same
+  instruction for the same reason: an untagged operand, which the PR attributes to memsys5's integer freelist
+  links overwriting a pointer field of the freed block.
+- So on silicon, as in the emulator, base Capstone (nothing revoked) does not stop these temporal bugs. Where
+  it faults, it faults for layout reasons, not temporal ones.
+
+**Not established:**
+- N = 1 per cell;
+- no Sublet or revocation arm;
+- rows 1, 3, 6, 11, 12, 13, 17 and 22 (reachability unproven) are not run;
+- batch 2 (rows 10, 19, 24) is not built;
+- the FAULT mechanism, memsys5's link words clearing the pointer's tag, is the PR's reading, not traced here.
+  The silicon trap matches its instruction and its cause.
