@@ -115,9 +115,8 @@ CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
 # program-independent and taken as they are -- 40/40 arms of the pymalloc defect
 # corpus stand on that code -- and PYMALLOC_DOMAIN selects backing.c's domain
 # form, whose arenas come from the shared region rather than from a native heap.
-# hostcall.c is rebuilt with CAPSTONE_PROGRAM_REGIONS so it parks the two regions
-# the adapter's init needs; the plain arm never sees any of this and stays
-# byte-identical.
+# hostcall.c parks the two program regions the adapter's init needs
+# (__capstone_region); the plain arm never asks for them.
 if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   PYM=$PORTS_DIR/cpython/pymalloc/src
   # THERE ARE TWO sublet.h AND THE ORDER DECIDES WHICH. capstone/sublet/sublet.h
@@ -199,7 +198,9 @@ rm -rf "$BUILD_DIR"; mkdir -p "$BUILD_DIR"
 # Answers configure cannot get by running a program on the target. Each is a
 # fact about the domain, not a way to make configure pass.
 cat > "$BUILD_DIR/config.site" <<'EOF'
-# No device files exist in a domain: the file service opens host paths only.
+# /dev/ptmx: configure would probe the BUILD host's /dev, which says nothing
+# about the guest. The answer is not used: HAVE_OPENPTY is 1 and os.openpty
+# goes through musl's openpty, which opens /dev/ptmx itself.
 ac_cv_file__dev_ptmx=no
 ac_cv_file__dev_ptc=no
 # getaddrinfo is never run (no socket opcode); "not buggy" only stops configure
@@ -211,12 +212,6 @@ ac_cv_buggy_getaddrinfo=no
 # takes them from malloc. The mmap module goes with it, which a domain cannot
 # use anyway.
 ac_cv_func_mmap=no
-# musl exports epoll functions, but this delegated syscall profile does not
-# serve them. Advertising select.epoll makes selectors probe epoll_create1,
-# leaving an UNSERVED diagnostic on otherwise successful child-process tests.
-# select.poll remains available through the delegated poll implementation.
-ac_cv_func_epoll_create=no
-ac_cv_func_epoll_create1=no
 # Left to itself this check CRASHES the compiler (C-51: its conftest uses
 # _Py_atomic_or_uint8), configure reads the crash as "libatomic needed", and
 # LIBS gains a -latomic no capstone64 library provides. With +a every width the
@@ -236,8 +231,11 @@ log "configuring CPython for riscv64-unknown-linux-musl via $CC"
 # MODULE_BUILDTYPE=static: no dlopen in a domain, so every module is built in.
 # --with-pkg-config=no: the host's pkg-config would hand over host library flags.
 # RANLIB is `llvm-ar s`: not every LLVM build here has the llvm-ranlib link.
-# Patch 0015 implements subprocess creation through the launcher's posix_spawn.
-# C11 thread-locals remain enabled; this does not enable fork without exec.
+# -D_Py_FORK_EXEC_POSIX_SPAWN: no fork in a domain; patches/...-0015 routes
+#   _posixsubprocess.fork_exec through posix_spawn, which the launcher serves.
+#   It does not make fork without exec possible.
+# Thread-locals are C11 thread-locals: with threads (C-47 fixed) patch 0006 and
+#   -D_Py_THREAD_LOCAL_AS_GLOBAL are gone, and the check below refuses them.
 (cd "$BUILD_DIR" && \
   CONFIG_SITE="$BUILD_DIR/config.site" MODULE_BUILDTYPE=static \
   CPPFLAGS="-D_Py_FORK_EXEC_POSIX_SPAWN" \
@@ -270,9 +268,6 @@ grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_FORK_EXEC_POSIX_SPAWN' "$BUILD_DIR/Makefil
   || { echo "configure did not enable patch 0015 (posix_spawn)" >&2; exit 2; }
 if grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_THREAD_LOCAL_AS_GLOBAL' "$BUILD_DIR/Makefile"; then
   echo "threading requires real thread-locals" >&2; exit 2
-fi
-if grep -qE '^#define HAVE_EPOLL( |_)' "$BUILD_DIR/pyconfig.h"; then
-  echo "configure advertised epoll, which this runtime does not serve" >&2; exit 2
 fi
 # A configure check whose conftest crashes the compiler reads as "feature
 # absent", silently. Every such check must be one whose answer is right anyway.

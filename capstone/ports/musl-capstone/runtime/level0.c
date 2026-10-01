@@ -264,6 +264,19 @@ void *realloc(void *p, size_t n)
 	return q;
 }
 
+/* The bytes a caller may use through p. Programs that keep no size of their own ask for
+   it: SQLite's default allocator does when it is configured as configure configures it on
+   Linux (HAVE_MALLOC_USABLE_SIZE). Otherwise it puts an 8-byte size header in front of
+   every block, so every structure it allocates that holds a capability starts 8 bytes off
+   its 16-byte boundary, and its first mutex faults (a misaligned store, cause 6). This is
+   the block's payload, and with CAPSTONE_LEVEL0_SHRINK no more than the pointer's bounds,
+   which are the request. musl's own malloc_usable_size reads mallocng's metadata, which
+   this heap does not keep. */
+size_t malloc_usable_size(void *p)
+{
+	return p ? l0_readable(p, l0_header(p)->size) : 0;
+}
+
 /* musl calls its own allocator by five names, not one. The public malloc is a
    weak alias, so defining it is not enough: everything under src/locale,
    src/time/__tz.c and src/stdio/ofl_add.c calls __libc_malloc or __libc_calloc

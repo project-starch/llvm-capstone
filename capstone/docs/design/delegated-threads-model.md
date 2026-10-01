@@ -318,12 +318,19 @@ context writes.
 - **Scheduling calls:**
   - `sched_yield` is delegated and runs on the serving thread: it yields that Linux thread.
   - `nanosleep` and `clock_nanosleep` sleep the serving thread.
-  - `sched_getaffinity` and `sched_setaffinity` act on the calling thread only (pid 0 or its own
-    tid); any other pid answers `ESRCH`.
-  - Priority and policy calls (`setpriority`, `sched_setscheduler`, `sched_setparam`) are not
-    delegated. They answer `ENOSYS` and appear in the unserved report.
-  - Every context runs on a launcher thread of the same priority. The runtime's
-    priority-inheritance mutexes therefore inherit nothing (6.2).
+  - `sched_getaffinity` and `sched_setaffinity` act on the calling thread only. The runtime turns
+    pid 0 or the caller's own tid into 0 and answers `ESRCH` for another thread's identity
+    without a round; the launcher refuses any pid but 0 with `EPERM`.
+  - `getpriority` and `setpriority` are delegated for `PRIO_PROCESS` and the task itself (0 or
+    its pid), and so are `sched_get_priority_max`, `sched_get_priority_min` and
+    `sched_rr_get_interval` (the plain rows, `runtime/applications.md`). They run on the serving
+    thread, and Linux keeps a nice value per thread: 0 names the calling context's serving
+    thread, the pid the first context's. That a nice value set from one context changes only its
+    own thread is Linux's rule and was not measured here.
+  - Policy calls (`sched_setscheduler`, `sched_setparam`) are not delegated. They answer `ENOSYS`
+    and appear in the unserved report.
+  - Every context starts on a launcher thread of the same priority, and no priority crosses a
+    lock. The runtime's priority-inheritance mutexes therefore inherit nothing (6.2).
 - **Thread names.** `pthread_setname_np` names the serving Linux thread, so the name shows in
   `/proc/<pid>/task/*/comm`. Naming another minted thread is refused: its tid names no Linux task
   (`ENOENT`). Naming the first context from another thread (its tid is the pid) is untested.
@@ -630,8 +637,10 @@ Not supported, and why:
   entry into a running context), which is not built. libc-test's `pthread_cancel` waits for it.
 - **Futex operations.** Beyond those listed in 6.2: `ENOSYS`, visible in the unserved report.
 - **`sem_open`.** It needs a file mapped `MAP_SHARED`, and a domain maps no files.
-- **Priority scheduling.** Priority and policy calls are not delegated; PI mutexes inherit nothing.
-- **Another thread's affinity or name.** `ESRCH` and `ENOENT`.
+- **Priority scheduling.** Policy calls are not delegated, a nice value is per serving thread
+  (5.5), and PI mutexes inherit nothing.
+- **Another thread's affinity or name.** `ESRCH` from the runtime (`EPERM` from the launcher for
+  a raw pid) and `ENOENT`.
 - **The platform.** The supervisor extension is "a VM platform extension, not an implementation
   claim about the existing FPGA instruction set" (`capstone_supervisor.c`). The quantum, the
   continuations and the dead-slot collection are capstone-qemu's.

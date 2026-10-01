@@ -232,20 +232,72 @@ The wire ABI, the shape table and the closed exception groups are in
 [docs/plans/delegation-abi.md](../docs/plans/delegation-abi.md).
 
 What crosses: files, directories, descriptors, time, identity, limits,
-`getrandom`, `wait4`, `kill` confined to the task, `exit_group`. What does not:
-memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS) and processes
-(`fork` is ENOSYS and `clone` makes threads only; image exec uses the process
-service below). A thread is a context of the application, stepped by a launcher
-thread of its own (Threads, below). Signals cross: the kernel keeps
-dispositions, mask, pending set and restart decisions, and a caught signal runs
-its domain handler at the domain's next round (see Signals below). The unserved report at exit lists what did not
-cross.
+`getrandom`, `wait4`, `kill` confined to the task, its children and its parent
+(and signal 0 to the task's own group, which signals nothing),
+`getpgid`, `getsid`, `ppoll` and `pselect6` (the fd_sets, the timeout and the
+mask, which the libc flattens out of the kernel's pointer pair and the
+launcher rebuilds), and the plain rows, integers, strings and flat buffers
+only: `statfs`, `fstatfs`, `statx`, `truncate`, `fallocate`, `linkat`,
+`mknodat`, `fchdir`, `fchmod`, `fchown`, `fchownat`, `faccessat2`,
+`sendfile`, `copy_file_range`, `readahead`, `fadvise64`, `sync`, `syncfs`,
+`memfd_create`, `clock_getres`, `getgroups`, `getrusage`, `getcpu`,
+`setsid`, `setpgid` among the task and its children, and for the task
+itself `getpriority`, `setpriority`, `sched_get_priority_max`,
+`sched_get_priority_min` and `sched_rr_get_interval`; `sched_getaffinity` and
+`sched_setaffinity` of the launcher thread serving the calling context (named
+by 0); `getresuid` and `getresgid`; the descriptor rows
+`eventfd2`, `timerfd_create`, `timerfd_settime`, `timerfd_gettime` and
+`signalfd4`, whose descriptors are then read, written and polled like any
+other (a signalfd reads what Linux holds pending, the signals the domain
+blocks, as `rt_sigtimedwait` does); `fcntl`'s integer commands, among them
+directory notification (`F_NOTIFY`, `F_SETSIG`, `F_GETSIG`); sockets and
+epoll (below); `exit_group`. What does
+not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS) and
+processes (`fork` is ENOSYS and `clone` makes threads only; image exec uses the
+process service below). A thread is a context of the application, stepped by a
+launcher thread of its own (Threads, below).
+
+Sockets are descriptors like files: `socket`, `socketpair`, `bind`, `listen`,
+`accept`, `accept4`, `connect`, `getsockname`, `getpeername`, `sendto`,
+`recvfrom`, `setsockopt`, `getsockopt`, `shutdown`, `sendmsg`, `recvmsg`,
+`epoll_create1`, `epoll_ctl` and `epoll_pwait` cross, and the launcher looks
+at no family, port or option: what a domain's socket reaches is what the
+launcher's process reaches, decided in Linux (a network namespace, a firewall,
+an outer seccomp filter), never in the launcher. Two things the wire cannot
+carry as they are the libc converts: a length behind a pointer (`socklen_t *`)
+travels as a four-byte word in the region whose value sizes the address or
+option buffer, read once by the validator, clamped to the region's room by the
+libc while the kernel reports the true length; and `msghdr` is flattened into
+a 64-byte block with offsets in place of pointers, the way `readv`'s iovec
+array crosses, `SCM_RIGHTS` descriptors included, the launcher refusing its
+own descriptors inside one as in every other position. A datagram is never
+cut to the region: a message the room cannot hold is EMSGSIZE from the libc,
+the kernel's own answer for one too long for its protocol, and a stream send
+of that size is short as a write is. `epoll_event.data` crosses as its 64
+bits, so a capability stored there loses its tag; a descriptor or an index
+survives. Not rows: `sendmmsg` and `recvmmsg`, and socket ioctls beyond
+`FIONBIO` and `FIONREAD`. The contract is `tests/application/socket-contract.c`
+with `run-sockets.py`, the design [docs/plans/delegation-sockets.md](../docs/plans/delegation-sockets.md). Signals cross: the kernel keeps dispositions, mask, pending set and
+restart decisions, and a caught signal runs its domain handler at the domain's
+next round (see Signals below). Under `CAPSTONE_DELEGATE_STATS` the domain
+reports at exit which syscalls did not cross; without it the application's
+stderr carries application bytes only. `ioctl` crosses for the terminal requests a
+libc uses and nothing else, each with its buffer size known to the libc and
+its number on the launcher's allowlist: the window size, the `termios` set,
+`FIONREAD` and `FIONBIO`, the pseudo-terminal pair (`TIOCSPTLCK`,
+`TIOCGPTN`, so `openpty`, `posix_openpt`, `unlockpt` and `ptsname` work) and
+the foreground process group (`TIOCGPGRP`, `TIOCSPGRP`). A request is an
+unsigned int to the kernel; musl passes it as an int, so both sides mask it
+before looking it up. The application contract's `pty` mode opens a pair
+through musl's `openpty`, passes bytes through it and reads the foreground
+group; the native edge test covers the entry from the launcher's side. The
+unserved report at exit, under `CAPSTONE_DELEGATE_STATS`, lists what did not cross.
 
 The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 `CAPSTONE_APPLICATION_EXCHANGE_BYTES` for the SDK project); larger buffers are
 chunked, so a big read or write is a short one. A v2 image's descriptor is 48
-bytes. `capstone-exec` rejects v1 images with exit 126. The SDK rejects
-`CAPSTONE_APPLICATION_DELEGATE=OFF`; rebuild old applications.
+bytes. `capstone-exec` refuses any image without it (a v1 image, or one
+without the delegation flag) with exit 126; rebuild old applications.
 `CAPSTONE_APPLICATION_GRANT_BYTES` declares shared backing for existing inner
 allocators, including a Sublet outer heap where selected.
 
@@ -255,7 +307,8 @@ ENOSYS. Installation failure aborts launch; `CAPSTONE_EXEC_NO_SECCOMP=1`
 disables it explicitly for debugging. The dispatcher separately validates
 command-dependent pointers and excludes launcher-private descriptors.
 `CAPSTONE_DELEGATE_STATS=1` prints rounds, syscalls, refused entries, bytes
-through the exchange region and `rdtime` ticks at exit.
+through the exchange region and `rdtime` ticks at exit, and lets the domain
+print its own report of unserved and no-op syscalls.
 
 A domain fault produces a record with cause, PC, address, the runtime address
 of `domain_main`, the code bounds and the sealed image's SHA-256, written to the file `CAPSTONE_FAULT_RECORD`
@@ -360,8 +413,10 @@ application descriptors are inherited. The helper closes its inherited
 descriptors and dies if the launcher dies. File actions cannot overwrite the
 exec-error channel; descriptor overflow is an error rather than truncation.
 `wait4` selects recorded children, including for `waitpid(-1)`, and retains
-stopped/continued children. `kill` accepts this task or a recorded child,
-not process-group targets. A blocking any-child wait polls recorded PIDs at
+stopped/continued children. `kill` accepts this task, a recorded child or the
+task that spawned it (a child domain may signal its parent), not
+process-group targets; a pid nobody has answers ESRCH, any other process
+EPERM. A blocking any-child wait polls recorded PIDs at
 1 ms intervals to avoid reaping the helper or unrelated children. `execve` of a Capstone image replaces the task
 through the launcher's own binary, keeping pid, descriptors, argv[0], the
 unfiltered helper and the recorded children. The replacement image is validated
@@ -418,7 +473,8 @@ backpressure while the ring is nearly full; nothing is dropped.
 
 The libc runs accepted events after every round, in acceptance order, under
 `current ∪ sa_mask ∪ {sig}`; an event accepted inside `rt_sigsuspend` or a
-masked `ppoll` runs under that call's temporary mask before the call returns.
+masked `ppoll` or `pselect6` runs under that call's temporary mask before the
+call returns.
 Nested delivery happens at the end of a handler's own rounds. `sigaction` on a
 signal with runnable events runs them under the old installation first.
 `sigaltstack`, `sigsetjmp` with a saved mask and `siglongjmp` are the libc's;
@@ -564,6 +620,40 @@ identity reuse. A separate case keeps creating valid ancestors to verify genuine
 exhaustion and recovery. Allocation-progress checks reject faults that happen
 before the intended threshold. Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
+
+The libc heap qualification runs the heap cases of `contract.c` once on the
+`HEAP=sublet` image and once on a `HEAP=level0` image of the same source,
+which is the control: every `fault-*` case must be a SIGSEGV on the first and
+must reach the survival marker and exit 90 on the second; every `heap-*` case
+must complete on both. The protected fault must occur at the intended byte
+probe with the expected QEMU cause. Churn must allocate at least 200,000
+nodes. A setup error, unrelated fault or early exhaustion fails the gate.
+
+Build each image with an LLD map, using
+`-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake
+configuration. The runner requires both ELFs and maps (default map path:
+`<elf>.map`; override with `--sublet-map` and `--control-map`). It checks the
+allocation symbols' input objects, addresses and sizes, then matches the
+guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
+`llvm-objdump`.
+
+```sh
+python3 capstone/runtime/tests/application/run-heap.py \
+  --state "$CAPSTONE_TMP_ROOT/dev-vm" \
+  --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/application-contract.dom \
+  --sublet-elf <build>/contract-sublet.dom --control-elf <build>/application-contract.dom \
+  --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \
+  --platform <kernel> <firmware> <rootfs> <qemu> <launcher> --report heap.json
+
+python3 -m unittest discover -s capstone/runtime/tests/application -p test_heap_qualification.py
+```
+
+It needs the emulator the tree pins (in-process node reuse): on the base
+emulator the 200,000-cycle churn case exhausts the node pool after about
+65,000 allocations, on any image. The
+[2026-09-30 record on the platform dev pins](tests/application/results/20260930-heap-qualification-on-dev.json)
+supersedes the first run's weaker verdict and filename checks; the plan is
+[capstone-heap-protection.md](../docs/plans/capstone-heap-protection.md).
 
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu-rebased.json)
 records 1,008 mixed starts after node exhaustion, with stable pool/node/tag counts.

@@ -207,8 +207,8 @@ application's own contexts, by thread identity).
 - Domain faults stay fatal, whatever the domain's `SIGSEGV` action; an
   explicit `raise(SIGSEGV)` is an ordinary caught signal.
 - Not in this branch: `timer_create` and `sigevent` (`getitimer`/`setitimer`
-  are delegated), `epoll_pwait` and `pselect6` masks (only `rt_sigsuspend`
-  and `ppoll` classify a wait), `tgkill`, `signalfd`. `ITIMER_VIRTUAL` and
+  are delegated), the `epoll_pwait` mask (`rt_sigsuspend`, `ppoll` and, since
+  `delegation-runtime-rows`, `pselect6` classify a wait), `tgkill`, `signalfd`. `ITIMER_VIRTUAL` and
   `ITIMER_PROF` are delegated as they are; how Linux accounts the domain's
   time inside the step ioctl is not measured.
 - Conformity worth naming: `rt_sigprocmask` writes `sigsetsize` (8) bytes of

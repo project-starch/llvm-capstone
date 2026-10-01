@@ -162,7 +162,7 @@ Done so far:
   main thread's exit as `exit_group` (status 0 without the other thread's line), a launcher without
   the wake (the join never returns), a launcher whose reservation does not wait (EAGAIN after 14
   ms), the PI deadline computed without saturation (the far deadline expired after 1 ms), musl
-  without patch 0005 (the user stack faults, cause 24). A first version of the reservation mode could not fire: a musl thread holds the thread-list
+  without musl patch 0007 (the user stack faults, cause 24). A first version of the reservation mode could not fire: a musl thread holds the thread-list
   lock until its clear, so the creator waited in `pthread_create` for that lock, not in the
   reservation; the mode now ends a context of the runtime's own interface, which holds no lock.
   Record `results/20260930-pthreads.json`.
@@ -170,7 +170,7 @@ Done so far:
   `libc.page_size` was never set (a domain has no auxv), so `PAGE_SIZE`, `sysconf(_SC_PAGESIZE)`
   and every `pthread_create`'s mapping size were 0; `pthread_cond_t` put `_c_head` over `_c_clock`
   and `_c_tail` 32 bytes past the object at 16-byte pointers (C-65), the defect e2c9ad3 worked around in
-  GLib (musl patch 0004 lays it out pointers first; a signal faulted in the probe before);
+  GLib (musl patch 0006 lays it out pointers first; a signal faulted in the probe before);
   `get_robust_list` answered ENOSYS, so `pthread_mutexattr_setrobust` refused and an orphaned
   robust mutex blocked for good; PI futexes answered ENOSYS, so `setprotocol` refused and a PI lock
   slept for good. Added before any run: `mprotect`, which answered ENOSYS (reported unserved) for
@@ -185,7 +185,7 @@ Done so far:
   lock's load and store could switch musl's locking off for good while two threads ran; the path
   now takes no lock (an atomic count of the threads `__clone` made replaces the scan of the
   records). `pthread_attr_t` kept the stack address as a long, so `pthread_attr_setstack` built an
-  untagged stack and `pthread_getattr_np` returned one; musl patch 0005 keeps it as a pointer. It
+  untagged stack and `pthread_getattr_np` returned one; musl patch 0007 keeps it as a pointer. It
   also found `SYS_exit` served only after the transport check, the PI deadline arithmetic
   overflowing, and stale comments; all are fixed. Its two further risks are B8's: after the main
   thread's `pthread_exit` no signal handler runs any more, and a minted thread cannot be signalled
@@ -253,8 +253,9 @@ Done so far:
   `sched_getaffinity` and `sched_setaffinity` of the calling thread (pid 0 or its own tid) are
   delegated. The launcher thread that serves a context runs them on itself, so a name shows in
   `/proc/<pid>/task/*/comm` and the CPU set is that thread's. Naming or asking about another thread is refused: a minted
-  thread's tid, from `0x400000`, names no Linux task (ENOENT), and the launcher answers ESRCH for
-  any pid but 0. musl patch 0006 keeps the name a pointer: `prctl` read its arguments as
+  thread's tid, from `0x400000`, names no Linux task (ENOENT); the runtime answers ESRCH for
+  another thread's identity without a round, and the launcher refuses any pid but 0 with EPERM,
+  as the rule for the other scheduling calls does. musl patch 0008 keeps the name a pointer: `prctl` read its arguments as
   `unsigned long` and the thread-name calls passed `(unsigned long)name`, so the first request
   faulted (cause 24); GLib names every thread it creates, so its thread tests faulted too.
   `pthread-probe` adds `thread-name` and `affinity` (28 of 28 pass); on a launcher without the
@@ -314,11 +315,11 @@ Done so far:
   qualify every application port. Shrinking invalidates the released tail: accesses
   beyond the new requested size are not supported. Pins, per-test results and hashes:
   `runtime/tests/application/results/20260930-level0-application-regressions.json`.
-- Process-lane integration: retain this lane's real TLS and pointer-preserving patch 0016
-  when resolving `prepare-cpython-capstone.sh` and the CPython README. Keep CPython patch
-  0006 deleted and `_Py_THREAD_LOCAL_AS_GLOBAL` absent. Patch 0015 and
-  `host/subprocess-smoke.py` match process-lane `dae66593` byte for byte; keep the spawn
-  configure define and the unsupported-epoll guard. See the port README for the gate.
+- Process-lane integration, done when this stack took dev: `prepare-cpython-capstone.sh` and
+  the CPython README keep this lane's real TLS and pointer-preserving patch 0016, CPython patch
+  0006 stays deleted and `_Py_THREAD_LOCAL_AS_GLOBAL` absent, and dev's patch 0015 and spawn
+  configure define stay. The unsupported-epoll guard is dropped: dev serves epoll (the sockets
+  rows), so disabling `select.epoll` would undo them. See the port README.
 - Scanner follow-up: stored cursor values now have to match the relocation target and
   addend, preserving nonlocal symbol identity (including weak aliases). Unknown values
   and unexpected analyzer exceptions are INCOMPLETE (exit 2). Thirteen controls pass;
@@ -1290,7 +1291,7 @@ runtime as generally thread-capable. Gates:
 - the libc-test thread group leaves the excluded set (seven of the nine pass after B8;
   `pthread_cancel` waits for the doorbell, `sem_open` for file mappings, not threads);
 - GLib's `GCond` in the tshark deps (the `pthread_cond_t` size fix, e2c9ad3; the layout itself is
-  fixed by musl patch 0004): pass 2026-09-30, glib-0008 is gone and GLib's own `cond` test passes
+  fixed by musl patch 0006): pass 2026-09-30, glib-0008 is gone and GLib's own `cond` test passes
   in a domain, with `thread`, `rec-mutex` and `asyncqueue`; `mutex`, `once` and `rwlock` stop only
   at their hundred-thread tests (`runtime/tests/application/results/20260930-glib-threads.json`);
 - CPython's basic `threading` tests: the subprocess-enabled review run passes all five modules

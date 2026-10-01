@@ -122,7 +122,7 @@
    "pass": false,
    "reason": "got ('exit', 1), , stdout='pi-mutex: timed lock answered 110 after 31 ms\\npi-mutex: far deadline answered 110 after 1 ms\\n', stderr='pthread-probe:424: e == 0'"
   },
-  "musl without patch 0005: user-stack": {
+  "musl without patch 0007 (numbered 0005 when measured): user-stack": {
    "pass": false,
    "reason": "got ('signal', 11), unexpected fault record, stdout='', stderr='capstone-vm: capstone-exec: domain fault cause=24 pc=0xc022b420 address=0x0 entry=0xc0200c60 code=0xc0200000-0xc0672000 last=0x87 prepar"
   }
