@@ -20,7 +20,11 @@
 > medeleg loads the canary pattern from beyond the seal. A 2048-byte control keeps every canary word. (4) A
 > deterministic census, `verif/sim/anvil-relational-lint.py` (same branch, with a self-test), flags any relational
 > sharing a parenthesis group with `&&`/`||`; on the resident sources it flags exactly `flu:215` and the switcher
-> line, nothing else. Supervised CALL's `cssupervise` therefore checks the seal's size and alignment itself.
+> line, nothing else. Supervised CALL's `cssupervise` checks the save area's size and alignment and the seal's
+> alignment itself; the seal's SIZE it cannot check (corrected 2026-10-01: a SEALED capability carries no end bound in a
+> register -- `ariane_pkg.sv` `decompress_cap_metadata` returns `bound_end = 0` for SEALED/SEALEDRET, that field
+> holds reg_id/async -- so the 1024-byte minimum the switch's walks rely on is SEAL's alone to enforce, i.e. this
+> very defect; until it is fixed the resident monitor's 1536-byte seals and the runtime's 1024-byte seals are the guarantee).
 
 > **2026-09-10: CONFIRMED ON THE RTL BY A DIRECTED TEST.** `verif/tests/custom/capstone/seal-minsize-boundary.S` (`capstone-ariane` `f6ec6c198`), 670 cycles: a **1022-byte** region seals without raising, where the spec requires ≥ 1024. Its negative control — sealing a NON-LINEAR capability, which SEAL rejects on a different branch (`UNEXPECTED_CAP_TYPE`, mcause 27) — is the **only** exception in the whole run, so "no arm raised" cannot be the instrument failing to reach SEAL. Until now this folder rested on reading the generated Verilog; it now rests on the hardware.
 >
