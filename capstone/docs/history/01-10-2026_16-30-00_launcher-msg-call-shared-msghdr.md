@@ -83,3 +83,31 @@ How the readings are read:
 - **R1 and R2 together** show that the static msghdr mixes concurrent sendmsg calls and that the
   locals stop it. They do not prove it was the only cause of the memcached transcript. That needs
   memcached runs on the fixed launcher, in lane `memcached-app`.
+
+## Second pair, window widened — PRE-REGISTERED before its boot
+
+The first pair's sendmsg arms can only show mixing if a launcher thread is preempted inside the
+window. On one vCPU that window is the few microseconds between filling `iov` and the syscall
+copying it. A clean fixed sendmsg arm is void unless the stock launcher mixes sendmsg under the same
+conditions.
+
+So the second pair creates the condition. Both launchers add the same test-only two lines to
+`msg_call`, and are not for commit:
+- `usleep(200)` before the syscall, between the fill and the kernel's copy of `iov`;
+- `usleep(200)` after it, before recvmsg's copy back.
+
+The variants:
+- **stock+delay** e92dedfd…: dev plus the two lines;
+- **fixed+delay** 584078a4…: this branch plus the two lines.
+
+They differ only in the fix. The sleep blocks the serving thread, so whenever another context has a
+call ready, it is served inside the window.
+
+`run-msg-race.sh` uses the same probe image, one boot, alternating, 300 rounds each: stock sendmsg,
+fixed sendmsg, stock recvmsg, fixed recvmsg.
+
+| | prediction |
+|---|---|
+| D1 | stock+delay, sendmsg: mixed > 0, in at least 10% of its 1200 messages |
+| D2 | fixed+delay: mixed 0 and failed 0, sendmsg and recvmsg |
+| D3 | stock+delay, recvmsg: mixed > 0 |

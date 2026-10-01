@@ -24,7 +24,10 @@ capstone-vm --state "$VM" exec sh -c "
   for arm in $ARMS; do
     l=\${arm%%:*}; rest=\${arm#*:}; mode=\${rest%%:*}; rounds=\${rest#*:}
     t0=\$(cut -d' ' -f1 /proc/uptime)
-    busybox timeout 900 /mnt/host/exec-\$l /mnt/host/pthread-probe.dom \$mode-concurrent \$rounds > /tmp/arm.out 2>&1; rc=\$?
+    # a watchdog, not timeout(1): the guest's busybox has no timeout applet
+    /mnt/host/exec-\$l /mnt/host/pthread-probe.dom \$mode-concurrent \$rounds > /tmp/arm.out 2>&1 & p=\$!
+    ( sleep 900; kill -KILL \$p 2>/dev/null ) & w=\$!
+    wait \$p; rc=\$?; kill \$w 2>/dev/null
     t1=\$(cut -d' ' -f1 /proc/uptime)
     echo \"ARM \$arm rc=\$rc seconds=\$(echo \"\$t0 \$t1\" | awk '{printf \"%.1f\", \$2-\$1}')\"
     sed 's/^/  /' /tmp/arm.out
