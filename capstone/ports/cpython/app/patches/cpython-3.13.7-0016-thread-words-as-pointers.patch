@@ -1,0 +1,208 @@
+Subject: [PATCH 0016] Keep thread handles and raw-mutex waiters as pointers where a pointer is a capability
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 domain (musl)
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Two thread words hold a pointer in an integer. PyThread_handle_t is
+Py_uintptr_t, and PyThread_start_joinable_thread stores the pthread_t in it
+that PyThread_join_thread and PyThread_detach_thread cast back. _PyRawMutex,
+the lock of every parking-lot bucket, keeps in its uintptr_t word the address
+of the entry a waiter links in, and the unlocker casts the word back to reach
+that entry. Where a pointer is a capability (capstone64: uintptr_t is the
+8-byte address of a 16-byte capability) the integer holds only the address,
+and the pointer made from it is untagged: the first Thread.join faults in
+pthread_join (cause 24), and a contended _PyRawMutex faults at
+_PyRawMutex_UnlockSlow's waiter->next (cause 24).
+
+Where _Py_SIZEOF_ADDRESS < SIZEOF_VOID_P, _Py_THREAD_WORDS_AS_POINTERS makes
+the handle a void * and the raw mutex word a char *. The mutex keeps its
+protocol: a waiter's address plus _Py_LOCKED is pointer arithmetic that keeps
+the waiter's capability, and the two words with no waiter are NULL and
+_Py_LOCKED as a pointer, never dereferenced and never reached by arithmetic
+on a null pointer. Elsewhere nothing changes; defining the selector chooses
+the pointer form on any platform.
+
+signal.pthread_kill still rebuilds a pthread_t from a thread identifier; a
+capability cannot come back from an integer, so that call stays out of reach
+here.
+
+The compile survey's round-trip census loses the four sites this removes and
+counts the five uses of _PyRawMutex_LOCKED_WORD, an integer made a pointer
+that no one dereferences; being in pycore_lock.h, it is reached by most
+objects.
+
+Measured on x86-64 with the selector defined: test_threading, test_thread,
+test_threading_local, test_queue and test_concurrent_futures.test_thread_pool
+pass (448 tests, 11 skipped). Those suites never reach the raw mutex's waiter
+branch (an abort placed there did not fire), so a directed test, eight
+threads taking one _PyRawMutex around a non-atomic counter, covers it: with
+the abort it aborts, without it the count is exact.
+
+--- a/Include/internal/pycore_lock.h
++++ b/Include/internal/pycore_lock.h
+@@ -100,9 +100,24 @@
+ // The mutex uses a packed representation: the least significant bit is used to
+ // indicate whether the mutex is locked or not. The remaining bits are either
+ // zero or a pointer to a `struct raw_mutex_entry` (see lock.c).
++//
++// Where a pointer is a capability the word is a pointer (the selector is
++// described in pycore_pythread.h): a waiter's address plus _Py_LOCKED keeps the
++// waiter's capability, and "locked, no waiter" is _Py_LOCKED as a pointer,
++// which no one dereferences.
++#if _Py_SIZEOF_ADDRESS < SIZEOF_VOID_P && !defined(_Py_THREAD_WORDS_AS_POINTERS)
++#  define _Py_THREAD_WORDS_AS_POINTERS 1
++#endif
++#ifdef _Py_THREAD_WORDS_AS_POINTERS
++typedef struct {
++    char *v;
++} _PyRawMutex;
++#  define _PyRawMutex_LOCKED_WORD ((char *)(uintptr_t)_Py_LOCKED)
++#else
+ typedef struct {
+     uintptr_t v;
+ } _PyRawMutex;
++#endif
+ 
+ // Slow paths for lock/unlock
+ extern void _PyRawMutex_LockSlow(_PyRawMutex *m);
+@@ -111,20 +126,34 @@
+ static inline void
+ _PyRawMutex_Lock(_PyRawMutex *m)
+ {
++#ifdef _Py_THREAD_WORDS_AS_POINTERS
++    char *unlocked = NULL;
++    if (_Py_atomic_compare_exchange_ptr(&m->v, &unlocked, _PyRawMutex_LOCKED_WORD)) {
++        return;
++    }
++#else
+     uintptr_t unlocked = _Py_UNLOCKED;
+     if (_Py_atomic_compare_exchange_uintptr(&m->v, &unlocked, _Py_LOCKED)) {
+         return;
+     }
++#endif
+     _PyRawMutex_LockSlow(m);
+ }
+ 
+ static inline void
+ _PyRawMutex_Unlock(_PyRawMutex *m)
+ {
++#ifdef _Py_THREAD_WORDS_AS_POINTERS
++    char *locked = _PyRawMutex_LOCKED_WORD;
++    if (_Py_atomic_compare_exchange_ptr(&m->v, &locked, NULL)) {
++        return;
++    }
++#else
+     uintptr_t locked = _Py_LOCKED;
+     if (_Py_atomic_compare_exchange_uintptr(&m->v, &locked, _Py_UNLOCKED)) {
+         return;
+     }
++#endif
+     _PyRawMutex_UnlockSlow(m);
+ }
+ 
+--- a/Include/internal/pycore_pythread.h
++++ b/Include/internal/pycore_pythread.h
+@@ -117,7 +117,22 @@
+     PY_TIMEOUT_T microseconds);
+ 
+ typedef unsigned long long PyThread_ident_t;
++
++/* _Py_THREAD_WORDS_AS_POINTERS: where a pointer is a capability (capstone64:
++ * uintptr_t is the 8-byte address of a 16-byte capability) an integer cannot
++ * hold a pthread_t, or the address of a waiter a mutex word links to; what it
++ * holds is the address, and the pointer made from it again traps when used.
++ * There the thread handle and the raw mutex word are pointers. Defining it
++ * selects that representation on any platform, so it can be tested where the
++ * tests run. The same selector is in pycore_lock.h. */
++#if _Py_SIZEOF_ADDRESS < SIZEOF_VOID_P && !defined(_Py_THREAD_WORDS_AS_POINTERS)
++#  define _Py_THREAD_WORDS_AS_POINTERS 1
++#endif
++#ifdef _Py_THREAD_WORDS_AS_POINTERS
++typedef void *PyThread_handle_t;
++#else
+ typedef Py_uintptr_t PyThread_handle_t;
++#endif
+ 
+ #define PY_FORMAT_THREAD_IDENT_T "llu"
+ #define Py_PARSE_THREAD_IDENT_T "K"
+--- a/Python/lock.c
++++ b/Python/lock.c
+@@ -185,6 +185,68 @@
+     _PySemaphore sema;
+ };
+ 
++#ifdef _Py_THREAD_WORDS_AS_POINTERS
++// The same protocol with the word as a pointer (pycore_lock.h). A waiter's
++// entry is linked by its pointer, never rebuilt from an address, and the words
++// with no waiter are exactly NULL and _PyRawMutex_LOCKED_WORD.
++void
++_PyRawMutex_LockSlow(_PyRawMutex *m)
++{
++    struct raw_mutex_entry waiter;
++    _PySemaphore_Init(&waiter.sema);
++
++    char *v = (char *)_Py_atomic_load_ptr(&m->v);
++    for (;;) {
++        if (((uintptr_t)v & _Py_LOCKED) == 0) {
++            // Unlocked: try to grab it (even if it has a waiter).
++            char *locked = v == NULL ? _PyRawMutex_LOCKED_WORD : v + _Py_LOCKED;
++            if (_Py_atomic_compare_exchange_ptr(&m->v, &v, locked)) {
++                break;
++            }
++            continue;
++        }
++
++        // Locked: try to add ourselves as a waiter.
++        waiter.next = v == _PyRawMutex_LOCKED_WORD
++            ? NULL : (struct raw_mutex_entry *)(v - _Py_LOCKED);
++        char *desired = (char *)&waiter + _Py_LOCKED;
++        if (!_Py_atomic_compare_exchange_ptr(&m->v, &v, desired)) {
++            continue;
++        }
++
++        // Wait for us to be woken up. Note that we still have to lock the
++        // mutex ourselves: it is NOT handed off to us.
++        _PySemaphore_Wait(&waiter.sema, -1, /*detach=*/0);
++    }
++
++    _PySemaphore_Destroy(&waiter.sema);
++}
++
++void
++_PyRawMutex_UnlockSlow(_PyRawMutex *m)
++{
++    char *v = (char *)_Py_atomic_load_ptr(&m->v);
++    for (;;) {
++        if (((uintptr_t)v & _Py_LOCKED) == 0) {
++            Py_FatalError("unlocking mutex that is not locked");
++        }
++
++        if (v != _PyRawMutex_LOCKED_WORD) {
++            struct raw_mutex_entry *waiter = (struct raw_mutex_entry *)(v - _Py_LOCKED);
++            char *next_waiter = (char *)waiter->next;
++            if (_Py_atomic_compare_exchange_ptr(&m->v, &v, next_waiter)) {
++                _PySemaphore_Wakeup(&waiter->sema);
++                return;
++            }
++        }
++        else {
++            if (_Py_atomic_compare_exchange_ptr(&m->v, &v, NULL)) {
++                return;
++            }
++        }
++    }
++}
++#else
+ void
+ _PyRawMutex_LockSlow(_PyRawMutex *m)
+ {
+@@ -240,6 +302,7 @@
+         }
+     }
+ }
++#endif
+ 
+ int
+ _PyEvent_IsSet(PyEvent *evt)

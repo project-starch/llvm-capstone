@@ -35,6 +35,7 @@ CAPSTONE_GP_STANDIN CAPSTONE_LCC_UNTAGGED_SURVIVE CAPSTONE_MOVC_NULL_SCALAR CAPS
 CAPSTONE_REV_NODES CAPSTONE_SLOT_CLEARSET_INCLUDES_NONLIN CAPSTONE_SLOT_LOG
 CAPSTONE_SLOT_MAX_LINES CAPSTONE_SLOT_TABLE_BITS CAPSTONE_STC_FIRSTSEEN
 CAPSTONE_STC_PROBE_OFF CAPSTONE_STC_PROBE_OPS CAPSTONE_STOREWATCH
+CAPSTONE_TEST_KEEP_DEAD_SLOTS CAPSTONE_TEST_NODE_QUERY
 CAPSTONE_STOREWATCH_HI CAPSTONE_STOREWATCH_LO CAPSTONE_STOREWATCH_LOW
 CAPSTONE_TAGWATCH CAPSTONE_TAGWATCH_GRANULE CAPSTONE_TAGWATCH_HI
 CAPSTONE_TAGWATCH_LO CAPSTONE_TAGWATCH_MAX CAPSTONE_TAGWATCH_VICTIM
@@ -68,10 +69,30 @@ def qemu_process_environment(recorded: dict[str, str]) -> dict[str, str]:
     return environment
 
 
+def qmp_connect(path: Path, timeout: float = 5) -> socket.socket:
+    """Connect to QEMU's QMP socket. Its listener has a backlog of one, and a
+    timed connect is non-blocking, so while another command is connected a
+    connect fails at once with EAGAIN instead of waiting: concurrent runs hit
+    this. Retry on a fresh socket within the same timeout."""
+    deadline = time.monotonic() + timeout
+    while True:
+        connection = socket.socket(socket.AF_UNIX)
+        connection.settimeout(timeout)
+        try:
+            connection.connect(str(path))
+            return connection
+        except BlockingIOError:
+            connection.close()
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.02)
+        except BaseException:
+            connection.close()
+            raise
+
+
 def qmp(state: Path, command: str) -> dict:
-    with socket.socket(socket.AF_UNIX) as connection:
-        connection.settimeout(5)
-        connection.connect(str(state / "qmp.sock"))
+    with qmp_connect(state / "qmp.sock") as connection:
         with connection.makefile("rwb", buffering=0) as stream:
             if "QMP" not in json.loads(stream.readline()):
                 raise VMError("Invalid QMP greeting")

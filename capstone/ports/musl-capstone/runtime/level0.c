@@ -31,6 +31,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <capstone/lock.h>
 
 #ifndef CAPSTONE_LEVEL0_ARENA_BYTES
 #define CAPSTONE_LEVEL0_ARENA_BYTES (256 * 1024)
@@ -143,6 +144,11 @@ size_t __capstone_level0_arena_bytes(void) { return CAPSTONE_LEVEL0_ARENA_BYTES;
 #define L0_NOTE_FREE(b) ((void)0)
 #endif
 
+/* One lock over the block list (capstone/lock.h, Q6): several contexts of one
+   application share this heap. The public entries take it once; the l0_
+   functions below run with it held. */
+static volatile int l0_lock;
+
 static void l0_init(void)
 {
 	l0_head = (struct l0_block *)l0_arena;
@@ -151,7 +157,7 @@ static void l0_init(void)
 	l0_head->free = 1;
 }
 
-void *malloc(size_t n)
+static void *l0_malloc(size_t n)
 {
 	if (!l0_head)
 		l0_init();
@@ -183,10 +189,8 @@ void *malloc(size_t n)
 	return 0;
 }
 
-void free(void *p)
+static void l0_free(void *p)
 {
-	if (!p)
-		return;
 	struct l0_block *b = l0_header(p);
 	L0_NOTE_FREE(b);
 	b->free = 1;
@@ -198,6 +202,23 @@ void free(void *p)
 			c->next = c->next->next;
 		}
 	}
+}
+
+void *malloc(size_t n)
+{
+	capstone_lock(&l0_lock);
+	void *p = l0_malloc(n);
+	capstone_unlock(&l0_lock);
+	return p;
+}
+
+void free(void *p)
+{
+	if (!p)
+		return;
+	capstone_lock(&l0_lock);
+	l0_free(p);
+	capstone_unlock(&l0_lock);
 }
 
 void *calloc(size_t n, size_t m)
@@ -222,17 +243,38 @@ void *realloc(void *p, size_t n)
 		free(p);
 		return 0;
 	}
+	capstone_lock(&l0_lock);
 	struct l0_block *b = l0_header(p);
-	if (b->size >= l0_round(n))
-		return L0_REALLOC_IN_PLACE(p, b, n);
-	char *q = malloc(n);
-	if (!q)
-		return 0;
-	/* memmove, not a byte loop: a byte loop drops the tag of every pointer
-	   stored in the block, and the whole point of moving a block is that its
-	   contents keep meaning what they meant. See string_bounds_safe.c. */
-	memmove(q, p, l0_readable(p, b->size));
-	free(p);
+	char *q;
+	size_t want = l0_round(n);
+	if (b->size >= want) {
+		/* Short reads shrink CPython's 32 KiB buffers to their actual length.
+		   Keeping every original block exhausts the arena on small output. */
+		if (b->size - want >= sizeof(struct l0_block) + L0_ALIGN) {
+			struct l0_block *tail =
+			    (struct l0_block *)((char *)b + sizeof(struct l0_block) + want);
+			tail->size = b->size - want - sizeof(struct l0_block);
+			tail->next = b->next;
+			tail->free = 1;
+#ifdef CAPSTONE_LEVEL0_STATS
+			l0_in_use -= b->size - want;
+#endif
+			b->size = want;
+			b->next = tail;
+			while (tail->next && tail->next->free) {
+				tail->size += sizeof(struct l0_block) + tail->next->size;
+				tail->next = tail->next->next;
+			}
+		}
+		q = L0_REALLOC_IN_PLACE(p, b, n);
+	} else if ((q = l0_malloc(n))) {
+		/* memmove, not a byte loop: a byte loop drops the tag of every pointer
+		   stored in the block, and the whole point of moving a block is that its
+		   contents keep meaning what they meant. See string_bounds_safe.c. */
+		memmove(q, p, l0_readable(p, b->size));
+		l0_free(p);
+	}
+	capstone_unlock(&l0_lock);
 	return q;
 }
 

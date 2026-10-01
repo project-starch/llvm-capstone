@@ -16,8 +16,11 @@
 #include <stdlib.h>
 #include <limits.h>
 #include "fdop.h"
+#include <capstone/lock.h>
 
 long __capstone_delegate_spawn(const void *block, unsigned long bytes);
+/* delegate.c: the one static request block and its lock, shared with execve */
+extern volatile int __capstone_spawn_lock;
 
 int posix_spawn(pid_t *restrict res, const char *restrict path,
                 const posix_spawn_file_actions_t *fa,
@@ -100,11 +103,16 @@ int posix_spawn(pid_t *restrict res, const char *restrict path,
       strcpy(candidate + length, path);
       target = candidate;
     }
+    /* The block is static: one request at a time, from packing to the answer. */
+    capstone_lock(&__capstone_spawn_lock);
     error = capstone_spawn_pack(block, sizeof block, flags, pgroup, target, argv,
                                 envp ? envp : (char *const[]){NULL}, actions, count, paths, &bytes);
+    if (!error) {
+      capstone_spawn_set_signals(block, sigflags, sigdefault, sigmask);
+      pid = __capstone_delegate_spawn(block, bytes);
+    }
+    capstone_unlock(&__capstone_spawn_lock);
     if (error) return error;
-    capstone_spawn_set_signals(block, sigflags, sigdefault, sigmask);
-    pid = __capstone_delegate_spawn(block, bytes);
     if (!search || (pid != -ENOENT && pid != -ENOTDIR && pid != -EACCES)) break;
     if (pid == -EACCES) denied = 1;
     if (!end) return denied ? EACCES : (int)-pid;

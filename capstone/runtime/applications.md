@@ -213,9 +213,10 @@ or hardware collection cost. Increasing `CAPSTONE_REV_NODES` only changes the
 capacity; it is no longer necessary for the six previously failing mruby repeats.
 
 The musl port's existing syscall coverage still applies: launching a Linux
-process does not add target fork, exec, threads, dynamic loading or full POSIX
-fd semantics inside a domain. Standard-stream read/write/EOF/close/stat/query
-fcntl use Linux objects; other file operations retain the existing host service.
+process does not add target fork, dynamic loading or full POSIX fd semantics
+inside a domain; exec, spawn and threads are the delegated runtime's (below).
+Standard-stream read/write/EOF/close/stat/query fcntl use Linux objects; other
+file operations retain the existing host service.
 The launcher uses its Linux filesystem authority and is not a filesystem sandbox.
 No claim of a complete hostile-code or QEMU security audit is made.
 
@@ -241,18 +242,20 @@ only: `statfs`, `fstatfs`, `statx`, `truncate`, `fallocate`, `linkat`,
 `sendfile`, `copy_file_range`, `readahead`, `fadvise64`, `sync`, `syncfs`,
 `memfd_create`, `clock_getres`, `getgroups`, `getrusage`, `getcpu`,
 `setsid`, `setpgid` among the task and its children, and for the task
-itself `getpriority`, `setpriority`, `sched_getaffinity`,
-`sched_setaffinity`, `sched_get_priority_max`, `sched_get_priority_min` and
-`sched_rr_get_interval`; `getresuid` and `getresgid`; the descriptor rows
+itself `getpriority`, `setpriority`, `sched_get_priority_max`,
+`sched_get_priority_min` and `sched_rr_get_interval`; `sched_getaffinity` and
+`sched_setaffinity` of the launcher thread serving the calling context (named
+by 0); `getresuid` and `getresgid`; the descriptor rows
 `eventfd2`, `timerfd_create`, `timerfd_settime`, `timerfd_gettime` and
 `signalfd4`, whose descriptors are then read, written and polled like any
 other (a signalfd reads what Linux holds pending, the signals the domain
 blocks, as `rt_sigtimedwait` does); `fcntl`'s integer commands, among them
 directory notification (`F_NOTIFY`, `F_SETSIG`, `F_GETSIG`); sockets and
 epoll (below); `exit_group`. What does
-not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS),
-processes (`clone` and `fork` are ENOSYS; image exec uses the process service
-below), and threads.
+not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS) and
+processes (`fork` is ENOSYS and `clone` makes threads only; image exec uses the
+process service below). A thread is a context of the application, stepped by a
+launcher thread of its own (Threads, below).
 
 Sockets are descriptors like files: `socket`, `socketpair`, `bind`, `listen`,
 `accept`, `accept4`, `connect`, `getsockname`, `getpeername`, `sendto`,
@@ -559,6 +562,32 @@ python3 capstone/runtime/tests/application/run-binfmt.py --state "$VM_STATE" \
   --image /mnt/host/delegate-contract.dom
 ```
 
+### Threads (2026-09-30)
+
+musl's `pthread_create`, `join`, `detach` and `exit` run unchanged. Each thread is a protected
+context the runtime mints, and one Linux thread of the launcher steps it. That thread enters the
+context through the driver and the monitor, and serves its delegated calls itself. So:
+- Linux schedules, blocks and routes signals per thread;
+- a call that blocks stops only its own thread;
+- futexes go through the launcher's park queue, since Linux cannot see domain memory.
+
+Two limits follow from how a step works:
+- Linux switches between threads only at step boundaries, at the latest at the supervisor's 5 ms
+  quantum;
+- one thread at a time executes domain code, because the driver serialises steps on one mutex and
+  the VM has one hart.
+
+The model is concurrency, not parallelism.
+
+An application built by the SDK may run fifteen threads besides its first. Not supported:
+- `fork`;
+- asynchronous signal delivery and asynchronous cancellation;
+- futex operations beyond WAIT, WAKE, REQUEUE and the PI lock pair;
+- priority and policy calls, and another thread's affinity or name.
+
+The whole model, with its authority rules, limits and evidence:
+[docs/design/delegated-threads-model.md](../docs/design/delegated-threads-model.md).
+
 ## Verification
 
 ```sh
@@ -592,24 +621,25 @@ exhaustion and recovery. Allocation-progress checks reject faults that happen
 before the intended threshold. Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
-The libc heap qualification runs the heap cases of `contract.c` once on the
-`HEAP=sublet` image and once on a `HEAP=level0` image of the same source,
-which is the control. That control must be built with
-`-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`: level0 bounds each object by default, and an arm
-that bounds them is not the unprotected arm this measurement needs -- with
-bounds on, `fault-bounds` and `fault-bounds-large` fault there too, on cause 5.
-Every `fault-*` case must be a SIGSEGV on the first and
-must reach the survival marker and exit 90 on the second; every `heap-*` case
-must complete on both. The protected fault must occur at the intended byte
-probe with the expected QEMU cause. Churn must allocate at least 200,000
-nodes. A setup error, unrelated fault or early exhaustion fails the gate.
+The libc heap qualification runs the heap cases of `contract.c` on three images
+of the same source: `sublet` (`HEAP=sublet`), `level0` (`HEAP=level0` as
+applications get it, each allocation bounded) and `control` (`HEAP=level0` built
+with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, unprotected). Every `fault-*` case must
+be a SIGSEGV on `sublet`; the spatial ones (`fault-bounds`, `fault-bounds-large`,
+`fault-realloc-shrink`) must be one on `level0` too; every other case on `level0`,
+and every case on `control`, must reach the survival marker and exit 90. Every
+`heap-*` case must complete on all three. The protected fault must occur at the
+intended byte probe with the expected QEMU cause (5 for the spatial cases, 24 or
+25 for the others; a double free stops at the Sublet heap's probe in `sh_free`,
+which `free` calls with the heap lock held). Churn must allocate at least 200,000
+nodes on `sublet`. A setup error, unrelated fault or early exhaustion fails the gate.
 
 Build the control with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0` in `CMAKE_C_FLAGS`; the
-default `application-contract.dom` is no longer unprotected. Build each image
+default `application-contract.dom` is the `level0` arm. Build each image
 with an LLD map, using
 `-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake
-configuration. The runner requires both ELFs and maps (default map path:
-`<elf>.map`; override with `--sublet-map` and `--control-map`). It checks the
+configuration. The runner requires the three ELFs and maps (default map path:
+`<elf>.map`; override with `--sublet-map`, `--level0-map` and `--control-map`). It checks the
 allocation symbols' input objects, addresses and sizes, then matches the
 guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 `llvm-objdump`.
@@ -617,8 +647,9 @@ guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 ```sh
 python3 capstone/runtime/tests/application/run-heap.py \
   --state "$CAPSTONE_TMP_ROOT/dev-vm" \
-  --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/contract-no-object-bounds.dom \
-  --sublet-elf <build>/contract-sublet.dom --control-elf <build>/contract-no-object-bounds.dom \
+  --sublet-image /mnt/host/contract-sublet.dom --sublet-elf <build>/contract-sublet.dom \
+  --level0-image /mnt/host/application-contract.dom --level0-elf <build>/application-contract.dom \
+  --control-image /mnt/host/contract-no-object-bounds.dom --control-elf <build>/contract-no-object-bounds.dom \
   --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \
   --platform <kernel> <firmware> <rootfs> <qemu> <launcher> --report heap.json
 
@@ -629,7 +660,9 @@ It needs the emulator the tree pins (in-process node reuse): on the base
 emulator the 200,000-cycle churn case exhausts the node pool after about
 65,000 allocations, on any image. The
 [2026-09-30 record on the platform dev pins](tests/application/results/20260930-heap-qualification-on-dev.json)
-supersedes the first run's weaker verdict and filename checks; the plan is
+supersedes the first run's weaker verdict and filename checks, and the
+[2026-10-01 record](tests/application/results/20261001-heap-three-arms.json)
+adds the `level0` arm and the shrinking `realloc`; the plan is
 [capstone-heap-protection.md](../docs/plans/capstone-heap-protection.md).
 
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu-rebased.json)

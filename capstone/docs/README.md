@@ -1,5 +1,10 @@
 # Capstone project documentation
 
+Lane-only work on `delegation-threads` (not landed on `dev`):
+[the threads computing model](design/delegated-threads-model.md),
+[thread plan and integration constraints](plans/delegation-threads.md),
+[CPython qualification](../ports/cpython/app/README.md#review-qualification-with-subprocess-enabled).
+
 Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
 Seven application recipes are migrated, with new QEMU functional and safety
 qualification, explicit compiler/resource requirements and preserved negative
@@ -280,6 +285,8 @@ Use these only when the task actually needs them:
 - `design/split-host-enclave-strategy.md` — source-backed architectural detail
 - `design/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
 - `design/research-decisions-log.md` — paper-worthy implementation decisions and tradeoffs, cited by commit hash
+- `design/delegated-threads-model.md` — how an application's threads run on the delegated runtime:
+  one Linux thread per protected context, stepping, scheduling, blocking, signals, lifetimes, limits
 - `plans/backend-compiler-fixes.md` — known backend bugs and workarounds (from CoreMark bring-up)
 - [Domain applications as Linux commands](plans/domain-process-runtime.md) — implemented
   shared launcher, owned lifecycle, shell I/O, common SDK and persistent development VM;

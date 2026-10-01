@@ -5,7 +5,7 @@ include_guard(GLOBAL)
 # capstone-domain toolchain and musl headers.
 
 function(capstone_configure_application target)
-  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG;EXCHANGE_BYTES;GRANT_BYTES" "")
+  cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG;EXCHANGE_BYTES;GRANT_BYTES;CONTEXT_BYTES;CONTEXTS" "")
   if(app_UNPARSED_ARGUMENTS OR app_KEYWORDS_MISSING_VALUES)
     message(FATAL_ERROR "Invalid capstone_configure_application arguments")
   endif()
@@ -20,6 +20,11 @@ function(capstone_configure_application target)
   if(NOT PORT_HEADER_PROVIDER STREQUAL "musl" OR NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "capstone64")
     message(FATAL_ERROR "Applications require the capstone-domain toolchain with musl headers")
   endif()
+  # Contexts of one application share lock words (docs/plans/delegation-threads.md):
+  # the runtime and the application are built with the atomic ISA, as musl is.
+  if(NOT PORT_C11_ATOMICS)
+    message(FATAL_ERROR "Applications require PORT_C11_ATOMICS=ON (the A extension)")
+  endif()
   if(NOT EXISTS "${CAPSTONE_MUSL_ARCHIVE}")
     message(FATAL_ERROR "Set CAPSTONE_MUSL_ARCHIVE to the built Capstone musl archive")
   endif()
@@ -33,7 +38,8 @@ function(capstone_configure_application target)
   if(NOT TARGET capstone-application-core)
     add_library(capstone-application-core OBJECT
       "${musl}/start-musl.S" "${musl}/set_thread_area.S" "${musl}/setjmp.S"
-      "${musl}/hostcall.c" "${musl}/tls.c" "${musl}/atomic_libcalls.c"
+      "${musl}/hostcall.c" "${musl}/tls.c" "${musl}/atomic_libcalls.c" "${musl}/context.c"
+      "${musl}/lock.c"
       "${capstone}/runtime/common/launch.c")
     file(STRINGS "${musl}/libc_overrides.list" overrides)
     foreach(source IN LISTS overrides)
@@ -94,14 +100,47 @@ function(capstone_configure_application target)
      app_EXCHANGE_BYTES GREATER 1073741824)
     message(FATAL_ERROR "EXCHANGE_BYTES must be between 4096 and 1073741824")
   endif()
+  math(EXPR exchange_rest "${app_EXCHANGE_BYTES} % 4096")
+  if(NOT exchange_rest EQUAL 0)
+    message(FATAL_ERROR "EXCHANGE_BYTES must be a multiple of 4096")
+  endif()
+  # CONTEXTS: how many contexts besides the first may run at once with a
+  # transport of their own (docs/plans/delegation-threads.md); the launcher
+  # grants 1 + CONTEXTS entry blocks and exchange regions. At most 15: the
+  # monitor lends each application 16 invocation descriptors.
+  if(NOT app_CONTEXTS)
+    set(app_CONTEXTS 0)
+  endif()
+  if(NOT app_CONTEXTS MATCHES "^([0-9]|1[0-5])$")
+    message(FATAL_ERROR "CONTEXTS must be between 0 and 15")
+  endif()
+  math(EXPR exchange_total "(1 + ${app_CONTEXTS}) * ${app_EXCHANGE_BYTES}")
+  if(exchange_total GREATER 1073741824)
+    message(FATAL_ERROR "(1 + CONTEXTS) * EXCHANGE_BYTES must be at most 1073741824")
+  endif()
   target_compile_definitions(${target} PRIVATE
-    CAPSTONE_APPLICATION_EXCHANGE_BYTES=${app_EXCHANGE_BYTES})
-  math(EXPR data_bytes "${app_DATA_BYTES} + 256")
+    CAPSTONE_APPLICATION_EXCHANGE_BYTES=${app_EXCHANGE_BYTES}
+    CAPSTONE_APPLICATION_CONTEXTS=${app_CONTEXTS})
+  # CONTEXT_BYTES: the linear arena _start splits off the data region for
+  # minted contexts (docs/plans/delegation-threads.md). 0 leaves the data
+  # region as it was.
+  if(NOT app_CONTEXT_BYTES)
+    set(app_CONTEXT_BYTES 0)
+  endif()
+  if(NOT app_CONTEXT_BYTES MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "CONTEXT_BYTES must be numeric")
+  endif()
+  math(EXPR context_rest "${app_CONTEXT_BYTES} % 4096")
+  if(NOT context_rest EQUAL 0)
+    message(FATAL_ERROR "CONTEXT_BYTES must be a multiple of 4096")
+  endif()
+  math(EXPR data_bytes "${app_DATA_BYTES} + 256 + ${app_CONTEXT_BYTES}")
   target_sources(${target} PRIVATE "${capstone}/runtime/domain/application.c"
     "${heap}" "${capstone}/runtime/domain/domreq.S"
     "${capstone}/runtime/domain/gct-section-end.S")
   target_compile_definitions(${target} PRIVATE _XOPEN_SOURCE=700
     CAPSTONE_DOMREQ_DATA=${data_bytes} CAPSTONE_DOMREQ_STACK=${app_STACK_BYTES}
+    CAPSTONE_CONTEXT_ARENA_BYTES=${app_CONTEXT_BYTES}
     CAPSTONE_LEVEL0_ARENA_BYTES=${app_ARENA_BYTES})
   target_compile_options(${target} PRIVATE -ffunction-sections -fdata-sections -fno-jump-tables)
   target_sources(${target} PRIVATE $<TARGET_OBJECTS:capstone-application-core>)

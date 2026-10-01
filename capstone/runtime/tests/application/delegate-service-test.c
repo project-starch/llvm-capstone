@@ -3,15 +3,19 @@
 #include "../../linux/delegate-service.h"
 #include "capstone/spawn.h"
 #include <sys/wait.h>
+#include <signal.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/file.h>
 #include <unistd.h>
+#include <time.h>
 
 #define EXCHANGE 4096
 static char exchange[EXCHANGE];
@@ -23,6 +27,11 @@ static struct capstone_delegate_entry entry(uint64_t nr, uint64_t a, uint64_t b,
   uint64_t args[CAPSTONE_DELEGATE_ARGS] = {a, b, c, d, e, f};
   assert(!capstone_delegate_pack(&x, nr, args));
   return x;
+}
+
+static long context_hook(struct capstone_delegate_host *h, const struct capstone_delegate_entry *r) {
+  (void)h;
+  return 1000 + (long)(r->nr & 0xff);
 }
 
 static long serve(struct capstone_delegate_entry *x) {
@@ -38,6 +47,27 @@ int main(void) {
   /* HELLO is answered by the launcher itself */
   x = entry(CAPSTONE_NR_HELLO, 0x80001234, 0x80000000, 0x80010000, 0, 0, 0);
   assert(serve(&x) == 0 && host.hello_seen && host.entry_address == 0x80001234);
+  /* THREAD_NAME names the thread serving the request, as Linux shows it */
+  {
+    char own[16] = {0}, comm[64] = {0}, proc[64];
+    assert(!prctl(PR_GET_NAME, own));
+    memset(exchange + 512, 0, 16);
+    strcpy(exchange + 512, "svc-test");
+    x = entry(CAPSTONE_NR_THREAD_NAME, CAPSTONE_THREAD_NAME_SET, 512, 0, 0, 0, 0);
+    assert(serve(&x) == 0);
+    memset(exchange + 512, 0, 16);
+    x = entry(CAPSTONE_NR_THREAD_NAME, CAPSTONE_THREAD_NAME_GET, 512, 0, 0, 0, 0);
+    assert(serve(&x) == 0 && !strcmp(exchange + 512, "svc-test"));
+    snprintf(proc, sizeof proc, "/proc/self/task/%ld/comm", (long)syscall(SYS_gettid));
+    int cf = open(proc, O_RDONLY);
+    assert(cf >= 0 && read(cf, comm, sizeof comm - 1) > 0 && !strcmp(comm, "svc-test\n"));
+    close(cf);
+    x = entry(CAPSTONE_NR_THREAD_NAME, 2, 512, 0, 0, 0, 0);
+    assert(serve(&x) == -EINVAL);
+    x = entry(CAPSTONE_NR_THREAD_NAME, CAPSTONE_THREAD_NAME_GET, EXCHANGE - 8, 0, 0, 0, 0);
+    assert(serve(&x) == -EFAULT);
+    assert(!prctl(PR_SET_NAME, own));
+  }
   /* write through the exchange region to a pipe, then read it back */
   int fds[2];
   assert(!pipe(fds));
@@ -47,6 +77,23 @@ int main(void) {
   x = entry(CAPSTONE_SYS_read, (uint64_t)fds[0], 128, 32, 0, 0, 0);
   assert(serve(&x) == 6 && !memcmp(exchange + 128, "hello\n", 6));
   assert(host.bytes_in == 6 && host.bytes_out == 32);
+  /* sched_getaffinity: the serving thread's CPU set, and no other task's (EPERM,
+     as for the other scheduling calls) */
+  memset(exchange + 512, 0, 128);
+  x = entry(CAPSTONE_SYS_sched_getaffinity, 0, 128, 512, 0, 0, 0);
+  {
+    long got = serve(&x);
+    int any = 0;
+    assert(got > 0 && got <= 128);
+    for (long i = 0; i < got; ++i) any |= exchange[512 + i];
+    assert(any);
+  }
+  x = entry(CAPSTONE_SYS_sched_getaffinity, 1, 128, 512, 0, 0, 0);
+  assert(serve(&x) == -EPERM);
+  x = entry(CAPSTONE_SYS_sched_setaffinity, 0, 128, 512, 0, 0, 0);  /* the set just read */
+  assert(serve(&x) == 0);
+  x = entry(CAPSTONE_SYS_sched_setaffinity, 1, 128, 512, 0, 0, 0);
+  assert(serve(&x) == -EPERM);
   /* a string argument: openat of a path in the exchange region */
   char path[] = "/tmp/capstone-delegate-XXXXXX";
   int tmp = mkstemp(path);
@@ -129,8 +176,8 @@ int main(void) {
   /* exit_group ends the run, and does not run */
   x = entry(CAPSTONE_SYS_exit_group, 42, 0, 0, 0, 0, 0);
   assert(serve(&x) == 0 && host.exiting && host.exit_status == 42);
-  /* five refused by the validator; the string and kill refusals are the runnerâs */
-  assert(host.refused == 5 && host.rounds == 23 && host.syscalls == 16);
+  /* six refused by the validator; the string and kill refusals are the runnerâs */
+  assert(host.refused == 6 && host.rounds == 31 && host.syscalls == 23);
   close(tmp);
   unlink(path);
   /* the fault record writes without blocking, even to a full pipe */
@@ -189,9 +236,113 @@ int main(void) {
     x = entry(CAPSTONE_SYS_wait4, (uint64_t)pid, 16, 0, 0, 0, 0);
     capstone_delegate_serve(&h2, &x);
     assert((long)x.result == -ECHILD);
+    {
+      /* A further context's host: its own exchange region, the owner's
+         children and spawner, and no signal requests (delegation-threads). */
+      static char other[EXCHANGE];
+      struct capstone_delegate_host further = {.exchange = other, .exchange_bytes = EXCHANGE,
+                                               .owner = &h2};
+      assert(!capstone_spawn_pack(other + 1024, EXCHANGE - 1024, CAPSTONE_SPAWN_SEARCH_PATH, 0,
+                                  "sh", argv, envp, NULL, 0, NULL, &bytes));
+      x = entry(CAPSTONE_NR_SPAWN, 1024, bytes, 0, 0, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      pid = (long)x.result;
+      assert(pid > 0 && h2.child_count == 1 && further.child_count == 0);
+      x = entry(CAPSTONE_SYS_wait4, (uint64_t)pid, 16, 0, 0, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == pid && h2.child_count == 0);
+      memcpy(other + 64, "further\n", 8);
+      int p2[2];
+      assert(!pipe(p2));
+      x = entry(CAPSTONE_SYS_write, (uint64_t)p2[1], 64, 8, 0, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == 8 && further.bytes_in == 8);
+      close(p2[0]);
+      close(p2[1]);
+      /* HELLO is the first context's; signals are each context's own (B8):
+         a further context's mask moves without the first context's */
+      x = entry(CAPSTONE_NR_HELLO, 1, 2, 3, 0, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == -ENOSYS && !h2.hello_seen && further.refused == 1);
+      uint64_t usr2 = UINT64_C(1) << (SIGUSR2 - 1);
+      memcpy(other + 32, &usr2, sizeof usr2);
+      x = entry(CAPSTONE_SYS_rt_sigprocmask, SIG_BLOCK, 32, 0, 8, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == 0 && (further.signals.logical & usr2) && !(h2.signals.logical & usr2));
+      x = entry(CAPSTONE_SYS_rt_sigprocmask, SIG_UNBLOCK, 32, 0, 8, 0, 0);
+      capstone_delegate_serve(&further, &x);
+      assert((long)x.result == 0 && !(further.signals.logical & usr2) && further.refused == 1);
+      capstone_delegate_host_free(&further);
+    }
     capstone_spawner_stop(&spawner);
     capstone_delegate_host_free(&h2);
   }
+  /* every context request reaches the launcher's hook; without one, ENOSYS */
+  {
+    struct capstone_delegate_host h3 = {.exchange = exchange, .exchange_bytes = EXCHANGE};
+    const uint64_t numbers[] = {CAPSTONE_NR_CONTEXT_RESERVE, CAPSTONE_NR_CONTEXT_CREATE,
+                                CAPSTONE_NR_CONTEXT_STEP, CAPSTONE_NR_CONTEXT_FORGET,
+                                CAPSTONE_NR_CONTEXT_EXITING};
+    for (unsigned i = 0; i < sizeof numbers / sizeof numbers[0]; ++i) {
+      x = entry(numbers[i], 0, 0, 0, 0, 0, 0);
+      capstone_delegate_serve(&h3, &x);
+      assert((long)x.result == -ENOSYS);
+      h3.context = context_hook;
+      x = entry(numbers[i], 0, 0, 0, 0, 0, 0);
+      capstone_delegate_serve(&h3, &x);
+      assert((long)x.result == 1000 + (long)(numbers[i] & 0xff));
+      h3.context = NULL;
+    }
+    capstone_delegate_host_free(&h3);
+  }
+  /* parking: without a queue ENOSYS; a WAIT whose generation is stale answers
+     RECHECK without sleeping, a WAKE with nobody queued selects none, and a
+     WAIT with a past deadline times out; a further context uses the owner's
+     queue */
+  {
+    static _Atomic uint64_t table[CAPSTONE_PARK_BUCKETS];
+    struct capstone_park park;
+    struct capstone_delegate_host h4 = {.exchange = exchange, .exchange_bytes = EXCHANGE};
+    x = entry(CAPSTONE_NR_PARK_WAKE, 0x5000, 1, 0, 0, 0, 0);
+    capstone_delegate_serve(&h4, &x);
+    assert((long)x.result == -ENOSYS);
+    assert(!capstone_park_init(&park, table, CAPSTONE_PARK_BUCKETS));
+    h4.park = &park;
+    x = entry(CAPSTONE_NR_PARK_WAKE, 0x5000, 1, 0, 0, 0, 0);
+    capstone_delegate_serve(&h4, &x);
+    assert((long)x.result == 0);
+    unsigned b = capstone_park_bucket_of(0x5000, CAPSTONE_PARK_BUCKETS);
+    assert(table[b] == 1);   /* the WAKE advanced the key's generation */
+    x = entry(CAPSTONE_NR_PARK_WAIT, 0x5000, 0, 0, 0, 0, 0);
+    capstone_delegate_serve(&h4, &x);
+    assert((long)x.result == CAPSTONE_PARK_RESULT_RECHECK && x.status == CAPSTONE_ROUND_DONE);
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    uint64_t past = (uint64_t)now.tv_sec * 1000000000u + (uint64_t)now.tv_nsec - 1;
+    struct capstone_delegate_host further = {.exchange = exchange, .exchange_bytes = EXCHANGE,
+                                             .owner = &h4};
+    x = entry(CAPSTONE_NR_PARK_WAIT, 0x5000, 1, past, 0, 0, 0);
+    capstone_delegate_serve(&further, &x);
+    assert((long)x.result == -ETIMEDOUT);
+    assert(capstone_park_queued(&park, b, 0x5000) == 0);
+    x = entry(CAPSTONE_NR_PARK_REQUEUE, 0x5000, 0x6000, 1, 1, 0, 0);
+    capstone_delegate_serve(&further, &x);
+    assert((long)x.result == 0 && table[b] == 2);
+    capstone_park_destroy(&park);
+    capstone_delegate_host_free(&further);
+    capstone_delegate_host_free(&h4);
+  }
+  /* runtime numbers resolve by their low bits, apart from Linux's */
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_CONTEXT_RESERVE)->name, "context-reserve"));
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_CONTEXT_CREATE)->name, "context-create"));
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_CONTEXT_EXITING)->name, "context-exiting"));
+  /* a thread's end is the domain's (CONTEXT_EXITING); only exit_group crosses */
+  assert(!capstone_delegate_shape(CAPSTONE_SYS_exit));
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_SYS_exit_group)->name, "exit_group"));
+  assert(!strcmp(capstone_delegate_shape(CAPSTONE_NR_HELLO)->name, "hello"));
+  assert(capstone_delegate_shape(CAPSTONE_SYS_write)->group == CAPSTONE_GROUP_DELEGATED);
+  assert(!capstone_delegate_shape(UINT64_C(0xC0DE0000) + CAPSTONE_SYS_write));
+  assert(!capstone_delegate_shape(UINT64_C(0xC0DE00FF)));
   capstone_delegate_host_free(&host);
   puts("delegate-service-test: ok");
   return 0;

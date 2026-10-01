@@ -5,8 +5,10 @@
 #define CAPSTONE_LINUX_DELEGATE_SERVICE_H
 
 #include "capstone/delegate.h"
+#include "park.h"
 #include "signals.h"
 #include "spawner.h"
+#include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
@@ -41,8 +43,33 @@ struct capstone_delegate_host {
   /* set by exit or exit_group: the process must end with this status */
   int exiting;
   int exit_status;
-  /* signals: the ring, the classes, the masks; initialized by the launcher */
+  /* signals: this context's ring, mask and handover block, and the process's
+     dispositions; initialized by the launcher */
   struct capstone_signal_state signals;
+  /* contexts (docs/plans/delegation-threads.md): the launcher answers the
+     CONTEXT requests through this hook; NULL answers ENOSYS. It writes a step
+     event, when asked for one, into the exchange region at the offset in
+     args[2]. */
+  long (*context)(struct capstone_delegate_host *host, const struct capstone_delegate_entry *request);
+  void *context_state;
+  /* A further context's host (docs/plans/delegation-threads.md) serves that
+     context's own transport, counters and exec request, and shares the rest
+     with the first context's host, `owner`: the spawner, the children, the
+     private descriptors, HELLO's code range and the signal dispositions. NULL
+     for the first context. `lock` is the owner's, for the children, the
+     spawner and the dispositions. */
+  struct capstone_delegate_host *owner;
+  pthread_mutex_t lock;
+  uint64_t context_id;      /* the context this host serves */
+  /* tkill: send sig to the Linux thread that serves the context with thread
+     identity tid (the runtime's, docs/plans/delegation-threads.md Q2); 0 or
+     -errno (-ESRCH for no such context). NULL reaches only the first context
+     (the pid). */
+  long (*tkill)(struct capstone_delegate_host *host, long tid, int sig);
+  /* parking: the process's queue (the owner's, NULL answers ENOSYS) and this
+     host's own wait record, one per serving thread */
+  struct capstone_park *park;
+  struct capstone_park_record park_record;
 };
 
 /* Service one entry in place: validate, run, write result. Never returns an

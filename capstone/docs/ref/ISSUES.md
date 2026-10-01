@@ -845,6 +845,35 @@ A program that passes an invalid immediate therefore runs on the emulator and tr
 first instance was E3's R1 harness encoding a register NUMBER (12) into the immediate field; see
 R-21's box. **Which behaviour is intended is a spec question**, and neither source reads as the
 specification. The RTL's refusal is the safer default.
+## Q-14 — capstone-qemu enforces no capability permission on a data load or store, and reports an out-of-bounds access as an access fault `OPEN — model divergence; found 2026-09-30 by Probe A case A2 (delegation-threads)`
+
+**What the emulator checks.** `_helper_access_with_cap` (`target/riscv/op_helper.c:1611`, capstone-qemu
+3589d6af6f) refuses an untagged base (24), a revoked one (25), a load through an UNINIT capability
+(26) and an access outside the bounds. It reads no permission bit: the bounds check carries the
+comment `// TODO: bounds check only for now` (`:1723`). An out-of-bounds access raises the standard
+access fault, store 7 or load 5 (`:1754`), not 28.
+
+**What the RTL's load/store unit does**, per R-34's table (`load_store_unit.sv:974-990`): 27 for a
+load without read permission or a store without write permission, 28 for out of bounds.
+
+**Found by:** the delegated-threads probe lends each context a 64-byte write-only descriptor. A load
+through it returned normally on capstone-qemu (`entry-negative`,
+`runtime/tests/application/results/20260929-context-probe-monitor.json`); a store one word past it
+faulted with cause 7 at the store.
+
+**Consequence:** no QEMU run is evidence that a permission restriction holds, whether a write-only
+loan, a read-only share or an execute-only mapping. On this platform such an authority is exactly its
+bounds. Any probe that asserts a permission fault needs the board, or a capstone-qemu that checks
+permissions.
+
+**Partly addressed 2026-09-30 (capstone-qemu a53ac18e3d, `_helper_access_with_cap`):** the access
+path now checks the operand TYPE and, for a sealed-return operand, the spec's access window (P0/A2,
+delegation-threads). The permission bits (27) are still not checked, and an out-of-window or
+out-of-bounds access is still reported as an access fault (5/7) rather than 27/28. So this entry
+stays open for the permission check and the cause number. Follow-up 674cdab03c removes an
+unsigned-overflow acceptance at the upper edge of the sealed-return window and from the general
+bounds check.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `OPEN — decision deferred 2026-09-10; ALL FOUR MEASURED. Only two are convention questions; SHRINKTO is an RTL off-by-one and SEAL's check is inert (S-11)`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -7160,7 +7189,7 @@ configuration in which C++ compiles today.** C-61 alone does not make C++ "nearl
 
 **Fix: none yet. The ABI decision is the lead's.**
 
-### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `OPEN — LIBC ABI (musl-capstone); found 2026-09-24 by the tshark port; WORKED AROUND for GLib only (ports/wireshark/app/deps/patches/glib-0008); source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
+### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `FIXED 2026-09-30 by musl-patches/0006 (delegation-threads, T4); found 2026-09-24 by the tshark port; GLib's workaround (ports/wireshark/app/deps/patches/glib-0008) removed 2026-09-30, GLib's cond test passing 4 of 4 in a domain with threads; source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
 
 **What happens.** On capstone64, `pthread_cond_t` (`include/alltypes.h.in:88`) is `int __i[12]`,
 48 bytes, and its pointer view `__p[12*sizeof(int)/sizeof(void*)]` holds three 16-byte pointers.
@@ -7205,6 +7234,17 @@ upstream tree untouched:
 With a private musl build, `run.sh c65` returns with `sizeof = 64` and "broadcast returned". The
 musl build fails the same 6 objects as without the patch. The wait paths need a futex and were not
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
+
+**Fixed (2026-09-30).** That branch is in no local clone any more. The same layout landed as
+`ports/musl-capstone/musl-patches/0006-pthread-cond-capability-layout.patch`, in the port's patch
+mechanism rather than as overlays: with 16-byte pointers `pthread_cond_t` and `cnd_t` are 64 bytes,
+`_c_shared`, `_c_head` and `_c_tail` are `__p[0..2]`, the four ints `__i[12..15]`; other pointer
+sizes are unchanged. With threads the wait paths now run: `pthread-probe cond` (2000 turns between
+two threads) faulted in `__private_cond_signal` at `ldc a0, 0x50(s3)` against the unpatched archive
+and passes against the patched one, and libc-test's `pthread_cond` passes
+(`runtime/tests/application/results/20260930-pthreads.json`). Every image relinks against the new
+libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
+(perl and mruby embed none).
 
 ### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism read out of the code 2026-09-30`
 
@@ -7294,6 +7334,101 @@ live instance. The compiler lane's sweep
 **latent, checked, not fixed**. They are quiet only because their offsets never take the
 `add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
 save loop is one alignment change from live.
+
+### C-75 — a pointer slot whose initializer names an alias is never tagged: `__capstone_cap_init` skipped every `GlobalAlias` `FIXED 2026-09-30 on compiler/cap-init-alias (a6e8d967140b and gp-captable function-alias follow-up fd82fef2a70d, on 7d01722aab88; gp-captable variable aliases remain open); found by delegation-threads, a fork in CPython's test_threading while the test's threads ran`
+
+**What happens.** `CapstoneCapGlobalInit` stores a tagged capability over each pointer slot of an
+initialized global, because a tag cannot live in the image. Its `needsMaterialization` accepted a
+slot whose value was a `GlobalVariable`, a `Function` or a `BlockAddress`; a `GlobalAlias` fell
+through, so the slot kept its link-time address, untagged. musl's `fork()` has such a table:
+`atfork_locks` (`src/process/fork.c`) is `&__at_quick_exit_lockptr` and nine more, each
+`weak_alias(dummy_lockptr, …)` that a strong definition elsewhere may replace. `fork()` walks it only
+while `need_locks` is set, that is once a second thread exists, so no single-threaded run met it.
+`test_clear_threads_states_after_fork` did: cause 24, address 0, at `fork+0x168`, the second `ldc`
+of `**atfork_locks[i]`. After the fix `os.fork()` there answers ENOSYS, as the delegated runtime
+answers every fork (`docs/plans/delegation-abi.md`, Processes). libc-test's `raise-race`, which forks
+beside threads, had faulted the same way since T4 and was recorded only as a FAULT: the image the
+T5 run used (`794dc291`, rebuilt byte for byte from `sdk-t4`) symbolizes to `fork+0x168`, address 0.
+With the fix it fails on the refused fork.
+
+**Reproducer.** Six lines: a table of `&real_ptr` beside a table of `&alias_ptr`, where `alias_ptr`
+is a weak alias. On 7d01722aab88 the initializer writes the first and not the second
+(`llvm/test/CodeGen/Capstone/static-cap-global-init-alias.ll` on the fix branch fails there at the
+alias's store).
+
+**Reach and scanner correction (2026-09-30).** The original
+`tests/capinit-unwritten-slots.py` used an object-level heuristic: any `PCREL_HI20`
+reference from `__capstone_cap_init` exempted every slot in that object. It found the ten
+`atfork_locks` slots, but missed C-75 in a mixed table whose non-alias slot was initialized.
+A reference used only as a stored value could hide an entirely unwritten object too.
+Its original clean scans did not establish the absence of other untagged pointers.
+
+The corrected scanner follows exact store destinations through the straight-line initializer,
+including address arithmetic and stack spills. Unsupported code is INCOMPLETE (exit 2),
+uncovered address slots exit 1, and a complete scan with none exits 0. Duplicate archive
+members are inspected separately. It checks **store coverage and symbolic cursor values**:
+the final store must match the relocation target plus addend. Nonlocal symbol identities
+remain distinct, so a weak alias cannot be replaced by its current aliasee. A wrong value
+exits 1; an unknown value or unexpected internal exception is INCOMPLETE (exit 2).
+It does not check the stored value's tag, bounds or authority; an integer address constant
+is also a candidate to review. The loader's `.gct` and the runtime's link-address
+constructor arrays are excluded explicitly.
+Thirteen executable controls in `tests/capinit-unwritten-slots-test.py` cover mixed alias tables,
+source-only references, destination/value spills, large offsets, scalar overwrites,
+unsupported control flow, duplicate members, wrong values/addends, weak-alias identity,
+unknown stored values and an injected unexpected exception. The mixed table built with the
+pre-C-75 compiler now reports its missing slot at offset 16; the fixed build reports none.
+
+A new scan of 1,629 objects (1,355 musl, 24 SDK archive members, 250 linked CPython objects)
+has no wrong stored values or incomplete analyses and one uncovered integer address anchor
+in the SDK's `hostcall.c.obj` (`__capstone_init_fini_anchor_link`, intentional). This is a coverage result,
+not proof that every stored pointer is tagged.
+
+**Fix.** `needsMaterialization` accepts any `GlobalValue`. The store names the alias, and the link
+resolves it as it resolves the static relocation, so a strong definition still wins. The musl
+archive built by 7d01722aab88 and by the fix, from one source path: of 1355 objects exactly one
+differs, `src_process_fork.o`; the corrected store-coverage scan reports no uncovered
+address slots in the fixed musl archive.
+
+**Non-default gp-captable follow-up and remaining gap.** `fd82fef2a70d` makes
+`selectLGA` look through aliases with `getAliaseeObject()` when identifying function
+addresses. Previously a function alias went through `scc gp`, giving its code address
+the cap table's data bounds. The regression is
+`llvm/test/CodeGen/Capstone/static-cap-global-init-alias-gp-captable.ll`; the follow-up
+records 153 passing compiler tests and one unsupported test, with no musl object changed
+apart from the compiler version comment. **A variable alias under gp-captable remains
+unsupported:** the cap table assigns slots to variables, not aliases, so the alias still
+falls through to derivation from the cap-table-bounded gp. A weak alias cannot simply
+use its aliasee's slot because a strong definition may replace it at link time. The
+threading qualification uses the default ABI; neither that run nor this scanner's
+cursor comparison establishes correct bounds for the non-default mode.
+
+### C-73 — capstone-c mis-allocates registers in long monitor functions, and cannot build two other shapes `WORKED AROUND 2026-09-29 in the monitor's code and by a build check; no reduced reproducer`
+
+capstone-c (the compiler of the capstone-sbi monitor, `jasonyu1996/capstone-c`) has three defects that
+shaped the context-slot monitor (capstone-sbi `0451a1a` and later, delegation-threads):
+
+- **Register misallocation.** In a long function that stores into many arrays in a row it spills an
+  index, loads an array capability into the same register and uses that capability as its own offset:
+  `cincoffset t0, t0, t0`. The first build of the context-slot monitor did this in `create_domain` and
+  `context_adopt` (five sites), and the monitor halted at its first store through the result.
+- **A global larger than 2048 bytes does not assemble**: every global gets an exactly sized capability
+  at start-up, sized with an `addi` immediate (`illegal operands 'addi t1,t1,-8192'`). The descriptor
+  pool is therefore two 128-capability halves.
+- **Passing one variable as two arguments of one call crashes the compiler** (`codegen.rs:635`, unwrap
+  on `None`).
+
+**Workarounds.** Slot bookkeeping lives in small functions with few live values; the pool is split;
+no call passes one variable twice. caplifive-buildroot `f9b2408` runs `scripts/check-monitor-asm.py`
+on every regenerated monitor `.c.S` and fails the build on `cincoffset(r, x, x)`; it exits 2 on input
+without a function, fired on the miscompiled build (five sites) and on a minimal file with the
+pattern, and passes the fixed monitor and the interrupt handler.
+
+**Reproducer.** None reduced: the miscompiled long functions were rewritten before they were
+committed. The build check makes a recurrence visible at the next monitor build.
+
+**Impact.** Any monitor change can meet the first defect; the check turns it into a build failure
+instead of a halted monitor. Only the monitor is compiled by capstone-c.
 
 ## Infrastructure / procedure
 
