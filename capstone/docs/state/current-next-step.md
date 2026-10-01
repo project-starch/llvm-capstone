@@ -20,7 +20,7 @@ rd, d, x0` is a refusal here), and S-11 is fixed at 1024 bytes / 16-byte
 alignment with R-32's off-by-one corrected and the sealed cursor set to the
 region's start (a SEALED capability's base is its cursor) -- every known
 sealer complies; the runtime lane should raise QEMU's `CAP_SEALED_SIZE_MIN`
-from 528 to 1024. The cursor fix is the last RTL commit on the branch, so the
+from 528 to 1024. The cursor fix is its own commit (c0c546542, only the bracket test above it), so the
 lead can veto it alone (a veto costs one revert and a 75-minute re-sweep).
 
 Application ports (2026-09-29): the seven application recipes now require
