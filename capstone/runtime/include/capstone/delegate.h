@@ -49,8 +49,8 @@ struct capstone_delegate_entry {
  * docs/plans/delegation-signals.md and docs/plans/delegation-threads.md. */
 #define CAPSTONE_DELEGATE_META_BYTES 16384u
 /* Contexts besides the first with a transport of their own: the monitor lends
- * each application 8 invocation descriptors (process-abi.h). */
-#define CAPSTONE_DELEGATE_CONTEXTS_MAX 7u
+ * each application 16 invocation descriptors (process-abi.h). */
+#define CAPSTONE_DELEGATE_CONTEXTS_MAX 15u
 #define CAPSTONE_SIGNAL_OFFSET 4096u
 #define CAPSTONE_SIGNAL_EVENTS 64u
 #define CAPSTONE_SIGNAL_WAIT 1u  /* accepted inside a wait with a temporary mask */

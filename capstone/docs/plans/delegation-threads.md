@@ -3,8 +3,8 @@
 Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES,
 PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1, B7), parking through the launcher
 (T2, B6 and B12), the runtime locks (T3, Q6, B9 and B14) and musl's own threads on minted
-contexts (T4, Q4, B10 and B11) and signals per context with cancellation (B8) pass; more contexts
-per application (T5) and the gates are next. Branch
+contexts (T4, Q4, B10 and B11), signals per context with cancellation (B8) and fifteen threads per
+application (T5) pass; the gates are next. Branch
 `delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
 Probe A and Probe B test.
 
@@ -229,6 +229,20 @@ Done so far:
   `pthread_cond-smasher` runs ten threads at once, more than seven (T5). A round costs about 1 to
   3 percent more: 100000 rounds took 9304 to 9463 ms in four runs, against 9189 and 9241 ms at T4.
   Record `results/20260930-signals-per-context.json`.
+- T5, more contexts per application: each application's threads each hold one of its invocation
+  descriptors, so 8 descriptors allowed seven threads, while musl's condition-variable regression
+  and CPython's `test_various_ops` start ten at once. The monitor (capstone-sbi 4674ab6) carves
+  16 descriptors per application off the top of its data region (1024 bytes, the driver's copy of
+  `process-abi.h` matching) and keeps them in four pool parts of 128 capabilities, since
+  capstone-c limits a global to 2048 bytes; the runtime allows `CONTEXTS` up to 15 and the SDK
+  declares 15. The 32 slots stay the board's, shared by all applications (monitor unification),
+  so QEMU's supervisor table is unchanged. `pthread-probe` now runs at 15: 60 rounds of fifteen
+  threads joined (900 threads, fifteen records), a sixteenth refused with EAGAIN, the reservation
+  waiting 48 ms for an ending transport; all 26 modes pass. On the previous firmware and driver
+  the same image fails at its eighth thread at once (EAGAIN). `pthread_cond-smasher` passes (the
+  regression selection 12 of 16); libc-test, the context probe with A7, A9 and ctl-wfi, the signal
+  contract and the application gate as before. 100000 rounds took 9395 ms. Record
+  `results/20260930-contexts-per-application.json`.
 - An independent review of B8 (2026-09-30) found five defects, all fixed: a delivery read the
   shared handler table unlocked while another context could change it (the action is now copied
   under a leaf lock); glibc's `sigaddset` refuses signals 32 and 33, so the trampoline could not
@@ -265,9 +279,9 @@ Done so far:
   one of the context's requests to the wrong thread. `two-steppers` now checks the refusal. The
   driver's serialisation of concurrent STEPs is still there, but no launcher path exercises it.
 - Pins: capstone-qemu 674cdab03c (`qemu/context-slots-on-pin`, on ac2837aa0e, the head of
-  `qemu/supervisor-switch-cost`); caplifive-buildroot cffac39 (`modcapstone/context-slots`, the
-  driver), whose components/opensbi is 3021c05 (caplifive-opensbi `wrapper/context-slots`) at
-  capstone-sbi dd812db (`monitor/context-slots`). The wrapper and monitor commits are on the
+  `qemu/supervisor-switch-cost`); caplifive-buildroot 8fd1ea1 (`modcapstone/context-slots`, the
+  driver), whose components/opensbi is cf344cf (caplifive-opensbi `wrapper/context-slots`) at
+  capstone-sbi 4674ab6 (`monitor/context-slots`). The wrapper and monitor commits are on the
   forks only (the `runtime-fork` remotes). `qemu/context-slots` (d220ab6ee9, on 22aec7ee0f with
   its own copies of the two switch-cost commits) is the frozen predecessor of
   `qemu/context-slots-on-pin`: its commits are patch-identical to ee9c93777f..a53ac18e3d, it lacks
