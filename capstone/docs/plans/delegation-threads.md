@@ -1,9 +1,9 @@
 # Delegated threads: one Linux thread per protected context
 
-Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES. Branch
-`delegation-threads`, stacked on `delegation-signals` (c460e8c). The contracts below are what
-Probe A and Probe B test; the runtime branch that builds `pthread_create` on them is written after
-both probes pass.
+Status: PROBE A CASES PASS (A2 refuted then closed by the P0 sealed-return fix, 2026-09-30), PROBE B NATIVE PHASE PASSES,
+PROBE B DOMAIN PHASE UNDER WAY: a transport per context (T1) and B7 pass. Branch `delegation-threads`,
+stacked on `delegation-signals` (c460e8c). The contracts below are what Probe A and Probe B test;
+the runtime that builds `pthread_create` on them is written after both probes pass.
 
 Done so far:
 - The domain half on the unchanged platform: context arena, mint, thread entry, exit and
@@ -67,10 +67,49 @@ Done so far:
   B12 and B13a to B13d with forced interleavings, each check shown to fire against a seeded
   defect (record `results/20260930-park-native.json`). B6 to B11 and B14 need the domain runtime:
   per-context transport and the WAIT/WAKE/REQUEUE requests.
+- Probe B, domain phase, T1: a transport per context (Q2, first part; "A transport per context"
+  below). A THREAD context's delegated calls are served by its own launcher thread through its own
+  entry block and exchange region, so B7 holds: a context blocked in `read` on an empty pipe leaves
+  the other running (it computed for 100 ms meanwhile) until that one writes. `thread-probe`
+  passes 15 of 15 modes: transport, B7, reservation and its lifetime, 28 sequential contexts in one
+  area, seven contexts at once each checking its own pipe traffic, a child preempted while the first
+  context makes rounds, 100000 rounds from one context, `exit()` and a fault in a further context
+  ending the process, a REGISTER context without transport, the signal requests a further context
+  may not make yet, signal handlers only in the first context, SIGPIPE from a further context (by
+  default the end of the process, EPIPE when ignored), and exec in place from a further context.
+  Probe A (35/35 and the explicit A7, A9 and ctl-wfi), the signal contract
+  (26/26) and the application gate, now with perl and mruby relinked on this runtime, pass
+  unchanged (record `results/20260930-transport.json`).
+- Found by T1, fixed in the monitor (capstone-sbi dd812db): every call's loan takes a revocation
+  node, and nothing collected them unless supervised code ran short itself. One process's 65536th
+  call (the VM's `CAPSTONE_REV_NODES`) halted the monitor at `loan_begin` with cause 30, with or
+  without threads; no earlier run had made that many calls. The monitor now collects before a loan
+  when fewer than 1024 nodes are free. 100000 rounds took 9126 ms and 9069 ms in two runs, every
+  10000-round block between 904 and 935 ms.
+- Found by T1: the launcher's region capabilities can cover more than was asked for (the driver
+  hands out a larger cached block), and the runtime had sized the exchange region by the
+  capability's bounds. After an application with seven transports, the signal contract's
+  `retry-partial` sent a write of 0x7fff0 bytes against a 0x40000-byte exchange region and got
+  EFAULT. The runtime now cuts
+  its transports by the sizes the image declared.
+- An independent review of T1 (2026-09-30) found five defects. Fixed, each with a probe mode that
+  failed before and passes after: a further context ran one of the first context's pending signal
+  events, which then stayed blocked (now only the context with the handover block touches signal
+  state); exec in place from a further context started the new image with every signal blocked
+  (the thread now takes the application's mask just before `execve`); SIGPIPE from a further
+  context's write stayed pending on its blocked thread (now forwarded to the process). Fixed by
+  review: exit, fault and exec in place take one lock, so an end that has begun wins. Left for Q6:
+  posix_spawn and execve pack into one static block in the domain, so two contexts spawning at once
+  mix requests, like malloc and stdio, which further contexts still run without locks.
+- A13, changed with T1: a THREAD context has one stepper, its own launcher thread, which serves its
+  transport; a STEP the application asks for is refused (EINVAL). Before, the application's steps
+  and the thread's interleaved; with a transport per context, a step from another thread would hand
+  one of the context's requests to the wrong thread. `two-steppers` now checks the refusal. The
+  driver's serialisation of concurrent STEPs is still there, but no launcher path exercises it.
 - Pins: capstone-qemu 674cdab03c (`qemu/context-slots-on-pin`, on ac2837aa0e, the head of
-  `qemu/supervisor-switch-cost`); caplifive-buildroot 515a3c6 (`modcapstone/context-slots`, the
-  driver), whose components/opensbi is 702c38f (caplifive-opensbi `wrapper/context-slots`) at
-  capstone-sbi c0dbd04 (`monitor/context-slots`). The wrapper and monitor commits are on the
+  `qemu/supervisor-switch-cost`); caplifive-buildroot cffac39 (`modcapstone/context-slots`, the
+  driver), whose components/opensbi is 3021c05 (caplifive-opensbi `wrapper/context-slots`) at
+  capstone-sbi dd812db (`monitor/context-slots`). The wrapper and monitor commits are on the
   forks only (the `runtime-fork` remotes). `qemu/context-slots` (d220ab6ee9, on 22aec7ee0f with
   its own copies of the two switch-cost commits) is the frozen predecessor of
   `qemu/context-slots-on-pin`: its commits are patch-identical to ee9c93777f..a53ac18e3d, it lacks
@@ -619,7 +658,9 @@ survive slot reassignment into another application's descriptor.
   another call or owner, every older derivation is invalid, and an offered seal has been adopted
   or preserved before the descriptor memory is reinitialised. This per-call revocation is the
   contract of the first version, and A15 tests it. It costs one revocation node per round, which
-  Probe A records. Revoking only before the slot is reissued to another generation or owner would
+  Probe A records; the supervisor collects by itself only when supervised code runs short, so the
+  monitor collects before a loan when fewer than 1024 nodes are free (without that, T1 found, one
+  process's 65536th call halted the monitor with cause 30). Revoking only before the slot is reissued to another generation or owner would
   still keep owners apart, but it is a later contract change that has to amend A15, not an
   implementation option. A14 and A15 test both sides; the existing result slot is examined first.
 - **Ticket.** A counter the domain writes next to the offered seal. ADOPT consumes the offer only
@@ -648,6 +689,42 @@ Recommended starting point:
   round. The launcher creates it and shares it with the creator, and the creator places it in the
   child's start block before sealing. Everything the first STEP needs then exists, whenever the
   Linux thread starts. The launcher releases the region after the Linux thread has ended.
+
+**Answer, first part: the transport (2026-09-30, T1; evidence `results/20260930-transport.json`).**
+- **Declared, not negotiated.** The image declares how many contexts besides the first may run at
+  once with a transport of their own: `CONTEXTS` (0 to 7; the monitor lends each application 8
+  descriptors), a field of the application descriptor. The launcher grants 1 + CONTEXTS transports
+  as two regions shared at launch: META blocks of 16 KiB (entry at 0, signal handover at 4096) and
+  exchange slices of the declared `EXCHANGE_BYTES` (a multiple of 4096), transport i at i times the
+  block size in both. Transport 0 is the first context's, byte for byte where it was. No region is
+  shared later: a share reaches only an application's first context, and only between calls.
+- **Reserved before the request.** `CONTEXT_RESERVE` returns a free transport index; the creator
+  writes it into the child's start block (`WORD_TRANSPORT`) and then asks `CONTEXT_CREATE(ticket,
+  THREAD, index)`. The launcher binds the transport to the adopted context before it starts the
+  thread, so the child's first entry already has it, whenever that is. A request consumes the
+  reservation whatever its outcome. The launcher frees a transport when the context's thread has
+  stepped it for the last time and forgotten it; until then RESERVE may answer EAGAIN.
+- **Installed at entry.** The entry glue calls `__capstone_context_run(start block)`, which
+  installs the transport (bounded capabilities to its entry block and exchange slice, cut from the
+  first context's region capabilities by the declared sizes) into the context's TLS block and then
+  calls the application's function. The delegation state (`dl_*`) is `__thread`.
+- **Signals stay with the first context for now.** A further context's handover block is not
+  installed, its launcher thread blocks every signal, and its signal requests (SIGACTION, SIGDONE,
+  SIGPOLL, `rt_sigprocmask`, `rt_sigsuspend`, `rt_sigtimedwait`, `rt_sigpending`, `ppoll` with a
+  mask, and `sigaltstack`, which stays in the domain) answer ENOSYS, visibly, before any state is
+  touched; only the first context takes and runs events. A signal Linux sends to a further
+  context's thread because of its own call (SIGPIPE, SIGXFSZ) is forwarded to the process, which
+  Linux delivers to the first context's thread under the application's disposition and mask. A
+  thread that execs in place takes the application's logical mask first. Signals per context are
+  B8's work.
+- **What ends with a context and what with the process.** The context's thread stops at the first
+  step that is neither a preemption nor a request (EXITED in every probe mode; DEAD, STALE and
+  REFUSED take the same path), forgets the context and frees its transport. `exit()` or a fault in
+  any context ends the process, as in Linux; nothing is unmapped first, since other threads may
+  still be serving. Exec in place is served from any context as from the first (not yet run with
+  more than one context).
+- **Open in Q2:** the thread identity (`t->tid`, the translations), and the start of a child before
+  its creator's reply as seen by musl.
 - **One identity inside the domain.** `t->tid` and every tid the domain sees is a protected runtime
   identity, never reused while its `struct pthread` is live. Linux reuses tids after thread exit
   even without malice. The launcher translates runtime identity to Linux tid for its own contexts

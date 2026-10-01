@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Run the Probe B domain-phase probe (thread-probe.dom) in a provisioned guest,
+one mode per case of docs/plans/delegation-threads.md, and report PASS or FAIL
+per mode with the reason. Exit 1 if any mode fails; --report writes details."""
+import argparse
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+HERE = Path(__file__).resolve().parent
+_spec = importlib.util.spec_from_file_location("run_context", HERE / "run-context.py")
+run_context = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(run_context)
+
+# mode -> (expected kind, expected value, stdout must contain, stdout must not
+# contain, expected fault: (cause, symbol the faulting pc must equal) or None)
+MODES = {
+    "transport": ("exit", 0, "PASS", None, None),
+    "blocking": ("exit", 0, "PASS", None, None),
+    "reserve": ("exit", 0, "PASS", None, None),
+    "reuse": ("exit", 0, "PASS", None, None),
+    "concurrent": ("exit", 0, "PASS", None, None),
+    "signals-refused": ("exit", 0, "PASS", None, None),
+    "no-transport": ("exit", 0, "PASS", None, None),
+    "preempted": ("exit", 0, "PASS", None, None),
+    "many-rounds": ("exit", 0, "PASS", None, None),
+    "signal-first-only": ("exit", 0, "PASS", None, None),
+    "sigpipe-ignored": ("exit", 0, "PASS", None, None),
+    # Linux's default action for the writing thread's SIGPIPE ends the process.
+    "sigpipe-child": ("signal", 13, "", "REACHED", None),
+    # The exec'd image prints its launcher's blocked mask: nothing blocked.
+    "exec-child": ("exit", 0, "SigBlk:\t0000000000000000", "REACHED", None),
+    # exit() in a further context ends the process with its status.
+    "exit-child": ("exit", 7, "", "REACHED", None),
+    # A fault in a further context ends the process: a store through a null
+    # capability, cause 24, at the labelled store.
+    "fault-child": ("signal", 11, "", "REACHED", (24, "probe_fault_store_insn")),
+}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--state", type=Path, required=True)
+    parser.add_argument("--image", default="/mnt/host/thread-probe.dom")
+    parser.add_argument("--only", nargs="*", default=None)
+    parser.add_argument("--timeout", type=float, default=120)
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--host-image", help="The same image on the host, for fault locations")
+    parser.add_argument("--nm", help="llvm-nm, for fault locations")
+    args = parser.parse_args()
+    symbols = run_context.image_symbols(args.nm, args.host_image)
+    env = dict(os.environ, PYTHONPATH=str(HERE.parents[1] / "host"))
+    cli = [sys.executable, "-m", "capstone_vm", "--state", str(args.state)]
+    results, failed = {}, 0
+    for mode, (kind, value, needle, forbidden, fault) in MODES.items():
+        if args.only and mode not in args.only:
+            continue
+        status = args.state / f"threads-{mode}.json"
+        status.unlink(missing_ok=True)
+        try:
+            result = subprocess.run([*cli, "run", "--result", str(status), args.image, mode],
+                                    env=env, capture_output=True, text=True, timeout=args.timeout)
+            record = json.loads(status.read_text()) if status.exists() else {}
+            got = (record.get("kind"), record.get("value"))
+            fault_ok, fault_reason = run_context.fault_matches(record, fault, symbols)
+            if fault and not symbols:
+                fault_ok, fault_reason = False, "fault location needs --host-image and --nm"
+            ok = (got == (kind, value) and needle in result.stdout
+                  and not (forbidden and forbidden in result.stdout + result.stderr) and fault_ok)
+            reason = "" if ok else (f"got {got}, {fault_reason}, stdout={result.stdout!r}, "
+                                    f"stderr={result.stderr.strip()[-300:]!r}")
+            out = result.stdout
+        except subprocess.TimeoutExpired:
+            ok, reason, out = False, f"timeout after {args.timeout}s", ""
+        results[mode] = {"pass": ok, "reason": reason, "stdout": out[-400:]}
+        failed += not ok
+        print(f"{mode}: {'PASS' if ok else 'FAIL ' + reason}", flush=True)
+    passed = len(results) - failed
+    print(f"thread probe: {passed}/{len(results)} PASS")
+    if args.report:
+        args.report.write_text(json.dumps({"modes": results, "passed": passed,
+                                           "total": len(results)}, indent=2) + "\n")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -93,25 +93,42 @@ static long host_number(uint64_t nr) {
 static int self_pid(pid_t pid) { return pid == 0 || pid == getpid(); }
 static int own_group(pid_t pgid) { return self_pid(pgid) || pgid == getpgrp(); }
 
-static int child_of(const struct capstone_delegate_host *host, pid_t pid) {
-  for (unsigned i = 0; i < host->child_count; ++i)
-    if (host->children[i] == pid)
+/* The host that holds what all contexts share: the first context's. */
+static struct capstone_delegate_host *shared(struct capstone_delegate_host *host) {
+  return host->owner ? host->owner : host;
+}
+
+/* Callers hold shared(host)->lock. */
+static int child_of(struct capstone_delegate_host *host, pid_t pid) {
+  struct capstone_delegate_host *s = shared(host);
+  for (unsigned i = 0; i < s->child_count; ++i)
+    if (s->children[i] == pid)
       return 1;
   return 0;
 }
 
 static void forget_child(struct capstone_delegate_host *host, pid_t pid) {
-  for (unsigned i = 0; i < host->child_count; ++i)
-    if (host->children[i] == pid) {
-      host->children[i] = host->children[--host->child_count];
+  struct capstone_delegate_host *s = shared(host);
+  for (unsigned i = 0; i < s->child_count; ++i)
+    if (s->children[i] == pid) {
+      s->children[i] = s->children[--s->child_count];
       return;
     }
 }
 
-static int private_fd(const struct capstone_delegate_host *host, int fd) {
-  if (host->spawner && fd == host->spawner->socket) return 1;
-  for (unsigned i = 0; i < host->private_count; ++i)
-    if (host->private_fds[i] == fd) return 1;
+static int child_of_locked(struct capstone_delegate_host *host, pid_t pid) {
+  pthread_mutex_lock(&shared(host)->lock);
+  int r = child_of(host, pid);
+  pthread_mutex_unlock(&shared(host)->lock);
+  return r;
+}
+
+/* Set before the first context runs and never changed: no lock. */
+static int private_fd(struct capstone_delegate_host *host, int fd) {
+  struct capstone_delegate_host *s = shared(host);
+  if (s->spawner && fd == s->spawner->socket) return 1;
+  for (unsigned i = 0; i < s->private_count; ++i)
+    if (s->private_fds[i] == fd) return 1;
   return 0;
 }
 
@@ -150,7 +167,8 @@ static unsigned fd_arguments(uint64_t nr) {
 /* posix_spawn and execve, as one block in the exchange region. A spawn goes
  * to the unfiltered spawner with the launcher's inheritable descriptors; an
  * exec of a Capstone image is answered by the caller replacing itself. */
-static long spawn(struct capstone_delegate_host *host, const struct capstone_delegate_entry *entry) {
+static long spawn_locked(struct capstone_delegate_host *host,
+                         const struct capstone_delegate_entry *entry) {
   const char *block = host->exchange + entry->args[0];
   size_t bytes = (size_t)entry->args[1];
   static char *argv[CAPSTONE_SPAWN_STRINGS + 1], *envp[CAPSTONE_SPAWN_STRINGS + 1];
@@ -178,7 +196,8 @@ static long spawn(struct capstone_delegate_host *host, const struct capstone_del
     host->exec_requested = 1;
     return 0;
   }
-  if (!host->spawner)
+  struct capstone_delegate_host *s = shared(host);
+  if (!s->spawner)
     return -ENOSYS;
   for (unsigned i = 0; i < view.actions; ++i) {
     struct capstone_spawn_action action;
@@ -190,10 +209,10 @@ static long spawn(struct capstone_delegate_host *host, const struct capstone_del
         (action.cmd == CAPSTONE_SPAWN_FCHDIR && private_fd(host, action.fd)))
       return -EBADF;
   }
-  if (host->child_count >= CAPSTONE_DELEGATE_CHILDREN)
+  if (s->child_count >= CAPSTONE_DELEGATE_CHILDREN)
     return -EAGAIN;
   count = capstone_spawner_descriptors(fds, numbers, &cloexec, CAPSTONE_SPAWNER_FDS,
-                                       host->spawner->socket);
+                                       s->spawner->socket);
   if (count < 0) return count;
   unsigned kept = 0;
   uint64_t kept_cloexec = 0;
@@ -203,11 +222,20 @@ static long spawn(struct capstone_delegate_host *host, const struct capstone_del
     if ((cloexec >> i) & 1) kept_cloexec |= UINT64_C(1) << kept;
     ++kept;
   }
-  pid = capstone_spawner_spawn(host->spawner, block, bytes, fds, numbers, kept_cloexec, kept,
-                               capstone_signals_ignored(&host->signals), host->signals.logical);
+  pid = capstone_spawner_spawn(s->spawner, block, bytes, fds, numbers, kept_cloexec, kept,
+                               capstone_signals_ignored(&s->signals), s->signals.logical);
   if (pid > 0)
-    host->children[host->child_count++] = (pid_t)pid;
+    s->children[s->child_count++] = (pid_t)pid;
   return pid;
+}
+
+/* One spawn at a time: the unpack arrays, the spawner's socket and the
+   children are shared by every context. */
+static long spawn(struct capstone_delegate_host *host, const struct capstone_delegate_entry *entry) {
+  pthread_mutex_lock(&shared(host)->lock);
+  long r = spawn_locked(host, entry);
+  pthread_mutex_unlock(&shared(host)->lock);
+  return r;
 }
 
 static int reads(unsigned kind) {
@@ -413,34 +441,47 @@ static long epoll_call(struct capstone_delegate_host *host,
 /* Keep the helper and unrelated native children out of waitpid(-1). Polling
  * recorded children also avoids consuming anyone else's status. A blocking
  * wait is interruptible; synchronous signal delivery is a separate milestone. */
+/* One pass over the recorded children, under the shared lock: a reaped child
+   is forgotten before another context can look for it. */
+static long wait_scan(struct capstone_delegate_host *host, pid_t wanted, int *out,
+                      int options, void *usage, unsigned *matching) {
+  struct capstone_delegate_host *s = shared(host);
+  int status;
+  *matching = 0;
+  for (unsigned i = 0; i < s->child_count; ++i) {
+    pid_t pid = s->children[i];
+    if (wanted > 0 && wanted != pid)
+      continue;
+    if (wanted == 0 || wanted < -1) {
+      pid_t group = wanted == 0 ? getpgrp() : (pid_t)-(int64_t)wanted;
+      if (getpgid(pid) != group)
+        continue;
+    }
+    ++*matching;
+    long r = syscall(SYS_wait4, pid, &status, options | WNOHANG, usage);
+    if (r < 0)
+      return -errno;
+    if (r > 0) {
+      if (out) memcpy(out, &status, sizeof status);
+      if (WIFEXITED(status) || WIFSIGNALED(status))
+        forget_child(host, pid);
+      return r;
+    }
+  }
+  return 0;
+}
+
 static long wait_child(struct capstone_delegate_host *host, pid_t wanted,
                        int *out, int options, void *usage) {
-  int status;
   if (options & ~(WNOHANG | WUNTRACED | WCONTINUED))
     return -EINVAL;
   for (;;) {
-    unsigned matching = 0;
-    for (unsigned i = 0; i < host->child_count; ++i) {
-      pid_t pid = host->children[i];
-      if (wanted > 0 && wanted != pid)
-        continue;
-      if (wanted == 0 || wanted < -1) {
-        pid_t group = wanted == 0 ? getpgrp() : (pid_t)-(int64_t)wanted;
-        if (getpgid(pid) != group)
-          continue;
-      }
-      ++matching;
-      long r = syscall(SYS_wait4, pid, &status,
-                       options | WNOHANG, usage);
-      if (r < 0)
-        return -errno;
-      if (r > 0) {
-        if (out) memcpy(out, &status, sizeof status);
-        if (WIFEXITED(status) || WIFSIGNALED(status))
-          forget_child(host, pid);
-        return r;
-      }
-    }
+    unsigned matching;
+    pthread_mutex_lock(&shared(host)->lock);
+    long r = wait_scan(host, wanted, out, options, usage, &matching);
+    pthread_mutex_unlock(&shared(host)->lock);
+    if (r)
+      return r;
     if (!matching)
       return -ECHILD;
     if (options & WNOHANG)
@@ -533,8 +574,8 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
       (entry->args[0] != PRIO_PROCESS || !self_pid((pid_t)entry->args[1])))
     return -EPERM;
   if (entry->nr == CAPSTONE_SYS_setpgid &&
-      (!(self_pid((pid_t)entry->args[0]) || child_of(host, (pid_t)entry->args[0])) ||
-       !(own_group((pid_t)entry->args[1]) || child_of(host, (pid_t)entry->args[1]) ||
+      (!(self_pid((pid_t)entry->args[0]) || child_of_locked(host, (pid_t)entry->args[0])) ||
+       !(own_group((pid_t)entry->args[1]) || child_of_locked(host, (pid_t)entry->args[1]) ||
          entry->args[1] == entry->args[0])))
     return -EPERM;
   if (!host->bounce)
@@ -589,10 +630,10 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
      kill of a pid that has been reaped. Signal 0 to the task's own group
      signals nothing and asks only what Linux always answers, since the task
      is in its group: that goes through. */
-  if (entry->nr == CAPSTONE_SYS_kill && !child_of(host, (pid_t)a[0]) &&
+  if (entry->nr == CAPSTONE_SYS_kill && !child_of_locked(host, (pid_t)a[0]) &&
       (pid_t)a[0] != getpid() && (pid_t)a[0] != getppid() && (a[0] != 0 || a[1] != 0))
     return kill((pid_t)a[0], 0) < 0 && errno == ESRCH ? -ESRCH : -EPERM;
-  if (entry->nr == CAPSTONE_SYS_wait4 && a[0] > 0 && !child_of(host, (pid_t)a[0]))
+  if (entry->nr == CAPSTONE_SYS_wait4 && a[0] > 0 && !child_of_locked(host, (pid_t)a[0]))
     return -ECHILD;
   /* raise() is tkill on the task's own thread; nothing else is a domain's to signal */
   if (entry->nr == CAPSTONE_SYS_tkill && (pid_t)a[0] != getpid())
@@ -642,6 +683,25 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
   return r;
 }
 
+/* Requests only the first context may make, for now: HELLO, and everything
+   that reads or changes signal state. Signals are the first context's until
+   they are per context (docs/plans/delegation-threads.md); a further context's
+   launcher thread blocks every signal, and a wait with a temporary mask would
+   unblock them there. */
+static int first_context_only(const struct capstone_delegate_entry *e) {
+  switch (e->nr) {
+  case CAPSTONE_NR_HELLO: case CAPSTONE_NR_SIGACTION: case CAPSTONE_NR_SIGDONE:
+  case CAPSTONE_NR_SIGPOLL: case CAPSTONE_SYS_rt_sigprocmask:
+  case CAPSTONE_SYS_rt_sigsuspend: case CAPSTONE_SYS_rt_sigtimedwait:
+  case CAPSTONE_SYS_rt_sigpending:
+    return 1;
+  case CAPSTONE_SYS_ppoll:
+    return e->args[3] != 0;
+  default:
+    return 0;
+  }
+}
+
 void capstone_delegate_serve(struct capstone_delegate_host *host,
                              struct capstone_delegate_entry *entry) {
   struct capstone_delegate_entry snapshot;
@@ -661,7 +721,10 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   s = capstone_delegate_shape(snapshot.nr);
   host->last_nr = snapshot.nr;
   long r;
-  if (snapshot.nr == CAPSTONE_NR_SPAWN) {
+  if (host->owner && first_context_only(&snapshot)) {
+    ++host->refused;
+    r = -ENOSYS;
+  } else if (snapshot.nr == CAPSTONE_NR_SPAWN) {
     ++host->syscalls;
     r = spawn(host, &snapshot);
   } else if (snapshot.nr == CAPSTONE_NR_HELLO) {
@@ -682,7 +745,7 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   } else if (snapshot.nr == CAPSTONE_NR_SIGPOLL) {
     r = 0;
   } else if (snapshot.nr == CAPSTONE_NR_CONTEXT_CREATE || snapshot.nr == CAPSTONE_NR_CONTEXT_STEP ||
-             snapshot.nr == CAPSTONE_NR_CONTEXT_FORGET) {
+             snapshot.nr == CAPSTONE_NR_CONTEXT_FORGET || snapshot.nr == CAPSTONE_NR_CONTEXT_RESERVE) {
     r = host->context ? host->context(host, &snapshot) : -ENOSYS;
   } else if (snapshot.nr == CAPSTONE_SYS_rt_sigprocmask) {
     /* the logical mask is the domain's; the kernel gets the physical one */
@@ -799,9 +862,11 @@ void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host 
   }
   PUT(" pc="); PUTHEX(pc);
   PUT(" address="); PUTHEX(address);
-  if (host && host->hello_seen) {
-    PUT(" entry="); PUTHEX(host->entry_address);
-    PUT(" code="); PUTHEX(host->code_base); PUT("-"); PUTHEX(host->code_end);
+  /* HELLO's code range and the image digest are the first context's */
+  const struct capstone_delegate_host *first = host && host->owner ? host->owner : host;
+  if (first && first->hello_seen) {
+    PUT(" entry="); PUTHEX(first->entry_address);
+    PUT(" code="); PUTHEX(first->code_base); PUT("-"); PUTHEX(first->code_end);
   } else {
     PUT(" entry=unknown");
   }
@@ -809,7 +874,7 @@ void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host 
     /* the last request served, and the one the domain was preparing */
     PUT(" last="); PUTHEX(host->last_nr);
     PUT(" preparing="); PUTHEX(host->preparing_nr);
-    if (host->image_sha256[0]) { PUT(" sha256="); PUT(host->image_sha256); }
+    if (first->image_sha256[0]) { PUT(" sha256="); PUT(first->image_sha256); }
   }
   if (image) { PUT(" image="); PUT(image); }
   PUT("\n");

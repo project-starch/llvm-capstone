@@ -48,8 +48,10 @@ static struct pending events[EVENTS];
 static unsigned event_count;
 
 static uint64_t logical;  /* the mask, as the kernel holds it for this task */
-static struct capstone_signal_block *block;
-static uint64_t seen_published;
+/* The calling context's handover block: the first context's is in transport
+   0; a further context has none yet (docs/plans/delegation-threads.md). */
+static __thread struct capstone_signal_block *block;
+static __thread uint64_t seen_published;
 static stack_t alt;
 static int alt_enabled;
 static int transition;    /* a management round of delivery is in progress */
@@ -74,6 +76,12 @@ void __capstone_signals_regions(void *meta, unsigned long bytes) {
 int __capstone_signals_hint(void) {
   return block && block->recorded != seen_published;
 }
+
+/* Signals are the first context's for now (docs/plans/delegation-threads.md):
+   only a context with a handover block takes events, runs handlers, or reads
+   and changes the signal state. Another context's signal calls answer ENOSYS
+   before they touch any of it; the launcher refuses them as well. */
+static int signal_context(void) { return block != 0; }
 
 /* Round end: the launcher published block->count events; keep them. */
 void __capstone_signals_take(void) {
@@ -114,6 +122,7 @@ static int on_altstack(void) {
 }
 
 long __capstone_sigaltstack(const stack_t *ss, stack_t *old) {
+  if (!signal_context()) return -ENOSYS;
   if (old) {
     *old = alt;
     old->ss_flags = alt_enabled ? (on_altstack() ? SS_ONSTACK : 0) : SS_DISABLE;
@@ -260,7 +269,7 @@ static struct pending *next_runnable(int only_sig) {
 /* After every round: run what is runnable, in acceptance order. */
 void __capstone_signals_deliver(void) {
   struct pending *p;
-  if (transition) return;
+  if (transition || !signal_context()) return;
   while ((p = next_runnable(0)))
     run_event(p);
 }
@@ -268,6 +277,7 @@ void __capstone_signals_deliver(void) {
 long __capstone_sigaction(int sig, const struct k_sigaction *new, struct k_sigaction *old) {
   struct pending *p;
   if (sig < 1 || sig > SIGNALS || sig == SIGKILL || sig == SIGSTOP) return -EINVAL;
+  if (!signal_context()) return -ENOSYS;
   if (new && !transition)
     while ((p = next_runnable(sig)))   /* accepted for the old installation: run it first */
       run_event(p);
@@ -306,6 +316,7 @@ long __capstone_sigprocmask(int how, const sigset_t *set, sigset_t *old, unsigne
   uint64_t m = set ? of_set(set) : 0, before = 0;
   long r;
   if (size != 8) return -EINVAL;
+  if (!signal_context()) return -ENOSYS;
   /* the round that unblocks a signal publishes it: the mirror must have
      moved before delivery decides what is runnable */
   transition++;

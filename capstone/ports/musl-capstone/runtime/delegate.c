@@ -93,9 +93,14 @@ static long dl_identity(long n, long *answer) {
   }
 }
 
-static volatile struct capstone_delegate_entry *dl_entry;
-static char *dl_exchange;
-static size_t dl_capacity, dl_used;
+/* The transport of the calling context: its entry block and exchange region.
+   Per context, in its TLS block (docs/plans/delegation-threads.md): the first
+   context installs transport 0 when the regions arrive, a further context the
+   transport its creator reserved, before its first delegated call. A context
+   without one gets -EIO from every call. */
+static __thread volatile struct capstone_delegate_entry *dl_entry;
+static __thread char *dl_exchange;
+static __thread size_t dl_capacity, dl_used;
 
 /* Argument marshalling record for one call. */
 struct dl_slot {
@@ -110,15 +115,61 @@ static size_t cap_bytes(void *cap) {
                   __builtin_capstone_cap_get_cursor(cap));
 }
 
-static uint64_t dl_status;  /* of the last round: DONE or RETRY */
+static __thread uint64_t dl_status;  /* of the last round: DONE or RETRY */
 
-void __capstone_delegate_regions(void *entry, void *exchange) {
-  dl_entry = entry;
-  dl_exchange = exchange;
-  __capstone_signals_regions(entry, entry ? cap_bytes(entry) : 0);
-  dl_capacity = exchange ? cap_bytes(exchange) : 0;
-  if (dl_capacity > 0x40000000u)
-    dl_capacity = 0x40000000u;
+/* The two regions every transport is cut from, for the whole application:
+   META blocks of CAPSTONE_DELEGATE_META_BYTES and exchange slices of equal
+   size, transport i at i times the block size in both. */
+static char *dl_meta_region, *dl_data_region;
+static size_t dl_transports, dl_slice_bytes;
+
+/* Install transport `index` for the calling context: bounded capabilities to
+   its entry block and its exchange slice. -1 when there is no such transport. */
+static int dl_install(size_t index) {
+  if (index >= dl_transports)
+    return -1;
+  char *meta = dl_meta_region + index * CAPSTONE_DELEGATE_META_BYTES;
+  char *data = dl_data_region + index * dl_slice_bytes;
+  dl_entry = (volatile struct capstone_delegate_entry *)__builtin_capstone_cap_shrink(
+      meta, meta, meta + CAPSTONE_DELEGATE_META_BYTES);
+  dl_exchange = __builtin_capstone_cap_shrink(data, data, data + dl_slice_bytes);
+  dl_capacity = dl_slice_bytes > 0x40000000u ? 0x40000000u : dl_slice_bytes;
+  return 0;
+}
+
+/* The first context, when the launcher's regions have arrived: record them and
+   take transport 0, whose META block also carries the signal handover. The
+   transports are cut by the sizes this image declared (application.c): a
+   region's capability may cover more, and one that covers less leaves the
+   application without transports. */
+void __capstone_application_transports(unsigned long *count, unsigned long *exchange_bytes);
+void __capstone_delegate_regions(void *meta, void *exchange) {
+  unsigned long count, slice;
+  __capstone_application_transports(&count, &slice);
+  dl_meta_region = meta;
+  dl_data_region = exchange;
+  dl_transports = count;
+  dl_slice_bytes = slice;
+  if (!meta || !exchange || cap_bytes(meta) / CAPSTONE_DELEGATE_META_BYTES < count ||
+      cap_bytes(exchange) / slice < count)
+    dl_transports = 0;
+  if (dl_install(0)) {
+    dl_entry = 0;
+    dl_exchange = 0;
+    dl_capacity = 0;
+    __capstone_signals_regions(0, 0);
+    return;
+  }
+  __capstone_signals_regions((void *)dl_entry, CAPSTONE_DELEGATE_META_BYTES);
+}
+
+/* A further context, at its first entry: the transport its creator reserved.
+   Signals stay with the first context for now; this one has no handover
+   block, so no event is ever taken or delivered here. */
+int __capstone_delegate_transport(unsigned long index) {
+  if (index == 0 || dl_install(index))
+    return -1;
+  return 0;
 }
 
 int __capstone_delegate_ready(void) {

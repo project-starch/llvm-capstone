@@ -36,6 +36,9 @@ void __capstone_context_seal(capstone_cap_slot *region, void *entry,
                              unsigned long mstatus, unsigned long mie);
 long __capstone_context_offer(capstone_cap_slot *seal, unsigned long ticket);
 long __capstone_delegate_context(uint64_t nr, uint64_t a, uint64_t b, void *event);
+long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c);
+int __capstone_delegate_transport(unsigned long index);
+unsigned long __capstone_context_run(void *start_block);
 
 #define MIN_STACK_BYTES 8192
 
@@ -101,8 +104,10 @@ static int mint_area(struct capstone_context *c, capstone_cap_slot *area, void *
   void **slot = (void **)sb;
   slot[CAPSTONE_CONTEXT_SLOT_SP / 16] = top;
   slot[CAPSTONE_CONTEXT_SLOT_TP / 16] = tp;
-  slot[CAPSTONE_CONTEXT_SLOT_START / 16] = (void *)start;
-  slot[CAPSTONE_CONTEXT_SLOT_ARG / 16] = arg;
+  slot[CAPSTONE_CONTEXT_SLOT_START / 16] = (void *)__capstone_context_run;
+  slot[CAPSTONE_CONTEXT_SLOT_ARG / 16] = sb;
+  slot[CAPSTONE_CONTEXT_SLOT_USER_START / 16] = (void *)start;
+  slot[CAPSTONE_CONTEXT_SLOT_USER_ARG / 16] = arg;
 
   c->done = (volatile unsigned long *)(sb + CAPSTONE_CONTEXT_WORD_DONE / 8);
   c->value = (volatile unsigned long *)(sb + CAPSTONE_CONTEXT_WORD_VALUE / 8);
@@ -192,16 +197,45 @@ int capstone_context_remint(struct capstone_context *c,
   return mint_area(c, &area, __capstone_context_entry, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
 }
 
-/* One ticket per offer: a late or repeated request can never consume a later
-   offer of this application. */
-static unsigned long next_ticket = 1;
+/* The first function a minted context runs (the entry glue calls it with its
+   start block): the transport its creator reserved, then the application's
+   function, whose value the entry glue passes on to __capstone_context_exit. */
+unsigned long __capstone_context_run(void *start_block)
+{
+  void **slot = (void **)start_block;
+  unsigned long *word = (unsigned long *)start_block;
+  unsigned long transport = word[CAPSTONE_CONTEXT_WORD_TRANSPORT / 8];
+  if (transport)
+    __capstone_delegate_transport(transport);   /* a bad index: every call gets -EIO */
+  unsigned long (*start)(void *) =
+      (unsigned long (*)(void *))slot[CAPSTONE_CONTEXT_SLOT_USER_START / 16];
+  return start(slot[CAPSTONE_CONTEXT_SLOT_USER_ARG / 16]);
+}
+
+/* One ticket per offer of this context: a late or repeated request can never
+   consume a later offer. The monitor keeps offers per offering context, so the
+   count is the context's own and needs no atomic. */
+static __thread unsigned long next_ticket = 1;
 
 long capstone_context_create(struct capstone_context *c, unsigned mode)
 {
   unsigned long ticket = next_ticket++;
-  if (__capstone_context_offer(&c->seal, ticket))
-    return -EINVAL;
-  long id = __capstone_delegate_context(CAPSTONE_NR_CONTEXT_CREATE, ticket, mode, 0);
+  long transport = 0;
+  if (mode == CAPSTONE_CONTEXT_THREAD) {
+    /* Before the request, not after it: the launcher may start the context
+       before this context has the request's answer. */
+    transport = __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_RESERVE, 0, 0, 0);
+    if (transport < 0)
+      return transport;
+    c->start[CAPSTONE_CONTEXT_WORD_TRANSPORT / 8] = (unsigned long)transport;
+  }
+  /* The request consumes the reservation whatever its outcome, so it is made
+     even when there is nothing to offer; it then fails to adopt. */
+  int offered = __capstone_context_offer(&c->seal, ticket) == 0;
+  long id = __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_CREATE, ticket, mode,
+                                     (unsigned long)transport);
+  if (!offered)
+    return id < 0 ? id : -EINVAL;
   if (id >= 0)
     c->id = (unsigned long)id;
   return id;
