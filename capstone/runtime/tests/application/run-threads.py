@@ -91,6 +91,9 @@ PTHREAD_MODES = {
     "sigreturn-mask": ("exit", 0, "PASS", None, None),
     "setuid-threads": ("exit", 0, "PASS", None, None),
     "sigaction-race": ("exit", 0, "PASS", None, None),
+    # the launcher's msghdr per call: four contexts in sendmsg/recvmsg at once
+    "sendmsg-concurrent": ("exit", 0, "PASS", None, None),
+    "recvmsg-concurrent": ("exit", 0, "PASS", None, None),
     "main-exit-signal": ("exit", 0, "main-exit-signal: PASS", None, None),
     # abort in a thread ends the application with SIGABRT.
     "abort-thread": ("signal", 6, "", "REACHED", None),
