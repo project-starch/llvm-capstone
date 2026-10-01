@@ -5,7 +5,11 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+export CAPSTONE_TMP_ROOT=${SQLITE322_TMP_ROOT:-/tmp/capstone-322}
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
+export SQLITE_VERSION=3220000
+export SQLITE_YEAR=2018
+export SQLITE_ARCHIVE_SHA3=69bc5ee8f08d747494dd3a4bfe075e5b078fe200dfc671d76dd9e1ccb5b2decb
 
 REPO_ROOT=$CAPSTONE_REPO_ROOT
 SQLITE_SRC_DIR=${SQLITE_SRC_DIR:-$(bash "$SCRIPT_DIR/fetch-sqlite.sh")}
@@ -58,30 +62,6 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
 # sqlite3.h (adapt-sqlite-322.sh's output for 3.22.0), so this 3.53.3 pass is skipped and the .c is
 # copied as it is. The Sublet and hook patches below still apply to the copy, and the other
 # translation units include the adapted sqlite3.h from the same directory.
-if [ "${SQLITE_PREADAPTED:-0}" = 1 ]; then
-  cp -f "$SQLITE_SRC_DIR/sqlite3.c" "$PATCHED_SQLITE"
-else
-sed \
-  -e 's/sqlite3Atoi64(z, pResult, strlen(z), SQLITE_UTF8)/sqlite3Atoi64(zIn, pResult, strlen(zIn), SQLITE_UTF8)/' \
-  -e 's/#if GCC_VERSION>=4007000 || __has_extension(c_atomic)/#if SQLITE_THREADSAFE \&\& (GCC_VERSION>=4007000 || __has_extension(c_atomic))/' \
-  -e '0,/^#define YYDYNSTACK 1$/s//#define YYDYNSTACK 0/' \
-  -e 's/^  char saveBuf\[PARSE_TAIL_SZ\];/  char saveBuf[PARSE_TAIL_SZ] __attribute__((aligned(16)));/' \
-  -e 's/  nByte = SZ_VDBECURSOR(nField);/  nByte = (SZ_VDBECURSOR(nField)+15)\&~15;/' \
-  -e 's/&pMem->z\[SZ_VDBECURSOR(nField)\]/\&pMem->z[(SZ_VDBECURSOR(nField)+15)\&~15]/' \
-  "$SQLITE_SRC_DIR/sqlite3.c" > "$PATCHED_SQLITE"
-
-grep -q 'sqlite3Atoi64(zIn, pResult, strlen(zIn), SQLITE_UTF8)' "$PATCHED_SQLITE"
-grep -q '#if SQLITE_THREADSAFE && (GCC_VERSION>=4007000 || __has_extension(c_atomic))' "$PATCHED_SQLITE"
-grep -q '^#define YYDYNSTACK 0$' "$PATCHED_SQLITE"
-# gap 6: sqlite3NestedParse saves the cap-bearing Parse tail through this buffer;
-# 16-align it so memcpy's tag-preserving ldc/stc fast path applies (no byte copy).
-grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$PATCHED_SQLITE"
-# gap 8: allocateCursor embeds a cap-bearing BtCursor at SZ_VDBECURSOR(nField),
-# which is only 8-aligned; 16-align its offset (and the allocation) so ldc/stc on
-# the BtCursor's capability fields don't fault on unaligned cap access.
-grep -q 'nByte = (SZ_VDBECURSOR(nField)+15)&~15;' "$PATCHED_SQLITE"
-grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
-fi
 
 # An instrument's patch (run-sqlite-speedtest1.sh, SPEEDTEST1_HOOK): SQLITE_HOOK_PATCH puts its
 # calls into the copies in OUT_DIR, the amalgamation above and a speedtest1.c the runner placed
@@ -104,6 +84,30 @@ fi
 # undeclared identifier 'capstone_cap_slot'", which is what it did from the PR #48 merge
 # (06a31271f200, 2026-09-18) until this was restored. dac22bcaeca4 had it right with a single
 # root; the merge added two in front of it. Verify with `clang -H` if this is ever touched.
+
+# 3.22.0 adaptation (replaces the 3.53.3 sed). adapt-sqlite-322.sh writes the adapted
+# amalgamation .c to PATCHED_SQLITE (saveBuf/cursor 16-align + sqlite3_filename in the .c).
+# adapt-sqlite-322.sh takes the amalgamation DIRECTORY and an OUTPUT DIRECTORY (it writes
+# sqlite3.c and sqlite3.h). Adapt into a subdir, then place the adapted .c at PATCHED_SQLITE
+# (a .c path, the contract the rest of this script and the sublet/hook patch dir rely on).
+ADAPTED_322_DIR="$OUT_DIR/sqlite-322-adapted"
+bash "$SCRIPT_DIR/adapt-sqlite-322.sh" "$SQLITE_SRC_DIR" "$ADAPTED_322_DIR"
+cp -f "$ADAPTED_322_DIR/sqlite3.c" "$PATCHED_SQLITE"
+# FTS5 CREATE fix (2026-09-30): the default-tokenizer path evaluates &azArg[1] with
+# azArg==NULL, which is cincoffset on a NULL capability and faults on Capstone
+# (pointer arithmetic on NULL is UB in C). See fts5-azarg-patch.py.
+python3 "$SCRIPT_DIR/fts5-azarg-patch.py" "$PATCHED_SQLITE"
+
+# The VFS is a SEPARATE TU that includes only sqlite3.h; 3.22.0's header has no
+# sqlite3_filename (added in 3.41.0). Backport the typedef into a private header dir and
+# put it first on the include path so every TU sees it.
+SQLITE322_INC="$OUT_DIR/inc-322"
+mkdir -p "$SQLITE322_INC"
+sed -e '/^typedef struct sqlite3_file sqlite3_file;$/a\
+typedef const char *sqlite3_filename;' \
+  "$SQLITE_SRC_DIR/sqlite3.h" > "$SQLITE322_INC/sqlite3.h"
+
+
 SUBLET_FLAGS=()
 if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
   patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_SUBLET_PATCH"
@@ -229,6 +233,7 @@ COMMON_FLAGS=(
   -I"$SCRIPT_DIR"
   "${SUBLET_FLAGS[@]}"
   -I"$VFS_SKELETON_DIR"
+  -I"$SQLITE322_INC"
   -I"$SQLITE_SRC_DIR"
   "${SQLITE_DEFINES[@]}"
   "${SQLITE_RESTORE[@]}"      # after SQLITE_DEFINES: -U must win over the -D above
@@ -238,9 +243,21 @@ COMMON_FLAGS=(
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$START_SRC" -o "$OBJ_DIR/start.o"
 
-"$CLANG" "${COMMON_FLAGS[@]}" "$SQLITE_OPT_LEVEL" \
-  -Wno-pointer-to-int-cast -Wno-void-pointer-to-int-cast \
-  -c "$PATCHED_SQLITE" -o "$OBJ_DIR/sqlite3.o"
+# CORPUS_CACHE_SQLITE=1 (opt-in): skip recompiling the 8 MB amalgamation when a
+# cached sqlite3.o already exists for the SAME flags+source. A stamp records the
+# flag string and the adapted-source hash; a mismatch forces a rebuild. Off by
+# default so nothing else that sources this script changes behaviour.
+_sq_stamp_want="$SQLITE_OPT_LEVEL|${COMMON_FLAGS[*]}|$(sha1sum "$PATCHED_SQLITE" | cut -d" " -f1)"
+if [ "${CORPUS_CACHE_SQLITE:-0}" = 1 ] && [ -f "$OBJ_DIR/sqlite3.o" ] && \
+   [ -f "$OBJ_DIR/sqlite3.o.stamp" ] && \
+   [ "$(cat "$OBJ_DIR/sqlite3.o.stamp")" = "$_sq_stamp_want" ]; then
+  echo "== reusing cached sqlite3.o (CORPUS_CACHE_SQLITE)"
+else
+  "$CLANG" "${COMMON_FLAGS[@]}" "$SQLITE_OPT_LEVEL" \
+    -Wno-pointer-to-int-cast -Wno-void-pointer-to-int-cast \
+    -c "$PATCHED_SQLITE" -o "$OBJ_DIR/sqlite3.o"
+  printf %s "$_sq_stamp_want" > "$OBJ_DIR/sqlite3.o.stamp"
+fi
 
 "$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" \
   -c "$ADAPTED_DIR/capstone_sqlite_libc.c" -o "$OBJ_DIR/libc.o"
