@@ -22,6 +22,14 @@ case "$GROUP" in
   fts3) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 $MATHINC" ;;
   ext) CF="-USQLITE_OMIT_INCRBLOB $MATHINC" ;;
   json) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_JSON1" ;;
+  # rtree needs floating point, but this port builds with -DSQLITE_OMIT_FLOATING_POINT=1,
+  # which does `#define double sqlite_int64` in sqliteInt.h AFTER sqlite3.h has already
+  # typedef'd sqlite3_rtree_dbl as a real double -- so RtreeDValue and sqlite3_rtree_dbl
+  # disagree and rtree.c will not compile.  -DSQLITE_RTREE_INT_ONLY makes BOTH typedefs
+  # sqlite3_int64 and they agree again.  Cell layout is unchanged (RtreeValue int vs
+  # float are both 4 bytes), and the host ASan oracle confirms both rtree cases still
+  # reproduce under INT_ONLY at the same row counts.
+  rtree) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_RTREE -DSQLITE_RTREE_INT_ONLY -USQLITE_OMIT_SHARED_CACHE $MATHINC" ;;
   *) echo "unknown group $GROUP" >&2; exit 2 ;;
 esac
 
@@ -53,6 +61,10 @@ case_json_each_static.c jsoneachstatic
 case_json_each_root.c   jsoneachroot
 EOF
    ;;
+   rtree) cat <<EOF
+case_rtree_probe.c    rtreeprobe
+EOF
+   ;;
    fts5) cat <<EOF
 case_fts5probe.c fts5probe
 case_fts5vocab_eof.c   fts5vocabeof
@@ -67,6 +79,7 @@ case_fts3_snippet_or.c fts3snipor
 case_fts3_zterm.c      fts3zterm
 case_fts3_offsets.c    fts3offsets
 case_fts3_snippet.c    fts3snip
+case_static_binding.c  staticbind
 EOF
    ;;
   esac
@@ -78,7 +91,7 @@ EXT_SRC_DIR=${EXT_SRC_DIR:-$HOME/sqlite-versions/sqlite-3.22.0-full/ext}
 do_build() {
   mkdir -p "$SHARE" "$OBJ"
   local BASE_SRC=""
-  case "$GROUP" in fts5|fts5S|fts3) BASE_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
+  case "$GROUP" in fts5|fts5S|fts3|rtree) BASE_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
   while read -r file tag extra; do
     [ -z "${file:-}" ] && continue
     # ext cases each pull in their own extension TU (and its include/defines)
