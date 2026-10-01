@@ -50,6 +50,6 @@
    "what": "test.test_os.TimerfdTests (12) and EventfdTests (3); base is the same objects relinked with #144's runtime, whose shape table has no such rows"
   },
   "cpython_test_os_full": "both images stop at the same place, TestSendfile.test_invalid_offset: its asyncio teardown cannot start a thread (threads are not on #144) and the run ends there; up to that point the only difference is EventfdTests, 3 ERROR in base and 3 ok with the rows",
-  "gate_note": "first measured as 22 PASS on the delegation-v0-removal-stack base. Rebasing onto dev brought in PR #158 (heap qualification), whose supervisor.c adds three 'overlapping cpu / application loop' checks (wait status 15, 9 and 2), so the same run is 25 PASS, 0 FAIL on dev. Re-measured after the rebase; the healthy path and the new rows are unchanged. #158 also adds heap modes to contract.c, in their own argv[1] modes, so they do not collide with the exit codes this change uses in the healthy path"
+  "gate_note": "first measured as 22 PASS on a base without PR #145, whose run.py prints the three 'overlapping cpu / application loop' cancellation lines; on dev it is 25 PASS, 0 FAIL. Re-measured after the rebase; the healthy path and the new rows are unchanged. #158 adds heap modes to contract.c, in their own argv[1] modes, so they do not collide with the exit codes this change uses in the healthy path"
  }
 }
