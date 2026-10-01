@@ -345,15 +345,25 @@ socket contract passes 11 of 11 in the guest. Record:
 [host/run-filtered.py](host/run-filtered.py) runs a module without named tests.
 Record: [results/subprocess-2026-09-29.json](results/subprocess-2026-09-29.json).
 
-To run the suite: put `lib/python3.13` next to the image on the share, copied
-from the source `Lib/` (the `test` package included, an empty `lib-dynload`)
-plus `_sysconfigdata__linux_.py`, the native riscv64 build's
-`_sysconfigdata__linux_riscv64-linux-gnu.py` under the name this build looks
-for, since its `sys.implementation._multiarch` is empty (`test.support` needs
-it for `sysconfig.get_config_var`). The interpreter finds that tree from
-`sys.executable`, so no `PYTHONHOME` is needed and children started with `-I`,
-`-E` or an empty environment find it too; a `PYTHONHOME` elsewhere works as
-well, but not for those children.
+To run the suite, stage two things the port's scripts do not:
+
+1. **The build's own `_sysconfigdata__linux_.py`.** In the cross build tree,
+   `make pybuilddir.txt` generates it in `build/lib.linux-riscv64-3.13/`
+   (checked 2026-10-01 on a copy of a 3.13.7 cross build). The name has no
+   multiarch part because this build's `sys.implementation._multiarch` is
+   empty. Without it every suite dies importing `test.support`, which needs
+   `sysconfig.get_config_var`. The native riscv64 build's
+   `_sysconfigdata__linux_riscv64-linux-gnu.py` copied under this name, which
+   this README gave before, also imports, but it describes another build.
+2. **The standard library next to the image.** Put `lib/python3.13` on the
+   share beside the image, copied from the source `Lib/` (the `test` package
+   included, an empty `lib-dynload`), with the file from step 1 in it. The
+   interpreter finds that tree from `sys.executable`, so children started with
+   `-I`, `-E` or an empty environment find it too; with the share at
+   `/mnt/host`, `PYTHONHOME=/mnt/host` names the same tree. A `PYTHONHOME`
+   elsewhere works for the parent but not for those children: that is the
+   `test_interprocess_signal` hang above, and in the review of PR #170 it also
+   gave spurious `test_posix` failures.
 
 ## What this does not establish
 
