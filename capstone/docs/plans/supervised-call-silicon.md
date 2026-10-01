@@ -1,6 +1,6 @@
 # Supervised CALL on silicon — RTL design: the full-exchange escape
 
-*RTL lane, 2026-10-01. Design approved by the project lead on 2026-10-01; implementation on capstone-ariane branch `sup-call`. Before-audit pending; nothing synthesised. The scoping estimate that preceded it is summarised in the Context section.*
+*RTL lane, 2026-10-01. Design approved by the project lead on 2026-10-01; implementation on capstone-ariane branch `sup-call`. Before-audit done 2026-10-01: it refuted the first design, revision 1.1 below was accepted by the lead the same day; nothing synthesised. The scoping estimate that preceded it is summarised in the Context section.*
 design, after-audit of the diff; apollo rules (CPUs 0-7,32-39, `--cpuset-cpus`, `taskset`+`nice`+`ionice`, `-j12`);
 work on a lane/task branch of capstone-ariane, squash-land; synthesis only on the lead's word; never name people.*
 
@@ -24,6 +24,67 @@ estimate sent to the board lane on 2026-10-01 concluded: no firmware-only path; 
 **Decisions already taken by the lead:** node-GC data via a read-only CSR (the `cssupervisor_gc` opcode is NOT
 decoded; "collect" is a no-op on silicon because the revoke walk already frees); a CALL by a supervised domain is
 ILLEGAL in v1 (no context stack). Naming: "trap-vector defect" = registry M-1; "node reclaimer" = R-12 / study M1.
+
+## REVISION 1.1 (2026-10-01, after the before-audit) — the monitor's continuation lives in a PRIVATE save area, not in the seal
+
+The audit refuted the design below on its central premise, and both critical findings are verified in source:
+
+- **C1.** The CALL hands the domain a SEALEDRET in x1, and `LDC`/`STC` through a SEALEDRET are allowed inside
+  `[seal+48, seal+1008)` (`capstone_dyn_unit.anvil:364-365, 373-374, 429-453`; no permission test for that type; the
+  LSU's type gate covers only LOAD/STORE, `load_store_unit.sv:1257,1280`). A full exchange would park the monitor's
+  mstatus..mie, CPMPs, x1..x31 and mcause..satp at +48..+943 — inside that window. QEMU is immune because its caller
+  snapshot is hidden state (`capstone_supervisor.c:345, 388`), and the window is contractual
+  (`runtime/tests/application/context-probe-asm.S:278-285`). Today's 8-register CALL already exposes +48..+87.
+- **C3 (pre-existing, made live by full mode).** The switcher's GPR write arm forces `cap_we_pack[i] = 1'b1`
+  (`issue_read_operands.sv:1653-1661`) while the rs1 write lane carries the frozen head's `cap_result` without ack
+  gating (`commit_stage.sv:297-300`), so each switch write also rewrites a stale register.
+- **C2.** The strip must act at T (the trap is otherwise taken in the decision cycle, `csr_regfile.sv:2019`).
+- **H1/H2/M3.** Resume must not rewrite x1; FP state is not in any exchange; a full exchange on the FIRST entry breaks
+  argument passing in a0..a7 (QEMU's first entry is the ordinary CALL, `capstone_supervisor.c:351`).
+
+**The revised primitive (matches QEMU's structure exactly):**
+
+```
+   cssupervise rd, rs1(seal), rs2(SAVE: a LINEAR RW capability to a 1 KiB monitor-private region)   quantum in CSR csupquantum
+   armed CALL (first entry):   the ORDINARY 8-register exchange with the seal (args pass in a0..a7, contract unchanged)
+                               + SAVE the monitor's ids 3..66 (mstatus..mie, offsetmmu, CPMP0..15, x1..x31 with metadata,
+                                 mcause..satp) into SAVE                       -- the protected continuation
+   escape / supervised RETURN: exchange ids 0..7 with the seal (the domain's pc+PCC, ctvec, cscratch, 8 regs parked, as
+                               a RETURN does today), SAVE the domain's ids 3..66 into the seal's own region [+48, +944)
+                               (its own state, reachable only by itself), then RESTORE the monitor's ids 3..66 from SAVE
+                               -- so the seal's +48..+87 contents, which the domain can rewrite, never reach the monitor
+   resume (armed CALL, resume flag): exchange 0..7 with the seal, SAVE the monitor's 3..66 into SAVE, RESTORE the domain's
+                               3..66 from the seal's region; set_ra = 0 (x1 restored from the image, not rewritten)
+```
+
+The switcher gains two walk kinds beside EXCHANGE: SAVE(base, ids 3..66) = registers → memory, RESTORE(base, ids 3..66)
+= memory → registers, run in sequence after the 0..7 exchange; `dom_switch_req_t` gains `save_en/save_base`,
+`restore_en/restore_base`, and the id range 3..66 reuses the full-mode slot sizes (ids 3..8 at 8 B, 9..56 at 16 B,
+57..66 at 8 B; 856 B, so a 1 KiB save area). `sup_save_base` is hardware-held from cssupervise's rs2; the domain has no
+capability to it. The SEALEDRET window now contains only the domain's own images (harmless: they are rewritten at the
+next escape before any resume). C3 is fixed by `cap_we_pack[i] = cap_we_i[i]` in the dom-switch arm. The quantum is a
+CSR (`csupquantum`, M-level RW, blocked under supervision) so cssupervise's rs2 can carry the save capability; the
+forget form is rs1 = x0.
+
+Audit items folded in: C2 — strip at T from `sup_active_q && head.ex.valid && !debug_mode && cause ∉ {REPLAY,
+DEBUG_REQUEST}` (plus the bad-RETURN and CSR/pc-cap cases), with the head's pc/metadata/cause/tval latched into flops at T
+and the dom-switch issue at T+1 from those flops (H3), every commit output forced off under `escape_q`; H1 — the resume
+flag zeroes set_ra; H4 — a RETURN that is not through the supervised seal (base ≠ sup_base or set_ra ≠ sup_rd) is itself
+the escape and its own switch is suppressed; H5 — escape, injection and the counter are gated on `!debug_mode_q`;
+M1 — the armed CALL must name the cssupervise'd seal (base compare) or it is an ordinary CALL and the arm is dropped;
+M2 — id 25's real defect is `cpmp_q[16]`: the arm returns 0 and writes nothing; M4 — CCSRRW to CTVEC/CEPC/CSCRATCH stays
+legal (QEMU allows them, the runtime's probe uses them), CIH/CPMP are blocked; M5 — the plain-CSR gate blocks
+`addr[9:8] != 0` AND the explicit list CID/CIC/CIS (0x801/0x802/0x804), 0x800, 0x810, 0x811 (fcsr stays legal); M6 —
+`csupstatus` is read-to-clear and cssupervise refuses (status 3) while an event is unread, so an interrupt handler
+cannot overwrite an unread event; M7 — the busy-strip is first run as a DETECTOR over the 92-test sweep on the unmodified
+RTL, and any test that trips it is examined before the strip ships. **H2 (FP):** v1 contract — the monitor saves and
+restores f0..f31 and fcsr in software whenever the domain it resumes is not the one that ran last; v2 — FPR ids in the
+hardware walks. Pre-registration corrections (G): the id-25 mutant's observable is an out-of-range CPMP read, not a
+deadlock; the FF count is ~420 + the save/restore request fields; the WNS band is −9.595 ± 3.74; the ORDER-like test
+exempts the strip's legitimate path into `exception_o`/`i_frontend` and binds the escape-issue path only.
+
+Everything below this line is the original approved text, kept for the record; where it conflicts with the revision,
+the revision wins.
 
 ## The primitive: a trap-initiated FULL exchange, on the existing switcher
 
