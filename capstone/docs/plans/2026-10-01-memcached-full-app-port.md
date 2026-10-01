@@ -1,6 +1,6 @@
 # memcached 1.6.45 as a full application on the delegated runtime
 
-**Status:** M0 open (2026-10-01). Lane branch `memcached-app`.
+**Status:** M0–M5 and the Safety fixtures done (2026-10-01); corpus case 02 and stretch S1/S2 open. Lane branch `memcached-app`.
 
 ## Why memcached, and why now
 
@@ -318,6 +318,26 @@ The order of the lines on stderr is not predicted: each worker prints from its o
 
 **Control:** the same gate, applied to the stderr of an oracle run (no marker, zero lines), must fail.
 
+## Safety (2026-10-01): 90 of 90 as pre-registered
+
+Ten fixtures (`src/mcapp-safety.c`) ran on all three heap arms, three boots each, in a worker of a
+running server, through the hidden command of patch 0005. Predictions were pushed first, in
+92a837b435f4. Results, images and the premise that was wrong are in
+`ports/memcached/app/results/2026-10-01-qemu-safety/`.
+
+- **shrink** faults on heap overflow and one-past-the-end, and has no temporal safety.
+- **sublet** faults on those, on use after free and reuse, and on a stale free (inside `free`).
+- **level0** faults only on the global and stack controls.
+- **memcached's slab items** (fixtures 9, 10) are unprotected on every arm. An item is bounded to
+  its 1 MiB slab page on shrink and sublet, and to the arena on level0, and the slab never frees.
+  That is the S1 gap.
+
+Fixtures 1–8 and their predictions are tshark's, carried over; 9 and 10 are new. An independent
+audit resolved every fault pc into the fixture's access functions (sublet fixture 6 into `sh_free`'s
+probe), and doctored the classifier's inputs to show its gates fire.
+
+Corpus case 02 over the protocol is open: paused, awaiting the lead.
+
 ## Milestones
 
 | | content | gate |
@@ -330,4 +350,4 @@ The order of the lines on stderr is not predicted: each worker prints from its o
 | M3 | 2 x `-t` concurrent connections | every worker serves; transcripts identical |
 | M4 | SIGTERM and SIGUSR1 | exit statuses and stderr match native |
 | M5 | level0, shrink, sublet; N = 3 | identical; null, positive and identity controls fire |
-| Safety | fixtures pre-registered in `host/safety-expect.txt`; corpus case 02 over the protocol | outcomes as predicted |
+| Safety | fixtures pre-registered in `host/safety-expect.txt`; corpus case 02 over the protocol | outcomes as predicted — **fixtures done, 90/90**; case 02 open |

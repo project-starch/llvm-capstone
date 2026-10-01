@@ -5,7 +5,7 @@
  *   mc-harness --out DIR [--port P] --fixture N -- SERVER-COMMAND...
  *
  * Starts SERVER-COMMAND (memcached natively, or capstone-job ... capstone-exec memcached.dom in the guest),
- * waits until it answers `version`, runs one fixed script, stops it with the chosen signal and records
+ * waits until it accepts a connection, runs one fixed script, stops it with the chosen signal and records
  * its wait status. The same source is built for the host (the native reference) and for the guest.
  *
  * The script avoids every line that depends on sizeof(item) or sizeof(void *) (raw stats, slab and item
@@ -335,7 +335,7 @@ int main(int argc, char **argv) {
     if (e >= 0) dup2(e, 2);
     execvp(server[0], server); perror("exec"); _exit(127);
   }
-  /* up when `version` answers; 120 s for a domain's start */
+  /* up when it accepts a connection; 120 s for a domain's start */
   struct conn *c0 = calloc(1, sizeof *c0);
   for (int t = 0; t < 1200; t++) {
     c0->fd = dial();
