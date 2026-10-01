@@ -108,7 +108,12 @@ export SQLITE_STAGE_DOMS="$D" PROBE_SCOPED_OUT=$OUT/boot.txt PROBE_RAW_OUT=$OUT/
 say "=== boot r322-b${BOOT}${TAG} = repro322 batch 1 on hardware, boot $BOOT ==="
 say "=== stage list: $D"
 for i in $(seq 1 30); do c=$(curl -sS -m 10 -o /dev/null -w '%{http_code}' "$FPGA_URL" 2>/dev/null); [ "$c" != "000" ] && break; say "console down ($i)"; sleep 60; done
-cd $R/capstone/tests/rtl-smoke
+# The runner resolves its repo from its own file and the preflight from its cwd, so both must run in the
+# clone that has the submodules -- and that clone's runner, preflight and watchdog must be this tree's.
+for f in capstone/tests/rtl-smoke/fpga_driver capstone/tests/preflight-board-run.sh capstone/tests/rtl-smoke/board-watchdog.sh; do
+  diff -rq -x __pycache__ "$R/$f" "$SUB/$f" > /dev/null || fail "$SUB/$f differs from this tree's; the runner would not be the one checked"
+done
+cd $SUB/capstone/tests/rtl-smoke
 T0=$(date +%s)
 timeout $((10*BUDGET + 2400)) python3 -m fpga_driver.run_sqlite_stages_fpga > $OUT/driver.log 2>&1 &
 RUNNER=$!
