@@ -9,12 +9,16 @@ chooses Linux U-mode capability processes as the target. The finite
 fault, retirement and private-clone schedules, with the review gaps closed:
 old/fresh accesses after address reuse, remap identities, virgin clone
 namespaces, preserved PTE rights and pending accesses on both harts. Next,
-demonstrate ordinary page translation, `malloc(64); free; malloc(64)` at the
-same address with an old-pointer fault and a successful fresh-pointer access,
-and a recoverable buffer-copy fault in a small U-mode prototype. The kernel/user
-ABI and implementation of the global retirement break and two-hart completion
-contract remain open. Integrate the existing thread work with current I/O
-services and qualify IPv6 end-to-end.
+extend the [QEMU U-mode access slice](../design/trusted-linux-execution-boundary.md)
+into a real Linux process. Its 23 bare-metal cases already demonstrate
+ordinary page translation and debug-minted old/fresh capabilities at one
+virtual address. First replace the per-hart, virtual-address-keyed tag side
+table with physical tag identity and define alias, copy and reclaim behavior;
+then add protected per-process lifetime selection and tagged context save.
+The `malloc(64); free; malloc(64)` same-address test, a recoverable buffer-copy
+fault, preemption, kernel/user ABI, global retirement break and two-hart
+completion contract remain open. Integrate the existing thread work with
+current I/O services and qualify IPv6 end-to-end.
 Linux OS feature parity remains the goal; the bridge result does not establish
 Linux user-mode execution or close M1.
 

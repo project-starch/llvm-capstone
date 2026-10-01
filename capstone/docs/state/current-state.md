@@ -2,6 +2,24 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — trusted-Linux U-mode QEMU access slice
+
+The unpinned QEMU [lane `db53c89ad0`](https://github.com/project-starch/capstone-qemu/commit/db53c89ad041a4b3c531bbc740e582bd3fe27f71)
+routes U-mode integer, FP, atomic and capability memory operations through
+Capstone object checks and Sv39 PTE translation. Its bare-metal gate passes
+23/23 cases with exact fault-instruction checks; disabling the object check,
+page walk or vector guard produces the expected test failure. A revoked old
+capability faults and a separately minted fresh capability at the same virtual
+address succeeds. This is not an allocator test or a Linux process.
+
+The source audit also blocked unchecked vector memory, Zcmp stack memory,
+XThead and cache-block operations in capability-enabled U mode. The current
+tag side table is per hart and virtual-address keyed, so aliases and process
+migration are unsound until tags follow physical memory. Protected namespace
+selection, tagged context save, checked Linux copies, preemption and
+retirement completion remain open. The parent QEMU pin is unchanged; M1 is
+not closed.
+
 ## 2026-10-01 — reviewed trusted-Linux M1 boundary model
 
 The [finite model](../../models/trusted-linux-m1/README.md) now explores 19

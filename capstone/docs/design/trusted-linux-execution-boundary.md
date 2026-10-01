@@ -1,8 +1,8 @@
 # Linux capability execution boundary (M1)
 
-Status: **PROPOSED TARGET**, 2026-10-01. This chooses the direction for the
-M1 prototype; it does not claim that Linux user-mode capability execution or
-the required kernel and hardware contracts exist yet. It refines the
+Status: **PROPOSED TARGET; QEMU ACCESS SLICE ONLY**, 2026-10-01. This chooses
+the direction for the M1 prototype; it does not claim that Linux user-mode
+capability execution or the required kernel and hardware contracts exist yet. It refines the
 [trusted-Linux memory design](trusted-linux-memory.md) and the
 [application compatibility M1 gate](../plans/trusted-linux-application-compatibility.md).
 
@@ -145,9 +145,9 @@ need their own completion rules; a pinned physical page alone is insufficient.
    behavior. A source-level architectural choice is not evidence of a working
    kernel or cheaper hardware.
 
-The next implementation experiment is the access/fault path in item 2.
-Adding more delegated syscall shapes improves the bridge but does not
-settle M1.
+The first implementation experiment covers the access/fault path in item 2,
+but not its Linux-process or context-switch gates. Adding more delegated
+syscall shapes improves the bridge but does not settle M1.
 
 The reviewed [executable boundary model](../../models/trusted-linux-m1/README.md)
 covers the finite cases in item 1 with explicit per-hart invalidation and
@@ -158,5 +158,30 @@ after allocation and remap, private-clone namespace freshness, unchanged PTE
 rights on object reuse, and pending accesses on both harts. Its globally
 visible retirement break is an assumed contract, not an implemented mechanism.
 Capability encoding, tag save, multi-page translation, kernel copy recovery
-and the QEMU/RTL implementation remain untested. Item 2 is the next
-implementation gate, including the same old/fresh-pointer accesses.
+and the RTL implementation remain untested. Item 2 still requires a real
+Linux process, including the same old/fresh-pointer accesses.
+
+The separate QEMU lane
+[`db53c89ad0`](https://github.com/project-starch/capstone-qemu/commit/db53c89ad041a4b3c531bbc740e582bd3fe27f71)
+implements and tests an **isolated U-mode access slice**, without changing
+this repository's QEMU submodule pin. With Capstone checks enabled, U-mode
+integer, FP, atomic and capability memory accesses reach ordinary Sv39 page
+translation and precise M-mode traps. A 23-case bare-metal suite checks
+independent capability and PTE denials, selected memory-operation classes,
+and an old/fresh capability pair at one virtual address; the latter uses
+debug-minted nodes, not `malloc`/`free`. Two source mutations removing the
+object or page check and a third disabling the vector guard were detected
+by the relevant tests. Unsupported vector, Zcmp stack, XThead and cache-block
+memory operations are rejected in Capstone U-mode for this prototype.
+
+The slice cannot yet safely carry Linux processes: the QEMU tag side table is
+per hart and keyed by the address supplied to the access, whereas Linux may
+map one physical page at multiple virtual addresses and move a process
+between harts. Tags need a shared physical backing and a rule for aliases,
+kernel writes, copying and reclaim. A process-specific protected lifetime
+namespace, tagged register save/restore, checked syscall buffers with
+recoverable faults, and retirement completion also remain open. The
+[suite README](https://github.com/project-starch/capstone-qemu/blob/qemu/trusted-linux-u-access/tests/trusted-linux-u-access/README.md)
+records the exact setup and limitations. The next M1 slice should resolve
+physical tag identity and context switching before a Linux process is used as
+evidence for the `malloc`/`free` contract.
