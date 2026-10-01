@@ -459,7 +459,42 @@ one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` i
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
 
-## ROOT CAUSE CLASS FOUND: an 8-byte union write kills a 16-byte capability in the same slot
+## REFUTED BY EXPERIMENT: the union aliasing is a real hazard but NOT this fault
+
+The de-aliasing fix was implemented and measured. `PHP_CAP_UNION_PAD=1` generates a patched COPY of
+`Zend/zend.h` (never touching the corpus tree, and refusing to build if the union text does not
+match) moving `str.val` from union offset 0 to offset 16 behind a pad inside the existing `str`
+struct -- so `lval`/`dval` writes land on a different granule, member names are unchanged, and all
+333 `.value.str.val` sites compile untouched.
+
+**The control arm faults identically with it on**: cause 24, same pc `0x101c97198`, same value
+`0x101d9fda0`. With the pad, `str.val`'s granule is [16,32) while `lval`/`dval` write [0,8),
+`znode.u.var`/`u.EA` write [u+0,u+16) and `refcount` moves to offset 48 -- nothing scalar in the
+zval aliases `val`'s granule any more. It still dies.
+
+So **the tag-destroying write is not a scalar store into the zval at all.** The section below keeps
+its observation (an 8-byte `sd` at `zend_language_parser.c:2671` really does kill a granule holding
+a live string capability) but is WITHDRAWN as the explanation for this fault. The flag stays,
+default OFF, because it removes a genuine hazard cheaply.
+
+### Where the evidence points now: our own memcpy's alignment-dependent byte path
+
+`beebs_freestanding_string.c`'s memcpy takes the tag-preserving `ldc`/`stc` chunk path **only when
+`da == sa`** (source and destination share a 16-byte phase); otherwise the whole copy is a byte
+loop, and byte stores register no tag. That strips a tag while preserving the address exactly and
+leaves no tag-kill report -- every symptom observed. PHP moves capability-bearing data through
+memcpy constantly: `zend_hash` copies `pData` that way, and bison's `YYCOPY` is
+`__builtin_memcpy` over the value stack.
+
+Two cheap checks, in order:
+  * whether the failing pointer passes through a memcpy with `da != sa`;
+  * whether the `da == sa` path is safe at a NON-ZERO shared phase -- `head = ps - da` byte-copies
+    to the first boundary and then chunks from there, so `da == sa == 8` would run `ldc`/`stc` at
+    8 mod 16, where `store_capregval`'s `assert(!(addr & 15))` should abort rather than mis-copy.
+    That answer decides whether the fix is "guard the chunk path" or "make the byte path
+    capability-aware".
+
+## Superseded: ROOT CAUSE CLASS (an 8-byte union write kills a 16-byte capability in the same slot)
 
 `zvalue_value` is a union. Two of its members matter here:
 

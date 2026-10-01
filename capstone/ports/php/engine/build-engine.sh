@@ -96,6 +96,18 @@ if [ "${PHP_DIAG_ALLOC:-0}" = "1" ]; then
   echo "  PHP_DIAG_ALLOC: probing _estrndup's view of _emalloc (diagnostic build, NOT an experiment arm)"
 fi
 
+# PHP_CAP_UNION_PAD=1: de-alias the capability member of zvalue_value from the scalars by
+# generating a patched COPY of Zend/zend.h that precedes the corpus tree on the include path.
+# See diag/pad-zvalue-union.py for the mechanism. The corpus tree is never modified, and the
+# generator refuses if the union text does not match, so a silent no-op is impossible.
+CAPINC=""
+if [ "${PHP_CAP_UNION_PAD:-0}" = "1" ]; then
+  CAPINC="$OUT/capinc"; mkdir -p "$CAPINC"
+  python3 "$HERE/diag/pad-zvalue-union.py" "$P/Zend/zend.h" "$CAPINC/zend.h" || exit 2
+  CF=(-I"$CAPINC" "${CF[@]}")
+  echo "  PHP_CAP_UNION_PAD: zvalue_value.str.val moved off the scalars' granule"
+fi
+
 TUS="zend_language_scanner zend_language_parser zend_compile zend_execute zend_execute_API
  zend_opcode zend_operators zend_variables zend_hash zend_API zend_alloc zend_mm zend
  zend_llist zend_ptr_stack zend_stack zend_constants zend_list zend_qsort zend_stream
