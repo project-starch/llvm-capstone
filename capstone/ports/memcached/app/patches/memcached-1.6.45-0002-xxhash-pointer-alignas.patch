@@ -1,0 +1,45 @@
+Subject: [PATCH 2/2] xxhash: no alignas on the accumulator pointer variables on Capstone
+Upstream: memcached 1.6.45 (bundled xxhash.h)
+Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
+Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
+Build-Variants: Capstone domain only (under __CAPSTONE__; a native build is unchanged)
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+XXH3_accumulate_512_scalar and XXH3_scrambleAcc_scalar declare
+`XXH_ALIGN(XXH_ACC_ALIGN) xxh_u64* const xacc`: the alignas(8) applies to the pointer variable, not
+to the accumulator it points at, so natively it does nothing. On Capstone a pointer is a 16-byte
+capability, and C11 forbids alignas below a type's own alignment, so both lines are errors
+("requested alignment is less than minimum alignment of 16"). Under __CAPSTONE__ the attribute is
+dropped; the accumulator's alignment is asserted on the next line as before.
+
+--- a/xxhash.h	2024-11-01 04:47:36.000000000 +0800
++++ b/xxhash.h	2026-10-01 15:52:58.182537028 +0800
+@@ -4041,7 +4041,13 @@
+                      const void* XXH_RESTRICT input,
+                      const void* XXH_RESTRICT secret)
+ {
++#ifdef __CAPSTONE__
++    /* alignas on the pointer variable, not on what it points to: a no-op natively, and an error here,
++       where a pointer is 16 bytes and alignas may not lower a type's alignment */
++    xxh_u64* const xacc = (xxh_u64*) acc; /* presumed aligned */
++#else
+     XXH_ALIGN(XXH_ACC_ALIGN) xxh_u64* const xacc = (xxh_u64*) acc; /* presumed aligned */
++#endif
+     const xxh_u8* const xinput  = (const xxh_u8*) input;  /* no alignment restriction */
+     const xxh_u8* const xsecret = (const xxh_u8*) secret;   /* no alignment restriction */
+     size_t i;
+@@ -4057,7 +4063,13 @@
+ XXH_FORCE_INLINE void
+ XXH3_scrambleAcc_scalar(void* XXH_RESTRICT acc, const void* XXH_RESTRICT secret)
+ {
++#ifdef __CAPSTONE__
++    /* alignas on the pointer variable, not on what it points to: a no-op natively, and an error here,
++       where a pointer is 16 bytes and alignas may not lower a type's alignment */
++    xxh_u64* const xacc = (xxh_u64*) acc;   /* presumed aligned */
++#else
+     XXH_ALIGN(XXH_ACC_ALIGN) xxh_u64* const xacc = (xxh_u64*) acc;   /* presumed aligned */
++#endif
+     const xxh_u8* const xsecret = (const xxh_u8*) secret;   /* no alignment restriction */
+     size_t i;
+     XXH_ASSERT((((size_t)acc) & (XXH_ACC_ALIGN-1)) == 0);

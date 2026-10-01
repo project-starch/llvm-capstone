@@ -65,6 +65,74 @@ Predictions, written before the probe has run:
 | P3 | SIGTERM ends the probe within 2 s: `STOPPED joined=5`, exit 0 | signal delivery to a domain whose contexts all block does not end the loop |
 | P4 | the exit report lists no unserved syscall | memcached will meet the same gap |
 
+### Result, 2026-10-01 (one boot; predictions committed first, d086d1068f2d)
+
+Images: probe `mc-threads-probe.dom` 4c09f260…, client `mc-probe-client` cc8bf6ce…. Platform as dev pins
+it: capstone-qemu 674cdab0 (32e7c975…), fw_jump.elf 6f2b082c… (OpenSBI cf344cf3 + capstone-sbi
+4674ab6a), capstone.ko fdb947f2… (buildroot 8fd1ea12), the lane's launcher e7e27f49…, compiler 612b3ec5.
+
+| | outcome |
+|---|---|
+| P1 | **holds**: the native client reached the domain's listener; 8/8 echoes correct |
+| P2 | **holds**: `served=2,2,2,2`, every reply naming the worker it predicted |
+| P3 | **holds functionally, misses its bound**: `STOPPED joined=5`, exit 0, but 2.21 s from `kill` to `wait`, not ≤ 2 s. The bound was too tight for a 1 s tick plus five joins and the launcher's exit; it is recorded as missed, not moved |
+| P4 | **holds**: no unserved line. The silence is evidence because the report was shown to fire: a domain calling `mlockall` (fd690a55…) under the same switch prints `capstone-domain: UNSERVED syscalls: 230`. The launcher's own counter said `refused=0` there too, so it cannot stand in for this report |
+
+## M0 census, M-deps, M0-link (2026-10-01)
+
+**libevent** (`deps/build-libevent.sh`):
+- **Native gate.** `make verify` must pass. Rule for a failed test: it is rerun alone, 3 times plain
+  and 3 times under `EVENT_DEBUG_MODE`, and must pass all six.
+  - `util/monotonic_prc_fallback` asserts two consecutive monotonic reads are under 1 s apart. It
+    failed in `make verify` on a loaded host and passed 6/6 alone, twice.
+- **Out of scope.** `dns/*`, `http/*` and `rpc/*` failures are reported, not gated: memcached calls
+  none of them. `host/build-domain.sh` proves that on the image: 0 evdns/evhttp/evrpc functions
+  linked, while the same pattern finds 244 in `libevent.a`.
+  - `dns/getaddrinfo_cancel_stress` asserts that some of 1000 lookups were cancelled before
+    completing. It failed 0/6 alone on a loaded host, and passed in another run.
+- **Cross build.** 13 cast sites; `regress` links as a domain.
+- **`config.h`, native vs cross**, 7 lines, all expected:
+  - arc4random: glibc only;
+  - zlib: native only, used by tests only;
+  - `sys/queue.h` and TAILQFOREACH: glibc only, compat used;
+  - `issetugid`: musl only.
+
+**memcached** (`host/build-domain.sh`): `memcached.dom` 1,972,744 bytes, sha256 9e763e696db3ee62….
+- **Configure.** `--disable-extstore --disable-proxy --disable-tls --disable-sasl --disable-docs`.
+- **Patches.**
+  - 0001: alignment.
+  - 0002: xxhash's `alignas(8)` on two pointer *variables*, an error where a pointer is 16 bytes.
+- **Link gates.** Nothing undefined except `_DYNAMIC`, which every SDK image carries (the threads
+  probe and every tshark arm do, and run); no undefined weak symbol.
+- **`config.h`, native vs cross**, 4 lines:
+  - `HAVE_LIBEVENT_NEW` is unset under cross; no source reads it.
+  - `NEED_ALIGN` is set: configure cannot run its probe, so it assumes alignment is needed.
+  - `SIZEOF_VOID_P` is 16. It is read only by `restart.h`, for `-e`.
+
+**Census: every lossy cast classified; none reconstructs a pointer on a reachable path.**
+
+| where | sites | class |
+|---|---|---|
+| memcached `restart.c`, `memcached.c:6024` | 31 | warm restart with `-e`: needs a file mapping, which the runtime refuses (ENODEV) — unreachable |
+| memcached `xxhash.h:1969,2402,4475` | 3 | address only: alignment tests and an aligned-offset computation |
+| libevent `test/*` | 12 | not in the library |
+| libevent `bufferevent_ratelim.c:666` | 1 | address only (a weak-RNG seed), and not linked: 0 bufferevent functions in the image, 102 in `libevent.a` |
+
+**Oracle (`host/mc-harness`, `host/run-oracle.sh`), native half.**
+- **Native controls.** Two native runs are byte-identical (1,931,207 bytes). A perturbed value byte
+  and a perturbed cas token each change the transcript. `stats pointer_size` reads 64; stderr is
+  empty; SIGTERM gives exit 0 in 0.9 s.
+- **Two settings changed from the plan, before any domain run:**
+  - **Port 21299, not 11211.** On a shared host 11211 may be someone else's server.
+  - **`-m 64` (the default), not 16.** Items carry an 80-byte header here and 48 natively, so values
+    land in different slab classes. Under memory pressure, eviction could then differ for a layout
+    reason rather than a correctness one. Pages are allocated on demand, so `-m 64` costs nothing
+    unused.
+- **Two harness defects, found before any domain run and fixed:**
+  - a 250-byte-key test truncated to a valid key;
+  - the long-key error is two lines (`CLIENT_ERROR ...\r\n\r\n`), which shifted every later
+    response by one.
+
 ## Milestones
 
 | | content | gate |
