@@ -716,7 +716,34 @@ static void run_linear(unsigned reps) {
 #ifndef M1_RELEASE_AT_BUFFER
 #define M1_RELEASE_AT_BUFFER 0
 #endif
-#if M1_STALE_DEREF
+/* M1_PROBE_RT puts BOTH halves of each condition-3 pair into ONE image and selects between them at RUN
+ * time: --probe read|write picks the access, --probe-live sends it through the slot's LIVE alias instead
+ * of the retained stale one, and --probe-age 0|1|2 picks the oldest, middle or newest retained alias.
+ * A stale probe and its control then differ by one argument and by nothing in the binary.
+ *
+ * Why it exists. The compile-time pairs could not be matched for the read: on 2026-09-29 the live-alias
+ * read control (aed492ab) was four source commits older than the stale read (35fb3fec), and the
+ * write pair (067cc96f / 9b24aa31) was matched only by building twice. A runtime switch also lets one
+ * boot run the control (which returns) before the stale probe (which wedges), so the pair shares the
+ * boot, the bitstream state and the layout.
+ *
+ * Both halves use the same instructions: a capability load from a global array, then one byte load
+ * or store through it. The stale half reads m1_ret_alias[k], and the live half reads alias[k % M1_LIVE].
+ * That is the same slot's current alias, over the same storage, because in the pressure arm
+ * m1_ret_alias[k] is retained at allocation k, from slot k % M1_LIVE.
+ *
+ * The ring arm is probed too, on slot 0, through m1_ring_alias -- see the probe for why.
+ *
+ * Age 2 (the newest) has had its index reclaimed exactly ONCE since it was retained: the next take
+ * popped it back under the next generation. Age 0 has had its index reclaimed about nret / M1_LIVE
+ * times. Off by default, so every existing image is byte-identical. */
+#ifndef M1_PROBE_RT
+#define M1_PROBE_RT 0
+#endif
+#if M1_PROBE_RT
+static unsigned m1_probe_op, m1_probe_live, m1_probe_age;   /* op: 0 none, 1 read, 2 write */
+#endif
+#if M1_STALE_DEREF || M1_PROBE_RT
 /* What each slot's storage was last written with, recorded as it happens so the probe can print the
  * value a LIVE read would give beside the value the STALE read gave. On 2026-09-19 that comparison had
  * to be done by hand afterwards -- the board returned byte=16 and the arithmetic said allocation 43,280
@@ -797,7 +824,7 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
     else { if (nret >= M1_MAXRET) { alias[i] = sublet_take(&leaf[i]); alloc++; stop = "buffer"; break;   /* the instrument, not the table: nret == M1_MAXRET before alloc == target */ } m1_ret_alias[nret++] = old; oldest = m1_ret_alias[0]; }
     t = cyc(); alias[i] = sublet_take(&leaf[i]); tk += cyc() - t;   /* a new object in its place: one node minted */
     touch((volatile char *)alias[i], (ulong)M1_TOUCH, (unsigned char)alloc);
-#if M1_STALE_DEREF
+#if M1_STALE_DEREF || M1_PROBE_RT
     m1_last_touch[i] = (unsigned char)alloc;
 #endif
     alloc++; n++;
@@ -810,6 +837,30 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   out("R1 m1 end arm="); out(arm); out(" stop="); out(stop); kv("alloc", alloc); kv("minted", minted() - m0);
   kv("revoked", sublet_stats.revoke); kv("retained", nret); kv("released", releasing); out("\n");
   nodes_minted_total += minted() - m0;
+#if M1_PROBE_RT
+  if (m1_probe_op && nret && (streq(arm, "pressure") || streq(arm, "ring"))) {
+    /* ring: m1_ring_alias[s] is slot s's PREVIOUS alias (one reclaim since), stored at k = alloc % M1_LIVE,
+     * which equals the slot because i and alloc advance together from 0. The probe takes slot 0. Over a
+     * 10C ring arm each slot's index is allocated about 41,000 times, past two retirements at 16,384, so
+     * the refused id's INDEX tells retirement (a new index) from a 14-bit wrap (the same index). */
+    unsigned ring = streq(arm, "ring");
+    unsigned k = ring ? 0u : (m1_probe_age == 0 ? 0u : (m1_probe_age == 1 ? nret / 2u : nret - 1u));
+    unsigned s = k % M1_LIVE;
+    volatile char *live = (volatile char *)alias[s];
+    volatile char *p = m1_probe_live ? live : (volatile char *)(ring ? m1_ring_alias[s] : m1_ret_alias[k]);
+    out("R1 m1 probe go"); out(" arm="); out(arm); kv("op", m1_probe_op); kv("live", m1_probe_live); kv("age", m1_probe_age);
+    kv("k", k); kv("slot", s); kv("reuses_since", ring ? 1UL : (alloc - k) / M1_LIVE); out("\n");
+    if (m1_probe_op == 1) {
+      char v = *p;      /* the stale half is expected to fault HERE, so this probe must be last in its boot */
+      out("R1 m1 probe read ok"); kv("live", m1_probe_live); kv("byte", (ulong)(unsigned char)v);
+      kv("live_byte", (ulong)m1_last_touch[s]); kv("is_live_data", (unsigned char)v == m1_last_touch[s]); out("\n");
+    } else {
+      *p = (char)0xA5;  /* likewise */
+      out("R1 m1 probe write ok"); kv("live", m1_probe_live); kv("via_live_alias", (ulong)(unsigned char)*live);
+      kv("wrote", 0xA5u); out("\n");
+    }
+  }
+#endif
 #if M1_STALE_TAKE_LIVE
   oldest = alias[0];   /* the positive control: a LIVE alias through the identical path */
   out("R1 m1 stale-take CONTROL: probing a LIVE alias, not a stale one\n");
@@ -995,6 +1046,11 @@ void domain_main(unsigned *res, unsigned func) {
       else if (streq(tok[i], "--stale")) stale = 1;
       else if (streq(tok[i], "--cap") && i + 1 < nt) cap = atou(tok[++i]);
       else if (streq(tok[i], "--stale-take")) stale_take = 1;
+#if M1_PROBE_RT
+      else if (streq(tok[i], "--probe") && i + 1 < nt) { i++; m1_probe_op = streq(tok[i], "read") ? 1u : (streq(tok[i], "write") ? 2u : 0u); }
+      else if (streq(tok[i], "--probe-live")) m1_probe_live = 1;
+      else if (streq(tok[i], "--probe-age") && i + 1 < nt) m1_probe_age = (unsigned)atou(tok[++i]);
+#endif
     }
   }
   arm_sublet = streq(arm, "S");
