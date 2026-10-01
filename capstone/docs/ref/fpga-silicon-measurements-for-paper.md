@@ -5769,3 +5769,28 @@ positive control held throughout: `bk` and `fl` rise across the identical record
 - **It does not separate the mechanism.** That the rise begins below the capacity boundary says a pure
   cache-capacity account is incomplete; it does not say what the remainder is. Nothing here attributes
   it, and the ramp is reported as measured rather than explained.
+
+## The SQLite 3.22.0 temporal-bug corpus, control arm, on R-43 v2 (boots r322-b1a/b1b/b2a, 2026-10-01)
+
+Folder: `tests/rtl-smoke/repro322-silicon-2026-10-01/` (pre-registration, images, result lines). The corpus is
+`ports/sqlite/repro322` (PR #171/#174): SQLite 3.22.0 driven to freed-then-used paths on UNPROTECTED Capstone
+(memsys5 and lookaside, nothing revoked). The cases were rebuilt in the silicon config, each at its own entry
+VA, and checked under QEMU with `CAPSTONE_GP_FABRICATE=0` and the board's own host first.
+
+| cell | row | silicon | against the emulator |
+|---|---|---|---|
+| SQLite 3.22.0 base domain | - | completes, all five markers, 3/3 boots | identical |
+| wschema, blobwrite, mem5design, blobclose, jsoneachstatic, jsoneachroot | 8, 20, 25, 5, #174 ×2 | return, `<tag> NOTRAP done` | domain output identical line for line |
+| backupattach | 15 | mcause 24 at `sqlite3BtreeUpdateMeta+0x48` | the same instruction |
+| detachtrig | 4 | mcause 24 at `sqlite3DropTriggerPtr+0x154` | the same instruction |
+
+- **SQLite 3.22.0 runs on silicon.** Until now it had passed only the silicon-config QEMU gate.
+- **The corpus's control-arm verdicts for these eight rows are not emulator artifacts.** Unprotected Capstone
+  runs six real temporal bugs to completion on the RTL, and the two faults are layout faults (an untagged
+  operand), not temporal enforcement. That is the baseline a Sublet arm would be measured against. No Sublet
+  arm has run.
+- **First boot void as a subject reading:** the corpus harness `delin`ed two non-linear capabilities, which
+  wedged on silicon (ISSUES S-02/S-15). It is fixed with the same compile-time guard
+  `sqlite_capstone_domain.c` uses, and the corpus's own QEMU image is byte-identical with and without it.
+- **N = 1 per cell.** Rows whose reachability is unproven (1, 3, 6, 11, 12, 13, 17, 22) were not run. Rows
+  10, 19 and 24 (extra translation units) are batch 2, not yet built.
