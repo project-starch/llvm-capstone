@@ -140,6 +140,12 @@ the after-audit, synthesis, silicon.
   revoked seal is nulled in its register and the memory copy cannot be shown to reload; the status is live code
   but unreached. What the monitor's compiled store/reload actually is, and whether silicon agrees, is the next
   question for whoever picks this up.
+- **Landed on the lane branch:** `capstone-ariane` `sup-call` = d38887426 (prerequisites) + 1dbf379b1 (S-11 in
+  simulation, the Anvil lint) + 727ea6e93 (R-47) + 03b70667e (the implementation, tests, runner and mutant
+  patcher). **Step 8 on that exact tree:** the 92-test corpus against the unmodified RTL -- 91 tests identical
+  in taken exceptions, CAPPRINT count and retired count; `revocation` loses its three phantom mid-switch traps
+  with readings and retired count unchanged; the mid-switch detector fires 0 of 92 times (5 of 97 before).
+  Not landed on the submodule's shared branch and the parent's pointer not bumped: synthesis is the lead's call.
 - **Final ladder on the audited tree (`all4`, every test, 2026-10-01 evening):** identical to the readings below
   where they overlap, plus the audit's arms: the x1 sentinel 0x1234 survives 53 resumes (quantum 64) and 103
   (quantum 16) with the count exactly 400 both times; CCSRRW cpmp0 with a tagged capability escapes (5) and the

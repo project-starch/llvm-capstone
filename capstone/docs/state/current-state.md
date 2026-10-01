@@ -8,9 +8,12 @@
   the quantum, the guards, the event CSRs (csupquantum 0x7C3, csupctl 0x7C4, csupstatus..csnodefree 0xFC0..0xFC4).
   Steps 2-7 of the ladder read as pre-registered in simulation (five synchronous faults, exactly-once resume
   under two quanta, a real timer interrupt escaping the domain twice, all ten guards, a hostile domain and a
-  foreign RETURN), with ten mutant positive controls. Lint at baseline. **Not synthesized, not on silicon**: the
-  after-audit of the diff and the 92-test neutrality run are the last simulation steps; synthesis is the lead's
-  call; the FPGA monitor build (`supervised_invoke` with the CSR-based events) is the runtime lane's.
+  foreign RETURN), with ten mutant positive controls, an adversarial after-audit whose four findings are fixed
+  with discriminating arms, and the 92-test neutrality sweep on the committed tree (91 identical, `revocation`'s
+  phantom mid-switch traps gone). Lint at baseline. Commits: d38887426, 1dbf379b1, 727ea6e93, 03b70667e on
+  `sup-call`, pushed, not landed on the submodule's shared branch. **Not synthesized, not on silicon**: synthesis
+  is the lead's call; the FPGA monitor build (`supervised_invoke` with the CSR-based events, csupctl.resume
+  before a resume, interrupts masked between cssupervise and CALL) is the runtime lane's.
 - **R-47 (new, fixed on `sup-call`, OPEN on every bitstream):** CALL parks the wrong return pc when a jump or
   branch reaches issue before the dyn unit responds -- the caller resumes past that instruction, or
   mid-instruction after a compressed one. Nothing resident is hit only because the monitor's and the runtime's

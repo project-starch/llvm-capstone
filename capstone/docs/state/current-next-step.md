@@ -1,8 +1,8 @@
 Supervised CALL (2026-10-01): the RTL is on capstone-ariane `sup-call`
-([plan, revision 1.2](../plans/supervised-call-silicon.md)). Finish the
-simulation gates (the after-audit's findings, the 92-test neutrality run with
-`revocation`'s two phantom traps as the only expected difference), then the
-lead decides on synthesis; the runtime lane builds the FPGA monitor's
+([plan, revision 1.2](../plans/supervised-call-silicon.md)); every simulation
+gate is done (the after-audit's four findings fixed and re-measured, the
+92-test neutrality run clean with `revocation`'s phantom traps as the only
+difference). The lead decides on synthesis (pre-registration in the plan); the runtime lane builds the FPGA monitor's
 `supervised_invoke` against the CSR-based events (csupctl.resume before a
 resume CALL; status 3 means an unread event). Before silicon: why an unguarded
 `mret` trapped instead of escaping (mutant-only), and whether a SEALED
