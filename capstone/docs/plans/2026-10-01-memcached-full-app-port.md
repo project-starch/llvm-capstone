@@ -277,6 +277,17 @@ The harness now stops waiting on a connection after its first 60 s timeout (`fil
 flag), so a desynchronised connection costs one timeout, not one per response it is still owed.
 Passing runs are unaffected.
 
+**Result.** stock+delay: 5 of 5 runs differ from native, every one with phase-3 connections carrying
+other connections' replies (7 or 8 of 8 per run, and non-text bytes in one run). fixed+delay: 5 of 5
+identical to native.
+
+MD1's clause "phase-4 counters equal native's" missed in one stock run. There, two connections lost
+their framing and the harness closed them, likely before the server had read their last pipelined
+commands. MD2 holds.
+
+So the shrink-run-2 signature is the shared msghdr's. It reproduces in every stock+delay run and
+never with the fix. Details: the launcher branch's history note.
+
 ## M3 worker marker — PRE-REGISTERED before its first boot
 
 The instrument is patch 0004. A build with `-DMC_CAPSTONE_WORKER_MARKER` prints
