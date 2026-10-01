@@ -24,6 +24,8 @@ A record arm of `1000` (timeout) or an EMPTY record voids the lifetime reading f
 Exits 2 with no boot.txt, no blocks, or no k800 line: "no data" is an error, never a clean table.
 """
 import os, re, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # rtl-smoke/, for fpga_driver
+from fpga_driver.transcript import strip_markers
 
 def nodata(msg):
     print(f"extract: {msg}", file=sys.stderr); sys.exit(2)
@@ -45,7 +47,10 @@ def main(out, boot):
     if not os.path.exists(bt): nodata(f"no {bt}")
     text = open(bt, errors="replace").read().replace("\r", "")
     parts = re.split(r"^===== (.+) =====$", text, flags=re.M)
-    blocks = list(zip(parts[1::2], parts[2::2]))
+    # The monitor's share-trace markers (ECSA:, SHA0:, ...) are interleaved into the UART and can splice
+    # a domain line mid-token (s1sql-b2a, sbp3: "...SIBLING__ meECSA:00000007\n...mory b[0]=b"). Read every
+    # block through fpga_driver.transcript.strip_markers, which deletes them with their newline.
+    blocks = [(lab, strip_markers(body)) for lab, body in zip(parts[1::2], parts[2::2])]
     if not blocks: nodata(f"no ===== blocks in {bt}")
     lines, bad = [f"# {os.path.basename(out.rstrip('/'))}, boot {boot}: {len(blocks)} blocks, {len(order)} cells + k800"], 0
     k = re.findall(r"RESULT k800 retval=-?\d+ cycles=\d+ ran=\d+ instret=\d+", blocks[0][1])
