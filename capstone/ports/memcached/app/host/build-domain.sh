@@ -23,6 +23,26 @@ fi
   || { echo "build FAILED"; grep -E 'error' "$LOG/build.log" | head -5; exit 1; }
 touch "$LOG/cast-log.txt"; sort -u "$LOG/cast-log.txt" > "$LOG/cast-sites.txt"
 cp "$X/memcached" "$OUT/memcached.dom"
+# The three heap arms, from the same objects: only the runtime the image links differs.
+#   shrink: the SDK's default level0, each allocation bounded (memcached.dom above);
+#   level0: level0 built with CAPSTONE_LEVEL0_OBJECT_BOUNDS=0, no heap safety;
+#   sublet: HEAP=sublet, revocation on free.
+cp "$OUT/memcached.dom" "$OUT/memcached-shrink.dom"
+for arm in level0 sublet; do
+  case $arm in
+    level0) extra=("-DCMAKE_C_FLAGS_RELEASE=-O1 -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0") ;;
+    sublet) extra=(-DCAPSTONE_APPLICATION_HEAP=sublet -DCAPSTONE_APPLICATION_HEAP_LOG=26) ;;
+  esac
+  SDK=$MC_WORK/sdk-$arm; rm -rf "$SDK"
+  bash "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh" "$SDK" "$MC_MUSL" "$MC_LIBC_ARCHIVE" "${extra[@]}" \
+    > "$LOG/sdk-$arm.log" 2>&1 || { echo "SDK $arm FAILED"; tail -3 "$LOG/sdk-$arm.log"; exit 1; }
+  rm -f "$X/memcached"
+  ( cd "$X" && MC_RUNTIME_DIR=$SDK make memcached > "$LOG/link-$arm.log" 2>&1 ) || { echo "link $arm FAILED"; exit 1; }
+  cp "$X/memcached" "$OUT/memcached-$arm.dom"
+done
+for arm in level0 shrink sublet; do
+  echo "arm $arm: $(sha256sum < "$OUT/memcached-$arm.dom" | cut -c1-16) heap: $("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/memcached-$arm.dom" | grep -cE ' [Tt] (sh_free|sublet_give)$') sublet / $("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/memcached-$arm.dom" | grep -cE ' [Tt] __capstone_level0_' ) level0 symbols"
+done
 "$CAPSTONE_LLVM_BIN/llvm-readelf" -h "$OUT/memcached.dom" > /dev/null
 # _DYNAMIC is the one undefined name every SDK image carries (the startup's reference; the threads
 # probe and every tshark arm have it and run): anything else undefined fails the gate.

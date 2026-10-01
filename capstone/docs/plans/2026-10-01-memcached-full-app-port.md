@@ -133,6 +133,52 @@ it: capstone-qemu 674cdab0 (32e7c975…), fw_jump.elf 6f2b082c… (OpenSBI cf344
   - the long-key error is two lines (`CLIENT_ERROR ...\r\n\r\n`), which shifted every later
     response by one.
 
+## M1–M4 (SIGTERM), default heap: the first domain runs (2026-10-01)
+
+**Run 1** (image 9e763e69…): the server died of SIGSEGV after `get k1 k2 k3`, on the first `gets`.
+- The fault record (`CAPSTONE_FAULT_RECORD`, now always set by `run-oracle.sh`): cause 6, a
+  misaligned store, at an address 8 mod 16.
+- The runtime's symbolizer places it in `do_item_bump` → `lru_bump_async` (`items.c:1295`).
+- Cause: the LRU bump queue keeps `lru_bump_entry` records (an item pointer and a hash, 32 bytes) in
+  a bipbuffer whose `data[]` starts at offset 24, so every record's pointer sits at 8 mod 16.
+- **Patch 0003** aligns `data[]` to 16 under `__CAPSTONE__`.
+- The other byte buffers were checked. The logger's bipbuffer records hold no pointer and are
+  written only while a watcher is attached; the storage and proxy casts are compiled out.
+
+**Run 3** (image f3aba04f…, patches 0001–0003, default level0 heap with per-object bounds):
+
+| check | result |
+|---|---|
+| null (two native runs) | identical, 1,931,207 bytes |
+| positive (value byte, cas value) | each changes the transcript |
+| oracle | **domain transcript identical to native**, 1,931,207 bytes: every phase, including 8 concurrent pipelined connections over 4 workers |
+| identity | `pointer_size` 64 natively, 128 in the domain |
+| status (SIGTERM) | exit 0 both (capstone-job's record) |
+| stderr | empty both |
+| stop time | native 0.89 s, domain 2.27 s (the 1 s clock tick, then nine contexts joined) |
+
+**Still open:**
+- M3's worker-coverage marker. The transcript shows every connection served correctly, not which
+  worker served it.
+- M4's SIGUSR1 graceful stop.
+
+## M5 — PRE-REGISTERED before its first boot
+
+M5 runs three arms, three runs each. The arms differ only in the heap the image links; the
+memcached objects are the same:
+
+- level0: `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, no heap safety;
+- shrink: the default level0, per-object bounds;
+- sublet: `HEAP=sublet`, `HEAP_LOG 26`.
+
+| | prediction |
+|---|---|
+| Q1 | all 9 runs give a transcript identical to the native one; identity reads 128; exit 0 on SIGTERM; stderr empty |
+| Q2 | the three arms' images differ from one another, and their malloc comes from `level0.c` (level0, shrink) or `sublet_heap.c` (sublet), read from each image's symbols |
+| Q3 | one SIGUSR1 run on the shrink arm: `Gracefully stopping` on stderr, exit 0, every thread joined, as native |
+
+If an arm's transcript differs, that is a finding about the arm, not an edit to the script.
+
 ## Milestones
 
 | | content | gate |

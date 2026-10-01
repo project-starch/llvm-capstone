@@ -271,6 +271,11 @@ static void writefile(const char *name, const char *p, size_t n) {
   char path[1024]; snprintf(path, sizeof path, "%s/%s", outdir, name);
   FILE *f = fopen(path, "w"); if (!f) { perror(path); exit(2); } fwrite(p, 1, n, f); fclose(f);
 }
+/* what the first connection has so far, so a run that stops early still says where */
+static void dump_partial(struct conn *c) {
+  writefile("transcript.partial.raw", c->raw.p ? c->raw.p : "", c->raw.n);
+  writefile("transcript.partial.norm", c->norm.p ? c->norm.p : "", c->norm.n);
+}
 static double now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec + t.tv_nsec / 1e9; }
 
 int main(int argc, char **argv) {
@@ -310,8 +315,8 @@ int main(int argc, char **argv) {
   if (c0->fd < 0) { fprintf(stderr, "mc-harness: server never listened\n"); kill(pid, SIGKILL); return 3; }
 
   struct buf all_raw = {0}, all_norm = {0};
-  bput(&c0->raw, "== phase 1\n", 11); bput(&c0->norm, "== phase 1\n", 11); phase1(c0);
-  bput(&c0->raw, "== phase 2\n", 11); bput(&c0->norm, "== phase 2\n", 11); phase2(c0);
+  bput(&c0->raw, "== phase 1\n", 11); bput(&c0->norm, "== phase 1\n", 11); phase1(c0); dump_partial(c0);
+  bput(&c0->raw, "== phase 2\n", 11); bput(&c0->norm, "== phase 2\n", 11); phase2(c0); dump_partial(c0);
   bput(&all_raw, c0->raw.p, c0->raw.n); bput(&all_norm, c0->norm.p, c0->norm.n);
 
   struct conn **cs = calloc((size_t)nconns, sizeof *cs);
@@ -319,7 +324,12 @@ int main(int argc, char **argv) {
   pthread_t *ts = calloc((size_t)nconns, sizeof *ts);
   for (int k = 0; k < nconns; k++) {
     cs[k] = calloc(1, sizeof **cs); cs[k]->fd = dial();
-    if (cs[k]->fd < 0) { fprintf(stderr, "mc-harness: phase 3 connection %d failed\n", k); return 4; }
+    if (cs[k]->fd < 0) {
+      fprintf(stderr, "mc-harness: phase 3 connection %d failed\n", k);
+      int st; if (waitpid(pid, &st, WNOHANG) == pid) fprintf(stderr, "mc-harness: the server had ended: %s %d\n",
+        WIFSIGNALED(st) ? "signal" : "exit", WIFSIGNALED(st) ? WTERMSIG(st) : WEXITSTATUS(st));
+      return 4;
+    }
     ws[k].c = cs[k]; ws[k].idx = k;
   }
   for (int k = 0; k < nconns; k++) pthread_create(&ts[k], NULL, phase3_conn, &ws[k]);

@@ -6,16 +6,18 @@
 #   identity  `stats pointer_size` reads 64 natively and 128 in the domain;
 #   oracle    the domain's normalised transcript is byte-identical to the native one, its exit status
 #             (capstone-job's record) matches the native one, and its stderr is empty like native's.
-#   run-oracle.sh <results-dir> [--stop TERM|USR1]
+#   run-oracle.sh <results-dir> [--stop TERM|USR1] [--arm level0|shrink|sublet] [--runs N]  (N domain runs, one boot)
 # Env: MC_WORK (build-native.sh, build-domain.sh outputs), CAPSTONE_VM_UP_ARGS (capstone-vm up platform
 # arguments), capstone-vm on PATH, CAPSTONE_BUILDROOT_DIR (the guest cross compiler).
 # Port 21299, not memcached's 11211: on a shared host 11211 may belong to someone else's server.
 set -uo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-R=${1:?results dir}; STOP=TERM; [ "${2:-}" = "--stop" ] && STOP=${3:?}
+R=${1:?results dir}; shift; STOP=TERM; ARM=shrink; RUNS=1
+while [ $# -gt 0 ]; do case $1 in --stop) STOP=$2; shift 2 ;; --arm) ARM=$2; shift 2 ;; --runs) RUNS=$2; shift 2 ;;
+  *) echo "unknown option $1" >&2; exit 2 ;; esac; done
 : "${MC_WORK:?}" "${CAPSTONE_VM_UP_ARGS:?}" "${CAPSTONE_BUILDROOT_DIR:?}"
 PORT=21299; FLAGS=(-l 127.0.0.1 -p "$PORT" -U 0 -m 64 -t 4)
-NAT=$MC_WORK/native/bin/memcached; DOM=$MC_WORK/domain/memcached.dom
+NAT=$MC_WORK/native/bin/memcached; DOM=$MC_WORK/domain/memcached-$ARM.dom
 [ -x "$NAT" ] && [ -f "$DOM" ] || { echo "need $NAT and $DOM (build-native.sh, build-domain.sh)" >&2; exit 2; }
 mkdir -p "$R/bin" "$R/share"
 gcc -O1 -Wall -o "$R/bin/mc-harness-host" "$APP/host/mc-harness/mc-harness.c" -lpthread || exit 2
@@ -51,24 +53,28 @@ for attempt in $(seq 1 2400); do
   grep -q "Another Capstone VM owns" "$R/up.log" || { tail -3 "$R/up.log"; exit 4; }
   sleep 3
 done
-rm -rf "$R/share/domain-run"
+for n in $(seq 1 "$RUNS"); do
+rm -rf "$R/share/domain-run$n"
 capstone-vm --state "$VM" exec sh -c "
-  mkdir -p /tmp/mc && /mnt/host/mc-harness --out /tmp/mc --port $PORT --stop $STOP -- \
+  rm -rf /tmp/mc /tmp/mc-fault.txt; mkdir -p /tmp/mc && CAPSTONE_FAULT_RECORD=/tmp/mc-fault.txt /mnt/host/mc-harness --out /tmp/mc --port $PORT --stop $STOP -- \
     /usr/bin/capstone-job /tmp/mc/job.json --user 65534:65534 -- /usr/bin/capstone-exec /mnt/host/memcached.dom ${FLAGS[*]}
   echo harness rc=\$?
-  cp -r /tmp/mc /mnt/host/domain-run" > "$R/domain-exec.log" 2>&1
-echo "domain exec rc=$?"; cat "$R/domain-exec.log"
-D=$R/share/domain-run
-[ -f "$D/transcript.norm" ] || { verdict oracle FAIL "the domain run left no transcript"; exit 5; }
+  if [ -s /tmp/mc-fault.txt ]; then cp /tmp/mc-fault.txt /tmp/mc/fault.txt; fi
+  cp -r /tmp/mc /mnt/host/domain-run$n; true" > "$R/domain-exec$n.log" 2>&1
+echo "domain run $n ($ARM): exec rc=$?"; cat "$R/domain-exec$n.log"
+D=$R/share/domain-run$n
+[ -s "$D/fault.txt" ] && { echo "--- domain fault record"; cat "$D/fault.txt"; }
+[ -f "$D/transcript.norm" ] || { verdict "oracle$n" FAIL "[$ARM] the domain run left no transcript"; continue; }
 cmp -s "$R/native-null1/transcript.norm" "$D/transcript.norm" \
-  && verdict oracle PASS "domain transcript identical to native ($(wc -c < "$D/transcript.norm") bytes)" \
-  || { verdict oracle FAIL "domain transcript differs from native"; diff "$R/native-null1/transcript.norm" "$D/transcript.norm" | head -20; }
+  && verdict "oracle$n" PASS "[$ARM] domain transcript identical to native ($(wc -c < "$D/transcript.norm") bytes)" \
+  || { verdict "oracle$n" FAIL "[$ARM] domain transcript differs from native"; diff "$R/native-null1/transcript.norm" "$D/transcript.norm" | head -20; }
 n_id=$(cat "$R/native-null1/identity.txt"); d_id=$(cat "$D/identity.txt")
 [ "$n_id" = $'STAT pointer_size 64\r' ] && [ "$d_id" = $'STAT pointer_size 128\r' ] \
-  && verdict identity PASS "native 64, domain 128" || verdict identity FAIL "native '$n_id' domain '$d_id'"
+  && verdict "identity$n" PASS "native 64, domain 128" || verdict "identity$n" FAIL "native '$n_id' domain '$d_id'"
 n_st=$(sed -E 's/ stop_seconds=.*//' "$R/native-null1/status.txt"); d_job=$(cat "$D/job.json" 2>/dev/null)
 want="{\"version\":1,\"kind\":\"$(echo "$n_st" | sed -E 's/.* (exit|signal)=.*/\1/')\",\"value\":$(echo "$n_st" | sed -E 's/.*=([0-9]+)$/\1/')}"
-[ "$d_job" = "$want" ] && verdict status PASS "native '$n_st', domain $d_job" || verdict status FAIL "native '$n_st' (want $want), domain '$d_job'"
-[ ! -s "$R/native-null1/server.err" ] && [ ! -s "$D/server.err" ] && verdict stderr PASS "both empty" \
-  || verdict stderr FAIL "native $(wc -c < "$R/native-null1/server.err") bytes, domain $(wc -c < "$D/server.err") bytes"
+[ "$d_job" = "$want" ] && verdict "status$n" PASS "native '$n_st', domain $d_job" || verdict "status$n" FAIL "native '$n_st' (want $want), domain '$d_job'"
+cmp -s "$R/native-null1/server.err" "$D/server.err" && verdict "stderr$n" PASS "identical ($(wc -c < "$D/server.err") bytes)" \
+  || verdict "stderr$n" FAIL "native $(wc -c < "$R/native-null1/server.err") bytes, domain $(wc -c < "$D/server.err") bytes"
 echo "stop: native $(cat "$R/native-null1/status.txt") domain $(cat "$D/status.txt")"
+done

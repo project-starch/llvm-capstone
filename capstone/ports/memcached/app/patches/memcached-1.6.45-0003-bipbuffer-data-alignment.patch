@@ -1,0 +1,34 @@
+Subject: [PATCH 3/3] bipbuffer: align the data area to the 16-byte capability on Capstone
+Upstream: memcached 1.6.45
+Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
+Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
+Build-Variants: Capstone domain only (under __CAPSTONE__; a native build is unchanged)
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+The LRU bump queue (items.c, lru_bump_async) keeps lru_bump_entry records, an item pointer and a
+hash, in a bipbuffer, whose data[] follows an 8-byte size and four 4-byte fields and so starts at
+offset 24. On Capstone a pointer is a 16-byte capability that must be stored 16-aligned, and the
+entry is 32 bytes, so every entry stores its pointer at 8 mod 16. The first `gets` faulted there:
+cause 6 (store address misaligned) in do_item_bump/lru_bump_async (items.c:1295), at an address
+8 mod 16. Under __CAPSTONE__ data[] is aligned to 16. Entries are pushed and polled in whole
+multiples of their size and region B restarts at data[0], so every entry stays aligned. The
+logger's byte records do not care.
+
+--- a/bipbuffer.h	2024-11-01 04:47:36.000000000 +0800
++++ b/bipbuffer.h	2026-10-01 16:01:07.930531962 +0800
+@@ -14,7 +14,14 @@
+     /* is B inuse? */
+     int b_inuse;
+ 
++#ifdef __CAPSTONE__
++    /* items.c queues lru_bump_entry records, each holding an item pointer, in this buffer. Here a
++     * pointer is a 16-byte capability that must be stored 16-aligned, and data[] would otherwise
++     * start at offset 24. */
++    unsigned char data[] __attribute__((aligned(16)));
++#else
+     unsigned char data[];
++#endif
+ } bipbuf_t;
+ 
+ /**
