@@ -63,6 +63,7 @@ EOF
    ;;
    rtree) cat <<EOF
 case_rtree_probe.c    rtreeprobe
+case_rtree_cursor.c   rtreecursor
 EOF
    ;;
    fts5) cat <<EOF
