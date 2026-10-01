@@ -1,5 +1,26 @@
 # S-11 — SEAL enforces neither its minimum size nor its base alignment
 
+> **2026-10-01 (evening): FIXED IN RTL on `capstone-ariane` branch `sup-call`, audited, pending the next bitstream.**
+> The lead delegated the decision ("audit and decide"); the fix is the one this folder asked for, plus one thing the
+> audit of it found. (a) Every comparison in `func SEAL` parenthesised on its own, and the `+1` dropped so that
+> `size = end - start` with the exclusive end (R-32's off-by-one): a region smaller than 1024 bytes or not 16-byte
+> aligned raises `ILLEGAL_OPERAND_VALUE` (29). Measured in simulation (`verif/tests/custom/capstone/sup-sealsize.S`):
+> 64 and 1023 bytes trap; 1024 and 2048 seal with every canary word intact; a 1024-byte region starting 8 bytes
+> into an aligned block traps (the alignment clause alone), the same at +16 seals. (b) The audit refuted the
+> fix's stated guarantee as it stood: a SEALED capability carries no bounds in a register, its effective base is
+> its CURSOR, so a 1024-byte region sealed with the cursor advanced to +960 would still put the switch's writes
+> past the region. SEAL therefore now sets the sealed cursor to the region's START (the spec says the cursor does
+> not apply to a sealed capability; QEMU's CALL uses the region's base) -- measured: that cursor arm reads as the
+> control. The cursor is NOT checked, deliberately: the resident monitor seals its interrupt-handler region with
+> the cursor at +88, which a cursor check would trap at boot. Every known sealer complies with the size and
+> alignment (the monitor's domain seals 1536 B page-aligned, its interrupt-handler seal exactly 1024 B aligned, the
+> runtime's contexts 1024 B, every directed test >= 2048 B). QEMU's minimum stays 528 with a different cause;
+> silicon is now the stricter side, and QEMU's `CAP_SEALED_SIZE_MIN` should be raised to 1024. Note for the two
+> branches carrying `seal-minsize-boundary.S` (`board/r35-directed-repro`, `s12-ldc-rolling-filter`): its 1022-byte
+> arm now expects the trap. Registry: R-32 (SEAL's half fixed) and R-48 (the SEALEDRET window, the cursor's other
+> half, unverified).
+
+
 > **2026-10-01: the precedence model is now read from the compiler itself, and two lines below are superseded.**
 > The Anvil grammar (`lib/parser.mly:87-91` in the pinned `corank/anvil:cva6` image, compiler commit `288373b5`)
 > declares `<` `>` `<=` `>=` at the LOWEST precedence, right-associative, below `&&`/`||` (line 90) and below

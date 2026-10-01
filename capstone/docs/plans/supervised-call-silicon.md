@@ -52,10 +52,10 @@ the after-audit, synthesis, silicon.
   aligned) / 3 an unread event (assigned by commit, which also drops the arm). rs1 = x0 is the forget form.
   **The seal's SIZE cannot be checked** (corrected the same day): a SEALED capability carries no end bound in a
   register (`decompress_cap_metadata` gives 0 for SEALED/SEALEDRET, the field holds reg_id/async); a 512-byte
-  seal arms with status 0. The 1 KiB minimum the walks rely on is SEAL's alone (S-11). **Status 1 is reachable
-  and measured** (2026-10-01 evening, after the `sup-arm.S` repair recorded below): a seal parked in memory with
-  STC, its node REVOKEd through the MREV handle, reloaded with LDC, reads SEALED (LCC 4) and `cssupervise` on it
-  returns 1; without the revocation the seal survives the STC/LDC round trip (LCC 4) and arms.
+  seal arms with status 0. The 1 KiB minimum the walks rely on is SEAL's alone (S-11, fixed below). **Status 1 is
+  reachable and measured** (2026-10-01 evening, after the `sup-arm.S` repair recorded below): a seal parked in
+  memory with STC, its node REVOKEd through the MREV handle, reloaded with LDC, reads SEALED (LCC 4) and
+  `cssupervise` on it returns 1; without the revocation the seal survives the STC/LDC round trip (LCC 4) and arms.
 - **The escape at commit**: `escape_d` (combinational, decision cycle T) strips `exception_o` and loads flops
   (pc, pc metadata, cause, tval, kind); `escape_q` issues the RETURN-shaped request at T+1 from the flops alone
   and is held until the switcher acknowledges. T and T+1 force every commit side effect off. The strip also fires
@@ -130,8 +130,9 @@ the after-audit, synthesis, silicon.
   free-list counter cannot underflow. Residuals recorded: a legal CSR or AMO head that escapes on a PC-capability
   fault performs its side effect at T (only matters if a kind-2 event were resumed, which the contract forbids);
   quantum 0 or any quantum shorter than the post-switch refetch latency livelocks by construction (the contract's
-  >= 50k minimum is the only floor); while armed, a CALL of another seal silently disarms, so the monitor must
-  mask interrupts between cssupervise and CALL (QEMU fails closed instead); and the first entry installs neither
+  >= 50k minimum is the only floor); while armed, a CALL of another seal fails CLOSED and the arm survives every
+  exception on the CALL head (the delegated decisions below; this residual used to read "silently disarms, so
+  the monitor must mask interrupts between cssupervise and CALL"); and the first entry installs neither
   the seal's CPMP slots nor the GPRs -- the domain runs with the monitor's CPMP0..15 and x2..x31, as today.
 - **RETRACTED (2026-10-01 evening, by the after-audit of the delegated decisions): "a SEALED capability stored
   with STC and reloaded with LDC reads back untagged (LCC 7) in simulation", and with it "status 1 is
@@ -151,15 +152,80 @@ the after-audit, synthesis, silicon.
   in taken exceptions, CAPPRINT count and retired count; `revocation` loses its three phantom mid-switch traps
   with readings and retired count unchanged; the mid-switch detector fires 0 of 92 times (5 of 97 before).
   Not landed on the submodule's shared branch and the parent's pointer not bumped: synthesis is the lead's call.
+  **Later the same evening:** sweep3 on the decided tree (fail-closed + the S-11 size check, before the audit's
+  changes) -- 91 of 92 identical, `revocation` -3 traps, the detector 0 of 92 (3 on the unmodified RTL by the same
+  comparator); sweep4 on the FINAL tree (the audit's changes and the sealed cursor): 91 of 92 identical to the unmodified RTL in taken exceptions, readings and retired count, the one difference again revocation's three phantom mid-switch traps gone (detector 3 -> 0); against sweep3, the decided tree, 92 of 92 identical -- the audit's changes and the sealed cursor are invisible to the corpus. Every other ladder
+  test's readings and retired count are identical between the all5 and all6 runs (the three that differ are the
+  three whose tests changed: `sup-armclose`, `sup-arm`, `sup-sealsize-1023`). Lane-branch commits: b9acda022 (fail-closed, audited: one predicate, the arm persists), bd4c0d486 (the sup-arm.S retraction), c0ad507b2 (S-11 size and alignment), c0c546542 (the sealed cursor, the lint re-baseline and the gate guard; the veto point), 36a641e0b (the bracket test); tip 36a641e0b.
+- **Two decisions the lead delegated (2026-10-01 evening, "audit and decide yourself"), both in this bitstream,
+  both AUDITED after implementation (claim-auditor, adversarial: both supported, with changes that are now made):**
+  (1) **M1 fails CLOSED.** A CALL of any seal other than the armed one, while armed, no longer switches and no
+  longer drops the arm silently (which left the intended CALL running unsupervised, with no signal): it is held
+  at commit and traps as an illegal instruction one cycle later from a flop, mepc at the CALL, the arm persisting
+  -- QEMU's `capstone_supervisor_call` (raise ILLEGAL_INST before clearing the arm). The audit required one change
+  and recommended one, both made: ONE predicate (`sup_mismatch_hit`) now feeds both the block in the commit
+  branch and the trap flop -- the first version excluded debug mode from the trap only, which would have held a
+  program-buffer CALL at the head forever (in debug mode the trap now goes to the debug ROM's exception address,
+  `csr_regfile`'s `trap_vector_base`, with no mepc/mcause update); and the disarm on a CALL head that takes an
+  exception is REMOVED -- an interrupt or debug request marked on the armed CALL dropped the arm, so the mret/dret
+  re-execution ran UNSUPERVISED, silently; QEMU keeps the arm on every exception, and so does the RTL now: only an
+  acknowledged armed CALL or the forget form clears it. Test `sup-armclose.S` (measured, runs all6/fix3): the CALL
+  of B traps with cause 2 at its own pc; the handler mrets WITHOUT forgetting and the re-executed CALL traps AGAIN
+  (the arm survived the trap and the mret); after the forget the same CALL runs B ordinarily (marker 0xBB, RETURN
+  to CALL + 4); re-armed, a planted CALL of a LINEAR capability faults (cause 26) and the handler steps over it
+  without forgetting; CALL A then ESCAPES on its ecall (csupstatus 5, csupcause 11) -- the arm survived the planted
+  fault; the marker intact, mcause 0 (199 retirements). Mutants: `no-armclose` (fail open again: measured, the
+  cause-2 readings are absent and 0xBB follows the arm status directly -- B ran unsupervised from the first CALL
+  and the arm was gone); `no-armclose-trap` (the switch blocked but no trap: measured: the CALL wedges at the head, 114 retirements, one reading, the simulation's time-out); `disarm-on-fault` (the
+  earlier disarm restored: measured: after the planted fault the arm is gone and CALL A runs unsupervised; its ecall then traps INSIDE the domain, whose trap vector is its seal's slot 1, and the core storms to the simulation's time-out (399306 exceptions, no escape reading, the test never completes) -- the M-1 shape itself; the pre-registered 'the handler prints 11' named the wrong observable, since the monitor's handler is unreachable from an unsupervised domain, but the discriminator (no 5/11, no completion) holds). The audit's other findings: the "enters no UNOPTFLAT cone" wording was
+  wrong -- the commit block is on the standing loop already (`commit_ack -> dirty_fp_state -> csr -> cap_check`);
+  the compare is the one `foreign_return` uses and every new source is a flop, the 40 UNOPTFLAT names are
+  unchanged, and synthesis is the gate as for every edit there. No legitimate flow CALLs another seal while armed
+  (the QEMU monitor's `supervised_invoke` and capstone-c's lowering emit one CALL of the armed seal). QEMU's owner
+  (PCC) and rd checks are not reproduced: seals are linear, so only the holder of A can consume the arm, and a
+  mismatched rd on resume makes the domain's RETURN a `foreign_return` (fails closed).
+  (2) **S-11 is fixed, at 1024 bytes and 16-byte alignment, with R-32's off-by-one corrected AND the sealed
+  cursor set to the region's start.** The audit supported the check as safe to ship and REFUTED its stated
+  rationale: a SEALED capability carries no bounds in a register, its effective base is its CURSOR
+  (`decompress_cap_metadata`), so a check on start/end bounds nothing once the cursor is advanced before SEAL --
+  a 1024-byte region sealed with the cursor at +960 would put the exchange, the SEALEDRET window and the walks
+  past the region. The fix, batched into this bitstream as the LAST RTL commit on the branch so the lead can veto
+  it alone: `func SEAL` sets the result's cursor := `rs1.metadata.start` -- the spec says the cursor does not
+  apply to a sealed capability, and QEMU's CALL uses `bounds.base`, so silicon and QEMU now agree on where a
+  seal's exchange lands. Never check the cursor instead: the resident monitor seals its interrupt-handler region
+  with the cursor at +88 (the compiled `cap_env_init`), harmless only because silicon never uses CIH (`cap_cih :
+  '0` in ex_stage); with the fix that seal's base is its start, still unused. Sealer census (source level): the
+  monitor's domain seals 1536 B, page-aligned, cursor = start (its zeroing loop leaves it there); the
+  interrupt-handler seal exactly 1024 B at 16-byte alignment; the runtime's contexts 1024 B (QEMU only); every
+  directed test >= 2048 B via CAPBOUND (cursor = start) except the deliberate S-11 arms. Measured
+  (`sup-sealsize.S`, runs all6/fix3): 64 and 1023 bytes trap with cause 29; 1024 and 2048 seal with every canary
+  word intact; a 1024-byte region starting 8 bytes into the aligned block traps with 29 (the alignment clause
+  alone -- an STC through a misaligned cursor traps on its own with 6, so nothing is planted first); the same at
+  +16 seals as the control; the cursor arm (1024 bytes, images planted at +0 and at +960, the cursor moved to
+  +960 before SEAL) reads as the control with the fix. Mutants: `no-seal-check` (measured: 64 and 1023 bytes seal (LCC 4), the 64-byte region shows the spill pattern again (medeleg/mip/mie images at canary[0..2]), and the misaligned 1024-byte region seals and its CALL storms to the time-out, the 29s gone); `no-seal-cursor`
+  (measured: the cursor arm shows the 64-byte arm's spill pattern (#3 0, #4 the mip image 0x80, #5 0, #6 canary, #7 the canary pattern) -- the exchange happened at +960 and wrote past the region -- while the 1024-byte control is unchanged). `sup-arm.S`'s 512-byte arm, moved last, ends that test with the trap. QEMU's minimum is 528
+  with a different cause (INSUF_CAP_PERMS); the divergence is in the safe direction and the runtime lane should
+  raise QEMU's `CAP_SEALED_SIZE_MIN` to 1024. `seal-minsize-boundary.S` on the `board/r35-directed-repro` and
+  `s12-ldc-rolling-filter` branches expects a 1022-byte region to seal and flips if merged. The Anvil relational
+  lint reports 0 findings. Lint gate on the final tree: every hazard counter at baseline (LATCH 52, MULTIDRIVEN 3,
+  UNOPTFLAT 40, BLKSEQ 2, UNDRIVEN 25, ANVIL_UNOPTFLAT 0); UNUSEDSIGNAL 830 -> 832, attributed line by line to the
+  generated FLU alone (the SEAL edit's two discarded intermediate wires, the rest renumbered), re-baselined.
+  **Contract items from the audit (for the FPGA monitor):** the silicon forget form is rs1 = x0 -- QEMU's
+  `cssupervise rd, d, x0` is a status-2 refusal on silicon and leaves the arm; the monitor's trap path must forget
+  (`cssupervise x0`) when it takes cause 2 at a CALL, or every later CALL of another seal traps; a re-arm while
+  armed overwrites (QEMU refuses); the arm survives every exception on the CALL head.
+  **Residuals (recorded, not changed here):** CSSUPERVISE has no privilege term in the decoder, like CALL and
+  CAPENTER on this RTL, where QEMU requires C-mode; the SEALEDRET window [cursor+48, cursor+1008) moves with its
+  cursor and CINCOFFSET does not refuse a SEALEDRET (source read only, no run: registry R-48).
 - **Step 9 pre-registration, FINAL (2026-10-01, written before any synthesis number exists; supersedes the
   "~476 FFs" of revision 1.1):** own-cell flop delta = csr_regfile supervision state 524 bits (armed 1, active 1,
   base 64, save base 64, seal 129, rd 5, csupquantum 32, counter 32, resume 1, event valid 1 + kind 2 + cause 64
   + epc 64 + tval 64) + commit escape flops 259 (escape_q 1, pc 64, pc metadata 64, cause 64, tval 64, kind 2) +
   ex_stage's CALL pc latch 128 + the rev-node's free_len 16 + the switcher's phase 2 and its widened request
-  register 137 = **1066**. The scoreboard entry's `dom_switch_req_t` grew by 137 bits and `cap_wbdata_t` by 1
+  register 137 + the fail-closed flop `sup_mismatch_q` 1 = **1067**. The scoreboard entry's `dom_switch_req_t` grew by 137 bits and `cap_wbdata_t` by 1
   (sup_arm_en), i.e. 138 bits per entry: the request's new fields are constant 0 at every pack site (commit is
-  their only writer, on its own output), so opt_design should prune those flops -- a delta near +1066 confirms
-  it, a delta near +2170 means they were NOT pruned and the walk fields must move off the entry type. ORDER-like
+  their only writer, on its own output), so opt_design should prune those flops -- a delta near +1067 confirms
+  it, a delta near +2171 means they were NOT pruned and the walk fields must move off the entry type. ORDER-like
   test (0/500 cells before the load unit, the D-cache arbiter and i_frontend): the only NEW combinational inputs
   are `csr_exception_i.valid` and the 64-bit `foreign_return` compare into `dom_switch_valid_o`/`commit_lsu_o`
   (the after-audit's 1b); `exception_o.valid` gains flop-sourced terms only, the foreign-RETURN compare having
@@ -405,10 +471,11 @@ Values from the CAPPRINT registers in the retirement trace and `SUP_TRACE` `$dis
 
 ## Monitor contract implied (the runtime lane's work, named here so it is not forgotten)
 
-`supervised_invoke(d, quantum)` = `cssupervise rd, d, quantum` (rd ≠ x0; status 0/1/2 in rd) then the ordinary `__domcall`;
+`supervised_invoke(d, quantum)` = `cssupervise rd, d, quantum` (rd ≠ x0; status 0/1/2/3 in rd) then the ordinary `__domcall` of the SAME seal (a CALL of any other seal while armed traps as an illegal instruction; `cssupervise x0` forgets the arm; mask interrupts between the two);
 on return `x[rd]` is the SEALED seal; `events[0..3]` is replaced by `csrr csupstatus/csupcause/csupepc/csuptval` (kind 0
 returned, 1 preempted — cause M_TIMER or the quantum cause — 2 fault); resume = `cssupervise` + the same CALL (the quantum
 re-arms per CALL); kind 2 → never CALL that seal again; `cssupervisor_gc` mode 0 → no-op, the census = `csrr csnodefree`.
+The arm survives every exception on the CALL head and a CALL of any other seal while armed traps (cause 2, mepc at the CALL): the trap path forgets with `cssupervise x0` -- the silicon forget form; QEMU's `cssupervise rd, d, x0` is a status-2 refusal here and leaves the arm. A re-arm while armed overwrites. SEAL now requires >= 1024 bytes at 16-byte alignment and sets the sealed cursor to the region's start.
 The monitor must populate seal slots 3 (mstatus) and 7 (mie) as it does today. [Superseded by revision 1.1/1.2: the first entry is the ordinary 8-register exchange, so slots 9..24 (CPMP) and the GPR slots are NOT installed on entry -- the domain runs with the monitor's CPMP0..15 and x2..x31 until it is first preempted; slot 25 carries cepc/mepc.] Minimum quantum ≥ ~50k cycles (it counts only
 outside the exchange, but must exceed the longest uninterruptible stall, e.g. a REVOKE walk). A `TARGET=fpga` define
 (e.g. `CAPSTONE_SUPERVISOR_CSR_EVENTS`) selects this form.

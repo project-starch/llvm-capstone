@@ -24,6 +24,15 @@
   capability's end (measured); `cssupervise` CANNOT check a seal's size (a SEALED capability carries no end
   bound in a register), so the 1 KiB minimum is SEAL's alone -- the resident monitor's 1536-byte seals are the
   guarantee until S-11 is fixed. A deterministic lint for the fold is on `sup-call`.
+- **Two more decisions on the lead's delegation, same bitstream, audited:** a CALL of another seal while armed
+  fails closed (trap, the arm persists across the trap and across every exception on a CALL head, as QEMU; one
+  predicate for the block and the trap, debug mode included); S-11 is fixed in RTL at 1024 B / 16-B aligned with
+  R-32's off-by-one corrected AND the sealed cursor set to the region's start -- the audit showed a SEALED
+  capability's base IS its cursor, so the size check alone bounded nothing (every known sealer complies; QEMU's
+  528 should be raised). Both tested with mutant controls; sweep4 on the final tree 91/92 identical to the unmodified RTL (revocation -3 phantom traps, as before) and 92/92 identical to the tree before the audit's changes. RETRACTED
+  with it: "a SEALED capability reads back untagged after STC/LDC in simulation" and "status 1 is unreachable" --
+  `sup-arm.S` had overwritten the seal with an integer before the store; repaired, the seal survives the round
+  trip and the dead-node status (1) is measured.
 - **Resident bitstream unchanged:** `caplifive_r43_8f6a0af98.bit`.
 
 Minimal snapshot. Read first in every session.
