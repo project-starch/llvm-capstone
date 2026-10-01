@@ -213,9 +213,10 @@ or hardware collection cost. Increasing `CAPSTONE_REV_NODES` only changes the
 capacity; it is no longer necessary for the six previously failing mruby repeats.
 
 The musl port's existing syscall coverage still applies: launching a Linux
-process does not add target fork, exec, threads, dynamic loading or full POSIX
-fd semantics inside a domain. Standard-stream read/write/EOF/close/stat/query
-fcntl use Linux objects; other file operations retain the existing host service.
+process does not add target fork, dynamic loading or full POSIX fd semantics
+inside a domain; exec, spawn and threads are the delegated runtime's (below).
+Standard-stream read/write/EOF/close/stat/query fcntl use Linux objects; other
+file operations retain the existing host service.
 The launcher uses its Linux filesystem authority and is not a filesystem sandbox.
 No claim of a complete hostile-code or QEMU security audit is made.
 
@@ -241,18 +242,20 @@ only: `statfs`, `fstatfs`, `statx`, `truncate`, `fallocate`, `linkat`,
 `sendfile`, `copy_file_range`, `readahead`, `fadvise64`, `sync`, `syncfs`,
 `memfd_create`, `clock_getres`, `getgroups`, `getrusage`, `getcpu`,
 `setsid`, `setpgid` among the task and its children, and for the task
-itself `getpriority`, `setpriority`, `sched_getaffinity`,
-`sched_setaffinity`, `sched_get_priority_max`, `sched_get_priority_min` and
-`sched_rr_get_interval`; `getresuid` and `getresgid`; the descriptor rows
+itself `getpriority`, `setpriority`, `sched_get_priority_max`,
+`sched_get_priority_min` and `sched_rr_get_interval`; `sched_getaffinity` and
+`sched_setaffinity` of the launcher thread serving the calling context (named
+by 0); `getresuid` and `getresgid`; the descriptor rows
 `eventfd2`, `timerfd_create`, `timerfd_settime`, `timerfd_gettime` and
 `signalfd4`, whose descriptors are then read, written and polled like any
 other (a signalfd reads what Linux holds pending, the signals the domain
 blocks, as `rt_sigtimedwait` does); `fcntl`'s integer commands, among them
 directory notification (`F_NOTIFY`, `F_SETSIG`, `F_GETSIG`); sockets and
 epoll (below); `exit_group`. What does
-not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS),
-processes (`clone` and `fork` are ENOSYS; image exec uses the process service
-below), and threads.
+not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS) and
+processes (`fork` is ENOSYS and `clone` makes threads only; image exec uses the
+process service below). A thread is a context of the application, stepped by a
+launcher thread of its own (Threads, below).
 
 Sockets are descriptors like files: `socket`, `socketpair`, `bind`, `listen`,
 `accept`, `accept4`, `connect`, `getsockname`, `getpeername`, `sendto`,
@@ -558,6 +561,32 @@ Run the direct-exec regression against a provisioned guest with the new kernel:
 python3 capstone/runtime/tests/application/run-binfmt.py --state "$VM_STATE" \
   --image /mnt/host/delegate-contract.dom
 ```
+
+### Threads (2026-09-30)
+
+musl's `pthread_create`, `join`, `detach` and `exit` run unchanged. Each thread is a protected
+context the runtime mints, and one Linux thread of the launcher steps it. That thread enters the
+context through the driver and the monitor, and serves its delegated calls itself. So:
+- Linux schedules, blocks and routes signals per thread;
+- a call that blocks stops only its own thread;
+- futexes go through the launcher's park queue, since Linux cannot see domain memory.
+
+Two limits follow from how a step works:
+- Linux switches between threads only at step boundaries, at the latest at the supervisor's 5 ms
+  quantum;
+- one thread at a time executes domain code, because the driver serialises steps on one mutex and
+  the VM has one hart.
+
+The model is concurrency, not parallelism.
+
+An application built by the SDK may run fifteen threads besides its first. Not supported:
+- `fork`;
+- asynchronous signal delivery and asynchronous cancellation;
+- futex operations beyond WAIT, WAKE, REQUEUE and the PI lock pair;
+- priority and policy calls, and another thread's affinity or name.
+
+The whole model, with its authority rules, limits and evidence:
+[docs/design/delegated-threads-model.md](../docs/design/delegated-threads-model.md).
 
 ## Verification
 
