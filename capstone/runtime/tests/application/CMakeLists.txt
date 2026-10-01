@@ -17,3 +17,8 @@ capstone_configure_application(signal-contract
 add_executable(context-probe context-probe.c context-probe-asm.S)
 capstone_configure_application(context-probe
   DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 CONTEXT_BYTES 1048576)
+# a 16 KiB exchange region on purpose: the datagram rule is exercised below
+# the kernel's own limits
+add_executable(socket-contract socket-contract.c)
+capstone_configure_application(socket-contract
+  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 EXCHANGE_BYTES 16384)

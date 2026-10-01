@@ -1072,7 +1072,10 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   }
 
   // A capability-typed value that is only moved or compared stays a pointer.
-  if (ShouldCastToIntPtrTy && MemTy->isPointerType() &&
+  // Capstone's __intcap is one too: its LLVM type is the capability pointer, so
+  // an i128 access would split it into two integer halves and drop the tag.
+  if (ShouldCastToIntPtrTy &&
+      (MemTy->isPointerType() || MemTy->isIntCapType()) &&
       movesOrComparesOnly(E->getOp()) &&
       CGM.getDataLayout().isNonIntegralPointerType(ConvertTypeForMem(MemTy)))
     ShouldCastToIntPtrTy = false;

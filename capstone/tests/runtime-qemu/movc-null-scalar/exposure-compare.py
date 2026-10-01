@@ -4,16 +4,20 @@
 usage: exposure-compare.py <OUT>
 
 Prints every nightly suite whose verdict differs, BEEBS' and linear-uninit-corpus' failure lists,
-libc-test test by test (chunked results, NOTRUN filled in from the one-per-boot re-run), and the
-switch's notice count in each arm: any notice with the switch off, or none with it on, means the arm
-did not measure what it claims; ON logs that show a boot but no notice are listed as unverified. A
+the bare HostCall wire probes one at a time, the delegated runtime probes and libc-test test by
+test (their runners' --report files), and the switch's notice count in each arm: any notice with
+the switch off, or none with it on, means the arm did not measure what it claims; ON logs that show
+a boot but no notice are listed as unverified. The movc probe's two variants in each arm's guest
+are the control that the guest ran with the switch it claims; if either did not pass, the
+comparison is refused. A
 missing artifact is an ERROR, never a match.
 Exit 0 with the arms identical, 1 if they differ, 2 if the comparison could not be made.
 """
-import collections, pathlib, re, sys
+import collections, json, pathlib, re, sys
 
 OUT = pathlib.Path(sys.argv[1])
 NOTICE = "MOVC-NULL-SCALAR first non-zero source nulled"
+MOVC = ("movc-rule", "movc-keep")  # the controls: judged per arm, not compared
 errors, differs = [], False
 
 
@@ -39,23 +43,23 @@ def failures(logdir, name, pattern):
     return sorted(set(re.findall(pattern, log.read_text(errors="replace"))))
 
 
+def report(kind, arm):
+    """A runner's --report file, or an ERROR."""
+    p = OUT / f"{kind}-{arm}.json"
+    if not p.exists():
+        errors.append(f"missing {p}")
+        return None
+    return json.loads(p.read_text())["results"]
+
+
 def libc(arm):
-    root = OUT / arm / "musl-libc-test" / "logs"
-    res = {}
-    for run_id in (f"movc-{arm}", f"movc-{arm}-notrun"):
-        p = root / run_id / "results.txt"
-        if not p.exists():
-            if run_id.endswith("-notrun"):
-                continue  # no NOTRUN tests, nothing was re-run
-            errors.append(f"missing {p}")
-            return None
-        for m in re.finditer(r"^(PASS|FAIL|FAULT|NOTRUN|NOBUILD|EXCLUDED)\s+(\S+)", p.read_text(), re.M):
-            if run_id.endswith("-notrun"):
-                if res.get(m.group(2)) == "NOTRUN" and m.group(1) != "NOTRUN":
-                    res[m.group(2)] = m.group(1)
-            else:
-                res[m.group(2)] = m.group(1)
-    return res
+    res = report("libc", arm)
+    return None if res is None else {name: verdict for name, (verdict, _) in res.items()}
+
+
+def probes(arm):
+    res = report("probes", arm)
+    return None if res is None else {name: row["verdict"] for name, row in res.items()}
 
 
 def notices(arm):
@@ -114,15 +118,18 @@ else:
     if both:
         print(f"  not ok in either arm: {both}")
 
-for p in ("file", "stdio", "write"):
-    rc = {}
-    for arm in ("off", "on"):
-        f = OUT / f"probe-{arm}-{p}.txt"
-        rc[arm] = f.read_text(errors="replace").strip().splitlines()[-1] if f.exists() else None
-        if rc[arm] is None:
-            errors.append(f"missing {f}")
-    differs |= rc["off"] != rc["on"]
-    print(f"musl probe {p}: off {rc['off']}, on {rc['on']}")
+poff, pon = probes("off"), probes("on")
+if poff is not None and pon is not None:
+    for arm, res in (("off", poff), ("on", pon)):
+        for k in MOVC:
+            if res.get(k) != "PASS":
+                errors.append(f"the {k} control did not pass in the {arm} arm ({res.get(k)}): its guest "
+                              "did not run with the switch the arm claims, or the probe cannot see C-32")
+    diff = {k: (poff.get(k), pon.get(k)) for k in sorted(set(poff) | set(pon))
+            if poff.get(k) != pon.get(k) and k not in MOVC}
+    differs |= bool(diff)
+    print(f"delegated runtime probes: {len(pon)}; pass off {sum(v == 'PASS' for v in poff.values())},"
+          f" on {sum(v == 'PASS' for v in pon.values())}; differing (movc aside): {diff or 'none'}")
 
 loff, lon = libc("off"), libc("on")
 if loff is not None and lon is not None:

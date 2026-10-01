@@ -96,8 +96,16 @@ segment service is implemented and file-backed `mmap` is not. Pass the
 `--single` arguments through the [shared application runner](../../common/application/README.md),
 using `--stdin work.sql` and `--user UID:GID` for an existing unprivileged guest
 account. The cluster must be writable by that account. The old input-file and
-root-bypass patches are removed. Patch 0019 flushes single-user statistics
-synchronously; SQL timeouts still require the pending signal implementation. The CheriBSD backend uses `dynamic_shared_memory_type=posix`
+root-bypass patches are removed, and so are the two that stood in for a process spawn
+and for timers (the former 0014 and 0019): `setitimer` is delegated and SIGALRM is
+delivered at the backend's next delegated call. So `statement_timeout` works: a
+300 ms timeout cancelled `pg_sleep(2)` after 324 ms (the backend waits in `poll`),
+and a counting query after about 600 ms (the signal waits for the query's next
+delegated call). Statistics are scheduled with PostgreSQL's own idle SIGALRM again;
+that path was not measured on its own, but it rides the same timer and signal.
+`pg_import_system_collations` runs `locale -a` through the launcher's spawn; the
+guest has no `locale`, so it imports none, with PostgreSQL's own warning, as the
+patch did silently. Lock and idle-transaction timeouts are not measured. The CheriBSD backend uses `dynamic_shared_memory_type=posix`
 with the same SQL input. Disable the guest-wide revocation default for
 setup services: the kernel can panic while SCP stages a cluster. Published-policy
 points explicitly enable libc revocation in each benchmark process;

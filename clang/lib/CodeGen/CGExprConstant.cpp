@@ -1171,8 +1171,23 @@ public:
     if (FromType->isIntegerType())
       if (llvm::Constant *C = Visit(E, FromType))
         if (auto *CI = dyn_cast<llvm::ConstantInt>(C)) {
+          // Capstone __intcap: an intcap source is a capability, not a
+          // ConstantInt; an intcap destination is an untagged capability
+          // holding the value (a GEP on null, as for any integer constant).
+          if (FromType->isIntCapType())
+            return nullptr;
           unsigned SrcWidth = CGM.getContext().getIntWidth(FromType);
           unsigned DstWidth = CGM.getContext().getIntWidth(DestType);
+          if (DestType->isIntCapType()) {
+            llvm::APInt A = FromType->isSignedIntegerType()
+                                ? CI->getValue().sextOrTrunc(64)
+                                : CI->getValue().zextOrTrunc(64);
+            auto *PtrTy =
+                cast<llvm::PointerType>(CGM.getTypes().ConvertType(DestType));
+            return llvm::ConstantExpr::getGetElementPtr(
+                CGM.Int8Ty, llvm::ConstantPointerNull::get(PtrTy),
+                llvm::ConstantInt::get(CGM.getLLVMContext(), A));
+          }
           if (DstWidth == SrcWidth)
             return CI;
           llvm::APInt A = FromType->isSignedIntegerType()
@@ -2451,6 +2466,17 @@ ConstantEmitter::tryEmitPrivate(const APValue &Value, QualType DestType,
         PointerAuth &&
         (PointerAuth.authenticatesNullValues() || Value.getInt() != 0))
       return nullptr;
+    // Capstone: an __intcap constant with an integer value is an untagged
+    // capability holding that address, emitted as a GEP on null (16 bytes in
+    // memory, the address and zero, no capability relocation).
+    if (DestType->isIntCapType()) {
+      auto *PtrTy = cast<llvm::PointerType>(CGM.getTypes().ConvertType(DestType));
+      llvm::APSInt V = Value.getInt();
+      return llvm::ConstantExpr::getGetElementPtr(
+          CGM.Int8Ty, llvm::ConstantPointerNull::get(PtrTy),
+          llvm::ConstantInt::get(CGM.Int64Ty,
+                                 V.isSigned() ? V.getSExtValue() : V.getZExtValue()));
+    }
     return llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
   case APValue::FixedPoint:
     return llvm::ConstantInt::get(CGM.getLLVMContext(),

@@ -9,9 +9,11 @@
 #   MRBD_TESTS     1 builds mrbtest for both builds
 #   MRBD_DEFINES   extra -D flags (space separated), both builds
 #
-# Gems: stdlib, stdlib-ext, math and metaprog, and from stdlib-io only what a
-# domain can serve: mruby-io, mruby-errno, mruby-dir, mruby-pack. Not mruby-socket,
-# mruby-process or mruby-signal: general fork and signal handlers are not served.
+# Gems: stdlib, stdlib-ext, math, metaprog and stdlib-io (at head mruby-io,
+# mruby-socket, mruby-errno, mruby-dir, mruby-env, mruby-signal, mruby-process;
+# at 4.0.0-rc2 the first four), and mruby-pack. The domain's calls are Linux's
+# own; mruby-process makes no child itself (it waits for and signals the ones
+# IO.popen makes), and mruby-signal is a name table, installing no handler.
 
 boxing   = ENV.fetch('MRBD_BOXING', 'no')
 dispatch = ENV.fetch('MRBD_DISPATCH', 'switch')
@@ -29,7 +31,12 @@ gems = lambda do |conf|
   conf.gembox 'stdlib-ext'
   conf.gembox 'math'
   conf.gembox 'metaprog'
-  %w(mruby-io mruby-errno mruby-dir mruby-pack mruby-bin-mruby).each { |g| conf.gem :core => g }
+  conf.gembox 'stdlib-io'
+  %w(mruby-pack mruby-bin-mruby).each { |g| conf.gem :core => g }
+  # mruby-task's timer HAL: at head the port layer (conf.ports 'posix') carries
+  # it, at 4.0.0-rc2 it is the separate hal-posix-task gem, which depends on
+  # mruby-task and so brings it in.
+  conf.gem :core => (File.directory?("#{MRUBY_ROOT}/mrbgems/hal-posix-task") ? 'hal-posix-task' : 'mruby-task')
 end
 
 # The host build makes mrbc for both, and is the native reference.
