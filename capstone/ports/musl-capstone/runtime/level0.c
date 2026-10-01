@@ -80,6 +80,11 @@ static size_t l0_round(size_t n)
 /* The name says the property, not the instruction that implements it: with it off a pointer
    still carries the ARENA's bounds, so it is never unbounded, and "shrink" is already taken by
    realloc releasing an unused tail (a different thing entirely). */
+#ifdef CAPSTONE_LEVEL0_SHRINK
+/* A build still passing the old name would get the default, bounds on, without a word: the
+   control it meant to disarm would be armed. Fail it instead. */
+#error "CAPSTONE_LEVEL0_SHRINK was renamed to CAPSTONE_LEVEL0_OBJECT_BOUNDS"
+#endif
 #ifndef CAPSTONE_LEVEL0_OBJECT_BOUNDS
 #define CAPSTONE_LEVEL0_OBJECT_BOUNDS 1
 #endif

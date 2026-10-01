@@ -617,8 +617,8 @@ guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 ```sh
 python3 capstone/runtime/tests/application/run-heap.py \
   --state "$CAPSTONE_TMP_ROOT/dev-vm" \
-  --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/contract-noshrink.dom \
-  --sublet-elf <build>/contract-sublet.dom --control-elf <build>/application-contract.dom \
+  --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/contract-no-object-bounds.dom \
+  --sublet-elf <build>/contract-sublet.dom --control-elf <build>/contract-no-object-bounds.dom \
   --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \
   --platform <kernel> <firmware> <rootfs> <qemu> <launcher> --report heap.json
 

@@ -1,6 +1,6 @@
 {
  "date": "2026-09-30",
- "change": "CAPSTONE_LEVEL0_OBJECT_BOUNDS is on by default: level0, the heap every application port links unless it asks for another, now narrows each returned pointer to the bytes requested. -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0 restores the old behaviour and is what the heap qualification's control and the FFmpeg and wireshark level0 arms need.",
+ "change": "CAPSTONE_LEVEL0_OBJECT_BOUNDS is on by default: level0, the heap every application port links unless it asks for another, now narrows each returned pointer to the bytes requested. FFmpeg and tshark are the exception: their build scripts pin their level0 arm to -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0, so for them the new behaviour is their existing shrink arm. -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0 restores the old behaviour and is what the heap qualification's control and the FFmpeg and wireshark level0 arms need.",
  "what_it_does_not_give": "temporal safety. free still only marks the block free, so a stale pointer keeps working and reads whatever occupies the memory next. That is sublet_heap.c's job and is unchanged here.",
  "prior_state": "the switch has existed since 2026-09-23 (5e7157e20bb0, 'per-object heap bounds (opt-in)'). CORRECTION to this record's first version, which said it was defined nowhere: two ports do define it. ports/ffmpeg/app/host/build-domain.sh and ports/wireshark/app/host/build-domain.sh each build a 'shrink' arm with it, as the middle of three arms between their unprotected level0 arm and their sublet arm. No BUILD default, no gate and no shipped image turned it on, which is what made the default reachable; but the claim 'no port turned it on' was wrong and is withdrawn. The threads lane's 'Qualify level0 shrink across the application and libc gates' (92d21b84) is still a different shrink -- realloc's tail (7795986d) -- and does not bound objects.",
  "platform": {
@@ -12,7 +12,7 @@
   "libc": "the #144 kit's libc-capstone.a"
  },
  "matched_pair": {
-  "method": "one contract source, two images: the default (bounds) and -DCAPSTONE_LEVEL0_SHRINK=0 (the control). Run through application-supervisor, which is what run-heap.py uses.",
+  "method": "one contract source, two images: the default (bounds) and -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0 (the control). Run through application-supervisor, which is what run-heap.py uses.",
   "images": {
    "bounds": "a75d4088b74853b3ff5527d14730bb990db378e8d1cfbf1dcce6ecde6ba35bd2",
    "control": "315ab4b980d4d15d108586560f5307b6d09499f82890655a2837612d54106c05"
@@ -69,12 +69,13 @@
    "reading": "a real interpreter whose every malloc is now bounded passes its own suite exactly as it does natively"
   }
  },
- "consequence_for_the_heap_qualification": "run-heap.py hard-codes level0 as the unprotected control (control = label == 'level0' and mode in FAULTS, then 'control faulted' must not fire). With bounds on by default that control must be built with -DCAPSTONE_LEVEL0_SHRINK=0, or its two bounds cases fault on both arms and the gate fails. applications.md now says so and names the control image contract-noshrink.dom.",
+ "consequence_for_the_heap_qualification": "run-heap.py hard-codes level0 as the unprotected control (control = label == 'level0' and mode in FAULTS, then 'control faulted' must not fire). With bounds on by default that control must be built with -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0, or its two bounds cases fault on both arms and the gate fails. applications.md now says so and names the control image contract-no-object-bounds.dom.",
  "not_measured": [
   "libc-test has not been re-run against the bounded heap",
   "no port other than mruby was rebuilt against it; Perl, CPython, SQLite, FFmpeg and tshark are untouched here",
   "silicon: level0.c already records that a narrowed capability of 4 KiB or more, stored and reloaded, is rounded outward to its representable granule because block bases are only 16-aligned. capstone-qemu keeps full precision, so this measurement does not see it, and a large object's bounds on the board may be wider than the request"
  ],
  "naming": "the switch was CAPSTONE_LEVEL0_SHRINK and is renamed. 'Shrink' named the instruction rather than the property, and it collided with the other shrink in this allocator -- realloc releasing an unused tail (7795986d) -- which already cost one wrong reading of the threads lane's 92d21b84. It is also not 'unbounded' when off: a pointer still carries the ARENA's bounds. The name now says which bounds.",
+ "rename_guard": "level0.c stops with #error when CAPSTONE_LEVEL0_SHRINK is defined at all, so a build still passing the old name fails instead of silently getting bounds on. Checked by building the contracts three ways: the default and -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0 give application-contract.dom images byte-identical to the matched pair above (a75d4088..., 315ab4b9...), and -DCAPSTONE_LEVEL0_SHRINK=0 stops at level0.c with that error.",
  "ports_with_a_shrink_arm": "FFmpeg and wireshark compare three arms: level0 (whole-arena bounds), shrink (per-object bounds, no revocation) and sublet (per-object bounds plus revocation). With bounds on by default their first two arms would have become the same build, and their recorded arm descriptions would have been false. Both build scripts now pass -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0 for the level0 arm and nothing for the shrink arm, so the three arms still differ exactly as their READMEs describe. Neither port was rebuilt or re-run here."
 }
