@@ -11,15 +11,20 @@ old/fresh accesses after address reuse, remap identities, virgin clone
 namespaces, preserved PTE rights and pending accesses on both harts. Next,
 extend the [QEMU U-mode access slice](../design/trusted-linux-execution-boundary.md)
 into a real Linux process. The stacked [physical-tag slice](../design/trusted-linux-execution-boundary.md)
-passes 47/47: 41 U-mode cases, four legacy-path executions and two harness
-controls. The prior binary fails the five new physical-tag cases.
+passes 51/51: 43 U-mode guest cases, two configuration rejections, four
+legacy-path executions and two harness controls. Review found that the
+previous two-hart handoff admitted a revoked cross-hart capability and that
+post-store PTE walking could clear the wrong frame's tag. Stores now capture
+their physical destination before writing; QEMU refuses more than one possible
+hart until a shared lifetime namespace exists.
 Keep the experiment behind `x-capstone-u-mode=true` while process selection is absent;
 the old 23/23 gate accepted pre-U-mode setup failures and is superseded.
 Old/fresh capabilities at one virtual address are still debug-minted.
-Next qualify concurrent tag/data transitions, full S-mode kernel copies and
-frame reclaim; then add protected per-process lifetime selection and tagged context
-save/restore. The physical tag map passes an ordered handoff between two
-harts and one S-mode alias store; Linux context switching remains untested.
+Next qualify full S-mode kernel copies and frame reclaim; then add protected
+per-process lifetime selection, shared revocation state and tagged context
+save/restore. The physical tag map passes S-mode scalar, FP and atomic stores
+through a stale cached translation on one hart; Linux context switching
+remains untested.
 The `malloc(64); free; malloc(64)` same-address test, a recoverable buffer-copy
 fault, preemption, kernel/user ABI, global retirement break and two-hart
 completion contract remain open. Integrate the existing thread work with

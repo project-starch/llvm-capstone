@@ -4,17 +4,21 @@ Minimal snapshot. Read first in every session.
 
 ## 2026-10-01 — experimental physical tags for U-mode QEMU
 
-The stacked QEMU [lane `f38c88108a`](https://github.com/project-starch/capstone-qemu/commit/f38c88108a)
-keys experimental U-mode tags by the translated physical granule and shares
-the map across harts. Its 47/47 gate adds alias/store clearing, remap identity,
-privileged physical-write, ordered two-hart transfer and S-mode alias-store
-tests; the prior binary fails those five cases. The existing Linux boot/module/
-shell smoke passes with the experiment disabled. The
-[record](https://github.com/project-starch/capstone-qemu/blob/f38c88108a/tests/trusted-linux-u-access/result.json)
-has source, binary and boot-input hashes. The parent QEMU pin is unchanged.
-Concurrent writes, full kernel copies, frame reclaim, tagged process
-contexts, kernel buffer recovery and a real `malloc/free` Linux process remain
-open; M1 is not closed.
+The stacked QEMU [lane `a417a3ed8b`](https://github.com/project-starch/capstone-qemu/commit/a417a3ed8b)
+keys experimental U-mode tags by the translated physical granule. Review of
+the earlier `f38c88108a` slice found two safety failures. First, a privileged
+store could use a cached translation to the old frame after a PTE edit while
+the later tag-clearing walk saw the new frame. Scalar, FP and atomic stores
+now capture the physical destination before writing. Second, the physical tag
+table was shared across harts but revocation trees were not: a capability
+revoked on hart 0 remained usable on hart 1. QEMU now refuses
+`x-capstone-u-mode=true` with more than one possible hart, including hotplug
+capacity, until a shared lifetime namespace exists. Its [record](https://github.com/project-starch/capstone-qemu/blob/a417a3ed8b/tests/trusted-linux-u-access/result.json)
+has 51/51 checks and source, binary and boot-input hashes. The existing Linux
+boot/module/shell smoke passes with the experiment disabled. The parent QEMU
+pin is unchanged. Full kernel copies, frame reclaim, tagged process contexts,
+kernel buffer recovery and a real `malloc/free` Linux process remain open; M1
+is not closed.
 
 ## 2026-10-01 — corrections to the U-mode QEMU access slice
 

@@ -186,30 +186,35 @@ before a refused PTE store, and the implementation changed existing monitor
 return/trap semantics. That result did not establish these contracts. The
 corrected runner requires a guest completion marker and rejects setup and
 wrong-site faults. UNINIT cursor advancement now follows successful STC writes.
-Concurrent PTE changes and two-hart atomicity of the two 64-bit STC writes
-remain unqualified. Unsupported vector, Zcmp stack, XThead and cache-block
+The two 64-bit STC writes and their tag publication are not atomic. A
+two-hart guest is now refused by the experimental CPU configuration until
+shared lifetime state and completion rules exist. Unsupported vector, Zcmp
+stack, XThead and cache-block
 memory operations are rejected in experimental Capstone U-mode.
 
-The stacked QEMU [physical-tag slice `f38c88108a`](https://github.com/project-starch/capstone-qemu/commit/f38c88108a)
-adds a shared map keyed by the TLB's physical 16-byte granule when the
-experiment is enabled. Its gate passes **47/47**: the earlier 42 checks plus
-physical alias/store clearing, remap identity, and a privileged physical
-write, an ordered two-hart tag handoff, and an S-mode store through a second
-virtual alias. The prior QEMU binary fails those five new cases. The
-[record](https://github.com/project-starch/capstone-qemu/blob/f38c88108a/tests/trusted-linux-u-access/result.json)
-contains source and binary hashes. The existing Linux boot/module/shell gate
-also passes with the experiment disabled. The parent QEMU pin is unchanged.
+The stacked QEMU [physical-tag slice `a417a3ed8b`](https://github.com/project-starch/capstone-qemu/commit/a417a3ed8b)
+adds a map keyed by the TLB's physical 16-byte granule when the experiment is
+enabled. Its gate passes **51/51**: 43 U-mode guests, two configuration
+rejections, four legacy-path executions and two harness controls. The
+[record](https://github.com/project-starch/capstone-qemu/blob/a417a3ed8b/tests/trusted-linux-u-access/result.json)
+contains source, binary and boot-input hashes. The existing Linux
+boot/module/shell gate also passes with the experiment disabled. The parent
+QEMU pin is unchanged.
 
-This establishes physical tag identity for the directed transitions, not
-safe Linux capability processes. The two-hart guest test is an ordered
-producer/consumer handoff; concurrent tag/data updates and context transfer
-remain unqualified.
-Privileged scalar stores clear tags, including the tested S-mode alias store;
-full kernel copies, device writes, DMA and frame reclaim still need explicit
-contracts and tests. Concurrent PTE
-changes can race the post-store privileged physical lookup. The QEMU map has
-no migration protocol. A process-specific protected lifetime namespace,
-tagged register save/restore, checked syscall buffers with recoverable faults,
-and retirement completion also remain open. The next M1 slice should test
-tag behavior across a real Linux context change before a process is
-used as evidence for the `malloc`/`free` contract.
+The preceding `f38c88108a` slice's live two-hart tag handoff did not prove
+shared lifetimes: a capability revoked on one hart could be loaded and used
+on another whose separate revocation node remained live. The experiment now
+requires exactly one possible hart, including hotplug capacity. A shared
+protected lifetime namespace and retirement completion are required before
+that restriction can be lifted.
+
+Privileged scalar, FP and atomic stores now capture the physical destination
+from the TLB before writing, and clear that frame's tag after the write. A
+regression test changes an S-mode alias PTE without `sfence.vma`, confirms the
+store used the cached translation to the old frame, then checks that U mode
+sees the tag cleared. A fresh post-store PTE walk cleared the new frame and
+left the written old frame tagged. Full kernel copies, device writes, DMA,
+frame reclaim, migration, tagged process context transfer, checked syscall
+buffers and a real Linux `malloc/free` process remain unqualified. The next
+M1 slice should test tags across a real Linux context change before claiming
+the allocator contract.
