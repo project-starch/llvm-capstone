@@ -81,6 +81,7 @@ case_fts3_snippet_or.c fts3snipor
 case_fts3_zterm.c      fts3zterm
 case_fts3_offsets.c    fts3offsets
 case_fts3_snippet.c    fts3snip
+case_fts3_destroy_oom.c fts3destroyoom
 EOF
    ;;
   esac
