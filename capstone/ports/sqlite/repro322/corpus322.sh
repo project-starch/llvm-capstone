@@ -30,6 +30,12 @@ case "$GROUP" in
   # sqlite3_int64 and they agree again.  Cell layout is unchanged (RtreeValue int vs
   # float are both 4 bytes), and the host ASan oracle confirms both rtree cases still
   # reproduce under INT_ONLY at the same row counts.
+  # row 6's bug is in fts3EvalNextRow()'s NESTED-OR branch, and nested query syntax
+  # exists only with -DSQLITE_ENABLE_FTS3_PARENTHESIS. Without it the parentheses are
+  # ordinary characters, a flat query runs, and the case returns 0 rows -- a PASS that
+  # establishes nothing. Kept as its own group so the other fts3 cases keep building
+  # against stock fts3 flags.
+  fts3P) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_FTS3_PARENTHESIS $MATHINC" ;;
   rtree) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_RTREE -DSQLITE_RTREE_INT_ONLY -USQLITE_OMIT_SHARED_CACHE $MATHINC" ;;
   *) echo "unknown group $GROUP" >&2; exit 2 ;;
 esac
@@ -65,6 +71,11 @@ case_json_each_root.c   jsoneachroot
 case_jsondiag.c         jsondiag
 EOF
    ;;
+   fts3P) cat <<EOF
+case_fts3p_probe.c     fts3pprobe
+case_fts3_snippet_or.c fts3snipor
+EOF
+   ;;
    rtree) cat <<EOF
 case_rtree_probe.c    rtreeprobe
 case_rtree_cursor.c   rtreecursor
@@ -82,7 +93,6 @@ EOF
    ;;
    fts3) cat <<EOF
 case_fts3probe.c fts3probe
-case_fts3_snippet_or.c fts3snipor
 case_fts3_zterm.c      fts3zterm
 case_fts3_offsets.c    fts3offsets
 case_fts3_snippet.c    fts3snip
@@ -101,7 +111,7 @@ EXT_SRC_DIR=${EXT_SRC_DIR:-$HOME/sqlite-versions/sqlite-3.22.0-full/ext}
 do_build() {
   mkdir -p "$SHARE" "$OBJ"
   local BASE_SRC=""
-  case "$GROUP" in fts5|fts5S|fts3|rtree) BASE_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
+  case "$GROUP" in fts5|fts5S|fts3|fts3P|rtree) BASE_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
   while read -r file tag extra; do
     [ -z "${file:-}" ] && continue
     # ext cases each pull in their own extension TU (and its include/defines)
