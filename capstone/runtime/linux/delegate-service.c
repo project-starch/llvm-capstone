@@ -321,11 +321,16 @@ static long vector_call(struct capstone_delegate_host *host,
  * bounce buffer with launcher addresses, as vector_call rebuilds an iovec
  * array. Read once into the view; the region is never consulted again. A
  * descriptor of the launcher's own inside an SCM_RIGHTS message on the way
- * out is refused, as it is in every descriptor position. */
+ * out is refused, as it is in every descriptor position. The view and the
+ * iovec array live on the serving thread's stack, as vector_call's do: each
+ * context has its own launcher thread, and with one copy of each for the
+ * whole launcher, a context's sendmsg could send the bytes another context's
+ * call had just put there (memcached: one worker's reply on another worker's
+ * connection, 2026-10-01). */
 static long msg_call(struct capstone_delegate_host *host,
                      const struct capstone_delegate_entry *entry) {
-  static struct capstone_msghdr_view view;
-  static struct iovec iov[CAPSTONE_MSGHDR_IOVS];
+  struct capstone_msghdr_view view;
+  struct iovec iov[CAPSTONE_MSGHDR_IOVS];
   struct msghdr m;
   int sending = entry->nr == CAPSTONE_SYS_sendmsg;
   int error = capstone_msghdr_unpack(host->exchange, host->exchange_bytes, entry->args[1], &view);
