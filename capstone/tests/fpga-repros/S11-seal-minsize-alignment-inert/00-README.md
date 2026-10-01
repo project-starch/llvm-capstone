@@ -1,5 +1,27 @@
 # S-11 — SEAL enforces neither its minimum size nor its base alignment
 
+> **2026-10-01: the precedence model is now read from the compiler itself, and two lines below are superseded.**
+> The Anvil grammar (`lib/parser.mly:87-91` in the pinned `corank/anvil:cva6` image, compiler commit `288373b5`)
+> declares `<` `>` `<=` `>=` at the LOWEST precedence, right-associative, below `&&`/`||` (line 90) and below
+> `==`/`!=` (line 91). That is the refined model of the 2026-08-23 history note, confirmed at its source, and
+> closes the "not yet confirmed against a precedence table" gap recorded further down. Consequences:
+> (1) **QEMU now raises** — the "QEMU never raises" line below is stale: `c128-qemu-merge` raises
+> `INSUF_CAP_PERMS` on an undersized or misaligned SEAL since 2026-09-26 (commit `6550f19489`; the parent's
+> pinned `674cdab03c` has it), with its minimum still **528** bytes against this RTL's intended 1024, and a
+> different cause code from the RTL's `ILLEGAL_OPERAND_VALUE`. (2) The **second instance** of the same fold, the
+> domain switcher's full-mode slot sizing (`capstone_dom_switcher.anvil`, the 2026-08-23 note), is **fixed** on
+> `capstone-ariane` branch `sup-call` (`d38887426`), confirmed by the switcher's own trace: ids 0-2 at 0/16/32,
+> 3-8 at 48..88 by 8, 9-56 at 96..848 by 16, 57-66 at 864..936 by 8. The SEAL instance here is deliberately NOT
+> fixed on that branch: the threshold (1024 vs QEMU's 528, plus the `+1` below) is a contract decision.
+> (3) What the dead check costs a CALL, measured in simulation (`verif/tests/custom/capstone/sup-sealsize.S` on
+> `sup-call`, retirement-trace readings): a **64-byte** seal is accepted (LCC type 4), and the CALL's 8-register
+> exchange then writes the caller's medeleg/mip/mie images at **+64/+72/+80**, past the capability's exclusive
+> end (the callee reads 0 / 0x80 / 0 where the canary held 0xC0C0…; +88 is untouched), while the callee's own
+> medeleg loads the canary pattern from beyond the seal. A 2048-byte control keeps every canary word. (4) A
+> deterministic census, `verif/sim/anvil-relational-lint.py` (same branch, with a self-test), flags any relational
+> sharing a parenthesis group with `&&`/`||`; on the resident sources it flags exactly `flu:215` and the switcher
+> line, nothing else. Supervised CALL's `cssupervise` therefore checks the seal's size and alignment itself.
+
 > **2026-09-10: CONFIRMED ON THE RTL BY A DIRECTED TEST.** `verif/tests/custom/capstone/seal-minsize-boundary.S` (`capstone-ariane` `f6ec6c198`), 670 cycles: a **1022-byte** region seals without raising, where the spec requires ≥ 1024. Its negative control — sealing a NON-LINEAR capability, which SEAL rejects on a different branch (`UNEXPECTED_CAP_TYPE`, mcause 27) — is the **only** exception in the whole run, so "no arm raised" cannot be the instrument failing to reach SEAL. Until now this folder rested on reading the generated Verilog; it now rests on the hardware.
 >
 > **AND THERE IS A SECOND DEFECT UNDERNEATH IT.** The Anvil computes `size = end - start + 1` (`flu:159`) — an INCLUSIVE formula under this RTL's EXCLUSIVE `end` — so even once the folded condition is repaired the check admits a region whose real size is **1023** bytes. **Fixing the fold without fixing the `+1` ships a check that is wrong on its first day.** The test's 1023-byte arm exists for exactly that and becomes the discriminator with no rewrite. Tracked as `R-32` in the registry.

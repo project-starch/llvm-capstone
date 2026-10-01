@@ -60,7 +60,7 @@ The audit refuted the design below on its central premise, and both critical fin
 The switcher gains two walk kinds beside EXCHANGE: SAVE(base, ids 3..66) = registers → memory, RESTORE(base, ids 3..66)
 = memory → registers, run in sequence after the 0..7 exchange; `dom_switch_req_t` gains `save_en/save_base`,
 `restore_en/restore_base`, and the id range 3..66 reuses the full-mode slot sizes (ids 3..8 at 8 B, 9..56 at 16 B,
-57..66 at 8 B; 856 B, so a 1 KiB save area). `sup_save_base` is hardware-held from cssupervise's rs2; the domain has no
+57..66 at 8 B; 896 B at +48..+944, so a 1 KiB save area with the same layout as the seal's). `sup_save_base` is hardware-held from cssupervise's rs2; the domain has no
 capability to it. The SEALEDRET window now contains only the domain's own images (harmless: they are rewritten at the
 next escape before any resume). C3 is fixed by `cap_we_pack[i] = cap_we_i[i]` in the dom-switch arm. The quantum is a
 CSR (`csupquantum`, M-level RW, blocked under supervision) so cssupervise's rs2 can carry the save capability; the
@@ -92,7 +92,7 @@ The switcher already implements a full context exchange — `is_full=1` walks id
 cscratch/mscratch, mstatus, mideleg, medeleg, mip, mie, offsetmmu, CPMP0..15, x1..x31 with metadata, mcause..satp
 (`core/anvil_build/capstone_dom_switcher.anvil:113-126`; ids: frontend 0, csr_regfile 1..25 & 57..66, GPRs 26..56 via
 `issue_read_operands.sv:1568-1569`). Nothing sets `is_full=1` today; CALL/RETURN use ids 0..7 (`capstone_dyn_unit.anvil:311,346`).
-The seal is 96 × 16 B = 1536 B; full mode needs 944 B; SEAL already requires ≥ 1024 B (`capstone_flu_unit.anvil:207-215`).
+The seal is 96 × 16 B = 1536 B; full mode needs 944 B. SEAL is MEANT to require ≥ 1024 B (`capstone_flu_unit.anvil:207-215`) but that check is inert on every bitstream so far (S-11 / R-32, the Anvil relational-precedence fold; QEMU raises since 2026-09-26 with a 528-byte minimum), so `cssupervise` checks the seal's and the save area's size and alignment itself. [Corrected 2026-10-01; the full-mode slot map was measured the same day after the switcher's own instance of the fold was fixed.]
 
 ```
    monitor                                   supervised domain (runs in M-mode, capmode on)
