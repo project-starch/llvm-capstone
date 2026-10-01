@@ -10,9 +10,12 @@ fault, retirement and private-clone schedules, with the review gaps closed:
 old/fresh accesses after address reuse, remap identities, virgin clone
 namespaces, preserved PTE rights and pending accesses on both harts. Next,
 extend the [QEMU U-mode access slice](../design/trusted-linux-execution-boundary.md)
-into a real Linux process. Its 23 bare-metal cases already demonstrate
-ordinary page translation and debug-minted old/fresh capabilities at one
-virtual address. First replace the per-hart, virtual-address-keyed tag side
+into a real Linux process. Its corrected 42-check gate covers 36 U-mode
+cases, four legacy-path executions and two harness controls. Keep the
+experiment behind `x-capstone-u-mode=true` while process selection is absent;
+the old 23/23 gate accepted pre-U-mode setup failures and is superseded.
+Old/fresh capabilities at one virtual address are still debug-minted.
+First replace the per-hart, virtual-address-keyed tag side
 table with physical tag identity and define alias, copy and reclaim behavior;
 then add protected per-process lifetime selection and tagged context save.
 The `malloc(64); free; malloc(64)` same-address test, a recoverable buffer-copy

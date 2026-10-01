@@ -2,7 +2,30 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — corrections to the U-mode QEMU access slice
+
+The initial `db53c89ad0` result below is superseded. Review reproduced RO
+stores, WO loads and REV-handle loads; a PTE-refused STC advanced an UNINIT
+cursor enough for INIT to expose unscrubbed bytes. It also changed the
+existing monitor's CEPC/CTVEC S/U transitions. Finally, the old harness
+reported 23/23 PASS even with a deliberate setup fault before U-mode entry,
+because the emulator's C-mode fail-stop returned exit status zero. The old
+gate did not establish these contracts.
+
+QEMU [correction `b71529835a`](https://github.com/project-starch/capstone-qemu/commit/b71529835a964cf1b268eee6f68518be96a1b2c0)
+enforces rights and data-capability types, commits the UNINIT cursor after
+STC writes, and requires the default-off `x-capstone-u-mode` CPU property
+for the experiment. The runner requires a completion marker and exact fault
+sites. The [record](https://github.com/project-starch/capstone-qemu/blob/b71529835a964cf1b268eee6f68518be96a1b2c0/tests/trusted-linux-u-access/result.json)
+has 42/42 checks, six detected source mutants and an existing Linux guest's
+boot/module/shell gate with the experiment disabled. Hashes identify the
+tested sources, binary and boot inputs. Domain application workloads were
+not rerun. The property is not a process ABI; physical tags, contexts and
+checked kernel copies remain open. The parent pin is unchanged; M1 is open.
+
 ## 2026-10-01 — trusted-Linux U-mode QEMU access slice
+
+Historical initial result; see the correction above before using its gate.
 
 The unpinned QEMU [lane `db53c89ad0`](https://github.com/project-starch/capstone-qemu/commit/db53c89ad041a4b3c531bbc740e582bd3fe27f71)
 routes U-mode integer, FP, atomic and capability memory operations through

@@ -162,17 +162,33 @@ and the RTL implementation remain untested. Item 2 still requires a real
 Linux process, including the same old/fresh-pointer accesses.
 
 The separate QEMU lane
-[`db53c89ad0`](https://github.com/project-starch/capstone-qemu/commit/db53c89ad041a4b3c531bbc740e582bd3fe27f71)
+[`b71529835a`](https://github.com/project-starch/capstone-qemu/commit/b71529835a964cf1b268eee6f68518be96a1b2c0)
 implements and tests an **isolated U-mode access slice**, without changing
-this repository's QEMU submodule pin. With Capstone checks enabled, U-mode
+this repository's QEMU submodule pin. It requires the default-off CPU property
+`x-capstone-u-mode=true`; this is an experiment selector, not the process ABI.
+Without it, existing monitor guests retain CEPC/CTVEC S/U transitions and
+ordinary U-mode scalar addressing. With Capstone checks enabled, U-mode
 integer, FP, atomic and capability memory accesses reach ordinary Sv39 page
-translation and precise M-mode traps. A 23-case bare-metal suite checks
-independent capability and PTE denials, selected memory-operation classes,
-and an old/fresh capability pair at one virtual address; the latter uses
-debug-minted nodes, not `malloc`/`free`. Two source mutations removing the
-object or page check and a third disabling the vector guard were detected
-by the relevant tests. Unsupported vector, Zcmp stack, XThead and cache-block
-memory operations are rejected in Capstone U-mode for this prototype.
+translation and precise M-mode traps. The corrected suite passes **42 checks**:
+36 U-mode cases, 4 legacy-path executions and 2 harness controls. It checks
+capability types/rights separately from PTE rights, UNINIT STC fault/retry,
+and an old/fresh capability pair at one virtual address; the pair uses
+debug-minted nodes, not `malloc`/`free`. Six injected source faults are detected.
+An existing Linux guest also boots, loads its Capstone module and completes
+a shell-command gate with the experiment disabled; no domain application
+workload was run for this compatibility check. Source, binary and boot-input
+hashes are in the [result record](https://github.com/project-starch/capstone-qemu/blob/b71529835a964cf1b268eee6f68518be96a1b2c0/tests/trusted-linux-u-access/result.json).
+
+**Correction to the initial `db53c89ad0` result:** its reported 23/23 gate
+also accepted a deliberate pre-U-mode setup fault because QEMU exited zero.
+It missed capability permission/type checks and an UNINIT cursor advance
+before a refused PTE store, and the implementation changed existing monitor
+return/trap semantics. That result did not establish these contracts. The
+corrected runner requires a guest completion marker and rejects setup and
+wrong-site faults. UNINIT cursor advancement now follows successful STC writes.
+Concurrent PTE changes and two-hart atomicity of the two 64-bit STC writes
+remain unqualified. Unsupported vector, Zcmp stack, XThead and cache-block
+memory operations are rejected in experimental Capstone U-mode.
 
 The slice cannot yet safely carry Linux processes: the QEMU tag side table is
 per hart and keyed by the address supplied to the access, whereas Linux may
