@@ -179,6 +179,49 @@ memcached objects are the same:
 
 If an arm's transcript differs, that is a finding about the arm, not an edit to the script.
 
+**Harness defect, found before any M5 result:** the first arm build linked all three arms against
+one runtime. `deps/env.sh` exports `CAPSTONE_SDK`, and the SDK's `capstone-cc` reads that before
+anything else, so setting `MC_RUNTIME_DIR` per arm changed nothing. The three images came out with
+one hash. The heap-symbol check of that version could not have caught it: it read zero in every arm,
+including one that must carry the Sublet heap. The run was stopped and no result was recorded.
+
+`build-domain.sh` now:
+- sets `CAPSTONE_SDK` per arm;
+- reports each arm's hash, its count of `sh_free` and `sh_carve_block`, and the heap and flags in
+  its SDK's CMake cache;
+- gates on three pairwise-distinct hashes, with the two Sublet symbols present in the sublet image
+  and absent from the shrink image.
+
+## M3 worker marker — PRE-REGISTERED before its first boot
+
+The instrument is patch 0004. A build with `-DMC_CAPSTONE_WORKER_MARKER` prints
+`MC-WORKER <index> conn` to stderr when a worker thread sets up a connection. Every other build
+compiles it out.
+
+`host/build-marker.sh` builds a native and a domain marker image (domain on the shrink runtime) in
+`$MC_WORK/marker`. It checks both directions:
+- both marker images carry the format string;
+- none of the oracle images do.
+
+`run-oracle.sh --marker` runs those two images.
+
+The harness makes nine connections, in a fixed order:
+- `c0` for phases 1, 2 and 4;
+- then 8 for phase 3, each dialled before the next.
+
+memcached's dispatcher hands connections out round robin starting at worker 0
+(`thread.c`, `last_thread`). With `-t 4` that gives:
+
+| | prediction |
+|---|---|
+| W1 | native marker run: 9 marker lines, per-worker counts 0:3 1:2 2:2 3:2 |
+| W2 | domain marker run: the same counts; every worker 0–3 present |
+| W3 | both marker transcripts identical to the oracle's native transcript (the marker writes only stderr), and stderr empty once the marker lines are removed |
+
+The order of the lines on stderr is not predicted: each worker prints from its own thread.
+
+**Control:** the same gate, applied to the stderr of an oracle run (no marker, zero lines), must fail.
+
 ## Milestones
 
 | | content | gate |

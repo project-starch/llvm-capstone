@@ -1,0 +1,27 @@
+Subject: [PATCH 4/4] An opt-in marker: which worker thread took each connection
+Upstream: memcached 1.6.45
+Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
+Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
+Build-Variants: only with -DMC_CAPSTONE_WORKER_MARKER (native or Capstone); every other build is unchanged
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+The port's M3 gate asks that every worker thread serve a connection. Neither memcached's stats nor
+the runtime's counters say which worker took a connection, so a build with MC_CAPSTONE_WORKER_MARKER
+prints "MC-WORKER <index> conn" to stderr when a worker sets one up (thread.c, after conn_new). The
+oracle's images are built without it, so their stderr is unchanged; the marker images are separate,
+native and domain alike, and their marker lines are compared with each other.
+
+--- a/thread.c	2026-07-08 07:10:43.000000000 +0800
++++ b/thread.c	2026-10-01 16:04:45.341529713 +0800
+@@ -638,6 +638,10 @@
+                     }
+                 } else {
+                     c->thread = me;
++#ifdef MC_CAPSTONE_WORKER_MARKER
++                    /* the port's M3 instrument: which worker took the connection (stderr) */
++                    fprintf(stderr, "MC-WORKER %d conn\n", (int)(me - threads));
++#endif
+ #ifdef TLS
+                     if (settings.ssl_enabled && c->ssl != NULL) {
+                         assert(c->thread && c->thread->ssl_wbuf);

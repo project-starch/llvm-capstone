@@ -37,12 +37,23 @@ for arm in level0 sublet; do
   bash "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh" "$SDK" "$MC_MUSL" "$MC_LIBC_ARCHIVE" "${extra[@]}" \
     > "$LOG/sdk-$arm.log" 2>&1 || { echo "SDK $arm FAILED"; tail -3 "$LOG/sdk-$arm.log"; exit 1; }
   rm -f "$X/memcached"
-  ( cd "$X" && MC_RUNTIME_DIR=$SDK make memcached > "$LOG/link-$arm.log" 2>&1 ) || { echo "link $arm FAILED"; exit 1; }
+  # Both variables: the SDK's capstone-cc takes its configuration from CAPSTONE_SDK when it is set,
+  # and env.sh sets it to the deps SDK, so MC_RUNTIME_DIR alone relinks every arm against that one.
+  ( cd "$X" && MC_RUNTIME_DIR=$SDK CAPSTONE_SDK=$SDK make memcached > "$LOG/link-$arm.log" 2>&1 ) || { echo "link $arm FAILED"; exit 1; }
   cp "$X/memcached" "$OUT/memcached-$arm.dom"
 done
 for arm in level0 shrink sublet; do
-  echo "arm $arm: $(sha256sum < "$OUT/memcached-$arm.dom" | cut -c1-16) heap: $("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/memcached-$arm.dom" | grep -cE ' [Tt] (sh_free|sublet_give)$') sublet / $("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/memcached-$arm.dom" | grep -cE ' [Tt] __capstone_level0_' ) level0 symbols"
+  sdk=$MC_WORK/sdk-$arm; [ $arm = shrink ] && sdk=$MC_RUNTIME_DIR
+  echo "arm $arm: $(sha256sum < "$OUT/memcached-$arm.dom" | cut -c1-16) sublet-heap symbols (sh_free, sh_carve_block): $("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/memcached-$arm.dom" | grep -cE ' [Tt] (sh_free|sh_carve_block)$'); SDK $(grep -oE 'CAPSTONE_APPLICATION_HEAP:STRING=[a-z0-9]+' "$sdk/CMakeCache.txt") $(grep -oE 'CMAKE_C_FLAGS_RELEASE:STRING=.*' "$sdk/CMakeCache.txt")"
 done
+# The arms must be three different images: an arm that silently linked another arm's runtime (as the
+# first version of this script did) gives the same hash, and this stops it.
+[ "$(for a in level0 shrink sublet; do sha256sum < "$OUT/memcached-$a.dom"; done | sort -u | wc -l)" = 3 ] \
+  || { echo "ARM GATE: the three arm images are not pairwise distinct"; exit 1; }
+[ "$("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/memcached-sublet.dom" | grep -cE ' [Tt] (sh_free|sh_carve_block)$')" = 2 ] && \
+[ "$("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/memcached-shrink.dom" | grep -cE ' [Tt] (sh_free|sh_carve_block)$')" = 0 ] \
+  || { echo "ARM GATE: the sublet image lacks the Sublet heap, or the level0 image has it"; exit 1; }
+echo "arms: three distinct images; the Sublet heap is in the sublet image only"
 "$CAPSTONE_LLVM_BIN/llvm-readelf" -h "$OUT/memcached.dom" > /dev/null
 # _DYNAMIC is the one undefined name every SDK image carries (the startup's reference; the threads
 # probe and every tshark arm have it and run): anything else undefined fails the gate.
