@@ -6,6 +6,72 @@ configuration built natively. The goal is a real allocator-heavy interpreter in 
 domain, as the ground on which the Sublet corpus rows for mruby can later run on
 the real program rather than on extracted reproducers.
 
+## mruby-task, and the GC-slot corpus (2026-09-30)
+
+The build also takes `mruby-task`, at 4.0.0-rc2 through `hal-posix-task` and at
+head through the gem itself, the port layer carrying its HAL. The gem was left
+out as a service a domain does not have; what its POSIX HAL actually uses is
+`sigaction(SIGALRM)` with `setitimer(ITIMER_REAL)` for the tick and
+`clock_gettime` with `nanosleep` for a sleeping task. All four are delegated,
+and none of them is a thread, so the scheduler runs in a domain.
+
+That matters beyond the gem. The [GC-slot
+corpus](../../../bug-corpora/mruby/gc-slot-repros) is for the defects that
+reuse a GC object slot without the allocator seeing a release, and its survey
+on `corpus/mruby-gc-slot-reuse` names this gem as the reason four candidates
+cannot be reached: mruby #6870, #6886, #6872 and #6887, the reports carrying
+that corpus's `MRB_TT_FREE` assertion exactly, all go through
+`mrb_task_mark_all`, and the gem was in none of the port's gemboxes. It is in
+all of them now, so those four are in range of the port.
+
+mrbtest with the gem (`results/2026-09-30/mrbtest-task.json`):
+
+| | Total | OK | KO | Crash | Skip |
+|---|---:|---:|---:|---:|---:|
+| head, native | 2936 | 2838 | 0 | 0 | 74 |
+| head, domain | 2936 | 2837 | 0 | 1 | 74 |
+| 4.0.0-rc2, native | 1710 | 1701 | 0 | 0 | 9 |
+| 4.0.0-rc2, domain | 1710 | 1701 | 0 | 0 | 9 |
+
+4.0.0-rc2 matches native test for test. head's one difference is the
+`Process.kill(0, 0)` crash the next section describes, which the gem does not
+introduce. Three task workloads also run to completion in the domain.
+
+A reproduction of #6886 was attempted and does not yet stand up; the record
+holds the arms and the control. The defect is live at the pin -- upstream
+`456a8687a` adds `mrb_task_mark_all` to `final_marking_phase`, and the pin
+calls it from `root_scan_phase` only -- but no Ruby workload written to that
+mechanism fires, while a control with task marking compiled out does. The
+corpus reached the same conclusion for its `realloc-vmstack` rows: this shape
+needs a C-level case rather than a script.
+
+## Delegated result with stdlib-io (2026-09-30)
+
+The build takes mruby's whole `stdlib-io` gembox: at head `mruby-socket`,
+`mruby-env`, `mruby-signal` and `mruby-process` join `mruby-io`,
+`mruby-errno` and `mruby-dir`; 4.0.0-rc2's gembox adds `mruby-socket`.
+Patch 0007 is gone. mrbtest in the domain against the same configuration
+natively (`results/2026-09-30/mrbtest-stdlib-io.json`):
+
+| | Total | OK | KO | Crash | Skip |
+|---|---:|---:|---:|---:|---:|
+| head, native | 2858 | 2761 | 0 | 0 | 74 |
+| head, domain | 2858 | 2760 | 0 | 1 | 74 |
+| 4.0.0-rc2, native | 1682 | 1673 | 0 | 0 | 9 |
+| 4.0.0-rc2, domain | 1682 | 1673 | 0 | 0 | 9 |
+
+Every test but one has the status it has natively. The one is
+`Process.kill passes the pid selectors on`: `Process.kill(0, 0)`, signal 0
+to the caller's own process group, is refused with EPERM, because the
+launcher confines `kill` to the task, its children and its parent. The
+control, head with the previous configuration on the same compiler and
+runtime, has 2710 tests, 2617 OK, 70 skips in both builds: `socket()` is a
+delegated call now, so `FileTest.socket?` passed with 0007 still applied,
+and the patch no longer fired. `mruby-process` makes no child of its own
+(pid, ppid, waitpid, kill; its tests make children with `IO.popen`, patch
+0009), and `mruby-signal` is a table of signal names that installs no
+handler.
+
 ## Delegated result (2026-09-29)
 
 The current ABI-v2 recipe passes the regular head suite with 2616 OK,
@@ -63,8 +129,29 @@ The output is byte-identical to native (`results/2026-09-26/scripts.txt`).
   mrbtest in the domain: OK 1632, KO 0, Crash 0 (native OK 1639); the 7 extra
   skips are popen and sockets (`results/2026-09-26/mrbtest-4.0.0-rc2.txt`).
   This version still parses with parse.y, so it needs no Prism patches; its
-  0001, 0003 and 0007 are rewritten for its code, 0002 is head's. There is no
+  0001 and 0003 are rewritten for its code, 0002 is head's. There is no
   0006 for it yet: `MRBD_BOXING=word` stops with a message.
+
+## Patch 0010: envadjust, and what it unblocked (2026-09-30)
+
+At the 4.0.0-rc2 pin, `stack_extend_alloc()` hands the old VM stack to
+`mrb_realloc()` and then calls `envadjust()`, which moved every frame's pointer
+with `ci->stack += delta` -- pointer arithmetic on a pointer `realloc` has
+already freed. On an ordinary allocator that computes the right address; with
+`MRBD_HEAP=sublet` or `sublet-gc`, where `free` revokes, the result is derived
+from a revoked capability, carries no tag, and the next write through it faults
+with cause 24. Both revoking arms died at ~40 frames of Ruby recursion, shallow
+enough that `scripts/smoke.rb` stopped at M8, so neither arm could report
+anything.
+
+Upstream fixed the same defect in `e5c82761f` (2026-07-24), found when another
+memory-safe C implementation trapped on that write; `patches/4.0.0-rc2/0010`
+backports it. Only this pin needs it -- `head` already carries it.
+
+With 0010 all three arms complete `scripts/smoke.rb` and `deep(500)`, and the
+[release corpus](../../../bug-corpora/mruby/release-differential) runs in each:
+`sublet` catches one case the control completes, and `sublet-gc` catches four,
+three of which revoke-on-free cannot see.
 
 ## The Sublet heap (`MRBD_HEAP=sublet`)
 
@@ -132,7 +219,6 @@ Knobs (`build_config.rb`): `MRBD_BOXING=no|word`, `MRBD_DISPATCH=switch|direct`,
 | 0004 | `mruby-compiler/src/ccontext.c` | The Prism arena answered 8 bytes off a 16-byte boundary; misaligned capability store. |
 | 0005 | `prism/src/util/pm_constant_pool.c` | The constants array followed 8-byte buckets unaligned. |
 | 0006 | `include/mruby/boxing_word.h` | `MRB_WORD_BOXING` only: the boxed word becomes `__uintcap_t`. |
-| 0007 | mruby-io's tests | The test setup raised when `socket()` failed; it now skips the one socket test. |
 
 The two `__uintcap_t` patches (and 0006) need the compiler's `__intcap` type.
 
@@ -151,6 +237,9 @@ The two `__uintcap_t` patches (and 0006) need the compiler's `__intcap` type.
   `mrb_define_method_raw`).
 
 ### Port runtime (`runtime/hostcall-more-files`, `runtime/hostcall-mruby-io`)
+
+These were services of the HostCall v0 runtime, removed on 2026-09-30; under the
+delegated runtime every one of them is Linux's own call. What the port needed then:
 
 128 open files instead of 8; and for mruby-io: `symlink`, `lstat`
 (`AT_SYMLINK_NOFOLLOW`), `chmod`, `flock` through the helper, `dup`/`dup3`/

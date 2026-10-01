@@ -6,9 +6,13 @@
  * more than the arena holds) with their errnos. Segments: IPC_PRIVATE and a
  * key, IPC_CREAT|IPC_EXCL on an existing key (EEXIST), lookup by key, a
  * missing key (ENOENT), attach and detach with the attach count in IPC_STAT,
- * IPC_RMID with the id gone afterwards. run.sh compiles level0 with a 512 KiB
- * arena for this domain: an undeclared domain's block is sized from its image,
- * and a larger arena pushed it past what the module gives.
+ * IPC_RMID with the id gone afterwards. "More than the arena holds" asks for
+ * 1 GiB, beyond any application SDK's arena.
+ *
+ * -DRAW_SYSCALL_CONTROL builds the control instead: the same first mapping
+ * asked of the syscall layer, as musl's own mmap() would without the override.
+ * The delegated runtime refuses it (memory never crosses, the MEMORY group of
+ * runtime/common/delegate.c), so a pass of the test is the override's.
  *
  * The refusals are judged by errno, not by the pointer: MAP_FAILED is (void *)-1,
  * which crosses a call as an integer, and C-32's movc on the caller's side turns
@@ -22,6 +26,7 @@
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <sys/shm.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #ifndef MAP_HUGETLB
@@ -59,6 +64,13 @@ int main(void)
 {
 	char detail[200];
 	const size_t A = 64 * 1024, B = 128 * 1024;
+
+#ifdef RAW_SYSCALL_CONTROL
+	errno = 0;
+	long raw = syscall(SYS_mmap, 0, A, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	printf("MMAP-SHM-CONTROL rc=%ld errno=%d\n", raw, errno);
+	return raw == -1 && errno == ENOSYS ? 0 : 1;
+#endif
 
 	errno = 0;
 	unsigned char *a = mmap(0, A, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -108,7 +120,7 @@ int main(void)
 	snprintf(detail, sizeof detail, "errno=%d (want ENOMEM=%d)", errno, ENOMEM);
 	check("hugetlb-refused", p == MAP_FAILED && errno == ENOMEM, detail);
 	errno = 0;
-	p = mmap(0, 8 * 1024 * 1024, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	p = mmap(0, (size_t)1 << 30, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	snprintf(detail, sizeof detail, "errno=%d (want ENOMEM=%d)", errno, ENOMEM);
 	check("beyond-arena-enomem", p == MAP_FAILED && errno == ENOMEM, detail);
 

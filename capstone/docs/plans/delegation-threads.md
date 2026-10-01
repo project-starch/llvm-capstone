@@ -157,7 +157,7 @@ Done so far:
   main thread's exit as `exit_group` (status 0 without the other thread's line), a launcher without
   the wake (the join never returns), a launcher whose reservation does not wait (EAGAIN after 14
   ms), the PI deadline computed without saturation (the far deadline expired after 1 ms), musl
-  without patch 0005 (the user stack faults, cause 24). A first version of the reservation mode could not fire: a musl thread holds the thread-list
+  without musl patch 0007 (the user stack faults, cause 24). A first version of the reservation mode could not fire: a musl thread holds the thread-list
   lock until its clear, so the creator waited in `pthread_create` for that lock, not in the
   reservation; the mode now ends a context of the runtime's own interface, which holds no lock.
   Record `results/20260930-pthreads.json`.
@@ -165,7 +165,7 @@ Done so far:
   `libc.page_size` was never set (a domain has no auxv), so `PAGE_SIZE`, `sysconf(_SC_PAGESIZE)`
   and every `pthread_create`'s mapping size were 0; `pthread_cond_t` put `_c_head` over `_c_clock`
   and `_c_tail` 32 bytes past the object at 16-byte pointers (C-65), the defect e2c9ad3 worked around in
-  GLib (musl patch 0004 lays it out pointers first; a signal faulted in the probe before);
+  GLib (musl patch 0006 lays it out pointers first; a signal faulted in the probe before);
   `get_robust_list` answered ENOSYS, so `pthread_mutexattr_setrobust` refused and an orphaned
   robust mutex blocked for good; PI futexes answered ENOSYS, so `setprotocol` refused and a PI lock
   slept for good. Added before any run: `mprotect`, which answered ENOSYS (reported unserved) for
@@ -180,7 +180,7 @@ Done so far:
   lock's load and store could switch musl's locking off for good while two threads ran; the path
   now takes no lock (an atomic count of the threads `__clone` made replaces the scan of the
   records). `pthread_attr_t` kept the stack address as a long, so `pthread_attr_setstack` built an
-  untagged stack and `pthread_getattr_np` returned one; musl patch 0005 keeps it as a pointer. It
+  untagged stack and `pthread_getattr_np` returned one; musl patch 0007 keeps it as a pointer. It
   also found `SYS_exit` served only after the transport check, the PI deadline arithmetic
   overflowing, and stale comments; all are fixed. Its two further risks are B8's: after the main
   thread's `pthread_exit` no signal handler runs any more, and a minted thread cannot be signalled
@@ -1185,5 +1185,5 @@ runtime as generally thread-capable. Gates:
 - the libc-test thread group leaves the excluded set (seven of the nine pass after B8;
   `pthread_cancel` waits for the doorbell, `sem_open` for file mappings, not threads);
 - GLib's `GCond` in the tshark deps (the `pthread_cond_t` size fix, e2c9ad3; the layout itself is
-  fixed by musl patch 0004);
+  fixed by musl patch 0006);
 - CPython's basic `threading` tests.

@@ -16,7 +16,7 @@ export TS_LINKER_SCRIPT="$CAPSTONE_REPO_ROOT/capstone/my_first_domain/link.ld"
 _ts_key=$( {
   _b=$(readlink -f "$CAPSTONE_CLANG")
   { echo "$_b"; ldd "$_b" | awk '/=> \//{print $3}' | grep -E 'libLLVM|libclang' || true; } | xargs stat -L -c '%n %s %Y'
-  cat "$_ts_musl_port"/runtime/*.c "$_ts_musl_port"/runtime/*.S "$_ts_musl_port/runtime/libc_overrides.sh" \
+  cat "$_ts_musl_port"/runtime/*.c "$_ts_musl_port"/runtime/*.S "$_ts_musl_port/runtime/libc_overrides.list" \
       "$TS_DEPS_DIR/capstone-cc" "$TS_DEPS_DIR/env.sh"
   (cd "$CAPSTONE_REPO_ROOT" && rg --files capstone/runtime capstone/ports/common/application) |
     sort | while IFS= read -r path; do cat "$CAPSTONE_REPO_ROOT/$path"; done

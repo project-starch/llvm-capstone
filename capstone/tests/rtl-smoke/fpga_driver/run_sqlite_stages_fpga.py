@@ -2527,14 +2527,31 @@ def main():
                         if REFUSAL_RECORD and 204 <= sw <= 209:
                             kind = "rr"
                             label = rr_label(sw, label)
-                        for bit in range(8):
-                            console.set_switch(bit, bool(sw & (1 << bit)))
-                        time.sleep(1.2)
-                        st = console.latest(C.LISTEN.get("led_state", "led_state"))
-                        bits = st.get("states") if isinstance(st, dict) else None
-                        v = sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
                         if kind == "rr":
+                            # FRESH OR NOTHING (2026-09-29, the audit of acceptance a10). The walk below
+                            # takes console.latest() after a sleep, and the console pushes led_state only
+                            # on change. On a10, 206, 207 and 208 produced NO event, so their bytes were the
+                            # previous aperture's cached payload, recorded as data. The record is static
+                            # while the core spins, so settled_halted_read's forced transition (mark,
+                            # park, target, wait for the event, let the stretcher decay) reads it fresh.
+                            # None means no fresh event, and the decoder reports that byte UNREAD.
+                            # RESET THE SWITCH MODEL FIRST. This loop sets the switches DIRECTLY
+                            # (console.set_switch) for every non-rr aperture, and set_switch_value's model
+                            # (_SW_CURRENT) never sees that. A stale model makes its bit walk land on the wrong
+                            # aperture: on m1v2-2 "208" was read with the switches at 210 and "205" at 207.
+                            # None forces set_switch_value's reset walk (bit 7 first) from a known 0.
+                            globals()["_SW_CURRENT"] = None
+                            v = settled_halted_read(console, C, sw)
                             rr_bytes[sw] = v
+                            if v is None:
+                                label = label + " [no fresh event]"
+                        else:
+                            for bit in range(8):
+                                console.set_switch(bit, bool(sw & (1 << bit)))
+                            time.sleep(1.2)
+                            st = console.latest(C.LISTEN.get("led_state", "led_state"))
+                            bits = st.get("states") if isinstance(st, dict) else None
+                            v = sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
                         line = (f"  [wedge] sw={sw:3} {label:52} "
                                 f"{'UNREAD' if v is None else f'0x{v:02x} {v:08b}'}")
                         # STALENESS, decided here rather than per-domain: with the clear skipped

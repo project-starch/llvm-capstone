@@ -1,0 +1,109 @@
+{
+ "date": "2026-09-30",
+ "program": "SQLite 3.22.0 (amalgamation SHA3-256 69bc5ee8f08d747494dd3a4bfe075e5b078fe200dfc671d76dd9e1ccb5b2decb; speedtest1.c from sqlite-src-3220000.zip, SHA3-256 f8695d69b4b4e4c6e7ff72defd8b2c3a5db12cf07fade273e6bbc1fd61841a98)",
+ "platform": "as capstone/runtime/tests/application/results/20260930-fcntl-lock-pointer.json (the #144 platform, the dev 330014ea compiler)",
+ "sdk": {
+  "libc_sha256": "7d42620dcc77e72d7dd9945626df0e3b5ba9e5352c9e335f8eda7648cdb8cf44",
+  "runtime_sha256": "ab19964534bbb83299343fe2311a85062dae9b225d750819dd9dedd04e7f4c8d",
+  "heap": "level0 (the SDK default)"
+ },
+ "native_oracle": {
+  "sqlite3_sha256": "ad66493057668bacac2269f0980bdc11528ce41b2091c1ce074bb102a9efb67f",
+  "speedtest1_sha256": "d5b449d1fc53f31098ccec33e403a58e5adea5340c39261493097799ea6917b4",
+  "note": "x86-64 host, cc -O2, the unadapted amalgamation, HAVE_MALLOC_H and HAVE_MALLOC_USABLE_SIZE"
+ },
+ "runs": {
+  "O2": {
+   "images": {
+    "sqlite3.dom": "9d89fb33e702cee02f8f7b7b894f28754156979b339dae02af2d63ea76dcaa9e",
+    "speedtest1.dom": "d2abaa03d1ecbc6b75e701f03a8272287579c23ad90dbfd093d0dc7aa60f62aa"
+   },
+   "size": 1,
+   "results": {
+    "work": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 27,
+     "output_sha256": "efdbe13353e838a52497ca5510a7be04e447ea656696a8d894ce44b6f5779473",
+     "native_output_sha256": "efdbe13353e838a52497ca5510a7be04e447ea656696a8d894ce44b6f5779473"
+    },
+    "again": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 2,
+     "output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a",
+     "native_output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a"
+    },
+    "speedtest1": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 32,
+     "output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c",
+     "native_output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c"
+    }
+   }
+  },
+  "O0": {
+   "images": {
+    "sqlite3.dom": "d3953fa8ca7a53e6528252b6ddc4679cbbecb9138e88f1819d775c1c6a56e929",
+    "speedtest1.dom": "e7cdd2b73b4371df4c3a5298efb411bd1d5d6ad7bfcd77db5c92fb616743d283"
+   },
+   "size": 1,
+   "results": {
+    "work": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 27,
+     "output_sha256": "efdbe13353e838a52497ca5510a7be04e447ea656696a8d894ce44b6f5779473",
+     "native_output_sha256": "efdbe13353e838a52497ca5510a7be04e447ea656696a8d894ce44b6f5779473"
+    },
+    "again": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 2,
+     "output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a",
+     "native_output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a"
+    },
+    "speedtest1": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 32,
+     "output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c",
+     "native_output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c"
+    }
+   }
+  }
+ },
+ "controls": {
+  "without HAVE_MALLOC_USABLE_SIZE (8-byte size header)": {
+   "images_sqlite3_sha256": {
+    "O2": "b0b5be3c5b42bcfa76b14ccd3a379c8393700bdac8842650214e670f6fc53ee8",
+    "O0": "663ffe93e655c431fb203ae42384b2001a2b53ef58b3c91c2217a0b5b871ae29"
+   },
+   "result": "sqlite3 :memory: 'select 1': domain fault cause=6 in pthread_mutex_init, a 16-byte store to an address 8 bytes off its boundary in the level0 arena, at -O2 and -O0; every check failed with status 255 and no output"
+  },
+  "without the sorter rewrite (ROUND8 records)": {
+   "images_sha256": {
+    "O2 sqlite3": "ecb5f6e25bcbeda2513dae3e9fcad5c4dcf0ac32d557265aaa4055e77449b346",
+    "O2 speedtest1": "ed33486419f3aa07623892fe594606737c70606a2385c93e297ff38dab139fd5",
+    "O0 sqlite3": "70c66e7df46949da058f2f4bddef2a2754c5e1a54690514205a812eee7b03d36",
+    "O0 speedtest1": "8ae844aa53dd21de1f6c0bcd912828a96d771c1a4037d542d3f05defc0c49b7b"
+   },
+   "result": "work: 7 of 27 lines, then domain fault cause=6 at a store to offset 16 of a sorter record (vdbeSorterSort at -O2), after the CREATE INDEX; speedtest1: 5 of 32 oracle lines, the same fault; again: the rows committed before the fault, intact"
+  },
+  "linked against musl without patch 0005": {
+   "images": {
+    "sqlite3.dom": "0fcb1375d2d005357ffe8dfabc3390cd785e2a78fad3e49dda80968ad15443a3",
+    "speedtest1.dom": "af5c35025d9995d7a8d0a86d5074188b51886e802d5e8fa2b1de017755bb0f32"
+   },
+   "result": "every check: domain fault cause=24 address=0x0 in the runtime's delegation dispatcher (__capstone_delegate_call), before any output; the contract's own control faults the same way"
+  }
+ },
+ "not_run": "the sqllogictest corpus; speedtest1 above size 1 and testsets other than main; the Sublet heap; WAL and memory-mapped I/O"
+}
