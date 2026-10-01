@@ -1,0 +1,11 @@
+# name	row	boot	va	sha256/16	want (the emulator's reading of THIS image, CAPSTONE_GP_FABRICATE=0)
+base322	-	1	0x410000	148b1c999e05397e	__CAPSTONE_SQLITE_MEMORY_PASSED__
+wschema	8	1	0x810000	a0e0e1dc29e91c0c	wschema NOTRAP done
+blobwrite	20	1	0xc10000	954032e8033d9b44	blobwrite NOTRAP done
+mem5design	25	1	0x1010000	64e9cbbd3b66f4b1	mem5design NOTRAP done
+blobclose	5	1	0x1410000	44c3c060f3023587	blobclose NOTRAP done
+jsonstatic	174a	1	0x1810000	727c5c93582b1741	jsoneachstatic NOTRAP done
+jsonroot	174b	1	0x1c10000	de8fb327ac5a548a	jsoneachroot NOTRAP done
+backupattach	15	1	0x2010000	b45625c0abe78fc2	FAULT
+base322	-	2	0x410000	148b1c999e05397e	__CAPSTONE_SQLITE_MEMORY_PASSED__
+detachtrig	4	2	0x2410000	d10cc511284c2e6b	FAULT
