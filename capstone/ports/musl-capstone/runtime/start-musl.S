@@ -592,3 +592,20 @@ __capstone_gct_start:
   .global __capstone_context_arena
 __capstone_context_arena:
   .zero 16
+
+/* musl's cancellation-point bounds (src/thread/pthread_cancel.c compares a
+ * handler's interrupted pc against them). A delegated call is not an
+ * instruction range, so these are three consecutive addresses that nothing
+ * executes: signals.c shows a cancellation handler __cp_begin while a
+ * cancellation point's call has no result, __cp_end after, and reads back
+ * __cp_cancel as the request to abandon the call. */
+  .section .rodata.capstone_cancel_points,"a",@progbits
+  .global __cp_begin
+  .global __cp_end
+  .global __cp_cancel
+__cp_begin:
+  .byte 0
+__cp_end:
+  .byte 0
+__cp_cancel:
+  .byte 0

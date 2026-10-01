@@ -17,9 +17,11 @@ capstone_configure_application(signal-contract
 add_executable(context-probe context-probe.c context-probe-asm.S)
 capstone_configure_application(context-probe
   DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 CONTEXT_BYTES 1048576 CONTEXTS 7)
+# Each context takes 45 KiB of heap for its signal list (B8): eight of them
+# and 1600 mappings need more than the contract images' 256 KiB.
 add_executable(thread-probe thread-probe.c thread-probe-asm.S)
 capstone_configure_application(thread-probe
-  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 CONTEXT_BYTES 1048576 CONTEXTS 7)
+  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 1048576 CONTEXT_BYTES 1048576 CONTEXTS 7)
 # musl's threads (T4): each thread's stack and TLS come from the heap (musl's
 # default 128 KiB stack), its area from the context arena.
 add_executable(pthread-probe pthread-probe.c)

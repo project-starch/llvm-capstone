@@ -10,6 +10,11 @@ user-facing summary is in `runtime/applications.md` under Signals. The wire
 at 4 KiB, the recorded-sequence word) retains its event offsets; two inherited
 state words are appended after the handover array. What this
 branch does not do is listed under Deviations; the bell is still later.
+Since 2026-09-30 (delegation-threads, B8) the state below is each context's:
+one disposition table per process, and per context the ring, the mask, the
+handover block (in the context's own META block) and the alternate stack, with
+`tkill` naming a context by its thread identity; see "Signals per context" in
+delegation-threads.md.
 
 ## Responsibility
 
@@ -181,7 +186,8 @@ the value and hands Linux an opaque token, resolved back at delivery.
 by field, for handlers and for `rt_sigtimedwait`.
 
 **`raise()`** is musl's: block application signals, `tkill`, restore the mask.
-`tkill` joins the table, restricted to the task's own tid.
+`tkill` joins the table, restricted to the task's own tid (since B8: to the
+application's own contexts, by thread identity).
 
 ## Deviations, named
 
@@ -277,4 +283,6 @@ owner task asks the monitor to interrupt domain X, one bit and no meaning;
 the supervisor lands the next resume on the domain's interrupt entry with the
 interrupted context saved; a libc entry there reads the handover block. The
 monitor learns nothing about Linux. It is the same primitive threads need,
-and it is not this branch.
+and it is not this branch. With threads (delegation-threads, B8) it is what
+asynchronous cancellation and a signal to a thread that computes without calls
+wait for.

@@ -27,6 +27,8 @@ EXCLUDE = {
     "dlopen": "dynamic loading", "dlopen_dso": "dynamic loading",
     "tls_align_dlopen": "dynamic loading", "tls_init_dlopen": "dynamic loading",
     "sem_open": "file-backed shared mapping: sem_open maps a /dev/shm file MAP_SHARED",
+    "pthread_cancel": "asynchronous cancellation of a thread that makes no call: a signal "
+                      "reaches a context at its next call (the doorbell, delegation-signals.md)",
     "vfork": "processes: vfork itself",
     "wordexp": "processes: musl forks a shell", "fcntl": "processes: forks a child",
     "socket": "network", "ipc_msg": "SysV IPC", "ipc_sem": "SysV IPC", "ipc_shm": "SysV IPC",

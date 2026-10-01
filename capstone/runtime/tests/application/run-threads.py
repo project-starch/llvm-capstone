@@ -23,11 +23,11 @@ MODES = {
     "reserve": ("exit", 0, "PASS", None, None),
     "reuse": ("exit", 0, "PASS", None, None),
     "concurrent": ("exit", 0, "PASS", None, None),
-    "signals-refused": ("exit", 0, "PASS", None, None),
+    "signals-own": ("exit", 0, "PASS", None, None),
     "no-transport": ("exit", 0, "PASS", None, None),
     "preempted": ("exit", 0, "PASS", None, None),
     "many-rounds": ("exit", 0, "PASS", None, None),
-    "signal-first-only": ("exit", 0, "PASS", None, None),
+    "signal-unblocked-context": ("exit", 0, "PASS", None, None),
     "sigpipe-ignored": ("exit", 0, "PASS", None, None),
     # Linux's default action for the writing thread's SIGPIPE ends the process.
     "sigpipe-child": ("signal", 13, "", "REACHED", None),
@@ -75,6 +75,22 @@ PTHREAD_MODES = {
     "pi-mutex": ("exit", 0, "PASS", None, None),
     "user-stack": ("exit", 0, "PASS", None, None),
     "main-exit-more": ("exit", 0, "main-exit-more: PASS", None, None),
+    # B8: signals per thread, and cancellation.
+    "kill-thread": ("exit", 0, "PASS", None, None),
+    "mask-routing": ("exit", 0, "PASS", None, None),
+    "raise-thread": ("exit", 0, "PASS", None, None),
+    "sigwait-thread": ("exit", 0, "PASS", None, None),
+    "cancel-sem": ("exit", 0, "PASS", None, None),
+    "cancel-read": ("exit", 0, "PASS", None, None),
+    "cancel-disabled": ("exit", 0, "PASS", None, None),
+    "park-signal-thread": ("exit", 0, "PASS", None, None),
+    "cancel-installed-early": ("exit", 0, "PASS", None, None),
+    "sigreturn-mask": ("exit", 0, "PASS", None, None),
+    "setuid-threads": ("exit", 0, "PASS", None, None),
+    "sigaction-race": ("exit", 0, "PASS", None, None),
+    "main-exit-signal": ("exit", 0, "main-exit-signal: PASS", None, None),
+    # abort in a thread ends the application with SIGABRT.
+    "abort-thread": ("signal", 6, "", "REACHED", None),
     # exit() in a thread ends the application with its status.
     "exit-thread": ("exit", 5, "", "REACHED", None),
 }

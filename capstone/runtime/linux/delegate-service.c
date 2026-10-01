@@ -223,8 +223,9 @@ static long spawn_locked(struct capstone_delegate_host *host,
     if ((cloexec >> i) & 1) kept_cloexec |= UINT64_C(1) << kept;
     ++kept;
   }
+  /* the child starts with the calling context's mask, as a thread's fork does */
   pid = capstone_spawner_spawn(s->spawner, block, bytes, fds, numbers, kept_cloexec, kept,
-                               capstone_signals_ignored(&s->signals), s->signals.logical);
+                               capstone_signals_ignored(&host->signals), host->signals.logical);
   if (pid > 0)
     s->children[s->child_count++] = (pid_t)pid;
   return pid;
@@ -636,9 +637,20 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     return kill((pid_t)a[0], 0) < 0 && errno == ESRCH ? -ESRCH : -EPERM;
   if (entry->nr == CAPSTONE_SYS_wait4 && a[0] > 0 && !child_of_locked(host, (pid_t)a[0]))
     return -ECHILD;
-  /* raise() is tkill on the task's own thread; nothing else is a domain's to signal */
-  if (entry->nr == CAPSTONE_SYS_tkill && (pid_t)a[0] != getpid())
-    return -EPERM;
+  /* tkill names a context by its thread identity (the pid for the first
+     context, docs/plans/delegation-threads.md Q2): the signal goes to the
+     Linux thread that serves that context, as tgkill. Nothing else is a
+     domain's to signal. */
+  if (entry->nr == CAPSTONE_SYS_tkill) {
+    long tid = (pid_t)a[0];
+    if (tid <= 0)
+      return -EINVAL;
+    if (host->tkill)
+      return host->tkill(host, tid, (int)a[1]);
+    if (tid != getpid())
+      return -ESRCH;
+    return syscall(SYS_tgkill, getpid(), getpid(), (int)a[1]) ? -errno : 0;
+  }
   if (entry->nr == CAPSTONE_SYS_wait4)
     r = wait_child(host, (pid_t)a[0], (int *)a[1], (int)a[2], (void *)a[3]);
   else if (entry->nr == CAPSTONE_SYS_fstat || entry->nr == CAPSTONE_SYS_newfstatat)
@@ -685,10 +697,9 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
 }
 
 /* Parking (docs/plans/delegation-threads.md). The sleep goes through the
-   signal stub: on the first context's thread, which takes the domain's
-   signals, an accepted signal ends it as a RETRY round even under SA_RESTART,
-   so the handler runs before the caller checks its lock word again; a further
-   context's thread blocks every signal and its stub never sees an event. */
+   signal stub: on every context's thread, which takes that context's signals,
+   an accepted signal ends it as a RETRY round even under SA_RESTART, so the
+   handler runs before the caller checks its lock word again. */
 _Static_assert(CAPSTONE_PARK_SLEEP_RETRY == CAPSTONE_STUB_RETRY, "one retry answer");
 
 static long park_sleep(void *context, _Atomic uint32_t *word, const struct timespec *deadline) {
@@ -726,23 +737,10 @@ static long park_request(struct capstone_delegate_host *host,
   }
 }
 
-/* Requests only the first context may make, for now: HELLO, and everything
-   that reads or changes signal state. Signals are the first context's until
-   they are per context (docs/plans/delegation-threads.md); a further context's
-   launcher thread blocks every signal, and a wait with a temporary mask would
-   unblock them there. */
+/* The one request only the first context makes: HELLO. Signal requests are
+   every context's own (B8): each serves its own mask, ring and waits. */
 static int first_context_only(const struct capstone_delegate_entry *e) {
-  switch (e->nr) {
-  case CAPSTONE_NR_HELLO: case CAPSTONE_NR_SIGACTION: case CAPSTONE_NR_SIGDONE:
-  case CAPSTONE_NR_SIGPOLL: case CAPSTONE_SYS_rt_sigprocmask:
-  case CAPSTONE_SYS_rt_sigsuspend: case CAPSTONE_SYS_rt_sigtimedwait:
-  case CAPSTONE_SYS_rt_sigpending:
-    return 1;
-  case CAPSTONE_SYS_ppoll:
-    return e->args[3] != 0;
-  default:
-    return 0;
-  }
+  return e->nr == CAPSTONE_NR_HELLO;
 }
 
 void capstone_delegate_serve(struct capstone_delegate_host *host,
@@ -781,8 +779,11 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
     host->exit_status = (int)snapshot.args[0] & 0xff;
     r = 0;
   } else if (snapshot.nr == CAPSTONE_NR_SIGACTION) {
+    /* the dispositions are the process's: one change at a time */
+    pthread_mutex_lock(&shared(host)->lock);
     r = capstone_signals_action(&host->signals, (int)snapshot.args[0],
                                 (unsigned)snapshot.args[1], (unsigned)snapshot.args[2]);
+    pthread_mutex_unlock(&shared(host)->lock);
   } else if (snapshot.nr == CAPSTONE_NR_SIGDONE) {
     r = capstone_signals_done(&host->signals, snapshot.args[0]);
   } else if (snapshot.nr == CAPSTONE_NR_SIGPOLL) {

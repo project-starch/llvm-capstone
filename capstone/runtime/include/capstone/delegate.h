@@ -151,8 +151,9 @@ enum capstone_delegate_group {
  * announced its end (CONTEXT_EXITING) and none is free, it waits for that one.
  * The creator puts the index into the new context's start block before
  * CONTEXT_CREATE, so the context has its transport at its first entry.
- * CONTEXT_CREATE: ticket, mode, transport; the seal is already in the
- * requesting context's invocation descriptor, the result is the new context's
+ * CONTEXT_CREATE: ticket, mode, transport, tid; the seal is already in the
+ * requesting context's invocation descriptor, tid is the context's thread
+ * identity (the runtime's; tkill names it), the result is the new context's
  * id or -errno. It consumes a reservation whatever its outcome: THREAD mode
  * names the reserved transport, which the launcher thread serves until the
  * context ends; REGISTER mode names none (0), and that context makes no
