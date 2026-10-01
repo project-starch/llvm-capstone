@@ -5874,3 +5874,54 @@ the content.
 - Whether the give-bracket +4 is added cost or cost moved between brackets.
 - Wall-clock figures.
 
+
+## S1 on R-43 v2 — SQLite's lookaside and memsys5 use-after-free, refused on silicon (boots s1sql-b1a…b3a, 2026-10-02)
+
+**Bundle:** nested-allocators-paper, branch `board/silicon-evidence`, at
+`experiments/results/S1/2026-10-01-sqlite-a1-silicon/`. It holds the audited pre-registration, the
+verdict lines and the emulator repetitions. The board folder is
+`tests/rtl-smoke/s1-sqlite-silicon-2026-10-01/`: cells, `build-images.sh`, `SHA256SUMS` and the parser.
+
+**Images.** A1's six probes (`experiments/a1-sqlite-reuse/probes.c`) run in the MEASUREMENT harness
+(`speedtest1_measure.c`, `-DSPEEDTEST1_PROBE_RT=1`, the probe chosen at run time by `--s1-probe n`).
+That way one image earns its emulator pass record with the benchmark and still runs a probe that
+faults by design. The geometry is the P1 cells'.
+
+| arm | image | entry |
+|---|---|---|
+| memsys5, unprotected | `611df066a69668b7` | 0x810000 |
+| Sublet | `483f764c8d691b3c` | 0xc10000 |
+
+**Boots.** Each boot ran k800, the six memsys5 cells and three returning Sublet cells, then ONE
+Sublet fault cell last.
+
+| case | memsys5 | Sublet |
+|---|---|---|
+| lookaside slot read after `sqlite3_finalize` | reads the freed slot (3/3 boots) | **cause 25 at the probe's `lbu`**, record hit-dead (boot 1) |
+| 4,096 B memsys5 block read after `sqlite3_free` | reads the freed block (3/3) | **cause 25 at the probe's `lbu`**, record hit-dead (boot 2) |
+| another live block after a 4,096 B free / another slot after a finalize (adjacency intended, not observed) | read (3/3) | read (3/3) |
+| last byte of a 128 B block / the byte past it (spatial) | read / read past the block (3/3) | read (3/3) / **cause 28 (out of bound) at the probe's `lbu`**, record EMPTY (boot 3) |
+
+**Readings:**
+- **SQLite's two allocators, under the Sublet port, stop a use-after-free at the access on silicon**,
+  while the unprotected build reads freed memory there exactly as on the emulator.
+- **Not a blanket deny:** the sibling cells returned in the same boot, on the same image.
+- **The record.** In both lifetime boots the first cause-25 verdict since reset was hit-dead, a genuine
+  revocation verdict per the RTL. Like the id, it is NOT attributed to the probe: ten invocations ran
+  first.
+- **The emulator reads cause 24 for these stale reads**, because it untags a revoked capability; the
+  silicon reads 25.
+
+**Limits:**
+- The fault cells are N = 1.
+- Before-reuse only.
+- Survivors ran before the fault, not after it (M-1).
+- The memsys5 and Sublet builds are two builds.
+- Every other S1 Design case is still open.
+- Whether probe 1's freed name lies in a lookaside slot on the Sublet arm is unresolved, because the
+  port reorganises both allocators.
+
+**Parser defects, all disclosed in the bundle.**
+- One gated stop: the host's own monitor markers spliced a marker line mid-token. The parser now reads
+  through `transcript.strip_markers`, and that fix was load-bearing for boots 2 and 3.
+- An unsafe-success did not fail the gate. Found by the results audit and fixed.

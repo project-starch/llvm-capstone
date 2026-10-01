@@ -216,6 +216,30 @@ static void out_ulong(unsigned long v) {
     (void)capstone_stdio_sink(&d[--n], 1);
 }
 
+#ifdef SPEEDTEST1_PROBE_RT
+/* S1 ON SILICON. -DSPEEDTEST1_PROBE_RT=1 compiles in the six probes of
+ * experiments/a1-sqlite-reuse/probes.c, and `--s1-probe <n>` in the speedtest1 arguments runs probe n
+ * INSTEAD of the benchmark. That happens after SQLite has been configured and initialised exactly as
+ * the measurement is (run_speedtest1).
+ *
+ * Why a RUN-TIME selector. The bring-up twin (speedtest1_domain.c) selects a probe at COMPILE time,
+ * one image per probe. A Sublet probe that faults by design could then never earn the emulator pass
+ * record the board preflight requires, because it never returns. Here one image runs the benchmark
+ * for that record and any probe on the board, so a probe and the measurement it is matched with are
+ * the same binary.
+ *
+ * probes.c tests `SPEEDTEST1_PROBE == n`, so defining that name as this variable makes the same source
+ * select at run time. It is #included, not linked, because under -capstone-gp-captable its string
+ * literals are globals and must share this unit (see the header comment). The build stages it as
+ * speedtest1_probe.c (SPEEDTEST1_PROBE_SRC). Without the define nothing here exists and the
+ * measurement image is unchanged. */
+static unsigned speedtest1_probe_n;
+#define SPEEDTEST1_PROBE speedtest1_probe_n
+void speedtest1_output_text(const char *text) { out(text); }
+void speedtest1_output_uint(unsigned long value) { out_ulong(value); }
+#include "speedtest1_probe.c"
+#endif
+
 /* mcycle, for the same reason ladder_perf_domain.h reads it: the board gates the unprivileged
  * counter for domains. minstret is deliberately NOT read -- it is implemented for rungs but no
  * recorded board result carries an instret value, so this vehicle reports CYCLES ONLY until someone
@@ -602,6 +626,26 @@ static unsigned run_speedtest1(void) {
 #endif
 
   argc = build_argv(args, args_len, argv);
+#ifdef SPEEDTEST1_PROBE_RT
+  /* `--s1-probe <n>`, n in 1..6: the probe instead of the benchmark. It returns only when the access it
+     makes did not trap. Any other n, or no flag, runs the benchmark. */
+  for (i = 1; i + 1 < argc; i++) {
+    if (argv[i][0] == '-' && argv[i][1] == '-' && argv[i][2] == 's' && argv[i][3] == '1' &&
+        argv[i][4] == '-' && argv[i][5] == 'p' && argv[i][6] == 'r' && argv[i][7] == 'o' &&
+        argv[i][8] == 'b' && argv[i][9] == 'e' && argv[i][10] == 0) {
+      const char *v = argv[i + 1];
+      if (v[0] >= '1' && v[0] <= '6' && v[1] == 0) {
+        unsigned probe_res = (unsigned)SQLITE_HC_RET_DONE;
+        speedtest1_probe_n = (unsigned)(v[0] - '0');
+        out("S1-PROBE ");
+        out_ulong(speedtest1_probe_n);
+        out("\n");
+        speedtest1_probe(&probe_res);
+        return probe_res;
+      }
+    }
+  }
+#endif
 
   /* Echo the arguments back. A size sweep whose size knob silently failed to arrive would otherwise
      read as a valid measurement of the wrong thing. */
