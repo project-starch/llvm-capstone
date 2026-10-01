@@ -7189,7 +7189,7 @@ configuration in which C++ compiles today.** C-61 alone does not make C++ "nearl
 
 **Fix: none yet. The ABI decision is the lead's.**
 
-### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `FIXED 2026-09-30 by musl-patches/0004 (delegation-threads, T4); found 2026-09-24 by the tshark port; GLib's workaround (ports/wireshark/app/deps/patches/glib-0008) still in place until the GCond gate; source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
+### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `FIXED 2026-09-30 by musl-patches/0006 (delegation-threads, T4); found 2026-09-24 by the tshark port; GLib's workaround (ports/wireshark/app/deps/patches/glib-0008) still in place until the GCond gate; source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
 
 **What happens.** On capstone64, `pthread_cond_t` (`include/alltypes.h.in:88`) is `int __i[12]`,
 48 bytes, and its pointer view `__p[12*sizeof(int)/sizeof(void*)]` holds three 16-byte pointers.
@@ -7236,7 +7236,7 @@ musl build fails the same 6 objects as without the patch. The wait paths need a 
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
 
 **Fixed (2026-09-30).** That branch is in no local clone any more. The same layout landed as
-`ports/musl-capstone/musl-patches/0004-pthread-cond-capability-layout.patch`, in the port's patch
+`ports/musl-capstone/musl-patches/0006-pthread-cond-capability-layout.patch`, in the port's patch
 mechanism rather than as overlays: with 16-byte pointers `pthread_cond_t` and `cnd_t` are 64 bytes,
 `_c_shared`, `_c_head` and `_c_tail` are `__p[0..2]`, the four ints `__i[12..15]`; other pointer
 sizes are unchanged. With threads the wait paths now run: `pthread-probe cond` (2000 turns between
