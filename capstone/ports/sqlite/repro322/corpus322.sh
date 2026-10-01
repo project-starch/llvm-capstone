@@ -81,7 +81,6 @@ case_fts3_snippet_or.c fts3snipor
 case_fts3_zterm.c      fts3zterm
 case_fts3_offsets.c    fts3offsets
 case_fts3_snippet.c    fts3snip
-case_static_binding.c  staticbind
 EOF
    ;;
   esac
