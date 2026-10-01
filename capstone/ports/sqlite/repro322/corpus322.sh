@@ -21,6 +21,7 @@ case "$GROUP" in
   fts5S) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS5 -USQLITE_OMIT_SHARED_CACHE $MATHINC" ;;
   fts3) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 $MATHINC" ;;
   ext) CF="-USQLITE_OMIT_INCRBLOB $MATHINC" ;;
+  json) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_JSON1" ;;
   *) echo "unknown group $GROUP" >&2; exit 2 ;;
 esac
 
@@ -45,6 +46,10 @@ EOF
    ext) cat <<EOF
 case_expert_rem.c   expertrem   -DSQLITE_HEAP_SIZE=1048576
 case_spellfix_oom.c spellfixoom
+EOF
+   ;;
+   json) cat <<EOF
+case_json_each_static.c jsoneachstatic
 EOF
    ;;
    fts5) cat <<EOF
