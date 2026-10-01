@@ -1,0 +1,84 @@
+{
+ "date": "2026-09-30",
+ "change": "build_config.rb takes the stdlib-io gembox (head: mruby-io, mruby-socket, mruby-errno, mruby-dir, mruby-env, mruby-signal, mruby-process; 4.0.0-rc2: the first four) in place of mruby-io, mruby-errno and mruby-dir; patch 0007 (io-tests-without-sockets) removed for both pins",
+ "platform": {
+  "qemu_sha256": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+  "firmware_fw_jump_sha256": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+  "module_sha256": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+  "kernel_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "launcher_sha256": "546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94",
+  "note": "the platform of the delegation-v0-removal-stack checks (#144); guest --cma-mib 1024 --process-cache-mib 768",
+  "compiler": "lane/compiler-stack-20260929 68c75ed3 (dev 009066ed with #120-#123, SROA fix 4c4c75bf)",
+  "runtime": "this branch's tree (delegation-v0-removal-stack 581938578a4c plus this change), level0 heap, 64 MiB arena"
+ },
+ "knobs": "MRBD_TESTS=1, MRBD_BOXING=no, MRBD_DISPATCH=switch, MRBD_OPT=-O2",
+ "arms": {
+  "head-control": {
+   "tree": "mruby ad98f216eb47, the #144 configuration: gems mruby-io mruby-errno mruby-dir, patches 0001-0005 0007 0009",
+   "native_mrbtest_sha256": "20e8c77a84a5dacfb53996ce80ce9ea735ed08b851ea3804e92e838b583dbc9b",
+   "domain_mrbtest_sha256": "5dc99f0e852c6ec1dbdac4180786ca21154d82894945ee11168a0e938fb081a2",
+   "native": {
+    "total": 2710,
+    "ok": 2617,
+    "ko": 0,
+    "crash": 0,
+    "skip": 70
+   },
+   "domain": {
+    "total": 2710,
+    "ok": 2617,
+    "ko": 0,
+    "crash": 0,
+    "skip": 70
+   },
+   "domain_exit": 0,
+   "per_test": "every test's status the same as native"
+  },
+  "head": {
+   "tree": "mruby ad98f216eb47, this change: patches 0001-0005 0009",
+   "native_mrbtest_sha256": "3d22ae5cbd551a4668d5ab8169a49028c306009ea23cce553de5d9db90a5b59c",
+   "domain_mrbtest_sha256": "8461beb28d70c95130a158e3854c618b2e67007f97cb1c97dc204f48b1a331e5",
+   "native": {
+    "total": 2858,
+    "ok": 2761,
+    "ko": 0,
+    "crash": 0,
+    "skip": 74
+   },
+   "domain": {
+    "total": 2858,
+    "ok": 2760,
+    "ko": 0,
+    "crash": 1,
+    "skip": 74
+   },
+   "domain_exit": 1,
+   "per_test": "one test differs: 'Process.kill passes the pid selectors on' passes natively and crashes in the domain with Errno::EPERM from Process.kill(0, 0): the launcher confines kill to the task, its children and its parent, and refuses signal 0 to the caller's own process group, which Linux always answers with 0"
+  },
+  "4.0.0-rc2": {
+   "tree": "mruby 9d523e2f74f2, this change: patches 0001-0003 0008 0009 (0008 unused, level0 heap)",
+   "native_mrbtest_sha256": "90a1b4c2dda41373e629699d02b0559c6405ae97754d710e591cec201f3b57ea",
+   "domain_mrbtest_sha256": "8a6b6d6f70f51cb2ceea29ec17a20eb8e8c41a2b1ebf001849ab9c6e219a4a35",
+   "native": {
+    "total": 1682,
+    "ok": 1673,
+    "ko": 0,
+    "crash": 0,
+    "skip": 9
+   },
+   "domain": {
+    "total": 1682,
+    "ok": 1673,
+    "ko": 0,
+    "crash": 0,
+    "skip": 9
+   },
+   "domain_exit": 0,
+   "per_test": "every test's status the same as native"
+  }
+ },
+ "notes": [
+  "The control shows patch 0007 no longer fires: socket() is a delegated row on #144, so io_test_setup makes its UNIX socket and FileTest.socket? passes in the domain with the patch present (70 skips, as native).",
+  "mruby-process makes no child itself: it answers pid, ppid, waitpid and kill, and its tests make children through IO.popen (patch 0009's posix_spawn). mruby-signal is a signal-name table and installs no handler."
+ ]
+}

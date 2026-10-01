@@ -1,10 +1,8 @@
 include_guard(GLOBAL)
 
-# A normal main(argc, argv), linked against the shared musl application ABI.
-# The caller selects the existing capstone-domain toolchain and musl headers.
-if(DEFINED CAPSTONE_APPLICATION_DELEGATE AND NOT CAPSTONE_APPLICATION_DELEGATE)
-  message(FATAL_ERROR "The application SDK requires delegation (ABI v2); rebuild old images")
-endif()
+# A normal main(argc, argv), linked against the shared musl application ABI:
+# the delegated runtime (ABI v2), the only one. The caller selects the existing
+# capstone-domain toolchain and musl headers.
 
 function(capstone_configure_application target)
   cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;HEAP;HEAP_LOG;EXCHANGE_BYTES;GRANT_BYTES;CONTEXT_BYTES;CONTEXTS" "")
@@ -44,14 +42,13 @@ function(capstone_configure_application target)
     target_include_directories(capstone-application-core PRIVATE
       "${PORT_MUSL_ROOT}/src/include" "${PORT_MUSL_ROOT}/src/internal"
       "${PORT_MUSL_ROOT}/obj/src/internal" "${PORT_MUSL_ROOT}/src/multibyte")
-    target_compile_definitions(capstone-application-core PRIVATE
-      _XOPEN_SOURCE=700 CAPSTONE_APPLICATION_RUNTIME=1 CAPSTONE_DOMAIN_FAULT_RECOVERY=1 CAPSTONE_PROGRAM_REGIONS=1)
+    target_compile_definitions(capstone-application-core PRIVATE _XOPEN_SOURCE=700)
     target_sources(capstone-application-core PRIVATE
         "${musl}/delegate.c" "${musl}/posix_spawn_delegate.c" "${musl}/signals.c" "${musl}/altstack.S"
-        "${capstone}/runtime/common/delegate.c" "${capstone}/runtime/common/spawn.c")
+        "${capstone}/runtime/common/delegate.c" "${capstone}/runtime/common/spawn.c"
+        "${capstone}/runtime/common/msghdr.c")
     set_source_files_properties("${musl}/posix_spawn_delegate.c" PROPERTIES
         INCLUDE_DIRECTORIES "${PORT_MUSL_ROOT}/src/process")
-    target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_DELEGATE_RUNTIME=1)
     target_compile_options(capstone-application-core PRIVATE
       -ffunction-sections -fdata-sections -fno-jump-tables
       "$<$<COMPILE_LANGUAGE:C>:-Wno-int-conversion>")
@@ -115,7 +112,7 @@ function(capstone_configure_application target)
   if(exchange_total GREATER 1073741824)
     message(FATAL_ERROR "(1 + CONTEXTS) * EXCHANGE_BYTES must be at most 1073741824")
   endif()
-  target_compile_definitions(${target} PRIVATE CAPSTONE_DELEGATE_RUNTIME=1
+  target_compile_definitions(${target} PRIVATE
     CAPSTONE_APPLICATION_EXCHANGE_BYTES=${app_EXCHANGE_BYTES}
     CAPSTONE_APPLICATION_CONTEXTS=${app_CONTEXTS})
   # CONTEXT_BYTES: the linear arena _start splits off the data region for

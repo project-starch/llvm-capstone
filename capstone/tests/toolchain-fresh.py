@@ -61,10 +61,11 @@ DEFAULT_TARGETS = ('llc', 'clang', 'lld', 'llvm-mc', 'llvm-readobj',
                    # acted on that because a drift returned rc=2 and every caller warns on rc=2.
                    'opt', 'llvm-symbolizer',
                    # Added 2026-09-25, the same way: the drift check asked for it and nothing had.
-                   # llvm-ar is invoked by the runtime-qemu runners that build a private musl
-                   # archive -- thread-local/run.sh:25 (C-47), subword-atomics/run.sh:20 (C-51) and
-                   # return-flush -- so it sits ON the artifact path, like llvm-objcopy and llvm-nm
-                   # below. It arrived with those tests; the gate refused rc=2 rather than reporting
+                   # llvm-ar builds the application SDK's archives (CMAKE_AR in
+                   # ports/common/cmake/toolchains/capstone-domain.cmake), so it sits ON the
+                   # artifact path, like llvm-objcopy and llvm-nm below. It arrived with the
+                   # runtime-qemu runners that built a private musl archive (removed with the
+                   # HostCall v0 runtime on 2026-09-30); the gate refused rc=2 rather than reporting
                    # fresh on a set it knew was incomplete, which is the behaviour that makes this
                    # list worth keeping honest.
                    'llvm-ar')

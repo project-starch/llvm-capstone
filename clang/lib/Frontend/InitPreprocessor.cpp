@@ -1162,6 +1162,17 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
                    TI.getTypeWidth(TI.getWIntType()), TI, Builder);
   if (TI.hasInt128Type())
     DefineTypeSizeof("__SIZEOF_INT128__", 128, TI, Builder);
+  if (TI.SupportsCapabilities()) {
+    // Capstone: __intcap_t/__uintcap_t are stored as a capability and range
+    // over the address.
+    DefineTypeSizeof("__SIZEOF_INTCAP__", TI.getIntCapWidth(), TI, Builder);
+    DefineTypeSizeof("__SIZEOF_UINTCAP__", TI.getIntCapWidth(), TI, Builder);
+    unsigned Range = TI.getMaxAddressWidth();
+    DefineTypeSize("__INTCAP_MAX__", TI.getIntTypeByWidth(Range, true), TI,
+                   Builder);
+    DefineTypeSize("__UINTCAP_MAX__", TI.getIntTypeByWidth(Range, false), TI,
+                   Builder);
+  }
 
   DefineType("__INTMAX_TYPE__", TI.getIntMaxType(), Builder);
   DefineFmt(LangOpts, "__INTMAX", TI.getIntMaxType(), TI, Builder);

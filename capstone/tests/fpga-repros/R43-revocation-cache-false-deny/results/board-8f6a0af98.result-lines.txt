@@ -133,3 +133,44 @@ R-42, so their sweeps run on silicon for the first time here); the ladder and P1
 still traps and the refusal record reads it as refused on the probe path, not by deny-on-miss. The a3 cold-ramp reading stands
 as N=1 with a candidate mechanism. R-43 is FIXED ON SILICON. Two of the board lane's readings were retracted the same evening
 (a1's "contaminated" reads, a5/a6's "at the sweep lbu") and are corrected above.
+
+== Part A discriminator for a10 -- boot m1v2-2, 20:21-20:35: the LIVE-ALIAS control (image aed492ab985653f3, M1_STALE_TAKE_LIVE, frozen;
+   list m1-staletake.txt; stock k800) -- PASS as pre-registered ==
+opening k800 retval=4; ENT1.
+trap log sw=255 0x9a = seen, mcause 26; mepc 0x81a04360 - DBAS = +0x4360 = the mint, where the auditor predicted it; tval 0xac100000.
+refusal record 204 = 0x02 = EMPTY: no cause-25 LSU denial since reset (the switch trace confirms the read was taken at 204).
+reading    RETRACTED by the board lane the same night, as argued: aed492ab is NOT the identical run -- its Part A auditor checked
+           provenance, and aed492ab (single-age deref through `oldest`, 42 globals, 672-byte cap table) and 35fb3fec (multi-age
+           deref, 43 globals, 688-byte table) are four source commits apart. So m1v2-2's EMPTY is a live-alias control of a
+           DIFFERENT fixture and does not show that 35fb3fec's run refuses nothing before its stale access. What stands: m1v2-2
+           read EMPTY, fresh, at 204; the live-alias mint wedges with cause 26 as on every bitstream since 4ad0df694.
+           Caveat (board lane's own regression, fixed from m1v2-4): this boot's 205..208 bytes are VOID -- the wedge-dump change
+           walked from a stale switch model, so "208" was read at 210 and "205" at 207; reproduced two-sided without the fix.
+           a10 predates the change and its 204/205 reads were confirmed at the right apertures, so a10 is unaffected.
+
+== a10's id RESOLVED -- boots m1v2-3 and m1v2-4 (35fb3fec, the stale read, repetitions 2 and 3 on v2) ==
+m1v2-4     the first boot with the fixed wedge-dump reads: every record byte read fresh (settled_halted_read, switch model reset
+           first), each confirmed at its labelled aperture by a switch-trace check that the board lane verified two-sided (it flags
+           m1v2-2's 208@210 and 205@207). trap 0x99 (cause 25), mepc +0x4354, tval 0xac100000; 204 = 0x11 (LATCHED, arm 0100 =
+           probe path); 205 = 0x5f, 206/207/208 = 00/00/00, all fresh -> id = 0x5f (95, generation 0), parity consistent.
+m1v2-3     cause 25 at +0x4354, 204 = 0x11; ran the pre-fix runner, so its id bytes are VOID.
+reading    The stale read is 3/3 on v2 (a10, m1v2-3, m1v2-4), each trapping 25 at the stale lbu with the record LATCHED on the
+           probe arm, and the id reads 95 on both boots that read it. SCOPE (board lane, after its auditor): the record latches
+           the FIRST cause-25 verdict since reset (load_store_unit.sv, the rvc_den_v_q latch), verdicts included and not only
+           retired ones, so on this evidence "the boot's first refusal was on the probe path, id 0x5f" -- not provably the stale
+           access's own verdict, though the trap that ended the boot is that access. The cheap settler the auditor names: a
+           RETURNING build of the same source with the probe tied off, reading 204 at the end of the same workload. The
+           stale-WRITE pair (067cc96f) runs next.
+
+== The stale-WRITE pair -- boots m1v2-5 and m1v2-6 (067cc96f: DEREF=0, WRITE=1, MINT=0, the #119 compiler) and the matched live
+   control m1v2-1 (9b24aa31, one define apart: -DM1_STALE_TAKE_LIVE=1, checked two-sided) -- a STORE through a revoked reference is REFUSED ==
+m1v2-5, m1v2-6   trap 0x99 = cause 25, mepc +0x4370 on both = `sb a2,0(a1)` of 0xA5 through m1_ret_alias[0] (a1 = ldc 0(ldc 0x190(gp));
+                 the ldc at +0x4368 checks only the live global addressing it -- the board lane's auditor disassembled the image).
+                 refusal record: LATCHED, arm 0100 (probe path), id 0x60 (96), fresh reads at verified apertures on both boots.
+                 The store not committing is inferred from the precise trap at it; the wedge loses the domain's output, so a missing
+                 "stale-write ok" line is not evidence on its own.
+m1v2-1           the MATCHED live control at the board geometry (--cap 65532 --budget 900000): "R1 m1 end ... stop=buffer alloc=43297
+                 retained=43296", "stale-write CONTROL", "stale-write ok", "readback via_live_alias=165 wrote=165". No trap.
+reading    A store through a revoked reference is refused on silicon, 2/2, for the first time on any bitstream, against a live-write
+           control that differs by one define and completes. Recorded by the board lane on dev (7e721ae2: the measurements doc's
+           "Part A on R-43 v2" and tests/rtl-smoke/paper-r43v2-2026-09-29/results/m1v2-{1,5,6}); source lane/board-m1-write-control.

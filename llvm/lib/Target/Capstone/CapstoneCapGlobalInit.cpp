@@ -28,8 +28,8 @@
 // so a capability-pointer slot at any depth is materialized: a bare pointer
 // global, a one-field struct, a flat pointer array, and — the case SQLite's
 // builtin-function table needs — an array of structs / arbitrarily nested
-// aggregates. Only leaves whose target is a GlobalVariable or Function are
-// materialized; null elements need no tag.
+// aggregates. Only leaves whose target is a GlobalVariable, a Function or a
+// label (BlockAddress) are materialized; null elements need no tag.
 //
 // Design note + rationale (constructor-codegen vs a GCT runtime consumer):
 // capstone/docs/design/capability-globals-init-decision.md.
@@ -122,7 +122,21 @@ static bool needsMaterialization(Constant *FieldInit) {
       break;
     C = CE->getOperand(0);
   }
-  return isa<GlobalVariable>(C) || isa<Function>(C);
+  // A label address (GNU labels-as-values, `static void *tbl[] = {&&l, ...}`,
+  // an interpreter's direct-threaded dispatch table) is a code address like a
+  // function's. Left in the static image it is the LINK-time address -- the
+  // domain is loaded at a runtime base and processes no relocations -- and an
+  // indirect branch through it fetches from a stale address (mruby's VM:
+  // instruction access fault, pc = tval = the link-time label). Materialized
+  // here, ISel builds it as in the function itself: pc-relative, derived from
+  // the code root, tagged.
+  //
+  // An alias is a symbol like any other global's (musl's fork(): a table of
+  // &__atexit_lockptr and nine more, each a weak alias of one dummy that a
+  // strong definition elsewhere may replace). Its slot was left out, so it kept
+  // the link-time address untagged; the store names the alias, and the link
+  // resolves it as it resolves the static relocation.
+  return isa<GlobalValue>(C) || isa<BlockAddress>(C);
 }
 
 namespace {

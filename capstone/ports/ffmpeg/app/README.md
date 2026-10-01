@@ -54,9 +54,9 @@ recording from `buffer-pool/host/record.sh:23-34`.
 - The allocation is then **4 MiB = the order-10 ceiling**, with **305,248 B of headroom**. That is
   tight: the arena cannot grow much.
 
-**The negative control fires.** Relinked without `hostcall.o`, the image leaves exactly
-`__capstone_hostcall` undefined. FFmpeg's libc calls reach the hostcall, and nothing else is
-missing.
+**The negative control fired** (M0, on the HostCall v0 runtime removed on 2026-09-30).
+Relinked without `hostcall.o`, the image left exactly `__capstone_hostcall` undefined: FFmpeg's
+libc calls reached the hostcall, and nothing else was missing.
 
 **At M0 the compiler flagged 21 pointer round trips (`-Wcapstone-pointer-roundtrip`), down from 28.** Patch 0003 later removed one more, leaving 20.
 - The 7 removed are exactly the sites the patches fix.

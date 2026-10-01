@@ -1,7 +1,7 @@
 /* mmap, munmap and the System V shared-memory calls for a domain, served from
  * the domain's own allocator (level0.c).
  *
- * WHY AN OVERRIDE AND NOT A CASE IN __capstone_hostcall. musl's mmap() and
+ * WHY AN OVERRIDE AND NOT A CASE IN THE SYSCALL STUB. musl's mmap() and
  * shmat() return the syscall's long as a pointer:
  *
  *     return (void *)__syscall_ret(ret);            src/mman/mmap.c

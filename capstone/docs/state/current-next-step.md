@@ -280,7 +280,8 @@ now passes all 27 original Capstone repeats at 65,536 nodes. Extend the checked
 workload sizes and remaining application ports; record live-node demand separately
 from cumulative allocations. The QEMU collector performs a software tag sweep.
 PostgreSQL's larger workload needs FileFallocate
-support; tshark needs its full dependency build restored. Matching default
+support; tshark's full build is #128's, under `/tmp/capstone/delegation-ports/tshark-source`,
+relinked and green on the current stack (`ports/wireshark/app/results/2026-09-30-qemu-tshark-current-stack`). Matching default
 CheriBSD runs now cover FFmpeg and mruby: use the [shared comparison
 contract](../../experiments/applications/comparison.md) for requested bytes,
 address reuse and allocator retention. Extend this default-CheriBSD reference method to
