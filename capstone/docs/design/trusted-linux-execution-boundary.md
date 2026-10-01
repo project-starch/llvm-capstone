@@ -190,23 +190,25 @@ Concurrent PTE changes and two-hart atomicity of the two 64-bit STC writes
 remain unqualified. Unsupported vector, Zcmp stack, XThead and cache-block
 memory operations are rejected in experimental Capstone U-mode.
 
-The stacked QEMU [physical-tag slice `fc05b25cb8`](https://github.com/project-starch/capstone-qemu/commit/fc05b25cb8)
+The stacked QEMU [physical-tag slice `4f030b8a67`](https://github.com/project-starch/capstone-qemu/commit/4f030b8a67)
 adds a shared map keyed by the TLB's physical 16-byte granule when the
-experiment is enabled. Its gate passes **45/45**: the earlier 42 checks plus
+experiment is enabled. Its gate passes **46/46**: the earlier 42 checks plus
 physical alias/store clearing, remap identity, and a privileged physical
-write. The prior QEMU binary fails exactly those three new cases. The
-[record](https://github.com/project-starch/capstone-qemu/blob/fc05b25cb8/tests/trusted-linux-u-access/result.json)
+write and an ordered two-hart tag handoff. The prior QEMU binary fails exactly
+those four new cases. The
+[record](https://github.com/project-starch/capstone-qemu/blob/4f030b8a67/tests/trusted-linux-u-access/result.json)
 contains source and binary hashes. The existing Linux boot/module/shell gate
 also passes with the experiment disabled. The parent QEMU pin is unchanged.
 
-This establishes physical tag identity for those one-hart transitions, not
-safe Linux capability processes. The map is shared across harts, but no
-two-hart guest test qualifies concurrent tag/data updates or context transfer.
+This establishes physical tag identity for the directed transitions, not
+safe Linux capability processes. The two-hart guest test is an ordered
+producer/consumer handoff; concurrent tag/data updates and context transfer
+remain unqualified.
 Privileged scalar stores clear tags; S-mode kernel copies, device writes, DMA
 and frame reclaim still need explicit contracts and tests. Concurrent PTE
 changes can race the post-store privileged physical lookup. The QEMU map has
 no migration protocol. A process-specific protected lifetime namespace,
 tagged register save/restore, checked syscall buffers with recoverable faults,
 and retirement completion also remain open. The next M1 slice should test
-tag behavior across a real two-hart context change before a Linux process is
+tag behavior across a real Linux context change before a process is
 used as evidence for the `malloc`/`free` contract.
