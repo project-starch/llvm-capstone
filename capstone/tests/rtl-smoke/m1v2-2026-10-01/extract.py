@@ -39,7 +39,7 @@ def main(d):
     out += k800
     rl = os.path.join(d, "r1-lines.txt")
     r1 = [l.strip() for l in open(rl, errors="replace")] if os.path.exists(rl) else []
-    keep = [l for l in r1 if re.match(r"R1 m1 (start|end|released|probe|stale)", l)]
+    keep = [l for l in r1 if re.match(r"R1 m1 (start|end|released|probe|stale|snap|lcc)", l)]
     out += keep
     out.append(f"# R1 m1 snapshot lines: {sum(l.startswith('R1 m1 snap') for l in r1)}")
     v = wedge(log)
@@ -54,6 +54,11 @@ def main(d):
         out.append(f"# wedge: mepc 0x{mepc:x}, DBAS 0x{base:x} -> image+0x{mepc - base:x}" if (mepc is not None and base) else f"# wedge: mepc {mepc}, DBAS {base}: offset UNAVAILABLE")
         out.append(f"# wedge: tval 0x{tval:x}" if tval is not None else "# wedge: tval UNREAD")
         out.append(f"# wedge: rev_node_head[15:0] = {head}" if head is not None else "# wedge: rev_node_head UNREAD")
+        serving = le(v, [251, 252, 253, 254])
+        out.append(f"# wedge: rev_node_serving_idx[29:0] = {serving & 0x3FFFFFFF} (generation {(serving >> 16) & 0x3FFF}, index {serving & 0xFFFF})"
+                   if serving is not None else "# wedge: rev_node_serving_idx UNREAD")
+        if tval is not None:
+            out.append(f"# wedge: tval[9:0] = 0x{tval & 0x3FF:03x} (the probed slot's offset in the pool: slot 15 of 64-byte leaves is 0x3c0)")
         rr = [l.strip() for l in log.split("\n") if l.strip().startswith("[refusal] wedge")]
         out += rr[-1:] or ["# refusal: no [refusal] wedge line"]
         idb = le(v, [205, 206, 207])

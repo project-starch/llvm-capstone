@@ -570,6 +570,15 @@ static void run_linear(unsigned reps) {
  * allocations against a 65,532-index pool WITHOUT EXHAUSTING IT -- 20.1x the pool -- which is only
  * possible if indices recycle.
  *
+ * CORRECTED 2026-10-01: about 2*M1_LIVE (32), not M1_LIVE. take(i) is mrev then delin. The mrev gives
+ * the NEW node to the handle and leaves the slot's old node on what becomes the alias. give(i) revokes
+ * that handle, which frees the ALIAS's node, and the next take pops it as the new HANDLE. So each slot
+ * alternates between two indices, and each index is reused once every two allocations of its slot.
+ * Read from capstone_dyn_unit.anvil (MREV) and capstone_rev_node.anvil at 8f6a0af98 by the
+ * claim-auditor, and consistent with the silicon's rev_node_head = B+37 and serving_idx = B+21 on
+ * m1v2-4/5/6. The halving applies to every per-index reuse count derived below; the conclusion about
+ * M1_MAXRET does not change.
+ *
  * So: M1_MAXRET bounds how many stale references are HELD, which is worth having, and M1_LIVE bounds
  * how many distinct indices they NAME, which is what the protocol's "fraction of distinct indices"
  * actually asks for. Sweep M1_LIVE for coverage. This knob is still what stops the arm measuring its
@@ -734,14 +743,48 @@ static void run_linear(unsigned reps) {
  *
  * The ring arm is probed too, on slot 0, through m1_ring_alias -- see the probe for why.
  *
- * Age 2 (the newest) has had its index reclaimed exactly ONCE since it was retained: the next take
- * popped it back under the next generation. Age 0 has had its index reclaimed about nret / M1_LIVE
- * times. Off by default, so every existing image is byte-identical. */
+ * Age 2 (the newest) has had its node reclaimed exactly ONCE since it was retained: the next take
+ * popped it back, as the slot's new HANDLE, under the next generation. Age 0's node has been
+ * reclaimed about nret / (2 * M1_LIVE) times, because each slot alternates between two nodes (see the
+ * 2026-10-01 correction at M1_MAXRET). The printed reuses_since is (alloc - k) / M1_LIVE and counts the
+ * SLOT's reuses, so it is twice the node's. Off by default, so every existing image is byte-identical. */
 #ifndef M1_PROBE_RT
 #define M1_PROBE_RT 0
 #endif
 #if M1_PROBE_RT
 static unsigned m1_probe_op, m1_probe_live, m1_probe_age;   /* op: 0 none, 1 read, 2 write */
+#endif
+/* M1_LCC_SCAN: a NON-FAULTING validity scan, so one boot reads hundreds of thousands of stale
+ * references instead of one wedge. LCC with selector 0 (`.insn r 0x5b, 0x1, 0x04, rd, rs1, x0`)
+ * asks the rev-node unit whether the capability's own {generation, index} is live: it returns
+ * (node.valid AND node.generation == cap.generation) as a scalar and never raises for a TAGGED operand.
+ * At 8f6a0af98: capstone_dyn_unit.anvil:192-206 sends the full revnode_id and replies NO_EXCEPTION;
+ * capstone_rev_node.anvil:173-174 is the validity site. `--lcc-scan` turns it on at RUN time. Each
+ * allocation then queries:
+ *   - `old`, revoked one statement ago and whose index the LIFO list has just reissued under
+ *     generation + 1: it must read 0. This is node reuse with the stale reference refused, once per
+ *     allocation;
+ *   - the reissued alias itself: it must read 1. This is the positive control, from the same instruction;
+ *   - on slot 0 only, slot 0's FIXTURE alias, kept for the whole arm. Its index is allocated 16,384
+ *     times and then retired (anvil:59), so it must read 0 for ever. A 14-bit wrap would bring the
+ *     index back to that generation after 16,384 reclaims, about allocation 262,144 in a 10C arm, and
+ *     the alias would read 1 again: the wrap bound, read rather than argued.
+ * THE EMULATOR CANNOT VALIDATE THIS. Its LCC selector 0 is a constant 1 (op_helper.c, "let's say it's
+ * always valid for now"), and it untags a revoked capability, so an LCC on one raises cause 24 there.
+ * The silicon keeps the tag. So the scan is off unless asked for, the emulator's pass record is earned
+ * without it, and the silicon reading carries its own controls: live must count every query, and old
+ * must count none. Off by default, so every image without the knob is byte-identical. */
+#ifndef M1_LCC_SCAN
+#define M1_LCC_SCAN 0
+#endif
+#if M1_LCC_SCAN
+static unsigned m1_lcc_on;
+static void *m1_first_alias;
+static inline unsigned long m1_lcc_valid(void *cap) {
+  unsigned long r;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x0" : "=&r"(r) : "r"(cap));   /* rd != rs1 */
+  return r;
+}
 #endif
 #if M1_STALE_DEREF || M1_PROBE_RT
 /* What each slot's storage was last written with, recorded as it happens so the probe can print the
@@ -806,6 +849,10 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
     return; }
 #endif
   i = 0; ini0 = sublet_stats.init;
+#if M1_LCC_SCAN
+  ulong lq = 0, lv_old = 0, lv_live = 0, lq_first = 0, lv_first = 0, lfirst_at = 0;
+  m1_first_alias = alias[0];
+#endif
   for (;;) {
     if (alloc >= target && !releasing) {
       if (streq(arm, "release")) {
@@ -824,6 +871,18 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
     else { if (nret >= M1_MAXRET) { alias[i] = sublet_take(&leaf[i]); alloc++; stop = "buffer"; break;   /* the instrument, not the table: nret == M1_MAXRET before alloc == target */ } m1_ret_alias[nret++] = old; oldest = m1_ret_alias[0]; }
     t = cyc(); alias[i] = sublet_take(&leaf[i]); tk += cyc() - t;   /* a new object in its place: one node minted */
     touch((volatile char *)alias[i], (ulong)M1_TOUCH, (unsigned char)alloc);
+#if M1_LCC_SCAN
+    if (m1_lcc_on) {
+      lq++;
+      lv_old += m1_lcc_valid(old);
+      lv_live += m1_lcc_valid(alias[i]);
+      if (i == 0) {
+        ulong f = m1_lcc_valid(m1_first_alias);
+        lq_first++; lv_first += f;
+        if (f && !lfirst_at) lfirst_at = alloc + 1UL;
+      }
+    }
+#endif
 #if M1_STALE_DEREF || M1_PROBE_RT
     m1_last_touch[i] = (unsigned char)alloc;
 #endif
@@ -837,12 +896,18 @@ static void run_m1(const char *arm, ulong C, ulong budget, unsigned stale_take) 
   out("R1 m1 end arm="); out(arm); out(" stop="); out(stop); kv("alloc", alloc); kv("minted", minted() - m0);
   kv("revoked", sublet_stats.revoke); kv("retained", nret); kv("released", releasing); out("\n");
   nodes_minted_total += minted() - m0;
+#if M1_LCC_SCAN
+  if (m1_lcc_on) {
+    out("R1 m1 lcc arm="); out(arm); kv("queries", lq); kv("old_valid", lv_old); kv("live_valid", lv_live);
+    kv("first_queries", lq_first); kv("first_valid", lv_first); kv("first_valid_at", lfirst_at); out("\n");
+  }
+#endif
 #if M1_PROBE_RT
   if (m1_probe_op && nret && (streq(arm, "pressure") || streq(arm, "ring"))) {
     /* ring: m1_ring_alias[s] is slot s's PREVIOUS alias (one reclaim since), stored at k = alloc % M1_LIVE,
      * which equals the slot because i and alloc advance together from 0. The probe takes slot 0. Over a
-     * 10C ring arm each slot's index is allocated about 41,000 times, past two retirements at 16,384, so
-     * the refused id's INDEX tells retirement (a new index) from a 14-bit wrap (the same index). */
+     * 10C ring arm each slot's two nodes are each allocated about 20,500 times, past one retirement at
+     * 16,384. The wrap question is better answered by M1_LCC_SCAN, which reads it without a wedge. */
     unsigned ring = streq(arm, "ring");
     unsigned k = ring ? 0u : (m1_probe_age == 0 ? 0u : (m1_probe_age == 1 ? nret / 2u : nret - 1u));
     unsigned s = k % M1_LIVE;
@@ -1046,6 +1111,9 @@ void domain_main(unsigned *res, unsigned func) {
       else if (streq(tok[i], "--stale")) stale = 1;
       else if (streq(tok[i], "--cap") && i + 1 < nt) cap = atou(tok[++i]);
       else if (streq(tok[i], "--stale-take")) stale_take = 1;
+#if M1_LCC_SCAN
+      else if (streq(tok[i], "--lcc-scan")) m1_lcc_on = 1;
+#endif
 #if M1_PROBE_RT
       else if (streq(tok[i], "--probe") && i + 1 < nt) { i++; m1_probe_op = streq(tok[i], "read") ? 1u : (streq(tok[i], "write") ? 2u : 0u); }
       else if (streq(tok[i], "--probe-live")) m1_probe_live = 1;

@@ -2,7 +2,7 @@
 # One boot of the 2026-10-01 M1 campaigns on R-43 v2, by tag. Pre-registrations: the paper bundles
 # experiments/results/M1/2026-10-01-v2-series/ and .../2026-10-01-v2-turnover-witness/ (branch board/silicon-evidence).
 # Runs board-r1e4.sh from the MAIN clone (it needs the buildroot submodules), with this lane's lists.
-#   bash board-m1v2.sh <tag>      (m1v2s-1..5: the series; m1tw-1..5: the turnover witness)
+#   bash board-m1v2.sh <tag>      (m1v2s-1..5: the series; m1tw-1..3 LCC scan, m1tw-4..5 single probes)
 set -u
 LISTS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lists
 MAIN=${CAPSTONE_MAIN_CLONE:-$HOME/dev/llvm-capstone}; A=${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}
@@ -15,20 +15,20 @@ case $tag in
                    pre="BRIDGE: pressure stop=buffer alloc=43297 (054cea69b take 72.010 give 71.052); release released at 43290, end 51948 (phase 1 take 72.175 give 71.827; phase 2 take 86.943 give 93.085); k800 twice" ;;
   m1v2s-2|m1v2s-3|m1v2s-4)
                    img=$A/m1v2-2026-10-01/rt/r1_slots_pools.dom; h=eb3ed1e3f8ac4d82; ql=$Q/eb3ed1e3-pressure/boot.log
-                   common="k800 retval=4; drop and ring stop=target alloc=655320, 159 snapshots; pressure stop=buffer alloc=43297 x3; release released 43290 end 51948; minted-revoked=31 every snapshot; take ~94; live controls: ring and pressure age0 read ok live=1 is_live_data=1, pressure age2 write ok live=1 via_live_alias=165"
+                   common="k800 retval=4; drop and ring stop=target alloc=655320, 159 snapshots; pressure stop=buffer alloc=43297 x3; release released 43290 end 51948; minted-revoked=31 every snapshot; take ~94; live controls: ring and pressure age0 read ok live=1 is_live_data=1, pressure age2 write ok live=1 via_live_alias=165, pressure age2 read ok live=1 is_live_data=1"
                    case $tag in
                      m1v2s-2) list=m1v2-rt-series-rstale0.txt; pre="$common; LAST stale READ age 0: no 'probe read ok live=0', cause 25 at image+0x4868, record LATCHED" ;;
                      m1v2s-3) list=m1v2-rt-series-wstale0.txt; pre="$common; LAST stale WRITE age 0: no 'probe write ok live=0', cause 25 at image+0x48cc, record LATCHED" ;;
                      m1v2s-4) list=m1v2-rt-series-rstale2.txt; pre="$common; LAST stale READ age 2: no 'probe read ok live=0', cause 25 at image+0x4868, record LATCHED" ;;
                    esac ;;
-  m1tw-1|m1tw-2|m1tw-3|m1tw-4|m1tw-5)
+  m1tw-1|m1tw-2|m1tw-3)
+                   img=$A/m1v2-2026-10-01/lcc/r1_slots_pools.dom; h=42bdc05826fe5f4a; ql=$Q/42bdc058-pressure/boot.log; list=m1v2-lcc-scan.txt
+                   pre="LCC scan, returns: k800 twice; every arm: old_valid=0 and live_valid=queries; drop and ring: queries=655320 first_queries=40958 first_valid=0 (a 14-bit wrap would read 2, first at alloc 524257); pressure queries=43296 first_queries=2706; release queries=51948 first_queries=3247" ;;
+  m1tw-4|m1tw-5)
                    img=$A/m1v2-2026-10-01/rt/r1_slots_pools.dom; h=eb3ed1e3f8ac4d82; ql=$Q/eb3ed1e3-pressure/boot.log
                    case $tag in
-                     m1tw-1) list=m1v2-rt-controls.txt; pre="matched LIVE controls return: ring and pressure age-0 reads is_live_data=1, pressure age-2 write via_live_alias=165 wrote=165; drop and release as the series; k800 twice" ;;
-                     m1tw-2) list=m1v2-rt-p0read.txt;   pre="stale read of slot 0 fixture alias refused: cause 25 at image+0x4868, record LATCHED, id generation 0, index B (the model guesses 100)" ;;
-                     m1tw-3) list=m1v2-rt-p2read.txt;   pre="stale read of slot 15 newest alias refused: cause 25 at image+0x4868, record LATCHED, id generation 2705 (0xa91), index B+15" ;;
-                     m1tw-4) list=m1v2-rt-p2write.txt;  pre="stale write of slot 15 newest alias refused: cause 25 at image+0x48cc, record LATCHED, id generation 2705, index B+15" ;;
-                     m1tw-5) list=m1v2-rt-ringread.txt; pre="ring 10C then slot 0 previous alias refused: cause 25 at image+0x4868, id generation 8189 at index B+32 (retired twice); index B would be a 14-bit wrap" ;;
+                     m1tw-4) list=m1v2-rt-p2read.txt;  pre="alone after k800, stale READ age 2 refused: cause 25 at image+0x4868, tval[9:0]=0x3c0 (BLOCKING), record LATCHED with id generation 1352 and index head-1, serving_idx head-16" ;;
+                     m1tw-5) list=m1v2-rt-p2write.txt; pre="alone after k800, stale WRITE age 2 refused: cause 25 at image+0x48cc, tval[9:0]=0x3c0 (BLOCKING), id generation 1352 index head-1, serving head-16" ;;
                    esac ;;
   *) echo "unknown tag $tag" >&2; exit 2 ;;
 esac
