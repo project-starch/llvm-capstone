@@ -5794,3 +5794,83 @@ VA, and checked under QEMU with `CAPSTONE_GP_FABRICATE=0` and the board's own ho
   `sqlite_capstone_domain.c` uses, and the corpus's own QEMU image is byte-identical with and without it.
 - **N = 1 per cell.** Rows whose reachability is unproven (1, 3, 6, 11, 12, 13, 17, 22) were not run. Rows
   10, 19 and 24 (extra translation units) are batch 2, not yet built.
+
+## M1 on R-43 v2 — all four conditions in the same boots, node turnover read off the refused capability, and a validity scan (boots m1v2s-1…5, m1tw-1…7, 2026-10-01/02)
+
+Bundles: nested-allocators-paper, branch `board/silicon-evidence`, at
+`experiments/results/M1/2026-10-01-v2-series/` and `.../2026-10-01-v2-turnover-witness/`. Each holds the
+pre-registration (`work-order.md`, audited before its boots), the result lines and the analysis.
+- Bitstream: `caplifive_r43_8f6a0af.bit` (capstone-ariane `8f6a0af98`, timing failing, WNS −9.595 ns).
+- Monitor `2dcd3a5`, buildroot `d04bd83`, host `2c9e82d1`.
+- Harness: `sublet/r1/r1_slots_pools.c` with two run-time probes, both off by default:
+  - `M1_PROBE_RT`: one stale or live access through a single instruction;
+  - `M1_LCC_SCAN`: a non-faulting `lcc` selector-0 validity query.
+- Lane: `lane/board-m1v2`.
+
+### The four conditions, measured together on the resident bitstream
+
+| condition | silicon reading |
+|---|---|
+| permitted reuse | drop and ring reach 10C (655,320 allocations) against the 65,532-index pool in every boot, with no exhaustion |
+| accounting | `minted − revoked = 31` on all 2,136 snapshots of 26 invocation-phases |
+| stale operations | after all four Design arms in the same boot, ONE stale access per boot is refused at the probe's own instruction with cause 25 (READ age 0, WRITE age 0, READ age 2), while the same instructions through live aliases succeed in every boot (reads return the live data; a write of 0xA5 reads back as 165; the write's live control is at slot 15, the stale write at slot 0) |
+| pressure | `stop=buffer alloc=43297` (the pre-registered clean null); release enters phase 2 at 43,290 and ends at 51,948 |
+
+### Node turnover, read directly
+
+- **The refusal record.** It latches the refused capability's OWN `{generation, index}`
+  (`load_store_unit.sv:1470-1472` at `8f6a0af98`). On m1v2s-4 it read generation **1,352** at index
+  head − 1, with serving_idx head − 16 (post hoc: seven invocations ran first). That is consistent with the claim-auditor's corrected model of the rev-node
+  allocator: each slot alternates between two nodes, so 32 indices are in play. On that model the refused
+  reference was minted on an index already reissued 1,352 times. The attributable reading is the
+  single-probe boot m1tw-4.
+- **The validity scan.** At every allocation it asks the rev-node unit whether the alias revoked one
+  statement earlier is still valid; its node has just been reissued. Over three boots (m1tw-1..3) that is
+  4,217,652 queries: **no stale reference ever read valid, every live one did.** The fixture alias read
+  invalid on all 263,607 queries. A 14-bit wrap would have read it valid twice per long arm.
+- **Two limits on the scan.**
+  - A validity query is not an access: per-access refusal is the cause-25 evidence.
+  - The emulator cannot check any of this, because its `lcc` selector 0 is a constant 1.
+- **Attributable refusals (m1tw-4 read, m1tw-5 write, each alone after k800).**
+  - Cause 25 at the probe's instruction, tval[9:0] 0x3c0 (slot 15).
+  - The record holds **generation 1,352 at index 136**, with head 137 and serving 121.
+  - The generation and the relations index = head − 1 and serving = head − 16 were predicted before the
+    boots. The head itself fixes B = 100.
+- **Retirement at generation 16,383, not a wrap, for the 32 indices one ring arm drives (m1tw-6).**
+  - The boot read head 169, serving 144 and refused (4,094, 153), i.e. B+69 / B+44 / B+53.
+  - A 14-bit wrap would read B+37 / B+12 / B+21: 32 lower on all three, the 32 retirements' replacement
+    bumps.
+  - B comes from m1tw-4. The boots ran 4 → 6 → 5 and m1tw-5 re-read head 137 after m1tw-6.
+  - m1tw-7 (a short ring arm that never reaches 16,384) controls the borrowed B directly: head 137, serving 120, refused (10,239, 121), exactly the shared-pre-history prediction, so ring
+    boots share m1tw-4's pre-history.
+  - Permanence of retirement is the RTL (`capstone_rev_node.anvil:59`, `:66-67`).
+
+### Cost: what the bridges attribute to v2
+
+On the identical `054cea69b` images (`1b7a04fe`, `249cfda9`), one boot each on v2:
+- **The give bracket reads about +4 cycles** on drop, pressure and release phase 1 (103.058 → 107.057,
+  71.052 → 75.066, 71.827 → 75.782).
+- **The take bracket is unchanged** on those arms (72.029 → 72.029).
+- **Phase 2 shows the cost MOVES rather than grows.** Its take+give over 8,672 operations is unchanged to
+  6 cycles in 1.56 M, while about 3.9 cycles per operation move from take to give.
+- So the +4 is quoted as **a reading of the give BRACKET**. Whether a give got slower, or cost moved into
+  the bracket, needs an outer per-iteration bracket.
+- Ring's +4.4 is unproven at N = 1, since ring give varies more than the band on v2.
+
+On the probe image `eb3ed1e3`, mint cost differs by INVOCATION, reproducibly to ≤ 0.01 over three boots:
+drop 96.0, ring 73.0, pressure 84.0, release 73.0. Arm and boot position are confounded. Not explained;
+it is with the RTL lane. **Quote a v2 mint cost with its image, arm and position.**
+
+**Provenance incident (m1v2s-3).** That boot's wrapper script was edited while it ran. Bash then
+re-executed a fragment without the bitstream settings, which hard-stopped BEFORE booting but overwrote
+the original run's log and driver.log. The result lines had been extracted before the overwrite, and
+the original boot.txt survives. The image identity for that boot is asserted from the schedule and
+the content.
+
+### What this does not establish
+
+- Anything in S-mode: R-44 is open.
+- Retirement for indices other than the 32 one ring arm drives.
+- Whether the give-bracket +4 is added cost or cost moved between brackets.
+- Wall-clock figures.
+
