@@ -133,14 +133,17 @@ register slots. The next gate must run the same round trip in a Linux-selected
 process, then add a checked buffer syscall and allocator lifetime test.
 A kernel module now proves that the booted Linux image can execute S-mode
 STC/LDC before selecting a protected process; its saved value is untagged.
-The QEMU bare-metal gate checks a tagged value in that order. Neither result
-initialises a Linux-owned revocation namespace or preserves a tagged Linux
-`pt_regs` frame. Those are the next code changes.
+The QEMU bare-metal gate checks a tagged value in that order. A subsequent
+bounded Linux process slice now initializes a separate lifetime tree, saves
+and restores tagged `s2` in `pt_regs`, and selects protection on return to
+one U-mode task. It passes an ordinary Linux page-fault retry, `getpid`, and
+a switch away and back through `clone`/`wait4`. A scalar replacement of `s2`
+faults at the first store. See the [gate and record](../../tests/trusted-linux-feasibility/README.md).
 
 The live guest image and its prepared source report Linux 6.1.0, despite the
 Buildroot configuration naming 6.1.26. Patch and rebuild the source matched
 to the image, and verify the booted `Image` hash before assessing results.
-The first protected-process slice needs these contracts together:
+The complete protected-process ABI still needs these contracts together:
 
 1. A privileged Linux interface creates a lifetime namespace and binds it to
    one address-space instance. The current QEMU tree is initialized only by
@@ -158,10 +161,11 @@ The first protected-process slice needs these contracts together:
    a real syscall, involuntary scheduling and a page-fault retry. Keep signal
    frames, fork and ptrace as explicit gates before claiming a general ABI.
 
-The S-mode instruction gate makes item 2 executable, but does not choose the
-namespace representation or pay for the complete 31-register save on every
-trap. Compare that cost with automatic trap capture and metadata propagation
-using one matched guest workload before freezing the ISA.
+The process slice implements item 1 only for one `mm` and item 2 only for
+`s2`. It does not pay for the complete tagged register save on every trap,
+checked user buffers, a protected allocator, child inheritance or object
+retirement. Compare that cost with automatic trap capture and metadata
+propagation using one matched guest workload before freezing the ISA.
 
 ### M2 — Real virtual memory and a growing protected heap
 

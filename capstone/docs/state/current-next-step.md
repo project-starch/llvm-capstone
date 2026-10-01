@@ -2,14 +2,14 @@ Trusted Linux application compatibility (2026-10-01): follow the
 [M0–M7 plan](../plans/trusted-linux-application-compatibility.md) on
 `memory-trusted-linux` and its implementation lanes. The
 ordinary Linux [feasibility control](../../tests/trusted-linux-feasibility/README.md)
-passes the OS operations needed by the next guest probe but runs unprotected.
-The pinned QEMU [context candidate](../design/trusted-linux-execution-boundary.md)
-preserves tagged `a0` and `tp` across a bare-metal U-to-S trap, with 70/70
-checks; Linux has not adopted that save/restore path. The next M1 step is a
-Linux-selected process context and tagged register frame through syscall and
-scheduling boundaries. The in-kernel S-mode instruction probe passes; tagged
-`pt_regs`, per-process lifetime selection and kernel authority still need an
-implementation contract. The
+passes the OS operations needed by the guest probe. A bounded Linux-selected
+process now preserves tagged `s2` across a page-fault retry, `getpid`, and a
+switch away and back through `clone`/`wait4`. The same scalar address without
+the tag faults at its first store; the QEMU bare-metal suite passes 73/73.
+This is one protected `mm` on one hart, with a debug-minted page capability
+and no protected libc or checked buffer syscall. The next M1 step is the
+complete tagged register and syscall argument contract, then allocator
+lifetimes and protected-fork semantics. The
 `trusted-linux-syscall-bounds` lane demonstrates requested-span checks through
 the current C-mode bridge; it is not the target Linux process ABI. The
 [M1 boundary proposal](../design/trusted-linux-execution-boundary.md) chooses
@@ -18,21 +18,12 @@ Linux U-mode capability processes. The finite
 fault, retirement and private-clone schedules, including retained old and
 fresh pointers at one reused address and pending accesses on both harts.
 
-The pinned QEMU [context candidate](../design/trusted-linux-execution-boundary.md)
-passes **70/70** bare-metal checks and boots the existing Linux guest with
-`x-capstone-u-mode=true`. CPU support alone had selected the new MEPC/trap
-path during legacy OpenSBI boot and caused a capability fault before login.
-The prototype now requires a privileged runtime selector to activate that path.
-The earlier kernel-write work checks S-mode scalar, FP, atomic and vector tag
-clearing through stale cached translations, a complete page scrub, and a
-CPMP-refused vector store. QEMU still refuses more than one possible hart;
-old/fresh capabilities in the bare-metal cases are debug-minted. The new Linux
-boot runs ordinary userspace, without the protected selector.
-
-Next implement protected **per-process** selection and tagged register context
-transfer. Then run a real Linux capability process with an ordinary mapping,
-page-fault retry, preemption and a checked buffer syscall; qualify Linux
-copy/reclaim tag handling along that path. The same-address
+The earlier context candidate and the new protected process run are distinct:
+the former checks several tagged S-mode operations in bare metal; the latter
+checks one register in an actual Linux task. The [protected result](../../tests/trusted-linux-feasibility/protected-result.json)
+binds the latter to the rebuilt kernel `Image` and QEMU binary. Complete
+tagged `tp`/`sp` and all argument registers, then a checked buffer syscall
+and Linux copy/reclaim tag handling. The same-address
 `malloc(64); free(p); q=malloc(64)` test, recoverable copy fault, global
 retirement break and two-hart completion remain open. M1 is not closed;
 real Linux `malloc/mmap` integration belongs to M2. Continue thread and I/O

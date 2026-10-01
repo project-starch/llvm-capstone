@@ -1,0 +1,222 @@
+diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
+index 593cf09264d8..e792dde5d804 100644
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -12,0 +13,8 @@ config 32BIT
++config CAPSTONE_TRUSTED_U
++	bool "Experimental trusted-Linux Capstone user context"
++	depends on 64BIT && MMU
++	help
++	  Enable the bounded single-process QEMU experiment for a tagged s2
++	  register across Linux syscalls and task switches.  This kernel requires
++	  the experimental Capstone CPU option and is not a general user ABI.
++
+diff --git a/arch/riscv/include/asm/capstone_trusted_u.h b/arch/riscv/include/asm/capstone_trusted_u.h
+new file mode 100644
+index 000000000000..97aabfce8ba4
+--- /dev/null
++++ b/arch/riscv/include/asm/capstone_trusted_u.h
+@@ -0,0 +1,18 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _ASM_RISCV_CAPSTONE_TRUSTED_U_H
++#define _ASM_RISCV_CAPSTONE_TRUSTED_U_H
++
++#include <linux/types.h>
++
++struct pt_regs;
++struct task_struct;
++
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++long riscv_capstone_enable(unsigned long base, unsigned long end);
++long riscv_capstone_switch_count(void);
++void riscv_capstone_user_return(struct pt_regs *regs);
++void riscv_capstone_task_switch(struct task_struct *prev,
++				 struct task_struct *next);
++#endif
++
++#endif
+diff --git a/arch/riscv/include/asm/ptrace.h b/arch/riscv/include/asm/ptrace.h
+index 6ecd461129d2..8769a1482664 100644
+--- a/arch/riscv/include/asm/ptrace.h
++++ b/arch/riscv/include/asm/ptrace.h
+@@ -53,0 +54,4 @@ struct pt_regs {
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++	/* Private kernel slot; never copied as authority through scalar pt_regs. */
++	unsigned long capstone_s2[2] __aligned(16);
++#endif
+diff --git a/arch/riscv/kernel/asm-offsets.c b/arch/riscv/kernel/asm-offsets.c
+index df9444397908..fc465cd2305e 100644
+--- a/arch/riscv/kernel/asm-offsets.c
++++ b/arch/riscv/kernel/asm-offsets.c
+@@ -112,0 +113,3 @@ void asm_offsets(void)
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++	OFFSET(PT_CAPSTONE_S2, pt_regs, capstone_s2);
++#endif
+diff --git a/arch/riscv/kernel/entry.S b/arch/riscv/kernel/entry.S
+index 186abd146eaf..0f6b3f7c4e04 100644
+--- a/arch/riscv/kernel/entry.S
++++ b/arch/riscv/kernel/entry.S
+@@ -45,0 +46,4 @@ _save_context:
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++	/* Preserve s2's tag before Linux's scalar pt_regs stores touch it. */
++	.insn s 0x5b, 4, x18, PT_CAPSTONE_S2(sp)
++#endif
+@@ -279,0 +284,6 @@ resume_userspace:
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++	/* The task's mm, rather than a CPU-wide option, selects protected U. */
++	move a0, sp
++	call riscv_capstone_user_return
++#endif
++
+@@ -336,0 +347,3 @@ restore_all:
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++	.insn i 0x5b, 3, x18, sp, PT_CAPSTONE_S2
++#else
+@@ -337,0 +351 @@ restore_all:
++#endif
+@@ -561,0 +576,11 @@ ENTRY(__switch_to)
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++	addi sp, sp, -16
++	REG_S a0, 0(sp)
++	REG_S a1, 8(sp)
++	call riscv_capstone_task_switch
++	REG_L a0, 0(sp)
++	REG_L a1, 8(sp)
++	addi sp, sp, 16
++	li a4, TASK_THREAD_RA
++	add a4, a1, a4
++#endif
+diff --git a/arch/riscv/kernel/process.c b/arch/riscv/kernel/process.c
+index 8955f2432c2d..242d77aa0156 100644
+--- a/arch/riscv/kernel/process.c
++++ b/arch/riscv/kernel/process.c
+@@ -17,0 +18,6 @@
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++#include <linux/atomic.h>
++#include <linux/mm.h>
++#include <linux/mutex.h>
++#include <linux/sched/mm.h>
++#endif
+@@ -26,0 +33,88 @@
++#include <asm/capstone_trusted_u.h>
++
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++/* The first integrated gate permits exactly one protected mm for this boot.
++ * Holding mm_count prevents a reused address from masquerading as that mm. */
++static DEFINE_MUTEX(capstone_owner_lock);
++static struct mm_struct *capstone_owner_mm;
++static atomic_t capstone_switches = ATOMIC_INIT(0);
++
++long riscv_capstone_enable(unsigned long base, unsigned long end)
++{
++	struct mm_struct *mm = current->mm;
++	struct vm_area_struct *vma;
++	struct pt_regs *regs;
++	unsigned long physical_start = 0;
++	unsigned long physical_end = 1UL << 56;
++	long result = 0;
++
++	if (!mm || atomic_read(&mm->mm_users) != 1 ||
++	    !base || (base & (PAGE_SIZE - 1)) ||
++	    end <= base || end - base != PAGE_SIZE)
++		return -EINVAL;
++	mutex_lock(&capstone_owner_lock);
++	if (capstone_owner_mm) {
++		result = -EBUSY;
++		goto unlock;
++	}
++	mmap_read_lock(mm);
++	vma = find_vma(mm, base);
++	if (!vma || vma->vm_start > base || vma->vm_end < end ||
++	    (vma->vm_flags & (VM_READ | VM_WRITE)) !=
++	    (VM_READ | VM_WRITE)) {
++		result = -EFAULT;
++		goto unlock_mmap;
++	}
++
++	/* Selector 3 creates a namespace without changing the live execution
++	 * mode.  It refuses a second initialization instead of resetting nodes. */
++	asm volatile("li t0, 3\n\t"
++		     ".insn r 0x5b, 1, 0x41, zero, t0, zero\n\t"
++		     : : : "t0", "memory");
++	/* Trusted Linux needs physical access while a protected task runs. */
++	asm volatile(".insn r 0x5b, 1, 0x40, t0, %0, %1\n\t"
++		     ".insn i 0x5b, 7, zero, t0, 0x10\n\t"
++		     : : "r"(physical_start), "r"(physical_end)
++		     : "t0", "memory");
++	regs = current_pt_regs();
++	asm volatile(".insn r 0x5b, 1, 0x40, t0, %0, %1\n\t"
++		     ".insn s 0x5b, 4, t0, 0(%2)\n\t"
++		     : : "r"(base), "r"(end), "r"(regs->capstone_s2)
++		     : "t0", "memory");
++	regs->s2 = base;
++	mmgrab(mm);
++	WRITE_ONCE(capstone_owner_mm, mm);
++unlock_mmap:
++	mmap_read_unlock(mm);
++unlock:
++	mutex_unlock(&capstone_owner_lock);
++	return result;
++}
++
++long riscv_capstone_switch_count(void)
++{
++	if (current->mm != READ_ONCE(capstone_owner_mm))
++		return -EPERM;
++	return atomic_read(&capstone_switches);
++}
++
++void riscv_capstone_task_switch(struct task_struct *prev,
++				struct task_struct *next)
++{
++	struct mm_struct *owner = READ_ONCE(capstone_owner_mm);
++
++	if (owner && prev->mm == owner && next->mm != owner)
++		atomic_inc(&capstone_switches);
++}
++
++void riscv_capstone_user_return(struct pt_regs *regs)
++{
++	unsigned long mode = current->mm == READ_ONCE(capstone_owner_mm) ? 2 : 0;
++
++	/* A scalar kernel edit to s2 cannot inherit a prior capability tag. */
++	if (mode && regs->s2 != READ_ONCE(regs->capstone_s2[0]))
++		WRITE_ONCE(regs->capstone_s2[0], regs->s2);
++	asm volatile(".insn r 0x5b, 1, 0x41, zero, %0, zero"
++		     : : "r"(mode) : "memory");
++}
++#endif
+diff --git a/include/uapi/linux/prctl.h b/include/uapi/linux/prctl.h
+index a5e06dcbba13..4e05c22a22ff 100644
+--- a/include/uapi/linux/prctl.h
++++ b/include/uapi/linux/prctl.h
+@@ -286,0 +287,4 @@ struct prctl_mm_map {
++/* Bounded Capstone trusted-Linux U-mode experiment, not a stable ABI. */
++#define PR_CAPSTONE_ENABLE	0x43535410
++#define PR_CAPSTONE_SWITCHES	0x43535411
++
+diff --git a/kernel/sys.c b/kernel/sys.c
+index 5fd54bf0e886..82e08738f9bf 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -75,0 +76,3 @@
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++#include <asm/capstone_trusted_u.h>
++#endif
+@@ -2628,0 +2632,16 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
++	case PR_CAPSTONE_ENABLE:
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++		error = (arg4 || arg5) ? -EINVAL :
++			riscv_capstone_enable(arg2, arg3);
++#else
++		error = -EOPNOTSUPP;
++#endif
++		break;
++	case PR_CAPSTONE_SWITCHES:
++#ifdef CONFIG_CAPSTONE_TRUSTED_U
++		error = (arg2 || arg3 || arg4 || arg5) ? -EINVAL :
++			riscv_capstone_switch_count();
++#else
++		error = -EOPNOTSUPP;
++#endif
++		break;

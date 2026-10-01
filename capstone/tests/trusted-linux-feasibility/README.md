@@ -1,4 +1,4 @@
-# Trusted-Linux feasibility gate: ordinary guest control
+# Trusted-Linux feasibility gates
 
 The first question is whether the selected QEMU, firmware, Linux image and
 cross-compiler can run a small ordinary Linux process with the OS operations
@@ -72,23 +72,75 @@ omits the module from the guest disk; the ordinary probe still completes, but
 the combined gate must fail. A QEMU source mutation that restores the prior
 S-mode requirement for active protected U execution also fails this gate.
 The [pinned candidate result](kernel-context-result.json) records the input
-hashes and controls. The next gate needs a Linux-selected process with a
-tagged register saved at trap entry and restored after a syscall and scheduling.
+hashes and controls. The bounded process gate below now tests one tagged
+register through Linux trap entry, a syscall and a task switch.
 
-It is not evidence for a tagged kernel copy, protected `malloc`, preserved
-capability registers, preemption of a protected process, or safe retirement.
+It is not evidence for a tagged kernel copy, protected `malloc`, all-register
+preservation, or safe retirement.
 
-The next gate is a process that Linux explicitly selects for protection. It
-must retain tagged pointer identity across a syscall and a context switch,
-obtain authority for an ordinary Linux mapping, and fault a retained old
+## Bounded Linux process gate
+
+`protected.S` runs as an ordinary Linux U-mode process. It `mmap`s one page,
+asks the experimental kernel to select a protected lifetime namespace, and
+receives a tagged capability in `s2`. Its first store faults in the page through
+Linux's normal lazy allocation, then retries. It dereferences `s2` after
+`getpid`, creates a child with a separate `mm`, and blocks in `wait4`.
+The parent requires the kernel's switch-away counter to be positive and
+reads/writes through `s2` again. The child runs unprotected. The shell reports
+the final exit code; this process deliberately uses no user-buffer syscall or
+libc yet.
+
+The exact [kernel patch](linux-trusted-u.patch) applies to
+`transcapstone-linux` revision `830b3c68c1fb1e9176028d02ef86f3cf76aa2476`;
+`git apply --unidiff-zero --check` can verify the zero-context patch before
+application. It is also committed
+locally on `riscv/trusted-u-entry` as `a56307461a68`; the original repository
+denied the push, so the patch makes this gate reviewable without that remote.
+Build the patched source with `CONFIG_CAPSTONE_TRUSTED_U=y` and the
+same Buildroot cross-compiler used for the guest image. This option is
+experimental and requires QEMU's `x-capstone-u-mode=true`. Place the built
+`Image` with the boot firmware and rootfs in a scratch image directory;
+verify that this is the directory passed to `--image-dir`. For example:
+
+```sh
+source capstone/tests/capstone-test-env.sh
+make -C /path/to/transcapstone-linux O="$CAPSTONE_TMP_ROOT/trusted-linux-kbuild" \
+  ARCH=riscv CROSS_COMPILE=/path/to/riscv64-buildroot-linux-gnu- -j90 Image
+cp "$CAPSTONE_TMP_ROOT/trusted-linux-kbuild/arch/riscv/boot/Image" \
+  "$CAPSTONE_TMP_ROOT/trusted-linux-images/Image"
+python3 capstone/tests/trusted-linux-feasibility/run.py \
+  --image-dir "$CAPSTONE_TMP_ROOT/trusted-linux-images" \
+  --qemu /path/to/qemu-system-riscv64 \
+  --cc /path/to/riscv64-buildroot-linux-gnu-gcc --protected \
+  --log "$CAPSTONE_TMP_ROOT/trusted-linux-protected.log" \
+  --record "$CAPSTONE_TMP_ROOT/trusted-linux-protected.json"
+```
+
+Run the same command with `--control-strip-protected-tag`, a separate scratch
+log and record. This control passes only if the guest faults with cause 24 at
+the named first `s2` store and exits 132. Adding
+`--control-wrong-fault-site` to that run must fail even though the earlier
+fault has the same cause. `--control-missing-protected` must also fail.
+The [positive record](protected-result.json) and
+[control record](protected-strip-control.json) include hashes of the kernel image, QEMU binary,
+firmware, rootfs, compiler, sources and guest binaries. The raw serial log
+remains in scratch space. This gate checks one tagged register, one protected
+`mm`, one possible hart, syscall entry/return, a Linux page-fault retry and a
+task switch. It does not check `tp`/`sp` or other capability registers,
+signals, ptrace, protected fork inheritance, checked syscall copies, frame
+reclaim, object revocation or a real allocator. M1 remains open.
+
+The next gate must extend this one-register process to full tagged register
+preservation, obtain authority for ordinary Linux mappings without a debug
+mint, and fault a retained old
 pointer after `free` and same-address reuse while the fresh pointer succeeds.
 The process must also observe ordinary PTE restrictions and receive a
 recoverable `EFAULT` for an invalid syscall buffer. A debug-minted capability
 in a bare-metal guest cannot close this gate. Compare three ways of preserving
 pointer identity across Linux's register saves and copies—explicit tagged
 save/restore, automatic trap capture, and disjoint metadata propagation—by
-their complete hardware, kernel, libc and compiler costs. No trap mechanism is
-selected by this control run.
+their complete hardware, kernel, libc and compiler costs. The bounded gate
+uses explicit tagged save/restore for `s2`; it does not select a general ABI.
 
 Before performance results, freeze one matched application workload and the
 acceptable limits for throughput, tail latency, memory/metadata use and

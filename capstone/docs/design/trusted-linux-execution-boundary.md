@@ -1,8 +1,8 @@
 # Linux capability execution boundary (M1)
 
-Status: **PROPOSED TARGET; QEMU ACCESS AND CONTEXT CANDIDATES ONLY**, 2026-10-01. This chooses
-the direction for the M1 prototype; it does not claim that Linux user-mode
-capability execution or the required kernel and hardware contracts exist yet. It refines the
+Status: **PROPOSED TARGET; BOUNDED LINUX PROCESS PROTOTYPE**, 2026-10-01. This chooses
+the direction for M1 and records a one-register Linux experiment; it does
+not claim a complete process ABI or the required hardware contracts. It refines the
 [trusted-Linux memory design](trusted-linux-memory.md) and the
 [application compatibility M1 gate](../plans/trusted-linux-application-compatibility.md).
 
@@ -299,3 +299,37 @@ task selector, per-process lifetime namespaces, checked syscall copies or a
 protected `malloc` process. The use of S-mode `CSSTC`/`CSLDC` and `CSCRATCH`
 is an ISA candidate; Linux integration and hardware cost decide whether to
 retain it.
+
+## Integrated one-register process experiment
+
+The next stacked QEMU/Linux prototype tests an actual Linux-selected task,
+within a deliberately narrow scope. The experimental kernel creates a separate
+revocation tree once, binds it to one `mm` for the boot, and selects that tree
+on return to its U-mode task. It mints authority for one already-mapped
+anonymous page directly into a protected `pt_regs` slot. The trap entry saves
+`s2` with `CSSTC`; return restores it with `CSLDC`. Other user registers still
+use Linux's scalar context path. On a trap to M-mode OpenSBI, QEMU temporarily
+selects the firmware's original tree and restores the Linux tree on `MRET`.
+This keeps firmware's legacy Capstone node IDs separate from Linux's new ones.
+
+The [guest gate](../../tests/trusted-linux-feasibility/README.md) executes an
+ordinary `mmap`, the first-store page fault and retry, `getpid`, then
+`clone`/`wait4`. A kernel counter confirms a switch away from the protected
+`mm` before the parent uses `s2` again. The separately built kernel `Image`,
+QEMU binary and boot inputs are hashed in the [result](../../tests/trusted-linux-feasibility/protected-result.json).
+Replacing the delivered `s2` with the same scalar address passes a separate
+[control](../../tests/trusted-linux-feasibility/protected-strip-control.json)
+only when it faults at the first store (cause 24, exit 132); omitting the
+guest binary also fails the gate.
+The QEMU bare-metal suite remains 73/73, including the full-span CPMP check
+for a protected context slot.
+
+This establishes that Linux can own scheduling and page faults while one
+tagged application register survives those boundaries. It does not yet
+preserve tagged `tp`, `sp`, syscall arguments or the other general registers.
+The child is intentionally unprotected; `fork` is only a way to force a task
+switch here, not a protected-fork result. The kernel uses a debug mint and
+one unrecycled lifetime tree. There is no libc `malloc`, checked syscall
+copy, object retirement, tag-preserving page copy, signal frame or two-hart
+completion. M1 stays open until these contracts and the cost of a full
+context strategy are addressed.
