@@ -1,0 +1,41 @@
+{
+ "date": "2026-09-30",
+ "change": "remove patches 0014 (no locale -a) and 0019 (synchronous statistics); both stood in for runtime services that now exist",
+ "platform": "the #144 platform (step-one-ecall QEMU and firmware, launch-cost module, binfmt kernel, cheap rootfs); launcher of the delegation-v0-removal-stack kit; compiler dev 330014ea",
+ "images_sha256": {
+  "control (all patches, delegation-v0-removal-stack 58193857)": "1bf15ca7a5769a23525c8a388347e3fd5bba94c3d16f5d84b0d049679f5a24c9",
+  "without 0019": "7bb0d85ef2419c2e149e51f2ba84ccbe16295b7d60aae22c7e61e048403f5ca3",
+  "without 0014 and 0019 (this branch)": "fdda50bbe669837b24005fb0509d2fc11da20ef64f82219078919dd1ff9aa599"
+ },
+ "cluster": "fresh copies of the pinned 16-byte MAXALIGN native fixture per run",
+ "work_sql": {
+  "control": "IDENTICAL: 22 result rows, final count 1500",
+  "without 0019": "IDENTICAL: 22 result rows, final count 1500",
+  "without 0014 and 0019": "IDENTICAL: 22 result rows, final count 1500"
+ },
+ "statement_timeout_300ms": {
+  "native": {
+   "pg_sleep(2)": "cancelled after 300 ms",
+   "count over generate_series(1, 10000000)": "cancelled after 310 ms"
+  },
+  "control": {
+   "pg_sleep(2)": "cancelled after 324 ms",
+   "counting query": "cancelled after 609 ms"
+  },
+  "without 0019": {
+   "pg_sleep(2)": "cancelled after 324 ms",
+   "counting query": "cancelled after 586 ms"
+  },
+  "without 0014 and 0019": {
+   "pg_sleep(2)": "cancelled after 324 ms",
+   "counting query": "cancelled after 603 ms"
+  },
+  "note": "the timeout already worked with patch 0019 applied; the patch's premise (setitimer refused) no longer held"
+ },
+ "pg_import_system_collations": {
+  "control (0014 applied)": "before 169, imported 0, after 169; no process started",
+  "without 0014": "before 169; the launcher spawns sh -c 'locale -a', which reports 'sh: locale: not found'; WARNING: no usable system locales were found; imported 0, after 169"
+ },
+ "guest": "has no locale program",
+ "not_measured": "the idle statistics SIGALRM on its own; lock_timeout; idle_in_transaction_session_timeout; initdb inside a domain"
+}

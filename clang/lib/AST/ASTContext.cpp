@@ -1267,6 +1267,18 @@ TypedefDecl *ASTContext::getUInt128Decl() const {
   return UInt128Decl;
 }
 
+TypedefDecl *ASTContext::getIntCapDecl() const {
+  if (!IntCapDecl)
+    IntCapDecl = buildImplicitTypedef(IntCapTy, "__intcap_t");
+  return IntCapDecl;
+}
+
+TypedefDecl *ASTContext::getUIntCapDecl() const {
+  if (!UIntCapDecl)
+    UIntCapDecl = buildImplicitTypedef(UnsignedIntCapTy, "__uintcap_t");
+  return UIntCapDecl;
+}
+
 void ASTContext::InitBuiltinType(CanQualType &R, BuiltinType::Kind K) {
   auto *Ty = new (*this, alignof(BuiltinType)) BuiltinType(K);
   R = CanQualType::CreateUnsafe(QualType(Ty, 0));
@@ -1352,6 +1364,10 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target,
   // GNU extension, 128-bit integers.
   InitBuiltinType(Int128Ty,            BuiltinType::Int128);
   InitBuiltinType(UnsignedInt128Ty,    BuiltinType::UInt128);
+
+  // Capstone: capability-carrying integers.
+  InitBuiltinType(IntCapTy,            BuiltinType::IntCap);
+  InitBuiltinType(UnsignedIntCapTy,    BuiltinType::UIntCap);
 
   // C++ 3.9.1p5
   if (TargetInfo::isTypeSigned(Target.getWCharType()))
@@ -2214,6 +2230,11 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     case BuiltinType::UInt128:
       Width = 128;
       Align = Target->getInt128Align();
+      break;
+    case BuiltinType::IntCap:
+    case BuiltinType::UIntCap:
+      Width = Target->getIntCapWidth();
+      Align = Target->getIntCapAlign();
       break;
     case BuiltinType::ShortAccum:
     case BuiltinType::UShortAccum:
@@ -8196,6 +8217,11 @@ unsigned ASTContext::getIntegerRank(const Type *T) const {
   case BuiltinType::Int128:
   case BuiltinType::UInt128:
     return 7 + (getIntWidth(Int128Ty) << 3);
+  // __intcap ranks above every other integer type, as in CHERI C, so the usual
+  // arithmetic conversions keep the capability: intcap + int is an intcap.
+  case BuiltinType::IntCap:
+  case BuiltinType::UIntCap:
+    return UINT_MAX;
 
   // "The ranks of char8_t, char16_t, char32_t, and wchar_t equal the ranks of
   // their underlying types" [c++20 conv.rank]
@@ -9121,6 +9147,7 @@ static char getObjCEncodingForPrimitiveType(const ASTContext *C,
     case BuiltinType::ULong:
         return C->getTargetInfo().getLongWidth() == 32 ? 'L' : 'Q';
     case BuiltinType::UInt128:    return 'T';
+    case BuiltinType::UIntCap:    return 'Y';
     case BuiltinType::ULongLong:  return 'Q';
     case BuiltinType::Char_S:
     case BuiltinType::SChar:      return 'c';
@@ -9132,6 +9159,7 @@ static char getObjCEncodingForPrimitiveType(const ASTContext *C,
       return C->getTargetInfo().getLongWidth() == 32 ? 'l' : 'q';
     case BuiltinType::LongLong:   return 'q';
     case BuiltinType::Int128:     return 't';
+    case BuiltinType::IntCap:     return 'y';
     case BuiltinType::Float:      return 'f';
     case BuiltinType::Double:     return 'd';
     case BuiltinType::LongDouble: return 'D';
@@ -12198,6 +12226,9 @@ unsigned ASTContext::getIntWidth(QualType T) const {
     return 1;
   if (const auto *EIT = T->getAs<BitIntType>())
     return EIT->getNumBits();
+  // __intcap's integer value is the capability's address: 64 bits in 128.
+  if (T->isIntCapType())
+    return Target->getMaxAddressWidth();
   // For builtin types, just use the standard type sizing method
   return (unsigned)getTypeSize(T);
 }
@@ -12238,6 +12269,8 @@ QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
     return UnsignedLongLongTy;
   case BuiltinType::Int128:
     return UnsignedInt128Ty;
+  case BuiltinType::IntCap:
+    return UnsignedIntCapTy;
   // wchar_t is special. It is either signed or not, but when it's signed,
   // there's no matching "unsigned wchar_t". Therefore we return the unsigned
   // version of its underlying type instead.
@@ -12312,6 +12345,8 @@ QualType ASTContext::getCorrespondingSignedType(QualType T) const {
     return LongLongTy;
   case BuiltinType::UInt128:
     return Int128Ty;
+  case BuiltinType::UIntCap:
+    return IntCapTy;
   // wchar_t is special. It is either unsigned or not, but when it's unsigned,
   // there's no matching "signed wchar_t". Therefore we return the signed
   // version of its underlying type instead.

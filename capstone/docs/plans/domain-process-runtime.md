@@ -6,6 +6,12 @@ records the original goals; the implementation and verified limits are in
 live on the `domain-process-runtime` branches in LLVM, Buildroot, OpenSBI,
 capstone-sbi and QEMU. This does not claim FPGA implementation or full POSIX.
 
+2026-09-30: the delegated runtime (application ABI v2, [delegation-abi.md](delegation-abi.md))
+is the only application runtime. The musl runtime's HostCall v0 mode, its host services and the
+probes that ran on them were removed; `capstone-exec` refuses an image without the v2
+descriptor. Where the plan below keeps old HostCall binaries, opcodes or forwarding includes
+working, that part is superseded.
+
 The 2026-09-27 `runtime-node-reuse` follow-up adds collection under allocation
 pressure within a continuing application. It reuses the protected continuation
 and existing stale-tag collector; no monitor, driver or application ABI changes
@@ -66,7 +72,7 @@ ordinary program execution; trace formats and replay drivers are not its API.
 |---|---|---|
 | [Generic recovery](../../runtime/domain-faults.md) and its [recorded tests](../../runtime/tests/fault-recovery/README.md) | On a matching QEMU, a cooperative CALL/REGION_SHARE client can fault, return to Linux and cause actual SIGSEGV in its launcher; a later healthy client runs in the same boot | Integrate application entry/yield paths; complete destruction; independently trusted fault termination |
 | [musl entry](../../ports/musl-capstone/runtime/start-musl.S) and [HostCall runtime](../../ports/musl-capstone/runtime/hostcall.c) | Resumable execution of real applications across service requests | This is a different continuation ABI from the generic recovery entry; installing its recovery define alone is insufficient |
-| [Host services](../../ports/musl-capstone/runtime/host_service.h) | Shared file-service implementation, including the bounce buffer required by observed 9p I/O failures | Separate stdout/stderr, working stdin, descriptor semantics, reusable library ownership |
+| Host services (`ports/musl-capstone/runtime/host_service.h`, removed 2026-09-30) | Shared file-service implementation, including the bounce buffer required by observed 9p I/O failures | Separate stdout/stderr, working stdin, descriptor semantics, reusable library ownership |
 | [Former Perl application entry](../../ports/perl/musl/README.md) | Argument/environment setup before main, currently using fixed files | Shared startup ABI with environment established before constructors, no application-specific argument files |
 | [Guest runner](../../tests/runtime-qemu/run-domain-smoke.py) | Linux boot, shared-directory mount, module loading and commands | It owns a whole boot and powers off afterward; no persistent session interface |
 | [Shared host support](../../ports/common/host/port_support.py) | Input staging, identities, results and execution serialization | Extract reusable host infrastructure without introducing another test framework |

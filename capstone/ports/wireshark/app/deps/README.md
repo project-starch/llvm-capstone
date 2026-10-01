@@ -16,13 +16,10 @@ bash capstone/ports/wireshark/app/deps/build-zlib.sh     # then pcre2, c-ares, l
 
 - **`env.sh`** (sourced by every recipe). It builds, once per toolchain and runtime source:
   - this lane's own `libc-capstone.a`;
-  - the domain runtime: start-musl, hostcall, tls, level0, the libc overrides from
-    `runtime/libc_overrides.sh`, soft-float, and compiler-rt's 128-bit division;
-  - `domain_entry.c`, the `capstone_main` → `main` adapter. A domain has no command line and no
-    environment, so it reads them when the domain starts, from `/tmp/domain.argv` (one argument
-    per line) and `/tmp/domain.env` (one `NAME=value` per line). One image then serves every run.
-    Without the files it passes argv `{"domain"}` and an empty environment, which is what every
-    configure link test gets.
+  - the application SDK (`ports/common/application/build-sdk.sh`): the delegated runtime with
+    the libc overrides of `runtime/libc_overrides.list`, soft-float, and compiler-rt's 128-bit
+    division. Its key covers every runtime source. An image is an ordinary `main(argc, argv)`
+    that gets the launcher's command line and environment.
 
   It then checks `capstone-cc` in both directions: a call to `puts` links, while an undefined
   function and an unknown `-l` do not.
