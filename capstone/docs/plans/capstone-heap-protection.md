@@ -158,6 +158,33 @@ superseded.
 Not covered: silicon, where the compressed-store rounding and the R-35/R-45
 fixes would have to be exercised; threads; the ports' own allocators.
 
+### Result, 2026-10-01: the default level0 heap as a third arm
+
+Since #170 the `level0` heap that applications link bounds each allocation, yet
+no gate ran it: the runner's two arms were Sublet and the unprotected control.
+The delegated threads stack then let level0's `realloc` shrink a block in place
+and release the tail, which the next allocation may take, and neither change
+had been tested with the other. The runner now qualifies three images
+([record](../../runtime/tests/application/results/20261001-heap-three-arms.json),
+on the threads stack with dev's #169 and #170 merged):
+
+| Case | `sublet` | `level0` | `control` |
+|---|---|---|---|
+| fault-bounds, fault-bounds-large, fault-realloc-shrink | SIGSEGV, cause 5, at the probe | SIGSEGV, cause 5, at the probe | survives, exit 90 |
+| fault-stale, fault-reused | SIGSEGV, cause 24, at the probe | survives, exit 90 | survives, exit 90 |
+| fault-double-free, fault-double-free-reused | SIGSEGV, cause 24, at the probe in `sh_free` | survives, exit 90 | survives, exit 90 |
+| healthy, churn, heap-bounds, heap-neighbour, heap-companion, heap-realloc-shrink | PASS | PASS | PASS |
+
+`fault-realloc-shrink` shrinks a 4096-byte block to 24 bytes and reads one byte
+past the new end; `heap-realloc-shrink` checks that a shrink keeps the bytes and
+a stored capability, and that an allocation after it leaves the shrunk block
+intact. The check fires: a level0 whose in-place shrink keeps the old pointer
+fails the gate at `level0 fault-realloc-shrink`, the read surviving to exit 90.
+On the stack, `free` takes the heap lock and frees in `sh_free`, whose first act
+is the stale-pointer probe, so the runner takes the probe from there.
+
+Not covered here: silicon, and the CPython and GLib threading gates on this head.
+
 ## 5. Deferred: size classes below the atom
 
 Recorded so the reasoning is not redone when memory use forces the change.

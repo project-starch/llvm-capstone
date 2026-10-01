@@ -1,0 +1,108 @@
+{
+ "date": "2026-09-30",
+ "stage": "GLib's thread tests in a domain on delegation-threads; glib-0008 removed",
+ "build": {
+  "glib": "2.80.5, build-glib.sh without glib-0008 and without CAPSTONE_SINGLE_THREAD_DOMAIN, tests with meson's test_cargs",
+  "recipe": "native glib:glib 133 ok, 1 skipped; 0 failed objects; 63 cast sites; no undefined weak symbol; 16 of 16 test programs link",
+  "compiler": "compiler/cap-init-alias fd82fef2a70d",
+  "runtime": "delegation-threads with thread names and CPU sets, musl patches 0001-0006",
+  "platform": "capstone-qemu 674cdab03c, firmware ae41a8c6, module 649f4108, launcher 4c1b0ad0",
+  "images_sha256": {
+   "cond": "81e3b9b1f5c5417d9f56e6019ab3c8dbd9ef45858265fc99271e85e1cae1d71d",
+   "mutex": "6050864a9242d8339f5aa28d4be49caa52f819f81de1c4f4578de52964959013",
+   "once": "30013cb99dc29db1a65e2ecc3788c772c1c1cb56d25c1f41df1bf31aad4d62c1",
+   "thread": "7f00a07b2f53de5b51f1f79a26da83b9d19e84f8456d295cd86810836f4eed3f",
+   "rec-mutex": "37d85e57a804cbc401184534637d70794aa6d136378a78ed9482feb627ec7d52",
+   "rwlock": "91ab3b370c10cbc0f51cd8ec04269a5bf33629c84f62323ed1bc2b48dd336327",
+   "asyncqueue": "8b9f53f4b5fec9b9a22b1f7102ae66dc586753e125c32d6b848e6f7ef5f0165b"
+  }
+ },
+ "tests": {
+  "cond": {
+   "ok": 4,
+   "not_ok": [],
+   "skip": 1,
+   "result": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   }
+  },
+  "mutex": {
+   "ok": 4,
+   "not_ok": [
+    "not ok /thread/mutex5 - GLib-FATAL-CRITICAL: g_thread_join: assertion 'thread' failed"
+   ],
+   "skip": 0,
+   "result": {
+    "version": 1,
+    "kind": "signal",
+    "value": 5
+   }
+  },
+  "once": {
+   "ok": 1,
+   "not_ok": [
+    "not ok /once/multi-threaded - GLib-FATAL-ERROR: creating thread 'once-multi-threaded': Error creating thread: Resource temporarily unavailable"
+   ],
+   "skip": 0,
+   "result": {
+    "version": 1,
+    "kind": "signal",
+    "value": 5
+   }
+  },
+  "thread": {
+   "ok": 7,
+   "not_ok": [],
+   "skip": 1,
+   "result": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   }
+  },
+  "rec-mutex": {
+   "ok": 29,
+   "not_ok": [],
+   "skip": 0,
+   "result": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   }
+  },
+  "rwlock": {
+   "ok": 6,
+   "not_ok": [
+    "not ok /thread/rwlock7 - GLib-FATAL-ERROR: creating thread 'test': Error creating thread: Resource temporarily unavailable"
+   ],
+   "skip": 0,
+   "result": {
+    "version": 1,
+    "kind": "signal",
+    "value": 5
+   }
+  },
+  "asyncqueue": {
+   "ok": 7,
+   "not_ok": [],
+   "skip": 0,
+   "result": {
+    "version": 1,
+    "kind": "exit",
+    "value": 0
+   }
+  }
+ },
+ "limits": {
+  "mutex5, once/multi-threaded, rwlock7": "start a hundred threads at once; an application has fifteen besides main (T5)",
+  "cond wait-until/contended-and-interrupted": "compiled only under __linux__ (cond.c:277); the domain's target does not define it",
+  "thread4": "a thread was still created under a low RLIMIT_NPROC, which GLib reads as privilege; the guest runs as root"
+ },
+ "earlier_in_this_series": {
+  "before musl 0006": "thread, rec-mutex and asyncqueue faulted (signal 11): GLib names every thread, and the name reached the new THREAD_NAME request untagged",
+  "before meson's test flags": "asyncqueue waited for GLib's critical under the wrong log domain",
+  "before sched_setaffinity": "thread7 failed with ENOSYS setting a thread's CPU set"
+ }
+}

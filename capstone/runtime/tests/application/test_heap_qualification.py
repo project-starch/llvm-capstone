@@ -25,7 +25,7 @@ def outcome(mode, control=False, cause=None, pc=None, digest=DIGEST, status=None
             f"heap evidence {mode}: ready={ready} survived={survived} stderr=1\n")
     if not control and fault:
         if cause is None:
-            cause = 5 if mode in ("fault-bounds", "fault-bounds-large") else 25
+            cause = 5 if mode in gate.SPATIAL else 25
         if pc is None:
             pc = 0x8800 if mode.startswith("fault-double-free") else 0x8200
         text += (f"capstone-exec: domain fault cause={cause} pc={pc:#x} address=0x9000 "
@@ -35,14 +35,38 @@ def outcome(mode, control=False, cause=None, pc=None, digest=DIGEST, status=None
 
 class HeapOracleTests(unittest.TestCase):
     def check(self, mode, result, control=False, after=None):
-        return gate.check_case("level0" if control else "sublet", mode, result,
+        return gate.check_case("control" if control else "sublet", mode, result,
                                BEFORE, AFTER if after is None else after, EVIDENCE)
+
+    def level0(self, mode, result):
+        return gate.check_case("level0", mode, result, BEFORE, AFTER, EVIDENCE)
 
     def test_expected_faults_and_completed_controls(self):
         for mode in gate.FAULTS:
             for control in (False, True):
                 with self.subTest(mode=mode, control=control):
                     self.check(mode, outcome(mode, control), control)
+
+    def test_level0_faults_on_spatial_cases_and_runs_through_the_others(self):
+        for mode in gate.FAULTS:
+            with self.subTest(mode=mode):
+                self.level0(mode, outcome(mode, control=mode not in gate.SPATIAL))
+
+    def test_level0_spatial_survival_is_rejected(self):
+        # a shrinking realloc that kept the old bounds would survive here
+        for mode in gate.SPATIAL:
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                self.level0(mode, outcome(mode, control=True))
+
+    def test_level0_temporal_fault_is_rejected(self):
+        # level0 does not revoke: a fault on a stale pointer is some other defect
+        for mode in ("fault-stale", "fault-double-free"):
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                self.level0(mode, outcome(mode))
+
+    def test_realloc_shrink_needs_a_bounds_fault(self):
+        with self.assertRaises(ValueError):
+            self.check("fault-realloc-shrink", outcome("fault-realloc-shrink", cause=25))
 
     def test_control_setup_errors_are_not_survival(self):
         # 63 was accepted by the old gate even though address reuse had failed.

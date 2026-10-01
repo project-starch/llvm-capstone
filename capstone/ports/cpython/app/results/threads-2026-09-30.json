@@ -1,0 +1,117 @@
+{
+ "date": "2026-09-30",
+ "stage": "CPython 3.13.7 threading on the delegated runtime (delegation-threads)",
+ "build": {
+  "cpython_image_sha256": "7b2ad63ba6ffd126e913dd0ac35f5f0fa57d4682918caf7170d501d1b24a8a93",
+  "rawmutex_test_sha256": "d6651de6c8c8242a075e31e60be1133a0167a42f8f43d8d580fca0d22cc4b8a5",
+  "patches": "0001-0005, 0007-0013, 0016 (0006 removed; the plain pymalloc arm, 0009)",
+  "configure": "no -D_Py_THREAD_LOCAL_AS_GLOBAL; _Py_tss_tstate is a TLS symbol in Python/pystate.o (it was a plain global)",
+  "survey": "250 of 250 objects compile",
+  "compiler": "compiler/cap-init-alias fd82fef2a70d (C-75)",
+  "runtime": "delegation-threads with thread names and CPU sets (c545b7b586a3), musl patches 0001-0006",
+  "platform": "capstone-qemu 674cdab03c, firmware ae41a8c6, module 649f4108, launcher 4c1b0ad0",
+  "stdlib": "PYTHONHOME on the share: the source Lib/ with an empty lib-dynload and _sysconfigdata__linux_.py"
+ },
+ "suites": {
+  "test_threading": {
+   "ran": 212,
+   "result": "FAILED (errors=28, skipped=13)",
+   "errors_by_cause": {
+    "ERROR: OSError: [Errno 38] Function not implemented (in _execute_child)": {
+     "count": 26,
+     "tests": [
+      "test_1_join_on_shutdown",
+      "test_2_join_in_forked_process",
+      "test_3_join_in_forked_from_thread",
+      "test_atexit_after_shutdown",
+      "test_atexit_called_once",
+      "test_atexit_output",
+      "test_dummy_thread_after_fork",
+      "test_dummy_thread_on_interpreter_shutdown",
+      "test_finalization_shutdown",
+      "test_finalize_with_trace",
+      "test_import_from_another_thread",
+      "test_join_nondaemon_on_shutdown",
+      "test_locals_at_exit",
+      "test_main_thread_after_fork",
+      "test_main_thread_after_fork_from_dummy_thread",
+      "test_main_thread_after_fork_from_foreign_thread",
+      "test_main_thread_after_fork_from_nonmain_thread",
+      "test_main_thread_during_shutdown",
+      "test_print_exception",
+      "test_print_exception_gh_102056",
+      "test_print_exception_stderr_is_none_1",
+      "test_print_exception_stderr_is_none_2",
+      "test_recursion_limit",
+      "test_start_new_thread_at_finalization",
+      "test_start_new_thread_failed",
+      "test_thread_from_thread"
+     ]
+    },
+    "ERROR: RuntimeError: can't start new thread (in start)": {
+     "count": 1,
+     "tests": [
+      "test_clear_threads_states_after_fork"
+     ]
+    },
+    "ERROR: OSError: [Errno 38] Function not implemented (in test_is_alive_after_fork)": {
+     "count": 1,
+     "tests": [
+      "test_is_alive_after_fork"
+     ]
+    }
+   }
+  },
+  "test_thread": {
+   "ran": 34,
+   "result": "OK",
+   "errors_by_cause": {}
+  },
+  "test_threading_local": {
+   "ran": 22,
+   "result": "OK (skipped=2)",
+   "errors_by_cause": {}
+  },
+  "test_queue": {
+   "ran": 162,
+   "result": "OK (skipped=6)",
+   "errors_by_cause": {}
+  },
+  "test_thread_pool": {
+   "ran": 17,
+   "result": "FAILED (errors=2)",
+   "errors_by_cause": {
+    "ERROR: NotImplementedError: This Python build lacks multiprocessing.synchronize, usuall (in _check_system_limits)": {
+     "count": 1,
+     "tests": [
+      "test_hang_global_shutdown_lock"
+     ]
+    },
+    "ERROR: OSError: [Errno 38] Function not implemented (in _launch)": {
+     "count": 1,
+     "tests": [
+      "test_process_fork_from_a_threadpool"
+     ]
+    }
+   }
+  }
+ },
+ "left_out": {
+  "test.test_thread": [
+   "test_forkinthread: forks in a thread and reads the child's answer from a pipe whose write end the parent keeps; with fork refused it blocks for good"
+  ]
+ },
+ "error_classes": {
+  "OSError ENOSYS in subprocess._execute_child": "fork_exec needs fork; CPython patch 0015 (posix_spawn) is on another lane",
+  "OSError ENOSYS in os.fork": "fork is refused by design (delegation-abi.md, Processes)",
+  "RuntimeError can't start new thread": "test_clear_threads_states_after_fork starts sixteen threads at once; an application has fifteen besides main (T5)",
+  "NotImplementedError multiprocessing.synchronize": "_multiprocessing is n/a in a domain (config.site)"
+ },
+ "cascade_note": "A run on an earlier build of the series (C-75 compiler, before thread names) had ten more 'can't start new thread' errors in the tests that follow the two sixteen-thread tests, which leave fifteen threads still ending; ThreadTests alone on that build had none (45 tests: 14 errors, all ENOSYS). The final run had none.",
+ "controls": {
+  "join": "the same build without 0016 (image d1cf0697): Thread.join faults, cause 24 in __pthread_timedjoin_np",
+  "raw_mutex": "rawmutex-test on the objects without 0016 (image b0e7efb3): cause 24 at Python/lock.c:230 (_PyRawMutex_UnlockSlow, waiter->next), 2 of 2 runs; with 0016 160000 of 160000, 2 of 2",
+  "native_x86_64": "patches 0001-0013 and 0016 with _Py_THREAD_WORDS_AS_POINTERS: test_threading, test_thread, test_threading_local, test_queue, test_concurrent_futures.test_thread_pool pass (448 tests, 11 skipped); an abort placed in the raw mutex's waiter branch did not fire in them; rawmutex-test aborts with it (exit 134) and counts 1600000 of 1600000 three times without it",
+  "fork_with_threads": "before C-75's fix os.fork() in test_clear_threads_states_after_fork, with the test's threads running, faulted in musl's fork (fork+0x168, atfork_locks); after it, OSError ENOSYS, and a fork beside four running threads raises ENOSYS and all four join"
+ }
+}

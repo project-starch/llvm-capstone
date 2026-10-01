@@ -246,7 +246,26 @@ void *realloc(void *p, size_t n)
 	capstone_lock(&l0_lock);
 	struct l0_block *b = l0_header(p);
 	char *q;
-	if (b->size >= l0_round(n)) {
+	size_t want = l0_round(n);
+	if (b->size >= want) {
+		/* Short reads shrink CPython's 32 KiB buffers to their actual length.
+		   Keeping every original block exhausts the arena on small output. */
+		if (b->size - want >= sizeof(struct l0_block) + L0_ALIGN) {
+			struct l0_block *tail =
+			    (struct l0_block *)((char *)b + sizeof(struct l0_block) + want);
+			tail->size = b->size - want - sizeof(struct l0_block);
+			tail->next = b->next;
+			tail->free = 1;
+#ifdef CAPSTONE_LEVEL0_STATS
+			l0_in_use -= b->size - want;
+#endif
+			b->size = want;
+			b->next = tail;
+			while (tail->next && tail->next->free) {
+				tail->size += sizeof(struct l0_block) + tail->next->size;
+				tail->next = tail->next->next;
+			}
+		}
 		q = L0_REALLOC_IN_PLACE(p, b, n);
 	} else if ((q = l0_malloc(n))) {
 		/* memmove, not a byte loop: a byte loop drops the tag of every pointer
