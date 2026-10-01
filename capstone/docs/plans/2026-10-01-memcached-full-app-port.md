@@ -1,6 +1,6 @@
 # memcached 1.6.45 as a full application on the delegated runtime
 
-**Status:** M0–M5 and the Safety fixtures done (2026-10-01); corpus case 02 and stretch S1/S2 open. Lane branch `memcached-app`.
+**Status:** M0–M5, the Safety fixtures and S1 (Sublet inside the slabs) done (2026-10-01); stretch S2 open. Lane branches `memcached-app`, `slab-sublet`.
 
 ## Why memcached, and why now
 
@@ -382,6 +382,33 @@ S2 and S3 are the positive controls that the hooks are live; the plain sublet ar
 and 10 stays the negative control. An oracle difference, or an adapter refusal, is a finding about
 memcached or the hooks, not an edit to the predictions.
 
+### S1 result (2026-10-01; predictions committed first, 1cb89fb5ddf7)
+
+Images: oracle 90d0da59…, safety 2193cf9e…; launcher 63e8a39a…. Everything as pre-registered:
+
+| | result |
+|---|---|
+| W1 | holds: mode 0, 3/3 identical to native, identity 128, exit 0, stderr empty |
+| W2 | holds: mode 1, 3/3, the chunked value included |
+| S1 | holds: fixtures 1–8 as the sublet arm, 3 boots per mode |
+| S2 | holds: fixture 9 faults oob on both modes, 3/3 each (it returns on every other arm) |
+| S3 | holds: fixture 10 returns `a0015b` in mode 0 and faults temporal in mode 1, 3/3 each |
+| R | holds: `pages=9 chunk_releases=20 chunk_reuses=20 object_releases=127 object_reuses=111` |
+
+Item bounds went from the page (`[c8800000,c8900000)` on the sublet arm) to the chunk
+(`[cc0fff00,cc0fffd0)`, 208 bytes).
+
+**Two sentences above are wrong and stay as written.** The server does call `cache.c`, through
+`do_cache_alloc`/`do_cache_free` for every worker's read buffers and IO objects (upstream
+`memcached.c:398-432, 1047-1199`, `thread.c:314,327`; caches made at `thread.c:454,471`); the grep
+that produced the sentence was cut by `| head`. And W2's "the chunked release hook runs" is false:
+the oracle never frees its large values, so that hook never ran. Fixture 11 (below) was added for
+it. The predictions did not rest on either sentence. Details and the limits (QEMU only,
+`-m 48`, no page mover) are in `ports/memcached/app/results/2026-10-01-qemu-slab-sublet/`.
+
+**S1 is done.** Open: stretch S2 (upstream `t/*.t`), and corpus case 02 over the protocol (paused,
+see the Safety section above).
+
 ## Milestones
 
 | | content | gate |
@@ -395,4 +422,4 @@ memcached or the hooks, not an edit to the predictions.
 | M4 | SIGTERM and SIGUSR1 | exit statuses and stderr match native |
 | M5 | level0, shrink, sublet; N = 3 | identical; null, positive and identity controls fire |
 | Safety | fixtures pre-registered in `host/safety-expect.txt`; corpus case 02 over the protocol | outcomes as predicted — **fixtures done, 90/90**; case 02 open |
-| S1 | Sublet inside slabs.c and cache.c (patch 0006, `host/build-slab-sublet.sh`) | oracle identical on both modes; fixtures 9 and 10 flip to FAULT |
+| S1 | Sublet inside slabs.c and cache.c (patch 0006, `host/build-slab-sublet.sh`) | oracle identical on both modes; fixtures 9 and 10 flip to FAULT — **done, 6/6 and 60/60** |

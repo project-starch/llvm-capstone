@@ -35,7 +35,7 @@ PORT=21299; NTHREADS=4; FLAGS=(-l 127.0.0.1 -p "$PORT" -U 0 -m 64 -t "$NTHREADS"
 # shellcheck disable=SC2206
 [ -n "$OPTS" ] && FLAGS+=($OPTS)
 NAT=$MC_WORK/native/bin/memcached; DOM=$MC_WORK/domain/memcached-$ARM.dom
-[ -n "$IMAGE" ] && DOM=$IMAGE
+if [ -n "$IMAGE" ]; then DOM=$IMAGE; ARM=$(basename "$IMAGE" .dom); ARM=${ARM#memcached-}; fi   # the verdicts' label
 if [ "$MARKER" = 1 ]; then
   [ "$ARM" = shrink ] || { echo "--marker: the marker domain image is built on the shrink runtime only" >&2; exit 2; }
   NAT=$MC_WORK/marker/memcached-native; DOM=$MC_WORK/marker/memcached.dom

@@ -38,10 +38,17 @@
  *                     through the first item's data pointer at the second item's first data byte.
  *  10 slab_reuse      an item removed (item_remove: back on its class's free list) and a new item
  *                     of the same class allocated; reads the old item's data through the old pointer.
+ *  11 chunked_reuse   fixture 10 for a CHUNKED item (a 700 KB value: its header in a small class,
+ *                     one 512 KiB data chunk attached with do_item_alloc_chunk). item_remove frees
+ *                     it through do_slabs_free_chunked, which files the header and then the chunk;
+ *                     a new item of the same shape takes both back; reads the old chunk's data
+ *                     through the old pointer. Added with the slabsublet arm, whose oracle never
+ *                     frees a chunked item, so this is the only run of that release path.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "items.h"
 
 #define MCAPP_MARK(n, v) (0x100000 * (n) + ((v) & 0xFFFFF))
 
@@ -243,6 +250,47 @@ static int mcapp_fixture(int n)
         mcapp_touching(n, a_addr);
         v = mcapp_fix_touch(a, idx);
         printf("MCAPP-FIX 10 returned a[0]=%02x (0x5b = the NEW item's byte)\n", v);
+        return MCAPP_MARK(n, (same << 8) | v);
+    }
+    case 11: {
+        /* 700000 bytes is over slab_chunk_size_max (512 KiB), so the item is chunked: a header, then
+           chunks attached as the value arrives. One chunk is attached here, as the first read would. */
+        const int big = 700000;
+        char key[32];
+        int nkey = snprintf(key, sizeof key, "mcapp-fix-a");
+        item *ia = item_alloc(key, (size_t)nkey, 0, 0, big + 2);
+        if (!ia || !(ia->it_flags & ITEM_CHUNKED)) {
+            printf("MCAPP-FIX 11 item_alloc a FAILED or not chunked\n");
+            return MCAPP_MARK(n, 0xE000B);
+        }
+        item_chunk *ca = do_item_alloc_chunk((item_chunk *)ITEM_schunk(ia), (size_t)big);
+        if (!ca) {
+            printf("MCAPP-FIX 11 do_item_alloc_chunk a FAILED\n");
+            return MCAPP_MARK(n, 0xE000B);
+        }
+        unsigned char *a = (unsigned char *)ca->data;
+        printf("MCAPP-FIX 11 item a header-class=%u chunk-class=%u chunk-size=%d\n",
+               (unsigned)((item_chunk *)ITEM_schunk(ia))->orig_clsid, (unsigned)ca->slabs_clsid, ca->size);
+        mcapp_show(n, "a-header", ia);
+        mcapp_show(n, "a", a);
+        mcapp_fill(a, 0xA0, 64);
+        unsigned long a_addr = mcapp_cur(a);
+        item_remove(ia);                /* refcount 1 -> 0: do_slabs_free_chunked files the header, then the chunk */
+        item *ib = item_alloc(key, (size_t)nkey, 0, 0, big + 2);
+        item_chunk *cb = ib ? do_item_alloc_chunk((item_chunk *)ITEM_schunk(ib), (size_t)big) : NULL;
+        if (!ib || !cb) {
+            printf("MCAPP-FIX 11 item b FAILED\n");
+            return MCAPP_MARK(n, 0xE000B);
+        }
+        unsigned char *b = (unsigned char *)cb->data;
+        mcapp_show(n, "b", b);
+        mcapp_fill(b, 0x5B, 64);
+        unsigned same = mcapp_cur(b) == a_addr;
+        printf("MCAPP-FIX 11 same-address=%u\n", same);
+        idx = 0;
+        mcapp_touching(n, a_addr);
+        v = mcapp_fix_touch(a, idx);
+        printf("MCAPP-FIX 11 returned a[0]=%02x (0x5b = the NEW item's chunk byte)\n", v);
         return MCAPP_MARK(n, (same << 8) | v);
     }
     default:

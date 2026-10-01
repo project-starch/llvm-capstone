@@ -1,0 +1,4 @@
+# The booted images, as host/build-slab-sublet.sh built them into $MC_WORK/slabsublet and as every boot's
+# share copy hashed. Verify from $MC_WORK with sha256sum -c. Guest harness mc-harness 5457112b... in every boot.
+90d0da599a2ffd01271e5e962671ff114d6e7bff0bee7a280d7ced73fb165490  slabsublet/memcached-slabsublet.dom
+2193cf9e70400fa9536bf32527ee331cb780317d970fe67d46268ebb8239fcc4  slabsublet/memcached-safety-slabsublet.dom
