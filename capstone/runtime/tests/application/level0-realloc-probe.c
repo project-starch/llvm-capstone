@@ -17,9 +17,8 @@
 #define __libc_free probe_libc_free
 #define CAPSTONE_LEVEL0_ARENA_BYTES (1024 * 1024)
 #define CAPSTONE_LEVEL0_STATS 1
+#include "native-runtime.h"
 #include "../../../ports/musl-capstone/runtime/level0.c"
-void capstone_lock(volatile int *word) { (void)word; }
-void capstone_unlock(volatile int *word) { (void)word; }
 #endif
 
 extern size_t __capstone_level0_in_use(void);
