@@ -50,6 +50,7 @@ EOF
    ;;
    json) cat <<EOF
 case_json_each_static.c jsoneachstatic
+case_json_each_root.c   jsoneachroot
 EOF
    ;;
    fts5) cat <<EOF
