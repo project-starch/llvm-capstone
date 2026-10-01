@@ -5,7 +5,8 @@
  * runtime (musl-capstone/runtime/atomic_libcalls.c). The value has to come out
  * TAGGED: every pointer that an atomic returned or stored is dereferenced
  * right after. An untagged one faults, the run ends before the DONE line, and
- * run.sh reports FAIL. A long atomic runs first as the control.
+ * ../run-delegated-probes.py reports FAIL. A long atomic runs first as the
+ * control.
  */
 #include <stdio.h>
 #include <stdlib.h>

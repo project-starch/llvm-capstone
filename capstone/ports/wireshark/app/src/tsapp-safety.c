@@ -20,7 +20,7 @@
  *     TSAPP-FIX <n> target=<hex>
  *     TSAPP-FIX <n> touch
  * A fault counts as the fixture's only after its touch line and with nothing printed after it;
- * a bounds fault must also name the printed target (host/safety-verdict.py). The marks carry the
+ * a bounds fault must also name the printed target (ports/common/application/check-safety.py). The marks carry the
  * byte read, so an unprotected arm's answer is a VALUE (the neighbour's pattern, the new
  * occupant's pattern), not merely "it came back".
  *
