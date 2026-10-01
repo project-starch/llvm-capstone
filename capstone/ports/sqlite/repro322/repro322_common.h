@@ -31,8 +31,18 @@ static unsigned shared_region_count;
 
 static void out_text(const char *text) {
   if (!hostcall_metadata || !hostcall_payload) return;
+  /* Under the gp-captable (silicon) ABI both capabilities arrive NON-LINEAR (string literals from
+     cap-table storage, the payload through the cap-table too), and the RTL's DELIN raises
+     UNEXPECTED_CAPABILITY_TYPE on any non-linear operand, a wedge on this RTL, where QEMU's
+     helper returns early. Same fix as output_text in sqlite_capstone_domain.c (ISSUES S-02,
+     S-15). The QEMU corpus build defines no CAPSTONE_GP_CAPTABLE_ABI and is unchanged. */
+#ifdef CAPSTONE_GP_CAPTABLE_ABI
+  const char *src = text;
+  char *payload = (char *)hostcall_payload;
+#else
   const char *src = (const char *)__builtin_capstone_cap_delin((void *)text);
   char *payload = (char *)__builtin_capstone_cap_delin((void *)hostcall_payload);
+#endif
   unsigned long offset = hostcall_metadata->length;
   while (*src && offset + 1 < SQLITE_HC_REGION_SIZE) payload[offset++] = *src++;
   hostcall_metadata->length = offset;

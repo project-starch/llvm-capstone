@@ -111,3 +111,42 @@ The informative readings are divergences from the emulator:
 - this is the control arm only: nothing is revoked, so nothing here measures Sublet or temporal enforcement;
 - rows 1, 3, 6, 11, 12, 13, 17 and 22 are not run;
 - batch 2 (rows 10, 19, 24) is not built.
+
+## Boot 1a (2026-10-01, v1 images): the harness's `delin` wedges on silicon, and the v2 images
+
+Result lines: `results/boot1a.result-lines.txt`.
+- **k800 = 4**, so the boot is valid.
+- **base322 returned** with all five markers. That is SQLite 3.22.0's first run on silicon, and it matches the
+  emulator.
+- **wschema wedged before printing anything**, while the emulator's reading of the same image was a return.
+  - Trap log `0x9a`: mcause 26 = `UNEXPECTED_CAPABLITY_TYPE` at the bitstream's commit (`riscv_pkg.sv:360` at
+    8f6a0af98). An older capstone-ariane numbers it 27, which is the number ISSUES S-15 recorded.
+  - Trap mepc `0x830e2af0`, refusal record EMPTY.
+  - The mepc lies 0xe2af0 into the 4 MiB-aligned domain block, which is image VA 0x8f2af0 = `out_text+0x48`,
+    a `delin`.
+
+**This is not a reading about the corpus's bug paths.** `repro322_common.h`'s `out_text` (and
+`sqlite_blobclose_domain.c`'s `output_text`) `delin` both the string and the payload capability. Under the
+silicon ABI both arrive non-linear, and the RTL's DELIN raises UNEXPECTED_CAPABILITY_TYPE on any non-linear
+operand, where QEMU's helper returns early. It is ISSUES S-02/S-15's mechanism, and `sqlite_capstone_domain.c`
+already carries the fix: the delin is compiled out under `CAPSTONE_GP_CAPTABLE_ABI`, which the silicon build
+defines. So every corpus cell would wedge at its first print. Of this boot, base322 is the only reading about
+the subject.
+
+**Fix (v2), the same guard:** `#ifdef CAPSTONE_GP_CAPTABLE_ABI`, the helpers use the capabilities as they are.
+Checked:
+- the corpus's own QEMU image (`build-sqlite-row322.sh`, which defines no such macro) is byte-identical with
+  and without the change (wschema `0ac086cd…`);
+- every v2 silicon image has exactly one `delin`, the entry glue's in `_start`, the same as base322. The v1
+  images had two more in the print helper, counted by the same scan;
+- base322 is byte-identical between v1 and v2;
+- under QEMU with `CAPSTONE_GP_FABRICATE=0` and the board's host, every returning v2 image prints output
+  identical to v1, and the two FAULT images fault with cause 24 at the same image VAs. backupattach's first
+  attempt was an emulator stop before the guest command echoed; the retry ran it;
+- `cells.tsv` and `SHA256SUMS` now name the v2 images, and their QEMU records are in
+  `~/capstone-artifacts/qemu-pass/`.
+
+The pre-registered readings above stand unchanged for v2. Boots 1b and 2 run the v2 images.
+
+What would have caught this before the boot: a scan of the staged silicon images for `delin` outside the entry
+glue. S-02 and S-15 both had this shape, and nothing checks for it.
