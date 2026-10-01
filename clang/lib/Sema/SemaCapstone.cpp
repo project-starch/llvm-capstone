@@ -25,6 +25,10 @@ void SemaCapstone::checkPointerRoundTrip(Expr *Src, QualType DestTy,
                                          SourceRange OpRange) {
   if (!DestTy->isPointerType() || !Src->getType()->isIntegerType())
     return;
+  // An __intcap holds the capability itself, so converting it back to a
+  // pointer restores what was put in. That is the type's purpose.
+  if (Src->getType()->isIntCapType())
+    return;
   // (a) `(T *)(integer)p`: the integer is an explicit cast of a pointer.
   if (const auto *CE = dyn_cast<CastExpr>(Src->IgnoreParenImpCasts())) {
     if (CE->getSubExpr()->IgnoreParenImpCasts()->getType()->isPointerType()) {

@@ -1,6 +1,6 @@
 {
  "date": "2026-09-30",
- "stage": "A thread's name and CPU set on the Linux thread that serves it; musl patch 0006",
+ "stage": "A thread's name and CPU set on the Linux thread that serves it; musl patch 0008 (numbered 0006 when measured)",
  "platform": {
   "capstone-qemu": "674cdab03c",
   "capstone-sbi": "4674ab6",

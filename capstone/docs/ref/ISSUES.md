@@ -1740,11 +1740,17 @@ RETURN" rule applied to privilege rather than to control flow.
 >   there (the objects differ in exactly `.text.setupLookaside` and its relocations), but it does not
 >   remove the C-32 shape.
 >
-> #94 itself is held (review comment issuecomment-5869761874) for two measured defects:
-> - it emits `cincoffset` on NULL or untagged sources, which raises cause 24 on the RTL and in QEMU;
-> - select and phi attach a capability to an address that did not come from it.
-> Its other gates are clean: Capstone lit 121/121, and an empty llvm CodeGen+Transforms failure-set
-> diff against dev.
+> **#94 was closed unmerged on 2026-09-30.** Three review rounds each found a real defect:
+> - `cincoffset` on a NULL or untagged source (cause 24);
+> - select and phi attaching a capability to a foreign address;
+> - integer-made and sentinel sources, and a LINEAR source consumed by the new `cincoffset`.
+>
+> Fixing them left the pass rebuilding only sources it can prove tagged and NONLIN. Bare arguments,
+> opaque loads and call results are declined, and those are where the motivating round trips come
+> from (musl's `atexit` callback, CPython's alignment macros). It recovered 0 round trips in musl
+> 1.2.5 and the SQLite port at -O0 and -O2, with byte-identical assembly. The closing comment
+> (issuecomment-5902419443) gives the reasons and the route back (a guarded rewrite, unmeasured). The
+> branch `compiler/recover-provenance` keeps the pass, its lit cases and the QEMU round-trip probe.
 >
 > **2026-09-25: a class fix, on branch `compiler/movc-live-source-copy` (Phase A of
 > `plans/2026-09-25-intcap-implementation.md`). On dev since 2026-09-29 (#119). RTL-simulated on
@@ -6557,6 +6563,90 @@ the transcript, never a verdict. Audit of the archive (2026-09-15 08:10, §7r): 
 changes and no cited number is a truncated fragment. Related: M-10 (the emulator console's silent
 truncation of a long command), the transcript-marker note in the board-run skill.
 
+### M-12 — `capstone-exec` dies by SIGSEGV when a caught signal (seen: SIGALRM) arrives after `cleanup()` has unmapped the domain's regions: its signal trampoline stays installed and stores into the unmapped signal block `OPEN — found 2026-09-30 gating #163; mechanism audited; on dev 8c08aa1d, QEMU`
+
+**Symptom.** An application that exits while a timer it armed is still pending ends with the
+launcher killed by SIGSEGV, not with its own exit status. `capstone-vm` reports "application
+terminated by signal 11", the task record is `{"kind": "signal", "value": 11}` with no `fault` key
+(no domain fault), and the guest kernel logs `capstone-exec[pid]: unhandled signal 11 code 0x1
+(SEGV_MAPERR) at <page-aligned address>`. The application's own output is complete: PostgreSQL
+`--single` had already written its shutdown checkpoint.
+
+**Mechanism** (source: `runtime/linux/exec.c`, `runtime/linux/signals.c` at tree 824162ec).
+1. `setitimer` is a delegated row, so the timer is armed in the launcher process itself, and so is
+   the SIGALRM it raises. The domain catches SIGALRM, so the launcher's `trampoline`
+   (signals.c:57) is installed for it.
+2. On the exit request, `exec.c:458-463` calls `report_stats`, then `cleanup()`.
+   `cleanup()` (exec.c:47-58) first munmaps every region, REGION_META included (exec.c:49-51).
+   It then closes the device, stops the spawner and frees the host state.
+3. The signal block lives in REGION_META at `CAPSTONE_SIGNAL_OFFSET` (4096), and
+   `capstone_signals_init` (exec.c:421) points `s->block` at it.
+4. Nothing on the exit path blocks signals, resets the handler, clears `active` (written only at
+   signals.c:144) or `s->block`, or disarms the process's interval timers.
+5. A SIGALRM that falls due after the munmap and before the process exits runs the trampoline,
+   and `if (s->block) s->block->recorded = head + 1;` (signals.c:113) stores to the unmapped page.
+   A SIGALRM before the munmap is recorded harmlessly.
+
+**Evidence.**
+- **Located to the instruction.** Every crash's pc is offset `0xecb8` into the launcher's
+  executable mapping. The launcher is `c80922427dbb`, a -O0 build, with its R-E segment at vaddr 0.
+  That instruction is `sd a4, 0(a5)` in `trampoline`: `a5` is `s->block`, loaded from `s + 0xb438`,
+  and `a4` is `head + 1`.
+- **The audit's register reading** (two PostgreSQL crashes):
+  - the store address is META+0x1000, page-aligned;
+  - `a0 = bit(14)`, so the signal was SIGALRM, read from registers rather than inferred;
+  - `head` was 0, so this was the first caught signal;
+  - the stack depth places delivery inside `cleanup()`, after the munmap loop. Which `close()` was
+    running is not resolved.
+- **Minimal reproducer.** Built with the application SDK's `capstone-cc -O1` and run as
+  `<image> N [disarm]`:
+
+  ```c
+  static void on_alarm(int s) { (void)s; }
+  int main(int argc, char **argv) {
+    int ms = argc > 1 ? atoi(argv[1]) : 100;
+    struct sigaction sa = {0};
+    sa.sa_handler = on_alarm;
+    sigaction(SIGALRM, &sa, 0);
+    struct itimerval it = {{0, 0}, {ms / 1000, (ms % 1000) * 1000}};
+    setitimer(ITIMER_REAL, &it, 0);
+    if (argc > 2) {                     /* the control: disarm before exiting */
+      struct itimerval zero = {{0, 0}, {0, 0}};
+      setitimer(ITIMER_REAL, &zero, 0);
+    }
+    return 0;
+  }
+  ```
+
+  One boot, dev's launcher, per-run dmesg:
+
+  | N (ms) | 5 | 10 | 20 | 50 | 100 | 150 | 200 | 250 | 100, disarmed before exit |
+  |---|---|---|---|---|---|---|---|---|---|
+  | result | exit 0 | exit 0 | **SIGSEGV 3/3** | **SIGSEGV** | **SIGSEGV 3/3** | **SIGSEGV** | **SIGSEGV** | exit 0 | exit 0, 3/3 |
+
+  Every crash was at pc offset `0xecb8`. At 5 and 10 ms the alarm arrives while the domain still
+  runs; at 250 ms the launcher is already gone. So `cleanup()` runs for between ~10–20 ms and
+  ~200–250 ms of wall time on this platform. The window is inferred from these points, not timed.
+- **PostgreSQL** (the #163 build and dev's alike): `SET statement_timeout = 300; SELECT 1;` then EOF
+  crashes, because PostgreSQL leaves its interval timer running after a statement and the alarm
+  falls due during teardown.
+  - The matched variant that waits 0.6 s past the alarm before exiting exits 0 (2/2).
+  - `work.sql`, which arms no timer, exits 0 on every run (11/11).
+  - What decides it is where the alarm falls due relative to the munmap, not how soon the process
+    exits after arming: `SET 300; SELECT pg_sleep(0.1); SET 0` exited 0.
+
+**Scope, from reading the code, untested.** Any signal the domain has made *caught* reaches
+signals.c:113 in the same window, for example SIGCHLD from an application child, or a caught
+SIGTERM, SIGINT or SIGHUP. The helper's own death is not one: it uses exit signal 0,
+spawner.c:300-302. QEMU only. The launcher tested was a -O0 build; the defect is at source level,
+but its timing may differ in an optimised build.
+
+**What would fix it** (proposal, not done): make the launcher stop taking domain signals before the
+regions go away. For example, at the top of `cleanup()`, block every signal and disarm
+`ITIMER_REAL`/`ITIMER_VIRTUAL`/`ITIMER_PROF`, or clear `active` (or `s->block`) before the munmap.
+The test is the reproducer above: 20 and 100 ms must exit 0, and the disarmed control must stay
+exit 0.
+
 ### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
 
 > **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
@@ -7099,7 +7189,7 @@ configuration in which C++ compiles today.** C-61 alone does not make C++ "nearl
 
 **Fix: none yet. The ABI decision is the lead's.**
 
-### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `FIXED 2026-09-30 by musl-patches/0004 (delegation-threads, T4); found 2026-09-24 by the tshark port; GLib's workaround (ports/wireshark/app/deps/patches/glib-0008) still in place until the GCond gate; source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
+### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `FIXED 2026-09-30 by musl-patches/0006 (delegation-threads, T4); found 2026-09-24 by the tshark port; GLib's workaround (ports/wireshark/app/deps/patches/glib-0008) still in place until the GCond gate; source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
 
 **What happens.** On capstone64, `pthread_cond_t` (`include/alltypes.h.in:88`) is `int __i[12]`,
 48 bytes, and its pointer view `__p[12*sizeof(int)/sizeof(void*)]` holds three 16-byte pointers.
@@ -7146,7 +7236,7 @@ musl build fails the same 6 objects as without the patch. The wait paths need a 
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
 
 **Fixed (2026-09-30).** That branch is in no local clone any more. The same layout landed as
-`ports/musl-capstone/musl-patches/0004-pthread-cond-capability-layout.patch`, in the port's patch
+`ports/musl-capstone/musl-patches/0006-pthread-cond-capability-layout.patch`, in the port's patch
 mechanism rather than as overlays: with 16-byte pointers `pthread_cond_t` and `cnd_t` are 64 bytes,
 `_c_shared`, `_c_head` and `_c_tail` are `__p[0..2]`, the four ints `__i[12..15]`; other pointer
 sizes are unchanged. With threads the wait paths now run: `pthread-probe cond` (2000 turns between
@@ -7155,6 +7245,40 @@ and passes against the patched one, and libc-test's `pthread_cond` passes
 (`runtime/tests/application/results/20260930-pthreads.json`). Every image relinks against the new
 libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
 (perl and mruby embed none).
+
+### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism read out of the code 2026-09-30`
+
+**What happens.** `tests/runtime-qemu/subword-atomics`, built by the application SDK's
+`capstone-cc` and run with `run-delegated-probes.py`, faults at its last case, an 8-bit
+`__atomic_compare_exchange_n` on `static uint8_t lone_byte`: cause 5 at the load-reserved of the
+lowered sequence, the address `lone_byte` itself (the variable sits at the end of `.bss`, 16-byte
+aligned; in the stack run below, link address 0x40629d0 plus the load base 0xc01f0000 is the
+fault address 0xc42529d0). Every earlier case passes, the capability-address 32-bit control and
+the PyMutex-shaped byte inside a struct included. The same source at -O2 passes (`subword-O2`).
+Under the retired HostCall v0 harness both levels passed. Seen twice, with two compilers:
+- on `delegation-v0-removal` (the threads lane), compiler 7d01722aab88;
+- on `delegation-v0-removal-stack` (the delegation stack, #142, with dev 330014ea merged), with a
+  compiler built from dev 330014ea's compiler sources (68c75ed3); record
+  `tests/runtime-qemu/results/20260930-delegated-probes-stack.json`.
+
+**The mechanism, read out of the code.** It is the risk case the probe's comment names: the aligned
+word around a lone byte reaches past the variable, and the capability for the variable is bounded
+to it. From `capstone-cc -S` of the probe and the faulting image (fault pc 0x1d2b0 in the image):
+- **-O0:** `&lone_byte` is `cincoffset gp` + `delin`, then `shrink` to `[addr, addr+1)`, one byte.
+  AtomicExpand's masked loop then moves the cursor to `addr & ~3` (`andi -4`, `cincoffset`) and
+  runs `lr.w.aqrl` on that word. The variable is 16-byte aligned, so the word starts at the byte
+  itself and its other three bytes lie past the one-byte bound: cause 5 at the byte's address.
+- **-O2:** GlobalMerge puts `lone_byte` into `.L_MergedGlobals` (`lone_byte = .L_MergedGlobals`, 48
+  bytes, with `word32` and the others). The capability is shrunk to the merged block, the word lies
+  inside it, and the same loop succeeds. The -O2 pass is GlobalMerge's luck, not a fix.
+
+So any object smaller than 4 bytes whose capability is bounded to it alone (a static or global
+`uint8_t`/`uint16_t` at -O0, and at any level once it is not merged, or one allocated alone) cannot
+be the target of an 8- or 16-bit atomic. The expansion cannot repair it: it only has the narrow
+capability, and nothing widens one. The fix belongs where the bound is set: an object smaller than
+4 bytes gets 4-byte alignment and padding and a bound of the containing word, at least when its
+address can reach an atomic. Not decided and not implemented. Relevant for CPython: `PyMutex` is
+one byte; a standalone static one is exposed wherever it is bounded alone.
 
 ### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `OPEN — COMPILER, observed 2026-09-29; port workaround qualified; not reduced`
 
@@ -7634,6 +7758,69 @@ No other runner has the watchdog.
 **What would settle the cause:** whether the TCG vCPU or the 9p server is starved during a slow
 copy. The QEMU monitor's `info registers`, or a host-side stack of the QEMU threads, taken during a
 stall, would show which. No runner collects either yet.
+
+### I-14 — `run-hostcall-all.sh` stops at large-io, and at mmap-shm, on dev since de07a5b5: two harness paths that the persistent-VM commit moved `FIXED 2026-09-30 by #129 (merge 34f22b8b): hostcall-all runs 28/28 on dev + #129; was pre-existing on dev since 2026-09-28 (de07a5b5), found 2026-09-29 while gating #124-#127`
+
+de07a5b5 ("Run applications as recoverable processes in a persistent Linux VM") moved two files that
+hostcall-probe harnesses still read by their old paths:
+- the header, `R088 capstone/tests/runtime-qemu/hostcall-file-service-probe-common.h →
+  capstone/runtime/include/capstone/hostcall-file-service.h`. A plain `git show --stat` on a
+  pathspec does not show this rename; `--name-status -M` does.
+- the override list, into the new `ports/musl-capstone/runtime/libc_overrides.list`, which
+  `libc_overrides.sh:13` now reads with `mapfile`.
+
+`run-hostcall-all.sh` runs `set -euo pipefail`, so its first failing probe ends the suite. From
+2026-09-28 until #129 the suite ran 12 of its 28 probes on dev, unless `CAPSTONE_ONLY` selected past
+the break.
+
+**FIXED by #129 (merge 34f22b8b, head 4c9d8548).** Gated on dev 8f24b908 + 4c9d8548: all 28 probes
+PASS, run one per leg in suite order. Every control failed as the probe requires. Three guest boot
+stalls (I-12) were retried, not counted: one in the first full-suite attempt (exit 75) and two
+per-probe, each ending at the OpenSBI banner. #129's fixes differ from the one-liners recorded
+below; both were verified:
+- **large-io.** #129 restores two headers from `de07a5b5^`: the common header, and the old
+  `hostcall_stdout_probe.h`, which then carried the opcodes. That is exactly what the controls
+  were built against until 2026-09-28.
+  - The one-liner below instead copies only the common header, from each control's own commit.
+    It also passed, twice.
+  - So #129's message ("restoring only the removed header is not enough") holds for its choice
+    of version only. Its review notes this.
+- **mmap-shm.** #129 asks the list the script loaded (`MUSL_OVERRIDES`), not a file's text, so
+  it cannot go stale if the list moves again.
+
+**1. large-io fails to BUILD.**
+
+- `tests/runtime-qemu/large-io/run.sh:92` copies ONLY `host_service.h` from the two control commits
+  (`READ_CTL` e852b395, `STDOUT_CTL` 40eefa09).
+- That header includes `hostcall-file-service-probe-common.h` under its old name, which no longer
+  exists in the tree: `fatal error: hostcall-file-service-probe-common.h: No such file or directory`.
+- **Fix (one-liner, not the one landed):** copy that header from the same `$rev` into
+  `$O/$arm-inc/` too, one line after :92. Both control commits contain it.
+- **Verified 2026-09-29** on origin/dev ae1b13c2, with the fix as a local edit:
+  - rc 0. The test reads 65536 bytes whole and in pieces, and writes and reads them back.
+  - The read control "FAILS the whole read, as it must without a bounce buffer".
+  - The stdout control "loses the long line, as it must".
+
+**2. mmap-shm stops at its own precheck (rc 2).**
+
+- `tests/runtime-qemu/mmap-shm/run.sh:66` greps `libc_overrides.sh` for the literal name
+  `mmap_shm_level0`.
+- The name moved to `libc_overrides.list:5`, so the precheck reports "libc_overrides.sh does not
+  list mmap_shm_level0; the test would link musl's mmap".
+- The entry was NOT dropped: the build still links `mmap_shm_level0.o`.
+- The control arm filters the built object list, not the file's text, so only the precheck is stale.
+- **Fix (one-liner, not the one landed):** `grep -qx 'mmap_shm_level0' "$MRT/libc_overrides.list"`.
+- **Verified 2026-09-29** on origin/dev ae1b13c2, with the fix as a local edit:
+  - rc 0. The test's 25 MMAP-SHM checks pass (`failures=0`).
+  - The control halts on musl's `MAP_FAILED` as the harness expects: "C-32: the -1 arrives as NULL
+    through movc". The first attempt was a boot stall (see below); the second is this result.
+
+**These per-probe harnesses report a guest boot stall as a verdict** (see I-12). On 2026-09-29 three
+boots stalled: two at the OpenSBI banner and one after "Starting network … OK". The probe printed
+`test: FAIL`, and mmap-shm also printed "control: did NOT fail mmap -- the test cannot tell the
+override from its absence". Neither printed exit 75.
+- Both lines are artefacts of an empty guest log.
+- Before reading one as a result, check the per-probe `run-*.log` for any `LT-RESULT` line.
 
 ## Compiler / toolchain (ours)
 
@@ -8708,7 +8895,7 @@ Fix: gate the WB forward on validity, and/or classify by opcode. Both need a bit
 the project lead's call.
 ---
 
-### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` untested on silicon; the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
+### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` COPY ON SILICON 2026-09-25 (boot r42e3b on R-42: R-21 CONFIRMED for both, box below); the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
 
 > **`tighten` and `shrinkto` COPY on silicon: R-21 CONFIRMED for both (2026-09-25, boot r42e3b,
 > `caplifive_r42_6cbdaeeb4.bit`, image `cbf8cb41eb56c477`).** R1 `--series linear`:

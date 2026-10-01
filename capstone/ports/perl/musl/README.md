@@ -15,7 +15,15 @@ library's `popen`, which the task spawns. The rebuilt interpreter passes
 `binfmt_misc` (Buildroot `227fdfa`), and the corrected VM setup registers
 Capstone images for direct shell execution. The
 [earlier 8/9 run](results/2026-09-29/base-tests-delegated.txt) used a guest
-without that support. Signal handlers and general fork semantics remain open.
+without that support. With `delegation-signals`, `op/kill0.t` passes 9/9 and
+`io/errnosig.t` 1/1, and `alarm` interrupts `sleep` and a loop that polls
+`time`; `op/sigdispatch.t` waits forever in `alarm 2; 1 while 1`, a loop with
+no libc call, which synchronous delivery never interrupts. `op/alarm.t` and
+`io/pipe.t` die in `test.pl`'s `which_perl()` before any signal, on the
+pre-signals image as well (cause 24, open, not a signal gap), and the static
+image reads as miniperl to `test.pl`, which skips `sigsystem.t` and
+`signame_canonical.t`. General fork semantics remain open. Record:
+`ports/cpython/app/results/signals-2026-09-29.json`.
 
 ## Result (2026-09-26)
 

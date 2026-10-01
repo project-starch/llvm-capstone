@@ -88,7 +88,9 @@ Let `len = end - base`, `hb = ` index of the highest set bit of `len`,
 
 **Paper claim (spec-derived; NOT measured here).** *In a faithful 128-bit
 implementation, compiler-generated object bounds would be byte-exact for objects
-under 4 KiB and aligned to a `2^(E+3)`-byte grain above (`E = ⌈log2 len⌉ − 12`),
+under 4 KiB and aligned to a `2^(E+3)`-byte grain above (`E = ⌊log2 len⌋ − 12`:
+the encoder takes the highest set bit of the length, `cap_compress.c:39-43`, as does
+`sh_narrow` in the Sublet heap; an earlier version of this sentence said `⌈ ⌉`),
 rounding authority outward by at most one grain.* **In the current QEMU this does
 not occur** — the fat-bounds side table makes `SHRINK` exact at all sizes (see the
 Correction at top). State results as "exact bounds in the current QEMU model";
