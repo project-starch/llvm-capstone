@@ -6,11 +6,12 @@ set -uo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)   # ports/sqlite/repro322
 PORTS_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)                        # ports/sqlite
 cd "$PORTS_DIR"
-export SQLITE322_TMP_ROOT=/tmp/capstone-322-repro
+# Overridable so two checkouts (or two users) do not collide in /tmp.
+export SQLITE322_TMP_ROOT=${SQLITE322_TMP_ROOT:-/tmp/capstone-322-repro}
 source "$PORTS_DIR/../../tests/capstone-test-env.sh" 2>/dev/null
 
 GROUP=${2:-core}
-ROOT=/tmp/capstone-322-repro/corpus-$GROUP
+ROOT=$SQLITE322_TMP_ROOT/corpus-$GROUP
 SHARE=$ROOT/share
 OBJ=$ROOT/obj
 MATHINC="-include $SCRIPT_DIR/repro322_math_decl.h"
@@ -41,6 +42,8 @@ case_agginfo.c      agginfo
 case_backupattach.c backupattach
 case_blobwrite.c    blobwrite
 case_writable_schema.c wschema
+case_mem5tagmap.c   mem5tag
+../sqlite_blobclose_domain.c blobclose
 EOF
    ;;
    coreT) cat <<EOF
@@ -59,6 +62,7 @@ EOF
    json) cat <<EOF
 case_json_each_static.c jsoneachstatic
 case_json_each_root.c   jsoneachroot
+case_jsondiag.c         jsondiag
 EOF
    ;;
    rtree) cat <<EOF
@@ -90,6 +94,8 @@ EOF
 }
 
 # The extension sources the ext group compiles as extra TUs.
+# The ext group compiles extension sources straight out of the 3.22.0 source tree.
+# Unpack sqlite-src-3220000.zip (sha256 7bc5a3ce…) and point EXT_SRC_DIR at its ext/.
 EXT_SRC_DIR=${EXT_SRC_DIR:-$HOME/sqlite-versions/sqlite-3.22.0-full/ext}
 
 do_build() {
@@ -125,7 +131,19 @@ do_build() {
 }
 
 do_run() {
-  source /home/miniconda/miniconda3/etc/profile.d/conda.sh && conda activate qemu-deps
+  # The QEMU runner needs pexpect from the qemu-deps env. `set -uo pipefail` has no -e,
+  # so a missing conda.sh used to be skipped silently and surface much later as an
+  # unrelated pexpect failure. Fail here instead, with the reason.
+  CONDA_SH=${CONDA_SH:-/home/miniconda/miniconda3/etc/profile.d/conda.sh}
+  if [ ! -r "$CONDA_SH" ]; then
+    echo "ERROR: cannot read $CONDA_SH; set CONDA_SH, or activate an env with pexpect yourself" >&2
+    return 2
+  fi
+  # shellcheck disable=SC1090
+  source "$CONDA_SH" && conda activate qemu-deps || {
+    echo "ERROR: 'conda activate qemu-deps' failed; the QEMU runner needs pexpect" >&2
+    return 2
+  }
   local all=() ; while read -r file tag extra; do [ -z "${file:-}" ] && continue; [ -f "$SHARE/$tag.dom" ] && all+=("$tag"); done < <(manifest)
   local pass="$SHARE/passed.txt" fault="$SHARE/faulted.txt" err="$SHARE/erred.txt"
   local infra="$SHARE/infra.txt"
