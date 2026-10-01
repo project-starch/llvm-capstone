@@ -96,10 +96,14 @@ enum capstone_delegate_kind {
 
 /* Where a buffer argument's length comes from. */
 enum capstone_delegate_length {
-  CAPSTONE_LEN_NONE = 0,  /* an integer, or a string */
-  CAPSTONE_LEN_FIXED,     /* `size` bytes */
-  CAPSTONE_LEN_ARG,       /* args[size] bytes */
-  CAPSTONE_LEN_ARG_SCALED /* args[size] elements of `scale` bytes */
+  CAPSTONE_LEN_NONE = 0,   /* an integer, or a string */
+  CAPSTONE_LEN_FIXED,      /* `size` bytes */
+  CAPSTONE_LEN_ARG,        /* args[size] bytes */
+  CAPSTONE_LEN_ARG_SCALED, /* args[size] elements of `scale` bytes */
+  /* the 32-bit value at exchange offset args[size], a length the caller passes
+     behind a pointer (socklen_t *); args[size] is itself a four-byte INOUT
+     buffer the kernel updates, and 0 there (NULL) means a length of 0 */
+  CAPSTONE_LEN_WORD
 };
 
 struct capstone_delegate_arg {
@@ -205,8 +209,8 @@ struct capstone_context_event {
 #define CAPSTONE_SIGNAL_IGNORE 1u
 #define CAPSTONE_SIGNAL_CAUGHT 2u
 
-/* Descriptor flag: the image speaks this ABI. Images without it use the
- * HostCall v0 application runtime; a launcher must accept both. */
+/* Descriptor flag: the image speaks this ABI, the only application ABI.
+ * capstone-exec refuses an image without it (ENOEXEC, exit 126). */
 #define CAPSTONE_APPLICATION_DELEGATE 2u
 #define CAPSTONE_DELEGATE_DEFAULT_EXCHANGE 262144u
 
@@ -229,7 +233,7 @@ enum {
   CAPSTONE_SYS_close = 57, CAPSTONE_SYS_pipe2 = 59, CAPSTONE_SYS_getdents64 = 61,
   CAPSTONE_SYS_lseek = 62, CAPSTONE_SYS_read = 63, CAPSTONE_SYS_write = 64,
   CAPSTONE_SYS_readv = 65, CAPSTONE_SYS_writev = 66, CAPSTONE_SYS_pread64 = 67,
-  CAPSTONE_SYS_pwrite64 = 68, CAPSTONE_SYS_ppoll = 73,
+  CAPSTONE_SYS_pwrite64 = 68, CAPSTONE_SYS_pselect6 = 72, CAPSTONE_SYS_ppoll = 73,
   CAPSTONE_SYS_preadv = 69, CAPSTONE_SYS_pwritev = 70,
   CAPSTONE_SYS_readlinkat = 78, CAPSTONE_SYS_newfstatat = 79,
   CAPSTONE_SYS_fstat = 80, CAPSTONE_SYS_fsync = 82, CAPSTONE_SYS_fdatasync = 83,
@@ -244,7 +248,8 @@ enum {
   CAPSTONE_SYS_rt_sigprocmask = 135, CAPSTONE_SYS_rt_sigpending = 136,
   CAPSTONE_SYS_rt_sigtimedwait = 137, CAPSTONE_SYS_rt_sigreturn = 139,
   CAPSTONE_SYS_getitimer = 102, CAPSTONE_SYS_setitimer = 103,
-  CAPSTONE_SYS_times = 153, CAPSTONE_SYS_uname = 160, CAPSTONE_SYS_umask = 166,
+  CAPSTONE_SYS_times = 153, CAPSTONE_SYS_getpgid = 155, CAPSTONE_SYS_getsid = 156,
+  CAPSTONE_SYS_uname = 160, CAPSTONE_SYS_umask = 166,
   CAPSTONE_SYS_gettimeofday = 169, CAPSTONE_SYS_getpid = 172,
   CAPSTONE_SYS_getppid = 173, CAPSTONE_SYS_getuid = 174,
   CAPSTONE_SYS_geteuid = 175, CAPSTONE_SYS_getgid = 176,
@@ -255,6 +260,30 @@ enum {
   CAPSTONE_SYS_mprotect = 226, CAPSTONE_SYS_madvise = 233,
   CAPSTONE_SYS_wait4 = 260, CAPSTONE_SYS_prlimit64 = 261,
   CAPSTONE_SYS_renameat2 = 276, CAPSTONE_SYS_getrandom = 278,
+  /* the plain rows: integers, strings and flat buffers only */
+  CAPSTONE_SYS_mknodat = 33, CAPSTONE_SYS_linkat = 37, CAPSTONE_SYS_statfs = 43,
+  CAPSTONE_SYS_fstatfs = 44, CAPSTONE_SYS_truncate = 45, CAPSTONE_SYS_fallocate = 47,
+  CAPSTONE_SYS_fchdir = 50, CAPSTONE_SYS_fchmod = 52, CAPSTONE_SYS_fchownat = 54,
+  CAPSTONE_SYS_fchown = 55, CAPSTONE_SYS_sendfile = 71, CAPSTONE_SYS_sync = 81,
+  CAPSTONE_SYS_clock_getres = 114, CAPSTONE_SYS_sched_setaffinity = 122,
+  CAPSTONE_SYS_sched_getaffinity = 123, CAPSTONE_SYS_sched_get_priority_max = 125,
+  CAPSTONE_SYS_sched_get_priority_min = 126, CAPSTONE_SYS_sched_rr_get_interval = 127,
+  CAPSTONE_SYS_setpriority = 140, CAPSTONE_SYS_getpriority = 141, CAPSTONE_SYS_setpgid = 154,
+  CAPSTONE_SYS_setsid = 157, CAPSTONE_SYS_getgroups = 158, CAPSTONE_SYS_getrusage = 165,
+  CAPSTONE_SYS_getcpu = 168, CAPSTONE_SYS_readahead = 213, CAPSTONE_SYS_fadvise64 = 223,
+  CAPSTONE_SYS_syncfs = 267, CAPSTONE_SYS_memfd_create = 279, CAPSTONE_SYS_copy_file_range = 285,
+  CAPSTONE_SYS_statx = 291, CAPSTONE_SYS_faccessat2 = 439,
+  /* sockets and epoll: descriptors like files */
+  CAPSTONE_SYS_epoll_create1 = 20, CAPSTONE_SYS_epoll_ctl = 21, CAPSTONE_SYS_epoll_pwait = 22,
+  CAPSTONE_SYS_socketpair = 199, CAPSTONE_SYS_bind = 200, CAPSTONE_SYS_listen = 201,
+  CAPSTONE_SYS_accept = 202, CAPSTONE_SYS_connect = 203, CAPSTONE_SYS_getsockname = 204,
+  CAPSTONE_SYS_getpeername = 205, CAPSTONE_SYS_sendto = 206, CAPSTONE_SYS_recvfrom = 207,
+  CAPSTONE_SYS_setsockopt = 208, CAPSTONE_SYS_getsockopt = 209, CAPSTONE_SYS_shutdown = 210,
+  CAPSTONE_SYS_sendmsg = 211, CAPSTONE_SYS_recvmsg = 212, CAPSTONE_SYS_accept4 = 242,
+  /* event, timer and signal descriptors; the ids that are read, not set */
+  CAPSTONE_SYS_eventfd2 = 19, CAPSTONE_SYS_signalfd4 = 74, CAPSTONE_SYS_timerfd_create = 85,
+  CAPSTONE_SYS_timerfd_settime = 86, CAPSTONE_SYS_timerfd_gettime = 87,
+  CAPSTONE_SYS_getresuid = 148, CAPSTONE_SYS_getresgid = 150,
   CAPSTONE_SYS_vfork = 1071, CAPSTONE_SYS_fork = 1079
 };
 
@@ -270,17 +299,23 @@ int capstone_delegate_pack(struct capstone_delegate_entry *entry, uint64_t nr,
 
 /* The launcher's check before it touches the exchange region: version, count,
  * group, and every flagged argument inside [0, exchange_bytes) for the length
- * the shape implies. Returns 0, or the errno the request must be answered with
+ * the shape implies. A length given as a word in the region is read from
+ * `exchange` once its own four bytes are bounded, and every resolved length
+ * is written to `lengths` (when given) so the caller uses the length that
+ * was checked. Returns 0, or the errno the request must be answered with
  * (EINVAL for a malformed block, EFAULT for an offset outside the region,
  * ENOSYS for an unknown or excepted number). RUNTIME requests pass. */
 int capstone_delegate_validate(const struct capstone_delegate_entry *entry,
-                               size_t exchange_bytes);
+                               const void *exchange, size_t exchange_bytes,
+                               size_t lengths[CAPSTONE_DELEGATE_ARGS]);
 
 /* Bytes the argument at `index` covers in the exchange region, per the shape,
  * or 0 when it is not a buffer. Strings report 0: the launcher bounds them
- * with capstone_delegate_string_ok. */
+ * with capstone_delegate_string_ok. A word length needs `exchange`; it is 0
+ * when the word's own bytes are not inside the region. */
 size_t capstone_delegate_arg_bytes(const struct capstone_delegate_shape *shape,
                                    const struct capstone_delegate_entry *entry,
+                                   const void *exchange, size_t exchange_bytes,
                                    unsigned index);
 
 /* A NUL inside [offset, exchange_bytes). */

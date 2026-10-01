@@ -4,8 +4,12 @@
 #include "delegate-service.h"
 #include "capstone/spawn.h"
 #include <errno.h>
+#include "capstone/msghdr.h"
 #include <sys/wait.h>
 #include <sys/ioctl.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/epoll.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <time.h>
@@ -54,7 +58,20 @@ static const struct { uint16_t wire; long host; } numbers[] = {
   MAP(uname) MAP(sysinfo) MAP(prlimit64) MAP(getrandom) MAP(sched_yield)
   MAP(set_tid_address) MAP(set_robust_list) MAP(futex) MAP(exit) MAP(exit_group)
   MAP(kill) MAP(wait4) MAP(tkill) MAP(rt_sigsuspend) MAP(rt_sigpending)
+  MAP(pselect6) MAP(getpgid) MAP(getsid)
   MAP(rt_sigtimedwait) MAP(getitimer) MAP(setitimer)
+  MAP(linkat) MAP(mknodat) MAP(statfs) MAP(fstatfs) MAP(statx) MAP(truncate)
+  MAP(fallocate) MAP(fchdir) MAP(fchmod) MAP(fchown) MAP(fchownat) MAP(faccessat2)
+  MAP(sendfile) MAP(copy_file_range) MAP(readahead) MAP(fadvise64) MAP(sync) MAP(syncfs)
+  MAP(memfd_create) MAP(clock_getres) MAP(getgroups) MAP(getrusage) MAP(getpriority)
+  MAP(setpriority) MAP(getcpu) MAP(sched_getaffinity) MAP(sched_setaffinity)
+  MAP(sched_get_priority_max) MAP(sched_get_priority_min) MAP(sched_rr_get_interval)
+  MAP(setpgid) MAP(setsid)
+  MAP(socket) MAP(socketpair) MAP(bind) MAP(listen) MAP(accept) MAP(accept4) MAP(connect)
+  MAP(getsockname) MAP(getpeername) MAP(sendto) MAP(recvfrom) MAP(setsockopt) MAP(getsockopt)
+  MAP(shutdown) MAP(sendmsg) MAP(recvmsg) MAP(epoll_create1) MAP(epoll_ctl) MAP(epoll_pwait)
+  MAP(eventfd2) MAP(timerfd_create) MAP(timerfd_settime) MAP(timerfd_gettime) MAP(signalfd4)
+  MAP(getresuid) MAP(getresgid)
 };
 #undef MAP
 
@@ -73,6 +90,9 @@ static long host_number(uint64_t nr) {
   return -1;
 #endif
 }
+
+static int self_pid(pid_t pid) { return pid == 0 || pid == getpid(); }
+static int own_group(pid_t pgid) { return self_pid(pgid) || pgid == getpgrp(); }
 
 /* The host that holds what all contexts share: the first context's. */
 static struct capstone_delegate_host *shared(struct capstone_delegate_host *host) {
@@ -115,9 +135,15 @@ static int private_fd(struct capstone_delegate_host *host, int fd) {
 
 static unsigned fd_arguments(uint64_t nr) {
   switch (nr) {
-  case CAPSTONE_SYS_dup3: return 3;
+  case CAPSTONE_SYS_dup3: case CAPSTONE_SYS_sendfile: return 3;
   case CAPSTONE_SYS_symlinkat: return 2;
-  case CAPSTONE_SYS_renameat2: return 5;
+  case CAPSTONE_SYS_renameat2: case CAPSTONE_SYS_linkat: case CAPSTONE_SYS_copy_file_range:
+  case CAPSTONE_SYS_epoll_ctl: return 5;
+  case CAPSTONE_SYS_bind: case CAPSTONE_SYS_listen: case CAPSTONE_SYS_accept:
+  case CAPSTONE_SYS_accept4: case CAPSTONE_SYS_connect: case CAPSTONE_SYS_getsockname:
+  case CAPSTONE_SYS_getpeername: case CAPSTONE_SYS_sendto: case CAPSTONE_SYS_recvfrom:
+  case CAPSTONE_SYS_setsockopt: case CAPSTONE_SYS_getsockopt: case CAPSTONE_SYS_shutdown:
+  case CAPSTONE_SYS_sendmsg: case CAPSTONE_SYS_recvmsg: case CAPSTONE_SYS_epoll_pwait:
   case CAPSTONE_SYS_dup: case CAPSTONE_SYS_fcntl: case CAPSTONE_SYS_ioctl:
   case CAPSTONE_NR_FCNTL_LOCK: case CAPSTONE_NR_IOCTL_BUF:
   case CAPSTONE_SYS_mkdirat: case CAPSTONE_SYS_unlinkat: case CAPSTONE_SYS_ftruncate:
@@ -129,7 +155,12 @@ static unsigned fd_arguments(uint64_t nr) {
   case CAPSTONE_SYS_newfstatat: case CAPSTONE_SYS_fstat: case CAPSTONE_SYS_fsync:
   case CAPSTONE_SYS_fdatasync: case CAPSTONE_SYS_sync_file_range:
   case CAPSTONE_SYS_flock: case CAPSTONE_SYS_fchmodat:
-  case CAPSTONE_SYS_utimensat: return 1;
+  case CAPSTONE_SYS_utimensat: case CAPSTONE_SYS_mknodat: case CAPSTONE_SYS_fstatfs:
+  case CAPSTONE_SYS_statx: case CAPSTONE_SYS_fallocate: case CAPSTONE_SYS_fchdir:
+  case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown: case CAPSTONE_SYS_fchownat:
+  case CAPSTONE_SYS_faccessat2: case CAPSTONE_SYS_readahead: case CAPSTONE_SYS_fadvise64:
+  case CAPSTONE_SYS_syncfs: case CAPSTONE_SYS_timerfd_settime: case CAPSTONE_SYS_timerfd_gettime:
+  case CAPSTONE_SYS_signalfd4: return 1;
   default: return 0;
   }
 }
@@ -172,8 +203,11 @@ static long spawn_locked(struct capstone_delegate_host *host,
   for (unsigned i = 0; i < view.actions; ++i) {
     struct capstone_spawn_action action;
     memcpy(&action, &view.action[i], sizeof action);
-    if ((action.cmd != CAPSTONE_SPAWN_CHDIR && private_fd(host, action.fd)) ||
-        (action.cmd == CAPSTONE_SPAWN_DUP2 && private_fd(host, action.srcfd)))
+    /* action.fd names a descriptor in the child's table, where the launcher's
+       own never arrive; the descriptors an action reads from the launcher's
+       table, a DUP2 source or an FCHDIR directory, are the ones checked */
+    if ((action.cmd == CAPSTONE_SPAWN_DUP2 && private_fd(host, action.srcfd)) ||
+        (action.cmd == CAPSTONE_SPAWN_FCHDIR && private_fd(host, action.fd)))
       return -EBADF;
   }
   if (s->child_count >= CAPSTONE_DELEGATE_CHILDREN)
@@ -218,12 +252,15 @@ static int writes(unsigned kind) {
 /* Only integer commands may use the integer entry. A buffer entry is not
  * permission for an arbitrary ioctl: many commands embed more pointers. */
 static int command_ok(uint64_t nr, uint64_t cmd) {
+  if (nr == CAPSTONE_NR_IOCTL_BUF || nr == CAPSTONE_SYS_ioctl)
+    cmd &= 0xffffffffu;   /* an ioctl request is an unsigned int to the kernel */
   if (nr == CAPSTONE_NR_FCNTL_LOCK)
     return cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW;
   if (nr == CAPSTONE_NR_IOCTL_BUF)
     return cmd == TIOCGWINSZ || cmd == TIOCSWINSZ || cmd == TCGETS ||
            cmd == TCSETS || cmd == TCSETSW || cmd == TCSETSF ||
-           cmd == FIONREAD || cmd == FIONBIO;
+           cmd == FIONREAD || cmd == FIONBIO ||
+           cmd == TIOCSPTLCK || cmd == TIOCGPTN || cmd == TIOCGPGRP || cmd == TIOCSPGRP;
   if (nr == CAPSTONE_SYS_ioctl)
     return cmd == FIOCLEX || cmd == FIONCLEX;
   if (nr == CAPSTONE_SYS_fcntl)
@@ -231,6 +268,8 @@ static int command_ok(uint64_t nr, uint64_t cmd) {
     case F_DUPFD: case F_DUPFD_CLOEXEC: case F_GETFD: case F_SETFD:
     case F_GETFL: case F_SETFL: case F_GETOWN: case F_SETOWN:
     case F_GETPIPE_SZ: case F_SETPIPE_SZ: case F_GET_SEALS: case F_ADD_SEALS:
+    /* directory notification: the signal comes to this task like any other */
+    case F_NOTIFY: case F_SETSIG: case F_GETSIG:
       return 1;
     default: return 0;
     }
@@ -275,6 +314,129 @@ static long vector_call(struct capstone_delegate_host *host,
     host->bytes_out += (size_t)r;
   }
   return r;
+}
+
+/* sendmsg and recvmsg: the msghdr block from the region, rebuilt over the
+ * bounce buffer with launcher addresses, as vector_call rebuilds an iovec
+ * array. Read once into the view; the region is never consulted again. A
+ * descriptor of the launcher's own inside an SCM_RIGHTS message on the way
+ * out is refused, as it is in every descriptor position. */
+static long msg_call(struct capstone_delegate_host *host,
+                     const struct capstone_delegate_entry *entry) {
+  static struct capstone_msghdr_view view;
+  static struct iovec iov[CAPSTONE_MSGHDR_IOVS];
+  struct msghdr m;
+  int sending = entry->nr == CAPSTONE_SYS_sendmsg;
+  int error = capstone_msghdr_unpack(host->exchange, host->exchange_bytes, entry->args[1], &view);
+  if (error)
+    return -error;
+  memset(&m, 0, sizeof m);
+  for (uint64_t i = 0; i < view.block.iovlen; ++i) {
+    iov[i].iov_base = host->bounce + view.offsets[i];
+    iov[i].iov_len = (size_t)view.lengths[i];
+    if (sending)
+      memcpy(iov[i].iov_base, host->exchange + view.offsets[i], iov[i].iov_len);
+  }
+  m.msg_iov = iov;
+  m.msg_iovlen = (size_t)view.block.iovlen;
+  if (view.block.name) {
+    m.msg_name = host->bounce + view.block.name;
+    m.msg_namelen = (socklen_t)view.block.namelen;
+    memcpy(m.msg_name, host->exchange + view.block.name, view.block.namelen);
+  }
+  if (view.block.control) {
+    m.msg_control = host->bounce + view.block.control;
+    m.msg_controllen = (size_t)view.block.controllen;
+    memcpy(m.msg_control, host->exchange + view.block.control, view.block.controllen);
+    if (sending)
+      for (struct cmsghdr *c = CMSG_FIRSTHDR(&m); c; c = CMSG_NXTHDR(&m, c)) {
+        if (c->cmsg_level != SOL_SOCKET || c->cmsg_type != SCM_RIGHTS)
+          continue;
+        size_t avail = (size_t)((char *)m.msg_control + m.msg_controllen - (char *)CMSG_DATA(c));
+        size_t bytes = c->cmsg_len >= CMSG_LEN(0) ? c->cmsg_len - CMSG_LEN(0) : 0;
+        if (bytes > avail) bytes = avail;
+        for (size_t j = 0; j + sizeof(int) <= bytes; j += sizeof(int)) {
+          int fd;
+          memcpy(&fd, CMSG_DATA(c) + j, sizeof fd);
+          if (private_fd(host, fd)) return -EBADF;
+        }
+      }
+  }
+  long argv[6] = {(long)(int)entry->args[0], (long)(intptr_t)&m, (long)entry->args[2], 0, 0, 0};
+  long r = capstone_signals_call(&host->signals, host_number(entry->nr), argv, 0, 0);
+  if (r < 0 || r == CAPSTONE_STUB_RETRY)
+    return r;
+  if (sending) {
+    host->bytes_in += (size_t)r;
+    return r;
+  }
+  {
+    size_t left = (size_t)r;
+    for (uint64_t i = 0; i < view.block.iovlen && left; ++i) {
+      size_t n = iov[i].iov_len < left ? iov[i].iov_len : left;
+      memcpy(host->exchange + view.offsets[i], iov[i].iov_base, n);
+      left -= n;
+    }
+    host->bytes_out += (size_t)r;
+  }
+  if (view.block.name) {
+    size_t n = m.msg_namelen < view.block.namelen ? m.msg_namelen : (size_t)view.block.namelen;
+    memcpy(host->exchange + view.block.name, m.msg_name, n);
+  }
+  if (view.block.control) {
+    size_t n = m.msg_controllen < view.block.controllen ? m.msg_controllen : (size_t)view.block.controllen;
+    memcpy(host->exchange + view.block.control, m.msg_control, n);
+  }
+  /* the lengths the kernel reports and its flags go back in the block */
+  {
+    struct capstone_msghdr_block out = view.block;
+    out.namelen = m.msg_namelen;
+    out.controllen = m.msg_controllen;
+    out.flags = (uint32_t)m.msg_flags;
+    memcpy(host->exchange + entry->args[1], &out, sizeof out);
+  }
+  return r;
+}
+
+/* epoll_event is 16 bytes on riscv64 and 12, packed, on x86_64: a native test
+ * host converts, as stat_call does for stat. */
+static long epoll_call(struct capstone_delegate_host *host,
+                       const struct capstone_delegate_entry *entry, const long a[6],
+                       int has_wait, uint64_t wait_mask) {
+#if defined(__riscv) && __riscv_xlen == 64
+  return capstone_signals_call(&host->signals, host_number(entry->nr), a, has_wait, wait_mask);
+#else
+  if (entry->nr == CAPSTONE_SYS_epoll_ctl) {
+    struct epoll_event ev;
+    long argv[6] = {a[0], a[1], a[2], 0, 0, 0};
+    if (a[3]) {
+      uint64_t wire[2];
+      memcpy(wire, (const void *)a[3], sizeof wire);
+      ev.events = (uint32_t)wire[0];
+      ev.data.u64 = wire[1];
+      argv[3] = (long)(intptr_t)&ev;
+    }
+    return capstone_signals_call(&host->signals, host_number(entry->nr), argv, 0, 0);
+  }
+  {
+    size_t max = (size_t)entry->args[2];
+    struct epoll_event *events = NULL;
+    long argv[6] = {a[0], a[1], a[2], a[3], a[4], a[5]};
+    long r;
+    if (max && max <= 65536) {
+      events = calloc(max, sizeof *events);
+      if (!events) return -ENOMEM;
+      argv[1] = (long)(intptr_t)events;
+    }
+    r = capstone_signals_call(&host->signals, host_number(entry->nr), argv, has_wait, wait_mask);
+    for (long i = 0; events && i < r && (size_t)i < max; ++i) {
+      uint64_t wire[2] = {events[i].events, events[i].data.u64};
+      memcpy((char *)a[1] + 16 * i, wire, sizeof wire);
+    }
+    free(events);
+    return r;
+  }
+#endif
 }
 
 /* Keep the helper and unrelated native children out of waitpid(-1). Polling
@@ -376,7 +538,8 @@ static long stat_call(struct capstone_delegate_host *host, uint64_t nr, const lo
 }
 
 static long run(struct capstone_delegate_host *host, const struct capstone_delegate_shape *s,
-                struct capstone_delegate_entry *entry) {
+                struct capstone_delegate_entry *entry,
+                const size_t lengths[CAPSTONE_DELEGATE_ARGS]) {
   long a[CAPSTONE_DELEGATE_ARGS];
   size_t bytes[CAPSTONE_DELEGATE_ARGS] = {0};
   long r;
@@ -397,10 +560,24 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
   if (entry->nr == CAPSTONE_SYS_set_tid_address ||
       entry->nr == CAPSTONE_SYS_set_robust_list || entry->nr == CAPSTONE_SYS_futex)
     return -ENOSYS;
-  if (entry->nr == CAPSTONE_SYS_ppoll && entry->args[3] && entry->args[4] != 8)
+  if ((entry->nr == CAPSTONE_SYS_ppoll && entry->args[3] && entry->args[4] != 8) ||
+      (entry->nr == CAPSTONE_SYS_epoll_pwait && entry->args[4] && entry->args[5] != 8) ||
+      (entry->nr == CAPSTONE_SYS_signalfd4 && entry->args[2] != 8))
     return -EINVAL;
-  if (entry->nr == CAPSTONE_SYS_prlimit64 && (pid_t)entry->args[0] != 0 &&
-      (pid_t)entry->args[0] != getpid())
+  if (entry->nr == CAPSTONE_SYS_prlimit64 && !self_pid((pid_t)entry->args[0]))
+    return -EPERM;
+  /* scheduling and priority: this task only; a process group is formed by
+     the task or a child, or a child joins the task's group or a child's */
+  if ((entry->nr == CAPSTONE_SYS_sched_getaffinity || entry->nr == CAPSTONE_SYS_sched_setaffinity ||
+       entry->nr == CAPSTONE_SYS_sched_rr_get_interval) && !self_pid((pid_t)entry->args[0]))
+    return -EPERM;
+  if ((entry->nr == CAPSTONE_SYS_getpriority || entry->nr == CAPSTONE_SYS_setpriority) &&
+      (entry->args[0] != PRIO_PROCESS || !self_pid((pid_t)entry->args[1])))
+    return -EPERM;
+  if (entry->nr == CAPSTONE_SYS_setpgid &&
+      (!(self_pid((pid_t)entry->args[0]) || child_of_locked(host, (pid_t)entry->args[0])) ||
+       !(own_group((pid_t)entry->args[1]) || child_of_locked(host, (pid_t)entry->args[1]) ||
+         entry->args[1] == entry->args[0])))
     return -EPERM;
   if (!host->bounce)
     host->bounce = malloc(host->exchange_bytes);
@@ -409,6 +586,8 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
   if (entry->nr == CAPSTONE_SYS_readv || entry->nr == CAPSTONE_SYS_writev ||
       entry->nr == CAPSTONE_SYS_preadv || entry->nr == CAPSTONE_SYS_pwritev)
     return vector_call(host, entry);
+  if (entry->nr == CAPSTONE_SYS_sendmsg || entry->nr == CAPSTONE_SYS_recvmsg)
+    return msg_call(host, entry);
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i) {
     int flagged = (entry->flags >> i) & 1;
     if (!flagged) {
@@ -421,7 +600,7 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
       a[i] = (long)(intptr_t)at(host, entry->args[i]);
       continue;
     }
-    bytes[i] = capstone_delegate_arg_bytes(s, entry, i);
+    bytes[i] = lengths[i];
     if (host->bounce) {
       /* Ordinary pages keep wire offsets. Initialize output padding so
          kernel structs cannot expose malloc contents. */
@@ -438,10 +617,23 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     if (writes(s->args[i].kind))
       host->bytes_out += bytes[i];
   }
-  /* kill and wait4 are delegated but confined to this task and its children */
-  if (entry->nr == CAPSTONE_SYS_kill && (pid_t)a[0] != getpid() &&
-      !child_of_locked(host, (pid_t)a[0]))
-    return -EPERM;
+  /* a length given as a word: the kernel sees the length the validator
+     checked, whatever the domain wrote into the word since */
+  for (unsigned i = 0; i < s->argc; ++i)
+    if (s->args[i].length == CAPSTONE_LEN_WORD && ((entry->flags >> i) & 1) &&
+        s->args[i].size < CAPSTONE_DELEGATE_ARGS && entry->args[s->args[i].size]) {
+      uint32_t word = (uint32_t)lengths[i];
+      memcpy(host->bounce + entry->args[s->args[i].size], &word, sizeof word);
+    }
+  /* kill and wait4 are delegated but confined to this task, its children and
+     the task that spawned it: a child domain may signal its parent. Anything
+     else is EPERM, or ESRCH when there is no such process, as Linux answers a
+     kill of a pid that has been reaped. Signal 0 to the task's own group
+     signals nothing and asks only what Linux always answers, since the task
+     is in its group: that goes through. */
+  if (entry->nr == CAPSTONE_SYS_kill && !child_of_locked(host, (pid_t)a[0]) &&
+      (pid_t)a[0] != getpid() && (pid_t)a[0] != getppid() && (a[0] != 0 || a[1] != 0))
+    return kill((pid_t)a[0], 0) < 0 && errno == ESRCH ? -ESRCH : -EPERM;
   if (entry->nr == CAPSTONE_SYS_wait4 && a[0] > 0 && !child_of_locked(host, (pid_t)a[0]))
     return -ECHILD;
   /* raise() is tkill on the task's own thread; nothing else is a domain's to signal */
@@ -459,8 +651,12 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     int has_wait = 0;
     uint64_t wait_mask = 0;
     if (entry->nr == CAPSTONE_SYS_rt_sigsuspend ||
-        (entry->nr == CAPSTONE_SYS_ppoll && entry->args[3])) {
-      void *mask = (void *)a[entry->nr == CAPSTONE_SYS_ppoll ? 3 : 0];
+        (entry->nr == CAPSTONE_SYS_ppoll && entry->args[3]) ||
+        (entry->nr == CAPSTONE_SYS_pselect6 && entry->args[5]) ||
+        (entry->nr == CAPSTONE_SYS_epoll_pwait && entry->args[4])) {
+      void *mask = (void *)a[entry->nr == CAPSTONE_SYS_ppoll ? 3
+                              : entry->nr == CAPSTONE_SYS_pselect6 ? 5
+                              : entry->nr == CAPSTONE_SYS_epoll_pwait ? 4 : 0];
       memcpy(&wait_mask, mask, sizeof wait_mask);
       /* A temporary kernel mask must not undo the runtime's backpressure.
          Keep the domain's requested mask in wait_mask for handler delivery. */
@@ -468,7 +664,15 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
       memcpy(mask, &physical_wait, sizeof physical_wait);
       has_wait = 1;
     }
-    r = capstone_signals_call(&host->signals, number, a, has_wait, wait_mask);
+    /* pselect6's sixth argument is a {sigset_t *, size} pair to the kernel;
+       on the wire it is the mask itself, or 0 */
+    struct { void *ss; size_t len; } sig6 = {(void *)a[5], 8};
+    if (entry->nr == CAPSTONE_SYS_pselect6)
+      a[5] = (uint64_t)(uintptr_t)&sig6;
+    if (entry->nr == CAPSTONE_SYS_epoll_ctl || entry->nr == CAPSTONE_SYS_epoll_pwait)
+      r = epoll_call(host, entry, a, has_wait, wait_mask);
+    else
+      r = capstone_signals_call(&host->signals, number, a, has_wait, wait_mask);
   }
   if (r == CAPSTONE_STUB_RETRY)
     return r;
@@ -545,11 +749,12 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
                              struct capstone_delegate_entry *entry) {
   struct capstone_delegate_entry snapshot;
   const struct capstone_delegate_shape *s;
+  size_t lengths[CAPSTONE_DELEGATE_ARGS];
   int error;
   /* Snapshot first: the domain's copy is shared memory. */
   memcpy(&snapshot, entry, sizeof snapshot);
   ++host->rounds;
-  error = capstone_delegate_validate(&snapshot, host->exchange_bytes);
+  error = capstone_delegate_validate(&snapshot, host->exchange, host->exchange_bytes, lengths);
   if (error) {
     ++host->refused;
     entry->result = -error;
@@ -604,7 +809,7 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   } else {
     ++host->syscalls;
     host->last_nr = snapshot.nr;
-    r = run(host, s, &snapshot);
+    r = run(host, s, &snapshot, lengths);
   }
   entry->result = r == CAPSTONE_STUB_RETRY ? 0 : r;
   capstone_signals_publish(&host->signals, entry, r == CAPSTONE_STUB_RETRY);

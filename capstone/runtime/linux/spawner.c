@@ -395,8 +395,10 @@ long capstone_spawner_spawn(struct capstone_spawner *s, const void *block, size_
   do { n = recv(s->socket, &reply, sizeof reply, 0); } while (n < 0 && errno == EINTR);
   if (n != (ssize_t)sizeof reply) return -EIO;
   if (reply.error) {
+    /* The child took the helper's exit signal, which is none (a CLONE_PARENT
+       child inherits its cloner's), so only __WALL sees it. */
     if (reply.pid > 0)
-      while (waitpid((pid_t)reply.pid, NULL, 0) < 0 && errno == EINTR) {}
+      while (waitpid((pid_t)reply.pid, NULL, __WALL) < 0 && errno == EINTR) {}
     return -reply.error;
   }
   return (long)reply.pid;

@@ -1,9 +1,11 @@
-/* Domain entry glue for pure-capability domains that make HOSTCALLS.
+/* Domain entry glue for the musl application runtime (the delegated runtime,
+ * docs/plans/delegation-abi.md).
  *
- * This is my_first_domain/start.S plus exactly one capability: a RESUMABLE
- * yield. The shared start.S is left byte-identical on purpose -- every existing
- * domain and every silicon ladder rung depends on it, and a change there would
- * put a working measurement at risk to buy nothing.
+ * This is my_first_domain/start.S with the fault-recovery block it has under
+ * CAPSTONE_DOMAIN_FAULT_RECOVERY, plus a RESUMABLE yield. The shared start.S
+ * is left byte-identical on purpose -- every existing domain and every silicon
+ * ladder rung depends on it, and a change there would put a working
+ * measurement at risk to buy nothing.
  *
  * WHY A SEPARATE YIELD IS NEEDED AT ALL
  *
@@ -20,16 +22,16 @@
  * file -- sp included -- is restored by the hardware swap. Passing a label
  * inside the yield routine instead of __test_reentry is the entire difference.
  *
- * The existing HostCall v0 probes get resumption a different way: they run an
- * S-mode payload inside a nested domain (create_dom(sbi.dom, x.smode)) and
- * yield with an SBI DOM_RETURN ecall. That path is not pure-capability, which
- * is why it cannot carry musl.
+ * The bare HostCall wire probes (tests/runtime-qemu/hostcall-*-probe) get
+ * resumption a different way: they run an S-mode payload inside a nested
+ * domain (create_dom(sbi.dom, x.smode)) and yield with an SBI DOM_RETURN
+ * ecall. That path is not pure-capability, which is why it cannot carry musl.
  *
- * NO SCALAR STATUS IS RETURNED. The shared glue zeroes every register before
+ * NO SCALAR STATUS IS RETURNED. The glue zeroes every register before
  * returning (capability-leak hygiene), so a domain's `call_dom` result is
- * always 0 and SQLite already carries its real status in the shared region.
- * The yield keeps that property: the host distinguishes "pending hostcall"
- * from "finished" by reading metadata->phase, not from a return value.
+ * always 0. What the launcher reads is the result slot of the entry it made
+ * (recovery-block slot 16, CAPSTONE_DOMAIN_FAULT_RETVAL after a fault) and the
+ * delegated entry block (delegate.h), never a return value.
  */
 #ifndef __CAPSTONE_TEST_BUILTIN__
 #define __CAPSTONE_TEST_BUILTIN__
@@ -53,21 +55,10 @@
 .text
 
 __test_reentry:
-#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
   ccsrrw(t0, cscratch, x0)
   ldc(sp, t0, 48)
   ldc(gp, t0, 32)
   ccsrrw(x0, cscratch, t0)
-#else
-  ccsrrw(sp, cscratch, x0)
-  ldc(gp, sp, -16)
-  ldc(t0, sp, -32)
-  ccsrrw(x0, cscratch, t0)
-  ld t0, -40(sp)
-  csrrw x0, mcause, t0
-  ld t0, -48(sp)
-  csrrw x0, mtval, t0
-#endif
   j test
 
 .section .text.entry
@@ -75,9 +66,8 @@ __test_reentry:
 _start:
 __test_entry:
   ccsrrw(sp, cscratch, x0)
-#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
   /* Keep recovery state outside the application's stack. cscratch always
-     holds this context, including across HostCall yields. Slots match the
+     holds this context, including across the yields of delegated calls. Slots match the
      generic entry, with suspended SP added at 80. */
   lcc(t1, sp, 4)
   addi t1, t1, -256
@@ -109,14 +99,11 @@ __test_entry:
 .Lno_context_arena:
   li t3, 0
   li t4, 0
-#endif
   lcc(t1, sp, 4)
   scc(sp, sp, t1)
   delin(sp)
-#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
   stc(sp, t2, 48)
   li t2, 0
-#endif
   j test
 
 .text
@@ -124,7 +111,6 @@ __test_entry:
 test:
   delin(gp)
   cincoffsetimm(sp, sp, -96)
-#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
   ccsrrw(t2, cscratch, x0)
   stc(ra, t2, 0)
   li ra, 0
@@ -140,24 +126,13 @@ test:
   .insn r 0x5b, 0x1, 0x2, t0, t0, x1
   ccsrrw(x0, ctvec, t0)
   li t0, 0
-#else
-  stc(ra, sp, 48)
-#endif
   sd a0, 64(sp)
   stc(a1, sp, 80)
 
-  /* Stash the sealed-return capability where the yield can find it.
-     `ra` holds it on EVERY entry, which is why the shared glue can do
-     `stc(ra, sp, 48)` here and still work across SQLite's three entries. The
-     yield needs it from arbitrary depth inside libc, so it also goes into a
-     global slot. */
-#ifndef CAPSTONE_DOMAIN_FAULT_RECOVERY
-  .Lpcrel_domret_entry:
-  auipc t0, %pcrel_hi(__capstone_dom_ret)
-  addi t0, t0, %pcrel_lo(.Lpcrel_domret_entry)
-  cincoffset t0, gp, t0
-  stc(ra, t0, 0)
-#endif
+  /* The sealed-return capability `ra` holds on EVERY entry went into the
+     recovery block above (slot 0), with the result slot (16) and gp (32):
+     the yield and the fault handler need them from arbitrary depth inside
+     libc, and cscratch finds that block from anywhere. */
 
   # Run capability-global initializers before domain_main. A capability tag
   # cannot live in the static image, so initialized capability globals (pointer/
@@ -202,17 +177,10 @@ test:
   .insn i 0x5b, 0x5, ra, 0(t0)
 
   lla t2, __test_reentry
-#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
   ccsrrw(t0, cscratch, x0)
   ldc(t1, t0, 0)
   stc(x0, t0, 0)
   ccsrrw(x0, cscratch, t0)
-#else
-  ldc(t1, sp, 48)
-  lcc(t0, sp, 4)
-  scc(sp, sp, t0)
-  stc(gp, sp, -16)
-#endif
 .Lmusl_scrub_return:
   li ra, 0
   li gp, 0
@@ -242,20 +210,9 @@ test:
   li t4, 0
   li t5, 0
   li t6, 0
-#ifndef CAPSTONE_DOMAIN_FAULT_RECOVERY
-  ccsrrw(t0, cscratch, x0)
-  stc(t0, sp, -32)
-  csrrw t0, mcause, x0
-  sd t0, -40(sp)
-  csrrw t0, mtval, x0
-  sd t0, -48(sp)
-  li t0, 0
-  ccsrrw(x0, cscratch, sp)
-#endif
   li sp, 0
   domreturn(t1, t2, x0)
 
-#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
 .Lmusl_fault:
   ccsrrw(x0, ctvec, x0)
   ccsrrw(sp, cscratch, x0)
@@ -522,14 +479,13 @@ __capstone_context_call_insn:
   ldc(tp, sp, 224)
   cincoffsetimm(sp, sp, 256)
   ret
-#endif
 
 .Ltest_ret:
   j .Ltest_ret
 
 /* void __capstone_yield(void);
  *
- * Hand control back to the host and resume HERE when the host calls again.
+ * Hand control back to the launcher and resume HERE when it calls again.
  *
  * SP DOES NOT SURVIVE THE BOUNDARY. The first version of this routine assumed
  * the hardware register-file swap restored the whole C state, saved only `ra`,
@@ -543,19 +499,16 @@ __capstone_context_call_insn:
  * access two instructions earlier did not fault -- which is consistent with the
  * monitor handing gp to the domain on every entry.
  *
- * The shared glue already encodes the remedy and it was there to be read: it
- * stashes sp into `cscratch` before returning and `__test_reentry` recovers it
- * with `ccsrrw(sp, cscratch, x0)`. cscratch is the designated carrier for a
- * capability across a domain boundary. So: sp travels in cscratch, and
- * everything else travels on the stack that sp then finds again.
+ * cscratch is the designated carrier for a capability across a domain
+ * boundary, and in this glue it always holds the context's recovery block (see
+ * _start). So: sp travels in that block (slot 80), the return capability comes
+ * from its slot 0, and everything else travels on the stack that sp then finds
+ * again. The resuming CALL supplies a new return capability and result slot,
+ * which the resume path installs before it touches the stack.
  *
  * Callee-saved registers are saved even though `gp` suggests some registers do
  * survive. Which ones is unverified, one wrong guess costs a ten-minute boot to
  * discover, and 14 stores are free by comparison.
- *
- * cscratch needs no save/restore: `_start` reads it with `ccsrrw(sp, cscratch,
- * x0)`, which leaves null behind, and the resume path here does the same, so
- * the register is returned to the state the rest of the glue expects.
  *
  * Deliberately does NOT scrub the register file. The shared glue scrubs because
  * it is finished and must not leave capabilities behind; here the registers ARE
@@ -589,27 +542,15 @@ __capstone_yield:
      free; the frame is 256 bytes and 0..208 were in use. */
   stc(tp, sp, 224)
 
-#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
   ccsrrw(t0, cscratch, x0)
   stc(sp, t0, 80)
   ldc(t1, t0, 0)
   stc(x0, t0, 0)
   ccsrrw(x0, cscratch, t0)
-#else
-  .Lpcrel_domret_load:
-  auipc t3, %pcrel_hi(__capstone_dom_ret)
-  addi t3, t3, %pcrel_lo(.Lpcrel_domret_load)
-  cincoffset t3, gp, t3
-  ldc(t1, t3, 0)
-#endif
   lla t2, .Lyield_resume
-#ifndef CAPSTONE_DOMAIN_FAULT_RECOVERY
-  ccsrrw(x0, cscratch, sp)
-#endif
   domreturn(t1, t2, x0)
 
 .Lyield_resume:
-#ifdef CAPSTONE_DOMAIN_FAULT_RECOVERY
   /* The resuming CALL supplies a NEW result pointer and return capability.
      Install both before touching the suspended application's stack. */
   ccsrrw(t0, cscratch, x0)
@@ -620,18 +561,6 @@ __capstone_yield:
   ldc(sp, t0, 80)
   ldc(gp, t0, 32)
   ccsrrw(x0, cscratch, t0)
-#else
-  ccsrrw(sp, cscratch, x0)
-  ldc(gp, sp, 16)
-
-  /* `ra` holds the FRESH sealed-return capability the resuming CALL left; the
-     next yield needs it. Stash before restoring the C return address. */
-  .Lpcrel_domret_store:
-  auipc t3, %pcrel_hi(__capstone_dom_ret)
-  addi t3, t3, %pcrel_lo(.Lpcrel_domret_store)
-  cincoffset t3, gp, t3
-  stc(ra, t3, 0)
-#endif
 
   ldc(ra, sp, 0)
   ldc(s0, sp, 32)
@@ -656,14 +585,7 @@ __capstone_yield:
   .hidden __capstone_gct_start
 __capstone_gct_start:
 
-/* One capability-sized slot. Not in .capstone_cap_init: it is written at entry
-   from a register, never materialised from the static image. */
   .section .data
-  .align 4
-  .global __capstone_dom_ret
-__capstone_dom_ret:
-  .zero 16
-
 /* The linear context arena _start splits off (see there); empty without
    CONTEXT_BYTES. */
   .align 4
