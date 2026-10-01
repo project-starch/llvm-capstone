@@ -190,7 +190,11 @@ The `domain-process-runtime` application stack supports a persistent Linux guest
 ordinary application arguments/streams, trusted fault/preemption return and owned
 resource reuse. The installed QEMU guest passes exhaustion/recovery followed by
 1,008 mixed starts in the same boot, with stable retained resources. Perl uses
-the shared SDK; Perl and mruby execute through the common launcher. See
+the shared SDK; Perl and mruby execute through the common launcher. The delegated
+runtime (application ABI v2) is the only application runtime: the musl runtime's
+HostCall v0 mode and the probes that ran on it were removed on 2026-09-30, and the
+runtime probes that remain run as delegated applications
+(`tests/runtime-qemu/run-delegated-probes.py`). See
 [applications](../runtime/applications.md), the
 [checked acceptance](../runtime/tests/application/results/20260926-qemu-rebased.json)
 and [current state](state/current-state.md) for scope and remaining failures.

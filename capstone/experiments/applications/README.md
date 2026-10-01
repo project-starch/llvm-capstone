@@ -144,13 +144,14 @@ controls: wrong oracle, missing completion, missing guest status, timeout,
 signal and impossible counters. `workloads/calibrate.c` checks two known
 allocations followed by release; level0 occupies 1,136 bytes, while a Sublet
 heap with 256-byte atoms occupies 1,280. Both must return live bytes to zero.
-`workloads/files.c` exercises all 128 file slots, EMFILE and reuse twice.
+(`workloads/files.c`, which exercised the 128 file slots of the HostCall v0
+runtime, was removed with that runtime on 2026-09-30: a delegated application's
+descriptors are its Linux task's.)
 
 The common SDK now includes the existing capability-aware atomic helpers and
 compiler-rt's 128-bit integer helpers, needed by CPython and PostgreSQL.
-The existing PostgreSQL file-table change is applied to the common runtime:
-domain and helper use one capacity constant. These are ordinary application
-prerequisites, independent of measurement instrumentation.
+These are ordinary application prerequisites, independent of measurement
+instrumentation.
 
 QEMU wall time is diagnostic only. Node allocations per launch include startup
 and teardown and are cumulative, not peak live metadata. The original discovery platform recycled nodes only between launches. The

@@ -16,13 +16,10 @@ bash capstone/ports/wireshark/app/deps/build-zlib.sh     # then pcre2, c-ares, l
 
 - **`env.sh`** (sourced by every recipe). It builds, once per toolchain and runtime source:
   - this lane's own `libc-capstone.a`;
-  - the domain runtime: start-musl, hostcall, tls, level0, the libc overrides from
-    `runtime/libc_overrides.sh`, soft-float, and compiler-rt's 128-bit division;
-  - `domain_entry.c`, the `capstone_main` → `main` adapter. A domain has no command line and no
-    environment, so it reads them when the domain starts, from `/tmp/domain.argv` (one argument
-    per line) and `/tmp/domain.env` (one `NAME=value` per line). One image then serves every run.
-    Without the files it passes argv `{"domain"}` and an empty environment, which is what every
-    configure link test gets.
+  - the application SDK (`ports/common/application/build-sdk.sh`): the delegated runtime with
+    the libc overrides of `runtime/libc_overrides.list`, soft-float, and compiler-rt's 128-bit
+    division. Its key covers every runtime source. An image is an ordinary `main(argc, argv)`
+    that gets the launcher's command line and environment.
 
   It then checks `capstone-cc` in both directions: a call to `puts` links, while an undefined
   function and an unknown `-l` do not.
@@ -87,7 +84,7 @@ subtests) covers the rewrite:
   `__lsan_ignore_object`) and passes with the patch, and none of the other six archives has one.
 - GCond reaches `pthread_cond_*` as upstream has it. `glib-0008` made signal and broadcast no-ops
   and wait an abort, because musl-capstone's `pthread_cond_t` put `_c_tail` 32 bytes past the
-  object (a broadcast halted the tshark domain in `epan_init`, cause 24); musl patch 0004 lays the
+  object (a broadcast halted the tshark domain in `epan_init`, cause 24); musl patch 0006 lays the
   type out pointers first (C-65), and a domain now runs threads, so a wait can be woken.
 
 **Threads (2026-09-30).** On `delegation-threads` GLib's own thread tests run as domains:

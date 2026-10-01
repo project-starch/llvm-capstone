@@ -77,7 +77,8 @@ int main(void) {
   x = entry(CAPSTONE_SYS_read, (uint64_t)fds[0], 128, 32, 0, 0, 0);
   assert(serve(&x) == 6 && !memcmp(exchange + 128, "hello\n", 6));
   assert(host.bytes_in == 6 && host.bytes_out == 32);
-  /* sched_getaffinity: the serving thread's CPU set, and no other task's */
+  /* sched_getaffinity: the serving thread's CPU set, and no other task's (EPERM,
+     as for the other scheduling calls) */
   memset(exchange + 512, 0, 128);
   x = entry(CAPSTONE_SYS_sched_getaffinity, 0, 128, 512, 0, 0, 0);
   {
@@ -88,11 +89,11 @@ int main(void) {
     assert(any);
   }
   x = entry(CAPSTONE_SYS_sched_getaffinity, 1, 128, 512, 0, 0, 0);
-  assert(serve(&x) == -ESRCH);
+  assert(serve(&x) == -EPERM);
   x = entry(CAPSTONE_SYS_sched_setaffinity, 0, 128, 512, 0, 0, 0);  /* the set just read */
   assert(serve(&x) == 0);
   x = entry(CAPSTONE_SYS_sched_setaffinity, 1, 128, 512, 0, 0, 0);
-  assert(serve(&x) == -ESRCH);
+  assert(serve(&x) == -EPERM);
   /* a string argument: openat of a path in the exchange region */
   char path[] = "/tmp/capstone-delegate-XXXXXX";
   int tmp = mkstemp(path);

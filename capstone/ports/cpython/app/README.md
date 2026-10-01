@@ -74,7 +74,9 @@ a site. The census is a lower bound.
 
     source $CPY_ROOT/build/capstone-env.sh
     python3 link-cpython-capstone.py $CPY_ROOT/build --native <native CPython 3.13.7 build>
-    python3 host/startup-syscalls.py <native>/python $CPY_ROOT/build/link-attempt/domain-support.txt
+    python3 ../../musl-capstone/check-domain-support.py $CPY_ROOT/build/link-attempt/python.dom \
+        --sdk "$CAPSTONE_SDK" > domain-support.txt
+    python3 host/startup-syscalls.py <native>/python domain-support.txt
 
 `link-cpython-capstone.py` links, after a survey, what CPython's Makefile would link for a static
 interpreter, the way every musl domain here is linked. Two absent objects get a measured per-file
@@ -103,7 +105,10 @@ objects (1.30) adds ~3.1 MiB: **~11.5 MiB for the whole static image, an estimat
 heap. A domain gets 4 MiB.
 
 **Linking is not working.** `musl-capstone/check-domain-support.py` on that image: 100 linked
-libc symbols need one of **53 syscalls the domain does not serve**. Which of those CPython
+libc symbols need one of **53 syscalls the domain does not serve**. (Measured against the
+HostCall v0 served set of 2026-09-23. The checker now reads the delegated runtime's shape table,
+and `link-cpython-capstone.py` no longer writes `domain-support.txt`: run the checker on the
+image, as above.) Which of those CPython
 itself makes while starting (`-S -I -c pass`), measured natively under `strace -k` and
 attributed to the first CPython frame -- glibc and a dynamic loader, so an approximation:
 
@@ -211,9 +216,146 @@ assumption it corrects and why the replacement is right; all six leave every pla
 | 0003 | `pycore_obmalloc.h` | the radix tree indexes 64 address bits (as `../pymalloc` decided) |
 | 0004 | `pycore_pyhash.h` | the pointer hash is of the address; it is never converted back |
 | 0005 | `pycore_qsbr.h` | false-sharing padding assumed the per-thread state fits in 64 bytes |
+| 0015 | `_posixsubprocess.c` | opt-in: `fork_exec` through `posix_spawn` in a process that cannot fork; `preexec_fn`, umask and id changes refused |
 | 0016 | `pycore_pythread.h`, `pycore_lock.h`, `lock.c` | a thread's join handle and a raw mutex's waiter link were pointers kept in integers |
 
 None of them makes a pointer↔integer ROUND TRIP safe; the census above is where those are.
+
+## Signals, 2026-09-29
+
+On `delegation-signals` the interpreter's `signal` module works against the
+delegated runtime; the record is [results/signals-2026-09-29.json](results/signals-2026-09-29.json).
+
+- [host/signals-smoke.py](host/signals-smoke.py) passes 18/18 in the guest: a
+  handler with `os.kill` on the process itself and `raise_signal`; `alarm` and
+  `setitimer` against `time.sleep`, with the sleep resumed (PEP 475) or the
+  handler's exception propagated out of `sleep` and out of a blocking `read`;
+  `set_wakeup_fd`; `pthread_sigmask`, `sigpending` and delivery on unblock;
+  `sigtimedwait` for `SIGCHLD` with `si_pid` and `si_status`; a child that
+  signals its waiting parent; `SIG_IGN` inheritance and `setsigdef` through
+  `os.posix_spawnp`; `signal.pause`; `faulthandler.enable`; `KeyboardInterrupt`
+  from `SIGINT`. One check documents the deviation: a loop that makes no libc
+  call runs the handler only at the next call, while a loop that polls
+  `time.monotonic()` is interrupted, because every entry into the dispatcher
+  checks the recorded-sequence hint.
+- `python -m unittest test.test_signal`: 25 pass, 0 fail, 13 skipped, 19 errors,
+  every error an unserved `clone` (16, through `subprocess`), `socket` (2) or a
+  thread start (1). `test.test_faulthandler`: 2 pass, 35 errors, all
+  `subprocess`, 9 skipped.
+- Not signals: at that revision `subprocess.Popen` still ran
+  `_posixsubprocess.fork_exec` over `clone`; patch 0015 (below) routes it
+  through `posix_spawn`. `epoll_create1` is unserved as well.
+
+With `delegation-pty-ioctls`, `os.openpty()` and `pty.openpty()` work (musl's
+`openpty` over `/dev/ptmx`, `TIOCSPTLCK` and `TIOCGPTN`); `pty.fork` and
+`pty.spawn` still need `fork`. The two `config.site` answers
+`ac_cv_file__dev_ptmx=no` and `ac_cv_file__dev_ptc=no` have no effect on
+that path, since the build has `HAVE_OPENPTY` and uses musl's `openpty`
+directly; they only stop `configure` from probing the build host's `/dev`.
+
+## subprocess without fork, 2026-09-29
+
+Patch 0015 (`-D_Py_FORK_EXEC_POSIX_SPAWN`) keeps `_posixsubprocess.fork_exec`'s
+signature and its contract with `subprocess.py` and expresses the child steps
+of `child_exec` as `posix_spawn` attributes and file actions: the pipe ends
+onto 0, 1 and 2 with the same care when one of them already is a standard
+stream, `cwd` through `posix_spawn_file_actions_addchdir_np`, `pass_fds` kept
+by a dup2 onto itself (which clears `FD_CLOEXEC`), `close_fds` as one close
+action per inheritable descriptor from 3 up read from `/proc/self/fd`,
+`restore_signals` as `SETSIGDEF` of `SIGPIPE`, `SIGXFZ` and `SIGXFSZ`,
+`start_new_session` as `SETSID`, `process_group` as `SETPGROUP`. Exec failure
+is synchronous and raises the error named after the program; the error pipe
+is never written. Refused with ENOSYS: `preexec_fn`, `umask`, `user`, `group`
+and `extra_groups`. The launcher's spawner does the rest.
+
+[host/subprocess-smoke.py](host/subprocess-smoke.py) passes 21/21 in the
+guest: `run` with captured streams and exit status, `check_output`,
+`check_call`, `communicate` in both directions, a 10 KB round trip through
+`cat`, `env` and `cwd`, `FileNotFoundError` for a missing program and a
+missing directory, `pass_fds` kept and an inheritable descriptor closed,
+`restore_signals` both ways, `terminate`, `kill`, `wait(timeout)`,
+`run(timeout)`, `start_new_session`, `process_group`, `preexec_fn` refused,
+a child signalling its waiting parent, `os.popen` and `shell=True`.
+CPython's own suites in the guest, booted with `--process-cache-mib 768`
+(the default 384 MiB refuses a second CPython domain next to its parent):
+`test_subprocess` 344 tests, 237 ok, 7 fail, 56 errors, 38 skipped, up from
+179 ok before the patch; `test_popen` 5/5; `test_faulthandler` 25 ok, 11 fail,
+1 error, 9 skipped, up from 2 ok; `test_signal` without
+`test_interprocess_signal` 37 ok, 2 fail, 4 errors, 13 skipped, up from 25 ok.
+What remained then, by cause: 26 refused by design; 24 `select.select` on the
+unserved `pselect6`; the thread tests; children started without `PYTHONHOME`
+(`env={}`, `-E`, `-I`, which is also why `test_interprocess_signal` hung: its
+sender never started); `os.getpgid` and `os.getsid` unserved; two stderr
+comparisons that saw the domain's `UNSERVED syscalls: 20` report; faults that
+faulthandler cannot report because a domain fault is fatal;
+`signal.pthread_kill(threading.get_ident())`, which rebuilds a `pthread_t`
+from an integer; and `kill` to the parent, which the launcher refused.
+With `delegation-runtime-rows` (`pselect6`, `getpgid`, `getsid`, `kill` to the
+parent with ESRCH for a vanished pid, the unserved report only under
+`CAPSTONE_DELEGATE_STATS`, musl's `pselect` mask kept a capability) and the
+stdlib beside the image: `test_subprocess` 282 ok, 0 fail, 32 errors, 38
+skipped, the errors being 26 refused by design, 4 threads and 2 descriptor
+limits; `test_signal` complete, 57 tests, 38 ok, 2 fail, 4 errors, 13 skipped,
+`test_interprocess_signal` included; `test_faulthandler` 26 ok. A child's
+stderr is empty again. Record:
+`runtime/tests/application/results/20260930-runtime-rows.json`.
+
+With `delegation-cheap-rows`, the 32 plain rows (`statfs`, `statx`, `truncate`,
+`linkat`, `fchown`, `getrusage`, `sched_getaffinity`, `setpgid`, ...):
+[host/rows-smoke.py](host/rows-smoke.py), 28 CPython checks over the rows,
+28 pass where 4 of 30 did before, the rest ENOSYS; `test_os` 366 tests,
+256 ok, 2 fail, 38 errors, 70 skipped, from 229 ok, 6 fail, 60 errors; the
+37 ENOSYS left are `timerfd_create` (12), `socket.socketpair` (5, the
+sendfile tests' setup), `os.spawn*` and `fork` (17), `eventfd` (3); the
+other three are `setreuid`, `setregid` and a `pathconf` on a bad
+descriptor. `test_posix` 29 ok of the 45 before `test_lockf`, from 22, and
+stops there in both runs: the domain faults before any fcntl round, musl's
+`fcntl()` narrowing the `struct flock` pointer through `unsigned long`, the
+class of musl patch 0004; a fifth patch, not a row. Record:
+`runtime/tests/application/results/20260930-cheap-rows.json`.
+
+With the fifth patch, `musl-patches/0005`, `test_lockf`
+passes and `test_posix` runs to its end: 170 tests, 113 ok, 1 fail, 18
+errors, 38 skipped. The errors are ENOSYS from calls that are not rows
+(`getresuid`, `getresgid`, `setresuid`, `setresgid`, `setgroups`,
+`initgroups`, `waitid`, `fexecve`, `preadv` with flags), EOPNOTSUPP
+(`posix_fallocate` on the file system, `POSIX_SPAWN_RESETIDS` refused by the
+spawner), and two CPython build items (`_testcapi`, `makedev`); the failure
+is `test_register_at_fork`. The same objects linked without the patch fault
+at `test_lockf` as before. `test_fcntl`: 12 tests, 6 ok, 3 skipped, 3
+errors (`F_NOTIFY` not an admitted command; two lock tests need
+`_multiprocessing`, which is not built). Record:
+`runtime/tests/application/results/20260930-cpython-lockf.json`.
+
+With `delegation-sockets` (nineteen socket and epoll rows, the word length
+rule, the msghdr block, the datagram rule, and the data-copy rule for every
+buffer crossing the exchange region): [host/socket-smoke.py](host/socket-smoke.py),
+16 CPython checks over the rows, 16 pass; `test_epoll` 10 of 10, from a
+suite that did not import; `test_selectors` 121 tests, 77 ok, 1 fail, 43
+skipped, from 6 ok; `test_socket` 740 tests, 96 ok, 2 fail, 356 errors, 286
+skipped, from 22 ok, and 350 of the errors are threads, the rest the Linux
+abstract namespace (4: the build targets `capstone64-unknown-elf`, which
+defines no `__linux__`, so CPython's abstract-namespace code is compiled
+out while the kernel binds and connects the names; a configuration item for
+the port), `getservbyname` without `/etc/services` in the image,
+`if_nametoindex` (`SIOCGIFINDEX` is not an admitted ioctl), `sethostname`
+and `testMaxName`; `test_asyncio.test_sock_lowlevel` 12 of
+39 with every error a thread, `test_asyncio.test_streams` 53 of 74,
+`test_socketserver` 8 of 27, all three from an ENOSYS at import. The
+socket contract passes 11 of 11 in the guest. Record:
+`runtime/tests/application/results/20260930-sockets.json`.
+[host/run-filtered.py](host/run-filtered.py) runs a module without named tests.
+Record: [results/subprocess-2026-09-29.json](results/subprocess-2026-09-29.json).
+
+To run the suite: put `lib/python3.13` next to the image on the share, copied
+from the source `Lib/` (the `test` package included, an empty `lib-dynload`)
+plus `_sysconfigdata__linux_.py`, the native riscv64 build's
+`_sysconfigdata__linux_riscv64-linux-gnu.py` under the name this build looks
+for, since its `sys.implementation._multiarch` is empty (`test.support` needs
+it for `sysconfig.get_config_var`). The interpreter finds that tree from
+`sys.executable`, so no `PYTHONHOME` is needed and children started with `-I`,
+`-E` or an empty environment find it too; a `PYTHONHOME` elsewhere works as
+well, but not for those children.
 
 ## Threads on the delegated runtime (2026-09-30)
 
@@ -247,10 +389,11 @@ Fork remains refused by design (`docs/plans/delegation-abi.md`).
 ### Review qualification with subprocess enabled
 
 Patch 0015 is now included, with `-D_Py_FORK_EXEC_POSIX_SPAWN` checked in configure's output.
-The existing launcher runs the spawn; there is no domain fork implementation. Configure also
-disables `select.epoll`: musl exports its functions, but this runtime does not serve them.
-Advertising that feature made `selectors` probe `epoll_create1` and left an unexpected UNSERVED
-diagnostic on an otherwise successful child's stderr. The supported `select.poll` remains.
+The existing launcher runs the spawn; there is no domain fork implementation. For this run
+configure also disabled `select.epoll`, which the threads lane's runtime did not serve:
+advertising it made `selectors` probe `epoll_create1` and left an unexpected UNSERVED
+diagnostic on an otherwise successful child's stderr. Since the sockets rows (above), epoll is
+served, and the disable and its configure check are gone; the results below predate that.
 
 Run `host/run-thread-gate.py` inside the domain, optionally with one or more test module names.
 It first verifies `os.fork()` returns ENOSYS beside four live threads and joins all four. It then
@@ -304,16 +447,13 @@ build hashes, every skip, the outcomes of all 26 formerly blocked tests, and the
 result replaces it. Fork, unavailable optional test modules and resource exclusions remain
 explicit in the record. This does not establish unrestricted CPython or asynchronous delivery.
 
-### Integrating the process lane
+### On dev
 
-These results are on `delegation-threads`, not yet on `dev`. Resolve the preparation
-script and README conflicts by retaining this lane's real TLS: CPython patch 0006
-stays deleted and `_Py_THREAD_LOCAL_AS_GLOBAL` stays absent. Keep patch 0016, spawn
-patch 0015, `-D_Py_FORK_EXEC_POSIX_SPAWN` and the unsupported-epoll guard. Patch 0015
-and `host/subprocess-smoke.py` are byte-identical to process-lane `dae66593`.
-Rebuild and run the gate after integration; the current record does not qualify an
-as-yet unbuilt merge. The [thread plan](../../../docs/plans/delegation-threads.md)
-also records which signal-probe commits must land together.
+The threads stack landed on dev after the process, signals, rows and sockets work above. The
+merge keeps this section's real thread-locals (patch 0006 and `-D_Py_THREAD_LOCAL_AS_GLOBAL`
+stay gone), patch 0016, and dev's patch 0015 and `-D_Py_FORK_EXEC_POSIX_SPAWN`; it drops the
+epoll disable, since dev serves epoll. The records above were measured on the threads lane,
+before that merge.
 
 ## What this does not establish
 

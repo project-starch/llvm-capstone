@@ -43,8 +43,8 @@
     },
     {
       "from": "capstone/ports/sqlite",
-      "to": "capstone/ports/sqlite/app",
-      "reason": "99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them"
+      "to": "capstone/ports/sqlite/freestanding",
+      "reason": "99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them; the target is freestanding/ since 2026-09-30, when app/ became the ordinary-program build of 3.22.0"
     },
     {
       "from": "capstone/ports/micropython",

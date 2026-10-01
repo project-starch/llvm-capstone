@@ -20,9 +20,9 @@
  *                       memory for the records, which must NOT live in freed
  *                       payload, since that payload is revoked.
  *
- * Both arrive through the runtime's existing path: hostcall.c compiled with
- * CAPSTONE_PROGRAM_REGIONS parks every region past the two host-call ones and
- * hands them over one at a time through __capstone_region(). HC_PROGRAM_REGIONS
+ * Both arrive through the runtime's existing path: hostcall.c parks every
+ * region past the launcher's own three and hands them over one at a time
+ * through __capstone_region(). HC_PROGRAM_REGIONS
  * is 2, which is exactly what is needed, so no runtime change -- index 0 is the
  * payload, index 1 the metadata, in the order the host shares them.
  *

@@ -496,6 +496,14 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
       ResultType = llvm::IntegerType::get(getLLVMContext(), 128);
       break;
 
+    // Capstone: an __intcap is a capability, the same LLVM type as a pointer
+    // in the default address space. Its integer value is the address.
+    case BuiltinType::IntCap:
+    case BuiltinType::UIntCap:
+      ResultType = llvm::PointerType::get(
+          getLLVMContext(), Context.getTargetAddressSpace(LangAS::Default));
+      break;
+
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
     case BuiltinType::Id:
 #include "clang/Basic/OpenCLImageTypes.def"

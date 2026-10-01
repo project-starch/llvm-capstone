@@ -8,6 +8,13 @@
 
 #define EXCHANGE 4096
 
+/* the validator reads word lengths from the region: a zeroed one unless a
+   test places a word */
+static char region[EXCHANGE];
+static int validate(const struct capstone_delegate_entry *e) {
+  return capstone_delegate_validate(e, region, EXCHANGE, NULL);
+}
+
 static struct capstone_delegate_entry pack(uint64_t nr, uint64_t a, uint64_t b,
                                            uint64_t c, uint64_t d, uint64_t e,
                                            uint64_t f) {
@@ -34,7 +41,8 @@ static void groups(void) {
   assert(capstone_delegate_group_of(CAPSTONE_SYS_fork) == CAPSTONE_GROUP_PROCESS);
   assert(capstone_delegate_group_of(CAPSTONE_SYS_clone) == CAPSTONE_GROUP_PROCESS);
   assert(capstone_delegate_group_of(CAPSTONE_SYS_rt_sigaction) == CAPSTONE_GROUP_SIGNAL);
-  assert(capstone_delegate_group_of(CAPSTONE_SYS_socket) == CAPSTONE_GROUP_UNKNOWN);
+  assert(capstone_delegate_group_of(CAPSTONE_SYS_socket) == CAPSTONE_GROUP_DELEGATED);
+  assert(capstone_delegate_group_of(CAPSTONE_SYS_recvmsg) == CAPSTONE_GROUP_DELEGATED);
   assert(capstone_delegate_group_of(999999) == CAPSTONE_GROUP_UNKNOWN);
   assert(capstone_delegate_group_of(CAPSTONE_NR_HELLO) == CAPSTONE_GROUP_RUNTIME);
   assert(capstone_delegate_group_of(0) == CAPSTONE_GROUP_UNKNOWN); /* not io_setup */
@@ -45,7 +53,7 @@ static void groups(void) {
   struct capstone_delegate_entry e;
   uint64_t z[CAPSTONE_DELEGATE_ARGS] = {0};
   assert(capstone_delegate_pack(&e, CAPSTONE_SYS_mmap, z) == EINVAL);
-  assert(capstone_delegate_pack(&e, CAPSTONE_SYS_socket, z) == EINVAL);
+  assert(capstone_delegate_pack(&e, 999999, z) == EINVAL);
 }
 
 static void flags_follow_the_shape(void) {
@@ -59,19 +67,19 @@ static void flags_follow_the_shape(void) {
   e = pack(CAPSTONE_SYS_getpid, 0, 0, 0, 0, 0, 0);
   assert(e.flags == 0);
   e = pack(CAPSTONE_NR_HELLO, 0x80001000, 0x80000000, 0x80010000, 0, 0, 0);
-  assert(e.flags == 0 && !capstone_delegate_validate(&e, EXCHANGE));
+  assert(e.flags == 0 && !validate(&e));
   /* ioctl and fcntl carry integers as the Linux numbers; the pointer forms
      have their own numbers with a fixed buffer, never confused with a value */
   e = pack(CAPSTONE_SYS_fcntl, 1, 2 /* F_SETFD */, 1, 0, 0, 0);
-  assert(e.flags == 0 && !capstone_delegate_validate(&e, EXCHANGE));
+  assert(e.flags == 0 && !validate(&e));
   e = pack(CAPSTONE_SYS_ioctl, 1, 0x5413, 1, 0, 0, 0);
   assert(e.flags == 0);
   e = pack(CAPSTONE_NR_IOCTL_BUF, 1, 0x5413, 64, 0, 0, 0);
-  assert(e.flags == 0x4 && !capstone_delegate_validate(&e, EXCHANGE));
+  assert(e.flags == 0x4 && !validate(&e));
   e = pack(CAPSTONE_NR_IOCTL_BUF, 1, 0x5413, EXCHANGE - 63, 0, 0, 0);
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
+  assert(validate(&e) == EFAULT);
   e = pack(CAPSTONE_NR_FCNTL_LOCK, 1, 5, 32, 0, 0, 0);
-  assert(e.flags == 0x4 && !capstone_delegate_validate(&e, EXCHANGE));
+  assert(e.flags == 0x4 && !validate(&e));
   assert(capstone_delegate_group_of(CAPSTONE_NR_FCNTL_LOCK) == CAPSTONE_GROUP_RUNTIME);
   /* optional buffers: NULL is not flagged, non-NULL is */
   e = pack(CAPSTONE_SYS_nanosleep, 0, 0, 0, 0, 0, 0);
@@ -84,56 +92,56 @@ static void bounds(void) {
   struct capstone_delegate_entry e;
   /* a 7-byte write at offset 100 fits; at the last byte it does not */
   e = pack(CAPSTONE_SYS_write, 1, 100, 7, 0, 0, 0);
-  assert(!capstone_delegate_validate(&e, EXCHANGE));
+  assert(!validate(&e));
   e = pack(CAPSTONE_SYS_write, 1, EXCHANGE - 7, 7, 0, 0, 0);
-  assert(!capstone_delegate_validate(&e, EXCHANGE));
+  assert(!validate(&e));
   e = pack(CAPSTONE_SYS_write, 1, EXCHANGE - 6, 7, 0, 0, 0);
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
+  assert(validate(&e) == EFAULT);
   e = pack(CAPSTONE_SYS_write, 1, EXCHANGE, 0, 0, 0, 0);
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
+  assert(validate(&e) == EFAULT);
   /* a length that wraps */
   e = pack(CAPSTONE_SYS_read, 0, 8, (uint64_t)-1, 0, 0, 0);
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
+  assert(validate(&e) == EFAULT);
   /* fixed-size out buffers */
   e = pack(CAPSTONE_SYS_fstat, 3, EXCHANGE - 128, 0, 0, 0, 0);
-  assert(!capstone_delegate_validate(&e, EXCHANGE));
+  assert(!validate(&e));
   e = pack(CAPSTONE_SYS_fstat, 3, EXCHANGE - 127, 0, 0, 0, 0);
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
+  assert(validate(&e) == EFAULT);
   /* scaled: 3 iovecs of 16 bytes */
   e = pack(CAPSTONE_SYS_writev, 1, EXCHANGE - 48, 3, 0, 0, 0);
-  assert(!capstone_delegate_validate(&e, EXCHANGE));
+  assert(!validate(&e));
   e = pack(CAPSTONE_SYS_writev, 1, EXCHANGE - 47, 3, 0, 0, 0);
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
+  assert(validate(&e) == EFAULT);
   e = pack(CAPSTONE_SYS_writev, 1, 0, (uint64_t)-1, 0, 0, 0);
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
+  assert(validate(&e) == EFAULT);
   /* an optional NULL passes without a flag; a required NULL is EINVAL */
   e = pack(CAPSTONE_SYS_nanosleep, 0, 0, 0, 0, 0, 0);
-  assert(!capstone_delegate_validate(&e, EXCHANGE));
+  assert(!validate(&e));
   e = pack(CAPSTONE_SYS_read, 0, 0, 16, 0, 0, 0);
   e.flags = 0;
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EINVAL);
+  assert(validate(&e) == EINVAL);
   /* a flag on an integer argument is malformed, not a fault */
   e = pack(CAPSTONE_SYS_close, 3, 0, 0, 0, 0, 0);
   e.flags = 0x1;
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EINVAL);
+  assert(validate(&e) == EINVAL);
   /* version, count, high flag bits */
   e = pack(CAPSTONE_SYS_getpid, 0, 0, 0, 0, 0, 0);
   e.version = 1;
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EINVAL);
+  assert(validate(&e) == EINVAL);
   e = pack(CAPSTONE_SYS_getpid, 0, 0, 0, 0, 0, 0);
   e.count = 2;
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EINVAL);
+  assert(validate(&e) == EINVAL);
   e = pack(CAPSTONE_SYS_getpid, 0, 0, 0, 0, 0, 0);
   e.flags = UINT64_C(1) << 40;
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EINVAL);
+  assert(validate(&e) == EINVAL);
   /* an excepted number arriving on the wire is ENOSYS, not a crash */
   memset(&e, 0, sizeof e);
   e.version = CAPSTONE_DELEGATE_VERSION;
   e.count = 1;
   e.nr = CAPSTONE_SYS_clone;
-  assert(capstone_delegate_validate(&e, EXCHANGE) == ENOSYS);
-  e.nr = CAPSTONE_SYS_socket;
-  assert(capstone_delegate_validate(&e, EXCHANGE) == ENOSYS);
+  assert(validate(&e) == ENOSYS);
+  e.nr = CAPSTONE_SYS_rt_sigreturn;
+  assert(validate(&e) == ENOSYS);
 }
 
 static void strings(void) {
@@ -148,18 +156,24 @@ static void strings(void) {
   /* a string offset is validated by the launcher, not by the shape: the
      validator only checks the offset is inside the region */
   struct capstone_delegate_entry e = pack(CAPSTONE_SYS_chdir, EXCHANGE - 1, 0, 0, 0, 0, 0);
-  assert(!capstone_delegate_validate(&e, EXCHANGE));
+  assert(!validate(&e));
   e = pack(CAPSTONE_SYS_chdir, EXCHANGE, 0, 0, 0, 0, 0);
-  assert(capstone_delegate_validate(&e, EXCHANGE) == EFAULT);
+  assert(validate(&e) == EFAULT);
 }
 
 static void table_is_consistent(void) {
-  /* every delegated shape's buffer lengths refer to an existing argument */
+  /* every delegated shape's buffer lengths refer to an existing argument: an
+     integer for an argument length, a checked four-byte INOUT buffer for a
+     word length */
   static const uint16_t numbers[] = {
     CAPSTONE_SYS_getcwd, CAPSTONE_SYS_read, CAPSTONE_SYS_write, CAPSTONE_SYS_readv,
     CAPSTONE_SYS_writev, CAPSTONE_SYS_pread64, CAPSTONE_SYS_pwrite64,
     CAPSTONE_SYS_getdents64, CAPSTONE_SYS_readlinkat, CAPSTONE_SYS_ppoll,
-    CAPSTONE_SYS_getrandom};
+    CAPSTONE_SYS_getrandom, CAPSTONE_SYS_getgroups, CAPSTONE_SYS_sched_getaffinity,
+    CAPSTONE_SYS_sched_setaffinity, CAPSTONE_SYS_bind, CAPSTONE_SYS_connect,
+    CAPSTONE_SYS_sendto, CAPSTONE_SYS_recvfrom, CAPSTONE_SYS_setsockopt,
+    CAPSTONE_SYS_getsockopt, CAPSTONE_SYS_accept, CAPSTONE_SYS_accept4,
+    CAPSTONE_SYS_getsockname, CAPSTONE_SYS_getpeername, CAPSTONE_SYS_epoll_pwait};
   for (size_t n = 0; n < sizeof numbers / sizeof numbers[0]; ++n) {
     const struct capstone_delegate_shape *s = capstone_delegate_shape(numbers[n]);
     assert(s && s->name);
@@ -171,8 +185,65 @@ static void table_is_consistent(void) {
       }
       if (a->length == CAPSTONE_LEN_ARG_SCALED)
         assert(a->scale);
+      if (a->length == CAPSTONE_LEN_WORD) {
+        const struct capstone_delegate_arg *w;
+        assert(a->size < s->argc);
+        w = &s->args[a->size];
+        assert(w->length == CAPSTONE_LEN_FIXED && w->size == 4);
+        assert(w->kind == CAPSTONE_ARG_INOUT || w->kind == CAPSTONE_ARG_OPT_INOUT);
+        assert(a->kind == CAPSTONE_ARG_INOUT || a->kind == CAPSTONE_ARG_OPT_INOUT);
+      }
     }
   }
+}
+
+static void words(void) {
+  /* accept4(fd, addr, &len, flags): the address buffer is as long as the word
+     says; the word's own bytes are bounded first; a null buffer or a null
+     word crosses as the kernel takes it */
+  struct capstone_delegate_entry e;
+  size_t lengths[CAPSTONE_DELEGATE_ARGS];
+  uint32_t word = 16;
+  memcpy(region + 64, &word, sizeof word);
+  e = pack(CAPSTONE_SYS_accept4, 3, 128, 64, 0, 0, 0);
+  assert(e.flags == 0x6);
+  assert(!capstone_delegate_validate(&e, region, EXCHANGE, lengths));
+  assert(lengths[1] == 16 && lengths[2] == 4 && !lengths[0]);
+  /* the buffer at the very end fits its 16 bytes and not 17 */
+  e = pack(CAPSTONE_SYS_accept4, 3, EXCHANGE - 16, 64, 0, 0, 0);
+  assert(!validate(&e));
+  word = 17;
+  memcpy(region + 64, &word, sizeof word);
+  assert(validate(&e) == EFAULT);
+  /* a word beyond the region is a fault of its own four bytes */
+  word = 16;
+  memcpy(region + 64, &word, sizeof word);
+  e = pack(CAPSTONE_SYS_accept4, 3, 128, EXCHANGE - 3, 0, 0, 0);
+  assert(validate(&e) == EFAULT);
+  /* a null buffer with a word: only the word is flagged; a buffer with a
+     null word has length 0 */
+  e = pack(CAPSTONE_SYS_accept4, 3, 0, 64, 0, 0, 0);
+  assert(e.flags == 0x4 && !capstone_delegate_validate(&e, region, EXCHANGE, lengths) && lengths[1] == 0);
+  e = pack(CAPSTONE_SYS_accept4, 3, 128, 0, 0, 0, 0);
+  assert(e.flags == 0x2 && !capstone_delegate_validate(&e, region, EXCHANGE, lengths) && lengths[1] == 0);
+  /* a word argument that carries a value without being flagged is malformed */
+  e = pack(CAPSTONE_SYS_accept4, 3, 128, 64, 0, 0, 0);
+  e.flags = 0x2;
+  assert(validate(&e) == EINVAL);
+  /* without a region to read from, a word length is 0 */
+  assert(capstone_delegate_arg_bytes(capstone_delegate_shape(CAPSTONE_SYS_accept4), &e, NULL, 0, 1) == 0);
+  /* recvfrom: data by argument, address by word */
+  word = 110;
+  memcpy(region + 64, &word, sizeof word);
+  e = pack(CAPSTONE_SYS_recvfrom, 3, 256, 100, 0, 512, 64);
+  assert(e.flags == 0x32);
+  assert(!capstone_delegate_validate(&e, region, EXCHANGE, lengths) && lengths[1] == 100 && lengths[4] == 110);
+  /* getsockopt: the option value by word */
+  word = 4;
+  memcpy(region + 64, &word, sizeof word);
+  e = pack(CAPSTONE_SYS_getsockopt, 3, 1, 3, 128, 64, 0);
+  assert(!capstone_delegate_validate(&e, region, EXCHANGE, lengths) && lengths[3] == 4);
+  memset(region, 0, sizeof region);
 }
 
 int main(void) {
@@ -182,6 +253,7 @@ int main(void) {
   bounds();
   strings();
   table_is_consistent();
+  words();
   puts("delegate-test: ok");
   return 0;
 }

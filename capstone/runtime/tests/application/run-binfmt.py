@@ -34,7 +34,9 @@ def main():
     for mode, stdout in [('io', 'delegate-contract: io and spawn ok\n'),
                          ('exec', 'delegate-contract: exec ok\n'),
                          ('exec-closed', ''),
-                         ('exec-error', 'delegate-contract: failed exec preserved task\n')]:
+                         ('exec-error', 'delegate-contract: failed exec preserved task\n'),
+                         ('lock', 'delegate-contract: record locks ok\n'),
+                         ('usable-size', 'delegate-contract: usable size ok\n')]:
         check(mode, ['sh', '-c', 'exec "$@"', 'binfmt-test', args.image, mode, args.image],
               0, stdout)
     if args.report:

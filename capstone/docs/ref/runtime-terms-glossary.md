@@ -183,6 +183,22 @@ A synchronous request/response sequence:
 
 This is not busy-wait polling. It is a pair of explicit control transfers.
 
+### HostCall v0
+The bare-domain transport this section describes: a metadata region and a payload
+region, a two-round protocol, coarse services such as `HC_V0_OP_WRITE_STDOUT`
+(`runtime/include/capstone/hostcall.h`). The S-mode wire probes
+(`tests/runtime-qemu/hostcall-*-probe`) and the FPGA gates use it. It is not an
+application ABI: the musl runtime's HostCall v0 mode, which emulated files, pipes,
+the working directory and path operations inside the domain, was removed on
+2026-09-30.
+
+### Delegated runtime (application ABI v2)
+The only application runtime. A musl application's Linux calls cross one at a time:
+the domain fills an entry block, copies pointer arguments into an exchange region and
+yields, and the launcher's task (`capstone-exec`) runs the call as Linux. An image
+without the v2 descriptor is refused. See `runtime/applications.md` and
+`plans/delegation-abi.md`.
+
 ### HostCall proof
 A proof that a domain can request a host-side service through the shared-memory
 protocol, return control, let the helper perform the service, and then validate the

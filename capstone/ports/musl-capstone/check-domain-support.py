@@ -2,21 +2,27 @@
 """Say, before a domain is ever booted, which of its libc calls need something
 the domain cannot provide.
 
-WHY THIS EXISTS. A domain's hostcall answers the syscalls it knows and returns
--ENOSYS for the rest. musl turns -ENOSYS into an ordinary failed call, and a
+WHY THIS EXISTS. A delegated application's runtime runs the syscalls it knows
+and returns -ENOSYS for the rest. musl turns -ENOSYS into an ordinary failed call, and a
 caller that does not check gets a plausible-looking wrong answer instead of a
 stop. The runtime records what it refused and reports it at exit, but that is
 after the fact and only for paths the run happened to take. This is the check
 that does not need a run: the image is linked, so every libc source it can
 reach is already in it.
 
-HOW. The served set is read out of runtime/hostcall.c, from its `case SYS_x:`
-labels, so it cannot drift from the implementation. For each symbol the image
-defines, the archive says which musl object defined it, the object name gives
-the source file, and the source is scanned for the SYS_ names it mentions.
-Names are resolved to numbers through musl's own generated bits/syscall.h and
-the compatibility aliases in src/internal/syscall.h, so SYS_fstatat and
-SYS_newfstatat compare equal.
+HOW. The served set is read out of the delegated runtime's own tables, so it
+cannot drift from the implementation: every number the shape table
+(runtime/common/delegate.c) puts in CAPSTONE_GROUP_DELEGATED, which the
+launcher's task runs as Linux, plus every number the domain's stub
+(runtime/delegate.c in this port) answers itself, from its `case SYS_x:`
+labels and `n == SYS_x` tests: futex, the signal calls, execve through the
+spawn service, the identities and the robust list. The rest of the table
+(memory, processes, the signal return) and every number not in it are
+refused. For each symbol the image defines, the archive says which musl object
+defined it, the object name gives the source file, and the source is scanned
+for the SYS_ names it mentions. Names are resolved to numbers through musl's
+own generated bits/syscall.h and the compatibility aliases in
+src/internal/syscall.h, so SYS_fstatat and SYS_newfstatat compare equal.
 
 THE RULE, and it is the whole design. A source is reported only when EVERY
 syscall it names is unserved. A mention is not a need: musl's fstatat tries
@@ -33,6 +39,12 @@ every image is the same failure as reporting mentions, one level up, so
 --baseline takes a reference image and subtracts whatever it also has. What is
 left is what THIS program brought. Use any domain built from the same archive;
 the smaller the better.
+
+THE RUNTIME'S OWN FUNCTIONS. The SDK's runtime archive replaces some musl
+functions outright (mmap and the System V calls from the domain's allocator,
+atexit, a few string functions), and the image's copy is then not musl's:
+--sdk passes that archive as a port object, and names the libc archive and
+the musl tree the SDK was built with.
 
 WHAT IT STILL CANNOT DO. It reads each symbol's own source, not the whole call
 graph, and a linked symbol need not be reachable. So a line means "this cannot
@@ -64,13 +76,26 @@ def syscall_numbers(musl):
         return None
     return resolve
 
-def served_set(hostcall, resolve):
-    out = set()
-    for name in re.findall(r"case\s+SYS_(\w+)\s*:", open(hostcall).read()):
-        n = resolve(name)
-        if n is not None:
-            out.add(n)
-    return out
+def served_set(runtime, resolve):
+    """The numbers the delegated runtime serves: the shape table's DELEGATED
+    group, and what the domain's stub answers itself. An empty part is an
+    error, never an empty set: a table that moved would otherwise make every
+    call look unserved."""
+    header = open(os.path.join(runtime, "include/capstone/delegate.h")).read()
+    number = {m.group(1): int(m.group(2))
+              for m in re.finditer(r"CAPSTONE_SYS_(\w+)\s*=\s*(\d+)", header)}
+    table = open(os.path.join(runtime, "common/delegate.c")).read()
+    delegated = {number[m.group(1)] for m in re.finditer(
+        r"\{\s*CAPSTONE_SYS_(\w+)\s*,\s*CAPSTONE_GROUP_DELEGATED\b", table)}
+    stub = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "runtime/delegate.c")).read()
+    local = {resolve(name) for name in
+             re.findall(r"case\s+SYS_(\w+)\s*:", stub) + re.findall(r"\bn\s*==\s*SYS_(\w+)", stub)}
+    local.discard(None)
+    if not number or not delegated or not local:
+        sys.exit(f"check-domain-support: no served set under {runtime} "
+                 f"({len(number)} numbers, {len(delegated)} delegated, {len(local)} in the stub)")
+    return delegated | local
 
 def archive_map(nm, archive):
     """symbol -> archive member that defines it."""
@@ -99,9 +124,14 @@ def member_sources(musl, members):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("image")
-    ap.add_argument("--musl", default=os.environ.get("MUSL_SRC", "/tmp/capstone/musl-src/musl-1.2.5"))
-    ap.add_argument("--archive", default=os.environ.get("ARCHIVE", "/tmp/capstone/musl-capstone-build/libc-capstone.a"))
-    ap.add_argument("--hostcall", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime/hostcall.c"))
+    ap.add_argument("--sdk", default=None,
+                    help="the application SDK the image was linked with: its sdk.json names "
+                         "the musl tree, the libc archive and the runtime archive")
+    ap.add_argument("--musl", default=None)
+    ap.add_argument("--archive", default=None)
+    ap.add_argument("--runtime", default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                      "../../runtime"),
+                    help="capstone/runtime, whose shape table says what is delegated")
     ap.add_argument("--baseline", default=None,
                     help="a reference image built from the same archive; what it also "
                          "links is the libc's baseline and is subtracted")
@@ -109,9 +139,17 @@ def main():
                     help="the port's own runtime objects; whatever they define is not musl's")
     ap.add_argument("--nm", default=os.environ.get("CAPSTONE_LLVM_BIN", "") + "/llvm-nm" if os.environ.get("CAPSTONE_LLVM_BIN") else "llvm-nm")
     args = ap.parse_args()
+    if args.sdk:
+        import json
+        sdk = json.load(open(os.path.join(args.sdk, "sdk.json")))
+        args.musl = args.musl or sdk["musl"]
+        args.archive = args.archive or sdk["libc"]
+        args.port_objects.append(sdk["runtime"])
+    args.musl = args.musl or os.environ.get("MUSL_SRC", "/tmp/capstone/musl-src/musl-1.2.5")
+    args.archive = args.archive or os.environ.get("ARCHIVE", "/tmp/capstone/musl-capstone-build/libc-capstone.a")
 
     resolve = syscall_numbers(args.musl)
-    served = served_set(args.hostcall, resolve)
+    served = served_set(args.runtime, resolve)
 
     def image_symbols(path):
         out = set()

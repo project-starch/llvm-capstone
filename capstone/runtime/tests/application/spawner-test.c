@@ -52,7 +52,14 @@ int main(void) {
      running, and cloned without an exit signal so that a plain wait never
      sees it; only __WALL does */
   assert(waitpid(-1, &status, WNOHANG) == -1 && errno == ECHILD);
-  assert(waitpid(-1, &status, WNOHANG | __WALL) == 0);
+  /* A child whose exec failed keeps the helper's exit signal, none: under
+     CLONE_PARENT a child takes its creator's, and only a successful exec
+     resets it to SIGCHLD. Checked for 200 ms, so that an unreaped child has
+     exited and shows here, not only when it happens to be fast. */
+  for (int i = 0; i < 20; ++i) {
+    assert(waitpid(-1, &status, WNOHANG | __WALL) == 0);
+    usleep(10000);
+  }
   /* the descriptor set carries every open one with its flag, except the skip */
   {
     uint64_t cloexec = 0;

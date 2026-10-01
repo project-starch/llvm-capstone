@@ -1,8 +1,9 @@
 /* __thread in a musl domain (C-47).
  *
- * Built by run.sh at -O0 and -O2, and twice more as controls. Every check prints
- * one TLS-TEST line; the status is the number that failed, so LT-RESULT status=0
- * is the pass and a missing line is a failure, never "no result".
+ * Built by ../run-delegated-probes.py at -O0 and -O2, and once more as the
+ * control. Every check prints one TLS-TEST line; the exit status is the number
+ * that failed, so status 0 with nine PASS lines is the pass and a missing line
+ * is a failure, never "no result".
  *
  *   initialized  .tdata: a thread-local starts at its initial value, and a write
  *                sticks. The runtime copied the template.
@@ -17,11 +18,11 @@
  *                through it after a call.
  *   bounds       the capability for a thread-local covers that variable and no
  *                more (-capstone-shrink-globals, as for a global).
- *   errno        errno still works: musl reaches it through tp, and tp is now the
+ *   errno        errno still works: musl reaches it through tp, and tp is the
  *                start of the TLS block with struct pthread below it.
  *
- * -DOVERRUN (the control tls-overrun) writes one byte past `zeroed` and must halt
- * on the capability's bounds.
+ * -DOVERRUN (the control tls-overrun) writes one byte past `zeroed` and must
+ * fault on the capability's bounds: SIGSEGV with a fault record.
  */
 #include <errno.h>
 #include <stdint.h>
