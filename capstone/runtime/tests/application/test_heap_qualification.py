@@ -10,7 +10,7 @@ spec.loader.exec_module(gate)
 
 DIGEST = "a" * 64
 EVIDENCE = {"sha256": DIGEST, "entry": 0x1000,
-            "probes": {"capstone_heap_fault_load": 0x1200, "free": 0x1800}}
+            "probes": {"capstone_heap_fault_load": 0x1200, "sh_free": 0x1800}}
 BEFORE = {"nodes_allocated_total": 100}
 AFTER = {"nodes_allocated_total": 200100, "live_domains": 0, "live_regions": 0, "live_bytes": 0}
 
