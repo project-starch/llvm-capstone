@@ -78,3 +78,62 @@ sublet   7  FAULT  oob
 sublet   8  FAULT  oob
 sublet   9  RETURN 9000ee
 sublet  10  RETURN a0015b
+
+# THE SLABSUBLET ARMS (host/build-slab-sublet.sh; run-safety.py --arm slabsublet0|slabsublet1),
+# registered 2026-10-01 after the three heap arms had run, BEFORE any slabsublet image had booted,
+# and pushed before its first run. Both arms are one image: patch 0006 puts the allocators component
+# port's lifetime hooks into slabs.c and cache.c, on the Sublet runtime heap (HEAP_LOG 27, which lends
+# the 64 MiB payload). MC_SLAB_SUBLET_MODE picks the mode at run time:
+#   slabsublet0  spatial: a slab page is carved into one Sublet region per chunk at carve time, and
+#                every item pointer is an alias bounded to its chunk; nothing is revoked;
+#   slabsublet1  sublet: as 0, and each release (do_slabs_free) and issue (do_slabs_alloc) revokes
+#                the chunk's aliases and mints a fresh one.
+# WHAT EACH PREDICTION RESTS ON:
+# - 1-8 do not touch the slabs: the heap under them is the sublet arm's sublet_heap.c, so they
+#   are the sublet arm's verdicts.
+# - 9 writes through item a's pointer 208 bytes below, into item b. On these arms a's alias is bounded
+#   to its own 208-byte chunk (leases.c mcp_page_carve: one region per chunk, sublet_take), so the
+#   poke faults oob at the printed target on BOTH arms. That is the positive control that the hooks
+#   are live: on every other arm the same fixture returns 9000ee.
+# - 10 removes item a (item_remove -> item_free -> slabs_free -> do_slabs_free: mcp_chunk_release)
+#   and allocates b of the same class, which takes a's chunk back (do_slabs_alloc: mcp_chunk_issue),
+#   then reads a[0] through the OLD pointer.
+#   - slabsublet0: the release and the issue renew nothing, so the old alias still names the chunk:
+#     RETURN a0015b, the same address and the new item's byte, as on the other arms.
+#   - slabsublet1: the release revoked every alias of the chunk and the issue did it again, so the
+#     old pointer reloads untagged (ISSUES Q-11) and the read faults temporal at the printed address.
+# - 11 (registered 2026-10-01 after the first slabsublet boots, before any boot of it): fixture 10 for
+#   a CHUNKED item. The oracle never frees a chunked item (an audit of the first boots found the
+#   chunked release hooks compiled in but never run), so this fixture is their first run. The header
+#   goes back to its class's list and the 512 KiB chunk to the largest class's, both LIFO, so the next
+#   item of the same shape takes both back (same-address=1). slabsublet0: RETURN b0015b. slabsublet1:
+#   do_slabs_free_chunked released the chunk (a revoke), the next do_item_alloc_chunk issued it (again),
+#   so the old data pointer faults temporal at the printed address.
+# - A fault in mcs_init (an adapter refusal, exit 97) or a RETURN with a value other than predicted is
+#   a finding, never an edit here.
+
+slabsublet0   1  RETURN 100001
+slabsublet0   1  LEN    64
+slabsublet0   2  FAULT  oob
+slabsublet0   3  FAULT  oob
+slabsublet0   4  FAULT  temporal
+slabsublet0   5  FAULT  temporal
+slabsublet0   6  FAULT  temporal
+slabsublet0   7  FAULT  oob
+slabsublet0   8  FAULT  oob
+slabsublet0   9  FAULT  oob
+slabsublet0  10  RETURN a0015b
+slabsublet0  11  RETURN b0015b
+
+slabsublet1   1  RETURN 100001
+slabsublet1   1  LEN    64
+slabsublet1   2  FAULT  oob
+slabsublet1   3  FAULT  oob
+slabsublet1   4  FAULT  temporal
+slabsublet1   5  FAULT  temporal
+slabsublet1   6  FAULT  temporal
+slabsublet1   7  FAULT  oob
+slabsublet1   8  FAULT  oob
+slabsublet1   9  FAULT  oob
+slabsublet1  10  FAULT  temporal
+slabsublet1  11  FAULT  temporal
