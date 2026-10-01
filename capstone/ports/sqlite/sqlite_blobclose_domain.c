@@ -104,16 +104,38 @@ static int run_blobclose(void) {
   rc = sqlite3_blob_open(db, "main", "t", "x", 1, 0, &blob);
   if (rc != SQLITE_OK)
     return fail("blob-open", rc);
+  output_text("blobclose blob_open rc=0\n");
 
-  /* blob still open -> connection becomes a zombie, lookaside pool stays alive */
+  /* blob still open -> connection becomes a zombie, lookaside pool stays alive.
+   *
+   * REACHABILITY PROBE. close_v2 returning 0 here is the decisive marker: it means the
+   * ZOMBIE path was taken, which is what defers the real free of the connection to the
+   * finalize inside blob_close below. Plain sqlite3_close() on the same sequence returns
+   * SQLITE_BUSY (5) and does not close anything at all, and then there is no UAF --
+   * measured on the host, where close_v2 faults under ASan and close is clean. So a 5
+   * here, or any nonzero, means this case established nothing. */
   rc = sqlite3_close_v2(db);
   if (rc != SQLITE_OK)
     return fail("close-v2", rc);
+  output_text("blobclose close_v2 rc=0 (zombie path taken; plain close would give 5)\n");
 
-  /* 3.22.0 buggy order: this is the UAF on the lookaside Incrblob */
+  /* 3.22.0's order inside sqlite3_blob_close is
+   *     rc = sqlite3_finalize(p->pStmt);   <- last stmt on a zombie db, so
+   *                                           sqlite3LeaveMutexAndCloseZombie frees db
+   *     sqlite3DbFree(db, p);              <- reads db->lookaside on the FREED db
+   * Fixed 3.30.0 by freeing p first and finalizing afterwards.
+   *
+   * Host ASan oracle on 3.22.0, this exact sequence:
+   *   READ of size 8
+   *     use   sqlite3DbFreeNN <- sqlite3DbFree <- sqlite3_blob_close
+   *     free  sqlite3LeaveMutexAndCloseZombie <- sqlite3_finalize <- sqlite3_blob_close
+   * It fires with lookaside ON and with lookaside OFF -- sqlite3DbFree reads
+   * db->lookaside.pStart/pEnd either way to decide whether p is a lookaside slot, so
+   * this bug is NOT out of a native oracle's reach as was previously recorded. */
   rc = sqlite3_blob_close(blob);
   if (rc != SQLITE_OK)
     return fail("blob-close", rc);
+  output_text("blobclose blob_close rc=0 (the freed-db read already happened)\n");
 
   output_text("blobclose NOTRAP done\n");
   return 0;
