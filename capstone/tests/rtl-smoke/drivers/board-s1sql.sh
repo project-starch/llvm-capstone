@@ -53,6 +53,8 @@ while IFS=$'\t' read -r name arm probe va hash hostargs boot want; do
   [ -f "$QP/$full" ] || fail "$name: no QEMU record $QP/$full"
   e=$(python3 -c "import struct,sys;print(hex(struct.unpack_from('<Q',open(sys.argv[1],'rb').read(),0x18)[0]))" $src)
   [ "$e" = "$va" ] || fail "$name: entry $e, cells.tsv says $va"
+  [ -n "$want" ] || fail "$name: empty want column -- the row did not split into 8 fields (an empty field collapses under tab IFS; use '-')"
+  case "$hostargs" in -) hostargs="" ;; *) hostargs=" $hostargs" ;; esac
   dst=s1-$arm.dom
   case " $STAGED " in *" $dst "*) ;; *) cp -f "$src" "$T/$dst" && cp -f "$src" "$TT/$dst" || fail "stage $dst"; STAGED="$STAGED $dst";; esac
   D="$D,/test-domains/$dst:--speedtest1$hostargs --testset main --size 1 --s1-probe $probe"
@@ -62,6 +64,7 @@ done <<< "$CELLS"
 say "pieces: monitor 2dcd3a5, module d04bd83, host 2c9e82d1; staged for boot $BOOT:$STAGED"
 say "pre-registered:
 $PRE"
+say "=== stage list: $D"
 [ "${DRYRUN:-0}" = 1 ] && { echo dryrun > "$OUT/marker"; say "DRYRUN: all pre-bake checks passed; stopping before the overlay, the bake and the board"; exit 0; }
 # retire the big images that are not this boot's
 STASH=$OUT/retired; mkdir -p $STASH; RESTORED=0
