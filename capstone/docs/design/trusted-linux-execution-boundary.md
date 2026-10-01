@@ -113,6 +113,14 @@ need their own completion rules; a pinned physical page alone is insufficient.
    behavior. A source-level architectural choice is not evidence of a working
    kernel or cheaper hardware.
 
-The earliest implementation experiment is the access/fault path in item 2,
-after the small model in item 1. Adding more delegated syscall shapes before
-this experiment improves the bridge but does not settle M1.
+The next implementation experiment is the access/fault path in item 2.
+Adding more delegated syscall shapes improves the bridge but does not
+settle M1.
+
+The first [executable boundary model](../../models/trusted-linux-m1/README.md)
+now covers the finite cases in item 1 with explicit per-hart invalidation and
+drain transitions. Its [record](../../models/trusted-linux-m1/result.json)
+contains 11 families, 10,089 named-event schedules and counterexamples for
+10 injected faults. These bounded checks leave capability encoding, tag save,
+multi-page translation, kernel copy recovery and the QEMU/RTL implementation
+untested. Item 2 is the next implementation gate.

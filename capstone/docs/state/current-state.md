@@ -2,6 +2,18 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — executable trusted-Linux M1 boundary model
+
+The [finite model](../../models/trusted-linux-m1/README.md) explores 11
+families and 10,089 named-event schedules. Both `free` and `unmap` families
+reach successful issue, per-hart invalidation/drain, completion and reuse.
+All correct schedules remain safe under the modeled properties; 10 injected
+variants produce the intended counterexamples. The deterministic
+[record](../../models/trusted-linux-m1/result.json) includes the model source
+hash. Register/tag state, multi-page behavior, recoverable kernel-copy faults
+and hardware timing remain outside its bounds. M1 still needs the Linux U-mode
+translation and fault prototype.
+
 ## 2026-10-01 — trusted-Linux M1 boundary and UDP recheck
 
 The [M1 proposal](../design/trusted-linux-execution-boundary.md) selects

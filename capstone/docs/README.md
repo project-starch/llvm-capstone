@@ -9,8 +9,10 @@ loader work, with common acceptance gates and a measured-benefit decision.
 The `memory-trusted-linux` base starts from `dev`; its initial design and plan
 added no implementation or qualification result.
 The [M1 execution-boundary proposal](design/trusted-linux-execution-boundary.md)
-selects Linux U-mode capability processes as the target to test. Its model,
-kernel/user ABI and prototype gate remain open.
+selects Linux U-mode capability processes as the target to test. The
+[first executable boundary model](../models/trusted-linux-m1/README.md) checks
+context, fault, retirement and private-clone transitions in a finite state
+space; the kernel/user ABI and prototype gate remain open.
 
 The `trusted-linux-syscall-bounds` lane adds a bounded-buffer prototype to
 the current delegated runtime. Its [one-hart result](../runtime/tests/application/results/20260930-syscall-buffer-bounds.json)

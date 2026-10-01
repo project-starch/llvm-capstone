@@ -1,0 +1,472 @@
+{
+  "bounds": {
+    "contexts": 2,
+    "generations": 2,
+    "harts": 2,
+    "objects_per_context": 1,
+    "pages_per_context": 1,
+    "pending_accesses_per_hart": 1
+  },
+  "checks": {
+    "bad_read_no_input_consumption": "PASS",
+    "cached_issue_after_retire_rejected": "PASS",
+    "private_clone_writes_independent": "PASS",
+    "unrelated_issue_during_retirement": "PASS",
+    "untagged_pointer": "PASS"
+  },
+  "families": {
+    "asid_reuse": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "completed": 1,
+          "issued": 1,
+          "refused": 1,
+          "switch": 1
+        },
+        "schedules": 1,
+        "states": 4,
+        "successful_schedules": 0,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "access1",
+          "property": "object_authority",
+          "schedule": [
+            "warm",
+            "complete0",
+            "switch1",
+            "access1"
+          ]
+        },
+        "outcomes": {
+          "completed": 1,
+          "issued": 2,
+          "switch": 1
+        },
+        "schedules": 1,
+        "states": 5,
+        "successful_schedules": 1,
+        "violations": [
+          "object_authority"
+        ]
+      },
+      "variant": "stale_asid_cache"
+    },
+    "dead_clone": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "cloned": 1,
+          "refused": 1
+        },
+        "schedules": 1,
+        "states": 2,
+        "successful_schedules": 0,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "clone",
+          "property": "revived_dead_identity",
+          "schedule": [
+            "clone",
+            "issue1"
+          ]
+        },
+        "outcomes": {
+          "cloned": 1
+        },
+        "schedules": 1,
+        "states": 2,
+        "successful_schedules": 0,
+        "violations": [
+          "revived_dead_identity"
+        ]
+      },
+      "variant": "clone_revives_dead_node"
+    },
+    "fault_retry": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "mapped": 1,
+          "page_fault": 1,
+          "resolved": 1,
+          "retiring": 1,
+          "retry_denied": 1
+        },
+        "schedules": 1,
+        "states": 6,
+        "successful_schedules": 1,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "retry0",
+          "property": "object_authority",
+          "schedule": [
+            "mmap0",
+            "issue0",
+            "retire0",
+            "resolve0",
+            "retry0"
+          ]
+        },
+        "outcomes": {
+          "issued": 1,
+          "mapped": 1,
+          "page_fault": 1,
+          "resolved": 1,
+          "retiring": 1
+        },
+        "schedules": 1,
+        "states": 6,
+        "successful_schedules": 1,
+        "violations": [
+          "object_authority"
+        ]
+      },
+      "variant": "fault_retry_skips_liveness"
+    },
+    "free_completion": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "completed": 5040,
+          "drained": 4200,
+          "finished": 140,
+          "invalidated": 10080,
+          "issued": 5040,
+          "refused": 15800,
+          "retiring": 5040,
+          "reused": 20
+        },
+        "schedules": 5040,
+        "states": 19,
+        "successful_schedules": 20,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "finish0",
+          "property": "reuse_authorized_with_access_pending",
+          "schedule": [
+            "issue0",
+            "retire0",
+            "invalidate0",
+            "invalidate1",
+            "drain0",
+            "drain1",
+            "finish0",
+            "complete0",
+            "reuse0"
+          ]
+        },
+        "outcomes": {
+          "completed": 4620,
+          "drained": 3444,
+          "finished": 1680,
+          "invalidated": 10080,
+          "issued": 5040,
+          "refused": 13776,
+          "retiring": 5040,
+          "reused": 20
+        },
+        "schedules": 5040,
+        "states": 24,
+        "successful_schedules": 20,
+        "violations": [
+          "finish_without_drain_ack",
+          "reuse_authorized_with_access_pending"
+        ]
+      },
+      "variant": "no_free_drain"
+    },
+    "lifetime_switch": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "completed": 1,
+          "issued": 1,
+          "refused": 1,
+          "switch": 1
+        },
+        "schedules": 1,
+        "states": 4,
+        "successful_schedules": 0,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "access1",
+          "property": "object_authority",
+          "schedule": [
+            "warm",
+            "complete0",
+            "switch1",
+            "access1"
+          ]
+        },
+        "outcomes": {
+          "completed": 1,
+          "issued": 2,
+          "switch": 1
+        },
+        "schedules": 1,
+        "states": 5,
+        "successful_schedules": 1,
+        "violations": [
+          "object_authority"
+        ]
+      },
+      "variant": "stale_lifetime_selector"
+    },
+    "page_write": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "refused": 1
+        },
+        "schedules": 1,
+        "states": 1,
+        "successful_schedules": 0,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "issue0",
+          "property": "page_permission",
+          "schedule": [
+            "issue0"
+          ]
+        },
+        "outcomes": {
+          "issued": 1
+        },
+        "schedules": 1,
+        "states": 2,
+        "successful_schedules": 1,
+        "violations": [
+          "page_permission"
+        ]
+      },
+      "variant": "pte_write_bypass"
+    },
+    "private_clone": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "cloned": 1,
+          "completed": 1,
+          "issued": 1,
+          "retiring": 1
+        },
+        "schedules": 1,
+        "states": 5,
+        "successful_schedules": 1,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "clone",
+          "property": "private_backing_shared",
+          "schedule": [
+            "clone",
+            "retire0",
+            "issue1",
+            "complete1"
+          ]
+        },
+        "outcomes": {
+          "cloned": 1
+        },
+        "schedules": 1,
+        "states": 2,
+        "successful_schedules": 0,
+        "violations": [
+          "private_backing_shared"
+        ]
+      },
+      "variant": "clone_shares_backing"
+    },
+    "syscall_span": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "EFAULT": 1
+        },
+        "schedules": 1,
+        "states": 1,
+        "successful_schedules": 1,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "bad_read",
+          "property": "syscall_consumed_on_bad_span",
+          "schedule": [
+            "bad_read"
+          ]
+        },
+        "outcomes": {
+          "read:16": 1
+        },
+        "schedules": 1,
+        "states": 2,
+        "successful_schedules": 1,
+        "violations": [
+          "syscall_consumed_on_bad_span"
+        ]
+      },
+      "variant": "syscall_clamps_request"
+    },
+    "translation_switch": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "completed": 1,
+          "issued": 2,
+          "switch": 1
+        },
+        "schedules": 1,
+        "states": 5,
+        "successful_schedules": 1,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "access1",
+          "property": "foreign_translation",
+          "schedule": [
+            "warm",
+            "complete0",
+            "switch1",
+            "access1"
+          ]
+        },
+        "outcomes": {
+          "completed": 1,
+          "issued": 2,
+          "switch": 1
+        },
+        "schedules": 1,
+        "states": 5,
+        "successful_schedules": 1,
+        "violations": [
+          "foreign_translation"
+        ]
+      },
+      "variant": "stale_translation_selector"
+    },
+    "unmap_completion": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "completed": 5040,
+          "drained": 4200,
+          "finished": 140,
+          "invalidated": 10080,
+          "issued": 5040,
+          "refused": 15800,
+          "retiring": 5040,
+          "reused": 20
+        },
+        "schedules": 5040,
+        "states": 19,
+        "successful_schedules": 20,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "finish_unmap0",
+          "property": "reuse_authorized_with_access_pending",
+          "schedule": [
+            "issue0",
+            "unmap0",
+            "invalidate0",
+            "invalidate1",
+            "drain0",
+            "drain1",
+            "finish_unmap0",
+            "complete0",
+            "reuse0"
+          ]
+        },
+        "outcomes": {
+          "completed": 4620,
+          "drained": 3444,
+          "finished": 1680,
+          "invalidated": 10080,
+          "issued": 5040,
+          "refused": 13776,
+          "retiring": 5040,
+          "reused": 20
+        },
+        "schedules": 5040,
+        "states": 24,
+        "successful_schedules": 20,
+        "violations": [
+          "finish_without_drain_ack",
+          "reuse_authorized_with_access_pending"
+        ]
+      },
+      "variant": "no_unmap_drain"
+    },
+    "unrelated_context": {
+      "correct": {
+        "counterexample": null,
+        "outcomes": {
+          "completed": 2,
+          "drained": 2,
+          "finished": 1,
+          "invalidated": 2,
+          "issued": 2,
+          "refused": 1,
+          "retiring": 1
+        },
+        "schedules": 1,
+        "states": 11,
+        "successful_schedules": 0,
+        "violations": []
+      },
+      "injected": {
+        "counterexample": {
+          "action": "finish0",
+          "property": "reuse_authorized_with_access_pending",
+          "schedule": [
+            "issue0",
+            "retire0",
+            "issue1",
+            "invalidate0",
+            "invalidate1",
+            "complete1",
+            "drain1",
+            "finish0",
+            "complete0",
+            "drain0",
+            "finish0"
+          ]
+        },
+        "outcomes": {
+          "completed": 1,
+          "drained": 1,
+          "finished": 1,
+          "invalidated": 2,
+          "issued": 2,
+          "retiring": 1
+        },
+        "schedules": 1,
+        "states": 9,
+        "successful_schedules": 0,
+        "violations": [
+          "reuse_authorized_with_access_pending"
+        ]
+      },
+      "variant": "no_free_drain"
+    }
+  },
+  "model_sha256": "a615ea820ade76cd4dc6a01f838480e1e778d90826f0f3184f39004402f072d3",
+  "schema": 1
+}

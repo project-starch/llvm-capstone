@@ -4,11 +4,13 @@ Trusted Linux application compatibility (2026-09-30): follow the
 `trusted-linux-syscall-bounds` lane now demonstrates requested-span checks
 through the current C-mode bridge, with direct-exec and socket contracts in a
 one-hart guest. The [M1 boundary proposal](../design/trusted-linux-execution-boundary.md)
-chooses Linux U-mode capability processes as the target. Next, model context
-isolation and retirement, then demonstrate ordinary page translation and a
-recoverable buffer-copy fault in a small prototype. The kernel/user ABI and
-two-hart completion contract remain open. Integrate
-the existing thread work with current I/O services and qualify IPv6 end-to-end.
+chooses Linux U-mode capability processes as the target. The finite
+[boundary model](../../models/trusted-linux-m1/README.md) now covers context,
+fault, retirement and private-clone schedules. Next, review its explicit
+bounds and demonstrate ordinary page translation and a recoverable buffer-copy
+fault in a small U-mode prototype. The kernel/user ABI and two-hart completion
+contract remain open. Integrate the existing thread work with current I/O
+services and qualify IPv6 end-to-end.
 Linux OS feature parity remains the goal; the bridge result does not establish
 Linux user-mode execution or close M1.
 
