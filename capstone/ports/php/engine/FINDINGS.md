@@ -459,6 +459,58 @@ one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` i
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
 
+## THE REASON EVERY TAG WATCH CAME BACK SILENT
+
+`store_capregval` adds a map entry only when the stored register is TAGGED; for an untagged value
+it stores the 128 bits and calls `cap_mem_map_remove`, which is a no-op when no entry exists. So:
+
+> **An `stc` of an already-untagged value registers no tag and destroys nothing.**
+
+Once a capability is untagged anywhere, it then propagates through arbitrarily many PERFECTLY
+CORRECT `stc`/`ldc` copies, carrying its exact address, and generating **no diagnostic signal at
+all**. There is exactly ONE destruction event per lost tag, and it is upstream of every copy.
+
+That is why a whole-domain tag watch aimed at the dead pointer's own slot
+(`CAPSTONE_TAGWATCH_GRANULE=0x101d9f760`, the slot address obtained by probing
+`&zvalue->value.str.val` in `_zval_copy_ctor`) reports **zero kills**. Nothing destroys the tag
+there because nothing ever registered one: the value arrived untagged and was faithfully copied.
+
+**The tag watch is therefore the wrong instrument for this fault**, and several passes were spent
+on it. It answers "who destroyed a live tag"; the question here is "where was the tag first
+absent", which only a probe at successive points in the pipeline can answer -- `csdebugprint`,
+which has now produced the two decisive results in this investigation.
+
+### Eliminated by measurement, cumulative
+
+| candidate | how | result |
+|---|---|---|
+| our arena allocator returns untagged | `ZEND_CAP_TAG_GUARD` | never fires |
+| arena byte / slot exhaustion | `ZEND_CAP_ARENA_TRACE` + 16 KB positive control | never fires (control does) |
+| PHP's `AG(cache)` holds untagged | rung walks `alloc_globals.cache` | 2 entries, 0 untagged |
+| spill widths in `_estrndup`, PHP `_emalloc`, our `malloc` | disassembly | all `stc`/`ldc`; `ld` only for null tests |
+| in-memory clobber of the stack slot | whole-stack watch, 1751 kills, complete | none at the slot |
+| union aliasing (`lval` over `str.val`) | **implemented the de-aliasing fix** | still faults identically |
+| struct-copy lowering | whole-image scan | 418 `ldc`/`stc` runs, **0** `ld`/`sd` runs |
+| memcpy mismatched-phase byte path | capability-aware one-shot probe | never fires |
+| static layout / alignment | measured | `zval` 48/16, `value` at offset 0 |
+| QEMU ops silently untagging | read the helpers | all raise or assert |
+| capability-map eviction | read `add_entry` | grows, never evicts |
+| S-14 (scalar `ld` of a cap spill slot) | S-14's own pattern over the image | **0** sites |
+| C-32 `stc`/`ldc` move semantics | type check | ours is NONLIN; no load-path removal at our pin |
+| clobber of the heap zval's slot | whole-domain watch, `_GRANULE` on it | **0** kills |
+
+### The one thing that is directly known, and the next step
+
+`csdebugprint` shows the string tagged when `_emalloc` returns it and untagged when
+`_zval_copy_ctor` hands it to `_estrndup`. Between those two points lies the scanner -> parser ->
+compiler pipeline, and the scanner's own stores are `stc` (verified at `17ca0`, `190d4`).
+
+So: **bisect the pipeline with `csdebugprint`**, not with the tag watch. Probe the string pointer's
+tag at successive stages -- scanner `zendlval` after the store, the parser's semantic value after
+the reduction, the compiler's `zend_do_*` entry, the heap zval after `ALLOC_ZVAL`/copy -- and the
+first Scalar print names the stage. The diagnostic-copy machinery for doing that already exists
+(`PHP_DIAG_ALLOC`, `PHP_DIAG_ZVAR` and `diag/*.inc`); each new probe is one more spliced file.
+
 ## REFUTED BY EXPERIMENT: the union aliasing is a real hazard but NOT this fault
 
 The de-aliasing fix was implemented and measured. `PHP_CAP_UNION_PAD=1` generates a patched COPY of

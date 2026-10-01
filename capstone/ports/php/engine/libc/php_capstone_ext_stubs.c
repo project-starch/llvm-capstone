@@ -41,3 +41,14 @@ void php_error_docref1(const char *docref, const char *param1, int type,
     (void)docref; (void)param1; (void)format;
     zend_error(type, "php_error_docref1");
 }
+
+/* Hook for beebs memcpy's BEEBS_MEMCPY_PHASE_NOTE one-shot assertion (default off there).
+ * A mismatched-phase memcpy of >=16 bytes is the one shape in that function that can move
+ * capability-bearing data and strip its tag, so this answers whether it ever happens on the
+ * trigger path. php_fault_report halts and encodes its argument in badaddr, so n comes back
+ * as badaddr - 64; the da/sa phases are folded in above it. */
+void capstone_memcpy_phase_note(unsigned long da_, unsigned long sa_, unsigned long n_)
+{
+    extern void php_fault_report(unsigned long);
+    php_fault_report((da_ << 56) | (sa_ << 48) | (n_ & 0xFFFFFFFFUL));
+}

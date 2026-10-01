@@ -176,6 +176,34 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
     return dst;
   }
 #endif
+#if defined(BEEBS_MEMCPY_PHASE_NOTE) && BEEBS_MEMCPY_PHASE_NOTE
+  /* ONE-SHOT ASSERTION, default off. The byte-loop fallback below strips the tag off every
+     capability it copies, so a mismatched-phase copy of 16 bytes or more is the only shape in
+     this function that can relocate capability-bearing data untagged. This reports the FIRST
+     such call through the port's fault channel (which halts, encoding n) so that "it never
+     happens" and "the probe was compiled out" cannot be confused. Default off because the
+     report is a deliberate halt. */
+  if (da != sa && n >= 16u) {
+    /* Mismatched phase alone is NOT harmful: a 17-byte string copy at da=0,sa=1 cannot be
+       carrying a capability, because a capability only ever sits at a 16-aligned address.
+       Report only when the SOURCE actually holds one, by walking its 16-aligned granules and
+       checking the tag. `as` is derived from `s` by POINTER arithmetic, never by casting
+       through an integer -- an integer-derived pointer is untagged and the ldc below would
+       fault instead of reporting. */
+    const unsigned char *as_ = s + ((16u - (unsigned)(sa & 15u)) & 15u);
+    const unsigned char *se_ = s + n;
+    while (as_ + 16 <= se_) {
+      void *probe_ = *(void * const *)as_;
+      if (__builtin_capstone_cap_get_tag(probe_)) {
+        extern void capstone_memcpy_phase_note(unsigned long da_, unsigned long sa_,
+                                               unsigned long n_);
+        capstone_memcpy_phase_note((unsigned long)da, (unsigned long)sa, (unsigned long)n);
+        break;
+      }
+      as_ += 16;
+    }
+  }
+#endif
   /* Only when src and dst share alignment can the middle be copied as whole
      capabilities; otherwise fall through to the byte loop for everything. */
 #ifndef BEEBS_MEMCPY_BYTES_ONLY

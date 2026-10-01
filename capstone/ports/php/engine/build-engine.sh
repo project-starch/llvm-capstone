@@ -108,6 +108,19 @@ if [ "${PHP_CAP_UNION_PAD:-0}" = "1" ]; then
   echo "  PHP_CAP_UNION_PAD: zvalue_value.str.val moved off the scalars' granule"
 fi
 
+# PHP_DIAG_ZVAR=1: patched COPY of Zend/zend_variables.c printing the slot address that holds
+# the string pointer _zval_copy_ctor reads, so the tag watch can be aimed at that one granule.
+ZEND_VARIABLES_SRC="$P/Zend/zend_variables.c"
+if [ "${PHP_DIAG_ZVAR:-0}" = "1" ]; then
+  ZEND_VARIABLES_SRC="$OUT/zend_variables_diag.c"
+  sed "/estrndup_rel(zvalue->value.str.val/i\\" "$P/Zend/zend_variables.c" > /dev/null 2>&1 || true
+  awk 'BEGIN{while((getline l < "'"$HERE"'/diag/zvar-slot-probe.inc")>0) pr=pr l "\n"}
+       /estrndup_rel\(zvalue->value\.str\.val/ { printf "%s", pr }
+       { print }' "$P/Zend/zend_variables.c" > "$ZEND_VARIABLES_SRC"
+  grep -q "0x43" "$ZEND_VARIABLES_SRC" || { echo "  PHP_DIAG_ZVAR: probe did not splice" >&2; exit 2; }
+  echo "  PHP_DIAG_ZVAR: printing the slot address in _zval_copy_ctor"
+fi
+
 TUS="zend_language_scanner zend_language_parser zend_compile zend_execute zend_execute_API
  zend_opcode zend_operators zend_variables zend_hash zend_API zend_alloc zend_mm zend
  zend_llist zend_ptr_stack zend_stack zend_constants zend_list zend_qsort zend_stream
@@ -124,7 +137,9 @@ ZCF=("${CF[@]}")
 # __cyg_profile hooks' void* params do not match the capability pointer type. The depth
 # watchdog lives in malloc() instead -- see libc/php_capstone_malloc.c.
 for t in $TUS; do
-  _src="$P/Zend/$t.c"; [ "$t" = "zend_alloc" ] && _src="$ZEND_ALLOC_SRC"
+  _src="$P/Zend/$t.c"
+  [ "$t" = "zend_alloc" ] && _src="$ZEND_ALLOC_SRC"
+  [ "$t" = "zend_variables" ] && _src="$ZEND_VARIABLES_SRC"
   "$CAPSTONE_CLANG" "${ZCF[@]}" -c "$_src" -o "$OUT/obj/$t.o" 2>"$OUT/log/$t.log" \
     || { echo "FAILED $t"; head -5 "$OUT/log/$t.log"; exit 1; }
   OBJS+=("$OUT/obj/$t.o")
