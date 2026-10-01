@@ -16,9 +16,12 @@ static int unpack(size_t size) {
 int main(void) {
   char *input[] = {"program", "", "two words", "a\nb", "'\"$()`", NULL};
   char *environment[] = {"A=", "B=a\nb", NULL};
-  assert(!capstone_launch_pack(data, sizeof data, 5, input, environment, "/tmp/a b", 5));
+  struct capstone_launch_task task = {4242, 1, 1000, 1000, 100, 100,
+      1700000000123456789ull, 987654321ull, 55555555ull, 10000000ull};
+  assert(!capstone_launch_pack(data, sizeof data, 5, input, environment, "/tmp/a b", 5, &task));
   assert(!unpack(sizeof data));
   assert(view.argc == 5 && view.envc == 2 && view.stdio_mask == 5);
+  assert(!memcmp(&view.task, &task, sizeof task));
   assert(!strcmp(view.cwd, "/tmp/a b") && !args[5] && !env[2]);
   for (unsigned i = 0; i < 5; ++i) assert(!strcmp(input[i], args[i]));
   for (unsigned i = 0; i < 2; ++i) assert(!strcmp(environment[i], env[i]));
@@ -27,7 +30,9 @@ int main(void) {
   struct capstone_launch_header h;
   memcpy(&h, data, sizeof h);
   for (size_t n = 0; n < h.bytes; ++n) assert(unpack(n));
-  for (unsigned field = 0; field < 8; ++field) {
+  /* version, bytes, argc, envc, cwd, stdio_mask: each rejects UINT32_MAX. The
+     task fields that follow are data, not structure, and are not validated. */
+  for (unsigned field = 0; field < 6; ++field) {
     uint32_t bad = UINT32_MAX;
     memcpy(data, good, sizeof data);
     memcpy(data + 8 + field * sizeof bad, &bad, sizeof bad);
@@ -39,13 +44,13 @@ int main(void) {
   memcpy(data, good, sizeof data);
   data[h.bytes - 1] = 'x';
   assert(unpack(h.bytes));
-  assert(capstone_launch_pack(data, sizeof h, 5, input, environment, "/", 7) == E2BIG);
-  assert(capstone_launch_pack(data, sizeof data, 0, input, environment, "/", 7) == EINVAL);
-  assert(capstone_launch_pack(data, sizeof data, 5, input, environment, "/", 8) == EINVAL);
+  assert(capstone_launch_pack(data, sizeof h, 5, input, environment, "/", 7, &task) == E2BIG);
+  assert(capstone_launch_pack(data, sizeof data, 0, input, environment, "/", 7, &task) == EINVAL);
+  assert(capstone_launch_pack(data, sizeof data, 5, input, environment, "/", 8, &task) == EINVAL);
   char huge[CAPSTONE_LAUNCH_BYTES + 1];
   memset(huge, 'x', sizeof huge - 1); huge[sizeof huge - 1] = 0;
   char *large[] = {huge};
-  assert(capstone_launch_pack(data, sizeof data, 1, large, environment, "/", 7) == E2BIG);
+  assert(capstone_launch_pack(data, sizeof data, 1, large, environment, "/", 7, &task) == E2BIG);
   /* Deterministic malformed-block stress: the decoder must reject or produce
      only pointers into the supplied data. Run this under ASan/UBSan as well. */
   uint32_t random = 1;

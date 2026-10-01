@@ -16,13 +16,10 @@ bash capstone/ports/wireshark/app/deps/build-zlib.sh     # then pcre2, c-ares, l
 
 - **`env.sh`** (sourced by every recipe). It builds, once per toolchain and runtime source:
   - this lane's own `libc-capstone.a`;
-  - the domain runtime: start-musl, hostcall, tls, level0, the libc overrides from
-    `runtime/libc_overrides.sh`, soft-float, and compiler-rt's 128-bit division;
-  - `domain_entry.c`, the `capstone_main` → `main` adapter. A domain has no command line and no
-    environment, so it reads them when the domain starts, from `/tmp/domain.argv` (one argument
-    per line) and `/tmp/domain.env` (one `NAME=value` per line). One image then serves every run.
-    Without the files it passes argv `{"domain"}` and an empty environment, which is what every
-    configure link test gets.
+  - the application SDK (`ports/common/application/build-sdk.sh`): the delegated runtime with
+    the libc overrides of `runtime/libc_overrides.list`, soft-float, and compiler-rt's 128-bit
+    division. Its key covers every runtime source. An image is an ordinary `main(argc, argv)`
+    that gets the launcher's command line and environment.
 
   It then checks `capstone-cc` in both directions: a call to `puts` links, while an undefined
   function and an unknown `-l` do not.
@@ -56,7 +53,7 @@ All seven libraries tshark 4.6.8 requires pass their gates.
 | libgpg-error 1.61 (no threads) | 13/13 (`t-poll` does not compile without threads, upstream) | `libgpg-error.a` | 1 / 0 | none: `%p` formatting |
 | libgcrypt 1.12.4 (no asm) | 40 pass, 2 skipped (6 GB/256 GB hashes), `t-lock` fails as expected: it drives locks from many threads, and libgpg-error has none | `libgcrypt.a` | 56 / 0 after the patch (3 rebuilt before) | **3 patched** (`patches/libgcrypt-0002`): ChaCha20/Salsa20 selftests aligned by masking an address (now add an offset, as rijndael.c does); `sexp_null_cond`'s constant-time select through `uintptr_t` (now a branch, which gives up constant time). `fips.c`'s `__thread` (C-47) is plain static storage in a domain (`patches/libgcrypt-0001`) |
 | libxml2 2.15.4 (no ICU, no threads) | 12/12 upstream checks: runtest 3,410, runsuite 1,471, … (`testModule` needs a shared build; `runxmlconf` has 0 tests, its suite is not in the tarball) | `libxml2.a` | 35 / 13 | none: attribute values are offsets rebuilt as `base + offset` (a real pointer plus an integer); the rest are integers carried in pointers and hashed addresses |
-| GLib 2.80.5 (libglib only) | glib:glib suite 133 ok, 1 skipped, 0 failed | `libglib-2.0.a`, 0 failed objects; 9/9 GLib test programs link | 40 / 23 after the patches | see below |
+| GLib 2.80.5 (libglib only) | glib:glib suite 133 ok, 1 skipped, 0 failed | `libglib-2.0.a`, 0 failed objects; 16/16 GLib test programs link, 7 of them its thread tests (run below) | 40 / 23 after the patches | see below |
 
 
 **GLib**, cross-configured by its own meson (`build-glib.sh`), so `config.h`'s answers come from
@@ -66,7 +63,7 @@ neither header, and GLib falls back.
   direction, `strlcpy`, `/proc`).
 - **libffi** is a stub `.pc`, since only libglib is built, not GObject.
 
-Eight patches, each under `__CAPSTONE__` except `gqsort`'s copy, whose native suite (`sort`, 4
+Seven patches, each under `__CAPSTONE__` except `gqsort`'s copy, whose native suite (`sort`, 4
 subtests) covers the rewrite:
 - `glib-0001`: `gintptr`/`guintptr` are `long`, the address, because no integer type is as wide as
   a capstone64 pointer and the compiler has no `__intcap_t`;
@@ -85,14 +82,21 @@ subtests) covers the rewrite:
   Found by the tshark M0 link gate, not by GLib's suite. The recipe now refuses an archive with any
   undefined weak symbol; that check fired on the unpatched archive (`__lsan_enable`,
   `__lsan_ignore_object`) and passes with the patch, and none of the other six archives has one.
-- `glib-0008`: GCond does not reach `pthread_cond_*` in a domain. musl-capstone's
-  `pthread_cond_t` is 48 bytes on capstone64, room for three pointers, but musl's internal macros
-  put `_c_tail` at `__u.__p[5]`, 32 bytes past the object (`src/internal/pthread_impl.h`), and
-  `_c_shared`/`_c_head` overlap its int fields. A broadcast from GLib halted the tshark domain in
-  `epan_init` (cause 24 in `__private_cond_signal`); `g_once_init_leave()` broadcasts on every call. A
-  domain runs one thread, so a signal or broadcast has no waiter (no effect, as documented) and a
-  wait could never be woken (it aborts). GLib's `gthread-posix.c` is the only user of
-  `pthread_cond_*` among the seven libraries and tshark. The defect itself is musl-capstone's.
+- GCond reaches `pthread_cond_*` as upstream has it. `glib-0008` made signal and broadcast no-ops
+  and wait an abort, because musl-capstone's `pthread_cond_t` put `_c_tail` 32 bytes past the
+  object (a broadcast halted the tshark domain in `epan_init`, cause 24); musl patch 0006 lays the
+  type out pointers first (C-65), and a domain now runs threads, so a wait can be woken.
+
+**Threads (2026-09-30).** On `delegation-threads` GLib's own thread tests run as domains:
+`cond` 4 ok and 1 skipped (a case GLib runs only where `__linux__` is defined), `thread` 7 ok and 1
+skipped (a thread was still created under a low `RLIMIT_NPROC`, which GLib reads as privilege; the
+guest runs it as root), `rec-mutex` 29 ok, `asyncqueue` 7 ok. `mutex`, `once` and `rwlock`
+pass until a test that starts a hundred threads at once (`mutex5`, `once/multi-threaded`,
+`rwlock7`); an application has fifteen besides main. The tests are compiled with the flags
+`glib/tests/meson.build` gives them (`-DG_LOG_DOMAIN="GLib" -UG_DISABLE_ASSERT`); without them
+`asyncqueue` waited for GLib's own critical under the wrong domain. The recipe no longer passes
+`CAPSTONE_SINGLE_THREAD_DOMAIN` to GLib, which read it nowhere. Record
+`runtime/tests/application/results/20260930-glib-threads.json`.
 
 Of the 63 census lines left, the 23 rebuilt sites all carry real integers (quarks, fds, log
 depths, error numbers, unichars) or are the `ghash` small-array code, dead with 16-byte pointers.

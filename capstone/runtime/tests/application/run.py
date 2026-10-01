@@ -72,9 +72,15 @@ def main():
             assert json.loads(call("exec", "capstone-exec", "--stats").stdout)["live_domains"] == 1
             assert call("run", "/mnt/host/mruby.dom", "-e", 'puts 42').stdout == "42\n"
             if mode == "cpu":
+                # Every step shares the hart with the looping domain: the
+                # board lane measured 62 s unloaded and 134 s on a loaded host
+                # (#135, 2026-09-30), against call()'s default of 90 s.
                 result = call("exec", "/tmp/application-supervisor", "/usr/bin/capstone-exec",
-                              "/mnt/host/application-contract.dom")
+                              "/mnt/host/application-contract.dom", timeout=300)
                 assert "application sequence: PASS" in result.stdout
+                # The cancellations' times while the hart is shared.
+                print("".join(f"overlapping cpu / {line}\n" for line in result.stdout.splitlines()
+                              if "stopped in" in line), end="")
             # Let the last mode fill the pipe before interrupting the host CLI.
             time.sleep(0.1)
             stop = signal.SIGINT if mode == "cpu" else signal.SIGTERM

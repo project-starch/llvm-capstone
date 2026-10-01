@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(capstone_exec LANGUAGES C)
+project(capstone_exec LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
@@ -15,8 +15,8 @@ if(CAPSTONE_LIBCAPSTONE_DIR)
     message(FATAL_ERROR "CAPSTONE_LIBCAPSTONE_DIR must contain libcapstone.c")
   endif()
   add_executable(capstone-exec ../linux/exec.c ../linux/application-image.c ../linux/image-hash.c
-    ../linux/application-service.c ../linux/delegate-service.c ../linux/spawner.c
-    "${CAPSTONE_LIBCAPSTONE_DIR}/libcapstone.c")
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c "${CAPSTONE_LIBCAPSTONE_DIR}/libcapstone.c")
   target_compile_definitions(capstone-exec PRIVATE _POSIX_C_SOURCE=200809L)
   target_include_directories(capstone-exec PRIVATE
     "${CAPSTONE_LIBCAPSTONE_DIR}"
@@ -32,8 +32,36 @@ endif()
 
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  find_package(Threads REQUIRED)
+  add_executable(level0-realloc-probe ../tests/application/level0-realloc-probe.c)
+  target_compile_definitions(level0-realloc-probe PRIVATE CAPSTONE_LEVEL0_TEST_NATIVE)
+  target_include_directories(level0-realloc-probe PRIVATE ../include)
+  add_test(NAME level0-realloc-shrink COMMAND level0-realloc-probe)
+  add_executable(pthread-kill-probe ../tests/application/pthread-kill-probe.c)
+  target_compile_definitions(pthread-kill-probe PRIVATE CAPSTONE_KILL_PROBE_MAIN)
+  target_link_libraries(pthread-kill-probe PRIVATE Threads::Threads)
+  add_test(NAME pthread-kill-read COMMAND pthread-kill-probe)
+  add_test(NAME pthread-kill-before-read COMMAND pthread-kill-probe early)
+  set_tests_properties(pthread-kill-read pthread-kill-before-read PROPERTIES TIMEOUT 15)
+  add_executable(pthread-kill-no-signal ../tests/application/pthread-kill-probe.c)
+  target_compile_definitions(pthread-kill-no-signal PRIVATE
+    CAPSTONE_KILL_PROBE_MAIN CAPSTONE_KILL_PROBE_NO_SIGNAL)
+  target_link_libraries(pthread-kill-no-signal PRIVATE Threads::Threads)
+  add_test(NAME pthread-kill-missing-signal COMMAND pthread-kill-no-signal early)
+  set_tests_properties(pthread-kill-missing-signal PROPERTIES WILL_FAIL TRUE TIMEOUT 15)
   add_test(NAME application-job COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/../tests/application/job-test.py" $<TARGET_FILE:capstone-job>)
+  add_executable(mruby-spawn-test ../../ports/mruby/app/spawn-shell.c
+    ../../ports/mruby/app/spawn-shell-test.c)
+  target_compile_options(mruby-spawn-test PRIVATE -UNDEBUG)
+  add_test(NAME mruby-spawn-shell COMMAND mruby-spawn-test)
+  set_tests_properties(mruby-spawn-shell PROPERTIES TIMEOUT 15)
+  add_executable(mapping-test ../tests/application/mapping-test.c)
+  target_compile_options(mapping-test PRIVATE -UNDEBUG)
+  target_include_directories(mapping-test PRIVATE ../include)
+  add_test(NAME application-mappings COMMAND mapping-test)
+  add_test(NAME application-safety-classifier
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../../ports/common/application/check-safety-test.py)
   add_executable(launch-test ../tests/application/launch-test.c)
   target_link_libraries(launch-test PRIVATE Capstone::Launch)
   add_test(NAME launch-wire-contract COMMAND launch-test)
@@ -43,17 +71,29 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   add_executable(spawn-test ../tests/delegation/spawn-test.c)
   target_link_libraries(spawn-test PRIVATE Capstone::Delegate)
   add_test(NAME spawn-wire-contract COMMAND spawn-test)
-  add_executable(application-service-test ../tests/application/service-test.c
-    ../linux/application-service.c)
-  target_compile_definitions(application-service-test PRIVATE _GNU_SOURCE)
-  target_link_libraries(application-service-test PRIVATE Capstone::Runtime)
-  add_test(NAME application-streams COMMAND application-service-test)
+  add_executable(msghdr-test ../tests/delegation/msghdr-test.c)
+  target_link_libraries(msghdr-test PRIVATE Capstone::Delegate)
+  target_compile_options(msghdr-test PRIVATE -UNDEBUG)
+  add_test(NAME msghdr-wire-contract COMMAND msghdr-test)
+  set_tests_properties(msghdr-wire-contract PROPERTIES TIMEOUT 15)
   add_executable(application-image-test ../tests/application/image-test.c ../linux/application-image.c ../linux/image-hash.c)
   target_include_directories(application-image-test PRIVATE ../linux)
   target_link_libraries(application-image-test PRIVATE Capstone::Runtime)
   add_test(NAME application-image COMMAND application-image-test)
   add_executable(delegate-service-test ../tests/application/delegate-service-test.c
-    ../linux/delegate-service.c ../linux/spawner.c)
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
+  add_executable(signal-service-test ../tests/application/signal-service-test.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
+  target_link_libraries(signal-service-test PRIVATE Capstone::Delegate)
+  add_test(NAME signal-service COMMAND signal-service-test)
+  set_tests_properties(signal-service PROPERTIES TIMEOUT 30)
+  add_executable(signal-overflow-test ../tests/application/signal-overflow-test.c
+    ../linux/signals.c ../linux/stub.S)
+  target_link_libraries(signal-overflow-test PRIVATE Capstone::Delegate)
+  add_test(NAME signal-overflow COMMAND signal-overflow-test)
+  set_tests_properties(signal-overflow PROPERTIES TIMEOUT 30)
   add_executable(spawner-test ../tests/application/spawner-test.c ../linux/spawner.c)
   target_compile_definitions(spawner-test PRIVATE _GNU_SOURCE)
   target_link_libraries(spawner-test PRIVATE Capstone::Delegate)
@@ -69,15 +109,46 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   target_link_libraries(delegate-service-test PRIVATE Capstone::Delegate)
   add_test(NAME delegate-service COMMAND delegate-service-test)
   add_executable(delegate-edge-test ../tests/application/delegate-edge-test.c
-    ../linux/delegate-service.c ../linux/spawner.c)
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
   target_compile_options(delegate-edge-test PRIVATE -UNDEBUG)
   target_link_libraries(delegate-edge-test PRIVATE Capstone::Delegate)
-  foreach(case short-read raw-pointer vector stat-boundary private-fd wait-empty wait-stopped kill-group)
+  foreach(case short-read raw-pointer vector stat-boundary private-fd wait-empty wait-stopped kill-group pty pselect spawn-target)
     add_test(NAME delegate-${case} COMMAND delegate-edge-test ${case})
     set_tests_properties(delegate-${case} PROPERTIES TIMEOUT 15)
   endforeach()
-  foreach(test launch-test delegate-test spawn-test application-service-test application-image-test delegate-service-test spawner-test)
+  # Probe B, native phase: the launcher's parking queue (docs/plans/delegation-threads.md).
+  add_executable(park-test ../tests/application/park-test.c ../linux/park.c)
+  target_compile_options(park-test PRIVATE -UNDEBUG)
+  target_link_libraries(park-test PRIVATE Capstone::Delegate)
+  foreach(case b1 b2 b3-timeout-select b3-timeout-abort b3-eintr-select b3-eintr-abort b4 b5 b12
+          b13a b13b b13c b13d retry retry-woken retry-requeued)
+    add_test(NAME park-${case} COMMAND park-test ${case})
+    set_tests_properties(park-${case} PROPERTIES TIMEOUT 15)
+  endforeach()
+  add_executable(delegate-rows-test ../tests/application/delegate-rows-test.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
+  target_compile_options(delegate-rows-test PRIVATE -UNDEBUG)
+  target_link_libraries(delegate-rows-test PRIVATE Capstone::Delegate)
+  foreach(case statfs statx truncate fallocate fchdir fchmod fchown linkat mknodat faccessat2
+      sendfile copy-file-range readahead sync memfd clock-getres getgroups getrusage priority
+      getcpu affinity scheduler setpgid setsid eventfd timerfd signalfd getresid fcntl-notify
+      private)
+    add_test(NAME delegate-row-${case} COMMAND delegate-rows-test ${case})
+    set_tests_properties(delegate-row-${case} PROPERTIES TIMEOUT 15)
+  endforeach()
+  add_executable(delegate-socket-test ../tests/application/delegate-socket-test.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
+  target_compile_options(delegate-socket-test PRIVATE -UNDEBUG)
+  target_link_libraries(delegate-socket-test PRIVATE Capstone::Delegate)
+  foreach(case unix-stream word-truncated inet dgram socketpair-msg private epoll)
+    add_test(NAME delegate-socket-${case} COMMAND delegate-socket-test ${case})
+    set_tests_properties(delegate-socket-${case} PROPERTIES TIMEOUT 15)
+  endforeach()
+  foreach(test launch-test delegate-test spawn-test application-image-test delegate-service-test spawner-test)
     target_compile_options(${test} PRIVATE -UNDEBUG)
   endforeach()
-  set_tests_properties(launch-wire-contract delegate-wire-contract spawn-wire-contract application-streams application-image delegate-service spawner PROPERTIES TIMEOUT 15)
+  set_tests_properties(launch-wire-contract delegate-wire-contract spawn-wire-contract application-image delegate-service spawner PROPERTIES TIMEOUT 15)
 endif()

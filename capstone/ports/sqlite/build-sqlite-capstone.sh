@@ -54,6 +54,13 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
 # the rewrite and passes without it. Nothing here depends on an unmerged compiler change: dev's clang
 # and dev + the open compiler PRs build byte-identical silicon domains (-O0, 3.22.0 and 3.53.3) with
 # or without either rewrite, and run-sqlite-memory.sh (-O1) passes without both on each of them.
+# SQLITE_PREADAPTED=1: SQLITE_SRC_DIR already holds an adapted amalgamation, sqlite3.c and
+# sqlite3.h (adapt-sqlite-322.sh's output for 3.22.0), so this 3.53.3 pass is skipped and the .c is
+# copied as it is. The Sublet and hook patches below still apply to the copy, and the other
+# translation units include the adapted sqlite3.h from the same directory.
+if [ "${SQLITE_PREADAPTED:-0}" = 1 ]; then
+  cp -f "$SQLITE_SRC_DIR/sqlite3.c" "$PATCHED_SQLITE"
+else
 sed \
   -e 's/sqlite3Atoi64(z, pResult, strlen(z), SQLITE_UTF8)/sqlite3Atoi64(zIn, pResult, strlen(zIn), SQLITE_UTF8)/' \
   -e 's/#if GCC_VERSION>=4007000 || __has_extension(c_atomic)/#if SQLITE_THREADSAFE \&\& (GCC_VERSION>=4007000 || __has_extension(c_atomic))/' \
@@ -74,6 +81,7 @@ grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$PATCHED_
 # the BtCursor's capability fields don't fault on unaligned cap access.
 grep -q 'nByte = (SZ_VDBECURSOR(nField)+15)&~15;' "$PATCHED_SQLITE"
 grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
+fi
 
 # An instrument's patch (run-sqlite-speedtest1.sh, SPEEDTEST1_HOOK): SQLITE_HOOK_PATCH puts its
 # calls into the copies in OUT_DIR, the amalgamation above and a speedtest1.c the runner placed

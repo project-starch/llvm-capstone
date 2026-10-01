@@ -40,11 +40,12 @@ static void fixture(void) {
   sections()[1] = (Elf64_Shdr){.sh_name = 1, .sh_type = SHT_STRTAB,
       .sh_offset = 512, .sh_size = sizeof names};
   sections()[2] = (Elf64_Shdr){.sh_name = 11, .sh_type = SHT_PROGBITS,
-      .sh_offset = 640, .sh_size = sizeof(struct capstone_application_descriptor)};
+      .sh_offset = 640, .sh_size = sizeof(struct capstone_application_descriptor_v2)};
   sections()[3] = (Elf64_Shdr){.sh_name = 33, .sh_type = SHT_PROGBITS,
       .sh_offset = 704, .sh_size = 24};
-  struct capstone_application_descriptor d = {CAPSTONE_APPLICATION_MAGIC,
-      CAPSTONE_LAUNCH_VERSION, CAPSTONE_APPLICATION_RECOVERY, CAPSTONE_LAUNCH_BYTES, 0};
+  struct capstone_application_descriptor_v2 d = {{CAPSTONE_APPLICATION_MAGIC,
+      CAPSTONE_LAUNCH_VERSION, CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE,
+      CAPSTONE_LAUNCH_BYTES, 0}, 262144, 0};
   memcpy(image + 640, &d, sizeof d);
   const uint64_t req[] = {UINT64_C(0x5145524d4f445043), 4096 + 256, 4096};
   memcpy(image + 704, req, sizeof req);
@@ -56,14 +57,15 @@ static int load(void) {
   return capstone_application_image(path, &loaded);
 }
 
-/* Rewrite the fixture's descriptor as v2: 48 bytes, the delegate flag, an
-   exchange size. */
-static void v2(uint64_t flags, uint64_t exchange) {
+/* Rewrite the fixture's descriptor as v2: the delegate flag, an exchange
+   size, and the further contexts with a transport of their own. */
+static void v2c(uint64_t flags, uint64_t exchange, uint64_t contexts) {
   struct capstone_application_descriptor_v2 d = {{CAPSTONE_APPLICATION_MAGIC,
-      CAPSTONE_LAUNCH_VERSION, flags, CAPSTONE_LAUNCH_BYTES, 0}, exchange};
+      CAPSTONE_LAUNCH_VERSION, flags, CAPSTONE_LAUNCH_BYTES, 0}, exchange, contexts};
   sections()[2].sh_size = sizeof d;
   memcpy(image + 640, &d, sizeof d);
 }
+static void v2(uint64_t flags, uint64_t exchange) { v2c(flags, exchange, 0); }
 
 static void reject(void) {
   assert(load() == -1);
@@ -105,9 +107,10 @@ int main(void) {
   sections()[3].sh_offset = UINT64_MAX; reject();
   sections()[3].sh_type = SHT_NOBITS; reject();
   image[640] ^= 1; reject();
-  /* v1: 40 bytes, no exchange */
-  assert(load() >= 0 && loaded.exchange_bytes == 0 &&
-         loaded.v1.flags == CAPSTONE_APPLICATION_RECOVERY);
+  /* Legacy images must be rejected, never silently use a second runtime. */
+  sections()[2].sh_size = sizeof(struct capstone_application_descriptor);
+  ((struct capstone_application_descriptor *)(image + 640))->flags = CAPSTONE_APPLICATION_RECOVERY;
+  reject();
   /* v2: 48 bytes with the flag and a sane exchange size */
   v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 262144);
   snapshot = load();
@@ -120,9 +123,26 @@ int main(void) {
   struct capstone_application_descriptor d1 = {CAPSTONE_APPLICATION_MAGIC,
       CAPSTONE_LAUNCH_VERSION, CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE,
       CAPSTONE_LAUNCH_BYTES, 0};
+  sections()[2].sh_size = sizeof d1;
   memcpy(image + 640, &d1, sizeof d1); reject();
   v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 4095); reject();
   v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, UINT64_C(2) << 30); reject();
+  /* exchange slices are whole pages: transport i starts at i times the size */
+  v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 262144 + 16); reject();
+  /* further contexts: up to the monitor's descriptors per application, and all
+     transports' exchange slices together within the one region's limit */
+  v2c(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 262144,
+      CAPSTONE_DELEGATE_CONTEXTS_MAX);
+  snapshot = load();
+  assert(snapshot >= 0 && loaded.contexts == CAPSTONE_DELEGATE_CONTEXTS_MAX);
+  close(snapshot);
+  v2c(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 262144,
+      CAPSTONE_DELEGATE_CONTEXTS_MAX + 1); reject();
+  v2c(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, UINT64_C(256) << 20, 7);
+  reject();
+  /* the descriptor before `contexts`: one version only, so rejected */
+  v2(CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE, 262144);
+  sections()[2].sh_size = sizeof(struct capstone_application_descriptor_v2) - 8; reject();
   close(source);
   unlink(path);
   return 0;

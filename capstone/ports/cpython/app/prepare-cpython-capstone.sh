@@ -98,10 +98,9 @@ log "building libc-capstone.a with $CAPSTONE_CLANG"
 OUT_DIR=$CPY_ROOT/musl-build bash "$PORTS_DIR/musl-capstone/build-musl-capstone.sh" >&2
 LIBC_ARCHIVE=$CPY_ROOT/musl-build/libc-capstone.a
 
-# The runtime exactly as musl-capstone/libc-test/build-libc-test.sh builds it.
+# The application SDK is the only startup and syscall implementation.
 RT=$CPY_ROOT/runtime
 rm -f "$RT"/*.o
-MRT=$PORTS_DIR/musl-capstone/runtime
 INC=(-nostdinc -isystem "$MUSL_DIR/arch/capstone64" -isystem "$MUSL_DIR/arch/generic"
      -isystem "$MUSL_DIR/obj/include" -isystem "$MUSL_DIR/include"
      -I"$MUSL_DIR/src/include" -I"$MUSL_DIR/src/internal" -I"$MUSL_DIR/obj/src/internal")
@@ -109,32 +108,15 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -Xclang -target-feature -Xclang +a -ffreestanding -fno-builtin -fno-jump-tables
     -ffunction-sections -fdata-sections -std=c99 -O1 -w -Wno-int-conversion
     -D_XOPEN_SOURCE=700 "${INC[@]}")
-ASF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -O0)
-for s in start-musl set_thread_area setjmp; do
-  "$CAPSTONE_CLANG" "${ASF[@]}" -c "$MRT/$s.S" -o "$RT/$s.o"
-done
-for f in hostcall tls string_bounds_safe fputwc_null_safe atomic_libcalls; do
-  "$CAPSTONE_CLANG" "${CF[@]}" -c "$MRT/$f.c" -o "$RT/$f.o"
-done
-# The domain's heap is level0's static arena, 256 KiB by default: enough for
-# stdio, not for an interpreter. pymalloc takes its 1 MiB arenas from it (mmap
-# is off, see config.site), and every larger object comes straight from it.
 CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
-"$CAPSTONE_CLANG" "${CF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="$CPY_HEAP_BYTES" \
-  -c "$MRT/level0.c" -o "$RT/level0.o"
-"$CAPSTONE_CLANG" "${CF[@]}" -I"$MUSL_DIR/src/multibyte" \
-  -c "$MRT/mbsrtowcs_bounds_safe.c" -o "$RT/mbsrtowcs_bounds_safe.o"
-
 # The Sublet arm's allocator side. link-cpython-capstone.py links every *.o in
 # this directory, so compiling them here is the whole wiring; nothing in the link
 # step changes. The adapter and its metadata heap are the component port's,
 # program-independent and taken as they are -- 40/40 arms of the pymalloc defect
 # corpus stand on that code -- and PYMALLOC_DOMAIN selects backing.c's domain
 # form, whose arenas come from the shared region rather than from a native heap.
-# hostcall.c is rebuilt with CAPSTONE_PROGRAM_REGIONS so it parks the two regions
-# the adapter's init needs; the plain arm never sees any of this and stays
-# byte-identical.
-DOMAIN_ENTRY_FLAGS=()
+# hostcall.c parks the two program regions the adapter's init needs
+# (__capstone_region); the plain arm never asks for them.
 if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
   PYM=$PORTS_DIR/cpython/pymalloc/src
   # THERE ARE TWO sublet.h AND THE ORDER DECIDES WHICH. capstone/sublet/sublet.h
@@ -153,14 +135,8 @@ if [[ "${CPY_SUBLET:-0}" == 1 ]]; then
     -c "$PYM/shared/backing.c" -o "$RT/pym_backing.o"
   "$CAPSTONE_CLANG" "${CF[@]}" "${GAP_FLAGS[@]}" \
     -c "$SCRIPT_DIR/toolchain/pym_sublet_glue.c" -o "$RT/pym_sublet_glue.o"
-  "$CAPSTONE_CLANG" "${CF[@]}" -DCAPSTONE_PROGRAM_REGIONS=1 \
-    -c "$MRT/hostcall.c" -o "$RT/hostcall.o"
-  DOMAIN_ENTRY_FLAGS=(-DCPY_SUBLET=1)
-  log "Sublet arm: adapter, metadata heap and glue compiled; hostcall.c parks program regions"
+  log "Sublet arm: adapter, metadata heap and glue compiled"
 fi
-"$CAPSTONE_CLANG" "${CF[@]}" "${DOMAIN_ENTRY_FLAGS[@]}" \
-  -c "$SCRIPT_DIR/toolchain/domain_entry.c" -o "$RT/domain_entry.o"
-
 # compiler-rt's generic builtins, as an ARCHIVE so the linker takes only what is
 # referenced -- which is what a toolchain's libclang_rt.builtins.a is. The
 # benchmarks' hand-picked soft-float list would make configure report a libc
@@ -190,9 +166,16 @@ rm -f "$COMBINED"
 printf 'CREATE %s\nADDLIB %s\nADDLIB %s\nSAVE\nEND\n' \
   "$COMBINED" "$LIBC_ARCHIVE" "$CPY_ROOT/libclang_rt.builtins.a" | "$LLVM_AR" -M
 
+SDK_FLAGS=()
+if [[ ${CPY_SUBLET:-0} == 1 ]]; then
+  SDK_FLAGS=(-DCAPSTONE_APPLICATION_GRANT_BYTES=83886080)
+fi
+bash "$PORTS_DIR/common/application/build-sdk.sh" "$RT" "$MUSL_DIR" "$COMBINED" \
+  -DCAPSTONE_APPLICATION_ARENA_BYTES="$CPY_HEAP_BYTES" "${SDK_FLAGS[@]}"
+export CAPSTONE_SDK=$RT
 export CPY_MUSL=$MUSL_DIR CPY_RUNTIME_DIR=$RT CPY_LIBC_ARCHIVE=$COMBINED
-export CPY_LINKER_SCRIPT=$REPO_ROOT/capstone/my_first_domain/link.ld
-CC=$SCRIPT_DIR/toolchain/capstone-cc
+export CPY_SUBLET=${CPY_SUBLET:-0}
+CC=$RT/capstone-cc
 
 # ---- 4. the link check must be able to say no ----------------------------
 LC=$CPY_ROOT/linkcheck; rm -rf "$LC"; mkdir -p "$LC"
@@ -215,7 +198,9 @@ rm -rf "$BUILD_DIR"; mkdir -p "$BUILD_DIR"
 # Answers configure cannot get by running a program on the target. Each is a
 # fact about the domain, not a way to make configure pass.
 cat > "$BUILD_DIR/config.site" <<'EOF'
-# No device files exist in a domain: the file service opens host paths only.
+# /dev/ptmx: configure would probe the BUILD host's /dev, which says nothing
+# about the guest. The answer is not used: HAVE_OPENPTY is 1 and os.openpty
+# goes through musl's openpty, which opens /dev/ptmx itself.
 ac_cv_file__dev_ptmx=no
 ac_cv_file__dev_ptc=no
 # getaddrinfo is never run (no socket opcode); "not buggy" only stops configure
@@ -246,13 +231,14 @@ log "configuring CPython for riscv64-unknown-linux-musl via $CC"
 # MODULE_BUILDTYPE=static: no dlopen in a domain, so every module is built in.
 # --with-pkg-config=no: the host's pkg-config would hand over host library flags.
 # RANLIB is `llvm-ar s`: not every LLVM build here has the llvm-ranlib link.
-# -D_Py_THREAD_LOCAL_AS_GLOBAL: a domain has one hart and no clone, so each
-#   thread-local has one instance; patches/...-0006 makes it a global, because
-#   capstone64 cannot lower TLS (ISSUES.md C-47). Only valid while nothing can
-#   start a thread.
+# -D_Py_FORK_EXEC_POSIX_SPAWN: no fork in a domain; patches/...-0015 routes
+#   _posixsubprocess.fork_exec through posix_spawn, which the launcher serves.
+#   It does not make fork without exec possible.
+# Thread-locals are C11 thread-locals: with threads (C-47 fixed) patch 0006 and
+#   -D_Py_THREAD_LOCAL_AS_GLOBAL are gone, and the check below refuses them.
 (cd "$BUILD_DIR" && \
   CONFIG_SITE="$BUILD_DIR/config.site" MODULE_BUILDTYPE=static \
-  CPPFLAGS="-D_Py_THREAD_LOCAL_AS_GLOBAL" \
+  CPPFLAGS="-D_Py_FORK_EXEC_POSIX_SPAWN" \
   CC="$CC" AR="$LLVM_AR" RANLIB="$LLVM_AR s" READELF=: \
   "$CPY_SRC/configure" \
     --host=riscv64-unknown-linux-musl \
@@ -278,8 +264,11 @@ if grep -qE '^[a-z_]' <(sed -n '/^\*shared\*$/,$p' "$BUILD_DIR/Modules/Setup.std
 fi
 grep -q "loading site script $BUILD_DIR/config.site" "$BUILD_DIR/configure.log" \
   || { echo "configure did not read $BUILD_DIR/config.site" >&2; exit 2; }
-grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_THREAD_LOCAL_AS_GLOBAL' "$BUILD_DIR/Makefile" \
-  || { echo "configure did not carry -D_Py_THREAD_LOCAL_AS_GLOBAL into the Makefile" >&2; exit 2; }
+grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_FORK_EXEC_POSIX_SPAWN' "$BUILD_DIR/Makefile" \
+  || { echo "configure did not enable patch 0015 (posix_spawn)" >&2; exit 2; }
+if grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_THREAD_LOCAL_AS_GLOBAL' "$BUILD_DIR/Makefile"; then
+  echo "threading requires real thread-locals" >&2; exit 2
+fi
 # A configure check whose conftest crashes the compiler reads as "feature
 # absent", silently. Every such check must be one whose answer is right anyway.
 python3 - "$BUILD_DIR/config.log" <<'PY' || exit 2
@@ -322,7 +311,7 @@ fi
 cat > "$BUILD_DIR/capstone-env.sh" <<EOF
 export CAPSTONE_CLANG='$CAPSTONE_CLANG' CAPSTONE_LD_LLD='$CAPSTONE_LD_LLD'
 export CPY_MUSL='$MUSL_DIR' CPY_RUNTIME_DIR='$RT' CPY_LIBC_ARCHIVE='$COMBINED'
-export CPY_LINKER_SCRIPT='$CPY_LINKER_SCRIPT'
+export CAPSTONE_SDK='$RT' CPY_SUBLET='$CPY_SUBLET'
 EOF
 printf '%s\n' "${APPLIED[@]}" > "$BUILD_DIR/applied-patches.txt"
 printf '%s\n' "$BUILD_DIR"

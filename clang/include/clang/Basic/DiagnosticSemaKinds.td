@@ -13088,6 +13088,17 @@ def warn_tcb_enforcement_violation : Warning<
   InGroup<DiagGroup<"tcb-enforcement">>;
 
 // RISC-V builtin required extension warning
+// CHERI's wording and group name, so CheriBSD practice and our M0 site list carry over.
+def warn_ambiguous_provenance_capability_binop : Warning<
+  "binary expression on capability types %0 and %1; it is not clear which "
+  "should be used as the source of provenance; currently provenance is "
+  "inherited from the left-hand side">,
+  InGroup<DiagGroup<"cheri-provenance">>;
+def err_capstone_intcap_arith : Error<
+  "operator '%0' on %1 is not supported yet on Capstone">;
+def err_capstone_intcap_atomic_rmw : Error<
+  "atomic read-modify-write through %0 is not supported yet on Capstone; "
+  "only load, store, exchange and compare-exchange keep an __intcap's tag">;
 def warn_capstone_pointer_roundtrip : Warning<
   "%select{casting an integer that was itself converted from a pointer|"
   "casting a value of type %1}0 to %2 does not restore capability provenance "

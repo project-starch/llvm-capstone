@@ -1,0 +1,58 @@
+envadjust: rebase each frame off the new stack, not off the freed one.
+
+stack_extend_alloc() hands the old VM stack to mrb_realloc() and then calls
+envadjust(), which moved every frame's pointer with `ci->stack += delta`.
+That is pointer arithmetic on a pointer realloc has already freed. On an
+ordinary allocator it computes the right address and nothing happens; in a
+Capstone domain whose free revokes, the result is derived from a revoked
+capability, carries no tag, and the next write through it faults (cause 24).
+It is what stopped `MRBD_HEAP=sublet` and `sublet-gc` at ~40 frames of Ruby
+recursion, which is shallow enough that the port's own scripts/smoke.rb hit
+it.
+
+This is upstream's own defect and upstream's own fix: e5c82761f, "vm.c: fix
+envadjust rebasing stack pointers off a freed pointer" (2026-07-24), found
+when another memory-safe C implementation trapped on exactly this write. The
+fix derives each frame from newbase instead, which yields the identical
+address and carries the new buffer's bounds. That commit does not apply here
+because it rewrites the byte-level form introduced by d95ebe4a2, which landed
+after this pin; the expression it settles on is used verbatim.
+
+Only 4.0.0-rc2 needs this. The port's `head` pin already carries d95ebe4a2 and
+e5c82761f, so its envadjust is already rebased off newbase.
+
+diff --git i/src/vm.c w/src/vm.c
+index f898287d8..56d6bec42 100644
+--- i/src/vm.c
++++ w/src/vm.c
+@@ -134,19 +134,26 @@ static inline void
+ envadjust(mrb_state *mrb, mrb_value *oldbase, mrb_value *newbase)
+ {
+   mrb_callinfo *ci = mrb->c->cibase;
+-  ptrdiff_t delta = newbase - oldbase;
+ 
+-  if (delta == 0) return;
++  if (newbase == oldbase) return;
++
+   while (ci <= mrb->c->ci) {
+     struct REnv *e = mrb_vm_ci_env(ci);
+ 
++    /* Derive each frame's new pointer from newbase, never from the old one:
++       stack_extend_alloc() has already handed the old stack to mrb_realloc(),
++       so `ci->stack + delta` is pointer arithmetic on a freed pointer. It
++       computes the right address on an ordinary allocator and traps on an
++       implementation that tracks provenance and bounds. */
++    mrb_value *new_stack = (mrb_value *)((char *)newbase + ((char *)ci->stack - (char *)oldbase));
++
+     if (e) {
+       mrb_assert(e->cxt == mrb->c && MRB_ENV_ONSTACK_P(e));
+       mrb_assert(e->stack == ci->stack);
+ 
+-      e->stack += delta;
++      e->stack = new_stack;
+     }
+-    ci->stack += delta;
++    ci->stack = new_stack;
+     ci++;
+   }
+ }

@@ -1,0 +1,185 @@
+{
+  "date": "2026-09-30",
+  "scope": "Replace elapsed-time assumption in kill-thread with observation of the actual blocked Linux read",
+  "runtime_base": "14a59e446a4c49282dce120571c3da080ef3d3d8",
+  "platform": {
+    "qemu_revision": "674cdab03c",
+    "monitor_revision": "4674ab6",
+    "compiler_revision": "fd82fef2a70d",
+    "compiler_sha256": "94a99e60a823f93518485487230fed4fd09f1742862e8e9c07b8adf0ae14d6c8",
+    "firmware_sha256": "ae41a8c6d22877f779750bcd4aba040b4ecf5015ce25fff6d47f773139cf05dc",
+    "module_sha256": "649f410893eeb40a825232452974ac3161bb667163457c42f628c325dd7e6d97",
+    "launcher_sha256": "4c1b0ad0d67af32eb62a5acdf0ff07969b86c582b26b21ecbf7bd4519a015ad7",
+    "pthread_probe_sha256": "0fe2381a018176982f94618173d6129e93c6dadd5a70133aa76a70d10b29ed68"
+  },
+  "native": {
+    "build": "Debug with -Wall -Wextra -fsanitize=address,undefined",
+    "ctest_passed": 44,
+    "ctest_total": 44,
+    "controls": {
+      "pthread-kill-read": "PASS: one handler on reader, read=-1 errno=EINTR",
+      "pthread-kill-before-read": "PASS: one signal handled before read, another interrupts observed read",
+      "pthread-kill-missing-signal": "Expected failure in 3.01 s; reports missing interruption, writes cleanup byte, joins and exits rather than hanging"
+    }
+  },
+  "guest": {
+    "modes": {
+      "join-values": {
+        "pass": true,
+        "reason": "",
+        "stdout": "join-values: 900 threads, records made 15, live 15\npthread-probe join-values: PASS\n"
+      },
+      "join-parked": {
+        "pass": true,
+        "reason": "",
+        "stdout": "join-parked: join returned after 49 ms\njoin-parked: join returned after 45 ms\njoin-parked: join returned after 45 ms\njoin-parked: join returned after 45 ms\njoin-parked: join returned after 44 ms\npthread-probe join-parked: PASS\n"
+      },
+      "detach-many": {
+        "pass": true,
+        "reason": "",
+        "stdout": "detach-many: 300 detached, records made 1, live 1\npthread-probe detach-many: PASS\n"
+      },
+      "reserve-waits": {
+        "pass": true,
+        "reason": "",
+        "stdout": "reserve-waits: create answered 0 after 48 ms\npthread-probe reserve-waits: PASS\n"
+      },
+      "main-exit": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe main-exit: PASS\n"
+      },
+      "tsd": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe tsd: PASS\n"
+      },
+      "cond": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe cond: PASS\n"
+      },
+      "clone-refused": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe clone-refused: PASS\n"
+      },
+      "thread-name": {
+        "pass": true,
+        "reason": "",
+        "stdout": "thread-name: main was 'capstone-exec'; naming another thread: No such file or directory\npthread-probe thread-name: PASS\n"
+      },
+      "affinity": {
+        "pass": true,
+        "reason": "",
+        "stdout": "affinity: 1 CPUs; another thread's set: No such process\npthread-probe affinity: PASS\n"
+      },
+      "pi-mutex": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pi-mutex: timed lock answered 110 after 30 ms\npi-mutex: far deadline answered 0 after 48 ms\npthread-probe pi-mutex: PASS\n"
+      },
+      "user-stack": {
+        "pass": true,
+        "reason": "",
+        "stdout": "user-stack: thread answered 1\npthread-probe user-stack: PASS\n"
+      },
+      "main-exit-more": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe main-exit-more: PASS\n"
+      },
+      "kill-thread": {
+        "pass": true,
+        "reason": "",
+        "stdout": "kill-thread: early=0 signals=1 handler=4194304 reader=4194304 read=-1 errno=4 PASS\npthread-probe kill-thread: PASS\n"
+      },
+      "kill-thread-early": {
+        "pass": true,
+        "reason": "",
+        "stdout": "kill-thread: early=1 signals=2 handler=4194304 reader=4194304 read=-1 errno=4 PASS\npthread-probe kill-thread-early: PASS\n"
+      },
+      "mask-routing": {
+        "pass": true,
+        "reason": "",
+        "stdout": "mask-routing: handler in 4194304, the unblocking thread 4194304\npthread-probe mask-routing: PASS\n"
+      },
+      "raise-thread": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe raise-thread: PASS\n"
+      },
+      "sigwait-thread": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe sigwait-thread: PASS\n"
+      },
+      "cancel-sem": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe cancel-sem: PASS\n"
+      },
+      "cancel-read": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe cancel-read: PASS\n"
+      },
+      "cancel-disabled": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe cancel-disabled: PASS\n"
+      },
+      "park-signal-thread": {
+        "pass": true,
+        "reason": "",
+        "stdout": "park-signal-thread: handler in 4194304, waiter 4194304, wait answered 0\npthread-probe park-signal-thread: PASS\n"
+      },
+      "cancel-installed-early": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe cancel-installed-early: PASS\n"
+      },
+      "sigreturn-mask": {
+        "pass": true,
+        "reason": "",
+        "stdout": "sigreturn-mask: handler ran 1, SIGUSR2 blocked after the wait 1, SIGUSR1 1\npthread-probe sigreturn-mask: PASS\n"
+      },
+      "setuid-threads": {
+        "pass": true,
+        "reason": "",
+        "stdout": "setuid-threads: answered -1 (errno 38) after 1 ms, the other thread spun 58599 times\npthread-probe setuid-threads: PASS\n"
+      },
+      "sigaction-race": {
+        "pass": true,
+        "reason": "",
+        "stdout": "sigaction-race: 8 and 28 runs of the two handlers for 600 signals\npthread-probe sigaction-race: PASS\n"
+      },
+      "main-exit-signal": {
+        "pass": true,
+        "reason": "",
+        "stdout": "pthread-probe main-exit-signal: PASS\n"
+      },
+      "abort-thread": {
+        "pass": true,
+        "reason": "",
+        "stdout": ""
+      },
+      "exit-thread": {
+        "pass": true,
+        "reason": "",
+        "stdout": ""
+      }
+    },
+    "passed": 29,
+    "total": 29
+  },
+  "limits": [
+    "The original intermittent timeout was not captured with scheduler evidence; this fixes a demonstrable race in its test, not a retrospective proof of that timeout's cause.",
+    "Delivery before the read is forced through sched_yield in the domain. This does not test asynchronous delivery to a context making no delegated calls."
+  ],
+  "source_qualification": {
+    "probe_revision": "06a0846e8ee4",
+    "superseded_attribution": "7777c481 alone removes reader_tid still used by mask-routing and does not build the domain probe; its commit-message claim of 29 passing modes requires 06a0846e.",
+    "landing": "Combine 7777c481 and 06a0846e into one buildable logical change; preserve pushed lane history."
+  }
+}

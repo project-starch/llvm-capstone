@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
   size_t bytes;
   assert(!capstone_spawn_pack(block, sizeof block, 0, 0, program, args, env,
                               actions, action_count, NULL, &bytes));
-  long pid = capstone_spawner_spawn(&s, block, bytes, NULL, NULL, 0, 0);
+  long pid = capstone_spawner_spawn(&s, block, bytes, NULL, NULL, 0, 0, 0, 0);
   int status = 0;
   if (pid > 0) assert(waitpid(pid, &status, 0) == pid);
   capstone_spawner_stop(&s);

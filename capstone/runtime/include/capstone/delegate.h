@@ -16,10 +16,11 @@
 #define CAPSTONE_DELEGATE_VERSION 2u
 #define CAPSTONE_DELEGATE_ARGS 6u
 
-/* Fixed-width, little-endian, 88 bytes. `flags` bit i says args[i] is an
+/* Fixed-width, little-endian, 96 bytes. `flags` bit i says args[i] is an
  * offset into the exchange region; the shape table says how many bytes that
  * offset must cover. An optional buffer argument of 0 is NULL, so the libc
- * never places a buffer at offset 0. `pending` is written by the launcher on
+ * never places a buffer at offset 0. The launcher writes `result`, `pending`
+ * (bit n-1 set: a signal n event was published this round) and `status` on
  * every return. */
 struct capstone_delegate_entry {
   uint32_t version;
@@ -29,6 +30,55 @@ struct capstone_delegate_entry {
   uint64_t flags;
   int64_t result;
   uint64_t pending;
+  uint64_t status;
+};
+
+/* Round status. RETRY: the call has no result for the application yet, either
+ * because signals were accepted before it entered the kernel or because Linux
+ * prepared a restart; the libc delivers the published events and issues the
+ * call again from its caller's buffers. Only DONE carries output data. */
+#define CAPSTONE_ROUND_DONE 0u
+#define CAPSTONE_ROUND_RETRY 1u
+
+/* One transport per context: a META block of CAPSTONE_DELEGATE_META_BYTES
+ * (the entry at offset 0, the signal handover block at CAPSTONE_SIGNAL_OFFSET)
+ * and an exchange region of the descriptor's exchange_bytes. The launcher
+ * grants 1 + contexts of each as two regions, transport i at i times the block
+ * size in both; transport 0 is the first context's. After the last META block
+ * the META region holds the park table (CAPSTONE_PARK_BYTES). See
+ * docs/plans/delegation-signals.md and docs/plans/delegation-threads.md. */
+#define CAPSTONE_DELEGATE_META_BYTES 16384u
+/* Contexts besides the first with a transport of their own: the monitor lends
+ * each application 16 invocation descriptors (process-abi.h). */
+#define CAPSTONE_DELEGATE_CONTEXTS_MAX 15u
+#define CAPSTONE_SIGNAL_OFFSET 4096u
+#define CAPSTONE_SIGNAL_EVENTS 64u
+#define CAPSTONE_SIGNAL_WAIT 1u  /* accepted inside a wait with a temporary mask */
+#define CAPSTONE_SIGNAL_DEFER 2u /* its own signal remains blocked until SIGDONE */
+
+/* One accepted signal. `mask` is the mask the domain handler is based on: the
+ * wait's temporary mask for a WAIT event, otherwise the task's mask at
+ * acceptance. `info` is the kernel's siginfo, RV64 layout, 128 bytes. */
+struct capstone_signal_event {
+  uint64_t seq;
+  uint32_t signo, flags;
+  uint64_t mask;
+  uint64_t generation;
+  unsigned char info[128];
+};
+
+/* Written by the launcher; read by the libc between rounds. `recorded` counts
+ * every accepted event and is written by the trampoline itself, so the libc
+ * can see between rounds that something waits (the hint). `published` counts
+ * the events handed over so far; events[0..count) are those published by the
+ * round that just ended, in acceptance order. */
+struct capstone_signal_block {
+  uint64_t recorded;
+  uint64_t published;
+  uint32_t count, reserved;
+  struct capstone_signal_event events[CAPSTONE_SIGNAL_EVENTS];
+  /* Appended after events so existing images retain the handover offsets. */
+  uint64_t initial_mask, initial_ignored; /* inherited state at launcher startup */
 };
 
 /* How one argument of one syscall is interpreted. */
@@ -46,10 +96,14 @@ enum capstone_delegate_kind {
 
 /* Where a buffer argument's length comes from. */
 enum capstone_delegate_length {
-  CAPSTONE_LEN_NONE = 0,  /* an integer, or a string */
-  CAPSTONE_LEN_FIXED,     /* `size` bytes */
-  CAPSTONE_LEN_ARG,       /* args[size] bytes */
-  CAPSTONE_LEN_ARG_SCALED /* args[size] elements of `scale` bytes */
+  CAPSTONE_LEN_NONE = 0,   /* an integer, or a string */
+  CAPSTONE_LEN_FIXED,      /* `size` bytes */
+  CAPSTONE_LEN_ARG,        /* args[size] bytes */
+  CAPSTONE_LEN_ARG_SCALED, /* args[size] elements of `scale` bytes */
+  /* the 32-bit value at exchange offset args[size], a length the caller passes
+     behind a pointer (socklen_t *); args[size] is itself a four-byte INOUT
+     buffer the kernel updates, and 0 there (NULL) means a length of 0 */
+  CAPSTONE_LEN_WORD
 };
 
 struct capstone_delegate_arg {
@@ -81,9 +135,91 @@ enum capstone_delegate_group {
  * the launcher runs the Linux call with the buffer's address. */
 #define CAPSTONE_NR_FCNTL_LOCK UINT64_C(0xC0DE0003)  /* F_GETLK, F_SETLK, F_SETLKW: 32 bytes */
 #define CAPSTONE_NR_IOCTL_BUF UINT64_C(0xC0DE0004)   /* a request with a buffer: 64 bytes */
+/* Signals: the domain keeps its handlers, the task keeps Linux's state.
+ * SIGACTION carries a disposition class instead of a handler pointer, plus
+ * the flags Linux applies itself; SIGDONE acknowledges an event's sequence
+ * number after its handler ran; SIGPOLL publishes accepted events without a
+ * call, the answer to the hint. */
+#define CAPSTONE_NR_SIGACTION UINT64_C(0xC0DE0005) /* signo, class, flags */
+#define CAPSTONE_NR_SIGDONE UINT64_C(0xC0DE0006)   /* seq */
+#define CAPSTONE_NR_SIGPOLL UINT64_C(0xC0DE0007)
 
-/* Descriptor flag: the image speaks this ABI. Images without it use the
- * HostCall v0 application runtime; a launcher must accept both. */
+/* Contexts (docs/plans/delegation-threads.md).
+ * CONTEXT_RESERVE: no arguments; the result is a free transport index, 1 to
+ * the descriptor's contexts, or -EAGAIN when every one is in use (-ENOSYS for
+ * an application that declares none). While a transport's context has
+ * announced its end (CONTEXT_EXITING) and none is free, it waits for that one.
+ * The creator puts the index into the new context's start block before
+ * CONTEXT_CREATE, so the context has its transport at its first entry.
+ * CONTEXT_CREATE: ticket, mode, transport, tid; the seal is already in the
+ * requesting context's invocation descriptor, tid is the context's thread
+ * identity (the runtime's; tkill names it), the result is the new context's
+ * id or -errno. It consumes a reservation whatever its outcome: THREAD mode
+ * names the reserved transport, which the launcher thread serves until the
+ * context ends; REGISTER mode names none (0), and that context makes no
+ * delegated call.
+ * CONTEXT_STEP: id, 0, event; the launcher steps a REGISTER context once and
+ * writes a capstone_context_event. CONTEXT_FORGET: id. */
+#define CAPSTONE_NR_CONTEXT_CREATE UINT64_C(0xC0DE0008)
+#define CAPSTONE_NR_CONTEXT_STEP UINT64_C(0xC0DE0009)
+#define CAPSTONE_NR_CONTEXT_FORGET UINT64_C(0xC0DE000A)
+#define CAPSTONE_NR_CONTEXT_RESERVE UINT64_C(0xC0DE000B)
+/* CONTEXT_EXITING: key; a THREAD context's last request. Its transport is
+ * ending, and once the context has returned for good (EXITED, or DEAD) the
+ * launcher frees the transport and then wakes one waiter on key (0: none),
+ * the word the context cleared on its way out, as Linux does for
+ * CLONE_CHILD_CLEARTID. -EINVAL from a context without a transport of its own. */
+#define CAPSTONE_NR_CONTEXT_EXITING UINT64_C(0xC0DE000F)
+/* THREAD_NAME: the calling thread's name, which is the name of the Linux
+ * thread that serves its context (prctl PR_SET_NAME and PR_GET_NAME there).
+ * args[0] 0 sets it from the 16-byte buffer at args[1], 1 reads it into that
+ * buffer. */
+#define CAPSTONE_NR_THREAD_NAME UINT64_C(0xC0DE0010)
+#define CAPSTONE_THREAD_NAME_SET 0u
+#define CAPSTONE_THREAD_NAME_GET 1u
+#define CAPSTONE_THREAD_NAME_BYTES 16u
+#define CAPSTONE_CONTEXT_REGISTER 0u   /* register only; the application steps it */
+#define CAPSTONE_CONTEXT_THREAD 1u     /* a launcher thread steps it until it ends */
+
+/* Parking (docs/plans/delegation-threads.md, "Parking"). The domain keeps the
+ * lock words; Linux only puts launcher threads to sleep and wakes them. A key
+ * is the domain address of a lock word as an integer; the launcher never
+ * dereferences it. The park table has one generation word per bucket; only
+ * the launcher writes one, and it never wraps (it stops at UINT64_MAX).
+ * PARK_WAIT: key, gen, deadline (absolute CLOCK_MONOTONIC nanoseconds, 0 for
+ *   none); sleeps only while the key's bucket still has generation gen. The
+ *   result is CAPSTONE_PARK_RESULT_WOKEN or _RECHECK, or -ETIMEDOUT or
+ *   -EINTR; a signal accepted meanwhile under SA_RESTART ends it as a RETRY
+ *   round, after which the caller checks its lock word again.
+ * PARK_WAKE: key, n; the result is how many waiters on key it selected.
+ * PARK_REQUEUE: src, dst, nwake, nmove; wakes up to nwake waiters on src,
+ *   moves up to nmove more to dst, and returns woken plus moved. */
+#define CAPSTONE_NR_PARK_WAIT UINT64_C(0xC0DE000C)
+#define CAPSTONE_NR_PARK_WAKE UINT64_C(0xC0DE000D)
+#define CAPSTONE_NR_PARK_REQUEUE UINT64_C(0xC0DE000E)
+#define CAPSTONE_PARK_RESULT_WOKEN 0
+#define CAPSTONE_PARK_RESULT_RECHECK 1
+#define CAPSTONE_PARK_BUCKETS 256u
+#define CAPSTONE_PARK_BYTES 4096u
+
+_Static_assert(CAPSTONE_PARK_BUCKETS * 8u <= CAPSTONE_PARK_BYTES, "the park table fits its page");
+
+/* The bucket of a key, the same on both sides of the boundary. */
+static inline unsigned capstone_park_bucket_of(uint64_t key, unsigned buckets) {
+  return (unsigned)((key * UINT64_C(0x9E3779B97F4A7C15)) >> 32) & (buckets - 1);
+}
+struct capstone_context_event {
+  uint64_t kind;     /* the driver's step event: returned, preempted, fault, dead, stale */
+  uint64_t result;   /* the context's result word */
+  uint64_t cause, pc, address;
+  uint64_t reserved;
+};
+#define CAPSTONE_SIGNAL_DEFAULT 0u
+#define CAPSTONE_SIGNAL_IGNORE 1u
+#define CAPSTONE_SIGNAL_CAUGHT 2u
+
+/* Descriptor flag: the image speaks this ABI, the only application ABI.
+ * capstone-exec refuses an image without it (ENOEXEC, exit 126). */
 #define CAPSTONE_APPLICATION_DELEGATE 2u
 #define CAPSTONE_DELEGATE_DEFAULT_EXCHANGE 262144u
 
@@ -99,24 +235,30 @@ struct capstone_delegate_shape {
  * and both sides of the boundary agree without a kernel header. */
 enum {
   CAPSTONE_SYS_getcwd = 17, CAPSTONE_SYS_dup = 23, CAPSTONE_SYS_dup3 = 24,
-  CAPSTONE_SYS_fcntl = 25, CAPSTONE_SYS_ioctl = 29, CAPSTONE_SYS_mkdirat = 34,
-  CAPSTONE_SYS_unlinkat = 35, CAPSTONE_SYS_ftruncate = 46,
+  CAPSTONE_SYS_fcntl = 25, CAPSTONE_SYS_ioctl = 29, CAPSTONE_SYS_flock = 32, CAPSTONE_SYS_mkdirat = 34,
+  CAPSTONE_SYS_unlinkat = 35, CAPSTONE_SYS_symlinkat = 36, CAPSTONE_SYS_ftruncate = 46,
   CAPSTONE_SYS_faccessat = 48, CAPSTONE_SYS_chdir = 49, CAPSTONE_SYS_openat = 56,
+  CAPSTONE_SYS_fchmodat = 53,
   CAPSTONE_SYS_close = 57, CAPSTONE_SYS_pipe2 = 59, CAPSTONE_SYS_getdents64 = 61,
   CAPSTONE_SYS_lseek = 62, CAPSTONE_SYS_read = 63, CAPSTONE_SYS_write = 64,
   CAPSTONE_SYS_readv = 65, CAPSTONE_SYS_writev = 66, CAPSTONE_SYS_pread64 = 67,
-  CAPSTONE_SYS_pwrite64 = 68, CAPSTONE_SYS_ppoll = 73,
+  CAPSTONE_SYS_pwrite64 = 68, CAPSTONE_SYS_pselect6 = 72, CAPSTONE_SYS_ppoll = 73,
   CAPSTONE_SYS_preadv = 69, CAPSTONE_SYS_pwritev = 70,
   CAPSTONE_SYS_readlinkat = 78, CAPSTONE_SYS_newfstatat = 79,
   CAPSTONE_SYS_fstat = 80, CAPSTONE_SYS_fsync = 82, CAPSTONE_SYS_fdatasync = 83,
+  CAPSTONE_SYS_sync_file_range = 84,
   CAPSTONE_SYS_utimensat = 88, CAPSTONE_SYS_exit = 93,
   CAPSTONE_SYS_exit_group = 94, CAPSTONE_SYS_set_tid_address = 96,
   CAPSTONE_SYS_futex = 98, CAPSTONE_SYS_set_robust_list = 99,
   CAPSTONE_SYS_nanosleep = 101, CAPSTONE_SYS_clock_gettime = 113,
   CAPSTONE_SYS_clock_nanosleep = 115, CAPSTONE_SYS_sched_yield = 124,
-  CAPSTONE_SYS_kill = 129, CAPSTONE_SYS_rt_sigaction = 134,
-  CAPSTONE_SYS_rt_sigprocmask = 135, CAPSTONE_SYS_rt_sigreturn = 139,
-  CAPSTONE_SYS_times = 153, CAPSTONE_SYS_uname = 160, CAPSTONE_SYS_umask = 166,
+  CAPSTONE_SYS_kill = 129, CAPSTONE_SYS_tkill = 130, CAPSTONE_SYS_sigaltstack = 132,
+  CAPSTONE_SYS_rt_sigsuspend = 133, CAPSTONE_SYS_rt_sigaction = 134,
+  CAPSTONE_SYS_rt_sigprocmask = 135, CAPSTONE_SYS_rt_sigpending = 136,
+  CAPSTONE_SYS_rt_sigtimedwait = 137, CAPSTONE_SYS_rt_sigreturn = 139,
+  CAPSTONE_SYS_getitimer = 102, CAPSTONE_SYS_setitimer = 103,
+  CAPSTONE_SYS_times = 153, CAPSTONE_SYS_getpgid = 155, CAPSTONE_SYS_getsid = 156,
+  CAPSTONE_SYS_uname = 160, CAPSTONE_SYS_umask = 166,
   CAPSTONE_SYS_gettimeofday = 169, CAPSTONE_SYS_getpid = 172,
   CAPSTONE_SYS_getppid = 173, CAPSTONE_SYS_getuid = 174,
   CAPSTONE_SYS_geteuid = 175, CAPSTONE_SYS_getgid = 176,
@@ -127,6 +269,30 @@ enum {
   CAPSTONE_SYS_mprotect = 226, CAPSTONE_SYS_madvise = 233,
   CAPSTONE_SYS_wait4 = 260, CAPSTONE_SYS_prlimit64 = 261,
   CAPSTONE_SYS_renameat2 = 276, CAPSTONE_SYS_getrandom = 278,
+  /* the plain rows: integers, strings and flat buffers only */
+  CAPSTONE_SYS_mknodat = 33, CAPSTONE_SYS_linkat = 37, CAPSTONE_SYS_statfs = 43,
+  CAPSTONE_SYS_fstatfs = 44, CAPSTONE_SYS_truncate = 45, CAPSTONE_SYS_fallocate = 47,
+  CAPSTONE_SYS_fchdir = 50, CAPSTONE_SYS_fchmod = 52, CAPSTONE_SYS_fchownat = 54,
+  CAPSTONE_SYS_fchown = 55, CAPSTONE_SYS_sendfile = 71, CAPSTONE_SYS_sync = 81,
+  CAPSTONE_SYS_clock_getres = 114, CAPSTONE_SYS_sched_setaffinity = 122,
+  CAPSTONE_SYS_sched_getaffinity = 123, CAPSTONE_SYS_sched_get_priority_max = 125,
+  CAPSTONE_SYS_sched_get_priority_min = 126, CAPSTONE_SYS_sched_rr_get_interval = 127,
+  CAPSTONE_SYS_setpriority = 140, CAPSTONE_SYS_getpriority = 141, CAPSTONE_SYS_setpgid = 154,
+  CAPSTONE_SYS_setsid = 157, CAPSTONE_SYS_getgroups = 158, CAPSTONE_SYS_getrusage = 165,
+  CAPSTONE_SYS_getcpu = 168, CAPSTONE_SYS_readahead = 213, CAPSTONE_SYS_fadvise64 = 223,
+  CAPSTONE_SYS_syncfs = 267, CAPSTONE_SYS_memfd_create = 279, CAPSTONE_SYS_copy_file_range = 285,
+  CAPSTONE_SYS_statx = 291, CAPSTONE_SYS_faccessat2 = 439,
+  /* sockets and epoll: descriptors like files */
+  CAPSTONE_SYS_epoll_create1 = 20, CAPSTONE_SYS_epoll_ctl = 21, CAPSTONE_SYS_epoll_pwait = 22,
+  CAPSTONE_SYS_socketpair = 199, CAPSTONE_SYS_bind = 200, CAPSTONE_SYS_listen = 201,
+  CAPSTONE_SYS_accept = 202, CAPSTONE_SYS_connect = 203, CAPSTONE_SYS_getsockname = 204,
+  CAPSTONE_SYS_getpeername = 205, CAPSTONE_SYS_sendto = 206, CAPSTONE_SYS_recvfrom = 207,
+  CAPSTONE_SYS_setsockopt = 208, CAPSTONE_SYS_getsockopt = 209, CAPSTONE_SYS_shutdown = 210,
+  CAPSTONE_SYS_sendmsg = 211, CAPSTONE_SYS_recvmsg = 212, CAPSTONE_SYS_accept4 = 242,
+  /* event, timer and signal descriptors; the ids that are read, not set */
+  CAPSTONE_SYS_eventfd2 = 19, CAPSTONE_SYS_signalfd4 = 74, CAPSTONE_SYS_timerfd_create = 85,
+  CAPSTONE_SYS_timerfd_settime = 86, CAPSTONE_SYS_timerfd_gettime = 87,
+  CAPSTONE_SYS_getresuid = 148, CAPSTONE_SYS_getresgid = 150,
   CAPSTONE_SYS_vfork = 1071, CAPSTONE_SYS_fork = 1079
 };
 
@@ -142,17 +308,23 @@ int capstone_delegate_pack(struct capstone_delegate_entry *entry, uint64_t nr,
 
 /* The launcher's check before it touches the exchange region: version, count,
  * group, and every flagged argument inside [0, exchange_bytes) for the length
- * the shape implies. Returns 0, or the errno the request must be answered with
+ * the shape implies. A length given as a word in the region is read from
+ * `exchange` once its own four bytes are bounded, and every resolved length
+ * is written to `lengths` (when given) so the caller uses the length that
+ * was checked. Returns 0, or the errno the request must be answered with
  * (EINVAL for a malformed block, EFAULT for an offset outside the region,
  * ENOSYS for an unknown or excepted number). RUNTIME requests pass. */
 int capstone_delegate_validate(const struct capstone_delegate_entry *entry,
-                               size_t exchange_bytes);
+                               const void *exchange, size_t exchange_bytes,
+                               size_t lengths[CAPSTONE_DELEGATE_ARGS]);
 
 /* Bytes the argument at `index` covers in the exchange region, per the shape,
  * or 0 when it is not a buffer. Strings report 0: the launcher bounds them
- * with capstone_delegate_string_ok. */
+ * with capstone_delegate_string_ok. A word length needs `exchange`; it is 0
+ * when the word's own bytes are not inside the region. */
 size_t capstone_delegate_arg_bytes(const struct capstone_delegate_shape *shape,
                                    const struct capstone_delegate_entry *entry,
+                                   const void *exchange, size_t exchange_bytes,
                                    unsigned index);
 
 /* A NUL inside [offset, exchange_bytes). */

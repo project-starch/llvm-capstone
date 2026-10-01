@@ -45,9 +45,10 @@ SECTIONS {
    * WHY .tdata IS ALIGNED TO .tbss's ALIGNMENT. lld's offset for a symbol is
    * (its address - p_vaddr) + (p_vaddr mod p_align), and p_align is the larger
    * of the two sections' alignments. Aligning .tdata to both makes the second
-   * term zero, so the runtime only has to put tp on an address congruent to the
-   * template's (it uses the template's offset within a 4 KiB page, since the
-   * loader places the image on a page boundary) and needs no other number.
+   * term zero, so the template starts at a p_align boundary and the runtime
+   * only has to put tp on one: it describes the segment to musl with a 4096-byte
+   * alignment and offset 0, and musl's __copy_tls aligns every tp to a page
+   * (runtime/tls.c), which covers every alignment the ASSERT below admits.
    *
    * With no thread-locals both sections are empty, nothing moves and nothing is
    * added to the loaded image; the PT_TLS header is empty and the loader only
@@ -65,7 +66,7 @@ SECTIONS {
   } :domain :tls
 
   ASSERT(ALIGNOF(.tdata) <= 4096 && ALIGNOF(.tbss) <= 4096,
-         "a thread-local aligned above 4096 bytes: runtime/tls.c aligns tp within a page")
+         "a thread-local aligned above 4096 bytes: runtime/tls.c aligns tp to a page")
 
   /* THE INIT AND FINI ARRAYS, defined so their MARKERS EXIST.
    *

@@ -24,11 +24,23 @@ static double now(void) {
   return t.tv_sec + t.tv_nsec / 1e9;
 }
 
+static int heap_fault(const char *mode) {
+  const char *modes[] = {"fault-stale", "fault-reused", "fault-bounds",
+    "fault-bounds-large", "fault-realloc-shrink", "fault-double-free",
+    "fault-double-free-reused"};
+  for (unsigned i = 0; i < sizeof modes / sizeof modes[0]; ++i)
+    if (!strcmp(mode, modes[i])) return 1;
+  return 0;
+}
+
 static int run(const char *launcher, const char *image, const char *mode, int stop) {
   int clear = open("contract.out", O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (clear < 0) return 0;
   close(clear);
   clear = open("contract.err", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (clear < 0) return 0;
+  close(clear);
+  clear = open("contract.fault", O_WRONLY | O_CREAT | O_TRUNC, 0600);
   if (clear < 0) return 0;
   close(clear);
   pid_t child = fork();
@@ -41,11 +53,13 @@ static int run(const char *launcher, const char *image, const char *mode, int st
         dup2(out, 1) < 0 || dup2(err, 2) < 0) _exit(124);
     close(in); close(out); close(err);
     setenv("CAPSTONE_CONTRACT", "environment with spaces", 1);
+    setenv("CAPSTONE_FAULT_RECORD", "/tmp/contract.fault", 1);
     execl(launcher, launcher, image, mode, "",
           "argument with spaces\nand newline", (char *)NULL);
     _exit(124);
   }
   int status = 0;
+  double stopped = 0;
   double deadline = now() +
       ((!strcmp(mode, "churn") || !strcmp(mode, "fault-reused")) ? 120 : 20);
   if (stop) {
@@ -60,7 +74,14 @@ static int run(const char *launcher, const char *image, const char *mode, int st
     nanosleep(&running, NULL);
     if (waitpid(child, &status, WNOHANG) != 0) return 0;
     kill(child, stop);
-    deadline = now() + 5;
+    /* The check is that cancellation completes, not that it is quick. The
+       board lane measured (#135, 2026-09-30) a looping domain stopping in
+       ~0.04 s alone, ~3.5 s while another CPU-bound domain shares the hart
+       and ~7.3 s on a loaded host; 1 of 3 gate runs failed the old 5 s
+       limit. 30 s still catches a domain that never stops; the time taken
+       is printed with the verdict. */
+    stopped = now();
+    deadline = stopped + 30;
   }
   for (;;) {
     pid_t result = waitpid(child, &status, WNOHANG);
@@ -80,12 +101,29 @@ static int run(const char *launcher, const char *image, const char *mode, int st
     struct timespec pause = {.tv_nsec = 1000000};
     nanosleep(&pause, NULL);
   }
+  double took = now() - stopped;
   int fault = !strncmp(mode, "fault", 5), exited = !strcmp(mode, "exit139");
   int passed = stop ? WIFSIGNALED(status) && WTERMSIG(status) == stop : fault ? WIFSIGNALED(status) && WTERMSIG(status) == SIGSEGV
                      : WIFEXITED(status) && WEXITSTATUS(status) == (exited ? 139 : 0);
-  passed = passed && check_file("contract.out", fault || exited || stop ?
+  int heap = heap_fault(mode);
+  passed = passed && check_file("contract.out", heap ? "stdout\nheap: ready\n" : fault || exited || stop ?
       "stdout\n" : "stdout\napplication: ok\n") && check_file("contract.err", "stderr\n");
-  printf("application %s: %s (wait status=%d)\n", mode, passed ? "PASS" : "FAIL", status);
+  if (stop)
+    printf("application %s: %s (wait status=%d, stopped in %.2f s)\n", mode,
+           passed ? "PASS" : "FAIL", status, took);
+  else
+    printf("application %s: %s (wait status=%d)\n", mode, passed ? "PASS" : "FAIL", status);
+  if (heap) {
+    int survived = check_file("contract.out", "stdout\nheap: ready\nheap: survived\n");
+    int ready = survived || check_file("contract.out", "stdout\nheap: ready\n");
+    printf("heap evidence %s: ready=%d survived=%d stderr=%d\n", mode, ready, survived,
+           check_file("contract.err", "stderr\n"));
+    FILE *record = fopen("contract.fault", "r");
+    if (!record) return 0;
+    char line[1024];
+    while (fgets(line, sizeof line, record)) fputs(line, stdout);
+    fclose(record);
+  }
   fflush(stdout);
   return passed;
 }
@@ -101,7 +139,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[3], "--mode")) return 2;
     return run(argv[1], argv[2], argv[4], 0) ? 0 : 1;
   }
-  const char *modes[] = {"healthy", "fault", "fault-stack", "fault-vector", "exit139"};
+  const char *modes[] = {"healthy", "pty", "fault", "fault-stack", "fault-vector", "exit139"};
   for (unsigned i = 0; i < count; ++i)
     for (unsigned j = 0; j < sizeof modes / sizeof modes[0]; ++j)
       if (!run(argv[1], argv[2], modes[j], 0)) return 1;

@@ -1,0 +1,357 @@
+#!/usr/bin/env bash
+# -fno-jump-tables retired 2026-09-05 (W-15 residue): BR_JT lowers with a capability table base
+# and label-difference entries since cycle 3 (W-17 pairs AGREE-PASS; jump-table.ll), so the pin only
+# hid the shape from the twins.
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+export CAPSTONE_TMP_ROOT=${SQLITE322_TMP_ROOT:-/tmp/capstone-322}
+source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
+export SQLITE_VERSION=3220000
+export SQLITE_YEAR=2018
+export SQLITE_ARCHIVE_SHA3=69bc5ee8f08d747494dd3a4bfe075e5b078fe200dfc671d76dd9e1ccb5b2decb
+
+REPO_ROOT=$CAPSTONE_REPO_ROOT
+SQLITE_SRC_DIR=${SQLITE_SRC_DIR:-$(bash "$SCRIPT_DIR/fetch-sqlite.sh")}
+OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/sqlite-build}
+OBJ_DIR=${OBJ_DIR:-$OUT_DIR/obj}
+PATCHED_SQLITE=${PATCHED_SQLITE:-$OUT_DIR/sqlite3-capstone.c}
+OUT_DOM=${OUT_DOM:-$OUT_DIR/sqlite_memory_capstone.dom}
+DOMAIN_OPT_LEVEL=${DOMAIN_OPT_LEVEL:--O0}
+SQLITE_OPT_LEVEL=${SQLITE_OPT_LEVEL:--O0}
+# The domain payload TU (the run_* driver). Default = the sqlite-memory smoke
+# domain; the row3 matched-pair runner overrides it. DOMAIN_EXTRA_FLAGS lets a
+# caller pass e.g. -DROW3_NO_REVOKE to build the control variant.
+DOMAIN_SRC=${DOMAIN_SRC:-$SCRIPT_DIR/sqlite_capstone_domain.c}
+DOMAIN_EXTRA_FLAGS=${DOMAIN_EXTRA_FLAGS:-}
+
+CLANG=${CLANG:-$CAPSTONE_CLANG}
+LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
+LLVM_READOBJ=${LLVM_READOBJ:-$CAPSTONE_LLVM_READOBJ}
+START_SRC=${START_SRC:-$REPO_ROOT/capstone/my_first_domain/start.S}
+LINKER_SCRIPT=${LINKER_SCRIPT:-$REPO_ROOT/capstone/my_first_domain/link.ld}
+ADAPTED_DIR="$SCRIPT_DIR/adapted"
+VFS_SKELETON_DIR="$REPO_ROOT/capstone/tests/runtime-qemu/sqlite-vfs-skeleton"
+BUILTINS_DIR="$REPO_ROOT/compiler-rt/lib/builtins"
+BEEBS_STRING_SRC="$REPO_ROOT/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
+
+for required in "$SQLITE_SRC_DIR/sqlite3.c" "$SQLITE_SRC_DIR/sqlite3.h" \
+                "$START_SRC" "$LINKER_SCRIPT"; do
+  [[ -f "$required" ]] || {
+    echo "missing required SQLite build input: $required" >&2
+    exit 1
+  }
+done
+
+mkdir -p "$OUT_DIR" "$OBJ_DIR"
+
+# Keep the official amalgamation immutable in the temporary source cache; every rewrite below is
+# asserted after the sed, so one that stops matching fails the build instead of passing silently.
+#
+# Two rewrites were retired on 2026-09-24 because the compiler no longer needs them: the
+# SQLITE_TRANSIENT sentinel, replaced by a real function while clang's constant evaluator asserted on
+# ((sqlite3_destructor_type)-1), and memsys5's methods table, filled in at run time while the compiler
+# could not initialise that static table of function pointers. The sentinel was also the cause of gap 9:
+# it changed SQLITE_TRANSIENT inside sqlite3.c only, so a client compiled against sqlite3.h passed -1,
+# which the core stored as a destructor and later called. Measured as a matched pair with the workload
+# binding through SQLITE_TRANSIENT: run-sqlite-memory.sh halted with cause 24 on that xDel call with
+# the rewrite and passes without it. Nothing here depends on an unmerged compiler change: dev's clang
+# and dev + the open compiler PRs build byte-identical silicon domains (-O0, 3.22.0 and 3.53.3) with
+# or without either rewrite, and run-sqlite-memory.sh (-O1) passes without both on each of them.
+# SQLITE_PREADAPTED=1: SQLITE_SRC_DIR already holds an adapted amalgamation, sqlite3.c and
+# sqlite3.h (adapt-sqlite-322.sh's output for 3.22.0), so this 3.53.3 pass is skipped and the .c is
+# copied as it is. The Sublet and hook patches below still apply to the copy, and the other
+# translation units include the adapted sqlite3.h from the same directory.
+
+# An instrument's patch (run-sqlite-speedtest1.sh, SPEEDTEST1_HOOK): SQLITE_HOOK_PATCH puts its
+# calls into the copies in OUT_DIR, the amalgamation above and a speedtest1.c the runner placed
+# there. -F0: a source the patch was not written for is refused, not patched somewhere near.
+# SQLITE_SUBLET_PATCH: the Sublet port of memsys5 and lookaside (sublet/sublet-3530300.patch),
+# a diff against the file the sed above produces, applied to the copy, before the instrument.
+# The primitives (capstone/sublet/sublet.h) are program-independent and shared by every port;
+# the patch's own directory joins the include path too, for anything a program's port keeps
+# beside it. Both join only here, so the unprotected build never sees a Sublet file.
+#
+# TWO include ROOTS, because two conventions coexist. This lane's code says `#include "sublet.h"`
+# and means capstone/sublet/sublet.h (struct sublet_cap, 13 primitives as raw .insn); the
+# amalgamation patch says `#include <sublet/sublet.h>` and means capstone/runtime/include/sublet/
+# sublet.h (capstone_cap_slot, 7 primitives over <capstone/capability.h>). THESE ARE TWO DIFFERENT
+# HEADERS WITH INCOMPATIBLE TYPE NAMES, not one header reachable two ways.
+#
+# ORDER IS LOAD-BEARING: capstone/runtime/include MUST precede capstone/, because `-I capstone`
+# also resolves <sublet/sublet.h> -- to capstone/sublet/sublet.h, which has never contained
+# capstone_cap_slot. With the roots the other way round the Sublet build fails with "use of
+# undeclared identifier 'capstone_cap_slot'", which is what it did from the PR #48 merge
+# (06a31271f200, 2026-09-18) until this was restored. dac22bcaeca4 had it right with a single
+# root; the merge added two in front of it. Verify with `clang -H` if this is ever touched.
+
+# 3.22.0 adaptation (replaces the 3.53.3 sed). adapt-sqlite-322.sh writes the adapted
+# amalgamation .c to PATCHED_SQLITE (saveBuf/cursor 16-align + sqlite3_filename in the .c).
+# adapt-sqlite-322.sh takes the amalgamation DIRECTORY and an OUTPUT DIRECTORY (it writes
+# sqlite3.c and sqlite3.h). Adapt into a subdir, then place the adapted .c at PATCHED_SQLITE
+# (a .c path, the contract the rest of this script and the sublet/hook patch dir rely on).
+ADAPTED_322_DIR="$OUT_DIR/sqlite-322-adapted"
+bash "$SCRIPT_DIR/adapt-sqlite-322.sh" "$SQLITE_SRC_DIR" "$ADAPTED_322_DIR"
+cp -f "$ADAPTED_322_DIR/sqlite3.c" "$PATCHED_SQLITE"
+# FTS5 CREATE fix (2026-09-30): the default-tokenizer path evaluates &azArg[1] with
+# azArg==NULL, which is cincoffset on a NULL capability and faults on Capstone
+# (pointer arithmetic on NULL is UB in C). See fts5-azarg-patch.py.
+python3 "$SCRIPT_DIR/fts5-azarg-patch.py" "$PATCHED_SQLITE"
+
+# The VFS is a SEPARATE TU that includes only sqlite3.h; 3.22.0's header has no
+# sqlite3_filename (added in 3.41.0). Backport the typedef into a private header dir and
+# put it first on the include path so every TU sees it.
+SQLITE322_INC="$OUT_DIR/inc-322"
+mkdir -p "$SQLITE322_INC"
+sed -e '/^typedef struct sqlite3_file sqlite3_file;$/a\
+typedef const char *sqlite3_filename;' \
+  "$SQLITE_SRC_DIR/sqlite3.h" > "$SQLITE322_INC/sqlite3.h"
+
+
+SUBLET_FLAGS=()
+if [ -n "${SQLITE_SUBLET_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_SUBLET_PATCH"
+  SUBLET_FLAGS=(-I"$REPO_ROOT/capstone/runtime/include"
+                -I"$REPO_ROOT/capstone/sublet"
+                -I"$REPO_ROOT/capstone"
+                -I"$(cd -- "$(dirname -- "$SQLITE_SUBLET_PATCH")" && pwd)")
+fi
+if [ -n "${SQLITE_HOOK_PATCH:-}" ]; then
+  patch -s -F0 -p1 -d "$OUT_DIR" < "$SQLITE_HOOK_PATCH"
+fi
+
+SQLITE_DEFINES=(
+  -DNDEBUG
+  -DSQLITE_OS_OTHER=1
+  -DSQLITE_THREADSAFE=0
+  -DSQLITE_DEFAULT_MEMSTATUS=0
+  -DSQLITE_TEMP_STORE=3
+  -DSQLITE_OMIT_LOAD_EXTENSION=1
+  -DSQLITE_OMIT_LOCALTIME=1
+  -DSQLITE_OMIT_MMAP=1
+  -DSQLITE_OMIT_WAL=1
+  -DSQLITE_OMIT_SHARED_CACHE=1
+  -DSQLITE_OMIT_TEMPDB=1
+  -DSQLITE_OMIT_AUTOINIT=1
+  -DSQLITE_OMIT_COMPILEOPTION_DIAGS=1
+  -DSQLITE_OMIT_FLOATING_POINT=1
+  -DSQLITE_OMIT_UTF16=1
+  -DSQLITE_OMIT_INCRBLOB=1
+  -DSQLITE_OMIT_GET_TABLE=1
+  -DSQLITE_OMIT_DEPRECATED=1
+  -DSQLITE_OMIT_EXPLAIN=1
+  -DSQLITE_OMIT_FOREIGN_KEY=1
+  -DSQLITE_OMIT_JSON=1
+  -DSQLITE_DQS=0
+  -DSQLITE_UNTESTABLE=1
+  -DSQLITE_ZERO_MALLOC=1
+  -DSQLITE_ENABLE_MEMSYS5=1
+  -DSQLITE_DEFAULT_LOOKASIDE=0,0
+  -DYYSTACKDEPTH=1000
+)
+
+# SQLITE_LOOKASIDE=slots-size,count selects SQLite's compiled-in lookaside default; the allocator
+# chain lookaside > memsys5 that the paper measures needs 1200,40 (run-sqlite-speedtest1.sh sets
+# it). A later -D wins over an earlier one, so this overrides the 0,0 above without disturbing it.
+#
+# IT IS APPLIED HERE, OUTSIDE THE ARRAY, AND THAT PLACEMENT IS THE WHOLE POINT. SIX other scripts
+# read this block as TEXT rather than by running it -- build-sqlite-silicon.sh:1005,
+# build-speedtest1-native.sh, build-speedtest1-baseline.sh, build-slt-native.sh,
+# tools/speedtest1-heap-sweep.sh and tests/twins/build-slt-native-cap.sh, all with the same
+# sed+grep. A shell expansion written inside the array is harvested LITERALLY and handed to clang
+# as `-DSQLITE_DEFAULT_LOOKASIDE=${SQLITE_LOOKASIDE:-0,0}`, which fails at the use site with
+# "use of undeclared identifier '$'". That is exactly what reached dev in the collaborator merge
+# (b47e926f296e, from the PR side; this branch's own copy was literal), and it broke the whole
+# silicon path, every board domain included. Only that one consumer complained: the others filter
+# this macro out of their harvest, so five scripts carried the same broken text in silence.
+#
+# A SECOND REASON THE ARRAY MUST STAY LITERAL, and the one that would have caught an in-array fix:
+# build-speedtest1-baseline.sh:99 gates on an EXACT harvested count, EXPECT_DEFS=27, and it has no
+# LOOKASIDE filter. Anything that changes the number of -D tokens in this block trips it.
+# Keeping the default at 0,0 here also keeps every recorded board result reproducible by text
+# harvest alone.
+if [ -n "${SQLITE_LOOKASIDE:-}" ]; then
+  SQLITE_DEFINES+=( "-DSQLITE_DEFAULT_LOOKASIDE=$SQLITE_LOOKASIDE" )
+fi
+
+# ---- feature set ------------------------------------------------------------------------------
+# `deployed` (the default) reproduces every recorded board result byte for byte. `restored`
+# undefines the omissions above that are CODE-SIZE choices rather than platform limits, so a result
+# can be stated as "SQLite minus what a domain with no OS, no filesystem and no threads cannot
+# provide" instead of "minus seventeen features". What stays omitted either way: OS_OTHER,
+# THREADSAFE, TEMP_STORE, ZERO_MALLOC/MEMSYS5, WAL, MMAP, SHARED_CACHE, TEMPDB, LOAD_EXTENSION,
+# LOCALTIME, AUTOINIT -- and FLOATING_POINT, which is not a define flip here (it needs soft-float
+# builtins this build does not link; see docs/plans/sqlite-stockness-and-benchmark-breadth.md).
+#
+# THIS IS A LITERAL ARRAY ON PURPOSE. build-slt-native.sh and build-sqlite-silicon.sh both harvest
+# these blocks out of this file with `sed`, which is how the oracle and the two domain builds have
+# stayed in step. A conditional the sed cannot see would let them drift apart silently, and that
+# drift is the one failure this pairing exists to prevent.
+#
+# EXPLAIN IS DELIBERATELY NOT IN THIS LIST, and that is a measured decision rather than an
+# oversight. Restoring it -- and it alone, of the eight -- makes the domain fault at the FIRST
+# region share (`SQ: E/share1`, cause 24), before it executes anything, on the ordinary SLT path
+# with no probe involved. Bisected 2026-09-09 one define at a time against an all-deployed control:
+# NONE and the other seven reach `SQ: H/return`; -USQLITE_OMIT_EXPLAIN alone reaches only E/share1;
+# the seven together pass and all eight fail. Root cause NOT established (see the registry entry).
+# It also happens to be the omission that buys nothing: we build from the amalgamation, whose
+# parser tables are pre-generated, so SQLITE_OMIT_EXPLAIN never removed the grammar and EXPLAIN
+# parses and runs today WITH the define set. Restoring it would trade a working domain for a
+# feature that already works.
+SQLITE_RESTORE=(
+  -USQLITE_OMIT_FOREIGN_KEY
+  -USQLITE_OMIT_UTF16
+  -USQLITE_OMIT_INCRBLOB
+  -USQLITE_OMIT_GET_TABLE
+  -USQLITE_OMIT_DEPRECATED
+  -USQLITE_OMIT_COMPILEOPTION_DIAGS
+  -USQLITE_UNTESTABLE
+)
+SQLITE_FEATURE_SET=${SQLITE_FEATURE_SET:-deployed}
+case "$SQLITE_FEATURE_SET" in
+  deployed) SQLITE_RESTORE=() ;;
+  restored) ;;
+  *) echo "ERROR: SQLITE_FEATURE_SET must be 'deployed' or 'restored', got '$SQLITE_FEATURE_SET'" >&2
+     exit 1 ;;
+esac
+echo "== SQLITE_FEATURE_SET=$SQLITE_FEATURE_SET (${#SQLITE_RESTORE[@]} omissions restored)"
+
+COMMON_FLAGS=(
+  -target capstone64-unknown-elf
+  -Xclang -target-feature
+  -Xclang +m
+  -ffreestanding
+  -fno-builtin
+  # sibling calls: -fno-optimize-sibling-calls retired 2026-09-05 -- C-28 (tail calls emitted as calls) is fixed; W-16 pair AGREE-PASS at -O2, and the coremark_matrix silicon rung built with sibling calls returned its oracle (board-results/2026-09-05.tsv B4)
+  -ffunction-sections
+  -fdata-sections
+  -include "$ADAPTED_DIR/capstone_sqlite_libc.h"
+  # host-independent: the seven glibc headers the amalgamation includes resolve here, never in
+  # the host's /usr/include (see adapted/stubinc/README, 2026-09-09)
+  -I"$ADAPTED_DIR/stubinc"
+  -I"$ADAPTED_DIR"
+  -I"$SCRIPT_DIR"
+  "${SUBLET_FLAGS[@]}"
+  -I"$VFS_SKELETON_DIR"
+  -I"$SQLITE322_INC"
+  -I"$SQLITE_SRC_DIR"
+  "${SQLITE_DEFINES[@]}"
+  "${SQLITE_RESTORE[@]}"      # after SQLITE_DEFINES: -U must win over the -D above
+  ${SQLITE_CFLAGS_EXTRA:-}
+)
+
+"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -O0 -c "$START_SRC" -o "$OBJ_DIR/start.o"
+
+# CORPUS_CACHE_SQLITE=1 (opt-in): skip recompiling the 8 MB amalgamation when a
+# cached sqlite3.o already exists for the SAME flags+source. A stamp records the
+# flag string and the adapted-source hash; a mismatch forces a rebuild. Off by
+# default so nothing else that sources this script changes behaviour.
+_sq_stamp_want="$SQLITE_OPT_LEVEL|${COMMON_FLAGS[*]}|$(sha1sum "$PATCHED_SQLITE" | cut -d" " -f1)"
+if [ "${CORPUS_CACHE_SQLITE:-0}" = 1 ] && [ -f "$OBJ_DIR/sqlite3.o" ] && \
+   [ -f "$OBJ_DIR/sqlite3.o.stamp" ] && \
+   [ "$(cat "$OBJ_DIR/sqlite3.o.stamp")" = "$_sq_stamp_want" ]; then
+  echo "== reusing cached sqlite3.o (CORPUS_CACHE_SQLITE)"
+else
+  "$CLANG" "${COMMON_FLAGS[@]}" "$SQLITE_OPT_LEVEL" \
+    -Wno-pointer-to-int-cast -Wno-void-pointer-to-int-cast \
+    -c "$PATCHED_SQLITE" -o "$OBJ_DIR/sqlite3.o"
+  printf %s "$_sq_stamp_want" > "$OBJ_DIR/sqlite3.o.stamp"
+fi
+
+"$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" \
+  -c "$ADAPTED_DIR/capstone_sqlite_libc.c" -o "$OBJ_DIR/libc.o"
+
+"$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" \
+  -c "$BEEBS_STRING_SRC" -o "$OBJ_DIR/beebs_string.o"
+
+"$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" \
+  -c "$VFS_SKELETON_DIR/capstone_sqlite_vfs.c" -o "$OBJ_DIR/sqlite_vfs.o"
+
+"$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" \
+  -c "$ADAPTED_DIR/capstone_sqlite_os.c" -o "$OBJ_DIR/sqlite_os.o"
+
+"$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" $DOMAIN_EXTRA_FLAGS \
+  -c "$DOMAIN_SRC" -o "$OBJ_DIR/domain.o"
+
+# DOMAIN_EXTRA_SRC: further sources of the domain program, compiled like it and linked
+EXTRA_OBJECTS=()
+for src in ${DOMAIN_EXTRA_SRC:-}; do
+  object="$OBJ_DIR/$(basename "${src%.c}").o"
+  "$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" $DOMAIN_EXTRA_FLAGS -c "$src" -o "$object"
+  EXTRA_OBJECTS+=("$object")
+done
+
+BUILTIN_OBJECTS=()
+for builtin in adddf3 comparedf2 divdf3 fixdfdi fixdfsi fixunsdfdi fixunsdfsi \
+               floatdidf floatsidf floatunsidf fp_mode muldf3 subdf3; do
+  object="$OBJ_DIR/$builtin.o"
+  "$CLANG" -target capstone64-unknown-elf \
+    -Xclang -target-feature -Xclang +m \
+    -ffreestanding -fno-builtin -O0 \
+    -I"$BUILTINS_DIR" \
+    -c "$BUILTINS_DIR/$builtin.c" -o "$object"
+  BUILTIN_OBJECTS+=("$object")
+done
+
+# THE DOMAIN DECLARES WHAT IT NEEDS, because at 3.3 MB it no longer fits the rule
+# that applies when it does not. Without .capstone_domreq the module sizes headroom
+# as max(2 * code_len, 512 KiB), asks the buddy allocator for over 10 MB in one
+# block, and the DOM_CREATE ioctl fails before a single instruction runs:
+#
+#   Loadable size = 3336736
+#   SQ: obs=18446744073709551615     <- create_dom returned -1
+#   create_dom failed
+#
+# domreq.S's own header names this exact case ("that 3x-on-the-image rule is what
+# pushed an interpreter image past the buddy allocator's maximum order").
+#
+# SQLite's heap is the in-image sqlite_heap[] array driving memsys5, NOT dom_data,
+# so the declared requirement is essentially the stack. SQLite recurses in the
+# parser and the VDBE, and at -O0 with 16-byte pointers a frame is about twice its
+# size on an ordinary target.
+SQLITE_DOMAIN_STACK=${SQLITE_DOMAIN_STACK:-$((1024 * 1024))}
+SQLITE_DOMAIN_DATA=${SQLITE_DOMAIN_DATA:-$SQLITE_DOMAIN_STACK}
+
+_segs() { "$LLVM_READOBJ" --program-headers "$OUT_DOM" | grep -E 'Offset|VirtualAddress|FileSize|MemSize'; }
+
+"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
+  "$OBJ_DIR/start.o" \
+  "$OBJ_DIR/sqlite3.o" \
+  "$OBJ_DIR/libc.o" \
+  "$OBJ_DIR/beebs_string.o" \
+  "$OBJ_DIR/sqlite_vfs.o" \
+  "$OBJ_DIR/sqlite_os.o" \
+  "$OBJ_DIR/domain.o" \
+  "${EXTRA_OBJECTS[@]}" \
+  "${BUILTIN_OBJECTS[@]}"
+_before=$(_segs)
+
+"$CLANG" -target capstone64-unknown-elf -ffreestanding \
+  -DCAPSTONE_DOMREQ_DATA=$SQLITE_DOMAIN_DATA \
+  -DCAPSTONE_DOMREQ_STACK=$SQLITE_DOMAIN_STACK \
+  -c "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OBJ_DIR/domreq.o"
+
+"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
+  "$OBJ_DIR/start.o" \
+  "$OBJ_DIR/sqlite3.o" \
+  "$OBJ_DIR/libc.o" \
+  "$OBJ_DIR/beebs_string.o" \
+  "$OBJ_DIR/sqlite_vfs.o" \
+  "$OBJ_DIR/sqlite_os.o" \
+  "$OBJ_DIR/domain.o" \
+  "${EXTRA_OBJECTS[@]}" \
+  "${BUILTIN_OBJECTS[@]}" \
+  "$OBJ_DIR/domreq.o"
+
+# The section is non-alloc, so NOTHING LOADED MAY MOVE. Verified, not asserted:
+# four added instructions have flipped a passing run on this project before, and an
+# image-perturbing diagnostic is how that was found.
+if [[ "$(_segs)" != "$_before" ]]; then
+  echo "domreq.S moved a loaded byte; the declaration must be non-alloc" >&2
+  exit 2
+fi
+echo "declared dom_data $SQLITE_DOMAIN_DATA (stack $SQLITE_DOMAIN_STACK)"
+
+"$LLVM_READOBJ" -h "$OUT_DOM" >/dev/null
+echo "Built $OUT_DOM"

@@ -1,0 +1,96 @@
+pthread_attr_t keeps the stack address as a pointer
+
+musl keeps a thread attribute's stack address in an unsigned long
+(_a_stackaddr, __u.__s[2]) and does its arithmetic there. On capstone64 a
+long holds an address, not a capability: pthread_attr_setstack stored
+(size_t)addr + size, and pthread_create's `(void *)(attr._a_stackaddr & -16)`
+built an untagged stack pointer, whose first store faults (cause 24);
+pthread_getattr_np and pthread_attr_getstack handed an untagged stack back.
+The attribute gains a pointer view: _a_stackaddr is __p[2] where a pointer
+is a long (the same bytes as __s[2]) and __p[3] with 16-byte pointers,
+after the ints, in a 64-byte object; its users do pointer arithmetic. Found
+by review, 2026-09-30.
+
+diff -ru a/include/alltypes.h.in b/include/alltypes.h.in
+--- a/include/alltypes.h.in
++++ b/include/alltypes.h.in
+@@ -82,7 +82,7 @@
+ TYPEDEF unsigned socklen_t;
+ TYPEDEF unsigned short sa_family_t;
+ 
+-TYPEDEF struct { union { int __i[sizeof(long)==8?14:9]; volatile int __vi[sizeof(long)==8?14:9]; unsigned long __s[sizeof(long)==8?7:9]; } __u; } pthread_attr_t;
++TYPEDEF struct { union { int __i[sizeof(void*)==16?16:sizeof(long)==8?14:9]; volatile int __vi[sizeof(void*)==16?16:sizeof(long)==8?14:9]; unsigned long __s[sizeof(void*)==16?8:sizeof(long)==8?7:9]; void *__p[sizeof(void*)==16?4:3]; } __u; } pthread_attr_t;
+ TYPEDEF struct { union { int __i[sizeof(long)==8?10:6]; volatile int __vi[sizeof(long)==8?10:6]; volatile void *volatile __p[sizeof(long)==8?5:6]; } __u; } pthread_mutex_t;
+ TYPEDEF struct { union { int __i[sizeof(long)==8?10:6]; volatile int __vi[sizeof(long)==8?10:6]; volatile void *volatile __p[sizeof(long)==8?5:6]; } __u; } mtx_t;
+ TYPEDEF struct { union { int __i[sizeof(void*)==16?16:12]; volatile int __vi[sizeof(void*)==16?16:12]; void *__p[(sizeof(void*)==16?16:12)*sizeof(int)/sizeof(void*)]; } __u; } pthread_cond_t;
+diff -ru a/src/internal/pthread_impl.h b/src/internal/pthread_impl.h
+--- a/src/internal/pthread_impl.h
++++ b/src/internal/pthread_impl.h
+@@ -78,7 +78,9 @@
+ 
+ #define _a_stacksize __u.__s[0]
+ #define _a_guardsize __u.__s[1]
+-#define _a_stackaddr __u.__s[2]
++/* A pointer, so that a capability keeps its tag: __p[2] is __s[2] where a
++   pointer is a long; with 16-byte pointers __p[3], past the ints. */
++#define _a_stackaddr __u.__p[__SIZEOF_POINTER__ == 16 ? 3 : 2]
+ #define _a_detach __u.__i[3*__SU+0]
+ #define _a_sched __u.__i[3*__SU+1]
+ #define _a_policy __u.__i[3*__SU+2]
+diff -ru a/src/thread/pthread_attr_get.c b/src/thread/pthread_attr_get.c
+--- a/src/thread/pthread_attr_get.c
++++ b/src/thread/pthread_attr_get.c
+@@ -40,7 +40,7 @@
+ 	if (!a->_a_stackaddr)
+ 		return EINVAL;
+ 	*size = a->_a_stacksize;
+-	*addr = (void *)(a->_a_stackaddr - *size);
++	*addr = (char *)a->_a_stackaddr - *size;
+ 	return 0;
+ }
+ 
+diff -ru a/src/thread/pthread_attr_setstack.c b/src/thread/pthread_attr_setstack.c
+--- a/src/thread/pthread_attr_setstack.c
++++ b/src/thread/pthread_attr_setstack.c
+@@ -3,7 +3,7 @@
+ int pthread_attr_setstack(pthread_attr_t *a, void *addr, size_t size)
+ {
+ 	if (size-PTHREAD_STACK_MIN > SIZE_MAX/4) return EINVAL;
+-	a->_a_stackaddr = (size_t)addr + size;
++	a->_a_stackaddr = (char *)addr + size;
+ 	a->_a_stacksize = size;
+ 	return 0;
+ }
+diff -ru a/src/thread/pthread_create.c b/src/thread/pthread_create.c
+--- a/src/thread/pthread_create.c
++++ b/src/thread/pthread_create.c
+@@ -271,8 +271,8 @@
+ 	if (attr._a_stackaddr) {
+ 		size_t need = libc.tls_size + __pthread_tsd_size;
+ 		size = attr._a_stacksize;
+-		stack = (void *)(attr._a_stackaddr & -16);
+-		stack_limit = (void *)(attr._a_stackaddr - size);
++		stack = (unsigned char *)attr._a_stackaddr - ((uintptr_t)attr._a_stackaddr & 15);
++		stack_limit = (unsigned char *)attr._a_stackaddr - size;
+ 		/* Use application-provided stack for TLS only when
+ 		 * it does not take more than ~12% or 2k of the
+ 		 * application's stack space. */
+diff -ru a/src/thread/pthread_getattr_np.c b/src/thread/pthread_getattr_np.c
+--- a/src/thread/pthread_getattr_np.c
++++ b/src/thread/pthread_getattr_np.c
+@@ -9,13 +9,13 @@
+ 	a->_a_detach = t->detach_state>=DT_DETACHED;
+ 	a->_a_guardsize = t->guard_size;
+ 	if (t->stack) {
+-		a->_a_stackaddr = (uintptr_t)t->stack;
++		a->_a_stackaddr = t->stack;
+ 		a->_a_stacksize = t->stack_size;
+ 	} else {
+ 		char *p = (void *)libc.auxv;
+ 		size_t l = PAGE_SIZE;
+ 		p += -(uintptr_t)p & PAGE_SIZE-1;
+-		a->_a_stackaddr = (uintptr_t)p;
++		a->_a_stackaddr = p;
+ 		while (mremap(p-l-PAGE_SIZE, PAGE_SIZE, 2*PAGE_SIZE, 0)==MAP_FAILED && errno==ENOMEM)
+ 			l += PAGE_SIZE;
+ 		a->_a_stacksize = l;

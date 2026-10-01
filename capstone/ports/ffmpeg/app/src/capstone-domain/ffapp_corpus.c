@@ -6,9 +6,9 @@
  * arm (the buffer-pool port's probe cases 36-38) runs FFmpeg's buffer.c with the payloads served
  * by that port's own allocator and its leases; here the pools are FFmpeg's own, ported.
  *
- * This file stands in for the corpus's shared/driver.c. The domain has no argv, so the case and
- * its arm (upstream's defect, or the fix applied) are compile-time. One image per case and arm,
- * fixture 40 + 2 * case + fixed (build-domain.sh, FFAPP_CORPUS_DIR), because a fault ends the
+ * This file stands in for the corpus's shared/driver.c. The case and its arm (upstream's defect,
+ * or the fix applied) are compile-time, like the port's safety fixtures: one image per case and
+ * arm, fixture 40 + 2 * case + fixed (build-domain.sh, FFAPP_CORPUS_DIR), because a fault ends the
  * domain. The case prints its own verdict line, exactly as natively. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,9 +24,6 @@
 
 AVBufferPool *g_pool;
 
-extern char **__environ;
-static char *ffapp_empty_environ[1] = { 0 };
-
 /* The corpus's contract: an infrastructure failure is never a verdict. */
 _Noreturn void ff2_fail(unsigned code)
 {
@@ -35,9 +32,9 @@ _Noreturn void ff2_fail(unsigned code)
     exit(75);
 }
 
-int capstone_main(void)
+int main(int argc, char **argv)
 {
-    __environ = ffapp_empty_environ;
+    (void)argc; (void)argv;
     setvbuf(stdout, NULL, _IOLBF, 0);
     printf("FFAPP-FIX %d begin\n", FFAPP_FIXTURE);
     g_pool = av_buffer_pool_init(POOL_BYTES, NULL);   /* the driver's pool, as natively */

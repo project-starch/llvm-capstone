@@ -1,5 +1,16 @@
 # Capstone project documentation
 
+Lane-only work on `delegation-threads` (not landed on `dev`):
+[the threads computing model](design/delegated-threads-model.md),
+[thread plan and integration constraints](plans/delegation-threads.md),
+[CPython qualification](../ports/cpython/app/README.md#review-qualification-with-subprocess-enabled).
+
+Application ports now require the [shared delegated ABI-v2 SDK](../ports/common/application/README.md).
+Seven application recipes are migrated, with new QEMU functional and safety
+qualification, explicit compiler/resource requirements and preserved negative
+results. The launcher rejects old images; historical measurement archives
+retain their original ABI and binary identities.
+
 Inner-reuse expansion: [CPython](../experiments/study/results/cpython-reuse-four-arm-20260928/README.md)
 and [PostgreSQL](../experiments/study/results/postgres-reuse-four-arm-20260928/README.md)
 now each validate 12/12 complete processes across four arms. The
@@ -180,7 +191,11 @@ The `domain-process-runtime` application stack supports a persistent Linux guest
 ordinary application arguments/streams, trusted fault/preemption return and owned
 resource reuse. The installed QEMU guest passes exhaustion/recovery followed by
 1,008 mixed starts in the same boot, with stable retained resources. Perl uses
-the shared SDK; Perl and mruby execute through the common launcher. See
+the shared SDK; Perl and mruby execute through the common launcher. The delegated
+runtime (application ABI v2) is the only application runtime: the musl runtime's
+HostCall v0 mode and the probes that ran on it were removed on 2026-09-30, and the
+runtime probes that remain run as delegated applications
+(`tests/runtime-qemu/run-delegated-probes.py`). See
 [applications](../runtime/applications.md), the
 [checked acceptance](../runtime/tests/application/results/20260926-qemu-rebased.json)
 and [current state](state/current-state.md) for scope and remaining failures.
@@ -270,6 +285,8 @@ Use these only when the task actually needs them:
 - `design/split-host-enclave-strategy.md` — source-backed architectural detail
 - `design/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
 - `design/research-decisions-log.md` — paper-worthy implementation decisions and tradeoffs, cited by commit hash
+- `design/delegated-threads-model.md` — how an application's threads run on the delegated runtime:
+  one Linux thread per protected context, stepping, scheduling, blocking, signals, lifetimes, limits
 - `plans/backend-compiler-fixes.md` — known backend bugs and workarounds (from CoreMark bring-up)
 - [Domain applications as Linux commands](plans/domain-process-runtime.md) — implemented
   shared launcher, owned lifecycle, shell I/O, common SDK and persistent development VM;

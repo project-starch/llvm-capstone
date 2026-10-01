@@ -1,9 +1,27 @@
+Application ports (2026-09-29): the seven application recipes now require
+the [shared delegated SDK](../../ports/common/application/README.md), with
+v1 rejection qualified. Use the recorded compiler and memory settings when
+rebuilding; do not reintroduce the removed private launchers or fake process
+inputs. The protected PostgreSQL qualification needs more than 65,536
+revocation nodes. Investigate the larger mruby GC stress's cause-30 exhaustion
+before treating that workload as qualified; it also fails at 262,144 nodes.
+Keep FFmpeg's C-70 flag workaround explicit until a reduced compiler fix is
+qualified. These are separate from the successful application migration.
+
+Delegated signals (2026-09-29): the `delegation-signals` branch passes its
+[26-mode synchronous contract](../../runtime/tests/application/results/20260929-signal-contract.json)
+plus 25 native tests, the application gate, binfmt and
+Perl `t/base`. The asynchronous bell remains later, as do the deviations in
+[the signal plan](../plans/delegation-signals.md). Continue broader process
+group and region-grant qualification before calling the four-step runtime
+stack accepted.
+
 Delegated runtime (2026-09-29): the reviewed stack has
 [checked syscall/process fixes](../../runtime/applications.md#review-verification-2026-09-29).
 Guest binfmt_misc now passes direct shell execution and Perl's full `t/base`
-(9 files, 493 assertions), with 45 libc-test passes retained. Complete the
-outstanding process-group gates and qualify signal-dependent process behavior
-with step 6. Region-grant memory
+(9 files, 493 assertions), with all 45 previous libc-test passes retained and
+`sscanf_long` newly green (46 total). Complete the
+outstanding process-group gates. Region-grant memory
 is still step 5. The current rdtime sample does not discharge the planned
 icount/per-step measurement. Do not label all four steps accepted yet.
 
@@ -262,7 +280,8 @@ now passes all 27 original Capstone repeats at 65,536 nodes. Extend the checked
 workload sizes and remaining application ports; record live-node demand separately
 from cumulative allocations. The QEMU collector performs a software tag sweep.
 PostgreSQL's larger workload needs FileFallocate
-support; tshark needs its full dependency build restored. Matching default
+support; tshark's full build is #128's, under `/tmp/capstone/delegation-ports/tshark-source`,
+relinked and green on the current stack (`ports/wireshark/app/results/2026-09-30-qemu-tshark-current-stack`). Matching default
 CheriBSD runs now cover FFmpeg and mruby: use the [shared comparison
 contract](../../experiments/applications/comparison.md) for requested bytes,
 address reuse and allocator retention. Extend this default-CheriBSD reference method to

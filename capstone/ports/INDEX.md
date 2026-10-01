@@ -15,10 +15,12 @@
 |---|---|---|---|---|
 | `cpython/app` | 3.13.7 | capstone-domain, cheribsd-purecap | objects.py JSON/GC qualification workload | `pymalloc-repros` |
 | `ffmpeg/app` | 9.0.1 | capstone-domain | matroska demuxer to mpeg4 decoder, per-frame framemd5 | -- |
+| `memcached/app` | 1.6.45 | capstone-domain, native | mc-harness: a fixed text- and meta-protocol script over one connection and 2 x -t concurrent ones, compared byte for byte with the native server | `allocator-repros` |
 | `micropython` | 2e3304a | capstone-domain, silicon | the registered upstream test selection | -- |
 | `mruby/app` | 4.0.0-rc2 | capstone-domain, native | mrbtest, and the upstream ao-render benchmark for the study | `gc-slot-repros` |
 | `perl/musl` | 5.36.3 | capstone-domain, native | scripts/smoke.pl, byte-identical to the native reference | -- |
 | `postgres/app` | 17.5 | capstone-domain, cheribsd-purecap | work.sql, checked against the native 16-byte-MAXALIGN oracle | -- |
+| `sqlite/app` | 3.22.0 | capstone-domain, native | work.sql.in and again.sql on a database file, with a second writer refused while the first holds a transaction; speedtest1 main at size 1 with the per-phase result oracle; each byte for byte against the native build of the same release | -- |
 | `sqlite` | 3.53.3, 3.22.0 | capstone-domain, silicon, native | the in-memory SQL smoke, speedtest1, and the 3.22.0 silicon gate | `capi-repros` |
 | `wireshark/app` | 4.6.8 | capstone-domain | -- | -- |
 
@@ -55,8 +57,10 @@ A directory under `ports/` is an upstream **program**; a directory inside it is 
 |---|---|---|
 | cpython | `cpython/app` · `cpython/pymalloc` | 3.13.7 |
 | ffmpeg | `ffmpeg/app` · `ffmpeg/buffer-pool` | 9.0.1 |
+| memcached | `memcached/allocators` · `memcached/app` | 1.6.45 |
 | perl | `perl/cheribsd` · `perl/musl` | 5.36.3 |
 | postgres | `postgres/app` (17.5) · `postgres/memory-contexts` (17.0) | **differs, see the note in its port.json** |
+| sqlite | `sqlite/app` (3.22.0) · `sqlite` (3.53.3, 3.22.0) | **differs, see the note in its port.json** |
 | wireshark | `wireshark/app` · `wireshark/wmem` | 4.6.8 |
 
 The components of one program usually pin the same release, and the pin then lives in each component's own recipe rather than once per program. That duplication is guarded rather than removed: where two components pin **different** releases, one of them must say why in its `note`, and `check-ports.py` refuses the pair otherwise -- so bumping one component alone turns a silent divergence into a blocked one. PostgreSQL is the live case, and the reason its version was wrong in the study catalog until 2026-09-28.
@@ -74,7 +78,7 @@ A component's directory has been renamed where the old name did not say what it 
 Deferred, with the reason:
 
 - `capstone/ports/perl/musl` &rarr; `capstone/ports/perl/app` -- another lane is editing this component; rename it once that work lands
-- `capstone/ports/sqlite` &rarr; `capstone/ports/sqlite/app` -- 99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them
+- `capstone/ports/sqlite` &rarr; `capstone/ports/sqlite/freestanding` -- 99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them; the target is freestanding/ since 2026-09-30, when app/ became the ordinary-program build of 3.22.0
 - `capstone/ports/micropython` &rarr; `capstone/ports/micropython/app` -- same added level: run-nightly.sh drives its gate script, which resolves the test environment relative to its own depth
 - `capstone/ports/nginx` &rarr; `capstone/ports/nginx/pool` -- same added level, and two board drivers invoke its scripts
 

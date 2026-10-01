@@ -5,8 +5,10 @@ Builds every functional test with the application SDK's compiler driver
 (ABI v2), stages the images on the VM's share and runs them through the host
 CLI. Verdicts: PASS is exit 0 with no unserved syscall; FAIL carries the status
 and the unserved names; FAULT is a domain fault with its record; HUNG is a
-test that outlived its timeout. The exclusions are the old runner's, so the
-counts compare with docs/../musl-capstone/README.md.
+test that outlived its timeout. The exclusions are those of the HostCall v0
+runner this one replaced (removed 2026-09-30), so the counts compare with the
+earlier results in ../README.md. Fetch the pinned, patched suite first with
+fetch-libc-test.sh.
 """
 
 import argparse
@@ -24,10 +26,10 @@ HERE = Path(__file__).resolve().parent
 EXCLUDE = {
     "dlopen": "dynamic loading", "dlopen_dso": "dynamic loading",
     "tls_align_dlopen": "dynamic loading", "tls_init_dlopen": "dynamic loading",
-    "pthread_cancel-points": "threads", "pthread_cancel": "threads",
-    "pthread_cond": "threads", "pthread_mutex": "threads", "pthread_mutex_pi": "threads",
-    "pthread_robust": "threads", "pthread_tsd": "threads", "sem_init": "threads",
-    "sem_open": "threads and shared memory", "vfork": "processes: vfork itself",
+    "sem_open": "file-backed shared mapping: sem_open maps a /dev/shm file MAP_SHARED",
+    "pthread_cancel": "asynchronous cancellation of a thread that makes no call: a signal "
+                      "reaches a context at its next call (the doorbell, delegation-signals.md)",
+    "vfork": "processes: vfork itself",
     "wordexp": "processes: musl forks a shell", "fcntl": "processes: forks a child",
     "socket": "network", "ipc_msg": "SysV IPC", "ipc_sem": "SysV IPC", "ipc_shm": "SysV IPC",
 }
@@ -97,6 +99,7 @@ def run_one(cli: list[str], name: str, timeout: float, env: dict,
     with tempfile.TemporaryDirectory(prefix=f"lt-{name}-") as directory:
         result_file = Path(directory) / "result.json"
         command = [*cli, "run", "--cwd", "/tmp", "--result", str(result_file),
+                   "-e", "CAPSTONE_DELEGATE_STATS=1",   # the domain's unserved report
                    f"{guest_share.rstrip('/')}/lt-{name}.dom"]
         with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, env=env) as proc:

@@ -57,7 +57,14 @@ and against the Sublet port of FFmpeg's own pools, each `case.c` unchanged, in t
 port's domain (build first with `FFAPP_HEAP=sublet FFAPP_POOL=sublet|stock
 FFAPP_CORPUS_DIR=<this corpus>` `ports/ffmpeg/app/host/build-domain.sh`):
 
-    bash runners/run-sublet-port.sh <poolsublet|poolstock> [rounds]
+    CAPSTONE_VM_STATE=<running VM> FFAPP_CORPUS_OUT=<new dir> \
+      bash runners/run-sublet-port.sh <poolsublet|poolstock> [rounds]
+
+(the delegated application ABI: each image is a `capstone-exec` application, and the verdict
+reads its exit status, the launcher's fault record and the QEMU log over that run;
+`results/20260929-qemu-sublet-port/` was taken on the earlier HostCall transport; the same
+predictions re-run on this transport, 36/36 as registered, are in
+`ports/common/application/results/20260929-dev-merge.json`).
 
 and CheriBSD with PoisonCap, where the same three cases are registered as
 `pool-<mode>-<case>`:

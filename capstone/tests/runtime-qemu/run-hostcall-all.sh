@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Serial aggregate gate for the default HostCall proof wrappers. The
-# second-PENDING wrappers are targeted diagnostics and intentionally omitted.
+# Serial aggregate gate for the bare HostCall wire probes: an S-mode payload in
+# a nested domain and a helper that services it, no musl and no capstone-exec.
+# The second-PENDING wrappers are targeted diagnostics and intentionally
+# omitted. The probes that ran musl programs on the HostCall v0 application
+# runtime were removed or converted with it on 2026-09-30; the converted ones
+# run as delegated applications with run-delegated-probes.py, in a guest that
+# capstone_vm provisions.
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
@@ -21,22 +26,6 @@ HOSTCALL_RUNNERS=(
   "$SCRIPT_DIR/run-hostcall-path-access-probe.sh"
   "$SCRIPT_DIR/run-hostcall-path-delete-probe.sh"
   "$SCRIPT_DIR/run-hostcall-combined-file-object-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-large-io-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-dir-read-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-exit-hook-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-stdio-descriptors-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-return-flush-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-thread-local-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-init-fini-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-unserved-report-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-pread-pwrite-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-path-rename-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-cwd-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-mmap-shm-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-pid-timer-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-pipe-poll-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-mkdir-rmdir-probe.sh"
-  "$SCRIPT_DIR/run-hostcall-path-readlink-probe.sh"
 )
 
 capstone_select_banner hostcall

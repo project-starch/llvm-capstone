@@ -6,8 +6,8 @@
  * after free both simply work. Measured on the FFmpeg app port, 2026-09-23
  * (ports/ffmpeg/app/host/safety-expect.txt).
  *
- * WHAT THIS IS. A binary buddy allocator over one LINEAR region the host transfers to the
- * domain (hostcall.c, CAPSTONE_PROGRAM_REGIONS), following the Sublet recipe exactly as the
+ * WHAT THIS IS. A binary buddy allocator over one LINEAR region the launcher transfers to the
+ * domain (hostcall.c's __capstone_region), following the Sublet recipe exactly as the
  * SQLite memsys5 patch applies it (ports/sqlite/sublet/sublet-3530300.patch):
  *   - every block has its own revocation node: split with sublet_split, and a handle senior
  *     to both halves taken first (sublet_handle), so that one revoke merges them again;
@@ -33,11 +33,14 @@
  * read faults, in free, and the stale free never reaches a revoke of somebody else's handle (the
  * nginx port's note: "a stale free is caught when the allocator touches the object"). It also
  * keeps the emulator alive: capstone-qemu without the revoke-raises fix ASSERTS on a revoke of an
- * untagged operand. ON SILICON THE PROBE DOES NOT PROTECT: the RTL forwards the stale capability
- * tagged and a data load through it retires (measurements §7r), so a stale free there would
- * revoke the new owner's handle. A silicon-effective check is the LCC validity query (selector
- * 0), which the RTL answers from the revocation node and capstone-qemu stubs to "valid" (Q-11);
- * it would need both.
+ * untagged operand. On the RTL as measured in §7r (2026-09-14) the probe did NOT protect: the
+ * LSU forwarded the stale capability tagged and a data load through it retired, so a stale free
+ * there would have revoked the new owner's handle. ISSUES.md records that path as fixed since,
+ * R-35 (closed 2026-09-25, capstone-ariane 4ad0df694) and R-45 (bitstream 8f6a0af98, 2026-09-29);
+ * this heap has not been re-run on the board since those bitstreams, so the silicon verdict for
+ * the probe is open, not negative. The LCC validity query (selector 0), which the RTL answers
+ * from the revocation node and capstone-qemu stubs to "valid" (Q-11), remains the check that
+ * does not depend on the load path.
  *
  * THE POOL is the largest power-of-two block, at most 2^CAPSTONE_SUBLET_HEAP_LOG, that is
  * aligned to its own size and lies inside the grant. A buddy region from the kernel is aligned
@@ -48,8 +51,12 @@
  * split): with the defaults, 4 MiB pool and 256-byte atoms, about 0.6 MiB. A merge writes the
  * merged block through before init (sublet.h, sublet_give_to), so freeing is O(block) when it
  * coalesces, and O(object) always, for the scrub. Revocation nodes: one per split and one per
- * allocation, 65,532 per boot. The resident bitstream (054cea69b) reclaims the nodes a revoke
- * walk invalidates but never a handle's own node, so how far that ceiling moves depends on the
+ * allocation, from a pool of 65,536 identities. Since capstone-qemu 22aec7ee the emulator
+ * recycles retired identities inside the process when only its cleanup reserve remains
+ * (runtime/tests/application/results/20260927-node-reuse/), so the pool bounds the live plus
+ * not-yet-reclaimable identities, not the allocations per boot: the 200,000-cycle churn fixture
+ * completes there. The resident bitstream (054cea69b) reclaims the nodes a revoke walk
+ * invalidates but never a handle's own node, so on the RTL the ceiling still moves with the
  * workload's leak fraction (ISSUES R-12; bitstreams before 2026-09-17 reclaimed nothing). The
  * counts are exported (__capstone_sublet_heap_stats) for a program to report.
  *
@@ -62,6 +69,7 @@
 #include <unistd.h>
 
 #include "sublet.h"
+#include <capstone/lock.h>
 
 #ifndef CAPSTONE_SUBLET_HEAP_LOG
 #define CAPSTONE_SUBLET_HEAP_LOG 22    /* the pool: 4 MiB, one naturally aligned buddy block */
@@ -79,8 +87,8 @@
 #define SH_OUT  0x40u   /*                                  checked out to the program */
 #define SH_ORD  0x3Fu
 
-/* Handed over by hostcall.c: the first region the host shares after the two HostCall v0
-   regions, or null if it shared none. Taken once. */
+/* Handed over by hostcall.c: the first region the launcher shares after its own three,
+   or null if it shared none. Taken once. */
 void *__capstone_region(unsigned index);
 
 static sublet_cap sh_grant;
@@ -262,7 +270,12 @@ static int sh_carve_block(size_t n, unsigned *idx)
 	return 0;
 }
 
-void *malloc(size_t n)
+/* One lock over the buddy tables (capstone/lock.h, Q6): several contexts of
+   one application share this heap. The public entries take it once; sh_
+   functions run with it held. */
+static volatile int sh_lock;
+
+static void *sh_malloc(size_t n)
 {
 	unsigned i;
 	if (sh_carve_block(n, &i) < 0)
@@ -270,10 +283,8 @@ void *malloc(size_t n)
 	return sh_narrow(sublet_take(&sh_cap[i]), n);
 }
 
-void free(void *p)
+static void sh_free(void *p)
 {
-	if (!p)
-		return;
 	/* The stale-pointer probe. A freed object's alias is revoked, so this read faults here,
 	   before anything below can revoke a handle that now belongs to someone else. */
 	(void)*(volatile const char *)p;
@@ -333,15 +344,18 @@ void free(void *p)
 unsigned long __capstone_sublet_malloc_linear(size_t n, sublet_cap *out)
 {
 	unsigned i;
-	if (sh_carve_block(n, &i) < 0)
-		return 0;
-	/* Reads the base before moving the region out, as the header requires. */
-	return sublet_take_linear(&sh_cap[i], out);
+	unsigned long base = 0;
+	capstone_lock(&sh_lock);
+	if (sh_carve_block(n, &i) == 0)
+		/* Reads the base before moving the region out, as the header requires. */
+		base = sublet_take_linear(&sh_cap[i], out);
+	capstone_unlock(&sh_lock);
+	return base;
 }
 
 /* Reclaim a block lent by __capstone_sublet_malloc_linear. One revoke kills the lent region and
    every capability the borrower carved from it; the buddy merge below is free's, unchanged. */
-void __capstone_sublet_free_linear(unsigned long base)
+static void sh_free_linear(unsigned long base)
 {
 	unsigned i;
 	if (sh_state <= 0 || base < sh_base ||
@@ -378,6 +392,30 @@ void __capstone_sublet_free_linear(unsigned long base)
 	sh_push(i, k);
 }
 
+void __capstone_sublet_free_linear(unsigned long base)
+{
+	capstone_lock(&sh_lock);
+	sh_free_linear(base);
+	capstone_unlock(&sh_lock);
+}
+
+void *malloc(size_t n)
+{
+	capstone_lock(&sh_lock);
+	void *p = sh_malloc(n);
+	capstone_unlock(&sh_lock);
+	return p;
+}
+
+void free(void *p)
+{
+	if (!p)
+		return;
+	capstone_lock(&sh_lock);
+	sh_free(p);
+	capstone_unlock(&sh_lock);
+}
+
 void *calloc(size_t n, size_t m)
 {
 	if (m && n > (size_t)-1 / m) {
@@ -401,12 +439,14 @@ void *realloc(void *p, size_t n)
 	}
 	(void)*(volatile const char *)p;  /* same probe as free, before anything is copied */
 	size_t old = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_cursor(p);
-	char *q = malloc(n);
-	if (!q)
-		return 0;
-	/* memmove, not a byte loop: the block may hold capabilities (see level0.c) */
-	memmove(q, p, old < n ? old : n);
-	free(p);
+	capstone_lock(&sh_lock);
+	char *q = sh_malloc(n);
+	if (q) {
+		/* memmove, not a byte loop: the block may hold capabilities (see level0.c) */
+		memmove(q, p, old < n ? old : n);
+		sh_free(p);
+	}
+	capstone_unlock(&sh_lock);
 	return q;
 }
 

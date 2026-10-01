@@ -2,7 +2,8 @@
 """Run an explicit matrix through one persistent VM; preserve every attempt.
 
 Each JSON point specifies id, application, arm, image (host path), argv (guest
-arguments), expected_stdout, environment, and optionally expected_phases.
+arguments), expected_stdout, environment, and optionally expected_phases, user (UID:GID),
+cwd, and stdin (a /mnt/host/ file whose hash is recorded).
 This runner never reboots, retries, or silently skips a point. The timeout
 terminates capstone_vm with SIGTERM, allowing its guest cancellation to run.
 """
@@ -186,7 +187,10 @@ def main():
     inputs = {}
     for point in points:
         declared = point.get('inputs', [])
-        if not isinstance(declared, list) or any(
+        if not isinstance(declared, list):
+            raise ValueError('point inputs must be a list of /mnt/host/ file paths')
+        declared = declared + ([point['stdin']] if 'stdin' in point else [])
+        if any(
                 not isinstance(value, str) or not value.startswith('/mnt/host/')
                 for value in declared):
             raise ValueError('point inputs must be a list of /mnt/host/ file paths')
@@ -215,7 +219,7 @@ def main():
                 try:
                     if digest(image) != images[point['image']]:
                         raise RuntimeError('image changed after manifest was recorded')
-                    for value in point.get('inputs', []):
+                    for value in point.get('inputs', []) + ([point['stdin']] if 'stdin' in point else []):
                         path = share / value.removeprefix('/mnt/host/')
                         if digest(path) != inputs[value]:
                             raise RuntimeError(f'declared input changed during campaign: {value}')
@@ -234,13 +238,21 @@ def main():
                         raise RuntimeError('boot changed during campaign')
                     result_file = directory / 'exit.json'
                     cmd = cli + ['run', '--result', str(result_file)]
+                    for option in ('user', 'cwd'):
+                        if option in point:
+                            cmd += ['--' + option, point[option]]
                     for key, value in point.get('environment', {}).items():
                         cmd += ['-e', key + '=' + value]
                     cmd += [guest_image] + point['argv']
                     (directory / 'command.json').write_text(json.dumps(cmd)+'\n')
                     start = time.monotonic()
-                    child = subprocess.Popen(cmd, env=env, stdin=subprocess.DEVNULL,
-                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    input_stream = (share / point['stdin'].removeprefix('/mnt/host/')).open('rb') if 'stdin' in point else None
+                    try:
+                        child = subprocess.Popen(cmd, env=env, stdin=input_stream or subprocess.DEVNULL,
+                                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    finally:
+                        if input_stream is not None:
+                            input_stream.close()
                     timed_out = False
                     try: stdout, stderr = child.communicate(timeout=args.timeout)
                     except subprocess.TimeoutExpired:

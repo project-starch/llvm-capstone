@@ -12,8 +12,8 @@
 |---|---|---:|---|
 | third-party defects, as cases | `capstone/bug-corpora/` | 77 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
-| our own silicon defects | `capstone/tests/fpga-repros/` | 27 | one self-contained report per defect, the folder is the report |
-| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 88 open, 77 resolved | the registry, not reproduced cases |
+| our own silicon defects | `capstone/tests/fpga-repros/` | 28 | one self-contained report per defect, the folder is the report |
+| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 96 open, 77 resolved | the registry, not reproduced cases |
 
 Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 7 components have them: `apr/pools`, `cpython/pymalloc`, `ffmpeg/buffer-pool`, `memcached/allocators`, `postgres/memory-contexts`, `whisper/ggml-context`, `wireshark/wmem`.
 
@@ -27,6 +27,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/httpd/bucket-repros`](httpd/bucket-repros) | httpd | 1.7.4 | 8 | 8 not asserted | 0 | case-json | measured |
 | [`capstone/bug-corpora/memcached/allocator-repros`](memcached/allocator-repros) | memcached | 1.6.45 | 5 | 1 live, 4 fixed before the pin | 1 | case-json | measured |
 | [`capstone/bug-corpora/mruby/gc-slot-repros`](mruby/gc-slot-repros) | mruby | 4.0.0-rc2 | 0 | not recorded | 0 | case-json | planned |
+| [`capstone/bug-corpora/mruby/release-differential`](mruby/release-differential) | mruby | 4.0.0-rc2 | 0 | not recorded | 0 | case-json | triaged |
 | [`capstone/bug-corpora/postgres/mmgr-repros`](postgres/mmgr-repros) | postgres | 17.0 | 8 | 8 live | 0 | case-json | measured |
 | [`capstone/bug-corpora/sqlite/capi-repros`](sqlite/capi-repros) | sqlite | 3.53.3 amalgamation, for the host ASan arm | 19 | 19 not asserted | 2 | sqlite-row | measured |
 | [`capstone/bug-corpora/wireshark/wmem-repros`](wireshark/wmem-repros) | wireshark | 4.6.8 | 13 | 13 fixed before the pin | 0 | case-json | measured |
@@ -35,7 +36,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
 | [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**107 cases in 13 corpora**, of which 29 are recorded live in the version their corpus pins, 20 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 14 advisories are cited across all corpora.
+**107 cases in 14 corpora**, of which 29 are recorded live in the version their corpus pins, 20 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 14 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
@@ -47,6 +48,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | -- | 0 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 3 |
 | `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 5 |
+| `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, native | `allocator-repros` | 5 |
 | `capstone/ports/micropython` | full-application | 2e3304a | capstone-domain, silicon | -- | 0 |
 | `capstone/ports/mruby/app` | full-application | 4.0.0-rc2 | capstone-domain, native | `gc-slot-repros` | 0 |
 | `capstone/ports/musl-capstone` | domain-libc | 1.2.5 | capstone-domain | -- | 0 |
@@ -55,6 +57,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, native | -- | 0 |
 | `capstone/ports/postgres/app` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
 | `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-domain, cheribsd-purecap, linux-guest, native | `mmgr-repros` | 8 |
+| `capstone/ports/sqlite/app` | full-application | 3.22.0 | capstone-domain, native | -- | 0 |
 | `capstone/ports/sqlite` | full-application | 3.53.3, 3.22.0 | capstone-domain, silicon, native | `capi-repros` | 19 |
 | `capstone/ports/whisper/ggml-context` | allocator-component | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | 0 |
 | `capstone/ports/wireshark/app` | full-application | 4.6.8 | capstone-domain | -- | 0 |
@@ -68,6 +71,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/memcached/allocator-repros` commits no result bundle of its own.
 - `capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.
 - `capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.
+- `capstone/bug-corpora/mruby/release-differential` is triage only -- nothing built.
+- `capstone/bug-corpora/mruby/release-differential` does not record live_in_pin: No cases are cut to the schema yet. Liveness is recorded per row in ledger.json instead, and it is measured rather than asserted: a row is here only because its own upstream test fails at the pin and passes at master. The rows are regenerated by probe/extract.py from an mruby clone, so this corpus carries the ledger and the harness rather than 674 generated files.
 - `capstone/bug-corpora/postgres/mmgr-repros`: 3 of 8 cases have a PROVENANCE.md.
 - `capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.
 - `capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.
@@ -82,14 +87,17 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/ports/micropython` is a complete application with no corpus.
 - `capstone/ports/perl/musl` is a complete application with no corpus.
 - `capstone/ports/postgres/app` is a complete application with no corpus.
+- `capstone/ports/sqlite/app` is a complete application with no corpus.
 - `capstone/ports/wireshark/app` is a complete application with no corpus.
+- `capstone/bug-corpora/mruby/release-differential` is not referenced by any port.json.
 
 ## Our own silicon defects
 
-27 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 15 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
+28 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 16 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
 
 - `R01-lsu-hazard` -- no heading in 00-README.md
 - `R02-delin` -- no heading in 00-README.md
+- `R12-revnode-exhaustion-reclaimer` -- R-12 — revocation nodes were never reused: the pool ran out at 65,532 allocations and the core DEADLOCKED. Fixed by the M1 reclaimer (`054cea69b`), on silicon since 2026-09-17
 - `R16-entry-stall` -- R-16 — the domain never returns from its FIRST entry (`SHA5` stall)
 - `R18-scalar-store-metadata-clobber` -- R-18 — a scalar in the upper half of a 16-byte cache row is silently zeroed on silicon
 - `R19-movc-zero-metadata-in-slot` -- R-19 — a `movc rd, zero`-sourced store leaves `compress_cap(NULL)` in its OWN bank-1 slot
@@ -101,7 +109,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `R34-lsu-exception-lost-on-immediate-grant` -- R-34 — every exception the load/store unit generates itself (the five capability causes 24–28 AND the misaligned causes 4/6) is LOST when the access is granted in its request cycle; it is delivered only if an exception is still being presented one cycle later
 - `R35-revoked-reference-retains-authority` -- R-35 — on silicon a REVOKED capability still reads AND writes the storage its object has given up, at every age, and the access does not trap
 - `R42-icache-killed-miss-refill` -- R-42 — a speculative I-cache miss killed by a taken-branch redirect costs +1 cycle every loop iteration
-- `R43-revocation-cache-false-deny` -- R-43 — R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live
+- `R43-revocation-cache-false-deny` -- R-43 — R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live. FIXED ON SILICON 2026-09-29 (`8f6a0af98`, `caplifive_r43_8f6a0af98.bit`)
 - `RTL-cap-mcause-off-by-one` -- SPEC VIOLATION — every capability `mcause` from the DATA path is one code too high, and 25 aliases
 - `RTL-domain-trap-vector-unset` -- A domain enters with NO trap vector: `create_domain` never writes the trap-vector context slot
 - `RTL-give-cost-tracks-global-placement` -- Release cost tracks GLOBAL PLACEMENT, not the arm: a 16-byte relocation moves `give_cyc/n` by 83 %

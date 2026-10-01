@@ -55,7 +55,7 @@ static int inspect(const unsigned char *data, size_t size,
   memcpy(&names, data + h.e_shoff + h.e_shstrndx * sizeof names, sizeof names);
   if (names.sh_type != SHT_STRTAB || !within(names.sh_offset, names.sh_size, size))
     return ENOEXEC;
-  int found = 0, delegated = 0;
+  int found = 0;
   for (unsigned i = 0; i < h.e_shnum; ++i) {
     Elf64_Shdr section;
     memcpy(&section, data + h.e_shoff + i * sizeof section, sizeof section);
@@ -81,26 +81,22 @@ static int inspect(const unsigned char *data, size_t size,
     if (strcmp(name, ".capstone_application"))
       continue;
     if (found++ || section.sh_type != SHT_PROGBITS ||
-        (section.sh_size != sizeof out->v1 && section.sh_size != sizeof *out) ||
+        section.sh_size != sizeof *out ||
         !within(section.sh_offset, section.sh_size, size))
       return ENOEXEC;
     memset(out, 0, sizeof *out);
     memcpy(out, data + section.sh_offset, section.sh_size);
-    delegated = section.sh_size == sizeof *out;
   }
   if (!found || out->v1.magic != CAPSTONE_APPLICATION_MAGIC ||
       out->v1.version != CAPSTONE_LAUNCH_VERSION ||
       out->v1.launch_bytes != CAPSTONE_LAUNCH_BYTES ||
       out->v1.heap_bytes > 256u * 1024u * 1024u)
     return ENOEXEC;
-  /* The flag and the size say the same thing, or the image is malformed. */
-  if (delegated) {
-    if (out->v1.flags != (CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE) ||
-        out->exchange_bytes < 4096 || out->exchange_bytes > 1024u * 1024u * 1024u)
-      return ENOEXEC;
-  } else if (out->v1.flags != CAPSTONE_APPLICATION_RECOVERY) {
+  if (out->v1.flags != (CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE) ||
+      out->exchange_bytes < 4096 || out->exchange_bytes > 1024u * 1024u * 1024u ||
+      out->exchange_bytes % 4096 || out->contexts > CAPSTONE_DELEGATE_CONTEXTS_MAX ||
+      (1 + out->contexts) * out->exchange_bytes > 1024u * 1024u * 1024u)
     return ENOEXEC;
-  }
   return 0;
 }
 

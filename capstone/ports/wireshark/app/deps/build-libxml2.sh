@@ -20,8 +20,8 @@ OPTS=(--disable-shared --enable-static --without-python --without-icu --without-
 # testModule dlopens a shared test module, which a --disable-shared build does not have ("Failed to
 # open module"), so the same commands run here one by one: every one except testModule must exit 0.
 ( cd "$N" && env -u CC -u AR -u RANLIB ./configure "${OPTS[@]}" > "$LOG/native-configure.log" 2>&1 &&
-  env -u CC -u AR -u RANLIB make -j16 > "$LOG/native-build.log" 2>&1 &&
-  env -u CC -u AR -u RANLIB make -k -j16 check > "$LOG/native-make-check.log" 2>&1 ) || true
+  env -u CC -u AR -u RANLIB make -j"${JOBS:-8}" > "$LOG/native-build.log" 2>&1 &&
+  env -u CC -u AR -u RANLIB make -k -j"${JOBS:-8}" check > "$LOG/native-make-check.log" 2>&1 ) || true
 : > "$LOG/native-check.log"
 ( cd "$N" && [ -d test ] || ln -s "$N/test" test ) 2>/dev/null || true
 XCHECKS=("./runtest" "./testrecurse" "./testapi" "./testcatalog" "./testchar" "./testdict" "./testparser"
@@ -42,7 +42,7 @@ echo "  runxmlconf runs 0 tests here: the W3C xmlconf suite is not in the releas
 
 ( cd "$X" && ./configure --host=riscv64-unknown-linux-musl --prefix="$TS_DEPS_PREFIX" "${OPTS[@]}" \
     > "$LOG/cap-configure.log" 2>&1 )
-( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j16 libxml2.la > "$LOG/cap-build.log" 2>&1 )
+( cd "$X" && TS_CENSUS=1 TS_CENSUS_LOG="$LOG/cast-log.txt" make -j"${JOBS:-8}" libxml2.la > "$LOG/cap-build.log" 2>&1 )
 ( cd "$X" && make install-libLTLIBRARIES > "$LOG/cap-install.log" 2>&1 &&
   make -C include install >> "$LOG/cap-install.log" 2>&1 )
 touch "$LOG/cast-log.txt"; sort -u "$LOG/cast-log.txt" > "$LOG/cast-sites.txt"

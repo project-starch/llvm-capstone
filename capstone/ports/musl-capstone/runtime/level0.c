@@ -31,6 +31,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <capstone/lock.h>
 
 #ifndef CAPSTONE_LEVEL0_ARENA_BYTES
 #define CAPSTONE_LEVEL0_ARENA_BYTES (256 * 1024)
@@ -56,11 +57,14 @@ static size_t l0_round(size_t n)
 	return (n + (L0_ALIGN - 1)) & ~(size_t)(L0_ALIGN - 1);
 }
 
-/* CAPSTONE_LEVEL0_SHRINK: per-object heap bounds, opt-in. Without it every pointer this
- * allocator returns carries the bounds of the WHOLE ARENA, so an overflow from one object
- * into the next is not a fault -- which is the default, and which is what every port built
- * on this file has had. With it, malloc narrows the returned capability to exactly the n
- * bytes asked for (the rv8 allocators' shrink, benchmarks/rv8/adapted/rv8_malloc.c).
+/* CAPSTONE_LEVEL0_OBJECT_BOUNDS: per-object heap bounds, ON by default since 2026-09-30. An
+ * ordinary program calling an ordinary malloc gets a pointer bounded to the object it asked
+ * for, so an overflow from one object into the next faults; malloc narrows the returned
+ * capability to exactly the n bytes requested (the rv8 allocators' shrink,
+ * benchmarks/rv8/adapted/rv8_malloc.c). Build with -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0 for the old
+ * behaviour, where every pointer carries the bounds of the WHOLE ARENA and that overflow is
+ * not a fault. The switch remains because the heap qualification needs an unprotected arm as
+ * its control (runtime/tests/application/run-heap.py).
  *
  * Two things follow, and both are the reason this is a macro and not a one-line change:
  *  - the header sits BELOW the payload, outside a narrowed pointer, so free and realloc
@@ -74,7 +78,18 @@ static size_t l0_round(size_t n)
  * rounded outward to its representable granule (the RTL's encoder), since block bases here are
  * only 16-aligned; capstone-qemu keeps full precision for stored capabilities (cap_mem_map.h)
  * and does not show that. */
-#if defined(CAPSTONE_LEVEL0_SHRINK) && CAPSTONE_LEVEL0_SHRINK
+/* The name says the property, not the instruction that implements it: with it off a pointer
+   still carries the ARENA's bounds, so it is never unbounded, and "shrink" is already taken by
+   realloc releasing an unused tail (a different thing entirely). */
+#ifdef CAPSTONE_LEVEL0_SHRINK
+/* A build still passing the old name would get the default, bounds on, without a word: the
+   control it meant to disarm would be armed. Fail it instead. */
+#error "CAPSTONE_LEVEL0_SHRINK was renamed to CAPSTONE_LEVEL0_OBJECT_BOUNDS"
+#endif
+#ifndef CAPSTONE_LEVEL0_OBJECT_BOUNDS
+#define CAPSTONE_LEVEL0_OBJECT_BOUNDS 1
+#endif
+#if CAPSTONE_LEVEL0_OBJECT_BOUNDS
 static void *l0_narrow(void *p, size_t n)
 {
 	unsigned long c = __builtin_capstone_cap_get_cursor(p);
@@ -129,6 +144,11 @@ size_t __capstone_level0_arena_bytes(void) { return CAPSTONE_LEVEL0_ARENA_BYTES;
 #define L0_NOTE_FREE(b) ((void)0)
 #endif
 
+/* One lock over the block list (capstone/lock.h, Q6): several contexts of one
+   application share this heap. The public entries take it once; the l0_
+   functions below run with it held. */
+static volatile int l0_lock;
+
 static void l0_init(void)
 {
 	l0_head = (struct l0_block *)l0_arena;
@@ -137,7 +157,7 @@ static void l0_init(void)
 	l0_head->free = 1;
 }
 
-void *malloc(size_t n)
+static void *l0_malloc(size_t n)
 {
 	if (!l0_head)
 		l0_init();
@@ -169,10 +189,8 @@ void *malloc(size_t n)
 	return 0;
 }
 
-void free(void *p)
+static void l0_free(void *p)
 {
-	if (!p)
-		return;
 	struct l0_block *b = l0_header(p);
 	L0_NOTE_FREE(b);
 	b->free = 1;
@@ -184,6 +202,23 @@ void free(void *p)
 			c->next = c->next->next;
 		}
 	}
+}
+
+void *malloc(size_t n)
+{
+	capstone_lock(&l0_lock);
+	void *p = l0_malloc(n);
+	capstone_unlock(&l0_lock);
+	return p;
+}
+
+void free(void *p)
+{
+	if (!p)
+		return;
+	capstone_lock(&l0_lock);
+	l0_free(p);
+	capstone_unlock(&l0_lock);
 }
 
 void *calloc(size_t n, size_t m)
@@ -208,18 +243,52 @@ void *realloc(void *p, size_t n)
 		free(p);
 		return 0;
 	}
+	capstone_lock(&l0_lock);
 	struct l0_block *b = l0_header(p);
-	if (b->size >= l0_round(n))
-		return L0_REALLOC_IN_PLACE(p, b, n);
-	char *q = malloc(n);
-	if (!q)
-		return 0;
-	/* memmove, not a byte loop: a byte loop drops the tag of every pointer
-	   stored in the block, and the whole point of moving a block is that its
-	   contents keep meaning what they meant. See string_bounds_safe.c. */
-	memmove(q, p, l0_readable(p, b->size));
-	free(p);
+	char *q;
+	size_t want = l0_round(n);
+	if (b->size >= want) {
+		/* Short reads shrink CPython's 32 KiB buffers to their actual length.
+		   Keeping every original block exhausts the arena on small output. */
+		if (b->size - want >= sizeof(struct l0_block) + L0_ALIGN) {
+			struct l0_block *tail =
+			    (struct l0_block *)((char *)b + sizeof(struct l0_block) + want);
+			tail->size = b->size - want - sizeof(struct l0_block);
+			tail->next = b->next;
+			tail->free = 1;
+#ifdef CAPSTONE_LEVEL0_STATS
+			l0_in_use -= b->size - want;
+#endif
+			b->size = want;
+			b->next = tail;
+			while (tail->next && tail->next->free) {
+				tail->size += sizeof(struct l0_block) + tail->next->size;
+				tail->next = tail->next->next;
+			}
+		}
+		q = L0_REALLOC_IN_PLACE(p, b, n);
+	} else if ((q = l0_malloc(n))) {
+		/* memmove, not a byte loop: a byte loop drops the tag of every pointer
+		   stored in the block, and the whole point of moving a block is that its
+		   contents keep meaning what they meant. See string_bounds_safe.c. */
+		memmove(q, p, l0_readable(p, b->size));
+		l0_free(p);
+	}
+	capstone_unlock(&l0_lock);
 	return q;
+}
+
+/* The bytes a caller may use through p. Programs that keep no size of their own ask for
+   it: SQLite's default allocator does when it is configured as configure configures it on
+   Linux (HAVE_MALLOC_USABLE_SIZE). Otherwise it puts an 8-byte size header in front of
+   every block, so every structure it allocates that holds a capability starts 8 bytes off
+   its 16-byte boundary, and its first mutex faults (a misaligned store, cause 6). This is
+   the block's payload, and with CAPSTONE_LEVEL0_OBJECT_BOUNDS no more than the pointer's bounds,
+   which are the request. musl's own malloc_usable_size reads mallocng's metadata, which
+   this heap does not keep. */
+size_t malloc_usable_size(void *p)
+{
+	return p ? l0_readable(p, l0_header(p)->size) : 0;
 }
 
 /* musl calls its own allocator by five names, not one. The public malloc is a

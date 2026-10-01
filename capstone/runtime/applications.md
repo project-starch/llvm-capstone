@@ -31,7 +31,7 @@ claimed here.
 The Buildroot external package `BR2_PACKAGE_CAPSTONE_RUNTIME` installs
 `capstone-exec`, the small `capstone-job` waitpid collector, the driver and
 Dropbear. Set `BR2_PACKAGE_CAPSTONE_RUNTIME_SOURCE` to this LLVM checkout.
-`S40capstone` loads the driver, checks its process ABI and optionally mounts the
+`S40capstone` loads the driver, selects the process API and optionally mounts the
 9p host share. The serial Linux shell works without the host CLI or SSH.
 See the package's README in `capstone/caplifive-buildroot/package/capstone-runtime`.
 
@@ -100,11 +100,10 @@ Exclude old port entry adapters and runtime objects. Resource settings are
 `CAPSTONE_APPLICATION_{DATA,STACK,ARENA}_BYTES`, `CAPSTONE_APPLICATION_HEAP` and
 `CAPSTONE_APPLICATION_HEAP_LOG`.
 
-Perl's build recipe now uses this SDK; its private compiler wrapper, entry
-adapter and VM runner were removed. Perl and mruby objects were also linked
-through the identical SDK driver and executed successfully. Other ports can
-adopt either build interface while retaining their upstream patches and build
-recipes. Historical hardware gates and loaders for older ABIs remain explicit.
+The [shared port build and run interface](../ports/common/application/README.md)
+covers Perl, mruby, CPython, PostgreSQL, SQLite, FFmpeg and tshark. Application
+recipes use this SDK; private argv/env files and application HostCall launchers
+are retired. Historical hardware and allocator probe targets remain separate.
 
 ## Host session and commands
 
@@ -124,7 +123,10 @@ capstone-vm --state "$CAPSTONE_TMP_ROOT/dev-vm" shell
 ```
 
 QEMU needs user networking (`--enable-slirp`). Defaults are one hart, 8 GiB RAM,
-640 MiB CMA, `CAPSTONE_GP_NONLIN=1` and 65,536 revocation nodes. Explicit supported
+512 MiB CMA, a 384 MiB retained process-storage limit, `CAPSTONE_GP_NONLIN=1`
+and 65,536 revocation nodes. `--cma-mib` and `--process-cache-mib` configure
+the two memory limits; the mixed application-port matrix uses 1024 and 768.
+They are recorded and preserved across explicit restarts. Explicit supported
 emulator environment settings are recorded in the session identity and passed
 to QEMU on every boot or restart. The rootfs
 runs as a disposable snapshot; files on the host share remain persistent.
@@ -211,18 +213,18 @@ or hardware collection cost. Increasing `CAPSTONE_REV_NODES` only changes the
 capacity; it is no longer necessary for the six previously failing mruby repeats.
 
 The musl port's existing syscall coverage still applies: launching a Linux
-process does not add target fork, exec, threads, dynamic loading or full POSIX
-fd semantics inside a domain. Standard-stream read/write/EOF/close/stat/query
-fcntl use Linux objects; other file operations retain the existing host service.
+process does not add target fork, dynamic loading or full POSIX fd semantics
+inside a domain; exec, spawn and threads are the delegated runtime's (below).
+Standard-stream read/write/EOF/close/stat/query fcntl use Linux objects; other
+file operations retain the existing host service.
 The launcher uses its Linux filesystem authority and is not a filesystem sandbox.
 No claim of a complete hostile-code or QEMU security audit is made.
 
 ## Delegated syscalls (application ABI v2)
 
-An application built with the default `CAPSTONE_APPLICATION_DELEGATE=ON` speaks
-ABI v2: every Linux service is the Linux syscall itself, run by the launcher
-task. The domain fills an 88-byte entry in the entry region, copies pointer
-arguments into the exchange region as offsets, and yields; the launcher
+Every application built by the SDK speaks ABI v2: every Linux service is the Linux syscall itself, run by the launcher
+task. The domain fills a 96-byte entry at the start of the 16 KiB META region,
+copies pointer arguments into the exchange region as offsets, and yields; the launcher
 validates the entry against the shape table, runs `syscall()` under its own
 credentials, descriptors and working directory, and writes the result back.
 The wire ABI, the shape table and the closed exception groups are in
@@ -230,17 +232,74 @@ The wire ABI, the shape table and the closed exception groups are in
 [docs/plans/delegation-abi.md](../docs/plans/delegation-abi.md).
 
 What crosses: files, directories, descriptors, time, identity, limits,
-`getrandom`, `wait4`, `kill` confined to the task, `exit_group`. What does not:
-memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS), processes
-(`clone` and `fork` are ENOSYS; image exec uses the process service below), and
-signals (`rt_sigaction` and `rt_sigprocmask` are accepted and recorded as
-no-ops until the signals branch). The unserved report at exit lists both.
+`getrandom`, `wait4`, `kill` confined to the task, its children and its parent
+(and signal 0 to the task's own group, which signals nothing),
+`getpgid`, `getsid`, `ppoll` and `pselect6` (the fd_sets, the timeout and the
+mask, which the libc flattens out of the kernel's pointer pair and the
+launcher rebuilds), and the plain rows, integers, strings and flat buffers
+only: `statfs`, `fstatfs`, `statx`, `truncate`, `fallocate`, `linkat`,
+`mknodat`, `fchdir`, `fchmod`, `fchown`, `fchownat`, `faccessat2`,
+`sendfile`, `copy_file_range`, `readahead`, `fadvise64`, `sync`, `syncfs`,
+`memfd_create`, `clock_getres`, `getgroups`, `getrusage`, `getcpu`,
+`setsid`, `setpgid` among the task and its children, and for the task
+itself `getpriority`, `setpriority`, `sched_get_priority_max`,
+`sched_get_priority_min` and `sched_rr_get_interval`; `sched_getaffinity` and
+`sched_setaffinity` of the launcher thread serving the calling context (named
+by 0); `getresuid` and `getresgid`; the descriptor rows
+`eventfd2`, `timerfd_create`, `timerfd_settime`, `timerfd_gettime` and
+`signalfd4`, whose descriptors are then read, written and polled like any
+other (a signalfd reads what Linux holds pending, the signals the domain
+blocks, as `rt_sigtimedwait` does); `fcntl`'s integer commands, among them
+directory notification (`F_NOTIFY`, `F_SETSIG`, `F_GETSIG`); sockets and
+epoll (below); `exit_group`. What does
+not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS) and
+processes (`fork` is ENOSYS and `clone` makes threads only; image exec uses the
+process service below). A thread is a context of the application, stepped by a
+launcher thread of its own (Threads, below).
+
+Sockets are descriptors like files: `socket`, `socketpair`, `bind`, `listen`,
+`accept`, `accept4`, `connect`, `getsockname`, `getpeername`, `sendto`,
+`recvfrom`, `setsockopt`, `getsockopt`, `shutdown`, `sendmsg`, `recvmsg`,
+`epoll_create1`, `epoll_ctl` and `epoll_pwait` cross, and the launcher looks
+at no family, port or option: what a domain's socket reaches is what the
+launcher's process reaches, decided in Linux (a network namespace, a firewall,
+an outer seccomp filter), never in the launcher. Two things the wire cannot
+carry as they are the libc converts: a length behind a pointer (`socklen_t *`)
+travels as a four-byte word in the region whose value sizes the address or
+option buffer, read once by the validator, clamped to the region's room by the
+libc while the kernel reports the true length; and `msghdr` is flattened into
+a 64-byte block with offsets in place of pointers, the way `readv`'s iovec
+array crosses, `SCM_RIGHTS` descriptors included, the launcher refusing its
+own descriptors inside one as in every other position. A datagram is never
+cut to the region: a message the room cannot hold is EMSGSIZE from the libc,
+the kernel's own answer for one too long for its protocol, and a stream send
+of that size is short as a write is. `epoll_event.data` crosses as its 64
+bits, so a capability stored there loses its tag; a descriptor or an index
+survives. Not rows: `sendmmsg` and `recvmmsg`, and socket ioctls beyond
+`FIONBIO` and `FIONREAD`. The contract is `tests/application/socket-contract.c`
+with `run-sockets.py`, the design [docs/plans/delegation-sockets.md](../docs/plans/delegation-sockets.md). Signals cross: the kernel keeps dispositions, mask, pending set and
+restart decisions, and a caught signal runs its domain handler at the domain's
+next round (see Signals below). Under `CAPSTONE_DELEGATE_STATS` the domain
+reports at exit which syscalls did not cross; without it the application's
+stderr carries application bytes only. `ioctl` crosses for the terminal requests a
+libc uses and nothing else, each with its buffer size known to the libc and
+its number on the launcher's allowlist: the window size, the `termios` set,
+`FIONREAD` and `FIONBIO`, the pseudo-terminal pair (`TIOCSPTLCK`,
+`TIOCGPTN`, so `openpty`, `posix_openpt`, `unlockpt` and `ptsname` work) and
+the foreground process group (`TIOCGPGRP`, `TIOCSPGRP`). A request is an
+unsigned int to the kernel; musl passes it as an int, so both sides mask it
+before looking it up. The application contract's `pty` mode opens a pair
+through musl's `openpty`, passes bytes through it and reads the foreground
+group; the native edge test covers the entry from the launcher's side. The
+unserved report at exit, under `CAPSTONE_DELEGATE_STATS`, lists what did not cross.
 
 The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 `CAPSTONE_APPLICATION_EXCHANGE_BYTES` for the SDK project); larger buffers are
 chunked, so a big read or write is a short one. A v2 image's descriptor is 48
-bytes; `capstone-exec` accepts v1 and v2 images and keeps HostCall v0 for the
-former. Building with `CAPSTONE_APPLICATION_DELEGATE=OFF` produces a v1 image.
+bytes. `capstone-exec` refuses any image without it (a v1 image, or one
+without the delegation flag) with exit 126; rebuild old applications.
+`CAPSTONE_APPLICATION_GRANT_BYTES` declares shared backing for existing inner
+allocators, including a Sublet outer heap where selected.
 
 The launcher installs a seccomp filter from the same shape table before the
 first step: the delegated numbers plus its own, everything else answers
@@ -248,7 +307,8 @@ ENOSYS. Installation failure aborts launch; `CAPSTONE_EXEC_NO_SECCOMP=1`
 disables it explicitly for debugging. The dispatcher separately validates
 command-dependent pointers and excludes launcher-private descriptors.
 `CAPSTONE_DELEGATE_STATS=1` prints rounds, syscalls, refused entries, bytes
-through the exchange region and `rdtime` ticks at exit.
+through the exchange region and `rdtime` ticks at exit, and lets the domain
+print its own report of unserved and no-op syscalls.
 
 A domain fault produces a record with cause, PC, address, the runtime address
 of `domain_main`, the code bounds and the sealed image's SHA-256, written to the file `CAPSTONE_FAULT_RECORD`
@@ -267,10 +327,77 @@ Measured on 2026-09-29 in the QEMU guest, `rdtime` at its 10 MHz rate, one hart:
 | Delegated round, `delegate-bench.dom`, 10,000 calls | 1,049 |
 | Native process, same counter, 10,000 calls | 8.2 |
 
-That ratio is the emulator's: each round crosses U, S and M mode twice and
-QEMU flushes its TLB on every supervised switch. This run did not use `icount`; it is a wall-time observation affected by host
+This run did not use `icount`; it is a wall-time observation affected by host
 scheduling, not a hardware cost or completion of the planned per-step cycle
 measurement. It predates the review corrections below.
+
+The step ioctl behind every round used to make ten SBI ecalls: a feature probe,
+the STEP, and eight QUERY calls fetching result, cause, pc and address as
+32-bit halves. With `caplifive-buildroot` 201a8d4 (monitor `capstone-sbi`
+02d9d47) STEP returns the whole event in one ecall, in a1..a5. Measured on
+2026-09-29, same guest, same host, base and new booted back to back, median
+of five runs of 10,000 calls and two of 100,000
+([record](tests/application/results/20260929-step-one-ecall.json)):
+
+| Step protocol | Ticks per round, 10,000 calls | 100,000 calls |
+|---|---|---|
+| Ten ecalls per step | 1,047 | 1,048 |
+| One ecall per step | 893 | 885 |
+| One ecall, no S-mode swap around the CALL | 527 | 519 |
+| plus QEMU: TLB flush only when translation state changes | 351 | 345 |
+| plus QEMU: quantum timer instead of a clock read per block | 303 | 262 |
+
+Still wall time without `icount`, with another guest running on the host. The
+fault records of the four contract fault modes are byte-identical on both
+platforms; the application gate and the binfmt contract pass on the new one.
+
+The third row is `caplifive-buildroot` c3507a5 (monitor `capstone-sbi`
+a810177): the monitor's supervised invoke uses `__domcall`, so the compiler
+no longer swaps the sixteen CPMP CCSRs and nine S-mode CSRs out and back
+around every step. The supervisor snapshots and restores that state itself,
+and each CPMP write is a full TLB flush in QEMU
+([record](tests/application/results/20260929-no-smode-swap.json)).
+
+The last two rows are emulator changes, `capstone-qemu` ac2837aa: the
+supervisor's `restore_state` flushed the TLB on every switch although
+satp, the CPMP registers and the mstatus translation bits never change across
+a supervised switch, and every C-mode translation block began with a helper
+that read the virtual clock to enforce the 5 ms quantum, 771 times per
+round. The flush is now conditional and the quantum is a timer with an inline
+flag test. Both rows are QEMU-only savings and say nothing about hardware; the
+control for them is an unmodified build of the previous pin at 512 / 509
+([record](tests/application/results/20260929-qemu-switch-cost.json)).
+
+The number of rounds is the other half of the cost. The libc now answers
+identity and the two clocks from the launch record the task writes at start
+(`launch.h`: pid, ppid, the ids, and the clocks paired with `rdtime`), answers
+musl's thread setup itself, and no longer opens a `fcntl` round after every
+`O_CLOEXEC` open; stdio buffers are 8 KiB and the `getdents64` buffer 32 KiB
+(`ports/musl-capstone/musl-patches/`). Measured 2026-09-29 with
+`CAPSTONE_DELEGATE_STATS=1`: `perl -e 'print ...'` 43 -> 26 rounds, `mruby -e
+'puts 1'` 6 -> 4, the getpid benchmark 10,003 -> 2. Perl `t/base` takes 35 s
+either way: the nine launches, not the rounds, are what remains of that figure
+([record](tests/application/results/20260929-libc-rounds.json)).
+
+A launch, measured in the guest with `CAPSTONE_DELEGATE_STATS=1` (the
+launcher prints `launch ticks` per stage), perl.dom warm on the 9p share:
+
+| Stage | Before | After |
+|---|---|---|
+| image read over 9p into a memfd | 1.1 s | 0.5 s |
+| SHA-256 of the image | 2.0 s | 0 (computed only for a fault record) |
+| domain: loader copy and `DOM_CREATE` | 1.9 s | 0.5 s (copy the file-backed 14.5 MB, not the 82 MB memsz; zero fresh blocks only) |
+| regions, heap included | 4.0 s | 4.2 s |
+| total before the first instruction | 9.0 s | 5.2 s |
+| wall in the guest, `perl -e 1` | 12.0 s | 6.9 s |
+
+`capstone-vm` keeps one SSH connection per VM (`ControlMaster`), so a
+command costs 0.1 to 0.3 s of host time instead of 0.5 to 1.1 s. Perl
+`t/base` through `prove` from the host: 35 s -> 23 s. What remains of a
+launch is the heap region: the monitor's reclaim fills a released region with
+zero capabilities granule by granule and does so again when the region is
+prepared for the next owner, 4 s for the 64 MiB Perl heap in QEMU
+([record](tests/application/results/20260929-launch-cost.json)).
 
 ### Processes
 
@@ -286,8 +413,10 @@ application descriptors are inherited. The helper closes its inherited
 descriptors and dies if the launcher dies. File actions cannot overwrite the
 exec-error channel; descriptor overflow is an error rather than truncation.
 `wait4` selects recorded children, including for `waitpid(-1)`, and retains
-stopped/continued children. `kill` accepts this task or a recorded child,
-not process-group targets. A blocking any-child wait polls recorded PIDs at
+stopped/continued children. `kill` accepts this task, a recorded child or the
+task that spawned it (a child domain may signal its parent), not
+process-group targets; a pid nobody has answers ESRCH, any other process
+EPERM. A blocking any-child wait polls recorded PIDs at
 1 ms intervals to avoid reaping the helper or unrelated children. `execve` of a Capstone image replaces the task
 through the launcher's own binary, keeping pid, descriptors, argv[0], the
 unfiltered helper and the recorded children. The replacement image is validated
@@ -323,6 +452,58 @@ so the task dies of it: that is the signals branch. The remaining exclusions
 are threads, sockets, SysV IPC, dynamic loading, `vfork` itself, `wordexp`
 and the `fcntl` test's forked child.
 
+### Signals (2026-09-29)
+
+Linux owns every signal decision; the runtime carries a caught signal into the
+domain. `rt_sigaction` is delegated with the handler replaced by a class
+(default, ignore, caught): a caught signal installs the launcher's trampoline
+with `SA_SIGINFO`, the domain's `SA_RESTART`, `SA_RESETHAND`, `SA_NOCLDSTOP`
+and `SA_NOCLDWAIT` mirrored, and every signal masked while it records. The
+trampoline appends `{seq, signo, siginfo, mask}` to a lock-free ring, bumps a
+recorded-sequence word in the META region, keeps the signal blocked in the
+kernel until the domain handler is done (unless `SA_NODEFER`), and when the
+interrupted pc lies inside the launcher's syscall stub before its `ecall`
+redirects it to a `retry` exit, so the round reports `RETRY` with no result and
+no output and the libc marshals the call again after the handler. A completed
+call reports its result, `-EINTR` included; the kernel's own restart decision
+(`SA_RESTART`) lands in the same stub range. `wait4` polling and the spawn
+protocol have their own continuation points. The kernel mask the launcher
+applies is the domain's mask plus the in-flight signals plus caught-signal
+backpressure while the ring is nearly full; nothing is dropped.
+
+The libc runs accepted events after every round, in acceptance order, under
+`current ∪ sa_mask ∪ {sig}`; an event accepted inside `rt_sigsuspend` or a
+masked `ppoll` or `pselect6` runs under that call's temporary mask before the
+call returns.
+Nested delivery happens at the end of a handler's own rounds. `sigaction` on a
+signal with runnable events runs them under the old installation first.
+`sigaltstack`, `sigsetjmp` with a saved mask and `siglongjmp` are the libc's;
+a handler abandoned through `siglongjmp` is acknowledged when the jump is
+seen. The recorded-sequence word is checked at every entry into the syscall
+dispatcher, so a signal accepted during pure computation runs at the next
+libc call, not before: delivery is synchronous. A domain fault stays fatal
+whatever the `SIGSEGV` action, `ucontext` carries no register image, and
+`timer_create` is not served yet.
+
+`tests/application/signal-contract.c` is the definition of done, one mode per
+case of the plan, driven by `run-signals.py`:
+26/26 modes pass in the guest (self delivery with and without `SA_NODEFER`, a
+signal before and during a blocking read with restart and with `EINTR`, a
+handler that writes, `sigsuspend`, `ppoll`, nesting A -> B, `RETRY` after a
+partial write, `waitpid(-1)` restarted and interrupted, a spawn interrupted
+after its request, `SA_RESETHAND` dying and reinstalled, a realtime queue
+through the ring, the hint, `sigaltstack` with a nested `siglongjmp`,
+`SIG_IGN` inheritance with `SETSIGDEF`, and a caught `SIGABRT` through musl's
+own sigaction path, plus positive-PID wait timing, a 400-signal `SA_NODEFER`
+burst, a deep-stack `siglongjmp`, translated `sigtimedwait` status, and
+inherited state in a second domain). The native suite (25/25) checks all 400
+queued payloads and the spare overflow record. The application gate (21 PASS
+lines), the binfmt contract and Perl `t/base` (9 files, 493 tests, 23 s) pass
+on the same images; `perl -e` makes 30 rounds instead of 26, the signal
+calls Perl makes that the previous runtime answered locally as no-ops.
+libc-test with the SDK built from this commit: 48 PASS, 4 FAIL, 2 FAULT, 3 NOBUILD, 20 EXCLUDED of 77; `popen` (SIGUSR1 from its child) and `setjmp` (six `sigprocmask` calls that were no-ops) pass now, `tls_local_exec` fails instead of faulting, the rest is unchanged: `clocale_mbfuncs` faults at startup as before, `mntent`, `strptime` and `strtold` fail as before, the TLS tests do not build.
+Record: [20260929-signal-contract.json](tests/application/results/20260929-signal-contract.json).
+
 ### Review verification (2026-09-29)
 
 The [checked result](tests/application/results/20260929-delegation-review.json)
@@ -340,7 +521,8 @@ children, spawn after exec, exec with closed standard descriptors, and recovery
 from a rejected image. The deliberate fault is SIGSEGV and resolves to
 `main+0x95c` after verifying the sealed image hash. The unchanged v1 application
 gate passes 108 mixed starts in the same boot with stable retained resources.
-Both v1 and v2 SDK builds succeed.
+At that review revision both SDK variants built. The subsequent port migration
+removes v1 application support; this historical result remains tied to its hashes.
 
 The fresh delegated libc-test result is **45 PASS, 5 FAIL, 2 FAULT, 5 NOBUILD,
 20 EXCLUDED** (77 total). `utime` gains its pass because futimens now carries
@@ -380,6 +562,32 @@ python3 capstone/runtime/tests/application/run-binfmt.py --state "$VM_STATE" \
   --image /mnt/host/delegate-contract.dom
 ```
 
+### Threads (2026-09-30)
+
+musl's `pthread_create`, `join`, `detach` and `exit` run unchanged. Each thread is a protected
+context the runtime mints, and one Linux thread of the launcher steps it. That thread enters the
+context through the driver and the monitor, and serves its delegated calls itself. So:
+- Linux schedules, blocks and routes signals per thread;
+- a call that blocks stops only its own thread;
+- futexes go through the launcher's park queue, since Linux cannot see domain memory.
+
+Two limits follow from how a step works:
+- Linux switches between threads only at step boundaries, at the latest at the supervisor's 5 ms
+  quantum;
+- one thread at a time executes domain code, because the driver serialises steps on one mutex and
+  the VM has one hart.
+
+The model is concurrency, not parallelism.
+
+An application built by the SDK may run fifteen threads besides its first. Not supported:
+- `fork`;
+- asynchronous signal delivery and asynchronous cancellation;
+- futex operations beyond WAIT, WAKE, REQUEUE and the PI lock pair;
+- priority and policy calls, and another thread's affinity or name.
+
+The whole model, with its authority rules, limits and evidence:
+[docs/design/delegated-threads-model.md](../docs/design/delegated-threads-model.md).
+
 ## Verification
 
 ```sh
@@ -412,6 +620,50 @@ identity reuse. A separate case keeps creating valid ancestors to verify genuine
 exhaustion and recovery. Allocation-progress checks reject faults that happen
 before the intended threshold. Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
+
+The libc heap qualification runs the heap cases of `contract.c` on three images
+of the same source: `sublet` (`HEAP=sublet`), `level0` (`HEAP=level0` as
+applications get it, each allocation bounded) and `control` (`HEAP=level0` built
+with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, unprotected). Every `fault-*` case must
+be a SIGSEGV on `sublet`; the spatial ones (`fault-bounds`, `fault-bounds-large`,
+`fault-realloc-shrink`) must be one on `level0` too; every other case on `level0`,
+and every case on `control`, must reach the survival marker and exit 90. Every
+`heap-*` case must complete on all three. The protected fault must occur at the
+intended byte probe with the expected QEMU cause (5 for the spatial cases, 24 or
+25 for the others; a double free stops at the Sublet heap's probe in `sh_free`,
+which `free` calls with the heap lock held). Churn must allocate at least 200,000
+nodes on `sublet`. A setup error, unrelated fault or early exhaustion fails the gate.
+
+Build the control with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0` in `CMAKE_C_FLAGS`; the
+default `application-contract.dom` is the `level0` arm. Build each image
+with an LLD map, using
+`-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake
+configuration. The runner requires the three ELFs and maps (default map path:
+`<elf>.map`; override with `--sublet-map`, `--level0-map` and `--control-map`). It checks the
+allocation symbols' input objects, addresses and sizes, then matches the
+guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
+`llvm-objdump`.
+
+```sh
+python3 capstone/runtime/tests/application/run-heap.py \
+  --state "$CAPSTONE_TMP_ROOT/dev-vm" \
+  --sublet-image /mnt/host/contract-sublet.dom --sublet-elf <build>/contract-sublet.dom \
+  --level0-image /mnt/host/application-contract.dom --level0-elf <build>/application-contract.dom \
+  --control-image /mnt/host/contract-no-object-bounds.dom --control-elf <build>/contract-no-object-bounds.dom \
+  --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \
+  --platform <kernel> <firmware> <rootfs> <qemu> <launcher> --report heap.json
+
+python3 -m unittest discover -s capstone/runtime/tests/application -p test_heap_qualification.py
+```
+
+It needs the emulator the tree pins (in-process node reuse): on the base
+emulator the 200,000-cycle churn case exhausts the node pool after about
+65,000 allocations, on any image. The
+[2026-09-30 record on the platform dev pins](tests/application/results/20260930-heap-qualification-on-dev.json)
+supersedes the first run's weaker verdict and filename checks, and the
+[2026-10-01 record](tests/application/results/20261001-heap-three-arms.json)
+adds the `level0` arm and the shrinking `realloc`; the plan is
+[capstone-heap-protection.md](../docs/plans/capstone-heap-protection.md).
 
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu-rebased.json)
 records 1,008 mixed starts after node exhaustion, with stable pool/node/tag counts.

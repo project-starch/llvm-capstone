@@ -1,76 +1,26 @@
 #!/usr/bin/env bash
-# M0 and the staged images: the cross-built minimal tshark (host/cross-build.sh) linked as
-# Capstone domains, FFmpeg-app style (ports/ffmpeg/app/host/build-domain.sh).
+# Link full tshark, staged starts and allocator fixtures with the shared ABI-v2 SDK.
 #
-#   build-domain.sh      -> $TS_WORK/domain/tshark_m{1,2,3,4,5}.dom, tsapp_fx{1..12}.dom
-#   TSAPP_HEAP=shrink build-domain.sh   -> the same in $TS_WORK/domain-shrink
-#   TSAPP_HEAP=sublet build-domain.sh   -> the same in $TS_WORK/domain-sublet
-#   TSAPP_HEAP=chunks build-domain.sh   -> the same in $TS_WORK/domain-chunks
-#
-# THE HEAP ARM (TSAPP_HEAP) is what differs between the directories:
-# - level0 (the default): runtime/level0.c as every port has it; each pointer it returns carries
-#   the bounds of the whole arena;
-# - shrink: level0.c built with CAPSTONE_LEVEL0_SHRINK=1; each pointer carries exactly the bytes
-#   asked for. No temporal safety on either.
-# - sublet: runtime/sublet_heap.c instead of level0, a buddy heap over a 16 MiB pool
-#   (CAPSTONE_SUBLET_HEAP_LOG=24) carved from a LINEAR region the host transfers
-#   (host/run-qemu.sh grants TSAPP_HEAP_REGION_BYTES, default 32 MiB, so a CMA region aligned only
-#   to 1 MiB still holds a self-aligned 16 MiB block). Per-object bounds, and every free revokes.
-#   Three more changes go with it and nothing else:
-#   - hostcall.c is rebuilt with CAPSTONE_PROGRAM_REGIONS, which parks that region for the heap;
-#   - wmem's two block allocators are recompiled from patch 0007 with 1 MiB blocks, linked ahead
-#     of libwsutil.a: three 8 MiB blocks and a 2 MiB one do not fit in the pool;
-#   - src/tsapp-heap.c reports the sublet heap's counts instead of level0's.
-# - chunks: the sublet arm, with ONE difference -- wmem's BLOCK allocator is the wmem port's chunk
-#   port (ports/wireshark/wmem, patches 0001+0002, the source its replay harness tests), so every
-#   chunk is a region of its own and a chunk free, a scope reset and a block's end are revokes.
-#   Its blocks come LINEAR from the Sublet heap (__capstone_sublet_malloc_linear), its headers live
-#   in heap records beside them (src/tsapp-wmem-chunks.c, the level below), and the port's own
-#   src/allocators/sublet/chunks.c carves and revokes. BLOCK_FAST is the sublet arm's, unchanged:
-#   the wmem port found it needs nothing. Patch 0007's block size applies to both files; on the
-#   ported block allocator its one macro edit is re-anchored, since 0002 changed its context.
-#
-# The safety fixtures (src/tsapp-safety.c, one image per fixture) are built on every arm, compiled
-# with tshark.c's own command and linked in tshark.c.o's place, as M1-M4 are. Their predictions
-# are host/safety-expect.txt; host/run-qemu.sh safety runs and judges them.
-#
-# M1-M4 are tshark.c recompiled with -DTSAPP_STOP_AT=<n> (patch 0006): at milestone n the image
-# prints `TSAPP-STAGE n` and exits with 100 + n. M5 is the unmodified program. Everything else is the same objects and archives
-# the cross build linked tshark from (ninja's own link command), so the images differ only in
-# that one object.
-#
-# The link is this port's own, not capstone-cc's:
-# - level0 with a tshark-sized arena (TSAPP_ARENA_BYTES, default 40 MiB). Native peak heap is
-#   27.8 MB with patch 0005, of which 27.3 MB is fixed-size wmem arenas (plan, results item 4);
-# - a declared stack (.capstone_domreq, TSAPP_STACK_BYTES, default 1 MiB): manuf.c's
-#   capability-initialiser frame alone is 322,080 bytes (results item 5);
-# - level0 built with CAPSTONE_LEVEL0_STATS, and src/tsapp-heap.c as the runtime's exit hook: every
-#   image ends with one `TSAPP-HEAP ... peak_end=<bytes>` line on stderr, the arena it needed;
-# - the constructors (GLib, libgpg-error) and the destructor (libxml2) are run by the runtime
-#   (hostcall.c, ISSUES C-64); the port carried its own copy until that fix.
-#
-# GATES, each failing the build:
-# - LINK: no undefined symbols, and no undefined weak symbol (the runner refuses the image; C-56);
-# - NEGATIVE CONTROL: M5 relinked without hostcall.o comes back with exactly __capstone_hostcall
-#   (what the libc's syscalls call) and domain_main (what start-musl calls) undefined. It shows
-#   the LINK gate can fire, and pins what hostcall.o supplies: dropping start-musl.o as well
-#   fails it. It cannot see a missing libc OVERRIDE: dropping string_bounds_safe.o too still
-#   passes, because musl's own memcpy then links in its place (tested on a stand-in, 2026-09-24);
-# - SIZE: code_len (PT_LOAD memsz) and the block the kernel module sizes for it
-#   (capstone.c: code_len + 8 KiB + declared data, rounded to a power of two), printed per image.
+# TSAPP_HEAP=chunks is the sublet arm with ONE difference: wmem's BLOCK allocator is the wmem
+# port's chunk port (ports/wireshark/wmem, patches 0001+0002, the source its replay harness tests),
+# so every chunk is a region of its own and a chunk free, a scope reset and a block's end are
+# revokes. Its blocks come LINEAR from the Sublet heap (__capstone_sublet_malloc_linear), its
+# headers live in heap records beside them (src/tsapp-wmem-chunks.c), and the port's own
+# src/allocators/sublet/chunks.c carves and revokes. BLOCK_FAST is the sublet arm's, unchanged.
+# Patch 0007's block size applies to both files; on the ported block allocator its one macro edit
+# is re-anchored, since 0002 changed its context.
 set -euo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$APP/deps/env.sh"
 B=$TS_WORK/xbuild
 HEAP=${TSAPP_HEAP:-level0}
 case $HEAP in
-  level0) OUT=$TS_WORK/domain HEAPF=() ;;
-  shrink) OUT=$TS_WORK/domain-shrink HEAPF=(-DCAPSTONE_LEVEL0_SHRINK=1) ;;
+  level0) OUT=$TS_WORK/domain HEAPF=(-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) ;;
+  shrink) OUT=$TS_WORK/domain-shrink HEAPF=() ;;
   sublet) OUT=$TS_WORK/domain-sublet HEAPF=() ;;
   chunks) OUT=$TS_WORK/domain-chunks HEAPF=() ;;
   *) echo "TSAPP_HEAP must be level0, shrink, sublet or chunks" >&2; exit 2 ;;
 esac
-OUT=${TSAPP_DOMAIN_DIR:-$OUT}   # as host/run-qemu.sh reads it: a separate set of images, e.g. per step
 ARENA=${TSAPP_ARENA_BYTES:-$((40 << 20))}
 STACK=${TSAPP_STACK_BYTES:-$((1 << 20))}
 LD=${CAPSTONE_LD_LLD:?}
@@ -101,23 +51,20 @@ for n in 1 2 3 4; do
   [ $((a * 100)) -ge $((b * 95)) ] || { echo "STAGE GATE: tshark_m$n.o is much smaller than M5's; code after the stop was dropped" >&2; exit 1; }
 done
 
-# Runtime: env.sh's objects, with this image's own level0 and the domain requirement.
-RTF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -Xclang -target-feature -Xclang +a
-     -ffreestanding -fno-builtin -fno-jump-tables -ffunction-sections -fdata-sections -std=c99 -O1 -w
-     -Wno-int-conversion -D_XOPEN_SOURCE=700 -nostdinc
-     -isystem "$TS_MUSL/arch/capstone64" -isystem "$TS_MUSL/arch/generic" -isystem "$TS_MUSL/obj/include"
-     -isystem "$TS_MUSL/include" -I"$TS_MUSL/src/include" -I"$TS_MUSL/src/internal" -I"$TS_MUSL/obj/src/internal")
-MRT=$CAPSTONE_REPO_ROOT/capstone/ports/musl-capstone/runtime
-RT=(); for o in "$TS_RUNTIME_DIR"/*.o; do [ "$(basename "$o")" = level0.o ] || RT+=("$o"); done
-if [ "$HEAP" = sublet ] || [ "$HEAP" = chunks ]; then
-  "$CAPSTONE_CLANG" "${RTF[@]}" -I"$CAPSTONE_REPO_ROOT/capstone/sublet" -DCAPSTONE_SUBLET_HEAP_LOG=24 \
-    -c "$MRT/sublet_heap.c" -o "$OUT/heap.o"
-  WMEMF=(); [ "$HEAP" = chunks ] && WMEMF=(-DTSAPP_WMEM_CHUNKS)
-  "$CAPSTONE_CLANG" "${RTF[@]}" -DTSAPP_SUBLET_HEAP "${WMEMF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
-  # hostcall.c as env.sh builds it, plus the program regions.
-  "$CAPSTONE_CLANG" "${RTF[@]}" -DCAPSTONE_PROGRAM_REGIONS=1 -c "$MRT/hostcall.c" -o "$OUT/hostcall.o"
-  RT=("${RT[@]/#$TS_RUNTIME_DIR\/hostcall.o/$OUT/hostcall.o}")
-  [[ " ${RT[*]} " == *" $OUT/hostcall.o "* ]] || { echo "the runtime has no hostcall.o to replace" >&2; exit 1; }
+SDK=$OUT/sdk
+SDK_HEAP=$HEAP
+[[ $HEAP == shrink ]] && SDK_HEAP=level0
+[[ $HEAP == chunks ]] && SDK_HEAP=sublet
+bash "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh" \
+  "$SDK" "$TS_MUSL" "$TS_LIBC_ARCHIVE" \
+  -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG=24 \
+  -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" -DCAPSTONE_APPLICATION_STACK_BYTES="$STACK" \
+  -DCMAKE_C_FLAGS_RELEASE="-O1 -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS ${HEAPF[*]}"
+export CAPSTONE_SDK=$SDK
+RT=() HEAPOBJ=()
+if [[ $HEAP == sublet || $HEAP == chunks ]]; then
+  WMEMF=(); [[ $HEAP == chunks ]] && WMEMF=(-DTSAPP_WMEM_CHUNKS)
+  "$SDK/capstone-cc" -O1 -DTSAPP_SUBLET_HEAP "${WMEMF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
   # wmem's block allocators from patch 0007, with their own ninja commands (less the dependency
   # files, which would overwrite ninja's record), on copies: the cross-built tree stays as it is.
   mkdir -p "$OUT/wmem-src/wsutil/wmem"
@@ -125,10 +72,10 @@ if [ "$HEAP" = sublet ] || [ "$HEAP" = chunks ]; then
     cp "$TS_WORK/xsrc/wsutil/wmem/$f.c" "$OUT/wmem-src/wsutil/wmem/"
   done
   patch -s -d "$OUT/wmem-src" -p1 < "$APP/patches/0007-capstone-wmem-block-size-for-the-sublet-heap.patch"
-  HEAPOBJ=("$OUT/heap.o")
+  HEAPOBJ=()
   WPORT=$CAPSTONE_REPO_ROOT/capstone/ports/wireshark/wmem
   WCF=()
-  if [ "$HEAP" = chunks ]; then
+  if [[ $HEAP == chunks ]]; then
     # The chunk port's block allocator: upstream + the wmem port's 0001 and 0002, exactly the
     # source its replay harness builds (0001 touches only the four allocator .c files), then
     # 0007's one macro edit. xsrc's copy must be upstream's, or this is not the tested source.
@@ -154,9 +101,9 @@ PY
     # The level below: the port's own chunks.c, unchanged, and this app's backing for it.
     # TSAPP_WMEM_ABLATE=1: the chunk free's one give stubbed out (the harness's WM_P1_ABLATE), the
     # matched arm that attributes fixture 13 to that revoke and shows the counter identity can fail.
-    ABL=(); [ "${TSAPP_WMEM_ABLATE:-0}" = 1 ] && ABL=(-DWM_ABLATE_RETIRE_GIVE)
+    ABL=(); [[ ${TSAPP_WMEM_ABLATE:-0} == 1 ]] && ABL=(-DWM_ABLATE_RETIRE_GIVE)
     for s in "$WPORT/src/allocators/sublet/chunks.c" "$APP/src/tsapp-wmem-chunks.c"; do
-      "$CAPSTONE_CLANG" "${RTF[@]}" -std=c11 -DWM_DOMAIN "${ABL[@]}" -I"$WPORT/src/shared" \
+      "$SDK/capstone-cc" -O1 -std=c11 -DWM_DOMAIN "${ABL[@]}" -I"$WPORT/src/shared" \
         -I"$CAPSTONE_REPO_ROOT/capstone/runtime/include" -c "$s" -o "$OUT/$(basename "${s%.c}").o"
       HEAPOBJ+=("$OUT/$(basename "${s%.c}").o")
     done
@@ -166,25 +113,20 @@ PY
     c=$(ninja -C "$B" -t commands "$o" | tail -1)
     tail=" -MD -MT $o -MF $o.d -o $o -c $TS_WORK/xsrc/wsutil/wmem/$f.c"
     [[ $c == *"$tail" ]] || { echo "$o's compile command does not end as expected" >&2; exit 1; }
-    WF=(); [ "$f" = wmem_allocator_block ] && WF=("${WCF[@]}")
+    WF=(); [[ $f == wmem_allocator_block ]] && WF=("${WCF[@]}")
     ( cd "$B" && eval "${c%"$tail"} -I$TS_WORK/xsrc/wsutil/wmem -DCAPSTONE_WMEM_BLOCK_BYTES=1048576 ${WF[*]} -o $OUT/$f.o -c $OUT/wmem-src/wsutil/wmem/$f.c" )
     HEAPOBJ+=("$OUT/$f.o")
   done
 else
-  "$CAPSTONE_CLANG" "${RTF[@]}" -DCAPSTONE_LEVEL0_ARENA_BYTES="$ARENA" -DCAPSTONE_LEVEL0_STATS "${HEAPF[@]}" \
-    -c "$MRT/level0.c" -o "$OUT/level0.o"
-  "$CAPSTONE_CLANG" "${RTF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
-  HEAPOBJ=("$OUT/level0.o")
+  "$SDK/capstone-cc" -O1 -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
 fi
-"$CAPSTONE_CLANG" -target capstone64-unknown-elf -ffreestanding -O0 -DCAPSTONE_DOMREQ_DATA="$STACK" \
-  -DCAPSTONE_DOMREQ_STACK="$STACK" -c "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OUT/domreq.o"
 
 link() {  # out-image tshark-object [runtime objects...]
   local out=$1 tso=$2; shift 2
   local ins=(); for i in "${INPUTS[@]}"; do
     if [ "$i" = "$TSO" ]; then ins+=("$tso"); elif [ "${i#/}" != "$i" ]; then ins+=("$i"); else ins+=("$B/$i"); fi
   done
-  "$LD" --gc-sections -T "$TS_LINKER_SCRIPT" -o "$out" "$@" "${HEAPOBJ[@]}" "$OUT/tsapp-heap.o" "$OUT/domreq.o" \
+  "$SDK/capstone-cc" -o "$out" "$@" "${HEAPOBJ[@]}" "$OUT/tsapp-heap.o" \
     "${ins[@]}" "$TS_LIBC_ARCHIVE"
 }
 gates() {  # image label
@@ -215,19 +157,31 @@ for n in $(seq 1 13); do
   gates "$OUT/tsapp_fx$n.dom" "fixture $n"
 done
 
-# Negative control: M5 without hostcall.o.
-# The sublet heap takes its region from hostcall.o, so on that arm exactly one more symbol is missing.
-NOHC=(); for o in "${RT[@]}"; do [ "$(basename "$o")" = hostcall.o ] || NOHC+=("$o"); done
-set +e; ctl=$(link "$OUT/nohostcall.dom" "$OUT/tshark_m5.o" "${NOHC[@]}" 2>&1); set -e
-und=$(printf '%s\n' "$ctl" | grep -oE 'undefined symbol: [A-Za-z_][A-Za-z0-9_]*' | sed 's/undefined symbol: //' | sort -u | tr '\n' ' ')
-want="__capstone_hostcall domain_main "; { [ "$HEAP" = sublet ] || [ "$HEAP" = chunks ]; } && want="__capstone_hostcall __capstone_region domain_main "
-[ "$und" = "$want" ] \
-  || { echo "CONTROL FAILED: expected exactly ${want}undefined, got: ${und:-<none>}"; exit 1; }
-rm -f "$OUT/nohostcall.dom"
-echo "control fired: without hostcall.o exactly ${want}are missing (the libc's way out, start-musl's call$([ "$HEAP" != level0 ] && [ "$HEAP" != shrink ] && echo ", the heap's region"))"
+# NEGATIVE CONTROL, chunks arm: M5 relinked without chunks.o comes back with EXACTLY the chunk
+# port's twelve entry points undefined. It shows the LINK gate can fire, and pins that the ported
+# block allocator and its backing (tsapp-wmem-chunks.o) reach the chunk port through every entry
+# point chunks.o defines; a link that fell back to upstream's allocator would reference none. It is
+# the ABI-v2 successor of the v0 control, "M5 without hostcall.o", which the chunks arm's T1 names
+# (wmem/PREREGISTRATION-tshark-step2.md). That one has no v2 form on any arm: an ABI-v2 SDK links
+# its runtime archive whole, so there is no runtime object to leave out; level0 and sublet
+# therefore run no link control (README.md).
+if [[ $HEAP == chunks ]]; then
+  KEEP=("${HEAPOBJ[@]}") NOCH=()
+  for o in "${HEAPOBJ[@]}"; do [ "$(basename "$o")" = chunks.o ] || NOCH+=("$o"); done
+  [ ${#NOCH[@]} -lt ${#KEEP[@]} ] || { echo "CONTROL: chunks.o is not among the heap objects" >&2; exit 1; }
+  HEAPOBJ=("${NOCH[@]}")
+  set +e; ctl=$(link "$OUT/nochunks.dom" "$OUT/tshark_m5.o" 2>&1); set -e
+  HEAPOBJ=("${KEEP[@]}")
+  und=$(printf '%s\n' "$ctl" | grep -oE 'undefined symbol: [A-Za-z_][A-Za-z0-9_]*' | sed 's/undefined symbol: //' | LC_ALL=C sort -u | tr '\n' ' ')
+  want="wm_block_close wm_block_forget wm_block_open wm_block_reset wm_chunk_adopt wm_chunk_bytes wm_chunk_forget wm_chunk_issue wm_chunk_report wm_chunk_retire wm_chunk_split wm_chunks_init "
+  [ "$und" = "$want" ] \
+    || { echo "CONTROL FAILED: without chunks.o expected exactly ${want}undefined, got: ${und:-<none>}"; exit 1; }
+  rm -f "$OUT/nochunks.dom"
+  echo "control fired: without chunks.o exactly the chunk port's 12 entry points are missing"
+fi
 
 for n in 1 2 3 4 5; do
-  python3 - "$OUT/tshark_m$n.dom" "$STACK" <<'PY'
+  python3 - "$OUT/tshark_m$n.dom" 33554688 <<'PY'
 import subprocess, sys
 img, stack = sys.argv[1], int(sys.argv[2])
 out = subprocess.run(['readelf', '-lW', img], capture_output=True, text=True).stdout

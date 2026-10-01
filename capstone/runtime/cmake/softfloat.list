@@ -47,3 +47,9 @@ udivmodti4
 multi3
 ashlti3
 lshrti3
+divmodti4
+floatditf
+floatunditf
+fixtfdi
+fixunstfdi
+ashrti3

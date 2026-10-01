@@ -20,8 +20,8 @@ export SQLITE_ARCHIVE_SHA3=69bc5ee8f08d747494dd3a4bfe075e5b078fe200dfc671d76dd9e
 SRC=$(bash "$SCRIPT_DIR/fetch-sqlite.sh")
 
 # Regenerated on every run, never reused: build-sqlite-silicon.sh compiles whatever file sits here.
-export PATCHED_SQLITE=$CAPSTONE_TMP_ROOT/sqlite-build/sqlite3-capstone.c
-mkdir -p "$(dirname -- "$PATCHED_SQLITE")"
-bash "$SCRIPT_DIR/adapt-sqlite-322.sh" "$SRC/sqlite3.c" "$PATCHED_SQLITE"
+ADAPTED=$CAPSTONE_TMP_ROOT/sqlite-322-adapted
+bash "$SCRIPT_DIR/adapt-sqlite-322.sh" "$SRC" "$ADAPTED"
+export PATCHED_SQLITE=$ADAPTED/sqlite3.c
 
 exec bash "$SCRIPT_DIR/run-sqlite-silicon.sh"

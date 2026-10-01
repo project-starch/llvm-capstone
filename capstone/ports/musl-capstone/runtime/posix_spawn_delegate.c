@@ -3,8 +3,9 @@
  * musl's posix_spawn clones a vfork child, which a domain cannot do; its
  * posix_spawnp, popen and system all come through here, so they work as
  * soon as this does. The file actions are musl's private list (fdop.h), the
- * attribute's __fn marks posix_spawnp, and the signal fields are not carried:
- * a domain has no signals to reset. The pid returned is the child's real
+ * attribute's __fn marks posix_spawnp, and the signal attributes travel as
+ * two 64-bit sets: the launcher's helper applies them before exec, where
+ * Linux would have applied them in a vfork child. The pid returned is the child's real
  * Linux pid, a child of the launcher task, so waitpid and kill apply to it.
  */
 #define _GNU_SOURCE
@@ -15,8 +16,11 @@
 #include <stdlib.h>
 #include <limits.h>
 #include "fdop.h"
+#include <capstone/lock.h>
 
 long __capstone_delegate_spawn(const void *block, unsigned long bytes);
+/* delegate.c: the one static request block and its lock, shared with execve */
+extern volatile int __capstone_spawn_lock;
 
 int posix_spawn(pid_t *restrict res, const char *restrict path,
                 const posix_spawn_file_actions_t *fa,
@@ -26,7 +30,8 @@ int posix_spawn(pid_t *restrict res, const char *restrict path,
   struct capstone_spawn_action actions[CAPSTONE_SPAWN_ACTIONS];
   const char *paths[CAPSTONE_SPAWN_ACTIONS];
   unsigned count = 0;
-  uint32_t flags = 0, pgroup = 0;
+  uint32_t flags = 0, pgroup = 0, sigflags = 0;
+  uint64_t sigdefault = 0, sigmask = 0;
   size_t bytes;
   long pid;
   int error;
@@ -41,6 +46,14 @@ int posix_spawn(pid_t *restrict res, const char *restrict path,
     }
     if (attr->__flags & POSIX_SPAWN_SETSID)
       flags |= CAPSTONE_SPAWN_SETSID;
+    if (attr->__flags & POSIX_SPAWN_SETSIGDEF) {
+      sigflags |= CAPSTONE_SPAWN_SETSIGDEF;
+      memcpy(&sigdefault, &attr->__def, sizeof sigdefault);
+    }
+    if (attr->__flags & POSIX_SPAWN_SETSIGMASK) {
+      sigflags |= CAPSTONE_SPAWN_SETSIGMASK;
+      memcpy(&sigmask, &attr->__mask, sizeof sigmask);
+    }
   }
   if (fa) {
     /* musl keeps the list newest-first; apply in the order they were added */
@@ -90,10 +103,16 @@ int posix_spawn(pid_t *restrict res, const char *restrict path,
       strcpy(candidate + length, path);
       target = candidate;
     }
+    /* The block is static: one request at a time, from packing to the answer. */
+    capstone_lock(&__capstone_spawn_lock);
     error = capstone_spawn_pack(block, sizeof block, flags, pgroup, target, argv,
                                 envp ? envp : (char *const[]){NULL}, actions, count, paths, &bytes);
+    if (!error) {
+      capstone_spawn_set_signals(block, sigflags, sigdefault, sigmask);
+      pid = __capstone_delegate_spawn(block, bytes);
+    }
+    capstone_unlock(&__capstone_spawn_lock);
     if (error) return error;
-    pid = __capstone_delegate_spawn(block, bytes);
     if (!search || (pid != -ENOENT && pid != -ENOTDIR && pid != -EACCES)) break;
     if (pid == -EACCES) denied = 1;
     if (!end) return denied ? EACCES : (int)-pid;

@@ -1852,10 +1852,19 @@ difference was presenting as a capability defect.
 | `select1.test` | 1031 | 1000 | identical, 0 failures |
 | `select2.test` | 1031 | 1000 | identical, 0 failures |
 | `select3.test` | 3351 | 3320 | identical, 0 failures |
-| `select4.test` | 3857 | 2617 | identical, 0 failures, 215 skipped for size |
+| `select4.test` | 3857 | 2617 | identical, 0 failures, 215 not compared: 184 for size and 31 empty results (correction below) |
 | `select5.test` | 1436 | 732 | identical, 0 failures (needs a 2 MiB arena — see below) |
 | `evidence/slt_lang_aggfunc.test` | 80 | 67 | identical, including 11 shared corpus artifacts |
 | **total** | **10,807** | **8,746** | **zero divergences** |
+
+**Correction (2026-09-30): 31 of select4's 215 skipped records were not large, they were empty.**
+Each was a `valuesort` query with no rows. The runner asked `sqlite3_malloc64(0)` for the sort,
+which returns NULL by definition, read that as an allocation failure, and counted the record as
+skipped for size. Both sides run the same runner, so the verdict stands (identical, zero
+divergences), but those 31 records were never compared. With the fixed runner (branch
+`slt-runner-empty-valuesort`) the native baseline at the same cap gives select4 2648 passing
+queries and 184 skipped for size, all rowsort; the other six files are unchanged. The
+negative-control fixture has two more arms since (23 records), one for each side of the fix.
 
 **7,393 of the query records state their expectation as an MD5 of the entire result set**, so
 this is agreement over hashed full result sets, not over scalars.
@@ -2765,7 +2774,7 @@ region/heap class, every image validated under QEMU on its own file before it wa
 | `select2.test` | 1031 | 31 | 1000 | identical, 0 failures | sw27 |
 | `select3.test` | 3351 | 31 | 3320 | identical, 0 failures (~5 min of execution) | sw28 |
 | `select5.test` | 1436 | 704 | 732 | identical, 0 failures (2 MiB heap, 1 MiB stack) | sw26 |
-| `select4.test` | 3857 | 1025 | 2617 + 215 skipped for size | identical, 0 failures (4 MiB region, ~78 min of execution) | sw29 |
+| `select4.test` | 3857 | 1025 | 2617 + 215 not compared (184 for size, 31 empty results; see the correction under the first SLT table) | identical, 0 failures (4 MiB region, ~78 min of execution) | sw29 |
 
 **What this establishes.** The two files with deliberate and known failures reproduce them exactly
 on silicon (2 + 4 and 1 + 10), so a clean row is a clean row and not a comparator that cannot fire.
@@ -5760,3 +5769,28 @@ positive control held throughout: `bk` and `fl` rise across the identical record
 - **It does not separate the mechanism.** That the rise begins below the capacity boundary says a pure
   cache-capacity account is incomplete; it does not say what the remainder is. Nothing here attributes
   it, and the ramp is reported as measured rather than explained.
+
+## The SQLite 3.22.0 temporal-bug corpus, control arm, on R-43 v2 (boots r322-b1a/b1b/b2a, 2026-10-01)
+
+Folder: `tests/rtl-smoke/repro322-silicon-2026-10-01/` (pre-registration, images, result lines). The corpus is
+`ports/sqlite/repro322` (PR #171/#174): SQLite 3.22.0 driven to freed-then-used paths on UNPROTECTED Capstone
+(memsys5 and lookaside, nothing revoked). The cases were rebuilt in the silicon config, each at its own entry
+VA, and checked under QEMU with `CAPSTONE_GP_FABRICATE=0` and the board's own host first.
+
+| cell | row | silicon | against the emulator |
+|---|---|---|---|
+| SQLite 3.22.0 base domain | - | completes, all five markers, 3/3 boots | identical |
+| wschema, blobwrite, mem5design, blobclose, jsoneachstatic, jsoneachroot | 8, 20, 25, 5, #174 ×2 | return, `<tag> NOTRAP done` | domain output identical line for line |
+| backupattach | 15 | mcause 24 at `sqlite3BtreeUpdateMeta+0x48` | the same instruction |
+| detachtrig | 4 | mcause 24 at `sqlite3DropTriggerPtr+0x154` | the same instruction |
+
+- **SQLite 3.22.0 runs on silicon.** Until now it had passed only the silicon-config QEMU gate.
+- **The corpus's control-arm verdicts for these eight rows are not emulator artifacts.** Unprotected Capstone
+  runs six real temporal bugs to completion on the RTL, and the two faults are layout faults (an untagged
+  operand), not temporal enforcement. That is the baseline a Sublet arm would be measured against. No Sublet
+  arm has run.
+- **First boot void as a subject reading:** the corpus harness `delin`ed two non-linear capabilities, which
+  wedged on silicon (ISSUES S-02/S-15). It is fixed with the same compile-time guard
+  `sqlite_capstone_domain.c` uses, and the corpus's own QEMU image is byte-identical with and without it.
+- **N = 1 per cell.** Rows whose reachability is unproven (1, 3, 6, 11, 12, 13, 17, 22) were not run. Rows
+  10, 19 and 24 (extra translation units) are batch 2, not yet built.

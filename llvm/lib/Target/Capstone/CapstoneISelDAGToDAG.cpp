@@ -1632,7 +1632,9 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   if (CapstoneGpCaptable) {
     bool IsCodeSymbol = false;
     if (auto *GA = dyn_cast<GlobalAddressSDNode>(Symbol))
-      IsCodeSymbol = isa<Function>(GA->getGlobal());
+      // An alias of a function is a code symbol as well (C-75: the initializer
+      // now stores alias slots, and a function alias went through gp here).
+      IsCodeSymbol = isa_and_nonnull<Function>(GA->getGlobal()->getAliaseeObject());
     else if (isa<BlockAddressSDNode>(Symbol) || isa<ExternalSymbolSDNode>(Symbol))
       IsCodeSymbol = true;
 
@@ -3356,6 +3358,20 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return selectShrink(Node);
     case Intrinsic::capstone_cap_scc:
       return selectSCC(Node);
+    case Intrinsic::capstone_cap_set_address:
+      // The address of null is how clang converts an integer into an __intcap.
+      // There is no type to dispatch on: the result is the untagged bridge.
+      if (isNullConstant(Node->getOperand(1))) {
+        ReplaceNode(Node, CurDAG->getMachineNode(Capstone::PseudoBRIDGE_CAP,
+                                                 SDLoc(Node), MVT::c128,
+                                                 Node->getOperand(2)));
+        return;
+      }
+      ReplaceNode(Node, CurDAG->getMachineNode(Capstone::PseudoSetAddr,
+                                               SDLoc(Node), MVT::c128,
+                                               Node->getOperand(1),
+                                               Node->getOperand(2)));
+      return;
     case Intrinsic::capstone_cap_init:
       return selectInit(Node);
     case Intrinsic::capstone_cap_tighten:

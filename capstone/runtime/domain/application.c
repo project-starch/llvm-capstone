@@ -1,32 +1,35 @@
 #include "capstone/launch.h"
 #include <errno.h>
 #include <string.h>
-#include <unistd.h>
 
 #ifndef CAPSTONE_APPLICATION_HEAP_BYTES
 #define CAPSTONE_APPLICATION_HEAP_BYTES 0
 #endif
 
-#ifdef CAPSTONE_DELEGATE_RUNTIME
 #include "capstone/delegate.h"
 #ifndef CAPSTONE_APPLICATION_EXCHANGE_BYTES
 #define CAPSTONE_APPLICATION_EXCHANGE_BYTES CAPSTONE_DELEGATE_DEFAULT_EXCHANGE
 #endif
-/* Descriptor v2 (launch.h): a v1 launcher rejects the size; a v2 launcher
-   accepts both. */
+#ifndef CAPSTONE_APPLICATION_CONTEXTS
+#define CAPSTONE_APPLICATION_CONTEXTS 0
+#endif
+/* Delegated applications always declare the exchange region (ABI v2) and how
+   many further contexts get a transport of their own. */
 __attribute__((used, section(".capstone_application")))
 static const struct capstone_application_descriptor_v2 descriptor = {
     {CAPSTONE_APPLICATION_MAGIC, CAPSTONE_LAUNCH_VERSION,
      CAPSTONE_APPLICATION_RECOVERY | CAPSTONE_APPLICATION_DELEGATE,
      CAPSTONE_LAUNCH_BYTES, CAPSTONE_APPLICATION_HEAP_BYTES},
-    CAPSTONE_APPLICATION_EXCHANGE_BYTES};
-#else
-__attribute__((used, section(".capstone_application")))
-static const struct capstone_application_descriptor descriptor = {
-    CAPSTONE_APPLICATION_MAGIC, CAPSTONE_LAUNCH_VERSION,
-    CAPSTONE_APPLICATION_RECOVERY, CAPSTONE_LAUNCH_BYTES,
-    CAPSTONE_APPLICATION_HEAP_BYTES};
-#endif
+    CAPSTONE_APPLICATION_EXCHANGE_BYTES, CAPSTONE_APPLICATION_CONTEXTS};
+
+/* What this image declared for its transports. The capabilities to the
+   launcher's regions can cover more than was asked for (the driver may hand
+   out a larger block it had cached), so the delegation runtime cuts its
+   transports by these sizes, never by the capabilities' bounds. */
+void __capstone_application_transports(unsigned long *count, unsigned long *exchange_bytes) {
+  *count = 1 + descriptor.contexts;
+  *exchange_bytes = descriptor.exchange_bytes;
+}
 
 static char storage[CAPSTONE_LAUNCH_BYTES] __attribute__((aligned(16)));
 static char *arguments[CAPSTONE_LAUNCH_STRINGS + 1];
@@ -46,13 +49,16 @@ int __capstone_application_prepare(const void *region, size_t bytes) {
       CAPSTONE_LAUNCH_STRINGS + 1, environment, CAPSTONE_LAUNCH_STRINGS + 1, &launch);
   if (error)
     return error;
-  if (chdir(launch.cwd))
-    return errno;
+  /* No chdir: the domain is the user half of the task that packed this block,
+     and that task already runs in launch.cwd. */
   prepared = 1;
   return 0;
 }
 
-unsigned __capstone_application_stdio(void) { return launch.stdio_mask; }
+const struct capstone_launch_task *__capstone_launch_task(void) {
+  return prepared ? &launch.task : NULL;
+}
+
 char **__capstone_domain_environ(void) { return environment; }
 
 extern int main(int, char **);
