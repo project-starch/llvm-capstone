@@ -190,14 +190,23 @@ Concurrent PTE changes and two-hart atomicity of the two 64-bit STC writes
 remain unqualified. Unsupported vector, Zcmp stack, XThead and cache-block
 memory operations are rejected in experimental Capstone U-mode.
 
-The slice cannot yet safely carry Linux processes: the QEMU tag side table is
-per hart and keyed by the address supplied to the access, whereas Linux may
-map one physical page at multiple virtual addresses and move a process
-between harts. Tags need a shared physical backing and a rule for aliases,
-kernel writes, copying and reclaim. A process-specific protected lifetime
-namespace, tagged register save/restore, checked syscall buffers with
-recoverable faults, and retirement completion also remain open. The
-[suite README](https://github.com/project-starch/capstone-qemu/blob/qemu/trusted-linux-u-access/tests/trusted-linux-u-access/README.md)
-records the exact setup and limitations. The next M1 slice should resolve
-physical tag identity and context switching before a Linux process is used as
-evidence for the `malloc`/`free` contract.
+The stacked QEMU [physical-tag slice `fc05b25cb8`](https://github.com/project-starch/capstone-qemu/commit/fc05b25cb8)
+adds a shared map keyed by the TLB's physical 16-byte granule when the
+experiment is enabled. Its gate passes **45/45**: the earlier 42 checks plus
+physical alias/store clearing, remap identity, and a privileged physical
+write. The prior QEMU binary fails exactly those three new cases. The
+[record](https://github.com/project-starch/capstone-qemu/blob/fc05b25cb8/tests/trusted-linux-u-access/result.json)
+contains source and binary hashes. The existing Linux boot/module/shell gate
+also passes with the experiment disabled. The parent QEMU pin is unchanged.
+
+This establishes physical tag identity for those one-hart transitions, not
+safe Linux capability processes. The map is shared across harts, but no
+two-hart guest test qualifies concurrent tag/data updates or context transfer.
+Privileged scalar stores clear tags; S-mode kernel copies, device writes, DMA
+and frame reclaim still need explicit contracts and tests. Concurrent PTE
+changes can race the post-store privileged physical lookup. The QEMU map has
+no migration protocol. A process-specific protected lifetime namespace,
+tagged register save/restore, checked syscall buffers with recoverable faults,
+and retirement completion also remain open. The next M1 slice should test
+tag behavior across a real two-hart context change before a Linux process is
+used as evidence for the `malloc`/`free` contract.

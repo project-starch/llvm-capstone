@@ -2,6 +2,19 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — experimental physical tags for U-mode QEMU
+
+The stacked QEMU [lane `fc05b25cb8`](https://github.com/project-starch/capstone-qemu/commit/fc05b25cb8)
+keys experimental U-mode tags by the translated physical granule and shares
+the map across harts. Its 45/45 gate adds alias/store clearing, remap identity
+and privileged physical-write tests; the prior binary fails exactly those
+three cases. The existing Linux boot/module/shell smoke passes with the
+experiment disabled. The [record](https://github.com/project-starch/capstone-qemu/blob/fc05b25cb8/tests/trusted-linux-u-access/result.json)
+has source, binary and boot-input hashes. The parent QEMU pin is unchanged.
+Two-hart guest execution, S-mode copies, frame reclaim, tagged process
+contexts, kernel buffer recovery and a real `malloc/free` Linux process remain
+open; M1 is not closed.
+
 ## 2026-10-01 — corrections to the U-mode QEMU access slice
 
 The initial `db53c89ad0` result below is superseded. Review reproduced RO

@@ -10,14 +10,16 @@ fault, retirement and private-clone schedules, with the review gaps closed:
 old/fresh accesses after address reuse, remap identities, virgin clone
 namespaces, preserved PTE rights and pending accesses on both harts. Next,
 extend the [QEMU U-mode access slice](../design/trusted-linux-execution-boundary.md)
-into a real Linux process. Its corrected 42-check gate covers 36 U-mode
-cases, four legacy-path executions and two harness controls. Keep the
-experiment behind `x-capstone-u-mode=true` while process selection is absent;
+into a real Linux process. The stacked [physical-tag slice](../design/trusted-linux-execution-boundary.md)
+passes 45/45: 39 U-mode cases, four legacy-path executions and two harness
+controls. The prior binary fails exactly the three new physical-tag cases.
+Keep the experiment behind `x-capstone-u-mode=true` while process selection is absent;
 the old 23/23 gate accepted pre-U-mode setup failures and is superseded.
 Old/fresh capabilities at one virtual address are still debug-minted.
-First replace the per-hart, virtual-address-keyed tag side
-table with physical tag identity and define alias, copy and reclaim behavior;
-then add protected per-process lifetime selection and tagged context save.
+Next qualify two-hart tag/data transitions, S-mode kernel copies and frame
+reclaim; then add protected per-process lifetime selection and tagged context
+save/restore. The physical tag map is shared across harts but its tested
+transitions are one-hart only.
 The `malloc(64); free; malloc(64)` same-address test, a recoverable buffer-copy
 fault, preemption, kernel/user ABI, global retirement break and two-hart
 completion contract remain open. Integrate the existing thread work with
