@@ -26,7 +26,8 @@ static double now(void) {
 
 static int heap_fault(const char *mode) {
   const char *modes[] = {"fault-stale", "fault-reused", "fault-bounds",
-    "fault-bounds-large", "fault-double-free", "fault-double-free-reused"};
+    "fault-bounds-large", "fault-realloc-shrink", "fault-double-free",
+    "fault-double-free-reused"};
   for (unsigned i = 0; i < sizeof modes / sizeof modes[0]; ++i)
     if (!strcmp(mode, modes[i])) return 1;
   return 0;

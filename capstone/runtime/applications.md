@@ -592,24 +592,25 @@ exhaustion and recovery. Allocation-progress checks reject faults that happen
 before the intended threshold. Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
-The libc heap qualification runs the heap cases of `contract.c` once on the
-`HEAP=sublet` image and once on a `HEAP=level0` image of the same source,
-which is the control. That control must be built with
-`-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`: level0 bounds each object by default, and an arm
-that bounds them is not the unprotected arm this measurement needs -- with
-bounds on, `fault-bounds` and `fault-bounds-large` fault there too, on cause 5.
-Every `fault-*` case must be a SIGSEGV on the first and
-must reach the survival marker and exit 90 on the second; every `heap-*` case
-must complete on both. The protected fault must occur at the intended byte
-probe with the expected QEMU cause. Churn must allocate at least 200,000
-nodes. A setup error, unrelated fault or early exhaustion fails the gate.
+The libc heap qualification runs the heap cases of `contract.c` on three images
+of the same source: `sublet` (`HEAP=sublet`), `level0` (`HEAP=level0` as
+applications get it, each allocation bounded) and `control` (`HEAP=level0` built
+with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, unprotected). Every `fault-*` case must
+be a SIGSEGV on `sublet`; the spatial ones (`fault-bounds`, `fault-bounds-large`,
+`fault-realloc-shrink`) must be one on `level0` too; every other case on `level0`,
+and every case on `control`, must reach the survival marker and exit 90. Every
+`heap-*` case must complete on all three. The protected fault must occur at the
+intended byte probe with the expected QEMU cause (5 for the spatial cases, 24 or
+25 for the others; a double free stops at the Sublet heap's probe in `sh_free`,
+which `free` calls with the heap lock held). Churn must allocate at least 200,000
+nodes on `sublet`. A setup error, unrelated fault or early exhaustion fails the gate.
 
 Build the control with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0` in `CMAKE_C_FLAGS`; the
-default `application-contract.dom` is no longer unprotected. Build each image
+default `application-contract.dom` is the `level0` arm. Build each image
 with an LLD map, using
 `-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake
-configuration. The runner requires both ELFs and maps (default map path:
-`<elf>.map`; override with `--sublet-map` and `--control-map`). It checks the
+configuration. The runner requires the three ELFs and maps (default map path:
+`<elf>.map`; override with `--sublet-map`, `--level0-map` and `--control-map`). It checks the
 allocation symbols' input objects, addresses and sizes, then matches the
 guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 `llvm-objdump`.
@@ -617,8 +618,9 @@ guest image hashes to those ELFs. Use the Capstone toolchain's `llvm-nm` and
 ```sh
 python3 capstone/runtime/tests/application/run-heap.py \
   --state "$CAPSTONE_TMP_ROOT/dev-vm" \
-  --sublet-image /mnt/host/contract-sublet.dom --control-image /mnt/host/contract-no-object-bounds.dom \
-  --sublet-elf <build>/contract-sublet.dom --control-elf <build>/contract-no-object-bounds.dom \
+  --sublet-image /mnt/host/contract-sublet.dom --sublet-elf <build>/contract-sublet.dom \
+  --level0-image /mnt/host/application-contract.dom --level0-elf <build>/application-contract.dom \
+  --control-image /mnt/host/contract-no-object-bounds.dom --control-elf <build>/contract-no-object-bounds.dom \
   --nm <toolchain>/bin/llvm-nm --objdump <toolchain>/bin/llvm-objdump \
   --platform <kernel> <firmware> <rootfs> <qemu> <launcher> --report heap.json
 
@@ -629,7 +631,9 @@ It needs the emulator the tree pins (in-process node reuse): on the base
 emulator the 200,000-cycle churn case exhausts the node pool after about
 65,000 allocations, on any image. The
 [2026-09-30 record on the platform dev pins](tests/application/results/20260930-heap-qualification-on-dev.json)
-supersedes the first run's weaker verdict and filename checks; the plan is
+supersedes the first run's weaker verdict and filename checks, and the
+[2026-10-01 record](tests/application/results/20261001-heap-three-arms.json)
+adds the `level0` arm and the shrinking `realloc`; the plan is
 [capstone-heap-protection.md](../docs/plans/capstone-heap-protection.md).
 
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu-rebased.json)
