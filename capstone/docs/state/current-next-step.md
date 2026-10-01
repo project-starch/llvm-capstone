@@ -11,7 +11,8 @@ old/fresh accesses after address reuse, remap identities, virgin clone
 namespaces, preserved PTE rights and pending accesses on both harts. Next,
 extend the [QEMU U-mode access slice](../design/trusted-linux-execution-boundary.md)
 into a real Linux process. The stacked [physical-tag slice](../design/trusted-linux-execution-boundary.md)
-passes 51/51: 43 U-mode guest cases, two configuration rejections, four
+passes 51/51; its [S-mode kernel-write follow-up](../design/trusted-linux-execution-boundary.md)
+passes 54/54: 46 U-mode guest cases, two configuration rejections, four
 legacy-path executions and two harness controls. Review found that the
 previous two-hart handoff admitted a revoked cross-hart capability and that
 post-store PTE walking could clear the wrong frame's tag. Stores now capture
@@ -20,10 +21,13 @@ hart until a shared lifetime namespace exists.
 Keep the experiment behind `x-capstone-u-mode=true` while process selection is absent;
 the old 23/23 gate accepted pre-U-mode setup failures and is superseded.
 Old/fresh capabilities at one virtual address are still debug-minted.
-Next qualify full S-mode kernel copies and frame reclaim; then add protected
+The follow-up closes the S-mode vector-store tag gap and tests a full-page
+S-mode overwrite with tags at both frame edges. It does not exercise Linux's
+actual page reclaim or define capability-tag preservation for `fork`/COW and
+other kernel copies. Qualify those paths next; then add protected
 per-process lifetime selection, shared revocation state and tagged context
-save/restore. The physical tag map passes S-mode scalar, FP and atomic stores
-through a stale cached translation on one hart; Linux context switching
+save/restore. The physical tag map passes S-mode scalar, FP, atomic and vector
+stores through a stale cached translation on one hart; Linux context switching
 remains untested.
 The `malloc(64); free; malloc(64)` same-address test, a recoverable buffer-copy
 fault, preemption, kernel/user ABI, global retirement break and two-hart

@@ -213,8 +213,23 @@ from the TLB before writing, and clear that frame's tag after the write. A
 regression test changes an S-mode alias PTE without `sfence.vma`, confirms the
 store used the cached translation to the old frame, then checks that U mode
 sees the tag cleared. A fresh post-store PTE walk cleared the new frame and
-left the written old frame tagged. Full kernel copies, device writes, DMA,
-frame reclaim, migration, tagged process context transfer, checked syscall
-buffers and a real Linux `malloc/free` process remain unqualified. The next
-M1 slice should test tags across a real Linux context change before claiming
-the allocator contract.
+left the written old frame tagged.
+
+The stacked [S-mode kernel-write slice `988d78387e`](https://github.com/project-starch/capstone-qemu/commit/988d78387e)
+adds the same physical-destination capture to each executed S-mode vector
+store element. Its gate passes **54/54**; the new vector test failed on the
+pre-hook binary. A stale-TLB vector test checks the frame actually written.
+An S-mode loop also overwrites every word of a 4-KiB frame, and U mode then
+finds zero bytes and absent tags at both edge granules. This establishes one
+scrub mechanism, not Linux's actual frame-reclaim path. The parent QEMU pin is
+unchanged. The [result record](https://github.com/project-starch/capstone-qemu/blob/988d78387e/tests/trusted-linux-u-access/result.json)
+contains source and binary hashes.
+
+A byte copy of a capability-bearing page clears destination tags under this
+store rule. Linux `fork`/COW and any other operation that must preserve live
+capabilities therefore need an explicit tag-preserving copy contract, including
+how copied nodes bind to the child's lifetime namespace. Full kernel copies,
+actual Linux frame reclaim, device writes, DMA, migration, tagged process
+context transfer, checked syscall buffers and a real Linux `malloc/free`
+process remain unqualified. The next M1 slice should test tags across a real
+Linux context change before claiming the allocator contract.
