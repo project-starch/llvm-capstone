@@ -1,43 +1,33 @@
-Trusted Linux application compatibility (2026-09-30): follow the
+Trusted Linux application compatibility (2026-10-01): follow the
 [M0–M7 plan](../plans/trusted-linux-application-compatibility.md) on
 `memory-trusted-linux` and its implementation lanes. The
-`trusted-linux-syscall-bounds` lane now demonstrates requested-span checks
-through the current C-mode bridge, with direct-exec and socket contracts in a
-one-hart guest. The [M1 boundary proposal](../design/trusted-linux-execution-boundary.md)
-chooses Linux U-mode capability processes as the target. The finite
-[boundary model](../../models/trusted-linux-m1/README.md) now covers context,
-fault, retirement and private-clone schedules, with the review gaps closed:
-old/fresh accesses after address reuse, remap identities, virgin clone
-namespaces, preserved PTE rights and pending accesses on both harts. Next,
-extend the [QEMU U-mode access slice](../design/trusted-linux-execution-boundary.md)
-into a real Linux process. The stacked [physical-tag slice](../design/trusted-linux-execution-boundary.md)
-passes 51/51; its [S-mode kernel-write follow-up](../design/trusted-linux-execution-boundary.md)
-passes 57/57: 47 U-mode guest cases, two configuration rejections, four
-legacy-path executions and four harness controls. Review found that the
-previous two-hart handoff admitted a revoked cross-hart capability and that
-post-store PTE walking could clear the wrong frame's tag. Stores now capture
-their physical destination before writing; QEMU refuses more than one possible
-hart until a shared lifetime namespace exists.
-Keep the experiment behind `x-capstone-u-mode=true` while process selection is absent;
-the old 23/23 gate accepted pre-U-mode setup failures and is superseded.
-Old/fresh capabilities at one virtual address are still debug-minted.
-The follow-up closes the S-mode vector-store tag gap, checks all bytes and
-tags after a full-page overwrite, and verifies that a CPMP-refused vector
-store preserves both bytes and tags. The gate rejects an early-tag-clear
-source mutation and two incomplete scrubs. The historical Linux smoke is
-bound to its original binary; it was not rerun for this slice. These tests do
-not exercise Linux's actual page reclaim or define capability-tag preservation
-for `fork`/COW and other kernel copies. Qualify those paths next; then add protected
-per-process lifetime selection, shared revocation state and tagged context
-save/restore. The physical tag map passes S-mode scalar, FP, atomic and vector
-stores through a stale cached translation on one hart; Linux context switching
-remains untested.
-The `malloc(64); free; malloc(64)` same-address test, a recoverable buffer-copy
-fault, preemption, kernel/user ABI, global retirement break and two-hart
-completion contract remain open. Integrate the existing thread work with
-current I/O services and qualify IPv6 end-to-end.
-Linux OS feature parity remains the goal; the bridge result does not establish
-Linux user-mode execution or close M1.
+`trusted-linux-syscall-bounds` lane demonstrates requested-span checks through
+the current C-mode bridge; it is not the target Linux process ABI. The
+[M1 boundary proposal](../design/trusted-linux-execution-boundary.md) chooses
+Linux U-mode capability processes. The finite
+[boundary model](../../models/trusted-linux-m1/README.md) covers context,
+fault, retirement and private-clone schedules, including retained old and
+fresh pointers at one reused address and pending accesses on both harts.
+
+The pinned QEMU [runtime-opt-in slice](../design/trusted-linux-execution-boundary.md)
+passes **58/58** bare-metal checks and boots the existing Linux guest with
+`x-capstone-u-mode=true`. CPU support alone had selected the new MEPC/trap
+path during legacy OpenSBI boot and caused a capability fault before login.
+The prototype now requires an M-mode debug selector to activate that path.
+The earlier kernel-write work checks S-mode scalar, FP, atomic and vector tag
+clearing through stale cached translations, a complete page scrub, and a
+CPMP-refused vector store. QEMU still refuses more than one possible hart;
+old/fresh capabilities in the bare-metal cases are debug-minted. The new Linux
+boot runs ordinary userspace, without the protected selector.
+
+Next implement protected **per-process** selection and tagged register context
+transfer. Then run a real Linux capability process with an ordinary mapping,
+page-fault retry, preemption and a checked buffer syscall; qualify Linux
+copy/reclaim tag handling along that path. The same-address
+`malloc(64); free(p); q=malloc(64)` test, recoverable copy fault, global
+retirement break and two-hart completion remain open. M1 is not closed;
+real Linux `malloc/mmap` integration belongs to M2. Continue thread and I/O
+integration, including IPv6, on their separate lanes.
 
 The 2026-10-01 review fixes retain small I/O snapshots and explicit unbounded
 test controls. Preserve the new 32 KiB stack gates. The earlier current-launcher

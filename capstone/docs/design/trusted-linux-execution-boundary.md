@@ -238,3 +238,18 @@ actual Linux frame reclaim, device writes, DMA, migration, tagged process
 context transfer, checked syscall buffers and a real Linux `malloc/free`
 process remain unqualified. The next M1 slice should test tags across a real
 Linux context change before claiming the allocator contract.
+
+The [runtime-opt-in slice `fafae833fe`](https://github.com/project-starch/capstone-qemu/commit/fafae833fe2bea70427e6ce49ad48a07ee7039fa)
+exposes another M1 boundary: a CPU-wide support option cannot itself select
+the new MEPC/trap and U-mode access path. With that option alone, the previous
+binary faulted in OpenSBI before Linux login; its legacy CEPC return had been
+interpreted as the experimental MEPC return. The prototype now selects the
+new path through M-mode `csdebugoncapmem(2)` after `cscapenter`; values 0 and 1
+retain ordinary and legacy-C behavior. QEMU's translation-block flags carry
+that runtime selection. The existing Linux guest now boots with the CPU option
+enabled, and the bare-metal gate passes 58/58, including an enabled-option
+legacy S-mode return. The [result record](https://github.com/project-starch/capstone-qemu/blob/fafae833fe2bea70427e6ce49ad48a07ee7039fa/tests/trusted-linux-u-access/result.json)
+binds the tests to source, binary and guest-image hashes. The superproject
+pins this QEMU commit. This debug selector is not a Linux process ABI: Linux
+does not yet choose a protected lifetime namespace, save tagged registers or
+run an allocator under the new mode. M1 remains open.

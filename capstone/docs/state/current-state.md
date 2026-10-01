@@ -2,6 +2,21 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — runtime opt-in for experimental U-mode execution
+
+The stacked QEMU [lane `fafae833fe`](https://github.com/project-starch/capstone-qemu/commit/fafae833fe2bea70427e6ce49ad48a07ee7039fa)
+separates the CPU support property from the execution-context selection. A
+fresh boot with only `x-capstone-u-mode=true` previously stopped in OpenSBI's
+trap handler on a capability fault before Linux login; the same guest images
+booted with the property disabled. The prototype now requires an explicit
+M-mode debug selector for the protected U-mode path. Its [record](https://github.com/project-starch/capstone-qemu/blob/fafae833fe2bea70427e6ce49ad48a07ee7039fa/tests/trusted-linux-u-access/result.json)
+has **58/58** bare-metal checks and a fresh Linux boot/login/shell smoke with
+the CPU property enabled, tied to the tested QEMU binary and guest-image hashes.
+The superproject now pins this QEMU commit. This is ordinary Linux userspace,
+not a capability-enabled Linux process. A protected per-process selector,
+tagged context save/restore, checked kernel copies and a real Linux
+`malloc/mmap` process remain open; M1 is not closed.
+
 ## 2026-10-01 — S-mode vector stores and strengthened scrub qualification
 
 The stacked QEMU [lane `ed8b9f956e`](https://github.com/project-starch/capstone-qemu/commit/ed8b9f956e)
