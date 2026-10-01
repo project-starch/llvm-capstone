@@ -105,11 +105,12 @@ do_run() {
   source /home/miniconda/miniconda3/etc/profile.d/conda.sh && conda activate qemu-deps
   local all=() ; while read -r file tag extra; do [ -z "${file:-}" ] && continue; [ -f "$SHARE/$tag.dom" ] && all+=("$tag"); done < <(manifest)
   local pass="$SHARE/passed.txt" fault="$SHARE/faulted.txt" err="$SHARE/erred.txt"
-  : > "$pass"; : > "$fault"; : > "$err"
+  local infra="$SHARE/infra.txt"
+  : > "$pass"; : > "$fault"; : > "$err"; : > "$infra"
   local boot=0
   while :; do
     local rem=()
-    for t in "${all[@]}"; do grep -qxF "$t" "$pass" || grep -qxF "$t" "$fault" || grep -qxF "$t" "$err" || rem+=("$t"); done
+    for t in "${all[@]}"; do grep -qxF "$t" "$pass" || grep -qxF "$t" "$fault" || grep -qxF "$t" "$err" || grep -qxF "$t" "$infra" || rem+=("$t"); done
     [ ${#rem[@]} -eq 0 ] && break
     boot=$((boot+1)); local log="$SHARE/run-boot$boot.log"
     echo "=== boot $boot: running ${rem[*]} ==="
@@ -135,9 +136,19 @@ do_run() {
       for d in "${rem[@]}"; do grep -qxF "$d" "$pass" || { echo "$d" >> "$err"; echo "  ran-no-NOTRAP: $d"; }; done
       continue
     fi
-    # qemu died mid-batch (capability fault or crash)
+    # qemu died mid-batch. Only call it a FAULT if the log actually carries a capability
+    # fault line. Without this check a plain boot stall or a prompt timeout is blamed on
+    # rem[0], and in a SINGLE-CASE group that means ANY boot failure is recorded as a false
+    # FAULT -- which is exactly how fts5rank was briefly mis-recorded. Infra failures go to
+    # their own bucket so they can never be mistaken for a result.
     if [ $progressed -eq 0 ]; then
-      local victim="${rem[0]}"; echo "$victim" >> "$fault"; echo "  isolated faulter: $victim (rc=$rc)"
+      local victim="${rem[0]}"
+      if grep -aq "capability fault" "$log"; then
+        echo "$victim" >> "$fault"; echo "  isolated faulter: $victim (rc=$rc)"
+      else
+        echo "$victim" >> "$infra"
+        echo "  INFRA: no capability-fault line in $log; recording $victim as INFRA, not FAULT (rc=$rc)"
+      fi
     fi
   done
   echo "===== RESULTS ($GROUP) ====="
@@ -145,6 +156,7 @@ do_run() {
     if grep -qxF "$t" "$pass"; then echo "PASS   $t (control ran to NOTRAP)";
     elif grep -qxF "$t" "$fault"; then echo "FAULT  $t (base-capstone capability fault; see run-boot*.log)";
     elif grep -qxF "$t" "$err"; then echo "ERR    $t (ran, no NOTRAP -- soft error path; see run-boot*.log)";
+    elif grep -qxF "$t" "$infra"; then echo "INFRA  $t (boot stalled/timed out, NO capability fault -- not a result; re-run, consider a larger CORPUS_TIMEOUT_MULT)";
     else echo "NORUN  $t"; fi
   done
 }
