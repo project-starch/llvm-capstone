@@ -1,6 +1,6 @@
 # Linux capability execution boundary (M1)
 
-Status: **PROPOSED TARGET; QEMU ACCESS SLICE ONLY**, 2026-10-01. This chooses
+Status: **PROPOSED TARGET; QEMU ACCESS AND CONTEXT CANDIDATES ONLY**, 2026-10-01. This chooses
 the direction for the M1 prototype; it does not claim that Linux user-mode
 capability execution or the required kernel and hardware contracts exist yet. It refines the
 [trusted-Linux memory design](trusted-linux-memory.md) and the
@@ -250,6 +250,30 @@ that runtime selection. The existing Linux guest now boots with the CPU option
 enabled, and the bare-metal gate passes 58/58, including an enabled-option
 legacy S-mode return. The [result record](https://github.com/project-starch/capstone-qemu/blob/fafae833fe2bea70427e6ce49ad48a07ee7039fa/tests/trusted-linux-u-access/result.json)
 binds the tests to source, binary and guest-image hashes. The superproject
-pins this QEMU commit. This debug selector is not a Linux process ABI: Linux
+previously pinned this QEMU commit. This debug selector is not a Linux process ABI: Linux
 does not yet choose a protected lifetime namespace, save tagged registers or
 run an allocator under the new mode. M1 remains open.
+
+The stacked [S-mode context candidate `c9d79399b9`](https://github.com/project-starch/capstone-qemu/commit/c9d79399b975efb915e0dcdf017529bc35a9fb65)
+tests the first Linux-entry obstacle. The current RISC-V Linux entry path
+swaps user `tp` through scalar `sscratch` and saves other registers with
+64-bit stores, so a tagged user pointer would lose its identity on the first
+trap. In the candidate, trusted S mode can select the experimental U path.
+While selected, S-mode `CSSTC` and `CSLDC` use scalar kernel addresses for
+full-width tagged register slots; ordinary S-mode loads and stores remain
+scalar. The existing capability `CSCRATCH` can swap tagged user `tp` before
+the handler clobbers it. Physical tag lookup follows the TLB-selected frame,
+including when two kernel virtual addresses alias the slot.
+
+The bare-metal gate passes **62/62**: the new cases save and restore a tagged
+register across virtual aliases and a U-to-S ECALL, then dereference it after
+`SRET`. A scalar `sd`/`ld` in the handler loses authority and faults at the U
+load; S selection without CPU support faults at its named instruction. The
+ordinary Linux boot still passes on this QEMU binary. The
+[record](../../capstone-qemu/tests/trusted-linux-u-access/result.json) binds
+the source and binary hashes. This superproject now pins the candidate for the
+next kernel experiment. It does not implement Linux `pt_regs`, a protected
+task selector, per-process lifetime namespaces, checked syscall copies or a
+protected `malloc` process. The use of S-mode `CSSTC`/`CSLDC` and `CSCRATCH`
+is an ISA candidate; Linux integration and hardware cost decide whether to
+retain it.

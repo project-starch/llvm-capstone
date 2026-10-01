@@ -3,8 +3,11 @@ Trusted Linux application compatibility (2026-10-01): follow the
 `memory-trusted-linux` and its implementation lanes. The
 ordinary Linux [feasibility control](../../tests/trusted-linux-feasibility/README.md)
 passes the OS operations needed by the next guest probe but runs unprotected.
-The next M1 implementation step is a Linux-selected process context with
-tagged register preservation through syscall and scheduling boundaries. The
+The pinned QEMU [context candidate](../design/trusted-linux-execution-boundary.md)
+preserves tagged `a0` and `tp` across a bare-metal U-to-S trap, with 62/62
+checks; Linux has not adopted that save/restore path. The next M1 step is a
+Linux-selected process context and tagged register frame through syscall and
+scheduling boundaries. The
 `trusted-linux-syscall-bounds` lane demonstrates requested-span checks through
 the current C-mode bridge; it is not the target Linux process ABI. The
 [M1 boundary proposal](../design/trusted-linux-execution-boundary.md) chooses
@@ -13,11 +16,11 @@ Linux U-mode capability processes. The finite
 fault, retirement and private-clone schedules, including retained old and
 fresh pointers at one reused address and pending accesses on both harts.
 
-The pinned QEMU [runtime-opt-in slice](../design/trusted-linux-execution-boundary.md)
-passes **58/58** bare-metal checks and boots the existing Linux guest with
+The pinned QEMU [context candidate](../design/trusted-linux-execution-boundary.md)
+passes **62/62** bare-metal checks and boots the existing Linux guest with
 `x-capstone-u-mode=true`. CPU support alone had selected the new MEPC/trap
 path during legacy OpenSBI boot and caused a capability fault before login.
-The prototype now requires an M-mode debug selector to activate that path.
+The prototype now requires a privileged runtime selector to activate that path.
 The earlier kernel-write work checks S-mode scalar, FP, atomic and vector tag
 clearing through stale cached translations, a complete page scrub, and a
 CPMP-refused vector store. QEMU still refuses more than one possible hart;

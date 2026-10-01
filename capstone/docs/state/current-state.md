@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-01 — tagged S-mode context candidate
+
+The pinned QEMU [context candidate](../design/trusted-linux-execution-boundary.md)
+passes 62/62 bare-metal checks. Trusted S mode selects the protected U path;
+S-mode tagged spill/load preserves register identity across virtual aliases
+and a U-to-S ECALL, with scalar-spill and unsupported-CPU controls. Ordinary
+Linux still boots on this binary. Linux trap entry and context switching have
+not been changed, so no protected Linux process, syscall buffer or allocation
+is qualified. The explicit spill path remains an ISA candidate, pending Linux
+integration and cost comparison.
+
 ## 2026-10-01 — ordinary Linux feasibility control
 
 The [trusted-Linux feasibility gate](../../tests/trusted-linux-feasibility/README.md)

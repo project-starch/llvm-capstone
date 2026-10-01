@@ -126,6 +126,11 @@ under the experimental QEMU CPU property. Its record explicitly marks the
 process unprotected. It establishes that the guest and runner can exercise
 these OS calls before M1 adds per-process selection and tagged context transfer;
 it does not satisfy any protected-process part of the M1 exit gate.
+The stacked [S-mode context experiment](../design/trusted-linux-execution-boundary.md)
+shows tagged register preservation across one bare-metal U-to-S trap and
+detects a scalar save; Linux's `pt_regs` and task switching still use scalar
+register slots. The next gate must run the same round trip in a Linux-selected
+process, then add a checked buffer syscall and allocator lifetime test.
 
 ### M2 — Real virtual memory and a growing protected heap
 
