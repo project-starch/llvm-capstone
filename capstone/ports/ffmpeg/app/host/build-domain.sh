@@ -26,8 +26,10 @@ ORDER_CEILING=$(( ${FFAPP_ORDER_CEILING_MB:-256} * 1024 * 1024 ))
 # FFmpeg libraries are shared (built once, under domain/), so an arm cannot differ by accident
 # in anything else.
 #   level0  musl-capstone's level0 as every earlier run used it: every heap pointer carries the
-#           bounds of the whole arena, and free only marks the block free.        -> domain/
-#   shrink  the same allocator with CAPSTONE_LEVEL0_SHRINK: per-object bounds, still no
+#           bounds of the whole arena, and free only marks the block free. That now takes
+#           -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0, since the allocator bounds each object by
+#           default.                                                              -> domain/
+#   shrink  the same allocator with its default per-object bounds, still no
 #           revocation.                                                           -> domain-shrink/
 #   sublet  musl-capstone's sublet_heap.c instead of level0: a buddy heap over a LINEAR region the
 #           launcher transfers (a program region, parked by hostcall.c's
@@ -38,8 +40,8 @@ HEAP=${FFAPP_HEAP:-level0}
 HEAP_REGION=${FFAPP_HEAP_REGION_BYTES:-$((8 * 1024 * 1024))}   # sublet arm: the granted pool
 ENTRYF=()
 case $HEAP in
-  level0) OUT="$WORK/domain"; HEAPF=() ;;
-  shrink) OUT="$WORK/domain-shrink"; HEAPF=(-DCAPSTONE_LEVEL0_SHRINK=1) ;;
+  level0) OUT="$WORK/domain"; HEAPF=(-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) ;;
+  shrink) OUT="$WORK/domain-shrink"; HEAPF=() ;;
   sublet) OUT="$WORK/domain-sublet"; HEAPF=()
           ENTRYF=(-DFFAPP_SUBLET_HEAP=1) ;;
   *) echo "FFAPP_HEAP must be level0, shrink or sublet" >&2; exit 2 ;;
