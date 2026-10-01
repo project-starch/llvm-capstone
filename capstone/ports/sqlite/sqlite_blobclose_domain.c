@@ -66,8 +66,23 @@ static int fail(const char *stage, int rc) {
 }
 
 static int run_blobclose(void) {
-  /* memsys5 as the level-0 heap; lookaside stays ON by default, so the Incrblob
-   * that blob_open creates lands in the connection's lookaside pool. */
+  /* memsys5 as the level-0 heap.
+   *
+   * CORRECTION. An earlier version of this comment said "lookaside stays ON by default, so
+   * the Incrblob lands in the connection's lookaside pool". That is wrong for this corpus:
+   * build-sqlite-row322.sh sets -DSQLITE_DEFAULT_LOOKASIDE=0,0, and with lookaside off
+   * sqlite3DbMallocZero falls straight through to sqlite3Malloc, i.e. memsys5. So in the
+   * default configuration this bug exercises ONE allocator, not the nested pair.
+   *
+   * The bug reproduces either way -- what dangles is the sqlite3 connection itself (a
+   * plain sqlite3MallocZero), and the dangling read is of its db->lookaside descriptor
+   * field, which sqlite3DbFree consults whether or not a pool exists. Host ASan confirms
+   * it fires with lookaside on AND off.
+   *
+   * To exercise the lookaside > memsys5 chain the paper describes, build with
+   * SQLITE_LOOKASIDE=1200,40 (build-sqlite-row322.sh appends that as a later -D, which
+   * wins over the 0,0 above). The probe below reports the lookaside high-water mark so the
+   * configuration is VERIFIED at runtime rather than assumed. */
   int rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
                           (int)sizeof(sqlite_heap), 64);
   if (rc != SQLITE_OK)
@@ -105,6 +120,23 @@ static int run_blobclose(void) {
   if (rc != SQLITE_OK)
     return fail("blob-open", rc);
   output_text("blobclose blob_open rc=0\n");
+
+  /* VERIFY the allocator chain instead of assuming it. With lookaside compiled off the
+   * high-water mark stays 0; with a pool configured it is the bytes served from slots. */
+  {
+    int cur = 0, hi = 0;
+    int srv = sqlite3_db_status(db, SQLITE_DBSTATUS_LOOKASIDE_USED, &cur, &hi, 0);
+    output_text("blobclose lookaside status_rc=");
+    output_uint((unsigned long)(srv < 0 ? -srv : srv));
+    output_text(" slots_in_use=");
+    output_uint((unsigned long)(cur < 0 ? 0 : cur));
+    output_text(" high_water=");
+    output_uint((unsigned long)(hi < 0 ? 0 : hi));
+    /* hi > 0 proves SOME connection-owned allocation was served from a slot; it does not
+     * single out the Incrblob. That distinction matters -- see case_lookaside_tagmap.c. */
+    output_text(hi > 0 ? "  (lookaside ACTIVE: connection-owned allocations came from slots)\n"
+                       : "  (lookaside OFF: every allocation came straight from memsys5)\n");
+  }
 
   /* blob still open -> connection becomes a zombie, lookaside pool stays alive.
    *

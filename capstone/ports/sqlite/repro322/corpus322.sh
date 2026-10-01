@@ -49,6 +49,7 @@ case_backupattach.c backupattach
 case_blobwrite.c    blobwrite
 case_writable_schema.c wschema
 case_mem5tagmap.c   mem5tag
+case_lookaside_tagmap.c latag
 ../sqlite_blobclose_domain.c blobclose
 EOF
    ;;
