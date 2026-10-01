@@ -98,7 +98,10 @@ int main(int argc, char **argv) {
   }
   /* The heap qualification (docs/plans/capstone-heap-protection.md). Every
    * fault-* case below must end in SIGSEGV on the HEAP=sublet build and run to
-   * completion on the HEAP=level0 build, which is the control. The heap-*
+   * completion on the control, HEAP=level0 built with
+   * CAPSTONE_LEVEL0_OBJECT_BOUNDS=0. On the default level0 build, which bounds
+   * each allocation, the spatial cases (fault-bounds, fault-bounds-large,
+   * fault-realloc-shrink) end in SIGSEGV too and the others complete. The heap-*
    * cases fall through to the ordinary tail on success and return a distinct
    * code on the first failed check. */
   if (!strcmp(argv[1], "fault-bounds")) {
@@ -120,6 +123,20 @@ int main(int argc, char **argv) {
     if (p[4999] != 3) return 61;
     if (!heap_fault_ready()) return 68;
     (void)capstone_heap_fault_load(p + 5000);
+    return heap_fault_survived();
+  }
+  if (!strcmp(argv[1], "fault-realloc-shrink")) {
+    /* a realloc that shrinks returns a pointer to the new size, whether the
+       heap moves the block (sublet) or shrinks it in place and releases the
+       tail (level0): the last byte inside first, then one past it */
+    volatile unsigned char *p = malloc(4096);
+    if (!p) return 46;
+    volatile unsigned char *q = realloc((void *)p, 24);
+    if (!q) return 46;
+    q[0] = 1; q[23] = 2;
+    if (q[0] != 1 || q[23] != 2) return 61;
+    if (!heap_fault_ready()) return 68;
+    (void)capstone_heap_fault_load(q + 24);
     return heap_fault_survived();
   }
   if (!strcmp(argv[1], "fault-double-free")) {
@@ -207,6 +224,32 @@ int main(int argc, char **argv) {
     if (huge || errno != ENOMEM) return 67;
     if (grown[0][0] != 7 || ((unsigned char *)grown)[47] != 0x44) return 67;
     free(grown);
+    free(inner);
+  }
+  if (!strcmp(argv[1], "heap-realloc-shrink")) {
+    /* shrinking keeps the bytes and a capability stored in the block, the
+       shrunk block is usable to its new end, and an allocation after it,
+       which on level0 may take the released tail, leaves it intact */
+    unsigned char *inner = malloc(8);
+    unsigned char **p = malloc(4096);
+    if (!inner || !p) return 46;
+    inner[0] = 7;
+    p[0] = inner;
+    memset((unsigned char *)p + sizeof(void *), 0x55, 4096 - sizeof(void *));
+    unsigned char **q = realloc(p, 48);
+    if (!q) return 46;
+    if (q[0] != inner || q[0][0] != 7) return 66;
+    for (unsigned i = sizeof(void *); i < 48; ++i)
+      if (((unsigned char *)q)[i] != 0x55) return 66;
+    memset((unsigned char *)q + sizeof(void *), 0x66, 48 - sizeof(void *));
+    unsigned char *later = malloc(2048);
+    if (!later) return 46;
+    memset(later, 0x77, 2048);
+    if (q[0] != inner || q[0][0] != 7) return 66;
+    for (unsigned i = sizeof(void *); i < 48; ++i)
+      if (((unsigned char *)q)[i] != 0x66) return 66;
+    free(later);
+    free(q);
     free(inner);
   }
   if (!strcmp(argv[1], "write-loop")) {

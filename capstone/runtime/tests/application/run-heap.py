@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Qualify Capstone malloc/free protection, with an unprotected control.
+"""Qualify Capstone malloc/free protection on three builds of one contract.
 
-Requires both host ELFs and their LLD maps, and checks the guest image hashes.
-Fault cases must reach the test operation, then fault at its instruction with
-the expected cause, or survive it and exit with the control sentinel (90).
+sublet:  HEAP=sublet, spatial and temporal protection.
+level0:  HEAP=level0 as applications get it, each allocation bounded (spatial).
+control: HEAP=level0 with CAPSTONE_LEVEL0_OBJECT_BOUNDS=0, unprotected.
+
+Requires the three host ELFs and their LLD maps, and checks the guest image
+hashes. Fault cases must reach the test operation, then fault at its
+instruction with the expected cause, or survive it and exit with the control
+sentinel (90): every fault case faults on sublet, the spatial ones fault on
+level0 too, and none faults on the control.
 See docs/plans/capstone-heap-protection.md for the scope of this qualification.
 """
 import argparse
@@ -21,9 +27,11 @@ HOST = Path(__file__).resolve().parents[2] / "host"
 sys.path.insert(0, str(HOST))
 from capstone_vm.symbolize import parse as parse_fault
 
-FAULTS = ("fault-stale", "fault-reused", "fault-bounds", "fault-bounds-large",
-          "fault-double-free", "fault-double-free-reused")
-COMPLETES = ("healthy", "churn", "heap-bounds", "heap-neighbour", "heap-companion")
+SPATIAL = ("fault-bounds", "fault-bounds-large", "fault-realloc-shrink")
+FAULTS = ("fault-stale", "fault-reused", *SPATIAL, "fault-double-free", "fault-double-free-reused")
+COMPLETES = ("healthy", "churn", "heap-bounds", "heap-neighbour", "heap-companion",
+             "heap-realloc-shrink")
+ARMS = ("sublet", "level0", "control")
 HEAP_SYMBOLS = ("malloc", "free", "calloc", "realloc", "__libc_malloc", "__libc_free")
 
 
@@ -88,15 +96,20 @@ def probe_pc(elf, objdump, table, function, dest):
     return int(loads[0], 16)
 
 
+def survives(label, mode):
+    """A fault case the build does not protect against: it must run to the sentinel."""
+    return mode in FAULTS and (label == "control" or (label == "level0" and mode not in SPATIAL))
+
+
 def check_case(label, mode, result, before, after, evidence):
     matches = re.findall(rf"^application {re.escape(mode)}: (PASS|FAIL) \(wait status=(\d+)\)$",
                          result.stdout, re.MULTILINE)
     require(len(matches) == 1, f"{label} {mode}: missing or ambiguous supervisor verdict")
     verdict, raw_status = matches[0]
     status = int(raw_status)
-    control = label == "level0" and mode in FAULTS
-    require(verdict == ("FAIL" if control else "PASS"), f"{label} {mode}: wrong supervisor verdict")
-    require(result.returncode == (1 if control else 0), f"{label} {mode}: supervisor did not finish as expected")
+    survive = survives(label, mode)
+    require(verdict == ("FAIL" if survive else "PASS"), f"{label} {mode}: wrong supervisor verdict")
+    require(result.returncode == (1 if survive else 0), f"{label} {mode}: supervisor did not finish as expected")
     nodes = after["nodes_allocated_total"] - before["nodes_allocated_total"]
     live = {k: after[k] for k in ("live_domains", "live_regions", "live_bytes")}
     require(all(v == 0 for v in live.values()), f"{label} {mode}: resources leaked: {live}")
@@ -110,12 +123,12 @@ def check_case(label, mode, result, before, after, evidence):
 
     markers = re.findall(rf"^heap evidence {re.escape(mode)}: ready=(\d) survived=(\d) stderr=(\d)$",
                          result.stdout, re.MULTILINE)
-    require(markers == [("1", "1" if control else "0", "1")], f"{label} {mode}: missing operation/completion evidence")
+    require(markers == [("1", "1" if survive else "0", "1")], f"{label} {mode}: missing operation/completion evidence")
     lines = [line for line in result.stdout.splitlines() if "capstone-exec: domain fault" in line]
-    if control:
+    if survive:
         require(os.WIFEXITED(status) and os.WEXITSTATUS(status) == 90,
-                f"{label} {mode}: control did not reach completion sentinel")
-        require(not lines, f"{label} {mode}: control faulted")
+                f"{label} {mode}: unprotected case did not reach completion sentinel")
+        require(not lines, f"{label} {mode}: unprotected case faulted")
         record["operation_survived"] = True
     else:
         require(os.WIFSIGNALED(status) and os.WTERMSIG(status) == signal.SIGSEGV,
@@ -126,10 +139,10 @@ def check_case(label, mode, result, before, after, evidence):
                 f"{label} {mode}: fault record does not identify the executed ELF")
         # This QEMU's _helper_access_with_cap reports a load bounds violation
         # as LOAD_ACCESS_FAULT (5), not the RTL's capability exception encoding.
-        causes = (5,) if mode in ("fault-bounds", "fault-bounds-large") else (24, 25)
+        causes = (5,) if mode in SPATIAL else (24, 25)
         require(fault["cause"] in causes, f"{label} {mode}: unexpected fault cause {fault['cause']}")
         link_pc = fault["pc"] - (fault["entry"] - evidence["entry"])
-        site = "free" if mode.startswith("fault-double-free") else "capstone_heap_fault_load"
+        site = "sh_free" if mode.startswith("fault-double-free") else "capstone_heap_fault_load"
         require(link_pc == evidence["probes"][site], f"{label} {mode}: fault at wrong instruction {link_pc:#x}")
         record["fault"] = {"cause": fault["cause"], "link_pc": hex(link_pc), "site": site}
     record["operation_reached"] = True
@@ -139,12 +152,11 @@ def check_case(label, mode, result, before, after, evidence):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state", type=Path, required=True)
-    parser.add_argument("--sublet-image", required=True, help="guest path of the protected image")
-    parser.add_argument("--control-image", required=True, help="guest path of the unprotected image")
-    parser.add_argument("--sublet-elf", type=Path, required=True)
-    parser.add_argument("--control-elf", type=Path, required=True)
-    parser.add_argument("--sublet-map", type=Path, help="default: <sublet-elf>.map")
-    parser.add_argument("--control-map", type=Path, help="default: <control-elf>.map")
+    for label, what in (("sublet", "the HEAP=sublet image"), ("level0", "the default HEAP=level0 image"),
+                        ("control", "the level0 image built with CAPSTONE_LEVEL0_OBJECT_BOUNDS=0")):
+        parser.add_argument(f"--{label}-image", required=True, help=f"guest path of {what}")
+        parser.add_argument(f"--{label}-elf", type=Path, required=True)
+        parser.add_argument(f"--{label}-map", type=Path, help=f"default: <{label}-elf>.map")
     parser.add_argument("--nm", default=os.environ.get("CAPSTONE_LLVM_NM", "llvm-nm"))
     parser.add_argument("--objdump", default=os.environ.get("CAPSTONE_LLVM_OBJDUMP", "llvm-objdump"))
     parser.add_argument("--platform", nargs="*", default=[], help="host files to hash in the report")
@@ -164,9 +176,9 @@ def main():
     for path in args.platform:
         report["sha256"][Path(path).name] = sha256(path)
     evidence = {}
-    for label, elf, map_path in (("sublet", args.sublet_elf, args.sublet_map),
-                                 ("level0", args.control_elf, args.control_map)):
-        map_path = map_path or Path(str(elf) + ".map")
+    for label in ARMS:
+        elf = getattr(args, f"{label}_elf")
+        map_path = getattr(args, f"{label}_map") or Path(str(elf) + ".map")
         table = read_symbols(elf, args.nm)
         wanted = "sublet_heap.c.obj" if label == "sublet" else "level0.c.obj"
         owners = check_link_map(map_path.read_text(), table, wanted)
@@ -174,7 +186,13 @@ def main():
         if label == "sublet":
             evidence[label]["probes"] = {
                 "capstone_heap_fault_load": probe_pc(elf, args.objdump, table, "capstone_heap_fault_load", "a0"),
-                "free": probe_pc(elf, args.objdump, table, "free", "zero")}
+                # free takes the heap lock and frees in sh_free, whose first act is the
+                # stale-pointer probe: with several threads, the probe and the revocation
+                # must be one step, or two frees of one pointer could both pass the probe
+                "sh_free": probe_pc(elf, args.objdump, table, "sh_free", "zero")}
+        elif label == "level0":
+            evidence[label]["probes"] = {
+                "capstone_heap_fault_load": probe_pc(elf, args.objdump, table, "capstone_heap_fault_load", "a0")}
         report["symbols"][label] = {"entry_points": owners, "sha256": evidence[label]["sha256"],
                                     "map_sha256": sha256(map_path)}
         print(f"{label}: ELF/map agree on allocation entry points from {wanted}: PASS", flush=True)
@@ -182,7 +200,8 @@ def main():
     boot_id = call("exec", "cat", "/proc/sys/kernel/random/boot_id").stdout.strip()
     call("exec", "sh", "-c", "cp /mnt/host/application-supervisor /tmp/application-supervisor && "
          "chmod +x /tmp/application-supervisor")
-    for label, image in (("sublet", args.sublet_image), ("level0", args.control_image)):
+    for label in ARMS:
+        image = getattr(args, f"{label}_image")
         guest_hash = call("exec", "sha256sum", image).stdout.split()[0]
         require(guest_hash == evidence[label]["sha256"], f"{label}: guest image differs from checked ELF")
         report["symbols"][label]["guest_sha256"] = guest_hash
