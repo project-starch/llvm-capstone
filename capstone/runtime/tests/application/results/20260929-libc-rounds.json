@@ -1,0 +1,94 @@
+{
+ "date": "2026-09-29",
+ "purpose": "fewer delegated rounds from the libc: no fcntl after an O_CLOEXEC open, 8 KiB stdio and 32 KiB getdents buffers, identity and clock from the launch record, thread setup and chdir without a round",
+ "platform": "firmware capstone-sbi a810177 (no S-mode swap), modcapstone one-ecall module, capstone-qemu ac2837aa (timer quantum); kernel e833dfb1...; base: launcher 991bc7dc... with the pinned musl and images (review-perl-v2.dom, mruby.dom, contracts); new: launcher built from this commit with -Wall -Wextra -O2, musl 1.2.5 with musl-patches/, perl and mruby relinked with ports/common/application/build.py against it",
+ "method": "capstone-vm run with CAPSTONE_DELEGATE_STATS=1; rounds are the launcher's count; ticks are rdtime wall time from after seccomp install to exit and include the interpreter's own execution; Perl t/base through prove --exec from the host, nine launches; host shared with another session's guest and a parallel compile job (load 15-21)",
+ "runs": {
+  "base": {
+   "perl-print": {
+    "rounds": 43,
+    "syscalls": 41,
+    "ticks": 1045597
+   },
+   "perl-time": {
+    "rounds": 45,
+    "syscalls": 43,
+    "ticks": 1118007
+   },
+   "mruby-puts": {
+    "rounds": 6,
+    "syscalls": 4,
+    "ticks": 1016954
+   },
+   "bench-10k": {
+    "rounds": 10003,
+    "syscalls": 10001,
+    "ticks": 2570821
+   },
+   "gate": {
+    "exit": 0,
+    "pass_lines": 21
+   },
+   "t_base": {
+    "prove_wallclock_s": 36,
+    "wall": "0m35.558s"
+   }
+  },
+  "base2": {
+   "perl-print": {
+    "rounds": 43,
+    "syscalls": 41,
+    "ticks": 1159333
+   },
+   "mruby-puts": {
+    "rounds": 6,
+    "syscalls": 4,
+    "ticks": 1309201
+   },
+   "bench-10k": {
+    "rounds": 10003,
+    "syscalls": 10001,
+    "ticks": 2573509
+   },
+   "gate": {
+    "exit": 0,
+    "pass_lines": 21
+   },
+   "t_base": {
+    "prove_wallclock_s": 35,
+    "wall": "0m35.627s"
+   }
+  },
+  "new3": {
+   "perl-print": {
+    "rounds": 26,
+    "syscalls": 24,
+    "ticks": 1075989
+   },
+   "perl-time": {
+    "rounds": 26,
+    "syscalls": 24,
+    "ticks": 1117745
+   },
+   "mruby-puts": {
+    "rounds": 4,
+    "syscalls": 2,
+    "ticks": 1393765
+   },
+   "bench-10k": {
+    "rounds": 2,
+    "syscalls": 0,
+    "ticks": 442174
+   },
+   "gate": {
+    "exit": 0,
+    "pass_lines": 21
+   },
+   "t_base": {
+    "prove_wallclock_s": 35,
+    "wall": "0m35.408s"
+   }
+  }
+ },
+ "note": "the intermediate runs 'new' (launcher built without optimisation: perl startup 53 s vs 10 s in the guest) and 'new2' (host load: gate cancellation timeout, t/base 170 s) are in the log directory and not results; base2 and new3 ran back to back under the same load"
+}

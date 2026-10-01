@@ -1,0 +1,25 @@
+{
+  "qemu": {
+    "path": "/tmp/capstone/node-reuse/qemu/qemu-system-riscv64",
+    "sha256": "ed89e9751c731267a68a499be5a8c1be3821c6790ea6c7b6c777d0cffcf3bd6e"
+  },
+  "kernel": {
+    "path": "/tmp/capstone/br-snap/build/images/Image",
+    "sha256": "b3193f0a7eccafabcd3ba89b8246afa29c391aa0d38cf54362f55379f84a09dd"
+  },
+  "firmware": {
+    "path": "/tmp/capstone/br-snap/build/images/fw_jump.elf",
+    "sha256": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116"
+  },
+  "rootfs": {
+    "path": "/tmp/capstone/br-snap/build/images/rootfs.ext2",
+    "sha256": "d1bcf48a780c396453936fdac0f4088d39c928c14eb54018a07df9c4a32c354b"
+  },
+  "host": {
+    "path": "/tmp/capstone/sqlite-normalized-20260927/primary/sqlite_host.user",
+    "sha256": "148e57ddf6fe9f0fc117b686ab0354765246124e415c5e4adeded8a6fe48b976"
+  },
+  "capstone_rev_nodes": 4194304,
+  "cma": "512M",
+  "capstone_gp_nonlin": 1
+}

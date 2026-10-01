@@ -1,0 +1,284 @@
+# Delegated syscalls and the task model
+
+Status, 2026-09-29: steps 1 to 4 implemented on the stack `delegation-abi`,
+`delegation-libc`, `delegation-launcher`, `delegation-spawn`, `delegation-ports`;
+Perl `t/base` 9/9 with guest `binfmt_misc`. Steps 5 and 6 are open. Above the
+stack, the same day, five branches cut the cost of a round and the number of
+rounds; their measurements are in `runtime/applications.md` and the
+`runtime/tests/application/results/20260929-*.json` records:
+
+| Branch | What | getpid round, rdtime ticks (10 MHz) |
+|---|---|---|
+| (pinned stack) | ten SBI ecalls per step | 1,047 |
+| `delegation-step-one-ecall` | STEP returns the event in a1..a5; no probe, no QUERY | 893 |
+| `delegation-no-smode-swap` | monitor invoke without the 16 CPMP + 9 CSR swaps | 527 |
+| `delegation-qemu-switch-cost` | QEMU: flush only when translation state changes; quantum timer | 262 |
+| `delegation-libc-rounds` | identity and clocks from the launch record; no CLOEXEC fcntl; 8 KiB stdio; 32 KiB getdents | rounds 43 -> 26 for `perl -e` |
+| `delegation-launch-cost` | lazy image hash, file-backed copy only, one SSH connection per VM | Perl launch 12.0 -> 6.9 s in the guest |
+| `delegation-signals` | synchronous signal delivery, Linux keeps the state (`docs/plans/delegation-signals.md`) | 21/21 contract modes; `perl -e` 30 rounds; `t/base` 22 s |
+
+Those are QEMU wall-time figures; the first two rows also hold on hardware, the
+third is emulator-only. With a round at ~26 us and `perl -e` at 26 rounds, the
+round is no longer what a program waits for. What is left, in this order:
+
+- Done above the table: launch cost and signals (step 6 before step 5), the
+  latter with its own plan and contract.
+- **Cheap shape rows**: the ~25 rows that are integers and buffers only
+  (`pselect6`, `statx`, `statfs`, `getrusage`, `getrlimit`, `truncate`,
+  `fallocate`, `fchown`, `linkat`, ...), plus `timer_create` with an opaque
+  `sigevent` token now that delivery exists. The rows are done on
+  `delegation-cheap-rows`: 32 of them, one line each in the shape table and
+  one native case each in `tests/application/delegate-rows-test.c`, chosen
+  as the syscalls musl's wrappers issue; `getrlimit` and `setrlimit` are not
+  among them because musl issues `prlimit64` for both, `sched_getscheduler`
+  and `sched_getparam` not because musl answers ENOSYS itself. `timer_create`
+  remains. Done ahead of it, on
+  `delegation-pty-ioctls`: the pseudo-terminal and foreground-group
+  `ioctl` requests, with the 32-bit request mask that any `_IOR` request
+  needed; on `delegation-runtime-rows`: `pselect6` (mask flattened out of the
+  kernel's pointer pair), `getpgid`, `getsid`, `kill` to the parent with ESRCH
+  for a vanished pid, the domain's unserved report only under
+  `CAPSTONE_DELEGATE_STATS`, and musl's `pselect` mask kept a capability.
+  On `delegation-fd-rows`: `eventfd2`, the three `timerfd` calls,
+  `signalfd4` (mask size 8, what Linux holds pending), `getresuid`,
+  `getresgid`, `fcntl`'s `F_NOTIFY`, `F_SETSIG` and `F_GETSIG`, and signal 0
+  to the task's own group.
+- **Memory**, step 5: the region grant at the resume label; `mmap` of files,
+  `mprotect`.
+- **Threads**: the sibling-context primitive in the monitor plus capability TLS
+  in the compiler (C-47); last.
+
+Everything below this line is the plan as written on 2026-09-29 morning; the
+numbers in it are gates, not results, except where the table above says so.
+
+## Goal
+
+A Capstone application is the user half of one Linux task. Every operating-system
+service it uses is the Linux syscall itself, executed by the task that owns the
+domain, under that task's credentials, descriptor table, working directory and
+seccomp filter. The runtime keeps no OS state in the domain. The monitor learns
+nothing about processes.
+
+What this replaces: the HostCall v0 opcode list, the domain-side file table,
+file positions, pipes, working directory and timers, the stdio special case,
+the 4 KiB payload region and the bounce buffer. What it keeps: the CALL/REGION_SHARE
+entry ABI, the resumable yield, managed ownership tied to the open device file,
+and the supervised step with its typed events.
+
+The measure of success is not a new feature list. It is that the ports stop
+inventing conventions: no absolute `argv[0]` because `getcwd` is missing, no
+standard library packed into a zip because directory reads cost a round each,
+no `ac_cv_func_mmap=no`, no thread-locals rewritten as globals. The gates are
+the existing ones: musl's libc-test in a domain, today 43 of 77 with 22 excluded
+for missing processes, threads and sockets; Perl `t/base`, today 8 of 9; and
+the persistent-guest application gate with its 1,008 mixed starts.
+
+## The wire ABI
+
+One versioned request block in the metadata region. Its 88-byte layout is
+runtime-specific, **not binary-compatible with an io_uring SQE**. A future
+io_uring transport needs a translation layer:
+
+| Field | Meaning |
+|---|---|
+| `version` | 2; the entry is 88 bytes, little-endian |
+| `count` | entries in this batch, 1 for now |
+| `nr` | Linux syscall number, RV64 table |
+| `args[6]` | integers, or offsets into the exchange region for pointer arguments |
+| `result` | the syscall's return value, negative errno on failure |
+| `flags` | which arguments are exchange offsets, for the launcher's bounds check |
+| `pending` | signal mask written by the launcher on every return |
+
+Pointer arguments never cross as capabilities and never as domain addresses.
+The libc copies buffers into the **exchange region** and passes offsets; the
+launcher validates each offset and length against the region and hands the
+kernel its own mapping address. The current guest also needs an ordinary-memory bounce mirror because the
+9p transport cannot pin the exchange mapping. Buffers therefore pass through
+both the exchange region and that mirror; this is not a zero-copy path.
+An identity mapping of the domain block into the task is an optimization for a
+later branch, not part of this ABI.
+
+The exchange region size is declared in the application descriptor, like the
+heap. Requests larger than the region are chunked in the libc, as reads and
+writes are chunked today.
+
+Structures that contain pointers are marshalled in the libc, because our
+pointers are 128 bits wide and the kernel's are 64: `iovec` for the vector
+forms, `msghdr` when sockets arrive, argv and envp for spawn. Everything else
+is integers and byte buffers and passes through. The reference for every
+syscall's semantics is the Linux manual page; this document describes only the
+transport, the marshalling and the exceptions.
+
+## The three exception groups
+
+Everything not listed here is delegated. The list is closed; adding to it is
+an ABI change.
+
+**Memory.** `mmap`, `munmap`, `mremap`, `brk`, `mprotect`, `madvise`. Domain
+memory is capability memory and Linux cannot grant authority into it. Anonymous
+`mmap` is served by the domain allocator. File `mmap` is ENOSYS. A later branch
+turns anonymous `mmap` into a region grant through the monitor, delivered at
+the yield's resume label; the driver already resumes shares across preemption.
+
+**Processes.** `clone`, `fork`, `vfork`, `execve`, `exit_group`. `fork` without
+`exec` is ENOSYS by design and stays visible in the unserved report. `exit_group`
+is delegated as is: the launcher ends the process with the status. The rest
+become the spawn service below.
+
+**Signals.** `rt_sigaction` keeps a table in the domain, `rt_sigprocmask` a mask
+in the launcher, `rt_sigreturn` is unused. Delivery is synchronous: the launcher
+receives the Linux signal, records it in `pending`, and the libc runs the
+installed handler before returning from the yield. This covers SIGCHLD, SIGALRM,
+SIGPIPE and Ctrl-C for any program that makes syscalls, which is every
+interpreter in the study. Asynchronous delivery into a domain that never yields
+is a later branch and needs the sibling-context primitive.
+
+## The task model
+
+- **Spawn.** `posix_spawn` in the libc becomes one request: path, argv, envp,
+  cwd, file actions. The launcher forks, applies the file actions, and execs.
+  A Capstone image with an ABI v1 descriptor runs under `capstone-exec`; a
+  native Linux program runs directly. The child is a real process with a real
+  PID. The launcher records only children it started.
+- **Wait and kill.** `wait4` and `kill` are delegated, restricted to recorded
+  children. `capstone-job` already records waitpid status; it stays.
+- **Exec in place.** `execve` of a Capstone image replaces the task through the
+  launcher's own binary: same PID and descriptors, the device closes on exec and
+  destroys the domain. A native program cannot take over a seccomp-filtered
+  task, so that form answers ENOSYS.
+- **Pipes and descriptors.** `pipe2` is a Linux pipe. `dup`, `dup3`, `fcntl`
+  including `F_SETFL`, `ppoll` and `lseek` are delegated, so shared offsets,
+  non-blocking mode and real waiting come from Linux. The domain-side pipe
+  queue and file table are deleted.
+- **Threads.** Not in this branch. The design is one launcher thread per sibling
+  context; the primitive is monitor work.
+
+Port patches: Perl's `my_popen` and `do_exec`, and CPython's
+`_posixsubprocess.fork_exec`, are routed to `posix_spawn`. Both interpreters
+already have such a path for Windows.
+
+## Policy
+
+The launcher installs a seccomp filter derived from its allowlist before the
+first step. The set of syscalls a domain can reach is then enforced by the
+kernel, not by runtime code. The allowlist is the table's delegated group, one
+version and no profile: sockets are rows like files, planned in
+[delegation-sockets.md](delegation-sockets.md).
+
+## Faults
+
+The supervised step already returns cause, PC and address. The launcher records
+them with the sealed image's SHA-256 and load base before raising SIGSEGV.
+The host CLI collects the separate fault file into the job result; stderr
+receives diagnostics only when explicitly enabled or connected to a terminal. A
+symbolizer on the host maps PC to a line using the retained debug image. A
+fault record without a symbol is a bug in this plan, not an acceptable output.
+
+## Measurement
+
+`--stats` gains counters for delegated calls, bytes through the exchange
+region and cycles per round, read from `rdcycle` in the launcher around each
+step. The first commit that runs an application records cycles per delegated
+syscall on QEMU with `icount` next to a native process making the same call.
+No optimization lands before that number exists.
+
+## Delivery, one branch per step
+
+Each step stacks on the previous one, is gated, and lands squashed.
+
+1. **`delegation-abi`**: this document, the request block header, the
+   marshalling table as a header, native unit tests for pack, unpack and bounds
+   validation.
+2. **`delegation-libc`**: the musl dispatcher becomes a stub plus the exception
+   table; HostCall v0 stayed behind `CAPSTONE_APPLICATION_RUNTIME` for legacy
+   probes until 2026-09-30, when that mode was removed (below). Gate: libc-test
+   file, time, directory and descriptor groups at or above today's count.
+3. **`delegation-launcher`**: generic dispatcher, seccomp profile, fault record.
+   Gate: the application contract program, `perl.dom` and `mruby.dom` through
+   the persistent-guest gate; `capstone-exec --stats` shows the new counters.
+4. **`delegation-spawn`**: spawn of native programs, wait, host pipes, exec in
+   place. Gate: Perl `t/base` 9 of 9; the libc-test process group leaves the
+   excluded set.
+5. **`delegation-signals`** (was 6, moved ahead: it needs no monitor change):
+   synchronous delivery. Gate: the libc-test signal group and `popen`;
+   CPython's `signal` tests that do not need a second process. Result
+   (2026-09-29, `ports/cpython/app/results/signals-2026-09-29.json`):
+   `popen` and `setjmp` pass in libc-test; CPython `test_signal` 25 pass,
+   0 fail, 13 skipped, 19 errors that are all an unserved `clone`, `socket`
+   or thread start; the port's signal smoke 18/18. The CPython `subprocess`
+   patch (`fork_exec` through `posix_spawn`) is `delegation-cpython-subprocess`,
+   CPython patch 0015: the port's subprocess smoke 21/21, `test_subprocess`
+   237 ok of 344 (from 179), `test_popen` 5/5. Found on the way, each its own
+   small runtime item, all done on `delegation-runtime-rows`: `kill` to the
+   parent process (a child domain signalling its parent got EPERM), `pselect6`,
+   `getpgid` and `getsid` rows, ESRCH for a vanished pid, and the domain's
+   unserved report only under `CAPSTONE_DELEGATE_STATS`, since it lands on the
+   application's stderr. Result: `test_subprocess` 282 ok of 344 with every remaining error
+   refused by design, a thread or a descriptor limit; `test_signal` 38 ok of
+   57 with the inter-process test passing; the signal contract 27/27 with
+   `pselect`; gate, binfmt and libc-test unchanged
+   (`runtime/tests/application/results/20260930-runtime-rows.json`).
+6. **`delegation-memory`** (was 5): region grant at the resume label, chunk
+   allocator, heap declared as initial size. Gate: CPython built without
+   `ac_cv_func_mmap=no`.
+
+Out of scope for the whole stack: threads, asynchronous signals (the bell), the
+identity mapping, io_uring, any monitor change beyond the grant, any ISA change.
+Sockets have their own plan, [delegation-sockets.md](delegation-sockets.md).
+
+## What the existing applications become
+
+**SQLite** keeps its two entry styles. The standalone domain with memsys5 and
+the two-region host protocol is unchanged and stays the reference for the
+boundary benchmark and the revocation probes. The `speedtest1` and SLT builds
+that link musl move to the delegated path and gain a real VFS: `xOpen` opens a
+file, `xRead` and `xWrite` are `pread` and `pwrite`, `xSync` is `fsync`,
+`xAccess` is `faccessat`. The in-memory smoke stays exactly as it is.
+
+**CPython** loses patch 0006 once threads exist and nothing before; the other
+thirteen patches are about pointer width and stay. Its build drops
+`ac_cv_func_mmap=no` in step 5. The standard library can be a directory on the
+share instead of a zip. `subprocess` works for native children in step 4,
+`signal` in step 6. The test suite becomes runnable through the upstream
+runner; what fails then is a port result, not a runtime gap.
+
+**Perl** needs one patch fewer, the spawn path replaces the private
+`my_popen` workaround, and `t/base` completes. The rest of the upstream suite
+becomes the next port target.
+
+**mruby** changes nothing in source. It gains `system` and file I/O with real
+semantics.
+
+**PostgreSQL** keeps the single-user backend for the study. The postmaster
+becomes possible with `EXEC_BACKEND` after step 4, and its self-pipe latch is
+correct by construction on a Linux pipe with `O_NONBLOCK`.
+
+**FFmpeg and tshark** keep their app ports; their file service calls map one to
+one onto delegated `openat`, `pread`, `pwrite` and `close`.
+
+The S-mode wire probes (`tests/runtime-qemu/hostcall-*-probe`, run by
+`run-hostcall-all.sh`: an S-mode payload and a helper, no musl, no
+`capstone-exec`) and the FPGA gates keep the bare HostCall transport. They are
+evidence for silicon claims and are not migrated by this plan.
+
+The musl runtime's HostCall v0 mode, and every probe that ran a musl program on
+it, were removed on 2026-09-30: the delegated runtime is the only application
+runtime, and `capstone-exec` refuses an image without the v2 descriptor. Their
+features are covered by delegated tests:
+
+- `tests/runtime-qemu/run-delegated-probes.py`, the probes converted to
+  delegated applications: `init-fini` (constructors and destructors, C-64),
+  `exit-default` and `exit-hook` (exit status and the at-exit hook, C-56),
+  `return-flush` (returning from `main`), `unserved-report` (the report on the
+  task's stderr after fd 1 is closed, I-11), `large-read` and `big-stdout`
+  (64 KiB and 5000-byte transfers through 9p), `mmap-shm` and its control
+  (the domain's mmap and System V shared memory), `tls-O0`, `tls-O2` and
+  `tls-overrun` (C-47), `cap-atomics-*` (C-54), `subword-*` (C-51), `movc`
+  (Q-04) and `arith-0..2` (untagged CINCOFFSET and SCC);
+- the probes of the v0 emulation itself (working directory, directory
+  listing, mkdir and rmdir, readlink, rename, pread and pwrite, pipes and
+  poll, pid and timers, standard descriptors) and the musl write, stdio, file
+  and yield probes are Linux's own behaviour under v2, covered by the
+  delegated libc-test (`ports/musl-capstone/libc-test/run-libc-test-delegated.py`,
+  which also replaces the v0 libc-test runner) and the application gate
+  (`runtime/tests/application/run.py`).

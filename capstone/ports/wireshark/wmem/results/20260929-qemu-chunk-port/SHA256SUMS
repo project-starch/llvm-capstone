@@ -1,0 +1,26 @@
+# Images and tools behind result-lines.txt. v1 first, then v2.
+# v1, the port (WM_CHUNKS=ON):
+286516552e1d0c9c99339e4aef383ec0d7cfa6bad6ddb49be1ae161116ea11e1  wmem-security.dom
+bcdf57e4d727815cbc3782025e320c11a79a1abcf487ed55f39153f90904a03a  replay.dom
+# v1, the control (WM_CHUNKS=OFF, WM_P2_CONTROL=ON), same tree:
+49bf6889f3b19f26c2fb046183332f915e68a5a93f5cfac1753982ae878ad875  wmem-security.dom
+# v1, the guest loader:
+ad60a5e6be4ca0dfa38dc5667611fc190fbbd4c87d870855b75a0fe20056ec06  domain-loader
+# compiler 3979abd8e9a36a8feb7ff67c5b84377025b0b047 (bin/clang sha256 below); emulator capstone-qemu deb7d75756
+1c1436586f99c53c1a2087bf872f83b7563d9a6776ee78d2e1546419e83c1c0f  clang
+6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2  qemu-system-riscv64
+# the directed trace (identical to the 2026-09-21 run's):
+f1d4feb337140268d3f3ec01bd22d119e900d4c0d159d3d109b00f1a1496e0c8  directed.bin
+# v2 (3abcdbca84f8), each arm from the same tree and compiler; names are <arm>/<image>
+4a2fc629e9ce58cca63e00f681ea6b20e1b1c695afb29baeb3adb14f7ca8b1f1  v2-dom/wmem-security.dom
+3bf82ca72023c3b7d6d16e8f7a1e83cb5f5821f7e90aee3bfdc91d44113d2fda  v2-dom/replay.dom
+47faa2a4410a23ec0523c4f5f5e277391f73b9508316826f0f0acda2fd688e3d  v2-dom-off/wmem-security.dom
+7d471990ee82ee81b11bfd7cd5a3cf324cf49f5d1d23ed848c2de5596eeb5324  v2-dom-off/replay.dom
+07d90dc5d2eab4bc7d2a53b32562e3b29704aabe12b81021747ad3ffb729cfe0  v2-dom-p2ctl/wmem-security.dom
+7d471990ee82ee81b11bfd7cd5a3cf324cf49f5d1d23ed848c2de5596eeb5324  v2-dom-p2ctl/replay.dom
+028c5bf26899a6ccb776d28ba311c142c89e2c53c9466795724f7fdb9323cdfc  v2-dom-ablate/wmem-security.dom
+9ec8c07a63594db2e1db874d036b3232441a2aef49182a24cba0815d4dc8becf  v2-dom-ablate/replay.dom
+c7b0f51684a3490700477ae179b49833d251ffa5753eae15ce96e8c04f9948d4  v2-dom-v1thr/wmem-security.dom
+3bf82ca72023c3b7d6d16e8f7a1e83cb5f5821f7e90aee3bfdc91d44113d2fda  v2-dom-v1thr/replay.dom
+2187dd8f4dd65cb085526b7a93092a083ff3f3ebabcdf9bf81f6435e1e7f5ac7  v2-guest/domain-loader
+f1d4feb337140268d3f3ec01bd22d119e900d4c0d159d3d109b00f1a1496e0c8  v2 directed.bin (the replays' trace)

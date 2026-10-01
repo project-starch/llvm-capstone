@@ -567,7 +567,7 @@ one-cycle IDLE detour goes.
 
 te by the RTL lane, 2026-09-24.
 
-### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `OPEN — CONFIRMED 2026-09-25, on silicon (both R1 harness runs, caplifive_r42_6cbdaeeb4.bit) and in RTL simulation (r43-evict-live.S); safe direction (false DENY, never an authority escape) but it blocks every revocation-heavy workload on the R-35-fixed silicon; fix planned: docs/plans/r43-query-on-miss.md`
+### R-43 — R-35's fix DENIES ON A CACHE MISS, so a live capability whose id was evicted is falsely refused; the rate under a large live-id population is unmeasured `FIXED ON SILICON 2026-09-29 (capstone-ariane 8f6a0af98, caplifive_r43_8f6a0af98.bit, flashed on the lead's word; acceptance a1..a10 all PASS: the R1 warm/cold harnesses, live128/512 and P1 cell 6 complete where R-42 trapped 25, the ladder and cell 5 unchanged, the R-35 probe still traps with the refusal record reading refused-on-the-probe-path, not deny-on-miss; the live128/512 fixtures had trapped in their minting phase on R-42, so their sweeps run on silicon for the first time). The second fix: a miss REPLAYS the access through the existing exception path instead of holding the load request; shipping-build sim passes every arm, the 8-variant batch and the 92-test sweep read clean, lint at baseline; SYNTHESISED and SEALED 2026-09-29: loop membership the same as R-42 (1 loop), LUTLP-1 0, ORDER 0/500, WNS -9.595 against R-42's -10.615, own-cell FF exactly +150, bitstream sha256 61443441...5345 -- a FLASH CANDIDATE, the reflash being the lead's call; the after-audit refuted four documented properties (recorded in the folder) and the mechanism held. The first fix (0f5185a6d) was refuted by synthesis (WNS -24.495, every worst path through its combinational stall gate). Confirmed 2026-09-25 on silicon (R1, live128/512, P1 cell 6) and in simulation. Report folder: tests/fpga-repros/R43-revocation-cache-false-deny/`
 
 > **Scope.** The M-mode LSU revocation cache in `capstone-ariane 4ad0df694` (4 ways x 64 sets, exact
 > 30-bit `{generation, index}` tag). An access whose id is not resident is refused with cause 25
@@ -596,6 +596,26 @@ te by the RTL lane, 2026-09-24.
 >   on `6cbdaeeb4`): alias A reads fine after 16 new live nodes; after 512 more the same read traps 25
 >   while `LCC(A) = 1`; after that `LCC` it reads fine again, because the LCC's node read re-installed it
 >   through the read tap. Arms 1 and 2 differ only in the number of nodes minted.
+> - **Board, boot p1o2-c6, 2026-09-29: the first REAL WORKLOAD instance, the P1 cell ⑥ -O2 image**
+>   (`df484d98b489aeab`, the Sublet port with D′).
+>   - **What happened:** cause 25 at VA 0x26928 in `setupLookaside`'s lookaside carve loop. The trap is the
+>     `sublet_stats.split++` load through the gp capability of a static global (`ldc a5,0x40(gp)`), right
+>     after a `cssplit` minted a revocation id. tval 0x827ff530 is that global's address. `rev_node_head`
+>     is 313.
+>   - **Why it is not a real revoke:** no software path revokes the global, and QEMU, which enforces
+>     revocation, runs the image to completion.
+>   - **What is not established:** the miss arm, as opposed to the two dead arms, is inferred, because
+>     cause 25 does not separate them. N=1. Audited before recording; see the measurements doc, "P1 -O2
+>     pair on R-42".
+>   - **Why it appears only now:** the carve loop exists only because D′ turned the lookaside back on.
+>   - **The arm discriminator, the same day** (image `2d0efa02`, LCC probes before every split-counter access;
+>     pre-registration `lane/board-p1-o2` `dfb9ee90`): **inconclusive, as pre-registered.** No probed load
+>     trapped. Instead cause 25 hit a DIFFERENT live static global, `lw a0,0(s8)` with `s8 = ldc 0x2a0(gp)` in
+>     openDatabase, at `rev_node_head` 466 against 313. That fits the miss arm, the victim moving once one
+>     entry is protected, but it does not exclude a defect that writes live nodes dead.
+>   - **Consequence:** P1 ⑥ is not measurable on R-42. This image under `board-c6var.sh` joins live512 in
+>     the R-43 redesign's board acceptance, and must complete with its QEMU oracle (`112006 38bb59fd`,
+>     25,010 lookasides).
 > - Not affected: the ladder, the small m1 drop run (about 160 ids), and the live16 sweep (board, passed).
 >
 > **First experiments** *(written at filing; the sweep images exist, and the simulation test supersedes
@@ -638,6 +658,58 @@ te by the RTL lane, 2026-09-24.
 > **What a fix needs:** positive evidence for the CPMP entries (R-35's taps can feed a second consumer)
 > plus an explicit seed for the hardcoded `cpmp(0..2)` ids, so they are not denied at boot. It goes to
 > synthesis before any board time, and a first S-mode boot is its acceptance.
+
+### R-45 — a load/store issued right after REVOKE or DROP could be checked BEFORE the revocation took effect, and was allowed `FIXED IN THE FLASHED BITSTREAM (capstone-ariane 8f6a0af98, caplifive_r43_8f6a0af98.bit, 2026-09-29): verified in RTL simulation (arms 7/7r deny; the noflush build allows 7r); no silicon arm exercises the window on its own; found while testing R-43; predates it`
+
+> **What happens.** REVOKE and DROP change rev-node memory, and the DYN unit completes them only after that
+> (REVOKE waits for `rev_res` at the end of its walk). But nothing holds LSU issue behind an in-flight DYN
+> op (`issue_read_operands.sv` sets only `fus_busy.capstone_dyn`; load/store are busy only when the LSU is
+> not ready). So a younger load/store can pass its capability check against the PRE-revocation state. The
+> verdict is fixed at execute (commit re-examines only LDC/STC), so the load retires with data and a store
+> would reach memory. The rev-node's busy/debug outputs reach only the debug LEDs (`cva6.sv` ~1153-1236).
+>
+> **Found by** the R-43 test's arm 7 (`verif/tests/custom/capstone/r43-evict-live.S`). With no barrier after
+> REVOKE, the read was allowed: the probe read the node live before the walk wrote it dead. An adversarial
+> audit could not refute it. It **predates R-43**: on `6cbdaeeb4` the same read is allowed whenever the
+> entry is still resident. R-43's probe extended it to evicted entries, which deny-on-miss had refused only
+> by accident. The R-35 fixture's 64-nop BARRIER after every REVOKE exists precisely to step around it
+> (`r35-rotate-stale.S` header); the barrier relies on timing alone, and silicon walks take up to 11,811
+> cycles.
+>
+> **Fix** (the project lead chose to close it in the R-43 bitstream): `commit_stage.sv` raises
+> `flush_commit` when a REVOKE or DROP commits, as R-26 does for a capability CSR write. Younger
+> instructions refetch from `pc_commit + 4` and re-execute after the revocation. It is a pipeline flush
+> only; the D-cache is untouched. Nothing commits beside a REVOKE/DROP on a second commit port.
+> **Cost:** one pipeline flush per REVOKE/DROP.
+>
+> **Acceptance** (simulation, `r43-evict-live.S`): arms 7 (evicted) and 7r (resident), a read immediately
+> after REVOKE with no barrier, must deny. The `noflush` variant, with the flush removed, must ALLOW arm 7r,
+> which proves the flush is what closes it. Results:
+> `tests/fpga-repros/R43-revocation-cache-false-deny/results/sim-query-on-miss.result-lines.txt`.
+>
+> **Related:** R-26 (the same class: a committed state change that younger instructions checked too early).
+
+### R-46 — a commit-stage refetch keeps the PC-capability metadata, so a younger CJALR's target metadata can leak into the refetched code `OPEN — accepted for the R-43/R-45 bitstream by the project lead (2026-09-29); predates R-45, which makes it routine`
+
+> **What happens.** On a commit-stage refetch, `frontend.sv` (the `set_pc_commit_i` branch) redirects the PC
+> to `pc_commit + 4` but carries `npc_metadata_q` forward unchanged. The refetch comes from the AMO, CSR and
+> fence flushes, and since R-45 from every REVOKE/DROP commit. A younger CJALR that resolved in EX before the
+> flush may already have set that metadata to ITS target (`branch_unit.sv`, `resolved_branch.sets_metadata`).
+> So the re-fetched instructions after the flushing one run under the wrong code-capability metadata until
+> the next capability control-flow change. The consumers are `pc_cap_check` in `commit_stage.sv` and CALL's
+> saved caller metadata.
+>
+> **Why accepted for now.** It is harmless when a domain has a single code capability, because a `ret`
+> restores the same metadata. That is the case in R1, the sweeps and the test corpus. With several code
+> capabilities it can raise a spurious bounds fault, or run code under the wrong capability.
+>
+> **Fix candidate:** on `set_pc_commit_i`, load `npc_metadata_d` from the committing instruction's PC
+> capability, with priority over a same-cycle `resolved_branch` update. That needs plumbing from commit to
+> the frontend. **First test:** REVOKE, then a CJALR to a code capability with different bounds, within
+> the window.
+>
+> Found by the final R-43/R-45 audit. Related: ISSUES.md ~5464 and SILICON-BLOCKER.md (metadata carried
+> forward on traps).
 
 ## Q-08 — no capability fault path assigned `env->badaddr`, so `tval` was stale on every capability fault ever reported `FIXED 2026-09-11 in capstone-qemu cabc953e58; found while root-causing an unaligned capability store in SQLite`
 
@@ -1628,6 +1700,73 @@ RETURN" rule applied to privilege rather than to control flow.
 
 ### C-32 — `MOVC` is emitted for an integer-bridged (untagged) pointer where a plain `mv` would do, and the RTL nulls its source (silently: MOVC raises nothing) `OPEN — LIVE ON SILICON 2026-09-15: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (the block base is nulled by the movc that passes it, and re-read), so every optimised-image board number of that port is a lookaside-OFF run, and Q-04 hides it on every emulator pass; DESIGN A CHOSEN AND MERGED 2026-09-15 (46c53b7b6ae2, on dev at e3bb47b43680) AND MEASURED NOT TO FIX THIS SITE — the design choice is BACK WITH THE LEAD; still blocking P1's O2 arms; reproducer no longer an XFAIL, and a local reproducer of the surviving site is in capstone/tests/c32-sinkfold-repro/`
 
+> **PR #94 (CapstoneRecoverProvenance) does NOT fix C-32, and D′ was not redundant (2026-09-28).**
+> Measured by the compiler lane with a three-way compile of the SQLite Sublet TU. The pre-registration
+> is `lane/compiler-pr94-threeway` @ cc19bc45ff84, and it held on every arm.
+> - **dev with D′:** 0 INT-ONLY and 0 mixed; no `setupLookaside` site.
+> - **dev + #94 on the same D′ TU:** byte-identical to dev, in every section except `.comment`. The
+>   pass is inert: D′'s `pStart` is a `uptr` assigned from a CALL, and a call result gives the pass no
+>   source.
+> - **#94 on the pre-D′ TU:** 1 INT-ONLY and 1 mixed, still at `setupLookaside`. The pass does fire
+>   there (the objects differ in exactly `.text.setupLookaside` and its relocations), but it does not
+>   remove the C-32 shape.
+>
+> **#94 was closed unmerged on 2026-09-30.** Three review rounds each found a real defect:
+> - `cincoffset` on a NULL or untagged source (cause 24);
+> - select and phi attaching a capability to a foreign address;
+> - integer-made and sentinel sources, and a LINEAR source consumed by the new `cincoffset`.
+>
+> Fixing them left the pass rebuilding only sources it can prove tagged and NONLIN. Bare arguments,
+> opaque loads and call results are declined, and those are where the motivating round trips come
+> from (musl's `atexit` callback, CPython's alignment macros). It recovered 0 round trips in musl
+> 1.2.5 and the SQLite port at -O0 and -O2, with byte-identical assembly. The closing comment
+> (issuecomment-5902419443) gives the reasons and the route back (a guarded rewrite, unmeasured). The
+> branch `compiler/recover-provenance` keeps the pass, its lit cases and the QEMU round-trip probe.
+>
+> **2026-09-25: a class fix, on branch `compiler/movc-live-source-copy` (Phase A of
+> `plans/2026-09-25-intcap-implementation.md`). On dev since 2026-09-29 (#119). RTL-simulated on
+> `6cbdaeeb4` and on the R-43 redesign `8f6a0af98`: PASS at both latencies
+> (`tests/rtl-smoke/live-source-copy/`). Not on a board.**
+> - **What it does.** `CapstoneLiveSourceCopy` runs after the last MachineCopyPropagation. It
+>   rewrites every `movc` whose source is read again as `stc src, slot` + `ldc dst, slot`, through a
+>   16-byte stack slot of its own.
+>   - On RTL, `stc` keeps an untagged or NONLIN source and nulls every other tagged type, and `ldc`
+>     clears the granule of a tagged non-NONLIN value when its base has W (`load_unit.sv:214-218`);
+>     the slot is sp-relative, and sp has W because every spill already stores through it. So the
+>     pair is a `movc` for every type, except that an integer survives. It never needs to know the
+>     type, which is why it reaches the musl `iconv_open` instance below that no caller-side analysis
+>     could.
+>   - `movc`s with a dead source, or from c0/sp/gp/tp/fp/bp, stay.
+>   - A check-only instance after MakeCompressible refuses any live-source `movc` still left.
+>   - `+movc-keeps-integer-source` turns it off, for a bitstream that implements Q-04 (b).
+> - **QEMU, under the RTL's `movc` (`CAPSTONE_MOVC_NULL_SCALAR=1`, `movc-null-scalar/run.sh`).**
+>   - The C-32 probe reads `0x5000` with the rule. The same source built with the rule off reads
+>     `0x1`, the positive control.
+>   - An iconv-shaped probe (one integer descriptor passed to three calls) makes 3/3 calls with the
+>     rule, and 1/3 with it off.
+>   - exposure.sh with the rule (switch 0 vs switch 1, one QEMU, one compiler): libc-test identical, 44 PASS / 6 FAIL / 5 NOBUILD / 22 EXCLUDED in both arms, and `iconv_open` PASSES under the RTL `movc` (on 2026-09-24, with dev's compiler, it was the one verdict that changed). The musl file/stdio/write probes are identical. Of the 28 hostcall probes run one at a time, 18 are ok in both arms; the only difference, `cwd`, was a boot stall in the on arm (killed) and passed 2/2 when rerun under switch 1. The 26 nightly suites give 19 PASS in each arm; the two that differ swap FLAKE and FAIL (hostcall-all stalled at boot, postgres-sublet has no host tree here), which is environment in both arms. In every on-arm boot (240/240) the firmware executes one integer `movc` (pc 0x80020a50, x9=1), without effect.
+> - **Cost on CPython 3.13.7's core** (129 files, the port's flags, rule against off):
+>   - 30,606 copies rewritten, which matches the 30,625 predicted from MIR; 167 more reuse a store.
+>   - `.text` +3.25 %.
+>   - No function gains a frame.
+>   - Stack +7.6 % (57 KB summed over all functions).
+>   - Shrink-wrap candidates fall from 393 to 157.
+>   - Dynamic cost: CoreMark (10 iterations, `movc-null-scalar/cost-coremark.sh`, QEMU `-icount` over the timed region): 1,644,401 instructions with the rule against 1,630,867 without, +0.83 % (1,353 per iteration). It validates, including under `CAPSTONE_MOVC_NULL_SCALAR=1`. An instruction count, not cycles.
+> - **An adversarial audit refuted the first version, and each finding is now a test**
+>   (`live-source-copy-slot.mir`):
+>   - Sharing the register scavenger's slot was a **miscompile**: in a frame over 2 KiB, a copy
+>     between the scavenger's save and restore overwrote the saved register. The rule now has its own
+>     slot, registered after the scavenger's, and refuses to compile a function in which anything
+>     else touched it. The test's SCAV check fails on the old output.
+>   - Two pre-frame liveness shapes aborted the compile with "no copy slot": a copy BranchFolder
+>     hoists in front of a branch, and a redefinition MachineLateInstrsCleanup deletes.
+> - **Open before any board image uses it:**
+>   - the RTL-sim cases in `tests/rtl-smoke/live-source-copy/` (S-10b's tag route is the risk);
+>   - the cycle cost of an adjacent `stc`/`ldc`.
+>
+>   The S-07 `-capstone-double-ldc` mitigation runs before register allocation, so it does not
+>   cover the rule's `ldc`s.
+
 > **LEAD'S DECISION, 2026-09-25: "D′ now + prototype C".** Options were assembled by the compiler lane and
 > adversarially audited before the decision.
 > - **D′ (the route for P1): a port-only change.** `sqlite3MallocLinear` returns a `uptr`, and `pStart`
@@ -1663,7 +1802,8 @@ RETURN" rule applied to privilege rather than to control flow.
 > - The paper condition in the measurements doc (§7s arm C) is re-worded to match.
 
 > **2026-09-24: a second instance, in musl, found by measurement and out of reach of any compiler
-> fix.** `CAPSTONE_MOVC_NULL_SCALAR=1` (Q-04) with `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh`
+> fix.** *(Amended 2026-09-25: out of reach of any fix that must know the value is an integer. The
+> live-source copy rule above does not need to, and the iconv-shaped probe passes under it.)* `CAPSTONE_MOVC_NULL_SCALAR=1` (Q-04) with `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh`
 > runs the nightly and libc-test with MOVC keeping and zeroing an integer source. Across the corpus
 > exactly one verdict changes, `iconv_open`, the same in two runs at the same pc. musl's
 > `combine_to_from()` returns a conversion descriptor as an integer, `(void *)(f<<16 | t<<1 | 1)`.
@@ -4229,6 +4369,18 @@ globals *after* ISel would silently break this positional scheme.
 
 ### R-12 — rev-node exhaustion DEADLOCKS the core (a deliberate stall), and the pool is 65536 nodes, not 1024 `CHARACTERISED 2026-09-10 — the wraparound/silent-corruption account below is WITHDRAWN; the threshold is ~65532 allocations, not 1025, and the failure is a visible hang, not silent id reuse. The `99.3 % consumed` board reading is WITHDRAWN 2026-09-10 (it appears only after a wedge; every healthy boot reads the sentinel, which cannot be the true head or no domain would run). No workload is known to approach the threshold; measuring one needs a monitor-side split counter, not the debug aperture`
 
+> **2026-09-27 — QEMU application runtime: collect on node pressure.** The
+> supervised VM now suspends a running application before a node-allocating
+> instruction, performs its existing stale-tag sweep in the trusted monitor
+> context, and resumes the instruction after recycling invalid identities.
+> Collection previously ran only at process teardown. All six mruby failures
+> in the default 65,536-node comparison now pass with unchanged binaries;
+> the complete Capstone rerun is 27/27. Genuine live-node exhaustion still
+> produces a resource fault while preserving the 256-node cleanup reserve.
+> [Regression and application evidence](../../runtime/tests/application/results/20260927-node-reuse/README.md).
+> This software sweep updates the QEMU baseline only; it does not change the
+> hardware status or cost measurements documented below.
+
 > # 2026-09-16 — THE REVOKE-WALK SPLICE: built, measured, synthesised. R-12's COST half, not its capacity half.
 >
 > `r12-splice-revoked-nodes` at `f1331daed` (synthesised at `379248185`). **This addresses the cost of
@@ -6382,6 +6534,90 @@ the transcript, never a verdict. Audit of the archive (2026-09-15 08:10, §7r): 
 changes and no cited number is a truncated fragment. Related: M-10 (the emulator console's silent
 truncation of a long command), the transcript-marker note in the board-run skill.
 
+### M-12 — `capstone-exec` dies by SIGSEGV when a caught signal (seen: SIGALRM) arrives after `cleanup()` has unmapped the domain's regions: its signal trampoline stays installed and stores into the unmapped signal block `OPEN — found 2026-09-30 gating #163; mechanism audited; on dev 8c08aa1d, QEMU`
+
+**Symptom.** An application that exits while a timer it armed is still pending ends with the
+launcher killed by SIGSEGV, not with its own exit status. `capstone-vm` reports "application
+terminated by signal 11", the task record is `{"kind": "signal", "value": 11}` with no `fault` key
+(no domain fault), and the guest kernel logs `capstone-exec[pid]: unhandled signal 11 code 0x1
+(SEGV_MAPERR) at <page-aligned address>`. The application's own output is complete: PostgreSQL
+`--single` had already written its shutdown checkpoint.
+
+**Mechanism** (source: `runtime/linux/exec.c`, `runtime/linux/signals.c` at tree 824162ec).
+1. `setitimer` is a delegated row, so the timer is armed in the launcher process itself, and so is
+   the SIGALRM it raises. The domain catches SIGALRM, so the launcher's `trampoline`
+   (signals.c:57) is installed for it.
+2. On the exit request, `exec.c:458-463` calls `report_stats`, then `cleanup()`.
+   `cleanup()` (exec.c:47-58) first munmaps every region, REGION_META included (exec.c:49-51).
+   It then closes the device, stops the spawner and frees the host state.
+3. The signal block lives in REGION_META at `CAPSTONE_SIGNAL_OFFSET` (4096), and
+   `capstone_signals_init` (exec.c:421) points `s->block` at it.
+4. Nothing on the exit path blocks signals, resets the handler, clears `active` (written only at
+   signals.c:144) or `s->block`, or disarms the process's interval timers.
+5. A SIGALRM that falls due after the munmap and before the process exits runs the trampoline,
+   and `if (s->block) s->block->recorded = head + 1;` (signals.c:113) stores to the unmapped page.
+   A SIGALRM before the munmap is recorded harmlessly.
+
+**Evidence.**
+- **Located to the instruction.** Every crash's pc is offset `0xecb8` into the launcher's
+  executable mapping. The launcher is `c80922427dbb`, a -O0 build, with its R-E segment at vaddr 0.
+  That instruction is `sd a4, 0(a5)` in `trampoline`: `a5` is `s->block`, loaded from `s + 0xb438`,
+  and `a4` is `head + 1`.
+- **The audit's register reading** (two PostgreSQL crashes):
+  - the store address is META+0x1000, page-aligned;
+  - `a0 = bit(14)`, so the signal was SIGALRM, read from registers rather than inferred;
+  - `head` was 0, so this was the first caught signal;
+  - the stack depth places delivery inside `cleanup()`, after the munmap loop. Which `close()` was
+    running is not resolved.
+- **Minimal reproducer.** Built with the application SDK's `capstone-cc -O1` and run as
+  `<image> N [disarm]`:
+
+  ```c
+  static void on_alarm(int s) { (void)s; }
+  int main(int argc, char **argv) {
+    int ms = argc > 1 ? atoi(argv[1]) : 100;
+    struct sigaction sa = {0};
+    sa.sa_handler = on_alarm;
+    sigaction(SIGALRM, &sa, 0);
+    struct itimerval it = {{0, 0}, {ms / 1000, (ms % 1000) * 1000}};
+    setitimer(ITIMER_REAL, &it, 0);
+    if (argc > 2) {                     /* the control: disarm before exiting */
+      struct itimerval zero = {{0, 0}, {0, 0}};
+      setitimer(ITIMER_REAL, &zero, 0);
+    }
+    return 0;
+  }
+  ```
+
+  One boot, dev's launcher, per-run dmesg:
+
+  | N (ms) | 5 | 10 | 20 | 50 | 100 | 150 | 200 | 250 | 100, disarmed before exit |
+  |---|---|---|---|---|---|---|---|---|---|
+  | result | exit 0 | exit 0 | **SIGSEGV 3/3** | **SIGSEGV** | **SIGSEGV 3/3** | **SIGSEGV** | **SIGSEGV** | exit 0 | exit 0, 3/3 |
+
+  Every crash was at pc offset `0xecb8`. At 5 and 10 ms the alarm arrives while the domain still
+  runs; at 250 ms the launcher is already gone. So `cleanup()` runs for between ~10–20 ms and
+  ~200–250 ms of wall time on this platform. The window is inferred from these points, not timed.
+- **PostgreSQL** (the #163 build and dev's alike): `SET statement_timeout = 300; SELECT 1;` then EOF
+  crashes, because PostgreSQL leaves its interval timer running after a statement and the alarm
+  falls due during teardown.
+  - The matched variant that waits 0.6 s past the alarm before exiting exits 0 (2/2).
+  - `work.sql`, which arms no timer, exits 0 on every run (11/11).
+  - What decides it is where the alarm falls due relative to the munmap, not how soon the process
+    exits after arming: `SET 300; SELECT pg_sleep(0.1); SET 0` exited 0.
+
+**Scope, from reading the code, untested.** Any signal the domain has made *caught* reaches
+signals.c:113 in the same window, for example SIGCHLD from an application child, or a caught
+SIGTERM, SIGINT or SIGHUP. The helper's own death is not one: it uses exit signal 0,
+spawner.c:300-302. QEMU only. The launcher tested was a -O0 build; the defect is at source level,
+but its timing may differ in an optimised build.
+
+**What would fix it** (proposal, not done): make the launcher stop taking domain signals before the
+regions go away. For example, at the top of `cleanup()`, block every signal and disarm
+`ITIMER_REAL`/`ITIMER_VIRTUAL`/`ITIMER_PROF`, or clear `active` (or `s->block`) before the munmap.
+The test is the reproducer above: 20 and 100 ms must exit 0, and the disarmed control must stay
+exit 0.
+
 ### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
 
 > **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
@@ -6691,6 +6927,21 @@ compiler and PRESENT with dev's; `compile.ll` compiles at `-O1`..`-O3` with the 
 errors. lit: `CodeGen/Capstone/frame-base-register-capability.ll` (12 lines of IR: two byval copies
 ahead of a 4 KiB byval temporary; fails on the unfixed llc). CoreMark validated; BEEBS 76 of 81 with the five known host-header skips.
 
+**Where it did not crash, the output happened to work, and that is an inference, not an observation.**
+`x<n>` and `c<n>` share an encoding, and the `ADDI` on a frame index was expanded to a `cincoffset`
+from `sp`. A spill of that GPR would have been an 8-byte `sd`, which drops the tag. **That is
+inferred from the register class, NOT observed** (the fix author's own distinction, `fc987bb99d8d`).
+Cite it as "a latent tag loss was reasoned", never as "a tag loss occurred".
+
+**The regression guard moved (C-50, 4c407f9, 2026-09-25).** After C-50 gives byval local copies a
+capability frame index, the IR test `frame-base-register-capability.ll` no longer makes
+LocalStackSlotAllocation materialise a base register. `-stats` shows the "virtual frame base
+registers allocated" counter absent, i.e. zero, so its two CHECK lines could no longer fail. C-52's
+guard is now `frame-base-register-capability.mir`, which feeds `-run-pass=localstackalloc` the
+recorded input so the pass still runs. It is negative-tested: forcing
+`materializeFrameBaseRegister` back to GPR+ADDI makes it fail with `%21:gpr = ADDI %stack.1, 0`.
+Updating the old CHECKs instead would have left a guard that cannot fail.
+
 ### C-53 — an inline-asm `"m"` INPUT operand crashes isel ("Memory operands expect pointer values"); `"=m"` outputs compile `OPEN — COMPILER; found 2026-09-23 through CPython's configure; blocks no port today`
 
 **What happens.** `__asm__ volatile("lw zero, %0" : : "m"(*p))` asserts in
@@ -6802,6 +7053,11 @@ LICM), which LLVM also considers free. Not seen yet; the same trap would follow.
 recorded in `docs/history/23-08-2026_00-30-00_sqlite-lost-tag-two-hypotheses-withdrawn.md`
 (`cincoffsetimm a4, a4, 0xb0` = `&pWInfo->sWC` with `pWInfo` NULL, concluded "a null dereference in
 software") has this shape and was not checked against it.
+*2026-09-25:* the machine-level half of this was reached a second way, through MachineCSE's PRE, and
+is C-66, which also moves this entry's fix out of MachineLICM's hook into a generic one. The IR-level
+half named here was already covered when this was written: C-19 put the rule into
+`isSafeToSpeculativelyExecute`, which SimplifyCFG, LICM and GVN's PRE all ask. The SQLite fault was
+checked against C-66 and is not it (see there).
 
 ### C-62 — with `-g` at `-O1`+, Assignment Tracking asserts on every escaping local, because its offset accumulator is sized at the POINTER width (128) instead of the INDEX width (64) `FIXED 2026-09-23 (external collaborator, f8b140caa818, merged via #75). COMMITTED AS "C-50", a number already taken by an unrelated OPEN defect; renumbered here 2026-09-24`
 
@@ -6950,7 +7206,298 @@ With a private musl build, `run.sh c65` returns with `sizeof = 64` and "broadcas
 musl build fails the same 6 objects as without the patch. The wait paths need a futex and were not
 exercised (`docs/history/25-09-2026_01-30-00_c64-i11-runtime-fix.md`).
 
+### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism read out of the code 2026-09-30`
+
+**What happens.** `tests/runtime-qemu/subword-atomics`, built by the application SDK's
+`capstone-cc` and run with `run-delegated-probes.py`, faults at its last case, an 8-bit
+`__atomic_compare_exchange_n` on `static uint8_t lone_byte`: cause 5 at the load-reserved of the
+lowered sequence, the address `lone_byte` itself (the variable sits at the end of `.bss`, 16-byte
+aligned; in the stack run below, link address 0x40629d0 plus the load base 0xc01f0000 is the
+fault address 0xc42529d0). Every earlier case passes, the capability-address 32-bit control and
+the PyMutex-shaped byte inside a struct included. The same source at -O2 passes (`subword-O2`).
+Under the retired HostCall v0 harness both levels passed. Seen twice, with two compilers:
+- on `delegation-v0-removal` (the threads lane), compiler 7d01722aab88;
+- on `delegation-v0-removal-stack` (the delegation stack, #142, with dev 330014ea merged), with a
+  compiler built from dev 330014ea's compiler sources (68c75ed3); record
+  `tests/runtime-qemu/results/20260930-delegated-probes-stack.json`.
+
+**The mechanism, read out of the code.** It is the risk case the probe's comment names: the aligned
+word around a lone byte reaches past the variable, and the capability for the variable is bounded
+to it. From `capstone-cc -S` of the probe and the faulting image (fault pc 0x1d2b0 in the image):
+- **-O0:** `&lone_byte` is `cincoffset gp` + `delin`, then `shrink` to `[addr, addr+1)`, one byte.
+  AtomicExpand's masked loop then moves the cursor to `addr & ~3` (`andi -4`, `cincoffset`) and
+  runs `lr.w.aqrl` on that word. The variable is 16-byte aligned, so the word starts at the byte
+  itself and its other three bytes lie past the one-byte bound: cause 5 at the byte's address.
+- **-O2:** GlobalMerge puts `lone_byte` into `.L_MergedGlobals` (`lone_byte = .L_MergedGlobals`, 48
+  bytes, with `word32` and the others). The capability is shrunk to the merged block, the word lies
+  inside it, and the same loop succeeds. The -O2 pass is GlobalMerge's luck, not a fix.
+
+So any object smaller than 4 bytes whose capability is bounded to it alone (a static or global
+`uint8_t`/`uint16_t` at -O0, and at any level once it is not merged, or one allocated alone) cannot
+be the target of an 8- or 16-bit atomic. The expansion cannot repair it: it only has the narrow
+capability, and nothing widens one. The fix belongs where the bound is set: an object smaller than
+4 bytes gets 4-byte alignment and padding and a bound of the containing word, at least when its
+address can reach an atomic. Not decided and not implemented. Relevant for CPython: `PyMutex` is
+one byte; a standalone static one is exposed wherever it is bounded alone.
+
+### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `OPEN — COMPILER, observed 2026-09-29; port workaround qualified; not reduced`
+
+FFmpeg 9.0.1 built by `compiler/sroa-keep-capability-whole` at `7d01722aab88`
+(clang SHA-256 `0a0f12b14f4447928853aa88c511e11696d48b6625c2585d719ec009e26d8ac1`)
+faults in the delegated decoder's `h263_decode_init_vlc+0xa8` with cause 6.
+QEMU records `STC` at `sp+0x38`, with `sp=0xe81ff300` and effective address
+`0xe81ff338`: the 16-byte capability store is only 8-byte aligned. This is an
+observed instruction/alignment failure; the optimization or lowering pass
+responsible has not been isolated, and equivalence to C-50 is not established.
+This is separate from the C-69 byte-copy lowering defect recorded in the
+[af_join qualification](../../ports/ffmpeg/app/results/2026-09-29-trackb-afjoin/README.md).
+
+Reproduce with the [full decoder recipe](../../ports/ffmpeg/app/README.md), a
+fresh `FFAPP_WORK`, this compiler and
+`FFAPP_OPT_FLAGS='-O3 -fomit-frame-pointer'`, then `host/run-qemu.sh all` in the
+delegated VM. These are FFmpeg configure's former defaults. The source recipe
+now explicitly selects `-O1 -fno-omit-frame-pointer`; that combined setting
+passes all five stages and the 30-frame native oracle with the changed-input
+control, including the Sublet heap/pool arm. Neither flag has been qualified
+independently as the minimum workaround. No compiler fix is claimed.
+
+### C-68 — `LowerCall` asserts on a split scalar integer argument wider than 128 bits: an integer `ADD` built over a capability stack slot `OPEN — COMPILER, crash, low priority: pre-existing, not reachable from C; found 2026-09-28 by the compiler lane's frame-index sweep; reproduced by the board lane`
+
+**What happens.** A call passing a scalar integer wider than 128 bits that ends up split or
+indirect (`i256` after seven `i64` arguments) aborts in
+`CapstoneTargetLowering::LowerCall` with `Binary operator types must match!`. The threshold is sharp:
+`i128` compiles, and `i129` and wider assert. Reproduced 2026-09-28 with the tree's `llc`
+(b7b31421e9fa, pre-C-50): `i256` rc 134, `i128` control rc 0.
+Reproducer: `capstone/tests/compiler-repros/C68-frameindex-i256-lowercall/`.
+
+**Cause.** In `LowerCall`'s `CCValAssign::Indirect` path:
+- `SpillSlot = DAG.CreateStackTemporary(...)` goes through `getFrameIndexTy`, so it is a **c128**;
+- `PtrVT` is `getPointerTy(DL)`, address space 0, so it is **i64**;
+- they meet in an `ISD::ADD`.
+
+This target models capability arithmetic as `ISD::PTRADD` on `c128`, so the node is inconsistent at
+construction, not merely at selection. It is reached through `CapstoneCallingConv.cpp`'s
+`isScalarInteger() && (isSplit() || !PendingLocs.empty())`. **Not vector-gated**: treating
+`fatal-scalable-stack.ll`'s "RVV is non-functional" as covering it would have been a false
+"unreachable".
+
+**Priority and why it is not fixed.**
+- Pre-existing: the pre-C-50 compiler asserts identically.
+- Unreachable from C: clang rejects `_BitInt(N)` for `N > 128` on this target.
+- The presumable fix is `PTRADD` in the capability type. With no C-reachable case, there is nothing
+  to validate a change to argument lowering against. Filed with the reproducer instead of fixed
+  speculatively.
+
+**The class it belongs to.** Frame-index pointers spelled as integers: C-50, fixed at 4c407f9, is the
+live instance. The compiler lane's sweep
+(`docs/history/28-09-2026_00-00-00_frame-index-pointer-type-sweep.md`) records the sibling sites as
+**latent, checked, not fixed**. They are quiet only because their offsets never take the
+`add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
+save loop is one alignment change from live.
+
 ## Infrastructure / procedure
+
+### C-66 — MachineCSE's PRE moves capability arithmetic above the test that guards it: a second hoisting path the C-58 fix does not see `FIX on compiler/c66-machinecse-pre-trapping-cap-arith; found 2026-09-25 by the CPython pymalloc corpus run inside the interpreter`
+
+**What happens.** The CPython interpreter image of #107 (no Sublet, no adapter) halts with cause 24 in
+`_PyArg_UnpackKeywords` on any call without keyword arguments that reaches its keyword walk:
+`cincoffsetimm with an UNTAGGED rs1 -- rd=x16 rs1=x13 val=0x0`, at ELF `0x33e210` =
+`_PyArg_UnpackKeywords+0x500`, `cincoffsetimm a6, a3, 0x30`. `a3` is `kwnames`, NULL. It ended the
+control arm of **6 of the 13** interpreter-corpus candidates (cases 1, 5, 9, 10, 11, 19) before
+their defect ran, and the Sublet arm of three of them (9, 11, 19), so those pairs could not be
+decided at all.
+
+The arithmetic is `&kwnames->ob_item` (`0x30` is `offsetof(PyTupleObject, ob_item)` with 16-byte
+pointers) from `find_keyword` (`Python/getargs.c:2022-2046`), inlined twice. Each inlined loop forms
+it in its own preheader, and each loop is entered only when `nkwargs > 0` -- which implies
+`kwnames != NULL`. The guard is that correlation, not a NULL test, so no known-non-NULL reasoning
+on the operand can see it.
+
+**Where it moves.** `-print-before/-print-after=machine-cse` on `getargs.c`, compiled as the port
+compiles it:
+
+    before  bb.29.for.body.lr.ph.i.us       %37:gpcr  = CIncOffsetImm %101:gpcr, 48
+    before  bb.73.for.body.lr.ph.i424.us    %76:gpcr  = CIncOffsetImm %101:gpcr, 48
+    after   bb.125.for.end                  %678:gpcr = CIncOffsetImm %101:gpcr, 48
+            (%101:gpcr = COPY $c13 -- the fourth argument, kwnames)
+
+`MachineCSEImpl::ProcessBlockPRE` (`llvm/lib/CodeGen/MachineCSE.cpp:822`) finds the two copies in
+blocks where neither dominates the other, duplicates the instruction into their nearest common
+dominator (`TII->duplicate(*CMBB, CMBB->getFirstTerminator(), MI)`, debug location erased -- which
+is why `addr2line` gives `getargs.c:0` for it), and lets CSE delete the originals. `isPRECandidate`
+refuses loads and asks nothing else about speculation. `for.end` lies above the loops' zero-trip
+test, so the copy runs when `nkwargs == 0`.
+
+**Why the C-58 fix did not catch it.** C-58 is the same trap reached through MachineLICM, and it was
+fixed inside MachineLICM's own hook, `TargetInstrInfo::shouldHoist(MI, FromLoop)`, with the
+guaranteed-to-execute test re-derived by reachability because that hook gets no dominator tree. The
+knowledge was right -- `trapsOnUntaggedOperand` lists the ten opcodes that raise on an untagged
+operand -- but only one pass could ask for it. `shouldHoist` occurs zero times in `MachineCSE.cpp`.
+Measured, not inferred: `early-machinelicm` leaves all three copies in their guarded blocks on this
+file; it is `machine-cse` that moves one.
+
+**The asymmetry this is an instance of.** At the IR level the same rule is in ONE predicate that
+every speculating pass asks: C-19 made `isSafeToSpeculativelyExecute` answer false for a GEP on a
+non-integral pointer whose base is not known non-NULL (`llvm/lib/Analysis/ValueTracking.cpp`), and
+SimplifyCFG, LICM, GVN's scalar PRE (`GVN.cpp:3072`, the IR counterpart of this pass),
+SpeculativeExecution and InstCombine's select folds all consult it. At the machine level there was
+no such predicate, so each speculating pass had to be taught separately, and one was.
+
+**The fix: the IR design, one level down.** A generic hook, `TargetInstrInfo::canTrap(MI)` -- true
+when the instruction can trap for some operand values although it neither accesses memory nor has
+unmodeled side effects; false by default, so no other target changes. Every machine pass that runs
+an instruction on a path where it did not run before asks it, the way it already treats loads:
+
+- MachineLICM (`IsLICMCandidate`, both before and after register allocation): a trapping
+  instruction is hoisted only from a block that is guaranteed to execute -- its own dominator-tree
+  test, the one it applies to loads. That test caches its answer, and the cache is now keyed by
+  loop as well as by block (below).
+- MachineCSE (`isPRECandidate`): a trapping instruction is not PRE'd. Ordinary CSE, which replaces
+  an instruction by a dominating copy, is untouched.
+- EarlyIfConversion (`canSpeculateInstrs`): not speculated. Inert on Capstone today -- the target
+  does not enable the pass and cannot insert a select -- and there so that the rule does not depend
+  on that staying true.
+
+Capstone answers once, with the existing `trapsOnUntaggedOperand`. Its `shouldHoist` override and
+`executesOnEveryIteration` are removed: MachineLICM applies its own guaranteed-to-execute test
+instead, with the real dominator tree.
+
+**The speculation cache, and what moving C-58's question into it broke.** An earlier revision of
+this branch, never pushed, said C-58's test (`no-speculative-cap-arith.ll`) shows that the removed
+override and MachineLICM's test agree. They agree only for the loop asked about first.
+`IsGuaranteedToExecute` caches its answer per block (`SpeculationState`, reset once per block in
+`HoistOutOfLoop` and in the post-RA walk). `HoistOutOfLoop` asks about a block for the outermost loop
+first. When the instruction cannot leave that loop, it asks again for each subloop in turn, and it
+got the outermost loop's answer back. A block can run on every iteration of the outer loop that
+reaches its exit without running on every iteration of the subloop. The increment then went into the
+subloop's preheader, above the subloop's own test. C-58's hook recomputed per loop and never did
+this. Routing the question through the cache did: in `c66-machinelicm-subloop-speculation.ll`,
+`CIncOffsetImm %1, 48` lands in `bb.1.outer` without the change below. It stays in `bb.3.body` with
+the change, and with C-58's hook on `a378789289cd`. This was found because the LICM hoist count
+moved when the prediction said it would not. The cause was then read in the code and the test built
+from it.
+
+The cache now also remembers which loop it answered for (`SpeculationLoop`) and recomputes when
+asked about another. That is not a Capstone-only fix. The cache was written for loads, and it moves a
+load the same way on any target. On x86 the load of `p+48` in the same shape goes above `p == NULL`
+into the subloop's preheader under this fork's unmodified MachineLICM (drift base `b3a1c7778245`; not
+checked against upstream main). `c66-machinelicm-subloop-load-x86.ll` FAILS there: on
+`a378789289cd`, whose `MachineLICM.cpp` is the drift base's and dev's, `MOV64rm %3, 1, $noreg, 48`
+lands in `bb.2.outer`. With the change the load stays in `bb.4.body`. Both
+tests carry a control: the same instruction in the subloop's header, which does run on every
+iteration, still goes to the subloop's preheader. So what they show is the rule, not an end to
+subloop hoisting. The negative control was run for the Capstone test too: with only the keyed cache
+reverted and `llc` rebuilt, it fails (`CHECK-NOT: excluded string found`). That run is the only
+evidence for the Capstone test failing: the intermediate binary is gone, and on dev the test passes,
+since C-58's hook is exact. In the lit gate it guards against that intermediate state coming back.
+
+The stale answer also cut the other way, and that changes code on every target. When the outer loop
+can exit before the subloop starts, a load in the subloop's header is not guaranteed for the outer
+loop. That "no" was handed to the subloop, where the load does run on every iteration, and it
+stayed put. Keyed by loop, it goes to the subloop's preheader. This is the third function of the
+x86 test: on dev `MOV64rm %2, 1, $noreg, 48` stays in `bb.3.ihead`, and with the change it moves to
+`bb.2.pre`. The X86 and Generic CodeGen directories were run with the final compiler: 5470 tests,
+5421 pass, and no failure is new. 17 need tools this build does not have (`llvm-dwarfdump`,
+`llvm-profdata`). The other 5 are the TLS tests `emutls*.ll` and `tls-android.ll`, which fail
+identically on dev without C-66.
+
+An adversarial audit re-ran both tests on dev and on `a378789289cd` and confirmed the x86 case is a
+miscompile rather than a legal speculation. The load's memory operand carries no `dereferenceable`
+or `invariant` flag, and the final assembly puts `movq 48(%r9)` ahead of `testq %r9, %r9`. The audit
+also found no caller of `IsGuaranteedToExecute` that asks about a block other than the one whose
+iteration last reset the state. There are three callers: loads, `canTrap`, and `AvoidSpeculation`.
+All three pass the instruction's own block, and the post-RA walk sees top-level loops only.
+
+**What a PRE refused costs.** PRE merges two copies that lie on one path; refusing it costs at most
+one extra capability increment on the paths through both blocks, and nothing on any other path.
+How many it refuses on CPython is measured below, after the end-to-end pair.
+
+**If the ISA changes.** `plans/2026-09-24-scc-cincoffset-untagged.md` asks whether an untagged
+`CINCOFFSET`/`SCC` should compute, as CHERI's do. If it does, those opcodes leave
+`trapsOnUntaggedOperand` and every pass above follows from that one line. That memo also says
+"no program we build needs the change now"; this issue is a program that does.
+
+**Not covered.** A machine pass added later that speculates without asking `canTrap`. The passes
+that can place an instruction on a new path were inventoried for this entry (MachineLICM,
+MachineCSE's PRE, EarlyIfConversion; MachineSink only moves an instruction to a subset of its
+paths, BranchFolding hoists only what every successor already runs); a new one has to be added to
+that list by hand.
+
+**Checked and ruled out: the SQLite fault C-58 lists as unchecked.** `cincoffsetimm a4, a4, 0xb0`
+(`&pWInfo->sWC`, `pWInfo` NULL) in `sqlite3WhereCodeOneLoopStart`
+(`docs/history/23-08-2026_00-30-00_sqlite-lost-tag-two-hypotheses-withdrawn.md`) has this shape but
+not this cause, on two grounds that history records. It was a SILICON fault and "QEMU runs the
+identical path tagged": a code-motion defect is deterministic compiler output, and QEMU traps on an
+untagged `cincoffsetimm` as the silicon does, so a moved increment would have faulted on QEMU too.
+And `pWInfo` is a parameter that `sqlite3WhereBegin` allocates -- never NULL in a correct run --
+whereas this issue needs a value that is legitimately NULL on the path the copy was moved onto. So
+that fault stays what history concluded it was not: a value lost on silicon.
+
+**End to end, one variable.** There are two CPython images from one tree: the port as merged on dev,
+patches 0001-0013, 250 of 250 objects compiled, strict link with 0 undefined symbols.
+- Image A (`c3e07424`) is built entirely by this branch's final compiler.
+- Image B' (`7a2477ef`) is identical except `Python/getargs.o`. That object was recompiled by dev's
+  compiler at `01ec8b0d322a`, the fix's own parent, and relinked. So the two differ in C-66 and in
+  nothing else, and `getargs.o` does differ.
+
+Corpus cases 1 and 9, whose control arm used to end at this trap:
+
+    B', case 1 and case 9  cincoffsetimm with an UNTAGGED rs1 -- rd=x16 rs1=x13 val=0x0,
+                           _PyArg_UnpackKeywords+0x510                                  (this issue)
+    A,  case 9             BEGIN, ARMED ... CPY-CASE-END -- runs through
+    A,  case 1             no untagged cincoffset; faults later, in find_name_in_mro+0xdc,
+                           loading through a register that holds the integer 1
+
+The trap follows `getargs.o` and nothing else. An earlier revision of this paragraph built B from
+`a378789289cd`. That compiler also lacks C-46, C-47 and C-61, so the pair differed in more than
+C-66. It was redone with the fix's parent, and the result is the same.
+
+What case 1 does next is not this issue, and it is worth recording. gh-146613 compares through a
+pointer to a freed key. The block has been reused, and where `ob_type` stood there is now integer
+data. That value has no tag, so the capability machine stops the use-after-free on its own, without
+Sublet. It could not be seen before, because the control arm died here first.
+
+**What refusing the PRE costs, measured.** CPython's 143 core sources were compiled with
+`-mllvm -stats`, with the port's flags, once by dev's compiler (`01ec8b0d322a`) and once by the final
+one. 137 compile under both; the 6 that do not are platform files. The counts, dev against final:
+
+    machine-cse  PRE (partial redundancy made full)   1056 ->   847   (-209)
+    machine-cse  common subexpressions eliminated     64037 -> 63484  (-553, the copies PRE would have merged)
+    machinelicm  hoisted out of loops                24709 -> 24811   (+102, 16 of 115 files)
+    machinelicm  hoisted in low register pressure    13126 -> 13193   (+67)
+    getargs.c    PRE                                    15 ->     7
+
+The LICM change is the keyed cache, and it goes up because the stale cache had also refused
+legitimate subloop hoists. A first comparison against `a378789289cd` put it at +2119. That
+comparison was not one variable: the rest of the difference came from C-46, C-47 and C-61.
+
+**Lit.** The Capstone CodeGen directory, 108 tests, with the final compiler: 107 pass. The one
+failure is `shared-patches-present.test`, the manifest guard, and not on account of this branch.
+The four shared files patched here are in `llvm/utils/capstone-shared-patches.txt` (MachineLICM.cpp
+at +16 -1 with the keyed cache; nothing else moved). What it still reports is `CodeGenDAGPatterns.cpp: diff is +40 -6, manifest
+says +41 -7` -- a file this branch does not touch, whose manifest entry this branch does not touch.
+It fails on dev as it stands, and whether a line of that TableGen patch was lost is a question of
+its own.
+
+**QEMU gates, with the final compiler.**
+- `run-hostcall-all.sh`: 28 of 28.
+- The nightly core tier (`--skip-build`) is 13 of 17 green. The four red suites were each checked
+  against dev without C-66, under identical conditions, and none of them is caused by C-66:
+  - `lit`: the `shared-patches-present` drift described above.
+  - `lit-generic`: the two `dwarf-*` tests need `llvm-dwarfdump`, which is not built.
+  - `beebs`: 5 of 81 benchmarks fail to compile. Freestanding `<string.h>` resolves to the host's
+    glibc header (`bits/libc-header-start.h` not found), and dev's compiler fails on the same line.
+  - `linear-uninit-corpus`: `uninit_init_then_use_ok` stores 16 bytes at its region's end
+    (`va 0x660`, cause 7). Dev's compiler gives the identical signature, so this is the emulator in
+    use (built 2026-09-17), not the code.
+
+**Test.** `llvm/test/CodeGen/Capstone/c66-machinecse-pre-trapping-cap-arith.ll`: two guarded blocks
+form `&kw->field` in sequence, and their nearest common dominator is `%entry`. On `a378789289cd`
+(no fix) the test FAILS as it must -- `CIncOffsetImm %0, 48` is in `bb.0.entry` after
+`machine-cse`. Its control, the same shape with an integer multiply, is PRE'd into `%entry` both
+with and without the fix, which is what shows the test can see PRE at all.
+`c66-machinelicm-subloop-speculation.ll` and `c66-machinelicm-subloop-load-x86.ll`: the speculation
+cache, above, each with its control and each failing without the keyed cache.
 
 ### I-03 — a capability-bearing array at alignment 1 faults only when the linker lands it wrong, so `-O0` passing proves nothing `OPEN — latent, affects BOARD runs`
 
@@ -7114,7 +7661,9 @@ listed tools are fresh", NOT as "lit can run".**
 Some QEMU guest boots stop, or crawl, before any domain starts. The tshark safety campaign
 (`ports/wireshark/app/results/2026-09-25-qemu-safety/stall-classes.txt`) had 28 boots, and 7 of
 them never reached a domain. All ran on the port's PRIVATE rootfs, so the shared rootfs's ext4
-corruption is not the cause. FFmpeg's hardening round counted 9 such boots: 7 before login, 1 at
+corruption is not the cause. (That corruption is itself fixed: ISSUES-ARCHIVE I-13. On 2026-09-29, 7
+of 80 corpus boots on a private, `e2fsck`-clean rootfs still stalled: 6 with the serial log ending
+in the firmware banner, 1 at init.) FFmpeg's hardening round counted 9 such boots: 7 before login, 1 at
 login, 1 in the 9p copy. The shapes, told apart by a setup watchdog in
 `ports/wireshark/app/host/run-qemu.sh`:
 - **A slow 9p copy, 6 of the 28.** The guest's copy of the domain images from the 9p share
@@ -7142,6 +7691,69 @@ No other runner has the watchdog.
 **What would settle the cause:** whether the TCG vCPU or the 9p server is starved during a slow
 copy. The QEMU monitor's `info registers`, or a host-side stack of the QEMU threads, taken during a
 stall, would show which. No runner collects either yet.
+
+### I-14 — `run-hostcall-all.sh` stops at large-io, and at mmap-shm, on dev since de07a5b5: two harness paths that the persistent-VM commit moved `FIXED 2026-09-30 by #129 (merge 34f22b8b): hostcall-all runs 28/28 on dev + #129; was pre-existing on dev since 2026-09-28 (de07a5b5), found 2026-09-29 while gating #124-#127`
+
+de07a5b5 ("Run applications as recoverable processes in a persistent Linux VM") moved two files that
+hostcall-probe harnesses still read by their old paths:
+- the header, `R088 capstone/tests/runtime-qemu/hostcall-file-service-probe-common.h →
+  capstone/runtime/include/capstone/hostcall-file-service.h`. A plain `git show --stat` on a
+  pathspec does not show this rename; `--name-status -M` does.
+- the override list, into the new `ports/musl-capstone/runtime/libc_overrides.list`, which
+  `libc_overrides.sh:13` now reads with `mapfile`.
+
+`run-hostcall-all.sh` runs `set -euo pipefail`, so its first failing probe ends the suite. From
+2026-09-28 until #129 the suite ran 12 of its 28 probes on dev, unless `CAPSTONE_ONLY` selected past
+the break.
+
+**FIXED by #129 (merge 34f22b8b, head 4c9d8548).** Gated on dev 8f24b908 + 4c9d8548: all 28 probes
+PASS, run one per leg in suite order. Every control failed as the probe requires. Three guest boot
+stalls (I-12) were retried, not counted: one in the first full-suite attempt (exit 75) and two
+per-probe, each ending at the OpenSBI banner. #129's fixes differ from the one-liners recorded
+below; both were verified:
+- **large-io.** #129 restores two headers from `de07a5b5^`: the common header, and the old
+  `hostcall_stdout_probe.h`, which then carried the opcodes. That is exactly what the controls
+  were built against until 2026-09-28.
+  - The one-liner below instead copies only the common header, from each control's own commit.
+    It also passed, twice.
+  - So #129's message ("restoring only the removed header is not enough") holds for its choice
+    of version only. Its review notes this.
+- **mmap-shm.** #129 asks the list the script loaded (`MUSL_OVERRIDES`), not a file's text, so
+  it cannot go stale if the list moves again.
+
+**1. large-io fails to BUILD.**
+
+- `tests/runtime-qemu/large-io/run.sh:92` copies ONLY `host_service.h` from the two control commits
+  (`READ_CTL` e852b395, `STDOUT_CTL` 40eefa09).
+- That header includes `hostcall-file-service-probe-common.h` under its old name, which no longer
+  exists in the tree: `fatal error: hostcall-file-service-probe-common.h: No such file or directory`.
+- **Fix (one-liner, not the one landed):** copy that header from the same `$rev` into
+  `$O/$arm-inc/` too, one line after :92. Both control commits contain it.
+- **Verified 2026-09-29** on origin/dev ae1b13c2, with the fix as a local edit:
+  - rc 0. The test reads 65536 bytes whole and in pieces, and writes and reads them back.
+  - The read control "FAILS the whole read, as it must without a bounce buffer".
+  - The stdout control "loses the long line, as it must".
+
+**2. mmap-shm stops at its own precheck (rc 2).**
+
+- `tests/runtime-qemu/mmap-shm/run.sh:66` greps `libc_overrides.sh` for the literal name
+  `mmap_shm_level0`.
+- The name moved to `libc_overrides.list:5`, so the precheck reports "libc_overrides.sh does not
+  list mmap_shm_level0; the test would link musl's mmap".
+- The entry was NOT dropped: the build still links `mmap_shm_level0.o`.
+- The control arm filters the built object list, not the file's text, so only the precheck is stale.
+- **Fix (one-liner, not the one landed):** `grep -qx 'mmap_shm_level0' "$MRT/libc_overrides.list"`.
+- **Verified 2026-09-29** on origin/dev ae1b13c2, with the fix as a local edit:
+  - rc 0. The test's 25 MMAP-SHM checks pass (`failures=0`).
+  - The control halts on musl's `MAP_FAILED` as the harness expects: "C-32: the -1 arrives as NULL
+    through movc". The first attempt was a boot stall (see below); the second is this result.
+
+**These per-probe harnesses report a guest boot stall as a verdict** (see I-12). On 2026-09-29 three
+boots stalled: two at the OpenSBI banner and one after "Starting network … OK". The probe printed
+`test: FAIL`, and mmap-shm also printed "control: did NOT fail mmap -- the test cannot tell the
+override from its absence". Neither printed exit 75.
+- Both lines are artefacts of an empty guest log.
+- Before reading one as a result, check the per-probe `run-*.log` for any `LT-RESULT` line.
 
 ## Compiler / toolchain (ours)
 
@@ -8216,7 +8828,7 @@ Fix: gate the WB forward on validity, and/or classify by opcode. Both need a bit
 the project lead's call.
 ---
 
-### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` untested on silicon; the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
+### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `PARTLY RESOLVED — `cincoffset` and `scc` CONFORMANT ON SILICON 2026-09-15 (boot sw8x-f4, six readings each with the instrument and conformance controls; cincoffset already noted gone at 5097eb166); `tighten`/`shrinkto` COPY ON SILICON 2026-09-25 (boot r42e3b on R-42: R-21 CONFIRMED for both, box below); the INIT half is R-25 (fixed on silicon 2026-09-09); nothing to report to the hardware side`
 
 > **`tighten` and `shrinkto` COPY on silicon: R-21 CONFIRMED for both (2026-09-25, boot r42e3b,
 > `caplifive_r42_6cbdaeeb4.bit`, image `cbf8cb41eb56c477`).** R1 `--series linear`:

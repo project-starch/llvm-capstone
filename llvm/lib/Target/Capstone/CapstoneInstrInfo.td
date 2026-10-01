@@ -2521,6 +2521,13 @@ def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 // outliner, both reasoning about an instruction whose source-destroying write is invisible to
 // them. What bounds it is that they can only hurt when a read of the source OUTLIVES the movc,
 // which is the case C-32 owns.
+//
+// Since 2026-09-25 that case is closed at the end of the pipeline, not here: CapstoneLiveSourceCopy
+// runs after the last MCP and rewrites every MOVC whose source is still read as STC+LDC through a
+// stack slot, and a CheckOnly instance after MakeCompressible fails the build if one survives. The
+// outliner runs later still and only moves instructions, so the MOVCs it sees already have dead
+// sources. This model can stay a pure copy because nothing before that pass needs it not to be.
+// +movc-keeps-integer-source disables the rewrite for a bitstream whose MOVC keeps untagged sources.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "movc", "$rd, $rs1"> {
@@ -2645,6 +2652,23 @@ def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 4,
     isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def PseudoBRIDGE_CAP : Pseudo<(outs GPCR:$rd), (ins GPR:$rs), []>;
+
+// PseudoSetAddr: llvm.capstone.cap.set.address, the address replacement behind
+// __intcap arithmetic. CapstoneSetAddressExpand turns it, before register
+// allocation, into a dispatch on the operand's type:
+//     lcc  t, cap, 1            ; total: an untagged operand answers 7
+//     addi t, t, -1             ; NONLIN answers 1
+//     bnez t, bridge
+//     scc  rd, cap, addr        ; NONLIN: keep the authority, move the cursor
+//     j    done
+//   bridge:
+//     rd = PseudoBRIDGE_CAP addr ; otherwise: an untagged value, the address
+// so the scc never sees an operand it traps on. It stays a pseudo until then
+// so MachineLICM and MachineCSE see one side-effect-free instruction; after
+// expansion scc is in trapsOnUntaggedOperand, so later code motion keeps it
+// behind its branch (C-66).
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 24 in
+def PseudoSetAddr : Pseudo<(outs GPCR:$rd), (ins GPCR:$cap, GPR:$addr), []>;
 
 // THE CURSOR IS READ WITH A PLAIN INTEGER MOVE, NOT `lcc rd, rs, 2`.
 

@@ -22,7 +22,68 @@ and that includes the paper's R1 measurements.
 **The same test shows the remedy's mechanism.** After the `LCC`, whose node read passes the cache's
 read tap, the same alias reads fine again. A node read resolves a miss.
 
-## Design (REVISED 2026-09-25 after the before-audit; the first draft is in git history)
+## Design — SECOND VERSION (2026-09-29): REPLAY a missed access, never hold the request
+
+The first version (`0f5185a6d`) held a missed load/store by gating its request with a combinational term
+built from the revocation lookup. It was correct in simulation and **refuted by synthesis**: WNS −24.495,
+with all of the worst 500 paths through that gate (`tests/fpga-repros/R43-revocation-cache-false-deny/
+results/synth-0f5185a6d.result-lines.txt`). Everything below the gate is kept; the gate is replaced.
+
+```
+   M-mode load/store, revocation-cache MISS (no hit, no ALLOW/DEAD record)
+          |
+          v
+   LSU: mark the access with an INTERNAL replay cause on the EXISTING registered exception path
+        (cap_exception -> MMU flop -> the load/store unit finishes WITHOUT a memory operation)
+        and start the probe (probe_ep -> rev-node reads the node -> the read tap installs it)
+          |
+          v
+   commit: the marked head is NOT an exception (stripped from exception_o, commit_ack stays 0);
+           wait while the LSU's REGISTERED probe-pending flag is set;
+           then flush and re-fetch THE SAME pc (frontend: pc_commit + 0, and restore the head's own
+           PC-capability metadata, so R-46 cannot fire on the replay)
+          |
+          v
+   the re-executed access: hits, or matches the ALLOW record (set by a live probe) -> allowed;
+                            matches the DEAD record (dead / stale / timeout)         -> cause 25
+```
+
+Rules that make it hold (from the before-audit):
+- **Nothing new enters the load unit's request path.** The only new wire from the LSU is the probe-pending
+  flag, a flop, to commit. Commit's replay term reads the head and that flop, never `commit_ack` or
+  `pc_cap_ex_valid`.
+- **The probe outlives the access's pop.** It clears only on resolve, timeout or a flush.
+- **ALLOW** is set only by a live probe resolution, keyed by the exact 30-bit id, cleared by any
+  invalidation of its index (broadcast or a dead write), never by a flush.
+- **DEAD** is set by a dead/stale resolution or a timeout, cleared only by a write to its index, never by
+  flush or pop; a dead 30-bit id never becomes live again, so a stale RESOLVED DEAD cannot falsely deny.
+  *Corrected by the after-audit (2026-09-29): a TIMEOUT DEAD records an id that may be live and denies every
+  later miss on it until a write reaches its index — fail-closed, wedged-rev-node-only, accepted for this
+  bitstream; the first version cleared DEAD on pop for exactly this case.*
+- **Younger rev-node operations cannot run twice:** DROP/REVOKE/MREV/SPLIT/DELIN issue only when every
+  older instruction has committed (`issue_read_operands.sv`), and a marked head is uncommitted.
+- **Bound:** each wait is bounded by the two timeouts; the number of replays per access is NOT bounded by a
+  mechanism (*after-audit, 2026-09-29: this line used to claim "at most 3 replays"; that was the observed
+  count, at most 1 per pc, not an enforced bound*).
+- **The `noclear` control of the first version is VACUOUS on v2** (arm 6's pre-read hits, so the record never
+  holds C); re-registered as **arm 6b**, whose pre-read is a miss: shipping cause 25, `noclear` cause 0.
+- **Timeouts** (fail closed, unchanged): ~1M cycles before the rev-node accepts the probe, 65,535 after.
+- **R-45** (the REVOKE/DROP commit flush) is unchanged; **R-46** stays accepted for the ordinary refetch and
+  is closed on the replay refetch.
+
+**The refusal record** (observation only, batched in): the FIRST cause-25 verdict since reset, `{~v, v}`
++ one-hot arm (hit-dead / same-cycle invalidation / probe DEAD / timeout) + 30-bit id with two parity bits,
+at switch values 204..208 (bank 110, regs 01100..10000). Only 204 and 208 are UART-safe; 205..207 carry
+`sw[0]`/`sw[1]` and are read after the console capture ends. The marker is also visible to the hardware
+tracer as a cause-`0x4000000000000019` entry per replay (not architectural).
+
+## Design — FIRST VERSION (REVISED 2026-09-25 after the before-audit) — REFUTED BY SYNTHESIS, kept as history
+
+
+
+*Correction: an earlier version of this heading, and the commit that added it, said the first draft is in
+git history. It is not: the draft was revised before it was ever committed, and only the revised design
+was committed.*
 
 The before-audit returned **UNSUPPORTED as written**. The mechanism is sound: the read tap is keyed on
 the memory channel (`ex_stage.sv:1273-1281`), so any `get_rev_node` read installs. But four problems
@@ -43,8 +104,9 @@ change the design, and all four were re-checked in source:
 
 **The revised design.**
 
-**1. Probe endpoint** (unchanged in intent): `lsu_ep.probe_req(logic[29:0])`, no response, lowest
-priority in `IDLE_STAGE`. The handler latches the id into a new register, then calls `get_rev_node(*reg)`.
+**1. Probe endpoint** (unchanged in intent): `probe_ep.probe_req(logic[16])`, a bare INDEX, since the node
+read addresses by index and the read tap supplies the generation. No response, lowest priority in
+`IDLE_STAGE`. The handler latches the index into a 16-bit register, then calls `get_rev_node(*reg)`.
 The generated `try recv` chain splits only the final `else`, so the existing `ep` acks keep their structure.
 A tied-off build is the bisect control.
 
@@ -78,8 +140,16 @@ tap whose index matches:
 It is cleared on flush and on ANY pop, since an older store's exception can pop a stalled younger head
 (`store_unit.sv`, the exception block).
 
-**6. Wedged node:** a bounded wait (a counter), then deny. That fails closed, so a wedged rev-node cannot
-turn today's deny into a core hang. The bound is a parameter.
+**6. Wedged node, in two bounds (revised after the second after-audit):** before the rev-node accepts the
+probe it may be busy for a long time, because the probe is served only in IDLE_STAGE and never during a
+walk; silicon walks cost up to 11,811 cycles for 256 nodes. So the pre-acceptance bound is about 1M
+cycles, and the post-acceptance bound is 1,023 cycles. Either one expiring denies (fail closed), so a
+wedged rev-node cannot turn a deny into a core hang. The first single 1,023-cycle bound would have
+falsely denied live accesses that missed during a walk of more than ~40 nodes.
+
+**7. R-45, the revocation ORDERING window, closed in the same bitstream (the lead's decision).**
+`commit_stage.sv` raises `flush_commit` when a REVOKE or DROP commits (after its walk), so younger
+instructions re-execute against the revoked state. See ISSUES.md R-45.
 
 ## Traps, pre-registered
 
@@ -98,24 +168,38 @@ turn today's deny into a core hang. The bound is a parameter.
 
 ## Acceptance — written to fail
 
-| test | on `6cbdaeeb4` | required on the fix |
-|---|---|---|
-| `r43-evict-live` ARM 2 (live, evicted), load | cause 25 | **value = sentinel, no trap** |
-| ARM 2s / 2a: the same with a store and an AMO | cause 25 | **no trap; the readback shows the write** |
-| ARM 4: DROP the node (dead, generation equal, NOT reissued), evict by LCC reads of pre-minted ids, access | cause 25 (miss) | **cause 25 via the probe** (trace witness: the probe fired) |
-| ARM 5: REVOKE, then one SPLIT (pops and reissues the index as g+1), access the OLD capability | cause 25 (miss) | **cause 25, no hang** (trace witness: the reissue happened, the probe fired) |
-| ARM 6: flush or interrupt while a probe is pending | — | no hang, correct verdict on re-execution |
-| all arms at `S12_MEM_DELAY=12` (opens the WAIT_GNT window) | — | as above |
-| mutants: no ALLOW-record clear / no generation compare | — | each must produce an ESCAPE (the positive control) |
-| `r35-rotate-stale` | exactly 7 traps | **exactly 7** |
-| tied-off build (trap 3's bisect control) | — | identical to `6cbdaeeb4` |
-| 92-test neutrality sweep | — | 0 trap-count differences |
-| `rtl-lint-gate` | baseline | PASS at baseline |
-| synthesis | 1 loop (TIMING-23 `lsu_i/state_q[3]_i_19`), WNS −10.615 | the SAME single loop; LUTLP-1 = 0; WNS reported against −10.615 (noise band several ns) |
-| board (after the reflash) | R1 traps 25; live512 traps | R1 completes with its QEMU oracle; live512 returns 17408 |
+*Arm numbers are those of `verif/tests/custom/capstone/r43-evict-live.S`. Every arm counts only if the
+`R43_TRACE` lines show its triggering condition was actually created.*
 
-Positive control for ARMs 4 and 5: on `6cbdaeeb4` they trap for the WRONG reason (a miss), so a fix
-that reached "no trap" on them would be an escape. That is why they are pre-registered as 25 on both.
+| arm / build | condition | on `6cbdaeeb4` | required on the fix |
+|---|---|---|---|
+| ARM 2 | live alias, evicted, load | cause 25 | sentinel, no trap (the ALLOW record) |
+| ARM 2s | live alias, evicted, store + readback | cause 25 | no trap; readback shows the write (probe -> ALLOW) |
+| ARM 5 | revoked, then its index reissued at g+1; old capability accessed | cause 25 | cause 25 via the probe (generation mismatch -> DEAD) |
+| ARM 6 | allowed, revoked, churned (dead entry evicted, index reissued) | cause 25 | cause 25 via the probe |
+| ARM 7 | revoke with NO barrier, then read an EVICTED alias at once (R-45) | cause 25 (by miss) | cause 25 (the REVOKE-commit flush re-executes the read after the walk) |
+| ARM 7r | the same with the alias RESIDENT (the case already open on `6cbdaeeb4`) | cause 0 (allowed) | cause 25 |
+| ARM 8 | a live alias at generation >= 1, evicted | cause 25 | sentinel via probe -> ALLOW with a nonzero generation |
+| ARM 9a | AMO through an evicted live alias | cause 25 | old value returned, memory updated |
+| ARM 9b | DROP, evict, access | cause 25 | cause 25 via the probe |
+| build **tieoff** | `R43_PROBE_TIEOFF` | — | every miss denies; no probe (it still carries R-45's flush, so arm 7r denies) |
+| build **noclear** | ALLOW record ignores invalidations | — | superseded: R-45's flush ALSO clears the record, so this single removal is masked (arm 6 denied) |
+| build **noclearflush** | both clears removed | — | ARM 6 ALLOWED: at least one of the two is required |
+| build **mgen** | resolution drops the generation compare | — | ARMs 5/6 ALLOWED (positive control: the compare is load-bearing) |
+| build **mto** | the rev-node never receives the probe | — | every stalled miss denies after the timeout; no hang |
+| build **noflush** | R-45's REVOKE/DROP commit flush removed | — | ARM 7r ALLOWED (positive control: the flush is what closes the window) |
+| ~~build tiny~~ | a 2 x 2 cache | — | dropped: it did not create a `samp=0` verdict in its run, so it tested nothing (see below) |
+| build **flushproxy** | the probe state cleared once just after a probe was sent | — | a second probe for the same id, then the correct verdict; no hang |
+| `r35-rotate-stale` | R-35's acceptance fixture | exactly 7 traps | exactly 7 |
+| 92-test sweep | neutrality | — | 0 trap-count differences |
+| `rtl-lint-gate` | hazards | baseline | every hazard counter at baseline; UNUSEDSIGNAL +1 (the probe read's unused return value, by design), re-baselined with that named |
+| synthesis | loop / timing | 1 loop (TIMING-23 `lsu_i/state_q[3]_i_19`), WNS −10.615 | the SAME single loop; LUTLP-1 = 0; WNS reported against −10.615 (noise band several ns) |
+| board | after the reflash | R1 traps 25; live512 traps | R1 completes with its QEMU oracle; live512 returns 17408 |
+
+**Not constructible deterministically, and said so:** a miss in the load unit's WAIT_GNT window on the
+shipping geometry (it needs an eviction inside a grant hole of a few cycles). The **tiny** build forces the
+window; the shipping design fails closed there, as a false deny, and that residual is documented rather
+than claimed away.
 
 ## Alternatives considered and rejected
 

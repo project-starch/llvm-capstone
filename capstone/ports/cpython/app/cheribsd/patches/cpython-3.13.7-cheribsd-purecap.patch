@@ -1,0 +1,93 @@
+--- a/configure.ac
++++ b/configure.ac
+@@ -323,6 +323,9 @@
+ 		;;
+ 	*-*-linux*)
+ 		ac_sys_system=Linux
++		;;
++	*-*-freebsd*)
++		ac_sys_system=FreeBSD
+ 		;;
+ 	*-*-cygwin*)
+ 		ac_sys_system=Cygwin
+@@ -739,6 +742,9 @@
+ AC_SUBST([_PYTHON_HOST_PLATFORM])
+ if test "$cross_compiling" = yes; then
+ 	case "$host" in
++	*-*-freebsd*)
++		_host_ident=$host_cpu
++		;;
+ 	*-*-linux*)
+ 		case "$host_cpu" in
+ 		arm*)
+--- a/configure
++++ b/configure
+@@ -4052,6 +4052,9 @@
+ 	*-*-linux*)
+ 		ac_sys_system=Linux
+ 		;;
++	*-*-freebsd*)
++		ac_sys_system=FreeBSD
++		;;
+ 	*-*-cygwin*)
+ 		ac_sys_system=Cygwin
+ 		;;
+@@ -4491,6 +4494,9 @@
+ 
+ if test "$cross_compiling" = yes; then
+ 	case "$host" in
++	*-*-freebsd*)
++		_host_ident=$host_cpu
++		;;
+ 	*-*-linux*)
+ 		case "$host_cpu" in
+ 		arm*)
+--- a/Include/pyport.h
++++ b/Include/pyport.h
+@@ -119,13 +119,14 @@
+ /* _Py_SIZEOF_ADDRESS is the width of a pointer's ADDRESS: the width of
+  * uintptr_t, and so of the integer a pointer converts to. It equals
+  * SIZEOF_VOID_P except where a pointer is a capability. There sizeof(void *)
+- * is the capability's storage size (16 on capstone64), no integer type is that
+- * wide, and the round trip the comment above describes does NOT hold: the
+- * integer carries the address and loses the rest. Code that sizes storage for
+- * a pointer keeps SIZEOF_VOID_P; code that reasons about address values or
+- * about an integer holding one uses this.
+- */
+-#if defined(SIZEOF_UINTPTR_T) && SIZEOF_UINTPTR_T < SIZEOF_VOID_P
++ * is the capability's storage size (16 on capstone64). On CHERI purecap,
++ * uintptr_t is itself 16 bytes and can preserve provenance, but addresses
++ * still have 64 bits. Code that sizes storage for a pointer keeps
++ * SIZEOF_VOID_P; code that reasons about address values uses this width.
++ */
++#if defined(__CHERI_PURE_CAPABILITY__)
++#  define _Py_SIZEOF_ADDRESS SIZEOF_LONG
++#elif defined(SIZEOF_UINTPTR_T) && SIZEOF_UINTPTR_T < SIZEOF_VOID_P
+ #  define _Py_SIZEOF_ADDRESS SIZEOF_UINTPTR_T
+ #else
+ #  define _Py_SIZEOF_ADDRESS SIZEOF_VOID_P
+--- a/Include/internal/pycore_pyhash.h
++++ b/Include/internal/pycore_pyhash.h
+@@ -10,14 +10,19 @@
+ _Py_HashPointerRaw(const void *ptr)
+ {
+     // The hash is of the address. Where a pointer is a capability the
+-    // conversion keeps only the address, which is what identity means here:
+-    // two live objects never share one.
++    // conversion needs only the address, which is what identity means here:
++    // two live objects never share one. CHERI uintptr_t is capability-width,
++    // so extract its 64-bit address explicitly instead of hashing authority.
++#ifdef __CHERI_PURE_CAPABILITY__
++    size_t x = __builtin_cheri_address_get(ptr);
++#else
+     uintptr_t x = (uintptr_t)ptr;
++#endif
+     Py_BUILD_ASSERT(sizeof(x) == _Py_SIZEOF_ADDRESS);
+ 
+     // Bottom 3 or 4 bits are likely to be 0; rotate x by 4 to the right
+     // to avoid excessive hash collisions for dicts and sets.
+-    x = (x >> 4) | (x << (8 * sizeof(uintptr_t) - 4));
++    x = (x >> 4) | (x << (8 * sizeof(x) - 4));
+ 
+     Py_BUILD_ASSERT(sizeof(x) == sizeof(Py_hash_t));
+     return (Py_hash_t)x;

@@ -379,6 +379,10 @@ class ASTContext : public RefCountedBase<ASTContext> {
   /// The typedef for the __uint128_t type.
   mutable TypedefDecl *UInt128Decl = nullptr;
 
+  /// The typedefs for __intcap_t and __uintcap_t (Capstone).
+  mutable TypedefDecl *IntCapDecl = nullptr;
+  mutable TypedefDecl *UIntCapDecl = nullptr;
+
   /// The typedef for the target specific predefined
   /// __builtin_va_list type.
   mutable TypedefDecl *BuiltinVaListDecl = nullptr;
@@ -1228,6 +1232,7 @@ public:
   CanQualType SignedCharTy, ShortTy, IntTy, LongTy, LongLongTy, Int128Ty;
   CanQualType UnsignedCharTy, UnsignedShortTy, UnsignedIntTy, UnsignedLongTy;
   CanQualType UnsignedLongLongTy, UnsignedInt128Ty;
+  CanQualType IntCapTy, UnsignedIntCapTy; // Capstone __intcap_t, __uintcap_t
   CanQualType FloatTy, DoubleTy, LongDoubleTy, Float128Ty, Ibm128Ty;
   CanQualType ShortAccumTy, AccumTy,
       LongAccumTy;  // ISO/IEC JTC1 SC22 WG14 N1169 Extension
@@ -1376,6 +1381,10 @@ public:
 
   /// Retrieve the declaration for the 128-bit unsigned integer type.
   TypedefDecl *getUInt128Decl() const;
+
+  /// Retrieve the declaration for the __intcap_t / __uintcap_t typedefs.
+  TypedefDecl *getIntCapDecl() const;
+  TypedefDecl *getUIntCapDecl() const;
 
   //===--------------------------------------------------------------------===//
   //                           Type Constructors

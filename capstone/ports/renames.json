@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "note": "Path history for port components. An archived result bundle records which directory a measured binary was built from, so it is never rewritten and keeps quoting the 'from' path; docs/history/ is append-only for the same reason. Resolve an old path here. check-ports.py verifies that every 'from' is gone, every 'to' exists, and every file listed under quoted_by really still quotes the old path.",
+  "renames": [
+    {
+      "from": "capstone/ports/cpython/interpreter",
+      "to": "capstone/ports/cpython/app",
+      "date": "2026-09-28",
+      "reason": "the complete application of a program is app/",
+      "quoted_by": [
+        "capstone/experiments/study/results/cpython-objects-qualification-20260928/README.md",
+        "capstone/experiments/study/results/cpython-reuse-four-arm-20260928/build-manifest.json",
+        "capstone/experiments/study/results/cpython-reuse-three-arm-20260928/cheribsd-build-manifest.json"
+      ]
+    },
+    {
+      "from": "capstone/ports/mruby/musl",
+      "to": "capstone/ports/mruby/app",
+      "date": "2026-09-28",
+      "reason": "the complete application of a program is app/",
+      "quoted_by": [
+        "capstone/experiments/study/results/mruby-gc-memory-20260927/README.md"
+      ]
+    },
+    {
+      "from": "capstone/ports/postgres/single-user",
+      "to": "capstone/ports/postgres/app",
+      "date": "2026-09-28",
+      "reason": "the complete application of a program is app/",
+      "quoted_by": [
+        "capstone/experiments/study/results/postgres-pristine-20260928/README.md",
+        "capstone/experiments/study/results/postgres-reuse-four-arm-20260928/README.md",
+        "capstone/experiments/study/results/postgres-reuse-four-arm-20260928/build-manifest.json",
+        "capstone/experiments/study/results/postgres-reuse-spatial-20260928/build-manifest.json"
+      ]
+    }
+  ],
+  "deferred": [
+    {
+      "from": "capstone/ports/perl/musl",
+      "to": "capstone/ports/perl/app",
+      "reason": "another lane is editing this component; rename it once that work lands"
+    },
+    {
+      "from": "capstone/ports/sqlite",
+      "to": "capstone/ports/sqlite/freestanding",
+      "reason": "99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them; the target is freestanding/ since 2026-09-30, when app/ became the ordinary-program build of 3.22.0"
+    },
+    {
+      "from": "capstone/ports/micropython",
+      "to": "capstone/ports/micropython/app",
+      "reason": "same added level: run-nightly.sh drives its gate script, which resolves the test environment relative to its own depth"
+    },
+    {
+      "from": "capstone/ports/nginx",
+      "to": "capstone/ports/nginx/pool",
+      "reason": "same added level, and two board drivers invoke its scripts"
+    }
+  ]
+}

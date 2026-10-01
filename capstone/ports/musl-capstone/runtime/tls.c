@@ -89,3 +89,8 @@ int __capstone_init_tls(void)
 	__capstone_tp = tp;
 	return __init_tp(tp - sizeof(struct pthread));
 }
+
+/* The thread pointer is installed before the launch record is applied, so
+ * set_tid_address answered the placeholder 1. Once the record is in, the one
+ * thread's tid is the task's pid: raise() and pthread_kill() send there. */
+void __capstone_set_tid(int tid) { __pthread_self()->tid = tid; }

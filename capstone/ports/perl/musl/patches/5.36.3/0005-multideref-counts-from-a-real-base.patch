@@ -1,0 +1,46 @@
+op.c: S_maybe_multideref counts from a real base, not by incrementing NULL.
+
+The function runs twice: the first pass counts the multideref arguments by
+incrementing `arg` from `arg_buf`, which is NULL on that pass, and takes the
+count as `arg - arg_buf`. Every write through `arg` is guarded by `if (pass)`, so
+the pass stores nothing -- it walks a null pointer as a counter. That is
+undefined in C and harmless on an ordinary machine. Here pointer arithmetic is
+capability arithmetic and cincoffset on an untagged register traps: cause 24 in
+S_maybe_multideref, reached by any subscript chain, so `$h{k}` in a script is
+enough. Measured at -O2 and again at -O1 (2026-09-26), which is what says it is
+the program rather than the optimiser hoisting.
+
+The pass is given a valid base of the right type instead, a single local item.
+The count is unchanged, nothing is stored through it, and arg_buf is replaced by
+the real allocation before the second pass. The pointer does leave that local's
+bounds while counting; this ISA allows arithmetic out of bounds and refuses
+arithmetic without authority, and no load or store happens through it.
+
+Under __CAPSTONE_PURECAP__ only, so every other platform keeps perl's own code.
+
+--- a/op.c	2026-09-26 15:26:56.929911268 +0800
++++ b/op.c	2026-09-26 15:26:56.942226666 +0800
+@@ -16416,6 +16416,23 @@
+ {
+     int pass;
+     UNOP_AUX_item *arg_buf = NULL;
++#ifdef __CAPSTONE_PURECAP__
++    /* capstone: the first pass counts the arguments by walking a pointer from
++       arg_buf -- which is NULL then -- and takes the count as `arg - arg_buf`
++       below. `arg++` on a null pointer is undefined in C and harmless on an
++       ordinary machine; here pointer arithmetic is capability arithmetic, and
++       cincoffset on an untagged register traps (cause 24 in S_maybe_multideref,
++       reached by any subscript chain -- `$h{k}` in a script is enough; measured
++       2026-09-26 at -O2 and at -O1, so it is the program and not the optimiser).
++       A valid base of the right type is all the pass needs: every write through
++       arg is under `if (pass)`, so nothing is stored, and only the difference is
++       read. The pointer does leave the dummy's bounds, which this ISA allows for
++       arithmetic -- what it refuses is arithmetic without authority, and a load
++       or store out of bounds, neither of which happens here. arg_buf is replaced
++       by the real allocation before the second pass. */
++    UNOP_AUX_item arg_count_base;
++    arg_buf = &arg_count_base;
++#endif
+     bool reset_start_targ  = FALSE; /* start->op_targ needs zeroing */
+     int index_skip         = -1;    /* don't output index arg on this action */
+ 

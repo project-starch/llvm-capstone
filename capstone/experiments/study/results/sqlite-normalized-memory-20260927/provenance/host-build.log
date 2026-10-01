@@ -1,0 +1,7 @@
+Built /tmp/capstone/sqlite-normalized-20260927/reproduce/sqlite_host.user
+  host source:     /home/biecho/llvm-capstone-poisoncap-study/capstone/ports/sqlite/sqlite_host.c
+  libcapstone.c:   /home/biecho/llvm-capstone-perl/capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c
+  libcapstone sha: 77df04c663e9da74e2894ffbeaf8923a7291c5deb9a3acda3b5bc7ff37d0b2d7
+  buildroot HEAD:  NOT-A-CHECKOUT
+  buildroot dirty: 0 modified path(s)
+  built:           2026-09-27T09:34:39Z

@@ -1,0 +1,67 @@
+# One line per hunk, per the rule in capstone/tests/port-effort.py: file:new_start, class, level,
+# and why. Classes are hierarchy, metadata, workaround; levels are allocator, application. The rule
+# was fixed before the first ported line, in PREREGISTRATION-chunk-port.md.
+#
+# The split, and the one placement decision behind it. The records that replace the in-block
+# headers, and the index that finds them by address, are the metadata rule made concrete: a chunk's
+# header and its free-list links may not live in the chunk, because the chunk's range is carved
+# away and revoked. Everything that carves, takes, gives back or revokes is hierarchy. The three
+# hierarchy helpers (split_off, hand_out, chunk_of) sit with upstream's CHUNK HELPERS, where they
+# are called, and so form a hunk of their own. Had they been written inside the records hunk, the
+# tie-break would have classed their ~40 lines as metadata; that is recorded here so the split can
+# be read either way.
+#
+# No hunk is a workaround: nothing here is present because a compiler or an RTL defect demands it.
+# No hunk is at the application level: every line is inside wmem_allocator_block.c.
+#
+# Given up, and why: free chunks never rejoin, so there is no merge on free, no merge of a shrink's
+# remainder, and no growth in place. A join needs a handle taken before the split that separated
+# the two chunks, and for an allocator that carves from the front of a free chunk that handle also
+# covers the live chunks between them (micropython's 0025 states the same rule).
+#
+# v2, 2026-09-29, after the claim audit. The audit found that a freed chunk whose data was under
+# two pointers (32 bytes in purecap) joined no free list: upstream's minimum, sized for links kept
+# IN the chunk, was kept although the links had moved to the record, and without merging nothing
+# reclaimed such a chunk until the block's next reset. Four hunks (453, 615, 840, 848) name the
+# minimum instead of spelling upstream's expression, and hunks 147, 264 and 940 grew by its two
+# definitions and the shrink's remainder test. They are classed by the rule as written -- the
+# recycler is metadata -- and v1's count (332 added code lines, metadata 206, 62%) is kept in the
+# results beside v2's.
+#
+# SCOPE, which decides the split and is therefore stated here. The count covers the patch only, as
+# every port's .classes does. The Sublet calls themselves -- sublet_handle/split/take/give/give_to --
+# live in src/allocators/sublet/chunks.c, and the block's linear lend in src/shared/backing.c and
+# src/allocators/sublet/regions.c, which ledger.manifest lists but the patch does not contain. The
+# audit showed that counting chunks.c as hierarchy flips H4 for this port, and that moving the records
+# and index into a side file (PostgreSQL's choice for its pools) would refute it outright. The
+# results report the count under both scopes; neither is adjusted here.
+
+wsutil/wmem/wmem_allocator_block.c:20           hierarchy   allocator   the chunk authority interface arrives
+wsutil/wmem/wmem_allocator_block.c:147         metadata    allocator   chunk and block headers become records beside the block, with upstream's field names; the free-list links leave the chunk's data; the header sizes stay upstream's, so a block's layout is upstream's; and a free list holds any chunk that can serve a request, since its links no longer live in the chunk. Carries the authority fields, which are hierarchy
+wsutil/wmem/wmem_allocator_block.c:264         metadata    allocator   closes the exclusion of upstream's in-block headers; upstream's free-list minimum, named, in its own branch
+wsutil/wmem/wmem_allocator_block.c:274         metadata    allocator   the record pool and the address index: an address can no longer be turned into its header by arithmetic, so headers come from a pool outside the blocks and are found by address
+wsutil/wmem/wmem_allocator_block.c:453     metadata    allocator   the free-list minimum is the listed chunk's, not two pointers in its data (the verifier's count)
+wsutil/wmem/wmem_allocator_block.c:615     metadata    allocator   the recycler holds any chunk that can serve a request: its links are in the record
+wsutil/wmem/wmem_allocator_block.c:700         hierarchy   allocator   a split carves a region for the free space; a hand-out takes the chunk's own handle; a pointer handed back is probed on its own authority before the index is consulted; and merge_free leaves the build
+wsutil/wmem/wmem_allocator_block.c:819         hierarchy   allocator   the end of merge_free's exclusion
+wsutil/wmem/wmem_allocator_block.c:840     metadata    allocator   splitting a free chunk leaves a remainder the lists can hold, by the same minimum
+wsutil/wmem/wmem_allocator_block.c:848     metadata    allocator   a chunk too small to split leaves the recycler by the same minimum
+wsutil/wmem/wmem_allocator_block.c:864         hierarchy   allocator   splitting a free chunk splits its region
+wsutil/wmem/wmem_allocator_block.c:925         hierarchy   allocator   split_used_chunk reports whether it split, because a split re-issues the chunk
+wsutil/wmem/wmem_allocator_block.c:940         hierarchy   allocator   the same signature change, the no-split value; and a shrink does not split off a remainder too small to list, since it would never rejoin
+wsutil/wmem/wmem_allocator_block.c:967         hierarchy   allocator   a used chunk comes back, a revoke, before its region can be split
+wsutil/wmem/wmem_allocator_block.c:989         hierarchy   allocator   a shrink's remainder goes to the recycler without a merge
+wsutil/wmem/wmem_allocator_block.c:1043       metadata    allocator   a block's one chunk header is made beside the block and indexed. Carries the adopt of the authority open or reset left waiting, which is hierarchy
+wsutil/wmem/wmem_allocator_block.c:1069       hierarchy   allocator   a new block arrives linear, its senior handle taken before any split. Its header is a record, which is metadata
+wsutil/wmem/wmem_allocator_block.c:1091       metadata    allocator   a jumbo block stays a system region whose release already revokes; only its headers move beside it
+wsutil/wmem/wmem_allocator_block.c:1146       metadata    allocator   a jumbo's headers go back to the pool with it
+wsutil/wmem/wmem_allocator_block.c:1165       metadata    allocator   a jumbo realloc moves the storage but not the headers; only the index entry moves
+wsutil/wmem/wmem_allocator_block.c:1199       metadata    allocator   closes the exclusion of upstream's header fix-ups
+wsutil/wmem/wmem_allocator_block.c:1247       hierarchy   allocator   alloc hands out under the chunk's own handle
+wsutil/wmem/wmem_allocator_block.c:1265       hierarchy   allocator   free is one revoke per chunk in a block that lives on, then the recycler without a merge. Carries the header lookup through the index, which is metadata
+wsutil/wmem/wmem_allocator_block.c:1312       metadata    allocator   realloc finds the header through the index, after the probe
+wsutil/wmem/wmem_allocator_block.c:1331       hierarchy   allocator   never grow in place: that joins two regions
+wsutil/wmem/wmem_allocator_block.c:1387       hierarchy   allocator   the copy reads the whole chunk through the chunk's own alias, since the caller's is narrowed to its request
+wsutil/wmem/wmem_allocator_block.c:1404       hierarchy   allocator   a shrinking realloc re-issues the front under a new handle; other results come from the chunk's alias, not a widened block pointer
+wsutil/wmem/wmem_allocator_block.c:1457       hierarchy   allocator   free_all is one revoke per retained block, on the senior handle. Carries dropping the dead chunks' headers, which is metadata
+wsutil/wmem/wmem_allocator_block.c:1566       hierarchy   allocator   gc gives a wholly free block back with one revoke, before its header is reused

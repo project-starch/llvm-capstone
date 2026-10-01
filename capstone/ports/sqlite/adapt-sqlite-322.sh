@@ -11,6 +11,10 @@
 # saveBuf stays even though removing it leaves this 3.22.0 image byte-identical: the array is
 # `align 1` in the IR, and it is 16-aligned only where this frame layout happens to put it.
 #
+# The old RowSet allocation hardcodes 64 bytes, but its capability-pointer
+# layout is 112 bytes here. Allocate the actual rounded struct size; otherwise
+# phase 210 faults while SQLite initializes the RowSet.
+#
 # One addition the 3.53.3 pass does not need: sqlite3_filename. SQLite 3.41.0 introduced
 # it as an alias for const char * and changed sqlite3_vfs.xOpen to take it; the shared VFS
 # (tests/runtime-qemu/sqlite-vfs-skeleton/capstone_sqlite_vfs.c) is written against that
@@ -51,6 +55,7 @@ sed \
   -e 's/^  char saveBuf\[PARSE_TAIL_SZ\];/  char saveBuf[PARSE_TAIL_SZ] __attribute__((aligned(16)));/' \
   -e 's/ROUND8(sizeof(VdbeCursor)) + 2\*sizeof(u32)\*nField + /((ROUND8(sizeof(VdbeCursor)) + 2*sizeof(u32)*nField + 15)\&~15) + /' \
   -e 's/&pMem->z\[ROUND8(sizeof(VdbeCursor))+2\*sizeof(u32)\*nField\]/\&pMem->z[(ROUND8(sizeof(VdbeCursor))+2*sizeof(u32)*nField+15)\&~15]/' \
+  -e 's/pMem->zMalloc = sqlite3DbMallocRawNN(db, 64);/pMem->zMalloc = sqlite3DbMallocRawNN(db, ROUND8(sizeof(RowSet)));/' \
   -e "$FILENAME_TYPEDEF" \
   "$SRC_DIR/sqlite3.c" > "$TMP_C"
 sed -e "$FILENAME_TYPEDEF" "$SRC_DIR/sqlite3.h" > "$TMP_H"
@@ -60,6 +65,7 @@ sed -e "$FILENAME_TYPEDEF" "$SRC_DIR/sqlite3.h" > "$TMP_H"
 grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$TMP_C"
 grep -q '((ROUND8(sizeof(VdbeCursor)) + 2\*sizeof(u32)\*nField + 15)&~15) + ' "$TMP_C"
 grep -q '&pMem->z\[(ROUND8(sizeof(VdbeCursor))+2\*sizeof(u32)\*nField+15)&~15\]' "$TMP_C"
+grep -q 'pMem->zMalloc = sqlite3DbMallocRawNN(db, ROUND8(sizeof(RowSet)));' "$TMP_C"
 for t in "$TMP_C" "$TMP_H"; do
   [ "$(grep -c '^typedef const char \*sqlite3_filename;$' "$t")" = 1 ]
 done

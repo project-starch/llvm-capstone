@@ -38,7 +38,7 @@ next allocation from that list hands it out.
 ## The contract
 
 The layout and the `case.json` fields are the corpus contract in
-[`cpython/pymalloc-repros/SCHEMA.md`](../../cpython/pymalloc-repros/SCHEMA.md),
+[`SCHEMA.md`](../../SCHEMA.md),
 referenced rather than copied. Where this corpus differs:
 
 * **`native-fix-differential`** replaces the protection axis: the pair differs

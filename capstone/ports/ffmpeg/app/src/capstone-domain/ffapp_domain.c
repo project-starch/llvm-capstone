@@ -1,21 +1,4 @@
-/* Domain entry. musl-capstone's runtime (hostcall.c) calls capstone_main from domain_main;
- * its return value reaches the host as the DONE result.
- *
- * Three things the runtime does not do for a program, and FFmpeg needs:
- *  - __environ is never set, and log.c calls getenv(). A NULL environ makes getenv
- *    dereference NULL. libc-test's domain entry sets the same empty environment
- *    (musl-capstone/libc-test/libc_test_domain.c).
- *  - There is no argv, so the input path and the stop stage are compile-time. One image
- *    per milestone keeps every run returning a result (ffapp_decode.h).
- *  - stdout was never flushed when capstone_main RETURNED (runtime/hostcall.c domain_main called
- *    no exit path). Since the runtime merge 556863938d46 (2026-09-24) it does: hostcall.c ends a
- *    returning program with exit(), which flushes. The setup below predates that and is kept,
- *    because it is harmless and bounds what a wedge loses. musl switches stdout to FULL buffering
- *    on its first flush, because the
- *    TIOCGWINSZ ioctl fails (ENOTTY). Found 2026-09-23: exactly the first line of every run
- *    reached the host and the rest was lost. So stdout is set LINE-buffered here (each line
- *    is one hostcall round, and a wedge loses at most a partial line), and flushed before
- *    returning. */
+/* Complete decoder entry; argv and environment come from the application SDK. */
 #include <stdio.h>
 
 #include "ffapp_decode.h"
@@ -27,25 +10,30 @@
 #define FFAPP_STOP_AT FFAPP_M5_ALL
 #endif
 
-extern char **__environ;
 #ifdef FFAPP_SUBLET_HEAP
 void __capstone_sublet_heap_stats(unsigned long out[9]);
 #endif
 #ifdef FFAPP_POOL_MODE
 #include "ffapp_pool.h"
 #endif
-static char *ffapp_empty_environ[1] = { 0 };
+#ifdef FFAPP_SUBLET_POOLS
+void ff_sublet_report(void);
+#endif
 
-int capstone_main(void)
+int main(int argc, char **argv)
 {
-    __environ = ffapp_empty_environ;
+    (void)argc; (void)argv;
     setvbuf(stdout, NULL, _IOLBF, 0);
 #ifdef FFAPP_POOL_MODE
     ffapp_pool_init();
 #endif
-    int status = ffapp_run(FFAPP_INPUT, FFAPP_STOP_AT);
+    int status = ffapp_run(argc > 1 ? argv[1] : FFAPP_INPUT, FFAPP_STOP_AT);
 #ifdef FFAPP_POOL_MODE
     ffapp_pool_report();
+#endif
+#ifdef FFAPP_SUBLET_POOLS
+    /* the pools' own counts: blocks taken from the heap and ended, entries, takes, gives */
+    ff_sublet_report();
 #endif
 #ifdef FFAPP_SUBLET_HEAP
     /* What the revoking heap spent: split + mrev is the revocation-node count, which silicon

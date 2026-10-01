@@ -138,6 +138,8 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstoneMoveMergePass(*PR);
   initializeCapstonePushPopOptPass(*PR);
   initializeCapstoneIndirectBranchTrackingPass(*PR);
+  initializeCapstoneLiveSourceCopyPass(*PR);
+  initializeCapstoneSetAddressExpandPass(*PR);
   initializeCapstoneLoadStoreOptPass(*PR);
   initializeCapstoneExpandAtomicPseudoPass(*PR);
   initializeCapstoneRedundantCopyEliminationPass(*PR);
@@ -613,8 +615,13 @@ void CapstonePassConfig::addPreEmitPass() {
   // basic block alignment. It must be done before Branch Relaxation to
   // prevent the adjusted offset exceeding the branch range.
   addPass(createCapstoneIndirectBranchTrackingPass());
+  // After every pass that can make a MOVC's source live again, before the one
+  // that needs final code size: each rewrite adds four bytes. At every -O.
+  addPass(createCapstoneLiveSourceCopyPass());
   addPass(&BranchRelaxationPassID);
   addPass(createCapstoneMakeCompressibleOptPass());
+  // Nothing after the rewrite may produce a live-source MOVC; prove it.
+  addPass(createCapstoneLiveSourceCopyPass(/*CheckOnly=*/true));
 }
 
 void CapstonePassConfig::addPreEmitPass2() {
@@ -661,6 +668,11 @@ void CapstonePassConfig::addPreRegAlloc() {
   addPass(createCapstoneInsertReadWriteCSRPass());
   addPass(createCapstoneInsertWriteVXRMPass());
   addPass(createCapstoneLandingPadSetupPass());
+
+  // __intcap arithmetic: the type dispatch behind llvm.capstone.cap.set.address.
+  // After the SSA-level MachineLICM/MachineCSE, before register allocation, at
+  // every optimization level.
+  addPass(createCapstoneSetAddressExpandPass());
 
   // S-07 instrument, off by default. Sited in the UNGATED region deliberately:
   // the silicon SQLite domain is built at -O0, and the opt-level-gated block

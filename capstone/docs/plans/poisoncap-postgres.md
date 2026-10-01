@@ -130,9 +130,36 @@ zero pass the paper removes. They must never be quoted as PoisonCap overhead.
 Measuring that would need a quarantine layer and an allocator whose free list
 is not in-band, which is a different experiment.
 
-## Scope
+## Complete-backend batch policy
 
-A trusted, serial adapter. This is not whole-backend protection, not isolation of
-hostile nested managers (class A-3), and the synchronous per-free sweep is a
-deliberately conservative policy, not a lower bound for PoisonCap. QEMU elapsed time
-is not hardware cost.
+The [PostgreSQL 17.5 single-user port](../../ports/postgres/app/README.md)
+now uses the same out-of-band chunk table as the Sublet port and adds a
+separate PoisonCap batch policy. It poisons a freed chunk immediately and
+records its identifier and byte span outside the chunk. It sweeps the whole
+pending queue when the manager asks to reissue a pending chunk; block release
+and context reset also force a sweep before that backing is recycled. Detox
+and zeroing follow the sweep. This policy removed the one-sweep-per-free rule,
+but it has not implemented the paper's quarter-heap quarantine trigger.
+
+On a complete protected `SELECT 1` backend execution, this policy reported
+1,619 sweeps for 6,097 chunk releases, with a maximum pending queue of 22
+chunks / 525,312 bytes. These counts describe the current adapter only. They
+show why batching alone is insufficient when the manager quickly selects its
+most recently freed slot. QEMU time is not a hardware-cost measurement.
+
+For a paper-policy memory comparison, the free-list selection must exclude
+pending chunks until the quarantine threshold or allocation pressure triggers
+a sweep. Every manager's block-return/reset path must preserve the same rule:
+retired backing stays unavailable and charged in `Q`, and reclaimed backing
+only enters `F` after the sweep. The phase ledger must count the external
+chunk table and quarantine-index reservation in both modes of the shared
+binary, and its occupied queue only in the protected mode. A plot from the
+current reuse-triggered policy must carry that policy
+name; it cannot stand in for PoisonCap's default.
+
+## Original component-adapter scope
+
+The original defect driver uses a trusted, serial adapter. It is not the
+complete-backend run above, nor isolation of hostile nested managers (class
+A-3). Its synchronous per-free sweep is a deliberately conservative policy,
+not a lower bound for PoisonCap. QEMU elapsed time is not hardware cost.

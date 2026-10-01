@@ -14,15 +14,20 @@
  *              mrev=<n> delin=<n> revoke=<n> init=<n> unserved=... stdout=open|closed
  * where split + mrev is the revocation-node spend (sublet_heap.c).
  *
- * The unserved syscalls are reported HERE, on fd 2, as well as by the runtime. The runtime's own
- * line goes to fd 1 after the program has finished, and a program that closed fd 1 loses it
- * without a trace: the full tshark run reported none while its first four stages reported fifteen
- * (2026-09-24). `stdout=` says whether fd 1 was still open when the program exited.
+ * On the chunks arm (-DTSAPP_WMEM_CHUNKS as well) the wmem chunk port's counts follow the heap's,
+ * before unserved=: " wmem opens=... nodes=<n>" (src/tsapp-wmem-chunks.c), nodes= being the chunk
+ * layer's own split + mrev. The node spend of a run is the heap's split + mrev plus that.
  *
- * It is the runtime's __capstone_at_exit (hostcall.c), which runs inside the exit syscall, after
- * musl's exit() has flushed stdout. So the line comes after all of tshark's own output, and
- * host/domain-stdout.py takes it out before the oracle compares. Linked only into the images
- * build-domain.sh makes, never through deps/capstone-cc.
+ * The unserved syscalls are reported HERE, on fd 2, as well as by the runtime, whose own line
+ * goes to the task's fd 2 once the program has finished, and only with CAPSTONE_DELEGATE_STATS
+ * set. (When that line went to fd 1, a program that closed fd 1 lost it without a trace: the full
+ * tshark run reported none while its first four stages reported fifteen, 2026-09-24.) `stdout=`
+ * says whether fd 1 was still open when the program exited.
+ *
+ * It is the runtime's __capstone_at_exit (hostcall.c), which runs inside the exit_group call,
+ * after musl's exit() has flushed stdout. So the line comes after all of tshark's own output, on
+ * stderr, which host/run.py keeps apart from the stdout the oracle compares. Linked only into the
+ * images build-domain.sh makes, never through deps/capstone-cc.
  */
 #include <stddef.h>
 #include <stdio.h>
@@ -30,6 +35,9 @@
 
 #ifdef TSAPP_SUBLET_HEAP
 void __capstone_sublet_heap_stats(unsigned long out[9]);
+#ifdef TSAPP_WMEM_CHUNKS
+int tsapp_wmem_report(char *line, size_t cap);
+#endif
 #else
 size_t __capstone_level0_in_use(void);
 size_t __capstone_level0_peak_in_use(void);
@@ -41,15 +49,21 @@ long __capstone_unserved_at(unsigned long i);
 
 int __capstone_at_exit(int status)
 {
-	char line[512];
+	char line[1024];
 	size_t cap = sizeof line - 2;
 #ifdef TSAPP_SUBLET_HEAP
 	unsigned long st[9];
 	__capstone_sublet_heap_stats(st);
 	int n = snprintf(line, cap,
 	                 "TSAPP-HEAP status=%d sublet alloc=%lu free=%lu merge=%lu peak_live=%lu split=%lu"
-	                 " mrev=%lu delin=%lu revoke=%lu init=%lu unserved=",
+	                 " mrev=%lu delin=%lu revoke=%lu init=%lu",
 	                 status, st[0], st[1], st[2], st[3], st[4], st[5], st[6], st[7], st[8]);
+#ifdef TSAPP_WMEM_CHUNKS
+	if (n > 0 && (size_t)n < cap)
+		n += tsapp_wmem_report(line + n, cap - (size_t)n);
+#endif
+	if (n > 0 && (size_t)n < cap)
+		n += snprintf(line + n, cap - (size_t)n, " unserved=");
 #else
 	int n = snprintf(line, cap,
 	                 "TSAPP-HEAP status=%d in_use=%zu peak_in_use=%zu peak_end=%zu arena=%zu unserved=",

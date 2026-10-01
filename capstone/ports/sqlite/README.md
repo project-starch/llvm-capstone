@@ -1,5 +1,8 @@
 # SQLite in-memory smoke
 
+The builds in this directory are freestanding domains. SQLite 3.22.0 as an ordinary program,
+with the unix VFS, musl, the shell and speedtest1, is in [`app/`](app/README.md).
+
 ## Status
 
 SQLite 3.53.3 **compiles, links, and runs end to end** for `capstone64-unknown-elf`

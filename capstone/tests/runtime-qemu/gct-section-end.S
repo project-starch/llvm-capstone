@@ -1,5 +1,2 @@
-.section .gct
-  .global __capstone_gct_end
-  .hidden __capstone_gct_end
-__capstone_gct_end:
-
+/* Compatibility path for existing domain build scripts. */
+#include "../../runtime/domain/gct-section-end.S"

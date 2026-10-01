@@ -1,0 +1,1193 @@
+{
+  "corpora": [
+    {
+      "program": "cpython",
+      "boundary": "pymalloc",
+      "title": "Consumer-side temporal defects in CPython whose memory comes from pymalloc",
+      "upstream": {
+        "version": "3.13.7",
+        "port": "capstone/ports/cpython/pymalloc"
+      },
+      "cases": 20,
+      "case_schema": "case-json",
+      "case_macro": "PYC",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected"
+      ],
+      "arm_keys": {
+        "sublet": [
+          "oracle",
+          "cause"
+        ]
+      },
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 20
+      },
+      "runners": [
+        "capstone/bug-corpora/cpython/pymalloc-repros/runners/capstone-domain/run-defects.py",
+        "capstone/bug-corpora/cpython/pymalloc-repros/runners/cheribsd/run-defects.py"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/cpython-pymalloc-defects.md",
+      "evidence": [
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20",
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/20260919-qemu-20-negative-control"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "shape_prose": [
+        "[Tt]wenty reports, (\\w+) shapes",
+        "The (\\w+) shapes, and what each"
+      ],
+      "note": "The inventory states this is the whole reachable set at the pin, not a sample.",
+      "where": "capstone/bug-corpora/cpython/pymalloc-repros"
+    },
+    {
+      "program": "ffmpeg",
+      "boundary": "AVBufferPool / AVRefStructPool",
+      "title": "Consumer-side temporal defects whose stale storage an FFmpeg pool handed out",
+      "upstream": {
+        "version": "9.0.1",
+        "port": "capstone/ports/ffmpeg/buffer-pool"
+      },
+      "cases": 3,
+      "case_schema": "case-json",
+      "case_macro": "FF2",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential",
+        "backing"
+      ],
+      "arm_keys": {
+        "sublet-port": [
+          "oracle"
+        ]
+      },
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "false": 3
+      },
+      "runners": [
+        "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/ffmpeg-pool-consumer-defects.md",
+      "evidence": [
+        "capstone/ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev",
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "where": "capstone/bug-corpora/ffmpeg/pool-repros"
+    },
+    {
+      "program": "httpd",
+      "boundary": "apr_pool_t over apr_allocator_t",
+      "title": "A consumer of APR's pool allocator reusing a destroyed pool",
+      "upstream": {
+        "version": "1.7.4",
+        "port": "capstone/ports/apr/pools"
+      },
+      "cases": 1,
+      "case_schema": "case-json",
+      "case_macro": "APR",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "not_asserted": 1
+      },
+      "runners": [
+        "capstone/bug-corpora/httpd/apr-pool-repros/runners/capstone-domain/run-defects.py",
+        "capstone/bug-corpora/httpd/apr-pool-repros/runners/cheribsd/run-defects.py",
+        "capstone/bug-corpora/httpd/apr-pool-repros/runners/poisoncap/run-defects.py",
+        "capstone/bug-corpora/httpd/apr-pool-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/httpd-bucket-allocator-defects.md",
+      "evidence": [
+        "capstone/bug-corpora/httpd/apr-pool-repros/results/20260921-qemu",
+        "capstone/bug-corpora/httpd/apr-pool-repros/results/20260921-cheribsd",
+        "capstone/bug-corpora/httpd/apr-pool-repros/results/20260922-poisoncap"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "where": "capstone/bug-corpora/httpd/apr-pool-repros"
+    },
+    {
+      "program": "httpd",
+      "boundary": "apr_bucket_alloc_t over apr_pool_t over apr_allocator_t",
+      "title": "Consumer defects across Apache's two stacked recycling allocators",
+      "upstream": {
+        "version": "1.7.4",
+        "port": "capstone/ports/apr/pools"
+      },
+      "cases": 8,
+      "case_schema": "case-json",
+      "case_macro": "APRB",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "not_asserted": 8
+      },
+      "runners": [
+        "capstone/bug-corpora/httpd/bucket-repros/runners/capstone-domain/run-defects.py",
+        "capstone/bug-corpora/httpd/bucket-repros/runners/cheribsd/run-defects.py",
+        "capstone/bug-corpora/httpd/bucket-repros/runners/poisoncap/run-defects.py",
+        "capstone/bug-corpora/httpd/bucket-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/httpd-bucket-allocator-defects.md",
+      "evidence": [
+        "capstone/bug-corpora/httpd/bucket-repros/results/20260922-cheribsd",
+        "capstone/bug-corpora/httpd/bucket-repros/results/20260922-poisoncap",
+        "capstone/bug-corpora/httpd/bucket-repros/results/20260922-poisoncap-negative-control"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "where": "capstone/bug-corpora/httpd/bucket-repros"
+    },
+    {
+      "program": "memcached",
+      "boundary": "slabs and the per-thread object cache",
+      "title": "Temporal defects in consumers of memcached's slab classes and object cache",
+      "upstream": {
+        "version": "1.6.45",
+        "port": "capstone/ports/memcached/allocators"
+      },
+      "cases": 5,
+      "case_schema": "case-json",
+      "case_macro": "MC",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 1,
+        "false": 4
+      },
+      "runners": [
+        "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",
+        "capstone/bug-corpora/memcached/allocator-repros/runners/cheribsd/run-defects.py",
+        "capstone/bug-corpora/memcached/allocator-repros/runners/poisoncap/run-defects.py",
+        "capstone/bug-corpora/memcached/allocator-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "advisories": [
+        "CVE-2018-1000127"
+      ],
+      "shape_table": true,
+      "note": "No result bundle is committed in this corpus; its CheriBSD fixtures live with the port.",
+      "where": "capstone/bug-corpora/memcached/allocator-repros"
+    },
+    {
+      "program": "mruby",
+      "boundary": "GC slots (mrb_heap_page)",
+      "title": "Planned: the xlang mruby rows re-run inside the complete interpreter",
+      "upstream": {
+        "version": "4.0.0-rc2",
+        "port": "capstone/ports/mruby/app"
+      },
+      "cases": 0,
+      "case_schema": "case-json",
+      "status": "planned",
+      "live_in_pin_recorded": false,
+      "live_in_pin_note": "No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "advisories": [],
+      "related": [
+        "xlang/repro",
+        "capstone/ports/mruby/app"
+      ],
+      "note": "Six xlang rows (4, 5, 8, 10, 13, 15) share the realloc-vmstack shape and are the intended first cases.",
+      "where": "capstone/bug-corpora/mruby/gc-slot-repros"
+    },
+    {
+      "program": "mruby",
+      "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
+      "title": "Triaged: 165 defects live in 4.0.0-rc2, found by differential test extraction, with what each arm sees",
+      "upstream": {
+        "version": "4.0.0-rc2",
+        "port": "capstone/ports/mruby/app"
+      },
+      "cases": 0,
+      "case_schema": "case-json",
+      "status": "triaged",
+      "live_in_pin_recorded": false,
+      "live_in_pin_note": "No cases are cut to the schema yet. Liveness is recorded per row in ledger.json instead, and it is measured rather than asserted: a row is here only because its own upstream test fails at the pin and passes at master. The rows are regenerated by probe/extract.py from an mruby clone, so this corpus carries the ledger and the harness rather than 674 generated files.",
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "advisories": [],
+      "related": [
+        "capstone/bug-corpora/mruby/gc-slot-repros",
+        "capstone/ports/mruby/app",
+        "xlang/repro"
+      ],
+      "note": "The published-advisory route is nearly empty at this pin: of 44 CVE/GHSA entries for mruby, 43 are already fixed in 4.0.0-rc2, and of 78 OSS-Fuzz OSV advisories, 73 are. This corpus exists because the defects that ARE live are the ones fixed after the pin, and upstream's own regression tests are the way to reach them.",
+      "where": "capstone/bug-corpora/mruby/release-differential"
+    },
+    {
+      "program": "postgres",
+      "boundary": "memory contexts (aset, slab)",
+      "title": "Upstream use-after-free and double-free defects in PostgreSQL's memory managers",
+      "upstream": {
+        "version": "17.0",
+        "port": "capstone/ports/postgres/memory-contexts"
+      },
+      "cases": 8,
+      "case_schema": "case-json",
+      "case_macro": "PG",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "native-detect"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 8
+      },
+      "expect_provenance": 3,
+      "runners": [
+        "capstone/bug-corpora/postgres/mmgr-repros/shared/run-defects.py",
+        "capstone/bug-corpora/postgres/mmgr-repros/run-host-repros.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/postgres-nested-allocator-defects.md",
+      "evidence": [
+        "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu-delivery"
+      ],
+      "advisories": [],
+      "note": "The allocator pin is 17.0; the complete single-user backend port is 17.5.",
+      "where": "capstone/bug-corpora/postgres/mmgr-repros"
+    },
+    {
+      "program": "sqlite",
+      "boundary": "the SQLite C API, as host bindings hold it",
+      "title": "Pointer-lifetime defects in host bindings over SQLite's C API",
+      "upstream": {
+        "version": "3.53.3 amalgamation, for the host ASan arm",
+        "port": "capstone/ports/sqlite"
+      },
+      "cases": 19,
+      "case_schema": "sqlite-row",
+      "case_number_base": 1,
+      "required_arms": [
+        "host-asan"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "not_asserted": 19
+      },
+      "runners": [
+        "capstone/bug-corpora/sqlite/capi-repros/run-host-asan-repros.sh",
+        "capstone/ports/sqlite/run-sqlite-row2.sh",
+        "capstone/ports/sqlite/run-sqlite-row3.sh",
+        "capstone/ports/sqlite/run-sqlite-row3-b2.sh",
+        "capstone/ports/sqlite/run-sqlite-row5.sh",
+        "capstone/ports/sqlite/run-sqlite-row7.sh",
+        "capstone/ports/sqlite/run-sqlite-row9.sh",
+        "capstone/ports/sqlite/run-sqlite-row11.sh",
+        "capstone/ports/sqlite/run-sqlite-row14.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/bug-corpora/sqlite/capi-repros/PROVENANCE-LEDGER.md",
+      "advisories": [
+        "RUSTSEC-2021-0128 = CVE-2021-45713 = GHSA-q89g-4vhh-mvvm",
+        "RUSTSEC-2021-0037"
+      ],
+      "note": "The defects are in the bindings, not in the engine. SQLite's own engine-internal CVEs are recorded as out of scope in row12's PROVENANCE.md. The Capstone column is measured on 7 of the 19 rows.",
+      "where": "capstone/bug-corpora/sqlite/capi-repros"
+    },
+    {
+      "program": "wireshark",
+      "boundary": "wmem (block, block_fast)",
+      "title": "Dissector-side temporal defects in consumers of Wireshark's wmem pools",
+      "upstream": {
+        "version": "4.6.8",
+        "port": "capstone/ports/wireshark/wmem"
+      },
+      "cases": 13,
+      "case_schema": "case-json",
+      "case_macro": "WM",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "native-detect"
+      ],
+      "arm_keys": {
+        "sublet-chunks": [
+          "oracle",
+          "cause"
+        ]
+      },
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "false": 13
+      },
+      "runners": [
+        "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "evidence": [
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu-negative-control",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "note": "No triage inventory under docs/ref/ yet; the README carries the selection.",
+      "where": "capstone/bug-corpora/wireshark/wmem-repros"
+    },
+    {
+      "program": "Lua C-data-pointer bindings",
+      "boundary": "a C object borrowed by a Lua binding",
+      "title": "Corpus C: GC-ended and allocator-ended borrows in Lua bindings",
+      "cases": 13,
+      "case_schema": "xlang-row",
+      "case_table": "xlang/lua-cdp/capstone/rows.tsv",
+      "case_dir_column": "slug",
+      "case_doc": "CASE.md",
+      "status": "measured",
+      "live_in_pin_recorded": false,
+      "live_in_pin_note": "Each row is pinned to the binding version its upstream report names, not to a release this project ports.",
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/paper-bug-inventory.md",
+      "evidence": [
+        "xlang/lua-cdp/capstone/rows.tsv",
+        "xlang/lua-cdp/cheri/rows.tsv"
+      ],
+      "advisories": [],
+      "related": [
+        "capstone/bug-corpora"
+      ],
+      "note": "7 of the 13 are GC-frees, which is the structural sub-case. Blocked specimens (C++/STL, LuaJIT) sit beside the rows and are not cases.",
+      "where": "xlang/lua-cdp"
+    },
+    {
+      "program": "cross-language FFI (12 of 15 rows are mruby or an mruby gem)",
+      "boundary": "handles held across a language boundary",
+      "title": "Corpus B: cross-language FFI memory-safety defects, as distilled C shims",
+      "cases": 15,
+      "case_schema": "xlang-row",
+      "case_table": "xlang/capstone/rows.tsv",
+      "case_dir_column": "key",
+      "status": "measured",
+      "live_in_pin_recorded": false,
+      "live_in_pin_note": "Each row is pinned to its own vulnerable upstream commit, named in its target.md, rather than to a release this project ports.",
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/paper-bug-inventory.md",
+      "evidence": [
+        "xlang/capstone/rows.tsv",
+        "xlang/cheri/rows.tsv"
+      ],
+      "advisories": [
+        "CVE-2017-9527",
+        "CVE-2018-10191",
+        "CVE-2018-10199",
+        "CVE-2020-6838",
+        "CVE-2020-6840",
+        "CVE-2022-1071",
+        "CVE-2022-1106",
+        "CVE-2022-1934",
+        "CVE-2026-1979",
+        "GHSA-f56g-chqp-22m9",
+        "RUSTSEC-2022-0070"
+      ],
+      "related": [
+        "capstone/bug-corpora",
+        "capstone/bug-corpora/mruby/gc-slot-repros"
+      ],
+      "note": "Rows 8 and 13 are one upstream defect, so 15 rows are 14 distinct fixes. The advisory list is the front-page table's; rows 8, 12, 13 and 14 carry their CVE id in that table but not yet in their own target.md.",
+      "where": "xlang/repro"
+    },
+    {
+      "program": "sqlite",
+      "boundary": "borrowed row data across a step or a reset",
+      "title": "Row 3: reuse without any allocator event, built on real SQLite",
+      "cases": 2,
+      "case_schema": "xlang-row",
+      "case_glob": "sqlite-*",
+      "case_doc": "EVIDENCE.txt",
+      "status": "built",
+      "live_in_pin_recorded": false,
+      "live_in_pin_note": "These are documented API contracts rather than fixed defects, so there is no upstream fix against which a pin could be live.",
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/paper-bug-inventory.md",
+      "advisories": [],
+      "related": [
+        "capstone/bug-corpora/sqlite/capi-repros"
+      ],
+      "note": "Host-verified: ASan is silent on both, and one is silent only while lookaside is on. Neither has a Capstone or CHERI column yet.",
+      "where": "xlang/reuse-not-free"
+    },
+    {
+      "program": "various (sandbox and host boundaries)",
+      "boundary": "a value read twice across a sharing boundary",
+      "title": "Row 6: TOCTOU / double-fetch, triaged and not built",
+      "cases": 0,
+      "case_schema": "xlang-row",
+      "case_glob": "[0-9]*",
+      "status": "triaged",
+      "live_in_pin_recorded": false,
+      "live_in_pin_note": "Nothing is built, so there is no case to place in a pin.",
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/paper-bug-inventory.md",
+      "advisories": [],
+      "related": [
+        "capstone/bug-corpora"
+      ],
+      "note": "Eight specimens are triaged in this directory's README. The inventory also records four fabricated CVE ids that must never be cited.",
+      "where": "xlang/toctou-double-fetch"
+    }
+  ],
+  "ports": [
+    {
+      "program": "httpd",
+      "role": "allocator-component",
+      "title": "APR's pools, with apr-util's bucket allocator carried on top",
+      "upstream": {
+        "version": "1.7.4",
+        "pin_source": {
+          "file": "capstone/ports/apr/pools/upstream.json",
+          "grep": "\"version\": \"1.7.4\""
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap",
+        "native"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/httpd/apr-pool-repros",
+        "capstone/bug-corpora/httpd/bucket-repros"
+      ],
+      "where": "capstone/ports/apr/pools"
+    },
+    {
+      "program": "cpython",
+      "role": "full-application",
+      "title": "The complete CPython interpreter in a Capstone domain, and on CheriBSD purecap",
+      "upstream": {
+        "version": "3.13.7",
+        "pin_source": {
+          "file": "capstone/ports/cpython/app/upstream.json",
+          "grep": "\"version\": \"3.13.7\""
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap"
+      ],
+      "workload": "objects.py JSON/GC qualification workload",
+      "evidence": [
+        "capstone/experiments/study/results/cpython-reuse-four-arm-20260928"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/cpython/pymalloc-repros"
+      ],
+      "related": [
+        "capstone/ports/cpython/pymalloc"
+      ],
+      "note": "The README is still headed 'compile survey': it documents the 2026-09-23 compile census and first link, not the interpreter runs that followed.",
+      "where": "capstone/ports/cpython/app"
+    },
+    {
+      "program": "cpython",
+      "role": "allocator-component",
+      "title": "CPython's small-object allocator, replayed from native recordings",
+      "upstream": {
+        "version": "3.13.7",
+        "pin_source": {
+          "file": "capstone/ports/cpython/pymalloc/upstream.json",
+          "grep": "\"version\": \"3.13.7\""
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap",
+        "native"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/cpython/pymalloc-repros"
+      ],
+      "where": "capstone/ports/cpython/pymalloc"
+    },
+    {
+      "program": "ffmpeg",
+      "role": "full-application",
+      "title": "FFmpeg as one whole file-to-file decoder inside a Capstone domain",
+      "upstream": {
+        "version": "9.0.1",
+        "pin_source": {
+          "file": "capstone/ports/ffmpeg/app/upstream.json",
+          "grep": "\"version\": \"9.0.1\""
+        }
+      },
+      "targets": [
+        "capstone-domain"
+      ],
+      "workload": "matroska demuxer to mpeg4 decoder, per-frame framemd5",
+      "evidence": [
+        "capstone/ports/ffmpeg/app/results/2026-09-24-qemu-hardening"
+      ],
+      "related": [
+        "capstone/ports/ffmpeg/buffer-pool"
+      ],
+      "note": "Its pool fixtures run the buffer-pool port's Sublet leases inside the whole decoder; the pool corpus's cases belong to that component, not to this one.",
+      "where": "capstone/ports/ffmpeg/app"
+    },
+    {
+      "program": "ffmpeg",
+      "role": "allocator-component",
+      "title": "AVBufferPool and AVRefStructPool replay from native decoder recordings",
+      "upstream": {
+        "version": "9.0.1",
+        "pin_source": {
+          "file": "capstone/ports/ffmpeg/buffer-pool/upstream.json",
+          "grep": "\"version\": \"9.0.1\""
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap",
+        "native"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/ffmpeg/pool-repros"
+      ],
+      "where": "capstone/ports/ffmpeg/buffer-pool"
+    },
+    {
+      "program": "memcached",
+      "role": "allocator-component",
+      "title": "memcached's slab classes and per-thread object cache",
+      "upstream": {
+        "version": "1.6.45",
+        "pin_source": {
+          "file": "capstone/ports/memcached/allocators/upstream.json",
+          "grep": "\"version\": \"1.6.45\""
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap",
+        "native"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/memcached/allocator-repros"
+      ],
+      "where": "capstone/ports/memcached/allocators"
+    },
+    {
+      "program": "micropython",
+      "role": "full-application",
+      "title": "The MicroPython interpreter and its GC heap as one domain image",
+      "upstream": {
+        "version": "2e3304a",
+        "commit": "2e3304a",
+        "pin_source": {
+          "file": "capstone/ports/micropython/fetch-micropython.sh",
+          "grep": "MPY_COMMIT=${MPY_COMMIT:-2e3304a}"
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "silicon"
+      ],
+      "workload": "the registered upstream test selection",
+      "note": "Pinned to a commit; upstream release tags are not used by this port.",
+      "where": "capstone/ports/micropython"
+    },
+    {
+      "program": "mruby",
+      "role": "full-application",
+      "title": "The complete mruby interpreter in a Capstone musl domain",
+      "upstream": {
+        "version": "4.0.0-rc2",
+        "commit": "9d523e2f74f2e63ca02840937523de61398a617d",
+        "pin_source": {
+          "file": "capstone/ports/mruby/app/build-mruby-domain.sh",
+          "grep": "4.0.0-rc2) MRUBY_COMMIT="
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "native"
+      ],
+      "workload": "mrbtest, and the upstream ao-render benchmark for the study",
+      "evidence": [
+        "capstone/ports/mruby/app/results/2026-09-26",
+        "capstone/experiments/study/results/mruby-gc-memory-20260927"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/mruby/gc-slot-repros"
+      ],
+      "related": [
+        "xlang/repro"
+      ],
+      "where": "capstone/ports/mruby/app"
+    },
+    {
+      "program": "musl",
+      "role": "domain-libc",
+      "title": "musl as the domain libc, with the hostcall runtime and its own test suite",
+      "upstream": {
+        "version": "1.2.5",
+        "pin_source": {
+          "file": "capstone/ports/musl-capstone/fetch-musl.sh",
+          "grep": "MUSL_VERSION=${MUSL_VERSION:-1.2.5}"
+        }
+      },
+      "targets": [
+        "capstone-domain"
+      ],
+      "workload": "libc-test, plus the hostcall probes",
+      "where": "capstone/ports/musl-capstone"
+    },
+    {
+      "program": "nginx",
+      "role": "allocator-component",
+      "title": "nginx's pool allocator, replayed from recorded calls -- not the server",
+      "upstream": {
+        "version": "1.28.0",
+        "pin_source": {
+          "file": "capstone/ports/nginx/fetch-nginx.sh",
+          "grep": "NGX_VERSION=${NGX_VERSION:-1.28.0}"
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "native"
+      ],
+      "note": "No README of its own yet; the runner scripts carry the scope.",
+      "where": "capstone/ports/nginx"
+    },
+    {
+      "program": "perl",
+      "role": "platform-build",
+      "title": "The same Perl release, cross-built for CheriBSD purecap",
+      "upstream": {
+        "version": "5.36.3",
+        "pin_source": {
+          "file": "capstone/ports/perl/cheribsd/build.sh",
+          "grep": "perl-5.36.3.tar.gz"
+        }
+      },
+      "targets": [
+        "cheribsd-purecap"
+      ],
+      "workload": "the 17-section smoke, under both libc revocation switches",
+      "note": "No inner SV lifetime adapter yet, which is why Perl is not a measured application in the reuse study.",
+      "where": "capstone/ports/perl/cheribsd"
+    },
+    {
+      "program": "perl",
+      "role": "full-application",
+      "title": "The complete Perl interpreter in a Capstone musl domain",
+      "upstream": {
+        "version": "5.36.3",
+        "pin_source": {
+          "file": "capstone/ports/perl/musl/build-perl-domain.sh",
+          "grep": "PERL_VERSION=${PERL_VERSION:-5.36.3}"
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "native"
+      ],
+      "workload": "scripts/smoke.pl, byte-identical to the native reference",
+      "evidence": [
+        "capstone/ports/perl/musl/results/2026-09-26"
+      ],
+      "related": [
+        "capstone/ports/perl/cheribsd"
+      ],
+      "where": "capstone/ports/perl/musl"
+    },
+    {
+      "program": "postgres",
+      "role": "full-application",
+      "title": "The complete PostgreSQL single-user backend, on Capstone and CheriBSD purecap",
+      "upstream": {
+        "version": "17.5",
+        "pin_source": [
+          {
+            "file": "capstone/ports/postgres/app/build-domain.sh",
+            "grep": "not the pinned PostgreSQL 17.5 archive"
+          },
+          {
+            "file": "capstone/ports/postgres/app/build-cheribsd.sh",
+            "grep": "SRC=$ROOT/postgresql-17.5"
+          }
+        ]
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap"
+      ],
+      "workload": "work.sql, checked against the native 16-byte-MAXALIGN oracle",
+      "evidence": [
+        "capstone/experiments/study/results/postgres-reuse-four-arm-20260928"
+      ],
+      "related": [
+        "capstone/ports/postgres/memory-contexts"
+      ],
+      "note": "The memory-context corpus and replay component pin 17.0, not 17.5.",
+      "where": "capstone/ports/postgres/app"
+    },
+    {
+      "program": "postgres",
+      "role": "allocator-component",
+      "title": "PostgreSQL's memory contexts, replayed against aset, slab and generation",
+      "upstream": {
+        "version": "17.0",
+        "pin_source": {
+          "file": "capstone/ports/postgres/memory-contexts/upstream.json",
+          "grep": "\"version\": \"17.0\""
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap",
+        "linux-guest",
+        "native"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/postgres/mmgr-repros"
+      ],
+      "where": "capstone/ports/postgres/memory-contexts"
+    },
+    {
+      "program": "sqlite",
+      "role": "full-application",
+      "title": "SQLite 3.22.0 as an ordinary program: the shell and speedtest1 on the delegated runtime, with the unix VFS and musl",
+      "upstream": {
+        "version": "3.22.0",
+        "pin_source": {
+          "file": "capstone/ports/sqlite/app/prepare-sources.sh",
+          "grep": "SQLITE_VERSION=3220000 SQLITE_YEAR=2018",
+          "version": "3220000"
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "native"
+      ],
+      "workload": "work.sql.in and again.sql on a database file, with a second writer refused while the first holds a transaction; speedtest1 main at size 1 with the per-phase result oracle; each byte for byte against the native build of the same release",
+      "evidence": [
+        "capstone/ports/sqlite/app/results/20260930-sqlite-322-app.json"
+      ],
+      "related": [
+        "capstone/ports/sqlite"
+      ],
+      "note": "3.22.0 only, the PoisonCap anchor release; the freestanding builds in the parent directory also pin 3.53.3.",
+      "where": "capstone/ports/sqlite/app"
+    },
+    {
+      "program": "sqlite",
+      "role": "full-application",
+      "title": "SQLite in a Capstone domain: the in-memory workload and speedtest1",
+      "upstream": {
+        "version": [
+          "3.53.3",
+          "3.22.0"
+        ],
+        "pin_source": [
+          {
+            "file": "capstone/ports/sqlite/fetch-sqlite-src.sh",
+            "grep": "SQLITE_SRC_VERSION=${SQLITE_SRC_VERSION:-3.53.3}",
+            "version": "3.53.3"
+          },
+          {
+            "file": "capstone/ports/sqlite/run-sqlite-322-silicon.sh",
+            "grep": "export SQLITE_VERSION=3220000",
+            "version": "3220000"
+          }
+        ]
+      },
+      "targets": [
+        "capstone-domain",
+        "silicon",
+        "native"
+      ],
+      "workload": "the in-memory SQL smoke, speedtest1, and the 3.22.0 silicon gate",
+      "corpora": [
+        "capstone/bug-corpora/sqlite/capi-repros"
+      ],
+      "related": [
+        "xlang/reuse-not-free"
+      ],
+      "note": "3.22.0 is the published PoisonCap artifact's release and the anchor of the measured memory campaigns; 3.53.3 is the general port and the version the binding corpus's host arm builds.",
+      "where": "capstone/ports/sqlite"
+    },
+    {
+      "program": "whisper.cpp",
+      "role": "allocator-component",
+      "title": "ggml's context allocator and buffer epochs, replayed",
+      "upstream": {
+        "version": "1.9.4",
+        "pin_source": {
+          "file": "capstone/ports/whisper/ggml-context/upstream.json",
+          "grep": "\"version\": \"1.9.4\""
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap",
+        "native"
+      ],
+      "note": "The defect survey found no consumer-side temporal defect, so there is no corpus: see docs/ref/whisper-ggml-defects.md.",
+      "where": "capstone/ports/whisper/ggml-context"
+    },
+    {
+      "program": "wireshark",
+      "role": "full-application",
+      "title": "tshark as a whole application in a domain -- dependencies built, not running",
+      "upstream": {
+        "version": "4.6.8",
+        "pin_source": {
+          "file": "capstone/ports/wireshark/app/upstream.json",
+          "grep": "\"version\": \"4.6.8\""
+        }
+      },
+      "targets": [
+        "capstone-domain"
+      ],
+      "status": "in progress",
+      "evidence": [
+        "capstone/ports/wireshark/app/results/2026-09-24-qemu-cma-domain-block"
+      ],
+      "note": "The seven dependencies cross-build and a CMA domain block covers its size; the port found three runtime gaps (C-64, C-65, I-11) and has no README.",
+      "where": "capstone/ports/wireshark/app"
+    },
+    {
+      "program": "wireshark",
+      "role": "allocator-component",
+      "title": "All four wmem allocators with pool-reset epochs",
+      "upstream": {
+        "version": "4.6.8",
+        "pin_source": {
+          "file": "capstone/ports/wireshark/wmem/upstream.json",
+          "grep": "\"version\": \"4.6.8\""
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "cheribsd-purecap",
+        "native"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/wireshark/wmem-repros"
+      ],
+      "where": "capstone/ports/wireshark/wmem"
+    }
+  ],
+  "fpga": [
+    {
+      "id": "R01-lsu-hazard",
+      "title": "",
+      "has_sha256sums": false
+    },
+    {
+      "id": "R02-delin",
+      "title": "",
+      "has_sha256sums": false
+    },
+    {
+      "id": "R12-revnode-exhaustion-reclaimer",
+      "title": "R-12 \u2014 revocation nodes were never reused: the pool ran out at 65,532 allocations and the core DEADLOCKED. Fixed by the M1 reclaimer (`054cea69b`), on silicon since 2026-09-17",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R16-entry-stall",
+      "title": "R-16 \u2014 the domain never returns from its FIRST entry (`SHA5` stall)",
+      "has_sha256sums": false
+    },
+    {
+      "id": "R18-scalar-store-metadata-clobber",
+      "title": "R-18 \u2014 a scalar in the upper half of a 16-byte cache row is silently zeroed on silicon",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R19-movc-zero-metadata-in-slot",
+      "title": "R-19 \u2014 a `movc rd, zero`-sourced store leaves `compress_cap(NULL)` in its OWN bank-1 slot",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R20-stc-rs1-cursor-forward-x10",
+      "title": "R-20 \u2014 after `stc`, a load into **x10** is read by the next instruction as the store's base address",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R25-init-rs1-ne-rd",
+      "title": "R-25 \u2014 `INIT` with `rd != rs1` wrote the new LINEAR capability to BOTH registers",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R26-ccsrrw-stale-cpmp",
+      "title": "R-26 \u2014 a younger load is checked against the CPMP entry a pending `CCSRRW` is about to replace",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R27-revnode-orphan-response",
+      "title": "R-27 \u2014 a pipeline flush during the DYN unit's revocation-node query leaves the core dead",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R29-wbuffer-highword-forwarding",
+      "title": "R-29 \u2014 a plain 8-byte store adjacent to a 128-bit `ldc` of the same granule loses the high half",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R34-lsu-exception-lost-on-immediate-grant",
+      "title": "R-34 \u2014 every exception the load/store unit generates itself (the five capability causes 24\u201328 AND the misaligned causes 4/6) is LOST when the access is granted in its request cycle; it is delivered only if an exception is still being presented one cycle later",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R35-revoked-reference-retains-authority",
+      "title": "R-35 \u2014 on silicon a REVOKED capability still reads AND writes the storage its object has given up, at every age, and the access does not trap",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R42-icache-killed-miss-refill",
+      "title": "R-42 \u2014 a speculative I-cache miss killed by a taken-branch redirect costs +1 cycle every loop iteration",
+      "has_sha256sums": true
+    },
+    {
+      "id": "R43-revocation-cache-false-deny",
+      "title": "R-43 \u2014 R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live. FIXED ON SILICON 2026-09-29 (`8f6a0af98`, `caplifive_r43_8f6a0af98.bit`)",
+      "has_sha256sums": true
+    },
+    {
+      "id": "RTL-cap-mcause-off-by-one",
+      "title": "SPEC VIOLATION \u2014 every capability `mcause` from the DATA path is one code too high, and 25 aliases",
+      "has_sha256sums": false
+    },
+    {
+      "id": "RTL-domain-trap-vector-unset",
+      "title": "A domain enters with NO trap vector: `create_domain` never writes the trap-vector context slot",
+      "has_sha256sums": false
+    },
+    {
+      "id": "RTL-give-cost-tracks-global-placement",
+      "title": "Release cost tracks GLOBAL PLACEMENT, not the arm: a 16-byte relocation moves `give_cyc/n` by 83 %",
+      "has_sha256sums": true
+    },
+    {
+      "id": "RTL-store-user-metadata",
+      "title": "Every store routes capability metadata into the dcache write-user sideband",
+      "has_sha256sums": false
+    },
+    {
+      "id": "S01-image-perturbation-hang",
+      "title": "A ~1.6 MB pure-capability domain hangs after ANY perturbation of its image",
+      "has_sha256sums": false
+    },
+    {
+      "id": "S06-untagged-ldc-stc-high-half",
+      "title": "S-06 \u2014 an untagged 128-bit `ldc`/`stc` round trip loses the HIGH 64 bits",
+      "has_sha256sums": true
+    },
+    {
+      "id": "S07-capability-untagged-on-reload",
+      "title": "S-07 \u2014 a capability read back from memory comes back UNTAGGED, sporadically",
+      "has_sha256sums": true
+    },
+    {
+      "id": "S08-s06fullfix-bitstream-cannot-run-domains",
+      "title": "S-08 \u2014 on `caplifive_s06fullfix.bit` the monitor takes an UNHANDLED TRAP just after a domain's first share returns",
+      "has_sha256sums": true
+    },
+    {
+      "id": "S09-write-buffer-tag-forgery",
+      "title": "S-09 \u2014 a capability survives the plain store meant to destroy it",
+      "has_sha256sums": false
+    },
+    {
+      "id": "S10-write-buffer-forward-residual",
+      "title": "S-10 \u2014 a scrubbed capability still reads back LIVE while the store is in the write buffer",
+      "has_sha256sums": false
+    },
+    {
+      "id": "S11-seal-minsize-alignment-inert",
+      "title": "S-11 \u2014 SEAL enforces neither its minimum size nor its base alignment",
+      "has_sha256sums": false
+    },
+    {
+      "id": "S12-wherecode-notcap-operand-vs-memory",
+      "title": "S-12 ROOT-CAUSED \u2014 2026-09-03",
+      "has_sha256sums": false
+    },
+    {
+      "id": "S13-o1-dyn-rev-node-hang",
+      "title": "S-13 \u2014 at `-O1` the domain HANGS in the DYN/rev-node path, with no exception",
+      "has_sha256sums": false
+    }
+  ],
+  "issues": {
+    "open": 92,
+    "resolved": 77
+  },
+  "fixtures": [
+    "apr/pools",
+    "cpython/pymalloc",
+    "ffmpeg/buffer-pool",
+    "memcached/allocators",
+    "postgres/memory-contexts",
+    "whisper/ggml-context",
+    "wireshark/wmem"
+  ],
+  "cases_by_corpus": {
+    "capstone/bug-corpora/cpython/pymalloc-repros": 20,
+    "capstone/bug-corpora/ffmpeg/pool-repros": 3,
+    "capstone/bug-corpora/httpd/apr-pool-repros": 1,
+    "capstone/bug-corpora/httpd/bucket-repros": 8,
+    "capstone/bug-corpora/memcached/allocator-repros": 5,
+    "capstone/bug-corpora/mruby/gc-slot-repros": 0,
+    "capstone/bug-corpora/mruby/release-differential": 0,
+    "capstone/bug-corpora/postgres/mmgr-repros": 8,
+    "capstone/bug-corpora/sqlite/capi-repros": 19,
+    "capstone/bug-corpora/wireshark/wmem-repros": 13,
+    "xlang/lua-cdp": 13,
+    "xlang/repro": 15,
+    "xlang/reuse-not-free": 2,
+    "xlang/toctou-double-fetch": 0
+  },
+  "cases_here": 77,
+  "cases_xlang": 30,
+  "cases_total": 107,
+  "live_true": 29,
+  "live_false": 20,
+  "live_not": 28,
+  "advisories_total": 14,
+  "renames": {
+    "schema_version": 1,
+    "note": "Path history for port components. An archived result bundle records which directory a measured binary was built from, so it is never rewritten and keeps quoting the 'from' path; docs/history/ is append-only for the same reason. Resolve an old path here. check-ports.py verifies that every 'from' is gone, every 'to' exists, and every file listed under quoted_by really still quotes the old path.",
+    "renames": [
+      {
+        "from": "capstone/ports/cpython/interpreter",
+        "to": "capstone/ports/cpython/app",
+        "date": "2026-09-28",
+        "reason": "the complete application of a program is app/",
+        "quoted_by": [
+          "capstone/experiments/study/results/cpython-objects-qualification-20260928/README.md",
+          "capstone/experiments/study/results/cpython-reuse-four-arm-20260928/build-manifest.json",
+          "capstone/experiments/study/results/cpython-reuse-three-arm-20260928/cheribsd-build-manifest.json"
+        ]
+      },
+      {
+        "from": "capstone/ports/mruby/musl",
+        "to": "capstone/ports/mruby/app",
+        "date": "2026-09-28",
+        "reason": "the complete application of a program is app/",
+        "quoted_by": [
+          "capstone/experiments/study/results/mruby-gc-memory-20260927/README.md"
+        ]
+      },
+      {
+        "from": "capstone/ports/postgres/single-user",
+        "to": "capstone/ports/postgres/app",
+        "date": "2026-09-28",
+        "reason": "the complete application of a program is app/",
+        "quoted_by": [
+          "capstone/experiments/study/results/postgres-pristine-20260928/README.md",
+          "capstone/experiments/study/results/postgres-reuse-four-arm-20260928/README.md",
+          "capstone/experiments/study/results/postgres-reuse-four-arm-20260928/build-manifest.json",
+          "capstone/experiments/study/results/postgres-reuse-spatial-20260928/build-manifest.json"
+        ]
+      }
+    ],
+    "deferred": [
+      {
+        "from": "capstone/ports/perl/musl",
+        "to": "capstone/ports/perl/app",
+        "reason": "another lane is editing this component; rename it once that work lands"
+      },
+      {
+        "from": "capstone/ports/sqlite",
+        "to": "capstone/ports/sqlite/freestanding",
+        "reason": "99 files quote this path, 23 of them evidence, and the move adds a directory level that every script inside computes its own paths against -- not done without running the nightly and the board gates that drive them; the target is freestanding/ since 2026-09-30, when app/ became the ordinary-program build of 3.22.0"
+      },
+      {
+        "from": "capstone/ports/micropython",
+        "to": "capstone/ports/micropython/app",
+        "reason": "same added level: run-nightly.sh drives its gate script, which resolves the test environment relative to its own depth"
+      },
+      {
+        "from": "capstone/ports/nginx",
+        "to": "capstone/ports/nginx/pool",
+        "reason": "same added level, and two board drivers invoke its scripts"
+      }
+    ]
+  },
+  "gaps": [
+    "`capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.",
+    "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
+    "`capstone/bug-corpora/memcached/allocator-repros` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/memcached/allocator-repros` commits no result bundle of its own.",
+    "`capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.",
+    "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
+    "`capstone/bug-corpora/mruby/release-differential` is triage only -- nothing built.",
+    "`capstone/bug-corpora/mruby/release-differential` does not record live_in_pin: No cases are cut to the schema yet. Liveness is recorded per row in ledger.json instead, and it is measured rather than asserted: a row is here only because its own upstream test fails at the pin and passes at master. The rows are regenerated by probe/extract.py from an mruby clone, so this corpus carries the ledger and the harness rather than 674 generated files.",
+    "`capstone/bug-corpora/postgres/mmgr-repros`: 3 of 8 cases have a PROVENANCE.md.",
+    "`capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.",
+    "`capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.",
+    "`capstone/bug-corpora/wireshark/wmem-repros` has no triage inventory under docs/ref/.",
+    "`xlang/lua-cdp` does not record live_in_pin: Each row is pinned to the binding version its upstream report names, not to a release this project ports.",
+    "`xlang/repro` does not record live_in_pin: Each row is pinned to its own vulnerable upstream commit, named in its target.md, rather than to a release this project ports.",
+    "`xlang/reuse-not-free` does not record live_in_pin: These are documented API contracts rather than fixed defects, so there is no upstream fix against which a pin could be live.",
+    "`xlang/reuse-not-free` commits no result bundle of its own.",
+    "`xlang/toctou-double-fetch` is triage only -- nothing built.",
+    "`xlang/toctou-double-fetch` does not record live_in_pin: Nothing is built, so there is no case to place in a pin.",
+    "`capstone/ports/ffmpeg/app` is a complete application with no corpus.",
+    "`capstone/ports/micropython` is a complete application with no corpus.",
+    "`capstone/ports/perl/musl` is a complete application with no corpus.",
+    "`capstone/ports/postgres/app` is a complete application with no corpus.",
+    "`capstone/ports/sqlite/app` is a complete application with no corpus.",
+    "`capstone/ports/wireshark/app` is a complete application with no corpus.",
+    "`capstone/bug-corpora/mruby/release-differential` is not referenced by any port.json."
+  ]
+}

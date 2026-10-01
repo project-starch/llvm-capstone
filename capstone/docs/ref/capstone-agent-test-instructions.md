@@ -1,5 +1,33 @@
 # Capstone test/run instructions for future agent sessions
 
+Application benchmark study: the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md)
+uses two matched pairs for the nested boundary; default CheriBSD on/off remains
+separate reference data. The [planner](../../experiments/study/README.md) supports
+PoisonCap plans but blocks execution qualification pending observed inner-policy
+accounting. Twenty host checks pass. Upstream mruby lists passes 4/4 original
+arms; both PoisonCap SQLite modes complete the artifact's 20 active phases at
+size 1. Twelve phases are commented out in that artifact, and the main
+result oracle is missing. These are readiness results, not a memory ranking.
+
+Application memory behavior: [twelve paired workload configurations](../../experiments/applications/results/20260927-reuse/README.md)
+pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU
+controls without in-process collection. The results quantify prompt address
+reuse and post-release retention, include the large-retained-graph counterexample,
+and make no timing or total-RSS claim.
+
+Application memory: [Capstone ports versus default CheriBSD](../../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The original matrix recorded
+six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+passes all 27 Capstone repeats at the same 65,536-node capacity, including all six
+previous failures, using unchanged application binaries. Keep the original data
+and larger-node controls separate. These are memory observations, not timings.
+
+Application execution: use the [installed persistent guest and shared SDK](../../runtime/applications.md).
+Start a VM once with `capstone-vm up`, use its Linux shell or `capstone-vm run`,
+and run the common gate in that existing boot. The standard workflow does not
+boot per test or parse application diagnostics for control. Legacy fresh-boot
+hardware/reproducer gates remain separate.
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../../ports/common/host/port_trace/README.md).
 
 This file is the practical command cookbook for the current tree.
@@ -146,7 +174,24 @@ sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-all.txt"
 
 Expected: the aggregate prints each child wrapper before running it and stops on
 the first failure. Use the individual HostCall wrappers below for focused reruns
-and diagnosis.
+and diagnosis. These are the bare HostCall wire probes (an S-mode payload and a
+helper, no musl); no application runs on HostCall v0 any more.
+
+### Delegated runtime probes
+
+The runtime probes that run musl programs (constructors, exit paths, the unserved
+report, large I/O, mmap/shm, `__thread`, capability and sub-word atomics, MOVC,
+untagged CINCOFFSET/SCC) are delegated applications. Build them with an
+application SDK and run them in a running `capstone-vm` guest:
+
+```bash
+python3 capstone/tests/runtime-qemu/run-delegated-probes.py --sdk <SDK> \
+  --work "$CAPSTONE_TMP_ROOT/delegated-probes" --state <capstone-vm state> \
+  --report "$CAPSTONE_TMP_ROOT/delegated-probes.json"
+```
+
+Expected: one `PASS` line per variant and `N of N variants pass`, exit 0. The
+variants and what each checks are in `tests/runtime-qemu/README.md`.
 
 ### HostCall stdout proof
 

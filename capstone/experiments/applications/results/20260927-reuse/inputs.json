@@ -1,0 +1,42 @@
+[
+  {
+    "file": "applications/runs.jsonl",
+    "bytes": 590056,
+    "sha256": "58d819b648f8ba11f3372ab4e99a587b6fe416c67b7cab4fc7ec37f6e456b047"
+  },
+  {
+    "file": "cap-bounded/runs.jsonl",
+    "bytes": 188551,
+    "sha256": "8c62c8e3365fea0d0c0fbc5289fec69f2b858b09c2c53187af232377c1830515"
+  },
+  {
+    "file": "reuse-metrics/cap-ffmpeg64.jsonl",
+    "bytes": 703635,
+    "sha256": "936f4ae64d4c8ce6557aeeb24a814025f7b206f2621bc55f677cfd0deefe94d5"
+  },
+  {
+    "file": "cheri-campaign/runs.jsonl",
+    "bytes": 574806,
+    "sha256": "52b9ba9a7e2297df88ef7d65e9d2dc5824cd6173dcc88d095b5c920d12dc110b"
+  },
+  {
+    "file": "cheri-bounded/runs.jsonl",
+    "bytes": 885623,
+    "sha256": "635fea9d28010056ba96bc6e2e1494b40df79a545f62564856939c1933941071"
+  },
+  {
+    "file": "cap-campaign/runs.jsonl",
+    "bytes": 543886,
+    "sha256": "5176f97aa3c0d8ae40cf180f649f6c41a629b70062ba85a910e30572a5d786fd"
+  },
+  {
+    "file": "cap-large-campaign/runs.jsonl",
+    "bytes": 147409,
+    "sha256": "70c78a3c8c4e3d5e4d3e0b7055cd020d936a8ebd3d04ce0bbb6e30c18df9b6b6"
+  },
+  {
+    "file": "cap-control/runs.jsonl",
+    "bytes": 297405,
+    "sha256": "401afbca9a7824edb9082cfa5741d7313f005023ad9bdc98e35ffadaf78a479e"
+  }
+]

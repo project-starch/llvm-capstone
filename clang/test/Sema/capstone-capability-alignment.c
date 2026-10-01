@@ -44,6 +44,12 @@ PyObject *read_obj(unsigned short *cache) {
 void save(short *buf, PyObject *o) {
   memmove(buf, o, sizeof(*o)); // default-warning {{copying 'PyObject' (aka 'struct object'), which holds a capability, to memory that is only 2-byte aligned}}
 }
+#ifdef __SIZEOF_INTCAP__
+// An __intcap holds a capability too.
+void save_intcaps(short *buf, __intcap *ic) {
+  memcpy(buf, ic, 2 * sizeof(*ic)); // default-warning {{copying '__intcap', which holds a capability, to memory that is only 2-byte aligned}}
+}
+#endif
 // Through a byte buffer: its type says nothing about alignment (opt-in).
 void save_bytes(char *buf, PyObject *o) {
   memmove(buf, o, sizeof(*o)); // all-warning {{copying 'PyObject' (aka 'struct object'), which holds a capability, to a byte buffer: the capability's tag survives on Capstone only if the buffer is 16-byte aligned at run time}}

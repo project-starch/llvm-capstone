@@ -1,0 +1,37 @@
+doio.c: S_openn_setup clears PERL_MODE_MAX bytes of mode, not sizeof(a pointer).
+
+`Zero(mode,sizeof(mode),char)` where mode is the function's `char *mode`
+parameter: sizeof(mode) is the size of a pointer, not of the buffer. Both callers
+pass a `char mode[PERL_MODE_MAX]` and PERL_MODE_MAX is 8, so wherever a pointer is
+8 bytes the two numbers agree by coincidence and nothing goes wrong. Where a
+pointer is a 16-byte capability it clears 16 bytes of an 8-byte stack array.
+
+This is a defect in perl rather than a porting difference, so the patch is
+unconditional: it is a no-op on any platform whose pointers are 8 bytes. Present
+unchanged in 5.32.1, 5.36.3 and 5.38.2 -- worth reporting upstream.
+
+Found by running scripts/smoke.pl in a domain: a capability bounds fault on a
+one-byte store at offset 8 of an 8-byte object, reached at the script's first
+open(). The store was in memset and the caller came from the monitor's saved
+return address (S_openn_setup + 0xdc).
+
+--- a/doio.c	2026-09-26 15:42:28.045530431 +0800
++++ b/doio.c	2026-09-26 15:42:28.052528390 +0800
+@@ -442,7 +442,16 @@
+     *savefd = -1;
+     *savetype = IoTYPE_CLOSED;
+ 
+-    Zero(mode,sizeof(mode),char);
++    /* PERL_MODE_MAX, not sizeof(mode): mode is a char* parameter here, so
++       sizeof(mode) is the size of a POINTER, and this cleared as many bytes as a
++       pointer is wide. Both callers pass a char[PERL_MODE_MAX], which is 8, so on
++       a machine with 8-byte pointers the two numbers agree by coincidence and the
++       bug is invisible. Where a pointer is a 16-byte capability it wrote 16 bytes
++       into an 8-byte stack array: caught here at the first byte past the end
++       (capability bounds fault, one-byte store at offset 8 of an 8-byte object, in
++       S_openn_setup, on the first open() a script does). Present unchanged in
++       5.32.1, 5.36.3 and 5.38.2. */
++    Zero(mode,PERL_MODE_MAX,char);
+     PL_forkprocess = 1;		/* assume true if no fork */
+ 
+     /* If currently open - close before we re-open */

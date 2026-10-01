@@ -1,0 +1,21 @@
+{
+  "workloads": [
+    "sqlite-main",
+    "mruby-ao8",
+    "mruby-ao16",
+    "ffmpeg-xvid",
+    "ffmpeg-resize",
+    "postgres-work"
+  ],
+  "processes_per_cell": 3,
+  "inputs_sha256": {
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/experiments/study/plot-application-memory-paper.py": "dc697ca463653fb8292e21c24c22ad2f446bbeec2ae357a6ec596848de569c55",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/experiments/study/results/published-policy-20260928/summary.json": "2556899a8395aca4663e6425deb9d173da95d9597b790c5f044d4ff7fc143666",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/experiments/study/results/published-policy-20260928/sqlite-summary.json": "11c3fb3a864b131593e74868f587248de2eed307150dfd5e11ecc76f8dc2d8ae",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/experiments/study/results/postgres-reuse-four-arm-20260928/reuse-summary.json": "f30d7fe1c7f3bffb2656fac65705dca243f0697b75423d32a9b4253ac27bf8e3",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/experiments/study/results/postgres-reuse-four-arm-20260928/validate.py": "20e026a56ea4261ffc248bfdf0c76f5585d56e62f23306fd4874f17e2388a312",
+    "/home/biecho/llvm-capstone-poisoncap-study/capstone/experiments/study/results/postgres-reuse-four-arm-20260928/cheribsd-raw.tar.gz": "bd4d845a041ad903fc1a52dcd4464760a8598b5b3d3b773ab91c3c9e42c90996"
+  },
+  "metric": "Pooled three-process conditional distribution of observed same-start release-to-reissue gaps; successful lifetime index.",
+  "scope": "Per-application inner allocators; no physical working-set or total-memory inference."
+}

@@ -1,9 +1,54 @@
 # Capstone testing matrix and current recommendations
 
+Application benchmark study: the [Sublet/PoisonCap design](../plans/sublet-poisoncap-memory-study.md)
+uses two matched pairs for the nested boundary; default CheriBSD on/off remains
+separate reference data. The [planner](../../experiments/study/README.md) supports
+PoisonCap plans but blocks execution qualification pending observed inner-policy
+accounting. Twenty host checks pass. Upstream mruby lists passes 4/4 original
+arms; both PoisonCap SQLite modes complete the artifact's 20 active phases at
+size 1. Twelve phases are commented out in that artifact, and the main
+result oracle is missing. These are readiness results, not a memory ranking.
+
+Application memory behavior: [twelve paired workload configurations](../../experiments/applications/results/20260927-reuse/README.md)
+pass 72/72 attempts. Every recorded Capstone memory phase matches older-QEMU
+controls without in-process collection. The results quantify prompt address
+reuse and post-release retention, include the large-retained-graph counterexample,
+and make no timing or total-RSS claim.
+
+Application memory: [Capstone ports versus default CheriBSD](../../experiments/applications/comparison.md) now covers
+FFmpeg and mruby with common allocation counters. The original matrix recorded
+six Capstone node-capacity failures. The [QEMU node-reuse follow-up](../../runtime/tests/application/results/20260927-node-reuse/README.md)
+passes all 27 Capstone repeats at the same 65,536-node capacity, including all six
+previous failures, using unchanged application binaries. Keep the original data
+and larger-node controls separate. These are memory observations, not timings.
+
+2026-09-26 application-platform run: the installed managed guest passes the common
+acceptance (including exhaustion followed by 1,008 starts). Legacy CoreMark,
+shared-region, stdout/filewrite/fileread pass. The available snapshot fails
+null_blk (null_submit_bio, bad address 0x6f) and file-open-close (borrowed-region
+INIT, cause 29) on both the original and new platforms. These remain baseline
+failures; the historical rows below are not a claim that every gate passed in
+this run. See [current state](../state/current-state.md).
+
 Allocator trace tooling: [formats, CLI, validation scope and adapter tests](../../ports/common/host/port_trace/README.md).
 
 This file is the compact map of which test layer to run for which kind of change.
 It is intentionally shorter than the older narrative version.
+
+Perl's [complete upstream `t/base` run](../../ports/perl/musl/results/2026-09-26/base-tests.txt)
+uses host `prove --exec` with `capstone-vm run`: 6/9 files pass; `term.t` has one
+failed assertion and `lex.t`/`rs.t` each terminate by SIGSEGV before TAP. This
+is a port compatibility gate, not a passing full Perl-suite result.
+
+Shared application runtime: run the native startup/image/stream tests and host
+CLI tests, then the [persistent-guest application gate](../../runtime/applications.md#verification).
+It checks actual waitpid signals, no-yield and blocked-I/O cancellation,
+concurrent ownership, dup/fork/VMA lifetime, rollback, memory scrubbing, two real
+interpreters and an unchanged boot ID. `--repeat 200` adds 1,008 mixed starts with
+stable resource counters; `--sublet-image` adds transferred-heap reclamation,
+200,000-cycle in-process reuse, stale-reference rejection after reuse and
+recoverable genuine node exhaustion. It does not add
+fork/threads inside a domain or constitute FPGA validation.
 
 ## Setup once per shell
 
@@ -32,8 +77,12 @@ source capstone/tests/capstone-test-env.sh
 "$CAPSTONE_LLVM_LIT" -sv \
   "$CAPSTONE_REPO_ROOT/clang/test/Driver/capstone-linux-toolchain.c"
 
-# Runtime proofs
+# Runtime proofs: the bare HostCall wire probes (each boots its own QEMU)
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-all.sh"
+
+# Runtime probes as delegated applications, in a running capstone_vm guest
+python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-delegated-probes.py" \
+  --sdk <application SDK> --work <dir> --state <capstone_vm state>
 
 # null_blk regressions
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-all.sh"
@@ -68,22 +117,22 @@ for build paths, release-layout restrictions and artifact retention.
 | HostCall file handle write proof | first handle-based byte-movement path on top of helper-managed file tokens | handle-based file-service data-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh` |
 | HostCall file handle read proof | first handle-based reverse-direction byte-movement path on top of helper-managed file tokens | handle-based file-service read-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh` |
 | HostCall file handle sync proof | first handle-based durability-oriented path on top of helper-managed file tokens | handle-based file-service sync-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh` |
-| MOVC of an integer, as the RTL does it | capstone-qemu with `CAPSTONE_MOVC_NULL_SCALAR=1` nulls a non-capability MOVC source as the RTL does (probe `b=5 c=0`, against `b=5 c=5` by default), and reports whether the compiler's C-32 shape loses its pointer to it | capstone-qemu MOVC changes; C-32 and other register-copy codegen changes | `capstone/tests/runtime-qemu/movc-null-scalar/run.sh` |
-| MOVC exposure: what zeroing an integer MOVC source changes | the nightly, each hostcall probe, the musl probes and libc-test with `CAPSTONE_MOVC_NULL_SCALAR` off and on, every verdict compared; exits 1 on a difference, 2 if an arm did not measure | a QEMU or compiler change that could move the answer to Q-04 | `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh` |
-| CINCOFFSET and SCC on an integer | case 0 (both on a capability) works, cases 1 and 2 raise 24 today, or give the integer result under `EXPECT=cheri` | the SCC/CINCOFFSET decision; capstone-qemu cap-arithmetic helpers | `capstone/tests/runtime-qemu/untagged-cap-arith/run.sh` |
+| MOVC of an integer, as the RTL does it | capstone-qemu with `CAPSTONE_MOVC_NULL_SCALAR=1` nulls a non-capability MOVC source as the RTL does (probe `b=5 c=0`, against `b=5 c=5` by default), and reports whether the compiler's C-32 shape loses its pointer to it; a delegated application, run once in a guest started with the switch off and once with it on | capstone-qemu MOVC changes; C-32 and other register-copy codegen changes | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only movc` |
+| MOVC exposure: what zeroing an integer MOVC source changes | the nightly, each bare hostcall probe, the delegated runtime probes and the delegated libc-test with `CAPSTONE_MOVC_NULL_SCALAR` off and on, every verdict compared; exits 1 on a difference, 2 if an arm did not measure | a QEMU or compiler change that could move the answer to Q-04 | `capstone/tests/runtime-qemu/movc-null-scalar/exposure.sh` |
+| CINCOFFSET and SCC on an integer | case 0 (both on a capability) works, cases 1 and 2 end in SIGSEGV with fault cause 24 today, or give the integer result under `--arith-expect cheri` | the SCC/CINCOFFSET decision; capstone-qemu cap-arithmetic helpers | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only arith-0 arith-1 arith-2` |
 | HostCall file handle stat proof | first handle-based narrow metadata path on top of helper-managed file tokens | handle-based file-service stat-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh` |
 | HostCall file handle truncate proof | first handle-based size-mutation path on top of helper-managed file tokens | handle-based file-service truncate-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh` |
 | HostCall path access proof | first SQLite-facing path existence/access path on top of the current HostCall boundary | path-level SQLite/VFS-facing changes | `capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh` |
 | HostCall path delete proof | first SQLite-facing path delete/unlink path on top of the current HostCall boundary | path-level SQLite/VFS-facing changes | `capstone/tests/runtime-qemu/run-hostcall-path-delete-probe.sh` |
 | HostCall combined file-object proof | first composed end-to-end file-object scenario across modular OPEN/WRITE/SYNC/CLOSE/READ operations | composed file-service behavior changes | `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh` |
-| HostCall large I/O proof | 64 KiB file reads/writes on the 9p share, whole and in odd pieces, and a stdout line longer than a payload region with the host's stdout on a 9p file; a pinned control per direction must fail | host service data-path changes (anything that moves payload bytes through a syscall) | `capstone/tests/runtime-qemu/run-hostcall-large-io-probe.sh` |
-| HostCall directory listing proof | `DIR_READ`: opendir/readdir/rewinddir/seekdir on the 9p share, a 300-entry directory across several rounds, ENOENT/ENOTDIR; the control (a runtime without getdents64) must fail the listing | directory service or musl dirent changes | `capstone/tests/runtime-qemu/run-hostcall-dir-read-probe.sh` |
-| HostCall exit proof | `exit()` from a musl domain ends with the right status and flushed stdio, with and without a `__capstone_at_exit` hook; the control (a runtime that tests the hook's address, C-56) must halt | runtime exit path or weak-symbol changes | `capstone/tests/runtime-qemu/run-hostcall-exit-hook-probe.sh` |
-| HostCall standard descriptors proof | stdout/stderr are non-tty character devices to fstat/isatty, not seekable, closable (and closed to everything after); stdin and unopened descriptors say EBADF, ioctl included; the control (a runtime whose fstat knows no stdout) must fail | runtime descriptor handling | `capstone/tests/runtime-qemu/run-hostcall-stdio-descriptors-probe.sh` |
-| HostCall return proof | a musl domain that returns without `exit()` still delivers its buffered stdout and runs its `atexit` handlers, with the returned status; the control (a runtime that returns straight to the host) must lose them | runtime `domain_main` / exit-path changes | `capstone/tests/runtime-qemu/run-hostcall-return-flush-probe.sh` |
-| __thread in a musl domain (C-47): local-exec codegen, the TLS segment, and the runtime's block; with an overrun control and an old-runtime control | 9 checks at -O0 and -O2: initial values, .tbss, 64/4096 alignment, a second unit, a kept capability, bounds, errno | compiler codegen or musl-capstone runtime changes | `capstone/tests/runtime-qemu/run-hostcall-thread-local-probe.sh` |
-| HostCall constructors proof | a musl domain runs its constructors (with and without a priority) before `main` and its destructors at exit, printing exactly what the same file prints natively; the control (the runtime before C-64, which ran none and faulted on `.fini_array`) must halt | runtime `domain_main` / exit-path changes, `my_first_domain/link.ld` array placement | `capstone/tests/runtime-qemu/run-hostcall-init-fini-probe.sh` |
-| HostCall unserved-report proof | the runtime's unserved-syscall line reaches the host from a program that closed fd 1; the control (the runtime before I-11, which wrote it through the program's fd 1) must lose it | runtime unserved report / descriptor handling | `capstone/tests/runtime-qemu/run-hostcall-unserved-report-probe.sh` |
+| Delegated large I/O | an application reads and writes a 64 KiB file on the 9p share, whole and in odd pieces, through the launcher's bounce buffer; a 5000-byte stdout line with the launcher's stdout on a 9p file | delegated read/write path, launcher bounce buffer | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only large-read big-stdout` |
+| Delegated exit | `exit()` ends with the right status and flushed stdio, with and without a `__capstone_at_exit` hook (7, and 42 through the hook), and the `atexit` handler runs through a tagged pointer | runtime exit path, weak-symbol or `atexit` override changes | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only exit-default exit-hook` |
+| Delegated return | a program that returns from `main` without `exit()` still delivers its buffered stdout and runs its `atexit` handlers, with the returned status 5 | runtime `domain_main` / exit-path changes | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only return-flush` |
+| __thread in an application (C-47): local-exec codegen, the TLS segment, and the runtime's block; with an overrun control | 9 checks at -O0 and -O2: initial values, .tbss, 64/4096 alignment, a second unit, a kept capability, bounds, errno; the overrun must end in SIGSEGV with a fault record | compiler codegen or musl-capstone runtime changes | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only tls-O0 tls-O2 tls-overrun` |
+| Delegated constructors | constructors (with and without a priority) run before `main` and destructors at exit, printing exactly what the same file prints natively, one of them reading the launcher's environment | runtime `domain_main` / exit-path changes, `my_first_domain/link.ld` array placement | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only init-fini` |
+| Delegated unserved report | the runtime's unserved-syscall line (`214x2`, two `brk`) reaches the task's stderr from a program that closed fd 1 | runtime unserved report | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only unserved-report` |
+| Delegated mmap and System V shared memory | mmap/munmap/shm* from the domain's allocator (`mmap_shm_level0.c`), with the refusals' errnos; the control asks the syscall layer for the same mapping and must get ENOSYS and an unserved report | runtime mmap/shm override, level0 | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only mmap-shm mmap-shm-control` |
+| Capability-valued and sub-word atomics in an application (C-54, C-51) | pointer atomics through the runtime's generic `__atomic_*` come out tagged; 8/16-bit atomics land on their lane; each at -O0 and -O2 | atomic codegen, `atomic_libcalls.c` | `capstone/tests/runtime-qemu/run-delegated-probes.py` `--only cap-atomics-O0 cap-atomics-O2 subword-O0 subword-O2` |
 | Second-`PENDING` diagnostic | whether metadata-only multi-`PENDING` re-entry works | targeted runtime/control-flow diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-probe.sh` |
 | Second-`PENDING` payload-reuse diagnostic | whether reusing the same borrowed output payload across rounds triggers the current limitation | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-probe.sh` |
 | Second-`PENDING` payload-reuse revoke diagnostic | whether explicit revoke before re-share satisfies the intended borrowed-region rule | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-revoke-probe.sh` |
@@ -147,6 +196,11 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-all.sh"
 ```
 
 Then add the more specific wrapper that matches the changed service.
+
+A change to the musl application runtime (`ports/musl-capstone/runtime`, the delegated
+runtime, the only one) runs `run-delegated-probes.py`, the delegated libc-test
+(`ports/musl-capstone/libc-test/run-libc-test-delegated.py`) and the application gate
+(`runtime/tests/application/run.py`) in a capstone_vm guest.
 
 ### OpenSBI / kernel / module integration changes
 

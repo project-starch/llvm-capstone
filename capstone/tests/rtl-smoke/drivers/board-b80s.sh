@@ -10,6 +10,9 @@
 #   arm 3  lpc + k800.dom                       retval=4
 #   arm 4  native -O2, warm --size 1 --stats    112006 38bb59fd, Successful lookasides 25122
 # BUDGET 900 s per arm; watchdog 420 s.
+# SQLITE_HOST_HASH / NATIVE_HASH / NATIVE_QEMU pin the host, the native image and its QEMU BASELINE-WARM figure; the
+# defaults are the sw80a pieces (2af56927aaf907e9, b36eb3814c3cefce, 240654449). A rebuilt baseline or a different host
+# re-pins all three here rather than in a copy of this file, and every check below reads the same three values.
 set -u; R=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); U=${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/unify
 B=$R/capstone/caplifive-system/sw/buildroot; BM=$B/components/opensbi/lib/sbi/capstone-sbi
 FW=${CAPSTONE_BR_FW:-$B/build-fpga/build/opensbi-custom/build/platform/fpga/ariane/firmware}
@@ -32,24 +35,41 @@ IMG=$C5_IMG
 [ "$(sha256sum $IMG|cut -c1-16)" = "$C5_HASH" ] || fail "cell 5 image is not $C5_HASH"
 [ -f ${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/qemu-pass/$(sha256sum $IMG|cut -d' ' -f1) ] || fail "no QEMU pass record for the cell 5 image"
 RRH=${SQLITE_HOST_USER:?set SQLITE_HOST_USER=<path to sqlite_host.user>}
-[ "$(sha256sum $RRH|cut -c1-16)" = 2af56927aaf907e9 ] || fail "host is not the readback build 2af56927aaf907e9"
+SQLITE_HOST_HASH=${SQLITE_HOST_HASH:-2af56927aaf907e9}; NATIVE_HASH=${NATIVE_HASH:-b36eb3814c3cefce}; NATIVE_QEMU=${NATIVE_QEMU:-240654449}
+export SQLITE_HOST_HASH NATIVE_HASH NATIVE_QEMU
+[ "$(sha256sum $RRH|cut -c1-16)" = "$SQLITE_HOST_HASH" ] || fail "host is not the readback build $SQLITE_HOST_HASH"
 NAT=${NATIVE_BASELINE:?set NATIVE_BASELINE=<path to speedtest1_baseline>}
-[ "$(sha256sum $NAT|cut -c1-16)" = b36eb3814c3cefce ] || fail "native -O2 baseline is not b36eb3814c3cefce"
+[ "$(sha256sum $NAT|cut -c1-16)" = "$NATIVE_HASH" ] || fail "native -O2 baseline is not $NATIVE_HASH"
 grep -aq "SPEEDTEST1-CYCLES $C5_QEMU HIGHWATER n/a HEAP 2097152" "$C5_QEMU_LOG" || fail "the QEMU run of the cell 5 image ($C5_QEMU) is not on record in $C5_QEMU_LOG"
-grep -aq 'BASELINE-WARM CYCLES 240654449' ${QEMU_LOG_BASELINE:?} || fail "the -O2 QEMU run of the baseline is not on record"
+grep -aq "BASELINE-WARM CYCLES $NATIVE_QEMU " ${QEMU_LOG_BASELINE:?} || fail "the -O2 QEMU run of the baseline ($NATIVE_QEMU) is not on record in $QEMU_LOG_BASELINE"
 LPC=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}/lpc
 [ "$(sha256sum $LPC|cut -c1-16)" = 3b93a2b6e2adfa36 ] || fail "lpc on the overlay is not 3b93a2b6e2adfa36"
 [ -f "$B/overlay/test-domains/k800.dom" ] || fail "k800.dom missing from the overlay"
-say "pieces: cell 5 variant $C5_TAG $C5_HASH (pass record present), readback host 2af56927aaf907e9, native -O2 b36eb3814c3cefce, lpc 3b93a2b6e2adfa36; QEMU runs on record ($C5_QEMU / 240,654,449)"
+# K800_IMG/K800_HASH/K800_ORACLES (optional): stage a k800 control relinked off 0x10000. DOMAIN_BASE_VA defaults to
+# 0x10000, so a cell built without it enters where the stock control does and the entry-VA check below
+# refuses the boot. Relink the control, never the cell: the cell is the artifact under measurement.
+if [ -n "${K800_IMG:-}" ]; then
+  [ "$(sha256sum "$K800_IMG"|cut -c1-16)" = "${K800_HASH:?set K800_HASH=<sha256/16> with K800_IMG}" ] || fail "relinked k800 is not $K800_HASH"
+  # Preflight C13 binds every rung's image to the FIRST hash in $PREFLIGHT_ORACLES/<rung>.qemu-pass, and
+  # the default directory vouches for the STOCK k800, so a relinked control without its own record is
+  # refused (boot sw8x-b80s-p1o2-c5, 2026-09-29). The control is this driver's only rung, so the
+  # directory is the relinked k800's alone. The check is unchanged; only the record it reads is.
+  K800_ORACLES=${K800_ORACLES:?set K800_ORACLES=<dir with the relinked k800.oracle and k800.qemu-pass> with K800_IMG}
+  [ "$(grep -oE '[0-9a-f]{64}' "$K800_ORACLES/k800.qemu-pass" 2>/dev/null | head -1 | cut -c1-16)" = "$K800_HASH" ] || fail "$K800_ORACLES/k800.qemu-pass does not vouch for $K800_HASH"
+  [ -f "$K800_ORACLES/k800.oracle" ] || fail "no k800.oracle in $K800_ORACLES"
+  export K800_HASH PREFLIGHT_ORACLES=$K800_ORACLES
+fi
+say "pieces: cell 5 variant $C5_TAG $C5_HASH (pass record present), readback host $SQLITE_HOST_HASH, native -O2 $NATIVE_HASH, lpc 3b93a2b6e2adfa36; QEMU runs on record ($C5_QEMU / $NATIVE_QEMU)"
 T=${CAPSTONE_BR_OVERLAY:-$B/overlay/test-domains}; TT=${CAPSTONE_BR_TARGET:-$B/build-fpga/target/test-domains}; mkdir -p "$T" "$TT"
-for s in speedtest1.dom sqlite_host.user speedtest1_baseline; do cp -f "$T/$s" $OUT/$s.before 2>/dev/null; done
+for s in speedtest1.dom sqlite_host.user speedtest1_baseline k800.dom; do cp -f "$T/$s" $OUT/$s.before 2>/dev/null; done
 cp -f $IMG "$T/speedtest1.dom" || fail "stage the cell 5 image"
 cp -f $RRH "$T/sqlite_host.user" || fail "stage host"
 cp -f $NAT "$T/speedtest1_baseline" && chmod 0755 "$T/speedtest1_baseline" || fail "stage native -O2"
+if [ -n "${K800_IMG:-}" ]; then cp -f "$K800_IMG" "$T/k800.dom" || fail "stage relinked k800"; fi
 STASH=$OUT/retired; mkdir -p $STASH; RESTORED=0
 RETIRE="rtpc bigregion.user trapctl.dom fillsd.dom fillwarm.dom fillcost.dom fillnop.dom speedtest1_seven.dom sqlite_host_rr.user"
 restore(){ [ "$RESTORED" = 1 ] && return 0; RESTORED=1
-  for s in speedtest1.dom sqlite_host.user speedtest1_baseline; do [ -f $OUT/$s.before ] && { cp -f $OUT/$s.before "$T/$s"; cp -f $OUT/$s.before "$TT/$s"; }; done
+  for s in speedtest1.dom sqlite_host.user speedtest1_baseline k800.dom; do [ -f $OUT/$s.before ] && { cp -f $OUT/$s.before "$T/$s"; cp -f $OUT/$s.before "$TT/$s"; }; done
   for f in $RETIRE; do [ -f "$STASH/$f" ] && { cp -f "$STASH/$f" "$T/$f"; cp -f "$STASH/$f" "$TT/$f"; }; done
   bake restore && say "rebaked with the retired set back" || say "WARN: restore rebake failed -- the next boot MUST rebake"; }
 trap restore EXIT
@@ -64,7 +84,11 @@ for p in sorted(glob.glob(L+'/overlay/test-domains/*')):
     d=open(p,'rb').read()
     if d[:4]!=b'\x7fELF': continue
     e=struct.unpack_from('<Q',d,0x18)[0]; n=p.split('/')[-1]
-    print(f"  entry {e:#012x}  {n}"); seen.setdefault(e,[]).append(n)
+    # Only DOMAINS can collide: R-3 hangs a second domain entered at a reused VA. Host programs (lpc,
+    # sqlite_host*.user) are Linux processes and two identical copies share an entry harmlessly;
+    # counting them refused a valid boot (p1o2-c6, 2026-09-29). Same scope as preflight C15 (*.dom).
+    dom = n.endswith('.dom'); print(f"  entry {e:#012x}  {n}{'' if dom else '  (host program, not checked)'}")
+    if dom: seen.setdefault(e,[]).append(n)
 dup={e:v for e,v in seen.items() if len(v)>1}
 print('entry-VA collisions:', 'none' if not dup else dup); sys.exit(1 if dup else 0)
 PY
@@ -79,7 +103,8 @@ python3 - "$B" <<'PY' | tee -a $LOG
 import sys,hashlib,os
 L=sys.argv[1]
 import os
-want={'speedtest1.dom':os.environ['C5_HASH'],'lpc':'3b93a2b6e2adfa36','sqlite_host.user':'2af56927aaf907e9','speedtest1_baseline':'b36eb3814c3cefce'}
+want={'speedtest1.dom':os.environ['C5_HASH'],'lpc':'3b93a2b6e2adfa36','sqlite_host.user':os.environ['SQLITE_HOST_HASH'],'speedtest1_baseline':os.environ['NATIVE_HASH']}
+if os.environ.get('K800_HASH'): want['k800.dom']=os.environ['K800_HASH']
 bad=0
 for d in ('overlay/test-domains','build/target/test-domains'):
     for f,exp in want.items():
@@ -111,7 +136,7 @@ D="$D,/test-domains/lpc|k800:/test-domains/k800.dom"
 D="$D,/test-domains/speedtest1_baseline|warm:--testset main --size 1 --verify --stats"
 export SQLITE_STAGE_DOMS="$D" PROBE_SCOPED_OUT=$OUT/boot.txt PROBE_RAW_OUT=$OUT/boot-raw.txt
 say "=== boot sw8x-b80s-$C5_TAG = cell 5 variant $C5_TAG ($C5_HASH) with --stats: control, cell 5 --stats, control, native -O2 warm --stats ==="
-say "=== pre-registered: retval=4 twice; cell 5 $C5_TAG: 112006 38bb59fd, HEAP 2097152 DROPPED 0; $C5_EXPECT; cycles = $C5_QEMU x CPI 3.2..4.9; native -O2: 112006 38bb59fd, Successful lookasides 25122, BASELINE-WARM cycles = 240.65 M x CPI ==="
+say "=== pre-registered: retval=4 twice; cell 5 $C5_TAG: 112006 38bb59fd, HEAP 2097152 DROPPED 0; $C5_EXPECT; cycles = $C5_QEMU x CPI 3.2..4.9; native -O2: 112006 38bb59fd, Successful lookasides 25122, BASELINE-WARM cycles = $NATIVE_QEMU x CPI ==="
 for i in $(seq 1 30); do c=$(curl -sS -m 10 -o /dev/null -w '%{http_code}' "$FPGA_URL" 2>/dev/null); [ "$c" != "000" ] && break; say "console down ($i)"; sleep 60; done
 cd $R/capstone/tests/rtl-smoke
 T0=$(date +%s)
@@ -136,10 +161,10 @@ for pat in (r'RESULT k800 retval=[0-9-]+', r'Verification Hash: \d+ [0-9a-f]{8}'
     f=find_all(pat,src); print(f"  {pat[:30]:30}: {len(f)}x {f[-6:]}")
 m=re.findall(r'SPEEDTEST1-CYCLES (\d+) HIGHWATER', s)   # anchored on the next token
 import os
-q=int(os.environ['C5_QEMU'])
+q=int(os.environ['C5_QEMU']); nq=int(os.environ['NATIVE_QEMU'])
 if m: c=int(m[0]); print(f"  cell 5 {os.environ['C5_TAG']} cycles {c:,}; CPI vs QEMU {q:,}: {c/q:.3f}; in band: {3.2*q<=c<=4.9*q}")
 n=re.findall(r'BASELINE-WARM CYCLES (\d+) INSTRS', s)
-if n: b=int(n[-1]); print(f"  native -O2 warm cycles {b:,}; CPI vs QEMU 240,654,449: {b/240654449:.3f}; in band: {720000000<=b<=1200000000}; ratio cell5/native-O2: {c/b:.4f}") if m else None
+if n: b=int(n[-1]); print(f"  native -O2 warm cycles {b:,}; CPI vs QEMU {nq:,}: {b/nq:.3f}; in band: {720000000<=b<=1200000000}; ratio cell5/native-O2: {c/b:.4f}") if m else None
 print("  boot banners after this run's load_image (must be 1):", max(len(find_all(r'OpenSBI v', s)), len(find_all(r'Linux version', s))))
 PY
 srs=${PIPESTATUS[0]}

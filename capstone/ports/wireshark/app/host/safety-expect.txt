@@ -19,8 +19,8 @@
 #   coalescing on every free, so at rest no two free blocks are adjacent. So a block freed and
 #   asked for again at the same size comes back at the same address (5, 6). free writes only
 #   headers, so a freed payload keeps its bytes (4).
-# - shrink (CAPSTONE_LEVEL0_SHRINK) narrows each returned pointer to the bytes asked for, and
-#   changes nothing else: no temporal safety (4, 5, 6 as on level0).
+# - shrink (level0's default per-object bounds) narrows each returned pointer to the bytes asked
+#   for, and changes nothing else: no temporal safety (4, 5, 6 as on level0).
 # - wmem (10-12): a BLOCK_FAST or BLOCK allocator carves its allocations out of one g_malloc'd
 #   block (2 or 8 MiB), and every allocation carries that block's bounds on BOTH arms, since
 #   level0 narrows only the block. After wmem_free_all, BLOCK_FAST keeps its first block and
@@ -89,3 +89,33 @@ sublet   9  RETURN 90005b
 sublet  10  RETURN a0015b
 sublet  11  RETURN b0015b
 sublet  12  RETURN c000ee
+
+# FIXTURE 13 on the sublet arm, the chunks arm's matched control (wmem step 2, registered with
+# ports/wireshark/wmem/PREREGISTRATION-tshark-step2.md before the first chunks boot). The freed
+# chunk stays readable: upstream's free changes nothing the old pointer's capability covers. Its
+# first bytes may now hold a free-list link, so the value is not predicted.
+sublet  13  RETURN *
+
+# THE CHUNKS ARM (host/build-domain.sh TSAPP_HEAP=chunks): the sublet arm with wmem's BLOCK
+# allocator under the chunk port (ports/wireshark/wmem, patches 0001+0002). Registered before any
+# chunks image had booted, and pushed before its first run.
+# - 1-9 do not touch wmem, and the heap is the sublet arm's: the same verdicts.
+# - 10 is BLOCK_FAST, which the chunk port leaves unchanged: RETURN, as on the sublet arm.
+# - 11: a BLOCK reset is one revoke of the block's senior handle, so the pointer kept across it
+#   faults, temporal. 12: every chunk is handed out through an alias bounded to its request, so a
+#   write past the first allocation into the second faults, oob, at the printed target. 13: the
+#   chunk free is a revoke, so the read faults, temporal.
+chunks   1  RETURN 100001
+chunks   1  LEN    64
+chunks   2  FAULT  oob
+chunks   3  FAULT  oob
+chunks   4  FAULT  temporal
+chunks   5  FAULT  temporal
+chunks   6  FAULT  temporal
+chunks   7  FAULT  oob
+chunks   8  FAULT  oob
+chunks   9  RETURN 90005b
+chunks  10  RETURN a0015b
+chunks  11  FAULT  temporal
+chunks  12  FAULT  oob
+chunks  13  FAULT  temporal
