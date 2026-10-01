@@ -26,10 +26,8 @@ HERE = Path(__file__).resolve().parent
 EXCLUDE = {
     "dlopen": "dynamic loading", "dlopen_dso": "dynamic loading",
     "tls_align_dlopen": "dynamic loading", "tls_init_dlopen": "dynamic loading",
-    "pthread_cancel-points": "threads", "pthread_cancel": "threads",
-    "pthread_cond": "threads", "pthread_mutex": "threads", "pthread_mutex_pi": "threads",
-    "pthread_robust": "threads", "pthread_tsd": "threads", "sem_init": "threads",
-    "sem_open": "threads and shared memory", "vfork": "processes: vfork itself",
+    "sem_open": "file-backed shared mapping: sem_open maps a /dev/shm file MAP_SHARED",
+    "vfork": "processes: vfork itself",
     "wordexp": "processes: musl forks a shell", "fcntl": "processes: forks a child",
     "socket": "network", "ipc_msg": "SysV IPC", "ipc_sem": "SysV IPC", "ipc_shm": "SysV IPC",
 }

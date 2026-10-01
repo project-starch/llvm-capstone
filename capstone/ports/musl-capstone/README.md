@@ -10,12 +10,15 @@ stubs, and the next workload would need its own.
 
 **A domain runs musl**, as a delegated application (ABI v2, the only application runtime:
 [applications.md](../../runtime/applications.md)). The delegated libc-test runner runs musl's
-functional suite in one guest boot and currently records **46 PASS, 4 FAIL, 4 FAULT, 3 NOBUILD,
-20 EXCLUDED** of 77; see [the port migration results](../common/application/results/20260929-delegation.json).
-All 45 earlier delegated passes remain green; `sscanf_long` now passes.
-`tls_init` and `tls_local_exec` now build but fault in `pthread_join` after
-unsupported thread creation. They are not TLS-initialization passes. The
-existing exclusions are retained for comparison.
+functional suite in one guest boot and currently records **56 PASS, 3 FAIL, 1 FAULT, 5 NOBUILD,
+12 EXCLUDED** of 77 with threads (2026-09-30, [record](../../runtime/tests/application/results/20260930-pthreads.json)),
+against 46, 4, 4, 3 and 20 at [the port migration](../common/application/results/20260929-delegation.json).
+musl's own `pthread_create`, `join`, `detach` and `exit` run on minted contexts
+(docs/plans/delegation-threads.md, T4): `pthread_cond`, `pthread_mutex`,
+`pthread_mutex_pi`, `pthread_robust`, `pthread_tsd`, `sem_init`, `tls_init`
+and `tls_local_exec` pass. `pthread_cancel` and `pthread_cancel-points` do
+not build yet (cancellation points need signals per thread); `sem_open` is
+excluded because it maps a file MAP_SHARED, which a domain does not serve.
 
 In v2, pipes, `posix_spawn`, `popen`, `system`, wait and Capstone-image
 `execve` work as delegated operations, and sockets and epoll are delegated
@@ -336,7 +339,7 @@ a patch may change how a test reaches memory, never what it checks. `fetch-libc-
 the tree to the pinned commit and applies them, so a run depends on the commit and the patch set
 and on nothing that happened in the tree before.
 
-## Patches to musl: three round-count decisions, and two capabilities
+## Patches to musl: three round-count decisions, two capabilities, and threads
 
 Under the delegated runtime every syscall is a round trip through the launcher, so the
 port's cost model is the number of rounds, and `musl-patches/` holds the three places where
@@ -355,6 +358,13 @@ them; each patch is one decision and says so in its name:
   `F_*OWN_EX` commands, so the `struct flock` pointer arrived untagged and the runtime's first
   read of it faulted (CPython's `test_lockf`, SQLite's first lock). It reads the argument as
   `syscall_arg_t`, as musl's `syscall()` does.
+- `0006` `pthread_cond_t` and `cnd_t` laid out for 16-byte pointers (C-65): upstream's union
+  of 12 ints put `_c_head` over `_c_clock` and `_c_tail` 32 bytes past the 48-byte object, so
+  every signal on a private condition variable loaded from the next object. With 16-byte
+  pointers the object is 64 bytes, pointers first; other pointer sizes are unchanged.
+- `0007` a thread attribute keeps its stack address as a pointer: musl kept it in an
+  `unsigned long`, so `pthread_create` built an untagged stack pointer from it and
+  `pthread_getattr_np` handed one back.
 - `0003` no `fcntl(F_SETFD, FD_CLOEXEC)` after an `open` that already asked for `O_CLOEXEC`,
   in `open`, `fopen` and `__fopen_rb_ca`. Linux honours the flag; the second call was
   musl's fallback for kernels that did not. The sites that set the flag on a descriptor
@@ -362,7 +372,8 @@ them; each patch is one decision and says so in its name:
 
 The rule for `libc-test/patches/` is unchanged: tests are patched only in how they reach
 memory, never in what they check. Of the library patches, 0001 to 0003 change only its round
-count, and 0004 and 0005 only keep a pointer a capability.
+count; 0004, 0005 and 0007 only keep a pointer a capability, and 0006 gives a type the room
+its pointers need.
 The rest of the saving is in the runtime: identity (`getpid` and friends) and the two clocks
 come from the launch record the task writes (`runtime/include/capstone/launch.h`), `set_tid_address`
 and `set_robust_list` are answered in the domain, and the domain no longer `chdir`s to the

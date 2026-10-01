@@ -289,6 +289,27 @@ __capstone_context_exit:
   ldc(t2, t0, 16)
   sd a0, 168(t0)
   fence rw, w
+  j .Lcontext_exit_done
+
+/* void __capstone_context_exit_clear(unsigned long value, volatile int *clear),
+ * never returns: as __capstone_context_exit, and before the completion word it
+ * stores 0 into *clear, the word Linux clears when a thread made with
+ * CLONE_CHILD_CLEARTID ends (musl's thread-list lock). A thread that joined
+ * may free this context's stack and TLS from that store on, so it comes after
+ * the last access to them; the launcher wakes the word's waiters once the
+ * context has returned for good (CONTEXT_EXITING). */
+  .global __capstone_context_exit_clear
+__capstone_context_exit_clear:
+  ccsrrw(t0, cscratch, x0)
+  ldc(t1, t0, 0)
+  stc(x0, t0, 0)
+  ld t3, 64(t0)
+  ldc(t2, t0, 16)
+  sd a0, 168(t0)
+  fence rw, w
+  sw x0, 0(a1)
+  fence w, w
+.Lcontext_exit_done:
   li t4, 1
   sd t4, 160(t0)
   /* No access to the thread area below this line. */

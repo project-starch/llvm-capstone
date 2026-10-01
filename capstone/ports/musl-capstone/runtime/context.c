@@ -15,9 +15,14 @@
  * The seal region stays linear until it is sealed; the other three children
  * are delinearized into aliases, which the handle still covers. Linear values
  * never sit in C variables here, only in capstone_cap_slot records. */
+#define _GNU_SOURCE /* the CLONE_ flags */
 #include <errno.h>
+#include <sched.h>
+#include <stdarg.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include "pthread_impl.h"
 #include "stdio_impl.h"
 #include <capstone/capability.h>
@@ -41,6 +46,10 @@ long __capstone_delegate_context(uint64_t nr, uint64_t a, uint64_t b, void *even
 long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c);
 int __capstone_delegate_transport(unsigned long index);
 unsigned long __capstone_context_run(void *start_block);
+uint64_t __capstone_park_key(volatile int *word);
+int __capstone_context_tid(void);
+void __capstone_hc_note_unserved(long n);
+_Noreturn void __capstone_context_exit_clear(unsigned long value, volatile int *clear);
 
 #define MIN_STACK_BYTES 8192
 
@@ -225,8 +234,14 @@ int capstone_context_remint(struct capstone_context *c,
 /* The first function a minted context runs (the entry glue calls it with its
    start block): the transport its creator reserved, then the application's
    function, whose value the entry glue passes on to __capstone_context_exit. */
+/* Set in every context the runtime minted. The first context's stack is the
+   monitor's and its TLS block the runtime's first allocation; neither is ever
+   freed. */
+static __thread int minted;
+
 unsigned long __capstone_context_run(void *start_block)
 {
+  minted = 1;
   void **slot = (void **)start_block;
   unsigned long *word = (unsigned long *)start_block;
   unsigned long transport = word[CAPSTONE_CONTEXT_WORD_TRANSPORT / 8];
@@ -276,12 +291,14 @@ static void threads_begin(void)
     libc.need_locks = 1;
 }
 
-long capstone_context_create(struct capstone_context *c, unsigned mode)
+/* Offer and create; a THREAD context gets its transport first. musl's own
+   threads (__clone below) come here directly: pthread_create has already
+   switched musl's locks on. */
+static long create(struct capstone_context *c, unsigned mode)
 {
   unsigned long ticket = next_ticket++;
   long transport = 0;
   if (mode == CAPSTONE_CONTEXT_THREAD) {
-    threads_begin();
     /* Before the request, not after it: the launcher may start the context
        before this context has the request's answer. */
     transport = __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_RESERVE, 0, 0, 0);
@@ -301,6 +318,13 @@ long capstone_context_create(struct capstone_context *c, unsigned mode)
   return id;
 }
 
+long capstone_context_create(struct capstone_context *c, unsigned mode)
+{
+  if (mode == CAPSTONE_CONTEXT_THREAD)
+    threads_begin();
+  return create(c, mode);
+}
+
 long capstone_context_step(unsigned long id, struct capstone_context_event *event)
 {
   return __capstone_delegate_context(CAPSTONE_NR_CONTEXT_STEP, id, 0, event);
@@ -309,4 +333,247 @@ long capstone_context_step(unsigned long id, struct capstone_context_event *even
 long capstone_context_forget(unsigned long id)
 {
   return __capstone_delegate_context(CAPSTONE_NR_CONTEXT_FORGET, id, 0, 0);
+}
+
+/* musl's threads (docs/plans/delegation-threads.md, T4).
+ *
+ * musl's pthread_create builds the new thread's stack, TLS block and struct
+ * pthread in a mapping of its own and calls __clone for the rest, as on
+ * Linux; its join, detach and exit are musl's own too. __clone mints a context
+ * whose area is only a seal region and a start block, entered on musl's stack
+ * with musl's thread pointer, and runs it on a launcher thread (THREAD mode).
+ *
+ * A thread's end, in order (SYS_exit below, then __capstone_context_exit_clear):
+ *   1. CONTEXT_EXITING tells the launcher the context is ending and which
+ *      word to wake once it has returned for good;
+ *   2. the CLONE_CHILD_CLEARTID word (musl's thread-list lock) becomes 0:
+ *      from here a joiner may free musl's mapping, the stack and TLS included;
+ *   3. the completion word becomes 1: from here the area may be revoked;
+ *   4. the context returns EXITED, and the launcher frees its transport and
+ *      wakes the word from 1 (as Linux does after clearing it).
+ * Nothing runs on the stack or TLS after 2; after 3 the area sees only the
+ * final switch's own write of the seal region.
+ *
+ * Areas are revoked and kept, never returned to the arena: a record per area,
+ * outside every area, holds its handle. The reaper revokes each area whose
+ * context has published completion, at the next __clone; a detached thread's
+ * mapping (__unmapself) goes back to the heap then too. So a finished,
+ * unreaped context costs one area and at most one mapping until the next
+ * thread is made. */
+#define CLONE_AREA_BYTES (CAPSTONE_CONTEXT_SEAL_BYTES + CAPSTONE_CONTEXT_START_BYTES)
+#define CLONE_REQUIRED (CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD | CLONE_SETTLS)
+#define CLONE_ALLOWED (CLONE_REQUIRED | CLONE_SYSVSEM | CLONE_PARENT_SETTID | CLONE_CHILD_SETTID | \
+                       CLONE_CHILD_CLEARTID | CLONE_DETACHED)
+
+struct clone_record {
+  struct capstone_context c;   /* the area's handle stays here between threads */
+  int (*func)(void *);
+  void *arg;
+  volatile int *clear;         /* CLONE_CHILD_CLEARTID */
+  void *unmap_base;            /* __unmapself: the mapping the reaper frees */
+  size_t unmap_size;
+  int live;                    /* created, and not yet reaped */
+  struct clone_record *next;
+};
+
+static struct clone_record *clones;   /* every record made; none is freed */
+static volatile int clones_lock;      /* before the arena, the maps and the heap */
+/* Threads __clone made that have not reached their end, and whether the first
+   context has ended: atomics, not clones_lock, because an ending thread may
+   take no musl lock after its pthread_exit announced it (need_locks, below). */
+static int clones_running, first_ended, first_status;
+static __thread struct clone_record *self_clone;
+static __thread volatile int *clear_tid;
+
+static void reap_held(void)
+{
+  for (struct clone_record *r = clones; r; r = r->next) {
+    if (!r->live || !__atomic_load_n(r->c.done, __ATOMIC_ACQUIRE))
+      continue;
+    capstone_context_revoke(&r->c);
+    if (r->unmap_base)
+      __munmap(r->unmap_base, r->unmap_size);
+    r->unmap_base = 0;
+    r->live = 0;
+  }
+}
+
+/* Mint into *area: seal region and start block only. */
+static void mint_clone(struct capstone_context *c, capstone_cap_slot *area, void *stack,
+                       void *tp, unsigned long (*start)(void *), void *arg)
+{
+  unsigned long base = capstone_cap_base(area);
+  unsigned long end = capstone_cap_end(area);
+  unsigned long start_at = base + CAPSTONE_CONTEXT_SEAL_BYTES;
+  capstone_cap_slot start_s = {0};
+  capstone_cap_make_handle(area, &c->handle);
+  capstone_cap_split(area, start_at, &start_s);
+  unsigned long *sb = capstone_cap_delinearize(&start_s);
+  memset(sb, 0, CAPSTONE_CONTEXT_START_BYTES);
+  void **slot = (void **)sb;
+  slot[CAPSTONE_CONTEXT_SLOT_SP / 16] = stack;
+  slot[CAPSTONE_CONTEXT_SLOT_TP / 16] = tp;
+  slot[CAPSTONE_CONTEXT_SLOT_START / 16] = (void *)__capstone_context_run;
+  slot[CAPSTONE_CONTEXT_SLOT_ARG / 16] = sb;
+  slot[CAPSTONE_CONTEXT_SLOT_USER_START / 16] = (void *)start;
+  slot[CAPSTONE_CONTEXT_SLOT_USER_ARG / 16] = arg;
+  c->done = (volatile unsigned long *)(sb + CAPSTONE_CONTEXT_WORD_DONE / 8);
+  c->value = (volatile unsigned long *)(sb + CAPSTONE_CONTEXT_WORD_VALUE / 8);
+  c->start = sb;
+  c->tp = tp;
+  c->area_base = base;
+  c->area_bytes = end - base;
+  c->stack_base = c->stack_top = 0;
+  __capstone_context_seal(area, __capstone_context_entry, sb, &c->seal, CAPSTONE_CONTEXT_MSTATUS, 0);
+}
+
+long __capstone_thread_exit(int status);
+int __capstone_delegate_ready(void);
+
+static unsigned long clone_start(void *p)
+{
+  struct clone_record *r = p;
+  self_clone = r;
+  clear_tid = r->clear;
+  __capstone_thread_exit(r->func(r->arg));
+  for (;;);   /* a minted context's end never returns */
+}
+
+int __clone(int (*func)(void *), void *stack, int flags, void *arg, ...)
+{
+  va_list ap;
+  va_start(ap, arg);
+  int *ptid = va_arg(ap, int *);
+  void *tls = va_arg(ap, void *);
+  int *ctid = va_arg(ap, int *);
+  va_end(ap);
+  /* A thread of this process, nothing else: fork and vfork are not contexts. */
+  if ((flags & CLONE_REQUIRED) != CLONE_REQUIRED || (flags & ~CLONE_ALLOWED)) {
+    __capstone_hc_note_unserved(SYS_clone);
+    return -ENOSYS;
+  }
+
+  long r = -EAGAIN;
+  struct clone_record *rec;
+  capstone_lock(&clones_lock);
+  reap_held();
+  for (rec = clones; rec && rec->live; rec = rec->next)
+    ;
+  if (!rec && (rec = calloc(1, sizeof *rec))) {
+    rec->next = clones;
+    clones = rec;
+  }
+  capstone_cap_slot area = {0};
+  if (!rec)
+    goto out;
+  if (capstone_cap_type(&rec->c.handle) == CAPSTONE_CAP_LINEAR)
+    capstone_cap_move(&rec->c.handle, &area);
+  else if (arena_take(CLONE_AREA_BYTES, &area))
+    goto out;
+  unsigned tid = __atomic_fetch_add(&next_tid, 1, __ATOMIC_RELAXED);
+  if (tid < TID_FIRST || tid > TID_LAST) {
+    capstone_cap_move(&area, &rec->c.handle);
+    goto out;
+  }
+  rec->func = func;
+  rec->arg = arg;
+  rec->clear = flags & CLONE_CHILD_CLEARTID ? ctid : 0;
+  rec->unmap_base = 0;
+  if (flags & CLONE_PARENT_SETTID)
+    *ptid = (int)tid;
+  if (flags & CLONE_CHILD_SETTID)
+    *ctid = (int)tid;
+  mint_clone(&rec->c, &area, stack, tls, clone_start, rec);
+  /* counted before it can run: it may end before CREATE answers */
+  __atomic_fetch_add(&clones_running, 1, __ATOMIC_SEQ_CST);
+  r = create(&rec->c, CAPSTONE_CONTEXT_THREAD);
+  if (r < 0) {
+    __atomic_fetch_sub(&clones_running, 1, __ATOMIC_SEQ_CST);
+    capstone_context_revoke(&rec->c);   /* no context runs after a failure */
+  } else {
+    rec->live = 1;
+  }
+out:
+  capstone_unlock(&clones_lock);
+  return r < 0 ? (int)r : (int)tid;
+}
+
+/* A detached thread's last call (musl's pthread_exit): the mapping it runs on
+   goes back to the heap once its context can never run again. */
+_Noreturn void __unmapself(void *base, size_t size)
+{
+  if (self_clone) {
+    self_clone->unmap_base = base;
+    self_clone->unmap_size = size;
+  }
+  __capstone_thread_exit(0);
+  for (;;);
+}
+
+/* set_tid_address: the word SYS_exit clears (musl passes its thread-list lock). */
+long __capstone_set_tid_address(volatile int *word)
+{
+  clear_tid = word;
+  return __capstone_context_tid();
+}
+
+static volatile int never_cleared, forever;
+
+/* Test only (pthread-probe): runs in a further context's end after
+   CONTEXT_EXITING and before the clear word is released, to hold the context
+   there across quanta (B10, and a reservation that waits for it). */
+void (*__capstone_thread_exit_test_gap)(void);
+
+/* Records made, and those whose context is created and not yet reaped. */
+void __capstone_clone_stats(unsigned *made, unsigned *live)
+{
+  unsigned m = 0, l = 0;
+  capstone_lock(&clones_lock);
+  for (struct clone_record *r = clones; r; r = r->next) {
+    ++m;
+    l += r->live;
+  }
+  capstone_unlock(&clones_lock);
+  *made = m;
+  *live = l;
+}
+
+/* SYS_exit: the calling context ends, the others go on.
+ *
+ * musl's pthread_exit sets need_locks to -1 when the thread count reaches 0,
+ * and the next musl lock then switches locking off for good: an ending thread
+ * must take no musl lock (capstone_lock included) after that, while another
+ * thread may already be making a third. So this path uses atomics only.
+ *
+ * The first context's stack and TLS are never freed: it clears and wakes its
+ * word itself and then waits for good while a thread lives. The last musl
+ * thread's pthread_exit finds itself alone and calls exit(0), as on Linux;
+ * when the last thread ends with SYS_exit instead, the application ends with
+ * the first context's status, as Linux reports the group leader's. Alone, the
+ * first context ends the application with its own. Returns -EIO only in a
+ * first context whose transport is not there yet (musl calls again). */
+long __capstone_thread_exit(int status)
+{
+  volatile int *clear = clear_tid;
+  if (minted) {
+    if (self_clone && __atomic_sub_fetch(&clones_running, 1, __ATOMIC_SEQ_CST) == 0 &&
+        __atomic_load_n(&first_ended, __ATOMIC_SEQ_CST))
+      _Exit(__atomic_load_n(&first_status, __ATOMIC_RELAXED));
+    __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_EXITING, clear ? __capstone_park_key(clear) : 0, 0, 0);
+    if (__capstone_thread_exit_test_gap)
+      __capstone_thread_exit_test_gap();
+    __capstone_context_exit_clear((unsigned long)status, clear ? clear : &never_cleared);
+  }
+  if (!__capstone_delegate_ready())
+    return -EIO;
+  if (clear) {
+    __atomic_store_n(clear, 0, __ATOMIC_RELEASE);
+    __syscall(SYS_futex, clear, FUTEX_WAKE | FUTEX_PRIVATE, 1);
+  }
+  __atomic_store_n(&first_status, status, __ATOMIC_RELAXED);
+  __atomic_store_n(&first_ended, 1, __ATOMIC_SEQ_CST);
+  if (!__atomic_load_n(&clones_running, __ATOMIC_SEQ_CST))
+    _Exit(status);
+  for (;;)
+    __syscall(SYS_futex, &forever, FUTEX_WAIT | FUTEX_PRIVATE, 0, 0);
 }

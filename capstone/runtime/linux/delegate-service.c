@@ -776,7 +776,7 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
     host->code_end = snapshot.args[2];
     host->hello_seen = 1;
     r = 0;
-  } else if (snapshot.nr == CAPSTONE_SYS_exit_group || snapshot.nr == CAPSTONE_SYS_exit) {
+  } else if (snapshot.nr == CAPSTONE_SYS_exit_group) {
     host->exiting = 1;
     host->exit_status = (int)snapshot.args[0] & 0xff;
     r = 0;
@@ -788,7 +788,8 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   } else if (snapshot.nr == CAPSTONE_NR_SIGPOLL) {
     r = 0;
   } else if (snapshot.nr == CAPSTONE_NR_CONTEXT_CREATE || snapshot.nr == CAPSTONE_NR_CONTEXT_STEP ||
-             snapshot.nr == CAPSTONE_NR_CONTEXT_FORGET || snapshot.nr == CAPSTONE_NR_CONTEXT_RESERVE) {
+             snapshot.nr == CAPSTONE_NR_CONTEXT_FORGET || snapshot.nr == CAPSTONE_NR_CONTEXT_RESERVE ||
+             snapshot.nr == CAPSTONE_NR_CONTEXT_EXITING) {
     r = host->context ? host->context(host, &snapshot) : -ENOSYS;
   } else if (snapshot.nr == CAPSTONE_NR_PARK_WAIT || snapshot.nr == CAPSTONE_NR_PARK_WAKE ||
              snapshot.nr == CAPSTONE_NR_PARK_REQUEUE) {

@@ -167,7 +167,6 @@ static const struct capstone_delegate_shape shapes[] = {
   {CAPSTONE_SYS_set_robust_list, CAPSTONE_GROUP_DELEGATED, 2, "set_robust_list", {I, I}},
   {CAPSTONE_SYS_futex, CAPSTONE_GROUP_DELEGATED, 6, "futex", {I, I, I, I, I, I}},
   /* process: delegated members of the task model */
-  {CAPSTONE_SYS_exit, CAPSTONE_GROUP_DELEGATED, 1, "exit", {I}},
   {CAPSTONE_SYS_exit_group, CAPSTONE_GROUP_DELEGATED, 1, "exit_group", {I}},
   {CAPSTONE_SYS_kill, CAPSTONE_GROUP_DELEGATED, 2, "kill", {I, I}},
   {CAPSTONE_SYS_tkill, CAPSTONE_GROUP_DELEGATED, 2, "tkill", {I, I}},
@@ -249,6 +248,7 @@ static const struct capstone_delegate_shape shapes[] = {
   {12, CAPSTONE_GROUP_RUNTIME, 3, "park-wait", {I, I, I}},
   {13, CAPSTONE_GROUP_RUNTIME, 2, "park-wake", {I, I}},
   {14, CAPSTONE_GROUP_RUNTIME, 4, "park-requeue", {I, I, I, I}},
+  {15, CAPSTONE_GROUP_RUNTIME, 1, "context-exiting", {I}},
 };
 
 const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
