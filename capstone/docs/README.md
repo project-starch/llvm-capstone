@@ -15,9 +15,10 @@ context, fault, retirement and private-clone transitions, including retained
 old and fresh pointers after reuse of the exact same address and pending
 accesses on both harts. These are finite model checks; the kernel/user ABI and
 prototype gate remain open.
-The [stacked QEMU runtime-opt-in slice](design/trusted-linux-execution-boundary.md)
-now boots the existing Linux guest with experimental CPU support enabled and
-passes 58/58 bare-metal checks. It still lacks a protected Linux process ABI.
+The [stacked QEMU context candidate](design/trusted-linux-execution-boundary.md)
+boots the existing Linux guest with experimental CPU support enabled and
+passes 69/69 bare-metal checks after the `x0` and fault-oracle review fixes.
+It still lacks a protected Linux process ABI.
 
 The `trusted-linux-syscall-bounds` lane adds a bounded-buffer prototype to
 the current delegated runtime. Its [one-hart result](../runtime/tests/application/results/20260930-syscall-buffer-bounds.json)

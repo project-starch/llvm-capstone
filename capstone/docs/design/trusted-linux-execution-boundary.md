@@ -265,14 +265,25 @@ scalar. The existing capability `CSCRATCH` can swap tagged user `tp` before
 the handler clobbers it. Physical tag lookup follows the TLB-selected frame,
 including when two kernel virtual addresses alias the slot.
 
-The bare-metal gate passes **62/62**: the new cases save and restore a tagged
+The corrected bare-metal gate passes **69/69**: the context cases save and restore a tagged
 register across virtual aliases and a U-to-S ECALL, then dereference it after
 `SRET`. A scalar `sd`/`ld` in the handler loses authority and faults at the U
-load; S selection without CPU support faults at its named instruction. The
+load; the handler requires cause 24, the named instruction, U-mode source
+privilege and a completed restore. Controls reject a wrong cause, the same
+cause at another site, an early setup fault and a tagged spill with no fault.
+S selection without CPU support faults at its named instruction. The
 ordinary Linux boot still passes on this QEMU binary. The
 [record](../../capstone-qemu/tests/trusted-linux-u-access/result.json) binds
 the source and binary hashes. This superproject now pins the candidate for the
-next kernel experiment. It does not implement Linux `pt_regs`, a protected
+next kernel experiment. Review of the original context candidate found that
+LDC wrote capability state into `x0`, allowing a subsequent U-mode load
+through register zero to read the object. The shared destination helper now
+discards `x0` after the access. Both S-mode and U-mode regressions fail on the
+prior binary; an additional test requires a misaligned S-mode LDC into `x0`
+to retain its exact fault. The earlier 62-check result did not test these cases,
+and its scalar-spill control accepted unrelated exit-1 failures. The corrected
+record identifies the prior binary and the new source and binary hashes.
+It does not implement Linux `pt_regs`, a protected
 task selector, per-process lifetime namespaces, checked syscall copies or a
 protected `malloc` process. The use of S-mode `CSSTC`/`CSLDC` and `CSCRATCH`
 is an ISA candidate; Linux integration and hardware cost decide whether to

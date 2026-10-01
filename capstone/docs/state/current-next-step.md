@@ -4,7 +4,7 @@ Trusted Linux application compatibility (2026-10-01): follow the
 ordinary Linux [feasibility control](../../tests/trusted-linux-feasibility/README.md)
 passes the OS operations needed by the next guest probe but runs unprotected.
 The pinned QEMU [context candidate](../design/trusted-linux-execution-boundary.md)
-preserves tagged `a0` and `tp` across a bare-metal U-to-S trap, with 62/62
+preserves tagged `a0` and `tp` across a bare-metal U-to-S trap, with 69/69
 checks; Linux has not adopted that save/restore path. The next M1 step is a
 Linux-selected process context and tagged register frame through syscall and
 scheduling boundaries. The
@@ -17,7 +17,7 @@ fault, retirement and private-clone schedules, including retained old and
 fresh pointers at one reused address and pending accesses on both harts.
 
 The pinned QEMU [context candidate](../design/trusted-linux-execution-boundary.md)
-passes **62/62** bare-metal checks and boots the existing Linux guest with
+passes **69/69** bare-metal checks and boots the existing Linux guest with
 `x-capstone-u-mode=true`. CPU support alone had selected the new MEPC/trap
 path during legacy OpenSBI boot and caused a capability fault before login.
 The prototype now requires a privileged runtime selector to activate that path.
