@@ -129,7 +129,7 @@ def check_case(label, mode, result, before, after, evidence):
         causes = (5,) if mode in ("fault-bounds", "fault-bounds-large") else (24, 25)
         require(fault["cause"] in causes, f"{label} {mode}: unexpected fault cause {fault['cause']}")
         link_pc = fault["pc"] - (fault["entry"] - evidence["entry"])
-        site = "free" if mode.startswith("fault-double-free") else "capstone_heap_fault_load"
+        site = "sh_free" if mode.startswith("fault-double-free") else "capstone_heap_fault_load"
         require(link_pc == evidence["probes"][site], f"{label} {mode}: fault at wrong instruction {link_pc:#x}")
         record["fault"] = {"cause": fault["cause"], "link_pc": hex(link_pc), "site": site}
     record["operation_reached"] = True
@@ -174,7 +174,10 @@ def main():
         if label == "sublet":
             evidence[label]["probes"] = {
                 "capstone_heap_fault_load": probe_pc(elf, args.objdump, table, "capstone_heap_fault_load", "a0"),
-                "free": probe_pc(elf, args.objdump, table, "free", "zero")}
+                # free takes the heap lock and frees in sh_free, whose first act is the
+                # stale-pointer probe: with several threads, the probe and the revocation
+                # must be one step, or two frees of one pointer could both pass the probe
+                "sh_free": probe_pc(elf, args.objdump, table, "sh_free", "zero")}
         report["symbols"][label] = {"entry_points": owners, "sha256": evidence[label]["sha256"],
                                     "map_sha256": sha256(map_path)}
         print(f"{label}: ELF/map agree on allocation entry points from {wanted}: PASS", flush=True)
