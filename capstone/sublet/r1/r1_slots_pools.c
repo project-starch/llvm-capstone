@@ -767,8 +767,10 @@ static unsigned m1_probe_op, m1_probe_live, m1_probe_age;   /* op: 0 none, 1 rea
  *   - the reissued alias itself: it must read 1. This is the positive control, from the same instruction;
  *   - on slot 0 only, slot 0's FIXTURE alias, kept for the whole arm. Its index is allocated 16,384
  *     times and then retired (anvil:59), so it must read 0 for ever. A 14-bit wrap would bring the
- *     index back to that generation after 16,384 reclaims, about allocation 262,144 in a 10C arm, and
- *     the alias would read 1 again: the wrap bound, read rather than argued.
+ *     index back to that generation after 16,384 reclaims. Each slot alternates between two nodes, so
+ *     that is about allocation 524,257 in a 10C arm (the turnover bundle's lccsim.py), and the alias
+ *     would then read 1 twice. It bounds a RETURN to the old generation and does not by itself show
+ *     retirement: a wider generation counter would also read 0.
  * THE EMULATOR CANNOT VALIDATE THIS. Its LCC selector 0 is a constant 1 (op_helper.c, "let's say it's
  * always valid for now"), and it untags a revoked capability, so an LCC on one raises cause 24 there.
  * The silicon keeps the tag. So the scan is off unless asked for, the emulator's pass record is earned
