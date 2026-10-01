@@ -1,4 +1,4 @@
-Subject: [PATCH 4/4] An opt-in marker: which worker thread took each connection
+Subject: [PATCH 4/5] An opt-in marker: which worker thread took each connection
 Upstream: memcached 1.6.45
 Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
 Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd

@@ -1,0 +1,80 @@
+# PRE-REGISTERED predictions for the memcached safety fixtures (src/mcapp-safety.c), written
+# 2026-10-01 BEFORE any fixture had run on any arm, and committed and pushed before the first boot.
+# A cell whose outcome differs is a FINDING, never an edit to this file: if a prediction is wrong,
+# the result says so and this file keeps the prediction that was made.
+#
+# The format and the judge are the shared ones (ports/common/application/check-safety.py, through
+# host/run-safety.py):
+#   RETURN <hex>   the process exited with this fixture's mark (fixture * 0x100000 + value), printed
+#                  once and equal in its low byte to the exit status capstone-job recorded
+#   RETURN *       a mark with this fixture's prefix; the value is not predictable
+#   FAULT oob      a domain SIGSEGV whose fault record's pc matches a QEMU bounds diagnostic, AFTER
+#                  the fixture's touch line, at the target it printed
+#   FAULT temporal the same with a revoked or untagged capability
+#   LEN arena      fixture 1's first pointer reaches more than 64 KiB past its cursor
+#   LEN 64         exactly 64
+#
+# Every fixture runs on a WORKER context of a running memcached (the hidden command of patch 0005),
+# not on main as in the tshark and FFmpeg ports; that is the first thing these fixtures test.
+#
+# WHAT EACH PREDICTION RESTS ON:
+# - 1-8 are tshark's fixtures 1-8 (ports/wireshark/app/src/tsapp-safety.c) with malloc for g_malloc,
+#   and the predictions are tshark's on the same three heaps (its host/safety-expect.txt), which the
+#   shared classifier has judged on the delegated runtime (common/application/README.md: tshark's
+#   sublet control 13/13). The heap is the same runtime level0.c / sublet_heap.c.
+#   - level0 (CAPSTONE_LEVEL0_OBJECT_BOUNDS=0): a pointer covers the rest of the arena; first fit;
+#     free writes only headers, so a freed payload keeps its bytes (4), and a block freed and asked
+#     for again at the same size comes back at the same address (5, 6).
+#   - shrink: each pointer narrowed to the bytes asked for; otherwise level0 (no temporal safety).
+#   - sublet: narrowed; free scrubs and revokes every alias, and free reads one byte through the
+#     pointer it is given, so 4, 5 and 6 (6 inside free) fault as temporal at the printed address.
+#   - The new risk here: memcached's other threads (LRU maintainer, crawler, workers) share the heap.
+#     A malloc between a fixture's free and its next step could take the block, changing 4-6's
+#     values on level0 and shrink. The server is idle but for the fixture's own connection.
+# - 7 and 8 are controls that do not depend on the heap: FAULT oob on every arm.
+# - 9 and 10 are memcached's slab items. Without -L or a memory file, memory_allocate is malloc
+#   (slabs.c:613-618), so a slab page is one 1 MiB malloc and every item carved from it carries the
+#   PAGE's capability, on every arm: level0 narrows nothing, shrink and sublet narrow the page, not
+#   the item. A fresh class's page is pushed onto a LIFO free list in address order
+#   (split_slab_page_into_freelist, do_slabs_free: slabs.c:354, 501), so two item_allocs of one class
+#   on a fresh server are neighbours in that page. item_remove of an unlinked item at refcount 1
+#   frees it to the head of its class's list (items.c:540-548, slabs.c:438), and the next item_alloc
+#   of that class takes it back. The slab never calls free, so no arm revokes anything.
+#   So 9 writes into its neighbour, and 10 reads the new item's byte at the same address, on all arms.
+#   That is the gap an in-app Sublet port of the slabs (the plan's stretch S1) would close.
+
+level0   1  RETURN 100001
+level0   1  LEN    arena
+level0   2  RETURN 2000ee
+level0   3  RETURN *
+level0   4  RETURN 4000a0
+level0   5  RETURN 50015b
+level0   6  RETURN 600177
+level0   7  FAULT  oob
+level0   8  FAULT  oob
+level0   9  RETURN 9000ee
+level0  10  RETURN a0015b
+
+shrink   1  RETURN 100001
+shrink   1  LEN    64
+shrink   2  FAULT  oob
+shrink   3  FAULT  oob
+shrink   4  RETURN 4000a0
+shrink   5  RETURN 50015b
+shrink   6  RETURN 600177
+shrink   7  FAULT  oob
+shrink   8  FAULT  oob
+shrink   9  RETURN 9000ee
+shrink  10  RETURN a0015b
+
+sublet   1  RETURN 100001
+sublet   1  LEN    64
+sublet   2  FAULT  oob
+sublet   3  FAULT  oob
+sublet   4  FAULT  temporal
+sublet   5  FAULT  temporal
+sublet   6  FAULT  temporal
+sublet   7  FAULT  oob
+sublet   8  FAULT  oob
+sublet   9  RETURN 9000ee
+sublet  10  RETURN a0015b

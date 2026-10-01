@@ -1,6 +1,8 @@
 /* mc-harness: the memcached port's oracle driver.
  *
- *   mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1] [--perturb none|value|cas] -- SERVER-COMMAND...
+ *   mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1] [--signal-child] [--perturb none|value|cas]
+ *              -- SERVER-COMMAND...
+ *   mc-harness --out DIR [--port P] --fixture N -- SERVER-COMMAND...
  *
  * Starts SERVER-COMMAND (memcached natively, or capstone-job ... capstone-exec memcached.dom in the guest),
  * waits until it answers `version`, runs one fixed script, stops it with the chosen signal and records
@@ -15,6 +17,15 @@
  * DIR/identity.txt     the raw `stats` pointer_size line (64 natively, 128 in a domain): not compared
  * DIR/status.txt       the server's wait status, and how long the stop took
  * DIR/server.out|err   the server's stdout and stderr
+ *
+ * --fixture N (the Safety milestone) runs no script: once the server listens it sends the hidden
+ * `mc_capstone_fixture N` (patch 0005), reads until the server closes the connection, and records how
+ * the server ended without signalling it (DIR/fixture-reply.txt, DIR/status.txt "stop=none ...").
+ *
+ * --signal-child sends the stop signal to SERVER-COMMAND's child (its process group) instead of to
+ * SERVER-COMMAND itself. capstone-job forwards SIGINT, SIGTERM and SIGHUP to its child and nothing
+ * else (runtime/linux/job.c), so a SIGUSR1 sent to capstone-job kills the helper and never reaches the
+ * domain; with this option it reaches capstone-exec, and capstone-job still records its status.
  */
 #define _GNU_SOURCE
 #include <arpa/inet.h>
@@ -27,6 +38,7 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -276,20 +288,36 @@ static void dump_partial(struct conn *c) {
   writefile("transcript.partial.raw", c->raw.p ? c->raw.p : "", c->raw.n);
   writefile("transcript.partial.norm", c->norm.p ? c->norm.p : "", c->norm.n);
 }
+/* the one child of `parent`, from /proc/<pid>/stat (field 4 is the ppid); 0 for none, -1 for several */
+static pid_t only_child(pid_t parent) {
+  DIR *d = opendir("/proc"); struct dirent *e; pid_t found = 0;
+  if (!d) return 0;
+  while ((e = readdir(d))) {
+    char path[300], buf[512]; int pid = atoi(e->d_name); if (pid <= 0) continue;
+    snprintf(path, sizeof path, "/proc/%d/stat", pid);
+    FILE *f = fopen(path, "r"); if (!f) continue;
+    size_t n = fread(buf, 1, sizeof buf - 1, f); fclose(f); buf[n] = 0;
+    char *rp = strrchr(buf, ')'); int ppid = 0;
+    if (rp && sscanf(rp + 1, " %*c %d", &ppid) == 1 && ppid == parent) found = found ? -1 : pid;
+  }
+  closedir(d); return found;
+}
 static double now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec + t.tv_nsec / 1e9; }
 
 int main(int argc, char **argv) {
-  int stopsig = SIGTERM, i;
+  int stopsig = SIGTERM, signal_child = 0, fixture = 0, i;
   for (i = 1; i < argc && strcmp(argv[i], "--"); i++) {
     if (!strcmp(argv[i], "--out")) outdir = argv[++i];
     else if (!strcmp(argv[i], "--port")) port = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--conns")) nconns = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--stop")) stopsig = !strcmp(argv[++i], "USR1") ? SIGUSR1 : SIGTERM;
+    else if (!strcmp(argv[i], "--signal-child")) signal_child = 1;
+    else if (!strcmp(argv[i], "--fixture")) fixture = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--perturb")) { i++; perturb_value = !strcmp(argv[i], "value"); perturb_cas = !strcmp(argv[i], "cas"); }
     else { fprintf(stderr, "mc-harness: unknown option %s\n", argv[i]); return 2; }
   }
   if (!outdir || i + 1 >= argc || nconns < 1 || nconns > 64) {
-    fprintf(stderr, "usage: mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1] [--perturb none|value|cas] -- SERVER...\n");
+    fprintf(stderr, "usage: mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1] [--signal-child] [--perturb none|value|cas] -- SERVER...\n");
     return 2;
   }
   char **server = argv + i + 1;
@@ -314,6 +342,22 @@ int main(int argc, char **argv) {
   }
   if (c0->fd < 0) { fprintf(stderr, "mc-harness: server never listened\n"); kill(pid, SIGKILL); return 3; }
 
+  if (fixture) {
+    char cmdline[64]; snprintf(cmdline, sizeof cmdline, "mc_capstone_fixture %d\r\n", fixture);
+    sends(c0, cmdline);
+    struct buf reply = {0};
+    while (fill(c0)) { bput(&reply, c0->rb + c0->rpos, c0->rn - c0->rpos); c0->rpos = c0->rn; }
+    writefile("fixture-reply.txt", reply.p ? reply.p : "", reply.n);
+    close(c0->fd);
+    if (timed_out) { fprintf(stderr, "mc-harness: fixture %d: no EOF in 60 s; killing the server\n", fixture); kill(pid, SIGKILL); }
+    int st = 0; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) ;
+    char status[128];
+    int sn = snprintf(status, sizeof status, "stop=none %s=%d\n", WIFSIGNALED(st) ? "signal" : "exit",
+                      WIFSIGNALED(st) ? WTERMSIG(st) : WEXITSTATUS(st));
+    writefile("status.txt", status, (size_t)sn);
+    printf("mc-harness: fixture %d: %zu reply bytes, %s", fixture, reply.n, status);
+    return timed_out ? 5 : 0;
+  }
   struct buf all_raw = {0}, all_norm = {0};
   bput(&c0->raw, "== phase 1\n", 11); bput(&c0->norm, "== phase 1\n", 11); phase1(c0); dump_partial(c0);
   bput(&c0->raw, "== phase 2\n", 11); bput(&c0->norm, "== phase 2\n", 11); phase2(c0); dump_partial(c0);
@@ -349,8 +393,16 @@ int main(int argc, char **argv) {
   bput(&all_norm, "== phase 4\n", 11); bput(&all_norm, stats.p ? stats.p : "", stats.n);
   close(c0->fd);
 
+  pid_t target = pid;
+  if (signal_child) {
+    target = only_child(pid);
+    if (target <= 0) { fprintf(stderr, "mc-harness: --signal-child: %s child of %d\n", target ? "more than one" : "no", (int)pid);
+      kill(pid, SIGKILL); return 6; }
+    if (getpgid(target) == target) target = -target;   /* capstone-job makes its child a group leader */
+    fprintf(stderr, "mc-harness: stop signal to %s %d\n", target < 0 ? "process group" : "process", (int)(target < 0 ? -target : target));
+  }
   double t0 = now();
-  kill(pid, stopsig);
+  kill(target, stopsig);
   int st = 0; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) ;
   double t1 = now();
   char status[256];

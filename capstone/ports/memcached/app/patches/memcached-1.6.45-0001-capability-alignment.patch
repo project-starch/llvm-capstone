@@ -1,4 +1,4 @@
-Subject: [PATCH 1/4] Align items and chunk headers to the 16-byte capability on Capstone
+Subject: [PATCH 1/5] Align items and chunk headers to the 16-byte capability on Capstone
 Upstream: memcached 1.6.45
 Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
 Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
