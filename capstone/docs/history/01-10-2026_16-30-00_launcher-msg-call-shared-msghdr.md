@@ -235,3 +235,32 @@ How the readings are read:
   are void.
 - **MD1 and MD2 together** tie the memcached failure's shape to the shared msghdr. They still do not
   prove the one failure on dev's launcher had no other contributor.
+
+### Result, memcached under the delay pair (2026-10-01; predictions committed first, 5dda6f629ac3)
+
+The run used shrink image 1c67f7bd… and one boot: stock+delay e92dedfd… on odd runs, fixed+delay
+584078a4… on even runs. The guest's `/usr/bin/capstone-exec` (e7e27f49…) was not used: each run
+named its launcher.
+
+| run | launcher | transcript | phase-3 connections carrying another connection's replies | phase-4 counters |
+|---|---|---|---|---|
+| 1 | stock+delay | differs | 8 of 8 | equal to native |
+| 3 | stock+delay | differs | 7 of 8 | **lower**: `cmd_set` 342 vs 345, `cmd_get` 338 vs 342 |
+| 5 | stock+delay | differs | 8 of 8, and non-text bytes on connections 2 and 7 | equal |
+| 7 | stock+delay | differs | 8 of 8 | equal |
+| 9 | stock+delay | differs | 8 of 8 | equal |
+| 2, 4, 6, 8, 10 | fixed+delay | **identical** (1,931,207 bytes) | none | equal |
+
+Every run exited 0 on SIGTERM with empty stderr. Native's null, positive and identity controls
+fired.
+
+- **MD1 holds in its shape and misses its counter clause once.** Every stock+delay run carried
+  other connections' replies. Run 3's counters came out lower. Its connections 1 and 6 lost their
+  framing: 28 and 41 `STORED` lines against native's 40, and neither ends in `MN`. The harness stops
+  reading a connection at the number of responses it expects and then closes it. The likely
+  consequence is that the server never read the rest of their pipelined commands. That is an
+  inference: the server side was not traced. It is recorded as a miss of the clause as written.
+- **MD2 holds:** 5 of 5 identical.
+
+This ties memcached's failure shape to the shared msghdr. With the window held open, the stock
+launcher reproduces the shrink-run-2 signature in every run, and the fixed launcher never does.
