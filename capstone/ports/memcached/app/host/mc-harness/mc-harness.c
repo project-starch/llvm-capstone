@@ -63,7 +63,7 @@ static void bprintf(struct buf *b, const char *fmt, ...) {
 
 /* ---- one connection: a socket, a read buffer, its transcript and its CAS ordinals ---- */
 struct conn {
-  int fd; char rb[1 << 16]; size_t rn, rpos;
+  int fd, dead; char rb[1 << 16]; size_t rn, rpos;
   struct buf raw, norm;
   unsigned long long cas_seen[4096]; int ncas;
   unsigned long long last_cas;
@@ -87,10 +87,13 @@ static void sends(struct conn *c, const char *s) { sendall(c, s, strlen(s)); }
 static int timed_out;
 static int fill(struct conn *c) {
   if (c->rpos < c->rn) return 1;
+  /* a connection that timed out once stays timed out: one that lost its place in the protocol would
+     otherwise wait 60 s for every response still owed to it */
+  if (c->dead) return 0;
   for (;;) {
     struct pollfd pf = {.fd = c->fd, .events = POLLIN};
     int pr = poll(&pf, 1, 60 * 1000);
-    if (pr == 0) { timed_out = 1; bput(&c->raw, "<TIMEOUT>\n", 10); bput(&c->norm, "<TIMEOUT>\n", 10); return 0; }
+    if (pr == 0) { timed_out = 1; c->dead = 1; bput(&c->raw, "<TIMEOUT>\n", 10); bput(&c->norm, "<TIMEOUT>\n", 10); return 0; }
     if (pr < 0 && errno == EINTR) continue;
     ssize_t r = read(c->fd, c->rb, sizeof c->rb);
     if (r > 0) { c->rn = (size_t)r; c->rpos = 0; return 1; }

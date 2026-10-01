@@ -10,15 +10,18 @@
 #             per connection a worker sets up; per-worker counts equal native's, every worker present,
 #             the stderr otherwise compared as above, and a control that the gate fails on no markers.
 #   run-oracle.sh <results-dir> [--stop TERM|USR1] [--arm level0|shrink|sublet] [--runs N] [--marker]
-#             (N domain runs, one boot)
+#             [--alternate STOCK-EXEC FIXED-EXEC]   (N domain runs, one boot)
+#   --alternate runs odd-numbered runs under STOCK-EXEC and even-numbered ones under FIXED-EXEC (two
+#   capstone-exec binaries copied to the share), so a launcher pair is compared within one boot.
 # Env: MC_WORK (build-native.sh, build-domain.sh outputs), CAPSTONE_VM_UP_ARGS (capstone-vm up platform
 # arguments), capstone-vm on PATH, CAPSTONE_BUILDROOT_DIR (the guest cross compiler).
 # Port 21299, not memcached's 11211: on a shared host 11211 may belong to someone else's server.
 set -uo pipefail
 APP=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-R=${1:?results dir}; shift; STOP=TERM; ARM=shrink; RUNS=1; MARKER=0
+R=${1:?results dir}; shift; STOP=TERM; ARM=shrink; RUNS=1; MARKER=0; ALT_STOCK=; ALT_FIXED=
 while [ $# -gt 0 ]; do case $1 in --stop) STOP=$2; shift 2 ;; --arm) ARM=$2; shift 2 ;; --runs) RUNS=$2; shift 2 ;;
   --marker) MARKER=1; shift ;;
+  --alternate) ALT_STOCK=$2; ALT_FIXED=$3; shift 3 ;;
   *) echo "unknown option $1" >&2; exit 2 ;; esac; done
 : "${MC_WORK:?}" "${CAPSTONE_VM_UP_ARGS:?}" "${CAPSTONE_BUILDROOT_DIR:?}"
 PORT=21299; NTHREADS=4; FLAGS=(-l 127.0.0.1 -p "$PORT" -U 0 -m 64 -t "$NTHREADS")
@@ -33,6 +36,10 @@ gcc -O1 -Wall -o "$R/bin/mc-harness-host" "$APP/host/mc-harness/mc-harness.c" -l
 "$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc" -O1 -Wall -o "$R/share/mc-harness" \
   "$APP/host/mc-harness/mc-harness.c" -lpthread || exit 2
 cp "$DOM" "$R/share/memcached.dom"
+if [ -n "$ALT_STOCK" ]; then
+  cp "$ALT_STOCK" "$R/share/exec-stock"; cp "$ALT_FIXED" "$R/share/exec-fixed"; chmod 755 "$R/share/exec-stock" "$R/share/exec-fixed"
+  echo "alternate: stock $(sha256sum < "$ALT_STOCK" | cut -c1-16) fixed $(sha256sum < "$ALT_FIXED" | cut -c1-16)" | tee -a "$R/inputs.txt"
+fi
 { echo "native memcached $(sha256sum < "$NAT" | cut -c1-16)"; echo "domain memcached.dom $(sha256sum < "$DOM" | cut -c1-16)";
   echo "harness host $(sha256sum < "$R/bin/mc-harness-host" | cut -c1-16) guest $(sha256sum < "$R/share/mc-harness" | cut -c1-16)"; } | tee "$R/inputs.txt"
 
@@ -89,20 +96,22 @@ SIGCHILD=; [ "$STOP" = TERM ] || SIGCHILD=--signal-child
 capstone-vm --state "$VM" exec sh -c 'sha256sum /usr/bin/capstone-exec /usr/bin/capstone-job' 2>&1 \
   | sed 's/^/guest /' | tee -a "$R/inputs.txt"
 for n in $(seq 1 "$RUNS"); do
+EXEC=/usr/bin/capstone-exec; LBL=$ARM
+if [ -n "$ALT_STOCK" ]; then if [ $((n % 2)) = 1 ]; then EXEC=/mnt/host/exec-stock; LBL=$ARM/stock; else EXEC=/mnt/host/exec-fixed; LBL=$ARM/fixed; fi; fi
 rm -rf "$R/share/domain-run$n"
 capstone-vm --state "$VM" exec sh -c "
   rm -rf /tmp/mc /tmp/mc-fault.txt; mkdir -p /tmp/mc && CAPSTONE_FAULT_RECORD=/tmp/mc-fault.txt /mnt/host/mc-harness --out /tmp/mc --port $PORT --stop $STOP $SIGCHILD -- \
-    /usr/bin/capstone-job /tmp/mc/job.json --user 65534:65534 -- /usr/bin/capstone-exec /mnt/host/memcached.dom ${FLAGS[*]}
+    /usr/bin/capstone-job /tmp/mc/job.json --user 65534:65534 -- $EXEC /mnt/host/memcached.dom ${FLAGS[*]}
   echo harness rc=\$?
   if [ -s /tmp/mc-fault.txt ]; then cp /tmp/mc-fault.txt /tmp/mc/fault.txt; fi
   cp -r /tmp/mc /mnt/host/domain-run$n; true" > "$R/domain-exec$n.log" 2>&1
-echo "domain run $n ($ARM): exec rc=$?"; cat "$R/domain-exec$n.log"
+echo "domain run $n ($LBL): exec rc=$?"; cat "$R/domain-exec$n.log"
 D=$R/share/domain-run$n
 [ -s "$D/fault.txt" ] && { echo "--- domain fault record"; cat "$D/fault.txt"; }
-[ -f "$D/transcript.norm" ] || { verdict "oracle$n" FAIL "[$ARM] the domain run left no transcript"; continue; }
+[ -f "$D/transcript.norm" ] || { verdict "oracle$n" FAIL "[$LBL] the domain run left no transcript"; continue; }
 cmp -s "$R/native-null1/transcript.norm" "$D/transcript.norm" \
-  && verdict "oracle$n" PASS "[$ARM] domain transcript identical to native ($(wc -c < "$D/transcript.norm") bytes)" \
-  || { verdict "oracle$n" FAIL "[$ARM] domain transcript differs from native"; diff "$R/native-null1/transcript.norm" "$D/transcript.norm" | head -20; }
+  && verdict "oracle$n" PASS "[$LBL] domain transcript identical to native ($(wc -c < "$D/transcript.norm") bytes)" \
+  || { verdict "oracle$n" FAIL "[$LBL] domain transcript differs from native"; diff "$R/native-null1/transcript.norm" "$D/transcript.norm" | head -20; }
 n_id=$(cat "$R/native-null1/identity.txt"); d_id=$(cat "$D/identity.txt")
 [ "$n_id" = $'STAT pointer_size 64\r' ] && [ "$d_id" = $'STAT pointer_size 128\r' ] \
   && verdict "identity$n" PASS "native 64, domain 128" || verdict "identity$n" FAIL "native '$n_id' domain '$d_id'"

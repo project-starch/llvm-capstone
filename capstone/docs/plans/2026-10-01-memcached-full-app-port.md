@@ -157,10 +157,7 @@ it: capstone-qemu 674cdab0 (32e7c975…), fw_jump.elf 6f2b082c… (OpenSBI cf344
 | stderr | empty both |
 | stop time | native 0.89 s, domain 2.27 s (the 1 s clock tick, then nine contexts joined) |
 
-**Still open:**
-- M3's worker-coverage marker. The transcript shows every connection served correctly, not which
-  worker served it.
-- M4's SIGUSR1 graceful stop.
+**Still open then:** M3's worker-coverage marker and M4's SIGUSR1 stop, both settled below.
 
 ## M5 — PRE-REGISTERED before its first boot
 
@@ -191,6 +188,94 @@ including one that must carry the Sublet heap. The run was stopped and no result
   its SDK's CMake cache;
 - gates on three pairwise-distinct hashes, with the two Sublet symbols present in the sublet image
   and absent from the shrink image.
+
+### M5 first run (2026-10-01): Q1 fails on one run, Q2 holds, Q3 void
+
+The images were level0 daa68667…, shrink 1c67f7bd…, sublet 4266d329…. The launcher was dev's,
+e7e27f49…. The shrink image is no longer f3aba04f… because patch 0004 is now in its source, compiled
+out without its define.
+
+| | result |
+|---|---|
+| Q2 | holds: three distinct hashes (ARM GATE); `sh_free` and `sh_carve_block` in sublet only; each SDK's CMake cache names its heap and flags |
+| Q1 | **8 of 9.** level0 3/3, sublet 3/3, shrink 2/3: every transcript identical to native, identity 128, exit 0 on SIGTERM, stderr empty. Shrink run 2 failed: see below |
+| Q3 | **void**: the instrument signalled the wrong process |
+
+Every null, positive and identity control fired in every boot.
+
+**Shrink run 2.**
+- In phase 3, connection 4 received connection 7's replies for items 36–39, with the same lengths.
+- Connection 5 received 180 bytes of binary in place of 180 bytes of its own, then timed out.
+- The server's phase-4 counters (`curr_items` 328, `cmd_set` 345, `cmd_get` 342) equal native's.
+  So every request was read and served, and the bytes went wrong on the way out.
+- The binary is not text. It opens with one iovec wire pair, `{0x420, 8}`, and continues with
+  fragments of the same kind cut at irregular boundaries.
+
+**Candidate cause** (signature match; the run itself was not traced): the launcher's `msg_call`
+rebuilt every sendmsg and recvmsg msghdr in two function statics, shared by the launcher's
+per-context threads. Connections 4 and 7 are on different workers under round-robin dispatch. Lane
+branch `launcher-msg-call-reentrant` has:
+- the history note `docs/history/01-10-2026_16-30-00_launcher-msg-call-shared-msghdr.md`;
+- the fix (the two become locals);
+- a pre-registered matched pair in one boot. The stock launcher mixed 3/1200 recvmsg and 4/4000
+  sendmsg messages, each carrying another thread's bytes. The fixed one mixed 0/1200 recvmsg and
+  0/1200 sendmsg, with its 1000-round arms pending.
+
+**Q3 void.** The harness sent SIGUSR1 to capstone-job, which forwards SIGINT, SIGTERM and SIGHUP
+and nothing else (`runtime/linux/job.c`). USR1 killed the helper (`signal=10`, 0.00 s, no status
+record) and never reached the domain.
+
+The same shape reproduces natively: memcached under a forking `bash -c` wrapper, USR1 sent to the
+wrapper. The wrapper dies and memcached is orphaned.
+
+The harness gained `--signal-child`, which signals the server command's child (its process group
+when it leads one). `run-oracle.sh` uses it for USR1 only, so the TERM path stays the one M5 ran.
+Natively, through the same wrapper, it gives `Gracefully stopping`, exit 0 from both processes,
+and a transcript identical to native's.
+
+### M5, M4 and M3 on the fixed launcher (2026-10-01)
+
+The images and Q1–Q3 were the same as the first run. The launcher was 63e8a39a… (lane branch
+`launcher-msg-call-reentrant`), with capstone-job 5a160efa…. Each boot prints the hashes the guest
+actually runs.
+
+| | result |
+|---|---|
+| Q1 | **holds, 9/9**: level0 3/3, shrink 3/3, sublet 3/3. Every transcript is identical to native (1,931,207 bytes); identity 128; exit 0 on SIGTERM; stderr empty. Domain stop 2.2–2.3 s (level0, shrink), 3.0 s (sublet); native 0.9 s |
+| Q2 | holds (unchanged images) |
+| Q3 | **holds**: shrink, SIGUSR1 to capstone-exec's process group. `Gracefully stopping` on stderr, exactly native's 20 bytes; exit 0; transcript identical; stop 2.29 s against native's 0.96 s. Exit 0 after that line means `stop_threads()` returned (`memcached.c:6236-6237`), and it stops and joins every background thread and reaps each worker (`thread.c:206` onward) before main returns |
+
+Every null, positive and identity control fired in each of the five boots.
+
+**M3 worker marker (W1–W3, predictions committed first in 5013e7e02fc3).** Images: native
+4a939832…, domain d35bee6b… (shrink runtime); `build-marker.sh` showed both carry the marker and no
+oracle image does.
+
+| | result |
+|---|---|
+| W1 | **holds**: native, two runs, 0:3 1:2 2:2 3:2 each |
+| W2 | **holds**: domain 0:3 1:2 2:2 3:2, every worker 0–3 present |
+| W3 | **holds**: the transcript is identical to the oracle's native one, and stderr is empty once the marker lines are removed |
+| control | the same gate fails on a stderr with no marker line |
+
+**M3 and M4 are complete.** M5 passed 9/9 on the fixed launcher, but that is not evidence the fix
+resolves the shrink-run-2 failure. At one run in nine, nine clean runs happen about a third of the
+time, and the harness binary changed between the two series.
+
+The experiment that ties the failure to the mechanism, or does not, is memcached under the two
+delay launchers. It is pre-registered below.
+
+### memcached under the delay pair — PRE-REGISTERED before its boot
+
+The predictions MD1 and MD2 are in lane branch `launcher-msg-call-reentrant`'s history note
+(`docs/history/01-10-2026_16-30-00_launcher-msg-call-shared-msghdr.md`), committed before the boot.
+The setup:
+- `run-oracle.sh --arm shrink --runs 10 --alternate <stock+delay> <fixed+delay>`;
+- odd runs stock+delay e92dedfd…, even runs fixed+delay 584078a4…, one boot.
+
+The harness now stops waiting on a connection after its first 60 s timeout (`fill`, the `dead`
+flag), so a desynchronised connection costs one timeout, not one per response it is still owed.
+Passing runs are unaffected.
 
 ## M3 worker marker — PRE-REGISTERED before its first boot
 
