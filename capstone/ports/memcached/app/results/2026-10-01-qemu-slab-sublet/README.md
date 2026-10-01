@@ -11,7 +11,8 @@ component port's lifetime hooks run inside it, and do those two fixtures then fa
 
 ## Verdict
 
-**Every run is as pre-registered: oracle 6 of 6, safety 60 of 60, report as predicted.**
+**Every run is as pre-registered: oracle 6 of 6, safety 60 of 60 and then 18 of 18 with fixture 11,
+the report and the guard as predicted.**
 
 | | mode 0 (spatial) | mode 1 (sublet) |
 |---|---|---|
@@ -19,6 +20,7 @@ component port's lifetime hooks run inside it, and do those two fixtures then fa
 | fixture 9, write into the neighbouring slab item | **bounds fault** at the neighbour's first data byte, 3/3 boots | **bounds fault**, 3/3 |
 | fixture 10, read a removed and reused item through the stale pointer | returns `a0015b` (same address, the new item's byte), 3/3 | **temporal fault**: the stale pointer reloads untagged at the printed target, 3/3 |
 | fixtures 1–8 | the sublet arm's verdicts, 3/3 | the same, 3/3 |
+| fixture 11, a chunked item (700 KB: header plus one 512 KiB chunk) removed and reallocated, read through the old chunk pointer | returns `b0015b` (same chunk, the new item's byte), 3/3 | **temporal fault** at the printed target, 3/3 |
 
 On every other arm fixture 9 returns `9000ee` and fixture 10 returns `a0015b`: those are the negative
 controls, already recorded, and the two flips above are the positive controls that the hooks are
@@ -36,8 +38,32 @@ stored values are never freed (`curr_items 328`, `evictions 0`).
 included), the non-chunked chunk release, object backing, issue and release. **Not exercised:** the
 chunked-item release (the oracle never frees its 600 KB and 900 KB values: they are still linked at
 `stats`), page discard (`memory_release` returns early without `slab_reassign`), object discard (no
-cache limit, no `cache_destroy`), and the mover (not started). Fixture 11, registered after this
-audit and run below, covers the chunked release.
+cache limit, no `cache_destroy`), and the mover (not started). Fixture 11 was registered after that
+audit (pushed in 6c73bc73fb61, before its first boot) for the chunked release: it frees a chunked
+item (a header in class 3 plus one attached 512 KiB chunk in class 37) through `item_remove` →
+`do_slabs_free_chunked`. The chunk returns to its class's free list and is reissued at the same
+address to the next item of the same shape (`same-address=1`; its alias is bounded to the chunk,
+`[cc180000,cc200000)`). That can only happen if the chained-chunk release ran, and the header's
+release runs unconditionally before it. It ran on a rebuilt safety image, 286e2211…, with fixtures
+9 and 10 alongside, 3 boots per mode: 18 of 18 as predicted, the fixture's output byte-identical
+across boots.
+
+A direct count, one more boot in mode 0 with the report line on: fixture 10's server reports
+`chunk_releases=1 chunk_reuses=1`, fixture 11's `chunk_releases=2 chunk_reuses=2`. The two releases
+are the header's and the chunk's, counted by the ledger itself, with no address argument needed.
+
+What fixture 11 does not show: the header's own reuse (its new address is not printed); which of
+the two renews, the release's or the reissue's, killed the old pointer in mode 1 (both revoke, as
+in fixture 10); and the loop's second iteration, since one chunk was attached where a real 700 KB
+value carries a smaller tail chunk as well. The item is never linked or filled: this is the path
+from `item_free` down, not a server-side delete. The pre-registered fixture source needed a
+one-line build fix before it compiled (an `#include "items.h"` that `memcached.h` already supplies,
+and `items.h` has no guard); the fix is committed with these results. Page discard, object discard
+and the mover remain unexercised.
+
+**The guard fires.** One run of the oracle image with no `MC_SLAB_SUBLET_MODE` in the environment:
+the server printed `MCAPP-SLAB-SUBLET fail 903` and exited 97 before listening, and the harness
+recorded no transcript. So a run that loses the variable cannot pass as either mode.
 
 **Item bounds, read from the fixtures' own output.** On the plain sublet arm an item's data pointer
 reads `bounds=[c8800000,c8900000)`, its page; here it reads `[cc0fff00,cc0fffd0)`, its 208-byte

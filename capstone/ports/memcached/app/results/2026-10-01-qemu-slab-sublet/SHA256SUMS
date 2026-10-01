@@ -1,4 +1,6 @@
 # The booted images, as host/build-slab-sublet.sh built them into $MC_WORK/slabsublet and as every boot's
 # share copy hashed. Verify from $MC_WORK with sha256sum -c. Guest harness mc-harness 5457112b... in every boot.
+# The first safety image, 2193cf9e... (fixtures 1-10, 60 runs), was rebuilt with fixture 11 into the one
+# listed; the oracle image came out byte-identical on the rebuild.
 90d0da599a2ffd01271e5e962671ff114d6e7bff0bee7a280d7ced73fb165490  slabsublet/memcached-slabsublet.dom
-2193cf9e70400fa9536bf32527ee331cb780317d970fe67d46268ebb8239fcc4  slabsublet/memcached-safety-slabsublet.dom
+286e2211ea265d2f5de30496630688606e357ea1c42b71241c8ea55e42614fc4  slabsublet/memcached-safety-slabsublet.dom

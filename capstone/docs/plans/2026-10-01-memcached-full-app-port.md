@@ -394,6 +394,8 @@ Images: oracle 90d0da59…, safety 2193cf9e…; launcher 63e8a39a…. Everything
 | S2 | holds: fixture 9 faults oob on both modes, 3/3 each (it returns on every other arm) |
 | S3 | holds: fixture 10 returns `a0015b` in mode 0 and faults temporal in mode 1, 3/3 each |
 | R | holds: `pages=9 chunk_releases=20 chunk_reuses=20 object_releases=127 object_reuses=111` |
+| 11 | holds (registered after the first boots' audit, 6c73bc73fb61): the chunked item's release returns `b0015b` in mode 0 and faults temporal in mode 1, 3/3 each, on the rebuilt safety image 286e2211… |
+| guard | a run with no `MC_SLAB_SUBLET_MODE` printed `fail 903` and exited 97 before listening |
 
 Item bounds went from the page (`[c8800000,c8900000)` on the sublet arm) to the chunk
 (`[cc0fff00,cc0fffd0)`, 208 bytes).

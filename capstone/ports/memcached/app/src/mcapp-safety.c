@@ -48,7 +48,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "items.h"
 
 #define MCAPP_MARK(n, v) (0x100000 * (n) + ((v) & 0xFFFFF))
 

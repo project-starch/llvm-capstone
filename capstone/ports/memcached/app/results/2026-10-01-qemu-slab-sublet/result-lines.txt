@@ -119,3 +119,59 @@ fx7: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
 fx8: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
 fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
 fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## guard, oracle image 90d0da59 with no MC_SLAB_SUBLET_MODE in the environment, one run
+server env: none
+mc-harness: server exited before listening
+harness rc=3
+oracle1   FAIL [slabsublet] the domain run left no transcript
+domain stderr: MCAPP-SLAB-SUBLET fail 903
+job: {"version":1,"kind":"exit","value":97}
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet0, repeat 1 (safety slabsublet0: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+fx11: AS PREDICTED: RETURN b0015b  (predicted RETURN b0015b; exit 91, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet1, repeat 1 (safety slabsublet1: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx11: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet0, repeat 2 (safety slabsublet0: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+fx11: AS PREDICTED: RETURN b0015b  (predicted RETURN b0015b; exit 91, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet1, repeat 2 (safety slabsublet1: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx11: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet0, repeat 3 (safety slabsublet0: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+fx11: AS PREDICTED: RETURN b0015b  (predicted RETURN b0015b; exit 91, len=None)
+
+## fixtures 9-11 on the rebuilt safety image (fixture 11 added), slabsublet1, repeat 3 (safety slabsublet1: image 286e2211ea265d2f harness 5457112b41823ad8)
+fx9: AS PREDICTED: FAULT oob  (predicted FAULT oob; signal 11, len=None)
+fx10: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx11: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## fixture 11's own lines, slabsublet0 repeat 1 (both modes print the same addresses)
+MCAPP-FIX 11 begin
+MCAPP-FIX 11 item a header-class=3 chunk-class=37 chunk-size=524208
+MCAPP-FIX 11 a-header cursor=cc0fff00 bounds=[cc0fff00,cc0fffd0) len-from-cursor=208
+MCAPP-FIX 11 a cursor=cc180042 bounds=[cc180000,cc200000) len-from-cursor=524222
+MCAPP-FIX 11 b cursor=cc180042 bounds=[cc180000,cc200000) len-from-cursor=524222
+MCAPP-FIX 11 same-address=1
+MCAPP-FIX 11 target=cc180042
+MCAPP-FIX 11 touch
+MCAPP-FIX 11 returned a[0]=5b (0x5b = the NEW item's chunk byte)
+MCAPP-FIX 11 mark=b0015b
+
+## hook count, slabsublet0 with MC_SLAB_SUBLET_REPORT=1, fixtures 10 and 11, one boot (image 286e2211)
+fx10: AS PREDICTED: RETURN a0015b  (predicted RETURN a0015b; exit 91, len=None)
+fx11: AS PREDICTED: RETURN b0015b  (predicted RETURN b0015b; exit 91, len=None)
+fx10 stderr: MCAPP-SLAB-SUBLET mode=0 pages=1 chunk_releases=1 chunk_reuses=1 object_releases=1 object_reuses=0 backing_used=1081456 metadata=857472
+fx11 stderr: MCAPP-SLAB-SUBLET mode=0 pages=2 chunk_releases=2 chunk_reuses=2 object_releases=1 object_reuses=0 backing_used=2130032 metadata=857984

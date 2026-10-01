@@ -55,6 +55,8 @@ def main():
     parser.add_argument('--arm', choices=['level0', 'shrink', 'sublet', 'slabsublet0', 'slabsublet1'], required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--expect', type=Path, default=APP / 'host/safety-expect.txt')
+    parser.add_argument('--env', action='append', default=[], metavar='NAME=VALUE',
+                        help='more server environment (e.g. MC_SLAB_SUBLET_REPORT=1 for the adapter counters on stderr)')
     parser.add_argument('fixtures', nargs='+', type=int)
     args = parser.parse_args()
 
@@ -74,6 +76,7 @@ def main():
         image = work / 'slabsublet' / 'memcached-safety-slabsublet.dom'
         flags += SLAB_SUBLET_FLAGS
         env = f'MC_SLAB_SUBLET_MODE={args.arm[-1]} '
+    env += ''.join(f'{e} ' for e in args.env)
     if not image.is_file():
         parser.error(f'no {image}: run host/build-safety.sh')
     args.out.mkdir(parents=True, exist_ok=False)
