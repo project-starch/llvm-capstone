@@ -689,7 +689,7 @@ te by the RTL lane, 2026-09-24.
 >
 > **Related:** R-26 (the same class: a committed state change that younger instructions checked too early).
 
-### R-47 — CALL parks the WRONG return pc when a jump or branch reaches issue before the dyn unit responds: the caller resumes past that instruction, or mid-instruction `FIXED on capstone-ariane sup-call 727ea6e93 (audited 2026-10-01), not yet landed; OPEN on every bitstream so far`
+### R-47 — CALL parks the WRONG return pc when a jump or branch reaches issue before the dyn unit responds: the caller resumes past that instruction, or mid-instruction `FIXED ON SILICON 2026-10-02: resident in caplifive_supcall_36a641e0b.bit, call-retpc's readings on the board bit-identical to the fixed simulation; sup-call not yet landed on the submodule's shared branch`
 
 > **What happens.** `core/ex_stage.sv` builds CALL's domain-switch request when the dyn unit RESPONDS and
 > packs the caller's parked return pc as `pc_i + 4`. `pc_i` is `issue_read_operands.sv`'s `pc_o`, which is
@@ -931,7 +931,7 @@ stays open for the permission check and the cause number. Follow-up 674cdab03c r
 unsigned-overflow acceptance at the upper edge of the sealed-return window and from the general
 bounds check.
 
-## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED on capstone-ariane sup-call (2026-10-01, audited): the fold corrected, the +1 dropped, 1024 B / 16-B aligned, and the sealed cursor set to the region's start (the only base a SEALED capability carries), pending the bitstream; SHRINKTO's off-by-one and the two convention questions still OPEN`
+## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED and RESIDENT since 2026-10-02 (caplifive_supcall_36a641e0b.bit; audited): the fold corrected, the +1 dropped, 1024 B / 16-B aligned, the sealed cursor set to the region's start; the seal-size arms have not run on silicon yet; SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
 > overlooked.** That ruling fixed each document's *outlier arithmetic* and moved no convention: the
