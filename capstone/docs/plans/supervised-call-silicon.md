@@ -247,6 +247,38 @@ the after-audit, synthesis, silicon.
   If the reading would be uninformative the build does not go: here it is not -- the design is inert
   unless cssupervise runs, so the bitstream's first job is the R-43 acceptance list unchanged, then the first
   capstone-exec program.
+- **Step 9 RESULT (2026-10-02, the synth lane's sealed run on 36a641e0b, exit 0, 2h35m; PROVENANCE 36a641e0bd1b;
+  bitstream sha256 016219b27ff0a2010c1e9535a166f39ceb9ab5f7c62236251dc24fae2a55d045, 11,443,722 B, on the synth
+  host, NOT flashed; tarball synth-36a641e0b-exit0.tar.gz sha256 8409e936...). Every binding item passes:** the
+  routed TIMING-23 arc identical to 8f6a0af98's including the index (`lsu_i/state_q[3]_i_18`); LUTLP-1 = 0 with the
+  CFGBVS-1 control present; WNS -8.189 against -9.595, inside the band (read as noise, not improvement); failing
+  endpoints 52.84 % (v2 52.17 %), WHS +0.051; synthesis-stage loops the same five families, no new one, no 8-326
+  cut through the new cells (two cuts moved: the arbiter loop's from the LSU's data_req to the arbiter's idx_o,
+  plus one anonymous cut in the clear_addr loop); the -1 `rd_ack_q` stem resolved as a naming change (the disabled-
+  arc LUT lies inside rd_ack_q's D-cone in both builds); census unchanged (2,000/2,000 in csr_regfile's CPMP
+  register, dom-switch groups 0/0/0); R-43's ORDER still 0/500; routing converged in ~31 min with one R-42-shaped
+  excursion. Whole-design FF +1,090, LUT +2,182. **FF rows** (predicted -> measured): csr_regfile +524 -> +510, of
+  which 482 new registers (sup_event_cause 21 of 64 and kind 1 of 2 pruned, +28 replication of existing cpmp_q/
+  debug_mode_q); commit_stage +260 -> +216 (esc_cause_q 20 of 64, the rest exactly 196); ex_stage +128 EXACT;
+  rev-node +16 EXACT; dom-switcher +137 -> +168 (the generated FSM's own state growth +31, not predicted);
+  scoreboard 0 -> +25 (sup_arm_en 1 bit x 8 entries, ex.cause +10, pointer replicas +7: the request fields ARE
+  pruned off the entry, the +1,104 failure mode did not occur); issue_read_operands 0 -> -25 (replica churn). The
+  cause pruning is confirmed from the RTL: every writer of a cause field is a constant (riscv codes, Capstone
+  24-29, dcsr causes, interrupts = bit 63 + a code, the quantum) or the FPU's 5 status bits, so bits 6..62 are
+  provably 0 and the live set is at most {0..5, 63}; the 20/21 flops are those bits plus replicas (index list
+  requested from the synth lane). **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
+  arbiter 0/500 (PASS); before i_load_unit 55/500 -- a pre-registration MISS with the mechanism identified: I had
+  commit_lsu_o landing in the store buffer's flops, and its cone continues through the store buffer's combinational
+  status (commit pointer, last_store_buf_ready next-state) into the AMO fifo and the load unit's dom-switch
+  metadata enable, then the switcher's event registers; the route pre-existed (the entry's op/fu drove commit_lsu_o
+  the same way), new is A at its head; not a loop, 1.3-1.6 ns better than WNS, the load-unit cell is the switcher's
+  metadata enable and not accept/translation/data_req -- accepted, startpoint flops requested to pin whether A is
+  the source or a through-point; before i_frontend 3/500 through neither exception_o nor the switcher, all via a LUT
+  named `mem_q[sbe][cap_result][sup_arm_en]` -- read as a shared-LUT naming artifact (sup_arm_en is a data bit
+  written by the dyn unit's write-back and read only at commit, with no RTL path to issue validity; the matched LUT
+  is the entry's write-back enable, named after one of the fields it drives), fan-in query requested; if an A flop
+  is in that fan-in it becomes a real finding. **Verdict from this lane: ready for the board; the flash is the
+  lead's call, the R-43 acceptance list first.**
 - **Final ladder on the audited tree (`all4`, every test, 2026-10-01 evening):** identical to the readings below
   where they overlap, plus the audit's arms: the x1 sentinel 0x1234 survives 53 resumes (quantum 64) and 103
   (quantum 16) with the count exactly 400 both times; CCSRRW cpmp0 with a tagged capability escapes (5) and the
