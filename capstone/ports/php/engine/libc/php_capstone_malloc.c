@@ -15,7 +15,35 @@
  * Do not "fix" this by enabling ZEND_MM.
  */
 #include <string.h>   /* memcpy -- realloc needs the TAG-PRESERVING copy, see below */
+
+/* THE SEAM MOVES UP ONE LAYER (PHP_CAP_ALLOC_SEAM).
+ *
+ * Leaving ZEND_MM undefined makes ZEND_DO_MALLOC plain malloc, and the plan concluded that this
+ * alone gives "every emalloc block its own precisely-bounded capability". IT DOES NOT. PHP's own
+ * _emalloc still sits on top: it asks malloc for sizeof(zend_mem_header) + MEM_HEADER_PADDING +
+ * REAL_SIZE(size) -- measured 48 + 0 + REAL_SIZE(size) here -- and returns p + 48. So the
+ * capability covers PHP's whole block and the engine's object lives 48 bytes inside it. A 9-byte
+ * string got 16 reachable bytes, and both corpus triggers MISSED in that slack.
+ *
+ * Worse, REAL_SIZE is the IDENTITY on PHP's request (48 + REAL_SIZE(n) is always a multiple of
+ * 8), so the fault and control arms computed the SAME bound: rung E was not a matched pair at all.
+ *
+ * So the ported allocator becomes PHP's allocator rather than sitting under it. The entry points
+ * below replace Zend/zend_alloc.c's (that TU is dropped from the build), and each bound is
+ * computed from the CALLER's own size. They live in this TU because the arena is a static in
+ * zend_capstone_alloc.h -- a second includer would get a second, disjoint arena.
+ *
+ * The header's own `_emalloc`/`_efree` are renamed out of the way so the PHP-facing names are
+ * free; the header itself is not edited, so the CRASH-008 and UAF suites are unaffected. */
+#if defined(PHP_CAP_ALLOC_SEAM)
+#  define _emalloc zend_cap_emalloc
+#  define _efree   zend_cap_efree
+#endif
 #include "../../zend-alloc/zend_capstone_alloc.h"
+#if defined(PHP_CAP_ALLOC_SEAM)
+#  undef _emalloc
+#  undef _efree
+#endif
 
 /* STACK-DEPTH WATCHDOG, sited in malloc.
  *
@@ -31,6 +59,15 @@
 /* Declared in php_capstone_depth.c. php_depth_trip_fn is a POINTER, not a direct extern:
  * only the rung that arms the watchdog defines a handler, and a direct reference would
  * make every other rung fail to link. */
+/* One spelling for the ported allocator whichever way it was compiled. */
+#if defined(PHP_CAP_ALLOC_SEAM)
+#  define ZCAP_EMALLOC(n) zend_cap_emalloc(n)
+#  define ZCAP_EFREE(p)   zend_cap_efree(p)
+#else
+#  define ZCAP_EMALLOC(n) _emalloc(n)
+#  define ZCAP_EFREE(p)   _efree(p)
+#endif
+
 extern unsigned long php_depth_floor, php_depth_low, php_depth_mallocs;
 extern int           php_depth_armed;
 extern void        (*php_depth_trip_fn)(void);
@@ -46,9 +83,9 @@ void *malloc(size_t n)
         php_depth_walk();            /* record the chain BEFORE unwinding it */
         php_depth_trip_fn();
     }
-    return _emalloc(n ? n : 1);
+    return ZCAP_EMALLOC(n ? n : 1);
 }
-void  free(void *p)               { if (p) _efree(p); }
+void  free(void *p)               { if (p) ZCAP_EFREE(p); }
 
 /* The watchdog is sited here too: the stage bisect showed the 2.6 MB excursion begins at
  * the first zend_hash_init_ex, whose only call is calloc(nTableSize, sizeof(Bucket*)). */
@@ -73,7 +110,7 @@ void *calloc(size_t n, size_t sz)
         static int once = 0;
         if (!once) {
             once = 1;
-            unsigned char *q = (unsigned char *) _emalloc(total ? total : 1);
+            unsigned char *q = (unsigned char *) ZCAP_EMALLOC(total ? total : 1);
             unsigned long tag = q ? __builtin_capstone_cap_get_tag(q) : 0UL;
             unsigned long len = q ? (__builtin_capstone_cap_get_end(q)
                                    - __builtin_capstone_cap_get_base(q)) : 0UL;
@@ -82,7 +119,7 @@ void *calloc(size_t n, size_t sz)
         }
     }
 #endif
-    unsigned char *p = (unsigned char *) _emalloc(total ? total : 1);
+    unsigned char *p = (unsigned char *) ZCAP_EMALLOC(total ? total : 1);
     if (p) { for (unsigned long i = 0; i < total; i++) { p[i] = 0; } }
     return p;
 }
@@ -98,7 +135,7 @@ void *realloc(void *p, size_t n)
         ((char *)p - sizeof(zend_mem_header) - MEM_HEADER_PADDING);
     unsigned long old = h->size;
     unsigned long cp  = old < (unsigned long)n ? old : (unsigned long)n;
-    unsigned char *q = (unsigned char *) _emalloc(n);
+    unsigned char *q = (unsigned char *) ZCAP_EMALLOC(n);
     if (!q) { return (void *)0; }
     /* MUST BE A TAG-PRESERVING COPY, NOT A BYTE LOOP.
      *
@@ -121,6 +158,96 @@ void *realloc(void *p, size_t n)
      * path. Any tail shorter than a granule goes byte-wise, which is safe because a capability
      * is never stored straddling a granule boundary. */
     memcpy(q, p, cp);
-    _efree(p);
+    ZCAP_EFREE(p);
     return q;
 }
+
+#if defined(PHP_CAP_ALLOC_SEAM)
+/* ============================================================================
+ * Zend/zend_alloc.c's PUBLIC API, served directly by the capability-bounding
+ * allocator so every bound is computed from the CALLER's size.
+ *
+ * With ZEND_DEBUG off, ZEND_FILE_LINE_DC and ZEND_FILE_LINE_ORIG_DC expand to nothing, so these
+ * signatures match zend_alloc.h:78-86 exactly.
+ *
+ * WHAT THIS GAINS over wrapping PHP's allocator, which is the whole point:
+ *   - bounds are PER EMALLOC OBJECT, not per underlying malloc block, so a one-byte over-read of
+ *     a 9-byte string is now outside the capability instead of inside PHP's 48-byte header slack;
+ *   - PHP's own AG(cache) is gone with the TU, so an emalloc/efree pair is no longer invisible to
+ *     us -- which is what the temporal axis needs, since PHP's cache used to recycle one malloc
+ *     block across several object lifetimes without the allocator seeing it.
+ * ==========================================================================*/
+
+void *_emalloc(size_t size)              { return ZCAP_EMALLOC(size ? size : 1); }
+void  _efree(void *ptr)                  { if (ptr) ZCAP_EFREE(ptr); }
+
+void *_ecalloc(size_t nmemb, size_t size)
+{
+    size_t n = nmemb * size;
+    unsigned char *p;
+    if (size && nmemb != n / size) { return (void *)0; }   /* overflow */
+    p = (unsigned char *) ZCAP_EMALLOC(n ? n : 1);
+    if (p) { size_t i; for (i = 0; i < n; i++) { p[i] = 0; } }
+    return (void *)p;
+}
+
+void *_safe_emalloc(size_t nmemb, size_t size, size_t offset)
+{
+    size_t n = nmemb * size;
+    if (size && nmemb != n / size) { return (void *)0; }
+    if (n + offset < n)            { return (void *)0; }
+    return ZCAP_EMALLOC((n + offset) ? (n + offset) : 1);
+}
+
+/* The copy MUST be tag-preserving; a byte loop here was the rung E root cause. memcpy takes its
+ * ldc/stc chunk path because both blocks start 16-aligned at base + header + padding. */
+void *_erealloc(void *ptr, size_t size, int allow_failure)
+{
+    zend_mem_header *h;
+    unsigned long old, cp;
+    void *q;
+    (void)allow_failure;
+    if (!ptr)  { return ZCAP_EMALLOC(size ? size : 1); }
+    if (!size) { ZCAP_EFREE(ptr); return (void *)0; }
+    h   = (zend_mem_header *)((char *)ptr - sizeof(zend_mem_header) - MEM_HEADER_PADDING);
+    old = h->size;
+    cp  = old < (unsigned long)size ? old : (unsigned long)size;
+    q   = ZCAP_EMALLOC(size);
+    if (!q) { return (void *)0; }
+    memcpy(q, ptr, cp);
+    ZCAP_EFREE(ptr);
+    return q;
+}
+
+char *_estrndup(const char *s, unsigned int length)
+{
+    char *p = (char *) ZCAP_EMALLOC((size_t)length + 1);
+    if (!p) { return (char *)0; }
+    memcpy(p, s, length);
+    p[length] = 0;
+    return p;
+}
+
+char *_estrdup(const char *s)
+{
+    return _estrndup(s, (unsigned int)strlen(s));
+}
+
+/* PERSISTENT allocations in PHP (plain malloc, never efree'd). There is no separate persistent
+ * heap in a domain, so they come from the same arena; nothing frees them, which matches how PHP
+ * uses them. */
+char *zend_strndup(const char *s, unsigned int length)
+{
+    char *p = (char *) ZCAP_EMALLOC((size_t)length + 1);
+    if (!p) { return (char *)0; }
+    memcpy(p, s, length);
+    p[length] = 0;
+    return p;
+}
+
+char *zend_strdup(const char *s)
+{
+    if (!s) { return (char *)0; }
+    return zend_strndup(s, (unsigned int)strlen(s));
+}
+#endif /* PHP_CAP_ALLOC_SEAM */

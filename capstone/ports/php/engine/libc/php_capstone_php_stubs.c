@@ -29,3 +29,20 @@ ZEND_API void zend_register_reflection_api(TSRMLS_D) { }
 /* Zend/zend_highlight.c -- reachable only via highlight_file()/highlight_string(). */
 ZEND_API void zend_highlight(zend_syntax_highlighter_ini *syntax_highlighter_ini TSRMLS_DC)
 { (void)syntax_highlighter_ini; }
+
+#if defined(PHP_CAP_ALLOC_SEAM)
+/* The two symbols the engine still imports from Zend/zend_alloc.c, which PHP_CAP_ALLOC_SEAM
+ * drops. They live here rather than beside the allocator because they need PHP's headers, and
+ * libc/php_capstone_malloc.c deliberately does not include them (it defines its own size_t).
+ *
+ * alloc_globals: exported by zend_alloc.c and linked against, though AG() itself is referenced
+ * only from inside that TU. Zeroed and never read here -- notably its `cache` is unused, which
+ * is the point of the re-seam: PHP's allocator cache is gone, so an emalloc/efree pair is now
+ * visible to the capability allocator instead of being absorbed by a recycling cache.
+ *
+ * start_memory_manager: a no-op. zend_arena_init() runs lazily on the first carve, so there is
+ * nothing to start. TSRMLS_D is `void` in this non-ZTS build. */
+ZEND_API zend_alloc_globals alloc_globals;
+
+ZEND_API void start_memory_manager(TSRMLS_D) { }
+#endif

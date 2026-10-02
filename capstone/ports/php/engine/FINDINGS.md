@@ -459,6 +459,57 @@ one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` i
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
 
+## PHASE 3 RESULT: BOTH CORPUS TRIGGERS CAUGHT, through the real engine
+
+`run-triggers.sh both`, matched pairs, control first:
+
+| case | control arm (stock bounds) | fault arm (true-size bounds) |
+|---|---|---|
+| **CRASH-110** `parse_url("file:///")` | PASS -- returns an array, reproducing the corpus pristine-OK row | **CAUGHT**, cause 5 |
+| **CRASH-073** `parse_url('a:/')` | PASS -- same | **CAUGHT**, cause 5 |
+
+CRASH-110's fault line identifies the defect exactly:
+
+    insn = 00550503, rs1 = x10, cursor = 101d93fe4, imm = 5, addr = 101d93fe9, size = 1,
+    bounds = (101d93fb0, 101d93fe9)
+
+`00550503` is `lbu rd, 5(rs1)` -- literally `*(e + 5)` at `ext/standard/url.c:132`, the line ASAN
+named. `addr` equals the bound's END, so the read is exactly one byte past. The span,
+`0x101d93fe9 - 0x101d93fb0 = 57`, is 48 bytes of `zend_mem_header` plus the string's TRUE size of
+9 ("file:///" is 8 chars + NUL). CRASH-073 is the same shape at span 52 = 48 + 4.
+
+`ext/standard/url.c` and every Zend TU are byte-identical from the corpus tree. No shadow memory,
+no redzones, no instrumentation: the capability bound on the zval's string stops the read.
+
+### What made it work: the seam moved up one layer (PHP_CAP_ALLOC_SEAM, default ON)
+
+The previous MISS was not a result about PHP. `Zend/zend_alloc.c` is now DROPPED and its public API
+(`_emalloc`, `_efree`, `_ecalloc`, `_erealloc`, `_safe_emalloc`, `_estrdup`, `_estrndup`,
+`zend_strdup`, `zend_strndup`) is served directly by the capability-bounding allocator in
+`libc/php_capstone_malloc.c`, so every bound is computed from the CALLER's size. Two symbols the
+engine still imports (`alloc_globals`, `start_memory_manager`) are supplied in
+`libc/php_capstone_php_stubs.c`, which already has PHP's headers.
+
+The arithmetic shows the difference directly: bounds used to span 96 bytes of header, because
+PHP's 48-byte `zend_mem_header` sat INSIDE our own 48-byte one, and the user's object began 48
+bytes into our capability. Now there is ONE header and the bound ends at the object's true end.
+
+It also restores the temporal axis in principle: PHP's `AG(cache)` went with the dropped TU, so an
+`emalloc`/`efree` pair is visible to the capability allocator again instead of being absorbed by a
+cache that recycled one malloc block across several object lifetimes.
+
+Cost, stated plainly: `zend_alloc.c` is no longer byte-identical from the corpus tree -- it is
+dropped, not edited, and the allocator under test is the ported one, which is the same arrangement
+the CRASH-008 and UAF suites already use and measure. The functions it replaces are reimplemented
+from the originals; `_erealloc` in particular copies with `memcpy`, never a byte loop.
+
+### No regressions
+
+`run-crash008.sh`: control 200 (survived), fault arm CAUGHT cause 7 -- VERDICT CAUGHT.
+`run-uaf.sh`: control 213 (survived), fault arm CAUGHT cause 24 -- VERDICT CAUGHT.
+Rung E's control arm reaching ISARRAY also exercises startup, compile and execute, so rungs B-D
+are covered by the same run.
+
 ## FIXED: the rung E fault was OUR realloc, copying byte by byte
 
 `libc/php_capstone_malloc.c`'s `realloc` was

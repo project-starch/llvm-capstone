@@ -121,12 +121,25 @@ if [ "${PHP_DIAG_ZVAR:-0}" = "1" ]; then
   echo "  PHP_DIAG_ZVAR: printing the slot address in _zval_copy_ctor"
 fi
 
+# PHP_CAP_ALLOC_SEAM=1 drops Zend/zend_alloc.c: its public API is served instead by the
+# capability-bounding allocator in libc/php_capstone_malloc.c, so each bound comes from the
+# CALLER's size rather than from PHP's 48-byte-header-inflated malloc request. See the long
+# comment in that file for why wrapping PHP's allocator cannot work.
 TUS="zend_language_scanner zend_language_parser zend_compile zend_execute zend_execute_API
- zend_opcode zend_operators zend_variables zend_hash zend_API zend_alloc zend_mm zend
+ zend_opcode zend_operators zend_variables zend_hash zend_API zend_mm zend
  zend_llist zend_ptr_stack zend_stack zend_constants zend_list zend_qsort zend_stream
  zend_objects zend_objects_API zend_object_handlers zend_exceptions zend_interfaces
  zend_iterators zend_builtin_functions zend_extensions zend_ini zend_default_classes
  zend_ts_hash zend_sprintf zend_dynamic_array zend_multibyte"
+
+# zend_alloc.c is compiled ONLY when the seam is off; with the seam on its API comes from
+# libc/php_capstone_malloc.c instead.
+if [ "${PHP_CAP_ALLOC_SEAM:-1}" = "1" ]; then
+  CF+=(-DPHP_CAP_ALLOC_SEAM)
+  echo "  PHP_CAP_ALLOC_SEAM: bounds are per emalloc OBJECT (zend_alloc.c dropped)"
+else
+  TUS="$TUS zend_alloc"
+fi
 
 OBJS=()
 ZCF=("${CF[@]}")
