@@ -66,8 +66,23 @@ static int fail(const char *stage, int rc) {
 }
 
 static int run_blobclose(void) {
-  /* memsys5 as the level-0 heap; lookaside stays ON by default, so the Incrblob
-   * that blob_open creates lands in the connection's lookaside pool. */
+  /* memsys5 as the level-0 heap.
+   *
+   * CORRECTION. An earlier version of this comment said "lookaside stays ON by default, so
+   * the Incrblob lands in the connection's lookaside pool". That is wrong for this corpus:
+   * build-sqlite-row322.sh sets -DSQLITE_DEFAULT_LOOKASIDE=0,0, and with lookaside off
+   * sqlite3DbMallocZero falls straight through to sqlite3Malloc, i.e. memsys5. So in the
+   * default configuration this bug exercises ONE allocator, not the nested pair.
+   *
+   * The bug reproduces either way -- what dangles is the sqlite3 connection itself (a
+   * plain sqlite3MallocZero), and the dangling read is of its db->lookaside descriptor
+   * field, which sqlite3DbFree consults whether or not a pool exists. Host ASan confirms
+   * it fires with lookaside on AND off.
+   *
+   * To exercise the lookaside > memsys5 chain the paper describes, build with
+   * SQLITE_LOOKASIDE=1200,40 (build-sqlite-row322.sh appends that as a later -D, which
+   * wins over the 0,0 above). The probe below reports the lookaside high-water mark so the
+   * configuration is VERIFIED at runtime rather than assumed. */
   int rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
                           (int)sizeof(sqlite_heap), 64);
   if (rc != SQLITE_OK)
@@ -104,16 +119,55 @@ static int run_blobclose(void) {
   rc = sqlite3_blob_open(db, "main", "t", "x", 1, 0, &blob);
   if (rc != SQLITE_OK)
     return fail("blob-open", rc);
+  output_text("blobclose blob_open rc=0\n");
 
-  /* blob still open -> connection becomes a zombie, lookaside pool stays alive */
+  /* VERIFY the allocator chain instead of assuming it. With lookaside compiled off the
+   * high-water mark stays 0; with a pool configured it is the bytes served from slots. */
+  {
+    int cur = 0, hi = 0;
+    int srv = sqlite3_db_status(db, SQLITE_DBSTATUS_LOOKASIDE_USED, &cur, &hi, 0);
+    output_text("blobclose lookaside status_rc=");
+    output_uint((unsigned long)(srv < 0 ? -srv : srv));
+    output_text(" slots_in_use=");
+    output_uint((unsigned long)(cur < 0 ? 0 : cur));
+    output_text(" high_water=");
+    output_uint((unsigned long)(hi < 0 ? 0 : hi));
+    /* hi > 0 proves SOME connection-owned allocation was served from a slot; it does not
+     * single out the Incrblob. That distinction matters -- see case_lookaside_tagmap.c. */
+    output_text(hi > 0 ? "  (lookaside ACTIVE: connection-owned allocations came from slots)\n"
+                       : "  (lookaside OFF: every allocation came straight from memsys5)\n");
+  }
+
+  /* blob still open -> connection becomes a zombie, lookaside pool stays alive.
+   *
+   * REACHABILITY PROBE. close_v2 returning 0 here is the decisive marker: it means the
+   * ZOMBIE path was taken, which is what defers the real free of the connection to the
+   * finalize inside blob_close below. Plain sqlite3_close() on the same sequence returns
+   * SQLITE_BUSY (5) and does not close anything at all, and then there is no UAF --
+   * measured on the host, where close_v2 faults under ASan and close is clean. So a 5
+   * here, or any nonzero, means this case established nothing. */
   rc = sqlite3_close_v2(db);
   if (rc != SQLITE_OK)
     return fail("close-v2", rc);
+  output_text("blobclose close_v2 rc=0 (zombie path taken; plain close would give 5)\n");
 
-  /* 3.22.0 buggy order: this is the UAF on the lookaside Incrblob */
+  /* 3.22.0's order inside sqlite3_blob_close is
+   *     rc = sqlite3_finalize(p->pStmt);   <- last stmt on a zombie db, so
+   *                                           sqlite3LeaveMutexAndCloseZombie frees db
+   *     sqlite3DbFree(db, p);              <- reads db->lookaside on the FREED db
+   * Fixed 3.30.0 by freeing p first and finalizing afterwards.
+   *
+   * Host ASan oracle on 3.22.0, this exact sequence:
+   *   READ of size 8
+   *     use   sqlite3DbFreeNN <- sqlite3DbFree <- sqlite3_blob_close
+   *     free  sqlite3LeaveMutexAndCloseZombie <- sqlite3_finalize <- sqlite3_blob_close
+   * It fires with lookaside ON and with lookaside OFF -- sqlite3DbFree reads
+   * db->lookaside.pStart/pEnd either way to decide whether p is a lookaside slot, so
+   * this bug is NOT out of a native oracle's reach as was previously recorded. */
   rc = sqlite3_blob_close(blob);
   if (rc != SQLITE_OK)
     return fail("blob-close", rc);
+  output_text("blobclose blob_close rc=0 (the freed-db read already happened)\n");
 
   output_text("blobclose NOTRAP done\n");
   return 0;

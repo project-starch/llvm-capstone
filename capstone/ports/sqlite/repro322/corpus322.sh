@@ -6,11 +6,12 @@ set -uo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)   # ports/sqlite/repro322
 PORTS_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)                        # ports/sqlite
 cd "$PORTS_DIR"
-export SQLITE322_TMP_ROOT=/tmp/capstone-322-repro
+# Overridable so two checkouts (or two users) do not collide in /tmp.
+export SQLITE322_TMP_ROOT=${SQLITE322_TMP_ROOT:-/tmp/capstone-322-repro}
 source "$PORTS_DIR/../../tests/capstone-test-env.sh" 2>/dev/null
 
 GROUP=${2:-core}
-ROOT=/tmp/capstone-322-repro/corpus-$GROUP
+ROOT=$SQLITE322_TMP_ROOT/corpus-$GROUP
 SHARE=$ROOT/share
 OBJ=$ROOT/obj
 MATHINC="-include $SCRIPT_DIR/repro322_math_decl.h"
@@ -22,6 +23,20 @@ case "$GROUP" in
   fts3) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 $MATHINC" ;;
   ext) CF="-USQLITE_OMIT_INCRBLOB $MATHINC" ;;
   json) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_JSON1" ;;
+  # rtree needs floating point, but this port builds with -DSQLITE_OMIT_FLOATING_POINT=1,
+  # which does `#define double sqlite_int64` in sqliteInt.h AFTER sqlite3.h has already
+  # typedef'd sqlite3_rtree_dbl as a real double -- so RtreeDValue and sqlite3_rtree_dbl
+  # disagree and rtree.c will not compile.  -DSQLITE_RTREE_INT_ONLY makes BOTH typedefs
+  # sqlite3_int64 and they agree again.  Cell layout is unchanged (RtreeValue int vs
+  # float are both 4 bytes), and the host ASan oracle confirms both rtree cases still
+  # reproduce under INT_ONLY at the same row counts.
+  # row 6's bug is in fts3EvalNextRow()'s NESTED-OR branch, and nested query syntax
+  # exists only with -DSQLITE_ENABLE_FTS3_PARENTHESIS. Without it the parentheses are
+  # ordinary characters, a flat query runs, and the case returns 0 rows -- a PASS that
+  # establishes nothing. Kept as its own group so the other fts3 cases keep building
+  # against stock fts3 flags.
+  fts3P) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_FTS3_PARENTHESIS $MATHINC" ;;
+  rtree) CF="-USQLITE_OMIT_INCRBLOB -DSQLITE_ENABLE_RTREE -DSQLITE_RTREE_INT_ONLY -USQLITE_OMIT_SHARED_CACHE $MATHINC" ;;
   *) echo "unknown group $GROUP" >&2; exit 2 ;;
 esac
 
@@ -33,6 +48,10 @@ case_agginfo.c      agginfo
 case_backupattach.c backupattach
 case_blobwrite.c    blobwrite
 case_writable_schema.c wschema
+case_mem5tagmap.c   mem5tag
+case_lookaside_tagmap.c latag
+case_lookaside_uaf.c    lauaf
+../sqlite_blobclose_domain.c blobclose
 EOF
    ;;
    coreT) cat <<EOF
@@ -51,6 +70,19 @@ EOF
    json) cat <<EOF
 case_json_each_static.c jsoneachstatic
 case_json_each_root.c   jsoneachroot
+case_jsondiag.c         jsondiag
+EOF
+   ;;
+   fts3P) cat <<EOF
+case_fts3p_probe.c     fts3pprobe
+case_fts3_snippet_or.c fts3snipor
+EOF
+   ;;
+   rtree) cat <<EOF
+case_rtree_probe.c    rtreeprobe
+case_rtree_cursor.c   rtreecursor
+case_rtree_inode0.c   rtreeinode0
+case_rtree_static_bind.c rtreestatic
 EOF
    ;;
    fts5) cat <<EOF
@@ -63,22 +95,25 @@ EOF
    ;;
    fts3) cat <<EOF
 case_fts3probe.c fts3probe
-case_fts3_snippet_or.c fts3snipor
 case_fts3_zterm.c      fts3zterm
 case_fts3_offsets.c    fts3offsets
 case_fts3_snippet.c    fts3snip
+case_fts3_destroy_oom.c fts3destroyoom
+case_fts3_static_bind.c staticbind
 EOF
    ;;
   esac
 }
 
 # The extension sources the ext group compiles as extra TUs.
+# The ext group compiles extension sources straight out of the 3.22.0 source tree.
+# Unpack sqlite-src-3220000.zip (sha256 7bc5a3ce…) and point EXT_SRC_DIR at its ext/.
 EXT_SRC_DIR=${EXT_SRC_DIR:-$HOME/sqlite-versions/sqlite-3.22.0-full/ext}
 
 do_build() {
   mkdir -p "$SHARE" "$OBJ"
   local BASE_SRC=""
-  case "$GROUP" in fts5|fts5S|fts3) BASE_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
+  case "$GROUP" in fts5|fts5S|fts3|fts3P|rtree) BASE_SRC="$SCRIPT_DIR/repro322_fts_stubs.c" ;; esac
   while read -r file tag extra; do
     [ -z "${file:-}" ] && continue
     # ext cases each pull in their own extension TU (and its include/defines)
@@ -108,7 +143,19 @@ do_build() {
 }
 
 do_run() {
-  source /home/miniconda/miniconda3/etc/profile.d/conda.sh && conda activate qemu-deps
+  # The QEMU runner needs pexpect from the qemu-deps env. `set -uo pipefail` has no -e,
+  # so a missing conda.sh used to be skipped silently and surface much later as an
+  # unrelated pexpect failure. Fail here instead, with the reason.
+  CONDA_SH=${CONDA_SH:-/home/miniconda/miniconda3/etc/profile.d/conda.sh}
+  if [ ! -r "$CONDA_SH" ]; then
+    echo "ERROR: cannot read $CONDA_SH; set CONDA_SH, or activate an env with pexpect yourself" >&2
+    return 2
+  fi
+  # shellcheck disable=SC1090
+  source "$CONDA_SH" && conda activate qemu-deps || {
+    echo "ERROR: 'conda activate qemu-deps' failed; the QEMU runner needs pexpect" >&2
+    return 2
+  }
   local all=() ; while read -r file tag extra; do [ -z "${file:-}" ] && continue; [ -f "$SHARE/$tag.dom" ] && all+=("$tag"); done < <(manifest)
   local pass="$SHARE/passed.txt" fault="$SHARE/faulted.txt" err="$SHARE/erred.txt"
   local infra="$SHARE/infra.txt"
