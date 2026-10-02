@@ -38,6 +38,25 @@
  *                     through the first item's data pointer at the second item's first data byte.
  *  10 slab_reuse      an item removed (item_remove: back on its class's free list) and a new item
  *                     of the same class allocated; reads the old item's data through the old pointer.
+ *  12-16 the five cases of bug-corpora/memcached/allocator-repros, each performing its own
+ *                     premature free through memcached's REAL allocator inside the running server.
+ *                     The corpus drives the same sequences in a freestanding harness; these are the
+ *                     same allocator-level shapes, reduced the same way (its PROVENANCE files say
+ *                     what each reduction leaves out: the hash table, the LRU queues, the real
+ *                     consumer path and, for 13 and 16, the thread interleaving, which is written
+ *                     out in program order here exactly as the corpus writes it).
+ *                     12 case 00: a read buffer handed back to its cache and THEN copied out of.
+ *                     13 case 01: a pending-IO list walked while the body frees and reissues the
+ *                        current entry, so the step reads the next link out of a dead object.
+ *                     14 case 02: tail repair assigns refcount = 1 over a live holder's reference
+ *                        and unlinks, freeing a chunk the holder still has.
+ *                     15 case 03 (CVE-2018-1000127): the unsigned short refcount wraps past the
+ *                        holders, so the next release frees a held item. 1.6.45 still has the
+ *                        narrow counter and the bare ++; its fix is a ceiling in the multiget
+ *                        consumer, which this fixture does not go through.
+ *                     16 case 04: an unlocked decrement loses a concurrent get, leaving the count
+ *                        one low, so the next release frees a held item.
+ *                     12 and 13 are cache.c objects; 14-16 are slabs.c chunks.
  *  11 chunked_reuse   fixture 10 for a CHUNKED item (a 700 KB value: its header in a small class,
  *                     one 512 KiB data chunk attached with do_item_alloc_chunk). item_remove frees
  *                     it through do_slabs_free_chunked, which files the header and then the chunk;
@@ -106,6 +125,72 @@ static item *mcapp_item(int n, const char *tag, int len, unsigned char **data)
     mcapp_show(n, tag, *data);
     return it;
 }
+
+/* ---- the corpus's reduced item layer (02/03/04), copied rather than called ----------------
+ * Upstream's item_free / do_item_remove / do_item_unlink_nolock, with the refcount arithmetic and
+ * the one call to the real allocator kept and nothing else. The app's own do_item_unlink_nolock is
+ * deliberately NOT used: it also does assoc_delete, do_item_unlink_q and STORAGE_delete on an item
+ * that was never linked or put on an LRU. */
+static void mcapp_item_free_reduced(item *it)
+{
+    unsigned int clsid = ITEM_clsid(it);
+    slabs_free(it, clsid);
+}
+/* 1 when this release took the count to zero and freed the chunk. */
+static int mcapp_item_remove_reduced(item *it)
+{
+    if (it->refcount == 0)
+        return 0;
+    if (--it->refcount == 0) {
+        mcapp_item_free_reduced(it);
+        return 1;
+    }
+    return 0;
+}
+static int mcapp_item_unlink_nolock_reduced(item *it)
+{
+    if ((it->it_flags & ITEM_LINKED) != 0) {
+        it->it_flags &= ~ITEM_LINKED;
+        return mcapp_item_remove_reduced(it);
+    }
+    return 0;
+}
+/* An item in class `id`, linked, with its payload filled: the LRU tail a client stored. Returns the
+ * payload pointer, whose alias is the chunk's under slabsublet. */
+static unsigned char *mcapp_store_item(int n, const char *tag, unsigned id, unsigned char fill)
+{
+    item *it = slabs_alloc(id, 0);
+    if (!it) {
+        printf("MCAPP-FIX %d slabs_alloc %s FAILED\n", n, tag);
+        return NULL;
+    }
+    it->slabs_clsid = (uint8_t)id;
+    it->nkey = 0;
+    it->nbytes = 16;
+    it->it_flags = ITEM_LINKED;
+    it->refcount++;                      /* 2: linked, plus the storing client */
+    mcapp_item_remove_reduced(it);       /* the storing client lets go -> 1 */
+    unsigned char *payload = (unsigned char *)it + sizeof(item);
+    mcapp_fill(payload, fill, 16);
+    printf("MCAPP-FIX %d item %s class=%u refcount=%u\n", n, tag, id, (unsigned)it->refcount);
+    mcapp_show(n, tag, payload);
+    return payload;
+}
+/* The item an mcapp_store_item payload belongs to. */
+static item *mcapp_item_of(unsigned char *payload) { return (item *)(payload - sizeof(item)); }
+
+/* ---- fixture 13's object, the corpus's reduction of io_pending_proxy_t -------------------- */
+struct mcapp_io_pending {
+    void *thread, *conn, *client_resp;
+    void (*return_cb)(void *);
+    void (*finalize_cb)(void *);
+    int status;
+    STAILQ_ENTRY(mcapp_io_pending) io_next;
+    char data[120];
+};
+STAILQ_HEAD(mcapp_io_head_s, mcapp_io_pending);
+
+#define MCAPP_STORED 0xA7   /* what the holder wrote and expects to read back */
 
 static int mcapp_fixture(int n)
 {
@@ -290,6 +375,154 @@ static int mcapp_fixture(int n)
         mcapp_touching(n, a_addr);
         v = mcapp_fix_touch(a, idx);
         printf("MCAPP-FIX 11 returned a[0]=%02x (0x5b = the NEW item's chunk byte)\n", v);
+        return MCAPP_MARK(n, (same << 8) | v);
+    }
+    case 12: {
+        /* case 00: rbuf_switch_to_malloc before 7af02b0c87 -- give the read buffer back to the
+           thread's cache, THEN copy the unparsed command out of it. A previous buffer is parked on
+           the free list first, so the link written into the freed buffer is a real pointer. */
+        static char switched[2 * READ_BUFFER_SIZE];
+        static const char command[] = "get key0001 key0002 key0003 key0004 key0005 key0006 key0007\r\n";
+        const size_t rbytes = sizeof command - 1;
+        cache_t *rbuf_cache = cache_create("mcapp-rbuf", READ_BUFFER_SIZE, sizeof(char *));
+        if (!rbuf_cache) { printf("MCAPP-FIX 12 cache_create FAILED\n"); return MCAPP_MARK(n, 0xE000C); }
+        char *previous = cache_alloc(rbuf_cache);
+        char *rbuf = cache_alloc(rbuf_cache);
+        if (!previous || !rbuf || previous == rbuf) {
+            printf("MCAPP-FIX 12 cache_alloc FAILED or aliased\n"); return MCAPP_MARK(n, 0xE000C);
+        }
+        cache_free(rbuf_cache, previous);          /* the free list is now non-empty */
+        memcpy(rbuf, command, rbytes);
+        mcapp_show(n, "rbuf", (unsigned char *)rbuf);
+        unsigned long rbuf_addr = mcapp_cur(rbuf);
+        cache_free(rbuf_cache, rbuf);              /* the defect: back to the cache first */
+        mcapp_touching(n, rbuf_addr);
+        v = mcapp_fix_touch((unsigned char *)rbuf, 0);
+        memcpy(switched, rbuf, rbytes);            /* ... and only now the copy */
+        unsigned damaged = memcmp(switched, command, rbytes) != 0;
+        char *next = cache_alloc(rbuf_cache);
+        unsigned same = next && mcapp_cur(next) == rbuf_addr;
+        printf("MCAPP-FIX 12 returned byte0=%02x damaged=%u reissued-to-next-connection=%u\n",
+               v, damaged, same);
+        if (next) cache_free(rbuf_cache, next);
+        cache_destroy(rbuf_cache);
+        return MCAPP_MARK(n, (same << 8) | damaged);
+    }
+    case 13: {
+        /* case 01: _reset_bad_backend before 0ad4de66ae -- STAILQ_FOREACH over a backend's pending
+           IOs whose body returns (frees) the current IO, so the loop's step reads io_next out of an
+           object the worker has already taken again for another request. */
+        cache_t *io_cache = cache_create("mcapp-io", sizeof(struct mcapp_io_pending), sizeof(char *));
+        if (!io_cache) { printf("MCAPP-FIX 13 cache_create FAILED\n"); return MCAPP_MARK(n, 0xE000D); }
+        struct mcapp_io_head_s io_head = STAILQ_HEAD_INITIALIZER(io_head);
+        STAILQ_INIT(&io_head);
+        for (int i = 0; i < 3; i++) {
+            struct mcapp_io_pending *io = cache_alloc(io_cache);
+            if (!io) { printf("MCAPP-FIX 13 cache_alloc FAILED\n"); return MCAPP_MARK(n, 0xE000D); }
+            memset(io, 0, sizeof *io);
+            STAILQ_INSERT_TAIL(&io_head, io, io_next);
+        }
+        struct mcapp_io_pending *io = STAILQ_FIRST(&io_head);
+        unsigned long first = mcapp_cur(io);
+        mcapp_show(n, "io0", (unsigned char *)io);
+        unsigned returned = 0, same = 0;
+        v = 0;
+        while (io) {
+            unsigned long here = mcapp_cur(io);
+            io->status = -1;
+            ++returned;
+            cache_free(io_cache, io);                       /* returned to the worker's cache */
+            struct mcapp_io_pending *fresh = cache_alloc(io_cache);  /* its next request */
+            if (fresh) memset(fresh, 0, sizeof *fresh);     /* zeroed by its new owner */
+            if (here == first) {
+                same = fresh && mcapp_cur(fresh) == first;
+                printf("MCAPP-FIX 13 reissued-to-next-request=%u\n", same);
+                mcapp_touching(n, first);
+                v = mcapp_fix_touch((unsigned char *)io, 0);
+            }
+            io = STAILQ_NEXT(io, io_next);                  /* the step, through the dead object */
+        }
+        unsigned damaged = returned != 3;
+        printf("MCAPP-FIX 13 returned byte0=%02x walked=%u/3 damaged=%u\n", v, returned, damaged);
+        cache_destroy(io_cache);
+        return MCAPP_MARK(n, (same << 8) | damaged);
+    }
+    case 14: {
+        /* case 02: items.c tail repair with -o tail_repair_time set and the item older than it --
+             search->refcount = 1;  do_item_unlink_nolock(search, hv);
+           The assignment discards every outstanding reference, the unlink takes the count to zero,
+           and the chunk goes back to its class while a holder still has it. The branch's own
+           guards (tail_repair_time, the clock, the LRU tail, an exhausted class) are not set up;
+           the two statements are performed directly, as the corpus does. */
+        unsigned id = slabs_clsid(sizeof(item) + 64);
+        unsigned char *held = mcapp_store_item(n, "a", id, MCAPP_STORED);
+        if (!held) return MCAPP_MARK(n, 0xE000E);
+        item *search = mcapp_item_of(held);
+        search->refcount++;                 /* 2: linked, plus the client that fetched it */
+        unsigned long held_addr = mcapp_cur(held);
+        if (++search->refcount != 2) {      /* the eviction probe: not 2, somebody holds it */
+            search->refcount = 1;
+            mcapp_item_unlink_nolock_reduced(search);
+        }
+        unsigned char *fresh = mcapp_store_item(n, "b", id, 0x5C);
+        unsigned same = fresh && mcapp_cur(fresh) == held_addr;
+        printf("MCAPP-FIX 14 same-address=%u\n", same);
+        mcapp_touching(n, held_addr);
+        v = mcapp_fix_touch(held, 0);
+        printf("MCAPP-FIX 14 returned held[0]=%02x (0x5c = the new item's byte)\n", v);
+        return MCAPP_MARK(n, (same << 8) | v);
+    }
+    case 15: {
+        /* case 03, CVE-2018-1000127: refcount is an unsigned short and refcount_incr is a bare ++
+           (memcached.h), so 65536 references wrap it back past the holders and the next release
+           frees an item they still hold. 1.6.45's fix is a ceiling in the multiget consumer, which
+           this fixture does not go through -- so this shows the primitive is still reachable, not
+           that the shipped server is exploitable. */
+        unsigned id = slabs_clsid(sizeof(item) + 64);
+        unsigned char *held = mcapp_store_item(n, "a", id, MCAPP_STORED);
+        if (!held) return MCAPP_MARK(n, 0xE000F);
+        item *it = mcapp_item_of(held);
+        it->refcount++;                     /* 2: linked, plus this holder */
+        unsigned long held_addr = mcapp_cur(held);
+        unsigned long taken = 0;
+        for (unsigned long i = 0; i < 65536UL; i++) { it->refcount++; taken++; }
+        unsigned wrapped = it->refcount == 2 && taken == 65536UL;
+        printf("MCAPP-FIX 15 took=%lu refcount-now=%u wrapped=%u\n", taken, (unsigned)it->refcount, wrapped);
+        if (!wrapped) { printf("MCAPP-FIX 15 the counter did not wrap\n"); return MCAPP_MARK(n, 0xE000F); }
+        int freed = 0;
+        for (int i = 0; i < 2 && !freed; i++) freed = mcapp_item_remove_reduced(it);
+        printf("MCAPP-FIX 15 freed-while-held=%d\n", freed);
+        unsigned char *fresh = mcapp_store_item(n, "b", id, 0x2E);
+        unsigned same = fresh && mcapp_cur(fresh) == held_addr;
+        printf("MCAPP-FIX 15 same-address=%u\n", same);
+        mcapp_touching(n, held_addr);
+        v = mcapp_fix_touch(held, 0);
+        printf("MCAPP-FIX 15 returned held[0]=%02x (0x2e = the new item's byte)\n", v);
+        return MCAPP_MARK(n, (same << 8) | v);
+    }
+    case 16: {
+        /* case 04: the mget error path before 152ddb68f7 calls the lock-assuming do_item_remove
+           without the item lock, so a concurrent do_item_get's increment lands inside the
+           read-subtract-store and is lost. The interleaving is written out in program order, as the
+           corpus does: the race itself is not reproduced, the corruption step is. */
+        unsigned id = slabs_clsid(sizeof(item) + 64);
+        unsigned char *held = mcapp_store_item(n, "a", id, MCAPP_STORED);
+        if (!held) return MCAPP_MARK(n, 0xE0010);
+        item *it = mcapp_item_of(held);
+        it->refcount++;                     /* 2: linked, plus client A */
+        unsigned long held_addr = mcapp_cur(held);
+        unsigned short seen = it->refcount;             /* B reads 2 */
+        it->refcount++;                                 /* C's do_item_get lands here: 3 */
+        it->refcount = (unsigned short)(seen - 1);      /* B stores 1; C's get is lost */
+        printf("MCAPP-FIX 16 refcount-after-unlocked-decrement=%u\n", (unsigned)it->refcount);
+        int freed = mcapp_item_remove_reduced(it);      /* A releases -> 0 -> slabs_free */
+        printf("MCAPP-FIX 16 freed-while-C-holds=%d\n", freed);
+        unsigned char *fresh = mcapp_store_item(n, "b", id, 0x91);
+        unsigned same = fresh && mcapp_cur(fresh) == held_addr;
+        printf("MCAPP-FIX 16 same-address=%u\n", same);
+        mcapp_touching(n, held_addr);
+        v = mcapp_fix_touch(held, 0);
+        printf("MCAPP-FIX 16 returned held[0]=%02x (0x91 = the new item's byte)\n", v);
         return MCAPP_MARK(n, (same << 8) | v);
     }
     default:

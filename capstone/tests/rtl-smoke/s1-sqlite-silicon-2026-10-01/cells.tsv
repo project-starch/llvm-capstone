@@ -1,0 +1,13 @@
+# name	arm	probe	va	sha256/16	host args before the speedtest1 args, '-' for none (bash read collapses empty tab fields)	boot	want (the emulator's reading of this image through host 2c9e82d1; the silicon's where it differs)
+m5p1	memsys5	1	0x810000	611df066a69668b7	-	all	__CAPSTONE_SPEEDTEST1_UAF_NOTRAP__ lookaside name[0]= (the freed slot's byte, recorded not predicted; emulator p)
+m5p2	memsys5	2	0x810000	611df066a69668b7	-	all	__CAPSTONE_SPEEDTEST1_UAF_NOTRAP__ memsys5 p[0]= (the freed block's byte, recorded not predicted)
+m5p3	memsys5	3	0x810000	611df066a69668b7	-	all	__CAPSTONE_SPEEDTEST1_SIBLING__ memsys5 b[0]=b
+m5p4	memsys5	4	0x810000	611df066a69668b7	-	all	__CAPSTONE_SPEEDTEST1_SIBLING__ lookaside n2[0]=t
+m5p5	memsys5	5	0x810000	611df066a69668b7	-	all	__CAPSTONE_SPEEDTEST1_BOUNDS__ p[127] read
+m5p6	memsys5	6	0x810000	611df066a69668b7	-	all	__CAPSTONE_SPEEDTEST1_BOUNDS_NOTRAP__ p[128] read
+sbp3	sublet	3	0xc10000	483f764c8d691b3c	--arena 2097152 --tables 1750285	all	__CAPSTONE_SPEEDTEST1_SIBLING__ memsys5 b[0]=b
+sbp4	sublet	4	0xc10000	483f764c8d691b3c	--arena 2097152 --tables 1750285	all	__CAPSTONE_SPEEDTEST1_SIBLING__ lookaside n2[0]=t
+sbp5	sublet	5	0xc10000	483f764c8d691b3c	--arena 2097152 --tables 1750285	all	__CAPSTONE_SPEEDTEST1_BOUNDS__ p[127] read
+sbp1	sublet	1	0xc10000	483f764c8d691b3c	--arena 2097152 --tables 1750285	1	FAULT 25 +0x1e408 (emulator 24)
+sbp2	sublet	2	0xc10000	483f764c8d691b3c	--arena 2097152 --tables 1750285	2	FAULT 25 +0x1deb4 (emulator 24)
+sbp6	sublet	6	0xc10000	483f764c8d691b3c	--arena 2097152 --tables 1750285	3	FAULT 28 +0x1e94c (emulator 5)

@@ -5794,3 +5794,134 @@ VA, and checked under QEMU with `CAPSTONE_GP_FABRICATE=0` and the board's own ho
   `sqlite_capstone_domain.c` uses, and the corpus's own QEMU image is byte-identical with and without it.
 - **N = 1 per cell.** Rows whose reachability is unproven (1, 3, 6, 11, 12, 13, 17, 22) were not run. Rows
   10, 19 and 24 (extra translation units) are batch 2, not yet built.
+
+## M1 on R-43 v2 — all four conditions in the same boots, node turnover read off the refused capability, and a validity scan (boots m1v2s-1…5, m1tw-1…7, 2026-10-01/02)
+
+Bundles: nested-allocators-paper, branch `board/silicon-evidence`, at
+`experiments/results/M1/2026-10-01-v2-series/` and `.../2026-10-01-v2-turnover-witness/`. Each holds the
+pre-registration (`work-order.md`, audited before its boots), the result lines and the analysis.
+- Bitstream: `caplifive_r43_8f6a0af.bit` (capstone-ariane `8f6a0af98`, timing failing, WNS −9.595 ns).
+- Monitor `2dcd3a5`, buildroot `d04bd83`, host `2c9e82d1`.
+- Harness: `sublet/r1/r1_slots_pools.c` with two run-time probes, both off by default:
+  - `M1_PROBE_RT`: one stale or live access through a single instruction;
+  - `M1_LCC_SCAN`: a non-faulting `lcc` selector-0 validity query.
+- Lane: `lane/board-m1v2`.
+
+### The four conditions, measured together on the resident bitstream
+
+| condition | silicon reading |
+|---|---|
+| permitted reuse | drop and ring reach 10C (655,320 allocations) against the 65,532-index pool in every boot, with no exhaustion |
+| accounting | `minted − revoked = 31` on all 2,136 snapshots of 26 invocation-phases |
+| stale operations | after all four Design arms in the same boot, ONE stale access per boot is refused at the probe's own instruction with cause 25 (READ age 0, WRITE age 0, READ age 2), while the same instructions through live aliases succeed in every boot (reads return the live data; a write of 0xA5 reads back as 165; the write's live control is at slot 15, the stale write at slot 0) |
+| pressure | `stop=buffer alloc=43297` (the pre-registered clean null); release enters phase 2 at 43,290 and ends at 51,948 |
+
+### Node turnover, read directly
+
+- **The refusal record.** It latches the refused capability's OWN `{generation, index}`
+  (`load_store_unit.sv:1470-1472` at `8f6a0af98`). On m1v2s-4 it read generation **1,352** at index
+  head − 1, with serving_idx head − 16 (post hoc: seven invocations ran first). That is consistent with the claim-auditor's corrected model of the rev-node
+  allocator: each slot alternates between two nodes, so 32 indices are in play. On that model the refused
+  reference was minted on an index already reissued 1,352 times. The attributable reading is the
+  single-probe boot m1tw-4.
+- **The validity scan.** At every allocation it asks the rev-node unit whether the alias revoked one
+  statement earlier is still valid; its node has just been reissued. Over three boots (m1tw-1..3) that is
+  4,217,652 queries: **no stale reference ever read valid, every live one did.** The fixture alias read
+  invalid on all 263,607 queries. A 14-bit wrap would have read it valid twice per long arm.
+- **Two limits on the scan.**
+  - A validity query is not an access: per-access refusal is the cause-25 evidence.
+  - The emulator cannot check any of this, because its `lcc` selector 0 is a constant 1.
+- **Attributable refusals (m1tw-4 read, m1tw-5 write, each alone after k800).**
+  - Cause 25 at the probe's instruction, tval[9:0] 0x3c0 (slot 15).
+  - The record holds **generation 1,352 at index 136**, with head 137 and serving 121.
+  - The generation and the relations index = head − 1 and serving = head − 16 were predicted before the
+    boots. The head itself fixes B = 100.
+- **Retirement at generation 16,383, not a wrap, for the 32 indices one ring arm drives (m1tw-6).**
+  - The boot read head 169, serving 144 and refused (4,094, 153), i.e. B+69 / B+44 / B+53.
+  - A 14-bit wrap would read B+37 / B+12 / B+21: 32 lower on all three, the 32 retirements' replacement
+    bumps.
+  - B comes from m1tw-4. The boots ran 4 → 6 → 5 and m1tw-5 re-read head 137 after m1tw-6.
+  - m1tw-7 (a short ring arm that never reaches 16,384) controls the borrowed B directly: head 137, serving 120, refused (10,239, 121), exactly the shared-pre-history prediction, so ring
+    boots share m1tw-4's pre-history.
+  - Permanence of retirement is the RTL (`capstone_rev_node.anvil:59`, `:66-67`).
+
+### Cost: what the bridges attribute to v2
+
+On the identical `054cea69b` images (`1b7a04fe`, `249cfda9`), one boot each on v2:
+- **The give bracket reads about +4 cycles** on drop, pressure and release phase 1 (103.058 → 107.057,
+  71.052 → 75.066, 71.827 → 75.782).
+- **The take bracket is unchanged** on those arms (72.029 → 72.029).
+- **Phase 2 shows the cost MOVES rather than grows.** Its take+give over 8,672 operations is unchanged to
+  6 cycles in 1.56 M, while about 3.9 cycles per operation move from take to give.
+- So the +4 is quoted as **a reading of the give BRACKET**. Whether a give got slower, or cost moved into
+  the bracket, needs an outer per-iteration bracket.
+- Ring's +4.4 is unproven at N = 1, since ring give varies more than the band on v2.
+
+On the probe image `eb3ed1e3`, mint cost differs by INVOCATION, reproducibly to ≤ 0.01 over three boots:
+drop 96.0, ring 73.0, pressure 84.0, release 73.0. Arm and boot position are confounded. Not explained;
+it is with the RTL lane. **Quote a v2 mint cost with its image, arm and position.**
+
+**Provenance incident (m1v2s-3).** That boot's wrapper script was edited while it ran. Bash then
+re-executed a fragment without the bitstream settings, which hard-stopped BEFORE booting but overwrote
+the original run's log and driver.log. The result lines had been extracted before the overwrite, and
+the original boot.txt survives. The image identity for that boot is asserted from the schedule and
+the content.
+
+### What this does not establish
+
+- Anything in S-mode: R-44 is open.
+- Retirement for indices other than the 32 one ring arm drives.
+- Whether the give-bracket +4 is added cost or cost moved between brackets.
+- Wall-clock figures.
+
+
+## S1 on R-43 v2 — SQLite's lookaside and memsys5 use-after-free, refused on silicon (boots s1sql-b1a…b3a, 2026-10-02)
+
+**Bundle:** nested-allocators-paper, branch `board/silicon-evidence`, at
+`experiments/results/S1/2026-10-01-sqlite-a1-silicon/`. It holds the audited pre-registration, the
+verdict lines and the emulator repetitions. The board folder is
+`tests/rtl-smoke/s1-sqlite-silicon-2026-10-01/`: cells, `build-images.sh`, `SHA256SUMS` and the parser.
+
+**Images.** A1's six probes (`experiments/a1-sqlite-reuse/probes.c`) run in the MEASUREMENT harness
+(`speedtest1_measure.c`, `-DSPEEDTEST1_PROBE_RT=1`, the probe chosen at run time by `--s1-probe n`).
+That way one image earns its emulator pass record with the benchmark and still runs a probe that
+faults by design. The geometry is the P1 cells'.
+
+| arm | image | entry |
+|---|---|---|
+| memsys5, unprotected | `611df066a69668b7` | 0x810000 |
+| Sublet | `483f764c8d691b3c` | 0xc10000 |
+
+**Boots.** Each boot ran k800, the six memsys5 cells and three returning Sublet cells, then ONE
+Sublet fault cell last.
+
+| case | memsys5 | Sublet |
+|---|---|---|
+| lookaside slot read after `sqlite3_finalize` | reads the freed slot (3/3 boots) | **cause 25 at the probe's `lbu`**, record hit-dead (boot 1) |
+| 4,096 B memsys5 block read after `sqlite3_free` | reads the freed block (3/3) | **cause 25 at the probe's `lbu`**, record hit-dead (boot 2) |
+| another live block after a 4,096 B free / another slot after a finalize (adjacency intended, not observed) | read (3/3) | read (3/3) |
+| last byte of a 128 B block / the byte past it (spatial) | read / read past the block (3/3) | read (3/3) / **cause 28 (out of bound) at the probe's `lbu`**, record EMPTY (boot 3) |
+
+**Readings:**
+- **SQLite's two allocators, under the Sublet port, stop a use-after-free at the access on silicon**,
+  while the unprotected build reads freed memory there exactly as on the emulator.
+- **Not a blanket deny:** the sibling cells returned in the same boot, on the same image.
+- **The record.** In both lifetime boots the first cause-25 verdict since reset was hit-dead, a genuine
+  revocation verdict per the RTL. Like the id, it is NOT attributed to the probe: ten invocations ran
+  first.
+- **The emulator reads cause 24 for these stale reads**, because it untags a revoked capability; the
+  silicon reads 25.
+
+**Limits:**
+- The fault cells are N = 1.
+- Before-reuse only.
+- Survivors ran before the fault, not after it (M-1).
+- The memsys5 and Sublet builds are two builds.
+- Every other S1 Design case is still open.
+- Whether probe 1's freed name lies in a lookaside slot on the Sublet arm is unresolved, because the
+  port reorganises both allocators.
+
+**Parser defects, all disclosed in the bundle.**
+- One gated stop: the host's own monitor markers spliced a marker line mid-token. The parser now reads
+  through `transcript.strip_markers`, and that fix was load-bearing for boots 2 and 3.
+- An unsafe-success did not fail the gate. Found by the results audit and fixed.

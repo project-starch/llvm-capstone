@@ -804,6 +804,22 @@ PYRF
   echo "== speedtest1 staged from $SQLITE_SPEEDTEST1_SRC ($(wc -l < "$OBJ_DIR/speedtest1.c") lines)"
 fi
 
+# SPEEDTEST1_PROBE_SRC=<file.c> with DOMAIN_EXTRA_DEFS containing -DSPEEDTEST1_PROBE_RT=1 -- S1's probes
+# on silicon: stage the probe source as speedtest1_probe.c, which speedtest1_measure.c #includes under
+# that define (one image, the probe chosen at run time by `--s1-probe <n>`). It cannot be its own object,
+# for the reason speedtest1.c cannot (above). Each half without the other is refused, rather than
+# building an image that looks valid: the define alone fails to compile on a missing include, and the
+# source alone would build the measurement image under a probe's name.
+if [[ -n "${SPEEDTEST1_PROBE_SRC:-}" ]]; then
+  [[ -f "$SPEEDTEST1_PROBE_SRC" ]] || { echo "SPEEDTEST1_PROBE_SRC=$SPEEDTEST1_PROBE_SRC does not exist" >&2; exit 1; }
+  [[ "${DOMAIN_EXTRA_DEFS:-}" == *-DSPEEDTEST1_PROBE_RT=1* ]] || {
+    echo "SPEEDTEST1_PROBE_SRC is set but DOMAIN_EXTRA_DEFS has no -DSPEEDTEST1_PROBE_RT=1" >&2; exit 1; }
+  cp -f "$SPEEDTEST1_PROBE_SRC" "$OBJ_DIR/speedtest1_probe.c"
+  echo "== S1 probes staged from $SPEEDTEST1_PROBE_SRC (run-time selector --s1-probe <n>)"
+else
+  rm -f "$OBJ_DIR/speedtest1_probe.c"   # a reused OUT_DIR must not carry an earlier probe into this image
+fi
+
 # FAILSTOP=<n> -- DIAGNOSTIC ONLY. Clamp inside fail(), which WEDGES (S-02 Site A,
 # measured 2026-08-09: nk takes the fail() path and wedges, n8 skips it and returns in 4 s
 # with an otherwise identical image).

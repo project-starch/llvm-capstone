@@ -184,3 +184,26 @@ run, and it is the experiment the protocol's condition actually wants.
 
 **For condition 3 the correction strengthens the result:** `m1_ret_alias[0]` names an index that has
 been reused roughly 2,706 times since it was retained, not one of 43,296 once-used indices.
+
+## The 2026-10-01 lists for R-43 v2 (`m1v2-rt-*.txt`) — one image, one access per probe
+
+All of them run image `eb3ed1e3f8ac4d82`, built with `-DM1_PROBE_RT=1`. The probe is selected at
+RUN time:
+- `--probe read|write` picks the access;
+- `--probe-live` sends it through the slot's LIVE alias instead of the retained stale one;
+- `--probe-age 0|1|2` picks the oldest, middle or newest retained alias in `pressure`.
+
+`ring` probes slot 0's previous alias. A stale probe and its control therefore differ by one argument,
+and execute the SAME instruction: `lbu` at +0x4868 or `sb` at +0x48cc. That fixes what the Part A
+images could not: `35fb3fec` reads three ages through one `lbu` and then also stores, so a trap there
+does not say which age was refused.
+
+| list | what it runs | last line |
+|---|---|---|
+| `m1v2-rt-series-{rstale0,wstale0,rstale2}.txt` | the four Design arms, plus the three LIVE controls on ring and pressure | ONE stale probe (read age 0, write age 0, read age 2): faults, so it is last |
+| `m1v2-rt-controls.txt` | the Design arms with the live controls only | none: the boot returns |
+| `m1v2-rt-p0read.txt`, `-p2read.txt`, `-p2write.txt`, `-ringread.txt` | ONE stale probe, alone after k800 | the probe: for the turnover-witness boots, whose refusal-record id is attributable only when nothing ran before it |
+
+`release` runs at `--cap 4329`, because phase 2 needs `M1_MAXRET >= 10C` (the 2026-09-19 ladder).
+The pre-registrations are the paper bundles `experiments/results/M1/2026-10-01-v2-series/` and
+`.../2026-10-01-v2-turnover-witness/` (branch `board/silicon-evidence`).

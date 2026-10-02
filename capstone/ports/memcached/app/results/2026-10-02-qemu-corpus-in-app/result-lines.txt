@@ -1,0 +1,71 @@
+# Result lines, as host/run-safety.py printed them. Guest tools in every boot: capstone-exec 63e8a39a
+# (PR #176's launcher), capstone-job 5a160efa. Images: plain sublet a3a3d5b6…, slabsublet 9f6467ff….
+# slabsublet arms run -m 48 -o no_slab_reassign; the mode is MC_SLAB_SUBLET_MODE in the environment.
+
+## negative control: arm sublet (runtime Sublet heap only, no hooks in memcached's allocators)
+safety sublet: image a3a3d5b6b516ed8a harness 5457112b41823ad8
+fx12: AS PREDICTED: RETURN c00101  (predicted RETURN c00101; exit 1, len=None)
+fx13: AS PREDICTED: RETURN d00101  (predicted RETURN d00101; exit 1, len=None)
+fx14: AS PREDICTED: RETURN e0015c  (predicted RETURN e0015c; exit 92, len=None)
+fx15: AS PREDICTED: RETURN f0012e  (predicted RETURN f0012e; exit 46, len=None)
+fx16: AS PREDICTED: RETURN 1000191  (predicted RETURN 1000191; exit 145, len=None)
+
+## arm slabsublet0, repeat 1
+safety slabsublet0: image 9f6467ff9f50fb7f harness 5457112b41823ad8
+fx12: AS PREDICTED: RETURN c00101  (predicted RETURN c00101; exit 1, len=None)
+fx13: AS PREDICTED: RETURN d00101  (predicted RETURN d00101; exit 1, len=None)
+fx14: AS PREDICTED: RETURN e0015c  (predicted RETURN e0015c; exit 92, len=None)
+fx15: AS PREDICTED: RETURN f0012e  (predicted RETURN f0012e; exit 46, len=None)
+fx16: AS PREDICTED: RETURN 1000191  (predicted RETURN 1000191; exit 145, len=None)
+
+## arm slabsublet1, repeat 1
+safety slabsublet1: image 9f6467ff9f50fb7f harness 5457112b41823ad8
+fx12: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx13: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx14: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx15: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx16: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## arm slabsublet0, repeat 2
+safety slabsublet0: image 9f6467ff9f50fb7f harness 5457112b41823ad8
+fx12: AS PREDICTED: RETURN c00101  (predicted RETURN c00101; exit 1, len=None)
+fx13: AS PREDICTED: RETURN d00101  (predicted RETURN d00101; exit 1, len=None)
+fx14: AS PREDICTED: RETURN e0015c  (predicted RETURN e0015c; exit 92, len=None)
+fx15: AS PREDICTED: RETURN f0012e  (predicted RETURN f0012e; exit 46, len=None)
+fx16: AS PREDICTED: RETURN 1000191  (predicted RETURN 1000191; exit 145, len=None)
+
+## arm slabsublet1, repeat 2
+safety slabsublet1: image 9f6467ff9f50fb7f harness 5457112b41823ad8
+fx12: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx13: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx14: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx15: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx16: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## arm slabsublet0, repeat 3
+safety slabsublet0: image 9f6467ff9f50fb7f harness 5457112b41823ad8
+fx12: AS PREDICTED: RETURN c00101  (predicted RETURN c00101; exit 1, len=None)
+fx13: AS PREDICTED: RETURN d00101  (predicted RETURN d00101; exit 1, len=None)
+fx14: AS PREDICTED: RETURN e0015c  (predicted RETURN e0015c; exit 92, len=None)
+fx15: AS PREDICTED: RETURN f0012e  (predicted RETURN f0012e; exit 46, len=None)
+fx16: AS PREDICTED: RETURN 1000191  (predicted RETURN 1000191; exit 145, len=None)
+
+## arm slabsublet1, repeat 3
+safety slabsublet1: image 9f6467ff9f50fb7f harness 5457112b41823ad8
+fx12: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx13: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx14: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx15: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+fx16: AS PREDICTED: FAULT temporal  (predicted FAULT temporal; signal 11, len=None)
+
+## hook counts, one extra mode-0 boot with MC_SLAB_SUBLET_REPORT=1 (same image 9f6467ff)
+fx12: AS PREDICTED: RETURN c00101  (predicted RETURN c00101; exit 1, len=None)
+fx13: AS PREDICTED: RETURN d00101  (predicted RETURN d00101; exit 1, len=None)
+fx14: AS PREDICTED: RETURN e0015c  (predicted RETURN e0015c; exit 92, len=None)
+fx15: AS PREDICTED: RETURN f0012e  (predicted RETURN f0012e; exit 46, len=None)
+fx16: AS PREDICTED: RETURN 1000191  (predicted RETURN 1000191; exit 145, len=None)
+fx12 stderr: MCAPP-SLAB-SUBLET mode=0 pages=0 chunk_releases=0 chunk_reuses=0 object_releases=4 object_reuses=1 backing_used=65648 metadata=615488
+fx13 stderr: MCAPP-SLAB-SUBLET mode=0 pages=0 chunk_releases=0 chunk_reuses=0 object_releases=2 object_reuses=1 backing_used=33600 metadata=615488
+fx14 stderr: MCAPP-SLAB-SUBLET mode=0 pages=1 chunk_releases=1 chunk_reuses=1 object_releases=1 object_reuses=0 backing_used=1081456 metadata=930048
+fx15 stderr: MCAPP-SLAB-SUBLET mode=0 pages=1 chunk_releases=1 chunk_reuses=1 object_releases=1 object_reuses=0 backing_used=1081456 metadata=930048
+fx16 stderr: MCAPP-SLAB-SUBLET mode=0 pages=1 chunk_releases=1 chunk_reuses=1 object_releases=1 object_reuses=0 backing_used=1081456 metadata=930048

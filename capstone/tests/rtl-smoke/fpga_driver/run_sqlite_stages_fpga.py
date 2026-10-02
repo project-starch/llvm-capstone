@@ -309,6 +309,38 @@ _selftest_probe_result()
 _SW_CURRENT = None
 
 
+def switch_echo(console):
+    """The switch value the BOARD last reported (its switch_state event), or None.
+
+    The driver tracks the switches it believes it set (_SW_CURRENT), and a read is only about the
+    aperture the board is actually showing. On 2026-10-02 (boot m1tw-4) the after-rep head read
+    printed "rev-node head = 169" while the board's own echo said the switches sat at 41/42 (GPR
+    data): a plausible number from the wrong aperture, equal by chance to the value another boot's
+    finding rested on. A read whose aperture the echo does not confirm is not a reading."""
+    try:
+        payload = console.latest(C.SWITCH_STATE_EVENT)
+    except Exception:
+        return None
+    states = payload.get("states") if isinstance(payload, dict) else None
+    if not isinstance(states, (list, tuple)) or not states:
+        return None
+    return sum((1 << i) for i, b in enumerate(states) if b)
+
+
+def _selftest_switch_echo():
+    class _Fake:
+        def __init__(self, payload): self.payload = payload
+        def latest(self, _event): return self.payload
+    assert switch_echo(_Fake({"states": [1, 0, 0, 1, 1, 1, 1, 1]})) == 249
+    assert switch_echo(_Fake({"states": [0, 1, 0, 1, 0, 1, 0, 0]})) == 42
+    assert switch_echo(_Fake({"states": [0] * 8})) == 0          # a real zero is a value
+    assert switch_echo(_Fake(None)) is None                        # no echo is not a value
+    assert switch_echo(_Fake({"states": []})) is None
+
+
+_selftest_switch_echo()
+
+
 def set_switch_value(console, target):
     """Drive the switches to `target` without ever RESTING on a destructive aperture.
 
@@ -2253,8 +2285,17 @@ def main():
             # for a workload that never revokes. It is a different quantity, not a broken one.
             try:
                 _hl = _read_sw(249, allow_cached=not _halt_reads, _force_emit=_halt_reads)
+                _el = switch_echo(console)
                 _hh = _read_sw(250, allow_cached=not _halt_reads, _force_emit=_halt_reads)
-                if _hl is None or _hh is None:
+                _eh = switch_echo(console)
+                if _el != 249 or _eh != 250:
+                    # The board did not confirm the aperture, so the bytes are from somewhere else
+                    # (or a stale cache). Never print them as a head: see switch_echo().
+                    _rev_head_prev[0] = None
+                    _line = (f"  [s07] after {label}: rev-node head VOID -- the board's switch echo "
+                             f"was {_el}/{_eh}, not 249/250; the bytes read (lo={_hl} hi={_hh}) are "
+                             f"not from the head aperture")
+                elif _hl is None or _hh is None:
                     _line = (f"  [s07] after {label}: rev-node head VOID "
                              f"(lo={_hl} hi={_hh}) -- no consumption datum for this rep")
                 elif ((_hh << 8) | _hl) == 0xFFFF:
