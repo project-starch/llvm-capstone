@@ -2,7 +2,7 @@ Supervised CALL (2026-10-01): the RTL is on capstone-ariane `sup-call`
 ([plan, revision 1.2](../plans/supervised-call-silicon.md)); every simulation
 gate is done (the after-audit's four findings fixed and re-measured, the
 92-test neutrality run clean with `revocation`'s phantom traps as the only
-difference). Sent to synthesis 2026-10-02 on the lead's go-ahead (the synth lane is building 36a641e0b from 18:15 UTC, grading the rows pinned in the plan); the runtime lane builds the FPGA monitor's
+difference). Synthesized 2026-10-02 (sealed, exit 0: every binding item in band, two explained ORDER-like misses -- the plan's step-9 result; bitstream sha256 016219b2..., 11,443,722 B, on the synth host, NOT flashed: the flash is the lead's call, then the R-43 acceptance list before anything else); the runtime lane builds the FPGA monitor's
 `supervised_invoke` against the CSR-based events (csupctl.resume before a
 resume CALL; status 3 means an unread event). Before silicon: why an unguarded
 `mret` trapped instead of escaping (mutant-only). (The earlier line here, "a

@@ -33,6 +33,9 @@
   with it: "a SEALED capability reads back untagged after STC/LDC in simulation" and "status 1 is unreachable" --
   `sup-arm.S` had overwritten the seal with an integer before the store; repaired, the seal survives the round
   trip and the dead-node status (1) is measured.
+- **Supervised CALL synthesized (2026-10-02):** `sup-call` 36a641e0b sealed by the synth lane, exit 0; routed loop arc
+  identical to the resident's, LUTLP-1 = 0, WNS -8.189 in band, FF +1,090 explained row by row, two ORDER-like
+  pre-registration misses with mechanisms (plan, step-9 result). Bitstream sha256 016219b2..., NOT flashed.
 - **Resident bitstream unchanged:** `caplifive_r43_8f6a0af98.bit`.
 
 Minimal snapshot. Read first in every session.
