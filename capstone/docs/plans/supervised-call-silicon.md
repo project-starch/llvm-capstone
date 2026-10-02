@@ -299,7 +299,24 @@ the after-audit, synthesis, silicon.
   exception count did, 5 for 1) -- the monitor will read the domain's saved mcause slot in the seal region after
   each escape; the plan's resume-plus4 text ("300") was stale -- at 36a641e0b that mutant ends in a kind-2 fault
   with the stored count 0 after 52 resumes; sup-quantum's 400 is a commutative aggregate -- the ladder becomes
-  acc := acc * 7 + i with the value pre-registered. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
+  acc := acc * 7 + i with the value pre-registered.
+- **The three audit items DONE (2026-10-02, sim-only test changes on `sup-call` after the synthesized hash):**
+  (1) `sup-escape.S` keeps a NONLIN alias of each seal region and reads the domain's SAVED mcause slot (+864) after
+  every escape: 0 in all five arms with the strip (78 readings, 1 exception); with the `no-strip` mutant the trap
+  writes the cause into the live mcause before the SAVE walk parks it, and the five slots read 11, 2, 2, 4, 2 (78
+  readings, 5 exceptions) -- the step-3 control now discriminates by readings, not only by the trace. The header's
+  "mepc 0 is the tell" is withdrawn (mepc is restored from the private area). (2) `sup-quantum.S`'s ladder is
+  acc := acc * 7 + i over 100 steps (400 steps were 4.8 KB and ~280 resumes, past the simulation's time-out), expected
+  0x1f64f7f55a20a182: exact at quantum 64 (73 resumes) and quantum 16 (74), x1 0x1234, mie 0x888, mcause 0; a skip
+  and a repeat can no longer cancel. (3) The `resume-plus4` text above ("the stored count is 300") is SUPERSEDED: on
+  36a641e0b with the 400-addi ladder that mutant ended in a kind-2 fault (csupstatus 5) with the stored count 0 after
+  52 resumes; with the new ladder it ends in a kind-2 fault with the value 0x44bd8ee8ac81d14 -- wrong value and
+  fault both. `count-in-switch` (never completes) and `no-set-ra` (fault 24) unchanged. Also: the misaligned-load
+  arm now loads a written RAM granule (tval 0x80003401 = the reference trap's mtval) instead of the unmapped
+  [0x3000, 0x4000); and a lesson -- a first version aliased seal4 in s10, which IS x26, the misaligned arm's
+  capability, so that domain loaded seal4 + 1 (a never-written granule, whose tag is not 0 in simulation) and the
+  sim-only S-06 invariant stopped the run three times before the register clash was seen: in a test that mixes ABI
+  names and x-numbers, write the register map down before adding registers. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
   arbiter 0/500 (PASS); before i_load_unit 55/500 -- a pre-registration MISS with the mechanism identified: I had
   commit_lsu_o landing in the store buffer's flops, and its cone continues through the store buffer's combinational
   status (commit pointer, last_store_buf_ready next-state) into the AMO fifo and the load unit's dom-switch
