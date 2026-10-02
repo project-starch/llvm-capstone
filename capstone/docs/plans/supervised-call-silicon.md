@@ -274,8 +274,14 @@ the after-audit, synthesis, silicon.
   prove constant through the write-back cone (their D-cone is the whole write-back valid cone, ~8.7k startpoints):
   pre-existing in v2, functionally inert if the RTL is as read, and in the conservative direction (fewer pruned
   than the value set allows), so the csr_regfile and commit_stage rows read as explained with the mechanism
-  partly outside the RTL. A measured closure is available and not run: a harness assertion that no retired cause
-  has a bit outside {0..5, 62, 63}, over the 92-test sweep, with a high-bit mutant as its positive control. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
+  partly outside the RTL. MEASURED (2026-10-02, a SUP_TRACE detector in commit_stage, sim only, on the lane branch
+  after the synthesized hash): 0 heads with a cause bit outside {0..5, 62, 63} over the 92-test corpus (run sweep5,
+  identical to sweep4 in exceptions, readings and retired counts) and 0 over the 23-test ladder (run all7); the
+  positive control, mutant `cause-high-bit` (bit 47 ORed into the quantum cause), prints 159 lines and the bit
+  reaches csupcause. Bounded by what the corpus exercises: the netlist's extra classes are unexplained from the RTL
+  and unreached by anything run; the synth lane's caution stands -- a surviving flop means synthesis saw a variable
+  in that bit position somewhere in the write-back cone, so this is evidence that the RTL as read holds over the
+  corpus, not a proof about the classes. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
   arbiter 0/500 (PASS); before i_load_unit 55/500 -- a pre-registration MISS with the mechanism identified: I had
   commit_lsu_o landing in the store buffer's flops, and its cone continues through the store buffer's combinational
   status (commit pointer, last_store_buf_ready next-state) into the AMO fifo and the load unit's dom-switch
