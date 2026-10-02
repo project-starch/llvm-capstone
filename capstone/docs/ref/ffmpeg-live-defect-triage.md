@@ -86,6 +86,55 @@ hardware-accelerated decode, which the app port does not build.
 pool-consumer history was already exhausted by the existing inventory ("upstream history is
 exhausted at four").
 
+## Measured, 2026-10-02: both reproduce natively, and ASan reports both
+
+The reductions are in `ports/ffmpeg/app/src/capstone-domain/ffapp_safety.c` as fixtures 24 and 25,
+whose predictions were pushed in `95aa3d340f80` before either was built. The native pair below was
+run from the same reductions and is the fix-differential arm plus the `host-asan` comparator.
+
+| case | arm | plain native | with `-fsanitize=address` |
+|---|---|---|---|
+| 24 vvc/thread | fixed | `VERDICT FIXED field-nulled=1` | clean, rc 0 |
+| 24 vvc/thread | buggy | `DEFECT-REPRODUCED same-address=1 read=5b` | **`heap-use-after-free`**, rc 1 |
+| 25 ops_dispatch | fixed | `VERDICT FIXED read-from-copy=a0` | clean, rc 0 |
+| 25 ops_dispatch | buggy | `DEFECT-REPRODUCED same-address=1 read=5b` | **`heap-use-after-free`**, rc 1 |
+
+`same-address=1` is what makes this evidence rather than a crash: the storage really was freed and
+reissued to a new owner, and `read=5b` is that new owner's byte where the original held `0xa0`.
+
+**ASan firing here is the point, not a disappointment.** These are the control half; a silent ASan
+would mean the reproduction is wrong. It also fires on exactly the two buggy arms and neither fixed
+arm, so the comparator is shown able to say both things.
+
+## Blocked: the domain arms cannot be built on this host
+
+Fixtures 24 and 25 are registered for `level0`, `shrink` and `sublet`, and **none of those images
+has been built**, so nothing here says what the capability machine does with these defects.
+
+The application SDK refuses both toolchains present on this host, each for its own reason, and both
+refusals are correct:
+
+| toolchain | built | verdict |
+|---|---|---|
+| `llvm-capstone/llvm/cmake-build-debug` | 2026-09-24 | *"compiler emits a linear direct-call target (C-46); rebuild the toolchain"*. C-46's direct-call instance was fixed at `563e0765953e` and merged 2026-09-25, after this build |
+| `llvm-capstone-tshark/llvm/cmake-build-debug` | 2026-09-25 | passes C-46, then *"application SDK requires the intcap compiler extensions; use a qualified toolchain"* |
+
+Probed behaviourally with a positive control — a trivial file compiles for `capstone64-unknown-elf`
+with both, and `__uintcap_t` compiles with neither. The qualified compiler the migration used is
+named in `ports/common/application/README.md`: `compiler/sroa-keep-capability-whole` at
+`7d01722aab88`, whose commit is present in this repository but has no build on this host.
+
+**The gate must not be weakened to get a run.** `runtime/host/capstone_vm/compiler.py:63` states what
+it is protecting: without the feature macro the port patches *"compile an integer-only fallback that
+links successfully and faults on the first symbol/Datum access"* — an image that faults for a reason
+unrelated to the fixture, which would read as a result.
+
+**A route that does work.** The *component* port builds domain images without the application SDK:
+`cmake --preset capstone-domain` on `ports/ffmpeg/buffer-pool` configures and builds `replay.dom` and
+`pool-security.dom` with the 2026-09-25 toolchain. A heap corpus cut against that preset would reach
+the emulator without the qualified compiler. That is the recommended next step, and it is a change to
+the component's `cmake/Replay.cmake` plus a new `bug-corpora/ffmpeg/heap-repros`.
+
 ## Counts
 
 | | |
