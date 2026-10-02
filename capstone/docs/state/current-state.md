@@ -1,5 +1,32 @@
 # Current Capstone state
 
+## 2026-10-02 — Supervised CALL RUNS ON SILICON: quantum preemption with exactly-once resume, and fault-event delivery (bare M-mode, one run each)
+
+- **The RTL lane's directed tests ran on the board** (`caplifive_supcall_36a641e0b.bit`), bare M-mode, JTAG-loaded at
+  `0x80000000` with no OpenSBI. The tests are byte-identical to capstone-ariane `36a641e0b`; only a harness header
+  differs. All three board reading vectors are **bit-identical to the RTL lane's simulation of the same tree**
+  (113/113, 67/67, 8/8):
+  - `sup-quantum`: 53 quantum preemptions, each resumed. The domain's 400 instructions net to **exactly 400**. The
+    domain's x1, the monitor's resume count and its mie survived, and no trap was taken.
+  - `sup-escape`: ecall, illegal, `csrw mepc` (CSR gate), `mret` (decoder guard) and a misaligned load each deliver a
+    fault EVENT to the monitor with the right cause, epc and tval. The seal comes back SEALED.
+    - It does NOT show the trap stripped: the no-strip mutant reads the same 67 values, because mepc, mcause and
+      mstatus are walked. That is a test fix for the RTL lane.
+  - `call-retpc`: correct values. This is not a demonstration of R-47 fixed on silicon, because the board's timing
+    was not shown to create the trigger.
+  Folder: `tests/rtl-smoke/sup-bare-2026-10-02/` (self-contained harness, images, pre-registration, audited result
+  lines).
+- **These two tests discriminate** against any bitstream without the extension, where `cssupervise` and the event
+  CSRs do not exist. This is the first silicon evidence for the mechanism the delegated runtime needs.
+- **Not yet on silicon:**
+  - the trap strip;
+  - repeatability;
+  - the MTIP escape, the guards, the hostile domain, and S-11's refusal;
+  - anything through the OpenSBI monitor or Linux.
+  The delegated runtime on silicon still needs the runtime lane's FPGA monitor, built to the plan's contract.
+- **Instrument:** the runner's GDB halt fallback does not work on this board (`dmstatus` allrunning; the halt is not
+  honoured). The UART report is the only channel.
+
 ## 2026-10-01 — Supervised CALL implemented in RTL (capstone-ariane `sup-call`), verified through step 7 in simulation; R-47 found and fixed; S-11 amended
 
 - **The supervised-CALL platform extension** (the primitive the delegated application runtime needs on silicon)
