@@ -11,7 +11,12 @@
   - `sup-escape`: ecall, illegal, `csrw mepc` (CSR gate), `mret` (decoder guard) and a misaligned load each deliver a
     fault EVENT to the monitor with the right cause, epc and tval. The seal comes back SEALED.
     - It does NOT show the trap stripped: the no-strip mutant reads the same 67 values, because mepc, mcause and
-      mstatus are walked. That is a test fix for the RTL lane.
+      mstatus are walked. **Settled by the v2 tests** (capstone-ariane 7564c0945, repaired by the RTL lane;
+      `tests/rtl-smoke/sup-bare-2026-10-02-v2/`, pre-registration committed before the boot): sup-escape v2 reads
+      the domain's saved mcause slot as 0 in all five arms, and equals simulation 72/72. **The trap is stripped on
+      silicon.** sup-quantum v2 (an acc := acc*7 + i ladder) is exact at both quanta. At q16 it equals simulation
+      155/155. At q64 the board took 74 preemptions against simulation's 73: a pre-registration miss on a timing
+      count, with every correctness reading exact.
   - `call-retpc`: correct values. This is not a demonstration of R-47 fixed on silicon, because the board's timing
     was not shown to create the trigger.
   Folder: `tests/rtl-smoke/sup-bare-2026-10-02/` (self-contained harness, images, pre-registration, audited result
@@ -19,8 +24,7 @@
 - **These two tests discriminate** against any bitstream without the extension, where `cssupervise` and the event
   CSRs do not exist. This is the first silicon evidence for the mechanism the delegated runtime needs.
 - **Not yet on silicon:**
-  - the trap strip;
-  - repeatability;
+  - repeatability (one run each);
   - the MTIP escape, the guards, the hostile domain, and S-11's refusal;
   - anything through the OpenSBI monitor or Linux.
   The delegated runtime on silicon still needs the runtime lane's FPGA monitor, built to the plan's contract.
