@@ -263,21 +263,34 @@ the after-audit, synthesis, silicon.
   rev-node +16 EXACT; dom-switcher +137 -> +168 (the generated FSM's own state growth +31, not predicted);
   scoreboard 0 -> +25 (sup_arm_en 1 bit x 8 entries, ex.cause +10, pointer replicas +7: the request fields ARE
   pruned off the entry, the +1,104 failure mode did not occur); issue_read_operands 0 -> -25 (replica churn). The
-  cause pruning is confirmed from the RTL: every writer of a cause field is a constant (riscv codes, Capstone
-  24-29, dcsr causes, interrupts = bit 63 + a code, the quantum) or the FPU's 5 status bits, so bits 6..62 are
-  provably 0 and the live set is at most {0..5, 63}; the 20/21 flops are those bits plus replicas (index list
-  requested from the synth lane). **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
+  cause rows -- RETRACTED as first written here ("bits 6..62 are provably 0, the live set at most {0..5, 63}, the
+  20/21 flops are replicas"): the synth lane's index list shows 20 DISTINCT classes in esc_cause_q and 21 in
+  sup_event_cause_q, inherited from the scoreboard entry's ex.cause (75 flops here, 65 in v2, i.e. ~9.4 and ~8.1
+  per entry, with class names outside {0..5, 62, 63} in BOTH builds); and bit 62 is R-43's replay cause, which my
+  grep filter had excluded as a "constant". The unfiltered trace of every cause writer in the core, generated Anvil
+  SV included: riscv codes <= 32, the Capstone `23 + code[3:0]` (23..38), the dcsr causes, the FPU's 5 status bits,
+  `1<<63 | code` for interrupts and the quantum, `1<<62 | 25` for the replay -- nothing writes a cause from data,
+  so the RTL's value set has live bits only in {0..5, 62, 63}. The extra classes are registers Vivado could not
+  prove constant through the write-back cone (their D-cone is the whole write-back valid cone, ~8.7k startpoints):
+  pre-existing in v2, functionally inert if the RTL is as read, and in the conservative direction (fewer pruned
+  than the value set allows), so the csr_regfile and commit_stage rows read as explained with the mechanism
+  partly outside the RTL. A measured closure is available and not run: a harness assertion that no retired cause
+  has a bit outside {0..5, 62, 63}, over the 92-test sweep, with a high-bit mutant as its positive control. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
   arbiter 0/500 (PASS); before i_load_unit 55/500 -- a pre-registration MISS with the mechanism identified: I had
   commit_lsu_o landing in the store buffer's flops, and its cone continues through the store buffer's combinational
   status (commit pointer, last_store_buf_ready next-state) into the AMO fifo and the load unit's dom-switch
   metadata enable, then the switcher's event registers; the route pre-existed (the entry's op/fu drove commit_lsu_o
-  the same way), new is A at its head; not a loop, 1.3-1.6 ns better than WNS, the load-unit cell is the switcher's
-  metadata enable and not accept/translation/data_req -- accepted, startpoint flops requested to pin whether A is
-  the source or a through-point; before i_frontend 3/500 through neither exception_o nor the switcher, all via a LUT
-  named `mem_q[sbe][cap_result][sup_arm_en]` -- read as a shared-LUT naming artifact (sup_arm_en is a data bit
-  written by the dyn unit's write-back and read only at commit, with no RTL path to issue validity; the matched LUT
-  is the entry's write-back enable, named after one of the fields it drives), fan-in query requested; if an A flop
-  is in that fan-in it becomes a real finding. **Verdict from this lane: ready for the board; the flash is the
+  the same way); not a loop, 1.3-1.6 ns better than WNS, the load-unit cell is the switcher's metadata enable and
+  not accept/translation/data_req. RESOLVED by the synth lane's startpoint query: all 55 paths start at the CPMP
+  register, the standing critical source (so do the 3 frontend paths); no A-named FLOP is a startpoint of any
+  worst-500 path, and the A-named LUT at their head (the esc_cause_q family, 281 LUTs) has 0 A flops in its fan-in
+  -- A is the NAME of the new escape/fail-closed logic the pre-existing paths now run through, not a source.
+  Before i_frontend 3/500 through neither exception_o nor the switcher, all via one LUT named
+  `mem_q[1][sbe][cap_result][sup_arm_en]_i_3` -- CONFIRMED a shared-LUT naming artifact by the fan-in query (0 A
+  flops among 8,623 startpoints; sup_arm_en is a data bit written by the dyn unit's write-back and read only at
+  commit, with no RTL path to issue validity); the entries-2..7 `_i_1` LUTs of the same name do carry 74 A flops
+  (the field's own write logic) and are on no worst-500 path. Control: the 281 esc_cause-named LUTs return 0 A
+  flops, so the fan-in check can come back empty. **Verdict from this lane: ready for the board; the flash is the
   lead's call, the R-43 acceptance list first.**
 - **Final ladder on the audited tree (`all4`, every test, 2026-10-01 evening):** identical to the readings below
   where they overlap, plus the audit's arms: the x1 sentinel 0x1234 survives 53 resumes (quantum 64) and 103
