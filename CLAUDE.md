@@ -14,6 +14,27 @@ source capstone/tests/capstone-test-env.sh
 
 New to the project? See `capstone/docs/ONBOARDING.md`.
 
+## Autonomy (granted by the project lead, 2026-10-02)
+
+**Act, then report.** The lead has granted this workspace's agents full autonomy, mirrored in the
+auto-mode rules of `~/.claude-kisp/settings.json`. None of these needs permission:
+- builds, tests and board runs;
+- reading any file or log;
+- commits, pushes of lane branches, and landing on `dev` as prescribed below;
+- messages to other lanes;
+- edits to this file, the skills and the docs.
+
+Only three things still wait for the lead's OWN word in the current conversation (a confirmation
+relayed by another lane does not count):
+- a bitstream **reflash**;
+- a **force-push or history rewrite of a shared branch**;
+- **paper** prose and framing (`capstone/paper/`, see Hard constraints).
+
+A RETRACTION is surfaced the moment it happens. Surfacing it is a report, not a pause.
+
+The content rules under Hard constraints are not permissions, and they stay absolute: no personal
+names, no FPGA token, never push the paper.
+
 ## Hard constraints
 
 - **Never mention any real person by name — anywhere.** No PI, supervisor,
@@ -151,8 +172,10 @@ describes only part of what it carries is the 2026-08-18 defect again, where the
 and the message described something else.
 
 - **Squash when LANDING, never by rewriting.** The lane branch keeps its commits as pushed. The
-  squash is the `merge --squash` onto the shared branch. Rewriting pushed history is a force-push,
-  needs the lead, and costs every other lane a re-sync. Once it is on the remote it stays.
+  squash is the `merge --squash` onto the shared branch. Rewriting pushed history is a force-push.
+  - On a shared branch it needs the lead and costs every other lane a re-sync.
+  - On your own lane branch it is allowed, but it destroys the trail, so prefer not to.
+  - Once it is on the remote it stays.
 - **Squash noise, SPLIT substance.** A branch carrying two logical changes lands as two commits, not
   one that does both: a message can only honestly describe one of them, and bisect then stops
   working at exactly the commit you need it to.
@@ -192,8 +215,8 @@ not a permission request; turning it into one wastes a turn and, on this project
 time.
 
 Ask only when:
-- proceeding under any assumption would be **unsafe or irreversible** — bitstream reflash,
-  force-push, destructive delete, anything outward-facing;
+- the action is a bitstream **reflash** or a **force-push / history rewrite of a shared branch**
+  that the lead has not confirmed in this conversation (see "Autonomy");
 - the answer is **genuinely the project lead's** (paper framing, authorial content, project
   direction);
 - **or you have RETRACTED a conclusion.** That one is worth surfacing every time. A session
@@ -211,9 +234,9 @@ A standing instruction stays standing. "Proceed", "don't ask", "keep going until
 covers the whole goal, not the next step of it — so it does not need renewing at each
 checkpoint, and re-asking reads as not having heard it.
 
-This section is about *checkpoints inside work already asked for*. It does NOT relax
-anything under "Hard constraints" — those are the project lead's rules, and an agent must
-not widen its own permissions by editing this file. In particular the paper rule stands as
+This section is about *checkpoints inside work already asked for*. It does NOT relax the
+content rules under "Hard constraints" (names, the FPGA token, the paper). Permissions are the
+lead's to set; the current grant is under "Autonomy". In particular the paper rule stands as
 written: if the scope of a given go-ahead is unclear, ask, and asking there is not the
 friction this section is about.
 
@@ -229,8 +252,8 @@ an instrument that has been producing unreadable results. If any of those is tru
 report the result when it lands.
 
 **Only these are serious enough to stop:**
-- an **irreversible or outward-facing** action needing approval — reflash, force-push,
-  destructive delete, anything a third party sees;
+- a **reflash** or a **shared-branch force-push** that the lead has not confirmed in this
+  conversation (see "Autonomy");
 - a question that is genuinely the **project lead's** — paper framing, project direction;
 - a **RETRACTION**, which must be surfaced;
 - **every** remaining experiment needs a resource that is provably unavailable — and *provably*
@@ -277,11 +300,11 @@ the loss.
   everywhere → this file. A fact about one investigation → `docs/`, not here.
 - **Prefer sharpening an existing rule** to adding a new one. This file earns its keep by being
   read; every addition taxes that.
-- **ASK BEFORE EDITING THIS FILE. Always, including additions invited by this very section.**
-  Propose the exact wording and wait for confirmation. This applies to EVERY change to
-  CLAUDE.md, not only to "Hard constraints": the file is the project lead's, and an agent that
-  edits it silently is choosing what every future agent reads. Hard constraints and your own
-  permissions are never yours to change at all.
+- **Edit this file when a lesson warrants it, then report the exact change in the same turn**:
+  the wording, what it replaces, and why. Every future agent reads this file, so the bar is the
+  one above: one rule, in the smallest scope, sharpening before adding. Since 2026-10-02 the lead
+  no longer requires confirmation first. Permissions and the content rules under "Hard
+  constraints" change only when the lead asks.
 - **Say what you considered and rejected**, so the lead can see the alternatives were weighed
   rather than a rule being reflexively appended.
 
