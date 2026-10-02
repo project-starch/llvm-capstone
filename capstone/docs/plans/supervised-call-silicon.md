@@ -281,7 +281,25 @@ the after-audit, synthesis, silicon.
   reaches csupcause. Bounded by what the corpus exercises: the netlist's extra classes are unexplained from the RTL
   and unreached by anything run; the synth lane's caution stands -- a surviving flop means synthesis saw a variable
   in that bit position somewhere in the write-back cone, so this is evidence that the RTL as read holds over the
-  corpus, not a proof about the classes. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
+  corpus, not a proof about the classes.
+- **Step 10 RESULT (2026-10-02, the board lane): the bitstream is resident and supervised CALL has RUN ON SILICON.**
+  `caplifive_supcall_36a641e0b.bit` flashed at 15:55 on the lead's direct confirmation (resident name read back
+  after the power cycle). The R-43 acceptance list unchanged, a1..a10 all PASS, k800 first in every boot: a1's M1
+  result line identical to r43a1 on 8f6a0af98; a2's REVOKE costs 92/194/848 against 95/194/850; a3's per-point
+  deltas -1.7..+3.4 % with mixed signs, 28.15 cycles/node unchanged; a4/a5/a6 live sums 544/4352/17408 exact; the
+  ladder, P1 c5/c6 and a10 as on 8f6a0af98; the refusal record EMPTY after k800 as before. Then three ladder tests
+  of this plan, UNMODIFIED, ran bare M-mode on the board (JTAG at 0x80000000 after `monitor reset halt`, no OpenSBI;
+  a harness asm_insn.h redefines CAPPRINT to record through a CAPCREATE'd capability and CAP_PASS to report over
+  UART, both inline under the CAPENTER bound): sup-quantum (53 preemptions, count 400), sup-escape (five fault
+  events, the seal SEALED) and call-retpc (0, 0x12, 0x21, 0, 0x51, 0, 0, 0) -- every reading vector bit-identical
+  to the all7 simulation (113/113, 67/67, 8/8). The board folder (harness, images, pre-registration, audited
+  result lines) is `tests/rtl-smoke/sup-bare-2026-10-02/` on the board lane's branch, pending their push. Three
+  items from their auditor, all accepted and being fixed in the simulation tests (sim only, after the hash): the
+  no-strip control does not discriminate by READINGS (the walks restore the monitor's mcause/mepc; only the trace's
+  exception count did, 5 for 1) -- the monitor will read the domain's saved mcause slot in the seal region after
+  each escape; the plan's resume-plus4 text ("300") was stale -- at 36a641e0b that mutant ends in a kind-2 fault
+  with the stored count 0 after 52 resumes; sup-quantum's 400 is a commutative aggregate -- the ladder becomes
+  acc := acc * 7 + i with the value pre-registered. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
   arbiter 0/500 (PASS); before i_load_unit 55/500 -- a pre-registration MISS with the mechanism identified: I had
   commit_lsu_o landing in the store buffer's flops, and its cone continues through the store buffer's combinational
   status (commit pointer, last_store_buf_ready next-state) into the AMO fifo and the load unit's dom-switch
