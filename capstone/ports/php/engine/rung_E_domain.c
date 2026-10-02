@@ -49,9 +49,31 @@
 
 /* CRASH-110 by default; -DRUNG_E_CRASH073 selects the other. No whitespace, and the inner
  * quotes are escaped because the whole thing is one -D argument. */
+/* Corpus cases selected by name, never by passing the source through EXTRA_CF -- that is
+ * word-split, and an embedded quote silently corrupts every TU's command line.
+ *
+ * The parse_url pair are EXPRESSIONS, evaluated with a retval so the result can be checked.
+ * The language-level cases are STATEMENTS: zend_eval_string wraps its argument in
+ * `return <src> ;` when given a retval pointer, which does not parse for a statement list, so
+ * those pass retval_ptr = NULL and are judged on completion instead. RUNG_E_STMT says which. */
 #ifndef RUNG_E_SOURCE
 # ifdef RUNG_E_CRASH073
 #  define RUNG_E_SOURCE "parse_url(\"a:/\")"
+# elif defined(RUNG_E_CRASH003)
+#  define RUNG_E_SOURCE "$h=array();\n$h['me']=&$h;\n$h['me']=42;"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH004)
+#  define RUNG_E_SOURCE "$a=array(1,2,3);\n$a=&$a[1];"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH010)
+#  define RUNG_E_SOURCE "foreach(array(\"x\") as $f=>$f);"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH067)
+#  define RUNG_E_SOURCE "function &f() { return ($sa); }\n$sh =& f();\n$sh =& f();\n$sq[] = 1;"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH005)
+#  define RUNG_E_SOURCE "a(1"
+#  define RUNG_E_STMT   1
 # else
 #  define RUNG_E_SOURCE "parse_url(\"file:///\")"
 # endif
@@ -254,15 +276,24 @@ void domain_main(unsigned *res, unsigned func)
 
         INIT_ZVAL(ret);
         zend_try {
+#ifdef RUNG_E_STMT
+            /* Statements: no retval, so zend_eval_string does not wrap in `return ... ;`. */
+            rc = zend_eval_string(source, (zval *)0, "trigger" TSRMLS_CC);
+#else
             rc = zend_eval_string(source, &ret, "trigger" TSRMLS_CC);
+#endif
         } zend_catch {
             st |= ST_BAILED;
         } zend_end_try();
 
         if (rc == SUCCESS) {
             st |= ST_EVALED;
+#ifndef RUNG_E_STMT
             rtype = (unsigned)ret.type;
             if (ret.type == IS_ARRAY) { st |= ST_ISARRAY; }
+#else
+            st |= ST_ISARRAY;   /* statement cases: completion IS the pass condition */
+#endif
         }
     }
 

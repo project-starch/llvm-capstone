@@ -67,10 +67,38 @@ flags_of() {    # $1 = retval -> prints set stage names
   echo "$out"
 }
 
+# AXIS of each case, because a matched pair is only meaningful when the CONTROL varies the thing
+# that masks the bug:
+#   heap    -- a heap over-read. Allocator rounding masks it, so -DZEND_CAP_BOUNDS_REAL_SIZE is
+#              the right control and the pair is valid.
+#   temporal-- a use-after-free. Nothing about BOUNDS masks or reveals it; it needs revoke-on-free
+#              (-DZEND_TEMPORAL / -DZEND_NO_REVOKE). On the spatial axis the correct report is
+#              NOT APPLICABLE, not MISSED -- calling it a miss would be a false negative claim.
+#   global  -- an overflow of a .rodata/.bss table. The compiler bounds globals identically in
+#              both arms, so the allocator control cannot mask it and there is no pair to run.
+#              The control is the corpus's own crashes_on_pristine_build=False row.
+axis_of() {
+  case "$1" in
+    CRASH-110|CRASH-073) echo heap ;;
+    CRASH-003|CRASH-004|CRASH-010|CRASH-067) echo temporal ;;
+    CRASH-005) echo global ;;
+    *) echo heap ;;
+  esac
+}
+
 one_case() {    # $1 = case id, $2 = extra -D for the source select
   local id=$1
   local sel=$2
   local rc=0
+  local axis
+  axis=$(axis_of "$id")
+  if [ "$axis" = temporal ]; then
+    echo
+    echo "################ $id"
+    echo "    AXIS temporal (use-after-free): the spatial pair cannot decide this case."
+    echo "    SKIPPED on this axis -- needs -DZEND_TEMPORAL revoke-on-free, not a bounds change."
+    return 0
+  fi
   echo
   echo "################ $id"
 
@@ -90,8 +118,18 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
 
   # ---- CONTROL
   local c v cause oob
-  c=$(run_arm "${id}_control"); v=${c%%|*}; cause=$(echo "$c" | cut -d'|' -f2)
+  c=$(run_arm "${id}_control"); v=${c%%|*}; cause=$(echo "$c" | cut -d'|' -f2); oob=$(echo "$c" | cut -d'|' -f3)
   echo "==> CONTROL arm (bound = REAL_SIZE) -- stock PHP lifetime/rounding"
+  if [ -z "$v" ] && [ "$axis" = global ]; then
+    # EXPECTED for a global overflow: the allocator control cannot mask a .rodata/.bss bound, so
+    # both arms fault. That is the bug, not infrastructure.
+    echo "    control also faults (cause = ${cause:-none}) -- EXPECTED on the global axis"
+    [ -n "$oob" ] && echo "            $oob"
+    echo "VERDICT: $id CAUGHT (no pair). The overflowed object is a GLOBAL, bounded by the"
+    echo "         compiler in both arms, so allocator rounding cannot mask it and there is no"
+    echo "         control to vary. Control is the corpus row: stock PHP survives this input."
+    return 0
+  fi
   if [ -z "$v" ]; then
     echo "    CONTROL DID NOT COMPLETE (cause=${cause:-none}). No verdict -- infrastructure, not a result." >&2
     return 75
@@ -102,7 +140,7 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
     echo "    CONTROL completed but parse_url did NOT return an array. No verdict." >&2
     return 75
   fi
-  echo "    PASS  completed, parse_url returned an array -- reproduces the corpus pristine-OK row"
+  echo "    PASS  completed -- reproduces the corpus crashes_on_pristine_build=False row"
 
   # ---- FAULT
   local f
@@ -124,6 +162,16 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
   return $rc
 }
 
+# The reachable corpus cases: those needing no ext/standard function, since the whole Zend engine
+# is linked but only ext/standard/url.c is. The four use-after-free cases are pure language;
+# CRASH-005 is a PARSE ERROR (`a(1`) whose ASAN class is global-buffer-overflow, so it exercises
+# the scanner/parser rather than the heap.
+#
+# AXIS MATTERS. -DZEND_CAP_BOUNDS_REAL_SIZE vs nothing is the SPATIAL pair, which is what the
+# bounds arm varies. A use-after-free is a TEMPORAL defect and needs revoke-on-free
+# (-DZEND_TEMPORAL, controlled by -DZEND_NO_REVOKE); the spatial pair cannot catch one, and
+# reporting a spatial MISS on a UAF would be meaningless. `lang` runs the reachable cases on the
+# spatial axis only, which is honest about what it can show and is the cheap first measurement.
 worst=0
 case "$WHICH" in
   CRASH-110) one_case CRASH-110 ""                  ; worst=$? ;;
@@ -132,7 +180,12 @@ case "$WHICH" in
     one_case CRASH-110 ""                  ; a=$?
     one_case CRASH-073 "-DRUNG_E_CRASH073" ; b=$?
     worst=$(( a > b ? a : b )) ;;
-  *) echo "usage: $0 [CRASH-110|CRASH-073|both]" >&2; exit 2 ;;
+  lang)
+    for c in CRASH-003 CRASH-004 CRASH-010 CRASH-067 CRASH-005; do
+      one_case "$c" "-DRUNG_E_${c/CRASH-/CRASH}" ; r=$?
+      [ "$r" -gt "$worst" ] && worst=$r
+    done ;;
+  *) echo "usage: $0 [CRASH-110|CRASH-073|both|lang]" >&2; exit 2 ;;
 esac
 echo
 exit $worst

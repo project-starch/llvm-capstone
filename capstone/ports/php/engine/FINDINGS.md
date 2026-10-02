@@ -459,6 +459,65 @@ one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` i
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
 
+## A THIRD CATCH, and what the corpus can and cannot reach
+
+Of 127 corpus cases, **54 are memory-corruption AND masked on stock PHP** (`vuln_class =
+memory-corruption`, `crashes_on_pristine_build = False`) -- the same class as CRASH-110/073. Most
+need an `ext/standard` function we do not link (`var_dump`, `str_repeat`, `unserialize`,
+`html_entity_decode`, the stream functions). **Five need nothing but the Zend engine**, which we
+have in full:
+
+| case | trigger | ASAN class | axis |
+|---|---|---|---|
+| CRASH-003 | `$h['me']=&$h; $h['me']=42;` | use-after-free | temporal |
+| CRASH-004 | `$a=array(1,2,3); $a=&$a[1];` | use-after-free | temporal |
+| CRASH-010 | `foreach(array("x") as $f=>$f);` | use-after-free | temporal |
+| CRASH-067 | by-ref return of a parenthesised undefined var | use-after-free | temporal |
+| CRASH-005 | `<?php a(1` (a parse error) | global-buffer-overflow | global |
+
+### CRASH-005 CAUGHT: a bison table over-read in the parser's error path
+
+    insn = 00051503 (lh, 2 bytes), addr = 101cb286e, bounds = (101cb0a9e, 101cb286e)
+    zend_language_parser.c:3518
+
+`addr` equals the bound's END -- one element past a 7,632-byte table of 2-byte entries. Line 3518
+is bison's verbose-error construction:
+
+    for (yyx = yyn < 0 ? -yyn : 0; yyx < (int)(sizeof(yytname)/sizeof(char *)); yyx++)
+        if (yycheck[yyx + yyn] == yyx)
+
+The loop bound is the number of token NAMES, not the extent of `yycheck`, so `yyx + yyn` runs off
+the table. A classic generated-parser defect, triggered by a one-line syntax error, caught by the
+capability bound on `static const short yycheck[]` in `.rodata`.
+
+**It has no matched pair, and that is correct rather than a gap.** `yycheck` is a GLOBAL: the
+compiler bounds it identically in both arms, so `ZEND_CAP_BOUNDS_REAL_SIZE` -- which only changes
+heap bounds -- cannot mask it. Both arms fault. The control is the corpus's own row: stock PHP
+survives this input. The runner now knows this and reports CAUGHT (no pair) instead of treating a
+faulting control as infrastructure failure.
+
+### The four UAF cases are NOT misses -- the harness now says so
+
+They first came back "MISSED -- the read is inside the bound", which was the harness lying: a
+use-after-free is a TEMPORAL defect and the spatial pair varies BOUNDS. Nothing about a bounds
+change can mask or reveal one, so a bounds pair structurally cannot decide the case, and reporting
+MISSED would be a false negative claim. `run-triggers.sh` now carries an `axis_of` table and
+reports them SKIPPED on this axis, naming what they need: `-DZEND_TEMPORAL` revoke-on-free, with
+`-DZEND_NO_REVOKE` as the control -- exactly the pair `run-uaf.sh` already uses.
+
+**Running them is now possible for the first time**, because the re-seam removed PHP's `AG(cache)`:
+an `emalloc`/`efree` pair is visible to the capability allocator again instead of being absorbed by
+a cache that recycled one block across several object lifetimes. That is the next measurement, and
+the honest caveat is that revoke-on-free across a whole engine startup may exhaust the revocation
+node pool (`CAP_REV_TREE_SIZE` 65536), which has not been tested.
+
+### Score so far, stated conservatively
+
+Three corpus defects caught through the real engine: **CRASH-110** and **CRASH-073** (heap
+over-reads in `php_url_parse`, valid matched pairs), and **CRASH-005** (global over-read in the
+generated parser, no pair possible). Four more are reachable but need the temporal axis. The
+remaining 49 of the 54 need `ext/standard` TUs that are not linked.
+
 ## PHASE 3 RESULT: BOTH CORPUS TRIGGERS CAUGHT, through the real engine
 
 `run-triggers.sh both`, matched pairs, control first:
