@@ -40,9 +40,32 @@ arms and neither fixed arm, so the comparator is shown able to say both things r
 
 Both pre-fix lines are present in the pinned tree, at `thread.c:714` and `ops_dispatch.c:664`.
 
+## CORRECTION 2026-10-03: this native pair was a FALSE CONTROL for case 25
+
+`native-pair.c` fills the reissued object with `memset(q, 0x5B, ...)` — a **constant**. The domain
+fixtures fill with `fill(p, v0, n)`, which writes **`v0 + i`**. Case 25 reads at offset 32, so the
+two differ exactly there: the native arm printed `read=5b` and **agreed with a prediction that was
+wrong**, while the fixture on QEMU returned `0x7b`.
+
+Re-run on 2026-10-03 with the fixture's incrementing fill, same source otherwise:
+
+    case 24 buggy: DEFECT-REPRODUCED same-address=1 read=5b
+    case 25 buggy: DEFECT-REPRODUCED same-address=1 read=7b
+
+So had this bundle used the same fill as the fixtures it reproduces, the prediction error would have
+been caught here, a day before the QEMU run. A control that differs from the thing it controls in
+the one respect that matters is not a control. The triage document's claim that the native pair was
+"run from the same reductions" is withdrawn with this note.
+
+A second, smaller overstatement in the same spirit: the ASan **fixed** arms contain no use-after-free
+at all — both return before the stale read — so a clean ASan there is tautological. The comparator is
+shown able to report and not report, but not on the same access.
+
 ## What this does NOT show
 
-- **Nothing about the capability machine.** The `level0`, `shrink` and `sublet` images were never
+- **Nothing about the capability machine** — true when written, **superseded 2026-10-03** by
+  `../2026-10-03-qemu-upstream-defects-heap-arms/`, where all three arms ran. As written:
+  the `level0`, `shrink` and `sublet` images were never
   built, so the registered domain predictions remain predictions. The application SDK refuses both
   toolchains on this host — one emits a linear direct-call target (C-46, fixed upstream after that
   build), the other lacks the intcap extensions — and the gate is correct to refuse: without the

@@ -49,10 +49,14 @@ The README defers 18 defects "until another allocator is ported": the page mover
 logger's bipbuffer (2), the response bundles (1) and the crawler (1).
 
 **The slab port now exists** (`ports/memcached/app`, patch 0006, with the five corpus defects run as
-in-process fixtures 12–16 on 2026-10-02), so the page-mover group is worth re-reading against it:
-the page mover's whole purpose is to move items between slab pages, which is an allocator-internal
-reuse of exactly the kind the slab hooks were built to observe. That re-read is the highest-value
-memcached work available and has not been done.
+in-process fixtures 12–16 on 2026-10-02). **It does not, however, unblock the page-mover group,**
+and an earlier version of this paragraph said it was "worth re-reading against it" and "the
+highest-value memcached work available". That overstated it: the slab arms run with the mover
+**disabled**, `-o no_slab_reassign`, and the port's own results say why — *"the page mover is not
+hooked: it walks a page by pointer arithmetic, which per-chunk bounds refuse"*
+(`ports/memcached/app/results/2026-10-01-qemu-slab-sublet/README.md`). Reaching those seven
+defects needs the mover hooked, which is **port work, not corpus work**, and is the real
+next step for memcached's nested class.
 
 ## The plain-heap half
 
@@ -69,5 +73,5 @@ mechanism this project claims. It is a control, and should be written as one or 
 | commits after the pin | 0 — no live-in-pin candidate is possible |
 | history already searched | 2,360 commits, 2026-09-21 |
 | in scope then | 9 — 5 built, 4 rejected with reasons |
-| deferred pending a port | 18, of which the 7 page-mover defects are now worth re-reading |
+| deferred pending a port | 18; the 7 page-mover defects stay blocked until the mover is hooked |
 | live in the pin today | 1 (case 02), unchanged |

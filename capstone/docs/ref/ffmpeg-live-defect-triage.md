@@ -91,6 +91,9 @@ exhausted at four").
 The reductions are in `ports/ffmpeg/app/src/capstone-domain/ffapp_safety.c` as fixtures 24 and 25,
 whose predictions were pushed in `95aa3d340f80` before either was built. The native pair below was
 run from the same reductions and is the fix-differential arm plus the `host-asan` comparator.
+**Corrected 2026-10-03: "the same reductions" is false.** The native pair fills with a constant
+`memset`, the fixtures with `fill`'s `v0 + i`; case 25 reads at offset 32, so the native arm
+corroborated a wrong prediction. See the native bundle's own correction section.
 
 | case | arm | plain native | with `-fsanitize=address` |
 |---|---|---|---|
@@ -106,7 +109,13 @@ reissued to a new owner, and `read=5b` is that new owner's byte where the origin
 would mean the reproduction is wrong. It also fires on exactly the two buggy arms and neither fixed
 arm, so the comparator is shown able to say both things.
 
-## Blocked: the domain arms cannot be built on this host
+## ~~Blocked: the domain arms cannot be built on this host~~ — SUPERSEDED 2026-10-03
+
+All three arms were built and run; the results are in
+`../../ports/ffmpeg/app/results/2026-10-03-qemu-upstream-defects-heap-arms/`. The section below
+was accurate for the toolchains available when it was written and is kept for that reason.
+
+### As written, 2026-10-02
 
 Fixtures 24 and 25 are registered for `level0`, `shrink` and `sublet`, and **none of those images
 has been built**, so nothing here says what the capability machine does with these defects.
@@ -122,7 +131,8 @@ refusals are correct:
 Probed behaviourally with a positive control — a trivial file compiles for `capstone64-unknown-elf`
 with both, and `__uintcap_t` compiles with neither. The qualified compiler the migration used is
 named in `ports/common/application/README.md`: `compiler/sroa-keep-capability-whole` at
-`7d01722aab88`, whose commit is present in this repository but has no build on this host.
+`7d01722aab88`, whose commit is present in this repository but had no build on this host **when
+this was written**; it was built later the same day (19 minutes, 1.2 GB, Release + assertions).
 
 **The gate must not be weakened to get a run.** `runtime/host/capstone_vm/compiler.py:63` states what
 it is protecting: without the feature macro the port patches *"compile an integer-only fallback that
