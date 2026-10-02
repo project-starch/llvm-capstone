@@ -8,8 +8,10 @@ question, and it states its instrument so a wrong reading can be traced to it.
 defect was fixed upstream before 4.6.8 and each case re-creates it by reversing the fix. Is there a
 defect of the same class that is **still present in the tree we compile**?
 
-**Answer: one.** Of 82 commits that landed on `origin/release-4.6` after `v4.6.8`, exactly one is a
-lifetime defect at a wmem scope.
+**Answer: none.** Of 82 commits that landed on `origin/release-4.6` after `v4.6.8`, exactly one is a
+lifetime defect at a wmem scope -- and reading its release path showed the storage goes back to the
+system allocator, so it is a plain-heap defect and not of this corpus's class. The correction is
+recorded below rather than quietly dropped.
 
 ## The instrument
 
@@ -31,7 +33,7 @@ read UNRESOLVED rather than either verdict, and the newest commit must *not* rea
 on `master` and never backported to 4.6; one whose message does not name the lifetime; and one
 introduced after 4.6.8. It is a search along named axes, not a proof of absence.
 
-## The one candidate
+## The one candidate, and why it turned out to be heap class
 
 ### ZigBee ZCL Touchlink: file-scope entries kept in a global map across a redissect
 
@@ -60,23 +62,44 @@ entries in the commissioning map are allocated with `file` scope, which means th
 redissect pass, they will all be freed … so that we don't have a bunch of references to freed
 memory and thus don't have a use-after-free issue."*
 
-**Why it is in class.** The lifetime ends at a wmem scope reset. The backing block stays with wmem
-and nothing reaches `free()`, so a free-keyed mechanism — ASan, a libc quarantine and sweep — has no
-event to act on. That is the corpus's whole premise, and this case is the first instance of it that
-is *live in the version we build*.
+### CORRECTION, same day: this defect is HEAP class, not wmem class
 
-**Its sibling, and why it is not a duplicate.** Shape 1 of the corpus — "stale pointer held by a
-global across packets" — holds cases 0, 1 and 6, whose lifetime ends at the *packet* scope between
-packets. Here the lifetime ends at the *file* scope on a redissect, a coarser event that frees every
-entry at once, and the stale key is an extra. If it is built, `distinguishing` must say that.
+The first version of this file said the defect was in class for `wmem-repros` and would be its first
+live-in-pin case and first CVE. **That was wrong, and it is withdrawn.** The storage does not stay
+with wmem: it goes back to the system allocator, so this is an ordinary heap use-after-free that
+ASan and a libc quarantine both see. It belongs in the plain-heap control half, not in the nested
+corpus.
 
-**What it would be, if built.** The corpus today has **13 cases, 0 live in the pin and 0
-advisories**. This case would be its first live-in-pin case and its first with a CVE.
+The chain, read at the pin rather than assumed:
 
-**Not yet established:** whether the redissect path is reachable in the reduced tshark build, and
-whether the reduction is better keyed on `wmem_leave_file_scope` directly, as cases 7–11 key on the
-packet scope. The corpus runs `-r <file>` once per process, so a redissect may have to be modelled
-rather than driven — which is the same reduction the existing cases already make and declare.
+1. A redissect runs the registered init routines. `epan/packet.c:271` at `v4.6.8` describes them as
+   *"called before we make a pass through a capture file … or run a 'filter packets' or 'colorize
+   packets' pass"* — that pass is what the fix hooks.
+2. `epan/wmem_scopes.c:62` — `wmem_leave_file_scope()` is `wmem_leave_scope(file_scope)` followed by
+   a collection, under the comment *"this seems like a good time to do garbage collection"*.
+3. `wsutil/wmem/wmem_allocator_block.c:1032` — `wmem_block_gc` walks the block list and, for a block
+   that is entirely unused, *"return it to the OS"*, calling `wmem_free(NULL, cur)`.
+
+After a scope leave the file scope holds nothing, so its blocks are wholly unused and all of them
+are returned. Upstream's own commit message is the confirming evidence: the crash is *"a 'that
+address is not valid' trap"*, because *"memory allocators are free to release regions of the address
+space that no longer contain any allocated data"* — that is an unmapped page, which only happens
+once the storage has left the allocator.
+
+**This is the rule that already disqualified two candidates**, recorded in
+[`port-candidate-survey.md`](port-candidate-survey.md): issues 19399 and 19265 were excluded because
+their freeing frame is `wmem_block_gc`, *"the return-to-OS call"*. A scope reset that **retains** the
+blocks is in class; a path that returns them is not. `wmem_free_all` on the packet scope retains —
+which is why cases 0–11 are in class — and `wmem_leave_file_scope` does not.
+
+**What it is instead.** A real, live, CVE-carrying plain-heap use-after-free: a global container
+holding pointers, and keys pointing into the same objects, across a release that reaches the system
+allocator. That makes it a **control** case — valuable, because it is a genuine upstream defect
+rather than a synthetic fixture, but it supports no claim that this project's mechanism is uniquely
+able to catch it.
+
+**What this costs the corpus:** `wmem-repros` still has **13 cases, 0 live in the pin and 0
+advisories**, and no live-in-pin candidate for its class has been found.
 
 ## What was rejected, and why
 
