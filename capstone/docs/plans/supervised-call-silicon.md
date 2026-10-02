@@ -316,7 +316,17 @@ the after-audit, synthesis, silicon.
   [0x3000, 0x4000); and a lesson -- a first version aliased seal4 in s10, which IS x26, the misaligned arm's
   capability, so that domain loaded seal4 + 1 (a never-written granule, whose tag is not 0 in simulation) and the
   sim-only S-06 invariant stopped the run three times before the register clash was seen: in a test that mixes ABI
-  names and x-numbers, write the register map down before adding registers. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
+  names and x-numbers, write the register map down before adding registers.
+  **On silicon the same evening (the board lane, one run each, pre-registered before the boot, folder
+  `tests/rtl-smoke/sup-bare-2026-10-02-v2/` on their lane branch):** sup-escape identical to the aud3e simulation
+  reading for reading (72/72 in their recorder's count; the scratch address relocated to that image's), the saved-
+  mcause slot 0 in all five arms -- THE TRAP IS STRIPPED ON SILICON, with the no-strip vector (11, 2, 2, 4, 2) as the
+  control the instrument would have shown; sup-quantum at quantum 16 identical (155/155), ladder 0x1f64f7f55a20a182;
+  at quantum 64 the ladder, x1 0x1234, mie 0x888 and mcause 0 all hold, with 74 preemptions on the board against 73 in
+  simulation. The board lane recorded that as a miss against its pre-registered bit equality; the right reading is
+  that the preemption COUNT is a timing quantity by construction (the quantum counts cycles, the domain's cycles
+  depend on the memory system, and S12_MEM_DELAY=12 is not the FPGA's DDR), so the invariants of this test are the
+  ladder value, x1, mie, mcause and the per-escape readings, and the count is reported, not pre-registered. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
   arbiter 0/500 (PASS); before i_load_unit 55/500 -- a pre-registration MISS with the mechanism identified: I had
   commit_lsu_o landing in the store buffer's flops, and its cone continues through the store buffer's combinational
   status (commit pointer, last_store_buf_ready next-state) into the AMO fifo and the load unit's dom-switch
