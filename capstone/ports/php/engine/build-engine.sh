@@ -132,14 +132,34 @@ TUS="zend_language_scanner zend_language_parser zend_compile zend_execute zend_e
  zend_iterators zend_builtin_functions zend_extensions zend_ini zend_default_classes
  zend_ts_hash zend_sprintf zend_dynamic_array zend_multibyte"
 
-# zend_alloc.c is compiled ONLY when the seam is off; with the seam on its API comes from
-# libc/php_capstone_malloc.c instead.
-if [ "${PHP_CAP_ALLOC_SEAM:-1}" = "1" ]; then
-  CF+=(-DPHP_CAP_ALLOC_SEAM)
-  echo "  PHP_CAP_ALLOC_SEAM: bounds are per emalloc OBJECT (zend_alloc.c dropped)"
-else
-  TUS="$TUS zend_alloc"
-fi
+# ALLOCATOR MODE. Both give per-emalloc-OBJECT bounds; they differ in what happens to PHP's own
+# allocator and therefore in temporal granularity.
+#
+#   hier (default) -- HIERARCHICAL. zend_alloc.c is compiled from the corpus tree and kept, its
+#       allocating entry points renamed aside so libc/php_capstone_zend_hier.c can wrap them and
+#       re-bound each result to the CALLER's size. Two levels, both capability-correct: the lower
+#       level bounds the raw block, the upper level bounds the object. PHP's allocator is under
+#       test. AG(cache) survives, so the temporal axis is coarser than per-object.
+#   seam -- COLLAPSED. zend_alloc.c is dropped and the ported allocator serves its API directly.
+#       One level. PHP's cache is gone, so every emalloc/efree pair reaches the arena, which is
+#       what the temporal axis needs -- at the cost of zend_alloc.c no longer being under test.
+PHP_CAP_ALLOC_MODE=${PHP_CAP_ALLOC_MODE:-hier}
+ZEND_ALLOC_RENAME=()
+case "$PHP_CAP_ALLOC_MODE" in
+  hier)
+    TUS="$TUS zend_alloc"
+    ZEND_ALLOC_RENAME=(-D_emalloc=php_raw_emalloc -D_ecalloc=php_raw_ecalloc
+                       -D_erealloc=php_raw_erealloc -D_safe_emalloc=php_raw_safe_emalloc
+                       -D_estrdup=php_raw_estrdup -D_estrndup=php_raw_estrndup
+                       -D_efree=php_raw_efree)
+    echo "  allocator: HIERARCHICAL -- zend_alloc.c kept, each result re-bounded to the caller's size"
+    ;;
+  seam)
+    CF+=(-DPHP_CAP_ALLOC_SEAM)
+    echo "  allocator: COLLAPSED (seam) -- zend_alloc.c dropped, ported allocator serves its API"
+    ;;
+  *) echo "  unknown PHP_CAP_ALLOC_MODE=$PHP_CAP_ALLOC_MODE (want hier|seam)" >&2; exit 2 ;;
+esac
 
 OBJS=()
 ZCF=("${CF[@]}")
@@ -153,7 +173,10 @@ for t in $TUS; do
   _src="$P/Zend/$t.c"
   [ "$t" = "zend_alloc" ] && _src="$ZEND_ALLOC_SRC"
   [ "$t" = "zend_variables" ] && _src="$ZEND_VARIABLES_SRC"
-  "$CAPSTONE_CLANG" "${ZCF[@]}" -c "$_src" -o "$OUT/obj/$t.o" 2>"$OUT/log/$t.log" \
+  # The rename is scoped to zend_alloc.c: every OTHER TU must still call `_emalloc` and so reach
+  # the re-bounding wrapper. Applying it globally would bypass the wrapper everywhere.
+  _rn=(); [ "$t" = "zend_alloc" ] && _rn=("${ZEND_ALLOC_RENAME[@]}")
+  "$CAPSTONE_CLANG" "${ZCF[@]}" ${_rn[@]+"${_rn[@]}"} -c "$_src" -o "$OUT/obj/$t.o" 2>"$OUT/log/$t.log" \
     || { echo "FAILED $t"; head -5 "$OUT/log/$t.log"; exit 1; }
   OBJS+=("$OUT/obj/$t.o")
 done
@@ -167,6 +190,9 @@ SUP=("$R/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
      "$HERE/libc/php_capstone_os.c"   "$HERE/libc/php_capstone_malloc.c"
      "$HERE/libc/php_capstone_php_stubs.c" "$HERE/libc/php_capstone_depth.c"
      "$HERE/libc/php_capstone_ext_stubs.c")
+if [ "$PHP_CAP_ALLOC_MODE" = hier ]; then
+  SUP+=("$HERE/libc/php_capstone_zend_hier.c")
+fi
 
 # ext/standard TUs, compiled BYTE-IDENTICAL from the corpus tree. url.c compiles against the
 # real php.h with no source change once stubinc supplies the headers php.h reaches for

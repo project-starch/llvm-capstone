@@ -162,6 +162,35 @@ void *realloc(void *p, size_t n)
     return q;
 }
 
+/* WIDEN A RE-BOUNDED POINTER BACK TO ITS BLOCK, for the hierarchical mode.
+ *
+ * Capability narrowing is MONOTONIC: shrink cannot widen. So if an upper-level allocator parks the
+ * pointer it handed the caller into its own size-class cache, that cache now holds a bound that
+ * belongs to ONE PAST TENANT. PHP's cache is a size-CLASS cache -- bucket i takes anything that
+ * rounded to i*8 -- so a block freed as a 6-byte string gets re-served for a 9-byte one, and the
+ * new tenant inherits the old, tighter bound. Measured: _estrndup's `p[length] = 0` at
+ * zend_alloc.c:404 stored one past the end, which looked exactly like a caught corpus bug and was
+ * not one.
+ *
+ * The lower level still holds the UNSHRUNK block alias in zend_slots[].blk, keyed by base -- and
+ * re-bounding keeps the base, so the key still matches. This returns that wide capability with the
+ * caller's cursor, so the upper level can cache something whose bound belongs to the BLOCK rather
+ * than to a past request. Re-bounding then happens on each handout, which is exactly the policy
+ * the ported allocator's own cache already uses.
+ *
+ * Unknown pointers pass through unchanged: a block the arena did not hand out has no slot. */
+void *zend_cap_widen(void *p)
+{
+    zend_slot *s;
+    unsigned long c;
+    if (!p) { return p; }
+    s = zend_find(p);
+    if (!s || !s->blk) { return p; }
+    c = __builtin_capstone_cap_get_cursor(p);
+    return (void *)((char *)s->blk
+                    + (c - __builtin_capstone_cap_get_base(s->blk)));
+}
+
 #if defined(PHP_CAP_ALLOC_SEAM)
 /* ============================================================================
  * Zend/zend_alloc.c's PUBLIC API, served directly by the capability-bounding

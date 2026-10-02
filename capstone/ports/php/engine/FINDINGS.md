@@ -1,8 +1,24 @@
 # PHP engine in a Capstone domain — state and findings
 
-Phase 0 complete and gated. Phase 2 rung A passes. **Rung B (`zend_startup`) does not yet
-complete**; it exhausts the domain stack. Details below so the next session does not
-re-derive any of it.
+Phase 0 complete and gated; Phase 2 rungs A-E all pass; Phase 3 has results. **The real PHP
+engine compiles, boots, parses, compiles and EXECUTES PHP inside a Capstone domain, on a
+two-level allocator hierarchy in which PHP's own `zend_alloc.c` runs unedited over a capability
+arena -- and corpus bugs are caught by capability bounds alone, with no shadow memory, redzones
+or instrumentation.**
+
+Caught so far, each as a matched pair whose CONTROL arm completes (reproducing the corpus's
+`crashes_on_pristine_build = False`): **CRASH-110** and **CRASH-073** on the spatial axis, through
+the allocator hierarchy, plus **CRASH-005** with no pair possible (the overflowed object is a
+compiler-bounded global).
+
+On the temporal axis, **CRASH-003, CRASH-004, CRASH-010 and CRASH-067** are caught, each faulting
+in the same function ASAN names as frame #0. These four were reported caught once before, retracted
+as worthless, and only then earned: revocation had been faulting on benign workloads too, and the
+per-case control could not see it because that control switches revocation off. Two real allocator
+bugs and a new sanity gate separate the first claim from this one.
+
+Everything below is kept in the order it was learned, including the wrong turns, so the next
+session does not re-derive any of it. The sections nearest the top are the oldest.
 
 ## Measured
 
@@ -458,6 +474,257 @@ whose bounds span the address and the whole-image capability always does. `_GRAN
 one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` in its frame) --
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
+
+## TEMPORAL AXIS: four use-after-free cases CAUGHT, after a retraction and two real bugs
+
+**An earlier version of this section reported CRASH-003, CRASH-004, CRASH-010 and CRASH-067 as
+CAUGHT on the temporal axis. That was wrong, and the retraction is the useful part.**
+
+The suite looked exemplary. Every control arm (`-DZEND_NO_REVOKE`) completed -- "the use-after-free
+SURVIVED, as on stock PHP" -- and every fault arm halted with cause 24. Four for four, on the axis
+the cases belong to.
+
+What gave it away was that all four faulted at the **same source line**, and that line was in
+`zend_capstone_alloc.h`, not in PHP. ASAN reports all four in Zend, at the USE of the stale
+reference: `zend_assign_to_variable` (003, 067), `zend_assign_to_variable_reference` (004),
+`_zval_ptr_dtor` (010). A use-after-free faults where the dead pointer is dereferenced; a fault
+inside the allocator's own free path is a different event.
+
+The decisive test was one run: **a benign script, revocation ON**, spatial over-read masked by
+`REAL_SIZE` exactly as stock PHP masks it. It faulted with cause 24 at the identical site. So the
+fault had nothing to do with any use-after-free -- it is what this allocator does on *any*
+sufficiently long workload once revocation is enabled.
+
+### Why the matched pair could not see it
+
+Because the per-case control removes the very thing that was broken. `-DZEND_NO_REVOKE` is the
+correct control for "does the bug survive stock PHP lifetimes", and it is blind to "is revocation
+itself sound": with revocation off the fault cannot occur, so control-completes/fault-faults is
+exactly what a broken revocation produces. The pair was internally consistent and collectively
+meaningless.
+
+**The general lesson, which generalises past this project:** a differential test is only as good as
+the thing its control holds fixed. When the control removes the mechanism under test, "the
+experimental arm faulted and the control did not" carries no information about the input. The
+spatial axis had already taught this once, in the other direction -- its `REAL_SIZE` control
+masked nothing because the rounding was applied to an already-rounded size, making both arms
+identical. Each axis needs a control that varies the INPUT while leaving the mechanism on.
+
+So `run-triggers.sh` now runs a **revocation sanity arm** -- benign workload, revocation on -- once,
+before scoring any temporal case, and reports NO VERDICT on the whole axis if it does not complete.
+It also refuses a temporal catch whose fault is inside the allocator, the two checks failing
+independently on purpose.
+
+### The defect: a free-slot marker doubling as a lookup key
+
+`zend_find(p)` located a block by `base`, and `base == 0` is also how `_efree` marks a slot FREE.
+`__builtin_capstone_cap_get_base` of an UNTAGGED value is **0**. So an `_efree` handed an untagged
+pointer looked up base 0, matched **the first free slot**, and revoked a node that the previous
+tenant's revoke had already consumed. Revoking an untagged node faults with cause 24 -- and the
+faulting instruction is the `ldc` that loads `s->rev`, which is why the symbolized line sat a few
+lines off, at the cache-park store rather than at the revoke.
+
+Fixed by refusing 0 as a lookup key. An `_efree` of an untagged pointer now finds no slot, so it
+neither revokes nor parks: the block leaks rather than corrupting the slot table, which is the
+right failure for a diagnostic allocator, and detection is unaffected because a use-after-free
+faults at the USE, through the revoked alias, not here.
+
+Worth noting what supplies those untagged pointers in the first place: a `memcpy` whose source and
+destination have DIFFERENT 16-byte alignments cannot copy capability granules and falls back to the
+byte loop, which silently drops tags. That is the same mechanism as the realloc byte-loop bug
+recorded below, surviving in the one case the fix could not cover. It is a known limitation of the
+port, and it is the reason an untagged pointer can reach `_efree` on a correct program.
+
+That fix was necessary and not sufficient -- the benign arm still faulted. The rest of the hunt is
+the interesting part.
+
+### The real cause: revocation versus an INTRUSIVE allocation list
+
+PHP keeps its list of live allocations threaded through the block headers themselves
+(`zend_alloc.c:117-126`). `REMOVE_POINTER_FROM_LIST(p)` reads `p->pLast` and `p->pNext` out of the
+block being freed, and writes through them into the NEIGHBOURING blocks' headers.
+
+Revocation invalidates every capability derived from a block -- including the link fields that other
+blocks hold pointing AT it. So:
+
+1. `_efree` revoked the block and THEN unlinked it, reading link pointers out of memory it had just
+   killed; and
+2. stock PHP never unlinks a cached block at all (`_efree` returns early for blocks <= 80 bytes), so
+   a revoked block stayed in the list and poisoned its neighbours -- the next unlink to walk through
+   it faulted.
+
+Fixing (1) alone just moved the fault from the park site to the unlink site. The fix is three
+changes that only work together, all confined to `ZEND_TEMPORAL` so the spatial arm keeps PHP's
+structure exactly:
+
+- unlink BEFORE revoking;
+- unlink EVERY block, not only the ones the cache declines, so the list never holds a dead block;
+- RE-LINK on a cache hit, because a block that now leaves the list on free must re-enter it when it
+  is handed out again -- otherwise its header still carries links from its previous lifetime,
+  pointing at blocks since revoked.
+
+**The transferable rule: revocation is a point of no return for everything INSIDE the object,
+metadata included.** An allocator with out-of-band metadata has no such ordering constraint. PHP's
+is in-band, so any bookkeeping kept in the object must be finished before the object dies -- and any
+structure that outlives the object must not point into it.
+
+The symptom to recognise next time: a cause-24 whose faulting instruction is a capability load
+through a pointer that was itself read out of freed memory.
+
+### The result
+
+With revocation sound -- the benign arm completes, `retval = 4351`, revocation ON -- all four
+use-after-free cases are caught, and **every one faults in the function ASAN names as frame #0**:
+
+| case | source | our fault site | enclosing function | ASAN frame #0 |
+|---|---|---|---|---|
+| CRASH-003 | `$h['me']=&$h; $h['me']=42;` | `zend_execute.c:669` | `zend_assign_to_variable` | same |
+| CRASH-004 | `$a=array(1,2,3); $a=&$a[1];` | `zend_execute.c:242` | `zend_assign_to_variable_reference` | same |
+| CRASH-010 | `foreach(array("x") as $f=>$f);` | `zend_execute_API.c:389` | `_zval_ptr_dtor` | same |
+| CRASH-067 | by-ref return of a parenthesised undefined var | `zend_execute.c:676` | `zend_assign_to_variable` | same |
+
+Each control arm (`-DZEND_NO_REVOKE`) completes, reproducing the corpus's
+`crashes_on_pristine_build = False`: the stale reference is still usable under stock PHP lifetimes
+and dead at `efree` once revocation is on. Four-for-four function-level agreement with an
+independent reference detector is the strongest evidence in this file, and it is worth noting that
+it was obtained only AFTER the four verdicts had been retracted once -- the earlier run reported the
+same four cases as caught while catching nothing.
+
+## A FALSE POSITIVE CAUGHT BY ARITHMETIC, and the harness gate that now prevents it
+
+The first hierarchical build reported CRASH-110 and CRASH-073 as CAUGHT. **Both were wrong.** The
+giveaway was that the two different triggers faulted at the *same* pc, on the same instruction, at
+the same address -- and the instruction was `sb` (a STORE, cause 7) while both corpus defects are
+over-READS. The site was `zend_alloc.c:404`, `p[length] = 0` in `_estrndup`: our own allocator bug,
+in the right arm for the wrong reason.
+
+`run-triggers.sh` now resolves the faulting pc to a source location, prints it on every verdict,
+and **refuses to score a spatial catch whose fault is not in `url.c`**, reporting NO VERDICT
+instead. The old gates checked that the arms differed and that `shrink` was present; neither can
+tell *where* a fault happened, which is exactly how this slipped through.
+
+### Root cause: a re-bounded capability must never flow into the allocator's own cache
+
+Capability narrowing is MONOTONIC -- `shrink` cannot widen. PHP's `_efree` parks the pointer it was
+given into `AG(cache)`, a size-CLASS cache (bucket i takes anything rounding to i*8). So a block
+freed as a 6-byte string is re-served for a 9-byte one, and the new tenant inherits the OLD, tighter
+bound. `_estrndup`'s NUL write then lands one past the end.
+
+The ported allocator had already solved this deliberately, and its comment states the rule:
+"Parking the unshrunk block and re-bounding on handout keeps the size-class policy exactly as PHP
+has it while giving each new lifetime its own correct bound."
+
+So `_efree` is now wrapped too: `zend_cap_widen()` looks the block up in the lower level's slot
+table (keyed by base, which re-bounding preserves) and hands PHP the BLOCK-wide capability, so its
+cache holds a bound belonging to the block rather than to a past request. The per-object bound is
+re-applied on each handout.
+
+### An earlier version of the same mistake
+
+The first hierarchical wrapper also moved the capability BASE to `cursor - sizeof(php header)`,
+which excluded the LOWER level's header -- a hierarchy has two, `[ our 48 ][ PHP's 48 ][ payload ]`
+-- so the next `ZEND_DO_FREE` subtracted another 48, landed below the base, and made the CONTROL arm
+halt. The wrapper now keeps the base untouched and tightens only the END, which is the only
+direction an over-read travels, and works at any hierarchy depth.
+
+### The same mistake again, at the other pointer-taking entry point
+
+With `_efree` fixed, the CONTROL arm completed for the first time in hierarchical mode -- retval
+4351, every stage bit set, and `rtype = 4` (`IS_ARRAY`), i.e. real `parse_url("file:///")` returning
+a real PHP array through PHP's own allocator. The fault arm then faulted at **cause 5, a 16-byte
+capability-granule LOAD one granule past the end, inside our `memcpy`'s chunk-copy loop** -- not in
+`url.c`, so the harness scored NO VERDICT again.
+
+`_erealloc` was handing the NARROW pointer back DOWN to PHP's allocator. The lower level then copies
+the old contents using its own block record, so it reads a block's worth of bytes through an
+object-sized bound. Whether that over-read faults depends only on whether the tail happens to land
+in rounding slack, which is why it showed up in the fault arm alone and looked like a catch.
+
+**The general rule for hierarchical capability allocators** -- both halves, because each was learned
+from a separate fault:
+
+> **Narrow on the way up, widen on the way down.** A level may narrow what it returns to its
+> caller, but a narrowed capability must not re-enter the lower level: not into its cache or
+> free-list (narrowing is monotonic, so a recycling size-class cache poisons every later tenant),
+> and not as an argument it will use for its own block-sized work (it is entitled to touch the
+> whole block). Recover the wide capability from the level that knows the block bounds.
+
+Getting either half wrong is quiet in the same way: a bound belonging to one level, used at another,
+produces a fault on a later and unrelated allocation -- which is indistinguishable from a caught bug
+unless the harness checks WHERE the fault happened. That check is the single most useful piece of
+the harness, and it was added only after the false positive.
+
+A practical corollary for the arena: re-bounding must **preserve the base**, because that is the key
+`zend_cap_widen` looks the block up by. The rule that keeps the lower level's header reachable is
+the same rule that makes widening possible at all.
+
+## ATTRIBUTING AN OVER-READ THAT A SHARED COPY PRIMITIVE PERFORMS
+
+With `_erealloc` fixed, CRASH-110 came back CAUGHT at `url.c:132` with the control completing and
+returning a real array. CRASH-073's control also completed -- and its fault arm faulted **inside our
+`memcpy`**, a 1-byte load at exactly the bound end, so the `url.c`-only gate scored NO VERDICT.
+
+That gate was wrong for this case, and checking the corpus record says why. ASAN's own report for
+CRASH-073 is:
+
+```
+READ of size 3 at 0x50300000317c
+    #0 memcpy
+    #1 _estrndup       Zend/zend_alloc.c:403
+    #2 php_url_parse   ext/standard/url.c:292
+0x50300000317c is located 0 bytes after 28-byte region
+```
+
+Frame #0 is memcpy on the reference build too: `url.c:292` is `ret->path = estrndup(s, (ue-s))`, and
+the over-read is performed BY the copy. **A fault inside the copy primitive is the correct shape of
+this catch.** "0 bytes after the region" is also exactly what we observed -- the faulting address
+equals the bound end.
+
+But the gate cannot simply be loosened, because a fault in memcpy is *also* precisely what a bound
+the port got wrong looks like -- that is how `_erealloc`'s narrow pointer scored as a catch one
+section above. The faulting pc cannot separate the two cases, and no refinement of it can.
+
+**So the attribution is taken at the allocator boundary instead.** A third, diagnostic arm
+(`-DZEND_CAP_ESTRNDUP_AUDIT`, default off, never the arm that is scored) compares the length the
+caller asked for against what the SOURCE capability actually authorises, and halts with both numbers
+through the fault channel if the request overruns. The question "did the caller ask for more than its
+source holds?" is answerable at the boundary, and it is the defect, whoever ends up performing the
+load.
+
+Measured, on the CRASH-073 fault arm:
+
+```
+badaddr 0xe301000003000241 - 64 = 0xe301000003000201
+  0xE3 = audit report | who = 1 (_estrndup) | requested = 3 | authorised = 2 | over by 1
+```
+
+`url.c:292` asks for 3 bytes from a source holding 2. The capability stops the copy at the first byte
+past the end. The amounts differ from ASAN's (3 bytes past a 28-byte region) because the intermediate
+buffer differs between the CLI build and our eval path; the defect -- `ue - s` over-counting because
+`ue` was not adjusted when `s` advanced -- is the same, and our figures are the tighter ones.
+
+The general point, and it is not specific to PHP: **when the faulting instruction belongs to a shared
+primitive, the pc identifies the primitive, not the defect.** Attribution has to come from a boundary
+where the caller's intent is still visible. A detector that scores on fault location alone will
+confuse "the program over-read" with "the port mis-bounded", in both directions.
+
+## THE BOOT FLAKE, characterised
+
+All results above come from retried runs. The flake now has a signature: the guest wedges **mid-boot**
+after the SBI remote-fence messages, with QEMU still spinning at 100% CPU and no further serial
+output ever arriving. It is not a lost domain and not a monitor fault -- it never reaches the domain
+at all. Roughly one boot in three.
+
+What made it expensive was unrelated: `run-domain-smoke.py` derives its login timeout as
+`120 * timeout_multiplier`, and the multiplier is 12 because the DOMAIN is slow. Booting Linux to a
+login prompt takes the same ~30 s whatever is about to run, so every flaked boot burned **24 minutes**
+of a three-retry budget. `run-triggers.sh` now caps `CAPSTONE_QEMU_LOGIN_TIMEOUT` at 300 s
+independently, which is the same retry policy at a twentieth of the cost. The underlying wedge is
+still unexplained.
+
+One operational hazard found alongside it: a stopped runner leaves **orphaned container processes
+holding the QEMU lock**, so the next run blocks on `flock` indefinitely while looking idle. Killing
+the orphan tree releases it.
 
 ## A THIRD CATCH, and what the corpus can and cannot reach
 

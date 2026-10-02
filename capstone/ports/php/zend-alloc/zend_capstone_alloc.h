@@ -110,6 +110,34 @@ extern void php_fault_report(unsigned long);
 #  define ZEND_CAP_CHECK_TAG(ptr, size) do { } while (0)
 #endif
 
+/* ZEND_CAP_REV_AUDIT: diagnostic only, OFF by default. Finds which revocation invariant breaks,
+ * and when, instead of inferring it from where the cause-24 lands.
+ *
+ * Three invariants, reported through the fault channel with distinct codes so the first one to fire
+ * names the cause (php_fault_report halts, so only the first fires):
+ *
+ *   0xE5 | slot | nfree   _efree found a slot whose `rev` node is UNTAGGED. Either the node was
+ *                         already consumed by an earlier revoke, or something cleared it.
+ *   0xE6 | bucket| nalloc the cache handed back an UNTAGGED block. Parking stored a dead capability,
+ *                         so the park happened after the authority was already gone.
+ *   0xE7 | slot | nfree   revoke RETURNED an untagged authority, which is what the cache then parks.
+ *                         This is the invariant the comment above _efree asserts from probes.
+ */
+#if defined(ZEND_CAP_REV_AUDIT)
+extern void php_fault_report(unsigned long);
+static unsigned long zend_nalloc_ctr, zend_nfree_ctr;
+#  define ZEND_REV_NOTE(code, idx, ctr)                                        \
+    php_fault_report(((unsigned long)(code) << 56)                             \
+                   | (((unsigned long)(idx) & 0xFFFFUL) << 32)                 \
+                   | ((unsigned long)(ctr) & 0xFFFFFFFFUL))
+#  define ZEND_REV_COUNT_ALLOC() (++zend_nalloc_ctr)
+#  define ZEND_REV_COUNT_FREE()  (++zend_nfree_ctr)
+#else
+#  define ZEND_REV_NOTE(code, idx, ctr) do { } while (0)
+#  define ZEND_REV_COUNT_ALLOC() do { } while (0)
+#  define ZEND_REV_COUNT_FREE()  do { } while (0)
+#endif
+
 /* ZEND_CAP_ARENA_TRACE: diagnostic only, OFF by default. Answers one question -- does the
  * arena actually RUN OUT during a run, or is a downstream fault something else? Both
  * exhaustion modes are reported separately, because they are different bugs:
@@ -255,9 +283,23 @@ static void *zend_arena_carve(unsigned long bytes, unsigned long bound_bytes)
     return __builtin_capstone_cap_shrink(alias, ab, ab + bound_bytes);
 }
 
+/* base == 0 is the FREE-SLOT marker, so it must never be a lookup key.
+ *
+ * `__builtin_capstone_cap_get_base` of an UNTAGGED value is 0, so without the `b &&` guard an
+ * _efree handed an untagged pointer matched the first free slot and revoked a node that the
+ * previous tenant's revoke had already consumed. Revoking an untagged node faults with cause 24,
+ * inside the allocator, on a workload containing no lifetime error at all -- which is how the
+ * temporal arm came to report CAUGHT for four use-after-free cases that it had not caught. A
+ * benign script with revocation on faulted identically.
+ *
+ * With the guard, an _efree of an untagged pointer finds no slot, so it neither revokes nor parks:
+ * the block leaks instead of corrupting the slot table, which is the right failure for a diagnostic
+ * allocator. It does not weaken detection -- a use-after-free faults at the USE, through the revoked
+ * alias, not here. */
 static zend_slot *zend_find(void *p)
 {
     unsigned long b = __builtin_capstone_cap_get_base(p);
+    if (!b) { return (zend_slot *)0; }
     for (unsigned i = 0; i < zend_nslots; ++i) {
         if (zend_slots[i].base == b) { return &zend_slots[i]; }
     }
@@ -283,6 +325,12 @@ static void *_emalloc(size_t size)
      * probes/revoke-reuse-safety.c. */
     if ((cache_index < MAX_CACHED_MEMORY) && (AG_cache_count[cache_index] > 0)) {
         void *blk = AG_cache[cache_index][--AG_cache_count[cache_index]];
+#if defined(ZEND_CAP_REV_AUDIT)
+        ZEND_REV_COUNT_ALLOC();
+        if (!__builtin_capstone_cap_get_tag(blk)) {
+            ZEND_REV_NOTE(0xE6, cache_index, zend_nalloc_ctr);
+        }
+#endif
 
         unsigned i;
         for (i = 0; i < zend_nslots; ++i) { if (zend_slots[i].base == 0) { break; } }
@@ -319,6 +367,19 @@ static void *_emalloc(size_t size)
                 bb + sizeof(zend_mem_header) + MEM_HEADER_PADDING + ZEND_CAP_BOUND_BYTES(size));
         ZEND_CAP_CHECK_TAG(p, size);
         p->cached = 0;
+#ifdef ZEND_TEMPORAL
+        /* The other half of the unlink-before-revoke fix, and it is not optional.
+         *
+         * Stock PHP never removes a cached block from its allocation list, so a cache hit has
+         * nothing to re-link. Under revocation every block MUST leave the list before it dies, so
+         * every block must also RE-ENTER the list when it is handed out again -- otherwise its
+         * header still holds the link fields from its previous lifetime, pointing at blocks that
+         * have since been freed and revoked, and the next unlink faults on them.
+         *
+         * Unlink-on-free and link-on-allocate are one change; adding only the first one moves the
+         * fault from the cache-park site to the unlink site without fixing anything. */
+        ADD_POINTER_TO_LIST(p);
+#endif
         p->size   = size;
         return (void *)((char *)p + sizeof(zend_mem_header) + MEM_HEADER_PADDING);
     }
@@ -352,6 +413,49 @@ static void _efree(void *ptr)
     zend_slot *s = zend_find(ptr);
     void *blk = s ? s->blk : (void *)0;
 
+    /* WILL PHP PARK THIS BLOCK? Decided BEFORE the revoke, because the answer decides whether the
+     * in-block list links have to be read, and they are only readable while the block is alive.
+     * The condition is the same one the park below tests; `blk != 0` is equivalent to `s != 0` at
+     * this point, in both arms. */
+    int will_cache = (blk != (void *)0) && (cache_index < MAX_CACHED_MEMORY)
+                   && (AG_cache_count[cache_index] < MAX_CACHED_ENTRIES);
+
+    /* THE UNLINK MUST PRECEDE THE REVOKE, AND IT MUST BE UNCONDITIONAL UNDER REVOCATION.
+     *
+     * PHP's allocation list is INTRUSIVE: `REMOVE_POINTER_FROM_LIST(p)` reads `p->pLast` and
+     * `p->pNext` out of the block headers, and writes through them into the NEIGHBOURING blocks'
+     * headers. Revocation invalidates every capability derived from a block, which includes the link
+     * fields other blocks hold pointing AT it. So a revoked block left in the list poisons its
+     * neighbours: the next unlink that walks through it loads an untagged capability and faults with
+     * cause 24, inside the allocator, on a program with no lifetime error in it.
+     *
+     * Stock PHP leaves cached blocks in the list -- `_efree` returns early for them (zend_alloc.c:
+     * 271-278) -- which is harmless when nothing invalidates memory and fatal once something does.
+     * Two orderings therefore have to be fixed at once: unlink BEFORE revoking, and unlink EVERY
+     * block rather than only the ones the cache declines. Together they guarantee the list never
+     * contains a dead block, so every link the unlink walks is still live.
+     *
+     * This is a deviation from PHP's `_efree`, and it is confined to `ZEND_TEMPORAL` -- including the
+     * `-DZEND_NO_REVOKE` control arm, so the matched pair still differs in revocation ALONE. The
+     * spatial arm and the CRASH-008 suite keep PHP's structure byte for byte. What is given up is
+     * PHP's leak report at shutdown seeing cached blocks, which this port does not use.
+     *
+     * The general rule: revocation is a point of no return for everything INSIDE the object,
+     * metadata included. An allocator with out-of-band metadata has no such ordering constraint;
+     * PHP's is in-band, so the port has to respect it. It took four false CAUGHT verdicts to find,
+     * because only the blocks the cache declined reached the unlink, so it needed a long run and
+     * looked trigger-specific.
+     *
+     * The symptom to recognise next time: a cause-24 whose faulting instruction is a capability load
+     * through a pointer that was read out of freed memory. */
+#ifdef ZEND_TEMPORAL
+    REMOVE_POINTER_FROM_LIST(p);            /* :281, hoisted and unconditional */
+#else
+    if (!will_cache) {
+        REMOVE_POINTER_FROM_LIST(p);        /* :281, exactly where PHP has it */
+    }
+#endif
+
 #ifdef ZEND_TEMPORAL
     /* REVOKE-ON-FREE. Every alias derived from this allocation stops
      * dereferencing here -- including one the caller cached before the free.
@@ -367,8 +471,19 @@ static void _efree(void *ptr)
      * it still faults. Address reuse does not resurrect a stale pointer, which
      * is exactly the hazard it would be in a conventional allocator. */
     if (s) {
+#if defined(ZEND_CAP_REV_AUDIT)
+        ZEND_REV_COUNT_FREE();
+        if (!__builtin_capstone_cap_get_tag(s->rev)) {
+            ZEND_REV_NOTE(0xE5, (unsigned long)(s - zend_slots), zend_nfree_ctr);
+        }
+#endif
 #ifndef ZEND_NO_REVOKE
         blk = __builtin_capstone_cap_revoke(s->rev);   /* the control removes ONLY this */
+#endif
+#if defined(ZEND_CAP_REV_AUDIT)
+        if (!__builtin_capstone_cap_get_tag(blk)) {
+            ZEND_REV_NOTE(0xE7, (unsigned long)(s - zend_slots), zend_nfree_ctr);
+        }
 #endif
         s->base = 0;
     }
@@ -379,13 +494,13 @@ static void _efree(void *ptr)
     /* zend_alloc.c:271-278, UNPATCHED in both arms: blocks <= 80 bytes never
      * reach a free path at all, they are parked here and handed straight back.
      * This is what ZEND_DISABLE_MEMORY_CACHE exists to defeat for ASan, and it
-     * is left ON. */
-    if (blk && (cache_index < MAX_CACHED_MEMORY) && (AG_cache_count[cache_index] < MAX_CACHED_ENTRIES)) {
+     * is left ON. `blk` is re-read here because the revoke above replaced it with the authority it
+     * handed back, which is what must be parked -- see the note on recycling. */
+    if (will_cache) {
         AG_cache[cache_index][AG_cache_count[cache_index]++] = blk;
         return;
     }
-
-    REMOVE_POINTER_FROM_LIST(p);        /* :281 */
+    /* The unlink already happened, above the revoke. */
     /* ZEND_DO_FREE(p) -- the arena does not reclaim address space. */
 }
 
