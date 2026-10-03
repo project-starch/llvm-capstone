@@ -335,7 +335,28 @@ the after-audit, synthesis, silicon.
   the quantum escape exact; sup-strip x5 within its invariants (d8 took the other legitimate outcome: the caller took
   the interrupt); sup-escape v2, sup-quantum v2 (74 preemptions at both quanta, every time) and call-retpc at N=3,
   identical. Not run: sup-hostile (needs a register-preserving recorder). Of this plan's verification, everything but
-  the hostile domain and the no-strip control's own silicon run now stands on the board. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
+  the hostile domain and the no-strip control's own silicon run now stands on the board.
+- **OPEN on silicon (2026-10-03, the board lane): a supervised RESUME CALL hangs under the FPGA monitor.** With the
+  monitor's `supervised_invoke` (quantum 2,000,000) running the P1 SQLite speedtest, 212 resumes went well and the
+  213th resume CALL never committed, never escaped, never trapped (600 s); the last retired instruction is the one
+  before the CALL, and a run without the UART print between escape and resume shows the same signature. The escape
+  before it landed right after `stc` to a stack granule, `sb` to the byte below it (the neighbouring granule), `ldc`
+  of the same granule and `lbu` through the loaded capability. Mechanism read (RTL): commit holds a CALL until the
+  dom-switcher acknowledges, and nothing retires while the switcher is busy, so this is a switcher stuck inside a
+  walk; the walks' reads are dcache loads, and in `wt_axi_adapter` every data-region load that MISSES waits in
+  TAG_WAIT for all outstanding shadow-tag writes' B-responses and for any in-flight tag read -- a counter that a lost
+  response leaves non-zero forever (the adapter's own comment on the AMO rider). The board's hot-cache bare loop of
+  that shape ran 10,500 resumes without a hang (every walk read hits L1, no tag read); the SQLite working set evicts
+  the seal and the save area between escapes, so every walk read misses behind the previous walk's 64 tag writes.
+  Simulation (`sup-stcsb.S` on `sup-call`, with a 64 KiB sweep per iteration evicting both, quanta 20000/5000/2000,
+  and detectors for a TAG_WAIT stall and a starved switcher request): about 700 resumes with the walks missing L1,
+  no hang, no detector line -- the in-order fixed-latency AXI memory of the test harness does not reproduce it; the
+  DDR path's B-response behaviour is the variable it lacks. On the way, S-07 reproduced in this three-instruction
+  window in simulation (the LDC two instructions after the STC reads the stale tag). Next: the board lane's sweep arm
+  (the same loop with a 64 KiB sweep, quantum ~100k, the addi control), and a discriminator for the mechanism -- a
+  tagged load from the save area in the monitor right before the resume CALL: if the hang moves to that load, it is
+  the adapter's tag FSM under DDR; if the CALL still hangs with the load passing, it is the switcher's own path.
+  The board lane files the registry entry with its folder. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
   arbiter 0/500 (PASS); before i_load_unit 55/500 -- a pre-registration MISS with the mechanism identified: I had
   commit_lsu_o landing in the store buffer's flops, and its cone continues through the store buffer's combinational
   status (commit pointer, last_store_buf_ready next-state) into the AMO fifo and the load unit's dom-switch
