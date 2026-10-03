@@ -278,3 +278,29 @@ mswapfix images byte-identically):
 | swappart14 (0c266a6c) | 2+4+8 | CPMP |
 
 Each image that hangs proves its omitted part is not needed. Each that completes proves its omitted part is needed.
+
+## RESULT, the three-part combinations (23:15-23:24): part 8 (cscratch/sp) is NEEDED, and no single other part is
+- Control: call-retpc PASS exact (N = 11).
+- **swappart7 (1+2+4, no cscratch/sp) COMPLETES:** `ACR`, everything exact.
+- **swappart11 (1+2+8), swappart13 (1+4+8) and swappart14 (2+4+8) HANG:** `AC`, no `R`.
+- Part 8 alone completed in the single-part run, so the hang needs part 8 (`cscratch := sp; sp := 0` before the CALL,
+  `sp := cscratch` after it) TOGETHER with at least one of the other parts: CPMP STC/LDC, the tag STCs, or CSRs plus
+  cepc STC/LDC.
+- **From the RTL lane's simulation:** the fixed plain control (the full macro, one plain CALL) COMPLETES there. So the
+  plain hang is board-only, i.e. in the board's memory path. Their ARMED hang is a different, sim-visible state: the
+  load unit is held in WAIT_FLUSH by a flush asserted continuously after the escape, and they are tracing which flush
+  source holds it.
+
+**Pairs, pre-registered.** Each puts part 8 together with one other part, plus the full macro. All carry 'K' printed
+immediately after the CALL returns, before the swap-in:
+
+| image | parts |
+|---|---|
+| swappart9k (5e50d977) | 8+1 |
+| swappart10k (7676e303) | 8+2 |
+| swappart12k (6eb6f7ac) | 8+4 |
+| swappart15k (d618c78b) | all |
+
+- `ACKR` means it completed.
+- `ACK` and no `R`: the CALL returned, and the swap-in hangs.
+- `AC` alone: the CALL never returns.

@@ -12,6 +12,9 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = swappairs ]; then   # pairs with part 8, and the full macro, each with 'K' after the CALL
+    for p in 9k 10k 12k; do jobs+=("swappart$p-plain|$F/images/swappart$p-plain.bin|80014000"); done
+    jobs+=("swappart15k-plain|$F/images/swappart15k-plain.bin|80015000")
   elif [ "$CAPSTL_SET" = swapparts3 ]; then   # the three-part combinations
     jobs+=("swappart7-plain|$F/images/swappart7-plain.bin|80015000" "swappart11-plain|$F/images/swappart11-plain.bin|80014000")
     jobs+=("swappart13-plain|$F/images/swappart13-plain.bin|80015000" "swappart14-plain|$F/images/swappart14-plain.bin|80014000")

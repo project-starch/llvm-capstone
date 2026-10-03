@@ -23,6 +23,7 @@
 #             control that the sweeps evict the walks' lines. The hot loop must read two hits.
 #   -DMSWAP_PLAIN  (with MSWAP) no cssupervise at all: one plain CALL, the domain runs to its RETURN. The control for
 #             the swap code itself in this harness: reading 2 is then 0 (no supervision event), 3 and 4 as usual.
+#   -DTRACE_K  'K' right after the first CALL returns, before the swap-in (CALL vs swap-in hang).
 #   -DTRACE_CHARS  'A' after each arm, 'C' just before each CALL, 'R' after each swap-in, for the first CALL and the
 #             first 16 resumes: localizes a hang that the 256-escape dots cannot.
 #   -DMSWAP   the monitor wraps every CALL in the FPGA monitor's generated __domcallsaves sequence: CPMP0..15 read,
@@ -270,6 +271,9 @@ SWAP_OUT
 BPUTI(67)                      # 'C'
 #endif
 CALL(a3, a3)
+#ifdef TRACE_K
+BPUTI(75)                      # 'K': the CALL came back (before the swap-in)
+#endif
 SWAP_IN
 #ifdef TRACE_CHARS
 BPUTI(82)                      # 'R'
