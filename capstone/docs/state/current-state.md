@@ -35,13 +35,8 @@
   - A plain CALL is affected too.
   - The simulation hangs at the same LDC in a different state; open.
 - **Instrument added:** the bare runner `sup-resume-2026-10-03/run_sup_bare_wedge.py` reads the switcher and LSU
-  apertures (192-195, 224-229, 238-240) after a hang.
-- **The commit-pc aperture during a stuck switch is stale scoreboard slot 0**, shown by a positive control.
-  - It is the first instruction after the last flush only until eight more have issued (the issue pointer wraps
-    over 8 slots).
-  - After a long run it locates the stuck switch to within eight issued instructions, not to the last resume point.
-  - **Retracted 2026-10-04:** C5f's 0xe56bc as "the previous resume point". The escape landed within eight
-    instructions of it, in an `stc` burst.
+  apertures (192-195, 224-229, 238-240) after a hang. The commit-pc aperture during a stuck switch is stale scoreboard
+  slot 0, shown by a positive control.
 - **Corrections along the way, recorded in the lane PREREGs:**
   - the k800 entry path;
   - "the hot loop never misses";
@@ -70,6 +65,28 @@
   - the I4 tag residual (an AMO over a capability granule keeps its tag; the RTL lane's
     `s06sec-amo-no-resurrect.S`);
   - multi-hart contention.
+
+## 2026-10-04 — S-16 root-caused: the switcher's first SAVE write pushed into a FULL store-buffer commit queue; fixed in RTL with a second switch-path defect (R-49, R-50); the resident bitstream needs a `fence` before every CALL
+
+- **The resume hang under the FPGA monitor (C5u/C5q, the board lane's S-16) is a store-path defect, not the adapter.**
+  The store unit acknowledges a switcher write on the room of the PREVIOUS store's queue, so with four committed
+  stores still queued the write lands over the commit queue's head: one committed store is lost and the queue
+  deadlocks four writes later, at walk id 7. The board lane's wedge reads (idx 7, WAIT_STORE_READY, commit count 4,
+  the write request valid and unacknowledged) and the simulation reproducer `sup-s16-stores.S` (N = 32 stores before
+  an armed CALL, memory delay 12 and 40) agree on every aperture. Fixed on capstone-ariane `sup-call` 192a5e624
+  (registry R-49). **Workaround on the resident bitstream: a `fence` before every CALL**, confirmed on the reproducer;
+  the board lane is applying it to the FPGA monitor.
+- **A second defect, found on the way (R-50, 429c60b32):** the load unit's dom-switch flush exemption outlives the
+  switcher's read, so the first LDC after an escape, when dispatched in the swap-in CCSRRW's flush cycle, runs
+  un-killed and its stale completion pops the re-issued LDC unexecuted; the DYN unit waits forever. Deterministic in
+  `sup-mswap-noploop` on the resident logic; fixed by adding the entry's valid bit to the exemption. Not the silicon
+  S-17 (different aperture signature; S-17 stays open).
+- **Verification so far:** matched pairs for both fixes; `sup-mswap-noploop/base/postread` 78 switches on the fixed
+  tree; lint gate at the committed baseline; 95-test sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. Sim-only tracers (every retirement, write-back,
+  LSU queue event, load/store-unit transition, the switcher's busy edges, and the board's apertures emulated every
+  4000 cycles) in b576635be/d92093828. **Next:** the synthesis candidate is `sup-call` HEAD; synthesis and the
+  reflash are the lead's word; then the board's S-16 arms (armdep-nt, s16sd24) must complete without the fence, and
+  the FPGA monitor's supervised speedtest runs again.
 
 ## 2026-10-03 — Supervised-CALL ladder complete on silicon: 12 images exact to simulation, the real timer escape, S-11's refusal; N = 3 on the key tests
 

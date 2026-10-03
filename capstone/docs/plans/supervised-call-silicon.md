@@ -336,7 +336,19 @@ the after-audit, synthesis, silicon.
   the interrupt); sup-escape v2, sup-quantum v2 (74 preemptions at both quanta, every time) and call-retpc at N=3,
   identical. Not run: sup-hostile (needs a register-preserving recorder). Of this plan's verification, everything but
   the hostile domain and the no-strip control's own silicon run now stands on the board.
-- **OPEN on silicon (2026-10-03, the board lane): a supervised RESUME CALL hangs under the FPGA monitor.** With the
+- **ROOT-CAUSED AND FIXED IN RTL (2026-10-04), NOT YET ON SILICON: the resume hang is S-16 = R-49.** The switcher's
+  first SAVE write reaches the store unit while the store buffer's commit queue still holds four committed stores from
+  the monitor's swap-out; the store unit's room check answers for the PREVIOUS store's queue (`is_dom_switch_q`), the
+  write is pushed over the commit queue's head (a committed store lost), the count runs one ahead of the valid bits
+  and the 4th later write (id 7) starves forever. Silicon (the board lane's wedge reads) and simulation
+  (`sup-s16-stores.S`, N = 32) agree on every aperture, idx 7 included; a `fence` before the CALL is the workaround on
+  the resident bitstream and passes the reproducer. Fixed on `sup-call` 192a5e624; R-50 (the load unit's flush
+  exemption outliving the switcher's read, the sim race behind the first post-escape LDC) fixed in 429c60b32; sim-only
+  tracers and the tests in b576635be/d92093828. Lint at baseline; sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. Synthesis candidate = `sup-call`
+  HEAD after the sweep, for the lead's word. S-17 on silicon (the LDC after a finished switch, lsu_ready 0 with both
+  LSU units idle) stays OPEN. The TAG_WAIT reading in the paragraph below is WITHDRAWN: the walk's read was never the
+  problem, its write was; the paragraph stays as the record of what was believed on 2026-10-03.
+- **(superseded) OPEN on silicon (2026-10-03, the board lane): a supervised RESUME CALL hangs under the FPGA monitor.** With the
   monitor's `supervised_invoke` (quantum 2,000,000) running the P1 SQLite speedtest, 212 resumes went well and the
   213th resume CALL never committed, never escaped, never trapped (600 s); the last retired instruction is the one
   before the CALL, and a run without the UART print between escape and resume shows the same signature. The escape

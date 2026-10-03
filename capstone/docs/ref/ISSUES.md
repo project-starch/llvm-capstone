@@ -729,6 +729,106 @@ te by the RTL lane, 2026-09-24.
 > stand as such: CALL;CALL corrupts the first's parked pc; control flow two or three instructions after the
 > CALL triggers it when fetch timing lets it reach issue in time (one layout measured: it did not).
 
+### R-49 — a switcher write is pushed into a FULL store-buffer commit queue: the store unit's room check answers for the previous store's queue · `FIXED IN RTL (capstone-ariane sup-call 192a5e624, 2026-10-04), NOT YET ON SILICON — the RTL half of S-16`
+
+> **What happens.** The domain switcher's walk writes (SAVE, and the exchange's parked registers) go through the
+> store unit into the store buffer's COMMIT queue directly (`store_buffer.sv`, the `valid_i && is_dom_switch` push;
+> depth `DEPTH_COMMIT` = 4). The store unit decides to accept a switcher write in IDLE on `st_ready`, the buffer's
+> `ready_o = is_dom_switch ? (commit_status_cnt_n < DEPTH_COMMIT) : (speculative_status_cnt_n < DEPTH_SPEC || commit_i)`,
+> and `is_dom_switch` was wired to `is_dom_switch_q` — the kind of the PREVIOUS accepted store. When that was an
+> ordinary store and the commit queue still held four committed stores, the ready returned was the speculative
+> queue's (empty under the switch's held flush): the write was acknowledged and, next cycle, pushed into the full
+> commit queue. The push has no room check; with `wp == rp` it overwrites the HEAD — the oldest committed store is
+> lost, replaced by the switcher's write — and the count goes to 5 for four valid slots. The ring then drains and
+> refills around the stale slot; when the read pointer returns to it the head is invalid, nothing drains, the count
+> stays at 4, `ready_o` stays 0, and the switcher's 4th later write starves forever. The switch never finishes, busy
+> holds the flush, the core is wedged with the commit pointer at 0 (the commit-pc aperture then shows the stale pc of
+> scoreboard slot 0: with fewer than eight issues since the last flush_ex that is the first instruction fetched after
+> it -- `li sp, 0` in the monitor, the stub's first instruction for a short domain -- and after more issues it is the
+> most recent instruction whose issue index was a multiple of 8, i.e. one of the last eight before the stuck switch).
+>
+> **Evidence.** Silicon (the board lane, board-supmon `tests/fpga-repros/S16-supervised-switch-never-finishes`,
+> 2026-10-04): three bare arms wedge byte-identically with switcher idx 7 (apertures 228/239/240), store unit
+> WAIT_STORE_READY (194), commit count 4 (193), the data request valid and unacknowledged with write_en (226 = 0x80,
+> 227 = 0x04), load unit idle; 12 stores before the CALL complete 8,552 escapes, 24 hang within 16 resumes; the FPGA
+> monitor's `__domcallsaves` queues ~26 (C5u/C5q). Simulation (`sup-s16-stores.S`, N stores then the swap-out tail
+> then an armed CALL, SUP_TRACE, memory delay 12 and 40, b576635be): N = 32 on the resident logic —
+> `stunit IDLE -> VALID_STORE (st_ready=1 sel_dom=1 is_dom_q=0 ack=1)`, next cycle `stbuf dom-switch push: cnt_q=4
+> cnt_n=5 rp=3 wp=3 head_valid=1 addr=...3030` (SAVE id 3 over the head), then `dom-switch data request starved:
+> write_en=1 addr=...3050` (id 7) for the rest of the run, end state `commit queue: cnt=4 valid=0111 rp=3 wp=3
+> data_req=0 ready_o=0`; N = 4/8/16 complete; N = 32 and 64 without the CCSRRW tail hang the same way; N = 32 with a
+> `fence` before the CALL completes. The starving write is the first SAVE write + 4 = id 7 for any timing, which is
+> what silicon reads. With the seal warm (three rounds of burst + CALL) EVERY arm hangs on the resident logic, N = 4
+> and the fence arm included, at the RETURN switch of the second round: the CALL's own SAVE tail plus the domain's one
+> store fill the commit queue, and that ordinary store resets the kind the room check is keyed on -- so a fence before
+> the CALL covers only the CALL side (the board's C5f: the escape's SAVE met a queue full of the domain's stores). On
+> the fixed tree all six three-round arms complete (6 switches, 5 readings each). The ESCAPE side (the board's C5f
+> shape: the domain runs bursts of N back-to-back stores under a short quantum, `-DESCAPE`, N/quantum = 8/150, 32/200,
+> 64/400): on the resident logic the N = 8 arm hangs at its 6th switch, the quantum escape's SAVE id 3 into the seal
+> pushed over the head of a queue full of the DOMAIN's stores (`push: cnt_q=4 ... addr=seal+0x30`, `starved ...
+> addr=seal+0x50` = id 7), while N = 32 and 64 hang already at the monitor's own CALL (its burst, the CALL side); on
+> the fixed tree the three arms complete with 6, 23 and 33 resumes. A PLAIN (un-armed) CALL takes the same path:
+> `-DPLAIN`, N = 32, three rounds -- on the resident logic round 2's CALL hangs, the exchange's first write (seal+0,
+> id 0) pushed over the head and id 4 (seal+0x38) starving; on the fixed tree three rounds complete. On the board
+> (the board lane, bare, 2026-10-04) every plain twin hangs at a CALL's exchange with the idx-4 signature, the
+> single-round N = 32 arm included -- the DDR drain of 32 queued stores is far slower than one seal-line miss, so my
+> simulation-calibrated prediction that a cold seal lets the queue drain was wrong on silicon. Exposed and OBSERVED
+> bare; not yet seen under the monitor, whose plain domcalls are preceded by fewer stores.
+> First seen at the 5th switch of `sup-mswap-noploop` once R-50's
+> fix let that arm run past its first escape.
+>
+> **The fix** (192a5e624). `store_buffer.sv` gains `ready_is_dom_switch_i`, the kind of the request the store unit is
+> DECIDING this cycle (`store_unit.sv` wires `sel_dom_switch`), and `ready_o` is keyed on it; the push stays keyed on
+> the accepted kind. A `$fatal` guards the invariant (a dom-switch push with `commit_status_cnt_q == DEPTH_COMMIT`),
+> ignored by synthesis like the wbuffer's ctag assertion. N = 32 then completes at both delays — at the very cycle the
+> resident logic acknowledged into the full queue the fixed store unit reads `IDLE -> WAIT_STORE_READY (st_ready=0
+> sel_dom=1 is_dom_q=0 ack=0)`; `sup-mswap-noploop` completes 78 switches (with R-50's fix), `-base`/`-postread` 78
+> as before. Lint gate: every counter at the committed baseline. 95-test sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep.
+>
+> **Workaround on the resident bitstream (the board lane, 2026-10-04):** a `fence` before every CALL drains the commit
+> queue (`no_st_pending`), so the first SAVE write cannot meet it full; confirmed on the simulation reproducer. Every
+> S-16 hang also lost one committed store (the overwritten head); the fence prevents the loss.
+>
+> **Pre-existing.** The dom-switch store path and its `is_dom_switch_q` wiring date from the original domain-switch
+> load/store fixes (6c4a8d5ab, 44fcf1620); the 8-register exchange has the same path, so a plain CALL after a long
+> store burst is exposed too. The supervised SAVE walk (64 writes starting right after the CALL's commit) made the
+> coincidence likely under DDR latency. The earlier TAG_WAIT reading in the plan is withdrawn: the walk's READ was
+> never the problem, the WRITE was.
+
+### R-50 — the load unit's dom-switch flush exemption outlives the switcher's read, so the first load after a switch that is dispatched in a flush cycle is not killed · `FIXED IN RTL (capstone-ariane sup-call 429c60b32, 2026-10-04), NOT YET ON SILICON — simulation-only so far; NOT the silicon S-17`
+
+> **What happens.** `load_unit.sv`: `if (flush_i && !sel_dom_switch && !ldbuf_q[ldbuf_last_id_q].is_dom_switch)
+> state_d = WAIT_FLUSH` exempts the switcher's reads from the busy-driven flush (6c4a8d5ab). Keyed on the last
+> load-buffer entry's KIND alone, it stays true after that read completes, until an ordinary load is written — so the
+> first ordinary load after a switch is exempt too. A load accepted in the same cycle as a flush (`accept_req` has no
+> flush term; the entry written that cycle is not marked flushed) then runs to completion instead of being killed in
+> WAIT_FLUSH. For an LDC that is fatal: the LSU bypass queue is wiped by the flush, the load unit holds "its" LDC
+> un-popped until the result returns, the re-issued LDC queues behind it, and the stale result's pop removes the
+> RE-ISSUED LDC's LSU copy unexecuted; the load syncer forwards the stale result as a normal load (trans_id mismatch),
+> the DYN unit waits for a result that never comes, issue stalls behind it.
+>
+> **Evidence.** `sup-mswap-noploop` on the resident logic (SUP_TRACE, time-stamped): the escape switch ends at 26688;
+> at 26695 the swap-in `ccsrrw sp, cscratch, x0` retires with flush_csr and the next LDC is dispatched to the DYN
+> unit and the LSU in that cycle (`load_unit req: op=LDC trans_id=1 state=IDLE flush=1`, `state IDLE -> SEND_TAG_LDC
+> (flush=1 ... last_is_dom=1 last_valid=0)`); re-issue at 26745 (trans_id 0, `syncer req_set -> 1`); at 26814
+> `load_unit result: trans_id=1` and `lsu-bypass pop: op=LDC trans_id=0`; then `dyn unit not ready ... load_req_set=1`
+> for the rest of the run. Deterministic at that arm's first escape.
+>
+> **The fix** (429c60b32): the exemption applies while the switcher's read is OUTSTANDING,
+> `!(ldbuf_q[ldbuf_last_id_q].is_dom_switch && ldbuf_valid_q[ldbuf_last_id_q])`. Matched pair, same test, same
+> tracers, one predicate: the resident logic hangs at the first escape; the fixed load unit takes WAIT_FLUSH at the
+> CCSRRW's flush, re-issues the LDC cleanly and completes the swap-in; the arm then runs 78 switches (with R-49's
+> fix). `sup-mswap-base` and `-postread`: 78 switches on both trees. Cost: one IDLE->WAIT_FLUSH->IDLE bounce per walk
+> read while the flush is held (+56 cycles on an 11,800-cycle escape switch). Lint gate: every counter at the committed
+> baseline. 95-test sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep.
+>
+> **Not the silicon S-17.** The board's S-17 wedge (board-supmon `S17-ldc-after-supervised-switch-lsu-stuck`) reads
+> lsu_ready 0, dyn_ready 1, no syncer request, commit pc = CALL+4 with the slot invalid, switch finished (idx 66) — an
+> entry neither LSU unit claims sits in the bypass queue and the CCSRRW never got its result. This defect's state would
+> read lsu_ready 1, dyn_ready 0, syncer 1, commit pc = CALL+8. Same instruction window, different stuck point: S-17 on
+> silicon stays OPEN; `lsu_ctrl.operation`/`fu` and the adapter's tag state are the apertures proposed for the next
+> bitstream.
+
 ### R-48 — the SEALEDRET window moves with its cursor: `CINCOFFSET` does not refuse a SEALEDRET, and the +48..+1008 LDC/STC window is computed from the cursor `UNVERIFIED (source read only, 2026-10-01); no run has shown it; found by the after-audit of the supervised-CALL decisions`
 
 > **What the source says.** `capstone_flu_unit.anvil` lets `CINCOFFSET`/`CINCOFFSETIMM` move the cursor of every type
