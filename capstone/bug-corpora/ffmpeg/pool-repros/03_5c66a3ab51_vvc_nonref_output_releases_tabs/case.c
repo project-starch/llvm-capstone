@@ -54,7 +54,11 @@ FF2_CASE(3) {
   frame.rpl_tab = av_refstruct_pool_get(g_refpool);
   CHECK(frame.rpl_tab, 605);
   CHECK(frame.tab_dmvr_mvf != frame.rpl_tab, 606);
+  /* BOTH tables get a distinct known value. rpl_tab needs one because it is the
+   * entry the LIFO pool hands back (see below): without it the fixed arm would
+   * print stale_read=0x00, and a zero cannot be told apart from uninitialised. */
   memset(frame.tab_dmvr_mvf, 0xA0, TAB_BYTES);
+  memset(frame.rpl_tab, 0xB0, TAB_BYTES);
 
   /* The flags a picture gets when ph_pic_output_flag is set and
    * ph_non_ref_pic_flag is set. Upstream 5c66a3ab51 adds the SHORT_REF term at
@@ -64,8 +68,9 @@ FF2_CASE(3) {
   frame.flags = fixed ? (VVC_FRAME_FLAG_OUTPUT | VVC_FRAME_FLAG_SHORT_REF)
                       : VVC_FRAME_FLAG_OUTPUT;
 
-  /* Live control: the table is readable while the frame is held. */
+  /* Live control: both tables are readable while the frame is held. */
   CHECK(frame.tab_dmvr_mvf[0] == 0xA0, 607);
+  CHECK(frame.rpl_tab[0] == 0xB0, 609);
   /* Both side tables are the decoder's, and ff_vvc_unref_frame releases BOTH, so
    * both stale pointers have to be tracked -- see the LIFO note below. */
   unsigned char *held = frame.tab_dmvr_mvf; /* what the decoder goes on using */

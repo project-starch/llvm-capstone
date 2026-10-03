@@ -12,7 +12,7 @@ which recompiles them?
 | 00 `af_join_dedup_bound` | AVBufferPool | `FIXED` output holds a reference | `DEFECT-REPRODUCED` `reuse_same_address=1 stale_read=0xCC` |
 | 01 `h264_refs_partial_clear` | AVBufferPool | `FIXED` reset covers the whole list | `DEFECT-REPRODUCED` `survivors_past_len=2 reuse_same_address=1` |
 | 02 `vidstab_parked_plane_pointer` | AVBufferPool | `FIXED` nothing carried across frames | `DEFECT-REPRODUCED` `wrote_through_stale=1` |
-| **03 `vvc_nonref_output_releases_tabs`** | **AVRefStructPool** | `FIXED` `tables_released=0` | **`DEFECT-REPRODUCED`** `tables_released=1 reuse_same_address=1 reissued_is_rpl_tab=1 stale_read=0xCC` |
+| **03 `vvc_nonref_output_releases_tabs`** | **AVRefStructPool** | `FIXED` `tables_released=0 stale_read=0xB0` | **`DEFECT-REPRODUCED`** `tables_released=1 reuse_same_address=1 reissued_is_rpl_tab=1 stale_read=0xCC` |
 
 Cases 0-2 are unchanged from their previous native runs, so extending the shared driver did not disturb
 them — which is the reason they were re-run rather than assumed.
@@ -39,6 +39,13 @@ tables are the decoder's, both are released by the same branch, and either one c
 reuse. The fix tracks both and names which came back (`reissued_is_rpl_tab=1`), so the oracle can no
 longer be satisfied or defeated by release order.
 
+**A second, smaller instrument fix went in with it.** Once `stale` could point at `rpl_tab`, the fixed
+arm printed `stale_read=0x00` — because only `tab_dmvr_mvf` had been filled. A zero there cannot be told
+apart from uninitialised memory, and reads like a finding. `rpl_tab` now gets its own `0xB0` fill with a
+live control (`CHECK(frame.rpl_tab[0] == 0xB0, 609)`), so the fixed arm reports a known value and the
+buggy arm's `0xCC` is contrasted against one for **both** tables. No verdict changed, and the fault
+lines moved again, `99,100,103` → `104,105,108`.
+
 **Why it matters beyond this case.** `reuse_same_address=0` is exactly what a *correct* allocator and a
 *nonexistent* defect both look like. Had case 3 been built only for the capability arm, this would have
 surfaced as a clean, monotone, entirely void domain result — a pooled-reuse case that never created its
@@ -46,7 +53,7 @@ triggering condition, which is the failure CLAUDE.md names as the most expensive
 arm cost one minute and caught it.
 
 **Re-registration, with the prediction untouched.** `runners/sublet-port-expect.txt` now reads
-`poolsublet 46 FAULT 99,100,103` instead of `84,85,88`. Only the **line table** moved; the predicted
+`poolsublet 46 FAULT 104,105,108` instead of `84,85,88`. Only the **line table** moved; the predicted
 outcomes (`poolsublet` faults on 46, `poolstock` completes, both complete on 47) are unchanged, and the
 reason is recorded in the expect file itself rather than only here.
 

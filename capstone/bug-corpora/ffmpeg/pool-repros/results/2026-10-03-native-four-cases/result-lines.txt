@@ -17,7 +17,7 @@
 02_316531e61c_vidstab_parked_plane_pointer wrote_through_stale=1 new_owner_byte=0x99
 02_316531e61c_vidstab_parked_plane_pointer VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner
 03_5c66a3ab51_vvc_nonref_output_releases_tabs case=3 arm=fixed
-03_5c66a3ab51_vvc_nonref_output_releases_tabs flags_after_output=2 tables_released=0 reuse_same_address=0 reissued_is_rpl_tab=0 stale_read=0x00 new_owner=0xCC
+03_5c66a3ab51_vvc_nonref_output_releases_tabs flags_after_output=2 tables_released=0 reuse_same_address=0 reissued_is_rpl_tab=0 stale_read=0xB0 new_owner=0xCC
 03_5c66a3ab51_vvc_nonref_output_releases_tabs VERDICT FIXED SHORT_REF keeps the frame alive, so the tables stay with it
 03_5c66a3ab51_vvc_nonref_output_releases_tabs case=3 arm=buggy
 03_5c66a3ab51_vvc_nonref_output_releases_tabs flags_after_output=0 tables_released=1 reuse_same_address=1 reissued_is_rpl_tab=1 stale_read=0xCC new_owner=0xCC
@@ -28,3 +28,6 @@
 # build  : ports/ffmpeg/buffer-pool, cmake --preset native, host clang, apollo, -j12 pinned 0-7,32-39
 # allocator: upstream libavutil/buffer.c + libavutil/refstruct.c, unreduced, from the port's
 #            sources/ffmpeg-ported tree (FFmpeg n9.0.1)
+# note   : case 3's fixed arm prints stale_read=0xB0, not 0x00. rpl_tab is filled with 0xB0 at
+#          setup precisely so the fixed arm reports a KNOWN value: a zero there could not be told
+#          apart from uninitialised, and would read like a finding.
