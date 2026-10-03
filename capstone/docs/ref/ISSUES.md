@@ -833,8 +833,13 @@ te by the RTL lane, 2026-09-24.
 > lsu_ready 0, dyn_ready 1, no syncer request, commit pc = CALL+4 with the slot invalid, switch finished (idx 66) — an
 > entry neither LSU unit claims sits in the bypass queue and the CCSRRW never got its result. This defect's state would
 > read lsu_ready 1, dyn_ready 0, syncer 1, commit pc = CALL+8. Same instruction window, different stuck point: S-17 on
-> silicon stays OPEN; `lsu_ctrl.operation`/`fu` and the adapter's tag state are the apertures proposed for the next
-> bitstream.
+> silicon stays OPEN. The apertures that read its state are IN the candidate bitstream (07eb22deb, bank 6 registers
+> 27..30 = switch values 219..222): 219 the LSU bypass head's fu_op, 220 {lsu_ctrl.valid, bypass empty, 0, 0, fu[3:0]},
+> 221 the store buffer's commit queue {valid[3:0], store-port data_req, data_gnt, no_st_pending, 0}, 222 the AXI
+> adapter's shadow-tag FSM {tag_state[2:0], pending tag writes[2:0], tag read in flight, 0}. Go/no-go written before the
+> build: if an unclaimed entry sits in the bypass, 220 reads valid 1 with its unit and 219 its op; if the queue is empty,
+> the hypothesis dies on the spot. 221 separates R-49's ghost count (count 4, three valid bits, data_req 0) from a drain
+> stall (four valid bits, data_req 1, no gnt). Observation only: taps into the LED mux, lint identical to the fixed tree.
 
 ### R-48 — the SEALEDRET window moves with its cursor: `CINCOFFSET` does not refuse a SEALEDRET, and the +48..+1008 LDC/STC window is computed from the cursor `UNVERIFIED (source read only, 2026-10-01); no run has shown it; found by the after-audit of the supervised-CALL decisions`
 

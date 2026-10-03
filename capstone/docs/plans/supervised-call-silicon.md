@@ -345,7 +345,12 @@ the after-audit, synthesis, silicon.
   the resident bitstream and passes the reproducer. Fixed on `sup-call` 192a5e624; R-50 (the load unit's flush
   exemption outliving the switcher's read, the sim race behind the first post-escape LDC) fixed in 429c60b32; sim-only
   tracers and the tests in b576635be/d92093828. Lint at baseline; sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. Synthesis candidate = `sup-call`
-  HEAD after the sweep, for the lead's word. S-17 on silicon (the LDC after a finished switch, lsu_ready 0 with both
+  715bdd1fe (the fixes plus the S-17/S-16 LED apertures 219..222 of 07eb22deb), for the lead's word. Synthesis
+  acceptance for it, written before the build: Vivado's TIMING-23 combinational-loop check still reports ONE loop with
+  the same members (`lsu_i/state_q`, the index may be renamed; the fix audit established TIMING-23 is the loop check,
+  not a timing arc), LUTLP-1 0, WNS inside the −9.595 ± 3.74 band, the FF delta = the apertures' zero new flops; the four
+  mux inputs are real timed paths into the LED stretcher flops like every existing aperture, so a WNS shift is a
+  candidate cause to look at first. S-17 on silicon (the LDC after a finished switch, lsu_ready 0 with both
   LSU units idle) stays OPEN. The TAG_WAIT reading in the paragraph below is WITHDRAWN: the walk's read was never the
   problem, its write was; the paragraph stays as the record of what was believed on 2026-10-03.
 - **(superseded) OPEN on silicon (2026-10-03, the board lane): a supervised RESUME CALL hangs under the FPGA monitor.** With the
