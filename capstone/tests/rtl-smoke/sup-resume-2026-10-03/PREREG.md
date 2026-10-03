@@ -234,3 +234,26 @@ swap-in, for the first CALL and the first 16 resumes):
   stands.
 - **mswapfix-noploop-q64** (6b3641c1): armed. Predicted: `AC`, then no `R` (the first escape's SWAP_IN LDC hangs, as
   in simulation), then the timeout. If it COMPLETES, silicon differs from simulation at this point.
+
+## RESULT, the clash-fixed pair (23:01-23:07), and the swap bisect pre-registered
+- Control: call-retpc PASS exact (N = 9).
+- **mswapfix-plain-noploop STILL hangs on silicon:** `AC`, no `R`, timeout. So does mswapfix-noploop-q64. With the
+  clash removed, the swap macro plus ONE plain, un-armed CALL never returns on silicon. The armed MSWAP hangs are
+  therefore still not attributable to supervision.
+- 0x803 is `offsetmmu` (reset 0, switch id 8), so zeroing it in the bare harness is a no-op.
+
+**Bisect** (plain control, NOPLOOP, TRACE_CHARS; `SWAP_PARTS` selects the parts; the full macro, 15, reproduces the
+mswapfix images byte-identically):
+
+| image | parts | content |
+|---|---|---|
+| swappart0-plain (3def813d) | none | the plain CALL, nothing swapped. The control of the control: it must COMPLETE and print `ACR`. |
+| swappart1-plain (22865b7b) | 1 | CPMP0..15 read, cleared, STC'd out; LDC'd and written back after |
+| swappart2-plain (d0248af5) | 2 | 8 tag-setting STCs of s11 |
+| swappart4-plain (beebecd8) | 4 | the 9 CSRs and cepc swapped out and back |
+| swappart8-plain (a8e17393) | 8 | cscratch := sp, sp := 0, and sp back from cscratch |
+
+- The disassembly was checked per image: 64 / 0 / 0 / 0 / 0 CPMP CCSRRWs, 0 / 16 / 0 / 0 / 0 STCs of s11, extra
+  mcause accesses only in part 4, cscratch CCSRRWs only in part 8.
+- Predicted: part 0 completes. The part that hangs (`AC`, no `R`) names what breaks a plain CALL on silicon. If parts
+  1-8 all complete, the hang needs a combination, and the next step is pairs.

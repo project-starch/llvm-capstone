@@ -12,6 +12,8 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = swapparts ]; then   # bisect the swap on the plain control: none, then one part each
+    for p in 0 1 2 4 8; do jobs+=("swappart$p-plain|$F/images/swappart$p-plain.bin|80014000"); done
   elif [ "$CAPSTL_SET" = mswapfix ]; then   # the clash-fixed swap: its plain control, then one armed arm
     for n in mswapfix-plain-noploop mswapfix-noploop-q64; do jobs+=("$n|$F/images/$n.bin|80015000"); done
   elif [ "$CAPSTL_SET" = dbg ]; then   # the latency probe, then the MSWAP debug set (its own control first)

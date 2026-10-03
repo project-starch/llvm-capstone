@@ -43,3 +43,9 @@ build mswapdbg-capstl-q64        93 -DMSWAP -DTRACE_CHARS -DQUANTUM=64
 # after the RTL lane found the x26 = s10 clash in MSWAP_PLAIN: the checksum is x29 under MSWAP
 build mswapfix-plain-noploop     94 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DQUANTUM=64
 build mswapfix-noploop-q64       95 -DMSWAP -DNOPLOOP -DTRACE_CHARS -DQUANTUM=64
+# bisect the swap on the PLAIN control (it hangs on silicon with all parts): one part per image
+build swappart1-plain 97 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DSWAP_PARTS=1
+build swappart2-plain 98 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DSWAP_PARTS=2
+build swappart4-plain 99 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DSWAP_PARTS=4
+build swappart8-plain 100 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DSWAP_PARTS=8
+build swappart0-plain 101 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DSWAP_PARTS=0

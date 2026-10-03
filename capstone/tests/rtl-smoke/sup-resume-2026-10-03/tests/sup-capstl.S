@@ -59,17 +59,25 @@
 #define ITER 4096
 #endif
 
+#ifndef SWAP_PARTS
+#define SWAP_PARTS 15     /* bit 0 CPMP0..15, bit 1 the 8 tag-setting STCs, bit 2 the CSRs + cepc, bit 3 cscratch/sp */
+#endif
 #ifdef MSWAP
 /* s10: the swap area (512 B, NONLIN RW). Layout: CPMP0..15 at 0..255, 8 tag-setting copies of s11 at 256..383,
    the plain CSRs at 384.., cepc at 464. */
 .macro SWAP_OUT
+#if SWAP_PARTS & 1
   .irp n,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
     CCSRRW(t1, (0x10 | \n), x0)
     STC(s10, t1, (16 * \n))
   .endr
+#endif
+#if SWAP_PARTS & 2
   .irp n,0,1,2,3,4,5,6,7
     STC(s10, s11, (256 + 16 * \n))
   .endr
+#endif
+#if SWAP_PARTS & 4
   csrrw t1, mcause, x0
   sd t1, 384(s10)
   csrrw t1, mtval, x0
@@ -90,18 +98,28 @@
   sd t1, 448(s10)
   CCSRRW(t1, CCSR_CEPC, x0)
   STC(s10, t1, 464)
+#endif
   li t1, 0
+#if SWAP_PARTS & 8
   CCSRRW(x0, CCSR_CSCRATCH, sp)
   li sp, 0
+#endif
 .endm
 .macro SWAP_IN
+#if SWAP_PARTS & 8
   CCSRRW(sp, CCSR_CSCRATCH, x0)
+#endif
+#if SWAP_PARTS & 4
   LDC(t1, s10, 464)
   CCSRRW(x0, CCSR_CEPC, t1)
+#endif
+#if SWAP_PARTS & 1
   .irp n,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
     LDC(t1, s10, (16 * \n))
     CCSRRW(x0, (0x10 | \n), t1)
   .endr
+#endif
+#if SWAP_PARTS & 4
   ld t1, 384(s10)
   csrrw x0, mcause, t1
   ld t1, 392(s10)
@@ -120,6 +138,7 @@
   csrrw x0, satp, t1
   ld t1, 448(s10)
   csrrw x0, 0x803, t1
+#endif
 .endm
 #else
 .macro SWAP_OUT
