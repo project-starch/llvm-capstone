@@ -119,3 +119,28 @@ chunks  10  RETURN a0015b
 chunks  11  FAULT  temporal
 chunks  12  FAULT  oob
 chunks  13  FAULT  temporal
+
+# ---------------------------------------------------------------------------------------------
+# Fixtures 14 and 15, registered 2026-10-03 BEFORE either was built or run on any arm.
+# The two upstream Wireshark defects confirmed LIVE at our v4.6.8 pin by the cherry-pick probe
+# (git log v4.6.8 --grep='cherry picked from commit <sha>', empty for both, non-empty for a
+# control fix that WAS backported). Both are HEAP class, so `chunks` is predicted to behave
+# exactly as `sublet`: its difference is wmem's block allocator, which neither fixture uses.
+#
+# Values are DERIVED, not copied from another row: fill() writes v0 + i, the new owner's v0 is
+# 0x5b, so the byte read is 0x5b + <object offset>. Fixture 14 touches through an INTERIOR key at
+# offset 8 -> 0x63. Fixture 15 touches at offset 0 -> 0x5b. same-address is predicted 1 because
+# fixture 5, the same g_malloc/g_free/g_malloc(64) shape, returned 50015b on level0 and shrink.
+#
+# Registered hypothesis for 14 vs 15: they must agree on every arm. They differ only in the
+# LIFETIME-ENDER (an explicit free of a container entry vs a refcount reaching zero) and in the
+# pointer used (an interior key vs the object's own base). Revocation is per object, not per alias
+# and not per ender, so a DISAGREEMENT between 14 and 15 would itself be the result.
+level0  14  RETURN e00163
+shrink  14  RETURN e00163
+sublet  14  FAULT  temporal
+chunks  14  FAULT  temporal
+level0  15  RETURN f0015b
+shrink  15  RETURN f0015b
+sublet  15  FAULT  temporal
+chunks  15  FAULT  temporal

@@ -1,0 +1,108 @@
+# Supervised-CALL bitstream caplifive_supcall_36a641e0b.bit (sha256 016219b27ff0a2010c1e9535a166f39ceb9ab5f7c62236251dc24fae2a55d045,
+# capstone-ariane 36a641e0b), flashed by the board lane 2026-10-02 15:54-15:56 on the lead's direct confirmation; resident name read
+# back after the power cycle. The R-43 acceptance list UNCHANGED (tests/fpga-repros/R43-revocation-cache-false-deny/00-README.md,
+# "Board acceptance"), in the 2026-09-29 a1..a10 order, same images. Cite a boot by its image hash.
+
+== a1 -- boot sca1, 16:12-16:20: B1 workload regression (R1 m1 drop, image 079b1f3a2801205a @0x410000, stock k800, fw ab6da70fd47f) -- PASS ==
+RESULT k800 retval=4 cycles=4515 ran=53406 instret=1089            (opening)
+RESULT k800 retval=4 cycles=4553 ran=53406 instret=1089            (closing)
+R1 m1 end arm=drop stop=target alloc=160 minted=191 revoked=160 retained=0 released=0     (identical to r43a1 on 8f6a0af98)
+speedtest1-ran=1320222911; released pool rc=1; released tables rc=1; 0 refused; no HARD STOP / ENTRY-STALL / halt; 1 boot banner
+aperture reads: after the opening k800 sw=204 0x02 (refusal record EMPTY, the negative control) and sw=208 0x00 -- as on r43a1.
+           The PRE string's "trap log seen=0" (a1, a4, a5, a6) was NOT read: the driver reads sw=255 only on a wedge, as on
+           2026-09-29. PASS rests on the domain returning with its ok line, which implies no trap.
+           The post-harness / closing reads come back VOID exactly as on r43a1 (the per-domain path's known switch-model limit);
+           dev 99fc1b8f9bb0's echo check now names it ("switch echo was 41/42, not 249/250").
+
+== a2 -- boot sca2, 16:21-16:38: B3, the R1 WARM harness, campaign lines 1-12 (image 1b7a04fe237e1580 @0x410000, host 2c9e82d101b48160,
+   fw 06e06d736dbe; control = the RELINKED k800 589ceee3853c6092 @0x20000) -- PASS ==
+RESULT k800 retval=4 cycles=4507 ran=53406 instret=1089            (opening)
+RESULT k800 retval=4 cycles=4533 ran=53406 instret=1089            (closing)
+12 invocations: 60 R1 point lines, every one ok=1 bad=0; 12 x speedtest1-ran; 12 x released pool rc=1; 0 refused;
+no halt, no stall, one banner.
+REVOKE cost at n=1/4/16: rv=92/194/848 cycles (r43a2 on 8f6a0af98: 95/194/850) -> the release path is unchanged.
+
+== a3 -- boot sca3, 16:40-16:48: B4, the R1 COLD harness, wide series rep 1 (image 46f99c7b5bf2556e @0x410000, host 2c9e82d101b48160,
+   fw 44113c84159c; control = the relinked k800 589ceee3) -- PASS ==
+RESULT k800 retval=4 cycles=4544 ran=53406 instret=1089            (opening)
+RESULT k800 retval=4 cycles=4538 ran=53406 instret=1089            (closing)
+12 points, all ok=1 bad=0, 0 refused; 1 x speedtest1-ran=1320264012; released pool rc=1; no halt, no stall, one banner.
+rv per point vs r43a3 (8f6a0af98, N=1 each): nd 64 +3.42 %, 256 +0.66, 512 -1.72, 1024 +1.35, 1536 -0.02, 1792 -1.22, 2048 -0.28,
+           2304 +1.60, 3072 +0.29, 4096 +0.24, 8192 -0.02, 16384 +0.02 (461,252 vs 461,171): range -1.72 .. +3.42 %, mixed signs, no systematic shift;
+           the cold constant reads 28.15 cycles/node as before.
+
+== a4 -- boot sca4, 16:49-16:57: live16 CONTROL (image f1aa05aa4fc2e4ff @0x410000, host 2c9e82d101b48160, fw e4342e13caca, stock k800) -- PASS ==
+R1 m1 live-sweep ok live=16 reads=32 sum=544 expect=544     (read through fpga_driver.transcript.strip_markers: the raw line
+                                                            is spliced by a monitor ECSA marker after "sum=5")
+k800 retval=4 twice (cycles 4500 / 4535, instret 1089); speedtest1-ran 0x4EB10000; released pool rc=1; no halt, one banner.
+
+== a5 -- boot sca5, 16:58-17:06: live128 (image 8333c411dce02ea8 @0x410000, host 2c9e82d101b48160, fw 5c872bbfc333, stock k800) -- PASS ==
+R1 m1 live-sweep ok live=128 reads=256 sum=4352 expect=4352
+k800 retval=4 twice (cycles 4556 / 4559, instret 1089); released pool rc=1; no halt, one banner.
+
+== a6 -- boot sca6, 17:08-17:15: live512, THE R-43 TEST (image 1186b02f0df6d80e @0x410000, host 2c9e82d101b48160, fw f1b182941e83, stock k800) -- PASS ==
+R1 m1 live-sweep ok live=512 reads=1024 sum=17408 expect=17408
+k800 retval=4 twice (cycles 4501 / 4550, instret 1089); released pool rc=1; no halt, one banner.
+refusal record: after the opening k800 sw=204 0x02 (EMPTY), sw=208 0x00 -- as on r43a6.
+reading    512 live ids against the 256-entry revocation cache: every miss still resolves ALLOW through the replay on the new
+           bitstream; R-43's fix is intact under the supervised-CALL change.
+
+== a7 -- the ladder at K=0, capability boot (17:16-17:26; /tmp/capstone/ladder-revival/results-sccap-K0.txt) -- PASS ==
+17/17 rungs correct (retval == oracle); retvals and oracles identical to r43's capability boot (results-r43cap-K0.txt, 8f6a0af98);
+instret IDENTICAL on every rung; mcycle within -1.1 .. +0.23 % per rung (the largest moves are the shortest rungs: beebs_bs
+2139 -> 2116, beebs_janne 676 -> 673, ctrsanitys 6306 -> 6283); every rung over 9,000 cycles within +/- 0.23 %.
+   bare baseline (17:26-17:28, /tmp/capstone/ladder-revival/scbase-K0.log): 17/17 rungs 15/15 passes each; BEST cycles, instret and
+   retval IDENTICAL to r43's bare boot (r43base-K0.log) on every rung. NOT evidence about this change: the claim-auditor found the
+   same BEST lines (md5-identical with spread stripped) on FIVE bitstreams since 054cea69b (p10/r35/r42/r43/sc base logs), so this
+   reading has never moved on any bitstream change -- a check that has never fired. The run itself is fresh (17:26-17:28).
+
+== a8 -- P1 cell 5 -O2 (image 5f4b44257c933477, --stats, relinked k800) plus native -O2 (17:29-17:39, board-b80s.sh) -- PASS ==
+RESULT k800 retval=4 twice; Verification Hash 112006 38bb59fd (cell 5 and native); HEAP 2097152 DROPPED 0; no sublet line (right image)
+cell 5: SPEEDTEST1-CYCLES 1,157,184,935 (r43 a8: 1,157,324,017, -0.012 %); Successful lookasides 25010, Slots Used 1 -- as pre-registered
+native -O2 warm: 856,012,366 cycles, 253,518,742 instrs (r43 a8: 856,285,087, -0.032 %); ratio cell5/native 1.3518 (r43: 1.3516)
+no HARD STOP / stall; one banner.
+
+== a9 -- P1 cell 6 -O2 (image df484d98b489aeab, 2 MiB arena, --stats, relinked k800; 17:40-17:50, board-c6var.sh) -- PASS: THE REAL WORKLOAD ==
+RESULT k800 retval=4 twice; Verification Hash 112006 38bb59fd; HEAP 1344064 DROPPED 0; Successful lookasides 25010
+sublet: split=5568 mrev=37970 delin=32569 revoke=37970 init=5401  -- exactly the pre-registered --stats counts
+SPEEDTEST1-CYCLES 1,241,186,019 (r43 a9: 1,241,773,854, -0.047 %); CPI vs its emulator count 3.639 (r43: 3.641); no stall; one banner.
+
+== a10 -- the R-35 stale probe, LAST (image 35fb3fec3196841b, 17:52-18:05, fw b14cc42b4bf9, stock k800) -- PASS on every pre-registered count ==
+opening RESULT k800 retval=4; the probe invocation WEDGED (no return), as designed; no HARD STOP / ENTRY-STALL; one banner.
+trap log sw=255 0x99 = seen 1, mcause 25; trap mepc 0x81a04354 = DBAS 0x81A00000 + 0x4354; tval 0xac100000  -- identical to r43 a10
+refusal record (wedge dump): LATCHED, arm 0100 = probe resolved DEAD, revnode id 0x5f (95), parity ok. Compare with the
+           RESOLVED reading (boots m1v2-3/m1v2-4 on 8f6a0af98, id 95), not with r43 a10, whose id the board-8f6a0af98 file
+           retracted as UNRESOLVED that evening. Today's 204..208 were read fresh at their labelled apertures (the auditor's
+           switch/LED trace: each aperture reached its value, then produced a led_state event).
+wedge registers: rev_node_head 0x0084 (132), serving_idx 0x74 (116); sw=224 0x9f, sw=225 0x80
+reading    R-35 is NOT reopened: the stale dereference still traps 25 at the probe's own instruction, and the record names the
+           same id through the same arm as on 8f6a0af98.
+
+== VERDICT (2026-10-02 18:05, board released after a10) ==
+All ten rows PASS as pre-registered for R-43 (00-README.md "Board acceptance"), on the same images as 2026-09-29.
+Read as: NO OBSERVABLE CHANGE ON THESE TEN WORKLOADS. That is NOT "inert until cssupervise" -- an earlier wording of this file,
+RETRACTED: the bitstream carries changes that run without cssupervise, and they ran in every boot here:
+  - commit_stage.sv:913 drops every exception while ANY domain switch is busy (03b70667e);
+  - every CALL parks its return pc from capstone_dyn_req_pc_q (R-47, 727ea6e93);
+  - every SEAL applies the 1024 B / 16-B-aligned check and sets cursor := region start (S-11, c0ad507b2, c0c546542), and the monitor
+    SEALs at every domain create (1536-byte, aligned seals: accepted, as predicted);
+  - the switcher's metadata read-port mux in issue_read_operands (d38887426).
+What has not run is the supervised path itself (cssupervise, escape, quantum, event CSRs other than csnodefree) and any input that
+would trip S-11 (an undersized or misaligned SEAL) or R-47 (a jump reaching issue before the dyn unit responds).
+Cycle-level: capability-ladder instret identical on 17/17, mcycle -1.08 .. +0.23 %; P1 cell 5 -0.012 %, native -0.032 %,
+cell 6 -0.047 %; R1 cold -1.72 .. +3.42 % with mixed signs (N=1). The bare ladder carries no information (see a7).
+IDENTITY: the rows alone cannot tell 36a641e0b from 8f6a0af98; the discriminator boot below does (csnodefree returned 0xFFCD).
+Claims a6 (R-43 holds) and a10 (R-35 not reopened) hold on either bitstream, since 8f6a0af98 is an ancestor of 36a641e0b.
+Audited 2026-10-02 by a claim-auditor: every number re-derived from the primary logs and upheld; the corrections above are its.
+Next on this bitstream: the first supervised-CALL program, which needs the runtime lane's FPGA monitor built to the plan's contract.
+
+== BITSTREAM DISCRIMINATOR -- 18:24-18:30, one boot (LADDER_ONE_BOOT=1, run_ladder_perf_fpga.py), pre-registered 18:24:38 -- 36a641e0b IDENTIFIED ==
+Why: none of a1..a10 can tell 36a641e0b from 8f6a0af98 (the extension is dormant), so before this the only identification was
+the console's nv_bitstream_name, which every driver re-read and checked (a mismatch hard-stops). This boot adds the behavioural
+discriminator the project's rule asks for.
+ctrsanitys (control, 0x10000, sha 4219d081d000c127): retval 3688591409 == oracle, 6330 cycles, instret 5029
+csrprobe (0x20000, sha ae4403fa2842d100; one `csrr a5, 0xfc4` = csnodefree at +0x1b4): RETURNED retval 65485 = 0xFFCD, no trap,
+           126 cycles, instret 9 -- inside the pre-registered 0xFF00..0xFFFF. On 8f6a0af98 address 0xFC4 has no CSR
+           (csr_regfile.sv default: read_access_exception) and the read raises illegal instruction, so a return identifies the
+           new RTL. The value reads head - free_len = 50 nodes in use, consistent with a fresh boot.
+           This is also the first silicon execution of any part of the supervised-CALL change (the census CSR's read path).

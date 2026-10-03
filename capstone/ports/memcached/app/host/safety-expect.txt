@@ -186,3 +186,69 @@ slabsublet1  13  FAULT  temporal
 slabsublet1  14  FAULT  temporal
 slabsublet1  15  FAULT  temporal
 slabsublet1  16  FAULT  temporal
+
+# ---------------------------------------------------------------------------------------------
+# Fixtures 17 and 18, registered 2026-10-03 BEFORE either was built or run on any arm.
+# Two memcached defects from upstream's own history, both PLAIN MALLOC -- which is the point.
+#   17  commit 204019d (a 2006 contributed patch): realloc moves the connection read buffer and
+#       only the base pointer is updated, so the parser's interior cursor c->rcurr still points
+#       into the released block. Same OBJECT as fixture 12, DIFFERENT allocator seam.
+#   18  e779381 logger: the close routine clears the global slot and frees the watcher; the
+#       caller keeps its own pointer and WRITES w->failed_flush through it. The corpus's only
+#       write-after-free; the watcher is calloc'd, not an item and not a slab chunk.
+# Both are HISTORICAL -- the upstream fix is reversed -- as cases 0, 1, 3 and 4 are. memcached's
+# origin/master IS our pin (0 commits after it, and origin/next carries one unrelated commit),
+# verified two-sided, so no memcached case can be live-in-pin except case 02.
+#
+# WHY THESE TWO MATTER TO THE ARM MATRIX, and it is the opposite of 12-16:
+# 12-16 end their objects INSIDE memcached's own allocators -- cache_free pushes onto a STAILQ,
+# do_slabs_free onto a class's slots list -- so the runtime's free is never called, `sublet`
+# cannot revoke, and it is the NEGATIVE CONTROL that must RETURN. 17 and 18 end their objects with
+# the platform's own free/realloc, so the release DOES reach the runtime heap. `sublet` must
+# therefore FAULT on these. Without that contrast, sublet's silence on 12-16 is just a silence;
+# with it, the silence is attributable to the nested allocator rather than to a broken arm.
+#
+# Values DERIVED, not copied: mcapp_fill writes v0 + i and the new owner's v0 is 0x5b, so 17 reads
+# 0x5b + 8 = 0x63 through its interior cursor at offset 8. 18 pokes 0xEE at offset 32 through the
+# dead pointer and reads it back through the NEW owner's live pointer, so its value is 0xee.
+# Reuse is predicted 1 for both, and each fixture ERRORS (0xE0017 / 0xE0018) rather than returning
+# a mark if the storage was not reissued -- a condition not created must not read as a result.
+level0       17  RETURN 1100163
+shrink       17  RETURN 1100163
+sublet       17  FAULT  temporal
+slabsublet0  17  FAULT  temporal
+slabsublet1  17  FAULT  temporal
+level0       18  RETURN 12001ee
+shrink       18  RETURN 12001ee
+sublet       18  FAULT  temporal
+slabsublet0  18  FAULT  temporal
+slabsublet1  18  FAULT  temporal
+
+# ---------------------------------------------------------------------------------------------
+# Fixture 19, registered 2026-10-03 BEFORE it was built or run on any arm.
+# CLASS 3 -- REUSE-NOT-FREE -- on memcached's real bipbuffer (the logger's per-watcher output
+# buffer, logger.h:197,215; it also carries items.c's lru_bump_entry records, each holding an item
+# pointer, which is why the port aligns data[] to 16 in patch 0003).
+#
+# This fixture performs NO free of any kind. bipbuf_new is one malloc(sizeof(bipbuf_t) + size) with
+# a flexible data[]; bipbuf_request returns me->data + offset; bipbuf_poll only advances cursors and
+# resets a_start = a_end = 0, so the next request hands out the SAME bytes. The consumer's polled
+# pointer was never freed, stays tagged, stays in bounds of the one malloc, and now names another
+# record. Only the data's identity changed.
+#
+# PREDICTION: EVERY arm RETURNS 130015b, INCLUDING sublet, slabsublet0 and slabsublet1. The revoking
+# arms are blind to this because the runtime heap never sees a free and there is nothing to revoke.
+# Registering a predicted BLINDNESS is the point: it is the measurement that motivates hooking the
+# bipbuffer as a nested allocator, and a fault on any arm here would be the finding instead.
+#
+# THE INSTRUMENT IS KNOWN TO FIRE: fixture 18 is the same stale-pointer-then-reuse shape on the same
+# five arms, and it FAULTS on all three revoking arms because its release reaches the allocator. So
+# a clean RETURN here is a statement about the bipbuffer, not about an arm that never worked.
+# Value derived: mcapp_fill writes v0 + i and the second record's v0 is 0x5b, read at offset 0.
+# reissued is predicted 1, and the fixture exits 0xE0019 rather than a mark if the buffer did not
+# recycle in place -- a condition not created must not read as a result.
+level0       19  RETURN 130015b
+shrink       19  RETURN 130015b
+sublet       19  RETURN 130015b
+slabsublet0  19  RETURN 130015b
+slabsublet1  19  RETURN 130015b

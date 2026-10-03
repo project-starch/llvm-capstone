@@ -53,6 +53,17 @@
  *                     lives on, then read. Added with the chunks arm, where that free is a revoke;
  *                     elsewhere the free changes nothing the old pointer can see, except that
  *                     upstream writes its free-list links into the chunk's first bytes.
+ *  14 zigbee_touchlink CVE-2026-95391, live at our v4.6.8 pin: a global container keeps a record
+ *                     across the release that frees it, AND holds a key pointing INSIDE that same
+ *                     record; the stale interior key is dereferenced. Fixture 5's shape plus the
+ *                     global and the interior pointer. Heap class (wmem_gc returns the block to
+ *                     the OS), not wmem-nested -- see 06a775b2e1b6.
+ *  15 http2_regex_unref live at our v4.6.8 pin: a refcount reaching zero frees the object while the
+ *                     owner's file-static pointer stays set, so its own `== NULL` validity test
+ *                     still passes and the next use reads freed storage. Differs from 14 in the
+ *                     LIFETIME-ENDER: a refcount, not an explicit free.
+ * 14 and 15 are the two upstream defects this port carries that are confirmed live at the pin by
+ * the cherry-pick probe; both are HEAP class, so `chunks` is predicted to behave as `sublet`.
  * On every heap arm of this port, 10-12 are predicted to return: a wmem block is one g_malloc,
  * and every allocation carved from it carries the whole block's bounds. That is the gap the
  * wmem hooks (ports/wireshark/wmem) are for; it is measured here, not assumed.
@@ -281,6 +292,91 @@ static int fixture(void)
     v = tsapp_fix_touch(p, idx);
     printf("TSAPP-FIX 13 returned p[0]=%02x (0xa0 = its own byte, unless a free-list link covers it)\n", v);
     return FX_MARK(v);
+
+#elif TSAPP_FIXTURE == 14
+    /* ZigBee ZCL Touchlink, CVE-2026-95391 / wnpa-sec-2026-92, upstream 030bf6ad011c (fix
+     * 609134fa7c55, first released in v4.6.9 and so ABSENT from our v4.6.8 pin). A file-scope
+     * global GHashTable keeps commissioning records across a redissect that frees them, AND its
+     * keys point INSIDE those same records (&commissioning_data->transaction_id), so the key and
+     * the value go stale together -- which is what makes it worse than fixture 5.
+     *
+     * Live at the pin, read from the pinned tree: the global at packet-zbee-zcl-general.c:15899,
+     * created exactly once at :16917 with NO register_init_routine to empty it, the record
+     * allocated at :16591 and inserted at :16593. Verified not backported: the cherry-pick probe
+     * over v4.6.8 is empty for this sha while the identical probe returns a sha for a fix that WAS
+     * backported, so the negative is a tested one.
+     *
+     * HEAP class. Precisely: the OBJECT is a wmem file-scope allocation (wmem_new0(wmem_file_scope(),
+     * ...) at :16591), but the LIFETIME-ENDING FREE bottoms out in g_free of the containing block --
+     * wmem_leave_file_scope() ends in wmem_gc, and wmem_block_gc returns a wholly-unused block to the
+     * OS via wmem_free(NULL, cur). So it is not a wmem RESET that ends the lifetime, which is what
+     * the nested class means here. Classified as nested once and retracted (06a775b2e1b6); do not
+     * re-file it, and do not state it as "not at a wmem scope" either -- the allocation is.
+     *
+     * Reduced to the allocator seam, no dissector and no GHashTable traversal: a global holds both
+     * the record and an INTERIOR key, the storage is released, a new owner takes it, and the stale
+     * INTERIOR key is dereferenced -- which is what upstream's g_hash_table_lookup does first. */
+    static unsigned char *tl_map_value;   /* the global container's value */
+    static unsigned char *tl_map_key;     /* its key, interior to the SAME object */
+    unsigned char *rec = g_malloc(64);
+    fill(rec, 0xA0, 64);
+    show("rec", rec);
+    tl_map_value = rec;
+    tl_map_key   = rec + 8;               /* &commissioning_data->transaction_id */
+    show("key-interior", tl_map_key);
+    unsigned long rec_addr = cur(rec);
+    unsigned long key_addr = cur(tl_map_key);   /* read BEFORE the free: cur() on a revoked
+                                                 * capability would fault outside the touch
+                                                 * helper, breaking the oracle's pc rule */
+    g_free(rec);                          /* the redissect's release */
+    unsigned char *nu = g_malloc(64);
+    fill(nu, 0x5B, 64);
+    show("new-owner", nu);
+    unsigned same14 = cur(nu) == rec_addr;
+    printf("TSAPP-FIX 14 same-address=%u map-still-holds=%u\n", same14, tl_map_value != NULL);
+    idx = 0;
+    touching(key_addr);
+    v = tsapp_fix_touch(tl_map_key, idx); /* the lookup hashes the stale interior key */
+    printf("TSAPP-FIX 14 returned key[0]=%02x (0x63 = the NEW occupant's byte at offset 8)\n", v);
+    return FX_MARK((same14 << 8) | v);
+
+#elif TSAPP_FIXTURE == 15
+    /* http2 3GPP header decoding, upstream 6e61bca421 (on master, ABSENT from our v4.6.8 pin and
+     * not backported -- probed the same way as fixture 14). Two file-static GRegex pointers are
+     * created lazily behind an `if (regex == NULL)` guard and released with g_regex_unref, which
+     * frees the object once its refcount reaches zero WITHOUT nulling the static. The guard then
+     * passes on freed storage and g_regex_match reads through it.
+     *
+     * Live at the pin: packet-http2.c:2148-2149 declare the statics, :2160 is the NULL guard,
+     * :2171 matches, :2185-2186 unref; the pattern repeats at :2213 and :2262-2263. HEAP class --
+     * GRegex is GLib-allocated, and no wmem call appears in the fix.
+     *
+     * The distinguishing feature against 14 is the LIFETIME-ENDER: not an explicit free of a
+     * container's entry but a REFCOUNT reaching zero, with the owner's own validity test -- the
+     * NULL check -- left satisfied. The fixture creates that condition itself rather than relying
+     * on the http2.3gpp_session preference being set at run time: a directed test that does not
+     * create its triggering condition comes back clean and void. */
+    static unsigned char *h2_regex;       /* the file-static the guard tests */
+    static int h2_refcount;
+    if (h2_regex == NULL) {               /* the lazy-create guard */
+        h2_regex = g_malloc(64);
+        h2_refcount = 1;
+        fill(h2_regex, 0xA0, 64);
+    }
+    show("regex", h2_regex);
+    unsigned long rx_addr = cur(h2_regex);
+    if (--h2_refcount == 0)
+        g_free(h2_regex);                 /* g_regex_unref: frees, leaves the static set */
+    unsigned char *nu15 = g_malloc(64);
+    fill(nu15, 0x5B, 64);
+    show("new-owner", nu15);
+    unsigned same15 = cur(nu15) == rx_addr;
+    printf("TSAPP-FIX 15 same-address=%u guard-passes=%u\n", same15, h2_regex != NULL);
+    idx = 0;
+    touching(rx_addr);
+    v = tsapp_fix_touch(h2_regex, idx);   /* the guard passed; g_regex_match reads here */
+    printf("TSAPP-FIX 15 returned regex[0]=%02x (0x5b = the NEW occupant's byte)\n", v);
+    return FX_MARK((same15 << 8) | v);
 
 #else
 #error "unknown TSAPP_FIXTURE"

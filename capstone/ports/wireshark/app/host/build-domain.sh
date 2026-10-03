@@ -149,7 +149,7 @@ done
 # overwrite ninja's record for tshark.c.o with the fixture's), for another source and object.
 DEPF=" -MD -MT $TSO -MF $TSO.d -o $TSO -c $TS_WORK/xsrc/tshark.c"
 [[ $CMD == *"$DEPF" ]] || { echo "tshark.c.o's compile command does not end as expected: ${CMD: -200}" >&2; exit 1; }
-for n in $(seq 1 13); do
+for n in $(seq 1 15); do
   ( cd "$B" && eval "${CMD%"$DEPF"} -DTSAPP_FIXTURE=$n -o $OUT/tsapp_fx$n.o -c $APP/src/tsapp-safety.c" ) \
     || { echo "compile failed: fixture $n" >&2; exit 1; }
   link "$OUT/tsapp_fx$n.dom" "$OUT/tsapp_fx$n.o" "${RT[@]}" > "$OUT/link-fx$n.log" 2>&1 \

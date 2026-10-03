@@ -177,3 +177,31 @@ poolstock    22  RETURN 1600177
 poolstock    23  RETURN 170015b
 poolsublet   22  RETURN 1600177
 poolsublet   23  FAULT  temporal
+
+# FIXTURES 24 and 25: two UPSTREAM FFmpeg defects, both live at the 9.0.1 pin, transcribed into
+# the heap arms. Registered 2026-10-02 BEFORE either fixture was built or run on any arm, and
+# pushed before the first boot. Unlike 1-10 these are not shapes we invented: 24 is
+# bc46eab87c4f (released in n9.0.2, so absent from our pin) and 25 is 4b9c4b9cfb56.
+#
+# WHAT EACH PREDICTION RESTS ON, so a wrong one can be traced to the premise that failed:
+# - the heap is first fit with forward coalescing, so a free immediately followed by an
+#   av_malloc of the SAME size returns the same block. That is fixture 5's established
+#   behaviour on all three arms (its registered mark is 50015b, i.e. same-address=1 and the
+#   new owner's 0x5b), and 24 and 25 reuse the same ordering with nothing in between;
+# - so both marks are (same-address << 8) | the new owner's byte = (1 << 8) | 0x5b = 0x15b,
+#   which is 180015b for fixture 24 and 190015b for fixture 25;
+# - level0 has arena-wide bounds and free only marks free: the stale read completes;
+# - shrink narrows to the object but still does not revoke: the stale read completes, in the
+#   bounds of the block the NEW owner now holds;
+# - sublet revokes at free, so the stale alias is dead at the touch. The fault is temporal and
+#   not oob: both reads are INSIDE the object's own bounds, 24 at offset 0 and 25 at offset 32
+#   of a 64-byte object. A fault reported as oob would be a finding, not a pass.
+# - 25's stale pointer is INTERIOR (p + 32). The prediction is that this changes nothing on any
+#   arm, because revocation is per object and not per alias; if 25 and 24 ever differ, that
+#   difference is the finding.
+level0  24  RETURN 180015b
+shrink  24  RETURN 180015b
+sublet  24  FAULT  temporal
+level0  25  RETURN 190015b
+shrink  25  RETURN 190015b
+sublet  25  FAULT  temporal

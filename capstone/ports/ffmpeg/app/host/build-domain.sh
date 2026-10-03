@@ -336,7 +336,8 @@ echo "control image $OUT/ffapp_m5flip.dom decodes ${INPUT%.mkv}.flip.mkv"
 # --- safety fixtures (src/capstone-domain/ffapp_safety.c) ------------------------------
 # One image per fixture: a fault ends the emulator, so a faulting fixture reports nothing else.
 # Same runtime, allocator and libraries as the milestone images above; only the entry differs.
-FIXTURES="1 2 3 4 5 6 7 8 9 10 16"   # 16 on the heap arms: the stock control for the pool arms
+FIXTURES="1 2 3 4 5 6 7 8 9 10 16 24 25"   # 16 on the heap arms: the stock control for the pool arms;
+                                           # 24 and 25 are two upstream defects live at the pin
 [ -n "$POOL" ] && FIXTURES="$(seq -s ' ' 1 17) 20 21"          # the pool fixtures, and the pool-end counts
 # FFAPP_EXTRA_FIXTURES: more fixture ids on any arm, e.g. a diagnostic on the level0 heap
 FIXTURES="$FIXTURES ${FFAPP_EXTRA_FIXTURES:-}"

@@ -1,5 +1,78 @@
 # Current Capstone state
 
+## 2026-10-03 — upstream memory defects for the three app ports: 4 measured on the arms, 18/18 cells as pre-registered, 3 retractions
+
+- **What was asked:** find memory defects (plain `malloc` **and** nested allocators) for memcached,
+  tshark and FFmpeg on the upstream trackers, run them through the emulator, check they are caught.
+- **Measured, all exactly as pre-registered** (predictions pushed before every build):
+  - **tshark** fixtures 14/15 — ZigBee ZCL Touchlink (CVE-2026-95391) and http2 `GRegex` — on
+    `level0`/`shrink`/`sublet`/`chunks`: **8/8 cells**. `ports/wireshark/app/results/2026-10-03-qemu-upstream-live-defects/`.
+  - **memcached** fixtures 17/18 — `204019d` realloc cursor and `e779381` logger write-after-free — on
+    all five arms: **10/10 cells**. `ports/memcached/app/results/2026-10-03-qemu-plain-heap-contrast/`.
+- **The memcached pair is the one that changes an argument.** Fixtures 12–16 end their objects inside
+  memcached's own allocators, so the runtime's `free` is never called and `sublet` is registered as the
+  negative control that must RETURN — that silence is the nested-allocator blindness claim. 17/18 end
+  theirs with the platform's `free`/`realloc`, and `sublet` faults. Same heap, same runtime, opposite
+  outcome: the variable is **where the lifetime ends**, which makes 12–16's silence attributable.
+- **Three retractions, all surfaced and recorded:**
+  1. **`ops_dispatch` (FFmpeg fixture 25) is NOT live at our pin** — backported as `716d2a47c5`. The
+     retracted method was *"Ancestry decides; the pinned tree proves"*: ancestry is insufficient for
+     cherry-picking release tags, and the "proof" was a grep for a line *shape* that matched a site
+     where the object is never freed. Replacement test, with both controls:
+     `git log <tag> --grep='cherry picked from commit <sha>'` plus reading the enclosing function.
+  2. **Neither tshark defect is reachable in the port's own binary** — http2's block is inside
+     `#ifdef HAVE_NGHTTP2` which the port undefines (and it is preference-gated upstream), and the
+     zbee dissector is not linked (0 symbols against 353). They are live in the **v4.6.8 source**;
+     "live in the version we compile" and the triage doc's "reachable and not latent" are withdrawn.
+  3. **Three attribution/control overstatements in the tshark bundle**: the load base was given as
+     `pc − symbol` (`0xa01f0014`) and is `0xa01f0000`; a symbol-delta argument was **vacuous** (an
+     algebraic identity); and "both controls fired in every boot" was false — fixture 5 ran in none of
+     the four decisive FAULT boots.
+- **Search yield, honestly:** Wireshark `v4.6.8..origin/master` is **4321** commits (I had searched 82
+  on the release branch) → 24 lifetime-worded → 5 live in source → **1** new usable. FFmpeg: all 10
+  remaining candidates read, **none usable**; its nested column is empty because the only nested-class
+  commit was backported, and the four "HW data freed early" pool commits are destruction-ordering on a
+  **VkSemaphore**, not pool storage. memcached: **0** fixed-upstream-after-the-pin, now verified
+  two-sided (`origin/next`, which memcached actually develops on, is one unrelated commit ahead).
+- **Instrument lesson worth carrying:** a lifetime-vocabulary grep over memcached's history returns 13
+  commits and is **not** a superset of the 9 the subsystem search found — intersection 2, and three of
+  the five built corpus cases would never have been found by wording. Treat such a filter as a sampler.
+- **Still open:** memcached's nested column needs port work (`--disable-proxy --disable-extstore`
+  everywhere, page mover not hooked); no native/ASan arm for the four new fixtures; the "revocation on
+  free" mechanism is inferred rather than counted in the faulting runs, and the missing control is named
+  in the tshark bundle.
+
+## 2026-10-02 — Supervised CALL RUNS ON SILICON: quantum preemption with exactly-once resume, and fault-event delivery (bare M-mode, one run each)
+
+- **The RTL lane's directed tests ran on the board** (`caplifive_supcall_36a641e0b.bit`), bare M-mode, JTAG-loaded at
+  `0x80000000` with no OpenSBI. The tests are byte-identical to capstone-ariane `36a641e0b`; only a harness header
+  differs. All three board reading vectors are **bit-identical to the RTL lane's simulation of the same tree**
+  (113/113, 67/67, 8/8):
+  - `sup-quantum`: 53 quantum preemptions, each resumed. The domain's 400 instructions net to **exactly 400**. The
+    domain's x1, the monitor's resume count and its mie survived, and no trap was taken.
+  - `sup-escape`: ecall, illegal, `csrw mepc` (CSR gate), `mret` (decoder guard) and a misaligned load each deliver a
+    fault EVENT to the monitor with the right cause, epc and tval. The seal comes back SEALED.
+    - It does NOT show the trap stripped: the no-strip mutant reads the same 67 values, because mepc, mcause and
+      mstatus are walked. **Settled by the v2 tests** (capstone-ariane 7564c0945, repaired by the RTL lane;
+      `tests/rtl-smoke/sup-bare-2026-10-02-v2/`, pre-registration committed before the boot): sup-escape v2 reads
+      the domain's saved mcause slot as 0 in all five arms, and equals simulation 72/72. **The trap is stripped on
+      silicon.** sup-quantum v2 (an acc := acc*7 + i ladder) is exact at both quanta. At q16 it equals simulation
+      155/155. At q64 the board took 74 preemptions against simulation's 73: a pre-registration miss on a timing
+      count, with every correctness reading exact.
+  - `call-retpc`: correct values. This is not a demonstration of R-47 fixed on silicon, because the board's timing
+    was not shown to create the trigger.
+  Folder: `tests/rtl-smoke/sup-bare-2026-10-02/` (self-contained harness, images, pre-registration, audited result
+  lines).
+- **These two tests discriminate** against any bitstream without the extension, where `cssupervise` and the event
+  CSRs do not exist. This is the first silicon evidence for the mechanism the delegated runtime needs.
+- **Not yet on silicon:**
+  - repeatability (one run each);
+  - the MTIP escape, the guards, the hostile domain, and S-11's refusal;
+  - anything through the OpenSBI monitor or Linux.
+  The delegated runtime on silicon still needs the runtime lane's FPGA monitor, built to the plan's contract.
+- **Instrument:** the runner's GDB halt fallback does not work on this board (`dmstatus` allrunning; the halt is not
+  honoured). The UART report is the only channel.
+
 ## 2026-10-01 — Supervised CALL implemented in RTL (capstone-ariane `sup-call`), verified through step 7 in simulation; R-47 found and fixed; S-11 amended
 
 - **The supervised-CALL platform extension** (the primitive the delegated application runtime needs on silicon)
@@ -38,9 +111,24 @@
   pre-registration misses with mechanisms (plan, step-9 result). Bitstream sha256 016219b2..., NOT flashed.
 - **Resident bitstream: `caplifive_supcall_36a641e0b.bit`** (sha256 016219b2...5d045), flashed 2026-10-02 15:55 by the
   board lane on the lead's direct confirmation, name read back after the power cycle; the previous resident was
-  `caplifive_r43_8f6a0af98.bit`. The R-43 acceptance list passed on it unchanged (a1..a10, k800 first in every boot), and three plan tests ran
-  bare M-mode on the board with readings bit-identical to simulation (sup-quantum, sup-escape, call-retpc): supervised
-  CALL and R-47 work on silicon; S-11's seal-size arms and the fail-closed arm are resident but not yet exercised there.
+  `caplifive_r43_8f6a0af.bit` (the name the console reports). **ACCEPTED 2026-10-02 16:12-18:05: the R-43
+  acceptance list a1..a10 reads as pre-registered on every row, on the same images as 2026-09-29**
+  (`tests/fpga-repros/R43-revocation-cache-false-deny/results/board-36a641e0b.result-lines.txt`; audited, every number
+  re-derived from the primary logs). Highlights:
+  - live512 sums 17408 (R-43 holds), and P1 cell 6 completes with 112006 38bb59fd and the exact Sublet counts;
+  - the R-35 probe still traps 25 at +0x4354 with the refusal record LATCHED, id 95, probe-DEAD;
+  - the capability ladder's instret is identical on 17/17 rungs, and P1 moves -0.01..-0.05 %.
+  **Identity shown by behaviour, not only by the console label:** a one-instruction domain reading csnodefree (CSR
+  0xFC4, which exists only in 36a641e0b; on 8f6a0af98 the read is an illegal instruction) RETURNED 0xFFCD, inside the
+  pre-registered range. That is the first silicon execution of the census CSR. **Read the acceptance as "no observable
+  change on these ten workloads", NOT "inert until cssupervise"** (that wording was retracted before this landed).
+  Several changes run without cssupervise, every boot:
+  - commit drops exceptions while any domain switch is busy;
+  - every CALL parks its pc per R-47;
+  - every SEAL applies S-11's size/alignment check and sets cursor := start; the monitor's seals passed.
+  The supervised path itself, and any input that would trip S-11 or R-47, have not run on silicon. Set
+  `FPGA_BITSTREAM=caplifive_supcall_36a641e0b.bit` for every board run. Every Part A bundle so far (M1 v2, S1,
+  repro322) was measured on 8f6a0af98, before this flash.
 
 Minimal snapshot. Read first in every session.
 
