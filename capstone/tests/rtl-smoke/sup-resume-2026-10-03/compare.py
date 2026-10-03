@@ -18,13 +18,14 @@ def main(d, control=False, iters=4096):
     if control:
         ok = sv == [0, 0x12, 0x21, 0, 0x51, 0, 0, 0]
         print(("PASS exact" if ok else "MISS") + f" {[hex(x) for x in sv]}"); return 0 if ok else 1
-    if len(sv) != 8:
+    if len(sv) not in (8, 10):
         print(f"MISS: {len(sv)} readings {[hex(x) for x in sv]} (a trap ends with mcause, mepc)"); return 1
-    nf0, st, it, ck, esc, nf1, mc, end = sv
+    nf0, st, it, ck, esc, nf1, mc, end = sv[:8]
+    lat = f" latency probe {sv[8]} / {sv[9]} cycles" if len(sv) == 10 else ""
     want_ck = (iters // 256) * 32640 + sum(range(iters % 256))
     ok = st == 1 and it == iters and ck == want_ck and esc > 0 and mc == 0 and end == 0x5E5E
     print(("COMPLETED" if ok else "MISS") + f": status {st:#x} iter {it:#x} checksum {ck:#x} escapes {esc} (dots {dots}) "
-          f"csnodefree {nf0:#x} -> {nf1:#x} mcause {mc:#x} end {end:#x}")
+          f"csnodefree {nf0:#x} -> {nf1:#x} mcause {mc:#x} end {end:#x}" + lat)
     return 0 if ok else 1
 
 if __name__ == "__main__":

@@ -142,3 +142,21 @@ Images (board_rec 0x80015000):
 
 **Predicted:** COMPLETE under the null, with the same values as their non-MSWAP twins. If a MSWAP arm hangs while its
 twin completed, the monitor's swap sequence is part of the trigger, and the dots say how far it got.
+
+**The eviction positive control (LATPROBE), pre-registered.** At the FIRST escape (after any MEVICT sweep, before
+the resume) the monitor times one load of a seal line (+512, inside the walks' slot area) twice, with `cycle` around
+a dependent load, through a NONLIN alias of the seal region. The readings are 9 (the first load) and 10 (the same line
+again).
+
+Images:
+- latprobe-capstl-q64 (hot): b144d117
+- latprobe-mevict-capstl-q64: 78167180
+- latprobe-evict-capstl-q100k: 5469eb78
+
+Predicted:
+- **hot:** 9 and 10 both small and about equal, an L1 hit (single-digit cycles). This is the NEGATIVE control: without
+  a sweep the line stays in L1.
+- **mevict and evict:** reading 9 well above reading 10, a miss to DDR, then a hit. A random-replacement survivor would
+  show as a hit, so one probe line samples it; it is not a proof for all 59 lines.
+- **If both swept arms read a hit:** the sweeps do not evict, and the cache-miss null above says nothing about misses.
+- Readings 1-8 as for the twins.

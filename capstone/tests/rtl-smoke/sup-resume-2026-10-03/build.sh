@@ -32,3 +32,7 @@ build mswap-capstl-q64          84 -DMSWAP -DQUANTUM=64
 build mswap-evict-noploop-q100k 85 -DMSWAP -DEVICT -DNOPLOOP -DQUANTUM=100000 -DITER=1048576
 build mswap-evict-capstl-q100k  86 -DMSWAP -DEVICT -DQUANTUM=100000 -DITER=1048576
 build mswap-mevict-capstl-q64   87 -DMSWAP -DMEVICT -DQUANTUM=64
+# the eviction positive control: the first escape's seal-line load latency, hot vs swept
+build latprobe-capstl-q64        88 -DLATPROBE -DQUANTUM=64
+build latprobe-mevict-capstl-q64 89 -DLATPROBE -DMEVICT -DQUANTUM=64
+build latprobe-evict-capstl-q100k 90 -DLATPROBE -DEVICT -DQUANTUM=100000 -DITER=1048576

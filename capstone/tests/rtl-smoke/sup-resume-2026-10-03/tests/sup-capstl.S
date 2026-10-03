@@ -17,6 +17,10 @@
 #   -DEVICT   the domain also loads one 16-byte line of a 64 KiB buffer per iteration, so a large quantum turns L1
 #             (32 KiB, 8-way, 16-B lines) over between escapes, as SQLite's working set does;
 #   -DMEVICT  the monitor sweeps the 64 KiB buffer before every resume, so every RESTORE read misses.
+#   -DLATPROBE at the FIRST escape (after any MEVICT sweep, before the resume) the monitor times one load of a seal line
+#             twice with `cycle`, through a NONLIN alias of the seal region: readings 9 (first load) and 10 (that
+#             same seal line again, a hit). A first load far above the second means it was NOT in L1 -- the positive
+#             control that the sweeps evict the walks' lines. The hot loop must read two hits.
 #   -DMSWAP   the monitor wraps every CALL in the FPGA monitor's generated __domcallsaves sequence: CPMP0..15 read,
 #             cleared and stored with STC, 8 more tag-setting STCs, mcause/mtval/stvec/scause/stval/sepc/sscratch/
 #             satp/0x803 and cepc swapped out, cscratch := sp, sp := 0 -- and all of it swapped back after the CALL.
@@ -211,6 +215,18 @@ sd x0, 56(a1)
 sd x0, 64(a1)
 sd x0, 72(a1)
 sd x0, 80(a1)
+#ifdef LATPROBE
+CAPCREATE(s2)                  # s2: a NONLIN alias of the seal region, for the latency probe only
+li a0, CAP_TYPE_NONLIN
+lla a4, seal
+lla a5, seal_end
+CAPTYPE(s2, a0)
+CAPBOUND(s2, a4, a5)
+li a0, CAP_PERM_RW
+CAPPERM(s2, a0)
+li s3, 0
+li s4, 0
+#endif
 SEAL(a3, a1)
 
 csrr t0, CSNODEFREE
@@ -243,6 +259,21 @@ supervise_loop:
   addi t4, t4, 16
   bne t4, t5, 3b
 #endif
+#ifdef LATPROBE
+  li t1, 1
+  bne s7, t1, 5f
+  csrr t4, cycle
+  ld t5, 512(s2)               # a seal line the walks read (slot area +512)
+  add t5, t5, x0
+  csrr t6, cycle
+  sub s3, t6, t4
+  csrr t4, cycle
+  ld t5, 512(s2)
+  add t5, t5, x0
+  csrr t6, cycle
+  sub s4, t6, t4
+5:
+#endif
   csrwi CSUPCTL, 1             # resume
   CSSUPERVISE(t3, a3, s5)
   SWAP_OUT
@@ -263,6 +294,10 @@ csrr t0, mcause
 CAPPRINT(t0)                   # 7  0
 li t0, 0x5E5E
 CAPPRINT(t0)                   # 8  end marker
+#ifdef LATPROBE
+CAPPRINT(s3)                   # 9  cycles for the first probe load (a miss if the line was evicted)
+CAPPRINT(s4)                   # 10 cycles for the same load again (a hit)
+#endif
 CAP_PASS(s11)
 
 .align 4
