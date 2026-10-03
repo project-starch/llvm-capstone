@@ -1,3 +1,14 @@
+2026-10-04: the FPGA monitor's resume hang (S-16) is root-caused and fixed on
+capstone-ariane `sup-call` (192a5e624, registry R-49: the switcher's first SAVE
+write pushed into a FULL store-buffer commit queue), together with R-50
+(429c60b32, the load unit's flush exemption). Sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. NEXT: synthesis of
+`sup-call` HEAD on the lead's word (lint at baseline, hash + numbers in the
+plan). Until the reflash, a `fence` before every CALL covers only that CALL's switch
+(the board lane, bare). A fence before every RETURN as well completed every
+non-preemptive twin that hung. A quantum escape stays exposed, so preemptive
+supervision waits for the reflash. After the reflash: the board's S-16 arms without the fence, then
+the supervised speedtest; S-17 on silicon stays open (aperture proposal in R-50).
+
 Supervised CALL (2026-10-01): the RTL is on capstone-ariane `sup-call`
 ([plan, revision 1.2](../plans/supervised-call-silicon.md)); every simulation
 gate is done (the after-audit's four findings fixed and re-measured, the

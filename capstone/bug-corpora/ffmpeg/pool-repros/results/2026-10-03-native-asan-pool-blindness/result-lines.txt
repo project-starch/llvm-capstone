@@ -1,0 +1,47 @@
+# ASan visibility of a use-after-return-to-pool (AVRefStructPool), native x86-64, 2026-10-03
+# toolchain : clang -fsanitize=address -fno-omit-frame-pointer -g -O1  (same flags all three arms)
+# libavutil : /tmp/capstone/ffmpeg-native-asan, FFmpeg n9.0.1 = the paper's pin
+# prediction: registered in docs/ref/ffmpeg-live-defect-triage.md, pushed in 6bfcabcb9316 BEFORE this run
+
+arm      variant          rc  ASan verdict                         flagged
+control  plain-heap-uaf    1  heap-use-after-free                  ctl_uaf.c:12   READ size 1
+armA     pin, unpatched    0  NO REPORT                            --
+armB     e6255fb822 applied 1 use-after-poison                     pool_stale.c:32  READ size 1
+
+# armA -- ASan silent for the whole sequence, which runs to completion:
+#   live_read=0xA0
+#   released=1
+#   stale_read=0xA0                  <- the use-after-return-to-pool, unreported
+#   reuse_same_address=1             <- the pool handed the same storage back
+#   after_new_owner_stale_read=0xCC  <- the stale pointer now reads the NEW owner's data
+#   DONE
+#
+# armB -- identical binary logic, same libavutil except refstruct.c; diverges at the stale read:
+#   live_read=0xA0
+#   released=1
+#   (abort)                          <- use-after-poison at pool_stale.c:32
+#
+# armB region attribution, i.e. ASan names the pool entry rather than a malloc the program made:
+#   0x507000000040 is located 32 bytes inside of 64-byte region [0x507000000020,0x507000000060)
+#   allocated by ... av_refstruct_alloc_ext_c (refstruct.c:110) <- refstruct_pool_get_ext (:287)
+#                                                              <- av_refstruct_pool_get (:318)
+#
+# Two-sidedness, stated explicitly:
+#   * the instrument CAN fire   -> control, heap-use-after-free, rc=1
+#   * the instrument DOES fire on this very access once pooled memory is annotated -> armB
+#   * so armA's rc=0 is a measured blindness, not an untested zero
+
+# ARM C, added 2026-10-03 after being pre-registered in da90e4051862:
+# the SAME armB-patched refstruct.o, the SAME access -- the pool is the only difference.
+armC     e6255fb822 applied, pool has a free_entry_cb   rc=0  ASan: NO REPORT
+#   live_read=0xA0
+#   released=1
+#   stale_read=0xA0                  <- armB aborts here; armC does not
+#   reuse_same_address=1
+#   after_new_owner_stale_read=0xCC
+#   DONE
+#
+# armB vs armC is a one-variable contrast: av_refstruct_pool_alloc(TAB,0) vs
+# av_refstruct_pool_alloc_ext(TAB,0,NULL,NULL,NULL,noop_free_entry,NULL). Same patch, same
+# binary logic, opposite verdict -- so the `if (!pool->free_entry_cb)` gate is MEASURED to
+# suppress the poisoning, not merely read from the diff.
