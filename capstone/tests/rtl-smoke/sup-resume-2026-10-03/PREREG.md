@@ -601,3 +601,44 @@ The RTL lane's simulation of the resident logic gives these outcomes, which are 
   narrows to "when the domain runs long enough for the CALL's SAVE tail to drain". That correction lands on dev as its
   own commit.
 - **If it completes:** silicon's drain timing differs from simulation here, and the claim stands as measured.
+
+### Addendum, 05:30 on 2026-10-04: the walk-index derivation, and the PLAIN twins
+**Timing of this addendum.**
+- Written while the s16stores session was running.
+- n4-r1 had completed and n4-r3 had ended rc=2.
+- Written BEFORE reading any wedge aperture of that session, so the derivation below binds the reading of those
+  apertures, and is a prediction for the PLAIN set, which has not run.
+
+**The derivation** (mine, from R-49 as the RTL lane described it plus the switcher at 36a641e0b,
+`core/anvil_build/capstone_dom_switcher.anvil`):
+- The mis-checked push is the FIRST switcher write after an ordinary store. After it, `is_dom_switch_q` = 1 and every
+  later switcher write gets the commit queue's own ready.
+- The starved write is the 4th after the overwrite.
+- A switch whose first write is a **SAVE** write starts at id 3 (`req.save_en` sets `cur_idx := 3`, phase 1), so it
+  starves at **idx 7**. That is S-16's board signature, from an armed CALL or a quantum escape that saves.
+- A switch whose first write is an **EXCHANGE** write starts at id 0 (`cur_idx := 0`, phase 0; `process()` reads
+  memory and then WRITES each id), so it starves at **idx 4**. This covers a plain CALL, and a RETURN whose request
+  carries no SAVE.
+- **Prediction for the warm-seal hang at a RETURN switch** (n4-r3, n4-r3-fence): **228 / 239 / 240 = 4**, not 7.
+  - If they read 7, either the RETURN request saves first, or the hang is not at the RETURN. In that case the
+    derivation is wrong, and it is withdrawn.
+- **The escape arm (esc-n8):** idx 7 if the escape's request saves (save_en), idx 4 if it starts at the exchange.
+  The switcher alone does not settle which. Both are a positive result for S-16; only 224/225 = 0x1f/0x88 with 226
+  bit 7 set is required.
+
+**The PLAIN twins** (`-DPLAIN`, the knob added to the copied test).
+- PLAIN drops the arming and nothing else. The disassembly diff against the armed twin is the cssupervise word
+  (0x45569e5b), `csrr csupstatus` replaced by `li t0, 0x51`, and one alignment nop. The id char differs.
+- The five running images rebuild byte-identical with the knob in the source.
+
+| image | its armed twin | prediction |
+|---|---|---|
+| s16st-plain-n4-r3 (e0e8bf50) | n4-r3 | **No confident prediction.** The mechanism does not depend on arming: the exchange writes go through the same path, and store_unit.sv:443 is keyed on `is_dom_switch_q`, not on save_en. But each exchange write follows a memory read, which spaces the walk's writes; an armed SAVE has no read. **If it hangs: idx 4.** |
+| s16st-plain-n24-r3 (13f96258) | none (the monitor's own shape: about 26 stores, the swap-out tail, a plain CALL, a warm seal) | As above. If it hangs: idx 4. |
+| s16st-plain-n32-r1 (63e457d2) | n32-r1 | As above. If it hangs: idx 4. |
+
+- Readings if it completes: 0x51 once per round, 0x77, 0.
+- **What it decides:** whether "a memcached run with UNSUPERVISED contexts does not depend on S-16"
+  (`docs/plans/memcached-on-silicon.md` on dev) is measured or false.
+- ISSUES' S-16 entry says plain-CALL exposure "has not been measured". This set measures it at the shapes above.
+- A completion does not prove safety: the monitor's own timing differs.

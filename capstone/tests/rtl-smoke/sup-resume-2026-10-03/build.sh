@@ -112,3 +112,8 @@ b2 s16st-n4-r3        140 -DNSTORES=4 -DITER=3
 b2 s16st-n4-r3-fence  141 -DNSTORES=4 -DITER=3 -DFENCE
 b2 s16st-n32-r1       142 -DNSTORES=32 -DITER=1
 b2 s16st-esc-n8       143 -DESCAPE -DNSTORES=8 -DQUANTUM=150 -DESC_BURSTS=6
+# PLAIN twins (2026-10-04): the same burst and swap-out tail with an UNARMED CALL, each differing from its armed twin
+# only in the arming (and the id char): does S-16 need supervision, or does a plain CALL's switch meet it too?
+b2 s16st-plain-n4-r3   144 -DPLAIN -DNSTORES=4 -DITER=3
+b2 s16st-plain-n24-r3  145 -DPLAIN -DNSTORES=24 -DITER=3
+b2 s16st-plain-n32-r1  146 -DPLAIN -DNSTORES=32 -DITER=1

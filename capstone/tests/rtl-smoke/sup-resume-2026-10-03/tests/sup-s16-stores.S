@@ -1,4 +1,6 @@
-# Copied unchanged from capstone-ariane a8045365a (branch sup-call), verif/tests/custom/capstone/sup-s16-stores.S -- the RTL lane's S-16 directed test.
+# Copied from capstone-ariane a8045365a (branch sup-call), verif/tests/custom/capstone/sup-s16-stores.S -- the RTL lane's S-16 directed test.
+# One knob added by the board lane, nothing else changed: PLAIN drops the arming (no cssupervise before the CALL)
+# and reads the marker 0x51 where csupstatus was read, so a PLAIN arm and its armed twin differ only in the arming.
 # See LICENSE for license details.
 
 #*****************************************************************************
@@ -131,7 +133,9 @@ li x30, 0xA5
 li s7, 0                       # the round counter
 round:
 MOVC(sp, s8)                   # sp holds a capability, as the monitor's does
+#ifndef PLAIN
 CSSUPERVISE(t3, a3, s5)
+#endif
 
 # the burst: NSTORES stores to distinct granules, back to back
 .set s16_off, 0
@@ -163,6 +167,8 @@ supervise_loop:
   CALL(a3, a3)
   j supervise_loop
 escapes_done:
+#elif defined(PLAIN)
+li t0, 0x51
 #else
 csrr t0, CSUPSTATUS
 #endif
