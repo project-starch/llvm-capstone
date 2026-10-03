@@ -257,3 +257,24 @@ mswapfix images byte-identically):
   mcause accesses only in part 4, cscratch CCSRRWs only in part 8.
 - Predicted: part 0 completes. The part that hangs (`AC`, no `R`) names what breaks a plain CALL on silicon. If parts
   1-8 all complete, the hang needs a combination, and the next step is pairs.
+
+## RESULT, the single-part bisect (23:09-23:15): every single part COMPLETES; three-part combinations pre-registered
+- Control: call-retpc PASS exact (N = 10).
+- swappart0 (nothing swapped), 1 (CPMP), 2 (8 tag-setting STCs), 4 (CSRs + cepc) and 8 (cscratch/sp) each printed
+  `ACR`, with count 0x1000, checksum 0x7F800, status 0 (a plain call has no event, as predicted), mcause 0.
+  `compare.py` prints MISS only because it expects the armed status 1.
+- So no single part breaks a plain CALL. The full macro (15) does.
+- **From the RTL lane's simulation of the ARMED arm** (previous build): the instruction stuck at issue is SWAP_IN's
+  `CCSRRW x0 <- cepc, t1`, waiting on t1. The LDC that writes t1 issued and never returned, so the hang is in the LSU's
+  LDC path, not at issue and not in the adapter.
+
+**Three-part combinations** (plain control, each omits one part):
+
+| image | parts | omits |
+|---|---|---|
+| swappart7 (56f3d413) | 1+2+4 | cscratch/sp |
+| swappart11 (113772e0) | 1+2+8 | CSRs + cepc |
+| swappart13 (bfcbf47c) | 1+4+8 | the tag-setting STCs |
+| swappart14 (0c266a6c) | 2+4+8 | CPMP |
+
+Each image that hangs proves its omitted part is not needed. Each that completes proves its omitted part is needed.
