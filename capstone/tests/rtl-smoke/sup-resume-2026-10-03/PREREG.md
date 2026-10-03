@@ -840,3 +840,21 @@ RETURN protect every switch that has no quantum escape? Each arm is the twin of 
     the seal warm.
 - **esc-n8 itself hangs at a RETURN, twice, at the same reading.** The RETURN is three instructions after the
   marker's ordinary `sd`.
+
+## Results: session s16fence (2026-10-04 06:00-06:04, bitstream 36a641e0b, bare, one power cycle per image)
+| image | its twin, which hung | prediction | board |
+|---|---|---|---|
+| control call-retpc | | PASS | PASS exact |
+| s16st-plain-n32-r1-fence (22f8c5d6) | plain-n32-r1 (idx 4) | completes | **COMPLETED** 0x51, 0x77, 0 |
+| s16st-plain-n4-r3-fence2 (efa42f4f) | plain-n4-r3 (idx 4) | completes | **COMPLETED** 0x51 x3, 0x77, 0 |
+| s16st-n4-r3-fence2 (112700ce) | n4-r3 and n4-r3-fence (idx 7) | completes | **COMPLETED** 1 x3, 0x77, 0 |
+| s16st-plain-n32-r3-fence2 (a3508213) | plain-n32-r3 (idx 4) | completes | **COMPLETED** 0x51 x3, 0x77, 0 |
+
+- **Every prediction holds.** Each arm differs from a twin that hung only by its fences: one before the CALL, and
+  where the twin has rounds, one before the domain's RETURN.
+- So on silicon, in these shapes, a fence before every CALL and before every RETURN keeps each switch off a full
+  commit queue. That covers plain and armed CALLs and supervised RETURNs. It does not cover a quantum escape
+  (esc-n8-retfence).
+- N = 1 per arm. This is a software workaround for runs with no quantum preemption, not a proof for arbitrary code:
+  a store between the fence and the switch reopens it.
+- Raw lines: `results/s16fence.result-lines.txt`.
