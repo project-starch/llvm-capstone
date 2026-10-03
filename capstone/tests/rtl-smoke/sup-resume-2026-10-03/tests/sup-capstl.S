@@ -21,6 +21,10 @@
 #             twice with `cycle`, through a NONLIN alias of the seal region: readings 9 (first load) and 10 (that
 #             same seal line again, a hit). A first load far above the second means it was NOT in L1 -- the positive
 #             control that the sweeps evict the walks' lines. The hot loop must read two hits.
+#   -DMSWAP_PLAIN  (with MSWAP) no cssupervise at all: one plain CALL, the domain runs to its RETURN. The control for
+#             the swap code itself in this harness: reading 2 is then 0 (no supervision event), 3 and 4 as usual.
+#   -DTRACE_CHARS  'A' after each arm, 'C' just before each CALL, 'R' after each swap-in, for the first CALL and the
+#             first 16 resumes: localizes a hang that the 256-escape dots cannot.
 #   -DMSWAP   the monitor wraps every CALL in the FPGA monitor's generated __domcallsaves sequence: CPMP0..15 read,
 #             cleared and stored with STC, 8 more tag-setting STCs, mcause/mtval/stvec/scause/stval/sepc/sscratch/
 #             satp/0x803 and cepc swapped out, cscratch := sp, sp := 0 -- and all of it swapped back after the CALL.
@@ -236,10 +240,21 @@ csrw CSUPQUANTUM, t0
 csrwi CSUPCTL, 0
 li s7, 0                       # escapes
 
+#ifndef MSWAP_PLAIN
 CSSUPERVISE(t3, a3, s5)
+#endif
+#ifdef TRACE_CHARS
+BPUTI(65)                      # 'A'
+#endif
 SWAP_OUT
+#ifdef TRACE_CHARS
+BPUTI(67)                      # 'C'
+#endif
 CALL(a3, a3)
 SWAP_IN
+#ifdef TRACE_CHARS
+BPUTI(82)                      # 'R'
+#endif
 supervise_loop:
   csrr t0, CSUPSTATUS
   andi t1, t0, 6
@@ -276,9 +291,27 @@ supervise_loop:
 #endif
   csrwi CSUPCTL, 1             # resume
   CSSUPERVISE(t3, a3, s5)
+#ifdef TRACE_CHARS
+  li t1, 16
+  bgeu s7, t1, 6f
+  BPUTI(65)                    # 'A'
+6:
+#endif
   SWAP_OUT
+#ifdef TRACE_CHARS
+  li t1, 16
+  bgeu s7, t1, 7f
+  BPUTI(67)                    # 'C'
+7:
+#endif
   CALL(a3, a3)
   SWAP_IN
+#ifdef TRACE_CHARS
+  li t1, 16
+  bgeu s7, t1, 8f
+  BPUTI(82)                    # 'R'
+8:
+#endif
   j supervise_loop
 done:
 CAPPRINT(t0)                   # 2  csupstatus: 1

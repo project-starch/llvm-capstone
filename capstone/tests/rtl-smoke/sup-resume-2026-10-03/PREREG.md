@@ -160,3 +160,25 @@ Predicted:
   show as a hit, so one probe line samples it; it is not a proof for all 59 lines.
 - **If both swept arms read a hit:** the sweeps do not evict, and the cache-miss null above says nothing about misses.
 - Readings 1-8 as for the twins.
+
+## RESULT, the MSWAP session (2026-10-03 22:27-22:37): every arm HUNG, the addi control included, all before 256 escapes
+- Control: call-retpc PASS exact (N = 7).
+- mswap-capstl-q64, mswap-evict-noploop-q100k, mswap-evict-capstl-q100k and mswap-mevict-capstl-q64 each printed
+  SUPTEST BEGIN and SB1, then 0 progress dots, and timed out at 90 s.
+- **Not yet attributable.** The swap code is new and untested in this harness. A hang with nothing after SB1 fits
+  "the swap sequence makes the switch hang" and fits equally "the swap macro breaks the bare monitor": for example a
+  trap with no reachable handler in capability mode, which also hangs silently. The dots cannot place it either:
+  first CALL or the 200th resume.
+
+**MSWAP debug set, pre-registered** (TRACE_CHARS: 'A' after each arm, 'C' just before each CALL, 'R' after each
+swap-in, for the first CALL and the first 16 resumes):
+- **mswapdbg-plain-noploop** (225b963a). The SAME swap macro around ONE plain, un-armed CALL. This controls the
+  instrument. Predicted: it COMPLETES, printing `AC` then `R`, with reading 2 = 0 (no supervision event), and 3/4 =
+  0x1000/0x7F800. If it hangs, the swap macro is the bug and the MSWAP hangs say nothing about the hardware.
+- **mswapdbg-noploop-q64** (4faa2899) and **mswapdbg-capstl-q64** (3d76477c), armed. The last characters place the
+  hang:
+  - `ACR` repeating, then a stop after `C`: a resume CALL never returns (C5u's signature);
+  - a stop after `A`: the swap-out itself;
+  - no `R` after the first `C`: the first armed CALL never returns or escapes.
+- Before them in the same session, the pending LATPROBE set (latprobe-capstl-q64 hot, latprobe-mevict, latprobe-evict)
+  as pre-registered above.

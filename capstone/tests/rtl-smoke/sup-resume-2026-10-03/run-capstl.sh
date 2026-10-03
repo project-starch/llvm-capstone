@@ -12,6 +12,10 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = dbg ]; then   # the latency probe, then the MSWAP debug set (its own control first)
+    jobs+=("latprobe-capstl-q64|$F/images/latprobe-capstl-q64.bin|80003c40")
+    for n in latprobe-mevict-capstl-q64 latprobe-evict-capstl-q100k; do jobs+=("$n|$F/images/$n.bin|80014000"); done
+    for n in mswapdbg-plain-noploop mswapdbg-noploop-q64 mswapdbg-capstl-q64; do jobs+=("$n|$F/images/$n.bin|80015000"); done
   elif [ "$CAPSTL_SET" = latprobe ]; then   # the eviction positive control
     jobs+=("latprobe-capstl-q64|$F/images/latprobe-capstl-q64.bin|80003c40")
     for n in latprobe-mevict-capstl-q64 latprobe-evict-capstl-q100k; do jobs+=("$n|$F/images/$n.bin|80014000"); done

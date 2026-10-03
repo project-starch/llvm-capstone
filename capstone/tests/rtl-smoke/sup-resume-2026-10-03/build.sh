@@ -36,3 +36,7 @@ build mswap-mevict-capstl-q64   87 -DMSWAP -DMEVICT -DQUANTUM=64
 build latprobe-capstl-q64        88 -DLATPROBE -DQUANTUM=64
 build latprobe-mevict-capstl-q64 89 -DLATPROBE -DMEVICT -DQUANTUM=64
 build latprobe-evict-capstl-q100k 90 -DLATPROBE -DEVICT -DQUANTUM=100000 -DITER=1048576
+# after every MSWAP arm hung with 0 dots: the swap code's own control (no arm) and the fine-grained trace
+build mswapdbg-plain-noploop     91 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DQUANTUM=64
+build mswapdbg-noploop-q64       92 -DMSWAP -DNOPLOOP -DTRACE_CHARS -DQUANTUM=64
+build mswapdbg-capstl-q64        93 -DMSWAP -DTRACE_CHARS -DQUANTUM=64
