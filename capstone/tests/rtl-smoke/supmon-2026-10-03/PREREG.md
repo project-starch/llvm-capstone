@@ -249,3 +249,24 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
   so that escapes land at every offset of the sequence. Its matched control is the same loop with the capability
   store/load replaced by integer ones. It runs on silicon in the ladder harness, and the RTL lane can run it in
   simulation.
+
+## C5f, pre-registered 2026-10-04 before its boot: C5u with the S-16 workaround (a fence before every domcall)
+- **S-16 is localised and has a workaround in bare**
+  (`../sup-resume-2026-10-03/`, `../../fpga-repros/S16-supervised-switch-never-finishes/`):
+  - the switch's idx-7 walk write waits behind a store-buffer commit queue that never drains;
+  - the RTL lane's simulation traces it to a dom-switch push into a full commit queue, which overwrites the head;
+  - a `fence` right before the CALL drains the queue first, and the bare repro then COMPLETES, 8,551 escapes.
+- **C5f (fw bc9206e7ccb3)** is C5u's exact configuration: the same masks, the same Image a9e838663d64 with the patched
+  speedtest, monitor 78151e4. It differs in one thing: `FW_PRECALL=fence` inserts a `fence` before every one of the
+  8 generated `domcall`s. Artifact gate: 8 CALL words, all preceded by a fence. Negative control: the C5u firmware
+  reads 8 of 8 without one.
+- Stages, as in C5u: k800; speedtest x4 (call 0 plain; A loud and traced; C quiet with a fence before each arm;
+  B quiet); k800.
+- **Predicted, if S-16 is C5u's hang and the fence masks it:**
+  - every run gives 112006 38bb59fd, HEAP 2097152 DROPPED 0 RC 0;
+  - A, C and B end with SUPK 0 and SUPN about 1,275 (reported);
+  - the closing k800 returns 4.
+  - C5u hung at A's 213th resume.
+- **Reported:** the supervision overhead from C's and B's SPEEDTEST1-CYCLES against call 0's. Each fence costs the
+  drain of about 26 swap-out stores per CALL.
+- **Refuted by:** any hang (read with the stages driver's apertures), or any hash other than the oracle.
