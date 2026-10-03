@@ -44,6 +44,7 @@ branch.
 >
 > **The replacement test, and both of its controls must be run:**
 >
+>     git cat-file -t <sha>                                       # MUST print `commit` -- see below
 >     git log <tag> --grep='cherry picked from commit <sha>'     # non-empty  => BACKPORTED, not live
 >     git log <tag> -- <path>                                     # a same-subject commit => suspect
 >
@@ -51,6 +52,17 @@ branch.
 > by grepping for the line. Controls: the probe must fire on a known backport (`4b9c4b9cfb` →
 > `716d2a47c5`) and come back empty on a bogus sha. Without the first control a probe that silently
 > matches nothing reads exactly like "not backported".
+>
+> **Step 0 — `git cat-file -t <sha>` must print `commit` — added 2026-10-03, and it is not a
+> formality.** The two controls above *cannot distinguish a nonexistent candidate from a live one*,
+> because the bogus-sha control is designed to come back empty and a nonexistent sha produces exactly
+> that. Worse, `git merge-base --is-ancestor <bad-sha> <tag>` exits **128** ("bad object"), and 128 is
+> non-zero, so it reads as "not an ancestor" — i.e. as *live*. A candidate was reported on 2026-10-03
+> with all prescribed controls run and a sha that does not exist in FFmpeg's history; every probe on it
+> was vacuous. This is the CLAUDE.md rule *"treat any exit status the gate does not itself define as
+> BLOCKED, not as a pass"* in a new place: `--is-ancestor` defines 0 and 1, and 128 is neither.
+> Resolve the sha to an object **before** any probe, and keep a resolvable control (`5c66a3ab51` →
+> `commit`) beside it so step 0 is itself two-sided.
 >
 > This is the "POSITIVE finding from a narrowed view" trap in CLAUDE.md, in its own right: the grep
 > was written to find the pre-fix line and it found one.
@@ -166,8 +178,62 @@ fix classifies it as spatial, not temporal"*). Read now, against the commits' ow
 
 **So half (a) yields no candidate, now by reading rather than by deferral**, and FFmpeg's
 pool-consumer history stands exhausted at the four the existing inventory already found.
-**FFmpeg's nested column is empty, and that is a finding rather than a gap**: the only `nested`-class
-commit in either half was `4c6217477f`, and it is backported.
+~~**FFmpeg's nested column is empty, and that is a finding rather than a gap**: the only
+`nested`-class commit in either half was `4c6217477f`, and it is backported.~~
+
+> ### The enumeration above is WITHDRAWN — 2026-10-03. The conclusion survives, for a different reason.
+>
+> **What is withdrawn.** "The only `nested`-class commit in either half was `4c6217477f`" and
+> "FFmpeg's pool-consumer history stands exhausted at the four" are both **false**.
+> **`46f3276248`** — *"avcodec/h264_slice: clear the ER picture when starting a second field"*,
+> 2026-07-30 — is `nested`-class and **live at the pin**, and this file's search missed it.
+>
+> **Why it was missed: filter 1.** `filter 1` is *"lifetime wording in the subject"*, and this subject
+> says only "clear the ER picture". No wording filter can catch it. That is the filter's cost, stated
+> here rather than left implicit — and it bounds every "exhausted" claim this file makes, including the
+> ones not withdrawn.
+>
+> **Liveness, step 0 first (the object resolves: `git cat-file -t 46f3276248` → `commit`):**
+>
+>     git merge-base --is-ancestor 46f3276248 n9.0.1   -> rc=1   NOT in the pin
+>     git merge-base --is-ancestor 5c66a3ab51 n9.0.1   -> rc=0   CONTROL, is in the pin
+>     git log n9.0.1 --grep='cherry picked from commit 46f3276248'  -> EMPTY
+>     git log n9.0.1 --grep='cherry picked from commit 4b9c4b9cfb'  -> 716d2a47c5   CONTROL fires
+>
+> **The storage is genuinely nested, and the pointer is INTERIOR.** `h264dec.h:570-574` declares
+> `mb_type_pool`, `motion_val_pool`, `ref_index_pool` as `AVRefStructPool *`; `h264_slice.c:254` takes
+> entries with `av_refstruct_pool_get`, `h264_picture.c:52-56` returns them with `av_refstruct_unref`,
+> so a release reaches the pool's free list and **never the system allocator**. And
+> `h264_slice.c:259` is `pic->motion_val[i] = pic->motion_val_base[i] + 4` — an interior pointer into a
+> pooled entry. `ff_h264_set_erpic` (`h264_picture.c:166-187`) then copies `f`, `tf`, `motion_val[i]`,
+> `ref_index[i]`, `mb_type` as **raw aliases with no refcount**. The pin's second-field `else` branch
+> (`h264_slice.c:1619-1622`) does not clear that struct; `h264_frame_start` clears it for every other
+> picture at `:537`. So the dangling pooled pointers are real.
+>
+> **Why the conclusion still holds: the dangling pointers are never DEREFERENCED at the pin.** Proved
+> rather than argued, in two steps:
+>
+> 1. `git grep 'er\.cur_pic\|er->cur_pic' n9.0.1 -- libavcodec/` returns **three** sites: the two
+>    `set_erpic` calls and one in `mpeg_er.c` for a different codec. The many other files matching
+>    `cur_pic.motion_val` hold `H264Context`'s own `cur_pic`, an `H264Picture` — a different object from
+>    `er.cur_pic`, which is an `ERPicture`. Only `error_resilience.c` reads the `ERPicture`.
+> 2. Of its **55** `cur_pic.{motion_val,mb_type,ref_index}` accesses, 16 are in `ff_er_frame_end` and
+>    all 39 others are in five `static` helpers — `guess_mv`, `guess_dc`, `h_block_filter`,
+>    `v_block_filter`, `is_intra_more_likely` — whose only call sites are inside `ff_er_frame_end`
+>    (checked per call site; the one other `guess_dc` hit is a log string inside `guess_dc` itself).
+>
+> And `h264dec.c:782`, `if (!FIELD_PICTURE(h) && h->current_slice && h->enable_er)`, wraps **both** the
+> populate at `:788` and `ff_er_frame_end` at `:804`. So on a second field `ff_er_frame_end` is not
+> called, and the next frame picture clears the struct at `:537`, closing the window. The only read
+> reachable during the window is `er_supported()` (`error_resilience.c:823`) from `ff_er_add_slice`,
+> which null-tests the stale `f` and reads the stale **scalar** `field_picture` — and `ERPicture` is
+> embedded in `ERContext`, not pooled, so that read is in bounds.
+>
+> **Verdict: a stale-struct LOGIC defect** (`er_supported` answers for the previous picture), **not a
+> memory-safety fault. Rejected as a corpus case** — there is no faulting access for any arm to catch,
+> so it would measure nothing. Recorded here because "nested-class, live, and still not a case" is a
+> different and more useful statement than "no nested-class commit exists", which is what this file
+> said before.
 
 ## Measured, 2026-10-02: both reproduce natively, and ASan reports both
 
@@ -245,3 +311,48 @@ negative is a tested negative and not an untested one.
 
 The ratio is still the point, and it is now sharper: **1** usable candidate from 1,788 commits. Do
 not read a small shortlist as a weak search — but do not read an unverified one as a result either.
+
+## Upstream's own evidence that pooled memory was ASan-invisible at this pin — `e6255fb822`
+
+Found 2026-10-03 while triaging the enumeration retraction above. **This is not a defect and not a
+case.** It is an *instrument*, and it is the one piece of evidence on this question that is not ours.
+
+    commit e6255fb822   2026-09-13
+    avutil/{buffer,refstruct}: annotate pooled memory for ASan and MSan
+
+Step 0 and liveness, same probes as everything else in this file: `git cat-file -t e6255fb822` →
+`commit`; `git merge-base --is-ancestor e6255fb822 n9.0.1` → rc=1; the cherry-pick probe is empty while
+the `4b9c4b9cfb` control returns `716d2a47c5`. **So it is NOT in the tree the paper compiles.**
+
+What it does, in `libavutil/refstruct.c` — the allocator three of the four `pool-repros` cases and all
+of `ports/ffmpeg/pool`'s arms sit on:
+
+    pool_return_entry()      + if (!pool->free_entry_cb)
+                             +     FF_ASAN_POISON(get_userdata(ref), pool->size);
+    refstruct_pool_get_ext() + if (!pool->free_entry_cb)
+                             +     FF_ASAN_UNPOISON(ret, pool->size);
+
+and the same pattern in `buffer.c`. Upstream's message states the intent plainly: *"Poison the memory
+when it enters the pool and unpoison it when it is handed out again or freed."*
+
+**Why this matters more than our assertion of the same thing.** Every bundle in this tree that reports
+ASan clean on a pooled reuse currently rests on *our* reading of why — that a return to a pool never
+reaches `free`, so there is nothing for ASan to key on. `e6255fb822` is upstream adding exactly the
+missing annotation, which means the absence it repairs was real at the pin, stated by the people who
+maintain the allocator. That is a primary source, and it is the difference between "ASan is blind here"
+as an argument and as a cited fact.
+
+**It also makes the blindness MEASURABLE, which is the point.** A clean ASan result is only evidence
+once the check is known to be able to fire (CLAUDE.md). `e6255fb822` is a positive control that can be
+applied to the pin: the same reduction, built `-fsanitize=address`, against unpatched `refstruct.c`
+versus a scratch copy with this commit applied. **Prediction, registered here before the run: clean on
+the first, `use-after-poison` on the second.** If the second is also clean, the instrument is wrong and
+no ASan-blindness number in this tree should be trusted until that is explained.
+
+**Two limits, both from the diff rather than inferred.** The poisoning is gated on
+`if (!pool->free_entry_cb)`, and upstream says why: *"RefStruct entries with an entry free callback own
+allocations while they rest in the pool… LeakSanitizer does not follow pointers stored in poisoned
+memory"*. So even on master today, pools with a free callback stay unpoisoned — the blindness is
+**narrowed, not closed**, and a future "but ASan catches this now" objection is answered by the gate in
+upstream's own patch. Second, `buffer.c` touches only `av_buffer_default_free` buffers, *"since custom
+pool allocators may not be compatible"*. Both limits are upstream's words, not our framing.
