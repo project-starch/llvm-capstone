@@ -36,7 +36,11 @@
 - **Supervised CALL synthesized (2026-10-02):** `sup-call` 36a641e0b sealed by the synth lane, exit 0; routed loop arc
   identical to the resident's, LUTLP-1 = 0, WNS -8.189 in band, FF +1,090 explained row by row, two ORDER-like
   pre-registration misses with mechanisms (plan, step-9 result). Bitstream sha256 016219b2..., NOT flashed.
-- **Resident bitstream unchanged:** `caplifive_r43_8f6a0af98.bit`.
+- **Resident bitstream: `caplifive_supcall_36a641e0b.bit`** (sha256 016219b2...5d045), flashed 2026-10-02 15:55 by the
+  board lane on the lead's direct confirmation, name read back after the power cycle; the previous resident was
+  `caplifive_r43_8f6a0af98.bit`. The R-43 acceptance list passed on it unchanged (a1..a10, k800 first in every boot), and three plan tests ran
+  bare M-mode on the board with readings bit-identical to simulation (sup-quantum, sup-escape, call-retpc): supervised
+  CALL and R-47 work on silicon; S-11's seal-size arms and the fail-closed arm are resident but not yet exercised there.
 
 Minimal snapshot. Read first in every session.
 
