@@ -146,8 +146,30 @@ pre-fix line matching is **evidence of a line, not of a defect**.
 | `4a1ae0b63c` dfilter | epan-core | heap | no: latent for tshark — `dfilter_init`/`dfilter_cleanup` run once each per process, so a single invocation never does cleanup→init |
 | `d24613c461` opcua | dissector | **neither** | no: **out of class.** Despite a subject saying "heap-use-after-free", the diff adds only length guards and touches no allocator call; the defect is an out-of-bounds read inside a `wmem_alloc`'d buffer. A bounds bug, and the scope here is allocator lifetime |
 
-So the widened search yields **one** new usable case, `6e61bca421`, which became fixture 15. That is
-the honest yield: 4321 commits → 24 worded → 5 live → 1 in class, reachable and not latent.
+So the widened search yields **one** new usable case, `6e61bca421`, which became fixture 15. The honest
+yield is: 4321 commits → 24 worded → 5 live in the **source** → 1 in class and reducible.
+
+> ### CORRECTED 2026-10-03 — ~~"reachable and not latent"~~ is withdrawn for `6e61bca421`
+>
+> An audit of the results bundle refuted the reachability half, and the same correction applies to the
+> ZigBee row. **Neither defect's code is in the binary this port builds:**
+>
+> - `6e61bca421`'s block sits inside `#ifdef HAVE_NGHTTP2`, and the port undefines it —
+>   `/tmp/capstone/tshark-app/cap-cfg/config.h:118` and `xbuild/config.h:119` both read
+>   `/* #undef HAVE_NGHTTP2 */`. In `tshark_m1.dom`: **0** `populate_http_header_tracking` or
+>   `dissect_http2` symbols and **0** occurrences of the `imsi-` regex string, against a control of 42
+>   `HTTP` literals and a linked `g_regex_new`.
+> - It is also **preference-gated upstream**: `v4.6.8:packet-http2.c:88` is
+>   `static bool http2_3gpp_session = false;`, and the defect block is under `if (http2_3gpp_session)`
+>   at `:2143`. This file disqualifies other candidates for exactly that kind of latency, so calling
+>   this one "not latent" was an internal inconsistency as well as a wrong reading.
+> - `030bf6ad01`'s dissector is **not linked**: **0** `zbee` symbols in `tshark_m1.dom` against **353**
+>   `dissect_*`/`proto_register_*` overall.
+>
+> What stands: both are live **in the v4.6.8 source**, verified line by line and by a tested-negative
+> backport probe, and both are reducible — which is what the fixtures are. What does not stand is any
+> claim that the port's own tshark can reach them. Results and the full correction:
+> [`../../ports/wireshark/app/results/2026-10-03-qemu-upstream-live-defects/`](../../ports/wireshark/app/results/2026-10-03-qemu-upstream-live-defects/README.md).
 
 ## What was rejected, and why
 

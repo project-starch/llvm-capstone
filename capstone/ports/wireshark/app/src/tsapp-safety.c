@@ -306,9 +306,12 @@ static int fixture(void)
      * over v4.6.8 is empty for this sha while the identical probe returns a sha for a fix that WAS
      * backported, so the negative is a tested one.
      *
-     * HEAP class, not wmem-nested: wmem_leave_file_scope() ends in wmem_gc, and wmem_block_gc
-     * returns a wholly-unused block to the OS via wmem_free(NULL, cur). That was retracted once
-     * already (06a775b2e1b6) -- do not re-file it as nested.
+     * HEAP class. Precisely: the OBJECT is a wmem file-scope allocation (wmem_new0(wmem_file_scope(),
+     * ...) at :16591), but the LIFETIME-ENDING FREE bottoms out in g_free of the containing block --
+     * wmem_leave_file_scope() ends in wmem_gc, and wmem_block_gc returns a wholly-unused block to the
+     * OS via wmem_free(NULL, cur). So it is not a wmem RESET that ends the lifetime, which is what
+     * the nested class means here. Classified as nested once and retracted (06a775b2e1b6); do not
+     * re-file it, and do not state it as "not at a wmem scope" either -- the allocation is.
      *
      * Reduced to the allocator seam, no dissector and no GHashTable traversal: a global holds both
      * the record and an INTERIOR key, the storage is released, a new owner takes it, and the stale
