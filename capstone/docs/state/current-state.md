@@ -35,8 +35,13 @@
   - A plain CALL is affected too.
   - The simulation hangs at the same LDC in a different state; open.
 - **Instrument added:** the bare runner `sup-resume-2026-10-03/run_sup_bare_wedge.py` reads the switcher and LSU
-  apertures (192-195, 224-229, 238-240) after a hang. The commit-pc aperture during a stuck switch is stale scoreboard
-  slot 0, shown by a positive control.
+  apertures (192-195, 224-229, 238-240) after a hang.
+- **The commit-pc aperture during a stuck switch is stale scoreboard slot 0**, shown by a positive control.
+  - It is the first instruction after the last flush only until eight more have issued (the issue pointer wraps
+    over 8 slots).
+  - After a long run it locates the stuck switch to within eight issued instructions, not to the last resume point.
+  - **Retracted 2026-10-04:** C5f's 0xe56bc as "the previous resume point". The escape landed within eight
+    instructions of it, in an `stc` burst.
 - **Corrections along the way, recorded in the lane PREREGs:**
   - the k800 entry path;
   - "the hot loop never misses";

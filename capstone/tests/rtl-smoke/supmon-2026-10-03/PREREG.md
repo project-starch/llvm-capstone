@@ -298,6 +298,12 @@ Lines are in `results/board-c5f.result-lines.txt`.
   - What stands: the last instruction issued before the stuck switch was the domain's, so the stuck switch was a
     quantum ESCAPE's SAVE walk, i.e. S-16 entered from the escape side.
   - That the queue was full of the domain's own stores is the mechanism's requirement, not an observation.
+  - **That correction is itself withdrawn (2026-10-04).**
+    - The issue pointer restarts at 0 after a flush and wraps over the scoreboard's 8 slots (`scoreboard.sv:302-303`).
+    - After a long run, slot 0 is one of the last eight instructions issued, not the resume point.
+    - So the escape landed within eight issued instructions of 0xe56bc, inside the local-init `stc` burst, which was
+      the first reading.
+    - See the S-16 README.
 - **The pre-registered prediction "A, C and B all complete" is REFUTED.** A fence before the CALL removes only the
   CALL-side trigger; no software placement covers an arbitrary preemption point.
 - **Preemptive supervision on this bitstream needs the RTL fix.** The RTL lane's store-path fix (room check keyed on
