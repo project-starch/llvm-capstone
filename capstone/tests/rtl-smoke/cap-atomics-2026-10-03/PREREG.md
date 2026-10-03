@@ -55,3 +55,22 @@ Part 4a of the plan to run memcached on the board, done before any memcached wor
 - **A wrong value.** A real silicon defect in the atomic path through capabilities. It is bisectable by reading
   number.
 - **Reading 13 or 15 = 0** (an SC that should fail succeeds). LR/SC is not a valid lock on silicon.
+
+## RESULT (2026-10-03 21:29-21:31): PASS, all 22 readings exact
+Lines are in `results/board-36a641e0b.result-lines.txt`; each run is cited by the hash of the image it loaded.
+- **Control:** call-retpc a05ca464 read [0, 0x12, 0x21, 0, 0x51, 0, 0, 0], PASS exact. That is N = 4 on this bitstream.
+- **cap-atomics 5fe7e533:** `compare.py` PASS, every reading as pre-registered. The two SC-must-fail readings are 1.
+- **What this shows.** On caplifive_supcall_36a641e0b, every operation below works through a capability address in
+  capability mode:
+  - amoadd.d, amoswap.d, amoadd.w (with the 32-bit wrap and sign extension) and amoswap.w;
+  - lr.w/sc.w and lr.d/sc.d success, with the reservation consumed;
+  - SC failure with no reservation, and for a different granule;
+  - a musl-style a_cas loop, in one attempt.
+  Those are the forms memcached links (lr.w/sc.w x80 each, amoadd.w/.d, amoswap.w), so musl's locks are not blocked
+  on silicon by the atomic operations themselves.
+- **What it does not show:**
+  - bounds or permission enforcement on AMOs (no out-of-bounds arm);
+  - the tag behaviour, I4 (an AMO over a capability granule keeps the tag), which remains the RTL lane's documented
+    residual;
+  - contention between harts (single hart);
+  - any address other than this 64-byte buffer.
