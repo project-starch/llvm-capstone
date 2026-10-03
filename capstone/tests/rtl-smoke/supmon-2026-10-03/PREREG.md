@@ -30,3 +30,15 @@ C5 = fw-c5 49864994aa64: + CAPSTONE_SUPERVISED_CALL + CAPSTONE_SUPERVISOR_CSR_EV
   - SUPN is 0 on the speedtest (supervision never preempted);
   - any SUPA is non-zero;
   - the boot wedges (classified by ENT1/ENT2 and the SUP tags, not as an R-16 stall).
+
+## ADDENDUM 2026-10-03 20:08:30, before either boot: the image was re-baked, and the control relinked
+The first attempt never booted. The runner's preflight refused it before any upload, on two grounds:
+- C15: speedtest1.dom and the stock k800 both enter at 0x10000, which is R-3;
+- the image carried unused files.
+The image was re-baked with the k800 RELINKED at 0x20000 (589ceee3853c6092; its silicon record is 4 at both ends
+of both P1 boots on R-42) in place of the stock one, and with speedtest1_baseline and sqlite_host.user retired.
+The new payload Image is 9f66fb53af98. Firmware rebuilt from the same sources on it (firmware/SHA256SUMS):
+- C3 96884501d098;
+- C5 eec16b773423.
+Preflight now reads GO.
+Predictions are unchanged, except that the control is the relinked k800 (retval 4).

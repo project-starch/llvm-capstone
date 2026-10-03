@@ -9,6 +9,9 @@ main() {
   export FPGA_URL="$(cat "${CAPSTONE_FPGA_URL_FILE:-$HOME/.claude-kisp/secrets/fpga-console-url}")"
   export FPGA_FW="$OUT/fw_payload.bin" FPGA_BITSTREAM=caplifive_supcall_36a641e0b.bit REFUSAL_RECORD=1
   export PREFLIGHT_ALLOW_SHORT=1 PREFLIGHT_ALLOW_SLOTS=1
+  # The image carries the k800 RELINKED at 0x20000 (589ceee3; speedtest1.dom enters at 0x10000, R-3 / preflight C15),
+  # so preflight reads that control's own QEMU-pass record.
+  export PREFLIGHT_ORACLES=$HOME/capstone-artifacts/k800-relinked-0x20000/orc K800_ORACLES=$HOME/capstone-artifacts/k800-relinked-0x20000/orc K800_HASH=589ceee3853c6092
   export ENTRY_STALL_S=420 EARLY_HALT_CONTROL=0 WEDGE_TRACER=0 HALT_MUX_READS=0
   export SQLITE_HOST=/test-domains/sqlite_host_rr.user SQLITE_STAGE_TIMEOUT=600 SQLITE_IDLE_S=600
   export SQLITE_STAGE_DOMS="/test-domains/lpc|k800:/test-domains/k800.dom,/test-domains/sqlite_host_rr.user|/test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify,/test-domains/lpc|k800:/test-domains/k800.dom"
