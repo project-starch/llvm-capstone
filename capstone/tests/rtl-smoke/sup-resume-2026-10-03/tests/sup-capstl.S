@@ -342,11 +342,19 @@ trap_handler:
   CAP_PASS(s11)
 
 .align 4
+#ifdef MSWAP
+/* x26 IS s10, the monitor's swap-area capability, and an UN-armed CALL/RETURN restores only the eight exchanged
+   registers: the checksum moves to x29 under MSWAP (found by the RTL lane's simulation of MSWAP_PLAIN, 2026-10-03:
+   the LDC through s10 after the RETURN trapped with cause 24). Other builds keep x26 and stay byte-identical. */
+#define CKSUM x29
+#else
+#define CKSUM x26
+#endif
 stub:
   MOVC(s3, x1)                 # park the SEALEDRET
-  li x24, ITER                 # the limit   (x22 / x24 / x26: none is s1..s3 or a recorder register)
+  li x24, ITER                 # the limit   (x22 / x24 / CKSUM: none is s1..s3 or a recorder register)
   li x22, 0                    # iterations
-  li x26, 0                    # checksum
+  li CKSUM, 0                  # checksum
   CINCOFFSETIMM(s2, s1, 16)    # G = buf + 16 (granule 1); buf + 15 is in granule 0, its neighbour
 #ifdef EVICT
   li t6, 0xFFF0                # the sweep offset mask (64 KiB, 16-byte steps)
@@ -375,11 +383,11 @@ stub:
   CINCOFFSET(a5, s11, t3)
   ld t5, 0(a5)
 #endif
-  add x26, x26, a4
+  add CKSUM, CKSUM, a4
   addi x22, x22, 1
   bne x22, x24, 2b
   sd x22, 0(s1)
-  sd x26, 8(s1)
+  sd CKSUM, 8(s1)
   MOVC(x1, s3)
   la a1, stub
   RETURN(ra, a1, x0)

@@ -40,3 +40,6 @@ build latprobe-evict-capstl-q100k 90 -DLATPROBE -DEVICT -DQUANTUM=100000 -DITER=
 build mswapdbg-plain-noploop     91 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DQUANTUM=64
 build mswapdbg-noploop-q64       92 -DMSWAP -DNOPLOOP -DTRACE_CHARS -DQUANTUM=64
 build mswapdbg-capstl-q64        93 -DMSWAP -DTRACE_CHARS -DQUANTUM=64
+# after the RTL lane found the x26 = s10 clash in MSWAP_PLAIN: the checksum is x29 under MSWAP
+build mswapfix-plain-noploop     94 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DQUANTUM=64
+build mswapfix-noploop-q64       95 -DMSWAP -DNOPLOOP -DTRACE_CHARS -DQUANTUM=64

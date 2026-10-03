@@ -206,3 +206,31 @@ swap-in, for the first CALL and the first 16 resumes):
     them dearer (83).
   - For the null this means the ~22,000 clean bare resumes INCLUDED walk misses behind the walks' own tag writes. The
     adapter's miss path under real DDR alone does not reproduce C5u's hang.
+
+## CORRECTION to the debug-session result, and the clash-fixed pair pre-registered
+- **"MSWAP is VOID" had the wrong reason.** The RTL lane ported sup-capstl.S unchanged into simulation (2026-10-03).
+  - MSWAP_PLAIN does not hang in the macro. It TRAPS, cause 24, at SWAP_IN's second instruction, the LDC through s10.
+  - The cause is my register clash. The domain's checksum register x26 IS s10, the swap-area capability, and an
+    UN-armed CALL/RETURN restores only the eight exchanged registers.
+  - On the board the trap read as "AC, no R".
+  - So the plain control was broken by the TEST, not by the swap macro.
+  - The ARMED arms are not touched by the clash: the escape's RESTORE brings the monitor's s10 back from the private
+    area.
+- **The armed MSWAP arms hang deterministically in simulation too.**
+  - The armed CALL's SAVE and exchange complete.
+  - The escape's SAVE, exchange and RESTORE of the monitor's 3..66 complete.
+  - The monitor retires SWAP_IN's `ccsrrw sp, cscratch`, and then its LDC through the restored, tagged s10 never
+    retires (~168 instructions, 4M cycles).
+  - No adapter detector fires (TAG_WAIT, starved switcher request): the load is stuck in the LSU. The RTL lane is
+    tracing the load unit and the store-buffer head.
+  - This is a DIFFERENT point from C5u: there the commit pc stayed before the CALL. The two are not yet the same
+    defect.
+- **Fix:** under MSWAP the checksum lives in x29. Non-MSWAP images are byte-identical. The earlier mswap* images were
+  built from the pre-fix source (45e3c7681d66).
+
+**Pre-registered, the clash-fixed pair** (call-retpc control first):
+- **mswapfix-plain-noploop** (ffd6f6db): the swap around one plain CALL. Predicted to COMPLETE and print `ACR`, with
+  reading 2 = 0 (no event), 3 = 0x1000, 4 = 0x7F800. This is the instrument's control. If it fails, nothing else here
+  stands.
+- **mswapfix-noploop-q64** (6b3641c1): armed. Predicted: `AC`, then no `R` (the first escape's SWAP_IN LDC hangs, as
+  in simulation), then the timeout. If it COMPLETES, silicon differs from simulation at this point.
