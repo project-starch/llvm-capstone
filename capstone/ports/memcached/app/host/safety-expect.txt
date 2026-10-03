@@ -223,3 +223,32 @@ shrink       18  RETURN 12001ee
 sublet       18  FAULT  temporal
 slabsublet0  18  FAULT  temporal
 slabsublet1  18  FAULT  temporal
+
+# ---------------------------------------------------------------------------------------------
+# Fixture 19, registered 2026-10-03 BEFORE it was built or run on any arm.
+# CLASS 3 -- REUSE-NOT-FREE -- on memcached's real bipbuffer (the logger's per-watcher output
+# buffer, logger.h:197,215; it also carries items.c's lru_bump_entry records, each holding an item
+# pointer, which is why the port aligns data[] to 16 in patch 0003).
+#
+# This fixture performs NO free of any kind. bipbuf_new is one malloc(sizeof(bipbuf_t) + size) with
+# a flexible data[]; bipbuf_request returns me->data + offset; bipbuf_poll only advances cursors and
+# resets a_start = a_end = 0, so the next request hands out the SAME bytes. The consumer's polled
+# pointer was never freed, stays tagged, stays in bounds of the one malloc, and now names another
+# record. Only the data's identity changed.
+#
+# PREDICTION: EVERY arm RETURNS 130015b, INCLUDING sublet, slabsublet0 and slabsublet1. The revoking
+# arms are blind to this because the runtime heap never sees a free and there is nothing to revoke.
+# Registering a predicted BLINDNESS is the point: it is the measurement that motivates hooking the
+# bipbuffer as a nested allocator, and a fault on any arm here would be the finding instead.
+#
+# THE INSTRUMENT IS KNOWN TO FIRE: fixture 18 is the same stale-pointer-then-reuse shape on the same
+# five arms, and it FAULTS on all three revoking arms because its release reaches the allocator. So
+# a clean RETURN here is a statement about the bipbuffer, not about an arm that never worked.
+# Value derived: mcapp_fill writes v0 + i and the second record's v0 is 0x5b, read at offset 0.
+# reissued is predicted 1, and the fixture exits 0xE0019 rather than a mark if the buffer did not
+# recycle in place -- a condition not created must not read as a result.
+level0       19  RETURN 130015b
+shrink       19  RETURN 130015b
+sublet       19  RETURN 130015b
+slabsublet0  19  RETURN 130015b
+slabsublet1  19  RETURN 130015b
