@@ -182,3 +182,27 @@ swap-in, for the first CALL and the first 16 resumes):
   - no `R` after the first `C`: the first armed CALL never returns or escapes.
 - Before them in the same session, the pending LATPROBE set (latprobe-capstl-q64 hot, latprobe-mevict, latprobe-evict)
   as pre-registered above.
+
+## RESULT, the debug session (2026-10-03 22:39-22:56): the swap macro is VOID as an instrument; the latency probe corrects a premise
+- Control: call-retpc PASS exact (N = 8).
+- **MSWAP is VOID.** Its own control hung. mswapdbg-plain-noploop puts the swap macro around ONE plain, UN-ARMED CALL,
+  and it printed `AC` and never `R`, exactly like the two armed arms (mswapdbg-noploop-q64, mswapdbg-capstl-q64).
+  - So with this macro the first CALL never returns, supervision or not. The macro breaks a plain CALL in the bare
+    harness, and the four MSWAP hangs above say nothing about the supervised switch.
+  - Which part breaks it, and why the real monitor's generated `__domcallsaves` (the same CPMP / CSR / cscratch / sp
+    steps on paper) does not, is OPEN. Candidates: the bare harness's CPMP or 0x803 contents, which differ from the
+    FPGA monitor's.
+- **The latency probe.** First load / second load of seal line +512 at the first escape:
+
+  | arm | readings 1-8 | probe (cycles) |
+  |---|---|---|
+  | latprobe-capstl-q64 (hot) | exact | 27 / 7 |
+  | latprobe-mevict-capstl-q64 | exact | 83 / 6 |
+
+  - latprobe-evict-capstl-q100k: NO-RESULT (infrastructure: JTAG load_image stalled for 6 minutes, nothing ran).
+  - **Correction: the hot negative control did not read two hits.** Even without a sweep, the walk-written seal line
+    is not in L1 at the first escape: 27 cycles against a 7-cycle hit. The premise above, "in the hot loop the walks
+    never miss", is WITHDRAWN. The hot runs also had walk misses, at least for this line, and the sweep only makes
+    them dearer (83).
+  - For the null this means the ~22,000 clean bare resumes INCLUDED walk misses behind the walks' own tag writes. The
+    adapter's miss path under real DDR alone does not reproduce C5u's hang.
