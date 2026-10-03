@@ -107,11 +107,34 @@ of that fixture. What does **not** stand is the framing: fixture 25 is **modelle
 `4b9c4b9cfb`, which is **fixed at the version we compile**. It is not a reproduction of a defect
 live in our pin, and must not be counted as one.
 
-### Also in this half, not yet read
+### ~~Also in this half, not yet read~~ — READ 2026-10-03, all six triaged
 
-`23aea1374579` videotoolboxenc, use-after-free of strings (the platform is macOS-only, so the code
-is not in our build — a reduction would still run); `c2173dcc3232` hlsenc, freed segment buffer
-pointer not cleared before an error return; `4c6217477fc6` nvdec, double free on an error path.
+`23aea1374579` videotoolboxenc; `c2173dcc3232` hlsenc; `4c6217477fc6` nvdec; plus
+`415c9f7b35` avutil/mem, `b8b8d43935` h274 and `d42cd604d0` vulkan_ffv1, which the earlier
+wording filter had not surfaced. Every one was put through the backport probe **and** the
+built-or-not question against the port's own `config.h`/`config_components.h`.
+
+| sha | subsystem | backported into `n9.0.1`? | built by the port? | verdict |
+|---|---|---|---|---|
+| `c2173dcc32` | hlsenc | no | **no** — `CONFIG_HLS_MUXER 0` | **live, reducible, portable C — the only usable one** |
+| `b8b8d43935` | h274 | no | buildable, but the stale read and the allocation are both inside `#if HAVE_BIGENDIAN`, and `HAVE_BIGENDIAN 0` in every config | live in source, **unreachable**: both lines compile out on little-endian |
+| `415c9f7b35` | avutil/mem | no | no — gated on `HAVE_ALIGNED_MALLOC`, which is 0 | **not a defect**: it works around a blind spot in the Windows ASan runtime, not an FFmpeg memory error |
+| `23aea13745` | videotoolboxenc | no | no — macOS only | **out of taxonomy**: CoreFoundation retain/release on a borrowed reference, no `av_malloc`/`av_free` and no pool API in the diff |
+| `d42cd604d0` | vulkan_ffv1 | no | no — hwaccel | **out of taxonomy**: the dangling object is a Vulkan descriptor binding written by a GPU shader; 2 of the 4 touched files are GLSL |
+| `4c6217477f` | nvdec | **YES — `3d5ad47c40`** | no — hwaccel | **not live.** This is the second instance of the trap: it is "absent by ancestry" yet its backport is in the tag. It would otherwise have been the only `nested`-class candidate of the six |
+
+**`4c6217477f` also carries a near-miss worth recording.** The `fail:`/`nvdec_fdd_priv_free(cf)`
+label *does* exist at the pin (`n9.0.1:libavcodec/nvdec.c:606-607`), but it belongs to a different
+function where freeing `cf` is correct, because it has not yet been published into
+`fdd->hwaccel_priv`. Grepping for the label alone would have produced a false LIVE — the same
+one-sided-grep failure as `ops_dispatch` above.
+
+**Only `c2173dcc32` survives, and its limitation is specific:** the port builds no HLS muxer, so the
+defective path is not in our binary. A reduction of it at the allocator seam would still run — the
+reductions here never execute the upstream consumer — but it must then be labelled as a reduction of
+a defect **live in the pinned source and unreachable in our build**, which is weaker than fixtures 24
+(FFmpeg) or 14/15 (tshark). It is also the *same measurement cell* as fixture 24: a stale struct
+field read at offset 0. Noted as available, deliberately not built.
 
 ## Half (a): pool-layer candidates — all four are one change, and all need reading
 
@@ -119,16 +142,32 @@ pointer not cleared before an error return; `4c6217477fc6` nvdec, double free on
 2026-07-16, all *"Ensure that private HW data is freed early for pictures"*. Each moves one
 `av_refstruct_unref(&pic->hwaccel_picture_private)` earlier in the same function.
 
-**Not yet classified, and the reason is worth stating.** The subject says "freed early", which reads
-as a *resource-ordering* fix rather than a use-after-free, and the existing inventory records a
-retraction of exactly this mistake: `a024f8c541` vp9 was filed as a pool-backed temporal specimen
-and later withdrawn because *"its own fix classifies it as spatial, not temporal"*. These four must
-be read against their call sites before any of them is called a temporal defect. They also touch
-hardware-accelerated decode, which the app port does not build.
+**~~Not yet classified~~ — CLASSIFIED 2026-10-03, and the earlier suspicion was right.** The subject
+says "freed early", which reads as a *resource-ordering* fix rather than a use-after-free, and the
+inventory records a retraction of exactly this mistake (`a024f8c541` vp9, withdrawn because *"its own
+fix classifies it as spatial, not temporal"*). Read now, against the commits' own bodies:
 
-**So half (a) currently yields no confirmed candidate**, and the honest reading is that FFmpeg's
-pool-consumer history was already exhausted by the existing inventory ("upstream history is
-exhausted at four").
+- **All four are REJECTED, out of class.** Each diff is a pure reordering — the same
+  `av_refstruct_unref(&…->hwaccel_picture_private)` line removed and re-added a few lines earlier,
+  1–2 lines net. The commit body names the dying object, and it is **not pool storage**: *"Vulkan
+  video decode holds a reference to a VkSemaphore that is waited on in `ff_vk_decode_free_frame`. …
+  the wait_semaphores call ends up waiting on a destroyed [semaphore]."* That is a
+  destruction-ordering defect across the CPU/GPU boundary on a **driver handle**. The
+  `av_refstruct_unref` is the fix's *mechanism*, not the defect's allocator — which is precisely why
+  the layer must be read from the diff's semantics and not from the API that appears in it.
+- **The hevc one is explicitly speculative:** its author records that another upstream developer
+  suggested hevc would have a similar bug, and adds *"I couldn't reproduce a crash or VVL error in
+  this area."* Hardening, not an observed defect.
+- **And none is reachable:** the port's own `config_components.h` has **79** `_HWACCEL` lines with
+  **0** enabled, and no `CONFIG_*VULKAN*` enabled either. (Checked two-sided: the same grep finds
+  `CONFIG_H263_DECODER 1`, `CONFIG_MPEG4_DECODER 1`, so it is able to report an enabled entry.)
+- All four survive the backport probe (not cherry-picked into `n9.0.1`), so liveness is not what
+  rejects them — class and reachability are.
+
+**So half (a) yields no candidate, now by reading rather than by deferral**, and FFmpeg's
+pool-consumer history stands exhausted at the four the existing inventory already found.
+**FFmpeg's nested column is empty, and that is a finding rather than a gap**: the only `nested`-class
+commit in either half was `4c6217477f`, and it is backported.
 
 ## Measured, 2026-10-02: both reproduce natively, and ASan reports both
 
