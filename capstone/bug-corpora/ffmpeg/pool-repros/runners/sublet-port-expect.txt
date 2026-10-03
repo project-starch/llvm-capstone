@@ -35,7 +35,14 @@ poolsublet   45       COMPLETE  FIXED
 # poolsublet is the nested arm: a release returns the entry to the pool, which on this arm is a
 # revoke, so the stale read faults. The fault's line is whichever line of case.c dereferences
 # `held` -- the printf, the verdict and the `bad` expression all do, so any of them counts.
+# 2026-10-03: case 3's fault lines re-registered 84,85,88 -> 99,100,103. The PREDICTION is
+# unchanged (poolsublet faults on 46, poolstock completes); only the line table moved, because
+# case.c now tracks BOTH released side tables. The pool's free list is LIFO, so the entry handed
+# back is rpl_tab -- the last released -- not tab_dmvr_mvf, and the first version of the
+# reduction watched only tab_dmvr_mvf and read reuse_same_address=0. That was the instrument
+# misreading a correct allocator, not the defect failing to reproduce. Measured natively the
+# same day: reuse_same_address=1, reissued_is_rpl_tab=1, stale_read=0xCC.
 poolstock    46       COMPLETE  DEFECT-REPRODUCED
 poolstock    47       COMPLETE  FIXED
-poolsublet   46       FAULT     84,85,88
+poolsublet   46       FAULT     99,100,103
 poolsublet   47       COMPLETE  FIXED

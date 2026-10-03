@@ -1,0 +1,30 @@
+00_461fb22053_af_join_dedup_bound case=0 arm=fixed
+00_461fb22053_af_join_dedup_bound tracked_buffers=2 output_refs=2 reuse_same_address=0 stale_read=0xB0 new_owner=0xCC
+00_461fb22053_af_join_dedup_bound VERDICT FIXED output holds a reference, storage not reissued
+00_461fb22053_af_join_dedup_bound case=0 arm=buggy
+00_461fb22053_af_join_dedup_bound tracked_buffers=1 output_refs=1 reuse_same_address=1 stale_read=0xCC new_owner=0xCC
+00_461fb22053_af_join_dedup_bound VERDICT DEFECT-REPRODUCED stale pointer reads the new owner's payload
+01_1886c3269d_h264_refs_partial_clear case=1 arm=fixed
+01_1886c3269d_h264_refs_partial_clear survivors_past_len=0 reuse_same_address=0 stale_read=0x00
+01_1886c3269d_h264_refs_partial_clear VERDICT FIXED the reset covers the whole list
+01_1886c3269d_h264_refs_partial_clear case=1 arm=buggy
+01_1886c3269d_h264_refs_partial_clear survivors_past_len=2 reuse_same_address=1 stale_read=0xCC
+01_1886c3269d_h264_refs_partial_clear VERDICT DEFECT-REPRODUCED a record past ref_count still names reissued storage
+02_316531e61c_vidstab_parked_plane_pointer case=2 arm=fixed
+02_316531e61c_vidstab_parked_plane_pointer wrote_through_stale=0 new_owner_byte=0x22
+02_316531e61c_vidstab_parked_plane_pointer VERDICT FIXED nothing is carried across frames
+02_316531e61c_vidstab_parked_plane_pointer case=2 arm=buggy
+02_316531e61c_vidstab_parked_plane_pointer wrote_through_stale=1 new_owner_byte=0x99
+02_316531e61c_vidstab_parked_plane_pointer VERDICT DEFECT-REPRODUCED the parked pointer corrupts the new owner
+03_5c66a3ab51_vvc_nonref_output_releases_tabs case=3 arm=fixed
+03_5c66a3ab51_vvc_nonref_output_releases_tabs flags_after_output=2 tables_released=0 reuse_same_address=0 reissued_is_rpl_tab=0 stale_read=0x00 new_owner=0xCC
+03_5c66a3ab51_vvc_nonref_output_releases_tabs VERDICT FIXED SHORT_REF keeps the frame alive, so the tables stay with it
+03_5c66a3ab51_vvc_nonref_output_releases_tabs case=3 arm=buggy
+03_5c66a3ab51_vvc_nonref_output_releases_tabs flags_after_output=0 tables_released=1 reuse_same_address=1 reissued_is_rpl_tab=1 stale_read=0xCC new_owner=0xCC
+03_5c66a3ab51_vvc_nonref_output_releases_tabs VERDICT DEFECT-REPRODUCED the decoder's side table went back to the pool and was reissued
+
+# runner : runners/run-native.sh  (exit 0 = every case's defect arm reproduced; 75 = infra)
+# rc     : 0
+# build  : ports/ffmpeg/buffer-pool, cmake --preset native, host clang, apollo, -j12 pinned 0-7,32-39
+# allocator: upstream libavutil/buffer.c + libavutil/refstruct.c, unreduced, from the port's
+#            sources/ffmpeg-ported tree (FFmpeg n9.0.1)

@@ -66,26 +66,41 @@ FF2_CASE(3) {
 
   /* Live control: the table is readable while the frame is held. */
   CHECK(frame.tab_dmvr_mvf[0] == 0xA0, 607);
+  /* Both side tables are the decoder's, and ff_vvc_unref_frame releases BOTH, so
+   * both stale pointers have to be tracked -- see the LIFO note below. */
   unsigned char *held = frame.tab_dmvr_mvf; /* what the decoder goes on using */
+  unsigned char *held2 = frame.rpl_tab;
 
   /* ff_vvc_output_frame can select the frame that has not finished decoding and
    * clears its OUTPUT flag. */
   unref_frame(&frame, VVC_FRAME_FLAG_OUTPUT);
-  int released = frame.tab_dmvr_mvf == NULL;
+  int released = frame.tab_dmvr_mvf == NULL && frame.rpl_tab == NULL;
 
-  /* The next picture's side table comes from the same pool. */
+  /* The next picture's side table comes from the same pool.
+   *
+   * The free list is LIFO, and that is load-bearing for this case: the real
+   * pool_return_entry pushes onto the head (`ref->opaque.nc =
+   * pool->available_entries; pool->available_entries = ref;`) and
+   * refstruct_pool_get_ext pops the head, so the entry handed back is the LAST
+   * one released. unref_frame releases tab_dmvr_mvf first and rpl_tab second,
+   * so the reissued entry is RPL_TAB, not tab_dmvr_mvf. An earlier version of
+   * this reduction watched only tab_dmvr_mvf and reported reuse_same_address=0
+   * -- a correct allocator being misread by the instrument. Both tables belong
+   * to the decoder, so either one coming back proves the reuse; naming which
+   * one is what keeps the oracle unambiguous. */
   unsigned char *reissued = av_refstruct_pool_get(g_refpool);
   CHECK(reissued, 608);
-  int same = reissued == held;
+  int same = reissued == held || reissued == held2;
+  unsigned char *stale = reissued == held ? held : held2;
   memset(reissued, 0xCC, TAB_BYTES);
 
   printf("flags_after_output=%d tables_released=%d reuse_same_address=%d "
-         "stale_read=0x%02X new_owner=0x%02X\n",
-         frame.flags, released, same, held[0], reissued[0]);
-  FF2_VERDICT(!fixed && released && same && held[0] == 0xCC, fixed && !released,
+         "reissued_is_rpl_tab=%d stale_read=0x%02X new_owner=0x%02X\n",
+         frame.flags, released, same, reissued == held2, stale[0], reissued[0]);
+  FF2_VERDICT(!fixed && released && same && stale[0] == 0xCC, fixed && !released,
               "the decoder's side table went back to the pool and was reissued",
               "SHORT_REF keeps the frame alive, so the tables stay with it");
-  int bad = !fixed ? !(released && same && held[0] == 0xCC) : !!released;
+  int bad = !fixed ? !(released && same && stale[0] == 0xCC) : !!released;
   av_refstruct_unref(&reissued);
   av_refstruct_unref(&frame.tab_dmvr_mvf);
   av_refstruct_unref(&frame.rpl_tab);

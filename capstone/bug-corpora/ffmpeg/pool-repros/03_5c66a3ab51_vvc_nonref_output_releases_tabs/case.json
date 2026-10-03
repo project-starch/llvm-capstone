@@ -13,8 +13,9 @@
   "distinguishing": "the only case in this corpus whose stale storage comes from AVRefStructPool rather than AVBufferPool, and the only one whose release is triggered by flag arithmetic rather than by a reference count reaching zero through a consumer's own unref",
   "arms": {
     "native-fix-differential": {
-      "oracle": "the buggy arm has the tables released and reissued at the same address, and reads the new owner's 0xCC; the fixed arm keeps VVC_FRAME_FLAG_SHORT_REF set so the release branch never runs and nothing is reissued",
-      "note": "this pair differs by the upstream fix, not by protection"
+      "oracle": "the buggy arm has both side tables released and one reissued at the same address, and reads the new owner's 0xCC through the stale pointer; the fixed arm keeps VVC_FRAME_FLAG_SHORT_REF set so the release branch never runs and nothing is reissued. The pool's free list is LIFO (pool_return_entry pushes onto pool->available_entries, refstruct_pool_get_ext pops the head), so the entry handed back is rpl_tab, the LAST of the two released -- the oracle tracks both and reports which, via reissued_is_rpl_tab",
+      "note": "this pair differs by the upstream fix, not by protection",
+      "measured": "2026-10-03, results/2026-10-03-native-four-cases/: buggy arm tables_released=1 reuse_same_address=1 reissued_is_rpl_tab=1 stale_read=0xCC -> DEFECT-REPRODUCED; fixed arm tables_released=0 -> FIXED. run-native.sh exited 0 over all four cases"
     },
     "sublet-port": {
       "fixtures": [
@@ -47,6 +48,6 @@
       "status": "not written"
     }
   },
-  "status": "declared 2026-10-03, not yet run on any arm. The sublet-port predictions are registered in runners/sublet-port-expect.txt before the first build, as this corpus requires; nothing here claims an outcome",
+  "status": "declared 2026-10-03; the native-fix-differential arm MEASURED the same day (results/2026-10-03-native-four-cases/), both arms as predicted. The sublet-port rows (fixtures 46/47) remain predictions: they need the FFmpeg app port, whose SDK gate correctly refuses both toolchains on this host (C-46 linear direct-call target / missing intcap extensions), reproduced 2026-10-03. The fault lines were re-registered 84,85,88 -> 99,100,103 when the reduction was corrected to track both released tables; the predicted outcomes did not change",
   "note": "The arms left 'not written' are the ones this case cannot honestly carry yet: spatial and sublet need a probe case in ports/ffmpeg/buffer-pool (36-38 are taken by cases 0-2), and the PoisonCap and CheriBSD arms need platforms this host does not have. They are declared rather than omitted so the corpus's required_arms stay satisfied without any of them implying a result"
 }
