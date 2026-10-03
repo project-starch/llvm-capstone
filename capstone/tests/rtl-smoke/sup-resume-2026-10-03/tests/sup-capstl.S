@@ -10,13 +10,19 @@
 # This test makes every escape land near that sequence. A supervised domain loops on it ITER times under a small
 # quantum (QUANTUM cycles), and the monitor resumes every preemption, like the FPGA monitor's classic-call hook.
 # Build -DINTLOOP for the matched control: the same loop with the capability store/load replaced by sd/ld, i.e. no
-# tagged write and no tagged reload.
+# tagged write and no tagged reload; -DNOPLOOP replaces all four memory instructions by addi/andi (the RTL lane's
+# control: the arms then differ only in the memory traffic).
+# CACHE MISSES (added after the hot-cache session completed every arm): a walk load reads the shadow tag only on an
+# L1 MISS, and that read waits in TAG_WAIT behind every outstanding tag write. The hot loop never misses.
+#   -DEVICT   the domain also loads one 16-byte line of a 64 KiB buffer per iteration, so a large quantum turns L1
+#             (32 KiB, 8-way, 16-B lines) over between escapes, as SQLite's working set does;
+#   -DMEVICT  the monitor sweeps the 64 KiB buffer before every resume, so every RESTORE read misses.
 #
 # Readings (CAPPRINT, in order):
 #   1 csnodefree at the start (reported)
 #   2 csupstatus after the last CALL: 1 = kind 0, valid (the domain RETURNed)
 #   3 the domain's stored iteration count = ITER (exactly-once: a skipped or doubled iteration moves it)
-#   4 the domain's stored checksum = sum of (i & 0xff) for i < ITER: 0x7F800 for ITER 4096
+#   4 the domain's stored checksum = sum of (i & 0xff) for i < ITER: 0x7F800 for ITER 4096, 0x7F80000 for 2^20
 #   5 escapes, i.e. resumes (reported; > 0)
 #   6 csnodefree at the end (reported)
 #   7 mcause = 0 (no trap taken)
@@ -87,6 +93,18 @@ CAPPERM(s1, a5)
 sd x0, 0(s1)
 sd x0, 8(s1)
 
+#if defined(EVICT) || defined(MEVICT)
+# s11: NONLIN RW over the 64 KiB eviction buffer (the domain inherits it; the monitor sweeps it under MEVICT)
+CAPCREATE(s11)
+li a0, CAP_TYPE_NONLIN
+lla a3, bigbuf
+lla a4, bigbuf_end
+li a5, CAP_PERM_RW
+CAPTYPE(s11, a0)
+CAPBOUND(s11, a3, a4)
+CAPPERM(s11, a5)
+#endif
+
 # a2: the stub's code capability; a1 -> the seal
 CAPCREATE(a2)
 li a0, CAP_TYPE_LIN
@@ -132,6 +150,15 @@ supervise_loop:
   bnez t1, 1f
   BPUTI(46)                    # '.' every 256 escapes
 1:
+#ifdef MEVICT
+  li t4, 0                     # sweep 64 KiB through s11, one load per 16-byte line: L1 holds none of the walks' lines
+  li t5, 0x10000
+3:
+  CINCOFFSET(t6, s11, t4)
+  ld t6, 0(t6)
+  addi t4, t4, 16
+  bne t4, t5, 3b
+#endif
   csrwi CSUPCTL, 1             # resume
   CSSUPERVISE(t3, a3, s5)
   CALL(a3, a3)
@@ -167,8 +194,17 @@ stub:
   li x22, 0                    # iterations
   li x26, 0                    # checksum
   CINCOFFSETIMM(s2, s1, 16)    # G = buf + 16 (granule 1); buf + 15 is in granule 0, its neighbour
+#ifdef EVICT
+  li t6, 0xFFF0                # the sweep offset mask (64 KiB, 16-byte steps)
+  li t3, 0
+#endif
 2:
-#ifdef INTLOOP
+#if defined(NOPLOOP)
+  addi x0, x0, 0
+  addi x0, x0, 0
+  addi x0, x0, 0
+  andi a4, x22, 255            # the value the lbu would read
+#elif defined(INTLOOP)
   sd x24, 0(s2)                # integer store to G
   sb x22, -1(s2)               # byte into the neighbouring granule
   ld a5, 0(s2)                 # integer reload of G
@@ -178,6 +214,12 @@ stub:
   sb x22, -1(s2)               # byte into the neighbouring granule
   LDC(a2, s2, 0)               # the capability reloaded from G
   lbu a4, 15(a2)               # through it: buf + 15, the byte just stored
+#endif
+#ifdef EVICT
+  addi t3, t3, 16
+  and t3, t3, t6
+  CINCOFFSET(a5, s11, t3)
+  ld t5, 0(a5)
 #endif
   add x26, x26, a4
   addi x22, x22, 1
@@ -206,5 +248,11 @@ seal_end:
 buf:
   .zero 64
 buf_end:
+#if defined(EVICT) || defined(MEVICT)
+.align 12
+bigbuf:
+  .zero 65536
+bigbuf_end:
+#endif
   TEST_DATA
 RVTEST_DATA_END

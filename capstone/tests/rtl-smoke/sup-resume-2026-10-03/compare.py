@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Verdict for one sup-capstl run (or the call-retpc control). Usage: compare.py <run dir with uart.txt> [control].
+"""Verdict for one sup-capstl run (or the call-retpc control). Usage: compare.py <run dir with uart.txt> [control | ITER].
 Exit 0 COMPLETED-AS-PREDICTED, 1 MISS (completed with a wrong value), 3 HANG (SUPTEST BEGIN/SB1 seen, no END: the
 dots say how far it got), 2 NO-RESULT (no uart.txt or no SB1 -- the harness never started the test)."""
 import re, sys, pathlib
 
-def main(d, control=False):
+def main(d, control=False, iters=4096):
     p = pathlib.Path(d) / "uart.txt"
     if not p.exists():
         print(f"NO-RESULT: no {p}"); return 2
@@ -21,10 +21,12 @@ def main(d, control=False):
     if len(sv) != 8:
         print(f"MISS: {len(sv)} readings {[hex(x) for x in sv]} (a trap ends with mcause, mepc)"); return 1
     nf0, st, it, ck, esc, nf1, mc, end = sv
-    ok = st == 1 and it == 0x1000 and ck == 0x7F800 and esc > 0 and mc == 0 and end == 0x5E5E
+    want_ck = (iters // 256) * 32640 + sum(range(iters % 256))
+    ok = st == 1 and it == iters and ck == want_ck and esc > 0 and mc == 0 and end == 0x5E5E
     print(("COMPLETED" if ok else "MISS") + f": status {st:#x} iter {it:#x} checksum {ck:#x} escapes {esc} (dots {dots}) "
           f"csnodefree {nf0:#x} -> {nf1:#x} mcause {mc:#x} end {end:#x}")
     return 0 if ok else 1
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1], len(sys.argv) > 2 and sys.argv[2] == "control"))
+    a = sys.argv[2] if len(sys.argv) > 2 else ""
+    sys.exit(main(sys.argv[1], a == "control", int(a, 0) if a and a != "control" else 4096))

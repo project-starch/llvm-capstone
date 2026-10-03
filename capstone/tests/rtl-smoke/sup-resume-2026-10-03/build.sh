@@ -20,3 +20,10 @@ build intloop-q64 73 -DINTLOOP -DQUANTUM=64
 build capstl-q64  67 -DQUANTUM=64
 build capstl-q47  68 -DQUANTUM=47
 build capstl-q16  69 -DQUANTUM=16
+# cache-miss variants (after the hot-cache session completed every arm): ITER 2^20 for the domain-side sweep
+build evict-noploop-q100k 78 -DEVICT -DNOPLOOP -DQUANTUM=100000 -DITER=1048576
+build evict-intloop-q100k 79 -DEVICT -DINTLOOP -DQUANTUM=100000 -DITER=1048576
+build evict-capstl-q100k  80 -DEVICT -DQUANTUM=100000 -DITER=1048576
+build evict-capstl-q20k   81 -DEVICT -DQUANTUM=20000 -DITER=1048576
+build mevict-noploop-q64  82 -DMEVICT -DNOPLOOP -DQUANTUM=64
+build mevict-capstl-q64   83 -DMEVICT -DQUANTUM=64
