@@ -101,6 +101,54 @@ able to catch it.
 **What this costs the corpus:** `wmem-repros` still has **13 cases, 0 live in the pin and 0
 advisories**, and no live-in-pin candidate for its class has been found.
 
+## WIDENED 2026-10-03: the master-only population this instrument could not see
+
+The section above names the gap itself — *"a defect … fixed only on `master` and never backported to
+4.6"*. That gap was the whole answer: searching the release branch saw **82** commits where `master`
+carries **4321**. The widened search, and what it found:
+
+| | |
+|---|---|
+| population | `v4.6.8..origin/master` = **4321** commits, against 82 on the release branch |
+| lifetime wording | **24** (one of them the ZigBee commit already triaged) |
+| **LIVE at the pin, two-sided** | **5** |
+| NOT-LIVE | 18 — of which **7 were backported** under a different sha, 5 have code that postdates the pin (3 of those are files absent from v4.6.8), 3 are funnel commits against a list that does not exist at the pin, 1 is a different implementation, and 2 are the traps below |
+
+**The decisive fact, and it is a methodology one: `v4.6.8` is dated 2026-08-12, newer than 20 of the
+24 commits.** So "absent by ancestry" says almost nothing here, and 7 of 23 were in fact present by
+content. Liveness was therefore decided by the test that replaced the retracted method (see
+[`ffmpeg-live-defect-triage.md`](ffmpeg-live-defect-triage.md)): a cherry-pick probe over the tag,
+**plus** reading the enclosing code to confirm the free precedes the read — with controls proving the
+probe fires on a known backport, errors on a missing path, and does not read an empty result as
+"not live".
+
+### The two one-sided-grep traps, which are the real finding here
+
+Both would have been scored **LIVE** by grepping the pinned tree for the pre-fix line, and both are
+NOT-LIVE because *the free that turns the stale read into a use-after-free postdates the pin*:
+
+- **`ac4aa6510e` PPI.** The pre-fix order IS at `v4.6.8:epan/dissectors/packet-ppi.c:417-418`. But
+  `v4.6.8:epan/proto.c:1324` is `/*g_free(ptvc);*/` — it frees nothing. The real free arrived in
+  `5a8efd7836`, proven **not** an ancestor of `v4.6.8`.
+- **`e5dc76c30c` zlib.** Pre-fix `g_free(strmbuf)` then reuse; at the pin the code accumulates into a
+  separate buffer and `strmbuf` is never read after any free.
+
+This is the same shape as the `ops_dispatch` retraction on the same day, in a second program. A
+pre-fix line matching is **evidence of a line, not of a defect**.
+
+### The 5 live candidates, and which were taken
+
+| sha | subsystem | class | taken? |
+|---|---|---|---|
+| **`6e61bca421`** http2 | dissector | **heap** — a `static GRegex *` unref'd to a zero refcount but left non-NULL, so its own `== NULL` guard passes and `g_regex_match` reads freed storage | **YES — fixture 15** |
+| `030bf6ad01` ZigBee | dissector | heap (see the correction above) | **YES — fixture 14** |
+| `2a6db056e1` ngap, `81e76cd4a8` e2ap | dissector | **wmem-nested** — a global `proto_tree *top_tree` moved into `pinfo->pool` private data | **no: LATENT.** Hardening, not observed defects. The exported-handle sets were intersected against the `set_message_label` callers and the intersection is **empty**, so no stale window was reachable; both authors say so in their own messages (*"I haven't found any use-after-free in this dissector"*). Recorded as a pattern, not counted as a bug. One route left open and UNRESOLVED: whether `tshark -d`/Decode-As can bind a `*.proc.*` entry directly and skip the top-level dissector |
+| `4a1ae0b63c` dfilter | epan-core | heap | no: latent for tshark — `dfilter_init`/`dfilter_cleanup` run once each per process, so a single invocation never does cleanup→init |
+| `d24613c461` opcua | dissector | **neither** | no: **out of class.** Despite a subject saying "heap-use-after-free", the diff adds only length guards and touches no allocator call; the defect is an out-of-bounds read inside a `wmem_alloc`'d buffer. A bounds bug, and the scope here is allocator lifetime |
+
+So the widened search yields **one** new usable case, `6e61bca421`, which became fixture 15. That is
+the honest yield: 4321 commits → 24 worded → 5 live → 1 in class, reachable and not latent.
+
 ## What was rejected, and why
 
 | candidate | reason |
