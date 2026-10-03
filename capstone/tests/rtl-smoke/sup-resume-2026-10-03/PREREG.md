@@ -642,3 +642,25 @@ The RTL lane's simulation of the resident logic gives these outcomes, which are 
   (`docs/plans/memcached-on-silicon.md` on dev) is measured or false.
 - ISSUES' S-16 entry says plain-CALL exposure "has not been measured". This set measures it at the shapes above.
 - A completion does not prove safety: the monitor's own timing differs.
+
+### Correction, 05:31 on 2026-10-04: the derivation's RETURN premise is withdrawn; the escape prediction is fixed at idx 7
+**The 05:30 prediction is refuted.**
+- I had predicted that a RETURN-side hang would read idx 4. n4-r3 (b7937a87) hung with the full S-16 signature at
+  **idx 7**: 224/225/226/227 = 0x1f/0x88/0x80/0x04, 193 = 4, 194 = 3, 228/239/240 = 7.
+- Its stale slot-0 pc is 0x800009b0, `stub`'s first instruction, so the CALL's switch had finished and the stuck
+  switch is the domain's RETURN, as the RTL lane's simulation said.
+
+**What was wrong.**
+- The derivation assumed a RETURN is exchange-entered. A **supervised** RETURN is not: commit_stage.sv:521-526
+  at 36a641e0b sets `save_en = 1` (SAVE the domain's 3..66 into the seal region first). Its first write is therefore
+  id 3, and it starves at id 7.
+- That was the pre-registered first alternative, and I had not checked commit_stage before writing the premise.
+
+**What stands.**
+- Read in source this time, `save_en` is set by exactly three requests: the armed CALL (:497), the supervised RETURN
+  (:522) and the quantum escape (:746). An ordinary CALL or RETURN takes the request from the instruction with
+  `save_en` clear.
+- The walk-index rule ("the first switcher write after an ordinary store is mis-checked; the 4th after it starves")
+  is consistent with every S-16 reading so far.
+- The PLAIN twins' prediction is unchanged: **if they hang, idx 4**.
+- **esc-n8, not yet run:** the escape saves, so **idx 7**.
