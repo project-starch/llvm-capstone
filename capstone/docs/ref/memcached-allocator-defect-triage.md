@@ -58,13 +58,65 @@ hooked: it walks a page by pointer arithmetic, which per-chunk bounds refuse"*
 defects needs the mover hooked, which is **port work, not corpus work**, and is the real
 next step for memcached's nested class.
 
-## The plain-heap half
+## WIDENED 2026-10-03: the "0" re-checked two-sided, and the wording filter measured
 
-Every corpus in this tree is a nested-allocator corpus, so a plain `malloc`/`free` defect in
-memcached would have no home today. Candidates exist — the proxy and the vendored `mcmc` client both
-use plain `malloc`, and `#1268` ("Minor ASAN crash-triggering Bug in `_mcmc_token()`") is one — but
-note what that implies: a defect ASan already reports is, by construction, **not** evidence for the
-mechanism this project claims. It is a control, and should be written as one or not at all.
+**The zero stands, and it is now a tested negative rather than a one-branch reading.** The earlier
+check looked only at `origin/master`. memcached develops on `origin/next`, so that was the same
+single-branch mistake that cost the Wireshark search 4,239 commits. Re-checked:
+
+| | |
+|---|---|
+| `origin/master` | `2d51e36` — still exactly the pin, **0** commits after |
+| `origin/next` | `853112d`, 2026-07-20 — **1** commit ahead of master, `slabs: minor cleanup`, nothing lifetime-related |
+
+So no fixed-upstream-after-the-pin candidate exists for memcached, on either branch. Every memcached
+case must be historical.
+
+**And a lesson about the instrument, which is why the counts below are not an inventory.** A
+lifetime-vocabulary grep over the whole history returns **13** commits. That list is *not* a superset
+of the 9 candidates the 2026-09-21 subsystem search found: the intersection is **2** (`7af02b0`,
+`0ad4de6`). The corpus's three strongest cases — `59bd02ce29`, `a8c4a82787`, `152ddb68f7` — and four
+of its rejections are **absent** from the 13. **Three of the five built cases would never have been
+found by wording.** Read subsystems and diffs; treat a wording filter as a sampler, never as a
+population.
+
+Of the 11 unused members of those 13: two were worth building and became app fixtures 17 and 18 (see
+the next section); five are rejected with reasons — `3eb7773` touches `slabs.c` but is a
+wrong-*metadata* bug where both arms read freed chunks anyway, `34e4604` reverses into a NULL
+dereference that cannot discriminate the arms, `683bb98` and `f8a55c4` sit on substrate deleted
+before the pin, and `d195dfe` is not an ancestor of 1.6.45 at all (its `daemon/` layout is gone);
+one, `acdfe1a`, is **not a defect** — a `configure.ac` change that matched the filter only because its
+message says "use after frees, double frees". The remaining three are proxy-side and blocked with the
+rest of the proxy.
+
+**No unused member of the 13 is a slab (nested-class) defect.** The only nested shape among them is
+`5267f14`, a double return into the proxy's own rctx cache, and it needs a Lua state. That is
+consistent with the deferral below rather than a new finding.
+
+## The plain-heap half — now built, as the CONTRAST rather than as filler
+
+~~a plain `malloc`/`free` defect in memcached would have no home today~~ — it has one: the port's app
+fixtures. Two were added on 2026-10-03, and the reason is specific rather than "more cases".
+
+Fixtures 12–16 end their objects **inside** memcached's own allocators — `cache_free` pushes onto a
+STAILQ, `do_slabs_free` onto a class's slots list — so the runtime's `free` is never called, `sublet`
+cannot revoke, and the expect file registers `sublet` as the **negative control that must RETURN**.
+That silence is the nested-allocator blindness claim. But a silence is only attributable if the same
+arm is shown to speak when the release *does* reach the allocator. That is what the two new fixtures
+are for:
+
+- **17**, commit `204019d` (a 2006 contributed patch): `realloc` moves the connection read buffer and
+  only the base pointer is updated, leaving the parser's interior cursor in the released block. Same
+  *object* as fixture 12, different allocator seam.
+- **18**, `e779381` logger: the close routine clears the global slot and frees the watcher; the caller
+  writes `w->failed_flush` through its own stale pointer. The corpus's only **write**-after-free.
+
+Both are plain `malloc`/`calloc`/`realloc`, so `sublet` must FAULT on them — and does. Results:
+[`../../ports/memcached/app/results/2026-10-03-qemu-plain-heap-contrast/`](../../ports/memcached/app/results/2026-10-03-qemu-plain-heap-contrast/README.md).
+
+The older caution still applies and is worth keeping: a defect ASan already reports is **not**
+evidence for the mechanism this project claims. These two are controls, and are written as such. What
+they add is that the nested rows' silence is now attributable.
 
 ## Counts
 
