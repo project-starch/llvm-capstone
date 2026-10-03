@@ -30,3 +30,18 @@ armB     e6255fb822 applied 1 use-after-poison                     pool_stale.c:
 #   * the instrument CAN fire   -> control, heap-use-after-free, rc=1
 #   * the instrument DOES fire on this very access once pooled memory is annotated -> armB
 #   * so armA's rc=0 is a measured blindness, not an untested zero
+
+# ARM C, added 2026-10-03 after being pre-registered in da90e4051862:
+# the SAME armB-patched refstruct.o, the SAME access -- the pool is the only difference.
+armC     e6255fb822 applied, pool has a free_entry_cb   rc=0  ASan: NO REPORT
+#   live_read=0xA0
+#   released=1
+#   stale_read=0xA0                  <- armB aborts here; armC does not
+#   reuse_same_address=1
+#   after_new_owner_stale_read=0xCC
+#   DONE
+#
+# armB vs armC is a one-variable contrast: av_refstruct_pool_alloc(TAB,0) vs
+# av_refstruct_pool_alloc_ext(TAB,0,NULL,NULL,NULL,noop_free_entry,NULL). Same patch, same
+# binary logic, opposite verdict -- so the `if (!pool->free_entry_cb)` gate is MEASURED to
+# suppress the poisoning, not merely read from the diff.

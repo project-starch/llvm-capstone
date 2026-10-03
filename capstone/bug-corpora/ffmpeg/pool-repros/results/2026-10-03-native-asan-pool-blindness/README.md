@@ -78,6 +78,19 @@ sequence, the same armB-patched `refstruct.c`, but the pool created through
 reports one on the identical access.** If armC instead reports, then the gate does not do what the diff
 says and limit 1 must be withdrawn.
 
+**MEASURED, as predicted: armC is rc=0, no report.** The prediction was pushed in `da90e4051862`
+before the run.
+
+| arm | patch applied | pool created by | rc | ASan verdict |
+|---|---|---|---:|---|
+| armB | `e6255fb822` | `av_refstruct_pool_alloc(TAB, 0)` | 1 | **`use-after-poison`** |
+| **armC** | **the same `refstruct.o`** | `av_refstruct_pool_alloc_ext(…, noop_free_entry, NULL)` | **0** | **NO REPORT** |
+
+armB and armC are a **one-variable contrast**: identical patched object, identical source except the
+pool constructor, opposite verdict. armC runs the whole sequence with ASan silent —
+`stale_read=0xA0`, `reuse_same_address=1`, `after_new_owner_stale_read=0xCC`. **So limit 1 is measured,
+not inferred: the `if (!pool->free_entry_cb)` gate really does suppress the poisoning.**
+
 **Which real pools this bears on, checked at the pin rather than assumed:**
 
 | pool | created by | covered by `e6255fb822`? |
@@ -87,8 +100,9 @@ says and limit 1 must be withdrawn.
 | **MPVPicture** — the picture pool of the whole MPEG-1/2/4, H.263, VC-1, RV30/34/40, WMV2, MSMPEG4 family | `ff_mpv_alloc_pic_pool` → `av_refstruct_pool_alloc_ext(…, mpv_pic_init, mpv_pic_reset, **mpv_pic_free**, NULL)` (`mpegpicture.c:90-96`) | **NO** |
 | `AVContainerFifo` slots | `av_refstruct_pool_alloc_ext(…, container_fifo_free_entry, NULL)` (`container_fifo.c:87`) | **NO** |
 
-So the covered/uncovered split is not hypothetical: **FFmpeg's most widely used picture pool is in the
-uncovered set.** Recorded here with its call site because an earlier draft of this reasoning asserted the
+So the covered/uncovered split is not hypothetical, and armC shows what being in the uncovered set
+costs: **FFmpeg's most widely used picture pool is invisible to ASan for this class even on master
+today.** Recorded here with its call site because an earlier draft of this reasoning asserted the
 opposite for h264 — that its pools carried callbacks — and the pin says they do not.
 
 
@@ -111,7 +125,8 @@ opposite for h264 — that its pools carried callbacks — and the pin says they
 `result-lines.txt` — every line quoted above.
 `pool_stale.c` — the pooled-reuse probe (armA and armB, same source).
 `ctl_uaf.c` — the instrument's positive control.
-`refstruct-e6255fb822.patch` — the exact patch applied for armB, so the arm is reproducible.
+`pool_stale_C.c` — arm C: the same probe with a `free_entry_cb` pool.
+`refstruct-e6255fb822.patch` — the exact patch applied for armB and armC, so both are reproducible.
 
 Reproduce: compile `pool_stale.c` against a `-fsanitize=address` build of the pin's `libavutil` for
 armA; for armB apply `refstruct-e6255fb822.patch` (plus `libavutil/sanitizer.h` from that commit) to
