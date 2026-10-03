@@ -809,3 +809,34 @@ RETURN protect every switch that has no quantum escape? Each arm is the twin of 
 - **If any of them hangs:** the queue is not drained at the switch even after a fence. The fence workaround is then
   unsound for that switch, and its pc and idx say which switch.
 - **Scope:** this covers no quantum escape. An escape lands wherever the domain is.
+
+## Results: session s16next (2026-10-04 05:42-06:00, bitstream 36a641e0b, bare, one power cycle per image)
+"Full signature" means 224/225/226 = 0x1f/0x88/0x80, 193 = 4, 194 = 3, 195 = 0, 192 = 0. The raw lines are in
+`results/s16next.result-lines.txt`. No hanging image printed a reading.
+
+| image | predicted | board | idx | 227 | stale slot-0 pc | verdict |
+|---|---|---|---|---|---|---|
+| control call-retpc | PASS | PASS exact | | | | |
+| plain-n32-r1 (63e457d2) | completes (mine and the simulation's) | HANG, full signature | **4** | 0x06 | `li sp, 0` (exact, 2 issues after the CCSRRW's flush) | **MISS**: its only CALL hangs, cold seal |
+| plain-n4-r3 (e0e8bf50) | simulation: round 2's RETURN, idx 4, `stub`+0 | HANG, full signature | **4** | 0x06 | `li sp, 0` | hang and idx as predicted; the switch is a CALL, not the RETURN |
+| plain-n24-r3 (13f96258) | simulation: round 2's CALL, idx 4, `li sp, 0` | HANG, full signature | **4** | 0x06 | `li sp, 0` | as predicted |
+| plain-n32-r3 (64c1f390) | round 2's CALL, idx 4, `li sp, 0` | HANG, full signature | **4** | 0x06 | `li sp, 0` | as predicted |
+| esc-n8-retfence (c3340e82) | mine: hangs mid-burst if the escape side hangs, else completes; the RTL lane: completes | HANG, full signature | **7** | 0x04 | **0x80000a34**, a burst `sd` | **an ESCAPE-side hang on silicon, mid-burst** |
+| esc-n8 repeat (c710c07f) | idx 7 | HANG, full signature | 7 | 0x04 | 0x80000a56, the same as run 1 | N = 2, identical |
+
+**What these establish.**
+- **A plain CALL is exposed on silicon.**
+  - All four PLAIN images hang at an exchange write. The 05:30 rule's exchange-entered signature holds on every one:
+    idx 4 rather than 7, and 227 carries `reg_req.is_set` (0x06), which a SAVE write never has (0x04).
+  - It is not only a warm-seal effect: plain-n32-r1 hangs at its first and only CALL.
+  - The account "a plain exchange reads each slot before writing it, so on silicon the queue drains" does not hold at
+    32, 24 or 4 stores.
+- **The escape side hangs bare on silicon.**
+  - esc-n8-retfence differs from esc-n8 by one `fence` before the domain's RETURN.
+  - A fence flushes the pipeline (it commits as a flush), so a RETURN-side hang would leave the RETURN in slot 0.
+  - The reading is a burst store, 11 instructions before the RETURN. So the stuck switch is a quantum escape that
+    landed within eight issued instructions of 0x80000a34, inside a burst of the domain's own stores.
+  - The ESCAPE arms run three rounds (ITER defaults to 3), so this escape is in a round after round 1's RETURN, with
+    the seal warm.
+- **esc-n8 itself hangs at a RETURN, twice, at the same reading.** The RETURN is three instructions after the
+  marker's ordinary `sd`.

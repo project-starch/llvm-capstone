@@ -16,6 +16,8 @@ main() {
     for n in s16st-n4-r1 s16st-n4-r3 s16st-n4-r3-fence s16st-n32-r1 s16st-esc-n8; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = s16next ]; then   # the PLAIN twins, the escape discriminator, and an esc-n8 repeat
     for n in s16st-plain-n32-r1 s16st-plain-n4-r3 s16st-plain-n24-r3 s16st-plain-n32-r3 s16st-esc-n8-retfence s16st-esc-n8; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
+  elif [ "$CAPSTL_SET" = s16fence ]; then   # a fence before the CALL and the domain's RETURN, on four twins that hung
+    for n in s16st-plain-n32-r1-fence s16st-plain-n4-r3-fence2 s16st-n4-r3-fence2 s16st-plain-n32-r3-fence2; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = precall ]; then   # the S-16 workaround candidate, and the stc18 rerun
     for n in s16pre-nt s16pre-stc24 s16stc18; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = deep ]; then   # extended apertures on S-16/S-17, the slot-0 control, the store-count dose-response
