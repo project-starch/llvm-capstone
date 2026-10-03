@@ -731,3 +731,15 @@ byte-identical.
   - If it hangs with the slot-0 pc at 0x80000a56..0x80000a5e: the RETURN hung with a drained queue. That refutes the
     queue-full account at that switch.
 - **s16st-esc-n8 again (c710c07f).** N = 2 on the hang's location. No prediction for the pc; idx 7.
+
+### Addendum 05:43 on 2026-10-04: the RTL lane's simulation predictions for plain-n4-r3 and plain-n24-r3
+These arrived after session s16next had started and are recorded BEFORE any of its readings were looked at.
+Source: the RTL lane's simulation, sup-call 57a9874c8, resident logic, three rounds, memory delay 12.
+- **plain-n4-r3:** HANGS at the 4th switch, round 2's plain RETURN.
+  - Its exchange id 0 write is pushed over the head and id 4 starves: **idx 4**, 193 = 4, 194 = 3, 226/227 = 0x80/0x04.
+  - The slot-0 pc is on `stub`+0.
+- **plain-n24-r3:** HANGS at the 3rd switch, round 2's CALL.
+  - **idx 4**; the slot-0 pc is on the tail's `li sp, 0`.
+- **plain-n32-r3:** as above (round 2's CALL, idx 4, `li sp, 0`).
+- **plain-n32-r1:** completes.
+- On their fixed tree, all of them complete.
