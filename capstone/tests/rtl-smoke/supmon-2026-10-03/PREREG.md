@@ -277,3 +277,10 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
     QEMU-pass record) and speedtest1 7291218e at 0x10000. These are C5u's staged images exactly, with no entry-VA
     collision between the run's domains.
   - The boot runs with `PREFLIGHT=0` for that reason only; no check was weakened.
+- **The second launch (04:48:23) was refused by the stages driver's own freshness gate.** That gate finds the
+  REFERENCE overlay's bytes inside the payload's initramfs, and its default reference is the restored shared overlay.
+  - The boot runs with `SQLITE_STAGE_OVERLAY` pointing at a private directory holding the ORIGINAL intended files: the
+    relinked k800 artifact 589ceee3 (`~/capstone-artifacts/k800-relinked-0x20000/k800.dom`) and the glue-patched
+    speedtest 7291218e (`/tmp/capstone/mon-c0/supglue/speedtest1.dom`).
+  - So the gate still verifies, by content, that the payload carries exactly the images this run intends.
+  - Not from the payload's own extraction, which would be circular.
