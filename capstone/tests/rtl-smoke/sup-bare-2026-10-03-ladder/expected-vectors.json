@@ -1,0 +1,333 @@
+{
+ "sup-fullswitch": {
+  "kind": "exact",
+  "sim_vector": [
+   "0x80003000",
+   "0xa5",
+   "0x3000",
+   "0x1",
+   "0x1f1f",
+   "0xbad5",
+   "0x3000",
+   "0x1",
+   "0xbadf",
+   "0xbad7",
+   "0xbad9",
+   "0x4",
+   "0xa6",
+   "0x3000",
+   "0x1",
+   "0xbadf",
+   "0xbad5"
+  ]
+ },
+ "sup-strip": {
+  "kind": "exploratory",
+  "sim_vector": [
+   "0x0",
+   "0x0",
+   "0x8000000000000003",
+   "0x0",
+   "0x800000c0"
+  ],
+  "invariants": [
+   "the run completes (SUPTEST END)",
+   "every mcause reading is 0 or 0x8000000000000003",
+   "every mepc reading is 0 or inside the image's [_start, _end_of_text)"
+  ]
+ },
+ "sup-strip-d0": {
+  "kind": "exploratory",
+  "sim_vector": [
+   "0x0",
+   "0x0",
+   "0x8000000000000003",
+   "0x0",
+   "0x800000c0"
+  ],
+  "invariants": [
+   "the run completes (SUPTEST END)",
+   "every mcause reading is 0 or 0x8000000000000003",
+   "every mepc reading is 0 or inside the image's [_start, _end_of_text)"
+  ]
+ },
+ "sup-strip-d8": {
+  "kind": "exploratory",
+  "sim_vector": [
+   "0x8000000000000003",
+   "0x0",
+   "0x800000c2",
+   "0x0",
+   "0x800000c2"
+  ],
+  "invariants": [
+   "the run completes (SUPTEST END)",
+   "every mcause reading is 0 or 0x8000000000000003",
+   "every mepc reading is 0 or inside the image's [_start, _end_of_text)"
+  ]
+ },
+ "sup-strip-d32": {
+  "kind": "exploratory",
+  "sim_vector": [
+   "0x8000000000000003",
+   "0x0",
+   "0x800000c2",
+   "0x0",
+   "0x800000c2"
+  ],
+  "invariants": [
+   "the run completes (SUPTEST END)",
+   "every mcause reading is 0 or 0x8000000000000003",
+   "every mepc reading is 0 or inside the image's [_start, _end_of_text)"
+  ]
+ },
+ "sup-strip-d128": {
+  "kind": "exploratory",
+  "sim_vector": [
+   "0x8000000000000003",
+   "0x0",
+   "0x800000c2",
+   "0x0",
+   "0x800000c2"
+  ],
+  "invariants": [
+   "the run completes (SUPTEST END)",
+   "every mcause reading is 0 or 0x8000000000000003",
+   "every mepc reading is 0 or inside the image's [_start, _end_of_text)"
+  ]
+ },
+ "sup-arm": {
+  "kind": "exact",
+  "sim_vector": [
+   "0x0",
+   "0x0",
+   "0x2",
+   "0x2",
+   "0x2",
+   "0x2",
+   "0x2",
+   "0x4",
+   "0x4",
+   "0x1",
+   "0x4",
+   "0x0",
+   "0x1d"
+  ]
+ },
+ "sup-armclose": {
+  "kind": "exact",
+  "sim_vector": [
+   "0x0",
+   "0x2",
+   "0x0",
+   "0x2",
+   "0x0",
+   "0x0",
+   "0xbb",
+   "0x0",
+   "0x1a",
+   "0x0",
+   "0x5",
+   "0xb",
+   "0xbb",
+   "0x0"
+  ]
+ },
+ "sup-sealsize-64": {
+  "kind": "exact",
+  "sim_vector": [
+   "0xc0c0c0c0c0c0c0c0",
+   "0x1d"
+  ]
+ },
+ "sup-sealsize-1023": {
+  "kind": "exact",
+  "sim_vector": [
+   "0xc0c0c0c0c0c0c0c0",
+   "0x1d"
+  ]
+ },
+ "sup-sealsize-1024": {
+  "kind": "exact",
+  "sim_vector": [
+   "0xc0c0c0c0c0c0c0c0",
+   "0x4",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0x0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0"
+  ]
+ },
+ "sup-sealsize-2048": {
+  "kind": "exact",
+  "sim_vector": [
+   "0xc0c0c0c0c0c0c0c0",
+   "0x4",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0x0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0"
+  ]
+ },
+ "sup-sealsize-off8": {
+  "kind": "exact",
+  "sim_vector": [
+   "0xc0c0c0c0c0c0c0c0",
+   "0x1d"
+  ]
+ },
+ "sup-sealsize-off16": {
+  "kind": "exact",
+  "sim_vector": [
+   "0xc0c0c0c0c0c0c0c0",
+   "0x4",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0x0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0"
+  ]
+ },
+ "sup-sealsize-cur960": {
+  "kind": "exact",
+  "sim_vector": [
+   "0xc0c0c0c0c0c0c0c0",
+   "0x4",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0x0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0",
+   "0xc0c0c0c0c0c0c0c0"
+  ]
+ },
+ "sup-guards": {
+  "kind": "exact",
+  "sim_vector": [
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x0",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x0",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x6",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x0",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x0",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x0",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x0",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x0",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x0",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x2",
+   "0x0",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x1",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x3",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x5",
+   "0x4",
+   "0x0",
+   "0x7",
+   "0x0",
+   "0x3",
+   "0x4",
+   "0x0",
+   "0x0",
+   "0x7"
+  ]
+ },
+ "sup-mtip": {
+  "kind": "exact-except",
+  "sim_vector": [
+   "0xf3",
+   "0x8000000000000007",
+   "0x0",
+   "0x3",
+   "0x8000000000000007",
+   "0xa5",
+   "0x0",
+   "0x80",
+   "0x3",
+   "0x8000000000000007",
+   "0x0",
+   "0x3",
+   "0x8000000000000010",
+   "0xa5",
+   "0x0"
+  ],
+  "reported_positions": {
+   "1": "reference spin iterations until MTIP (timing; invariant < 4000000 = 0x3d0900)"
+  }
+ }
+}
