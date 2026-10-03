@@ -664,3 +664,28 @@ The RTL lane's simulation of the resident logic gives these outcomes, which are 
   is consistent with every S-16 reading so far.
 - The PLAIN twins' prediction is unchanged: **if they hang, idx 4**.
 - **esc-n8, not yet run:** the escape saves, so **idx 7**.
+
+### Addendum, 05:35 on 2026-10-04: the RTL lane's PLAIN simulation, and the matched arm s16st-plain-n32-r3 (64c1f390)
+**The RTL lane's simulation (their message, sup-call 57a9874c8).**
+- Arm: `sup-s16-stores.S -DPLAIN -DNSTORES=32`, three rounds.
+- On the resident logic, round 1 passes (seal line cold). Round 2's CALL hangs: the exchange's first write (seal+0,
+  id 0) is pushed over the full queue's head, and **id 4** starves. On the fixed logic, all three rounds complete.
+- Their account of why the board has not shown it: a plain exchange READS each slot before writing it, so with the
+  seal line cold the first write waits a DDR read and the queue drains. With the line warm it does not.
+
+**The arm.** I built that exact arm as `s16st-plain-n32-r3` (id 147). The eight earlier images rebuild
+byte-identical.
+
+**Predictions, taken from their simulation and the 05:30 rule, before any PLAIN arm runs:**
+
+| image | prediction |
+|---|---|
+| s16st-plain-n32-r1 | completes: 0x51, 0x77, 0 (one round, seal cold; simulation round 1 passes) |
+| s16st-plain-n4-r3 | no confident prediction (4 stores: the queue may not be full at the exchange's first write) |
+| s16st-plain-n24-r3 | hangs at round 2's CALL **if** 24 stores fill the queue as 32 do in simulation; otherwise completes |
+| s16st-plain-n32-r3 | **hangs** at round 2's CALL: idx 4, 224/225 = 0x1f/0x88, 226 = 0x80, 227 = 0x04, 193 = 4, 194 = 3; the stale slot-0 pc on the swap-out tail's `li sp, 0` (0x800003de, the residue of the CCSRRW's flush), not on `stub` (0x80000a20) |
+
+**What a miss would mean.**
+- If plain-n32-r3 completes on silicon, the board's drain timing differs from simulation at this shape. In that case
+  "a plain CALL is exposed" stays a simulation result only.
+- If it hangs at idx 7 or with the pc on `stub`, the exchange-entry account is wrong for a plain switch.

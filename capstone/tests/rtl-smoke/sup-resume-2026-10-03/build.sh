@@ -117,3 +117,4 @@ b2 s16st-esc-n8       143 -DESCAPE -DNSTORES=8 -DQUANTUM=150 -DESC_BURSTS=6
 b2 s16st-plain-n4-r3   144 -DPLAIN -DNSTORES=4 -DITER=3
 b2 s16st-plain-n24-r3  145 -DPLAIN -DNSTORES=24 -DITER=3
 b2 s16st-plain-n32-r1  146 -DPLAIN -DNSTORES=32 -DITER=1
+b2 s16st-plain-n32-r3  147 -DPLAIN -DNSTORES=32 -DITER=3   # the RTL lane's simulated arm (sup-s16-plain-n32, sup-call 57a9874c8)
