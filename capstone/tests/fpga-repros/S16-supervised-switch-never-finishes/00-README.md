@@ -64,9 +64,13 @@ Every arm below is bare, part of the sup-resume ladder, and has its result lines
   - A fence AFTER the CALL does not help, because the switch has already started.
 - **The ESCAPE side is not covered.** In the FPGA monitor with a fence before all 8 domcalls (boot supmon-c5f), the
   supervised speedtest made 552 preemptions (C5u: 212), then hung with the same 224/225.
-  - Its stale slot-0 commit pc was a DOMAIN instruction: VA 0xe56bc, inside an -O0 local-init burst of `stc`/`sw` in
-    `lookupName`. So the stuck switch was the quantum escape, fired while the domain's own committed stores filled
-    the queue.
+  - Its stale slot-0 commit pc was a DOMAIN instruction (VA 0xe56bc, in `lookupName`). By the slot-0 rule, that is
+    the resume point of the PREVIOUS preemption: the resume's refetch put it in slot 0, and the domain then ran
+    without a flush.
+  - So the last thing issued before the stuck switch was the domain's, and the stuck switch was the next quantum
+    ESCAPE, up to one quantum later. Exactly where it landed is not recorded.
+  - That its SAVE walk met a commit queue full of the domain's own stores is what the mechanism requires; it was not
+    observed directly.
   - No software placement covers an arbitrary preemption point. **Preemptive supervision needs the RTL fix.**
 
 ## The mechanism (the supervised-CALL RTL lane's simulation, 2026-10-04; it matches every silicon read above)
@@ -84,8 +88,10 @@ In simulation, at the 5th switch of their `sup-mswap-noploop` run, with store-pa
   threshold, and why DDR's slower drain makes it common on silicon and rare in simulation.
 - **A consequence beyond the hang:** every S-16 occurrence also dropped one committed store, the oldest of the
   stores issued before the CALL.
-- The fix belongs in the RTL: consult the commit queue's readiness for a dom-switch request, and assert that such a
-  push never meets a full queue. It is the RTL lane's to make.
+- **The RTL side** is the supervised-CALL RTL lane's registry entry R-49. Its fix is capstone-ariane 1f56774bd on branch
+  `sup-call`: the store unit's room check is keyed on the switcher request being decided, so every switcher write is
+  checked against the commit queue it enters. That covers the CALL's SAVE and the escape's SAVE alike, and an
+  assertion fires if such a push ever meets a full queue.
 
 ## Prior art
 capstone-ariane `controller.sv:220-224` carries a comment that flushing EX during a domain switch "causes a deadlock

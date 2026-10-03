@@ -292,11 +292,12 @@ Lines are in `results/board-c5f.result-lines.txt`.
 - **A (loud) made 552 preemptions (C5u: 212), every re-arm standing, then hung after a re-arm** with signature A:
   224 = 0x1f, 225 = 0x88.
 - **The stale slot-0 commit pc is 0x828d56bc, inside the domain** (DBAS 0x82800000, so VA 0xe56bc in `lookupName`).
-  - That is the middle of an -O0 local-init burst: stc, stc, stc, sw, stc, stc @0xe56bc, then ldc.
-  - So the last instruction issued before the stuck switch was the domain's, which makes the stuck switch the quantum
-    ESCAPE's SAVE walk.
-  - It entered S-16 from the escape side: the domain's own committed stores filled the commit queue at the instant of
-    preemption.
+  - Corrected the same day on the RTL lane's reading: for an escape-side wedge, slot 0 holds the resume point of the
+    PREVIOUS preemption, not where this quantum landed. 0xe56bc is inside an -O0 local-init burst, but the stuck
+    escape came up to one quantum later, at an unrecorded point.
+  - What stands: the last instruction issued before the stuck switch was the domain's, so the stuck switch was a
+    quantum ESCAPE's SAVE walk, i.e. S-16 entered from the escape side.
+  - That the queue was full of the domain's own stores is the mechanism's requirement, not an observation.
 - **The pre-registered prediction "A, C and B all complete" is REFUTED.** A fence before the CALL removes only the
   CALL-side trigger; no software placement covers an arbitrary preemption point.
 - **Preemptive supervision on this bitstream needs the RTL fix.** The RTL lane's store-path fix (room check keyed on
