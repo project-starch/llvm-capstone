@@ -424,3 +424,29 @@ stages driver's post-run read of 255/224/225/230-237, switches parked at 0 after
   The commit pc is CALL+4, the CCSRRW.
 - mswapfix-plain-noploop (the plain-CALL hang): unknown. The reading itself says which class it belongs to.
 - Instrument check: every read returns a byte (none UNREAD), and each commit pc lies inside its own image's text.
+
+## RESULT, the bare wedge reads (03:34-03:43): two silicon signatures, and the bare sp-dependent arm IS C5u's
+Lines are in `results/wedge-reads-2026-10-04.txt`. Apertures as in the stages driver: 224 = {excommit, ldsync, stsync,
+lsu_rdy, dyn_rdy, flu_rdy, flush, privM}; 225 = {tbe, wstore, wload, wrev, domsw, stall, memwr, memwait}.
+
+| run | 224 | 225 | commit pc |
+|---|---|---|---|
+| **C5q, C5u** (real monitor, from their driver logs) | 0x1f | 0x88 | `li sp, 0` after `ccsrrw x0, cscratch, sp`, before the resume domcall |
+| **armdep-d16-q64** (d09491cd) | **0x1f** | **0x88** | 0x80000774 = `li sp, 0` after `ccsrrw x0, cscratch, sp`, before the CALL |
+| arm12-ldc-q64 (07de9fb7) | 0x0d | 0x80 | 0x80000498 = the post-CALL `ccsrrw sp, cscratch` (CALL+4) |
+| mswapfix-plain-noploop (ffd6f6db) | 0x0d | 0x80 | 0x80000534 = the post-CALL `ccsrrw sp, cscratch` (CALL+4) |
+
+- **Signature A** (domsw 1, flush 1, no syncer, lsu_rdy 1; commit pc on the `li sp, 0` that follows
+  `ccsrrw x0, cscratch, sp` before a CALL):
+  - **C5q and C5u, and the bare sp-dependent arm, byte for byte.** The bare image reproduces the real monitor's hang
+    on silicon within ~20 resumes (3 of 3 runs hang between escape 16 and 255; the two counted runs between 16 and
+    31).
+  - The C5u link withdrawn above is RESTORED for this arm, on aperture and commit-pc identity.
+- **Signature B** (lsu_rdy 0, domsw 0, flush 0, no syncer; commit pc on the post-CALL `ccsrrw sp, cscratch`):
+  - the armed independent-LDC hang and the plain-CALL + swap hang.
+  - **The pre-registered ldsync = 1 is REFUTED on silicon.** The RTL lane's simulation of B shows an orphaned DYN load
+    syncer. The board shows no syncer set and the LSU not ready. So simulation and silicon disagree in detail here.
+  - An `ld` in place of the LDC completes, so B needs the capability load.
+- **OPEN, for the RTL lane:** whether "commit pc" (commit_instr_id_commit[0].pc) is the last RETIRED instruction or
+  the uncommitted HEAD. It decides whether in A `li sp, 0` retired and the CALL's switch then hung, or `li sp, 0`
+  cannot commit while the switch is busy.
