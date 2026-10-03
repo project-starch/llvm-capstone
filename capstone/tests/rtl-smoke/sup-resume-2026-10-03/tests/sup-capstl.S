@@ -23,6 +23,7 @@
 #             control that the sweeps evict the walks' lines. The hot loop must read two hits.
 #   -DMSWAP_PLAIN  (with MSWAP) no cssupervise at all: one plain CALL, the domain runs to its RETURN. The control for
 #             the swap code itself in this harness: reading 2 is then 0 (no supervision event), 3 and 4 as usual.
+#   -DPOSTCALL=1  a `fence` right after every CALL, before the swap-in; =2 eight `nop`s instead (ordering vs delay).
 #   -DTRACE_K  'K' right after the first CALL returns, before the swap-in (CALL vs swap-in hang).
 #   -DTRACE_CHARS  'A' after each arm, 'C' just before each CALL, 'R' after each swap-in, for the first CALL and the
 #             first 16 resumes: localizes a hang that the 256-escape dots cannot.
@@ -148,6 +149,14 @@
 .endm
 #endif
 
+#if defined(POSTCALL) && POSTCALL == 1
+#define POSTCALL_SEQ fence
+#elif defined(POSTCALL) && POSTCALL == 2
+#define POSTCALL_SEQ nop; nop; nop; nop; nop; nop; nop; nop
+#else
+#define POSTCALL_SEQ
+#endif
+
 .section .text.init
 .globl _start
 _start:
@@ -271,6 +280,7 @@ SWAP_OUT
 BPUTI(67)                      # 'C'
 #endif
 CALL(a3, a3)
+POSTCALL_SEQ
 #ifdef TRACE_K
 BPUTI(75)                      # 'K': the CALL came back (before the swap-in)
 #endif
@@ -328,6 +338,7 @@ supervise_loop:
 7:
 #endif
   CALL(a3, a3)
+  POSTCALL_SEQ
   SWAP_IN
 #ifdef TRACE_CHARS
   li t1, 16

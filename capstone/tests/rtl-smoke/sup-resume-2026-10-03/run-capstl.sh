@@ -12,6 +12,10 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = postcall ]; then   # the hang repeated, a fence / 8 nops after the CALL, pairs without K, armed+fence
+    jobs+=("mswapfix-plain-noploop|$F/images/mswapfix-plain-noploop.bin|80015000")
+    for n in swap15-plain-fence swap15-plain-nop8 swappart9-plain swappart10-plain swappart12-plain swap15-armed-fence; do
+      jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = swappairs ]; then   # pairs with part 8, and the full macro, each with 'K' after the CALL
     for p in 9k 10k 12k; do jobs+=("swappart$p-plain|$F/images/swappart$p-plain.bin|80014000"); done
     jobs+=("swappart15k-plain|$F/images/swappart15k-plain.bin|80015000")

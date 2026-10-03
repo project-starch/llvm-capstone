@@ -304,3 +304,33 @@ immediately after the CALL returns, before the swap-in:
 - `ACKR` means it completed.
 - `ACK` and no `R`: the CALL returned, and the swap-in hangs.
 - `AC` alone: the CALL never returns.
+
+## RESULT, the pairs with 'K' (23:24-23:29): a print right after the CALL removes the hang, even for the full macro
+- Control: call-retpc PASS exact (N = 12).
+- swappart9k (8+1), swappart10k (8+2), swappart12k (8+4) and **swappart15k (ALL parts)** each printed `ACKR` with
+  everything exact.
+- The full macro without the 'K' (mswapfix-plain-noploop, and swappart11/13/14) hung every time.
+- So the one difference between hanging and completing is a few instructions (the UART poll and store) between the
+  CALL's return and SWAP_IN's first instruction.
+- **Together with the combinations, the hang needs** the CALL returning, IMMEDIATELY followed by
+  `ccsrrw sp <- cscratch` (part 8), followed by an LDC from DRAM (the swap area):
+  - without part 8, SWAP_IN starts with the LDC and completes;
+  - with part 8 alone, the next memory op is the UART poll, and it completes;
+  - with a short delay after the CALL, it completes.
+- **This is the compiler-generated `__domcallsaves` sequence in the real FPGA monitor after EVERY domcall:**
+  `domcall(t0, t0); ccsrrw(sp, cscratch, x0); ldc(ra, sp, -16)`. It is the leading candidate for C5q/C5u. It is NOT
+  yet shown to be their cause.
+- The RTL lane's simulated ARMED hang has the same shape: the CCSRRW retires, then the LDC is held in WAIT_FLUSH by a
+  flush that stays asserted.
+
+**Pre-registered, no prints between the CALL and the swap-in** (call-retpc control first):
+
+| image | build | predicted |
+|---|---|---|
+| mswapfix-plain-noploop (ffd6f6db) | the full macro, plain, nothing after the CALL | HANGS again (`AC`, no `R`), making the full-macro plain hang N = 2 |
+| swap15-plain-fence (ed44c96c) | the same with one `fence` right after the CALL | completes if ordering (a pending store or a held flush) is what the print hid |
+| swap15-plain-nop8 (df58e15a) | the same with 8 `nop`s right after the CALL | completes if a few cycles of delay suffice |
+| swappart9-plain (31407f0f), swappart10-plain (48e130a4), swappart12-plain (f98db002) | part 8 with 1, 2 or 4, no K | swappart10 (8+2) has no LDC in its swap-in; the readings say which pairs are enough |
+| swap15-armed-fence (12d21743) | the ARMED arm (q64) with the fence after every CALL | completes if the same workaround clears the supervised hang (`ACR` per resume, then COMPLETED) |
+
+The disassembly was checked: CALL, then fence (or 8 nops), then `ccsrrw sp, cscratch`, then `ldc t1, 464(s10)`.
