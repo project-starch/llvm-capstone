@@ -23,7 +23,10 @@
 #             control that the sweeps evict the walks' lines. The hot loop must read two hits.
 #   -DMSWAP_PLAIN  (with MSWAP) no cssupervise at all: one plain CALL, the domain runs to its RETURN. The control for
 #             the swap code itself in this harness: reading 2 is then 0 (no supervision event), 3 and 4 as usual.
-#   -DPOSTCALL=1  a `fence` right after every CALL, before the swap-in; =2 eight `nop`s instead (ordering vs delay).
+#   -DPOSTCALL=1  a `fence` right after every CALL, before the swap-in; =2 eight `nop`s instead (ordering vs delay);
+#             =3 a UART print ('k') after every CALL; =4 a plain `csrr t1, cycle` after every CALL.
+#   -DSWAP_DEP  (with MSWAP) sp holds a copy of the swap-area capability across the CALL, and the swap-in loads
+#             THROUGH the sp it just restored -- the real monitor's `ccsrrw sp, cscratch; ldc ra, -16(sp)` dependency.
 #   -DTRACE_K  'K' right after the first CALL returns, before the swap-in (CALL vs swap-in hang).
 #   -DTRACE_CHARS  'A' after each arm, 'C' just before each CALL, 'R' after each swap-in, for the first CALL and the
 #             first 16 resumes: localizes a hang that the 256-escape dots cannot.
@@ -64,6 +67,11 @@
 #ifndef SWAP_PARTS
 #define SWAP_PARTS 15     /* bit 0 CPMP0..15, bit 1 the 8 tag-setting STCs, bit 2 the CSRs + cepc, bit 3 cscratch/sp */
 #endif
+#ifdef SWAP_DEP
+#define SWB sp
+#else
+#define SWB s10
+#endif
 #ifdef MSWAP
 /* s10: the swap area (512 B, NONLIN RW). Layout: CPMP0..15 at 0..255, 8 tag-setting copies of s11 at 256..383,
    the plain CSRs at 384.., cepc at 464. */
@@ -103,6 +111,9 @@
 #endif
   li t1, 0
 #if SWAP_PARTS & 8
+#ifdef SWAP_DEP
+  CINCOFFSETIMM(sp, s10, 0)    # sp := a copy of the swap-area capability (the real monitor's sp is a capability)
+#endif
   CCSRRW(x0, CCSR_CSCRATCH, sp)
   li sp, 0
 #endif
@@ -112,33 +123,33 @@
   CCSRRW(sp, CCSR_CSCRATCH, x0)
 #endif
 #if SWAP_PARTS & 4
-  LDC(t1, s10, 464)
+  LDC(t1, SWB, 464)
   CCSRRW(x0, CCSR_CEPC, t1)
 #endif
 #if SWAP_PARTS & 1
   .irp n,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
-    LDC(t1, s10, (16 * \n))
+    LDC(t1, SWB, (16 * \n))
     CCSRRW(x0, (0x10 | \n), t1)
   .endr
 #endif
 #if SWAP_PARTS & 4
-  ld t1, 384(s10)
+  ld t1, 384(SWB)
   csrrw x0, mcause, t1
-  ld t1, 392(s10)
+  ld t1, 392(SWB)
   csrrw x0, mtval, t1
-  ld t1, 400(s10)
+  ld t1, 400(SWB)
   csrrw x0, stvec, t1
-  ld t1, 408(s10)
+  ld t1, 408(SWB)
   csrrw x0, scause, t1
-  ld t1, 416(s10)
+  ld t1, 416(SWB)
   csrrw x0, stval, t1
-  ld t1, 424(s10)
+  ld t1, 424(SWB)
   csrrw x0, sepc, t1
-  ld t1, 432(s10)
+  ld t1, 432(SWB)
   csrrw x0, sscratch, t1
-  ld t1, 440(s10)
+  ld t1, 440(SWB)
   csrrw x0, satp, t1
-  ld t1, 448(s10)
+  ld t1, 448(SWB)
   csrrw x0, 0x803, t1
 #endif
 .endm
@@ -153,6 +164,10 @@
 #define POSTCALL_SEQ fence
 #elif defined(POSTCALL) && POSTCALL == 2
 #define POSTCALL_SEQ nop; nop; nop; nop; nop; nop; nop; nop
+#elif defined(POSTCALL) && POSTCALL == 3
+#define POSTCALL_SEQ BPUTI(107)
+#elif defined(POSTCALL) && POSTCALL == 4
+#define POSTCALL_SEQ csrr t1, cycle
 #else
 #define POSTCALL_SEQ
 #endif

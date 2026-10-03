@@ -66,3 +66,8 @@ build swappart9-plain     112 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DSW
 build swappart10-plain    113 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DSWAP_PARTS=10
 build swappart12-plain    114 -DMSWAP -DMSWAP_PLAIN -DNOPLOOP -DTRACE_CHARS -DSWAP_PARTS=12
 build swap15-armed-fence  115 -DMSWAP -DNOPLOOP -DTRACE_CHARS -DPOSTCALL=1 -DQUANTUM=64
+# armed, many resumes: the real monitor's sp-dependent load (with / without fence), and two masks on the independent load
+build armdep-q64        116 -DMSWAP -DSWAP_DEP -DNOPLOOP -DTRACE_CHARS -DQUANTUM=64 -DITER=65536
+build armdep-fence-q64  117 -DMSWAP -DSWAP_DEP -DNOPLOOP -DTRACE_CHARS -DPOSTCALL=1 -DQUANTUM=64 -DITER=65536
+build arm-print-q64     118 -DMSWAP -DNOPLOOP -DTRACE_CHARS -DPOSTCALL=3 -DQUANTUM=64 -DITER=65536
+build arm-csrr-q64      119 -DMSWAP -DNOPLOOP -DTRACE_CHARS -DPOSTCALL=4 -DQUANTUM=64 -DITER=65536

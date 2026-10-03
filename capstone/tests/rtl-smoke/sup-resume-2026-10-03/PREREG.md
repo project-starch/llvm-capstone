@@ -334,3 +334,37 @@ immediately after the CALL returns, before the swap-in:
 | swap15-armed-fence (12d21743) | the ARMED arm (q64) with the fence after every CALL | completes if the same workaround clears the supervised hang (`ACR` per resume, then COMPLETED) |
 
 The disassembly was checked: CALL, then fence (or 8 nops), then `ccsrrw sp, cscratch`, then `ldc t1, 464(s10)`.
+
+## RESULT, the post-CALL set (02:55-03:09): a fence clears the PLAIN hang and 8 nops do not; the ARMED arm hangs even with the fence
+- Control: call-retpc PASS exact (N = 13).
+
+| arm | result |
+|---|---|
+| mswapfix-plain-noploop (the full macro, plain) | HANG again (`AC`): N = 2 |
+| swap15-plain-fence | COMPLETES (`ACR`, exact) |
+| swap15-plain-nop8 | HANG. So it is not pure delay. The RTL lane's simulation: 4 nops do not clear it either. |
+| swappart9-plain (8+1: ccsrrw, then the CPMP LDCs) | HANG |
+| swappart12-plain (8+4: ccsrrw, then LDC t1, 464(s10)) | HANG |
+| swappart10-plain (8+2: ccsrrw, then no DRAM load before the UART poll) | COMPLETES |
+| swap15-armed-fence (armed, a fence after every CALL) | HANG at the first escape (`AC`) |
+
+- **The plain hang needs** a CALL returning, then `ccsrrw sp <- cscratch`, then a capability/DRAM load. A fence or a
+  UART print between the CALL and the ccsrrw masks it. Eight nops do not.
+- **In the armed case the fence does not mask it.**
+- **The RTL lane's simulation trace** of the armed hang: `flush_commit_o = flush_commit | dom_switch_busy_i` stays
+  high because the switcher never leaves busy. Its last printed step is the set_ra write of the CALL's rd. The leading
+  mechanism, still being traced, is that write and the CCSRRW's capability writeback landing on the same
+  register-file port in the same cycle.
+
+**The armed batch, pre-registered** (q64, NOPLOOP, ITER = 65,536 so that the checksum is 0x7F8000, and about 8,000
+resumes per arm):
+
+| image | build | expected |
+|---|---|---|
+| armdep-q64 (2c8acedc) | SWAP_DEP: sp holds a copy of the swap-area capability across the CALL, and the swap-in loads THROUGH the restored sp (`ccsrrw sp, cscratch; ldc t1, 464(sp)`). This is the real monitor's dependency shape. | if the dependency is why the real monitor survives ~200 resumes, this either completes or hangs after MANY escapes (the dots say how many): a bare reproduction of C5u's rare hang |
+| armdep-fence-q64 (1e04098c) | the same + a fence after every CALL | the fence as a mask for the real-monitor shape |
+| arm-print-q64 (e04f74db) | independent LDC, a UART print after every CALL | — |
+| arm-csrr-q64 (aff41100) | independent LDC, a plain `csrr t1, cycle` after every CALL. This is what the ~22,000 clean bare resumes had after their CALL (`csrr t0, csupstatus`). | — |
+
+The disassembly was checked: armdep's swap-in is `ccsrrw sp, cscratch` then `ldc t1, 464(sp)`; arm-csrr has
+`rdcycle t1` right after the CALL; arm-print has the UART poll there.
