@@ -398,3 +398,29 @@ the swap-in's cepc load, at both CALL sites: LDC `1d0d335b` against `ld` `1d0d33
 
 **The dependent arm twice, with a dot every 16 escapes:** armdep-d16-q64 (d09491cd), two runs. The dot counts bound
 the hang's escape number, so the two runs show whether it is deterministic or spread.
+
+## RESULT, the DYN-unit discriminator (03:22-03:32): LDC hangs, `ld` completes; and C5u is a DIFFERENT signature
+- Control: call-retpc PASS exact (N = 15).
+- **arm12-ld-q64 COMPLETED:** 8,552 escapes, count 0x10000 and checksum 0x7F8000 exact, csnodefree flat.
+- **arm12-ldc-q64 HANGS** at the first escape. The two images differ only in that one instruction, at both swap-in
+  sites.
+- So on silicon the capability load (LDC) after a supervised escape's switch is what hangs, and a scalar `ld` from
+  the same address does not. This matches the RTL lane's simulation, where the DYN unit's load syncer waits for an
+  LSU copy of the LDC that the LSU no longer has.
+- **armdep-d16-q64, two runs:** each hung after 1 dot, i.e. between escapes 16 and 31. `compare.py`'s ">= 256"
+  assumes the default mask. The first 16 resumes carry trace prints, and the hang comes soon after they stop.
+- **C5q and C5u are NOT this signature.** Their stages-driver wedge reads, identical in both boots:
+  - aperture 224 = 0x1f: excommit 0, **ldsync 0, stsync 0**, lsu/dyn/flu ready 1, **flush 1**, privM 1;
+  - aperture 225 = 0x88: trace-buffer-empty 1, **domsw 1**, every wait flag 0;
+  - commit pc frozen at `li sp, 0`, BEFORE the resume domcall.
+  So the real monitor's hang is a domain switch that never finishes (dom_switch_busy holding the flush), inside the
+  RESUME CALL, with no syncer waiting. In the bare LDC hang, the RTL lane's simulation shows the last retired
+  instruction is the post-escape CCSRRW at CALL+4, so the switch had finished.
+- **The two are siblings in the supervised switch, not one hang.** The C5u link to the bare repro is withdrawn.
+
+**Pre-registered: the same apertures on the bare hangs** (`run_sup_bare_wedge.py` = the ladder's runner plus the
+stages driver's post-run read of 255/224/225/230-237, switches parked at 0 afterwards):
+- arm12-ldc-q64 and armdep-d16-q64: predicted the DYN signature. 224 shows ldsync = 1 and domsw (225 bit 3) = 0.
+  The commit pc is CALL+4, the CCSRRW.
+- mswapfix-plain-noploop (the plain-CALL hang): unknown. The reading itself says which class it belongs to.
+- Instrument check: every read returns a byte (none UNREAD), and each commit pc lies inside its own image's text.

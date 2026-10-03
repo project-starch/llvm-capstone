@@ -12,6 +12,9 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = wedge ]; then   # the three hang types again, read with the wedge apertures (run_sup_bare_wedge.py)
+    for n in arm12-ldc-q64 armdep-d16-q64; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
+    jobs+=("mswapfix-plain-noploop|$F/images/mswapfix-plain-noploop.bin|80015000")
   elif [ "$CAPSTL_SET" = dyn ]; then   # LDC vs ld after the post-CALL ccsrrw; the dependent arm twice with dots per 16
     for n in arm12-ld-q64 arm12-ldc-q64 armdep-d16-q64; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
     jobs+=("armdep-d16-q64-rep2|$F/images/armdep-d16-q64.bin|$(cat $F/images/armdep-d16-q64.rec)")
@@ -49,7 +52,7 @@ main() {
     IFS='|' read -r tag img rec <<< "$j"
     echo "$tag START $(date +%H:%M:%S) $(sha256sum $img | cut -c1-16)" >> $OUT/SEQ
     SUP_IMG=$img SUP_OUT=$OUT/runs/$tag SUP_REC_ADDR=$rec SUP_TIMEOUT=${CAPSTL_TIMEOUT:-90} \
-      taskset -c 0-7,32-39 nice -n 10 python3 $L/run_sup_bare.py > $OUT/runs-$tag.log 2>&1
+      taskset -c 0-7,32-39 nice -n 10 python3 ${SUP_RUNNER:-$L/run_sup_bare.py} > $OUT/runs-$tag.log 2>&1
     echo "$tag END rc=$? $(date +%H:%M:%S)" >> $OUT/SEQ
     sleep 8
   done
