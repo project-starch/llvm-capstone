@@ -121,3 +121,10 @@ b2 s16st-plain-n32-r3  147 -DPLAIN -DNSTORES=32 -DITER=3   # the RTL lane's simu
 # The escape discriminator (2026-10-04): esc-n8 hung with its last resume two instructions before the domain's RETURN,
 # so the stuck switch was the RETURN or an escape on it. RETFENCE drains the queue right before that RETURN.
 b2 s16st-esc-n8-retfence 148 -DESCAPE -DNSTORES=8 -DQUANTUM=150 -DESC_BURSTS=6 -DRETFENCE
+# The non-preemptive workaround (2026-10-04): a fence before the CALL AND before the domain's RETURN, each paired with a
+# twin that hung on the board (plain-n32-r1, plain-n4-r3, n4-r3, plain-n32-r3). By the mechanism every switch then
+# starts with the commit queue drained.
+b2 s16st-plain-n32-r1-fence   149 -DPLAIN -DNSTORES=32 -DITER=1 -DFENCE
+b2 s16st-plain-n4-r3-fence2   150 -DPLAIN -DNSTORES=4 -DITER=3 -DFENCE -DRETFENCE
+b2 s16st-n4-r3-fence2         151 -DNSTORES=4 -DITER=3 -DFENCE -DRETFENCE
+b2 s16st-plain-n32-r3-fence2  152 -DPLAIN -DNSTORES=32 -DITER=3 -DFENCE -DRETFENCE

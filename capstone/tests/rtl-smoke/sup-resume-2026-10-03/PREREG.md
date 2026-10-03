@@ -775,3 +775,37 @@ retired instruction was the burst's 8th `sd`, and the mis-check followed the dom
 - So in simulation the escape side proper hangs. On the board, the RETURN side hung first.
 - s16st-esc-n8-retfence (running) decides whether the board's escape side hangs in this harness. The RTL lane
   predicts it completes with resumes >= 1.
+
+### Interim (05:53, 2026-10-04, s16next still running): the first two PLAIN readings, and the workaround set s16fence
+**plain-n32-r1** (63e457d2) **HANGS**, though both I and the RTL lane's simulation predicted it would complete.
+- 228/239/240 = **4**; 227 = 0x06 (write_en and reg_req.is_set: an EXCHANGE write); 238 = 0xd4 (reg id 4, is_set).
+- 224/225/226 = 0x1f/0x88/0x80, 193 = 4, 194 = 3.
+- The slot-0 pc is the tail's `li sp, 0` (0x800003de), two issues after the CCSRRW's flush, so the reading is exact.
+- So the stuck switch is its one and only CALL.
+- **A plain CALL after 32 stores hangs on silicon in its first round.** The account "the exchange's slot read precedes
+  its write, so on silicon the queue drains" is refuted at this shape.
+
+**plain-n4-r3** (e0e8bf50) **HANGS**, idx 4, 227 = 0x06.
+- The slot-0 pc is `li sp, 0` (0x8000036e), so the stuck switch is a CALL. Which round is not recorded.
+- The simulation predicted round 2's RETURN, with the pc on `stub`+0. The hang and the idx match; the switch kind does
+  not.
+
+**Status of the 05:30 rule.** The exchange-entered prediction holds on both: idx 4 rather than 7, and 227 carries
+`is_set`, which a SAVE write never has.
+
+**Set s16fence (pre-registered here, runs after s16next).** Does a fence before the CALL AND before the domain's
+RETURN protect every switch that has no quantum escape? Each arm is the twin of an image that hung, plus the fences
+(one fence word for FENCE, two for FENCE+RETFENCE; disassembly counts checked).
+
+| image | its hanging twin | prediction |
+|---|---|---|
+| s16st-plain-n32-r1-fence (22f8c5d6) | plain-n32-r1 | completes: 0x51, 0x77, 0 |
+| s16st-plain-n4-r3-fence2 (efa42f4f) | plain-n4-r3 | completes: 0x51 x3, 0x77, 0 |
+| s16st-n4-r3-fence2 (112700ce) | n4-r3, n4-r3-fence | completes: 1 x3, 0x77, 0 |
+| s16st-plain-n32-r3-fence2 (a3508213) | plain-n32-r3 | completes: 0x51 x3, 0x77, 0 |
+
+- **The basis:** every switch then starts with the commit queue drained. A mis-checked first write cannot overwrite a
+  head when there is no full queue to overwrite.
+- **If any of them hangs:** the queue is not drained at the switch even after a fence. The fence workaround is then
+  unsound for that switch, and its pc and idx say which switch.
+- **Scope:** this covers no quantum escape. An escape lands wherever the domain is.
