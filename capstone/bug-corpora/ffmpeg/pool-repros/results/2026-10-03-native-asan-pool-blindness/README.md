@@ -68,6 +68,30 @@ The two arms diverge at exactly the stale read:
 Both limits matter for the paper: they answer a "but ASan catches this now" objection using the gate in
 upstream's own patch, not our framing.
 
+### Arm C — PRE-REGISTERED, NOT YET RUN: does the `free_entry_cb` gate leave a real pool uncovered?
+
+Limit 1 above is read from the diff, not measured. **Arm C measures it**: the same `pool_stale.c`
+sequence, the same armB-patched `refstruct.c`, but the pool created through
+`av_refstruct_pool_alloc_ext` with a no-op `free_entry_cb` instead of `av_refstruct_pool_alloc`.
+
+**Prediction, registered before the run: armC is CLEAN — no `use-after-poison` — even though armB
+reports one on the identical access.** If armC instead reports, then the gate does not do what the diff
+says and limit 1 must be withdrawn.
+
+**Which real pools this bears on, checked at the pin rather than assumed:**
+
+| pool | created by | covered by `e6255fb822`? |
+|---|---|---|
+| h264 `qscale_table` / `mb_type` / `motion_val` / `ref_index` | `av_refstruct_pool_alloc(…, 0)` (`h264_slice.c:169-174`) | **yes** — the simple form passes all-NULL callbacks (`refstruct.c:337`) |
+| VVC `rpl_tab` / `tab_dmvr_mvf` (**case 3's storage**) | `av_refstruct_pool_alloc(…, 0)` (`vvc/dec.c:387,394`) | **yes** |
+| **MPVPicture** — the picture pool of the whole MPEG-1/2/4, H.263, VC-1, RV30/34/40, WMV2, MSMPEG4 family | `ff_mpv_alloc_pic_pool` → `av_refstruct_pool_alloc_ext(…, mpv_pic_init, mpv_pic_reset, **mpv_pic_free**, NULL)` (`mpegpicture.c:90-96`) | **NO** |
+| `AVContainerFifo` slots | `av_refstruct_pool_alloc_ext(…, container_fifo_free_entry, NULL)` (`container_fifo.c:87`) | **NO** |
+
+So the covered/uncovered split is not hypothetical: **FFmpeg's most widely used picture pool is in the
+uncovered set.** Recorded here with its call site because an earlier draft of this reasoning asserted the
+opposite for h264 — that its pools carried callbacks — and the pin says they do not.
+
+
 ## What this does and does not say
 
 - **It does** establish, by measurement with a working positive control, that a use-after-return-to-pool
