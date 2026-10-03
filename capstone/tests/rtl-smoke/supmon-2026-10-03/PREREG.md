@@ -134,7 +134,7 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
   - a wedge.
 - If run 1 fails, the patch itself is broken and run 2 says nothing.
 
-## C5q RESULT (boot supmon-c5q, fw bdabef34243c), a correction, and C5t pre-registered 2026-10-03 21:45 before its boot
+## C5q RESULT (boot supmon-c5q, fw bdabef34243c), a correction, and C5t pre-registered before its boot (pushed 2026-10-03 21:35:42 in 5569e2c4b0fe; an earlier draft of this heading said 21:45)
 - **Boot and controls held.** BT00..BT03 printed and Linux booted. k800 returned 4 (4,589 cycles).
 - **Run 1 (plain, SUPM 0) PASSED:**
   - 112006 38bb59fd, HEAP 2097152 DROPPED 0 RC 0;
@@ -183,3 +183,42 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
   - The expected first-escape cause is the quantum, 0x8000000000000010, with MEPC inside the domain image
     [DBAS, DBAS + 0x16a388).
 - Each of A, B and C names the failing step. That is the purpose of this boot, which spends no other board time.
+
+## C5t RESULT (boot supmon-c5t, fw 393210e96691): reading B, so the resume works mechanically; and C5u pre-registered before its boot
+- k800 returned 4.
+- **The speedtest, supervised (SUPM 1, loud), read B.** Every cycle went `SUPA:0 SUPK:1` (each re-arm stood, each
+  resume came back as kind 1):
+  - MCAU 0x10, the quantum cause (the report prints only the low word of 0x8000000000000010);
+  - MEPC 0x824A27B0, 0x82549E98, 0x82431A10, 0x82549E9C, all inside the domain image and different each time, so
+    the domain advanced;
+  - after 8 preemptions: SUPN 8, SUPK 0x1b, and a clean return of -1. The domain's own output had reached
+    "100 - 500 INSERTs". The driver's HARD STOP on obs = -1 is the bound's expected value.
+  - So the monitor's resume path, on silicon and through the compiler's __domcallsaves, works for at least 8 cycles.
+    C5q's wedge needs something C5t did not have: more preemptions, QUIET (no ~5 ms of UART between an escape's SAVE
+    walk and the resume's RESTORE walk), or being the second call of the boot.
+- **The candidate mechanism class** is a store/tag ordering hazard that time hides. ISSUES.md lists the S-07/S-10b
+  composed liveness ("never observed, because no test has yet opened that window") and the TAG_WAIT stall of the
+  s06sec header. Both leave a CALL that never commits, which is C5q's wedge-read signature.
+
+**C5u** (fw d07761ded4ce; the same Image a9e838663d64; monitor 78151e4):
+- Masks, by bit n = call_domain n: CLASSIC = 14, QUIET = 12, FENCE = 4, TRACE_EVENTS for every preemption,
+  MAX_RESUMES = 4000. SUPM reports supervised | quiet << 4 | fence << 8.
+- Stages: k800; then four speedtest runs; then k800. The runs, by call:
+  - call 0: plain (SUPM 0x000);
+  - call 1: A, loud, every event traced (0x001). This is the SAME position as C5q's wedged run 2;
+  - call 2: C, quiet with a `fence` before every arm (0x111);
+  - call 3: B, quiet with no fence (0x011). This is C5q's configuration, and it is last.
+- Predicted:
+  - BT00..BT03, Linux, k800 4. Call 0 gives the oracle 112006 38bb59fd at ~2,550.6M cycles (within 0.1 %).
+  - Every run that returns gives 112006 38bb59fd, HEAP 2097152 DROPPED 0 RC 0.
+  - A supervised run that completes has SUPK 0 and SUPN about 1,275 (reported). In A, every MCAU is 0x10 and every
+    MEPC lies inside the domain image.
+  - A's SPEEDTEST1-CYCLES includes ~13 s of UART printing in the resume loop, so it is not an overhead reading. C's
+    and B's cycles, if they return, are the overhead readings against call 0, reported.
+- Outcomes:
+  - **A, C complete; B hangs:** store/tag ordering. A fence before the re-arm avoids it. That goes to the RTL lane as
+    a bare directed test: a domain with many tagged register slots, an immediate resume.
+  - **A completes; C hangs** (B is then lost): time, not ordering. The switcher-busy class.
+  - **A hangs:** not a QUIET effect. A rare point after k > 8 preemptions; A's last MCAU/MEPC name it.
+  - **All complete:** C5q's hang did not reproduce at N = 1. The next step is a repeat of C5q's exact configuration,
+    not another variant.
