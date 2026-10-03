@@ -60,3 +60,25 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
   - BT00 and BT01 only: the carve hangs (split_out_cap of sup_save_region);
   - BT00..BT02 and no BT03: a later step of cap_env_init;
   - BT03 and still no Linux: after cap_env_init.
+
+## C5d RESULT and ROOT CAUSE; the fixed C5 pre-registered 2026-10-03 20:45:23 before its boot
+- C5d printed NO boot-trace tag. Its own OpenSBI banner ends at "Boot HART MEDELEG", then silence, so the hang
+  precedes cap_env_init's UART mint.
+- The cause is in the generated code. capstone-c's dom_init, called from sbi_capstone_init_cap before cap_env_init,
+  carves EVERY monitor global out of the top of dom_stack:
+  - the board build's globals take 4,960 B of the 8 KiB FPGA dom_stack;
+  - the CAPSTONE_SUPERVISED_CALL context-slot tables take 21,552 B (4 x 2 KiB descriptor pools among them).
+  At 8 KiB the carve runs past the stack's base and faults before any trap vector exists. QEMU's 64 KiB hid it.
+- The fix is in wrapper/supcall-fpga:
+  - 36c5607: dom_stack is 32 KiB under CAPSTONE_SUPERVISED_CALL; FPGA define-off builds keep 8 KiB.
+  - 882892f: CAPSTONE_PLATFORM_DEFS carries the defines to OpenSBI's assembly. Without it the first fix never took
+    effect.
+- A build gate (build-fpga-fw.sh) refuses a firmware whose dom_init carves + 2 KiB exceed dom_stack, or whose RW +
+  36 KiB crosses 0x800A0000. It was controlled both ways: it refuses the 8 KiB supervision build and passes the C3
+  build that booted. C3 rebuilt through the new wrapper is byte-identical (96884501d098), so the hook is inert when
+  unused.
+- Fixed C5 = da369481cacf (+ CAPSTONE_BOOT_TRACE): dom_init carves 21,552 B of 32,768 B, and _fw_end is 0x80093000.
+  Predicted:
+  - BT00, BT01, BT02 and BT03 print, then Linux boots;
+  - then the original C5 predictions: k800 4 twice, SUPN 0, SUPK 0; speedtest 112006 38bb59fd, HEAP 2097152 DROPPED
+    0 RC 0; SUPN about 1,275 (reported), SUPK 0, every SUPA 0.
