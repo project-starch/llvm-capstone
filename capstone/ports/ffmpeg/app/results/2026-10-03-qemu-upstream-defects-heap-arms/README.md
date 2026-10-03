@@ -1,7 +1,28 @@
-# Two upstream FFmpeg defects on the capability machine: level0, shrink, sublet (2026-10-03)
+# Two upstream FFmpeg defect shapes on the capability machine: level0, shrink, sublet (2026-10-03)
 
-**Question.** Fixtures 24 and 25 reproduce two defects that the triage found **live at the 9.0.1
-pin**. Does the revoking heap catch them, and do the unprotected arms let them through?
+> ## RETRACTED 2026-10-03 (same day, after the run) — only fixture 24 is live at our pin
+>
+> This file was titled *"Two upstream FFmpeg **defects**"* and opened by saying the triage found both
+> **live at the 9.0.1 pin**. **Fixture 25's defect is NOT live:** its upstream fix `4b9c4b9cfb` was
+> backported into `n9.0.1` as `716d2a47c5`, whose body reads *"(cherry picked from commit
+> 4b9c4b9cfb56…)"*.
+>
+> The error was in the liveness method, not the run: the pinned tree was grepped for the pre-fix line
+> *shape*, which matched `ops_dispatch.c:664` — a site in `compile_single` where `p` is never freed
+> (it is handed to `ff_sws_graph_add_pass(…, p, op_pass_free, …)`, and `p->pixel_bits_out` is read
+> two lines later). The defect's site is line 553, and it carries the fixed form.
+>
+> **Every measured cell below stands** — the six cells, the attribution, the arm separation. What
+> changes is what fixture 25 *is*: a valid **synthetic** interior-pointer use-after-free **modelled
+> on** `4b9c4b9cfb`, `live_in_pin: false`, in the same category as three of memcached's five corpus
+> cases. It is not evidence about the version we compile.
+>
+> Replacement liveness test and its two controls:
+> [`docs/ref/ffmpeg-live-defect-triage.md`](../../../../../docs/ref/ffmpeg-live-defect-triage.md).
+
+**Question.** Fixtures 24 and 25 reproduce two defect shapes, one of which (24) the triage confirmed
+**live at the 9.0.1 pin**. Does the revoking heap catch them, and do the unprotected arms let them
+through?
 
 **Pre-registration.** Both fixtures and all six predictions were pushed in `95aa3d340f80`, before
 either image was built. Nothing in that file has been edited since, including the one cell that
@@ -93,8 +114,9 @@ with the cursor 32 bytes in.
 - **It is the CONTROL half, not a detection claim.** Both defects are plain `malloc`/`free`
   use-after-free, which ASan also reports — measured the same day in
   `../2026-10-02-native-upstream-defects/`, where both buggy arms report `heap-use-after-free` and
-  neither fixed arm does. The value here is that the 2×2 is now measured on *real upstream defects*
-  rather than on shapes we invented, in both rows.
+  neither fixed arm does. The value here is that the 2×2 is now measured on a *real upstream defect*
+  rather than only on shapes we invented — **in row 24 only.** Row 25's shape is upstream's, but the
+  defect is fixed at our pin, so that row is on the same footing as our own synthetic fixtures.
 - **Nothing about nested allocators.** Neither defect is in FFmpeg's pools.
 - **QEMU only.** The temporal faults are the emulator untagging a revoked capability on reload
   (Q-11); the deployed silicon lets such an access retire.

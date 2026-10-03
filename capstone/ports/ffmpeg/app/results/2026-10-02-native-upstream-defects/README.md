@@ -1,8 +1,28 @@
-# Two upstream FFmpeg defects, live at the 9.0.1 pin: native pair and ASan (2026-10-02)
+# Two upstream FFmpeg defect shapes, native pair and ASan (2026-10-02)
 
-**Question.** The triage in [`docs/ref/ffmpeg-live-defect-triage.md`](../../../../docs/ref/ffmpeg-live-defect-triage.md)
-found two lifetime defects still present in the release this port compiles. Do the reductions in
-fixtures 24 and 25 actually reproduce them, and does the free-keyed comparator see them?
+> ## RETRACTED 2026-10-03 — "live at the 9.0.1 pin" is false for case 25
+>
+> The original title was *"Two upstream FFmpeg defects, **live at the 9.0.1 pin**"*. **Only case 24
+> is live.** Case 25's upstream fix `4b9c4b9cfb` was **backported into `n9.0.1` as `716d2a47c5`**,
+> whose body reads *"(cherry picked from commit 4b9c4b9cfb56…)"*.
+>
+> The original liveness verdict came from grepping the pinned tree for the pre-fix line *shape* and
+> finding it at `ops_dispatch.c:664`. Reading the enclosing function instead shows line 664 is on a
+> path where `p` is **never freed** — it is handed to `ff_sws_graph_add_pass(…, p, op_pass_free, …)`
+> and `p->pixel_bits_out` is read two lines later. The defect's real site is line 553, and it carries
+> the fixed form.
+>
+> **What stands:** both reductions reproduce, ASan reports both buggy arms and neither fixed arm.
+> Case 25 is a valid *synthetic* interior-pointer use-after-free **modelled on** `4b9c4b9cfb`, with
+> `live_in_pin: false`. **What does not stand:** calling it a defect live in the version we compile.
+>
+> Full reasoning and the replacement liveness test (with its two controls) are in
+> [`docs/ref/ffmpeg-live-defect-triage.md`](../../../../../docs/ref/ffmpeg-live-defect-triage.md).
+
+**Question.** The triage in [`docs/ref/ffmpeg-live-defect-triage.md`](../../../../../docs/ref/ffmpeg-live-defect-triage.md)
+found two lifetime defects ~~still present in the release this port compiles~~ — **corrected
+2026-10-03: only case 24 is still present; case 25's fix was backported as `716d2a47c5`.** Do the
+reductions in fixtures 24 and 25 actually reproduce them, and does the free-keyed comparator see them?
 
 **Pre-registration.** Fixtures 24 and 25 and their predictions were pushed in `95aa3d340f80` before
 either fixture was built or run on any arm.
@@ -23,8 +43,8 @@ came back to a new owner, and `read=5b` is that new owner's byte where the first
 `0xa0`. Without the premature free the read would have returned `0xa0`.
 
 **ASan firing is the intended result.** These two are the CONTROL half of the request that produced
-them: real upstream defects at the plain `malloc`/`free` layer, where a free-keyed tool is supposed
-to work. A silent ASan here would have meant the reduction was wrong. It also fires on both buggy
+them: upstream defect shapes at the plain `malloc`/`free` layer — case 24 live at our pin, case 25
+fixed at it — where a free-keyed tool is supposed to work. A silent ASan here would have meant the reduction was wrong. It also fires on both buggy
 arms and neither fixed arm, so the comparator is shown able to say both things rather than only one.
 
 ## What these defects are
@@ -38,7 +58,12 @@ arms and neither fixed arm, so the comparator is shown able to say both things r
   *"comp points into p, which is freed before comp->backend is read. Use the copy taken before the
   free."*
 
-Both pre-fix lines are present in the pinned tree, at `thread.c:714` and `ops_dispatch.c:664`.
+~~Both pre-fix lines are present in the pinned tree, at `thread.c:714` and `ops_dispatch.c:664`.~~
+**RETRACTED 2026-10-03.** Only `thread.c:714` is. `ops_dispatch.c:664` is a *different site* in
+`compile_single` where `p` is never freed (it is handed to `ff_sws_graph_add_pass` and
+`p->pixel_bits_out` is read two lines later); the defect's site is line 553 and it carries the
+**fixed** form, `c.backend->flags`. Case 25's description above is of upstream's pre-fix code, which
+is **not** the code at our pin.
 
 ## CORRECTION 2026-10-03: this native pair was a FALSE CONTROL for case 25
 

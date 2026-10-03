@@ -28,7 +28,32 @@ structurally missed" a measurement instead of an assertion.
 
 **Commit dates do not decide liveness and are not used for it.** Four of the candidates below are
 dated before the pin's tag date yet are absent from the tag, because 9.0.1 was cut from a release
-branch. Ancestry decides; the pinned tree proves.
+branch.
+
+> ### ~~Ancestry decides; the pinned tree proves.~~ — WITHDRAWN 2026-10-03
+>
+> **Both halves of that sentence are wrong, and it governed every verdict in this file.**
+>
+> 1. **Ancestry is INSUFFICIENT.** `n9.0.1` is a release-branch tag that cherry-picks, so a fix can
+>    be "not an ancestor" and still be present by content under a different sha. `4b9c4b9cfb` is
+>    exactly that: absent by ancestry, present as `716d2a47c5`, whose body reads
+>    *"(cherry picked from commit 4b9c4b9cfb56…)"*.
+> 2. **"The pinned tree proves" was a grep for a line SHAPE**, and a line shape recurs at sites where
+>    the defect does not exist. For `ops_dispatch` it matched line 664, where the object is still
+>    alive — see the retraction in section 2.
+>
+> **The replacement test, and both of its controls must be run:**
+>
+>     git log <tag> --grep='cherry picked from commit <sha>'     # non-empty  => BACKPORTED, not live
+>     git log <tag> -- <path>                                     # a same-subject commit => suspect
+>
+> then confirm **the free precedes the read on the same path** by reading the enclosing function, not
+> by grepping for the line. Controls: the probe must fire on a known backport (`4b9c4b9cfb` →
+> `716d2a47c5`) and come back empty on a bogus sha. Without the first control a probe that silently
+> matches nothing reads exactly like "not backported".
+>
+> This is the "POSITIVE finding from a narrowed view" trap in CLAUDE.md, in its own right: the grep
+> was written to find the pre-fix line and it found one.
 
 ## Half (b): plain-heap candidates — the control, and the strongest results here
 
@@ -51,17 +76,36 @@ Why it is a good control case: the shape is three statements, the reduction is n
 (the allocator is `av_malloc`/`av_free`, which *is* the real allocator here), and the stale pointer
 is a struct field rather than a local, so a reader cannot object that the optimiser removed it.
 
-### 2. `swscale/ops_dispatch`: a field read through a pointer the call already invalidated
+### 2. ~~`swscale/ops_dispatch`~~ — RETRACTED 2026-10-03: FIXED at our pin, never live
 
 | | |
 |---|---|
 | fix | `4b9c4b9cfb56`, 2026-07-13 — *"swscale/ops_dispatch: fix use-after-free when adding opaque ops passes"* |
+| **backport** | **`716d2a47c5`, IN `n9.0.1`** — body: *"(cherry picked from commit 4b9c4b9cfb56…)"* |
 | consumer | `libswscale/ops_dispatch.c` |
 | layer | plain heap |
+| **live in pin** | **NO** |
 
-One line again: `(*output)->backend = comp->backend->flags;` becomes `c.backend->flags`, a local copy
-taken before the call that invalidates `comp`. **Live at the pin:** `n9.0.1:libswscale/ops_dispatch.c:664`
-carries the pre-fix line verbatim.
+**The claim "live at the pin, `ops_dispatch.c:664` carries the pre-fix line verbatim" is withdrawn.**
+Reading the enclosing function `compile_single` (`n9.0.1:libswscale/ops_dispatch.c:527-674`) instead
+of grepping it shows two distinct `backend =` sites:
+
+- **line 553 — the defect's site, and it is FIXED.** The `p->comp.opaque` branch takes a copy,
+  `SwsCompiledOp c = *comp;`, then `av_free(p);`, then reads `c.backend->flags`. That is the
+  post-fix form; the cherry-pick is applied.
+- **line 664 — the site I cited, and it is not a defect.** On the fall-through path `p` is never
+  freed: it is handed to `ff_sws_graph_add_pass(…, op_pass_setup, p, op_pass_free, output)`, which
+  takes ownership while the object stays live. Two lines later `align_pass(…, p->pixel_bits_out)`
+  reads `p` directly — which is itself proof that `p` is alive there.
+
+So `comp->backend->flags` at 664 reads a **live** object. No free precedes it on that path.
+
+**Consequence for the measured results.** The fixture built from this (`ffapp_safety.c` fixture 25)
+remains a valid *synthetic* interior-pointer use-after-free, and the six cells measured in
+`../../ports/ffmpeg/app/results/2026-10-03-qemu-upstream-defects-heap-arms/` stand as a measurement
+of that fixture. What does **not** stand is the framing: fixture 25 is **modelled on** upstream
+`4b9c4b9cfb`, which is **fixed at the version we compile**. It is not a reproduction of a defect
+live in our pin, and must not be counted as one.
 
 ### Also in this half, not yet read
 
@@ -151,9 +195,14 @@ the component's `cmake/Replay.cmake` plus a new `bug-corpora/ffmpeg/heap-repros`
 |---|---|
 | population | 1,788 commits after the pin |
 | lifetime wording in the subject | 15 |
-| plain-heap, read from the diff | 1 confirmed live + 3 unread |
+| plain-heap, read from the diff | 1 confirmed live, 1 **retracted as backported**, 3 unread |
 | pool-layer, read from the diff | 4, all one change, all unclassified |
-| confirmed live and in class, today | **2**, both plain heap |
+| ~~confirmed live and in class, today~~ | ~~**2**, both plain heap~~ → **1** (`vvc/thread` only) |
 
-The ratio is the point: 2 usable candidates from 1,788 commits. Expect the same elsewhere, and do
-not read a small shortlist as a weak search.
+**Corrected 2026-10-03: one, not two.** `ops_dispatch` was backported (section 2). `vvc/thread`
+survives the same probe that caught it — `git log n9.0.1 --grep='cherry picked from commit
+bc46eab87c'` is empty while the identical probe for `4b9c4b9cfb` returns `716d2a47c5`, so the
+negative is a tested negative and not an untested one.
+
+The ratio is still the point, and it is now sharper: **1** usable candidate from 1,788 commits. Do
+not read a small shortlist as a weak search — but do not read an unverified one as a result either.
