@@ -11,7 +11,10 @@ rm -rf "$OUT"; mkdir -p "$OUT/opensbi" "$OUT/images"
 git -C "$WW" archive HEAD | tar -x -C "$OUT/opensbi"
 rm -rf "$OUT/opensbi/lib/sbi/capstone-sbi"; mkdir -p "$OUT/opensbi/lib/sbi/capstone-sbi"
 git -C "$MW" archive HEAD | tar -x -C "$OUT/opensbi/lib/sbi/capstone-sbi"
-cp "$FB/build-fpga/images/Image" "$FB/build-fpga/images/caplifive.dtb" "$OUT/images/"
+# FW_IMAGE_DIR: build on a saved Image + dtb instead of the shared build's current ones (the shared image can be
+# restored for other lanes while private firmwares keep using a staged Image).
+IMGDIR=${FW_IMAGE_DIR:-$FB/build-fpga/images}
+cp "$IMGDIR/Image" "$IMGDIR/caplifive.dtb" "$OUT/images/"
 for f in lib/sbi/sbi_capstone_dom.c lib/sbi/capstone_int_handler.c; do
   "$CC" --abi capstone "$OUT/opensbi/$f" -- -I"$OUT/opensbi/lib/sbi/capstone-sbi" -D__riscv_xlen=64 -DCAPSTONE_TARGET_FPGA $DEFS > "$OUT/opensbi/$f.S" 2> "$OUT/$(basename $f).err"
 done

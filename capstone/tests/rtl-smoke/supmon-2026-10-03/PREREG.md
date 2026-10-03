@@ -222,3 +222,30 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
   - **A hangs:** not a QUIET effect. A rare point after k > 8 preemptions; A's last MCAU/MEPC name it.
   - **All complete:** C5q's hang did not reproduce at N = 1. The next step is a repeat of C5q's exact configuration,
     not another variant.
+
+## C5u RESULT (boot supmon-c5u, fw d07761ded4ce): outcome "A hangs". It is not a QUIET effect; the RESUME CALL never completes
+- k800 returned 4. Call 0 (plain) gave 112006 38bb59fd, HEAP ok, 2,551,482,753 cycles (+0.03 % against C5q run 1).
+- **A (loud, every event traced, C5q's position) wedged after 213 preemptions.**
+  - Every one of the 213 events is MCAU 0x10 (the quantum), with its MEPC inside the domain image.
+  - The tail is `SUPK:1 MCAU:10 MEPC:82851864`, then `SUPA:0` (the re-arm stood), then nothing for the 600 s budget.
+  - So the resume CALL after preemption 213 neither returned nor escaped. The quantum always yields an escape once
+    the domain commits anything.
+  - The driver's wedge read: commit pc 0x800211b6, `li sp, 0` immediately before the CALL in supervised_invoke. This
+    is the same signature as C5q, where it was 0x80021188 in that layout.
+  - C and B were lost behind it, as pre-registered.
+- **The escape before the hung resume** landed at VA 0x61864 in sqlite3VdbeExec (DBAS 0x82800000). It came directly
+  after a capability store-to-load on the domain stack:
+  - `stc a3, 0(s0-0x80)`;
+  - `sb` into the adjacent granule;
+  - `ldc a2, 0(s0-0x80)`;
+  - `lbu` through it.
+  No earlier preemption in A landed at 0x61864 (N = 1 for this sequence).
+- **What it rules out:** QUIET timing. A had ~10 ms of UART between every SAVE walk and RESUME walk, and hung all the
+  same.
+- **What stands:** over 8 + 212 resumes worked. The hang is a property of the domain state at one escape, or of
+  accumulated state, not of the resume path as such.
+- **Next instrument, not a board boot of the speedtest:** a bare directed test that creates the condition. A supervised
+  domain loops on STC to a granule, SB to its neighbour, LDC of the same granule, LBU through it, with a small quantum,
+  so that escapes land at every offset of the sequence. Its matched control is the same loop with the capability
+  store/load replaced by integer ones. It runs on silicon in the ladder harness, and the RTL lane can run it in
+  simulation.
