@@ -743,3 +743,35 @@ Source: the RTL lane's simulation, sup-call 57a9874c8, resident logic, three rou
 - **plain-n32-r3:** as above (round 2's CALL, idx 4, `li sp, 0`).
 - **plain-n32-r1:** completes.
 - On their fixed tree, all of them complete.
+
+### Correction, 05:55 on 2026-10-04: the slot-0 rule wraps; the esc-n8 "unexplained" paragraph is withdrawn
+**The rule was incomplete.**
+- The issue pointer restarts at 0 after a flush and wraps over the scoreboard's 8 slots: `scoreboard.sv:302-303`;
+  NrScoreboardEntries = 8 in `capstone_cv64a6_imafdc_sv39_config_pkg.sv:60` (both at 36a641e0b, checked).
+- So slot 0 is the first instruction after the last flush only until eight more issue. After that it is one of the
+  last eight issued.
+- This is the RTL lane's correction of the rule it had given.
+- Readings that stand:
+  - `li sp, 0` (2 issues after the CCSRRW's flush);
+  - the s16nop-nt control;
+  - `stub`+0 for n4-r3 and the fence arm (a 4-instruction stub).
+
+**esc-n8.**
+- 0x80000a56 is NOT the last resume point. It is one of the last eight instructions issued before the stuck switch's
+  flush.
+- The stuck switch is therefore the domain's RETURN, or an escape taken at it, as the 05:40 paragraph said.
+- But `sd a1, 0(s3)`, three instructions before the RETURN, IS an ordinary store after the last switcher write. It
+  resets `is_dom_switch_q`, so the RETURN's first SAVE write is mis-checked exactly as R-49 describes, with the same
+  precondition as n4-r3.
+- **The paragraph "What the R-49 description leaves unexplained" is withdrawn.**
+- Withdrawn too: my candidate, the load unit's clear pushes during RESTORE. The RTL lane excludes it from the RTL: a
+  switcher read takes load_unit.sv:396-409's IDLE `else` branch, never the LDC states, so `clear_o` cannot fire.
+
+**C5f.** The same wrap restores the first reading: the escape landed within eight issued instructions of 0xe56bc,
+inside the `stc` burst. The S-16 README and the supmon PREREG are corrected in the same commit.
+
+**Simulation, for comparison (the RTL lane).** Their simulated esc-n8 hung at a genuine mid-burst ESCAPE: the last
+retired instruction was the burst's 8th `sd`, and the mis-check followed the domain's own `sd`.
+- So in simulation the escape side proper hangs. On the board, the RETURN side hung first.
+- s16st-esc-n8-retfence (running) decides whether the board's escape side hangs in this harness. The RTL lane
+  predicts it completes with resumes >= 1.
