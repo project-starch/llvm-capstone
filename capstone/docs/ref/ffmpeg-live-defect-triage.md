@@ -349,6 +349,25 @@ versus a scratch copy with this commit applied. **Prediction, registered here be
 the first, `use-after-poison` on the second.** If the second is also clean, the instrument is wrong and
 no ASan-blindness number in this tree should be trusted until that is explained.
 
+> **MEASURED 2026-10-03, exactly as predicted — three-sided.** Bundle:
+> [`../../bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-asan-pool-blindness/`](../../bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-asan-pool-blindness/README.md).
+>
+> | arm | variant | rc | ASan verdict |
+> |---|---|---:|---|
+> | control | plain `malloc`/`free` | 1 | **`heap-use-after-free`** |
+> | armA | the pin, unpatched | **0** | **NO REPORT** |
+> | armB | the pin + `e6255fb822` | 1 | **`use-after-poison`**, same address, same 1-byte read |
+>
+> Same compiler, same flags, same `libavutil`; armA and armB differ only in whether `refstruct.c`
+> carries the annotation. ASan attributes armB's poisoned region to `av_refstruct_pool_get` →
+> `refstruct_pool_get_ext` → `av_refstruct_alloc_ext_c`, i.e. to the pooled entry itself. **So "ASan is
+> blind to a use-after-return-to-pool at our pin" is now a measurement with a working positive control,
+> not a reading of the allocator's structure.**
+>
+> One process note, because it is the recurring failure: the control **failed to compile** on the first
+> attempt and the harness printed "INSTRUMENT DEAD" — a build error that reads exactly like a finding.
+> Had armA been run without it, its rc=0 would have been recorded as blindness on no evidence at all.
+
 **Two limits, both from the diff rather than inferred.** The poisoning is gated on
 `if (!pool->free_entry_cb)`, and upstream says why: *"RefStruct entries with an entry free callback own
 allocations while they rest in the pool… LeakSanitizer does not follow pointers stored in poisoned
