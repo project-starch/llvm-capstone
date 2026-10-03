@@ -1,0 +1,19 @@
+# S-16 result lines. Bitstream caplifive_supcall_36a641e0b. Apertures: 224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM}, 225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}.
+## bare: images/armdep-d16-q64.bin (d09491cd), 2026-10-04
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+commit pc 0x0000000080000774
+## real FPGA monitor, boot supmon-c5u (fw d07761ded4ce), from the stages driver's wedge read, 2026-10-03
+[wedge] sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+[wedge] sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}    0x88 10001000
+[wedge] commit pc = 0x00000000800211b6   <-- map this onto the domain disassembly to name the faulting instruction
+## real FPGA monitor, boot supmon-c5q (fw bdabef34243c)
+[wedge] sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+[wedge] sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}    0x88 10001000
+[wedge] commit pc = 0x0000000080021188   <-- map this onto the domain disassembly to name the faulting instruction
+## bare: images/armdep-nt-d16-q64.bin (0986d394), 2026-10-04 03:52 -- hang with 0 dots (before escape 16)
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+commit pc 0x000000008000071c

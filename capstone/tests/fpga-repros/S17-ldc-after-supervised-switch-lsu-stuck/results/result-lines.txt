@@ -1,20 +1,15 @@
+# S-17 result lines. Bitstream caplifive_supcall_36a641e0b. Bare, one power cycle per image.
 # arm12-ldc-q64 (image 07de9fb7af896dd5), bare, caplifive_supcall_36a641e0b, post-run LED-path read (run_sup_bare_wedge.py)
 sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
 sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x0d 00001101
 sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x80 10000000
 commit pc 0x0000000080000498
-# armdep-d16-q64 (image d09491cd969f2650), bare, caplifive_supcall_36a641e0b, post-run LED-path read (run_sup_bare_wedge.py)
-sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
-sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
-sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
-commit pc 0x0000000080000774
 # mswapfix-plain-noploop (image ffd6f6db241db2e1), bare, caplifive_supcall_36a641e0b, post-run LED-path read (run_sup_bare_wedge.py)
 sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
 sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x0d 00001101
 sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x80 10000000
 commit pc 0x0000000080000534
-# armdep-nt-d16-q64 (image 0986d3946ef9abca), bare, caplifive_supcall_36a641e0b, post-run LED-path read (run_sup_bare_wedge.py)
-sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
-sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
-sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
-commit pc 0x000000008000071c
+## arm12-ld-q64 (8027a661), 2026-10-04 03:22: COMPLETED
+COMPLETED: status 0x1 iter 0x10000 checksum 0x7f8000 escapes 8552 (dots 33) csnodefree 0xfffc -> 0xfffc mcause 0x0 end 0x5e5e
+## arm12-ldc-q64 (07de9fb7), the same session: HANG
+HANG after 0 dots, i.e. >= 0 escapes

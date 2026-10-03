@@ -457,3 +457,13 @@ A/C/R prints in the first 16 resumes; a dot every 16 escapes. Both counted armde
 - **If the prints protect:** this image hangs within the first 16 resumes (0 dots).
 - **If they do not:** it hangs at a similar count, or later.
 The wedge read is taken as for the others.
+
+## RESULT, armdep without the trace prints (03:51-03:54): signature A within the FIRST 16 resumes
+- Control: call-retpc PASS exact (N = 16).
+- **armdep-nt-d16-q64 (0986d394) HANGS with 0 dots**, i.e. before escape 16.
+  - Apertures 224 = 0x1f, 225 = 0x88: signature A again.
+  - commit pc 0x8000071c = the `li sp, 0` directly after `ccsrrw x0, cscratch, sp` (0x80000718) and directly before
+    the CALL (0x80000720). With no trace branch in between, this is exactly the real monitor's
+    `ccsrrw(x0, cscratch, sp); li sp, 0; domcall`.
+- **So the per-resume prints were DELAYING the hang.** Without them it comes within 16 resumes. This image is the
+  fastest S-16 reproduction: about 2.5 minutes of board time with the wedge read.
