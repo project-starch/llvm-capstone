@@ -127,6 +127,11 @@
 - **Supervised CALL synthesized (2026-10-02):** `sup-call` 36a641e0b sealed by the synth lane, exit 0; routed loop arc
   identical to the resident's, LUTLP-1 = 0, WNS -8.189 in band, FF +1,090 explained row by row, two ORDER-like
   pre-registration misses with mechanisms (plan, step-9 result). Bitstream sha256 016219b2..., NOT flashed.
+- **Supervised CALL confirmed on silicon (2026-10-03, the board lane):** the whole plan ladder except the hostile domain
+  ran bare on the resident bitstream exact to simulation -- full switch, arm, the fail-closed arm, guards, all seven
+  seal-size arms (S-11 fixed on silicon), MTIP, strip x5, N=3 repeats of escape/quantum/call-retpc; folder
+  `tests/rtl-smoke/sup-bare-2026-10-03-ladder/`, plan step-10 result. Next: the FPGA monitor's `supervised_invoke`
+  against the plan's CSR contract (the board lane), then the first `capstone-exec` program.
 - **Resident bitstream: `caplifive_supcall_36a641e0b.bit`** (sha256 016219b2...5d045), flashed 2026-10-02 15:55 by the
   board lane on the lead's direct confirmation, name read back after the power cycle; the previous resident was
   `caplifive_r43_8f6a0af.bit` (the name the console reports). **ACCEPTED 2026-10-02 16:12-18:05: the R-43
