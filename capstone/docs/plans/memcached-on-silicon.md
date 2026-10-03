@@ -49,7 +49,12 @@ are the owners on record.
   - The FPGA monitor's resume path hit it after 212 good resumes of the SQLite speedtest.
   - A bare image hits it within 16 resumes.
   - Until there is an RTL fix, supervised contexts (preemptive threads) on silicon stall after a few hundred quanta.
-  - A memcached run with UNSUPERVISED contexts does not depend on it.
+  - **Withdrawn (2026-10-04):** "a memcached run with UNSUPERVISED contexts does not depend on it".
+    - A PLAIN CALL is exposed too: bare on silicon, plain CALLs after 4, 24 and 32 stores hang at the exchange,
+      idx 4.
+    - The FPGA monitor's plain domcalls have not shown it.
+    - Until the RTL fix, a silicon runtime without quantum preemption should drain the store buffer (`fence`)
+      immediately before every CALL and every RETURN it emits. That completed every bare twin that hung.
 - **S-17:** after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` can hang (LSU not ready),
   supervised or not (`tests/fpga-repros/S17-...`).
   - Generated code in the FPGA monitor's `__domcallsaves` does load through the just-restored sp. A runtime's post-call
