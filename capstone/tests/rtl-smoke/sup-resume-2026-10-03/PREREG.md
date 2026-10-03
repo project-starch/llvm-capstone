@@ -578,3 +578,26 @@ which drains the store buffer before the switch starts:
   un-drained stores are the trigger.
 - s16pre-stc24 (94f670ed): part 8 with 24 STCs plus the fence. The same prediction.
 - s16stc18: the original image, the rerun of the NO-RESULT.
+
+## Pre-registered (2026-10-04): the RTL lane's `sup-s16-stores.S` bare on silicon -- the reach of the fence workaround
+The test is copied unchanged from capstone-ariane a8045365a into `tests/sup-s16-stores.S`.
+- **What it does:** NSTORES scalar stores to distinct granules; then `ccsrrw x0, cscratch, sp; li sp, 0`; then an
+  armed CALL whose domain RETURNs at once, for ITER rounds.
+- **Why ITER matters:** the first round warms the seal's line.
+- **ESCAPE variant:** the domain makes ESC_BURSTS bursts of NSTORES stores under a short quantum.
+- **Readings:** 1 per round (csupstatus 1); then the resume count (ESCAPE only); then 0x77; then mcause 0.
+
+The RTL lane's simulation of the resident logic gives these outcomes, which are the predictions here:
+
+| image | build | simulated outcome |
+|---|---|---|
+| s16st-n4-r1 (acb649c8) | 4 stores, 1 round, cold seal | COMPLETES. The control. |
+| s16st-n4-r3 (b7937a87) | 4 stores, 3 rounds | HANGS at round 2's RETURN switch: the CALL's own SAVE tail plus the domain's one store fill the queue |
+| s16st-n4-r3-fence (ab8cde6f) | the same with the fence before the CALL | HANGS the same way. The fence cannot cover a short domain's RETURN. |
+| s16st-n32-r1 (e9b8d043) | 32 stores, cold | HANGS. Our own board data: 18 and 24 stores hang. |
+| s16st-esc-n8 (c710c07f) | ESCAPE, 8-store bursts, quantum 150, 6 bursts | HANGS at an escape. The escape-side reproduction. |
+
+- **If n4-r3-fence hangs on the board:** the folder's claim "a fence before the CALL removes the CALL-side trigger"
+  narrows to "when the domain runs long enough for the CALL's SAVE tail to drain". That correction lands on dev as its
+  own commit.
+- **If it completes:** silicon's drain timing differs from simulation here, and the claim stands as measured.

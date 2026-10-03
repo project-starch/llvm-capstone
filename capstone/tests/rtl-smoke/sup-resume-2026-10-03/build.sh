@@ -94,3 +94,21 @@ build s16sd24    135 -DMSWAP -DSWAP_DEP -DNOPLOOP -DDOTMASK=15 -DSWAP_PARTS=8 -D
 # S-16 workaround candidate: a fence right BEFORE every CALL (drain the store buffer before the switch)
 build s16pre-nt      136 -DMSWAP -DSWAP_DEP -DNOPLOOP -DDOTMASK=15 -DPRECALL -DQUANTUM=64 -DITER=65536
 build s16pre-stc24   137 -DMSWAP -DSWAP_DEP -DNOPLOOP -DDOTMASK=15 -DSWAP_PARTS=8 -DNSTC=24 -DPRECALL -DQUANTUM=64 -DITER=65536
+
+# The RTL lane's S-16 directed test (tests/sup-s16-stores.S, from capstone-ariane a8045365a), bare on silicon: the
+# reach of the fence-before-CALL workaround (warm seal, short domain) and the escape-side arm, on the resident logic
+b2() {   # name id-char [extra -D]
+  local n=$1 ch=$2; shift 2
+  "$BIN/clang" --target=riscv64-unknown-elf -march=rv64gc -mabi=lp64 -mcmodel=medany -static -nostdlib -nostartfiles \
+    -fuse-ld=lld -I"$H/inc" -I"$B/tests" -I"$H/env/macros" -I"$H/env/p" \
+    -DBOARD_TEST_FILE='"sup-s16-stores.S"' -DBOARD_TEST_CH=$ch -DBOARD_R_CAP=x16 -DBOARD_R_T1=x17 -DBOARD_R_T2=x8 "$@" \
+    -T "$H/inc/board.ld" "$H/inc/board_wrap.S" -o "$B/out/$n.elf"
+  "$BIN/llvm-objcopy" -O binary "$B/out/$n.elf" "$B/out/$n.bin"
+  printf '%-14s %8d bytes  sha256 %s  board_rec %s\n' "$n" "$(stat -c %s "$B/out/$n.bin")" \
+    "$(sha256sum "$B/out/$n.bin" | cut -c1-16)" "$("$BIN/llvm-nm" "$B/out/$n.elf" | awk '$3=="board_rec"{print $1}')"
+}
+b2 s16st-n4-r1        139 -DNSTORES=4 -DITER=1
+b2 s16st-n4-r3        140 -DNSTORES=4 -DITER=3
+b2 s16st-n4-r3-fence  141 -DNSTORES=4 -DITER=3 -DFENCE
+b2 s16st-n32-r1       142 -DNSTORES=32 -DITER=1
+b2 s16st-esc-n8       143 -DESCAPE -DNSTORES=8 -DQUANTUM=150 -DESC_BURSTS=6

@@ -12,6 +12,8 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = s16stores ]; then   # the RTL lane's sup-s16-stores.S, bare
+    for n in s16st-n4-r1 s16st-n4-r3 s16st-n4-r3-fence s16st-n32-r1 s16st-esc-n8; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = precall ]; then   # the S-16 workaround candidate, and the stc18 rerun
     for n in s16pre-nt s16pre-stc24 s16stc18; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = deep ]; then   # extended apertures on S-16/S-17, the slot-0 control, the store-count dose-response
