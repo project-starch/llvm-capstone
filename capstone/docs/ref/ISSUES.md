@@ -931,7 +931,7 @@ stays open for the permission check and the cause number. Follow-up 674cdab03c r
 unsigned-overflow acceptance at the upper edge of the sealed-return window and from the general
 bounds check.
 
-## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED and RESIDENT since 2026-10-02 (caplifive_supcall_36a641e0b.bit; audited): the fold corrected, the +1 dropped, 1024 B / 16-B aligned, the sealed cursor set to the region's start; the seal-size arms have not run on silicon yet; SHRINKTO's off-by-one and the two convention questions still OPEN`
+## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
 > overlooked.** That ruling fixed each document's *outlier arithmetic* and moved no convention: the

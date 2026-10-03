@@ -1,6 +1,6 @@
 # S-11 — SEAL enforces neither its minimum size nor its base alignment
 
-> **2026-10-01 (evening): FIXED IN RTL on `capstone-ariane` branch `sup-call`, audited; RESIDENT since 2026-10-02 in `caplifive_supcall_36a641e0b.bit` (the R-43 acceptance list passed on it unchanged; this folder's seal-size arms have not been run on silicon yet).**
+> **2026-10-01 (evening): FIXED IN RTL on `capstone-ariane` branch `sup-call`, audited; RESIDENT since 2026-10-02 in `caplifive_supcall_36a641e0b.bit`, and CONFIRMED ON SILICON 2026-10-03: all seven `sup-sealsize` arms ran bare on the board exact to simulation -- 64, 1023 and the misaligned 1024 trap with 29; 1024, 2048, the aligned +16 and the cursor-at-+960 arm seal with every canary word intact (the board lane's `tests/rtl-smoke/sup-bare-2026-10-03-ladder/`).**
 > The lead delegated the decision ("audit and decide"); the fix is the one this folder asked for, plus one thing the
 > audit of it found. (a) Every comparison in `func SEAL` parenthesised on its own, and the `+1` dropped so that
 > `size = end - start` with the exclusive end (R-32's off-by-one): a region smaller than 1024 bytes or not 16-byte
