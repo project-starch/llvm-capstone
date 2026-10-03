@@ -28,3 +28,22 @@ poolstock    44       COMPLETE  DEFECT-REPRODUCED
 poolstock    45       COMPLETE  FIXED
 poolsublet   44       FAULT     33
 poolsublet   45       COMPLETE  FIXED
+
+# Case 3 (5c66a3ab51, VVC non-reference output releases its pooled side tables), registered
+# 2026-10-03 BEFORE the first build of fixtures 46/47. The corpus's first AVRefStructPool case.
+# poolstock is the control: upstream's own pools, so the defect completes and reports it.
+# poolsublet is the nested arm: a release returns the entry to the pool, which on this arm is a
+# revoke, so the stale read faults. The fault's line is whichever line of case.c dereferences
+# `held` -- the printf, the verdict and the `bad` expression all do, so any of them counts.
+# 2026-10-03: case 3's fault lines re-registered 84,85,88 -> 99,100,103 -> 104,105,108 (the last
+# shift from giving rpl_tab its own 0xB0 fill, so the fixed arm cannot print an ambiguous zero). The PREDICTION is
+# unchanged (poolsublet faults on 46, poolstock completes); only the line table moved, because
+# case.c now tracks BOTH released side tables. The pool's free list is LIFO, so the entry handed
+# back is rpl_tab -- the last released -- not tab_dmvr_mvf, and the first version of the
+# reduction watched only tab_dmvr_mvf and read reuse_same_address=0. That was the instrument
+# misreading a correct allocator, not the defect failing to reproduce. Measured natively the
+# same day: reuse_same_address=1, reissued_is_rpl_tab=1, stale_read=0xCC.
+poolstock    46       COMPLETE  DEFECT-REPRODUCED
+poolstock    47       COMPLETE  FIXED
+poolsublet   46       FAULT     104,105,108
+poolsublet   47       COMPLETE  FIXED
