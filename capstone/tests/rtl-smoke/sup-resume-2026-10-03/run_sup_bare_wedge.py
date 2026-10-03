@@ -134,6 +134,14 @@ def main():
                     if v is None: ok = False; break
                     pc |= v << (8 * i)
                 wl.append("commit pc " + (f"0x{pc:016x}" if ok else "UNREAD"))
+                # the trap log's latched pc (cva6.sv:1289-1296 at 36a641e0b: bank 6 regs 4..11 = 196..203,
+                # recent_nontrivial_mepc_log_q): where the trap that 255 reports was taken
+                mp = 0; ok = True
+                for i in range(8):
+                    setsw(196 + i); v = leds()
+                    if v is None: ok = False; break
+                    mp |= v << (8 * i)
+                wl.append("trap-log mepc (196..203) " + (f"0x{mp:016x}" if ok else "UNREAD"))
             except Exception as e:
                 wl.append(f"wedge read failed: {e}")
             finally:
