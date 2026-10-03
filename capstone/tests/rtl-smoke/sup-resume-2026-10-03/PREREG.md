@@ -689,3 +689,45 @@ byte-identical.
 - If plain-n32-r3 completes on silicon, the board's drain timing differs from simulation at this shape. In that case
   "a plain CALL is exposed" stays a simulation result only.
 - If it hangs at idx 7 or with the pc on `stub`, the exchange-entry account is wrong for a plain switch.
+
+## Results: session s16stores (2026-10-04 05:24-05:37, bitstream 36a641e0b, bare, one power cycle per image)
+| image | prediction | board | walk idx | stale slot-0 pc | reading |
+|---|---|---|---|---|---|
+| control call-retpc (a05ca464) | PASS | PASS exact | | | |
+| s16st-n4-r1 (acb649c8) | completes | completed: 1, 0x77, 0 | | | as predicted |
+| s16st-n4-r3 (b7937a87) | hangs at round 2's RETURN | HANG, full S-16 signature | 7 | 0x800009b0 = `stub`+0 | the stuck switch is the domain's supervised RETURN. As predicted by the RTL lane; my 05:30 idx-4 prediction is withdrawn (see the 05:31 correction) |
+| s16st-n4-r3-fence (ab8cde6f) | hangs the same way | HANG, full signature | 7 | 0x800009c0 = `stub`+0 of this image | **the fence before the CALL does not cover the RETURN** |
+| s16st-n32-r1 (e9b8d043) | hangs | HANG, full signature | 7 | 0x800003e2 = the tail's `li sp, 0` | a CALL-side hang (the armed CALL's SAVE), the C5q/C5u residue |
+| s16st-esc-n8 (c710c07f) | hangs at an escape, idx 7 | HANG, full signature | 7 | **0x80000a56**, the `addi` two instructions before the domain's RETURN (0x80000a5a) | see below |
+
+- "Full signature" means 224/225/226/227 = 0x1f/0x88/0x80/0x04, 193 = 4, 194 = 3, 195 = 0 and 192 = 0. The raw lines
+  are in `results/s16stores.result-lines.txt`.
+- None of the hanging images printed a reading: there is no streaming recorder, and GDB cannot halt. So the round in
+  which n4-r3 hung is not recorded. Its round 1 executes the same instructions as n4-r1, which completed.
+
+### esc-n8 does NOT show an escape-side hang
+- **Where the stuck switch was.** By the slot-0 rule, 0x80000a56 is the last RESUME point. After it, the domain
+  issues `addi` and then the RETURN at 0x80000a5a. So the stuck switch was the RETURN, or an escape taken at it. It
+  was not an escape in a burst.
+- **Status of the pre-registration.** It predicted "hangs at an escape". The hang, its signature and idx 7 are as
+  predicted; the escape-side location is NOT shown.
+- **What the R-49 description leaves unexplained.** Between that resume and the RETURN, the domain issues no store.
+  - The last store-unit request before the RETURN's first SAVE write is then the resume CALL's own exchange write.
+  - `is_dom_switch_q` changes only when the store unit accepts a request (store_unit.sv:252/284). It resets only on
+    `rst_ni` (:512), not on a flush.
+  - So it reads 1 there, and the first SAVE write should get the commit queue's own ready.
+  - A RETURN two instructions after a resume should therefore not be mis-checked. This is open; it has gone to the
+    RTL lane.
+
+### Next session s16next (pre-registered here, before it runs)
+- **The four PLAIN twins:** predictions as in the 05:30 and 05:35 addenda.
+- **s16st-esc-n8-retfence (c3340e82).** esc-n8 plus one `fence` immediately before the domain's RETURN (the RETFENCE
+  knob). The stub entry and the burst addresses are unchanged.
+  - With the queue drained, the RETURN cannot meet a full commit queue.
+  - **If the escape side hangs on silicon:** it HANGS, idx 7, with the slot-0 pc at a resume point inside the bursts
+    (0x80000a24..0x80000a46) or at `stub`+0..+2.
+  - **If it completes** (readings 1, resumes >= 1, 0x77, 0): esc-n8's hang was at the RETURN, and this harness has not
+    shown an escape-side hang on silicon. C5f's escape-side reading stands alone.
+  - If it hangs with the slot-0 pc at 0x80000a56..0x80000a5e: the RETURN hung with a drained queue. That refutes the
+    queue-full account at that switch.
+- **s16st-esc-n8 again (c710c07f).** N = 2 on the hang's location. No prediction for the pc; idx 7.

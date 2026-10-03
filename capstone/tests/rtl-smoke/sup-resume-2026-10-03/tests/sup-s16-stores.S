@@ -1,6 +1,8 @@
 # Copied from capstone-ariane a8045365a (branch sup-call), verif/tests/custom/capstone/sup-s16-stores.S -- the RTL lane's S-16 directed test.
 # One knob added by the board lane, nothing else changed: PLAIN drops the arming (no cssupervise before the CALL)
 # and reads the marker 0x51 where csupstatus was read, so a PLAIN arm and its armed twin differ only in the arming.
+# A second board-lane knob: RETFENCE puts a fence immediately before the domain's RETURN, so that switch starts
+# with the commit queue drained and cannot be the stuck one; an ESCAPE arm that still hangs then hangs at an escape.
 # See LICENSE for license details.
 
 #*****************************************************************************
@@ -209,6 +211,9 @@ stub:
   li a1, 0x77
   sd a1, 0(s3)
   la a1, stub
+#ifdef RETFENCE
+  fence
+#endif
   RETURN(ra, a1, x0)
 stub_end:
 
