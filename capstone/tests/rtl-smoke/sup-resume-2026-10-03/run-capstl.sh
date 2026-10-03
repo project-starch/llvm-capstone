@@ -12,6 +12,8 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = s16parts3 ]; then   # S-16: three-part combinations with part 8
+    for n in s16p11-nt s16p13-nt s16p14-nt; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = s16parts ]; then   # S-16 bisect on the fast repro
     for n in s16p8-nt s16p9-nt s16p10-nt s16p12-nt; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = notrace ]; then   # armdep without the per-resume trace prints (do they protect?)

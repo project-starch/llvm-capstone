@@ -482,3 +482,12 @@ ITER 65,536; the apertures read after any hang):
 - Otherwise, the pairs say which burst it needs.
 - **The real monitor's sequence is all of these (15).** The full armdep-nt hangs within 16 resumes (the result
   above).
+
+## RESULT, the S-16 pair bisect (03:59-04:03): every pair COMPLETES; three-part combinations pre-registered
+- Control: call-retpc PASS exact (N = 17).
+- s16p8-nt (8 alone), s16p9-nt (8+1), s16p10-nt (8+2) and s16p12-nt (8+4) all COMPLETED. Each had 8,552 escapes,
+  count 0x10000 and checksum 0x7F8000 exact, and csnodefree flat.
+- The full combination (armdep-nt, 15) hangs within 16 resumes. So S-16 needs more than two of the parts together:
+  it is not the cscratch/sp sequence alone, and not any one burst with it.
+- **Next, pre-registered:** s16p11-nt (8+1+2), s16p13-nt (8+1+4) and s16p14-nt (8+2+4). A hang shows its omitted part
+  is not needed; a completion shows the omitted part is needed.
