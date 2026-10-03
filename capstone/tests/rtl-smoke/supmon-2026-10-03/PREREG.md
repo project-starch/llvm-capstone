@@ -82,3 +82,54 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
   - BT00, BT01, BT02 and BT03 print, then Linux boots;
   - then the original C5 predictions: k800 4 twice, SUPN 0, SUPK 0; speedtest 112006 38bb59fd, HEAP 2097152 DROPPED
     0 RC 0; SUPN about 1,275 (reported), SUPK 0, every SUPA 0.
+
+## Fixed C5 RESULT (boot supmon-c5fix, fw da369481cacf), and C5q pre-registered 2026-10-03 21:07 before its boot
+- **The dom_stack fix holds on silicon.** BT00, BT01, BT02 and BT03 printed, then Linux booted. C5d hung at the same
+  point with 8 KiB of stack, and the only other difference is the define plumbing that carries the stack size.
+- **k800 retval=4 (4,511 cycles), but it did NOT run under supervision.** The ladder host calls through
+  DPI_CALL_WITH_CAP (call_domain_with_cap), and the hook covers call_domain only. No SUP or ENT tag printed for it.
+  The prediction "k800 ... SUPN 0, SUPK 0" was a wrong premise of this pre-registration, not a result.
+- **The speedtest ended in the pre-registered refutation, SUPK 2.** In order:
+  - The arm stood: SUPA 0.
+  - The domain faulted before its first preemption (SUPN 0): MCAU 2, MEPC 0x82400240 (DBAS + 0x240 = VA 0x10240),
+    MTVL 0x34229073 = `csrw mcause, t0`.
+  - That instruction is in the glue's `__test_reentry`. The domain entered there because the two region shares had
+    already called it plainly (SHA6 twice).
+  - The supervision gate forbids every plain CSR with addr[9:8] != 0, by design: supervised-call-silicon.md:65,
+    csr_regfile.sv:2879-2886 at 36a641e0b.
+  - The fault came back as an EVENT with the trap stripped. The monitor returned -1 to the host (SQ: X/fail), and
+    the shell came back (DN_1): a real domain's kind-2 path works under the monitor on silicon (N=1).
+  - The driver stopped at that stage, as designed, so the closing k800 did not run.
+- **Statically, every silicon-ABI domain image does this.** sup-static-audit.py, with positive controls for every
+  rule (21/21) and negative controls (0/15), flags 6 words in each of speedtest1 e6ee5255 and k800 589ceee3:
+  - the glue's mcause/mtval restore at re-entry, and save at return;
+  - the cycle bracket's `csrr mcycle` / `minstret`.
+  Its first flag is exactly the board's MEPC and MTVL. So the C5 premise was false as written: existing domains do not
+  run under supervision unchanged. Their glue and cycle bracket must avoid M-level CSRs.
+
+**C5q** (fw bdabef34243c, Image a9e838663d64; monitor 134258f, wrapper 882892f):
+- Firmware defines: SUPERVISED_CALL, CSR_EVENTS, CLASSIC_TEST, QUIET (no per-invoke lines inside the cycle bracket),
+  CLASSIC_MASK = 2 (only the 2nd call_domain of the boot is supervised), BOOT_TRACE.
+- The image is the speedtest PATCHED by patch-sup-glue.py: e6ee5255 -> 7291218eab669695. Exactly those 6 words
+  change, and nothing else:
+  - mcause/mtval restore -> nop;
+  - mcause/mtval save -> `li t0, 0`;
+  - `mcycle` -> `cycle`, the same counter. It is legal under supervision: sup-guards stubs 10/11 run it supervised,
+    84/84 on this bitstream, and RVZicntr = 1 in the board config.
+  The image's embedded initramfs was checked to carry the patched words.
+- Stages: k800 (589ceee3, plain); speedtest x3; k800.
+- Predicted:
+  - BT00..BT03, Linux; k800 retval=4 at both ends.
+  - Each speedtest run: Verification Hash 112006 38bb59fd, HEAP 2097152 DROPPED 0 RC 0.
+  - SUPM 0, 1, 0 for runs 1, 2, 3.
+  - Run 2 (supervised): final SUPK 0, SUPN > 0 and about 1,275 (reported), no SUPA line (QUIET prints only a
+    refused arm).
+  - Runs 1 and 3 (plain): SPEEDTEST1-CYCLES within 0.1 % of each other and of the C3 record 2,551,615,035.
+  - Supervision overhead = run 2 - mean(runs 1, 3): positive and below 1 %. Point estimate ~0.2 %, from ~4k cycles per
+    preempt/resume (four 64-slot walks, the 32-CCSRRW CPMP swap, the monitor loop) x ~1,275. The value is reported.
+- Refuted by:
+  - any hash other than 112006 38bb59fd;
+  - run 2 ending in SUPK 1/2/3 or SUPN 0;
+  - an overhead of 1 % or more;
+  - a wedge.
+- If run 1 fails, the patch itself is broken and run 2 says nothing.

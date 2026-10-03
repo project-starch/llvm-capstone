@@ -1,6 +1,6 @@
 #!/bin/bash
 # One board session on a PRIVATE firmware (no bake: the payload Image is the shared board build's current one, copied).
-# Usage: board-supmon.sh <tag> <fw_payload.bin>. Stages: k800, P1 cell 5 -O0 speedtest (e6ee5255c896aa21), k800.
+# Usage: [SUPMON_SPEEDTESTS=n] board-supmon.sh <tag> <fw_payload.bin>. Stages: k800, n x the staged speedtest1.dom, k800.
 # Mirrors board-r1e4.sh's runner + watchdog section (the stages runner is the driver of record).
 main() {
   set -u
@@ -14,7 +14,12 @@ main() {
   export PREFLIGHT_ORACLES=$HOME/capstone-artifacts/k800-relinked-0x20000/orc K800_ORACLES=$HOME/capstone-artifacts/k800-relinked-0x20000/orc K800_HASH=589ceee3853c6092
   export ENTRY_STALL_S=420 EARLY_HALT_CONTROL=0 WEDGE_TRACER=0 HALT_MUX_READS=0
   export SQLITE_HOST=/test-domains/sqlite_host_rr.user SQLITE_STAGE_TIMEOUT=600 SQLITE_IDLE_S=600
-  export SQLITE_STAGE_DOMS="/test-domains/lpc|k800:/test-domains/k800.dom,/test-domains/sqlite_host_rr.user|/test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify,/test-domains/lpc|k800:/test-domains/k800.dom"
+  local K="/test-domains/lpc|k800:/test-domains/k800.dom"
+  local S="/test-domains/sqlite_host_rr.user|/test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify"
+  # SUPMON_SPEEDTESTS: how many speedtest runs between the two k800 controls (default 1; C5q runs 3).
+  local D="$K" i
+  for i in $(seq 1 "${SUPMON_SPEEDTESTS:-1}"); do D="$D,$S"; done
+  export SQLITE_STAGE_DOMS="$D,$K"
   export PROBE_SCOPED_OUT=$OUT/boot.txt PROBE_RAW_OUT=$OUT/boot-raw.txt
   echo "$(date +%H:%M:%S) === $TAG fw $(sha256sum "$FPGA_FW" | cut -c1-12) ===" | tee -a $OUT/log
   cd $R/capstone/tests/rtl-smoke
