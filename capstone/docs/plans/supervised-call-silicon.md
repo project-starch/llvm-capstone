@@ -326,7 +326,16 @@ the after-audit, synthesis, silicon.
   simulation. The board lane recorded that as a miss against its pre-registered bit equality; the right reading is
   that the preemption COUNT is a timing quantity by construction (the quantum counts cycles, the domain's cycles
   depend on the memory system, and S12_MEM_DELAY=12 is not the FPGA's DDR), so the invariants of this test are the
-  ladder value, x1, mie, mcause and the per-escape readings, and the count is reported, not pre-registered. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
+  ladder value, x1, mie, mcause and the per-escape readings, and the count is reported, not pre-registered.
+- **The ladder bare on silicon (2026-10-03, the board lane, one session per image, pre-registered; dev 7d15deab5ba2,
+  `tests/rtl-smoke/sup-bare-2026-10-03-ladder/`):** fullswitch 17/17, arm 13/13, armclose 14/14 (the fail-closed arm
+  and the arm's persistence on silicon), guards 84/84, all seven sealsize arms exact (S-11's size, alignment and
+  cursor fixes on silicon), each vector an order-preserving subsequence of the b83d67ea1 reference; sup-mtip exact
+  except the reference spin count (122 on the board against 243: the board's mtime is 1 MHz), both timer escapes and
+  the quantum escape exact; sup-strip x5 within its invariants (d8 took the other legitimate outcome: the caller took
+  the interrupt); sup-escape v2, sup-quantum v2 (74 preemptions at both quanta, every time) and call-retpc at N=3,
+  identical. Not run: sup-hostile (needs a register-preserving recorder). Of this plan's verification, everything but
+  the hostile domain and the no-strip control's own silicon run now stands on the board. **ORDER-like, A = `sup_|esc_|escape|quantum|mismatch`:** before the D-cache
   arbiter 0/500 (PASS); before i_load_unit 55/500 -- a pre-registration MISS with the mechanism identified: I had
   commit_lsu_o landing in the store buffer's flops, and its cone continues through the store buffer's combinational
   status (commit pointer, last_store_buf_ready next-state) into the AMO fifo and the load unit's dom-switch
