@@ -1,5 +1,23 @@
 # Current Capstone state
 
+## 2026-10-03 — Supervised-CALL ladder complete on silicon: 12 images exact to simulation, the real timer escape, S-11's refusal; N = 3 on the key tests
+
+- **The rest of the RTL lane's ladder ran bare on the board** (`caplifive_supcall_36a641e0b.bit`), one session per image,
+  pre-registered and pushed before the boot (`tests/rtl-smoke/sup-bare-2026-10-03-ladder/`, 73093f0bd558).
+  - **Equal to simulation, every reading:** fullswitch (the 67-slot full exchange), arm, armclose, guards (84/84), and
+    all seven S-11 arms. Below 1024 B or off 16-byte alignment the seal is refused with cause 29; at 1024/2048 B
+    aligned it seals with every canary intact.
+  - **sup-mtip:** the real CLINT timer interrupt escapes a supervised domain (kind 1, cause 7) twice, with MTIP still
+    pending in the monitor, and the quantum escape follows. Exact except the reference spin count, a board timing
+    quantity (122 against simulation's 243).
+  - **sup-strip x5:** exploratory. It completes within its invariants. Its in-switch detector exists only in
+    simulation.
+  - **Repeats:** sup-escape v2, sup-quantum v2 (q16, q64) and call-retpc now stand at N = 3, identical every time;
+    74 preemptions at both quanta.
+- **Still open on silicon:**
+  - sup-hostile (it needs a register-preserving recorder);
+  - anything through the OpenSBI monitor or Linux. Next: the FPGA monitor's supervised_invoke, in the board lane.
+
 ## 2026-10-03 — upstream memory defects for the three app ports: 4 measured on the arms, 18/18 cells as pre-registered, 3 retractions
 
 - **What was asked:** find memory defects (plain `malloc` **and** nested allocators) for memcached,

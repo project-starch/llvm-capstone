@@ -1,0 +1,67 @@
+# Supervised-CALL ladder on silicon, bare M-mode: caplifive_supcall_36a641e0b.bit, 2026-10-03 19:19-19:47. One board
+# session per image. Pre-registered and pushed before the boot: board-sup-ladder 73093f0bd558 (PREREG.md,
+# expected-vectors.json). Each verdict is a mechanical comparison of the board's CAPPRINT vector with the pinned simulation
+# vector (../compare logic; the comparator was positive-controlled on real data: unmodified PASS, one flipped reading MISS).
+# Cite a row by its image hash (images/SHA256SUMS; repeats use the v1/v2 folders' images).
+#
+# Infrastructure event: sup-strip-d0's first session never ran the image. The JTAG load_image timed out ("[riscv.cpu] Timed
+# out after 120s waiting for busy to go low"), no uart.txt. It was re-run once, same image and pre-registration, and the
+# re-run is the row below.
+
+sup-fullswitch           PASS exact (17/17)
+sup-arm                  PASS exact (13/13)
+sup-armclose             PASS exact (14/14)
+sup-sealsize-1024        PASS exact (11/11)
+sup-sealsize-2048        PASS exact (11/11)
+sup-sealsize-off16       PASS exact (11/11)
+sup-sealsize-cur960      PASS exact (11/11)
+sup-sealsize-64          PASS exact (2/2)
+sup-sealsize-1023        PASS exact (2/2)
+sup-sealsize-off8        PASS exact (2/2)
+sup-guards               PASS exact (84/84)
+sup-mtip                 PASS exact-except; reported [(1, '0x7a')] (sim ['0xf3'])
+sup-strip                PASS invariants exploratory; board ['0x0', '0x0', '0x8000000000000003', '0x0', '0x800002fe'] sim ['0x0', '0x0', '0x8000000000000003', '0x0', '0x800000c0']
+sup-strip-d0             PASS invariants exploratory; board ['0x0', '0x0', '0x8000000000000003', '0x0', '0x800002fe'] sim ['0x0', '0x0', '0x8000000000000003', '0x0', '0x800000c0']
+sup-strip-d8             PASS invariants exploratory; board ['0x0', '0x0', '0x8000000000000003', '0x0', '0x8000030e'] sim ['0x8000000000000003', '0x0', '0x800000c2', '0x0', '0x800000c2']
+sup-strip-d32            PASS invariants exploratory; board ['0x8000000000000003', '0x0', '0x80000322', '0x0', '0x80000322'] sim ['0x8000000000000003', '0x0', '0x800000c2', '0x0', '0x800000c2']
+sup-strip-d128           PASS invariants exploratory; board ['0x8000000000000003', '0x0', '0x80000322', '0x0', '0x80000322'] sim ['0x8000000000000003', '0x0', '0x800000c2', '0x0', '0x800000c2']
+rep2-sup-escape-v2       PASS exact (72/72); saved mcause ['0x0', '0x0', '0x0', '0x0', '0x0']
+rep2-sup-quantum-q64     PASS invariants; preemptions (reported) 74; tail ['0x1', '0x1f64f7f55a20a182', '0x1234', '0x4a', '0xa5', '0x888', '0x0']
+rep2-sup-quantum-q16     PASS invariants; preemptions (reported) 74; tail ['0x1', '0x1f64f7f55a20a182', '0x1234', '0x4a', '0xa5', '0x888', '0x0']
+rep2-call-retpc          PASS exact ['0x0', '0x12', '0x21', '0x0', '0x51', '0x0', '0x0', '0x0']
+rep3-sup-escape-v2       PASS exact (72/72); saved mcause ['0x0', '0x0', '0x0', '0x0', '0x0']
+rep3-sup-quantum-q64     PASS invariants; preemptions (reported) 74; tail ['0x1', '0x1f64f7f55a20a182', '0x1234', '0x4a', '0xa5', '0x888', '0x0']
+rep3-sup-quantum-q16     PASS invariants; preemptions (reported) 74; tail ['0x1', '0x1f64f7f55a20a182', '0x1234', '0x4a', '0xa5', '0x888', '0x0']
+rep3-call-retpc          PASS exact ['0x0', '0x12', '0x21', '0x0', '0x51', '0x0', '0x0', '0x0']
+
+== Reading ==
+- EXACT, board == simulation:
+  - sup-fullswitch (17): the full 67-slot exchange round trip;
+  - sup-arm (13), sup-armclose (14);
+  - sup-sealsize-1024/2048/off16/cur960 (11 each): the seal accepted, canaries intact;
+  - sup-sealsize-64/1023/off8 (2 each): S-11 refuses, cause 29 (0x1d), so a seal below 1024 B or off 16-byte
+    alignment is refused on silicon;
+  - sup-guards (84/84): the supervision guards.
+  Twelve images, every reading.
+- sup-mtip: exact except reading 1, the reference spin count until MTIP, which is board timing: 0x7a = 122 iterations
+  against 243 in simulation. It is below the "never came" ceiling, and the board's mtime runs at 1 MHz. Every other
+  reading is exact, including two timer escapes (csupstatus 3, cause 0x8000000000000007) with MTIP still pending in
+  the monitor (0x80) and the quantum escape. The real CLINT timer interrupt escapes a supervised domain on silicon.
+- sup-strip x5 (exploratory, invariants only): every variant completes, every mcause reading is 0 or
+  0x8000000000000003, and every mepc reading is 0 or inside the image's text.
+  - d0 and default: the callee saw no trap during the switch; the caller's handler took the software interrupt
+    after return. This is simulation's shape.
+  - d8: the same as d0. Simulation's d8 had the callee take it instead.
+  - d32 and d128: the callee took the interrupt, as in simulation.
+  Which side takes it depends on when the msip write lands; both are legitimate per the test header. The in-switch
+  detector is simulation-only, so this test cannot show the hazard's absence on silicon. It shows completion, and
+  the absence of any foreign mcause or out-of-text mepc.
+- Repeats (N = 3 with 2026-10-02's runs):
+  - sup-escape v2: 72/72 three times, saved mcause 0 in all five arms each time;
+  - sup-quantum v2 q64 and q16: ladder exact three times, 74 preemptions every time at both quanta;
+  - call-retpc: identical three times.
+
+== Not covered ==
+- sup-hostile (it clobbers all 31 GPRs, so it needs a register-preserving recorder).
+- m1-take-cost (a perf bracket, not a correctness test).
+- Anything through the OpenSBI monitor or Linux.
