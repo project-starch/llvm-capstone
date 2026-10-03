@@ -438,6 +438,12 @@ So after any reflash:
    second; keep them in step or a `git status` in the other will contradict the DTB.
 3. Verify the value is in the **built firmware's DTB**, not just the source.
 4. Also update `FPGA_BITSTREAM` — the drivers hard-stop on a mismatch, which is the gate working.
+5. **Identify the new silicon by BEHAVIOUR in the first session**: run an instruction or CSR that only the new
+   RTL has, pre-registered as "returns on the new bitstream, traps on the old one". `nv_bitstream_name` is the
+   server's memory of its last flash, not a readback from the FPGA. An acceptance list of unchanged workloads
+   reads identically on both bitstreams. On 2026-10-02, all ten R-43 rows passed and none could tell
+   `36a641e0b` from `8f6a0af98`. A one-instruction domain reading csnodefree (CSR 0xFC4) settled it: it
+   returned 0xFFCD, where the old RTL raises illegal instruction.
 
 Full recipe: `docs/ref/HOW-TO-LAUNCH-ON-FPGA.md`.
 

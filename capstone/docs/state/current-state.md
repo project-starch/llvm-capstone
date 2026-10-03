@@ -80,9 +80,24 @@
   pre-registration misses with mechanisms (plan, step-9 result). Bitstream sha256 016219b2..., NOT flashed.
 - **Resident bitstream: `caplifive_supcall_36a641e0b.bit`** (sha256 016219b2...5d045), flashed 2026-10-02 15:55 by the
   board lane on the lead's direct confirmation, name read back after the power cycle; the previous resident was
-  `caplifive_r43_8f6a0af98.bit`. The R-43 acceptance list passed on it unchanged (a1..a10, k800 first in every boot), and three plan tests ran
-  bare M-mode on the board with readings bit-identical to simulation (sup-quantum, sup-escape, call-retpc): supervised
-  CALL and R-47 work on silicon; S-11's seal-size arms and the fail-closed arm are resident but not yet exercised there.
+  `caplifive_r43_8f6a0af.bit` (the name the console reports). **ACCEPTED 2026-10-02 16:12-18:05: the R-43
+  acceptance list a1..a10 reads as pre-registered on every row, on the same images as 2026-09-29**
+  (`tests/fpga-repros/R43-revocation-cache-false-deny/results/board-36a641e0b.result-lines.txt`; audited, every number
+  re-derived from the primary logs). Highlights:
+  - live512 sums 17408 (R-43 holds), and P1 cell 6 completes with 112006 38bb59fd and the exact Sublet counts;
+  - the R-35 probe still traps 25 at +0x4354 with the refusal record LATCHED, id 95, probe-DEAD;
+  - the capability ladder's instret is identical on 17/17 rungs, and P1 moves -0.01..-0.05 %.
+  **Identity shown by behaviour, not only by the console label:** a one-instruction domain reading csnodefree (CSR
+  0xFC4, which exists only in 36a641e0b; on 8f6a0af98 the read is an illegal instruction) RETURNED 0xFFCD, inside the
+  pre-registered range. That is the first silicon execution of the census CSR. **Read the acceptance as "no observable
+  change on these ten workloads", NOT "inert until cssupervise"** (that wording was retracted before this landed).
+  Several changes run without cssupervise, every boot:
+  - commit drops exceptions while any domain switch is busy;
+  - every CALL parks its pc per R-47;
+  - every SEAL applies S-11's size/alignment check and sets cursor := start; the monitor's seals passed.
+  The supervised path itself, and any input that would trip S-11 or R-47, have not run on silicon. Set
+  `FPGA_BITSTREAM=caplifive_supcall_36a641e0b.bit` for every board run. Every Part A bundle so far (M1 v2, S1,
+  repro322) was measured on 8f6a0af98, before this flash.
 
 Minimal snapshot. Read first in every session.
 

@@ -20,7 +20,8 @@ bits per half. An even number within one half is not caught, and the lines say s
 WHY THIS IS KEYED OFF A FLAG. Before this build, the driver treated 204..209 as the S-07 recorder. That
 recorder is absent from the R-42 lineage, where those apertures read 0x00. On a refusal-record
 bitstream the S-07 interpretation would misread the record, so REFUSAL_RECORD=1 switches the map. It
-is cross-checked against the resident name, which follows caplifive_r43_<commit>.bit.
+is cross-checked against the resident name, which follows caplifive_r43_<commit>.bit or, for the
+supervised-CALL build descended from it, caplifive_supcall_<commit>.bit.
 
 The record latches the first denial AS PRESENTED. A wrong-path access that is later flushed can
 occupy it, so compare a latched id against the wedge dump's mepc/tval before reading it as the
@@ -48,10 +49,12 @@ def bitstream_note():
     """One line if the flag and the resident name disagree, else None. It warns and never blocks,
     because the name is only a convention. The flag is what the operator asserted."""
     bs = os.environ.get("FPGA_BITSTREAM", "")
-    named = bs.startswith("caplifive_r43_")
+    # Every bitstream descended from R-43 v2 (8f6a0af98) carries the record: the R-43 builds and the
+    # supervised-CALL build caplifive_supcall_<commit>.bit (capstone-ariane 36a641e0b, resident 2026-10-02).
+    named = bs.startswith(("caplifive_r43_", "caplifive_supcall_"))
     if REFUSAL_RECORD and not named:
         return (f"  [refusal] WARNING: REFUSAL_RECORD=1 but FPGA_BITSTREAM={bs!r} does not follow "
-                f"caplifive_r43_<commit>.bit -- if this silicon has no refusal record, 204..208 "
+                f"caplifive_r43_ or caplifive_supcall_<commit>.bit -- if this silicon has no refusal record, 204..208 "
                 f"read 0x00 and decode as UNREADABLE (00), never as a verdict")
     if named and not REFUSAL_RECORD:
         return (f"  [refusal] WARNING: resident {bs!r} looks like a refusal-record build but "

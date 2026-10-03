@@ -124,9 +124,10 @@ reflash is stale** and must be re-checked before it is relied on.
   `~/.config/capstone/fpga-board-url`) is still a leak. Ask the user out-of-band each
   time; in committed text write `<FPGA-CONSOLE-URL>`.
 - A local `.bit` is NOT needed — re-flash names the **server-side** bitstream. The resident one is
-  **`caplifive_r25r26r27_66c4e7517.bit`** (RTL `66c4e7517`; R-25, R-26 and R-27).
-  **CORRECTED 2026-09-10** — this named the 2026-08-04 `caplifive_fixed_forward.bit`, two reflashes
-  ago. The drivers gate via `FPGA_BITSTREAM` and **several still default to a stale name**, so SET IT
+  named in the LATEST entry of `docs/state/current-state.md`, the only place that is updated at every
+  flash. As of 2026-10-02 it is **`caplifive_supcall_36a641e0b.bit`** (capstone-ariane `36a641e0b`).
+  This line named a bitstream two or more flashes stale THREE times (`fixed_forward`, then
+  `r25r26r27_66c4e7517`, until 2026-10-02), so check current-state rather than trusting it. The drivers gate via `FPGA_BITSTREAM` and **several still default to a stale name**, so SET IT
   EXPLICITLY: a wrong default makes the resident-silicon guard hard-stop the boot. The board scripts
   for sw48-sw51 are the record that settles which bitstream is actually on the board.
 
