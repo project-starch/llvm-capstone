@@ -1,0 +1,43 @@
+# Fixture 19 -- CLASS 3, reuse-not-free -- on memcached's real bipbuffer. Five arms, QEMU, 2026-10-03.
+# Predictions pushed in 4a30b3f34dbc before the build. Fixture 18 ran in the SAME boot, AFTER 19.
+# arm          fx19 (class 3)     fx18 (class 1, same boot)
+level0       RETURN 130015b     RETURN 12001ee  (exit 238 = 0xee)
+shrink       RETURN 130015b     RETURN 12001ee  (exit 238 = 0xee)
+sublet       RETURN 130015b     FAULT cause=24  (exit 139 = 128+11)
+slabsublet0  RETURN 130015b     FAULT cause=24  (exit 139)
+slabsublet1  RETURN 130015b     FAULT cause=24  (exit 139)
+# fx19 exit status corroborates every RETURN: 91 = 0x5b = 130015b & 255.
+
+# CONDITION CREATED -- printed by the fixture before the touch, on every arm
+fx19 polled-same=1 reissued-in-place=1 frees-performed=0
+# and the fixture exits 0xE0019 instead of a mark if the buffer fails to recycle in place.
+
+# THE BLINDNESS IS VISIBLE IN THE CAPABILITY ITSELF (sublet arm, the narrowest-bounds arm)
+fx19 record1 cursor=c86cc020 bounds=[c86cc000,c86cd020) len-from-cursor=4096
+fx19 record2 cursor=c86cc020 bounds=[c86cc000,c86cd020) len-from-cursor=4096
+# Identical cursor AND identical bounds: both records are sub-allocations inside ONE malloc
+# (bipbuf_new = malloc(sizeof(bipbuf_t) + size), flexible data[] at +0x20 after 16-byte alignment,
+# so len-from-cursor is the whole 4096-byte data area). Per-object bounds on the OUTER allocation
+# cannot separate the records -- which is what "nested allocator" means here.
+
+# IN-BOOT POSITIVE CONTROL -- this is the load-bearing part
+# On sublet, slabsublet0 and slabsublet1, fixture 18 FAULTED in the SAME BOOT, on the SAME arm,
+# immediately after 19 returned. Fixture 18 is the same stale-pointer-then-reuse shape whose
+# release DOES reach the runtime allocator. So fixture 19's RETURN is not a dead arm, a broken
+# image or a boot that never ran the fixture: the arm demonstrably faults, in that boot, on the
+# class whose lifetime ends at the allocator. The only difference is WHERE the lifetime ends.
+# Fixture 1 also ran first in all five boots and returned 100001.
+
+# IMAGE HASHES for this run (the fixture-19 images differ from the 5d7e1fb64c1a run's by construction)
+level0  59313ed6a83f5657
+shrink  41e4754fbba20494
+sublet  f61c16a447dcd794
+slab    3700bc7b98b56de9   (one image; arm selected by MC_SLAB_SUBLET_MODE)
+# Fixture 18's faults therefore reproduce on a SECOND, different image -- N=2 across images for it.
+
+# WHAT MAKES THIS CLASS 3 RATHER THAN A USE-AFTER-FREE, read from the port's own source tree
+# bipbuf_new:      malloc(sizeof(bipbuf_t) + size)            -- ONE allocation, flexible data[]
+# bipbuf_request:  return (unsigned char *)me->data + me->a_end   -- a pointer INSIDE it
+# bipbuf_poll:     void *end = me->data + me->a_start; me->a_start += size;
+#                  ... me->a_start = me->a_end = 0;  return end;   -- CURSORS ONLY, no free
+# So the next request hands out the same bytes. frees-performed=0 is not an assumption.
