@@ -858,3 +858,50 @@ RETURN protect every switch that has no quantum escape? Each arm is the twin of 
 - N = 1 per arm. This is a software workaround for runs with no quantum preemption, not a proof for arbitrary code:
   a store between the fence and the switch reopens it.
 - Raw lines: `results/s16fence.result-lines.txt`.
+
+### Corrections after the claim audit (06:35, 2026-10-04): the three claims stand, narrower; four sentences above are withdrawn
+An adversarial audit re-checked every image hash, every pc mapping and the RTL paths. The three claims stand:
+- a plain CALL is exposed;
+- a fence before an armed CALL does not protect a supervised RETURN that follows a domain store;
+- an escape hangs bare.
+
+**Added by the audit.**
+- **Claim 1, the plain CALL.**
+  - The PLAIN CALL is genuinely un-armed: `sup_armed_q` is set only by a committed CSSUPERVISE (commit_stage.sv:495,
+    csr_regfile.sv:3120), and that word is absent from the PLAIN ELFs.
+  - seal+48..+80 are just the non-full exchange's ids 3..7 (mstatus, mideleg, medeleg, mip, mie).
+  - The fenced twin completing is the matched control.
+  - 238 bit 6 (pc_loaded_seen, sticky from reset) reads 1 in plain-n32-r1 (its only switch reached id 0's read) and 0
+    in the armed n32-r1 (it never left SAVE). That independently confirms the two entry points.
+- **Claim 2, the RETURN.** It holds because the domain stores (`sd a1, 0(s3)`) between the CALL's last switcher
+  write and the RETURN's first SAVE write. The claim is "a supervised RETURN right after a domain store", not "a
+  short domain's RETURN".
+- **N = 1 per image throughout.** Silicon disagreed with the simulation's timing on 2 of the 4 plain arms, so why a
+  plain exchange meets a full queue on silicon is not understood.
+
+**Withdrawn.**
+1. **"A stuck resume CALL would leave a monitor pc because the csrwi before it flushes"** (s16next results, and my
+   message to the RTL lane).
+   - A CSUPCTL write sets only `csupctl_resume_d` (csr_regfile.sv:1953). It is none of the twelve `flush_o` sites,
+     which I checked.
+   - The conclusion stands on another argument: after the escape switch's own flush, the monitor issues eight
+     instructions (csrr .. CALL) before the resume CALL. So a stuck resume CALL would leave a monitor pc.
+2. **"esc-n8 itself hangs at a RETURN, twice"** (s16next results), and the 05:40 and 05:55 sentences placing esc-n8's
+   stuck switch at the RETURN.
+   - Slot 0 = 0x80000a56 bounds the commit point only to [0x80000a3c, the RETURN].
+   - With the head `sd` stalled and the scoreboard backed up, an escape near the end of the last burst fits equally.
+   - **esc-n8's switch kind is UNRESOLVED.** It motivated RETFENCE, but the retfence reading stands on its own.
+3. **"ITER defaults to 3, so this escape is in a round after round 1's RETURN, with the seal warm"** (s16next
+   results).
+   - No reading records the round, and the first escape of round 1 is the earliest chance to hang.
+   - Whether the seal is warm is irrelevant to a walk that starts with a SAVE write.
+4. **esc-n8-retfence "a quantum escape inside a burst"** becomes **"an escape (by design, the quantum) within the
+   domain's store bursts or at the marker store that ends them"**.
+   - Slot 0 bounds the commit point to issue positions [0x80000a34 - 7, + 7], which includes `li a1, 0x77` and the
+     marker `sd`.
+   - The kind is inferred, not read: every escape kind goes through commit_stage.sv:735-751 with save_en and reads
+     idx 7. For a first escape only the quantum is plausible.
+
+**Open, not discriminating.** 255 = 0x83 (TRAP LOG, mcause 3) appears on every hang reading in all three sessions and
+in the earlier wedge reads. The completing runs print mcause 0, so it is probably a debug-mode `ebreak` from the
+OpenOCD load. Next time: read apertures 196..203 (recent non-trivial mepc) on a hang.
