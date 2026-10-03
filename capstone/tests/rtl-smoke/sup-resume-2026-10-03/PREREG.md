@@ -536,3 +536,45 @@ and 238-240; labels checked against cva6.sv at 36a641e0b):
   S-16.
 - **s16nop-nt (4d643fb7):** a `nop` between `ccsrrw x0, cscratch, sp` and `li sp, 0`. This is the positive control
   for the stale-slot reading: if it hangs, the commit pc reads the nop's address (0x80000720), not `li sp, 0`.
+
+## RESULT, session "deep" (04:15-04:38): S-16 localised to a store-buffer deadlock, the slot-0 control confirmed
+Lines are in `results/wedge-reads-deep-2026-10-04.txt`. Labels were checked against cva6.sv at 36a641e0b.
+- Control: call-retpc PASS exact.
+- **The dose-response:**
+  - s16stc12 COMPLETED, 8,552 escapes, exact;
+  - **s16stc24 HANG**, signature A (0x1f / 0x88);
+  - **s16sd24 HANG**, signature A;
+  - s16stc18: NO-RESULT. JTAG load_image stalled for 6.7 min (infrastructure), so it is rerun next.
+  - Every data-region store also writes a shadow tag (wt_axi_adapter.sv, per the RTL lane), so the sd arm does NOT
+    separate tag writes from plain stores. It shows the trigger is the store count.
+  - With part 8 and nothing else, 24 stores before the CALL hang it and 12 do not.
+- **S-16's extended read.** armdep-nt, s16sd24 and s16nop-nt read byte-identically:
+  - 226 = 0x80: the switcher's DATA request is valid and NOT acknowledged, with no response;
+  - 227 = 0x04: that data request is a WRITE (`data_req.write_en`);
+  - 228 / 239 / 240 = idx 7: the switch is at walk index 7, and its last logged step is idx 7 / reg 7;
+  - 238 = 0xc7: busy seen, pc loaded seen;
+  - 193 = 4: **the store buffer holds 4 COMMITTED stores**, its full commit depth;
+  - 194 = 3: **store_state = WAIT_STORE_READY** (store_unit.sv:155-160);
+  - 195 / 229 = 0: the load unit is idle;
+  - 192 = 0: commit slot 0 is not valid.
+  - **So S-16 on silicon is:** the switch's idx-7 walk WRITE waits forever for the store path, behind 4 committed
+    stores that never drain, with the store unit stuck waiting for store-buffer space.
+- **The slot-0 positive control CONFIRMED the RTL lane's reading.** s16nop-nt's commit pc reads 0x80000720, the
+  inserted `nop`, not `li sp, 0`. So the commit-pc aperture during a stuck switch is stale scoreboard slot 0, and
+  `li sp, 0` in C5q/C5u/armdep was residue.
+- **S-17's extended read (arm12-ldc):**
+  - 226 = 0x00: no switcher activity;
+  - 228 / 239 = idx 66: the switch had completed its last index; 240 = reg 38;
+  - 193 / 194 / 195 / 229 = 0: store buffer empty, store and load units idle;
+  - 192 = 0;
+  - 227 = 0x02 (only `reg_req.is_set` holds a stale value);
+  - yet 224 still reads lsu_ready 0.
+  - The RTL lane's simulated S-17 state (an orphaned load syncer, commit pc CALL + 8) does NOT match this: silicon has
+    no syncer set and slot 0 at CALL + 4. S-17 on silicon stays open.
+
+**Pre-registered: the S-16 workaround candidate, a `fence` immediately BEFORE every CALL** (after the swap-out),
+which drains the store buffer before the switch starts:
+- s16pre-nt (03ec01c9): the fast reproduction plus the fence. Predicted to COMPLETE (8,552 escapes) if the
+  un-drained stores are the trigger.
+- s16pre-stc24 (94f670ed): part 8 with 24 STCs plus the fence. The same prediction.
+- s16stc18: the original image, the rerun of the NO-RESULT.

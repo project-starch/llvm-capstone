@@ -13,20 +13,25 @@
 # tagged write and no tagged reload; -DNOPLOOP replaces all four memory instructions by addi/andi (the RTL lane's
 # control: the arms then differ only in the memory traffic).
 # CACHE MISSES (added after the hot-cache session completed every arm): a walk load reads the shadow tag only on an
-# L1 MISS, and that read waits in TAG_WAIT behind every outstanding tag write. The hot loop never misses.
+# L1 MISS, and that read waits in TAG_WAIT behind every outstanding tag write. (The premise first written here, "the
+# hot loop never misses", is WITHDRAWN: LATPROBE read 27 against 7 cycles on the hot loop's first escape, so the walk
+# lines miss there too. See PREREG.md, "the latency probe corrects a premise".)
 #   -DEVICT   the domain also loads one 16-byte line of a 64 KiB buffer per iteration, so a large quantum turns L1
 #             (32 KiB, 8-way, 16-B lines) over between escapes, as SQLite's working set does;
 #   -DMEVICT  the monitor sweeps the 64 KiB buffer before every resume, so every RESTORE read misses.
 #   -DLATPROBE at the FIRST escape (after any MEVICT sweep, before the resume) the monitor times one load of a seal line
 #             twice with `cycle`, through a NONLIN alias of the seal region: readings 9 (first load) and 10 (that
 #             same seal line again, a hit). A first load far above the second means it was NOT in L1 -- the positive
-#             control that the sweeps evict the walks' lines. The hot loop must read two hits.
+#             control that the sweeps evict the walks' lines. (Pre-registered "the hot loop must read two hits" was
+#             REFUTED: hot 27/7, swept 83/6.)
 #   -DMSWAP_PLAIN  (with MSWAP) no cssupervise at all: one plain CALL, the domain runs to its RETURN. The control for
 #             the swap code itself in this harness: reading 2 is then 0 (no supervision event), 3 and 4 as usual.
 #   -DPOSTCALL=1  a `fence` right after every CALL, before the swap-in; =2 eight `nop`s instead (ordering vs delay);
 #             =3 a UART print ('k') after every CALL; =4 a plain `csrr t1, cycle` after every CALL.
 #   -DNSTC=n  (with MSWAP) n tag-setting STCs into the 64 KiB buffer right before the part-8 sequence; -DNSD=n the
 #             same with n plain `sd`s (no tag): a store-count dose-response for S-16.
+#   -DPRECALL  a `fence` immediately BEFORE every domain-call instruction, after the swap-out: drain the store buffer before the switch
+#             starts -- the S-16 workaround candidate (S-16's wedge reads 4 committed stores and WAIT_STORE_READY).
 #   -DSWAPNOP  a `nop` between part 8's `ccsrrw x0, cscratch, sp` and `li sp, 0` (the RTL lane's positive control for
 #             the stale scoreboard-slot-0 reading of the commit-pc aperture).
 #   -DLDTEST  the swap-in's cepc load is a SCALAR `ld` instead of an LDC (an ld skips the Capstone DYN unit):
@@ -191,6 +196,11 @@
 .endm
 #endif
 
+#ifdef PRECALL
+#define PRECALL_SEQ fence
+#else
+#define PRECALL_SEQ
+#endif
 #if defined(POSTCALL) && POSTCALL == 1
 #define POSTCALL_SEQ fence
 #elif defined(POSTCALL) && POSTCALL == 2
@@ -325,6 +335,7 @@ SWAP_OUT
 #ifdef TRACE_CHARS
 BPUTI(67)                      # 'C'
 #endif
+PRECALL_SEQ
 CALL(a3, a3)
 POSTCALL_SEQ
 #ifdef TRACE_K
@@ -383,7 +394,8 @@ supervise_loop:
   BPUTI(67)                    # 'C'
 7:
 #endif
-  CALL(a3, a3)
+  PRECALL_SEQ
+CALL(a3, a3)
   POSTCALL_SEQ
   SWAP_IN
 #ifdef TRACE_CHARS
