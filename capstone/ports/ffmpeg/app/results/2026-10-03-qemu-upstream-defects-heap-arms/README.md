@@ -24,6 +24,15 @@
 **live at the 9.0.1 pin**. Does the revoking heap catch them, and do the unprotected arms let them
 through?
 
+**Scope, added 2026-10-03 for consistency with the tshark bundle, which was audited on exactly this
+point.** "Live at the pin" means live in the **pinned source**. Fixture 24's defect is **not in the
+binary this port builds**: `vvc/thread.c` belongs to the VVC decoder, and the port's own
+`config_components.h:320` reads `CONFIG_VVC_DECODER 0` (also `H264_DECODER` and `HEVC_DECODER` at 0).
+The fixture-24 image contains **0** `ff_vvc_*` symbols — not a stripping artifact, since `av_malloc`
+is present and the same grep finds `CONFIG_H263_DECODER 1`. So both fixtures here are reductions of
+upstream **source** defects, which is what a reduction is: they never execute the upstream consumer.
+The same is true of the two tshark fixtures. No cell is affected.
+
 **Pre-registration.** Both fixtures and all six predictions were pushed in `95aa3d340f80`, before
 either image was built. Nothing in that file has been edited since, including the one cell that
 differs.
