@@ -24,6 +24,10 @@ pos_start:
   .word 0x01f0735b   # CCSR cpmp15
   .word 0x083100fb   # MINT capcreate
   .word 0x103100fb   # MINT capbound
+  .word 0xf805000b   # DBGP debug.print a0
+  .word 0x0000000b   # DBGP custom-0, illegal form
+  .hword 0x9002      # TRAP c.ebreak (16-bit)
+  .hword 0x0001      # (16-bit c.nop, padding: must NOT be flagged)
   .globl neg_start
 neg_start:
   .word 0xc00022f3   # csrr t0,cycle 0xc00

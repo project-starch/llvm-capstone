@@ -55,7 +55,7 @@ def main(src, dst):
     res = audit.audit(src)
     if res is None or res[0] == 0:
         raise SystemExit("REFUSED: the audit decoded nothing (no data)")
-    n, hits = res
+    n, hits, _ = res
     for addr, sym, w, rule, det, dis in hits:
         new = substitute(w)
         if new is None:
@@ -72,7 +72,7 @@ def main(src, dst):
         raise SystemExit(f"REFUSED: {diff} words differ, {len(hits)} substitutions made")
     open(dst, "wb").write(elf)
     os.chmod(dst, 0o755)
-    n2, hits2 = audit.audit(dst)
+    n2, hits2, _ = audit.audit(dst)
     if n2 != n or hits2:
         raise SystemExit(f"REFUSED: output audit {n2} instructions, {len(hits2)} forbidden")
     print(f"{src} sha256 {hashlib.sha256(orig).hexdigest()[:16]} -> {dst} sha256 "

@@ -11,9 +11,13 @@ Every rule below is the RTL's own guard, cited by file:line at 36a641e0b:
   NEST   decoder.sv:1314           custom-2 funct3 1 funct7 0x22 (CSSUPERVISE)
   ENTER  decoder.sv:1318           custom-2 funct3 1 funct7 0x0D (CAPENTER)
   MINT   decoder.sv:1138           custom-3 funct3 0 funct7 0x04..0x08 (CAPCREATE/CAPTYPE/CAPNODE/CAPPERM/CAPBOUND)
+  DBGP   decoder.sv:499-513        custom-0 (opcode 0x0B): debug.print decodes as a CSR_WRITE to 0x800 (on the CSR
+                                   list above); every other custom-0 form is illegal outright
 and two that are not guards but end a supervised run the same way:
   VMOP   custom-2 funct3 1 funct7 0x23 -- the VM's collector opcode, NOT decoded on silicon at all
-  TRAP   ECALL / EBREAK -- an exception under supervision is a fault event (kind 2), never a trap
+  TRAP   ECALL / EBREAK / C.EBREAK -- an exception under supervision is a fault event (kind 2), never a trap
+16-bit words are decoded too (c.ebreak is the only compressed form that can trap) and counted in the summary.
+(Rule DBGP and the 16-bit decode were added after a claim-auditor pass on 2026-10-03 found both missing.)
 
 Usage: sup-static-audit.py [--range LO:HI] <elf>...
 Exit status: 0 = no forbidden instruction in any input; 1 = at least one found; 2 = no data (no instruction decoded,
@@ -70,6 +74,10 @@ def classify(w):
             if imm == 0x001 or 0x010 <= imm <= 0x01F:
                 return "CCSR", f"ccsrrw ccsr 0x{imm:03x} ({'cih' if imm == 1 else 'cpmp%d' % (imm - 0x10)})"
         return None
+    if op == 0x0B:
+        if f3 == 0 and f7 == 0x7C and ((w >> 20) & 31) == 0 and ((w >> 7) & 31) == 0:
+            return "DBGP", "debug.print = CSR_WRITE 0x800"
+        return "DBGP", "custom-0, illegal"
     if op == 0x7B and f3 == 0 and 0x04 <= f7 <= 0x08:
         return "MINT", f"custom-3 mint funct7 0x{f7:02x}"
     return None
@@ -84,7 +92,7 @@ def audit(path, lo=None, hi=None):
     if r.returncode != 0:
         print(f"ERROR {path}: objdump rc={r.returncode}: {r.stderr.strip()[:200]}")
         return None
-    hits, n, sym = [], 0, "?"
+    hits, n, n16, sym = [], 0, 0, "?"
     for line in r.stdout.splitlines():
         m = SYM.match(line)
         if m:
@@ -95,16 +103,22 @@ def audit(path, lo=None, hi=None):
             continue
         addr = int(m.group(1), 16)
         bs = m.group(2).split()
-        if len(bs) != 4:
-            continue
         if lo is not None and not (lo <= addr < hi):
+            continue
+        if len(bs) == 2:
+            n16 += 1
+            h = int.from_bytes(bytes(int(b, 16) for b in bs), "little")
+            if h == 0x9002:
+                hits.append((addr, sym, h, "TRAP", "c.ebreak", m.group(3).strip()))
+            continue
+        if len(bs) != 4:
             continue
         n += 1
         w = int.from_bytes(bytes(int(b, 16) for b in bs), "little")
         c = classify(w)
         if c:
             hits.append((addr, sym, w, c[0], c[1], m.group(3).strip()))
-    return n, hits
+    return n, hits, n16
 
 
 def main(argv):
@@ -122,12 +136,12 @@ def main(argv):
         if res is None:
             worst = 2
             continue
-        n, hits = res
+        n, hits, n16 = res
         if n == 0:
             print(f"ERROR {p}: no 32-bit instruction decoded -- no data, not a clean result")
             worst = 2
             continue
-        print(f"{p}: {n} instructions, {len(hits)} forbidden under supervision")
+        print(f"{p}: {n} instructions (+{n16} 16-bit), {len(hits)} forbidden under supervision")
         for addr, sym, w, rule, det, dis in hits:
             print(f"  0x{addr:x} <{sym}> {w:08x} {rule:5s} {det}   [{dis}]")
         if hits and worst == 0:

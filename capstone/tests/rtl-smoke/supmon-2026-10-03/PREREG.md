@@ -133,3 +133,53 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
   - an overhead of 1 % or more;
   - a wedge.
 - If run 1 fails, the patch itself is broken and run 2 says nothing.
+
+## C5q RESULT (boot supmon-c5q, fw bdabef34243c), a correction, and C5t pre-registered 2026-10-03 21:45 before its boot
+- **Boot and controls held.** BT00..BT03 printed and Linux booted. k800 returned 4 (4,589 cycles).
+- **Run 1 (plain, SUPM 0) PASSED:**
+  - 112006 38bb59fd, HEAP 2097152 DROPPED 0 RC 0;
+  - 2,550,641,195 cycles, -0.038 % against the C3 record.
+  So the 6-word glue patch is neutral under a plain call.
+- **Run 2 (supervised, SUPM 1) WEDGED.** ENT1:2, then no monitor output for the 600 s stage budget. The driver's
+  wedge read put the commit pc at 0x80021188, `li sp, 0` in supervised_invoke: the instruction just before the
+  supervised CALL at 0x8002118a. Runs 3 and the closing k800 did not run.
+  - The two bursts of binary on the console (~1156 s and ~1186 s into the run) came after the stage timeout, during
+    the driver's own wedge reads: switch 209 is odd, so it hands the console TX to the tracer. They are not monitor
+    output.
+  - **The C5q predictions for runs 2 and 3 are refuted.**
+  - One commit-pc sample cannot tell "the resume CALL hangs" from "it escapes again forever".
+  - The monitor's resume path had never run on silicon: escape kind 1, re-arm with csupctl = 1, then CALL on the
+    returned seal. C5fix's call faulted before its first quantum.
+- **Ruled out by reading:**
+  - a timer (MTIP) livelock: create_domain zeroes the seal and writes only mstatus with MIE = 0, so mie = 0. sup-mtip
+    measured that a masked timer does not escape.
+  - a seal region overlapping domain memory: it is DOMAIN_DATA_SIZE = 1,536 B rounded to the granule, above the 944 B
+    full save, and split apart from dom_data.
+  - a lost seal: the generated code stores the CALL's rd into domains[id] before anything else.
+- **CORRECTION (claim-auditor, 2026-10-03).** Under "Fixed C5 RESULT" above, "the ladder host calls through
+  DPI_CALL_WITH_CAP (call_domain_with_cap)" is WRONG and withdrawn.
+  - k800's only entry is the annotated region share: shared_region_annotated's plain `__domcallsaves`
+    (sbi_capstone.c:2238 at 1fd1bbe). ladder_perf_ctl.c:5-6 says "that share IS the domain entry".
+  - The board log agrees: k800 printed SHA0..SHA6 and no ENT0.
+  - The conclusion stands: k800 never ran supervised.
+- **AUDIT-TOOL GAP (same auditor).** sup-static-audit.py missed custom-0 `debug.print`, which decodes as a CSR_WRITE to
+  0x800 (decoder.sv:499-513), and it skipped 16-bit words.
+  - Both are added now, with controls: 24/24 flagged, negatives clean.
+  - The auditor's independent raw scan of the patched speedtest finds no gated word. The re-run tool agrees: stock 6,
+    patched 0.
+
+**C5t** (fw 393210e96691; the same Image a9e838663d64; monitor f45f366):
+- Defines: SUPERVISED_CALL, CSR_EVENTS, CLASSIC_TEST, CLASSIC_MASK = 1 (the first call_domain, i.e. the speedtest),
+  TRACE_EVENTS (MCAU/MEPC for the first 4 preemptions), MAX_RESUMES = 8, BOOT_TRACE.
+- NOT QUIET: SUPA after every arm and SUPK after every CALL print.
+- Stages: k800; the patched speedtest; k800.
+- Readings, and what each one means:
+  - A: `SUPA:0 SUPK:1 MCAU MEPC SUPA:0`, then silence. The first RESUME CALL never returns.
+  - B: kind 1 repeating up to the bound, then `SUPN:8 SUPK:1b`. The call returns -1 and the closing k800 returns 4.
+    The resume works mechanically, but the loop would never have ended. The causes and epcs of the first four
+    preemptions (MCAU/MEPC) say why: an immediate re-escape repeats one epc.
+  - C: `SUPA:0`, then silence. The FIRST supervised CALL neither escapes nor completes.
+  - D: the call completes, SUPK 0. Not expected: the speedtest needs ~1,275 quanta and the bound is 8.
+  - The expected first-escape cause is the quantum, 0x8000000000000010, with MEPC inside the domain image
+    [DBAS, DBAS + 0x16a388).
+- Each of A, B and C names the failing step. That is the purpose of this boot, which spends no other board time.
