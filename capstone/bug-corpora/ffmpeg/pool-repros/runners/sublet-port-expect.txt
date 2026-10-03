@@ -28,3 +28,14 @@ poolstock    44       COMPLETE  DEFECT-REPRODUCED
 poolstock    45       COMPLETE  FIXED
 poolsublet   44       FAULT     33
 poolsublet   45       COMPLETE  FIXED
+
+# Case 3 (5c66a3ab51, VVC non-reference output releases its pooled side tables), registered
+# 2026-10-03 BEFORE the first build of fixtures 46/47. The corpus's first AVRefStructPool case.
+# poolstock is the control: upstream's own pools, so the defect completes and reports it.
+# poolsublet is the nested arm: a release returns the entry to the pool, which on this arm is a
+# revoke, so the stale read faults. The fault's line is whichever line of case.c dereferences
+# `held` -- the printf, the verdict and the `bad` expression all do, so any of them counts.
+poolstock    46       COMPLETE  DEFECT-REPRODUCED
+poolstock    47       COMPLETE  FIXED
+poolsublet   46       FAULT     84,85,88
+poolsublet   47       COMPLETE  FIXED

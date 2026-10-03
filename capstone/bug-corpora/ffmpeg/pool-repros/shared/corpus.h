@@ -9,6 +9,7 @@
 #define FF2_CORPUS_H
 
 #include "libavutil/buffer.h"
+#include "libavutil/refstruct.h"
 #include "trace.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +17,9 @@
 
 #define POOL_BYTES 64
 #define PLANE_BYTES 32
+/* One entry of a per-frame side table, the shape VVC's tab_dmvr_mvf and rpl_tab
+ * have: pooled through AVRefStructPool rather than AVBufferPool. */
+#define TAB_BYTES 32
 
 /* A case declares the number its directory carries. The driver refuses a
  * fixture that names another case rather than silently running it. */
@@ -26,8 +30,15 @@
 extern const int ff2_case_number;
 int ff2_case_run(int fixed);
 
-/* The pool the driver created. Real libavutil/buffer.c throughout. */
+/* The pools the driver created. Real libavutil/buffer.c and libavutil/refstruct.c
+ * throughout -- a case reduces its consumer, never the allocator.
+ *   g_pool    AVBufferPool      the payload pool, e.g. a frame's planes
+ *   g_refpool AVRefStructPool   the side-table pool; a release returns the entry
+ *                               to pool->available_entries and the next
+ *                               av_refstruct_pool_get() hands the same one back
+ * A case that does not use g_refpool is unaffected by its existence. */
 extern AVBufferPool *g_pool;
+extern AVRefStructPool *g_refpool;
 
 _Noreturn void ff2_fail(unsigned code);
 #define CHECK(c, n)                                                            \

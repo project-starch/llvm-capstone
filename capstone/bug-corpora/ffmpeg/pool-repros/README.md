@@ -9,14 +9,26 @@ property of the allocator rather than of a run.
     00_461fb22053_af_join_dedup_bound/            a reference is never taken; stale read
     01_1886c3269d_h264_refs_partial_clear/        reset bounded by the count, not the array
     02_316531e61c_vidstab_parked_plane_pointer/   pointer parked in a library; stale write
+    03_5c66a3ab51_vvc_nonref_output_releases_tabs/ non-ref frame output; side tables returned
 
 | shape | cases |
 |---|---|
 | reference never taken / reuse / stale read | 0 |
 | partial clear / reuse / stale read | 1 |
 | parked pointer / reuse / stale write | 2 |
+| premature return to the pool / reuse / stale read | 3 |
 
-Three cases, three shapes. The inventory and triage that selected them, and the
+Four cases, four shapes. **Case 3 is the corpus's first `AVRefStructPool` case**; 0-2 are all
+`AVBufferPool`. That matters because `AVRefStructPool` is the second of the two FFmpeg pool
+allocators this work ports, and it is a genuine recycling pool rather than a wrapper: a release
+pushes the entry onto `pool->available_entries` (`libavutil/refstruct.c:230-231`) and the next
+`av_refstruct_pool_get` pops the same one back (`:258-261`).
+
+**Case 3 is declared but not yet run.** The corpus-level `status` stays `measured` because cases 0-2
+are, with N=3 on both the native pair and the `poolsublet` arm; case 3's own `status` field says it
+has run on no arm, and its `poolstock`/`poolsublet` predictions are registered in
+`runners/sublet-port-expect.txt` before its first build. Read the per-case status, not the corpus
+status, when counting what is measured. The inventory and triage that selected them, and the
 further pool-backed specimens it found that are not built here, are in
 [`docs/ref/ffmpeg-pool-consumer-defects.md`](../../../docs/ref/ffmpeg-pool-consumer-defects.md).
 
