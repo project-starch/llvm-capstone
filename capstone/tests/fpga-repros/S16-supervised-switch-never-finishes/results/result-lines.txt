@@ -1,0 +1,89 @@
+# S-16 result lines. Bitstream caplifive_supcall_36a641e0b. Images cited by sha256 (16 hex).
+# NOTE: sw=255 (the latched trap log) is NOT cleared before these runs, so 0x83/0x89 there are stale (the JTAG
+# load's debug halt in bare runs; a routine SBI ecall in the Linux boots) and say nothing about the hang. The stages
+# driver's own annotation "<-- map this onto the domain disassembly to name the faulting instruction" does not apply:
+# S-16 is a stall, not a fault, and the commit-pc aperture is stale scoreboard slot 0 (see the README).
+
+## FPGA monitor, boot supmon-c5u (fw d07761ded4ce) and supmon-c5q (fw bdabef34243c), stages-driver wedge reads
+c5u: [wedge] sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+c5u: [wedge] sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}    0x88 10001000
+c5u: [wedge] commit pc = 0x00000000800211b6
+c5q: [wedge] sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+c5q: [wedge] sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}    0x88 10001000
+c5q: [wedge] commit pc = 0x0000000080021188
+
+## bare armdep-nt-d16-q64 (0986d3946ef9abca), session deep 2026-10-04 -- HANG, 0 dots
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x04 00000100
+sw=228 {1,dom_switch_idx[6:0]} 0x87 10000111
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=238 {busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]} 0xc7 11000111
+sw=239 {0,dom_switch_last_idx_log[6:0]} 0x07 00000111
+sw=240 {0,dom_switch_last_reg_id_log[6:0]} 0x07 00000111
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+commit pc 0x000000008000071c
+## bare s16nop-nt (4d643fb7f01486ca), session deep 2026-10-04 -- HANG, 0 dots
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x04 00000100
+sw=228 {1,dom_switch_idx[6:0]} 0x87 10000111
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=238 {busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]} 0xc7 11000111
+sw=239 {0,dom_switch_last_idx_log[6:0]} 0x07 00000111
+sw=240 {0,dom_switch_last_reg_id_log[6:0]} 0x07 00000111
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+commit pc 0x0000000080000720
+## bare s16sd24 (5037d3de74c3bc12), session deep 2026-10-04 -- HANG, 0 dots
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x04 00000100
+sw=228 {1,dom_switch_idx[6:0]} 0x87 10000111
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=238 {busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]} 0xc7 11000111
+sw=239 {0,dom_switch_last_idx_log[6:0]} 0x07 00000111
+sw=240 {0,dom_switch_last_reg_id_log[6:0]} 0x07 00000111
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+commit pc 0x000000008000052c
+## bare armdep-nt-d16-q64, first run 2026-10-04 03:52 -- HANG, 0 dots (224/225/pc only)
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+commit pc 0x000000008000071c
+## bare armdep-d16-q64 (d09491cd), 2026-10-04 03:38 -- HANG after 1 dot (escape 16..31)
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x83 10000011
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+commit pc 0x0000000080000774
+
+## dose-response (part 8 + N stores before the CALL), compare.py verdicts
+s16stc12 (0a07197201f6733b): COMPLETED: status 0x1 iter 0x10000 checksum 0x7f8000 escapes 8552 (dots 534) csnodefree 0xfffc -> 0xfffc mcause 0x0 end 0x5e5e
+s16stc24 (00c2ec66837c8617): HANG after 0 dots, i.e. >= 0 escapes
+s16sd24 (5037d3de74c3bc12): HANG after 0 dots, i.e. >= 0 escapes
+s16stc18 (152e121b829e9da5): HANG after 0 dots, i.e. >= 0 escapes
+
+## the workaround: a fence immediately BEFORE every CALL
+s16pre-nt (03ec01c98fbc2f7a): COMPLETED: status 0x1 iter 0x10000 checksum 0x7f8000 escapes 8551 (dots 534) csnodefree 0xfffc -> 0xfffc mcause 0x0 end 0x5e5e
+s16pre-stc24 (94f670ed146922e4): COMPLETED: status 0x1 iter 0x10000 checksum 0x7f8000 escapes 8552 (dots 534) csnodefree 0xfffc -> 0xfffc mcause 0x0 end 0x5e5e
+
+## FPGA monitor with the pre-CALL fence workaround, boot supmon-c5f (fw bc9206e7ccb3), 2026-10-04: 552 resumes, then
+c5f: [wedge] sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+c5f: [wedge] sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}    0x88 10001000
+c5f: [wedge] commit pc = 0x00000000828d56bc
+# c5f's commit pc 0x828d56bc = DBAS 0x82800000 + 0xd56bc = VA 0xe56bc (lookupName): stale slot 0, i.e. the resume point of the PREVIOUS
+# preemption; the stuck switch is the next escape, up to one quantum later (the escape side; the exact point is not recorded)
