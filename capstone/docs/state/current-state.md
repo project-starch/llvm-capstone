@@ -1,5 +1,53 @@
 # Current Capstone state
 
+## 2026-10-04 — Supervised CALL under the FPGA monitor on silicon: a real workload preempts and resumes hundreds of times, then hits S-16 (localised, mechanism traced, an RTL fix needed); S-17 found beside it
+
+- **The FPGA monitor runs supervised CALL on silicon.**
+  - Where it lives: capstone-sbi `monitor/supcall-fpga`, behind the opt-in `CAPSTONE_SUPERVISOR_CSR_EVENTS`.
+  - The C5 boot hang was the monitor's 21.5 KiB of globals carved from an 8 KiB FPGA `dom_stack`. It is fixed in the
+    wrapper and gated in `build-fpga-fw.sh`.
+  - The merged monitor with supervision compiled out passed C3.
+  - Folder: `tests/rtl-smoke/supmon-2026-10-03/`.
+- **Silicon supervision forbids every M-level CSR inside a domain, by design.**
+  - The legacy my_first_domain-family glue saves and restores mcause/mtval, and every cycle bracket reads mcycle.
+  - `sup-static-audit.py` finds every such instruction (controls both ways).
+  - `patch-sup-glue.py` replaces exactly those words. The patched speedtest gives the oracle on a plain call at
+    -0.04 % cycles.
+  - The musl glue is clean.
+- **The real workload under supervision.**
+  - The SQLite speedtest resumed 212 times (C5u), then the switch hung.
+  - With a fence before every domcall, it resumed 552 times (C5f), then hung again, on the escape side.
+- **S-16 (`tests/fpga-repros/S16-supervised-switch-never-finishes/`).** A domain switch that starts while the
+  store buffer's commit queue is full never finishes.
+  - The switcher's walk-idx-7 write is never acknowledged; commit count 4, WAIT_STORE_READY.
+  - Reproduced bare within 16 resumes.
+  - 12 stores before the CALL complete; 18 and 24 hang.
+  - The RTL lane's simulation matches every silicon read: the store unit acknowledges the switcher's write on the
+    previous store's queue ready, so the write is pushed over the full commit queue's head. **The oldest committed
+    store is lost**, and the 4th later write starves.
+  - A fence before the CALL removes the CALL-side trigger. It cannot cover a quantum escape, which lands wherever the
+    domain is; C5f's hang was on the escape side. **Preemptive supervision on this bitstream needs the RTL fix**; that
+    lane has one passing in simulation.
+- **About 22,000 bare supervised resumes without the swap sequence never hung.**
+- **S-17 (`tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`).**
+  - After a finished switch, an LDC right behind `ccsrrw sp <- cscratch` leaves the LSU not ready. A scalar `ld` there
+    completes 8,552 escapes.
+  - A plain CALL is affected too.
+  - The simulation hangs at the same LDC in a different state; open.
+- **Instrument added:** the bare runner `sup-resume-2026-10-03/run_sup_bare_wedge.py` reads the switcher and LSU
+  apertures (192-195, 224-229, 238-240) after a hang. The commit-pc aperture during a stuck switch is stale scoreboard
+  slot 0, shown by a positive control.
+- **Corrections along the way, recorded in the lane PREREGs:**
+  - the k800 entry path;
+  - "the hot loop never misses";
+  - "MSWAP is void" (my x26/s10 register clash);
+  - the S-17 prediction ldsync = 1;
+  - the C5f prediction "all supervised runs complete".
+- **Still open:**
+  - the RTL fix for S-16 and its bitstream. A reflash is the lead's call.
+  - S-17 on silicon.
+  - Supervised contexts on silicon (memcached Part 4b) stand behind S-16.
+
 ## 2026-10-03 — Atomics through a capability address work on silicon: the first memcached prerequisite
 
 - **The question.** memcached.dom links 171 atomics: 80 `lr.w`, 80 `sc.w` (musl's `a_cas`), 9 `amoadd`, 2 `amoswap`. No
