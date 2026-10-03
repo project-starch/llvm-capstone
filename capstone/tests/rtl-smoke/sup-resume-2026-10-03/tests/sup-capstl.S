@@ -25,6 +25,9 @@
 #             the swap code itself in this harness: reading 2 is then 0 (no supervision event), 3 and 4 as usual.
 #   -DPOSTCALL=1  a `fence` right after every CALL, before the swap-in; =2 eight `nop`s instead (ordering vs delay);
 #             =3 a UART print ('k') after every CALL; =4 a plain `csrr t1, cycle` after every CALL.
+#   -DLDTEST  the swap-in's cepc load is a SCALAR `ld` instead of an LDC (an ld skips the Capstone DYN unit):
+#             with SWAP_PARTS=12 the only load after the post-CALL ccsrrw differs by exactly that one instruction.
+#   -DDOTMASK=n  progress dot every n+1 escapes (default 255).
 #   -DSWAP_DEP  (with MSWAP) sp holds a copy of the swap-area capability across the CALL, and the swap-in loads
 #             THROUGH the sp it just restored -- the real monitor's `ccsrrw sp, cscratch; ldc ra, -16(sp)` dependency.
 #   -DTRACE_K  'K' right after the first CALL returns, before the swap-in (CALL vs swap-in hang).
@@ -62,6 +65,9 @@
 #endif
 #ifndef ITER
 #define ITER 4096
+#endif
+#ifndef DOTMASK
+#define DOTMASK 255
 #endif
 
 #ifndef SWAP_PARTS
@@ -123,7 +129,11 @@
   CCSRRW(sp, CCSR_CSCRATCH, x0)
 #endif
 #if SWAP_PARTS & 4
+#ifdef LDTEST
+  ld t1, 464(SWB)
+#else
   LDC(t1, SWB, 464)
+#endif
   CCSRRW(x0, CCSR_CEPC, t1)
 #endif
 #if SWAP_PARTS & 1
@@ -309,7 +319,7 @@ supervise_loop:
   li t2, 2
   bne t1, t2, done             # kind != 1: the return (0) or a fault (2)
   addi s7, s7, 1
-  andi t1, s7, 255
+  andi t1, s7, DOTMASK
   bnez t1, 1f
   BPUTI(46)                    # '.' every 256 escapes
 1:

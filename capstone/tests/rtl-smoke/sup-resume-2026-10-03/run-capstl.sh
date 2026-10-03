@@ -12,6 +12,9 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = dyn ]; then   # LDC vs ld after the post-CALL ccsrrw; the dependent arm twice with dots per 16
+    for n in arm12-ld-q64 arm12-ldc-q64 armdep-d16-q64; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
+    jobs+=("armdep-d16-q64-rep2|$F/images/armdep-d16-q64.bin|$(cat $F/images/armdep-d16-q64.rec)")
   elif [ "$CAPSTL_SET" = armed ]; then   # armed, many resumes: sp-dependent load +/- fence; print / csrr after the CALL
     for n in armdep-q64 armdep-fence-q64 arm-print-q64 arm-csrr-q64; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = postcall ]; then   # the hang repeated, a fence / 8 nops after the CALL, pairs without K, armed+fence

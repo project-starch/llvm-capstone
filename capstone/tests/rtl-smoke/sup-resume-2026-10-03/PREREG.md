@@ -368,3 +368,33 @@ resumes per arm):
 
 The disassembly was checked: armdep's swap-in is `ccsrrw sp, cscratch` then `ldc t1, 464(sp)`; arm-csrr has
 `rdcycle t1` right after the CALL; arm-print has the UART poll there.
+
+## RESULT, the armed batch (03:13-03:22): the real monitor's dependent shape reproduces a RARE hang in bare
+- Control: call-retpc PASS exact (N = 14).
+
+| arm | trace | result |
+|---|---|---|
+| armdep-q64 (sp-dependent LDC after the post-CALL ccsrrw: the real monitor's shape) | `ACR` x16 (the trace covers only the first 16 resumes) | HANG before escape 256 |
+| armdep-fence-q64 | the same | HANG before escape 256 |
+| arm-print-q64 (a UART print after every CALL) | `ACkR` x16 | HANG before escape 256 |
+| arm-csrr-q64 (a plain csrr after every CALL) | `AC` | HANG at the first escape |
+
+- **The sp-dependent load survives tens of resumes, then hangs.** That is C5u's behaviour (212 good resumes) in a
+  90 KB bare image. An independent LDC dies at the first escape.
+- **A fence or a print after the CALL only delays the hang.** A plain csrr does not help at all.
+- **The RTL lane's simulation trace (2026-10-04):**
+  - the escape's switch finishes, busy drops, and the monitor's ccsrrw retires;
+  - the LDC is then dispatched to the Capstone DYN unit and never comes back, with DYN ready low for the rest of the
+    run;
+  - there is no rev-node drain pending and no unacknowledged rev-node response, which rules out the R-27 class;
+  - the load unit never receives a request.
+  So the LDC is stuck inside the DYN unit, between the rev-node validity query, the load request to the LSU side,
+  and the wait for the word. One handshake is never accepted. A scalar `ld` skips the DYN unit.
+
+**The DYN-unit discriminator, pre-registered.** These are armed, parts 8+4, ITER 65,536. The images differ only in
+the swap-in's cepc load, at both CALL sites: LDC `1d0d335b` against `ld` `1d0d3303`, plus the test ID character:
+- arm12-ld-q64 (8027a661): `ld`. Predicted to COMPLETE if the stuck element is the DYN unit's LDC path.
+- arm12-ldc-q64 (07de9fb7): LDC. Predicted to HANG at the first escape, as the independent LDC did.
+
+**The dependent arm twice, with a dot every 16 escapes:** armdep-d16-q64 (d09491cd), two runs. The dot counts bound
+the hang's escape number, so the two runs show whether it is deterministic or spread.
