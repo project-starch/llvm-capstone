@@ -1,0 +1,53 @@
+{
+  "case": 3,
+  "upstream_fix": "5c66a3ab51",
+  "title": "a non-reference VVC frame that is output is fully released, returning its pooled side tables while the decoder still holds them",
+  "consumer": "libavcodec/vvc/refs.c, ff_vvc_set_new_ref() and ff_vvc_output_frame()",
+  "live_in_pin": false,
+  "live_proof": "the fix is an ANCESTOR of the pin, so the defect is absent from it: `git merge-base --is-ancestor 5c66a3ab51 n9.0.1` succeeds, and the fixed form is present verbatim at n9.0.1:libavcodec/vvc/refs.c:254 as `ref->flags = VVC_FRAME_FLAG_OUTPUT | VVC_FRAME_FLAG_SHORT_REF;`. The case re-introduces the reverse, as the other three in this corpus do. Checked against the backport trap as well: the cherry-pick probe is not what settles this one, because the fix is in by ancestry rather than by a pick",
+  "object": "a VVC frame's per-frame side tables, tab_dmvr_mvf and rpl_tab, taken from their AVRefStructPools at refs.c:153 and :157",
+  "lifetime_ender": "ff_vvc_unref_frame clears the frame's last flag, so the `if (!frame->flags)` branch at refs.c:53 runs av_refstruct_unref on both tables, returning them to pool->available_entries",
+  "shape": "premature return to the pool / reuse / stale read",
+  "allocator_layer": "AVRefStructPool (libavutil/refstruct.c), with the frame's planes on AVBufferPool alongside",
+  "fidelity": "model-consumer, real allocator: refstruct.c and buffer.c are upstream's, unreduced, and the pool's recycling is its own -- a release pushes the entry onto pool->available_entries (refstruct.c:230-231) and the next av_refstruct_pool_get pops the same one back (:258-261). Reduced is the consumer: ff_vvc_unref_frame's flag arithmetic is transcribed, the frame carries only the fields this defect touches, and no decoder is built. The triggering condition is written out rather than reached through a bitstream: a picture with ph_pic_output_flag set and ph_non_ref_pic_flag set, which is the combination the upstream message names",
+  "distinguishing": "the only case in this corpus whose stale storage comes from AVRefStructPool rather than AVBufferPool, and the only one whose release is triggered by flag arithmetic rather than by a reference count reaching zero through a consumer's own unref",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm has both side tables released and one reissued at the same address, and reads the new owner's 0xCC through the stale pointer; the fixed arm keeps VVC_FRAME_FLAG_SHORT_REF set so the release branch never runs and nothing is reissued. The pool's free list is LIFO (pool_return_entry pushes onto pool->available_entries, refstruct_pool_get_ext pops the head), so the entry handed back is rpl_tab, the LAST of the two released -- the oracle tracks both and reports which, via reissued_is_rpl_tab",
+      "note": "this pair differs by the upstream fix, not by protection",
+      "measured": "2026-10-03, results/2026-10-03-native-four-cases/: buggy arm tables_released=1 reuse_same_address=1 reissued_is_rpl_tab=1 stale_read=0xCC -> DEFECT-REPRODUCED; fixed arm tables_released=0 -> FIXED. run-native.sh exited 0 over all four cases"
+    },
+    "sublet-port": {
+      "fixtures": [
+        46,
+        47
+      ],
+      "oracle": "case.c unchanged against the Sublet port of FFmpeg's own pools (app port, FFAPP_POOL=sublet): the defect faults at an instruction case.c's line table puts on a line that dereferences the stale table pointer, before the verdict line; the fix completes with VERDICT FIXED",
+      "control": "the same case.c and driver objects linked against upstream's pools (FFAPP_POOL=stock): the defect completes with VERDICT DEFECT-REPRODUCED, the fix with VERDICT FIXED",
+      "cause": 24
+    },
+    "spatial": {
+      "status": "not written"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "poisoncap-spatial": {
+      "status": "not written"
+    },
+    "poisoncap-protected": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    },
+    "native-detect": {
+      "status": "not written"
+    },
+    "backing": {
+      "status": "not written"
+    }
+  },
+  "status": "declared 2026-10-03; the native-fix-differential arm MEASURED the same day (results/2026-10-03-native-four-cases/), both arms as predicted. The sublet-port rows (fixtures 46/47) remain predictions: they need the FFmpeg app port, whose SDK gate correctly refuses both toolchains on this host (C-46 linear direct-call target / missing intcap extensions), reproduced 2026-10-03. The fault lines were re-registered 84,85,88 -> 99,100,103 when the reduction was corrected to track both released tables; the predicted outcomes did not change",
+  "note": "The arms left 'not written' are the ones this case cannot honestly carry yet: spatial and sublet need a probe case in ports/ffmpeg/buffer-pool (36-38 are taken by cases 0-2), and the PoisonCap and CheriBSD arms need platforms this host does not have. They are declared rather than omitted so the corpus's required_arms stay satisfied without any of them implying a result"
+}

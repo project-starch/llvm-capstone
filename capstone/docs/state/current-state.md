@@ -1,5 +1,23 @@
 # Current Capstone state
 
+## 2026-10-03 — Atomics through a capability address work on silicon: the first memcached prerequisite
+
+- **The question.** memcached.dom links 171 atomics: 80 `lr.w`, 80 `sc.w` (musl's `a_cas`), 9 `amoadd`, 2 `amoswap`. No
+  image proven on silicon contained any, and no RTL directed test ran one through a capability in capability mode.
+- **The test.** `tests/rtl-smoke/cap-atomics-2026-10-03/`, bare on `caplifive_supcall_36a641e0b.bit`, pre-registered
+  and pushed before the boot (49d7f98067c3). It has 22 architectural readings.
+- **PASS, all 22 exact**, cited by image hash:
+  - the control, call-retpc a05ca464, exact (N = 4 on this bitstream);
+  - amoadd/amoswap .d/.w, including the 32-bit wrap;
+  - lr/sc .w/.d success;
+  - SC failure with no reservation and on another granule;
+  - a musl `a_cas` loop in one attempt.
+- **Not covered:**
+  - AMO bounds or permission enforcement;
+  - the I4 tag residual (an AMO over a capability granule keeps its tag; the RTL lane's
+    `s06sec-amo-no-resurrect.S`);
+  - multi-hart contention.
+
 ## 2026-10-03 — Supervised-CALL ladder complete on silicon: 12 images exact to simulation, the real timer escape, S-11's refusal; N = 3 on the key tests
 
 - **The rest of the RTL lane's ladder ran bare on the board** (`caplifive_supcall_36a641e0b.bit`), one session per image,

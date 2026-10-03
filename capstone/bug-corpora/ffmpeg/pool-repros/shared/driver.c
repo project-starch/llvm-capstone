@@ -4,6 +4,7 @@
 #include "corpus.h"
 
 AVBufferPool *g_pool;
+AVRefStructPool *g_refpool;
 
 _Noreturn void ff2_fail(unsigned code) {
   fprintf(stderr, "CONTROL-FAILED %u\n", code);
@@ -31,9 +32,16 @@ int main(int argc, char **argv) {
   g_pool = av_buffer_pool_init(POOL_BYTES, NULL);
   if (!g_pool)
     ff2_fail(605);
+  /* The side-table pool. Created unconditionally so every case links the same
+   * driver; cases that do not use it are unaffected, which the re-run of cases
+   * 0-2 against this driver is there to show. */
+  g_refpool = av_refstruct_pool_alloc(TAB_BYTES, 0);
+  if (!g_refpool)
+    ff2_fail(606);
   printf("case=%d arm=%s\n", ff2_case_number, fixed ? "fixed" : "buggy");
   int rc = ff2_case_run(fixed);
   av_buffer_pool_uninit(&g_pool);
+  av_refstruct_pool_uninit(&g_refpool);
   free(metadata);
   free(payload);
   return rc;

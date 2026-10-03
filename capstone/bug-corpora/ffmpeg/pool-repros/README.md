@@ -9,14 +9,34 @@ property of the allocator rather than of a run.
     00_461fb22053_af_join_dedup_bound/            a reference is never taken; stale read
     01_1886c3269d_h264_refs_partial_clear/        reset bounded by the count, not the array
     02_316531e61c_vidstab_parked_plane_pointer/   pointer parked in a library; stale write
+    03_5c66a3ab51_vvc_nonref_output_releases_tabs/ non-ref frame output; side tables returned
 
 | shape | cases |
 |---|---|
 | reference never taken / reuse / stale read | 0 |
 | partial clear / reuse / stale read | 1 |
 | parked pointer / reuse / stale write | 2 |
+| premature return to the pool / reuse / stale read | 3 |
 
-Three cases, three shapes. The inventory and triage that selected them, and the
+Four cases, four shapes. **Case 3 is the corpus's first `AVRefStructPool` case**; 0-2 are all
+`AVBufferPool`. That matters because `AVRefStructPool` is the second of the two FFmpeg pool
+allocators this work ports, and it is a genuine recycling pool rather than a wrapper: a release
+pushes the entry onto `pool->available_entries` (`libavutil/refstruct.c:230-231`) and the next
+`av_refstruct_pool_get` pops the same one back (`:258-261`).
+
+**Case 3 has run on the native arm only.** Measured 2026-10-03
+(`results/2026-10-03-native-four-cases/`): both arms as predicted, and `run-native.sh` exited 0 over all
+four cases, so extending `shared/driver.c` for the refstruct pool did not disturb 0-2. Cases 0-2 carry
+N=3 on both the native pair and the `poolsublet` arm; case 3's `poolstock`/`poolsublet` rows (fixtures
+46/47) are still **predictions**, because they need the FFmpeg app port and its SDK gate correctly
+refuses both toolchains on this host (C-46 linear direct-call target / missing intcap extensions,
+reproduced 2026-10-03). Read the per-case status, not the corpus status, when counting what is measured.
+
+Case 3's first native run **failed**, and the reason is recorded because it generalises: the pool's free
+list is LIFO, so with both side tables released the entry handed back is `rpl_tab` (the last released),
+not `tab_dmvr_mvf`. The reduction watched only the latter and reported `reuse_same_address=0` — a correct
+allocator misread by the instrument, and indistinguishable from a defect that does not exist. The
+reduction now tracks both and names which came back. The inventory and triage that selected them, and the
 further pool-backed specimens it found that are not built here, are in
 [`docs/ref/ffmpeg-pool-consumer-defects.md`](../../../docs/ref/ffmpeg-pool-consumer-defects.md).
 
