@@ -27,3 +27,8 @@ build evict-capstl-q100k  80 -DEVICT -DQUANTUM=100000 -DITER=1048576
 build evict-capstl-q20k   81 -DEVICT -DQUANTUM=20000 -DITER=1048576
 build mevict-noploop-q64  82 -DMEVICT -DNOPLOOP -DQUANTUM=64
 build mevict-capstl-q64   83 -DMEVICT -DQUANTUM=64
+# the FPGA monitor's __domcallsaves sequence around every CALL (CPMP/CSR swap, cscratch := sp, sp := 0)
+build mswap-capstl-q64          84 -DMSWAP -DQUANTUM=64
+build mswap-evict-noploop-q100k 85 -DMSWAP -DEVICT -DNOPLOOP -DQUANTUM=100000 -DITER=1048576
+build mswap-evict-capstl-q100k  86 -DMSWAP -DEVICT -DQUANTUM=100000 -DITER=1048576
+build mswap-mevict-capstl-q64   87 -DMSWAP -DMEVICT -DQUANTUM=64

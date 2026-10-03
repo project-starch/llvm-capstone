@@ -66,7 +66,7 @@ All four are 19,432 B, with board_rec at 0x80003c40.
 |---|---|---|
 | intloop-q64 | 480113b5 | 824 |
 | capstl-q64 | 092ec82d | 1,540 |
-| capstl-q47 | 40975d31 | 2,052 |
+| capstl-q47 | 4097d317 | 2,052 |
 | capstl-q16 | 2e28b7dc | 6,148 |
 
 - About 10,500 resumes, with not one hang.
@@ -101,3 +101,44 @@ All four are 19,432 B, with board_rec at 0x80003c40.
 - **Every arm completes again.** The board's real-monitor sequence is the remaining difference (CPMP and S-CSR swap,
   cscratch := sp, sp := 0), or a DDR/AXI timing the bare harness does not reach. The next step is the monitor's
   `__domcallsaves` sequence in this monitor loop.
+
+## RESULT, the cache-miss session (2026-10-03 22:19-22:26): every arm COMPLETED again
+- Control: call-retpc PASS exact (N = 6).
+- Every run: the count and the checksum exact (0x100000 / 0x7F80000 for EVICT, 0x1000 / 0x7F800 for MEVICT), the
+  last event kind 0, mcause 0, csnodefree 0xFFFC at both ends.
+
+| arm | escapes |
+|---|---|
+| evict-noploop-q100k | 488 |
+| evict-intloop-q100k | 891 |
+| evict-capstl-q100k | 914 |
+| evict-capstl-q20k | 4,575 |
+| mevict-noploop-q64 | 537 |
+| mevict-capstl-q64 | 3,950 |
+
+- In all, about 22,000 bare resumes on silicon (hot plus eviction), and none hung.
+- **Not yet shown:** that the sweeps EVICT the walks' lines. The D-cache is 8-way with 16-byte lines, and its
+  replacement may be random. A 64 KiB sweep then leaves about (7/8)^16 = 12 % of any set's earlier lines in place.
+  Until a latency probe shows the misses, this null is about "after a 64 KiB sweep", not "every walk read missed".
+- From the RTL lane's simulation (memory delay 12): an LDC two instructions after an STC to the same granule reads the
+  stale tag (S-07 in a three-instruction window), so the lbu through it faults with cause 24, with or without
+  supervision. On the board the loop never faulted, so the window is shorter on silicon.
+
+**The MSWAP set, pre-registered.** Every CALL, the first and every resume, is wrapped in the FPGA monitor's generated
+`__domcallsaves` sequence:
+- CPMP0..15 read, cleared and stored with STC;
+- 8 more tag-setting STCs;
+- mcause, mtval, stvec, scause, stval, sepc, sscratch, satp, 0x803 and cepc swapped out;
+- cscratch := sp, sp := 0;
+- after the CALL, all of it swapped back.
+So each armed CALL's walks start behind a burst of tag writes, as in the real monitor. The expansion was checked:
+CPMP 0x10..0x1f in order, STC offsets 0..240 / 256..368 / 464.
+
+Images (board_rec 0x80015000):
+- mswap-capstl-q64: 65ede31e
+- mswap-evict-noploop-q100k: 662b0dc1
+- mswap-evict-capstl-q100k: 1a039140
+- mswap-mevict-capstl-q64: 11abd706
+
+**Predicted:** COMPLETE under the null, with the same values as their non-MSWAP twins. If a MSWAP arm hangs while its
+twin completed, the monitor's swap sequence is part of the trigger, and the dots say how far it got.

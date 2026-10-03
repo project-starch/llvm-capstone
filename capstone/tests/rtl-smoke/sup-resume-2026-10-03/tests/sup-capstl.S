@@ -17,6 +17,9 @@
 #   -DEVICT   the domain also loads one 16-byte line of a 64 KiB buffer per iteration, so a large quantum turns L1
 #             (32 KiB, 8-way, 16-B lines) over between escapes, as SQLite's working set does;
 #   -DMEVICT  the monitor sweeps the 64 KiB buffer before every resume, so every RESTORE read misses.
+#   -DMSWAP   the monitor wraps every CALL in the FPGA monitor's generated __domcallsaves sequence: CPMP0..15 read,
+#             cleared and stored with STC, 8 more tag-setting STCs, mcause/mtval/stvec/scause/stval/sepc/sscratch/
+#             satp/0x803 and cepc swapped out, cscratch := sp, sp := 0 -- and all of it swapped back after the CALL.
 #
 # Readings (CAPPRINT, in order):
 #   1 csnodefree at the start (reported)
@@ -46,6 +49,75 @@
 #endif
 #ifndef ITER
 #define ITER 4096
+#endif
+
+#ifdef MSWAP
+/* s10: the swap area (512 B, NONLIN RW). Layout: CPMP0..15 at 0..255, 8 tag-setting copies of s11 at 256..383,
+   the plain CSRs at 384.., cepc at 464. */
+.macro SWAP_OUT
+  .irp n,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+    CCSRRW(t1, (0x10 | \n), x0)
+    STC(s10, t1, (16 * \n))
+  .endr
+  .irp n,0,1,2,3,4,5,6,7
+    STC(s10, s11, (256 + 16 * \n))
+  .endr
+  csrrw t1, mcause, x0
+  sd t1, 384(s10)
+  csrrw t1, mtval, x0
+  sd t1, 392(s10)
+  csrrw t1, stvec, x0
+  sd t1, 400(s10)
+  csrrw t1, scause, x0
+  sd t1, 408(s10)
+  csrrw t1, stval, x0
+  sd t1, 416(s10)
+  csrrw t1, sepc, x0
+  sd t1, 424(s10)
+  csrrw t1, sscratch, x0
+  sd t1, 432(s10)
+  csrrw t1, satp, x0
+  sd t1, 440(s10)
+  csrrw t1, 0x803, x0
+  sd t1, 448(s10)
+  CCSRRW(t1, CCSR_CEPC, x0)
+  STC(s10, t1, 464)
+  li t1, 0
+  CCSRRW(x0, CCSR_CSCRATCH, sp)
+  li sp, 0
+.endm
+.macro SWAP_IN
+  CCSRRW(sp, CCSR_CSCRATCH, x0)
+  LDC(t1, s10, 464)
+  CCSRRW(x0, CCSR_CEPC, t1)
+  .irp n,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+    LDC(t1, s10, (16 * \n))
+    CCSRRW(x0, (0x10 | \n), t1)
+  .endr
+  ld t1, 384(s10)
+  csrrw x0, mcause, t1
+  ld t1, 392(s10)
+  csrrw x0, mtval, t1
+  ld t1, 400(s10)
+  csrrw x0, stvec, t1
+  ld t1, 408(s10)
+  csrrw x0, scause, t1
+  ld t1, 416(s10)
+  csrrw x0, stval, t1
+  ld t1, 424(s10)
+  csrrw x0, sepc, t1
+  ld t1, 432(s10)
+  csrrw x0, sscratch, t1
+  ld t1, 440(s10)
+  csrrw x0, satp, t1
+  ld t1, 448(s10)
+  csrrw x0, 0x803, t1
+.endm
+#else
+.macro SWAP_OUT
+.endm
+.macro SWAP_IN
+.endm
 #endif
 
 .section .text.init
@@ -93,7 +165,17 @@ CAPPERM(s1, a5)
 sd x0, 0(s1)
 sd x0, 8(s1)
 
-#if defined(EVICT) || defined(MEVICT)
+#ifdef MSWAP
+CAPCREATE(s10)
+li a0, CAP_TYPE_NONLIN
+lla a3, swaparea
+lla a4, swaparea_end
+li a5, CAP_PERM_RW
+CAPTYPE(s10, a0)
+CAPBOUND(s10, a3, a4)
+CAPPERM(s10, a5)
+#endif
+#if defined(EVICT) || defined(MEVICT) || defined(MSWAP)
 # s11: NONLIN RW over the 64 KiB eviction buffer (the domain inherits it; the monitor sweeps it under MEVICT)
 CAPCREATE(s11)
 li a0, CAP_TYPE_NONLIN
@@ -139,7 +221,9 @@ csrwi CSUPCTL, 0
 li s7, 0                       # escapes
 
 CSSUPERVISE(t3, a3, s5)
+SWAP_OUT
 CALL(a3, a3)
+SWAP_IN
 supervise_loop:
   csrr t0, CSUPSTATUS
   andi t1, t0, 6
@@ -161,7 +245,9 @@ supervise_loop:
 #endif
   csrwi CSUPCTL, 1             # resume
   CSSUPERVISE(t3, a3, s5)
+  SWAP_OUT
   CALL(a3, a3)
+  SWAP_IN
   j supervise_loop
 done:
 CAPPRINT(t0)                   # 2  csupstatus: 1
@@ -248,7 +334,13 @@ seal_end:
 buf:
   .zero 64
 buf_end:
-#if defined(EVICT) || defined(MEVICT)
+#ifdef MSWAP
+.align 6
+swaparea:
+  .zero 512
+swaparea_end:
+#endif
+#if defined(EVICT) || defined(MEVICT) || defined(MSWAP)
 .align 12
 bigbuf:
   .zero 65536

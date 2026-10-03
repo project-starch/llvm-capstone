@@ -12,6 +12,9 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = mswap ]; then   # the FPGA monitor's __domcallsaves sequence around every CALL
+    for n in mswap-capstl-q64 mswap-evict-noploop-q100k mswap-evict-capstl-q100k mswap-mevict-capstl-q64; do
+      jobs+=("$n|$F/images/$n.bin|80015000"); done
   else   # CAPSTL_SET=evict: the cache-miss set (board_rec moves with the 64 KiB buffer)
     for n in evict-noploop-q100k evict-intloop-q100k evict-capstl-q100k evict-capstl-q20k mevict-noploop-q64 mevict-capstl-q64; do
       jobs+=("$n|$F/images/$n.bin|80014000"); done
