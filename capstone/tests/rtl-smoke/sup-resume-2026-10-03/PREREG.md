@@ -467,3 +467,18 @@ The wedge read is taken as for the others.
     `ccsrrw(x0, cscratch, sp); li sp, 0; domcall`.
 - **So the per-resume prints were DELAYING the hang.** Without them it comes within 16 resumes. This image is the
   fastest S-16 reproduction: about 2.5 minutes of board time with the wedge read.
+
+**Pre-registered: the S-16 bisect on the fast reproduction** (SWAP_DEP, no trace prints, a dot every 16 escapes,
+ITER 65,536; the apertures read after any hang):
+
+| image | parts | content around the CALL |
+|---|---|---|
+| s16p8-nt (5fffb73c) | 8 only | `cincoffsetimm sp, s10, 0; ccsrrw x0, cscratch, sp; li sp, 0; CALL; ccsrrw sp, cscratch, x0`. No STC, no LDC (checked in the disassembly). |
+| s16p9-nt (b54b72f0) | 8+1 | the CPMP swap: 16 CCSRRW and STC before, 16 LDC (through sp) and CCSRRW after |
+| s16p10-nt (23fdfd98) | 8+2 | 8 tag-setting STCs before, no load after |
+| s16p12-nt (f28cf122) | 8+4 | the CSR swap plus the cepc STC before; the cepc LDC through sp and 9 `ld`s after |
+
+- If s16p8 hangs with signature A, S-16 needs nothing but the cscratch/sp sequence around an armed CALL.
+- Otherwise, the pairs say which burst it needs.
+- **The real monitor's sequence is all of these (15).** The full armdep-nt hangs within 16 resumes (the result
+  above).
