@@ -616,6 +616,58 @@ static int mcapp_fixture(int n)
         printf("MCAPP-FIX 18 returned new[32]=%02x (0xee = the write landed in the new owner)\n", v);
         return MCAPP_MARK(n, (same << 8) | v);
     }
+    case 19: {
+        /* CLASS 3 -- REUSE-NOT-FREE -- on memcached's REAL bipbuffer, which is the logger's
+           per-watcher output buffer (logger.h:197,215) and also carries items.c's lru_bump_entry
+           records. This is NOT a use-after-free: no free() of any kind occurs anywhere in it.
+
+           bipbuf_new is ONE allocation -- malloc(sizeof(bipbuf_t) + size) with a flexible data[] --
+           so every record lives inside a single malloc. Then:
+             bipbuf_request  returns (unsigned char *)me->data + me->a_end   -- a pointer INSIDE it
+             bipbuf_poll     void *end = me->data + me->a_start; me->a_start += size;
+                             ... me->a_start = me->a_end = 0;  return end;  -- CURSORS ONLY
+           So a consumer that polled a record, and then lets the producer request again, is holding a
+           pointer to bytes that now belong to a DIFFERENT record -- while the pointer was never
+           freed, is still tagged, and is still in bounds of the one malloc. Only the data's identity
+           changed. That is class 3 in docs/design/sharing-bug-taxonomy-and-novelty.md, the row where
+           ASan, GC, Rust, CHERI spatial, CHERI async AND CHERI eager are all listed blind.
+
+           PREDICTION: EVERY arm RETURNS -- level0, shrink, sublet, slabsublet0 and slabsublet1
+           alike. The revoking arms are blind here too, because the runtime heap never sees a free
+           and there is nothing to revoke. That blindness is the POINT of this fixture: it is the
+           measurement that motivates hooking the bipbuffer, not a failure of the arms.
+
+           THE POSITIVE CONTROL IS FIXTURE 18, in this same file and on the same arms: same
+           stale-pointer-then-reuse shape, but its release DOES reach the allocator, and it faults on
+           every revoking arm. So a RETURN here cannot be dismissed as a harness that never fires.
+           Each "condition not created" exit below is an ERROR mark, never a quiet pass. */
+        bipbuf_t *bb = bipbuf_new(4096);
+        if (!bb) return MCAPP_MARK(n, 0xE0013);
+        unsigned char *first = bipbuf_request(bb, 64);
+        if (!first) return MCAPP_MARK(n, 0xE0013);
+        mcapp_fill(first, 0xA0, 64);
+        bipbuf_push(bb, 64);
+        mcapp_show(n, "record1", first);
+        unsigned long rec_addr = mcapp_cur(first);
+        unsigned char *polled = bipbuf_poll(bb, 64);      /* the consumer takes record 1 ... */
+        unsigned same_ptr = polled && mcapp_cur(polled) == rec_addr;
+        unsigned char *second = bipbuf_request(bb, 64);   /* ... and the producer reuses the bytes */
+        unsigned reissued = second && mcapp_cur(second) == rec_addr;
+        if (!same_ptr || !reissued) {
+            printf("MCAPP-FIX 19 bipbuf did not recycle in place: condition NOT created "
+                   "(polled-same=%u reissued=%u)\n", same_ptr, reissued);
+            return MCAPP_MARK(n, 0xE0019);
+        }
+        mcapp_fill(second, 0x5B, 64);
+        bipbuf_push(bb, 64);
+        mcapp_show(n, "record2", second);
+        printf("MCAPP-FIX 19 polled-same=%u reissued-in-place=%u frees-performed=0\n",
+               same_ptr, reissued);
+        mcapp_touching(n, rec_addr);
+        v = mcapp_fix_touch(polled, 0);   /* the consumer reads what it believes is its own record */
+        printf("MCAPP-FIX 19 returned polled[0]=%02x (0x5b = the SECOND record's byte)\n", v);
+        return MCAPP_MARK(n, (reissued << 8) | v);
+    }
     default:
         printf("MCAPP-FIX %d unknown\n", n);
         return MCAPP_MARK(0xF, n);
