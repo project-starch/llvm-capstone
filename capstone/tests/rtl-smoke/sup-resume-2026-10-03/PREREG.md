@@ -578,3 +578,330 @@ which drains the store buffer before the switch starts:
   un-drained stores are the trigger.
 - s16pre-stc24 (94f670ed): part 8 with 24 STCs plus the fence. The same prediction.
 - s16stc18: the original image, the rerun of the NO-RESULT.
+
+## Pre-registered (2026-10-04): the RTL lane's `sup-s16-stores.S` bare on silicon -- the reach of the fence workaround
+The test is copied unchanged from capstone-ariane a8045365a into `tests/sup-s16-stores.S`.
+- **What it does:** NSTORES scalar stores to distinct granules; then `ccsrrw x0, cscratch, sp; li sp, 0`; then an
+  armed CALL whose domain RETURNs at once, for ITER rounds.
+- **Why ITER matters:** the first round warms the seal's line.
+- **ESCAPE variant:** the domain makes ESC_BURSTS bursts of NSTORES stores under a short quantum.
+- **Readings:** 1 per round (csupstatus 1); then the resume count (ESCAPE only); then 0x77; then mcause 0.
+
+The RTL lane's simulation of the resident logic gives these outcomes, which are the predictions here:
+
+| image | build | simulated outcome |
+|---|---|---|
+| s16st-n4-r1 (acb649c8) | 4 stores, 1 round, cold seal | COMPLETES. The control. |
+| s16st-n4-r3 (b7937a87) | 4 stores, 3 rounds | HANGS at round 2's RETURN switch: the CALL's own SAVE tail plus the domain's one store fill the queue |
+| s16st-n4-r3-fence (ab8cde6f) | the same with the fence before the CALL | HANGS the same way. The fence cannot cover a short domain's RETURN. |
+| s16st-n32-r1 (e9b8d043) | 32 stores, cold | HANGS. Our own board data: 18 and 24 stores hang. |
+| s16st-esc-n8 (c710c07f) | ESCAPE, 8-store bursts, quantum 150, 6 bursts | HANGS at an escape. The escape-side reproduction. |
+
+- **If n4-r3-fence hangs on the board:** the folder's claim "a fence before the CALL removes the CALL-side trigger"
+  narrows to "when the domain runs long enough for the CALL's SAVE tail to drain". That correction lands on dev as its
+  own commit.
+- **If it completes:** silicon's drain timing differs from simulation here, and the claim stands as measured.
+
+### Addendum, 05:30 on 2026-10-04: the walk-index derivation, and the PLAIN twins
+**Timing of this addendum.**
+- Written while the s16stores session was running.
+- n4-r1 had completed and n4-r3 had ended rc=2.
+- Written BEFORE reading any wedge aperture of that session, so the derivation below binds the reading of those
+  apertures, and is a prediction for the PLAIN set, which has not run.
+
+**The derivation** (mine, from R-49 as the RTL lane described it plus the switcher at 36a641e0b,
+`core/anvil_build/capstone_dom_switcher.anvil`):
+- The mis-checked push is the FIRST switcher write after an ordinary store. After it, `is_dom_switch_q` = 1 and every
+  later switcher write gets the commit queue's own ready.
+- The starved write is the 4th after the overwrite.
+- A switch whose first write is a **SAVE** write starts at id 3 (`req.save_en` sets `cur_idx := 3`, phase 1), so it
+  starves at **idx 7**. That is S-16's board signature, from an armed CALL or a quantum escape that saves.
+- A switch whose first write is an **EXCHANGE** write starts at id 0 (`cur_idx := 0`, phase 0; `process()` reads
+  memory and then WRITES each id), so it starves at **idx 4**. This covers a plain CALL, and a RETURN whose request
+  carries no SAVE.
+- **Prediction for the warm-seal hang at a RETURN switch** (n4-r3, n4-r3-fence): **228 / 239 / 240 = 4**, not 7.
+  - If they read 7, either the RETURN request saves first, or the hang is not at the RETURN. In that case the
+    derivation is wrong, and it is withdrawn.
+- **The escape arm (esc-n8):** idx 7 if the escape's request saves (save_en), idx 4 if it starts at the exchange.
+  The switcher alone does not settle which. Both are a positive result for S-16; only 224/225 = 0x1f/0x88 with 226
+  bit 7 set is required.
+
+**The PLAIN twins** (`-DPLAIN`, the knob added to the copied test).
+- PLAIN drops the arming and nothing else. The disassembly diff against the armed twin is the cssupervise word
+  (0x45569e5b), `csrr csupstatus` replaced by `li t0, 0x51`, and one alignment nop. The id char differs.
+- The five running images rebuild byte-identical with the knob in the source.
+
+| image | its armed twin | prediction |
+|---|---|---|
+| s16st-plain-n4-r3 (e0e8bf50) | n4-r3 | **No confident prediction.** The mechanism does not depend on arming: the exchange writes go through the same path, and store_unit.sv:443 is keyed on `is_dom_switch_q`, not on save_en. But each exchange write follows a memory read, which spaces the walk's writes; an armed SAVE has no read. **If it hangs: idx 4.** |
+| s16st-plain-n24-r3 (13f96258) | none (the monitor's own shape: about 26 stores, the swap-out tail, a plain CALL, a warm seal) | As above. If it hangs: idx 4. |
+| s16st-plain-n32-r1 (63e457d2) | n32-r1 | As above. If it hangs: idx 4. |
+
+- Readings if it completes: 0x51 once per round, 0x77, 0.
+- **What it decides:** whether "a memcached run with UNSUPERVISED contexts does not depend on S-16"
+  (`docs/plans/memcached-on-silicon.md` on dev) is measured or false.
+- ISSUES' S-16 entry says plain-CALL exposure "has not been measured". This set measures it at the shapes above.
+- A completion does not prove safety: the monitor's own timing differs.
+
+### Correction, 05:31 on 2026-10-04: the derivation's RETURN premise is withdrawn; the escape prediction is fixed at idx 7
+**The 05:30 prediction is refuted.**
+- I had predicted that a RETURN-side hang would read idx 4. n4-r3 (b7937a87) hung with the full S-16 signature at
+  **idx 7**: 224/225/226/227 = 0x1f/0x88/0x80/0x04, 193 = 4, 194 = 3, 228/239/240 = 7.
+- Its stale slot-0 pc is 0x800009b0, `stub`'s first instruction, so the CALL's switch had finished and the stuck
+  switch is the domain's RETURN, as the RTL lane's simulation said.
+
+**What was wrong.**
+- The derivation assumed a RETURN is exchange-entered. A **supervised** RETURN is not: commit_stage.sv:521-526
+  at 36a641e0b sets `save_en = 1` (SAVE the domain's 3..66 into the seal region first). Its first write is therefore
+  id 3, and it starves at id 7.
+- That was the pre-registered first alternative, and I had not checked commit_stage before writing the premise.
+
+**What stands.**
+- Read in source this time, `save_en` is set by exactly three requests: the armed CALL (:497), the supervised RETURN
+  (:522) and the quantum escape (:746). An ordinary CALL or RETURN takes the request from the instruction with
+  `save_en` clear.
+- The walk-index rule ("the first switcher write after an ordinary store is mis-checked; the 4th after it starves")
+  is consistent with every S-16 reading so far.
+- The PLAIN twins' prediction is unchanged: **if they hang, idx 4**.
+- **esc-n8, not yet run:** the escape saves, so **idx 7**.
+
+### Addendum, 05:35 on 2026-10-04: the RTL lane's PLAIN simulation, and the matched arm s16st-plain-n32-r3 (64c1f390)
+**The RTL lane's simulation (their message, sup-call 57a9874c8).**
+- Arm: `sup-s16-stores.S -DPLAIN -DNSTORES=32`, three rounds.
+- On the resident logic, round 1 passes (seal line cold). Round 2's CALL hangs: the exchange's first write (seal+0,
+  id 0) is pushed over the full queue's head, and **id 4** starves. On the fixed logic, all three rounds complete.
+- Their account of why the board has not shown it: a plain exchange READS each slot before writing it, so with the
+  seal line cold the first write waits a DDR read and the queue drains. With the line warm it does not.
+
+**The arm.** I built that exact arm as `s16st-plain-n32-r3` (id 147). The eight earlier images rebuild
+byte-identical.
+
+**Predictions, taken from their simulation and the 05:30 rule, before any PLAIN arm runs:**
+
+| image | prediction |
+|---|---|
+| s16st-plain-n32-r1 | completes: 0x51, 0x77, 0 (one round, seal cold; simulation round 1 passes) |
+| s16st-plain-n4-r3 | no confident prediction (4 stores: the queue may not be full at the exchange's first write) |
+| s16st-plain-n24-r3 | hangs at round 2's CALL **if** 24 stores fill the queue as 32 do in simulation; otherwise completes |
+| s16st-plain-n32-r3 | **hangs** at round 2's CALL: idx 4, 224/225 = 0x1f/0x88, 226 = 0x80, 227 = 0x04, 193 = 4, 194 = 3; the stale slot-0 pc on the swap-out tail's `li sp, 0` (0x800003de, the residue of the CCSRRW's flush), not on `stub` (0x80000a20) |
+
+**What a miss would mean.**
+- If plain-n32-r3 completes on silicon, the board's drain timing differs from simulation at this shape. In that case
+  "a plain CALL is exposed" stays a simulation result only.
+- If it hangs at idx 7 or with the pc on `stub`, the exchange-entry account is wrong for a plain switch.
+
+## Results: session s16stores (2026-10-04 05:24-05:37, bitstream 36a641e0b, bare, one power cycle per image)
+| image | prediction | board | walk idx | stale slot-0 pc | reading |
+|---|---|---|---|---|---|
+| control call-retpc (a05ca464) | PASS | PASS exact | | | |
+| s16st-n4-r1 (acb649c8) | completes | completed: 1, 0x77, 0 | | | as predicted |
+| s16st-n4-r3 (b7937a87) | hangs at round 2's RETURN | HANG, full S-16 signature | 7 | 0x800009b0 = `stub`+0 | the stuck switch is the domain's supervised RETURN. As predicted by the RTL lane; my 05:30 idx-4 prediction is withdrawn (see the 05:31 correction) |
+| s16st-n4-r3-fence (ab8cde6f) | hangs the same way | HANG, full signature | 7 | 0x800009c0 = `stub`+0 of this image | **the fence before the CALL does not cover the RETURN** |
+| s16st-n32-r1 (e9b8d043) | hangs | HANG, full signature | 7 | 0x800003e2 = the tail's `li sp, 0` | a CALL-side hang (the armed CALL's SAVE), the C5q/C5u residue |
+| s16st-esc-n8 (c710c07f) | hangs at an escape, idx 7 | HANG, full signature | 7 | **0x80000a56**, the `addi` two instructions before the domain's RETURN (0x80000a5a) | see below |
+
+- "Full signature" means 224/225/226/227 = 0x1f/0x88/0x80/0x04, 193 = 4, 194 = 3, 195 = 0 and 192 = 0. The raw lines
+  are in `results/s16stores.result-lines.txt`.
+- None of the hanging images printed a reading: there is no streaming recorder, and GDB cannot halt. So the round in
+  which n4-r3 hung is not recorded. Its round 1 executes the same instructions as n4-r1, which completed.
+
+### esc-n8 does NOT show an escape-side hang
+- **Where the stuck switch was.** By the slot-0 rule, 0x80000a56 is the last RESUME point. After it, the domain
+  issues `addi` and then the RETURN at 0x80000a5a. So the stuck switch was the RETURN, or an escape taken at it. It
+  was not an escape in a burst.
+- **Status of the pre-registration.** It predicted "hangs at an escape". The hang, its signature and idx 7 are as
+  predicted; the escape-side location is NOT shown.
+- **What the R-49 description leaves unexplained.** Between that resume and the RETURN, the domain issues no store.
+  - The last store-unit request before the RETURN's first SAVE write is then the resume CALL's own exchange write.
+  - `is_dom_switch_q` changes only when the store unit accepts a request (store_unit.sv:252/284). It resets only on
+    `rst_ni` (:512), not on a flush.
+  - So it reads 1 there, and the first SAVE write should get the commit queue's own ready.
+  - A RETURN two instructions after a resume should therefore not be mis-checked. This is open; it has gone to the
+    RTL lane.
+
+### Next session s16next (pre-registered here, before it runs)
+- **The four PLAIN twins:** predictions as in the 05:30 and 05:35 addenda.
+- **s16st-esc-n8-retfence (c3340e82).** esc-n8 plus one `fence` immediately before the domain's RETURN (the RETFENCE
+  knob). The stub entry and the burst addresses are unchanged.
+  - With the queue drained, the RETURN cannot meet a full commit queue.
+  - **If the escape side hangs on silicon:** it HANGS, idx 7, with the slot-0 pc at a resume point inside the bursts
+    (0x80000a24..0x80000a46) or at `stub`+0..+2.
+  - **If it completes** (readings 1, resumes >= 1, 0x77, 0): esc-n8's hang was at the RETURN, and this harness has not
+    shown an escape-side hang on silicon. C5f's escape-side reading stands alone.
+  - If it hangs with the slot-0 pc at 0x80000a56..0x80000a5e: the RETURN hung with a drained queue. That refutes the
+    queue-full account at that switch.
+- **s16st-esc-n8 again (c710c07f).** N = 2 on the hang's location. No prediction for the pc; idx 7.
+
+### Addendum 05:43 on 2026-10-04: the RTL lane's simulation predictions for plain-n4-r3 and plain-n24-r3
+These arrived after session s16next had started and are recorded BEFORE any of its readings were looked at.
+Source: the RTL lane's simulation, sup-call 57a9874c8, resident logic, three rounds, memory delay 12.
+- **plain-n4-r3:** HANGS at the 4th switch, round 2's plain RETURN.
+  - Its exchange id 0 write is pushed over the head and id 4 starves: **idx 4**, 193 = 4, 194 = 3, 226/227 = 0x80/0x04.
+  - The slot-0 pc is on `stub`+0.
+- **plain-n24-r3:** HANGS at the 3rd switch, round 2's CALL.
+  - **idx 4**; the slot-0 pc is on the tail's `li sp, 0`.
+- **plain-n32-r3:** as above (round 2's CALL, idx 4, `li sp, 0`).
+- **plain-n32-r1:** completes.
+- On their fixed tree, all of them complete.
+
+### Correction, 05:55 on 2026-10-04: the slot-0 rule wraps; the esc-n8 "unexplained" paragraph is withdrawn
+**The rule was incomplete.**
+- The issue pointer restarts at 0 after a flush and wraps over the scoreboard's 8 slots: `scoreboard.sv:302-303`;
+  NrScoreboardEntries = 8 in `capstone_cv64a6_imafdc_sv39_config_pkg.sv:60` (both at 36a641e0b, checked).
+- So slot 0 is the first instruction after the last flush only until eight more issue. After that it is one of the
+  last eight issued.
+- This is the RTL lane's correction of the rule it had given.
+- Readings that stand:
+  - `li sp, 0` (2 issues after the CCSRRW's flush);
+  - the s16nop-nt control;
+  - `stub`+0 for n4-r3 and the fence arm (a 4-instruction stub).
+
+**esc-n8.**
+- 0x80000a56 is NOT the last resume point. It is one of the last eight instructions issued before the stuck switch's
+  flush.
+- The stuck switch is therefore the domain's RETURN, or an escape taken at it, as the 05:40 paragraph said.
+- But `sd a1, 0(s3)`, three instructions before the RETURN, IS an ordinary store after the last switcher write. It
+  resets `is_dom_switch_q`, so the RETURN's first SAVE write is mis-checked exactly as R-49 describes, with the same
+  precondition as n4-r3.
+- **The paragraph "What the R-49 description leaves unexplained" is withdrawn.**
+- Withdrawn too: my candidate, the load unit's clear pushes during RESTORE. The RTL lane excludes it from the RTL: a
+  switcher read takes load_unit.sv:396-409's IDLE `else` branch, never the LDC states, so `clear_o` cannot fire.
+
+**C5f.** The same wrap restores the first reading: the escape landed within eight issued instructions of 0xe56bc,
+inside the `stc` burst. The S-16 README and the supmon PREREG are corrected in the same commit.
+
+**Simulation, for comparison (the RTL lane).** Their simulated esc-n8 hung at a genuine mid-burst ESCAPE: the last
+retired instruction was the burst's 8th `sd`, and the mis-check followed the domain's own `sd`.
+- So in simulation the escape side proper hangs. On the board, the RETURN side hung first.
+- s16st-esc-n8-retfence (running) decides whether the board's escape side hangs in this harness. The RTL lane
+  predicts it completes with resumes >= 1.
+
+### Interim (05:53, 2026-10-04, s16next still running): the first two PLAIN readings, and the workaround set s16fence
+**plain-n32-r1** (63e457d2) **HANGS**, though both I and the RTL lane's simulation predicted it would complete.
+- 228/239/240 = **4**; 227 = 0x06 (write_en and reg_req.is_set: an EXCHANGE write); 238 = 0xd4 (reg id 4, is_set).
+- 224/225/226 = 0x1f/0x88/0x80, 193 = 4, 194 = 3.
+- The slot-0 pc is the tail's `li sp, 0` (0x800003de), two issues after the CCSRRW's flush, so the reading is exact.
+- So the stuck switch is its one and only CALL.
+- **A plain CALL after 32 stores hangs on silicon in its first round.** The account "the exchange's slot read precedes
+  its write, so on silicon the queue drains" is refuted at this shape.
+
+**plain-n4-r3** (e0e8bf50) **HANGS**, idx 4, 227 = 0x06.
+- The slot-0 pc is `li sp, 0` (0x8000036e), so the stuck switch is a CALL. Which round is not recorded.
+- The simulation predicted round 2's RETURN, with the pc on `stub`+0. The hang and the idx match; the switch kind does
+  not.
+
+**Status of the 05:30 rule.** The exchange-entered prediction holds on both: idx 4 rather than 7, and 227 carries
+`is_set`, which a SAVE write never has.
+
+**Set s16fence (pre-registered here, runs after s16next).** Does a fence before the CALL AND before the domain's
+RETURN protect every switch that has no quantum escape? Each arm is the twin of an image that hung, plus the fences
+(one fence word for FENCE, two for FENCE+RETFENCE; disassembly counts checked).
+
+| image | its hanging twin | prediction |
+|---|---|---|
+| s16st-plain-n32-r1-fence (22f8c5d6) | plain-n32-r1 | completes: 0x51, 0x77, 0 |
+| s16st-plain-n4-r3-fence2 (efa42f4f) | plain-n4-r3 | completes: 0x51 x3, 0x77, 0 |
+| s16st-n4-r3-fence2 (112700ce) | n4-r3, n4-r3-fence | completes: 1 x3, 0x77, 0 |
+| s16st-plain-n32-r3-fence2 (a3508213) | plain-n32-r3 | completes: 0x51 x3, 0x77, 0 |
+
+- **The basis:** every switch then starts with the commit queue drained. A mis-checked first write cannot overwrite a
+  head when there is no full queue to overwrite.
+- **If any of them hangs:** the queue is not drained at the switch even after a fence. The fence workaround is then
+  unsound for that switch, and its pc and idx say which switch.
+- **Scope:** this covers no quantum escape. An escape lands wherever the domain is.
+
+## Results: session s16next (2026-10-04 05:42-06:00, bitstream 36a641e0b, bare, one power cycle per image)
+"Full signature" means 224/225/226 = 0x1f/0x88/0x80, 193 = 4, 194 = 3, 195 = 0, 192 = 0. The raw lines are in
+`results/s16next.result-lines.txt`. No hanging image printed a reading.
+
+| image | predicted | board | idx | 227 | stale slot-0 pc | verdict |
+|---|---|---|---|---|---|---|
+| control call-retpc | PASS | PASS exact | | | | |
+| plain-n32-r1 (63e457d2) | completes (mine and the simulation's) | HANG, full signature | **4** | 0x06 | `li sp, 0` (exact, 2 issues after the CCSRRW's flush) | **MISS**: its only CALL hangs, cold seal |
+| plain-n4-r3 (e0e8bf50) | simulation: round 2's RETURN, idx 4, `stub`+0 | HANG, full signature | **4** | 0x06 | `li sp, 0` | hang and idx as predicted; the switch is a CALL, not the RETURN |
+| plain-n24-r3 (13f96258) | simulation: round 2's CALL, idx 4, `li sp, 0` | HANG, full signature | **4** | 0x06 | `li sp, 0` | as predicted |
+| plain-n32-r3 (64c1f390) | round 2's CALL, idx 4, `li sp, 0` | HANG, full signature | **4** | 0x06 | `li sp, 0` | as predicted |
+| esc-n8-retfence (c3340e82) | mine: hangs mid-burst if the escape side hangs, else completes; the RTL lane: completes | HANG, full signature | **7** | 0x04 | **0x80000a34**, a burst `sd` | **an ESCAPE-side hang on silicon, mid-burst** |
+| esc-n8 repeat (c710c07f) | idx 7 | HANG, full signature | 7 | 0x04 | 0x80000a56, the same as run 1 | N = 2, identical |
+
+**What these establish.**
+- **A plain CALL is exposed on silicon.**
+  - All four PLAIN images hang at an exchange write. The 05:30 rule's exchange-entered signature holds on every one:
+    idx 4 rather than 7, and 227 carries `reg_req.is_set` (0x06), which a SAVE write never has (0x04).
+  - It is not only a warm-seal effect: plain-n32-r1 hangs at its first and only CALL.
+  - The account "a plain exchange reads each slot before writing it, so on silicon the queue drains" does not hold at
+    32, 24 or 4 stores.
+- **The escape side hangs bare on silicon.**
+  - esc-n8-retfence differs from esc-n8 by one `fence` before the domain's RETURN.
+  - A fence flushes the pipeline (it commits as a flush), so a RETURN-side hang would leave the RETURN in slot 0.
+  - The reading is a burst store, 11 instructions before the RETURN. So the stuck switch is a quantum escape that
+    landed within eight issued instructions of 0x80000a34, inside a burst of the domain's own stores.
+  - The ESCAPE arms run three rounds (ITER defaults to 3), so this escape is in a round after round 1's RETURN, with
+    the seal warm.
+- **esc-n8 itself hangs at a RETURN, twice, at the same reading.** The RETURN is three instructions after the
+  marker's ordinary `sd`.
+
+## Results: session s16fence (2026-10-04 06:00-06:04, bitstream 36a641e0b, bare, one power cycle per image)
+| image | its twin, which hung | prediction | board |
+|---|---|---|---|
+| control call-retpc | | PASS | PASS exact |
+| s16st-plain-n32-r1-fence (22f8c5d6) | plain-n32-r1 (idx 4) | completes | **COMPLETED** 0x51, 0x77, 0 |
+| s16st-plain-n4-r3-fence2 (efa42f4f) | plain-n4-r3 (idx 4) | completes | **COMPLETED** 0x51 x3, 0x77, 0 |
+| s16st-n4-r3-fence2 (112700ce) | n4-r3 and n4-r3-fence (idx 7) | completes | **COMPLETED** 1 x3, 0x77, 0 |
+| s16st-plain-n32-r3-fence2 (a3508213) | plain-n32-r3 (idx 4) | completes | **COMPLETED** 0x51 x3, 0x77, 0 |
+
+- **Every prediction holds.** Each arm differs from a twin that hung only by its fences: one before the CALL, and
+  where the twin has rounds, one before the domain's RETURN.
+- So on silicon, in these shapes, a fence before every CALL and before every RETURN keeps each switch off a full
+  commit queue. That covers plain and armed CALLs and supervised RETURNs. It does not cover a quantum escape
+  (esc-n8-retfence).
+- N = 1 per arm. This is a software workaround for runs with no quantum preemption, not a proof for arbitrary code:
+  a store between the fence and the switch reopens it.
+- Raw lines: `results/s16fence.result-lines.txt`.
+
+### Corrections after the claim audit (06:35, 2026-10-04): the three claims stand, narrower; four sentences above are withdrawn
+An adversarial audit re-checked every image hash, every pc mapping and the RTL paths. The three claims stand:
+- a plain CALL is exposed;
+- a fence before an armed CALL does not protect a supervised RETURN that follows a domain store;
+- an escape hangs bare.
+
+**Added by the audit.**
+- **Claim 1, the plain CALL.**
+  - The PLAIN CALL is genuinely un-armed: `sup_armed_q` is set only by a committed CSSUPERVISE (commit_stage.sv:495,
+    csr_regfile.sv:3120), and that word is absent from the PLAIN ELFs.
+  - seal+48..+80 are just the non-full exchange's ids 3..7 (mstatus, mideleg, medeleg, mip, mie).
+  - The fenced twin completing is the matched control.
+  - 238 bit 6 (pc_loaded_seen, sticky from reset) reads 1 in plain-n32-r1 (its only switch reached id 0's read) and 0
+    in the armed n32-r1 (it never left SAVE). That independently confirms the two entry points.
+- **Claim 2, the RETURN.** It holds because the domain stores (`sd a1, 0(s3)`) between the CALL's last switcher
+  write and the RETURN's first SAVE write. The claim is "a supervised RETURN right after a domain store", not "a
+  short domain's RETURN".
+- **N = 1 per image throughout.** Silicon disagreed with the simulation's timing on 2 of the 4 plain arms, so why a
+  plain exchange meets a full queue on silicon is not understood.
+
+**Withdrawn.**
+1. **"A stuck resume CALL would leave a monitor pc because the csrwi before it flushes"** (s16next results, and my
+   message to the RTL lane).
+   - A CSUPCTL write sets only `csupctl_resume_d` (csr_regfile.sv:1953). It is none of the twelve `flush_o` sites,
+     which I checked.
+   - The conclusion stands on another argument: after the escape switch's own flush, the monitor issues eight
+     instructions (csrr .. CALL) before the resume CALL. So a stuck resume CALL would leave a monitor pc.
+2. **"esc-n8 itself hangs at a RETURN, twice"** (s16next results), and the 05:40 and 05:55 sentences placing esc-n8's
+   stuck switch at the RETURN.
+   - Slot 0 = 0x80000a56 bounds the commit point only to [0x80000a3c, the RETURN].
+   - With the head `sd` stalled and the scoreboard backed up, an escape near the end of the last burst fits equally.
+   - **esc-n8's switch kind is UNRESOLVED.** It motivated RETFENCE, but the retfence reading stands on its own.
+3. **"ITER defaults to 3, so this escape is in a round after round 1's RETURN, with the seal warm"** (s16next
+   results).
+   - No reading records the round, and the first escape of round 1 is the earliest chance to hang.
+   - Whether the seal is warm is irrelevant to a walk that starts with a SAVE write.
+4. **esc-n8-retfence "a quantum escape inside a burst"** becomes **"an escape (by design, the quantum) within the
+   domain's store bursts or at the marker store that ends them"**.
+   - Slot 0 bounds the commit point to issue positions [0x80000a34 - 7, + 7], which includes `li a1, 0x77` and the
+     marker `sd`.
+   - The kind is inferred, not read: every escape kind goes through commit_stage.sv:735-751 with save_en and reads
+     idx 7. For a first escape only the quantum is plausible.
+
+**Open, not discriminating.** 255 = 0x83 (TRAP LOG, mcause 3) appears on every hang reading in all three sessions and
+in the earlier wedge reads. The completing runs print mcause 0, so it is probably a debug-mode `ebreak` from the
+OpenOCD load. Next time: read apertures 196..203 (recent non-trivial mepc) on a hang.

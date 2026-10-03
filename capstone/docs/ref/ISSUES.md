@@ -785,9 +785,16 @@ te by the RTL lane, 2026-09-24.
 > sel_dom=1 is_dom_q=0 ack=0)`; `sup-mswap-noploop` completes 78 switches (with R-50's fix), `-base`/`-postread` 78
 > as before. Lint gate: every counter at the committed baseline. 95-test sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep.
 >
-> **Workaround on the resident bitstream (the board lane, 2026-10-04):** a `fence` before every CALL drains the commit
-> queue (`no_st_pending`), so the first SAVE write cannot meet it full; confirmed on the simulation reproducer. Every
-> S-16 hang also lost one committed store (the overwritten head); the fence prevents the loss.
+> **Workaround on the resident bitstream (the board lane, 2026-10-04, bare on silicon; S-16's README).**
+> - A `fence` before every CALL drains the commit queue (`no_st_pending`), so that CALL's first switcher write
+>   cannot meet it full. It covers that switch only.
+>   - A supervised RETURN right after a domain store still hangs with it (`s16st-n4-r3-fence`).
+>   - An escape still hangs with it (`s16st-esc-n8-retfence`, boot supmon-c5f).
+> - A fence before every CALL AND every RETURN completed all four twins that hung (session s16fence). That covers
+>   runs without quantum preemption.
+> - Preemption needs the reflash.
+> - Every S-16 hang also lost one committed store (the overwritten head). Where the fences apply, by the mechanism
+>   they prevent the loss.
 >
 > **Pre-existing.** The dom-switch store path and its `is_dom_switch_q` wiring date from the original domain-switch
 > load/store fixes (6c4a8d5ab, 44fcf1620); the 8-register exchange has the same path, so a plain CALL after a long
@@ -1519,15 +1526,24 @@ one bitstream; the rung's 66 → 64 on the board is the acceptance.
   INDEPENDENT capability load placed right after a domain call is the shape to avoid until it is fixed.
 - Sibling: S-16 (the switch itself never finishing).
 
-### S-16 — a domain switch that starts while the store buffer's commit queue is FULL never finishes, and one committed store is lost (apertures 224/225 = `0x1f`/`0x88`, switcher walk idx 7, its WRITE never acknowledged) `OPEN — needs the RTL fix; a fence before every CALL removes only the CALL-side trigger (the FPGA monitor then ran 552 supervised resumes and hung on a quantum ESCAPE, its stale slot-0 pc a domain instruction, boot supmon-c5f); localised on silicon 2026-10-04 by the switcher and LSU apertures (data write request valid and unacknowledged at idx 7, store-buffer commit count 4, store unit WAIT_STORE_READY); reproduced bare within 16 resumes and in the FPGA monitor's supervised resume (boots supmon-c5q, supmon-c5u); 12 stores before the CALL complete, 18/24 hang; a `fence` immediately before the CALL removes the CALL-side trigger (bare 8,551 escapes). Mechanism from the RTL lane's simulation, matching every silicon read: a dom-switch push into a FULL commit queue (the store unit consults the speculative queue's ready, store_unit.sv:443 / store_buffer.sv:170) overwrites the queue head, LOSING the oldest committed store, and the ring then starves the 4th switcher write. The RTL side is R-49, fix capstone-ariane 1f56774bd (sup-call), which covers CALL and escape alike. Report folder: tests/fpga-repros/S16-supervised-switch-never-finishes/`
+### S-16 — a domain switch that starts while the store buffer's commit queue is FULL never finishes, and one committed store is lost (apertures 224/225 = `0x1f`/`0x88`, switcher walk idx 7, its WRITE never acknowledged) `OPEN — needs the RTL fix; EVERY switch kind is exposed on silicon (bare 2026-10-04: armed CALL, supervised RETURN and escape at walk idx 7, PLAIN CALL at idx 4); a fence before every CALL covers only that CALL's own switch (not a supervised RETURN right after a domain store, bare s16st-n4-r3-fence; not an escape, bare s16st-esc-n8-retfence and boot supmon-c5f, where the FPGA monitor ran 552 supervised resumes); a fence before every CALL AND every RETURN completed all four twins that hung (bare, session s16fence), which covers runs without quantum preemption; localised on silicon 2026-10-04 by the switcher and LSU apertures (data write request valid and unacknowledged at idx 7, store-buffer commit count 4, store unit WAIT_STORE_READY); reproduced bare within 16 resumes and in the FPGA monitor's supervised resume (boots supmon-c5q, supmon-c5u); 12 stores before the CALL complete, 18/24 hang; a `fence` immediately before the CALL removes the CALL-side trigger (bare 8,551 escapes). Mechanism from the RTL lane's simulation, matching every silicon read: a dom-switch push into a FULL commit queue (the store unit consults the speculative queue's ready, store_unit.sv:443 / store_buffer.sv:170) overwrites the queue head, LOSING the oldest committed store, and the ring then starves the 4th switcher write. The RTL side is R-49, fix capstone-ariane 192a5e624 (sup-call), which covers every switcher write. Report folder: tests/fpga-repros/S16-supervised-switch-never-finishes/`
 
 - The FPGA monitor's compiler-generated `__domcallsaves` puts about 26 stores right before every domcall, so any
   supervised CALL through it is exposed.
-- Whether a PLAIN (un-armed) CALL is exposed has not been measured. The monitor's plain domcalls have run on every
-  boot without showing it.
-- The CALL-side workaround (`FW_PRECALL=fence` in tests/rtl-smoke/supmon-2026-10-03/build-fpga-fw.sh) puts a fence
-  before every domcall. It cannot cover the escape: a quantum preemption lands wherever the domain is, including
-  inside the domain's own store bursts.
+- **A PLAIN (un-armed) CALL is exposed: measured bare on silicon, 2026-10-04.**
+  - Four PLAIN arms hang at the CALL's exchange write: idx 4, 227 = 0x06. One of them hangs at its only CALL.
+  - The FPGA monitor's plain domcalls have run on every boot without showing it. Why they differ from the bare arms
+    is not measured.
+- **Walk index by switch kind.** The first switcher write after an ordinary store is mis-checked, and the 4th after
+  it starves.
+  - A switch that SAVEs first (`save_en`: the armed CALL, the supervised RETURN, the escape) reads idx 7.
+  - One that starts with the exchange (a plain CALL or RETURN) reads idx 4.
+- **The CALL-side workaround** (`FW_PRECALL=fence` in tests/rtl-smoke/supmon-2026-10-03/build-fpga-fw.sh) puts a
+  fence before every domcall. That covers each CALL's own switch only.
+  - A supervised RETURN right after a domain store still meets the CALL's own switcher writes plus that store.
+  - A quantum preemption lands wherever the domain is, including inside its store bursts.
+- **Without quantum preemption, a fence before every CALL and every RETURN completed every bare twin that hung.**
+  Folder: S-16 README, "Which switches".
 - Every hang so far also dropped a committed store, which the hang masked.
 - Sibling: S-17.
 

@@ -25,9 +25,16 @@
   - The RTL lane's simulation matches every silicon read: the store unit acknowledges the switcher's write on the
     previous store's queue ready, so the write is pushed over the full commit queue's head. **The oldest committed
     store is lost**, and the 4th later write starves.
-  - A fence before the CALL removes the CALL-side trigger. It cannot cover a quantum escape, which lands wherever the
-    domain is; C5f's hang was on the escape side. **Preemptive supervision on this bitstream needs the RTL fix**; that
-    lane has one passing in simulation.
+  - **Every switch kind is exposed (bare, 2026-10-04, the RTL lane's `sup-s16-stores.S`).**
+    - The armed CALL, a supervised RETURN right after a domain store, and an escape hang at walk idx 7.
+    - A PLAIN CALL hangs too, at idx 4, its exchange write.
+  - **A fence before the CALL covers only that CALL's own switch.** The RETURN and escape arms hang with it.
+  - **A fence before every CALL AND every RETURN completed all four twins that hung**, so runs without quantum
+    preemption have a software workaround.
+  - A quantum escape lands wherever the domain is. C5f's hang was on the escape side, and so is bare
+    `s16st-esc-n8-retfence`. **Preemptive supervision on this bitstream needs the RTL fix**; that lane has one
+    passing in simulation.
+  - **Withdrawn:** the memcached plan's "unsupervised contexts do not depend on S-16".
 - **About 22,000 bare supervised resumes without the swap sequence never hung.**
 - **S-17 (`tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`).**
   - After a finished switch, an LDC right behind `ccsrrw sp <- cscratch` leaves the LSU not ready. A scalar `ld` there
@@ -66,7 +73,7 @@
     `s06sec-amo-no-resurrect.S`);
   - multi-hart contention.
 
-## 2026-10-04 — S-16 root-caused: the switcher's first SAVE write pushed into a FULL store-buffer commit queue; fixed in RTL with a second switch-path defect (R-49, R-50); the resident bitstream needs a `fence` before every CALL
+## 2026-10-04 — S-16 root-caused: the switcher's first SAVE write pushed into a FULL store-buffer commit queue; fixed in RTL with a second switch-path defect (R-49, R-50); the resident bitstream needs a `fence` before every CALL and every RETURN, and preemption needs the reflash
 
 - **The resume hang under the FPGA monitor (C5u/C5q, the board lane's S-16) is a store-path defect, not the adapter.**
   The store unit acknowledges a switcher write on the room of the PREVIOUS store's queue, so with four committed
@@ -74,8 +81,10 @@
   deadlocks four writes later, at walk id 7. The board lane's wedge reads (idx 7, WAIT_STORE_READY, commit count 4,
   the write request valid and unacknowledged) and the simulation reproducer `sup-s16-stores.S` (N = 32 stores before
   an armed CALL, memory delay 12 and 40) agree on every aperture. Fixed on capstone-ariane `sup-call` 192a5e624
-  (registry R-49). **Workaround on the resident bitstream: a `fence` before every CALL**, confirmed on the reproducer;
-  the board lane is applying it to the FPGA monitor.
+  (registry R-49). **Workaround on the resident bitstream** (the board lane, bare on silicon, narrowed 2026-10-04):
+  - A `fence` before every CALL covers that CALL's own switch only.
+  - A fence before every RETURN as well completed every non-preemptive twin that hung.
+  - A quantum escape stays exposed. See the S-16 entry above.
 - **A second defect, found on the way (R-50, 429c60b32):** the load unit's dom-switch flush exemption outlives the
   switcher's read, so the first LDC after an escape, when dispatched in the swap-in CCSRRW's flush cycle, runs
   un-killed and its stale completion pops the re-issued LDC unexecuted; the DYN unit waits forever. Deterministic in
