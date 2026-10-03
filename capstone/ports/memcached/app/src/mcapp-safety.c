@@ -525,6 +525,97 @@ static int mcapp_fixture(int n)
         printf("MCAPP-FIX 16 returned held[0]=%02x (0x91 = the new item's byte)\n", v);
         return MCAPP_MARK(n, (same << 8) | v);
     }
+    case 17: {
+        /* commit 204019d (a 2006 contributed patch), the connection read buffer grown in place.
+           try_read_network reallocs a malloc'd read buffer, which may MOVE the block and release
+           the old one. The fix survives verbatim at the pin and updates BOTH pointers:
+             1.6.45:memcached.c:2467  c->rcurr = c->rbuf = new_rbuf;
+             1.6.45:memcached.c:2468  c->rsize *= 2;
+           Reversed here to `c->rbuf = new_rbuf;` alone, which leaves c->rcurr pointing into the
+           released block; the text parser then reads straight through it:
+             1.6.45:proto_text.c:243  st = c->rcurr;
+             1.6.45:proto_text.c:244  el = memchr(c->rcurr, '\n', c->rbytes);
+           Plain malloc/realloc -- NOT the slab allocator and NOT cache.c's rbuf cache. This is the
+           malloc'd path a conn reaches through rbuf_switch_to_malloc (1.6.45:memcached.c:424-434).
+           HISTORICAL: the upstream fix is reversed here, as cases 0, 1, 3 and 4 are.
+           Same OBJECT as fixture 12 (the connection read buffer) but a DIFFERENT allocator seam:
+           12's lifetime-ender is cache_free pushing onto cache.c's STAILQ; this one's is realloc
+           releasing the old block. That is why both are worth having.
+           Both "condition not created" exits below are ERRORS, not zero marks: realloc is free to
+           grow in place, and if it does there is no stale pointer and the fixture has measured
+           nothing. A directed test that does not create its triggering condition must say so. */
+        size_t sz = 512;
+        unsigned char *rbuf = malloc(sz);
+        unsigned char *blocker = malloc(sz);     /* occupy the space after rbuf so realloc moves */
+        if (!rbuf || !blocker) return MCAPP_MARK(n, 0xE0011);
+        mcapp_fill(rbuf, 0xA0, 64);
+        unsigned char *rcurr = rbuf + 8;         /* the parser's cursor, interior to the buffer */
+        mcapp_show(n, "rbuf", rbuf);
+        mcapp_show(n, "rcurr", rcurr);
+        unsigned long rbuf_addr = mcapp_cur(rbuf);
+        unsigned long rcurr_addr = mcapp_cur(rcurr);
+        unsigned char *grown = realloc(rbuf, sz * 2);
+        if (!grown) return MCAPP_MARK(n, 0xE0011);
+        unsigned moved = mcapp_cur(grown) != rbuf_addr;
+        if (!moved) {
+            printf("MCAPP-FIX 17 realloc grew IN PLACE: triggering condition not created\n");
+            return MCAPP_MARK(n, 0xE0017);
+        }
+        unsigned char *taker = malloc(sz);        /* the next owner of the released block */
+        if (!taker) return MCAPP_MARK(n, 0xE0011);
+        unsigned same = mcapp_cur(taker) == rbuf_addr;
+        if (!same) {
+            printf("MCAPP-FIX 17 released block NOT reissued: triggering condition not created\n");
+            return MCAPP_MARK(n, 0xE0017);
+        }
+        mcapp_fill(taker, 0x5B, 64);
+        printf("MCAPP-FIX 17 realloc-moved=%u reissued-to-next-owner=%u\n", moved, same);
+        mcapp_touching(n, rcurr_addr);
+        v = mcapp_fix_touch(rcurr, 0);            /* proto_text.c reads through the stale cursor */
+        printf("MCAPP-FIX 17 returned rcurr[0]=%02x (0x63 = the new owner's byte at offset 8)\n", v);
+        return MCAPP_MARK(n, (same << 8) | v);
+    }
+    case 18: {
+        /* e779381 (2026-07-07) "logger: fix use-after-free of closed watcher".
+           logger_thread_close_watcher both clears the global slot and frees the watcher:
+             1.6.45:logger.c:734  watchers[w->id] = NULL;
+             1.6.45:logger.c:737  bipbuf_free(w->buf);
+             1.6.45:logger.c:738  free(w);
+           and the fix present at the pin is the CALLER's recheck:
+             1.6.45:logger.c:691  // Oddity; poll_watchers can free *w, recheck it.
+             1.6.45:logger.c:692  if (watchers[x] == NULL)
+             1.6.45:logger.c:693      break;
+           Reversed here: the caller keeps its own `w` and writes w->failed_flush through it.
+           The watcher is plain calloc (1.6.45:logger.c:1120), NOT an item and NOT a slab chunk,
+           so the slab arms cannot see this one -- which is the point of recording it as plain heap.
+           HISTORICAL, like 17.
+           This is the corpus's only WRITE-after-free: every other case here reads. The damage is
+           therefore visible from the NEW owner's side, which is how it is measured -- poke through
+           the dead pointer, then read back through the live pointer. */
+        static unsigned char *watcher_slot[4];
+        unsigned char *w = calloc(1, 64);
+        if (!w) return MCAPP_MARK(n, 0xE0012);
+        mcapp_fill(w, 0xA0, 64);
+        watcher_slot[1] = w;
+        mcapp_show(n, "watcher", w);
+        unsigned long w_addr = mcapp_cur(w);
+        watcher_slot[1] = NULL;                   /* logger.c:734 clears the slot ... */
+        free(w);                                  /* ... logger.c:738 frees it */
+        unsigned char *nu = calloc(1, 64);        /* the next allocation takes the storage */
+        if (!nu) return MCAPP_MARK(n, 0xE0012);
+        unsigned same = mcapp_cur(nu) == w_addr;
+        if (!same) {
+            printf("MCAPP-FIX 18 storage NOT reissued: triggering condition not created\n");
+            return MCAPP_MARK(n, 0xE0018);
+        }
+        mcapp_fill(nu, 0x5B, 64);
+        printf("MCAPP-FIX 18 same-address=%u slot-cleared=%u\n", same, watcher_slot[1] == NULL);
+        mcapp_touching(n, w_addr);
+        mcapp_fix_poke(w, 32, 0xEE);              /* w->failed_flush = true, into freed storage */
+        v = mcapp_fix_touch(nu, 32);              /* read back through the NEW owner's pointer */
+        printf("MCAPP-FIX 18 returned new[32]=%02x (0xee = the write landed in the new owner)\n", v);
+        return MCAPP_MARK(n, (same << 8) | v);
+    }
     default:
         printf("MCAPP-FIX %d unknown\n", n);
         return MCAPP_MARK(0xF, n);

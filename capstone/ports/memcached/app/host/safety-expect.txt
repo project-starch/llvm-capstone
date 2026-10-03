@@ -186,3 +186,40 @@ slabsublet1  13  FAULT  temporal
 slabsublet1  14  FAULT  temporal
 slabsublet1  15  FAULT  temporal
 slabsublet1  16  FAULT  temporal
+
+# ---------------------------------------------------------------------------------------------
+# Fixtures 17 and 18, registered 2026-10-03 BEFORE either was built or run on any arm.
+# Two memcached defects from upstream's own history, both PLAIN MALLOC -- which is the point.
+#   17  commit 204019d (a 2006 contributed patch): realloc moves the connection read buffer and
+#       only the base pointer is updated, so the parser's interior cursor c->rcurr still points
+#       into the released block. Same OBJECT as fixture 12, DIFFERENT allocator seam.
+#   18  e779381 logger: the close routine clears the global slot and frees the watcher; the
+#       caller keeps its own pointer and WRITES w->failed_flush through it. The corpus's only
+#       write-after-free; the watcher is calloc'd, not an item and not a slab chunk.
+# Both are HISTORICAL -- the upstream fix is reversed -- as cases 0, 1, 3 and 4 are. memcached's
+# origin/master IS our pin (0 commits after it, and origin/next carries one unrelated commit),
+# verified two-sided, so no memcached case can be live-in-pin except case 02.
+#
+# WHY THESE TWO MATTER TO THE ARM MATRIX, and it is the opposite of 12-16:
+# 12-16 end their objects INSIDE memcached's own allocators -- cache_free pushes onto a STAILQ,
+# do_slabs_free onto a class's slots list -- so the runtime's free is never called, `sublet`
+# cannot revoke, and it is the NEGATIVE CONTROL that must RETURN. 17 and 18 end their objects with
+# the platform's own free/realloc, so the release DOES reach the runtime heap. `sublet` must
+# therefore FAULT on these. Without that contrast, sublet's silence on 12-16 is just a silence;
+# with it, the silence is attributable to the nested allocator rather than to a broken arm.
+#
+# Values DERIVED, not copied: mcapp_fill writes v0 + i and the new owner's v0 is 0x5b, so 17 reads
+# 0x5b + 8 = 0x63 through its interior cursor at offset 8. 18 pokes 0xEE at offset 32 through the
+# dead pointer and reads it back through the NEW owner's live pointer, so its value is 0xee.
+# Reuse is predicted 1 for both, and each fixture ERRORS (0xE0017 / 0xE0018) rather than returning
+# a mark if the storage was not reissued -- a condition not created must not read as a result.
+level0       17  RETURN 1100163
+shrink       17  RETURN 1100163
+sublet       17  FAULT  temporal
+slabsublet0  17  FAULT  temporal
+slabsublet1  17  FAULT  temporal
+level0       18  RETURN 12001ee
+shrink       18  RETURN 12001ee
+sublet       18  FAULT  temporal
+slabsublet0  18  FAULT  temporal
+slabsublet1  18  FAULT  temporal
