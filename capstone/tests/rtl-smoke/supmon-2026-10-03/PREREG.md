@@ -42,3 +42,21 @@ The new payload Image is 9f66fb53af98. Firmware rebuilt from the same sources on
 - C5 eec16b773423.
 Preflight now reads GO.
 Predictions are unchanged, except that the control is the relinked k800 (retval 4).
+
+## C5 RESULT, and the diagnostic boot C5d, pre-registered 2026-10-03 20:31:34 before it
+- C3 (96884501d098) PASSED as predicted:
+  - k800 4 and 4 (4,524 / 4,531 cycles);
+  - 112006 38bb59fd, HEAP 2097152 DROPPED 0 RC 0;
+  - 2,551,615,035 cycles (+0.005 % against the record).
+  The merged monitor with supervision compiled out is sound on silicon.
+- C5 (eec16b773423) did NOT boot Linux. OpenSBI's banner printed through "Boot HART MEDELEG", then silence: no
+  monitor tag, no Linux line. The runner timed out on login and released the board. In C3 Linux's first line follows
+  the banner directly, so C5 hangs inside the Capstone monitor's init, before the handoff.
+- Static checks hold: no VM-only opcode in any assembly input of C5 (dom.c.S, int_handler.c.S, sbi_capstone.S,
+  init.S). The layout is identical to C3's: sup_save_region 0x8008a780..0x8008ab80 in both.
+- C5d (d27587e95654) = C5 + CAPSTONE_BOOT_TRACE (wrapper f59a2b3): BT00 once the UART capability is minted, BT01
+  before the save-area carve, BT02 after it, BT03 at the end of cap_env_init. Predictions, one boot:
+  - no BT tag at all: the hang precedes cap_env_init's UART mint (CAPENTER, or the supervision build's global setup);
+  - BT00 and BT01 only: the carve hangs (split_out_cap of sup_save_region);
+  - BT00..BT02 and no BT03: a later step of cap_env_init;
+  - BT03 and still no Linux: after cap_env_init.
