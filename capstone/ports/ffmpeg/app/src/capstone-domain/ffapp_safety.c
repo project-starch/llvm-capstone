@@ -313,6 +313,71 @@ static int fixture(void)
     printf("FFAPP-FIX 10 returned gb[0]-through-ga=%02x (0x5b = the second array's byte)\n", v);
     return FX_MARK(v);
 
+#elif FFAPP_FIXTURE == 24
+    /* UPSTREAM DEFECT, live at the 9.0.1 pin. libavcodec/vvc/thread.c:703-715,
+     * ff_vvc_frame_thread_free:
+     *     VVCFrameThread *ft = fc->ft;   ...   av_freep(&ft);
+     * av_freep nulls the pointer it is GIVEN, so it clears the local alias and leaves
+     * fc->ft naming freed storage; eight sites in that file then read fc->ft. Fixed
+     * after our pin by bc46eab87c4f, "clear fc->ft when the frame thread is freed",
+     * which is av_freep(&fc->ft), released in n9.0.2 and so absent from n9.0.1.
+     * Reduced: the frame thread is a 64-byte object and the later reader is the probe. */
+    static struct { unsigned char *ft; } fc_obj;
+    fc_obj.ft = av_malloc(64);
+    if (!fc_obj.ft)
+        return FX_MARK(0xE0001);
+    fill(fc_obj.ft, 0xA0, 64);
+    show("fc->ft", fc_obj.ft);
+    unsigned long ft_addr = cur(fc_obj.ft);
+    {
+        unsigned char *ft = fc_obj.ft; /* the local alias the function takes */
+        av_freep(&ft);                 /* nulls ft, NOT fc->ft */
+    }
+    /* Nothing between the free and the next av_malloc: a printf here could take the
+     * block itself and the reuse this fixture depends on would not happen. */
+    unsigned char *q24 = av_malloc(64); /* the storage goes to a new owner */
+    if (!q24)
+        return FX_MARK(0xE0002);
+    fill(q24, 0x5B, 64);
+    unsigned same24 = cur(q24) == ft_addr;
+    printf("FFAPP-FIX 24 fc-ft-still-set=%u same-address=%u\n", fc_obj.ft != NULL, same24);
+    idx = 0;
+    touching(ft_addr);
+    v = ffapp_fix_touch(fc_obj.ft, idx);
+    printf("FFAPP-FIX 24 returned fc->ft[0]=%02x (0x5b = the NEW owner's byte)\n", v);
+    return FX_MARK((same24 << 8) | v);
+
+#elif FFAPP_FIXTURE == 25
+    /* UPSTREAM DEFECT, live at the 9.0.1 pin. libswscale/ops_dispatch.c:544-664,
+     * compile_single:
+     *     const SwsCompiledOp *comp = &p->comp;   -- an INTERIOR pointer into p
+     *     SwsCompiledOp c = *comp;  av_free(p);
+     *     (*output)->backend = comp->backend->flags;   -- read through comp after the free
+     * Upstream's own words, fix 4b9c4b9cfb56: "comp points into p, which is freed before
+     * comp->backend is read. Use the copy taken before the free."
+     * Fixture 5's shape with the one difference that is the point: the stale pointer is an
+     * INTERIOR pointer, carrying an offset into the object rather than its base. */
+    unsigned char *p25 = av_malloc(64);
+    if (!p25)
+        return FX_MARK(0xE0001);
+    fill(p25, 0xA0, 64);
+    show("p", p25);
+    unsigned char *comp = p25 + 32; /* &p->comp */
+    show("comp", comp);
+    unsigned long comp_addr = cur(comp);
+    av_free(p25);                       /* av_free(p): comp now points into freed storage */
+    unsigned char *q25 = av_malloc(64); /* the storage goes to a new owner */
+    if (!q25)
+        return FX_MARK(0xE0002);
+    fill(q25, 0x5B, 64);
+    unsigned same25 = cur(q25) + 32 == comp_addr;
+    printf("FFAPP-FIX 25 same-address=%u\n", same25);
+    idx = 0;
+    touching(comp_addr);
+    v = ffapp_fix_touch(comp, idx);
+    printf("FFAPP-FIX 25 returned comp[0]=%02x (0x5b = the NEW owner's byte)\n", v);
+    return FX_MARK((same25 << 8) | v);
+
 #elif FFAPP_FIXTURE >= 11 && FFAPP_FIXTURE <= 14
     AVBufferPool *pool = av_buffer_pool_init(64, av_buffer_alloc);
     AVBufferRef *r = pool ? av_buffer_pool_get(pool) : NULL;

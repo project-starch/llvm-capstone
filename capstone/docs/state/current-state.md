@@ -1,5 +1,47 @@
 # Current Capstone state
 
+## 2026-10-03 — upstream memory defects for the three app ports: 4 measured on the arms, 18/18 cells as pre-registered, 3 retractions
+
+- **What was asked:** find memory defects (plain `malloc` **and** nested allocators) for memcached,
+  tshark and FFmpeg on the upstream trackers, run them through the emulator, check they are caught.
+- **Measured, all exactly as pre-registered** (predictions pushed before every build):
+  - **tshark** fixtures 14/15 — ZigBee ZCL Touchlink (CVE-2026-95391) and http2 `GRegex` — on
+    `level0`/`shrink`/`sublet`/`chunks`: **8/8 cells**. `ports/wireshark/app/results/2026-10-03-qemu-upstream-live-defects/`.
+  - **memcached** fixtures 17/18 — `204019d` realloc cursor and `e779381` logger write-after-free — on
+    all five arms: **10/10 cells**. `ports/memcached/app/results/2026-10-03-qemu-plain-heap-contrast/`.
+- **The memcached pair is the one that changes an argument.** Fixtures 12–16 end their objects inside
+  memcached's own allocators, so the runtime's `free` is never called and `sublet` is registered as the
+  negative control that must RETURN — that silence is the nested-allocator blindness claim. 17/18 end
+  theirs with the platform's `free`/`realloc`, and `sublet` faults. Same heap, same runtime, opposite
+  outcome: the variable is **where the lifetime ends**, which makes 12–16's silence attributable.
+- **Three retractions, all surfaced and recorded:**
+  1. **`ops_dispatch` (FFmpeg fixture 25) is NOT live at our pin** — backported as `716d2a47c5`. The
+     retracted method was *"Ancestry decides; the pinned tree proves"*: ancestry is insufficient for
+     cherry-picking release tags, and the "proof" was a grep for a line *shape* that matched a site
+     where the object is never freed. Replacement test, with both controls:
+     `git log <tag> --grep='cherry picked from commit <sha>'` plus reading the enclosing function.
+  2. **Neither tshark defect is reachable in the port's own binary** — http2's block is inside
+     `#ifdef HAVE_NGHTTP2` which the port undefines (and it is preference-gated upstream), and the
+     zbee dissector is not linked (0 symbols against 353). They are live in the **v4.6.8 source**;
+     "live in the version we compile" and the triage doc's "reachable and not latent" are withdrawn.
+  3. **Three attribution/control overstatements in the tshark bundle**: the load base was given as
+     `pc − symbol` (`0xa01f0014`) and is `0xa01f0000`; a symbol-delta argument was **vacuous** (an
+     algebraic identity); and "both controls fired in every boot" was false — fixture 5 ran in none of
+     the four decisive FAULT boots.
+- **Search yield, honestly:** Wireshark `v4.6.8..origin/master` is **4321** commits (I had searched 82
+  on the release branch) → 24 lifetime-worded → 5 live in source → **1** new usable. FFmpeg: all 10
+  remaining candidates read, **none usable**; its nested column is empty because the only nested-class
+  commit was backported, and the four "HW data freed early" pool commits are destruction-ordering on a
+  **VkSemaphore**, not pool storage. memcached: **0** fixed-upstream-after-the-pin, now verified
+  two-sided (`origin/next`, which memcached actually develops on, is one unrelated commit ahead).
+- **Instrument lesson worth carrying:** a lifetime-vocabulary grep over memcached's history returns 13
+  commits and is **not** a superset of the 9 the subsystem search found — intersection 2, and three of
+  the five built corpus cases would never have been found by wording. Treat such a filter as a sampler.
+- **Still open:** memcached's nested column needs port work (`--disable-proxy --disable-extstore`
+  everywhere, page mover not hooked); no native/ASan arm for the four new fixtures; the "revocation on
+  free" mechanism is inferred rather than counted in the faulting runs, and the missing control is named
+  in the tshark bundle.
+
 ## 2026-10-01 — Supervised CALL implemented in RTL (capstone-ariane `sup-call`), verified through step 7 in simulation; R-47 found and fixed; S-11 amended
 
 - **The supervised-CALL platform extension** (the primitive the delegated application runtime needs on silicon)

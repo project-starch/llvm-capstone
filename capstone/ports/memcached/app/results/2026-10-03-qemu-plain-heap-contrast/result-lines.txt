@@ -1,0 +1,44 @@
+# memcached fixtures 17 and 18 -- two PLAIN-MALLOC defects from upstream's history
+# Five heap arms, QEMU, 2026-10-03. Predictions pushed in e611f0679fa8 before any build.
+# arm fixture outcome detail
+level0      17 RETURN 1100163
+level0      18 RETURN 12001ee
+shrink      17 RETURN 1100163
+shrink      18 RETURN 12001ee
+sublet      17 FAULT cause=24 target=c8003608 val==target pc=c02478c4
+sublet      18 FAULT cause=24 target=c8003600 val==target pc=c02478f0
+slabsublet0 17 FAULT cause=24 target=c8003608 val==target pc=c0247db8
+slabsublet0 18 FAULT cause=24 target=c8003600 val==target pc=c0247de4
+slabsublet1 17 FAULT cause=24 target=c8003608 val==target pc=c0247db8
+slabsublet1 18 FAULT cause=24 target=c8003600 val==target pc=c0247de4
+
+# CONDITION-CREATED evidence, printed BEFORE each touch. Each fixture EXITS WITH AN ERROR
+# (0xE0017 / 0xE0018) instead of a mark if the condition is absent, so these are not assumed.
+fx17 realloc-moved=1 reissued-to-next-owner=1
+fx18 same-address=1 slot-cleared=1
+
+# ARM SEPARATION, from the capability the fixture holds
+level0      fx17 rbuf bounds=[c02e2820,c42e2820) len-from-cursor=62132144   the whole arena
+level0      fx18 watcher                         len-from-cursor=65368224   the whole arena
+sublet      fx17 rbuf bounds=[c8003600,c8003800) len-from-cursor=512        the object alone
+sublet      fx18 watcher bounds=[c8003600,c8003640) len-from-cursor=64      the object alone
+# fx17's interior cursor carries the object's bounds with the cursor 8 bytes in:
+sublet      fx17 rcurr bounds=[c8003600,c8003800) len-from-cursor=504
+
+# FAULT ATTRIBUTION
+# Load base implied by (pc - symbol) = c01f0014, identical for every fault, and each pc lands on
+# the SEMANTICALLY CORRECT helper for its access type:
+#   mcapp_fix_touch = 0x578b0, next insn after its cincoffset is  lbu a0,0x0(a0)   -- a LOAD
+#   mcapp_fix_poke  = 0x578dc, next insn after its cincoffset is  sb  a2,0x0(a0)   -- a STORE
+#   fixture 17 READS  -> pc resolves to mcapp_fix_touch + 0x14
+#   fixture 18 WRITES -> pc resolves to mcapp_fix_poke  + 0x14
+# The fx17->fx18 pc delta is 0x2c in EVERY image, which is exactly poke - touch (0x578dc-0x578b0).
+
+# IMAGE HASH, matched against the build's own report (never the arm label)
+sublet      image sha256=1e3df2b1edefeb31  all sublet fault records agree
+slabsublet0 image sha256=ed4fe4380886feea  all four slab fault records agree
+slabsublet1 image sha256=ed4fe4380886feea  (one image, arm selected by MC_SLAB_SUBLET_MODE)
+
+# EXIT-STATUS CORROBORATION
+# RETURN cells: harness exit = mark & 255 -- 99 = 0x63 = 1100163 & 255 ; 238 = 0xee = 12001ee & 255
+# FAULT  cells: harness exit = 139 = 128 + 11 (SIGSEGV), and a fault record was written
