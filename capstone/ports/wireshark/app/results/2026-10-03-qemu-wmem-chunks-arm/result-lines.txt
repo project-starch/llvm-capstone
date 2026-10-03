@@ -1,0 +1,58 @@
+# wmem fixtures 10-13 on the CHUNKS arm -- wireshark's nested-allocator arm, registered 2026-09-23
+# in host/safety-expect.txt and never measured until now. QEMU, 2026-10-03.
+# arm fixture outcome detail
+chunks 10 RETURN a0015b                                          # as predicted
+chunks 11 FAULT    temporal  val==target=a5100030 pc=a02173ec    # as predicted (2nd boot)
+chunks 12 FAULT    oob  target=a5100080  insn=00c50023           # as predicted
+chunks 13 FAULT    temporal  val==target=a5100030 pc=a02173ec    # as predicted
+sublet 13 RETURN   d00020                                        # predicted "RETURN *" (wildcard)
+
+# THE OTHER ARMS, from the committed bundles of 2026-09-25 (not re-run here)
+level0 10 RETURN a0015b   len=41908928     # the whole arena
+level0 11 RETURN b0015b   len=41908912
+level0 12 RETURN c000ee   len=41908912
+shrink 10 RETURN a0015b   len=2097104
+shrink 11 RETURN b0015b   len=8388560
+shrink 12 RETURN c000ee   len=8388560
+sublet 10 RETURN a0015b   len=1048528      # the whole 1 MiB wmem BLOCK
+sublet 11 RETURN b0015b   len=1048528
+sublet 12 RETURN c000ee   len=1048528
+
+# THE NESTED ADAPTER IS VISIBLE IN THE CAPABILITY, and it is selective
+# On `chunks`, a wmem BLOCK chunk is bounded to ITSELF:
+chunks fx12 p cursor=a5100030 bounds=[a5100030,a5100070) len-from-cursor=64
+chunks fx12 q cursor=a5100080 bounds=[a5100080,a51000c0) len-from-cursor=64
+chunks fx13 p cursor=a5100030 bounds=[a5100030,a5100070) len-from-cursor=64
+chunks fx11 p cursor=a5100030 bounds=[a5100030,a5100070) len-from-cursor=64
+chunks fx11 q cursor=a5100030 bounds=[a5100030,a5100070) len-from-cursor=64   same-address=1
+# fx11's q is the SAME chunk reissued after wmem_free_all -- same cursor AND same per-chunk bounds,
+# so the reset recycled that exact chunk and the stale pointer names it.
+# while on `sublet` the same allocation carries the whole block (len=1048528 above), and on
+# `chunks` fixture 10 ALSO carries the whole block:
+chunks fx10 p cursor=a5100030 bounds=[a5100000,a5200000) len-from-cursor=1048528
+# -- because fixture 10 is BLOCK_FAST, which the chunk port leaves alone ("BLOCK_FAST is the
+# sublet arm's, unchanged" -- host/build-domain.sh). So within ONE arm the adapter narrows BLOCK
+# chunks and not BLOCK_FAST, which is a two-sided check on what the port claims to do.
+
+# ATTRIBUTION
+# fx12 is a WRITE through p at q's address: insn 00c50023 = sb, and the OOB diagnostic names
+#   bounds that end at a5100070 while the target is a5100080 -- a spatial fault, as predicted,
+#   and it is the per-chunk bound that makes it one.
+# fx13 is a READ through a chunk freed with wmem_free while its block lives on: the diagnostic's
+#   untagged value equals the printed target (a5100030) -- the temporal rule.
+# Neither section contains a `mark=` or `returned` line after its touch (checked, count=0).
+
+# RESOLVED: fixture 11 needed a longer timeout, and then faulted as predicted
+# fx11 is the BLOCK-reset case (wmem_free_all), where on this arm a scope reset must revoke every
+# chunk in the block. It BEGAN and the domain ran -- 36 gp-fabrication lines after FIXTURE 11
+# BEGIN, counter advancing #1561000 -> #1596000 with the pc moving a021e000 -> a04f9b4c, so it was
+# PROGRESSING, not spinning -- and the driver's expect timeout cut the boot mid-stream. out-11.txt
+# is 0 bytes, err-11.txt is 0 bytes, no fault record, and no capability diagnostic anywhere in the
+# boot. Fixture 10 returned normally in the SAME boot, so neither the boot nor the arm is at fault.
+# Re-run ALONE with --timeout-multiplier 12.0: it printed every line and FAULTED, untagged value
+# a5100030 == the printed target, pc=a02173ec (the same tsapp_fix_touch+0x14 as fx13). So the first
+# boot was cut short, not wedged, and the cell is FAULT temporal as registered. The first boot's
+# TIMEOUT is kept in this file because it is the reason the cell needed two boots, and because
+# "progressing but cut off" and "wedged" look identical in a single run.
+# Cost note for whoever repeats it: fx11 is the only one of the four needing the long multiplier --
+# a BLOCK reset revokes every chunk at once, against a 65,536-node per-boot pool.
