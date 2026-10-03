@@ -284,3 +284,21 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
     speedtest 7291218e (`/tmp/capstone/mon-c0/supglue/speedtest1.dom`).
   - So the gate still verifies, by content, that the payload carries exactly the images this run intends.
   - Not from the payload's own extraction, which would be circular.
+
+## C5f RESULT (fw bc9206e7ccb3, 04:49-05:10): the fence before every domcall DELAYS the hang but does not close it. S-16 also hits the ESCAPE switch
+Lines are in `results/board-c5f.result-lines.txt`.
+- k800 returned 4.
+- Call 0 (plain) gave 112006 38bb59fd at 2,551,695,601 cycles.
+- **A (loud) made 552 preemptions (C5u: 212), every re-arm standing, then hung after a re-arm** with signature A:
+  224 = 0x1f, 225 = 0x88.
+- **The stale slot-0 commit pc is 0x828d56bc, inside the domain** (DBAS 0x82800000, so VA 0xe56bc in `lookupName`).
+  - That is the middle of an -O0 local-init burst: stc, stc, stc, sw, stc, stc @0xe56bc, then ldc.
+  - So the last instruction issued before the stuck switch was the domain's, which makes the stuck switch the quantum
+    ESCAPE's SAVE walk.
+  - It entered S-16 from the escape side: the domain's own committed stores filled the commit queue at the instant of
+    preemption.
+- **The pre-registered prediction "A, C and B all complete" is REFUTED.** A fence before the CALL removes only the
+  CALL-side trigger; no software placement covers an arbitrary preemption point.
+- **Preemptive supervision on this bitstream needs the RTL fix.** The RTL lane's store-path fix (room check keyed on
+  the request being decided) applies to any switcher write.
+- C and B did not run.
