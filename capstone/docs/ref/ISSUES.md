@@ -1413,6 +1413,24 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
+### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
+
+- Not on the FPGA monitor's own path: its post-domcall `ldc ra, -16(sp)` depends on the CCSRRW's result. An
+  INDEPENDENT capability load placed right after a domain call is the shape to avoid until it is fixed.
+- Sibling: S-16 (the switch itself never finishing).
+
+### S-16 — a domain switch that starts while the store buffer's commit queue is FULL never finishes, and one committed store is lost (apertures 224/225 = `0x1f`/`0x88`, switcher walk idx 7, its WRITE never acknowledged) `OPEN — needs the RTL fix; a fence before every CALL removes only the CALL-side trigger (the FPGA monitor then ran 552 supervised resumes and hung on a quantum ESCAPE, its stale slot-0 pc a domain instruction, boot supmon-c5f); localised on silicon 2026-10-04 by the switcher and LSU apertures (data write request valid and unacknowledged at idx 7, store-buffer commit count 4, store unit WAIT_STORE_READY); reproduced bare within 16 resumes and in the FPGA monitor's supervised resume (boots supmon-c5q, supmon-c5u); 12 stores before the CALL complete, 18/24 hang; a `fence` immediately before the CALL removes the CALL-side trigger (bare 8,551 escapes). Mechanism from the RTL lane's simulation, matching every silicon read: a dom-switch push into a FULL commit queue (the store unit consults the speculative queue's ready, store_unit.sv:443 / store_buffer.sv:170) overwrites the queue head, LOSING the oldest committed store, and the ring then starves the 4th switcher write. The RTL side is R-49, fix capstone-ariane 1f56774bd (sup-call), which covers CALL and escape alike. Report folder: tests/fpga-repros/S16-supervised-switch-never-finishes/`
+
+- The FPGA monitor's compiler-generated `__domcallsaves` puts about 26 stores right before every domcall, so any
+  supervised CALL through it is exposed.
+- Whether a PLAIN (un-armed) CALL is exposed has not been measured. The monitor's plain domcalls have run on every
+  boot without showing it.
+- The CALL-side workaround (`FW_PRECALL=fence` in tests/rtl-smoke/supmon-2026-10-03/build-fpga-fw.sh) puts a fence
+  before every domcall. It cannot cover the escape: a quantum preemption lands wherever the domain is, including
+  inside the domain's own store bursts.
+- Every hang so far also dropped a committed store, which the hang masked.
+- Sibling: S-17.
+
 ### S-15 — the speedtest1 port DE-LINEARISES a grant the monitor has already de-linearised, and on silicon that is a fault, not a no-op `ACCOUNT STRENGTHENED BY THE MATCHED PAIR 2026-09-13 (sw66 hangs at share3, sw67 with a trap vector returns from it and dies at sqlite3_initialize); MECHANISM TRACED THROUGH THE RTL AT THE BITSTREAM COMMIT (DELIN raises UNEXPECTED_CAP_TYPE on any non-LINEAR operand; the delin is the only type-sensitive instruction in the branch); MCAUSE READ BACK ON SILICON 2026-09-13 (sw69: the trap word the glue's handler wrote into the shared arena is arena0=0xF6C09D13, mcause field 27 = UNEXPECTED_CAP_TYPE, written during the share3 domcall; the run then failed with obs=0x5117BAD3 = the sqlite3_initialize failure sw67 died on); FIX PROVEN ON SILICON 2026-09-13 (sw68: the image with the delin removed and nothing else, no trap vector, passes share3 and RAN size-20 to completion at 64,732,455,367 cycles / ratio 1.194 where sw64/sw66 hang); S-15 CONFIRMED end to end — mechanism, fault named, and fix all on silicon`
 
 > # ⚠ THE CONFIRMING ARM DID NOT CONFIRM IT (boot sw65, 2026-09-13). Read this before citing the chain below.

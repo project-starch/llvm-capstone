@@ -1,0 +1,55 @@
+# board-supmon-c5t: fw_payload sha256 393210e96691..., bitstream caplifive_supcall_36a641e0b. Result lines only,
+# extracted by tag patterns, in order, from THIS boot's transcript (after the last OpenSBI banner).
+BT00:00000000
+BT01:00000001
+BT02:00000002
+BT03:00000003
+### TEST 1/3 START k800:/test-domains/k800.dom ###
+DBAS:81D60000
+SHA6:00000000
+RESULT k800 retval=4 cycles=4588
+### TEST 1/3 END k800:/test-domains/k800.dom rc=0 ###
+### TEST 2/3 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+DBAS:82400000
+SQ: A/dom-ok
+SQ: B/mkregion1
+SQ: C/mkregion2
+SQ: D/mapped
+SQ: E/share1
+SHA6:00000001
+SQ: F/share2
+SHA6:00000001
+SQ: G/enter
+ENT0:00000001
+SUPM:00000001
+ENT1:00000001
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:824A27B0
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82549E98
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82431A10
+SUPA:00000000
+SUPK:00000001
+MCAU:00000010
+MEPC:82549E9C
+SUPA:00000000
+SUPK:00000001
+SUPA:00000000
+SUPK:00000001
+SUPA:00000000
+SUPK:00000001
+SUPA:00000000
+SUPK:00000001
+SUPN:00000008
+SUPK:0000001B
+SQ: H/return
+SQ: X/fail
+SQ: obs=18446744073709551615
+### TEST 2/3 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=1 ###
