@@ -491,3 +491,48 @@ ITER 65,536; the apertures read after any hang):
   it is not the cscratch/sp sequence alone, and not any one burst with it.
 - **Next, pre-registered:** s16p11-nt (8+1+2), s16p13-nt (8+1+4) and s16p14-nt (8+2+4). A hang shows its omitted part
   is not needed; a completion shows the omitted part is needed.
+
+## RESULT, the S-16 three-part combinations (04:08-04:16): any TWO bursts hang, any one completes
+- Control: call-retpc PASS exact.
+- s16p11-nt (8+1+2), s16p13-nt (8+1+4) and s16p14-nt (8+2+4) all HANG before escape 16, each with 224 = 0x1f and
+  225 = 0x88.
+- With the pairs, which all completed 8,552 escapes, the stores in the burst before the CALL line up as follows:
+
+  | combination | stores | result |
+  |---|---|---|
+  | 8+2 | 8 STC | completes |
+  | 8+4 | 9 sd + 1 STC | completes |
+  | 8+1 | 16 STC | completes |
+  | 8+2+4 | 18 | hangs |
+  | 8+1+2 | 24 | hangs |
+  | 8+1+4 | 26 | hangs |
+
+  A store-count threshold between 16 and 18 is the simplest reading. The next session tests it directly.
+- **From the RTL lane (2026-10-04, reading the RTL at 36a641e0b), checked against cva6.sv here:** the commit-pc
+  aperture is `mem_q[commit_pointer_q[0]].sbe.pc`. That slot is read whether or not it is valid.
+  - During a switch the controller holds the flush, which resets the commit pointer to 0 and clears every valid bit.
+  - So the aperture shows the stale pc in slot 0: the first instruction issued after the last flush. Here that is the
+    `li sp, 0` refetched after the swap-out CCSRRW's own flush.
+  - The CALL itself retired at the switcher's acceptance (commit_stage.sv:532). The reading says "the CALL retired, its
+    switch started, nothing was issued since". It says nothing about `li sp, 0`.
+  - The early-switch hypothesis is refuted: the switcher's only requester is commit, with the CALL at the head.
+- **Prior art (found by a claim-auditor, 2026-10-04):**
+  - controller.sv:220-224 carries the comment that flushing EX during a domain switch "causes a deadlock where
+    req_en_q never clears", while the code sets `flush_ex_o = 1'b1`;
+  - capstone-ariane 901c45ce1 (2026-02-25, "hangs in domain switching") had made it `~dom_switch_busy_i`;
+  - 030378a66 (2026-04-21) restored `1'b1` and kept the comment.
+  S-16's end state is the deadlock that comment describes. That is a lead, not evidence.
+
+**Pre-registered, session "deep"** (the wedge read is extended to the switcher and LSU apertures 192-195, 226-229
+and 238-240; labels checked against cva6.sv at 36a641e0b):
+- **Store-count dose-response** (part 8 plus N STCs of s11 into the 64 KiB buffer, nothing else, sp-dependent,
+  no-trace):
+  - s16stc12 (0a071972), s16stc18 (152e121b) and s16stc24 (00c2ec66);
+  - s16sd24 (5037d3de) is part 8 plus 24 plain `sd`, with no tag.
+  - If the threshold reading holds: stc12 completes, stc18 and stc24 hang.
+  - sd24 says whether TAG writes are needed (it completes) or any stores suffice (it hangs).
+- **armdep-nt-d16-q64 (S-16) and arm12-ldc-q64 (S-17) again, with the extended read.** 228 / 226 / 239 / 240 name
+  the switch step and whether its data request is unacknowledged or waiting for a response. 192 should read 0 for
+  S-16.
+- **s16nop-nt (4d643fb7):** a `nop` between `ccsrrw x0, cscratch, sp` and `li sp, 0`. This is the positive control
+  for the stale-slot reading: if it hangs, the commit pc reads the nop's address (0x80000720), not `li sp, 0`.

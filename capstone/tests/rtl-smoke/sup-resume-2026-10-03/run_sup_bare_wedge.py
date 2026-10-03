@@ -111,9 +111,21 @@ def main():
                 bits = (st or {}).get("states") or [] if isinstance(st, dict) else []
                 return sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
             try:
+                # labels verified against cva6.sv at 36a641e0b (bank 111 = 224+reg, bank 110 = 192+reg), MSB first
                 for sw, label in ((255, "TRAP LOG {seen,mcause[6:0]}"),
                                   (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM}"),
-                                  (225, "{tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}")):
+                                  (225, "{tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}"),
+                                  (226, "{data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack}"),
+                                  (227, "{commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en}"),
+                                  (228, "{1,dom_switch_idx[6:0]}"),
+                                  (229, "{load_state[3:0],0000}"),
+                                  (238, "{busy_seen,pc_loaded_seen,last_data_metadata_en,last_reg_is_set,last_reg_id[3:0]}"),
+                                  (239, "{0,dom_switch_last_idx_log[6:0]}"),
+                                  (240, "{0,dom_switch_last_reg_id_log[6:0]}"),
+                                  (192, "{0000000,commit_instr[0].valid}"),
+                                  (193, "{00000,store_buf_commit_cnt}"),
+                                  (194, "{000000,store_state}"),
+                                  (195, "{0000,load_state}")):
                     setsw(sw); v = leds()
                     wl.append(f"sw={sw} {label} " + ("UNREAD" if v is None else f"0x{v:02x} {v:08b}"))
                 pc = 0; ok = True

@@ -25,6 +25,10 @@
 #             the swap code itself in this harness: reading 2 is then 0 (no supervision event), 3 and 4 as usual.
 #   -DPOSTCALL=1  a `fence` right after every CALL, before the swap-in; =2 eight `nop`s instead (ordering vs delay);
 #             =3 a UART print ('k') after every CALL; =4 a plain `csrr t1, cycle` after every CALL.
+#   -DNSTC=n  (with MSWAP) n tag-setting STCs into the 64 KiB buffer right before the part-8 sequence; -DNSD=n the
+#             same with n plain `sd`s (no tag): a store-count dose-response for S-16.
+#   -DSWAPNOP  a `nop` between part 8's `ccsrrw x0, cscratch, sp` and `li sp, 0` (the RTL lane's positive control for
+#             the stale scoreboard-slot-0 reading of the commit-pc aperture).
 #   -DLDTEST  the swap-in's cepc load is a SCALAR `ld` instead of an LDC (an ld skips the Capstone DYN unit):
 #             with SWAP_PARTS=12 the only load after the post-CALL ccsrrw differs by exactly that one instruction.
 #   -DDOTMASK=n  progress dot every n+1 escapes (default 255).
@@ -115,12 +119,29 @@
   CCSRRW(t1, CCSR_CEPC, x0)
   STC(s10, t1, 464)
 #endif
+#if defined(NSTC) && NSTC > 0
+  .set _k, 0
+  .rept NSTC
+    STC(s11, s11, (16 * _k))
+    .set _k, _k + 1
+  .endr
+#endif
+#if defined(NSD) && NSD > 0
+  .set _k, 0
+  .rept NSD
+    sd s7, (16 * _k)(s11)
+    .set _k, _k + 1
+  .endr
+#endif
   li t1, 0
 #if SWAP_PARTS & 8
 #ifdef SWAP_DEP
   CINCOFFSETIMM(sp, s10, 0)    # sp := a copy of the swap-area capability (the real monitor's sp is a capability)
 #endif
   CCSRRW(x0, CCSR_CSCRATCH, sp)
+#ifdef SWAPNOP
+  nop
+#endif
   li sp, 0
 #endif
 .endm
