@@ -270,3 +270,10 @@ Predictions are unchanged, except that the control is the relinked k800 (retval 
 - **Reported:** the supervision overhead from C's and B's SPEEDTEST1-CYCLES against call 0's. Each fence costs the
   drain of about 26 swap-out stores per CALL.
 - **Refuted by:** any hang (read with the stages driver's apertures), or any hash other than the oracle.
+- **Preflight override, recorded before the boot.** The first launch (04:47:03) was BLOCKED by the preflight and spent
+  no boot. The preflight inspects the SHARED overlay, which was restored to the stock k800 (b2d60e52, at 0x10000)
+  after C5u. C5f's payload carries its own saved Image a9e838663d64.
+  - Its embedded initramfs, extracted and hashed: k800 589ceee3 at entry 0x20000 (the image with the published
+    QEMU-pass record) and speedtest1 7291218e at 0x10000. These are C5u's staged images exactly, with no entry-VA
+    collision between the run's domains.
+  - The boot runs with `PREFLIGHT=0` for that reason only; no check was weakened.
