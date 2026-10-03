@@ -80,3 +80,9 @@ s16stc18 (152e121b829e9da5): HANG after 0 dots, i.e. >= 0 escapes
 ## the workaround: a fence immediately BEFORE every CALL
 s16pre-nt (03ec01c98fbc2f7a): COMPLETED: status 0x1 iter 0x10000 checksum 0x7f8000 escapes 8551 (dots 534) csnodefree 0xfffc -> 0xfffc mcause 0x0 end 0x5e5e
 s16pre-stc24 (94f670ed146922e4): COMPLETED: status 0x1 iter 0x10000 checksum 0x7f8000 escapes 8552 (dots 534) csnodefree 0xfffc -> 0xfffc mcause 0x0 end 0x5e5e
+
+## FPGA monitor with the pre-CALL fence workaround, boot supmon-c5f (fw bc9206e7ccb3), 2026-10-04: 552 resumes, then
+c5f: [wedge] sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1f 00011111
+c5f: [wedge] sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}    0x88 10001000
+c5f: [wedge] commit pc = 0x00000000828d56bc
+# c5f's commit pc 0x828d56bc = DBAS 0x82800000 + 0xd56bc, i.e. VA 0xe56bc, an stc inside lookupName's local-init burst (the escape side)

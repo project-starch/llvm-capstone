@@ -41,8 +41,10 @@ reads the apertures after the timeout.
   resumes. Those prints delay the hang: it hung between escapes 16 and 31 in 3 of 3 runs.
 
 **The FPGA monitor** (capstone-sbi `monitor/supcall-fpga`, its classic-call test hook) ran the SQLite speedtest under
-supervised CALL in boots supmon-c5q and supmon-c5u (`../../rtl-smoke/supmon-2026-10-03/`). Both read 224 = 0x1f and
-225 = 0x88, with the commit pc on the stale `li sp, 0`.
+supervised CALL in boots supmon-c5q, supmon-c5u and supmon-c5f (`../../rtl-smoke/supmon-2026-10-03/`). All three read
+224 = 0x1f and 225 = 0x88.
+- C5q and C5u: the stale commit pc on `li sp, 0`, so the CALL side.
+- C5f (with the fence workaround): a domain instruction, so the escape side.
 - In C5u, after 212 good resumes, the resume CALL never came back.
 - C5q was quiet, so whether it hung on its first supervised CALL or on a resume is unknown.
 - Their 226-240 apertures were not read. That they share the localisation below is inferred from 224/225 and the code
@@ -56,10 +58,16 @@ Every arm below is bare, part of the sup-resume ladder, and has its result lines
   - Each data-region store also writes a shadow tag, so the `sd` arm does not separate tag writes from plain stores.
   - Without the swap sequence, about 22,000 supervised resumes in this harness never hung, including runs whose walk
     reads missed L1 (one seal line timed at the first escape: 27 cycles hot, 83 after a sweep, against a 7-cycle hit).
-- **A `fence` immediately BEFORE the CALL removes it.**
+- **A `fence` immediately BEFORE the CALL removes the CALL-side trigger, and only that.**
   - The fast reproduction plus that fence COMPLETED: 8,551 escapes, every reading exact.
   - So did 24 STCs plus that fence: 8,552.
-  - A fence placed AFTER the CALL does not help, because the switch has already started.
+  - A fence AFTER the CALL does not help, because the switch has already started.
+- **The ESCAPE side is not covered.** In the FPGA monitor with a fence before all 8 domcalls (boot supmon-c5f), the
+  supervised speedtest made 552 preemptions (C5u: 212), then hung with the same 224/225.
+  - Its stale slot-0 commit pc was a DOMAIN instruction: VA 0xe56bc, inside an -O0 local-init burst of `stc`/`sw` in
+    `lookupName`. So the stuck switch was the quantum escape, fired while the domain's own committed stores filled
+    the queue.
+  - No software placement covers an arbitrary preemption point. **Preemptive supervision needs the RTL fix.**
 
 ## The mechanism (the supervised-CALL RTL lane's simulation, 2026-10-04; it matches every silicon read above)
 In simulation, at the 5th switch of their `sup-mswap-noploop` run, with store-path tracers:
