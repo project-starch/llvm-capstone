@@ -22,10 +22,19 @@ Bitstream `caplifive_supcall_36a641e0b.bit`, the supervised-CALL bitstream. Its 
 | 192 commit_instr[0].valid | 0 | |
 
 **The commit-pc aperture (230..237) during a stuck switch is STALE scoreboard slot 0**, not a live instruction:
-`scoreboard.sv:149` reads the slot whether valid or not, and the switch's held flush resets the pointer to 0. It shows
-the first instruction issued after the last flush. Positive control: with a `nop` inserted after
-`ccsrrw x0, cscratch, sp`, the reading moved from `li sp, 0` to that nop (`s16nop-nt`). The CALL itself had retired;
-it retires when the switcher accepts it (commit_stage.sv:532).
+`scoreboard.sv:149` reads the slot whether valid or not, and the switch's held flush resets the pointer to 0.
+- **Which instruction it shows.**
+  - The issue pointer also restarts at 0 after every flush and WRAPS over the scoreboard's 8 slots
+    (`scoreboard.sv:302-303`; NrScoreboardEntries = 8 in `capstone_cv64a6_imafdc_sv39_config_pkg.sv:60`).
+  - So slot 0 holds the first instruction issued after the previous flush ONLY until eight more have issued.
+  - After that it holds the latest instruction whose issue index since that flush is a multiple of 8, i.e. one of the
+    last eight issued.
+- **The short case is exact.** The monitor's `li sp, 0; CALL` comes two issues after the CCSRRW's flush. Positive
+  control: with a `nop` inserted after `ccsrrw x0, cscratch, sp`, the reading moved from `li sp, 0` to that nop
+  (`s16nop-nt`).
+- **For a domain that has run longer, the reading locates the stuck switch to within eight issued instructions.** It
+  does not give the last resume point.
+- The CALL itself had retired; it retires when the switcher accepts it (commit_stage.sv:532).
 
 ## Reproductions
 **Bare images** (`images/`). Rebuild both with `src/build.sh` from `src/sup-capstl.S`; `images/SHA256SUMS` matches. M-mode,
@@ -64,13 +73,16 @@ Every arm below is bare, part of the sup-resume ladder, and has its result lines
   - A fence AFTER the CALL does not help, because the switch has already started.
 - **The ESCAPE side is not covered.** In the FPGA monitor with a fence before all 8 domcalls (boot supmon-c5f), the
   supervised speedtest made 552 preemptions (C5u: 212), then hung with the same 224/225.
-  - Its stale slot-0 commit pc was a DOMAIN instruction (VA 0xe56bc, in `lookupName`). By the slot-0 rule, that is
-    the resume point of the PREVIOUS preemption: the resume's refetch put it in slot 0, and the domain then ran
-    without a flush.
-  - So the last thing issued before the stuck switch was the domain's, and the stuck switch was the next quantum
-    ESCAPE, up to one quantum later. Exactly where it landed is not recorded.
-  - That its SAVE walk met a commit queue full of the domain's own stores is what the mechanism requires; it was not
-    observed directly.
+  - Its stale slot-0 commit pc was a DOMAIN instruction: VA 0xe56bc, in `lookupName`, inside an -O0 local-init burst
+    of `stc`s.
+  - The domain had run far more than eight instructions since it was last resumed. So by the rule above, 0xe56bc is
+    one of the last eight instructions issued before the stuck switch's flush, and the quantum ESCAPE landed within
+    eight issued instructions of it, inside that store burst. No domain RETURN is that close to `lookupName`.
+  - **Withdrawn (2026-10-04).** An earlier version of this paragraph read 0xe56bc as the resume point of the PREVIOUS
+    preemption, and put the escape "up to one quantum later, at an unrecorded point". That reading ignored the issue
+    pointer's wrap over the 8 slots (the RTL lane's own correction of the rule it had given).
+  - That the escape's SAVE walk met a commit queue full of the domain's own stores is what the mechanism requires.
+    The burst makes it likely; it was not observed directly.
   - No software placement covers an arbitrary preemption point. **Preemptive supervision needs the RTL fix.**
 
 ## The mechanism (the supervised-CALL RTL lane's simulation, 2026-10-04; it matches every silicon read above)
