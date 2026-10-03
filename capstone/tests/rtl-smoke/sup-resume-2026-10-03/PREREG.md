@@ -450,3 +450,10 @@ lsu_rdy, dyn_rdy, flu_rdy, flush, privM}; 225 = {tbe, wstore, wload, wrev, domsw
 - **OPEN, for the RTL lane:** whether "commit pc" (commit_instr_id_commit[0].pc) is the last RETIRED instruction or
   the uncommitted HEAD. It decides whether in A `li sp, 0` retired and the CALL's switch then hung, or `li sp, 0`
   cannot commit while the switch is busy.
+
+**Pre-registered: armdep without the trace prints** (armdep-nt-d16-q64). It is armdep-d16 with TRACE_CHARS off: no
+A/C/R prints in the first 16 resumes; a dot every 16 escapes. Both counted armdep runs hung between escapes 16 and
+31, right after those prints stop.
+- **If the prints protect:** this image hangs within the first 16 resumes (0 dots).
+- **If they do not:** it hangs at a similar count, or later.
+The wedge read is taken as for the others.

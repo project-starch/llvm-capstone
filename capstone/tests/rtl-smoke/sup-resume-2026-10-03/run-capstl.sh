@@ -12,6 +12,8 @@ main() {
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
     for n in intloop-q64 capstl-q64 capstl-q47 capstl-q16; do jobs+=("$n|$F/images/$n.bin|80003c40"); done
+  elif [ "$CAPSTL_SET" = notrace ]; then   # armdep without the per-resume trace prints (do they protect?)
+    jobs+=("armdep-nt-d16-q64|$F/images/armdep-nt-d16-q64.bin|$(cat $F/images/armdep-nt-d16-q64.rec)")
   elif [ "$CAPSTL_SET" = wedge ]; then   # the three hang types again, read with the wedge apertures (run_sup_bare_wedge.py)
     for n in arm12-ldc-q64 armdep-d16-q64; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
     jobs+=("mswapfix-plain-noploop|$F/images/mswapfix-plain-noploop.bin|80015000")
