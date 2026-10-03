@@ -689,7 +689,7 @@ te by the RTL lane, 2026-09-24.
 >
 > **Related:** R-26 (the same class: a committed state change that younger instructions checked too early).
 
-### R-47 — CALL parks the WRONG return pc when a jump or branch reaches issue before the dyn unit responds: the caller resumes past that instruction, or mid-instruction `FIXED ON SILICON 2026-10-02: resident in caplifive_supcall_36a641e0b.bit, call-retpc's readings on the board bit-identical to the fixed simulation; sup-call not yet landed on the submodule's shared branch`
+### R-47 — CALL parks the WRONG return pc when a jump or branch reaches issue before the dyn unit responds: the caller resumes past that instruction, or mid-instruction `FIX RESIDENT since 2026-10-02 (caplifive_supcall_36a641e0b.bit): call-retpc reads the fixed values on the board, bit-identical to simulation; whether the board's timing creates R-47's trigger is UNSHOWN (call-retpc never ran on the previous bitstream, so the fixed readings are consistent with both a working fix and an unreached window -- scoped down 2026-10-03 after the board lane's reading); sup-call not yet landed on the submodule's shared branch`
 
 > **What happens.** `core/ex_stage.sv` builds CALL's domain-switch request when the dyn unit RESPONDS and
 > packs the caller's parked return pc as `pc_i + 4`. `pc_i` is `issue_read_operands.sv`'s `pc_o`, which is
