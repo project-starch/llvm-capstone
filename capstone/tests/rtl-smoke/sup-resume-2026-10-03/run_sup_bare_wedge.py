@@ -125,7 +125,13 @@ def main():
                                   (192, "{0000000,commit_instr[0].valid}"),
                                   (193, "{00000,store_buf_commit_cnt}"),
                                   (194, "{000000,store_state}"),
-                                  (195, "{0000,load_state}")):
+                                  (195, "{0000,load_state}"),
+                                  # capstone-ariane 715bdd1fe and later ONLY (cva6.sv:1308-1316, bank 6 regs 27..30); on
+                                  # 36a641e0b these switch values select nothing defined here
+                                  (219, "[715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head)"),
+                                  (220, "[715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN)"),
+                                  (221, "[715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0}"),
+                                  (222, "[715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0}")):
                     setsw(sw); v = leds()
                     wl.append(f"sw={sw} {label} " + ("UNREAD" if v is None else f"0x{v:02x} {v:08b}"))
                 pc = 0; ok = True

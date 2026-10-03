@@ -905,3 +905,55 @@ An adversarial audit re-checked every image hash, every pc mapping and the RTL p
 **Open, not discriminating.** 255 = 0x83 (TRAP LOG, mcause 3) appears on every hang reading in all three sessions and
 in the earlier wedge reads. The completing runs print mcause 0, so it is probably a debug-mode `ebreak` from the
 OpenOCD load. Next time: read apertures 196..203 (recent non-trivial mepc) on a hang.
+
+## Pre-registered (2026-10-04, before any synthesis or reflash): acceptance of the S-16/S-17 fix bitstream, capstone-ariane sup-call 715bdd1fe
+**Contents of the candidate:**
+- R-49: 192a5e624, the store path. A switcher write is accepted on the room of the queue it enters.
+- R-50: 429c60b32, the load unit.
+- Four observation bytes for S-17 (07eb22deb): bank 6 regs 27..30 = switch values 219..222, labelled at
+  cva6.sv:1308-1316.
+
+The RTL lane's hand-off numbers:
+- lint gate PASS, every counter at baseline, CASEOVERLAP now gated;
+- sweep 92/92 identical;
+- sim smoke: sup-s16-n32 three rounds and esc-n8 complete.
+
+**The reflash is the lead's word.** Nothing here runs before it.
+
+**Run.** `CAPSTL_BITSTREAM=<the new .bit name> CAPSTL_SET=accept715 SUP_RUNNER=$PWD/run_sup_bare_wedge.py`.
+- The runner HARD-STOPS on a name mismatch.
+- It now also reads 196..203 (the trap log's mepc) and 219..222 after any hang.
+- One power cycle per image, so the order costs nothing. S-17 still runs last.
+
+**Predictions: every S-16 arm COMPLETES without a fence, with the readings of its completed fenced twin.**
+
+| image | prediction on 715bdd1fe |
+|---|---|
+| control call-retpc | PASS exact |
+| armdep-nt-d16-q64 (0986d394) | completes: status 0x1, iter 0x10000, checksum 0x7f8000, csnodefree 0xfffc -> 0xfffc, mcause 0, end 0x5e5e. Escapes are reported, not predicted (twin s16pre-nt: 8551) |
+| s16sd24 (5037d3de) | completes with the same vector shape (twin s16pre-stc24) |
+| s16st-n4-r1, -n4-r3, -n4-r3-fence, -n32-r1 | complete: 1 per round, 0x77, 0 |
+| s16st-esc-n8, -esc-n8-retfence | complete: 1 per round (3), then the resume count (>= 1, reported), 0x77, 0 |
+| s16st-plain-n32-r1, -plain-n4-r3, -plain-n24-r3, -plain-n32-r3 | complete: 0x51 per round, 0x77, 0 |
+| arm12-ld-q64 (8027a661), the S-17 control | completes (8,552 escapes on 36a641e0b) |
+| arm12-ldc-q64 (07de9fb7), S-17 | **no prediction**: R-50 is not S-17 |
+
+**If arm12-ldc-q64 hangs, the RTL lane's go/no-go, written before the build, decides it:**
+- 220 valid 1 with a nonzero queue count and fu naming a unit, plus 219 naming the op: the "entry neither LSU unit
+  claims" hypothesis holds, and that names the unit.
+- 220 valid 0 with the bypass empty: the hypothesis dies, and lsu_ready is low for a reason outside the bypass.
+
+**If any S-16 arm hangs on 715bdd1fe:**
+- 221 separates a ghost count (three valid bits, data_req 0: R-49 not fixed) from a drain stall (four valid,
+  data_req 1, no gnt).
+- 222 says whether the adapter's tag FSM is parked.
+- The R-49 audit's residuals would read here: a switcher push coinciding with commit_i, and a load-unit clear write
+  coinciding with a switcher write.
+
+**Beyond this bare batch:**
+- the R-43 acceptance list on the new bitstream, as for every reflash;
+- one FPGA monitor boot with the C5f configuration WITHOUT the fence: fw-c5u (d07761ded4ce), the C5u boot's 6 tests,
+  classifier `../supmon-2026-10-03/classify-c5f.py`.
+  - Predicted: all 6 tests ok.
+  - The three supervised speedtests give the oracle 112006 38bb59fd with SUPN > 0 and final SUPK 0.
+  - On 36a641e0b this firmware hung after 212 resumes.
