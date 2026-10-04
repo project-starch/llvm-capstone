@@ -1028,3 +1028,42 @@ accept715 goes through it. The worst LED path runs through store-buffer ready an
   UNSTABLE switch values.
 - **That detector has no positive control yet:** no aperture is known to change after a hang.
 - An implausible reading on 715bdd1fe has LED-path timing as a candidate cause beside the RTL.
+
+## Results: accept715, the bare batch on caplifive_supcall_715bdd1fe.bit (2026-10-04 18:43-18:58; flashed 18:41-18:43 on the lead's direct word)
+**The flash.** Done with `drivers/flash-bitstream.py`: hash checked, uploaded (HTTP 201), flashed, power-cycled. The
+name read back after the cycle is `caplifive_supcall_715bdd1fe.bit`.
+
+**All 18 runs COMPLETED.**
+- The control passed exact.
+- **Every S-16 arm completes without a fence, with the reading of its fenced twin:**
+  - armdep-nt: 8,551 escapes, the fenced twin's exact vector;
+  - s16sd24, n4-r1, n4-r3, n4-r3-fence and n32-r1;
+  - all four plain arms (0x51 per round, 0x77, 0);
+  - all five escape arms, with resume counts 4 / 7 / 2 / 10 / 14 (esc-n8, -retfence, -n8-r1, -n32-r1, -n64-r1;
+    reported, not predicted).
+  - On 36a641e0b, every one of them except n4-r1 hung.
+- **That is also the behavioural identity of the bitstream:** these arms hang deterministically on 36a641e0b.
+- **S-17's arm12-ldc-q64 COMPLETED**, 8,552 escapes, identical to its `ld` twin. **N = 3** (accept715, s17rep2,
+  s17rep3), with arm12-ld completing alongside each time.
+  - On 36a641e0b it hung.
+  - Whether R-49, R-50 or a timing change removed it is not separable here. No hang, so the 219..222 apertures were
+    never exercised.
+- No aperture was read: no image hung. The double-read and 219..222 still have no board exercise.
+- Raw lines: `results/accept715.result-lines.txt`.
+
+## Pre-registered (before boot s7a1): the R-43 acceptance list on 715bdd1fe
+Unchanged from 2026-10-02. It uses the same kit, images, order and pre-registration strings, copied to
+`/tmp/capstone/accept715/` with tags s7a1..s7a10:
+- a1..a6;
+- the ladder at K = 0;
+- P1 cells 5 and 6;
+- a10 last.
+
+**Prediction: every row reads as on 36a641e0b**
+(`tests/fpga-repros/R43-revocation-cache-false-deny/results/board-36a641e0b.result-lines.txt`):
+- k800 retval 4 in every boot;
+- live16 / live128 / live512 sum 544 / 4352 / 17408;
+- P1 cell 6 gives 112006 38bb59fd with the same Sublet counts;
+- the ladder's instret is identical per rung;
+- a10 traps 25 at +0x4354 with the refusal record LATCHED.
+R-49 changes the store path of every switcher write, and R-50 the load unit. Cycle counts may move; correctness may not.
