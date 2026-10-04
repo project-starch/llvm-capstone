@@ -23,6 +23,7 @@ import argparse
 import collections
 import concurrent.futures
 import os
+import shlex
 import pathlib
 import re
 import subprocess
@@ -97,7 +98,12 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         f"-I{musl}/obj/include",
         f"-I{musl}/include",
         "-O1", "-w",
-    ]
+    ] + shlex.split(os.environ.get("MUSL_CAPSTONE_EXTRA_CFLAGS", ""))
+    # MUSL_CAPSTONE_EXTRA_CFLAGS is APPENDED, never a replacement, and empty when unset, so the
+    # default archive is unchanged. B0 (docs/plans/b0-silicon-delegated-runtime.md) builds the
+    # gp-captable LTO archive with it: -flto, the four silicon -mllvm options and
+    # -DCAPSTONE_GP_CAPTABLE_ABI=1. Under -flto the -mllvm options do nothing at compile time; the
+    # link re-passes them as --plugin-opt.
 
 
 def bucket(message: str) -> str:

@@ -715,10 +715,15 @@ __test_reentry:
   BUILD_GP_CAPTABLE_INTERP 0
   ldc(t0, sp, -32)
   ccsrrw(x0, cscratch, t0)
+#ifndef CAPSTONE_GLUE_NO_MCSR
+  /* CAPSTONE_GLUE_NO_MCSR (B0, docs/plans/b0-silicon-delegated-runtime.md): a SUPERVISED domain may not touch
+     any plain M-level CSR (csr_regfile.sv:2879-2886 at 36a641e0b), so the delegated runtime's build drops this
+     mcause/mtval carry and its twin at .Ldomain_returned. Off by default: every other user is byte-identical. */
   ld t0, -40(sp)
   csrrw x0, mcause, t0
   ld t0, -48(sp)
   csrrw x0, mtval, t0
+#endif
   j test
 
 .section .text.entry
@@ -939,10 +944,12 @@ test:
   li t6, 0
   ccsrrw(t0, cscratch, x0)
   stc(t0, sp, -32)
+#ifndef CAPSTONE_GLUE_NO_MCSR
   csrrw t0, mcause, x0
   sd t0, -40(sp)
   csrrw t0, mtval, x0
   sd t0, -48(sp)
+#endif
   li t0, 0
   ccsrrw(x0, cscratch, sp)
   li sp, 0
