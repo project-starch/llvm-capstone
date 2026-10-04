@@ -193,6 +193,52 @@ and shrink flags re-passed to the LTO plugin. Port the c128 per-member verifier.
 - With dev147: 1355 of 1361 sources compile, all bitcode. The 6 failures are mallocng (a static `sizeof(void*)`
   assert); the runtime replaces malloc with level0/sublet.
 
+## B0.2-B0.5 status (2026-10-04): `b0-hello.dom` builds and passes every static gate
+Build: `capstone/runtime/silicon/build-b0-hello.sh`, with CAPSTONE_LLVM_BIN set to dev147 and B0_MUSL_ARCHIVE set to
+the gp-captable LTO archive. Result: sha256 2b2224da711c89c0, .text 38,916 B, globals at 0x10000.
+
+**What it took, each found by a gate firing.**
+1. **lld keeps every bitcode LIBCALL definition** (`<internal>: reference to acosl`), and the fp128 family cannot
+   be selected under gp-captable (C-43).
+   - Fix: a per-member codegen verifier, ported from c128 into build-musl-capstone.sh. It runs llc with all four
+     -mllvm options and has a self-test that refuses a result in which no bitcode was recognised.
+   - It drops 41 musl members, acosl among them. The archive keeps 1314.
+   - The same verifier (`runtime/silicon/lto-codegen-verify.py`) drops the 4 fp128 soft-float builtins.
+2. **`__cp_begin/__cp_end/__cp_cancel` were start-musl.S assembly data.**
+   - They are now C definitions in `glue-data.c`, in name-sorted sections, emitted SORTed by link-gpfree-app.ld.
+   - The image has begin < end < cancel (0x205f0/1/2), as musl's handler needs.
+3. **2 `cjalr` in altstack.S's `__capstone_call_on_stack`.** Under gp-captable a function pointer and ra are
+   integers, and compiled code uses jalr/ret and `sd ra`.
+   - Fix: a `CAPSTONE_GP_CAPTABLE_ABI` form. The default ABI's .text is byte-identical.
+4. **9 gp-derived `scc rX, gp, rY; delin` sites** (C-13), all linker-script symbols:
+   - tls.c (inlined into domain_main);
+   - hostcall.c's init array;
+   - hostcall.c's `__libc_exit_fini`.
+   - Fix: `glue-accessors.S` returns the extents as integers (`lla` differences). tls.c and hostcall.c use the
+     accessors under `CAPSTONE_GP_CAPTABLE_ABI` and refuse a non-empty .tdata or init/fini array, which B0 cannot
+     read yet.
+   - In this image .tdata is empty, .tbss is 0xe4 B, and both arrays are empty.
+   - Default-ABI disassembly of tls.c and hostcall.c is identical; the define changes it (control).
+5. **4 mcause/mtval words in the interp glue**, illegal under supervision.
+   - Fix: a new opt-in `CAPSTONE_GLUE_NO_MCSR`.
+   - The glue disassembles identically in the default, YIELD and INTERP_DOMAIN_MTVEC configurations against HEAD.
+
+**Gates on the image:**
+
+| gate | reading |
+|---|---|
+| `cjalr` | 0 |
+| gp-derived `scc` | 0 (was 9) |
+| `delin` | 1 (the glue's `delin sp`) |
+| descriptor blocks | one, 66 globals |
+| supervision audit | 0 forbidden of 10,094 instructions |
+| fork.o, dummy_lockptr | absent |
+
+**Not yet:**
+- **Jump tables:** the image has 14 `jr`. They are not yet classified.
+- **context.c:38:** in the module but not reached. Its fix lands when contexts are needed.
+- **B0.6, the QEMU run with CAPSTONE_GP_FABRICATE=0.**
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the

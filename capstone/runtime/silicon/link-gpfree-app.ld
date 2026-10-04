@@ -1,0 +1,180 @@
+/* link-gpfree-app.ld -- B0 (docs/plans/b0-silicon-delegated-runtime.md): tests/runtime-qemu/gp-free-domain/
+   link-gpfree.ld plus what a delegated APPLICATION needs from my_first_domain/link.ld: the application
+   descriptor (.capstone_application), and thread-local data with a PT_TLS header. Both sit inside the globals
+   template, above __gpfree_globals_base, so the monitor copies them into dom_data with the rest of the globals.
+   The globals offset is sed-substituted exactly as for link-gpfree.ld (`0x10000 + 0x1000`). */
+/* gp-free domain linker script (silicon).
+ *
+ * Identical to my_first_domain/link.ld EXCEPT it forces all globals
+ * (.rodata/.data/.capstone_cap_init/.bss/.gct) to start at a FIXED image offset
+ * GPFREE_GLOBALS_OFFSET = 0x1000, immediately after .text. This lets the monitor
+ * derive the domain's `gp` on real silicon by SPLITting the code image at
+ * base+0x1000 into an execute code cap (PCC = [base, base+0x1000)) and an R/W
+ * globals cap (gp = [base+0x1000, base+code_size)) -- both via the real SPLIT
+ * instruction, never the QEMU-only C_GEN_CAP. See
+ * plans/gp-cap-derive-on-silicon-proposal.md and
+ * history/22-07-2026_18-05-00_gp-free-silicon-smoke-*.md.
+ *
+ * The offset MUST match GPFREE_GLOBALS_OFFSET in the monitor create_domain.
+ * .text must fit in [0, 0x1000) (true for the proof app; text ~0x310).
+ */
+ENTRY(_start)
+
+PHDRS {
+  domain PT_LOAD FLAGS(0x7);
+  nobits PT_NULL;
+  tls PT_TLS;
+}
+
+SECTIONS {
+  . = 0x10000;
+  .text : ALIGN(16) {
+    *(.text.entry)
+    *(.text .text.*)
+  } :domain
+
+  /* Globals start at GPFREE_GLOBALS_OFFSET from the image base. The monitor no
+     longer has to know this a priori, so it is a build knob rather than a shared
+     constant.
+
+     CORRECTED 2026-09-10, twice, because this comment described machinery that does
+     not exist. (a) There is NO `.capstone_domhdr` section -- the string appears
+     nowhere in the tree except in this comment. What actually happens is that the
+     loader walks the section headers for `.capstone_gp_initdesc` and computes the
+     offset from its address (libcapstone.c:230-241), packing it at :263; the monitor
+     unpacks it at sbi_capstone.c:757 and carves with it at :970-971. (b) Nothing
+     "substitutes a token" -- build-ladder-domain.sh and build-sqlite-silicon.sh do a
+     LITERAL string sed on `0x10000 + 0x1000`, which is why both now verify that the
+     substitution actually happened rather than trusting it.
+
+     This is what replaced link-gpfree-32k.ld -- which IS STILL ON DISK beside this
+     file, unused by any build script. Whose separate copy of
+     the constant was the thing the monitor silently disagreed with. */
+  . = 0x10000 + 0x1000;
+
+  /* Anchor at the globals base (== base + GPFREE_GLOBALS_OFFSET). The cap-table
+     glue uses `lla <sym> - __gpfree_globals_base` to compute a global's offset into
+     the monitor-copied initializer blob at the front of dom_data (large-RO delivery
+     path). Kept as an absolute address symbol so it is linkable from the glue TU. */
+  __gpfree_globals_base = .;
+
+  /* The blob-relative init descriptor MUST be the first thing in the globals
+     region, for two reasons.
+     (1) It has to be INSIDE the blob at all. The monitor copies
+         [base+GPFREE_GLOBALS_OFFSET, base+code_size) into the front of dom_data;
+         as an orphan section lld placed this at ~0x10cb0, i.e. BELOW
+         __gpfree_globals_base, so it was never copied and the entry-glue
+         interpreter could not have read it.
+     (2) Placing it first makes its blob offset exactly 0, so the glue finds it
+         with no `lla` arithmetic at all -- it is simply the front of dom_data.
+     KEEP() because the SQLite build links with --gc-sections and nothing
+     references this section from code; without it, it is collected. */
+  .capstone_gp_initdesc : ALIGN(16) {
+    __capstone_gp_initdesc_start = .;
+    KEEP(*(.capstone_gp_initdesc))
+    __capstone_gp_initdesc_end = .;
+  } :domain
+
+  .rodata : ALIGN(16) {
+    /* glue-data.c's cancellation markers, in name order (begin < end < cancel; musl compares them) */
+    KEEP(*(SORT(.rodata.capstone_cancel_points.*)))
+    *(.srodata .srodata.*)
+    *(.rodata .rodata.*)
+  } :domain
+
+  .data : ALIGN(16) {
+    *(.sdata .sdata.*)
+    *(.data .data.*)
+  } :domain
+  .capstone_application : ALIGN(8) {
+    KEEP(*(.capstone_application))
+  } :domain
+  /* TLS template. tls.c reads its bounds; under gp-captable those three symbols must reach C through the
+     glue's accessors, not as linker-script declarations (B0.2/B0.4). */
+  .tdata : ALIGN(MAX(16, ALIGNOF(.tbss))) {
+    __capstone_tls_image = .;
+    *(.tdata .tdata.*)
+    __capstone_tdata_end = .;
+  } :domain :tls
+  .tbss : ALIGN(16) {
+    *(.tbss .tbss.*)
+    __capstone_tls_end = .;
+  } :domain :tls
+  ASSERT(ALIGNOF(.tdata) <= 4096 && ALIGNOF(.tbss) <= 4096,
+         "a thread-local aligned above 4096 bytes: runtime/tls.c aligns tp to a page")
+
+  /* THE INIT AND FINI ARRAYS, defined so their MARKERS EXIST. Carried over from
+     my_first_domain/link.ld, where the full reasoning lives; the short version is
+     that musl's exit path walks the fini array, and undefined weak markers resolve
+     to ADDRESS ZERO. Forming address zero against the image capability lands
+     0x10000 below its base, subobject bounds shrink that to a function pointer,
+     and the result is a SHRINK whose range is outside what it shrinks -- an
+     `Illegal operand value (29)`. Any domain that calls exit() has that hole, and
+     mruby's test suite reaches it through an unimplemented symlink().
+
+     NEEDED HERE SEPARATELY: this script is not derived from link.ld at build time,
+     it is a sibling copy, so a fix there does not arrive here. libc-capstone.a has
+     weak undefined references to all four markers, so a musl domain linked with
+     this script and no such definitions gets exactly the failure above.
+
+     Placed inside the globals template, in the same position link.ld uses. Both
+     arrays are empty across every object and archive member checked, so this adds
+     symbols and no bytes and the template length does not change -- which is
+     verified rather than assumed, because an orphan landing inside this range
+     would shift every global's offset into the monitor-copied blob. */
+  .init_array : ALIGN(16) {
+    __init_array_start = .;
+    KEEP(*(.init_array))
+    __init_array_end = .;
+  } :domain
+
+  .fini_array : ALIGN(16) {
+    __fini_array_start = .;
+    KEEP(*(.fini_array))
+    __fini_array_end = .;
+  } :domain
+
+  .capstone_cap_init : ALIGN(8) {
+    __capstone_cap_init_start = .;
+    KEEP(*(.capstone_cap_init))
+    __capstone_cap_init_end = .;
+  } :domain
+
+  /* End of the LOADED globals template: rodata + data + capstone_cap_init. This is
+     exactly the byte range the monitor copies into the front of dom_data. */
+  . = ALIGN(16);
+  __gpfree_globals_tmpl_end = .;
+
+  /* .bss is deliberately NOT in the :domain PT_LOAD.
+     Under gp-captable every global's storage is CARVED FROM dom_data by the entry
+     glue, so the image's .bss is never touched -- it is pure padding that the loader
+     nonetheless counts, because libcapstone derives code_len from p_memsz. Leaving it
+     in costs dom_data the whole .bss size, and for SQLite (a 1 MiB memsys5 arena)
+     that is the difference between fitting and not: dom_data comes out ~860 KB with
+     .bss in the PT_LOAD versus ~1.92 MB with it out, against ~1.47 MB needed.
+     PT_NULL keeps the addresses assigned (so symbols resolve and the glue's zero path
+     still knows the sizes) while dropping it from the loaded image. */
+  .bss (NOLOAD) : ALIGN(16) {
+    *(.sbss .sbss.*)
+    *(.bss .bss.*)
+    *(COMMON)
+    . = ALIGN(16);
+  } :nobits
+
+  . = ALIGN(16);
+  __gpfree_globals_end = .;
+  __gpfree_globals_tmpl_len   = __gpfree_globals_tmpl_end - __gpfree_globals_base;
+  __gpfree_globals_region_len = __gpfree_globals_end - __gpfree_globals_base;
+
+  .gct : ALIGN(16) {
+    KEEP(*(.gct))
+  }
+
+  /DISCARD/ : {
+    *(.comment)
+    *(.note*)
+    *(.eh_frame*)
+    *(.llvm_addrsig)
+    *(.riscv.attributes)
+  }
+}

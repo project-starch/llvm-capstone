@@ -53,12 +53,30 @@ static struct tls_module image_tls;
 /* What musl's static __init_tls records for the main program's segment:
    __copy_tls reads it for every block. The size leaves room for the dtv
    (two words at the block's top) and for aligning tp. */
+#ifdef CAPSTONE_GP_CAPTABLE_ABI
+/* The silicon ABI (B0, docs/plans/b0-silicon-delegated-runtime.md): the template symbols above have no cap-table
+   slot (naming them derives from gp and delins, which faults on silicon, C-13), so the extents come from the glue's
+   accessors as integers. B0 cannot yet READ a non-empty .tdata (that needs a capability over the template), so one
+   is refused; .tbss alone needs only its size. */
+unsigned long __capstone_silicon_tls_tdata_bytes(void);
+unsigned long __capstone_silicon_tls_mem_bytes(void);
+#endif
+
 static void describe_tls(void)
 {
+#ifdef CAPSTONE_GP_CAPTABLE_ABI
+	size_t tdata = __capstone_silicon_tls_tdata_bytes();
+	size_t memsz = __capstone_silicon_tls_mem_bytes();
+	if (tdata != 0)
+		abort();
+	if (memsz) {
+		image_tls.image = 0;
+#else
 	size_t tdata = __capstone_tdata_end - __capstone_tls_image;
 	size_t memsz = __capstone_tls_end - __capstone_tls_image;
 	if (memsz) {
 		image_tls.image = __capstone_tls_image;
+#endif
 		image_tls.len = tdata;
 		image_tls.size = memsz;
 		image_tls.align = TLS_ALIGN;

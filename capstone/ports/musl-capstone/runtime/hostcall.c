@@ -263,6 +263,25 @@ __attribute__((__weak__)) char **__capstone_domain_environ(void) {
   return none;
 }
 
+#ifdef CAPSTONE_GP_CAPTABLE_ABI
+/* The silicon ABI (B0, docs/plans/b0-silicon-delegated-runtime.md). The array bounds above are linker-script
+   symbols with no cap-table slot: naming them derives a capability from gp and delins it, which faults on silicon
+   (C-13). The glue's accessors give the extents as integers instead. B0 has no way yet to READ a non-empty array
+   (that needs a capability over it from the glue), so a non-empty one is refused loudly rather than derived; the
+   image's build gate checks the same before any run. */
+unsigned long __capstone_silicon_init_array_bytes(void);
+unsigned long __capstone_silicon_fini_array_bytes(void);
+
+static void hc_run_init_array(void) {
+  if (__capstone_silicon_init_array_bytes() != 0)
+    abort();
+}
+
+void __libc_exit_fini(void) {
+  if (__capstone_silicon_fini_array_bytes() != 0)
+    abort();
+}
+#else
 static void hc_run_init_array(void) {
   for (const unsigned char *p = __init_array_start; p < __init_array_end;
        p += sizeof(hc_array_fn))
@@ -274,6 +293,7 @@ void __libc_exit_fini(void) {
        p -= sizeof(hc_array_fn))
     hc_call_array_slot(p - sizeof(hc_array_fn));
 }
+#endif
 
 /* Domain entry. The region shares carry the entry block, the exchange region,
    the launch block and then the program's regions; the entry after them runs
