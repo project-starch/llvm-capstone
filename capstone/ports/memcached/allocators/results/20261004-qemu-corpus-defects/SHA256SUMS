@@ -1,0 +1,13 @@
+# the domain image each case ran -- ONE image per case, both arms (the mode is a runtime argument)
+bc2347e1616b9fe7d9a38ccd48bcd2ac0de1037a203fd80e8df2106fd4473e4e  defect-00.dom
+c3a3475e87056110b580c5fb956b45949ddfb319e3ed08114b3d9eb73a638d26  defect-01.dom
+f152598cd70056cca69d8ab657b980f2fed1f59c9346cc787b390ed50fb0d55d  defect-02.dom
+63710391d161cbf34b5855100c27c34fa56f2d6ec1a391a093ad27312176a78d  defect-03.dom
+23cfcf6eceb368ed72ebdc38dd9969d82c3bbce63ee6eebf438c7e0f549b393b  defect-04.dom
+
+# the loader every boot ran
+7f9fc50a169edc1fad1f22544f403ae1edb4118cce473136b8c206991f099512  domain-loader
+
+# emulator and compiler, as the runner's manifest.json records them
+6e5e136a070b0ee9ad2849e3bc6bbc0d3ad039294dd0642e69b864b28dbd73e2  qemu-system-riscv64
+660fca7da9067f766dc235c8a99448da2ce9bb4d6ece211c6fec03ab668f7420  clang

@@ -27,10 +27,16 @@
       "cause": 24
     },
     "spatial": {
-      "status": "not written"
+      "probe_case": 39,
+      "oracle": "the sequence completes",
+      "role": "control for sublet: same binary and guest, one difference",
+      "measured": "2026-10-04, ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/: mode 0 completed, passed, runner_exit 0"
     },
     "sublet": {
-      "status": "not written"
+      "probe_case": 39,
+      "oracle": "fault at the labelled read probe",
+      "cause": 24,
+      "measured": "2026-10-04, same bundle: mode 2 faulted with cause 24 at pc 0x101a11720 == expected_pc, exactly one fault; the same domain_sha256 ac4473aa27353f9e in both modes, so the pair differs only in the runtime mode argument"
     },
     "poisoncap-spatial": {
       "status": "not written"
@@ -48,6 +54,6 @@
       "status": "not written"
     }
   },
-  "status": "declared 2026-10-03; the native-fix-differential arm MEASURED the same day (results/2026-10-03-native-four-cases/), both arms as predicted. The sublet-port rows (fixtures 46/47) remain predictions: they need the FFmpeg app port, whose SDK gate correctly refuses both toolchains on this host (C-46 linear direct-call target / missing intcap extensions), reproduced 2026-10-03. The fault lines were re-registered 84,85,88 -> 99,100,103 when the reduction was corrected to track both released tables; the predicted outcomes did not change",
-  "note": "The arms left 'not written' are the ones this case cannot honestly carry yet: spatial and sublet need a probe case in ports/ffmpeg/buffer-pool (36-38 are taken by cases 0-2), and the PoisonCap and CheriBSD arms need platforms this host does not have. They are declared rather than omitted so the corpus's required_arms stay satisfied without any of them implying a result"
+  "status": "declared 2026-10-03; the native-fix-differential arm MEASURED the same day (bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-four-cases/), and the spatial/sublet pair MEASURED 2026-10-04 as probe case 39 (ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/), both cells as pre-registered in a9a5df563658. The sublet-port rows (fixtures 46/47) remain PREDICTIONS: they need the FFmpeg app port, and have simply not been run. RETRACTED 2026-10-04, same day: the earlier wording here said that port's SDK ABI gate 'refuses every toolchain on this host for want of the intcap extensions'. That is false. A qualified toolchain IS present -- llvm-capstone-cc/build-release/bin/clang, commit 7d01722aab88 -- and check_toolchain accepts it end to end (both the two-call direct-call probe and __uintcap_t pass). The error was generalising from a glob over */llvm/cmake-build-* to 'every toolchain on this host'; docs/ref/ffmpeg-live-defect-triage.md:281-284 already named that compiler. So sublet-port is reachable and merely unrun. The fault lines were re-registered 84,85,88 -> 99,100,103 -> 104,105,108 when the reduction was corrected to track both released tables and to give rpl_tab its own fill; the predicted outcomes did not change.",
+  "note": "The arms left 'not written' are the ones this case cannot honestly carry yet: the PoisonCap and CheriBSD arms need platforms this host does not have, and native-detect would measure the fixture rather than FFmpeg because the port's payload arena is one allocation. spatial and sublet were filled on 2026-10-04 by probe slot 39 in ports/ffmpeg/buffer-pool, which is what this note previously said was missing; 36-38 remain cases 0-2."
 }

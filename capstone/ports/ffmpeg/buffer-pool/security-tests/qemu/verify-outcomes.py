@@ -39,6 +39,7 @@ NAMES += ["alias-scatter-valid-after-parent-revoke"]
 NAMES += ["af-join-dedup-bound-stale-read"]
 NAMES += ["h264-refs-partial-clear-stale-read",
           "vidstab-parked-plane-pointer-stale-write"]
+NAMES += ["vvc-nonref-output-releases-tabs-stale-read"]
 parser = argparse.ArgumentParser()
 parser.add_argument("output", type=pathlib.Path)
 parser.add_argument("--cases", default="0,1,2,3,4,5,6,7,8,9,10,11")
@@ -82,7 +83,7 @@ for mode in map(int, args.modes.split(",")):
             or (case == 9 and mode >= 1)
             or (mode == 2 and case in (1, 2, 3, 4, 5, 6, 8, 12))
             or (mode == 2 and scatter)
-            or (mode == 2 and case in (36, 37, 38))
+            or (mode == 2 and case in (36, 37, 38, 39))
         )
         guest = f"""#!/bin/sh
 set -e
