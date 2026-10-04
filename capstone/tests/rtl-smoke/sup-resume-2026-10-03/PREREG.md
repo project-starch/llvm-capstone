@@ -1035,14 +1035,18 @@ name read back after the cycle is `caplifive_supcall_715bdd1fe.bit`.
 
 **All 18 runs COMPLETED.**
 - The control passed exact.
-- **Every S-16 arm completes without a fence, with the reading of its fenced twin:**
+- **The 14 S-16 arms that hung on 36a641e0b and were re-run here all complete without a fence, with the reading of
+  their fenced twins** (corrected after the audit from "every S-16 arm": n4-r1 never hung; s16stc18, s16stc24,
+  s16p11/p13/p14-nt, s16nop-nt and armdep-d16 were not re-run):
   - armdep-nt: 8,551 escapes, the fenced twin's exact vector;
   - s16sd24, n4-r1, n4-r3, n4-r3-fence and n32-r1;
   - all four plain arms (0x51 per round, 0x77, 0);
   - all five escape arms, with resume counts 4 / 7 / 2 / 10 / 14 (esc-n8, -retfence, -n8-r1, -n32-r1, -n64-r1;
     reported, not predicted).
   - On 36a641e0b, every one of them except n4-r1 hung.
-- **That is also the behavioural identity of the bitstream:** these arms hang deterministically on 36a641e0b.
+- **That is also behavioural evidence that the board no longer runs 36a641e0b** (corrected after the audit: the old
+  runs were mostly N=1, so not "deterministic"; what holds is that about 27 of 27 above-threshold runs on 36a641e0b
+  hung, and no unfenced above-threshold run ever completed there). It does not fingerprint 715bdd1fe itself.
 - **S-17's arm12-ldc-q64 COMPLETED**, 8,552 escapes, identical to its `ld` twin. **N = 3** (accept715, s17rep2,
   s17rep3), with arm12-ld completing alongside each time.
   - On 36a641e0b it hung.
@@ -1067,3 +1071,31 @@ Unchanged from 2026-10-02. It uses the same kit, images, order and pre-registrat
 - the ladder's instret is identical per rung;
 - a10 traps 25 at +0x4354 with the refusal record LATCHED.
 R-49 changes the store path of every switcher write, and R-50 the load unit. Cycle counts may move; correctness may not.
+
+### The claim audit of "S-16 fixed on silicon" (2026-10-04 21:35)
+**The claim is split in two.**
+- "S-16 no longer reproduces on 715bdd1fe" is SUPPORTED.
+- "Fixed by R-49" is strongly favoured but not isolated on silicon, because R-50 and the re-placement change in the
+  same bitstream.
+
+**What separates R-49 from timing.**
+- The SAVE-entered arms. Their first switcher write follows a REGISTER read (`save_step`), never a load-unit read, so
+  R-50 cannot reach them, and all of them complete.
+- On 36a641e0b the trigger was a sharp store-count threshold, not jitter: 12 completed, and 18 and 24 hung within 16
+  escapes.
+- Workload cycles moved by under 0.05 %, so the rebuild did not change memory timing materially.
+- The marginal hazard fell by orders of magnitude: 3,832 preemptions without a hang, where the old rate was about
+  1 in 213.
+
+**The limits the dev text must carry:**
+- one run per arm on 715bdd1fe;
+- R-50 and the re-placement are not separable from R-49;
+- R-49's coincidence residuals are unexercised: a switcher push in the same cycle as `commit_i`, and a load-unit clear
+  coinciding with a switcher write;
+- apertures 219..222 and the double-read have never fired on this bitstream.
+
+**The cheapest further checks:**
+- read 220 at idle on 715bdd1fe: 0x40 expected, against 0x00 on 36a641e0b. This is a behavioural fingerprint, and it
+  would give the double-read its first exercise;
+- a sticky "the old mis-ack cycle was reached" flag, batched into the next bitstream;
+- N = 2 repeats of armdep-nt and C5u B.
