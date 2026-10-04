@@ -35,5 +35,8 @@
     "CVE-2018-1000127"
   ],
   "shape_table": true,
-  "note": "No result bundle is committed in this corpus; its CheriBSD fixtures live with the port."
+  "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port.",
+  "evidence": [
+    "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects"
+  ]
 }
