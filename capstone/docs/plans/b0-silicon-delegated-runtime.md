@@ -170,6 +170,29 @@ and shrink flags re-passed to the LTO plugin. Port the c128 per-member verifier.
 - This is also the first execution of the process ABI on silicon. If it fails, a classic-path control of the same
   image separates "the ABI" from "the image".
 
+## Toolchain (2026-10-04): the shared build is STALE for B0; use the frozen dev147 build
+- **The shared build is stale.** `llvm/cmake-build-debug`'s libLLVMCapstoneCodeGen.so dates from 2026-09-24. dev has
+  gp-captable backend fixes since then, among them C-75: e2a1010c6891 and 214373ee2add.
+- **B0 uses the compiler lane's frozen copy:**
+  - built from 612b3ec514c0, with 0 files differing under llvm/ and clang/ from dev dedab28c4a2c;
+  - lib manifest 18c0d1b392dff5d9;
+  - read-only, at `<compiler lane scratch>/dev147-toolchain/bin`.
+  `clang --version` says 612b3ec5, a configure-time string.
+- **Identified by behaviour, two-sided** (the compiler lane's probes, run here):
+
+  | probe | shared build | dev147 |
+  |---|---|---|
+  | B: gp-captable function alias, `pcrel_hi(fn_alias)` | 0 | 1 |
+  | A: default-ABI alias, `stc` in cap-init | 1 | 2 |
+  | A's control | 2 | 2 |
+
+**B0.5, first piece: the gp-captable LTO musl archive.**
+- `MUSL_CAPSTONE_EXTRA_CFLAGS`, appended to the survey's flags, carries -flto, the four silicon -mllvm options and
+  -DCAPSTONE_GP_CAPTABLE_ABI=1. When unset it is a strict no-op: the flag lists are identical with the hook absent and
+  unset. `MUSL_SURVEY_JOBS` caps the parallelism.
+- With dev147: 1355 of 1361 sources compile, all bitcode. The 6 failures are mallocng (a static `sizeof(void*)`
+  assert); the runtime replaces malloc with level0/sublet.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the

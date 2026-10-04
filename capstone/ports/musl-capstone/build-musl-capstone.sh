@@ -24,7 +24,9 @@ mkdir -p "$OBJ_DIR"
 # output. It exits 1 on a regression, which must not stop the build here: a
 # partial archive is the point. Only a harness error (2) is fatal.
 set +e
+# MUSL_SURVEY_JOBS: the survey defaults to min(16, cpus); a shared host may need fewer.
 python3 "$SCRIPT_DIR/survey-musl-capstone.py" "$MUSL_SRC_DIR" \
+        ${MUSL_SURVEY_JOBS:+--jobs "$MUSL_SURVEY_JOBS"} \
         --objects "$OBJ_DIR" > "$OUT_DIR/survey.txt"
 survey_status=$?
 set -e
