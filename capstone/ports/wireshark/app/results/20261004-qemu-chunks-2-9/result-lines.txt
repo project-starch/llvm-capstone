@@ -1,0 +1,17 @@
+# tshark CHUNKS arm, fixtures 2-9: registered 2026-09-23, never measured until now.
+# Fixture 1 is the in-boot setup control, which must RETURN 100001 with LEN 64.
+# runner : ports/common/application/run-fixtures-9p.py --port wireshark --arm chunks
+# judge  : check-safety.py's own classify()/matches(), imported
+# ONE BOOT for all nine cells: a domain fault SIGSEGVs the launcher, not the guest.
+
+{"arm": "chunks", "fixture": 1, "expected": [["RETURN", "100001"], ["LEN", "64"]], "passed": true, "outcome": "RETURN", "detail": "100001", "target": null, "touch": null, "len": 64}
+{"arm": "chunks", "fixture": 2, "expected": [["FAULT", "oob"]], "passed": true, "outcome": "FAULT", "detail": "oob", "target": 2768250624, "touch": 5, "len": 64}
+{"arm": "chunks", "fixture": 3, "expected": [["FAULT", "oob"]], "passed": true, "outcome": "FAULT", "detail": "oob", "target": 2768250432, "touch": 3, "len": 64}
+{"arm": "chunks", "fixture": 4, "expected": [["FAULT", "temporal"]], "passed": true, "outcome": "FAULT", "detail": "temporal", "target": 2768250368, "touch": 3, "len": 64}
+{"arm": "chunks", "fixture": 5, "expected": [["FAULT", "temporal"]], "passed": true, "outcome": "FAULT", "detail": "temporal", "target": 2768250368, "touch": 5, "len": 64}
+{"arm": "chunks", "fixture": 6, "expected": [["FAULT", "temporal"]], "passed": true, "outcome": "FAULT", "detail": "temporal", "target": 2768250368, "touch": 5, "len": 64}
+{"arm": "chunks", "fixture": 7, "expected": [["FAULT", "oob"]], "passed": true, "outcome": "FAULT", "detail": "oob", "target": 2716289072, "touch": 4, "len": null}
+{"arm": "chunks", "fixture": 8, "expected": [["FAULT", "oob"]], "passed": true, "outcome": "FAULT", "detail": "oob", "target": 2753558904, "touch": 4, "len": null}
+{"arm": "chunks", "fixture": 9, "expected": [["RETURN", "90005b"]], "passed": true, "outcome": "RETURN", "detail": "90005b", "target": 2716289264, "touch": 5, "len": null}
+
+# 9/9 cells AS PREDICTED; runner exit 0

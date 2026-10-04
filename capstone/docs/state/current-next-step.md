@@ -1,13 +1,78 @@
+2026-10-05: **B0 PASSES ON SILICON.** The gp-captable delegated hello-world runs byte-exact on
+`caplifive_supcall_715bdd1fe.bit`, N=2. It is launched by capstone-exec through the process-ABI module and stepped by
+the FPGA monitor's supervised CALL, with no fabricated gp. Preflight was off, for a documented reason.
+- Full record: `docs/plans/b0-silicon-delegated-runtime.md`.
+- Two silicon-only defects were found and fixed, both QEMU-silent:
+  - **C-76:** capstone-c caller-saved a `__rev` argument with `stc`, and silicon's STC moves it, so the monitor's
+    step wedged the board. Fixed by `managed_reinit`.
+  - **A delegate-runtime copy loss:** a freshly built `{offset, len}` pair lost its length in a granule copy. Fixed
+    with 8-byte copies.
+    - This is R-29's family. The first attribution, to R-29's recorded stale-refill mechanism, was retracted. The
+      RTL lane then reproduced the real path in simulation: write-buffer residency, with the high half taken from
+      a plain store's `.user = 0`.
+    - musl's memcpy has the same exposure, so memcached on silicon needs a plain-data guard or the RTL fix.
+- **M-13:** a trap inside the FPGA monitor always reads as cause 24 at `_cap_trap_entry`+4.
+- A module built outside buildroot needs `-march=rv64g` on the FPGA; the board-run skill has the module rules.
+- **Next:**
+  - the monitor fix is on caplifive-sbi `capstone-bootstrap` 91c8aa2. The QEMU A/B shows no regression. The
+    opensbi and buildroot pins are not bumped: QEMU behaviour is unchanged, and the FPGA line carries the fix;
+  - the Part 3 silicon monitor line (supervised CALL under CSR events, B0.1) is still on lane branches;
+  - **B0.8 done:** the runtime memcpy's R-29 guard holds on silicon (0/96; the unguarded control 94/96).
+  - then B1 toward memcached on silicon (`docs/plans/memcached-on-silicon.md`): contexts and threads stepped by the
+    monitor, the W-12 aggregate-copy guard in the application build, non-empty TLS and init arrays.
+
+2026-10-04, evening: `caplifive_supcall_715bdd1fe.bit` is FLASHED and ACCEPTED.
+- Bare S-16 images: 18 of 18, the 14 previously-hanging S-16 arms among them.
+- The R-43 list: unchanged.
+- C5u without the fence: 1,277 preemptions at +0.69 %.
+- **S-16 is fixed on silicon.** The audited wording is in ISSUES S-16.
+- Set `FPGA_BITSTREAM=caplifive_supcall_715bdd1fe.bit` for every board run.
+- **Next:**
+  - B0 on the board (branch `b0-silicon-runtime`: the gp-captable delegated hello-world, which passes in QEMU without
+    fabricated gp);
+  - S-17 stays watched through apertures 219..222.
+
+## APP PORTS AND BUG CORPORA — 2026-10-04. **Nothing is owed on memcached, tshark or FFmpeg.** All 24
+registered-but-unmeasured cells are measured and committed: FFmpeg pool corpus 40-47 on both app arms
+(16/16, `ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/`), case 3's component pair as probe 39
+(2/2), tshark `chunks` 2-9 (9/9, `ports/wireshark/app/results/20261004-qemu-chunks-2-9/`), memcached's
+corpus 5x2 plus its negative control (`ports/memcached/allocators/results/20261004-qemu-corpus-defects/`).
+**22 of 22 upstream cases across the three programs now carry a measured capability arm.**
+
+**NEXT, and none of it is this lane's to start:**
+1. **PostgreSQL's 8 `spatial`/`sublet` cells.** The paper prints Sublet catching 8 of 8 while all 8
+   `bug-corpora/postgres/mmgr-repros/*/case.json` say that arm has **NOT been run**. It is the one place a
+   printed number is denied by its own corpus, and the highest-value single measurement for the paper. Out
+   of scope by the lead's decision (report only). The runner pattern now exists:
+   `ports/common/application/run-fixtures-9p.py`.
+2. **The paper's S3 numbers are the lead's call.** All five totals print as `\targetmeasured` while S3 is
+   "Pending" in three places and `experiments/results/S3/` does not exist; "every comparator now runs the
+   whole denominator" is false (22 of 57). Report, not committed:
+   `/tmp/capstone/2026-10-04-paper-defect-evidence-audit.md`. The paper's own appendix authorises either
+   running the arms or narrowing the claim.
+3. **`INDEX.md`/`index.json` need ONE consolidated regeneration.** They are stale on `dev` from the board
+   lane's fpga-repros and ISSUES additions (S-16/S-17; 28 -> 30 folders). This lane applied only its own
+   lines, deliberately, to avoid republishing another lane's content. The lead asked the two lanes to
+   squash and merge a single consolidated version.
+4. **PoisonCap and CheriBSD for memcached and FFmpeg** stay unmeasured: that platform (SDK, purecap
+   sysroot, image) is absent from this host. Not a gap that work here can close.
+
+**New instrument worth knowing about:** `ports/common/application/run-fixtures-9p.py` runs app-SDK domain
+images over 9p + the serial console when `capstone-vm` is unavailable (it needs ssh; no riscv64 dropbear
+exists here). It issues the same guest command `capstone-vm` does, merges the launcher's fault record as
+`capstone-vm`'s host side does, and judges with the committed oracles. Negative-tested.
+
 2026-10-04: the FPGA monitor's resume hang (S-16) is root-caused and fixed on
 capstone-ariane `sup-call` (192a5e624, registry R-49: the switcher's first SAVE
 write pushed into a FULL store-buffer commit queue), together with R-50
-(429c60b32, the load unit's flush exemption). Sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. SYNTHESIZED AND SEALED: `sup-call` 715bdd1fe (bitstream sha256 a7add4c0...1311; route clean, LUTLP-1 0,
-WNS −9.949 in band; plan step-11 result). NEXT: the lead's word for the reflash, then the board lane's
-acceptance batch (17 bare S-16/S-17 images plus the monitor without the fence). Until the reflash, a `fence` before every CALL covers only that CALL's switch
-(the board lane, bare). A fence before every RETURN as well completed every
-non-preemptive twin that hung. A quantum escape stays exposed, so preemptive
-supervision waits for the reflash. After the reflash: the board's S-16 arms without the fence, then
-the supervised speedtest; S-17 on silicon stays open; the apertures that read its state (219..222) are in the candidate (R-50).
+(429c60b32, the load unit's flush exemption). Sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. FLASHED AND ACCEPTED: `sup-call` 715bdd1fe (caplifive_supcall_715bdd1fe.bit, sha256 a7add4c0...1311) --
+18/18 bare images, R-43 a1..a10 unchanged, the C5u monitor without a fence at 1,278 preemptions where
+36a641e0b hung after 212 (plan step-11 acceptance; R-49 FIXED ON SILICON). NEXT for the RTL lane: the
+runtime lane's supervised_invoke work needs nothing more from the RTL; keep the fallback sup-call-b2 parked;
+the audit's cheap checks (byte 220 at idle = 0x40 as the bitstream's fingerprint; a sticky mis-check flag for
+the next bitstream) go into the next aperture batch, not a cycle of their own. (Before the reflash, on 36a641e0b, a `fence` before every CALL covered only that CALL's switch and a
+fence before every RETURN as well covered the non-preemptive twins, the quantum escape staying exposed --
+the board lane, bare; superseded by the flashed fix.) S-17 on silicon stays open; the apertures that read its state (219..222) are in the candidate (R-50).
 
 Supervised CALL (2026-10-01): the RTL is on capstone-ariane `sup-call`
 ([plan, revision 1.2](../plans/supervised-call-silicon.md)); every simulation

@@ -128,3 +128,8 @@ b2 s16st-plain-n32-r1-fence   149 -DPLAIN -DNSTORES=32 -DITER=1 -DFENCE
 b2 s16st-plain-n4-r3-fence2   150 -DPLAIN -DNSTORES=4 -DITER=3 -DFENCE -DRETFENCE
 b2 s16st-n4-r3-fence2         151 -DNSTORES=4 -DITER=3 -DFENCE -DRETFENCE
 b2 s16st-plain-n32-r3-fence2  152 -DPLAIN -DNSTORES=32 -DITER=3 -DFENCE -DRETFENCE
+# The RTL lane's three simulated escape arms exactly (testlist_sup.yaml at capstone-ariane 715bdd1fe: ONE round, ITER=1).
+# The board's s16st-esc-n8 above runs three rounds (ITER defaults to 3), so it is not their sup-s16-esc-n8.
+b2 s16st-esc-n8-r1   153 -DESCAPE -DNSTORES=8  -DQUANTUM=150 -DITER=1 -DESC_BURSTS=6
+b2 s16st-esc-n32-r1  154 -DESCAPE -DNSTORES=32 -DQUANTUM=200 -DITER=1 -DESC_BURSTS=6
+b2 s16st-esc-n64-r1  155 -DESCAPE -DNSTORES=64 -DQUANTUM=400 -DITER=1 -DESC_BURSTS=6

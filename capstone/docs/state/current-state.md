@@ -1,5 +1,104 @@
 # Current Capstone state
 
+## 2026-10-05 — B0: a gp-captable delegated application runs byte-exact on silicon
+
+- **b0-hello passes on `caplifive_supcall_715bdd1fe.bit`, byte-exact under a `cmp` oracle, N=2** (boots 13 and
+  13b, preflight off for a documented reason).
+  - Four delegated rounds: HELLO, `ioctl` -> -25, `writev` -> 51, `exit_group`.
+  - Identity was verified by hash. fw e411395bde2c embeds Image d5ab7fad, whose initramfs carries b0run.sh
+    cc858ec4, b0-hello.dom cdd82e56, capstone-exec 1dca5b19 and module 0332e2d6.
+- **What runs:**
+  - a full-LTO gp-captable musl application, launched by capstone-exec through the process-ABI module;
+  - stepped by the FPGA monitor's supervised CALL under CSR events;
+  - with no fabricated gp;
+  - with its domain torn down at exit (census `live_domains 0`).
+- **Found on the way, all QEMU-silent:**
+  - **C-76:** capstone-c's `stc` spill of a `__rev` argument, moved to cnull by silicon's STC. It wedged every
+    process-ABI step.
+  - **A delegate-runtime copy loss** in R-29's family, worked around with 8-byte copies. The first attribution
+    (R-29's stale-refill mechanism) was retracted. The RTL lane then reproduced the actual path in simulation: a
+    granule copy of a plain-store pair still in the write buffer reads the high half as 0.
+  - **M-13:** a monitor-internal trap reads as cause 24 at `_cap_trap_entry`+4.
+  - **The board kernel cannot unload modules**, and a module built out of tree needs `-march=rv64g`.
+- Record: `docs/plans/b0-silicon-delegated-runtime.md`. The module's `vm_flags_set` port is on caplifive-buildroot
+  `capstone-bootstrap` (3f485c4).
+
+## 2026-10-04, evening — the S-16 fix bitstream on silicon: S-16 fixed, the R-43 list unchanged, and the real workload preempts 1,277 times at +0.69 %
+
+- **The resident bitstream is `caplifive_supcall_715bdd1fe.bit`.**
+  - capstone-ariane sup-call 715bdd1fe: R-49, R-50 and the S-17 apertures 219..222.
+  - Flashed 18:41-18:43 on the lead's direct word with `drivers/flash-bitstream.py`. The sha256 matched the sealed
+    hash, and the name was read back after the power cycle.
+  - Set `FPGA_BITSTREAM=caplifive_supcall_715bdd1fe.bit` for every board run. The previous resident,
+    caplifive_supcall_36a641e0b.bit, stays registered on the console.
+- **S-16 is fixed on silicon.** Audited wording and limits are in the S-16 entry in ISSUES and in its folder.
+  - Bare: 14 of 14 previously-hanging arms complete without a fence.
+  - **The FPGA monitor's supervised SQLite speedtest:** the C5u firmware, byte-identical and with no fence, completes
+    1,277 preemptions with the oracle hash at **+0.69 %** over the plain call (quantum 2,000,000). On 36a641e0b it
+    hung after 212. Preemptive supervision of a real workload now works on silicon.
+- **The R-43 acceptance list passes unchanged**, a1..a10 on the same images
+  (`tests/fpga-repros/R43-revocation-cache-false-deny/results/board-715bdd1fe.result-lines.txt`).
+  - Identity readings are exact: instret 17/17, hashes, Sublet counts, a10's trap and refusal record.
+  - Cycles are within noise.
+- **S-17 does not reproduce** (3 of 3), mechanism unknown. The new apertures are armed.
+- **The trap log's 0x83 residue on bare hangs is the JTAG load's debug-module `ebreak`** (mepc 0x35c). It means no
+  trap since the load.
+- **Next:** B0, the delegated hello-world, on this bitstream (branch `b0-silicon-runtime`). It already passes in QEMU
+  with no fabricated gp.
+
+## 2026-10-04 — the app ports' and corpora's last 24 registered cells measured, two retractions, and the ledgers closed
+
+- **What was asked:** audit the defect evidence for memcached/tshark/FFmpeg against the paper, then
+  finalize everything.
+- **The audit's answer: count was never the problem.** 22 upstream corpus cases across the three, **all
+  22 nested-allocator**, now **22/22 with a measured capability arm**; plus 59 app-port fixtures carrying
+  24 measured nested-discriminating cells. Only **1 of 22** is live at the pin, which matches the paper's
+  own wording ("previously fixed bugs"). The gap was **printed numbers without backing runs** — see
+  `/tmp/capstone/2026-10-04-paper-defect-evidence-audit.md` (not committed; the paper is the lead's).
+- **Measured, all as pre-registered** (predictions committed before every run):
+  - **FFmpeg pool corpus, fixtures 40-47, both app-port arms: 16/16 cells.**
+    `ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/`. `poolsublet` faults cause 24 at
+    `case.c:85 / :48 / :33 / :104`, each with non-zero `value_hi`; `poolstock` completes every defect
+    with DEFECT-REPRODUCED. **Case 3's `sublet-port` arm was the last unmeasured arm of the 22.**
+  - **FFmpeg case 3's component-port pair, probe slot 39: 2/2.**
+    `ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/`.
+  - **tshark `chunks` fixtures 2-9: 9/9** (fixture 1 as the in-boot control).
+    `ports/wireshark/app/results/20261004-qemu-chunks-2-9/`. Read as a consistency check: these are
+    plain-heap probes on a nested arm, not new nested evidence.
+  - **memcached corpus, 5 cases × spatial/sublet: 10/10, plus the suite-wide negative control** (exit 0 =
+    every oracle fired). `ports/memcached/allocators/results/20261004-qemu-corpus-defects/` — the
+    corpus's first committed bundle; it gitignores its own `results/` by policy.
+  - **ASan blindness to pooled reuse, 4 arms**, with upstream's own `e6255fb822` as the positive control
+    and arm C showing the `free_entry_cb` gate leaves the MPVPicture pool uncovered even on master.
+    `bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-asan-pool-blindness/`.
+- **New instrument: `ports/common/application/run-fixtures-9p.py`.** `capstone-vm` is the app ports' only
+  runner and needs ssh; no riscv64 dropbear exists here to give it. This stages images and the pinned
+  launcher/module over 9p, issues **the same guest command `capstone-vm` issues**, merges the launcher's
+  fault record into the result as `capstone-vm`'s host side does, and judges with the **committed**
+  oracles (`check-safety.py`'s `classify()`/`matches()`, or an external `--verdict` script). Negative-
+  tested: forced against a wrong row it reports DIFFERS and exits 1.
+- **TWO RETRACTIONS, both mine, both from generalising a partial enumeration:**
+  1. *"The app SDK gate refuses every toolchain on this host"* (`5208789e4b9e`). It does not: the
+     `llvm-capstone-cc` worktree's `build-release`, commit `7d01722aab88`, passes it end to end, and all
+     16 FFmpeg app images were built through the gate with it. I had globbed `*/llvm/cmake-build-*`;
+     `ffmpeg-live-defect-triage.md:281-284` already named the qualified compiler.
+  2. *"No replacement harness exists"* (`dedab28c4a2c`). One existed on disk and had run app-SDK
+     fixtures the previous day; the sibling bundle said so outright. Propagated into the four files that
+     still carried the first claim (`49c4903ca277`).
+  Rule captured as the `blocked-is-an-enumeration-claim` memory.
+- **Also corrected:** `dedab28c4a2c`'s `g_refpool` caveat named the **wrong bundles** — the affected one
+  is `bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port/`, which now carries it in-tree
+  rather than only in a commit message; and that port bundle's claim that the oracle's FAULT branch is
+  "structurally unreachable" (it is reachable — the host merges the fault record).
+- **Still open, deliberately:**
+  - **PostgreSQL's 8 spatial/sublet cells.** The paper prints Sublet catching 8 of 8 while all 8
+    `case.json` say the arm has **not** been run. Highest-value single measurement for the paper; out of
+    scope by the lead's decision (report only).
+  - **`INDEX.md` / `index.json` are stale on `dev`** from the board lane's fpga-repros and ISSUES
+    additions. Only this lane's own lines were applied; the lead asked that the two lanes squash and
+    merge one consolidated regeneration.
+  - PoisonCap and CheriBSD for memcached and FFmpeg: that platform is absent from this host.
+
 ## 2026-10-04 — Supervised CALL under the FPGA monitor on silicon: a real workload preempts and resumes hundreds of times, then hits S-16 (localised, mechanism traced, an RTL fix needed); S-17 found beside it
 
 - **The FPGA monitor runs supervised CALL on silicon.**

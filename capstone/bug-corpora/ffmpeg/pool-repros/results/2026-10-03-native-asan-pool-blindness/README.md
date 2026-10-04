@@ -68,7 +68,7 @@ The two arms diverge at exactly the stale read:
 Both limits matter for the paper: they answer a "but ASan catches this now" objection using the gate in
 upstream's own patch, not our framing.
 
-### Arm C — PRE-REGISTERED, NOT YET RUN: does the `free_entry_cb` gate leave a real pool uncovered?
+### Arm C — MEASURED 2026-10-03 (registered first, in `da90e4051862`): the `free_entry_cb` gate does leave a real pool uncovered
 
 Limit 1 above is read from the diff, not measured. **Arm C measures it**: the same `pool_stale.c`
 sequence, the same armB-patched `refstruct.c`, but the pool created through

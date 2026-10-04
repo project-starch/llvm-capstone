@@ -372,7 +372,15 @@ the after-audit, synthesis, silicon.
   pre-registered criteria hold; the bitstream goes to the board lane's acceptance batch (17 bare images plus the
   monitor configuration without the fence) on the lead's word for the reflash. The fallback form of R-49 (`sup-call-b2`
   5b7f455d8: ready_o as in 36a641e0b, a one-cycle bubble on a kind change in the store unit; audited, lint at
-  baseline, sweep 91 identical + 1 budget artifact) stays unsynthesized unless the acceptance points at the store path. S-17 on silicon (the LDC after a finished switch, lsu_ready 0 with both
+  baseline, sweep 91 identical + 1 budget artifact) stays unsynthesized unless the acceptance points at the store path.
+- **Step 11 acceptance on silicon (2026-10-04 evening, the board lane; board-supmon a888ec953c57):** flashed
+  `caplifive_supcall_715bdd1fe.bit` (name read back after the power cycle). Bare: 18 of 18 images complete, among them
+  every S-16 arm that hung on 36a641e0b and S-17's arm12-ldc 3/3. R-43 a1..a10: every row PASSES unchanged, identity
+  readings exact, cycles within noise. The real workload, the C5u monitor firmware with NO fence: all 6 tests pass, the
+  supervised SQLite speedtest preempts 1,278 (loud) / 1,277 (quiet) times with the oracle hash, +0.69 % quiet overhead
+  at quantum 2,000,000 -- where 36a641e0b hung after 212 resumes. S-16 is FIXED ON SILICON (registry R-49, with the
+  audit's limits); S-17 did not reproduce, mechanism unknown; the apertures never fired. The supervised-CALL platform
+  extension the delegated runtime needs is now usable on silicon without the fence workaround. S-17 on silicon (the LDC after a finished switch, lsu_ready 0 with both
   LSU units idle) stays OPEN. The TAG_WAIT reading in the paragraph below is WITHDRAWN: the walk's read was never the
   problem, its write was; the paragraph stays as the record of what was believed on 2026-10-03.
 - **(superseded) OPEN on silicon (2026-10-03, the board lane): a supervised RESUME CALL hangs under the FPGA monitor.** With the

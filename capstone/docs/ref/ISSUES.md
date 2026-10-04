@@ -729,7 +729,20 @@ te by the RTL lane, 2026-09-24.
 > stand as such: CALL;CALL corrupts the first's parked pc; control flow two or three instructions after the
 > CALL triggers it when fetch timing lets it reach issue in time (one layout measured: it did not).
 
-### R-49 — a switcher write is pushed into a FULL store-buffer commit queue: the store unit's room check answers for the previous store's queue · `FIXED IN RTL (capstone-ariane sup-call 192a5e624, 2026-10-04), NOT YET ON SILICON — the RTL half of S-16`
+### R-49 — a switcher write is pushed into a FULL store-buffer commit queue: the store unit's room check answers for the previous store's queue · `FIXED ON SILICON (caplifive_supcall_715bdd1fe.bit, flashed 2026-10-04; capstone-ariane sup-call 192a5e624) — the RTL half of S-16`
+
+> **On silicon (the board lane's pre-registered acceptance, lane board-supmon a888ec953c57, audited wording in the S-16
+> entry):** the 14 hash-identical bare arms that hung on 36a641e0b (stores 4..64; armed and plain CALL, supervised
+> RETURN, quantum escape; idx-7 and idx-4 entries) complete without a fence with their fenced twins' readings; armdep-nt
+> runs 8,551 escapes where 36a641e0b hung within 16; the byte-identical C5u monitor firmware without a fence runs the
+> supervised SQLite speedtest to 1,278 / 1,277 / 1,277 preemptions with the oracle hash where 36a641e0b hung after 212;
+> the R-43 list a1..a10 is unchanged (identity readings exact, cycles within 0.05 %). Attribution to R-49 rests on the
+> simulated mechanism and on the SAVE-entered arms, whose first switcher write follows a register read and never a load,
+> so R-50 cannot reach them. Limits: no silicon build isolates R-49 from R-50 and from re-placement; the two residuals
+> below are unexercised; the apertures 219..222 have never fired on this bitstream (nothing hung). Cheapest further
+> checks (the audit's): byte 220 at idle reads 0x40 on 715bdd1fe against 0x00 on 36a641e0b, a behavioural fingerprint of
+> the bitstream; a sticky "old mis-check reached" flag batched into the next bitstream would separate R-49 from timing;
+> N = 2 repeats of armdep-nt and the monitor run.
 
 > **What happens.** The domain switcher's walk writes (SAVE, and the exchange's parked registers) go through the
 > store unit into the store buffer's COMMIT queue directly (`store_buffer.sv`, the `valid_i && is_dom_switch` push;
@@ -802,7 +815,15 @@ te by the RTL lane, 2026-09-24.
 > coincidence likely under DDR latency. The earlier TAG_WAIT reading in the plan is withdrawn: the walk's READ was
 > never the problem, the WRITE was.
 
-### R-50 — the load unit's dom-switch flush exemption outlives the switcher's read, so the first load after a switch that is dispatched in a flush cycle is not killed · `FIXED IN RTL (capstone-ariane sup-call 429c60b32, 2026-10-04), NOT YET ON SILICON — simulation-only so far; NOT the silicon S-17`
+### R-50 — the load unit's dom-switch flush exemption outlives the switcher's read, so the first load after a switch that is dispatched in a flush cycle is not killed · `IN THE RESIDENT BITSTREAM (caplifive_supcall_715bdd1fe.bit, 2026-10-04; capstone-ariane sup-call 429c60b32); its trigger was never observed on silicon — NOT the silicon S-17`
+
+> **On silicon:** the trigger (an LDC dispatched in the same cycle as the swap-in CCSRRW's flush) is timing-dependent and
+> has never been observed on the board; the silicon evidence for the fix is the absence of regression on 715bdd1fe --
+> the R-43 list a1..a10 unchanged, the monitor's 1,277+ preemptions through exactly that CCSRRW/LDC window. S-17 itself
+> did not reproduce on 715bdd1fe (arm12-ldc 3/3, 8,552 escapes, identical to its ld twin; it hung on 36a641e0b): its
+> mechanism stays unknown -- neither R-49 nor R-50 produces the state it read (WAIT_STORE_READY with count 4, and
+> lsu_ready 1 with the DYN unit waiting, respectively, against its lsu_ready 0 / idle units / unretired CCSRRW), and a
+> timing-marginal path moved by the rebuild cannot be excluded. The apertures 219..222 stay armed for its return.
 
 > **What happens.** `load_unit.sv`: `if (flush_i && !sel_dom_switch && !ldbuf_q[ldbuf_last_id_q].is_dom_switch)
 > state_d = WAIT_FLUSH` exempts the switcher's reads from the busy-driven flush (6c4a8d5ab). Keyed on the last
@@ -1273,6 +1294,43 @@ lane. Not to be conflated with R-27: that one is a deadlock, this one is a state
 
 ### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Both the store-buffer account and the `.user = 0` account are REFUTED by traced arms that show their condition existed. SILICON: the window is ONE instruction wide -- boot sw49's distance ladder turns clean at a single intervening nop. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour). No fix candidate; synthesis-first; W-12 stays in force`
 
+> **NEW SHAPE, REPRODUCED IN SIMULATION, SEEN ON SILICON (2026-10-05): the HIT shape with the granule's plain stores
+> still in the write buffer reads the high half as 0.** On caplifive_supcall_715bdd1fe.bit the delegated runtime wrote a
+> `{offset, len}` pair with two plain `sd` (low word, then high) and its LTO-inlined memcpy copied the granule with
+> `ldc`/`stc` ~17 instructions later; the host read the length as 0 with the offset intact, deterministically (197
+> retries, 2 boots; the board lane's B0 attempt 12, lane b0-silicon-runtime; workaround: 8-byte copies, 72b8a662e7e9).
+> The recorded mechanism below (a stale refill on a MISS) predicts the OLD value, not 0. The board lane's discriminator,
+> run in simulation on the resident tree (capstone-ariane `r29-wbuf-busy-hit.S`, 56ca92df9, memory delay 12 and 40
+> identical): with G's line in L1 and `sd 0x4040 -> G+0; sd 0x6060 -> G+8` followed by the ldc/stc copy, the high half
+> reads 0 with no other store in flight, with 12 or 24 queued ahead, and 17 nops later; a plain `ld` reads 0x6060; a
+> `fence` between the pair and the copy restores 0x6060 even with 12 stores queued ahead; 200 nops restore it; the
+> board's exact two-pair shape reads the first copy intact and the second 0 at 0 nops, correct at 17 nops with nothing
+> queued ahead, 0 again with 6 stores queued ahead of the pair. **The general hazard (single-store arms, d453f9d94): a 128-bit
+> load of a granule returns a WRONG HIGH HALF whenever a plain store to that granule is still in the write buffer -- 0
+> when the fresh store is to the LOW word (`onlylo`: G+8 never written, read 0; the forwarded entry carries `.user = 0`
+> on the lanes the high half rides), the OLD value when the fresh store is to the HIGH word (`onlyhi`: the new value in
+> the write buffer is not routed to those lanes, the line's stale copy is); with both words fresh the low word's entry
+> wins and the half is 0.** The low word is correct in every case, a plain `ld` is unaffected, and a `fence` between the
+> plain stores and the wide load clears both faces. Mechanism: the 128-bit load carries the granule's high half on the
+> `user` lanes and the write buffer forwards per 64-bit word (`wt_dcache_mem.sv` gen_rd_user, the store unit's metadata
+> gate), so a plain store's entry either zeroes the half (low word) or is invisible to it (high word). **Confirmed on
+> the board in all three faces (the board lane, 2026-10-05 01:37-01:42, caplifive_supcall_715bdd1fe.bit, B0.8 in
+> b0-silicon-delegated-runtime.md):** an unguarded `ldc`/`stc` granule copy ~10 instructions after fresh plain `sd`s with
+> six stores to another line queued ahead miscopied 31/32 with the low word fresh, 31/32 with the high word fresh, 32/32
+> with both. The runtime memcpy's plain-data guard -- `ldc`, the `lcc` type query, and for type 7 two `ld` and two `sd` --
+> miscopied 0 of 96 with LTO placing its load one instruction after the stores (opt-in for silicon builds,
+> CAPSTONE_MEMCPY_PLAIN_GUARD). The queue drains in order -- stores issued before
+> the pair hold it (the board's 50-byte data copy; on DDR a single drain exceeds 17 instructions), stores issued after it
+> do not -- which is why the first pair's copy arrived intact on the board and in simulation. The refutation of the
+> `.user = 0` account below stands for the resident-and-MISS arm it tested; the HIT arm `r29-sep-userzero` never created
+> this condition. Consequence for the fix fork below: both shapes (stale refill on a miss, zero on a hit) are now
+> reproduced deterministically in simulation, so either formulation has its positive controls; a lint-clean alternative
+> to the data overlay is a load-side hold -- stall a 128-bit load while any store to its granule is resident in the
+> write buffer, the stall-only shape of the S-07 `gran_hazard` precedent. Software workaround until then: a `fence`
+> between a granule's plain stores and a wide load of it, or plain 8-byte moves for freshly written plain data (B0's
+> `dl_bytes`) -- musl-capstone's memcpy granule loop has exactly this exposure for any freshly written plain data; the W-04 line "the memcpy loop does not have this shape" is
+> false under full LTO, where the inlined memcpy forms the shape across the call.
+>
 > **FIX CANDIDATE 2026-09-10: functionally correct, FAILS THE LINT GATE. Branch
 > `r29-granule-data-overlay`, commit `00e89d968`.** The granule-scoped data overlay does what it was
 > written to do — `s06agg-shape` goes FAIL 11 → PASS with four controls unchanged and the predictions
@@ -1525,13 +1583,39 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
+### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `NOT REPRODUCED on caplifive_supcall_715bdd1fe (arm12-ldc 3/3), mechanism unknown, apertures 219..222 armed; was: OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
+
+**S-17: NOT REPRODUCED on `caplifive_supcall_715bdd1fe.bit`.** arm12-ldc ran 3 of 3, 8,552 escapes each, identical
+to its `ld` twin; it hung on 36a641e0b.
+- **Mechanism unknown.** Neither R-49 nor R-50 produces the state read here. Their end states read WAIT_STORE_READY
+  with count 4, and lsu_ready 1 with DYN waiting, respectively.
+- A timing-marginal path moved by the rebuild cannot be excluded.
+- Apertures 219..222 (the LSU bypass head, the commit queue, the adapter's tag FSM) remain armed for its return.
 
 - Not on the FPGA monitor's own path: its post-domcall `ldc ra, -16(sp)` depends on the CCSRRW's result. An
   INDEPENDENT capability load placed right after a domain call is the shape to avoid until it is fixed.
 - Sibling: S-16 (the switch itself never finishing).
 
-### S-16 — a domain switch that starts while the store buffer's commit queue is FULL never finishes, and one committed store is lost (apertures 224/225 = `0x1f`/`0x88`, switcher walk idx 7, its WRITE never acknowledged) `OPEN — needs the RTL fix; EVERY switch kind is exposed on silicon (bare 2026-10-04: armed CALL, supervised RETURN and escape at walk idx 7, PLAIN CALL at idx 4); a fence before every CALL covers only that CALL's own switch (not a supervised RETURN right after a domain store, bare s16st-n4-r3-fence; not an escape, bare s16st-esc-n8-retfence and boot supmon-c5f, where the FPGA monitor ran 552 supervised resumes); a fence before every CALL AND every RETURN completed all four twins that hung (bare, session s16fence), which covers runs without quantum preemption; localised on silicon 2026-10-04 by the switcher and LSU apertures (data write request valid and unacknowledged at idx 7, store-buffer commit count 4, store unit WAIT_STORE_READY); reproduced bare within 16 resumes and in the FPGA monitor's supervised resume (boots supmon-c5q, supmon-c5u); 12 stores before the CALL complete, 18/24 hang; a `fence` immediately before the CALL removes the CALL-side trigger (bare 8,551 escapes). Mechanism from the RTL lane's simulation, matching every silicon read: a dom-switch push into a FULL commit queue (the store unit consults the speculative queue's ready, store_unit.sv:443 / store_buffer.sv:170) overwrites the queue head, LOSING the oldest committed store, and the ring then starves the 4th switcher write. The RTL side is R-49, fix capstone-ariane 192a5e624 (sup-call), which covers every switcher write. Report folder: tests/fpga-repros/S16-supervised-switch-never-finishes/`
+### S-16 — a domain switch that starts while the store buffer's commit queue is FULL never finishes, and one committed store is lost (apertures 224/225 = `0x1f`/`0x88`, switcher walk idx 7, its WRITE never acknowledged) `FIXED ON SILICON 2026-10-04 on caplifive_supcall_715bdd1fe (R-49 192a5e624 + R-50; pre-registered acceptance, limits in the entry); was: OPEN — needs the RTL fix; EVERY switch kind is exposed on silicon (bare 2026-10-04: armed CALL, supervised RETURN and escape at walk idx 7, PLAIN CALL at idx 4); a fence before every CALL covers only that CALL's own switch (not a supervised RETURN right after a domain store, bare s16st-n4-r3-fence; not an escape, bare s16st-esc-n8-retfence and boot supmon-c5f, where the FPGA monitor ran 552 supervised resumes); a fence before every CALL AND every RETURN completed all four twins that hung (bare, session s16fence), which covers runs without quantum preemption; localised on silicon 2026-10-04 by the switcher and LSU apertures (data write request valid and unacknowledged at idx 7, store-buffer commit count 4, store unit WAIT_STORE_READY); reproduced bare within 16 resumes and in the FPGA monitor's supervised resume (boots supmon-c5q, supmon-c5u); 12 stores before the CALL complete, 18/24 hang; a `fence` immediately before the CALL removes the CALL-side trigger (bare 8,551 escapes). Mechanism from the RTL lane's simulation, matching every silicon read: a dom-switch push into a FULL commit queue (the store unit consults the speculative queue's ready, store_unit.sv:443 / store_buffer.sv:170) overwrites the queue head, LOSING the oldest committed store, and the ring then starves the 4th switcher write. The RTL side is R-49, fix capstone-ariane 192a5e624 (sup-call), which covers every switcher write. Report folder: tests/fpga-repros/S16-supervised-switch-never-finishes/`
+
+**S-16: FIXED ON SILICON** by pre-registered acceptance on `caplifive_supcall_715bdd1fe.bit`, flashed 2026-10-04.
+That is capstone-ariane sup-call 715bdd1fe = R-49 192a5e624 + R-50 429c60b32 + observation-only apertures, sha256
+a7add4c0...1311.
+- **Bare:** no reproduction in the 14 hash-identical arms that hung on 36a641e0b.
+  - They span stores 4..64; armed and plain CALL, supervised RETURN and quantum escape; walk-idx 7 and 4 entries.
+  - Each ran once and completed without a fence, with its fenced twin's readings.
+  - armdep-nt ran 8,551 escapes, where 36a641e0b hung within 16.
+- **The FPGA monitor:** no reproduction in three supervised SQLite runs of the byte-identical C5u firmware
+  (d07761ded4ce, no fence): 1,278 / 1,277 / 1,277 preemptions with the oracle hash, where 36a641e0b hung after 212.
+- **Attribution:** to R-49, by the simulated mechanism and by the SAVE-entered arms, which R-50 cannot reach.
+  The rebuild left memory timing unchanged: workload cycles within 0.05 %.
+- **Limits:**
+  - No silicon build isolates R-49 from R-50 and the re-placement.
+  - R-49's coincidence residuals are unexercised: a switcher push in the same cycle as commit_i, and a load-unit
+    clear coinciding with a switcher write.
+  - Apertures 219..222 have never fired on this bitstream.
+- Evidence: `tests/rtl-smoke/sup-resume-2026-10-03/` (accept715, the claim audit) and
+  `tests/rtl-smoke/supmon-2026-10-03/` (C5u on 715bdd1fe).
 
 - The FPGA monitor's compiler-generated `__domcallsaves` puts about 26 stores right before every domcall, so any
   supervised CALL through it is exposed.
@@ -6843,6 +6927,20 @@ regions go away. For example, at the top of `cleanup()`, block every signal and 
 The test is the reproducer above: 20 and 100 ms must exit 0, and the disarmed control must stay
 exit 0.
 
+### M-13 — a trap raised by the FPGA monitor's own code cannot be reported: `_cap_trap_entry` swaps Linux's integer sp in from cscratch and faults at +4 `OPEN — monitor robustness; found 2026-10-04 (B0.7 attempts 7-8)`
+
+- `_cap_trap_entry` begins `ccsrrw sp <- cscratch`. While the monitor is handling an ecall, cscratch holds the
+  interrupted S-mode sp, an integer.
+- So a trap taken INSIDE M-mode swaps that integer in, and the next instruction, `cincoffsetimm sp`, faults with
+  cause 24.
+- The board's trap log (`recent_nontrivial_*`, which keeps the LATEST trap, ecalls included) then reads mcause 24
+  at `_cap_trap_entry`+4, with tval a Linux kernel stack address (0xffffffc80412bca0, B0 attempts 8 and 9). The
+  original fault's cause and pc are overwritten.
+- The second entry swaps the monitor's sp back and starts saving registers. In both boots its stores then never
+  drained: the commit queue was full and the store port was not granted.
+- **Consequence:** a monitor bug on silicon reads as a silent wedge with a misleading trap log. Bisect it with trace
+  points, as C-76 was. The cheap tells are mepc at `_cap_trap_entry`+4 and a kernel-stack tval.
+
 ### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
 
 > **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
@@ -7625,6 +7723,43 @@ committed. The build check makes a recurrence visible at the next monitor build.
 
 **Impact.** Any monitor change can meet the first defect; the check turns it into a build failure
 instead of a halted monitor. Only the monitor is compiled by capstone-c.
+
+### C-76 — capstone-c's monitor code assumes `ldc`/`stc` COPY a linear-family capability; silicon MOVES it (Q-12), so the monitor's process-ABI step wedged the board `FIXED 2026-10-05 on caplifive-sbi capstone-bootstrap 91c8aa2 (managed_reinit, revoke in the caller; QEMU A/B against 52010b3 shows no regression) and on the FPGA monitor lane line (d5459e1, verified on silicon by llvm-capstone's B0 runs, 4 boots); the opensbi/buildroot pins are not bumped; one LATENT instance remains (below)`
+
+**The instance that wedged the board.**
+- On `caplifive_supcall_715bdd1fe.bit`, capstone-c caller-saved a live `__rev` argument with `stc(a0, sp, N)`
+  immediately before each of `managed_reclaim`'s four calls. That is verified in the 3be6737 firmware binary,
+  e.g. `stc a0,112(sp)` at 0x80021bfc, then `jal managed_reclaim` two instructions later.
+- The RTL source clears STC's register source for every type but NONLIN and NOT_CAP
+  (`capstone_dyn_unit.anvil:525-529, 544-548` at 715bdd1fe). So the callee read NOT_CAP: LCC type 7, B0 attempts
+  8 and 9.
+- **The hop is identified by elimination.** `loan_begin` is byte-identical across the runs and the same global is
+  reloaded, yet revoking in the caller passes on four boots.
+- **A REV-typed STC clear has not been measured directly.** R-22's silicon readings are LINEAR, and
+  `stc-register-clear.S` has no REV arm.
+- REVOKE on NOT_CAP raises 24 per the RTL source. The trap actually observed is the nested one at
+  `_cap_trap_entry`+4 (M-13). Why the store unit then wedges is unresolved.
+- capstone-qemu copies on STC (Q-12), so every QEMU run passed.
+- Evidence: `docs/plans/b0-silicon-delegated-runtime.md`, attempts 5-13.
+
+**The fix.** Each caller does `x = __revoke(slot); x = managed_reinit(x)`, so a `__rev` value never crosses a call.
+capstone-c moves a `__linear` argument into a call instead of caller-saving it. A scan of the generated monitor for
+"an argument register passed exactly as stc-saved" finds the 4 old sites, and none after the fix.
+
+**The latent instance.** In `create_domain`, the gp carve `dom_gp = __split(...)` is LINEAR and is spilled to a
+stack slot.
+- `if (dom_gp != 0)` loads that slot, and on silicon the load moves the value out (Q-12's memory half).
+- `*(__linear void **)dom_data = dom_gp` then loads it again, so silicon delivers cnull in the gp slot at
+  `data_top - 16`.
+- The FPGA build has the identical sequence.
+- It is harmless today, because the interp glue builds gp from its own cap-table carve and never reads the
+  delivered slot. A glue that reads it would get cnull on silicon.
+- Found by capstone-qemu's S-12 slot tracker (`CAPSTONE_SLOT_LOG`), whose positive control fires, on B0's run. That
+  was the only clear-set double load in the whole run.
+
+**The class.** capstone-c treats `__rev` as copyable, and a linear value that is tested and then used is loaded
+twice. Both are correct under QEMU and wrong on silicon. Same family as the LLVM RegAllocFast spill in
+`history/13-08-2026_02-30-00_sqlite-returns-rows-on-silicon.md` (STC declared with an empty `(outs)`).
 
 ## Infrastructure / procedure
 

@@ -7,7 +7,8 @@ main() {
   local F=$(cd "$(dirname "$0")" && pwd) OUT=${CAPSTL_OUT:-/tmp/capstone/capstl-run}
   local L=$F/../sup-bare-2026-10-03-ladder V1=$F/../sup-bare-2026-10-02/images
   export FPGA_URL="$(cat "${CAPSTONE_FPGA_URL_FILE:-$HOME/.claude-kisp/secrets/fpga-console-url}")"
-  export FPGA_BITSTREAM=caplifive_supcall_36a641e0b.bit
+  # the runner HARD-STOPS unless this equals the resident bitstream's name; set CAPSTL_BITSTREAM after a reflash
+  export FPGA_BITSTREAM=${CAPSTL_BITSTREAM:-caplifive_supcall_36a641e0b.bit}
   mkdir -p $OUT
   local jobs=("control-call-retpc|$V1/call-retpc.bin|80003800")
   if [ "${CAPSTL_SET:-hot}" = hot ]; then
@@ -18,6 +19,15 @@ main() {
     for n in s16st-plain-n32-r1 s16st-plain-n4-r3 s16st-plain-n24-r3 s16st-plain-n32-r3 s16st-esc-n8-retfence s16st-esc-n8; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = s16fence ]; then   # a fence before the CALL and the domain's RETURN, on four twins that hung
     for n in s16st-plain-n32-r1-fence s16st-plain-n4-r3-fence2 s16st-n4-r3-fence2 s16st-plain-n32-r3-fence2; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
+  elif [ "$CAPSTL_SET" = accept715 ]; then   # the S-16/S-17 fix bitstream (capstone-ariane 715bdd1fe): every S-16 arm without a fence, S-17 last
+    for n in armdep-nt-d16-q64 s16sd24 s16st-n4-r1 s16st-n4-r3 s16st-n4-r3-fence s16st-n32-r1 s16st-esc-n8 s16st-esc-n8-retfence \
+             s16st-plain-n32-r1 s16st-plain-n4-r3 s16st-plain-n24-r3 s16st-plain-n32-r3 s16st-esc-n8-r1 s16st-esc-n32-r1 s16st-esc-n64-r1 \
+             arm12-ld-q64 arm12-ldc-q64; do
+      jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
+  elif [ "$CAPSTL_SET" = s16escr1 ]; then   # the RTL lane's three one-round escape arms exactly
+    for n in s16st-esc-n8-r1 s16st-esc-n32-r1 s16st-esc-n64-r1; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
+  elif [ "$CAPSTL_SET" = s17rep ]; then   # S-17's matched pair again (repeats on 715bdd1fe)
+    for n in arm12-ldc-q64 arm12-ld-q64; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = precall ]; then   # the S-16 workaround candidate, and the stc18 rerun
     for n in s16pre-nt s16pre-stc24 s16stc18; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = deep ]; then   # extended apertures on S-16/S-17, the slot-0 control, the store-count dose-response

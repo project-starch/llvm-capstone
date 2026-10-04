@@ -30,13 +30,18 @@
     "false": 4
   },
   "runners": [
-    "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-native.sh"
+    "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-native.sh",
+    "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-sublet-port.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "inventory": "capstone/docs/ref/ffmpeg-pool-consumer-defects.md",
   "evidence": [
+    "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-asan-pool-blindness",
+    "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-four-cases",
+    "capstone/bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port",
+    "capstone/ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47",
     "capstone/ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev",
-    "capstone/bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port"
+    "capstone/ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39"
   ],
   "advisories": [],
   "shape_table": true

@@ -79,13 +79,18 @@
         "false": 4
       },
       "runners": [
-        "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-native.sh"
+        "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-native.sh",
+        "capstone/bug-corpora/ffmpeg/pool-repros/runners/run-sublet-port.sh"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "inventory": "capstone/docs/ref/ffmpeg-pool-consumer-defects.md",
       "evidence": [
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-asan-pool-blindness",
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-four-cases",
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port",
+        "capstone/ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47",
         "capstone/ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev",
-        "capstone/bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port"
+        "capstone/ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39"
       ],
       "advisories": [],
       "shape_table": true,
@@ -1094,10 +1099,20 @@
       "id": "S13-o1-dyn-rev-node-hang",
       "title": "S-13 \u2014 at `-O1` the domain HANGS in the DYN/rev-node path, with no exception",
       "has_sha256sums": false
+    },
+    {
+      "id": "S16-supervised-switch-never-finishes",
+      "title": "S-16 \u2014 a domain switch that starts while the store buffer's commit queue is FULL never finishes on silicon (and loses a committed store)",
+      "has_sha256sums": false
+    },
+    {
+      "id": "S17-ldc-after-supervised-switch-lsu-stuck",
+      "title": "S-17 \u2014 on silicon, an LDC right behind the post-CALL `ccsrrw sp <- cscratch` does not complete, and the LSU stays not-ready",
+      "has_sha256sums": false
     }
   ],
   "issues": {
-    "open": 98,
+    "open": 102,
     "resolved": 77
   },
   "fixtures": [
