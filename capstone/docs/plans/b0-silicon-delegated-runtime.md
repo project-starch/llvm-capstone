@@ -547,6 +547,34 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
 - **The tval of the nested trap** should read Linux's sp, a kernel stack address, if the nested-trap reading is
   right. Anything else refutes it.
 
+## B0.7 attempt 8 (22:48-22:57): the value handed to REVOKE is NOT a capability
+- **Trace:** `... LNDE 4, MRCL 0xF, MRCL 0x17`, then nothing.
+- **Correction to the pre-registration.** It said an lcc on an integer faults. On silicon the TYPE query (selector
+  1) is TOTAL by design, the "S-06 enabler" (capstone_dyn_unit.anvil:212-237 at 715bdd1fe). It returns
+  `cap_type - 1` in 3 bits (:249), so NOT_CAP (0) reads 7. **So 0x17 is the "root reloaded as a non-capability"
+  reading**, and REVOKE on plain data then raises.
+- **tval of the nested trap: 0xffffffc80412bca0**, a Linux kernel stack address, as predicted for
+  `cincoffsetimm sp` on Linux's integer sp. The nested-trap reading holds.
+- **Rev-node state:** rev_node_debug_ex 0, head 0x009e, serving index 0. All other apertures match attempt 7.
+- **Not Q-11.** On silicon, LDC forwards a loaded capability verbatim (ISSUES Q-11: a revoked handle reads 2 there).
+  So silicon's 7 means the stored value had no tag. It is not a revoked rev capability.
+- **Not S-07.** That defect is sporadic. This one repeated identically in attempts 5-8.
+
+## B0.7 attempt 9 pre-registered (before the boot): which hop loses the tag
+- **Monitor 5c984b2:** 8a5004e plus type traces in post-shift numbering (LIN 0, NONLIN 1, REV 2, UNINIT 3,
+  NOT_CAP 7).
+  - In loan_begin: `LNBG 0x10+` the block desc_take returns; `0x20+` what MREV returns; `0x30+` the block after
+    MREV; `0x40+` desc_rev[k] reloaded right after the store; `0x50+` the DELINed view.
+  - In loan_end, before the call: `LNDE 0x40+` desc_rev[k].
+- **Build:** firmware 43018fb5871e on Image 88ad30cafd09.
+- **A healthy sequence reads** LNBG 0x10, 0x22, 0x30, 0x42, 0x51, then LNDE 0x42 and MRCL 0x12. The first 7 names
+  the hop:
+  - LNBG 0x27: MREV returned a non-capability;
+  - 0x47: the stc into the global array lost the tag;
+  - LNDE 0x47 after LNBG 0x42: the tag disappeared while the domain ran;
+  - MRCL 0x17 after LNDE 0x42: the stack round trip lost it.
+- Also informative: a 0x20 + t with t not 2, i.e. MREV returning some other type.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
