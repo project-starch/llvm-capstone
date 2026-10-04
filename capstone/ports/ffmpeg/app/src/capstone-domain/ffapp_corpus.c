@@ -23,6 +23,10 @@
 #endif
 
 AVBufferPool *g_pool;
+/* The side-table pool, mirroring the corpus's shared/driver.c. A case that does not use
+ * it is unaffected by its existence; case 3 is the first that does, and without this the
+ * link fails with "undefined symbol: g_refpool". */
+AVRefStructPool *g_refpool;
 
 /* The corpus's contract: an infrastructure failure is never a verdict. */
 _Noreturn void ff2_fail(unsigned code)
@@ -40,10 +44,14 @@ int main(int argc, char **argv)
     g_pool = av_buffer_pool_init(POOL_BYTES, NULL);   /* the driver's pool, as natively */
     if (!g_pool)
         ff2_fail(605);
+    g_refpool = av_refstruct_pool_alloc(TAB_BYTES, 0); /* same codes as the corpus driver */
+    if (!g_refpool)
+        ff2_fail(606);
     printf("case=%d arm=%s\n", ff2_case_number, FFAPP_CORPUS_FIXED ? "fixed" : "buggy");
     fflush(stdout);
     int rc = ff2_case_run(FFAPP_CORPUS_FIXED);
     av_buffer_pool_uninit(&g_pool);
+    av_refstruct_pool_uninit(&g_refpool);
     printf("FFAPP-FIX %d mark=%x\n", FFAPP_FIXTURE, rc);
     fflush(stdout);
     return rc;

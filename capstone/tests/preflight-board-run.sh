@@ -86,7 +86,18 @@ if [[ -f "$FW" ]]; then
     *65536*|*_r20*|*supcall*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c2d2000)" \
         || bad "DTS/bitstream MISMATCH: $BITSTREAM needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
-    *) say "warn" "unknown bitstream $BITSTREAM -- DTS pairing unchecked" ;;
+    # An unknown name BLOCKS (the lead, 2026-10-04). It used to warn, and _r20 and supcall both fell through that warn
+    # for every run on them, verifying nothing. A name not in this table is declared for one run with
+    # PREFLIGHT_DTS_NODES=65536|1021 after checking the bitstream's node count, and added here once known.
+    *) case "${PREFLIGHT_DTS_NODES:-}" in
+         65536) [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
+                  && ok "DTS matches $BITSTREAM as DECLARED 65536-node (0x3c2d2000; add the name to this table)" \
+                  || bad "DTS/bitstream MISMATCH: declared 65536-node needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
+         1021)  [[ "$have_1021" -ge 1 && "$have_64k" -eq 0 ]] \
+                  && ok "DTS matches $BITSTREAM as DECLARED 1021-node (0x3c3c0000; add the name to this table)" \
+                  || bad "DTS/bitstream MISMATCH: declared 1021-node needs 0x3c3c0000 (found 1021=$have_1021 64k=$have_64k)" ;;
+         *)     bad "unknown bitstream $BITSTREAM -- DTS pairing would go unchecked: add it to this table, or set PREFLIGHT_DTS_NODES=65536|1021 for this run after checking its node count" ;;
+       esac ;;
   esac
   python3 -c "
 import sys

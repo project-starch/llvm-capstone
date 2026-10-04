@@ -157,6 +157,14 @@ poolsublet   19  FAULT  temporal
 # avfilter_graph_config on both pool arms (2026-09-29) while the same graph runs clean natively
 # under ASan. Not predictions of safety: each returns 0x1 (mark 0x..00001) if the graph configures.
 # Registered so the runner will run them; a fault in any of them localizes the negotiation fault.
+#
+# RETIRED 2026-10-04. The negotiation fault they existed to localize was resolved: fixtures 18 and 19
+# are AS PREDICTED in results/2026-09-29-trackb-afjoin (result-lines.txt section 3 onward). Only 30
+# ever produced a reading; 31, 32 and 33 appear in exactly one bundle, all three as
+# "ERROR no section in the log -- the image never started", and were never re-attempted. They are kept
+# as rows rather than deleted so the bundle that reports those ERRORs still resolves against this file,
+# but they are NOT owed a measurement: do not schedule boots for them. If the negotiation question ever
+# reopens, re-register them with a fresh date rather than reviving these.
 poolsublet   30  RETURN 1e00001
 poolsublet   31  RETURN 1f00001
 poolsublet   32  RETURN 2000001

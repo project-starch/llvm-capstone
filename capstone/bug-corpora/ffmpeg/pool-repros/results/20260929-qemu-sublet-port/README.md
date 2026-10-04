@@ -23,6 +23,21 @@ N = 3 per cell:
 How to read it:
 
 - **Every case is the corpus's `case.c`, unchanged,** in the FFmpeg app port's domain.
+
+> **SUPERSEDED for reproducibility, 2026-10-04.** The `case.c` files are still unchanged, but the
+> **driver around them is not**: `dedab28c4a2c` made `ports/ffmpeg/app/src/capstone-domain/ffapp_corpus.c`
+> create `g_refpool`, without which the corpus's case 3 does not link. The committed file this bundle ran
+> against has **zero** occurrences of `g_refpool`, so **the twelve image hashes in `SHA256SUMS` can no
+> longer be produced from today's source**, and on the `poolsublet` arm the extra pool takes a lease.
+> The cells below stand as what was measured on 2026-09-29; they are **not** confirmations of today's
+> tree. Fixtures 40-45 were re-measured on 2026-10-04 — see
+> `../../../../../ports/ffmpeg/app/results/` — and those rows supersede these.
+>
+> Recorded here because `dedab28c4a2c`'s own message put this caveat on the **wrong bundles**: it named
+> `results/20260929-trackb-afjoin/` and `-vidstab/`, which do not exist under those names and are in any
+> case unaffected — they measure *safety* fixtures 18/19 and 22/23 built from `ffapp_safety.c`, not from
+> `ffapp_corpus.c`. This bundle is the only committed measurement of fixtures 40-45, and until now the
+> caveat existed only in a commit message, where a repository reader would never find it.
   `src/capstone-domain/ffapp_corpus.c` stands in for the corpus driver: the same pool, the same
   calls, and the case prints its own verdict line.
 - **The arms differ in one macro**, `FF_SUBLET_POOLS`, plus the port's backend `ffsublet.o`, which
