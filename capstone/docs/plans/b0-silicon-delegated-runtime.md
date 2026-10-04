@@ -69,8 +69,47 @@ and the QEMU-pinned one:
 - **Gate:** the QEMU process-ABI suites are unchanged, since managed images have gpoff = 0. A managed gpoff != 0
   image boots, with a must-fail control: the old monitor refuses it.
 
+**B0.1 status (2026-10-04):** written as capstone-sbi `monitor/b0-managed-gp` 3be6737.
+- The refusal is dropped. `data_top = tot_size - CONTEXT_DESC_AREA` for a managed domain is used by both blob guards
+  and the gp park.
+- It compiles for FPGA with supervision, FPGA plain and QEMU, and the firmware passes the dom_stack gate.
+- Not yet run: it needs the B0 image. A park move is enough, because the interp glue never reads the park: it carves
+  its own table from its data capability's END (`start-gp-captable-interp.S:451-455`), which after the descriptor
+  split is `data_top`.
+
 **B0.2 Glue: `start-musl-gpct.S`.** The interp glue's carve, prologue and reentry, plus start-musl's recovery block,
 `__capstone_yield`, contexts, seal/offer and `domain_main` call.
+- **What in today's `start-musl.S` cannot carry over (read 2026-10-04).**
+  - It treats gp as the domain's CODE capability at cursor 0. It loads data through it (`cincoffset t3, gp, t3;
+    ld t4, 0(t3)` for `__capstone_context_arena_bytes`) and forms every code pointer from it (`domain_main`, the
+    cap-init initializers, the fault vector).
+  - On silicon a code-authority capability cannot load data (the 2026-07-22 root cause in the monitor's comment).
+- **Data the glue defines in assembly, which C references:**
+  - `__capstone_context_arena` (.data);
+  - `__cp_begin/__cp_end/__cp_cancel` (.rodata, compared by address in musl's `pthread_cancel.c`);
+  - `__capstone_gct_start`.
+  - Under full LTO an assembly definition is outside the module, so C's `extern` is an undefined declaration: the same
+    gp-derivation plus `delin` as a linker-script symbol, fatal on silicon.
+  - These move into a C file that LTO sees.
+- **B0 needs no minted contexts** (CONTEXT_BYTES = 0). The context entry/exit/seal/offer/call exports become stubs
+  that fault deterministically if reached.
+- **The gp-captable yield already exists, so B0.2 is a port, not a new glue.** The c128 line
+  (`origin/rebased/c128-3-musl`, plan `20-08-2026_mruby-gp-captable.md`) put `__capstone_yield` into the interp glue:
+  - under `CAPSTONE_GLUE_YIELD`, landed on dev as d67a82a0e3a4;
+  - it reaches its frame through `cscratch` and the entry return capability at `+48`, the slot `test:` already
+    parks;
+  - byte-identity controls keep SQLite, micropython and jerryscript untouched;
+  - its yield-probe passed on QEMU on the gp-captable glue: resume, not restart, with frame and cap table intact.
+- **The c128 build path to port:**
+  - `build-yield-probe.sh YIELD_PROBE_GPCT=1` and `build-mruby-probe.sh MRUBY_GPCT=1` on that branch;
+  - the musl archive built with `MUSL_CAPSTONE_EXTRA_CFLAGS`, with its compile census (1321/1361, as the default
+    ABI);
+  - full LTO, its step 4b;
+  - stack_reserve.o in BOTH links (a new global shifts the descriptor).
+- **What B0 adds is the CURRENT runtime.** c128 ran the old HostCall v0 runtime. Today's runtime is `hostcall.c`
+  domain_main with 3 region shares, delegate.c over the process ABI, and the recovery-block layout in context.h.
+  - The interp glue's frame and result-slot convention differs from start-musl's recovery block (slots 0/16/32/48/64/
+    80). B0.2 reconciles the two for exactly what the runtime reads: the result slot on a fault, and the yield.
 - **No plain M-CSR access.** The interp glue's mcause/mtval saves (:719/:721/:942/:944) are illegal under supervision.
 - **The init/fini and TLS template bounds come from the glue** (as values computed from gp-relative definitions it
   owns), not from linker-script symbols. The runtime C uses them through two small accessors.
