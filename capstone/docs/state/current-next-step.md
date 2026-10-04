@@ -17,11 +17,9 @@ write pushed into a FULL store-buffer commit queue), together with R-50
 36a641e0b hung after 212 (plan step-11 acceptance; R-49 FIXED ON SILICON). NEXT for the RTL lane: the
 runtime lane's supervised_invoke work needs nothing more from the RTL; keep the fallback sup-call-b2 parked;
 the audit's cheap checks (byte 220 at idle = 0x40 as the bitstream's fingerprint; a sticky mis-check flag for
-the next bitstream) go into the next aperture batch, not a cycle of their own. Until the reflash, a `fence` before every CALL covers only that CALL's switch
-(the board lane, bare). A fence before every RETURN as well completed every
-non-preemptive twin that hung. A quantum escape stays exposed, so preemptive
-supervision waits for the reflash. After the reflash: the board's S-16 arms without the fence, then
-the supervised speedtest; S-17 on silicon stays open; the apertures that read its state (219..222) are in the candidate (R-50).
+the next bitstream) go into the next aperture batch, not a cycle of their own. (Before the reflash, on 36a641e0b, a `fence` before every CALL covered only that CALL's switch and a
+fence before every RETURN as well covered the non-preemptive twins, the quantum escape staying exposed --
+the board lane, bare; superseded by the flashed fix.) S-17 on silicon stays open; the apertures that read its state (219..222) are in the candidate (R-50).
 
 Supervised CALL (2026-10-01): the RTL is on capstone-ariane `sup-call`
 ([plan, revision 1.2](../plans/supervised-call-silicon.md)); every simulation
