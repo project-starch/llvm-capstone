@@ -1313,7 +1313,13 @@ lane. Not to be conflated with R-27: that one is a deadlock, this one is a state
 > wins and the half is 0.** The low word is correct in every case, a plain `ld` is unaffected, and a `fence` between the
 > plain stores and the wide load clears both faces. Mechanism: the 128-bit load carries the granule's high half on the
 > `user` lanes and the write buffer forwards per 64-bit word (`wt_dcache_mem.sv` gen_rd_user, the store unit's metadata
-> gate), so a plain store's entry either zeroes the half (low word) or is invisible to it (high word). The queue drains in order -- stores issued before
+> gate), so a plain store's entry either zeroes the half (low word) or is invisible to it (high word). **Confirmed on
+> the board in all three faces (the board lane, 2026-10-05 01:37-01:42, caplifive_supcall_715bdd1fe.bit, B0.8 in
+> b0-silicon-delegated-runtime.md):** an unguarded `ldc`/`stc` granule copy ~10 instructions after fresh plain `sd`s with
+> six stores to another line queued ahead miscopied 31/32 with the low word fresh, 31/32 with the high word fresh, 32/32
+> with both. The runtime memcpy's plain-data guard -- `ldc`, the `lcc` type query, and for type 7 two `ld` and two `sd` --
+> miscopied 0 of 96 with LTO placing its load one instruction after the stores (opt-in for silicon builds,
+> CAPSTONE_MEMCPY_PLAIN_GUARD). The queue drains in order -- stores issued before
 > the pair hold it (the board's 50-byte data copy; on DDR a single drain exceeds 17 instructions), stores issued after it
 > do not -- which is why the first pair's copy arrived intact on the board and in simulation. The refutation of the
 > `.user = 0` account below stands for the resident-and-MISS arm it tested; the HIT arm `r29-sep-userzero` never created
