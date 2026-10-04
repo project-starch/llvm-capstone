@@ -94,14 +94,22 @@ def read_wedge_apertures(console):
                 break
             pc |= v << (8 * i)
         lines.append("commit pc (scoreboard slot 0; stale after a flush) " + (f"0x{pc:016x}" if ok else "UNREAD"))
-        mepc, ok = 0, True
-        for i in range(8):
-            v = rd(196 + i)
-            if v is None:
-                ok = False
-                break
-            mepc |= v << (8 * i)
-        lines.append("trap-log mepc " + (f"0x{mepc:016x}" if ok else "UNREAD"))
+        # Multi-byte reads, LSB first, verified against cva6.sv at 715bdd1fe: the trap log's mepc (bank 6 regs
+        # 4..11) and latched tval (bank 6 regs 18,19,21..26 -- reg 20 is the trap-summary mirror), and the rev-node
+        # debug word, head and serving index (bank 7 regs 17..24, 25..26, 27..30).
+        for name, sws in (("trap-log mepc", range(196, 204)),
+                          ("trap-log tval", (210, 211, 213, 214, 215, 216, 217, 218)),
+                          ("rev_node_debug_ex", range(241, 249)),
+                          ("rev_node_head_ex", (249, 250)),
+                          ("rev_node_serving_idx_ex", range(251, 255))):
+            val, ok = 0, True
+            for i, sw in enumerate(sws):
+                v = rd(sw)
+                if v is None:
+                    ok = False
+                    break
+                val |= v << (8 * i)
+            lines.append(f"{name} " + (f"0x{val:0{2 * len(sws)}x}" if ok else "UNREAD"))
         for sw, a, b in unstable:
             lines.append(f"UNSTABLE sw={sw}: {a} then {b}")
     finally:

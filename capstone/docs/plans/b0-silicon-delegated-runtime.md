@@ -511,6 +511,42 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   `__mrev`'d block, delinearised and lent, then revoked) has no silicon precedent. The traces decide it, not this
   lean.
 
+## B0.7 attempt 7 (22:34-22:43): the wedge follows loan_end's offer stage; a nested trap in the monitor's trap entry
+- **Trace:** `STPB 0, SUPA 0, SUPK 0, LNDE 1, 2, 3, 4`, then nothing. MRCL 1 never printed.
+  - The descriptor loads, the seal's `ldc` and `stc x0`, and the offer bookkeeping all completed.
+  - The wedge lies in loan_end's call into managed_reclaim, its prologue `stc`s, the `ldc` of the rev capability,
+    `revoke`, `movc`, or the `stc` before the trace call.
+- **Apertures**, all stable on a double read:
+  - trap log 0x98: seen, mcause 24 (UNEXP_OP_TYPE), mepc 0x80020064 = `_cap_trap_entry`+4.
+  - commit pc 0x8002007c = `_cap_trap_entry`+0x1c, a SAVE_REG store.
+  - 224 = 0x0d: lsu_rdy 0.
+  - commit queue FULL: 221 = 0xf8 (valid 1111, st_data_req 1, gnt 0), 193 count 4, 194 store_state 3.
+  - bypass head a STORE (220 = 0x82, 219 = 0x26). Tag FSM IDLE (222 = 0). 228 = 0xc2.
+- **Reading.** cva6.sv at 715bdd1fe latches the LATEST non-interrupt, non-illegal trap, ecalls included.
+  - `_cap_trap_entry` starts `ccsrrw sp <- cscratch`. Inside the monitor, cscratch holds Linux's integer sp. So any
+    trap taken IN M-mode makes the next instruction, `cincoffsetimm sp`, fault with cause 24 (+4).
+  - The second entry swaps the monitor's sp back and starts saving registers. Its stores then never drain: the
+    commit queue is full and the store port is not granted.
+  - **So the original fault, somewhere after LNDE 4, is a trap inside the monitor whose cause and pc the nested
+    trap overwrote.** The final LSU wedge may be a consequence rather than the cause. UNRESOLVED.
+- Side finding: a trap raised by the monitor's own code cannot be reported on silicon. It always becomes this
+  nested cause-24 trap.
+
+## B0.7 attempt 8 pre-registered (before the boot)
+- **Monitor 8a5004e:** b6d74c3 plus `MRCL 0xf` at managed_reclaim's entry (prologue done) and
+  `MRCL 0x10 + cap_type(root)` right before the revoke. The generated code is prologue, trace, `ldc root`,
+  `lcc type`, trace, `ldc`, `revoke`, `movc`, `stc`, trace (MRCL 1).
+- **Build:** firmware 104f5798c558 on the same Image 88ad30cafd09. dom_stack gate PASS.
+- **Driver:** the wedge read adds the latched tval (210/211/213..218) and the rev-node state:
+  rev_node_debug_ex (241..248), head (249/250), serving index (251..254). A fake-console test assembles each.
+- **Predicted readings:**
+  - no MRCL 0xf: the call or the prologue's stores fault;
+  - 0xf but no 0x1t: root reloads as a NON-capability, so `lcc` faults;
+  - 0x1t but no MRCL 1: `revoke` (or `movc`/`stc` behind it) faults or blocks on a capability of type t;
+  - MRCL 1 printed: attempt 7's wedge did not reproduce with these traces.
+- **The tval of the nested trap** should read Linux's sp, a kernel stack address, if the nested-trap reading is
+  right. Anything else refutes it.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
