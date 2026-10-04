@@ -356,6 +356,50 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
     restored shared cpio carries it again (hash checked).
 - Predictions unchanged: k800r 4 (the classic path on the process-ABI module), b0-hello 0.
 
+## B0.7 attempt 3 (21:33-21:40): the module's own insmod hangs the board -- a build-flag defect, already on record
+- **What the board did.** The driver's `insmod /capstone.ko` never returned. The monitor printed
+  `EXCX:0000E002 MCAU:00000004 MEPC:80006B18 MTVL:00F0006E MSTA:00000822`.
+  - That is a misaligned load (cause 4), taken in S-mode (MPP=1).
+  - The faulting pc is in the FPGA vmlinux's `apply_r_riscv_call_plt_rela`, at `ffffffff80006b18: 4090 lw a2,0(s1)`.
+    The kernel's module loader reads the auipc+jalr pair at a relocation site with 32-bit loads.
+  - The capstone monitor's `handle_exception` has no cause-4 case, so it prints EXCX and spins. The kernel never gets
+    the trap back.
+  - Neither rung ran, and there is no verdict about the process ABI.
+- **Why.** My module was built out of tree with `make -C linux M=...`, and that drops the package-level
+  `EXTRA_CFLAGS`. On the FPGA target, `external.mk` sets `-march=rv64g -mabi=lp64d` for exactly this failure: upstream
+  cfa3d49, "Disabled C extension for modcapstone build to avoid misaligned access". Without it the kernel's own
+  `-march=rv64imac` applied.
+- **Measured** (python over `readelf -rW` and `objdump -d`; the old build is the positive control):
+
+  | build | 2-byte instructions | R_RISCV_CALL* in .text | at a 2-mod-4 offset |
+  |---|---|---|---|
+  | attempt-3 module 57cb9a9b (rv64imac) | 1602 | 161 | **71** |
+  | rebuilt module 0332e2d6 (`EXTRA_CFLAGS="-march=rv64g -mabi=lp64d"`) | 0 | 161 | 0 |
+  | stock buildroot module ed807a29 | 0 | 87 | 0 |
+
+  The rebuilt module still carries the process ABI: `process_cache_bytes` is present, and the `vm_flags_set` guard is
+  in process.c.
+- **A side note on the external.mk comment** ("the FPGA core has no C extension"): it does not match this boot. The
+  faulting instruction is itself a 2-byte `c.lw` that the core was executing (the kernel is built rv64imac). The
+  defect is the misaligned DATA load that RVC relocation sites cause, not instruction fetch. The flags are right
+  either way.
+
+## B0.7 attempt 4 pre-registered (before the boot)
+- Same boot, bitstream, firmware recipe, driver command and oracles as attempt 3. The only change is the module in the
+  private image: 0332e2d6 (rv64g) replaces 57cb9a9b, as both `/capstone.ko` and `/test-domains/capstone-proc.ko`.
+  - Image 96811d0769d064d8. Its cpio check shows all six staged files and the replaced `/capstone.ko` present by hash.
+  - The shared image was restored afterwards: its target `/capstone.ko` is ed807a29 again, and the six files are
+    absent from the restored cpio.
+  - Firmware a63f82b0dfe5: monitor 3be6737, wrapper 882892f,
+    `-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS`. The dom_stack gate passes (21552 of 32768 B).
+- **Predictions.** The driver's insmod returns, and `/dev/capstone` appears.
+  - **k800r: retval 4.** This is the classic path under the process-ABI module. If it fails, the module breaks the
+    classic path.
+  - **b0-hello: retval 0**, with the codes as pre-registered at 21:12.
+- **A new failure point.** If the insmod hangs again, read the EXCX block.
+  - Cause 4 again would mean a misaligned access the flags did not remove: data, not RVC relocation sites.
+  - Any other cause is a new finding.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
