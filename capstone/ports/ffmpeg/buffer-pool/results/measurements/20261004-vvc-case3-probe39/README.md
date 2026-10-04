@@ -34,9 +34,37 @@ Case 3 declares two protected Capstone arms and they are different things:
 - **`spatial` / `sublet`** — the **component** port, `ports/ffmpeg/buffer-pool`, probe slot 39. **This
   bundle.** Measured.
 - **`sublet-port`** (fixtures 46/47) — the **app** port, `ports/ffmpeg/app`, FFmpeg's own pools under
-  the Sublet allocator. **Still a prediction**, and blocked: the app SDK's ABI gate
-  (`capstone/runtime/application/CMakeLists.txt:16`) refuses every toolchain on this host for want of
-  the intcap extensions (PR #120 / C-72). Do not read this bundle as closing that arm.
+  the Sublet allocator. **Still a prediction**, because it has not been run. Do not read this bundle as
+  closing that arm.
+
+> ### ~~and blocked: the app SDK's ABI gate refuses every toolchain on this host~~ — RETRACTED same day
+>
+> **That was false, and it was my own claim from earlier today.** A **qualified toolchain is present on
+> this host** and the gate **accepts** it:
+>
+>     <sibling worktree> llvm-capstone-cc/build-release/bin/clang
+>     clang 22.0.0git, project-starch/llvm-capstone 7d01722aab88
+>     check_toolchain(...) -> PASS   (run end-to-end as the SDK runs it)
+>     check 1 (two-call direct call): PASS, emits `delin t1`
+>     check 2 (__uintcap_t / intcap):  PASS
+>
+> **How the error was made:** I enumerated toolchains with a glob over `*/llvm/cmake-build-*`, found
+> two, and generalised from "both of these fail" to "every toolchain on this host fails". The qualified
+> build lives at `llvm-capstone-cc/build-release`, which that glob does not match.
+>
+> **The prior art already said so**, which is the part worth keeping:
+> `docs/ref/ffmpeg-live-defect-triage.md:281-284` names it — *"The qualified compiler the migration used
+> is named in `ports/common/application/README.md`: `compiler/sroa-keep-capability-whole` at
+> `7d01722aab88`, whose commit is present in this repository but had no build on this host **when this
+> was written**; it was built later the same day"*. I read the table above that sentence and stopped
+> before the sentence that answered the question.
+>
+> **What stands and what does not.** Everything measured in this bundle stands: slot 39 is the component
+> port's arm, it needs no intcap, and it was never affected. What does not stand is the *reason* given
+> for `sublet-port` being unmeasured. It is unmeasured because **nobody has run it**, not because it
+> cannot be run — and on this evidence **it can be**, with `CAPSTONE_LLVM_BUILD_DIR` pointed at that
+> build. `PREREG.md` in this folder carries the same withdrawn sentence; it is left as written, because a
+> pre-registration is a record of what was registered and rewriting it would destroy the trail.
 
 Slot 39 is exactly what case 3's own note said was missing: *"spatial and sublet need a probe case in
 `ports/ffmpeg/buffer-pool` (36-38 are taken by cases 0-2)"*. With it, cases 0-3 all carry the same
