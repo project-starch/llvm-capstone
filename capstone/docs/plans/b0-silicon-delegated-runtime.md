@@ -645,6 +645,31 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
     finishing in 300 s.
 - The heartbeat and watchdog are readable again, so a 905 says Linux was alive.
 
+## B0.7 attempt 11 (23:24-23:28): the gp-captable application runs to its exit on silicon; its OUTPUT is not byte-exact
+- **Rungs:** b0-stats 0, **b0-hello 0**, b0-stats2 0.
+  - capstone-exec exited 0, after 121 delegated rounds.
+  - The census after the exit reads `live_domains 0` and `cached_bytes 688128`. Domain teardown ran through the
+    fixed revoke, and the module cached the memory.
+- **This is the first time a delegated application has run to completion on silicon.** It ran HELLO, an ioctl and a
+  writev through the process ABI, with the monitor's supervised steps under CSR events, and a real gp: no
+  fabrication exists on silicon.
+- **But the oracle only greps for the line, and the output stream is WRONG.** `/tmp/b0.out` holds:
+  - the correct 51-byte line (`B0: hello ... application\n`);
+  - then `0: hello from a gp-captable delegated application` (the line again, from offset 2);
+  - then 14 NUL bytes, a newline and a NUL.
+  - QEMU, on the same image and monitor source, writes exactly the 51 bytes (vm-fix-off/on).
+- **The request stream:** round 1 HELLO; round 2 `ioctl(1, TCGETS)` -> -25 (ENOTTY: stdout is a file, so stdio is
+  fully buffered); **round 3 `writev(1, iov, 2)` -> 50**, short by one byte of the 51; then **rounds 4..~119
+  `writev(1, iov, 2)` -> 0**; then the exit. bytes_out=64, bytes_in=180.
+  - musl's `__stdio_write` retries the remainder while writev returns less than requested, so a run of zeros is a
+    retry loop. Its length varies: about 116 here, while attempt 10 spent 6,600 rounds in it without finishing.
+- **So the write path loses data on silicon.** The marshaled iovec or its data is wrong after the first round. That
+  is UNRESOLVED.
+  - The leading suspect is the same family as the monitor bug: an `ldc` that moves a linear-family pointer out of
+    the domain's iovec or stdio state (Q-12). It is not yet checked against the runtime's marshaling code.
+- **Status of B0:** the milestone's control flow is proven on silicon; its output contract is not. B0 is not
+  closed until the stream is byte-exact.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
