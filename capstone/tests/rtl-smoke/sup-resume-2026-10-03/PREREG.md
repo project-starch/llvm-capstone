@@ -1013,3 +1013,18 @@ Source: their simulation on the resident logic, memory delay 12.
 - The trap logger latches every committed cause other than 0 and 2 (cva6.sv:1140-1145). So a 0x83 with mepc 0x35c
   means no trap was taken after the load.
 - The 196..203 read is now exercised. It works.
+
+### Before the reflash (2026-10-04 18:00): the bitstream, and the LED-path timing caveat
+**The bitstream.**
+- `caplifive_supcall_715bdd1fe.bit` was pulled to `/tmp/capstone/_bitstreams/` on apollo.
+- sha256 a7add4c019d3067627ba984634e96de564f023bcec50e2c29fd0f668c0a81311, which matches the synth lane's sealed hash.
+- 11,443,722 B.
+- WNS -9.949 ns, LUTLP-1 = 0; one routed loop, the same family as 36a641e0b; TNS about 49 % worse.
+
+**The LED readout path fails timing at -9.588 ns, 3.15 ns worse than on 36a641e0b.** Every aperture read in
+accept715 goes through it. The worst LED path runs through store-buffer ready and dom-switch status.
+- A post-hang read is of static state, so it should settle. That is an expectation, not a measurement.
+- The runner therefore reads every aperture twice, 0.6 s apart, and prints `double-read: all stable` or the
+  UNSTABLE switch values.
+- **That detector has no positive control yet:** no aperture is known to change after a hang.
+- An implausible reading on 715bdd1fe has LED-path timing as a candidate cause beside the RTL.

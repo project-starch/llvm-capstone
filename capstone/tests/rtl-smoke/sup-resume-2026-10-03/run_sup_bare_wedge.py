@@ -110,6 +110,14 @@ def main():
                 st = console.latest(C.LISTEN.get("led_state", "led_state"))
                 bits = (st or {}).get("states") or [] if isinstance(st, dict) else []
                 return sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
+            # Every aperture is read TWICE, 0.6 s apart, on the same switch value. On 715bdd1fe the LED path fails
+            # timing at -9.6 ns (the synth lane), so a post-hang (static) read should settle; one that changes between
+            # the two reads is flagged UNSTABLE instead of being trusted.
+            unstable = []
+            def rd(sw):
+                setsw(sw); a = leds(); time.sleep(0.6); b = leds()
+                if a != b: unstable.append((sw, a, b))
+                return a
             try:
                 # labels verified against cva6.sv at 36a641e0b (bank 111 = 224+reg, bank 110 = 192+reg), MSB first
                 for sw, label in ((255, "TRAP LOG {seen,mcause[6:0]}"),
@@ -132,11 +140,11 @@ def main():
                                   (220, "[715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN)"),
                                   (221, "[715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0}"),
                                   (222, "[715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0}")):
-                    setsw(sw); v = leds()
+                    v = rd(sw)
                     wl.append(f"sw={sw} {label} " + ("UNREAD" if v is None else f"0x{v:02x} {v:08b}"))
                 pc = 0; ok = True
                 for i in range(8):
-                    setsw(230 + i); v = leds()
+                    v = rd(230 + i)
                     if v is None: ok = False; break
                     pc |= v << (8 * i)
                 wl.append("commit pc " + (f"0x{pc:016x}" if ok else "UNREAD"))
@@ -144,10 +152,12 @@ def main():
                 # recent_nontrivial_mepc_log_q): where the trap that 255 reports was taken
                 mp = 0; ok = True
                 for i in range(8):
-                    setsw(196 + i); v = leds()
+                    v = rd(196 + i)
                     if v is None: ok = False; break
                     mp |= v << (8 * i)
                 wl.append("trap-log mepc (196..203) " + (f"0x{mp:016x}" if ok else "UNREAD"))
+                wl.append("double-read: " + ("all stable" if not unstable else
+                          "UNSTABLE " + ", ".join(f"sw={a} {b} then {c}" for a, b, c in unstable)))
             except Exception as e:
                 wl.append(f"wedge read failed: {e}")
             finally:
