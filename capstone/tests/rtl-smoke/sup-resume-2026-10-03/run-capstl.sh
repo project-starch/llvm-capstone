@@ -21,8 +21,11 @@ main() {
     for n in s16st-plain-n32-r1-fence s16st-plain-n4-r3-fence2 s16st-n4-r3-fence2 s16st-plain-n32-r3-fence2; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = accept715 ]; then   # the S-16/S-17 fix bitstream (capstone-ariane 715bdd1fe): every S-16 arm without a fence, S-17 last
     for n in armdep-nt-d16-q64 s16sd24 s16st-n4-r1 s16st-n4-r3 s16st-n4-r3-fence s16st-n32-r1 s16st-esc-n8 s16st-esc-n8-retfence \
-             s16st-plain-n32-r1 s16st-plain-n4-r3 s16st-plain-n24-r3 s16st-plain-n32-r3 arm12-ld-q64 arm12-ldc-q64; do
+             s16st-plain-n32-r1 s16st-plain-n4-r3 s16st-plain-n24-r3 s16st-plain-n32-r3 s16st-esc-n8-r1 s16st-esc-n32-r1 s16st-esc-n64-r1 \
+             arm12-ld-q64 arm12-ldc-q64; do
       jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
+  elif [ "$CAPSTL_SET" = s16escr1 ]; then   # the RTL lane's three one-round escape arms exactly
+    for n in s16st-esc-n8-r1 s16st-esc-n32-r1 s16st-esc-n64-r1; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = precall ]; then   # the S-16 workaround candidate, and the stc18 rerun
     for n in s16pre-nt s16pre-stc24 s16stc18; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = deep ]; then   # extended apertures on S-16/S-17, the slot-0 control, the store-count dose-response

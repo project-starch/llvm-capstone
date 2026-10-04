@@ -957,3 +957,22 @@ The RTL lane's hand-off numbers:
   - Predicted: all 6 tests ok.
   - The three supervised speedtests give the oracle 112006 38bb59fd with SUPN > 0 and final SUPK 0.
   - On 36a641e0b this firmware hung after 212 resumes.
+
+## Pre-registered (2026-10-04, on the RESIDENT bitstream 36a641e0b, while 715bdd1fe synthesises): the RTL lane's three one-round escape arms
+`testlist_sup.yaml` at 715bdd1fe runs sup-s16-esc-n8/-n32/-n64 with **ITER=1**.
+- The board's s16st-esc-n8 above ran ITER=3 (the default), so it was NOT their sup-s16-esc-n8. The earlier
+  comparisons between the two were between different arms.
+- Built exactly (and added to accept715):
+  - s16st-esc-n8-r1 (298f6c8b): NSTORES 8, quantum 150;
+  - s16st-esc-n32-r1 (ff751122): NSTORES 32, quantum 200;
+  - s16st-esc-n64-r1 (62646381): NSTORES 64, quantum 400.
+  All three: ESC_BURSTS 6, one round, the seal cold.
+
+**Predictions on 36a641e0b.**
+- **All three HANG, idx 7.** Their simulation on the resident logic hangs sup-s16-esc-n8 at the 6th switch, a
+  mid-burst escape.
+- Reported, not predicted: the stuck switch's location, from the slot-0 pc bounded to +/- 7 issue positions (escape
+  within the bursts, or the RETURN), and 196..203.
+- If one COMPLETES (readings 1, resumes >= 1, 0x77, 0), that is a miss for the resident-logic simulation at that
+  shape.
+- **On 715bdd1fe (accept715):** all three complete.
