@@ -1294,6 +1294,31 @@ lane. Not to be conflated with R-27: that one is a deadlock, this one is a state
 
 ### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Both the store-buffer account and the `.user = 0` account are REFUTED by traced arms that show their condition existed. SILICON: the window is ONE instruction wide -- boot sw49's distance ladder turns clean at a single intervening nop. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour). No fix candidate; synthesis-first; W-12 stays in force`
 
+> **NEW SHAPE, REPRODUCED IN SIMULATION, SEEN ON SILICON (2026-10-05): the HIT shape with the granule's plain stores
+> still in the write buffer reads the high half as 0.** On caplifive_supcall_715bdd1fe.bit the delegated runtime wrote a
+> `{offset, len}` pair with two plain `sd` (low word, then high) and its LTO-inlined memcpy copied the granule with
+> `ldc`/`stc` ~17 instructions later; the host read the length as 0 with the offset intact, deterministically (197
+> retries, 2 boots; the board lane's B0 attempt 12, lane b0-silicon-runtime; workaround: 8-byte copies, 72b8a662e7e9).
+> The recorded mechanism below (a stale refill on a MISS) predicts the OLD value, not 0. The board lane's discriminator,
+> run in simulation on the resident tree (capstone-ariane `r29-wbuf-busy-hit.S`, 56ca92df9, memory delay 12 and 40
+> identical): with G's line in L1 and `sd 0x4040 -> G+0; sd 0x6060 -> G+8` followed by the ldc/stc copy, the high half
+> reads 0 with no other store in flight, with 12 or 24 queued ahead, and 17 nops later; a plain `ld` reads 0x6060; a
+> `fence` between the pair and the copy restores 0x6060 even with 12 stores queued ahead; 200 nops restore it; the
+> board's exact two-pair shape reads the first copy intact and the second 0 at 0 nops, correct at 17 nops with nothing
+> queued ahead, 0 again with 6 stores queued ahead of the pair. So the condition is write-buffer RESIDENCY of the pair at
+> the wide load, not a stale refill: the 128-bit load carries the granule's high half on the `user` lanes and the write
+> buffer forwards per 64-bit word from a plain store's `.user = 0` (`wt_dcache_mem.sv` gen_rd_user, the store unit's
+> metadata gate), so the high half is 0 while the low word is correct. The queue drains in order -- stores issued before
+> the pair hold it (the board's 50-byte data copy; on DDR a single drain exceeds 17 instructions), stores issued after it
+> do not -- which is why the first pair's copy arrived intact on the board and in simulation. The refutation of the
+> `.user = 0` account below stands for the resident-and-MISS arm it tested; the HIT arm `r29-sep-userzero` never created
+> this condition. Consequence for the fix fork below: both shapes (stale refill on a miss, zero on a hit) are now
+> reproduced deterministically in simulation, so either formulation has its positive controls; a lint-clean alternative
+> to the data overlay is a load-side hold -- stall a 128-bit load while any store to its granule is resident in the
+> write buffer, the stall-only shape of the S-07 `gran_hazard` precedent. Software workaround until then: a `fence`
+> between a granule's plain stores and a wide load of it; the W-04 line "the memcpy loop does not have this shape" is
+> false under full LTO, where the inlined memcpy forms the shape across the call.
+>
 > **FIX CANDIDATE 2026-09-10: functionally correct, FAILS THE LINT GATE. Branch
 > `r29-granule-data-overlay`, commit `00e89d968`.** The granule-scoped data overlay does what it was
 > written to do — `s06agg-shape` goes FAIL 11 → PASS with four controls unchanged and the predictions
