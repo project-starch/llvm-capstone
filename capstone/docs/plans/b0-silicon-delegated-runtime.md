@@ -842,6 +842,15 @@ b0-stats2.
   guard, and the next arm would bring the control's stores closer.
 - Exit 1 would mean the guard does not hold.
 
+## B0.8 result (2026-10-05 01:37-01:42): THE GUARD HOLDS ON SILICON; R-29's three faces are confirmed on the board
+- **Rungs:** b0-stats 0, **b0-memcpy 0**, b0-stats2 0. That is the predicted reading.
+- **The unguarded control miscopied:** fresh low **31/32**, fresh high **31/32**, both **32/32**. R-29 fires on
+  715bdd1fe in all three of its faces at a ~10-instruction distance, with six stores queued ahead.
+- **The guarded memcpy miscopied 0 of 96**, although LTO placed its load ONE instruction after the stores.
+- The plain-data guard is therefore the runtime's answer to R-29 for silicon builds (`CAPSTONE_MEMCPY_PLAIN_GUARD`,
+  on in build-b0-hello.sh). Compiler-emitted aggregate copies are a separate path: the SQLite silicon build's W-12
+  pass covers those. A full application build needs it too.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
