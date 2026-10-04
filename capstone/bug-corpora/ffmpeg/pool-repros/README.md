@@ -32,8 +32,12 @@ four cases, so extending `shared/driver.c` for the refstruct pool did not distur
 mode 2 faults with cause 24 at the labelled access, one binary for both. Cases 0-2 carry N=3 on both the
 native pair and the `poolsublet` arm.
 
-Case 3's `poolstock`/`poolsublet` rows (fixtures 46/47) are still **predictions — because nobody has run
-them, not because they cannot be run.** The earlier wording here said the FFmpeg app port's "SDK gate
+Case 3's `poolstock`/`poolsublet` rows (fixtures 46/47) were **measured 2026-10-04**
+(`../../../ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/`): `poolsublet` 46 faults with
+cause 24 at `case.c:104` and 47 completes FIXED, against a `poolstock` control that completes both —
+16 of 16 cells across 40-47 on both arms. **All four cases now carry a discriminating pair on FFmpeg's
+own ported pools.** They were predictions until then **because nobody had run them, not because they
+could not be run.** The earlier wording here said the FFmpeg app port's "SDK gate
 correctly refuses both toolchains on this host"; **that was withdrawn on 2026-10-04 (`5208789e4b9e`)**. A
 qualified toolchain IS present — the `llvm-capstone-cc` sibling worktree's `build-release`, commit
 `7d01722aab88` — `check_toolchain` accepts it end to end, and on 2026-10-04 all sixteen corpus images
