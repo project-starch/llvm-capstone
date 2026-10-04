@@ -12,15 +12,15 @@ evidence rather than from memory. **It reports numbers; it does not edit the pap
 
 ## Answer
 
-**22 of the 57 counted cases carry a committed CheriBSD measurement. 28 carry none of any kind. 8 are
-declared-or-claimed with no committed bundle.**
+**22 of the 57 counted cases carry a committed CheriBSD measurement. 28 carry none of any kind. ~~8~~
+**9** are declared-or-claimed with no committed bundle** (FFmpeg gained case 3 on 2026-10-03).
 
 | program | counted by the paper | CheriBSD state | evidence |
 |---|---:|---|---|
 | **Wireshark** | 12 | ✅ **13/13 measured** | `wmem-repros/results/20260921-cheribsd/matrix.tsv` — 39 data rows over 3 arms, `arm=cheribsd` on 13 distinct cases, all `expected=complete`, `passed=13/13` |
 | **Apache** | 9 | ✅ **9/9 measured** | `apr-pool-repros/results/20260921-cheribsd` (1 case, revocation on *and* off) + `bucket-repros/results/20260922-cheribsd` (8 cases) |
-| **memcached** | 5 | ⚠️ **declared and claimed, no committed bundle** | all 5 `case.json` declare `cheribsd-revocation` and their `status` names a CheriBSD run, but `results/` holds no bundle; `INDEX.md` already records "commits no result bundle of its own" |
-| **FFmpeg** | 3 | ⚠️ **declared, never claimed, no bundle** | all 3 declare the arm; no `status` mentions CheriBSD; no bundle |
+| **memcached** | 5 | ⚠️ **declared and claimed, no committed bundle** | all 5 `case.json` declare `cheribsd-revocation` and their `status` names a CheriBSD run, but `results/` holds no bundle. **Updated 2026-10-04:** the corpus now has a committed capability bundle at `ports/memcached/allocators/results/20261004-qemu-corpus-defects/` (spatial/sublet, 10/10, plus the negative control) and names it in `evidence`, and `e236ca79ea5a` **removed** the `INDEX.md` line this row used to quote. The CheriBSD verdict here is unchanged: that bundle deliberately did not measure CheriBSD, because the platform is absent from this host |
+| **FFmpeg** | ~~3~~ **4** | ⚠️ **declared, never claimed, no bundle** | all 4 declare the arm (case 3 was added 2026-10-03); no `status` mentions CheriBSD; no bundle |
 | **CPython** | 20 | ❌ **nothing** | no `cheribsd-*` arm in any of the 20 `case.json`; no `status` mentions it; no bundle |
 | **PostgreSQL** | 8 | ❌ **nothing** | same three negatives |
 | SQLite | 0 (row dashed) | n/a | `required_arms: ["host-asan"]`; no CheriBSD anywhere in that corpus |
@@ -33,9 +33,14 @@ CPython and PostgreSQL (28 cases), with memcached and FFmpeg (8) in between.
 A first pass over the `arms` objects gives "60 of 77 cases declare no CheriBSD arm", which **overstates
 the problem by a wide margin**:
 
-- **Wireshark declares the arm nowhere and is nonetheless measured 13/13.** Its CheriBSD outcome lives
-  in a committed bundle and in all 13 `status` strings; only the schema's `arms` object omits it.
-- So the **declaration** gap (60/77) and the **measurement** gap (28 firm /57) are different facts.
+- ~~**Wireshark declares the arm nowhere and is nonetheless measured 13/13.**~~ **CLOSED 2026-10-04 by
+  `fabb59f1f28b`**, which this entry prompted: all 13 cases now declare `cheribsd-revocation` with the
+  outcome read from the bundle's own `matrix.tsv`, and the arm is in `required_arms`, so the omission
+  cannot recur (verified two-sided: removing it from one case makes `check-corpus.py` exit 1).
+  As written: its CheriBSD outcome lived in a committed bundle and in all 13 `status` strings, and only
+  the schema's `arms` object omitted it.
+- So the **declaration** gap (~~60/77~~ **47/77** after `fabb59f1f28b`) and the **measurement** gap
+  (28 firm /57) are different facts.
   Only the second one bears on the paper's sentence.
 
 This is worth stating because the cheap instrument — counting `arms` keys — points at the wrong
@@ -43,14 +48,17 @@ conclusion, and the expensive one — opening each bundle — reverses it for 13
 
 ## Why the gate did not catch this
 
-`check-corpus.py` reports **CLEAN** (14 corpora, 107 declared cases, 0 problems) and
+`check-corpus.py` reports **CLEAN** (14 corpora, ~~107~~ **108** declared cases, 0 problems) and
 `build-index.py --check` reports **current**. Neither is wrong: the checker validates declarations
 against the tree — required fields, numbering, arm well-formedness, liveness proofs — and never asks
 whether a declared arm has an **outcome**, nor whether a `status` sentence is backed by a bundle. Every
 discrepancy above passes the gate by construction.
 
-Across all 77 `case.json`, every Capstone/PoisonCap arm has `status: null`; the only populated
-`arm.status` anywhere is `"not written"` on `native-detect`. All real measurement lives in free-text
+~~Across all 77 `case.json`, every Capstone/PoisonCap arm has `status: null`; the only populated
+`arm.status` anywhere is `"not written"` on `native-detect`.~~ **Stale since 2026-10-03:** FFmpeg's
+case 3 populates `status: "not written"` on `poisoncap-spatial`, `poisoncap-protected`,
+`cheribsd-revocation` and `backing` as well, so the claim now holds for 38 `native-detect` arms plus
+those four. The point it was making is unchanged. All real measurement lives in free-text
 `status` prose, which is why it drifts.
 
 ## What this means for the claim
