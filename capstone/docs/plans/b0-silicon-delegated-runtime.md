@@ -55,6 +55,28 @@ context-probe, pthread-probe).
 - **(d) C-74:** an 8/16-bit atomic on a self-bounded small object faults. Audit the runtime for sub-word atomics on
   lone globals.
 
+## The compiler lane's review of this plan (2026-10-04; their record is i8-b0-review.md in their scratch)
+- **The silicon flag set is four `-mllvm` options**, the ones dev's silicon builds (r1, micropython) pass.
+  - The set:
+    - `-capstone-gp-captable`;
+    - `-capstone-shrink-stack=false`;
+    - `-capstone-shrink-globals=false`;
+    - `-capstone-merge-string-constants=true`;
+    - plus `-DCAPSTONE_GP_CAPTABLE_ABI=1`, which is compile-time.
+  - Under LTO all four need `--plugin-opt=` forms. c128's 5f9fd5e92283 re-passed only the first.
+  - Dropping merge-string-constants is not cosmetic: micropython records 232 carves with it, 633 without.
+- **Jump tables:** `-fno-jump-tables` survives LTO as an IR attribute.
+  - But on this target no jump table appears even under the default ABI (a 24-case switch gives 0 `.LJTI` either
+    way), so it is not established what suppresses them.
+  - Do not count on that flag as the protection. B0.5 counts `.LJTI` and indirect jumps in the image.
+- **Accessors over linker-script-filled globals:** the latter is the C-13 shape again. An accessor must return a
+  VALUE, not a pointer into a glue-owned object whose bounds C then re-derives.
+- **A third site: `context.c:38` `extern char __capstone_context_entry[];`.** A code label declared as data gets
+  DATA bounds under gp-captable (`scc a0, gp, a0; delin a0`).
+  - The fix is one line: declare it as a function.
+  - It is in the same remediation pass as tls.c and hostcall.c, even though B0 itself mints no contexts.
+  - The codegen shape is shown two-sided. A runtime fault is not shown.
+
 ## Steps
 Each step has a gate that can fail, and is shown to fire before it is trusted.
 
