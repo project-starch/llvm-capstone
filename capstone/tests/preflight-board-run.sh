@@ -80,7 +80,10 @@ if [[ -f "$FW" ]]; then
     # the SAME DTS as 65536_nodes. Listed explicitly because the name matches neither
     # pattern, so this check fell through to the "unknown bitstream" warn and silently
     # verified nothing for every run on the resident silicon.
-    *65536*|*_r20*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
+    # caplifive_supcall_*.bit (36a641e0b, and the 715bdd1fe fix build) is the same 65536-node lineage (csnodefree read
+    # 0xFFCD on 36a641e0b; every firmware that booted on it carries 0x3c2d2000). It also matched neither pattern, so
+    # it fell through to the warn below and this pairing went unchecked for every supervised-CALL run.
+    *65536*|*_r20*|*supcall*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c2d2000)" \
         || bad "DTS/bitstream MISMATCH: $BITSTREAM needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
     *) say "warn" "unknown bitstream $BITSTREAM -- DTS pairing unchecked" ;;
