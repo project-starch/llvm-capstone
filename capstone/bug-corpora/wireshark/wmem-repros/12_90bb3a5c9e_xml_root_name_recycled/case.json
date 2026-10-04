@@ -34,6 +34,13 @@
     },
     "native-detect": {
       "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap, the guest's own libc revocation on; the run's ABI probe reported runtime_revocation=1 in both boots",
+      "oracle": "the sequence completes: the stale storage is wmem-managed, and a scope reset or an individual recycler free returns it inside a block that malloc still owns, so nothing reaches free() and the quarantine the revoker sweeps never holds it",
+      "control": "the PoisonCap mode-1 arm in the same bundle and the same boots faults 13/13 with SIGPROT at the labelled read probe, so the platform CAN be made to catch these cases; the completion here is therefore a measured miss and not an absent integration",
+      "guest_default": "preserved -- the kernel default stays on",
+      "measured": "2026-09-21, results/20260921-cheribsd/ (matrix.tsv, arm=cheribsd): expected complete, passed True, exit 0. 0 of 13 caught across the corpus"
     }
   },
   "status": "run 2026-09-21 under QEMU: spatial completes; sublet completes, the recorded non-detection; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe with released_chunks=1, the chunk poisoned at its individual free; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe x3, and the WM_CHUNKS=OFF build still completes x3; results/20260929-qemu-chunk-port"
