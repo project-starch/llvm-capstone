@@ -139,6 +139,42 @@ char *strchrnul(const char *, int) __attribute__((weak, alias("__strchrnul")));
 typedef void *cap_t;
 #define CAP_ALIGNED(p) ((((__UINTPTR_TYPE__)(p)) & 15) == 0)
 
+/* CAPSTONE_MEMCPY_PLAIN_GUARD (silicon builds): a granule that holds no capability is copied as two 8-byte words.
+ *
+ * ISSUES R-29, open on silicon. A 128-bit load of a granule returns a WRONG HIGH HALF whenever a plain store to that
+ * granule is still in the write buffer: 0 after a fresh low-word store, the OLD value after a fresh high-word store.
+ * The low word and a plain `ld` are always correct. The granule loop below is exactly that load, so on silicon any
+ * memcpy of freshly written plain data can lose its high words (llvm-capstone B0 hit it in the delegate runtime,
+ * 2026-10-04). Stores through `stc` are not in the hazard's shape.
+ *
+ * So the copy asks LCC's type query about what the 128-bit load returned: 7 is NOT_CAP. Then it copies the granule
+ * with two plain 8-byte loads and stores, which R-29 does not touch. A tagged granule still moves as a capability,
+ * so tags survive exactly as before. The type query is TOTAL on the deployed bitstream and on capstone-qemu
+ * (op_helper.c, the `imm == 1 && !tag` case). On an older bitstream it RAISES on plain data, which is why this is
+ * opt-in per build, as the SQLite silicon build's granule guard (W-12) is, and not a target-wide default. Off, the
+ * loop is byte-identical to before. */
+#if defined(CAPSTONE_MEMCPY_PLAIN_GUARD) && CAPSTONE_MEMCPY_PLAIN_GUARD
+static inline __attribute__((always_inline)) void granule_copy(unsigned char *d, const unsigned char *s)
+{
+	cap_t v = *(const cap_t *)s;
+	unsigned long type;
+	__asm__ volatile ("lcc %0, %1, 1" : "=r"(type) : "r"(v));
+	if (type == 7) {
+		/* Both are 16-aligned here: two `ld` and two `sd`, never a capability (and never bytes, which a
+		   memcpy-of-8 from an unsigned char * would compile to). */
+		typedef unsigned long __attribute__((__may_alias__, __aligned__(8))) word_t;
+		word_t lo = ((const word_t *)s)[0], hi = ((const word_t *)s)[1];
+		((word_t *)d)[0] = lo;
+		((word_t *)d)[1] = hi;
+	} else {
+		*(cap_t *)d = v;
+	}
+}
+#define GRANULE_COPY(d, s) granule_copy((d), (s))
+#else
+#define GRANULE_COPY(d, s) (*(cap_t *)(d) = *(const cap_t *)(s))
+#endif
+
 void *memcpy(void *restrict dst, const void *restrict src, size_t n)
 {
 	unsigned char *d = dst;
@@ -146,7 +182,7 @@ void *memcpy(void *restrict dst, const void *restrict src, size_t n)
 	if (((__UINTPTR_TYPE__)d & 15) == ((__UINTPTR_TYPE__)s & 15)) {
 		while (n && !CAP_ALIGNED(d)) { *d++ = *s++; n--; }
 		while (n >= 16) {
-			*(cap_t *)d = *(const cap_t *)s;
+			GRANULE_COPY(d, s);
 			d += 16; s += 16; n -= 16;
 		}
 	}
@@ -168,7 +204,7 @@ void *memmove(void *dst, const void *src, size_t n)
 		while (n && !CAP_ALIGNED(d)) { *--d = *--s; n--; }
 		while (n >= 16) {
 			d -= 16; s -= 16; n -= 16;
-			*(cap_t *)d = *(const cap_t *)s;
+			GRANULE_COPY(d, s);
 		}
 	}
 	while (n--) *--d = *--s;

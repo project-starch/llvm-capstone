@@ -17,8 +17,9 @@ the FPGA monitor's supervised CALL, with no fabricated gp. Preflight was off, fo
   - the monitor fix is on caplifive-sbi `capstone-bootstrap` 91c8aa2. The QEMU A/B shows no regression. The
     opensbi and buildroot pins are not bumped: QEMU behaviour is unchanged, and the FPGA line carries the fix;
   - the Part 3 silicon monitor line (supervised CALL under CSR events, B0.1) is still on lane branches;
+  - **B0.8 done:** the runtime memcpy's R-29 guard holds on silicon (0/96; the unguarded control 94/96).
   - then B1 toward memcached on silicon (`docs/plans/memcached-on-silicon.md`): contexts and threads stepped by the
-    monitor.
+    monitor, the W-12 aggregate-copy guard in the application build, non-empty TLS and init arrays.
 
 2026-10-04, evening: `caplifive_supcall_715bdd1fe.bit` is FLASHED and ACCEPTED.
 - Bare S-16 images: 18 of 18, the 14 previously-hanging S-16 arms among them.

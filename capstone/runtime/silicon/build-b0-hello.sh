@@ -18,6 +18,9 @@ BIN=${CAPSTONE_LLVM_BIN:?set CAPSTONE_LLVM_BIN to the current toolchain}
 ARCHIVE=${B0_MUSL_ARCHIVE:?set B0_MUSL_ARCHIVE to the gp-captable LTO musl archive}
 MUSL=${PORT_MUSL_ROOT:-/tmp/capstone/musl-src/musl-1.2.5}
 OUT=${OUT_DIR:-/tmp/capstone/b0/hello}
+# B0_APP: which application in this directory to build (b0-hello, or b0-memcpy for B0.8); the image is $OUT/$B0_APP.dom.
+APP=${B0_APP:-b0-hello}
+[ -f "$(dirname "$0")/$APP.c" ] || { echo "no application $APP.c" >&2; exit 2; }
 CC=$BIN/clang
 [ -f "$MUSL/obj/include/bits/alltypes.h" ] || { echo "no prepared musl headers at $MUSL" >&2; exit 2; }
 rm -rf "$OUT"; mkdir -p "$OUT/obj"
@@ -48,11 +51,14 @@ cc() {  # $1 = source, $2 = object, rest = extra flags
 # the core, as Application.cmake lists it, minus start-musl.S (replaced by the gp-captable glue below)
 for f in hostcall tls atomic_libcalls context lock delegate signals; do cc "$M/$f.c" "core_$f.o" "${CORE_INC[@]}"; done
 cc "$M/posix_spawn_delegate.c" core_posix_spawn_delegate.o "${CORE_INC[@]}" -I"$MUSL/src/process"
-while read -r o; do [ -n "$o" ] && cc "$M/$o.c" "ovr_$o.o" "${CORE_INC[@]}"; done < "$M/libc_overrides.list"
+# The memcpy plain-data guard (string_bounds_safe.c, ISSUES R-29) is on for every silicon build: the type query it
+# asks is total on the deployed bitstream. B0_MEMCPY_GUARD=0 turns it off for an A/B.
+while read -r o; do [ -n "$o" ] && cc "$M/$o.c" "ovr_$o.o" "${CORE_INC[@]}" \
+  -DCAPSTONE_MEMCPY_PLAIN_GUARD="${B0_MEMCPY_GUARD:-1}"; done < "$M/libc_overrides.list"
 for f in launch delegate spawn msghdr; do cc "$CAP/runtime/common/$f.c" "common_$f.o" "${CORE_INC[@]}"; done
 cc "$CAP/runtime/domain/application.c" app_application.o "${APPDEFS[@]}"
 cc "$M/level0.c" app_level0.o "${APPDEFS[@]}"
-cc "$HERE/b0-hello.c" app_hello.o "${APPDEFS[@]}"
+cc "$HERE/$APP.c" "app_$APP.o" "${APPDEFS[@]}"
 cc "$HERE/glue-data.c" glue_data.o
 # builtins, as bitcode too -- into their own directory, VERIFIED through codegen, then a LAZY archive. lld keeps
 # every bitcode definition of a libcall, and the fp128 (tf) soft-float family cannot be selected under gp-captable
@@ -91,5 +97,5 @@ else: print(0)')
 [ "${TEXT:-0}" -gt 0 ] || { echo "could not measure .text from pass 1" >&2; exit 2; }
 GOFF=$(( ((TEXT + 0xFFFF) / 0x10000) * 0x10000 )); [ $GOFF -lt 65536 ] && GOFF=65536
 printf '.text = %d bytes -> globals offset 0x%x\n' "$TEXT" "$GOFF"
-link "$(printf '0x%x' $GOFF)" "$OUT/b0-hello.dom"
-ls -la "$OUT/b0-hello.dom"
+link "$(printf '0x%x' $GOFF)" "$OUT/$APP.dom"
+ls -la "$OUT/$APP.dom"
