@@ -6921,6 +6921,20 @@ regions go away. For example, at the top of `cleanup()`, block every signal and 
 The test is the reproducer above: 20 and 100 ms must exit 0, and the disarmed control must stay
 exit 0.
 
+### M-13 — a trap raised by the FPGA monitor's own code cannot be reported: `_cap_trap_entry` swaps Linux's integer sp in from cscratch and faults at +4 `OPEN — monitor robustness; found 2026-10-04 (B0.7 attempts 7-8)`
+
+- `_cap_trap_entry` begins `ccsrrw sp <- cscratch`. While the monitor is handling an ecall, cscratch holds the
+  interrupted S-mode sp, an integer.
+- So a trap taken INSIDE M-mode swaps that integer in, and the next instruction, `cincoffsetimm sp`, faults with
+  cause 24.
+- The board's trap log (`recent_nontrivial_*`, which keeps the LATEST trap, ecalls included) then reads mcause 24
+  at `_cap_trap_entry`+4, with tval a Linux kernel stack address (0xffffffc80412bca0, B0 attempts 8 and 9). The
+  original fault's cause and pc are overwritten.
+- The second entry swaps the monitor's sp back and starts saving registers. In both boots its stores then never
+  drained: the commit queue was full and the store port was not granted.
+- **Consequence:** a monitor bug on silicon reads as a silent wedge with a misleading trap log. Bisect it with trace
+  points, as C-76 was. The cheap tells are mepc at `_cap_trap_entry`+4 and a kernel-stack tval.
+
 ### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
 
 > **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
@@ -7703,6 +7717,43 @@ committed. The build check makes a recurrence visible at the next monitor build.
 
 **Impact.** Any monitor change can meet the first defect; the check turns it into a build failure
 instead of a halted monitor. Only the monitor is compiled by capstone-c.
+
+### C-76 — capstone-c's monitor code assumes `ldc`/`stc` COPY a linear-family capability; silicon MOVES it (Q-12), so the monitor's process-ABI step wedged the board `FIXED in caplifive-sbi monitor/managed-reinit (managed_reinit, revoke in the caller); found and verified on silicon by llvm-capstone's B0 runs, 2026-10-04/05; one LATENT instance remains (below)`
+
+**The instance that wedged the board.**
+- On `caplifive_supcall_715bdd1fe.bit`, capstone-c caller-saved a live `__rev` argument with `stc(a0, sp, N)`
+  immediately before each of `managed_reclaim`'s four calls. That is verified in the 3be6737 firmware binary,
+  e.g. `stc a0,112(sp)` at 0x80021bfc, then `jal managed_reclaim` two instructions later.
+- The RTL source clears STC's register source for every type but NONLIN and NOT_CAP
+  (`capstone_dyn_unit.anvil:525-529, 544-548` at 715bdd1fe). So the callee read NOT_CAP: LCC type 7, B0 attempts
+  8 and 9.
+- **The hop is identified by elimination.** `loan_begin` is byte-identical across the runs and the same global is
+  reloaded, yet revoking in the caller passes on four boots.
+- **A REV-typed STC clear has not been measured directly.** R-22's silicon readings are LINEAR, and
+  `stc-register-clear.S` has no REV arm.
+- REVOKE on NOT_CAP raises 24 per the RTL source. The trap actually observed is the nested one at
+  `_cap_trap_entry`+4 (M-13). Why the store unit then wedges is unresolved.
+- capstone-qemu copies on STC (Q-12), so every QEMU run passed.
+- Evidence: `docs/plans/b0-silicon-delegated-runtime.md`, attempts 5-13.
+
+**The fix.** Each caller does `x = __revoke(slot); x = managed_reinit(x)`, so a `__rev` value never crosses a call.
+capstone-c moves a `__linear` argument into a call instead of caller-saving it. A scan of the generated monitor for
+"an argument register passed exactly as stc-saved" finds the 4 old sites, and none after the fix.
+
+**The latent instance.** In `create_domain`, the gp carve `dom_gp = __split(...)` is LINEAR and is spilled to a
+stack slot.
+- `if (dom_gp != 0)` loads that slot, and on silicon the load moves the value out (Q-12's memory half).
+- `*(__linear void **)dom_data = dom_gp` then loads it again, so silicon delivers cnull in the gp slot at
+  `data_top - 16`.
+- The FPGA build has the identical sequence.
+- It is harmless today, because the interp glue builds gp from its own cap-table carve and never reads the
+  delivered slot. A glue that reads it would get cnull on silicon.
+- Found by capstone-qemu's S-12 slot tracker (`CAPSTONE_SLOT_LOG`), whose positive control fires, on B0's run. That
+  was the only clear-set double load in the whole run.
+
+**The class.** capstone-c treats `__rev` as copyable, and a linear value that is tested and then used is loaded
+twice. Both are correct under QEMU and wrong on silicon. Same family as the LLVM RegAllocFast spill in
+`history/13-08-2026_02-30-00_sqlite-returns-rows-on-silicon.md` (STC declared with an empty `(outs)`).
 
 ## Infrastructure / procedure
 
