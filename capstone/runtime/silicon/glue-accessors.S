@@ -36,3 +36,17 @@ __capstone_silicon_fini_array_bytes:
 	lla	t0, __fini_array_start
 	sub	a0, a0, t0
 	ret
+
+/* HELLO's code range (hostcall.c): the launcher uses it only for diagnostics (its fault line and symbolization).
+ * Under gp-captable a function pointer is an integer, so its capability bounds cannot be read; the range is the
+ * image start to the globals boundary, where the monitor splits the code capability (sbi_capstone.c: dom_code ->
+ * [base, base+gpoff)). Runtime addresses, from pc-relative lla. */
+	.global __capstone_silicon_code_base
+__capstone_silicon_code_base:
+	lla	a0, __capstone_silicon_image_start
+	ret
+
+	.global __capstone_silicon_code_end
+__capstone_silicon_code_end:
+	lla	a0, __gpfree_globals_base
+	ret

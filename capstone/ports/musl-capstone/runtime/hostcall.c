@@ -336,9 +336,19 @@ void domain_main(unsigned *res, unsigned func) {
         *res = (unsigned)-1;
       return;
     }
+#ifdef CAPSTONE_GP_CAPTABLE_ABI
+    /* The silicon ABI (B0): `anchor` is a plain integer (a function pointer is not a capability there), so its
+       capability bounds cannot be read -- reading them was B0's first QEMU fault (cause 24, lcc on domain_main's
+       address). The glue's accessors give the code range as integers. */
+    extern unsigned long __capstone_silicon_code_base(void);
+    extern unsigned long __capstone_silicon_code_end(void);
+    __capstone_delegate_hello((unsigned long)anchor, __capstone_silicon_code_base(),
+                              __capstone_silicon_code_end());
+#else
     __capstone_delegate_hello((unsigned long)__builtin_capstone_cap_get_cursor(anchor),
                               (unsigned long)__builtin_capstone_cap_get_base(anchor),
                               (unsigned long)__builtin_capstone_cap_get_end(anchor));
+#endif
   }
   size_t startup_bytes = hc_startup ?
       __builtin_capstone_cap_get_end(hc_startup) -

@@ -28,6 +28,8 @@ PHDRS {
 
 SECTIONS {
   . = 0x10000;
+  /* B0: the image start, for the code-range accessor (glue-accessors.S) -- HELLO reports [start, globals). */
+  __capstone_silicon_image_start = .;
   .text : ALIGN(16) {
     *(.text.entry)
     *(.text .text.*)
