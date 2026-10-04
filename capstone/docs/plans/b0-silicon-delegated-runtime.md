@@ -851,6 +851,31 @@ b0-stats2.
   on in build-b0-hello.sh). Compiler-emitted aggregate copies are a separate path: the SQLite silicon build's W-12
   pass covers those. A full application build needs it too.
 
+## B1 scope (2026-10-05): from one context to threads, toward memcached on silicon
+B0 and B0.8 are on dev: one gp-captable context runs byte-exact, and memcpy is R-29-safe. Below is what a THREADED
+application needs. Each item names its source; none is attempted yet.
+1. **Contexts on silicon.**
+   - The runtime mints contexts through the delegate (CAPSTONE_NR_CONTEXT_CREATE, then the monitor's ADOPT and
+     FORGET), and capstone-exec steps each one with PROCESS_STEP on its own thread.
+   - CALL is illegal inside a supervised domain (decoder.sv:1289), so any domain-side nested call path
+     (`__capstone_context_call`) must stay unused on silicon. The pthread path must be checked for it.
+2. **`context.c:38`:** `extern char __capstone_context_entry[]` gets DATA bounds under gp-captable. It must be
+   declared as a function (the compiler lane's review, above). It is unreached in B0 and reached by the first
+   minted context.
+3. **Non-empty TLS and init/fini arrays.** B0 aborts on a non-empty `.tdata` and on non-empty init/fini arrays
+   (tls.c and hostcall.c under CAPSTONE_GP_CAPTABLE_ABI). Real applications have both, so the accessors must copy
+   the TLS image and walk the arrays by value.
+4. **Compiler-emitted aggregate copies (R-29).** Struct assignment takes the same 128-bit granule load as memcpy.
+   The SQLite silicon build guards it with its W-12 pass; a threaded application build needs the same flag.
+5. **Variable aliases (the C-75 residual) and sub-word atomics on lone globals (C-74).**
+   - musl's fork.c carries 11 weak data aliases, so the link map must show fork.o absent, or C-75 must be settled.
+   - The runtime and the application need an audit for 8/16-bit atomics on self-bounded globals.
+6. **The test ladder, one image per boot (R-3):**
+   1. B1a: pthread-probe (runtime/tests/application) built with the B0 pipeline: create, join, mutex, condvar.
+   2. B1b: the threaded delegate paths (park/futex).
+   3. B2: memcached `-t 1` (three contexts), per docs/plans/memcached-on-silicon.md.
+   Each step is pre-registered, QEMU first with fabrication off, then one board boot.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
