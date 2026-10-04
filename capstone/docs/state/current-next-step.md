@@ -1,5 +1,27 @@
+2026-10-05: **B0 PASSES ON SILICON.** The gp-captable delegated hello-world runs byte-exact on
+`caplifive_supcall_715bdd1fe.bit`, N=2. It is launched by capstone-exec through the process-ABI module and stepped by
+the FPGA monitor's supervised CALL, with no fabricated gp. Preflight was off, for a documented reason.
+- Full record: `docs/plans/b0-silicon-delegated-runtime.md`.
+- Two silicon-only defects were found and fixed, both QEMU-silent:
+  - **C-76:** capstone-c caller-saved a `__rev` argument with `stc`, and silicon's STC moves it, so the monitor's
+    step wedged the board. Fixed by `managed_reinit`.
+  - **A delegate-runtime copy loss:** a freshly built `{offset, len}` pair lost its length in a granule copy. Fixed
+    with 8-byte copies.
+    - This is R-29's family. The first attribution, to R-29's recorded stale-refill mechanism, was retracted. The
+      RTL lane then reproduced the real path in simulation: write-buffer residency, with the high half taken from
+      a plain store's `.user = 0`.
+    - musl's memcpy has the same exposure, so memcached on silicon needs a plain-data guard or the RTL fix.
+- **M-13:** a trap inside the FPGA monitor always reads as cause 24 at `_cap_trap_entry`+4.
+- A module built outside buildroot needs `-march=rv64g` on the FPGA; the board-run skill has the module rules.
+- **Next:**
+  - the monitor fix is on caplifive-sbi `capstone-bootstrap` 91c8aa2. The QEMU A/B shows no regression. The
+    opensbi and buildroot pins are not bumped: QEMU behaviour is unchanged, and the FPGA line carries the fix;
+  - the Part 3 silicon monitor line (supervised CALL under CSR events, B0.1) is still on lane branches;
+  - then B1 toward memcached on silicon (`docs/plans/memcached-on-silicon.md`): contexts and threads stepped by the
+    monitor.
+
 2026-10-04, evening: `caplifive_supcall_715bdd1fe.bit` is FLASHED and ACCEPTED.
-- Bare S-16 arms: 18 of 18.
+- Bare S-16 images: 18 of 18, the 14 previously-hanging S-16 arms among them.
 - The R-43 list: unchanged.
 - C5u without the fence: 1,277 preemptions at +0.69 %.
 - **S-16 is fixed on silicon.** The audited wording is in ISSUES S-16.

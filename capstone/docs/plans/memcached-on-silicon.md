@@ -10,6 +10,23 @@ Every SDK image on dev (memcached, FFmpeg, tshark, ...) links `ports/musl-capsto
 - memcached.dom has 7,958 `delin gp` call sites.
 - FFmpeg with `CAPSTONE_GP_FABRICATE=0` never runs.
 - No gp-captable delegated runtime exists yet (contexts, seal, offer, recovery block, TLS).
+  **2026-10-05: one now exists for a single context.** B0's hello-world runs byte-exact on silicon
+  (`docs/plans/b0-silicon-delegated-runtime.md`): full LTO, the yield, HELLO, delegated syscalls and exit.
+  Contexts, threads, a non-empty TLS data image and init arrays are still to build (B1).
+- **musl's memcpy loses data on silicon (ISSUES R-29; found by B0, reproduced in simulation 2026-10-05).**
+  - R-29's general statement: a 128-bit load of a granule returns a WRONG HIGH HALF whenever a plain store to that
+    granule is still in the write buffer.
+    - It reads 0 when the fresh store is to the low word.
+    - It reads the OLD value when the fresh store is to the high word.
+    - The low word and plain `ld` are always correct, and a fence clears both faces.
+  - musl-capstone's memcpy granule loop does exactly that load, for any freshly written buffer or struct, in both
+    directions.
+  - B0 avoided it only in the delegate runtime (`dl_bytes`).
+  - memcached needs one of:
+    - a plain-data guard in memcpy (`ldc` only for the tag, plain `ld` for the data, as S-06's guard does), which
+      covers both faces on the read side; STC writes are not in the hazard's shape;
+    - the compiler's granule-copy guard covering memcpy;
+    - the RTL fix (R-29's fix fork is back with the lead).
 That runtime is the bulk of the work. It is unassigned; the runtime lane and the compiler lane (I-8, one-unit LTO)
 are the owners on record.
 
@@ -30,6 +47,8 @@ are the owners on record.
     (`caplifive.dts`) sets to 12,500,000.
   - **So on the board every `clock_gettime` in a domain would fault, and libevent calls it on every loop.**
   - Fix, when a silicon runtime exists to test it: `ticks_per_second = 0` on this CPU (cpu compatible `"eth, ariane"`).
+    **Done in B0** (`runtime/linux/exec.c`, `cpu_without_time_csr`). B0's application ran on the board with it and
+    made no clock call; a clock-calling application on silicon is still to come.
     `dl_clock` then returns 0 and the libc delegates the call.
 - **A supervised domain may not touch any plain CSR with addr[9:8] != 0**, by design (`csr_regfile.sv:2879-2886`).
   - The my_first_domain-family glue (`start.S`, `start-fpga-gpseed.S`, the gp-captable copies) saves and restores

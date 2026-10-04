@@ -320,7 +320,11 @@ of a bug believed to be fixed.
 individual instances, residuals, and "what would settle it" lists. Reading only the headline root
 cause gave the wrong answer twice — "this is not that bug", because the documented *mechanism* did
 not match, while the folder's own unexplained instance matched exactly. **A mechanism that does
-not fit is not evidence of a different bug; check the residuals.**
+not fit is not evidence of a different bug; check the residuals.** The converse holds too: **a
+matching SHAPE is not a matching mechanism.** Before writing "this is <known issue>", check that its
+recorded mechanism predicts the VALUE you read. B0's stdout loss had R-29's shape but read 0 where
+R-29's stale-refill mechanism predicts the previous value, and the attribution was retracted
+(2026-10-05).
 
 ## A CLEAN result is not evidence until the check is known to fire
 
