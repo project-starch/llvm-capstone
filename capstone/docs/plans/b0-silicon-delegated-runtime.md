@@ -734,6 +734,30 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - **RESULT b0-hello 0, byte-exact.**
 - If 906 or a retry loop returns: another R-29 site in the write path, which the descriptor trace will name.
 
+## B0.7 attempt 13 (2026-10-04 23:58 - 10-05 00:03): B0 PASSES ON SILICON, byte-exact, as pre-registered
+- **Rungs:** b0-stats 0, **b0-hello 0** (the stream is byte-exact under the new `cmp` oracle), b0-stats2 0.
+- **The request stream:**
+  - round 1 HELLO;
+  - round 2 `ioctl(1, TIOCGWINSZ)` -> -25;
+  - **round 3 `writev` -> 51**, with `iov[0] {0x30, 50}` (the line) and `iov[1] {0x70, 1}` ("\x0a");
+  - round 4 `exit_group(0)`.
+  - That is 4 rounds and 2 syscalls; capstone-exec exited 0.
+- **What this run carries, on silicon (caplifive_supcall_715bdd1fe.bit), with no fabricated gp anywhere:**
+  - a gp-captable, full-LTO musl application, launched by capstone-exec through the process-ABI module;
+  - entered and stepped by the FPGA monitor's supervised CALL under CSR events;
+  - delegating its system calls through the yield;
+  - exiting with its domain torn down.
+- **Images and firmware:**
+  - b0-hello.dom cdd82e56884e4dd2; module 0332e2d6 (rv64g); capstone-exec 1dca5b19;
+  - monitor caplifive-sbi 1855cb4 (`managed_reinit`, d5459e1, plus quiet step traces), wrapper 882892f,
+    firmware e411395bde2c, Image d5ab7fad7520e2a5.
+- **The two defects that stood between attempt 4 and this one, both silicon-only and both QEMU-silent:**
+  1. capstone-c caller-saves a live `__rev` argument with `stc`, and silicon's STC MOVES it (Q-12's register half).
+     managed_reclaim then received cnull, and its REVOKE wedged the core through a nested M-mode trap.
+  2. R-29 in the delegate runtime: a freshly built `{offset, length}` pair was copied by the LTO-inlined memcpy's
+     granule loop, and the length (the high word) arrived as 0.
+- **N = 1.** A repeat run follows.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
