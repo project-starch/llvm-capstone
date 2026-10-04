@@ -1,0 +1,25 @@
+{
+  "case": 15,
+  "upstream_fix": "25e3073741",
+  "title": "row03",
+  "consumer": "sqlite3.c (fts5StructureRelease)",
+  "live_in_pin": true,
+  "live_proof": "inspection in the 3.22.0 tree: fts5MultiIterNew caches a raw Fts5Structure* in fts5_index.c, a table write under an active cursor releases it, and fts5MultiIterFree releases it a second time. Fixed upstream in 3.27.0",
+  "allocator_layer": "memsys5",
+  "object": "the Fts5Structure the multi-iterator cached a raw pointer to",
+  "lifetime_ender": "a table write under the live cursor releases the structure, after which the iterator's own teardown releases it again",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator: a scan cursor left open while rows are inserted into the same table. Built in the fts5 group, which needs repro322_fts_stubs.c and the math declarations the freestanding domain lacks",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; the probe reaches the defect site but cannot show this access was the stale one (hits=31)"
+    }
+  },
+  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=31)"
+}

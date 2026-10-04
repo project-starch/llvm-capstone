@@ -1,0 +1,25 @@
+{
+  "case": 2,
+  "upstream_fix": "b9e0f62c3a",
+  "title": "row15",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "inspection with line numbers in the 3.22.0 tree: sqlite3_backup caches raw Btree* at backup.c:23 and :29, resolved by findBtree at :82, and ATTACH reallocates db->aDb at attach.c:113. Fixed upstream in 3.53.3 by storing db indices and re-deriving the Btree each step",
+  "allocator_layer": "memsys5",
+  "object": "the Btree the backup cached for its source or destination database",
+  "lifetime_ender": "ATTACH on the same connection reallocates db->aDb, moving or freeing the cached Btree",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator: the public backup API driven against a connection that ATTACHes mid-backup",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault; cause 24"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "no verdict: backup step1 rc=0"
+    }
+  },
+  "status": "spatial run 2026-10-04: capability fault; cause 24; sublet not run; cheribsd-revocation run 2026-10-04: no verdict: backup step1 rc=0"
+}

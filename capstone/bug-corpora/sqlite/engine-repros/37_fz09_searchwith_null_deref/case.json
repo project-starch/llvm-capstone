@@ -1,0 +1,25 @@
+{
+  "case": 37,
+  "upstream_fix": "fz09",
+  "title": "SEGV in sqlite3StrICmp via searchWith, NULL deref",
+  "consumer": "sqlite3.c (searchWith)",
+  "live_in_pin": true,
+  "live_proof": "fuzz-corpus diff: the input reproduces on stock 3.22.0 under host ASan as a NULL dereference in sqlite3StrICmp at sqlite3.c:28771 (UpperToLower[*a]), reached through searchWith at :122793, withExpand at :122849 and selectExpander at :123041",
+  "allocator_layer": "memsys5",
+  "object": "the CTE name string searchWith compares against",
+  "lifetime_ender": "not a lifetime defect: a WITH clause reaches searchWith with a null name, which sqlite3StrICmp dereferences unconditionally",
+  "shape": "stale or wild pointer dereference",
+  "fidelity": "real consumer, real allocator, triggered by a self-contained statement rather than a database image",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault; cause 24"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "SIGPROT at the defect site (si_code=2 (PROT_CHERI_TAG/untagged-deref), hits=3)"
+    }
+  },
+  "status": "spatial run 2026-10-04: capability fault; cause 24; sublet not run; cheribsd-revocation run 2026-10-04: SIGPROT at the defect site (si_code=2 (PROT_CHERI_TAG/untagged-deref), hits=3)"
+}

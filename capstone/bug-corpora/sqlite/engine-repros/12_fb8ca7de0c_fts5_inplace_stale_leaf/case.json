@@ -1,0 +1,25 @@
+{
+  "case": 12,
+  "upstream_fix": "fb8ca7de0c",
+  "title": "row10",
+  "consumer": "sqlite3.c (fts5SegIterNextPage)",
+  "live_in_pin": true,
+  "live_proof": "inspection with line numbers in the 3.22.0 tree: fts5StructureAddLevel() edits the Fts5Structure in place at fts5_index.c:925, and the reference count it ignores is at :339. Fixed upstream in 3.37.0",
+  "allocator_layer": "memsys5",
+  "object": "the shared Fts5Structure an fts5vocab cursor is scanning (nRef > 1)",
+  "lifetime_ender": "an in-place add-level reallocates the structure while another holder still reads it",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator: an fts5vocab scan cursor holding a reference, with inserts driving segment merges mid-scan. Two build constraints that are part of the case, not incidental: -DSQLITE_DQS=0 means SQL string literals must be single-quoted, and the heap stays at the 256 KiB default because raising it inflates the in-image sqlite_heap[] until the domain exceeds the buddy allocator's maximum order and DOM_CREATE fails before a single instruction runs",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault; cause 24"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; the probe witnesses the defective access (kind=OOB, hits=40, witnesses=2)"
+    }
+  },
+  "status": "spatial run 2026-10-04: capability fault; cause 24; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe witnesses the defective access (kind=OOB, hits=40, witnesses=2)"
+}

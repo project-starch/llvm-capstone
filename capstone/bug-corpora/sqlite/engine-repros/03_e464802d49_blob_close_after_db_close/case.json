@@ -1,0 +1,25 @@
+{
+  "case": 3,
+  "upstream_fix": "e464802d49",
+  "title": "row05",
+  "consumer": "sqlite3.c (sqlite3DbFreeNN)",
+  "live_in_pin": true,
+  "live_proof": "the defect is public and fixed upstream in 3.29.0, after the 3.22.0 pin; sqlite3_blob_close() in the pinned tree uses the lookaside-allocated Incrblob with no guard against the connection having been closed",
+  "allocator_layer": "memsys5",
+  "object": "the Incrblob, allocated from the connection's lookaside pool",
+  "lifetime_ender": "sqlite3_close_v2() frees the connection and its lookaside pool while the blob handle is still open",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator: SQLite's own memsys5 heap with lookaside on. This case predates the group harness and still talks to the older hostcall interface, which is why the Sublet arm skips it -- the standalone domain has no Sublet grant glue for it",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation not run"
+}

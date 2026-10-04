@@ -1,0 +1,25 @@
+{
+  "case": 0,
+  "upstream_fix": "adfb203a7d",
+  "title": "heap-use-after-free in sqlite3Fts5GetVarint",
+  "consumer": "sqlite3.c (sqlite3Fts5GetVarint)",
+  "live_in_pin": true,
+  "live_proof": "backport filter: upstream fix adfb203a7d removes code still present in 3.22.0, and its own regression database (decoded from the fix's hex dump) reproduces on stock 3.22.0 under host ASan as heap-use-after-free in sqlite3Fts5GetVarint",
+  "allocator_layer": "memsys5",
+  "object": "an fts5 leaf-page buffer held by the segment iterator",
+  "lifetime_ender": "the page is released while an iterator still refers to it, then the varint decoder reads it",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator: upstream's own regression image, run statement by statement through stock 3.22.0. Served from repro322_memfs.c rather than a real file -- ext/misc/memvfs.c cannot be used, it serves only the main database so the pager cannot create a rollback journal, and it takes its buffer as an integer in the URI, which on a capability machine is an untagged forged pointer",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=14, witnesses=2)"
+    }
+  },
+  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe witnesses the defective access (kind=UAF, hits=14, witnesses=2)"
+}

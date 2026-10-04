@@ -1,0 +1,25 @@
+{
+  "case": 5,
+  "upstream_fix": "6397a78b2b",
+  "title": "row04",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "inspection in the 3.22.0 tree: detachFunc frees the auxiliary btree and schema in attach.c while a TEMP TRIGGER in aDb[1] keeps pTabSchema pointing at it, and sqlite3DropTriggerPtr -> tableOfTrigger reads pTrigger->pTabSchema->tblHash in trigger.c. Fixed upstream in 3.30.0",
+  "allocator_layer": "memsys5",
+  "object": "the auxiliary database's Schema, and the table hash inside it",
+  "lifetime_ender": "DETACH frees the auxiliary btree and schema while a temp trigger still points at them",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator. Built in the coreT group (-USQLITE_OMIT_TEMPDB): without a temp database the trigger has nowhere to survive",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault; cause 24"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "no verdict: detachtrig before drop"
+    }
+  },
+  "status": "spatial run 2026-10-04: capability fault; cause 24; sublet not run; cheribsd-revocation run 2026-10-04: no verdict: detachtrig before drop"
+}

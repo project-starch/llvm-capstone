@@ -1,0 +1,33 @@
+{
+  "program": "sqlite",
+  "boundary": "memsys5, SQLite's own arena allocator, under the engine",
+  "title": "Engine-internal memory-safety defects in SQLite 3.22.0, measured against a nested allocator",
+  "upstream": {
+    "version": "3.22.0 amalgamation",
+    "port": "capstone/ports/sqlite"
+  },
+  "cases": 43,
+  "case_schema": "case-json",
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "cheribsd-revocation"
+  ],
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "true": 43
+  },
+  "runners": [
+    "capstone/ports/sqlite/repro322/corpus322.sh"
+  ],
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "evidence": [
+    "capstone/bug-corpora/sqlite/engine-repros/results/20261004"
+  ],
+  "related": [
+    "capstone/bug-corpora/sqlite/capi-repros"
+  ],
+  "shape_table": true,
+  "note": "Sibling of capi-repros, not an extension of it: those 19 rows are pointer-lifetime defects in host BINDINGS over the C API, and that corpus records SQLite's engine-internal defects as out of scope. These 43 are engine-internal. Five further R2 fuzz-diff images (fz01, fz03, fz04, fz05, fz07) are collected and carry a host-ASan signature but no derived trigger, so they are not cases here; deriving them needs the 3.43.1 fuzz corpus re-extracted for db-by-sql pairing. Eight more entries in the collection are diagnostics rather than defects -- five baseline probes and three allocator demonstrators -- and stay in the port. The memsys5 boundary is the point: a sub-allocation is the address arena+i*atom, so it inherits the whole arena's bounds, and both a use-after-free and an overflow that stays inside the arena are in bounds for a capability machine."
+}

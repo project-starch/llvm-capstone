@@ -1,0 +1,25 @@
+{
+  "case": 36,
+  "upstream_fix": "fz08",
+  "title": "SEGV in sqlite3VdbeCursorMoveto, bad pointer 0x3",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "fuzz-corpus diff: the input reproduces on stock 3.22.0 under host ASan as a SEGV at address 0x3 in sqlite3VdbeCursorMoveto (sqlite3.c:76109, reached from sqlite3VdbeExec at :82409). The faulting address is small and non-zero, so it is a bad pointer rather than a plain NULL",
+  "allocator_layer": "memsys5",
+  "object": "the VdbeCursor pointer sqlite3VdbeCursorMoveto loads through",
+  "lifetime_ender": "not a lifetime defect: a deeply nested CTE leaves the cursor slot holding a value that was never a pointer",
+  "shape": "stale or wild pointer dereference",
+  "fidelity": "real consumer, real allocator, and the trigger is a single self-contained statement rather than a database image: a CTE whose body nests sub-selects deeply enough to reach the defect",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault; cause 24"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "SIGPROT (PROT_CHERI_TAG/untagged-deref)"
+    }
+  },
+  "status": "spatial run 2026-10-04: capability fault; cause 24; sublet not run; cheribsd-revocation run 2026-10-04: SIGPROT (PROT_CHERI_TAG/untagged-deref)"
+}

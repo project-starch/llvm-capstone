@@ -1,0 +1,25 @@
+{
+  "case": 42,
+  "upstream_fix": "fz13",
+  "title": "hang / infinite loop",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "fuzz-corpus diff: the image makes stock 3.22.0 hang under host ASan, confirmed by a 60 s timeout rather than by a fault",
+  "allocator_layer": "memsys5",
+  "object": "no object: the defect is non-termination, not a memory error",
+  "lifetime_ender": "not applicable -- a corrupt structure makes the dbstat walk fail to advance",
+  "shape": "non-terminating loop",
+  "fidelity": "real consumer, real allocator, with a reconstructed trigger (see case 34). Needs -DSQLITE_ENABLE_DBSTAT_VTAB. The oracle is a timeout and is recorded as such",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation not run"
+}

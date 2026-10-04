@@ -1,0 +1,25 @@
+{
+  "case": 40,
+  "upstream_fix": "174c21ff06",
+  "title": "hang / infinite loop",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "backport filter: upstream fix 174c21ff06 removes code still present in 3.22.0, and its own regression database makes stock 3.22.0 hang under host ASan rather than return",
+  "allocator_layer": "memsys5",
+  "object": "no object: the defect is non-termination, not a memory error",
+  "lifetime_ender": "not applicable -- a corrupt image produces a loop whose exit condition is never reached",
+  "shape": "non-terminating loop",
+  "fidelity": "real consumer, real allocator: upstream's own regression image. The oracle is a timeout, which is weaker than a fault and is recorded as such; the case is kept because a denial of service is a defect class the corpus deliberately covers, and because a hang is the one outcome cooperative fault recovery cannot contain",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "oracle": "no verdict: 174c21ff06_0 s0_err: database disk image is malformed"
+    }
+  },
+  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: no verdict: 174c21ff06_0 s0_err: database disk image is malformed"
+}

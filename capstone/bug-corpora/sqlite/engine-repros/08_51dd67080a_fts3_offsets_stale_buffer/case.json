@@ -1,0 +1,25 @@
+{
+  "case": 8,
+  "upstream_fix": "51dd67080a",
+  "title": "row13",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "inspection with line numbers in the 3.22.0 tree: sqlite3Fts3Offsets() saves a poslist pointer per phrase and reads it at fts3_snippet.c:1544, while fts3EvalRestart at fts3.c:5540 frees and reloads already-visited doclists. Fixed upstream in 3.49.0",
+  "allocator_layer": "memsys5",
+  "object": "the per-phrase poslist buffers sqlite3Fts3Offsets() saved pointers into",
+  "lifetime_ender": "an incremental phrase restarts the NEAR group, so fts3EvalRestart frees and reloads the doclists those pointers refer to",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator: offsets() over an OR of phrases read incrementally. Built in the fts3 group",
+  "arms": {
+    "spatial": {
+      "oracle": "complete"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation not run"
+}
