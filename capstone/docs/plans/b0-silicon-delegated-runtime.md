@@ -239,6 +239,39 @@ the gp-captable LTO archive. Result: sha256 2b2224da711c89c0, .text 38,916 B, gl
 - **context.c:38:** in the module but not reached. Its fix lands when contexts are needed.
 - **B0.6, the QEMU run with CAPSTONE_GP_FABRICATE=0.**
 
+## B0.6 PASSED in QEMU (2026-10-04): the delegated hello-world runs with NO fabricated gp
+`capstone-vm run` printed `B0: hello from a gp-captable delegated application`, and the result was exit 0.
+
+**The image:** b0-hello.dom, sha256 777ec140369fb0f6, b0-silicon-runtime 8e3ecc0565f3.
+
+**The platform** (private, frozen copies, in /tmp/capstone/b0/platform):
+- QEMU 4940d3fde12b3efa: the compiler lane's idle qemu-dpr, src 440b922c90. Its strings carry GP_FABRICATE,
+  MOVC_NULL_SCALAR and GP_NONLIN.
+- Firmware faed82b38f33d052: wrapper 3514060, monitor capstone-sbi monitor/b0-managed-gp 3be6737,
+  `-DCAPSTONE_TARGET_QEMU -DCAPSTONE_DEBUG_ENABLE -DCAPSTONE_SUPERVISED_CALL`. Built with mon-c0/build-fw.sh.
+- Kernel and rootfs: the shared buildroot QEMU Image (e58613598c897103) and rootfs.ext2 (9903242c37a72425), the
+  rootfs under -snapshot.
+- launcher 0752aa7c, job helper 5a160efa and module a88ed215, copied from the memcached lane's
+  pinned-platform/run-level0 (2026-10-03). ssh_server 385fcf91. The shared rootfs has no capstone-exec or dropbear.
+- The QEMU process's own /proc environ: `CAPSTONE_GP_FABRICATE=0 CAPSTONE_MOVC_NULL_SCALAR=1 CAPSTONE_GP_NONLIN=1
+  CAPSTONE_REV_NODES=65536`. MOVC_NULL_SCALAR's one-shot report went to the monitor (pc 0x80021d80, priv 3), as
+  warned.
+
+**One fault before the pass.** cause 24 at `lcc` on `domain_main`'s address. HELLO read the capability bounds of a
+function pointer, which is an integer under gp-captable. It now reports the code range through two more accessors.
+
+**Controls, each firing as predicted** (/tmp/capstone/b0/vm-controls.sh):
+
+| arm | firmware | gp fabrication | b0-hello | legacy SDK image (ffapp_fx24, 61b707bd) |
+|---|---|---|---|---|
+| the run | B0.1 | OFF | PASS | faults at once (cause 0, pc 0, before HELLO) |
+| A | B0.1 | ON | PASS | runs (exit 91, its FFAPP output, as on its owners' platform) |
+| B | without B0.1 (78151e4, fw 71965bfc) | OFF | REFUSED ("cannot create domain") | - |
+
+- **The legacy image runs or fails on fabrication alone.** B0 passing with fabrication OFF therefore means B0
+  does not depend on it.
+- **Arm B** shows that the B0.1 monitor change is what admits a managed image with a globals region.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
