@@ -575,6 +575,44 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - MRCL 0x17 after LNDE 0x42: the stack round trip lost it.
 - Also informative: a 0x20 + t with t not 2, i.e. MREV returning some other type.
 
+## B0.7 attempt 9 (23:01-23:10): tagged after the store, untagged at loan_end -- and the cause, from the codegen
+- **Trace:** `LNBG 0x10, 0x22, 0x30, 0x42, 0x51`. The block is LIN, MREV returned a REV, the block stays LIN, the
+  global reloaded REV right after the store, and the view is NONLIN. Then the step, LNDE 1..4, **`LNDE 0x47`**,
+  MRCL 0xF and 0x17.
+- **Caveat on attempt 9 itself.** On silicon, LDC moves a linear-family value out of its slot (load_unit.sv:214-218;
+  ISSUES Q-12). The 0x40 trace's `ldc` of desc_rev[k] was spilled, not written back, so in that boot the trace
+  emptied the global. LNDE 0x47 there is self-inflicted. Attempts 5-8 had no such reader.
+- **The cause, in the generated code of the ORIGINAL monitor (3be6737):** `ldc(s1, desc_rev[k])`,
+  `movc(a0, s1)`, **`stc(a0, sp, 112)`**, `call managed_reclaim`.
+  - capstone-c treats `__rev` as copyable, so it caller-saves the live argument with `stc` before the call.
+  - On silicon, STC writes cnull back to its register source for every type but NONLIN
+    (capstone_dyn_unit.anvil:544-548 at 715bdd1fe, read in source). capstone-qemu's `trans_csstc` copies (Q-12).
+  - So managed_reclaim received NOT_CAP. All four managed_reclaim call sites had this shape: loan_end, domain
+    cache reuse, domain destroy, region reset.
+- The rtl-oracle confirmed, with quotes, that domain CALL/RETURN/SAVE/RESTORE never touch rev nodes, and that MREV
+  cannot write an untagged rd. That rules out the other hops.
+- This is a NEW instance of the KNOWN divergence Q-12, through a compiler that predates silicon's linear STC. It is
+  the same class as the LLVM RegAllocFast spill in history/13-08-2026 (STC with empty `(outs)`).
+
+## B0.7 attempt 10 pre-registered (before the boot): the fix
+- **Monitor d5459e1:** each caller does `x = __revoke(slot); x = managed_reinit(x)`, so no `__rev` value crosses a
+  call.
+  - The generated code is `ldc` of the global, `revoke`, then the LINEAR local, then the call; nothing saves a0.
+  - A scan for "argument register passed exactly as stc-saved" finds the 4 old sites in 3be6737 (the positive
+    control) and none in d5459e1. The other saved-argument hits are integers, NONLIN values, or temporaries that
+    are not the callee's arguments.
+  - The trace reloading desc_rev[k] in loan_begin is removed.
+  - Firmware 228a0194e64f on Image 88ad30cafd09, byte-identical to the compile that was inspected.
+- **Predicted reading:**
+  - b0-stats 0.
+  - b0-hello: each step reads `STPB, LNBG..., SUPA 0, SUPK 0, LNDE 1..4, MRCL 0x10` (silicon returns LINEAR after
+    DELIN, per the oracle; 0x13 would mean UNINIT), then `MRCL 2, LNDE 5, 6, STPE 0`.
+  - capstone-exec serves the request and steps again, through to the exit. The hello line appears, then
+    **RESULT b0-hello 0**.
+  - b0-stats2 0, with live_domains 0 after the exit if destroy works. It now also exercises the domain-destroy
+    revoke.
+- **A failure is read the same way as before.** The wedge apertures are on, and the last trace names the stage.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
