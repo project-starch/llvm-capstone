@@ -12,9 +12,12 @@
 2026-10-04: the FPGA monitor's resume hang (S-16) is root-caused and fixed on
 capstone-ariane `sup-call` (192a5e624, registry R-49: the switcher's first SAVE
 write pushed into a FULL store-buffer commit queue), together with R-50
-(429c60b32, the load unit's flush exemption). Sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. SYNTHESIZED AND SEALED: `sup-call` 715bdd1fe (bitstream sha256 a7add4c0...1311; route clean, LUTLP-1 0,
-WNS −9.949 in band; plan step-11 result). NEXT: the lead's word for the reflash, then the board lane's
-acceptance batch (17 bare S-16/S-17 images plus the monitor without the fence). Until the reflash, a `fence` before every CALL covers only that CALL's switch
+(429c60b32, the load unit's flush exemption). Sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. FLASHED AND ACCEPTED: `sup-call` 715bdd1fe (caplifive_supcall_715bdd1fe.bit, sha256 a7add4c0...1311) --
+18/18 bare images, R-43 a1..a10 unchanged, the C5u monitor without a fence at 1,278 preemptions where
+36a641e0b hung after 212 (plan step-11 acceptance; R-49 FIXED ON SILICON). NEXT for the RTL lane: the
+runtime lane's supervised_invoke work needs nothing more from the RTL; keep the fallback sup-call-b2 parked;
+the audit's cheap checks (byte 220 at idle = 0x40 as the bitstream's fingerprint; a sticky mis-check flag for
+the next bitstream) go into the next aperture batch, not a cycle of their own. Until the reflash, a `fence` before every CALL covers only that CALL's switch
 (the board lane, bare). A fence before every RETURN as well completed every
 non-preemptive twin that hung. A quantum escape stays exposed, so preemptive
 supervision waits for the reflash. After the reflash: the board's S-16 arms without the fence, then

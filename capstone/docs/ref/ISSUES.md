@@ -729,7 +729,20 @@ te by the RTL lane, 2026-09-24.
 > stand as such: CALL;CALL corrupts the first's parked pc; control flow two or three instructions after the
 > CALL triggers it when fetch timing lets it reach issue in time (one layout measured: it did not).
 
-### R-49 — a switcher write is pushed into a FULL store-buffer commit queue: the store unit's room check answers for the previous store's queue · `FIXED IN RTL (capstone-ariane sup-call 192a5e624, 2026-10-04), NOT YET ON SILICON — the RTL half of S-16`
+### R-49 — a switcher write is pushed into a FULL store-buffer commit queue: the store unit's room check answers for the previous store's queue · `FIXED ON SILICON (caplifive_supcall_715bdd1fe.bit, flashed 2026-10-04; capstone-ariane sup-call 192a5e624) — the RTL half of S-16`
+
+> **On silicon (the board lane's pre-registered acceptance, lane board-supmon a888ec953c57, audited wording in the S-16
+> entry):** the 14 hash-identical bare arms that hung on 36a641e0b (stores 4..64; armed and plain CALL, supervised
+> RETURN, quantum escape; idx-7 and idx-4 entries) complete without a fence with their fenced twins' readings; armdep-nt
+> runs 8,551 escapes where 36a641e0b hung within 16; the byte-identical C5u monitor firmware without a fence runs the
+> supervised SQLite speedtest to 1,278 / 1,277 / 1,277 preemptions with the oracle hash where 36a641e0b hung after 212;
+> the R-43 list a1..a10 is unchanged (identity readings exact, cycles within 0.05 %). Attribution to R-49 rests on the
+> simulated mechanism and on the SAVE-entered arms, whose first switcher write follows a register read and never a load,
+> so R-50 cannot reach them. Limits: no silicon build isolates R-49 from R-50 and from re-placement; the two residuals
+> below are unexercised; the apertures 219..222 have never fired on this bitstream (nothing hung). Cheapest further
+> checks (the audit's): byte 220 at idle reads 0x40 on 715bdd1fe against 0x00 on 36a641e0b, a behavioural fingerprint of
+> the bitstream; a sticky "old mis-check reached" flag batched into the next bitstream would separate R-49 from timing;
+> N = 2 repeats of armdep-nt and the monitor run.
 
 > **What happens.** The domain switcher's walk writes (SAVE, and the exchange's parked registers) go through the
 > store unit into the store buffer's COMMIT queue directly (`store_buffer.sv`, the `valid_i && is_dom_switch` push;
@@ -802,7 +815,15 @@ te by the RTL lane, 2026-09-24.
 > coincidence likely under DDR latency. The earlier TAG_WAIT reading in the plan is withdrawn: the walk's READ was
 > never the problem, the WRITE was.
 
-### R-50 — the load unit's dom-switch flush exemption outlives the switcher's read, so the first load after a switch that is dispatched in a flush cycle is not killed · `FIXED IN RTL (capstone-ariane sup-call 429c60b32, 2026-10-04), NOT YET ON SILICON — simulation-only so far; NOT the silicon S-17`
+### R-50 — the load unit's dom-switch flush exemption outlives the switcher's read, so the first load after a switch that is dispatched in a flush cycle is not killed · `IN THE RESIDENT BITSTREAM (caplifive_supcall_715bdd1fe.bit, 2026-10-04; capstone-ariane sup-call 429c60b32); its trigger was never observed on silicon — NOT the silicon S-17`
+
+> **On silicon:** the trigger (an LDC dispatched in the same cycle as the swap-in CCSRRW's flush) is timing-dependent and
+> has never been observed on the board; the silicon evidence for the fix is the absence of regression on 715bdd1fe --
+> the R-43 list a1..a10 unchanged, the monitor's 1,277+ preemptions through exactly that CCSRRW/LDC window. S-17 itself
+> did not reproduce on 715bdd1fe (arm12-ldc 3/3, 8,552 escapes, identical to its ld twin; it hung on 36a641e0b): its
+> mechanism stays unknown -- neither R-49 nor R-50 produces the state it read (WAIT_STORE_READY with count 4, and
+> lsu_ready 1 with the DYN unit waiting, respectively, against its lsu_ready 0 / idle units / unretired CCSRRW), and a
+> timing-marginal path moved by the rebuild cannot be excluded. The apertures 219..222 stay armed for its return.
 
 > **What happens.** `load_unit.sv`: `if (flush_i && !sel_dom_switch && !ldbuf_q[ldbuf_last_id_q].is_dom_switch)
 > state_d = WAIT_FLUSH` exempts the switcher's reads from the busy-driven flush (6c4a8d5ab). Keyed on the last
