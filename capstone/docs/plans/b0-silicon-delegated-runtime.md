@@ -334,6 +334,18 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
     715bdd1fe, 3 of 3.
   - a domain `rdtime`, if the time change did not take.
 
+## B0.7 attempt 1 (2026-10-04 21:20-21:24): the control passed; b0-hello = 901, the module swap
+- **k800r: RESULT retval=4.** The control is OK.
+- **b0-hello: `rmmod: can't unload module 'capstone': Function not implemented`, then RESULT 901.**
+- **Why.** The board's kernel has no module unload: vermagic is `6.4.14 SMP riscv`, without the QEMU kernel's
+  `mod_unload`. Once the control had loaded the stock module, nothing could replace it.
+- **Attempt 2: the wrapper loads the process-ABI module FIRST, and that module serves both rungs.**
+  - The classic control (lpc + k800r) now also checks the new module's classic path. A failing control says "the
+    module"; a failing b0-hello says "the process ABI".
+  - Predictions as before: k800r 4, b0-hello 0.
+  - A new failure point: **k800r 901 or a wrong value means the process-ABI module breaks the classic path on the
+    board.**
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
