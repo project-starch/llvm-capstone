@@ -7,7 +7,7 @@ main() {
   local TAG=$1 FW=$2 R=$HOME/dev/llvm-capstone OUT=$HOME/capstone-artifacts/unify/board-$1
   mkdir -p "$OUT"; cp -f "$FW" "$OUT/fw_payload.bin"
   export FPGA_URL="$(cat "${CAPSTONE_FPGA_URL_FILE:-$HOME/.claude-kisp/secrets/fpga-console-url}")"
-  export FPGA_FW="$OUT/fw_payload.bin" FPGA_BITSTREAM=caplifive_supcall_36a641e0b.bit REFUSAL_RECORD=1
+  export FPGA_FW="$OUT/fw_payload.bin" FPGA_BITSTREAM=${SUPMON_BITSTREAM:-caplifive_supcall_36a641e0b.bit} REFUSAL_RECORD=1
   export PREFLIGHT_ALLOW_SHORT=1 PREFLIGHT_ALLOW_SLOTS=1
   # The image carries the k800 RELINKED at 0x20000 (589ceee3; speedtest1.dom enters at 0x10000, R-3 / preflight C15),
   # so preflight reads that control's own QEMU-pass record.

@@ -309,3 +309,23 @@ Lines are in `results/board-c5f.result-lines.txt`.
 - **Preemptive supervision on this bitstream needs the RTL fix.** The RTL lane's store-path fix (room check keyed on
   the request being decided) applies to any switcher write.
 - C and B did not run.
+
+## Pre-registered (2026-10-04 21:05): C5u on the S-16 fix bitstream caplifive_supcall_715bdd1fe.bit (flashed 18:41-18:43)
+**What runs.** The C5u firmware UNCHANGED: fw d07761ded4ce, no fence. On 36a641e0b its loud supervised speedtest
+hung after 212 resumes.
+- Layout: SUPMON_SPEEDTESTS=4, i.e. k800, speedtest x4 (SUPM 0x000 plain, 0x001 A, 0x111 C, 0x011 B), k800.
+- Classifier: `classify-c5f.py` (it handles C5u-shaped boots).
+- `SUPMON_BITSTREAM=caplifive_supcall_715bdd1fe.bit`: the runner hard-stops on a name mismatch.
+
+**Preflight and the freshness gate, set as for C5f and for the same reasons.** PREFLIGHT=0 because the preflight
+inspects the shared overlay, not this payload. `SQLITE_STAGE_OVERLAY=/tmp/capstone/mon-c0/c5f-overlay` holds
+k800 589ceee3 and speedtest 7291218e, the images this payload embeds; the gate verifies them by content.
+
+**Prediction (the accept715 section of sup-resume-2026-10-03/PREREG.md): all 6 tests ok.**
+- k800 returns 4 twice.
+- Each of the four speedtests gives 112006 38bb59fd, with HEAP 2097152 DROPPED 0 RC 0.
+- The three supervised ones show SUPN > 0 and a final SUPK 0.
+- Their cycle overhead against the plain call is reported, not predicted.
+
+**Refuted by:** any hang, any other hash, or a supervised call with no preemption at all (SUPN 0 would mean the
+arming did nothing).
