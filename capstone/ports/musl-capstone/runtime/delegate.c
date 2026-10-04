@@ -208,14 +208,15 @@ int __capstone_delegate_ready(void) {
  * keep a tag. The runtime is built with -fno-builtin, so this stays a loop.
  *
  * Plain data built on the stack and handed on (the entry, a wire pair, a
- * msghdr) goes through here too, for a second reason: ISSUES R-29, open on
- * silicon. A 128-bit `ldc` of a granule whose HIGH word was just written by an
- * `sd` still in the write buffer returns that word ZEROED (the refill path's
- * overlay is word-gated). The libc memcpy's granule loop is exactly that load.
- * On the board it zeroed every iovec length but the first, `{offset, len}` built
- * as `uint64_t wire[2]` and copied at once: musl retried a 1-byte write against
- * a 0-length descriptor until the stream corrupted (B0.7, 2026-10-04). An 8-byte
- * `ld` of the same word is forwarded correctly. */
+ * msghdr) goes through here too, for a second reason found on silicon
+ * (caplifive_supcall_715bdd1fe, B0.7, 2026-10-04). The libc memcpy's 128-bit
+ * granule copy of a pair just written by two `sd`s delivered the HIGH word as
+ * 0 with the low word intact: iov[1]'s length of `{offset, len}`, built as
+ * `uint64_t wire[2]`, arrived as 0 while iov[0]'s 50 survived, and musl retried
+ * a 1-byte write against a 0-length descriptor until the stream corrupted. The
+ * idiom is ISSUES R-29's (write-buffer high word, then a wide `ldc`), but its
+ * sub-mechanism is unresolved: R-29's recorded stale-refill account does not
+ * predict 0 here. 8-byte moves made the stream byte-exact on two boots. */
 static void dl_bytes(void *dst, const void *src, size_t n) {
   unsigned char *d = dst;
   const unsigned char *s = src;

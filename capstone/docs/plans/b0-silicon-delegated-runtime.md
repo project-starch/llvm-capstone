@@ -619,7 +619,8 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - **MRCL 0x10:** silicon's REVOKE returns LINEAR for the DELINed block, as the oracle predicted from
     rev_node.anvil:71-73 and dyn_unit.anvil:92-95. The UNINIT reinitialisation does not run there. (QEMU returns
     UNINIT; both end LINEAR.)
-- **But b0-hello did not finish in 300 s.** There were 6,638 STPB and 6,636 STPE, every SUPK 0 (returned), about 22
+- **But b0-hello did not finish in 300 s.** There were 6,638 STPB and 6,636 STPE (counted over this boot's UART
+  joined and scoped after its own `load_image`; the driver's per-rung transcript holds fewer, 6,205/6,204), every SUPK 0 (returned), about 22
   steps per second, and the core was not wedged.
 - **No `B0: hb` and no watchdog line came through.** The monitor's ~1.6 MB of step traces at 57,600 baud starved and
   garbled Linux's console (binary fragments between trace lines), so the console says nothing about Linux.
@@ -698,7 +699,7 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - rounds 4+ with len 0, or offset/len garbage: the application's marshaling or iovec state is wrong.
 - The data bytes show directly whether `"0: hello..."` came from a wrong offset.
 
-## B0.7 attempt 12 (23:46-23:51): the corruption is R-29 in the runtime's wire copy
+## B0.7 attempt 12 (23:46-23:51): the corruption is in the runtime's wire copy (mechanism UNRESOLVED; see the retraction below)
 - **The descriptors the host received:**
   - round 3: `iov[0] {0x30, 50}` = "B0: hello ... application" and **`iov[1] {0x70, len 0}`**;
   - every retry: `iov[0] {0x30, 0}`, `iov[1] {0x30, len 0}`.
@@ -707,20 +708,22 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
 - **The code** (b0-hello.dom 777ec140, dl_vector): `sd t0, 0x0(s7)` (the wire's offset), `sd a6, 0x8(s7)` (its
   LENGTH, the granule's high word), then ~17 instructions later the inlined memcpy's granule loop
   `ldc t5, 0x0(t2)` with t2 = s7.
-- **This is ISSUES R-29, OPEN on silicon** (fpga-repros/R29-wbuffer-highword-forwarding). A 128-bit `ldc` of a
-  granule whose high word was just written by an `sd` still in the write buffer returns the high word zeroed: the
-  refill's overlay is word-gated, and a word-1 entry never hits. The low word survives, as the offset did here.
+- ~~This is ISSUES R-29~~ **WITHDRAWN 2026-10-05, see "RETRACTION" below.** It is the same copy idiom as R-29 (a
+  struct built with `sd`s, then a 128-bit granule copy of it), but R-29's recorded mechanism does not predict the
+  value read.
 - **R-29's README says W-04 (the memcpy fixup) is "unaffected, the memcpy loop does not have this shape".** Under
   full LTO the shape is formed ACROSS the inlined call: a struct built with `sd`s, then a granule copy. A
   same-register scan for the shape finds the R-29 reproducer (1 site, distance 1) and nothing here, because the
-  copy reads through a different register. The check that matters is by address.
+  copy reads through a different register. The check that matters is by address. This holds whatever the
+  sub-mechanism is.
 
-## B0.7 attempt 13 pre-registered (before the boot): the R-29 workaround in the delegate runtime
+## B0.7 attempt 13 pre-registered (before the boot): the wire-copy workaround in the delegate runtime
 - **delegate.c:** every copy of freshly built plain data now goes through `dl_bytes` (8-byte integer moves; an
   8-byte `ld` of the word is forwarded correctly), not libc memcpy. That covers the entry, the iovec wire pairs, the
   msghdr pairs and header, the thread name and the ioctl buffer.
-  - b0-hello.dom **cdd82e56**: dl_vector goes from 462 to 350 instructions, `ldc` 9 -> 6. The remaining `ldc`s are
-    capability spill reloads and the iov_base pointer load.
+  - b0-hello.dom **cdd82e56**: dl_vector goes from 799 to 528 instructions, `ldc` 43 -> 23. (The first count, "462
+    to 350, ldc 9 -> 6", stopped at a local label and is corrected here; the claim-auditor caught it.) The
+    remaining `ldc`s that were inspected are capability spill reloads and the iov_base pointer load.
   - QEMU (fw d7d769b1, fabrication off): exactly 51 bytes.
 - **b0run.sh now checks BYTE-EXACT** (`cmp` against the expected line). The new **906** means the line is there but
   the stream is wrong; attempt 11 scored 0 on a grep. A stub test scores pass 0, dirty 906, hang 905, no line 903
@@ -732,7 +735,7 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - **round 3 `writev` -> 51**, with `iov[0] {.., 50}` (the line) and `iov[1] {.., 1}` ("\x0a");
   - then the exit, about 4 rounds in all;
   - **RESULT b0-hello 0, byte-exact.**
-- If 906 or a retry loop returns: another R-29 site in the write path, which the descriptor trace will name.
+- If 906 or a retry loop returns: another such copy in the write path, which the descriptor trace will name.
 
 ## B0.7 attempt 13 (2026-10-04 23:58 - 10-05 00:03): B0 PASSES ON SILICON, byte-exact, as pre-registered
 - **Rungs:** b0-stats 0, **b0-hello 0** (the stream is byte-exact under the new `cmp` oracle), b0-stats2 0.
@@ -754,9 +757,40 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
 - **The two defects that stood between attempt 4 and this one, both silicon-only and both QEMU-silent:**
   1. capstone-c caller-saves a live `__rev` argument with `stc`, and silicon's STC MOVES it (Q-12's register half).
      managed_reclaim then received cnull, and its REVOKE wedged the core through a nested M-mode trap.
-  2. R-29 in the delegate runtime: a freshly built `{offset, length}` pair was copied by the LTO-inlined memcpy's
-     granule loop, and the length (the high word) arrived as 0.
-- **N = 1.** A repeat run follows.
+  2. In the delegate runtime, a freshly built `{offset, length}` pair was copied by the LTO-inlined memcpy's
+     128-bit granule loop, and the length (the high word) arrived as 0 with the offset intact. The idiom is R-29's;
+     the sub-mechanism is UNRESOLVED (see the retraction below).
+- **N = 2 (repeat, 2026-10-05 00:05-00:09, same image and firmware):** identical. All three rungs 0, byte-exact,
+  the same four rounds, the same descriptors (`{0x30, 50}`, `{0x70, 1}`).
+
+## RETRACTION (2026-10-05): "the stdout corruption is ISSUES R-29" is withdrawn; its sub-mechanism is UNRESOLVED
+The claim-auditor weakened it, and the reasons hold up. **What stands:**
+- On 715bdd1fe, the LTO-inlined memcpy's 128-bit `ldc`/`stc` granule copy of a freshly `sd`-built `{offset, len}`
+  pair delivered the length (the high word) as 0, with the offset intact.
+- It is deterministic within a boot (197 retries, every one len 0), across 2 boots.
+- The 8-byte-copy workaround (72b8a662e7e9) is byte-exact on 2 boots.
+
+**What is withdrawn:** the attribution to R-29's mechanism.
+- R-29's recorded verdict (waveform, 2026-09-10) is a MISS whose refill serves a STALE high word from memory. Here
+  the same granule had just been read by iov[0]'s own `ldc`, so iov[1]'s `ldc` most likely HIT. The stale-refill
+  account also predicts the previous value; round 3's slot had held 50.
+- The 17-instruction distance lies far outside R-29's measured 1-nop window. That window was measured on another
+  bitstream and another shape, so it is not a refutation.
+- The account that predicts exactly 0 with the low word intact is a word-0 write-buffer hit overlaying `.user = 0`
+  (wt_dcache_mem.sv:397, store_unit.sv:370 at 715bdd1fe). ISSUES records that one as REFUTED in simulation
+  (`r29-sep-userzero-miss`).
+- So B0 is either evidence against that refutation or a third mechanism.
+- **Discriminator, not yet run:** word 1 holding a known nonzero value, then plain `sd` to both words with the
+  write buffer busy and the line cached, then `ldc`. Stale-refill predicts the old value; the `.user = 0` overlay
+  predicts 0.
+
+**Also corrected:**
+- 72b8a662e7e9's subject said the defect "zeroed every iovec length". iov[0]'s 50 arrived intact.
+- Its body and the delegate.c comment named the word-gated refill overlay as the mechanism. The comment is
+  corrected; the lane commits stay as they are.
+
+**What would have caught it:** checking that the known defect's recorded mechanism predicts the observed VALUE, not
+just that the code has its SHAPE.
 
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
