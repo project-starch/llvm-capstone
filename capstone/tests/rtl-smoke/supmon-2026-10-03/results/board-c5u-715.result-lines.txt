@@ -1,0 +1,34 @@
+# boot supmon-c5u-715 on caplifive_supcall_715bdd1fe.bit, fw d07761ded4ce (C5u, no fence), 2026-10-04 21:00-21:18
+BT00:00000000
+BT01:00000001
+BT02:00000002
+BT03:00000003
+### TEST 1/6 START k800:/test-domains/k800.dom ###
+ladder-perf: RESULT k800 retval=4 cycles=4569 ran=53406 instret=1089 phase=2
+### TEST 1/6 END k800:/test-domains/k800.dom rc=0 ###
+### TEST 2/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SUPM:00000000
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2550486094 HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0
+### TEST 2/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 3/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SUPM:00000001
+SUPN:000004FE
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2903382934 HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0
+### TEST 3/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 4/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SUPM:00000111
+SUPN:000004FD
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2568320686 HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0
+### TEST 4/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 5/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SUPM:00000011
+SUPN:000004FD
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2567976588 HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0
+### TEST 5/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 6/6 START k800:/test-domains/k800.dom ###
+ladder-perf: RESULT k800 retval=4 cycles=4559 ran=53406 instret=1089 phase=2
+### TEST 6/6 END k800:/test-domains/k800.dom rc=0 ###

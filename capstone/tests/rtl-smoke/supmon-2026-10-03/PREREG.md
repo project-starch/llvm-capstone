@@ -329,3 +329,22 @@ k800 589ceee3 and speedtest 7291218e, the images this payload embeds; the gate v
 
 **Refuted by:** any hang, any other hash, or a supervised call with no preemption at all (SUPN 0 would mean the
 arming did nothing).
+
+## C5u RESULT on 715bdd1fe (boot supmon-c5u-715, 2026-10-04 21:00-21:18): all six tests pass; preemptive supervision of the real workload works on silicon
+`classify-c5f.py`: VERDICT all predictions hold. Raw lines are in `results/board-c5u-715.result-lines.txt`.
+
+| test | SUPM | preemptions (SUPN) | final SUPK | hash | cycles |
+|---|---|---|---|---|---|
+| 1 k800 | | | | retval 4 | 4,569 |
+| 2 plain | 0x000 | - | - | 112006 38bb59fd | 2,550,486,094 |
+| 3 A, loud | 0x001 | **1,278** | 0 | 112006 38bb59fd | 2,903,382,934 (+13.84 %, UART inside the bracket) |
+| 4 C, quiet + fence mask | 0x111 | **1,277** | 0 | 112006 38bb59fd | 2,568,320,686 (+0.699 %) |
+| 5 B, quiet | 0x011 | **1,277** | 0 | 112006 38bb59fd | 2,567,976,588 (**+0.686 %**) |
+| 6 k800 | | | | retval 4 | 4,559 |
+
+- **The same firmware hung after 212 resumes on 36a641e0b (C5u).** On 715bdd1fe its loud supervised run completes
+  1,278 preemptions, and the quiet runs 1,277, each with the oracle hash.
+- This firmware has NO pre-CALL fence (FW_PRECALL is off). The "fence mask" of test 4 is the monitor's per-call
+  quiet/fence test knob, and it costs nothing measurable over B.
+- **Preemptive supervision of the SQLite speedtest costs +0.69 %** at the monitor's quantum (2,000,000 cycles):
+  about 1,277 preemptions and resumes per run.
