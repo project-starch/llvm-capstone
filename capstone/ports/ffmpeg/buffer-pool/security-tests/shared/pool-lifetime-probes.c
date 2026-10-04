@@ -376,5 +376,45 @@ void ff2_security_run(unsigned test, unsigned long rounds, unsigned mode)
         av_buffer_pool_uninit(&bp); held = NULL;
         return;
     }
+    if (test == 39) {
+        /* A non-reference VVC frame that is output is released in full, so BOTH
+         * of its pooled side tables go back while the decoder still holds them
+         * (upstream 5c66a3ab51). VVC takes them from the SIMPLE all-NULL-callback
+         * pool form (vvc/dec.c:387,394), which is what this probe uses, so the
+         * recycling here is the same code path the decoder's is.
+         *
+         * Two entries are released, and that is what distinguishes this probe
+         * from tests 5/6/7, which release one. The free list is LIFO --
+         * pool_return_entry pushes onto pool->available_entries and
+         * refstruct_pool_get_ext pops the head -- and ff_vvc_unref_frame releases
+         * tab_dmvr_mvf first and rpl_tab second, so the entry handed back is
+         * RPL_TAB. Watching only tab_dmvr_mvf reads "no reuse", which is a correct
+         * allocator misread by the instrument and is indistinguishable from a
+         * defect that does not exist; it cost a void native run on 2026-10-03.
+         * So the LIFO order is asserted loudly AND `held` is chosen by comparison,
+         * which keeps the stale access correct either way. */
+        AVRefStructPool *rp = av_refstruct_pool_alloc(64, 0);
+        CHECK(rp, 480);
+        void *tab = av_refstruct_pool_get(rp), *rpl = av_refstruct_pool_get(rp);
+        CHECK(tab && rpl && tab != rpl, 481);
+        /* Both tables get a distinct known value: without one for rpl a stale
+         * read of zero could not be told apart from uninitialised memory. */
+        ((unsigned char *)tab)[0] = 0xA0; ((unsigned char *)rpl)[0] = 0xB0;
+        void *held_tab = tab, *held_rpl = rpl;
+        held = held_rpl;
+        CHECK(read_probe(held) == 0xB0, 482); /* live: readable while the frame holds it */
+        av_refstruct_unref(&tab);             /* ff_vvc_unref_frame, first  */
+        av_refstruct_unref(&rpl);             /* ff_vvc_unref_frame, second */
+        CHECK(!tab && !rpl, 483);
+        void *reissued = av_refstruct_pool_get(rp); /* the next picture's table */
+        CHECK(reissued == held_tab || reissued == held_rpl, 484);
+        CHECK(reissued == held_rpl, 485);     /* the LIFO order, asserted not assumed */
+        held = reissued == held_tab ? held_tab : held_rpl;
+        ((unsigned char *)reissued)[0] = 61;
+        mark(test);
+        CHECK(read_probe(held) == 61, 486);   /* the stale read sees the new owner */
+        av_refstruct_unref(&reissued); av_refstruct_unref(&rp); held = NULL;
+        return;
+    }
     ff2_fail(430);
 }
