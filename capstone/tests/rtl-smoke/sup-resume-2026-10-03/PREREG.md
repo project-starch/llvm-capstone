@@ -905,3 +905,197 @@ An adversarial audit re-checked every image hash, every pc mapping and the RTL p
 **Open, not discriminating.** 255 = 0x83 (TRAP LOG, mcause 3) appears on every hang reading in all three sessions and
 in the earlier wedge reads. The completing runs print mcause 0, so it is probably a debug-mode `ebreak` from the
 OpenOCD load. Next time: read apertures 196..203 (recent non-trivial mepc) on a hang.
+
+## Pre-registered (2026-10-04, before any synthesis or reflash): acceptance of the S-16/S-17 fix bitstream, capstone-ariane sup-call 715bdd1fe
+**Contents of the candidate:**
+- R-49: 192a5e624, the store path. A switcher write is accepted on the room of the queue it enters.
+- R-50: 429c60b32, the load unit.
+- Four observation bytes for S-17 (07eb22deb): bank 6 regs 27..30 = switch values 219..222, labelled at
+  cva6.sv:1308-1316.
+
+The RTL lane's hand-off numbers:
+- lint gate PASS, every counter at baseline, CASEOVERLAP now gated;
+- sweep 92/92 identical;
+- sim smoke: sup-s16-n32 three rounds and esc-n8 complete.
+
+**The reflash is the lead's word.** Nothing here runs before it.
+
+**Run.** `CAPSTL_BITSTREAM=<the new .bit name> CAPSTL_SET=accept715 SUP_RUNNER=$PWD/run_sup_bare_wedge.py`.
+- The runner HARD-STOPS on a name mismatch.
+- It now also reads 196..203 (the trap log's mepc) and 219..222 after any hang.
+- One power cycle per image, so the order costs nothing. S-17 still runs last.
+
+**Predictions: every S-16 arm COMPLETES without a fence, with the readings of its completed fenced twin.**
+
+| image | prediction on 715bdd1fe |
+|---|---|
+| control call-retpc | PASS exact |
+| armdep-nt-d16-q64 (0986d394) | completes: status 0x1, iter 0x10000, checksum 0x7f8000, csnodefree 0xfffc -> 0xfffc, mcause 0, end 0x5e5e. Escapes are reported, not predicted (twin s16pre-nt: 8551) |
+| s16sd24 (5037d3de) | completes with the same vector shape (twin s16pre-stc24) |
+| s16st-n4-r1, -n4-r3, -n4-r3-fence, -n32-r1 | complete: 1 per round, 0x77, 0 |
+| s16st-esc-n8, -esc-n8-retfence | complete: 1 per round (3), then the resume count (>= 1, reported), 0x77, 0 |
+| s16st-plain-n32-r1, -plain-n4-r3, -plain-n24-r3, -plain-n32-r3 | complete: 0x51 per round, 0x77, 0 |
+| arm12-ld-q64 (8027a661), the S-17 control | completes (8,552 escapes on 36a641e0b) |
+| arm12-ldc-q64 (07de9fb7), S-17 | **no prediction**: R-50 is not S-17 |
+
+**If arm12-ldc-q64 hangs, the RTL lane's go/no-go, written before the build, decides it:**
+- 220 valid 1 with a nonzero queue count and fu naming a unit, plus 219 naming the op: the "entry neither LSU unit
+  claims" hypothesis holds, and that names the unit.
+- 220 valid 0 with the bypass empty: the hypothesis dies, and lsu_ready is low for a reason outside the bypass.
+
+**If any S-16 arm hangs on 715bdd1fe:**
+- 221 separates a ghost count (three valid bits, data_req 0: R-49 not fixed) from a drain stall (four valid,
+  data_req 1, no gnt).
+- 222 says whether the adapter's tag FSM is parked.
+- The R-49 audit's residuals would read here: a switcher push coinciding with commit_i, and a load-unit clear write
+  coinciding with a switcher write.
+
+**Beyond this bare batch:**
+- the R-43 acceptance list on the new bitstream, as for every reflash;
+- one FPGA monitor boot with the C5f configuration WITHOUT the fence: fw-c5u (d07761ded4ce), the C5u boot's 6 tests,
+  classifier `../supmon-2026-10-03/classify-c5f.py`.
+  - Predicted: all 6 tests ok.
+  - The three supervised speedtests give the oracle 112006 38bb59fd with SUPN > 0 and final SUPK 0.
+  - On 36a641e0b this firmware hung after 212 resumes.
+
+## Pre-registered (2026-10-04, on the RESIDENT bitstream 36a641e0b, while 715bdd1fe synthesises): the RTL lane's three one-round escape arms
+`testlist_sup.yaml` at 715bdd1fe runs sup-s16-esc-n8/-n32/-n64 with **ITER=1**.
+- The board's s16st-esc-n8 above ran ITER=3 (the default), so it was NOT their sup-s16-esc-n8. The earlier
+  comparisons between the two were between different arms.
+- Built exactly (and added to accept715):
+  - s16st-esc-n8-r1 (298f6c8b): NSTORES 8, quantum 150;
+  - s16st-esc-n32-r1 (ff751122): NSTORES 32, quantum 200;
+  - s16st-esc-n64-r1 (62646381): NSTORES 64, quantum 400.
+  All three: ESC_BURSTS 6, one round, the seal cold.
+
+**Predictions on 36a641e0b.**
+- **All three HANG, idx 7.** Their simulation on the resident logic hangs sup-s16-esc-n8 at the 6th switch, a
+  mid-burst escape.
+- Reported, not predicted: the stuck switch's location, from the slot-0 pc bounded to +/- 7 issue positions (escape
+  within the bursts, or the RETURN), and 196..203.
+- If one COMPLETES (readings 1, resumes >= 1, 0x77, 0), that is a miss for the resident-logic simulation at that
+  shape.
+- **On 715bdd1fe (accept715):** all three complete.
+
+### Addendum 13:53, during session s16escr1, before any of its wedge reads was looked at: the RTL lane's simulated locations
+Source: their simulation on the resident logic, memory delay 12.
+- **esc-n8-r1:** the CALL and two escape/resume pairs, then a hang at the 6th switch, a mid-burst ESCAPE. idx 7;
+  the slot-0 pc inside a burst.
+- **esc-n32-r1 and esc-n64-r1:** hang at the FIRST switch, the monitor's own armed CALL after its 32/64-store burst.
+  idx 7; the slot-0 pc on `li sp, 0`. These are CALL-side, not escape-side evidence.
+- **Fixed logic:** all three complete, with 6, 23 and 33 resumes.
+
+## Results: session s16escr1 (2026-10-04 13:53-14:04, the resident 36a641e0b): the three one-round escape arms
+"Full signature" means 224/225/226/227 = 0x1f/0x88/0x80/0x04, 193 = 4, 194 = 3. Raw lines are in
+`results/s16escr1.result-lines.txt`.
+
+| image | predicted (the RTL lane's simulation, recorded before the reads) | board | idx | stale slot-0 pc |
+|---|---|---|---|---|
+| control call-retpc | PASS | PASS exact | | |
+| s16st-esc-n8-r1 (298f6c8b) | 6th switch, a mid-burst escape; pc inside a burst | HANG, full signature | 7 | 0x80000a56, the `addi` before the RETURN |
+| s16st-esc-n32-r1 (ff751122) | the first CALL; pc `li sp, 0` | HANG, full signature, 238 = 0x87 | 7 | 0x800003de = `li sp, 0` |
+| s16st-esc-n64-r1 (62646381) | the first CALL; pc `li sp, 0` | HANG, full signature, 238 = 0x87 | 7 | 0x8000045e = `li sp, 0` |
+
+- **n32 and n64 are exactly as simulated.** They hang at their first, CALL-side switch, so they say nothing about
+  the escape side.
+- **n8: the idx is as simulated; the location is not.**
+  - The pc bounds its commit point to the end of the LAST burst, the marker store or the RETURN, the same reading as
+    the three-round esc-n8.
+  - The domain therefore ran through at least five of its six bursts on silicon, where the simulation hung at the
+    6th switch.
+  - Silicon's escape-side evidence stays `s16st-esc-n8-retfence` (a mid-burst escape once the RETURN is fenced).
+
+**The 255 = 0x83 residue is RESOLVED: it is the JTAG load's debug-mode `ebreak`, not a test trap.**
+- The new trap-log mepc read (196..203) reads **0x35c** on all three hangs.
+- In the debug module at the pinned riscv-dbg e19d69e:
+  - AbstractCmdBaseAddr = ProgBufBaseAddr (0x380 - 4*8 = 0x360) - 40 = 0x338 (dm_mem.sv:70-72).
+  - `abstract_cmd[4][63:32] = dm::ebreak()` (:347) sits at 0x338 + 0x24 = 0x35c.
+- The trap logger latches every committed cause other than 0 and 2 (cva6.sv:1140-1145). So a 0x83 with mepc 0x35c
+  means no trap was taken after the load.
+- The 196..203 read is now exercised. It works.
+
+### Before the reflash (2026-10-04 18:00): the bitstream, and the LED-path timing caveat
+**The bitstream.**
+- `caplifive_supcall_715bdd1fe.bit` was pulled to `/tmp/capstone/_bitstreams/` on apollo.
+- sha256 a7add4c019d3067627ba984634e96de564f023bcec50e2c29fd0f668c0a81311, which matches the synth lane's sealed hash.
+- 11,443,722 B.
+- WNS -9.949 ns, LUTLP-1 = 0; one routed loop, the same family as 36a641e0b; TNS about 49 % worse.
+
+**The LED readout path fails timing at -9.588 ns, 3.15 ns worse than on 36a641e0b.** Every aperture read in
+accept715 goes through it. The worst LED path runs through store-buffer ready and dom-switch status.
+- A post-hang read is of static state, so it should settle. That is an expectation, not a measurement.
+- The runner therefore reads every aperture twice, 0.6 s apart, and prints `double-read: all stable` or the
+  UNSTABLE switch values.
+- **That detector has no positive control yet:** no aperture is known to change after a hang.
+- An implausible reading on 715bdd1fe has LED-path timing as a candidate cause beside the RTL.
+
+## Results: accept715, the bare batch on caplifive_supcall_715bdd1fe.bit (2026-10-04 18:43-18:58; flashed 18:41-18:43 on the lead's direct word)
+**The flash.** Done with `drivers/flash-bitstream.py`: hash checked, uploaded (HTTP 201), flashed, power-cycled. The
+name read back after the cycle is `caplifive_supcall_715bdd1fe.bit`.
+
+**All 18 runs COMPLETED.**
+- The control passed exact.
+- **The 14 S-16 arms that hung on 36a641e0b and were re-run here all complete without a fence, with the reading of
+  their fenced twins** (corrected after the audit from "every S-16 arm": n4-r1 never hung; s16stc18, s16stc24,
+  s16p11/p13/p14-nt, s16nop-nt and armdep-d16 were not re-run):
+  - armdep-nt: 8,551 escapes, the fenced twin's exact vector;
+  - s16sd24, n4-r1, n4-r3, n4-r3-fence and n32-r1;
+  - all four plain arms (0x51 per round, 0x77, 0);
+  - all five escape arms, with resume counts 4 / 7 / 2 / 10 / 14 (esc-n8, -retfence, -n8-r1, -n32-r1, -n64-r1;
+    reported, not predicted).
+  - On 36a641e0b, every one of them except n4-r1 hung.
+- **That is also behavioural evidence that the board no longer runs 36a641e0b** (corrected after the audit: the old
+  runs were mostly N=1, so not "deterministic"; what holds is that about 27 of 27 above-threshold runs on 36a641e0b
+  hung, and no unfenced above-threshold run ever completed there). It does not fingerprint 715bdd1fe itself.
+- **S-17's arm12-ldc-q64 COMPLETED**, 8,552 escapes, identical to its `ld` twin. **N = 3** (accept715, s17rep2,
+  s17rep3), with arm12-ld completing alongside each time.
+  - On 36a641e0b it hung.
+  - Whether R-49, R-50 or a timing change removed it is not separable here. No hang, so the 219..222 apertures were
+    never exercised.
+- No aperture was read: no image hung. The double-read and 219..222 still have no board exercise.
+- Raw lines: `results/accept715.result-lines.txt`.
+
+## Pre-registered (before boot s7a1): the R-43 acceptance list on 715bdd1fe
+Unchanged from 2026-10-02. It uses the same kit, images, order and pre-registration strings, copied to
+`/tmp/capstone/accept715/` with tags s7a1..s7a10:
+- a1..a6;
+- the ladder at K = 0;
+- P1 cells 5 and 6;
+- a10 last.
+
+**Prediction: every row reads as on 36a641e0b**
+(`tests/fpga-repros/R43-revocation-cache-false-deny/results/board-36a641e0b.result-lines.txt`):
+- k800 retval 4 in every boot;
+- live16 / live128 / live512 sum 544 / 4352 / 17408;
+- P1 cell 6 gives 112006 38bb59fd with the same Sublet counts;
+- the ladder's instret is identical per rung;
+- a10 traps 25 at +0x4354 with the refusal record LATCHED.
+R-49 changes the store path of every switcher write, and R-50 the load unit. Cycle counts may move; correctness may not.
+
+### The claim audit of "S-16 fixed on silicon" (2026-10-04 21:35)
+**The claim is split in two.**
+- "S-16 no longer reproduces on 715bdd1fe" is SUPPORTED.
+- "Fixed by R-49" is strongly favoured but not isolated on silicon, because R-50 and the re-placement change in the
+  same bitstream.
+
+**What separates R-49 from timing.**
+- The SAVE-entered arms. Their first switcher write follows a REGISTER read (`save_step`), never a load-unit read, so
+  R-50 cannot reach them, and all of them complete.
+- On 36a641e0b the trigger was a sharp store-count threshold, not jitter: 12 completed, and 18 and 24 hung within 16
+  escapes.
+- Workload cycles moved by under 0.05 %, so the rebuild did not change memory timing materially.
+- The marginal hazard fell by orders of magnitude: 3,832 preemptions without a hang, where the old rate was about
+  1 in 213.
+
+**The limits the dev text must carry:**
+- one run per arm on 715bdd1fe;
+- R-50 and the re-placement are not separable from R-49;
+- R-49's coincidence residuals are unexercised: a switcher push in the same cycle as `commit_i`, and a load-unit clear
+  coinciding with a switcher write;
+- apertures 219..222 and the double-read have never fired on this bitstream.
+
+**The cheapest further checks:**
+- read 220 at idle on 715bdd1fe: 0x40 expected, against 0x00 on 36a641e0b. This is a behavioural fingerprint, and it
+  would give the double-read its first exercise;
+- a sticky "the old mis-ack cycle was reached" flag, batched into the next bitstream;
+- N = 2 repeats of armdep-nt and C5u B.

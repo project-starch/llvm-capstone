@@ -1,5 +1,12 @@
 # S-17 — on silicon, an LDC right behind the post-CALL `ccsrrw sp <- cscratch` does not complete, and the LSU stays not-ready
 
+**S-17: NOT REPRODUCED on `caplifive_supcall_715bdd1fe.bit`.** arm12-ldc ran 3 of 3, 8,552 escapes each, identical
+to its `ld` twin; it hung on 36a641e0b.
+- **Mechanism unknown.** Neither R-49 nor R-50 produces the state read here. Their end states read WAIT_STORE_READY
+  with count 4, and lsu_ready 1 with DYN waiting, respectively.
+- A timing-marginal path moved by the rebuild cannot be excluded.
+- Apertures 219..222 (the LSU bypass head, the commit queue, the adapter's tag FSM) remain armed for its return.
+
 **Sibling, a different signature: [S-16](../S16-supervised-switch-never-finishes/).** There a supervised CALL's switch
 never finishes: aperture 224 = `0x1f` with 225 = `0x88` (dom_switch_busy 1). This issue reads 224 = `0x0d` together
 with 225 = `0x80`. Use both bytes to decide. 225 = `0x80` alone is the resting value of many unrelated wedges.

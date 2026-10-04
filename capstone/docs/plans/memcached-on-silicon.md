@@ -45,7 +45,10 @@ are the owners on record.
   - A silicon runtime whose contexts run supervised must have the monitor step them instead.
 
 ## Blocked
-- **S-16:** a supervised CALL's switch can stall forever on silicon (`tests/fpga-repros/S16-...`).
+- **S-16: RESOLVED 2026-10-04 on `caplifive_supcall_715bdd1fe.bit`** (the S-16 entry in ISSUES).
+  - The supervised SQLite speedtest now preempts 1,277 times at +0.69 % with no fence.
+  - The history below is kept: a supervised CALL's switch could stall forever on silicon
+    (`tests/fpga-repros/S16-...`).
   - The FPGA monitor's resume path hit it after 212 good resumes of the SQLite speedtest.
   - A bare image hits it within 16 resumes.
   - Until there is an RTL fix, supervised contexts (preemptive threads) on silicon stall after a few hundred quanta.

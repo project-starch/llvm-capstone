@@ -1,3 +1,14 @@
+2026-10-04, evening: `caplifive_supcall_715bdd1fe.bit` is FLASHED and ACCEPTED.
+- Bare S-16 arms: 18 of 18.
+- The R-43 list: unchanged.
+- C5u without the fence: 1,277 preemptions at +0.69 %.
+- **S-16 is fixed on silicon.** The audited wording is in ISSUES S-16.
+- Set `FPGA_BITSTREAM=caplifive_supcall_715bdd1fe.bit` for every board run.
+- **Next:**
+  - B0 on the board (branch `b0-silicon-runtime`: the gp-captable delegated hello-world, which passes in QEMU without
+    fabricated gp);
+  - S-17 stays watched through apertures 219..222.
+
 2026-10-04: the FPGA monitor's resume hang (S-16) is root-caused and fixed on
 capstone-ariane `sup-call` (192a5e624, registry R-49: the switcher's first SAVE
 write pushed into a FULL store-buffer commit queue), together with R-50

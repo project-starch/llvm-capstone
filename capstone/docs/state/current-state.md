@@ -1,5 +1,28 @@
 # Current Capstone state
 
+## 2026-10-04, evening — the S-16 fix bitstream on silicon: S-16 fixed, the R-43 list unchanged, and the real workload preempts 1,277 times at +0.69 %
+
+- **The resident bitstream is `caplifive_supcall_715bdd1fe.bit`.**
+  - capstone-ariane sup-call 715bdd1fe: R-49, R-50 and the S-17 apertures 219..222.
+  - Flashed 18:41-18:43 on the lead's direct word with `drivers/flash-bitstream.py`. The sha256 matched the sealed
+    hash, and the name was read back after the power cycle.
+  - Set `FPGA_BITSTREAM=caplifive_supcall_715bdd1fe.bit` for every board run. The previous resident,
+    caplifive_supcall_36a641e0b.bit, stays registered on the console.
+- **S-16 is fixed on silicon.** Audited wording and limits are in the S-16 entry in ISSUES and in its folder.
+  - Bare: 14 of 14 previously-hanging arms complete without a fence.
+  - **The FPGA monitor's supervised SQLite speedtest:** the C5u firmware, byte-identical and with no fence, completes
+    1,277 preemptions with the oracle hash at **+0.69 %** over the plain call (quantum 2,000,000). On 36a641e0b it
+    hung after 212. Preemptive supervision of a real workload now works on silicon.
+- **The R-43 acceptance list passes unchanged**, a1..a10 on the same images
+  (`tests/fpga-repros/R43-revocation-cache-false-deny/results/board-715bdd1fe.result-lines.txt`).
+  - Identity readings are exact: instret 17/17, hashes, Sublet counts, a10's trap and refusal record.
+  - Cycles are within noise.
+- **S-17 does not reproduce** (3 of 3), mechanism unknown. The new apertures are armed.
+- **The trap log's 0x83 residue on bare hangs is the JTAG load's debug-module `ebreak`** (mepc 0x35c). It means no
+  trap since the load.
+- **Next:** B0, the delegated hello-world, on this bitstream (branch `b0-silicon-runtime`). It already passes in QEMU
+  with no fabricated gp.
+
 ## 2026-10-04 — Supervised CALL under the FPGA monitor on silicon: a real workload preempts and resumes hundreds of times, then hits S-16 (localised, mechanism traced, an RTL fix needed); S-17 found beside it
 
 - **The FPGA monitor runs supervised CALL on silicon.**

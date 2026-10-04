@@ -1,5 +1,24 @@
 # S-16 — a domain switch that starts while the store buffer's commit queue is FULL never finishes on silicon (and loses a committed store)
 
+**S-16: FIXED ON SILICON** by pre-registered acceptance on `caplifive_supcall_715bdd1fe.bit`, flashed 2026-10-04.
+That is capstone-ariane sup-call 715bdd1fe = R-49 192a5e624 + R-50 429c60b32 + observation-only apertures, sha256
+a7add4c0...1311.
+- **Bare:** no reproduction in the 14 hash-identical arms that hung on 36a641e0b.
+  - They span stores 4..64; armed and plain CALL, supervised RETURN and quantum escape; walk-idx 7 and 4 entries.
+  - Each ran once and completed without a fence, with its fenced twin's readings.
+  - armdep-nt ran 8,551 escapes, where 36a641e0b hung within 16.
+- **The FPGA monitor:** no reproduction in three supervised SQLite runs of the byte-identical C5u firmware
+  (d07761ded4ce, no fence): 1,278 / 1,277 / 1,277 preemptions with the oracle hash, where 36a641e0b hung after 212.
+- **Attribution:** to R-49, by the simulated mechanism and by the SAVE-entered arms, which R-50 cannot reach.
+  The rebuild left memory timing unchanged: workload cycles within 0.05 %.
+- **Limits:**
+  - No silicon build isolates R-49 from R-50 and the re-placement.
+  - R-49's coincidence residuals are unexercised: a switcher push in the same cycle as commit_i, and a load-unit
+    clear coinciding with a switcher write.
+  - Apertures 219..222 have never fired on this bitstream.
+- Evidence: `tests/rtl-smoke/sup-resume-2026-10-03/` (accept715, the claim audit) and
+  `tests/rtl-smoke/supmon-2026-10-03/` (C5u on 715bdd1fe).
+
 **Sibling, a different signature: [S-17](../S17-ldc-after-supervised-switch-lsu-stuck/).** There, after a FINISHED switch,
 an LDC behind `ccsrrw sp <- cscratch` leaves the LSU not ready. Apertures 224 / 225 read `0x0d` / `0x80` there; here
 they read **`0x1f` / `0x88`**. Use both bytes: 225 = `0x80` alone is the resting value of many unrelated wedges.
