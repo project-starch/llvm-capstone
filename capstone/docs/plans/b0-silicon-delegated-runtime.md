@@ -400,6 +400,39 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - Cause 4 again would mean a misaligned access the flags did not remove: data, not RVC relocation sites.
   - Any other cause is a new finding.
 
+## B0.7 attempt 4 (21:55-21:59): the module loads; both rungs fail on one cause -- the control used the legacy API
+- **The module loads.** The driver's `insmod /capstone.ko` returned and `/dev/capstone` appeared (DEVOK), with no
+  EXCX. The rv64g rebuild fixed attempt 3's hang.
+- **k800r: `ladder-perf: create_dom failed`, with no RESULT.** lpc's `struct ioctl_dom_create_args` is 11 words. The
+  capstone-bootstrap module's struct added `copy_len`, making it 12. The struct size is part of the ioctl number,
+  so lpc's DOM_CREATE is not recognised. lpc's own comment (ladder_perf_ctl.c, at the struct) predicts exactly this.
+- **b0-hello: `capstone-exec: device: Device or resource busy`, then 902.** `device_ioctl_locked` sets
+  `legacy_api_selected` on any non-PROCESS_ENABLE ioctl, before its switch, so lpc's unrecognised one counts too.
+  After that, PROCESS_ENABLE returns EBUSY for the life of the module, and the board cannot unload it.
+- **So 902 here carries no verdict about the process ABI or the monitor.** It is collateral of the control.
+- **Design consequence.** A classic control and a process-ABI image cannot share a module load, and on this board a
+  module load is a boot.
+
+## B0.7 attempt 5 pre-registered (before the boot)
+- **Rungs, in order:**
+  1. `b0-stats`: `capstone-exec --stats` alone. The monitor answers the process ABI's census, so 0 is expected.
+  2. `b0-hello`: the unknown, last of the informative ones. 0 is expected, with the codes as pre-registered at 21:12.
+  3. `b0-stats2`: the census again. It runs only if b0-hello returned. 0 is expected, and its counts are reported,
+     not predicted.
+- **This boot has no classic control.** That is a deviation from the board-run rule, recorded deliberately: the
+  classic path cannot run on a process-ABI module load (attempt 4).
+  - Board and boot health come from the shell login and from DEVOK after the driver's insmod.
+  - The k800r classic control passed on this monitor (3be6737) with the stock module in attempt 1.
+- **Changes from attempt 4:**
+  - b0run.sh gains the b0-stats cases. A stub test prints RESULT 0 for a stats rc of 0, and 902 for rc 3.
+  - k800r.dom leaves the manifest.
+  - Image ba6facd1d096372e. Its cpio shows 5 files plus the replaced `/capstone.ko` (0332e2d6). The shared image
+    was restored (`/capstone.ko` is ed807a29, the 5 files are absent).
+  - Firmware 343ad544162a: monitor 3be6737, wrapper 882892f, the same defines. dom_stack gate PASS.
+- **Reading b0-stats:**
+  - 902 means the monitor does not answer the process ABI's census on silicon, and b0-hello will 902 as well;
+  - 901 means the module did not come up with the process ABI.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the

@@ -2,7 +2,12 @@
 # B0.7 (docs/plans/b0-silicon-delegated-runtime.md): the board-side wrapper, used as the baked-rung driver's
 # BAKED_CTL. Usage: b0run.sh <rung> <domain>. Prints "RESULT <rung> retval=<n>", which the driver scores against
 # its oracle file.
-#   k800r    the CLASSIC control (lpc + the relinked k800) under the SAME process-ABI module the image uses.
+#   k800r    the CLASSIC control (lpc + the relinked k800). It CANNOT share a boot with the process ABI: the module
+#            serves one API per load (the first legacy ioctl sets legacy_api_selected, after which PROCESS_ENABLE is
+#            EBUSY), the board cannot unload it, and lpc's DOM_CREATE struct predates the module's copy_len field, so
+#            its ioctl number is unrecognised (B0.7 attempt 4, 2026-10-04).
+#   b0-stats capstone-exec --stats alone: the monitor answers the process ABI's census (b0-stats2: the same, after
+#            b0-hello -- it only runs if b0-hello returned).
 #   b0-hello capstone-exec launches the gp-captable image under the process-ABI module.
 # Distinct retvals say where a failure happened: 0 the hello line was printed; 901 the process-ABI module is not loaded;
 # 902 capstone-exec --stats failed (the module's process ABI is not answered by the monitor); 903 no hello line
@@ -24,6 +29,12 @@ case "$rung" in
     # reused entry VA can hang (R-3, preflight C15) -- the control is relinked, never the image under test.
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     exec /test-domains/lpc "$rung" "$dom"
+    ;;
+  b0-stats|b0-stats2)
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    /usr/bin/capstone-exec --stats; rc=$?
+    echo "B0: capstone-exec --stats rc=$rc"
+    if [ $rc -eq 0 ]; then echo "RESULT $rung retval=0"; else echo "RESULT $rung retval=902"; fi
     ;;
   b0-hello)
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
