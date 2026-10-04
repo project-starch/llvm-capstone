@@ -296,6 +296,44 @@ function pointer, which is an integer under gp-captable. It now reports the code
 **insmod works on the board.** The stages driver loads /capstone.ko with `[ -c /dev/capstone ] || insmod` on every
 boot. The "insmod of ANY module hangs this board" comment in run_rtl_smoke.py is stale.
 
+## B0.7 pre-registered (2026-10-04 21:12, before the boot)
+**The boot.** One boot on `caplifive_supcall_715bdd1fe.bit`, driven by `run_baked_rungs_fpga.py` with
+`BAKED_CTL=/test-domains/b0run.sh` and `BAKED_RUNGS="k800r b0-hello"`. The oracles are k800r 4 and b0-hello 0.
+
+**Firmware abb829785a79.**
+- Monitor capstone-sbi monitor/b0-managed-gp 3be6737, wrapper 882892f,
+  `-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS`, no pre-CALL fence (S-16 is fixed on this bitstream).
+- dom_stack gate PASS.
+
+**Image 7b0c02fd6f2e.** The shared FPGA initramfs plus six files, each verified by hash in the cpio:
+- b0-hello.dom (777ec140);
+- the process-ABI module built for 6.4.14 (57cb9a9b);
+- b0run.sh;
+- capstone-exec and capstone-job, which carry the eth,ariane time change;
+- the k800 relinked at 0x20000 (589ceee3), as k800r.dom. b0-hello enters at 0x10000, which would be an R-3/C15 collision
+  with the stock k800.
+The shared image was restored and verified afterwards.
+
+**PREFLIGHT=0, for C5f's reason.** The preflight inspects the SHARED overlay, which is stock, not this private
+payload. Its BLOCKs were "b0-hello not staged", "unused files", "1 distinct image" and C15. C15 is real and is fixed
+by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-relinked-0x20000/orc.
+
+**Predictions.**
+- k800r: `RESULT k800r retval=4`.
+- **b0-hello: retval 0.** "B0: module swapped", then `capstone-exec --stats` answers, then the hello line, then
+  capstone-exec rc 0.
+- This is the FIRST execution of the process ABI on silicon. A failure is read by its code:
+  - 901: the module swap failed;
+  - 902: the monitor does not answer the process ABI;
+  - 903: no hello line; capstone-exec's own fault line (cause, pc, entry) is printed above it;
+  - 904: the line printed, but the exit status was non-zero;
+  - no RESULT at all: a hang.
+- **The known risks, so a failure can be placed:**
+  - the supervised context_step under CSR events has never run;
+  - the yield's `.Lyield_resume` is the S-17 shape (`ccsrrw sp <- cscratch` then `ldc`). S-17 did not reproduce on
+    715bdd1fe, 3 of 3.
+  - a domain `rdtime`, if the time change did not take.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
