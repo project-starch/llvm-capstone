@@ -753,6 +753,23 @@ static int first_context_only(const struct capstone_delegate_entry *e) {
   return e->nr == CAPSTONE_NR_HELLO;
 }
 
+/* CAPSTONE_DELEGATE_TRACE=N: the first N requests, then every 256th, one line each on stderr: round, number,
+   the first three arguments and the result. Off when unset. (B0.7, 2026-10-04: on silicon b0-hello took 6,600
+   kind-0 steps without finishing, and whether the application restarts or retries is in the request stream.) */
+static void delegate_trace(const struct capstone_delegate_host *host,
+                           const struct capstone_delegate_entry *e, long r) {
+  static long budget = -2;
+  if (budget == -2) {
+    const char *v = getenv("CAPSTONE_DELEGATE_TRACE");
+    budget = v ? strtol(v, NULL, 0) : -1;
+  }
+  if (budget < 0) return;
+  if (host->rounds > (unsigned long long)budget && host->rounds % 256 != 0) return;
+  fprintf(stderr, "capstone-exec: round %llu nr=%ld a0=%#lx a1=%#lx a2=%#lx -> %ld\n",
+          (unsigned long long)host->rounds, (long)e->nr, (unsigned long)e->args[0],
+          (unsigned long)e->args[1], (unsigned long)e->args[2], r);
+}
+
 void capstone_delegate_serve(struct capstone_delegate_host *host,
                              struct capstone_delegate_entry *entry) {
   struct capstone_delegate_entry snapshot;
@@ -766,6 +783,7 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
   if (error) {
     ++host->refused;
     entry->result = -error;
+    delegate_trace(host, &snapshot, -error);
     capstone_signals_publish(&host->signals, entry, 0);
     return;
   }
@@ -838,6 +856,7 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
     r = run(host, s, &snapshot, lengths);
   }
   entry->result = r == CAPSTONE_STUB_RETRY ? 0 : r;
+  delegate_trace(host, &snapshot, r);
   capstone_signals_publish(&host->signals, entry, r == CAPSTONE_STUB_RETRY);
 }
 

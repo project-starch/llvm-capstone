@@ -613,6 +613,38 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
     revoke.
 - **A failure is read the same way as before.** The wedge apertures are on, and the last trace names the stage.
 
+## B0.7 attempt 10 (23:12-23:21): THE FIX WORKS -- steps complete; a new livelock follows
+- **Every step now runs to the end:** `STPB, LNBG 0x10/0x22/0x30/0x51, SUPA 0, SUPK 0, LNDE 1..4, MRCL 0x10,
+  MRCL 2, LNDE 5, 6, STPE 0`.
+  - **MRCL 0x10:** silicon's REVOKE returns LINEAR for the DELINed block, as the oracle predicted from
+    rev_node.anvil:71-73 and dyn_unit.anvil:92-95. The UNINIT reinitialisation does not run there. (QEMU returns
+    UNINIT; both end LINEAR.)
+- **But b0-hello did not finish in 300 s.** There were 6,638 STPB and 6,636 STPE, every SUPK 0 (returned), about 22
+  steps per second, and the core was not wedged.
+- **No `B0: hb` and no watchdog line came through.** The monitor's ~1.6 MB of step traces at 57,600 baud starved and
+  garbled Linux's console (binary fragments between trace lines), so the console says nothing about Linux.
+- **QEMU regression of monitor d5459e1** (fw d7d769b1, /tmp/capstone/b0/vm-fix.sh):
+  - b0-hello passes with fabrication OFF and ON;
+  - the legacy SDK image exits 91, as on its owners' platform.
+
+## B0.7 attempt 11 pre-registered (before the boot): read the request stream
+- **Monitor 1855cb4:** d5459e1 with the step traces opt-in (`CAPSTONE_LOAN_TRACE`, not set), built with
+  `-DCAPSTONE_SUPERVISE_QUIET`. A step prints nothing; SUPA and SUPK print only on a refused arm or a missing event.
+  Firmware 12cd4c35aea7.
+- **capstone-exec 35c045ff:** `CAPSTONE_DELEGATE_TRACE=N` prints the first N requests, then every 256th: round,
+  number, the first three arguments and the result. b0run.sh sets N = 64.
+- **Image 14a0ec7ac8168c80**, with the same module and domain.
+- **Predicted readings:**
+  - **R1, the application restarts from the top at every step:** the same opening requests (HELLO first) repeat
+    with the round count, the watchdog fires at 90 s, and the result is 905.
+    - The suspected mechanism: a kind-0 RETURN leaves `slot_paused` at 0, so the next arm is a first entry
+      (csupctl 0). If silicon then enters at the domain's original entry and not at the yield's `.Lyield_resume`
+      (RETURN rs2), domain_main restarts.
+  - **R2, a libc retry loop:** one request (e.g. a write) repeats with a result that makes musl retry, then 905.
+  - **R3:** b0-hello prints its line and returns 0. That would mean the trace volume was what kept it from
+    finishing in 300 s.
+- The heartbeat and watchdog are readable again, so a 905 says Linux was alive.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the

@@ -48,7 +48,7 @@ case "$rung" in
     rm -f /tmp/b0.wd
     ( i=0; while [ $i -lt 40 ]; do sleep 5; i=$((i+1)); echo "B0: hb $i"; done ) &
     hb=$!
-    CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_DELEGATE_STATS=1 /usr/bin/capstone-exec "$dom" > /tmp/b0.out &
+    CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_DELEGATE_STATS=1 CAPSTONE_DELEGATE_TRACE=64 /usr/bin/capstone-exec "$dom" > /tmp/b0.out &
     cx=$!
     ( sleep 90
       if kill -0 $cx 2>/dev/null; then
