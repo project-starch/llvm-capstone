@@ -7718,7 +7718,7 @@ committed. The build check makes a recurrence visible at the next monitor build.
 **Impact.** Any monitor change can meet the first defect; the check turns it into a build failure
 instead of a halted monitor. Only the monitor is compiled by capstone-c.
 
-### C-76 — capstone-c's monitor code assumes `ldc`/`stc` COPY a linear-family capability; silicon MOVES it (Q-12), so the monitor's process-ABI step wedged the board `FIXED in caplifive-sbi monitor/managed-reinit (managed_reinit, revoke in the caller); found and verified on silicon by llvm-capstone's B0 runs, 2026-10-04/05; one LATENT instance remains (below)`
+### C-76 — capstone-c's monitor code assumes `ldc`/`stc` COPY a linear-family capability; silicon MOVES it (Q-12), so the monitor's process-ABI step wedged the board `FIXED 2026-10-05 on caplifive-sbi capstone-bootstrap 91c8aa2 (managed_reinit, revoke in the caller; QEMU A/B against 52010b3 shows no regression) and on the FPGA monitor lane line (d5459e1, verified on silicon by llvm-capstone's B0 runs, 4 boots); the opensbi/buildroot pins are not bumped; one LATENT instance remains (below)`
 
 **The instance that wedged the board.**
 - On `caplifive_supcall_715bdd1fe.bit`, capstone-c caller-saved a live `__rev` argument with `stc(a0, sp, N)`

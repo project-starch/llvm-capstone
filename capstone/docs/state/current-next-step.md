@@ -14,7 +14,8 @@ the FPGA monitor's supervised CALL, with no fabricated gp. Preflight was off, fo
 - **M-13:** a trap inside the FPGA monitor always reads as cause 24 at `_cap_trap_entry`+4.
 - A module built outside buildroot needs `-march=rv64g` on the FPGA; the board-run skill has the module rules.
 - **Next:**
-  - land the monitor fix on caplifive-sbi `capstone-bootstrap` (task branch `monitor/managed-reinit`);
+  - the monitor fix is on caplifive-sbi `capstone-bootstrap` 91c8aa2. The QEMU A/B shows no regression. The
+    opensbi and buildroot pins are not bumped: QEMU behaviour is unchanged, and the FPGA line carries the fix;
   - the Part 3 silicon monitor line (supervised CALL under CSR events, B0.1) is still on lane branches;
   - then B1 toward memcached on silicon (`docs/plans/memcached-on-silicon.md`): contexts and threads stepped by the
     monitor.
