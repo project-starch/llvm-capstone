@@ -984,3 +984,32 @@ Source: their simulation on the resident logic, memory delay 12.
 - **esc-n32-r1 and esc-n64-r1:** hang at the FIRST switch, the monitor's own armed CALL after its 32/64-store burst.
   idx 7; the slot-0 pc on `li sp, 0`. These are CALL-side, not escape-side evidence.
 - **Fixed logic:** all three complete, with 6, 23 and 33 resumes.
+
+## Results: session s16escr1 (2026-10-04 13:53-14:04, the resident 36a641e0b): the three one-round escape arms
+"Full signature" means 224/225/226/227 = 0x1f/0x88/0x80/0x04, 193 = 4, 194 = 3. Raw lines are in
+`results/s16escr1.result-lines.txt`.
+
+| image | predicted (the RTL lane's simulation, recorded before the reads) | board | idx | stale slot-0 pc |
+|---|---|---|---|---|
+| control call-retpc | PASS | PASS exact | | |
+| s16st-esc-n8-r1 (298f6c8b) | 6th switch, a mid-burst escape; pc inside a burst | HANG, full signature | 7 | 0x80000a56, the `addi` before the RETURN |
+| s16st-esc-n32-r1 (ff751122) | the first CALL; pc `li sp, 0` | HANG, full signature, 238 = 0x87 | 7 | 0x800003de = `li sp, 0` |
+| s16st-esc-n64-r1 (62646381) | the first CALL; pc `li sp, 0` | HANG, full signature, 238 = 0x87 | 7 | 0x8000045e = `li sp, 0` |
+
+- **n32 and n64 are exactly as simulated.** They hang at their first, CALL-side switch, so they say nothing about
+  the escape side.
+- **n8: the idx is as simulated; the location is not.**
+  - The pc bounds its commit point to the end of the LAST burst, the marker store or the RETURN, the same reading as
+    the three-round esc-n8.
+  - The domain therefore ran through at least five of its six bursts on silicon, where the simulation hung at the
+    6th switch.
+  - Silicon's escape-side evidence stays `s16st-esc-n8-retfence` (a mid-burst escape once the RETURN is fenced).
+
+**The 255 = 0x83 residue is RESOLVED: it is the JTAG load's debug-mode `ebreak`, not a test trap.**
+- The new trap-log mepc read (196..203) reads **0x35c** on all three hangs.
+- In the debug module at the pinned riscv-dbg e19d69e:
+  - AbstractCmdBaseAddr = ProgBufBaseAddr (0x380 - 4*8 = 0x360) - 40 = 0x338 (dm_mem.sv:70-72).
+  - `abstract_cmd[4][63:32] = dm::ebreak()` (:347) sits at 0x338 + 0x24 = 0x35c.
+- The trap logger latches every committed cause other than 0 and 2 (cva6.sv:1140-1145). So a 0x83 with mepc 0x35c
+  means no trap was taken after the load.
+- The 196..203 read is now exercised. It works.
