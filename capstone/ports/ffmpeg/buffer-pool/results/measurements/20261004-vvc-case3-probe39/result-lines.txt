@@ -1,0 +1,16 @@
+# probe case 39 -- the capability arm for bug-corpora/ffmpeg/pool-repros case 3
+# runner: security-tests/qemu/run.sh <out> --cases 39 --modes 0,2
+# mode 0 = bounds only; mode 2 = a Sublet lease on every pool get, revoked on return
+# predictions registered in PREREG.md and pushed as a9a5df563658 BEFORE the build
+
+{"mode": 0, "case": 39, "name": "vvc-nonref-output-releases-tabs-stale-read", "expected": "completed", "passed": true, "runner_exit": 0, "node_budget": 1048576, "rounds": 70000, "domain_sha256": "ac4473aa27353f9ef205f3595114ac0ed022b2b94151cb26ca4d48b4aa3dd27e"}
+{"mode": 2, "case": 39, "name": "vvc-nonref-output-releases-tabs-stale-read", "expected": "fault", "passed": true, "cause": 24, "pc": "0x101a11720", "expected_pc": "0x101a11720", "runner_exit": 1, "node_budget": 1048576, "rounds": 70000, "domain_sha256": "ac4473aa27353f9ef205f3595114ac0ed022b2b94151cb26ca4d48b4aa3dd27e"}
+
+# compiler : clang 22.0.0git, project-starch/llvm-capstone b7b31421e9fa
+#            (fails the app SDK's two-call direct-call check -- the C-46 shape; the component
+#             port does not invoke that gate. Stated, not hidden.)
+# emulator : CAPSTONE_QEMU_BINARY from the pinned capstone-qemu build
+# host     : apollo, pinned to CPUs 0-7,32-39, nice/ionice, -j12
+# image    : verified in the disassembly to contain case 39 before the boots -- CHECK codes
+#            0x1e0-0x1e6 present, test 38's 0x1d6/0x1d7/0x1d9 present as a positive control,
+#            a bogus code absent, dispatch immediate 0x27 present
