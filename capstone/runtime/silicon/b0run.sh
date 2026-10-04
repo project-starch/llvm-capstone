@@ -12,7 +12,8 @@
 # Distinct retvals say where a failure happened: 0 the hello line was printed; 901 the process-ABI module is not loaded;
 # 902 capstone-exec --stats failed (the module's process ABI is not answered by the monitor); 903 no hello line
 # (the launch itself; its stderr is printed above); 904 the line printed but the exit status was non-zero; 905 the
-# watchdog ended a capstone-exec that was still running at 90 s, with Linux alive.
+# watchdog ended a capstone-exec that was still running at 90 s, with Linux alive; 906 the line printed but the
+# stream is not byte-exact.
 rung=$1 dom=$2
 # The board's kernel has NO module unload (vermagic "6.4.14 SMP riscv", no mod_unload: rmmod answers "Function not
 # implemented" -- B0.7's first boot, 2026-10-04 21:22). So the process-ABI module is the ONLY one loaded, first, and
@@ -61,10 +62,16 @@ case "$rung" in
     kill $hb $wd 2>/dev/null
     cat /tmp/b0.out
     echo "B0: capstone-exec rc=$rc"
+    # BYTE-EXACT, not a grep: attempt 11 scored 0 on a grep while the stream carried 65 extra bytes (R-29 in the
+    # runtime's wire copies). 906: the line is there but the stream is not exactly it.
+    printf 'B0: hello from a gp-captable delegated application\n' > /tmp/b0.want
     if [ -e /tmp/b0.wd ]; then
       echo "RESULT $rung retval=905"
-    elif grep -q "B0: hello from a gp-captable delegated application" /tmp/b0.out; then
+    elif cmp -s /tmp/b0.out /tmp/b0.want; then
       if [ $rc -eq 0 ]; then echo "RESULT $rung retval=0"; else echo "RESULT $rung retval=904"; fi
+    elif grep -q "B0: hello from a gp-captable delegated application" /tmp/b0.out; then
+      echo "B0: stdout is $(wc -c < /tmp/b0.out) bytes, expected $(wc -c < /tmp/b0.want)"
+      echo "RESULT $rung retval=906"
     else
       echo "RESULT $rung retval=903"
     fi

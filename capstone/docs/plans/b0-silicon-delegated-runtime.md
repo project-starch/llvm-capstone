@@ -698,6 +698,42 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - rounds 4+ with len 0, or offset/len garbage: the application's marshaling or iovec state is wrong.
 - The data bytes show directly whether `"0: hello..."` came from a wrong offset.
 
+## B0.7 attempt 12 (23:46-23:51): the corruption is R-29 in the runtime's wire copy
+- **The descriptors the host received:**
+  - round 3: `iov[0] {0x30, 50}` = "B0: hello ... application" and **`iov[1] {0x70, len 0}`**;
+  - every retry: `iov[0] {0x30, 0}`, `iov[1] {0x30, len 0}`.
+- **The application's side is correct.** musl's `putc('\n')` -> `__overflow` -> `write(&c, 1)` makes iov[1]
+  `{&c, 1}`. The 1 is lost on the way: musl retried a 1-byte write against a 0-length descriptor.
+- **The code** (b0-hello.dom 777ec140, dl_vector): `sd t0, 0x0(s7)` (the wire's offset), `sd a6, 0x8(s7)` (its
+  LENGTH, the granule's high word), then ~17 instructions later the inlined memcpy's granule loop
+  `ldc t5, 0x0(t2)` with t2 = s7.
+- **This is ISSUES R-29, OPEN on silicon** (fpga-repros/R29-wbuffer-highword-forwarding). A 128-bit `ldc` of a
+  granule whose high word was just written by an `sd` still in the write buffer returns the high word zeroed: the
+  refill's overlay is word-gated, and a word-1 entry never hits. The low word survives, as the offset did here.
+- **R-29's README says W-04 (the memcpy fixup) is "unaffected, the memcpy loop does not have this shape".** Under
+  full LTO the shape is formed ACROSS the inlined call: a struct built with `sd`s, then a granule copy. A
+  same-register scan for the shape finds the R-29 reproducer (1 site, distance 1) and nothing here, because the
+  copy reads through a different register. The check that matters is by address.
+
+## B0.7 attempt 13 pre-registered (before the boot): the R-29 workaround in the delegate runtime
+- **delegate.c:** every copy of freshly built plain data now goes through `dl_bytes` (8-byte integer moves; an
+  8-byte `ld` of the word is forwarded correctly), not libc memcpy. That covers the entry, the iovec wire pairs, the
+  msghdr pairs and header, the thread name and the ioctl buffer.
+  - b0-hello.dom **cdd82e56**: dl_vector goes from 462 to 350 instructions, `ldc` 9 -> 6. The remaining `ldc`s are
+    capability spill reloads and the iov_base pointer load.
+  - QEMU (fw d7d769b1, fabrication off): exactly 51 bytes.
+- **b0run.sh now checks BYTE-EXACT** (`cmp` against the expected line). The new **906** means the line is there but
+  the stream is wrong; attempt 11 scored 0 on a grep. A stub test scores pass 0, dirty 906, hang 905, no line 903
+  and bad rc 904.
+- **Build:** Image d5ab7fad7520e2a5, firmware e411395bde2c (quiet monitor 1855cb4), capstone-exec 1dca5b19
+  (descriptor trace on).
+- **Predicted reading:**
+  - round 1 HELLO, round 2 ioctl -25;
+  - **round 3 `writev` -> 51**, with `iov[0] {.., 50}` (the line) and `iov[1] {.., 1}` ("\x0a");
+  - then the exit, about 4 rounds in all;
+  - **RESULT b0-hello 0, byte-exact.**
+- If 906 or a retry loop returns: another R-29 site in the write path, which the descriptor trace will name.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the

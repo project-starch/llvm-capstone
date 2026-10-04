@@ -205,7 +205,17 @@ int __capstone_delegate_ready(void) {
  * bytes but capstone-qemu keeps the granule's tag, and the copy back would
  * load the old pointer instead of what the kernel wrote (CPython's recv_fds
  * and inet-dgram, 2026-09-30). Eight-byte integer moves neither carry nor
- * keep a tag. The runtime is built with -fno-builtin, so this stays a loop. */
+ * keep a tag. The runtime is built with -fno-builtin, so this stays a loop.
+ *
+ * Plain data built on the stack and handed on (the entry, a wire pair, a
+ * msghdr) goes through here too, for a second reason: ISSUES R-29, open on
+ * silicon. A 128-bit `ldc` of a granule whose HIGH word was just written by an
+ * `sd` still in the write buffer returns that word ZEROED (the refill path's
+ * overlay is word-gated). The libc memcpy's granule loop is exactly that load.
+ * On the board it zeroed every iovec length but the first, `{offset, len}` built
+ * as `uint64_t wire[2]` and copied at once: musl retried a 1-byte write against
+ * a 0-length descriptor until the stream corrupted (B0.7, 2026-10-04). An 8-byte
+ * `ld` of the same word is forwarded correctly. */
 static void dl_bytes(void *dst, const void *src, size_t n) {
   unsigned char *d = dst;
   const unsigned char *s = src;
@@ -244,7 +254,7 @@ static long dl_round(uint64_t nr, const uint64_t args[CAPSTONE_DELEGATE_ARGS]) {
     dl_status = CAPSTONE_ROUND_DONE;
     return -EINVAL;
   }
-  memcpy((void *)dl_entry, &e, sizeof e);
+  dl_bytes((void *)dl_entry, &e, sizeof e);
   __capstone_yield();
   dl_status = dl_entry->status;
   __capstone_signals_take();
@@ -371,7 +381,7 @@ static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
     }
     {
       struct capstone_delegate_entry probe = {0};
-      memcpy(probe.args, args, sizeof args);
+      dl_bytes(probe.args, args, sizeof args);
       bytes = capstone_delegate_arg_bytes(s, &probe, dl_exchange, dl_capacity, i);
     }
     if (dl_alloc(bytes, &args[i]))
@@ -665,7 +675,7 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
       break;
     lengths[i] = bytes;
     uint64_t wire[2] = {offsets[i], bytes};
-    memcpy(dl_exchange + args[1] + (size_t)i * 16, wire, sizeof wire);
+    dl_bytes(dl_exchange + args[1] + (size_t)i * 16, wire, sizeof wire);
     if (writing && bytes)
       dl_bytes(dl_exchange + offsets[i], iov[i].iov_base, bytes);
     ++args[2];
@@ -720,7 +730,7 @@ static long dl_ioctl(long fd, unsigned long request, void *argp) {
   if (bytes && argp) {
     unsigned char buffer[64] = {0};
     long rc;
-    memcpy(buffer, argp, bytes);
+    dl_bytes(buffer, argp, bytes);
     raw[2] = buffer;
     dl_reset();
     {
@@ -755,7 +765,7 @@ static long dl_prctl(long option, void *arg) {
   if (option == PR_SET_NAME) {
     if (!arg)
       return -EFAULT;
-    memcpy(name, arg, strnlen(arg, sizeof name - 1));
+    dl_bytes(name, arg, strnlen(arg, sizeof name - 1));
     args[0] = CAPSTONE_THREAD_NAME_SET;
   } else if (option == PR_GET_NAME) {
     if (!arg)
@@ -769,7 +779,7 @@ static long dl_prctl(long option, void *arg) {
     dl_reset();
     if (dl_alloc(sizeof name, &args[1]))
       return -ENOMEM;
-    memcpy(dl_exchange + args[1], name, sizeof name);
+    dl_bytes(dl_exchange + args[1], name, sizeof name);
     rc = dl_round(CAPSTONE_NR_THREAD_NAME, args);
     if (rc >= 0 && option == PR_GET_NAME && dl_status != CAPSTONE_ROUND_RETRY)
       memcpy(arg, dl_exchange + args[1], sizeof name);
@@ -850,7 +860,7 @@ static long dl_msg_once(uint64_t nr, long fd, struct msghdr *msg, long flags) {
       break;
     lengths[i] = bytes;
     uint64_t pair[2] = {offsets[i], bytes};
-    memcpy(dl_exchange + b.iov + 16 * i, pair, sizeof pair);
+    dl_bytes(dl_exchange + b.iov + 16 * i, pair, sizeof pair);
     if (sending && bytes)
       dl_bytes(dl_exchange + offsets[i], msg->msg_iov[i].iov_base, bytes);
     ++fitted;
@@ -861,7 +871,7 @@ static long dl_msg_once(uint64_t nr, long fd, struct msghdr *msg, long flags) {
     return -EMSGSIZE;
   b.iovlen = fitted;
   b.flags = (uint32_t)msg->msg_flags;
-  memcpy(dl_exchange + args[1], &b, sizeof b);
+  dl_bytes(dl_exchange + args[1], &b, sizeof b);
   long result = dl_round(nr, args);
   if (dl_status == CAPSTONE_ROUND_RETRY)
     return 0;
