@@ -76,5 +76,15 @@ case "$rung" in
       echo "RESULT $rung retval=903"
     fi
     ;;
+  b0-memcpy)
+    # B0.8: the R-29 memcpy guard on silicon. The application's own exit status is the result: 0 the unguarded
+    # control miscopied and the guarded copy never did; 1 the guarded copy miscopied; 2 the control never miscopied
+    # (void: no hazard created). capstone-exec's own failures keep their codes (125 and so on).
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    /usr/bin/capstone-exec "$dom" > /tmp/b0.out 2> /tmp/b0.err
+    rc=$?
+    cat /tmp/b0.out; cat /tmp/b0.err
+    echo "RESULT $rung retval=$rc"
+    ;;
   *) echo "RESULT $rung retval=999" ;;
 esac

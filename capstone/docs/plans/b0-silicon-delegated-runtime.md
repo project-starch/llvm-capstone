@@ -805,6 +805,52 @@ and 40, identical).
   mechanism first named, stale-refill. The `.user = 0` account is reproduced.
 - The R-29 registry entry and its folder are the RTL lane's to update. The 8-byte-copy workaround stands.
 
+## B0.8 pre-registered (2026-10-05, before the boot): the runtime memcpy's R-29 guard on silicon
+**Why.** R-29 (the RTL lane's statement): a 128-bit load of a granule returns a WRONG HIGH HALF while a plain store
+to that granule is still in the write buffer. It reads 0 after a fresh low-word store, and the OLD value after a fresh
+high-word store. The runtime's memcpy (`string_bounds_safe.c`) copies aligned granules with exactly that load, so
+any real application on silicon is exposed. B0 avoided it only in the delegate runtime.
+
+**The guard.** `CAPSTONE_MEMCPY_PLAIN_GUARD`: memcpy and memmove ask LCC's type query about what the 128-bit load
+returned.
+- Type 7 (NOT_CAP) is copied with two `ld` and two `sd`; a tagged granule still moves by `stc`.
+- The query is total on 715bdd1fe and on capstone-qemu.
+- Off, the object's .text is byte-identical to before.
+- build-b0-hello.sh turns it on for silicon builds (`B0_MEMCPY_GUARD=0` for an A/B) and now takes `B0_APP`.
+
+**The test, b0-memcpy.c (image 73b7cb9a14edd170).** A matched pair after the same fresh stores, with six stores to
+another line queued ahead (the RTL lane's busy arm):
+- `copy_unguarded`, the old loop. LTO reduced it to one granule `ldc`/`stc`, reached by a call ~10 instructions
+  after the stores.
+- `memcpy`, guarded. LTO inlined it: `ldc`, `lcc`, `bne 7`, `ld`/`ld`/`sd`/`sd`, ONE instruction after the stores.
+  So the guarded arm is MORE exposed than the control, which makes a pass conservative.
+- Three faces (fresh low, fresh high, both), 32 reps each.
+- Exit 0: the control miscopied and the guard never did. 1: the guard miscopied. 2: the control never miscopied
+  (void).
+- QEMU (fw d7d769b1, fabrication off): exit 2 with 0/0 on every face, as it must be, because QEMU has no R-29.
+  b0-hello still passes there.
+
+**Board run.** One application per boot (R-3: b0-memcpy and b0-hello both enter at 0x10000): b0-stats, b0-memcpy,
+b0-stats2.
+- Image 41f949e4a4414238; firmware 18d47385a38e (quiet monitor 1855cb4); capstone-exec 1dca5b19; module 0332e2d6.
+- b0run.sh's new rung reports the application's exit status as the result.
+
+**Predicted readings:**
+- b0-memcpy exit 0, with unguarded_bad > 0 on each face (likely near 32: the RTL simulation was deterministic, and
+  the stores sit behind six others), and guarded_bad 0 on every face.
+- Exit 2 would mean the control's ~10-instruction distance let the pair drain. That would say nothing about the
+  guard, and the next arm would bring the control's stores closer.
+- Exit 1 would mean the guard does not hold.
+
+## B0.8 result (2026-10-05 01:37-01:42): THE GUARD HOLDS ON SILICON; R-29's three faces are confirmed on the board
+- **Rungs:** b0-stats 0, **b0-memcpy 0**, b0-stats2 0. That is the predicted reading.
+- **The unguarded control miscopied:** fresh low **31/32**, fresh high **31/32**, both **32/32**. R-29 fires on
+  715bdd1fe in all three of its faces at a ~10-instruction distance, with six stores queued ahead.
+- **The guarded memcpy miscopied 0 of 96**, although LTO placed its load ONE instruction after the stores.
+- The plain-data guard is therefore the runtime's answer to R-29 for silicon builds (`CAPSTONE_MEMCPY_PLAIN_GUARD`,
+  on in build-b0-hello.sh). Compiler-emitted aggregate copies are a separate path: the SQLite silicon build's W-12
+  pass covers those. A full application build needs it too.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the

@@ -22,11 +22,14 @@ Every SDK image on dev (memcached, FFmpeg, tshark, ...) links `ports/musl-capsto
   - musl-capstone's memcpy granule loop does exactly that load, for any freshly written buffer or struct, in both
     directions.
   - B0 avoided it only in the delegate runtime (`dl_bytes`).
-  - memcached needs one of:
-    - a plain-data guard in memcpy (`ldc` only for the tag, plain `ld` for the data, as S-06's guard does), which
-      covers both faces on the read side; STC writes are not in the hazard's shape;
-    - the compiler's granule-copy guard covering memcpy;
-    - the RTL fix (R-29's fix fork is back with the lead).
+  - **The runtime memcpy's guard exists and holds on silicon (B0.8, 2026-10-05).**
+    - `CAPSTONE_MEMCPY_PLAIN_GUARD` in `string_bounds_safe.c` checks the type of what the 128-bit load returned and
+      copies plain data with `ld`/`sd`.
+    - The unguarded control miscopied 94/96 across R-29's three faces; the guarded copy 0/96.
+    - It is on in the silicon build (build-b0-hello.sh).
+  - **Still needed for memcached:** compiler-emitted aggregate copies (struct assignment) take the same granule
+    load. The SQLite silicon build guards those with its W-12 pass; a memcached silicon build needs the same pass, or
+    the RTL fix (R-29's fix fork is back with the lead).
 That runtime is the bulk of the work. It is unassigned; the runtime lane and the compiler lane (I-8, one-unit LTO)
 are the owners on record.
 
