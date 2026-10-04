@@ -11,7 +11,8 @@
 #   b0-hello capstone-exec launches the gp-captable image under the process-ABI module.
 # Distinct retvals say where a failure happened: 0 the hello line was printed; 901 the process-ABI module is not loaded;
 # 902 capstone-exec --stats failed (the module's process ABI is not answered by the monitor); 903 no hello line
-# (the launch itself; its stderr is printed above); 904 the line printed but the exit status was non-zero.
+# (the launch itself; its stderr is printed above); 904 the line printed but the exit status was non-zero; 905 the
+# watchdog ended a capstone-exec that was still running at 90 s, with Linux alive.
 rung=$1 dom=$2
 # The board's kernel has NO module unload (vermagic "6.4.14 SMP riscv", no mod_unload: rmmod answers "Function not
 # implemented" -- B0.7's first boot, 2026-10-04 21:22). So the process-ABI module is the ONLY one loaded, first, and
@@ -40,11 +41,29 @@ case "$rung" in
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     echo "B0: process-ABI module loaded"
     /usr/bin/capstone-exec --stats || { echo "RESULT $rung retval=902"; exit 1; }
-    /usr/bin/capstone-exec "$dom" > /tmp/b0.out 2> /tmp/b0.err
+    # Attempt 6 (2026-10-04): attempt 5 went silent after the first STEP returned (SUPK 0), and a silent console
+    # cannot tell a wedged core from a stuck capstone-exec. So: a bounded heartbeat (stops only if the core or the
+    # kernel stops), capstone-exec's stderr live on the console with its diagnostics and counters, and a 90 s
+    # watchdog that ends a capstone-exec Linux is still running (retval 905: Linux alive, capstone-exec did not end).
+    rm -f /tmp/b0.wd
+    ( i=0; while [ $i -lt 40 ]; do sleep 5; i=$((i+1)); echo "B0: hb $i"; done ) &
+    hb=$!
+    CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_DELEGATE_STATS=1 /usr/bin/capstone-exec "$dom" > /tmp/b0.out &
+    cx=$!
+    ( sleep 90
+      if kill -0 $cx 2>/dev/null; then
+        echo watchdog > /tmp/b0.wd
+        echo "B0: watchdog: capstone-exec still running at 90 s; SIGTERM"; kill -TERM $cx; sleep 5; kill -KILL $cx 2>/dev/null
+      fi ) &
+    wd=$!
+    wait $cx
     rc=$?
-    cat /tmp/b0.out; cat /tmp/b0.err
+    kill $hb $wd 2>/dev/null
+    cat /tmp/b0.out
     echo "B0: capstone-exec rc=$rc"
-    if grep -q "B0: hello from a gp-captable delegated application" /tmp/b0.out; then
+    if [ -e /tmp/b0.wd ]; then
+      echo "RESULT $rung retval=905"
+    elif grep -q "B0: hello from a gp-captable delegated application" /tmp/b0.out; then
       if [ $rc -eq 0 ]; then echo "RESULT $rung retval=0"; else echo "RESULT $rung retval=904"; fi
     else
       echo "RESULT $rung retval=903"

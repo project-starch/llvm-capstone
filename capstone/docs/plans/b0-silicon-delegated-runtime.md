@@ -433,6 +433,45 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - 902 means the monitor does not answer the process ABI's census on silicon, and b0-hello will 902 as well;
   - 901 means the module did not come up with the process ABI.
 
+## B0.7 attempt 5 (22:04-22:10): the census answers; b0-hello's first step RETURNS, then the board goes silent
+- **b0-stats: RESULT 0.** `capstone-exec --stats` answered with all counters 0. **The monitor answers the process
+  ABI on silicon.**
+- **b0-hello: no RESULT within 300 s.** The trace, in order:
+  - `DBAS:AC080000 DENT:0`: the domain was created.
+  - Three region shares: RGID 0x0D (0x8000 bytes), 0x0F and 0x10 (0x10000 each). Each ran SHA0..SHA5, then
+    `SUPA 0` (armed), `SUPK 0` (returned), then `ECSZ 0`. The managed share path enters the domain through
+    supervised_invoke, so **the gp-captable domain was entered and returned three times on silicon.**
+  - A lone `SUPA 0 / SUPK 0`. RESUME_SHARE runs only after a preemption, so this is the first PROCESS_STEP
+    (context_step): **the application ran and came back with kind 0, a yield or its exit.**
+  - Then nothing for 300 s: no EXCX, and no next SUPA.
+- **Where the hang can be.** capstone-exec serves the yielded request and steps again, which must print SUPA. So the
+  hang lies between that SUPK and the next SUPA, in one of:
+  - context_step's loan_end, in M-mode;
+  - the return to Linux;
+  - capstone-exec's serving;
+  - the next step's nodes_reserve, loan_begin or arm.
+- **The console cannot separate these:** b0run.sh sent capstone-exec's stdout and stderr to files.
+- b0-stats2 is collateral. The driver's "ENTRY STALL (R-16)" label keys on the ladder's SHA6 and does not apply to
+  this path.
+
+## B0.7 attempt 6 pre-registered (before the boot): instruments that separate the hypotheses
+- **Monitor ee1dd50:** 3be6737 plus two traces, STPB at context_step entry and STPE after loan_end. The generated
+  assembly carries each constant once (SUPK, the positive control, twice).
+- **b0run.sh b0-hello:**
+  - a bounded heartbeat, `B0: hb N` every 5 s;
+  - capstone-exec run with `CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_DELEGATE_STATS=1`, its stderr live on the console;
+  - a 90 s watchdog: SIGTERM, then SIGKILL, and **retval 905**.
+  - A busybox-sh stub test scored pass 0, hang 905, no line 903 and bad rc 904, and left no process behind.
+- **Build:** Image 88ad30cafd090956, firmware d58595da63a8. Same rungs, oracles and driver command as attempt 5.
+- **Predicted readings, written before the boot:**
+  - **H1, loan_end wedges in M-mode:** `STPB SUPA0 SUPK0`, no STPE; heartbeats stop.
+  - **H2, capstone-exec stuck with Linux alive:** STPE printed, heartbeats continue, and the watchdog gives 905 plus
+    capstone-exec's stderr.
+  - **H3, the kernel hangs after the step ecall:** STPE printed; heartbeats stop.
+  - **H4, the next step's entry wedges:** STPE, a second STPB, no SUPA.
+  - **H5:** b0-hello returns 0. That would make attempt 5's hang timing-dependent, since the traces add UART time.
+- Every reading is informative, so this boot is not spent confirming what is already known.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
