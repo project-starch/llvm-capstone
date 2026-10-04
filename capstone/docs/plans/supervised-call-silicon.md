@@ -350,7 +350,29 @@ the after-audit, synthesis, silicon.
   the same members (`lsu_i/state_q`, the index may be renamed; the fix audit established TIMING-23 is the loop check,
   not a timing arc), LUTLP-1 0, WNS inside the −9.595 ± 3.74 band, the FF delta = the apertures' zero new flops; the four
   mux inputs are real timed paths into the LED stretcher flops like every existing aperture, so a WNS shift is a
-  candidate cause to look at first. S-17 on silicon (the LDC after a finished switch, lsu_ready 0 with both
+  candidate cause to look at first.
+- **Step 11 result -- 715bdd1fe SYNTHESIZED AND SEALED (2026-10-04, the synth lane; exit 0, 2 h 42 min; bitstream
+  sha256 a7add4c019d3067627ba984634e96de564f023bcec50e2c29fd0f668c0a81311, 11,443,722 B, `caplifive_supcall_715bdd1fe.bit`
+  when the board lane pulls it).** Binding items all hold: route ~21 min, clean, no excursion (the canary that refuted
+  v1); LUTLP-1 = 0 (CFGBVS-1 control present); WNS −9.949 ns, inside −13.335..−5.855; all 245,260 routable nets routed;
+  census 2,000/2,000 with the dom-switch groups 0/0/0. Two yellow flags, recorded with their attribution: (1) the
+  TIMING-23 count is 1 but the routed arc moved from `lsu_i/state_q[3]` to `lsu_bypass_i/cap_clear_addr_q[55]_i_2`,
+  inside the same loop-4 cluster (12 cells against 11; the only register stem that left is `ldbuf_valid_q`, which R-50
+  adds to the load unit's predicate) -- one loop, same family, cut relocated, not "same members" by the letter; (2) TNS
+  −601,117 against −403,765 (+49%), failing endpoints 55.0% against 52.8%. The LED apertures carry the WORST-path
+  shift but not the TNS shift: the worst slack into `led_stretch` is −9.588 (36a641e0b: −6.436), 0.36 ns from WNS,
+  42 of the worst 500 paths now end there (was 0), yet the failing LED endpoints are 200 -> 200 -- they got slower,
+  they did not multiply; the +4,028 failing endpoints sit in issue_read_operands (+1,367), the cache subsystem
+  (+1,052), csr_regfile (+635) and the scoreboard (+517), an endpoint-count proxy that one build cannot separate
+  from placement variance. FF rows: 0 delta on store_buffer_i, i_load_unit, lsu_i, ex_stage_i, i_cva6 and the cache
+  subsystem total; (i_adapter) +1 -- a finding with its mechanism: `3'(tag_state_q)` in the tag byte exposes the raw
+  FSM encoding, so FSM extraction changed (5 -> 4 FSM regs plus 2 plain), not a new register; (i_store_unit) +6 are
+  trans_id_q replicas; the cause registers (`esc_cause_q`, `sup_event_cause_q`) moved by +23 bits each with no
+  synthesizable change in their modules, so their surviving-bit count is Vivado's pruning, not the RTL. Verdict: the
+  pre-registered criteria hold; the bitstream goes to the board lane's acceptance batch (17 bare images plus the
+  monitor configuration without the fence) on the lead's word for the reflash. The fallback form of R-49 (`sup-call-b2`
+  5b7f455d8: ready_o as in 36a641e0b, a one-cycle bubble on a kind change in the store unit; audited, lint at
+  baseline, sweep 91 identical + 1 budget artifact) stays unsynthesized unless the acceptance points at the store path. S-17 on silicon (the LDC after a finished switch, lsu_ready 0 with both
   LSU units idle) stays OPEN. The TAG_WAIT reading in the paragraph below is WITHDRAWN: the walk's read was never the
   problem, its write was; the paragraph stays as the record of what was believed on 2026-10-03.
 - **(superseded) OPEN on silicon (2026-10-03, the board lane): a supervised RESUME CALL hangs under the FPGA monitor.** With the

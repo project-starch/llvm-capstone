@@ -90,6 +90,12 @@
   un-killed and its stale completion pops the re-issued LDC unexecuted; the DYN unit waits forever. Deterministic in
   `sup-mswap-noploop` on the resident logic; fixed by adding the entry's valid bit to the exemption. Not the silicon
   S-17 (different aperture signature; S-17 stays open).
+- **Synthesized and sealed (2026-10-04 evening, the synth lane):** `sup-call` 715bdd1fe (the two fixes plus the
+  S-17/S-16 LED apertures 219..222) -- route clean in ~21 min, LUTLP-1 0, WNS −9.949 in band, one TIMING-23 loop
+  (arc relocated within the same cluster), census unchanged; TNS +49% with the LED apertures carrying the worst-path
+  shift (0.36 ns from WNS) but not the endpoint growth. Bitstream sha256
+  a7add4c019d3067627ba984634e96de564f023bcec50e2c29fd0f668c0a81311. The board lane's acceptance batch (17 bare images
+  plus the monitor without the fence) is staged; the reflash is the lead's word. Details in the plan's step-11 result.
 - **Verification so far:** matched pairs for both fixes; `sup-mswap-noploop/base/postread` 78 switches on the fixed
   tree; lint gate at the committed baseline; 95-test sweep: 95-entry sweep on the committed tree against the clean baseline, seed 20260922, memory delay 12: 92 identical in taken exceptions, CAPPRINT readings and retired-instruction counts, 0 differ; the 3 random-generator entries produce no log on either side, as in every previous sweep. Sim-only tracers (every retirement, write-back,
   LSU queue event, load/store-unit transition, the switcher's busy edges, and the board's apertures emulated every
