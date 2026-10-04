@@ -1546,13 +1546,39 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
+### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `NOT REPRODUCED on caplifive_supcall_715bdd1fe (arm12-ldc 3/3), mechanism unknown, apertures 219..222 armed; was: OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
+
+**S-17: NOT REPRODUCED on `caplifive_supcall_715bdd1fe.bit`.** arm12-ldc ran 3 of 3, 8,552 escapes each, identical
+to its `ld` twin; it hung on 36a641e0b.
+- **Mechanism unknown.** Neither R-49 nor R-50 produces the state read here. Their end states read WAIT_STORE_READY
+  with count 4, and lsu_ready 1 with DYN waiting, respectively.
+- A timing-marginal path moved by the rebuild cannot be excluded.
+- Apertures 219..222 (the LSU bypass head, the commit queue, the adapter's tag FSM) remain armed for its return.
 
 - Not on the FPGA monitor's own path: its post-domcall `ldc ra, -16(sp)` depends on the CCSRRW's result. An
   INDEPENDENT capability load placed right after a domain call is the shape to avoid until it is fixed.
 - Sibling: S-16 (the switch itself never finishing).
 
-### S-16 — a domain switch that starts while the store buffer's commit queue is FULL never finishes, and one committed store is lost (apertures 224/225 = `0x1f`/`0x88`, switcher walk idx 7, its WRITE never acknowledged) `OPEN — needs the RTL fix; EVERY switch kind is exposed on silicon (bare 2026-10-04: armed CALL, supervised RETURN and escape at walk idx 7, PLAIN CALL at idx 4); a fence before every CALL covers only that CALL's own switch (not a supervised RETURN right after a domain store, bare s16st-n4-r3-fence; not an escape, bare s16st-esc-n8-retfence and boot supmon-c5f, where the FPGA monitor ran 552 supervised resumes); a fence before every CALL AND every RETURN completed all four twins that hung (bare, session s16fence), which covers runs without quantum preemption; localised on silicon 2026-10-04 by the switcher and LSU apertures (data write request valid and unacknowledged at idx 7, store-buffer commit count 4, store unit WAIT_STORE_READY); reproduced bare within 16 resumes and in the FPGA monitor's supervised resume (boots supmon-c5q, supmon-c5u); 12 stores before the CALL complete, 18/24 hang; a `fence` immediately before the CALL removes the CALL-side trigger (bare 8,551 escapes). Mechanism from the RTL lane's simulation, matching every silicon read: a dom-switch push into a FULL commit queue (the store unit consults the speculative queue's ready, store_unit.sv:443 / store_buffer.sv:170) overwrites the queue head, LOSING the oldest committed store, and the ring then starves the 4th switcher write. The RTL side is R-49, fix capstone-ariane 192a5e624 (sup-call), which covers every switcher write. Report folder: tests/fpga-repros/S16-supervised-switch-never-finishes/`
+### S-16 — a domain switch that starts while the store buffer's commit queue is FULL never finishes, and one committed store is lost (apertures 224/225 = `0x1f`/`0x88`, switcher walk idx 7, its WRITE never acknowledged) `FIXED ON SILICON 2026-10-04 on caplifive_supcall_715bdd1fe (R-49 192a5e624 + R-50; pre-registered acceptance, limits in the entry); was: OPEN — needs the RTL fix; EVERY switch kind is exposed on silicon (bare 2026-10-04: armed CALL, supervised RETURN and escape at walk idx 7, PLAIN CALL at idx 4); a fence before every CALL covers only that CALL's own switch (not a supervised RETURN right after a domain store, bare s16st-n4-r3-fence; not an escape, bare s16st-esc-n8-retfence and boot supmon-c5f, where the FPGA monitor ran 552 supervised resumes); a fence before every CALL AND every RETURN completed all four twins that hung (bare, session s16fence), which covers runs without quantum preemption; localised on silicon 2026-10-04 by the switcher and LSU apertures (data write request valid and unacknowledged at idx 7, store-buffer commit count 4, store unit WAIT_STORE_READY); reproduced bare within 16 resumes and in the FPGA monitor's supervised resume (boots supmon-c5q, supmon-c5u); 12 stores before the CALL complete, 18/24 hang; a `fence` immediately before the CALL removes the CALL-side trigger (bare 8,551 escapes). Mechanism from the RTL lane's simulation, matching every silicon read: a dom-switch push into a FULL commit queue (the store unit consults the speculative queue's ready, store_unit.sv:443 / store_buffer.sv:170) overwrites the queue head, LOSING the oldest committed store, and the ring then starves the 4th switcher write. The RTL side is R-49, fix capstone-ariane 192a5e624 (sup-call), which covers every switcher write. Report folder: tests/fpga-repros/S16-supervised-switch-never-finishes/`
+
+**S-16: FIXED ON SILICON** by pre-registered acceptance on `caplifive_supcall_715bdd1fe.bit`, flashed 2026-10-04.
+That is capstone-ariane sup-call 715bdd1fe = R-49 192a5e624 + R-50 429c60b32 + observation-only apertures, sha256
+a7add4c0...1311.
+- **Bare:** no reproduction in the 14 hash-identical arms that hung on 36a641e0b.
+  - They span stores 4..64; armed and plain CALL, supervised RETURN and quantum escape; walk-idx 7 and 4 entries.
+  - Each ran once and completed without a fence, with its fenced twin's readings.
+  - armdep-nt ran 8,551 escapes, where 36a641e0b hung within 16.
+- **The FPGA monitor:** no reproduction in three supervised SQLite runs of the byte-identical C5u firmware
+  (d07761ded4ce, no fence): 1,278 / 1,277 / 1,277 preemptions with the oracle hash, where 36a641e0b hung after 212.
+- **Attribution:** to R-49, by the simulated mechanism and by the SAVE-entered arms, which R-50 cannot reach.
+  The rebuild left memory timing unchanged: workload cycles within 0.05 %.
+- **Limits:**
+  - No silicon build isolates R-49 from R-50 and the re-placement.
+  - R-49's coincidence residuals are unexercised: a switcher push in the same cycle as commit_i, and a load-unit
+    clear coinciding with a switcher write.
+  - Apertures 219..222 have never fired on this bitstream.
+- Evidence: `tests/rtl-smoke/sup-resume-2026-10-03/` (accept715, the claim audit) and
+  `tests/rtl-smoke/supmon-2026-10-03/` (C5u on 715bdd1fe).
 
 - The FPGA monitor's compiler-generated `__domcallsaves` puts about 26 stores right before every domcall, so any
   supervised CALL through it is exposed.
