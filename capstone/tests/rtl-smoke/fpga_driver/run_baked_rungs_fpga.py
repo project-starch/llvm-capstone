@@ -24,6 +24,7 @@ import os
 import pathlib
 import re
 import sys
+import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
@@ -35,6 +36,77 @@ from fpga_driver.preflight import require_preflight                    # noqa: E
 from fpga_driver.run_sqlite_baked_fpga import _hash_name  # noqa: E402
 from fpga_driver.run_ladder_perf_fpga import (cold_boot, nvbit,        # noqa: E402
                                               install_resilient_emit)
+
+# BAKED_WEDGE_APERTURES=1: after a rung WEDGES, read the core's debug apertures through the virtual switches before
+# the board is released (ported from sup-resume-2026-10-03/run_sup_bare_wedge.py; the switch values and labels are
+# that file's, verified against cva6.sv). Off by default: the read takes ~2 min and only a wedged core is static
+# enough to be worth reading. Each aperture is read twice, 0.6 s apart, and a value that changes is marked UNSTABLE.
+WEDGE_APERTURES = (
+    (255, "TRAP LOG {seen,mcause[6:0]}"),
+    (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM}"),
+    (225, "{tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}"),
+    (226, "{data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack}"),
+    (227, "{commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,"
+          "data_req.write_en,reg_req.is_set,data_req.metadata_en}"),
+    (228, "{1,dom_switch_idx[6:0]}"),
+    (229, "{load_state[3:0],0000}"),
+    (192, "{0000000,commit_instr[0].valid}"),
+    (193, "{00000,store_buf_commit_cnt}"),
+    (194, "{000000,store_state}"),
+    (195, "{0000,load_state}"),
+    (219, "[715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head)"),
+    (220, "[715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN)"),
+    (221, "[715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0}"),
+    (222, "[715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0}"),
+)
+
+
+def read_wedge_apertures(console):
+    def setsw(v):
+        for bit in range(8):
+            console.set_switch(bit, bool(v & (1 << bit)))
+        time.sleep(1.2)
+
+    def leds():
+        st = console.latest(C.LISTEN.get("led_state", "led_state"))
+        bits = ((st or {}).get("states") or []) if isinstance(st, dict) else []
+        return sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
+
+    lines, unstable = [], []
+
+    def rd(sw):
+        setsw(sw)
+        a = leds()
+        time.sleep(0.6)
+        b = leds()
+        if a != b:
+            unstable.append((sw, a, b))
+        return a
+    try:
+        for sw, label in WEDGE_APERTURES:
+            v = rd(sw)
+            lines.append(f"sw={sw} {label} " + ("UNREAD" if v is None else f"0x{v:02x} {v:08b}"))
+        pc, ok = 0, True
+        for i in range(8):
+            v = rd(230 + i)
+            if v is None:
+                ok = False
+                break
+            pc |= v << (8 * i)
+        lines.append("commit pc (scoreboard slot 0; stale after a flush) " + (f"0x{pc:016x}" if ok else "UNREAD"))
+        mepc, ok = 0, True
+        for i in range(8):
+            v = rd(196 + i)
+            if v is None:
+                ok = False
+                break
+            mepc |= v << (8 * i)
+        lines.append("trap-log mepc " + (f"0x{mepc:016x}" if ok else "UNREAD"))
+        for sw, a, b in unstable:
+            lines.append(f"UNSTABLE sw={sw}: {a} then {b}")
+    finally:
+        setsw(0)   # park: an odd value hands the console TX pin to the tracer
+    return lines
 
 URL = os.environ.get("FPGA_URL")
 if not URL:
@@ -178,6 +250,12 @@ def main():
                 log(f"  {r}: retval={got} oracle={oracles[r]} "
                     f"{'OK' if got == oracles[r] else 'MISMATCH/NO-RESULT'}"
                     f"{'' if entered else ' [no SHA6 -- did not enter]'}")
+            if wedged and os.environ.get("BAKED_WEDGE_APERTURES") == "1":
+                log(f"{r}: reading the wedged core's apertures (BAKED_WEDGE_APERTURES=1)")
+                ap = read_wedge_apertures(console)
+                for line in ap:
+                    log(f"  APERTURE {line}")
+                transcript.append(f"===== {r} wedge apertures =====\n" + "\n".join(ap) + "\n")
             if wedged:
                 # A WEDGED DOMAIN TAKES THE CORE. Everything after this point is collateral,
                 # not a result, and must not be scored -- this runner used to continue and emit

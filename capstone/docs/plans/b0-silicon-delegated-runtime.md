@@ -472,6 +472,45 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - **H5:** b0-hello returns 0. That would make attempt 5's hang timing-dependent, since the traces add UART time.
 - Every reading is informative, so this boot is not spent confirming what is already known.
 
+## B0.7 attempt 6 (22:17-22:24): H1 -- the core wedges in M-mode inside loan_end
+- b0-stats 0 again.
+- **b0-hello:** the same three shares, each `SUPA 0 / SUPK 0`, then `STPB 0, SUPA 0, SUPK 0`, and nothing after:
+  **no STPE, and not one `B0: hb` line** in 300 s.
+  - The step returned kind 0, and context_step never reached the trace after loan_end. The only work between SUPK
+    and STPE is `result = loan_end(k)` and four stores to the trap frame.
+  - Linux never ran again: no heartbeat, with the first due 5 s after the launch began.
+  - This is the pre-registered H1 reading.
+- **loan_end and managed_reclaim have never run on silicon before.** C5's supervised runs drove classic domains,
+  which are UNMANAGED slots, and those never take context_step's loan path. The managed shares do not loan.
+
+## B0.7 attempt 7 pre-registered (before the boot): bisect loan_end, and read the wedged core
+- **Monitor b6d74c3:** ee1dd50 plus stage traces.
+  - LNDE 1: the two descriptor loads done.
+  - LNDE 2: the `ldc` of the offered seal at offset 32.
+  - LNDE 3: the `stc x0` that clears it.
+  - LNDE 4: the offer bookkeeping.
+  - Inside managed_reclaim: MRCL 1, the `__revoke` done; MRCL 2, the stc loop and C_INIT done.
+  - LNDE 5 and LNDE 6: managed_reclaim returned, desc_put done.
+  - The generated assembly carries LNDE 6 times and MRCL twice.
+- **Build:** firmware 596924b260b3 on the same Image 88ad30cafd090956.
+- **Driver:** `run_baked_rungs_fpga.py` gains `BAKED_WEDGE_APERTURES=1`. After a wedged rung, it reads the bare
+  wedge harness's apertures before release: trap log, 224..229, 192..195, 219..222, commit pc and trap mepc.
+  - A fake-console test assembled pc and mepc correctly and parked the switches at 0.
+  - Off by default.
+- **Predicted readings.** The last stage printed names the statement:
+  - no LNDE 1: the plain loads through `view` of memory the domain wrote;
+  - LNDE 1 only: the `ldc`;
+  - LNDE 2: the `stc`;
+  - LNDE 3: cap_type or offer_valid;
+  - LNDE 4: the revoke;
+  - MRCL 1: the reinitialising loop;
+  - MRCL 2 or later: desc_put or the return.
+- The apertures say whether the LSU is stuck: lsu_rdy (224), the load and store states (194/195), the bypass head
+  (219/220), the commit queue (221) and the tag unit (222).
+- **Current lean, low confidence:** the revoke or the first access to the loaned block. The loan's sequence (a
+  `__mrev`'d block, delinearised and lent, then revoked) has no silicon precedent. The traces decide it, not this
+  lean.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
