@@ -64,13 +64,17 @@ reason is recorded in the expect file itself rather than only here.
 - **It does** confirm the reuse happens inside the pool: no `free()` is involved, which is what makes the
   class invisible to a free-keyed tool — measured separately the same day in
   [`../2026-10-03-native-asan-pool-blindness/`](../2026-10-03-native-asan-pool-blindness/README.md).
-- **It does not** measure any capability arm. The `poolsublet`/`poolstock` rows (fixtures 46/47) remain
-  **predictions**. They need the FFmpeg **app** port, whose SDK gate **correctly refuses both toolchains
-  available on this host** — one emits a linear direct-call target (C-46), the other lacks the intcap
-  extensions. Reproduced today: `cmake` configure fails with *"Capstone compiler ABI check failed:
-  capstone-cc: compiler emits a linear direct-call target (C-46); rebuild the toolchain"*. That is a
-  tried-and-recorded blocker, not an assumption, and it is the same one already documented in
-  `../../../../ports/ffmpeg/app/results/2026-10-02-native-upstream-defects/README.md`.
+- **It does not** measure any capability arm. ~~The `poolsublet`/`poolstock` rows (fixtures 46/47) remain
+  predictions. They need the FFmpeg **app** port, whose SDK gate **correctly refuses both toolchains
+  available on this host** … That is a tried-and-recorded blocker, not an assumption.~~
+  **CORRECTED 2026-10-04 (`5208789e4b9e`): the blocker claim is withdrawn.** Two toolchains do fail the
+  gate, but a third, qualified one is present — the `llvm-capstone-cc` sibling worktree's
+  `build-release`, commit `7d01722aab88` — and `check_toolchain` accepts it end to end. All sixteen
+  corpus images (40-47, both arms) were built through that gate with it on 2026-10-04. So 46/47 remain
+  predictions **only because nobody had run them**, and the emphatic "not an assumption" framing was the
+  worst part of the original wording: it invited trust in a conclusion drawn from a partial enumeration.
+  Case 3's own capability pair was measured the next day as probe case 39
+  (`../../../../ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/`).
 - **It does not** make case 3 live at the pin. `5c66a3ab51` is an ancestor of `n9.0.1`, so the case
   re-introduces the reverse of the fix, as all four in this corpus do.
 - **N = 1 per arm.** These are deterministic: no timing, no concurrency, no allocator nondeterminism.

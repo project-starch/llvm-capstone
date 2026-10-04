@@ -75,10 +75,18 @@ classifier afterwards:
 
 - **the four RETURN cells pass the real oracle**, including its exit-code corroboration
   (`result['value'] == mark & 255`: 91 = `0x5b`, 123 = `0x7b`);
-- **the two FAULT cells cannot be judged by it on this platform at all.** `check-safety.py:40`
-  requires a `fault` field in `capstone-job`'s JSON, and this build of `capstone-job` emits only
-  `{"version":1,"kind":"%s","value":%d}` — there is no `fault` field in the binary. The oracle's
-  signal/11 branch is therefore **structurally unreachable** here, not merely skipped.
+- ~~**the two FAULT cells cannot be judged by it on this platform at all.** … The oracle's signal/11
+  branch is therefore **structurally unreachable** here, not merely skipped.~~
+  **WITHDRAWN 2026-10-04: that was a misreading, and the premise was right while the conclusion was
+  wrong.** It is true that `capstone-job` emits only `{"version":1,"kind":…,"value":…}` — **no build of
+  it ever writes a `fault` field.** The field is added by the **host**: `capstone-vm` reads the
+  launcher's `CAPSTONE_FAULT_RECORD` file and merges it into the record
+  (`capstone/runtime/host/capstone_vm/compiler.py`'s sibling `cli.py:238-241`). This run's `run.sh` did
+  write `fault-N`; nothing merged it. So the branch was unreached **because the harness skipped a
+  three-line step**, not because the binary cannot support it. Fixed in
+  `capstone/ports/common/application/run-fixtures-9p.py`, which performs that merge and then judges with
+  the imported `classify()`/`matches()` — and whose own negative control confirms the judge can return
+  DIFFERS. The hand check below stands; it is simply no longer the only option.
 
 So for the two faults the pc↔diagnostic correspondence and the cause were checked by hand. They
 hold, and more strongly than claimed above: `pc=0xc020ffbc` disassembles to the `cincoffset` inside
