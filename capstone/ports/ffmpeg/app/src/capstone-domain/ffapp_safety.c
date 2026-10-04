@@ -348,8 +348,13 @@ static int fixture(void)
     return FX_MARK((same24 << 8) | v);
 
 #elif FFAPP_FIXTURE == 25
-    /* UPSTREAM DEFECT, live at the 9.0.1 pin. libswscale/ops_dispatch.c:544-664,
-     * compile_single:
+    /* SYNTHETIC, modelled on an upstream defect that is NOT live at our pin.
+     * LIVENESS RETRACTED 2026-10-03 (a46f033be968): the fix 4b9c4b9cfb56 reached n9.0.1 as the
+     * cherry-pick 716d2a47c5, so ops_dispatch.c:553 carries the FIXED form at our pin. The earlier
+     * "live at the 9.0.1 pin" claim here rested on grepping for a line SHAPE, which matched line 664
+     * where `p` is still alive. This fixture remains a valid interior-pointer use-after-free and its
+     * measured cells stand; it is simply not a reproduction of a defect live in the version we compile.
+     * libswscale/ops_dispatch.c:544-664, compile_single:
      *     const SwsCompiledOp *comp = &p->comp;   -- an INTERIOR pointer into p
      *     SwsCompiledOp c = *comp;  av_free(p);
      *     (*output)->backend = comp->backend->flags;   -- read through comp after the free
