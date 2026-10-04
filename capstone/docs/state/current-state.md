@@ -23,6 +23,59 @@
 - **Next:** B0, the delegated hello-world, on this bitstream (branch `b0-silicon-runtime`). It already passes in QEMU
   with no fabricated gp.
 
+## 2026-10-04 — the app ports' and corpora's last 24 registered cells measured, two retractions, and the ledgers closed
+
+- **What was asked:** audit the defect evidence for memcached/tshark/FFmpeg against the paper, then
+  finalize everything.
+- **The audit's answer: count was never the problem.** 22 upstream corpus cases across the three, **all
+  22 nested-allocator**, now **22/22 with a measured capability arm**; plus 59 app-port fixtures carrying
+  24 measured nested-discriminating cells. Only **1 of 22** is live at the pin, which matches the paper's
+  own wording ("previously fixed bugs"). The gap was **printed numbers without backing runs** — see
+  `/tmp/capstone/2026-10-04-paper-defect-evidence-audit.md` (not committed; the paper is the lead's).
+- **Measured, all as pre-registered** (predictions committed before every run):
+  - **FFmpeg pool corpus, fixtures 40-47, both app-port arms: 16/16 cells.**
+    `ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/`. `poolsublet` faults cause 24 at
+    `case.c:85 / :48 / :33 / :104`, each with non-zero `value_hi`; `poolstock` completes every defect
+    with DEFECT-REPRODUCED. **Case 3's `sublet-port` arm was the last unmeasured arm of the 22.**
+  - **FFmpeg case 3's component-port pair, probe slot 39: 2/2.**
+    `ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39/`.
+  - **tshark `chunks` fixtures 2-9: 9/9** (fixture 1 as the in-boot control).
+    `ports/wireshark/app/results/20261004-qemu-chunks-2-9/`. Read as a consistency check: these are
+    plain-heap probes on a nested arm, not new nested evidence.
+  - **memcached corpus, 5 cases × spatial/sublet: 10/10, plus the suite-wide negative control** (exit 0 =
+    every oracle fired). `ports/memcached/allocators/results/20261004-qemu-corpus-defects/` — the
+    corpus's first committed bundle; it gitignores its own `results/` by policy.
+  - **ASan blindness to pooled reuse, 4 arms**, with upstream's own `e6255fb822` as the positive control
+    and arm C showing the `free_entry_cb` gate leaves the MPVPicture pool uncovered even on master.
+    `bug-corpora/ffmpeg/pool-repros/results/2026-10-03-native-asan-pool-blindness/`.
+- **New instrument: `ports/common/application/run-fixtures-9p.py`.** `capstone-vm` is the app ports' only
+  runner and needs ssh; no riscv64 dropbear exists here to give it. This stages images and the pinned
+  launcher/module over 9p, issues **the same guest command `capstone-vm` issues**, merges the launcher's
+  fault record into the result as `capstone-vm`'s host side does, and judges with the **committed**
+  oracles (`check-safety.py`'s `classify()`/`matches()`, or an external `--verdict` script). Negative-
+  tested: forced against a wrong row it reports DIFFERS and exits 1.
+- **TWO RETRACTIONS, both mine, both from generalising a partial enumeration:**
+  1. *"The app SDK gate refuses every toolchain on this host"* (`5208789e4b9e`). It does not: the
+     `llvm-capstone-cc` worktree's `build-release`, commit `7d01722aab88`, passes it end to end, and all
+     16 FFmpeg app images were built through the gate with it. I had globbed `*/llvm/cmake-build-*`;
+     `ffmpeg-live-defect-triage.md:281-284` already named the qualified compiler.
+  2. *"No replacement harness exists"* (`dedab28c4a2c`). One existed on disk and had run app-SDK
+     fixtures the previous day; the sibling bundle said so outright. Propagated into the four files that
+     still carried the first claim (`49c4903ca277`).
+  Rule captured as the `blocked-is-an-enumeration-claim` memory.
+- **Also corrected:** `dedab28c4a2c`'s `g_refpool` caveat named the **wrong bundles** — the affected one
+  is `bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port/`, which now carries it in-tree
+  rather than only in a commit message; and that port bundle's claim that the oracle's FAULT branch is
+  "structurally unreachable" (it is reachable — the host merges the fault record).
+- **Still open, deliberately:**
+  - **PostgreSQL's 8 spatial/sublet cells.** The paper prints Sublet catching 8 of 8 while all 8
+    `case.json` say the arm has **not** been run. Highest-value single measurement for the paper; out of
+    scope by the lead's decision (report only).
+  - **`INDEX.md` / `index.json` are stale on `dev`** from the board lane's fpga-repros and ISSUES
+    additions. Only this lane's own lines were applied; the lead asked that the two lanes squash and
+    merge one consolidated regeneration.
+  - PoisonCap and CheriBSD for memcached and FFmpeg: that platform is absent from this host.
+
 ## 2026-10-04 — Supervised CALL under the FPGA monitor on silicon: a real workload preempts and resumes hundreds of times, then hits S-16 (localised, mechanism traced, an RTL fix needed); S-17 found beside it
 
 - **The FPGA monitor runs supervised CALL on silicon.**

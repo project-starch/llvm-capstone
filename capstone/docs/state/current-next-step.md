@@ -9,6 +9,36 @@
     fabricated gp);
   - S-17 stays watched through apertures 219..222.
 
+## APP PORTS AND BUG CORPORA — 2026-10-04. **Nothing is owed on memcached, tshark or FFmpeg.** All 24
+registered-but-unmeasured cells are measured and committed: FFmpeg pool corpus 40-47 on both app arms
+(16/16, `ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47/`), case 3's component pair as probe 39
+(2/2), tshark `chunks` 2-9 (9/9, `ports/wireshark/app/results/20261004-qemu-chunks-2-9/`), memcached's
+corpus 5x2 plus its negative control (`ports/memcached/allocators/results/20261004-qemu-corpus-defects/`).
+**22 of 22 upstream cases across the three programs now carry a measured capability arm.**
+
+**NEXT, and none of it is this lane's to start:**
+1. **PostgreSQL's 8 `spatial`/`sublet` cells.** The paper prints Sublet catching 8 of 8 while all 8
+   `bug-corpora/postgres/mmgr-repros/*/case.json` say that arm has **NOT been run**. It is the one place a
+   printed number is denied by its own corpus, and the highest-value single measurement for the paper. Out
+   of scope by the lead's decision (report only). The runner pattern now exists:
+   `ports/common/application/run-fixtures-9p.py`.
+2. **The paper's S3 numbers are the lead's call.** All five totals print as `\targetmeasured` while S3 is
+   "Pending" in three places and `experiments/results/S3/` does not exist; "every comparator now runs the
+   whole denominator" is false (22 of 57). Report, not committed:
+   `/tmp/capstone/2026-10-04-paper-defect-evidence-audit.md`. The paper's own appendix authorises either
+   running the arms or narrowing the claim.
+3. **`INDEX.md`/`index.json` need ONE consolidated regeneration.** They are stale on `dev` from the board
+   lane's fpga-repros and ISSUES additions (S-16/S-17; 28 -> 30 folders). This lane applied only its own
+   lines, deliberately, to avoid republishing another lane's content. The lead asked the two lanes to
+   squash and merge a single consolidated version.
+4. **PoisonCap and CheriBSD for memcached and FFmpeg** stay unmeasured: that platform (SDK, purecap
+   sysroot, image) is absent from this host. Not a gap that work here can close.
+
+**New instrument worth knowing about:** `ports/common/application/run-fixtures-9p.py` runs app-SDK domain
+images over 9p + the serial console when `capstone-vm` is unavailable (it needs ssh; no riscv64 dropbear
+exists here). It issues the same guest command `capstone-vm` does, merges the launcher's fault record as
+`capstone-vm`'s host side does, and judges with the committed oracles. Negative-tested.
+
 2026-10-04: the FPGA monitor's resume hang (S-16) is root-caused and fixed on
 capstone-ariane `sup-call` (192a5e624, registry R-49: the switcher's first SAVE
 write pushed into a FULL store-buffer commit queue), together with R-50
