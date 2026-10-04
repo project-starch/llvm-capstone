@@ -214,9 +214,11 @@ int __capstone_delegate_ready(void) {
  * 0 with the low word intact: iov[1]'s length of `{offset, len}`, built as
  * `uint64_t wire[2]`, arrived as 0 while iov[0]'s 50 survived, and musl retried
  * a 1-byte write against a 0-length descriptor until the stream corrupted. The
- * idiom is ISSUES R-29's (write-buffer high word, then a wide `ldc`), but its
- * sub-mechanism is unresolved: R-29's recorded stale-refill account does not
- * predict 0 here. 8-byte moves made the stream byte-exact on two boots. */
+ * idiom is ISSUES R-29's family: the RTL lane reproduced it in simulation
+ * (2026-10-05). While the pair is still in the write buffer, a 128-bit load
+ * takes its high half from the `user` lanes, which a plain store forwards as 0;
+ * an 8-byte `ld` of the same word reads correctly. 8-byte moves made the stream
+ * byte-exact on two boots. */
 static void dl_bytes(void *dst, const void *src, size_t n) {
   unsigned char *d = dst;
   const unsigned char *s = src;

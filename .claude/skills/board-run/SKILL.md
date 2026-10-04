@@ -120,6 +120,19 @@ rc=0 on both targets, and only the size differed (31,144 vs 31,504 bytes). Order
 **Verify from the artifact, not the bake's exit status** — grep the built `.ko` and the cpio for a
 string that exists only in the new code, with a string present in both as the positive control.
 
+**A DIFFERENT module (not a rebuild of the stock one) is ONE per boot, and it fixes what the boot
+can run.** Four facts, each of which cost a B0.7 boot on 2026-10-04:
+- The board kernel cannot unload modules (`rmmod`: "Function not implemented").
+- Every driver runs `[ -e /dev/capstone ] || insmod /capstone.ko` before the first rung. So the
+  module under test must BE `/capstone.ko` in the image. Loading it from a rung is too late.
+- The process-ABI module serves ONE API per load. The first legacy ioctl, even an unrecognised one,
+  makes `PROCESS_ENABLE` EBUSY. So a classic `lpc` control cannot precede a `capstone-exec` rung.
+  Its DOM_CREATE struct also differs in size (`copy_len`), so lpc's create fails on that module.
+- A module built by hand (`make -C linux M=...`) skips `external.mk`'s FPGA `-march=rv64g`. Its
+  compressed call sites then make the kernel's relocation code take a misaligned load, which the
+  monitor cannot handle, and the board hangs inside `insmod` with MCAU 4. Before baking, count the
+  module's 2-byte instructions in `objdump -d`; the count must be 0.
+
 **Retire before you stage, every time — the image is DERIVED from the run, not accumulated:**
 
 ```bash

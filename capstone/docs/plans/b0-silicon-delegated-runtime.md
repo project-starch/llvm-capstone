@@ -792,6 +792,19 @@ The claim-auditor weakened it, and the reasons hold up. **What stands:**
 **What would have caught it:** checking that the known defect's recorded mechanism predicts the observed VALUE, not
 just that the code has its SHAPE.
 
+**Resolved the same morning, by the RTL lane's simulation on 715bdd1fe** (r29-wbuf-busy-hit.S, memory delays 12
+and 40, identical).
+- A 128-bit `ldc` of a granule whose two words were just written by plain `sd`s returns the low word correctly and
+  the HIGH word as **0**. That holds with nothing else in flight, and with 17 nops when stores are queued ahead of
+  the pair. A plain `ld` of the high word reads correctly.
+- B0's exact two-pair shape gives the board's readings: the first pair intact, because stores issued behind it do
+  not hold it, and the second pair high 0.
+- The path is the pair's residency in the write buffer at the wide load. The load takes its high half from the
+  `user` lanes, and a plain store forwards `.user = 0`.
+- So it IS R-29's family, by the path R-29's earlier hit arm never created. The retraction stands for the
+  mechanism first named, stale-refill. The `.user = 0` account is reproduced.
+- The R-29 registry entry and its folder are the RTL lane's to update. The 8-byte-copy workaround stands.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
