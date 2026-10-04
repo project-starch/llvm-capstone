@@ -346,6 +346,16 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
   - A new failure point: **k800r 901 or a wrong value means the process-ABI module breaks the classic path on the
     board.**
 
+## B0.7 attempt 2 (21:26-21:29): both rungs 901 -- the DRIVER loads the stock module first
+- Every board driver runs `[ -e /dev/capstone ] || insmod /capstone.ko` after boot and before any rung
+  (run_ladder_perf_fpga.py:193-202). The stock module was therefore in place before the wrapper ran, and it cannot
+  be unloaded. Attempt 1 had the same cause.
+- **Attempt 3:** in the private image, `/capstone.ko` IS the process-ABI module, so the driver's own insmod loads it.
+  - image 705722685b549e93: the cpio check shows /capstone.ko = the new module.
+  - The shared target's stock module (ed807a292aaad3f6) was backed up and restored by the bake's EXIT trap, and the
+    restored shared cpio carries it again (hash checked).
+- Predictions unchanged: k800r 4 (the classic path on the process-ABI module), b0-hello 0.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
