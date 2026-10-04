@@ -976,3 +976,11 @@ The RTL lane's hand-off numbers:
 - If one COMPLETES (readings 1, resumes >= 1, 0x77, 0), that is a miss for the resident-logic simulation at that
   shape.
 - **On 715bdd1fe (accept715):** all three complete.
+
+### Addendum 13:53, during session s16escr1, before any of its wedge reads was looked at: the RTL lane's simulated locations
+Source: their simulation on the resident logic, memory delay 12.
+- **esc-n8-r1:** the CALL and two escape/resume pairs, then a hang at the 6th switch, a mid-burst ESCAPE. idx 7;
+  the slot-0 pc inside a burst.
+- **esc-n32-r1 and esc-n64-r1:** hang at the FIRST switch, the monitor's own armed CALL after its 32/64-store burst.
+  idx 7; the slot-0 pc on `li sp, 0`. These are CALL-side, not escape-side evidence.
+- **Fixed logic:** all three complete, with 6, 23 and 33 resumes.
