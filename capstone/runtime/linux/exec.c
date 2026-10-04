@@ -79,13 +79,35 @@ static uint64_t timebase_frequency(void) {
   return value;
 }
 
+/* A CPU whose domains cannot read the time counter. The Capstone FPGA core (device-tree compatible "eth, ariane")
+ * has no `time` CSR: csr_regfile.sv has no CSR_TIME read case, so `rdtime` is an illegal instruction there. Linux
+ * user code never notices, because OpenSBI emulates it, but a domain's rdtime is not emulated -- it is a fault, or an
+ * event under supervision. On that CPU the launcher reports no timebase, and the libc then delegates every clock
+ * read (launch.h). The match is an exact entry of the NUL-separated compatible list. */
+static int cpu_without_time_csr(void) {
+  static const char ariane[] = "eth, ariane";
+  char list[256];
+  int fd = open("/proc/device-tree/cpus/cpu@0/compatible", O_RDONLY | O_CLOEXEC);
+  if (fd < 0)
+    return 0;
+  ssize_t n = read(fd, list, sizeof list);
+  close(fd);
+  for (ssize_t at = 0; at < n;) {
+    size_t len = strnlen(list + at, (size_t)(n - at));
+    if (len == sizeof ariane - 1 && memcmp(list + at, ariane, len) == 0)
+      return 1;
+    at += (ssize_t)len + 1;
+  }
+  return 0;
+}
+
 /* What the domain may answer itself: identity, and the clocks paired with the
  * counter it can read. The three reads sit together so the pairing is tight. */
 static struct capstone_launch_task task_record(void) {
   struct capstone_launch_task t = {
       .pid = (uint32_t)getpid(), .ppid = (uint32_t)getppid(),
       .uid = getuid(), .euid = geteuid(), .gid = getgid(), .egid = getegid(),
-      .ticks_per_second = timebase_frequency()};
+      .ticks_per_second = cpu_without_time_csr() ? 0 : timebase_frequency()};
   struct timespec realtime, monotonic;
   clock_gettime(CLOCK_MONOTONIC, &monotonic);
   clock_gettime(CLOCK_REALTIME, &realtime);

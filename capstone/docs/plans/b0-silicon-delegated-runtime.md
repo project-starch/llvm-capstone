@@ -272,6 +272,30 @@ function pointer, which is an integer under gp-captable. It now reports the code
   does not depend on it.
 - **Arm B** shows that the B0.1 monitor change is what admits a managed image with a globals region.
 
+## B0.7 preparation (2026-10-04)
+**The board image had none of the process ABI.**
+- The FPGA buildroot (d04bd83) has no capstone-exec in its target.
+- Its capstone.ko has no process-ABI symbols: 0 `process` strings, against the QEMU module's `process_cache_bytes`.
+- The FPGA kernel is 6.4.14. The QEMU guest's is 6.1.
+
+**Built for the board** (the build trees are private, in /tmp/capstone/b0):
+- **Module (sha 57cb9a9b6821e979):** the process-ABI modcapstone (the memcached lane's pinned package source), built
+  against build-fpga's linux-6.4.14 with the FPGA toolchain. vermagic is `6.4.14 SMP riscv`.
+  - It needed one port: Linux 6.3 made `vma->vm_flags` read-only, so `process.c` now uses `vm_flags_set()` behind
+    a `LINUX_VERSION_CODE` guard. That change belongs in the modcapstone package's process-ABI branch.
+- **Launcher:** capstone-exec and capstone-job from `capstone/runtime/exec`, cross-built with the FPGA buildroot's
+  toolchain (`linux-guest.cmake`). They carry the time-CSR change below.
+- **`exec.c`:** the launcher reports `ticks_per_second = 0` when the device-tree CPU compatible list has the exact
+  entry `eth, ariane`, i.e. the Capstone FPGA core, which has no `time` CSR. The libc then delegates every clock
+  read. The matcher was unit-tested on 6 cases, a missing file included.
+- **`runtime/silicon/b0run.sh`:** the board wrapper for the baked-rung driver.
+  - It runs the k800 classic control first, with the stock module.
+  - Then: rmmod/insmod of the process-ABI module, `capstone-exec --stats`, then the image.
+  - Distinct retvals: 901 module swap, 902 --stats, 903 no hello line, 904 non-zero exit.
+
+**insmod works on the board.** The stages driver loads /capstone.ko with `[ -c /dev/capstone ] || insmod` on every
+boot. The "insmod of ANY module hangs this board" comment in run_rtl_smoke.py is stale.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
