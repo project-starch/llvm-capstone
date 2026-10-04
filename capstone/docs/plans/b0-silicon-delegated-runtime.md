@@ -670,6 +670,34 @@ by the relinked control. k800r's QEMU-pass record is ~/capstone-artifacts/k800-r
 - **Status of B0:** the milestone's control flow is proven on silicon; its output contract is not. B0 is not
   closed until the stream is byte-exact.
 
+## The silicon-hazard census in QEMU: no LDC-move site in the application (2026-10-04 23:30)
+- **The tool:** capstone-qemu's S-12 slot tracker (`CAPSTONE_SLOT_LOG`). It lists every granule stored with a
+  clear-set capability (LIN/REV/UNINIT/SEALED/SEALEDRET) and loaded again: on silicon the first LDC moved that value
+  out, so the next load reads cnull.
+  - Run on b0-hello: fabrication OFF, firmware d7d769b1 (monitor d5459e1). b0-hello's output was the exact 51 bytes.
+  - Positive control: `CAPSTONE_SLOT_CLEARSET_INCLUDES_NONLIN=1` gives 749 lines, against 96.
+- **The application has ZERO hits.** pcc_base 0xe0200000 has only 7 clear-set stores, the glue's SEALEDRET stashes.
+  **The writev corruption is therefore not an LDC move in the application.**
+- **One hit, in the MONITOR's create_domain.** `dom_gp = __split(...)` (LINEAR) is spilled to a stack slot. The test
+  `if (dom_gp != 0)` LOADS it, which on silicon moves it out, and `*(__linear void **)dom_data = dom_gp` loads it
+  again. So silicon delivers cnull in the gp slot at data_top-16. The FPGA build has the identical sequence.
+  - **This is latent:** the interp glue builds gp from its own cap-table carve and never reads the delivered slot,
+    which is why gp-captable domains run.
+  - A glue that reads it would get cnull on silicon. It is the same compiler pattern as the managed_reclaim bug:
+    a linear value tested and then used.
+
+## B0.7 attempt 12 pre-registered (before the boot): what the host receives in each writev
+- **capstone-exec 1dca5b19:** for each traced writev round, every iovec's `{offset, length}` pair as it lies in the
+  exchange, plus up to 64 data bytes. b0run.sh traces 200 rounds, so all ~121 print.
+- **Build:** Image a1bb71fd4a879f80, firmware e867ddc286c2, the same quiet monitor 1855cb4.
+- **Predicted readings:**
+  - round 3 with len 51 and the full line as data, but result 50: the host side loses a byte (unlikely: a regular
+    file);
+  - **len 50: the application computed 50, so its stdio state is wrong on silicon;**
+  - rounds 4+ with len 1 and data "\n" but result 0: the host refuses (it should not);
+  - rounds 4+ with len 0, or offset/len garbage: the application's marshaling or iovec state is wrong.
+- The data bytes show directly whether `"0: hello..."` came from a wrong offset.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the

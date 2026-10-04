@@ -768,6 +768,26 @@ static void delegate_trace(const struct capstone_delegate_host *host,
   fprintf(stderr, "capstone-exec: round %llu nr=%ld a0=%#lx a1=%#lx a2=%#lx -> %ld\n",
           (unsigned long long)host->rounds, (long)e->nr, (unsigned long)e->args[0],
           (unsigned long)e->args[1], (unsigned long)e->args[2], r);
+  /* writev and write: what the host was handed. An iovec crosses as {offset, length} pairs at args[1]. */
+  if (e->nr == CAPSTONE_SYS_writev && e->args[2] <= 4 &&
+      e->args[1] + e->args[2] * 16 <= host->exchange_bytes) {
+    for (uint64_t i = 0; i < e->args[2]; ++i) {
+      uint64_t wire[2];
+      memcpy(wire, host->exchange + e->args[1] + i * 16, sizeof wire);
+      fprintf(stderr, "capstone-exec:   iov[%llu] offset=%#llx len=%llu", (unsigned long long)i,
+              (unsigned long long)wire[0], (unsigned long long)wire[1]);
+      if (wire[0] < host->exchange_bytes && wire[1] <= host->exchange_bytes - wire[0]) {
+        fputs(" data=\"", stderr);
+        for (uint64_t j = 0; j < wire[1] && j < 64; ++j) {
+          unsigned char c = (unsigned char)host->exchange[wire[0] + j];
+          if (c >= 0x20 && c < 0x7f && c != '"' && c != '\\') fputc(c, stderr);
+          else fprintf(stderr, "\\x%02x", c);
+        }
+        fputc('"', stderr);
+      }
+      fputc('\n', stderr);
+    }
+  }
 }
 
 void capstone_delegate_serve(struct capstone_delegate_host *host,
