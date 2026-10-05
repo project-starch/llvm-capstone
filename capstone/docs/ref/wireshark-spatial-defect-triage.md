@@ -7,9 +7,14 @@ discarded before triage, and 29 further rows of the 4.6.9 security tracker were 
 `spatial-vs-temporal-three-programs.md:20` for why the earlier "0 spatial" was a statement about the
 search, not about Wireshark.
 
-**Verdict: 3 class-B defects found, 2 of them LIVE at the `v4.6.8` pin.** All three are real
-upstream instances of the shape that, until now, existed in this project only as the **synthetic**
-fixture `tsapp` fx12 `wmem_neighbour`.
+**Verdict: 15 class-B defects found across the whole history, 2 of them LIVE at the `v4.6.8` pin,
+and 4 of them catchable by the port as it stands today.** Every one is a real upstream instance of
+the shape that, until now, existed in this project only as the **synthetic** fixture `tsapp` fx12
+`wmem_neighbour`.
+
+Read §§1-4 for the three defects found in the post-pin population (the two live ones among them),
+then the WIDENED section for the whole-history result, which is where the four immediately
+measurable candidates are.
 
 ## The instrument
 
@@ -117,6 +122,13 @@ earlier chunks or its header. The fix passes an `available` count and rejects `p
 - **Liveness, read from the pin, not from filter 3:** the negative-index read is present at `:332`;
   `verify_padding` still has the single-argument signature at `:324`; and the fix's guard
   `pad_len > available` has **0 occurrences** in the pinned file.
+- **Class nuance, because the direction matters.** A read *below* a chunk is class B only while the
+  chunk has something below it inside the block. If `plaintext` happens to be the **first** chunk
+  carved from a fresh block, `pad_len` up to 255 reads below the block itself, i.e. past the
+  `g_malloc` bound — which is class A, and which `shrink` and `sublet` would catch. So this defect
+  is **class B in general and degrades to class A for the first chunk in a block**. Which case a
+  real capture produces is not established here. `1d8acb21ab` has no such ambiguity: it overreads
+  *forward* from the second of two consecutive chunks, so the bound crossed is always a chunk bound.
 
 **Its subject says `heap-use-after-free`, and the defect is spatial.** Trust the diff, not the
 wording — the existing triage doc reached the same conclusion from the other direction.
@@ -184,6 +196,73 @@ outside it. Corpus cases do not run inside `tshark`: `ports/wireshark/wmem/cmake
 builds one standalone program per `case.c` against the real wmem allocator. So a reduction of
 `1d8acb21ab` is buildable today; what it cannot yet do is *discriminate*, for want of the
 `BLOCK_FAST` adapter.
+
+## WIDENED to the whole history: 15 class-B defects, and 4 of them the port can catch TODAY
+
+The sections above used `v4.6.8..origin/master` (4,321 commits), matching the temporal instrument's
+population. Widening to the **whole history to the pin — 96,806 commits** changes the picture, and
+fix-reversal cases are perfectly acceptable (every existing memcached and FFmpeg corpus case is one):
+
+| | |
+|---|---:|
+| population | **96,806** commits |
+| filter 1 kept | **303** |
+| class **B** | **15** |
+| class A | 21 |
+| STACK | 16 |
+| unresolved | 251 |
+
+Liveness across the 15: **12 `FIX-IN-PIN`, 2 `UNRESOLVED`, 1 `DEFECT-LIVE`** — and that one live
+reading is a **false positive**, caught by hand (see below). So the two live class-B defects remain
+the solaredge and opcua pair; the other 13 are fix-reversal material.
+
+### The four in `wmem_file_scope()` are the important ones
+
+File scope is a wmem **`BLOCK`** allocator — the one the `chunks` port *does* narrow. So unlike the
+three post-pin defects, **these four need no new port work to discriminate**:
+
+| candidate | file | scope |
+|---|---|---|
+| `0261fd7da6` | `epan/dissectors/packet-http.c` | `wmem_file_scope()` — **and `packet-http.c` is in the port's whitelist** |
+| `d7d1686a95` | `epan/dissectors/packet-snmp.c` | `wmem_file_scope()` |
+| `1c090e9292` | `epan/dissectors/packet-lbmc.c` | `wmem_file_scope()` |
+| `4a4871a831` | `epan/dissectors/packet-ntlmssp.c` | `wmem_file_scope()` |
+
+**`0261fd7da6` is the one to build**, and its mechanism is as reducible as a synthetic fixture.
+Quoted from the fix's parent, `epan/dissectors/packet-http.c:3740-3751`:
+
+```c
+first_range_num_str = wmem_strdup(wmem_file_scope(), value);
+if (first_range_num_str) {
+        first_range_num_str += 6;  /* Move the pointer past "bytes=" */
+        first_range_num_str = strtok(first_range_num_str, "-");
+        first_range_num = strtoul(first_range_num_str, NULL ,10);
+}
+...
+        char *str = wmem_strdup(wmem_file_scope(), value);
+        str += 8;
+        first_range_num = strtoul(str, NULL ,10);
+```
+
+**Unconditional pointer arithmetic with no length check at all.** A `Range:` header value shorter
+than 6 (or 8) characters moves the cursor past the end of the `wmem_strdup`'d chunk, and `strtok` /
+`strtoul` then read on into the rest of the file-scope BLOCK. The upstream subject is *"Fix buffer
+overflow, use after free in HTTP Range"*, so it is both spatial and temporal — only the spatial half
+is claimed here. `FIX-IN-PIN`, so a fix-reversal case.
+
+Three other class-B candidates are in code the port always builds: `ed20250c13` in `epan/proto.c`
+and `69dac89280` in `packet-tcp.c` (both `wmem_packet_scope()`, so BLOCK_FAST), plus `0939cf989d`,
+which is the **same ETSI DCP defect** as `e8ef9df09d` under a different hash.
+
+### The one `DEFECT-LIVE` reading in the widened run is FALSE, and that is the fifth measured instance
+
+`5a560f3f6a` — *"dns: fix off-by-one buffer overflow (write)"*, 2018 — is a genuine class-B
+off-by-one: `g_snprintf(np, maxname + 1, ...)` against a buffer allocated
+`wmem_alloc(wmem_packet_scope(), maxname)`, i.e. a one-byte **write** past the chunk. Filter 3
+called it live. **Reading the pin refutes that:** `v4.6.8:epan/dissectors/packet-dns.c:1677,1689,1703`
+all read `snprintf(np, maxname, ...)` — the fixed form. The fix is present; it is simply unfindable
+verbatim because upstream renamed `g_snprintf` to `snprintf`, so none of the fix's added lines
+match. Exactly the mechanism §filter-3 predicts, now observed in the Wireshark population too.
 
 ## Rejected, with reasons
 

@@ -14,8 +14,9 @@ anything is broken. A grep for the word finds arms, not defects.
 
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|
-| **spatial** | **0 — never searched for** | **0 — never searched for** | **0** |
-| **temporal** | 22 | 5 | **27** |
+| **spatial**, as corpus cases | **0** | **0** | **0** |
+| **spatial**, triaged upstream defects (§1a) | **19** (15 class B + 4 class C) | 21+ class A, not pursued | **19** |
+| **temporal**, as corpus cases | 22 | 5 | **27** |
 
 **Every defect reduced from real upstream code in these three programs is temporal.**
 
@@ -46,8 +47,52 @@ anything is broken. A grep for the word finds arms, not defects.
 > The honest statement is: **spatial defects were excluded by design and never triaged
 > individually.** Five were met incidentally and rejected with reasons — memcached `#1308`
 > `raw_line()` (rejected on *reachability*, not class, `allocator-repros/README.md:79`), the 29
-> Wireshark tracker rows, opcua `d24613c461`, vp9 `a024f8c541`, tdsc `fd3ee52fab`. A hunt is now
-> under way; until it reports, treat this row as **unmeasured**, not as zero.
+> Wireshark tracker rows, opcua `d24613c461`, vp9 `a024f8c541`, tdsc `fd3ee52fab`.
+>
+> **The hunt has since run. Its result is in §1a below and it is not zero.**
+
+### 1a. What the spatial hunt found (2026-10-05)
+
+Three new instruments, one per program, in `docs/ref/{wireshark,memcached,ffmpeg}-spatial-defect-triage.md`,
+driven by `bug-corpora/tools/spatial-triage.py`. The classification that matters is **which bound
+the overflow crosses**, because that is what decides whether anything of ours can see it:
+
+| class | bound crossed | who faults |
+|---|---|---|
+| **A** | the `malloc` bound | `shrink`, `sublet`, CHERI alike — a tie row |
+| **B** | a sub-allocation bound **inside a nested allocator's block** | only a ported inner allocator |
+| **C** | a **sub-object** bound inside ONE allocation | nothing we have; needs per-member authority |
+
+| program | population | filter 1 | class B | class C | live at pin |
+|---|---:|---:|---:|---:|---|
+| tshark | 96,806 | 303 | **15** | 0 | **2** (`1d8acb21ab`, `d24613c461`) |
+| memcached | 2,349 | 20 | **0** | 0 | 0 — pin *is* upstream head |
+| FFmpeg | 1,786 + history | 19 + shape search | 0 | **4** | **4** (`8864fd0aec`, `a809a784ec`, `68845e26f7`, `e058af88ab`) |
+
+**So the spatial row is not empty: 19 class-B/C upstream defects, 6 of them live at their pin.**
+Zero are built as corpus cases yet — see the honest comparison below.
+
+**The three programs are blind for three different reasons**, which is the finding worth carrying:
+
+- **tshark — unwired allocator coverage.** The live pair overflows a chunk in `pinfo->pool`, a wmem
+  `BLOCK_FAST` allocator, and the chunk port's only wiring patch targets `wmem_block.c`; no patch
+  against `wmem_block_fast.c` exists. **But 4 of the 15 are in `wmem_file_scope()`, a `BLOCK`
+  allocator the port already narrows** — `0261fd7da6` (HTTP Range, also a whitelisted dissector),
+  `d7d1686a95`, `1c090e9292`, `4a4871a831`. Those need no port work to discriminate.
+- **memcached — structurally absent.** An item is sized exactly from the key and value lengths at
+  `do_item_alloc` with the parser validating them first, so the length bugs land one layer out in
+  the proxy's own `malloc`'d buffers. The four `slabs.c`/`items.c` candidates index **static global
+  arrays**, not heap.
+- **FFmpeg — sub-object granularity, not an allocator problem at all.** All four live defects cross
+  a bound *between two members of one struct* inside a single `av_mallocz` or refstruct. No
+  allocator adapter can help; the authority that would need narrowing is per struct member. That is
+  the taxonomy's `partial²` cell, where CHERI and Capstone already share a verdict.
+
+**Honest comparison with the temporal hunt, because the two are not equivalent:** the temporal hunt
+produced **22 built corpus cases**; this one has produced **19 triaged candidates and 0 built
+cases**. Triage documents are not a corpus. The nearest buildable case is `0261fd7da6`, whose
+mechanism is unconditional pointer arithmetic (`+= 6` on a `wmem_strdup`'d string with no length
+check) and which would discriminate on the existing `chunks` arm.
 
 The 22 nested ones are the committed corpus case folders, one per defect:
 
