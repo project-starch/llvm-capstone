@@ -121,7 +121,10 @@ By shape, for the two mechanisms that catch anything:
 | stale pointer after an individual recycler free | 12 | **0 / 1** | **1 / 1** |
 | cursor advanced past its chunk by a fixed skip, read inside the same block | 13 | **1 / 1** (bounds, cause 5) | not run |
 
-Every `spatial` and every plain-CheriBSD arm completed: the unprotected
+Across cases 0-12 every `spatial` and every plain-CheriBSD arm completed. **Case 13 is the
+exception and it is not a counter-example:** it is the one spatial row, so its unprotected arm
+faults too (cause 5, measured both builds — `results/20261005-qemu-spatial-case13-ON/`). For the
+twelve temporal rows the unprotected
 allocator returns either the old bytes (the column cases, where nothing
 intervenes) or another object's bytes (the cases that assert reoccupation),
 and libc's quarantine never sees an event because wmem hands storage back to
