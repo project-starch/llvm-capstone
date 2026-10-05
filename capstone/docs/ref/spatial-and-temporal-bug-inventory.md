@@ -56,7 +56,7 @@ And the **synthetic baseline**, which is where the not-nested spatial row really
 This was the team's question, and the honest answer is a measurement rather than an absence.
 
 A spatial-wording pass over the same commit populations yields **29 class-A candidates** (tshark 21,
-memcached 3, FFmpeg 5) — class A being a crossing of the `malloc` bound itself. **Eight have been
+memcached 3, FFmpeg 5) — class A being a crossing of the `malloc` bound itself. **Seven have been
 read against the source each port actually pins. None is a live class-A defect:**
 
 | candidate | disposition in the pinned source |
@@ -64,12 +64,12 @@ read against the source each port actually pins. None is a live class-A defect:*
 | memcached `ddee3e2` | fix present — `authfile.c:50` is `calloc(1, sb.st_size + 2)` |
 | memcached `11b5f9b` | not heap — `char temp[KEY_MAX_LENGTH + 1]` at `proxy_lua.c:717` |
 | tshark `be813ede9d` | code absent at 4.6.8 |
-| tshark `f207d25f4b` | `g_strdup` of a string literal |
+| tshark `f207d25f4b` | **RETRACTED 2026-10-05:** misattributed, and returned to the unread pool. The row said "`g_strdup` of a string literal" at `wiretap/libpcap.c:621`; that line is the file's only `g_strdup`, but this commit has nothing to do with it. `git show --stat` gives the subject *"wiretap: pcap[ng]: Don't let the reported length underflow w/ phdr"* over `libpcap.c` and `pcapng.c`. Written from a grep in the file instead of the commit's diff — the same defect retracted above, committed again the same day |
 | tshark `830cf562a0` | integer-underflow subject, excluded by the hunt's own filter 1 |
 | tshark `06d08c5811` | no access leaves the allocation — `wsutil/eax.c:150` allocates `worksize`, the loop bound *is* `worksize` |
 | tshark `7ffc11e38f` | fix present — `wiretap/file_access.c:1322`, `:1376` |
 | tshark `3be1c99180` | fix present — `wiretap/netscreen.c:63-66`, `:311`, `:332` |
-| the remaining **21** | **not individually read** — stated as unread, not as absent |
+| the remaining **22**, `f207d25f4b` among them | **not individually read** — stated as unread, not as absent. 7 dispositioned + 22 unread = 29; the row above is listed for its trail and counted in the 22, not twice |
 
 **Class A is the class upstream fixes first.** It is what fuzzers, ASan and compiler warnings find,
 and these programs are pinned at recent releases (memcached 1.6.45, wireshark 4.6.8), so those fixes

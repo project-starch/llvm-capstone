@@ -384,7 +384,12 @@ Cheap habits that catch all of the above:
   clearing only those two registers, which *was* the asymmetry being hypothesised; it clears six.
   The same day a `trans_id` read at `[2:0]`, taken from the field's position in the struct
   declaration, would have counted events on arbitrary capability cursor bits — the generated code
-  reads it at `[255 +: 3]`.
+  reads it at `[255 +: 3]`. **And check it is the right ARTIFACT, not just the right pattern: a hit
+  in the file a commit is believed to touch is not evidence about that commit.** A candidate was
+  dispositioned "`g_strdup` of a string literal" off the only `g_strdup` in `libpcap.c`, while
+  `git show --stat` gave a reported-length underflow across two files and no `g_strdup` at all —
+  in a session that had just retracted four rows for this exact shape (2026-10-05). A commit's
+  disposition comes from `git show` on that commit.
 * When a result is *surprisingly* clean, suspect the instrument before the subject.
 * **Cite a board result by its image hash, never by its label.** A `board-results` row's label can
   name a different program: the S-06 folder's "acceptance passed" for `s06agg` cited a row whose image

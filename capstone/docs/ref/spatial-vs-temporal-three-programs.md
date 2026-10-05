@@ -205,12 +205,12 @@ is the opposite of true — it was simply not pursued.
 > | memcached `ddee3e2` — `authfile.c:44` `calloc(1, sb.st_size)` | **already fixed at the pin.** `authfile.c:50` reads `calloc(1, sb.st_size + 2)`, with `auth_end = auth_data + sb.st_size + 1` (56) and an `auth_end - auth_cur` clamp on the `fgets` length (60) |
 > | memcached `11b5f9b` — a `realloc`'d array at `proxy_lua.c:1403` | **not heap.** The overflowed object is `char temp[KEY_MAX_LENGTH + 1]` at `proxy_lua.c:717`, a stack array; the classifier matched a `realloc` elsewhere in the same file |
 > | tshark `be813ede9d` — `extcap/etl.c:1411` `Message = g_malloc(Length)` | **absent at the pin.** 4.6.8's `extcap/etl.c` is 799 lines and contains no `Message = g_malloc` |
-> | tshark `f207d25f4b`, `830cf562a0` — `g_strdup` error strings | **not a defect.** `wiretap/libpcap.c:621` is that file's only `g_strdup` and its argument is a string literal; `830cf562a0` is an integer-underflow subject that filter 1 excludes by its own wording |
+> | tshark `f207d25f4b`, `830cf562a0` — `g_strdup` error strings | **half right, and the wrong half is retracted below.** `830cf562a0` is indeed an integer-underflow subject (*"pcap: Fix an integer underflow."*) that filter 1 excludes by its own wording. The `g_strdup` reading of `f207d25f4b` is false: its subject is *"Don't let the reported length underflow w/ phdr"* and it touches no `g_strdup` |
 >
 > Nothing was measured wrong and nothing was built on these rows. What was wrong was publishing a
 > classifier's output under the word *verified* — the same defect, one level up, as the "29" itself.
 
-**The 29 is a candidate count. The verified count is 0.** Eight of the 29 have now been read
+**The 29 is a candidate count. The verified count is 0.** Seven of the 29 have now been read
 against the pinned source — every one that had been called verified, plus the three tshark rows
 that survived a liveness pass. None is a live class-A defect:
 
@@ -219,12 +219,12 @@ that survived a liveness pass. None is a live class-A defect:
 | memcached `ddee3e2` | fix present (`authfile.c:50`, `+ 2`) |
 | memcached `11b5f9b` | stack array (`proxy_lua.c:717`) |
 | tshark `be813ede9d` | code absent at 4.6.8 |
-| tshark `f207d25f4b` | `g_strdup` of a string literal |
+| tshark `f207d25f4b` | **RETRACTED 2026-10-05:** misattributed, and returned to the unread pool. The row said "`g_strdup` of a string literal" at `wiretap/libpcap.c:621`; that line is the file's only `g_strdup`, but this commit has nothing to do with it. `git show --stat` gives the subject *"wiretap: pcap[ng]: Don't let the reported length underflow w/ phdr"* over `libpcap.c` and `pcapng.c`. Written from a grep in the file instead of the commit's diff — the same defect retracted above, committed again the same day |
 | tshark `830cf562a0` | integer-underflow subject, excluded by filter 1 |
 | tshark `06d08c5811` | **no access leaves the allocation.** `wsutil/eax.c:150` allocates `worksize`; the loop bound *is* `worksize`. The fix moves where a one-past-the-end address is *formed* — legal C, and nothing dereferences it |
 | tshark `7ffc11e38f` | fix present (`wiretap/file_access.c:1322`, `:1376`) |
 | tshark `3be1c99180` | fix present (`wiretap/netscreen.c:63-66`, `:311`, `:332`). Also moot: `ws_buffer_assure_space` over-allocates, so a read past `pkt_len` stays inside the allocation — class C, not A |
-| **the remaining 21** | **not individually read.** Stated as unread, not as absent |
+| **the remaining 22**, `f207d25f4b` among them | **not individually read.** Stated as unread, not as absent. 7 dispositioned + 22 unread = 29: the retracted row is listed for its trail and counted in the 22, not twice |
 
 **Why 0 is a result here and not a gap.** Class A is the class upstream fixes *first* — it is what
 fuzzers, ASan and compiler warnings find — and these three programs are pinned at recent releases
