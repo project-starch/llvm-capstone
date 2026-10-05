@@ -1181,6 +1181,23 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
 - **The detector R-11 shipped did not fire, and could not have.** `check-repr.py` reports this image as `tot=1048576
   OK`. Its region model is the old SDK sizing from code length, and it never reads the domain's declared data size
   (.capstone_domreq), B1's arena or M-14's alignment. The B0 build never ran it either.
+- **The detector, rebuilt (2026-10-05 22:50).** An image with `.capstone_domreq` is now checked against the
+  process path, replayed end to end with the literal compress/decompress port.
+  - The path: the module's power-of-two block (code_len + domreq + 9 KiB), the monitor's managed split with M-14's
+    alignment and its two parks, then the glue's move to END - 32, its arena split and its carve.
+  - The arena size is decoded from the glue's own `li t4` in CONTEXTS_FIRST_ENTRY, because B0 builds drop the
+    symbol. Every 1 MiB-aligned base in the board's 256 MiB CMA window is tried. `ERROR` now fails the run.
+  - **Positive control: the faulting image (ac6abd2218a686f1) with the old glue.** AT RISK at 217 of 225 bases.
+    At the board's base 0xac100000 it shows 30 SHORT, with global[0] given [0xae0d6f30, 0xae0d6f60): 48 of its 56
+    bytes, so the seventh 8-byte store lands at 0xae0d6f60, B2f's SUPT exactly. This is derived from the ELF, the
+    module, the monitor and the glue alone.
+  - The board image (ba7e6921cf27f2b6, aligned glue) is OK at all 225 bases. B0's four 512 KiB images are OK at
+    all 512 bases, with or without the alignment. b1-thread with the alignment is OK at all 255 bases.
+  - **b1-thread WITHOUT the alignment is AT RISK at 7 of 255 bases**, the ones where its 2 MiB block straddles a
+    32 MiB boundary (e.g. 0xadf00000): there E = 5 and 4 to 9 globals come out short.
+    - The board does place 2 MiB blocks on 1 MiB alignment: B1f's block sat at 0xac100000. So a 2 MiB block is
+      exact only by placement, and the claim above that B0/B1's 2 MiB regions "lose nothing" was too broad.
+    - B1's board runs are unaffected: at 0xac100000, E = 1.
 - **Fix: `CAPSTONE_GLUE_CARVE_ALIGN`, now on in every B0 build.**
   - E is computed once from the region's base and top. The carve top is aligned down, and the table and every
     global's storage are rounded up to max(16, 2^E), so no split point can lose bits.
