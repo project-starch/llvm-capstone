@@ -234,13 +234,45 @@ no existing tool sees: a crossing inside a nested allocator's block (class B) or
 allocation (class C). That is the project's own thesis, and it now has a measured denominator
 instead of an assumption behind it.
 
-**So the not-nested spatial baseline is SYNTHETIC, by necessity, and that is the correct
-instrument.** fx2 `heap_neighbour` and fx3 `heap_one_past` already supply it in all three ports.
-memcached fixtures 20 and 21 add two more, each modelled on one of the historical defects above —
-`ddee3e2`'s authfile scan, and `d5d9ff0`'s cachedump `END\r\n` reservation, which `items.c:678`
-shows fixed at the pin too, as `bufcurr + len + 6`. A baseline row's job is to show the arms
-discriminate, not to count upstream defects, and a probe that creates the crossing on purpose does
-that job better than a defect whose reachability has to be argued.
+> **RETRACTED 2026-10-06.** What stood here said the not-nested spatial baseline is synthetic
+> **by necessity**, and that the zero is "a result, not a gap". **The measurement stands and is
+> unchanged: 0 of the candidates read is live at the pin.** What is withdrawn is the inference from
+> it to an empty cell, which rested on a premise never stated and never checked — *that a case must
+> be live at the pin to be built*.
+>
+> It is not. **27 of the 33 existing corpus cases carry `live_in_pin: false`**, and the convention is
+> explicit at `bug-corpora/memcached/allocator-repros/README.md:132-135`: each fix is an ancestor of
+> the pin, "so the shipped allocator is exercised by a pre-fix consumer shape the commit's own diff
+> shows -- the FFmpeg corpus's tier." Liveness is a **field recorded in the case**, not a gate on
+> building one. Every temporal case in this inventory is itself a fix-reversal.
+>
+> So "class A is fixed upstream first" remains true *about liveness* and explains why the live count
+> is 0. It does not explain an empty cell, and it was wrong to present the cell as closed. The cell
+> is **open**, with one verified buildable candidate (below).
+>
+> The check that would have caught it is the one already written down: test the single sentence the
+> conclusion rests on. Here that sentence was "a case must be live", which no document asserts and
+> the corpus contradicts 27 times.
+
+**Re-dispositioned against the correct criterion** — *a reconstructible heap defect whose crossing
+leaves the allocation*, with liveness recorded rather than required:
+
+| candidate | under the correct criterion |
+|---|---|
+| memcached `ddee3e2` | **BUILDABLE.** Its subject is "Fix minor severity heap buffer overflow reading `--auth-file`"; before the fix `auth_data = calloc(1, sb.st_size)` is scanned by an unclamped `fgets(auth_cur, MAX_ENTRY_LEN, ...)`, so the read leaves the allocation. A fix-reversal case exactly like the 27 |
+| tshark `7ffc11e38f` | **open** — the `GArray` capacity question is unanswered. An index at `len` is probably still inside `data`; only a negative index, or one past capacity, is class A |
+| tshark `f207d25f4b` | **open** — unread, a reported-length underflow; the same capacity question decides it |
+| tshark `3be1c99180` | no — `ws_buffer` over-allocates, so the crossing stays inside the allocation. Class C |
+| tshark `be813ede9d` | no — a fix-reversal needs the code to exist at the pin, and `etw_dump_write_ldap_event` does not |
+| tshark `06d08c5811` | no — unchanged, no access leaves the allocation |
+| memcached `11b5f9b` | no — unchanged, a stack array |
+| tshark `830cf562a0` | no — unchanged, an integer-underflow subject |
+
+**This does not put tshark's 21 back in play.** Most still fail on capacity-versus-length or on the
+code having to exist at the pin; what changed is the criterion, not the evidence.
+
+The synthetic probes keep their role regardless: fx2/fx3 and memcached 20/21 show the arms
+discriminate at `malloc` granularity, which is a different job from counting upstream defects.
 
 **Not verified, and marked so:** FFmpeg's five were classified by a subagent, **three from the diff
 alone without opening the allocation site** (`db05df9d13`, `bde5c6acb6`, `79e10e5196`). They are
