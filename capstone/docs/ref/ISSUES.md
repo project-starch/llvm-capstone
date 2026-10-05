@@ -7152,6 +7152,10 @@ would have overlapped every block.
 on silicon, both ways. A monitor that SPLITs a region, parks a cursor away from the base and hands the region over
 must align both ends to the region's granule. C-13 found the base, this entry the top.
 
+**Related: R-33**, the same encoder behaviour, and its standing decision: the cause is the allocator, not the encoder,
+and the fix is to round region sizes to the granule at creation. 10a0690 applies that rule to the monitor's own
+split. Rounding inward in the RTL would reverse R-33's decision; that trade-off is the lead's to reopen.
+
 ### M-13 — a trap raised by the FPGA monitor's own code cannot be reported: `_cap_trap_entry` swaps Linux's integer sp in from cscratch and faults at +4 `OPEN — monitor robustness; found 2026-10-04 (B0.7 attempts 7-8)`
 
 - `_cap_trap_entry` begins `ccsrrw sp <- cscratch`. While the monitor is handling an ecall, cscratch holds the

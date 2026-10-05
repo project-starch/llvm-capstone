@@ -1113,6 +1113,33 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   `/tmp/capstone/b1/board-strtod.txt`. memcached's float parsing (strtod, atof, sscanf %lf) therefore works on
   silicon, bit for bit against the host.
 
+## B2 (2026-10-05): memcached 1.6.45 as a gp-captable delegated application
+- **Build.** `build-b0-hello.sh` takes a many-source application.
+  - `B0_APP_SRCS` and `B0_APP_CFLAGS` name the sources and their flags. The 25 memcached sources (the port's
+    patched, configured tree) and the 18 libevent sources of its libevent_core (the port's configured libevent-cap
+    tree) are compiled as gp-captable bitcode.
+  - They are LTO-linked with musl, the runtime, the narrowed vfprintf/floatscan and B1's contexts:
+    `B0_CONTEXT_BYTES=131072 B0_CONTEXTS=3 B0_DATA=20 MiB B0_ARENA=16 MiB`.
+  - First try: 73 objects, `.text` 460,812 bytes, a 781,288-byte image (ac6abd2218a686f1), no verifier refusals.
+- **QEMU, monitor 10a0690, fabrication OFF and ON: the milestone holds.** memcached runs with `-l 127.0.0.1 -p 21299
+  -U 0 -m 8 -t 1 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`.
+  - It runs unprivileged under capstone-job (`--user 65534:65534`), as the SDK oracle does.
+  - Started as root it insists on `-u` and then calls `setgroups`, which the delegate runtime does not serve
+    (ENOSYS, exit 71); that was the first attempt.
+  - A native guest client (`mc-b2-client.c`) receives `VERSION 1.6.45`, `STORED`, `VALUE k 0 1` / `x` / `END`.
+  - SIGTERM ends memcached with status 0, and capstone-job's record is `{"kind":"exit","value":0}`.
+- **Board run, pre-registered before the bake (776d9d859, monitor 10a0690).**
+  - The image ac6abd2218a686f1 and the client (built with the FPGA toolchain) go into a private image
+    (`b0-bake-b2.sh`). Rungs: b0-stats, `b2-memcached`, b0-stats2.
+  - The b2-memcached rung's retval is `10 * client code + (memcached status != 0)`.
+  - **Predicted: the same transcript, `B2: client rc=0 memcached rc=0`, `RESULT b2-memcached retval=0`.**
+  - Silicon-only risks QEMU cannot show:
+    - level0's per-object bounds round outward on silicon for objects of 4 KiB and up (slab pages are 1 MiB);
+    - the board launcher is the B0.7 build of capstone-exec;
+    - this is the first ~21 MiB managed block on the board (CMA is 256 MiB).
+  - A client code of 2 (no connection) with memcached alive would point at the launcher's socket services; a fault
+    names its pc.
+
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
 use:

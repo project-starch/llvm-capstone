@@ -20,7 +20,7 @@ MUSL=${PORT_MUSL_ROOT:-/tmp/capstone/musl-src/musl-1.2.5}
 OUT=${OUT_DIR:-/tmp/capstone/b0/hello}
 # B0_APP: which application in this directory to build (b0-hello, or b0-memcpy for B0.8); the image is $OUT/$B0_APP.dom.
 APP=${B0_APP:-b0-hello}
-[ -f "$(dirname "$0")/$APP.c" ] || { echo "no application $APP.c" >&2; exit 2; }
+[ -n "${B0_APP_SRCS:-}" ] || [ -f "$(dirname "$0")/$APP.c" ] || { echo "no application $APP.c" >&2; exit 2; }
 CC=$BIN/clang
 [ -f "$MUSL/obj/include/bits/alltypes.h" ] || { echo "no prepared musl headers at $MUSL" >&2; exit 2; }
 rm -rf "$OUT"; mkdir -p "$OUT/obj"
@@ -73,7 +73,18 @@ python3 "$HERE/gen-floatscan-double.py" "$MUSL" "$OUT/gen" > "$OUT/gen-floatscan
 for f in floatscan strtod vfscanf; do cc "$OUT/gen/$f-double.c" "ovr_${f}_double.o" "${CORE_INC[@]}"; done
 cc "$CAP/runtime/domain/application.c" app_application.o "${APPDEFS[@]}"
 cc "$M/level0.c" app_level0.o "${APPDEFS[@]}"
-cc "$HERE/$APP.c" "app_$APP.o" "${APPDEFS[@]}"
+# B2 (memcached on silicon): an application of many sources. B0_APP_SRCS lists them (absolute paths) and
+# B0_APP_CFLAGS their own flags (include directories, -DHAVE_CONFIG_H); each is compiled like the single-file
+# applications above, into obj/, and joins the same full-LTO link. Without B0_APP_SRCS, $HERE/$APP.c as before.
+if [ -n "${B0_APP_SRCS:-}" ]; then
+  n=0
+  for f in $B0_APP_SRCS; do
+    n=$((n + 1)); cc "$f" "app_$(basename "${f%.c}")_$n.o" "${APPDEFS[@]}" ${B0_APP_CFLAGS:-} || { echo "app source $f FAILED" >&2; exit 1; }
+  done
+  echo "compiled $n application sources"
+else
+  cc "$HERE/$APP.c" "app_$APP.o" "${APPDEFS[@]}"
+fi
 cc "$HERE/glue-data.c" glue_data.o
 # builtins, as bitcode too -- into their own directory, VERIFIED through codegen, then a LAZY archive. lld keeps
 # every bitcode definition of a libcall, and the fp128 (tf) soft-float family cannot be selected under gp-captable

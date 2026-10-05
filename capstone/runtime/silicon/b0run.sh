@@ -91,5 +91,27 @@ case "$rung" in
     cat /tmp/b0.out; cat /tmp/b0.err
     echo "RESULT $rung retval=$rc"
     ;;
+  b2-memcached)
+    # B2: memcached as a gp-captable delegated application. The domain serves 127.0.0.1:21299 in the background;
+    # the native client (/test-domains/mc-b2-client) runs version/set/get and exits 0 only on the exact replies;
+    # the domain is then stopped with SIGTERM. retval = 10 * client code + (memcached's status != 0), so 0 is the
+    # milestone, 1 means the replies were right but the shutdown status was not 0, and 20+ names the client's step.
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    # Unprivileged, as the SDK oracle runs it: started as root, memcached insists on -u and then drops supplementary
+    # groups with setgroups, which the delegate runtime does not serve (ENOSYS, exit 71). capstone-job forwards
+    # SIGTERM to the launcher.
+    /usr/bin/capstone-job /tmp/b2-job.json --user 65534:65534 -- /usr/bin/capstone-exec "$dom" \
+      -l 127.0.0.1 -p 21299 -U 0 -m 8 -t 1 \
+      -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand > /tmp/b2.out 2> /tmp/b2.err &
+    pid=$!
+    /test-domains/mc-b2-client
+    crc=$?
+    kill -TERM "$pid" 2>/dev/null
+    wait "$pid"
+    mrc=$?
+    echo "B2: client rc=$crc memcached rc=$mrc job $(cat /tmp/b2-job.json 2>/dev/null)"
+    cat /tmp/b2.out; cat /tmp/b2.err
+    echo "RESULT $rung retval=$((crc * 10 + (mrc != 0)))"
+    ;;
   *) echo "RESULT $rung retval=999" ;;
 esac
