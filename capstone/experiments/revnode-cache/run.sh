@@ -16,7 +16,9 @@
 # nodes per line, and with the emulated supervisor's own reads left out -- and
 # <workload>.alias.json, aliasstat's aliases per node and tree shapes, and
 # <workload>.clover.json, clovsim's Capstone-vs-Clover metadata traffic, and
-# <workload>.bucket.json, bucketsim's figures for the proposed index.
+# <workload>.bucket.json, bucketsim's figures for the proposed index (its variants carry
+# the id policies), and <workload>.npl4-{lifo,bitmap,hybrid,chunk}.json, Capstone's node
+# cache with ids reused as those policies would (idpolicy.h).
 #
 # Everything this host-specific run needs is a variable; the defaults are the kits
 # the SQLite and mruby lanes built (see README.md).
@@ -76,7 +78,7 @@ case $name in
 esac
 vm down > /dev/null 2>&1; rm -rf $S
 R=$K/reports/$name
-rm -f $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.json
+rm -f $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.json $R.npl4-lifo.json $R.npl4-bitmap.json $R.npl4-hybrid.json $R.npl4-chunk.json
 # the simulators read the trace as QEMU writes it; nothing is stored. A reader that
 # dies must not block QEMU (tee keeps feeding the others) and must not pass either:
 # its .err is checked below, and every reader rejects a stream without END.
@@ -85,6 +87,10 @@ rm -f $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.
       >($ALIAS - > $R.alias.json 2> $R.alias.err) \
       >($CLOV - > $R.clover.json 2> $R.clover.err) \
       >($BUCK - > $R.bucket.json 2> $R.bucket.err) \
+      >($SIM --nodes-per-line 4 --ids lifo - > $R.npl4-lifo.json 2> $R.npl4-lifo.err) \
+      >($SIM --nodes-per-line 4 --ids bitmap - > $R.npl4-bitmap.json 2> $R.npl4-bitmap.err) \
+      >($SIM --nodes-per-line 4 --ids hybrid - > $R.npl4-hybrid.json 2> $R.npl4-hybrid.err) \
+      >($SIM --nodes-per-line 4 --ids chunk - > $R.npl4-chunk.json 2> $R.npl4-chunk.err) \
     < $FIFO | $SIM - > $R.json 2> $R.err ) &
 SIMPID=$!
 vm up --qemu $QEMU --kernel $KERNEL --firmware $FIRMWARE --rootfs $ROOTFS --share $SHARE \
@@ -118,11 +124,12 @@ wait $SIMPID
 for i in $(seq 1800); do
   grep -qx "}" $R.npl4.json 2>/dev/null && grep -qx "}" $R.nosup.json 2>/dev/null \
     && grep -qx "}" $R.alias.json 2>/dev/null && grep -qx "}" $R.clover.json 2>/dev/null \
-    && grep -qx "}" $R.bucket.json 2>/dev/null && break; sleep 1
+    && grep -qx "}" $R.bucket.json 2>/dev/null && grep -qx "}" $R.npl4-lifo.json 2>/dev/null \
+    && grep -qx "}" $R.npl4-bitmap.json 2>/dev/null && grep -qx "}" $R.npl4-hybrid.json 2>/dev/null && grep -qx "}" $R.npl4-chunk.json 2>/dev/null && break; sleep 1
 done
 rm -f $FIFO
 bad=0
-for f in $R.err $R.npl4.err $R.nosup.err $R.alias.err $R.clover.err $R.bucket.err; do [ -s $f ] && { echo "SIM ERROR $f"; cat $f; bad=1; }; done
-for f in $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.json; do grep -qx "}" $f 2>/dev/null || { echo "no report $f"; bad=1; }; done
+for f in $R.err $R.npl4.err $R.nosup.err $R.alias.err $R.clover.err $R.bucket.err $R.npl4-lifo.err $R.npl4-bitmap.err $R.npl4-hybrid.err $R.npl4-chunk.err; do [ -s $f ] && { echo "SIM ERROR $f"; cat $f; bad=1; }; done
+for f in $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.json $R.npl4-lifo.json $R.npl4-bitmap.json $R.npl4-hybrid.json $R.npl4-chunk.json; do grep -qx "}" $f 2>/dev/null || { echo "no report $f"; bad=1; }; done
 [ $rc = 0 ] && [ $bad = 0 ] || { echo "RUN FAILED $name"; exit 1; }
 echo "RUN-DONE $name"

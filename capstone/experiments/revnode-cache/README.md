@@ -89,13 +89,19 @@ cache of a given size and associativity would have. It does not answer what a mi
     no same-node shortcut fails 3 checks, and no directory walk on unregister fails 2.
 - **`summarize_clover.py`**: the comparison below, per 1000 lifetime checks.
 - **`bucketsim.c`**: the index proposed below ("Ein Index mit einem Zugriff pro Aenderung"),
-  in variants (inline capacity, slot cache size, node record size), on the same stream. It keeps
-  its own view of which slot holds which node under Clover's eager revocation, since the
-  emulator's is lazy; its error count must be 0.
+  in variants `K,W,B[,policy]` (inline capacity, slot cache size, node record size, node-id
+  policy), on the same stream. It keeps its own view of which slot holds which node under
+  Clover's eager revocation, since the emulator's is lazy; its error count must be 0.
   - `selftest_bucket.py` counts every access of three hand-built traces, including the CAM
     cases at revoke. Negative controls: no same-node shortcut fails 3 checks, a tag clear of a
     slot that holds another node fails 1, and a slot cache that absorbs nothing fails 3.
 - **`summarize_bucket.py`**: the comparison of all designs below.
+- **`idpolicy.h`**: node-id allocation policies as a remapping of the trace's ids (traced, lifo,
+  bitmap, hybrid, chunk; the section "Node-id reuse" below). `cachesim --ids P` applies one to
+  Capstone's node cache; a bucketsim variant names its own. The selftests cover the policies
+  (footprint, reuse counts, the creation hit a reused id gives) and the reuse detector has a
+  positive control.
+- **`summarize_ids.py`**: the three tables of that section, `--md` for Markdown.
 - **`ptrbench.py`**: builds the pointer benchmarks of the llvm-test-suite (Olden, Ptrdist,
   MallocBench: 17 C programs) twice, with the host compiler as the reference and with the
   application SDK's `capstone-cc` on the **sublet heap** (one revocation node per allocation), and
@@ -719,6 +725,171 @@ accesses, with no check on the load path. The two things that would decide a har
 and are not measured here remain the cost of a miss on a store against a miss on a load, and
 the hub nodes.
 
+
+## Node-id reuse: LIFO against lowest-free (`results/20261006-qemu-ids/`)
+
+Every number above is for **fresh ids**. The emulator allocates from a free list ahead of a bump
+counter (`_cap_rev_tree_alloc_node`), but the free list is fed only by its collector
+(`cap_rev_tree_release`), which releases a node once no copy of it can be found; in all eleven
+runs here the footprint equalled the allocations, and `reused` under `traced` is 0 in every
+report: no id was handed out twice. So each node's record was a line nobody had touched, every
+creation a compulsory miss, and the table grew with the allocations rather than with the live
+set. The question this section answers: a revoke knows the node's id is free. If hardware hands
+it out again at once, which free id should it take, what does the choice do to the cache, and
+what does it cost?
+
+**Method.** `idpolicy.h` remaps each node's trace id to the id a policy would have chosen; the
+remapped id decides which line the record lives in, nothing else changes. Both simulators take a
+policy: `cachesim --ids P` for Capstone's node cache, `bucketsim` variants `K,W,B,P` for the
+index. An id is returned at the revoke walk, when the node's record is written for the last
+time. For the index that is exact (invariant 4: after the revoke's CAM purge nothing names the
+id). For Capstone's node cache it is optimistic: stale copies may still name the node and are
+caught by the lazy check, which is why the emulator keeps the record until a sweep proves no
+alias remains; the Capstone columns show what reuse would give if that sweep were free.
+
+**The policies, and how hardware does each:**
+
+| policy | the id handed out | per allocation | per free |
+|---|---|---|---|
+| traced | the emulator's (a bump counter here) | 1 counter | — |
+| lifo | the id freed last; the counter when none is free | 1 stack access (pop) | 1 (push) |
+| bitmap | the lowest free id, from a 64-ary tree of summary words over one bit per id | 4 dependent word reads with find-first-set, then a clear that propagates up while a word empties (1–4 RMW) | 1 RMW, propagating up while a word was empty (1–4) |
+| hybrid | the lowest free bit in the leaf word used last; the tree walk only when that word is exhausted | 1 word read + FFS; the walk every 64 allocations at most | as bitmap |
+| chunk | as hybrid, but an exhausted word is replaced by the lowest **entirely free** word (a second summary tree over "all 64 free"), and only failing that by the lowest free id | as hybrid; the fresh-word walk is 3 reads | as bitmap, plus one RMW when a word becomes entirely free |
+
+For 2^24 ids the bitmap's leaf level is 2 MiB and its summaries 32 KiB, 512 B and 8 B; for the
+2^20 ids that a footprint under a million nodes needs (every program here), 128 KiB. The stack
+for lifo holds 4 bytes per free id. All of these are off the critical path if a few ids are
+prefetched into a FIFO: the allocation that needs an id takes it from there. chunk exists
+because the lowest free id is wherever the last frees happened: consecutive allocations can land
+on scattered lines, whereas fresh ids make four consecutive allocations share one 16-byte-record
+line. chunk keeps the next 64 allocations neighbours, as fresh ids do, and pays with footprint.
+
+Eleven programs: the seven pointer benchmarks that free (plus treeadd, which frees only at
+exit, as the control) on the threads-generation platform, and four mruby programs on the
+fx-sublet-gc arm on the 09-30 platform. One boot each; every variant's error count is 0.
+
+**The node table.** Ids handed out (the footprint) with the ids as traced and under each policy,
+the allocation at which the first id was reused, how many allocations reused one, and the
+density live/footprint averaged over allocations:
+
+| | allocations | peak live | footprint as traced | footprint with reuse | first reuse at allocation | reused (lifo) | mean density lifo / bitmap / hybrid / chunk |
+|---|---:|---:|---:|---:|---:|---:|---|
+| treeadd | 786,559 | 786,550 | 786,559 | 786,550 / 786,550 / 786,554 / 786,555 | 122 | 0.0 % | 1.00 / 1.00 / 1.00 / 1.00 |
+| ft | 624,615 | 622,584 | 624,615 | 622,584 / 622,584 / 622,592 / 623,325 | 122 | 0.3 % | 1.00 / 1.00 / 1.00 / 1.00 |
+| yacr2 | 5,633 | 5,215 | 5,633 | 5,215 / 5,215 / 5,219 / 5,273 | 122 | 7.4 % | 1.00 / 1.00 / 1.00 / 0.99 |
+| anagram | 18,006 | 1,164 | 18,006 | 1,164 / 1,164 / 1,168 / 1,171 | 122 | 93.5 % | 1.00 / 1.00 / 1.00 / 1.00 |
+| espresso | 3,663,726 | 13,287 | 3,663,726 | 13,287 / 13,287 / 13,312 / 15,680 | 122 | 99.6 % | 0.23 / 0.23 / 0.23 / 0.14 |
+| bc | 12,586,343 | 110,916 | 12,586,343 | 110,916 / 110,916 / 110,950 / 206,328 | 122 | 99.1 % | 1.00 / 1.00 / 1.00 / 0.54 |
+| cfrac | 15,763,280 | 26,551 | 15,763,280 | 26,551 / 26,551 / 26,560 / 50,607 | 122 | 99.8 % | 1.00 / 1.00 / 0.99 / 0.54 |
+| so_lists | 6,554 | 4,644 | 6,554 | 4,644 / 4,644 / 4,658 / 4,856 | 1,198 | 29.1 % | 1.00 / 1.00 / 1.00 / 0.98 |
+| so_mandelbrot | 21,584 | 9,788 | 21,584 | 9,788 / 9,788 / 9,792 / 10,176 | 1,198 | 54.7 % | 0.88 / 0.88 / 0.88 / 0.86 |
+| ao_render | 2,989,001 | 28,280 | 2,989,001 | 28,280 / 28,280 / 28,288 / 88,448 | 1,198 | 99.1 % | 0.63 / 0.63 / 0.63 / 0.22 |
+| lc_fizzbuzz | 10,880,348 | 232,984 | 10,880,348 | 232,984 / 232,984 / 233,024 / 500,224 | 1,198 | 97.9 % | 0.77 / 0.77 / 0.77 / 0.38 |
+
+**Capstone's node cache**, 16-byte records (4 per line): misses per 1000 checks, traced → lifo
+→ bitmap → hybrid → chunk (optimistic for Capstone, see Method):
+
+| | 64 lines | 1024 lines | 16384 lines |
+|---|---|---|---|
+| treeadd | 3.254 → 3.253 → 3.253 → 3.253 → 3.250 | 3.150 → 3.150 → 3.150 → 3.150 → 3.150 | 3.019 → 3.019 → 3.019 → 3.019 → 3.019 |
+| ft | 203.2 → 203.3 → 203.3 → 203.3 → 203.2 | 163.4 → 163.5 → 163.5 → 163.5 → 163.4 | 8.496 → 8.494 → 8.494 → 8.494 → 8.495 |
+| yacr2 | 0.039 → 0.038 → 0.038 → 0.038 → 0.038 | 0.002 → 0.001 → 0.001 → 0.001 → 0.001 | 0.001 → 0.001 → 0.001 → 0.001 → 0.001 |
+| anagram | 43.5 → 43.4 → 43.4 → 43.5 → 43.4 | 0.002 → 0.000 → 0.000 → 0.000 → 0.000 | 0.001 → 0.000 → 0.000 → 0.000 → 0.000 |
+| espresso | 2.926 → 5.845 → 2.422 → 2.570 → 2.546 | 1.037 → 1.368 → 0.327 → 0.331 → 0.371 | 0.877 → 0.002 → 0.002 → 0.002 → 0.002 |
+| bc | 1.531 → 0.036 → 0.021 → 0.067 → 0.044 | 1.225 → 0.018 → 0.018 → 0.018 → 0.029 | 1.224 → 0.010 → 0.010 → 0.010 → 0.023 |
+| cfrac | 1.646 → 0.344 → 0.351 → 0.340 → 0.358 | 1.443 → 0.297 → 0.304 → 0.293 → 0.313 | 1.079 → 0.001 → 0.001 → 0.001 → 0.002 |
+| so_lists | 0.009 → 0.007 → 0.007 → 0.008 → 0.007 | 0.004 → 0.003 → 0.003 → 0.003 → 0.003 | 0.002 → 0.001 → 0.001 → 0.001 → 0.001 |
+| so_mandelbrot | 0.040 → 0.042 → 0.043 → 0.043 → 0.040 | 0.018 → 0.012 → 0.012 → 0.012 → 0.013 | 0.006 → 0.003 → 0.003 → 0.003 → 0.003 |
+| ao_render | 6.549 → 8.531 → 6.590 → 6.886 → 6.297 | 1.409 → 2.425 → 1.065 → 1.099 → 1.227 | 0.487 → 0.002 → 0.002 → 0.002 → 0.056 |
+| lc_fizzbuzz | 6.986 → 16.0 → 8.921 → 8.982 → 7.020 | 4.948 → 12.4 → 5.379 → 5.394 → 4.933 | 3.346 → 5.667 → 2.486 → 2.487 → 3.068 |
+
+**The index**: misses per 1000 checks, traced → lifo → bitmap → hybrid → chunk, for the
+64-byte record with 12 inline entries and the 32-byte record with 4 (two per line), both with
+64 cached slots; the last column is the misses of node creation alone at 64 lines:
+
+| | records | 64 lines | 1024 lines | 16384 lines | node creation @64 |
+|---|---|---|---|---|---|
+| treeadd | K12, 64 B | 9.913 → 9.913 → 9.913 → 9.913 → 9.913 | 8.414 → 8.414 → 8.414 → 8.414 → 8.414 | 8.400 → 8.400 → 8.400 → 8.400 → 8.400 | 3.283 → 3.282 → 3.282 → 3.283 → 3.283 |
+|  | K4, 32 B | 5.217 → 5.773 → 5.773 → 5.773 → 5.217 | 4.769 → 5.294 → 5.294 → 5.294 → 4.769 | 4.761 → 5.286 → 5.286 → 5.286 → 4.761 | 1.610 → 1.627 → 1.627 → 1.627 → 1.610 |
+| ft | K12, 64 B | 4.010 → 4.007 → 4.008 → 4.008 → 4.008 | 3.181 → 3.178 → 3.178 → 3.178 → 3.179 | 2.621 → 2.618 → 2.618 → 2.618 → 2.619 | 0.818 → 0.816 → 0.816 → 0.816 → 0.817 |
+|  | K4, 32 B | 2.495 → 2.621 → 2.621 → 2.622 → 2.494 | 2.313 → 2.434 → 2.434 → 2.434 → 2.311 | 1.675 → 1.794 → 1.794 → 1.794 → 1.673 | 0.396 → 0.406 → 0.406 → 0.406 → 0.395 |
+| yacr2 | K12, 64 B | 0.021 → 0.021 → 0.021 → 0.021 → 0.021 | 0.011 → 0.010 → 0.010 → 0.010 → 0.010 | 0.005 → 0.004 → 0.004 → 0.004 → 0.004 | 0.004 → 0.004 → 0.004 → 0.004 → 0.004 |
+|  | K4, 32 B | 0.015 → 0.014 → 0.014 → 0.015 → 0.014 | 0.007 → 0.006 → 0.006 → 0.006 → 0.006 | 0.003 → 0.003 → 0.003 → 0.003 → 0.003 | 0.002 → 0.002 → 0.002 → 0.002 → 0.002 |
+| anagram | K12, 64 B | 1.007 → 0.997 → 0.997 → 0.997 → 0.997 | 0.005 → 0.001 → 0.001 → 0.001 → 0.001 | 0.005 → 0.000 → 0.000 → 0.000 → 0.000 | 0.005 → 0.000 → 0.000 → 0.000 → 0.000 |
+|  | K4, 32 B | 1.008 → 1.002 → 1.002 → 1.004 → 1.004 | 0.004 → 0.002 → 0.002 → 0.002 → 0.002 | 0.004 → 0.002 → 0.002 → 0.002 → 0.002 | 0.002 → 0.000 → 0.000 → 0.000 → 0.000 |
+| espresso | K12, 64 B | 8.620 → 8.094 → 8.128 → 8.262 → 8.209 | 2.900 → 1.600 → 1.737 → 1.770 → 2.012 | 1.781 → 0.030 → 0.031 → 0.031 → 0.033 | 2.143 → 1.748 → 1.775 → 1.873 → 1.838 |
+|  | K4, 32 B | 7.063 → 8.496 → 6.832 → 7.133 → 6.804 | 1.867 → 1.884 → 1.237 → 1.256 → 1.352 | 1.147 → 0.279 → 0.280 → 0.280 → 0.282 | 1.221 → 1.718 → 1.039 → 1.185 → 1.044 |
+| bc | K12, 64 B | 3.309 → 0.358 → 0.365 → 0.449 → 0.386 | 2.464 → 0.045 → 0.045 → 0.045 → 0.063 | 2.438 → 0.040 → 0.040 → 0.040 → 0.060 | 2.528 → 0.083 → 0.088 → 0.143 → 0.102 |
+|  | K4, 32 B | 1.700 → 0.146 → 0.116 → 0.209 → 0.136 | 1.237 → 0.025 → 0.025 → 0.025 → 0.037 | 1.230 → 0.021 → 0.021 → 0.021 → 0.033 | 1.263 → 0.026 → 0.021 → 0.056 → 0.032 |
+| cfrac | K12, 64 B | 3.781 → 0.719 → 0.725 → 1.039 → 0.729 | 2.168 → 0.007 → 0.007 → 0.007 → 0.011 | 2.156 → 0.005 → 0.005 → 0.005 → 0.009 | 2.449 → 0.172 → 0.177 → 0.373 → 0.180 |
+|  | K4, 32 B | 2.062 → 0.131 → 0.150 → 0.333 → 0.089 | 1.085 → 0.004 → 0.004 → 0.004 → 0.006 | 1.079 → 0.002 → 0.002 → 0.002 → 0.005 | 1.258 → 0.017 → 0.019 → 0.113 → 0.011 |
+| so_lists | K12, 64 B | 0.058 → 0.055 → 0.055 → 0.056 → 0.055 | 0.023 → 0.021 → 0.021 → 0.021 → 0.021 | 0.009 → 0.007 → 0.007 → 0.007 → 0.008 | 0.010 → 0.008 → 0.008 → 0.008 → 0.008 |
+|  | K4, 32 B | 0.052 → 0.051 → 0.051 → 0.051 → 0.051 | 0.017 → 0.016 → 0.016 → 0.016 → 0.016 | 0.007 → 0.006 → 0.006 → 0.006 → 0.006 | 0.005 → 0.005 → 0.005 → 0.005 → 0.005 |
+| so_mandelbrot | K12, 64 B | 0.533 → 0.533 → 0.533 → 0.533 → 0.533 | 0.102 → 0.095 → 0.095 → 0.096 → 0.096 | 0.041 → 0.020 → 0.020 → 0.020 → 0.021 | 0.046 → 0.046 → 0.046 → 0.046 → 0.046 |
+|  | K4, 32 B | 0.553 → 0.557 → 0.558 → 0.558 → 0.553 | 0.072 → 0.070 → 0.069 → 0.070 → 0.069 | 0.035 → 0.026 → 0.026 → 0.026 → 0.026 | 0.026 → 0.027 → 0.027 → 0.027 → 0.026 |
+| ao_render | K12, 64 B | 6.707 → 6.336 → 6.362 → 6.467 → 6.470 | 3.188 → 2.820 → 2.827 → 2.836 → 2.961 | 1.058 → 0.103 → 0.111 → 0.112 → 0.272 | 1.517 → 1.264 → 1.281 → 1.349 → 1.354 |
+|  | K4, 32 B | 5.661 → 6.806 → 5.723 → 6.007 → 5.473 | 2.413 → 2.841 → 2.135 → 2.172 → 2.226 | 0.684 → 0.180 → 0.182 → 0.182 → 0.284 | 0.946 → 1.252 → 0.918 → 1.040 → 0.860 |
+| lc_fizzbuzz | K12, 64 B | 19.9 → 19.9 → 19.9 → 19.9 → 19.9 | 12.4 → 12.3 → 12.3 → 12.3 → 12.4 | 9.267 → 8.520 → 8.563 → 8.566 → 9.033 | 4.220 → 4.218 → 4.218 → 4.220 → 4.220 |
+|  | K4, 32 B | 16.8 → 21.7 → 18.4 → 18.4 → 16.8 | 9.830 → 13.0 → 10.1 → 10.1 → 9.827 | 6.537 → 8.441 → 6.039 → 6.046 → 6.369 | 2.481 → 4.163 → 3.032 → 3.045 → 2.481 |
+
+**What the numbers say.**
+
+1. **Reuse bounds the table by the live set, and for that the policy does not matter.** lifo and
+   bitmap give exactly the peak live set as footprint, hybrid within 0.04 %: bc 12,586,343 →
+   110,916, cfrac 15,763,280 → 26,551, espresso 3,663,726 → 13,287, lc_fizzbuzz 10,880,348 →
+   232,984, ao_render 2,989,001 → 28,280. chunk pays for its fresh words: 1.2x (espresso) to
+   3.1x (ao_render) the live set, a density of 0.14–0.54 where the others sit at 0.23–1.0. It
+   never had to fall back to the lowest free id (`refills_lowest_id` is 0 in every report): there
+   was always an entirely free word, which is why its footprint grows.
+2. **Node creation becomes a hit.** The index's creation misses at 64 lines: bc 2.528 → 0.083
+   (lifo), cfrac 2.449 → 0.172, espresso 2.143 → 1.748. Capstone's cache: bc 1.531 → 0.021
+   (bitmap), cfrac 1.646 → 0.344 (lifo). The fresh-id floor that no cache size removed — bc 1.224 at
+   16384 lines — is the compulsory miss of each new record; with reuse it is 0.010.
+3. **With a large cache the live set fits, and the misses go.** At 16384 lines (1 MiB) Capstone's
+   cache: espresso 0.877 → 0.002, cfrac 1.079 → 0.001, bc 1.224 → 0.010, ao_render 0.487 →
+   0.002. The index, K12: espresso 1.781 → 0.030, bc 2.438 → 0.040, cfrac 2.156 → 0.005,
+   ao_render 1.058 → 0.103. Without reuse the footprint (3 to 16 million records) never fits,
+   whatever the cache.
+4. **Which free id matters once records share a line.** With one record per line (K12, 64 B)
+   the policies are within a few percent of each other everywhere: bc 0.358 lifo, 0.365 bitmap,
+   0.386 chunk at 64 lines. With four per line (Capstone's cache) or two (K4, 32 B), lifo is the
+   worst at small caches: espresso 2.926 → 5.845, lc_fizzbuzz 6.986 → 16.0, ao_render 6.549 →
+   8.531 (Capstone, 64 lines); K4 lc_fizzbuzz 16.8 → 21.7, espresso 7.063 → 8.496. The stack
+   holds ids in the order they were freed, so consecutive allocations get ids from all over the
+   table, and the adjacency fresh ids have — four consecutive allocations in one line — is gone;
+   that it only shows when records share a line is the control. Lowest-free keeps most of it:
+   espresso 2.422, ao_render 6.590, but lc_fizzbuzz 8.921 against 6.986 with fresh ids (its
+   holes are scattered: density 0.77). chunk restores it exactly: lc_fizzbuzz 7.020, K4 16.8 as
+   with fresh ids, espresso 2.546, ao_render 6.297 (the best of the five), and treeadd's 32-byte
+   alignment (5, below) back to 5.217 — at the footprint cost of (1), which shows at 16384 lines
+   (lc_fizzbuzz 3.068 against bitmap's 2.486; ao_render in the index 0.272 against 0.111). hybrid
+   has bitmap's footprint and more misses at small caches (bc 0.067 against 0.021 in Capstone's
+   cache, cfrac 1.039 against 0.725 in the index); it is dominated and not pursued.
+5. **A few early reuses shift every later id.** The first reuse comes at allocation 122 in every
+   pointer program and 1,198 in every mruby run: the launcher's start-up revokes. treeadd, which
+   frees nothing else until exit, then shows K4/32 B 5.217 → 5.773 under lifo, bitmap and hybrid
+   alike — nine reused ids shift the sublet heap's three-nodes-per-malloc pattern against the
+   two-record lines (the compulsory misses move from mrev to split nodes) — and 5.217 again under
+   chunk, whose fresh words start at multiples of 64. The 32-byte variant's numbers carry this
+   ±10 % alignment sensitivity; the 64-byte ones do not.
+6. Programs that do not free (treeadd, ft; yacr2 frees 7 %) are unchanged, as they must be.
+
+**For the design.** Reuse at revoke is part of the index already (invariant 4 requires it; the
+id is free the moment the run is walked), and this is where the remaining misses go: the table
+becomes the live set, creations hit, and 1 MiB of metadata cache holds everything these
+programs have live. Which free id: for the 64-byte record, where a line is one node, the stack
+is enough — lifo with a prefetch FIFO, one SRAM access per allocation and per free, no tree —
+and it is within a few percent of the best everywhere. For packed records (the 32-byte variant,
+or Capstone's 16-byte node) lifo costs up to 2.3x at small caches, and the lowest free id (a
+128 KiB bitmap for 2^20 ids, four FFS steps per refill) or chunk (fresh-id locality for a
+1.2–3x footprint) is needed. hybrid buys nothing. For Capstone itself the columns are optimistic:
+without an index nothing says when a node's last copy is gone, so reuse waits for a sweep, and
+that cost is not in these numbers.
+
+**Repeatability.** The eleven programs ran twice, the second time with hybrid and chunk added;
+traced, lifo and bitmap agree between the runs within 3 % on every value above 0.05 misses per
+1000 (checks within 0.11 %). The results directory holds the second run.
 
 ## What this does not measure
 

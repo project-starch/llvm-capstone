@@ -42,8 +42,15 @@
  * is a data store, and the emulator's collector untags, not Clover
  * operations, update the index for free.
  *
- * Variants: --variants "K,W,B;K,W,B;..." (inline capacity, slot cache entries,
- * node record bytes 64 or 32). Default "12,0,64;12,64,64;12,256,64;4,64,32".
+ * Node ids: each variant names an id allocation policy (idpolicy.h: traced,
+ * lifo, bitmap, hybrid). The trace's ids stay the keys of the model's own
+ * bookkeeping; the policy decides which record a node occupies, and so which
+ * line its accesses touch. A node's id is returned to the policy when its
+ * revoke has freed its record.
+ *
+ * Variants: --variants "K,W,B[,P];..." (inline capacity, slot cache entries,
+ * node record bytes 64 or 32, policy; default traced). Default
+ * "12,64,64,traced;12,64,64,lifo;12,64,64,bitmap;12,64,64,hybrid;12,64,64,chunk;4,64,32,traced;4,64,32,lifo;4,64,32,bitmap;4,64,32,hybrid;4,64,32,chunk".
  *
  *   cc -O2 -o bucketsim bucketsim.c
  *   ./bucketsim [--max-node N] [--no-end] [--variants ...] trace|-
@@ -53,6 +60,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "nested_lru.h"
+#include "idpolicy.h"
 
 enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, K_REPEAT, K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG,
        K_ALIAS_SLOT, K_END };
@@ -67,7 +75,7 @@ static const char *op_name[N_OPS] = {"insert", "delete", "flush", "reuse_flush",
 #define LINE(r, v) (((r) << 56) | (uint64_t)(v))
 #define KMAX 16
 #define TABW 16   /* 32-bit entries per 64-byte table line */
-#define MAXV 8
+#define MAXV 10
 
 struct bucket {
     uint32_t inl[KMAX];
@@ -77,6 +85,7 @@ struct bucket {
 
 struct variant {
     unsigned K, W, node_bytes;
+    struct idpolicy ids;
     struct lru *c;
     uint32_t *bk;               /* node -> bucket index + 1 */
     struct bucket *pool;
@@ -130,7 +139,9 @@ static void acc(struct variant *v, uint64_t line) {
     ++v->acc[v->op];
     if (v->c->hist[0] + v->c->hist[1] == h64) ++v->miss64[v->op];
 }
-static uint64_t node_line(struct variant *v, uint32_t n) { return LINE(R_NODE, n / (64 / v->node_bytes)); }
+static uint64_t node_line(struct variant *v, uint32_t n) {
+    return LINE(R_NODE, idpolicy_map(&v->ids, n) / (64 / v->node_bytes));
+}
 
 /* ---- buckets: the memory index ---- */
 static struct bucket *bucket(struct variant *v, uint32_t n) {
@@ -370,6 +381,7 @@ static void revoke_node(struct variant *v, uint32_t c, int primary) {
         bucket_free(v, c);
     }
     valid[c] = 0;
+    idpolicy_free(&v->ids, c);     /* nothing names it any more: its id is free */
 }
 /* a node id is handed out again: its index must be empty */
 static void node_reuse(struct variant *v, uint32_t id) {
@@ -384,9 +396,10 @@ static void node_reuse(struct variant *v, uint32_t id) {
     if (bucket(v, id)) { ++v->errors; v->mem_entries -= bucket(v, id)->n_inl + bucket(v, id)->ntab; bucket_free(v, id); }
 }
 
-static void variant_init(struct variant *v, unsigned K, unsigned W, unsigned B) {
+static void variant_init(struct variant *v, unsigned K, unsigned W, unsigned B, enum idpolicy_kind P) {
     memset(v, 0, sizeof *v);
     v->K = K; v->W = W; v->node_bytes = B;
+    idpolicy_init(&v->ids, P, max_node + 1);
     v->c = calloc(1, sizeof *v->c); lru_flush(v->c);
     v->bk = calloc((size_t)max_node + 1, 4);
     v->pool_free = NONE;
@@ -401,6 +414,7 @@ static void variant_init(struct variant *v, unsigned K, unsigned W, unsigned B) 
 }
 static void variant_reset(struct variant *v) {
     lru_flush(v->c);
+    idpolicy_reset(&v->ids);
     memset(v->bk, 0, ((size_t)max_node + 1) * 4);
     for (uint32_t i = 0; i < v->pool_n; ++i) free(v->pool[i].tab);
     v->pool_n = 0; v->pool_free = NONE;
@@ -410,7 +424,8 @@ static void variant_reset(struct variant *v) {
 }
 
 int main(int argc, char **argv) {
-    const char *path = NULL, *spec = "12,0,64;12,64,64;12,256,64;4,64,32";
+    const char *path = NULL,
+               *spec = "12,64,64,traced;12,64,64,lifo;12,64,64,bitmap;12,64,64,hybrid;12,64,64,chunk;4,64,32,traced;4,64,32,lifo;4,64,32,bitmap;4,64,32,hybrid;4,64,32,chunk";
     int no_end = 0, saw_end = 0;
     for (int i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "--no-end")) no_end = 1;
@@ -426,10 +441,13 @@ int main(int argc, char **argv) {
         char *copy = strdup(spec);
         for (char *tok = strtok(copy, ";"); tok; tok = strtok(NULL, ";")) {
             unsigned K, W, B;
-            if (sscanf(tok, "%u,%u,%u", &K, &W, &B) != 3 || K > KMAX || (B != 64 && B != 32) || W > 65535 || nv == MAXV) {
+            char pname[16] = "traced";
+            enum idpolicy_kind P;
+            int n = sscanf(tok, "%u,%u,%u,%15s", &K, &W, &B, pname);
+            if (n < 3 || K > KMAX || (B != 64 && B != 32) || W > 65535 || nv == MAXV || !idpolicy_parse(pname, &P)) {
                 fprintf(stderr, "bucketsim: bad variant %s\n", tok); return 2;
             }
-            variant_init(&vs[nv++], K, W, B);
+            variant_init(&vs[nv++], K, W, B, P);
         }
     }
     FILE *in = strcmp(path, "-") ? fopen(path, "rb") : stdin;
@@ -530,6 +548,7 @@ int main(int argc, char **argv) {
             for (int k = 0; k < nv; ++k) {
                 struct variant *v = &vs[k];
                 node_reuse(v, id);
+                idpolicy_alloc(&v->ids, id);       /* the record this node will occupy */
                 v->op = OP_TREE;
                 if ((site == S_MREV || site == S_SPLIT) && last_read[site] != NONE && valid[last_read[site]]) {
                     uint32_t src = last_read[site];
@@ -590,8 +609,8 @@ int main(int argc, char **argv) {
         struct variant *v = &vs[k];
         uint64_t total = 0;
         for (int o = 0; o < N_OPS; ++o) total += v->acc[o];
-        printf("%s\n    {\"inline\": %u, \"slot_cache\": %u, \"node_bytes\": %u, \"accesses\": %llu, \"misses\": [",
-               k ? "," : "", v->K, v->W, v->node_bytes, (unsigned long long)total);
+        printf("%s\n    {\"inline\": %u, \"slot_cache\": %u, \"node_bytes\": %u, \"policy\": \"%s\", \"accesses\": %llu, \"misses\": [",
+               k ? "," : "", v->K, v->W, v->node_bytes, idpolicy_name[v->ids.kind], (unsigned long long)total);
         for (int s = 0; s < NSZ; ++s) printf("%s%llu", s ? ", " : "", (unsigned long long)lru_misses(v->c, s));
         printf("],\n     \"by_operation\": {");
         for (int o = 0; o < N_OPS; ++o)
@@ -615,9 +634,11 @@ int main(int argc, char **argv) {
                (unsigned long long)v->revokes, (unsigned long long)v->tag_clears,
                v->revokes ? (double)v->acc[OP_REVOKE] / v->revokes : 0.0, (unsigned long long)v->revoke_acc_max,
                (unsigned long long)v->cam_purges, (unsigned long long)v->cam_skips);
-        printf("     \"memory_entries_peak\": %llu, \"collector_untags\": %llu, \"errors\": %llu}",
+        printf("     \"memory_entries_peak\": %llu, \"collector_untags\": %llu, \"errors\": %llu,\n     ",
                (unsigned long long)v->mem_entries_peak, (unsigned long long)v->gc_silent,
                (unsigned long long)v->errors);
+        idpolicy_print_json(&v->ids);
+        printf("}");
         if (v->errors) rc = 3;
     }
     printf("\n  ]\n}\n");

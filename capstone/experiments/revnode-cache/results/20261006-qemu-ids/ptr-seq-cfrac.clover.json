@@ -1,0 +1,11 @@
+{
+  "trace": "-",
+  "records": 11207782013,
+  "lifetime_checks": 7326359994,
+  "line_bytes": 64, "sizes_lines": [16, 64, 256, 1024, 4096, 16384, 65536],
+  "capstone": {"accesses": 7532783781, "misses": [36666713, 12056628, 10638327, 10572222, 9062223, 7904060, 7895868], "by_site": {"ldst": 5753031588, "ldc": 1573328406, "mrev": 66633335, "split": 12183038, "revoke": 84832996, "delin": 10890186, "create": 6, "supervisor": 357517, "gc": 31526709}},
+  "clover": {"accesses": 10357338921, "misses": [1876363182, 108930214, 8132207, 7962291, 7944528, 7931889, 7927422], "by_operation": {"store_register": {"accesses": 5218808315, "misses_64_lines": 30397424}, "store_unregister": {"accesses": 3577017828, "misses_64_lines": 35033936}, "data_store_unregister": {"accesses": 1333115470, "misses_64_lines": 13592107}, "revoke": {"accesses": 181107486, "misses_64_lines": 11431109}, "tree": {"accesses": 47289822, "misses_64_lines": 18475638}},
+    "capability_stores": {"index_unchanged_same_node": 833471752, "index_updated": 658106596, "of_a_revoked_capability": 0}, "data_stores_unregistering": 168925764, "collector_untags_ignored": 0,
+    "revokes": {"count": 13326643, "tag_clears": 36533711, "accesses_mean": 13.590, "accesses_max": 1020, "accesses_hist": {"9-16": 10542225, "17-32": 2784416, "65-128": 1, "513-1024": 1}},
+    "alias_records_peak": 27158, "alias_records_end": 73, "sidecar_frames_peak": 663}
+}

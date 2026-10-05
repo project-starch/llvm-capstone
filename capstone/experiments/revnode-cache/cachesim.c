@@ -33,6 +33,12 @@
  * --exclude SITE[,SITE...] drops sites before the caches see them, e.g.
  * "gc,supervisor" to leave out the emulated supervisor's own node reads.
  *
+ * --ids POLICY remaps node ids as an allocation policy would (idpolicy.h:
+ * traced, lifo, bitmap, hybrid). A node's id is returned when a revoke
+ * invalidates it, which for Capstone is optimistic: its lazy semantics let
+ * the hardware reuse an id only after a sweep has found no copy, so this is
+ * the locality Capstone could reach at best, with the sweeps assumed free.
+ *
  * Output: one JSON object on stdout.
  *
  * The trace is read once, front to back, so it can be a pipe: "-" reads
@@ -47,6 +53,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "idpolicy.h"
 
 enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, N_KINDS, K_REPEAT = N_KINDS,
        K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG, K_ALIAS_SLOT,  /* alias records: skipped here */
@@ -191,11 +198,14 @@ int main(int argc, char **argv) {
     unsigned npl = 1;
     uint32_t max_node = 16777216; /* largest CAPSTONE_REV_NODES the runs use */
     int no_end = 0, saw_end = 0;
+    enum idpolicy_kind policy = IDP_TRACED;
     int excluded[N_SITES] = {0};
     const char *path = NULL;
     for (int i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "--no-end")) {
             no_end = 1;
+        } else if (!strcmp(argv[i], "--ids") && i + 1 < argc) {
+            if (!idpolicy_parse(argv[++i], &policy)) { fprintf(stderr, "cachesim: unknown policy\n"); return 2; }
         } else if (!strcmp(argv[i], "--max-node") && i + 1 < argc) {
             max_node = strtoul(argv[++i], NULL, 0);
         } else if (!strcmp(argv[i], "--nodes-per-line") && i + 1 < argc) {
@@ -229,6 +239,8 @@ int main(int argc, char **argv) {
     }
     uint32_t max_id = 0;
     uint32_t max_line = max_node / npl;
+    struct idpolicy ids;
+    idpolicy_init(&ids, policy, max_node + 1);
 
     static const unsigned sizes[] = {16, 64, 256, 1024, 4096};
     static const unsigned waysv[] = {1, 4, 8};
@@ -327,6 +339,7 @@ int main(int argc, char **argv) {
             ++resets;
             for (int k = 0; k < nc; ++k) cache_flush(&caches[k]);
             full_flush();
+            idpolicy_reset(&ids);
             prev_line = NODE_NONE;
             memset(line_seen, 0, (size_t)max_line + 1);
             in_revoke = 0;
@@ -342,12 +355,15 @@ int main(int argc, char **argv) {
         if (id > max_id) max_id = id;
         ++count[kind][site];
         if (!seen[id]) { seen[id] = 1; ++distinct; }
+        if (kind == K_ALLOC) idpolicy_alloc(&ids, id);      /* the record this node occupies */
 
         if (site == 4 /* revoke */) {
             if (!in_revoke && kind == K_READ) {
                 in_revoke = 1; revoke_root = id; walked = 0;
             } else if (in_revoke && kind == K_WRITE && id != revoke_root) {
                 ++walked;
+                idpolicy_free(&ids, id);   /* this write is the node's last: its id is free (its
+                                              mapping stays, so this access still finds its record) */
             } else if (in_revoke && kind == K_WRITE && id == revoke_root) {
                 in_revoke = 0;
                 ++walks; walked_total += walked;
@@ -359,7 +375,7 @@ int main(int argc, char **argv) {
         }
 
         ++now;
-        uint32_t line = id / npl;
+        uint32_t line = idpolicy_map(&ids, id) / npl;
         if (!line_seen[line]) { line_seen[line] = 1; ++compulsory[site]; }
         if (line == prev_line) {
             /* most recent in every cache already: a hit that changes nothing */
@@ -400,7 +416,9 @@ int main(int argc, char **argv) {
     printf("{\n  \"trace\": \"%s\",\n  \"records\": %llu,\n  \"logical_records\": %llu,\n"
            "  \"nodes_per_line\": %u,\n",
            path, (unsigned long long)n, (unsigned long long)logical, npl);
-    printf("  \"excluded_sites\": [");
+    printf("  ");
+    idpolicy_print_json(&ids);
+    printf(",\n  \"excluded_sites\": [");
     for (int s = 0, first = 1; s < N_SITES; ++s)
         if (excluded[s]) { printf("%s\"%s\"", first ? "" : ", ", site_name[s]); first = 0; }
     printf("],\n  \"excluded_records\": %llu,\n", (unsigned long long)excluded_recs);

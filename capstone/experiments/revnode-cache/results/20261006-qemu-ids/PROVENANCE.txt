@@ -1,0 +1,30 @@
+# provenance, 2026-10-06 (id-reuse series, pass 2)
+capstone-qemu perf/revnode-trace 2f16a090b9e5a52a4136946463c8f6c5cc833cb9
+llvm-capstone base origin/dev 792369d1a1b847734a6de2c151f0c19711268b48
+llvm-test-suite e1356a24df892837fef6173c0e3561dd2c0518c1 MultiSource/Benchmarks/{Olden,Ptrdist,MallocBench}
+each program alone, one boot each; CAPSTONE_REV_NODES=16777216, --cma-mib 1920 --process-cache-mib 1792
+common:
+f0d69ab62621ab73377955236a48abfab429abf46b5da520ef6276dcf9967cb4  build/qemu-system-riscv64
+e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b  boot/Image
+pointer benchmarks (threads-generation platform; sublet SDK as in results/20261006-qemu-ptrbench):
+ae41a8c6d22877f779750bcd4aba040b4ecf5015ce25fff6d47f773139cf05dc  firmware/fw_jump.elf
+fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f  images/rootfs.ext2
+649f410893eeb40a825232452974ac3161bb667163457c42f628c325dd7e6d97  module/capstone.ko
+e604885a6e40f18c636496dcc0c46865fe5cf62a76ae9e3a2390cbc4bc4826fa  guest2/capstone-exec
+2764e894cb650ef3ddb48a40817d0c3751640cb20d52049f650b690703a949b2  ptrbench/treeadd.dom
+eebfeef6bffa39bc2aa765fb5a9bf81079b224ff4baf013d66ed5ef18a668db6  ptrbench/anagram.dom
+a8fad66b61c2685f2bdf261aa4503c673a93b988b29d689ca470b2d7f6496884  ptrbench/yacr2.dom
+7499d479c17656b251c06fb9ec01fadecb5139febd4b2412d6b49cd013ce214c  ptrbench/ft.dom
+7b81c4e1abff7cb109fe484d6129a7148cfa1e97fbbf19bef14687e635bba66b  ptrbench/espresso.dom
+c36e388b6ad44da3048f567fa951a5c812ea899bf13852048cc2827c905f29bf  ptrbench/bc.dom
+54967719c1956e6f478421792207219098f674468602eaf796baeab4074ef964  ptrbench/cfrac.dom
+mruby fx-sublet-gc arm (09-30 platform, as in results/20261005-qemu-bucket):
+db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d  firmware/fw_jump.elf
+fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f  cheap/rootfs.ext2
+c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf  launch-cost/module/module/capstone.ko
+546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94  v0-removal-stack/guest/capstone-exec
+703ddb70849183db249041f16bfc251bf866089af9af40707d09e0e915d72605  mruby-arms/share/mruby-fx-sublet-gc.dom
+mruby programs: bench/{so_lists,so_mandelbrot,ao_render,lc_fizzbuzz}.rb as in results/20261005-qemu-bucket; CAPSTONE_EXEC_DIAGNOSTICS=1
+readers per run: cachesim (npl1, npl4, npl4 --ids lifo|bitmap|hybrid|chunk, --exclude gc,supervisor), aliasstat, clovsim, bucketsim (ten variants: K12/W64/64B and K4/W64/32B under each policy)
+second of two runs of this series; the first (traced, lifo, bitmap only) agreed within 3 % on every value above 0.05 misses per 1000 checks
+the committed idpolicy.h differs from the run's copy by a 'default:' label in idpolicy_free (a compiler warning; no behavioural change)

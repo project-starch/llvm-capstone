@@ -126,6 +126,33 @@ def main():
     v = r["variants"][0]
     check(rc == 0 and ops(v) == {"tree": 8, "revoke": 4}, f"end-of-run relink: {ops(v)} {err}")
 
+    # id policies: after revoke(2) frees node 1, the next lone node (trace id 9) gets node 1's
+    # id under lifo, bitmap and hybrid (its record line was just written: a hit), and its own
+    # under traced (a new line: a miss). Policy ids: 0,1,2 handed out; 1 returned; 9 -> 1.
+    t5 = ([(NONE, RESET, CREATE)] + lone(0) + lone(1) + mrev(1, 2) + revoke(2, [1]) + lone(9)
+          + [(0, READ, LDST)])
+    rc, r, err = run(sim, t5, "2,0,64,traced;2,0,64,lifo;2,0,64,bitmap;2,0,64,hybrid")
+    check(rc == 0, f"policies exit {rc} {err}")
+    for v in r["variants"]:
+        ids = v["ids"]
+        want_fp = 10 if ids["policy"] == "traced" else 3
+        want_reused = 0 if ids["policy"] == "traced" else 1
+        check(ids["allocations"] == 4 and ids["frees"] == 1 and ids["footprint"] == want_fp
+              and ids["reused"] == want_reused and ids["peak_live"] == 3,
+              f"{ids['policy']}: {ids}")
+        # the tree write of node 9: traced misses (new line), the others hit node 1's line
+        tree_miss = v["by_operation"]["tree"]["misses_64_lines"]
+        check(tree_miss == (4 if ids["policy"] == "traced" else 3),
+              f"{ids['policy']}: tree misses {tree_miss}")
+    # bitmap hands out the lowest free id: free 2 of {0,1,2,3} live, next allocation is 2
+    t6 = ([(NONE, RESET, CREATE)] + lone(0) + lone(1) + lone(2) + lone(3) + mrev(2, 4) + revoke(4, [2])
+          + lone(9) + [(0, READ, LDST)])
+    rc, r, err = run(sim, t6, "2,0,64,lifo;2,0,64,bitmap")
+    for v in r["variants"]:
+        ids = v["ids"]
+        # both reuse id 2 here (lifo: most recent free; bitmap: lowest free); footprint stays 5
+        check(ids["footprint"] == 5 and ids["reused"] == 1, f"{ids['policy']}: {ids}")
+
     print("selftest_bucket:", "PASS" if not failures else f"FAIL ({len(failures)})")
     return 1 if failures else 0
 

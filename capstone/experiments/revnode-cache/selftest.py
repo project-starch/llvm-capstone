@@ -210,6 +210,36 @@ def main():
             f.write(struct.pack("<IBBH", 1, READ, 0, 0))
         check(subprocess.run([sim, t.name], capture_output=True).returncode != 0, "a record after END must fail")
 
+    # id policies: lone 0, lone 1, mrev(1 -> 2), revoke 2 (frees 1), lone 9. Under lifo the
+    # new node takes id 1 and its creation write hits the line the revoke just wrote; under
+    # traced it is a new line. Node accesses in capstone-qemu's order.
+    def lone(n):
+        return [(n, ALLOC, 6), (n, WRITE, 6)]
+    t = ([(NONE, RESET, 6)] + lone(0) + lone(1)
+         + [(1, READ, 2), (2, ALLOC, 2), (2, WRITE, 2), (1, WRITE, 2)]
+         + [(2, READ, 4), (1, READ, 4), (1, WRITE, 4), (2, WRITE, 4)]
+         + lone(9) + [(0, READ, 0)])
+    for policy, want_fp, want_reused in [("traced", 10, 0), ("lifo", 3, 1), ("bitmap", 3, 1), ("hybrid", 3, 1), ("chunk", 3, 1)]:
+        r = run(sim, t, "--nodes-per-line", "1", "--ids", policy)
+        ids = r["ids"]
+        check(ids["policy"] == policy and ids["allocations"] == 4 and ids["frees"] == 1
+              and ids["footprint"] == want_fp and ids["reused"] == want_reused, f"{policy}: {ids}")
+        # the fourth allocation (lone 9) is the one that reuses; live/footprint at the four
+        # allocations: traced 1/1, 2/2, 3/3, 3/10; a reuse policy 1/1, 2/2, 3/3, 3/3
+        check(ids["first_reuse_allocation"] == (0 if policy == "traced" else 4)
+              and ids["density_samples"] == 4
+              and abs(ids["density_mean"] - ((3 + 0.3) / 4 if policy == "traced" else 1.0)) < 1e-6
+              and abs(ids["density_min"] - (0.3 if policy == "traced" else 1.0)) < 1e-6, f"{policy}: {ids}")
+        create = cache(r, 16, "full")["by_site"]["create"]      # [hits, misses] of the lone nodes
+        check(create == ([3, 3] if policy == "traced" else [4, 2]), f"{policy}: create hits/misses {create}")
+    # the emulator itself reusing id 1 after the revoke: traced counts it (positive control
+    # of the reuse detector), the policies treat it as any new lifetime
+    t_emu = t[:-3] + lone(1) + [(0, READ, 0)]
+    for policy in ("traced", "lifo", "bitmap", "hybrid", "chunk"):
+        ids = run(sim, t_emu, "--nodes-per-line", "1", "--ids", policy)["ids"]
+        check(ids["allocations"] == 4 and ids["reused"] == 1 and ids["first_reuse_allocation"] == 4
+              and ids["footprint"] == 3, f"emulator reuse, {policy}: {ids}")
+
     # 3. revoke walk
     # In capstone-qemu's order: R root, (R n, W n)*, [R end], W root, [W end].
     walk3 = [(5, READ, 4), (6, READ, 4), (6, WRITE, 4), (7, READ, 4), (7, WRITE, 4),
