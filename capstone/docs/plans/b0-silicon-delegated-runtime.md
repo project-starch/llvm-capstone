@@ -1241,6 +1241,28 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   `diff native board`, with the native reference baked into the image (`b0-bake-b3d.sh`). No outcome is predicted
   beyond "the 38 bytes are visible".
 
+- **B3w hypothesis (22:40, from the source, before any run): the board's WALL clock, not a clock that fails to
+  advance.**
+  - Both served items are set with a NEGATIVE expiry: `touch gone -1` and `set past 0 -1 1`
+    (mc-harness.c:207-208).
+  - memcached maps a negative expiry to `REALTIME_MAXDELTA + 1` = 2,592,001, an absolute Unix time 30 days after
+    the epoch (memcached.h:1081). realtime() expires it at once only when `exptime <= process_started`
+    (memcached.c:182-190), and `process_started = time(0) - 62` comes from the wall clock (stats_init, :206).
+  - If the board has no RTC and no time source, its Linux runs at 1970 plus uptime (to be read on the board with
+    `date +%s`). Then process_started is a few hundred, 2,592,001
+    is in the future, and both items live for about 30 days. That is exactly the two extra hits and two fewer
+    misses, with nothing else in the transcript moving: relative expiries use the monotonic current_time.
+  - This replaces "the clocks do not advance". The monotonic clock is not needed to explain the transcript.
+    `stop_seconds=inf` is a separate oddity: it is a double, `t1 - t0` from `tv_sec + tv_nsec / 1e9`, and no
+    integer clock reading converts to inf. It is UNRESOLVED and is not part of this hypothesis.
+- **B3w pre-registered (QEMU, before the run):** one VM boot, monitor 10a0690, fabrication off, memcached
+  ba7e6921cf27f2b6, the host-built harness as before.
+  - Arm 1 is the control: the guest clock as booted. Predicted: transcript e0a254c47e7ee28c, 1,931,207 bytes (as
+    on 2026-10-05).
+  - Arm 2 is the only change: the guest clock set to `@400` with `date -s` first. **Predicted: the board's
+    transcript exactly, fe153b1465b4c9c5, 1,931,245 bytes.**
+  - Any other hash in arm 2 refutes "the wall clock is the whole difference", even if the two items are served.
+
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
 use:
