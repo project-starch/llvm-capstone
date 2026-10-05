@@ -81,6 +81,22 @@ port work rather than a new case. Before building, check the allocation's paddin
 aligned and padded, so the crossing must be shown to leave the *plane* in a frame whose planes are
 actually adjacent.
 
+**A second candidate, and the stronger one: `b7946098b1`,** `swscale/alphablend`, "don't overread
+alpha plane on subsampled odd size". It reads the alpha row *below the last one*, and the fix says
+so in one line — `int subsample_row = y_subsample && (y << y_subsample) + 1 < lum_h;` stops the
+`+ alpha_step` row being used when there is no next row. The pointer is the **caller's**:
+`ff_sws_alphablendaway` takes `const uint8_t *const src[]` and sets `a = src[plane_count] + ...`, so
+the object is a frame plane and the shape is nested. Fixed at our pin — `subsample_row` occurs 5
+times in `n9.0.1`'s `libswscale/alphablend.c`, the vulnerable `x_subsample || y_subsample` form 0
+times, with `ff_sws_alphablendaway` present as the positive control — which under the corrected
+criterion makes it a **fix-reversal case exactly like `plain-heap-repros/00`**, not a disqualifier.
+
+**What a case must still establish, and it is the whole difficulty:** that the read leaves the
+PLANE and stays inside the frame's single `AVBuffer`. `av_frame_get_buffer` aligns `linesize` and
+pads, and for a planar format with alpha the alpha plane may be last — in which case one row past it
+leaves the whole allocation, which would make the case class A and leave this cell empty. The layout
+must be **asserted in the case**, the way the sub-object cases assert their offsets, never assumed.
+
 Two weaker candidates from the same pass, allocation sites **not** opened: `56309e476a`
 (`vf_vif`, index mirroring with small dimensions) and `2a20737f66` (a **revert** of a bwdif
 heap-overflow fix, so provenance needs care before it is called a defect). Disqualified on sight as
