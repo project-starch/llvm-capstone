@@ -350,8 +350,8 @@ takes, each of which has produced a published claim that had to be retracted:
 * a count taken over a **population that was filtered to exclude the very class being counted**.
   This one is not about the check at all — the check works, and is pointed at the wrong input. On
   2026-10-05 "0 spatial defects of 27" was published from a hunt whose own filter 1 read *"a
-  lifetime defect … **and not as an overflow**"*; re-running the same populations for the excluded
-  class found 19. **Before reporting an absence, read the search's OWN inclusion criteria and ask
+  lifetime defect … **and not as an overflow**"*; re-running the three programs for the excluded
+  class found 19 (15 over tshark's full history, 4 in FFmpeg). **Before reporting an absence, read the search's OWN inclusion criteria and ask
   what they threw away.** A filter that names a class as a disqualifier can never produce evidence
   about that class.
 
