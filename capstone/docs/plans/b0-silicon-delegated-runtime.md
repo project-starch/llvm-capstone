@@ -1276,8 +1276,8 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
 - **What the board run must show next:** `date +%s` small (the board's wall clock), then the oracle with the clock
   set reproducing e0a254c47e7ee28c, which is B3 passing by hash on silicon.
 - **B3c pre-registered (board, before the bake): 776d9d859, monitor 1f9aedd, memcached ba7e6921cf27f2b6, harness
-  b433cd6ec88207a4, probe b3-clock-probe.c (FPGA build 10a5b0d7a0ef2e53).** Rungs in order: b0-stats,
-  `b3-setclock`, `b3-oracle`, `b3-clock`, b0-stats2.
+  b433cd6ec88207a4, probe b3-clock-probe.c (FPGA build 5aa140cf39647700), private image c2f7e7a7f8c1, firmware
+  8a3c285be032.** Rungs in order: b0-stats, `b3-setclock`, `b3-oracle`, `b3-clock`, b0-stats2.
   - b0-stats and b0-stats2: retval 0.
   - b3-setclock: **`date before` < 2,592,063** (the board's wall clock before 1970-01-31). A larger value refutes
     B3w on the board, whatever QEMU showed. Then `date -s @1791200000` succeeds, retval 0.
@@ -1291,9 +1291,11 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     - FP state lost across a domain run (hold-domain changed > 0, hold-native 0);
     - the kernel's FP context switch (hold-native changed too);
     - none of these reproduced: UNRESOLVED, with the oracle harness's own value as the in-situ reading.
-  - QEMU rehearsal (22:30, the same probe built for QEMU, firmware d5c57ee765c9): clocks advance 1.007 s, 0 arith
-    anomalies of 200,000, self-test 1 of 12, holds 0 and 0, `stop_seconds=1.40`; oracle e0a254c47e7ee28c after
-    `date -s`.
+  - The probe's domain arm waits until memcached listens before the 3 s and SIGTERM, as the harness does. The first
+    build sent SIGTERM 3 s after launch, which on silicon could still be inside the first entry.
+  - QEMU rehearsal of this probe (22:36, built for QEMU, firmware d5c57ee765c9): clocks advance 1.006 s, 0 arith
+    anomalies of 200,000, self-test 1 of 12, holds 0 and 0, server listening, `stop_seconds=1.52`; then oracle
+    e0a254c47e7ee28c after `date -s`.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not

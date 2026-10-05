@@ -9,15 +9,18 @@
  *                  backwards are counted, and the first one's operands are printed in hex.
  *   3 selftest     arm 4's instrument with fs5 changed on purpose: it must report exactly 1 changed register.
  *   4 hold-native  known values in fs0-fs11 across waitpid of a native child (`sleep 1`); changed ones counted.
- *   5 hold-domain  the harness's sequence: memcached under capstone-job + capstone-exec, 3 s, then t0, SIGTERM,
+ *   5 hold-domain  the harness's sequence: memcached under capstone-job + capstone-exec, serving, 3 s, t0, SIGTERM,
  *                  waitpid with fs0-fs11 held, t1; stop_seconds printed as the harness prints it, with t0/t1 in hex.
  * Exit status is a bitmask: 1 arith anomaly, 2 native hold changed, 4 domain hold changed, 8 a clock call failed,
  * 16 t1 - t0 not finite in arm 5, 32 the selftest did not fire. */
+#include <arpa/inet.h>
 #include <math.h>
+#include <netinet/in.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -155,6 +158,18 @@ static int hold(const char *arm, char *const argv[], int term_after_s, int selft
 	}
 	double t0 = 0, t1 = 0;
 	if (term_after_s) {
+		/* As the harness does: stop the server only once it is serving (it listens on 21299), not during its
+		   first entry. Up to 120 s, then on regardless. */
+		struct sockaddr_in sa = {.sin_family = AF_INET, .sin_port = htons(21299)};
+		inet_pton(AF_INET, "127.0.0.1", &sa.sin_addr);
+		int up = 0;
+		for (int i = 0; i < 1200 && !up; i++) {
+			int fd = socket(AF_INET, SOCK_STREAM, 0);
+			up = fd >= 0 && connect(fd, (struct sockaddr *)&sa, sizeof sa) == 0;
+			if (fd >= 0) close(fd);
+			if (!up) usleep(100 * 1000);
+		}
+		printf("B3c %s: server %s\n", arm, up ? "listening" : "NOT listening after 120 s");
 		sleep(term_after_s);
 		t0 = now();
 		kill(pid, SIGTERM);
