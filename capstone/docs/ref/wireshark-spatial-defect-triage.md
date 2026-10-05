@@ -157,8 +157,33 @@ So as the port stands today, **these three real defects would not be caught by a
 uses a **BLOCK** allocator (file scope), which is why it discriminates.
 
 This is the concrete, actionable consequence of the hunt: **extending the chunk adapter to
-`BLOCK_FAST` is what converts three real upstream spatial defects into detections.** Whether that is
-worth doing is a port-scope decision; that it is the blocker is now measured rather than guessed.
+`BLOCK_FAST` is what converts three real upstream spatial defects into detections.**
+
+**And the gap is wiring, not design.** Three things, each checked:
+
+1. The adapter itself is written in block-generic terms — `wm_block_open`, `wm_chunk_split`,
+   `wm_chunk_issue`, `wm_chunk_retire`, `wm_block_reset`
+   (`ports/wireshark/wmem/src/allocators/sublet/chunks.c`). Nothing in it is specific to `BLOCK`.
+2. The only thing that wires those hooks into a wmem allocator is a single patch,
+   `ports/wireshark/wmem/patches/wireshark-4.6.8-0002-wmem-block-chunks-under-sublet.patch`, and it
+   patches **`wmem_block.c`**. There is **no patch against `wmem_block_fast.c`** anywhere in the
+   tree.
+3. `BLOCK_FAST` is the *simpler* allocator: it carves linearly and has no per-chunk free, only
+   `free_all`. So its adapter is close to a strict subset of the BLOCK work — open the block, carve
+   a region per allocation, one revoke on reset.
+
+**The corpus driver already models the right allocator**, which removes the other obvious obstacle:
+`ports/wireshark/wmem/src/shared/scopes.c:39` creates the packet pool as
+`wmem_allocator_new(WMEM_ALLOCATOR_BLOCK_FAST)`, faithfully matching upstream's `pinfo->pool`, and
+`bug-corpora/wireshark/wmem-repros/shared/driver.c:92` acquires exactly that pool as `wm_packet`.
+
+**The port's 20-dissector whitelist is NOT an obstacle either.** `ports/wireshark/app/dissector-whitelist.txt`
+contains none of `solaredge`, `opcua` or `dcp-etsi` — but it does not contain `rpcrdma`, `sip`,
+`mysql` or `xml` either, and the corpus's thirteen existing cases are all defects in dissectors
+outside it. Corpus cases do not run inside `tshark`: `ports/wireshark/wmem/cmake/Replay.cmake`
+builds one standalone program per `case.c` against the real wmem allocator. So a reduction of
+`1d8acb21ab` is buildable today; what it cannot yet do is *discriminate*, for want of the
+`BLOCK_FAST` adapter.
 
 ## Rejected, with reasons
 
