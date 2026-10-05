@@ -39,12 +39,14 @@ An access that leaves a bound. Built from upstream defects:
 
 | program | nested | not nested | total | where |
 |---|---:|---:|---:|---|
-| memcached | **3** | 0 | **3** | `allocator-repros/05-07` — item data, suffix field, unterminated key; the objects are `slabs.c` chunks |
+| memcached | **3** | **1** | **4** | `allocator-repros/05-07` (`slabs.c` chunks) and `plain-heap-repros/00` (`ddee3e2`, one byte past a `calloc`) |
 | tshark | **5** | 0 | **5** | `wmem-repros/13-17` — cursor skip, fixed-offset loop, negative index, parity write, off-by-one size |
 | FFmpeg | 0 | **3** | **3** | `subobject-repros/00-02` — three members written past, inside one `av_malloc` |
-| **total** | **8** | **3** | **11** | |
+| **total** | **8** | **4** | **12** | |
 
-And the **synthetic baseline**, which is where the not-nested spatial row really lives:
+And the **synthetic baseline**, which carried the not-nested spatial row alone until
+`plain-heap-repros/00` landed and which still does the job no upstream case can -- showing
+the arms discriminate at `malloc` granularity on demand:
 
 | probe | programs | role |
 |---|---|---|
@@ -172,12 +174,12 @@ discriminate at `malloc` granularity, which is a different job from counting ups
 | | nested | not nested | total |
 |---|---:|---:|---:|
 | temporal | **22** | **5** | **27** |
-| spatial (upstream reductions) | **8** | **3** | **11** |
-| **total** | **30** | **8** | **38** |
+| spatial (upstream reductions) | **8** | **4** | **12** |
+| **total** | **30** | **9** | **39** |
 
-**30 of 38 are instances of nesting (79%).** On the spatial side specifically, 8 of 11. Add the
-synthetic baseline probes and the not-nested spatial row grows, but those are probes and are kept
-out of the defect count on purpose.
+**30 of 39 are instances of nesting (77%).** On the spatial side specifically, 8 of 12. Add the
+synthetic baseline probes and the not-nested spatial row grows further, but those are probes and
+are kept out of the defect count on purpose.
 
 ### (b) How many does Capstone catch without extra protection, and with Sublet?
 
@@ -187,7 +189,7 @@ out of the defect count on purpose.
 |---|---:|---:|---:|
 | temporal, 22 nested | **0 of 22** | **21 of 22** | **22 of 22** |
 | temporal, 5 not nested | **0 of 5** | **5 of 5** | tshark **2 of 2** |
-| spatial, 11 upstream | **6 of 11** | **6 of 11** | tshark **5 of 5** |
+| spatial, 12 upstream | **6 of 11 measured** | **6 of 11 measured** | tshark **5 of 5** |
 
 - **Temporal, 0 of 22 without protection, measured** — not predicted. A bound cannot see a dead
   object: the stale address is in bounds by construction.
@@ -204,6 +206,14 @@ out of the defect count on purpose.
   dead object. fx2/fx3 ran in all ten boots and faulted on every enforcing arm, so the two axes are
   separated inside each boot: the same image that returns on a temporal fixture faults on a spatial
   one.
+- **The twelfth case is counted but not yet measured under Capstone.**
+  `bug-corpora/memcached/plain-heap-repros/00` (`ddee3e2`) is measured on both NATIVE arms,
+  two-sided — the fix differential and, unlike every sub-object case in this tree, an **ASan report**
+  (`heap-buffer-overflow`, WRITE of size 1, 0 bytes after a 9-byte region). Its `spatial` and
+  `sublet` arms are declared **predictions to fault**, because that corpus has no domain runner yet;
+  the corresponding reading already exists in the port as memcached fixture 20, which carries the
+  same shape and reads `level0` RETURN / `shrink` FAULT `oob`. So the measured catch counts above
+  stay at 6 of 11 rather than silently becoming 7 of 12.
 - **Spatial: Sublet adds nothing, and that is expected.** Sublet *is* revocation, and revocation has
   nothing to fire on while the object is alive. The 6 spatial catches are `shrink`'s per-object
   bounds, which the `sublet` arm inherits by construction. The two columns being identical is a
@@ -227,7 +237,7 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **18** | 4 |
-| spatial, 11 upstream | **0** | **0** | 11 |
+| spatial, 12 upstream | **0** | **0** | 12 |
 
 - **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
   - tshark 13 — `results/20260921-cheribsd/` (`matrix.tsv`, `arm=cheribsd`): expected complete,
@@ -256,6 +266,12 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
   indistinguishable from a dead instrument, while one that catches the plain cases and misses the
   nested ones is measuring the nesting. **It is therefore the first thing an SDK host should run**,
   and a miss would refute the mechanism rather than add a data point.
+- **The new plain-heap case is the first spatial row predicted CAUGHT by stock CheriBSD**, and it
+  is unmeasured like the rest. The reason is structural rather than hopeful: CHERI bounds each
+  `malloc`, and this crossing leaves the `malloc` bound instead of staying inside a slab page or a
+  struct. Revocation is irrelevant to it; the bounds are not. A miss would refute the bounds claim
+  rather than add a data point — which is what makes it worth running first on an SDK host, beside
+  the five not-nested temporal fixtures.
 - **Spatial: 0 of 11 measured.** All 11 carry a prediction that the case *completes*, and the reason
   is structural: CHERI bounds the slab page or the enclosing allocation, which is one `malloc`. Not
   measurable on this host, checked rather than assumed —

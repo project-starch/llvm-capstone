@@ -1,0 +1,51 @@
+{
+  "case": 0,
+  "upstream_fix": "ddee3e2",
+  "title": "authfile_load sizes its buffer to the file's exact length, so fgets writes the terminating NUL one byte past it",
+  "consumer": "authfile.c, authfile_load()",
+  "object": "auth_data, one calloc(1, sb.st_size) holding the whole --auth-file",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "a line that exactly fills the allocation makes fgets's terminating NUL land one byte past it",
+  "allocator_layer": "the system allocator itself: one calloc, no inner layer. That is what makes this the NOT-NESTED spatial row.",
+  "fidelity": "real allocator, model consumer. calloc and free are the platform's own, and the arms differ by exactly the upstream fix (sb.st_size versus sb.st_size + 1). fgets is reduced to the write C requires of it -- for a line shorter than the size argument and ending at EOF it stores the line's bytes and then a terminating NUL -- so the crossing sits on the corpus's labelled probe rather than inside libc. Nothing about WHERE the NUL lands is reduced; that is the defect. The fix's other two hunks (an auth_end clamp on the fgets length, and a '\\0' break in the entry scan) bound LATER lines and are left out, which PROVENANCE.md states.",
+  "live_in_pin": false,
+  "live_proof": "the fix is an ancestor of the 1.6.45 tag (git merge-base --is-ancestor ddee3e2 1.6.45 succeeds), and 1.6.45:authfile.c:50 reads 'auth_data = calloc(1, sb.st_size + 2);' -- the fixed form, two past rather than the pre-fix exact size. The case reconstructs the pre-fix consumer shape against the shipped allocator, the convention stated at ../../allocator-repros/README.md:132-135 and carried by 27 of the 33 cases in this tree.",
+  "distinguishing": "the arms differ by ONE term, the + 1 in the allocation size. Everything else -- the line, its length, the write offset -- is identical, so a changed reading is attributable to the fix and to nothing else.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm reports cap=9 touched=9 crossed=1, the fixed arm cap=10 touched=9 crossed=0: the terminator's offset is unchanged and only the allocation's end moves. MEASURED 2026-10-06, results/20261006-native-plain-heap/.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "ASan REPORTS, and that is the contrast this corpus exists to draw: the crossing leaves the malloc bound, so a redzone sits exactly where it lands. MEASURED two-sided 2026-10-06 -- buggy 'heap-buffer-overflow ... WRITE of size 1 ... 0 bytes after 9-byte region', attributed to the labelled write_probe (shared/corpus.h:62) with the allocation at case.c:37; fixed arm silent, exit 0. The sub-object corpora record the opposite reading for the opposite reason.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "PREDICTED: faults at the labelled probe. The crossing leaves the malloc bound, which per-object bounds enforce, so the bounds-only arm must catch it. The corresponding reading already exists in the port: memcached app fixture 20 is this defect's shape and reads level0 RETURN, shrink FAULT oob (cause 5 on its read probe), ports/memcached/app/results/2026-10-05-qemu-classa-fixtures/. NOT YET MEASURED as a corpus case -- this corpus has no capstone-domain runner.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the buffer is alive; the catch is the inherited per-object bound. Fixture 20 reads sublet FAULT oob in the same bundle. NOT YET MEASURED as a corpus case.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: mode 0 bounds each allocation, so it catches a crossing of the malloc bound.",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset after sourcing the project environment, and no SDK, purecap sysroot or image exists here."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection to the same bounds, so it catches the crossing for the mode-0 reason.",
+      "note": "UNMEASURABLE ON THIS HOST, same check as the arm above."
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, NOT MEASURED: CATCHES. This is the first row in either corpus family predicted to be caught by stock CheriBSD on the SPATIAL axis, and the reason is structural rather than hopeful -- CHERI bounds each malloc, and this crossing leaves the malloc bound rather than staying inside a slab page or a struct. Revocation is irrelevant to it; the bounds are not.",
+      "note": "UNMEASURABLE ON THIS HOST, same check as the PoisonCap arms. A miss here would refute the bounds claim rather than add a data point."
+    }
+  },
+  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plain-heap/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner yet, and the port fixture that carries the same shape is measured separately."
+}

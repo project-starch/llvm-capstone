@@ -1,0 +1,19 @@
+# Result lines, as runners/run-native.sh printed them. Two builds of one program:
+# plain for the fix differential, ASan for native-detect. The control arm runs first.
+
+00_ddee3e2_authfile_scan_past_calloc plain=reproduced asan-buggy=heap-buffer-overflow asan-fixed=silent
+
+# The plain arms in full, so the one term that differs is visible:
+#   fixed  case=0 arm=fixed   cap=10 touched=9 crossed=0 damage=0  VERDICT FIXED
+#   buggy  case=0 arm=buggy   cap=9  touched=9 crossed=1 damage=1  VERDICT DEFECT-REPRODUCED
+#
+# The ASan report's own words on the buggy arm:
+#   ERROR: AddressSanitizer: heap-buffer-overflow
+#   WRITE of size 1
+#   #0 write_probe shared/corpus.h:62
+#   #1 mch_case_run 00_ddee3e2_authfile_scan_past_calloc/case.c:59
+#   0 bytes after 9-byte region, allocated by calloc at case.c:37
+# and on the fixed arm: no report, exit 0.
+#
+# runner exit status 0 = the plain pair reproduced AND the sanitiser fired on the buggy
+# arm AND stayed silent on the fixed one. Any one of the three missing makes it non-zero.
