@@ -1025,6 +1025,39 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - Code type 7 with a QEMU-like arena = the handover between the first entry and C (the cscratch carry, or the
     frame slots).
   - Code type 1 = the capability is there, and `context_entry()` or the flags check is what refuses.
+- **B1e result (20:27-20:32, firmware c46f2737b230):**
+  - silicon: code type **7** (absent); arena LINEAR [ac2e0000, ac300000); gp [ac2df9b0, ac2e0000); sp base ac12a000;
+  - QEMU (same image and monitor source): code type 1; arena [e03dfc00, e03ffc00); sp base e022a000.
+  - So the code capability never reached C on silicon. The cause is not yet established; this is where it stands.
+  - **What the numbers show.** The data region's length is fixed by the image and the monitor, and QEMU reads it
+    exactly: `e03ffc00 - e022a000 = 0x1d5c00`. On silicon the same capability reads `ac300000 - ac12a000 =
+    0x1d6000`, so its END is **1 KiB above `data_top`**, which is exactly `CONTEXT_DESC_AREA` (1024).
+    - The glue's `END - 32` then reads inside the monitor's descriptor area, not the code park at `data_top - 32`.
+    - The arena `[END - A, END)` covers that area.
+  - **My pre-registered discriminator did not fire, and that was a defect of the discriminator.** It expected
+    END-rounding to show as an end NOT on a 1 KiB boundary. Rounding to a coarser granule makes the end MORE
+    aligned (here 2 KiB and up), so only the comparison of lengths against QEMU shows it.
+  - **Two candidate mechanisms, under RTL check before anything is recorded as a cause:**
+    - (H1) compressed bounds: the monitor's own cursor moves on dom_data (the gp park at `data_top - 16`, now also
+      the code park at `- 32`) re-encode it lossily, and the top rounds up to the representability granule
+      (C-13/R-33's class);
+    - (H2) the descriptor area was not split off on this build.
+  - **Either way, the domain's data capability reaches the descriptor area on silicon,** which create_domain's
+    comment says "the domain never holds authority over". The cap-table carve of every B0 build (from END, with no
+    arena) would also land in that area.
+- **B1f pre-registered (before the boots): the candidate monitor fix, caplifive-sbi monitor/b0-managed-gp 10a0690.**
+  - The fix aligns the managed data_top down to repr_gran, and splits the descriptor area at that aligned top.
+  - The Linux images are B1a's and B1e's, unchanged, so each boot differs from its predecessor only in the monitor.
+  - Boot 1, the control: b0-hello (firmware 088d5d9c74bd). Predicted byte-exact, retval 0, as B1a. A failure here
+    is the fix, and boot 2 does not go.
+  - Boot 2: the B1e probe image 29b82435ce095d98 (firmware 69bd27fbb7c0). Predicted:
+    - `code type 1` (NONLIN), with the code region's bounds;
+    - the arena ending at the ALIGNED top, 0xac2ff800 if the block lands where B1e's did (the address may move),
+      and in any case 2 KiB-aligned, below the descriptor area;
+    - `B1: thread returned 124`, exit 0.
+  - Code type 7 again would refute H1 as the whole story.
+  - QEMU on 10a0690, fabrication off and on: b0-hello, b1-thread 124, the legacy control 91. The probe reads the
+    arena ending at e04ff800, the 2 KiB-aligned top (it was ...ffc00 before).
 
 ## B1.0b (2026-10-05): strtod, atof and scanf's %f on the silicon build, for memcached
 - **The gap.** The archive drops musl's `floatscan.o` for the same reason as vfprintf (C-43). `strtod.o` and
@@ -1058,6 +1091,10 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     arithmetic, which silicon already runs in vfprintf.
   - A mismatch confined to subnormal or rounding cases would point at the soft-float/FPU path on silicon, not at
     the narrowing, which QEMU passed bit for bit.
+- **Board result, 2026-10-05 20:22-20:27: as pre-registered.** `B1.0b strtod: 23 of 23 cases match`, retval 0,
+  census rungs 0 and 0. Firmware fw_b15d76e38a54, image e7d30ad72f104eed; raw lines
+  `/tmp/capstone/b1/board-strtod.txt`. memcached's float parsing (strtod, atof, sscanf %lf) therefore works on
+  silicon, bit for bit against the host.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
