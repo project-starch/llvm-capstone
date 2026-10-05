@@ -148,7 +148,7 @@ axis_of() {
     # the pure-ext cases: CWE-416 on the temporal axis, CWE-125 on the spatial one
     CRASH-022|CRASH-035|CRASH-047|CRASH-057|CRASH-074|CRASH-080|CRASH-103|CRASH-151|CRASH-160)
         echo temporal ;;
-    CRASH-066|CRASH-091|CRASH-102) echo heap ;;
+    CRASH-066|CRASH-091|CRASH-102|CRASH-016) echo heap ;;
     CRASH-005) echo global ;;
     *) echo heap ;;
   esac
@@ -176,7 +176,7 @@ sel_of() { echo "-DRUNG_E_${1/CRASH-/CRASH}"; }
 declare -A NEEDS_EXT=(
   [CRASH-022]=pure [CRASH-035]=pure [CRASH-047]=pure [CRASH-057]=pure [CRASH-066]=pure
   [CRASH-074]=pure [CRASH-080]=pure [CRASH-091]=pure [CRASH-102]=pure [CRASH-103]=pure
-  [CRASH-151]=pure [CRASH-160]=pure
+  [CRASH-151]=pure [CRASH-160]=pure [CRASH-016]=pure
 )
 
 # WHERE A SPATIAL CATCH IS ALLOWED TO LAND, per case. The gate used to hard-code url.c, which was
@@ -186,6 +186,7 @@ declare -A NEEDS_EXT=(
 declare -A EXPECT_FILE=(
   [CRASH-110]=url.c [CRASH-073]=url.c
   [CRASH-066]=var_unserializer.c [CRASH-091]=html.c [CRASH-102]=string.c
+  [CRASH-016]=formatted_print.c
 )
 
 # THE TEMPORAL AXIS NEEDS A CONTROL THAT LEAVES REVOCATION ON.
@@ -430,7 +431,7 @@ case "$WHICH" in
     done ;;
   pureext)
     # The twelve ASAN-blind cases unlocked by linking the pure ext/standard TUs.
-    for c in CRASH-022 CRASH-035 CRASH-047 CRASH-057 CRASH-066 CRASH-074 \
+    for c in CRASH-016 CRASH-022 CRASH-035 CRASH-047 CRASH-057 CRASH-066 CRASH-074 \
              CRASH-080 CRASH-091 CRASH-102 CRASH-103 CRASH-151 CRASH-160; do
       one_case "$c" "$(sel_of "$c")" ; r=$?
       [ "$r" -gt "$worst" ] && worst=$r

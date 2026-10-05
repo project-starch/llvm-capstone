@@ -52,3 +52,18 @@ void capstone_memcpy_phase_note(unsigned long da_, unsigned long sa_, unsigned l
     extern void php_fault_report(unsigned long);
     php_fault_report((da_ << 56) | (sa_ << 48) | (n_ & 0xFFFFFFFFUL));
 }
+
+/* ext/standard/formatted_print.c defines fprintf()/vfprintf() alongside sprintf(), and those write
+ * to a PHP stream resource. Only sprintf is registered here, so the stream path is unreachable --
+ * but it must still link, exactly as get_headers' two entry points above do.
+ *
+ * The resource-type ids are what php_stream_from_zval matches against; leaving them 0 means a
+ * stream zval can never be resolved, which is the truthful state of a domain with no streams. */
+int php_file_le_stream  = 0;
+int php_file_le_pstream = 0;
+
+unsigned long _php_stream_write(void *stream, const char *buf, unsigned long count)
+{
+    (void)stream; (void)buf; (void)count;
+    return 0;
+}

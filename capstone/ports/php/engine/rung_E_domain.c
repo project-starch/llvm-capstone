@@ -122,6 +122,9 @@
  *     PHP_MINIT_FUNCTION(html) and the domain runs no module init. 3 is its value
  *     (ENT_HTML_QUOTE_DOUBLE | ENT_HTML_QUOTE_SINGLE).
  */
+# elif defined(RUNG_E_CRASH016)
+#  define RUNG_E_SOURCE "echo sprintf(\"%'\", 'x');"
+#  define RUNG_E_STMT   1
 # elif defined(RUNG_E_CRASH022)
 #  define RUNG_E_SOURCE \
      "function cmp($x, $y) { global $a;\n" \
@@ -335,6 +338,9 @@ extern void zif_array_reduce(INTERNAL_FUNCTION_PARAMETERS);
 extern void zif_extract(INTERNAL_FUNCTION_PARAMETERS);
 extern void zif_unserialize(INTERNAL_FUNCTION_PARAMETERS);
 extern void zif_htmlspecialchars(INTERNAL_FUNCTION_PARAMETERS);
+/* sprintf is PHP_FALIAS(sprintf, user_sprintf) in basic_functions.c's table, so the handler is
+ * zif_user_sprintf -- the name PHP registers it under is ours to choose here. */
+extern void zif_user_sprintf(INTERNAL_FUNCTION_PARAMETERS);
 #endif
 
 static zend_function_entry rung_e_functions[] = {
@@ -353,6 +359,7 @@ static zend_function_entry rung_e_functions[] = {
     { "extract",              zif_extract,              (struct _zend_arg_info *)0, 0, 0 },
     { "unserialize",          zif_unserialize,          (struct _zend_arg_info *)0, 0, 0 },
     { "htmlspecialchars",     zif_htmlspecialchars,     (struct _zend_arg_info *)0, 0, 0 },
+    { "sprintf",              zif_user_sprintf,         (struct _zend_arg_info *)0, 0, 0 },
 #endif
     { (char *)0,   (void (*)(INTERNAL_FUNCTION_PARAMETERS))0, (struct _zend_arg_info *)0, 0, 0 }
 };

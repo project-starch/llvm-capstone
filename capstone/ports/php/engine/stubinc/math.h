@@ -12,5 +12,6 @@ double sqrt(double);
 int finite(double);
 int isnan(double);
 int isinf(double);
+double modf(double value, double *iptr);
 #define HUGE_VAL (__builtin_huge_val())
 #endif

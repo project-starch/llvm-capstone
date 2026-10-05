@@ -208,6 +208,7 @@ case "${PHP_CAP_EXT:-}" in
   pure) EXT="$EXT $P/ext/standard/string.c $P/ext/standard/array.c $P/ext/standard/var.c"
         EXT="$EXT $P/ext/standard/html.c $P/ext/standard/strnatcmp.c"
         EXT="$EXT $P/ext/standard/var_unserializer.c"   # php_var_unserialize, re2c-generated
+        EXT="$EXT $P/ext/standard/formatted_print.c"    # sprintf and friends
         CF+=(-DPHP_CAP_EXT_PURE); ZCF+=(-DPHP_CAP_EXT_PURE) ;;
   "")   : ;;
   *)    for e in ${PHP_CAP_EXT//,/ }; do EXT="$EXT $P/ext/standard/$e.c"; done ;;

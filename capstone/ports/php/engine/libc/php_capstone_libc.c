@@ -313,3 +313,24 @@ long strfmon(char *s, unsigned long max, const char *format, ...)
     (void)s; (void)max; (void)format;
     return -1;
 }
+
+/* --- the three libc entry points formatted_print.c's float path needs --- */
+
+int isascii(int c) { return (c & ~0x7f) == 0; }
+
+/* IEEE-754 binary64: exponent all ones with a zero mantissa is an infinity. Done by bit pattern
+ * rather than by comparison, because a comparison against HUGE_VAL needs a working HUGE_VAL. */
+int isinf(double d)
+{
+    union { double d; unsigned long u; } v;
+    v.d = d;
+    return ((v.u >> 52) & 0x7FFUL) == 0x7FFUL && (v.u & 0xFFFFFFFFFFFFFUL) == 0UL;
+}
+
+/* Split into integral and fractional parts, both carrying the sign of the argument, as C requires. */
+double modf(double value, double *iptr)
+{
+    double ip = (double)(long)value;        /* truncation toward zero */
+    if (iptr) { *iptr = ip; }
+    return value - ip;
+}

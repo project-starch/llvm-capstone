@@ -531,16 +531,36 @@ into reach. Result:
 
 | | cases |
 |---|---|
-| **CAUGHT** | **8** -- CRASH-035, -066, -074, -080, -091, -103, -151, -160 |
+| **CAUGHT** | **9** -- CRASH-016, -035, -066, -074, -080, -091, -103, -151, -160 |
 | **MISSED** | **1** -- CRASH-057 |
 | no verdict, control faults | 2 -- CRASH-022, CRASH-102 |
 | no verdict, trigger never ran | 1 -- CRASH-047 |
 
-Two of the catches are on the SPATIAL axis in code other than `url.c`, which is new:
-`CRASH-066` at `var_unserializer.c:390` and `CRASH-091` at `html.c:656`, each one byte past the
-bound, each with a completing control.
+Three of the catches are on the SPATIAL axis in code other than `url.c`, which is new:
+`CRASH-066` at `var_unserializer.c:390`, `CRASH-091` at `html.c:656` and `CRASH-016` at
+`formatted_print.c:592` -- each one byte past the bound, each at ASAN's own line, each with a
+completing control.
 
-**Running total against the population that matters: 19 of the 31 cases unpatched ASAN cannot see.**
+CRASH-016 needed `formatted_print.c`, which is not quite "pure": it defines `fprintf`/`vfprintf`
+beside `sprintf`, so it imports `_php_stream_write` and the two stream resource-type ids. Only
+`sprintf` is registered, so that path is unreachable, and the three are stubbed exactly as
+`get_headers`' two entry points already are. It also wanted `isascii`, `isinf` and `modf` from the
+float path; those are implemented rather than stubbed.
+
+**Running total against the population that matters: 20 of the 31 cases unpatched ASAN cannot see.**
+
+### The 31, fully accounted
+
+| bucket | n | status |
+|---|---|---|
+| A: runnable with no new linking | 11 | 11 caught |
+| B: needs pure ext code linked | 13 | 9 caught, 1 missed, 3 no verdict |
+| C: needs the OS | 7 | not attempted -- sockets, writable `/tmp`, the clock |
+
+A+B is the no-OS population: **24 cases, 20 caught, 1 missed, 3 without a verdict.** Bucket C is the
+real ceiling: four need sockets or a writable `/tmp`, two need `putenv`/tick functions, and
+CRASH-008 needs `date`'s clock -- the one the standalone allocator suite already catches with a
+hand-written trigger, which only the real engine cannot reach.
 
 ### CRASH-057 is a genuine MISS, and it is the most useful result here
 
