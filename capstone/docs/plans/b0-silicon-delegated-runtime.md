@@ -1193,6 +1193,10 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     module, the monitor and the glue alone.
   - The board image (ba7e6921cf27f2b6, aligned glue) is OK at all 225 bases. B0's four 512 KiB images are OK at
     all 512 bases, with or without the alignment. b1-thread with the alignment is OK at all 255 bases.
+  - The board image still reports WIDEN: up to 5 storage capabilities widen at writeback once their cursor leaves
+    the base. The lossy branch rounds a large global's bounds outward, so its capability can reach neighbouring
+    bytes. That is a spatial residual, not a fault. It is recorded, not fixed; the measurements doc claims no safety
+    numbers for memcached.
   - **b1-thread WITHOUT the alignment is AT RISK at 7 of 255 bases**, the ones where its 2 MiB block straddles a
     32 MiB boundary (e.g. 0xadf00000): there E = 5 and 4 to 9 globals come out short.
     - The board does place 2 MiB blocks on 1 MiB alignment: B1f's block sat at 0xac100000. So a 2 MiB block is
