@@ -1,0 +1,26 @@
+{
+  "case": 15,
+  "upstream_fix": "3d160401b65e",
+  "title": "array[]::oidvector \u672c\u5e94\u62a5 'array is not a valid oidvector'\uff1b17.5 \u6253\u5370 40 \u4e2a\u76f8\u90bb\u5806\u5b57\u3002ASan \u9759\u9ed8\u2014\u2014\u8d8a\u754c\u8bfb\u7559\u5728 palloc \u5757\u5185\uff0c\u9519\u8bef\u7b54\u6848\u662f\u552f\u4e00\u8bc1\u636e",
+  "consumer": "array[]::oidvector cast",
+  "class": "spatial/oob-read",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "CVE-2026-2003, fixed upstream in 3d160401b65e, which postdates the 17.5 pin. On the pin the cast is accepted where a correct build rejects it: the purecap run errors on 0 of the 2 statements upstream refuses",
+  "fidelity": "real server, core. The out-of-bounds read stays inside the palloc block, so no sanitizer and no capability machine sees it; the accepted input is the evidence. On the host the same case printed about forty words of adjacent heap, and on the purecap arm the value came back empty -- the arms show different amounts of the same defect, which is recorded rather than averaged",
+  "arms": {
+    "spatial": {
+      "status": "not written",
+      "precondition": "PGSU_NESTED=none. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+    },
+    "sublet": {
+      "status": "not written",
+      "precondition": "PGSU_NESTED=sublet, with its own PG_SU_ROOT separate from the spatial build. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; the differential fires -- upstream rejects 2 statements and 17.5 rejected 0, so an input a correct build refuses was accepted. Note the arms differ in how much they show: the host oracle printed about forty words of adjacent heap, here the value came back empty, so on this arm the accepted input is the whole of the evidence"
+    }
+  },
+  "status": "spatial not run; sublet not run; cheribsd-revocation run 2026-10-04",
+  "advisory": "CVE-2026-2003"
+}

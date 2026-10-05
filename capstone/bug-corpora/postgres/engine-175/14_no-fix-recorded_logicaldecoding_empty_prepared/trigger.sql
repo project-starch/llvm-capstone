@@ -1,0 +1,10 @@
+SET synchronous_commit = on;
+SELECT 'init' FROM pg_create_logical_replication_slot('regression_slot', 'test_decoding', false, true);
+CREATE TABLE test_prepared1(id integer primary key);
+INSERT INTO test_prepared1 VALUES (1);
+SELECT count(*) FROM pg_logical_slot_get_changes('regression_slot', NULL, NULL, 'include-xids', '0', 'skip-empty-xacts', '1');
+BEGIN;
+SELECT * FROM test_prepared1 WHERE id = 1 FOR SHARE;
+PREPARE TRANSACTION 'test_empty_transaction';
+COMMIT PREPARED 'test_empty_transaction';
+SELECT data AS spurious_output FROM pg_logical_slot_get_changes('regression_slot', NULL, NULL, 'include-xids', '0', 'skip-empty-xacts', '1');
