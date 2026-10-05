@@ -520,7 +520,10 @@ What the numbers say:
   SQLite, whose level0 heap has three nodes with thousands of copies. Tables grow 14 to 24,569
   times per run; the grow traffic is 0.01-0.07 accesses per 1000 checks.
 - **Revokes cost 3.2 to 5.5 accesses** in the mruby programs (1 per node plus the overflow lines),
-  and 276 in SQLite, whose four revokes retire arenas. The largest, lc_fizzbuzz's 98,874-copy
+  and 276 in SQLite, whose four revokes retire arenas. These figures, and the Clover baseline's
+  revoke figures above, leave out the write that relinks the node after the run (Capstone's
+  `cachesim` counts it): at most one access per revoke, 0.001-2.1 per 1000 checks. The models
+  count it since d2b8619e's successor; the tables are from the run before. The largest, lc_fizzbuzz's 98,874-copy
   revoke, takes 106,218 accesses and would stall for them.
 - **The CAM check at revoke is load-bearing**: in ao_render 443,101 memory entries named slots
   that had since been rewritten in the cache. Without the check those would be wrong tag clears.

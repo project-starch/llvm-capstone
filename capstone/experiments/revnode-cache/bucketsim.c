@@ -14,8 +14,10 @@
  *     capability store into an empty slot       RMW node[n]          1
  *     capability store over another node's copy RMW node[m], node[n] 2
  *     data store over a capability              RMW node[m]          1
- *     revoke of a run of nodes                  per node: RMW node, tag clear
- *                                               per listed slot; overflow lines
+ *     revoke of a run of nodes                  root RMW, per node: RMW node, tag
+ *                                               clear per listed slot, overflow
+ *                                               lines; the node after the run
+ *                                               (relinked) once
  *
  *   Overflow: a node with more than K copies gets a table of 16-entry lines,
  *   2-choice hashed by granule, insert into the first choice with room, grown
@@ -553,7 +555,9 @@ int main(int argc, char **argv) {
                 v->op = OP_REVOKE;
                 uint64_t before = v->acc[OP_REVOKE];
                 acc(v, node_line(v, root));
-                for (uint32_t c = nxt[root]; c != NONE && depth[c] > depth[root]; c = nxt[c]) revoke_node(v, c, k == 0);
+                uint32_t c = nxt[root];
+                for (; c != NONE && depth[c] > depth[root]; c = nxt[c]) revoke_node(v, c, k == 0);
+                if (c != NONE) acc(v, node_line(v, c));   /* the node after the run: its prev is relinked */
                 acc(v, node_line(v, root));
                 ++v->revokes;
                 uint64_t a = v->acc[OP_REVOKE] - before;

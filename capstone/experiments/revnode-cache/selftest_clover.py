@@ -73,6 +73,19 @@ def main():
     check(rc == 0, "reusing a revoked node's id with no records left is fine")
     rc, _, _ = run(sim, TRACE[:-2] + [(1, FREE, GC), (1, ALLOC, CREATE)])
     check(rc == 3, "reusing an id whose records are still indexed must exit 3")
+    # a run that ends at a node: [10 d0, 9 d1, 2 d0, 1 d1] after mrev(1,2), split(2->9),
+    # mrev(9->10); revoking 10 invalidates 9 (R, W) and relinks 2: R root, R 9, W 9, W 2, W root
+    t4 = ([(NONE, RESET, CREATE), (0, ALLOC, CREATE), (0, WRITE, CREATE), (1, ALLOC, CREATE), (1, WRITE, CREATE),
+           (1, READ, MREV), (2, ALLOC, MREV), (2, WRITE, MREV), (1, WRITE, MREV),
+           (2, READ, SPLIT), (9, ALLOC, SPLIT), (9, WRITE, SPLIT), (2, WRITE, SPLIT),
+           (9, READ, MREV), (10, ALLOC, MREV), (10, WRITE, MREV), (9, WRITE, MREV),
+           (10, READ, REVOKE), (9, READ, REVOKE), (9, WRITE, REVOKE), (2, READ, REVOKE), (10, WRITE, REVOKE),
+           (2, WRITE, REVOKE), (0, READ, LDST)])
+    rc, r, err = run(sim, t4)
+    check(rc == 0 and r["clover"]["by_operation"]["revoke"]["accesses"] == 5
+          and r["clover"]["by_operation"]["tree"]["accesses"] == 8,
+          f"end-of-run relink: {r and r['clover']['by_operation']} {err}")
+
     print("selftest_clover:", "PASS" if not failures else f"FAIL ({len(failures)})")
     return 1 if failures else 0
 

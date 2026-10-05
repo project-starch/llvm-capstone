@@ -28,7 +28,8 @@
  *   revoke of root r: R node[r]; per invalidated node c: R node[c], per alias e
  *                   of c: R alias[e], unregister's sidecar/free writes, and the
  *                   tag clear of the slot (counted apart: it is a data-side
- *                   write); W node[c]; then W node[r].
+ *                   write); W node[c]; then W of the node after the run (its
+ *                   prev is relinked), then W node[r].
  *   mrev/split: W node[new], W node[src], W node[src's list predecessor]
  *               (stands in for the parent's child link); lone node: W node[new]
  * Record sizes: node 32 B (links, alias head, Capstone state), alias 16 B
@@ -379,7 +380,7 @@ int main(int argc, char **argv) {
                 c = nxt[c];
             }
             nxt[root] = c;
-            if (c != NONE) prv[c] = root;
+            if (c != NONE) { prv[c] = root; cl(LINE(R_NODE, c / 2)); }   /* the node after the run: relinked */
             cl(LINE(R_NODE, root / 2));
             uint64_t a = clo->accesses - before;
             ++rev_hist[bucket(a)]; ++rev_count; rev_sum += a;

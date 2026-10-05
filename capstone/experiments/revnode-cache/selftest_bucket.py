@@ -117,6 +117,15 @@ def main():
     v = r["variants"][0]
     check(ops(v) == {"tree": 3} and v["misses"][0] == 1, f"32-byte nodes: {ops(v)} misses {v['misses'][0]}")
 
+    # a run that ends at a node: after mrev(1,2), split(2 -> 9), mrev(9 -> 10) the list is
+    # [10 d0, 9 d1, 2 d0, 1 d1]; revoking 10 invalidates 9 and relinks 2 (one more access)
+    t4 = ([(NONE, RESET, CREATE)] + lone(0) + lone(1) + mrev(1, 2)
+          + [(2, READ, SPLIT), (9, ALLOC, SPLIT), (9, WRITE, SPLIT), (2, WRITE, SPLIT)]
+          + mrev(9, 10) + revoke(10, [9]) + [(0, READ, LDST)])
+    rc, r, err = run(sim, t4, "2,0,64")
+    v = r["variants"][0]
+    check(rc == 0 and ops(v) == {"tree": 8, "revoke": 4}, f"end-of-run relink: {ops(v)} {err}")
+
     print("selftest_bucket:", "PASS" if not failures else f"FAIL ({len(failures)})")
     return 1 if failures else 0
 
