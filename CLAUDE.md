@@ -314,7 +314,11 @@ Before spending board time or building an instrument, search the **issue registr
 repro folders including archived ones, the commit history, and the other ports' adapter headers
 and patch commentary** — not only `docs/`. A
 whole session went into re-deriving a fault whose exact shape was already recorded, in the folder
-of a bug believed to be fixed.
+of a bug believed to be fixed. **Search by the NAME of the construct you are about to change, not only
+by the symptom** — `grep -rn <signal, module or compare> docs/history/ docs/ref/ISSUES.md` — because a
+prior attempt on that exact line is filed under its own issue, not yours: on 2026-10-05 half a session
+validated a widened `store_buffer` compare that `docs/history/21-08-2026_…_s10b-is-not-synthesizable.md`
+had already shown to form a LUT loop in synthesis.
 
 **Read past the root-cause box.** A fixed issue's folder records what its fix did *not* cover:
 individual instances, residuals, and "what would settle it" lists. Reading only the headline root
