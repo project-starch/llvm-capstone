@@ -47,6 +47,7 @@ capability `mcause` in either file against that table before acting on it** — 
 | `fpga-silicon-measurements-for-paper.md` | **where new silicon numbers go.** Reporting here needs no permission; editing `paper/` does |
 | `xlang-security-measurements-for-paper.md` | the xlang case-study numbers |
 | `table6-cheri-vs-capstone-explained.md` | how that comparison table is derived |
+| `spatial-vs-temporal-three-programs.md` | the spatial/temporal × nested/plain split for memcached, FFmpeg and tshark: 0 real spatial defects of 27, the three synthetic cells where a nested arm discriminates, and why spatial is a tie with CHERI. Read it before answering "why no spatial bugs" |
 | `report-style.md` | how results reports should read |
 
 ## Bug-corpus inventories
