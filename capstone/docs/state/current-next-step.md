@@ -11,13 +11,18 @@ response path changes.
 - **SYNTHESIZED (the synth lane, 4 h 57 m): all three pre-registered items PASS** -- no LUTLP of any kind, the one routed
   TIMING-23 loop is the standing loop-4 cluster with its cut moved one cell and nothing of the hold on the cycle (settled
   from the netlist), WNS -8.760 in band (+1.19 vs 715bdd1fe). Bitstream `ariane_xilinx.bit` sha256 3c91335acc7c1065…
-  (11,443,722 B) on the synth host; the full numbers are in ISSUES R-29. **The reflash is the lead's word.** After it, the
-  board lane runs its pre-registered set, controls first: the S-16 bare image, R-43 a1..a10, the guarded memcpy arm (0/96),
-  C5u without fence; then the unguarded memcpy control 94/96 -> 0/96, the R29 rung 31/32 -> 0/32, s10b-storebuf-primed
-  0/8 -> 8/8 legs trapping. The memcpy guard and the W-12 pass stay in force until those are measured.
+  (11,443,722 B); the full numbers are in ISSUES R-29.
+- **FLASHED on the lead's word (16:58) and FIXED ON SILICON** (board-supmon 3cdddc4727ec, dev f432fca10db1): controls unchanged
+  (S-16 bare 18/18, R-43 a1..a10, C5u +0.680 %); b0-memcpy unguarded 94/96 -> 0/96, guarded 0/96; the R-29 folder's rung
+  s06agg 66 -> 64; s10b-storebuf-primed bare 8 of 8 legs trap. ("The R29 rung 31/32 -> 0/32" written here before the run was
+  b0-memcpy's per-face numbers mislabeled.) The hardware no longer needs the memcpy guard or W-12 for this hazard; dropping
+  them is the runtime lane's call after its own measurement.
+- **R-51** (the board lane's entry: after a RETURN yield the resumed domain runs with an untagged PC) is confirmed on silicon
+  with this lane's `r51-return-pcc.S` and has a candidate fix on branch `r51-return-pcc` (ef8900e2d; QEMU's swap_pc semantics;
+  lint at baseline, sweep identical) -- NOT synthesized: **whether RETURN restores the PC capability is the lead's decision.**
 - The TLB-miss ordering case is closed by construction (a store that misses the TLB does not pop the LSU bypass, so the
   following load is not presented until the store has pushed); the remaining stated assumption is NrStorePipeRegs = 0.
-- memcached on silicon does not wait for it: the memcpy guard (B0.8) covers the runtime, the W-12 pass the application.
+- memcached on silicon never waited for it; with the fix measured, the guard and W-12 are a performance question, not a correctness one.
 
 2026-10-05: **B0 PASSES ON SILICON.** The gp-captable delegated hello-world runs byte-exact on
 `caplifive_supcall_715bdd1fe.bit`, N=2. It is launched by capstone-exec through the process-ABI module and stepped by
