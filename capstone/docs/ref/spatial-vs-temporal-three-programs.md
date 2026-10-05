@@ -15,7 +15,7 @@ anything is broken. A grep for the word finds arms, not defects.
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|
 | **spatial**, built and measured | **8** | **3** | **11** |
-| **spatial**, triaged upstream defects (§1a) | **19** (15 class B + 4 class C) | **29** class A — see §1b | **48** |
+| **spatial**, triaged upstream defects (§1a) | **19** (15 class B + 4 class C) | **29** class-A *candidates*, **0** verified — see §1b | **48** |
 | **temporal**, built and measured | 22 | 5 | **27** |
 
 > **CORRECTED 2026-10-05.** The spatial row previously read *"11 built and measured | 0"*, putting
@@ -196,20 +196,57 @@ all, and it is the only place CheriBSD can register a spatial hit. Reporting "0 
 beside "22 nested temporal" invites the reading that the not-nested class does not exist here, which
 is the opposite of true — it was simply not pursued.
 
-Verified starting points, allocation site opened in the pinned source:
+> **RETRACTED 2026-10-05, in full.** A table stood here headed *"Verified starting points,
+> allocation site opened in the pinned source"*, listing four rows. **Every one of the four is
+> false.** The sites were afterwards opened, one at a time, in the source each port actually pins:
+>
+> | row as published | what the pinned source says |
+> |---|---|
+> | memcached `ddee3e2` — `authfile.c:44` `calloc(1, sb.st_size)` | **already fixed at the pin.** `authfile.c:50` reads `calloc(1, sb.st_size + 2)`, with `auth_end = auth_data + sb.st_size + 1` (56) and an `auth_end - auth_cur` clamp on the `fgets` length (60) |
+> | memcached `11b5f9b` — a `realloc`'d array at `proxy_lua.c:1403` | **not heap.** The overflowed object is `char temp[KEY_MAX_LENGTH + 1]` at `proxy_lua.c:717`, a stack array; the classifier matched a `realloc` elsewhere in the same file |
+> | tshark `be813ede9d` — `extcap/etl.c:1411` `Message = g_malloc(Length)` | **absent at the pin.** 4.6.8's `extcap/etl.c` is 799 lines and contains no `Message = g_malloc` |
+> | tshark `f207d25f4b`, `830cf562a0` — `g_strdup` error strings | **not a defect.** `wiretap/libpcap.c:621` is that file's only `g_strdup` and its argument is a string literal; `830cf562a0` is an integer-underflow subject that filter 1 excludes by its own wording |
+>
+> Nothing was measured wrong and nothing was built on these rows. What was wrong was publishing a
+> classifier's output under the word *verified* — the same defect, one level up, as the "29" itself.
 
-| program | candidate | the allocation the access leaves |
-|---|---|---|
-| memcached | `ddee3e2` | `authfile.c:44` `auth_data = calloc(1, sb.st_size)`, read past by `auth_cur[x]` |
-| memcached | `11b5f9b` | `proxy_lua.c:1403`, a `realloc`'d `proxy_hook_tagged` array |
-| tshark | `be813ede9d` | `extcap/etl.c:1411` `Message = g_malloc(Length)` |
-| tshark | `f207d25f4b`, `830cf562a0` | `wiretap/libpcap.c:621`, `wiretap/pcapng.c` `g_strdup` error strings |
+**The 29 is a candidate count. The verified count is 0.** Eight of the 29 have now been read
+against the pinned source — every one that had been called verified, plus the three tshark rows
+that survived a liveness pass. None is a live class-A defect:
 
-**Not verified, and marked so:** FFmpeg's five were classified by a subagent, and **three of them
-from the diff alone without opening the allocation site** (`db05df9d13`, `bde5c6acb6`,
-`79e10e5196`). They are candidates, not facts, and must have their allocation site read before any
-of them is built. The two that were opened are `c79dfd29e6` (h264 `color_frame`) and `8e55f4f3e9`
-(v210dec `custom_stride`).
+| candidate | disposition in the pinned source |
+|---|---|
+| memcached `ddee3e2` | fix present (`authfile.c:50`, `+ 2`) |
+| memcached `11b5f9b` | stack array (`proxy_lua.c:717`) |
+| tshark `be813ede9d` | code absent at 4.6.8 |
+| tshark `f207d25f4b` | `g_strdup` of a string literal |
+| tshark `830cf562a0` | integer-underflow subject, excluded by filter 1 |
+| tshark `06d08c5811` | **no access leaves the allocation.** `wsutil/eax.c:150` allocates `worksize`; the loop bound *is* `worksize`. The fix moves where a one-past-the-end address is *formed* — legal C, and nothing dereferences it |
+| tshark `7ffc11e38f` | fix present (`wiretap/file_access.c:1322`, `:1376`) |
+| tshark `3be1c99180` | fix present (`wiretap/netscreen.c:63-66`, `:311`, `:332`). Also moot: `ws_buffer_assure_space` over-allocates, so a read past `pkt_len` stays inside the allocation — class C, not A |
+| **the remaining 21** | **not individually read.** Stated as unread, not as absent |
+
+**Why 0 is a result here and not a gap.** Class A is the class upstream fixes *first* — it is what
+fuzzers, ASan and compiler warnings find — and these three programs are pinned at recent releases
+(memcached 1.6.45, wireshark 4.6.8). Three of the eight rows above are that mechanism made visible:
+the fix is already in the tree we build. The class that survives into a current release is the one
+no existing tool sees: a crossing inside a nested allocator's block (class B) or inside a single
+allocation (class C). That is the project's own thesis, and it now has a measured denominator
+instead of an assumption behind it.
+
+**So the not-nested spatial baseline is SYNTHETIC, by necessity, and that is the correct
+instrument.** fx2 `heap_neighbour` and fx3 `heap_one_past` already supply it in all three ports.
+memcached fixtures 20 and 21 add two more, each modelled on one of the historical defects above —
+`ddee3e2`'s authfile scan, and `d5d9ff0`'s cachedump `END\r\n` reservation, which `items.c:678`
+shows fixed at the pin too, as `bufcurr + len + 6`. A baseline row's job is to show the arms
+discriminate, not to count upstream defects, and a probe that creates the crossing on purpose does
+that job better than a defect whose reachability has to be argued.
+
+**Not verified, and marked so:** FFmpeg's five were classified by a subagent, **three from the diff
+alone without opening the allocation site** (`db05df9d13`, `bde5c6acb6`, `79e10e5196`). They are
+candidates, not facts. They were not pursued: FFmpeg already contributes three not-nested spatial
+cases (§1a cases 0-2), so a fourth candidate adds nothing the baseline lacks. The two that were
+opened are `c79dfd29e6` (h264 `color_frame`) and `8e55f4f3e9` (v210dec `custom_stride`).
 
 **Where a class-A case belongs, and why it is not this corpus.** The corpus harnesses narrow every
 allocation their ported allocator makes — `wm_narrow()` on the wireshark side, the chunk carve on
