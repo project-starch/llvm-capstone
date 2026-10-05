@@ -141,8 +141,7 @@ This is also why a `DEFECT-LIVE` from this script is a **candidate**, never a re
 
 §2 said the next instrument was *"a search for fixes that change an `item_make_header` / `ITEM_*`
 size computation, which is a **shape** search rather than a wording search"*. Run, it gives **157**
-commits touching an item-size computation, of which **89** change size arithmetic on item storage,
-and **three** are reducible spatial defects — now cases **5, 6 and 7** of
+commits touching an item-size computation, and **three** of them are reducible spatial defects — now cases **5, 6 and 7** of
 `bug-corpora/memcached/allocator-repros`, measured 8/8 natively with the five temporal rows as a
 regression control (`results/20261005-native-spatial/`).
 
@@ -184,3 +183,16 @@ pass as a regression control. The three spatial rows:
 The Capstone arms are declared predictions, not measurements, and point different ways on purpose:
 case 5 predicts a fault (its crossing leaves the chunk), case 6 a completion (it does not), case 7
 states that it depends on how far the scan runs. No domain build was made.
+
+### A note on how to cite this search's numbers
+
+**157 is a population, not a candidate count, and there is no intermediate number to quote.** A
+regex over the diffs flagged 89 commits as "changing size arithmetic on item storage", and that
+figure is *not* trustworthy: it matched logger and cachedump lines such as
+`memcpy(le->key, ITEM_key(it), it->nkey)` that have nothing to do with an item's size. **Five
+commits were read individually** — the ones whose subjects carry a spatial or corruption word — and
+three of those became cases. The other 152 were **not** read one by one.
+
+Quoting 89 as "candidates" would be the same mistake this tree already records on the FFmpeg side,
+where *"overflow 2,415, out of array 1,062"* was measured in aggregate and never read case by case.
+An aggregate is evidence that a population is large, never that its members were triaged.
