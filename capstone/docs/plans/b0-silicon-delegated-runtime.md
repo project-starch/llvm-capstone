@@ -897,6 +897,15 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     hazard is gone, and the 0 is only meaningful because the same image read 94/96 on 715bdd1fe.
   - The R29 repro rung: 31/32 becomes 0/32.
   - s10b-storebuf-primed as a bare .dom, if the bare harness builds it: 0 of 8 legs trap becomes 8 of 8.
+    - Source: capstone-ariane sup-call 776d9d859, `verif/tests/custom/capstone/s10b-storebuf-primed.S`.
+      `s10b-storebuf-residual.S` sits beside it.
+    - **The verdict is the TRAP COUNT, not the exit code.** It passes either way: 9 exceptions (the control plus 8
+      legs) on the fix, 1 on 715bdd1fe.
+    - Its header (lines 31-38) is stale boilerplate saying the test does not create its condition. The primed
+      variant does; read past line 120.
+    - For the bare harness, replace its `tohost` exit with `CAPPRINT(gp)` and `CAP_PASS(s11)`, as the RTL lane did
+      for r29-s06agg-shape, and have it report the trap count.
+    - Build: testlist_sup.yaml's gcc_opts, with riscv-tests' `isa/macros/scalar` and `env/p` includes.
 - **Cost:** a true hazard now waits for the store's AXI write, the cost of a fence; a same-set false candidate costs
   ~3 cycles.
 
