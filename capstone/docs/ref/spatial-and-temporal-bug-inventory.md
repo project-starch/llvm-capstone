@@ -51,6 +51,39 @@ And the **synthetic baseline**, which is where the not-nested spatial row really
 | fx2 `heap_neighbour`, fx3 `heap_one_past` | all three app ports | the standing malloc-granular control: `level0` RETURN, `shrink` FAULT `oob` |
 | fixtures 20, 21 | memcached (new, 2026-10-05) | two more class-A probes, modelled on historical defects: **measured 15/15**, `results/2026-10-05-qemu-classa-fixtures/` |
 
+### The one remaining zero that IS a gap: FFmpeg nested spatial
+
+FFmpeg contributes 3 not-nested spatial cases and **0 nested** ones, and unlike the zeros discussed
+below this one is a genuine gap with a named candidate.
+
+**`9edd06f861` — `avcodec/proresenc_kostya`, "fill macroblock rows past the end of the bottom
+field".** Verified live at our pin, two-sided: the vulnerable expression
+`avctx->height / ctx->pictures_per_frame` occurs **4 times** in `n9.0.1`'s
+`libavcodec/proresenc_kostya.c`, the fix's marker `picture_height` **0 times**, with `encode_slice`
+at 5 occurrences as the positive control that the search reaches that file at all. The read is
+`src = pic->data[i] + line_add * pic->linesize[i]` passed to `get_slice_data` with that height, so
+for an interlaced frame the encoder reads **past the bottom field's last row**.
+
+**Why that is the nested shape.** The overflowed object is a *frame plane*, and the planes of a
+frame from `av_frame_get_buffer` are carved from **one** `AVBuffer` — literally the nested note the
+triage tool carries for FFmpeg. A crossing from one plane into the next stays inside that single
+allocation, so per-`malloc` bounds are in bounds for it and only a plane-granular adapter could
+separate them. Same structure as tshark's wmem chunks, one axis over.
+
+**What building it would and would not buy.** It would move this cell from 0 to 1 and give FFmpeg
+its first nested spatial case. It would **not** by itself produce a discriminating reading: FFmpeg's
+existing arms narrow pool buffers, not frame planes, so without a new adapter the case would read
+"completes on every arm" — a legitimate measured row of the same kind as the three sub-object cases,
+and the `partial²` verdict again. A discriminating cell needs a plane-narrowing port, which is new
+port work rather than a new case. Before building, check the allocation's padding: `linesize` is
+aligned and padded, so the crossing must be shown to leave the *plane* in a frame whose planes are
+actually adjacent.
+
+Two weaker candidates from the same pass, allocation sites **not** opened: `56309e476a`
+(`vf_vif`, index mirroring with small dimensions) and `2a20737f66` (a **revert** of a bwdif
+heap-overflow fix, so provenance needs care before it is called a defect). Disqualified on sight as
+not in our build: `884590dd4a` (AltiVec/PPC), `8b4fad11ac` (LoongArch), `ffe0104574` (CUDA).
+
 ### Why the not-nested spatial column has no live upstream defect in it
 
 This was the team's question, and the honest answer is a measurement rather than an absence.
