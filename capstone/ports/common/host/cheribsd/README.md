@@ -141,13 +141,13 @@ an ephemeral SSH private key and guest banners: keep them outside Git.
 | Target | Scope of this integration |
 |---|---|
 | FFmpeg CheriBSD | Existing bounded pool payload pointers; no per-return temporal invalidation by default |
-| PostgreSQL CheriBSD | Capability-compatible manager with 16-byte chunk/free-list layouts; ordinary libc backing allocation |
-| CPython CheriBSD | Capability-compatible pymalloc with retained arena/pool authority; inner pool frees remain ordinary allocator operations |
+| PostgreSQL CheriBSD | Capability-compatible manager with 16-byte chunk/free-list layouts; ordinary libc blocks |
+| CPython CheriBSD | Capability-compatible pymalloc with retained arena/pool authority; frees inside pymalloc's pools remain ordinary allocator operations |
 | ggml CheriBSD | Capability-compatible context extraction and backing ownership; reset does not revoke old aliases |
 | APR CheriBSD | Nodes from the platform's own malloc, as upstream; APR reuses a destroyed pool's node from its own free list without ever calling free(), so libc revocation is never asked |
 | memcached CheriBSD | Slab pages and cache objects from the platform's own malloc, as upstream; a freed chunk goes on its class's list and a freed object on cache.c's STAILQ without free(), so libc revocation is never asked |
 
-Running on CheriBSD does not automatically make inner frees temporally safe.
+Running on CheriBSD does not automatically make invisible releases temporally safe.
 The default suite explicitly disables libc revocation in test processes and verifies that state;
 `--runtime-revocation on` checks a separate installed runtime configuration.
 That switch does not add inner-lifetime hooks.

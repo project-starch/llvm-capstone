@@ -1,6 +1,6 @@
 # httpd's two nested allocators, and which one to port
 
-*Which of Apache's custom allocators is worth bringing under the discipline, and
+*Which of Apache's nested allocators is worth bringing under the discipline, and
 how many consumer defects each one would make visible. Assembled 2026-09-21
 against APR 1.7.4 and apr-util 1.6.3, from a full clone of `apache/httpd`.*
 

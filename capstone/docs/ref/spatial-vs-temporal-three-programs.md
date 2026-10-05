@@ -74,7 +74,7 @@ the overflow crosses**, because that is what decides whether anything of ours ca
 | class | bound crossed | who faults |
 |---|---|---|
 | **A** | the `malloc` bound | `shrink`, `sublet`, CHERI alike — a tie row |
-| **B** | a sub-allocation bound **inside a nested allocator's block** | only a ported inner allocator |
+| **B** | a sub-allocation bound **inside a nested allocator's block** | only a ported nested allocator |
 | **C** | a **sub-object** bound inside ONE allocation | nothing we have; needs per-member authority |
 
 | program | population | filter 1 | class B | class C | live at pin |
@@ -146,7 +146,7 @@ accounted for**, and the arithmetic reconciles from the case files rather than f
   the FFmpeg sub-object probe already shows the two-sided shape (silent inside the allocation, fires
   one element past it), and every crossing in those corpora stays inside one `g_malloc`'d block or
   slab page by the same mechanism.
-- **n/a** — FFmpeg's `backing` arm: there is no backing allocation distinct from the object, because
+- **n/a** — FFmpeg's `backing` arm: there is no block distinct from the object, because
   the object *is* one `av_malloc`.
 
 ### What the closed measurement shows, per program
@@ -305,7 +305,7 @@ The tshark fx12 ladder, one measured `len` per arm, each from a committed bundle
 | `sublet` | 1 048 528 (the 1 MiB wmem BLOCK) | RETURN `c000ee` | `ports/wireshark/app/results/2026-09-25-qemu-safety-sublet/` |
 | **`chunks`** | **64** (the allocation itself) | **FAULT `oob`** | `ports/wireshark/app/results/20260929-qemu-tshark-step2/`, `.../2026-10-03-qemu-wmem-chunks-arm/` |
 
-**Every layer narrows, and none of them reaches the object** until the inner allocator is ported. One
+**Every layer narrows, and none of them reaches the object** until the nested allocator is ported. One
 `g_malloc` hands wmem a 1 MiB region and every chunk carved from it inherits the block's bounds, so
 on `sublet` the neighbour `q` lies *inside* `p`'s bound and the write is legal. On `chunks` the same
 write faults — `sb`, insn `00c50023`, bounds ending `a5100070` against target `a5100080`.
@@ -331,9 +331,10 @@ The other two cells, same mechanism:
 
 Sublet **is** revocation, and revocation has nothing to fire on while the object is alive. fx2/fx3
 are caught by `shrink`'s per-object bounds, which `sublet` inherits by construction. The three
-nested RETURNs are the inner allocator hiding **extents** from `malloc`, exactly as it hides
-**lifetimes**. Same structure, one axis over: a nested allocator conceals both the size and the
-lifetime of its sub-objects from the layer below, and porting it restores both.
+nested RETURNs are the nested allocator making **extents** invisible to the system allocator
+(`malloc`), exactly as it makes **lifetimes** invisible. Same structure, one axis over: a nested
+allocator makes both the size and the lifetime of its sub-objects invisible to the system
+allocator, and porting it restores both.
 
 ## 4. Why there is no spatial advantage to claim over CHERI
 
@@ -370,7 +371,7 @@ to put in it"*) asserted a negative result from a search that excluded the class
 **And reason (a) does not generalise to the nested case, which is where this matters.** The tie is
 about spatial defects that cross the `malloc` bound — there bounds alone suffice and CHERI has them.
 A defect whose overflow stays **inside** a nested allocator's block is a different cell: the system
-allocator sees one block, so `shrink` and `sublet` return, and only a ported inner allocator faults.
+allocator sees one block, so `shrink` and `sublet` return, and only a ported nested allocator faults.
 That is measured today only by synthetic probes (tshark fx12, memcached fx9, FFmpeg fx16). Whether a
 *real* upstream defect of that shape exists in these three programs is **open**, and it is the
 question the hunt now under way is meant to answer. If one lands, the "spatial is a tie" framing

@@ -431,7 +431,7 @@ The runtime has two kinds of internal lock (`capstone/lock.h`):
   Capability-width atomics run under a spin lock: pointer tags and bounds survive, and they are not
   lock-free.
 - **Runtime locks.** A lock covers each of:
-  - the heap (level0 and the Sublet heap);
+  - the heap (the first-fit heap and the Sublet heap);
   - the mmap and shared-memory tables;
   - the context arena;
   - the static `posix_spawn`/`execve` request block;

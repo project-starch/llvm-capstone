@@ -67,7 +67,7 @@ those and are covered.
 On the patched platform, with libc revocation **on**, the complete suite passes
 **40/40** in one boot. The platform's own mechanism is still intact, which is
 the control that matters: a direct `malloc` use-after-free is still caught
-(tag 1 -> 0, `SIGPROT` at the labelled probe), and a sub-allocator's stale
+(tag 1 -> 0, `SIGPROT` at the labelled probe), and a nested allocator's stale
 access still is not. Had the patch merely disabled the protection, both would
 have stopped faulting.
 

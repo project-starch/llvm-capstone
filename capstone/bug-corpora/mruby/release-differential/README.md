@@ -66,7 +66,7 @@ defects are in range.
 | `stress` (`+ MRB_GC_STRESS`) | does it need a collection at every allocation? |
 | `asan` | **is the defect visible to a malloc-layer sanitizer at all?** |
 | `asan-page1` (`+ MRB_HEAP_PAGE_SIZE=1`) | one object per GC page, so a slot release becomes a page release: **is the reuse inside a GC page?** |
-| `level0` domain | the port's default heap: **the arena's** bounds, tag integrity, and `free` only marks. The revocation control. |
+| `sysalloc-none` domain (`level0`) | the port's default heap: **the arena's** bounds, tag integrity, and `free` only marks. The revocation control. |
 
 Over the 165:
 
@@ -83,7 +83,7 @@ Over the 165:
 
 ## In a Capstone domain
 
-The domain arm is `level0`: every pointer carries its bounds and its tag, and
+The domain arm is `sysalloc-none` (`level0`): every pointer carries its bounds and its tag, and
 `free` only marks. It is the **control** for the revoking arms, so a fault here
 is not a catch by revocation — it is the defect itself reaching a capability
 check. Its own control is the port's `scripts/smoke.rb`, which completes
@@ -106,7 +106,7 @@ Six rows are worth naming separately, because for them the native build returns 
 `84cc5aa60`, `93eb74a59`, `bef45e223`, `eb7693857`, `ec89364c4`. That is silent
 corruption converted into a fault with no revocation in the arm. Note what does
 the work: `CAPSTONE_LEVEL0_SHRINK` is opt-in and **off** in these builds, so
-level0 hands out the whole arena's bounds, not each object's. These six do not
+the first-fit heap (`level0.c`) hands out the whole arena's bounds, not each object's. These six do not
 fault because an object's bounds were exceeded — they fault because a
 capability that was rebuilt from an integer or derived from a dead one carries
 no tag, or because the access left the arena altogether.
@@ -118,11 +118,11 @@ event to fire on.
 
 ## The revoking arms: what revocation catches
 
-`sublet` (revoke on free) and `sublet-gc` (every GC object slot issued and
+`sysalloc-sublet` (`sublet`, revoke on free) and `sublet-gc` (every GC object slot issued and
 revoked on its own) were both **blocked** when this corpus was first measured:
 each failed its own control, faulting at ~40 frames of Ruby recursion — shallow
 enough that the port's own `scripts/smoke.rb` stopped at M8. `probe/depth-probe.sh`
-bracketed it, one depth per run in all three arms, and `level0` completed at every
+bracketed it, one depth per run in all three arms, and `sysalloc-none` (`level0`) completed at every
 depth.
 
 That was mruby's own defect, not the heap's. `stack_extend_alloc()` hands the old
@@ -140,15 +140,15 @@ With that patch **all three arms complete their control**, and the 165 run in ea
 
 | | completes | faults | watchdog |
 |---|---:|---:|---:|
-| `level0` (control: arena bounds, tags, no revocation) | 148 | 13 | 4 |
-| `sublet` (revoke on free) | 147 | 15 | 3 |
+| `sysalloc-none` (control: arena bounds, tags, no revocation) | 148 | 13 | 4 |
+| `sysalloc-sublet` (revoke on free) | 147 | 15 | 3 |
 | `sublet-gc` (per GC object slot) | 144 | 18 | 3 |
 
 A **catch** is a case the control runs to completion and a revoking arm faults
-on. `level0` revokes nothing, so its own 13 faults are the defect reaching a
+on. `sysalloc-none` revokes nothing, so its own 13 faults are the defect reaching a
 bounds or tag check, and are not catches. Four cases are caught:
 
-| case | level0 | sublet | sublet-gc | ASan | what it is |
+| case | sysalloc-none | sysalloc-sublet | sublet-gc | ASan | what it is |
 |---|---|---|---|---|---|
 | `59552ecb8` | **completes, silently** | **fault** | **fault** | use-after-free | `mruby-sprintf`, format string mutated during the call |
 | `606d9a6b2` | wrong answer | wrong answer | **fault** | use-after-free | `hash.c`, the pair a scan carries into a set |
@@ -197,7 +197,7 @@ every commit in the window.
   for none of the 17 yet.
 - Of the 153 ASan-blind rows, exactly **one** is caught by a mechanism here
   (`628ccec60`, by `sublet-gc`). The other 152 are still caught by nothing in
-  this set: not ASan, not level0's tags and arena bounds, not revocation at
+  this set: not ASan, not `sysalloc-none`'s (`level0`) tags and arena bounds, not revocation at
   either layer.
   That is the honest size of the remaining gap.
 - 24 further defects are live at the pin with a reproducer in their issue rather

@@ -298,8 +298,8 @@ The image declares the exchange region with `EXCHANGE_BYTES` (default 256 KiB,
 chunked, so a big read or write is a short one. A v2 image's descriptor is 48
 bytes. `capstone-exec` refuses any image without it (a v1 image, or one
 without the delegation flag) with exit 126; rebuild old applications.
-`CAPSTONE_APPLICATION_GRANT_BYTES` declares shared backing for existing inner
-allocators, including a Sublet outer heap where selected.
+`CAPSTONE_APPLICATION_GRANT_BYTES` declares shared backing for the Sublet heap,
+where selected, and for existing nested allocators.
 
 The launcher installs a seccomp filter from the same shape table before the
 first step: the delegated numbers plus its own, everything else answers
@@ -622,20 +622,20 @@ before the intended threshold. Upstream test failures remain port results;
 see [Perl's actual tested subset and limitations](../ports/perl/musl/README.md).
 
 The libc heap qualification runs the heap cases of `contract.c` on three images
-of the same source: `sublet` (`HEAP=sublet`), `level0` (`HEAP=level0` as
-applications get it, each allocation bounded) and `control` (`HEAP=level0` built
+of the same source: `sysalloc-sublet` (`sublet`, `HEAP=sublet`), `sysalloc-bounds` (`level0`, `HEAP=level0` as
+applications get it, each allocation bounded) and `sysalloc-none` (`control`, `HEAP=level0` built
 with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, unprotected). Every `fault-*` case must
-be a SIGSEGV on `sublet`; the spatial ones (`fault-bounds`, `fault-bounds-large`,
-`fault-realloc-shrink`) must be one on `level0` too; every other case on `level0`,
-and every case on `control`, must reach the survival marker and exit 90. Every
+be a SIGSEGV on `sysalloc-sublet`; the spatial ones (`fault-bounds`, `fault-bounds-large`,
+`fault-realloc-shrink`) must be one on `sysalloc-bounds` too; every other case on `sysalloc-bounds`,
+and every case on `sysalloc-none`, must reach the survival marker and exit 90. Every
 `heap-*` case must complete on all three. The protected fault must occur at the
 intended byte probe with the expected QEMU cause (5 for the spatial cases, 24 or
 25 for the others; a double free stops at the Sublet heap's probe in `sh_free`,
 which `free` calls with the heap lock held). Churn must allocate at least 200,000
-nodes on `sublet`. A setup error, unrelated fault or early exhaustion fails the gate.
+nodes on `sysalloc-sublet`. A setup error, unrelated fault or early exhaustion fails the gate.
 
-Build the control with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0` in `CMAKE_C_FLAGS`; the
-default `application-contract.dom` is the `level0` arm. Build each image
+Build the `sysalloc-none` arm with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0` in `CMAKE_C_FLAGS`; the
+default `application-contract.dom` is the `sysalloc-bounds` arm. Build each image
 with an LLD map, using
 `-DCMAKE_EXE_LINKER_FLAGS="-Map=<absolute-build>/<target>.dom.map"` at CMake
 configuration. The runner requires the three ELFs and maps (default map path:
@@ -662,7 +662,7 @@ emulator the 200,000-cycle churn case exhausts the node pool after about
 [2026-09-30 record on the platform dev pins](tests/application/results/20260930-heap-qualification-on-dev.json)
 supersedes the first run's weaker verdict and filename checks, and the
 [2026-10-01 record](tests/application/results/20261001-heap-three-arms.json)
-adds the `level0` arm and the shrinking `realloc`; the plan is
+adds the `sysalloc-bounds` arm and the shrinking `realloc`; the plan is
 [capstone-heap-protection.md](../docs/plans/capstone-heap-protection.md).
 
 The [2026-09-26 acceptance result](tests/application/results/20260926-qemu-rebased.json)

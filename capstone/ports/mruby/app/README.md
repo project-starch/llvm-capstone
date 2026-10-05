@@ -156,7 +156,7 @@ three of which revoke-on-free cannot see.
 ## The Sublet heap (`MRBD_HEAP=sublet`)
 
 mruby's `mrb_malloc` sits on the domain's `malloc`. `MRBD_HEAP=sublet` links
-the runtime's `sublet_heap.c` in place of level0: a buddy heap over a region the
+the runtime's `sublet_heap.c` in place of the first-fit heap (`level0.c`): a buddy heap over a region the
 host grants, one bounded alias per block, every free revoked. Every body mruby
 allocates -- strings, arrays, hashes, the VM stack, ireps -- and its GC heap
 pages come from it; single GC object slots do not (a page is revoked only when

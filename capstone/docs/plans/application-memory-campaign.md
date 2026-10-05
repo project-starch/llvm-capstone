@@ -92,7 +92,7 @@ identified separately from the unmodified upstream reference run.
 Predeclare at least one memory-active case per application and a contrasting
 case when the upstream suite offers one. Apply the same contract to **every
 admitted case**, including cases whose result disfavors the thesis. A benchmark
-is admitted only if the chosen unit exercises the nominated inner allocator, its release is
+is admitted only if the chosen unit exercises the nominated nested allocator, its release is
 observable, the output oracle passes, and its input/retained-set scale is
 reproducible. Workload adaptations and missing axes are published as cells,
 not silently replaced by a different benchmark. Use the existing planner's
@@ -127,16 +127,16 @@ Record these layers at **the same inner boundary** for all four arms:
 |---|---|---|
 | Useful demand | Live and peak requested bytes/objects, allocation and release counts, completed units, output oracle | Logical live allocation set, not cache working set. The four arms must execute comparable requests; report any differences. |
 | Address reuse | Integer `(start, usable size, allocation index, release index)` observations, in-place realloc and unreused/insufficient-follow-up counts | Distinct starts, union of allocated address intervals, allocation-side reuse fraction and retirement-side reuse within 1/8/64/512/4096 attempts on a fixed eligible cohort. These are virtual address histories, not resident pages. |
-| Inner allocator state | Rounded live capacity, reusable free capacity, capacity withheld from reuse, grants/returns to parent, high-water capacity | Separate useful live storage, rounding, reusable cache, and quarantine. `held = live + withheld` only where those categories really partition the same backing. |
+| Nested allocator state | Rounded live capacity, reusable free capacity, capacity withheld from reuse, grants/returns to parent, high-water capacity | Separate useful live storage, rounding, reusable cache, and quarantine. `held = live + withheld` only where those categories really partition the same backing. |
 | Protection and process storage | Sublet tables and live/retired/reclaimed node counts; PoisonCap link and queue tables, snapshot backing and revoker/page-table state; committed/mapped pages and process RSS where measured | Attribute metadata to the process or platform once, never sum independent peaks. Distinguish fixed reservations, touched pages, allocator-owned bytes, and OS-returned pages. |
 
 Every sample carries application/case/variant, arm, repetition, unit/phase,
 source/binary/kernel/libc/SDK identities, effective allocator and revocation
 policy, observer capacity, and raw-log digest. The observer stores integer
 events only; it must not keep guest heap capabilities alive. Check its own
-storage and overflow. Requested bytes and address events at outer `malloc`
+storage and overflow. Requested bytes and address events at the system allocator (`malloc`)
 alone do **not** qualify `memsys5`, GC slots, pymalloc, PostgreSQL contexts,
-or FFmpeg pools as measured inner allocators.
+or FFmpeg pools as measured nested allocators.
 
 Working-set growth has three different meanings and receives three different
 axes: current *live requested bytes*, current *allocator-held/committed bytes*,
@@ -170,7 +170,7 @@ configuration belong in frozen bindings.
 | mruby upstream `bm_so_lists.rb` | One complete upstream work body; drop transient lists and let its normal GC run; list size/retained graph for B/C | Original Capstone/CheriBSD arms pass. Full PoisonCap GC-slot integration and inner observer are missing. |
 | CPython pinned `pyperformance` body | One fixed-work JSON/pickle or similar body; release temporary Python objects under the benchmark's ordinary GC policy; input or retained-object size for B/C | Full PoisonCap interpreter, dependencies, output oracle, and inner pymalloc observer missing. A pymalloc component alone is insufficient. |
 | PostgreSQL `pgbench` select-only/simple-update | One transaction with its normal context reset; database/input scale or transaction result size for B/C, after checking that this changes context demand | Current single-user backend is not a `pgbench` server. Full backend/PoisonCap context integration and transaction-level oracle required. A SQL-body subset is a separately named derived workload. |
-| Perl pinned core workload | One complete case, dropping its temporary values; benchmark-defined input size for B/C | No matched protected inner allocator on both platforms yet. Keep outer-malloc/reference results separate; do not count this as a four-arm nested case. |
+| Perl pinned core workload | One complete case, dropping its temporary values; benchmark-defined input size for B/C | No matched protected nested allocator on both platforms yet. Keep outer-malloc/reference results separate; do not count this as a four-arm nested case. |
 
 If the native benchmark offers no repeatable unit or monotone live-set knob,
 admit a different *predeclared* case from the same suite or mark B/C unavailable.

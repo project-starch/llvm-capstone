@@ -14,7 +14,7 @@ The [stock build](../README.md) takes every slab page and cache object from
 the platform's own `malloc`, so its libc revocation is asked the question at
 the level where it lives -- and is never asked, because neither allocator
 calls `free()` on the path where a freed unit is reused. This build replaces
-that level: one `mmap`'d arena carries `CHERI_PERM_POISON` and
+the system allocator: one `mmap`'d arena carries `CHERI_PERM_POISON` and
 `CHERI_PERM_SW_VMEM`, that capability is the adapter's and stays in its
 records, and every alias handed to memcached is bounded to its unit and
 stripped of both permissions.
@@ -27,12 +27,12 @@ bookkeeping and two mechanisms.
 
 | mode | what a release does | what the corpus requires |
 |---|---|---|
-| 0 | nothing: bounded leases, no poison, no sweep | the sequence completes, and the adapter reports `sweeps=0` |
+| 0 | nothing: bounded aliases, no poison, no sweep | the sequence completes, and the adapter reports `sweeps=0` |
 | 1 | `cpoison` on each 16-byte granule of the unit, one synchronous `cheri_revoke`, `cclearpoison`, then a `memset` | the stale access faults with `SIGPROT` `si_code=PROT_CHERI_TAG` at the corpus's labelled load |
 
 The `memset` is not hygiene. `cclearpoison` resets the granule's access state
 but leaves the poison capability stored in the payload, and a later sweep
-would read that as a freshly issued lease. Both allocators write their
+would read that as a freshly issued alias. Both allocators write their
 free-list links into the unit immediately after the release returns, so the
 adapter hands back a fresh alias and upstream rebuilds the links through it.
 

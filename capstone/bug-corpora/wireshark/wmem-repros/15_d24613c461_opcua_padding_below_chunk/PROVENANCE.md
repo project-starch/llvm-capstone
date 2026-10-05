@@ -67,12 +67,12 @@ first iteration — the one that crosses.
 **Establishes:** the defect is real, reduces cleanly, and a bounds fault (cause 5) lands on the
 labelled probe.
 
-**Does NOT establish** that a nested allocator hides the *extent* from `malloc`. Every arm of this
+**Does NOT establish** that, under a nested allocator, the *extent* is invisible to `malloc`. Every arm of this
 harness narrows a wmem allocation to its request
 (`ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15`, `wm_narrow()`), so there is no
 malloc-granular arm here to contrast against. That contrast lives in the tshark **app** port, whose
-measured fx12 length ladder is `level0` 41 908 912, `shrink` 8 388 560, `sublet` 1 048 528,
-`chunks` 64. Case 13's own run established this, and these rows are pre-registered with the
+measured fx12 length ladder is `sysalloc-none` (`level0`) 41 908 912, `sysalloc-bounds` (`shrink`) 8 388 560,
+`sysalloc-sublet` (`sublet`) 1 048 528, `chunks` 64. Case 13's own run established this, and these rows are pre-registered with the
 correction already applied.
 
 **Does not establish reachability.** That a capture can deliver the triggering input to this site is

@@ -19,7 +19,7 @@ than the old byte.*
 ## Goal
 
 Port Wireshark's memory manager `wmem` — its core and all four allocators —
-to the Capstone domain with the two protection modes every other component
+to the Capstone domain with the two arms every other component
 port has: `spatial` (every object narrowed to its request) and `sublet`
 (additionally, a pool reset ends the epoch of every object in its retained
 blocks). Pin **wireshark 4.6.8**; both block allocators are blob-identical

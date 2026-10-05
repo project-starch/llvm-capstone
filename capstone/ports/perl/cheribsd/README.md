@@ -35,7 +35,7 @@ The [qualification evidence](results/2026-09-28/) records the existing
 regexes, closures, methods, files and packing complete. These are two smoke
 processes, not the complete Perl test suite or a memory benchmark.
 
-This qualification binary keeps Perl's upstream inner allocators.
+This qualification binary keeps Perl's upstream nested allocators.
 `PERL_CHERI_SV_HEADS=1` builds the study variant instead: patch 0001 and the
 PoisonCap backend of [`../sv-heads`](../sv-heads/README.md) replace the SV-head
 arenas, and the common phase observer is linked in. One binary carries the

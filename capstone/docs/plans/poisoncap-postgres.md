@@ -93,7 +93,7 @@ detox by the allocator at reallocation; and no zeroing at all --
 poisoning replaces the zero pass, which is the paper's claim to costing nothing
 over a zero-before-reuse baseline. Delegation to a nested allocator is by
 BOUNDS: an access to poisoned memory is permitted only through a pointer
-broader than the poison capability it references, so a sub-allocator's heap
+broader than the poison capability it references, so a nested allocator's heap
 capability survives while its issued chunks do not.
 
 This adapter follows none of those three timings, and a mode built to follow

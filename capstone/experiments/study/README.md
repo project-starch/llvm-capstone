@@ -38,7 +38,7 @@ snapshot backing. This selected component does not establish a total-memory
 advantage.
 
 The [three-application reuse CDF preview](results/cross-application-reuse-preview-20260928/README.md)
-places the qualified SQLite, mruby and FFmpeg inner-allocator results on one
+places the qualified SQLite, mruby and FFmpeg nested-allocator results on one
 paper-width figure with the same all-issues denominator and three independent
 process repetitions per arm. It is derived from existing campaigns; the other
 three application rows remain unqualified.
@@ -58,7 +58,7 @@ now measures exact same-start reuse timing inside the complete SQLite applicatio
 12/12 long runs match all SQL phase oracles; Sublet's histogram matches its
 original bin for bin, while corrected PoisonCap shifts reuse to longer gaps.
 The [FFmpeg whole-decoder lease-gap follow-up](results/ffmpeg-reuse-gaps-20260927/README.md)
-adds a second inner-allocator boundary: 36/36 full 1/4/16-stream processes
+adds a second nested-allocator boundary: 36/36 full 1/4/16-stream processes
 match the frame oracle. All four arms have exactly equal pool lease-gap bins,
 while the selective PoisonCap temporal adapter targets 116.155 MiB of
 cumulative payload spans with poison, clear and copy operations in the
@@ -108,18 +108,18 @@ campaign.
 
 ## Comparisons
 
-| Arm | Outer heap | Internal allocator | Process revocation policy |
+| Arm | System allocator | Nested allocator | Process revocation policy |
 |---|---|---|---|
-| `capstone` | Shared SDK level0 | Original application implementation | Existing Capstone runtime |
-| `capstone-sublet`, profile `nested` | Same level0 | Application's Sublet integration | Existing Capstone runtime |
+| `capstone` | Shared SDK first-fit heap (`level0.c`) | Original application implementation | Existing Capstone runtime |
+| `capstone-sublet`, profile `nested` | Same first-fit heap | Application's Sublet integration | Existing Capstone runtime |
 | `capstone-sublet`, profile `outer-malloc` | Sublet malloc | Original application implementation | Existing Capstone runtime |
 | `cheribsd-revocation-on` | Default CheriBSD malloc | Original application implementation | Explicitly enabled |
 | `cheribsd-revocation-off` | Same binary and malloc | Same implementation | Explicitly disabled |
 
 Each plan has exactly four arms and exactly one profile. The nested profile
-addresses the internal-allocator paper question. The outer-malloc profile is
+addresses the nested-allocator paper question. The outer-malloc profile is
 a separate comparison continuing the earlier experiments. Neither means
-disabling the Capstone ISA. Level0 is the SDK's arena allocator, not jemalloc;
+disabling the Capstone ISA. The first-fit heap is the SDK's arena allocator, not jemalloc;
 cross-platform differences include allocator policy and OS/runtime differences.
 
 `--comparison nested-poisoncap --profile nested` instead plans `capstone`,
@@ -251,7 +251,7 @@ binding format is:
 
 Build manifests identify the application, binary SHA256, `allocations=true`,
 and `allocations_sha256`. Capstone manifests also carry `heap` and `nested`;
-the latter is `none` or the application ID whose internal allocator is integrated.
+the latter is `none` or the application ID whose nested allocator is integrated.
 The existing builder supplies this for CPython and mruby. Other integrations
 need an application adapter before receiving that identity. Never manufacture
 a manifest that labels an allocator replay as an application build.
@@ -336,7 +336,7 @@ decoder. Across 1, 4 and 16 independent streams, six new PoisonCap runs and
 eighteen earlier Capstone repeats match the exact frame oracle. The PoisonCap
 temporal adapter retains a 315,072 B snapshot and increases within-platform
 jemalloc allocated by 294,912–318,336 B. The two FFmpeg figures keep that
-process ledger separate from Capstone's outer-heap peak and pool payload
+process ledger separate from Capstone's system-allocator peak and pool payload
 accounting; they make no cross-platform total-RSS or QEMU-speed claim.
 
 The [upstream mruby lists readiness run](results/20260927-mruby-lists.json)
@@ -345,8 +345,8 @@ the pinned fetched source with `prepare-mruby-lists.py --source PATH --out DIR`,
 then run the generated script unchanged on each interpreter. The adapter adds
 per-iteration checks, two phase writes and final text output, without forcing
 GC. An independent native Ruby run supplies the preserved output oracle.
-Both Capstone arms recover from six allocation failures at their 64 MiB outer
-heap budget. These are functional passes, not a qualified nested-memory ranking:
+Both Capstone arms recover from six allocation failures at their 64 MiB system
+allocator budget. These are functional passes, not a qualified nested-memory ranking:
 backing budgets and internal-slot counters still need matching.
 
 The [PoisonCap source/build audit](results/20260927-poisoncap-source-audit.json)
@@ -370,7 +370,7 @@ The [external evidence archive](results/20260927-archive.json) preserves raw
 attempts, commands and the tested sources, with guest credentials excluded.
 
 Next: qualify mruby's upstream workloads, broader SQLite speedtest1 sizes and the selected
-pyperformance bodies, including internal allocator counters. The existing
+pyperformance bodies, including nested allocator counters. The existing
 runner contract currently expects textual stdout; binary-output benchmarks
 (such as Mandelbrot PBM output) need exact byte-hash oracles before qualification.
 PostgreSQL's structured SQL oracle and FFmpeg's broader CLI need corresponding

@@ -23,7 +23,7 @@ angle form to the wrong one of the two. What stays here is the patch and this bo
 
 | Operation | memsys5 | lookaside |
 |---|---|---|
-| block from the level below | the host's region, linear, into a slot (`sqlite3_sublet_grant`) | `sqlite3MallocLinear`: memsys5 keeps the handle, the pool gets the block linear |
+| block from below | the host's region, linear, into a slot (`sqlite3_sublet_grant`) | `sqlite3MallocLinear`: memsys5 keeps the handle, the pool gets the block linear |
 | carve | `sublet_carve` at init, `sublet_split` at a split, after `sublet_handle` on the parent | `sublet_carve`, one slot at a time, front to back |
 | hand out | `sublet_take`: mrev, delin | the same, on the slot's entry |
 | free | `sublet_give`: revoke, the block is linear again | the same |

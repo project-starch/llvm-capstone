@@ -40,7 +40,7 @@ APR's unit of storage is the **node**: `MIN_ALLOC` or more, a multiple of
 `BOUNDARY_SIZE`, holding a pool's struct and everything allocated from it.
 Upstream still decides everything about nodes -- the size buckets, LIFO order,
 which node the next `apr_pool_create` pops. The adapter supplies the storage
-under a node and, in the protected mode, the authority over it.
+under a node and, in the protected arm, the authority over it.
 
 The hooks sit on APR's own free-list transitions, not on `free()`.
 `allocator_free` files a released node on `allocator->free[index]` and
@@ -53,7 +53,7 @@ to a pool. Both return the alias upstream uses from then on. `malloc`/`free` of
 a node become the payload backing; of the allocator struct, the metadata heap,
 so an allocator never lives in storage it hands out.
 
-Both domain modes use the same layout and allocator code:
+Both domain arms use the same layout and allocator code:
 
 - `spatial`: a node keeps the alias it was carved with. A handle saved across
   `apr_pool_destroy` still names the storage, which by then is the next pool's.
@@ -83,7 +83,7 @@ takes 8 KiB blocks from `apr_allocator_alloc`, carves `SMALL_NODE_SIZE` nodes
 from them by bumping `first_avail`, files a freed small node on its own LIFO
 freelist by writing the link into the freed node, and returns whole blocks
 when it is destroyed. Large nodes are whole APR nodes and pass through the
-pool hooks above. Its level below is this port, which is why it is carried
+pool hooks above. The allocator below it is this port, which is why it is carried
 here and not as a component of its own.
 
 The hooks replace a bump and two list operations with calls that do the same
@@ -99,7 +99,7 @@ which node, in which order:
 | `aprb_blocks_returning` | before the block chain goes back to APR | the records of what was carved from those blocks are dropped; the pool's release of each block revokes the senior handle and every piece dies with it |
 | `aprb_probe` | first thing in `apr_bucket_free` | a labelled read through the pointer handed back, so a stale or twice-freed one fails there and not in the bookkeeping |
 
-Both domain modes use the same layout: a piece is a `shrink` of the block's
+Both domain arms use the same layout: a piece is a `shrink` of the block's
 alias in `spatial` and a split of the lent block in `sublet`, at the same
 address either way. The list struct is still the first piece of the first
 block, as upstream carves it. A double free is refused by the records in
