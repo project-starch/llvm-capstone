@@ -1,0 +1,36 @@
+{
+  "program": "postgres",
+  "boundary": "the engine, reached through SQL against a running server",
+  "title": "Engine and contrib defects in PostgreSQL 17.5, reached by SQL rather than by a C reduction",
+  "upstream": {
+    "version": "17.5",
+    "port": "capstone/ports/postgres/memory-contexts"
+  },
+  "cases": 19,
+  "case_schema": "script-trigger",
+  "case_number_base": 1,
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "cheribsd-revocation"
+  ],
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "true": 19
+  },
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "related": [
+    "capstone/bug-corpora/postgres/mmgr-repros"
+  ],
+  "advisories": [
+    "CVE-2026-14669",
+    "CVE-2026-14680",
+    "CVE-2026-15742",
+    "CVE-2026-16239",
+    "CVE-2026-18024",
+    "CVE-2026-2003",
+    "CVE-2026-6470"
+  ],
+  "note": "Sibling of mmgr-repros, not an extension of it. Those 8 cases are upstream use-after-free and double-free defects in the memory managers, pinned at 17.0 and reduced to C programs against aset/slab. These 19 are reached through SQL against a running 17.5 server and are mostly not allocator defects at all: 5 invariant, 4 integer, 3 spatial, 2 spatial/oob-read, 2 type-confusion, 1 null-deref, 1 wrong-answer, 1 authz. That spread is the point -- a corpus filtered to what a sanitizer can see would keep 6 of 19. Cases 12, 14 and 18 need a postmaster and cannot run under the single-user backend the arms use; their arms say so rather than reporting silence. Case 13's directive was written from its own run output and is a recording, not an independent oracle; its case.json says so. Our own constructed memory-context demonstrators are deliberately NOT here: they are this project's fixtures, which README.md places under ports/*/security-tests rather than in bug material."
+}

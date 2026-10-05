@@ -1,0 +1,25 @@
+{
+  "case": 4,
+  "upstream_fix": "no-fix-recorded",
+  "title": "money INT64_MIN / -1; RISC-V division never traps, so it returns a wrong value",
+  "consumer": "money / int8 division",
+  "class": "integer",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "no fix commit recorded. Established by arithmetic on the pin rather than by a sanitizer: '-92233720368547758.08'::money is exactly INT64_MIN cents, and dividing it by -1 has no representable answer. x86 raises SIGFPE; RISC-V does not trap and cash_div_int64 returns INT64_MIN unchanged, which the purecap run prints",
+  "fidelity": "real server. There is no memory error here and nothing for a capability machine to catch -- the defect is arithmetic, and the evidence is the value. Recorded so the corpus's denominator is not quietly restricted to memory safety",
+  "arms": {
+    "spatial": {
+      "status": "not written",
+      "precondition": "PGSU_NESTED=none. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+    },
+    "sublet": {
+      "status": "not written",
+      "precondition": "PGSU_NESTED=sublet, with its own PG_SU_ROOT separate from the spatial build. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; the defect is witnessed by PostgreSQL's own check or by the differential -- REACHED-SILENT (2026-10-04). Returns -$92,233,720,368,547,758.08 -- the original negative, unchanged. INT64_MIN/-1 has no representable answer and negating a negative cannot stay negative, so this value is one no correct build can print. RISC-V division does not trap (x86 raises SIGFPE, which is how the host oracle saw it). Nothing for CHERI to catch: this is arithmetic, not a memory access."
+    }
+  },
+  "status": "spatial not run; sublet not run; cheribsd-revocation run 2026-10-04"
+}

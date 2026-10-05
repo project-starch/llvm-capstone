@@ -1,0 +1,25 @@
+{
+  "case": 2,
+  "upstream_fix": "no-fix-recorded",
+  "title": "ts_headline() overflow, ~32 KB -- leaves the malloc block",
+  "consumer": "ts_headline()",
+  "class": "spatial",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "no fix commit recorded; established on the pin by host ASan, which reports negative-size-param, and by the purecap arm, where the ~32 KB overflow crosses the malloc bound and raises SIGPROT on both the plain and the cassert build",
+  "fidelity": "real server, real allocator. Unlike case 01 this one leaves the malloc block, which is why both a sanitizer and a capability machine can see it",
+  "arms": {
+    "spatial": {
+      "status": "not written",
+      "precondition": "PGSU_NESTED=none. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+    },
+    "sublet": {
+      "status": "not written",
+      "precondition": "PGSU_NESTED=sublet, with its own PG_SU_ROOT separate from the spatial build. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+    },
+    "cheribsd-revocation": {
+      "oracle": "SIGPROT on the plain purecap build -- CHERI-DETECTED (2026-10-04). SIGPROT(34) on BOTH the plain and the cassert purecap build. ~32 KB overflow leaves the malloc block, so the capability bound is crossed."
+    }
+  },
+  "status": "spatial not run; sublet not run; cheribsd-revocation run 2026-10-04"
+}

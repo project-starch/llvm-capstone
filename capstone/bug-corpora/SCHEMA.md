@@ -43,6 +43,28 @@ per-case script would have to reinvent twenty times.
 `case.c` must declare the number its directory carries. A fixture naming
 another case is refused rather than silently run.
 
+## `script-trigger`: a case that is an interpreter script
+
+Some defects are not reducible to a C program against an allocator. A
+PostgreSQL engine defect is reached by running SQL against a real server; an
+mruby or Perl defect is reached by running a script through the interpreter.
+Their oracles are a fault, one of the program's own assertions, or a
+differential against what a correct build prints. For those the case directory
+carries a trigger script in place of `case.c`, and declares:
+
+    case, upstream_fix, title, consumer, class, trigger, fidelity, arms, status
+
+`class` is what kind of defect it is (`spatial`, `integer`, `invariant`,
+`type-confusion`, `wrong-answer`, …) rather than a reduction shape, because
+there is no reduction. `trigger` names the file the case runs, and the checker
+holds the case to it: the name is per case, not per corpus, so one corpus may
+mix `.t` and `.pl`, or `.sql` and anything else, without splitting in two or
+renaming upstream files to fit. `allocator_layer` is optional here -- a Perl
+case has one, a PostgreSQL integer-overflow case does not. `object`,
+`lifetime_ender` and `shape` do not apply either; a case may still carry
+`shape` where one genuinely fits. Everything else -- the directory name, dense numbering, the
+arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
+
 ## Required fields
 
 | field | meaning |
@@ -64,8 +86,23 @@ another case is refused rather than silently run.
 ## Optional fields
 
 `distinguishing` (why this case is not a duplicate of its siblings),
-`sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`. Optional
-means optional: the checker does not invent them, and absence is not a defect.
+`sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
+`allocator_consumed`, `channel`. Optional means optional: the checker does not
+invent them, and absence is not a defect.
+
+`allocator_consumed` is the companion to `allocator_layer`, and a corpus that
+records one without the other has half of axis 2. The layer says which
+allocator the memory came from; `allocator_consumed` says whether the damage
+stayed inside that layer's block, which is the difference between a defect a
+nested allocator hides and one it does not. The two do not share an empty
+count -- a case can have a measured layer and no consumed verdict -- so a
+corpus reporting coverage must count them separately rather than quoting one
+number for both.
+
+A field that is meaningful in exactly one schema belongs in that schema's
+required list, not here. `trigger` is the worked example: it is required for
+`script-trigger`, and keeping it out of the optional set is what lets the
+unknown-field check still catch a stray `trigger` on a `case-json` case.
 
 ## Arms
 
@@ -119,7 +156,7 @@ checkable from outside, and it is the only input to the generated index.
 | `program`, `boundary`, `title` | what the corpus is about: the upstream program, the allocator or API boundary its cases cross, and one line of scope |
 | `upstream` | `{version, port}` -- the release the cases are built against, and the port component that pins it. Absent where each row pins its own commit |
 | `cases` | how many cases the corpus has. The checker counts the tree and refuses a mismatch |
-| `case_schema` | `case-json` (a reduction with `case.c`), `sqlite-row` (a binding row carrying the provenance ledger's columns), or `xlang-row` (a shim row, declaration-level only) |
+| `case_schema` | `case-json` (a reduction with `case.c`), `script-trigger` (a defect whose trigger is an interpreter script rather than a C reduction; each case names its own file in `trigger`), `sqlite-row` (a binding row carrying the provenance ledger's columns), or `xlang-row` (a shim row, declaration-level only) |
 | `case_macro`, `case_glob`, `case_exclude`, `case_number_base`, `case_doc` | how cases are named and found, where the defaults do not fit. Case numbers are dense from `case_number_base` (0, or 1 for the SQLite rows) |
 | `case_table`, `case_dir_column` | for `xlang-row`: the row table that is the corpus's authority, and the column naming each case directory |
 | `required_arms`, `arm_keys` | the arms every case must declare, and any arm whose oracle carries more than `oracle` (the pymalloc corpus records a `cause` on `sublet`). **Order is not significant and is not checked** — `wmem-repros` lists `cheribsd-revocation` third, to mirror the paper's column order, while `allocator-repros` and `pool-repros` list it after the two PoisonCap arms. Both are valid; noted here because the difference otherwise reads as a defect, and reordering a corpus to match another would churn every case file for nothing |
