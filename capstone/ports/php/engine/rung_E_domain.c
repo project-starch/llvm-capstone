@@ -74,6 +74,49 @@
 # elif defined(RUNG_E_CRASH005)
 #  define RUNG_E_SOURCE "a(1"
 #  define RUNG_E_STMT   1
+/* The object-model lifetime cases. All four are CWE-416 that ASAN cannot see through PHP's own
+ * allocator (clean OK on the asan-stock build) -- which is exactly why they are worth running.
+ *
+ * var_dump is kept rather than removed, and registered as a no-op below. For CRASH-024 the
+ * faulting access IS the argument fetch ASAN reports at zend_fetch_var_address, so deleting the
+ * call would delete the bug; for the others the fault precedes the call and the stub only keeps
+ * the opcode stream faithful. */
+# elif defined(RUNG_E_CRASH024)
+#  define RUNG_E_SOURCE \
+     "class Foo {\n" \
+     "  function getThis() { return $this; }\n" \
+     "  function destroyThis() { $baz =& $this->getThis(); }\n" \
+     "}\n" \
+     "$bar = new Foo();\n" \
+     "$bar->destroyThis();\n" \
+     "var_dump($bar);"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH025)
+#  define RUNG_E_SOURCE \
+     "class Foo { function __construct() { $this->error = array($this,$this); } }\n" \
+     "$a =& new Foo();\n" \
+     "class Bar { function __construct() { $this->_rme2 = $this; } }\n" \
+     "$b =& new Bar();\n" \
+     "$b->_rme2 = 0;\n" \
+     "var_dump($b);"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH042)
+#  define RUNG_E_SOURCE \
+     "class main { public static $dataAccessor = NULL; }\n" \
+     "class relay { public function __get($name) { main::$dataAccessor = new relay; } }\n" \
+     "main::$dataAccessor = new relay();\n" \
+     "main::$dataAccessor->bar;\n" \
+     "echo 'ok';"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH065)
+#  define RUNG_E_SOURCE \
+     "class foo { function foo($arrayobj) { var_dump($arrayobj); } }\n" \
+     "new foo(array(new stdClass));"
+#  define RUNG_E_STMT   1
+/* Named explicitly as well as being the default: the runner derives -DRUNG_E_<case> from the case
+ * id, and an id with no branch would silently compile the default source instead of failing. */
+# elif defined(RUNG_E_CRASH110)
+#  define RUNG_E_SOURCE "parse_url(\"file:///\")"
 # else
 #  define RUNG_E_SOURCE "parse_url(\"file:///\")"
 # endif
@@ -125,8 +168,18 @@ static int ub_vspprintf(char **pbuf, size_t max_len, const char *fmt, va_list ap
 
 /* The one hand-written thing: ext/standard has no module to register, so the function is
  * introduced directly. handler is url.c's own zif_parse_url. */
+/* A no-op var_dump. The object-model cases call it, and every one of them faults BEFORE the call
+ * -- at the argument fetch, the array build or the property write -- so the body can be empty.
+ * What matters is that the function EXISTS: an undefined call would bail out of the eval before
+ * the opcodes under test had run. */
+static void zif_rung_nop(INTERNAL_FUNCTION_PARAMETERS)
+{
+    (void)ht; (void)return_value; (void)this_ptr; (void)return_value_used;
+}
+
 static zend_function_entry rung_e_functions[] = {
-    { "parse_url", zif_parse_url, (struct _zend_arg_info *)0, 0, 0 },
+    { "parse_url", zif_parse_url,  (struct _zend_arg_info *)0, 0, 0 },
+    { "var_dump",  zif_rung_nop,   (struct _zend_arg_info *)0, 0, 0 },
     { (char *)0,   (void (*)(INTERNAL_FUNCTION_PARAMETERS))0, (struct _zend_arg_info *)0, 0, 0 }
 };
 

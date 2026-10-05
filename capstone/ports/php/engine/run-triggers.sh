@@ -140,10 +140,28 @@ axis_of() {
   case "$1" in
     CRASH-110|CRASH-073) echo heap ;;
     CRASH-003|CRASH-004|CRASH-010|CRASH-067) echo temporal ;;
+    CRASH-024|CRASH-025|CRASH-042|CRASH-065) echo temporal ;;
     CRASH-005) echo global ;;
     *) echo heap ;;
   esac
 }
+
+# THE POPULATION THIS SUITE EXISTS FOR.
+#
+# Not "every corpus case" and not "every case masked on a pristine build", but the cases ASAN
+# CANNOT SEE through PHP's own allocator. The corpus ships the evidence: compare `outcome` per
+# `id` between results-asan-default.json (built with ZEND_DISABLE_MEMORY_CACHE 0->1 and
+# REAL_SIZE(size)->(size), both edits to the nested allocator) and results-asan-stockalloc.json
+# (allocator intact). 31 cases are ASAN-detected in the first and a clean OK in the second:
+# 23 hidden by the size-class cache, 8 hidden by REAL_SIZE rounding.
+#
+# Ten of those 31 are reachable with no ext beyond url.c, and they are listed here. The rest of
+# the corpus is not interesting for this question: ASAN already finds those unaided, so catching
+# them would not show that a capability bound added anything.
+BLIND_REACHABLE=(CRASH-110 CRASH-073 CRASH-003 CRASH-004 CRASH-010 CRASH-067
+                 CRASH-024 CRASH-025 CRASH-042 CRASH-065)
+
+sel_of() { echo "-DRUNG_E_${1/CRASH-/CRASH}"; }
 
 # THE TEMPORAL AXIS NEEDS A CONTROL THAT LEAVES REVOCATION ON.
 #
@@ -351,18 +369,30 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
 # spatial axis only, which is honest about what it can show and is the cheap first measurement.
 worst=0
 case "$WHICH" in
-  CRASH-110) one_case CRASH-110 ""                  ; worst=$? ;;
-  CRASH-073) one_case CRASH-073 "-DRUNG_E_CRASH073" ; worst=$? ;;
   both)
     one_case CRASH-110 ""                  ; a=$?
     one_case CRASH-073 "-DRUNG_E_CRASH073" ; b=$?
     worst=$(( a > b ? a : b )) ;;
   lang)
     for c in CRASH-003 CRASH-004 CRASH-010 CRASH-067 CRASH-005; do
-      one_case "$c" "-DRUNG_E_${c/CRASH-/CRASH}" ; r=$?
+      one_case "$c" "$(sel_of "$c")" ; r=$?
       [ "$r" -gt "$worst" ] && worst=$r
     done ;;
-  *) echo "usage: $0 [CRASH-110|CRASH-073|both|lang]" >&2; exit 2 ;;
+  blind)
+    # Every reachable case that unpatched ASAN cannot detect. This is the headline experiment.
+    for c in "${BLIND_REACHABLE[@]}"; do
+      one_case "$c" "$(sel_of "$c")" ; r=$?
+      [ "$r" -gt "$worst" ] && worst=$r
+    done ;;
+  objects)
+    # The four object-model lifetime cases: the part of BLIND_REACHABLE not yet run.
+    for c in CRASH-024 CRASH-025 CRASH-042 CRASH-065; do
+      one_case "$c" "$(sel_of "$c")" ; r=$?
+      [ "$r" -gt "$worst" ] && worst=$r
+    done ;;
+  CRASH-*)
+    one_case "$WHICH" "$(sel_of "$WHICH")" ; worst=$? ;;
+  *) echo "usage: $0 [both|lang|blind|objects|CRASH-NNN]" >&2; exit 2 ;;
 esac
 echo
 exit $worst

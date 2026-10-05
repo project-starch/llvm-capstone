@@ -6,16 +6,15 @@ two-level allocator hierarchy in which PHP's own `zend_alloc.c` runs unedited ov
 arena -- and corpus bugs are caught by capability bounds alone, with no shadow memory, redzones
 or instrumentation.**
 
-Caught so far, each as a matched pair whose CONTROL arm completes (reproducing the corpus's
-`crashes_on_pristine_build = False`): **CRASH-110** and **CRASH-073** on the spatial axis, through
-the allocator hierarchy, plus **CRASH-005** with no pair possible (the overflowed object is a
-compiler-bounded global).
+**All ten reachable cases that unpatched ASAN cannot detect are caught**, each at the exact line
+ASAN names as frame #0, and each as a matched pair whose CONTROL arm completes (reproducing the
+corpus's `crashes_on_pristine_build = False`). CRASH-005 is caught as well, outside that population.
+See the headline section below for the measurement and the table.
 
-On the temporal axis, **CRASH-003, CRASH-004, CRASH-010 and CRASH-067** are caught, each faulting
-in the same function ASAN names as frame #0. These four were reported caught once before, retracted
-as worthless, and only then earned: revocation had been faulting on benign workloads too, and the
-per-case control could not see it because that control switches revocation off. Two real allocator
-bugs and a new sanity gate separate the first claim from this one.
+On the temporal axis, **eight** use-after-free cases are caught. Four of them were reported caught
+once before, retracted as worthless, and only then earned: revocation had been faulting on benign
+workloads too, and the per-case control could not see it because that control switches revocation
+off. Two real allocator bugs and a new sanity gate separate the first claim from this one.
 
 Everything below is kept in the order it was learned, including the wrong turns, so the next
 session does not re-derive any of it. The sections nearest the top are the oldest.
@@ -474,6 +473,72 @@ whose bounds span the address and the whole-image capability always does. `_GRAN
 one 16-byte slot, which requires `p`'s stack address in `_estrndup` (`s0-0x60` in its frame) --
 obtainable, but it needs another pass, and the kills cluster in only ~672 bytes of stack
 (`0x101fff700`-`0x101fff9a0`), so the window is already small.
+
+## THE HEADLINE: 10 / 10 of the cases unpatched ASAN cannot see
+
+**The right population is not "all 127", and not "the 54 masked on a pristine build". It is the
+cases ASAN CANNOT DETECT through PHP's own allocator** -- because those are the ones that need
+detection at the nested-allocator level, which is the whole point of doing this on capability
+hardware.
+
+The corpus ships the evidence for that split. Its ASAN build applies two patches to
+`Zend/zend_alloc.c`, and the README says why in its own words:
+
+| patch | corpus's stated reason |
+|---|---|
+| `ZEND_DISABLE_MEMORY_CACHE 0 -> 1` | "PHP pools freed blocks, so `efree()` never reaches `free()`; without this ASan poisons nothing and use-after-free is invisible" |
+| `REAL_SIZE(size) ((size+7)&~7) -> (size)` | "the allocator rounds every request up 8 bytes, hiding small overflows in slack" |
+
+Both edit the program under test. Differencing `results-asan-default.json` (patched) against
+`results-asan-stockalloc.json` (allocator intact) gives the measurement:
+
+| build | ASAN detects |
+|---|---|
+| nested allocator patched | 127 / 127 |
+| cache disabled only | 119 / 127 |
+| **PHP's allocator intact** | **96 / 127** |
+
+**31 cases are ASAN-detected only once the allocator is patched** -- a clean `OK` otherwise. They
+split exactly along the two patches: **23 hidden by the size-class cache** (all CWE-416) and
+**8 hidden by `REAL_SIZE` rounding** (CRASH-008, -016, -066, -073, -091, -100, -102, -110).
+
+Ten of the 31 are reachable with no ext beyond `url.c`. **All ten are caught, and every one faults
+at the exact line ASAN names as frame #0:**
+
+| case | axis | Capstone fault site | ASAN frame #0 |
+|---|---|---|---|
+| CRASH-110 | spatial | `url.c:132` | `php_url_parse` @ `url.c:132` |
+| CRASH-073 | spatial | our `memcpy`, attributed to `url.c:292` | `memcpy` |
+| CRASH-003 | temporal | `zend_execute.c:669` | `zend_assign_to_variable` @ `:669` |
+| CRASH-004 | temporal | `zend_execute.c:242` | `zend_assign_to_variable_reference` @ `:242` |
+| CRASH-010 | temporal | `zend_execute_API.c:389` | `_zval_ptr_dtor` @ `:389` |
+| CRASH-067 | temporal | `zend_execute.c:676` | `zend_assign_to_variable` @ `:676` |
+| CRASH-024 | temporal | `zend_execute.c:59` | `zend_pzval_lock_func` @ `:59` |
+| CRASH-025 | temporal | `zend_object_handlers.c:344` | `zend_std_write_property` @ `:344` |
+| CRASH-042 | temporal | `zend_object_handlers.c:294` | `zend_std_read_property` @ `:294` |
+| CRASH-065 | temporal | `zend_execute.c:65` | `zend_pzval_unlock_func` @ `:65` |
+
+Line-level agreement on ten independent cases, against a detector that needed the allocator
+rewritten to see any of them, is the strongest evidence in this file.
+
+CRASH-005 is caught too but is NOT in this population: it is a `.rodata` parser table, which ASAN
+finds with the allocator intact, so it shows nothing about nested allocation. Eleven catches in all,
+ten of which bear on the question.
+
+### What the four object-model cases needed
+
+`run-triggers.sh objects` runs CRASH-024, -025, -042, -065 -- all `__get`/`$this`/ctor refcount
+errors. They needed no new linking: the object model (`zend_objects`, `zend_objects_API`,
+`zend_object_handlers`, `zend_exceptions`, `zend_interfaces`) was already in the engine set, and
+`stdClass` is registered by `zend_startup` itself (`zend.c:641`).
+
+What they did need was a **no-op `var_dump`**, registered beside `parse_url`. Three of the four call
+it. Deleting the call would have been wrong for CRASH-024, whose faulting access IS the argument
+fetch (`zend_fetch_var_address`, which ASAN reports at `zend_execute.c:59`); for the others the
+fault precedes the call and the stub only keeps the opcode stream faithful. An undefined function
+would have bailed out of the eval before the opcodes under test ran.
+
+`run-triggers.sh blind` runs the whole reachable population in one go.
 
 ## TEMPORAL AXIS: four use-after-free cases CAUGHT, after a retraction and two real bugs
 
