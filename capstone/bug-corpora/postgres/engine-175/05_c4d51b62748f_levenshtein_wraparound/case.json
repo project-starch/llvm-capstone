@@ -10,17 +10,17 @@
   "fidelity": "real server, contrib extension. An integer wraparound with no memory error; the wrong answer is the whole observable",
   "arms": {
     "spatial": {
-      "status": "not written",
-      "precondition": "PGSU_NESTED=none. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+      "oracle": "completes; the mechanism does not report. EXPECT-ABSENT held",
+      "run": "20261005, Capstone application VM, image sha256 8088ed6b2103e65a"
     },
     "sublet": {
-      "status": "not written",
-      "precondition": "PGSU_NESTED=sublet, with its own PG_SU_ROOT separate from the spatial build. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+      "oracle": "completes; the mechanism does not report. EXPECT-ABSENT held",
+      "run": "20261005, Capstone application VM, image sha256 be234a12c9336a00"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the defect is witnessed by PostgreSQL's own check or by the differential -- REACHED-SILENT (2026-10-04). Directive fired: levenshtein returned a negative value."
     }
   },
-  "status": "spatial not run; sublet not run; cheribsd-revocation run 2026-10-04",
+  "status": "spatial and sublet run 2026-10-05 on the Capstone application VM; cheribsd-revocation run 2026-10-04",
   "advisory": "CVE-2026-15742"
 }

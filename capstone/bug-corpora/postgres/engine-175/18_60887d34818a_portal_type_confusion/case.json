@@ -22,5 +22,6 @@
     }
   },
   "status": "spatial not run; sublet not run; cheribsd-revocation run 2026-10-04",
-  "advisory": "CVE-2026-16239"
+  "advisory": "CVE-2026-16239",
+  "harness_limit": "DECLARE CURSOR requires a transaction block and postgres --single has no implicit one, so the trigger cannot reach the defect here"
 }
