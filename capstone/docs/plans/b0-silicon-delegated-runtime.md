@@ -1113,6 +1113,134 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   `/tmp/capstone/b1/board-strtod.txt`. memcached's float parsing (strtod, atof, sscanf %lf) therefore works on
   silicon, bit for bit against the host.
 
+## B2 (2026-10-05): memcached 1.6.45 as a gp-captable delegated application
+- **Build.** `build-b0-hello.sh` takes a many-source application.
+  - `B0_APP_SRCS` and `B0_APP_CFLAGS` name the sources and their flags. The 25 memcached sources (the port's
+    patched, configured tree) and the 18 libevent sources of its libevent_core (the port's configured libevent-cap
+    tree) are compiled as gp-captable bitcode.
+  - They are LTO-linked with musl, the runtime, the narrowed vfprintf/floatscan and B1's contexts:
+    `B0_CONTEXT_BYTES=131072 B0_CONTEXTS=3 B0_DATA=20 MiB B0_ARENA=16 MiB`.
+  - First try: 73 objects, `.text` 460,812 bytes, a 781,288-byte image (ac6abd2218a686f1), no verifier refusals.
+  - `build-b2-memcached.sh` records the exact source list, flags and sizes over the port's configured trees
+    (`MC_WORK`). With the CARVE_ALIGN glue it reproduces the B2a/B3 board image ba7e6921cf27f2b6 byte for byte
+    (rebuilt 2026-10-05 22:19 with the same toolchain and musl archive).
+- **QEMU, monitor 10a0690, fabrication OFF and ON: the milestone holds.** memcached runs with `-l 127.0.0.1 -p 21299
+  -U 0 -m 8 -t 1 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`.
+  - It runs unprivileged under capstone-job (`--user 65534:65534`), as the SDK oracle does.
+  - Started as root it insists on `-u` and then calls `setgroups`, which the delegate runtime does not serve
+    (ENOSYS, exit 71); that was the first attempt.
+  - A native guest client (`mc-b2-client.c`) receives `VERSION 1.6.45`, `STORED`, `VALUE k 0 1` / `x` / `END`.
+  - SIGTERM ends memcached with status 0, and capstone-job's record is `{"kind":"exit","value":0}`.
+- **Board run, pre-registered before the bake (776d9d859, monitor 10a0690).**
+  - The image ac6abd2218a686f1 and the client (built with the FPGA toolchain) go into a private image
+    (`b0-bake-b2.sh`). Rungs: b0-stats, `b2-memcached`, b0-stats2.
+  - The b2-memcached rung's retval is `10 * client code + (memcached status != 0)`.
+  - **Predicted: the same transcript, `B2: client rc=0 memcached rc=0`, `RESULT b2-memcached retval=0`.**
+  - Silicon-only risks QEMU cannot show:
+    - level0's per-object bounds round outward on silicon for objects of 4 KiB and up (slab pages are 1 MiB);
+    - the board launcher is the B0.7 build of capstone-exec;
+    - this is the first ~21 MiB managed block on the board (CMA is 256 MiB).
+  - A client code of 2 (no connection) with memcached alive would point at the launcher's socket services; a fault
+    names its pc.
+- **Board result (21:07-21:14, firmware 3fffc01249e7): a MISS.** `B2: no connection`, `memcached rc=139`, job
+  `{"kind":"signal","value":11}`, `RESULT b2-memcached retval=21`; census rungs 0 and 0.
+  - The monitor's trace places it. The first region share's `supervised_invoke` returned **ECSZ 2, a FAULT event**,
+    during the domain's first entry: the glue's table build and cap-init, which for memcached zero-fill a 16 MiB
+    level0 arena.
+  - For comparison, b1f2's first share returned 1 (preempted) and then completed.
+  - Nothing ran after it. capstone-exec printed no fault line, and the event's cause, pc and tval were not traced
+    (`CAPSTONE_SUPERVISE_QUIET`).
+- **B2f pre-registered:** the same image with the monitor at 1f9aedd, which reports a fault event's cause, epc and
+  tval unconditionally (SUPC/SUPE/SUPT); firmware 9dbcddf6b32f.
+  - Predicted: the same fault, now with its location. epc minus DBAS gives the image offset.
+  - A pass would mean B2's fault is not deterministic.
+- **B2f result (21:16-21:23): the same fault, now located.** `SUPC 0x1c` (28), `SUPE 0xac1000d8` = DBAS + 0xd8,
+  `SUPT 0xae0d6f60`.
+  - The pc is `sd a7, 0(t6)` in the glue's carve loop, which copies a global's initial bytes into its freshly
+    split storage. The store address lies above everything the carve should have produced.
+- **Diagnosis: ISSUES R-11, its first hit on silicon.** R-11 was "OPEN, not yet hit".
+  - SPLIT writes both halves in compress_bounds' cursorless form (capstone_dyn_unit.anvil:180-184; ariane_pkg.sv
+    :793-812). That form keeps the top as 21 bits above E, E = (highest bit where cursor and top differ) - 20, and
+    truncates the rest.
+  - In memcached's 32 MiB block the region's base (0xac1...) and its split points (0xae0...) differ at bit 25, so
+    E = 5. The table split at `END - 265*16` left the stack capability's top 16 bytes short.
+  - The first global carved below it (56 bytes of initial data) got 48. Its seventh store faulted at `END -
+    0x10a0`.
+  - A literal Python port of compress_bounds/decompress_bounds reproduces the board's 0xae0d6f60 exactly, for any
+    plausible base, with the carve's END at 0xae0d8000.
+    - That END is the stack region's top below the 128 KiB arena, inside the 32 MiB block [0xac100000, 0xae100000).
+    - It is derived without the fault: the module rounds the declared 0x1420100 bytes up to a power of two, the
+      monitor aligns data_top to 0xae0f8000, and the arena sits below that. In that model the old carve leaves 30 inexact
+    capabilities; B0/B1's 2 MiB regions (E <= 1) lose nothing.
+  - QEMU has no cursorless encoding, so it cannot show any of this.
+- **The detector R-11 shipped did not fire, and could not have.** `check-repr.py` reports this image as `tot=1048576
+  OK`. Its region model is the old SDK sizing from code length, and it never reads the domain's declared data size
+  (.capstone_domreq), B1's arena or M-14's alignment. The B0 build never ran it either.
+- **Fix: `CAPSTONE_GLUE_CARVE_ALIGN`, now on in every B0 build.**
+  - E is computed once from the region's base and top. The carve top is aligned down, and the table and every
+    global's storage are rounded up to max(16, 2^E), so no split point can lose bits.
+  - It is a no-op inside one 2 MiB window. The ladder's glue stays byte-identical without the define.
+  - The model says 0 inexact capabilities, against 30 before.
+- **B2a pre-registered (before the boot):** memcached ba7e6921cf27f2b6 (the aligned glue), firmware 4279572eceda
+  (monitor 1f9aedd, which still reports faults), the same client and rung.
+  - **Predicted: `B2: client rc=0 memcached rc=0`, `RESULT b2-memcached retval=0`.**
+  - A new fault would come with its location; no fault and still no connection would point past the first entry.
+- **B2a RESULT (21:39-21:45, 776d9d859, firmware 4279572eceda): MEMCACHED RUNS ON SILICON, as pre-registered.**
+  - `B2 < VERSION 1.6.45`, `B2 < STORED`, `B2 < VALUE k 0 1` / `x` / `END`.
+  - `B2: client rc=0 memcached rc=0 job {"version":1,"kind":"exit","value":0}`, `RESULT b2-memcached retval=0`.
+  - Census rungs 0 and 0.
+  - It is a matched pair with B2f: the same monitor (1f9aedd), the same client and rung, and one source change,
+    the glue's carve alignment.
+    - The binaries differ more widely: the glue's added code shifts the image's code by 160 bytes, and the Linux
+      image differs only in that .dom.
+    - An audit diffed them; the firmware's OpenSBI part is identical. The unaligned image faulted at the address the RTL model predicts; the
+    aligned one serves.
+  - QEMU (fabrication off and on) passes b0-hello, b1-thread and memcached with the aligned glue.
+  - What ran: memcached 1.6.45 with libevent 2.1.12, musl, the delegate runtime and minted contexts for its
+    threads (how many started is not counted on the board), all as one gp-captable full-LTO image on 776d9d859.
+    - It served THE MILESTONE EXCHANGE over loopback and shut down cleanly on SIGTERM. That is the claim.
+    - The full oracle session is B3 below, and it differs from native.
+
+## B3 (2026-10-05): memcached's oracle on silicon, by transcript hash
+- **The reference.** Native memcached 1.6.45 (the pinned tarball, sha256 f23cee6dc1e4a77e) with libevent 2.1.12,
+  built as `host/build-native.sh` does, but without `deps/env.sh`: its SDK preparation fails C-46 with the shared
+  debug toolchain, which the native build does not use (`/tmp/capstone/b3/build-native.sh`).
+  - The port's harness (`mc-harness`, 8 connections, the scripted session) ran with the board's flags (`-l
+    127.0.0.1 -p 21299 -U 0 -m 8 -t 1 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`).
+  - Result: `transcript.norm` 1,931,207 bytes, sha256 **e0a254c47e7ee28c**.
+  - The two null runs are identical, and both perturbations (a value byte, a cas) change the hash, so the
+    comparison can see a one-byte difference.
+  - Identity `STAT pointer_size 64`, exit 0 on SIGTERM.
+- **QEMU, fabrication off, monitor 10a0690, memcached ba7e6921cf27f2b6:** the same transcript hash e0a254c47e7ee28c,
+  the same 1,931,207 bytes, `STAT pointer_size 128`, job record exit 0.
+- **Board run, pre-registered before the bake (776d9d859).**
+  - The image ba7e6921cf27f2b6 and the harness built with the FPGA toolchain, in a private image
+    (`b0-bake-b3.sh`); monitor 1f9aedd. Rungs b0-stats, `b3-oracle`, b0-stats2.
+  - The rung prints the transcript's hash and length, the identity and the job record; the transcript itself stays
+    on the board.
+  - **Predicted: `B3: transcript e0a254c47e7ee28c bytes 1931207`, `identity STAT pointer_size 128`, job exit 0,
+    `RESULT b3-oracle retval=0`.**
+  - A different hash with the right length points at a data difference: a protocol reply or a stored value.
+- **Board result (21:50-21:57, firmware 3645ae6b2219): a MISS.**
+  - `B3: transcript fe153b1465b4c9c5 bytes 1931245`, 38 bytes longer than native's 1,931,207.
+  - `identity STAT pointer_size 128`, job exit 0, `RESULT b3-oracle retval=0`.
+  - The harness reported `stop_seconds=inf` (its CLOCK_MONOTONIC delta on the board).
+  - QEMU reproduces the native transcript exactly, so the difference is the board's.
+- **B3d result (22:01-22:07): the 38 bytes are TIME, not data.**
+  - On the board two items that should have expired are still served: `gone` after a short-TTL `touch`, and
+    `past`, set with an expiry in the past. `get_hits`/`get_misses` move by exactly those two gets.
+  - The transcript is otherwise byte-identical.
+  - On the board the runtime has no tick source (exec.c passes `ticks_per_second = 0`: silicon has no `time`
+    CSR), so the domain's clock_gettime is delegated to the board's Linux.
+  - The native harness on the same board also read its CLOCK_MONOTONIC delta as `inf`.
+  - So the board's clocks, as memcached and the harness see them, do not advance the way the expiry needs. That
+    is a platform question, unresolved here. It is not a memory or capability difference.
+  - Next: read the board's CLOCK_REALTIME and CLOCK_MONOTONIC twice across a sleep, natively and through a
+    domain.
+- **B3d pre-registered (diagnostic):** the same image and the same rung, now also printing the first 40 lines of
+  `diff native board`, with the native reference baked into the image (`b0-bake-b3d.sh`). No outcome is predicted
+  beyond "the 38 bytes are visible".
+
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
 use:

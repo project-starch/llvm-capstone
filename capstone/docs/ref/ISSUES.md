@@ -6795,7 +6795,40 @@ or it regressed. Re-run stage 13 on a current build before trusting either numbe
 bitstream carries the forwarding fix). A waveform of `dp0` stage 11 around the hang would settle
 in minutes what no software-visible observable here can.
 
-### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit — and "QEMU never does" is NOT corroboration: QEMU has no `cursorless` encoding at all (zero occurrences in capstone-qemu/target/riscv/), so it cannot exhibit the branch this entry is about. See the 2026-09-15 box`
+### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `HIT ON SILICON 2026-10-05 (memcached, B2), and worked around in the gp-captable glue (CAPSTONE_GLUE_CARVE_ALIGN, validated by a matched pair); the RTL behaviour itself is unchanged. QEMU has no cursorless encoding, so it cannot exhibit this. See the 2026-10-05 box`
+
+> # 2026-10-05 — FIRST HIT, by the first domain past 2 MiB that carves its own globals
+>
+> **What happened.** memcached as a gp-captable delegated application (docs/plans/b0-silicon-delegated-runtime.md,
+> B2) gets a 32 MiB block. Its first entry faulted in the glue's carve loop on 776d9d859: cause 28, epc = DBAS +
+> 0xd8 (`sd a7, 0(t6)`, the copy of a global's initial bytes), tval 0xae0d6f60.
+> - The region's base (0xac1...) and its split points (0xae0...) differ at bit 25, so the cursorless E is 5.
+> - The table split at `END - 265*16` left the stack capability 16 bytes short.
+> - The first global carved below it got 48 of its 56 bytes, and its seventh store faulted.
+> - A literal Python port of compress_bounds/decompress_bounds (776d9d859, ariane_pkg.sv:672-728/793-851)
+>   reproduces 0xae0d6f60 exactly for END 0xae0d8000, and finds 30 inexact carved capabilities in that image.
+>
+> **Workaround (the B0 glue, `start-gp-captable-interp.S`, `CAPSTONE_GLUE_CARVE_ALIGN`).** E is computed once from
+> the region's base and top. The carve top is aligned down, and the table and every global's storage are rounded up
+> to max(16, 2^E), so no split point loses bits.
+> - The model then finds 0 capabilities truncated at their split.
+>   - Two large globals still WIDEN once their cursor moves: the lossy branch, R-33's class. In the model the
+>     16 MiB level0 arena's bounds then overlap neighbouring globals.
+>   - That is a containment caveat, not a fault.
+> - **Where END comes from, independently of the fault:**
+>   - the module's `roundup_pow_of_two` (process.c) of the declared 0x1420100 bytes gives a 32 MiB block at
+>     0xac100000;
+>   - the monitor's data_top, aligned (M-14), is 0xae0f8000;
+>   - the glue's 128 KiB arena then leaves the carve's END at 0xae0d8000, the value that predicts the tval.
+> - On the board the same build with only that change serves memcached's milestone exchange (B2a).
+> - The define is on in every B0 build; the ladder's glue is byte-identical without it.
+> - R-33's allocator rule (round region sizes to the granule) does NOT cover this: the truncation is at the glue's
+>   INTERIOR splits, inside a correctly sized region.
+>
+> **The detector this entry shipped did not fire, and could not have.** `check-repr.py` reports the failing image
+> as `tot=1048576 OK`. Its region model is the old SDK sizing from code length, and it reads neither the domain's
+> declared data size (`.capstone_domreq`), B1's context arena nor M-14's alignment. The B0 build never ran it
+> either. Its region model must be rebuilt from the module's actual sizing before it can stand as a gate again.
 
 > **RUN 2026-09-10, with the positive control the earlier attempt lacked. Still NOT HIT, and now that
 > statement means something.** The 2026-09 sweep logged `check-repr.py` as NOT RUN; an audit then ran it

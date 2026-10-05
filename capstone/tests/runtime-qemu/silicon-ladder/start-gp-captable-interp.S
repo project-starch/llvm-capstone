@@ -493,7 +493,39 @@
   beqz  s4, 99f                      /* no globals: nothing to build                   */
 
   lcc(t1, sp, 4)                     /* t1 = sp.END                                    */
+#if defined(CAPSTONE_GLUE_CARVE_ALIGN)
+  /* CAPSTONE_GLUE_CARVE_ALIGN (ISSUES R-11, first hit on silicon 2026-10-05 by B2's memcached): SPLIT writes both
+     halves back in compress_bounds' CURSORLESS form, which keeps the top as 21 bits above E, E = (highest bit
+     where cursor and top differ) - 20, and TRUNCATES the rest. So the lower half [base, t1) loses t1's low E bits
+     whenever base and t1 differ at bit 21 or above: in a 32 MiB region E = 5, the table split at END - count*16
+     left the stack's top 16 bytes short, and the first global carved below it faulted on its seventh store
+     (cause 28, tval END - 0x10a0). Every carve point is therefore kept a multiple of max(16, 2^E), with E taken
+     once from the region's own base and top (no interior split can need more). A no-op on a region inside one
+     2 MiB window. Off by default: every other build of this file is byte-identical. */
+  lcc(t3, sp, 3)                     /* t3 = base                                      */
+  xor   t3, t3, t1
+  srli  t3, t3, 21
+  li    s6, 1
+50:
+  beqz  t3, 51f
+  slli  s6, s6, 1                    /* s6 = 2^E, E = bits of (base ^ top) above bit 20 */
+  srli  t3, t3, 1
+  j     50b
+51:
+  li    t3, 16
+  bgeu  s6, t3, 52f
+  mv    s6, t3
+52:
+  addi  s6, s6, -1                   /* s6 = carve granule - 1, live through the loop  */
+  not   t3, s6
+  and   t1, t1, t3                   /* the top, aligned down                          */
   slli  t3, s4, 4                    /* count * 16                                     */
+  add   t3, t3, s6
+  not   t4, s6
+  and   t3, t3, t4                   /* the table, aligned up                          */
+#else
+  slli  t3, s4, 4                    /* count * 16                                     */
+#endif
   sub   t1, t1, t3
   split(gp, sp, t1)                  /* gp = [t1,END) table; sp = [base,t1)            */
 #if INTERP_SP_LINEAR
@@ -540,6 +572,11 @@
   bnez  t4, 11f
   li    t4, 16
 11:
+#if defined(CAPSTONE_GLUE_CARVE_ALIGN)
+  add   t4, t4, s6
+  not   t2, s6
+  and   t4, t4, t2                   /* storage aligned up to the carve granule (R-11) */
+#endif
   /* BOUNDS REPRESENTABILITY. A capability's bounds are encoded with a granule of
        1 << (max(0, floor(log2 len) - 12) + 3)
      so 16-byte alignment is exact only while that granule is <= 16, i.e. len < 8192.
