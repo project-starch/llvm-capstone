@@ -953,6 +953,26 @@ The gp-captable interp glue has none of them. Two of start-musl.S's assumptions 
   gp-captable; the fix is to declare it as a function. The glue should provide the capability from PCC (an
   accessor like the B0.5 code_base one). **To verify first:** that a PCC-derived capability from the glue has the
   type and bounds a seal accepts on silicon (an RTL read before any build).
+  - **Answered by the rtl-oracle at 776d9d859 (2026-10-05, quoted claims; files cited in its report):**
+    - `auipc`, `addi` and `lla` produce INTEGERS. scoreboard.sv:238-246 sets `cap_result = '0` for every writeback
+      port but FLU and DYN. No instruction copies the ambient PCC into a GPR, so the runtime CANNOT build a code
+      capability for a minted context by itself.
+    - The sealed region's PC is the 16-byte slot at the seal's base, SWAPPED by the domain switcher (dom_switcher
+      `process()`, frontend.sv:462-470), and it may hold a capability or an integer.
+    - commit_stage.sv `pc_cap_check` runs only for a TAGGED PC. A tagged PC must be LINEAR or NONLIN, have execute
+      permission, and have its cursor in bounds; wide bounds with an interior cursor are fine.
+    - **An untagged (integer) PC is not checked at all:** a context entered that way runs with no code-bounds
+      enforcement.
+  - **Decision: the monitor supplies the code capability.** Minting with an integer PC would work on silicon, but it
+    is a silent loss of PCC enforcement for every thread, so it is rejected.
+    - For a managed domain, create_domain DELINs a copy of `dom_code`; the NONLIN type passes `pc_cap_check`.
+    - That copy is parked where the glue can load it, beside the gp park under the descriptor area (B0.1's
+      `data_top`).
+    - The glue `cincoffset`s it to `__capstone_context_entry` for each seal. This is the gp-captable equivalent of
+      the SDK path's gp-derived code capability (QEMU's fabricated gp covered code and data).
+  - **Side question raised by the answer, to check before claiming PCC enforcement for B0 itself:** RETURN passes
+    only rs1's CURSOR as the resume PC (capstone_dyn_unit.anvil RETURN). If the yield's resume PC therefore installs
+    untagged, B0's application has run WITHOUT PCC enforcement after its first yield. Unverified.
 - **B1.4 the arena split** in the interp glue's `_start`, ordered against its cap-table carve from sp.END.
 - **B1.5 the fault handler under gp-captable**, PCC-derived; this was also open from B0.
 - **B1.6 non-empty `.tdata`/init arrays**, if pthread-probe or musl's thread start needs them. TLS areas for minted
