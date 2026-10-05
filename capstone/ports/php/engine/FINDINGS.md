@@ -607,7 +607,8 @@ tell *where* a fault happened, which is exactly how this slipped through.
 
 Capability narrowing is MONOTONIC -- `shrink` cannot widen. PHP's `_efree` parks the pointer it was
 given into `AG(cache)`, a size-CLASS cache (bucket i takes anything rounding to i*8). So a block
-freed as a 6-byte string is re-served for a 9-byte one, and the new tenant inherits the OLD, tighter
+freed as a 1-byte string is re-served for an 8-byte one -- both round to REAL_SIZE 8, so both land
+in bucket 1 -- and the new tenant inherits the OLD, tighter
 bound. `_estrndup`'s NUL write then lands one past the end.
 
 The ported allocator had already solved this deliberately, and its comment states the rule:

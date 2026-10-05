@@ -133,8 +133,9 @@ static void zc_audit_src(const char *s, unsigned long length, unsigned long who)
  *
  *   _efree   -- PHP's AG(cache) PARKS the pointer it is handed. Narrowing is monotonic, so a
  *               narrow capability in a size-CLASS cache poisons every later tenant of that class:
- *               a block freed as a 6-byte string, re-served for a 9-byte one, over-reads at the
- *               new object's own NUL write. Surfaced as a false-positive CAUGHT at
+ *               a block freed as a 1-byte string, re-served for an 8-byte one -- both round to
+ *               REAL_SIZE 8, so both are bucket 1 -- over-reads at the new object's own NUL write.
+ *               Surfaced as a false-positive CAUGHT at
  *               zend_alloc.c:404.
  *
  *   _erealloc -- the lower level COPIES the old contents, and its copy length comes from its own
