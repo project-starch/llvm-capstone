@@ -17,6 +17,13 @@ response path changes.
   s06agg 66 -> 64; s10b-storebuf-primed bare 8 of 8 legs trap. ("The R29 rung 31/32 -> 0/32" written here before the run was
   b0-memcpy's per-face numbers mislabeled.) The hardware no longer needs the memcpy guard or W-12 for this hazard; dropping
   them is the runtime lane's call after its own measurement.
+- **R-52 (was S-18): every floating-point consumer on silicon reads its operand STALE** -- the issue stage never marked an
+  FP destination as clobbered (one negated predicate, a regression of the 2026-04-24 issue-stage commit, in every bitstream
+  since; delegated domains are soft-float and unaffected). Reproduced in simulation with the board lane's sequences; the
+  rv64ud ISA suite fails 11 of 12 on the current RTL and passes 12 of 12 with the one-line fix on branch `s18-fpr-clobber`
+  (546807884; lint at baseline, sweep 95-test directed sweep (testlist_capstone.yaml, seed 20260922, memory delay 12) against the 776d9d859 tree's own sweep). NOT synthesized: **a candidate for the lead's next
+  bitstream, with R-51's.** Until then no hard-float native process on silicon can be trusted; the registry entry has the
+  details.
 - **R-51** (the board lane's entry: after a RETURN yield the resumed domain runs with an untagged PC) is confirmed on silicon
   with this lane's `r51-return-pcc.S` and has a candidate fix on branch `r51-return-pcc` (ef8900e2d; QEMU's swap_pc semantics;
   lint at baseline, sweep identical) -- NOT synthesized: **whether RETURN restores the PC capability is the lead's decision.**
