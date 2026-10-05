@@ -5926,7 +5926,7 @@ Sublet fault cell last.
   through `transcript.strip_markers`, and that fix was load-bearing for boots 2 and 3.
 - An unsafe-success did not fail the gate. Found by the results audit and fixed.
 
-## memcached 1.6.45 runs on silicon as a delegated application (boots B2a, B1f, b0-strtod, b0-printf; 776d9d859, 2026-10-05)
+## memcached 1.6.45 serves its milestone exchange on silicon as a delegated application (boots B2a, B1f, b0-strtod, b0-printf; 776d9d859, 2026-10-05)
 Plan: `docs/plans/b0-silicon-delegated-runtime.md` (B1, B1.0, B1.0b, B2). Every row was pre-registered before its
 boot, and each board image is named by hash.
 
@@ -5946,6 +5946,9 @@ boot, and each board image is named by hash.
     data_top.
   - **R-11**, first hit: the cursorless SPLIT encoding shortened a carved global in a 32 MiB region. Worked around
     by aligning the glue's carve.
-  - In each case a matched pair (the same images, one change) showed the fix on the board.
+  - In each case a matched pair with one change showed the fix on the board: the monitor for M-14, the glue for
+    R-11. The R-11 change also moves the image's code by 160 bytes.
 - The heap is level0 (per-object bounds, no temporal safety). Spatial or temporal safety numbers for memcached on
   silicon are not claimed here.
+- The full oracle session (B3) is NOT yet a pass on the board: the transcript differs from native by two
+  time-dependent expiries (the board's clocks; see the plan). In QEMU it is byte-identical.

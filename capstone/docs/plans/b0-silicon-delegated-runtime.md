@@ -1164,7 +1164,10 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - The first global carved below it (56 bytes of initial data) got 48. Its seventh store faulted at `END -
     0x10a0`.
   - A literal Python port of compress_bounds/decompress_bounds reproduces the board's 0xae0d6f60 exactly, for any
-    plausible base and END 0xae0d8000, which is a 32 MiB block. In that model the old carve leaves 30 inexact
+    plausible base, with the carve's END at 0xae0d8000.
+    - That END is the stack region's top below the 128 KiB arena, inside the 32 MiB block [0xac100000, 0xae100000).
+    - It is derived without the fault: the module rounds the declared 0x1420100 bytes up to a power of two, the
+      monitor aligns data_top to 0xae0f8000, and the arena sits below that. In that model the old carve leaves 30 inexact
     capabilities; B0/B1's 2 MiB regions (E <= 1) lose nothing.
   - QEMU has no cursorless encoding, so it cannot show any of this.
 - **The detector R-11 shipped did not fire, and could not have.** `check-repr.py` reports this image as `tot=1048576
@@ -1183,13 +1186,17 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - `B2 < VERSION 1.6.45`, `B2 < STORED`, `B2 < VALUE k 0 1` / `x` / `END`.
   - `B2: client rc=0 memcached rc=0 job {"version":1,"kind":"exit","value":0}`, `RESULT b2-memcached retval=0`.
   - Census rungs 0 and 0.
-  - It is a matched pair with B2f: the same build, the same monitor (1f9aedd), the same client and rung, and only
-    the glue's carve alignment differs. The unaligned image faulted at the address the RTL model predicts; the
+  - It is a matched pair with B2f: the same monitor (1f9aedd), the same client and rung, and one source change,
+    the glue's carve alignment.
+    - The binaries differ more widely: the glue's added code shifts the image's code by 160 bytes, and the Linux
+      image differs only in that .dom.
+    - An audit diffed them; the firmware's OpenSBI part is identical. The unaligned image faulted at the address the RTL model predicts; the
     aligned one serves.
   - QEMU (fabrication off and on) passes b0-hello, b1-thread and memcached with the aligned glue.
-  - What ran: memcached 1.6.45 with libevent 2.1.12, musl, the delegate runtime and minted contexts (main, one
-    worker and memcached's helper threads), all as one gp-captable full-LTO image on 776d9d859. It served the
-    milestone exchange over loopback and shut down cleanly on SIGTERM.
+  - What ran: memcached 1.6.45 with libevent 2.1.12, musl, the delegate runtime and minted contexts for its
+    threads (how many started is not counted on the board), all as one gp-captable full-LTO image on 776d9d859.
+    - It served THE MILESTONE EXCHANGE over loopback and shut down cleanly on SIGTERM. That is the claim.
+    - The full oracle session is B3 below, and it differs from native.
 
 ## B3 (2026-10-05): memcached's oracle on silicon, by transcript hash
 - **The reference.** Native memcached 1.6.45 (the pinned tarball, sha256 f23cee6dc1e4a77e) with libevent 2.1.12,
@@ -1216,6 +1223,17 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - `identity STAT pointer_size 128`, job exit 0, `RESULT b3-oracle retval=0`.
   - The harness reported `stop_seconds=inf` (its CLOCK_MONOTONIC delta on the board).
   - QEMU reproduces the native transcript exactly, so the difference is the board's.
+- **B3d result (22:01-22:07): the 38 bytes are TIME, not data.**
+  - On the board two items that should have expired are still served: `gone` after a short-TTL `touch`, and
+    `past`, set with an expiry in the past. `get_hits`/`get_misses` move by exactly those two gets.
+  - The transcript is otherwise byte-identical.
+  - On the board the runtime has no tick source (exec.c passes `ticks_per_second = 0`: silicon has no `time`
+    CSR), so the domain's clock_gettime is delegated to the board's Linux.
+  - The native harness on the same board also read its CLOCK_MONOTONIC delta as `inf`.
+  - So the board's clocks, as memcached and the harness see them, do not advance the way the expiry needs. That
+    is a platform question, unresolved here. It is not a memory or capability difference.
+  - Next: read the board's CLOCK_REALTIME and CLOCK_MONOTONIC twice across a sleep, natively and through a
+    domain.
 - **B3d pre-registered (diagnostic):** the same image and the same rung, now also printing the first 40 lines of
   `diff native board`, with the native reference baked into the image (`b0-bake-b3d.sh`). No outcome is predicted
   beyond "the 38 bytes are visible".

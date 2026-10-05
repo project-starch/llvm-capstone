@@ -6802,7 +6802,15 @@ in minutes what no software-visible observable here can.
 > **Workaround (the B0 glue, `start-gp-captable-interp.S`, `CAPSTONE_GLUE_CARVE_ALIGN`).** E is computed once from
 > the region's base and top. The carve top is aligned down, and the table and every global's storage are rounded up
 > to max(16, 2^E), so no split point loses bits.
-> - The model then finds 0 inexact capabilities.
+> - The model then finds 0 capabilities truncated at their split.
+>   - Two large globals still WIDEN once their cursor moves: the lossy branch, R-33's class. In the model the
+>     16 MiB level0 arena's bounds then overlap neighbouring globals.
+>   - That is a containment caveat, not a fault.
+> - **Where END comes from, independently of the fault:**
+>   - the module's `roundup_pow_of_two` (process.c) of the declared 0x1420100 bytes gives a 32 MiB block at
+>     0xac100000;
+>   - the monitor's data_top, aligned (M-14), is 0xae0f8000;
+>   - the glue's 128 KiB arena then leaves the carve's END at 0xae0d8000, the value that predicts the tval.
 > - On the board the same build with only that change serves memcached's milestone exchange (B2a).
 > - The define is on in every B0 build; the ladder's glue is byte-identical without it.
 > - R-33's allocator rule (round region sizes to the granule) does NOT cover this: the truncation is at the glue's
@@ -7133,8 +7141,10 @@ exit 0.
 
 **What happens.**
 - For a managed application, create_domain splits a 1 KiB descriptor area off the top of the data region:
-  `data_top = tot_size - CONTEXT_DESC_AREA`. SPLIT is exact: capstone_dyn_unit.anvil:180-182 stores the split
-  point verbatim and resets the cursor to start.
+  `data_top = tot_size - CONTEXT_DESC_AREA`. SPLIT stores the split point verbatim and puts each half's cursor
+  at its start (capstone_dyn_unit.anvil:180-184), so both halves are written back in the cursorless form. That is
+  exact here only because this 2 MiB region has E <= 1 and the split point is 16-aligned (R-11 is the case where
+  it is not).
 - The monitor then moves dom_data's cursor with C_SET_CURSOR (SCC) to park gp at `data_top - 16`, and since B1.3
   the code capability at `- 32`.
 - SCC's result has cursor != start, and every FLU/DYN result is re-compressed at writeback (ex_stage.sv:1449). So
@@ -7167,11 +7177,11 @@ and differ only in the monitor (a11d424 against 10a0690). With the fix:
 - the thread is created, runs and joins with its value (124).
 b0-hello on the fixed monitor is byte-exact.
 
-**Exposure before the fix.** Every gp-captable managed application carves its cap table from its data capability's
-END, so on silicon the table's top entries lay in the descriptor area. The monitor rewrites a descriptor block at
+**Exposure before the fix.** A gp-captable managed application without a context arena carves its cap table from its
+data capability's END (with one, the B1 arena sits at END instead), so on silicon the table's top entries lay in the descriptor area. The monitor rewrites a descriptor block at
 every loan (managed_reinit), so an application whose table reached a lent block would have had cap-table entries
-zeroed underneath it. B0's images were small enough not to reach one. memcached (~435 globals, a ~7 KiB table)
-would have overlapped every block.
+zeroed underneath it. B0's images were small enough not to reach one. memcached (265 globals, a 4,240-byte table)
+would have reached the lent blocks.
 
 **The class.** Any SCC/CINCOFFSET-style cursor move on a capability whose bounds are not granule-aligned widens it
 on silicon, both ways. A monitor that SPLITs a region, parks a cursor away from the base and hands the region over
