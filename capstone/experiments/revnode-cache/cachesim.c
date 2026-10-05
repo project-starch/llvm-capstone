@@ -4,9 +4,17 @@
  * CAPSTONE_REVNODE_TRACE=<file> (format: target/riscv/cap_rev_tree.h) and
  * replays it against a set of node caches in one pass, all LRU:
  *
- *   direct-mapped, 2-, 4- and 8-way set-associative, and fully associative,
- *   each at 8 .. 65536 entries; an entry holds one line of --nodes-per-line
- *   consecutive node ids (default 1).
+ *   fully associative at 8 .. 65536 entries, and direct-mapped, 4- and 8-way
+ *   set-associative at 16 .. 4096 entries; an entry holds one line of
+ *   --nodes-per-line consecutive node ids (default 1).
+ *
+ * The fully associative sizes are simulated together: LRU caches nest (a
+ * smaller one holds the most recent lines of a larger one), so one LRU list
+ * with a marker at each size boundary gives every size's hit or miss from
+ * the position of the accessed line -- O(sizes) per access, not O(sizes) list
+ * operations. An access to the same line as the access before it hits in
+ * every cache and changes no replacement state, and is counted without
+ * touching the caches.
  *
  * Every traced access goes through the cache: lifetime-check reads, the
  * reads and writes of mrev/split/revoke/delin, allocation (the new node is
@@ -45,66 +53,23 @@ static const char *site_name[N_SITES] = {"ldst", "ldc", "mrev", "split", "revoke
 #define NODE_NONE 0xffffffffu
 #define REC_SIZE 8
 
+/* Set-associative LRU cache. */
 struct cache {
-    unsigned entries, ways, sets; /* ways == entries: fully associative */
+    unsigned entries, ways, sets;
     uint32_t *tag;                /* sets*ways line ids, NODE_NONE = empty */
-    uint64_t *stamp;              /* last use, for LRU (set-associative) */
-    /* fully associative: index by line id into a doubly linked LRU list */
-    uint32_t *slot_of;            /* line -> slot+1, 0 = absent */
-    uint32_t *prev, *next;        /* per slot */
-    uint32_t head, tail, used;
+    uint64_t *stamp;              /* last use, for LRU */
     uint64_t hit[N_SITES], miss[N_SITES];
     uint64_t read_hit, read_miss;
 };
 
 static uint64_t now;
 
-static void cache_flush(struct cache *c, uint32_t max_line) {
-    (void)max_line;
-    if (c->ways == c->entries) {
-        for (uint32_t s = 0; s < c->used; ++s) c->slot_of[c->tag[s]] = 0;
-        c->used = 0;
-        c->head = c->tail = NODE_NONE;
-    } else {
-        for (unsigned i = 0; i < c->entries; ++i) c->tag[i] = NODE_NONE;
-    }
-}
-
-static void lru_unlink(struct cache *c, uint32_t s) {
-    if (c->prev[s] != NODE_NONE) c->next[c->prev[s]] = c->next[s]; else c->head = c->next[s];
-    if (c->next[s] != NODE_NONE) c->prev[c->next[s]] = c->prev[s]; else c->tail = c->prev[s];
-}
-
-static void lru_push_front(struct cache *c, uint32_t s) {
-    c->prev[s] = NODE_NONE;
-    c->next[s] = c->head;
-    if (c->head != NODE_NONE) c->prev[c->head] = s;
-    c->head = s;
-    if (c->tail == NODE_NONE) c->tail = s;
+static void cache_flush(struct cache *c) {
+    for (unsigned i = 0; i < c->entries; ++i) c->tag[i] = NODE_NONE;
 }
 
 /* Returns 1 on a hit. */
 static int cache_access(struct cache *c, uint32_t line) {
-    if (c->ways == c->entries) {
-        uint32_t s1 = c->slot_of[line];
-        if (s1) {
-            lru_unlink(c, s1 - 1);
-            lru_push_front(c, s1 - 1);
-            return 1;
-        }
-        uint32_t s;
-        if (c->used < c->entries) {
-            s = c->used++;
-        } else {
-            s = c->tail;
-            lru_unlink(c, s);
-            c->slot_of[c->tag[s]] = 0;
-        }
-        c->tag[s] = line;
-        c->slot_of[line] = s + 1;
-        lru_push_front(c, s);
-        return 0;
-    }
     unsigned set = line % c->sets;
     uint32_t *t = &c->tag[set * c->ways];
     uint64_t *st = &c->stamp[set * c->ways];
@@ -123,6 +88,90 @@ static int cache_access(struct cache *c, uint32_t line) {
     t[victim] = line;
     st[victim] = now;
     return 0;
+}
+
+/* All fully associative LRU sizes at once. One LRU list of FULL_MAX slots,
+ * most recent first; bucket_of[slot] is the smallest size index k with the
+ * slot's position < full_sizes[k], and marker[k] is the slot at position
+ * full_sizes[k] - 1 (NODE_NONE while the list is shorter). An access in
+ * bucket b hits in every size k >= b; a line not in the list (bucket
+ * N_FULL) misses in all. hist[b][site] counts accesses by bucket. */
+static const unsigned full_sizes[] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096,
+                                      8192, 16384, 32768, 65536};
+enum { N_FULL = sizeof(full_sizes) / sizeof(full_sizes[0]) };
+#define FULL_MAX 65536
+
+static struct {
+    uint32_t *slot_of;             /* line -> slot+1, 0 = absent */
+    uint32_t tag[FULL_MAX], prev[FULL_MAX], next[FULL_MAX];
+    uint8_t bucket_of[FULL_MAX];
+    uint32_t marker[N_FULL];
+    uint32_t head, tail, count;
+    uint64_t hist[N_FULL + 1][N_SITES], read_hist[N_FULL + 1];
+} full;
+
+static void full_flush(void) {
+    for (uint32_t i = 0; i < full.count; ++i) full.slot_of[full.tag[i]] = 0;
+    full.count = 0;
+    full.head = full.tail = NODE_NONE;
+    for (int k = 0; k < N_FULL; ++k) full.marker[k] = NODE_NONE;
+}
+
+static void full_unlink(uint32_t s) {
+    if (full.prev[s] != NODE_NONE) full.next[full.prev[s]] = full.next[s]; else full.head = full.next[s];
+    if (full.next[s] != NODE_NONE) full.prev[full.next[s]] = full.prev[s]; else full.tail = full.prev[s];
+}
+
+static void full_push_front(uint32_t s) {
+    full.prev[s] = NODE_NONE;
+    full.next[s] = full.head;
+    if (full.head != NODE_NONE) full.prev[full.head] = s;
+    full.head = s;
+    if (full.tail == NODE_NONE) full.tail = s;
+    full.bucket_of[s] = 0;
+}
+
+/* Every line above each boundary k < upto moves one position down: the one
+ * at full_sizes[k] - 1 crosses into bucket k + 1. */
+static void full_shift_markers(int upto) {
+    for (int k = 0; k < upto; ++k) {
+        uint32_t m = full.marker[k];
+        if (m == NODE_NONE) break;   /* list shorter than this size, and every larger one */
+        full.bucket_of[m] = k + 1;
+        full.marker[k] = full.prev[m];
+    }
+}
+
+/* Returns the bucket of the access (N_FULL = miss everywhere). */
+static unsigned full_access(uint32_t line) {
+    uint32_t s1 = full.slot_of[line];
+    if (s1) {
+        uint32_t s = s1 - 1;
+        unsigned b = full.bucket_of[s];
+        if (s == full.head) return b;
+        full_shift_markers(b);
+        if (full.marker[b] == s) full.marker[b] = full.prev[s];
+        full_unlink(s);
+        full_push_front(s);
+        return b;
+    }
+    uint32_t s;
+    if (full.count == FULL_MAX) {
+        s = full.tail;               /* at FULL_MAX - 1: marker of the largest size */
+        full.marker[N_FULL - 1] = full.prev[s];
+        full_unlink(s);
+        full.slot_of[full.tag[s]] = 0;
+        full_shift_markers(N_FULL - 1);
+    } else {
+        s = full.count++;
+        full_shift_markers(N_FULL);
+        for (int k = 0; k < N_FULL; ++k)
+            if (full.count == full_sizes[k]) full.marker[k] = full.tail == NODE_NONE ? s : full.tail;
+    }
+    full.tag[s] = line;
+    full.slot_of[line] = s + 1;
+    full_push_front(s);
+    return N_FULL;
 }
 
 static void usage(void) {
@@ -170,30 +219,27 @@ int main(int argc, char **argv) {
     uint32_t max_id = 0;
     uint32_t max_line = max_node / npl;
 
-    static const unsigned sizes[] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536};
-    static const unsigned waysv[] = {1, 2, 4, 8, 0 /* full */};
+    static const unsigned sizes[] = {16, 64, 256, 1024, 4096};
+    static const unsigned waysv[] = {1, 4, 8};
     enum { NS = sizeof(sizes) / sizeof(sizes[0]), NW = sizeof(waysv) / sizeof(waysv[0]) };
     struct cache caches[NS * NW];
     int nc = 0;
     for (int si = 0; si < NS; ++si) {
         for (int wi = 0; wi < NW; ++wi) {
-            if (waysv[wi] >= sizes[si]) continue; /* that is the fully associative one */
             struct cache *c = &caches[nc++];
             memset(c, 0, sizeof(*c));
             c->entries = sizes[si];
-            c->ways = waysv[wi] ? waysv[wi] : sizes[si];
+            c->ways = waysv[wi];
             c->sets = c->entries / c->ways;
             c->tag = calloc(c->entries, sizeof(uint32_t));
-            if (c->ways == c->entries) {
-                c->slot_of = calloc((size_t)max_line + 1, sizeof(uint32_t));
-                c->prev = calloc(c->entries, sizeof(uint32_t));
-                c->next = calloc(c->entries, sizeof(uint32_t));
-            } else {
-                c->stamp = calloc(c->entries, sizeof(uint64_t));
-            }
-            cache_flush(c, max_line);
+            c->stamp = calloc(c->entries, sizeof(uint64_t));
+            cache_flush(c);
         }
     }
+    full.slot_of = calloc((size_t)max_line + 1, sizeof(uint32_t));
+    full.count = 0;
+    full_flush();
+    uint32_t prev_line = NODE_NONE;   /* the line of the access before, for the fast path */
 
     uint64_t count[N_KINDS][N_SITES] = {{0}};
     uint64_t no_node_checks[N_SITES] = {0};
@@ -242,6 +288,8 @@ int main(int argc, char **argv) {
                 caches[k].hit[last_site] += id;
                 if (last_kind == K_READ) caches[k].read_hit += id;
             }
+            full.hist[0][last_site] += id;
+            if (last_kind == K_READ) full.read_hist[0] += id;
             continue;
         }
         ++logical;
@@ -254,7 +302,9 @@ int main(int argc, char **argv) {
         last_id = id; last_kind = kind; last_site = site;
         if (kind == K_RESET) {
             ++resets;
-            for (int k = 0; k < nc; ++k) cache_flush(&caches[k], max_line);
+            for (int k = 0; k < nc; ++k) cache_flush(&caches[k]);
+            full_flush();
+            prev_line = NODE_NONE;
             memset(line_seen, 0, (size_t)max_line + 1);
             in_revoke = 0;
             continue;
@@ -288,6 +338,20 @@ int main(int argc, char **argv) {
         ++now;
         uint32_t line = id / npl;
         if (!line_seen[line]) { line_seen[line] = 1; ++compulsory[site]; }
+        if (line == prev_line) {
+            /* most recent in every cache already: a hit that changes nothing */
+            for (int k = 0; k < nc; ++k) {
+                ++caches[k].hit[site];
+                if (kind == K_READ) ++caches[k].read_hit;
+            }
+            ++full.hist[0][site];
+            if (kind == K_READ) ++full.read_hist[0];
+            continue;
+        }
+        prev_line = line;
+        unsigned b = full_access(line);
+        ++full.hist[b][site];
+        if (kind == K_READ) ++full.read_hist[b];
         for (int k = 0; k < nc; ++k) {
             struct cache *c = &caches[k];
             if (cache_access(c, line)) {
@@ -335,14 +399,32 @@ int main(int argc, char **argv) {
            (unsigned long long)walks, (unsigned long long)walked_total, (unsigned long long)walk_max);
     for (int b = 0; b < 11; ++b) printf("%s%llu", b ? ", " : "", (unsigned long long)walk_hist[b]);
     printf("]},\n  \"caches\": [");
+    /* fully associative: size k hits every access in buckets 0..k */
+    for (int k = 0; k < N_FULL; ++k) {
+        uint64_t hs[N_SITES] = {0}, ms[N_SITES] = {0}, h = 0, m = 0, rh = 0, rm = 0;
+        for (int b = 0; b <= N_FULL; ++b) {
+            for (int st = 0; st < N_SITES; ++st) {
+                if (b <= k) hs[st] += full.hist[b][st]; else ms[st] += full.hist[b][st];
+            }
+            if (b <= k) rh += full.read_hist[b]; else rm += full.read_hist[b];
+        }
+        for (int st = 0; st < N_SITES; ++st) { h += hs[st]; m += ms[st]; }
+        printf("%s\n    {\"entries\": %u, \"ways\": \"full\", \"ways_n\": %u, \"hits\": %llu, \"misses\": %llu, "
+               "\"read_hits\": %llu, \"read_misses\": %llu, \"by_site\": {",
+               k ? "," : "", full_sizes[k], full_sizes[k], (unsigned long long)h, (unsigned long long)m,
+               (unsigned long long)rh, (unsigned long long)rm);
+        for (int st = 0; st < N_SITES; ++st)
+            printf("%s\"%s\": [%llu, %llu]", st ? ", " : "", site_name[st],
+                   (unsigned long long)hs[st], (unsigned long long)ms[st]);
+        printf("}}");
+    }
     for (int k = 0; k < nc; ++k) {
         struct cache *c = &caches[k];
         uint64_t h = 0, m = 0;
         for (int s = 0; s < N_SITES; ++s) { h += c->hit[s]; m += c->miss[s]; }
-        printf("%s\n    {\"entries\": %u, \"ways\": %s%u%s, \"hits\": %llu, \"misses\": %llu, "
+        printf(",\n    {\"entries\": %u, \"ways\": %u, \"hits\": %llu, \"misses\": %llu, "
                "\"read_hits\": %llu, \"read_misses\": %llu, \"by_site\": {",
-               k ? "," : "", c->entries, c->ways == c->entries ? "\"full\", \"ways_n\": " : "",
-               c->ways, "", (unsigned long long)h, (unsigned long long)m,
+               c->entries, c->ways, (unsigned long long)h, (unsigned long long)m,
                (unsigned long long)c->read_hit, (unsigned long long)c->read_miss);
         for (int s = 0; s < N_SITES; ++s)
             printf("%s\"%s\": [%llu, %llu]", s ? ", " : "", site_name[s],

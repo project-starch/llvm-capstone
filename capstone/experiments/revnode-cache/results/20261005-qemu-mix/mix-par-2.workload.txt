@@ -1,0 +1,3 @@
+par #0 ao_render: PASS rc=0 142.8s
+par #1 speedtest1: PASS rc=0 14.3s
+mix par n=2: PASS wall=142.8s

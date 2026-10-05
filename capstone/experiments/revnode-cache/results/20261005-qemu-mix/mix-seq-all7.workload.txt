@@ -1,0 +1,8 @@
+seq #0 ao_render: PASS rc=0 141.1s
+seq #1 lc_fizzbuzz: PASS rc=0 215.8s
+seq #2 so_lists: PASS rc=0 37.4s
+seq #3 fib: PASS rc=0 50.5s
+seq #4 so_mandelbrot: PASS rc=0 41.0s
+seq #5 mandel_term: PASS rc=0 15.0s
+seq #6 speedtest1: PASS rc=0 10.1s
+mix seq n=7: PASS wall=510.9s

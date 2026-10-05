@@ -1,0 +1,27 @@
+# provenance, 2026-10-05
+capstone-qemu perf/revnode-trace 191c7442fed80ded53e0eef42d47ca1383b37a40
+llvm-capstone base origin/dev 792369d1a1b847734a6de2c151f0c19711268b48
+CAPSTONE_REV_NODES=16777216 CAPSTONE_GP_NONLIN=1; mix-*-{2,4,5}: --cma-mib 1920 --process-cache-mib 1792; mix-seq-all7: 1024/768
+mruby heap arm fx-sublet-gc; benchmarks from mruby 4.0.0-rc2 benchmark/ scaled by prepare-bench.py
+MIX order: ao_render speedtest1 so_lists fib so_mandelbrot (first N); all7: ao_render lc_fizzbuzz so_lists fib so_mandelbrot mandel_term speedtest1
+c8e8551b202ee44bf5f887717a87ae6e6ef8d43e25c783e42740e5fb9fc3ad7e  build/qemu-system-riscv64
+e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b  boot/Image
+db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d  firmware/fw_jump.elf
+fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f  cheap/rootfs.ext2
+c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf  module/capstone.ko
+546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94  guest/capstone-exec
+703ddb70849183db249041f16bfc251bf866089af9af40707d09e0e915d72605  share/mruby-fx-sublet-gc.dom
+d2abaa03d1ecbc6b75e701f03a8272287579c23ad90dbfd093d0dc7aa60f62aa  app-O2/speedtest1.dom
+543c4473e6590d9cbffbacbf2a715ae4035e44b53bfada0d7f3f03183aab884f  bench/ao_render.rb
+fdcc106f0c4e65f9fc763e55926745f10751dfa80b30efbb3747c7e3cab8e523  bench/fib.rb
+b7dbfa5261492a454d115379b33369f8c43596c473be6659548b888f3d3ee47b  bench/lc_fizzbuzz.rb
+0786a0b193daee7edbb8e8dcefb75f8dd18aeb4be82b2d90997b06220cd38f82  bench/mandel_term.rb
+d8797cbae089f3a9755f2d681e1225f7fbaf245190a36c5e16cb16699048a627  bench/so_lists.rb
+8f66bc2e5b3e0bcd41209853faa018b058d520524839c4dfd82530417bf353d7  bench/so_mandelbrot.rb
+cfd73bb1de97514b2adacbda3a377e5172aecbe48819f654071d1996359ca634  bench/native/ao_render.out
+93a9b2b38d0ff170e51dfa05feafc9832ba25b87d3fabd8e4ffbb0778220cd50  bench/native/fib.out
+de5cfcab364fe88f60791c04e933c3a8e321a257443d9a6e9c2de6775df8285c  bench/native/lc_fizzbuzz.out
+c71112dad1c26b338a3dc7ee86c8e5d0321823e417a7c83d70cb4c29cbfe5e92  bench/native/mandel_term.out
+876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b  bench/native/so_lists.out
+bbe8fe2c63de6cf7791d64bca4103c938fb9a4c44f721cb3a4cf714f245a6bd8  bench/native/so_mandelbrot.out
+761ee3c811d197dc0c4996cb3b3de56b927b6d5ee6ea142b9e3f406e13bac224  bench/native/speedtest1.out

@@ -20,8 +20,14 @@ cache of a given size and associativity would have. It does not answer what a mi
     - the emulated supervisor's own checks and collector (`supervisor`, `gc`).
   - Without the variable the emulator is unchanged except for one not-taken branch per access.
 - **`cachesim.c`**: reads the trace once, front to back, from a file or a pipe.
-  - Simulates LRU caches: direct-mapped, 2-, 4- and 8-way, and fully associative, each at 8 to
-    65536 entries. An entry holds 1 node, or `--nodes-per-line N` consecutive nodes.
+  - Simulates LRU caches: fully associative at 8 to 65536 entries, and direct-mapped, 4- and 8-way
+    at 16 to 4096 entries. An entry holds 1 node, or `--nodes-per-line N` consecutive nodes.
+  - All fully associative sizes come from one LRU list with a marker at each size boundary,
+    because LRU caches nest. A repeat of the previous line is a hit everywhere and is counted
+    without touching any cache.
+  - This keeps three simulators ahead of QEMU. A per-size simulator held QEMU to 30 % of a core.
+    `results/20261005-qemu` was simulated by the earlier per-size version (b77546d0), which also
+    had 2-way. On the SQLite trace the two versions agree on all 29 configurations they share.
   - Write-allocate. A tree reset empties the caches.
   - Reports hits and misses per site, compulsory misses (first touch of a line), and revoke walk
     lengths.
@@ -31,12 +37,27 @@ cache of a given size and associativity would have. It does not answer what a mi
     resets and excluded sites, in both trace formats.
   - It also checks hand-derived cases: cyclic sweeps, a direct-mapped conflict, a reset, the
     compulsory count, and revoke walks of 0, 1 and 3 nodes.
-  - Negative controls, run once: an MRU victim instead of LRU fails 62 checks, and ignoring
-    repeat records fails 9. A truncated trace and an empty one both exit non-zero.
+  - It also checks traces past 65536 distinct lines, so every boundary crossing and the
+    eviction path are exercised.
+  - Negative controls, run once:
+    - an MRU victim instead of LRU fails 62 checks;
+    - ignoring repeat records fails 9;
+    - not moving a line across a size boundary fails 56;
+    - a truncated trace and an empty one both exit non-zero.
 - **`run.sh <workload>`**: boots the VM with the trace going to a FIFO and runs three simulators on
   it through `tee`: 1 node/line, 4 nodes/line, and without the supervisor/gc sites. Nothing is
   stored. A mruby trace runs to hundreds of GB, and a plain trace passed 30 GB in two minutes.
 - **`summarize.py`**: prints the tables below from the JSON reports.
+- **`prepare-bench.py`**: scales mruby's own `benchmark/` programs to emulator-sized inputs. The
+  code is unchanged; only the input sizes shrink. It records each program's native output, and the
+  STUDY-ORACLE lines of SQLite `speedtest1 --size 1`.
+- **`run-mix.py`** (`run.sh mix-<par|seq>-<label>`): runs the programs in `$MIX` in one VM.
+  - `par`: all at once, each its own Linux process and domain.
+  - `seq`: the same list one after another in the same boot. This is the control that differs
+    only in the interleaving.
+  - Every output is compared with native byte for byte. A changed or empty output reads FAIL
+    (checked once by hand).
+- **`compare-mix.py`**: lifetime-check miss rate of a `par` report against its `seq` report.
 
 ## Results (`results/20261005-qemu/`)
 
@@ -100,6 +121,62 @@ What the numbers say:
 - **The supervisor and collector sites change little.** Without them, sublet-gc at 64 entries
   misses 2.25 M of 315.9 M accesses instead of 2.57 M of 316.6 M.
 
+## Several processes at once (`results/20261005-qemu-mix/`)
+
+Workloads:
+- Programs: mruby's benchmark programs, run in the sublet-gc heap arm:
+  - `ao_render`, a ray tracer at 16x16;
+  - `so_lists`, array shuffling;
+  - `fib(30)`;
+  - `so_mandelbrot` at 150;
+  - `lc_fizzbuzz` over 1..30;
+  - `mandel_term`.
+  SQLite 3.22 `speedtest1 --size 1` (level0 heap) runs alongside them.
+- Mixes: N = 2, 4 and 5 programs, taking the first N of: ao_render, speedtest1, so_lists, fib,
+  so_mandelbrot.
+- Each mix ran twice, in two boots: all at once (`par`), and one after another (`seq`).
+- All 30 program runs matched their native output, and `mix-seq-all7` (all seven, one after
+  another) did too.
+
+**Five processes is the most the platform runs at once.**
+- Each sublet-gc process takes a 160 MiB heap (the image's descriptor) plus its domain.
+- With the default 1024 MiB CMA, a mix of three mruby processes and SQLite started only one of the
+  mruby processes. The other two failed with "cannot allocate application heap".
+- The kernel reserves CMA below 4 GiB physical. `--cma-mib 4096` boots with "cma: Failed to
+  reserve 4096 MiB", and every domain then fails, so `run.sh` now refuses such a boot.
+- At 1920 MiB, 4 mruby processes and SQLite run together. Of 8 (7 mruby), 3 are refused.
+
+Lifetime-check miss rate, fully associative LRU, `seq` → `par`, with the misses interleaving
+adds:
+
+| entries | N=2 | N=4 | N=5 |
+|---:|---|---|---|
+| 32 | 1.086 → 1.086 % | 0.657 → 0.662 % (+273 k) | 0.570 → 0.575 % (+362 k) |
+| 64 | 0.745 → 0.745 % | 0.451 → 0.455 % (+262 k) | 0.390 → 0.397 % (+448 k) |
+| 256 | 0.275 → 0.275 % | 0.166 → 0.171 % (+249 k) | 0.145 → 0.151 % (+408 k) |
+| 1024 | 0.153 → 0.153 % | 0.092 → 0.093 % (+25 k) | 0.080 → 0.081 % (+74 k) |
+| 4096 | 0.101 → 0.101 % | 0.061 → 0.062 % (+12 k) | 0.053 → 0.054 % (+86 k) |
+
+Lifetime checks per run: 3.34 G (N=2), 5.52 G (N=4), 6.39-6.40 G (N=5).
+
+- **Interleaving costs little.** Fully associative, it adds 1 to 4 % to the miss rate at 32-256
+  entries and 0 to 2 % at 1024-4096. That is +0.4 M misses on 6.4 G checks at N=5.
+  - The N=2 mix adds nothing measurable: SQLite's level0 heap uses a handful of nodes.
+  - Reading of it: a quantum is long against a cache refill. A switch can cost at most one
+    cache-full of misses, and between switches a process makes far more checks than that. The
+    number of switches is not in the trace.
+- **Small set-associative caches feel it more.** A 4-way 16-entry cache goes from 1.74 % to 2.20 %
+  (+26 %, +29 M misses) at N=5, and 64 entries 4-way +12 %. From 256 entries 4-way the
+  difference is within ±3 %.
+- **Node ids are reused across processes.** A destroyed domain's nodes return to the pool:
+  - `seq` touches 2,989,001 distinct ids at every N, the high-water of its largest program;
+  - `par` touches 2.08-2.87 M.
+  A reused id is rewritten by its allocation, which the simulator counts like any write.
+
+The real benchmarks also raise the single-process floor that `smoke.rb` showed. All seven
+programs one after another miss 0.67 % of lifetime checks at 64 entries and 0.33 % at 4096 (11.4 G
+node accesses, 10.9 M distinct ids).
+
 ## What this does not measure
 
 - **No cost.** QEMU has no timing model. The numbers are counts of a functional access stream. They
@@ -111,6 +188,9 @@ What the numbers say:
   channel and therefore through the data cache. Its interaction with data traffic is not modelled.
 - **One trace per workload.** Run-to-run variation, measured between two boots of each of SQLite
   and sublet, is under 0.05 % on the counts.
+- **One hart.** Several processes interleave on one hart at the supervisor's 5 ms quantum. They do
+  not run in parallel, and QEMU keeps a tree per hart, so a multi-hart run needs that checked
+  against the RTL first.
 
 ## Open questions
 

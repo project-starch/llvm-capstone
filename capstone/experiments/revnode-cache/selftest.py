@@ -58,8 +58,6 @@ def run(sim, recs, *args, rle=False):
 
 
 def cache(result, entries, ways):
-    if ways != "full" and ways >= entries:
-        ways = "full"
     for c in result["caches"]:
         if c["entries"] == entries and (c["ways"] == ways or (ways == "full" and c["ways"] == "full")):
             return c
@@ -109,11 +107,11 @@ def main():
         want_miss = k if k <= entries else k * 10
         check(c["misses"] == want_miss and c["hits"] == k * 10 - want_miss,
               f"cyclic K={k} full/{entries}: got {c['hits']} hits {c['misses']} misses, want {k*10-want_miss}/{want_miss}")
-    recs = [(n, READ, 0) for n in [0, 8, 0, 8, 0, 8]]
-    c = cache(run(sim, recs), 8, 1)
-    check(c["misses"] == 6, f"direct-mapped conflict 0/8 in 8 entries: {c['misses']} misses, want 6")
-    c = cache(run(sim, recs), 8, 2)
-    check(c["misses"] == 2, f"2-way 0/8 in 8 entries: {c['misses']} misses, want 2")
+    recs = [(n, READ, 0) for n in [0, 16, 0, 16, 0, 16]]
+    c = cache(run(sim, recs), 16, 1)
+    check(c["misses"] == 6, f"direct-mapped conflict 0/16 in 16 entries: {c['misses']} misses, want 6")
+    c = cache(run(sim, recs), 16, 4)
+    check(c["misses"] == 2, f"4-way 0/16 in 16 entries: {c['misses']} misses, want 2")
     recs = [(1, READ, 0), (1, READ, 0), (NONE, RESET, 6), (1, READ, 0)]
     c = cache(run(sim, recs), 8, "full")
     check(c["misses"] == 2 and c["hits"] == 1, f"reset: {c['hits']}/{c['misses']}, want 1/2")
@@ -149,8 +147,9 @@ def main():
             check(res_rle["caches"] == res["caches"] and res_rle["accesses"] == res["accesses"]
                   and res_rle["checks_without_node"] == res["checks_without_node"],
                   f"{name} npl={npl} excl={excl}: RLE result differs from the plain trace")
-            for entries in [8, 64, 512, 4096]:
-                for ways in [1, 2, 4, 8, "full"]:
+            for entries, ways in ([(e, "full") for e in [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]]
+                                  + [(e, w) for e in [16, 64, 256, 1024, 4096] for w in [1, 4, 8]]):
+                if True:
                     want = reference(recs, entries, ways, npl, excl)
                     got = cache(res, entries, ways)["by_site"]
                     check(all(list(got[s]) == want[s] for s in SITES),
@@ -166,11 +165,24 @@ def main():
     rb = run(sim, big)
     check(cache(rb, 65536, "full")["misses"] == sum(rb["compulsory_misses"].values()),
           "a 65536-entry cache larger than the working set misses only compulsorily")
-    for entries in [16384, 65536]:
-        for ways in [8, "full"]:
+    for entries in [8192, 16384, 32768, 65536]:
+        for ways in ["full"]:
             want = reference(big, entries, ways, 1, [])
             check(cache(rb, entries, ways)["by_site"]["ldst"] == want["ldst"],
                   f"large {entries}/{ways} vs reference")
+
+    # past the largest size: evictions from the 65536-entry list, every boundary crossed
+    huge = []
+    for _ in range(250000):
+        r = rng.random()
+        huge.append((rng.randrange(40) if r < 0.5 else rng.randrange(3000) if r < 0.7
+                     else rng.randrange(90000), READ, rng.randrange(2)))
+    huge += [(i % 70000, READ, 0) for i in range(140000)]      # cyclic sweep larger than 65536
+    rh = run(sim, huge)
+    for entries in [8, 64, 1024, 8192, 32768, 65536]:
+        want = reference(huge, entries, "full", 1, [])
+        got = cache(rh, entries, "full")["by_site"]
+        check(all(list(got[s]) == want[s] for s in SITES), f"huge {entries}/full: {got['ldst']} != {want['ldst']}")
 
     # 3. revoke walk
     # In capstone-qemu's order: R root, (R n, W n)*, [R end], W root, [W end].

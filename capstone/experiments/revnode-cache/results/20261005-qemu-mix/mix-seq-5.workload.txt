@@ -1,0 +1,6 @@
+seq #0 ao_render: PASS rc=0 138.6s
+seq #1 speedtest1: PASS rc=0 7.8s
+seq #2 so_lists: PASS rc=0 32.5s
+seq #3 fib: PASS rc=0 48.6s
+seq #4 so_mandelbrot: PASS rc=0 34.8s
+mix seq n=5: PASS wall=262.2s
