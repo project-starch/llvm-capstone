@@ -1211,6 +1211,14 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - **Predicted: `B3: transcript e0a254c47e7ee28c bytes 1931207`, `identity STAT pointer_size 128`, job exit 0,
     `RESULT b3-oracle retval=0`.**
   - A different hash with the right length points at a data difference: a protocol reply or a stored value.
+- **Board result (21:50-21:57, firmware 3645ae6b2219): a MISS.**
+  - `B3: transcript fe153b1465b4c9c5 bytes 1931245`, 38 bytes longer than native's 1,931,207.
+  - `identity STAT pointer_size 128`, job exit 0, `RESULT b3-oracle retval=0`.
+  - The harness reported `stop_seconds=inf` (its CLOCK_MONOTONIC delta on the board).
+  - QEMU reproduces the native transcript exactly, so the difference is the board's.
+- **B3d pre-registered (diagnostic):** the same image and the same rung, now also printing the first 40 lines of
+  `diff native board`, with the native reference baked into the image (`b0-bake-b3d.sh`). No outcome is predicted
+  beyond "the 38 bytes are visible".
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not

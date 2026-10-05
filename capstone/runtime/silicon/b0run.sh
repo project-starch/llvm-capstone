@@ -129,6 +129,11 @@ case "$rung" in
     tail -5 /tmp/b3.log
     echo "B3: transcript $(sha256sum /tmp/mc/transcript.norm 2>/dev/null | cut -c1-16) bytes $(wc -c < /tmp/mc/transcript.norm 2>/dev/null)"
     echo "B3: identity $(cat /tmp/mc/identity.txt 2>/dev/null) job $(cat /tmp/mc/job.json 2>/dev/null) status $(cat /tmp/mc/status.txt 2>/dev/null)"
+    # Diagnostic: with the native reference in the image, the first differing lines (the transcript stays here).
+    if [ -f /test-domains/b3-native.norm ]; then
+      echo "B3: diff native board (first 40 lines)"
+      diff /test-domains/b3-native.norm /tmp/mc/transcript.norm | head -40 | sed 's/^/B3d /'
+    fi
     echo "RESULT $rung retval=$hrc"
     ;;
   *) echo "RESULT $rung retval=999" ;;
