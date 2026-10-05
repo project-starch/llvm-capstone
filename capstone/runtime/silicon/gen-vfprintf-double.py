@@ -110,7 +110,10 @@ def main() -> int:
         if n:
             counts.append((pattern, n))
 
-    leftover = re.findall(r"long double|\bfrexpl\b|\bLDBL_", text)
+    # The literal forms too (1e9L, 0x1p28L): a surviving long double LITERAL is an fp128 constant even with every
+    # `long double` gone. gen-floatscan-double.py found one in floatscan.c (1000000000.0L) only through the backend.
+    leftover = re.findall(r"long double|\bfrexpl\b|\bLDBL_|\b\d+\.\d*(?:[eE][-+]?\d+)?L\b|\b\d+[eE][-+]?\d+L\b"
+                          r"|\b0[xX][0-9a-fA-F.]+[pP][-+]?\d+L\b", text)
     if leftover:
         print(f"ERROR: {len(leftover)} long-double references survived: "
               f"{sorted(set(leftover))}", file=sys.stderr)

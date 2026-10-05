@@ -323,6 +323,16 @@ static void threads_begin(void)
 /* Offer and create; a THREAD context gets its transport first. musl's own
    threads (__clone below) come here directly: pthread_create has already
    switched musl's locks on. */
+#ifdef CAPSTONE_CLONE_DIAG
+/* Diagnostic (B1 on silicon): musl's pthread_create turns every __clone failure into EAGAIN, so the step that
+   failed is recorded here for the application to print. Off by default. */
+struct capstone_clone_diag { long step, arena_type, arena_bytes, transport, offered, id, r; };
+struct capstone_clone_diag __capstone_clone_diag;
+#define CLONE_DIAG(field, v) (__capstone_clone_diag.field = (long)(v))
+#else
+#define CLONE_DIAG(field, v) ((void)0)
+#endif
+
 static long create(struct capstone_context *c, unsigned mode)
 {
   unsigned long ticket = next_ticket++;
@@ -331,6 +341,8 @@ static long create(struct capstone_context *c, unsigned mode)
     /* Before the request, not after it: the launcher may start the context
        before this context has the request's answer. */
     transport = __capstone_delegate_ints(CAPSTONE_NR_CONTEXT_RESERVE, 0, 0, 0);
+    CLONE_DIAG(step, 3);
+    CLONE_DIAG(transport, transport);
     if (transport < 0)
       return transport;
     c->start[CAPSTONE_CONTEXT_WORD_TRANSPORT / 8] = (unsigned long)transport;
@@ -340,8 +352,12 @@ static long create(struct capstone_context *c, unsigned mode)
   /* the thread identity the context's struct pthread carries: tkill names it */
   long tid = c->tp ? ((struct pthread *)((char *)c->tp - sizeof(struct pthread)))->tid : 0;
   int offered = __capstone_context_offer(&c->seal, ticket) == 0;
+  CLONE_DIAG(step, 4);
+  CLONE_DIAG(offered, offered);
   long id = __capstone_delegate_ints4(CAPSTONE_NR_CONTEXT_CREATE, ticket, mode,
                                       (unsigned long)transport, (unsigned long)tid);
+  CLONE_DIAG(step, 5);
+  CLONE_DIAG(id, id);
   if (!offered)
     return id < 0 ? id : -EINVAL;
   if (id >= 0)
@@ -501,6 +517,9 @@ int __clone(int (*func)(void *), void *stack, int flags, void *arg, ...)
     clones = rec;
   }
   capstone_cap_slot area = {0};
+  CLONE_DIAG(step, 1);
+  CLONE_DIAG(arena_type, capstone_cap_type(&__capstone_context_arena));
+  CLONE_DIAG(arena_bytes, capstone_cap_end(&__capstone_context_arena) - capstone_cap_base(&__capstone_context_arena));
   if (!rec)
     goto out;
   if (capstone_cap_type(&rec->c.handle) == CAPSTONE_CAP_LINEAR)
@@ -520,6 +539,7 @@ int __clone(int (*func)(void *), void *stack, int flags, void *arg, ...)
     *ptid = (int)tid;
   if (flags & CLONE_CHILD_SETTID)
     *ctid = (int)tid;
+  CLONE_DIAG(step, 2);
   mint_clone(&rec->c, &area, stack, tls, clone_start, rec);
   /* counted before it can run: it may end before CREATE answers */
   __atomic_fetch_add(&clones_running, 1, __ATOMIC_SEQ_CST);
@@ -531,6 +551,7 @@ int __clone(int (*func)(void *), void *stack, int flags, void *arg, ...)
     rec->live = 1;
   }
 out:
+  CLONE_DIAG(r, r);
   capstone_unlock(&clones_lock);
   return r < 0 ? (int)r : (int)tid;
 }

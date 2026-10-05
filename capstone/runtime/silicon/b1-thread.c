@@ -9,6 +9,19 @@
 #include <pthread.h>
 #include <stdio.h>
 
+#ifdef CAPSTONE_CLONE_DIAG
+struct capstone_clone_diag { long step, arena_type, arena_bytes, transport, offered, id, r; };
+extern struct capstone_clone_diag __capstone_clone_diag;
+static void diag(void)
+{
+	struct capstone_clone_diag *d = &__capstone_clone_diag;
+	printf("B1 diag: step %ld arena_type %ld arena_bytes %ld transport %ld offered %ld id %ld r %ld\n",
+	       d->step, d->arena_type, d->arena_bytes, d->transport, d->offered, d->id, d->r);
+}
+#else
+static void diag(void) {}
+#endif
+
 static void *worker(void *arg)
 {
 	long v = (long)arg;
@@ -22,6 +35,7 @@ int main(void)
 	int r = pthread_create(&t, 0, worker, (void *)41L);
 	if (r) {
 		printf("B1: pthread_create failed: %d\n", r);
+		diag();
 		return 3;
 	}
 	r = pthread_join(t, &ret);
@@ -29,6 +43,7 @@ int main(void)
 		printf("B1: pthread_join failed: %d\n", r);
 		return 4;
 	}
+	diag();
 	printf("B1: thread returned %ld\n", (long)ret);
 	return (long)ret == 124 ? 0 : 5;
 }
