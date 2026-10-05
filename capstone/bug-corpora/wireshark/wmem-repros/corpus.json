@@ -1,12 +1,12 @@
 {
   "program": "wireshark",
   "boundary": "wmem (block, block_fast)",
-  "title": "Dissector-side temporal defects in consumers of Wireshark's wmem pools",
+  "title": "Dissector-side defects in consumers of Wireshark's wmem pools: twelve temporal, one spatial",
   "upstream": {
     "version": "4.6.8",
     "port": "capstone/ports/wireshark/wmem"
   },
-  "cases": 13,
+  "cases": 14,
   "case_schema": "case-json",
   "case_macro": "WM",
   "required_arms": [
@@ -26,7 +26,7 @@
   "status": "measured",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
-    "false": 13
+    "false": 14
   },
   "runners": [
     "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py"
@@ -36,9 +36,11 @@
     "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu",
     "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd",
     "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu-negative-control",
-    "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port"
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-ON",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-OFF"
   ],
   "advisories": [],
   "shape_table": true,
-  "note": "No triage inventory under docs/ref/ yet; the README carries the selection."
+  "note": "Cases 0-12 are temporal; case 13 is the corpus's one SPATIAL row and its discriminating arm is sublet-chunks rather than sublet. Triage for the temporal rows is in the README; for the spatial row it is docs/ref/wireshark-spatial-defect-triage.md. Case 13 was measured 2026-10-05 on both the WM_CHUNKS=ON and WM_CHUNKS=OFF builds, with case 11 as a temporal regression control and the suite's negative control run and passed; results/20261005-qemu-spatial-case13-{ON,OFF}. That run REFUTED the completion predictions case 13 was filed with -- see its own README."
 }

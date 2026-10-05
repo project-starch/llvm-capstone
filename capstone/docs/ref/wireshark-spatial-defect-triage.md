@@ -228,7 +228,9 @@ three post-pin defects, **these four need no new port work to discriminate**:
 | `1c090e9292` | `epan/dissectors/packet-lbmc.c` | `wmem_file_scope()` |
 | `4a4871a831` | `epan/dissectors/packet-ntlmssp.c` | `wmem_file_scope()` |
 
-**`0261fd7da6` is the one to build**, and its mechanism is as reducible as a synthetic fixture.
+**`0261fd7da6` IS NOW BUILT AND MEASURED** as case 13 of `bug-corpora/wireshark/wmem-repros`
+(results: `results/20261005-qemu-spatial-case13-{ON,OFF}/`). Its mechanism is as reducible as a
+synthetic fixture.
 Quoted from the fix's parent, `epan/dissectors/packet-http.c:3740-3751`:
 
 ```c
@@ -263,6 +265,45 @@ called it live. **Reading the pin refutes that:** `v4.6.8:epan/dissectors/packet
 all read `snprintf(np, maxname, ...)` — the fixed form. The fix is present; it is simply unfindable
 verbatim because upstream renamed `g_snprintf` to `snprintf`, so none of the fix's added lines
 match. Exactly the mechanism §filter-3 predicts, now observed in the Wireshark population too.
+
+## The case that was built from this, and what its run REFUTED
+
+`0261fd7da6` is case **13** of `bug-corpora/wireshark/wmem-repros` — the first upstream **spatial**
+defect reduced anywhere in this tree, and the corpus's only row that faults on **bounds (cause 5)**
+rather than on revoked authority (cause 24).
+
+**Measured, 4/4 arms on each of two builds, runner exit 0, with the suite's negative control run and
+passing 4/4** (so the result is not vacuous):
+
+| build | case 13 `spatial` | case 13 protected arm | case 11 control (temporal) |
+|---|---|---|---|
+| `WM_CHUNKS=ON` | **FAULT cause 5** `0x10190222c` | **FAULT cause 5** `0x10190222c` | completes / cause 24 |
+| `WM_CHUNKS=OFF` | **FAULT cause 5** `0x1019013f8` | **FAULT cause 5** `0x1019013f8` | completes / cause 24 |
+
+**And the run refuted this document's own expectation.** The case was filed — and the section above
+was written — predicting that `sublet` would complete and only the chunk arm would fault, i.e. that
+it discriminated the chunk port. It does not, and **cannot in that harness**:
+`ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15` narrows **every** wmem allocation to its
+request under `WM_DOMAIN`, unconditionally and whatever `WM_CHUNKS` is set to. So the corpus port
+has **no malloc-granular arm at all**, the 6-byte object is bounded to 6 bytes on every arm, and the
+read at `+8` faults on all of them.
+
+So the corrected claim, in two halves that must not be merged:
+
+- **Established:** the defect is real, reduces cleanly, and per-allocation bounds catch it.
+- **NOT established here:** that a nested allocator hides the *extent* from `malloc`. That contrast
+  needs an arm whose bounds genuinely are malloc-granular, and the only place with one is the tshark
+  **app** port — the measured fx12 ladder (`level0` 41 908 912, `shrink` 8 388 560, `sublet`
+  1 048 528, `chunks` 64). The `BLOCK_FAST` gap below is about that port, not this one.
+
+**Two instrument defects were found and fixed before any of this was believed**, both of which would
+have reported a correct reading as a failure, and both negative-tested:
+
+1. `run-defects.py` hardcoded `cause in (24, 25)`. A spatial row faults with cause **5**, so the
+   gate would have failed it. The expected causes now come from the case's own arm, and every one of
+   the 14 measured rows already in `results/` is still accepted.
+2. `classify()` assumed the unprotected `spatial` mode always completes. For a spatial defect it
+   faults. Both modes are now judged by their declared arm, with cases 0-12 verified unchanged.
 
 ## Rejected, with reasons
 

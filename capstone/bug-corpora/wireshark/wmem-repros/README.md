@@ -119,6 +119,7 @@ By shape, for the two mechanisms that catch anything:
 | packet-scope object held by a column or address past the scope's end | 2, 3, 4, 5 | 4 / 4 | 4 / 4 |
 | packet-scope object kept by file-scope state across packets | 7, 8, 9, 10, 11 | 5 / 5 | 5 / 5 |
 | stale pointer after an individual recycler free | 12 | **0 / 1** | **1 / 1** |
+| cursor advanced past its chunk by a fixed skip, read inside the same block | 13 | **1 / 1** (bounds, cause 5) | not run |
 
 Every `spatial` and every plain-CheriBSD arm completed: the unprotected
 allocator returns either the old bytes (the column cases, where nothing

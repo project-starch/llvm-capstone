@@ -14,7 +14,7 @@ anything is broken. A grep for the word finds arms, not defects.
 
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|
-| **spatial**, as corpus cases | **0** | **0** | **0** |
+| **spatial**, as corpus cases | **1** (case 13, measured) | **0** | **1** |
 | **spatial**, triaged upstream defects (§1a) | **19** (15 class B + 4 class C) | 21+ class A, not pursued | **19** |
 | **temporal**, as corpus cases | 22 | 5 | **27** |
 
@@ -88,11 +88,21 @@ Zero are built as corpus cases yet — see the honest comparison below.
   allocator adapter can help; the authority that would need narrowing is per struct member. That is
   the taxonomy's `partial²` cell, where CHERI and Capstone already share a verdict.
 
-**Honest comparison with the temporal hunt, because the two are not equivalent:** the temporal hunt
-produced **22 built corpus cases**; this one has produced **19 triaged candidates and 0 built
-cases**. Triage documents are not a corpus. The nearest buildable case is `0261fd7da6`, whose
-mechanism is unconditional pointer arithmetic (`+= 6` on a `wmem_strdup`'d string with no length
-check) and which would discriminate on the existing `chunks` arm.
+**Comparison with the temporal hunt, which produced 22 built cases:** this hunt has produced **19
+triaged candidates and 1 BUILT, MEASURED case**. Triage documents are not a corpus, and 1 is not 22.
+
+The built one is `0261fd7da6` — case **13** of `bug-corpora/wireshark/wmem-repros`, the first
+upstream spatial defect reduced anywhere in this tree, and the only row in any corpus here that
+faults on **bounds (cause 5)** rather than on revoked authority (cause 24). Measured 4/4 arms on
+each of two builds with a temporal regression control and the suite's negative control passing 4/4
+(`results/20261005-qemu-spatial-case13-{ON,OFF}/`).
+
+**Its run also refuted the prediction it was filed with**, which is worth carrying into any use of
+these numbers: `ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15` narrows *every* wmem
+allocation to its request, so the corpus harness has **no malloc-granular arm** and every arm faults.
+The case therefore establishes that the defect is real and that per-allocation bounds catch it; it
+does **not** establish "a nested allocator hides the extent from `malloc`". That contrast exists only
+in the tshark **app** port's fx12 length ladder (41 908 912 / 8 388 560 / 1 048 528 / 64).
 
 The 22 nested ones are the committed corpus case folders, one per defect:
 
