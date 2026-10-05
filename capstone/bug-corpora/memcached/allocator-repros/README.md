@@ -30,6 +30,9 @@ not build.
 | allocator-forced free of a referenced item / slabs reuse / read through the dead pointer | 2 |
 | reference count overflow / item freed with holders remaining / slabs reuse / read through the dead pointer | 3 |
 | unlocked refcount update / count drifts below the holders / slabs reuse / read through the dead pointer | 4 |
+| one byte written past an item's data into the next chunk of the page | 5 | native only | not run |
+| four bytes written into an item field that has no room, inside the chunk | 6 | native only | not run |
+| unbounded read forward from an item key with no terminator | 7 | native only | not run |
 
 Five cases in five shapes, across both of the allocators the port carries.
 Cases 0 and 1 are consumer mistakes in `cache.c`'s object caches, read one

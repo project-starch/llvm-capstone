@@ -5,8 +5,7 @@ out — `bug-corpora/memcached/allocator-repros/README.md:52-57` *"filtered on t
 vocabulary (55 hits)"* — so it had never been triaged. See the retraction in
 `spatial-vs-temporal-three-programs.md:20`.
 
-**Verdict: 0 class-B defects, and unlike Wireshark that looks like a real structural fact rather
-than an instrument limitation.** The spatial defects memcached fixes are in its *metadata arrays*
+**VERDICT SUPERSEDED 2026-10-05: three spatial cases are now built and measured.** The original verdict below — 0 class-B, structural — was reached with a WORDING filter, and the shape search this file itself prescribed found three. See §6. The structural argument in §2 survives in part and is corrected there. The spatial defects memcached fixes are in its *metadata arrays*
 and its *protocol buffers*, not in item data inside a slab page. One candidate is more interesting
 than its class suggests — see §4.
 
@@ -136,3 +135,52 @@ This is also why a `DEFECT-LIVE` from this script is a **candidate**, never a re
   own adjudication as *"reachable only by a privileged user writing a configuration that would never
   work"* (`allocator-repros/README.md:79`); that rejection stands and is about reachability, not
   class.
+
+
+## 6. SUPERSEDED: the shape search this file prescribed found three cases (2026-10-05)
+
+§2 said the next instrument was *"a search for fixes that change an `item_make_header` / `ITEM_*`
+size computation, which is a **shape** search rather than a wording search"*. Run, it gives **157**
+commits touching an item-size computation, of which **89** change size arithmetic on item storage,
+and **three** are reducible spatial defects — now cases **5, 6 and 7** of
+`bug-corpora/memcached/allocator-repros`, measured 8/8 natively with the five temporal rows as a
+regression control (`results/20261005-native-spatial/`).
+
+| case | upstream | the crossing | leaves the chunk? |
+|---|---|---|---|
+| **5** | `2d61f18` | three bytes of a two-byte terminator, one byte past the item's data | **yes** — the case sizes the item to the measured chunk stride |
+| **6** | `78eb770` | four bytes of flags into suffix space that does not exist, over the value | **no** — a sub-object crossing inside the chunk |
+| **7** | `ecdb011` | an unterminated key read forward past the key field | no fixed extent |
+
+**All three have subjects that say "corruption", not "overflow"** — which is exactly why the wording
+filter missed them, and is the measured cost of a wording filter on top of the one already recorded
+for the temporal hunt.
+
+**What §2's structural argument got right and wrong.** Right: an item is sized exactly from the key
+and value lengths, so there is no *generic* item-data overflow. Wrong: it concluded no class-B
+defect could live here. Two of the three are size-computation slips at the item's own field
+boundaries — case 5 a hard-coded copy length, case 6 a field with no space allocated — which the
+argument did not consider. Case 6 is the more interesting of the two: it stays **inside** the chunk,
+and the slab port's bound *is* the chunk, so a chunk-granular bound cannot see it. That is the same
+sub-object shape FFmpeg's `subobject-repros` corpus is built around.
+
+The Capstone arms are **declared predictions, not measurements** — case 5 predicts a fault, case 6 a
+completion, case 7 states that it depends on how far the scan runs. No domain build was made.
+
+### The measured result lines (this corpus keeps no committed bundle, by its own `.gitignore`)
+
+`runners/run-native.sh` exit **0** over all eight cases — the five temporal rows ran in the same
+pass as a regression control. The three spatial rows:
+
+```
+    05_2d61f18_item_data_one_past VERDICT FIXED the two-byte copy ends exactly at the item's data end
+    05_2d61f18_item_data_one_past VERDICT DEFECT-REPRODUCED the three-byte copy of a two-byte terminator wrote one byte past the item's data, into the next chunk of the slab page
+    06_78eb770_suffix_write_no_space VERDICT FIXED the guard skipped the copy when no suffix space was allocated
+    06_78eb770_suffix_write_no_space VERDICT DEFECT-REPRODUCED the four-byte flags copy overwrote the value's storage, because with nsuffix = 0 the suffix field has no room of its own
+    07_ecdb011_unterminated_key_read VERDICT FIXED the bounded copy terminated at nkey, so the read stopped there
+    07_ecdb011_unterminated_key_read VERDICT DEFECT-REPRODUCED the formatter read past the key, because nothing terminated it
+```
+
+The Capstone arms are declared predictions, not measurements, and point different ways on purpose:
+case 5 predicts a fault (its crossing leaves the chunk), case 6 a completion (it does not), case 7
+states that it depends on how far the scan runs. No domain build was made.

@@ -1,0 +1,47 @@
+{
+  "case": 5,
+  "upstream_fix": "2d61f18",
+  "title": "the incr/decr rewrite copies three bytes of a two-byte terminator, one byte past the item's data",
+  "consumer": "memcached.c, the incr/decr value rewrite",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: 1.6.45:memcached.c:2317 reads 'memcpy(ITEM_data(new_it) + res, \"\\r\\n\", 2);' -- the fixed length -- immediately after 'memcpy(ITEM_data(new_it), buf, res);' at :2316, so the site survives verbatim with the fix applied. A fix-reversal. The defect was INTRODUCED by c47ee89 (2007, 'fix potential bug with memcpy()', which changed the length from 2 to 3) and fixed by 2d61f18 (2008); both halves of that pair are in history, which is how the shape was confirmed rather than inferred.",
+  "object": "an item's data field, sized exactly res + 2 by do_item_alloc",
+  "lifetime_ender": "NONE -- the item is alive throughout. The corpus's first SPATIAL row.",
+  "shape": "one byte written past an item's data into the next chunk of the page",
+  "allocator_layer": "slabs.c chunks over 1 MiB pages, memcached 1.6.45",
+  "fidelity": "model-consumer, real allocator. Two chunks come from the real slab allocator and the item's data is sized to end exactly at the measured chunk STRIDE -- derived from the distance between the two chunks, not from any assumed class size -- so the one-byte overflow crosses the CHUNK bound rather than landing in the class's rounding slack. That is the reachable worst case.",
+  "distinguishing": "the only row here whose crossing leaves the chunk, so it is the one a chunk-granular bound could catch. MEASURED only natively. The chunk bound is what the slab port narrows (leases.c carves each chunk), so whether a Capstone arm faults depends on whether this crossing leaves the CHUNK or stays inside it -- stated per case below and NOT measured here: the domain arms need a build this run did not make.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: faults. The crossing leaves the chunk, and the slab port narrows per chunk.",
+      "note": "Not measured: no domain build was made for this run."
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: faults. The crossing leaves the chunk, and the slab port narrows per chunk.",
+      "note": "revocation has nothing to fire on: no lifetime ends in a spatial row, so this arm reads as the spatial one does."
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured; neither platform is on this host."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: mode 1 adds temporal protection and no lifetime ends here."
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured: completes -- CHERI bounds the slab page, which is one malloc.",
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved"
+    },
+    "native-detect": {
+      "status": "not written",
+      "oracle": "NO ASan report expected: the crossing stays inside the slab page, which is one malloc, so there is no redzone between chunks. Needs its own positive control before the silence means anything -- see the FFmpeg subobject-repros bundle, where that control is measured and where it first failed to fire at -O1."
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's write or read crosses and the case's damage flag is set; the fixed arm's bound keeps it inside. This pair differs by the upstream fix, not by protection."
+    }
+  },
+  "status": "MEASURED 2026-10-05 natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED with damage=1, runners/run-native.sh exit 0 over all eight cases. The Capstone and CheriBSD arms are declared and NOT measured. A process note: the first version asserted the second chunk sat above the first, the free list handed them out the other way, and the control refused the run with CONTROL-FAILED 753 rather than measuring nothing."
+}

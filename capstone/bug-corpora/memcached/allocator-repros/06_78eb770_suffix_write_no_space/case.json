@@ -1,0 +1,47 @@
+{
+  "case": 6,
+  "upstream_fix": "78eb770",
+  "title": "the flags are copied into suffix space the item was never allocated, overwriting the value",
+  "consumer": "items.c, do_item_alloc()'s header fill",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: 1.6.45:items.c:330-332 carries the fix's guard verbatim -- 'if (nsuffix > 0) { memcpy(ITEM_suffix(it), &flags, sizeof(flags)); }'. A fix-reversal.",
+  "object": "an item's suffix field, which has NO room of its own when nsuffix is 0",
+  "lifetime_ender": "NONE -- the item is alive throughout. SPATIAL row.",
+  "shape": "four bytes written into an item field that has no room, inside the chunk",
+  "allocator_layer": "slabs.c chunks over 1 MiB pages, memcached 1.6.45",
+  "fidelity": "model-consumer, real allocator. The item is laid out in a real slab chunk with nsuffix = 0, where ITEM_suffix and ITEM_data are the SAME address -- asserted by the case -- and nbytes = 2, a zero-length value. A sentinel sits in the two bytes past the value.",
+  "distinguishing": "a SUB-OBJECT crossing: it overruns the value's storage and stays INSIDE the chunk, so a chunk-granular bound cannot see it. The same shape FFmpeg's subobject-repros corpus is built around, arrived at from the other end. MEASURED only natively. The chunk bound is what the slab port narrows (leases.c carves each chunk), so whether a Capstone arm faults depends on whether this crossing leaves the CHUNK or stays inside it -- stated per case below and NOT measured here: the domain arms need a build this run did not make.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: COMPLETES. The crossing stays inside the chunk, and the slab port's bound is the chunk.",
+      "note": "Not measured. If this prediction is wrong the slab port narrows finer than the chunk, which would itself be the finding."
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: COMPLETES. The crossing stays inside the chunk, and the slab port's bound is the chunk.",
+      "note": "revocation has nothing to fire on: no lifetime ends in a spatial row, so this arm reads as the spatial one does."
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured; neither platform is on this host."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: mode 1 adds temporal protection and no lifetime ends here."
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured: completes -- CHERI bounds the slab page, which is one malloc.",
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved"
+    },
+    "native-detect": {
+      "status": "not written",
+      "oracle": "NO ASan report expected: the crossing stays inside the slab page, which is one malloc, so there is no redzone between chunks. Needs its own positive control before the silence means anything -- see the FFmpeg subobject-repros bundle, where that control is measured and where it first failed to fire at -O1."
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's write or read crosses and the case's damage flag is set; the fixed arm's bound keeps it inside. This pair differs by the upstream fix, not by protection."
+    }
+  },
+  "status": "MEASURED 2026-10-05 natively: fixed arm VERDICT FIXED (the guard skips the copy entirely when nsuffix is 0), buggy arm VERDICT DEFECT-REPRODUCED with damage=1. Capstone and CheriBSD arms declared, not measured."
+}
