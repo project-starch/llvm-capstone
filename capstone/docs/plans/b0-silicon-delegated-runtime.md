@@ -929,6 +929,39 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   mode is the route, applied to floatscan.c and its header and callers together.
 - **Board run:** after the 776d9d859 acceptance chain frees the board.
 
+## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
+**The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
+use:
+- the arena split (`CONTEXT_BYTES`, `__capstone_context_arena`);
+- `__capstone_context_entry`;
+- `__capstone_context_exit` and `__capstone_context_exit_clear`.
+The gp-captable interp glue has none of them. Two of start-musl.S's assumptions fail on silicon:
+1. The entry reads **gp from the register at the CALL** (`delin(gp); stc(gp, t0, 32)`). That holds under QEMU only
+   because QEMU fabricates gp. On silicon a minted context's first CALL brings whatever its sealed state holds.
+2. The fault handler's address is **gp-derived** (`cincoffset(t1, gp, .Lmusl_fault)`). Under gp-captable, gp is the
+   cap table, not the code region.
+
+**The port (B1.1 to B1.6), each step QEMU-first with fabrication OFF:**
+- **B1.1 gp in the start block.** Under `CAPSTONE_GP_CAPTABLE_ABI`, the MINTING context writes its own gp (the shared
+  cap table) into the new context's start block, slot 32, and the entry loads gp from there. All contexts share
+  one cap table, as they share globals.
+- **B1.2 a gp-captable `__capstone_context_entry`/`_exit`** in the silicon glue: gp from slot 32, sp/tp/the start
+  function/its argument from slots 48/96/112/128, the start function called with `jalr` (an integer function pointer
+  under gp-captable), and the exit paths as in start-musl.S with `domreturn`.
+- **B1.3 a code capability for the seal.** context.c seals a context at `__capstone_context_entry` and needs a CODE
+  capability with that cursor. `context.c:38` declares the label as data, which gives DATA bounds under
+  gp-captable; the fix is to declare it as a function. The glue should provide the capability from PCC (an
+  accessor like the B0.5 code_base one). **To verify first:** that a PCC-derived capability from the glue has the
+  type and bounds a seal accepts on silicon (an RTL read before any build).
+- **B1.4 the arena split** in the interp glue's `_start`, ordered against its cap-table carve from sp.END.
+- **B1.5 the fault handler under gp-captable**, PCC-derived; this was also open from B0.
+- **B1.6 non-empty `.tdata`/init arrays**, if pthread-probe or musl's thread start needs them. TLS areas for minted
+  contexts are carved by context.c.
+- **The monitor's side already exists:** ADOPT, FORGET and STEP of minted slots (context_adopt, context_step), under
+  SUPERVISED_CALL. It has never run with CSR events on silicon for a MINTED slot, only for the first context (B0).
+- **First test after B1.1-B1.5:** pthread-probe's simplest mode (create, join with a value) as a B0-pipeline image,
+  APPDEFS from its CMake: CONTEXTS 15, CONTEXT_BYTES 131072, ARENA 8 MiB, DATA 1 MiB, STACK 256 KiB.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
