@@ -117,7 +117,9 @@ Note `refstruct` is a partial exception: the sublet patch does put refstruct *po
 leases, which is why fx16 discriminates on `pool0`/`pool2`/`poolsublet`. What it does not cover is a
 refstruct object allocated outside a pool.
 
-## 3. Candidates: four class-C defects, all LIVE at the pin
+## 3. Candidates: four class-C defects, all LIVE at the pin — and THREE are now built
+
+**Cases 0, 1 and 2 of `bug-corpora/ffmpeg/subobject-repros/`**, a new sibling corpus, measured 3/3 natively with `runners/run-native.sh` exit 0 (`results/20261005-native-subobject/`). The oracle is the upstream fix, because it is the only one available: **no configuration we have catches any of them**, and ASan is measured blind with a positive control that fires. `a809a784ec` remains unbuilt — its containment is partial, so a corpus is the wrong place for it.
 
 Class C in FFmpeg does **not** live in frame planes (see the retraction in §1a). It lives in
 **parameter-set, SEI and hwaccel-private structs**, each allocated as ONE `av_mallocz` or one
