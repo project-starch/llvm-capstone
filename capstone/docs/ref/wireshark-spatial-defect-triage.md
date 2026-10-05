@@ -44,7 +44,16 @@ pinned tree, not by the fix date"* (`:50`).
 appear in the pinned file, and the self-test keeps that honest two-sided — it must catch
 `e8ef9df09d` as `FIX-IN-PIN` (6/6 added lines present) **and** still be able to say `DEFECT-LIVE`.
 
-The script's controls, all of which fire: filter 2 separates a hand-adjudicated B / A / STACK triple;
+**But filter 3 has a measured false-live rate of about 20%, so its `DEFECT-LIVE` is a candidate and
+never a result.** memcached measures it, because there the pin provably *is* upstream head and no
+candidate can be live: filter 3 still said `DEFECT-LIVE` 4 times out of 20
+(`memcached-spatial-defect-triage.md`, §5). The mechanism is that a fix's added lines can be
+modified again later, so they are absent verbatim from the pin even though the fix is present.
+
+**So the two liveness claims below do not rest on filter 3.** Each was confirmed by reading the
+pinned source directly, and that reading is quoted where it is claimed.
+
+The script's other controls, all of which fire: filter 2 separates a hand-adjudicated B / A / STACK triple;
 a nonexistent sha reads `UNRESOLVED` rather than either verdict (`--is-ancestor` on a bad object
 exits 128, which reads exactly like "live"); a tag resolves; and filter 1 rejects
 `"refcount overflow"`. The self-test **failed twice for real reasons** while being written, which is
@@ -90,20 +99,24 @@ This one was **already triaged and rejected on scope**, not on merit —
 `wmem_alloc`'d buffer**. A bounds bug, and the scope here is allocator lifetime."* It is in class B
 and in scope here.
 
-At the fix's parent, `plugins/epan/opcua/opcua.c`:
+Quoted from the pinned tree, `v4.6.8:plugins/epan/opcua/opcua.c:324-332`:
 
 ```c
-static int verify_padding(const uint8_t *padding)
+static int verify_padding(const uint8_t *padding)      /* :324 -- no bound is passed in */
 {
-    pad_len = *padding;
+    pad_len = *padding;                                /* read from the packet */
     for (i = 0; i < pad_len; ++i) {
-        if (padding[-pad_len + i] != pad_len) return -1;   /* NEGATIVE index */
+        if (padding[-pad_len + i] != pad_len) return -1;   /* :332 -- NEGATIVE index */
 ```
 
-`padding` points into `plaintext`, allocated at `:652` with
+`padding` points into `plaintext`, allocated at `v4.6.8:642` with
 `wmem_alloc(pinfo->pool, plaintext_len)`, and `pad_len` is **attacker-controlled data read from the
-packet** (`pad_len = *padding`). So `padding[-pad_len + i]` reads an unbounded distance *below* the
-chunk. The fix passes an `available` count and rejects `pad_len > available`.
+packet**. So `padding[-pad_len + i]` reads up to 255 bytes *below* the chunk, into the wmem block's
+earlier chunks or its header. The fix passes an `available` count and rejects `pad_len > available`.
+
+- **Liveness, read from the pin, not from filter 3:** the negative-index read is present at `:332`;
+  `verify_padding` still has the single-argument signature at `:324`; and the fix's guard
+  `pad_len > available` has **0 occurrences** in the pinned file.
 
 **Its subject says `heap-use-after-free`, and the defect is spatial.** Trust the diff, not the
 wording — the existing triage doc reached the same conclusion from the other direction.
