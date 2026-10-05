@@ -1012,6 +1012,13 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - **QEMU, fabrication off and on:** every value and end offset matched on the first run. The one mismatch was errno
     on the smallest subnormal: glibc sets ERANGE there, musl does not. C leaves that implementation-defined, so the
     case now checks value and end only.
+- **Board run, pre-registered before the boot (776d9d859):** b0-strtod (e7d30ad72f104eed) in a private image whose
+  b0run.sh has the b0-strtod rung (0a00ffab4e23d16c; the first bake took the previous wrapper and was redone).
+  Rungs b0-stats, b0-strtod, b0-stats2.
+  - **Predicted: `B1.0b strtod: 23 of 23 cases match`, retval 0,** since the parser is pure integer and double
+    arithmetic, which silicon already runs in vfprintf.
+  - A mismatch confined to subnormal or rounding cases would point at the soft-float/FPU path on silicon, not at
+    the narrowing, which QEMU passed bit for bit.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
