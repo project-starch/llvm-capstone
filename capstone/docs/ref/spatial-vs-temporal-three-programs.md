@@ -10,16 +10,44 @@ here; `paper-bug-inventory.md` is the whole-tree inventory.
 failing to catch *temporal* bugs. It is not a count of spatial bugs, and it is not evidence that
 anything is broken. A grep for the word finds arms, not defects.
 
-## 1. The 27 real upstream defects: the spatial row is empty
+## 1. The 27 real upstream defects are all temporal — because spatial was filtered out
 
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|
-| **spatial** | **0** | **0** | **0** |
+| **spatial** | **0 — never searched for** | **0 — never searched for** | **0** |
 | **temporal** | 22 | 5 | **27** |
 
-**Every defect reduced from real upstream code in these three programs is temporal.** This is not a
-measurement gap — it is what the defect hunt found, and it is the thesis the target evaluation rests
-on.
+**Every defect reduced from real upstream code in these three programs is temporal.**
+
+> **RETRACTED 2026-10-05.** This section first continued *"This is not a measurement gap — it is
+> what the defect hunt found, and it is the thesis the target evaluation rests on."* **That is
+> false, and the refutation is in this tree.** The hunt **could not** have found a spatial defect,
+> because spatial wording was a *disqualifier* on its first filter:
+>
+> - `wireshark-wmem-defect-triage.md:23` — filter 1 is *"the commit message reads as a lifetime
+>   defect — use-after-free, freed, stale, dangling — **and not as an overflow**, a leak or a denial
+>   of service"*.
+> - `ffmpeg-live-defect-triage.md:26` — filter 1 is *"lifetime wording in the subject — 15 of 1,788
+>   survive"*.
+> - `bug-corpora/memcached/allocator-repros/README.md:52-57` — *"filtered on temporal-safety
+>   vocabulary (55 hits)"*.
+> - `wireshark-wmem-defect-triage.md:178` — **29 rows** of the 4.6.9 security tracker rejected en
+>   bloc as *"spatial or availability"*.
+> - `ffmpeg-pool-consumer-defects.md:51-54` — the population was *measured* to be **"genuinely
+>   spatial-dominated — "overflow" 2,415, "out of array" 1,062"* — counted in aggregate, then never
+>   read case by case.
+>
+> So the 0 is a property of the **search**, not of the software. A tree-wide census agrees: **0 of
+> 78 `case.json` files in `bug-corpora/` carry a spatial shape**, across all eight programs — the
+> signature of a single-axis hunt, not of eight clean codebases. A spatial-wording filter over the
+> same populations yields **71 candidates on filter 1 alone** (wireshark 33 of 4,321, FFmpeg 17 of
+> 1,786, memcached 21 of 2,349).
+>
+> The honest statement is: **spatial defects were excluded by design and never triaged
+> individually.** Five were met incidentally and rejected with reasons — memcached `#1308`
+> `raw_line()` (rejected on *reachability*, not class, `allocator-repros/README.md:79`), the 29
+> Wireshark tracker rows, opcua `d24613c461`, vp9 `a024f8c541`, tdsc `fd3ee52fab`. A hunt is now
+> under way; until it reports, treat this row as **unmeasured**, not as zero.
 
 The 22 nested ones are the committed corpus case folders, one per defect:
 
@@ -147,12 +175,19 @@ derivation cannot supply.
 Do **not** restate this as "CHERI cannot bound sub-objects". The claim is about what the deployed
 stack *derives*, not what is *derivable*.
 
-**(b) There are no real spatial defects to show.** 0 of 27. The three discriminating cells are
-synthetic probes written to measure the adapter, not reductions of upstream bugs.
+**(b) We have no real spatial defects *yet* — because none were searched for.** The three
+discriminating cells are synthetic probes written to measure the adapter, not reductions of upstream
+bugs. See the retraction in §1: the earlier wording of this paragraph (*"and the hunt found nothing
+to put in it"*) asserted a negative result from a search that excluded the class by construction.
 
-A "rich not-nested spatial" corpus for these three programs would therefore populate a tie column,
-and the hunt found nothing to put in it. Whether such a row belongs in the paper for completeness is
-a framing decision, not a measurement one.
+**And reason (a) does not generalise to the nested case, which is where this matters.** The tie is
+about spatial defects that cross the `malloc` bound — there bounds alone suffice and CHERI has them.
+A defect whose overflow stays **inside** a nested allocator's block is a different cell: the system
+allocator sees one block, so `shrink` and `sublet` return, and only a ported inner allocator faults.
+That is measured today only by synthetic probes (tshark fx12, memcached fx9, FFmpeg fx16). Whether a
+*real* upstream defect of that shape exists in these three programs is **open**, and it is the
+question the hunt now under way is meant to answer. If one lands, the "spatial is a tie" framing
+needs revisiting — which is the lead's call, not this document's.
 
 ## 5. Citing a bundle for one of these cells
 
