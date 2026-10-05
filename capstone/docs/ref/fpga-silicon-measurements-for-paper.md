@@ -5961,5 +5961,13 @@ boot, and each board image is named by hash.
   - Checked for the speedtest1 ratios in this file: build-speedtest1-baseline.sh has built `rv64imac_zicsr` /
     `lp64` since its first commit (abe7c46e3f54, 2026-09-11). The baseline the board images carry,
     9a80c1cd2a576ed2, has no FP opcode in 217,577 instructions; the same scan counts 85 in a hard-float binary.
-  - So ratios measured with it are unaffected. Boots before 2026-09-11 (sw52) and other native arms were not
-    checked here.
+  - So ratios measured with it are unaffected.
+  - The other native-on-board arms either paper cites were checked by the paper lane (2026-10-05) with an
+    FP-opcode counter whose controls fire. This lane re-counted the three committed ELFs.
+    - The ladder baselines (build-ladder-base-fpga.sh, -bare.sh) are rv64imac(_zicsr)/lp64. The committed native
+      ladder ELFs have no FP opcode: R01 and R02 `ladder_perf_ctl` in 493 instructions each, ARCHIVED R14 `lpc` in
+      551.
+    - The SLT native baseline is a host oracle and never runs on the board.
+    - The only rv64gc board build found, sup-bare-2026-10-03-ladder, has no FP result instruction (one `frcsr`, an
+      fcsr read) and is cited by neither paper.
+  - Still unchecked: boots before 2026-09-11, sw52 among them.
