@@ -1,0 +1,2 @@
+seq #0 tsp: PASS rc=0 129.3s
+mix seq n=1: PASS wall=129.3s

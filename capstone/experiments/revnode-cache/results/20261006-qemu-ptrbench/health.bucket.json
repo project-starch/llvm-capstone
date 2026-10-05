@@ -1,0 +1,313 @@
+{
+ "trace": "(fifo)",
+ "records": 550611493,
+ "lifetime_checks": 391022504,
+ "line_bytes": 64,
+ "sizes_lines": [
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536
+ ],
+ "variants": [
+  {
+   "inline": 12,
+   "slot_cache": 0,
+   "node_bytes": 64,
+   "accesses": 52364615,
+   "misses": [
+    12076829,
+    4452237,
+    3641557,
+    3536964,
+    3530086,
+    3528638,
+    3499759
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 24706907,
+     "misses_64_lines": 1540146
+    },
+    "delete": {
+     "accesses": 24028294,
+     "misses_64_lines": 946286
+    },
+    "flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 939923,
+     "misses_64_lines": 939869
+    },
+    "tree": {
+     "accesses": 2689383,
+     "misses_64_lines": 1025863
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 73
+    }
+   },
+   "capability_stores": {
+    "same_node": 58852717,
+    "fresh": 6663338,
+    "other_node": 10366432,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 6046077,
+   "index_changes": 17029770,
+   "absorbed_by_slot_cache": 0,
+   "deletes_absorbed": 0,
+   "evictions": 0,
+   "overflow": {
+    "inserts": 7677121,
+    "nodes": 21729,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 617188,
+    "accesses_mean": 93992.3,
+    "accesses_max": 939827,
+    "cam_purges": 0,
+    "cam_skips": 0
+   },
+   "memory_entries_peak": 1214891,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 64,
+   "node_bytes": 64,
+   "accesses": 6962197,
+   "misses": [
+    4661098,
+    3156669,
+    2896950,
+    2823101,
+    2812183,
+    2810441,
+    2788513
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 1050931,
+     "misses_64_lines": 700524
+    },
+    "flush": {
+     "accesses": 2305326,
+     "misses_64_lines": 606743
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 916449,
+     "misses_64_lines": 916388
+    },
+    "tree": {
+     "accesses": 2689383,
+     "misses_64_lines": 932940
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 74
+    }
+   },
+   "capability_stores": {
+    "same_node": 58852717,
+    "fresh": 6663338,
+    "other_node": 10366432,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 6046077,
+   "index_changes": 17029770,
+   "absorbed_by_slot_cache": 14567977,
+   "deletes_absorbed": 5181940,
+   "evictions": 2461729,
+   "overflow": {
+    "inserts": 268396,
+    "nodes": 9992,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 617188,
+    "accesses_mean": 91644.9,
+    "accesses_max": 916353,
+    "cam_purges": 39,
+    "cam_skips": 15
+   },
+   "memory_entries_peak": 1214864,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 256,
+   "node_bytes": 64,
+   "accesses": 5723375,
+   "misses": [
+    3964929,
+    3792455,
+    3687343,
+    2785635,
+    2777494,
+    2774994,
+    2750802
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 675483,
+     "misses_64_lines": 660774
+    },
+    "flush": {
+     "accesses": 1443020,
+     "misses_64_lines": 1271258
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 915381,
+     "misses_64_lines": 915339
+    },
+    "tree": {
+     "accesses": 2689383,
+     "misses_64_lines": 945011
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 73
+    }
+   },
+   "capability_stores": {
+    "same_node": 58852717,
+    "fresh": 6663338,
+    "other_node": 10366432,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 6046077,
+   "index_changes": 17029770,
+   "absorbed_by_slot_cache": 15560159,
+   "deletes_absorbed": 5385294,
+   "evictions": 1469355,
+   "overflow": {
+    "inserts": 52709,
+    "nodes": 9458,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 617188,
+    "accesses_mean": 91538.1,
+    "accesses_max": 915285,
+    "cam_purges": 113,
+    "cam_skips": 50
+   },
+   "memory_entries_peak": 1214794,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 4,
+   "slot_cache": 64,
+   "node_bytes": 32,
+   "accesses": 7243792,
+   "misses": [
+    3554975,
+    2393750,
+    2149360,
+    2090007,
+    2083233,
+    2081918,
+    1969003
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 1061202,
+     "misses_64_lines": 678058
+    },
+    "flush": {
+     "accesses": 2549194,
+     "misses_64_lines": 742489
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 943905,
+     "misses_64_lines": 500639
+    },
+    "tree": {
+     "accesses": 2689383,
+     "misses_64_lines": 472490
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 74
+    }
+   },
+   "capability_stores": {
+    "same_node": 58852717,
+    "fresh": 6663338,
+    "other_node": 10366432,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 6046077,
+   "index_changes": 17029770,
+   "absorbed_by_slot_cache": 14567977,
+   "deletes_absorbed": 5181940,
+   "evictions": 2461729,
+   "overflow": {
+    "inserts": 468229,
+    "nodes": 23720,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 617188,
+    "accesses_mean": 94390.5,
+    "accesses_max": 943801,
+    "cam_purges": 39,
+    "cam_skips": 15
+   },
+   "memory_entries_peak": 1214864,
+   "collector_untags": 0,
+   "errors": 0
+  }
+ ]
+}

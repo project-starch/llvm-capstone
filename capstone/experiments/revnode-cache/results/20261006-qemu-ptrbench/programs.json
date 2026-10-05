@@ -1,0 +1,121 @@
+{
+ "treeadd": {
+  "cwd": "/mnt/host/bench/inputs/treeadd",
+  "cmd": "/mnt/host/bench/treeadd.dom 18",
+  "stdin": null,
+  "native_out": "native/treeadd.out",
+  "sources": 4
+ },
+ "bh": {
+  "cwd": "/mnt/host/bench/inputs/bh",
+  "cmd": "/mnt/host/bench/bh.dom 2000 5",
+  "stdin": null,
+  "native_out": "native/bh.out",
+  "sources": 5
+ },
+ "em3d": {
+  "cwd": "/mnt/host/bench/inputs/em3d",
+  "cmd": "/mnt/host/bench/em3d.dom 256 250 35",
+  "stdin": null,
+  "native_out": "native/em3d.out",
+  "sources": 6
+ },
+ "health": {
+  "cwd": "/mnt/host/bench/inputs/health",
+  "cmd": "/mnt/host/bench/health.dom 8 15 1",
+  "stdin": null,
+  "native_out": "native/health.out",
+  "sources": 5
+ },
+ "mst": {
+  "cwd": "/mnt/host/bench/inputs/mst",
+  "cmd": "/mnt/host/bench/mst.dom 1000",
+  "stdin": null,
+  "native_out": "native/mst.out",
+  "sources": 5
+ },
+ "perimeter": {
+  "cwd": "/mnt/host/bench/inputs/perimeter",
+  "cmd": "/mnt/host/bench/perimeter.dom 9",
+  "stdin": null,
+  "native_out": "native/perimeter.out",
+  "sources": 4
+ },
+ "power": {
+  "cwd": "/mnt/host/bench/inputs/power",
+  "cmd": "/mnt/host/bench/power.dom",
+  "stdin": null,
+  "native_out": "native/power.out",
+  "sources": 4
+ },
+ "tsp": {
+  "cwd": "/mnt/host/bench/inputs/tsp",
+  "cmd": "/mnt/host/bench/tsp.dom 102400",
+  "stdin": null,
+  "native_out": "native/tsp.out",
+  "sources": 5
+ },
+ "voronoi": {
+  "cwd": "/mnt/host/bench/inputs/voronoi",
+  "cmd": "/mnt/host/bench/voronoi.dom 10000 20 32 7",
+  "stdin": null,
+  "native_out": "native/voronoi.out",
+  "sources": 4
+ },
+ "anagram": {
+  "cwd": "/mnt/host/bench/inputs/anagram",
+  "cmd": "/mnt/host/bench/anagram.dom words 2",
+  "stdin": "/mnt/host/bench/inputs/anagram/input.OUT",
+  "native_out": "native/anagram.out",
+  "sources": 2
+ },
+ "bc": {
+  "cwd": "/mnt/host/bench/inputs/bc",
+  "cmd": "/mnt/host/bench/bc.dom",
+  "stdin": "/mnt/host/bench/inputs/bc/primes.b",
+  "native_out": "native/bc.out",
+  "sources": 10
+ },
+ "ft": {
+  "cwd": "/mnt/host/bench/inputs/ft",
+  "cmd": "/mnt/host/bench/ft.dom 1500 100000",
+  "stdin": null,
+  "native_out": "native/ft.out",
+  "sources": 6
+ },
+ "ks": {
+  "cwd": "/mnt/host/bench/inputs/ks",
+  "cmd": "/mnt/host/bench/ks.dom KL-4.in",
+  "stdin": null,
+  "native_out": "native/ks.out",
+  "sources": 3
+ },
+ "yacr2": {
+  "cwd": "/mnt/host/bench/inputs/yacr2",
+  "cmd": "/mnt/host/bench/yacr2.dom input2.in",
+  "stdin": null,
+  "native_out": "native/yacr2.out",
+  "sources": 8
+ },
+ "cfrac": {
+  "cwd": "/mnt/host/bench/inputs/cfrac",
+  "cmd": "/mnt/host/bench/cfrac.dom 41757646344123832613190542166099121",
+  "stdin": null,
+  "native_out": "native/cfrac.out",
+  "sources": 29
+ },
+ "espresso": {
+  "cwd": "/mnt/host/bench/inputs/espresso",
+  "cmd": "/mnt/host/bench/espresso.dom -t INPUT/largest.espresso",
+  "stdin": null,
+  "native_out": "native/espresso.out",
+  "sources": 42
+ },
+ "bisort": {
+  "cwd": "/mnt/host/bench/inputs/bisort",
+  "cmd": "/mnt/host/bench/bisort.dom 250000",
+  "stdin": null,
+  "native_out": "native/bisort.out",
+  "sources": 2
+ }
+}

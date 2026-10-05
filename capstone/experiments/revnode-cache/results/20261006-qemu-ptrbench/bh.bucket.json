@@ -1,0 +1,313 @@
+{
+ "trace": "(fifo)",
+ "records": 1712960712,
+ "lifetime_checks": 1119844520,
+ "line_bytes": 64,
+ "sizes_lines": [
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536
+ ],
+ "variants": [
+  {
+   "inline": 12,
+   "slot_cache": 0,
+   "node_bytes": 64,
+   "accesses": 91257320,
+   "misses": [
+    20040747,
+    3265086,
+    951180,
+    285812,
+    137994,
+    27333,
+    20414
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 45608153,
+     "misses_64_lines": 2523594
+    },
+    "delete": {
+     "accesses": 45594335,
+     "misses_64_lines": 707236
+    },
+    "flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 16450,
+     "misses_64_lines": 16405
+    },
+    "tree": {
+     "accesses": 26610,
+     "misses_64_lines": 9993
+    },
+    "grow": {
+     "accesses": 11772,
+     "misses_64_lines": 7858
+    }
+   },
+   "capability_stores": {
+    "same_node": 229614824,
+    "fresh": 11254154,
+    "other_node": 16108167,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 11245905,
+   "index_changes": 27362321,
+   "absorbed_by_slot_cache": 0,
+   "deletes_absorbed": 0,
+   "evictions": 0,
+   "overflow": {
+    "inserts": 18240317,
+    "nodes": 1845,
+    "grows": 1897,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 8176,
+    "accesses_mean": 1645.0,
+    "accesses_max": 16346,
+    "cam_purges": 0,
+    "cam_skips": 0
+   },
+   "memory_entries_peak": 14251,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 64,
+   "node_bytes": 64,
+   "accesses": 5702836,
+   "misses": [
+    1506850,
+    362485,
+    226431,
+    183697,
+    142095,
+    26286,
+    20270
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 804566,
+     "misses_64_lines": 48068
+    },
+    "flush": {
+     "accesses": 4843726,
+     "misses_64_lines": 281203
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 16378,
+     "misses_64_lines": 16323
+    },
+    "tree": {
+     "accesses": 26610,
+     "misses_64_lines": 9187
+    },
+    "grow": {
+     "accesses": 11556,
+     "misses_64_lines": 7704
+    }
+   },
+   "capability_stores": {
+    "same_node": 229614824,
+    "fresh": 11254154,
+    "other_node": 16108167,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 11245905,
+   "index_changes": 27362321,
+   "absorbed_by_slot_cache": 24495743,
+   "deletes_absorbed": 10782828,
+   "evictions": 2866514,
+   "overflow": {
+    "inserts": 1205216,
+    "nodes": 1845,
+    "grows": 1879,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 8176,
+    "accesses_mean": 1637.8,
+    "accesses_max": 16274,
+    "cam_purges": 40,
+    "cam_skips": 15
+   },
+   "memory_entries_peak": 14229,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 256,
+   "node_bytes": 64,
+   "accesses": 132191,
+   "misses": [
+    108442,
+    103471,
+    93086,
+    69419,
+    23758,
+    8978,
+    8978
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 33178,
+     "misses_64_lines": 31589
+    },
+    "flush": {
+     "accesses": 63371,
+     "misses_64_lines": 53610
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 8894,
+     "misses_64_lines": 8847
+    },
+    "tree": {
+     "accesses": 26610,
+     "misses_64_lines": 9329
+    },
+    "grow": {
+     "accesses": 138,
+     "misses_64_lines": 96
+    }
+   },
+   "capability_stores": {
+    "same_node": 229614824,
+    "fresh": 11254154,
+    "other_node": 16108167,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 11245905,
+   "index_changes": 27362321,
+   "absorbed_by_slot_cache": 27307849,
+   "deletes_absorbed": 11213926,
+   "evictions": 54216,
+   "overflow": {
+    "inserts": 2072,
+    "nodes": 5,
+    "grows": 8,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 8176,
+    "accesses_mean": 889.4,
+    "accesses_max": 8790,
+    "cam_purges": 132,
+    "cam_skips": 60
+   },
+   "memory_entries_peak": 14188,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 4,
+   "slot_cache": 64,
+   "node_bytes": 32,
+   "accesses": 6091661,
+   "misses": [
+    1693202,
+    421615,
+    253558,
+    195444,
+    143128,
+    19310,
+    17658
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 830038,
+     "misses_64_lines": 56612
+    },
+    "flush": {
+     "accesses": 5203989,
+     "misses_64_lines": 338118
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 17566,
+     "misses_64_lines": 13260
+    },
+    "tree": {
+     "accesses": 26610,
+     "misses_64_lines": 4651
+    },
+    "grow": {
+     "accesses": 13458,
+     "misses_64_lines": 8974
+    }
+   },
+   "capability_stores": {
+    "same_node": 229614824,
+    "fresh": 11254154,
+    "other_node": 16108167,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 11245905,
+   "index_changes": 27362321,
+   "absorbed_by_slot_cache": 24495743,
+   "deletes_absorbed": 10782828,
+   "evictions": 2866514,
+   "overflow": {
+    "inserts": 1396606,
+    "nodes": 2126,
+    "grows": 2038,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 8176,
+    "accesses_mean": 1756.6,
+    "accesses_max": 17454,
+    "cam_purges": 40,
+    "cam_skips": 15
+   },
+   "memory_entries_peak": 14229,
+   "collector_untags": 0,
+   "errors": 0
+  }
+ ]
+}

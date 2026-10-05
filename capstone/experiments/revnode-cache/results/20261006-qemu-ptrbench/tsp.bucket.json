@@ -1,0 +1,313 @@
+{
+ "trace": "(fifo)",
+ "records": 2799471645,
+ "lifetime_checks": 1661827222,
+ "line_bytes": 64,
+ "sizes_lines": [
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536
+ ],
+ "variants": [
+  {
+   "inline": 12,
+   "slot_cache": 0,
+   "node_bytes": 64,
+   "accesses": 243043429,
+   "misses": [
+    18465264,
+    10329747,
+    2858670,
+    2369369,
+    2030021,
+    1712789,
+    1433356
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 120932078,
+     "misses_64_lines": 8706964
+    },
+    "delete": {
+     "accesses": 120537871,
+     "misses_64_lines": 799814
+    },
+    "flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 393361,
+     "misses_64_lines": 393309
+    },
+    "tree": {
+     "accesses": 1180011,
+     "misses_64_lines": 429588
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 72
+    }
+   },
+   "capability_stores": {
+    "same_node": 332307135,
+    "fresh": 32428391,
+    "other_node": 47719473,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 32034607,
+   "index_changes": 80147864,
+   "absorbed_by_slot_cache": 0,
+   "deletes_absorbed": 0,
+   "evictions": 0,
+   "overflow": {
+    "inserts": 40784131,
+    "nodes": 10,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 393711,
+    "accesses_mean": 39336.1,
+    "accesses_max": 393265,
+    "cam_purges": 0,
+    "cam_skips": 0
+   },
+   "memory_entries_peak": 656034,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 64,
+   "node_bytes": 64,
+   "accesses": 5833401,
+   "misses": [
+    3021406,
+    1803319,
+    1466308,
+    1373664,
+    1318507,
+    1279089,
+    1239174
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 1033967,
+     "misses_64_lines": 321012
+    },
+    "flush": {
+     "accesses": 3225954,
+     "misses_64_lines": 677552
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 393361,
+     "misses_64_lines": 393308
+    },
+    "tree": {
+     "accesses": 1180011,
+     "misses_64_lines": 411375
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 72
+    }
+   },
+   "capability_stores": {
+    "same_node": 332307135,
+    "fresh": 32428391,
+    "other_node": 47719473,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 32034607,
+   "index_changes": 80147864,
+   "absorbed_by_slot_cache": 77393476,
+   "deletes_absorbed": 31377293,
+   "evictions": 2754324,
+   "overflow": {
+    "inserts": 401938,
+    "nodes": 10,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 393711,
+    "accesses_mean": 39336.1,
+    "accesses_max": 393265,
+    "cam_purges": 35,
+    "cam_skips": 18
+   },
+   "memory_entries_peak": 656021,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 256,
+   "node_bytes": 64,
+   "accesses": 3925964,
+   "misses": [
+    2137139,
+    2025075,
+    1639848,
+    1374685,
+    1318762,
+    1279079,
+    1239079
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 335911,
+     "misses_64_lines": 295213
+    },
+    "flush": {
+     "accesses": 2016581,
+     "misses_64_lines": 920865
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 393353,
+     "misses_64_lines": 393318
+    },
+    "tree": {
+     "accesses": 1180011,
+     "misses_64_lines": 415607
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 72
+    }
+   },
+   "capability_stores": {
+    "same_node": 332307135,
+    "fresh": 32428391,
+    "other_node": 47719473,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 32034607,
+   "index_changes": 80147864,
+   "absorbed_by_slot_cache": 78690835,
+   "deletes_absorbed": 31730289,
+   "evictions": 1456773,
+   "overflow": {
+    "inserts": 33541,
+    "nodes": 6,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 393711,
+    "accesses_mean": 39335.3,
+    "accesses_max": 393257,
+    "cam_purges": 195,
+    "cam_skips": 144
+   },
+   "memory_entries_peak": 656021,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 4,
+   "slot_cache": 64,
+   "node_bytes": 32,
+   "accesses": 5898153,
+   "misses": [
+    2381578,
+    1316930,
+    1062706,
+    968745,
+    910489,
+    868200,
+    837344
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 1035747,
+     "misses_64_lines": 234138
+    },
+    "flush": {
+     "accesses": 3264490,
+     "misses_64_lines": 657678
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 417797,
+     "misses_64_lines": 223149
+    },
+    "tree": {
+     "accesses": 1180011,
+     "misses_64_lines": 201893
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 72
+    }
+   },
+   "capability_stores": {
+    "same_node": 332307135,
+    "fresh": 32428391,
+    "other_node": 47719473,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 32034607,
+   "index_changes": 80147864,
+   "absorbed_by_slot_cache": 77393476,
+   "deletes_absorbed": 31377293,
+   "evictions": 2754324,
+   "overflow": {
+    "inserts": 423025,
+    "nodes": 12228,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 393711,
+    "accesses_mean": 41779.7,
+    "accesses_max": 417693,
+    "cam_purges": 35,
+    "cam_skips": 18
+   },
+   "memory_entries_peak": 656021,
+   "collector_untags": 0,
+   "errors": 0
+  }
+ ]
+}

@@ -1,0 +1,2 @@
+seq #0 em3d: PASS rc=0 14.7s
+mix seq n=1: PASS wall=14.7s

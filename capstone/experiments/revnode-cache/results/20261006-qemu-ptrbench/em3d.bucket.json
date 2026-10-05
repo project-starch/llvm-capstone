@@ -1,0 +1,313 @@
+{
+ "trace": "(fifo)",
+ "records": 284790546,
+ "lifetime_checks": 300805422,
+ "line_bytes": 64,
+ "sizes_lines": [
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536
+ ],
+ "variants": [
+  {
+   "inline": 12,
+   "slot_cache": 0,
+   "node_bytes": 64,
+   "accesses": 6926142,
+   "misses": [
+    710853,
+    681022,
+    644124,
+    340928,
+    169794,
+    111878,
+    73059
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 3646693,
+     "misses_64_lines": 531963
+    },
+    "delete": {
+     "accesses": 3126223,
+     "misses_64_lines": 10426
+    },
+    "flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 39058,
+     "misses_64_lines": 38998
+    },
+    "tree": {
+     "accesses": 18852,
+     "misses_64_lines": 7504
+    },
+    "grow": {
+     "accesses": 95316,
+     "misses_64_lines": 92131
+    }
+   },
+   "capability_stores": {
+    "same_node": 35415659,
+    "fresh": 1280353,
+    "other_node": 1059234,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 1020805,
+   "index_changes": 2339587,
+   "absorbed_by_slot_cache": 0,
+   "deletes_absorbed": 0,
+   "evictions": 0,
+   "overflow": {
+    "inserts": 1297815,
+    "nodes": 517,
+    "grows": 2077,
+    "max_lines": 8192,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 259475,
+    "accesses_mean": 3905.8,
+    "accesses_max": 38966,
+    "cam_purges": 0,
+    "cam_skips": 0
+   },
+   "memory_entries_peak": 263728,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 64,
+   "node_bytes": 64,
+   "accesses": 704729,
+   "misses": [
+    549184,
+    541714,
+    501506,
+    320936,
+    154309,
+    110750,
+    73009
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 14356,
+     "misses_64_lines": 10045
+    },
+    "flush": {
+     "accesses": 537275,
+     "misses_64_lines": 393274
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 39026,
+     "misses_64_lines": 38956
+    },
+    "tree": {
+     "accesses": 18852,
+     "misses_64_lines": 7479
+    },
+    "grow": {
+     "accesses": 95220,
+     "misses_64_lines": 91960
+    }
+   },
+   "capability_stores": {
+    "same_node": 35415659,
+    "fresh": 1280353,
+    "other_node": 1059234,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 1020805,
+   "index_changes": 2339587,
+   "absorbed_by_slot_cache": 2048052,
+   "deletes_absorbed": 1009660,
+   "evictions": 291471,
+   "overflow": {
+    "inserts": 255200,
+    "nodes": 517,
+    "grows": 2075,
+    "max_lines": 8192,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 259475,
+    "accesses_mean": 3902.6,
+    "accesses_max": 38934,
+    "cam_purges": 36,
+    "cam_skips": 22
+   },
+   "memory_entries_peak": 263694,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 256,
+   "node_bytes": 64,
+   "accesses": 697587,
+   "misses": [
+    544532,
+    535395,
+    506353,
+    320068,
+    152828,
+    110398,
+    73016
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 11427,
+     "misses_64_lines": 5390
+    },
+    "flush": {
+     "accesses": 533062,
+     "misses_64_lines": 391915
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 39026,
+     "misses_64_lines": 38978
+    },
+    "tree": {
+     "accesses": 18852,
+     "misses_64_lines": 7159
+    },
+    "grow": {
+     "accesses": 95220,
+     "misses_64_lines": 91953
+    }
+   },
+   "capability_stores": {
+    "same_node": 35415659,
+    "fresh": 1280353,
+    "other_node": 1059234,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 1020805,
+   "index_changes": 2339587,
+   "absorbed_by_slot_cache": 2065520,
+   "deletes_absorbed": 1012559,
+   "evictions": 273811,
+   "overflow": {
+    "inserts": 254836,
+    "nodes": 517,
+    "grows": 2075,
+    "max_lines": 8192,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 259475,
+    "accesses_mean": 3902.6,
+    "accesses_max": 38934,
+    "cam_purges": 181,
+    "cam_skips": 29
+   },
+   "memory_entries_peak": 263538,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 4,
+   "slot_cache": 64,
+   "node_bytes": 32,
+   "accesses": 710225,
+   "misses": [
+    543618,
+    534418,
+    501169,
+    317188,
+    149150,
+    102608,
+    68249
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 14897,
+     "misses_64_lines": 9250
+    },
+    "flush": {
+     "accesses": 541966,
+     "misses_64_lines": 392979
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 39098,
+     "misses_64_lines": 36067
+    },
+    "tree": {
+     "accesses": 18852,
+     "misses_64_lines": 3977
+    },
+    "grow": {
+     "accesses": 95412,
+     "misses_64_lines": 92145
+    }
+   },
+   "capability_stores": {
+    "same_node": 35415659,
+    "fresh": 1280353,
+    "other_node": 1059234,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 1020805,
+   "index_changes": 2339587,
+   "absorbed_by_slot_cache": 2048052,
+   "deletes_absorbed": 1009660,
+   "evictions": 291471,
+   "overflow": {
+    "inserts": 259889,
+    "nodes": 521,
+    "grows": 2078,
+    "max_lines": 8192,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 259475,
+    "accesses_mean": 3909.8,
+    "accesses_max": 38998,
+    "cam_purges": 36,
+    "cam_skips": 22
+   },
+   "memory_entries_peak": 263694,
+   "collector_untags": 0,
+   "errors": 0
+  }
+ ]
+}

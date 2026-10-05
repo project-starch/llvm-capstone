@@ -1,0 +1,313 @@
+{
+ "trace": "(fifo)",
+ "records": 303364153,
+ "lifetime_checks": 249707798,
+ "line_bytes": 64,
+ "sizes_lines": [
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536
+ ],
+ "variants": [
+  {
+   "inline": 12,
+   "slot_cache": 0,
+   "node_bytes": 64,
+   "accesses": 19272454,
+   "misses": [
+    5507468,
+    2698954,
+    2399319,
+    2368496,
+    2361278,
+    2360487,
+    2356846
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 8194292,
+     "misses_64_lines": 454050
+    },
+    "delete": {
+     "accesses": 7931322,
+     "misses_64_lines": 626573
+    },
+    "flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 787073,
+     "misses_64_lines": 787017
+    },
+    "tree": {
+     "accesses": 2359659,
+     "misses_64_lines": 831242
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 72
+    }
+   },
+   "capability_stores": {
+    "same_node": 33127320,
+    "fresh": 3636931,
+    "other_node": 2237918,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 3374302,
+   "index_changes": 5874849,
+   "absorbed_by_slot_cache": 0,
+   "deletes_absorbed": 0,
+   "evictions": 0,
+   "overflow": {
+    "inserts": 2319425,
+    "nodes": 259,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 262556,
+    "accesses_mean": 78707.3,
+    "accesses_max": 786977,
+    "cam_purges": 0,
+    "cam_skips": 0
+   },
+   "memory_entries_peak": 787008,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 64,
+   "node_bytes": 64,
+   "accesses": 5504874,
+   "misses": [
+    3699181,
+    2474914,
+    2116480,
+    2100894,
+    2098374,
+    2097489,
+    2093825
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 943530,
+     "misses_64_lines": 585465
+    },
+    "flush": {
+     "accesses": 1414990,
+     "misses_64_lines": 283229
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 786587,
+     "misses_64_lines": 786532
+    },
+    "tree": {
+     "accesses": 2359659,
+     "misses_64_lines": 819616
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 72
+    }
+   },
+   "capability_stores": {
+    "same_node": 33127320,
+    "fresh": 3636931,
+    "other_node": 2237918,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 3374302,
+   "index_changes": 5874849,
+   "absorbed_by_slot_cache": 4499185,
+   "deletes_absorbed": 2609974,
+   "evictions": 1375600,
+   "overflow": {
+    "inserts": 179585,
+    "nodes": 15,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 262556,
+    "accesses_mean": 78658.7,
+    "accesses_max": 786491,
+    "cam_purges": 37,
+    "cam_skips": 18
+   },
+   "memory_entries_peak": 786984,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 256,
+   "node_bytes": 64,
+   "accesses": 4574819,
+   "misses": [
+    3114256,
+    2978404,
+    2939648,
+    2102180,
+    2098453,
+    2097442,
+    2093763
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 567445,
+     "misses_64_lines": 539695
+    },
+    "flush": {
+     "accesses": 861058,
+     "misses_64_lines": 830742
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 786561,
+     "misses_64_lines": 786514
+    },
+    "tree": {
+     "accesses": 2359659,
+     "misses_64_lines": 821389
+    },
+    "grow": {
+     "accesses": 96,
+     "misses_64_lines": 64
+    }
+   },
+   "capability_stores": {
+    "same_node": 33127320,
+    "fresh": 3636931,
+    "other_node": 2237918,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 3374302,
+   "index_changes": 5874849,
+   "absorbed_by_slot_cache": 5007259,
+   "deletes_absorbed": 2824304,
+   "evictions": 867334,
+   "overflow": {
+    "inserts": 17737,
+    "nodes": 4,
+    "grows": 5,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 262556,
+    "accesses_mean": 78656.1,
+    "accesses_max": 786469,
+    "cam_purges": 136,
+    "cam_skips": 51
+   },
+   "memory_entries_peak": 786865,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 4,
+   "slot_cache": 64,
+   "node_bytes": 32,
+   "accesses": 5522507,
+   "misses": [
+    2387587,
+    1302932,
+    1198997,
+    1190802,
+    1189642,
+    1188872,
+    1181680
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 944038,
+     "misses_64_lines": 426365
+    },
+    "flush": {
+     "accesses": 1426851,
+     "misses_64_lines": 71827
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 791851,
+     "misses_64_lines": 402627
+    },
+    "tree": {
+     "accesses": 2359659,
+     "misses_64_lines": 402041
+    },
+    "grow": {
+     "accesses": 108,
+     "misses_64_lines": 72
+    }
+   },
+   "capability_stores": {
+    "same_node": 33127320,
+    "fresh": 3636931,
+    "other_node": 2237918,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 3374302,
+   "index_changes": 5874849,
+   "absorbed_by_slot_cache": 4499185,
+   "deletes_absorbed": 2609974,
+   "evictions": 1375600,
+   "overflow": {
+    "inserts": 185786,
+    "nodes": 2652,
+    "grows": 6,
+    "max_lines": 32,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 10,
+    "tag_clears": 262556,
+    "accesses_mean": 79185.1,
+    "accesses_max": 791747,
+    "cam_purges": 37,
+    "cam_skips": 18
+   },
+   "memory_entries_peak": 786984,
+   "collector_untags": 0,
+   "errors": 0
+  }
+ ]
+}

@@ -1,0 +1,94 @@
+{
+ "trace": "(fifo)",
+ "records": 284790546,
+ "lifetime_checks": 300805422,
+ "line_bytes": 64,
+ "sizes_lines": [
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536
+ ],
+ "capstone": {
+  "accesses": 300868140,
+  "misses": [
+   837433,
+   691943,
+   274693,
+   4799,
+   1573,
+   1573,
+   1573
+  ],
+  "by_site": {
+   "ldst": 261101755,
+   "ldc": 39703667,
+   "mrev": 20690,
+   "split": 10733,
+   "revoke": 12484,
+   "delin": 2118,
+   "create": 6,
+   "supervisor": 3958,
+   "gc": 12729
+  }
+ },
+ "clover": {
+  "accesses": 36110292,
+  "misses": [
+   1374011,
+   1130805,
+   865981,
+   388461,
+   335138,
+   209357,
+   150261
+  ],
+  "by_operation": {
+   "store_register": {
+    "accesses": 18690609,
+    "misses_64_lines": 673461
+   },
+   "store_unregister": {
+    "accesses": 8465334,
+    "misses_64_lines": 14267
+   },
+   "data_store_unregister": {
+    "accesses": 8144598,
+    "misses_64_lines": 15300
+   },
+   "revoke": {
+    "accesses": 790899,
+    "misses_64_lines": 423650
+   },
+   "tree": {
+    "accesses": 18852,
+    "misses_64_lines": 4127
+   }
+  },
+  "capability_stores": {
+   "index_unchanged_same_node": 35415659,
+   "index_updated": 2339587,
+   "of_a_revoked_capability": 0
+  },
+  "data_stores_unregistering": 1020805,
+  "collector_untags_ignored": 0,
+  "revokes": {
+   "count": 10,
+   "tag_clears": 259475,
+   "accesses_mean": 79089.9,
+   "accesses_max": 789635,
+   "accesses_hist": {
+    "9-16": 2,
+    "17-32": 6,
+    "1025-2048": 1,
+    "524289-1048576": 1
+   }
+  },
+  "alias_records_peak": 263728,
+  "alias_records_end": 73,
+  "sidecar_frames_peak": 1207
+ }
+}

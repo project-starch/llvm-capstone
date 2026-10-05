@@ -1,0 +1,2 @@
+seq #0 treeadd: PASS rc=0 13.8s
+mix seq n=1: PASS wall=13.8s

@@ -1,0 +1,2 @@
+seq #0 perimeter: PASS rc=0 20.4s
+mix seq n=1: PASS wall=20.4s

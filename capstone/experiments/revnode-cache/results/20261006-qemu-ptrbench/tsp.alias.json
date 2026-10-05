@@ -1,0 +1,176 @@
+{
+ "trace": "(fifo)",
+ "records": 2799471645,
+ "nodes_allocated": 393343,
+ "mrev": 262173,
+ "split": 131167,
+ "lone": 3,
+ "memory_alias_events": {
+  "stored": 412454999,
+  "left": {
+   "mem_capstore": 380026626,
+   "mem_untag": 32428292,
+   "mem_clear": 0,
+   "gc": 8
+  },
+  "live_at_end": 73,
+  "peak_live": 656039
+ },
+ "capability_stores": {
+  "into_untagged": 32428373,
+  "over_same_node": 332307135,
+  "over_other_node": 47719491
+ },
+ "data_stores_over_capability": 32428292,
+ "errors": {
+  "negative_alias_count": 0,
+  "walk_mismatch": 0,
+  "alloc_with_live_aliases": 0
+ },
+ "aliases": {
+  "max_memory_aliases_per_node": {
+   "count": 393343,
+   "mean": 2.6913,
+   "max": 363,
+   "buckets": {
+    "1": 262207,
+    "2": 22,
+    "3": 17,
+    "4": 61,
+    "5": 69,
+    "6": 125768,
+    "7": 3308,
+    "8": 1225,
+    "9-16": 663,
+    "33-64": 1,
+    "65-128": 1,
+    "257-512": 1
+   }
+  },
+  "at_revoke_root_memory": {
+   "count": 10,
+   "mean": 3.0,
+   "max": 3,
+   "buckets": {
+    "3": 10
+   }
+  },
+  "at_revoke_root_registers": {
+   "count": 10,
+   "mean": 2.0,
+   "max": 2,
+   "buckets": {
+    "2": 10
+   }
+  },
+  "at_revoke_invalidated_memory": {
+   "count": 10,
+   "mean": 39371.1,
+   "max": 393220,
+   "buckets": {
+    "2": 1,
+    "3": 1,
+    "4": 3,
+    "5": 1,
+    "6": 2,
+    "257-512": 1,
+    "262145-524288": 1
+   }
+  },
+  "at_revoke_invalidated_registers": {
+   "count": 10,
+   "mean": 0.5,
+   "max": 1,
+   "buckets": {
+    "0": 5,
+    "1": 5
+   }
+  },
+  "at_free_memory": {
+   "count": 393275,
+   "mean": 0.0,
+   "max": 0,
+   "buckets": {
+    "0": 393275
+   }
+  }
+ },
+ "trees": {
+  "snapshots": 178,
+  "revoke_root_children": {
+   "count": 10,
+   "mean": 3.2,
+   "max": 21,
+   "buckets": {
+    "1": 8,
+    "3": 1,
+    "17-32": 1
+   }
+  },
+  "revoke_run": {
+   "count": 10,
+   "mean": 39327.5,
+   "max": 393246,
+   "buckets": {
+    "1": 8,
+    "17-32": 1,
+    "262145-524288": 1
+   }
+  },
+  "revoke_root_depth": {
+   "count": 10,
+   "mean": 0.5,
+   "max": 1,
+   "buckets": {
+    "0": 5,
+    "1": 5
+   }
+  },
+  "live_node_children": {
+   "count": 61949117,
+   "mean": 0.9998,
+   "max": 21,
+   "buckets": {
+    "0": 20659945,
+    "1": 20643783,
+    "2": 20645053,
+    "3": 169,
+    "17-32": 167
+   }
+  },
+  "live_node_depth": {
+   "count": 61949117,
+   "mean": 19.6609,
+   "max": 21,
+   "buckets": {
+    "0": 11214,
+    "1": 4557,
+    "2": 505,
+    "3": 338,
+    "4": 630,
+    "5": 946,
+    "6": 1578,
+    "7": 2842,
+    "8": 5362,
+    "9-16": 2572928,
+    "17-32": 59348217
+   }
+  },
+  "tree_size": {
+   "count": 534,
+   "mean": 116009.5824,
+   "max": 393328,
+   "buckets": {
+    "1": 178,
+    "5": 178,
+    "33-64": 9,
+    "8193-16384": 1,
+    "16385-32768": 1,
+    "32769-65536": 2,
+    "65537-131072": 4,
+    "131073-262144": 8,
+    "262145-524288": 153
+   }
+  }
+ }
+}

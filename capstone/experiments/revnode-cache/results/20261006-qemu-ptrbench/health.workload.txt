@@ -1,0 +1,2 @@
+seq #0 health: PASS rc=0 28.4s
+mix seq n=1: PASS wall=28.4s

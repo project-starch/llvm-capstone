@@ -1,0 +1,171 @@
+{
+ "trace": "(fifo)",
+ "records": 24798037227,
+ "nodes_allocated": 54880,
+ "mrev": 36531,
+ "split": 18346,
+ "lone": 3,
+ "memory_alias_events": {
+  "stored": 3758437281,
+  "left": {
+   "mem_capstore": 3531329276,
+   "mem_untag": 227107924,
+   "mem_clear": 0,
+   "gc": 8
+  },
+  "live_at_end": 73,
+  "peak_live": 55661
+ },
+ "capability_stores": {
+  "into_untagged": 227108005,
+  "over_same_node": 3394546562,
+  "over_other_node": 136782714
+ },
+ "data_stores_over_capability": 227107924,
+ "errors": {
+  "negative_alias_count": 0,
+  "walk_mismatch": 0,
+  "alloc_with_live_aliases": 0
+ },
+ "aliases": {
+  "max_memory_aliases_per_node": {
+   "count": 54880,
+   "mean": 1.4586,
+   "max": 473,
+   "buckets": {
+    "1": 36560,
+    "2": 16657,
+    "3": 30,
+    "4": 10,
+    "5": 458,
+    "6": 1159,
+    "7": 1,
+    "9-16": 2,
+    "33-64": 1,
+    "257-512": 2
+   }
+  },
+  "at_revoke_root_memory": {
+   "count": 10,
+   "mean": 3.0,
+   "max": 3,
+   "buckets": {
+    "3": 10
+   }
+  },
+  "at_revoke_root_registers": {
+   "count": 10,
+   "mean": 2.0,
+   "max": 2,
+   "buckets": {
+    "2": 10
+   }
+  },
+  "at_revoke_invalidated_memory": {
+   "count": 10,
+   "mean": 1901.5,
+   "max": 18257,
+   "buckets": {
+    "2": 1,
+    "3": 1,
+    "4": 3,
+    "5": 1,
+    "6": 2,
+    "513-1024": 1,
+    "16385-32768": 1
+   }
+  },
+  "at_revoke_invalidated_registers": {
+   "count": 10,
+   "mean": 0.5,
+   "max": 1,
+   "buckets": {
+    "0": 5,
+    "1": 5
+   }
+  },
+  "at_free_memory": {
+   "count": 54812,
+   "mean": 0.0,
+   "max": 0,
+   "buckets": {
+    "0": 54812
+   }
+  }
+ },
+ "trees": {
+  "snapshots": 1480,
+  "revoke_root_children": {
+   "count": 10,
+   "mean": 3.2,
+   "max": 21,
+   "buckets": {
+    "1": 8,
+    "3": 1,
+    "17-32": 1
+   }
+  },
+  "revoke_run": {
+   "count": 10,
+   "mean": 5481.2,
+   "max": 54783,
+   "buckets": {
+    "1": 8,
+    "17-32": 1,
+    "32769-65536": 1
+   }
+  },
+  "revoke_root_depth": {
+   "count": 10,
+   "mean": 0.5,
+   "max": 1,
+   "buckets": {
+    "0": 5,
+    "1": 5
+   }
+  },
+  "live_node_children": {
+   "count": 80704286,
+   "mean": 0.9988,
+   "max": 21,
+   "buckets": {
+    "0": 26988085,
+    "1": 26850758,
+    "2": 26862501,
+    "3": 1472,
+    "17-32": 1470
+   }
+  },
+  "live_node_depth": {
+   "count": 80704286,
+   "mean": 19.6293,
+   "max": 21,
+   "buckets": {
+    "0": 93240,
+    "1": 39734,
+    "2": 4414,
+    "3": 2944,
+    "4": 2944,
+    "5": 2944,
+    "6": 2944,
+    "7": 5884,
+    "8": 8826,
+    "9-16": 3365178,
+    "17-32": 77175234
+   }
+  },
+  "tree_size": {
+   "count": 4440,
+   "mean": 18176.641,
+   "max": 54865,
+   "buckets": {
+    "1": 1480,
+    "5": 1480,
+    "33-64": 8,
+    "8193-16384": 1,
+    "16385-32768": 1,
+    "32769-65536": 1470
+   }
+  }
+ }
+}

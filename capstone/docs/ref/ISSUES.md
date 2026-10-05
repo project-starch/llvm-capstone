@@ -8282,6 +8282,26 @@ override from its absence". Neither printed exit 75.
 
 ## Compiler / toolchain (ours)
 
+
+### C-77 — a pointer-typed common symbol crashes the capstone64 backend (`llvm_unreachable("Unknown section kind")`) `OPEN — COMPILER, observed 2026-10-05 building Olden/Ptrdist/MallocBench with compiler-stack-68c75ed3; reduced to one line; worked around with -fno-common`
+
+**What happens.** `char *shared_name;` at file scope, compiled with `-fcommon`, stops clang in code
+generation: `UNREACHABLE executed at llvm/lib/CodeGen/TargetLoweringObjectFileImpl.cpp:631`
+(`getSectionPrefixForGlobal`, reached through `selectELFSectionForGlobal`). An integer common
+symbol (`int n;`) compiles, so the capability-holding common global takes a path the generic
+section naming cannot name. Seven of the seventeen llvm-test-suite pointer benchmarks stopped on
+it (espresso's `getopt.c` `char *optarg;`, cfrac, anagram, bc, yacr2, bh, voronoi).
+
+**Repro.** `capstone/tests/compiler-repros/C77-pointer-common-symbol/run.sh` (`CLANG=` names the
+compiler): PRESENT with 68c75ed3; two controls (`-fno-common`, an integer common symbol) compile.
+
+**Workaround.** `-fno-common` (the default of GCC 10 and clang 11 and later); a program that
+defines one variable in several files then links with `-Wl,--allow-multiple-definition` (bh).
+No port in `capstone/ports/` is affected: they build with the compiler's default.
+
+**Impact.** Pre-2020 C built with `-fcommon` and a pointer at file scope. Found by
+`capstone/experiments/revnode-cache/ptrbench.py`, which builds with `-fno-common`.
+
 ### C-50 — an integer-valued pointer in an aggregate passed BY VALUE (union or struct) is copied through an address formed with integer `addi` on the frame pointer, which faults `OPEN — COMPILER, caller side (byval copy, CapstoneISelLowering.cpp:24316); found 2026-09-23 by the FFmpeg app port on QEMU, reduced to 12 lines, proven from disassembly and -debug-only=isel; worked around in the port; audited and CORRECTED the same day, see the box`
 
 > **Not the "C-50" in commit `f8b140caa818` / PR #75.** That merged fix is Assignment Tracking's

@@ -5,6 +5,8 @@
 # Workloads: boot-only (control: boot, run `true`), sqlite-O2 (SQLite 3.22 work +
 # again + speedtest1 size 1, checked against native), mruby-<arm> (the mruby port's
 # smoke.rb in that heap arm: fx-level0, fx-sublet, fx-sublet-gc), and
+# ptr-<par|seq>-<label>: the programs in $MIX from ptrbench.py's manifest (Olden, Ptrdist,
+# MallocBench on the sublet heap), checked against their native output; and
 # mix-<par|seq>-<label>: the programs in $MIX (mruby benchmarks scaled by
 # prepare-bench.py, in heap arm $ARM, and `speedtest1`), all at once as separate
 # processes (par) or one after another in the same boot (seq), each checked against
@@ -32,6 +34,7 @@ MRUBY_KIT=${MRUBY_KIT:-/tmp/capstone/mruby-arms}
 MRUBY_LAUNCHER=${MRUBY_LAUNCHER:-/tmp/capstone/v0-removal-stack/guest/capstone-exec}
 PY=${PY:-/tmp/capstone/venv/bin/python3}
 BENCH=${BENCH:-$K/bench}                 # prepare-bench.py's output
+PTRBENCH=${PTRBENCH:-$K/ptrbench}        # ptrbench.py's output (sublet-heap C programs)
 ARM=${ARM:-fx-sublet-gc}
 MIX=${MIX:-}
 # CMA the guest reserves for domains, and how much of it the module may keep cached;
@@ -60,6 +63,10 @@ vm() { $PY -m capstone_vm --state $S "$@"; }
 case $name in
   sqlite*) SHARE=$SQLITE_KIT/share; LAUNCHER=$SQLITE_KIT/guest/capstone-exec ;;
   mruby-*|boot-only) SHARE=$MRUBY_KIT/share; LAUNCHER=$MRUBY_LAUNCHER ;;
+  ptr-par-*|ptr-seq-*)
+    [ -n "$MIX" ] && [ -f $PTRBENCH/programs.json ] || { echo "ptr needs MIX and PTRBENCH"; exit 2; }
+    SHARE=$K/share-ptr; LAUNCHER=$MRUBY_LAUNCHER
+    rm -rf $SHARE/bench && mkdir -p $SHARE/bench && cp -r $PTRBENCH/*.dom $PTRBENCH/inputs $PTRBENCH/programs.json $SHARE/bench/ || exit 1 ;;
   mix-par-*|mix-seq-*)
     [ -n "$MIX" ] && [ -f $BENCH/native/speedtest1.out ] || { echo "mix needs MIX and BENCH"; exit 2; }
     SHARE=$K/share-mix; LAUNCHER=$MRUBY_LAUNCHER
@@ -96,6 +103,10 @@ case $name in
   mix-*) mode=${name#mix-}; mode=${mode%%-*}
       $PY $HERE/run-mix.py --state $S --bench $BENCH --mode $mode --mruby /mnt/host/mruby-$ARM.dom \
         --speedtest1 /mnt/host/speedtest1.dom $MIX > $K/logs/$name.txt 2>&1; rc=$?
+      cat $K/logs/$name.txt ;;
+  ptr-*) mode=${name#ptr-}; mode=${mode%%-*}
+      $PY $HERE/run-mix.py --state $S --bench $PTRBENCH --programs $PTRBENCH/programs.json --mode $mode \
+        --save-dir $K/logs/guest-out/$name --mruby none --speedtest1 none $MIX > $K/logs/$name.txt 2>&1; rc=$?
       cat $K/logs/$name.txt ;;
   mruby-*) timeout 1800 $PY -m capstone_vm --state $S exec /mnt/host/mruby-${name#mruby-}.dom \
       /mnt/host/files/smoke.rb > $K/logs/$name.txt 2>&1; rc=$?

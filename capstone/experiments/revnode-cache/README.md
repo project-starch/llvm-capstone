@@ -96,6 +96,11 @@ cache of a given size and associativity would have. It does not answer what a mi
     cases at revoke. Negative controls: no same-node shortcut fails 3 checks, a tag clear of a
     slot that holds another node fails 1, and a slot cache that absorbs nothing fails 3.
 - **`summarize_bucket.py`**: the comparison of all designs below.
+- **`ptrbench.py`**: builds the pointer benchmarks of the llvm-test-suite (Olden, Ptrdist,
+  MallocBench: 17 C programs) twice, with the host compiler as the reference and with the
+  application SDK's `capstone-cc` on the **sublet heap** (one revocation node per allocation), and
+  writes a manifest `programs.json` for `run-mix.py --programs`. The sources are unchanged except
+  one adaptation (voronoi, below); `run.sh ptr-<par|seq>-<label>` runs them.
 
 ## Results (`results/20261005-qemu/`)
 
@@ -529,6 +534,190 @@ What the numbers say:
   that had since been rewritten in the cache. Without the check those would be wrong tag clears.
 - **Memory:** 4 bytes per live copy (48,708 to 461,447 at peak), inside 64-byte node records or
   tables; no alias pool, no sidecars.
+
+
+## Pointer benchmarks on the sublet heap (`results/20261006-qemu-ptrbench/`)
+
+The mruby runs left one question open: is the slot cache's absorption an interpreter artefact?
+The programs the memory-safety literature measures pointer behaviour on answer it (SoftBound,
+CETS, Watchdog and DangSan all used Olden and Ptrdist): 17 C programs from the llvm-test-suite,
+built with `-O2` on the sublet heap, each checked byte for byte against the host build's output
+on the same input.
+
+**What it took to run them.** Every item below is a fact about the platform, not the design, and
+each cost a run:
+- **The compiler crashes on `char *x;` under `-fcommon`** (C-77, `tests/compiler-repros/C77-…`):
+  seven programs stopped on it. All build with `-fno-common`; bh, which defines one variable in
+  several files, links with `-Wl,--allow-multiple-definition`.
+- **The sublet heap hands out 256-byte atoms** (`CAPSTONE_SUBLET_ATOM_LOG 8`) from a pool the
+  launcher caps at 256 MiB of grant: at most ~520,000 live blocks. treeadd 20 (a million
+  48-byte nodes) and bisort 700000 get NULL from malloc and fault on it (cause 24, value 0);
+  they run at 18 levels and 250,000 elements. A ladder (12, 15, 17, 18 pass; 19 faults) fixed
+  the limit before the cause was read in the source.
+- **The current SDK writes the 56-byte descriptor** of the threads generation, which the
+  09-30 launcher refuses; these runs use the threads lane's platform (firmware `fw-t5`, module
+  `module-t5`, launcher `threads-merge/guest2`, same kernel and QEMU source). The mruby and
+  SQLite runs above are on the 09-30 platform; the two cannot run each other's images.
+- **voronoi** keeps an edge's rotation in the low bits of its pointer and computes siblings by
+  integer arithmetic cast back to a pointer: no capability, cause 24 at first use. The
+  adaptation (in `ptrbench.py`, applied to a copy) computes the same address and moves the
+  pointer there by pointer arithmetic, as inline functions because one call site has side
+  effects. It also needs `-DMEMALIGN_IS_NOT_AVAILABLE`: the sublet heap has no `memalign`.
+- **ft and espresso** draw random numbers from the C library, and glibc's and musl's generators
+  differ; both builds get the same LCG under the library's names. bisort has its own.
+- **p2c** did not finish natively with the suite's arguments; gs, gawk, make and perl are their
+  own ports' size. Not built.
+- **Soft float.** power (0.35 s natively) ran 19.5 minutes; ks 12. The platform has no FPU.
+
+All 17 programs ran to completion with output identical to the host build's; every variant's
+error count is 0. Each ran alone, one boot each.
+
+| | checks (M) | nodes | cap-stores /1000 | same node | index changes /1000 | copies/node p50 / max | revokes |
+|---|---:|---:|---:|---:|---:|---|---:|
+| treeadd (Olden) | 250 | 786,559 | 156 | 85 % | 23.5 | 1 / 326 | 10 |
+| bh (Olden) | 1,120 | 8,876 | 229 | 89 % | 24.4 | 1 / 329 | 10 |
+| bisort (Olden) | 339 | 393,344 | 134 | 77 % | 31.3 | 1 / 380 | 11 |
+| em3d (Olden) | 301 | 6,290 | 126 | 94 % | 7.8 | 1 / 64,257 | 10 |
+| health (Olden) | 391 | 896,467 | 194 | 78 % | 43.6 | 1 / 324 | 10 |
+| mst (Olden) | 271 | 4,904 | 138 | 91 % | 12.3 | 1 / 1,311 | 10 |
+| perimeter (Olden) | 323 | 1,048,697 | 157 | 82 % | 28.0 | 1 / 324 | 10 |
+| power (Olden) | 14,010 | 54,880 | 268 | 90 % | 26.0 | 1 / 473 | 10 |
+| tsp (Olden) | 1,662 | 393,343 | 248 | 81 % | 48.2 | 1 / 363 | 10 |
+| voronoi (Olden) | 459 | 196,666 | 204 | 89 % | 22.4 | 1 / 386 | 66 |
+| anagram (Ptrdist) | 3,905 | 18,006 | 115 | 75 % | 28.4 | 1 / 394 | 16,843 |
+| bc (Ptrdist) | 5,212 | 12,586,343 | 128 | 60 % | 51.3 | 1 / 315 | 8,835,517 |
+| ft (Ptrdist) | 819 | 624,615 | 99 | 88 % | 11.6 | 1 / 373 | 13,841 |
+| ks (Ptrdist) | 11,894 | 6,163 | 176 | 73 % | 47.9 | 1 / 332 | 18 |
+| yacr2 (Ptrdist) | 1,439 | 5,633 | 88 | 97 % | 2.3 | 1 / 348 | 384 |
+| cfrac (MallocBench) | 7,319 | 15,763,280 | 204 | 56 % | 89.9 | 1 / 508 | 13,326,643 |
+| espresso (MallocBench) | 2,088 | 3,663,726 | 130 | 62 % | 48.9 | 1 / 18,383 | 2,670,676 |
+
+Misses per 1000 lifetime checks at 64 lines (4 KiB of metadata cache):
+
+| | Capstone | Clover baseline | K12/W0 | K12/W64 | K12/W256 | K4/W64/32B |
+|---|---:|---:|---:|---:|---:|---:|
+| treeadd | 3.255 | 14.1 | 10.8 | 9.911 | 11.9 | 5.218 |
+| bh | 1.529 | 9.330 | 2.916 | 0.324 | 0.092 | 0.376 |
+| bisort | 12.7 | 42.8 | 14.0 | 7.574 | 7.411 | 5.895 |
+| em3d | 2.300 | 3.759 | 2.264 | 1.801 | 1.780 | 1.777 |
+| health | 5.802 | 22.4 | 11.4 | 8.073 | 9.699 | 6.122 |
+| mst | 2.548 | 4.643 | 2.237 | 1.566 | 1.593 | 1.590 |
+| perimeter | 5.055 | 18.4 | 11.8 | 9.478 | 12.3 | 5.967 |
+| power | 0.063 | 0.887 | 0.504 | 0.188 | 0.024 | 0.180 |
+| tsp | 3.356 | 12.7 | 6.216 | 1.085 | 1.219 | 0.792 |
+| voronoi | 1.022 | 21.4 | 3.604 | 2.416 | 2.508 | 3.357 |
+| anagram | 43.5 | 7.031 | 1.547 | 1.002 | 0.418 | 1.004 |
+| bc | 1.525 | 8.998 | 5.124 | 3.309 | 2.715 | 1.696 |
+| ft | 203.5 | 7.478 | 3.886 | 4.026 | 4.090 | 2.495 |
+| ks | 3.584 | 21.3 | 3.796 | 0.004 | 0.004 | 0.003 |
+| yacr2 | 0.039 | 0.312 | 0.087 | 0.021 | 0.018 | 0.015 |
+| cfrac | 1.628 | 14.8 | 10.5 | 3.757 | 3.051 | 2.038 |
+| espresso | 2.909 | 36.7 | 14.8 | 8.617 | 7.186 | 7.054 |
+
+At 1024 and 16384 lines, Capstone → K12/W64 → K4/W64/32B:
+
+| | 1024 lines | 16384 lines |
+|---|---|---|
+| treeadd | 3.150 → 8.413 → 4.769 | 3.019 → 8.400 → 4.761 |
+| bh | 0.078 → 0.164 → 0.175 | 0.002 → 0.023 → 0.017 |
+| bisort | 7.524 → 5.261 → 3.908 | 4.105 → 4.236 → 2.882 |
+| em3d | 0.016 → 1.067 → 1.054 | 0.005 → 0.368 → 0.341 |
+| health | 5.425 → 7.220 → 5.345 | 5.368 → 7.187 → 5.324 |
+| mst | 0.937 → 1.082 → 1.065 | 0.005 → 1.053 → 1.033 |
+| perimeter | 4.183 → 8.679 → 5.757 | 3.932 → 8.660 → 5.751 |
+| power | 0.061 → 0.017 → 0.013 | 0.001 → 0.010 → 0.005 |
+| tsp | 0.736 → 0.827 → 0.583 | 0.448 → 0.770 → 0.522 |
+| voronoi | 0.510 → 1.388 → 1.676 | 0.284 → 1.218 → 1.273 |
+| anagram | 0.002 → 0.005 → 0.004 | 0.001 → 0.005 → 0.004 |
+| bc | 1.225 → 2.464 → 1.238 | 1.225 → 2.439 → 1.230 |
+| ft | 163.618 → 3.186 → 2.317 | 8.511 → 2.626 → 1.677 |
+| ks | 0.061 → 0.001 → 0.001 | 0.000 → 0.001 → 0.000 |
+| yacr2 | 0.002 → 0.011 → 0.007 | 0.001 → 0.005 → 0.003 |
+| cfrac | 1.444 → 2.171 → 1.087 | 1.080 → 2.158 → 1.080 |
+| espresso | 1.038 → 2.902 → 1.867 | 0.877 → 1.782 → 1.146 |
+
+Accesses per 1000 checks, and what the index does (K12/W64):
+
+| | Capstone | Clover baseline | K12/W64 | absorbed | to overflow | overflow nodes | largest table (lines) | revoke accesses: mean / max |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| treeadd | 1029 | 377 | 22.05 | 76.6 % | 3.06 % | 15 | 32 | 78,659 / 786,491 |
+| bh | 1000 | 391 | 5.09 | 89.5 % | 4.40 % | 1,845 | 32 | 1,638 / 16,274 |
+| bisort | 1011 | 494 | 16.73 | 78.6 % | 2.01 % | 3 | 32 | 35,759 / 393,251 |
+| em3d | 1000 | 120 | 2.34 | 87.5 % | 10.91 % | 517 | 8,192 | 3,903 / 38,934 |
+| health | 1021 | 693 | 17.81 | 85.5 % | 1.58 % | 9,992 | 32 | 91,645 / 916,353 |
+| mst | 1000 | 179 | 11.31 | 64.1 % | 34.19 % | 1,594 | 128 | 9,907 / 98,886 |
+| perimeter | 1030 | 443 | 21.08 | 79.3 % | 0.92 % | 4 | 32 | 104,870 / 1,048,607 |
+| power | 1000 | 415 | 0.68 | 99.1 % | 0.60 % | 3 | 64 | 5,494 / 54,788 |
+| tsp | 1002 | 770 | 3.51 | 96.6 % | 0.50 % | 10 | 32 | 39,336 / 393,265 |
+| voronoi | 1004 | 355 | 10.70 | 77.5 % | 3.60 % | 2,094 | 32 | 3,046 / 200,690 |
+| anagram | 1000 | 447 | 2.38 | 95.6 % | 0.18 % | 4 | 64 | 4 / 1,147 |
+| bc | 1030 | 804 | 17.19 | 95.0 % | 0.65 % | 4 | 32 | 4 / 2,160 |
+| ft | 1007 | 182 | 6.35 | 84.5 % | 4.17 % | 1,535 | 64 | 52 / 652,436 |
+| ks | 1000 | 766 | 0.01 | 100.0 % | 0.00 % | 4 | 32 | 344 / 6,065 |
+| yacr2 | 1000 | 37 | 0.62 | 91.3 % | 5.66 % | 103 | 32 | 18 / 5,382 |
+| cfrac | 1028 | 1414 | 18.08 | 95.9 % | 0.50 % | 3 | 64 | 4 / 96 |
+| espresso | 1022 | 766 | 26.14 | 83.3 % | 4.75 % | 1,056 | 2,048 | 4 / 2,052 |
+
+Where the index's misses at 64 lines come from (K12/W64, per 1000 checks):
+
+| | flush | delete | node creation | revoke | table growth |
+|---|---:|---:|---:|---:|---:|
+| treeadd | 1.134 | 2.345 | 3.282 | 3.150 | 0.000 |
+| bh | 0.251 | 0.043 | 0.008 | 0.015 | 0.007 |
+| bisort | 4.226 | 0.980 | 1.209 | 1.159 | 0.000 |
+| em3d | 1.307 | 0.033 | 0.025 | 0.130 | 0.306 |
+| health | 1.552 | 1.792 | 2.386 | 2.344 | 0.000 |
+| mst | 0.465 | 0.035 | 0.029 | 0.365 | 0.672 |
+| perimeter | 0.432 | 2.475 | 3.322 | 3.247 | 0.000 |
+| power | 0.145 | 0.035 | 0.004 | 0.004 | 0.000 |
+| tsp | 0.408 | 0.193 | 0.248 | 0.237 | 0.000 |
+| voronoi | 1.125 | 0.381 | 0.472 | 0.438 | 0.000 |
+| anagram | 0.979 | 0.017 | 0.005 | 0.001 | 0.000 |
+| bc | 0.464 | 0.146 | 2.528 | 0.171 | 0.000 |
+| ft | 1.705 | 0.529 | 0.823 | 0.820 | 0.150 |
+| ks | 0.001 | 0.002 | 0.001 | 0.001 | 0.000 |
+| yacr2 | 0.008 | 0.004 | 0.004 | 0.004 | 0.000 |
+| cfrac | 0.523 | 0.188 | 2.449 | 0.598 | 0.000 |
+| espresso | 3.032 | 1.970 | 2.144 | 1.450 | 0.022 |
+
+What the numbers say:
+
+- **The slot cache is not an interpreter artefact.** 64 slots absorb 64 % (mst) to 100 % (ks) of
+  the index changes in C, typically 77-96 %. The capability stores of these programs are mostly
+  the compiler's spills of pointer registers into the same stack slots (every function entry
+  stores its callee-saved registers), and 56-97 % of them store the node that is already there.
+- **Where many objects are read broadly, Capstone's check misses and the index does not.** ft's
+  Fibonacci heap (625,000 nodes): Capstone 203 misses per 1000 checks at 64 lines, 164 at 1024,
+  8.5 at 16384; the index 4.0, 3.2, 2.6. anagram: 43.5 against 1.0. bisort: 12.7 against 7.6.
+  Capstone pays per access over the live objects; the index pays per change.
+- **Where millions of objects are created, the index pays for its records.** treeadd, health,
+  perimeter (0.8-1.0 M nodes, no frees): Capstone 3.3-5.8 at 64 lines, flat across cache
+  sizes; the index with 64-byte records 8.1-9.9, with 32-byte records 5.2-6.1. The breakdown
+  says why: node creation 2.4-3.3 and the teardown revoke 2.3-3.2 per 1000 checks, both writes
+  to records touched once, plus deletes into a million cold records. A controller writing a
+  full new line without reading it removes the creation misses; Capstone's model counts its
+  own mrev/split writes the same way.
+- **Hub nodes are the index's weak spot.** em3d has one node with 64,257 copies (a 8,192-line
+  table), espresso one with 18,383, mst 1,594 nodes with up to 1,311 copies that grew their
+  tables 7,337 times. At 1024-16384 lines the index misses 1.0-1.1 per 1000 on em3d and mst
+  where Capstone misses 0.005-0.016: the flushes land in cold table lines and the doublings
+  rehash them (mst: 0.67 of its 1.57 misses at 64 lines are growth). A region bitmap for hubs,
+  or growing by more than two, is the next design iteration to model.
+- **Frees are cheap revokes.** bc (8.8 M revokes), cfrac (13.3 M), espresso (2.7 M) and anagram
+  free their objects; a revoke costs 4 accesses (root, the node, the node after it, root
+  again) and 0.2-1.5 misses per 1000 checks. The Olden programs never free, so their ten
+  revokes are the runtime tearing down the heap: 79,000-105,000 accesses each, once.
+- **Accesses:** 0.01-26 per 1000 checks against Capstone's 1000-1030 and the Clover baseline's
+  37-1,414. cfrac's baseline exceeds Capstone: 90 index changes per 1000 checks at 7-8
+  accesses each, which is the case the slot cache and the inline records exist for.
+- **Copies per node:** median 1 everywhere; most nodes never exceed 12 (overflow takes
+  0.2-5 % of changes), except the hubs.
+
+Taken with the mruby and SQLite runs: on the fourteen non-hub programs the index with 32-byte
+records is within 0.5-2x of Capstone's misses at every cache size and 20-5,000x below it in
+accesses, with no check on the load path. The two things that would decide a hardware choice
+and are not measured here remain the cost of a miss on a store against a miss on a load, and
+the hub nodes.
 
 
 ## What this does not measure

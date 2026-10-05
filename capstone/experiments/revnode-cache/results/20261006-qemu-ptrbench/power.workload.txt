@@ -1,0 +1,2 @@
+seq #0 power: PASS rc=0 1170.7s
+mix seq n=1: PASS wall=1170.7s

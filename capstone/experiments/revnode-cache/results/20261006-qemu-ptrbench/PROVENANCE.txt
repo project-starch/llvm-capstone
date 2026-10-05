@@ -1,0 +1,30 @@
+# provenance, 2026-10-06
+capstone-qemu perf/revnode-trace 2f16a090b9e5a52a4136946463c8f6c5cc833cb9
+llvm-capstone base origin/dev 1d1ee0b449124d286e92d31831eea498480d60eb
+llvm-test-suite e1356a24df892837fef6173c0e3561dd2c0518c1 MultiSource/Benchmarks/{Olden,Ptrdist,MallocBench}
+application SDK: capstone/runtime/application at the base above, CAPSTONE_APPLICATION_HEAP=sublet HEAP_LOG=27 (128 MiB pool, 256-byte atoms), toolchain compiler-stack-68c75ed3, musl archive of the mruby fx-sublet-gc arm
+platform (threads generation, needed for the 56-byte descriptor): firmware threads/fw-t5, kernel delegation-binfmt-linux, rootfs domain-process-runtime, module threads/module-t5, launcher threads-merge/guest2
+each program alone, one boot each; CAPSTONE_REV_NODES=16777216, --cma-mib 1920 --process-cache-mib 1792
+f0d69ab62621ab73377955236a48abfab429abf46b5da520ef6276dcf9967cb4  build/qemu-system-riscv64
+ae41a8c6d22877f779750bcd4aba040b4ecf5015ce25fff6d47f773139cf05dc  firmware/fw_jump.elf
+e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b  boot/Image
+fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f  images/rootfs.ext2
+649f410893eeb40a825232452974ac3161bb667163457c42f628c325dd7e6d97  module/capstone.ko
+e604885a6e40f18c636496dcc0c46865fe5cf62a76ae9e3a2390cbc4bc4826fa  guest2/capstone-exec
+eebfeef6bffa39bc2aa765fb5a9bf81079b224ff4baf013d66ed5ef18a668db6  ptrbench/anagram.dom
+c36e388b6ad44da3048f567fa951a5c812ea899bf13852048cc2827c905f29bf  ptrbench/bc.dom
+09a214bcbf679ad518bb38c3c6a7c2220eec2958910c891c75c2acd1811a322a  ptrbench/bh.dom
+10207ce402968c4646be43bbc97cd7c62b9f06a08839388d5a109e03d6277b68  ptrbench/bisort.dom
+54967719c1956e6f478421792207219098f674468602eaf796baeab4074ef964  ptrbench/cfrac.dom
+4cea3a563112a73e966489157f1fb53e95d00b2c20c83706d0afe244fe9cb0af  ptrbench/em3d.dom
+7b81c4e1abff7cb109fe484d6129a7148cfa1e97fbbf19bef14687e635bba66b  ptrbench/espresso.dom
+7499d479c17656b251c06fb9ec01fadecb5139febd4b2412d6b49cd013ce214c  ptrbench/ft.dom
+67121bfb59dd7d15ec38dca035e45d57c6e95681587ad0b8d9897b6ca8388712  ptrbench/health.dom
+e98f2cbd12401494a4827cddcac5d034ad42c2a7e002c42e44d2f5b65d29c35b  ptrbench/ks.dom
+abe722573f8aca5a7be0d875debbe525e49a6c99892fa9162e3b139e05f8034a  ptrbench/mst.dom
+e79abf2d0de14fc1f0bce4f664638cfb3e61ffeaa87119ea01b0c569f5671328  ptrbench/perimeter.dom
+025e6b9ff16a2c75c70c0bc98ab9231987f560d1cd8a05d956e9ea6e1489b988  ptrbench/power.dom
+2764e894cb650ef3ddb48a40817d0c3751640cb20d52049f650b690703a949b2  ptrbench/treeadd.dom
+b6f7a1fc5fc5663ee9801805d373e6b033ac44512d13654d5176c2e5d7508c97  ptrbench/tsp.dom
+b3c74a0dd8aa7f7f8f0029e7e7073c2f761f991e8b67dfe1022b2b5cfadf959d  ptrbench/voronoi.dom
+a8fad66b61c2685f2bdf261aa4503c673a93b988b29d689ca470b2d7f6496884  ptrbench/yacr2.dom

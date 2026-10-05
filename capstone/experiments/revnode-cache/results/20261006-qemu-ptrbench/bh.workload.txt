@@ -1,0 +1,2 @@
+seq #0 bh: PASS rc=0 81.2s
+mix seq n=1: PASS wall=81.2s

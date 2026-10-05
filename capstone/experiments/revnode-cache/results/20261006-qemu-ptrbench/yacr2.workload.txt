@@ -1,0 +1,2 @@
+seq #0 yacr2: PASS rc=0 56.0s
+mix seq n=1: PASS wall=56.0s

@@ -1,0 +1,2 @@
+seq #0 anagram: PASS rc=0 215.2s
+mix seq n=1: PASS wall=215.2s

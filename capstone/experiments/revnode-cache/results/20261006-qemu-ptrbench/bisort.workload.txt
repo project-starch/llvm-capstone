@@ -1,0 +1,2 @@
+seq #0 bisort: PASS rc=0 19.6s
+mix seq n=1: PASS wall=19.6s
