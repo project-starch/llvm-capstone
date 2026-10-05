@@ -10,17 +10,17 @@
   "fidelity": "real server, real allocator, upstream's own trigger shape. The overflow is about 36 bytes and stays inside the palloc chunk, so ASan is structurally blind to it and only PostgreSQL's chunk sentinel sees it -- that is the measurement, not a weakness of the case",
   "arms": {
     "spatial": {
-      "status": "not written",
-      "precondition": "PGSU_NESTED=none. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+      "oracle": "completes; the mechanism does not report. completed with no directive and no fault",
+      "run": "20261005, Capstone application VM, image sha256 8088ed6b2103e65a"
     },
     "sublet": {
-      "status": "not written",
-      "precondition": "PGSU_NESTED=sublet, with its own PG_SU_ROOT separate from the spatial build. needs the Capstone application VM: a case is SQL run against a real postgres process, not a freestanding domain. Every attempt needs a fresh copy of a cluster made by the 16-byte-MAXALIGN backend (app/build-native16-fixture.py); an ordinary 8-byte native cluster is not interchangeable. Set CAPSTONE_REV_NODES=262144: this workload exhausts the 65536 default and passes at 262144 with a high-water mark of 84193 nodes (capstone/ports/common/application/README.md lines 36-37; the measurement is nodes_high_water in ports/common/application/results/20260929-delegation.json). Scoring: node exhaustion is a resource limit, not a detection -- it surfaces as cause 30 (RISCV_EXCP_INSUF_RESOURCES = 0x1e, capstone-qemu/target/riscv/cpu_bits.h), so an oracle that counts faults will score it as a catch. Record causes by name: the emulator and the RTL number them differently (ports/nginx/e1-bundle/e1-bundle.py:151). Also: su can return 0 after a child SIGPROT, so exit status alone does not qualify a run; the adapter report has to agree."
+      "oracle": "the mechanism reports: capability fault: capstone-exec: domain fault cause=7 pc=0xc0202214 address=0xc9dcf8f0 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x38 preparing=0x38 sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom",
+      "run": "20261005, Capstone application VM, image sha256 be234a12c9336a00"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the defect is witnessed by PostgreSQL's own check or by the differential -- REACHED-SILENT (2026-10-04, probe run). Plain purecap rc=0, no fault. The cassert build's own MEMORY_CONTEXT_CHECKING fires: detected write past chunk end; bad chunk size; bad block offset; req size > alloc size; found inconsistent memory block. The overflow stays inside the palloc chunk, so CHERI is correct to stay silent -- but the defect provably executed."
     }
   },
-  "status": "spatial not run; sublet not run; cheribsd-revocation run 2026-10-04",
+  "status": "spatial and sublet run 2026-10-05 on the Capstone application VM; cheribsd-revocation run 2026-10-04",
   "advisory": "CVE-2026-14669"
 }

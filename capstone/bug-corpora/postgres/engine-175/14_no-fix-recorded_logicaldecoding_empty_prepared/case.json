@@ -21,5 +21,6 @@
       "status": "not written"
     }
   },
-  "status": "spatial not run; sublet not run; cheribsd-revocation not run"
+  "status": "spatial not run; sublet not run; cheribsd-revocation not run",
+  "harness_limit": "needs a postmaster; the single-user backend the arms use cannot run it"
 }

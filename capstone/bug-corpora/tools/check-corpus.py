@@ -67,7 +67,15 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "sibling_issue", "size_class", "size_note", "layer_note", "note",
                  "advisory", "shape", "object", "capstone_column", "comparison",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
-                 "allocator_consumed", "channel"}
+                 "allocator_consumed", "channel", "harness_limit",
+                 "oracle_is_recording"}
+# `harness_limit` says this case cannot execute on the arms at all (it needs a
+# postmaster, a transaction block, something the harness does not provide), and
+# `oracle_is_recording` says its directive was written from its own run and so
+# necessarily fires. Both exist so a runner can act on them: the same facts are
+# in `fidelity` as prose, and a scorer matching prose matches wording, which
+# drifts. A case carrying either must be excluded from that arm's denominator
+# rather than given a verdict.
 # `trigger` is deliberately NOT here. A field meaningful in exactly one schema
 # belongs in that schema's required list; putting it in the global optional set
 # would stop the unknown-field check from catching a stray `trigger` on a
