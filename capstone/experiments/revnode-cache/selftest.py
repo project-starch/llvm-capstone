@@ -32,7 +32,7 @@ NONE = 0xFFFFFFFF
 REPEAT = 5
 
 
-def write_trace(path, recs, rle=False):
+def write_trace(path, recs, rle=False, end=True):
     """rle=True writes CRNTRC02 the way capstone-qemu does: a run of identical
     records once, then a REPEAT carrying the number of further copies."""
     with open(path, "wb") as f:
@@ -49,6 +49,8 @@ def write_trace(path, recs, rle=False):
             last = rec
         if reps:
             f.write(struct.pack("<IBBH", reps, REPEAT, 0, 0))
+        if end:
+            f.write(struct.pack("<IBBH", 0xFFFFFFFF, 10, 0, 0))
 
 
 def run(sim, recs, *args, rle=False):
@@ -196,6 +198,17 @@ def main():
     ra, rm = run(sim, base), run(sim, mixed, rle=True)
     check(ra["caches"] == rm["caches"] and rm["alias_records"] == len(mixed) - len(base),
           f"alias records: {rm['alias_records']} counted, caches equal {ra['caches'] == rm['caches']}")
+
+    # a trace without END is truncated: an error, unless --no-end
+    with tempfile.NamedTemporaryFile(suffix=".bin") as t:
+        write_trace(t.name, [(1, READ, 0)], end=False)
+        check(subprocess.run([sim, t.name], capture_output=True).returncode != 0, "no END must fail")
+        check(subprocess.run([sim, "--no-end", t.name], capture_output=True).returncode == 0, "--no-end accepts it")
+    with tempfile.NamedTemporaryFile(suffix=".bin") as t:
+        write_trace(t.name, [(1, READ, 0)])
+        with open(t.name, "ab") as f:
+            f.write(struct.pack("<IBBH", 1, READ, 0, 0))
+        check(subprocess.run([sim, t.name], capture_output=True).returncode != 0, "a record after END must fail")
 
     # 3. revoke walk
     # In capstone-qemu's order: R root, (R n, W n)*, [R end], W root, [W end].

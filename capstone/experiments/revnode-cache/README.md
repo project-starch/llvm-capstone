@@ -74,6 +74,20 @@ cache of a given size and associativity would have. It does not answer what a mi
     increment at mrev fails 6 checks, counting repeated copies once fails 4, and not counting
     children fails 1.
 - **`summarize_alias.py`**: the per-program table below. Percentiles above 8 are bucket bounds.
+- **`clovsim.c`**: Capstone's lifetime checks against Clover's capability index, on one trace.
+  - The trace (capstone-qemu 2f16a090) also carries each copy's 16-byte granule, and an END
+    record. Every reader rejects a stream without END: a reader that died once cut `tee`, and
+    the others then wrote complete-looking reports.
+  - Two caches of 64-byte lines, one per design, fully associative LRU, 16 to 65536 lines:
+    - Capstone: every traced node access (16-byte node records).
+    - Clover: the controller steps of `ideas/clover/detailed/sections/tracking-metadata.tex`:
+      `reserve_alias_entry`, `register`, `unregister`, a 2-level radix walk plus per-frame
+      sidecars, and revoke clearing every alias of every invalidated node. Clover keeps its own
+      index and revokes eagerly; the emulator is lazy.
+  - The Capstone side reproduces `cachesim --nodes-per-line 4` exactly (all 7 sizes, so_lists).
+  - `selftest_clover.py` counts every metadata access of a hand-built trace. Negative controls:
+    no same-node shortcut fails 3 checks, and no directory walk on unregister fails 2.
+- **`summarize_clover.py`**: the comparison below, per 1000 lifetime checks.
 
 ## Results (`results/20261005-qemu/`)
 
@@ -237,6 +251,53 @@ clears stale tags first. That is the check that the hooks see every place a tag 
   - 87 to 99 % of them are a capability stored over another capability, which touches two nodes:
     one count down, one up.
   - A count would need more than 15 bits: the largest is 34,829.
+
+## Capstone's node checks against Clover's index (`results/20261005-qemu-clover/`)
+
+Same programs, each alone, plus the five-program mix. All outputs match native.
+
+Metadata misses per 1000 lifetime checks (64-byte lines, fully associative LRU), Capstone →
+Clover:
+
+| | 64 lines (4 KiB) | 1024 lines (64 KiB) | 16384 lines (1 MiB) |
+|---|---|---|---|
+| ao_render | 6.5 → 60.8 | 1.41 → 5.09 | 0.49 → 0.71 |
+| lc_fizzbuzz | 7.0 → 118.6 | 4.96 → 25.2 | 3.35 → 18.0 |
+| so_lists | 0.009 → 0.60 | 0.004 → 0.030 | 0.002 → 0.010 |
+| fib | 0.005 → 1.56 | 0.001 → 0.019 | 0.001 → 0.006 |
+| so_mandelbrot | 0.04 → 3.01 | 0.018 → 0.118 | 0.006 → 0.030 |
+| mandel_term | 0.02 → 3.42 | 0.006 → 0.077 | 0.003 → 0.025 |
+| speedtest1 (level0) | 0.000 → 12.3 | 0.000 → 0.107 | 0.000 → 0.023 |
+| five at once | 3.3 → 31.5 | 0.75 → 2.77 | 0.27 → 0.43 |
+
+- **Clover misses more at every size, in every workload.**
+  - The mruby programs: 1.4 to 312 times as many misses at the sizes above. For the two with the
+    most misses, ao_render and lc_fizzbuzz, it is 1.4 to 17 times.
+  - SQLite on level0: Capstone has almost none, so the ratio is not meaningful.
+  - Clover makes fewer accesses: 98 to 1,044 against Capstone's 1,000 to 1,031 per 1000 checks.
+    They miss far more often, though: node records, other aliases' records and per-frame
+    sidecars scattered over the heap, against Capstone's repeated checks of a few hot nodes.
+- **The misses sit elsewhere.**
+  - Capstone's are on capability loads and stores.
+  - Clover's are on capability stores (register and unregister: 38 to 75 % of its misses at 64
+    lines, about two thirds in most programs), on data stores over a capability (most of the
+    rest), and on revokes (under 3 %).
+  - Clover's protocol completes each update before the operation does, with no buffering.
+- **Capability stores are 126 to 162 per 1000 checks.**
+  - 58 to 95 % of them store over a copy of the same node, which leaves Clover's index unchanged.
+    That is high (95 %) for the floating-point programs and lowest (58-64 %) for the
+    allocation-heavy ao_render and lc_fizzbuzz.
+  - No program stored a capability after its node had been revoked.
+- **Revoke stops are mostly short, sometimes very long.**
+  - Mean 15 to 30 metadata accesses per revoke in the mruby programs. SQLite's 4 revokes
+    average 6,320, since level0 revokes whole arenas.
+  - The longest: 39,401 (ao_render) and 487,816 (lc_fizzbuzz).
+- **Clover's metadata is small.**
+  - Peak alias records: 8,782 to 461,482, i.e. 0.1 to 7.0 MiB at 16 B.
+  - Sidecars for 207 to 4,551 frames, 0.2 to 4.4 MiB.
+- **This is the paper's baseline layout, not an optimised one.** Node records of 32 B, a
+  separate alias pool, sidecars per frame. Co-locating a node's first alias with the node, or
+  the sidecar with the tags, changes these numbers, and is the next thing to model.
 
 ## What this does not measure
 

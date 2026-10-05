@@ -25,6 +25,11 @@
  * <id> more copies of the record before it: each is a hit in every cache
  * and leaves LRU order as it is.
  *
+ * A complete trace ends with an END record (format note in cap_rev_tree.h); a
+ * stream that stops without one is truncated -- the emulator was killed or a
+ * reader upstream died -- and is an error. --no-end accepts traces recorded
+ * before END existed.
+ *
  * --exclude SITE[,SITE...] drops sites before the caches see them, e.g.
  * "gc,supervisor" to leave out the emulated supervisor's own node reads.
  *
@@ -44,7 +49,8 @@
 #include <string.h>
 
 enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, N_KINDS, K_REPEAT = N_KINDS,
-       K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG };  /* alias records: aliasstat.c's, skipped here */
+       K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG, K_ALIAS_SLOT,  /* alias records: skipped here */
+       K_END };
 static const char *kind_name[N_KINDS] = {"read", "write", "alloc", "free", "reset"};
 
 #define N_SITES 13
@@ -184,10 +190,13 @@ static void usage(void) {
 int main(int argc, char **argv) {
     unsigned npl = 1;
     uint32_t max_node = 16777216; /* largest CAPSTONE_REV_NODES the runs use */
+    int no_end = 0, saw_end = 0;
     int excluded[N_SITES] = {0};
     const char *path = NULL;
     for (int i = 1; i < argc; ++i) {
-        if (!strcmp(argv[i], "--max-node") && i + 1 < argc) {
+        if (!strcmp(argv[i], "--no-end")) {
+            no_end = 1;
+        } else if (!strcmp(argv[i], "--max-node") && i + 1 < argc) {
             max_node = strtoul(argv[++i], NULL, 0);
         } else if (!strcmp(argv[i], "--nodes-per-line") && i + 1 < argc) {
             npl = strtoul(argv[++i], NULL, 0);
@@ -276,6 +285,11 @@ int main(int argc, char **argv) {
     for (uint64_t i = 0; (got = fread(r, 1, REC_SIZE, in)) == REC_SIZE; ++i, ++n) {
         uint32_t id = r[0] | r[1] << 8 | r[2] << 16 | (uint32_t)r[3] << 24;
         unsigned kind = r[4], site = r[5];
+        if (saw_end) {
+            fprintf(stderr, "cachesim: record %llu after END\n", (unsigned long long)i);
+            return 1;
+        }
+        if (kind == K_END) { saw_end = 1; continue; }
         if (kind == K_REPEAT) {
             if (!have_last) {
                 fprintf(stderr, "cachesim: record %llu: REPEAT with nothing before it\n",
@@ -296,7 +310,7 @@ int main(int argc, char **argv) {
             continue;
         }
         ++logical;
-        if (kind >= K_ALIAS_INC && kind <= K_ALIAS_REG && site < N_SITES) {
+        if (kind >= K_ALIAS_INC && kind <= K_ALIAS_SLOT && site < N_SITES) {
             ++alias_recs;
             have_last = 1;
             last_id = id; last_kind = kind; last_site = site;
@@ -376,6 +390,10 @@ int main(int argc, char **argv) {
     if (got != 0 || ferror(in)) {
         fprintf(stderr, "cachesim: %s: trace ends inside a record (%zu stray bytes); truncated\n",
                 path, got);
+        return 1;
+    }
+    if (!saw_end && !no_end) {
+        fprintf(stderr, "cachesim: %s: no END record; the trace is truncated\n", path);
         return 1;
     }
 

@@ -30,6 +30,11 @@
  * list). The histograms sum the snapshots, so they are time-sampled. The
  * end-of-run state is not sampled: by then the programs have torn down.
  *
+ * A complete trace ends with an END record (format note in cap_rev_tree.h); a
+ * stream that stops without one is truncated -- the emulator was killed or a
+ * reader upstream died -- and is an error. --no-end accepts traces recorded
+ * before END existed.
+ *
  * Errors, which exit non-zero rather than print a plausible table: a memory
  * alias count going negative, a walk mismatch, a truncated trace, no header.
  *
@@ -41,7 +46,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, K_REPEAT, K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG };
+enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, K_REPEAT, K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG,
+       K_ALIAS_SLOT, K_END };
 enum { S_LDST, S_LDC, S_MREV, S_SPLIT, S_REVOKE, S_DELIN, S_CREATE, S_SUPERVISOR, S_GC,
        S_MEM_CAPSTORE, S_MEM_UNTAG, S_MEM_CLEAR, S_DROP, N_SITES };
 static const char *site_name[N_SITES] = {"ldst", "ldc", "mrev", "split", "revoke", "delin",
@@ -102,6 +108,11 @@ static struct hist h_free_alias;
 static uint64_t dec_by_site[N_SITES], inc_total, negative, walk_mismatch, alloc_live_aliases;
 static uint64_t mrevs, splits, creates, allocs;
 static uint32_t max_seen;
+/* capability stores by what they replaced (Clover leaves its index alone for
+ * the same node), and data stores that untagged a capability */
+static uint64_t store_fresh, store_same, store_other, data_over_tagged;
+#define NONE_EV 0xffffffffffffffffull
+static uint64_t prev_alias = NONE_EV;   /* kind<<40 | site<<32 | id of the alias record before */
 
 static void finalize(uint32_t n) {     /* close one incarnation of node n */
     if (live[n]) hadd(&h_max_alias, maxmem[n]);
@@ -157,8 +168,10 @@ static void snapshot(void) {
 
 int main(int argc, char **argv) {
     const char *path = NULL;
+    int no_end = 0, saw_end = 0;
     for (int i = 1; i < argc; ++i) {
-        if (!strcmp(argv[i], "--max-node") && i + 1 < argc) max_node = strtoul(argv[++i], NULL, 0);
+        if (!strcmp(argv[i], "--no-end")) no_end = 1;
+        else if (!strcmp(argv[i], "--max-node") && i + 1 < argc) max_node = strtoul(argv[++i], NULL, 0);
         else if (argv[i][0] == '-' && argv[i][1]) { fprintf(stderr, "usage: aliasstat [--max-node N] trace|-\n"); return 2; }
         else path = argv[i];
     }
@@ -200,6 +213,8 @@ int main(int argc, char **argv) {
         uint32_t id = r[0] | r[1] << 8 | r[2] << 16 | (uint32_t)r[3] << 24;
         unsigned kind = r[4], site = r[5];
         uint64_t times = 1;
+        if (saw_end) { fprintf(stderr, "aliasstat: record after END\n"); return 1; }
+        if (kind == K_END) { saw_end = 1; continue; }
         if (kind == K_REPEAT) {
             if (!have_last) { fprintf(stderr, "aliasstat: REPEAT first\n"); return 1; }
             times = id; kind = last_kind; site = last_site; id = last_id;
@@ -210,7 +225,12 @@ int main(int argc, char **argv) {
             have_last = kind != K_RESET;
             last_kind = kind; last_site = site; last_id = id;
         }
-        if (site >= N_SITES || kind > K_ALIAS_REG) {
+        if (kind == K_ALIAS_SLOT) {
+            /* the granule the next INC/DEC concern; a new store starts here */
+            prev_alias = NONE_EV;
+            continue;
+        }
+        if (site >= N_SITES || kind > K_ALIAS_SLOT) {
             fprintf(stderr, "aliasstat: record %llu: bad kind %u site %u\n", (unsigned long long)n, kind, site);
             return 1;
         }
@@ -220,11 +240,21 @@ int main(int argc, char **argv) {
         }
         switch (kind) {
         case K_ALIAS_INC:
+            /* what the store replaced: nothing, the same node, or another node */
+            if (prev_alias == (((uint64_t)K_ALIAS_DEC << 40) | ((uint64_t)S_MEM_CAPSTORE << 32) | id))
+                store_same += times;
+            else if ((prev_alias >> 32) == (((uint64_t)K_ALIAS_DEC << 8) | S_MEM_CAPSTORE))
+                store_other += times;
+            else
+                store_fresh += times;
+            prev_alias = NONE_EV;
             mem[id] += times; mem_total += times; inc_total += times;
             if (mem[id] > maxmem[id]) maxmem[id] = mem[id];
             if (mem_total > mem_peak) mem_peak = mem_total;
             continue;
         case K_ALIAS_DEC:
+            prev_alias = ((uint64_t)K_ALIAS_DEC << 40) | ((uint64_t)site << 32) | id;
+            if (site == S_MEM_UNTAG) data_over_tagged += times;
             if (mem[id] < times) { ++negative; mem_total -= mem[id]; mem[id] = 0; continue; }
             mem[id] -= times; mem_total -= times; dec_by_site[site] += times;
             continue;
@@ -310,6 +340,10 @@ int main(int argc, char **argv) {
         fprintf(stderr, "aliasstat: %s: truncated trace (%zu stray bytes)\n", path, got);
         return 1;
     }
+    if (!saw_end && !no_end) {
+        fprintf(stderr, "aliasstat: %s: no END record; the trace is truncated\n", path);
+        return 1;
+    }
     for (uint32_t i = 0; i <= max_seen; ++i) finalize(i);
 
     printf("{\n  \"trace\": \"%s\",\n  \"records\": %llu,\n", path, (unsigned long long)n);
@@ -322,6 +356,10 @@ int main(int argc, char **argv) {
     printf(", \"gc\": %llu}, \"live_at_end\": %llu, \"peak_live\": %llu},\n",
            (unsigned long long)dec_by_site[S_GC], (unsigned long long)mem_total,
            (unsigned long long)mem_peak);
+    printf("  \"capability_stores\": {\"into_untagged\": %llu, \"over_same_node\": %llu,"
+           " \"over_other_node\": %llu}, \"data_stores_over_capability\": %llu,\n",
+           (unsigned long long)store_fresh, (unsigned long long)store_same,
+           (unsigned long long)store_other, (unsigned long long)data_over_tagged);
     printf("  \"errors\": {\"negative_alias_count\": %llu, \"walk_mismatch\": %llu,"
            " \"alloc_with_live_aliases\": %llu},\n",
            (unsigned long long)negative, (unsigned long long)walk_mismatch,

@@ -16,7 +16,7 @@ import subprocess
 import sys
 import tempfile
 
-READ, WRITE, ALLOC, FREE, RESET, REPEAT, INC, DEC, REG = range(9)
+READ, WRITE, ALLOC, FREE, RESET, REPEAT, INC, DEC, REG, SLOT = range(10)
 LDST, LDC, MREV, SPLIT, REVOKE, DELIN, CREATE, SUP, GC, CAPSTORE, UNTAG, CLEAR, DROP = range(13)
 NONE = 0xFFFFFFFF
 
@@ -27,6 +27,7 @@ def run(sim, recs):
             f.write(b"CRNTRC02")
             for node, kind, site in recs:
                 f.write(struct.pack("<IBBH", node, kind, site, 0))
+            f.write(struct.pack("<IBBH", 0xFFFFFFFF, 10, 0, 0))
         p = subprocess.run([sim, "--max-node", "1000", t.name], capture_output=True, text=True)
     return p.returncode, (json.loads(p.stdout) if p.stdout else None)
 
@@ -36,6 +37,7 @@ def run_big(sim, recs):
         with open(t.name, "wb") as f:
             f.write(b"CRNTRC02")
             f.write(b"".join(struct.pack("<IBBH", node, kind, site, 0) for node, kind, site in recs))
+            f.write(struct.pack("<IBBH", 0xFFFFFFFF, 10, 0, 0))
         p = subprocess.run([sim, "--max-node", "20000", t.name], capture_output=True, text=True)
     return p.returncode, (json.loads(p.stdout) if p.stdout else None)
 
@@ -107,6 +109,18 @@ def main():
           f"depths {t2['live_node_depth']['buckets']}")
     check(t2["live_node_children"]["buckets"] == {"0": 3 + 16378, "1": 1},
           f"children {t2['live_node_children']['buckets']}")
+
+    # store classification, in capstone-qemu's record order (granule ids are not nodes,
+    # and may exceed --max-node)
+    st = ([(NONE, RESET, CREATE)] + lone(0) + lone(1)
+          + [(50000, SLOT, CAPSTORE), (0, INC, CAPSTORE)]                       # into an empty slot
+          + [(50000, SLOT, CAPSTORE), (0, DEC, CAPSTORE), (0, INC, CAPSTORE)]   # same node over it
+          + [(50000, SLOT, CAPSTORE), (0, DEC, CAPSTORE), (1, INC, CAPSTORE)]   # another node over it
+          + [(50000, SLOT, UNTAG), (1, DEC, UNTAG)]                             # a data store over it
+          + [(50001, SLOT, CAPSTORE), (1, INC, CAPSTORE)])                      # empty slot again
+    rc, r3 = run(sim, st)
+    check(rc == 0 and r3["capability_stores"] == {"into_untagged": 2, "over_same_node": 1, "over_other_node": 1}
+          and r3["data_stores_over_capability"] == 1, f"store classes {r3 and r3['capability_stores']}")
 
     rc, _ = run(sim, BASE + [(2, DEC, UNTAG)])
     check(rc == 3, f"a copy leaving a node with none must exit 3, got {rc}")
