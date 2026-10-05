@@ -104,6 +104,9 @@ names, no FPGA token, never push the paper.
   never by whom. So when other lanes may be active: before committing a shared file read `git diff`
   on the path and look for hunks you did not write, and afterwards read `git show`, **not**
   `git show --stat` — the stat shows a plausible file list and hides the foreign hunks inside it.
+  Read it BEFORE the push: never chain `git push` into the commit command. On 2026-10-05 a landing checked
+  only that dev's tree equalled the lane head, then pushed in the same command, and an unlanded lane section
+  reached dev under a message that does not describe it (2590f3afdf9c).
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
 - Active plans live in `capstone/docs/plans/` (committed, portable across machines and agents).
 - Manager-facing summaries go under `/tmp/capstone/`, not into the repo.
