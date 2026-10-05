@@ -668,6 +668,64 @@ static int mcapp_fixture(int n)
         printf("MCAPP-FIX 19 returned polled[0]=%02x (0x5b = the SECOND record's byte)\n", v);
         return MCAPP_MARK(n, (reissued << 8) | v);
     }
+    case 20: {
+        /* ddee3e2 "Fix minor severity heap buffer overflow reading `--auth-file`".
+           SPATIAL, class A: the access leaves a PLAIN malloc'd buffer, so per-object bounds see it.
+           The authfile parser sized its buffer to the file exactly and then scanned past the end
+           looking for a terminator:
+             ddee3e2^:authfile.c  auth_data = calloc(1, sb.st_size);
+             ddee3e2^:authfile.c  if (!found && auth_cur[x] == ':') { ... }
+           The fix widens the allocation; the pin carries an even wider form, verified:
+             1.6.45:authfile.c:50  auth_data = calloc(1, sb.st_size + 2);
+             1.6.45:authfile.c:56  char *auth_end = auth_data + sb.st_size + 1;
+           Reduced to the first byte the scan reads past the allocation. NOT the slab allocator and
+           NOT cache.c -- plain calloc, which is the point of this row: it is the baseline where
+           malloc-granular bounds DO fire, and the contrast that makes the nested rows mean
+           something. HISTORICAL: the upstream fix is reversed here. */
+        size_t sz = 64;
+        unsigned char *auth_data = calloc(1, sz);
+        unsigned char *after = malloc(sz);     /* whatever the scan runs into */
+        if (!auth_data || !after) return MCAPP_MARK(n, 0xE0011);
+        mcapp_fill(auth_data, 0x41, sz);       /* no terminator anywhere in the buffer */
+        mcapp_fill(after, 0x5B, sz);
+        mcapp_show(n, "auth_data", auth_data);
+        mcapp_show(n, "after", after);
+        printf("MCAPP-FIX 20 size=%lu first-read-past=%lu\n", (unsigned long)sz, (unsigned long)sz);
+        mcapp_touching(n, mcapp_cur(auth_data) + sz);
+        v = mcapp_fix_touch(auth_data, (long)sz);  /* auth_cur[sz]: one past the allocation */
+        printf("MCAPP-FIX 20 returned auth_data[%lu]=%02x (past the calloc)\n",
+               (unsigned long)sz, v);
+        return MCAPP_MARK(n, v);
+    }
+    case 21: {
+        /* d5d9ff0 (cited by hash: its subject names an outside contributor).
+           SPATIAL, class A, and a WRITE. do_item_cachedump reserved room for "END\r\n" but not for
+           its terminating NUL, so the last strcpy could put that NUL one byte past the buffer:
+             d5d9ff0^:items.c  buffer = malloc(memlimit);
+             d5d9ff0^:items.c  if (bufcurr + len +5 > memlimit)   // 5 is END\r\n
+           The fix makes the reserve 6, "END\r\n\0". Reduced to the single byte at index memlimit --
+           the one a reserve of 5 permits and a reserve of 6 does not. Plain malloc, so this is a
+           baseline row like fixture 20. HISTORICAL: the upstream fix is reversed here. */
+        size_t memlimit = 64;
+        unsigned char *buffer = malloc(memlimit);
+        unsigned char *after = malloc(memlimit);
+        if (!buffer || !after) return MCAPP_MARK(n, 0xE0011);
+        mcapp_fill(buffer, 0xA0, memlimit);
+        mcapp_fill(after, 0x5B, memlimit);
+        mcapp_show(n, "buffer", buffer);
+        mcapp_show(n, "after", after);
+        /* bufcurr advanced so that bufcurr + len + 5 == memlimit passes the old check, and the
+           terminator then lands at index memlimit. */
+        size_t len = 5, bufcurr = memlimit - len - 5;
+        printf("MCAPP-FIX 21 memlimit=%lu bufcurr=%lu len=%lu terminator-at=%lu\n",
+               (unsigned long)memlimit, (unsigned long)bufcurr, (unsigned long)len,
+               (unsigned long)memlimit);
+        mcapp_touching(n, mcapp_cur(buffer) + memlimit);
+        mcapp_fix_poke(buffer, (long)memlimit, 0x00);  /* the NUL, one byte past */
+        v = mcapp_fix_touch(after, 0);
+        printf("MCAPP-FIX 21 returned after[0]=%02x (0x5b untouched, 0x00 overwritten)\n", v);
+        return MCAPP_MARK(n, v);
+    }
     default:
         printf("MCAPP-FIX %d unknown\n", n);
         return MCAPP_MARK(0xF, n);

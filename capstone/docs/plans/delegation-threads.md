@@ -1188,7 +1188,7 @@ Recommended starting point:
 - **Two kinds** (`capstone/lock.h`): `capstone_lock` is musl's `__lock`, a futex lock through T2's
   parking, a no-op while the application has one context; `capstone_spin_lock` is the leaf spin
   lock on a scalar word. Neither allocates or calls the generic atomics.
-- **Covered state:** the heap (level0 and the Sublet heap, one lock each over their tables, public
+- **Covered state:** the heap (the first-fit heap and the Sublet heap, one lock each over their tables, public
   entries taking it once), the mmap/shm tables, the context arena, the static posix_spawn and
   execve request blocks (one lock for both), and the unserved-call notes (spin); the
   capability-width atomics (spin). musl's

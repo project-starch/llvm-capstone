@@ -53,7 +53,7 @@ The checked identities are `B = C + Q + F + M + S + Z`, `0 <= L <= C`, and
 new allocations**, never RSS. Record `B` and `F` beside `H`: a fixed pool can
 have constant backing while availability changes substantially. Free-list
 links stored inside free blocks are part of `F`, not a second copy in `M`.
-Count suballocator pools once; do not add inner blocks to the parent reservation
+Count nested allocator pools once; do not add inner blocks to the parent reservation
 that already contains them. Observers and platform metadata have separate ledgers.
 
 `C-L` is live-block overhead, including headers. Only a separately observed

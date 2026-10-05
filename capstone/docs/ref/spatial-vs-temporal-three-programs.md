@@ -14,9 +14,23 @@ anything is broken. A grep for the word finds arms, not defects.
 
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|
-| **spatial**, as corpus cases | **11 built and measured** | **0** | **11** |
-| **spatial**, triaged upstream defects (§1a) | **19** (15 class B + 4 class C) | 21+ class A, not pursued | **19** |
-| **temporal**, as corpus cases | 22 | 5 | **27** |
+| **spatial**, built and measured | **8** | **3** | **11** |
+| **spatial**, triaged upstream defects (§1a) | **19** (15 class B + 4 class C) | **29** class-A *candidates*, **0** verified — see §1b | **48** |
+| **temporal**, built and measured | 22 | 5 | **27** |
+
+> **CORRECTED 2026-10-05.** The spatial row previously read *"11 built and measured | 0"*, putting
+> every built case under *nested allocator*. **That is wrong, and the axis was the problem.** This
+> table's axis is **who allocated the object**; §1a's A/B/C axis is **which bound the access
+> crosses**. They are orthogonal, and I had collapsed them.
+>
+> On *this* table's axis: memcached cases 6 and 7 are **nested** — their objects are `slabs.c`
+> chunks — even though the bound they cross is a sub-object one inside the chunk. FFmpeg cases 0-2
+> are **plain**: `av_refstruct_alloc_ext` is called directly at `cbs_sei.c:257` and
+> `decode.c:2352`, *not* from a pool, so the object is one `av_malloc` with no recycling layer.
+> Hence **8 nested, 3 plain**, not 11 and 0.
+>
+> The sub-object distinction is kept in §1a because it is what decides *detectability*, which is a
+> different question from *who allocated*.
 
 **Every defect reduced from real upstream code in these three programs is temporal.**
 
@@ -60,7 +74,7 @@ the overflow crosses**, because that is what decides whether anything of ours ca
 | class | bound crossed | who faults |
 |---|---|---|
 | **A** | the `malloc` bound | `shrink`, `sublet`, CHERI alike — a tie row |
-| **B** | a sub-allocation bound **inside a nested allocator's block** | only a ported inner allocator |
+| **B** | a sub-allocation bound **inside a nested allocator's block** | only a ported nested allocator |
 | **C** | a **sub-object** bound inside ONE allocation | nothing we have; needs per-member authority |
 
 | program | population | filter 1 | class B | class C | live at pin |
@@ -95,8 +109,8 @@ parity with 22, and this is not the place to imply it is.
 | program | built | corpus | measured how | live at pin |
 |---|---:|---|---|---:|
 | tshark | **5** | `wireshark/wmem-repros` cases 13-17 | QEMU, 12/12 on each of two builds, negative control 12/12 | 2 |
-| memcached | **3** | `memcached/allocator-repros` cases 5-7 | native fix-differential, 8/8 with the temporal rows as control | 0 |
-| FFmpeg | **3** | `ffmpeg/subobject-repros` cases 0-2 *(new corpus)* | native fix-differential 3/3, plus ASan measured blind two-sided | 3 |
+| memcached | **3** | `memcached/allocator-repros` cases 5-7 | **QEMU domain, 8/8, negative control 8/8**, plus native fix-differential 8/8 | 0 |
+| FFmpeg | **3** | `ffmpeg/subobject-repros` cases 0-2 *(new corpus)* | **QEMU as probe cases 40-42, PASS/PASS on modes 0 and 2**, plus native 3/3 and ASan blind two-sided | 3 |
 
 **The result is not the count — it is that the three programs divide on WHO CAN SEE these defects**,
 and the division was measured rather than argued:
@@ -132,7 +146,7 @@ accounted for**, and the arithmetic reconciles from the case files rather than f
   the FFmpeg sub-object probe already shows the two-sided shape (silent inside the allocation, fires
   one element past it), and every crossing in those corpora stays inside one `g_malloc`'d block or
   slab page by the same mechanism.
-- **n/a** — FFmpeg's `backing` arm: there is no backing allocation distinct from the object, because
+- **n/a** — FFmpeg's `backing` arm: there is no block distinct from the object, because
   the object *is* one `av_malloc`.
 
 ### What the closed measurement shows, per program
@@ -167,6 +181,81 @@ that mattered.
 **Deliberately not pursued**, so nobody mistakes it for an oversight: tshark's **251** class-`?`
 candidates and memcached's **152 of 157** unread item-size commits; and `a809a784ec`, whose
 containment is partial.
+
+### 1b. The 29 class-A spatial candidates, and why the "plain" column was empty
+
+Class A is a spatial defect whose access crosses the **`malloc` bound itself**. The triage found
+**29** across the three programs — tshark 21, memcached 3, FFmpeg 5 — and for a long while **none**
+was built. That was a scoping decision of mine, not an absence in the software, and the reasoning
+was: `shrink` catches them and CHERI catches them, so they are a *tie* and add nothing to the
+project's claim.
+
+**That reasoning was wrong for what the numbers are for.** A row where every configuration catches
+is the **baseline and the denominator**: it is the evidence that the harness and the arms work at
+all, and it is the only place CheriBSD can register a spatial hit. Reporting "0 not-nested spatial"
+beside "22 nested temporal" invites the reading that the not-nested class does not exist here, which
+is the opposite of true — it was simply not pursued.
+
+> **RETRACTED 2026-10-05, in full.** A table stood here headed *"Verified starting points,
+> allocation site opened in the pinned source"*, listing four rows. **Every one of the four is
+> false.** The sites were afterwards opened, one at a time, in the source each port actually pins:
+>
+> | row as published | what the pinned source says |
+> |---|---|
+> | memcached `ddee3e2` — `authfile.c:44` `calloc(1, sb.st_size)` | **already fixed at the pin.** `authfile.c:50` reads `calloc(1, sb.st_size + 2)`, with `auth_end = auth_data + sb.st_size + 1` (56) and an `auth_end - auth_cur` clamp on the `fgets` length (60) |
+> | memcached `11b5f9b` — a `realloc`'d array at `proxy_lua.c:1403` | **not heap.** The overflowed object is `char temp[KEY_MAX_LENGTH + 1]` at `proxy_lua.c:717`, a stack array; the classifier matched a `realloc` elsewhere in the same file |
+> | tshark `be813ede9d` — `extcap/etl.c:1411` `Message = g_malloc(Length)` | **absent at the pin.** 4.6.8's `extcap/etl.c` is 799 lines and contains no `Message = g_malloc` |
+> | tshark `f207d25f4b`, `830cf562a0` — `g_strdup` error strings | **half right, and the wrong half is retracted below.** `830cf562a0` is indeed an integer-underflow subject (*"pcap: Fix an integer underflow."*) that filter 1 excludes by its own wording. The `g_strdup` reading of `f207d25f4b` is false: its subject is *"Don't let the reported length underflow w/ phdr"* and it touches no `g_strdup` |
+>
+> Nothing was measured wrong and nothing was built on these rows. What was wrong was publishing a
+> classifier's output under the word *verified* — the same defect, one level up, as the "29" itself.
+
+**The 29 is a candidate count. The verified count is 0.** Seven of the 29 have now been read
+against the pinned source — every one that had been called verified, plus the three tshark rows
+that survived a liveness pass. None is a live class-A defect:
+
+| candidate | disposition in the pinned source |
+|---|---|
+| memcached `ddee3e2` | fix present (`authfile.c:50`, `+ 2`) |
+| memcached `11b5f9b` | stack array (`proxy_lua.c:717`) |
+| tshark `be813ede9d` | code absent at 4.6.8 |
+| tshark `f207d25f4b` | **RETRACTED 2026-10-05:** misattributed, and returned to the unread pool. The row said "`g_strdup` of a string literal" at `wiretap/libpcap.c:621`; that line is the file's only `g_strdup`, but this commit has nothing to do with it. `git show --stat` gives the subject *"wiretap: pcap[ng]: Don't let the reported length underflow w/ phdr"* over `libpcap.c` and `pcapng.c`. Written from a grep in the file instead of the commit's diff — the same defect retracted above, committed again the same day |
+| tshark `830cf562a0` | integer-underflow subject, excluded by filter 1 |
+| tshark `06d08c5811` | **no access leaves the allocation.** `wsutil/eax.c:150` allocates `worksize`; the loop bound *is* `worksize`. The fix moves where a one-past-the-end address is *formed* — legal C, and nothing dereferences it |
+| tshark `7ffc11e38f` | fix present (`wiretap/file_access.c:1322`, `:1376`) |
+| tshark `3be1c99180` | fix present (`wiretap/netscreen.c:63-66`, `:311`, `:332`). Also moot: `ws_buffer_assure_space` over-allocates, so a read past `pkt_len` stays inside the allocation — class C, not A |
+| **the remaining 22**, `f207d25f4b` among them | **not individually read.** Stated as unread, not as absent. 7 dispositioned + 22 unread = 29: the retracted row is listed for its trail and counted in the 22, not twice |
+
+**Why 0 is a result here and not a gap.** Class A is the class upstream fixes *first* — it is what
+fuzzers, ASan and compiler warnings find — and these three programs are pinned at recent releases
+(memcached 1.6.45, wireshark 4.6.8). Three of the eight rows above are that mechanism made visible:
+the fix is already in the tree we build. The class that survives into a current release is the one
+no existing tool sees: a crossing inside a nested allocator's block (class B) or inside a single
+allocation (class C). That is the project's own thesis, and it now has a measured denominator
+instead of an assumption behind it.
+
+**So the not-nested spatial baseline is SYNTHETIC, by necessity, and that is the correct
+instrument.** fx2 `heap_neighbour` and fx3 `heap_one_past` already supply it in all three ports.
+memcached fixtures 20 and 21 add two more, each modelled on one of the historical defects above —
+`ddee3e2`'s authfile scan, and `d5d9ff0`'s cachedump `END\r\n` reservation, which `items.c:678`
+shows fixed at the pin too, as `bufcurr + len + 6`. A baseline row's job is to show the arms
+discriminate, not to count upstream defects, and a probe that creates the crossing on purpose does
+that job better than a defect whose reachability has to be argued.
+
+**Not verified, and marked so:** FFmpeg's five were classified by a subagent, **three from the diff
+alone without opening the allocation site** (`db05df9d13`, `bde5c6acb6`, `79e10e5196`). They are
+candidates, not facts. They were not pursued: FFmpeg already contributes three not-nested spatial
+cases (§1a cases 0-2), so a fourth candidate adds nothing the baseline lacks. The two that were
+opened are `c79dfd29e6` (h264 `color_frame`) and `8e55f4f3e9` (v210dec `custom_stride`).
+
+**Where a class-A case belongs, and why it is not this corpus.** The corpus harnesses narrow every
+allocation their ported allocator makes — `wm_narrow()` on the wireshark side, the chunk carve on
+memcached's — so they have **no malloc-granular arm to contrast against**. The app ports do:
+fixtures fx2 `heap_neighbour` and fx3 `heap_one_past` read `level0` **RETURN** and `shrink`
+**FAULT** in all three. So a class-A upstream defect belongs there as a **port fixture**, which is
+also where the five not-nested *temporal* defects already live (memcached 17/18, tshark 14/15,
+FFmpeg 24).
+
 
 ## 2. The SYNTHETIC spatial probes — and Sublet does catch most of them
 
@@ -216,7 +305,7 @@ The tshark fx12 ladder, one measured `len` per arm, each from a committed bundle
 | `sublet` | 1 048 528 (the 1 MiB wmem BLOCK) | RETURN `c000ee` | `ports/wireshark/app/results/2026-09-25-qemu-safety-sublet/` |
 | **`chunks`** | **64** (the allocation itself) | **FAULT `oob`** | `ports/wireshark/app/results/20260929-qemu-tshark-step2/`, `.../2026-10-03-qemu-wmem-chunks-arm/` |
 
-**Every layer narrows, and none of them reaches the object** until the inner allocator is ported. One
+**Every layer narrows, and none of them reaches the object** until the nested allocator is ported. One
 `g_malloc` hands wmem a 1 MiB region and every chunk carved from it inherits the block's bounds, so
 on `sublet` the neighbour `q` lies *inside* `p`'s bound and the write is legal. On `chunks` the same
 write faults — `sb`, insn `00c50023`, bounds ending `a5100070` against target `a5100080`.
@@ -242,9 +331,10 @@ The other two cells, same mechanism:
 
 Sublet **is** revocation, and revocation has nothing to fire on while the object is alive. fx2/fx3
 are caught by `shrink`'s per-object bounds, which `sublet` inherits by construction. The three
-nested RETURNs are the inner allocator hiding **extents** from `malloc`, exactly as it hides
-**lifetimes**. Same structure, one axis over: a nested allocator conceals both the size and the
-lifetime of its sub-objects from the layer below, and porting it restores both.
+nested RETURNs are the nested allocator making **extents** invisible to the system allocator
+(`malloc`), exactly as it makes **lifetimes** invisible. Same structure, one axis over: a nested
+allocator makes both the size and the lifetime of its sub-objects invisible to the system
+allocator, and porting it restores both.
 
 ## 4. Why there is no spatial advantage to claim over CHERI
 
@@ -281,7 +371,7 @@ to put in it"*) asserted a negative result from a search that excluded the class
 **And reason (a) does not generalise to the nested case, which is where this matters.** The tie is
 about spatial defects that cross the `malloc` bound — there bounds alone suffice and CHERI has them.
 A defect whose overflow stays **inside** a nested allocator's block is a different cell: the system
-allocator sees one block, so `shrink` and `sublet` return, and only a ported inner allocator faults.
+allocator sees one block, so `shrink` and `sublet` return, and only a ported nested allocator faults.
 That is measured today only by synthetic probes (tshark fx12, memcached fx9, FFmpeg fx16). Whether a
 *real* upstream defect of that shape exists in these three programs is **open**, and it is the
 question the hunt now under way is meant to answer. If one lands, the "spatial is a tie" framing

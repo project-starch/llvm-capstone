@@ -76,17 +76,87 @@ case "$rung" in
       echo "RESULT $rung retval=903"
     fi
     ;;
-  b0-memcpy|b0-printf)
+  b0-memcpy|b0-printf|b1-thread|b0-strtod)
     # The application's own exit status is the result; capstone-exec's own failures keep their codes (125 and so on).
     # B0.8 b0-memcpy, the R-29 memcpy guard on silicon: 0 the unguarded control miscopied and the guarded copy never
     # did; 1 the guarded copy miscopied; 2 the control never miscopied (void: no hazard created).
     # B1.0 b0-printf, the narrowed vfprintf: 0 all 20 snprintf cases equal the host printf's strings; otherwise the
     # number of cases that differ (each printed).
+    # B1 b1-thread, one minted context: 0 joined with the expected value; 3 pthread_create failed; 4 pthread_join
+    # failed; 5 joined with a wrong value.
+    # B1.0b b0-strtod, the narrowed float parser: 0 all 23 cases equal the host's; otherwise the number that differ.
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     /usr/bin/capstone-exec "$dom" > /tmp/b0.out 2> /tmp/b0.err
     rc=$?
     cat /tmp/b0.out; cat /tmp/b0.err
     echo "RESULT $rung retval=$rc"
+    ;;
+  b2-memcached)
+    # B2: memcached as a gp-captable delegated application. The domain serves 127.0.0.1:21299 in the background;
+    # the native client (/test-domains/mc-b2-client) runs version/set/get and exits 0 only on the exact replies;
+    # the domain is then stopped with SIGTERM. retval = 10 * client code + (memcached's status != 0), so 0 is the
+    # milestone, 1 means the replies were right but the shutdown status was not 0, and 20+ names the client's step.
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    # Unprivileged, as the SDK oracle runs it: started as root, memcached insists on -u and then drops supplementary
+    # groups with setgroups, which the delegate runtime does not serve (ENOSYS, exit 71). capstone-job forwards
+    # SIGTERM to the launcher.
+    /usr/bin/capstone-job /tmp/b2-job.json --user 65534:65534 -- /usr/bin/capstone-exec "$dom" \
+      -l 127.0.0.1 -p 21299 -U 0 -m 8 -t 1 \
+      -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand > /tmp/b2.out 2> /tmp/b2.err &
+    pid=$!
+    /test-domains/mc-b2-client
+    crc=$?
+    kill -TERM "$pid" 2>/dev/null
+    wait "$pid"
+    mrc=$?
+    echo "B2: client rc=$crc memcached rc=$mrc job $(cat /tmp/b2-job.json 2>/dev/null)"
+    cat /tmp/b2.out; cat /tmp/b2.err
+    echo "RESULT $rung retval=$((crc * 10 + (mrc != 0)))"
+    ;;
+  b3-setclock)
+    # B3w: the board's wall clock, read and then set for the b3-oracle rung that follows. memcached's negative
+    # expiries are absolute times 30 days after the epoch, so a board at 1970 + uptime keeps them (B3w, reproduced in
+    # QEMU with `date -s @400`). retval 0, or 100 if `date -s` failed.
+    echo "B3c date before: $(date +%s) uptime $(cut -d' ' -f1 /proc/uptime)"
+    date -s @1791200000 > /dev/null; drc=$?
+    echo "B3c date after setting: $(date +%s) (date -s rc=$drc)"
+    echo "RESULT $rung retval=$((100 * (drc != 0)))"
+    ;;
+  b3-clock)
+    # B3c: the harness's stop_seconds=inf (b3-clock-probe.c: raw clock readings, the harness's now() arithmetic, and
+    # fs0-fs11 held across waitpid of a native child and of memcached, the harness's own sequence). retval = the
+    # probe's bitmask: 0 nothing seen, 32 its self-test did not fire. On 776d9d859 (boot B3c) it did NOT return after
+    # its arith arm (ISSUES S-18, the FPR clobber defect): run it LAST in a boot, after everything that must return.
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    /test-domains/b3-clock-probe /usr/bin/capstone-job /tmp/b3c-job.json --user 65534:65534 -- \
+      /usr/bin/capstone-exec /test-domains/b3-oracle.dom -l 127.0.0.1 -p 21299 -U 0 -m 8 -t 1 \
+      -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand
+    prc=$?
+    echo "B3c memcached job $(cat /tmp/b3c-job.json 2>/dev/null)"
+    echo "RESULT $rung retval=$prc"
+    ;;
+  b3-oracle)
+    # B3: memcached's oracle on silicon. The port's harness (ports/memcached/app/host/mc-harness) starts the domain
+    # under capstone-job, runs its scripted 8-connection session and stops it with SIGTERM. Only the transcript's
+    # hash and length are printed (it is ~1.9 MB); the verdict is that hash against the native reference's, taken
+    # with the same flags and the same harness (docs/plans/b0-silicon-delegated-runtime.md, B3).
+    # retval = harness status (0 = it ran to the end).
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    rm -rf /tmp/mc; mkdir -p /tmp/mc
+    /test-domains/mc-harness --out /tmp/mc --port 21299 --stop TERM -- \
+      /usr/bin/capstone-job /tmp/mc/job.json --user 65534:65534 -- /usr/bin/capstone-exec "$dom" \
+      -l 127.0.0.1 -p 21299 -U 0 -m 8 -t 1 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand \
+      > /tmp/b3.log 2>&1
+    hrc=$?
+    tail -5 /tmp/b3.log
+    echo "B3: transcript $(sha256sum /tmp/mc/transcript.norm 2>/dev/null | cut -c1-16) bytes $(wc -c < /tmp/mc/transcript.norm 2>/dev/null)"
+    echo "B3: identity $(cat /tmp/mc/identity.txt 2>/dev/null) job $(cat /tmp/mc/job.json 2>/dev/null) status $(cat /tmp/mc/status.txt 2>/dev/null)"
+    # Diagnostic: with the native reference in the image, the first differing lines (the transcript stays here).
+    if [ -f /test-domains/b3-native.norm ]; then
+      echo "B3: diff native board (first 40 lines)"
+      diff /test-domains/b3-native.norm /tmp/mc/transcript.norm | head -40 | sed 's/^/B3d /'
+    fi
+    echo "RESULT $rung retval=$hrc"
     ;;
   *) echo "RESULT $rung retval=999" ;;
 esac

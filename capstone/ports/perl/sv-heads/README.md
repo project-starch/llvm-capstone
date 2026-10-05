@@ -37,7 +37,7 @@ and is inert without `-DPERL_SV_HEAD_ADAPTER`. Its header lists every hunk:
 policy exactly: a LIFO free list and a new page of `PERL_ARENA_SIZE /
 sizeof(SV) - 1` heads (84) only when the list is empty. A spatial build therefore
 reissues the same slot identities in the same order as upstream Perl. The free
-list, each head's state and its current lease live in a sidecar, never in a head.
+list, each head's state and its current alias live in a sidecar, never in a head.
 
 | Backend | Mode 0 (control) | Mode 1 (protected) |
 |---|---|---|

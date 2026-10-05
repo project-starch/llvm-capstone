@@ -5925,3 +5925,49 @@ Sublet fault cell last.
 - One gated stop: the host's own monitor markers spliced a marker line mid-token. The parser now reads
   through `transcript.strip_markers`, and that fix was load-bearing for boots 2 and 3.
 - An unsafe-success did not fail the gate. Found by the results audit and fixed.
+
+## memcached 1.6.45 serves its milestone exchange and passes its full oracle by hash on silicon as a delegated application (boots B2a, B3c, B1f, b0-strtod, b0-printf; 776d9d859, 2026-10-05)
+Plan: `docs/plans/b0-silicon-delegated-runtime.md` (B1, B1.0, B1.0b, B2). Every row was pre-registered before its
+boot, and each board image is named by hash.
+
+| milestone | image | firmware | board reading |
+|---|---|---|---|
+| printf (narrowed vfprintf) | b0-printf 0751dc622b9b78df | 8068f626e0d7 | 20 of 20 snprintf cases equal the host's, doubles included |
+| strtod/atof/sscanf %lf (narrowed floatscan) | b0-strtod e7d30ad72f104eed | b15d76e38a54 | 23 of 23 bit-exact against the host |
+| one pthread (a minted context) | B1e probe 29b82435ce095d98 | 69bd27fbb7c0 | created, stepped by the monitor with CSR events, joined with its value (124) |
+| **memcached** (memcached + libevent + musl + runtime, one gp-captable full-LTO image, 781 KB) | ba7e6921cf27f2b6 | 4279572eceda | `VERSION 1.6.45`, `STORED`, `VALUE k 0 1` / `x` / `END` over loopback; SIGTERM -> exit 0 |
+| **memcached, full oracle** (the port's scripted 8-connection session) | ba7e6921cf27f2b6 | 8a3c285be032 | transcript sha256 e0a254c47e7ee28c, 1,931,207 bytes: the native reference exactly; `STAT pointer_size 128`; job exit 0 (the board's wall clock set first, below) |
+
+- memcached ran with `-t 1 -m 8 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`,
+  unprivileged under capstone-job. Each of its system calls is delegated to the Linux launcher. The domain is
+  supervised (quantum preemption with CSR events) and holds no PC-capability check after its first yield (ISSUES
+  R-51).
+- Silicon-only defects found on the way, none visible in capstone-qemu:
+  - **M-14**, monitor: the managed data capability's top rounded up over the descriptor area. Fixed by aligning
+    data_top.
+  - **R-11**, first hit: the cursorless SPLIT encoding shortened a carved global in a 32 MiB region. Worked around
+    by aligning the glue's carve.
+  - In each case a matched pair with one change showed the fix on the board: the monitor for M-14, the glue for
+    R-11. The R-11 change also moves the image's code by 160 bytes.
+- The heap is level0 (per-object bounds, no temporal safety). Spatial or temporal safety numbers for memcached on
+  silicon are not claimed here.
+- **The full oracle (B3) passes by hash** once the board's wall clock is set.
+  - The board's Linux boots at 1970 plus uptime: `date +%s` read 108 at 109 s of uptime.
+  - memcached maps a negative expiry to an absolute time 30 days after the epoch. With the clock unset it keeps two
+    such items, a 38-byte transcript difference. QEMU reproduces that byte for byte with its clock at `@400`.
+- Native hard-float arithmetic on the board's Linux is not reliable on 776d9d859 (ISSUES S-18). The delegated
+  application is soft-float and does not use the FPU, but a timing printed by a native program on the board (the
+  harness's `stop_seconds`) is not evidence.
+  - Checked for the speedtest1 ratios in this file: build-speedtest1-baseline.sh has built `rv64imac_zicsr` /
+    `lp64` since its first commit (abe7c46e3f54, 2026-09-11). The baseline the board images carry,
+    9a80c1cd2a576ed2, has no FP opcode in 217,577 instructions; the same scan counts 85 in a hard-float binary.
+  - So ratios measured with it are unaffected.
+  - The other native-on-board arms either paper cites were checked by the paper lane (2026-10-05) with an
+    FP-opcode counter whose controls fire. This lane re-counted the three committed ELFs.
+    - The ladder baselines (build-ladder-base-fpga.sh, -bare.sh) are rv64imac(_zicsr)/lp64. The committed native
+      ladder ELFs have no FP opcode: R01 and R02 `ladder_perf_ctl` in 493 instructions each, ARCHIVED R14 `lpc` in
+      551.
+    - The SLT native baseline is a host oracle and never runs on the board.
+    - The only rv64gc board build found, sup-bare-2026-10-03-ladder, has no FP result instruction (one `frcsr`, an
+      fcsr read) and is cited by neither paper.
+  - Still unchecked: boots before 2026-09-11, sw52 among them.

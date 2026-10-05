@@ -56,10 +56,11 @@ static struct tls_module image_tls;
 #ifdef CAPSTONE_GP_CAPTABLE_ABI
 /* The silicon ABI (B0, docs/plans/b0-silicon-delegated-runtime.md): the template symbols above have no cap-table
    slot (naming them derives from gp and delins, which faults on silicon, C-13), so the extents come from the glue's
-   accessors as integers. B0 cannot yet READ a non-empty .tdata (that needs a capability over the template), so one
-   is refused; .tbss alone needs only its size. */
+   accessors as integers, and a non-empty .tdata is read through __capstone_silicon_tls_image (B1.6), a capability
+   over the template's copy in dom_data, narrowed here to exactly the template. */
 unsigned long __capstone_silicon_tls_tdata_bytes(void);
 unsigned long __capstone_silicon_tls_mem_bytes(void);
+void *__capstone_silicon_tls_image(void);
 #endif
 
 static void describe_tls(void)
@@ -67,10 +68,12 @@ static void describe_tls(void)
 #ifdef CAPSTONE_GP_CAPTABLE_ABI
 	size_t tdata = __capstone_silicon_tls_tdata_bytes();
 	size_t memsz = __capstone_silicon_tls_mem_bytes();
-	if (tdata != 0)
-		abort();
 	if (memsz) {
 		image_tls.image = 0;
+		if (tdata) {
+			char *t = __capstone_silicon_tls_image();
+			image_tls.image = __builtin_capstone_cap_shrink(t, t, t + tdata);
+		}
 #else
 	size_t tdata = __capstone_tdata_end - __capstone_tls_image;
 	size_t memsz = __capstone_tls_end - __capstone_tls_image;

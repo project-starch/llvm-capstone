@@ -37,7 +37,7 @@ reduction class are visibly siblings rather than accidentally similar.
 | double free through a stale array entry | the stale access IS the second free, so there is no read probe |
 | stale pointer to a recreated object | the object is destroyed and immediately recreated; the holder is never updated |
 | alias freed through a sibling | one object, two pointers; freed through one and read through the other |
-| stale pointer into a reset context | no free at all — a bulk context reset ends the lifetime |
+| stale pointer into a reset context | no free at all — a pool reset ends the lifetime |
 | stale pointer into a deleted ancestor | an ancestor context dies, taking a grandchild's arena with it |
 | same-address reuse from a fixed-size free list | reuse is deterministic, so the successor lands at the identical address |
 
@@ -64,7 +64,7 @@ one: it is the same source, not two reimplementations.
 |---|---|---|
 | `spatial` | Capstone domain | the sequence completes without protection |
 | `sublet` | Capstone domain | fault at the labelled read probe |
-| `cheribsd` | CheriBSD purecap, libc revocation ON | whether the layer below sees these defects |
+| `cheribsd` | CheriBSD purecap, libc revocation ON | whether the system allocator sees these defects |
 | `poisoncap-spatial` | CheriBSD purecap, adapter invalidation off | the matched control for the arm below |
 | `poisoncap-protected` | CheriBSD purecap, adapter invalidation on | SIGPROT at the labelled read probe |
 | `native-detect` | host, `before.c` | written for cases 3 and 7 only |
@@ -133,7 +133,7 @@ patch applied the same command pairs all eight. Any result taken that way is
 | **PoisonCap** | the same return: poison, then sweep | **8 / 8**, SIGPROT 162 |
 
 The two that catch these defects are the two that listen for the moment the
-INNER allocator takes the storage back. The other two listen for an event that
+NESTED allocator takes the storage back. The other two listen for an event that
 never happens: PostgreSQL asks the system allocator for a block once and hands
 out chunks from it itself, so between the `pfree` and the stale read there is
 nothing on the layer they watch. The same reason ASan is silent here.

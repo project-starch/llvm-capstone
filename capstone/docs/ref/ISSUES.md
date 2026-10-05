@@ -1760,6 +1760,43 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
+### S-18 — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `OPEN — observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations, N = 1 boot); origin not established (write-back lost or a stale read; RTL, FPGA build or kernel FP state); delegated domains are soft-float and do not use the FPU`
+
+**What was seen.** b3-clock-probe.c (runtime/silicon; board build 5aa140cf39647700) evaluates `sec + nsec / 1e9`,
+the oracle harness's `now()` shape, on live CLOCK_MONOTONIC readings. Disassembly of that exact binary:
+- **In the loop**, fa5 is loaded with 1e9 (`fld`). It is then the destination of `fcvt.d.l fa5, a3`, `fdiv.d fa5,
+  fa5, fa3` and `fadd.d fa5, fa5, fa4`. `fmv.x.d` then read **0x41cdcd6500000000 = 1e9**, the value of the fld,
+  in all 200,000 iterations.
+- **In `now()`**, `fcvt.d.l fa0, a5` (nanoseconds) is followed by `fdiv.d fa0, fa0, fa4` and `fadd.d fa0, fa0, fa5`.
+  It returned **904549760.0**: the conversion's result, never divided or added.
+- So the conversion's result was visible in one place and not in the other. The arithmetic results were visible in
+  neither.
+
+**What it explains.** mc-harness prints `stop_seconds=inf` on the board in all three oracle runs (B3, B3d, B3c),
+and 1.1-1.5 in QEMU. That value is `t1 - t0` from `now()`.
+
+**What it is not.**
+- Not the clocks. The same boot read realtime and monotonic advancing 1.015 s across `sleep 1`, as integers.
+- Not the delegated application. The silicon build has no F/D (`-target-feature +m +a`), so memcached never
+  touches the FPU. Its oracle passed by hash on the same boot (plan, B3c).
+
+**Not established.**
+- Whether the result is never written, or written and then read stale (forwarding/scoreboard).
+- Whether it is the RTL, the FPGA build, or Linux's FP state on this platform. Earlier notes say the board's glibc
+  hard-float path TRAPPED on `fsd` (an older bitstream, docs/plans/compatibility-eval-silicon-app.md); here FP
+  loads, stores and moves execute.
+- What hung the probe afterwards. Its next arm (fs0-fs11 held across fork + waitpid, with an `fadd.d` self-test)
+  never printed within 420 s. The trap log read 0x8f (mcause 15) at mepc `rwsem_down_write_slowpath+0x3e2`, tval
+  0xe8f3, but when that trap happened since the load is unknown.
+
+**What would settle it.** A bare M-mode directed test of the two instruction sequences above, run in RTL
+simulation at 776d9d859 with nonzero memory latency (the testbench's default of zero hid S-12). If simulation
+computes correctly, then the same test bare on the board.
+
+**Impact.** Any native hard-float result computed on the board's Linux is suspect on this bitstream: timings
+printed by native programs, and native baselines that use doubles. Board results computed on the host, and
+everything inside delegated domains, are unaffected.
+
 ### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `NOT REPRODUCED on caplifive_supcall_715bdd1fe (arm12-ldc 3/3), mechanism unknown, apertures 219..222 armed; was: OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
 
 **S-17: NOT REPRODUCED on `caplifive_supcall_715bdd1fe.bit`.** arm12-ldc ran 3 of 3, 8,552 escapes each, identical
@@ -3533,6 +3570,15 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > The bases here are `sublet_base(&x) + <8-aligned offset>` and so are 8-aligned if the root arena base
 > is — true of any capability-bearing arena, but that is reasoning rather than a measurement.
 
+> **RETRACTED 2026-10-05 by R-11's first hit on silicon (memcached as a delegated application, 32 MiB block,
+> 776d9d859; see R-11's 2026-10-05 box).** The cursorless branch's E is set by the highest bit at which the
+> capability's cursor and top DIFFER (E = that bit - 20), not by the region's size. So an INTERIOR split point
+> inside a power-of-two, page- and granule-aligned region still truncates: the table split at END - 265*16 lost
+> 16 bytes at E = 5. Rounding region sizes (R-33's fix) does not touch interior splits, and the 4 MiB threshold
+> applied the lossy branch's granule formula to the cursorless branch. R-11 needs its own fix, which is that the
+> carve keeps every split point a multiple of 2^E (`CAPSTONE_GLUE_CARVE_ALIGN`, lane b0-silicon-runtime). The
+> statements below are kept as written.
+>
 > **R-11 IS THE SAME CONTRACT, AND THIS FIX CLOSES IT TOO (added 2026-09-15).** R-11 is
 > `compress_bounds`' OTHER branch — the cursorless one, losing an unaligned TOP past its window —
 > and it is open only because nothing we ship is large enough to trigger it. Rounding region sizes
@@ -6786,7 +6832,40 @@ or it regressed. Re-run stage 13 on a current build before trusting either numbe
 bitstream carries the forwarding fix). A waveform of `dp0` stage 11 around the hang would settle
 in minutes what no software-visible observable here can.
 
-### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit — and "QEMU never does" is NOT corroboration: QEMU has no `cursorless` encoding at all (zero occurrences in capstone-qemu/target/riscv/), so it cannot exhibit the branch this entry is about. See the 2026-09-15 box`
+### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `HIT ON SILICON 2026-10-05 (memcached, B2), and worked around in the gp-captable glue (CAPSTONE_GLUE_CARVE_ALIGN, validated by a matched pair); the RTL behaviour itself is unchanged. QEMU has no cursorless encoding, so it cannot exhibit this. See the 2026-10-05 box`
+
+> # 2026-10-05 — FIRST HIT, by the first domain past 2 MiB that carves its own globals
+>
+> **What happened.** memcached as a gp-captable delegated application (docs/plans/b0-silicon-delegated-runtime.md,
+> B2) gets a 32 MiB block. Its first entry faulted in the glue's carve loop on 776d9d859: cause 28, epc = DBAS +
+> 0xd8 (`sd a7, 0(t6)`, the copy of a global's initial bytes), tval 0xae0d6f60.
+> - The region's base (0xac1...) and its split points (0xae0...) differ at bit 25, so the cursorless E is 5.
+> - The table split at `END - 265*16` left the stack capability 16 bytes short.
+> - The first global carved below it got 48 of its 56 bytes, and its seventh store faulted.
+> - A literal Python port of compress_bounds/decompress_bounds (776d9d859, ariane_pkg.sv:672-728/793-851)
+>   reproduces 0xae0d6f60 exactly for END 0xae0d8000, and finds 30 inexact carved capabilities in that image.
+>
+> **Workaround (the B0 glue, `start-gp-captable-interp.S`, `CAPSTONE_GLUE_CARVE_ALIGN`).** E is computed once from
+> the region's base and top. The carve top is aligned down, and the table and every global's storage are rounded up
+> to max(16, 2^E), so no split point loses bits.
+> - The model then finds 0 capabilities truncated at their split.
+>   - Two large globals still WIDEN once their cursor moves: the lossy branch, R-33's class. In the model the
+>     16 MiB level0 arena's bounds then overlap neighbouring globals.
+>   - That is a containment caveat, not a fault.
+> - **Where END comes from, independently of the fault:**
+>   - the module's `roundup_pow_of_two` (process.c) of the declared 0x1420100 bytes gives a 32 MiB block at
+>     0xac100000;
+>   - the monitor's data_top, aligned (M-14), is 0xae0f8000;
+>   - the glue's 128 KiB arena then leaves the carve's END at 0xae0d8000, the value that predicts the tval.
+> - On the board the same build with only that change serves memcached's milestone exchange (B2a).
+> - The define is on in every B0 build; the ladder's glue is byte-identical without it.
+> - R-33's allocator rule (round region sizes to the granule) does NOT cover this: the truncation is at the glue's
+>   INTERIOR splits, inside a correctly sized region.
+>
+> **The detector this entry shipped did not fire, and could not have.** `check-repr.py` reports the failing image
+> as `tot=1048576 OK`. Its region model is the old SDK sizing from code length, and it reads neither the domain's
+> declared data size (`.capstone_domreq`), B1's context arena nor M-14's alignment. The B0 build never ran it
+> either. Its region model must be rebuilt from the module's actual sizing before it can stand as a gate again.
 
 > **RUN 2026-09-10, with the positive control the earlier attempt lacked. Still NOT HIT, and now that
 > statement means something.** The 2026-09 sweep logged `check-repr.py` as NOT RUN; an audit then ran it
@@ -6858,6 +6937,16 @@ in minutes what no software-visible observable here can.
 
 > # 2026-09-15 — THE STATED TRIGGER IS ONE DOUBLING TOO LOW, AND R-33's FIX CLOSES THIS ENTRY TOO
 >
+> **RETRACTED 2026-10-05 by R-11's first hit on silicon (memcached as a delegated application, 32 MiB block,
+> 776d9d859; see R-11's 2026-10-05 box).** The cursorless branch's E is set by the highest bit at which the
+> capability's cursor and top DIFFER (E = that bit - 20), not by the region's size. So an INTERIOR split point
+> inside a power-of-two, page- and granule-aligned region still truncates: the table split at END - 265*16 lost
+> 16 bytes at E = 5. Rounding region sizes (R-33's fix) does not touch interior splits, and the 4 MiB threshold
+> applied the lossy branch's granule formula to the cursorless branch. R-11 needs its own fix, which is that the
+> carve keeps every split point a multiple of 2^E (`CAPSTONE_GLUE_CARVE_ALIGN`, lane b0-silicon-runtime). The
+> statements below are kept as written.
+>
+>
 > **Re-running at a 2–4 MiB image will produce another uninformative OK**, which is the same shape the
 > method note above warns about — one level further in. 2 MiB is where the truncation BRANCH starts
 > executing (`tot > WINDOW`); it is not where the branch can FIND anything. The granule is
@@ -6899,7 +6988,9 @@ by the highest bit at which base and top differ, floored at bit 20. E is 0 — a
 capability exact — only while base and top share one 2 MiB window.
 
 Domains are exact **by construction** today: the module rounds the allocation to a
-power-of-two page count (`capstone.c:83-84`) and the allocator returns it aligned, so
+power-of-two page count (`capstone.c:83-84`) and the allocator returns it aligned [RETRACTED 2026-10-05: the CMA path
+aligns to 1 MiB, not to the block's size, so B1's 2 MiB block [0xac100000, 0xac300000) already has E = 1 and
+memcached's 32 MiB block E = 5], so
 everything sits in one window. Past 2 MiB, interior splits straddle a boundary and
 globals silently get SHORT capabilities. `check-repr.py` fails a build at that cliff.
 
@@ -7103,6 +7194,64 @@ regions go away. For example, at the top of `cleanup()`, block every signal and 
 `ITIMER_REAL`/`ITIMER_VIRTUAL`/`ITIMER_PROF`, or clear `active` (or `s->block`) before the munmap.
 The test is the reproducer above: 20 and 100 ms must exit 0, and the disarmed control must stay
 exit 0.
+
+### M-14 — a managed application's data capability reaches the monitor's descriptor area on silicon: the managed `data_top` was 1 KiB-aligned, and the monitor's own cursor moves round the top UP to the representability granule `FIXED on the B0 monitor line (caplifive-sbi monitor/b0-managed-gp 10a0690), validated on silicon 2026-10-05 by a matched pair; not on capstone-bootstrap, which has no managed globals path`
+
+**What happens.**
+- For a managed application, create_domain splits a 1 KiB descriptor area off the top of the data region:
+  `data_top = tot_size - CONTEXT_DESC_AREA`. SPLIT stores the split point verbatim and puts each half's cursor
+  at its start (capstone_dyn_unit.anvil:180-184), so both halves are written back in the cursorless form. That is
+  exact here. The cursorless top drops only the bits below 2^E, and the split point (data_top) is 1 KiB-aligned, 2
+  KiB after the fix, so it is exact for any E <= 10. R-11 is the case of a split point that is not aligned enough.
+  **Corrected 2026-10-05 22:50:** this bullet first read "exact only because this 2 MiB region has E <= 1 and the
+  split point is 16-aligned". E <= 1 holds only at the base B1 ran at (0xac100000). The CMA places a 2 MiB block on
+  1 MiB alignment, and one straddling a 32 MiB boundary has E = 5: harmless to this split, but it shortens the glue's
+  16-aligned carve without CAPSTONE_GLUE_CARVE_ALIGN (R-11).
+- The monitor then moves dom_data's cursor with C_SET_CURSOR (SCC) to park gp at `data_top - 16`, and since B1.3
+  the code capability at `- 32`.
+- SCC's result has cursor != start, and every FLU/DYN result is re-compressed at writeback (ex_stage.sv:1449). So
+  compress_bounds takes its LOSSY branch (ariane_pkg.sv:793-835 at 776d9d859): the base truncates down and the top
+  rounds UP to 2^(E+3).
+- C-13 rounded the base side to that granule (`repr_gran`); the managed top was never rounded.
+- For a ~1.9 MB data region E = 8, the granule is 2 KiB, and the top rounds from `...ffc00` to `...00000`. The
+  domain's capability then covers the whole descriptor area, which create_domain's comment says it "never holds".
+- The widening is permanent for the capability's life: later cursor moves re-encode the already-widened bounds.
+- capstone-qemu keeps uncompressed bounds (cap.h CapBoundsFat; helper_csscc moves only the cursor), so it can never
+  show this.
+
+**Found and measured** (B1, docs/plans/b0-silicon-delegated-runtime.md, boots B1b..B1f on 776d9d859).
+- b1-thread's pthread_create failed with EAGAIN on silicon only.
+- The B1e probe (image 29b82435ce095d98) read:
+  - the data region `[ac12a000, ac300000)`, length 0x1d6000, against QEMU's exact 0x1d5c00 for the same image;
+  - the parked code capability as type 7.
+- The glue's `END - 32` had landed in the descriptor area instead of on the park.
+- The rtl-oracle reproduced 0xac300000 bit-exactly by executing compress_bounds/decompress_bounds on the monitor's
+  cursor sequence; the first SCC already produces it.
+
+**Fix.** data_top is aligned DOWN to repr_gran in absolute terms, and the descriptor area is split off at that
+aligned top. Its first block absorbs the gap (less than one granule). repr_gran comes from a length at least the
+data capability's own, so the alignment covers the capability's actual granule.
+
+**Validated on silicon by a matched pair.** B1e and B1f ran the same Linux image and the same application image,
+and differ only in the monitor (a11d424 against 10a0690). With the fix:
+- the data region ends at the aligned top 0xac2ff800;
+- the code capability reads type 1;
+- the thread is created, runs and joins with its value (124).
+b0-hello on the fixed monitor is byte-exact.
+
+**Exposure before the fix.** A gp-captable managed application without a context arena carves its cap table from its
+data capability's END (with one, the B1 arena sits at END instead), so on silicon the table's top entries lay in the descriptor area. The monitor rewrites a descriptor block at
+every loan (managed_reinit), so an application whose table reached a lent block would have had cap-table entries
+zeroed underneath it. B0's images were small enough not to reach one. memcached (265 globals, a 4,240-byte table)
+would have reached the lent blocks.
+
+**The class.** Any SCC/CINCOFFSET-style cursor move on a capability whose bounds are not granule-aligned widens it
+on silicon, both ways. A monitor that SPLITs a region, parks a cursor away from the base and hands the region over
+must align both ends to the region's granule. C-13 found the base, this entry the top.
+
+**Related: R-33**, the same encoder behaviour, and its standing decision: the cause is the allocator, not the encoder,
+and the fix is to round region sizes to the granule at creation. 10a0690 applies that rule to the monitor's own
+split. Rounding inward in the RTL would reverse R-33's decision; that trade-off is the lead's to reopen.
 
 ### M-13 — a trap raised by the FPGA monitor's own code cannot be reported: `_cap_trap_entry` swaps Linux's integer sp in from cscratch and faults at +4 `OPEN — monitor robustness; found 2026-10-04 (B0.7 attempts 7-8)`
 

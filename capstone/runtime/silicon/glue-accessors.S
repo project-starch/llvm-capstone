@@ -50,3 +50,20 @@ __capstone_silicon_code_base:
 __capstone_silicon_code_end:
 	lla	a0, __gpfree_globals_base
 	ret
+
+/* B1.6: the .tdata TEMPLATE, as a capability tls.c can read (musl's __copy_tls copies it into every thread's block).
+ * The template is image data inside the globals region, so the monitor copied it into dom_data with the rest of the
+ * blob, at its offset from __gpfree_globals_base (sbi_capstone.c's blob copy; RUN_CAP_INIT finds its table the same
+ * way). The FIRST context's sp still has dom_data's base -- the table and the context arena are carved from the top
+ * -- so the template is sp's base plus that offset. The capability keeps sp's bounds; tls.c narrows it to the
+ * template. Valid only in the first context, which is where tls.c's describe_tls runs. */
+	.global __capstone_silicon_tls_image
+__capstone_silicon_tls_image:
+	.insn r 0x5b, 0x1, 0x4, t0, sp, x3	/* lcc t0, sp, base */
+	lla	t1, __capstone_tls_image
+	lla	t2, __gpfree_globals_base
+	sub	t1, t1, t2
+	add	t0, t0, t1
+	.insn r 0x5b, 0x1, 0x5, a0, sp, t0	/* scc a0, sp, t0 */
+	li	t0, 0
+	ret

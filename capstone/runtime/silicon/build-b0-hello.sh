@@ -20,7 +20,7 @@ MUSL=${PORT_MUSL_ROOT:-/tmp/capstone/musl-src/musl-1.2.5}
 OUT=${OUT_DIR:-/tmp/capstone/b0/hello}
 # B0_APP: which application in this directory to build (b0-hello, or b0-memcpy for B0.8); the image is $OUT/$B0_APP.dom.
 APP=${B0_APP:-b0-hello}
-[ -f "$(dirname "$0")/$APP.c" ] || { echo "no application $APP.c" >&2; exit 2; }
+[ -n "${B0_APP_SRCS:-}" ] || [ -f "$(dirname "$0")/$APP.c" ] || { echo "no application $APP.c" >&2; exit 2; }
 CC=$BIN/clang
 [ -f "$MUSL/obj/include/bits/alltypes.h" ] || { echo "no prepared musl headers at $MUSL" >&2; exit 2; }
 rm -rf "$OUT"; mkdir -p "$OUT/obj"
@@ -35,12 +35,17 @@ BASE=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -Xclang 
       -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic" -isystem "$MUSL/obj/include"
       -isystem "$MUSL/include" -isystem "$RES/include"
       -ffunction-sections -fdata-sections -fno-jump-tables -Wno-int-conversion -O1 -flto
-      -DCAPSTONE_GP_CAPTABLE_ABI=1 "${SIL[@]}" -I"$CAP/runtime/include" -D_XOPEN_SOURCE=700)
+      -DCAPSTONE_GP_CAPTABLE_ABI=1 "${SIL[@]}" -I"$CAP/runtime/include" -D_XOPEN_SOURCE=700 ${B0_CFLAGS_EXTRA:-})
 # delegate-bench's sizes (runtime/tests/application/CMakeLists.txt): the small ones.
-DATA=262144; STACK=65536; ARENA=65536; EXCH=65536
-APPDEFS=(-DCAPSTONE_DOMREQ_DATA=$((DATA + 256)) -DCAPSTONE_DOMREQ_STACK=$STACK -DCAPSTONE_CONTEXT_ARENA_BYTES=0
+# B1: B0_CONTEXT_BYTES > 0 builds minted contexts in (the glue's CAPSTONE_GLUE_CONTEXTS; the arena is split off the
+# top of dom_data at the first entry), with B0_CONTEXTS of them able to run at once (Application.cmake's CONTEXTS).
+# B0_DATA and B0_ARENA override the data region and the level0 arena (thread stacks come from the latter).
+DATA=${B0_DATA:-262144}; STACK=65536; ARENA=${B0_ARENA:-65536}; EXCH=65536
+CTXB=${B0_CONTEXT_BYTES:-0}; NCTX=${B0_CONTEXTS:-0}
+[ $((CTXB % 4096)) -eq 0 ] || { echo "B0_CONTEXT_BYTES must be a multiple of 4096" >&2; exit 2; }
+APPDEFS=(-DCAPSTONE_DOMREQ_DATA=$((DATA + 256 + CTXB)) -DCAPSTONE_DOMREQ_STACK=$STACK -DCAPSTONE_CONTEXT_ARENA_BYTES=$CTXB
          -DCAPSTONE_LEVEL0_ARENA_BYTES=$ARENA -DCAPSTONE_APPLICATION_HEAP_BYTES=0
-         -DCAPSTONE_APPLICATION_EXCHANGE_BYTES=$EXCH -DCAPSTONE_APPLICATION_CONTEXTS=0)
+         -DCAPSTONE_APPLICATION_EXCHANGE_BYTES=$EXCH -DCAPSTONE_APPLICATION_CONTEXTS=$NCTX)
 M=$CAP/ports/musl-capstone/runtime
 CORE_INC=(-I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal" -I"$MUSL/src/multibyte")
 
@@ -61,9 +66,25 @@ for f in launch delegate spawn msghdr; do cc "$CAP/runtime/common/$f.c" "common_
 python3 "$HERE/gen-vfprintf-double.py" "$MUSL" "$OUT/gen/vfprintf-double.c" > "$OUT/gen-vfprintf.log" || {
   cat "$OUT/gen-vfprintf.log" >&2; exit 2; }
 cc "$OUT/gen/vfprintf-double.c" ovr_vfprintf_double.o "${CORE_INC[@]}"
+# strtod/atof/scanf (B1.0b): floatscan.o is dropped the same way and strtod.o/vfscanf.o call it, so the three are
+# generated narrowed to double (gen-floatscan-double.py) and linked ahead of the archive.
+python3 "$HERE/gen-floatscan-double.py" "$MUSL" "$OUT/gen" > "$OUT/gen-floatscan.log" || {
+  cat "$OUT/gen-floatscan.log" >&2; exit 2; }
+for f in floatscan strtod vfscanf; do cc "$OUT/gen/$f-double.c" "ovr_${f}_double.o" "${CORE_INC[@]}"; done
 cc "$CAP/runtime/domain/application.c" app_application.o "${APPDEFS[@]}"
 cc "$M/level0.c" app_level0.o "${APPDEFS[@]}"
-cc "$HERE/$APP.c" "app_$APP.o" "${APPDEFS[@]}"
+# B2 (memcached on silicon): an application of many sources. B0_APP_SRCS lists them (absolute paths) and
+# B0_APP_CFLAGS their own flags (include directories, -DHAVE_CONFIG_H); each is compiled like the single-file
+# applications above, into obj/, and joins the same full-LTO link. Without B0_APP_SRCS, $HERE/$APP.c as before.
+if [ -n "${B0_APP_SRCS:-}" ]; then
+  n=0
+  for f in $B0_APP_SRCS; do
+    n=$((n + 1)); cc "$f" "app_$(basename "${f%.c}")_$n.o" "${APPDEFS[@]}" ${B0_APP_CFLAGS:-} || { echo "app source $f FAILED" >&2; exit 1; }
+  done
+  echo "compiled $n application sources"
+else
+  cc "$HERE/$APP.c" "app_$APP.o" "${APPDEFS[@]}"
+fi
 cc "$HERE/glue-data.c" glue_data.o
 # builtins, as bitcode too -- into their own directory, VERIFIED through codegen, then a LAZY archive. lld keeps
 # every bitcode definition of a libcall, and the fp128 (tf) soft-float family cannot be selected under gp-captable
@@ -77,7 +98,12 @@ while IFS=$'\t' read -r o why; do [ -n "$o" ] && { echo "builtins: dropping $(ba
 "$BIN/llvm-ar" rcs "$OUT/librt-b0.a" "$OUT"/rt/*.o
 # assembly: native objects (no C globals)
 ASM=(-target capstone64-unknown-elf -ffreestanding -DCAPSTONE_GP_CAPTABLE_ABI=1)
-"$CC" "${ASM[@]}" -DCAPSTONE_GLUE_YIELD=1 -DCAPSTONE_GLUE_NO_MCSR=1 -c "$CAP/tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S" \
+GLUE_CTX=(); [ "$CTXB" -gt 0 ] && GLUE_CTX=(-DCAPSTONE_GLUE_CONTEXTS=1 -DCAPSTONE_CONTEXT_ARENA_BYTES=$CTXB -I"$CAP/runtime/include")
+# B0_GLUE_EXTRA: extra -D for the glue only, e.g. -DCAPSTONE_GLUE_CONTEXTS_PEEK (QEMU-only prints; never on a board).
+[ -n "${B0_GLUE_EXTRA:-}" ] && GLUE_CTX+=($B0_GLUE_EXTRA)
+# CAPSTONE_GLUE_CARVE_ALIGN (ISSUES R-11): carve points stay multiples of the region's cursorless granule, which
+# matters once the data region spans more than one 2 MiB window (memcached's does).
+"$CC" "${ASM[@]}" -DCAPSTONE_GLUE_YIELD=1 -DCAPSTONE_GLUE_NO_MCSR=1 -DCAPSTONE_GLUE_CARVE_ALIGN=1 "${GLUE_CTX[@]}" -c "$CAP/tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S" \
   -o "$OUT/glue.o"   # outside obj/, so the obj/*.o glob below does not list it twice
 for f in set_thread_area setjmp altstack; do "$CC" "${ASM[@]}" -c "$M/$f.S" -o "$OUT/obj/asm_$f.o"; done
 "$CC" "${ASM[@]}" "${APPDEFS[@]}" -c "$CAP/runtime/domain/domreq.S" -o "$OUT/obj/asm_domreq.o"
@@ -104,3 +130,8 @@ GOFF=$(( ((TEXT + 0xFFFF) / 0x10000) * 0x10000 )); [ $GOFF -lt 65536 ] && GOFF=6
 printf '.text = %d bytes -> globals offset 0x%x\n' "$TEXT" "$GOFF"
 link "$(printf '0x%x' $GOFF)" "$OUT/$APP.dom"
 ls -la "$OUT/$APP.dom"
+# R-11's detector (check-repr.py's process-ABI replay; ISSUES R-11): every carve point of this image must stay exact
+# at every base the board's CMA can give it. It runs here because the gate R-11 shipped with was never run by any
+# build, and reported memcached's faulting image OK. B0 builds carry CAPSTONE_GLUE_CARVE_ALIGN, so it is replayed on.
+python3 "$CAP/tests/runtime-qemu/silicon-ladder/check-repr.py" "$OUT/$APP.dom" ||
+  { echo "check-repr: $APP.dom is AT RISK or could not be checked (ISSUES R-11); see above" >&2; exit 3; }

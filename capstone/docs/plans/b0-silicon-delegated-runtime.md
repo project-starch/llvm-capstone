@@ -851,6 +851,31 @@ b0-stats2.
   on in build-b0-hello.sh). Compiler-emitted aggregate copies are a separate path: the SQLite silicon build's W-12
   pass covers those. A full application build needs it too.
 
+## B1 scope (2026-10-05): from one context to threads, toward memcached on silicon
+B0 and B0.8 are on dev: one gp-captable context runs byte-exact, and memcpy is R-29-safe. Below is what a THREADED
+application needs. Each item names its source; none is attempted yet.
+1. **Contexts on silicon.**
+   - The runtime mints contexts through the delegate (CAPSTONE_NR_CONTEXT_CREATE, then the monitor's ADOPT and
+     FORGET), and capstone-exec steps each one with PROCESS_STEP on its own thread.
+   - CALL is illegal inside a supervised domain (decoder.sv:1289), so any domain-side nested call path
+     (`__capstone_context_call`) must stay unused on silicon. The pthread path must be checked for it.
+2. **`context.c:38`:** `extern char __capstone_context_entry[]` gets DATA bounds under gp-captable. It must be
+   declared as a function (the compiler lane's review, above). It is unreached in B0 and reached by the first
+   minted context.
+3. **Non-empty TLS and init/fini arrays.** B0 aborts on a non-empty `.tdata` and on non-empty init/fini arrays
+   (tls.c and hostcall.c under CAPSTONE_GP_CAPTABLE_ABI). Real applications have both, so the accessors must copy
+   the TLS image and walk the arrays by value.
+4. **Compiler-emitted aggregate copies (R-29).** Struct assignment takes the same 128-bit granule load as memcpy.
+   The SQLite silicon build guards it with its W-12 pass; a threaded application build needs the same flag.
+5. **Variable aliases (the C-75 residual) and sub-word atomics on lone globals (C-74).**
+   - musl's fork.c carries 11 weak data aliases, so the link map must show fork.o absent, or C-75 must be settled.
+   - The runtime and the application need an audit for 8/16-bit atomics on self-bounded globals.
+6. **The test ladder, one image per boot (R-3):**
+   1. B1a: pthread-probe (runtime/tests/application) built with the B0 pipeline: create, join, mutex, condvar.
+   2. B1b: the threaded delegate paths (park/futex).
+   3. B2: memcached `-t 1` (three contexts), per docs/plans/memcached-on-silicon.md.
+   Each step is pre-registered, QEMU first with fabrication off, then one board boot.
+
 ## Pre-registered for the R-29/S-10b fix bitstream (2026-10-05, from the RTL lane; nothing to run until it exists)
 The fix is capstone-ariane sup-call 776d9d859 (in simulation; docs on dev efef06cda618). A read whose granule has a
 conflicting store in flight now waits in the dcache read controller until the store drains. The RTL lane's
@@ -935,6 +960,541 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   `RESULT b0-printf retval=0`, no MISMATCH line, census rungs 0 and 0. Firmware fw_8068f626e0d7, image
   0751dc622b9b78df (manifest of the private image), raw lines `/tmp/capstone/b0/board-b10-776.txt`. So printf,
   doubles included (%f/%e/%g/%a), works in a gp-captable delegated application on silicon.
+
+## B1 board runs (2026-10-05 19:52-20:02, 776d9d859): the monitor change holds; the thread is refused
+- **B1a, b0-hello on the B1.3 monitor (firmware 96ef3cc2d605): as pre-registered.** The hello line is byte-exact,
+  `RESULT b0-hello retval=0`, and both census rungs read 0. The domain now enters with the NONLIN code capability,
+  and that is safe on silicon.
+- **B1b, b1-thread (aa30032b0a071fa2, firmware cbf1a7a9f03a): `B1: pthread_create failed: 11`,
+  `RESULT b1-thread retval=3`. A MISS against the pre-registration (124, retval 0).**
+  - No fault, no wedge: the census rungs read 0 before and after, and the application exited normally.
+  - 11 is EAGAIN, and musl's pthread_create turns EVERY `__clone` failure into EAGAIN, so the failing step is
+    hidden.
+  - ~~It is not ENOSYS (38), so the parked code capability did reach the runtime.~~ **RETRACTED (20:22, from B1d):**
+    musl turns EVERY `__clone` failure into EAGAIN, including the ENOSYS that `__clone` returns when no code
+    capability was parked. So 11 says nothing about the code capability, and that inference ran one step past the
+    evidence.
+  - The candidates are the arena (not LINEAR on silicon), the transport RESERVE, the offer (-EINVAL when the entry
+    carried no descriptor) and the launcher's ADOPT.
+  - The same image passes in QEMU.
+  - Next: the `CAPSTONE_CLONE_DIAG` variant records each step's outcome (arena type and size, transport, offered,
+    CREATE's id, the final r) for the application to print.
+- **B1c pre-registered (before the boot):** b1-thread built with `B0_CFLAGS_EXTRA=-DCAPSTONE_CLONE_DIAG`
+  (c182429046987be4), same rungs, firmware from the same recipe.
+  - QEMU (fabrication off) prints the pass values: `step 5 arena_type 0 arena_bytes 131072 transport 1 offered 1
+    id 4294967297 r 4294967297`, then 124.
+  - On silicon the line names the failing step:
+    - arena_type != 0 or the wrong size: the glue's arena handover;
+    - step 3 with transport < 0: RESERVE (the launcher);
+    - step 5 with offered 0: the offer found no descriptor (the request slot was non-zero at this entry);
+    - step 5, offered 1, id < 0: ADOPT (the monitor's context_adopt or the launcher) with that errno.
+  - A pass (124) would mean B1b's failure did not repeat, which is itself a finding about nondeterminism.
+- **B1c result (20:06-20:11, firmware de384b7ab2a6): `step 0`, `pthread_create failed: 11` again.** `__clone` was
+  never entered: musl's pthread_create failed BEFORE the clone. Its only EAGAIN exits there are the stack mapping:
+  the anonymous `mmap` (served from level0's arena by mmap_shm_level0.c) returning MAP_FAILED, or the guard
+  `mprotect` failing with anything but ENOSYS.
+- **B1d pre-registered (before the boot):** the same image with `-DCAPSTONE_B1_PROBES` added (a31d70e8e98948dc,
+  firmware f8e93047641c).
+  - It does musl's mapping steps by hand, printing each with its errno: the level0 arena size, a malloc of a thread
+    stack's size, the anonymous mmap, and the guard mprotect.
+  - Then the default pthread_create, and on failure one with a 16 KiB stack (exit 10 + that thread's code).
+  - QEMU prints: arena 1048576, malloc ok, mmap ok, mprotect rc 0, step 5, 124.
+  - On silicon:
+    - malloc NULL: level0 cannot serve 140 KiB there (the arena or its capability);
+    - malloc ok but mmap FAILED: mmap_held itself;
+    - mprotect rc -1 with errno != 38: the guard path;
+    - all ok yet pthread_create fails: something else in pthread_create.
+  - The small stack passing would point at size.
+- **B1d result (20:16-20:21, firmware f8e93047641c): the mapping hypothesis is REFUTED.** malloc(143360) ok, mmap ok,
+  mprotect rc 0, as in QEMU. pthread_create still returns 11 at step 0, and so does the 16 KiB-stack thread (exit
+  13).
+  - musl's pthread_create has no failure exit between the mapping and `__clone`, so `__clone` WAS called and returned
+    before its first diagnostic point.
+  - The only exits there are the flags check and `if (!CONTEXT_ENTRY) return -ENOSYS`. The image and its flags are
+    QEMU's, so **the code capability is missing on silicon**: `context_entry()` read LCC type 7.
+  - Leading hypothesis, for the next boot: on silicon dom_data's END is not `data_top` (compressed bounds round the
+    top outward; QEMU keeps them exact). The glue's `END - 32` then misses the monitor's park, and the arena split
+    at `END - A` is off by the same amount.
+- **B1e pre-registered (before the boot):** the same probe image plus capability metadata (29b82435ce095d98, firmware
+  c46f2737b230).
+  - It prints the code capability (LCC type/cursor/base/end), the arena slot (type/base/end), and gp's and sp's
+    bounds.
+  - QEMU: code type 1 [e0200000, e0220000); arena type 0 [e03dfc00, e03ffc00) (128 KiB, its end = data_top); gp
+    [e03df5b0, e03dfc00) right below the arena; then step 5 and 124.
+  - On silicon, **code type 7 with the arena's end not on a 1 KiB boundary** = the END-rounding hypothesis.
+  - Code type 7 with a QEMU-like arena = the handover between the first entry and C (the cscratch carry, or the
+    frame slots).
+  - Code type 1 = the capability is there, and `context_entry()` or the flags check is what refuses.
+- **B1e result (20:27-20:32, firmware c46f2737b230):**
+  - silicon: code type **7** (absent); arena LINEAR [ac2e0000, ac300000); gp [ac2df9b0, ac2e0000); sp base ac12a000;
+  - QEMU (same image and monitor source): code type 1; arena [e03dfc00, e03ffc00); sp base e022a000.
+  - So the code capability never reached C on silicon. The cause is not yet established; this is where it stands.
+  - **What the numbers show.** The data region's length is fixed by the image and the monitor, and QEMU reads it
+    exactly: `e03ffc00 - e022a000 = 0x1d5c00`. On silicon the same capability reads `ac300000 - ac12a000 =
+    0x1d6000`, so its END is **1 KiB above `data_top`**, which is exactly `CONTEXT_DESC_AREA` (1024).
+    - The glue's `END - 32` then reads inside the monitor's descriptor area, not the code park at `data_top - 32`.
+    - The arena `[END - A, END)` covers that area.
+  - **My pre-registered discriminator did not fire, and that was a defect of the discriminator.** It expected
+    END-rounding to show as an end NOT on a 1 KiB boundary. Rounding to a coarser granule makes the end MORE
+    aligned (here 2 KiB and up), so only the comparison of lengths against QEMU shows it.
+  - **Two candidate mechanisms, under RTL check before anything is recorded as a cause:**
+    - (H1) compressed bounds: the monitor's own cursor moves on dom_data (the gp park at `data_top - 16`, now also
+      the code park at `- 32`) re-encode it lossily, and the top rounds up to the representability granule
+      (C-13/R-33's class);
+    - (H2) the descriptor area was not split off on this build.
+  - **Either way, the domain's data capability reaches the descriptor area on silicon,** which create_domain's
+    comment says "the domain never holds authority over". The cap-table carve of every B0 build (from END, with no
+    arena) would also land in that area.
+- **B1f pre-registered (before the boots): the candidate monitor fix, caplifive-sbi monitor/b0-managed-gp 10a0690.**
+  - The fix aligns the managed data_top down to repr_gran, and splits the descriptor area at that aligned top.
+  - The Linux images are B1a's and B1e's, unchanged, so each boot differs from its predecessor only in the monitor.
+  - Boot 1, the control: b0-hello (firmware 088d5d9c74bd). Predicted byte-exact, retval 0, as B1a. A failure here
+    is the fix, and boot 2 does not go.
+  - Boot 2: the B1e probe image 29b82435ce095d98 (firmware 69bd27fbb7c0). Predicted:
+    - `code type 1` (NONLIN), with the code region's bounds;
+    - the arena ending at the ALIGNED top, 0xac2ff800 if the block lands where B1e's did (the address may move),
+      and in any case 2 KiB-aligned, below the descriptor area;
+    - `B1: thread returned 124`, exit 0.
+  - Code type 7 again would refute H1 as the whole story.
+  - QEMU on 10a0690, fabrication off and on: b0-hello, b1-thread 124, the legacy control 91. The probe reads the
+    arena ending at e04ff800, the 2 KiB-aligned top (it was ...ffc00 before).
+- **B1f RESULT (20:40-20:50, 776d9d859): B1 RUNS ON SILICON, as pre-registered.**
+  - Boot 1, b0-hello on 10a0690 (firmware 088d5d9c74bd): byte-exact, retval 0, census rungs 0 and 0.
+  - Boot 2, the B1e probe image (firmware 69bd27fbb7c0):
+    - code capability type 1, `[ac100000, ac120000)`, cursor at its base;
+    - arena LINEAR `[ac2df800, ac2ff800)`, ending at the 2 KiB-aligned top as predicted;
+    - gp just below it;
+    - malloc, mmap and mprotect ok;
+    - clone step 5, transport 1, offered 1, id 0x100000001;
+    - **`B1: thread returned 124`, `RESULT b1-thread retval=0`**, census rungs 0 and 0.
+  - **A matched pair confirms H1 by intervention.** B1e and B1f boot 2 ran the same Linux image and the same
+    application image; only the monitor differs (a11d424 against 10a0690, the data_top alignment). The code
+    capability went from type 7 to type 1, and pthread_create from EAGAIN to a joined thread.
+  - So the first minted context of a gp-captable application has run on silicon. It was created by
+    pthread_create, minted from the arena, sealed with the monitor's code capability and the creator's gp, adopted
+    by the launcher, stepped by the monitor with CSR events, and joined with its value.
+  - Registry: ISSUES M-14 (the data capability's top reached the descriptor area). It also bounds every B0 build's
+    cap table, which was carved into that area until now.
+
+## B1.0b (2026-10-05): strtod, atof and scanf's %f on the silicon build, for memcached
+- **The gap.** The archive drops musl's `floatscan.o` for the same reason as vfprintf (C-43). `strtod.o` and
+  `vfscanf.o` survive but call `__floatscan`, so any program that parses a float fails to link. memcached does
+  (`safe_strtod` in util.c, `atof` in its option parsing).
+- **The fix: `gen-floatscan-double.py`, vfprintf's sibling.** It generates musl's own floatscan, strtod and vfscanf
+  with `long double` narrowed to `double`.
+  - The substitution selects musl's own `LDBL_MANT_DIG == 53` configuration, which arm and mips use, so the parser
+    is still musl's correctly rounded one.
+  - The entry is renamed `__floatscan_d`, so an archive member still expecting the fp128 `__floatscan` fails to
+    link, not mis-reads.
+  - `strtold` is not generated, and `%Lf` stores a double (C-20).
+  - Every rule must fire, and nothing long-double may survive.
+- **The generator's own gate had a blind spot, caught downstream.**
+  - Its first leftover check looked for `long double`, LDBL_ and the l-suffixed libm calls. It passed while
+    `1000000000.0L`, a long double LITERAL and so an fp128 constant, survived in floatscan.c.
+  - The backend's gp-captable verifier then refused the object (constant-pool data, C-43).
+  - Both generators now also reject decimal, exponent and hex literals with an `L` suffix. musl's vfprintf has
+    none, and its generated output is unchanged.
+- **The test, `b0-strtod.c` (generated by `gen-b0-strtod.py`).** It covers 21 strtod cases, plus atof and
+  `sscanf("%lf")`. Each expected value is the host's correctly rounded double, compared bit for bit, with its end
+  offset and errno.
+  - Native glibc: 23/23. The negative control (one expected bit flipped) reads 22/23 and exits 1.
+  - **QEMU, fabrication off and on:** every value and end offset matched on the first run. The one mismatch was errno
+    on the smallest subnormal: glibc sets ERANGE there, musl does not. C leaves that implementation-defined, so the
+    case now checks value and end only.
+- **Board run, pre-registered before the boot (776d9d859):** b0-strtod (e7d30ad72f104eed) in a private image whose
+  b0run.sh has the b0-strtod rung (0a00ffab4e23d16c; the first bake took the previous wrapper and was redone).
+  Rungs b0-stats, b0-strtod, b0-stats2.
+  - **Predicted: `B1.0b strtod: 23 of 23 cases match`, retval 0,** since the parser is pure integer and double
+    arithmetic, which silicon already runs in vfprintf.
+  - A mismatch confined to subnormal or rounding cases would point at the soft-float/FPU path on silicon, not at
+    the narrowing, which QEMU passed bit for bit.
+- **Board result, 2026-10-05 20:22-20:27: as pre-registered.** `B1.0b strtod: 23 of 23 cases match`, retval 0,
+  census rungs 0 and 0. Firmware fw_b15d76e38a54, image e7d30ad72f104eed; raw lines
+  `/tmp/capstone/b1/board-strtod.txt`. memcached's float parsing (strtod, atof, sscanf %lf) therefore works on
+  silicon, bit for bit against the host.
+
+## B2 (2026-10-05): memcached 1.6.45 as a gp-captable delegated application
+- **Build.** `build-b0-hello.sh` takes a many-source application.
+  - `B0_APP_SRCS` and `B0_APP_CFLAGS` name the sources and their flags. The 25 memcached sources (the port's
+    patched, configured tree) and the 18 libevent sources of its libevent_core (the port's configured libevent-cap
+    tree) are compiled as gp-captable bitcode.
+  - They are LTO-linked with musl, the runtime, the narrowed vfprintf/floatscan and B1's contexts:
+    `B0_CONTEXT_BYTES=131072 B0_CONTEXTS=3 B0_DATA=20 MiB B0_ARENA=16 MiB`.
+  - First try: 73 objects, `.text` 460,812 bytes, a 781,288-byte image (ac6abd2218a686f1), no verifier refusals.
+  - `build-b2-memcached.sh` records the exact source list, flags and sizes over the port's configured trees
+    (`MC_WORK`). With the CARVE_ALIGN glue it reproduces the B2a/B3 board image ba7e6921cf27f2b6 byte for byte
+    (rebuilt 2026-10-05 22:19 with the same toolchain and musl archive).
+- **QEMU, monitor 10a0690, fabrication OFF and ON: the milestone holds.** memcached runs with `-l 127.0.0.1 -p 21299
+  -U 0 -m 8 -t 1 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`.
+  - It runs unprivileged under capstone-job (`--user 65534:65534`), as the SDK oracle does.
+  - Started as root it insists on `-u` and then calls `setgroups`, which the delegate runtime does not serve
+    (ENOSYS, exit 71); that was the first attempt.
+  - A native guest client (`mc-b2-client.c`) receives `VERSION 1.6.45`, `STORED`, `VALUE k 0 1` / `x` / `END`.
+  - SIGTERM ends memcached with status 0, and capstone-job's record is `{"kind":"exit","value":0}`.
+- **Board run, pre-registered before the bake (776d9d859, monitor 10a0690).**
+  - The image ac6abd2218a686f1 and the client (built with the FPGA toolchain) go into a private image
+    (`b0-bake-b2.sh`). Rungs: b0-stats, `b2-memcached`, b0-stats2.
+  - The b2-memcached rung's retval is `10 * client code + (memcached status != 0)`.
+  - **Predicted: the same transcript, `B2: client rc=0 memcached rc=0`, `RESULT b2-memcached retval=0`.**
+  - Silicon-only risks QEMU cannot show:
+    - level0's per-object bounds round outward on silicon for objects of 4 KiB and up (slab pages are 1 MiB);
+    - the board launcher is the B0.7 build of capstone-exec;
+    - this is the first ~21 MiB managed block on the board (CMA is 256 MiB).
+  - A client code of 2 (no connection) with memcached alive would point at the launcher's socket services; a fault
+    names its pc.
+- **Board result (21:07-21:14, firmware 3fffc01249e7): a MISS.** `B2: no connection`, `memcached rc=139`, job
+  `{"kind":"signal","value":11}`, `RESULT b2-memcached retval=21`; census rungs 0 and 0.
+  - The monitor's trace places it. The first region share's `supervised_invoke` returned **ECSZ 2, a FAULT event**,
+    during the domain's first entry: the glue's table build and cap-init, which for memcached zero-fill a 16 MiB
+    level0 arena.
+  - For comparison, b1f2's first share returned 1 (preempted) and then completed.
+  - Nothing ran after it. capstone-exec printed no fault line, and the event's cause, pc and tval were not traced
+    (`CAPSTONE_SUPERVISE_QUIET`).
+- **B2f pre-registered:** the same image with the monitor at 1f9aedd, which reports a fault event's cause, epc and
+  tval unconditionally (SUPC/SUPE/SUPT); firmware 9dbcddf6b32f.
+  - Predicted: the same fault, now with its location. epc minus DBAS gives the image offset.
+  - A pass would mean B2's fault is not deterministic.
+- **B2f result (21:16-21:23): the same fault, now located.** `SUPC 0x1c` (28), `SUPE 0xac1000d8` = DBAS + 0xd8,
+  `SUPT 0xae0d6f60`.
+  - The pc is `sd a7, 0(t6)` in the glue's carve loop, which copies a global's initial bytes into its freshly
+    split storage. The store address lies above everything the carve should have produced.
+- **Diagnosis: ISSUES R-11, its first hit on silicon.** R-11 was "OPEN, not yet hit".
+  - SPLIT writes both halves in compress_bounds' cursorless form (capstone_dyn_unit.anvil:180-184; ariane_pkg.sv
+    :793-812). That form keeps the top as 21 bits above E, E = (highest bit where cursor and top differ) - 20, and
+    truncates the rest.
+  - In memcached's 32 MiB block the region's base (0xac1...) and its split points (0xae0...) differ at bit 25, so
+    E = 5. The table split at `END - 265*16` left the stack capability's top 16 bytes short.
+  - The first global carved below it (56 bytes of initial data) got 48. Its seventh store faulted at `END -
+    0x10a0`.
+  - A literal Python port of compress_bounds/decompress_bounds reproduces the board's 0xae0d6f60 exactly, for any
+    plausible base, with the carve's END at 0xae0d8000.
+    - That END is the stack region's top below the 128 KiB arena, inside the 32 MiB block [0xac100000, 0xae100000).
+    - It is derived without the fault: the module rounds the declared 0x1420100 bytes up to a power of two, the
+      monitor aligns data_top to 0xae0f8000, and the arena sits below that. In that model the old carve leaves 30 inexact
+    capabilities. ~~B0/B1's 2 MiB regions (E <= 1) lose nothing.~~ **RETRACTED 2026-10-05 22:50 (scope):** B0's
+    512 KiB blocks, and B1's 2 MiB block at the base it ran at (0xac100000, E = 1), lose nothing. The board's CMA
+    places a 2 MiB block on 1 MiB alignment (B1f's sat at 0xac100000), so one can straddle a 32 MiB boundary. There
+    E = 5, and without CAPSTONE_GLUE_CARVE_ALIGN b1-thread loses 4 to 9 globals at 7 of the 255 bases
+    (check-repr.py's process-ABI replay, lane b0-silicon-runtime 3b1360ac7087). B1's board runs are unaffected, and
+    every B0 build now has the alignment.
+  - QEMU has no cursorless encoding, so it cannot show any of this.
+- **The detector R-11 shipped did not fire, and could not have.** `check-repr.py` reports this image as `tot=1048576
+  OK`. Its region model is the old SDK sizing from code length, and it never reads the domain's declared data size
+  (.capstone_domreq), B1's arena or M-14's alignment. The B0 build never ran it either.
+- **The detector, rebuilt (2026-10-05 22:50).** An image with `.capstone_domreq` is now checked against the
+  process path, replayed end to end with the literal compress/decompress port.
+  - The path: the module's power-of-two block (code_len + domreq + 9 KiB), the monitor's managed split with M-14's
+    alignment and its two parks, then the glue's move to END - 32, its arena split and its carve.
+  - The arena size is decoded from the glue's own `li t4` in CONTEXTS_FIRST_ENTRY, because B0 builds drop the
+    symbol. Every 1 MiB-aligned base in the board's 256 MiB CMA window is tried. `ERROR` now fails the run.
+  - **Positive control: the faulting image (ac6abd2218a686f1) with the old glue.** AT RISK at 217 of 225 bases.
+    At the board's base 0xac100000 it shows 30 SHORT, with global[0] given [0xae0d6f30, 0xae0d6f60): 48 of its 56
+    bytes, so the seventh 8-byte store lands at 0xae0d6f60, B2f's SUPT exactly. This is derived from the ELF, the
+    module, the monitor and the glue alone.
+  - The board image (ba7e6921cf27f2b6, aligned glue) is OK at all 225 bases. B0's four 512 KiB images are OK at
+    all 512 bases, with or without the alignment. b1-thread with the alignment is OK at all 255 bases.
+  - The board image still reports WIDEN: up to 5 storage capabilities widen at writeback once their cursor leaves
+    the base. The lossy branch rounds a large global's bounds outward, so its capability can reach neighbouring
+    bytes. That is a spatial residual, not a fault. It is recorded, not fixed; the measurements doc claims no safety
+    numbers for memcached.
+  - **b1-thread WITHOUT the alignment is AT RISK at 7 of 255 bases**, the ones where its 2 MiB block straddles a
+    32 MiB boundary (e.g. 0xadf00000): there E = 5 and 4 to 9 globals come out short.
+    - The board does place 2 MiB blocks on 1 MiB alignment: B1f's block sat at 0xac100000. So a 2 MiB block is
+      exact only by placement, and the claim above that B0/B1's 2 MiB regions "lose nothing" was too broad.
+    - B1's board runs are unaffected: at 0xac100000, E = 1.
+  - **Now a build gate (23:00).** build-b0-hello.sh runs it on every image and fails with rc 3 when the image is
+    AT RISK or cannot be checked. The checker reads CAPSTONE_GLUE_CARVE_ALIGN from the image's own code (the
+    granule computation's `xor t3,t3,t1; srli t3,t3,21`) instead of trusting a flag.
+    - Matched pair: memcached built normally passes and is still ba7e6921cf27f2b6.
+    - Built with `B0_GLUE_EXTRA=-UCAPSTONE_GLUE_CARVE_ALIGN`, the build stops with rc 3 (AT RISK at 217 of 225
+      bases), and the refused image is exactly the faulting ac6abd2218a686f1.
+- **Fix: `CAPSTONE_GLUE_CARVE_ALIGN`, now on in every B0 build.**
+  - E is computed once from the region's base and top. The carve top is aligned down, and the table and every
+    global's storage are rounded up to max(16, 2^E), so no split point can lose bits.
+  - It is a no-op inside one 2 MiB window. The ladder's glue stays byte-identical without the define.
+  - The model says 0 inexact capabilities, against 30 before.
+- **B2a pre-registered (before the boot):** memcached ba7e6921cf27f2b6 (the aligned glue), firmware 4279572eceda
+  (monitor 1f9aedd, which still reports faults), the same client and rung.
+  - **Predicted: `B2: client rc=0 memcached rc=0`, `RESULT b2-memcached retval=0`.**
+  - A new fault would come with its location; no fault and still no connection would point past the first entry.
+- **B2a RESULT (21:39-21:45, 776d9d859, firmware 4279572eceda): MEMCACHED RUNS ON SILICON, as pre-registered.**
+  - `B2 < VERSION 1.6.45`, `B2 < STORED`, `B2 < VALUE k 0 1` / `x` / `END`.
+  - `B2: client rc=0 memcached rc=0 job {"version":1,"kind":"exit","value":0}`, `RESULT b2-memcached retval=0`.
+  - Census rungs 0 and 0.
+  - It is a matched pair with B2f: the same monitor (1f9aedd), the same client and rung, and one source change,
+    the glue's carve alignment.
+    - The binaries differ more widely: the glue's added code shifts the image's code by 160 bytes, and the Linux
+      image differs only in that .dom.
+    - An audit diffed them; the firmware's OpenSBI part is identical. The unaligned image faulted at the address the RTL model predicts; the
+    aligned one serves.
+  - QEMU (fabrication off and on) passes b0-hello, b1-thread and memcached with the aligned glue.
+  - What ran: memcached 1.6.45 with libevent 2.1.12, musl, the delegate runtime and minted contexts for its
+    threads (how many started is not counted on the board), all as one gp-captable full-LTO image on 776d9d859.
+    - It served THE MILESTONE EXCHANGE over loopback and shut down cleanly on SIGTERM. That is the claim.
+    - The full oracle session is B3 below, and it differs from native.
+
+## B3 (2026-10-05): memcached's oracle on silicon, by transcript hash
+- **The reference.** Native memcached 1.6.45 (the pinned tarball, sha256 f23cee6dc1e4a77e) with libevent 2.1.12,
+  built as `host/build-native.sh` does, but without `deps/env.sh`: its SDK preparation fails C-46 with the shared
+  debug toolchain, which the native build does not use (`/tmp/capstone/b3/build-native.sh`).
+  - The port's harness (`mc-harness`, 8 connections, the scripted session) ran with the board's flags (`-l
+    127.0.0.1 -p 21299 -U 0 -m 8 -t 1 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`).
+  - Result: `transcript.norm` 1,931,207 bytes, sha256 **e0a254c47e7ee28c**.
+  - The two null runs are identical, and both perturbations (a value byte, a cas) change the hash, so the
+    comparison can see a one-byte difference.
+  - Identity `STAT pointer_size 64`, exit 0 on SIGTERM.
+- **QEMU, fabrication off, monitor 10a0690, memcached ba7e6921cf27f2b6:** the same transcript hash e0a254c47e7ee28c,
+  the same 1,931,207 bytes, `STAT pointer_size 128`, job record exit 0.
+- **Board run, pre-registered before the bake (776d9d859).**
+  - The image ba7e6921cf27f2b6 and the harness built with the FPGA toolchain, in a private image
+    (`b0-bake-b3.sh`); monitor 1f9aedd. Rungs b0-stats, `b3-oracle`, b0-stats2.
+  - The rung prints the transcript's hash and length, the identity and the job record; the transcript itself stays
+    on the board.
+  - **Predicted: `B3: transcript e0a254c47e7ee28c bytes 1931207`, `identity STAT pointer_size 128`, job exit 0,
+    `RESULT b3-oracle retval=0`.**
+  - A different hash with the right length points at a data difference: a protocol reply or a stored value.
+- **Board result (21:50-21:57, firmware 3645ae6b2219): a MISS.**
+  - `B3: transcript fe153b1465b4c9c5 bytes 1931245`, 38 bytes longer than native's 1,931,207.
+  - `identity STAT pointer_size 128`, job exit 0, `RESULT b3-oracle retval=0`.
+  - The harness reported `stop_seconds=inf`. ~~(its CLOCK_MONOTONIC delta on the board)~~ **RETRACTED 23:15, see
+    B3c:** the clocks advance correctly; the `inf` is the harness's FP arithmetic (ISSUES S-18), not a clock reading.
+  - QEMU reproduces the native transcript exactly, so the difference is the board's.
+- **B3d result (22:01-22:07): the 38 bytes are TIME, not data.**
+  - On the board two items that should have expired are still served: ~~`gone` after a short-TTL `touch`~~ `gone`
+    after `touch gone -1`, and `past`, set with an expiry of -1. Both are NEGATIVE expiries (corrected 23:15, B3w).
+    `get_hits`/`get_misses` move by exactly those two gets.
+  - The transcript is otherwise byte-identical.
+  - On the board the runtime has no tick source (exec.c passes `ticks_per_second = 0`: silicon has no `time`
+    CSR), so the domain's clock_gettime is delegated to the board's Linux.
+  - ~~The native harness on the same board also read its CLOCK_MONOTONIC delta as `inf`.~~
+  - ~~So the board's clocks, as memcached and the harness see them, do not advance the way the expiry needs.~~
+    **RETRACTED 2026-10-05 23:15.** B3c read both clocks advancing 1.015 s across `sleep 1` on the board. The `inf`
+    is FP arithmetic in the native harness (ISSUES S-18), and the two items are memcached's negative-expiry
+    mapping meeting a wall clock at 1970 plus uptime (B3w, B3c). What stands: it was a platform question, not a
+    memory or capability difference.
+  - Next: read the board's CLOCK_REALTIME and CLOCK_MONOTONIC twice across a sleep, natively and through a
+    domain.
+- **B3d pre-registered (diagnostic):** the same image and the same rung, now also printing the first 40 lines of
+  `diff native board`, with the native reference baked into the image (`b0-bake-b3d.sh`). No outcome is predicted
+  beyond "the 38 bytes are visible".
+
+- **B3w hypothesis (22:20, from the source, before any run): the board's WALL clock, not a clock that fails to
+  advance.**
+  - Both served items are set with a NEGATIVE expiry: `touch gone -1` and `set past 0 -1 1`
+    (mc-harness.c:207-208).
+  - memcached maps a negative expiry to `REALTIME_MAXDELTA + 1` = 2,592,001, an absolute Unix time 30 days after
+    the epoch (memcached.h:1081). realtime() expires it at once only when `exptime <= process_started`
+    (memcached.c:182-190), and `process_started = time(0) - 62` comes from the wall clock (stats_init, :206).
+  - If the board has no RTC and no time source, its Linux runs at 1970 plus uptime (to be read on the board with
+    `date +%s`). Then process_started is a few hundred, 2,592,001
+    is in the future, and both items live for about 30 days. That is exactly the two extra hits and two fewer
+    misses, with nothing else in the transcript moving: relative expiries use the monotonic current_time.
+  - This replaces "the clocks do not advance". The monotonic clock is not needed to explain the transcript.
+    `stop_seconds=inf` is a separate oddity: it is a double, `t1 - t0` from `tv_sec + tv_nsec / 1e9`, and no
+    integer clock reading converts to inf. It is UNRESOLVED and is not part of this hypothesis.
+- **B3w pre-registered (QEMU, before the run):** one VM boot, monitor 10a0690, fabrication off, memcached
+  ba7e6921cf27f2b6, the host-built harness as before.
+  - Arm 1 is the control: the guest clock as booted. Predicted: transcript e0a254c47e7ee28c, 1,931,207 bytes (as
+    on 2026-10-05).
+  - Arm 2 is the only change: the guest clock set to `@400` with `date -s` first. **Predicted: the board's
+    transcript exactly, fe153b1465b4c9c5, 1,931,245 bytes.**
+  - Any other hash in arm 2 refutes "the wall clock is the whole difference", even if the two items are served.
+- **B3w RESULT (QEMU, 22:23-22:25, after pre-registration 1348a1432ff5; firmware d5c57ee765c9, fabrication off):
+  AS PREDICTED, the wall clock is the whole difference.**
+  - Arm 1, control (`date +%s` = 1791210272): transcript e0a254c47e7ee28c, 1,931,207 bytes, `stop_seconds=1.19`.
+  - Arm 2, `date -s @400` (`date +%s` = 400): transcript **fe153b1465b4c9c5, 1,931,245 bytes**, which is the
+    board's, byte for byte. `stop_seconds=1.30`.
+  - Both arms: `STAT pointer_size 128`, job exit 0, harness rc 0.
+  - So B3's miss is not a memcached, runtime or capability difference. A guest whose wall clock is before
+    1970-01-31 keeps negative-expiry items for 30 days. From the source this holds natively too, since realtime() is
+    memcached's own code; no native run on a 1970 clock was made.
+  - It does not explain `stop_seconds=inf`. That value is monotonic-clock arithmetic in the harness, and a 1970 wall
+    clock gives 1.30 here. It stays UNRESOLVED and gets its own probe.
+- **What the board run must show next:** `date +%s` small (the board's wall clock), then the oracle with the clock
+  set reproducing e0a254c47e7ee28c, which is B3 passing by hash on silicon.
+- **B3c pre-registered (board, before the bake): 776d9d859, monitor 1f9aedd, memcached ba7e6921cf27f2b6, harness
+  b433cd6ec88207a4, probe b3-clock-probe.c (FPGA build 5aa140cf39647700), private image c2f7e7a7f8c1, firmware
+  8a3c285be032.** Rungs in order: b0-stats, `b3-setclock`, `b3-oracle`, `b3-clock`, b0-stats2.
+  - b0-stats and b0-stats2: retval 0.
+  - b3-setclock: **`date before` < 2,592,063** (the board's wall clock before 1970-01-31). A larger value refutes
+    B3w on the board, whatever QEMU showed. Then `date -s @1791200000` succeeds, retval 0.
+  - **b3-oracle: transcript e0a254c47e7ee28c, 1,931,207 bytes**, `STAT pointer_size 128`, job exit 0, retval 0.
+    That is B3 passing by hash on silicon. A different hash with the clock set refutes "the clock is the whole
+    difference" on the board.
+  - b3-clock, a diagnostic placed last because it starts memcached a second time. Its self-test must report exactly
+    1 changed register (fs5), or its hold arms are void. No outcome is predicted for `stop_seconds=inf`; the
+    readings decide between:
+    - an FP arithmetic or load defect (arith anomalies > 0, or t1 in hex not finite);
+    - FP state lost across a domain run (hold-domain changed > 0, hold-native 0);
+    - the kernel's FP context switch (hold-native changed too);
+    - none of these reproduced: UNRESOLVED, with the oracle harness's own value as the in-situ reading.
+  - The probe's domain arm waits until memcached listens before the 3 s and SIGTERM, as the harness does. The first
+    build sent SIGTERM 3 s after launch, which on silicon could still be inside the first entry.
+  - QEMU rehearsal of this probe (22:32, built for QEMU, firmware d5c57ee765c9): clocks advance 1.006 s, 0 arith
+    anomalies of 200,000, self-test 1 of 12, holds 0 and 0, server listening, `stop_seconds=1.52`; then oracle
+    e0a254c47e7ee28c after `date -s`.
+- **B3c RESULT (22:34-22:46, 776d9d859, firmware 8a3c285be032): B3 PASSES BY HASH ON SILICON, as pre-registered.**
+  - b0-stats retval 0.
+  - b3-setclock: `date before: 108` at an uptime of 109.09 s. The board's Linux runs at 1970 plus uptime, as
+    predicted (< 2,592,063). `date -s @1791200000` returned 0.
+  - **b3-oracle: transcript e0a254c47e7ee28c, 1,931,207 bytes, which is the native reference exactly.**
+    `STAT pointer_size 128`, job exit 0, retval 0, and the native-board diff is empty.
+  - So the whole B3 difference was the board's wall clock, on the board as in QEMU (B3w).
+  - **b3-clock, the clocks:** realtime and monotonic both advance 1.015 s across `sleep 1` (monotonic 204.886 to
+    205.902). The clocks work.
+  - **b3-clock, the arithmetic: 200,000 anomalies of 200,000.** `sec + nsec / 1e9` read back as exactly 1e9, the
+    `fld` value of a register that fcvt.d.l, fdiv.d and fadd.d had written after it. `now()` returned 904549760.0:
+    nanoseconds converted, never divided or added.
+    - That is the harness's `stop_seconds=inf`.
+    - The memcached domain is soft-float and never touches the FPU.
+    - Filed as ISSUES S-18, origin not established.
+  - The rung then returned nothing within 420 s, after the arith line and before the self-test's, so there is no
+    hold reading, and b0-stats2 is collateral.
+    - The trap log read 0x8f (mcause 15) at mepc `rwsem_down_write_slowpath+0x3e2`.
+    - When that trap happened since the load is unknown, so the hang is not attributed.
+  - Next for S-18: a bare directed test of the two sequences in RTL simulation, with memory latency, before any
+    board time.
+
+## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
+**The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
+use:
+- the arena split (`CONTEXT_BYTES`, `__capstone_context_arena`);
+- `__capstone_context_entry`;
+- `__capstone_context_exit` and `__capstone_context_exit_clear`.
+The gp-captable interp glue has none of them. Two of start-musl.S's assumptions fail on silicon:
+1. The entry reads **gp from the register at the CALL** (`delin(gp); stc(gp, t0, 32)`). That holds under QEMU only
+   because QEMU fabricates gp. On silicon a minted context's first CALL brings whatever its sealed state holds.
+2. The fault handler's address is **gp-derived** (`cincoffset(t1, gp, .Lmusl_fault)`). Under gp-captable, gp is the
+   cap table, not the code region.
+
+**The port (B1.1 to B1.6), each step QEMU-first with fabrication OFF:**
+- **B1.1 gp in the start block.** Under `CAPSTONE_GP_CAPTABLE_ABI`, the MINTING context writes its own gp (the shared
+  cap table) into the new context's start block, slot 32, and the entry loads gp from there. All contexts share
+  one cap table, as they share globals.
+- **B1.2 a gp-captable `__capstone_context_entry`/`_exit`** in the silicon glue: gp from slot 32, sp/tp/the start
+  function/its argument from slots 48/96/112/128, the start function called with `jalr` (an integer function pointer
+  under gp-captable), and the exit paths as in start-musl.S with `domreturn`.
+- **B1.3 a code capability for the seal.** context.c seals a context at `__capstone_context_entry` and needs a CODE
+  capability with that cursor. `context.c:38` declares the label as data, which gives DATA bounds under
+  gp-captable; the fix is to declare it as a function. The glue should provide the capability from PCC (an
+  accessor like the B0.5 code_base one). **To verify first:** that a PCC-derived capability from the glue has the
+  type and bounds a seal accepts on silicon (an RTL read before any build).
+  - **Answered by the rtl-oracle at 776d9d859 (2026-10-05, quoted claims; files cited in its report):**
+    - `auipc`, `addi` and `lla` produce INTEGERS. scoreboard.sv:238-246 sets `cap_result = '0` for every writeback
+      port but FLU and DYN. No instruction copies the ambient PCC into a GPR, so the runtime CANNOT build a code
+      capability for a minted context by itself.
+    - The sealed region's PC is the 16-byte slot at the seal's base, SWAPPED by the domain switcher (dom_switcher
+      `process()`, frontend.sv:462-470), and it may hold a capability or an integer.
+    - commit_stage.sv `pc_cap_check` runs only for a TAGGED PC. A tagged PC must be LINEAR or NONLIN, have execute
+      permission, and have its cursor in bounds; wide bounds with an interior cursor are fine.
+    - **An untagged (integer) PC is not checked at all:** a context entered that way runs with no code-bounds
+      enforcement.
+  - **Decision: the monitor supplies the code capability.** Minting with an integer PC would work on silicon, but it
+    is a silent loss of PCC enforcement for every thread, so it is rejected.
+    - For a managed domain, create_domain DELINs a copy of `dom_code`; the NONLIN type passes `pc_cap_check`.
+    - That copy is parked where the glue can load it, beside the gp park under the descriptor area (B0.1's
+      `data_top`).
+    - The glue `cincoffset`s it to `__capstone_context_entry` for each seal. This is the gp-captable equivalent of
+      the SDK path's gp-derived code capability (QEMU's fabricated gp covered code and data).
+  - **Side question raised by the answer, to check before claiming PCC enforcement for B0 itself:** RETURN passes
+    only rs1's CURSOR as the resume PC (capstone_dyn_unit.anvil RETURN). If the yield's resume PC therefore installs
+    untagged, B0's application has run WITHOUT PCC enforcement after its first yield. Unverified.
+- **B1.4 the arena split** in the interp glue's `_start`, ordered against its cap-table carve from sp.END.
+- **B1.5 the fault handler under gp-captable**, PCC-derived; this was also open from B0.
+- **B1.6 non-empty `.tdata`/init arrays**, if pthread-probe or musl's thread start needs them. TLS areas for minted
+  contexts are carved by context.c.
+- **The monitor's side already exists:** ADOPT, FORGET and STEP of minted slots (context_adopt, context_step), under
+  SUPERVISED_CALL. It has never run with CSR events on silicon for a MINTED slot, only for the first context (B0).
+- **First test after B1.1-B1.5:** pthread-probe's simplest mode (create, join with a value) as a B0-pipeline image,
+  APPDEFS from its CMake: CONTEXTS 15, CONTEXT_BYTES 131072, ARENA 8 MiB, DATA 1 MiB, STACK 256 KiB.
+
+## B1.1-B1.3 and B1.6 implemented (2026-10-05): one minted context runs in QEMU with fabrication OFF
+**What was built.**
+- **Monitor (caplifive-sbi `monitor/b0-managed-gp` a11d424, B1.3).** For a managed application with a globals
+  boundary, create_domain delinearizes `dom_code`, parks a NONLIN copy at `data_top - 32` beside the gp park, and
+  seals the domain with the same capability. Every other domain is byte-identical.
+- **Glue (`start-gp-captable-interp.S`, under a new `CAPSTONE_GLUE_CONTEXTS`; off, the file builds byte-identically):**
+  - The first entry splits a LINEAR context arena (`CAPSTONE_CONTEXT_ARENA_BYTES`) off the TOP of dom_data while it
+    is still linear. The top is used because the globals blob sits at the base; the cap table is then carved below
+    the arena.
+  - The code capability is read from `data_top - 32` before that split.
+  - Both values ride in cscratch across the table build, and after cap-init they go into C globals through two
+    accessors (glue-data.c).
+  - The `test:` frame takes the SDK recovery-block layout (return 0, result 16, gp 32, request 64, suspended sp 80).
+  - start-musl.S's yield and its context entry/exit/seal/offer/call routines are ported, with three gp-captable
+    changes:
+    - **B1.1:** `__capstone_context_seal` writes the minting context's gp into the start block's slot 32, and the
+      entry loads gp from there;
+    - the start function is called with an integer `jalr`;
+    - no gp-derived trap vector (B1.5 stays open).
+- **context.c (B1.3):** a seal's PC is `__capstone_silicon_entry_cap(code)`, the parked capability with its cursor at
+  `__capstone_context_entry`. With no capability parked (LCC type 7), minting returns -1 and `__clone` returns
+  ENOSYS, rather than sealing an integer PC.
+- **tls.c (B1.6):** a non-empty `.tdata` used to abort. It is now read through `__capstone_silicon_tls_image`, which
+  takes the first context's sp base plus the template's offset into the globals blob, narrowed to the template.
+  - **Found by the first run:** b1-thread links context.c's `static __thread next_ticket = 1`, so its `.tdata` is 8
+    bytes. `describe_tls` aborted, the main context never got a thread pointer, and its next delegated call faulted
+    on `tp + 0x40` (cause 24, tp = 0).
+  - A QEMU-only print run settled which context it was: the seal never ran, so it was the main one.
+- Build: `B0_CONTEXT_BYTES`/`B0_CONTEXTS`/`B0_DATA`/`B0_ARENA` in build-b0-hello.sh; `B0_GLUE_EXTRA` for glue-only
+  diagnostics.
+
+**QEMU, firmware fw-b1-a11d424, `CAPSTONE_GP_FABRICATE=0` and `=1`.**
+| image | result |
+|---|---|
+| b0-hello, contexts off (db4385ff32deddf6) | byte-identical to the lane head before these changes (glue.o c012e3a7 too); the hello line, both arms |
+| b0-hello with the contexts glue, 128 KiB arena, no thread | the hello line, rc 0, both arms |
+| legacy SDK control | 91, as always |
+| **b1-thread** (one pthread created and joined; 128 KiB arena, CONTEXTS 1, 1 MiB level0) | **`B1: thread returned 124`, rc 0, both arms** |
+
+The print variant (`B0_GLUE_EXTRA=-DCAPSTONE_GLUE_CONTEXTS_PEEK`, QEMU only) shows the path itself, so the pass is not
+some other route to 124.
+- The seal's entry is `Cap(1, 0x7, 0xe0200410, 0xe0200000, 0xe0220000)`: the monitor's code region `[base,
+  base+gpoff)` with its cursor at `__capstone_context_entry`.
+- The entry loads the start block, then gp: the cap table, `[0xe03df630, 0xe03dfc00)`.
+- It loads tp: a tagged capability over the thread's TLS, from musl's `__clone` argument.
+- The start function is an integer (0xe0202830).
+
+## B1 board runs, pre-registered 2026-10-05 before the boots (776d9d859)
+Firmware: the B0.8 recipe (`build-fpga-fw.sh`, `-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS
+-DCAPSTONE_SUPERVISE_QUIET`) with the monitor at a11d424, over a private image per boot (`b0-bake-b1{hello,thread}.sh`).
+The two images both enter at 0x10000 (R-3), so they get two boots. Rungs in each: `b0-stats`, the image, `b0-stats2`.
+- **B1a, the control for the monitor change:** b0-hello (db4385ff32deddf6) on the new monitor, whose domain now
+  enters with a NONLIN PC capability. Predicted: the hello line byte-exact, `RESULT b0-hello retval=0`, as B0.7
+  attempt 13. A failure here is the monitor change, and B1b does not go.
+- **B1b:** b1-thread (`/tmp/capstone/b1/bake-thread.dom`). **Predicted: `B1: thread returned 124`,
+  `RESULT b1-thread retval=0`.** It would be the first minted context of a gp-captable application on silicon, and
+  the first supervised STEP of a MINTED slot with CSR events there.
+  - Exit 3 with code 38 (ENOSYS) = no code capability reached the runtime.
+  - A domain fault names its pc: in `__capstone_context_entry` = the seal/entry path; in the worker = the context
+    ran.
+  - A wedge = the monitor's minted-slot path. Its apertures are read (BAKED_WEDGE_APERTURES).
+  - The R-29 hazard is fixed on this bitstream, and the memcpy guard stays on anyway.
+
+## Open after B3 (2026-10-05)
+- **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
+  was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
+  fabricated gp, run-context.py).
+  - **Firmware fw-b0-d5459e1:** origin/dev and the lane both give 23 of 33, with the same failures.
+    - ctl-mret, ctl-priv, ctl-priv-nested: a cause-12 fault in the domain's own code, where the probe expects
+      another outcome (a fault at a named instruction, an exit, a cause-2 fault).
+    - ra-slot0/16/32: no fault, where a load-access fault is expected.
+    - exhaust: the VM dies. QEMU halts the MONITOR with cause 2 (illegal instruction) at `_supervised_invoke.3+0x24`,
+      on the custom-opcode word 0x44a4935b, which llvm-objdump does not decode either.
+    - exhaust-ended, foreign and hold are collateral.
+  - **Firmware fw-b1-top (monitor 10a0690):** both trees give 0 of 10. The monitor halts at the first mode
+    (adopt-dead), at `_supervised_forget.3+0x20`.
+  - **What it does show:** no regression from B1. The base and the lane are identical mode for mode, and the B1
+    images run in QEMU on the same platform.
+  - **What it does not show:** anything about the monitor's context paths. The supervision instructions this QEMU
+    rejects are on exactly those paths. Until a QEMU that decodes them is in the platform, the probe cannot gate
+    them.
+  - Not attributed further. Whether QEMU or the monitor line is behind, and which instruction 0x44a4935b is, are
+    UNRESOLVED.
+- B1.5 (a fault handler in the application) and safety arms for memcached on silicon (Sublet, a level-1 heap) are
+  the next application steps.
+- Whether the B0 monitor line (caplifive-sbi `monitor/b0-managed-gp`: managed globals, M-14, fault reporting)
+  moves to capstone-bootstrap is the lead's call. Moving it means re-running the shared monitor's acceptance list.
 
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.

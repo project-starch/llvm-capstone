@@ -290,6 +290,49 @@
 79:
 .endm
 
+#ifdef CAPSTONE_GLUE_CONTEXTS
+/* CAPSTONE_GLUE_CONTEXTS (B1, llvm-capstone docs/plans/b0-silicon-delegated-runtime.md): minted contexts under the
+   gp-captable ABI. Off by default; every other build of this file is byte-identical. Three things change when on:
+   - the first entry splits a LINEAR context arena off the TOP of dom_data before anything else is carved, and
+     picks up the code capability the monitor parked at data_top - 32 (sbi_capstone.c, B1.3);
+   - the `test:` frame takes the SDK recovery-block layout (include/capstone/context.h: return 0, result 16,
+     gp 32, request 64, suspended sp 80), so one yield serves the first context and every minted one;
+   - the yield and the context entry/exit/seal/offer/call routines are start-musl.S's, adapted to gp-captable. */
+#if !defined(CAPSTONE_GLUE_YIELD)
+#error "CAPSTONE_GLUE_CONTEXTS needs CAPSTONE_GLUE_YIELD"
+#endif
+#include <capstone/context.h>
+#if defined(INTERP_DOMAIN_MTVEC) || defined(INTERP_FAKE_COUNT) || defined(INTERP_RETURN_PRECALL) || defined(INTERP_RETURN_POSTCALL)
+#error "CAPSTONE_GLUE_CONTEXTS moves the test: frame slots; the diagnostic knobs still read the old ones"
+#endif
+#if !defined(CAPSTONE_CONTEXT_ARENA_BYTES) || (CAPSTONE_CONTEXT_ARENA_BYTES) <= 0
+#error "CAPSTONE_GLUE_CONTEXTS needs -DCAPSTONE_CONTEXT_ARENA_BYTES > 0"
+#endif
+/* First entry only, before BUILD_GP_CAPTABLE_INTERP: sp = dom_data, LINEAR, cursor at its base. The arena must be
+   split while dom_data is still LINEAR (context.c seals regions carved from it, and a seal needs a LINEAR region),
+   and from the TOP, because the monitor copied the globals blob to the base. The table build then carves its
+   table below the arena, from the new END. The code capability is moved to the arena's base and the arena is
+   carried across the build in cscratch, which the build never touches; `test:` takes both out. */
+.macro CONTEXTS_FIRST_ENTRY
+  lcc(t3, sp, 4)                     /* t3 = END = the monitor's data_top              */
+  lcc(t4, sp, 2)                     /* t4 = cursor (the base)                         */
+  addi  t5, t3, -32
+  sub   t5, t5, t4
+  cincoffset(sp, sp, t5)             /* in place: a LINEAR sp moves within itself      */
+  ldc(t6, sp, 0)                     /* t6 = the NONLIN code capability (B1.3)         */
+  sub   t5, x0, t5
+  cincoffset(sp, sp, t5)             /* cursor back at the base                        */
+  li    t4, CAPSTONE_CONTEXT_ARENA_BYTES
+  sub   t3, t3, t4
+  split(t5, sp, t3)                  /* sp = [base, END-A); t5 = [END-A, END), LINEAR  */
+  stc(t6, t5, 0)                     /* the code capability rides at the arena's base  */
+  ccsrrw(x0, cscratch, t5)
+  li    t3, 0
+  li    t4, 0
+  li    t5, 0
+  li    t6, 0
+.endm
+#endif
 .macro BUILD_GP_CAPTABLE_INTERP first_entry=1
 #if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 2
   /* Diagnostic build: no descriptor is read, so no blob view is needed -- which also
@@ -450,7 +493,39 @@
   beqz  s4, 99f                      /* no globals: nothing to build                   */
 
   lcc(t1, sp, 4)                     /* t1 = sp.END                                    */
+#if defined(CAPSTONE_GLUE_CARVE_ALIGN)
+  /* CAPSTONE_GLUE_CARVE_ALIGN (ISSUES R-11, first hit on silicon 2026-10-05 by B2's memcached): SPLIT writes both
+     halves back in compress_bounds' CURSORLESS form, which keeps the top as 21 bits above E, E = (highest bit
+     where cursor and top differ) - 20, and TRUNCATES the rest. So the lower half [base, t1) loses t1's low E bits
+     whenever base and t1 differ at bit 21 or above: in a 32 MiB region E = 5, the table split at END - count*16
+     left the stack's top 16 bytes short, and the first global carved below it faulted on its seventh store
+     (cause 28, tval END - 0x10a0). Every carve point is therefore kept a multiple of max(16, 2^E), with E taken
+     once from the region's own base and top (no interior split can need more). A no-op on a region inside one
+     2 MiB window. Off by default: every other build of this file is byte-identical. */
+  lcc(t3, sp, 3)                     /* t3 = base                                      */
+  xor   t3, t3, t1
+  srli  t3, t3, 21
+  li    s6, 1
+50:
+  beqz  t3, 51f
+  slli  s6, s6, 1                    /* s6 = 2^E, E = bits of (base ^ top) above bit 20 */
+  srli  t3, t3, 1
+  j     50b
+51:
+  li    t3, 16
+  bgeu  s6, t3, 52f
+  mv    s6, t3
+52:
+  addi  s6, s6, -1                   /* s6 = carve granule - 1, live through the loop  */
+  not   t3, s6
+  and   t1, t1, t3                   /* the top, aligned down                          */
   slli  t3, s4, 4                    /* count * 16                                     */
+  add   t3, t3, s6
+  not   t4, s6
+  and   t3, t3, t4                   /* the table, aligned up                          */
+#else
+  slli  t3, s4, 4                    /* count * 16                                     */
+#endif
   sub   t1, t1, t3
   split(gp, sp, t1)                  /* gp = [t1,END) table; sp = [base,t1)            */
 #if INTERP_SP_LINEAR
@@ -497,6 +572,11 @@
   bnez  t4, 11f
   li    t4, 16
 11:
+#if defined(CAPSTONE_GLUE_CARVE_ALIGN)
+  add   t4, t4, s6
+  not   t2, s6
+  and   t4, t4, t2                   /* storage aligned up to the carve granule (R-11) */
+#endif
   /* BOUNDS REPRESENTABILITY. A capability's bounds are encoded with a granule of
        1 << (max(0, floor(log2 len) - 12) + 3)
      so 16-byte alignment is exact only while that granule is <= 16, i.e. len < 8192.
@@ -731,6 +811,9 @@ __test_reentry:
 _start:
 __test_entry:
   ccsrrw(sp, cscratch, x0)           /* sp = dom_data (cscratch) DATA region */
+#ifdef CAPSTONE_GLUE_CONTEXTS
+  CONTEXTS_FIRST_ENTRY
+#endif
 #ifdef INTERP_PEEK_SP
   .insn r 0x5b, 0x1, 0x43, x0, sp, x0
 #endif
@@ -761,9 +844,16 @@ __test_entry:
   .global test
 test:
   cincoffsetimm(sp, sp, -96)
+#ifdef CAPSTONE_GLUE_CONTEXTS
+  stc(ra, sp, 0)                     /* CONTEXT_SLOT_RETURN */
+  stc(a1, sp, 16)                    /* CONTEXT_SLOT_RESULT (res) */
+  stc(gp, sp, 32)                    /* CONTEXT_SLOT_GP: the yield's resume reloads it */
+  sd a0, 64(sp)                      /* CONTEXT_SLOT_REQUEST (func) */
+#else
   stc(ra, sp, 48)                    /* save the entry return cap for domreturn */
   sd a0, 64(sp)
   stc(a1, sp, 80)                    /* a1 = shared region cap (res) */
+#endif
 
 #if defined(INTERP_DOMAIN_MTVEC)
   /* INSTALL THE TRAP VECTOR **BEFORE** CAP-INIT, not just before domain_main.
@@ -790,7 +880,18 @@ test:
      reads it to reach the entry return capability stashed at +48. Sited here for the reason
      the comment above gives -- cscratch is provably free across cap-init -- and that
      argument is what makes it safe to share. */
+#ifdef CAPSTONE_GLUE_CONTEXTS
+  ccsrrw(t5, cscratch, sp)
+  beqz  s5, 1f                       /* not the building entry: nothing was parked     */
+  ldc(t6, t5, 0)                     /* the code capability, from the arena's base     */
+  stc(t6, sp, 48)                    /* frame slots 48/80 are free until domain_main   */
+  stc(t5, sp, 80)                    /* the LINEAR arena (moved)                       */
+1:
+  li    t5, 0
+  li    t6, 0
+#else
   ccsrrw(x0, cscratch, sp)
+#endif
 #endif
 
   /* Cap-init runs HERE, not at the entry points, because it CALLS: `jalr ra`
@@ -801,8 +902,26 @@ test:
      my_first_domain/start.S orders it the same way, for the same reason. */
   RUN_CAP_INIT
 
+#ifdef CAPSTONE_GLUE_CONTEXTS
+  /* Globals are live now, so the two values can go where C finds them (glue-data.c). The accessors return the
+     slots' capabilities from the cap table; asm cannot name a cap-table slot itself. */
+  beqz  s5, 2f
+  call  __capstone_silicon_arena_slot
+  ldc(t5, sp, 80)
+  stc(x0, sp, 80)
+  stc(t5, a0, 0)
+  call  __capstone_silicon_code_cap_slot
+  ldc(t5, sp, 48)
+  stc(x0, sp, 48)
+  stc(t5, a0, 0)
+  li    t5, 0
+2:
+  ldc(a0, sp, 16)                    /* a0 = res */
+  ld a1, 64(sp)                      /* a1 = func */
+#else
   ldc(a0, sp, 80)                    /* a0 = res */
   ld a1, 64(sp)                      /* a1 = func */
+#endif
 
 #if defined(INTERP_RETURN_PRECALL)
   /* BISECT THE ENTRY GLUE WITHOUT TOUCHING THE CAP-TABLE BUILD.
@@ -913,7 +1032,11 @@ test:
 
 .Ldomain_returned:
   lla t2, __test_reentry
+#ifdef CAPSTONE_GLUE_CONTEXTS
+  ldc(t1, sp, 0)                     /* t1 = entry return cap */
+#else
   ldc(t1, sp, 48)                    /* t1 = entry return cap */
+#endif
   li ra, 0
   li gp, 0
   li tp, 0
@@ -1039,7 +1162,7 @@ test:
   j .Ldomain_returned
 #endif
 
-#ifdef CAPSTONE_GLUE_YIELD
+#if defined(CAPSTONE_GLUE_YIELD) && !defined(CAPSTONE_GLUE_CONTEXTS)
 /* void __capstone_yield(void);
  *
  * Hand control back to the host and RESUME HERE when it calls again, with the C
@@ -1132,6 +1255,380 @@ __capstone_yield:
   ldc(tp, sp, 224)
   cincoffsetimm(sp, sp, 256)
   ret
+#endif
+
+
+#ifdef CAPSTONE_GLUE_CONTEXTS
+/* The SDK's context routines and yield (ports/musl-capstone/runtime/start-musl.S), under gp-captable. */
+  .text
+/* ---- Minted contexts (docs/plans/delegation-threads.md) ------------------
+ *
+ * A context the runtime mints (context.c) enters here on its first CALL. Its
+ * cscratch is its own start block, laid out like the recovery block above:
+ * slots 0..80 are the entry glue's (return capability, result slot, gp, sp,
+ * request, suspended sp), so the yield and the fault handler above serve a
+ * minted context unchanged. Slots 96..128 carry tp, the start function and
+ * its argument; 160 is the completion word and 168 the return value
+ * (include/capstone/context.h). The capability-global initializers never run
+ * here: they ran once, on the application's first entry. */
+  .global __capstone_context_entry
+  .balign 16
+__capstone_context_entry:
+  ccsrrw(t0, cscratch, x0)
+  stc(ra, t0, 0)
+  li ra, 0
+  /* gp-captable (B1.1): gp is the application's ONE cap table, which every context shares as it shares the
+     globals. The minting context's __capstone_context_seal wrote it into slot 32; nothing arrives in gp at a
+     CALL on silicon. No trap vector is installed yet (B1.5): the SDK entry's is gp-derived, and under
+     gp-captable gp is the table, not the code. */
+  ldc(gp, t0, 32)
+#ifdef CAPSTONE_GLUE_CONTEXTS_PEEK
+  /* QEMU-only diagnostic (csdebugprint): the start block, then what the entry loads from it. */
+  .insn r 0x5b, 0x1, 0x43, x0, t0, x0
+  .insn r 0x5b, 0x1, 0x43, x0, gp, x0
+  ldc(t1, t0, 96)
+  .insn r 0x5b, 0x1, 0x43, x0, t1, x0
+  ldc(t1, t0, 112)
+  .insn r 0x5b, 0x1, 0x43, x0, t1, x0
+  li t1, 0
+#endif
+  sd a0, 64(t0)
+  bnez a0, .Lcontext_no_result
+  stc(a1, t0, 16)
+.Lcontext_no_result:
+  ldc(sp, t0, 48)
+  ldc(tp, t0, 96)
+  ldc(t1, t0, 112)
+  ldc(a0, t0, 128)
+  ccsrrw(x0, cscratch, t0)
+  li t0, 0
+  jalr ra, 0(t1)                     /* gp-captable: the start function is an INTEGER pointer */
+  /* The start function returned: its value is the context's. */
+
+/* void __capstone_context_exit(unsigned long value), never returns.
+ *
+ * Everything the final switch needs is loaded into registers BEFORE the
+ * completion word is published; after that store nothing touches the stack,
+ * the TLS block or the start block, no libc function runs and the syscall
+ * dispatcher is never entered, so no signal is delivered here. A joiner that
+ * sees done == 1 may revoke the thread area at once. */
+  .global __capstone_context_exit
+__capstone_context_exit:
+  ccsrrw(t0, cscratch, x0)
+  ldc(t1, t0, 0)
+  stc(x0, t0, 0)
+  ld t3, 64(t0)
+  ldc(t2, t0, 16)
+  sd a0, 168(t0)
+  fence rw, w
+  j .Lcontext_exit_done
+
+/* void __capstone_context_exit_clear(unsigned long value, volatile int *clear),
+ * never returns: as __capstone_context_exit, and before the completion word it
+ * stores 0 into *clear, the word Linux clears when a thread made with
+ * CLONE_CHILD_CLEARTID ends (musl's thread-list lock). A thread that joined
+ * may free this context's stack and TLS from that store on, so it comes after
+ * the last access to them; the launcher wakes the word's waiters once the
+ * context has returned for good (CONTEXT_EXITING). */
+  .global __capstone_context_exit_clear
+__capstone_context_exit_clear:
+  ccsrrw(t0, cscratch, x0)
+  ldc(t1, t0, 0)
+  stc(x0, t0, 0)
+  ld t3, 64(t0)
+  ldc(t2, t0, 16)
+  sd a0, 168(t0)
+  fence rw, w
+  sw x0, 0(a1)
+  fence w, w
+.Lcontext_exit_done:
+  li t4, 1
+  sd t4, 160(t0)
+  /* No access to the thread area below this line. */
+  ccsrrw(x0, cscratch, t0)
+  li t0, 0
+  bnez t3, .Lcontext_exit_switch
+  li t4, CAPSTONE_CONTEXT_EXITED
+  sd t4, 0(t2)
+.Lcontext_exit_switch:
+  li t2, 0
+  li t3, 0
+  li t4, 0
+  li sp, 0
+  li gp, 0
+  li tp, 0
+  li s0, 0
+  li s1, 0
+  li s2, 0
+  li s3, 0
+  li s4, 0
+  li s5, 0
+  li s6, 0
+  li s7, 0
+  li s8, 0
+  li s9, 0
+  li s10, 0
+  li s11, 0
+  li a0, 0
+  li a1, 0
+  li a2, 0
+  li a3, 0
+  li a4, 0
+  li a5, 0
+  li a6, 0
+  li a7, 0
+  li t5, 0
+  li t6, 0
+  lla t2, .Lcontext_reentry
+  domreturn(t1, t2, x0)
+
+/* Every later entry into an exited context lands here. It uses only the
+ * return capability and result slot this entry delivered, reports EXITED
+ * again and returns: no stack, no TLS, no start block. */
+.Lcontext_reentry:
+  bnez a0, .Lcontext_reentry_switch
+  li t4, CAPSTONE_CONTEXT_EXITED
+  sd t4, 0(a1)
+.Lcontext_reentry_switch:
+  li a0, 0
+  li a1, 0
+  li t4, 0
+  lla t2, .Lcontext_reentry
+  domreturn(ra, t2, x0)
+
+/* void __capstone_context_seal(capstone_cap_slot *region, void *entry,
+ *                              void *start_block, capstone_cap_slot *out,
+ *                              unsigned long mstatus, unsigned long mie)
+ *
+ * Fill a LINEAR seal region with the synchronous context a first CALL loads
+ * (pc, ctvec, cscratch, then the control words) and seal it into *out. The
+ * runtime passes the words create_domain writes; a probe may pass others
+ * (A12). ctvec stays null: the entry installs the runtime's own. */
+  .global __capstone_context_seal
+__capstone_context_seal:
+#ifdef CAPSTONE_GLUE_CONTEXTS_PEEK
+  .insn r 0x5b, 0x1, 0x43, x0, a1, x0
+  .insn r 0x5b, 0x1, 0x43, x0, a2, x0
+  ldc(t0, a2, 96)
+  .insn r 0x5b, 0x1, 0x43, x0, t0, x0
+  li t0, 0
+#endif
+  stc(gp, a2, 32)                    /* gp-captable (B1.1): the start block's gp slot */
+  ldc(t0, a0, 0)
+  stc(x0, a0, 0)
+  stc(a1, t0, 0)
+  stc(x0, t0, 16)
+  stc(a2, t0, 32)
+  sd a4, 48(t0)
+  sd x0, 56(t0)
+  sd x0, 64(t0)
+  sd x0, 72(t0)
+  sd a5, 80(t0)
+  .insn r 0x5b, 0x1, 0x7, t0, t0, x0   /* seal t0 in place */
+  stc(t0, a3, 0)
+  li t1, 0
+  ret
+
+/* long __capstone_context_offer(capstone_cap_slot *seal, unsigned long ticket)
+ *
+ * Move a minted seal, with its ticket, into the invocation descriptor the
+ * current call entry lent this context (recovery-block slot 16). The monitor
+ * takes it out when the call returns, before it revokes the loan; the launcher
+ * then asks it to ADOPT the offer under the ticket. -1 when the current entry
+ * carried no descriptor (a region share); the seal then stays where it is. */
+  .global __capstone_context_offer
+__capstone_context_offer:
+  ccsrrw(t0, cscratch, x0)
+  ld t1, 64(t0)
+  bnez t1, .Lcontext_offer_none
+  ldc(t2, t0, 16)
+  ccsrrw(x0, cscratch, t0)
+  ldc(t3, a0, 0)
+  stc(x0, a0, 0)
+  sd a1, 16(t2)
+  stc(t3, t2, 32)
+  li t0, 0
+  li t2, 0
+  li t3, 0
+  li a0, 0
+  ret
+.Lcontext_offer_none:
+  ccsrrw(x0, cscratch, t0)
+  li t0, 0
+  li a0, -1
+  ret
+
+/* void __capstone_context_call(capstone_cap_slot *seal, unsigned long request,
+ *                              unsigned long *result)
+ *
+ * Enter a minted context directly with CALL (a nested, unsupervised entry
+ * from this context) and return when it yields or exits; the seal comes back
+ * into *seal. The CALL exchanges only pc, ctvec, cscratch and the control
+ * words, so everything this caller needs is saved on its stack and sp
+ * travels in the recovery block's suspended-sp slot, as in the yield. */
+  .global __capstone_context_call
+__capstone_context_call:
+  cincoffsetimm(sp, sp, -256)
+  stc(ra, sp, 0)
+  stc(gp, sp, 16)
+  stc(s0, sp, 32)
+  stc(s1, sp, 48)
+  stc(s2, sp, 64)
+  stc(s3, sp, 80)
+  stc(s4, sp, 96)
+  stc(s5, sp, 112)
+  stc(s6, sp, 128)
+  stc(s7, sp, 144)
+  stc(s8, sp, 160)
+  stc(s9, sp, 176)
+  stc(s10, sp, 192)
+  stc(s11, sp, 208)
+  stc(tp, sp, 224)
+  stc(a0, sp, 240)
+  ccsrrw(t0, cscratch, x0)
+  stc(sp, t0, 80)
+  ccsrrw(x0, cscratch, t0)
+  ldc(t3, a0, 0)
+  stc(x0, a0, 0)
+  mv a0, a1
+  .insn r 0x5b, 0x1, 0xa, a1, a2, x0   /* movc a1, a2 */
+  /* Named so that a probe can match a fault at exactly this CALL. */
+  .global __capstone_context_call_insn
+__capstone_context_call_insn:
+  .insn r 0x5b, 0x1, 0x20, t3, t3, x0  /* call t3 */
+  ccsrrw(t0, cscratch, x0)
+  ldc(sp, t0, 80)
+  ccsrrw(x0, cscratch, t0)
+  li t0, 0
+  ldc(a0, sp, 240)
+  stc(t3, a0, 0)
+  ldc(ra, sp, 0)
+  ldc(gp, sp, 16)
+  ldc(s0, sp, 32)
+  ldc(s1, sp, 48)
+  ldc(s2, sp, 64)
+  ldc(s3, sp, 80)
+  ldc(s4, sp, 96)
+  ldc(s5, sp, 112)
+  ldc(s6, sp, 128)
+  ldc(s7, sp, 144)
+  ldc(s8, sp, 160)
+  ldc(s9, sp, 176)
+  ldc(s10, sp, 192)
+  ldc(s11, sp, 208)
+  ldc(tp, sp, 224)
+  cincoffsetimm(sp, sp, 256)
+  ret
+
+
+/* void *__capstone_silicon_entry_cap(void *code)
+ *
+ * gp-captable (B1.3): the code capability the monitor parked, with its cursor moved to __capstone_context_entry,
+ * for a seal's PC. C cannot name the label itself: under gp-captable a reference to an assembly symbol is derived
+ * from gp and faults on silicon (C-13). */
+  .global __capstone_silicon_entry_cap
+__capstone_silicon_entry_cap:
+  lla t0, __capstone_context_entry
+  scc(a0, a0, t0)
+  li t0, 0
+  ret
+
+/* void __capstone_yield(void);
+ *
+ * Hand control back to the launcher and resume HERE when it calls again.
+ *
+ * SP DOES NOT SURVIVE THE BOUNDARY. The first version of this routine assumed
+ * the hardware register-file swap restored the whole C state, saved only `ra`,
+ * and MEASURED (QEMU, 2026-08-14) exactly one thing on resume:
+ *
+ *   [CAPSTONE] Cap mem access requires capability: pc = ..., rs1 = x2, imm = 0
+ *   [CAPSTONE] domain halted by capability fault: cause = 24
+ *
+ * `rs1 = x2` is sp, at the first sp-relative `ldc` after resume: sp came back
+ * as a plain integer, not a capability. `gp` did survive -- the gp-relative
+ * access two instructions earlier did not fault -- which is consistent with the
+ * monitor handing gp to the domain on every entry.
+ *
+ * cscratch is the designated carrier for a capability across a domain
+ * boundary, and in this glue it always holds the context's recovery block (see
+ * _start). So: sp travels in that block (slot 80), the return capability comes
+ * from its slot 0, and everything else travels on the stack that sp then finds
+ * again. The resuming CALL supplies a new return capability and result slot,
+ * which the resume path installs before it touches the stack.
+ *
+ * Callee-saved registers are saved even though `gp` suggests some registers do
+ * survive. Which ones is unverified, one wrong guess costs a ten-minute boot to
+ * discover, and 14 stores are free by comparison.
+ *
+ * Deliberately does NOT scrub the register file. The shared glue scrubs because
+ * it is finished and must not leave capabilities behind; here the registers ARE
+ * the suspended computation.
+ */
+  .global __capstone_yield
+__capstone_yield:
+  cincoffsetimm(sp, sp, -256)
+  stc(ra, sp, 0)
+  stc(gp, sp, 16)
+  stc(s0, sp, 32)
+  stc(s1, sp, 48)
+  stc(s2, sp, 64)
+  stc(s3, sp, 80)
+  stc(s4, sp, 96)
+  stc(s5, sp, 112)
+  stc(s6, sp, 128)
+  stc(s7, sp, 144)
+  stc(s8, sp, 160)
+  stc(s9, sp, 176)
+  stc(s10, sp, 192)
+  stc(s11, sp, 208)
+  /* THE THREAD POINTER IS PART OF THE SUSPENDED COMPUTATION, and it is the one
+     register here that is neither callee-saved by the C ABI nor handed back by
+     the monitor. musl keeps errno, the locale and the cancellation state behind
+     it, so a domain that loses it across a yield works until the first syscall
+     that FAILS and then faults in __errno_location instead of returning -1.
+     Measured 2026-09-16: write(1,...) completed through this yield, and the
+     write(7,...) after it halted with cause = 24 at `cincoffsetimm a0, a0, -0x124`,
+     the pointer arithmetic in __pthread_self, with tp reading 0. Slot 224 was
+     free; the frame is 256 bytes and 0..208 were in use. */
+  stc(tp, sp, 224)
+
+  ccsrrw(t0, cscratch, x0)
+  stc(sp, t0, 80)
+  ldc(t1, t0, 0)
+  stc(x0, t0, 0)
+  ccsrrw(x0, cscratch, t0)
+  lla t2, .Lyield_resume
+  domreturn(t1, t2, x0)
+
+.Lyield_resume:
+  /* The resuming CALL supplies a NEW result pointer and return capability.
+     Install both before touching the suspended application's stack. */
+  ccsrrw(t0, cscratch, x0)
+  stc(ra, t0, 0)
+  li ra, 0
+  stc(a1, t0, 16)
+  sd a0, 64(t0)
+  ldc(sp, t0, 80)
+  ldc(gp, t0, 32)
+  ccsrrw(x0, cscratch, t0)
+
+  ldc(ra, sp, 0)
+  ldc(s0, sp, 32)
+  ldc(s1, sp, 48)
+  ldc(s2, sp, 64)
+  ldc(s3, sp, 80)
+  ldc(s4, sp, 96)
+  ldc(s5, sp, 112)
+  ldc(s6, sp, 128)
+  ldc(s7, sp, 144)
+  ldc(s8, sp, 160)
+  ldc(s9, sp, 176)
+  ldc(s10, sp, 192)
+  ldc(s11, sp, 208)
+  ldc(tp, sp, 224)
+  cincoffsetimm(sp, sp, 256)
+  ret
+
 #endif
 
   .align 4
