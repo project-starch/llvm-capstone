@@ -61,6 +61,11 @@ for f in launch delegate spawn msghdr; do cc "$CAP/runtime/common/$f.c" "common_
 python3 "$HERE/gen-vfprintf-double.py" "$MUSL" "$OUT/gen/vfprintf-double.c" > "$OUT/gen-vfprintf.log" || {
   cat "$OUT/gen-vfprintf.log" >&2; exit 2; }
 cc "$OUT/gen/vfprintf-double.c" ovr_vfprintf_double.o "${CORE_INC[@]}"
+# strtod/atof/scanf (B1.0b): floatscan.o is dropped the same way and strtod.o/vfscanf.o call it, so the three are
+# generated narrowed to double (gen-floatscan-double.py) and linked ahead of the archive.
+python3 "$HERE/gen-floatscan-double.py" "$MUSL" "$OUT/gen" > "$OUT/gen-floatscan.log" || {
+  cat "$OUT/gen-floatscan.log" >&2; exit 2; }
+for f in floatscan strtod vfscanf; do cc "$OUT/gen/$f-double.c" "ovr_${f}_double.o" "${CORE_INC[@]}"; done
 cc "$CAP/runtime/domain/application.c" app_application.o "${APPDEFS[@]}"
 cc "$M/level0.c" app_level0.o "${APPDEFS[@]}"
 cc "$HERE/$APP.c" "app_$APP.o" "${APPDEFS[@]}"
