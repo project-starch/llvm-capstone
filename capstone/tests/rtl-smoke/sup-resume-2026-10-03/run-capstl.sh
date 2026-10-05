@@ -26,6 +26,8 @@ main() {
       jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = s16escr1 ]; then   # the RTL lane's three one-round escape arms exactly
     for n in s16st-esc-n8-r1 s16st-esc-n32-r1 s16st-esc-n64-r1; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
+  elif [ "$CAPSTL_SET" = r51 ]; then   # R-51: the PC capability before and after a RETURN-based yield (PREREG.md "r51")
+    for n in r51-before r51-after; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = s17rep ]; then   # S-17's matched pair again (repeats on 715bdd1fe)
     for n in arm12-ldc-q64 arm12-ld-q64; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = precall ]; then   # the S-16 workaround candidate, and the stc18 rerun

@@ -1121,3 +1121,20 @@ R-49 changes the store path of every switcher write, and R-50 the load unit. Cyc
   is therefore weak evidence by itself. For S-16 the verdict is completion, because S-16 fails by hanging, and every
   image completed.
 - The S-16/S-17 control holds: the R-29/S-10b fix regressed nothing here.
+
+## r51: R-51 on silicon, the PC capability before and after a RETURN-based yield (pre-registered 2026-10-05, before the boot)
+- **The test.** The RTL lane's `r51-return-pcc.S` (capstone-ariane r51-return-pcc ef8900e2d), copied into `tests/`.
+  - One comment line was changed: `RETURN (resume point...` became `RETURN, (`, because cpp expands macro names in
+    `.S` comments and the board harness defines RETURN.
+  - The domain's code capability covers only its stub. It yields with RETURN, is CALLed again, and does an INTEGER
+    jalr to `outside`: mapped and executable, but outside its code capability.
+- **Arms**, built with the bare harness and BOARD_TEST_CH 160, board_rec 0x80003c00:
+  - `r51-before` (-DJUMP_BEFORE: the same jump at the first entry, before any yield), sha256 c42ba366eed59653;
+  - `r51-after`, sha256 17c3c6a83e39cad7.
+- **Run:** after the 776d9d859 acceptance chain, `CAPSTL_BITSTREAM=caplifive_supcall_776d9d859.bit CAPSTL_SET=r51
+  SUP_RUNNER=$PWD/run_sup_bare_wedge.py CAPSTL_OUT=/tmp/capstone/r51-776`, with the call-retpc control first.
+- **Predicted, on 776d9d859** (simulation of the same tree, by the RTL lane):
+  - r51-before: reading #1 = **28**, the PC capability enforced at the first entry;
+  - r51-after: #1 = 0 (the yield happened), **#2 = 0xBAD** (the post-yield jump executed: R-51), #3 = 0.
+  - **r51-after #2 = 28 would REFUTE R-51 on silicon.**
+- QEMU would read 28 for both arms, from swap_pc keeping the PC capability; that is not run here.
