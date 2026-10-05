@@ -64,8 +64,8 @@ path instead, replayed end to end with a literal port of compress/decompress_bou
   * the glue: CAPSTONE_GLUE_CONTEXTS' move to END - 32 and back and the arena split at
     END - A (A from __capstone_context_arena_bytes), then the table and every global
     carved downward, each split's upper half taking the lower half's DECODED top, with
-    or without CAPSTONE_GLUE_CARVE_ALIGN (--carve-align / --no-carve-align; it is on in
-    every B0 build since 2026-10-05).
+    or without CAPSTONE_GLUE_CARVE_ALIGN, which is read from the image's own code (its
+    `xor t3,t3,t1; srli t3,t3,21`); --carve-align on/off overrides that.
 Reported per base: SHORT (a global's storage capability is shorter than the global:
 the R-11 fault), INEXACT (a carve point lost bits: SHORT's cause), M-14 (dom_data's
 top moved), and the stack left above the globals template. WIDEN (a storage
@@ -229,6 +229,24 @@ def glue_arena(img, secs):
     return found.pop() if found else None
 
 
+def glue_carve_align(img, secs):
+    """Whether the glue was built with CAPSTONE_GLUE_CARVE_ALIGN: its granule computation starts with
+    `xor t3, t3, t1` immediately followed by `srli t3, t3, 21`, a pair nothing else in the glue emits."""
+    text = secs.get(".text")
+    if not text:
+        return False
+    off, size = text[4], text[5]
+    xor_t3 = (6 << 20) | (28 << 15) | (4 << 12) | (28 << 7) | 0x33
+    srli_t3_21 = (21 << 20) | (28 << 15) | (5 << 12) | (28 << 7) | 0x13
+    prev = None
+    for i in range(size // 4):
+        w = struct.unpack_from("<I", img, off + 4 * i)[0]
+        if prev == xor_t3 and w == srli_t3_21:
+            return True
+        prev = w
+    return False
+
+
 def process_layout(path, arena_override=None):
     img, lo, hi, secs, syms = read_elf(path)
     if lo is None:
@@ -244,7 +262,8 @@ def process_layout(path, arena_override=None):
     if arena is None and "__capstone_context_entry" in syms:
         raise ValueError("the image has minted contexts but no CONTEXTS_FIRST_ENTRY arena split was recognised in "
                          ".text; pass --arena BYTES")
-    return dict(code_len=hi - lo, gpoff=ini[3] - lo, req_data=req_data, req_stack=req_stack,
+    return dict(carve_align=glue_carve_align(img, secs),
+                code_len=hi - lo, gpoff=ini[3] - lo, req_data=req_data, req_stack=req_stack,
                 count=count, recs=recs, arena=arena or 0)
 
 
@@ -312,6 +331,10 @@ def replay_process(lay, base, carve_align):
 def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None):
     name = path.split("/")[-1]
     lay = process_layout(path, arena)
+    detected = lay["carve_align"]
+    if carve_align is None:
+        carve_align = detected
+    how = "detected" if carve_align == detected else "FORCED, the code says %s" % ("on" if detected else "off")
     first = replay_process(lay, cma_base, carve_align)
     tot = first["tot"]
     step = min(tot, 1 << 20)
@@ -325,9 +348,9 @@ def check_process(path, carve_align, cma_base, cma_size, show_base, arena=None):
         worst_stack = r["stack"] if worst_stack is None else min(worst_stack, r["stack"])
         if r["short"] or r["inexact"] or r["m14"] or r["stack"] < lay["req_stack"]:
             bad.append((b, r))
-    print("%-28s process ABI: code_len=%d domreq=%d arena=%d count=%d tot=%d carve-align=%s; %d bases "
+    print("%-28s process ABI: code_len=%d domreq=%d arena=%d count=%d tot=%d carve-align=%s (%s); %d bases "
           "(%#x + k*%#x): %s" % (name, lay["code_len"], lay["req_data"], lay["arena"], lay["count"], tot,
-                                 "on" if carve_align else "off", len(bases), cma_base, step,
+                                 "on" if carve_align else "off", how, len(bases), cma_base, step,
                                  "OK" if not bad else "AT RISK at %d" % len(bad)))
     print("    worst stack above the globals template %d (declared %d); WIDEN up to %d storage capabilities"
           % (worst_stack, lay["req_stack"], widen))
@@ -399,8 +422,9 @@ if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser(description="check gp-captable domains against CVA6's bounds compression")
     ap.add_argument("domains", nargs="+")
-    ap.add_argument("--no-carve-align", action="store_true",
-                    help="process ABI: replay the glue WITHOUT CAPSTONE_GLUE_CARVE_ALIGN (images built before it)")
+    ap.add_argument("--carve-align", choices=("auto", "on", "off"), default="auto",
+                    help="process ABI: whether the glue has CAPSTONE_GLUE_CARVE_ALIGN; auto (default) reads it from "
+                         "the image's code, on/off override that")
     ap.add_argument("--cma-base", type=lambda v: int(v, 0), default=0xac000000,
                     help="process ABI: the CMA window's base (default: the FPGA board's 0xac000000)")
     ap.add_argument("--cma-size", type=lambda v: int(v, 0), default=256 << 20)
@@ -414,7 +438,8 @@ if __name__ == "__main__":
         try:
             secs = read_elf(p)[3]
             if ".capstone_domreq" in secs:
-                bad = check_process(p, not a.no_carve_align, a.cma_base, a.cma_size, a.base, a.arena)
+                bad = check_process(p, {"auto": None, "on": True, "off": False}[a.carve_align], a.cma_base, a.cma_size,
+                                    a.base, a.arena)
             else:
                 bad = check(p)
             if bad:

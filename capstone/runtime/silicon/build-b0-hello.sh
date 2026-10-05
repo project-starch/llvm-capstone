@@ -130,3 +130,8 @@ GOFF=$(( ((TEXT + 0xFFFF) / 0x10000) * 0x10000 )); [ $GOFF -lt 65536 ] && GOFF=6
 printf '.text = %d bytes -> globals offset 0x%x\n' "$TEXT" "$GOFF"
 link "$(printf '0x%x' $GOFF)" "$OUT/$APP.dom"
 ls -la "$OUT/$APP.dom"
+# R-11's detector (check-repr.py's process-ABI replay; ISSUES R-11): every carve point of this image must stay exact
+# at every base the board's CMA can give it. It runs here because the gate R-11 shipped with was never run by any
+# build, and reported memcached's faulting image OK. B0 builds carry CAPSTONE_GLUE_CARVE_ALIGN, so it is replayed on.
+python3 "$CAP/tests/runtime-qemu/silicon-ladder/check-repr.py" "$OUT/$APP.dom" ||
+  { echo "check-repr: $APP.dom is AT RISK or could not be checked (ISSUES R-11); see above" >&2; exit 3; }

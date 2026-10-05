@@ -1198,6 +1198,12 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     - The board does place 2 MiB blocks on 1 MiB alignment: B1f's block sat at 0xac100000. So a 2 MiB block is
       exact only by placement, and the claim above that B0/B1's 2 MiB regions "lose nothing" was too broad.
     - B1's board runs are unaffected: at 0xac100000, E = 1.
+  - **Now a build gate (23:00).** build-b0-hello.sh runs it on every image and fails with rc 3 when the image is
+    AT RISK or cannot be checked. The checker reads CAPSTONE_GLUE_CARVE_ALIGN from the image's own code (the
+    granule computation's `xor t3,t3,t1; srli t3,t3,21`) instead of trusting a flag.
+    - Matched pair: memcached built normally passes and is still ba7e6921cf27f2b6.
+    - Built with `B0_GLUE_EXTRA=-UCAPSTONE_GLUE_CARVE_ALIGN`, the build stops with rc 3 (AT RISK at 217 of 225
+      bases), and the refused image is exactly the faulting ac6abd2218a686f1.
 - **Fix: `CAPSTONE_GLUE_CARVE_ALIGN`, now on in every B0 build.**
   - E is computed once from the region's base and top. The carve top is aligned down, and the table and every
     global's storage are rounded up to max(16, 2^E), so no split point can lose bits.
