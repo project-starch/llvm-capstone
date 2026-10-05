@@ -1318,6 +1318,27 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - QEMU rehearsal of this probe (22:36, built for QEMU, firmware d5c57ee765c9): clocks advance 1.006 s, 0 arith
     anomalies of 200,000, self-test 1 of 12, holds 0 and 0, server listening, `stop_seconds=1.52`; then oracle
     e0a254c47e7ee28c after `date -s`.
+- **B3c RESULT (22:34-22:46, 776d9d859, firmware 8a3c285be032): B3 PASSES BY HASH ON SILICON, as pre-registered.**
+  - b0-stats retval 0.
+  - b3-setclock: `date before: 108` at an uptime of 109.09 s. The board's Linux runs at 1970 plus uptime, as
+    predicted (< 2,592,063). `date -s @1791200000` returned 0.
+  - **b3-oracle: transcript e0a254c47e7ee28c, 1,931,207 bytes, which is the native reference exactly.**
+    `STAT pointer_size 128`, job exit 0, retval 0, and the native-board diff is empty.
+  - So the whole B3 difference was the board's wall clock, on the board as in QEMU (B3w).
+  - **b3-clock, the clocks:** realtime and monotonic both advance 1.015 s across `sleep 1` (monotonic 204.886 to
+    205.902). The clocks work.
+  - **b3-clock, the arithmetic: 200,000 anomalies of 200,000.** `sec + nsec / 1e9` read back as exactly 1e9, the
+    `fld` value of a register that fcvt.d.l, fdiv.d and fadd.d had written after it. `now()` returned 904549760.0:
+    nanoseconds converted, never divided or added.
+    - That is the harness's `stop_seconds=inf`.
+    - The memcached domain is soft-float and never touches the FPU.
+    - Filed as ISSUES S-18, origin not established.
+  - The rung then returned nothing within 420 s, after the arith line and before the self-test's, so there is no
+    hold reading, and b0-stats2 is collateral.
+    - The trap log read 0x8f (mcause 15) at mepc `rwsem_down_write_slowpath+0x3e2`.
+    - When that trap happened since the load is unknown, so the hang is not attributed.
+  - Next for S-18: a bare directed test of the two sequences in RTL simulation, with memory latency, before any
+    board time.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not

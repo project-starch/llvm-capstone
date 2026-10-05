@@ -1760,6 +1760,43 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
+### S-18 — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `OPEN — observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations, N = 1 boot); origin not established (write-back lost or a stale read; RTL, FPGA build or kernel FP state); delegated domains are soft-float and do not use the FPU`
+
+**What was seen.** b3-clock-probe.c (runtime/silicon; board build 5aa140cf39647700) evaluates `sec + nsec / 1e9`,
+the oracle harness's `now()` shape, on live CLOCK_MONOTONIC readings. Disassembly of that exact binary:
+- **In the loop**, fa5 is loaded with 1e9 (`fld`). It is then the destination of `fcvt.d.l fa5, a3`, `fdiv.d fa5,
+  fa5, fa3` and `fadd.d fa5, fa5, fa4`. `fmv.x.d` then read **0x41cdcd6500000000 = 1e9**, the value of the fld,
+  in all 200,000 iterations.
+- **In `now()`**, `fcvt.d.l fa0, a5` (nanoseconds) is followed by `fdiv.d fa0, fa0, fa4` and `fadd.d fa0, fa0, fa5`.
+  It returned **904549760.0**: the conversion's result, never divided or added.
+- So the conversion's result was visible in one place and not in the other. The arithmetic results were visible in
+  neither.
+
+**What it explains.** mc-harness prints `stop_seconds=inf` on the board in all three oracle runs (B3, B3d, B3c),
+and 1.1-1.5 in QEMU. That value is `t1 - t0` from `now()`.
+
+**What it is not.**
+- Not the clocks. The same boot read realtime and monotonic advancing 1.015 s across `sleep 1`, as integers.
+- Not the delegated application. The silicon build has no F/D (`-target-feature +m +a`), so memcached never
+  touches the FPU. Its oracle passed by hash on the same boot (plan, B3c).
+
+**Not established.**
+- Whether the result is never written, or written and then read stale (forwarding/scoreboard).
+- Whether it is the RTL, the FPGA build, or Linux's FP state on this platform. Earlier notes say the board's glibc
+  hard-float path TRAPPED on `fsd` (an older bitstream, docs/plans/compatibility-eval-silicon-app.md); here FP
+  loads, stores and moves execute.
+- What hung the probe afterwards. Its next arm (fs0-fs11 held across fork + waitpid, with an `fadd.d` self-test)
+  never printed within 420 s. The trap log read 0x8f (mcause 15) at mepc `rwsem_down_write_slowpath+0x3e2`, tval
+  0xe8f3, but when that trap happened since the load is unknown.
+
+**What would settle it.** A bare M-mode directed test of the two instruction sequences above, run in RTL
+simulation at 776d9d859 with nonzero memory latency (the testbench's default of zero hid S-12). If simulation
+computes correctly, then the same test bare on the board.
+
+**Impact.** Any native hard-float result computed on the board's Linux is suspect on this bitstream: timings
+printed by native programs, and native baselines that use doubles. Board results computed on the host, and
+everything inside delegated domains, are unaffected.
+
 ### S-17 — after a domain switch, an LDC right behind `ccsrrw sp <- cscratch` does not complete on silicon and the LSU stays not-ready (apertures 224/225 = `0x0d`/`0x80`) `NOT REPRODUCED on caplifive_supcall_715bdd1fe (arm12-ldc 3/3), mechanism unknown, apertures 219..222 armed; was: OPEN — DEMONSTRATED 2026-10-04 on caplifive_supcall_36a641e0b by a one-instruction matched pair (an `ld` there completes 8,552 escapes; the LDC hangs at the first escape) and on a plain, un-armed CALL; the RTL lane's simulation hangs at the same LDC in a DIFFERENT state (an orphaned DYN load syncer), so the silicon state is unexplained; the LSU queue entry's operation is not on the LED mux. Report folder: tests/fpga-repros/S17-ldc-after-supervised-switch-lsu-stuck/`
 
 **S-17: NOT REPRODUCED on `caplifive_supcall_715bdd1fe.bit`.** arm12-ldc ran 3 of 3, 8,552 escapes each, identical
