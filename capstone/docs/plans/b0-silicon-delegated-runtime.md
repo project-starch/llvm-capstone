@@ -1462,6 +1462,31 @@ The two images both enter at 0x10000 (R-3), so they get two boots. Rungs in each
   - A wedge = the monitor's minted-slot path. Its apertures are read (BAKED_WEDGE_APERTURES).
   - The R-29 hazard is fixed on this bitstream, and the memcpy guard stays on anyway.
 
+## Open after B3 (2026-10-05)
+- **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
+  was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
+  fabricated gp, run-context.py).
+  - **Firmware fw-b0-d5459e1:** origin/dev and the lane both give 23 of 33, with the same failures.
+    - ctl-mret, ctl-priv, ctl-priv-nested: a cause-12 fault in the domain's own code, where the probe expects
+      another outcome (a fault at a named instruction, an exit, a cause-2 fault).
+    - ra-slot0/16/32: no fault, where a load-access fault is expected.
+    - exhaust: the VM dies. QEMU halts the MONITOR with cause 2 (illegal instruction) at `_supervised_invoke.3+0x24`,
+      on the custom-opcode word 0x44a4935b, which llvm-objdump does not decode either.
+    - exhaust-ended, foreign and hold are collateral.
+  - **Firmware fw-b1-top (monitor 10a0690):** both trees give 0 of 10. The monitor halts at the first mode
+    (adopt-dead), at `_supervised_forget.3+0x20`.
+  - **What it does show:** no regression from B1. The base and the lane are identical mode for mode, and the B1
+    images run in QEMU on the same platform.
+  - **What it does not show:** anything about the monitor's context paths. The supervision instructions this QEMU
+    rejects are on exactly those paths. Until a QEMU that decodes them is in the platform, the probe cannot gate
+    them.
+  - Not attributed further. Whether QEMU or the monitor line is behind, and which instruction 0x44a4935b is, are
+    UNRESOLVED.
+- B1.5 (a fault handler in the application) and safety arms for memcached on silicon (Sublet, a level-1 heap) are
+  the next application steps.
+- Whether the B0 monitor line (caplifive-sbi `monitor/b0-managed-gp`: managed globals, M-14, fault reporting)
+  moves to capstone-bootstrap is the lead's call. Moving it means re-running the shared monitor's acceptance list.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
