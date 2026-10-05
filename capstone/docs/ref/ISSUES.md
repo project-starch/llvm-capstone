@@ -7104,6 +7104,54 @@ regions go away. For example, at the top of `cleanup()`, block every signal and 
 The test is the reproducer above: 20 and 100 ms must exit 0, and the disarmed control must stay
 exit 0.
 
+### M-14 — a managed application's data capability reaches the monitor's descriptor area on silicon: the managed `data_top` was 1 KiB-aligned, and the monitor's own cursor moves round the top UP to the representability granule `FIXED on the B0 monitor line (caplifive-sbi monitor/b0-managed-gp 10a0690), validated on silicon 2026-10-05 by a matched pair; not on capstone-bootstrap, which has no managed globals path`
+
+**What happens.**
+- For a managed application, create_domain splits a 1 KiB descriptor area off the top of the data region:
+  `data_top = tot_size - CONTEXT_DESC_AREA`. SPLIT is exact: capstone_dyn_unit.anvil:180-182 stores the split
+  point verbatim and resets the cursor to start.
+- The monitor then moves dom_data's cursor with C_SET_CURSOR (SCC) to park gp at `data_top - 16`, and since B1.3
+  the code capability at `- 32`.
+- SCC's result has cursor != start, and every FLU/DYN result is re-compressed at writeback (ex_stage.sv:1449). So
+  compress_bounds takes its LOSSY branch (ariane_pkg.sv:793-835 at 776d9d859): the base truncates down and the top
+  rounds UP to 2^(E+3).
+- C-13 rounded the base side to that granule (`repr_gran`); the managed top was never rounded.
+- For a ~1.9 MB data region E = 8, the granule is 2 KiB, and the top rounds from `...ffc00` to `...00000`. The
+  domain's capability then covers the whole descriptor area, which create_domain's comment says it "never holds".
+- The widening is permanent for the capability's life: later cursor moves re-encode the already-widened bounds.
+- capstone-qemu keeps uncompressed bounds (cap.h CapBoundsFat; helper_csscc moves only the cursor), so it can never
+  show this.
+
+**Found and measured** (B1, docs/plans/b0-silicon-delegated-runtime.md, boots B1b..B1f on 776d9d859).
+- b1-thread's pthread_create failed with EAGAIN on silicon only.
+- The B1e probe (image 29b82435ce095d98) read:
+  - the data region `[ac12a000, ac300000)`, length 0x1d6000, against QEMU's exact 0x1d5c00 for the same image;
+  - the parked code capability as type 7.
+- The glue's `END - 32` had landed in the descriptor area instead of on the park.
+- The rtl-oracle reproduced 0xac300000 bit-exactly by executing compress_bounds/decompress_bounds on the monitor's
+  cursor sequence; the first SCC already produces it.
+
+**Fix.** data_top is aligned DOWN to repr_gran in absolute terms, and the descriptor area is split off at that
+aligned top. Its first block absorbs the gap (less than one granule). repr_gran comes from a length at least the
+data capability's own, so the alignment covers the capability's actual granule.
+
+**Validated on silicon by a matched pair.** B1e and B1f ran the same Linux image and the same application image,
+and differ only in the monitor (a11d424 against 10a0690). With the fix:
+- the data region ends at the aligned top 0xac2ff800;
+- the code capability reads type 1;
+- the thread is created, runs and joins with its value (124).
+b0-hello on the fixed monitor is byte-exact.
+
+**Exposure before the fix.** Every gp-captable managed application carves its cap table from its data capability's
+END, so on silicon the table's top entries lay in the descriptor area. The monitor rewrites a descriptor block at
+every loan (managed_reinit), so an application whose table reached a lent block would have had cap-table entries
+zeroed underneath it. B0's images were small enough not to reach one. memcached (~435 globals, a ~7 KiB table)
+would have overlapped every block.
+
+**The class.** Any SCC/CINCOFFSET-style cursor move on a capability whose bounds are not granule-aligned widens it
+on silicon, both ways. A monitor that SPLITs a region, parks a cursor away from the base and hands the region over
+must align both ends to the region's granule. C-13 found the base, this entry the top.
+
 ### M-13 — a trap raised by the FPGA monitor's own code cannot be reported: `_cap_trap_entry` swaps Linux's integer sp in from cscratch and faults at +4 `OPEN — monitor robustness; found 2026-10-04 (B0.7 attempts 7-8)`
 
 - `_cap_trap_entry` begins `ccsrrw sp <- cscratch`. While the monitor is handling an ecall, cscratch holds the
