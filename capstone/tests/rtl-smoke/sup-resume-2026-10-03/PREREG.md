@@ -1155,3 +1155,24 @@ Raw lines are in `results/r51-776.result-lines.txt`. Each image ran on its own p
   after arm.
 - The arms differ in one `-D`, and the before arm is the positive control: it shows `outside` lies outside the
   domain's code capability, and that a tagged PC capability is checked.
+
+## s10b and s06agg: the R-29/S-10b fix's own positive tests on 776d9d859 (pre-registered 2026-10-05, before the boots)
+Requested by the RTL lane. Both run after C5u and b0-printf, each on its own boot with a control first.
+
+**s10b-primed** is the RTL lane's `s10b-storebuf-primed.S` (capstone-ariane 776d9d859), copied into `tests/`.
+- One change: `RVTEST_PASS` became the board report, #1 = `trap_count` after the measurement and #2 = gp.
+- Image sha256 2f8ef9cecda4b8dc, BOARD_TEST_CH 161, board_rec 0x80003180.
+- The disassembly has the positive control, then 8 legs of `ld zero,OFF(s1); stc; sd zero,OFF+8(s1); ldc; ldc`.
+- Run: `CAPSTL_SET=s10b`, control call-retpc first.
+- **Predicted on 776d9d859: #1 = 8 (every leg's tag cleared, 9 exceptions with the control), #2 = 1.**
+- On 715bdd1fe the RTL lane's simulation gives #1 = 0 and #2 = 208. The control failing (#2 = 999) voids the run.
+
+**s06agg** is R-29's own frozen reproducer (dev `fpga-repros/R29-wbuffer-highword-forwarding/src/s06agg.dom`,
+249118220f8cf37a).
+- It enters at 0x10000, where the stock k800 also enters, so the control is the RELINKED k800 589ceee3 at 0x20000,
+  which has silicon records from R-43 a2/a3 today.
+- Private firmware 2f49d5b257f7: the shared tree (monitor 2dcd3a5, buildroot d04bd83) with k800 589ceee3 and
+  s06agg staged; cpio verified by hash; `/tmp/capstone/s06agg-776/bake.sh`.
+- Rungs: k800 (oracle 4), then s06agg.
+- **Predicted on 776d9d859: s06agg = 64 (clean).** 66 = R-29 still present (the folder's reading on
+  66c4e7517, boots sw46/sw48). 65 = something other than R-29.

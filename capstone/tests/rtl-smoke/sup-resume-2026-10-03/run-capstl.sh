@@ -26,6 +26,8 @@ main() {
       jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = s16escr1 ]; then   # the RTL lane's three one-round escape arms exactly
     for n in s16st-esc-n8-r1 s16st-esc-n32-r1 s16st-esc-n64-r1; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
+  elif [ "$CAPSTL_SET" = s10b ]; then   # S-10b's primed route on the R-29/S-10b fix (PREREG.md "s10b")
+    jobs+=("s10b-primed|$F/images/s10b-primed.bin|$(cat $F/images/s10b-primed.rec)")
   elif [ "$CAPSTL_SET" = r51 ]; then   # R-51: the PC capability before and after a RETURN-based yield (PREREG.md "r51")
     for n in r51-before r51-after; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = s17rep ]; then   # S-17's matched pair again (repeats on 715bdd1fe)
