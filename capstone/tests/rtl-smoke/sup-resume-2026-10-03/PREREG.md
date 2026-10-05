@@ -1111,3 +1111,13 @@ R-49 changes the store path of every switcher write, and R-50 the load unit. Cyc
   apart from the ones accept715 already reported as timing-dependent (preemption and escape counts).
 - **Why it is the control:** the fix changes the dcache read path beside the store buffer, where S-16 lived. A hang
   or a changed reading here is a regression, and it comes before any claim about R-29.
+
+## accept776 RESULT (2026-10-05 17:01-17:14): the S-16 control set is UNCHANGED on 776d9d859
+- **All 18 images complete:** rc 0 and SUPTEST END, the 17 accept715 images plus the call-retpc control.
+- **Every SV reading is identical to accept715's,** including armdep-nt's 8,551 escapes (0x2167) and the S-17 pair.
+  Lines: `results/accept776.result-lines.txt`.
+- **A limit of the comparison, measured, not assumed.** The comparer fires on mismatched pairs (2 of 3 differ), but
+  s16sd24 and arm12-ld-q64 produce IDENTICAL vectors as different images. For some tests, equality with accept715
+  is therefore weak evidence by itself. For S-16 the verdict is completion, because S-16 fails by hanging, and every
+  image completed.
+- The S-16/S-17 control holds: the R-29/S-10b fix regressed nothing here.
