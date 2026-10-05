@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "purpose": "Native observations for the QE problem statement, without temporal protection",
+  "repetitions": 3,
+  "window": "Whole fresh process, including initialization and teardown",
+  "workloads": [
+    {"id":"sqlite-main","application":"sqlite","source":"upstream test/speedtest1.c","arguments":["--size","10","--testset","main","--verify"],"oracle":"integrity_check and canonical final database dump against the uninstrumented build"},
+    {"id":"sqlite-memsys5","application":"sqlite","source":"same upstream speedtest1","arguments":["--size","10","--testset","main","--verify","--heap","134217728","64"],"oracle":"same database oracle, separately labelled allocator configuration"},
+    {"id":"postgres-pgbench","application":"postgresql","source":"PostgreSQL 17.5 pgbench built-in tpcb-like SQL","scale":1,"transactions":1000,"seed":2601005,"adaptation":"Instantiate SQL variables in a fixed sequence and feed the single-user backend. No pgbench client, concurrency or TPS claim.","oracle":"account, branch and teller balance sums, history count and delta sum, deterministic SQL results"},
+    {"id":"python-json-loads","application":"cpython","source":"pyperformance 1.14.0 json_loads","iterations":1000,"adaptation":"Unchanged dataset and benchmark function, fixed-count harness without time calibration","oracle":"JSON round trip and payload checksum, fixed call count"},
+    {"id":"python-json-dumps","application":"cpython","source":"pyperformance 1.14.0 json_dumps, all four cases","iterations":100,"adaptation":"Unchanged dataset and benchmark function, fixed-count harness without time calibration","oracle":"JSON round trip and payload checksum, fixed call count"},
+    {"id":"mruby-ao","application":"mruby","source":"upstream benchmark/bm_ao_render.rb","width":32,"oracle":"complete PPM bytes match uninstrumented output, expected dimensions and payload length"},
+    {"id":"perl-binarytrees","application":"perl","source":"Benchmarks Game sequential Perl binary-trees program","depth":12,"oracle":"every tree check and iteration count verified analytically and against baseline"},
+    {"id":"ffmpeg-xvid","application":"ffmpeg","source":"FATE mpeg4/xvid_vlc_trac7411.h263","frames":20,"adaptation":"Decode through the CLI and compare frame hashes, not an official FATE score","oracle":"complete framemd5 output and frame count"},
+    {"id":"ffmpeg-resize","application":"ffmpeg","source":"FATE mpeg4/resize_down-up.h263","frames":150,"adaptation":"Decode through the CLI and compare frame hashes, not an official FATE score","oracle":"complete framemd5 output and frame count"},
+    {"id":"tshark-captures","application":"wireshark","source":"Wireshark 4.6.8 test/captures","captures":["http.pcap","dns-ooo.pcap","tcp-badsegments.pcap","sip-rtp.pcapng","dhcp.pcap","tls13-rfc8446.pcap"],"selection":"Preselected HTTP, DNS, TCP, SIP/RTP, DHCP and TLS regression inputs. Each capture is a separate process. Include all selected processes.","oracle":"complete normalized protocol-tree JSON and packet counts match baseline"},
+    {"id":"memcached-memtier","application":"memcached","source":"memtier_benchmark 2.2.1","workers":1,"clients":1,"keys":1000,"value_bytes":256,"warmup_sets":1000,"requests":50000,"ratio":"1:1","key_pattern":"S:S","oracle":"exact operation counts, no protocol errors, readback validation of all final keys"}
+  ]
+}

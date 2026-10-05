@@ -1,0 +1,828 @@
+{
+  "platform": {
+    "system": "Linux",
+    "machine": "aarch64",
+    "kernel": "6.12.67-linuxkit",
+    "libc": [
+      "glibc",
+      "2.35"
+    ]
+  },
+  "compiler": "11.4.0",
+  "packages": [
+    "adduser=3.118ubuntu5",
+    "apt=2.4.14",
+    "autoconf=2.71-2",
+    "automake=1:1.16.5-1.3",
+    "autotools-dev=20220109.1",
+    "base-files=12ubuntu4.7",
+    "base-passwd=3.5.52build1",
+    "bash=5.1-6ubuntu1.1",
+    "binutils=2.38-4ubuntu2.12",
+    "binutils-aarch64-linux-gnu=2.38-4ubuntu2.12",
+    "binutils-common=2.38-4ubuntu2.12",
+    "bison=2:3.8.2+dfsg-1ubuntu0.22.04.1",
+    "bsdutils=1:2.37.2-4ubuntu3.6",
+    "build-essential=12.9ubuntu3",
+    "bzip2=1.0.8-5ubuntu0.1",
+    "ca-certificates=20260601~22.04.1",
+    "cmake=3.22.1-1ubuntu1.22.04.2",
+    "cmake-data=3.22.1-1ubuntu1.22.04.2",
+    "coreutils=8.32-4.1ubuntu1.4",
+    "cpp=4:11.2.0-1ubuntu1",
+    "cpp-11=11.4.0-1ubuntu1~22.04.3",
+    "curl=7.81.0-1ubuntu1.29",
+    "dash=0.5.11+git20210903+057cd650a4ed-3build1",
+    "debconf=1.5.79ubuntu1",
+    "debianutils=5.5-1ubuntu2",
+    "dh-elpa-helper=2.0.9ubuntu1",
+    "diffutils=1:3.8-0ubuntu2.1",
+    "dpkg=1.21.1ubuntu2.6",
+    "dpkg-dev=1.21.1ubuntu2.6",
+    "e2fsprogs=1.46.5-2ubuntu1.2",
+    "emacsen-common=3.0.4",
+    "file=1:5.41-3ubuntu0.1",
+    "findutils=4.8.0-1ubuntu3",
+    "flex=2.6.4-8build2",
+    "g++=4:11.2.0-1ubuntu1",
+    "g++-11=11.4.0-1ubuntu1~22.04.3",
+    "gcc=4:11.2.0-1ubuntu1",
+    "gcc-11=11.4.0-1ubuntu1~22.04.3",
+    "gcc-11-base=11.4.0-1ubuntu1~22.04.3",
+    "gcc-12-base=12.3.0-1ubuntu1~22.04.3",
+    "git=1:2.34.1-1ubuntu1.17",
+    "git-man=1:2.34.1-1ubuntu1.17",
+    "gpgv=2.2.27-3ubuntu2.5",
+    "grep=3.7-1build1",
+    "gzip=1.10-4ubuntu4.2",
+    "hostname=3.23ubuntu2",
+    "icu-devtools=70.1-2",
+    "init-system-helpers=1.62",
+    "libacl1=2.3.1-1",
+    "libapt-pkg6.0=2.4.14",
+    "libarchive13=3.6.0-1ubuntu1.8",
+    "libasan6=11.4.0-1ubuntu1~22.04.3",
+    "libatomic1=12.3.0-1ubuntu1~22.04.3",
+    "libattr1=1:2.5.1-1ubuntu0.1",
+    "libaudit-common=1:3.0.7-1ubuntu0.1",
+    "libaudit1=1:3.0.7-1ubuntu0.1",
+    "libbinutils=2.38-4ubuntu2.12",
+    "libblkid-dev=2.37.2-4ubuntu3.6",
+    "libblkid1=2.37.2-4ubuntu3.6",
+    "libbrotli1=1.0.9-2build6",
+    "libbsd0=0.11.5-1",
+    "libbz2-1.0=1.0.8-5ubuntu0.1",
+    "libbz2-dev=1.0.8-5ubuntu0.1",
+    "libc-ares-dev=1.18.1-1ubuntu0.22.04.3",
+    "libc-ares2=1.18.1-1ubuntu0.22.04.3",
+    "libc-bin=2.35-0ubuntu3.15",
+    "libc-dev-bin=2.35-0ubuntu3.15",
+    "libc6=2.35-0ubuntu3.15",
+    "libc6-dev=2.35-0ubuntu3.15",
+    "libcap-ng0=0.7.9-2.2build3",
+    "libcap2=1:2.44-1ubuntu0.22.04.3",
+    "libcc1-0=12.3.0-1ubuntu1~22.04.3",
+    "libcom-err2=1.46.5-2ubuntu1.2",
+    "libcrypt-dev=1:4.4.27-1",
+    "libcrypt1=1:4.4.27-1",
+    "libctf-nobfd0=2.38-4ubuntu2.12",
+    "libctf0=2.38-4ubuntu2.12",
+    "libcurl3-gnutls=7.81.0-1ubuntu1.29",
+    "libcurl4=7.81.0-1ubuntu1.29",
+    "libdb5.3=5.3.28+dfsg1-0.8ubuntu3",
+    "libdbus-1-3=1.12.20-2ubuntu4.1",
+    "libdbus-1-dev=1.12.20-2ubuntu4.1",
+    "libdebconfclient0=0.261ubuntu1",
+    "libdpkg-perl=1.21.1ubuntu2.6",
+    "libedit2=3.1-20210910-1build1",
+    "libelf1=0.186-1ubuntu0.1",
+    "liberror-perl=0.17029-1",
+    "libevent-2.1-7=2.1.12-stable-1ubuntu0.2",
+    "libevent-core-2.1-7=2.1.12-stable-1ubuntu0.2",
+    "libevent-dev=2.1.12-stable-1ubuntu0.2",
+    "libevent-extra-2.1-7=2.1.12-stable-1ubuntu0.2",
+    "libevent-openssl-2.1-7=2.1.12-stable-1ubuntu0.2",
+    "libevent-pthreads-2.1-7=2.1.12-stable-1ubuntu0.2",
+    "libexpat1=2.4.7-1ubuntu0.9",
+    "libext2fs2=1.46.5-2ubuntu1.2",
+    "libffi-dev=3.4.2-4",
+    "libffi8=3.4.2-4",
+    "libgcc-11-dev=11.4.0-1ubuntu1~22.04.3",
+    "libgcc-s1=12.3.0-1ubuntu1~22.04.3",
+    "libgcrypt20=1.9.4-3ubuntu3.3",
+    "libgcrypt20-dev=1.9.4-3ubuntu3.3",
+    "libgdbm-compat4=1.23-1",
+    "libgdbm-dev=1.23-1",
+    "libgdbm6=1.23-1",
+    "libglib2.0-0=2.72.4-0ubuntu2.10",
+    "libglib2.0-bin=2.72.4-0ubuntu2.10",
+    "libglib2.0-data=2.72.4-0ubuntu2.10",
+    "libglib2.0-dev=2.72.4-0ubuntu2.10",
+    "libglib2.0-dev-bin=2.72.4-0ubuntu2.10",
+    "libgmp10=2:6.2.1+dfsg-3ubuntu1",
+    "libgnutls30=3.7.3-4ubuntu1.9",
+    "libgomp1=12.3.0-1ubuntu1~22.04.3",
+    "libgpg-error-dev=1.43-3",
+    "libgpg-error0=1.43-3",
+    "libgssapi-krb5-2=1.19.2-2ubuntu0.10",
+    "libhogweed6=3.7.3-1build2",
+    "libhwasan0=12.3.0-1ubuntu1~22.04.3",
+    "libicu-dev=70.1-2",
+    "libicu70=70.1-2",
+    "libidn2-0=2.3.2-2build1",
+    "libisl23=0.24-2build1",
+    "libitm1=12.3.0-1ubuntu1~22.04.3",
+    "libjsoncpp25=1.9.5-3",
+    "libk5crypto3=1.19.2-2ubuntu0.10",
+    "libkeyutils1=1.6.1-2ubuntu3",
+    "libkrb5-3=1.19.2-2ubuntu0.10",
+    "libkrb5support0=1.19.2-2ubuntu0.10",
+    "libldap-2.5-0=2.5.20+dfsg-0ubuntu0.22.04.1",
+    "liblsan0=12.3.0-1ubuntu1~22.04.3",
+    "liblz4-1=1.9.3-2build2",
+    "liblz4-dev=1.9.3-2build2",
+    "liblzma-dev=5.2.5-2ubuntu1.1",
+    "liblzma5=5.2.5-2ubuntu1.1",
+    "libmagic-mgc=1:5.41-3ubuntu0.1",
+    "libmagic1=1:5.41-3ubuntu0.1",
+    "libmd0=1.0.4-1build1",
+    "libmount-dev=2.37.2-4ubuntu3.6",
+    "libmount1=2.37.2-4ubuntu3.6",
+    "libmpc3=1.2.1-2build1",
+    "libmpdec3=2.5.1-2build2",
+    "libmpfr6=4.1.0-3build3",
+    "libncurses-dev=6.3-2ubuntu0.3",
+    "libncurses6=6.3-2ubuntu0.3",
+    "libncursesw6=6.3-2ubuntu0.3",
+    "libnettle8=3.7.3-1build2",
+    "libnghttp2-14=1.43.0-1ubuntu0.4",
+    "libnghttp2-dev=1.43.0-1ubuntu0.4",
+    "libnsl-dev=1.3.0-2build2",
+    "libnsl2=1.3.0-2build2",
+    "libp11-kit0=0.24.0-6ubuntu0.1",
+    "libpam-modules=1.4.0-11ubuntu2.8",
+    "libpam-modules-bin=1.4.0-11ubuntu2.8",
+    "libpam-runtime=1.4.0-11ubuntu2.8",
+    "libpam0g=1.4.0-11ubuntu2.8",
+    "libpcap-dev=1.10.1-4ubuntu1.22.04.2",
+    "libpcap0.8=1.10.1-4ubuntu1.22.04.2",
+    "libpcap0.8-dev=1.10.1-4ubuntu1.22.04.2",
+    "libpcre16-3=2:8.39-13ubuntu0.22.04.1",
+    "libpcre2-16-0=10.39-3ubuntu0.1",
+    "libpcre2-32-0=10.39-3ubuntu0.1",
+    "libpcre2-8-0=10.39-3ubuntu0.1",
+    "libpcre2-dev=10.39-3ubuntu0.1",
+    "libpcre2-posix3=10.39-3ubuntu0.1",
+    "libpcre3=2:8.39-13ubuntu0.22.04.1",
+    "libpcre3-dev=2:8.39-13ubuntu0.22.04.1",
+    "libpcre32-3=2:8.39-13ubuntu0.22.04.1",
+    "libpcrecpp0v5=2:8.39-13ubuntu0.22.04.1",
+    "libperl5.34=5.34.0-3ubuntu1.9",
+    "libprocps8=2:3.3.17-6ubuntu2.1",
+    "libpsl5=0.21.0-1.2build2",
+    "libpython3-stdlib=3.10.6-1~22.04.1",
+    "libpython3.10-minimal=3.10.12-1~22.04.18",
+    "libpython3.10-stdlib=3.10.12-1~22.04.18",
+    "libreadline-dev=8.1.2-1",
+    "libreadline8=8.1.2-1",
+    "librhash0=1.4.2-1ubuntu1",
+    "librtmp1=2.4+20151223.gitfa8646d.1-2build4",
+    "libruby3.0=3.0.2-7ubuntu2.13",
+    "libsasl2-2=2.1.27+dfsg2-3ubuntu1.2",
+    "libsasl2-modules-db=2.1.27+dfsg2-3ubuntu1.2",
+    "libseccomp2=2.5.3-2ubuntu3~22.04.1",
+    "libselinux1=3.3-1build2",
+    "libselinux1-dev=3.3-1build2",
+    "libsemanage-common=3.3-1build2",
+    "libsemanage2=3.3-1build2",
+    "libsepol-dev=3.3-1build1",
+    "libsepol2=3.3-1build1",
+    "libsigsegv2=2.13-1ubuntu3",
+    "libsmartcols1=2.37.2-4ubuntu3.6",
+    "libsqlite3-0=3.37.2-2ubuntu0.8",
+    "libsqlite3-dev=3.37.2-2ubuntu0.8",
+    "libss2=1.46.5-2ubuntu1.2",
+    "libssh-4=0.9.6-2ubuntu0.22.04.8",
+    "libssl-dev=3.0.2-0ubuntu1.30",
+    "libssl3=3.0.2-0ubuntu1.30",
+    "libstdc++-11-dev=11.4.0-1ubuntu1~22.04.3",
+    "libstdc++6=12.3.0-1ubuntu1~22.04.3",
+    "libsystemd0=249.11-0ubuntu3.22",
+    "libtasn1-6=4.18.0-4ubuntu0.2",
+    "libtinfo6=6.3-2ubuntu0.3",
+    "libtirpc-common=1.3.2-2ubuntu0.1",
+    "libtirpc-dev=1.3.2-2ubuntu0.1",
+    "libtirpc3=1.3.2-2ubuntu0.1",
+    "libtool=2.4.6-15build2",
+    "libtsan0=11.4.0-1ubuntu1~22.04.3",
+    "libubsan1=12.3.0-1ubuntu1~22.04.3",
+    "libudev1=249.11-0ubuntu3.22",
+    "libunistring2=1.0-1",
+    "libuuid1=2.37.2-4ubuntu3.6",
+    "libuv1=1.43.0-1ubuntu0.1",
+    "libxml2=2.9.13+dfsg-1ubuntu0.13",
+    "libxml2-dev=2.9.13+dfsg-1ubuntu0.13",
+    "libxxhash0=0.8.1-1",
+    "libyaml-0-2=0.2.2-1build2",
+    "libzstd-dev=1.4.8+dfsg-3build1",
+    "libzstd1=1.4.8+dfsg-3build1",
+    "linux-libc-dev=5.15.0-198.208",
+    "login=1:4.8.1-2ubuntu2.2",
+    "logsave=1.46.5-2ubuntu1.2",
+    "lsb-base=11.1.0ubuntu4",
+    "lto-disabled-list=24",
+    "m4=1.4.18-5ubuntu2",
+    "make=4.3-4.1build1",
+    "mawk=1.3.4.20200120-3",
+    "media-types=7.0.0",
+    "mount=2.37.2-4ubuntu3.6",
+    "ncurses-base=6.3-2ubuntu0.3",
+    "ncurses-bin=6.3-2ubuntu0.3",
+    "ninja-build=1.10.1-1",
+    "openssl=3.0.2-0ubuntu1.30",
+    "passwd=1:4.8.1-2ubuntu2.2",
+    "patch=2.7.6-7build2",
+    "perl=5.34.0-3ubuntu1.9",
+    "perl-base=5.34.0-3ubuntu1.9",
+    "perl-modules-5.34=5.34.0-3ubuntu1.9",
+    "pkg-config=0.29.2-1ubuntu3",
+    "procps=2:3.3.17-6ubuntu2.1",
+    "python3=3.10.6-1~22.04.1",
+    "python3-distutils=3.10.8-1~22.04",
+    "python3-lib2to3=3.10.8-1~22.04",
+    "python3-minimal=3.10.6-1~22.04.1",
+    "python3-pip=22.0.2+dfsg-1ubuntu0.7",
+    "python3-pip-whl=22.0.2+dfsg-1ubuntu0.7",
+    "python3-pkg-resources=59.6.0-1.2ubuntu0.22.04.3",
+    "python3-setuptools=59.6.0-1.2ubuntu0.22.04.3",
+    "python3-setuptools-whl=59.6.0-1.2ubuntu0.22.04.3",
+    "python3-venv=3.10.6-1~22.04.1",
+    "python3-wheel=0.37.1-2ubuntu0.22.04.1",
+    "python3.10=3.10.12-1~22.04.18",
+    "python3.10-minimal=3.10.12-1~22.04.18",
+    "python3.10-venv=3.10.12-1~22.04.18",
+    "rake=13.0.6-2",
+    "readline-common=8.1.2-1",
+    "rpcsvc-proto=1.4.2-0ubuntu6",
+    "ruby=1:3.0~exp1",
+    "ruby-net-telnet=0.1.1-2",
+    "ruby-rubygems=3.3.5-2ubuntu1.2",
+    "ruby-webrick=1.7.0-3ubuntu0.2",
+    "ruby-xmlrpc=0.3.2-1ubuntu0.1",
+    "ruby3.0=3.0.2-7ubuntu2.13",
+    "rubygems-integration=1.18",
+    "sed=4.8-1ubuntu2.1",
+    "sensible-utils=0.0.17",
+    "sysvinit-utils=3.01-1ubuntu1",
+    "tar=1.34+dfsg-1ubuntu0.1.22.04.6",
+    "ubuntu-keyring=2021.03.26",
+    "unzip=6.0-26ubuntu3.2",
+    "usrmerge=25ubuntu2",
+    "util-linux=2.37.2-4ubuntu3.6",
+    "uuid-dev=2.37.2-4ubuntu3.6",
+    "xz-utils=5.2.5-2ubuntu1.1",
+    "zlib1g=1:1.2.11.dfsg-2ubuntu9.2",
+    "zlib1g-dev=1:1.2.11.dfsg-2ubuntu9.2"
+  ],
+  "observer_sha256": "919ea3fedccbadbd49742f6dd021a5557014fc500005cefed04ff34c557b3b3d",
+  "observer_source_sha256": "39f24eaf79debb7c6a4291f0841e2b815b8adc6d49b8757b91f4b284f6a1e95c",
+  "builds": {
+    "baseline/postgresql/build.json": {
+      "application": "postgresql",
+      "variant": "baseline",
+      "commands": [
+        [
+          "./configure",
+          "--without-icu",
+          "--without-readline",
+          "--without-zlib",
+          "--prefix=/tmp/capstone/native-survey/install/baseline/postgresql"
+        ],
+        [
+          "make",
+          "-j3"
+        ],
+        [
+          "make",
+          "-j3",
+          "install"
+        ]
+      ],
+      "cflags": "-O2 -g",
+      "ldflags": "",
+      "source": {
+        "version": "17.5",
+        "url": "https://ftp.postgresql.org/pub/source/v17.5/postgresql-17.5.tar.bz2",
+        "sha256": "fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8",
+        "archive": "downloads/postgresql.tar"
+      }
+    },
+    "baseline/ffmpeg/build.json": {
+      "application": "ffmpeg",
+      "variant": "baseline",
+      "commands": [
+        [
+          "./configure",
+          "--disable-everything",
+          "--disable-autodetect",
+          "--disable-doc",
+          "--disable-network",
+          "--disable-x86asm",
+          "--disable-debug",
+          "--disable-ffplay",
+          "--disable-ffprobe",
+          "--enable-ffmpeg",
+          "--enable-protocol=file,pipe",
+          "--enable-indev=lavfi",
+          "--enable-filter=testsrc2,scale,hflip,format,null,anull",
+          "--enable-encoder=mpeg4,rawvideo",
+          "--enable-decoder=mpeg4,h264,wrapped_avframe",
+          "--enable-parser=mpeg4video,h264",
+          "--enable-muxer=matroska,framemd5,framecrc,null",
+          "--enable-demuxer=matroska,mov,avi,h264,m4v",
+          "--enable-static",
+          "--disable-shared",
+          "--extra-cflags=-O2 -g",
+          "--extra-ldflags=",
+          "--prefix=/tmp/capstone/native-survey/install/baseline/ffmpeg"
+        ],
+        [
+          "make",
+          "-j3",
+          "ffmpeg"
+        ]
+      ],
+      "cflags": "-O2 -g",
+      "ldflags": "",
+      "source": {
+        "name": "ffmpeg",
+        "version": "9.0.1",
+        "url": "https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz",
+        "sha256": "cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635",
+        "archive": "downloads/ffmpeg.tar"
+      }
+    },
+    "baseline/perl/build.json": {
+      "application": "perl",
+      "variant": "baseline",
+      "commands": [
+        [
+          "sh",
+          "Configure",
+          "-des",
+          "-Dprefix=/tmp/capstone/native-survey/install/baseline/perl",
+          "-Dccflags=-O2 -g",
+          "-Dldflags=",
+          "-Dman1dir=none",
+          "-Dman3dir=none"
+        ],
+        [
+          "make",
+          "-j3"
+        ]
+      ],
+      "cflags": "-O2 -g",
+      "ldflags": "",
+      "source": {
+        "version": "5.36.3",
+        "url": "https://www.cpan.org/src/5.0/perl-5.36.3.tar.gz",
+        "sha256": "f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a",
+        "archive": "downloads/perl.tar"
+      }
+    },
+    "baseline/sqlite/build.json": {
+      "application": "sqlite",
+      "variant": "baseline",
+      "commands": [
+        [
+          "cc",
+          "-O2",
+          "-g",
+          "-DSQLITE_ENABLE_MEMSYS5",
+          "-DSQLITE_ENABLE_RTREE",
+          "-I.",
+          "sqlite3.c",
+          "/tmp/capstone/native-survey/original/sqlite-src/test/speedtest1.c",
+          "-lm",
+          "-ldl",
+          "-lpthread",
+          "-o",
+          "/tmp/capstone/native-survey/install/baseline/sqlite/speedtest1"
+        ],
+        [
+          "cc",
+          "-O2",
+          "-g",
+          "-DSQLITE_ENABLE_MEMSYS5",
+          "-DSQLITE_ENABLE_RTREE",
+          "-I.",
+          "sqlite3.c",
+          "/tmp/capstone/native-survey/build/baseline/sqlite/shell.c",
+          "-lm",
+          "-ldl",
+          "-lpthread",
+          "-o",
+          "/tmp/capstone/native-survey/install/baseline/sqlite/sqlite3"
+        ]
+      ],
+      "cflags": "-O2 -g",
+      "ldflags": "",
+      "source": {
+        "version": "3.22.0",
+        "url": "https://www.sqlite.org/2018/sqlite-amalgamation-3220000.zip",
+        "sha256": "0db7cb47613475c5060ce47ad24dc73875cddeda4d13196ab3a98b356326ac72",
+        "archive": "downloads/sqlite.zip"
+      }
+    },
+    "baseline/memcached/build.json": {
+      "application": "memcached",
+      "variant": "baseline",
+      "commands": [
+        [
+          "./configure",
+          "--disable-docs",
+          "--prefix=/tmp/capstone/native-survey/install/baseline/memcached"
+        ],
+        [
+          "make",
+          "-j3"
+        ]
+      ],
+      "cflags": "-O2 -g",
+      "ldflags": "",
+      "source": {
+        "name": "memcached",
+        "version": "1.6.45",
+        "url": "https://memcached.org/files/memcached-1.6.45.tar.gz",
+        "sha256": "d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd",
+        "archive": "downloads/memcached.tar"
+      }
+    },
+    "baseline/mruby/build.json": {
+      "application": "mruby",
+      "variant": "baseline",
+      "commands": [
+        [
+          "rake",
+          "-j3"
+        ]
+      ],
+      "cflags": "-O2 -g",
+      "ldflags": "",
+      "source": {
+        "version": "4.0.0-rc2",
+        "url": "https://codeload.github.com/mruby/mruby/tar.gz/9d523e2f74f2e63ca02840937523de61398a617d",
+        "sha256": "3ed4c5cd13f6b1002f9ae40651341404b6942be9803270dce5d55059b2439ae4",
+        "archive": "downloads/mruby.tar"
+      }
+    },
+    "baseline/cpython/build.json": {
+      "application": "cpython",
+      "variant": "baseline",
+      "commands": [
+        [
+          "./configure",
+          "--without-ensurepip",
+          "--without-static-libpython",
+          "--prefix=/tmp/capstone/native-survey/install/baseline/cpython"
+        ],
+        [
+          "make",
+          "-j4"
+        ]
+      ],
+      "cflags": "-O2 -g",
+      "ldflags": "",
+      "source": {
+        "name": "CPython",
+        "version": "3.13.7",
+        "url": "https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz",
+        "sha256": "6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2",
+        "archive": "downloads/cpython.tar"
+      }
+    },
+    "baseline/wireshark/build.json": {
+      "application": "wireshark",
+      "variant": "baseline",
+      "commands": [
+        [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "/tmp/capstone/native-survey/build/baseline/wireshark/out",
+          "-G",
+          "Ninja",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DBUILD_wireshark=OFF",
+          "-DBUILD_tshark=ON",
+          "-DBUILD_stratoshark=OFF",
+          "-DENABLE_LUA=OFF",
+          "-DENABLE_GNUTLS=OFF",
+          "-DENABLE_KERBEROS=OFF",
+          "-DBUILD_dumpcap=OFF",
+          "-DENABLE_SMI=OFF",
+          "-DBUILD_sharkd=OFF",
+          "-DCMAKE_INSTALL_PREFIX=/tmp/capstone/native-survey/install/baseline/wireshark"
+        ],
+        [
+          "cmake",
+          "--build",
+          "/tmp/capstone/native-survey/build/baseline/wireshark/out",
+          "--target",
+          "tshark",
+          "-j",
+          "3"
+        ]
+      ],
+      "cflags": "-O2 -g",
+      "ldflags": "",
+      "source": {
+        "name": "wireshark",
+        "version": "4.6.8",
+        "url": "https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz",
+        "sha256": "c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0",
+        "archive": "downloads/wireshark.tar"
+      }
+    },
+    "observed/postgresql/build.json": {
+      "application": "postgresql",
+      "variant": "observed",
+      "commands": [
+        [
+          "./configure",
+          "--without-icu",
+          "--without-readline",
+          "--without-zlib",
+          "--prefix=/tmp/capstone/native-survey/install/observed/postgresql"
+        ],
+        [
+          "make",
+          "-j3"
+        ],
+        [
+          "make",
+          "-j3",
+          "install"
+        ]
+      ],
+      "cflags": "-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+      "ldflags": "-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+      "source": {
+        "version": "17.5",
+        "url": "https://ftp.postgresql.org/pub/source/v17.5/postgresql-17.5.tar.bz2",
+        "sha256": "fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8",
+        "archive": "downloads/postgresql.tar"
+      }
+    },
+    "observed/ffmpeg/build.json": {
+      "application": "ffmpeg",
+      "variant": "observed",
+      "commands": [
+        [
+          "./configure",
+          "--disable-everything",
+          "--disable-autodetect",
+          "--disable-doc",
+          "--disable-network",
+          "--disable-x86asm",
+          "--disable-debug",
+          "--disable-ffplay",
+          "--disable-ffprobe",
+          "--enable-ffmpeg",
+          "--enable-protocol=file,pipe",
+          "--enable-indev=lavfi",
+          "--enable-filter=testsrc2,scale,hflip,format,null,anull",
+          "--enable-encoder=mpeg4,rawvideo",
+          "--enable-decoder=mpeg4,h264,wrapped_avframe",
+          "--enable-parser=mpeg4video,h264",
+          "--enable-muxer=matroska,framemd5,framecrc,null",
+          "--enable-demuxer=matroska,mov,avi,h264,m4v",
+          "--enable-static",
+          "--disable-shared",
+          "--extra-cflags=-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+          "--extra-ldflags=-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+          "--prefix=/tmp/capstone/native-survey/install/observed/ffmpeg"
+        ],
+        [
+          "make",
+          "-j4",
+          "ffmpeg"
+        ]
+      ],
+      "cflags": "-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+      "ldflags": "-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+      "source": {
+        "name": "ffmpeg",
+        "version": "9.0.1",
+        "url": "https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz",
+        "sha256": "cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635",
+        "archive": "downloads/ffmpeg.tar"
+      }
+    },
+    "observed/perl/build.json": {
+      "application": "perl",
+      "variant": "observed",
+      "commands": [
+        [
+          "sh",
+          "Configure",
+          "-des",
+          "-Dprefix=/tmp/capstone/native-survey/install/observed/perl",
+          "-Dccflags=-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+          "-Dldflags=-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+          "-Dman1dir=none",
+          "-Dman3dir=none"
+        ],
+        [
+          "make",
+          "-j4"
+        ]
+      ],
+      "cflags": "-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+      "ldflags": "-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+      "source": {
+        "version": "5.36.3",
+        "url": "https://www.cpan.org/src/5.0/perl-5.36.3.tar.gz",
+        "sha256": "f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a",
+        "archive": "downloads/perl.tar"
+      }
+    },
+    "observed/sqlite/build.json": {
+      "application": "sqlite",
+      "variant": "observed",
+      "commands": [
+        [
+          "cc",
+          "-O2",
+          "-g",
+          "-I/repo/capstone/experiments/native-lifetime-survey",
+          "-DSQLITE_ENABLE_MEMSYS5",
+          "-DSQLITE_ENABLE_RTREE",
+          "-I.",
+          "sqlite3.c",
+          "/tmp/capstone/native-survey/original/sqlite-src/test/speedtest1.c",
+          "-Wl,--no-as-needed",
+          "-L/tmp/capstone/native-survey/lib",
+          "-lnativesurvey",
+          "-Wl,-rpath,/tmp/capstone/native-survey/lib",
+          "-lm",
+          "-ldl",
+          "-lpthread",
+          "-o",
+          "/tmp/capstone/native-survey/install/observed/sqlite/speedtest1"
+        ],
+        [
+          "cc",
+          "-O2",
+          "-g",
+          "-I/repo/capstone/experiments/native-lifetime-survey",
+          "-DSQLITE_ENABLE_MEMSYS5",
+          "-DSQLITE_ENABLE_RTREE",
+          "-I.",
+          "sqlite3.c",
+          "/tmp/capstone/native-survey/build/observed/sqlite/shell.c",
+          "-Wl,--no-as-needed",
+          "-L/tmp/capstone/native-survey/lib",
+          "-lnativesurvey",
+          "-Wl,-rpath,/tmp/capstone/native-survey/lib",
+          "-lm",
+          "-ldl",
+          "-lpthread",
+          "-o",
+          "/tmp/capstone/native-survey/install/observed/sqlite/sqlite3"
+        ]
+      ],
+      "cflags": "-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+      "ldflags": "-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+      "source": {
+        "version": "3.22.0",
+        "url": "https://www.sqlite.org/2018/sqlite-amalgamation-3220000.zip",
+        "sha256": "0db7cb47613475c5060ce47ad24dc73875cddeda4d13196ab3a98b356326ac72",
+        "archive": "downloads/sqlite.zip"
+      }
+    },
+    "observed/memcached/build.json": {
+      "application": "memcached",
+      "variant": "observed",
+      "commands": [
+        [
+          "./configure",
+          "--disable-docs",
+          "--prefix=/tmp/capstone/native-survey/install/observed/memcached"
+        ],
+        [
+          "make",
+          "-j3"
+        ]
+      ],
+      "cflags": "-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+      "ldflags": "-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+      "source": {
+        "name": "memcached",
+        "version": "1.6.45",
+        "url": "https://memcached.org/files/memcached-1.6.45.tar.gz",
+        "sha256": "d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd",
+        "archive": "downloads/memcached.tar"
+      }
+    },
+    "observed/mruby/build.json": {
+      "application": "mruby",
+      "variant": "observed",
+      "commands": [
+        [
+          "rake",
+          "-j3"
+        ]
+      ],
+      "cflags": "-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+      "ldflags": "-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+      "source": {
+        "version": "4.0.0-rc2",
+        "url": "https://codeload.github.com/mruby/mruby/tar.gz/9d523e2f74f2e63ca02840937523de61398a617d",
+        "sha256": "3ed4c5cd13f6b1002f9ae40651341404b6942be9803270dce5d55059b2439ae4",
+        "archive": "downloads/mruby.tar"
+      }
+    },
+    "observed/cpython/build.json": {
+      "application": "cpython",
+      "variant": "observed",
+      "commands": [
+        [
+          "./configure",
+          "--without-ensurepip",
+          "--without-static-libpython",
+          "--prefix=/tmp/capstone/native-survey/install/observed/cpython"
+        ],
+        [
+          "make",
+          "-j4"
+        ]
+      ],
+      "cflags": "-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+      "ldflags": "-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+      "source": {
+        "name": "CPython",
+        "version": "3.13.7",
+        "url": "https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz",
+        "sha256": "6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2",
+        "archive": "downloads/cpython.tar"
+      }
+    },
+    "observed/wireshark/build.json": {
+      "application": "wireshark",
+      "variant": "observed",
+      "commands": [
+        [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "/tmp/capstone/native-survey/build/observed/wireshark/out",
+          "-G",
+          "Ninja",
+          "-DCMAKE_BUILD_TYPE=Release",
+          "-DBUILD_wireshark=OFF",
+          "-DBUILD_tshark=ON",
+          "-DBUILD_stratoshark=OFF",
+          "-DENABLE_LUA=OFF",
+          "-DENABLE_GNUTLS=OFF",
+          "-DENABLE_KERBEROS=OFF",
+          "-DBUILD_dumpcap=OFF",
+          "-DENABLE_SMI=OFF",
+          "-DBUILD_sharkd=OFF",
+          "-DCMAKE_INSTALL_PREFIX=/tmp/capstone/native-survey/install/observed/wireshark"
+        ],
+        [
+          "cmake",
+          "--build",
+          "/tmp/capstone/native-survey/build/observed/wireshark/out",
+          "--target",
+          "tshark",
+          "-j",
+          "4"
+        ]
+      ],
+      "cflags": "-O2 -g -I/repo/capstone/experiments/native-lifetime-survey",
+      "ldflags": "-Wl,--no-as-needed -L/tmp/capstone/native-survey/lib -lnativesurvey -Wl,-rpath,/tmp/capstone/native-survey/lib",
+      "source": {
+        "name": "wireshark",
+        "version": "4.6.8",
+        "url": "https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz",
+        "sha256": "c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0",
+        "archive": "downloads/wireshark.tar"
+      }
+    }
+  },
+  "container_image": "sha256:9aa912c3c603a9f7866e134fce3e5c14b9e8821d2f3044ceeef1c5e50ee8b13e",
+  "base_image": "ubuntu@sha256:3b06811b2afd352be909dd088a004166d665dc76d38b13eada33522a9d915c6f",
+  "host_execution": "Docker Desktop Linux VM on ARM64 macOS. Native ARM64 binaries, no ISA emulation.",
+  "plot_environment": {
+    "python": "3.14",
+    "matplotlib": "3.10.8"
+  },
+  "python_benchmark_dependency": {
+    "pyperf": "2.9.0",
+    "installation": "pip --target in scratch with --no-deps"
+  }
+}

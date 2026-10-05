@@ -1,0 +1,6 @@
+PASS 96 processes, 16 profiles, 8 applications
+PASS functional oracles match across all six processes in each profile
+PASS exact source hooks for all 8 baseline and 8 observed trees
+PASS backing generations, bulk accounting, resize, unknown backing, cross-instance gaps, fatal overlap, threads
+PASS complete matrix, duplicate/missing cells, oracle mismatch, counter mismatch, unknown coverage, undefined ratio
+PASS exported counters and rendered PNG figures reproduced exactly from committed counters

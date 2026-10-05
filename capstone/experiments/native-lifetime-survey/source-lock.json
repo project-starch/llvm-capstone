@@ -1,0 +1,51 @@
+{
+  "sqlite": {
+    "version": "3.22.0",
+    "url": "https://www.sqlite.org/2018/sqlite-amalgamation-3220000.zip",
+    "sha256": "0db7cb47613475c5060ce47ad24dc73875cddeda4d13196ab3a98b356326ac72"
+  },
+  "sqlite-src": {
+    "version": "3.22.0",
+    "url": "https://www.sqlite.org/2018/sqlite-src-3220000.zip",
+    "sha256": "7bc5a3ce285690db85bd3f97034a467e19096b787c9c9c09a23b1513a43c8913"
+  },
+  "postgresql": {
+    "version": "17.5",
+    "url": "https://ftp.postgresql.org/pub/source/v17.5/postgresql-17.5.tar.bz2",
+    "sha256": "fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8"
+  },
+  "mruby": {
+    "version": "4.0.0-rc2",
+    "url": "https://codeload.github.com/mruby/mruby/tar.gz/9d523e2f74f2e63ca02840937523de61398a617d",
+    "sha256": "3ed4c5cd13f6b1002f9ae40651341404b6942be9803270dce5d55059b2439ae4"
+  },
+  "perl": {
+    "version": "5.36.3",
+    "url": "https://www.cpan.org/src/5.0/perl-5.36.3.tar.gz",
+    "sha256": "f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a"
+  },
+  "cpython": {
+    "name": "CPython",
+    "version": "3.13.7",
+    "url": "https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz",
+    "sha256": "6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2"
+  },
+  "ffmpeg": {
+    "name": "ffmpeg",
+    "version": "9.0.1",
+    "url": "https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz",
+    "sha256": "cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635"
+  },
+  "wireshark": {
+    "name": "wireshark",
+    "version": "4.6.8",
+    "url": "https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz",
+    "sha256": "c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0"
+  },
+  "memcached": {
+    "name": "memcached",
+    "version": "1.6.45",
+    "url": "https://memcached.org/files/memcached-1.6.45.tar.gz",
+    "sha256": "d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd"
+  }
+}

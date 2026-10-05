@@ -1,0 +1,26 @@
+{
+  "json_loads.py": {
+    "url": "https://raw.githubusercontent.com/python/pyperformance/1.14.0/pyperformance/data-files/benchmarks/bm_json_loads/run_benchmark.py",
+    "sha256": "16c41ff06bf3173d30158c767340d389c459a656e997e306719891d50f09646f"
+  },
+  "json_dumps.py": {
+    "url": "https://raw.githubusercontent.com/python/pyperformance/1.14.0/pyperformance/data-files/benchmarks/bm_json_dumps/run_benchmark.py",
+    "sha256": "023c991ff827fdcbfcfb2b7e3cadf023352a61d1903643d8af0ef302a0db1bf7"
+  },
+  "binarytrees.html": {
+    "url": "https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/binarytrees-perl-1.html",
+    "sha256": "5ae64f83167ae0b1f8aa645408874448ea568286e2695ad225948361e58f22c2"
+  },
+  "xvid.h263": {
+    "url": "https://fate-suite.ffmpeg.org/mpeg4/xvid_vlc_trac7411.h263",
+    "sha256": "aee58db19e76c334b126b2390aed661e6134995b7fdc614ea652222926153689"
+  },
+  "resize.h263": {
+    "url": "https://fate-suite.ffmpeg.org/mpeg4/resize_down-up.h263",
+    "sha256": "a1a40010f9865f9beadee8d63c36202d827d31c0058503a28081555cba0766e3"
+  },
+  "memtier.tar": {
+    "url": "https://codeload.github.com/redis/memtier_benchmark/tar.gz/refs/tags/2.2.1",
+    "sha256": "e417382826ea1b93f93441bfa52d7556fb41a85b29e20d5f87c4b1a972ee3a6b"
+  }
+}
