@@ -1471,6 +1471,32 @@ The two images both enter at 0x10000 (R-3), so they get two boots. Rungs in each
   - A wedge = the monitor's minted-slot path. Its apertures are read (BAKED_WEDGE_APERTURES).
   - The R-29 hazard is fixed on this bitstream, and the memcpy guard stays on anyway.
 
+## B3e pre-registered (2026-10-06, before any such bitstream exists): R-52's fix on silicon
+R-52 (was S-18) is the issue stage's FPR clobber predicate, negated since capstone-ariane 4891d379a (2026-04-24). Its
+fix is capstone-ariane 546807884 (branch s18-fpr-clobber, off sup-call 776d9d859). That commit is RTL-lane work,
+verified here at the source: one predicate un-negated, plus tests. It is not synthesized. Building it into a
+bitstream, and the reflash, are the lead's call.
+
+**If a bitstream carries 546807884**, the confirmation boot is B3c again with nothing changed but the firmware's
+bitstream. The images are memcached ba7e6921cf27f2b6, harness b433cd6ec88207a4 and probe 5aa140cf39647700. The
+rungs are b0-stats, `b3-setclock`, `b3-oracle`, `b3-clock` and b0-stats2, with `b3-clock` last. Predictions:
+- b0-stats and b0-stats2: retval 0. b3-setclock: `date before` < 2,592,063, then the clock is set.
+- **b3-oracle:** transcript e0a254c47e7ee28c, 1,931,207 bytes, as on 776d9d859; the domain is soft-float.
+  **The harness's `stop_seconds` is finite and positive** (QEMU reads 1.1 to 1.5). A value on the board under 60 s
+  is predicted, not pinned.
+- **b3-clock:**
+  - **arith reads 0 anomalies of 200,000.**
+  - The self-test reports exactly 1 of 12 changed registers (fs5).
+  - hold-native and hold-domain report 0 of 12.
+  - hold-domain's `stop_seconds` is finite.
+  - The probe returns rc 0, and the rung returns.
+- What would refute what:
+  - Any arith anomaly refutes "546807884 is the whole of R-52 on silicon".
+  - The rung still not returning, with arith at 0, makes the B3c hang a separate issue, no longer plausibly R-52's
+    stale reads.
+  - A changed oracle hash would mean the bitstream changed more than the FPU path.
+- The control is 776d9d859's own B3c record: 200,000 anomalies, `stop_seconds=inf`, and the rung not returning.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
