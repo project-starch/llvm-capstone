@@ -1171,9 +1171,12 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     - That END is the stack region's top below the 128 KiB arena, inside the 32 MiB block [0xac100000, 0xae100000).
     - It is derived without the fault: the module rounds the declared 0x1420100 bytes up to a power of two, the
       monitor aligns data_top to 0xae0f8000, and the arena sits below that. In that model the old carve leaves 30 inexact
-    capabilities. ~~B0/B1's 2 MiB regions (E <= 1) lose nothing.~~ **CORRECTED 22:50:** B0's 512 KiB blocks and
-    B1's 2 MiB block at the base it ran at (0xac100000, E = 1) lose nothing. A 2 MiB block placed across a 32 MiB
-    boundary has E = 5 and loses bits (7 of 255 CMA bases for b1-thread; see "The detector, rebuilt" below).
+    capabilities. ~~B0/B1's 2 MiB regions (E <= 1) lose nothing.~~ **RETRACTED 2026-10-05 22:50 (scope):** B0's
+    512 KiB blocks, and B1's 2 MiB block at the base it ran at (0xac100000, E = 1), lose nothing. The board's CMA
+    places a 2 MiB block on 1 MiB alignment (B1f's sat at 0xac100000), so one can straddle a 32 MiB boundary. There
+    E = 5, and without CAPSTONE_GLUE_CARVE_ALIGN b1-thread loses 4 to 9 globals at 7 of the 255 bases
+    (check-repr.py's process-ABI replay, lane b0-silicon-runtime 3b1360ac7087). B1's board runs are unaffected, and
+    every B0 build now has the alignment.
   - QEMU has no cursorless encoding, so it cannot show any of this.
 - **The detector R-11 shipped did not fire, and could not have.** `check-repr.py` reports this image as `tot=1048576
   OK`. Its region model is the old SDK sizing from code length, and it never reads the domain's declared data size

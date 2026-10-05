@@ -7164,8 +7164,12 @@ exit 0.
 - For a managed application, create_domain splits a 1 KiB descriptor area off the top of the data region:
   `data_top = tot_size - CONTEXT_DESC_AREA`. SPLIT stores the split point verbatim and puts each half's cursor
   at its start (capstone_dyn_unit.anvil:180-184), so both halves are written back in the cursorless form. That is
-  exact here only because this 2 MiB region has E <= 1 and the split point is 16-aligned (R-11 is the case where
-  it is not).
+  exact here. The cursorless top drops only the bits below 2^E, and the split point (data_top) is 1 KiB-aligned, 2
+  KiB after the fix, so it is exact for any E <= 10. R-11 is the case of a split point that is not aligned enough.
+  **Corrected 2026-10-05 22:50:** this bullet first read "exact only because this 2 MiB region has E <= 1 and the
+  split point is 16-aligned". E <= 1 holds only at the base B1 ran at (0xac100000). The CMA places a 2 MiB block on
+  1 MiB alignment, and one straddling a 32 MiB boundary has E = 5: harmless to this split, but it shortens the glue's
+  16-aligned carve without CAPSTONE_GLUE_CARVE_ALIGN (R-11).
 - The monitor then moves dom_data's cursor with C_SET_CURSOR (SCC) to park gp at `data_top - 16`, and since B1.3
   the code capability at `- 32`.
 - SCC's result has cursor != start, and every FLU/DYN result is re-compressed at writeback (ex_stage.sv:1449). So
