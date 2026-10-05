@@ -1,0 +1,313 @@
+{
+ "trace": "(fifo)",
+ "records": 1123874231,
+ "lifetime_checks": 876255493,
+ "line_bytes": 64,
+ "sizes_lines": [
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536
+ ],
+ "variants": [
+  {
+   "inline": 12,
+   "slot_cache": 0,
+   "node_bytes": 64,
+   "accesses": 22005356,
+   "misses": [
+    3147581,
+    844041,
+    142452,
+    97259,
+    54201,
+    37776,
+    30345
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 10980946,
+     "misses_64_lines": 459988
+    },
+    "delete": {
+     "accesses": 10895720,
+     "misses_64_lines": 310719
+    },
+    "flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 59733,
+     "misses_64_lines": 28239
+    },
+    "tree": {
+     "accesses": 64733,
+     "misses_64_lines": 41161
+    },
+    "grow": {
+     "accesses": 4224,
+     "misses_64_lines": 3934
+    }
+   },
+   "capability_stores": {
+    "same_node": 122104650,
+    "fresh": 1876272,
+    "other_node": 4499908,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 1800848,
+   "index_changes": 6376180,
+   "absorbed_by_slot_cache": 0,
+   "deletes_absorbed": 0,
+   "evictions": 0,
+   "overflow": {
+    "inserts": 4601321,
+    "nodes": 2984,
+    "grows": 49,
+    "max_lines": 1024,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 15456,
+    "tag_clears": 75362,
+    "accesses_mean": 3.865,
+    "accesses_max": 5928,
+    "cam_purges": 0,
+    "cam_skips": 0
+   },
+   "memory_entries_peak": 22421,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 64,
+   "node_bytes": 64,
+   "accesses": 1652696,
+   "misses": [
+    836759,
+    450473,
+    124831,
+    87720,
+    50556,
+    36023,
+    28592
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 514258,
+     "misses_64_lines": 120913
+    },
+    "flush": {
+     "accesses": 1011510,
+     "misses_64_lines": 257788
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 58049,
+     "misses_64_lines": 27197
+    },
+    "tree": {
+     "accesses": 64733,
+     "misses_64_lines": 40696
+    },
+    "grow": {
+     "accesses": 4146,
+     "misses_64_lines": 3879
+    }
+   },
+   "capability_stores": {
+    "same_node": 122104650,
+    "fresh": 1876272,
+    "other_node": 4499908,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 1800848,
+   "index_changes": 6376180,
+   "absorbed_by_slot_cache": 5595224,
+   "deletes_absorbed": 1487241,
+   "evictions": 780892,
+   "overflow": {
+    "inserts": 291553,
+    "nodes": 2125,
+    "grows": 46,
+    "max_lines": 1024,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 15456,
+    "tag_clears": 75362,
+    "accesses_mean": 3.756,
+    "accesses_max": 5772,
+    "cam_purges": 58192,
+    "cam_skips": 89
+   },
+   "memory_entries_peak": 22396,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 256,
+   "node_bytes": 64,
+   "accesses": 338072,
+   "misses": [
+    201328,
+    175853,
+    126166,
+    75769,
+    45245,
+    30042,
+    24388
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 57337,
+     "misses_64_lines": 27671
+    },
+    "flush": {
+     "accesses": 158065,
+     "misses_64_lines": 83501
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 53899,
+     "misses_64_lines": 23016
+    },
+    "tree": {
+     "accesses": 64733,
+     "misses_64_lines": 37891
+    },
+    "grow": {
+     "accesses": 4038,
+     "misses_64_lines": 3774
+    }
+   },
+   "capability_stores": {
+    "same_node": 122104650,
+    "fresh": 1876272,
+    "other_node": 4499908,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 1800848,
+   "index_changes": 6376180,
+   "absorbed_by_slot_cache": 6255024,
+   "deletes_absorbed": 1753519,
+   "evictions": 120900,
+   "overflow": {
+    "inserts": 28571,
+    "nodes": 56,
+    "grows": 43,
+    "max_lines": 1024,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 15456,
+    "tag_clears": 75362,
+    "accesses_mean": 3.487,
+    "accesses_max": 5652,
+    "cam_purges": 58459,
+    "cam_skips": 234
+   },
+   "memory_entries_peak": 22310,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 4,
+   "slot_cache": 64,
+   "node_bytes": 32,
+   "accesses": 1784688,
+   "misses": [
+    877039,
+    471685,
+    98649,
+    62077,
+    37285,
+    30602,
+    25864
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 553923,
+     "misses_64_lines": 130750
+    },
+    "flush": {
+     "accesses": 1101723,
+     "misses_64_lines": 295234
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 60127,
+     "misses_64_lines": 19117
+    },
+    "tree": {
+     "accesses": 64733,
+     "misses_64_lines": 22684
+    },
+    "grow": {
+     "accesses": 4182,
+     "misses_64_lines": 3900
+    }
+   },
+   "capability_stores": {
+    "same_node": 122104650,
+    "fresh": 1876272,
+    "other_node": 4499908,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 1800848,
+   "index_changes": 6376180,
+   "absorbed_by_slot_cache": 5595224,
+   "deletes_absorbed": 1487241,
+   "evictions": 780892,
+   "overflow": {
+    "inserts": 356735,
+    "nodes": 6207,
+    "grows": 51,
+    "max_lines": 1024,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 15456,
+    "tag_clears": 75362,
+    "accesses_mean": 3.89,
+    "accesses_max": 6114,
+    "cam_purges": 58192,
+    "cam_skips": 89
+   },
+   "memory_entries_peak": 22396,
+   "collector_untags": 0,
+   "errors": 0
+  }
+ ]
+}

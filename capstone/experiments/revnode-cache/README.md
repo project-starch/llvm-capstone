@@ -88,6 +88,14 @@ cache of a given size and associativity would have. It does not answer what a mi
   - `selftest_clover.py` counts every metadata access of a hand-built trace. Negative controls:
     no same-node shortcut fails 3 checks, and no directory walk on unregister fails 2.
 - **`summarize_clover.py`**: the comparison below, per 1000 lifetime checks.
+- **`bucketsim.c`**: the index proposed below ("Ein Index mit einem Zugriff pro Aenderung"),
+  in variants (inline capacity, slot cache size, node record size), on the same stream. It keeps
+  its own view of which slot holds which node under Clover's eager revocation, since the
+  emulator's is lazy; its error count must be 0.
+  - `selftest_bucket.py` counts every access of three hand-built traces, including the CAM
+    cases at revoke. Negative controls: no same-node shortcut fails 3 checks, a tag clear of a
+    slot that holds another node fails 1, and a slot cache that absorbs nothing fails 3.
+- **`summarize_bucket.py`**: the comparison of all designs below.
 
 ## Results (`results/20261005-qemu/`)
 
@@ -298,6 +306,227 @@ Clover:
 - **This is the paper's baseline layout, not an optimised one.** Node records of 32 B, a
   separate alias pool, sidecars per frame. Co-locating a node's first alias with the node, or
   the sidecar with the tags, changes these numbers, and is the next thing to model.
+
+## Ein Index mit einem Zugriff pro Aenderung
+
+The question: a structure that finds every copy of a revoked capability, costs at most one
+metadata access per store that changes it, and is hardware. This section derives one from the
+problem and the measurements, places it against the literature, and measures it on the same
+traces.
+
+### The problem
+
+State: the set S of (slot g, node n) with "g holds a tagged capability of n". A slot holds at
+most one. Operations, with their measured frequency per 1000 capability loads/stores (the seven
+programs above):
+
+| operation | effect on S | per 1000 checks |
+|---|---|---:|
+| capability store, same node already in g | nothing | 94-139 |
+| capability store into an untagged g | insert (g, n) | 1.6-21.6 |
+| capability store over another node's copy | delete (g, m), insert (g, n) | 4.6-45.9 |
+| data store over a capability | delete (g, m) | 1.6-21.6 |
+| revoke of a run of nodes N | delete all (g, n), n in N; clear their tags | 0.001-2.1 |
+
+So 58 to 95 % of capability stores change nothing, and of those that do, 70 % replace one
+node's copy by another's. A revoke touches 1.2-2.7 nodes with 3.6-7.6 copies. Registers are
+inspected at revoke (32 + PCC, fixed), as Clover does.
+
+### Where the floor is
+
+Any index that enumerates copies by node in time proportional to the copies must, for each
+insert, write to a location determined by n. On a line-granular memory that is one line
+access unless several changes share a line, which different nodes do not. Deferring the
+write into a sequential journal (1/8 line per change) only postpones that access to the
+moment the journal is sorted by node, and leaves stale entries in the journal until the node
+is revoked. So the floor for an exact, eagerly maintained index is **one line read-modify-write
+per index change**, and the only ways below it are to make fewer changes: detect the stores
+that change nothing, and coalesce rewrites of the same slot before they reach memory.
+
+Deletion is where Clover's baseline spends most: it needs to find the record for slot g, through
+a radix walk and a per-frame sidecar. The observation that removes all of that: **the old
+granule is in the line the store writes.** The line is in the L1 for the write (write-allocate,
+and the tag bit lives in it), so reading the overwritten capability's node m costs a read of
+the data array the store already addresses, and no memory access. The slot's own content is the reverse directory. Deletion is then one RMW of
+node[m], the same cost as insertion.
+
+### What this is in the literature
+
+The structure is a GC write barrier's remembered set, keyed by allocation instead of by region:
+- Lieberman and Hewitt's entry tables (1983) and Ungar's remembered sets (1984) record incoming
+  references per region on each store; card marking (Sobalvarro 1988, Wilson and Moher 1989)
+  records one bit per card at a store and scans dirty cards later; the sequential store buffer
+  (Hosking, Moss and Stefanovic 1992) appends the slot address to a buffer, the cheapest
+  barrier they measured. The slot cache below is a store buffer that coalesces by slot.
+- G1's remembered sets (Detlefs et al. 2004) keep per region a sparse table, a fine bitmap
+  or a coarse flag, depending on how many cards point in: the same skew handling as the
+  inline bucket with an overflow table here.
+- Coalescing reference counting (Levanoni and Petrank 2001) logs a slot once per epoch and
+  reads old and new value at collection, so a slot rewritten many times costs one update.
+  The slot cache is that in bounded hardware form.
+- In temporal safety: DangNull (2015) keeps per-object lists of pointer locations with eager
+  removal on overwrite (Clover's baseline, in software); DangSan (2017) appends locations to
+  per-object logs, tolerates duplicates and validates at free (the journal alternative below);
+  CHERIvoke (2019) and Cornucopia (2020, Reloaded 2024) sweep capability-holding memory with
+  quarantine, and Cornucopia Reloaded's capability-dirty page bits are card marking maintained
+  by the MMU at no store cost; Chromium's BackupRefPtr counts references per allocation on
+  pointer assignment, in software, in production. Watchdog (2012) checks a per-allocation lock
+  at every dereference, as Capstone does.
+- Write-optimised indexes (LSM trees, B-epsilon trees) are the journal-and-compact answer with
+  tombstones; two-choice and cuckoo hashing give constant-bounded lookups for the overflow.
+
+### The design
+
+**Node record = one 64-byte line.** Capstone's node state (prev, next, depth, valid, linear;
+16 bytes) and K = 12 slot references of 32 bits each: the granule (physical address / 16) of
+every copy of this node. No separate alias pool, no reverse directory.
+
+**Store path.** The store unit reads the overwritten granule's node m from the line it writes
+and emits (g, m, n) to the controller:
+- m = n: nothing.
+- otherwise, if g is in the slot cache: update the cached entry. Nothing reaches memory.
+- otherwise: RMW node[m] (find g among 12 entries in parallel, remove), RMW node[n] (append).
+A data store over a capability emits (g, m, none).
+
+**Slot cache.** W fully associative entries (g, c, f): the slot's current node c and the node f
+the memory index still lists it under. The W most recently capability-written slots live here
+and nowhere else. On eviction an entry is written out: delete (f, g), insert (c, g), if they
+differ. The data says why this matters: 70 % of index changes overwrite another node's copy,
+and (below) nearly all of them hit a slot written moments before, the VM stack's top.
+
+**Overflow.** A node whose 12 inline entries are full gets a table of 64-byte lines with 16
+entries each, two-choice hashed by granule: insert into the first choice with room, else the
+second, else double the table (rehash, a controller slow path). Lookups and deletions touch
+one or two lines. Only nodes with more than 12 live copies have one: 1-3 % of nodes.
+
+**Revoke.** Walk the run as Capstone does. Per invalidated node: RMW node[c]; clear the tag of
+every listed slot that the slot cache does not hold under another node (a CAM check); clear
+the tags of cached slots whose c is in the run; read and free the overflow lines; free the
+record. Registers: the fixed scan. The node id is reusable at once: nothing references it.
+
+**Per operation:**
+
+| operation | metadata accesses |
+|---|---:|
+| capability store, same node | 0 |
+| capability store, slot in the cache | 0 (deferred to its eviction: 1 or 2) |
+| capability store into an untagged slot | 1 |
+| capability store over another node's copy | 2 (one delete, one insert) |
+| data store over a capability | 1 |
+| revoke, per invalidated node | 1 + overflow lines; tag clears apart |
+
+**Hardware.** The core side: the store unit reads the old granule's node field (30 bits) from
+the line it writes, and pushes (g, m, n) to the controller's queue; stores never wait for
+metadata. The controller: a W-entry CAM with LRU; a 12-wide comparator over the node line; a
+two-choice hash over 16-entry lines; RMWs issued asynchronously from the queue; a revoke
+drains the queue, consults the CAM, and walks the run. Table growth and node-id exhaustion are
+slow paths that stall the core, like Clover's REVOKING state.
+
+**Invariants.** (1) g holds a tagged capability of n iff g is cached with c = n, or g is not
+cached and listed under n. (2) For a cached g, f is exactly what memory lists. (3) A revoke
+removes every (g, n) of the run from both. (4) A node id is handed out again only when no
+record and no cache entry names it. The Lean model of `ideas/clover` states (1) for its
+logical index; this is a refinement of that index, not a change to it.
+
+### Alternatives, and why the data rejects them
+
+- **Journal with lazy validation** (DangSan-style, the sequential store buffer): 1/8 line per
+  change, no reads on the store path. But entries are removed only at their node's revoke, and
+  a long-lived node with copy churn collects them without bound: SQLite's level0 arena would
+  gather 4.4 M entries (its 12.1 + 10.4 index-changing stores per 1000 checks over 196 M
+  checks) for 59 nodes that are never revoked. Validating them at revoke is a data read per
+  entry while the core stalls.
+- **Lazy deletion inside the inline bucket:** stale entries fill the 12 slots, and reclaiming
+  them costs 12 random data reads, against the eager delete's one node-line RMW.
+- **Per-node Bloom filter of pages:** the same node-line RMW per store, but a revoke sweeps
+  every candidate page (64 lines each) instead of touching 3.6-7.6 slots.
+- **Sweeping with quarantine** (CHERIvoke, Cornucopia): no store cost, but node ids and
+  storage are reusable only after a sweep, which Clover's requirements exclude.
+- **Reference counting:** 25-32 count changes per 1000 checks, two nodes each, 16-bit
+  counts, and it does not say where the copies are.
+
+### Measured (`results/20261005-qemu-bucket/`)
+
+Same programs, each alone. Every variant's error count is 0. The seven programs' outputs match native.
+
+Misses per 1000 lifetime checks at 64 lines (4 KiB of metadata cache): Capstone, Clover's baseline,
+and the proposed index without a slot cache (K12/W0), with 64 and 256 cached slots, and with 32-byte
+node records holding 4 inline entries (K4/W64/32B).
+
+| | Capstone | Clover baseline | K12/W0 | K12/W64 | K12/W256 | K4/W64/32B |
+|---|---:|---:|---:|---:|---:|---:|
+| ao_render | 6.534 | 60.8 | 18.1 | 6.347 | 4.960 | 5.353 |
+| lc_fizzbuzz | 6.965 | 118.6 | 33.5 | 19.5 | 20.8 | 16.4 |
+| so_lists | 0.009 | 0.609 | 0.078 | 0.057 | 0.045 | 0.052 |
+| fib | 0.005 | 1.633 | 0.043 | 0.035 | 0.030 | 0.031 |
+| so_mandelbrot | 0.040 | 2.988 | 0.963 | 0.514 | 0.201 | 0.538 |
+| mandel_term | 0.020 | 3.423 | 2.044 | 0.231 | 0.118 | 0.236 |
+| speedtest1 (level0) | 0.000 | 12.2 | 12.7 | 4.068 | 0.726 | 4.069 |
+
+The same at 1024 lines (64 KiB) and 16384 lines (1 MiB), Capstone → K12/W64 → K4/W64/32B:
+
+| | 1024 lines | 16384 lines |
+|---|---|---|
+| ao_render | 1.410 → 2.975 → 2.206 | 0.488 → 1.054 → 0.684 |
+| lc_fizzbuzz | 4.956 → 12.122 → 9.593 | 3.351 → 9.038 → 6.330 |
+| so_lists | 0.004 → 0.023 → 0.017 | 0.002 → 0.010 → 0.007 |
+| fib | 0.001 → 0.014 → 0.011 | 0.001 → 0.005 → 0.004 |
+| so_mandelbrot | 0.018 → 0.100 → 0.071 | 0.006 → 0.041 → 0.035 |
+| mandel_term | 0.006 → 0.059 → 0.044 | 0.003 → 0.021 → 0.017 |
+| speedtest1 (level0) | 0.000 → 0.024 → 0.024 | 0.000 → 0.011 → 0.011 |
+
+Metadata accesses per 1000 checks, and what the index does:
+
+| | Capstone | Clover baseline | K12/W0 | K12/W64 | changes/1000 | absorbed by 64 slots | to overflow (W64) | overflow nodes (W64) | revoke: mean / max accesses |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| ao_render | 1012 | 908 | 177.7 | 20.49 | 57.6 | 83.2 % | 3.28 % | 1,003 | 3.2 / 10,197 |
+| lc_fizzbuzz | 1032 | 1044 | 196.8 | 45.79 | 67.4 | 75.6 % | 5.23 % | 68,342 | 3.2 / 106,218 |
+| so_lists | 1000 | 636 | 136.8 | 0.17 | 39.7 | 99.8 % | 0.07 % | 108 | 4.5 / 2,166 |
+| fib | 1000 | 439 | 96.3 | 1.07 | 27.5 | 97.5 % | 0.81 % | 81 | 5.4 / 1,972 |
+| so_mandelbrot | 1000 | 116 | 25.1 | 1.89 | 7.3 | 87.8 % | 4.57 % | 2,125 | 3.8 / 5,772 |
+| mandel_term | 1000 | 100 | 20.7 | 2.09 | 6.3 | 77.4 % | 6.68 % | 79 | 5.5 / 2,125 |
+| speedtest1 (level0) | 1000 | 359 | 87.1 | 13.98 | 22.5 | 71.2 % | 15.54 % | 2 | 275.8 / 1,094 |
+
+Five processes at once (ao_render, speedtest1, so_lists, fib, so_mandelbrot), misses per 1000
+checks, concurrent → one after another: Capstone 3.33 → 3.68 at 64 lines, the index with 64
+slots 3.50 → 3.33, with 32-byte records 3.09 → 2.84. Interleaving changes the index's figures
+by under 5 %; its slot cache absorbs 86.9 % concurrent against 87.3 % sequential. The index is
+not sensitive to the process mix at this scale.
+
+What the numbers say:
+
+- **The slot cache is the design.** 64 slots absorb 71 to 99.8 % of the index changes: those are
+  rewrites of a slot written within the last 64 capability stores. Without it (K12/W0) the index
+  touches memory 87-197 times per 1000 checks and misses 2-3 times as often as Capstone on the
+  two allocation-heavy programs; with it, 0.2-46 accesses per 1000 checks. Which slots those are
+  is not attributed (the trace has no pc); the VM stack's top is the hypothesis.
+- **Accesses: 22 to 5,900 times fewer than Capstone, 23 to 3,700 times fewer than Clover's
+  baseline.** Capstone's thousand per 1000 checks are the checks themselves; they hit.
+- **Misses at 64 lines: Capstone's level on the heavy programs, 6 to 47 times below Clover's
+  baseline.** ao_render 6.35 against Capstone's 6.53; lc_fizzbuzz 19.5 against 7.0, the one
+  program where the index misses more than Capstone at every size. The five others are below
+  0.6 per 1000 for every design.
+- **Larger caches favour Capstone 2-3x on the heavy programs.** At 1024 and 16384 lines
+  Capstone's misses are a third to a half of the index's. Capstone's model packs four 16-byte
+  nodes per line and checks hot nodes; the index touches node[m] of the capability being
+  overwritten, which is colder. 32-byte records with 4 inline entries (two per line) take back
+  a third of that gap, and cost nothing in accesses: the nodes that overflow 4 entries (9-10 %
+  of them) are rarely touched once the slot cache is there.
+- **What remains is spread over four causes.** For ao_render with 64 slots, per 1000 checks:
+  flushes of evicted slots 11.0 accesses, direct deletes 4.1, node creation 2.9, revokes 2.6.
+  Node creation and revokes exist in Capstone too. A new node record is a full-line write, which
+  a controller can issue without reading the line; the model counts it as a miss.
+- **Overflow is rare.** 0.07 to 6.7 % of changes reach a table in the mruby programs; 15.5 % in
+  SQLite, whose level0 heap has three nodes with thousands of copies. Tables grow 14 to 24,569
+  times per run; the grow traffic is 0.01-0.07 accesses per 1000 checks.
+- **Revokes cost 3.2 to 5.5 accesses** in the mruby programs (1 per node plus the overflow lines),
+  and 276 in SQLite, whose four revokes retire arenas. The largest, lc_fizzbuzz's 98,874-copy
+  revoke, takes 106,218 accesses and would stall for them.
+- **The CAM check at revoke is load-bearing**: in ao_render 443,101 memory entries named slots
+  that had since been rewritten in the cache. Without the check those would be wrong tag clears.
+- **Memory:** 4 bytes per live copy (48,708 to 461,447 at peak), inside 64-byte node records or
+  tables; no alias pool, no sidecars.
+
 
 ## What this does not measure
 

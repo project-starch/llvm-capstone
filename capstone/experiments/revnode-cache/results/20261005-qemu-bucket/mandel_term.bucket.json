@@ -1,0 +1,313 @@
+{
+ "trace": "(fifo)",
+ "records": 353679437,
+ "lifetime_checks": 325145748,
+ "line_bytes": 64,
+ "sizes_lines": [
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536
+ ],
+ "variants": [
+  {
+   "inline": 12,
+   "slot_cache": 0,
+   "node_bytes": 64,
+   "accesses": 6717999,
+   "misses": [
+    1480050,
+    664505,
+    30157,
+    20020,
+    12293,
+    6977,
+    6977
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 3356263,
+     "misses_64_lines": 385991
+    },
+    "delete": {
+     "accesses": 3335958,
+     "misses_64_lines": 263481
+    },
+    "flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 9015,
+     "misses_64_lines": 5152
+    },
+    "tree": {
+     "accesses": 13337,
+     "misses_64_lines": 6710
+    },
+    "grow": {
+     "accesses": 3426,
+     "misses_64_lines": 3171
+    }
+   },
+   "capability_stores": {
+    "same_node": 39063635,
+    "fresh": 547153,
+    "other_node": 1490904,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 534693,
+   "index_changes": 2038057,
+   "absorbed_by_slot_cache": 0,
+   "deletes_absorbed": 0,
+   "evictions": 0,
+   "overflow": {
+    "inserts": 1317970,
+    "nodes": 132,
+    "grows": 38,
+    "max_lines": 1024,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 1641,
+    "tag_clears": 12398,
+    "accesses_mean": 5.494,
+    "accesses_max": 2169,
+    "cam_purges": 0,
+    "cam_skips": 0
+   },
+   "memory_entries_peak": 13869,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 64,
+   "node_bytes": 64,
+   "accesses": 677995,
+   "misses": [
+    300080,
+    75142,
+    26128,
+    19025,
+    11910,
+    6886,
+    6886
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 276475,
+     "misses_64_lines": 17064
+    },
+    "flush": {
+     "accesses": 375796,
+     "misses_64_lines": 42984
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 8967,
+     "misses_64_lines": 5766
+    },
+    "tree": {
+     "accesses": 13337,
+     "misses_64_lines": 6155
+    },
+    "grow": {
+     "accesses": 3420,
+     "misses_64_lines": 3173
+    }
+   },
+   "capability_stores": {
+    "same_node": 39063635,
+    "fresh": 547153,
+    "other_node": 1490904,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 534693,
+   "index_changes": 2038057,
+   "absorbed_by_slot_cache": 1577088,
+   "deletes_absorbed": 370930,
+   "evictions": 460905,
+   "overflow": {
+    "inserts": 136216,
+    "nodes": 79,
+    "grows": 37,
+    "max_lines": 1024,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 1641,
+    "tag_clears": 12398,
+    "accesses_mean": 5.464,
+    "accesses_max": 2125,
+    "cam_purges": 2863,
+    "cam_skips": 70
+   },
+   "memory_entries_peak": 13840,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 256,
+   "node_bytes": 64,
+   "accesses": 76447,
+   "misses": [
+    45205,
+    38472,
+    25641,
+    18512,
+    11526,
+    6774,
+    6774
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 11261,
+     "misses_64_lines": 5401
+    },
+    "flush": {
+     "accesses": 39640,
+     "misses_64_lines": 18300
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 8897,
+     "misses_64_lines": 5727
+    },
+    "tree": {
+     "accesses": 13337,
+     "misses_64_lines": 5953
+    },
+    "grow": {
+     "accesses": 3312,
+     "misses_64_lines": 3091
+    }
+   },
+   "capability_stores": {
+    "same_node": 39063635,
+    "fresh": 547153,
+    "other_node": 1490904,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 534693,
+   "index_changes": 2038057,
+   "absorbed_by_slot_cache": 2010330,
+   "deletes_absorbed": 526334,
+   "evictions": 27471,
+   "overflow": {
+    "inserts": 11825,
+    "nodes": 57,
+    "grows": 29,
+    "max_lines": 1024,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 1641,
+    "tag_clears": 12398,
+    "accesses_mean": 5.422,
+    "accesses_max": 2089,
+    "cam_purges": 3092,
+    "cam_skips": 76
+   },
+   "memory_entries_peak": 13732,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 4,
+   "slot_cache": 64,
+   "node_bytes": 32,
+   "accesses": 724589,
+   "misses": [
+    346788,
+    76755,
+    22174,
+    14429,
+    6688,
+    5497,
+    5497
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 297557,
+     "misses_64_lines": 19601
+    },
+    "flush": {
+     "accesses": 400810,
+     "misses_64_lines": 46094
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 9417,
+     "misses_64_lines": 4545
+    },
+    "tree": {
+     "accesses": 13337,
+     "misses_64_lines": 3311
+    },
+    "grow": {
+     "accesses": 3468,
+     "misses_64_lines": 3204
+    }
+   },
+   "capability_stores": {
+    "same_node": 39063635,
+    "fresh": 547153,
+    "other_node": 1490904,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 534693,
+   "index_changes": 2038057,
+   "absorbed_by_slot_cache": 1577088,
+   "deletes_absorbed": 370930,
+   "evictions": 460905,
+   "overflow": {
+    "inserts": 159508,
+    "nodes": 537,
+    "grows": 43,
+    "max_lines": 1024,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 1641,
+    "tag_clears": 12398,
+    "accesses_mean": 5.739,
+    "accesses_max": 2363,
+    "cam_purges": 2863,
+    "cam_skips": 70
+   },
+   "memory_entries_peak": 13840,
+   "collector_untags": 0,
+   "errors": 0
+  }
+ ]
+}

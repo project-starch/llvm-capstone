@@ -13,7 +13,8 @@
 # Output: $K/reports/<workload>{,.npl4,.nosup}.json -- one node per cache line, four
 # nodes per line, and with the emulated supervisor's own reads left out -- and
 # <workload>.alias.json, aliasstat's aliases per node and tree shapes, and
-# <workload>.clover.json, clovsim's Capstone-vs-Clover metadata traffic.
+# <workload>.clover.json, clovsim's Capstone-vs-Clover metadata traffic, and
+# <workload>.bucket.json, bucketsim's figures for the proposed index.
 #
 # Everything this host-specific run needs is a variable; the defaults are the kits
 # the SQLite and mruby lanes built (see README.md).
@@ -41,11 +42,13 @@ CACHE_MIB=${CACHE_MIB:-768}
 name=${1:?usage: run.sh <workload>}
 
 mkdir -p $K/logs $K/reports $K/fifo
-SIM=$K/cachesim ALIAS=$K/aliasstat CLOV=$K/clovsim
-cc -O2 -o $SIM $HERE/cachesim.c && cc -O2 -o $ALIAS $HERE/aliasstat.c && cc -O2 -o $CLOV $HERE/clovsim.c || exit 1
+SIM=$K/cachesim ALIAS=$K/aliasstat CLOV=$K/clovsim BUCK=$K/bucketsim
+cc -O2 -o $SIM $HERE/cachesim.c && cc -O2 -o $ALIAS $HERE/aliasstat.c && cc -O2 -o $CLOV $HERE/clovsim.c \
+  && cc -O2 -o $BUCK $HERE/bucketsim.c || exit 1
 $PY $HERE/selftest.py $SIM > $K/logs/selftest.txt || { cat $K/logs/selftest.txt; echo "selftest FAILED"; exit 75; }
 $PY $HERE/selftest_alias.py $ALIAS > $K/logs/selftest_alias.txt || { cat $K/logs/selftest_alias.txt; echo "selftest_alias FAILED"; exit 75; }
 $PY $HERE/selftest_clover.py $CLOV > $K/logs/selftest_clover.txt || { cat $K/logs/selftest_clover.txt; echo "selftest_clover FAILED"; exit 75; }
+$PY $HERE/selftest_bucket.py $BUCK > $K/logs/selftest_bucket.txt || { cat $K/logs/selftest_bucket.txt; echo "selftest_bucket FAILED"; exit 75; }
 
 export PYTHONPATH=$W/runtime/host CAPSTONE_QEMU_LOCK=$K/qemu.lock
 # the revoking arms spend far more nodes than the 65536 default
@@ -66,7 +69,7 @@ case $name in
 esac
 vm down > /dev/null 2>&1; rm -rf $S
 R=$K/reports/$name
-rm -f $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json
+rm -f $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.json
 # the simulators read the trace as QEMU writes it; nothing is stored. A reader that
 # dies must not block QEMU (tee keeps feeding the others) and must not pass either:
 # its .err is checked below, and every reader rejects a stream without END.
@@ -74,6 +77,7 @@ rm -f $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json
       >($SIM --exclude gc,supervisor - > $R.nosup.json 2> $R.nosup.err) \
       >($ALIAS - > $R.alias.json 2> $R.alias.err) \
       >($CLOV - > $R.clover.json 2> $R.clover.err) \
+      >($BUCK - > $R.bucket.json 2> $R.bucket.err) \
     < $FIFO | $SIM - > $R.json 2> $R.err ) &
 SIMPID=$!
 vm up --qemu $QEMU --kernel $KERNEL --firmware $FIRMWARE --rootfs $ROOTFS --share $SHARE \
@@ -102,11 +106,12 @@ vm down > /dev/null 2>&1
 wait $SIMPID
 for i in $(seq 1800); do
   grep -qx "}" $R.npl4.json 2>/dev/null && grep -qx "}" $R.nosup.json 2>/dev/null \
-    && grep -qx "}" $R.alias.json 2>/dev/null && grep -qx "}" $R.clover.json 2>/dev/null && break; sleep 1
+    && grep -qx "}" $R.alias.json 2>/dev/null && grep -qx "}" $R.clover.json 2>/dev/null \
+    && grep -qx "}" $R.bucket.json 2>/dev/null && break; sleep 1
 done
 rm -f $FIFO
 bad=0
-for f in $R.err $R.npl4.err $R.nosup.err $R.alias.err $R.clover.err; do [ -s $f ] && { echo "SIM ERROR $f"; cat $f; bad=1; }; done
-for f in $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json; do grep -qx "}" $f 2>/dev/null || { echo "no report $f"; bad=1; }; done
+for f in $R.err $R.npl4.err $R.nosup.err $R.alias.err $R.clover.err $R.bucket.err; do [ -s $f ] && { echo "SIM ERROR $f"; cat $f; bad=1; }; done
+for f in $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.json; do grep -qx "}" $f 2>/dev/null || { echo "no report $f"; bad=1; }; done
 [ $rc = 0 ] && [ $bad = 0 ] || { echo "RUN FAILED $name"; exit 1; }
 echo "RUN-DONE $name"

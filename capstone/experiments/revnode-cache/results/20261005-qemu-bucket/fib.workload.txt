@@ -1,0 +1,2 @@
+seq #0 fib: PASS rc=0 68.9s
+mix seq n=1: PASS wall=68.9s

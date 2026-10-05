@@ -1,0 +1,313 @@
+{
+ "trace": "(fifo)",
+ "records": 6311303817,
+ "lifetime_checks": 4474036411,
+ "line_bytes": 64,
+ "sizes_lines": [
+  16,
+  64,
+  256,
+  1024,
+  4096,
+  16384,
+  65536
+ ],
+ "variants": [
+  {
+   "inline": 12,
+   "slot_cache": 0,
+   "node_bytes": 64,
+   "accesses": 880321514,
+   "misses": [
+    358772929,
+    149852041,
+    70361626,
+    62297906,
+    54740758,
+    43535930,
+    30458331
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 426394862,
+     "misses_64_lines": 78949704
+    },
+    "delete": {
+     "accesses": 391003394,
+     "misses_64_lines": 39281819
+    },
+    "flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 29981465,
+     "misses_64_lines": 10521229
+    },
+    "tree": {
+     "accesses": 32641025,
+     "misses_64_lines": 20850882
+    },
+    "grow": {
+     "accesses": 300768,
+     "misses_64_lines": 248407
+    }
+   },
+   "capability_stores": {
+    "same_node": 421642601,
+    "fresh": 121156857,
+    "other_node": 180504954,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 86721332,
+   "index_changes": 301661811,
+   "absorbed_by_slot_cache": 0,
+   "deletes_absorbed": 0,
+   "evictions": 0,
+   "overflow": {
+    "inserts": 124622727,
+    "nodes": 267768,
+    "grows": 24569,
+    "max_lines": 4096,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 9235963,
+    "tag_clears": 34435463,
+    "accesses_mean": 3.246,
+    "accesses_max": 108024,
+    "cam_purges": 0,
+    "cam_skips": 0
+   },
+   "memory_entries_peak": 461482,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 64,
+   "node_bytes": 64,
+   "accesses": 204888112,
+   "misses": [
+    137117358,
+    87242830,
+    58966391,
+    54235979,
+    48983632,
+    40435322,
+    28473022
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 49231860,
+     "misses_64_lines": 21113359
+    },
+    "flush": {
+     "accesses": 93178082,
+     "misses_64_lines": 34556968
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 29547615,
+     "misses_64_lines": 12424714
+    },
+    "tree": {
+     "accesses": 32641025,
+     "misses_64_lines": 18906287
+    },
+    "grow": {
+     "accesses": 289530,
+     "misses_64_lines": 241502
+    }
+   },
+   "capability_stores": {
+    "same_node": 421642601,
+    "fresh": 121156857,
+    "other_node": 180504954,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 86721332,
+   "index_changes": 301661811,
+   "absorbed_by_slot_cache": 227990629,
+   "deletes_absorbed": 49025366,
+   "evictions": 73671118,
+   "overflow": {
+    "inserts": 15785117,
+    "nodes": 68342,
+    "grows": 23526,
+    "max_lines": 4096,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 9235963,
+    "tag_clears": 34435463,
+    "accesses_mean": 3.199,
+    "accesses_max": 106218,
+    "cam_purges": 25846682,
+    "cam_skips": 6989
+   },
+   "memory_entries_peak": 461447,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 12,
+   "slot_cache": 256,
+   "node_bytes": 64,
+   "accesses": 164096854,
+   "misses": [
+    110158179,
+    93111799,
+    80944723,
+    53500077,
+    48599976,
+    40220844,
+    28311567
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 36089183,
+     "misses_64_lines": 18540748
+    },
+    "flush": {
+     "accesses": 65559321,
+     "misses_64_lines": 42683813
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 29504751,
+     "misses_64_lines": 12395408
+    },
+    "tree": {
+     "accesses": 32641025,
+     "misses_64_lines": 19232512
+    },
+    "grow": {
+     "accesses": 302574,
+     "misses_64_lines": 259318
+    }
+   },
+   "capability_stores": {
+    "same_node": 421642601,
+    "fresh": 121156857,
+    "other_node": 180504954,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 86721332,
+   "index_changes": 301661811,
+   "absorbed_by_slot_cache": 251779409,
+   "deletes_absorbed": 59086266,
+   "evictions": 49882146,
+   "overflow": {
+    "inserts": 11114818,
+    "nodes": 38060,
+    "grows": 24774,
+    "max_lines": 4096,
+    "fallback_placements": 0
+   },
+   "revokes": {
+    "count": 9235963,
+    "tag_clears": 34435463,
+    "accesses_mean": 3.195,
+    "accesses_max": 105888,
+    "cam_purges": 25924154,
+    "cam_skips": 5957
+   },
+   "memory_entries_peak": 461323,
+   "collector_untags": 0,
+   "errors": 0
+  },
+  {
+   "inline": 4,
+   "slot_cache": 64,
+   "node_bytes": 32,
+   "accesses": 214671243,
+   "misses": [
+    123791630,
+    73553438,
+    48198583,
+    42920539,
+    36665851,
+    28322106,
+    17566752
+   ],
+   "by_operation": {
+    "insert": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "delete": {
+     "accesses": 52559766,
+     "misses_64_lines": 20652413
+    },
+    "flush": {
+     "accesses": 98193423,
+     "misses_64_lines": 32628458
+    },
+    "reuse_flush": {
+     "accesses": 0,
+     "misses_64_lines": 0
+    },
+    "revoke": {
+     "accesses": 30938305,
+     "misses_64_lines": 8879637
+    },
+    "tree": {
+     "accesses": 32641025,
+     "misses_64_lines": 11114108
+    },
+    "grow": {
+     "accesses": 338724,
+     "misses_64_lines": 278822
+    }
+   },
+   "capability_stores": {
+    "same_node": 421642601,
+    "fresh": 121156857,
+    "other_node": 180504954,
+    "of_revoked": 0
+   },
+   "data_stores_over_capability": 86721332,
+   "index_changes": 301661811,
+   "absorbed_by_slot_cache": 227990629,
+   "deletes_absorbed": 49025366,
+   "evictions": 73671118,
+   "overflow": {
+    "inserts": 20477418,
+    "nodes": 1052668,
+    "grows": 28377,
+    "max_lines": 4096,
+    "fallback_placements": 1
+   },
+   "revokes": {
+    "count": 9235963,
+    "tag_clears": 34435463,
+    "accesses_mean": 3.35,
+    "accesses_max": 116490,
+    "cam_purges": 25846682,
+    "cam_skips": 6989
+   },
+   "memory_entries_peak": 461447,
+   "collector_untags": 0,
+   "errors": 0
+  }
+ ]
+}
