@@ -1058,6 +1058,23 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - Code type 7 again would refute H1 as the whole story.
   - QEMU on 10a0690, fabrication off and on: b0-hello, b1-thread 124, the legacy control 91. The probe reads the
     arena ending at e04ff800, the 2 KiB-aligned top (it was ...ffc00 before).
+- **B1f RESULT (20:40-20:50, 776d9d859): B1 RUNS ON SILICON, as pre-registered.**
+  - Boot 1, b0-hello on 10a0690 (firmware 088d5d9c74bd): byte-exact, retval 0, census rungs 0 and 0.
+  - Boot 2, the B1e probe image (firmware 69bd27fbb7c0):
+    - code capability type 1, `[ac100000, ac120000)`, cursor at its base;
+    - arena LINEAR `[ac2df800, ac2ff800)`, ending at the 2 KiB-aligned top as predicted;
+    - gp just below it;
+    - malloc, mmap and mprotect ok;
+    - clone step 5, transport 1, offered 1, id 0x100000001;
+    - **`B1: thread returned 124`, `RESULT b1-thread retval=0`**, census rungs 0 and 0.
+  - **A matched pair confirms H1 by intervention.** B1e and B1f boot 2 ran the same Linux image and the same
+    application image; only the monitor differs (a11d424 against 10a0690, the data_top alignment). The code
+    capability went from type 7 to type 1, and pthread_create from EAGAIN to a joined thread.
+  - So the first minted context of a gp-captable application has run on silicon. It was created by
+    pthread_create, minted from the arena, sealed with the monitor's code capability and the creator's gp, adopted
+    by the launcher, stepped by the monitor with CSR events, and joined with its value.
+  - Registry: ISSUES M-14 (the data capability's top reached the descriptor area). It also bounds every B0 build's
+    cap table, which was carved into that area until now.
 
 ## B1.0b (2026-10-05): strtod, atof and scanf's %f on the silicon build, for memcached
 - **The gap.** The archive drops musl's `floatscan.o` for the same reason as vfprintf (C-43). `strtod.o` and
