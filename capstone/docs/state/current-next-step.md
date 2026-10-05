@@ -1,3 +1,19 @@
+2026-10-05, night: **R-29 AND S-10b HAVE A LINT-CLEAN RTL FIX IN SIMULATION** (capstone-ariane `sup-call` 776d9d859; the
+dated blocks in ISSUES R-29 and S-10b). A read whose granule has a conflicting store in flight -- a plain store for a 16-byte
+read, a capability store for a plain high-word read -- now waits in the dcache read controller until the store has drained,
+seeing the stores in BOTH buffers from flops: the write buffer's entries and the store buffer's queues exported as a shadow.
+The store buffer's address checker is untouched (its widening failed synthesis on 2026-08-21, S-10b); nothing in the memory's
+response path changes.
+- 25 directed arms read correctly with the hold where one is due, the set-index-9, MISS-face and S-10b controls among
+  them; the clean tree reads torn on every one that should. Sweep: 95-test directed sweep (testlist_capstone.yaml, seed 20260922, memory delay 12) on the fixed tree against the clean HEAD: 89 identical in exceptions, readings and retired count with zero cycle-count differences; 3 random-generator entries log-less on both sides as always; untagged-ldc-stc-fixup retires one instruction more and reads the same values -- its repair branch, which re-wrote the destination's high word after the stale read, is skipped now that the read is ordered (its own comment anticipated this); and linear-clear-audit / linear-clear-residue failed by their codes 2 and 3 for the reason above and pass with the updated expectation (one hold each, a plain high-word read behind the clear's capability entry in the write buffer), while the clean tree fails them. Audit: claim-auditor, two passes. The first (against the version that widened the store buffer's compare) REFUTED it on the S-10b record (c867dfcbb's LUTLP-1 loop in the same cone), found that the "R-51" mirror shape was S-10b's data route already registered, SUPPORTED the write-buffer hold's correctness/key/coverage/interactions, and called the UNOPTFLAT 40 -> 35 drop uninformative. The second (this shape) found no error by reading -- deadlock freedom, visibility timing (zero slack: the store appears in speculative_queue_q exactly in the load's earliest decision cycle; depends on NrStorePipeRegs = 0), the S-10b tag-route release, lint structure and the run results all SUPPORTED or plausible -- and named the deadlock rule's missing positive control, which r29-sb-younger and its mutant now provide. Residual it named: dom-switch reads re-check against lsu_ctrl in WAIT_PAGE_OFFSET (an inherited gap; whether the switcher writes and reads one granule within a switch is UNRESOLVED).
+- Mechanism sharpened: at zero distance the high-word face was the STORE buffer (word-granular check), not the write
+  buffer; the write-buffer phase begins 2-4 instructions later.
+- **Next:** synthesis of 776d9d859 (the lead's go of 2026-10-05). Pre-registered: UNOPTFLAT 40 with the baseline's set, so
+  synthesis must show the SAME loop membership (TIMING-23) as 715bdd1fe and no LUTLP; WNS within the band; on the board the
+  unguarded memcpy control 94/96 -> 0/96, the R29 repro 31/32 -> 0/32, the S-10b primed test's eight legs trapping, the
+  guarded build and the S-16/R-43 acceptance unchanged.
+- memcached on silicon does not wait for it: the memcpy guard (B0.8) covers the runtime, the W-12 pass the application.
+
 2026-10-05: **B0 PASSES ON SILICON.** The gp-captable delegated hello-world runs byte-exact on
 `caplifive_supcall_715bdd1fe.bit`, N=2. It is launched by capstone-exec through the process-ABI module and stepped by
 the FPGA monitor's supervised CALL, with no fabricated gp. Preflight was off, for a documented reason.
