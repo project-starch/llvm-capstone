@@ -56,6 +56,11 @@ cc "$M/posix_spawn_delegate.c" core_posix_spawn_delegate.o "${CORE_INC[@]}" -I"$
 while read -r o; do [ -n "$o" ] && cc "$M/$o.c" "ovr_$o.o" "${CORE_INC[@]}" \
   -DCAPSTONE_MEMCPY_PLAIN_GUARD="${B0_MEMCPY_GUARD:-1}"; done < "$M/libc_overrides.list"
 for f in launch delegate spawn msghdr; do cc "$CAP/runtime/common/$f.c" "common_$f.o" "${CORE_INC[@]}"; done
+# printf: musl's vfprintf.o is dropped from the gp-captable archive (its long double needs fp128 constant pools,
+# C-43), so the narrowed one is generated from musl's own source and linked ahead of the archive.
+python3 "$HERE/gen-vfprintf-double.py" "$MUSL" "$OUT/gen/vfprintf-double.c" > "$OUT/gen-vfprintf.log" || {
+  cat "$OUT/gen-vfprintf.log" >&2; exit 2; }
+cc "$OUT/gen/vfprintf-double.c" ovr_vfprintf_double.o "${CORE_INC[@]}"
 cc "$CAP/runtime/domain/application.c" app_application.o "${APPDEFS[@]}"
 cc "$M/level0.c" app_level0.o "${APPDEFS[@]}"
 cc "$HERE/$APP.c" "app_$APP.o" "${APPDEFS[@]}"
