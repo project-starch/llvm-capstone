@@ -49,7 +49,7 @@ And the **synthetic baseline**, which is where the not-nested spatial row really
 | probe | programs | role |
 |---|---|---|
 | fx2 `heap_neighbour`, fx3 `heap_one_past` | all three app ports | the standing malloc-granular control: `level0` RETURN, `shrink` FAULT `oob` |
-| fixtures 20, 21 | memcached (new, 2026-10-05) | two more class-A probes, modelled on historical defects — see the note below |
+| fixtures 20, 21 | memcached (new, 2026-10-05) | two more class-A probes, modelled on historical defects: **measured 15/15**, `results/2026-10-05-qemu-classa-fixtures/` |
 
 ### Why the not-nested spatial column has no live upstream defect in it
 
@@ -153,9 +153,12 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
     It goes back on an inner allocator's own free list — `cache.c`'s STAILQ, a wmem scope reset, a
     pool return — inside a block `malloc` still owns, so libc's quarantine never holds the object
     and the revoker has nothing to sweep.
-  - **4 not measured:** FFmpeg `pool-repros` — 3 carry a declared prediction (completes, same
-    mechanism), and case 3's `cheribsd-revocation` arm is **undeclared**. That one arm is the only
-    cell in either table with no oracle at all.
+  - **4 not measured, and all 4 now declared:** FFmpeg `pool-repros`. Case 3's
+    `cheribsd-revocation` arm held a bare `{"status": "not written"}` and was the one cell in either
+    table with no oracle at all; it was declared on 2026-10-05 with its siblings' mechanism — the
+    two side tables return to their `AVRefStructPool`s (`refs.c:153`, `:157`) rather than to
+    `free()` — marked **predicted, not measured**, and naming what a reading would need. So this
+    column is **22 declared, 18 measured, 0 caught**, with no blanks left in it.
 - **Spatial: 0 of 11 measured.** All 11 carry a prediction that the case *completes*, and the reason
   is structural: CHERI bounds the slab page or the enclosing allocation, which is one `malloc`. Not
   measurable on this host, checked rather than assumed —
@@ -198,9 +201,26 @@ this is what a host that has them needs in order to extend the measured column:
 Arm cells for the 11 spatial cases: **36 measured, 33 unavailable, 8 declined, 3 n/a = 80**, which
 is the closed accounting in the companion document.
 
-**Status of the two new memcached fixtures.** 20 and 21 are built — three distinct images carrying
-them, `level0` `9beb8bbfebdf04a1`, `shrink` `c8c1a1596787f908`, `sublet` `b5b340c630e0ea9d`, two
-fixture symbols in each — with their ten expect rows registered **before** any run. Their readings
-are **not in this document yet**: `level0` must RETURN and `shrink` must FAULT `oob`, and if `level0`
-also faults the fixture is not class A and the row is wrong rather than the port. Until the gated run
-lands they are counted as built, not as measured.
+**The two new memcached fixtures are MEASURED.** `results/2026-10-05-qemu-classa-fixtures/`,
+**15 of 15 cells as predicted** against rows registered before any image existed — fixtures 20 and
+21 plus fx2/fx3 as the standing malloc-granular controls and fx17 as the temporal control, one boot
+per arm, images cited by hash (`level0` `9beb8bbfebdf04a1`, `shrink` `c8c1a1596787f908`, `sublet`
+`b5b340c630e0ea9d`).
+
+| | fx2 | fx3 | fx17 (temporal) | **fx20** | **fx21** |
+|---|---|---|---|---|---|
+| `level0` | RETURN | RETURN | RETURN | **RETURN** | **RETURN** |
+| `shrink` | FAULT cause 7 | FAULT cause 5 | RETURN | **FAULT cause 5** | **FAULT cause 7** |
+| `sublet` | FAULT cause 7 | FAULT cause 5 | FAULT **cause 24** | **FAULT cause 5** | **FAULT cause 7** |
+
+`level0` RETURN beside `shrink` FAULT is what makes them class A, and the falsifier was pre-written:
+had `level0` faulted too, the fixture would not have been class A. Three checks the verdict did not
+need and the cells pass anyway: the cause matches the access (fixture 20 reads, cause 5, a load
+`insn`; fixture 21 writes, cause 7, a store), the faulting address is the fixture's own printed
+target, and fx17 faults with cause **24** — revoked authority, a different class — only on `sublet`.
+The gate is negative-tested: with fx20's row forced to `FAULT oob` the judge reports `DIFFERS` while
+its neighbours pass, and exits 1.
+
+**They are probes, not upstream-defect reductions**, so they do not change the 38 in table (a) —
+both modelled defects are already fixed at the pin. What they change is that the not-nested spatial
+baseline is now four measured probes per arm instead of two.

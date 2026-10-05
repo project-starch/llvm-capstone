@@ -28,7 +28,11 @@ spec.loader.exec_module(classifier)
 
 
 def classify(stdout, diagnostics, result, fixture):
-    lines = stdout.replace('TSAPP-', 'FFAPP-').splitlines()
+    # Each port's fixtures print their own prefix; this oracle reads one. MCAPP- joined the list
+    # on 2026-10-05: without it every memcached cell raised "fixture mark and actual exit status
+    # disagree", not because a mark was wrong but because the mark regex matched nothing -- the
+    # mirror of a clean zero, and it showed up on the three known-good controls first.
+    lines = stdout.replace('TSAPP-', 'FFAPP-').replace('MCAPP-', 'FFAPP-').splitlines()
     marks = re.findall(rf'^FFAPP-FIX {fixture} mark=([0-9a-f]+)$', '\n'.join(lines), re.M)
     refusal = re.findall(r'^FFAPP-POOL fail (\d+)$', '\n'.join(lines), re.M)
     done = int(marks[0], 16) if len(marks) == 1 else None
