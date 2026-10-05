@@ -7,7 +7,8 @@ arena -- and corpus bugs are caught by capability bounds alone, with no shadow m
 or instrumentation.**
 
 **All eleven reachable cases that unpatched ASAN cannot detect are caught**, each at the exact line
-ASAN names as frame #0, and each as a matched pair whose CONTROL arm completes (reproducing the
+ASAN names as frame #0. Across the whole corpus, 13 of the 14 cases that are both runnable here and
+scoreable are caught; the single exception, CRASH-155, is unscoreable because its CONTROL arm faults, and each as a matched pair whose CONTROL arm completes (reproducing the
 corpus's `crashes_on_pristine_build = False`). CRASH-005 is caught as well, outside that population.
 See the headline section below for the measurement and the table.
 
@@ -521,6 +522,64 @@ faults at the exact line ASAN names as frame #0:**
 
 Line-level agreement on eleven independent cases, against a detector that needed the allocator
 rewritten to see any of them, is the strongest evidence in this file.
+
+### Does everything that CAN run get caught? Stats, and the one exception
+
+Classifying all 127 by what each trigger actually needs (every called function mapped to its
+defining file, plus class use, `include`/`__FILE__`, and the corpus's own `requires` field):
+
+| | cases |
+|---|---|
+| corpus total | 127 |
+| **runnable here** (engine + `url.c`, no env requirement) | **31** |
+| of those, crash on stock PHP too, so no matched pair exists | 18 |
+| of those, **scoreable** (masked on stock PHP) | **14** |
+| **caught** | **13** |
+| scoreable, runnable, and NOT caught | **1** (CRASH-155) |
+
+And on the population this work is actually for:
+
+> **Of the 31 cases unpatched ASAN cannot see, 11 are reachable here and all 11 are caught.**
+
+The 18 that crash on stock PHP are excluded by the methodology, not by failure: the control arm is
+required to COMPLETE, and for those it cannot, so the suite would report NO VERDICT. They are also
+the cases that need no capability to find.
+
+### CRASH-155: runnable, and NOT scoreable -- an honest miss in the harness sense
+
+`is_a()`/`is_subclass_of()` hold `zval**` pointing into `EG(argument_stack).elements` across
+`zend_lookup_class()`, which runs userland `__autoload`; a deep enough nested call ereallocs that
+block and the pointer dangles. Everything it needs is linked -- `is_a` and `is_subclass_of` are Zend
+built-ins, `__autoload` and `eval` are language.
+
+**Its CONTROL arm faults, with cause 24, revocation OFF.** So there is no verdict: a control that
+does not complete means the port is faulting for its own reasons, and scoring the fault arm would be
+meaningless. Tested at 512 KB, 1 MB and 2 MB of domain stack -- identical at all three, so the
+800-frame recursion is NOT the cause.
+
+A tag lost with revocation disabled points at the one known hole: a `memcpy` whose source and
+destination differ in 16-byte alignment falls back to a byte loop and silently drops tags. This
+trigger is built to force an `erealloc` of a block full of `zval*`, which is exactly the shape that
+would expose it. That is a hypothesis, not a diagnosis -- it has not been instrumented.
+
+### CRASH-068 needed the SAPI to format error messages
+
+`zend_register_constant`'s failure path frees `c->name` and then passes the same pointer to
+`zend_error` as `%s`. The use-after-free IS the formatter's read -- ASAN reports frame #0 in `strlen`
+inside `spprintf`.
+
+The port's `ub_error` discarded `format` and `args` entirely, so that read never happened and the
+case would have been scored MISSED for a reason having nothing to do with capabilities. Real SAPIs
+format (`php_error_cb` -> `vspprintf`), so the stub was the deviation. `ub_error` now formats into a
+local buffer; CRASH-068 is then CAUGHT at `php_capstone_stdio.c:72`, the `%s` copy loop -- the same
+frame ASAN names.
+
+It also needed the temporal fault-site gate narrowed. That gate rejected any fault in
+`php_capstone_*` as a port artefact, which was right for the allocator and wrong for everything
+else: **only the allocator can trip over its own revocation**, because it is the component that
+performs the revoke and keeps bookkeeping inside the blocks it kills. Every other component merely
+dereferences what it is handed, so a revoked-capability fault there is a use-after-free by the
+caller whatever file it lands in. Scoped to `zend_capstone_alloc.h` and `php_capstone_malloc.c`.
 
 ### What the remaining 20 need, measured rather than guessed
 

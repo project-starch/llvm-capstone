@@ -141,6 +141,7 @@ axis_of() {
     CRASH-110|CRASH-073) echo heap ;;
     CRASH-003|CRASH-004|CRASH-010|CRASH-067) echo temporal ;;
     CRASH-024|CRASH-025|CRASH-042|CRASH-065|CRASH-140) echo temporal ;;
+    CRASH-068|CRASH-155) echo temporal ;;
     CRASH-005) echo global ;;
     *) echo heap ;;
   esac
@@ -245,8 +246,15 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
       # _zval_ptr_dtor). A fault inside the ALLOCATOR is the allocator tripping over its own
       # revocation, which is what the sanity arm exists to rule out; refuse it here as well, since
       # the two checks fail independently.
+      # ONLY THE ALLOCATOR can trip over its own revocation -- it is the component that performs
+      # the revoke and keeps bookkeeping in the blocks it kills. Every other component merely
+      # DEREFERENCES what it is handed, so a revoked-capability fault there is a use-after-free by
+      # the caller, whatever file it lands in. Scoping this to the allocator matters: the pattern
+      # was once `php_capstone_*`, which rejected CRASH-068 -- whose use-after-free is the error
+      # formatter reading a freed constant name through %s, exactly where ASAN reports it (frame #0
+      # strlen, inside spprintf).
       case "$tsite" in
-        zend_capstone_alloc.h:*|php_capstone_*)
+        zend_capstone_alloc.h:*|php_capstone_malloc.c:*)
           echo "SUSPECT: $id -- the fault is inside the ALLOCATOR, not at a use of the stale" >&2
           echo "         reference. That is a port artefact, not a catch. NO VERDICT." >&2
           return 75 ;;

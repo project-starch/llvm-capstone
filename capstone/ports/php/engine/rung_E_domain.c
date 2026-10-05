@@ -111,6 +111,27 @@
 /* Not an object case: a UAF entirely inside Zend/zend_builtin_functions.c, which the engine set
  * already links and zend_startup(..., 1) already registers. debug_print_backtrace fails to reset
  * arg_array across the eval frame, so it reads and re-frees a zval it already released. */
+/* A constant redefined: zend_register_constant's failure path frees c->name and then passes the
+ * same pointer to zend_error as %s. The read is performed by the message formatter, which is why
+ * ub_error above must actually format. */
+# elif defined(RUNG_E_CRASH068)
+#  define RUNG_E_SOURCE \
+     "define('C', 1);\n" \
+     "define('C', 2);"
+#  define RUNG_E_STMT   1
+/* is_a()/is_subclass_of() hold zval** pointing into EG(argument_stack).elements across
+ * zend_lookup_class(), which runs userland __autoload; a deep enough nested call ereallocs that
+ * block and the pointer dangles. */
+# elif defined(RUNG_E_CRASH155)
+#  define RUNG_E_SOURCE \
+     "class A {}\n" \
+     "function deep($n) { if ($n > 0) { deep($n - 1); } return $n; }\n" \
+     "function __autoload($c) { deep(800); eval(\"class $c {}\"); }\n" \
+     "$o = new A;\n" \
+     "var_dump(is_a($o, 'LazyClass'));\n" \
+     "var_dump(is_subclass_of($o, 'LazyClass2'));\n" \
+     "echo 'done';"
+#  define RUNG_E_STMT   1
 # elif defined(RUNG_E_CRASH140)
 #  define RUNG_E_SOURCE \
      "function f($a, $b, $c) { debug_print_backtrace(); }\n" \
@@ -141,7 +162,16 @@ static unsigned err_count;
 static void ub_error(int type, const char *fname, const uint lineno,
                      const char *format, va_list args)
 {
-    (void)fname; (void)lineno; (void)format; (void)args;
+    /* THE MESSAGE IS FORMATTED, NOT DISCARDED, and that is a correctness requirement rather than a
+     * nicety. Every real SAPI formats it (php_error_cb -> vspprintf, main/main.c), and at least one
+     * corpus defect lives inside that formatting: CRASH-068 frees a constant's name and then hands
+     * the same pointer to an E_NOTICE as %s, so the use-after-free IS the formatter's read. A
+     * handler that ignored `format` would report that case MISSED for a reason that has nothing to
+     * do with capabilities -- a false negative manufactured by the port. */
+    char msgbuf[256];
+    (void)fname; (void)lineno;
+    vsnprintf(msgbuf, sizeof msgbuf, format, args);
+    sink(msgbuf, 0);
     ++err_count;
     switch (type) {            /* mirrors php_error_cb (main/main.c:773-781) */
         case E_CORE_ERROR:
