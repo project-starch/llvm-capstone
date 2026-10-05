@@ -105,8 +105,25 @@ capability from a stack slot every iteration and on silicon sporadically returns
 silicon defect for another, and the new `rc=21` at `sqlite3_step` may BE that defect resurfacing.
 Treat `-O1`-vs-`-O0` as two different broken configurations, not as a fix.
 
-## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `S-07 and S-10 (route 1) ARE in the resident bitstream (2026-09-05); S-10b MEASURED STILL PRESENT there, and its fix is unsynthesizable`
+## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `S-07 and S-10 (route 1) ARE in the resident bitstream (2026-09-05); S-10b MEASURED STILL PRESENT there, and its 2026-08 fix is unsynthesizable; a DIFFERENT fix, outside the store buffer's address checker, is in simulation 2026-10-05 (`sup-call` 776d9d859, with R-29), awaiting synthesis`
 
+> **S-10b FIX IN SIMULATION 2026-10-05, in a shape that leaves the store buffer's address checker alone** (capstone-ariane
+> `sup-call` 776d9d859; the dated block under R-29 has the design). The dcache read controller holds a read whose granule
+> has a conflicting store in flight -- in the write buffer OR still queued in the store buffer, the queues exported as
+> flops -- until it drains: a 16-byte read behind a plain store (the TAG route: `s10b-storebuf-primed`, whose eight legs
+> each trap on the fixed tree where the clean tree traps on none, the tag route s10b-storebuf-primed 9 exceptions = the control plus all 8 legs trapping, 8 holds (clean tree 1 exception = 0 legs, the defect; s10b-storebuf-residual 9 on both, its condition is never created); the data route r29-stc-ldhi and -nop4 read the unfenced high word equal to the fenced one, 0xb280c8000, with one 57/54-cycle hold (clean tree 0x5050)), and a plain read of the HIGH word behind a
+> capability store (the DATA route: `r29-stc-ldhi.S`, which on the clean tree reads the old plain word instead of the
+> capability's metadata word at 0 and 4 nops). The three `[11:3]` compares in `store_buffer.sv` are what they were, so
+> the LUTLP-1 loop of `c867dfcbb` is not provoked; synthesis is the arbiter and is pre-registered as "same loop membership
+> as 715bdd1fe". Both s10b tests now live in `testlist_sup.yaml` on `sup-call`, no longer only on the unbuildable branches.
+> **A documented conclusion corrected by this fix:** the "incomplete linear clear" (ISSUES-ARCHIVE, the R-21-era observation
+> that the LDC linear clear zeroes the slot's low 8 bytes while the metadata word 0xb98044000 survives, carried as the
+> expectation of `linear-clear-audit.S` arm 3 and `linear-clear-residue.S`) was this data route, not the clear: the clear
+> is a whole-granule capability store, and the plain high-word read right behind it took the array's old word. On the
+> fixed tree both halves read 0 and the two tests failed by their own "the clear has been made whole" codes; their
+> expectation is updated with the fix and they fail on the clean tree, as S-10b regression tests should. The tag's
+> clearing, which the residue test measured, stands.
+>
 > **STATUS LINE CORRECTED 2026-09-05.** The header used to say *"none synthesised into a flashed
 > bitstream yet"*. That is **stale**: checked by content —
 > `git log e1b3db6ba..5097eb166 -- core/cache_subsystem/` — the resident bitstream's lineage
@@ -1292,7 +1309,7 @@ walks, read against the node pool and the retired-instruction trace. Owner: the 
 lane. Not to be conflated with R-27: that one is a deadlock, this one is a state divergence.
 
 
-### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Both the store-buffer account and the `.user = 0` account are REFUTED by traced arms that show their condition existed. SILICON: the window is ONE instruction wide -- boot sw49's distance ladder turns clean at a single intervening nop. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour). No fix candidate; synthesis-first; W-12 stays in force`
+### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Both the store-buffer account and the `.user = 0` account are REFUTED by traced arms that show their condition existed. SILICON: the window is ONE instruction wide -- boot sw49's distance ladder turns clean at a single intervening nop. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour). FIX IN SIMULATION 2026-10-05 (stall-only, lint-clean, `sup-call` 776d9d859; the dated block below), awaiting synthesis; W-12 and the runtime memcpy guard stay in force until it is on silicon`
 
 > **NEW SHAPE, REPRODUCED IN SIMULATION, SEEN ON SILICON (2026-10-05): the HIT shape with the granule's plain stores
 > still in the write buffer reads the high half as 0.** On caplifive_supcall_715bdd1fe.bit the delegated runtime wrote a
@@ -1330,6 +1347,48 @@ lane. Not to be conflated with R-27: that one is a deadlock, this one is a state
 > between a granule's plain stores and a wide load of it, or plain 8-byte moves for freshly written plain data (B0's
 > `dl_bytes`) -- musl-capstone's memcpy granule loop has exactly this exposure for any freshly written plain data; the W-04 line "the memcpy loop does not have this shape" is
 > false under full LTO, where the inlined memcpy forms the shape across the call.
+>
+> **FIX 2026-10-05, stall-only, lint-clean, in simulation: capstone-ariane `sup-call` 776d9d859, both faces, both
+> buffers, and S-10b's two routes with it; awaiting synthesis.** One mechanism in the dcache read controller
+> (`wt_dcache_ctrl.sv`, a new state `WBUF_HOLD`): a read whose granule has a CONFLICTING store in flight waits, requesting
+> nothing, until that store has drained, then replays. Conflicting = a PLAIN store for a 16-byte read (R-29), a CAPABILITY
+> store for a plain read of the granule's HIGH word (S-10b's data route); a plain read of the low word and a 16-byte read
+> behind a capability store are forwarded correctly today and are not held. The stores in flight are seen in BOTH buffers,
+> from flops only: the write buffer's entries (`wt_dcache.sv`: per-entry valid/is_cap/key vectors) and the store buffer's
+> two queues, exported as a "shadow" (`store_buffer.sv`: valid, is_cap, speculative, paddr[PLEN-1:4] per entry, routed
+> store unit -> LSU -> ex_stage -> cva6 -> cache subsystem). The store buffer's own address checker is UNTOUCHED, by the
+> S-10b lesson: widening its compare made a 69-LUT combinational loop in synthesis (2026-08-21), and the first version of
+> this fix had done exactly that again before the audit pointed at the record. A committed queued store is older than any
+> read in flight and always counts; a speculative one may be younger, and waiting for a younger store would deadlock, so
+> speculative entries count only while the load unit reports (from its load buffer and the commit head's id, both flops)
+> that the load being served is NOT the oldest uncommitted instruction; ports whose reads are not instructions never wait
+> for them. Two keys: the live-tag cycle decides on the set-index part (a superset), the stay on the exact key, so a
+> same-set false entry costs a replay (~3 cycles) and a true one waits for the drain. Nothing in the memory's response path
+> (`rd_data`/`rd_user`/`rd_ctag`) changes, so the ring that cost the 2026-09-10 candidate its +1 UNOPTFLAT is not touched.
+>
+> **Mechanism sharpened -- a correction of the high-word sentence above, for the HIT arm:** at ZERO distance the high-word
+> face is the STORE buffer, not the write buffer: the trace shows the write buffer empty of the store at the load's
+> decision cycle and the entry arriving three cycles later, because the word-granular check (`[11:3]`) lets a load of the
+> granule's other word pass. At 2-4 instructions the store is in the write buffer and the sentence above holds. From 8
+> nops the test's nops cross an I-cache line and the refill stall lets the store complete -- ~82 cycles per entry in this
+> testbench, 13 queued entries 869 -- so that window closes by fetch latency, not by the distance. (The 2026-09-10 waveform
+> that refuted the store-buffer account was the MISS shape with the entry already in the write buffer; both are faces of
+> one hazard, and the fix orders the read behind the store in whichever buffer it sits.)
+>
+> Readings, memory delay 12 (`r29-wbuf-busy-hit.S` arms in `testlist_sup.yaml`; the high word): 25 arms (the r29hold7 run), every reading correct and a hold wherever one is due -- the high word 0x6060 (0x5050 where only the low word was fresh) in busy/busy24/busy-nop17/idle/onlylo/onlyhi(+nop2/4/8)/repeat/repeat-busy6/repeat-nop17/nop200 and the set-index-9 pad90 arms, the plain-ld and fenced controls unchanged; before the fix (sup-run8) 0 or the stale 0x5050 on every unfenced arm. Hold lengths 81-89 cycles per queued entry, 869 behind 12 queued stores; 38 holds in all, 22 of them caught in the STORE buffer (the window the write-buffer hold alone missed), 12 in the write buffer, 4 in both. The MISS face
+> (`r29-s06agg-shape`, the repro folder's `s06agg-shape.S` now in the sup list with a CAP_PASS exit): clean tree `y` = 0 at
+> delay 40 and 12 (x and the control intact), fixed tree r29-s06agg-shape x 0x1111222233334444, y 0x5555666677778888, control 0x0f0f0f0f0f0f0f0f, verdict 0, one 89-cycle hold (clean tree: y = 0 at delay 40 and 12). S-10b's two routes (`s10b-storebuf-primed`, the tag
+> route, polarity inverted: a trap per leg is correct; `r29-stc-ldhi`, the data route): the tag route s10b-storebuf-primed 9 exceptions = the control plus all 8 legs trapping, 8 holds (clean tree 1 exception = 0 legs, the defect; s10b-storebuf-residual 9 on both, its condition is never created); the data route r29-stc-ldhi and -nop4 read the unfenced high word equal to the fenced one, 0xb280c8000, with one 57/54-cycle hold (clean tree 0x5050). Controls: the
+> plain-`ld` arm and the fenced arms unchanged; the set-index-9 arms (`-DGPAD=0x90`) are the positive control for the key
+> -- the first key was an empty offset slice (this core's cache lines are 16 bytes, so the granule key is the set index),
+> flagged by lint (SELRANGE) and passed by the index-0 arms by coincidence; it read torn with no hold at index 9, and the
+> lint gate now counts SELRANGE (REF 100). The deadlock-freedom rule has its own positive control, `r29-sb-younger` (an
+> older stc, the plain high-word load, then a YOUNGER stc to the same granule; with 0 and 4 nops and with a multi-cycle div
+> ahead of the load so it is not the commit head), and a mutant with the rule disabled: fixed tree: all three arms complete, t5 = the older stc's metadata word 0xb280c8000 and t6 = the younger's 0xb280d0000, two holds each (the held load behind the older stc in the store buffer, ~101 cycles, then the fenced re-read behind the younger one), no wedge; MUTANT (ld_at_head forced to 0, simulation only): all three arms WEDGE -- the hold is entered once and never left, the load never retires, the run ends on the 4,000,000-cycle budget with tohost = 0 and the load unit's stuck tracer firing. The rule fires, and the test creates the condition. Lint: every counter at
+> baseline, UNOPTFLAT 40 with the baseline's variable set
+> (the abandoned store-buffer-compare version had read 35 with five ring members dropped, which the audit called
+> uninformative either way). Sweep: 95-test directed sweep (testlist_capstone.yaml, seed 20260922, memory delay 12) on the fixed tree against the clean HEAD: 89 identical in exceptions, readings and retired count with zero cycle-count differences; 3 random-generator entries log-less on both sides as always; untagged-ldc-stc-fixup retires one instruction more and reads the same values -- its repair branch, which re-wrote the destination's high word after the stale read, is skipped now that the read is ordered (its own comment anticipated this); and linear-clear-audit / linear-clear-residue failed by their codes 2 and 3 for the reason above and pass with the updated expectation (one hold each, a plain high-word read behind the clear's capability entry in the write buffer), while the clean tree fails them. Audit: claim-auditor, two passes. The first (against the version that widened the store buffer's compare) REFUTED it on the S-10b record (c867dfcbb's LUTLP-1 loop in the same cone), found that the "R-51" mirror shape was S-10b's data route already registered, SUPPORTED the write-buffer hold's correctness/key/coverage/interactions, and called the UNOPTFLAT 40 -> 35 drop uninformative. The second (this shape) found no error by reading -- deadlock freedom, visibility timing (zero slack: the store appears in speculative_queue_q exactly in the load's earliest decision cycle; depends on NrStorePipeRegs = 0), the S-10b tag-route release, lint structure and the run results all SUPPORTED or plausible -- and named the deadlock rule's missing positive control, which r29-sb-younger and its mutant now provide. Residual it named: dom-switch reads re-check against lsu_ctrl in WAIT_PAGE_OFFSET (an inherited gap; whether the switcher writes and reads one granule within a switch is UNRESOLVED). Cost: a true hazard waits for the store's AXI write,
+> the price the fence workaround already pays; a same-set false entry costs ~3 cycles.
 >
 > **FIX CANDIDATE 2026-09-10: functionally correct, FAILS THE LINT GATE. Branch
 > `r29-granule-data-overlay`, commit `00e89d968`.** The granule-scoped data overlay does what it was
