@@ -1,0 +1,27 @@
+{
+  "case": 16,
+  "upstream_fix": "ec89364c4",
+  "title": "start + length overflows mrb_int, both guards go false, and fill writes far past the element buffer",
+  "consumer": "mrbgems/mruby-array-ext/src/array.c",
+  "class": "spatial",
+  "trigger": "trigger.rb",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in ec89364c4 (ec89364c44d74387a85d814c938201f0a477974c) (2026-08-01), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: no report (with MRB_HEAP_PAGE_SIZE=1: no report); the same case on master: no report",
+  "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-none": {
+      "oracle": "capability fault, cause 7"
+    },
+    "sysalloc-bounds": {
+      "oracle": "capability fault, cause 7"
+    },
+    "sublet-gc": {
+      "oracle": "capability fault, cause 7"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation not run",
+  "allocator_layer": "an Array's element buffer (system allocator)"
+}

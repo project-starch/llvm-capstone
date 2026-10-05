@@ -14,7 +14,11 @@ row per defect, with what four native arms and one domain arm see.
 
 The obvious route yields almost nothing here. Of the **44** CVE/GHSA entries
 published for mruby, **43 are already fixed in 4.0.0-rc2**; the one that is not
-(`CVE-2026-79590`, a NULL passed to `memcpy` in Prism) is not a reuse defect. Of
+(`CVE-2026-79590`, a NULL passed to `memcpy` in Prism) cannot be live here at
+all, because **the pin has no Prism**: 4.0.0-rc2 and the 4.0.0 release both still
+parse with `mrbgems/mruby-compiler/core/parse.y`, and Prism became the compiler
+in `ca1ea88eb` (2026-06-21), after both. An earlier revision of this file called
+that CVE the one live advisory; it is withdrawn. Of
 the **78** OSS-Fuzz OSV advisories, **73** are fixed at the pin. Zero published
 use-after-free CVEs survive in this release.
 
@@ -204,3 +208,38 @@ every commit in the window.
   than in a test, so `extract.py` cannot see them; the whole `mruby-task`
   assertion lane (mruby #6862, #6863, #6868, #6870, #6886, #6887) is among them.
   They are not in the 165.
+
+## The measured subset: 23 cases
+
+`ledger.json` is the triage. The numbered directories are the subset on which a
+Capstone arm actually reports, measured 2026-10-06 over the **whole** 674-case
+population rather than over the 165 rows
+([results/20261006](results/20261006/README.md)).
+
+| arm | faults of 674 |
+|---|---:|
+| `sysalloc-none` (no per-object bounds; tags and the arena only) | 15 |
+| **`sysalloc-bounds` -- the baseline applications get today** | **16** |
+| `sublet-gc` (+ revocation, and each GC object slot on its own) | **23** |
+
+So the headline is **16 at the baseline, and 6 more from Sublet** (7 cases, one
+of which is C-stack exhaustion and not a memory-safety defect). No regression:
+nothing the baseline catches is lost under Sublet. All six faulted with cause 24,
+a dereference of a revoked capability.
+
+By class: 11 temporal, 5 spatial, 1 both, and 6 outside that scope (4 NULL
+dereferences, 1 type confusion, 1 C-stack exhaustion). The six are kept because
+they are what the arms reported; dropping them would make the arms' own counts
+impossible to reproduce. By the allocator whose memory is damaged: 10 the system
+allocator's, 6 a nested allocator's -- GC object slots and, in
+`07_eb7693857`, a `hash_entry` slot inside one `mrb_realloc`'d entry array.
+
+**Five cases are not ledger rows** (`09`, `10`, `11`, `13`, `21`): their tests
+pass at the pin, so the "fails at the pin" rule could never admit them, and host
+ASan is what found them. Two of those five are among Sublet's six additions, so a
+third of what Sublet contributes here was unreachable by the method that produced
+the 165 rows. That is why the run used all 674 cases.
+
+**`cheribsd-revocation` is declared and not written** for every case. It is the
+next measurement: the same population on CheriBSD purecap with libc revocation at
+its default.

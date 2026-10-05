@@ -1,0 +1,24 @@
+{
+  "pin": "mruby 4.0.0-rc2 (9d523e2f74f2e63ca02840937523de61398a617d)",
+  "population": "674 cases: the Ruby test upstream added with each post-pin fix that touches both a source file and a .rb test, extracted onto one harness",
+  "arms": {
+    "sysalloc-none": {
+      "image_sha256": "e8ab571d58a656e27078687396644ca0b876ae4d06e4af460e009b196ac68144",
+      "what_differs": "the first-fit heap built with -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0: every pointer carries the whole arena's bounds, free only marks"
+    },
+    "sysalloc-bounds": {
+      "image_sha256": "0f208270af54fbdf9f2e0aa265d2bb42e98234ef33dd163525daea48e1aaaec7",
+      "what_differs": "the same heap as applications get it since PR #170: each allocation bounded, no revocation. THE BASELINE"
+    },
+    "sublet-gc": {
+      "image_sha256": "447c5947b77577b6b1831ce7562f63f7d6e6a704cc2b844d8dacda69a67c1f85",
+      "what_differs": "the Sublet heap plus patch 0008: per-object bounds, every free revokes, and each GC object slot issued and revoked on its own"
+    }
+  },
+  "held_fixed": "one source tree, one compiler, one musl, one QEMU, one guest; the three images differ only in the heap they link",
+  "launcher": "capstone-exec of 2026-10-01 (/tmp/capstone/threads-merge/guest2). The images' application descriptor is 56 bytes; a launcher built before that grew refuses them with ENOEXEC, and this launcher refuses the older images, so the pair is matched in both directions",
+  "controls": "each arm ran scripts/smoke.rb and the 40- and 500-frame recursion ladder before its cases; all three passed all three",
+  "watchdog": "25 s per case, since four cases do not terminate at the pin and the guest has no timeout(1)",
+  "node_pool": "CAPSTONE_REV_NODES=16777216 on the sublet arm; this kit's emulator does not recycle revocation nodes",
+  "not_measured": "cheribsd-revocation"
+}
