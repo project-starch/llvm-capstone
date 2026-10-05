@@ -3533,6 +3533,15 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > The bases here are `sublet_base(&x) + <8-aligned offset>` and so are 8-aligned if the root arena base
 > is — true of any capability-bearing arena, but that is reasoning rather than a measurement.
 
+> **RETRACTED 2026-10-05 by R-11's first hit on silicon (memcached as a delegated application, 32 MiB block,
+> 776d9d859; see R-11's 2026-10-05 box).** The cursorless branch's E is set by the highest bit at which the
+> capability's cursor and top DIFFER (E = that bit - 20), not by the region's size. So an INTERIOR split point
+> inside a power-of-two, page- and granule-aligned region still truncates: the table split at END - 265*16 lost
+> 16 bytes at E = 5. Rounding region sizes (R-33's fix) does not touch interior splits, and the 4 MiB threshold
+> applied the lossy branch's granule formula to the cursorless branch. R-11 needs its own fix, which is that the
+> carve keeps every split point a multiple of 2^E (`CAPSTONE_GLUE_CARVE_ALIGN`, lane b0-silicon-runtime). The
+> statements below are kept as written.
+>
 > **R-11 IS THE SAME CONTRACT, AND THIS FIX CLOSES IT TOO (added 2026-09-15).** R-11 is
 > `compress_bounds`' OTHER branch — the cursorless one, losing an unaligned TOP past its window —
 > and it is open only because nothing we ship is large enough to trigger it. Rounding region sizes
@@ -6891,6 +6900,16 @@ in minutes what no software-visible observable here can.
 
 > # 2026-09-15 — THE STATED TRIGGER IS ONE DOUBLING TOO LOW, AND R-33's FIX CLOSES THIS ENTRY TOO
 >
+> **RETRACTED 2026-10-05 by R-11's first hit on silicon (memcached as a delegated application, 32 MiB block,
+> 776d9d859; see R-11's 2026-10-05 box).** The cursorless branch's E is set by the highest bit at which the
+> capability's cursor and top DIFFER (E = that bit - 20), not by the region's size. So an INTERIOR split point
+> inside a power-of-two, page- and granule-aligned region still truncates: the table split at END - 265*16 lost
+> 16 bytes at E = 5. Rounding region sizes (R-33's fix) does not touch interior splits, and the 4 MiB threshold
+> applied the lossy branch's granule formula to the cursorless branch. R-11 needs its own fix, which is that the
+> carve keeps every split point a multiple of 2^E (`CAPSTONE_GLUE_CARVE_ALIGN`, lane b0-silicon-runtime). The
+> statements below are kept as written.
+>
+>
 > **Re-running at a 2–4 MiB image will produce another uninformative OK**, which is the same shape the
 > method note above warns about — one level further in. 2 MiB is where the truncation BRANCH starts
 > executing (`tot > WINDOW`); it is not where the branch can FIND anything. The granule is
@@ -6932,7 +6951,9 @@ by the highest bit at which base and top differ, floored at bit 20. E is 0 — a
 capability exact — only while base and top share one 2 MiB window.
 
 Domains are exact **by construction** today: the module rounds the allocation to a
-power-of-two page count (`capstone.c:83-84`) and the allocator returns it aligned, so
+power-of-two page count (`capstone.c:83-84`) and the allocator returns it aligned [RETRACTED 2026-10-05: the CMA path
+aligns to 1 MiB, not to the block's size, so B1's 2 MiB block [0xac100000, 0xac300000) already has E = 1 and
+memcached's 32 MiB block E = 5], so
 everything sits in one window. Past 2 MiB, interior splits straddle a boundary and
 globals silently get SHORT capabilities. `check-repr.py` fails a build at that cliff.
 

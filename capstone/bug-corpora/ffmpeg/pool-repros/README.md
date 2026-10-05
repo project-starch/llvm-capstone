@@ -129,7 +129,7 @@ buffer-pool port's substitute that the `Sublet` row measures. Each `case.c` runs
 it, in the FFmpeg app port's domain, with upstream's pools as the one-macro control:
 [`results/20260929-qemu-sublet-port/`](results/20260929-qemu-sublet-port/README.md), N = 3 per cell.
 
-It catches whoever listens for the moment the inner allocator takes the storage
+It catches whoever listens for the moment the nested allocator takes the storage
 back. The other two listen for an event that never happens here: Capstone
 spatial has none at all, and CHERI's deployed revoker sweeps what `free()` put
 in its quarantine — a buffer returned to an `AVBufferPool` never reaches
@@ -163,7 +163,7 @@ each; the CHERI-default row cannot do that job for PoisonCap, because it differs
 from it in kernel, emulator, libc, build and revocation setting at once.
 
 Mode 1 is the one negative that says something on its own. It **has** revocation,
-at the backing allocation — and the pool never frees its backing, it recycles
+at the block — and the pool never frees its block, it recycles
 out of it. In the port's twelve-case suite that arm catches exactly one defect,
 `buffer-read-after-backing-free`, and none of these three. That separates "no
 mechanism" from "a mechanism at the wrong point", which is the distinction the

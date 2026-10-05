@@ -103,7 +103,7 @@ ports/<project>/<component>/
 
 This is the common convention, not a claim that every historical component
 already has every directory. Execution environment belongs under `src/`;
-`spatial` and `sublet` are protection modes, not separate platforms. A native
+`spatial` and `sublet` are arms, not separate platforms. A native
 execution does not acquire revocation merely by selecting a mode number.
 
 [common/](common/README.md) owns downloads, build-location guards, toolchains,

@@ -74,7 +74,11 @@ SPATIAL = re.compile(
 # (memcached case 03 is exactly this trap), and a leak or DoS is out of class entirely.
 NOT_SPATIAL = re.compile(
     r"integer overflow|refcount overflow|reference count overflow|memory leak|\bleak\b"
-    r"|memory exhaustion|infinite loop|stack overflow(?! in)|accounting underflow",
+    r"|memory exhaustion|infinite loop|stack overflow(?! in)|accounting underflow"
+    # SPATIAL matches bare `underflow`, so an INTEGER underflow subject passed filter 1 while
+    # 'integer overflow' was excluded -- asymmetric, and it let wireshark 830cf562a0 through
+    # into a table published as 'verified class A' (retracted 2026-10-05).
+    r"|integer underflow|unsigned underflow|signed underflow|size underflow",
     re.I,
 )
 
@@ -382,6 +386,30 @@ def self_test():
         "refcount overflow frees linked item")
     print(f"  [{'PASS' if not trap else 'FAIL'}] filter 1 rejects 'refcount overflow' as non-spatial")
     ok &= not trap
+
+    # ... and the underflow half of the same trap, which it did NOT reject until 2026-10-05.
+    # Two-sided: an integer underflow is out, a buffer underflow (a real spatial shape) stays in.
+    for subject, want_spatial in (("fix integer underflow in packet length", False),
+                                  ("fix unsigned underflow when computing remaining", False),
+                                  ("fix buffer underflow when seeking backwards", True)):
+        got = bool(SPATIAL.search(subject)) and not bool(NOT_SPATIAL.search(subject))
+        good = got == want_spatial
+        print(f"  [{'PASS' if good else 'FAIL'}] filter 1 {'keeps' if want_spatial else 'rejects'}"
+              f" {subject!r}: spatial={got}")
+        ok &= good
+
+    # KNOWN BLIND SPOT of filter 2, kept as a control so it cannot be forgotten: the allocation is
+    # matched anywhere in the fix's file, not near the overflowed object, so a file that happens to
+    # contain a heap allocation makes a STACK overflow read as class A. memcached 11b5f9b overflows
+    # `char temp[KEY_MAX_LENGTH + 1]` at proxy_lua.c:717 and reads A because of an unrelated
+    # realloc in the same file. The control asserts the WRONG answer on purpose: a class-A verdict
+    # from this tool is a CANDIDATE, and the allocation site must be opened before it is published.
+    cls_blind, _, _ = classify("memcached", "11b5f9b")
+    blind = cls_blind == "A"
+    print(f"  [{'PASS' if blind else 'CHANGED'}] known blind spot (11b5f9b, a stack array) still "
+          f"reads {cls_blind}: an A verdict is a candidate, not a finding")
+    if not blind:
+        print("         filter 2 changed -- re-read the blind-spot note above and this control")
 
     print("SELF-TEST", "PASS" if ok else "FAIL")
     return 0 if ok else 2

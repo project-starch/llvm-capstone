@@ -12,7 +12,7 @@ the Database owns its Statements, and on unlucky GC-finalizer order the parent's
 teardown frees a statement the child still believes it owns. The faithful file lands
 the UAF **inside `sqlite3_finalize`** — exactly the observed backtrace
 (`sqlite3_finalize+0x23`) — because it is a genuine double-finalize driven by the
-parent/child ownership confusion, not a synthetic read of a freed malloc block. This
+parent/child ownership confusion, not a synthetic read of a freed block. This
 is precisely what senior/hierarchical revocation is meant to make safe: revoking the
 Database's authority on close invalidates the child's `st` capability, so the child's
 finalize faults locally instead of double-freeing.

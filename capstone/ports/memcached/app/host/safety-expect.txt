@@ -252,3 +252,22 @@ shrink       19  RETURN 130015b
 sublet       19  RETURN 130015b
 slabsublet0  19  RETURN 130015b
 slabsublet1  19  RETURN 130015b
+
+# --- fixtures 20 and 21: upstream SPATIAL defects on the PLAIN heap (class A), added 2026-10-05.
+# PRE-REGISTERED before any image was built. These are the baseline the nested spatial rows need:
+# the access leaves a plain malloc/calloc, so MALLOC-GRANULAR bounds see it. level0 therefore
+# RETURNS (no bounds at all) and every bounded arm FAULTS oob -- the same pattern fx2/fx3 already
+# read, which is why fx2/fx3 are run in the same pass as the standing control. If level0 FAULTS,
+# the fixture is not class A and the row is wrong, not the port.
+#   20  ddee3e2  the authfile scan reads one byte past calloc(1, sb.st_size)
+#   21  d5d9ff0  do_item_cachedump writes the END terminator one byte past malloc(memlimit)
+level0       20  RETURN *
+level0       21  RETURN *
+shrink       20  FAULT  oob
+shrink       21  FAULT  oob
+sublet       20  FAULT  oob
+sublet       21  FAULT  oob
+slabsublet0  20  FAULT  oob
+slabsublet0  21  FAULT  oob
+slabsublet1  20  FAULT  oob
+slabsublet1  21  FAULT  oob

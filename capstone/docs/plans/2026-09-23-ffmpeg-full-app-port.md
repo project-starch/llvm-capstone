@@ -136,7 +136,7 @@ MD5s, so the comparison is shown to fire.
   what musl-capstone provides.
 - **Post-configure overrides in `config.h`:** `HAVE_POSIX_MEMALIGN 0` and `HAVE_MEMALIGN 0`.
   - `av_malloc` then uses plain `malloc` (`libavutil/mem.c:105-142`).
-  - With asm off, `ALIGN` is 16 (`mem.c:65`), which is exactly level0's alignment
+  - With asm off, `ALIGN` is 16 (`mem.c:65`), which is exactly the first-fit heap's alignment
     (`musl-capstone/runtime/level0.c:39-42`).
   - musl's `posix_memalign` would sit on an allocator the port does not use.
 - `HAVE_MMAP` and `HAVE_NANOSLEEP` stay 1: they link but return `-ENOSYS`, and nothing on the decode

@@ -46,7 +46,11 @@
       "status": "not written"
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "target": "stock CheriBSD purecap, libc revocation enabled",
+      "oracle": "PREDICTED, NOT MEASURED: the sequence completes. The two side tables go back to their AVRefStructPools (refs.c:153 and :157) rather than to free(), so the storage never enters the quarantine the revoker sweeps -- the same mechanism this corpus's other three cases state, and the reason every nested temporal case completes under stock CheriBSD.",
+      "guest_default": "preserved -- the kernel default stays on, as in the sibling cases",
+      "control": "NOT RUN HERE. The reading this arm would need is the cheribsd-abi probe reporting runtime_revocation=1 in the same guest immediately before the case, plus a revocation control that FAULTS in the same boot; without both, a completion is not a reading. The platform (SDK, purecap sysroot, image) is absent on this host: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them, and both are unset after sourcing the project environment.",
+      "status": "declared 2026-10-05, unmeasured. Replaces the bare {\"status\": \"not written\"} that made this the one cell in either inventory table with no oracle."
     },
     "native-detect": {
       "status": "not written"

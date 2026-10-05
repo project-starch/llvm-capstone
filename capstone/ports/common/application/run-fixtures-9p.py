@@ -50,7 +50,25 @@ _spec = importlib.util.spec_from_file_location('check_safety', HERE / 'check-saf
 check_safety = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(check_safety)
 
-PREFIX = {'ffmpeg': 'ffapp', 'wireshark': 'tsapp'}
+PREFIX = {'ffmpeg': 'ffapp', 'wireshark': 'tsapp', 'memcached': 'mcapp'}
+
+# memcached's safety images are shaped differently from the other two ports', and that is why
+# this runner could not judge them until now. ffmpeg and wireshark build ONE IMAGE PER FIXTURE
+# and run it directly; memcached builds ONE IMAGE PER ARM and selects the fixture with a hidden
+# server command (patch 0005's `mc_capstone_fixture N`). So its launcher is host/mc-harness --
+# which starts the server, waits until it listens, sends that command and reaps the process --
+# wrapping the same capstone-job/capstone-exec pair. Everything else is identical, the oracle
+# included: check-safety.py reads the fixture's MCAPP- lines under the FFAPP- prefix, exactly as
+# host/run-safety.py hands them over, and that prefix is the only translation.
+PER_FIXTURE_IMAGE = {'ffmpeg', 'wireshark'}
+SERVER_PORT = 21299
+
+
+def image_for(port: str, images: Path, arm: str, n: int) -> Path:
+    """The image a fixture runs from: per fixture for ffmpeg/wireshark, per ARM for memcached."""
+    if port in PER_FIXTURE_IMAGE:
+        return images / f'{PREFIX[port]}_fx{n}.dom'
+    return images / f'memcached-safety-{arm}.dom'
 
 
 def read_expectations(expect: Path, arm: str) -> dict[int, list[list[str]]]:
@@ -84,6 +102,8 @@ def main() -> int:
     p.add_argument('--qemu-binary', type=Path,
                    default=Path('/tmp/capstone/deleg-gate2/qemu-12/build/qemu-system-riscv64'))
     p.add_argument('--cma', default='1536M')
+    p.add_argument('--guest-cc', help='guest cross compiler; required for --port memcached, '
+                                      'whose launcher (host/mc-harness) is built here')
     p.add_argument('--process-cache-bytes', type=int, default=402653184)
     p.add_argument('--timeout-multiplier', default='4.0',
                    help='scales SETUP timeouts only; the workload gets --seconds-per-fixture')
@@ -136,11 +156,27 @@ def main() -> int:
     for source in (module, launcher, helper):
         shutil.copy2(source, share / Path(source).name)
     for n in order:
-        image = a.images / f'{PREFIX[a.port]}_fx{n}.dom'
+        image = image_for(a.port, a.images, a.arm, n)
         if not image.exists():
             print(f'CONTROL-FAILED missing image {image}', file=sys.stderr)
             return 75
         shutil.copy2(image, share / image.name)
+
+    # memcached's launcher is cross-built here rather than taken from a previous run's share:
+    # a binary whose source cannot be pointed at is not evidence about this source.
+    if a.port == 'memcached':
+        harness_src = PORTS / 'memcached/app/host/mc-harness/mc-harness.c'
+        xcc = Path(a.guest_cc) if a.guest_cc else None
+        if xcc is None or not xcc.exists() or not harness_src.exists():
+            print(f'CONTROL-FAILED need --guest-cc and {harness_src}', file=sys.stderr)
+            return 75
+        built = subprocess.run([str(xcc), '-O1', '-o', str(share / 'mc-harness'),
+                                str(harness_src)], capture_output=True, text=True)
+        if built.returncode:
+            print(f'CONTROL-FAILED mc-harness did not build: {built.stderr.strip()[:400]}',
+                  file=sys.stderr)
+            return 75
+        (share / 'mc-harness').chmod(0o755)
 
     script = ['#!/bin/sh',
               'cp /mnt/host/capstone-exec /mnt/host/capstone-job /tmp/ '
@@ -150,13 +186,38 @@ def main() -> int:
               'if [ -c /dev/capstone ]; then rmmod capstone; fi',
               f'insmod /mnt/host/capstone.ko process_cache_bytes={a.process_cache_bytes} '
               '|| { echo INSMOD_FAILED; echo FIXTURES_DONE; exit 0; }']
+    if a.port == 'memcached':
+        script.append('cp /mnt/host/mc-harness /tmp/ && chmod +x /tmp/mc-harness')
     for n in order:
-        script += [f'echo "=== FIXTURE {n} BEGIN"',
-                   f'CAPSTONE_FAULT_RECORD=/mnt/host/fault-{n} /tmp/capstone-job '
-                   f'/mnt/host/result-{n}.json -- /tmp/capstone-exec -- '
-                   f'/mnt/host/{PREFIX[a.port]}_fx{n}.dom '
-                   f'> /mnt/host/out-{n}.txt 2>/mnt/host/err-{n}.txt; '
-                   f'echo "=== FIXTURE {n} EXIT $?"']
+        script.append(f'echo "=== FIXTURE {n} BEGIN"')
+        if a.port in PER_FIXTURE_IMAGE:
+            script += [f'CAPSTONE_FAULT_RECORD=/mnt/host/fault-{n} /tmp/capstone-job '
+                       f'/mnt/host/result-{n}.json -- /tmp/capstone-exec -- '
+                       f'/mnt/host/{PREFIX[a.port]}_fx{n}.dom '
+                       f'> /mnt/host/out-{n}.txt 2>/mnt/host/err-{n}.txt; '
+                       f'echo "=== FIXTURE {n} EXIT $?"']
+        else:
+            # The fixture is a server run: mc-harness starts the image, waits for the listen,
+            # sends `mc_capstone_fixture n` and reaps it. capstone-job's record goes to the
+            # guest's own filesystem and is copied back, because the 9p share is not a safe
+            # target for a process that may die mid-write.
+            image_name = image_for(a.port, a.images, a.arm, n).name
+            script += [f'rm -rf /tmp/fx{n}; mkdir -p /tmp/fx{n}',
+                       f'CAPSTONE_FAULT_RECORD=/tmp/fault-{n} /tmp/mc-harness '
+                       f'--out /tmp/fx{n} --port {SERVER_PORT} --fixture {n} -- '
+                       f'/tmp/capstone-job /tmp/fx{n}/job.json --user 65534:65534 -- '
+                       f'/tmp/capstone-exec /mnt/host/{image_name} '
+                       f'-l 127.0.0.1 -p {SERVER_PORT} -U 0 -m 64 -t 4 '
+                       f'> /mnt/host/harness-{n}.txt 2>/mnt/host/err-{n}.txt; '
+                       f'echo "=== FIXTURE {n} EXIT $?"',
+                       # The oracle's "stdout" is the SERVER's output, which mc-harness collects
+                       # as server.out in its --out directory -- not the harness's own stdout.
+                       # Feeding it the latter made all five cells, the three known-good controls
+                       # included, read "fixture mark and actual exit status disagree": an 8-bit
+                       # exit status cannot carry the full mark, which only the printed line has.
+                       f'cp /tmp/fx{n}/server.out /mnt/host/out-{n}.txt 2>/dev/null',
+                       f'cp /tmp/fx{n}/job.json /mnt/host/result-{n}.json 2>/dev/null',
+                       f'if [ -s /tmp/fault-{n} ]; then cp /tmp/fault-{n} /mnt/host/fault-{n}; fi']
     # The guest script must exit 0: run_guest_command raises on a non-zero status, and
     # a faulting fixture is a result, not a runner failure.
     script += ['echo FIXTURES_DONE', 'exit 0']
@@ -210,7 +271,7 @@ def main() -> int:
             # sublet-port-verdict.py:99 attributes the fault by comparing it with the image's
             # own digest. Omitting it made every faulting cell read "the fault record is for
             # another image (None)" -- an instrument gap that looks like a refutation.
-            image = share / f'{PREFIX[a.port]}_fx{n}.dom'
+            image = share / image_for(a.port, a.images, a.arm, n).name
             record['image_sha256'] = hashlib.sha256(image.read_bytes()).hexdigest()
             (a.out / f'fx{n}.json').write_text(json.dumps(record, indent=2) + '\n')
 

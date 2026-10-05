@@ -34,7 +34,7 @@ a single arm.
 
 | mode | what a release does | required outcome |
 |---|---|---|
-| `spatial` (0) | nothing: bounded leases, no poison, no sweep | the sequence COMPLETES, and the adapter's own line reports `sweeps=0` |
+| `spatial` (0) | nothing: bounded aliases, no poison, no sweep | the sequence COMPLETES, and the adapter's own line reports `sweeps=0` |
 | `protected` (1) | `cpoison` per granule, one synchronous sweep, `cclearpoison`, `memset` | the stale access FAULTS at the labelled probe |
 
 The spatial arm's `sweeps=0` is part of the oracle, not decoration. A control
@@ -64,7 +64,7 @@ number and not that name.)
 
 | control | requires |
 |---|---|
-| `poisoncap-live` | a fresh lease reads and writes |
+| `poisoncap-live` | a fresh alias reads and writes |
 | `poisoncap-reuse` | poison, sweep, `cclearpoison`, and the storage is usable again; the old alias lost its tag and an unrelated sibling did not |
 | `poisoncap-read`, `poisoncap-write` | an access to a poisoned granule is refused: `SIGPROT si_code=3` |
 | `poisoncap-reused-read` | an access through the revoked old alias is refused: `SIGPROT si_code=2` |

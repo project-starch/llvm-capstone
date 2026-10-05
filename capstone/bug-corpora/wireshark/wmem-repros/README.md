@@ -90,7 +90,7 @@ reduction class are visibly siblings rather than accidentally similar.
 |---|---|---|
 | `spatial` | Capstone domain | the sequence completes without protection |
 | `sublet` | Capstone domain | fault at the labelled probe the oracle names |
-| `cheribsd` | CheriBSD purecap, libc revocation ON, plain build | whether the layer below sees these defects |
+| `cheribsd` | CheriBSD purecap, libc revocation ON, plain build | whether the system allocator sees these defects |
 | `poisoncap-spatial` | CheriBSD purecap, PoisonCap mode 0 | exact bounds, no invalidation: the matched control |
 | `poisoncap-protected` | CheriBSD purecap, PoisonCap mode 1 | SIGPROT at the labelled read probe |
 | `native-detect` | host | declared, not written |

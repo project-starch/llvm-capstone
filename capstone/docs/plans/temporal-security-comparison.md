@@ -37,7 +37,7 @@ were seen is a ranking, not an evaluation.
   aliases deliberately and picks when to use them. Partially covered today by
   the A1 alias-scatter fixture, which retains copies in five locations and does
   not clear them.
-* **A-3 — untrusted nested manager.** A sub-allocator that receives authority
+* **A-3 — untrusted nested manager.** A nested allocator that receives authority
   from a parent manager and tries to keep it past the parent's revocation, or to
   hand it onward. Nothing here covers this yet; the existing hierarchy work is
   trusted adaptation.

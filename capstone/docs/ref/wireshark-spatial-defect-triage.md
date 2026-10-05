@@ -301,7 +301,7 @@ read at `+8` faults on all of them.
 So the corrected claim, in two halves that must not be merged:
 
 - **Established:** the defect is real, reduces cleanly, and per-allocation bounds catch it.
-- **NOT established here:** that a nested allocator hides the *extent* from `malloc`. That contrast
+- **NOT established here:** that a nested allocator makes the *extent* invisible to the system allocator (`malloc`). That contrast
   needs an arm whose bounds genuinely are malloc-granular, and the only place with one is the tshark
   **app** port — the measured fx12 ladder (`level0` 41 908 912, `shrink` 8 388 560, `sublet`
   1 048 528, `chunks` 64). The `BLOCK_FAST` gap below is about that port, not this one.

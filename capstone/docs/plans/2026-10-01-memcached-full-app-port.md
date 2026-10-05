@@ -429,7 +429,7 @@ both `direct-tcpip` and `tcpip-forward`. So a host-side harness can reach a doma
 | M2 | one connection: storage, arithmetic, meta commands, values across slab classes | transcript identical to native (CAS uniques as per-connection ordinals) |
 | M3 | 2 x `-t` concurrent connections | every worker serves; transcripts identical |
 | M4 | SIGTERM and SIGUSR1 | exit statuses and stderr match native |
-| M5 | level0, shrink, sublet; N = 3 | identical; null, positive and identity controls fire |
+| M5 | `sysalloc-none` (`level0`), `sysalloc-bounds` (`shrink`), `sysalloc-sublet` (`sublet`); N = 3 | identical; null, positive and identity controls fire |
 | Safety | fixtures pre-registered in `host/safety-expect.txt`; corpus case 02 over the protocol | outcomes as predicted — **fixtures done, 90/90**; case 02 open |
 | S1 | Sublet inside slabs.c and cache.c (patch 0006, `host/build-slab-sublet.sh`) | oracle identical on both modes; fixtures 9, 10 and 11 flip to FAULT — **done: oracle 6/6, fixtures 60/60 then 18/18** |
 | S2 | upstream `t/*.t` against the domain server | open; the guest's SSH forwarding is confirmed available |

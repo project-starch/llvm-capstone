@@ -55,7 +55,7 @@ runner. The old `run-perl-domain.sh` interface has been removed. Use ordinary
 argv, `run --cwd DIR -e NAME=value`, or `capstone-exec` in the Linux guest shell.
 
 `PERLD_HEAP=level0` remains the default; `PERLD_HEAP=sublet` selects the common
-revoking heap with `PERLD_HEAP_LOG`. That changes outer malloc only. For
+revoking heap with `PERLD_HEAP_LOG`. That changes the system allocator only. For
 per-head protection, `PERLD_SV_HEADS=1` builds the study variant of
 [`../sv-heads`](../sv-heads/README.md), whose Sublet backend revokes every
 released SV head; `experiments/applications/build.py --nested perl` relinks it

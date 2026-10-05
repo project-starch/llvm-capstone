@@ -14,7 +14,7 @@ used here.
 |---|---|---|
 | OS layer | `SQLITE_OS_OTHER`, a VFS that refuses files | the unix VFS: files, locks, journals, temporary files |
 | C library | a local shim and BEEBS string routines | musl, through the application SDK |
-| allocator | memsys5 on a static arena | `malloc`, the runtime's heap (level0 by default) |
+| allocator | memsys5 on a static arena | `malloc`, the runtime's heap (the first-fit heap, `level0.c`, by default) |
 | floating point | omitted (`SQLITE_OMIT_FLOATING_POINT`) | on |
 | threads | `SQLITE_THREADSAFE=0` | SQLite's default (1) |
 | temporary data | in memory (`SQLITE_TEMP_STORE=3`) | SQLite's default (files) |
@@ -28,7 +28,7 @@ it has `main`, musl's headers and library, and the unix OS layer.
 This branch is stacked on two changes:
 - `musl-fcntl-lock-pointer`: musl patch 0005. `fcntl` passed the `struct flock` pointer as a
   number, and SQLite locks through it in every transaction.
-- `runtime-malloc-usable-size`: level0's `malloc_usable_size`.
+- `runtime-malloc-usable-size`: the first-fit heap's `malloc_usable_size`.
 
 Both are on `delegation-v0-removal-stack` (#144), whose delegated rows serve every system call
 the unix VFS makes. The threads stack alone lacks `fchmod`, `fchown` and `fallocate`.

@@ -139,7 +139,7 @@ pool lifetime handling; it is not a whole-process temporal-safety configuration.
 Initialisation-safety enforcement is outside this experiment's scope.
 
 These switches describe the historical standalone extraction tests. The
-complete-application published-policy campaign keeps outer libc revocation
+complete-application published-policy campaign keeps system allocator revocation
 enabled in both arms and uses the same corrected libc for both. Its
 [policy audit](../../../../../../experiments/study/poisoncap-policy.md)
 documents the required ABI fix and the distinct inner quarantine policy.

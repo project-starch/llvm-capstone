@@ -15,7 +15,7 @@ each admitted case must follow; one-off favorable endpoints do not qualify.
 
 The main paper question is the incremental effect of Sublet inside an
 application's existing internal allocator. Use Capstone plus its original
-internal allocator as the baseline, keeping the same outer heap. Compare
+internal allocator as the baseline, keeping the same system allocator. Compare
 against one CheriBSD purecap binary with malloc revocation enabled and disabled.
 Run the alternative outer-malloc comparison as a separate named profile. Do
 not silently substitute it where an internal-allocator application integration
@@ -72,7 +72,7 @@ MicroPython is excluded in favor of the requested CPython focus.
    allocation calls rather than elapsed time. State exactly which APIs are observed.
 2. **Internal allocator:** live object/slot requests, slab/context/arena capacity,
    reusable holes, and backing grants at application release boundaries. Instrument
-   the same logical boundary on all four arms. Outer malloc misses most pymalloc,
+   the same logical boundary on all four arms. The system allocator misses most pymalloc,
    GC-slot and PostgreSQL-context behavior.
 3. **Allocator storage:** occupied blocks, internal rounding, retained backing,
    committed/mapped storage, quarantine where directly observed, and metadata.

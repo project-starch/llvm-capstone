@@ -14,7 +14,7 @@ below record discovery and readiness for that campaign.
 
 | Primary arm | Internal allocator | Platform control |
 |---|---|---|
-| `capstone` | Original allocator | Same SDK outer heap and resource grants |
+| `capstone` | Original allocator | Same SDK system allocator and resource grants |
 | `capstone-sublet` | Sublet at the selected boundary | Same Capstone stack |
 | `poisoncap-spatial` | Spatial control of the nested adapter | Published PoisonCap stack, fixed outer policy |
 | `poisoncap-temporal` | Same adapter with nested poisoning and reclamation | Same kernel, libc, compiler and outer policy |

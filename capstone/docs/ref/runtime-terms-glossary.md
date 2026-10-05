@@ -1,8 +1,9 @@
 # Runtime terminology glossary
 
 This note is a compact reference for the terms used in the current split host /
-domain runtime work. It is grouped by topic so future notes can link here instead
-of redefining terms ad hoc.
+domain runtime work, and in section 6 for the allocator work (nested allocators,
+Sublet, the ports and the bug corpora). It is grouped by topic so future notes can
+link here instead of redefining terms ad hoc.
 
 ## 1. Execution layers and actors
 
@@ -269,3 +270,97 @@ A future hosted Linux mode with a genuinely Capstone-specific userspace ABI. Thi
 would require a coherent agreement across compiler ABI, pointer model, loader, crt,
 libc, syscall ABI, kernel user ABI handling, and related Linux runtime surfaces.
 
+
+## 6. Allocator terms
+
+The allocator work (Sublet, PoisonCap, the ports under `ports/`, the corpora under
+`bug-corpora/`) uses the six words below, each with one meaning. The programs we port
+use the same words for other things, so **an upstream name always carries its
+program**: aset chunk, pymalloc block, pymalloc pool, wmem block, memcached page,
+APR memnode. A bare *block*, *object* or *pool* means the term defined here.
+
+### System allocator
+The allocator that `malloc` and `free` resolve to: glibc on Linux, CheriBSD's libc,
+and in a Capstone domain one of the two heaps in `ports/musl-capstone/runtime/`:
+
+- the **first-fit heap** (`level0.c`): first fit over one static arena, per-object
+  bounds unless built with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, no revocation;
+- the **Sublet heap** (`sublet_heap.c`): a buddy heap over a granted region,
+  per-object bounds, and every free revokes.
+
+The paper and older notes call the system allocator *level 0*. In code,
+`level0` names the first-fit heap only (`level0.c`, `CAPSTONE_LEVEL0_*`, the
+`*_HEAP=level0` knob values), not the system allocator in general.
+
+### Nested allocator
+An allocator that gets its memory from below (the system allocator, another nested
+allocator, or the kernel or the host directly) and hands out pieces of it to the
+program. PostgreSQL's memory contexts, pymalloc, APR's pools and bucket allocator,
+nginx pools, memcached's slabs, FFmpeg's buffer pools, wmem, the Perl SV arenas,
+mruby's and MicroPython's GC heaps, SQLite's memsys5 and lookaside, ggml contexts.
+Where the memory comes from does not decide it: pymalloc is a nested allocator
+whether its arenas come from `mmap` or from `malloc`.
+
+Not *custom allocator* (CMASan's term; cite it as theirs), *inner allocator*,
+*sub-allocator* or *manager*.
+
+### Block
+What a nested allocator gets from below in one request: one `malloc`, one `mmap`,
+one piece of a granted region. The aset block, the pymalloc arena, the wmem block,
+the memcached page, the APR memnode and the mruby heap page are blocks in this sense.
+Not *malloc block* or *backing allocation*.
+
+### Object
+What a nested allocator hands to the program: an aset chunk, a pymalloc block, a wmem
+chunk, a memcached item, an mruby RVALUE, an SV head. When an overflow matters, say
+which boundary it crosses: the object (the bytes requested), the allocator's rounding
+of it (aset chunk, pymalloc size class), or the block.
+
+### Pool
+A group of objects the program releases together with one call: a PostgreSQL memory
+context (reset, delete), an APR or nginx pool (clear, destroy), a wmem allocator
+(`wmem_free_all`), an AVBufferPool (uninit), a ggml context (reset, free). A nested
+allocator without such a call has no pools; pymalloc's are size-class pages, so
+write *pymalloc pool*.
+
+### Release
+The end of an object's lifetime. *Free* is the call; *release* is the event. An
+object is released **one by one** (its own free, or a garbage collector's sweep) or
+**with its pool** (reset, clear, destroy).
+
+A release is **invisible** when it never reaches the system allocator. Invisible
+releases are what the project protects: the system allocator, and every defense
+built on it (ASan, MTE, CheriBSD's revocation), never sees them.
+
+Not *inner release*, *bulk free*, or *the allocator hides it*.
+
+### Arm
+One configuration a workload or a corpus case runs under. Not *variant*, *protection
+mode*, *heap mode* or *adapter mode*; an adapter's numeric knob stays *mode 0/1/2*.
+
+An arm that changes only the system allocator is named `sysalloc-<protection>`:
+
+| Arm | System allocator | FFmpeg, memcached, tshark | mruby, Perl, `build.py --heap` | heap qualification |
+|---|---|---|---|---|
+| `sysalloc-none` | first-fit heap, no per-object bounds | `level0` | — | `control` |
+| `sysalloc-bounds` | first-fit heap, per-object bounds | `shrink` | `level0` | `level0` |
+| `sysalloc-sublet` | Sublet heap | `sublet` | `sublet` | `sublet` |
+
+The knob values in the middle columns are today's code. The same value means
+different arms in different ports (`level0` is `sysalloc-none` in one column and
+`sysalloc-bounds` in the next), which is why results name the arm, not the knob.
+Per-object bounds became the first-fit heap's default with PR #170 (on `dev`
+2026-10-01); before that, `level0` had no per-object bounds in any port, so a
+`level0` result recorded earlier is `sysalloc-none`.
+
+An arm that changes a nested allocator keeps its corpus name: `spatial` (per-object
+bounds, no revocation), `sublet` (the allocator's Sublet port), `poisoncap-spatial`,
+`poisoncap-protected`. `cheribsd-revocation` is CheriBSD's system allocator with
+revocation on and the nested allocator unchanged. An arm that changes both says
+so: mruby's `sublet-gc` and tshark's `chunks` are `sysalloc-sublet` plus that
+program's Sublet port (mruby's GC object slots, wmem's block allocator).
+
+### Revocation capability, alias
+The paper's names for what the Sublet API calls a handle (`sublet_handle`) and for
+the copyable capability `sublet_take` returns, which the program receives. Not
+*token* or *lease* in prose; the API identifiers keep their names.

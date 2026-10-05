@@ -84,7 +84,7 @@ An address is an arena identity plus byte offset, not an across-process virtual
 address. For same-start reuse, record the latest release of the prior object
 at that start. If A allocations have completed when it is released and its
 next allocation has index B, the gap is B-A; immediate reuse has gap one.
-Treat bulk release as the end of the objects it releases. Define arena
+Treat a pool reset or destroy as the end of the objects it releases. Define arena
 destruction/recreation, moved realloc and in-place resizing explicitly;
 in-place resizing is not a free/reuse event. Same-start reuse misses partial
 overlap after splitting/coalescing, so pair it with interval-union address
