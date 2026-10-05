@@ -5926,7 +5926,7 @@ Sublet fault cell last.
   through `transcript.strip_markers`, and that fix was load-bearing for boots 2 and 3.
 - An unsafe-success did not fail the gate. Found by the results audit and fixed.
 
-## memcached 1.6.45 serves its milestone exchange on silicon as a delegated application (boots B2a, B1f, b0-strtod, b0-printf; 776d9d859, 2026-10-05)
+## memcached 1.6.45 serves its milestone exchange and passes its full oracle by hash on silicon as a delegated application (boots B2a, B3c, B1f, b0-strtod, b0-printf; 776d9d859, 2026-10-05)
 Plan: `docs/plans/b0-silicon-delegated-runtime.md` (B1, B1.0, B1.0b, B2). Every row was pre-registered before its
 boot, and each board image is named by hash.
 
@@ -5936,6 +5936,7 @@ boot, and each board image is named by hash.
 | strtod/atof/sscanf %lf (narrowed floatscan) | b0-strtod e7d30ad72f104eed | b15d76e38a54 | 23 of 23 bit-exact against the host |
 | one pthread (a minted context) | B1e probe 29b82435ce095d98 | 69bd27fbb7c0 | created, stepped by the monitor with CSR events, joined with its value (124) |
 | **memcached** (memcached + libevent + musl + runtime, one gp-captable full-LTO image, 781 KB) | ba7e6921cf27f2b6 | 4279572eceda | `VERSION 1.6.45`, `STORED`, `VALUE k 0 1` / `x` / `END` over loopback; SIGTERM -> exit 0 |
+| **memcached, full oracle** (the port's scripted 8-connection session) | ba7e6921cf27f2b6 | 8a3c285be032 | transcript sha256 e0a254c47e7ee28c, 1,931,207 bytes: the native reference exactly; `STAT pointer_size 128`; job exit 0 (the board's wall clock set first, below) |
 
 - memcached ran with `-t 1 -m 8 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`,
   unprivileged under capstone-job. Each of its system calls is delegated to the Linux launcher. The domain is
@@ -5950,5 +5951,10 @@ boot, and each board image is named by hash.
     R-11. The R-11 change also moves the image's code by 160 bytes.
 - The heap is level0 (per-object bounds, no temporal safety). Spatial or temporal safety numbers for memcached on
   silicon are not claimed here.
-- The full oracle session (B3) is NOT yet a pass on the board: the transcript differs from native by two
-  time-dependent expiries (the board's clocks; see the plan). In QEMU it is byte-identical.
+- **The full oracle (B3) passes by hash** once the board's wall clock is set.
+  - The board's Linux boots at 1970 plus uptime: `date +%s` read 108 at 109 s of uptime.
+  - memcached maps a negative expiry to an absolute time 30 days after the epoch. With the clock unset it keeps two
+    such items, a 38-byte transcript difference. QEMU reproduces that byte for byte with its clock at `@400`.
+- Native hard-float arithmetic on the board's Linux is not reliable on 776d9d859 (ISSUES S-18). The delegated
+  application is soft-float and does not use the FPU, but a timing printed by a native program on the board (the
+  harness's `stop_seconds`) is not evidence.
