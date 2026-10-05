@@ -52,20 +52,47 @@ def oracle_arm(domain_build):
     return "sublet-chunks" if m.group(1).upper() in ("ON", "1", "TRUE", "YES") else "sublet"
 
 
-def oracle_site(which):
+def arm_name(mode):
+    """Which case.json arm judges this runtime mode. The unprotected mode is judged by the
+    `spatial` arm, which used to be assumed to complete; case 13 is a SPATIAL defect, so its
+    unprotected arm faults too, and assuming completion reported the correct reading as a
+    FAILURE."""
+    return ORACLE_ARM if mode == "sublet" else "spatial"
+
+
+def oracle_site(which, arm=None):
     """Which labelled probe the case's protected oracle names, or None when the
     oracle says the protected arm completes: a recorded non-detection, which
     is checked as a completion rather than accepted as a fault anywhere."""
     for d in CORPUS.glob(f"{which:02d}_*"):
         arms = json.loads((d / "case.json").read_text())["arms"]
-        if ORACLE_ARM not in arms:
-            raise SystemExit(f"case {which} has no {ORACLE_ARM} oracle")
-        text = arms[ORACLE_ARM]["oracle"]
+        arm = arm or ORACLE_ARM
+        if arm not in arms:
+            raise SystemExit(f"case {which} has no {arm} oracle")
+        text = arms[arm]["oracle"]
         if text.startswith("complete"):
             return None
         if "allocator" in text:
             return 2
         return 1 if "write probe" in text else 0
+    raise SystemExit(f"no case.json for case {which}")
+
+
+def oracle_causes(which, arm=None):
+    """Which fault causes the case's own protected arm declares acceptable.
+
+    This was hardcoded to (24, 25), the revoked-authority pair, which is right for a TEMPORAL
+    row and wrong for a spatial one: case 13 crosses a chunk BOUND and faults with cause 5, so
+    the hardcoded set would have reported the correct, predicted reading as a FAILURE. The arms
+    already carry a `cause` key, so the oracle is read from the case instead of assumed by the
+    runner. Absent, the temporal pair stays the default, so cases 0-12 are judged exactly as
+    before."""
+    for d in CORPUS.glob(f"{which:02d}_*"):
+        declared = (json.loads((d / "case.json").read_text())["arms"]
+                    .get(arm or ORACLE_ARM, {}).get("cause"))
+        if declared is None:
+            return (24, 25)
+        return (int(declared),)
     raise SystemExit(f"no case.json for case {which}")
 
 
@@ -76,15 +103,16 @@ def classify(serial, which, mode, runner_exit, report):
         serial,
     )
     marker = f"Print = Scalar(0x{MARKER_BASE | which:x})"
-    site = oracle_site(which) if mode == "sublet" else None
+    judged_by = arm_name(mode)
+    site = oracle_site(which, judged_by)
     row = {
         "case": which,
         "mode": mode,
-        "expected": "fault" if mode == "sublet" and site is not None else "complete",
-        "oracle_arm": ORACLE_ARM if mode == "sublet" else "spatial",
+        "expected": "fault" if site is not None else "complete",
+        "oracle_arm": judged_by,
         "runner_exit": runner_exit,
     }
-    if mode == "sublet" and site is not None:
+    if site is not None:
         following = serial.split(marker, 1)[-1] if marker in serial else ""
         sites = re.findall(r"Print = Cap\(\d+, 0x[0-9a-f]+, (0x[0-9a-f]+),", following)
         cause, pc = faults[-1] if faults else ("0", "0")
@@ -96,7 +124,7 @@ def classify(serial, which, mode, runner_exit, report):
         row["passed"] = (
             marker in serial
             and len(faults) == 1
-            and int(cause) in (24, 25)
+            and int(cause) in oracle_causes(which, judged_by)
             and expected is not None
             and int(pc, 16) == int(expected, 16)
         )

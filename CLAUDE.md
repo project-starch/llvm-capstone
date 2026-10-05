@@ -314,7 +314,11 @@ Before spending board time or building an instrument, search the **issue registr
 repro folders including archived ones, the commit history, and the other ports' adapter headers
 and patch commentary** — not only `docs/`. A
 whole session went into re-deriving a fault whose exact shape was already recorded, in the folder
-of a bug believed to be fixed.
+of a bug believed to be fixed. **Search by the NAME of the construct you are about to change, not only
+by the symptom** — `grep -rn <signal, module or compare> docs/history/ docs/ref/ISSUES.md` — because a
+prior attempt on that exact line is filed under its own issue, not yours: on 2026-10-05 half a session
+validated a widened `store_buffer` compare that `docs/history/21-08-2026_…_s10b-is-not-synthesizable.md`
+had already shown to form a LUT loop in synthesis.
 
 **Read past the root-cause box.** A fixed issue's folder records what its fix did *not* cover:
 individual instances, residuals, and "what would settle it" lists. Reading only the headline root
@@ -342,7 +346,14 @@ takes, each of which has produced a published claim that had to be retracted:
 * a tool that renders **"no data" as a zero result**, which reads like a finding;
 * **directed tests that come back clean without ever creating the triggering condition;**
 * a check that **fires correctly and still under-determines** — proven to work, and unable
-  to tell apart the two hypotheses actually on the table.
+  to tell apart the two hypotheses actually on the table;
+* a count taken over a **population that was filtered to exclude the very class being counted**.
+  This one is not about the check at all — the check works, and is pointed at the wrong input. On
+  2026-10-05 "0 spatial defects of 27" was published from a hunt whose own filter 1 read *"a
+  lifetime defect … **and not as an overflow**"*; re-running the three programs for the excluded
+  class found 19 (15 over tshark's full history, 4 in FFmpeg). **Before reporting an absence, read the search's OWN inclusion criteria and ask
+  what they threw away.** A filter that names a class as a disqualifier can never produce evidence
+  about that class.
 
 The incident log these were drawn from is in `docs/`; it is evidence, not rules.
 

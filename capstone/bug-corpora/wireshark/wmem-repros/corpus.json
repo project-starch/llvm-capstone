@@ -1,12 +1,12 @@
 {
   "program": "wireshark",
   "boundary": "wmem (block, block_fast)",
-  "title": "Dissector-side temporal defects in consumers of Wireshark's wmem pools",
+  "title": "Dissector-side defects in consumers of Wireshark's wmem pools: thirteen temporal, five spatial",
   "upstream": {
     "version": "4.6.8",
     "port": "capstone/ports/wireshark/wmem"
   },
-  "cases": 13,
+  "cases": 18,
   "case_schema": "case-json",
   "case_macro": "WM",
   "required_arms": [
@@ -26,7 +26,8 @@
   "status": "measured",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
-    "false": 13
+    "false": 16,
+    "true": 2
   },
   "runners": [
     "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py"
@@ -36,9 +37,13 @@
     "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu",
     "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd",
     "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu-negative-control",
-    "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port"
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-ON",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-OFF",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-ON",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-OFF"
   ],
   "advisories": [],
   "shape_table": true,
-  "note": "No triage inventory under docs/ref/ yet; the README carries the selection."
+  "note": "Cases 0-12 are temporal; cases 13-17 are SPATIAL, from the hunt recorded in docs/ref/wireshark-spatial-defect-triage.md. Cases 14 and 15 are the corpus's only rows LIVE at the v4.6.8 pin -- every other row, temporal and spatial alike, is a fix-reversal. Note for anyone reading the spatial rows: every arm of this harness narrows a wmem allocation to its request (wm_narrow(), ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15), so a spatial crossing faults on ALL arms and these rows do not discriminate the chunk port. Case 13's run established that by refuting its own prediction."
 }

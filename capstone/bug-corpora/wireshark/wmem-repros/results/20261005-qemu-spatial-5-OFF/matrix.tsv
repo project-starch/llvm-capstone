@@ -1,0 +1,13 @@
+case	fix	name	shape	mode	oracle_arm	expected	passed	cause	pc	expected_pc	site	delivered	completed	runner_exit
+11	3a5f82dfb5	11-http-header-map	packet-scope object kept by file-scope state across packets	spatial	spatial	complete	True						True	0
+11	3a5f82dfb5	11-http-header-map	packet-scope object kept by file-scope state across packets	sublet	sublet	fault	True	24	0x101901424	0x101901424	read	False		1
+13	0261fd7da6	13-http-range-cursor-past-chunk	cursor advanced past its chunk by a fixed skip, read inside the same block	spatial	spatial	fault	True	5	0x1019013f8	0x1019013f8	read	False	True	1
+13	0261fd7da6	13-http-range-cursor-past-chunk	cursor advanced past its chunk by a fixed skip, read inside the same block	sublet	sublet	fault	True	5	0x1019013f8	0x1019013f8	read	False		1
+14	1d8acb21ab	14-solaredge-payload-six-past	loop reads a fixed offset past its chunk into the next chunk of the same block	spatial	spatial	fault	True	5	0x1019013f8	0x1019013f8	read	False	True	1
+14	1d8acb21ab	14-solaredge-payload-six-past	loop reads a fixed offset past its chunk into the next chunk of the same block	sublet	sublet	fault	True	5	0x1019013f8	0x1019013f8	read	False		1
+15	d24613c461	15-opcua-padding-below-chunk	packet-controlled negative index reads below the chunk, inside the same block	spatial	spatial	fault	True	5	0x1019013cc	0x1019013cc	read	False	True	1
+15	d24613c461	15-opcua-padding-below-chunk	packet-controlled negative index reads below the chunk, inside the same block	sublet	sublet	fault	True	5	0x1019013cc	0x1019013cc	read	False		1
+16	e8ef9df09d	16-dcp-etsi-rs-parity-write	fixed-offset parity write lands past the buffer, inside the same block	spatial	spatial	fault	True	7	0x1019013e4	0x1019013e4	write	False	True	1
+16	e8ef9df09d	16-dcp-etsi-rs-parity-write	fixed-offset parity write lands past the buffer, inside the same block	sublet	sublet	fault	True	7	0x1019013e4	0x1019013e4	write	False		1
+17	5a560f3f6a	17-dns-one-byte-write	a size one larger than the chunk permits a one-byte write past it	spatial	spatial	fault	True	7	0x1019013e4	0x1019013e4	write	False	True	1
+17	5a560f3f6a	17-dns-one-byte-write	a size one larger than the chunk permits a one-byte write past it	sublet	sublet	fault	True	7	0x1019013e4	0x1019013e4	write	False		1

@@ -1,0 +1,47 @@
+{
+  "case": 7,
+  "upstream_fix": "ecdb011",
+  "title": "an item key with no terminator is handed to a string formatter, which reads past it",
+  "consumer": "items.c, do_item_cachedump()",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: 1.6.45:items.c:669-670 copies a BOUNDED nkey and terminates it itself -- 'strncpy(key_temp, ITEM_key(it), it->nkey);' then 'key_temp[it->nkey] = 0x00; /* terminate */' -- and :672 formats key_temp rather than ITEM_key(it). A fix-reversal. Note the follow-up bd2f3ab ('Terminate the temp buffer properly in do_item_alloc') tightened ecdb011's own copy from nkey + 1 to nkey; the pin carries the later form.",
+  "object": "an item's key field, nkey bytes with no terminator written",
+  "lifetime_ender": "NONE -- the item is alive throughout. SPATIAL row.",
+  "shape": "unbounded read forward from an item key with no terminator",
+  "allocator_layer": "slabs.c chunks over 1 MiB pages, memcached 1.6.45",
+  "fidelity": "model-consumer, real allocator. A real slab chunk holds the item; the key is written WITHOUT the terminator upstream relies on and the bytes after it are made non-zero, so the read has somewhere to run. The formatter is reduced to the scan it performs -- reading forward until a zero byte -- and the case reports how far that got.",
+  "distinguishing": "the only row whose crossing has NO fixed extent: how far the read goes depends on where the next zero byte happens to be, which is why the fix bounds the copy rather than adding a terminator at the source. The case caps its own scan at 64 bytes so a run cannot wander, which means it measures THAT the key bound was crossed and not how far. MEASURED only natively. The chunk bound is what the slab port narrows (leases.c carves each chunk), so whether a Capstone arm faults depends on whether this crossing leaves the CHUNK or stays inside it -- stated per case below and NOT measured here: the domain arms need a build this run did not make.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED, not measured: depends on how far the scan runs before the chunk ends. Recorded as a prediction with that dependence stated rather than guessed at.",
+      "note": "Not measured."
+    },
+    "sublet": {
+      "oracle": "PREDICTED, not measured: depends on how far the scan runs before the chunk ends. Recorded as a prediction with that dependence stated rather than guessed at.",
+      "note": "revocation has nothing to fire on: no lifetime ends in a spatial row, so this arm reads as the spatial one does."
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured; neither platform is on this host."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: mode 1 adds temporal protection and no lifetime ends here."
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured: completes -- CHERI bounds the slab page, which is one malloc.",
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved"
+    },
+    "native-detect": {
+      "status": "not written",
+      "oracle": "NO ASan report expected: the crossing stays inside the slab page, which is one malloc, so there is no redzone between chunks. Needs its own positive control before the silence means anything -- see the FFmpeg subobject-repros bundle, where that control is measured and where it first failed to fire at -O1."
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's write or read crosses and the case's damage flag is set; the fixed arm's bound keeps it inside. This pair differs by the upstream fix, not by protection."
+    }
+  },
+  "status": "MEASURED 2026-10-05 natively: fixed arm VERDICT FIXED (the bounded copy stops the read at nkey), buggy arm VERDICT DEFECT-REPRODUCED with damage=1. Capstone and CheriBSD arms declared, not measured."
+}

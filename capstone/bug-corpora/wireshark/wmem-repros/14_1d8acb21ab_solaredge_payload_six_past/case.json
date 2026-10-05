@@ -1,0 +1,50 @@
+{
+  "case": 14,
+  "upstream_fix": "1d8acb21ab",
+  "title": "the decrypt loop reads six bytes past its packet-scope chunk into the next chunk of the same block",
+  "consumer": "epan/dissectors/packet-solaredge.c",
+  "live_in_pin": true,
+  "live_proof": "LIVE, read two-sided from the pinned tree. The vulnerable read is present at v4.6.8:epan/dissectors/packet-solaredge.c:1029 -- 'out[i] = intermediate_decrypted_payload[i + 6] ^ intermediate_decrypted_payload[2+(i&3)];' inside 'for (i = 0; i < payload_length; i++)' -- and the fix's marker 'payload_length -= 6' has ZERO occurrences in the pinned file. The two chunks are allocated at :1007 and :1008, both wmem_alloc(scratch, payload_length), and scratch is pinfo->pool at the :1292 call site. The pin additionally has no guard on `length` at all, so payload_length can go negative; that is a SECOND defect in the same function and is not what this case claims.",
+  "object": "the intermediate decrypted payload, payload_length bytes in the packet scope",
+  "lifetime_ender": "NONE -- the object is alive throughout. Spatial row: the cursor leaves the chunk.",
+  "shape": "loop reads a fixed offset past its chunk into the next chunk of the same block",
+  "allocator_layer": "block_fast -- the packet scope (pinfo->pool). In this harness the bound that fires is wm_narrow()'s per-allocation shrink, not the chunk adapter's.",
+  "fidelity": "model-consumer, real allocator. The decrypt arithmetic is reduced to the loop's LAST read, index payload_length - 1 + 6, which is the one that leaves the chunk; the cipher calls are dropped because they do not touch the bound.",
+  "arms": {
+    "spatial": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 5,
+      "note": "Every arm of this harness narrows a wmem allocation to its request -- ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15, wm_narrow(), unconditional under WM_DOMAIN -- so a spatial crossing faults on all of them and this case does NOT discriminate the chunk port. Established by case 13, whose completion predictions the run refuted; these four are pre-registered with that correction already applied."
+    },
+    "sublet": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 5,
+      "note": "Judged on the WM_CHUNKS=OFF build. Same reading as spatial, same reason."
+    },
+    "sublet-chunks": {
+      "oracle": "fault at the labelled read probe",
+      "cause": 5,
+      "note": "Judged on the WM_CHUNKS=ON build. The chunk port narrows the chunk a second time, but the bound crossed is already wm_narrow()'s."
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: faults if mode 0 bounds each wmem chunk, completes if it bounds only the g_malloc'd block. Neither platform is on this host; the reading settles it."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: mode 1 adds temporal protection and no lifetime ends here, so the spatial behaviour of mode 0 decides it."
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured: completes. CHERI bounds the g_malloc'd block and the crossing stays inside it; the revoker has nothing to sweep because nothing is freed.",
+      "target": "stock CheriBSD purecap with the guest's own libc revocation on",
+      "guest_default": "preserved"
+    },
+    "native-detect": {
+      "status": "not written",
+      "oracle": "NO ASan report: the crossing stays inside the one g_malloc'd block, so there is no redzone between the chunks to poison. A silent arm needs its own positive control -- a crossing past the END of the block, which ASan must report -- before it means anything."
+    }
+  },
+  "status": "PRE-REGISTERED 2026-10-05, before the run: every Capstone arm faults with cause 5 at the labelled probe, for the wm_narrow() reason recorded on the arms. A differing cell is a finding, not an edit to this file."
+}

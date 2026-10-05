@@ -15,7 +15,8 @@
 - **Found on the way, all QEMU-silent:**
   - **C-76:** capstone-c's `stc` spill of a `__rev` argument, moved to cnull by silicon's STC. It wedged every
     process-ABI step.
-  - **A delegate-runtime copy loss** in R-29's family, worked around with 8-byte copies. The first attribution
+  - **A delegate-runtime copy loss** in R-29's family, worked around with 8-byte copies; an RTL fix for R-29 and S-10b is
+    in RTL and synthesized (2026-10-05, `sup-call` 776d9d859, bitstream sha256 3c91335a…, ISSUES R-29), awaiting the lead's reflash. The first attribution
     (R-29's stale-refill mechanism) was retracted. The RTL lane then reproduced the actual path in simulation: a
     granule copy of a plain-store pair still in the write buffer reads the high half as 0.
   - **M-13:** a monitor-internal trap reads as cause 24 at `_cap_trap_entry`+4.

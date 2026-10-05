@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-05",
+  "runner": "runners/run-native.sh",
+  "runner_exit": 0,
+  "cases": 3,
+  "arms_measured": [
+    "native-fix-differential",
+    "native-detect"
+  ],
+  "arms_declared_not_measured": [
+    "spatial",
+    "sublet",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "cheribsd-revocation",
+    "backing"
+  ],
+  "native_compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "port_build": "/tmp/capstone/ffmpeg-buffer-pool/build/native (libffmpeg-pool.a)",
+  "asan_probe": {
+    "built": "cc -O0 -g -fsanitize=address",
+    "note": "-O0 is load-bearing: at -O1 BOTH arms were silent because the dead stores were optimised away, so the positive control could not fire and the blindness claim would have been an artefact."
+  },
+  "n_per_cell": 1
+}

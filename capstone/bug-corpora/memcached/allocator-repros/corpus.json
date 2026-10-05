@@ -1,12 +1,12 @@
 {
   "program": "memcached",
   "boundary": "slabs and the per-thread object cache",
-  "title": "Temporal defects in consumers of memcached's slab classes and object cache",
+  "title": "Consumer-side defects in memcached's nested allocators: five temporal, three spatial",
   "upstream": {
     "version": "1.6.45",
     "port": "capstone/ports/memcached/allocators"
   },
-  "cases": 5,
+  "cases": 8,
   "case_schema": "case-json",
   "case_macro": "MC",
   "required_arms": [
@@ -22,7 +22,7 @@
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
     "true": 1,
-    "false": 4
+    "false": 7
   },
   "runners": [
     "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",
@@ -35,7 +35,7 @@
     "CVE-2018-1000127"
   ],
   "shape_table": true,
-  "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port.",
+  "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port. Cases 5-7 are SPATIAL, added 2026-10-05 from a SHAPE search over item-size computations (item_make_header / ITEM_* / do_item_alloc) rather than a wording filter -- the wording filter found 0 class-B defects here, and these three have subjects that say 'corruption' rather than 'overflow', which is exactly why it missed them. See docs/ref/memcached-spatial-defect-triage.md. This corpus's .gitignore keeps run summaries OUT of the repository by design -- 'the case files' status carries the outcome' -- so cases 5-7's measured readings live in their status fields and in docs/ref/memcached-spatial-defect-triage.md section 6, not in a committed results/ bundle.",
   "evidence": [
     "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects"
   ]
