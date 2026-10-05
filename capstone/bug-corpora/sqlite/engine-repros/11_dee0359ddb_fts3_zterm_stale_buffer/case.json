@@ -18,7 +18,8 @@
       "oracle": "completes"
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "status": "not written",
+      "not_run_reason": "Demoted: the structural defect is present in 3.22.0 but no input is known that reaches a memory error, so it is not in the CheriBSD build manifest. Runnable only if such an input is found; until then it is arguably not a bug of this corpus at all."
     }
   },
   "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: completes; cheribsd-revocation not run"

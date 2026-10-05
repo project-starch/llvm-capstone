@@ -18,7 +18,8 @@
       "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "status": "not written",
+      "not_run_reason": "Trigger derived and the binary cross-compiled, but never executed on CheriBSD. Runnable now; this is the cheapest gap in the table to close."
     }
   },
   "status": "spatial run 2026-10-04/05: the domain never returned (no ==RC): a hang, which fault recovery cannot contain; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation not run"

@@ -18,7 +18,8 @@
       "oracle": "returns rc=0 without its completion marker and without a fault"
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "status": "not written",
+      "not_run_reason": "Trigger derived and the binary cross-compiled, but never executed on CheriBSD. Runnable now; this is the cheapest gap in the table to close."
     }
   },
   "status": "spatial run 2026-10-04/05: returns rc=0 without its completion marker and without a fault; sublet run 2026-10-04/05: returns rc=0 without its completion marker and without a fault; cheribsd-revocation not run"

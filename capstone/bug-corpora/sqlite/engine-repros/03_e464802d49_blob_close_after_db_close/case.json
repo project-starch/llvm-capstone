@@ -15,10 +15,12 @@
       "oracle": "complete"
     },
     "sublet": {
-      "status": "not written"
+      "status": "not written",
+      "not_run_reason": "Skipped by the build: a standalone domain has no Sublet grant glue. Runnable once that glue exists."
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "status": "not written",
+      "not_run_reason": "Not in the CheriBSD build manifest: this case predates the group harness and still uses the old sqlite_hostcall.h interface. Runnable after a rewrite onto REPRO322_MAIN."
     }
   },
   "status": "spatial run 2026-10-04/05: complete; sublet not run; cheribsd-revocation not run"
