@@ -113,5 +113,23 @@ case "$rung" in
     cat /tmp/b2.out; cat /tmp/b2.err
     echo "RESULT $rung retval=$((crc * 10 + (mrc != 0)))"
     ;;
+  b3-oracle)
+    # B3: memcached's oracle on silicon. The port's harness (ports/memcached/app/host/mc-harness) starts the domain
+    # under capstone-job, runs its scripted 8-connection session and stops it with SIGTERM. Only the transcript's
+    # hash and length are printed (it is ~1.9 MB); the verdict is that hash against the native reference's, taken
+    # with the same flags and the same harness (docs/plans/b0-silicon-delegated-runtime.md, B3).
+    # retval = harness status (0 = it ran to the end).
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    rm -rf /tmp/mc; mkdir -p /tmp/mc
+    /test-domains/mc-harness --out /tmp/mc --port 21299 --stop TERM -- \
+      /usr/bin/capstone-job /tmp/mc/job.json --user 65534:65534 -- /usr/bin/capstone-exec "$dom" \
+      -l 127.0.0.1 -p 21299 -U 0 -m 8 -t 1 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand \
+      > /tmp/b3.log 2>&1
+    hrc=$?
+    tail -5 /tmp/b3.log
+    echo "B3: transcript $(sha256sum /tmp/mc/transcript.norm 2>/dev/null | cut -c1-16) bytes $(wc -c < /tmp/mc/transcript.norm 2>/dev/null)"
+    echo "B3: identity $(cat /tmp/mc/identity.txt 2>/dev/null) job $(cat /tmp/mc/job.json 2>/dev/null) status $(cat /tmp/mc/status.txt 2>/dev/null)"
+    echo "RESULT $rung retval=$hrc"
+    ;;
   *) echo "RESULT $rung retval=999" ;;
 esac

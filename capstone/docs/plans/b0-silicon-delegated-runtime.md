@@ -1191,6 +1191,27 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     worker and memcached's helper threads), all as one gp-captable full-LTO image on 776d9d859. It served the
     milestone exchange over loopback and shut down cleanly on SIGTERM.
 
+## B3 (2026-10-05): memcached's oracle on silicon, by transcript hash
+- **The reference.** Native memcached 1.6.45 (the pinned tarball, sha256 f23cee6dc1e4a77e) with libevent 2.1.12,
+  built as `host/build-native.sh` does, but without `deps/env.sh`: its SDK preparation fails C-46 with the shared
+  debug toolchain, which the native build does not use (`/tmp/capstone/b3/build-native.sh`).
+  - The port's harness (`mc-harness`, 8 connections, the scripted session) ran with the board's flags (`-l
+    127.0.0.1 -p 21299 -U 0 -m 8 -t 1 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`).
+  - Result: `transcript.norm` 1,931,207 bytes, sha256 **e0a254c47e7ee28c**.
+  - The two null runs are identical, and both perturbations (a value byte, a cas) change the hash, so the
+    comparison can see a one-byte difference.
+  - Identity `STAT pointer_size 64`, exit 0 on SIGTERM.
+- **QEMU, fabrication off, monitor 10a0690, memcached ba7e6921cf27f2b6:** the same transcript hash e0a254c47e7ee28c,
+  the same 1,931,207 bytes, `STAT pointer_size 128`, job record exit 0.
+- **Board run, pre-registered before the bake (776d9d859).**
+  - The image ba7e6921cf27f2b6 and the harness built with the FPGA toolchain, in a private image
+    (`b0-bake-b3.sh`); monitor 1f9aedd. Rungs b0-stats, `b3-oracle`, b0-stats2.
+  - The rung prints the transcript's hash and length, the identity and the job record; the transcript itself stays
+    on the board.
+  - **Predicted: `B3: transcript e0a254c47e7ee28c bytes 1931207`, `identity STAT pointer_size 128`, job exit 0,
+    `RESULT b3-oracle retval=0`.**
+  - A different hash with the right length points at a data difference: a protocol reply or a stored value.
+
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
 use:
