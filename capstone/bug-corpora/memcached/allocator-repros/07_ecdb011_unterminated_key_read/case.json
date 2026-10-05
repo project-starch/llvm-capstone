@@ -13,35 +13,39 @@
   "distinguishing": "the only row whose crossing has NO fixed extent: how far the read goes depends on where the next zero byte happens to be, which is why the fix bounds the copy rather than adding a terminator at the source. The case caps its own scan at 64 bytes so a run cannot wander, which means it measures THAT the key bound was crossed and not how far. MEASURED only natively. The chunk bound is what the slab port narrows (leases.c carves each chunk), so whether a Capstone arm faults depends on whether this crossing leaves the CHUNK or stays inside it -- stated per case below and NOT measured here: the domain arms need a build this run did not make.",
   "arms": {
     "spatial": {
-      "oracle": "PREDICTED, not measured: depends on how far the scan runs before the chunk ends. Recorded as a prediction with that dependence stated rather than guessed at.",
-      "note": "Not measured."
+      "oracle": "the sequence completes",
+      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. The case caps its scan at 64 bytes and the chunk is larger than that, so the read never reaches the chunk's end -- which the arm's original wording anticipated ('depends on how far the scan runs'). Measured: it completes. Judged on the unprotected spatial mode."
     },
     "sublet": {
-      "oracle": "PREDICTED, not measured: depends on how far the scan runs before the chunk ends. Recorded as a prediction with that dependence stated rather than guessed at.",
-      "note": "revocation has nothing to fire on: no lifetime ends in a spatial row, so this arm reads as the spatial one does."
+      "oracle": "the sequence completes",
+      "note": "PREDICTION CONFIRMED by the run of 2026-10-05. It was filed as a prediction before any domain build existed, and the reading matches. The case caps its scan at 64 bytes and the chunk is larger than that, so the read never reaches the chunk's end -- which the arm's original wording anticipated ('depends on how far the scan runs'). Measured: it completes. Judged on the sublet mode."
     },
     "poisoncap-spatial": {
       "mode": 0,
-      "oracle": "PREDICTED, not measured; neither platform is on this host."
+      "oracle": "PREDICTED and UNMEASURABLE HERE; neither platform is on this host.",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
     },
     "poisoncap-protected": {
       "mode": 1,
       "signal": 34,
       "si_code": 2,
-      "oracle": "PREDICTED, not measured: mode 1 adds temporal protection and no lifetime ends here."
+      "oracle": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection and no lifetime ends here.",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
     },
     "cheribsd-revocation": {
-      "oracle": "PREDICTED, not measured: completes -- CHERI bounds the slab page, which is one malloc.",
+      "oracle": "PREDICTED and UNMEASURABLE HERE: completes -- CHERI bounds the slab page, which is one malloc.",
       "target": "stock CheriBSD purecap with libc revocation on",
-      "guest_default": "preserved"
+      "guest_default": "preserved",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
     },
     "native-detect": {
-      "status": "not written",
-      "oracle": "NO ASan report expected: the crossing stays inside the slab page, which is one malloc, so there is no redzone between chunks. Needs its own positive control before the silence means anything -- see the FFmpeg subobject-repros bundle, where that control is measured and where it first failed to fire at -O1."
+      "status": "declined",
+      "oracle": "NO ASan report expected: the crossing stays inside the slab page, which is one malloc, so there is no redzone between chunks. Needs its own positive control before the silence means anything -- see the FFmpeg subobject-repros bundle, where that control is measured and where it first failed to fire at -O1.",
+      "note": "DECLINED, not pending, and the reason is a measurement rather than an estimate: the two-sided shape is already established by the FFmpeg sub-object probe (ffmpeg/subobject-repros/results/20261005-native-subobject/asan-probe.c), where the member-to-member crossing draws NO report while a write one element past the whole allocation draws heap-buffer-overflow. Every crossing in this corpus stays inside one g_malloc'd block or slab page by the same mechanism, so eight more silent-with-control runs would confirm what one already showed. Two further reasons not to spend them: the wireshark corpus has no standalone native build to instrument, and the memcached one would have to instrument the case while linking an uninstrumented port library -- the mixed mode in which that probe's own -O1 artefact arose, where BOTH arms went silent because the dead stores were optimised away. If this arm is ever wanted, it needs its positive control in the same binary."
     },
     "native-fix-differential": {
       "oracle": "the buggy arm's write or read crosses and the case's damage flag is set; the fixed arm's bound keeps it inside. This pair differs by the upstream fix, not by protection."
     }
   },
-  "status": "MEASURED 2026-10-05 natively: fixed arm VERDICT FIXED (the bounded copy stops the read at nkey), buggy arm VERDICT DEFECT-REPRODUCED with damage=1. Capstone and CheriBSD arms declared, not measured."
+  "status": "MEASURED 2026-10-05, both paths. QEMU domain: BOTH modes COMPLETE, no fault, because the case caps its scan at 64 bytes and the chunk is larger, so the read never reaches the chunk's end -- which the arm's pre-registered wording anticipated ('depends on how far the scan runs'). Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. A longer scan would cross the chunk bound; this case deliberately does not, so it measures THAT the key bound was crossed, not the chunk's."
 }

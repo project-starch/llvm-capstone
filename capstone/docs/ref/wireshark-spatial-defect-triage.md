@@ -338,3 +338,26 @@ have reported a correct reading as a failure, and both negative-tested:
   None of the three carries a reachability proof yet.
 - **Whether `tshark` as our port builds it** compiles the dissector at all; `solaredge`, `opcua` and
   `dcp-etsi` still need checking against the port's dissector set.
+
+## PoisonCap and CheriBSD are UNMEASURABLE on this host, checked rather than assumed
+
+Every case in this corpus declares a `poisoncap-spatial`, `poisoncap-protected` and
+`cheribsd-revocation` arm, and **none of them can be measured here.**
+`ports/common/cmake/toolchains/cheribsd.cmake:4-9` requires `CHERI_SDK` and `CHERI_SYSROOT` and
+`FATAL_ERROR`s without them; both are **unset** even after sourcing the project environment, and a
+filesystem search finds no CHERI SDK, rootfs or PoisonCap image anywhere on this host.
+
+Recorded as **unavailable**, not *pending*. The distinction matters: "pending" invites someone to
+wait for a measurement that cannot be taken on this machine.
+
+## The runner guard that was missing, and the boot it misreported
+
+`bug-corpora/wireshark/wmem-repros/shared/run-defects.py` had **no** "produced no result" check,
+while its memcached sibling has two. That is why case 15's empty boot was reported as a **FAIL**
+instead of exiting 75: its serial ended at `sh /mnt/host/run.sh` with no marker, no fault and no
+`CONTROL-FAILED`, and a FAIL there reads exactly like the defect failing to reproduce.
+
+The two checks are now in, extracted into `refuse_if_no_result()` so they can be tested without a
+QEMU boot, and **negative-tested five ways** — including against the *real* 73,831-byte empty capture
+that caused the misread, and against two inputs that must NOT be refused (a real passing capture,
+and a fault with no marker, since a fault is itself information).

@@ -1,5 +1,14 @@
 # R-29 — a plain 8-byte store adjacent to a 128-bit `ldc` of the same granule loses the high half
 
+> **Status 2026-10-05: FIXED ON SILICON.** `caplifive_supcall_776d9d859.bit` (capstone-ariane `sup-call` 776d9d859) carries a
+> stall-only fix: a 16-byte read whose granule has a plain store in flight -- in the store buffer or the write buffer -- waits
+> in the dcache read controller until that store has drained (ISSUES R-29, the dated block of 2026-10-05, has the design, the
+> simulation record and the synthesis numbers). This folder's rung `s06agg` (frozen `249118220f8cf37a`, the k800 control first)
+> reads **64 = clean** on it (board-supmon 3cdddc4727ec; 66 on 66c4e7517), and the delegated runtime's memcpy arm went from
+> 94/96 miscopies to 0/96 on the same image. The mechanism statement below is history: both of its faces -- the stale refill on
+> a MISS and the word-wise forwarding on a HIT -- are one hazard, the un-ordered read behind a store still in flight, and the
+> store-buffer account it refutes was true of the HIT arm at zero distance (the trace of 2026-10-05).
+>
 > **Status 2026-09-10: OPEN, mechanism SEPARATED BY WAVEFORM.** Reproduced on silicon and in RTL
 > simulation on every revision we can build, including the one that flew before the current flash.
 > The failing wide load **misses** and is served from the refill leg, so its high half comes from a

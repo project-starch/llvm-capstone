@@ -58,6 +58,7 @@ MC_CASE(5) {
   size_t n = fixed ? 2 : 3;
   o->unit_reissued = 0;                /* nothing is freed or reissued here */
   held = data + res;                   /* set while live, as the seam requires */
+  mark(5); /* LAST thing before the access: its presence is the setup's evidence */
   CHECK((char *)(data + res + n) > (char *)next || fixed, 757);
   for (size_t i = 0; i < n; i++)
     write_probe((volatile unsigned char *)(data + res + i));

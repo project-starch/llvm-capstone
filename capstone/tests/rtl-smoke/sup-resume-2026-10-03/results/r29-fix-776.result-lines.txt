@@ -1,0 +1,33 @@
+# s06agg and s10b-primed on caplifive_supcall_776d9d859.bit, 2026-10-05 (pre-registered board-supmon b4efce6eabd2)
+# s06agg: private firmware 2f49d5b257f7 (shared tree monitor 2dcd3a5 + k800 589ceee3 + s06agg 249118220f8cf37a), 19:43-19:50
+### TEST 1/2 START k800:/test-domains/k800.dom ###
+ladder-perf: RESULT k800 retval=4 cycles=4511 ran=53406 instret=1089 phase=2
+### TEST 1/2 END k800:/test-domains/k800.dom rc=0 ###
+### TEST 2/2 START s06agg:/test-domains/s06agg.dom ###
+ladder-perf: RESULT s06agg retval=64 cycles=1111 ran=53406 instret=134 phase=2
+### TEST 2/2 END s06agg:/test-domains/s06agg.dom rc=0 ###
+# s10b-primed: bare, one power cycle per image, 19:50-19:52; SEQ:
+control-call-retpc START 19:50:20 a05ca464c4f683cd
+control-call-retpc END rc=0 19:51:02
+s10b-primed START 19:51:10 2f8ef9cecda4b8dc
+s10b-primed END rc=0 19:51:53
+== control-call-retpc
+SUPTEST BEGIN
+SB1
+SR 0000000000000008
+SV 0000000000000000
+SV 0000000000000012
+SV 0000000000000021
+SV 0000000000000000
+SV 0000000000000051
+SV 0000000000000000
+SV 0000000000000000
+SV 0000000000000000
+SUPTEST END
+== s10b-primed
+SUPTEST BEGIN
+SB1
+SR 0000000000000002
+SV 0000000000000008
+SV 0000000000000001
+SUPTEST END

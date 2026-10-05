@@ -239,3 +239,14 @@ the false-live mode measured in `memcached-spatial-defect-triage.md` §5.
   each and should be re-read before any of them enters a case folder or the paper.
 - **Reachability is not established for any of them.** Three need specific builds or BSF entry
   points, named per candidate.
+
+## PoisonCap and CheriBSD are UNMEASURABLE on this host, checked rather than assumed
+
+Every case in this corpus declares a `poisoncap-spatial`, `poisoncap-protected` and
+`cheribsd-revocation` arm, and **none of them can be measured here.**
+`ports/common/cmake/toolchains/cheribsd.cmake:4-9` requires `CHERI_SDK` and `CHERI_SYSROOT` and
+`FATAL_ERROR`s without them; both are **unset** even after sourcing the project environment, and a
+filesystem search finds no CHERI SDK, rootfs or PoisonCap image anywhere on this host.
+
+Recorded as **unavailable**, not *pending*. The distinction matters: "pending" invites someone to
+wait for a measurement that cannot be taken on this machine.

@@ -48,6 +48,7 @@ MC_CASE(7) {
 
   o->unit_reissued = 0;
   held = (volatile unsigned char *)scan;
+  mark(7); /* LAST thing before the access */
   /* How far a %s-style read gets before it finds a zero. */
   unsigned n = 0;
   while (n < SCAN_LIMIT && read_probe(scan + n) != 0)
