@@ -1139,6 +1139,18 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     - this is the first ~21 MiB managed block on the board (CMA is 256 MiB).
   - A client code of 2 (no connection) with memcached alive would point at the launcher's socket services; a fault
     names its pc.
+- **Board result (21:07-21:14, firmware 3fffc01249e7): a MISS.** `B2: no connection`, `memcached rc=139`, job
+  `{"kind":"signal","value":11}`, `RESULT b2-memcached retval=21`; census rungs 0 and 0.
+  - The monitor's trace places it. The first region share's `supervised_invoke` returned **ECSZ 2, a FAULT event**,
+    during the domain's first entry: the glue's table build and cap-init, which for memcached zero-fill a 16 MiB
+    level0 arena.
+  - For comparison, b1f2's first share returned 1 (preempted) and then completed.
+  - Nothing ran after it. capstone-exec printed no fault line, and the event's cause, pc and tval were not traced
+    (`CAPSTONE_SUPERVISE_QUIET`).
+- **B2f pre-registered:** the same image with the monitor at 1f9aedd, which reports a fault event's cause, epc and
+  tval unconditionally (SUPC/SUPE/SUPT); firmware 9dbcddf6b32f.
+  - Predicted: the same fault, now with its location. epc minus DBAS gives the image offset.
+  - A pass would mean B2's fault is not deterministic.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
