@@ -82,7 +82,6 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/engine-175` has no triage inventory under docs/ref/.
-- `capstone/bug-corpora/postgres/engine-175` commits no result bundle of its own.
 - `capstone/bug-corpora/postgres/mmgr-repros`: 3 of 8 cases have a PROVENANCE.md.
 - `capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.
 - `capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.
