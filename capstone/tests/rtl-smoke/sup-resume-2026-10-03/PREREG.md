@@ -1099,3 +1099,15 @@ R-49 changes the store path of every switcher write, and R-50 the load unit. Cyc
   would give the double-read its first exercise;
 - a sticky "the old mis-ack cycle was reached" flag, batched into the next bitstream;
 - N = 2 repeats of armdep-nt and C5u B.
+
+## accept776: the S-16 set as a CONTROL on caplifive_supcall_776d9d859.bit (pre-registered 2026-10-05, before the boot)
+- **Bitstream:** capstone-ariane sup-call 776d9d859 (the R-29 + S-10b stall-only fix on top of 715bdd1fe). sha256
+  3c91335acc7c1065ac60c550495ccf4bfb7538ed078b20000d15ce6caecd21a4. Flashed 2026-10-05 16:58-17:00 on the lead's
+  own word, and read back after the power cycle.
+- **Run:** `CAPSTL_BITSTREAM=caplifive_supcall_776d9d859.bit CAPSTL_SET=accept715
+  SUP_RUNNER=$PWD/run_sup_bare_wedge.py CAPSTL_OUT=/tmp/capstone/accept776`. The images are hash-identical to
+  accept715's.
+- **Prediction: UNCHANGED.** Every image completes (rc 0, SUPTEST END), with the same SV readings as accept715
+  apart from the ones accept715 already reported as timing-dependent (preemption and escape counts).
+- **Why it is the control:** the fix changes the dcache read path beside the store buffer, where S-16 lived. A hang
+  or a changed reading here is a regression, and it comes before any claim about R-29.
