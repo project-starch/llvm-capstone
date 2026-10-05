@@ -1,13 +1,13 @@
 {
   "case": 2,
   "upstream_fix": "no-fix-recorded",
-  "title": "ts_headline() overflow, ~32 KB -- leaves the malloc block",
+  "title": "ts_headline() overflow, ~32 KB -- leaves its block",
   "consumer": "ts_headline()",
   "class": "spatial",
   "trigger": "trigger.sql",
   "live_in_pin": true,
   "live_proof": "no fix commit recorded; established on the pin by host ASan, which reports negative-size-param, and by the purecap arm, where the ~32 KB overflow crosses the malloc bound and raises SIGPROT on both the plain and the cassert build",
-  "fidelity": "real server, real allocator. Unlike case 01 this one leaves the malloc block, which is why both a sanitizer and a capability machine can see it",
+  "fidelity": "real server, real allocator. Unlike case 01 this one leaves its block, which is why both a sanitizer and a capability machine can see it",
   "arms": {
     "spatial": {
       "oracle": "the mechanism reports: capability fault: capstone-exec: domain fault cause=7 pc=0xc02023a8 address=0xc1dc58e0 entry=0xc0200de0 code=0xc0200000-0xc5220000 last=0x4f preparing=0x4f sha256=8088ed6b2103e65a7d679555fb1c06ecadfe376818ce0e914fe5f6795e018558 image=/mnt/host/applications/postgres-8088ed6b2103e65a7d679555fb1c06ecadfe376818ce0e914fe5f6795e018558.dom",

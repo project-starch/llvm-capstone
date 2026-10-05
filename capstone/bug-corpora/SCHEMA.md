@@ -93,9 +93,9 @@ invent them, and absence is not a defect.
 `allocator_consumed` is the companion to `allocator_layer`, and a corpus that
 records one without the other has half of axis 2. The layer says which
 allocator the memory came from; `allocator_consumed` says whether the damage
-stayed inside that layer's block, which is the difference between a defect a
-nested allocator hides and one it does not. The two do not share an empty
-count -- a case can have a measured layer and no consumed verdict -- so a
+stayed inside one block of that allocator, which is the difference between a
+defect the system allocator cannot see and one it can. The two do not share an
+empty count -- a case can have a measured layer and no consumed verdict -- so a
 corpus reporting coverage must count them separately rather than quoting one
 number for both.
 

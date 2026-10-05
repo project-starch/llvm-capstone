@@ -1,13 +1,13 @@
 {
   "case": 15,
   "upstream_fix": "3d160401b65e",
-  "title": "array[]::oidvector \u672c\u5e94\u62a5 'array is not a valid oidvector'\uff1b17.5 \u6253\u5370 40 \u4e2a\u76f8\u90bb\u5806\u5b57\u3002ASan \u9759\u9ed8\u2014\u2014\u8d8a\u754c\u8bfb\u7559\u5728 palloc \u5757\u5185\uff0c\u9519\u8bef\u7b54\u6848\u662f\u552f\u4e00\u8bc1\u636e",
+  "title": "array[]::oidvector out-of-bounds read, ~40 heap words -- stays inside its aset block",
   "consumer": "array[]::oidvector cast",
   "class": "spatial/oob-read",
   "trigger": "trigger.sql",
   "live_in_pin": true,
   "live_proof": "CVE-2026-2003, fixed upstream in 3d160401b65e, which postdates the 17.5 pin. On the pin the cast is accepted where a correct build rejects it: the purecap run errors on 0 of the 2 statements upstream refuses",
-  "fidelity": "real server, core. The out-of-bounds read stays inside the palloc block, so no sanitizer and no capability machine sees it; the accepted input is the evidence. On the host the same case printed about forty words of adjacent heap, and on the purecap arm the value came back empty -- the arms show different amounts of the same defect, which is recorded rather than averaged",
+  "fidelity": "real server, core. The out-of-bounds read stays inside its aset block, so no sanitizer sees it and neither do capability bounds on the block or the arena (cheribsd-revocation, spatial); there the accepted input is the evidence. The sublet arm bounds each aset chunk and faults on the read (cause 5, 2026-10-05). On the host the same case printed about forty words of adjacent heap, and on the purecap arm the value came back empty -- the arms show different amounts of the same defect, which is recorded rather than averaged",
   "arms": {
     "spatial": {
       "oracle": "completes with no fault; the trigger's own directive fires -- the defect is witnessed by its effect, not by the access. errors 0/2 expected",

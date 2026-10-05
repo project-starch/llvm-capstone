@@ -1,13 +1,13 @@
 {
   "case": 3,
   "upstream_fix": "no-fix-recorded",
-  "title": "ltree deparse_lquery out of bounds, ~65 KB -- leaves the malloc block",
+  "title": "ltree deparse_lquery out of bounds, ~65 KB -- leaves its block",
   "consumer": "lquery cast (ltree extension)",
   "class": "spatial",
   "trigger": "trigger.sql",
   "live_in_pin": true,
   "live_proof": "no fix commit recorded; established on the pin by host ASan (heap-buffer-overflow in the lquery deparse path) and by the purecap arm, which raises SIGPROT on both builds",
-  "fidelity": "real server, real allocator, in a contrib extension rather than core. ~65 KB, so it leaves the malloc block",
+  "fidelity": "real server, real allocator, in a contrib extension rather than core. ~65 KB, so it leaves its block",
   "arms": {
     "spatial": {
       "oracle": "completes; the mechanism does not report. completed with no directive and no fault",

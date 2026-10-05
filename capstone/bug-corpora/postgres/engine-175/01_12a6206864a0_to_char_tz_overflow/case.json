@@ -1,13 +1,13 @@
 {
   "case": 1,
   "upstream_fix": "12a6206864a0",
-  "title": "to_char(timestamptz,'TZ') heap overflow write, ~36 B -- stays in the palloc block",
+  "title": "to_char(timestamptz,'TZ') heap overflow write, ~36 B -- stays inside its aset block",
   "consumer": "to_char(timestamptz, 'TZ')",
   "class": "spatial",
   "trigger": "trigger.sql",
   "live_in_pin": true,
   "live_proof": "CVE-2026-14669, fixed upstream in 12a6206864a0, which postdates the 17.5 pin. Reproduced on the pin: PostgreSQL's own MEMORY_CONTEXT_CHECKING reports 'detected write past chunk end' in ExprContext, followed by four alloc-set integrity warnings",
-  "fidelity": "real server, real allocator, upstream's own trigger shape. The overflow is about 36 bytes and stays inside the palloc chunk, so ASan is structurally blind to it and only PostgreSQL's chunk sentinel sees it -- that is the measurement, not a weakness of the case",
+  "fidelity": "real server, real allocator, upstream's own trigger shape. The overflow is about 36 bytes and stays inside its aset block, so ASan is structurally blind to it, and so are capability bounds on the block or the arena (cheribsd-revocation, spatial). It does leave its aset chunk: PostgreSQL's own check reports damaged chunk headers (bad chunk size, bad block offset), and the sublet arm, which bounds each aset chunk, faults on the store (cause 7, 2026-10-05) -- that is the measurement, not a weakness of the case",
   "arms": {
     "spatial": {
       "oracle": "completes; the mechanism does not report. completed with no directive and no fault",
