@@ -112,10 +112,61 @@ and the division was measured rather than argued:
 - **memcached's three are native-only**: their Capstone readings are declared predictions pointing
   deliberately different ways, so a future reading settles something.
 
-**Three pre-registered predictions were refuted** and are recorded where they were made: case 13's
-completion predictions (both arms fault), the five tshark rows' cause 5 (a store faults 7), and
-memcached's *"0 class-B, structural"* verdict (the shape search that file itself prescribed found
-three, all with subjects saying "corruption" rather than "overflow").
+**The measurement is now CLOSED. Every one of the 80 arm cells across the eleven cases is
+accounted for**, and the arithmetic reconciles from the case files rather than from a summary:
+
+| | measured | unavailable | declined | n/a | total |
+|---|---:|---:|---:|---:|---:|
+| tshark (5 cases × 7 arms) | **15** | 15 | 5 | 0 | 35 |
+| memcached (3 × 7) | **9** | 9 | 3 | 0 | 21 |
+| FFmpeg (3 × 8) | **12** | 9 | 0 | 3 | 24 |
+| **total** | **36** | **33** | **8** | **3** | **80** |
+
+- **measured** — every Capstone arm of all eleven cases, plus the native fix-differentials and
+  FFmpeg's ASan arm. **All eleven cases are now measured under Capstone**, not six of them.
+- **unavailable** — PoisonCap and CheriBSD, 3 arms × 11 cases. Checked, not assumed:
+  `ports/common/cmake/toolchains/cheribsd.cmake:4-9` requires `CHERI_SDK` and `CHERI_SYSROOT` and
+  `FATAL_ERROR`s without them; both are unset even after sourcing the project environment, and no
+  SDK, rootfs or PoisonCap image exists anywhere on this host.
+- **declined** — the eight `native-detect` (ASan) arms, with a reason that is itself a measurement:
+  the FFmpeg sub-object probe already shows the two-sided shape (silent inside the allocation, fires
+  one element past it), and every crossing in those corpora stays inside one `g_malloc`'d block or
+  slab page by the same mechanism.
+- **n/a** — FFmpeg's `backing` arm: there is no backing allocation distinct from the object, because
+  the object *is* one `av_malloc`.
+
+### What the closed measurement shows, per program
+
+- **tshark, 5 cases, all faulting.** Cause **5** on the three reads, cause **7** on the two writes,
+  on **both** builds. They do **not** discriminate the chunk port: `wm_narrow()` narrows every wmem
+  allocation on every arm, so the harness has no malloc-granular arm. 12/12 per build, negative
+  control 12/12.
+- **memcached, 3 cases, and the decisive one.** Case 5 **faults** (cause 7, write probe); cases 6 and
+  7 **complete on both modes**. Case 6 is the result: the defect is real and corrupts the value's
+  storage, the crossing stays **inside** the chunk, the slab port's bound *is* the chunk, and so
+  **nothing we have detects it**. 8/8, negative control 8/8 fired.
+- **FFmpeg, 3 cases, caught by nothing — now measured, not declared.** Probe cases 40-42 of the
+  buffer-pool port, **PASS/PASS on modes 0 and 2**, runner exit 0 each. Each probe asserts the
+  crossing happened, so a completion is a measurement and not a quiet nothing.
+
+**Nine pre-registered predictions were refuted across this work** and each is recorded where it was
+made, never silently corrected. The last four: case 13's completion predictions; the five tshark
+rows' cause 5 (a store faults 7); memcached's *"0 class-B, structural"* verdict; and — the only one
+that went the other way — memcached's three Capstone predictions, which **held**, including the one
+that mattered.
+
+### The two decisions that remain, and they are the lead's
+
+1. **Wire `BLOCK_FAST` into the chunk adapter.** It would turn the two *live* tshark defects into
+   app-port detections. The gap is wiring, not design: the adapter is block-generic, the only wiring
+   patch targets `wmem_block.c`, and `BLOCK_FAST` is the simpler allocator.
+2. **Whether any of this enters the paper.** `tab:target-security`'s rows are programs and its
+   columns configurations, and "Capstone spatial" is a *configuration* scoring 0 on 57 **temporal**
+   bugs — so adding spatial defects means new `Cases` and a changed `\targetCorpus`.
+
+**Deliberately not pursued**, so nobody mistakes it for an oversight: tshark's **251** class-`?`
+candidates and memcached's **152 of 157** unread item-size commits; and `a809a784ec`, whose
+containment is partial.
 
 ## 2. The SYNTHETIC spatial probes — and Sublet does catch most of them
 
