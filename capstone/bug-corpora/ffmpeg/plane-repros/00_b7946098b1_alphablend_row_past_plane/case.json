@@ -1,0 +1,51 @@
+{
+  "case": 0,
+  "upstream_fix": "b7946098b1",
+  "title": "ff_sws_alphablendaway averages the alpha row below the plane's last on a subsampled odd size",
+  "consumer": "libswscale/alphablend.c, ff_sws_alphablendaway()",
+  "object": "the alpha plane of a YUVA420P frame, one of four planes av_frame_get_buffer carves from a single AVBuffer",
+  "lifetime_ender": "NONE -- the frame is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "a vertical average reads one row past the alpha plane, inside the frame's single AVBuffer",
+  "allocator_layer": "av_frame_get_buffer over av_malloc: every plane of the frame is carved from ONE AVBuffer, which is what makes the crossing nested",
+  "fidelity": "real allocator, model consumer. The frame, its planes and its single AVBuffer come from real libavutil; the case asserts both structural facts rather than assuming them -- buf[1] == NULL, and a whole row past the alpha plane still inside the buffer (measured slack 1024 bytes). The consumer is reduced to the one average the fix changed, at x = 0 on the last subsampled row, with the fix's own condition subsample_row = y_subsample && (y << y_subsample) + 1 < lum_h as the only difference between the arms. The horizontal half of the same overread, a[2x + 1] past the row's width, is left out; PROVENANCE.md says so.",
+  "live_in_pin": false,
+  "live_proof": "the fix is an ancestor of n9.0.1 (git merge-base --is-ancestor b7946098b1 n9.0.1 succeeds), and the pin carries the fixed form: 'subsample_row' occurs 5 times in n9.0.1:libswscale/alphablend.c while the pre-fix 'x_subsample || y_subsample' condition occurs 0 times, with ff_sws_alphablendaway present as the positive control that the search reaches the file. The case reconstructs the pre-fix consumer shape against the shipped allocator -- the convention at ../../memcached/allocator-repros/README.md:132-135, carried by 27 of the 33 cases in this tree.",
+  "distinguishing": "the arms differ by the fix's own condition and by nothing else. The frame, the plane, the row and the x index are identical in both; only whether the row below is averaged changes.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm reports crossed=1 contained=1 damage=1, the fixed arm crossed=0 contained=1 damage=0. contained=1 on BOTH arms is the structural claim: a whole row past the plane is inside the frame's one AVBuffer, with 1024 bytes to spare. MEASURED 2026-10-06, results/20261006-native-plane/.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "NO ASan report, and that is the finding rather than a gap: the read leaves the PLANE, not the ALLOCATION, so no redzone sits where it lands. MEASURED two-sided 2026-10-06 -- silent on both arms, exit 0. The positive control for the detector is a sibling corpus rather than a contrived case: memcached/plain-heap-repros/00 crosses the malloc bound and ASan reports it in the same tree on the same day.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "PREDICTED: the sequence completes. The crossing stays inside one av_malloc, so a per-allocation bound is in bounds for it and the bounds-only arm cannot see it. NOT MEASURED -- this corpus has no capstone-domain runner.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: the sequence completes, for the spatial arm's reason plus its own -- revocation has nothing to fire on while the frame is alive. A DISCRIMINATING reading needs an adapter that narrows each plane, which is port work rather than a case, and is the relationship chunks has to the wmem corpus. NOT MEASURED.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: completes -- mode 0 bounds the allocation, and the crossing stays inside it.",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset after sourcing the project environment, and no SDK, purecap sysroot or image exists here."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: completes -- mode 1 adds temporal protection and no lifetime ends here.",
+      "note": "UNMEASURABLE ON THIS HOST, same check as the arm above."
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, NOT MEASURED: completes. CHERI bounds the frame's one AVBuffer, and the crossing stays inside it, so the row is the nested-spatial tie the project already states -- a porting gap rather than a hardware one.",
+      "note": "UNMEASURABLE ON THIS HOST, same check as the PoisonCap arms."
+    }
+  },
+  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plane/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner, and a discriminating reading would need a plane-narrowing adapter that does not exist yet."
+}

@@ -41,8 +41,8 @@ An access that leaves a bound. Built from upstream defects:
 |---|---:|---:|---:|---|
 | memcached | **3** | **1** | **4** | `allocator-repros/05-07` (`slabs.c` chunks) and `plain-heap-repros/00` (`ddee3e2`, one byte past a `calloc`) |
 | tshark | **5** | 0 | **5** | `wmem-repros/13-17` — cursor skip, fixed-offset loop, negative index, parity write, off-by-one size |
-| FFmpeg | 0 | **3** | **3** | `subobject-repros/00-02` — three members written past, inside one `av_malloc` |
-| **total** | **8** | **4** | **12** | |
+| FFmpeg | **1** | **3** | **4** | `plane-repros/00` (`b7946098b1`, one row past a frame plane) and `subobject-repros/00-02` (members inside one `av_malloc`) |
+| **total** | **9** | **4** | **13** | |
 
 And the **synthetic baseline**, which carried the not-nested spatial row alone until
 `plain-heap-repros/00` landed and which still does the job no upstream case can -- showing
@@ -53,54 +53,35 @@ the arms discriminate at `malloc` granularity on demand:
 | fx2 `heap_neighbour`, fx3 `heap_one_past` | all three app ports | the standing malloc-granular control: `level0` RETURN, `shrink` FAULT `oob` |
 | fixtures 20, 21 | memcached (new, 2026-10-05) | two more class-A probes, modelled on historical defects: **measured 15/15**, `results/2026-10-05-qemu-classa-fixtures/` |
 
-### The one remaining zero that IS a gap: FFmpeg nested spatial
+### FFmpeg nested spatial: the cell is filled, and ASan's silence is the finding
 
-FFmpeg contributes 3 not-nested spatial cases and **0 nested** ones, and unlike the zeros discussed
-below this one is a genuine gap with a named candidate.
+It stood at 0 and is now `bug-corpora/ffmpeg/plane-repros/00` — `b7946098b1`,
+`swscale/alphablend`, *"don't overread alpha plane on subsampled odd size"*. On the last subsampled
+row the vertical average takes the alpha row **below the plane's last**, and the fix says so in one
+added line: `int subsample_row = y_subsample && (y << y_subsample) + 1 < lum_h;`.
 
-**`9edd06f861` — `avcodec/proresenc_kostya`, "fill macroblock rows past the end of the bottom
-field".** Verified live at our pin, two-sided: the vulnerable expression
-`avctx->height / ctx->pictures_per_frame` occurs **4 times** in `n9.0.1`'s
-`libavcodec/proresenc_kostya.c`, the fix's marker `picture_height` **0 times**, with `encode_slice`
-at 5 occurrences as the positive control that the search reaches that file at all. The read is
-`src = pic->data[i] + line_add * pic->linesize[i]` passed to `get_slice_data` with that height, so
-for an interlaced frame the encoder reads **past the bottom field's last row**.
+**Why it is nested, measured rather than assumed.** `ff_sws_alphablendaway` reads the caller's
+planes (`const uint8_t *const src[]`), and `av_frame_get_buffer` carves every plane of a frame from
+**one** `AVBuffer`. A `YUVA420P` frame reports `buf[1] == NULL` with **1024 bytes of slack after the
+alpha plane inside that buffer**, so a whole row past the plane is still inside the allocation. The
+case asserts both facts itself rather than trusting the note.
 
-**Why that is the nested shape.** The overflowed object is a *frame plane*, and the planes of a
-frame from `av_frame_get_buffer` are carved from **one** `AVBuffer` — literally the nested note the
-triage tool carries for FFmpeg. A crossing from one plane into the next stays inside that single
-allocation, so per-`malloc` bounds are in bounds for it and only a plane-granular adapter could
-separate them. Same structure as tshark's wmem chunks, one axis over.
+**Measured 2026-10-06**, `results/20261006-native-plane/`: buggy `crossed=1 contained=1 damage=1`,
+fixed `crossed=0 contained=1 damage=0`, and **ASan silent on both arms**. That silence is the row's
+finding, not a gap — the read leaves the *plane*, not the *allocation*, so no redzone sits where it
+lands. The detector is not merely assumed to work: the same tree, the same day, records
+`memcached/plain-heap-repros/00` crossing the `malloc` bound and ASan reporting it. **The pair is
+the project's axis, measured rather than argued.**
 
-**What building it would and would not buy.** It would move this cell from 0 to 1 and give FFmpeg
-its first nested spatial case. It would **not** by itself produce a discriminating reading: FFmpeg's
-existing arms narrow pool buffers, not frame planes, so without a new adapter the case would read
-"completes on every arm" — a legitimate measured row of the same kind as the three sub-object cases,
-and the `partial²` verdict again. A discriminating cell needs a plane-narrowing port, which is new
-port work rather than a new case. Before building, check the allocation's padding: `linesize` is
-aligned and padded, so the crossing must be shown to leave the *plane* in a frame whose planes are
-actually adjacent.
+**What it does not yet buy.** `spatial` and `sublet` are declared predictions to *complete*, because
+nothing in the port narrows frame planes today. A discriminating reading needs a plane-narrowing
+adapter — port work rather than a case, the relationship `chunks` has to the wmem corpus. Until that
+exists the row measures the gap rather than closing it.
 
-**A second candidate, and the stronger one: `b7946098b1`,** `swscale/alphablend`, "don't overread
-alpha plane on subsampled odd size". It reads the alpha row *below the last one*, and the fix says
-so in one line — `int subsample_row = y_subsample && (y << y_subsample) + 1 < lum_h;` stops the
-`+ alpha_step` row being used when there is no next row. The pointer is the **caller's**:
-`ff_sws_alphablendaway` takes `const uint8_t *const src[]` and sets `a = src[plane_count] + ...`, so
-the object is a frame plane and the shape is nested. Fixed at our pin — `subsample_row` occurs 5
-times in `n9.0.1`'s `libswscale/alphablend.c`, the vulnerable `x_subsample || y_subsample` form 0
-times, with `ff_sws_alphablendaway` present as the positive control — which under the corrected
-criterion makes it a **fix-reversal case exactly like `plain-heap-repros/00`**, not a disqualifier.
-
-**What a case must still establish, and it is the whole difficulty:** that the read leaves the
-PLANE and stays inside the frame's single `AVBuffer`. `av_frame_get_buffer` aligns `linesize` and
-pads, and for a planar format with alpha the alpha plane may be last — in which case one row past it
-leaves the whole allocation, which would make the case class A and leave this cell empty. The layout
-must be **asserted in the case**, the way the sub-object cases assert their offsets, never assumed.
-
-Two weaker candidates from the same pass, allocation sites **not** opened: `56309e476a`
-(`vf_vif`, index mirroring with small dimensions) and `2a20737f66` (a **revert** of a bwdif
-heap-overflow fix, so provenance needs care before it is called a defect). Disqualified on sight as
-not in our build: `884590dd4a` (AltiVec/PPC), `8b4fad11ac` (LoongArch), `ffe0104574` (CUDA).
+`9edd06f861` (ProRes, a field crossing) remains a live-at-pin candidate for a second case.
+`30c6667dad` was disqualified on inspection: its overread is of the OBMC window table, not a frame
+plane. Still unopened: `56309e476a`, `1168447626`, `041d4f010e`, `c79dfd29e6`. Disqualified as not
+in our build: `884590dd4a` (AltiVec/PPC), `8b4fad11ac` (LoongArch), `ffe0104574` (CUDA).
 
 ### Why the not-nested spatial column has no live upstream defect in it
 
@@ -175,7 +156,7 @@ has rather than what it might:
 |---|---|---|
 | memcached, not-nested spatial | **BUILT** — `plain-heap-repros/00` (`ddee3e2`) | an unclamped `fgets` scan leaves `calloc(1, sb.st_size)`; measured two-sided on both native arms, and ASan reports it |
 | tshark, not-nested spatial | **none** | `7ffc11e38f` was retracted as hardening; the cell is still empty and its candidates are the 22 unread |
-| FFmpeg, **nested** spatial | candidates only — see the section above | a frame-plane crossing, ownership and padding still to be opened |
+| FFmpeg, **nested** spatial | **BUILT** — `plane-repros/00` (`b7946098b1`) | one row past a frame plane, inside the frame's single `AVBuffer`; measured two-sided, and ASan is silent |
 
 They are **candidates until built and measured**, and neither is counted in any table yet.
 
@@ -192,10 +173,10 @@ discriminate at `malloc` granularity, which is a different job from counting ups
 | | nested | not nested | total |
 |---|---:|---:|---:|
 | temporal | **22** | **5** | **27** |
-| spatial (upstream reductions) | **8** | **4** | **12** |
-| **total** | **30** | **9** | **39** |
+| spatial (upstream reductions) | **9** | **4** | **13** |
+| **total** | **31** | **9** | **40** |
 
-**30 of 39 are instances of nesting (77%).** On the spatial side specifically, 8 of 12. Add the
+**31 of 40 are instances of nesting (78%).** On the spatial side specifically, 9 of 13. Add the
 synthetic baseline probes and the not-nested spatial row grows further, but those are probes and
 are kept out of the defect count on purpose.
 
@@ -207,7 +188,7 @@ are kept out of the defect count on purpose.
 |---|---:|---:|---:|
 | temporal, 22 nested | **0 of 22** | **21 of 22** | **22 of 22** |
 | temporal, 5 not nested | **0 of 5** | **5 of 5** | tshark **2 of 2** |
-| spatial, 12 upstream | **6 of 11 measured** | **6 of 11 measured** | tshark **5 of 5** |
+| spatial, 13 upstream | **6 of 11 measured** | **6 of 11 measured** | tshark **5 of 5** |
 
 - **Temporal, 0 of 22 without protection, measured** — not predicted. A bound cannot see a dead
   object: the stale address is in bounds by construction.
@@ -255,7 +236,7 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **18** | 4 |
-| spatial, 12 upstream | **0** | **0** | 12 |
+| spatial, 13 upstream | **0** | **0** | 13 |
 
 - **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
   - tshark 13 — `results/20260921-cheribsd/` (`matrix.tsv`, `arm=cheribsd`): expected complete,
