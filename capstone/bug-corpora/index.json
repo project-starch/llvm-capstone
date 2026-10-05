@@ -97,6 +97,44 @@
       "where": "capstone/bug-corpora/ffmpeg/pool-repros"
     },
     {
+      "program": "ffmpeg",
+      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
+      "title": "Upstream FFmpeg spatial defects that cross a bound BETWEEN TWO MEMBERS of one allocation",
+      "upstream": {
+        "version": "n9.0.1",
+        "port": "capstone/ports/ffmpeg/buffer-pool"
+      },
+      "cases": 3,
+      "case_schema": "case-json",
+      "case_macro": "FF2",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential",
+        "backing"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 3
+      },
+      "runners": [
+        "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "evidence": [
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. All three cases are LIVE at the n9.0.1 pin. No arm we have catches any of them; the oracle is the upstream fix, and the ASan arm is measured blind with a positive control. Triage: docs/ref/ffmpeg-spatial-defect-triage.md.",
+      "where": "capstone/bug-corpora/ffmpeg/subobject-repros"
+    },
+    {
       "program": "httpd",
       "boundary": "apr_pool_t over apr_allocator_t",
       "title": "A consumer of APR's pool allocator reusing a destroyed pool",
@@ -183,12 +221,12 @@
     {
       "program": "memcached",
       "boundary": "slabs and the per-thread object cache",
-      "title": "Temporal defects in consumers of memcached's slab classes and object cache",
+      "title": "Consumer-side defects in memcached's nested allocators: five temporal, three spatial",
       "upstream": {
         "version": "1.6.45",
         "port": "capstone/ports/memcached/allocators"
       },
-      "cases": 5,
+      "cases": 8,
       "case_schema": "case-json",
       "case_macro": "MC",
       "required_arms": [
@@ -204,7 +242,7 @@
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
         "true": 1,
-        "false": 4
+        "false": 7
       },
       "runners": [
         "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",
@@ -217,7 +255,7 @@
         "CVE-2018-1000127"
       ],
       "shape_table": true,
-      "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port.",
+      "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port. Cases 5-7 are SPATIAL, added 2026-10-05 from a SHAPE search over item-size computations (item_make_header / ITEM_* / do_item_alloc) rather than a wording filter -- the wording filter found 0 class-B defects here, and these three have subjects that say 'corruption' rather than 'overflow', which is exactly why it missed them. See docs/ref/memcached-spatial-defect-triage.md. This corpus's .gitignore keeps run summaries OUT of the repository by design -- 'the case files' status carries the outcome' -- so cases 5-7's measured readings live in their status fields and in docs/ref/memcached-spatial-defect-triage.md section 6, not in a committed results/ bundle.",
       "evidence": [
         "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects"
       ],
@@ -253,10 +291,10 @@
         "version": "4.0.0-rc2",
         "port": "capstone/ports/mruby/app"
       },
-      "cases": 0,
-      "case_schema": "case-json",
-      "status": "triaged",
-      "live_in_pin_recorded": false,
+      "cases": 23,
+      "case_schema": "script-trigger",
+      "status": "measured",
+      "live_in_pin_recorded": true,
       "live_in_pin_note": "No cases are cut to the schema yet. Liveness is recorded per row in ledger.json instead, and it is measured rather than asserted: a row is here only because its own upstream test fails at the pin and passes at master. The rows are regenerated by probe/extract.py from an mruby clone, so this corpus carries the ledger and the harness rather than 674 generated files.",
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "advisories": [],
@@ -265,7 +303,23 @@
         "capstone/ports/mruby/app",
         "xlang/repro"
       ],
-      "note": "The published-advisory route is nearly empty at this pin: of 44 CVE/GHSA entries for mruby, 43 are already fixed in 4.0.0-rc2, and of 78 OSS-Fuzz OSV advisories, 73 are. This corpus exists because the defects that ARE live are the ones fixed after the pin, and upstream's own regression tests are the way to reach them.",
+      "note": "ledger.json is the triage of the whole release: 165 defects live at the pin, found by extracting the Ruby test upstream added with each fix and running it at the pin and at master. The 23 cases here are the measured subset: every case on which a Capstone arm reports. They were selected by MEASUREMENT, not by the ledger, which is why 5 of them are not ledger rows at all -- their tests pass at the pin, so the ledger's 'fails at the pin' rule could never admit them, and host ASan is what found them. 17 of the 23 are spatial or temporal; the other 6 are 4 null dereferences, one type confusion and one C-stack exhaustion, kept because they are what the arms actually reported and dropping them would make the arms' own numbers unreproducible. sysalloc-bounds is the baseline: per-object heap bounds are what applications get by default since PR #170, so a catch is a case the bounds arm does not fault on.",
+      "case_number_base": 1,
+      "required_arms": [
+        "sysalloc-none",
+        "sysalloc-bounds",
+        "sublet-gc",
+        "cheribsd-revocation"
+      ],
+      "evidence": [
+        "capstone/bug-corpora/mruby/release-differential/results/20261006"
+      ],
+      "runners": [
+        "capstone/ports/mruby/app/build-mruby-domain.sh"
+      ],
+      "expect_live_in_pin": {
+        "true": 23
+      },
       "where": "capstone/bug-corpora/mruby/release-differential"
     },
     {
@@ -348,12 +402,12 @@
     {
       "program": "wireshark",
       "boundary": "wmem (block, block_fast)",
-      "title": "Dissector-side temporal defects in consumers of Wireshark's wmem pools",
+      "title": "Dissector-side defects in consumers of Wireshark's wmem pools: thirteen temporal, five spatial",
       "upstream": {
         "version": "4.6.8",
         "port": "capstone/ports/wireshark/wmem"
       },
-      "cases": 13,
+      "cases": 18,
       "case_schema": "case-json",
       "case_macro": "WM",
       "required_arms": [
@@ -373,7 +427,8 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "false": 13
+        "false": 16,
+        "true": 2
       },
       "runners": [
         "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py"
@@ -383,11 +438,15 @@
         "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu",
         "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-cheribsd",
         "capstone/bug-corpora/wireshark/wmem-repros/results/20260921-qemu-negative-control",
-        "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port"
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20260929-qemu-chunk-port",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-ON",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-OFF",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-ON",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-OFF"
       ],
       "advisories": [],
       "shape_table": true,
-      "note": "No triage inventory under docs/ref/ yet; the README carries the selection.",
+      "note": "Cases 0-12 are temporal; cases 13-17 are SPATIAL, from the hunt recorded in docs/ref/wireshark-spatial-defect-triage.md. Cases 14 and 15 are the corpus's only rows LIVE at the v4.6.8 pin -- every other row, temporal and spatial alike, is a fix-reversal. Note for anyone reading the spatial rows: every arm of this harness narrows a wmem allocation to its request (wm_narrow(), ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15), so a spatial crossing faults on ALL arms and these rows do not discriminate the chunk port. Case 13's run established that by refuting its own prediction.",
       "where": "capstone/bug-corpora/wireshark/wmem-repros"
     },
     {
@@ -1112,7 +1171,7 @@
     }
   ],
   "issues": {
-    "open": 102,
+    "open": 105,
     "resolved": 77
   },
   "fixtures": [
@@ -1127,24 +1186,25 @@
   "cases_by_corpus": {
     "capstone/bug-corpora/cpython/pymalloc-repros": 20,
     "capstone/bug-corpora/ffmpeg/pool-repros": 4,
+    "capstone/bug-corpora/ffmpeg/subobject-repros": 3,
     "capstone/bug-corpora/httpd/apr-pool-repros": 1,
     "capstone/bug-corpora/httpd/bucket-repros": 8,
-    "capstone/bug-corpora/memcached/allocator-repros": 5,
+    "capstone/bug-corpora/memcached/allocator-repros": 8,
     "capstone/bug-corpora/mruby/gc-slot-repros": 0,
-    "capstone/bug-corpora/mruby/release-differential": 0,
+    "capstone/bug-corpora/mruby/release-differential": 23,
     "capstone/bug-corpora/postgres/mmgr-repros": 8,
     "capstone/bug-corpora/sqlite/capi-repros": 19,
-    "capstone/bug-corpora/wireshark/wmem-repros": 13,
+    "capstone/bug-corpora/wireshark/wmem-repros": 18,
     "xlang/lua-cdp": 13,
     "xlang/repro": 15,
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 78,
+  "cases_here": 112,
   "cases_xlang": 30,
-  "cases_total": 108,
-  "live_true": 29,
-  "live_false": 21,
+  "cases_total": 142,
+  "live_true": 57,
+  "live_false": 27,
   "live_not": 28,
   "advisories_total": 14,
   "renames": {
@@ -1208,13 +1268,13 @@
     ]
   },
   "gaps": [
+    "`capstone/bug-corpora/ffmpeg/subobject-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.",
     "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
     "`capstone/bug-corpora/memcached/allocator-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
-    "`capstone/bug-corpora/mruby/release-differential` is triage only -- nothing built.",
-    "`capstone/bug-corpora/mruby/release-differential` does not record live_in_pin: No cases are cut to the schema yet. Liveness is recorded per row in ledger.json instead, and it is measured rather than asserted: a row is here only because its own upstream test fails at the pin and passes at master. The rows are regenerated by probe/extract.py from an mruby clone, so this corpus carries the ledger and the harness rather than 674 generated files.",
+    "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/mmgr-repros`: 3 of 8 cases have a PROVENANCE.md.",
     "`capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.",
     "`capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.",
@@ -1231,6 +1291,7 @@
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
     "`capstone/ports/sqlite/app` is a complete application with no corpus.",
     "`capstone/ports/wireshark/app` is a complete application with no corpus.",
+    "`capstone/bug-corpora/ffmpeg/subobject-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/mruby/release-differential` is not referenced by any port.json."
   ]
 }

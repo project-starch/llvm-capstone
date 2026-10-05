@@ -1,0 +1,26 @@
+{
+  "case": 20,
+  "upstream_fix": "94993eede",
+  "title": "a visibility change runs before the method table is prepared, so mt_put dereferences NULL",
+  "consumer": "src/class.c",
+  "class": "null-deref",
+  "trigger": "trigger.rb",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in 94993eede (94993eedeea669204472113ec273f173c8f93945) (2026-08-21), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: a report my first pattern missed (with MRB_HEAP_PAGE_SIZE=1: a report my first pattern missed); the same case on master: no report",
+  "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-none": {
+      "oracle": "capability fault, cause 24"
+    },
+    "sysalloc-bounds": {
+      "oracle": "capability fault, cause 24"
+    },
+    "sublet-gc": {
+      "oracle": "capability fault, cause 24"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation not run"
+}

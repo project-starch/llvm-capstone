@@ -93,12 +93,21 @@ if stage runtime; then
   if [[ $HEAP == sublet-gc ]]; then
     EXTRA=(-DCAPSTONE_APPLICATION_GRANT_BYTES="$(( (2 << HEAP_LOG) + (32 << 20) ))")
   fi
+  # MRBD_SDK_CFLAGS adds C flags to the SDK's own -O1. It must arrive as ONE cmake
+  # argument: a flag list that is word-split becomes separate -D arguments, and cmake
+  # takes an unknown -D as a cache variable and silently compiles without it, so the
+  # arm builds and is byte-identical to the default one (seen 2026-10-05, the
+  # unprotected control). CMAKE_C_FLAGS itself belongs to the domain toolchain
+  # (-nostdinc, -isystem ...); overriding that drops the sysroot and nothing compiles.
+  if [[ -n ${MRBD_SDK_CFLAGS:-} ]]; then
+    EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${MRBD_SDK_CFLAGS}")
+  fi
   bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
     -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
-  printf '%s\n' "$HEAP" > "$O/.heap"
+  printf '%s\n' "$HEAP ${MRBD_SDK_CFLAGS:-}" > "$O/.heap"
 fi
-[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" && -x "$O/capstone-cc" ]] \
+[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP ${MRBD_SDK_CFLAGS:-}" && -x "$O/capstone-cc" ]] \
   || { echo "rebuild the application SDK (MRBD_FROM=runtime)" >&2; exit 2; }
 export CAPSTONE_SDK=$O
 export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH

@@ -1,0 +1,27 @@
+{
+  "case": 13,
+  "upstream_fix": "4a386f80e",
+  "title": "mruby-pack computes a uuencode length with signed overflow and writes past the destination buffer",
+  "consumer": "mrbgems/mruby-pack/src/pack.c",
+  "class": "spatial",
+  "trigger": "trigger.rb",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in 4a386f80e (4a386f80e6be7a940fc8f1c154dc66e4570dccdb) (2026-07-29), which is in master and postdates the 4.0.0-rc2 pin (2026-03-12); the pin's tree has no such fix. Host ASan at the pin: heap-buffer-overflow (with MRB_HEAP_PAGE_SIZE=1: heap-buffer-overflow); the same case on master: no report",
+  "fidelity": "the trigger is the Ruby test upstream added with its fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-none": {
+      "oracle": "completes and the harness reports PASS: the defect executes and is silent in every sense this arm can see"
+    },
+    "sysalloc-bounds": {
+      "oracle": "capability fault, cause 7"
+    },
+    "sublet-gc": {
+      "oracle": "capability fault, cause 7"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation not run",
+  "allocator_layer": "a String buffer (system allocator)"
+}
