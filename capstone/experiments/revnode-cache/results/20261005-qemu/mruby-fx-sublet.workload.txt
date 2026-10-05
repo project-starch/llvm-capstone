@@ -1,0 +1,14 @@
+M1 hello
+M2 array 2000 4002000
+M3 hash 3000 2999
+M4 symbols foo,bar,literal_sym true
+M5 string 2390 ab0ab1ab2a
+M6 gc ok
+M7 fib 6765
+M8 deep 500
+M9 rescue ArgumentError
+M10 float 4.5 2.5 1180591620717411303424
+M11 file 50
+M12 dir true
+M13 pack [1, 2, 3] 03.14
+SMOKE_DONE

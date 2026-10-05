@@ -7,6 +7,8 @@ probes into a port's domain and records what it measured.
 
     a1-sqlite-reuse/    A1: does level 0 see the objects in the custom allocator? SQLite's
                         lookaside pool over memsys5, unprotected and under the Sublet port
+    revnode-cache/      How often a revocation-node cache would hit: capstone-qemu traces every
+                        node access, a simulator replays it against LRU caches of every shape
 
 Each directory has a `run.sh` that builds through the port, runs its control first and prints a
 verdict against what the directory records; a control that fails exits 75 with no verdict, as in

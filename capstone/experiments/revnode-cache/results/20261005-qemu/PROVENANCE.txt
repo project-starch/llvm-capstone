@@ -1,0 +1,32 @@
+# provenance, run 2026-10-05 (chain4)
+capstone-qemu perf/revnode-trace 191c7442fed80ded53e0eef42d47ca1383b37a40
+llvm-capstone base origin/dev 792369d1a1b847734a6de2c151f0c19711268b48
+CAPSTONE_REV_NODES=16777216 CAPSTONE_GP_NONLIN=1 (capstone_vm default)
+c8e8551b202ee44bf5f887717a87ae6e6ef8d43e25c783e42740e5fb9fc3ad7e  build/qemu-system-riscv64
+e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b  boot/Image
+db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d  firmware/fw_jump.elf
+fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f  cheap/rootfs.ext2
+c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf  module/capstone.ko
+546da6eda2952cb0f6995d907c0e32b41460fd342870ef03e48001076d98ab94  guest/capstone-exec (SQLite and mruby launchers, identical)
+269c979b58637ec633dbc2c657c5ad19bc45fa142fcbaaf5d50e346e8fc77ec5  share/mruby-fx-level0.dom
+a0b298510de220ab8e2563076ac36863e126165f8e34b746e918e46077a6b774  share/mruby-fx-sublet.dom
+703ddb70849183db249041f16bfc251bf866089af9af40707d09e0e915d72605  share/mruby-fx-sublet-gc.dom
+16718df7d583aa21d99bdcd1a01fbde3302ffc7bec7672c897a9952b8fe7af54  share/smoke.rb
+d2abaa03d1ecbc6b75e701f03a8272287579c23ad90dbfd093d0dc7aa60f62aa  app-O2/speedtest1.dom
+9d89fb33e702cee02f8f7b7b894f28754156979b339dae02af2d63ea76dcaa9e  app-O2/sqlite3.dom
+
+rc=0
+wall=0s
+WORKLOAD-DONE boot-only
+rc=0
+wall=25s
+WORKLOAD-DONE sqlite-O2
+rc=0 smoke_done=1
+wall=28s
+WORKLOAD-DONE mruby-fx-sublet-gc
+rc=0 smoke_done=1
+wall=20s
+WORKLOAD-DONE mruby-fx-sublet
+rc=0 smoke_done=1
+wall=541s
+WORKLOAD-DONE mruby-fx-level0
