@@ -49,20 +49,30 @@ partial clear leaving a live reference, not an out-of-bounds write; tshark fixtu
 
 ## 2. Spatial exists only as synthetic probes — and Sublet does catch most of them
 
-Every `FAULT oob` row across the three ports' `app/host/safety-expect.txt`:
+Every spatial probe across the three ports' `app/host/safety-expect.txt`. Fixture numbers differ
+per port, so each row names them explicitly.
 
 | probe | `level0` | `shrink` / `sublet` | nested arm |
 |---|---|---|---|
-| fx2 `heap_neighbour`, fx3 `heap_one_past` | RETURN | **FAULT `oob`** | `chunks`, `slabsublet*` FAULT; FFmpeg pool arms not registered |
-| fx7 `global_oob`, fx8 `stack_oob` (controls) | FAULT | FAULT | FAULT |
-| tshark fx9 `global_merged` | RETURN | RETURN | RETURN |
+| `heap_neighbour`, `heap_one_past` — fx2/fx3 in all three ports | RETURN | **FAULT `oob`** | `chunks`, `slabsublet*` FAULT; FFmpeg pool arms **not registered** for fx2/fx3 |
+| `global_oob`, `stack_oob` (controls) — fx7/fx8 in tshark and memcached, **fx8/fx9 in FFmpeg** | FAULT `oob` | FAULT `oob` | FAULT `oob` |
+| `global_merged` — tshark fx9, FFmpeg fx10 (memcached has none) | RETURN | RETURN | RETURN (`chunks` too) |
 | **tshark fx12 `wmem_neighbour`** | RETURN `c000ee` | **RETURN `c000ee`** | `chunks` **FAULT `oob`** |
 | **memcached fx9 `slab_neighbour`** | RETURN `9000ee` | **RETURN `9000ee`** | `slabsublet0/1` **FAULT `oob`** |
 | **FFmpeg fx16 `rs_underflow`** | RETURN | **RETURN** | `pool0`/`pool2`/`poolsublet` **FAULT `oob`**; `poolstock` RETURN |
 
-So `sublet` **faults on plain spatial** (fx2/fx3, where `level0` returns) and returns on **exactly
-three cells** — all three inside a nested allocator's block. Those three are the only
-nested-discriminating spatial cells in these programs: 6 `FAULT oob` rows, all measured.
+So `sublet` **faults on plain spatial** (fx2/fx3, where `level0` returns). It returns on four spatial
+probes: the **three nested-discriminating cells** — tshark fx12, memcached fx9, FFmpeg fx16, the only
+three in these programs, 6 `FAULT oob` rows, all measured — **plus `global_merged`, which no arm
+catches at all.**
+
+**`global_merged` is a spatial miss that is not an allocator problem**, which is why it sits outside
+the nested story. The compiler merges two 64-byte statics into one `.L_MergedGlobals`, so the bound
+derived for either covers the pair; reading the second through the first is in-bounds. No allocator
+is involved, nested or otherwise, and nothing in a lease mechanism addresses it — **CHERI has the
+identical hole**, for the identical reason. It is recorded here so the row is not later miscounted as
+a nested-spatial gap. (tshark's own catalogue notes it was added after FFmpeg fixture 8 showed a
+global's bounds covering a merged group rather than the object alone.)
 
 **FFmpeg fx14 `pool_one_past` is the instructive non-discriminator.** It faults on `poolstock` too,
 because `AVBufferPool` hands out individually `malloc`'d buffers — malloc-granular bounds already
@@ -121,10 +131,14 @@ Two independent reasons, which must not be conflated.
 > uninitialised rows, base CHERI is already sufficient — both systems catch them synchronously.
 > Capstone claims **no** advantage here. Its advantage is confined to the *temporal* class."
 
-The reason is structural. Spatial safety needs only **bounds**, and CHERI has monotonic unprivileged
-bounds derivation (`paper/sections/06-discussion-and-related-work.tex:63-66`), so a CHERI nested
-allocator could narrow to each suballocation exactly as our `chunks` arm does. **The nested-spatial
-gap is a porting gap, not a hardware gap** — both systems close it by changing the allocator.
+The reason is structural. Spatial safety needs only **bounds**, and the paper's own discussion says
+CHERI has them — *"CHERI supports monotonic, unprivileged bounds derivation, so a \nestedalloc can
+bound each suballocation … Temporal invalidation requires additional machinery"*
+(`sections/06-discussion-and-related-work.tex`, under `\para{From spatial bounds to temporal
+authority.}` — quote anchor rather than a line number, since Overleaf moves lines). So a CHERI
+nested allocator could narrow to each suballocation exactly as our `chunks` arm does. **The
+nested-spatial gap is a porting gap, not a hardware gap** — both systems close it by changing the
+allocator.
 
 Temporal is the opposite case: the stale address is legitimate and in-bounds, so no bound helps. It
 needs revocation, and revocation *inside* a nested allocator needs the lease mechanism, which bounds
