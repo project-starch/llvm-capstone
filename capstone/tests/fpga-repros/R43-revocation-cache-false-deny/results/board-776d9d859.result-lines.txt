@@ -1,0 +1,45 @@
+# R-29/S-10b fix bitstream caplifive_supcall_776d9d859.bit (capstone-ariane sup-call 776d9d859, on top of 715bdd1fe;
+# sha256 3c91335acc7c...). Flashed 2026-10-05 16:58-17:00 on the lead's direct word; resident name read back after the
+# power cycle. The R-43 acceptance list UNCHANGED: same images, same order and kit as 715bdd1fe
+# (board-715bdd1fe.result-lines.txt, the reference for every row), boots tagged s7a1..s7a10, 17:16-19:10.
+# Pre-registration: llvm-capstone b0-silicon-runtime docs/plans/b0-silicon-delegated-runtime.md ("Pre-registered for the
+# R-29/S-10b fix bitstream") and each boot's own PRE line (run-accept.sh). Cite a boot by its image hash.
+# The "(715: ...)" figures are quoted from board-715bdd1fe.result-lines.txt: this run wrote the same per-boot paths
+# (board-s7aN-b1, ladder-revival/results-s7cap-K0.txt), so 715's raw logs are gone. A board-log-forensics agent
+# re-derived every 776 row from the primary logs: all ten match.
+
+== a1 -- s7a1: B1 workload regression (R1 079b1f3a, stock k800) -- PASS ==
+RESULT k800 retval=4 instret=1089 twice; R1 m1 end arm=drop stop=target alloc=160 minted=191 revoked=160 retained=0
+released=0 (as 715bdd1fe); speedtest1-ran=1320222911 (identical); 0 refused, no cause 25; sw=204 0x02, sw=208 0x00 after
+the opening k800 (EMPTY by refusal_record.decode; the log's printed label is the legacy S-07 decoder's). The post-harness reads are 0xfe (VOID), the per-domain path's known limit, as on 8f6a0af98.
+== a2 -- s7a2: B3 R1 warm, 12 invocations, relinked k800 589ceee3 -- PASS ==
+60/60 R1 point lines bad=0 ok=1; 12 x released pool rc=1; 0 refused; REVOKE cost n=1/4/16 rv=95/194/847 (715: 92/194/851).
+== a3 -- s7a3: B4 R1 cold, wide rep 1 -- PASS ==
+12/12 points bad=0 ok=1; speedtest1-ran=1320264012 (identical); k800 retval=4 twice.
+== a4 / a5 / a6 -- s7a4..s7a6: live16 / live128 / live512 (R-43's own test) -- PASS ==
+R1 m1 live-sweep ok live=16 sum=544, live=128 reads=256 sum=4352, live=512 reads=1024 sum=17408 expect=17408; k800
+retval=4 twice in each; no cause 25.
+== a7 -- ladder at K=0 (ladder-revival/results-s7cap-K0.txt) -- PASS ==
+17/17 rungs retval == oracle; instret IDENTICAL on 17/17 to 36a641e0b's ladder (results-sccap-K0.txt, 2026-10-02);
+mcycle -1.74 .. +0.37 % against it. 715bdd1fe's own ladder file was overwritten by this run (same path), so the
+comparison is against 36a641e0b, which 715's row matched.
+== a8 -- P1 cell 5 -O2 + native (board-b80s-s7-p1o2-c5) -- PASS ==
+Verification Hash 112006 38bb59fd (cell 5 and native); HEAP 2097152 DROPPED 0; lookasides 25010 / 25122; SPEEDTEST1
+cycles 1,157,322,521 (715: 1,157,062,268, +0.022 %); native warm 856,090,127 (715: 855,939,619, +0.018 %); ratio
+1.3519 (715: 1.3518). One boot banner after load_image.
+== a9 -- P1 cell 6 -O2, the real workload (board-s7-p1o2-c6) -- PASS ==
+Verification Hash 112006 38bb59fd; HEAP 1344064 DROPPED 0; lookasides 25010; sublet: split=5568 mrev=37970
+delin=32569 revoke=37970 init=5401 (exact); cycles 1,242,101,778 (715: 1,241,702,268, +0.032 %); RR/done reached.
+== a10 -- s7a10: the R-35 stale probe, last (35fb3fec, wedges by design) -- PASS ==
+opening k800 retval=4 instret=1089; ENT1; trap log sw=255 0x99 (mcause 25); mepc 0x81a04354 = DBAS 0x81A00000 + 0x4354;
+tval 0xac100000; refusal record sw=204 0x11 LATCHED, arm probe-DEAD, revnode id 95, parity ok; rev_node_head 0x84
+(132), serving_idx 0x74 (116), sw=224 0x9f, sw=225 0x80 -- every byte as on 715bdd1fe and 36a641e0b. R-35 is not
+reopened.
+
+== VERDICT ==
+All ten rows PASS as pre-registered. No HARD STOP, ENTRY-STALL, halt, refused line or extra banner. "No cause 25" in
+a1..a9 means no trap dump fired and every arm returned its value (the trap log is read only on a wedge). Identity-
+class readings are exact (retvals, instret, hashes, Sublet counts, trap bytes, refusal record), and cycle counts move
+within the noise band. With accept776 (the S-16 bare control set, 18/18 with accept715's readings, sup-
+resume-2026-10-03/results/accept776.result-lines.txt), the R-29/S-10b fix bitstream breaks nothing the R-43 list
+covers. C5u and the R-29 fix's own positive tests (b0-memcpy's unguarded arm) are reported separately.
