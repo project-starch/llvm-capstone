@@ -897,7 +897,7 @@ te by the RTL lane, 2026-09-24.
 > supervised-CALL change (the supervised domain's writable window holds only its own images, which the next escape
 > rewrites before any resume).
 
-### R-51 — after a RETURN, the resumed domain runs with an UNTAGGED PC on silicon: no PC-capability check (bounds, execute, revocation) until the next capability control-flow change; capstone-qemu keeps the PC capability, so emulator evidence of PC enforcement after a yield does not transfer `OPEN — found 2026-10-05 by reading the RTL at 776d9d859 (rtl-oracle; three quotes re-verified by the board lane) and capstone-qemu; NOT yet measured on the board; a security-model question for the lead`
+### R-51 — after a RETURN, the resumed domain runs with an UNTAGGED PC on silicon: no PC-capability check (bounds, execute, revocation) until the next capability control-flow change; capstone-qemu keeps the PC capability, so emulator evidence of PC enforcement after a yield does not transfer `OPEN — found 2026-10-05 by reading the RTL at 776d9d859 (rtl-oracle; three quotes re-verified by the board lane) and capstone-qemu; CONFIRMED ON SILICON 2026-10-05 by a matched pair on 776d9d859 (below); a security-model question for the lead`
 
 **What the RTL does.** All quotes below are at capstone-ariane 776d9d859.
 - RETURN faults unless its resume operand rs1 is an integer (`capstone_dyn_unit.anvil:329`, `rs1...!=NOT_CAP` raises
@@ -932,6 +932,23 @@ address OUTSIDE its code capability's bounds that is still mapped and executable
 - silicon executes it (no fault);
 - capstone-qemu faults with 28.
 A matched arm that makes the same jump before its first yield must fault on both.
+
+**Measured on silicon, 2026-10-05, `caplifive_supcall_776d9d859.bit`: CONFIRMED, as pre-registered.**
+- The test is the RTL lane's `r51-return-pcc.S` (capstone-ariane r51-return-pcc ef8900e2d), built as bare board
+  images. Pre-registration: board-supmon b38df514aa7e; result board-supmon 714259b26ca7, `tests/rtl-smoke/sup-resume-2026-10-03/PREREG.md` ("r51").
+- The domain's code capability covers only its stub. Each arm does an INTEGER `jalr` to `outside`, which is mapped
+  and executable but outside that capability. Only `outside` writes 0xBAD to the shared word.
+
+| arm | sha256 | readings | meaning |
+|---|---|---|---|
+| control call-retpc | a05ca464c4f683cd | as on 715bdd1fe | the boot and harness are sound |
+| r51-before (the jump at the first entry) | c42ba366eed59653 | **28**, then caller mcause 28 | the tagged PC capability is checked |
+| r51-after (the same jump after a RETURN yield) | 17c3c6a83e39cad7 | 0, **0xBAD**, caller mcause 0 | it executes, and nothing traps |
+
+- One image per power cycle, control first. The arms differ in one `-D` (`JUMP_BEFORE`).
+- Raw lines: `sup-resume-2026-10-03/results/r51-776.result-lines.txt`.
+- This matches the RTL lane's simulation of the same tree (0xBAD after the yield, 28 before it).
+- capstone-qemu was not run on these images. Its prediction, 28 in both arms, comes from reading `swap_pc`.
 
 **For the lead.** Whether this is acceptable (the code region is still bounded by the domain's memory capability),
 whether RETURN should restore the domain's PC capability, and how any paper claim about code-capability enforcement
