@@ -909,6 +909,24 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
 - **Cost:** a true hazard now waits for the store's AXI write, the cost of a fence; a same-set false candidate costs
   ~3 cycles.
 
+**Measured, 2026-10-05, after the flash (on the lead's word, 16:58-17:00).**
+- **b0-memcpy: as pre-registered.** Same image 73b7cb9a, same firmware 18d47385a38e.
+  - The UNGUARDED control now miscopies **0/96**: low 0, high 0, both 0 of 32 each. It read 94/96 (31, 31, 32) on
+    715bdd1fe.
+  - The guarded copy stays 0/96. The image therefore exits 2, which means the hazard is gone.
+  - Census rungs b0-stats and b0-stats2: 0 and 0. Boot 19:11-19:16; raw lines `/tmp/capstone/b0/board-b08-776.txt`.
+- **R-43 a1..a10: unchanged.** Identity readings are exact and a10's trap and refusal bytes are as on 715bdd1fe.
+  Every row was re-derived from the primary logs by a forensics pass. Result lines: board-supmon,
+  `fpga-repros/R43-revocation-cache-false-deny/results/board-776d9d859.result-lines.txt`.
+- **The S-16 bare set: 18/18 with accept715's readings** (accept776, board-supmon cfa9b34b9adc).
+- **C5u: unchanged.** All six tests pass, and quiet supervision costs +0.680 % (+0.686 % on 715); board-supmon
+  2a1d03e4a3c1.
+- **Corrected label:** the item "the R29 repro rung: 31/32 becomes 0/32" above is b0-memcpy's per-face numbers. R-29's
+  own reproducer is s06agg, whose acceptance is 66 -> 64. It and s10b-storebuf-primed are pre-registered on
+  board-supmon (b4efce6eabd2) and run after this.
+- **The guards stay in the build.** The memcpy guard costs one LCC per granule, and dl_bytes is the clearer code
+  either way. Retiring W-12 for memcached is a separate decision once s06agg reads 64.
+
 ## B1.0 (2026-10-05): printf on the silicon build, in QEMU
 - **The gap.** musl's `vfprintf.o` is DROPPED from the gp-captable archive by the per-member verifier: its
   `long double` needs fp128 constant pools, refused under gp-captable (ISSUES C-43; slot-allocated pools are a lead
@@ -938,6 +956,10 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     census rungs 0.
   - A MISMATCH on a `double` case only, with the integer and string cases intact, would put the defect in the
     narrowed float path on silicon, since QEMU passed the same image.
+- **Board result, 2026-10-05 19:37-19:42, 776d9d859: as pre-registered.** `B1.0 printf: 20 of 20 cases match`,
+  `RESULT b0-printf retval=0`, no MISMATCH line, census rungs 0 and 0. Firmware fw_8068f626e0d7, image
+  0751dc622b9b78df (manifest of the private image), raw lines `/tmp/capstone/b0/board-b10-776.txt`. So printf,
+  doubles included (%f/%e/%g/%a), works in a gp-captable delegated application on silicon.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
@@ -991,6 +1013,69 @@ The gp-captable interp glue has none of them. Two of start-musl.S's assumptions 
   SUPERVISED_CALL. It has never run with CSR events on silicon for a MINTED slot, only for the first context (B0).
 - **First test after B1.1-B1.5:** pthread-probe's simplest mode (create, join with a value) as a B0-pipeline image,
   APPDEFS from its CMake: CONTEXTS 15, CONTEXT_BYTES 131072, ARENA 8 MiB, DATA 1 MiB, STACK 256 KiB.
+
+## B1.1-B1.3 and B1.6 implemented (2026-10-05): one minted context runs in QEMU with fabrication OFF
+**What was built.**
+- **Monitor (caplifive-sbi `monitor/b0-managed-gp` a11d424, B1.3).** For a managed application with a globals
+  boundary, create_domain delinearizes `dom_code`, parks a NONLIN copy at `data_top - 32` beside the gp park, and
+  seals the domain with the same capability. Every other domain is byte-identical.
+- **Glue (`start-gp-captable-interp.S`, under a new `CAPSTONE_GLUE_CONTEXTS`; off, the file builds byte-identically):**
+  - The first entry splits a LINEAR context arena (`CAPSTONE_CONTEXT_ARENA_BYTES`) off the TOP of dom_data while it
+    is still linear. The top is used because the globals blob sits at the base; the cap table is then carved below
+    the arena.
+  - The code capability is read from `data_top - 32` before that split.
+  - Both values ride in cscratch across the table build, and after cap-init they go into C globals through two
+    accessors (glue-data.c).
+  - The `test:` frame takes the SDK recovery-block layout (return 0, result 16, gp 32, request 64, suspended sp 80).
+  - start-musl.S's yield and its context entry/exit/seal/offer/call routines are ported, with three gp-captable
+    changes:
+    - **B1.1:** `__capstone_context_seal` writes the minting context's gp into the start block's slot 32, and the
+      entry loads gp from there;
+    - the start function is called with an integer `jalr`;
+    - no gp-derived trap vector (B1.5 stays open).
+- **context.c (B1.3):** a seal's PC is `__capstone_silicon_entry_cap(code)`, the parked capability with its cursor at
+  `__capstone_context_entry`. With no capability parked (LCC type 7), minting returns -1 and `__clone` returns
+  ENOSYS, rather than sealing an integer PC.
+- **tls.c (B1.6):** a non-empty `.tdata` used to abort. It is now read through `__capstone_silicon_tls_image`, which
+  takes the first context's sp base plus the template's offset into the globals blob, narrowed to the template.
+  - **Found by the first run:** b1-thread links context.c's `static __thread next_ticket = 1`, so its `.tdata` is 8
+    bytes. `describe_tls` aborted, the main context never got a thread pointer, and its next delegated call faulted
+    on `tp + 0x40` (cause 24, tp = 0).
+  - A QEMU-only print run settled which context it was: the seal never ran, so it was the main one.
+- Build: `B0_CONTEXT_BYTES`/`B0_CONTEXTS`/`B0_DATA`/`B0_ARENA` in build-b0-hello.sh; `B0_GLUE_EXTRA` for glue-only
+  diagnostics.
+
+**QEMU, firmware fw-b1-a11d424, `CAPSTONE_GP_FABRICATE=0` and `=1`.**
+| image | result |
+|---|---|
+| b0-hello, contexts off (db4385ff32deddf6) | byte-identical to the lane head before these changes (glue.o c012e3a7 too); the hello line, both arms |
+| b0-hello with the contexts glue, 128 KiB arena, no thread | the hello line, rc 0, both arms |
+| legacy SDK control | 91, as always |
+| **b1-thread** (one pthread created and joined; 128 KiB arena, CONTEXTS 1, 1 MiB level0) | **`B1: thread returned 124`, rc 0, both arms** |
+
+The print variant (`B0_GLUE_EXTRA=-DCAPSTONE_GLUE_CONTEXTS_PEEK`, QEMU only) shows the path itself, so the pass is not
+some other route to 124.
+- The seal's entry is `Cap(1, 0x7, 0xe0200410, 0xe0200000, 0xe0220000)`: the monitor's code region `[base,
+  base+gpoff)` with its cursor at `__capstone_context_entry`.
+- The entry loads the start block, then gp: the cap table, `[0xe03df630, 0xe03dfc00)`.
+- It loads tp: a tagged capability over the thread's TLS, from musl's `__clone` argument.
+- The start function is an integer (0xe0202830).
+
+## B1 board runs, pre-registered 2026-10-05 before the boots (776d9d859)
+Firmware: the B0.8 recipe (`build-fpga-fw.sh`, `-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS
+-DCAPSTONE_SUPERVISE_QUIET`) with the monitor at a11d424, over a private image per boot (`b0-bake-b1{hello,thread}.sh`).
+The two images both enter at 0x10000 (R-3), so they get two boots. Rungs in each: `b0-stats`, the image, `b0-stats2`.
+- **B1a, the control for the monitor change:** b0-hello (db4385ff32deddf6) on the new monitor, whose domain now
+  enters with a NONLIN PC capability. Predicted: the hello line byte-exact, `RESULT b0-hello retval=0`, as B0.7
+  attempt 13. A failure here is the monitor change, and B1b does not go.
+- **B1b:** b1-thread (`/tmp/capstone/b1/bake-thread.dom`). **Predicted: `B1: thread returned 124`,
+  `RESULT b1-thread retval=0`.** It would be the first minted context of a gp-captable application on silicon, and
+  the first supervised STEP of a MINTED slot with CSR events there.
+  - Exit 3 with code 38 (ENOSYS) = no code capability reached the runtime.
+  - A domain fault names its pc: in `__capstone_context_entry` = the seal/entry path; in the worker = the context
+    ran.
+  - A wedge = the monitor's minted-slot path. Its apertures are read (BAKED_WEDGE_APERTURES).
+  - The R-29 hazard is fixed on this bitstream, and the memcpy guard stays on anyway.
 
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.

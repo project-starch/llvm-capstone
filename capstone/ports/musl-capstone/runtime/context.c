@@ -53,6 +53,29 @@ int __capstone_context_tid(void);
 void __capstone_hc_note_unserved(long n);
 _Noreturn void __capstone_context_exit_clear(unsigned long value, volatile int *clear);
 
+#if defined(CAPSTONE_GP_CAPTABLE_ABI) && CAPSTONE_GP_CAPTABLE_ABI
+/* gp-captable (B1.3, docs/plans/b0-silicon-delegated-runtime.md): a seal's PC is the code capability the monitor
+   parked for this application, which the glue stores in __capstone_silicon_code_cap at the first entry, with its
+   cursor moved to the entry. C cannot name __capstone_context_entry itself: it is an assembly label, and under
+   gp-captable such a reference is derived from gp and faults on silicon (C-13). NULL when nothing was parked:
+   minting then fails rather than sealing an integer PC, which silicon would run with no PC-capability check. */
+void *__capstone_silicon_entry_cap(void *code);
+extern void *__capstone_silicon_code_cap;
+static void *context_entry(void)
+{
+  void *code = __capstone_silicon_code_cap;
+  unsigned long type;
+  /* LCC's type query is total on silicon and capstone-qemu and answers cap_type - 1: 7 is NOT_CAP. */
+  __asm__ volatile ("lcc %0, %1, 1" : "=r"(type) : "r"(code));
+  if (type == 7)
+    return 0;
+  return __capstone_silicon_entry_cap(code);
+}
+#define CONTEXT_ENTRY context_entry()
+#else
+#define CONTEXT_ENTRY ((void *)__capstone_context_entry)
+#endif
+
 #define MIN_STACK_BYTES 8192
 
 static size_t tls_bytes(void)
@@ -107,6 +130,8 @@ static int mint_area(struct capstone_context *c, capstone_cap_slot *area, void *
                      unsigned long (*start)(void *), void *arg, int split,
                      unsigned long mstatus, unsigned long mie)
 {
+  if (!entry)
+    return -1;
   size_t tls = tls_bytes();
   unsigned long base = capstone_cap_base(area);
   unsigned long end = capstone_cap_end(area);
@@ -166,7 +191,7 @@ int capstone_context_mint(struct capstone_context *c, size_t area_bytes,
   capstone_cap_slot area = {0};
   if (arena_take(area_bytes, &area))
     return -1;
-  return mint_area(c, &area, __capstone_context_entry, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
+  return mint_area(c, &area, CONTEXT_ENTRY, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
 }
 
 int capstone_context_mint_words(struct capstone_context *c, size_t area_bytes,
@@ -179,7 +204,7 @@ int capstone_context_mint_words(struct capstone_context *c, size_t area_bytes,
   capstone_cap_slot area = {0};
   if (arena_take(area_bytes, &area))
     return -1;
-  return mint_area(c, &area, __capstone_context_entry, start, arg, 0, mstatus, mie);
+  return mint_area(c, &area, CONTEXT_ENTRY, start, arg, 0, mstatus, mie);
 }
 
 int capstone_context_mint_entry(struct capstone_context *c, size_t area_bytes,
@@ -203,7 +228,7 @@ int capstone_context_mint_split(struct capstone_context *c, size_t area_bytes,
   capstone_cap_slot area = {0};
   if (arena_take(area_bytes, &area))
     return -1;
-  return mint_area(c, &area, __capstone_context_entry, start, arg, 1, CAPSTONE_CONTEXT_MSTATUS, 0);
+  return mint_area(c, &area, CONTEXT_ENTRY, start, arg, 1, CAPSTONE_CONTEXT_MSTATUS, 0);
 }
 
 void capstone_context_revoke_children(struct capstone_context *c)
@@ -230,7 +255,7 @@ int capstone_context_remint(struct capstone_context *c,
   capstone_cap_slot area = {0};
   capstone_cap_move(&c->handle, &area);
   capstone_cap_clear(&c->seal);
-  return mint_area(c, &area, __capstone_context_entry, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
+  return mint_area(c, &area, CONTEXT_ENTRY, start, arg, 0, CAPSTONE_CONTEXT_MSTATUS, 0);
 }
 
 /* The first function a minted context runs (the entry glue calls it with its
@@ -433,7 +458,7 @@ static void mint_clone(struct capstone_context *c, capstone_cap_slot *area, void
   c->area_base = base;
   c->area_bytes = end - base;
   c->stack_base = c->stack_top = 0;
-  __capstone_context_seal(area, __capstone_context_entry, sb, &c->seal, CAPSTONE_CONTEXT_MSTATUS, 0);
+  __capstone_context_seal(area, CONTEXT_ENTRY, sb, &c->seal, CAPSTONE_CONTEXT_MSTATUS, 0);
 }
 
 long __capstone_thread_exit(int status);
@@ -461,6 +486,9 @@ int __clone(int (*func)(void *), void *stack, int flags, void *arg, ...)
     __capstone_hc_note_unserved(SYS_clone);
     return -ENOSYS;
   }
+  /* No code capability for the seal (gp-captable, see context_entry): no thread, rather than one without PCC. */
+  if (!CONTEXT_ENTRY)
+    return -ENOSYS;
 
   long r = -EAGAIN;
   struct clone_record *rec;

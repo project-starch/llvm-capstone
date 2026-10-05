@@ -37,10 +37,15 @@ BASE=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -Xclang 
       -ffunction-sections -fdata-sections -fno-jump-tables -Wno-int-conversion -O1 -flto
       -DCAPSTONE_GP_CAPTABLE_ABI=1 "${SIL[@]}" -I"$CAP/runtime/include" -D_XOPEN_SOURCE=700)
 # delegate-bench's sizes (runtime/tests/application/CMakeLists.txt): the small ones.
-DATA=262144; STACK=65536; ARENA=65536; EXCH=65536
-APPDEFS=(-DCAPSTONE_DOMREQ_DATA=$((DATA + 256)) -DCAPSTONE_DOMREQ_STACK=$STACK -DCAPSTONE_CONTEXT_ARENA_BYTES=0
+# B1: B0_CONTEXT_BYTES > 0 builds minted contexts in (the glue's CAPSTONE_GLUE_CONTEXTS; the arena is split off the
+# top of dom_data at the first entry), with B0_CONTEXTS of them able to run at once (Application.cmake's CONTEXTS).
+# B0_DATA and B0_ARENA override the data region and the level0 arena (thread stacks come from the latter).
+DATA=${B0_DATA:-262144}; STACK=65536; ARENA=${B0_ARENA:-65536}; EXCH=65536
+CTXB=${B0_CONTEXT_BYTES:-0}; NCTX=${B0_CONTEXTS:-0}
+[ $((CTXB % 4096)) -eq 0 ] || { echo "B0_CONTEXT_BYTES must be a multiple of 4096" >&2; exit 2; }
+APPDEFS=(-DCAPSTONE_DOMREQ_DATA=$((DATA + 256 + CTXB)) -DCAPSTONE_DOMREQ_STACK=$STACK -DCAPSTONE_CONTEXT_ARENA_BYTES=$CTXB
          -DCAPSTONE_LEVEL0_ARENA_BYTES=$ARENA -DCAPSTONE_APPLICATION_HEAP_BYTES=0
-         -DCAPSTONE_APPLICATION_EXCHANGE_BYTES=$EXCH -DCAPSTONE_APPLICATION_CONTEXTS=0)
+         -DCAPSTONE_APPLICATION_EXCHANGE_BYTES=$EXCH -DCAPSTONE_APPLICATION_CONTEXTS=$NCTX)
 M=$CAP/ports/musl-capstone/runtime
 CORE_INC=(-I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal" -I"$MUSL/src/multibyte")
 
@@ -77,7 +82,10 @@ while IFS=$'\t' read -r o why; do [ -n "$o" ] && { echo "builtins: dropping $(ba
 "$BIN/llvm-ar" rcs "$OUT/librt-b0.a" "$OUT"/rt/*.o
 # assembly: native objects (no C globals)
 ASM=(-target capstone64-unknown-elf -ffreestanding -DCAPSTONE_GP_CAPTABLE_ABI=1)
-"$CC" "${ASM[@]}" -DCAPSTONE_GLUE_YIELD=1 -DCAPSTONE_GLUE_NO_MCSR=1 -c "$CAP/tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S" \
+GLUE_CTX=(); [ "$CTXB" -gt 0 ] && GLUE_CTX=(-DCAPSTONE_GLUE_CONTEXTS=1 -DCAPSTONE_CONTEXT_ARENA_BYTES=$CTXB -I"$CAP/runtime/include")
+# B0_GLUE_EXTRA: extra -D for the glue only, e.g. -DCAPSTONE_GLUE_CONTEXTS_PEEK (QEMU-only prints; never on a board).
+[ -n "${B0_GLUE_EXTRA:-}" ] && GLUE_CTX+=($B0_GLUE_EXTRA)
+"$CC" "${ASM[@]}" -DCAPSTONE_GLUE_YIELD=1 -DCAPSTONE_GLUE_NO_MCSR=1 "${GLUE_CTX[@]}" -c "$CAP/tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S" \
   -o "$OUT/glue.o"   # outside obj/, so the obj/*.o glob below does not list it twice
 for f in set_thread_area setjmp altstack; do "$CC" "${ASM[@]}" -c "$M/$f.S" -o "$OUT/obj/asm_$f.o"; done
 "$CC" "${ASM[@]}" "${APPDEFS[@]}" -c "$CAP/runtime/domain/domreq.S" -o "$OUT/obj/asm_domreq.o"

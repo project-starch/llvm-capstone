@@ -76,12 +76,14 @@ case "$rung" in
       echo "RESULT $rung retval=903"
     fi
     ;;
-  b0-memcpy|b0-printf)
+  b0-memcpy|b0-printf|b1-thread)
     # The application's own exit status is the result; capstone-exec's own failures keep their codes (125 and so on).
     # B0.8 b0-memcpy, the R-29 memcpy guard on silicon: 0 the unguarded control miscopied and the guarded copy never
     # did; 1 the guarded copy miscopied; 2 the control never miscopied (void: no hazard created).
     # B1.0 b0-printf, the narrowed vfprintf: 0 all 20 snprintf cases equal the host printf's strings; otherwise the
     # number of cases that differ (each printed).
+    # B1 b1-thread, one minted context: 0 joined with the expected value; 3 pthread_create failed; 4 pthread_join
+    # failed; 5 joined with a wrong value.
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     /usr/bin/capstone-exec "$dom" > /tmp/b0.out 2> /tmp/b0.err
     rc=$?
