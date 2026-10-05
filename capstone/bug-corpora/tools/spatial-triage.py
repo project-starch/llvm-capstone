@@ -254,7 +254,7 @@ def classify(program, sha):
     return proposed, evidence, names
 
 
-def triage(program, limit=None):
+def triage(program, limit=None, only_nested=False):
     cfg = PROGRAMS[program]
     repo = cfg["repo"]
     log = git(repo, "log", "--format=%h%x09%s", "--no-merges", cfg["population"]).splitlines()
@@ -290,6 +290,8 @@ def triage(program, limit=None):
                     "backported_under_another_hash": disagree,
                     "evidence": evidence, "liveness_evidence": live_ev, "buffers": names[:8]})
         flag = "<<<" if cls in ("B", "C") and source == "DEFECT-LIVE" else "   "
+        if only_nested and cls not in ("B", "C"):
+            continue
         note = "  (BACKPORTED: ancestry said live, the pin says fixed)" if disagree else ""
         print(f"{flag} [{cls:5}] [{source:11}] {sha}{note}")
         for e in evidence[:3]:
@@ -389,13 +391,22 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--program", choices=sorted(PROGRAMS))
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--population",
+                    help="override the default population, e.g. a program's whole history. "
+                         "Fix-reversal cases are acceptable -- every existing memcached and "
+                         "FFmpeg corpus case is one -- so the post-pin window is not the only "
+                         "useful range.")
+    ap.add_argument("--only-nested", action="store_true",
+                    help="print only class B/C rows, for a wide population")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
     if a.self_test:
         return self_test()
     if not a.program:
         ap.error("--program or --self-test")
-    return triage(a.program, a.limit)
+    if a.population:
+        PROGRAMS[a.program] = dict(PROGRAMS[a.program], population=a.population)
+    return triage(a.program, a.limit, only_nested=a.only_nested)
 
 
 if __name__ == "__main__":
