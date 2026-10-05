@@ -1179,6 +1179,17 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   (monitor 1f9aedd, which still reports faults), the same client and rung.
   - **Predicted: `B2: client rc=0 memcached rc=0`, `RESULT b2-memcached retval=0`.**
   - A new fault would come with its location; no fault and still no connection would point past the first entry.
+- **B2a RESULT (21:39-21:45, 776d9d859, firmware 4279572eceda): MEMCACHED RUNS ON SILICON, as pre-registered.**
+  - `B2 < VERSION 1.6.45`, `B2 < STORED`, `B2 < VALUE k 0 1` / `x` / `END`.
+  - `B2: client rc=0 memcached rc=0 job {"version":1,"kind":"exit","value":0}`, `RESULT b2-memcached retval=0`.
+  - Census rungs 0 and 0.
+  - It is a matched pair with B2f: the same build, the same monitor (1f9aedd), the same client and rung, and only
+    the glue's carve alignment differs. The unaligned image faulted at the address the RTL model predicts; the
+    aligned one serves.
+  - QEMU (fabrication off and on) passes b0-hello, b1-thread and memcached with the aligned glue.
+  - What ran: memcached 1.6.45 with libevent 2.1.12, musl, the delegate runtime and minted contexts (main, one
+    worker and memcached's helper threads), all as one gp-captable full-LTO image on 776d9d859. It served the
+    milestone exchange over loopback and shut down cleanly on SIGTERM.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
