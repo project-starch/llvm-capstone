@@ -139,7 +139,7 @@ leaves the allocation*, with liveness recorded rather than required:
 | candidate | under the correct criterion |
 |---|---|
 | memcached `ddee3e2` | **BUILDABLE.** Its subject is "Fix minor severity heap buffer overflow reading `--auth-file`"; before the fix `auth_data = calloc(1, sb.st_size)` is scanned by an unclamped `fgets(auth_cur, MAX_ENTRY_LEN, ...)`, so the read leaves the allocation. A fix-reversal case exactly like the 27 |
-| tshark `7ffc11e38f` | **BUILDABLE.** The capacity question is settled by the fix itself: it adds `file_type_subtype < 0 ||` as well as the `>= len` bound, so a **negative** index was reachable and `file_type_subtype_table[-n]` reads *before* the `g_malloc`'d GArray body (`file_access.c:1203-1205`). Below the allocation, not past `len`, so the over-allocation that disqualifies the other wiretap candidates does not apply |
+| tshark `7ffc11e38f` | **RETRACTED 2026-10-06: hardening, not a reachable defect.** The row called it buildable because the fix adds `file_type_subtype < 0`, and I read the guard's existence as proof the hole was reachable. It is not. The fix guards three functions, and every caller of all three supplies a validated or construction-valid type: `mergecap.c:257` rejects a negative `-F` before `:392` uses it, `merge.c` takes its type from `wtap_dump_file_type_subtype(pdh)` on an open dump, and the only external caller of the third is the Qt file dialog's own format list. **A bounds check added upstream is not evidence that the unbounded path was reachable** -- that needs a caller, and none was found |
 | tshark `f207d25f4b` | no — read at last, from the diff: it replaces `orig_size -= phdr_len` and `packet_size -= phdr_len` with checked `ckd_sub`, so the defect is an **unsigned underflow** of a reported length, the same class as `830cf562a0` that filter 1 excludes by its own wording. Its downstream consequence may be spatial; the defect is not |
 | tshark `3be1c99180` | no — `ws_buffer` over-allocates, so the crossing stays inside the allocation. Class C |
 | tshark `be813ede9d` | no — a fix-reversal needs the code to exist at the pin, and `etw_dump_write_ldap_event` does not |
@@ -150,13 +150,15 @@ leaves the allocation*, with liveness recorded rather than required:
 **This does not put tshark's 21 back in play.** Most still fail on capacity-versus-length or on the
 code having to exist at the pin; what changed is the criterion, not the evidence.
 
-**Two of the three empty cells therefore have a verified buildable candidate**, each read from the
-commit's own diff rather than from a grep in the file:
+**One of the three empty cells has been filled; the other two are still empty.** The memcached
+row is now `plain-heap-repros/00`, built and measured. The tshark candidate did not survive its
+reachability check and was retracted the same day, which is why this table names what each cell
+has rather than what it might:
 
 | cell | candidate | the crossing |
 |---|---|---|
-| memcached, not-nested spatial | `ddee3e2` | an unclamped `fgets` scan leaves `calloc(1, sb.st_size)` |
-| tshark, not-nested spatial | `7ffc11e38f` | a negative index reads below the `g_malloc`'d GArray body |
+| memcached, not-nested spatial | **BUILT** — `plain-heap-repros/00` (`ddee3e2`) | an unclamped `fgets` scan leaves `calloc(1, sb.st_size)`; measured two-sided on both native arms, and ASan reports it |
+| tshark, not-nested spatial | **none** | `7ffc11e38f` was retracted as hardening; the cell is still empty and its candidates are the 22 unread |
 | FFmpeg, **nested** spatial | candidates only — see the section above | a frame-plane crossing, ownership and padding still to be opened |
 
 They are **candidates until built and measured**, and neither is counted in any table yet.
