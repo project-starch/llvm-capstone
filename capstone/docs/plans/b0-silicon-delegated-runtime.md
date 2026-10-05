@@ -1121,6 +1121,9 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - They are LTO-linked with musl, the runtime, the narrowed vfprintf/floatscan and B1's contexts:
     `B0_CONTEXT_BYTES=131072 B0_CONTEXTS=3 B0_DATA=20 MiB B0_ARENA=16 MiB`.
   - First try: 73 objects, `.text` 460,812 bytes, a 781,288-byte image (ac6abd2218a686f1), no verifier refusals.
+  - `build-b2-memcached.sh` records the exact source list, flags and sizes over the port's configured trees
+    (`MC_WORK`). With the CARVE_ALIGN glue it reproduces the B2a/B3 board image ba7e6921cf27f2b6 byte for byte
+    (rebuilt 2026-10-05 22:19 with the same toolchain and musl archive).
 - **QEMU, monitor 10a0690, fabrication OFF and ON: the milestone holds.** memcached runs with `-l 127.0.0.1 -p 21299
   -U 0 -m 8 -t 1 -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand`.
   - It runs unprivileged under capstone-job (`--user 65534:65534`), as the SDK oracle does.
