@@ -140,7 +140,7 @@ axis_of() {
   case "$1" in
     CRASH-110|CRASH-073) echo heap ;;
     CRASH-003|CRASH-004|CRASH-010|CRASH-067) echo temporal ;;
-    CRASH-024|CRASH-025|CRASH-042|CRASH-065) echo temporal ;;
+    CRASH-024|CRASH-025|CRASH-042|CRASH-065|CRASH-140) echo temporal ;;
     CRASH-005) echo global ;;
     *) echo heap ;;
   esac
@@ -159,7 +159,7 @@ axis_of() {
 # the corpus is not interesting for this question: ASAN already finds those unaided, so catching
 # them would not show that a capability bound added anything.
 BLIND_REACHABLE=(CRASH-110 CRASH-073 CRASH-003 CRASH-004 CRASH-010 CRASH-067
-                 CRASH-024 CRASH-025 CRASH-042 CRASH-065)
+                 CRASH-024 CRASH-025 CRASH-042 CRASH-065 CRASH-140)
 
 sel_of() { echo "-DRUNG_E_${1/CRASH-/CRASH}"; }
 

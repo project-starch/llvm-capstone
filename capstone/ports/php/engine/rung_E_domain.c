@@ -108,6 +108,14 @@
      "main::$dataAccessor->bar;\n" \
      "echo 'ok';"
 #  define RUNG_E_STMT   1
+/* Not an object case: a UAF entirely inside Zend/zend_builtin_functions.c, which the engine set
+ * already links and zend_startup(..., 1) already registers. debug_print_backtrace fails to reset
+ * arg_array across the eval frame, so it reads and re-frees a zval it already released. */
+# elif defined(RUNG_E_CRASH140)
+#  define RUNG_E_SOURCE \
+     "function f($a, $b, $c) { debug_print_backtrace(); }\n" \
+     "eval('f(1,2,3);');"
+#  define RUNG_E_STMT   1
 # elif defined(RUNG_E_CRASH065)
 #  define RUNG_E_SOURCE \
      "class foo { function foo($arrayobj) { var_dump($arrayobj); } }\n" \

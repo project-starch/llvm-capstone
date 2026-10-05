@@ -6,12 +6,12 @@ two-level allocator hierarchy in which PHP's own `zend_alloc.c` runs unedited ov
 arena -- and corpus bugs are caught by capability bounds alone, with no shadow memory, redzones
 or instrumentation.**
 
-**All ten reachable cases that unpatched ASAN cannot detect are caught**, each at the exact line
+**All eleven reachable cases that unpatched ASAN cannot detect are caught**, each at the exact line
 ASAN names as frame #0, and each as a matched pair whose CONTROL arm completes (reproducing the
 corpus's `crashes_on_pristine_build = False`). CRASH-005 is caught as well, outside that population.
 See the headline section below for the measurement and the table.
 
-On the temporal axis, **eight** use-after-free cases are caught. Four of them were reported caught
+On the temporal axis, **nine** use-after-free cases are caught. Four of them were reported caught
 once before, retracted as worthless, and only then earned: revocation had been faulting on benign
 workloads too, and the per-case control could not see it because that control switches revocation
 off. Two real allocator bugs and a new sanity gate separate the first claim from this one.
@@ -502,8 +502,8 @@ Both edit the program under test. Differencing `results-asan-default.json` (patc
 split exactly along the two patches: **23 hidden by the size-class cache** (all CWE-416) and
 **8 hidden by `REAL_SIZE` rounding** (CRASH-008, -016, -066, -073, -091, -100, -102, -110).
 
-Ten of the 31 are reachable with no ext beyond `url.c`. **All ten are caught, and every one faults
-at the exact line ASAN names as frame #0:**
+Eleven of the 31 are reachable with no ext beyond `url.c`. **All eleven are caught, and every one
+faults at the exact line ASAN names as frame #0:**
 
 | case | axis | Capstone fault site | ASAN frame #0 |
 |---|---|---|---|
@@ -517,9 +517,36 @@ at the exact line ASAN names as frame #0:**
 | CRASH-025 | temporal | `zend_object_handlers.c:344` | `zend_std_write_property` @ `:344` |
 | CRASH-042 | temporal | `zend_object_handlers.c:294` | `zend_std_read_property` @ `:294` |
 | CRASH-065 | temporal | `zend_execute.c:65` | `zend_pzval_unlock_func` @ `:65` |
+| CRASH-140 | temporal | `zend_builtin_functions.c:1433` | `debug_print_backtrace_args` @ `:1433` |
 
-Line-level agreement on ten independent cases, against a detector that needed the allocator
+Line-level agreement on eleven independent cases, against a detector that needed the allocator
 rewritten to see any of them, is the strongest evidence in this file.
+
+### What the remaining 20 need, measured rather than guessed
+
+Mapping every function each trigger calls to the file that defines it (`ZEND_FUNCTION` /
+`PHP_FUNCTION` / `PHP_FALIAS` across the 5.0.0 tree) partitions the rest cleanly:
+
+| blocked on | cases |
+|---|---|
+| `ext/standard/string.c` | CRASH-035, -047, -057, -102, -103, -151 |
+| `ext/standard/array.c` | CRASH-022, -080, -160 |
+| both of those | CRASH-074 |
+| `ext/standard/var.c` (`unserialize`) | CRASH-066 |
+| `ext/standard/basic_functions.c` | CRASH-084, -086 |
+| `ext/standard/html.c` | CRASH-091 |
+| `ext/standard/datetime.c` | CRASH-008 |
+| `ext/standard/formatted_print.c` (`sprintf`) | CRASH-016 |
+| streams / files / network | CRASH-092, -099, -100, -112 |
+
+So **16 of the 20 are blocked on linking one or two more `ext/standard` files**, not on anything
+about capabilities, and six of those sixteen want the same file. Only four need the streams
+subsystem this port deliberately omits, and three of those also need a writable `/tmp`, a loopback
+listener or an open TCP port, which a domain has no way to provide.
+
+CRASH-008 is a special case worth noting: the standalone allocator suite already catches it, with a
+hand-written trigger, because `php_date`'s `'U'` arm cannot be entered without the VM. Linking
+`datetime.c` would let the real engine reach it.
 
 CRASH-005 is caught too but is NOT in this population: it is a `.rodata` parser table, which ASAN
 finds with the allocator intact, so it shows nothing about nested allocation. Eleven catches in all,
