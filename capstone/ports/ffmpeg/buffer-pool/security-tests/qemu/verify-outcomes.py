@@ -40,6 +40,14 @@ NAMES += ["af-join-dedup-bound-stale-read"]
 NAMES += ["h264-refs-partial-clear-stale-read",
           "vidstab-parked-plane-pointer-stale-write"]
 NAMES += ["vvc-nonref-output-releases-tabs-stale-read"]
+# The SUB-OBJECT rows, from bug-corpora/ffmpeg/subobject-repros. Deliberately NOT in the
+# fault predicate below: a crossing between two members of ONE allocation is in bounds for
+# every per-allocation bound, so these are expected to COMPLETE on both modes, and that is
+# the measurement. Each probe asserts the crossing happened, so a completion is not a quiet
+# nothing -- see pool-lifetime-probes.c tests 40-42.
+NAMES += ["cbs-h265-pic-timing-member-write",
+          "vulkan-hevc-refpicset-member-write",
+          "vulkan-hevc-dpb-member-write"]
 parser = argparse.ArgumentParser()
 parser.add_argument("output", type=pathlib.Path)
 parser.add_argument("--cases", default="0,1,2,3,4,5,6,7,8,9,10,11")

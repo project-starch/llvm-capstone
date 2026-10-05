@@ -416,5 +416,78 @@ void ff2_security_run(unsigned test, unsigned long rounds, unsigned mode)
         av_refstruct_unref(&reissued); av_refstruct_unref(&rp); held = NULL;
         return;
     }
+
+    if (test == 40 || test == 41 || test == 42) {
+        /* The SUB-OBJECT class: a crossing between two MEMBERS of one allocation,
+         * reduced from bug-corpora/ffmpeg/subobject-repros cases 0-2
+         * (8864fd0aec, 68845e26f7, e058af88ab). Unlike every other probe here the
+         * expected outcome is that NOTHING FAULTS, on either mode -- the whole
+         * point is that a per-allocation bound is in bounds for a member-to-member
+         * write, so no configuration we have can see it. verify-outcomes.py's
+         * fault predicate therefore does not list these cases.
+         *
+         * A silent probe proves nothing on its own, so each arm ASSERTS that the
+         * crossing actually happened: the neighbouring member's sentinel must
+         * change, and the far end of it must survive, which is what makes this a
+         * sub-object crossing rather than a run off the allocation. If either
+         * check fails the run is CONTROL-FAILED, not a quiet pass. */
+        enum { SEGMENTS = 600, SET = 8, REFS = 16 };
+        if (test == 40) {
+            /* 8864fd0aec: uint16_t num_nalus_in_du_minus1[600] is immediately
+             * followed by uint32_t du_cpb_removal_delay_increment_minus1[600];
+             * the loop bound is inclusive so the index reaches 600. */
+            struct { uint16_t a[SEGMENTS]; uint32_t b[SEGMENTS]; } *s =
+                av_refstruct_allocz(sizeof *s);
+            CHECK(s, 490);
+            CHECK((char *)&s->a[SEGMENTS] == (char *)&s->b[0], 491); /* layout, asserted */
+            s->b[0] = 0xA5A5A5A5u;
+            s->b[SEGMENTS - 1] = 0xA5A5A5A5u;
+            held = (volatile unsigned char *)&s->a[0];
+            mark(test);
+            for (unsigned k = 0; k <= SEGMENTS; k++)   /* inclusive: one past */
+                s->a[k] = 0x4141;
+            CHECK((s->b[0] & 0xFFFFu) == 0x4141, 492);          /* it crossed */
+            CHECK((s->b[0] & 0xFFFF0000u) == 0xA5A50000u, 493); /* only the low half */
+            CHECK(s->b[SEGMENTS - 1] == 0xA5A5A5A5u, 494);      /* stayed inside */
+            av_refstruct_unref(&s); held = NULL;
+            return;
+        }
+        if (test == 41) {
+            /* 68845e26f7: three 8-entry reference-set arrays filled from a list
+             * that holds up to HEVC_MAX_REFS = 16. */
+            struct { uint8_t before[SET], after[SET], lt[SET], tail[16]; } *s =
+                av_refstruct_allocz(sizeof *s);
+            CHECK(s, 495);
+            CHECK((char *)&s->before[SET] == (char *)&s->after[0], 496);
+            for (unsigned k = 0; k < SET; k++) s->after[k] = 0x5a;
+            held = (volatile unsigned char *)&s->before[0];
+            mark(test);
+            for (unsigned k = 0; k < 16; k++)          /* nb_refs up to HEVC_MAX_REFS */
+                s->before[k] = (uint8_t)k;
+            /* before[0..15] spills indices 8..15 into after[0..7], so the values
+             * that land there are 8..15 -- not 0..7, which is what the first
+             * version of this check asserted and what CONTROL-FAILED caught. */
+            CHECK(s->after[0] == 8 && s->after[SET - 1] == 15, 497);
+            CHECK(s->tail[0] == 0, 498);                            /* stayed inside */
+            av_refstruct_unref(&s); held = NULL;
+            return;
+        }
+        /* test == 42 -- e058af88ab: the DPB walk writes ref_src[16], which is the
+         * first element of the next member. Reduced to that FIRST crossing. */
+        struct { void *ref_src[REFS]; uint32_t h265_refs[REFS]; } *s =
+            av_refstruct_allocz(sizeof *s);
+        CHECK(s, 499);
+        CHECK((char *)&s->ref_src[REFS] == (char *)&s->h265_refs[0], 500);
+        for (unsigned k = 0; k < REFS; k++)
+            s->h265_refs[k] = 0xA5A5A5A5u;
+        held = (volatile unsigned char *)&s->ref_src[0];
+        mark(test);
+        for (unsigned k = 0; k <= REFS; k++)           /* one past the array */
+            s->ref_src[k] = (void *)(uintptr_t)(0x1000 + k);
+        CHECK(s->h265_refs[0] != 0xA5A5A5A5u, 501);          /* it crossed */
+        CHECK(s->h265_refs[REFS - 1] == 0xA5A5A5A5u, 502);   /* stayed inside */
+        av_refstruct_unref(&s); held = NULL;
+        return;
+    }
     ff2_fail(430);
 }
