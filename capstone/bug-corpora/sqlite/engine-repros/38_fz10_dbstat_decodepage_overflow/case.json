@@ -18,9 +18,9 @@
       "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
-      "status": "not written",
-      "not_run_reason": "Trigger derived and the binary cross-compiled, but never executed on CheriBSD. Runnable now; this is the cheapest gap in the table to close."
+      "oracle": "SIGPROT si_code=1 (PROT_CHERI_BOUNDS) -- CHERI-DETECTED (2026-10-05)",
+      "run": "2026-10-05"
     }
   },
-  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 5 load out of bounds (spatial) pc=0x1025a409c; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation not run"
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
 }

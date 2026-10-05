@@ -23,9 +23,6 @@ if [ -d "$SQLITE_CORPUS_DIR" ]; then
   for _d in "$SQLITE_CORPUS_DIR"/[0-9][0-9]_*; do
     [ -f "$_d/case.c" ] || continue
     _t=$(sed -n 's/.*REPRO322_MAIN("\([^"]*\)").*/\1/p' "$_d/case.c" | head -1)
-    # blobclose predates REPRO322_MAIN and still uses the older hostcall interface;
-    # it is named by its directory slug instead.
-    [ -z "$_t" ] && case "$_d" in *_blob_close_after_db_close) _t=blobclose ;; esac
     [ -n "$_t" ] && CORPUS_SRC[$_t]="$_d/case.c"
   done
 fi
@@ -229,13 +226,11 @@ do_build() {
                      EXTRA_INC="-DSQLITE_CORE -I$EXT_SRC_DIR/misc" ;;
       esac
     fi
-    # The legacy standalone domain has its own domain_main and never captures the grant,
-    # so under Sublet memsys5Init reads an empty slot and faults inside capstone_cap_base
-    # before the case runs. That is the harness missing, not a result -- skip it here
-    # rather than record a fault the arm did not earn.
-    if [ "$SUBLET" = 1 ] && [ "$file" = "../sqlite_blobclose_domain.c" ]; then
-      echo "== skip $tag (no Sublet grant glue in the standalone domain) =="; continue
-    fi
+    # blobclose used to be skipped on the Sublet arm: the legacy standalone domain
+    # had its own domain_main, never captured the grant, and faulted inside
+    # capstone_cap_base before the case ran. 2026-10-05 the corpus copy was ported
+    # onto REPRO322_MAIN, which captures the grant like every other case, so the
+    # skip is gone and the arm has no hole. The defect sequence did not change.
     local SUBLET_ENV=() CACHE=1
     if [ "$SUBLET" = 1 ]; then
       CACHE=0

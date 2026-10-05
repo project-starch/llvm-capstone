@@ -23,7 +23,8 @@
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [
-    "capstone/bug-corpora/sqlite/engine-repros/results/20261004"
+    "capstone/bug-corpora/sqlite/engine-repros/results/20261004",
+    "capstone/bug-corpora/sqlite/engine-repros/results/20261005"
   ],
   "related": [
     "capstone/bug-corpora/sqlite/capi-repros"

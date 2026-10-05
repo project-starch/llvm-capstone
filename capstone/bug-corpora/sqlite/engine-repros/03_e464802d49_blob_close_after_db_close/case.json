@@ -15,13 +15,13 @@
       "oracle": "complete"
     },
     "sublet": {
-      "status": "not written",
-      "not_run_reason": "Skipped by the build: a standalone domain has no Sublet grant glue. Runnable once that glue exists."
+      "oracle": "fault at cause 24, untagged dereference, pc=0x800239e4 -- detected (2026-10-05). Runnable at all only after the case was ported from the legacy standalone domain onto REPRO322_MAIN: the old entry point never captured the Sublet grant, so memsys5Init faulted before the case ran.",
+      "run": "2026-10-05"
     },
     "cheribsd-revocation": {
-      "status": "not written",
-      "not_run_reason": "Not in the CheriBSD build manifest: this case predates the group harness and still uses the old sqlite_hostcall.h interface. Runnable after a rewrite onto REPRO322_MAIN."
+      "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=155, witnesses=1) -- REACHED-SILENT (2026-10-05)",
+      "run": "2026-10-05"
     }
   },
-  "status": "spatial run 2026-10-04/05: complete; sublet not run; cheribsd-revocation not run"
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
 }

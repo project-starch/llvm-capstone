@@ -15,12 +15,12 @@
       "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x104007150"
     },
     "sublet": {
-      "status": "not written",
-      "not_run_reason": "The group exhausted its boot budget: 25 of this arm's faults halt the VM rather than returning, each boot retires one case, and this one was still in the queue at boot 7. Runnable by re-running the group on its own."
+      "oracle": "fault at cause 24, untagged dereference -- detected (2026-10-05)",
+      "run": "2026-10-05"
     },
     "cheribsd-revocation": {
       "oracle": "SIGPROT at the defect site (si_code=2 (PROT_CHERI_TAG/untagged-deref), hits=3)"
     }
   },
-  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x104007150; sublet not run; cheribsd-revocation run 2026-10-04/05: SIGPROT at the defect site (si_code=2 (PROT_CHERI_TAG/untagged-deref), hits=3)"
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
 }
