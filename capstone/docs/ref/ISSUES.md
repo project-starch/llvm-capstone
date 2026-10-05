@@ -105,7 +105,7 @@ capability from a stack slot every iteration and on silicon sporadically returns
 silicon defect for another, and the new `rc=21` at `sqlite3_step` may BE that defect resurfacing.
 Treat `-O1`-vs-`-O0` as two different broken configurations, not as a fix.
 
-## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `S-07 and S-10 (route 1) ARE in the resident bitstream (2026-09-05); S-10b MEASURED STILL PRESENT there, and its 2026-08 fix is unsynthesizable; a DIFFERENT fix, outside the store buffer's address checker, is in RTL and SYNTHESIZED 2026-10-05 (`sup-call` 776d9d859, with R-29; no LUTLP, same loop cluster, WNS in band), awaiting the lead's reflash`
+## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `S-07 and S-10 (route 1) ARE in the resident bitstream (2026-09-05); S-10b MEASURED STILL PRESENT there, and its 2026-08 fix is unsynthesizable; a DIFFERENT fix, outside the store buffer's address checker, is ON SILICON 2026-10-05 (caplifive_supcall_776d9d859.bit, with R-29): s10b-storebuf-primed baked bare reads 8 of 8 legs trapping (the tag route; no pre-fix silicon run of that image exists, the 0-of-8 is the 2026-09-05 measurement of the original test); the data route is fixed in the same mechanism and measured in simulation only`
 
 > **S-10b FIX IN SIMULATION 2026-10-05, in a shape that leaves the store buffer's address checker alone** (capstone-ariane
 > `sup-call` 776d9d859; the dated block under R-29 has the design). The dcache read controller holds a read whose granule
@@ -950,6 +950,15 @@ A matched arm that makes the same jump before its first yield must fault on both
 - This matches the RTL lane's simulation of the same tree (0xBAD after the yield, 28 before it).
 - capstone-qemu was not run on these images. Its prediction, 28 in both arms, comes from reading `swap_pc`.
 
+**Candidate fix (the RTL lane, 2026-10-05; NOT synthesized, not on `sup-call`): capstone-ariane branch `r51-return-pcc`
+(ef8900e2d, header corrected in f4e4d6051).** `ex_stage.sv`'s parked PC word carries the switching instruction's own PC-capability
+metadata and tag for RETURN as it already does for CALL, with the integer resume point as the cursor -- `swap_pc`'s semantics.
+In simulation the same test's post-yield jump then faults 28 and the before-yield arm is unchanged; lint at baseline (UNOPTFLAT
+40 with the baseline's set); the 95-test sweep against the 776d9d859 tree identical with zero cycle differences, the two
+linear-clear tests passing. S-06 fix P5b's anti-forgery property holds (the metadata is the live PC capability, never an
+operand). Behavioural consequence: a RETURN whose resume point lies outside the returning domain's code capability faults 28
+at the resume, as under QEMU. Adoption is the lead's decision.
+
 **For the lead.** Whether this is acceptable (the code region is still bounded by the domain's memory capability),
 whether RETURN should restore the domain's PC capability, and how any paper claim about code-capability enforcement
 for delegated applications should be worded. Those are the lead's decisions.
@@ -1367,7 +1376,7 @@ walks, read against the node pool and the retired-instruction trace. Owner: the 
 lane. Not to be conflated with R-27: that one is a deadlock, this one is a state divergence.
 
 
-### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Both the store-buffer account and the `.user = 0` account are REFUTED by traced arms that show their condition existed. SILICON: the window is ONE instruction wide -- boot sw49's distance ladder turns clean at a single intervening nop. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour). FIXED IN RTL AND SYNTHESIZED 2026-10-05 (stall-only, lint-clean, `sup-call` 776d9d859; the dated block below; bitstream sha256 3c91335a…, all three pre-registered items PASS), awaiting the lead's reflash; W-12 and the runtime memcpy guard stay in force until the board measures it`
+### R-29 — (repro folder: `tests/fpga-repros/R29-wbuffer-highword-forwarding/`) a plain 8-byte `sd` into the HIGH word of a 16-byte granule, immediately followed by a 128-bit untagged `ldc` of that granule, returns the high half ZEROED (the struct-assignment shape S-06 declared fixed; it never was) `OPEN — DEMONSTRATED 2026-09-09 on silicon (caplifive_r25r26r27_66c4e7517, boots sw46 and sw48, two firmwares) and in RTL simulation on 5097eb166, ef5a8eaf2 and 66c4e7517 (fpga-repros/S06-…/sim/s06agg-shape.S: FAIL 11 with the store adjacent, PASS with four instructions between); revision- and firmware-independent; MECHANISM SEPARATED BY WAVEFORM 2026-09-10: the wide load MISSES and takes the refill leg (`wt_dcache_mem.sv:354-358`), so `rd_user_o` is served from a line that memory does not yet hold — while the write-buffer entry holding the missing half sits RESIDENT and fully valid at that very cycle, because the overlay that would repair it (`:283/:335/:397`) is gated at WORD granularity and a word-1 entry never hits. Refill = origin, word-gated overlay = the missing repair. The store-buffer account is REFUTED by observation. Both the store-buffer account and the `.user = 0` account are REFUTED by traced arms that show their condition existed. SILICON: the window is ONE instruction wide -- boot sw49's distance ladder turns clean at a single intervening nop. Still unobserved: `wbuffer_hit_oh`/`wbuffer_be` themselves (internal combinational, inferred from port behaviour). FIXED ON SILICON 2026-10-05 (caplifive_supcall_776d9d859.bit, sha256 3c91335a…; capstone-ariane `sup-call` 776d9d859, stall-only, lint-clean; the dated block below): b0-memcpy unguarded 94/96 -> 0/96, this folder's rung s06agg 66 -> 64, s10b-storebuf-primed 8 of 8 legs trap; the runtime memcpy guard and W-12 are no longer needed by the hardware for this hazard -- dropping them is the runtime lane's call`
 
 > **NEW SHAPE, REPRODUCED IN SIMULATION, SEEN ON SILICON (2026-10-05): the HIT shape with the granule's plain stores
 > still in the write buffer reads the high half as 0.** On caplifive_supcall_715bdd1fe.bit the delegated runtime wrote a
@@ -1473,6 +1482,24 @@ lane. Not to be conflated with R-27: that one is a deadlock, this one is a state
 > Bitstream: `ariane_xilinx.bit` sha256 `3c91335acc7c1065ac60c550495ccf4bfb7538ed078b20000d15ce6caecd21a4`, 11,443,722 B,
 > on the synth host (`~/scratch/capstone-776d/corev_apu/fpga/work-fpga/`; artifact tarball `synth-776d9d859-exit0.tar.gz`
 > sha256 `e01b8fa34c61f48b61173759512429d3b05a2d9d02ca81ca8109f5a38db17044`). PROVENANCE 776d9d85900e.
+>
+> **FIXED ON SILICON 2026-10-05 -- `caplifive_supcall_776d9d859.bit` (sha256 3c91335a…), flashed on the lead's word 16:58,
+> every arm of the board lane's pre-registered set as predicted** (board-supmon 3cdddc4727ec and the acceptance landed on dev as
+> f432fca10db1; results cite the image hashes). Controls first and unchanged: the S-16 bare set 18/18, R-43 a1..a10 with exact
+> identity readings, C5u without a fence +0.680 % (715bdd1fe: +0.69 %). The changed arms: **b0-memcpy's unguarded arm 94/96 ->
+> 0/96** (same image 73b7cb9a and firmware 18d47385a38e on both bitstreams; on 715bdd1fe the three faces were 31 low-word, 31
+> high-word, 32 both), the guarded arm 0/96 unchanged, exit 2 as predicted; **this folder's own rung `s06agg` (frozen
+> 249118220f8cf37a) reads 64 = clean** where it read 66 on 66c4e7517 (k800 control relinked to 0x20000 first, private firmware
+> 2f49d5b257f7, the image verified to carry both domains by content; there is no 715bdd1fe reading of this image, so that pair
+> spans two bitstreams while b0-memcpy's is same-image); **`s10b-storebuf-primed` baked bare (image 2f8ef9cecda4b8dc, exit
+> changed to CAPPRINT + CAP_PASS) reads trap_count 8 with the control = 9 exceptions, the fix's value** -- with the board lane's
+> stated limit that this image never ran on pre-fix silicon, so on silicon the 8 is consistent with the fix but does not by
+> itself show the primed route creating the hazard (the 0-of-8 is the 2026-09-05 measurement of the original test and this
+> lane's simulation). A correction to this lane's own pre-registration text: "the R29 rung 31/32 -> 0/32" (in the handoff, the
+> next-step entry and the paragraph above) was b0-memcpy's per-face numbers mislabeled; the rung's acceptance is 66 -> 64, and
+> that is what was measured. The hardware no longer needs the runtime memcpy guard (CAPSTONE_MEMCPY_PLAIN_GUARD) or the W-12
+> aggregate-copy pass for this hazard; whether and when to drop them is the runtime lane's and the lead's call, after their
+> own measurement.
 >
 > **A residual closed after the landing (read in source):** the TLB-miss ordering case -- a store that misses the TLB ahead
 > of the load -- cannot open the window, because such a store does not pop the LSU bypass (`store_unit.sv`: `pop_st_o` only
