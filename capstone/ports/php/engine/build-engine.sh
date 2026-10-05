@@ -200,7 +200,18 @@ fi
 # it is 23,264 bytes of .text. Its only undefined symbols outside the engine are the two
 # streams entry points reached from PHP_FUNCTION(get_headers) plus php_error_docref1, all
 # three supplied by libc/php_capstone_ext_stubs.c.
+# PHP_CAP_EXT adds further ext/standard TUs. They are pure computation -- string, array, var and
+# html manipulation -- and are the only thing standing between this image and 12 more corpus cases
+# that unpatched ASAN cannot see. Default keeps the historic single-file build.
 EXT="$P/ext/standard/url.c"
+case "${PHP_CAP_EXT:-}" in
+  pure) EXT="$EXT $P/ext/standard/string.c $P/ext/standard/array.c $P/ext/standard/var.c"
+        EXT="$EXT $P/ext/standard/html.c $P/ext/standard/strnatcmp.c"
+        EXT="$EXT $P/ext/standard/var_unserializer.c"   # php_var_unserialize, re2c-generated
+        CF+=(-DPHP_CAP_EXT_PURE); ZCF+=(-DPHP_CAP_EXT_PURE) ;;
+  "")   : ;;
+  *)    for e in ${PHP_CAP_EXT//,/ }; do EXT="$EXT $P/ext/standard/$e.c"; done ;;
+esac
 for s in $EXT; do
   b=$(basename "$s" .c)
   "$CAPSTONE_CLANG" "${ZCF[@]}" -c "$s" -o "$OUT/obj/ext_$b.o" 2>"$OUT/log/ext_$b.log" \
@@ -254,7 +265,17 @@ OBJS+=("$OUT/obj/domain.o")
 # 512 KB, not 1 MB: the arena above shares this declaration, and the +m fix removed the
 # recursion that needed a big stack. See the note beside ZEND_ARENA_BYTES.
 PHP_DOMAIN_STACK=${PHP_DOMAIN_STACK:-$((512 * 1024))}
-PHP_DOMAIN_DATA=${PHP_DOMAIN_DATA:-$((2 * 1024 * 1024))}
+# The declaration competes with the image for the SAME ceiling: code + .bss + declared must stay
+# under ~4 MiB, and past it the MONITOR faults internally rather than refusing cleanly -- cause 5
+# at a pc inside the firmware (0x8002164c), which looks like a domain bug and is not. Linking the
+# pure ext/standard TUs takes the image from 1.4 MB to 2.35 MB, so the 2 MiB declaration no longer
+# fits beside it; 1.5 MiB does, and still covers the 512 KB stack with room for the cap table and
+# per-global storage. Measured: 1.5, 1.25 and 1 MiB all complete the benign workload.
+if [ -n "${PHP_CAP_EXT:-}" ]; then
+  PHP_DOMAIN_DATA=${PHP_DOMAIN_DATA:-$((1536 * 1024))}
+else
+  PHP_DOMAIN_DATA=${PHP_DOMAIN_DATA:-$((2 * 1024 * 1024))}
+fi
 "$CAPSTONE_CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 \
   -DCAPSTONE_DOMREQ_DATA=$PHP_DOMAIN_DATA -DCAPSTONE_DOMREQ_STACK=$PHP_DOMAIN_STACK \

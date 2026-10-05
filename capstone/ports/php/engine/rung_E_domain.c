@@ -114,6 +114,109 @@
 /* A constant redefined: zend_register_constant's failure path frees c->name and then passes the
  * same pointer to zend_error as %s. The read is performed by the message formatter, which is why
  * ub_error above must actually format. */
+/* ---- the pure-ext cases, reachable only with PHP_CAP_EXT=pure linked ------------------------
+ * Transcribed from corpus/CRASH-NNN.php. Two deliberate substitutions, both forced by the port and
+ * neither touching the defect:
+ *   - var_dump is the no-op stub registered above (output is not what is under test);
+ *   - CRASH-091 writes 3 where the corpus writes ENT_QUOTES, because that constant is registered by
+ *     PHP_MINIT_FUNCTION(html) and the domain runs no module init. 3 is its value
+ *     (ENT_HTML_QUOTE_DOUBLE | ENT_HTML_QUOTE_SINGLE).
+ */
+# elif defined(RUNG_E_CRASH022)
+#  define RUNG_E_SOURCE \
+     "function cmp($x, $y) { global $a;\n" \
+     "  unset($a[2]); unset($a[3]); unset($a[4]); unset($a[5]); unset($a[6]);\n" \
+     "  $a[100]=1; $a[101]=2; $a[102]=3; $a[103]=4; $a[104]=5;\n" \
+     "  return ($x < $y) ? -1 : 1; }\n" \
+     "$a = array(5,3,8,1,9,2,7,4,6,0,11,12,13,14,15,16,17,18,19,20);\n" \
+     "usort($a, 'cmp');\n" \
+     "echo 'done ', count($a);"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH035)
+#  define RUNG_E_SOURCE \
+     "function my_errorhandler($errno,$errormsg) { global $my_var; $my_var = 0; }\n" \
+     "set_error_handler('my_errorhandler');\n" \
+     "$my_var = str_repeat('A', $my_var[0]->errormsg = 'xyz');\n" \
+     "echo 'ok';"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH047)
+#  define RUNG_E_SOURCE \
+     "function compareByRef(&$first, &$second) { return $first === $second; }\n" \
+     "class MyTree implements ArrayAccess {\n" \
+     "  public $parent;\n" \
+     "  public $children = array();\n" \
+     "  public function offsetExists($offset) {}\n" \
+     "  public function offsetUnset($offset) {}\n" \
+     "  public function offsetSet($offset, $value) {\n" \
+     "    $cannonicalName = strtolower($offset);\n" \
+     "    $this->children[$cannonicalName] = $value;\n" \
+     "    $value->parent = $this; }\n" \
+     "  public function offsetGet($offset) {\n" \
+     "    $cannonicalName = strtolower($offset);\n" \
+     "    return $this->children[$cannonicalName]; }\n" \
+     "}\n" \
+     "$id = 'Test';\n$root = new MyTree();\n$child = new MyTree();\n" \
+     "$root[$id] = $child;\n" \
+     "var_dump(compareByRef($root[$id], $child));"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH057)
+#  define RUNG_E_SOURCE \
+     "$s = 'AB';\n" \
+     "$x = ($s[1] = chr(67) . '');\n" \
+     "var_dump($x);"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH066)
+#  define RUNG_E_SOURCE \
+     "class obj { var $ryat; public function __destruct() { $this->ryat = null; } }\n" \
+     "$poc = 'O:3:\"obj\":1:{';\n" \
+     "var_dump(unserialize($poc));"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH074)
+#  define RUNG_E_SOURCE \
+     "function cb($value, $key, &$userdata) { $userdata = str_repeat('A', 32); }\n" \
+     "$array = array('hello', array('world', array('deep')));\n" \
+     "$userdata = 'x';\n" \
+     "array_walk_recursive($array, 'cb', $userdata);\n" \
+     "echo 'Done';"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH080)
+#  define RUNG_E_SOURCE \
+     "function rd($carry, $item) { return $carry; }\n" \
+     "$r = array_reduce(array(1,2,3), 'rd', array('initialarray'));\n" \
+     "var_dump($r);"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH091)
+#  define RUNG_E_SOURCE \
+     "$s = \"\\x8f\";\n" \
+     "echo htmlspecialchars($s, 3, 'EUC-JP');"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH102)
+#  define RUNG_E_SOURCE \
+     "$s = str_repeat('A', 16);\n" \
+     "$mask = \"A\\0\";\n" \
+     "strspn($s, $mask, 0, 4294967296);\n" \
+     "echo 'done';"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH103)
+#  define RUNG_E_SOURCE \
+     "$h = 'Hello World';\n$n = 'world';\n" \
+     "$r = stristr($h, $n);\n" \
+     "var_dump($r);\nvar_dump($h);"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH151)
+#  define RUNG_E_SOURCE \
+     "$s = str_repeat('A', 8);\n" \
+     "$a = true;\n$a->p = $s;\n" \
+     "$q1 = array(1,2,3); $q2 = 'XXXXXXXXXXXXXXXX'; $q3 = 1.5;\n" \
+     "echo $s;\nvar_dump($s);"
+#  define RUNG_E_STMT   1
+# elif defined(RUNG_E_CRASH160)
+#  define RUNG_E_SOURCE \
+     "class D { function __destruct() { unset($GLOBALS['x']); } }\n" \
+     "$x = new D();\n" \
+     "extract(array('x' => 'newval'));\n" \
+     "echo 'after=', $x;"
+#  define RUNG_E_STMT   1
 # elif defined(RUNG_E_CRASH068)
 #  define RUNG_E_SOURCE \
      "define('C', 1);\n" \
@@ -215,9 +318,42 @@ static void zif_rung_nop(INTERNAL_FUNCTION_PARAMETERS)
     (void)ht; (void)return_value; (void)this_ptr; (void)return_value_used;
 }
 
+#if defined(PHP_CAP_EXT_PURE)
+/* The pure ext/standard entry points the corpus triggers need. Declared rather than included:
+ * php_string.h and php_array.h drag in the module machinery, and all that is wanted is the
+ * handler address. Registering them here is also what keeps the linker from garbage-collecting
+ * the objects -- nothing else in the image references them. */
+extern void zif_str_repeat(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_strtolower(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_chr(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_strspn(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_stristr(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_count(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_usort(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_array_walk_recursive(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_array_reduce(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_extract(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_unserialize(INTERNAL_FUNCTION_PARAMETERS);
+extern void zif_htmlspecialchars(INTERNAL_FUNCTION_PARAMETERS);
+#endif
+
 static zend_function_entry rung_e_functions[] = {
     { "parse_url", zif_parse_url,  (struct _zend_arg_info *)0, 0, 0 },
     { "var_dump",  zif_rung_nop,   (struct _zend_arg_info *)0, 0, 0 },
+#if defined(PHP_CAP_EXT_PURE)
+    { "str_repeat",           zif_str_repeat,           (struct _zend_arg_info *)0, 0, 0 },
+    { "strtolower",           zif_strtolower,           (struct _zend_arg_info *)0, 0, 0 },
+    { "chr",                  zif_chr,                  (struct _zend_arg_info *)0, 0, 0 },
+    { "strspn",               zif_strspn,               (struct _zend_arg_info *)0, 0, 0 },
+    { "stristr",              zif_stristr,              (struct _zend_arg_info *)0, 0, 0 },
+    { "count",                zif_count,                (struct _zend_arg_info *)0, 0, 0 },
+    { "usort",                zif_usort,                (struct _zend_arg_info *)0, 0, 0 },
+    { "array_walk_recursive", zif_array_walk_recursive, (struct _zend_arg_info *)0, 0, 0 },
+    { "array_reduce",         zif_array_reduce,         (struct _zend_arg_info *)0, 0, 0 },
+    { "extract",              zif_extract,              (struct _zend_arg_info *)0, 0, 0 },
+    { "unserialize",          zif_unserialize,          (struct _zend_arg_info *)0, 0, 0 },
+    { "htmlspecialchars",     zif_htmlspecialchars,     (struct _zend_arg_info *)0, 0, 0 },
+#endif
     { (char *)0,   (void (*)(INTERNAL_FUNCTION_PARAMETERS))0, (struct _zend_arg_info *)0, 0, 0 }
 };
 

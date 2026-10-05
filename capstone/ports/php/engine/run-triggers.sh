@@ -29,7 +29,7 @@ declare -A BIT=( [ENTERED]=1 [SINKED]=2 [STARTED]=4 [COMPILER]=8 [EXECUTOR]=16
 
 build_arm() {   # $1 = out tag, $2 = allocator mode (hier|seam), $3... = extra flags
   local tag=$1; local mode=$2; shift 2
-  PHP_CAP_ALLOC_MODE="$mode" EXTRA_CF="$*" "$HERE/build-engine.sh" E >/dev/null 2>&1 \
+  PHP_CAP_ALLOC_MODE="$mode" PHP_CAP_EXT="${CASE_EXT:-}" EXTRA_CF="$*" "$HERE/build-engine.sh" E >/dev/null 2>&1 \
     || { echo "BUILD-FAIL $tag" >&2; return 1; }
   cp "$O/php_rungE.dom" "$O/trig_$tag.dom"
 }
@@ -73,9 +73,12 @@ run_arm() {     # $1 = tag -> echoes "retval|cause|oob"
 # _estrndup's NUL write at zend_alloc.c:404 -- an allocator bug of ours, in the right arm for the
 # wrong reason. Every verdict now prints the faulting source location so that cannot pass silently.
 fault_site() {  # $1 = log -> "file:line" of the faulting pc, or empty
+  # The pc pattern is deliberately NOT anchored to a 101c prefix. It once was, which silently
+  # returned "no site" the moment the image grew past 1 MB and pcs ran into 101d -- the symptom
+  # was a fault reported with an empty location, which reads like a symbolizer failure and is not.
   local log=$1 pc base elf
-  pc=$(grep -aoE "pc = 101c[0-9a-f]+" "$log" 2>/dev/null | tail -1 | sed 's/pc = //')
-  base=$(grep -aoE "pcc_base = 101c[0-9a-f]+" "$log" 2>/dev/null | tail -1 | sed 's/pcc_base = //')
+  pc=$(grep -aoE "pc = 0x?[0-9a-f]+" "$log" 2>/dev/null | tail -1 | sed 's/pc = 0x//; s/pc = //')
+  base=$(grep -aoE "pcc_base = 0x?[0-9a-f]+" "$log" 2>/dev/null | tail -1 | sed 's/pcc_base = 0x//; s/pcc_base = //')
   [ -z "$pc" ] && return 0
   [ -z "$base" ] && base=101c00000
   elf=$(( 0x10000 + (0x$pc - 0x$base) ))
@@ -142,6 +145,10 @@ axis_of() {
     CRASH-003|CRASH-004|CRASH-010|CRASH-067) echo temporal ;;
     CRASH-024|CRASH-025|CRASH-042|CRASH-065|CRASH-140) echo temporal ;;
     CRASH-068|CRASH-155) echo temporal ;;
+    # the pure-ext cases: CWE-416 on the temporal axis, CWE-125 on the spatial one
+    CRASH-022|CRASH-035|CRASH-047|CRASH-057|CRASH-074|CRASH-080|CRASH-103|CRASH-151|CRASH-160)
+        echo temporal ;;
+    CRASH-066|CRASH-091|CRASH-102) echo heap ;;
     CRASH-005) echo global ;;
     *) echo heap ;;
   esac
@@ -163,6 +170,23 @@ BLIND_REACHABLE=(CRASH-110 CRASH-073 CRASH-003 CRASH-004 CRASH-010 CRASH-067
                  CRASH-024 CRASH-025 CRASH-042 CRASH-065 CRASH-140)
 
 sel_of() { echo "-DRUNG_E_${1/CRASH-/CRASH}"; }
+
+# Cases needing more of ext/standard than url.c. PHP_CAP_EXT=pure adds string.c, array.c, var.c,
+# html.c, strnatcmp.c and var_unserializer.c -- all pure computation, no OS surface.
+declare -A NEEDS_EXT=(
+  [CRASH-022]=pure [CRASH-035]=pure [CRASH-047]=pure [CRASH-057]=pure [CRASH-066]=pure
+  [CRASH-074]=pure [CRASH-080]=pure [CRASH-091]=pure [CRASH-102]=pure [CRASH-103]=pure
+  [CRASH-151]=pure [CRASH-160]=pure
+)
+
+# WHERE A SPATIAL CATCH IS ALLOWED TO LAND, per case. The gate used to hard-code url.c, which was
+# right while url.c was the only ext file linked and becomes wrong the moment another is. The file
+# here is the one ASAN names, so the check stays "did it fault in the defect's own code" rather
+# than degenerating into "did it fault anywhere".
+declare -A EXPECT_FILE=(
+  [CRASH-110]=url.c [CRASH-073]=url.c
+  [CRASH-066]=var_unserializer.c [CRASH-091]=html.c [CRASH-102]=string.c
+)
 
 # THE TEMPORAL AXIS NEEDS A CONTROL THAT LEAVES REVOCATION ON.
 #
@@ -203,6 +227,7 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
   local sel=$2
   local rc=0
   local axis
+  CASE_EXT="${NEEDS_EXT[$id]:-}"      # read by build_arm; empty keeps the url.c-only image
   axis=$(axis_of "$id")
   if [ "$axis" = temporal ]; then
     echo
@@ -229,6 +254,16 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
     echo "==> CONTROL arm (-DZEND_NO_REVOKE) -- stock PHP lifetime behaviour"
     if [ -z "$v" ]; then
       echo "    CONTROL DID NOT COMPLETE (cause=${cause:-none}). No verdict -- infrastructure." >&2
+      return 75
+    fi
+    # DID THE SCRIPT ACTUALLY RUN? A control that bails out of the eval -- a fatal error during
+    # compile or execute -- "completes" in the sense of returning a retval, while never reaching
+    # the opcodes under test. Scoring the fault arm against it produces a MISSED verdict for a
+    # case that was never exercised, which is a false negative manufactured by the harness.
+    # CRASH-047 did exactly that: both arms returned with BAILED|ERRORS and EVALED unset.
+    if [ $(( v & BIT[EVALED] )) -eq 0 ]; then
+      echo "    CONTROL returned but the eval BAILED (flags:$(flags_of "$v"))." >&2
+      echo "    The trigger never ran, so there is nothing to catch. NO VERDICT." >&2
       return 75
     fi
     echo "    PASS  completed (retval=$v) -- the use-after-free SURVIVED, as on stock PHP"
@@ -322,8 +357,9 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
     echo "    CAUGHT  cause = $cause"
     [ -n "$oob" ] && echo "            $oob"
     echo "            faulting site: ${site:-<unresolved>}"
+    local want="${EXPECT_FILE[$id]:-url.c}"
     case "$site" in
-      url.c:*) : ;;   # the defect under test, reading through its own frame
+      "$want":*) : ;;   # the defect under test, reading through its own frame
       *)
         # A copy primitive, for a case whose over-read ASAN also reports inside memcpy: attributable
         # on evidence, never on the pc alone.
@@ -348,12 +384,12 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
           echo "         #1 _estrndup, #2 php_url_parse)."
           return 0
         fi
-        echo "SUSPECT: $id -- the fault arm faulted, but NOT in url.c. That is an artefact of" >&2
+        echo "SUSPECT: $id -- the fault arm faulted, but NOT in $want. That is an artefact of" >&2
         echo "         this port, not a corpus catch. Treating as NO VERDICT." >&2
         return 75 ;;
     esac
-    echo "VERDICT: $id CAUGHT. url.c is byte-identical from the corpus; the over-read is"
-    echo "         stopped by the capability bound on the zval string."
+    echo "VERDICT: $id CAUGHT. $want is byte-identical from the corpus; the over-read is"
+    echo "         stopped by the capability bound on the object."
   elif [ -n "$v" ]; then
     echo "    retval=$v flags:$(flags_of "$v")"
     echo "VERDICT: $id MISSED -- the fault arm completed. The read is inside the bound."
@@ -389,6 +425,13 @@ case "$WHICH" in
   blind)
     # Every reachable case that unpatched ASAN cannot detect. This is the headline experiment.
     for c in "${BLIND_REACHABLE[@]}"; do
+      one_case "$c" "$(sel_of "$c")" ; r=$?
+      [ "$r" -gt "$worst" ] && worst=$r
+    done ;;
+  pureext)
+    # The twelve ASAN-blind cases unlocked by linking the pure ext/standard TUs.
+    for c in CRASH-022 CRASH-035 CRASH-047 CRASH-057 CRASH-066 CRASH-074 \
+             CRASH-080 CRASH-091 CRASH-102 CRASH-103 CRASH-151 CRASH-160; do
       one_case "$c" "$(sel_of "$c")" ; r=$?
       [ "$r" -gt "$worst" ] && worst=$r
     done ;;

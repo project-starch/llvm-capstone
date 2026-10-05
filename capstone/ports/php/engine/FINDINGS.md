@@ -523,6 +523,72 @@ faults at the exact line ASAN names as frame #0:**
 Line-level agreement on eleven independent cases, against a detector that needed the allocator
 rewritten to see any of them, is the strongest evidence in this file.
 
+## LINKING THE PURE ext/standard TUs: 19 of 31, and the FIRST REAL MISS
+
+`PHP_CAP_EXT=pure` adds `string.c`, `array.c`, `var.c`, `html.c`, `strnatcmp.c` and
+`var_unserializer.c` -- pure computation, no OS surface -- which brings 12 more ASAN-blind cases
+into reach. Result:
+
+| | cases |
+|---|---|
+| **CAUGHT** | **8** -- CRASH-035, -066, -074, -080, -091, -103, -151, -160 |
+| **MISSED** | **1** -- CRASH-057 |
+| no verdict, control faults | 2 -- CRASH-022, CRASH-102 |
+| no verdict, trigger never ran | 1 -- CRASH-047 |
+
+Two of the catches are on the SPATIAL axis in code other than `url.c`, which is new:
+`CRASH-066` at `var_unserializer.c:390` and `CRASH-091` at `html.c:656`, each one byte past the
+bound, each with a completing control.
+
+**Running total against the population that matters: 19 of the 31 cases unpatched ASAN cannot see.**
+
+### CRASH-057 is a genuine MISS, and it is the most useful result here
+
+`$x = ($s[1] = chr(67) . '');` -- the corpus records a use-after-free on an `IS_TMP_VAR`. Both arms
+completed, identically, with the trigger fully evaluated (`EVALED | ISARRAY` set). So the capability
+allocator did not make the stale reference dead.
+
+That is a real limitation, not an infrastructure problem, and the likely reason is one already
+stated elsewhere in this file: **temp variables are bounded as one array** (`EX_T` is a byte offset
+added to a `char *`), so a temp's lifetime is the frame's, not the temp's. Revocation keys on
+`efree`, and this zval's storage is never individually freed. Confirming that requires
+instrumenting the temp path; until then it is the best-supported explanation, not a diagnosis.
+
+**Recording a miss matters more than recording a catch.** Every verdict in this file is only worth
+as much as the harness's willingness to return MISSED, and this is the first case where it did.
+
+### The harness gained a "did the script actually run?" gate
+
+CRASH-047 first reported MISSED. It had not been missed: both arms returned with `BAILED | ERRORS`
+and `EVALED` UNSET -- a fatal error during compile or execute, so the opcodes under test never ran.
+A control that bails still returns a retval, which the old check accepted as "completed".
+
+The temporal control now requires `EVALED`, and reports NO VERDICT otherwise. Without it the suite
+manufactures false negatives for any trigger the port cannot compile or execute, which is exactly
+the failure mode a differential harness must not have.
+
+### Two ceilings hit while linking, both worth knowing
+
+**The domain size ceiling is shared between the image and its DECLARATION.** The pure-ext image
+grows from 1.4 MB to 2.35 MB, and the historic 2 MiB `.capstone_domreq` declaration no longer fits
+beside it. Over the limit the MONITOR faults internally -- cause 5 at `pc 0x8002164c`, inside the
+firmware, with `pcc_base` in the `0x8001xxxx` range -- which reads like a domain bug and is not.
+`build-engine.sh` now declares 1.5 MiB when `PHP_CAP_EXT` is set; 1.5, 1.25 and 1 MiB were all
+measured to complete the benign workload.
+
+**`fault_site` was anchored to a `101c` pc prefix.** Once the image passed 1 MB, pcs ran into
+`101d` and every lookup silently returned empty -- a fault reported with no location, which looks
+like a symbolizer failure. The pattern is now unanchored.
+
+### What linking cost, in stubs
+
+Four guarded-include stubs (`wchar.h`, `locale.h`, `langinfo.h`, `monetary.h`), real C-locale
+implementations of `localeconv`, `setlocale`, `nl_langinfo`, `strcoll`, `strpbrk`, `mblen`,
+`strfmon`, PHP's four globals at their own types (`core_globals`, `sapi_globals`, `sapi_module`,
+`basic_globals`), and output-side stand-ins (`php_body_write`, `php_printf`, `spprintf` --
+which allocates, because its callers `efree` the result). Output buffering reports FAILURE rather
+than faking success, so `print_r($x, true)` cannot silently return an empty string.
+
 ### Does everything that CAN run get caught? Stats, and the one exception
 
 Classifying all 127 by what each trigger actually needs (every called function mapped to its

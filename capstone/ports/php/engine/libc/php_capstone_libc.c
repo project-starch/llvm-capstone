@@ -226,3 +226,90 @@ void *php_capstone_alloca(unsigned long n)
     if (alloca_off > php_capstone_alloca_peak) { php_capstone_alloca_peak = alloca_off; }
     return p;
 }
+
+#include <locale.h>
+#include <langinfo.h>
+
+/* The "C" locale, and the only one a domain has. ext/standard/string.c's php_localeconv_r copies
+ * this struct wholesale on the number_format path; no trigger reaches it, but it must link. The
+ * CHAR_MAX entries mean "unspecified", exactly as the C standard says for the C locale. */
+struct lconv *localeconv(void)
+{
+    static char empty[] = "";
+    static char point[] = ".";
+    static struct lconv c_locale;
+    c_locale.decimal_point     = point;
+    c_locale.thousands_sep     = empty;
+    c_locale.grouping          = empty;
+    c_locale.int_curr_symbol   = empty;
+    c_locale.currency_symbol   = empty;
+    c_locale.mon_decimal_point = empty;
+    c_locale.mon_thousands_sep = empty;
+    c_locale.mon_grouping      = empty;
+    c_locale.positive_sign     = empty;
+    c_locale.negative_sign     = empty;
+    c_locale.int_frac_digits   = (char)127;
+    c_locale.frac_digits       = (char)127;
+    c_locale.p_cs_precedes     = (char)127;
+    c_locale.p_sep_by_space    = (char)127;
+    c_locale.n_cs_precedes     = (char)127;
+    c_locale.n_sep_by_space    = (char)127;
+    c_locale.p_sign_posn       = (char)127;
+    c_locale.n_sign_posn       = (char)127;
+    return &c_locale;
+}
+
+/* A domain has the "C" locale and no means to acquire another. Querying (locale == NULL) reports
+ * "C"; asking for "C" or "" succeeds trivially; anything else fails, which is what a C library
+ * without locale data is required to do. PHP_FUNCTION(setlocale) then returns false, correctly. */
+char *setlocale(int category, const char *locale)
+{
+    static char c_name[] = "C";
+    (void)category;
+    if (!locale) { return c_name; }
+    if ((locale[0] == 'C' && locale[1] == 0) || locale[0] == 0) { return c_name; }
+    return (char *)0;
+}
+
+char *nl_langinfo(nl_item item)
+{
+    static char empty[] = "";
+    (void)item;
+    return empty;
+}
+
+/* --- string/locale helpers ext/standard's pure TUs import from libc ---
+ * None is on a trigger path; each must link, and each does the C-locale-correct thing rather than
+ * returning a placeholder, so that a future trigger reaching one behaves predictably. */
+
+/* In the C locale, collation order IS byte order. */
+int strcoll(const char *a, const char *b)
+{
+    while (*a && *a == *b) { a++; b++; }
+    return (int)(unsigned char)*a - (int)(unsigned char)*b;
+}
+
+char *strpbrk(const char *s, const char *accept)
+{
+    for (; *s; s++) {
+        for (const char *a = accept; *a; a++) { if (*s == *a) { return (char *)s; } }
+    }
+    return (char *)0;
+}
+
+/* Single-byte locale: every non-NUL byte is a complete character, and mblen(NULL, n) reports
+ * that the encoding is stateless by returning 0, as C requires. */
+int mblen(const char *s, unsigned long n)
+{
+    if (!s) { return 0; }
+    if (n == 0) { return -1; }
+    return *s ? 1 : 0;
+}
+
+/* Monetary formatting has no C-locale definition and PHP only reaches it from money_format().
+ * -1 with no output is the documented failure, which is the honest answer here. */
+long strfmon(char *s, unsigned long max, const char *format, ...)
+{
+    (void)s; (void)max; (void)format;
+    return -1;
+}
