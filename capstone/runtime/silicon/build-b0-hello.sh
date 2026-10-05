@@ -101,7 +101,9 @@ ASM=(-target capstone64-unknown-elf -ffreestanding -DCAPSTONE_GP_CAPTABLE_ABI=1)
 GLUE_CTX=(); [ "$CTXB" -gt 0 ] && GLUE_CTX=(-DCAPSTONE_GLUE_CONTEXTS=1 -DCAPSTONE_CONTEXT_ARENA_BYTES=$CTXB -I"$CAP/runtime/include")
 # B0_GLUE_EXTRA: extra -D for the glue only, e.g. -DCAPSTONE_GLUE_CONTEXTS_PEEK (QEMU-only prints; never on a board).
 [ -n "${B0_GLUE_EXTRA:-}" ] && GLUE_CTX+=($B0_GLUE_EXTRA)
-"$CC" "${ASM[@]}" -DCAPSTONE_GLUE_YIELD=1 -DCAPSTONE_GLUE_NO_MCSR=1 "${GLUE_CTX[@]}" -c "$CAP/tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S" \
+# CAPSTONE_GLUE_CARVE_ALIGN (ISSUES R-11): carve points stay multiples of the region's cursorless granule, which
+# matters once the data region spans more than one 2 MiB window (memcached's does).
+"$CC" "${ASM[@]}" -DCAPSTONE_GLUE_YIELD=1 -DCAPSTONE_GLUE_NO_MCSR=1 -DCAPSTONE_GLUE_CARVE_ALIGN=1 "${GLUE_CTX[@]}" -c "$CAP/tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S" \
   -o "$OUT/glue.o"   # outside obj/, so the obj/*.o glob below does not list it twice
 for f in set_thread_area setjmp altstack; do "$CC" "${ASM[@]}" -c "$M/$f.S" -o "$OUT/obj/asm_$f.o"; done
 "$CC" "${ASM[@]}" "${APPDEFS[@]}" -c "$CAP/runtime/domain/domreq.S" -o "$OUT/obj/asm_domreq.o"

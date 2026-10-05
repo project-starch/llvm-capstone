@@ -1151,6 +1151,34 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   tval unconditionally (SUPC/SUPE/SUPT); firmware 9dbcddf6b32f.
   - Predicted: the same fault, now with its location. epc minus DBAS gives the image offset.
   - A pass would mean B2's fault is not deterministic.
+- **B2f result (21:16-21:23): the same fault, now located.** `SUPC 0x1c` (28), `SUPE 0xac1000d8` = DBAS + 0xd8,
+  `SUPT 0xae0d6f60`.
+  - The pc is `sd a7, 0(t6)` in the glue's carve loop, which copies a global's initial bytes into its freshly
+    split storage. The store address lies above everything the carve should have produced.
+- **Diagnosis: ISSUES R-11, its first hit on silicon.** R-11 was "OPEN, not yet hit".
+  - SPLIT writes both halves in compress_bounds' cursorless form (capstone_dyn_unit.anvil:180-184; ariane_pkg.sv
+    :793-812). That form keeps the top as 21 bits above E, E = (highest bit where cursor and top differ) - 20, and
+    truncates the rest.
+  - In memcached's 32 MiB block the region's base (0xac1...) and its split points (0xae0...) differ at bit 25, so
+    E = 5. The table split at `END - 265*16` left the stack capability's top 16 bytes short.
+  - The first global carved below it (56 bytes of initial data) got 48. Its seventh store faulted at `END -
+    0x10a0`.
+  - A literal Python port of compress_bounds/decompress_bounds reproduces the board's 0xae0d6f60 exactly, for any
+    plausible base and END 0xae0d8000, which is a 32 MiB block. In that model the old carve leaves 30 inexact
+    capabilities; B0/B1's 2 MiB regions (E <= 1) lose nothing.
+  - QEMU has no cursorless encoding, so it cannot show any of this.
+- **The detector R-11 shipped did not fire, and could not have.** `check-repr.py` reports this image as `tot=1048576
+  OK`. Its region model is the old SDK sizing from code length, and it never reads the domain's declared data size
+  (.capstone_domreq), B1's arena or M-14's alignment. The B0 build never ran it either.
+- **Fix: `CAPSTONE_GLUE_CARVE_ALIGN`, now on in every B0 build.**
+  - E is computed once from the region's base and top. The carve top is aligned down, and the table and every
+    global's storage are rounded up to max(16, 2^E), so no split point can lose bits.
+  - It is a no-op inside one 2 MiB window. The ladder's glue stays byte-identical without the define.
+  - The model says 0 inexact capabilities, against 30 before.
+- **B2a pre-registered (before the boot):** memcached ba7e6921cf27f2b6 (the aligned glue), firmware 4279572eceda
+  (monitor 1f9aedd, which still reports faults), the same client and rung.
+  - **Predicted: `B2: client rc=0 memcached rc=0`, `RESULT b2-memcached retval=0`.**
+  - A new fault would come with its location; no fault and still no connection would point past the first entry.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
