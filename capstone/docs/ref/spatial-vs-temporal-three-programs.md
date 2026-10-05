@@ -14,7 +14,7 @@ anything is broken. A grep for the word finds arms, not defects.
 
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|
-| **spatial**, as corpus cases | **0** | **0** | **0** |
+| **spatial**, as corpus cases | **11 built and measured** | **0** | **11** |
 | **spatial**, triaged upstream defects (§1a) | **19** (15 class B + 4 class C) | 21+ class A, not pursued | **19** |
 | **temporal**, as corpus cases | 22 | 5 | **27** |
 
@@ -88,39 +88,92 @@ Zero are built as corpus cases yet — see the honest comparison below.
   allocator adapter can help; the authority that would need narrowing is per struct member. That is
   the taxonomy's `partial²` cell, where CHERI and Capstone already share a verdict.
 
-**Honest comparison with the temporal hunt, because the two are not equivalent:** the temporal hunt
-produced **22 built corpus cases**; this one has produced **19 triaged candidates and 0 built
-cases**. Triage documents are not a corpus. The nearest buildable case is `0261fd7da6`, whose
-mechanism is unconditional pointer arithmetic (`+= 6` on a `wmem_strdup`'d string with no length
-check) and which would discriminate on the existing `chunks` arm.
+**Comparison with the temporal hunt, which produced 22 built cases:** this hunt has produced **19
+triaged candidates and 11 BUILT, MEASURED cases** — tshark 5, memcached 3, FFmpeg 3. Eleven is not
+parity with 22, and this is not the place to imply it is.
 
-The 22 nested ones are the committed corpus case folders, one per defect:
+| program | built | corpus | measured how | live at pin |
+|---|---:|---|---|---:|
+| tshark | **5** | `wireshark/wmem-repros` cases 13-17 | QEMU, 12/12 on each of two builds, negative control 12/12 | 2 |
+| memcached | **3** | `memcached/allocator-repros` cases 5-7 | native fix-differential, 8/8 with the temporal rows as control | 0 |
+| FFmpeg | **3** | `ffmpeg/subobject-repros` cases 0-2 *(new corpus)* | native fix-differential 3/3, plus ASan measured blind two-sided | 3 |
 
-| program | corpus | cases |
-|---|---|---:|
-| memcached | `bug-corpora/memcached/allocator-repros/` (`00`–`04`) | 5 |
-| tshark | `bug-corpora/wireshark/wmem-repros/` (`00`–`12`) | 13 |
-| FFmpeg | `bug-corpora/ffmpeg/pool-repros/` (`00`–`03`) | 4 |
+**The result is not the count — it is that the three programs divide on WHO CAN SEE these defects**,
+and the division was measured rather than argued:
 
-The 5 plain-heap ones are carried as port fixtures rather than corpus folders:
+- **tshark's five all fault**, cause **5** on the three reads and cause **7** on the two writes, and
+  they do **not** discriminate the chunk port: `wm_narrow()`
+  (`ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15`) narrows every wmem allocation on every
+  arm, so that harness has no malloc-granular arm to contrast against. The contrast is the app
+  port's fx12 ladder in §3.
+- **FFmpeg's three are caught by NOTHING**, measured: each crosses a bound *between two members of
+  one allocation*, so every per-allocation bound is in bounds for it, and ASan is blind with a
+  positive control that fires. The `partial²` cell of §4.
+- **memcached's three are native-only**: their Capstone readings are declared predictions pointing
+  deliberately different ways, so a future reading settles something.
 
-| program | fixture | upstream |
-|---|---|---|
-| memcached | 17 | `204019d` — `try_read_network` reallocs the connection read buffer, stale pointer survives |
-| memcached | 18 | `e779381` — logger close clears the global slot and frees the watcher |
-| tshark | 14 | CVE-2026-95391 / `030bf6ad011c` — ZigBee Touchlink, **live at the v4.6.8 pin** |
-| tshark | 15 | `6e61bca421` — http2 regex unref, **live at the pin** |
-| FFmpeg | 24 | `bc46eab87c4f` — vvc/thread, `fc->ft` not cleared when the frame thread is freed |
+**The measurement is now CLOSED. Every one of the 80 arm cells across the eleven cases is
+accounted for**, and the arithmetic reconciles from the case files rather than from a summary:
 
-FFmpeg fixture 25 is **not** in this list: it is synthetic, and the claim that it was live at the pin
-was retracted in `bfb92aea0924`.
+| | measured | unavailable | declined | n/a | total |
+|---|---:|---:|---:|---:|---:|
+| tshark (5 cases × 7 arms) | **15** | 15 | 5 | 0 | 35 |
+| memcached (3 × 7) | **9** | 9 | 3 | 0 | 21 |
+| FFmpeg (3 × 8) | **12** | 9 | 0 | 3 | 24 |
+| **total** | **36** | **33** | **8** | **3** | **80** |
 
-**Three titles read spatial and are not.** memcached case `03_a8c4a82787_refcount_overflow...` — an
-*integer* overflow driving an early free; FFmpeg case `01_1886c3269d_h264_refs_partial_clear` — a
-partial clear leaving a live reference, not an out-of-bounds write; tshark fixture 13
-`wmem_chunk_free` — a chunk freed while its block lives on. All three are temporal.
+- **measured** — every Capstone arm of all eleven cases, plus the native fix-differentials and
+  FFmpeg's ASan arm. **All eleven cases are now measured under Capstone**, not six of them.
+- **unavailable** — PoisonCap and CheriBSD, 3 arms × 11 cases. Checked, not assumed:
+  `ports/common/cmake/toolchains/cheribsd.cmake:4-9` requires `CHERI_SDK` and `CHERI_SYSROOT` and
+  `FATAL_ERROR`s without them; both are unset even after sourcing the project environment, and no
+  SDK, rootfs or PoisonCap image exists anywhere on this host.
+- **declined** — the eight `native-detect` (ASan) arms, with a reason that is itself a measurement:
+  the FFmpeg sub-object probe already shows the two-sided shape (silent inside the allocation, fires
+  one element past it), and every crossing in those corpora stays inside one `g_malloc`'d block or
+  slab page by the same mechanism.
+- **n/a** — FFmpeg's `backing` arm: there is no backing allocation distinct from the object, because
+  the object *is* one `av_malloc`.
 
-## 2. Spatial exists only as synthetic probes — and Sublet does catch most of them
+### What the closed measurement shows, per program
+
+- **tshark, 5 cases, all faulting.** Cause **5** on the three reads, cause **7** on the two writes,
+  on **both** builds. They do **not** discriminate the chunk port: `wm_narrow()` narrows every wmem
+  allocation on every arm, so the harness has no malloc-granular arm. 12/12 per build, negative
+  control 12/12.
+- **memcached, 3 cases, and the decisive one.** Case 5 **faults** (cause 7, write probe); cases 6 and
+  7 **complete on both modes**. Case 6 is the result: the defect is real and corrupts the value's
+  storage, the crossing stays **inside** the chunk, the slab port's bound *is* the chunk, and so
+  **nothing we have detects it**. 8/8, negative control 8/8 fired.
+- **FFmpeg, 3 cases, caught by nothing — now measured, not declared.** Probe cases 40-42 of the
+  buffer-pool port, **PASS/PASS on modes 0 and 2**, runner exit 0 each. Each probe asserts the
+  crossing happened, so a completion is a measurement and not a quiet nothing.
+
+**Nine pre-registered predictions were refuted across this work** and each is recorded where it was
+made, never silently corrected. The last four: case 13's completion predictions; the five tshark
+rows' cause 5 (a store faults 7); memcached's *"0 class-B, structural"* verdict; and — the only one
+that went the other way — memcached's three Capstone predictions, which **held**, including the one
+that mattered.
+
+### The two decisions that remain, and they are the lead's
+
+1. **Wire `BLOCK_FAST` into the chunk adapter.** It would turn the two *live* tshark defects into
+   app-port detections. The gap is wiring, not design: the adapter is block-generic, the only wiring
+   patch targets `wmem_block.c`, and `BLOCK_FAST` is the simpler allocator.
+2. **Whether any of this enters the paper.** `tab:target-security`'s rows are programs and its
+   columns configurations, and "Capstone spatial" is a *configuration* scoring 0 on 57 **temporal**
+   bugs — so adding spatial defects means new `Cases` and a changed `\targetCorpus`.
+
+**Deliberately not pursued**, so nobody mistakes it for an oversight: tshark's **251** class-`?`
+candidates and memcached's **152 of 157** unread item-size commits; and `a809a784ec`, whose
+containment is partial.
+
+## 2. The SYNTHETIC spatial probes — and Sublet does catch most of them
+
+> This section's title used to read *"Spatial exists only as synthetic probes"*. **That is no longer
+> true:** §1a's eleven built cases are reductions of real upstream defects. What follows is about
+> the port **fixtures**, which are synthetic and remain the only place the *nested-vs-malloc*
+> contrast is visible — see §3.
 
 Every spatial probe across the three ports' `app/host/safety-expect.txt`. Fixture numbers differ
 per port, so each row names them explicitly.

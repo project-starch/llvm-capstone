@@ -1,0 +1,55 @@
+{
+  "case": 2,
+  "upstream_fix": "e058af88ab",
+  "title": "the DPB walk writes ref_src[16], which is the first element of the next struct member",
+  "consumer": "libavcodec/vulkan_hevc.c",
+  "live_in_pin": true,
+  "live_proof": "LIVE: the fix's 'if (nb_refs >= HEVC_MAX_REFS)' guard is absent from n9.0.1:libavcodec/vulkan_hevc.c, where the walk 'for (int i = 0; i < FF_ARRAY_ELEMS(l->DPB); i++)' still reaches the unguarded vk_hevc_fill_pict call at :760 with 'int idx = nb_refs;'. The targets are HEVC_MAX_REFS wide (:123-125) while l->DPB is HEVCFrame DPB[32] (hevcdec.h:453), so idx can reach 31.",
+  "object": "HEVCVulkanDecodePicture, one refstruct allocation (decode.c:2352)",
+  "lifetime_ender": "NONE -- the object is alive throughout. Sub-object spatial row.",
+  "shape": "pointer array written past its end into the next member of the same allocation",
+  "allocator_layer": "av_refstruct over av_malloc: one allocation for the whole picture-private struct",
+  "fidelity": "model-consumer, real allocator. Reduced to the FIRST crossing write, ref_src[16]. Writing all sixteen extra entries the DPB[32] walk permits would run 128 bytes into a 64-byte member and leave the allocation, which is a different claim -- the first attempt at this case did exactly that and the containment check refused it, which is why the reduction is stated here rather than assumed.",
+  "distinguishing": "the bound crossed FIRST is the sub-object one. Far past it the walk leaves the struct as well, so unlike case 1 this row's containment holds only for the first crossing, and the case asserts the far end of the neighbouring member survives.",
+  "arms": {
+    "spatial": {
+      "oracle": "the sequence completes. NOTHING WE HAVE CATCHES THIS, and measuring that is the row's purpose. The crossing is between two members of ONE allocation, so every per-allocation bound -- shrink, sublet, the pool arms, CHERI -- is in bounds for it. The authority that would have to be narrowed is per struct member, which means the compiler or the allocation site, not an allocator. That is the taxonomy's partial-squared cell, where table6-cheri-vs-capstone-explained.md already gives CHERI and Capstone the same verdict.",
+      "probe_case": 42,
+      "note": "Measured as probe case 42 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound."
+    },
+    "sublet": {
+      "oracle": "the sequence completes: revocation has nothing to fire on, no lifetime ends here, and the bound is the whole allocation. NOTHING WE HAVE CATCHES THIS, and measuring that is the row's purpose. The crossing is between two members of ONE allocation, so every per-allocation bound -- shrink, sublet, the pool arms, CHERI -- is in bounds for it. The authority that would have to be narrowed is per struct member, which means the compiler or the allocation site, not an allocator. That is the taxonomy's partial-squared cell, where table6-cheri-vs-capstone-explained.md already gives CHERI and Capstone the same verdict.",
+      "probe_case": 42,
+      "note": "Measured as probe case 42 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound."
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: completes. Mode 0 bounds an allocation, and the crossing is inside one.",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: completes. Mode 1 adds temporal protection and no lifetime ends here.",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED and UNMEASURABLE HERE: completes, for the same reason -- CHERI bounds the av_malloc and the crossing stays inside it.",
+      "target": "stock CheriBSD purecap with the guest's own libc revocation on",
+      "guest_default": "preserved",
+      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
+    },
+    "native-detect": {
+      "oracle": "NO ASan report, MEASURED two-sided. The member-to-member crossing is inside one allocation, so there is no redzone to poison; a write one uint16_t PAST the same allocation is the positive control and ASan does report it (heap-buffer-overflow, exit 1). Without that control the silence would say nothing about the subject and something about the instrument -- and the first build of the probe proved the point: at -O1 the control was silent too, because the dead store had been optimised away.",
+      "measured": "2026-10-05, results/20261005-native-subobject/ (asan-probe.c and its two arms)"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm's write crosses into the neighbouring member and the sentinel there changes; the fixed arm's bound keeps every write inside its own member. This pair differs by the upstream fix, not by protection -- which is the ONLY oracle available for this class."
+    },
+    "backing": {
+      "oracle": "not applicable, and recorded rather than omitted: there is no backing allocation distinct from the object. The object IS one av_malloc (av_refstruct_allocz -> refstruct.c:109, av_malloc(size + REFCOUNT_OFFSET)), so the 'a mechanism at the wrong point' distinction this arm draws for the pool corpus has nothing to separate here."
+    }
+  },
+  "status": "MEASURED 2026-10-05, both paths. Capstone: probe case 42 (vulkan-hevc-dpb-member-write) of ports/ffmpeg/buffer-pool/security-tests, run under QEMU on BOTH modes 0 and 2 -- PASS/PASS, expected=completed, runner exit 0. So the prediction that NOTHING WE HAVE CATCHES THIS is now measured under Capstone and not merely declared. Native: runners/run-native.sh exit 0, fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261005-native-subobject/). PoisonCap and CheriBSD remain unmeasurable here. N = 1 per cell."
+}

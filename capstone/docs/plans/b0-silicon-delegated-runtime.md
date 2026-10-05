@@ -851,6 +851,57 @@ b0-stats2.
   on in build-b0-hello.sh). Compiler-emitted aggregate copies are a separate path: the SQLite silicon build's W-12
   pass covers those. A full application build needs it too.
 
+## Pre-registered for the R-29/S-10b fix bitstream (2026-10-05, from the RTL lane; nothing to run until it exists)
+The fix is capstone-ariane sup-call 776d9d859 (in simulation; docs on dev efef06cda618). A read whose granule has a
+conflicting store in flight now waits in the dcache read controller until the store drains. The RTL lane's
+correction to the account above: at zero distance the torn read was the STORE buffer's word-granular check letting
+the load pass; the write-buffer phase begins 2-4 instructions later. Both are closed by the fix.
+- **Synthesis first.** The flash needs the lead's own word.
+- **The guards stay in force until the fix is measured on silicon:** CAPSTONE_MEMCPY_PLAIN_GUARD, the delegate
+  runtime's dl_bytes, and the W-12 pass.
+
+**Acceptance boots, controls first.**
+- **Unchanged** (they are controls):
+  - the S-16 bare image;
+  - R-43 a1..a10;
+  - the guarded b0-memcpy build's guarded arm (0/96);
+  - C5u without a fence (1,277-ish preemptions; its quiet overhead is the first number to report if it moves beyond
+    noise).
+- **Changed:**
+  - b0-memcpy's UNGUARDED control: 94/96 becomes **0/96**, and b0-memcpy then exits 2. That "void" now means the
+    hazard is gone, and the 0 is only meaningful because the same image read 94/96 on 715bdd1fe.
+  - The R29 repro rung: 31/32 becomes 0/32.
+  - s10b-storebuf-primed as a bare .dom, if the bare harness builds it: 0 of 8 legs trap becomes 8 of 8.
+    - Source: capstone-ariane sup-call 776d9d859, `verif/tests/custom/capstone/s10b-storebuf-primed.S`.
+      `s10b-storebuf-residual.S` sits beside it.
+    - **The verdict is the TRAP COUNT, not the exit code.** It passes either way: 9 exceptions (the control plus 8
+      legs) on the fix, 1 on 715bdd1fe.
+    - Its header (lines 31-38) is stale boilerplate saying the test does not create its condition. The primed
+      variant does; read past line 120.
+    - For the bare harness, replace its `tohost` exit with `CAPPRINT(gp)` and `CAP_PASS(s11)`, as the RTL lane did
+      for r29-s06agg-shape, and have it report the trap count.
+    - Build: testlist_sup.yaml's gcc_opts, with riscv-tests' `isa/macros/scalar` and `env/p` includes.
+- **Cost:** a true hazard now waits for the store's AXI write, the cost of a fence; a same-set false candidate costs
+  ~3 cycles.
+
+**Measured, 2026-10-05, after the flash (on the lead's word, 16:58-17:00).**
+- **b0-memcpy: as pre-registered.** Same image 73b7cb9a, same firmware 18d47385a38e.
+  - The UNGUARDED control now miscopies **0/96**: low 0, high 0, both 0 of 32 each. It read 94/96 (31, 31, 32) on
+    715bdd1fe.
+  - The guarded copy stays 0/96. The image therefore exits 2, which means the hazard is gone.
+  - Census rungs b0-stats and b0-stats2: 0 and 0. Boot 19:11-19:16; raw lines `/tmp/capstone/b0/board-b08-776.txt`.
+- **R-43 a1..a10: unchanged.** Identity readings are exact and a10's trap and refusal bytes are as on 715bdd1fe.
+  Every row was re-derived from the primary logs by a forensics pass. Result lines: board-supmon,
+  `fpga-repros/R43-revocation-cache-false-deny/results/board-776d9d859.result-lines.txt`.
+- **The S-16 bare set: 18/18 with accept715's readings** (accept776, board-supmon cfa9b34b9adc).
+- **C5u: unchanged.** All six tests pass, and quiet supervision costs +0.680 % (+0.686 % on 715); board-supmon
+  2a1d03e4a3c1.
+- **Corrected label:** the item "the R29 repro rung: 31/32 becomes 0/32" above is b0-memcpy's per-face numbers. R-29's
+  own reproducer is s06agg, whose acceptance is 66 -> 64. It and s10b-storebuf-primed are pre-registered on
+  board-supmon (b4efce6eabd2) and run after this.
+- **The guards stay in the build.** The memcpy guard costs one LCC per granule, and dl_bytes is the clearer code
+  either way. Retiring W-12 for memcached is a separate decision once s06agg reads 64.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the

@@ -348,3 +348,24 @@ arming did nothing).
   quiet/fence test knob, and it costs nothing measurable over B.
 - **Preemptive supervision of the SQLite speedtest costs +0.69 %** at the monitor's quantum (2,000,000 cycles):
   about 1,277 preemptions and resumes per run.
+
+## C5u RESULT on 776d9d859 (boot supmon-c5u-776, 2026-10-05 19:19-19:36): unchanged from 715bdd1fe, all six tests pass
+The same firmware, d07761ded4ce, as on 715. The R-29/S-10b fix bitstream's pre-registration listed C5u as a control
+(llvm-capstone b0-silicon-runtime plan, "Pre-registered for the R-29/S-10b fix bitstream"). `classify-c5f.py`:
+VERDICT all predictions hold. Raw lines: `results/board-c5u-776.result-lines.txt`.
+
+| test | SUPM | preemptions (SUPN) | hash | cycles | 715bdd1fe |
+|---|---|---|---|---|---|
+| 1 k800 | | | retval 4 | 4,530 | 4,569 |
+| 2 plain | 0x000 | - | 112006 38bb59fd | 2,551,682,950 | 2,550,486,094 (+0.047 %) |
+| 3 A, loud | 0x001 | 1,279 | 112006 38bb59fd | 2,904,873,311 (+13.84 %) | 1,278, +13.84 % |
+| 4 C, quiet + fence mask | 0x111 | 1,278 | 112006 38bb59fd | 2,569,522,884 (+0.699 %) | 1,277, +0.699 % |
+| 5 B, quiet | 0x011 | 1,278 | 112006 38bb59fd | 2,569,039,778 (**+0.680 %**) | 1,277, +0.686 % |
+| 6 k800 | | | retval 4 | 4,457 | 4,559 |
+- **The quiet overhead of preemptive supervision is unchanged: +0.680 % against +0.686 % on 715bdd1fe.** The R-29/S-10b
+  fix's added read waits do not show in this workload.
+- Each supervised run preempts once more than on 715 (N=1 per bitstream; the count tracks the run's length).
+- Preflight was overridden (PREFLIGHT=0), as for supmon-c5u-715. Its checks read the shared overlay, not this private
+  firmware. The stages driver's freshness gate read `SQLITE_STAGE_OVERLAY=/tmp/capstone/mon-c0/c5f-overlay`, which
+  holds exactly the firmware's two domains (k800 589ceee3, speedtest1 7291218e). Two earlier attempts stopped at those
+  gates without spending a boot.

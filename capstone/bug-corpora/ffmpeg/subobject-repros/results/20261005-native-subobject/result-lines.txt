@@ -1,0 +1,23 @@
+# run-native.sh over all three cases, 2026-10-05, exit 0
+00_8864fd0aec_cbs_h265_pic_timing_member case=0 arm=fixed
+00_8864fd0aec_cbs_h265_pic_timing_member VERDICT FIXED the fix's bound of 599 keeps every write inside its own member
+00_8864fd0aec_cbs_h265_pic_timing_member case=0 arm=buggy
+00_8864fd0aec_cbs_h265_pic_timing_member VERDICT DEFECT-REPRODUCED index 600 of num_nalus_in_du_minus1[600] overwrote the low half of du_cpb_removal_delay_increment_minus1[0], inside one refstruct allocation
+01_68845e26f7_vulkan_hevc_refpicset_member case=1 arm=fixed
+01_68845e26f7_vulkan_hevc_refpicset_member VERDICT FIXED the fix's FF_ARRAY_ELEMS guard keeps every write inside its own array
+01_68845e26f7_vulkan_hevc_refpicset_member case=1 arm=buggy
+01_68845e26f7_vulkan_hevc_refpicset_member VERDICT DEFECT-REPRODUCED nb_refs = 16 wrote 8 bytes past RefPicSetStCurrBefore[8] into RefPicSetStCurrAfter, inside one refstruct allocation
+02_e058af88ab_vulkan_hevc_dpb_member case=2 arm=fixed
+02_e058af88ab_vulkan_hevc_dpb_member VERDICT FIXED the fix's nb_refs >= HEVC_MAX_REFS guard stops the walk at the array's end
+02_e058af88ab_vulkan_hevc_dpb_member case=2 arm=buggy
+02_e058af88ab_vulkan_hevc_dpb_member VERDICT DEFECT-REPRODUCED the DPB walk wrote ref_src[16], which is h265_refs[0], inside one refstruct allocation
+# asan-probe.c, two arms over the same struct
+
+## ARM inside -- the member-to-member crossing
+exit=0  ASan reports=0
+ARM inside: wrote index 600 of num_nalus_in_du_minus1[600]; du_cpb_removal_delay_increment_minus1[0] is now 0x00004141
+
+## ARM past -- the POSITIVE CONTROL, one uint16_t past the allocation
+exit=1  ASan reports=1
+=================================================================
+==369126==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x520000000e90 at pc 0x61a2b1b203b6 bp 0x7fffa27c1b40 sp 0x7fffa27c1b30

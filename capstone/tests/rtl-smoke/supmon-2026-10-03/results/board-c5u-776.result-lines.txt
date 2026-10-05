@@ -1,0 +1,38 @@
+# boot supmon-c5u-776 on caplifive_supcall_776d9d859.bit, fw d07761ded4ce (C5u, no fence; byte-identical to supmon-c5u-715), 2026-10-05 19:19-19:36
+BT00:00000000
+BT01:00000001
+BT02:00000002
+BT03:00000003
+### TEST 1/6 START k800:/test-domains/k800.dom ###
+ladder-perf: RESULT k800 retval=4 cycles=4530 ran=53406 instret=1089 phase=2
+### TEST 1/6 END k800:/test-domains/k800.dom rc=0 ###
+### TEST 2/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SUPM:00000000
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2551682950 HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0
+### TEST 2/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 3/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SUPM:00000001
+SUPK:00000000
+SUPN:000004FF
+SUPK:00000000
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2904873311 HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0
+### TEST 3/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 4/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SUPM:00000111
+SUPN:000004FE
+SUPK:00000000
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2569522884 HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0
+### TEST 4/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 5/6 START /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify ###
+SUPM:00000011
+SUPN:000004FE
+SUPK:00000000
+Verification Hash: 112006 38bb59fdd33e0c96471ffdb5f6d282f883579ff3925d8518
+SPEEDTEST1-CYCLES 2569039778 HIGHWATER n/a HEAP 2097152 DROPPED 0 RC 0
+### TEST 5/6 END /test-domains/speedtest1.dom:--speedtest1 --testset main --size 1 --verify rc=0 ###
+### TEST 6/6 START k800:/test-domains/k800.dom ###
+ladder-perf: RESULT k800 retval=4 cycles=4457 ran=53406 instret=1089 phase=2
+### TEST 6/6 END k800:/test-domains/k800.dom rc=0 ###

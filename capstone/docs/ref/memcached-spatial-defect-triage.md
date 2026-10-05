@@ -5,8 +5,7 @@ out — `bug-corpora/memcached/allocator-repros/README.md:52-57` *"filtered on t
 vocabulary (55 hits)"* — so it had never been triaged. See the retraction in
 `spatial-vs-temporal-three-programs.md:20`.
 
-**Verdict: 0 class-B defects, and unlike Wireshark that looks like a real structural fact rather
-than an instrument limitation.** The spatial defects memcached fixes are in its *metadata arrays*
+**VERDICT SUPERSEDED 2026-10-05: three spatial cases are now built and measured.** The original verdict below — 0 class-B, structural — was reached with a WORDING filter, and the shape search this file itself prescribed found three. See §6. The structural argument in §2 survives in part and is corrected there. The spatial defects memcached fixes are in its *metadata arrays*
 and its *protocol buffers*, not in item data inside a slab page. One candidate is more interesting
 than its class suggests — see §4.
 
@@ -136,3 +135,121 @@ This is also why a `DEFECT-LIVE` from this script is a **candidate**, never a re
   own adjudication as *"reachable only by a privileged user writing a configuration that would never
   work"* (`allocator-repros/README.md:79`); that rejection stands and is about reachability, not
   class.
+
+
+## 6. SUPERSEDED: the shape search this file prescribed found three cases (2026-10-05)
+
+§2 said the next instrument was *"a search for fixes that change an `item_make_header` / `ITEM_*`
+size computation, which is a **shape** search rather than a wording search"*. Run, it gives **157**
+commits touching an item-size computation, and **three** of them are reducible spatial defects — now cases **5, 6 and 7** of
+`bug-corpora/memcached/allocator-repros`, measured 8/8 natively with the five temporal rows as a
+regression control (`results/20261005-native-spatial/`).
+
+| case | upstream | the crossing | leaves the chunk? |
+|---|---|---|---|
+| **5** | `2d61f18` | three bytes of a two-byte terminator, one byte past the item's data | **yes** — the case sizes the item to the measured chunk stride |
+| **6** | `78eb770` | four bytes of flags into suffix space that does not exist, over the value | **no** — a sub-object crossing inside the chunk |
+| **7** | `ecdb011` | an unterminated key read forward past the key field | no fixed extent |
+
+**All three have subjects that say "corruption", not "overflow"** — which is exactly why the wording
+filter missed them, and is the measured cost of a wording filter on top of the one already recorded
+for the temporal hunt.
+
+**What §2's structural argument got right and wrong.** Right: an item is sized exactly from the key
+and value lengths, so there is no *generic* item-data overflow. Wrong: it concluded no class-B
+defect could live here. Two of the three are size-computation slips at the item's own field
+boundaries — case 5 a hard-coded copy length, case 6 a field with no space allocated — which the
+argument did not consider. Case 6 is the more interesting of the two: it stays **inside** the chunk,
+and the slab port's bound *is* the chunk, so a chunk-granular bound cannot see it. That is the same
+sub-object shape FFmpeg's `subobject-repros` corpus is built around.
+
+The Capstone arms are **declared predictions, not measurements** — case 5 predicts a fault, case 6 a
+completion, case 7 states that it depends on how far the scan runs. No domain build was made.
+
+### The measured result lines (this corpus keeps no committed bundle, by its own `.gitignore`)
+
+`runners/run-native.sh` exit **0** over all eight cases — the five temporal rows ran in the same
+pass as a regression control. The three spatial rows:
+
+```
+    05_2d61f18_item_data_one_past VERDICT FIXED the two-byte copy ends exactly at the item's data end
+    05_2d61f18_item_data_one_past VERDICT DEFECT-REPRODUCED the three-byte copy of a two-byte terminator wrote one byte past the item's data, into the next chunk of the slab page
+    06_78eb770_suffix_write_no_space VERDICT FIXED the guard skipped the copy when no suffix space was allocated
+    06_78eb770_suffix_write_no_space VERDICT DEFECT-REPRODUCED the four-byte flags copy overwrote the value's storage, because with nsuffix = 0 the suffix field has no room of its own
+    07_ecdb011_unterminated_key_read VERDICT FIXED the bounded copy terminated at nkey, so the read stopped there
+    07_ecdb011_unterminated_key_read VERDICT DEFECT-REPRODUCED the formatter read past the key, because nothing terminated it
+```
+
+The Capstone arms are declared predictions, not measurements, and point different ways on purpose:
+case 5 predicts a fault (its crossing leaves the chunk), case 6 a completion (it does not), case 7
+states that it depends on how far the scan runs. No domain build was made.
+
+### A note on how to cite this search's numbers
+
+**157 is a population, not a candidate count, and there is no intermediate number to quote.** A
+regex over the diffs flagged 89 commits as "changing size arithmetic on item storage", and that
+figure is *not* trustworthy: it matched logger and cachedump lines such as
+`memcpy(le->key, ITEM_key(it), it->nkey)` that have nothing to do with an item's size. **Five
+commits were read individually** — the ones whose subjects carry a spatial or corruption word — and
+three of those became cases. The other 152 were **not** read one by one.
+
+Quoting 89 as "candidates" would be the same mistake this tree already records on the FFmpeg side,
+where *"overflow 2,415, out of array 1,062"* was measured in aggregate and never read case by case.
+An aggregate is evidence that a population is large, never that its members were triaged.
+
+## 7. The three cases MEASURED under Capstone (2026-10-05), and one of them settles the class question
+
+§6 landed the three cases with their Capstone arms as **pre-registered predictions** pointing
+deliberately different ways. They have now been measured, and all three predictions hold.
+
+| case | predicted | measured | what it means |
+|---|---|---|---|
+| **5** `2d61f18` | faults | **FAULT, cause 7**, at the labelled WRITE probe, pc `0x10186a0e4` matching the resolved probe address, on **both** modes | the crossing leaves the chunk and the slab port's chunk bound catches it |
+| **6** `78eb770` | completes | **COMPLETES on both modes** | **a chunk-granular bound cannot see a sub-object crossing** — measured, not argued |
+| **7** `ecdb011` | depends on the scan length | **COMPLETES on both modes** | the case's 64-byte cap keeps the read inside the chunk, as its wording anticipated |
+
+**8/8 arms, runner exit 0**, with case 2 in the same pass as the temporal regression control reading
+**cause 24** as before, and the suite's `--negative-control` reporting **8/8 oracles fired** — so the
+pass is not vacuous.
+
+**Case 6 is the result worth carrying.** The defect is real (the native arm reproduces it with
+damage set), it corrupts the value's storage, and **nothing we have detects it**. That is the same
+conclusion FFmpeg's `subobject-repros` corpus reaches, arrived at here from the other end: memcached
+has no class-B defect that a wording filter would find, and the one sub-object defect the shape
+search found is invisible to the allocator-granular bound.
+
+Two things the run showed that were **not** predicted:
+
+- **Case 5 faults on BOTH modes**, so the slab port narrows per chunk whatever the temporal mode —
+  the same shape as `wm_narrow()` on the wireshark side.
+- **The cause is 7, not 5.** A bounds violation on a *store* differs from one on a *load*. The same
+  surprise as the two tshark write rows, so it is now a known distinction rather than a new one.
+
+### Three instrument defects had to be fixed before any of this could be judged
+
+None was about the cases, and each would have reported a correct reading as a failure:
+
+1. **`runners/capstone-domain/run-defects.py` had a hardcoded five-entry `CASES` list** — the drift
+   the contract warns about, and the reason cases 5-7 could not be measured when they landed. It now
+   discovers from `case.json` like its `cheribsd/` and `poisoncap/` siblings. Negative-tested against
+   the old literal: cases 0-4 come out **byte-identical**, 5-7 are added.
+2. **The same runner assumed every row is temporal** — that `spatial` always completes, `sublet`
+   always faults, the probe is always the READ one and the cause always 24 or 25. All four are wrong
+   for a spatial row. It now reads each arm's declared oracle.
+3. **`shared/corpus.h`'s `read_probe` was `unused`, not `used`**, while `write_probe` already had
+   `used`. `mark()` publishes the addresses of **both** probe labels, so the corpus's first
+   write-only case failed to link with `undefined symbol: mc_defect_read`. A one-word seam fix, and
+   the asymmetry had simply never been exercised.
+
+And one defect in **my own cases**, caught by the harness rather than by me: none of the three called
+`mark()`, so the runner found no marker and refused to attribute anything. The contract says the mark
+must be the last thing before the access precisely because its presence is the evidence the setup
+ran.
+
+## 8. PoisonCap and CheriBSD are UNMEASURABLE on this host, checked rather than assumed
+
+`ports/common/cmake/toolchains/cheribsd.cmake:4-9` requires `CHERI_SDK` and `CHERI_SYSROOT` and
+`FATAL_ERROR`s without them. Both are **unset** even after sourcing the project environment, and a
+filesystem search finds **no** CHERI SDK, rootfs or PoisonCap image anywhere on this host. Those
+arms are therefore recorded as *unavailable*, not *pending* — the distinction matters, because
+"pending" invites someone to wait for them.

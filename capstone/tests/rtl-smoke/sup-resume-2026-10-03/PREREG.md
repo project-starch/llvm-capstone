@@ -1099,3 +1099,59 @@ R-49 changes the store path of every switcher write, and R-50 the load unit. Cyc
   would give the double-read its first exercise;
 - a sticky "the old mis-ack cycle was reached" flag, batched into the next bitstream;
 - N = 2 repeats of armdep-nt and C5u B.
+
+## accept776: the S-16 set as a CONTROL on caplifive_supcall_776d9d859.bit (pre-registered 2026-10-05, before the boot)
+- **Bitstream:** capstone-ariane sup-call 776d9d859 (the R-29 + S-10b stall-only fix on top of 715bdd1fe). sha256
+  3c91335acc7c1065ac60c550495ccf4bfb7538ed078b20000d15ce6caecd21a4. Flashed 2026-10-05 16:58-17:00 on the lead's
+  own word, and read back after the power cycle.
+- **Run:** `CAPSTL_BITSTREAM=caplifive_supcall_776d9d859.bit CAPSTL_SET=accept715
+  SUP_RUNNER=$PWD/run_sup_bare_wedge.py CAPSTL_OUT=/tmp/capstone/accept776`. The images are hash-identical to
+  accept715's.
+- **Prediction: UNCHANGED.** Every image completes (rc 0, SUPTEST END), with the same SV readings as accept715
+  apart from the ones accept715 already reported as timing-dependent (preemption and escape counts).
+- **Why it is the control:** the fix changes the dcache read path beside the store buffer, where S-16 lived. A hang
+  or a changed reading here is a regression, and it comes before any claim about R-29.
+
+## accept776 RESULT (2026-10-05 17:01-17:14): the S-16 control set is UNCHANGED on 776d9d859
+- **All 18 images complete:** rc 0 and SUPTEST END, the 17 accept715 images plus the call-retpc control.
+- **Every SV reading is identical to accept715's,** including armdep-nt's 8,551 escapes (0x2167) and the S-17 pair.
+  Lines: `results/accept776.result-lines.txt`.
+- **A limit of the comparison, measured, not assumed.** The comparer fires on mismatched pairs (2 of 3 differ), but
+  s16sd24 and arm12-ld-q64 produce IDENTICAL vectors as different images. For some tests, equality with accept715
+  is therefore weak evidence by itself. For S-16 the verdict is completion, because S-16 fails by hanging, and every
+  image completed.
+- The S-16/S-17 control holds: the R-29/S-10b fix regressed nothing here.
+
+## r51: R-51 on silicon, the PC capability before and after a RETURN-based yield (pre-registered 2026-10-05, before the boot)
+- **The test.** The RTL lane's `r51-return-pcc.S` (capstone-ariane r51-return-pcc ef8900e2d), copied into `tests/`.
+  - One comment line was changed: `RETURN (resume point...` became `RETURN, (`, because cpp expands macro names in
+    `.S` comments and the board harness defines RETURN.
+  - The domain's code capability covers only its stub. It yields with RETURN, is CALLed again, and does an INTEGER
+    jalr to `outside`: mapped and executable, but outside its code capability.
+- **Arms**, built with the bare harness and BOARD_TEST_CH 160, board_rec 0x80003c00:
+  - `r51-before` (-DJUMP_BEFORE: the same jump at the first entry, before any yield), sha256 c42ba366eed59653;
+  - `r51-after`, sha256 17c3c6a83e39cad7.
+- **Run:** after the 776d9d859 acceptance chain, `CAPSTL_BITSTREAM=caplifive_supcall_776d9d859.bit CAPSTL_SET=r51
+  SUP_RUNNER=$PWD/run_sup_bare_wedge.py CAPSTL_OUT=/tmp/capstone/r51-776`, with the call-retpc control first.
+- **Predicted, on 776d9d859** (simulation of the same tree, by the RTL lane):
+  - r51-before: reading #1 = **28**, the PC capability enforced at the first entry;
+  - r51-after: #1 = 0 (the yield happened), **#2 = 0xBAD** (the post-yield jump executed: R-51), #3 = 0.
+  - **r51-after #2 = 28 would REFUTE R-51 on silicon.**
+- QEMU would read 28 for both arms, from swap_pc keeping the PC capability; that is not run here.
+
+## r51 RESULT on 776d9d859 (2026-10-05 19:16-19:19): R-51 is CONFIRMED on silicon, as pre-registered
+Raw lines are in `results/r51-776.result-lines.txt`. Each image ran on its own power cycle, the control first.
+| image | sha256 | readings | pre-registered |
+|---|---|---|---|
+| control-call-retpc | a05ca464c4f683cd | 0, 0x12, 0x21, 0, 0x51, 0, 0, 0 | as accept715/accept776 -- **match** |
+| r51-before (jump at the first entry) | c42ba366eed59653 | **0x1C (28)**, 0x1C | #1 = 28 -- **match** |
+| r51-after (jump after a RETURN yield) | 17c3c6a83e39cad7 | 0, **0xBAD**, 0 | 0, 0xBAD, 0 -- **match** |
+- **The same integer `jalr` to the same `outside` label faults with 28 before the domain's first yield, and executes
+  after it.** Only the code at `outside` writes 0xBAD. So after a RETURN-based yield the resumed domain runs with no
+  PC-capability check on silicon, which is R-51.
+- r51-after's last reading is the caller's `mcause`, 0: the out-of-bounds jump raised NO trap at all.
+- r51-before's second reading is also the caller's `mcause` (its JUMP_BEFORE build skips the resume): 28, the fault
+  just taken. This value was not pre-registered. The test header's "#3 mcause in the caller (0)" describes the
+  after arm.
+- The arms differ in one `-D`, and the before arm is the positive control: it shows `outside` lies outside the
+  domain's code capability, and that a tagged PC capability is checked.

@@ -228,7 +228,7 @@ three post-pin defects, **these four need no new port work to discriminate**:
 | `1c090e9292` | `epan/dissectors/packet-lbmc.c` | `wmem_file_scope()` |
 | `4a4871a831` | `epan/dissectors/packet-ntlmssp.c` | `wmem_file_scope()` |
 
-**`0261fd7da6` is the one to build**, and its mechanism is as reducible as a synthetic fixture.
+**FIVE of these are now BUILT AND MEASURED** as cases 13-17 of `bug-corpora/wireshark/wmem-repros` — `0261fd7da6`, `1d8acb21ab`, `d24613c461`, `e8ef9df09d` and `5a560f3f6a`, measured 12/12 on each of two builds with a temporal regression control and the suite's negative control passing 12/12 (`results/20261005-qemu-spatial-5-{ON,OFF}/`). Cases 14 and 15 are the corpus's only rows **live at the pin**. `0261fd7da6`'s mechanism is as reducible as a synthetic fixture.
 Quoted from the fix's parent, `epan/dissectors/packet-http.c:3740-3751`:
 
 ```c
@@ -264,6 +264,57 @@ all read `snprintf(np, maxname, ...)` — the fixed form. The fix is present; it
 verbatim because upstream renamed `g_snprintf` to `snprintf`, so none of the fix's added lines
 match. Exactly the mechanism §filter-3 predicts, now observed in the Wireshark population too.
 
+## The FIVE cases built from this, and the two predictions their runs REFUTED
+
+Cases **13-17** of `bug-corpora/wireshark/wmem-repros` are the first upstream **spatial** defects
+reduced anywhere in this tree, and the only rows in any corpus here that fault on **bounds** rather
+than on revoked authority (cause 24).
+
+| case | upstream | crossing | measured | live at pin |
+|---|---|---|---|---|
+| 13 | `0261fd7da6` | read past a chunk (HTTP Range `+= 8`) | cause **5** | no |
+| 14 | `1d8acb21ab` | read six bytes past (SolarEdge `[i + 6]`) | cause **5** | **YES** |
+| 15 | `d24613c461` | read **below** a chunk (opcua negative index) | cause **5** | **YES** |
+| 16 | `e8ef9df09d` | **write** past a buffer (DCP RS parity) | cause **7** | no |
+| 17 | `5a560f3f6a` | **one-byte write** past (DNS `maxname + 1`) | cause **7** | no |
+
+**A second pre-registered prediction was refuted:** all five were filed expecting cause 5, and the
+two WRITE rows read **7** — a bounds violation on a store is a different cause from one on a load.
+Right about the probe and the arm, wrong about load-versus-store; cases 16 and 17 record it.
+
+**Measured, 4/4 arms on each of two builds, runner exit 0, with the suite's negative control run and
+passing 4/4** (so the result is not vacuous):
+
+| build | case 13 `spatial` | case 13 protected arm | case 11 control (temporal) |
+|---|---|---|---|
+| `WM_CHUNKS=ON` | **FAULT cause 5** `0x10190222c` | **FAULT cause 5** `0x10190222c` | completes / cause 24 |
+| `WM_CHUNKS=OFF` | **FAULT cause 5** `0x1019013f8` | **FAULT cause 5** `0x1019013f8` | completes / cause 24 |
+
+**And the run refuted this document's own expectation.** The case was filed — and the section above
+was written — predicting that `sublet` would complete and only the chunk arm would fault, i.e. that
+it discriminated the chunk port. It does not, and **cannot in that harness**:
+`ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15` narrows **every** wmem allocation to its
+request under `WM_DOMAIN`, unconditionally and whatever `WM_CHUNKS` is set to. So the corpus port
+has **no malloc-granular arm at all**, the 6-byte object is bounded to 6 bytes on every arm, and the
+read at `+8` faults on all of them.
+
+So the corrected claim, in two halves that must not be merged:
+
+- **Established:** the defect is real, reduces cleanly, and per-allocation bounds catch it.
+- **NOT established here:** that a nested allocator hides the *extent* from `malloc`. That contrast
+  needs an arm whose bounds genuinely are malloc-granular, and the only place with one is the tshark
+  **app** port — the measured fx12 ladder (`level0` 41 908 912, `shrink` 8 388 560, `sublet`
+  1 048 528, `chunks` 64). The `BLOCK_FAST` gap below is about that port, not this one.
+
+**Two instrument defects were found and fixed before any of this was believed**, both of which would
+have reported a correct reading as a failure, and both negative-tested:
+
+1. `run-defects.py` hardcoded `cause in (24, 25)`. A spatial row faults with cause **5**, so the
+   gate would have failed it. The expected causes now come from the case's own arm, and every one of
+   the 14 measured rows already in `results/` is still accepted.
+2. `classify()` assumed the unprotected `spatial` mode always completes. For a spatial defect it
+   faults. Both modes are now judged by their declared arm, with cases 0-12 verified unchanged.
+
 ## Rejected, with reasons
 
 | candidate | reason |
@@ -287,3 +338,26 @@ match. Exactly the mechanism §filter-3 predicts, now observed in the Wireshark 
   None of the three carries a reachability proof yet.
 - **Whether `tshark` as our port builds it** compiles the dissector at all; `solaredge`, `opcua` and
   `dcp-etsi` still need checking against the port's dissector set.
+
+## PoisonCap and CheriBSD are UNMEASURABLE on this host, checked rather than assumed
+
+Every case in this corpus declares a `poisoncap-spatial`, `poisoncap-protected` and
+`cheribsd-revocation` arm, and **none of them can be measured here.**
+`ports/common/cmake/toolchains/cheribsd.cmake:4-9` requires `CHERI_SDK` and `CHERI_SYSROOT` and
+`FATAL_ERROR`s without them; both are **unset** even after sourcing the project environment, and a
+filesystem search finds no CHERI SDK, rootfs or PoisonCap image anywhere on this host.
+
+Recorded as **unavailable**, not *pending*. The distinction matters: "pending" invites someone to
+wait for a measurement that cannot be taken on this machine.
+
+## The runner guard that was missing, and the boot it misreported
+
+`bug-corpora/wireshark/wmem-repros/shared/run-defects.py` had **no** "produced no result" check,
+while its memcached sibling has two. That is why case 15's empty boot was reported as a **FAIL**
+instead of exiting 75: its serial ended at `sh /mnt/host/run.sh` with no marker, no fault and no
+`CONTROL-FAILED`, and a FAIL there reads exactly like the defect failing to reproduce.
+
+The two checks are now in, extracted into `refuse_if_no_result()` so they can be tested without a
+QEMU boot, and **negative-tested five ways** — including against the *real* 73,831-byte empty capture
+that caused the misread, and against two inputs that must NOT be refused (a real passing capture,
+and a fault with no marker, since a fault is itself information).

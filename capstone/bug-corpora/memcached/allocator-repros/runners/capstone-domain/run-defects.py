@@ -19,6 +19,7 @@ printed, so a relink cannot silently turn the check into a tautology.
 """
 
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -28,38 +29,66 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "ports/common/host"))
 from port_support import digest, run_guest, stage_run, write_json
 
-CASES = [
-    (
-        "7af02b0c87",
-        "rbuf-copied-after-cache-free",
-        "stale object pointer / cache.c reuse / read through the dead pointer",
-    ),
-    (
-        "0ad4de66ae",
-        "io-walk-reads-freed-link",
-        "stale object pointer / cache.c reuse / list link read through the dead pointer",
-    ),
-    (
-        "59bd02ce29",
-        "tail-repair-frees-referenced-item",
-        "allocator-forced free of a referenced item / slabs reuse / read through the dead pointer",
-    ),
-    (
-        "a8c4a82787",
-        "refcount-overflow-frees-linked-item",
-        "reference count overflow / item freed with holders remaining / slabs reuse / read through the dead pointer",
-    ),
-    (
-        "152ddb68f7",
-        "unlocked-refcount-drift",
-        "unlocked refcount update / count drifts below the holders / slabs reuse / read through the dead pointer",
-    ),
-]
+HERE = Path(__file__).resolve().parent
+CORPUS = HERE.parents[1]  # same anchor as the sibling runners
+
+
+def load_cases():
+    """The corpus's own case.json files, indexed by case number.
+
+    This WAS a hardcoded five-entry list, which meant adding a case to the corpus silently
+    left this runner measuring the old set -- the drift the contract warns about, and the
+    reason cases 5-7 could not be measured when they landed. The two sibling runners
+    (cheribsd/, poisoncap/) already discover; this one now does too, by the same pattern.
+    The tuple shape (fix, name, shape) is preserved so every existing use site is unchanged.
+    """
+    found = {}
+    for path in sorted(CORPUS.glob("[0-9][0-9]_*/case.json")):
+        claim = json.loads(path.read_text())
+        number = claim["case"]
+        if number in found:
+            raise SystemExit(f"two case.json files claim case {number}")
+        found[number] = (claim["upstream_fix"],
+                         path.parent.name.split("_", 2)[2].replace("_", "-"),
+                         claim["shape"])
+    if not found or sorted(found) != list(range(len(found))):
+        raise SystemExit("the corpus case numbers are not 0..N-1")
+    return [found[i] for i in range(len(found))]
+
+
+CASES = load_cases()
 
 MAGIC = 0x315342414C53434D  # "MCSLABS1"
 MARKER_BASE = 0xCF1C000000000000
 REPORT_FIELDS = 12  # struct mcp_header: 12 x uint64
 COMPLETED = 4  # its index
+
+
+def arm_oracle(which, mode):
+    """What the case's OWN case.json arm says this mode should do.
+
+    This runner used to assume every row is temporal: the `spatial` mode always completes,
+    the `sublet` mode always faults, the probe is always the READ one, and the cause is
+    always 24 or 25. All four are wrong for a SPATIAL row -- cases 5-7 are spatial, case 5
+    faults on BOTH modes with cause 7 (a store), and cases 6-7 complete on both. The
+    assumptions are now read from the arm instead, which is what the sibling wireshark
+    runner already does.
+
+    Returns (expect_fault, site, causes): site 0 is the read probe, 1 the write probe, in
+    the order mark() publishes them; causes is the tuple of acceptable fault causes."""
+    for d in CORPUS.glob(f"{which:02d}_*"):
+        arms = json.loads((d / "case.json").read_text())["arms"]
+        arm = arms.get(mode)
+        if arm is None:
+            raise SystemExit(f"case {which} has no {mode} arm")
+        text = str(arm.get("oracle", ""))
+        low = text.lower()
+        if "completes" in low or low.startswith("complete"):
+            return False, None, ()
+        site = 1 if "write probe" in low else 0
+        declared = arm.get("cause")
+        return True, site, (int(declared),) if declared is not None else (24, 25)
+    raise SystemExit(f"no case.json for case {which}")
 
 
 def classify(serial, report, which, mode, runner_exit):
@@ -75,27 +104,30 @@ def classify(serial, report, which, mode, runner_exit):
     delivered = "capability fault delivered" in serial
     marker = f"Print = Scalar(0x{MARKER_BASE | which:x})"
     fix, name, shape = CASES[which]
+    expect_fault, site, causes = arm_oracle(which, mode)
     row = {
         "case": which,
         "fix": fix,
         "name": name,
         "shape": shape,
         "mode": mode,
-        "expected": "fault" if mode == "sublet" else "complete",
+        "expected": "fault" if expect_fault else "complete",
+        "oracle_arm": mode,
         "runner_exit": runner_exit,
     }
-    if mode == "sublet":
+    if expect_fault:
         following = serial.split(marker, 1)[-1] if marker in serial else ""
         sites = re.findall(r"Print = Cap\(\d+, 0x[0-9a-f]+, (0x[0-9a-f]+),", following)
         cause, pc = faults[-1] if faults else ("0", "0")
-        expected = sites[0] if sites else None  # [0] is the read probe
-        row.update(cause=int(cause), pc=pc, expected_pc=expected, delivered=delivered)
+        expected = sites[site] if len(sites) > site else None
+        row.update(cause=int(cause), pc=pc, expected_pc=expected, delivered=delivered,
+                   site="write" if site else "read")
         ok = (
             marker in serial
             and len(faults) == 1
             and expected is not None
             and int(pc, 16) == int(expected, 16)
-            and int(cause) in (24, 25)
+            and int(cause) in causes
         )
         if delivered:
             # The VM survived, so the claim is containment and it has to be
