@@ -73,7 +73,7 @@ read against the source each port actually pins. None is a live class-A defect:*
 
 **Class A is the class upstream fixes first.** It is what fuzzers, ASan and compiler warnings find,
 and these programs are pinned at recent releases (memcached 1.6.45, wireshark 4.6.8), so those fixes
-are already inside the tree we build — three of the eight rows above are exactly that. What survives
+are already inside the tree we build — three of the rows above are exactly that. What survives
 into a current release is the crossing no existing tool sees: inside a nested allocator's block, or
 inside a single allocation. **That is the project's thesis, and the 0 is evidence for it rather than
 a hole in the data.**
@@ -107,7 +107,7 @@ out of the defect count on purpose.
 | | without extra protection | with Sublet | with the inner allocator ported |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0 of 22** | **21 of 22** | **22 of 22** |
-| temporal, 5 not nested | — (fixtures; see note) | — | — |
+| temporal, 5 not nested | **0 of 5** | **5 of 5** | tshark **2 of 2** |
 | spatial, 11 upstream | **6 of 11** | **6 of 11** | tshark **5 of 5** |
 
 - **Temporal, 0 of 22 without protection, measured** — not predicted. A bound cannot see a dead
@@ -116,6 +116,15 @@ out of the defect count on purpose.
   recycler free ends no epoch — a *recorded non-detection*, declared in the case file, not a
   silent gap. Porting the inner allocator (`sublet-chunks`, `sublet-port`, memcached's slab arms)
   closes it: **22 of 22**.
+- **Temporal, 5 not nested: 0 of 5 without protection, 5 of 5 with Sublet** —
+  measured 2026-10-05, `ports/common/application/results/2026-10-05-qemu-plain-temporal-baseline/`,
+  37 of 37 cells as predicted over ten boots. This row had a dash in it until then, and it is the
+  **denominator**: the plain `malloc`/`free` case against which the nested ones are read. Every
+  `sublet` catch is cause **24**, revoked authority, not a bounds cause. `shrink` returning on all
+  five is the finding, not a gap — these objects really are freed, and a bound still cannot see a
+  dead object. fx2/fx3 ran in all ten boots and faulted on every enforcing arm, so the two axes are
+  separated inside each boot: the same image that returns on a temporal fixture faults on a spatial
+  one.
 - **Spatial: Sublet adds nothing, and that is expected.** Sublet *is* revocation, and revocation has
   nothing to fire on while the object is alive. The 6 spatial catches are `shrink`'s per-object
   bounds, which the `sublet` arm inherits by construction. The two columns being identical is a
@@ -159,6 +168,15 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
     two side tables return to their `AVRefStructPool`s (`refs.c:153`, `:157`) rather than to
     `free()` — marked **predicted, not measured**, and naming what a reading would need. So this
     column is **22 declared, 18 measured, 0 caught**, with no blanks left in it.
+- **The 5 not-nested temporal are the one cell this column predicts NON-ZERO, and it is unmeasured.**
+  Same mechanism, run the other way: the nested cases complete because the stale storage never
+  reaches `free()` — it returns to an inner allocator's own free list inside a block `malloc` still
+  owns. **These five have no inner allocator**, so the quarantine does hold the object and the
+  revoker does sweep it. Predicted **caught, 5 of 5**; not measurable here. That prediction is what
+  gives the measured 0 of 18 its meaning — a system catching nothing anywhere would be
+  indistinguishable from a dead instrument, while one that catches the plain cases and misses the
+  nested ones is measuring the nesting. **It is therefore the first thing an SDK host should run**,
+  and a miss would refute the mechanism rather than add a data point.
 - **Spatial: 0 of 11 measured.** All 11 carry a prediction that the case *completes*, and the reason
   is structural: CHERI bounds the slab page or the enclosing allocation, which is one `malloc`. Not
   measurable on this host, checked rather than assumed —
