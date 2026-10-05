@@ -113,6 +113,27 @@ case "$rung" in
     cat /tmp/b2.out; cat /tmp/b2.err
     echo "RESULT $rung retval=$((crc * 10 + (mrc != 0)))"
     ;;
+  b3-setclock)
+    # B3w: the board's wall clock, read and then set for the b3-oracle rung that follows. memcached's negative
+    # expiries are absolute times 30 days after the epoch, so a board at 1970 + uptime keeps them (B3w, reproduced in
+    # QEMU with `date -s @400`). retval 0, or 100 if `date -s` failed.
+    echo "B3c date before: $(date +%s) uptime $(cut -d' ' -f1 /proc/uptime)"
+    date -s @1791200000 > /dev/null; drc=$?
+    echo "B3c date after setting: $(date +%s) (date -s rc=$drc)"
+    echo "RESULT $rung retval=$((100 * (drc != 0)))"
+    ;;
+  b3-clock)
+    # B3c: the harness's stop_seconds=inf (b3-clock-probe.c: raw clock readings, the harness's now() arithmetic, and
+    # fs0-fs11 held across waitpid of a native child and of memcached, the harness's own sequence). retval = the
+    # probe's bitmask: 0 nothing seen, 32 its self-test did not fire.
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    /test-domains/b3-clock-probe /usr/bin/capstone-job /tmp/b3c-job.json --user 65534:65534 -- \
+      /usr/bin/capstone-exec /test-domains/b3-oracle.dom -l 127.0.0.1 -p 21299 -U 0 -m 8 -t 1 \
+      -o no_lru_crawler,no_lru_maintainer,no_slab_reassign,no_hashexpand
+    prc=$?
+    echo "B3c memcached job $(cat /tmp/b3c-job.json 2>/dev/null)"
+    echo "RESULT $rung retval=$prc"
+    ;;
   b3-oracle)
     # B3: memcached's oracle on silicon. The port's harness (ports/memcached/app/host/mc-harness) starts the domain
     # under capstone-job, runs its scripted 8-connection session and stops it with SIGTERM. Only the transcript's

@@ -1241,7 +1241,7 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   `diff native board`, with the native reference baked into the image (`b0-bake-b3d.sh`). No outcome is predicted
   beyond "the 38 bytes are visible".
 
-- **B3w hypothesis (22:40, from the source, before any run): the board's WALL clock, not a clock that fails to
+- **B3w hypothesis (22:20, from the source, before any run): the board's WALL clock, not a clock that fails to
   advance.**
   - Both served items are set with a NEGATIVE expiry: `touch gone -1` and `set past 0 -1 1`
     (mc-harness.c:207-208).
@@ -1262,6 +1262,38 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - Arm 2 is the only change: the guest clock set to `@400` with `date -s` first. **Predicted: the board's
     transcript exactly, fe153b1465b4c9c5, 1,931,245 bytes.**
   - Any other hash in arm 2 refutes "the wall clock is the whole difference", even if the two items are served.
+- **B3w RESULT (QEMU, 22:23-22:25, after pre-registration 1348a1432ff5; firmware d5c57ee765c9, fabrication off):
+  AS PREDICTED, the wall clock is the whole difference.**
+  - Arm 1, control (`date +%s` = 1791210272): transcript e0a254c47e7ee28c, 1,931,207 bytes, `stop_seconds=1.19`.
+  - Arm 2, `date -s @400` (`date +%s` = 400): transcript **fe153b1465b4c9c5, 1,931,245 bytes**, which is the
+    board's, byte for byte. `stop_seconds=1.30`.
+  - Both arms: `STAT pointer_size 128`, job exit 0, harness rc 0.
+  - So B3's miss is not a memcached, runtime or capability difference. A guest whose wall clock is before
+    1970-01-31 keeps negative-expiry items for 30 days. From the source this holds natively too, since realtime() is
+    memcached's own code; no native run on a 1970 clock was made.
+  - It does not explain `stop_seconds=inf`. That value is monotonic-clock arithmetic in the harness, and a 1970 wall
+    clock gives 1.30 here. It stays UNRESOLVED and gets its own probe.
+- **What the board run must show next:** `date +%s` small (the board's wall clock), then the oracle with the clock
+  set reproducing e0a254c47e7ee28c, which is B3 passing by hash on silicon.
+- **B3c pre-registered (board, before the bake): 776d9d859, monitor 1f9aedd, memcached ba7e6921cf27f2b6, harness
+  b433cd6ec88207a4, probe b3-clock-probe.c (FPGA build 10a5b0d7a0ef2e53).** Rungs in order: b0-stats,
+  `b3-setclock`, `b3-oracle`, `b3-clock`, b0-stats2.
+  - b0-stats and b0-stats2: retval 0.
+  - b3-setclock: **`date before` < 2,592,063** (the board's wall clock before 1970-01-31). A larger value refutes
+    B3w on the board, whatever QEMU showed. Then `date -s @1791200000` succeeds, retval 0.
+  - **b3-oracle: transcript e0a254c47e7ee28c, 1,931,207 bytes**, `STAT pointer_size 128`, job exit 0, retval 0.
+    That is B3 passing by hash on silicon. A different hash with the clock set refutes "the clock is the whole
+    difference" on the board.
+  - b3-clock, a diagnostic placed last because it starts memcached a second time. Its self-test must report exactly
+    1 changed register (fs5), or its hold arms are void. No outcome is predicted for `stop_seconds=inf`; the
+    readings decide between:
+    - an FP arithmetic or load defect (arith anomalies > 0, or t1 in hex not finite);
+    - FP state lost across a domain run (hold-domain changed > 0, hold-native 0);
+    - the kernel's FP context switch (hold-native changed too);
+    - none of these reproduced: UNRESOLVED, with the oracle harness's own value as the in-situ reading.
+  - QEMU rehearsal (22:30, the same probe built for QEMU, firmware d5c57ee765c9): clocks advance 1.007 s, 0 arith
+    anomalies of 200,000, self-test 1 of 12, holds 0 and 0, `stop_seconds=1.40`; oracle e0a254c47e7ee28c after
+    `date -s`.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
