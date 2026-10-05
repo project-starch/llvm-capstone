@@ -927,7 +927,17 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
 - **Still open:** `%Lf` now reads a `double`, which matters to no program here (C-20: nothing can produce a long
   double). `floatscan` (strtod/scanf) is dropped the same way, and memcached needs strtod. The generator's `--source`
   mode is the route, applied to floatscan.c and its header and callers together.
-- **Board run:** after the 776d9d859 acceptance chain frees the board.
+- **Board run, pre-registered 2026-10-05 before the bake.**
+  - The image is the QEMU-passed `b0-printf.dom` (0751dc622b9b78df), baked into a private Linux image with the B0
+    files (`/tmp/capstone/b0/b0-bake-printf.sh`, a copy of b0-bake.sh with this image and its own output dir). The
+    firmware has the same monitor and defines as B0.8's (`-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS
+    -DCAPSTONE_SUPERVISE_QUIET`).
+  - Bitstream 776d9d859. Rungs in order: `b0-stats` (control), `b0-printf`, `b0-stats2`. b0run.sh's new
+    `b0-printf` rung returns the application's own exit status: the number of cases that differ.
+  - **Predicted:** `B1.0 printf: 20 of 20 cases match`, `RESULT b0-printf retval=0`, no MISMATCH line, and both
+    census rungs 0.
+  - A MISMATCH on a `double` case only, with the integer and string cases intact, would put the defect in the
+    narrowed float path on silicon, since QEMU passed the same image.
 
 ## B1 design (2026-10-05): minted contexts under gp-captable, from start-musl.S's context path
 **The finding that sizes B1.** Minted contexts are set up entirely by the SDK glue `start-musl.S`, which B0 does not
