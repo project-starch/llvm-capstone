@@ -1760,7 +1760,33 @@ fix candidate then goes through the sim pair (adjacent must PASS, apart unchange
 one bitstream; the rung's 66 → 64 on the board is the acceptance.
 
 
-### S-18 — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `OPEN — observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations, N = 1 boot); origin not established (write-back lost or a stale read; RTL, FPGA build or kernel FP state); delegated domains are soft-float and do not use the FPU`
+### R-52 (was S-18) — in a NATIVE Linux process on silicon, the value read back after fcvt.d.l / fdiv.d / fadd.d is the destination register's EARLIER value, not the result `ROOT-CAUSED IN RTL AND FIXED IN SIMULATION 2026-10-05 (capstone-ariane branch s18-fpr-clobber 546807884, NOT synthesized; a regression of the 2026-04-24 issue-stage commit, in every bitstream since): the issue stage never marked a floating-point destination as clobbered, so every FP consumer read its operand stale; rv64ud 11 of 12 FAIL -> 12 of 12 PASS; awaiting the lead's next bitstream` -- observed observed 2026-10-05 on caplifive_supcall_776d9d859 (boot B3c, 200,000 of 200,000 evaluations, N = 1 boot); origin not established (write-back lost or a stale read; RTL, FPGA build or kernel FP state); delegated domains are soft-float and do not use the FPU`
+
+> **ROOT CAUSE AND FIX (the RTL lane, 2026-10-05).** Reproduced bit-exactly in the Verilator testharness with
+> `s18-fp-writeback.S` (sup list `s18-fp-capmode` / `s18-fp-nocap`): the loop body's `fmv.x.d` reads the fld's 1e9, on
+> 776d9d859 as on the pre-R-29 HEAD, at memory delay 12 and 40 -- not the dcache hold, not cache timing. Wider than the two
+> sequences: `fdiv.d` and `fadd.d` results never reach the next consumer, `fcvt.d.l` reaches it only when the register's
+> previous writer had long completed, an `fsd` right behind an `fld` stores the old value, and every result does land in
+> order later (a fence + re-read sees the completed chain). **Mechanism:** `issue_read_operands.sv` builds the clobber vectors
+> the issue stage's RAW/WAW stalls and forwarding key on; the FPR line carried the GPR line's NEGATED predicate,
+> `fpr_clobber_vld[rd][i] = still_issued[i] && !(FpPresent && is_rd_fpr(op))`, so no in-flight instruction with an FP
+> destination ever marked its register, `rd_clobber_fpr` read NONE for every register, no FP consumer stalled or was
+> forwarded to, and it read the stale register file. **Origin:** the issue-stage commit of 2026-04-24 ("added missing
+> handling of WAW stalls ... cleaned up issue stage code") changed that line from the positive `still_issued & (FpPresent &&
+> is_rd_fpr(op))`; its own diff shows both lines. Every bitstream built since carries it, and every hard-float native process
+> on silicon since April has computed with stale operands. Delegated domains are unaffected: the silicon build's assembler
+> rejects F/D and memcached's 115,243 `.text` words contain no FP major opcode (the board lane), which is why no oracle caught
+> it; and no RTL regression list carried a floating-point test until now. **Fix:** the predicate un-negated, one line (branch
+> `s18-fpr-clobber` 546807884). With it both s18 arms read every sequence bit-exact to the double arithmetic (A
+> 0x40450fcd6e9b9cb2, B 0x41d954fc4039e425, C 0x419d6f34fc000000, D 0x41466d1badb6db6e) in capmode and plain M-mode, and the
+> standard riscv-tests rv64ud suite in the same harness goes from 11 of 12 FAIL plus `structural` running to the 2,000,000-cycle
+> budget on the current RTL to 12 of 12 PASS (fadd fdiv fcvt fcvt_w fmadd fmin ldst move recoding structural fclass fcmp; all
+> now in `testlist_sup.yaml`). Lint at baseline, UNOPTFLAT 40 with the baseline's set. Sweep: 95-test directed sweep (testlist_capstone.yaml, seed 20260922, memory delay 12) against the 776d9d859 tree's own sweep: 90 identical in exceptions, readings and retired count with zero cycle-count differences, 0 differ; the 3 random-generator entries log-less on both sides as always; the 2 linear-clear tests (updated with the R-29 fix) re-run on the fix and pass. No test in the sweep touches the FPU, so the fix's own positive controls are the s18 arms and the rv64ud suite. **Not
+> synthesized**: it is a candidate for the lead's next bitstream, beside R-51's. The board probe's later hang (fs0-fs11 held
+> across fork + waitpid with an `fadd.d` self-test, no return within 420 s) is unattributed; the same stale-read class is a
+> plausible cause (an `fsd` behind an `fld` stored the old value in simulation) and the fixed bitstream's b3-clock rung is the
+> arm that tells.
+>
 
 **What was seen.** b3-clock-probe.c (runtime/silicon; board build 5aa140cf39647700) evaluates `sec + nsec / 1e9`,
 the oracle harness's `now()` shape, on live CLOCK_MONOTONIC readings. Disassembly of that exact binary:
