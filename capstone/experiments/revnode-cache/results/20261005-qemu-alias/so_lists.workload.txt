@@ -1,0 +1,2 @@
+seq #0 so_lists: PASS rc=0 40.3s
+mix seq n=1: PASS wall=40.3s

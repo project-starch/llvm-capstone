@@ -1,0 +1,2 @@
+seq #0 so_mandelbrot: PASS rc=0 45.2s
+mix seq n=1: PASS wall=45.2s

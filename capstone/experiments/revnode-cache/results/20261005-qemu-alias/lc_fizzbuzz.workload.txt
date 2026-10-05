@@ -1,0 +1,2 @@
+seq #0 lc_fizzbuzz: PASS rc=0 280.5s
+mix seq n=1: PASS wall=280.5s

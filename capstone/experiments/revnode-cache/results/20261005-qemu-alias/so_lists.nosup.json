@@ -1,0 +1,1952 @@
+{
+ "trace": "(fifo)",
+ "records": 1019349845,
+ "logical_records": 1230917866,
+ "nodes_per_line": 1,
+ "excluded_sites": [
+  "supervisor",
+  "gc"
+ ],
+ "excluded_records": 33158,
+ "alias_records": 286556017,
+ "resets": 1,
+ "max_node_id": 6553,
+ "distinct_nodes": 6554,
+ "accesses": {
+  "read": {
+   "ldst": 746437998,
+   "ldc": 197829836,
+   "mrev": 4072,
+   "split": 2479,
+   "revoke": 12703,
+   "delin": 0,
+   "create": 0,
+   "supervisor": 0,
+   "gc": 0,
+   "mem_capstore": 0,
+   "mem_untag": 0,
+   "mem_clear": 0,
+   "drop": 0
+  },
+  "write": {
+   "ldst": 0,
+   "ldc": 0,
+   "mrev": 12216,
+   "split": 7424,
+   "revoke": 12703,
+   "delin": 2702,
+   "create": 3,
+   "supervisor": 0,
+   "gc": 0,
+   "mem_capstore": 0,
+   "mem_untag": 0,
+   "mem_clear": 0,
+   "drop": 0
+  },
+  "alloc": {
+   "ldst": 0,
+   "ldc": 0,
+   "mrev": 4072,
+   "split": 2479,
+   "revoke": 0,
+   "delin": 0,
+   "create": 3,
+   "supervisor": 0,
+   "gc": 0,
+   "mem_capstore": 0,
+   "mem_untag": 0,
+   "mem_clear": 0,
+   "drop": 0
+  },
+  "free": {
+   "ldst": 0,
+   "ldc": 0,
+   "mrev": 0,
+   "split": 0,
+   "revoke": 0,
+   "delin": 0,
+   "create": 0,
+   "supervisor": 0,
+   "gc": 0,
+   "mem_capstore": 0,
+   "mem_untag": 0,
+   "mem_clear": 0,
+   "drop": 0
+  }
+ },
+ "checks_without_node": {
+  "ldst": 0,
+  "ldc": 0,
+  "mrev": 0,
+  "split": 0,
+  "revoke": 0,
+  "delin": 0,
+  "create": 0,
+  "supervisor": 0,
+  "gc": 0,
+  "mem_capstore": 0,
+  "mem_untag": 0,
+  "mem_clear": 0,
+  "drop": 0
+ },
+ "compulsory_misses": {
+  "ldst": 0,
+  "ldc": 0,
+  "mrev": 4072,
+  "split": 2479,
+  "revoke": 0,
+  "delin": 0,
+  "create": 3,
+  "supervisor": 0,
+  "gc": 0,
+  "mem_capstore": 0,
+  "mem_untag": 0,
+  "mem_clear": 0,
+  "drop": 0
+ },
+ "revoke_walks": {
+  "count": 3102,
+  "nodes_walked": 6499,
+  "max": 1994,
+  "hist_buckets": [
+   "0",
+   "1",
+   "2",
+   "3-4",
+   "5-8",
+   "9-16",
+   "17-32",
+   "33-64",
+   "65-128",
+   "129-256",
+   ">256"
+  ],
+  "hist": [
+   0,
+   1699,
+   1401,
+   1,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   1
+  ]
+ },
+ "caches": [
+  {
+   "entries": 8,
+   "ways": "full",
+   "ways_n": 8,
+   "hits": 923118958,
+   "misses": 21209732,
+   "read_hits": 923086585,
+   "read_misses": 21200503,
+   "by_site": {
+    "ldst": [
+     746408787,
+     29211
+    ],
+    "ldc": [
+     176663622,
+     21166214
+    ],
+    "mrev": [
+     13621,
+     6739
+    ],
+    "split": [
+     9894,
+     2488
+    ],
+    "revoke": [
+     20329,
+     5077
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 16,
+   "ways": "full",
+   "ways_n": 16,
+   "hits": 944116209,
+   "misses": 212481,
+   "read_hits": 944083521,
+   "read_misses": 203567,
+   "by_site": {
+    "ldst": [
+     746419644,
+     18354
+    ],
+    "ldc": [
+     197649365,
+     180471
+    ],
+    "mrev": [
+     13933,
+     6427
+    ],
+    "split": [
+     9898,
+     2484
+    ],
+    "revoke": [
+     20664,
+     4742
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 32,
+   "ways": "full",
+   "ways_n": 32,
+   "hits": 944294235,
+   "misses": 34455,
+   "read_hits": 944261254,
+   "read_misses": 25834,
+   "by_site": {
+    "ldst": [
+     746437425,
+     573
+    ],
+    "ldc": [
+     197808597,
+     21239
+    ],
+    "mrev": [
+     14225,
+     6135
+    ],
+    "split": [
+     9899,
+     2483
+    ],
+    "revoke": [
+     21384,
+     4022
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 64,
+   "ways": "full",
+   "ways_n": 64,
+   "hits": 944306857,
+   "misses": 21833,
+   "read_hits": 944273505,
+   "read_misses": 13583,
+   "by_site": {
+    "ldst": [
+     746437865,
+     133
+    ],
+    "ldc": [
+     197819628,
+     10208
+    ],
+    "mrev": [
+     14593,
+     5767
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22163,
+     3243
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 128,
+   "ways": "full",
+   "ways_n": 128,
+   "hits": 944311632,
+   "misses": 17058,
+   "read_hits": 944277760,
+   "read_misses": 9328,
+   "by_site": {
+    "ldst": [
+     746437933,
+     65
+    ],
+    "ldc": [
+     197823454,
+     6382
+    ],
+    "mrev": [
+     15113,
+     5247
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22524,
+     2882
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 256,
+   "ways": "full",
+   "ways_n": 256,
+   "hits": 944314063,
+   "misses": 14627,
+   "read_hits": 944280045,
+   "read_misses": 7043,
+   "by_site": {
+    "ldst": [
+     746437950,
+     48
+    ],
+    "ldc": [
+     197825597,
+     4239
+    ],
+    "mrev": [
+     15259,
+     5101
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22649,
+     2757
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 512,
+   "ways": "full",
+   "ways_n": 512,
+   "hits": 944314830,
+   "misses": 13860,
+   "read_hits": 944280781,
+   "read_misses": 6307,
+   "by_site": {
+    "ldst": [
+     746437979,
+     19
+    ],
+    "ldc": [
+     197826272,
+     3564
+    ],
+    "mrev": [
+     15290,
+     5070
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22681,
+     2725
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 1024,
+   "ways": "full",
+   "ways_n": 1024,
+   "hits": 944315219,
+   "misses": 13471,
+   "read_hits": 944281159,
+   "read_misses": 5929,
+   "by_site": {
+    "ldst": [
+     746437988,
+     10
+    ],
+    "ldc": [
+     197826544,
+     3292
+    ],
+    "mrev": [
+     15301,
+     5059
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22778,
+     2628
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 2048,
+   "ways": "full",
+   "ways_n": 2048,
+   "hits": 944315837,
+   "misses": 12853,
+   "read_hits": 944281653,
+   "read_misses": 5435,
+   "by_site": {
+    "ldst": [
+     746437995,
+     3
+    ],
+    "ldc": [
+     197826700,
+     3136
+    ],
+    "mrev": [
+     15424,
+     4936
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     23110,
+     2296
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 4096,
+   "ways": "full",
+   "ways_n": 4096,
+   "hits": 944317720,
+   "misses": 10970,
+   "read_hits": 944282870,
+   "read_misses": 4218,
+   "by_site": {
+    "ldst": [
+     746437998,
+     0
+    ],
+    "ldc": [
+     197827155,
+     2681
+    ],
+    "mrev": [
+     16090,
+     4270
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     23869,
+     1537
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 8192,
+   "ways": "full",
+   "ways_n": 8192,
+   "hits": 944322136,
+   "misses": 6554,
+   "read_hits": 944287088,
+   "read_misses": 0,
+   "by_site": {
+    "ldst": [
+     746437998,
+     0
+    ],
+    "ldc": [
+     197829836,
+     0
+    ],
+    "mrev": [
+     16288,
+     4072
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     25406,
+     0
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 16384,
+   "ways": "full",
+   "ways_n": 16384,
+   "hits": 944322136,
+   "misses": 6554,
+   "read_hits": 944287088,
+   "read_misses": 0,
+   "by_site": {
+    "ldst": [
+     746437998,
+     0
+    ],
+    "ldc": [
+     197829836,
+     0
+    ],
+    "mrev": [
+     16288,
+     4072
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     25406,
+     0
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 32768,
+   "ways": "full",
+   "ways_n": 32768,
+   "hits": 944322136,
+   "misses": 6554,
+   "read_hits": 944287088,
+   "read_misses": 0,
+   "by_site": {
+    "ldst": [
+     746437998,
+     0
+    ],
+    "ldc": [
+     197829836,
+     0
+    ],
+    "mrev": [
+     16288,
+     4072
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     25406,
+     0
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 65536,
+   "ways": "full",
+   "ways_n": 65536,
+   "hits": 944322136,
+   "misses": 6554,
+   "read_hits": 944287088,
+   "read_misses": 0,
+   "by_site": {
+    "ldst": [
+     746437998,
+     0
+    ],
+    "ldc": [
+     197829836,
+     0
+    ],
+    "mrev": [
+     16288,
+     4072
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     25406,
+     0
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 16,
+   "ways": 1,
+   "hits": 907870283,
+   "misses": 36458407,
+   "read_hits": 907839487,
+   "read_misses": 36447601,
+   "by_site": {
+    "ldst": [
+     737102891,
+     9335107
+    ],
+    "ldc": [
+     170722750,
+     27107086
+    ],
+    "mrev": [
+     13182,
+     7178
+    ],
+    "split": [
+     9266,
+     3116
+    ],
+    "revoke": [
+     19651,
+     5755
+    ],
+    "delin": [
+     2540,
+     162
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 16,
+   "ways": 4,
+   "hits": 935720432,
+   "misses": 8608258,
+   "read_hits": 935687737,
+   "read_misses": 8599351,
+   "by_site": {
+    "ldst": [
+     746423305,
+     14693
+    ],
+    "ldc": [
+     189249900,
+     8579936
+    ],
+    "mrev": [
+     13941,
+     6419
+    ],
+    "split": [
+     9897,
+     2485
+    ],
+    "revoke": [
+     20684,
+     4722
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 16,
+   "ways": 8,
+   "hits": 943606474,
+   "misses": 722216,
+   "read_hits": 943573755,
+   "read_misses": 713333,
+   "by_site": {
+    "ldst": [
+     746418985,
+     19013
+    ],
+    "ldc": [
+     197140263,
+     689573
+    ],
+    "mrev": [
+     13965,
+     6395
+    ],
+    "split": [
+     9897,
+     2485
+    ],
+    "revoke": [
+     20659,
+     4747
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 64,
+   "ways": 1,
+   "hits": 941229740,
+   "misses": 3098950,
+   "read_hits": 941196787,
+   "read_misses": 3090301,
+   "by_site": {
+    "ldst": [
+     745893394,
+     544604
+    ],
+    "ldc": [
+     195287965,
+     2541871
+    ],
+    "mrev": [
+     14391,
+     5969
+    ],
+    "split": [
+     9781,
+     2601
+    ],
+    "revoke": [
+     21545,
+     3861
+    ],
+    "delin": [
+     2661,
+     41
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 64,
+   "ways": 4,
+   "hits": 944305125,
+   "misses": 23565,
+   "read_hits": 944271766,
+   "read_misses": 15322,
+   "by_site": {
+    "ldst": [
+     746437797,
+     201
+    ],
+    "ldc": [
+     197818063,
+     11773
+    ],
+    "mrev": [
+     14600,
+     5760
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22057,
+     3349
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 64,
+   "ways": 8,
+   "hits": 944306665,
+   "misses": 22025,
+   "read_hits": 944273309,
+   "read_misses": 13779,
+   "by_site": {
+    "ldst": [
+     746437854,
+     144
+    ],
+    "ldc": [
+     197819473,
+     10363
+    ],
+    "mrev": [
+     14597,
+     5763
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22133,
+     3273
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 256,
+   "ways": 1,
+   "hits": 943960248,
+   "misses": 368442,
+   "read_hits": 943926509,
+   "read_misses": 360579,
+   "by_site": {
+    "ldst": [
+     746428831,
+     9167
+    ],
+    "ldc": [
+     197481480,
+     348356
+    ],
+    "mrev": [
+     15018,
+     5342
+    ],
+    "split": [
+     9880,
+     2502
+    ],
+    "revoke": [
+     22346,
+     3060
+    ],
+    "delin": [
+     2690,
+     12
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 256,
+   "ways": 4,
+   "hits": 944313703,
+   "misses": 14987,
+   "read_hits": 944279696,
+   "read_misses": 7392,
+   "by_site": {
+    "ldst": [
+     746437957,
+     41
+    ],
+    "ldc": [
+     197825250,
+     4586
+    ],
+    "mrev": [
+     15248,
+     5112
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22640,
+     2766
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 256,
+   "ways": 8,
+   "hits": 944313989,
+   "misses": 14701,
+   "read_hits": 944279968,
+   "read_misses": 7120,
+   "by_site": {
+    "ldst": [
+     746437945,
+     53
+    ],
+    "ldc": [
+     197825527,
+     4309
+    ],
+    "mrev": [
+     15262,
+     5098
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22647,
+     2759
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 1024,
+   "ways": 1,
+   "hits": 944275284,
+   "misses": 53406,
+   "read_hits": 944241336,
+   "read_misses": 45752,
+   "by_site": {
+    "ldst": [
+     746431308,
+     6690
+    ],
+    "ldc": [
+     197793482,
+     36354
+    ],
+    "mrev": [
+     15193,
+     5167
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22695,
+     2711
+    ],
+    "delin": [
+     2700,
+     2
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 1024,
+   "ways": 4,
+   "hits": 944315193,
+   "misses": 13497,
+   "read_hits": 944281135,
+   "read_misses": 5953,
+   "by_site": {
+    "ldst": [
+     746437986,
+     12
+    ],
+    "ldc": [
+     197826495,
+     3341
+    ],
+    "mrev": [
+     15299,
+     5061
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22805,
+     2601
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 1024,
+   "ways": 8,
+   "hits": 944315217,
+   "misses": 13473,
+   "read_hits": 944281158,
+   "read_misses": 5930,
+   "by_site": {
+    "ldst": [
+     746437988,
+     10
+    ],
+    "ldc": [
+     197826531,
+     3305
+    ],
+    "mrev": [
+     15300,
+     5060
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     22790,
+     2616
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 4096,
+   "ways": 1,
+   "hits": 944316525,
+   "misses": 12165,
+   "read_hits": 944281666,
+   "read_misses": 5422,
+   "by_site": {
+    "ldst": [
+     746437858,
+     140
+    ],
+    "ldc": [
+     197825746,
+     4090
+    ],
+    "mrev": [
+     16100,
+     4260
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     24213,
+     1193
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 4096,
+   "ways": 4,
+   "hits": 944317853,
+   "misses": 10837,
+   "read_hits": 944282929,
+   "read_misses": 4159,
+   "by_site": {
+    "ldst": [
+     746437998,
+     0
+    ],
+    "ldc": [
+     197827264,
+     2572
+    ],
+    "mrev": [
+     16164,
+     4196
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     23819,
+     1587
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "entries": 4096,
+   "ways": 8,
+   "hits": 944317721,
+   "misses": 10969,
+   "read_hits": 944282845,
+   "read_misses": 4243,
+   "by_site": {
+    "ldst": [
+     746437998,
+     0
+    ],
+    "ldc": [
+     197827180,
+     2656
+    ],
+    "mrev": [
+     16116,
+     4244
+    ],
+    "split": [
+     9903,
+     2479
+    ],
+    "revoke": [
+     23819,
+     1587
+    ],
+    "delin": [
+     2702,
+     0
+    ],
+    "create": [
+     3,
+     3
+    ],
+    "supervisor": [
+     0,
+     0
+    ],
+    "gc": [
+     0,
+     0
+    ],
+    "mem_capstore": [
+     0,
+     0
+    ],
+    "mem_untag": [
+     0,
+     0
+    ],
+    "mem_clear": [
+     0,
+     0
+    ],
+    "drop": [
+     0,
+     0
+    ]
+   }
+  }
+ ]
+}

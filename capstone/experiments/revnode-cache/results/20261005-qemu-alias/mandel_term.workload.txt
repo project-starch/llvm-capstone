@@ -1,0 +1,2 @@
+seq #0 mandel_term: PASS rc=0 17.1s
+mix seq n=1: PASS wall=17.1s

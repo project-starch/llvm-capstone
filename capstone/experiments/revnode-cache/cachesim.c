@@ -43,12 +43,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, N_KINDS, K_REPEAT = N_KINDS };
+enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, N_KINDS, K_REPEAT = N_KINDS,
+       K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG };  /* alias records: aliasstat.c's, skipped here */
 static const char *kind_name[N_KINDS] = {"read", "write", "alloc", "free", "reset"};
 
-#define N_SITES 9
+#define N_SITES 13
 static const char *site_name[N_SITES] = {"ldst", "ldc", "mrev", "split", "revoke",
-                                         "delin", "create", "supervisor", "gc"};
+                                         "delin", "create", "supervisor", "gc",
+                                         "mem_capstore", "mem_untag", "mem_clear", "drop"};
 
 #define NODE_NONE 0xffffffffu
 #define REC_SIZE 8
@@ -262,7 +264,7 @@ int main(int argc, char **argv) {
     int in_revoke = 0;
     uint32_t revoke_root = 0;
     uint64_t walked = 0;
-    uint64_t logical = 0;
+    uint64_t logical = 0, alias_recs = 0;
     /* The record a REPEAT repeats. */
     int have_last = 0;
     uint32_t last_id = 0;
@@ -281,6 +283,7 @@ int main(int argc, char **argv) {
                 return 1;
             }
             logical += id;
+            if (last_kind >= K_ALIAS_INC) { alias_recs += id; continue; }
             if (excluded[last_site]) { excluded_recs += id; continue; }
             if (last_id == NODE_NONE) { no_node_checks[last_site] += id; continue; }
             count[last_kind][last_site] += id;
@@ -293,6 +296,12 @@ int main(int argc, char **argv) {
             continue;
         }
         ++logical;
+        if (kind >= K_ALIAS_INC && kind <= K_ALIAS_REG && site < N_SITES) {
+            ++alias_recs;
+            have_last = 1;
+            last_id = id; last_kind = kind; last_site = site;
+            continue;
+        }
         if (kind >= N_KINDS || site >= N_SITES) {
             fprintf(stderr, "cachesim: record %llu: bad kind %u / site %u\n",
                     (unsigned long long)i, kind, site);
@@ -377,6 +386,7 @@ int main(int argc, char **argv) {
     for (int s = 0, first = 1; s < N_SITES; ++s)
         if (excluded[s]) { printf("%s\"%s\"", first ? "" : ", ", site_name[s]); first = 0; }
     printf("],\n  \"excluded_records\": %llu,\n", (unsigned long long)excluded_recs);
+    printf("  \"alias_records\": %llu,\n", (unsigned long long)alias_recs);
     printf("  \"resets\": %llu,\n  \"max_node_id\": %u,\n  \"distinct_nodes\": %llu,\n",
            (unsigned long long)resets, max_id, (unsigned long long)distinct);
     printf("  \"accesses\": {");

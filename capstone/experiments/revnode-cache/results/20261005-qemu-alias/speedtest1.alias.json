@@ -1,0 +1,143 @@
+{
+ "trace": "(fifo)",
+ "records": 185079876,
+ "nodes_allocated": 59,
+ "mrev": 8,
+ "split": 48,
+ "lone": 3,
+ "memory_alias_events": {
+  "stored": 25741659,
+  "left": {
+   "mem_capstore": 23712226,
+   "mem_untag": 2029368,
+   "mem_clear": 0,
+   "gc": 6
+  },
+  "live_at_end": 59,
+  "peak_live": 8782
+ },
+ "errors": {
+  "negative_alias_count": 0,
+  "walk_mismatch": 0,
+  "alloc_with_live_aliases": 0
+ },
+ "aliases": {
+  "max_memory_aliases_per_node": {
+   "count": 59,
+   "mean": 150.9831,
+   "max": 8378,
+   "buckets": {
+    "1": 23,
+    "2": 13,
+    "3": 5,
+    "4": 9,
+    "5": 2,
+    "6": 2,
+    "7": 2,
+    "9-16": 1,
+    "257-512": 1,
+    "8193-16384": 1
+   }
+  },
+  "at_revoke_root_memory": {
+   "count": 4,
+   "mean": 3.0,
+   "max": 3,
+   "buckets": {
+    "3": 4
+   }
+  },
+  "at_revoke_root_registers": {
+   "count": 4,
+   "mean": 2.0,
+   "max": 2,
+   "buckets": {
+    "2": 4
+   }
+  },
+  "at_revoke_invalidated_memory": {
+   "count": 4,
+   "mean": 2104.75,
+   "max": 8411,
+   "buckets": {
+    "2": 1,
+    "3": 2,
+    "8193-16384": 1
+   }
+  },
+  "at_revoke_invalidated_registers": {
+   "count": 4,
+   "mean": 0.0,
+   "max": 0,
+   "buckets": {
+    "0": 4
+   }
+  },
+  "at_free_memory": {
+   "count": 7,
+   "mean": 0.0,
+   "max": 0,
+   "buckets": {
+    "0": 7
+   }
+  }
+ },
+ "trees": {
+  "snapshots": 11,
+  "revoke_root_children": {
+   "count": 4,
+   "mean": 1.75,
+   "max": 4,
+   "buckets": {
+    "1": 3,
+    "4": 1
+   }
+  },
+  "revoke_run": {
+   "count": 4,
+   "mean": 1.75,
+   "max": 4,
+   "buckets": {
+    "1": 3,
+    "4": 1
+   }
+  },
+  "revoke_root_depth": {
+   "count": 4,
+   "mean": 0.0,
+   "max": 0,
+   "buckets": {
+    "0": 4
+   }
+  },
+  "live_node_children": {
+   "count": 589,
+   "mean": 0.1036,
+   "max": 4,
+   "buckets": {
+    "0": 549,
+    "1": 33,
+    "4": 7
+   }
+  },
+  "live_node_depth": {
+   "count": 589,
+   "mean": 0.1036,
+   "max": 1,
+   "buckets": {
+    "0": 528,
+    "1": 61
+   }
+  },
+  "tree_size": {
+   "count": 33,
+   "mean": 17.8485,
+   "max": 49,
+   "buckets": {
+    "1": 11,
+    "5": 11,
+    "33-64": 11
+   }
+  }
+ }
+}

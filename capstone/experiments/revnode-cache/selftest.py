@@ -23,7 +23,8 @@ import sys
 import tempfile
 from collections import OrderedDict
 
-SITES = ["ldst", "ldc", "mrev", "split", "revoke", "delin", "create", "supervisor", "gc"]
+SITES = ["ldst", "ldc", "mrev", "split", "revoke", "delin", "create", "supervisor", "gc",
+         "mem_capstore", "mem_untag", "mem_clear", "drop"]
 READ, WRITE, ALLOC, FREE, RESET = range(5)
 NONE = 0xFFFFFFFF
 
@@ -183,6 +184,18 @@ def main():
         want = reference(huge, entries, "full", 1, [])
         got = cache(rh, entries, "full")["by_site"]
         check(all(list(got[s]) == want[s] for s in SITES), f"huge {entries}/full: {got['ldst']} != {want['ldst']}")
+
+    # alias records are not node accesses: a trace with them interleaved (and repeated)
+    # gives the same cache results as without them
+    base = [(rng.randrange(300), READ, 0) for _ in range(5000)]
+    mixed = []
+    for rec in base:
+        mixed.append(rec)
+        if rng.random() < 0.3:
+            mixed += [(rng.randrange(300), 6 + rng.randrange(3), 9 + rng.randrange(3))] * rng.randrange(1, 4)
+    ra, rm = run(sim, base), run(sim, mixed, rle=True)
+    check(ra["caches"] == rm["caches"] and rm["alias_records"] == len(mixed) - len(base),
+          f"alias records: {rm['alias_records']} counted, caches equal {ra['caches'] == rm['caches']}")
 
     # 3. revoke walk
     # In capstone-qemu's order: R root, (R n, W n)*, [R end], W root, [W end].

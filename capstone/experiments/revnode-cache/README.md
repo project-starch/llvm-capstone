@@ -58,6 +58,22 @@ cache of a given size and associativity would have. It does not answer what a mi
   - Every output is compared with native byte for byte. A changed or empty output reads FAIL
     (checked once by hand).
 - **`compare-mix.py`**: lifetime-check miss rate of a `par` report against its `seq` report.
+- **Alias accounting** (capstone-qemu 0bcc3dc7):
+  - The trace also records every capability copy entering or leaving a 16-byte memory granule,
+    from a shadow of the tag map, and the 32 GPRs and the PCC just before each revoke.
+  - The trace now records drop's node write as well, which the RTL makes and QEMU does not. The
+    earlier results lack those writes.
+- **`aliasstat.c`**: reads the same stream.
+  - It keeps its own copy of the emulator's revocation tree (the list of nodes with depths,
+    replayed from mrev/split/revoke).
+  - It reports: copies per node; copies at each revoke (of the revoked capability, and the
+    copies the revoke makes stale); children, depth and tree size.
+  - It exits 3 on its own errors: a copy count going negative, or a revoke whose recorded walk
+    differs from its tree copy.
+  - `selftest_alias.py` checks it against a hand-built trace. Negative controls: no depth
+    increment at mrev fails 6 checks, counting repeated copies once fails 4, and not counting
+    children fails 1.
+- **`summarize_alias.py`**: the per-program table below. Percentiles above 8 are bucket bounds.
 
 ## Results (`results/20261005-qemu/`)
 
@@ -176,6 +192,51 @@ Lifetime checks per run: 3.34 G (N=2), 5.52 G (N=4), 6.39-6.40 G (N=5).
 The real benchmarks also raise the single-process floor that `smoke.rb` showed. All seven
 programs one after another miss 0.67 % of lifetime checks at 64 entries and 0.33 % at 4096 (11.4 G
 node accesses, 10.9 M distinct ids).
+
+## Aliases and tree shapes (`results/20261005-qemu-alias/`)
+
+Each program ran alone, one boot each, in the sublet-gc heap arm; SQLite `speedtest1` ran on
+level0. All outputs matched native. Every report has 0 negative counts and 0 walk mismatches. In
+every run the collector freed 0 nodes with a copy still recorded, which it must not since it
+clears stale tags first. That is the check that the hooks see every place a tag is cleared.
+
+| | ao_render | lc_fizzbuzz | so_lists | fib | so_mandelbrot | mandel_term | speedtest1 (level0) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| nodes allocated | 2,989,001 | 10,880,348 | 6,554 | 4,264 | 21,584 | 4,452 | 59 |
+| most copies of one node at once: p50 | 4 | 3 | 1 | 1 | 7 | 1 | 2 |
+| p99 | <=16 | <=16 | <=32 | <=32 | <=16 | <=32 | <=16384 |
+| max | 6,995 | 34,829 | 6,923 | 6,913 | 6,925 | 6,936 | 8,378 |
+| copies made stale by one revoke: mean | 3.56 | 3.73 | 5.84 | 7.51 | 4.87 | 7.55 | (4 revokes) |
+| p99 | 6 | <=16 | <=16 | <=16 | 6 | <=16 | |
+| max | 7,095 | 98,874 | 6,752 | 6,748 | 6,742 | 6,773 | |
+| nodes one revoke invalidates: mean | 1.18 | 1.18 | 2.10 | 2.61 | 1.39 | 2.68 | 1.75 |
+| live node depth: mean / max | 9.4 / 20 | 10.0 / 20 | 10.8 / 20 | 11.0 / 20 | 6.8 / 20 | 10.1 / 20 | 0.1 / 1 |
+| children of a live node: p90 / max | 2 / 1,024 | 2 / 1,024 | 2 / 1,024 | 2 / 1,024 | 1 / 1,024 | 2 / 1,024 | 0 / 4 |
+| largest tree (nodes) | 26,579 | 232,101 | 4,630 | 4,094 | 9,769 | 4,250 | 49 |
+
+- **Few copies per node under sublet, many under level0.**
+  - Under sublet-gc a node typically has 1 to 7 copies at its peak, and 99 % have at most 16 or 32.
+  - A handful of nodes in every mruby run have about 7,000 copies, and one in lc_fizzbuzz has
+    34,829. Which nodes those are is not attributed.
+  - level0 is the opposite: 59 nodes, one of them with 8,378 copies, since every pointer derives
+    from the arena.
+- **A revoked capability exists once.** At its revoke it has one copy in memory and one in a
+  register, never more than 3 and 2. The copies a revoke makes stale are those of the nodes it
+  invalidates: 3.6 to 7.6 on average, rarely more than 16. One lc_fizzbuzz revoke made 98,874
+  stale.
+- **The trees are deep and narrow, with one wide level.**
+  - Depth reaches exactly 20 in every mruby run, and live nodes sit at depth 7 to 11 on average.
+  - A node has 1 or 2 direct children at the 90th percentile, and exactly 1,024 at most in every
+    mruby run.
+  - The mean of about 1.0 children says nothing: every node but a tree's root is someone's child.
+  - Not verified: 1,024 matches mruby's 1,024-object heap page, which sublet-gc splits one slot
+    at a time. Depth 20 would fit the buddy heap's levels.
+- **What a reference count would have to sustain** (memory copies only; register copies, every
+  `movc` and every capability loaded into a register, come on top):
+  - 25 to 32 count changes per 100 lifetime checks.
+  - 87 to 99 % of them are a capability stored over another capability, which touches two nodes:
+    one count down, one up.
+  - A count would need more than 15 bits: the largest is 34,829.
 
 ## What this does not measure
 
