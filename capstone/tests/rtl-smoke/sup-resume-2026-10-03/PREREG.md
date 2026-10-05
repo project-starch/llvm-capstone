@@ -1138,3 +1138,20 @@ R-49 changes the store path of every switcher write, and R-50 the load unit. Cyc
   - r51-after: #1 = 0 (the yield happened), **#2 = 0xBAD** (the post-yield jump executed: R-51), #3 = 0.
   - **r51-after #2 = 28 would REFUTE R-51 on silicon.**
 - QEMU would read 28 for both arms, from swap_pc keeping the PC capability; that is not run here.
+
+## r51 RESULT on 776d9d859 (2026-10-05 19:16-19:19): R-51 is CONFIRMED on silicon, as pre-registered
+Raw lines are in `results/r51-776.result-lines.txt`. Each image ran on its own power cycle, the control first.
+| image | sha256 | readings | pre-registered |
+|---|---|---|---|
+| control-call-retpc | a05ca464c4f683cd | 0, 0x12, 0x21, 0, 0x51, 0, 0, 0 | as accept715/accept776 -- **match** |
+| r51-before (jump at the first entry) | c42ba366eed59653 | **0x1C (28)**, 0x1C | #1 = 28 -- **match** |
+| r51-after (jump after a RETURN yield) | 17c3c6a83e39cad7 | 0, **0xBAD**, 0 | 0, 0xBAD, 0 -- **match** |
+- **The same integer `jalr` to the same `outside` label faults with 28 before the domain's first yield, and executes
+  after it.** Only the code at `outside` writes 0xBAD. So after a RETURN-based yield the resumed domain runs with no
+  PC-capability check on silicon, which is R-51.
+- r51-after's last reading is the caller's `mcause`, 0: the out-of-bounds jump raised NO trap at all.
+- r51-before's second reading is also the caller's `mcause` (its JUMP_BEFORE build skips the resume): 28, the fault
+  just taken. This value was not pre-registered. The test header's "#3 mcause in the caller (0)" describes the
+  after arm.
+- The arms differ in one `-D`, and the before arm is the positive control: it shows `outside` lies outside the
+  domain's code capability, and that a tagged PC capability is checked.
