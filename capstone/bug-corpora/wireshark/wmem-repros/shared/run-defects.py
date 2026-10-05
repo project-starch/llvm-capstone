@@ -96,6 +96,27 @@ def oracle_causes(which, arm=None):
     raise SystemExit(f"no case.json for case {which}")
 
 
+def refuse_if_no_result(serial, which, mode, run):
+    """A boot that produced nothing is an INFRASTRUCTURE failure, never a measurement.
+
+    The sibling memcached runner has had these two checks all along and this one did not,
+    which is why case 15's empty boot on 2026-10-05 was reported as a FAIL -- its serial
+    ended at "sh /mnt/host/run.sh" with no marker, no fault and no CONTROL-FAILED, and a
+    FAIL there reads exactly like the defect failing to reproduce. Returns the reason it
+    refused, or None when the boot said something; a caller that gets a reason must exit 75.
+
+    Kept a function rather than inline so it can be negative-tested without a QEMU boot."""
+    if not serial:
+        return f"NO SERIAL CAPTURE for case={which} mode={mode}: {run}"
+    if f"Print = Scalar(0x{MARKER_BASE | which:x})" not in serial and not re.search(
+        r"domain (?:halted by capability fault|capability fault delivered)", serial
+    ):
+        # Neither the case's own marker nor a fault: the boot says nothing about this
+        # case either way.
+        return f"BOOT PRODUCED NO RESULT for case={which} mode={mode}: {run}"
+    return None
+
+
 def classify(serial, which, mode, runner_exit, report):
     faults = re.findall(
         r"domain (?:halted by capability fault|capability fault delivered): "
@@ -210,6 +231,10 @@ echo WM_DEFECT_DONE
         env.setdefault("CAPSTONE_GUEST_COMMAND_TIMEOUT", "60")
         result = run_guest(run, "sh /mnt/host/run.sh", "WM_DEFECT_DONE", env=env, timeout_multiplier=1)
         serial = (run / "serial.log").read_text(errors="replace") if (run / "serial.log").exists() else ""
+        refused = refuse_if_no_result(serial, which, mode, run)
+        if refused:
+            print(refused, flush=True)
+            sys.exit(75)
         report = struct.unpack("<16Q", (share / "report.bin").read_bytes()) if (share / "report.bin").exists() else None
         row = classify(serial, which, mode, result.returncode, report)
         row.update(name=stem, run=str(run))
