@@ -120,6 +120,10 @@ By shape, for the two mechanisms that catch anything:
 | packet-scope object kept by file-scope state across packets | 7, 8, 9, 10, 11 | 5 / 5 | 5 / 5 |
 | stale pointer after an individual recycler free | 12 | **0 / 1** | **1 / 1** |
 | cursor advanced past its chunk by a fixed skip, read inside the same block | 13 | **1 / 1** (bounds, cause 5) | not run |
+| loop reads a fixed offset past its chunk into the next chunk of the same block | 14 | **1 / 1** (bounds, cause 5) | not run |
+| packet-controlled negative index reads below the chunk, inside the same block | 15 | **1 / 1** (bounds, cause 5) | not run |
+| fixed-offset parity write lands past the buffer, inside the same block | 16 | **1 / 1** (bounds on a STORE, cause 7) | not run |
+| a size one larger than the chunk permits a one-byte write past it | 17 | **1 / 1** (bounds on a STORE, cause 7) | not run |
 
 Across cases 0-12 every `spatial` and every plain-CheriBSD arm completed. **Case 13 is the
 exception and it is not a counter-example:** it is the one spatial row, so its unprotected arm

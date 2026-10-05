@@ -228,9 +228,7 @@ three post-pin defects, **these four need no new port work to discriminate**:
 | `1c090e9292` | `epan/dissectors/packet-lbmc.c` | `wmem_file_scope()` |
 | `4a4871a831` | `epan/dissectors/packet-ntlmssp.c` | `wmem_file_scope()` |
 
-**`0261fd7da6` IS NOW BUILT AND MEASURED** as case 13 of `bug-corpora/wireshark/wmem-repros`
-(results: `results/20261005-qemu-spatial-case13-{ON,OFF}/`). Its mechanism is as reducible as a
-synthetic fixture.
+**FIVE of these are now BUILT AND MEASURED** as cases 13-17 of `bug-corpora/wireshark/wmem-repros` — `0261fd7da6`, `1d8acb21ab`, `d24613c461`, `e8ef9df09d` and `5a560f3f6a`, measured 12/12 on each of two builds with a temporal regression control and the suite's negative control passing 12/12 (`results/20261005-qemu-spatial-5-{ON,OFF}/`). Cases 14 and 15 are the corpus's only rows **live at the pin**. `0261fd7da6`'s mechanism is as reducible as a synthetic fixture.
 Quoted from the fix's parent, `epan/dissectors/packet-http.c:3740-3751`:
 
 ```c
@@ -266,11 +264,23 @@ all read `snprintf(np, maxname, ...)` — the fixed form. The fix is present; it
 verbatim because upstream renamed `g_snprintf` to `snprintf`, so none of the fix's added lines
 match. Exactly the mechanism §filter-3 predicts, now observed in the Wireshark population too.
 
-## The case that was built from this, and what its run REFUTED
+## The FIVE cases built from this, and the two predictions their runs REFUTED
 
-`0261fd7da6` is case **13** of `bug-corpora/wireshark/wmem-repros` — the first upstream **spatial**
-defect reduced anywhere in this tree, and the corpus's only row that faults on **bounds (cause 5)**
-rather than on revoked authority (cause 24).
+Cases **13-17** of `bug-corpora/wireshark/wmem-repros` are the first upstream **spatial** defects
+reduced anywhere in this tree, and the only rows in any corpus here that fault on **bounds** rather
+than on revoked authority (cause 24).
+
+| case | upstream | crossing | measured | live at pin |
+|---|---|---|---|---|
+| 13 | `0261fd7da6` | read past a chunk (HTTP Range `+= 8`) | cause **5** | no |
+| 14 | `1d8acb21ab` | read six bytes past (SolarEdge `[i + 6]`) | cause **5** | **YES** |
+| 15 | `d24613c461` | read **below** a chunk (opcua negative index) | cause **5** | **YES** |
+| 16 | `e8ef9df09d` | **write** past a buffer (DCP RS parity) | cause **7** | no |
+| 17 | `5a560f3f6a` | **one-byte write** past (DNS `maxname + 1`) | cause **7** | no |
+
+**A second pre-registered prediction was refuted:** all five were filed expecting cause 5, and the
+two WRITE rows read **7** — a bounds violation on a store is a different cause from one on a load.
+Right about the probe and the arm, wrong about load-versus-store; cases 16 and 17 record it.
 
 **Measured, 4/4 arms on each of two builds, runner exit 0, with the suite's negative control run and
 passing 4/4** (so the result is not vacuous):

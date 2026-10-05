@@ -1,0 +1,51 @@
+{
+  "case": 16,
+  "upstream_fix": "e8ef9df09d",
+  "title": "the in-place Reed-Solomon decode writes its parity bytes at a fixed offset past the output buffer",
+  "consumer": "epan/dissectors/packet-dcp-etsi.c",
+  "live_in_pin": false,
+  "live_proof": "absent at the pin: v4.6.8 carries the fix's renamed constant PFT_RS_K_MAX and the widened allocation 'wmem_alloc(pinfo->pool, decoded_size + PFT_RS_N - rsk)' at :407, and the vulnerable 'memcpy(output+index_out+PFT_RS_N_MAX, ...)' has zero occurrences there. The triage script found 6 of 6 of the fix's distinctive added lines already in v4.6.8. A fix-reversal. The pre-fix shape is quoted from e8ef9df09d^:epan/dissectors/packet-dcp-etsi.c:235-237 (the swapped constants), :264 (the parity copy), :270 (index_out += rsk) and :376 (the allocation).",
+  "object": "the RS output buffer, fcount*plen bytes in the packet scope",
+  "lifetime_ender": "NONE -- the object is alive throughout. Spatial row.",
+  "shape": "fixed-offset parity write lands past the buffer, inside the same block",
+  "allocator_layer": "block_fast -- the packet scope (pinfo->pool); the firing bound is wm_narrow()'s.",
+  "fidelity": "model-consumer, real allocator. The RS decode is reduced to the FIRST byte its parity copy writes past the buffer (index_out = 0, offset PFT_RS_N_MAX); eras_dec_rs and the deinterleave are dropped because they do not touch the bound.",
+  "distinguishing": "the first row in this corpus whose stale access is a WRITE rather than a read, so it is the one that exercises the write probe and oracle_site's site-1 path.",
+  "arms": {
+    "spatial": {
+      "oracle": "fault at the labelled write probe",
+      "cause": 7,
+      "note": "Every arm of this harness narrows a wmem allocation to its request -- ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15, wm_narrow(), unconditional under WM_DOMAIN -- so a spatial crossing faults on all of them and this case does NOT discriminate the chunk port. Established by case 13, whose completion predictions the run refuted; these four are pre-registered with that correction already applied. PREDICTION REFUTED BY THE RUN, 2026-10-05: this arm was pre-registered with cause 5, the LOAD access fault. A bounds violation on a STORE raises cause 7, and the run read 7 at exactly the predicted write-probe pc. Corrected to 7. The two read rows (13, 14, 15) do read 5, so the pre-registration was right about the probe and wrong about load-vs-store."
+    },
+    "sublet": {
+      "oracle": "fault at the labelled write probe",
+      "cause": 7,
+      "note": "Judged on the WM_CHUNKS=OFF build. Same reading as spatial, same reason. PREDICTION REFUTED BY THE RUN, 2026-10-05: this arm was pre-registered with cause 5, the LOAD access fault. A bounds violation on a STORE raises cause 7, and the run read 7 at exactly the predicted write-probe pc. Corrected to 7. The two read rows (13, 14, 15) do read 5, so the pre-registration was right about the probe and wrong about load-vs-store."
+    },
+    "sublet-chunks": {
+      "oracle": "fault at the labelled write probe",
+      "cause": 7,
+      "note": "Judged on the WM_CHUNKS=ON build. The chunk port narrows the chunk a second time, but the bound crossed is already wm_narrow()'s. PREDICTION REFUTED BY THE RUN, 2026-10-05: this arm was pre-registered with cause 5, the LOAD access fault. A bounds violation on a STORE raises cause 7, and the run read 7 at exactly the predicted write-probe pc. Corrected to 7. The two read rows (13, 14, 15) do read 5, so the pre-registration was right about the probe and wrong about load-vs-store."
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED, not measured: faults if mode 0 bounds each wmem chunk, completes if it bounds only the g_malloc'd block. Neither platform is on this host; the reading settles it."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED, not measured: mode 1 adds temporal protection and no lifetime ends here, so the spatial behaviour of mode 0 decides it."
+    },
+    "cheribsd-revocation": {
+      "oracle": "PREDICTED, not measured: completes. CHERI bounds the g_malloc'd block and the crossing stays inside it; the revoker has nothing to sweep because nothing is freed.",
+      "target": "stock CheriBSD purecap with the guest's own libc revocation on",
+      "guest_default": "preserved"
+    },
+    "native-detect": {
+      "status": "not written",
+      "oracle": "NO ASan report: the crossing stays inside the one g_malloc'd block, so there is no redzone between the chunks to poison. A silent arm needs its own positive control -- a crossing past the END of the block, which ASan must report -- before it means anything."
+    }
+  },
+  "status": "PRE-REGISTERED 2026-10-05 with cause 5 and CORRECTED to cause 7 by the run: a bounds violation on a STORE is cause 7, not the load fault's 5. Measured at the predicted write-probe pc on both builds. Re-run after the correction is the recorded reading; see the result bundle."
+}
