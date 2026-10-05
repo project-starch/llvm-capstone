@@ -8,10 +8,15 @@ response path changes.
   them; the clean tree reads torn on every one that should. Sweep: 95-test directed sweep (testlist_capstone.yaml, seed 20260922, memory delay 12) on the fixed tree against the clean HEAD: 89 identical in exceptions, readings and retired count with zero cycle-count differences; 3 random-generator entries log-less on both sides as always; untagged-ldc-stc-fixup retires one instruction more and reads the same values -- its repair branch, which re-wrote the destination's high word after the stale read, is skipped now that the read is ordered (its own comment anticipated this); and linear-clear-audit / linear-clear-residue failed by their codes 2 and 3 for the reason above and pass with the updated expectation (one hold each, a plain high-word read behind the clear's capability entry in the write buffer), while the clean tree fails them. Audit: claim-auditor, two passes. The first (against the version that widened the store buffer's compare) REFUTED it on the S-10b record (c867dfcbb's LUTLP-1 loop in the same cone), found that the "R-51" mirror shape was S-10b's data route already registered, SUPPORTED the write-buffer hold's correctness/key/coverage/interactions, and called the UNOPTFLAT 40 -> 35 drop uninformative. The second (this shape) found no error by reading -- deadlock freedom, visibility timing (zero slack: the store appears in speculative_queue_q exactly in the load's earliest decision cycle; depends on NrStorePipeRegs = 0), the S-10b tag-route release, lint structure and the run results all SUPPORTED or plausible -- and named the deadlock rule's missing positive control, which r29-sb-younger and its mutant now provide. Residual it named: dom-switch reads re-check against lsu_ctrl in WAIT_PAGE_OFFSET (an inherited gap; whether the switcher writes and reads one granule within a switch is UNRESOLVED).
 - Mechanism sharpened: at zero distance the high-word face was the STORE buffer (word-granular check), not the write
   buffer; the write-buffer phase begins 2-4 instructions later.
-- **Next:** synthesis of 776d9d859 (the lead's go of 2026-10-05). Pre-registered: UNOPTFLAT 40 with the baseline's set, so
-  synthesis must show the SAME loop membership (TIMING-23) as 715bdd1fe and no LUTLP; WNS within the band; on the board the
-  unguarded memcpy control 94/96 -> 0/96, the R29 repro 31/32 -> 0/32, the S-10b primed test's eight legs trapping, the
-  guarded build and the S-16/R-43 acceptance unchanged.
+- **SYNTHESIZED (the synth lane, 4 h 57 m): all three pre-registered items PASS** -- no LUTLP of any kind, the one routed
+  TIMING-23 loop is the standing loop-4 cluster with its cut moved one cell and nothing of the hold on the cycle (settled
+  from the netlist), WNS -8.760 in band (+1.19 vs 715bdd1fe). Bitstream `ariane_xilinx.bit` sha256 3c91335acc7c1065…
+  (11,443,722 B) on the synth host; the full numbers are in ISSUES R-29. **The reflash is the lead's word.** After it, the
+  board lane runs its pre-registered set, controls first: the S-16 bare image, R-43 a1..a10, the guarded memcpy arm (0/96),
+  C5u without fence; then the unguarded memcpy control 94/96 -> 0/96, the R29 rung 31/32 -> 0/32, s10b-storebuf-primed
+  0/8 -> 8/8 legs trapping. The memcpy guard and the W-12 pass stay in force until those are measured.
+- The TLB-miss ordering case is closed by construction (a store that misses the TLB does not pop the LSU bypass, so the
+  following load is not presented until the store has pushed); the remaining stated assumption is NrStorePipeRegs = 0.
 - memcached on silicon does not wait for it: the memcpy guard (B0.8) covers the runtime, the W-12 pass the application.
 
 2026-10-05: **B0 PASSES ON SILICON.** The gp-captable delegated hello-world runs byte-exact on
