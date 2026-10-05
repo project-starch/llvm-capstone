@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator, with a reconstructed trigger (see case 34). Needs -DSQLITE_ENABLE_DBSTAT_VTAB, without which the statement fails with 'no such table: dbstat' and the case passes having tested nothing",
   "arms": {
     "spatial": {
-      "oracle": "capability fault; cause 5 load OOB (spatial) pc=0x1025a409c"
+      "oracle": "capability fault delivered, cause 5 load out of bounds (spatial) pc=0x1025a409c"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
       "status": "not written"
     }
   },
-  "status": "spatial run 2026-10-04: capability fault; cause 5 load OOB (spatial) pc=0x1025a409c; sublet not run; cheribsd-revocation not run"
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 5 load out of bounds (spatial) pc=0x1025a409c; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation not run"
 }

@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator: snippet() over an OR of phrases read incrementally. Distinct from case 10 (becd68ba0d) despite the shared fts3EvalRestart site: this one dangles the snippet scorer's saved pointers, that one keeps evaluating a node whose doclist is already freed. Built in the fts3 group",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
       "status": "not written"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation not run"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation not run"
 }

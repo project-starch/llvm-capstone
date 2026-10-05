@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator. Found by us rather than collected: it is the sibling the upstream fix left behind, which is why its upstream_fix is 'unfixed' and not a commit. Same shape and same reduction as case 18; the two differ only in which column of json_each is read",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe reaches the defect site but cannot show this access was the stale one (hits=10)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=10)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=10)"
 }

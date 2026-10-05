@@ -2,11 +2,11 @@
 
 Summaries. Raw serial and console logs are not committed (SCHEMA rule 6).
 
-| arm | detected | not-reached | not-run | silent |
-|---|---|---|---|---|
-| `spatial` | 11 | 0 | 0 | 32 |
-| `sublet` | 0 | 0 | 43 | 0 |
-| `cheribsd-revocation` | 2 | 3 | 12 | 26 |
+| arm | detected | hang | no-marker | not-reached | not-run | silent |
+|---|---|---|---|---|---|---|
+| `spatial` | 10 | 3 | 2 | 0 | 0 | 28 |
+| `sublet` | 34 | 1 | 1 | 0 | 3 | 4 |
+| `cheribsd-revocation` | 2 | 0 | 0 | 3 | 12 | 26 |
 
 `silent` means the arm's own mechanism did not report. On
 `cheribsd-revocation` the oracle column says whether the defect site was

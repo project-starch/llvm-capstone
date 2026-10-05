@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator, with a reconstructed trigger -- see case 34 for why the SQL had to be re-derived and why it must be replayed one statement per process",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "returns rc=0 without its completion marker and without a fault"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "returns rc=0 without its completion marker and without a fault"
     },
     "cheribsd-revocation": {
       "status": "not written"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation not run"
+  "status": "spatial run 2026-10-04/05: returns rc=0 without its completion marker and without a fault; sublet run 2026-10-04/05: returns rc=0 without its completion marker and without a fault; cheribsd-revocation not run"
 }

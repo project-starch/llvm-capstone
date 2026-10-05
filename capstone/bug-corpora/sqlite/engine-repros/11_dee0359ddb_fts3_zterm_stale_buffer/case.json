@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator: a non-empty pending hash, a SELECT scan open over it, and optimize() run mid-scan. Built in the fts3 group",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "completes"
     },
     "cheribsd-revocation": {
       "status": "not written"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation not run"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: completes; cheribsd-revocation not run"
 }

@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator: a failing CREATE of sqlite_sequence followed by AUTOINCREMENT codegen that reads the stale pointer. Reaching the failing CREATE needs writable_schema, which is what the case's name records",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=14, witnesses=1)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe witnesses the defective access (kind=UAF, hits=14, witnesses=1)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=14, witnesses=1)"
 }

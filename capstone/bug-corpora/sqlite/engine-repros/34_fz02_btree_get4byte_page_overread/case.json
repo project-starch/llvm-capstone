@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator, with a reconstructed trigger. The corpus entry carried only the database and an ASan log -- fuzzcheck pairs every database with every script and the provenance kept only the database id -- so the statement was re-derived by replaying candidate statements one process at a time against a fresh copy of the image. A cumulative script does not work here: an earlier statement leaves the image in a state the later one no longer reaches",
   "arms": {
     "spatial": {
-      "oracle": "capability fault; cause 5 load OOB (spatial) pc=0x102029578"
+      "oracle": "capability fault delivered, cause 5 load out of bounds (spatial) pc=0x102029578"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "capability fault delivered, cause 5 load out of bounds (spatial) pc=0x102029778"
     },
     "cheribsd-revocation": {
       "status": "not written"
     }
   },
-  "status": "spatial run 2026-10-04: capability fault; cause 5 load OOB (spatial) pc=0x102029578; sublet not run; cheribsd-revocation not run"
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 5 load out of bounds (spatial) pc=0x102029578; sublet run 2026-10-04/05: capability fault delivered, cause 5 load out of bounds (spatial) pc=0x102029778; cheribsd-revocation not run"
 }

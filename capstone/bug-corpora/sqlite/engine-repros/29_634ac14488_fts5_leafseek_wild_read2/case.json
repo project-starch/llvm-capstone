@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator: upstream's own regression image. Distinct from case 27 despite the shared function: a different image reaches a different line of fts5LeafSeek, which the probe site table records separately",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "completes"
     },
     "cheribsd-revocation": {
       "oracle": "the probe shows the defect site is not reached (hits=0)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: the probe shows the defect site is not reached (hits=0)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: completes; cheribsd-revocation run 2026-10-04/05: the probe shows the defect site is not reached (hits=0)"
 }

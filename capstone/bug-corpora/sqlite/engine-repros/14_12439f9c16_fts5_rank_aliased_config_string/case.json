@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator. Two constraints are load-bearing. It needs two connections on one database, so it builds in the fts5S group with -USQLITE_OMIT_SHARED_CACHE and opens file::memory:?cache=shared -- a :memory: database takes SQLite's memDb path and never calls the VFS xOpen, which in this domain always returns SQLITE_CANTOPEN. And the rank weights are integers because the Capstone arm compiles with -DSQLITE_OMIT_FLOATING_POINT, under which 10.0 tokenizes as an integer followed by a stray dot; upstream's bm25(10.0,1.0) fails to parse there and every rank query returns a syntax error, which is how this case first came back reaching nothing",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "the domain never returned (no ==RC): a hang, which fault recovery cannot contain"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "completes"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe reaches the defect site but cannot show this access was the stale one (hits=98)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=98)"
+  "status": "spatial run 2026-10-04/05: the domain never returned (no ==RC): a hang, which fault recovery cannot contain; sublet run 2026-10-04/05: completes; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=98)"
 }

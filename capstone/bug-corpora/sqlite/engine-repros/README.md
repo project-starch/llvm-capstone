@@ -34,23 +34,43 @@ Every case declares one of these, and the table partitions the corpus.
 | `sublet` | Capstone domain, nested-allocator discipline | does per-sub-allocation revocation notice? |
 | `cheribsd-revocation` | CheriBSD riscv64-purecap, revocation on | does CHERI plus revocation notice? |
 
-## A silent arm only means something with a probe
+## What the three arms measured
 
-`results/20261004/matrix.tsv` has 32 `silent` rows on `spatial` and 26 on
-`cheribsd-revocation`, and **those two silences are not the same claim.**
+`results/20261004/matrix.tsv`, one row per case per arm:
 
-The CheriBSD runs carry a defect-site probe: a marker at the exact `sqlite3.c`
-line where the host ASan oracle, running the same case source with the same
-flags, reported the error. Each oracle string says whether the site was reached
-(`hits`) and whether the defective access itself was witnessed. A silent row
-there is a usable negative. Three rows are `not-reached`, and before the probe
-existed those three were being counted as "the mechanism missed it".
+| arm | detected | silent | hang | no marker | not run |
+|---|---:|---:|---:|---:|---:|
+| `spatial` | 10 | 28 | 3 | 2 | 0 |
+| `sublet` | **34** | 4 | 1 | 1 | 3 |
+| `cheribsd-revocation` | 2 | 26 | 0 | 0 | 12 (3 not reached) |
 
-The `spatial` arm has no such probe yet. A marker does not survive there: the
-domain's `out_text()` writes a shared region the host reads only after the
-domain returns, so a faulting domain prints nothing and the marker is lost with
-it. On Capstone the equivalent evidence is a symbolized fault pc. Until that is
-done, a silent `spatial` row means the exit code was clean and nothing more.
+**Sublet detects 34 of the 40 it ran; the base machine detects 10 of 42.** Same
+sources, same build, same QEMU, one run apart: the two arms differ in the
+allocator discipline and in nothing else a case can see. That difference is what
+this corpus was built to measure.
+
+**25 of Sublet's 34 stopped the VM rather than returning**, and all 25 are the
+same instruction: `pc = 0x800239e4`, in kernel space. The delivered faults are
+all in domain space (`0x101…`, `0x102…`). Cooperative fault recovery returns
+through the domain's caller, so a fault taken in the monitor or the kernel has
+no frame to return through and must halt. That is why the Sublet arm costs
+seven boots on a group where the base arm costs one — a property of where the
+fault lands, not a misconfiguration, and the run records it rather than hiding
+it in a wall-clock number.
+
+**A silent row does not mean the same thing on every arm.** The CheriBSD runs
+carry a defect-site probe: a marker at the exact `sqlite3.c` line where the host
+ASan oracle, running the same case source with the same flags, reported the
+error, so each oracle string says whether the site was reached and whether the
+defective access was witnessed. Three rows come back `not-reached`, and before
+the probe existed those three were counted as "the mechanism missed it".
+
+The `spatial` and `sublet` arms have no such probe. A marker cannot survive
+there: the domain's `out_text()` writes a shared region the host reads only
+after the domain returns, so a faulting domain prints nothing and the marker
+goes with it. On Capstone the equivalent evidence is a symbolized fault pc.
+Until that exists, a silent row on those two arms means the exit code was clean
+and nothing more.
 
 ## Running it
 

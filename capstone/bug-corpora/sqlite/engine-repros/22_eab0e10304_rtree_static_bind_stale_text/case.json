@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator. Same upstream fix as case 24 and deliberately kept separate: one upstream commit, two independently reachable observables, in rtree and in fts3. The threat model is upstream's own, quoted in the fix's commit message: a caller may reach the persistent statement through sqlite3_next_stmt() and read the freed buffer",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe reaches the defect site but cannot show this access was the stale one (hits=213)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=213)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=213)"
 }

@@ -231,6 +231,10 @@ COMMON_FLAGS=(
   -I"$ADAPTED_DIR/stubinc"
   -I"$ADAPTED_DIR"
   -I"$SCRIPT_DIR"
+  # The corpus owns the case sources now, so a case compiled from
+  # bug-corpora/sqlite/engine-repros/NN_*/case.c must still find the
+  # harness headers that stay with the port.
+  -I"$SCRIPT_DIR/repro322"
   "${SUBLET_FLAGS[@]}"
   -I"$VFS_SKELETON_DIR"
   -I"$SQLITE322_INC"

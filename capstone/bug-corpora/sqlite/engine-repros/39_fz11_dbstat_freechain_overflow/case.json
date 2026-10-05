@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator, with a reconstructed trigger (see case 34). Needs -DSQLITE_ENABLE_DBSTAT_VTAB. Distinct from case 38: the same function, a different walk -- the free-chain traversal rather than the cell-pointer array",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "returns rc=0 without its completion marker and without a fault"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
       "status": "not written"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation not run"
+  "status": "spatial run 2026-10-04/05: returns rc=0 without its completion marker and without a fault; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation not run"
 }

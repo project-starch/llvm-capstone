@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator, but the defect is in ext/expert/sqlite3expert.c rather than in the amalgamation; the case compiles that extension into the domain. The stale read is in idxRemFunc, which is why its probe site is in the extension and not in sqlite3.c",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b86c8"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=12, witnesses=4)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe witnesses the defective access (kind=UAF, hits=12, witnesses=4)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b86c8; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=12, witnesses=4)"
 }

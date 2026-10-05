@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator. Built in the coreT group (-USQLITE_OMIT_TEMPDB): without a temp database the trigger has nowhere to survive",
   "arms": {
     "spatial": {
-      "oracle": "capability fault; cause 24"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021300c8"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1020a8f18"
     },
     "cheribsd-revocation": {
       "oracle": "no verdict: detachtrig before drop"
     }
   },
-  "status": "spatial run 2026-10-04: capability fault; cause 24; sublet not run; cheribsd-revocation run 2026-10-04: no verdict: detachtrig before drop"
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021300c8; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1020a8f18; cheribsd-revocation run 2026-10-04/05: no verdict: detachtrig before drop"
 }

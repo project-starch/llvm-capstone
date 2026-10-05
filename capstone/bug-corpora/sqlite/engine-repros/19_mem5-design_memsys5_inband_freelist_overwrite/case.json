@@ -12,14 +12,14 @@
   "fidelity": "constructed demonstrator, real allocator. The trigger is ours, not an upstream input: it allocates two adjacent blocks, holds a pointer to the first, frees both so memsys5 coalesces, then reads back through the held pointer. That makes it the one case here whose consumer is the case itself, which is also why its probe site is in the case source and not in sqlite3.c. It is in the corpus because it states the corpus's premise: to ASan the whole pool is one allocation, so this is invisible at the layer below",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x101da6878"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=1, witnesses=1)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe witnesses the defective access (kind=UAF, hits=1, witnesses=1)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x101da6878; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=1, witnesses=1)"
 }

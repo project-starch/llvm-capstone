@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator. The reported frame is in the expression deleter only because that is where the stack finally ran out; the recursion itself is the defect. On the arena arm this case exhausts the 256 KiB memsys5 heap before the stack, which is a different outcome for the same input and is recorded as such rather than as a detection",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
       "oracle": "completes; clean exit, no defect-site probe in that run"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; clean exit, no defect-site probe in that run"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; clean exit, no defect-site probe in that run"
 }

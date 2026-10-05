@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator. The accumulator is the part that makes it observable: SQLITE_STATIC means no copy is made and sqlite3VdbeMemCopy keeps MEM_Static as-is, so a min()/max() accumulator retains the raw pointer and minmaxStep() compares against freed memory. Built in the json group",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b801c"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe reaches the defect site but cannot show this access was the stale one (hits=14)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=14)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b801c; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=14)"
 }

@@ -12,7 +12,7 @@
   "fidelity": "real consumer, real allocator, triggered by a self-contained statement rather than a database image",
   "arms": {
     "spatial": {
-      "oracle": "capability fault; cause 24"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x104007150"
     },
     "sublet": {
       "status": "not written"
@@ -21,5 +21,5 @@
       "oracle": "SIGPROT at the defect site (si_code=2 (PROT_CHERI_TAG/untagged-deref), hits=3)"
     }
   },
-  "status": "spatial run 2026-10-04: capability fault; cause 24; sublet not run; cheribsd-revocation run 2026-10-04: SIGPROT at the defect site (si_code=2 (PROT_CHERI_TAG/untagged-deref), hits=3)"
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x104007150; sublet not run; cheribsd-revocation run 2026-10-04/05: SIGPROT at the defect site (si_code=2 (PROT_CHERI_TAG/untagged-deref), hits=3)"
 }

@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator. Needs -DSQLITE_ENABLE_FTS3_PARENTHESIS, which is why this case has its own build group: without it the parentheses are ordinary characters, a flat query runs, and the case passes having tested nothing",
   "arms": {
     "spatial": {
-      "oracle": "capability fault; cause 24 untagged deref (temporal: revoked, or never a capability) pc=0x1025e1b6c"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=2, witnesses=1)"
     }
   },
-  "status": "spatial run 2026-10-04: capability fault; cause 24 untagged deref (temporal: revoked, or never a capability) pc=0x1025e1b6c; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe witnesses the defective access (kind=UAF, hits=2, witnesses=1)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=2, witnesses=1)"
 }

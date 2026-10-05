@@ -10,6 +10,40 @@ cd "$PORTS_DIR"
 export SQLITE322_TMP_ROOT=${SQLITE322_TMP_ROOT:-/tmp/capstone-322-repro}
 source "$PORTS_DIR/../../tests/capstone-test-env.sh" 2>/dev/null
 
+# THE CORPUS IS THE BUILD INPUT (bug-corpora/SCHEMA.md). Each case directory holds
+# a complete translation unit; this script compiles it directly rather than a copy
+# kept beside the port, so the two cannot drift. Instruments that are deliberately
+# not corpus cases -- the baseline probes and the allocator demonstrators -- still
+# live here and are found by the fallback below.
+SQLITE_CORPUS_DIR=${SQLITE_CORPUS_DIR:-$PORTS_DIR/../../bug-corpora/sqlite/engine-repros}
+
+# tag -> case.c, built once from whichever case declares that tag.
+declare -A CORPUS_SRC=()
+if [ -d "$SQLITE_CORPUS_DIR" ]; then
+  for _d in "$SQLITE_CORPUS_DIR"/[0-9][0-9]_*; do
+    [ -f "$_d/case.c" ] || continue
+    _t=$(sed -n 's/.*REPRO322_MAIN("\([^"]*\)").*/\1/p' "$_d/case.c" | head -1)
+    # blobclose predates REPRO322_MAIN and still uses the older hostcall interface;
+    # it is named by its directory slug instead.
+    [ -z "$_t" ] && case "$_d" in *_blob_close_after_db_close) _t=blobclose ;; esac
+    [ -n "$_t" ] && CORPUS_SRC[$_t]="$_d/case.c"
+  done
+fi
+
+# Resolve a manifest row to the file to compile. Corpus first, port second,
+# hard error third: a tag that resolves to nothing must stop the build, because
+# a silently skipped case reads exactly like a case that passed.
+resolve_src() {   # $1 tag  $2 manifest path -> echoes an absolute path
+  if [ -n "${CORPUS_SRC[$1]:-}" ]; then echo "${CORPUS_SRC[$1]}"; return 0; fi
+  # The R2 images are named fzNN_r2 by the manifest and fzNN by their own
+  # REPRO322_MAIN. Without this the five of them resolve to the port copies.
+  if [ -n "${CORPUS_SRC[${1%_r2}]:-}" ]; then echo "${CORPUS_SRC[${1%_r2}]}"; return 0; fi
+  if [ -f "$SCRIPT_DIR/$2" ]; then echo "$SCRIPT_DIR/$2"; return 0; fi
+  echo "corpus322: no source for tag '$1' (manifest says '$2'); looked in" >&2
+  echo "  $SQLITE_CORPUS_DIR/NN_*/case.c  and  $SCRIPT_DIR/$2" >&2
+  return 1
+}
+
 GROUP=${2:-core}
 # CORPUS_SUBLET=1 builds the SECOND arm: identical in every respect except that the
 # allocator carries the Sublet discipline (sublet/sublet-3220000-memsys5.patch). The two
@@ -208,10 +242,11 @@ do_build() {
       SUBLET_ENV=(SQLITE_SUBLET_PATCH="$PORTS_DIR/sublet/sublet-3220000-memsys5.patch")
       extra="${extra:-} -DREPRO322_SUBLET=1"
     fi
-    echo "== build $tag ($file) =="
+    src=$(resolve_src "$tag" "$file") || { echo "  BUILD ABORTED ($tag)"; continue; }
+    echo "== build $tag ($(basename "$(dirname "$src")")/$(basename "$src")) =="
     if env "${SUBLET_ENV[@]}" CORPUS_CACHE_SQLITE=$CACHE \
        OUT_DIR="$OBJ" OBJ_DIR="$OBJ" OUT_DOM="$SHARE/$tag.dom" \
-       DOMAIN_SRC="$SCRIPT_DIR/$file" \
+       DOMAIN_SRC="$src" \
        DOMAIN_OPT_LEVEL="-O0" SQLITE_OPT_LEVEL="-O0" \
        DOMAIN_EXTRA_FLAGS="-DSQLITE_HEAP_SIZE=262144 $EXTRA_INC ${extra:-}" \
        DOMAIN_EXTRA_SRC="$EXTRA_SRC" \

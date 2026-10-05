@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator, with OOM injected by a counting wrapper installed over memsys5 -- SQLITE_UNTESTABLE removes sqlite3_test_control, so the injection point is the allocator rather than SQLite's own test hook. The case reports its allocation count and the rc transition point so its sequence can be matched against the host oracle's",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=257, witnesses=18)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe witnesses the defective access (kind=UAF, hits=257, witnesses=18)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=257, witnesses=18)"
 }

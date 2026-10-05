@@ -12,7 +12,7 @@
   "fidelity": "real consumer, real allocator, and the trigger is a single self-contained statement rather than a database image: a CTE whose body nests sub-selects deeply enough to reach the defect",
   "arms": {
     "spatial": {
-      "oracle": "capability fault; cause 24"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x104870774"
     },
     "sublet": {
       "status": "not written"
@@ -21,5 +21,5 @@
       "oracle": "SIGPROT (PROT_CHERI_TAG/untagged-deref)"
     }
   },
-  "status": "spatial run 2026-10-04: capability fault; cause 24; sublet not run; cheribsd-revocation run 2026-10-04: SIGPROT (PROT_CHERI_TAG/untagged-deref)"
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x104870774; sublet not run; cheribsd-revocation run 2026-10-04/05: SIGPROT (PROT_CHERI_TAG/untagged-deref)"
 }

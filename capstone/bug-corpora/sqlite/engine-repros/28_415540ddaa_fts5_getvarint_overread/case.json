@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator: upstream's own regression image, run statement by statement through the in-domain memfs",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "capability fault delivered, cause 5 load out of bounds (spatial) pc=0x1021ba380"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=5, witnesses=1)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe witnesses the defective access (kind=UAF, hits=5, witnesses=1)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 5 load out of bounds (spatial) pc=0x1021ba380; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=5, witnesses=1)"
 }

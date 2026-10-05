@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator: upstream's own regression image, run statement by statement through the in-domain memfs",
   "arms": {
     "spatial": {
-      "oracle": "complete"
+      "oracle": "completes"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "the domain never returned (no ==RC): a hang, which fault recovery cannot contain"
     },
     "cheribsd-revocation": {
       "oracle": "completes; the probe witnesses the defective access (kind=OOB, hits=71, witnesses=2)"
     }
   },
-  "status": "spatial run 2026-10-04: complete; sublet not run; cheribsd-revocation run 2026-10-04: completes; the probe witnesses the defective access (kind=OOB, hits=71, witnesses=2)"
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: the domain never returned (no ==RC): a hang, which fault recovery cannot contain; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=OOB, hits=71, witnesses=2)"
 }

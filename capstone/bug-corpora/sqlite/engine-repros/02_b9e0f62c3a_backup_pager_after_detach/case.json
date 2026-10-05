@@ -12,14 +12,14 @@
   "fidelity": "real consumer, real allocator: the public backup API driven against a connection that ATTACHes mid-backup",
   "arms": {
     "spatial": {
-      "oracle": "capability fault; cause 24"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10280b794"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10200b994"
     },
     "cheribsd-revocation": {
       "oracle": "no verdict: backup step1 rc=0"
     }
   },
-  "status": "spatial run 2026-10-04: capability fault; cause 24; sublet not run; cheribsd-revocation run 2026-10-04: no verdict: backup step1 rc=0"
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10280b794; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10200b994; cheribsd-revocation run 2026-10-04/05: no verdict: backup step1 rc=0"
 }
