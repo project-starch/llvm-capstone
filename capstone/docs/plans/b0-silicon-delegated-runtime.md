@@ -876,6 +876,30 @@ application needs. Each item names its source; none is attempted yet.
    3. B2: memcached `-t 1` (three contexts), per docs/plans/memcached-on-silicon.md.
    Each step is pre-registered, QEMU first with fabrication off, then one board boot.
 
+## Pre-registered for the R-29/S-10b fix bitstream (2026-10-05, from the RTL lane; nothing to run until it exists)
+The fix is capstone-ariane sup-call 776d9d859 (in simulation; docs on dev efef06cda618). A read whose granule has a
+conflicting store in flight now waits in the dcache read controller until the store drains. The RTL lane's
+correction to the account above: at zero distance the torn read was the STORE buffer's word-granular check letting
+the load pass; the write-buffer phase begins 2-4 instructions later. Both are closed by the fix.
+- **Synthesis first.** The flash needs the lead's own word.
+- **The guards stay in force until the fix is measured on silicon:** CAPSTONE_MEMCPY_PLAIN_GUARD, the delegate
+  runtime's dl_bytes, and the W-12 pass.
+
+**Acceptance boots, controls first.**
+- **Unchanged** (they are controls):
+  - the S-16 bare image;
+  - R-43 a1..a10;
+  - the guarded b0-memcpy build's guarded arm (0/96);
+  - C5u without a fence (1,277-ish preemptions; its quiet overhead is the first number to report if it moves beyond
+    noise).
+- **Changed:**
+  - b0-memcpy's UNGUARDED control: 94/96 becomes **0/96**, and b0-memcpy then exits 2. That "void" now means the
+    hazard is gone, and the 0 is only meaningful because the same image read 94/96 on 715bdd1fe.
+  - The R29 repro rung: 31/32 becomes 0/32.
+  - s10b-storebuf-primed as a bare .dom, if the bare harness builds it: 0 of 8 legs trap becomes 8 of 8.
+- **Cost:** a true hazard now waits for the store's AXI write, the cost of a fence; a same-set false candidate costs
+  ~3 cycles.
+
 ## Open, to settle before B0.7
 - Does the board's buildroot carry the process-ABI modcapstone and a capstone-exec? Not checked.
 - B0.1 changes the monitor every lane boots. The first boot of it is announced, and the previous firmware stays the
