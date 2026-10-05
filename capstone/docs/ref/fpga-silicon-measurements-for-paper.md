@@ -5958,3 +5958,8 @@ boot, and each board image is named by hash.
 - Native hard-float arithmetic on the board's Linux is not reliable on 776d9d859 (ISSUES S-18). The delegated
   application is soft-float and does not use the FPU, but a timing printed by a native program on the board (the
   harness's `stop_seconds`) is not evidence.
+  - Checked for the speedtest1 ratios in this file: build-speedtest1-baseline.sh has built `rv64imac_zicsr` /
+    `lp64` since its first commit (abe7c46e3f54, 2026-09-11). The baseline the board images carry,
+    9a80c1cd2a576ed2, has no FP opcode in 217,577 instructions; the same scan counts 85 in a hard-float binary.
+  - So ratios measured with it are unaffected. Boots before 2026-09-11 (sw52) and other native arms were not
+    checked here.

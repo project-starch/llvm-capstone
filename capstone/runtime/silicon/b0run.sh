@@ -125,7 +125,8 @@ case "$rung" in
   b3-clock)
     # B3c: the harness's stop_seconds=inf (b3-clock-probe.c: raw clock readings, the harness's now() arithmetic, and
     # fs0-fs11 held across waitpid of a native child and of memcached, the harness's own sequence). retval = the
-    # probe's bitmask: 0 nothing seen, 32 its self-test did not fire.
+    # probe's bitmask: 0 nothing seen, 32 its self-test did not fire. On 776d9d859 (boot B3c) it did NOT return after
+    # its arith arm (ISSUES S-18, the FPR clobber defect): run it LAST in a boot, after everything that must return.
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     /test-domains/b3-clock-probe /usr/bin/capstone-job /tmp/b3c-job.json --user 65534:65534 -- \
       /usr/bin/capstone-exec /test-domains/b3-oracle.dom -l 127.0.0.1 -p 21299 -U 0 -m 8 -t 1 \
