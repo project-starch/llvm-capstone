@@ -12,6 +12,22 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <capstone/capability.h>
+extern void *__capstone_silicon_code_cap;
+extern capstone_cap_slot __capstone_context_arena;
+/* B1e: the capabilities the context path depends on, as silicon sees them. LCC's type query is total; the other
+   selectors are asked only of a tagged value. */
+static void capinfo(const char *what, void *c)
+{
+	unsigned long t, cur = 0, b = 0, e = 0;
+	__asm__ volatile ("lcc %0, %1, 1" : "=r"(t) : "r"(c));
+	if (t != 7) {
+		__asm__ volatile ("lcc %0, %1, 2" : "=r"(cur) : "r"(c));
+		__asm__ volatile ("lcc %0, %1, 3" : "=r"(b) : "r"(c));
+		__asm__ volatile ("lcc %0, %1, 4" : "=r"(e) : "r"(c));
+	}
+	printf("B1 cap: %s type %lu cursor %lx base %lx end %lx\n", what, t, cur, b, e);
+}
 #endif
 
 #ifdef CAPSTONE_CLONE_DIAG
@@ -40,6 +56,17 @@ static void probes(void)
 {
 	size_t sz = 4096 + ((131072 + 4096 + 4095) & ~(size_t)4095);
 	printf("B1 probe: level0 arena %lu (as built)\n", (unsigned long)CAPSTONE_LEVEL0_ARENA_BYTES);
+	capinfo("code", __capstone_silicon_code_cap);
+	printf("B1 cap: arena type %lu base %lx end %lx\n", capstone_cap_type(&__capstone_context_arena),
+	       capstone_cap_base(&__capstone_context_arena), capstone_cap_end(&__capstone_context_arena));
+	{
+		unsigned long gb, ge, sb, se;
+		__asm__ volatile ("lcc %0, gp, 3" : "=r"(gb));
+		__asm__ volatile ("lcc %0, gp, 4" : "=r"(ge));
+		__asm__ volatile ("lcc %0, sp, 3" : "=r"(sb));
+		__asm__ volatile ("lcc %0, sp, 4" : "=r"(se));
+		printf("B1 cap: gp base %lx end %lx; sp base %lx end %lx\n", gb, ge, sb, se);
+	}
 	errno = 0;
 	void *m = malloc(sz + 4096);
 	printf("B1 probe: malloc(%lu) %s errno %d\n", (unsigned long)(sz + 4096), m ? "ok" : "NULL", errno);

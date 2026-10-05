@@ -970,7 +970,10 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
   - No fault, no wedge: the census rungs read 0 before and after, and the application exited normally.
   - 11 is EAGAIN, and musl's pthread_create turns EVERY `__clone` failure into EAGAIN, so the failing step is
     hidden.
-  - It is not ENOSYS (38), so the parked code capability did reach the runtime.
+  - ~~It is not ENOSYS (38), so the parked code capability did reach the runtime.~~ **RETRACTED (20:22, from B1d):**
+    musl turns EVERY `__clone` failure into EAGAIN, including the ENOSYS that `__clone` returns when no code
+    capability was parked. So 11 says nothing about the code capability, and that inference ran one step past the
+    evidence.
   - The candidates are the arena (not LINEAR on silicon), the transport RESERVE, the offer (-EINVAL when the entry
     carried no descriptor) and the launcher's ADOPT.
   - The same image passes in QEMU.
@@ -1002,6 +1005,26 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     - mprotect rc -1 with errno != 38: the guard path;
     - all ok yet pthread_create fails: something else in pthread_create.
   - The small stack passing would point at size.
+- **B1d result (20:16-20:21, firmware f8e93047641c): the mapping hypothesis is REFUTED.** malloc(143360) ok, mmap ok,
+  mprotect rc 0, as in QEMU. pthread_create still returns 11 at step 0, and so does the 16 KiB-stack thread (exit
+  13).
+  - musl's pthread_create has no failure exit between the mapping and `__clone`, so `__clone` WAS called and returned
+    before its first diagnostic point.
+  - The only exits there are the flags check and `if (!CONTEXT_ENTRY) return -ENOSYS`. The image and its flags are
+    QEMU's, so **the code capability is missing on silicon**: `context_entry()` read LCC type 7.
+  - Leading hypothesis, for the next boot: on silicon dom_data's END is not `data_top` (compressed bounds round the
+    top outward; QEMU keeps them exact). The glue's `END - 32` then misses the monitor's park, and the arena split
+    at `END - A` is off by the same amount.
+- **B1e pre-registered (before the boot):** the same probe image plus capability metadata (29b82435ce095d98, firmware
+  c46f2737b230).
+  - It prints the code capability (LCC type/cursor/base/end), the arena slot (type/base/end), and gp's and sp's
+    bounds.
+  - QEMU: code type 1 [e0200000, e0220000); arena type 0 [e03dfc00, e03ffc00) (128 KiB, its end = data_top); gp
+    [e03df5b0, e03dfc00) right below the arena; then step 5 and 124.
+  - On silicon, **code type 7 with the arena's end not on a 1 KiB boundary** = the END-rounding hypothesis.
+  - Code type 7 with a QEMU-like arena = the handover between the first entry and C (the cscratch carry, or the
+    frame slots).
+  - Code type 1 = the capability is there, and `context_entry()` or the flags check is what refuses.
 
 ## B1.0b (2026-10-05): strtod, atof and scanf's %f on the silicon build, for memcached
 - **The gap.** The archive drops musl's `floatscan.o` for the same reason as vfprintf (C-43). `strtod.o` and
