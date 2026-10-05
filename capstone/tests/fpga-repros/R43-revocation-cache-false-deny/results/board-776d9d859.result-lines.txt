@@ -38,8 +38,8 @@ reopened.
 
 == VERDICT ==
 All ten rows PASS as pre-registered. No HARD STOP, ENTRY-STALL, halt, refused line or extra banner. "No cause 25" in
-a1..a9 means no trap dump fired and every arm returned its value (the trap log is read only on a wedge). Identity-
-class readings are exact (retvals, instret, hashes, Sublet counts, trap bytes, refusal record), and cycle counts move
-within the noise band. With accept776 (the S-16 bare control set, 18/18 with accept715's readings, sup-
-resume-2026-10-03/results/accept776.result-lines.txt), the R-29/S-10b fix bitstream breaks nothing the R-43 list
+a1..a9 means no trap dump fired and every arm returned its value (the trap log is read only on a wedge).
+Identity-class readings are exact (retvals, instret, hashes, Sublet counts, trap bytes, refusal record), and cycle
+counts move within the noise band. With accept776 (the S-16 bare control set, 18/18 with accept715's readings,
+sup-resume-2026-10-03/results/accept776.result-lines.txt), the R-29/S-10b fix bitstream breaks nothing the R-43 list
 covers. C5u and the R-29 fix's own positive tests (b0-memcpy's unguarded arm) are reported separately.
