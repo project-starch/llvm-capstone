@@ -1252,17 +1252,22 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
 - **Board result (21:50-21:57, firmware 3645ae6b2219): a MISS.**
   - `B3: transcript fe153b1465b4c9c5 bytes 1931245`, 38 bytes longer than native's 1,931,207.
   - `identity STAT pointer_size 128`, job exit 0, `RESULT b3-oracle retval=0`.
-  - The harness reported `stop_seconds=inf` (its CLOCK_MONOTONIC delta on the board).
+  - The harness reported `stop_seconds=inf`. ~~(its CLOCK_MONOTONIC delta on the board)~~ **RETRACTED 23:15, see
+    B3c:** the clocks advance correctly; the `inf` is the harness's FP arithmetic (ISSUES S-18), not a clock reading.
   - QEMU reproduces the native transcript exactly, so the difference is the board's.
 - **B3d result (22:01-22:07): the 38 bytes are TIME, not data.**
-  - On the board two items that should have expired are still served: `gone` after a short-TTL `touch`, and
-    `past`, set with an expiry in the past. `get_hits`/`get_misses` move by exactly those two gets.
+  - On the board two items that should have expired are still served: ~~`gone` after a short-TTL `touch`~~ `gone`
+    after `touch gone -1`, and `past`, set with an expiry of -1. Both are NEGATIVE expiries (corrected 23:15, B3w).
+    `get_hits`/`get_misses` move by exactly those two gets.
   - The transcript is otherwise byte-identical.
   - On the board the runtime has no tick source (exec.c passes `ticks_per_second = 0`: silicon has no `time`
     CSR), so the domain's clock_gettime is delegated to the board's Linux.
-  - The native harness on the same board also read its CLOCK_MONOTONIC delta as `inf`.
-  - So the board's clocks, as memcached and the harness see them, do not advance the way the expiry needs. That
-    is a platform question, unresolved here. It is not a memory or capability difference.
+  - ~~The native harness on the same board also read its CLOCK_MONOTONIC delta as `inf`.~~
+  - ~~So the board's clocks, as memcached and the harness see them, do not advance the way the expiry needs.~~
+    **RETRACTED 2026-10-05 23:15.** B3c read both clocks advancing 1.015 s across `sleep 1` on the board. The `inf`
+    is FP arithmetic in the native harness (ISSUES S-18), and the two items are memcached's negative-expiry
+    mapping meeting a wall clock at 1970 plus uptime (B3w, B3c). What stands: it was a platform question, not a
+    memory or capability difference.
   - Next: read the board's CLOCK_REALTIME and CLOCK_MONOTONIC twice across a sleep, natively and through a
     domain.
 - **B3d pre-registered (diagnostic):** the same image and the same rung, now also printing the first 40 lines of
@@ -1321,7 +1326,7 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     - none of these reproduced: UNRESOLVED, with the oracle harness's own value as the in-situ reading.
   - The probe's domain arm waits until memcached listens before the 3 s and SIGTERM, as the harness does. The first
     build sent SIGTERM 3 s after launch, which on silicon could still be inside the first entry.
-  - QEMU rehearsal of this probe (22:36, built for QEMU, firmware d5c57ee765c9): clocks advance 1.006 s, 0 arith
+  - QEMU rehearsal of this probe (22:32, built for QEMU, firmware d5c57ee765c9): clocks advance 1.006 s, 0 arith
     anomalies of 200,000, self-test 1 of 12, holds 0 and 0, server listening, `stop_seconds=1.52`; then oracle
     e0a254c47e7ee28c after `date -s`.
 - **B3c RESULT (22:34-22:46, 776d9d859, firmware 8a3c285be032): B3 PASSES BY HASH ON SILICON, as pre-registered.**
