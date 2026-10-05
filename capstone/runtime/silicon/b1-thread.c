@@ -8,6 +8,11 @@
  *   failed; 5 joined with a wrong value (printed). */
 #include <pthread.h>
 #include <stdio.h>
+#ifdef CAPSTONE_B1_PROBES
+#include <errno.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#endif
 
 #ifdef CAPSTONE_CLONE_DIAG
 struct capstone_clone_diag { long step, arena_type, arena_bytes, transport, offered, id, r; };
@@ -28,14 +33,59 @@ static void *worker(void *arg)
 	return (void *)(v * 3 + 1);
 }
 
+#ifdef CAPSTONE_B1_PROBES
+/* B1 on silicon (B1d): pthread_create failed before __clone (B1c: step 0), i.e. in musl's stack mapping. Each step of
+   that mapping is done here by hand, then a thread with a small stack, so one boot separates the hypotheses. */
+static void probes(void)
+{
+	size_t sz = 4096 + ((131072 + 4096 + 4095) & ~(size_t)4095);
+	printf("B1 probe: level0 arena %lu (as built)\n", (unsigned long)CAPSTONE_LEVEL0_ARENA_BYTES);
+	errno = 0;
+	void *m = malloc(sz + 4096);
+	printf("B1 probe: malloc(%lu) %s errno %d\n", (unsigned long)(sz + 4096), m ? "ok" : "NULL", errno);
+	free(m);
+	errno = 0;
+	void *map = mmap(0, sz, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+	printf("B1 probe: mmap(%lu) %s errno %d\n", (unsigned long)sz, map == MAP_FAILED ? "FAILED" : "ok", errno);
+	if (map != MAP_FAILED) {
+		errno = 0;
+		int pr = mprotect((char *)map + 4096, sz - 4096, PROT_READ | PROT_WRITE);
+		printf("B1 probe: mprotect rc %d errno %d\n", pr, errno);
+		munmap(map, sz);
+	}
+}
+static int small_thread(void)
+{
+	pthread_attr_t a;
+	pthread_t t;
+	void *ret = 0;
+	pthread_attr_init(&a);
+	pthread_attr_setstacksize(&a, 16384);
+	int r = pthread_create(&t, &a, worker, (void *)41L);
+	printf("B1 probe: small-stack pthread_create %d\n", r);
+	diag();
+	if (r)
+		return 3;
+	r = pthread_join(t, &ret);
+	printf("B1 probe: small-stack join %d value %ld\n", r, (long)ret);
+	return r ? 4 : ((long)ret == 124 ? 0 : 5);
+}
+#endif
+
 int main(void)
 {
 	pthread_t t;
 	void *ret = 0;
+#ifdef CAPSTONE_B1_PROBES
+	probes();
+#endif
 	int r = pthread_create(&t, 0, worker, (void *)41L);
 	if (r) {
 		printf("B1: pthread_create failed: %d\n", r);
 		diag();
+#ifdef CAPSTONE_B1_PROBES
+		return 10 + small_thread();
+#endif
 		return 3;
 	}
 	r = pthread_join(t, &ret);

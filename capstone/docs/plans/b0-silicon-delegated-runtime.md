@@ -986,6 +986,22 @@ the load pass; the write-buffer phase begins 2-4 instructions later. Both are cl
     - step 5 with offered 0: the offer found no descriptor (the request slot was non-zero at this entry);
     - step 5, offered 1, id < 0: ADOPT (the monitor's context_adopt or the launcher) with that errno.
   - A pass (124) would mean B1b's failure did not repeat, which is itself a finding about nondeterminism.
+- **B1c result (20:06-20:11, firmware de384b7ab2a6): `step 0`, `pthread_create failed: 11` again.** `__clone` was
+  never entered: musl's pthread_create failed BEFORE the clone. Its only EAGAIN exits there are the stack mapping:
+  the anonymous `mmap` (served from level0's arena by mmap_shm_level0.c) returning MAP_FAILED, or the guard
+  `mprotect` failing with anything but ENOSYS.
+- **B1d pre-registered (before the boot):** the same image with `-DCAPSTONE_B1_PROBES` added (a31d70e8e98948dc,
+  firmware f8e93047641c).
+  - It does musl's mapping steps by hand, printing each with its errno: the level0 arena size, a malloc of a thread
+    stack's size, the anonymous mmap, and the guard mprotect.
+  - Then the default pthread_create, and on failure one with a 16 KiB stack (exit 10 + that thread's code).
+  - QEMU prints: arena 1048576, malloc ok, mmap ok, mprotect rc 0, step 5, 124.
+  - On silicon:
+    - malloc NULL: level0 cannot serve 140 KiB there (the arena or its capability);
+    - malloc ok but mmap FAILED: mmap_held itself;
+    - mprotect rc -1 with errno != 38: the guard path;
+    - all ok yet pthread_create fails: something else in pthread_create.
+  - The small stack passing would point at size.
 
 ## B1.0b (2026-10-05): strtod, atof and scanf's %f on the silicon build, for memcached
 - **The gap.** The archive drops musl's `floatscan.o` for the same reason as vfprintf (C-43). `strtod.o` and
