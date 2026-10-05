@@ -60,7 +60,11 @@ static volatile unsigned char *held __attribute__((used));
 
 /* The stale access, labelled so the host can require the fault to land HERE
  * rather than merely somewhere in the program. Natively it is a plain load. */
-__attribute__((noinline, unused)) static unsigned
+/* `used`, not merely `unused`: mark() publishes the addresses of BOTH probe labels,
+ * so a case that only writes still needs mc_defect_read to exist. write_probe below
+ * already had `used`; this one did not, and the first write-only case in the corpus
+ * (case 5) failed to link with "undefined symbol: mc_defect_read" because of it. */
+__attribute__((noinline, used)) static unsigned
 read_probe(const volatile unsigned char *p) {
 #if defined(MCP_DOMAIN)
   unsigned long value;
