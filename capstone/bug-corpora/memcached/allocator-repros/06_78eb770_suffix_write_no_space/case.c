@@ -41,6 +41,7 @@ MC_CASE(6) {
   const uint32_t flags = 0x41424344u;
   o->unit_reissued = 0;
   held = suffix;
+  mark(6); /* LAST thing before the access */
   if (!fixed) {
     /* items.c before the fix: memcpy(ITEM_suffix(it), &flags, sizeof(flags)) */
     for (size_t i = 0; i < sizeof flags; i++)

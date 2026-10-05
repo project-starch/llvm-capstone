@@ -196,3 +196,60 @@ three of those became cases. The other 152 were **not** read one by one.
 Quoting 89 as "candidates" would be the same mistake this tree already records on the FFmpeg side,
 where *"overflow 2,415, out of array 1,062"* was measured in aggregate and never read case by case.
 An aggregate is evidence that a population is large, never that its members were triaged.
+
+## 7. The three cases MEASURED under Capstone (2026-10-05), and one of them settles the class question
+
+§6 landed the three cases with their Capstone arms as **pre-registered predictions** pointing
+deliberately different ways. They have now been measured, and all three predictions hold.
+
+| case | predicted | measured | what it means |
+|---|---|---|---|
+| **5** `2d61f18` | faults | **FAULT, cause 7**, at the labelled WRITE probe, pc `0x10186a0e4` matching the resolved probe address, on **both** modes | the crossing leaves the chunk and the slab port's chunk bound catches it |
+| **6** `78eb770` | completes | **COMPLETES on both modes** | **a chunk-granular bound cannot see a sub-object crossing** — measured, not argued |
+| **7** `ecdb011` | depends on the scan length | **COMPLETES on both modes** | the case's 64-byte cap keeps the read inside the chunk, as its wording anticipated |
+
+**8/8 arms, runner exit 0**, with case 2 in the same pass as the temporal regression control reading
+**cause 24** as before, and the suite's `--negative-control` reporting **8/8 oracles fired** — so the
+pass is not vacuous.
+
+**Case 6 is the result worth carrying.** The defect is real (the native arm reproduces it with
+damage set), it corrupts the value's storage, and **nothing we have detects it**. That is the same
+conclusion FFmpeg's `subobject-repros` corpus reaches, arrived at here from the other end: memcached
+has no class-B defect that a wording filter would find, and the one sub-object defect the shape
+search found is invisible to the allocator-granular bound.
+
+Two things the run showed that were **not** predicted:
+
+- **Case 5 faults on BOTH modes**, so the slab port narrows per chunk whatever the temporal mode —
+  the same shape as `wm_narrow()` on the wireshark side.
+- **The cause is 7, not 5.** A bounds violation on a *store* differs from one on a *load*. The same
+  surprise as the two tshark write rows, so it is now a known distinction rather than a new one.
+
+### Three instrument defects had to be fixed before any of this could be judged
+
+None was about the cases, and each would have reported a correct reading as a failure:
+
+1. **`runners/capstone-domain/run-defects.py` had a hardcoded five-entry `CASES` list** — the drift
+   the contract warns about, and the reason cases 5-7 could not be measured when they landed. It now
+   discovers from `case.json` like its `cheribsd/` and `poisoncap/` siblings. Negative-tested against
+   the old literal: cases 0-4 come out **byte-identical**, 5-7 are added.
+2. **The same runner assumed every row is temporal** — that `spatial` always completes, `sublet`
+   always faults, the probe is always the READ one and the cause always 24 or 25. All four are wrong
+   for a spatial row. It now reads each arm's declared oracle.
+3. **`shared/corpus.h`'s `read_probe` was `unused`, not `used`**, while `write_probe` already had
+   `used`. `mark()` publishes the addresses of **both** probe labels, so the corpus's first
+   write-only case failed to link with `undefined symbol: mc_defect_read`. A one-word seam fix, and
+   the asymmetry had simply never been exercised.
+
+And one defect in **my own cases**, caught by the harness rather than by me: none of the three called
+`mark()`, so the runner found no marker and refused to attribute anything. The contract says the mark
+must be the last thing before the access precisely because its presence is the evidence the setup
+ran.
+
+## 8. PoisonCap and CheriBSD are UNMEASURABLE on this host, checked rather than assumed
+
+`ports/common/cmake/toolchains/cheribsd.cmake:4-9` requires `CHERI_SDK` and `CHERI_SYSROOT` and
+`FATAL_ERROR`s without them. Both are **unset** even after sourcing the project environment, and a
+filesystem search finds **no** CHERI SDK, rootfs or PoisonCap image anywhere on this host. Those
+arms are therefore recorded as *unavailable*, not *pending* — the distinction matters, because
+"pending" invites someone to wait for them.
