@@ -47,6 +47,10 @@ capability `mcause` in either file against that table before acting on it** — 
 | `fpga-silicon-measurements-for-paper.md` | **where new silicon numbers go.** Reporting here needs no permission; editing `paper/` does |
 | `xlang-security-measurements-for-paper.md` | the xlang case-study numbers |
 | `table6-cheri-vs-capstone-explained.md` | how that comparison table is derived |
+| `spatial-vs-temporal-three-programs.md` | the spatial/temporal × nested/plain split for memcached, FFmpeg and tshark, plus the consolidated spatial-hunt result: **19 triaged upstream spatial defects, 6 live at their pin, 0 built as cases**. Read it before answering "why no spatial bugs" — the earlier zero was a filter artefact and is retracted in §1 |
+| `wireshark-spatial-defect-triage.md` | the spatial hunt for tshark: 15 class-B defects, 2 live at the pin, and the 4 in `wmem_file_scope()` the `chunks` port can already catch |
+| `memcached-spatial-defect-triage.md` | the spatial hunt for memcached: class B structurally absent, and the program that measures the liveness filter's ~20% false-live rate |
+| `ffmpeg-spatial-defect-triage.md` | the spatial hunt for FFmpeg: 4 live class-C defects crossing a bound between two members of ONE allocation, which no allocator adapter can reach |
 | `report-style.md` | how results reports should read |
 
 ## Bug-corpus inventories
