@@ -137,7 +137,7 @@ needed the replacement work the old table planned.
 
 | files | where | cause | what to do |
 |---:|---|---|---|
-| 6 | `src/malloc/mallocng` | `sizeof(void*)` static assert; a 16-byte pointer makes the assert expression zero, so its negative-size array reports `array is too large (2^64-1 elements)` | Nothing. Every port here brings its own level 0, so no domain links musl's allocator. `src/malloc/mallocng/malloc.c` is now the survey's MUST_FAIL control for exactly that reason: it fails structurally and it blocks no milestone. |
+| 6 | `src/malloc/mallocng` | `sizeof(void*)` static assert; a 16-byte pointer makes the assert expression zero, so its negative-size array reports `array is too large (2^64-1 elements)` | Nothing. Every port here brings its own system allocator, so no domain links musl's allocator. `src/malloc/mallocng/malloc.c` is now the survey's MUST_FAIL control for exactly that reason: it fails structurally and it blocks no milestone. |
 
 So the compile side of this port is finished for practical purposes. **What remained was
 the transport**, which a compile count never measured: at the time `runtime/hostcall.c`
@@ -170,7 +170,7 @@ The served set comes out of the delegated runtime's own tables, so it cannot dri
 implementation: the numbers the shape table (`runtime/common/delegate.c`) delegates to Linux,
 plus the ones the domain's stub (`runtime/delegate.c`) answers itself. `--sdk` names the
 musl tree, the libc archive and the runtime archive the image was linked with; whatever the
-runtime archive defines (level0's mmap, the libc overrides) is not musl's and is not read. A
+runtime archive defines (the first-fit heap's mmap, the libc overrides) is not musl's and is not read. A
 source is reported only when **every** syscall it names is unserved. That second rule is what makes it usable: musl's `fstatat` tries `statx` and falls
 back to `newfstatat`, `clock_gettime` falls back to `gettimeofday`, and a checker that reported
 mentions called both of them broken. `--baseline` subtracts what any musl image links anyway,

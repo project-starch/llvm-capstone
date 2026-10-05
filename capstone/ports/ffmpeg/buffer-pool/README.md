@@ -15,7 +15,7 @@ decoder runs natively; this is not a capability-domain FFmpeg decoder.
 [`patches/`](patches/) separates the upstream changes from the replay and
 authority adapters. A [CHERI Purecap target](host/cheribsd/README.md) runs the
 same allocator and recordings in CheriBSD/QEMU, with explicit compressed-bounds
-accounting and separate pool/outer-heap lifetime controls. The [shared layout](../../README.md) describes `src/`,
+accounting and separate pool/system-allocator lifetime controls. The [shared layout](../../README.md) describes `src/`,
 `host/`, tests and result ownership.
 
 ## Build and run
@@ -52,7 +52,7 @@ python3 host/run-qemu.py /tmp/capstone/ffmpeg-recording/commands.bin \
   /tmp/capstone/ffmpeg-replay --protection sublet
 ```
 
-The runner offers `spatial`, `backing` and `sublet` modes, stages the exact
+The runner offers `spatial`, `backing` and `sublet` arms, stages the exact
 inputs and binaries, and retains each attempt. This port needs the capability
 atomic compiler change already in LLVM `dev` and the matching emulator checks
 in [QEMU PR #5](https://github.com/project-starch/capstone-qemu/pull/5).

@@ -57,7 +57,7 @@ ninja link command; its dependencies must already be built.
 `--heap sublet --heap-log N` selects the common Sublet malloc implementation.
 The separate `--nested cpython`, `--nested mruby` and `--nested perl` modes
 select already-built ports of pymalloc, GC slots and SV heads while leaving
-their outer malloc as level0.
+their system allocator as the first-fit heap (`level0.c`).
 They allocate the grants described in `regions.c`; they do not silently
 fall back if a protected port's region is absent. Record the supplied source
 revision, object hashes, protection contract and build manifest together.
@@ -117,7 +117,7 @@ blocks before forwarding the marker. It uses stack formatting and direct
 writes, with no malloc. An atexit hook captures peak usage even if main calls
 exit. Fatal signals have no fabricated final sample.
 
-For level0, live/peak count occupied blocks including headers and alignment;
+For the first-fit heap, live/peak count occupied blocks including headers and alignment;
 `end` includes holes up to the furthest block; `pool` is the fixed arena.
 For Sublet malloc, live/peak count occupied buddy blocks, including internal
 slack; `tables` counts the statically reserved capability/control arrays.
@@ -127,7 +127,7 @@ ledger entries. Driver live bytes returning to zero does not mean cached
 physical pages returned to Linux.
 
 SQLite emits its own memsys5 requested-byte accounting in `EXP-INNER` lines;
-do not add that to the 8 MiB backing block and count the same bytes twice.
+do not add that to the 8 MiB block and count the same bytes twice.
 PostgreSQL queries `pg_backend_memory_contexts` as an independent context
 ledger. FFmpeg validates decoded frame hashes against stock native ffmpeg.
 tshark's generated PCAPs vary flow count independently from packet count.
@@ -135,14 +135,14 @@ tshark's generated PCAPs vary flow count independently from packet count.
 The baseline language scripts use application allocators and their normal
 retention policies. Different applications' records are not interchangeable
 units. The level0 controls do not provide per-object temporal safety. Current
-SQLite and FFmpeg discovery images do not protect nested pool leases.
+SQLite and FFmpeg discovery images do not protect the objects of their nested pools.
 
 ## Validation and resource limits
 
 Run `python3 capstone/experiments/applications/test_runner.py` for false-pass
 controls: wrong oracle, missing completion, missing guest status, timeout,
 signal and impossible counters. `workloads/calibrate.c` checks two known
-allocations followed by release; level0 occupies 1,136 bytes, while a Sublet
+allocations followed by release; the first-fit heap occupies 1,136 bytes, while a Sublet
 heap with 256-byte atoms occupies 1,280. Both must return live bytes to zero.
 (`workloads/files.c`, which exercised the 128 file slots of the HostCall v0
 runtime, was removed with that runtime on 2026-09-30: a delegated application's

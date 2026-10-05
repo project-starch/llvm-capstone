@@ -25,7 +25,7 @@ not the modified platform build directory.
 |---|---|---|
 | SQLite MEMSYS5 | On free, after insertion and poisoning: held bytes at least 16 MiB **and** quarantined bytes at least one quarter of held bytes | `sqlite/src/mem5.c:574–622` |
 | SQLite queue capacity | Before inserting another entry into an already full 4,096-entry queue, drain the existing queue | `sqlite/src/mem5.c:467–597` |
-| Outer libc allocator | Minimum allocated heap 8 MiB, default fraction 1/4; asynchronous revocation enabled, every-free override disabled | `cheribsd/lib/libc/stdlib/malloc/mrs/mrs.c:107–112,344–360,800–825` |
+| System allocator (libc) | Minimum allocated heap 8 MiB, default fraction 1/4; asynchronous revocation enabled, every-free override disabled | `cheribsd/lib/libc/stdlib/malloc/mrs/mrs.c:107–112,344–360,800–825` |
 
 For MEMSYS5, held means rounded live allocation spans plus quarantined spans,
 not the reserved arena size, cumulative allocation volume, or process RSS.
@@ -118,7 +118,7 @@ drives their explicit revocation. This matters to memory interpretation.
 
 | Application | Measured inner policy | Outer policy | Default-comparison status |
 |---|---|---|---|
-| SQLite | Published thresholds plus the documented full-queue correction | libc revocation disabled in normalized memory/reuse campaigns | Corrected nested reference with isolated outer allocator; not an unchanged-artifact reproduction |
+| SQLite | Published thresholds plus the documented full-queue correction | libc revocation disabled in normalized memory/reuse campaigns | Corrected nested reference with isolated system allocator; not an unchanged-artifact reproduction |
 | mruby | Reclaim poisoned slots when no reusable GC heap slot remains | libc revocation enabled | Our pressure-triggered adapter; not the published nested policy |
 | FFmpeg | Sweep before reissuing an unswept poisoned block; selective RefStruct snapshots | libc revocation disabled | Our eager-reuse adapter; not the published nested policy |
 
@@ -142,7 +142,7 @@ Persistent RefStruct state and destructor callbacks need a correct lifetime
 path; any forced teardown/pressure sweep must be counted and disclosed as a
 port-specific extension, not hidden in the default-policy curve.
 
-Preserve the published outer allocator defaults in both CheriBSD arms.
+Preserve the published system allocator defaults in both CheriBSD arms.
 Record effective sysctls, allocator environment and libc/build hashes. A
 diagnostic with outer revocation disabled remains separately named; do not
 promote it as default if enabling that default exposes a platform fault.
@@ -176,7 +176,7 @@ live rounded chunks and quarantined chunk/block spans; block spans include
 used prefixes, not untouched reservation tails. Managed-reset exceptions
 remain separately counted and must be zero for the published-policy row.
 
-Both modes provision identical chunk/block metadata capacities and load the
+Both arms provision identical chunk/block metadata capacities and load the
 same corrected libc with process revocation explicitly enabled. The guest's
 setup services run with their default disabled because staging a cluster
 can hit the separate VM-map lock panic. This service setting does not disable
@@ -190,7 +190,7 @@ transfers the same published SQLite thresholds to pymalloc. Frees poison and
 queue blocks while preserving pymalloc's occupancy. A completed sweep clears
 the payload and then publishes the original free-list operation. This avoids
 both per-free sweeps and allocation-triggered drains. The comparison enables
-outer libc revocation in both modes; teardown drains are counted separately.
+the system allocator's (libc) revocation in both arms; teardown drains are counted separately.
 This is our disclosed application adapter, not a published CPython port.
 
 The [PoisonCap paper, §§4.5 and 5.5](https://arxiv.org/html/2605.13210v1)

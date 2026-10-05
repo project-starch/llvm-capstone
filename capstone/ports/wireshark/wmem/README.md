@@ -23,7 +23,7 @@ blocks, jumbo objects and its own descriptors. Every such request becomes one
 **region** with its own revocation handle (`src/shared/backing.c`); released
 regions of the same size are reissued before fresh payload is carved, as a
 system allocator would reissue a freed block. Objects handed to callers are
-narrowed to their request in both modes.
+narrowed to their request in both arms.
 
 The allocator hooks (`patches/…-0001-wmem-authority-hooks.patch`, every hunk
 guarded by `WMEM_PORT_HOOKS`) do three things:
@@ -37,7 +37,7 @@ guarded by `WMEM_PORT_HOOKS`) do three things:
   `block_fast` renews its first block, `block` renews each retained block and
   rebuilds its block list from the renewed aliases.
 
-Both modes run the same allocator and backing layout:
+Both arms run the same allocator and backing layout:
 
 - `spatial`: objects are request-bounded; a reset does not revoke old aliases.
 - `sublet`: additionally, a reset, a jumbo release, a returned block, a pool
@@ -229,7 +229,7 @@ The corpus arms run through `host/cheribsd/poisoncap/run.py`, under
 resolves `wm_defect_probe` from the child's own map plus the target ELF. A
 protected arm that faults anywhere else carries the same exit status; only
 the PC comparison in `matrix.json` tells the two apart. The plain build has
-one mode, and a completion there means the layer below saw nothing.
+one mode, and a completion there means the system allocator saw nothing.
 
 Measured 2026-09-21 on the thirteen corpus cases, guest libc revocation on
 for all three arms: the plain build completed every case (0 / 13 caught);
@@ -257,7 +257,7 @@ module's log is suppressed). The replay image is kept well under that.
 The `simple` allocator's objects are bounded to their request but each is its
 own region, as upstream intends it to be a per-object allocator. The `strict`
 allocator's canaries and fills are kept; its `free` revokes the object's
-region in `sublet` mode, which is the per-object behaviour upstream reaches
+region in the `sublet` arm, which is the per-object behaviour upstream reaches
 for when it wants to see this class at all.
 
 These are allocator-component QEMU results. They do not establish protection

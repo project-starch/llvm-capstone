@@ -92,8 +92,8 @@ python3 capstone/ports/common/application/build.py \
 The output directory must be new. `--libc-root` selects a separate musl build;
 `--musl` and `--libc` select explicit source/archive paths (useful for tshark's
 keyed dependency builds). SQLite needs `--include` pointing at `sqlite3.h`.
-`--heap sublet` selects outer malloc protection. `--nested cpython|mruby|postgres|perl`
-retains the existing inner allocator adapters and requests their static backing
+`--heap sublet` selects system allocator protection. `--nested cpython|mruby|postgres|perl`
+retains the existing nested allocator adapters and requests their static backing
 from the v2 descriptor. The study entry point in `experiments/applications/`
 uses this builder with `--instrument`; normal applications need no study wrapper.
 

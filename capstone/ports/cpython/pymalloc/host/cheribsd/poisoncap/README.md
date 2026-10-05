@@ -54,7 +54,7 @@ flag also disables the guest default before SSH starts, avoiding the known
 VM-locking failure of this published platform. Explicit PoisonCap revocation
 by the adapter remains active. This is not whole-process temporal protection.
 
-Mode 0 uses bounded spatial leases; mode 1 adds lifetime invalidation. The
+Mode 0 uses bounded spatial aliases; mode 1 adds lifetime invalidation. The
 PoisonCap replay binary defaults to mode 1 and accepts an explicit final
 argument `0` or `1`. The runner always passes it explicitly.
 
@@ -154,7 +154,7 @@ The existing extraction, provenance and lifetime-hook patches are reused.
 On free, the adapter poisons the block and finishes a sweep before clearing
 poison, overwriting the stored poison capabilities with zeros, and permitting
 pymalloc's in-band free-list write. Clearing access state alone leaves poison
-capabilities that a later kernel sweep can mistake for a newly issued lease.
+capabilities that a later kernel sweep can mistake for a newly issued alias.
 The `unwritten-reuse` check covers zero-size and raw allocations that receive
 no client stores before an unrelated free triggers another sweep. Pool reassignment
 and empty-arena release have their own invalidation boundaries. Pool/arena

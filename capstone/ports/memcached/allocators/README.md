@@ -48,7 +48,7 @@ through the mover. An **object** is `cache.c`'s: `malloc`'d once, pushed on a
 a limit the three per-thread instances do not have. Upstream still decides
 everything about both -- the class table, `perslab`, the LIFO order, which
 chunk or object the next request pops. The adapter supplies the storage under
-a page, a chunk or an object and, in the protected mode, the authority over it.
+a page, a chunk or an object and, in the protected arm, the authority over it.
 
 The hooks sit on those transitions, not on `free()`. `mcp_chunk_release`
 runs where `do_slabs_free` and `do_slabs_free_chunked` file a chunk, after its
@@ -64,7 +64,7 @@ element-wise, since it holds page aliases. `cache.c`'s control block and name
 come from the metadata heap, so an allocator never lives inside storage it
 hands out.
 
-Both domain modes use the same layout and allocator code:
+Both domain arms use the same layout and allocator code:
 
 - `spatial`: a chunk or object keeps the alias it was carved with. A pointer
   held across `slabs_free` or `cache_free` still names the storage, which by
@@ -149,7 +149,7 @@ expects.
 `mmap`'d arena carrying `CHERI_PERM_POISON` and `CHERI_PERM_SW_VMEM` is the
 adapter's, every alias handed to memcached is bounded to its unit and stripped
 of both permissions, and **the ledger is the one the Capstone domain runs**
-(`src/shared/leases.c`, unchanged). Mode 0 is bounded leases with no
+(`src/shared/leases.c`, unchanged). Mode 0 is bounded aliases with no
 invalidation; mode 1 poisons the unit's granules on release, sweeps
 synchronously, clears the poison and zeroes the payload before upstream writes
 its free-list link through the fresh alias. That file, 160 lines, is the whole
@@ -191,7 +191,7 @@ observes both reissues the corpus exists for: a freed chunk comes back as the
 next `slabs_alloc` and a freed object as the next `cache_alloc`,
 `chunk_reuses >= 1` and `object_reuses >= 1`. Without that the example would
 be measuring the wrong allocators. The same sequence, built through the seam
-as a domain, completes in both modes under QEMU with the same counts.
+as a domain, completes in both arms under QEMU with the same counts.
 
 The domain and CheriBSD arms are the corpus's, run and judged by
 [its runners](../../../bug-corpora/memcached/allocator-repros/runners/capstone-domain/README.md):

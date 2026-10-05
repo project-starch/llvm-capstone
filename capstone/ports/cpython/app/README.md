@@ -413,7 +413,7 @@ initial `test_thread` run, `test_forkinthread` is now reported as a skip rather 
 The runner prints `THREAD_GATE_RESULT` JSON with every skip, error and failure and returns a
 failing status for any unexpected result.
 
-The final rerun uses one fresh interpreter per module, a 64 MiB level0 arena, guest CMA of
+The final rerun uses one fresh interpreter per module, a 64 MiB arena for the first-fit heap (`level0.c`), guest CMA of
 1024 MiB and process cache of 768 MiB. All five suites pass with explicit upstream exclusions:
 
 | suite | ran | skipped | errors / failures |
@@ -428,7 +428,7 @@ The final rerun uses one fresh interpreter per module, a 64 MiB level0 arena, gu
 subprocess-creation errors in `test_threading`, 18 now pass, seven explicitly skip actual fork,
 and one skips because RLIMIT_NPROC has no effect as root.
 
-The rerun also exposed a level0 allocator limitation: CPython allocates a 32 KiB buffer for
+The rerun also exposed a first-fit heap limitation: CPython allocates a 32 KiB buffer for
 `os.read`, then shrinks it to the actual short read. The allocator kept the full block even
 after shrinking. Capturing the recursive exception child's stderr exhausted the parent;
 `test_threading` had four MemoryErrors followed by two thread-creation errors at both 128 MiB
@@ -441,7 +441,7 @@ the resulting unhandled `KeyboardInterrupt` makes `Py_RunMain` call `exit_sigint
 control and the domain child report signal 2. The test uses `assert_python_failure`;
 this termination is expected and does not require asynchronous domain delivery.
 
-Level0 now splits and coalesces the unused tail under its heap lock. The
+The first-fit heap now splits and coalesces the unused tail under its heap lock. The
 [directed allocator control](../../../runtime/tests/application/results/20260930-level0-realloc-review.json)
 fails at allocation 31 before the fix; afterwards it retains 4,096 short reads in 1 MiB,
 preserves capability payloads through shrink and regrowth, and recovers a 900 KiB free block.

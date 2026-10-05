@@ -41,7 +41,7 @@ be used; `storage.c` (1617) sits over extstore; `logger.c` (1151) over the
 bipbuffer; `crawler.c` (997) walks the LRU. The **proxy** (16 files, optional,
 Lua-driven) has no allocator of its own — 62 libc sites, no pool.
 
-## The level below
+## The system allocator
 
 163 `malloc`/`calloc`/`realloc`/`free` sites in the core (`testapp.c`
 excluded), 62 in the proxy. Compare APR's 18 and pymalloc's raw fallback:

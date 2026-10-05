@@ -8,7 +8,7 @@ Two tracks, because two different things are incomplete.
 - **Track A — port FFmpeg's own pools onto Sublet.** Today's pool arms are not a port of FFmpeg's
   allocator, they are a substitute for it: payloads are diverted into the port's own
   `pool-allocator.c` (2048 fixed exact-size blocks, bump-carved, never coalesced) in a separate
-  host region; `pool->alloc` is never called; custom allocators are refused (`ff2_fail 125/126`);
+  host region; `pool->alloc` is never called; pools with their own alloc callback are refused (`ff2_fail 125/126`);
   there is no per-pool senior handle, so `uninit` frees entries one at a time; and the grant is
   `REV_TRANSFERRED` where SQLite's is `REV_BORROWED` under a monitor-held handle. The SQLite port
   is the standard to meet (`ports/sqlite/sublet/README.md`): the allocator keeps its own policy,
@@ -101,7 +101,7 @@ The recipe is the one `capstone/sublet/sublet.h` already documents:
 
 | operation | primitive |
 |---|---|
-| block from the level below | `sublet_take_linear` — mrev, the block stays LINEAR |
+| block from the allocator below | `sublet_take_linear` — mrev, the block stays LINEAR |
 | carve an object | `sublet_split`, then `sublet_take` — mrev, delin |
 | free an object | `sublet_give` |
 | destroy the pool | `sublet_give_to` on the handle senior to the children: **one revoke**, whatever hangs below dies |

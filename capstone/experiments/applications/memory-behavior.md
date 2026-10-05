@@ -83,7 +83,7 @@ intended hardware's sustainable metadata behavior.
 
 Use real application operations and report common malloc-level metrics first.
 Nested allocator storage is a separate ledger and must not be inferred from
-outer malloc activity.
+system allocator activity.
 
 | Application | Repeated useful work | Release boundary |
 |---|---|---|
@@ -96,7 +96,7 @@ outer malloc activity.
 
 Only FFmpeg and mruby currently have matched default-CheriBSD application
 measurements. The other rows are candidate workloads. PostgreSQL filesystem
-coverage and the distinction between outer malloc and retained context pools
+coverage and the distinction between the system allocator and retained context pools
 must be resolved before expanding its claim. The prepared tshark inputs still
 need a complete dependency build.
 

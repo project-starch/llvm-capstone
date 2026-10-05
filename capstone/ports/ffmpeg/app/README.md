@@ -48,8 +48,8 @@ recording from `buffer-pool/host/record.sh:23-34`.
   errors.
 
 **The budget fits, sized the way the kernel module sizes it:**
-- `code_len` = 3,618,720 B, the `PT_LOAD` span through `p_memsz`, including the 1.5 MiB level0
-  heap arena.
+- `code_len` = 3,618,720 B, the `PT_LOAD` span through `p_memsz`, including the 1.5 MiB arena
+  of the first-fit heap (`level0.c`).
 - A `.capstone_domreq` declaration adds 256 KiB of stack.
 - The allocation is then **4 MiB = the order-10 ceiling**, with **305,248 B of headroom**. That is
   tight: the arena cannot grow much.
