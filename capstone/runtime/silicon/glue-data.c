@@ -12,3 +12,14 @@
 __attribute__((section(".rodata.capstone_cancel_points.0"), used)) const char __cp_begin[1] = {0};
 __attribute__((section(".rodata.capstone_cancel_points.1"), used)) const char __cp_end[1] = {0};
 __attribute__((section(".rodata.capstone_cancel_points.2"), used)) const char __cp_cancel[1] = {0};
+
+/* B1 (minted contexts, CAPSTONE_GLUE_CONTEXTS): storage start-musl.S keeps in assembly, here in C for the same
+ * reason as above. The glue's first entry fills both, through the two accessors, once globals are live:
+ * - __capstone_context_arena: the LINEAR context arena, split off the top of dom_data (context.c carves from it);
+ * - __capstone_silicon_code_cap: the NONLIN code capability the monitor parked (B1.3), for a seal's PC.
+ * The accessors return each slot's capability from the cap table; assembly cannot name a cap-table slot. */
+#include <capstone/capability-slot.h>
+capstone_cap_slot __capstone_context_arena;
+void *__capstone_silicon_code_cap;
+capstone_cap_slot *__capstone_silicon_arena_slot(void) { return &__capstone_context_arena; }
+void **__capstone_silicon_code_cap_slot(void) { return &__capstone_silicon_code_cap; }
