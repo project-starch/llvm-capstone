@@ -1176,3 +1176,20 @@ Requested by the RTL lane. Both run after C5u and b0-printf, each on its own boo
 - Rungs: k800 (oracle 4), then s06agg.
 - **Predicted on 776d9d859: s06agg = 64 (clean).** 66 = R-29 still present (the folder's reading on
   66c4e7517, boots sw46/sw48). 65 = something other than R-29.
+
+## s10b and s06agg RESULT on 776d9d859 (2026-10-05 19:43-19:52): both as pre-registered
+Raw lines: `results/r29-fix-776.result-lines.txt`.
+- **s06agg = 64 (clean)**, with the k800 control (589ceee3 at 0x20000) at 4. R-29's own frozen reproducer read 66 on
+  66c4e7517 (boots sw46/sw48), so the high half is no longer lost.
+  - The firmware is 2f49d5b257f7. The stages driver verified, by decompressed content, that the image carries
+    k800 589ceee3 and s06agg 249118220f8cf37a.
+  - There is no reading of this image on 715bdd1fe, so the pair is across two bitstreams apart. b0-memcpy is the
+    same-image pair (94/96 -> 0/96, 715 -> 776).
+- **s10b-primed: trap_count 8, gp 1** (every leg's tag cleared, 9 exceptions with the positive control). The control
+  call-retpc read as always.
+  - **Limit, stated:** the reading the fix is compared against (#1 = 0 on 715bdd1fe) comes from the RTL lane's
+    simulation; this image was never run on pre-fix silicon. So 8 is consistent with the fix but does not show,
+    on silicon, that the primed route creates the hazard.
+- The shared tree carried the s06agg staging from about 19:24 to 19:30, because the bake script's EXIT-trap restore
+  read `main()`'s locals after main returned and failed. It was restored by hand and rebaked, and the cpio was
+  verified by hash (12 files, stock k800 b2d60e52, no s06agg).
