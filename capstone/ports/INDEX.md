@@ -41,6 +41,7 @@
 
 | component | pinned version | runs on | workload | corpora |
 |---|---|---|---|---|
+| `mruby/cheribsd` | 4.0.0-rc2 | cheribsd-purecap | the 23 cases of the release corpus, plus its own controls: the interpreter evaluates, and 40- and 500-frame recursion survives revocation | `release-differential` |
 | `perl/cheribsd` | 5.36.3 | cheribsd-purecap | the 17-section smoke, under both libc revocation switches | -- |
 
 ## domain-libc -- the libc the domain images link against
@@ -58,6 +59,7 @@ A directory under `ports/` is an upstream **program**; a directory inside it is 
 | cpython | `cpython/app` · `cpython/pymalloc` | 3.13.7 |
 | ffmpeg | `ffmpeg/app` · `ffmpeg/buffer-pool` | 9.0.1 |
 | memcached | `memcached/allocators` · `memcached/app` | 1.6.45 |
+| mruby | `mruby/app` · `mruby/cheribsd` | 4.0.0-rc2 |
 | perl | `perl/cheribsd` · `perl/musl` | 5.36.3 |
 | postgres | `postgres/app` (17.5) · `postgres/memory-contexts` (17.0) | **differs, see the note in its port.json** |
 | sqlite | `sqlite/app` (3.22.0) · `sqlite` (3.53.3, 3.22.0) | **differs, see the note in its port.json** |

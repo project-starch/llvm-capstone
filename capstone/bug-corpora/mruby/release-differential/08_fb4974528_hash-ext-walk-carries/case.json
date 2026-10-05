@@ -19,9 +19,9 @@
       "oracle": "capability fault, cause 24"
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "oracle": "completes, and the harness reports a wrong answer rather than a fault -- a differential, not a detection: [\"Hash#key keeps the key it answers with across the comparison\", \"NOT_EQUAL\", \"\\\"the key only that entry holds"
     }
   },
-  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation not run",
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
   "allocator_layer": "a GC object slot in an mrb_heap_page"
 }

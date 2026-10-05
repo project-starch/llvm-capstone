@@ -18,7 +18,7 @@
     "capstone/ports/mruby/app",
     "xlang/repro"
   ],
-  "note": "ledger.json is the triage of the whole release: 165 defects live at the pin, found by extracting the Ruby test upstream added with each fix and running it at the pin and at master. The 23 cases here are the measured subset: every case on which a Capstone arm reports. They were selected by MEASUREMENT, not by the ledger, which is why 5 of them are not ledger rows at all -- their tests pass at the pin, so the ledger's 'fails at the pin' rule could never admit them, and host ASan is what found them. 17 of the 23 are spatial or temporal; the other 6 are 4 null dereferences, one type confusion and one C-stack exhaustion, kept because they are what the arms actually reported and dropping them would make the arms' own numbers unreproducible. sysalloc-bounds is the baseline: per-object heap bounds are what applications get by default since PR #170, so a catch is a case the bounds arm does not fault on.",
+  "note": "ledger.json is the triage of the whole release: 165 defects live at the pin, found by extracting the Ruby test upstream added with each fix and running it at the pin and at master. The 23 cases here are the measured subset: every case on which a Capstone arm reports. They were selected by MEASUREMENT, not by the ledger, which is why 5 of them are not ledger rows at all -- their tests pass at the pin, so the ledger's 'fails at the pin' rule could never admit them, and host ASan is what found them. 17 of the 23 are spatial or temporal; the other 6 are 4 null dereferences, one type confusion and one C-stack exhaustion, kept because they are what the arms actually reported and dropping them would make the arms' own numbers unreproducible. All four arms are measured. sysalloc-bounds is the baseline: per-object heap bounds are what applications get by default since PR #170, so a catch is a case the bounds arm does not fault on.",
   "case_number_base": 1,
   "required_arms": [
     "sysalloc-none",
@@ -27,10 +27,12 @@
     "cheribsd-revocation"
   ],
   "evidence": [
-    "capstone/bug-corpora/mruby/release-differential/results/20261006"
+    "capstone/bug-corpora/mruby/release-differential/results/20261006",
+    "capstone/bug-corpora/mruby/release-differential/results/20261006-cheribsd"
   ],
   "runners": [
-    "capstone/ports/mruby/app/build-mruby-domain.sh"
+    "capstone/ports/mruby/app/build-mruby-domain.sh",
+    "capstone/ports/mruby/cheribsd/build.sh"
   ],
   "expect_live_in_pin": {
     "true": 23

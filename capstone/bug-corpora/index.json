@@ -262,6 +262,43 @@
       "where": "capstone/bug-corpora/memcached/allocator-repros"
     },
     {
+      "program": "memcached",
+      "boundary": "the system allocator itself: one calloc or malloc, with no inner layer",
+      "title": "Upstream memcached spatial defects that cross the MALLOC BOUND, the not-nested row",
+      "upstream": {
+        "version": "1.6.45",
+        "port": "capstone/ports/memcached/app"
+      },
+      "cases": 1,
+      "case_schema": "case-json",
+      "case_macro": "MCH",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "false": 1
+      },
+      "runners": [
+        "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "evidence": [
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/20261006-native-plain-heap"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 27 of this tree's 33 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none.",
+      "where": "capstone/bug-corpora/memcached/plain-heap-repros"
+    },
+    {
       "program": "mruby",
       "boundary": "GC slots (mrb_heap_page)",
       "title": "Planned: the xlang mruby rows re-run inside the complete interpreter",
@@ -303,7 +340,7 @@
         "capstone/ports/mruby/app",
         "xlang/repro"
       ],
-      "note": "ledger.json is the triage of the whole release: 165 defects live at the pin, found by extracting the Ruby test upstream added with each fix and running it at the pin and at master. The 23 cases here are the measured subset: every case on which a Capstone arm reports. They were selected by MEASUREMENT, not by the ledger, which is why 5 of them are not ledger rows at all -- their tests pass at the pin, so the ledger's 'fails at the pin' rule could never admit them, and host ASan is what found them. 17 of the 23 are spatial or temporal; the other 6 are 4 null dereferences, one type confusion and one C-stack exhaustion, kept because they are what the arms actually reported and dropping them would make the arms' own numbers unreproducible. sysalloc-bounds is the baseline: per-object heap bounds are what applications get by default since PR #170, so a catch is a case the bounds arm does not fault on.",
+      "note": "ledger.json is the triage of the whole release: 165 defects live at the pin, found by extracting the Ruby test upstream added with each fix and running it at the pin and at master. The 23 cases here are the measured subset: every case on which a Capstone arm reports. They were selected by MEASUREMENT, not by the ledger, which is why 5 of them are not ledger rows at all -- their tests pass at the pin, so the ledger's 'fails at the pin' rule could never admit them, and host ASan is what found them. 17 of the 23 are spatial or temporal; the other 6 are 4 null dereferences, one type confusion and one C-stack exhaustion, kept because they are what the arms actually reported and dropping them would make the arms' own numbers unreproducible. All four arms are measured. sysalloc-bounds is the baseline: per-object heap bounds are what applications get by default since PR #170, so a catch is a case the bounds arm does not fault on.",
       "case_number_base": 1,
       "required_arms": [
         "sysalloc-none",
@@ -312,10 +349,12 @@
         "cheribsd-revocation"
       ],
       "evidence": [
-        "capstone/bug-corpora/mruby/release-differential/results/20261006"
+        "capstone/bug-corpora/mruby/release-differential/results/20261006",
+        "capstone/bug-corpora/mruby/release-differential/results/20261006-cheribsd"
       ],
       "runners": [
-        "capstone/ports/mruby/app/build-mruby-domain.sh"
+        "capstone/ports/mruby/app/build-mruby-domain.sh",
+        "capstone/ports/mruby/cheribsd/build.sh"
       ],
       "expect_live_in_pin": {
         "true": 23
@@ -764,6 +803,31 @@
       "where": "capstone/ports/mruby/app"
     },
     {
+      "program": "mruby",
+      "role": "platform-build",
+      "title": "mruby 4.0.0-rc2 cross-built for CheriBSD purecap, the release corpus's fourth arm",
+      "upstream": {
+        "version": "4.0.0-rc2",
+        "commit": "9d523e2f74f2e63ca02840937523de61398a617d",
+        "pin_source": {
+          "file": "capstone/ports/mruby/cheribsd/build.sh",
+          "grep": "COMMIT=9d523e2f74f2e63ca02840937523de61398a617d"
+        }
+      },
+      "targets": [
+        "cheribsd-purecap"
+      ],
+      "workload": "the 23 cases of the release corpus, plus its own controls: the interpreter evaluates, and 40- and 500-frame recursion survives revocation",
+      "evidence": [
+        "capstone/bug-corpora/mruby/release-differential/results/20261006-cheribsd"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/mruby/release-differential"
+      ],
+      "note": "Not a port of an allocator: mruby's own allocators are unchanged here. The point is the comparison -- the same defects under CheriBSD's deployed heap revocation instead of ours.",
+      "where": "capstone/ports/mruby/cheribsd"
+    },
+    {
       "program": "musl",
       "role": "domain-libc",
       "title": "musl as the domain libc, with the hostcall runtime and its own test suite",
@@ -1171,7 +1235,7 @@
     }
   ],
   "issues": {
-    "open": 105,
+    "open": 107,
     "resolved": 77
   },
   "fixtures": [
@@ -1190,6 +1254,7 @@
     "capstone/bug-corpora/httpd/apr-pool-repros": 1,
     "capstone/bug-corpora/httpd/bucket-repros": 8,
     "capstone/bug-corpora/memcached/allocator-repros": 8,
+    "capstone/bug-corpora/memcached/plain-heap-repros": 1,
     "capstone/bug-corpora/mruby/gc-slot-repros": 0,
     "capstone/bug-corpora/mruby/release-differential": 23,
     "capstone/bug-corpora/postgres/mmgr-repros": 8,
@@ -1200,11 +1265,11 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 112,
+  "cases_here": 113,
   "cases_xlang": 30,
-  "cases_total": 142,
+  "cases_total": 143,
   "live_true": 57,
-  "live_false": 27,
+  "live_false": 28,
   "live_not": 28,
   "advisories_total": 14,
   "renames": {
@@ -1272,6 +1337,7 @@
     "`capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.",
     "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
     "`capstone/bug-corpora/memcached/allocator-repros` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/memcached/plain-heap-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
     "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",
@@ -1292,6 +1358,6 @@
     "`capstone/ports/sqlite/app` is a complete application with no corpus.",
     "`capstone/ports/wireshark/app` is a complete application with no corpus.",
     "`capstone/bug-corpora/ffmpeg/subobject-repros` is not referenced by any port.json.",
-    "`capstone/bug-corpora/mruby/release-differential` is not referenced by any port.json."
+    "`capstone/bug-corpora/memcached/plain-heap-repros` is not referenced by any port.json."
   ]
 }
