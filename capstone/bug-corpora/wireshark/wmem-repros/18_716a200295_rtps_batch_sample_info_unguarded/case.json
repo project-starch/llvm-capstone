@@ -1,0 +1,51 @@
+{
+  "case": 18,
+  "upstream_fix": "716a200295",
+  "title": "the DATA_BATCH sample-info loop guards on a user preference whose default of 0 disables the guard entirely, so the write runs off arrays sized sample_info_max",
+  "consumer": "epan/dissectors/packet-rtps.c:16734-16740, dissect_RTPS_DATA_BATCH()",
+  "object": "sample_info_flags and sample_info_length, two consecutive chunks of the PACKET pool sized sample_info_max entries each",
+  "lifetime_ender": "NONE -- the object is alive throughout. This is a SPATIAL row.",
+  "shape": "a gate disabled by its own default: `rtps_max_batch_samples_dissected > 0 && count >= rtps_max_batch_samples_dissected` cannot fire when the preference is 0, which is the shipped default, so nothing bounds the counter while the arrays stay sample_info_max long",
+  "allocator_layer": "wmem, a chunk the BLOCK or BLOCK_FAST allocator carved from a block g_malloc handed out. An inner allocator carved the crossed region, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "nested": true,
+  "nested_why": "an inner allocator (wmem) carved the crossed region out of a larger block it had itself obtained from g_malloc, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "fidelity": "real allocator, model consumer. SAMPLE_INFO_MAX is reduced from 1024 to 8. The defect is that NOTHING bounds the counter, so the array's length changes how many iterations it takes to leave, not whether it leaves. The preference is kept at its real default of 0, because that value IS the defect, and the case asserts both that the pin's guard does not fire and that the fix's guard would.",
+  "live_in_pin": true,
+  "live_proof": "read from the PINNED source, keyed on the identifier: v4.6.8:epan/dissectors/packet-rtps.c contains the pre-fix guard `rtps_max_batch_samples_dissected > 0 &&` 1 time and the fixed `(unsigned)sample_info_max` 0 times. Two-sided. LIVE AT THE PIN.",
+  "distinguishing": "THE ROW THAT FILLS AN EMPTY CELL: the inventory recorded the nested-spatial cell as having no LIVE upstream defect, and this one is live at v4.6.8. It is also the only row in this corpus whose defect is a guard that CANNOT FIRE in the shipped configuration rather than a guard that is absent or miscomputed -- the preference's default of 0 short-circuits it. The fix's own comment says so: guarding on sample_info_max 'keeps the 0 case bounded too'.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED: faults. Every arm of this harness narrows a wmem allocation to its request via wm_narrow(), so a spatial crossing faults on ALL arms and this row does not discriminate the chunk port -- the corpus.json note states that for the corpus as a whole. NOT YET MEASURED for this case: it needs a Capstone domain build, which the four 2026-10-07 additions have not had.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: faults, identically to the spatial arm, and for the same reason -- wm_narrow() bounds every allocation on every arm. Revocation has nothing to fire on: nothing is freed in a spatial row. NOT YET MEASURED.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "MEASURED 2026-10-07, results/20261007-cheribsd-revocation-control/: the sequence COMPLETES, NOT CAUGHT. revocation ON, mode 0, 25 of 25 arms, runner exit 0, with the borrowed revocation control FAULTING in the same boot (tag_after_sweep=0, then SIGPROT si_code 2 at addr=pc=0x101dc0, equal to the address supervise resolved independently). The crossing stays inside the block the system allocator handed wmem, so a per-allocation capability is in bounds for it.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "status": "not written"
+    },
+    "native-fix-differential": {
+      "status": "not written"
+    }
+  },
+  "status": "built 2026-10-07 and MEASURED on stock CheriBSD the same day (revocation on, 25 of 25 arms, control firing): completes, not caught. The case's own CHECK assertions must hold for it to exit 0, so the crossing was created rather than merely described. The Capstone, PoisonCap and native arms are declared: these four have not had a domain build. N = 1 per cell."
+}

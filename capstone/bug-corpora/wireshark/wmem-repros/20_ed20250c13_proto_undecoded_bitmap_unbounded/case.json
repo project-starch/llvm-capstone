@@ -1,0 +1,51 @@
+{
+  "case": 20,
+  "upstream_fix": "ed20250c13",
+  "title": "proto_find_undecoded_data's marking loop is bounded by the field's extent and not by the bitmap's length, so a field reaching past the frame writes off the end",
+  "consumer": "epan/proto.c:9690-9700, check_for_undecoded() under proto_find_undecoded_data()",
+  "object": "decoded, a packet-scope chunk of length/8 + 1 bytes",
+  "lifetime_ender": "NONE -- the object is alive throughout. This is a SPATIAL row.",
+  "shape": "`for (i = fi->start; i < fi->start + fi->length; i++) { decoded[i/8] |= 1 << (i%8); }` consults the FIELD extent only, so a field whose start plus length reaches past the frame drives the byte index past the bitmap",
+  "allocator_layer": "wmem, a chunk the BLOCK or BLOCK_FAST allocator carved from a block g_malloc handed out. An inner allocator carved the crossed region, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "nested": true,
+  "nested_why": "an inner allocator (wmem) carved the crossed region out of a larger block it had itself obtained from g_malloc, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "fidelity": "real allocator, model consumer. the frame is 64 bytes, so the bitmap is 9. The field claims start 56 and length 32, reaching index 87 and byte 10 -- past the bitmap and inside the block, both asserted.",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source: v4.6.8:epan/proto.c contains the fix's `decoded_data_t` struct 4 times and the pre-fix bare `gchar* decoded = (gchar*)wmem_alloc0` 0 times. Two-sided. A fix-reversal.",
+  "distinguishing": "the index here comes from the protocol tree's OWN field extents -- output of a sibling subsystem -- rather than from attacker-supplied lengths as in rows 14 and 18. The fix accordingly does not clamp the field; it threads the bitmap's length through a struct and bounds the write. That is why this is not a duplicate of the clamp rows.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED: faults. Every arm of this harness narrows a wmem allocation to its request via wm_narrow(), so a spatial crossing faults on ALL arms and this row does not discriminate the chunk port -- the corpus.json note states that for the corpus as a whole. NOT YET MEASURED for this case: it needs a Capstone domain build, which the four 2026-10-07 additions have not had.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: faults, identically to the spatial arm, and for the same reason -- wm_narrow() bounds every allocation on every arm. Revocation has nothing to fire on: nothing is freed in a spatial row. NOT YET MEASURED.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "MEASURED 2026-10-07, results/20261007-cheribsd-revocation-control/: the sequence COMPLETES, NOT CAUGHT. revocation ON, mode 0, 25 of 25 arms, runner exit 0, with the borrowed revocation control FAULTING in the same boot (tag_after_sweep=0, then SIGPROT si_code 2 at addr=pc=0x101dc0, equal to the address supervise resolved independently). The crossing stays inside the block the system allocator handed wmem, so a per-allocation capability is in bounds for it.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "status": "not written"
+    },
+    "native-fix-differential": {
+      "status": "not written"
+    }
+  },
+  "status": "built 2026-10-07 and MEASURED on stock CheriBSD the same day (revocation on, 25 of 25 arms, control firing): completes, not caught. The case's own CHECK assertions must hold for it to exit 0, so the crossing was created rather than merely described. The Capstone, PoisonCap and native arms are declared: these four have not had a domain build. N = 1 per cell."
+}

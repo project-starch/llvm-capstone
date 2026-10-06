@@ -1,0 +1,51 @@
+{
+  "case": 19,
+  "upstream_fix": "4a4871a831",
+  "title": "dissect_ntlmssp_blob assigns result->length before the MAX_BLOB_SIZE check, so an oversized blob leaves the length large while contents was never allocated for it",
+  "consumer": "epan/dissectors/packet-ntlmssp.c:983-989 (the write) and :1649 (the consumer that trusts the length)",
+  "object": "result->contents, a wmem FILE scope chunk carved from a block g_malloc handed out",
+  "lifetime_ender": "NONE -- the object is alive throughout. This is a SPATIAL row.",
+  "shape": "the metadata overstates the allocation: `result->length = blob_length` runs unconditionally, then `if (blob_length < MAX_BLOB_SIZE)` guards the allocation, so for an oversized blob the struct claims a length its buffer does not have and a later memcpy at offset 32 reads past it",
+  "allocator_layer": "wmem, a chunk the BLOCK or BLOCK_FAST allocator carved from a block g_malloc handed out. An inner allocator carved the crossed region, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "nested": true,
+  "nested_why": "an inner allocator (wmem) carved the crossed region out of a larger block it had itself obtained from g_malloc, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "fidelity": "real allocator, model consumer. MAX_BLOB_SIZE is 256 and the earlier, smaller blob is 24 bytes -- the reachable case, since the struct is per-conversation and reused. The case asserts that the recorded length exceeds what was allocated, that the consumer's `> 24` threshold admits it, and that the read at offset 32 is past the chunk yet inside the block.",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source: v4.6.8:epan/dissectors/packet-ntlmssp.c contains the fixed `tvb_memdup(wmem_file_scope(), tvb, blob_offset, blob_length)` 1 time and the pre-fix unconditional `result->length = blob_length;` before the size check 0 times. Two-sided. A fix-reversal.",
+  "distinguishing": "the only row in this corpus where the crossing is a consumer CORRECTLY TRUSTING a field that was written too early, rather than an index arithmetic error. The fix does not clamp anything -- it moves one assignment inside the check so the two can no longer disagree. Distinct from rows 14, 20 and 21, where the index or the length is itself wrong.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED: faults. Every arm of this harness narrows a wmem allocation to its request via wm_narrow(), so a spatial crossing faults on ALL arms and this row does not discriminate the chunk port -- the corpus.json note states that for the corpus as a whole. NOT YET MEASURED for this case: it needs a Capstone domain build, which the four 2026-10-07 additions have not had.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: faults, identically to the spatial arm, and for the same reason -- wm_narrow() bounds every allocation on every arm. Revocation has nothing to fire on: nothing is freed in a spatial row. NOT YET MEASURED.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "MEASURED 2026-10-07, results/20261007-cheribsd-revocation-control/: the sequence COMPLETES, NOT CAUGHT. revocation ON, mode 0, 25 of 25 arms, runner exit 0, with the borrowed revocation control FAULTING in the same boot (tag_after_sweep=0, then SIGPROT si_code 2 at addr=pc=0x101dc0, equal to the address supervise resolved independently). The crossing stays inside the block the system allocator handed wmem, so a per-allocation capability is in bounds for it.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "status": "not written"
+    },
+    "native-fix-differential": {
+      "status": "not written"
+    }
+  },
+  "status": "built 2026-10-07 and MEASURED on stock CheriBSD the same day (revocation on, 25 of 25 arms, control firing): completes, not caught. The case's own CHECK assertions must hold for it to exit 0, so the crossing was created rather than merely described. The Capstone, PoisonCap and native arms are declared: these four have not had a domain build. N = 1 per cell."
+}

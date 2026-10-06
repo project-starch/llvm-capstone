@@ -6,7 +6,7 @@
     "version": "4.6.8",
     "port": "capstone/ports/wireshark/wmem"
   },
-  "cases": 18,
+  "cases": 22,
   "case_schema": "case-json",
   "case_macro": "WM",
   "required_arms": [
@@ -26,8 +26,8 @@
   "status": "measured",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
-    "false": 16,
-    "true": 2
+    "true": 3,
+    "false": 19
   },
   "runners": [
     "capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py"
@@ -46,5 +46,5 @@
   ],
   "advisories": [],
   "shape_table": true,
-  "note": "Cases 0-12 are temporal; cases 13-17 are SPATIAL, from the hunt recorded in docs/ref/wireshark-spatial-defect-triage.md. Cases 14 and 15 are the corpus's only rows LIVE at the v4.6.8 pin -- every other row, temporal and spatial alike, is a fix-reversal. Note for anyone reading the spatial rows: every arm of this harness narrows a wmem allocation to its request (wm_narrow(), ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15), so a spatial crossing faults on ALL arms and these rows do not discriminate the chunk port. Case 13's run established that by refuting its own prediction."
+  "note": "Cases 0-12 are temporal; cases 13-17 are SPATIAL, from the hunt recorded in docs/ref/wireshark-spatial-defect-triage.md. Cases 14 and 15 are the corpus's only rows LIVE at the v4.6.8 pin -- every other row, temporal and spatial alike, is a fix-reversal. Note for anyone reading the spatial rows: every arm of this harness narrows a wmem allocation to its request (wm_narrow(), ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15), so a spatial crossing faults on ALL arms and these rows do not discriminate the chunk port. Case 13's run established that by refuting its own prediction. Cases 18-21 added 2026-10-07, all SPATIAL and all nested. 18 (716a200295) is the row that FILLS a cell this inventory recorded as empty: a nested-spatial defect LIVE at the v4.6.8 pin, whose guard cannot fire because the user preference it tests defaults to 0. The leads came from bug-corpora/wireshark/LIVE-CANDIDATES.md and from the class-B candidates docs/ref/wireshark-spatial-defect-triage.md:226-229 named and left unbuilt. Two candidates from those lists were REJECTED rather than built: 1c090e9292 is a STACK buffer overflow, so it has no heap allocator boundary, and d7d1686a95 indexes a static value_string array, which likewise has no allocator. 0939cf989d is the same ETSI DCP defect as case 16 under a different hash."
 }
