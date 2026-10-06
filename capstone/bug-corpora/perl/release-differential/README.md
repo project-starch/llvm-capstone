@@ -55,11 +55,19 @@ two adjacent arms is that one thing and nothing else.
 | `sublet-svheads` | that same image **plus the nested allocator**: the SV head arena through the lifetime adapter | **8** |
 | `cheribsd-revocation` | the same release on CheriBSD, revocation as it comes | **7** |
 
-| step | adds | which case |
+**`sysalloc-sublet` is the floor, and it is the right floor because it equals CheriBSD
+case for case.** Not the same count — the same *set*: both report on the same 7, with no
+case unique to either. Protecting the system allocator spatially and temporally in a
+Capstone domain reproduces CheriBSD's revocation exactly.
+
+| | catches | against the floor |
 |---|---:|---|
-| system allocator, temporal | +1 | `10_254b30e378`, a stale `SvPVX` buffer: bounds cannot help, revocation can |
-| **the nested allocator** | **+1** | **`05_17535c984a`**, an SV head |
-| regressions, at either step | **0** | |
+| `sysalloc-bounds` | 6 | −1 (`10_254b30e378`: bounds cannot see a stale `SvPVX` buffer, revocation can) |
+| **`sysalloc-sublet` — the floor** | **7** | — |
+| `cheribsd-revocation` | **7** | **identical set** |
+| **`sublet-svheads`** | **8** | **+1: `05_17535c984a`, an SV head** |
+
+0 regressions at either step.
 
 **`05_17535c984a` is the argument for the third arm, in one case.** Its `CvXSUBANY` SV
 head lives in Perl's own head arena and is never returned to `malloc`. So host ASan is
@@ -69,8 +77,9 @@ Only Perl's own `Attempt to free unreferenced scalar` and the SV head adapter re
 The nested allocator is where the lifetime is, and nothing that works at the `malloc`
 boundary can see it.
 
-That is why the ladder ends 6, 7, **8**, with CheriBSD at 7: the cumulative arm is the
-only configuration here that reaches every case any defence reaches.
+So the whole result is one case wide, and that is the point: once the system allocator
+is protected as well as CheriBSD protects it, **the only thing left to gain is the nested
+allocator**, and it gains exactly `05_17535c984a`.
 
 Where bounds buy precision rather than reach: the spatial case `08_b7b77ffc1e` faults on
 all three Capstone arms as a **bounds** violation (cause 5). An unprotected variant was
@@ -154,11 +163,38 @@ argv-derived index whose value is printed so the load cannot be folded away:
 So revocation is live, `l0_free` really does only mark, and a dangling pointer into a
 grown buffer *is* possible here — "realloc grew in place" was considered and refuted.
 
-### CheriBSD
+### CheriBSD: identical to the floor, and the one case it cannot reach
 
-`cheribsd-revocation` reports on **7 of the 11**, one below the cumulative Capstone arm,
-and the case it lacks is `05_17535c984a` — the SV head in Perl's own arena. Everything
-CheriBSD catches, the cumulative arm catches too.
+`cheribsd-revocation` reports on **7 of the 11 — the same seven as `sysalloc-sublet`**,
+case for case. The one it lacks is `05_17535c984a`.
+
+**Is that head quarantined but not yet swept, or never in the quarantine at all?** The
+shadow bitmap answers it in O(1) without running a sweep — one bit per 16-byte granule,
+set while quarantined ([`quarantine-probe.c`](results/20261006-cheribsd/quarantine-probe.c),
+`LD_PRELOAD`ed around `malloc` and `free`). Under default revocation, for that case:
+
+| | |
+|---|---:|
+| mallocs | 4072 |
+| frees | 2983 |
+| of those, quarantined | **2983** — all of them, so the quarantine is fully active |
+| mallocs returning memory whose bit was **still set** | **0** |
+
+**Never in the quarantine.** Had the head travelled `free()` → `malloc()`, it would either
+have been reissued while quarantined — counted, and the count is 0 — or swept first, which
+would have revoked the stale capability and faulted. Neither happened. Perl recycles the
+head on `PL_sv_root`, so it never crosses the allocator boundary and there is nothing to
+quarantine.
+
+The probe is controlled in both directions: with revocation on a freed block reads 1 and a
+live one reads 0; with revocation off a freed block reads 0. So the bit tracks quarantine
+membership rather than merely having been freed, and a zero from it is informative.
+
+**An every-free run was tried and is rejected as evidence.** Under
+`_RUNTIME_REVOCATION_EVERY_FREE_ENABLE=1` this case does SIGPROT — and so do all eleven,
+including `11_af11b0c528`, an in-bounds read of a live object that no bounds and no
+revocation may legitimately catch. That configuration cannot distinguish, so its verdicts
+are not attributable, and an earlier inference drawn from it is withdrawn.
 
 That is the three-of-eleven ASan result above, repeated in capability hardware: a
 defence at the `malloc` boundary cannot see a lifetime that never crosses it, whichever
