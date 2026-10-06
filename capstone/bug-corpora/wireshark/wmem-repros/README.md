@@ -132,6 +132,10 @@ By shape, for the two mechanisms that catch anything:
 | packet-controlled negative index reads below the chunk, inside the same block | 15 | **1 / 1** (bounds, cause 5) | not run |
 | fixed-offset parity write lands past the buffer, inside the same block | 16 | **1 / 1** (bounds on a STORE, cause 7) | not run |
 | a size one larger than the chunk permits a one-byte write past it | 17 | **1 / 1** (bounds on a STORE, cause 7) | not run |
+| a guard disabled by its own default preference lets the counter run off the arrays | 18 | not run | not run |
+| metadata written before the allocation it describes, so a consumer trusts a length the buffer lacks | 19 | not run | not run |
+| a marking loop bounded by the field's extent rather than by the bitmap's length | 20 | not run | not run |
+| a fixed, compile-time-known output larger than its fixed buffer | 21 | not run | not run |
 
 Across cases 0-12 every `spatial` and every plain-CheriBSD arm completed. **Case 13 is the
 exception and it is not a counter-example:** it is the one spatial row, so its unprotected arm

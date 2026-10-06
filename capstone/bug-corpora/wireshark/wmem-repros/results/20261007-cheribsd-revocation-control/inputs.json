@@ -3,12 +3,37 @@
   "runner": "ports/common/host/cheribsd/run.py",
   "runtime_revocation": "on",
   "guest_default_revocation": "preserved",
-  "modes": [0],
-  "cases": 18,
+  "modes": [
+    0
+  ],
+  "cases": 22,
   "caught": [],
-  "completed": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17],
-  "arms_total": 21,
-  "arms_passed": 21,
+  "completed": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "arms_total": 25,
+  "arms_passed": 25,
   "runner_exit": 0,
   "controls": {
     "cheribsd-abi": "CHERI_ABI pointer_bytes=16 runtime_revocation=1 -- PASS",
@@ -23,5 +48,6 @@
     "note": "stock CheriBSD purecap built on this host; kernel CHERI-PURECAP-QEMU from releng/26.07-88f39900c329 = pins.env's CHERIBSD_REV. BYTE-IDENTICAL to the vehicle the ffmpeg and memcached readings used. The 20260921 bundle used image 3571a6d2..., a different (PoisonCap-tree) vehicle, so this run also makes the three programs' columns comparable rather than merely all labelled CheriBSD."
   },
   "supersedes": "results/20260921-cheribsd for the stock-CheriBSD question. That bundle is kept: it carries the PoisonCap arms, which this run does not measure.",
-  "n_per_cell": 1
+  "n_per_cell": 1,
+  "extended": "re-run the same day over 22 cases after 18-21 were added, on the same vehicle and with the same borrowed control. The 18-case reading it replaces was a subset of this one, not a different measurement."
 }

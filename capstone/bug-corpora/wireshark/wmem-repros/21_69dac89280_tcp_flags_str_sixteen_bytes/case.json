@@ -1,0 +1,51 @@
+{
+  "case": 21,
+  "upstream_fix": "69dac89280",
+  "title": "tcp_flags_to_str_first_letter writes nine flags, their separators and a terminator into a sixteen-byte buffer",
+  "consumer": "epan/dissectors/packet-tcp.c:4303-4330, tcp_flags_to_str_first_letter()",
+  "object": "pbuf, a packet-scope chunk of maxlength = 16 bytes",
+  "lifetime_ender": "NONE -- the object is alive throughout. This is a SPATIAL row.",
+  "shape": "the buffer size is a local constant of 16 while the output is nine letters plus eight separators plus a terminator, 18 bytes, written unconditionally",
+  "allocator_layer": "wmem, a chunk the BLOCK or BLOCK_FAST allocator carved from a block g_malloc handed out. An inner allocator carved the crossed region, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "nested": true,
+  "nested_why": "an inner allocator (wmem) carved the crossed region out of a larger block it had itself obtained from g_malloc, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED.",
+  "fidelity": "real allocator, model consumer. MAXLENGTH 16 and NFLAGS 9 are upstream's own values, unreduced. The case asserts that the output does not fit and that the overrun stays inside the block.",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source, and the first probe was REPLACED because it was not two-sided: `tcp_flags_to_str_first_letter` is the function's name and exists on BOTH sides of the fix, so it cannot distinguish them. Re-keyed on the fix's own added constant: v4.6.8:epan/dissectors/packet-tcp.c contains `const unsigned flags_count = 12` 1 time and the pre-fix `const int maxlength = 16` 0 times. Two-sided. A fix-reversal.",
+  "distinguishing": "the only row here reachable with NO crafted input: nine flags into sixteen bytes is a fixed, compile-time-known overflow, which is why it was found by inspection rather than by a fuzzer. Also the only spatial row in this corpus whose arms differ by the WRITTEN LENGTH rather than by one term -- the fix rewrites the function instead of adjusting the constant, and the case says so rather than letting a reader assume a one-term reversal.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED: faults. Every arm of this harness narrows a wmem allocation to its request via wm_narrow(), so a spatial crossing faults on ALL arms and this row does not discriminate the chunk port -- the corpus.json note states that for the corpus as a whole. NOT YET MEASURED for this case: it needs a Capstone domain build, which the four 2026-10-07 additions have not had.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: faults, identically to the spatial arm, and for the same reason -- wm_narrow() bounds every allocation on every arm. Revocation has nothing to fire on: nothing is freed in a spatial row. NOT YET MEASURED.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, because mode 0 bounds each allocation and the crossing leaves one. PoisonCap is unavailable on this host -- checked, not assumed.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "MEASURED 2026-10-07, results/20261007-cheribsd-revocation-control/: the sequence COMPLETES, NOT CAUGHT. revocation ON, mode 0, 25 of 25 arms, runner exit 0, with the borrowed revocation control FAULTING in the same boot (tag_after_sweep=0, then SIGPROT si_code 2 at addr=pc=0x101dc0, equal to the address supervise resolved independently). The crossing stays inside the block the system allocator handed wmem, so a per-allocation capability is in bounds for it.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "status": "not written"
+    },
+    "native-fix-differential": {
+      "status": "not written"
+    }
+  },
+  "status": "built 2026-10-07 and MEASURED on stock CheriBSD the same day (revocation on, 25 of 25 arms, control firing): completes, not caught. The case's own CHECK assertions must hold for it to exit 0, so the crossing was created rather than merely described. The Capstone, PoisonCap and native arms are declared: these four have not had a domain build. N = 1 per cell."
+}

@@ -1,5 +1,5 @@
 # wireshark/wmem-repros on stock CheriBSD purecap, libc revocation ON, with a REVOCATION CONTROL.
-# 2026-10-07. Result lines only. All 18 cases, mode 0 (the port's unprotected baseline).
+# 2026-10-07. All 22 cases, mode 0 (the port's unprotected baseline). Result lines only.
 
 ## platform controls, same boot
 CHERI_ABI pointer_bytes=16 runtime_revocation=1
@@ -13,7 +13,7 @@ REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1
 SUPERVISE fault signal=34 code=2 addr=0x101dc0 pc=0x101dc0
 SUPERVISE exit signalled=34
 
-## the 18 cases: all COMPLETE, none caught
+## the 22 cases: all COMPLETE, none caught. 25 of 25 arms, runner exit 0.
 PASS 00-rpcrdma-write-offsets-global-mode0
 PASS 01-cms-oid-global-mode0
 PASS 02-mdb-address-column-mode0
@@ -32,23 +32,32 @@ PASS 14-solaredge-payload-six-past-mode0
 PASS 15-opcua-padding-below-chunk-mode0
 PASS 16-dcp-etsi-rs-parity-write-mode0
 PASS 17-dns-one-byte-write-mode0
+PASS 18-rtps-batch-sample-info-unguarded-mode0
+PASS 19-ntlmssp-blob-length-before-check-mode0
+PASS 20-proto-undecoded-bitmap-unbounded-mode0
+PASS 21-tcp-flags-str-sixteen-bytes-mode0
 
-## per-case verdict lines
-WM_DEFECT case=0 ready WM_DEFECT case=0 mode=0 completed  <- 00-rpcrdma-write-offsets-global-mode0
-WM_DEFECT case=1 ready WM_DEFECT case=1 mode=0 completed  <- 01-cms-oid-global-mode0
-WM_DEFECT case=2 ready WM_DEFECT case=2 mode=0 completed  <- 02-mdb-address-column-mode0
-WM_DEFECT case=3 ready WM_DEFECT case=3 mode=0 completed  <- 03-cola-info-column-mode0
-WM_DEFECT case=4 ready WM_DEFECT case=4 mode=0 completed  <- 04-qnet6-col-set-str-mode0
-WM_DEFECT case=5 ready WM_DEFECT case=5 mode=0 completed  <- 05-usbll-address-struct-mode0
-WM_DEFECT case=6 ready WM_DEFECT case=6 mode=0 completed  <- 06-x509if-last-dn-static-mode0
-WM_DEFECT case=7 ready WM_DEFECT case=7 mode=0 completed  <- 07-mysql-auth-method-mode0
-WM_DEFECT case=8 ready WM_DEFECT case=8 mode=0 completed  <- 08-sip-cseq-method-mode0
-WM_DEFECT case=9 ready WM_DEFECT case=9 mode=0 completed  <- 09-geonw-proto-data-tvb-mode0
-WM_DEFECT case=10 ready WM_DEFECT case=10 mode=0 completed  <- 10-t38-reassembly-buffer-mode0
-WM_DEFECT case=11 ready WM_DEFECT case=11 mode=0 completed  <- 11-http-header-map-mode0
-WM_DEFECT case=12 ready WM_DEFECT case=12 mode=0 completed  <- 12-xml-root-name-recycled-mode0
-WM_DEFECT case=13 ready WM_DEFECT case=13 mode=0 completed  <- 13-http-range-cursor-past-chunk-mode0
-WM_DEFECT case=14 ready WM_DEFECT case=14 mode=0 completed  <- 14-solaredge-payload-six-past-mode0
-WM_DEFECT case=15 ready WM_DEFECT case=15 mode=0 completed  <- 15-opcua-padding-below-chunk-mode0
-WM_DEFECT case=16 ready WM_DEFECT case=16 mode=0 completed  <- 16-dcp-etsi-rs-parity-write-mode0
-WM_DEFECT case=17 ready WM_DEFECT case=17 mode=0 completed  <- 17-dns-one-byte-write-mode0
+## per-case verdict lines (each case's own CHECK assertions must hold for exit 0,
+## so a row that printed 'completed' really did create its crossing)
+WM_DEFECT case=0 ready WM_DEFECT case=0 mode=0 completed   <- 00-rpcrdma-write-offsets-global-mode0
+WM_DEFECT case=1 ready WM_DEFECT case=1 mode=0 completed   <- 01-cms-oid-global-mode0
+WM_DEFECT case=2 ready WM_DEFECT case=2 mode=0 completed   <- 02-mdb-address-column-mode0
+WM_DEFECT case=3 ready WM_DEFECT case=3 mode=0 completed   <- 03-cola-info-column-mode0
+WM_DEFECT case=4 ready WM_DEFECT case=4 mode=0 completed   <- 04-qnet6-col-set-str-mode0
+WM_DEFECT case=5 ready WM_DEFECT case=5 mode=0 completed   <- 05-usbll-address-struct-mode0
+WM_DEFECT case=6 ready WM_DEFECT case=6 mode=0 completed   <- 06-x509if-last-dn-static-mode0
+WM_DEFECT case=7 ready WM_DEFECT case=7 mode=0 completed   <- 07-mysql-auth-method-mode0
+WM_DEFECT case=8 ready WM_DEFECT case=8 mode=0 completed   <- 08-sip-cseq-method-mode0
+WM_DEFECT case=9 ready WM_DEFECT case=9 mode=0 completed   <- 09-geonw-proto-data-tvb-mode0
+WM_DEFECT case=10 ready WM_DEFECT case=10 mode=0 completed   <- 10-t38-reassembly-buffer-mode0
+WM_DEFECT case=11 ready WM_DEFECT case=11 mode=0 completed   <- 11-http-header-map-mode0
+WM_DEFECT case=12 ready WM_DEFECT case=12 mode=0 completed   <- 12-xml-root-name-recycled-mode0
+WM_DEFECT case=13 ready WM_DEFECT case=13 mode=0 completed   <- 13-http-range-cursor-past-chunk-mode0
+WM_DEFECT case=14 ready WM_DEFECT case=14 mode=0 completed   <- 14-solaredge-payload-six-past-mode0
+WM_DEFECT case=15 ready WM_DEFECT case=15 mode=0 completed   <- 15-opcua-padding-below-chunk-mode0
+WM_DEFECT case=16 ready WM_DEFECT case=16 mode=0 completed   <- 16-dcp-etsi-rs-parity-write-mode0
+WM_DEFECT case=17 ready WM_DEFECT case=17 mode=0 completed   <- 17-dns-one-byte-write-mode0
+WM_DEFECT case=18 ready WM_DEFECT case=18 mode=0 completed   <- 18-rtps-batch-sample-info-unguarded-mode0
+WM_DEFECT case=19 ready WM_DEFECT case=19 mode=0 completed   <- 19-ntlmssp-blob-length-before-check-mode0
+WM_DEFECT case=20 ready WM_DEFECT case=20 mode=0 completed   <- 20-proto-undecoded-bitmap-unbounded-mode0
+WM_DEFECT case=21 ready WM_DEFECT case=21 mode=0 completed   <- 21-tcp-flags-str-sixteen-bytes-mode0
