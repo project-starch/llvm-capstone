@@ -571,8 +571,10 @@ static int vm_release(struct inode *inode, struct file *f)
      * frames) before the final pins are dropped. */
     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
         if (c->arenas[i].pages || c->arenas[i].address)
-            if (retire(c, &c->arenas[i], false))
-                retire(c, &c->arenas[i], true);
+            /* The task may be in exit_mm() here.  A teardown must never
+             * call pin_user_pages_fast() to materialize lazy holes; only
+             * already pinned pages can safely be revoked and released. */
+            retire(c, &c->arenas[i], true);
     list_for_each_entry_safe(t, tmp, &c->threads, link) {
         list_del(&t->link);
         if (t->user_frame) { clear_thread_frame(t); drop_thread_frame(t); }

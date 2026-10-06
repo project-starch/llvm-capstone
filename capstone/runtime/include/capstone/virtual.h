@@ -15,4 +15,9 @@ long capstone_virtual_thread_create(void *(*entry)(void *), void *argument,
  * trampoline. It terminates only the current virtual thread. */
 _Noreturn void capstone_virtual_thread_exit(void *result);
 
+/* Wait until a child virtual thread has completed its exit protocol.  The
+ * join is what keeps a caller-owned stack and TLS mapping live until the
+ * child has stopped using them. */
+int capstone_virtual_thread_join(long thread);
+
 #endif

@@ -37,7 +37,9 @@ for mode in stale bounds retired; do
   cat /tmp/fault.out
 done
 ./capstone-vexec contract.dom spin > /tmp/spin.out 2>&1 & spin=$!
-sleep 2
+# QEMU startup includes Linux image loading and the first delegated rounds;
+# allow the child to publish its readiness before testing signal termination.
+sleep 5
 kill -TERM "$spin" 2>/dev/null
 wait "$spin"; echo VM_EXIT:preempt:$?
 cat /tmp/spin.out
@@ -139,8 +141,15 @@ def main():
     tests['spin_entered'] = lines.count('VIRTUAL_SPIN_READY') == 1
     stats = [dict((k, int(v)) for k, v in re.findall(r'(\w+)=(\d+)', s))
              for s in lines if s.startswith('CAPSTONE_VM_STATS ')]
-    tests['linux_pages_released'] = len(stats) == 6 and all(s['peak'] > s['pages'] + 300 for s in stats[:3])
-    tests['linux_demand_faults'] = len(stats) == 6 and all(s['faults'] >= 384 for s in stats[:3])
+    # The same-mm thread case adds one low-fault stats record.  The six
+    # application runs that exercise the allocator and demand paging remain
+    # the release/fault evidence; the thread record is checked separately by
+    # threads_output and the join/stack-retirement path.
+    release_stats = [s for s in stats if s['peak'] > s['pages'] + 300]
+    demand_stats = [s for s in stats if s.get('faults', 0) >= 384]
+    tests['linux_pages_released'] = len(stats) == 7 and len(release_stats) == 3
+    tests['linux_demand_faults'] = len(stats) == 7 and len(demand_stats) == 3 and all(
+        s['faults'] >= 384 for s in demand_stats)
     tests['sqlite_results'] = lines.count('SQLITE_SUM=5050') == 1 and lines.count('SQLITE_PERSIST=100') == 1
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1

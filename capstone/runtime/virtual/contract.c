@@ -17,6 +17,12 @@ static __thread unsigned thread_value = 41;
 static void fail(const char *what) { fprintf(stderr, "VM_CONTRACT_FAIL:%s\n", what); exit(1); }
 static void require(int ok, const char *what) { if (!ok) fail(what); }
 static volatile unsigned virtual_thread_value;
+static void *current_thread_pointer(void)
+{
+    void *tp;
+    __asm__ volatile("movc %0, tp" : "=r"(tp));
+    return tp;
+}
 static void *virtual_thread_entry(void *arg)
 {
     volatile unsigned *value = arg;
@@ -34,11 +40,13 @@ int main(int argc, char **argv)
         require(stack != MAP_FAILED, "thread stack");
         long tid = capstone_virtual_thread_create(virtual_thread_entry,
                                                    (void *)&virtual_thread_value,
-                                                   (char *)stack + bytes, NULL);
+                                                   (char *)stack + bytes,
+                                                   current_thread_pointer());
         require(tid > 0, "thread create");
         for (unsigned i = 0; i < 100000000 && virtual_thread_value != 42; ++i)
             __asm__ volatile("" ::: "memory");
         require(virtual_thread_value == 42, "thread ran");
+        require(!capstone_virtual_thread_join(tid), "thread join");
         require(!munmap(stack, bytes), "thread stack retire");
         puts("VIRTUAL_THREADS_OK shared_mm lifetime_root quantum");
         return 0;

@@ -1,10 +1,10 @@
 {
   "date": "2026-10-07",
   "status": "PASS",
-  "profile": "virtual application R1-R3 slice with recyclable guest table; one hart, one thread per process",
+  "profile": "virtual application R1-R3 slice with recyclable guest table; one hart, same-mm virtual thread contexts",
   "qemu_sha256": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
   "compiler": {
-    "clang_sha256": "aaebd7f23c2a51b9f722fd179ce93d5ee9d749590f3dbe23f1e4bd0402196cfd",
+    "clang_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
     "codegen_passed": 118,
     "codegen_unsupported": 1,
     "codegen_failed": 0,
@@ -55,15 +55,15 @@
     "total": 33
   },
   "application_gate": {
-    "passed": 20,
-    "total": 20,
+    "passed": 22,
+    "total": 22,
     "record": "result.json",
     "inputs_sha256": {
-      "application": "13fe3e641f3c11b2a5ac94d7a5ff77d88034d6a636aaef276854159db05343e8",
-      "sqlite": "98fe3bf6b93d46302e7d558e7c8d4f300da4fa899f27c7a1b93460da2d0c316e",
-      "mruby": "cb8db21a1022600db304ba52d1ea05f6dec45b0ac3f3bcbe1155d47ee62a6e12",
-      "launcher": "63fb8ba0111dac443e69545ffe60d859d2a6d43027232a39c70d53e5692f757f",
-      "module": "0f73ac90503a5746a0184fb9f78ea7bc2967122a659769f6fb34532081b382a8"
+      "application": "c122743d674328c86397b439c7bdd34adf91d90f617396624956980a91e84140",
+      "sqlite": "a2fa3782eb7a805c56e082c3a3c5121794c5f7133aa9d3f7f67c300cf6bdc004",
+      "mruby": "0d1fea72042cd186c104d9296134585e41d7acb0612ce2f02d7a78fe4ca5ae25",
+      "launcher": "0afa1dfbf6381c6e26284f30c95d3ffc2d7187ffdb547445d7939fd354bb8aee",
+      "module": "804b60a5c1c45c3d101319571eeb993c0617798cc2f4535c7045b542d0e42288"
     }
   },
   "recycling_gate": {
@@ -173,7 +173,7 @@
     "QEMU experiment, no RTL qualification",
     "Private anonymous mappings; pages pinned after first touch",
     "Recycling depends on a complete registered-page and saved-context sweep; dead PCC identities remain pinned",
-    "No fork, shared tagged pages, multiple threads/harts, swap or migration",
+    "No fork, shared tagged pages, multiple harts, swap or migration; virtual threads are same-mm and one-hart only",
     "Allocated bounds follow the request, rounded to the representable grain for 4 KiB and larger; inherited compressed-bounds side metadata remains",
     "Teardown clears tags only on pages the module pinned; pages Linux populated without an application fault rely on Linux zeroing before reuse"
   ],

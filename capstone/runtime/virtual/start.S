@@ -66,6 +66,11 @@ __capstone_vm_thread_exit:
     li a7, 4
     ecall
     ebreak
+.global __capstone_vm_thread_join
+__capstone_vm_thread_join:
+    li a7, 5
+    ecall
+    ret
 .section .gct
 .balign 16
 .global __capstone_gct_start

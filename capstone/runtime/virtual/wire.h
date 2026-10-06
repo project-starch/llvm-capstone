@@ -54,4 +54,5 @@ struct cv_global {
 #define CV_SERVICE_UNMAP 2
 #define CV_SERVICE_THREAD_CREATE 3
 #define CV_SERVICE_THREAD_EXIT 4
+#define CV_SERVICE_THREAD_JOIN 5
 #endif

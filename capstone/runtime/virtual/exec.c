@@ -31,9 +31,11 @@ static struct capstone_spawner spawner = {.socket = -1};
 static struct capstone_delegate_host host;
 #define CV_MAX_THREADS 32
 static uint64_t thread_ids[CV_MAX_THREADS] = {0};
+static unsigned thread_done[CV_MAX_THREADS];
 static unsigned thread_count = 1;
 static pthread_mutex_t service_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t thread_state_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t thread_state_cond = PTHREAD_COND_INITIALIZER;
 static unsigned long long launch_ns, start_ns;
 static int trace;
 static void *meta;
@@ -45,22 +47,59 @@ static int thread_add(uint64_t id)
     if (!id) return -EINVAL;
     pthread_mutex_lock(&thread_state_lock);
     if (thread_count >= CV_MAX_THREADS) result = -EAGAIN;
-    else thread_ids[thread_count++] = id;
+    else {
+        for (unsigned i = 1; i < CV_MAX_THREADS; ++i)
+            if (!thread_ids[i]) {
+                thread_ids[i] = id;
+                thread_done[i] = 0;
+                ++thread_count;
+                break;
+            }
+    }
     pthread_mutex_unlock(&thread_state_lock);
     return result;
 }
 static void thread_remove(uint64_t id)
 {
     pthread_mutex_lock(&thread_state_lock);
-    for (unsigned i = 0; i < thread_count; ++i) {
+    for (unsigned i = 1; i < CV_MAX_THREADS; ++i) {
         if (thread_ids[i] != id) continue;
-        memmove(&thread_ids[i], &thread_ids[i + 1],
-                (thread_count - i - 1) * sizeof(thread_ids[0]));
+        thread_ids[i] = 0;
+        thread_done[i] = 0;
         --thread_count;
         pthread_mutex_unlock(&thread_state_lock);
         return;
     }
     pthread_mutex_unlock(&thread_state_lock);
+}
+static void thread_mark_done(uint64_t id)
+{
+    pthread_mutex_lock(&thread_state_lock);
+    for (unsigned i = 1; i < CV_MAX_THREADS; ++i)
+        if (thread_ids[i] == id) {
+            thread_done[i] = 1;
+            pthread_cond_broadcast(&thread_state_cond);
+            break;
+        }
+    pthread_mutex_unlock(&thread_state_lock);
+}
+static int thread_join(uint64_t id)
+{
+    int result = 0;
+    pthread_mutex_lock(&thread_state_lock);
+    for (unsigned i = 1; i < CV_MAX_THREADS; ++i) {
+        if (thread_ids[i] != id) continue;
+        while (!thread_done[i])
+            pthread_cond_wait(&thread_state_cond, &thread_state_lock);
+        thread_ids[i] = 0;
+        thread_done[i] = 0;
+        --thread_count;
+        pthread_mutex_unlock(&thread_state_lock);
+        return 0;
+    }
+    result = -ESRCH;
+    pthread_mutex_unlock(&thread_state_lock);
+    return result;
 }
 static unsigned long long now_ns(void)
 {
@@ -318,9 +357,15 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             long cleanup_rc = unmap_arena(request.frame, 4096);
             if (cleanup_rc && cleanup_rc != -EINVAL) return -1;
         }
-        thread_remove(tid);
+        thread_mark_done(tid);
         step->reply = 0;
         return 1;
+    } else if (step->args[7] == CV_SERVICE_THREAD_JOIN) {
+        /* The child must acquire the same transport lock to publish its
+         * exit.  Do not wait while holding it, or join would deadlock. */
+        pthread_mutex_unlock(&service_lock);
+        step->result = thread_join(step->args[0]);
+        pthread_mutex_lock(&service_lock);
     } else if (step->args[7] == CV_SERVICE_DELEGATE) {
         struct capstone_delegate_entry *request = meta;
         if (request->version != CAPSTONE_DELEGATE_VERSION) return -1;

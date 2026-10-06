@@ -37,7 +37,8 @@ pointer. `capstone_virtual_thread_create` supplies an explicit start frame;
 the trusted module supplies `satp` and `srevroot`, forces protected-U options,
 and one Linux worker task drives each slot. `capstone_virtual_thread_exit`
 discards only the calling slot and returns its frame mapping to the trusted
-launcher. The workers share
+launcher. `capstone_virtual_thread_join` waits for that exit protocol before
+the caller retires the child stack or TLS mapping. The workers share
 the process transport under a wire lock; fork, shared tagged pages and SMP
 remain out of scope.
 

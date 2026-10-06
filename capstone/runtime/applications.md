@@ -217,7 +217,8 @@ process does not add target fork, exec, dynamic loading or full POSIX
 fd semantics inside a domain. Standard-stream read/write/EOF/close/stat/query
 fcntl use Linux objects; other file operations retain the existing host service.
 The virtual adapter supplies OS-backed same-`mm` threads through
-`capstone_virtual_thread_create` and `capstone_virtual_thread_exit`; POSIX
+`capstone_virtual_thread_create`, `capstone_virtual_thread_join` and
+`capstone_virtual_thread_exit`; POSIX
 `pthread_create` and process `clone` remain delegated-runtime work.
 The launcher uses its Linux filesystem authority and is not a filesystem sandbox.
 No claim of a complete hostile-code or QEMU security audit is made.
