@@ -30,6 +30,7 @@
 # Knobs (see build_config.rb): MRBD_BOXING, MRBD_DISPATCH, MRBD_OPT, MRBD_TESTS,
 # MRBD_DEFINES. MRBD_FROM=runtime|mruby starts at that stage. MRUBY_MIRROR=<a
 # local mruby clone> clones from there instead of GitHub (its Prism submodule too).
+# MRBD_SDK=<existing application SDK> reuses its libc and runtime profile.
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../../tests/capstone-test-env.sh" >/dev/null
@@ -72,6 +73,11 @@ stage() {
 }
 
 # ---- musl and its archive, private to this build --------------------------
+if [[ -n ${MRBD_SDK:-} ]]; then
+  O=$(cd -- "$MRBD_SDK" && pwd)
+  [[ -f "$O/sdk.json" && -x "$O/capstone-cc" ]] \
+    || { echo "MRBD_SDK is not an application SDK" >&2; exit 2; }
+else
 export MUSL_CACHE_ROOT=$ROOT/musl-src
 mkdir -p "$MUSL_CACHE_ROOT"
 [[ -f "$MUSL_CACHE_ROOT/musl-1.2.5.tar.gz" || ! -f "$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5.tar.gz" ]] \
@@ -100,6 +106,7 @@ if stage runtime; then
 fi
 [[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" && -x "$O/capstone-cc" ]] \
   || { echo "rebuild the application SDK (MRBD_FROM=runtime)" >&2; exit 2; }
+fi
 export CAPSTONE_SDK=$O
 export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
 export LLVM_AR=$CAPSTONE_LLVM_BIN/llvm-ar

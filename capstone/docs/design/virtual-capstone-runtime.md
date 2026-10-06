@@ -1,11 +1,12 @@
 # Virtual Capstone through the existing runtime
 
-Status: agreed integration direction; implementation proposal, 2026-10-06.
+Status: first QEMU application profile implemented, 2026-10-06.
 
-The [R0 execution experiment](../plans/virtual-capstone-runtime-r0.md) now runs
-virtual C code through a loadable Linux adapter using the existing QEMU
-supervisor. Connecting the normal application loader and service loop remains
-work beyond that bounded gate.
+The [application adapter](../../runtime/virtual/README.md) extends the
+[R0 execution experiment](../plans/virtual-capstone-runtime-r0.md) with a normal
+loader/CRT, delegated services, a growing heap, first-touch Linux page-fault
+resolution and whole-arena retirement. SQLite and mruby run through the common
+SDK at virtual addresses. The existing kernel and firmware binaries are reused.
 
 Capstone should use the virtual address space and services of an existing
 operating system through the runtime we already have. The first target is a
@@ -58,7 +59,7 @@ The supervised execution support is qualified on a bounded QEMU platform;
 its documentation does not establish an FPGA implementation or general
 multicore support.
 
-The next implementation reuses that execution path while giving the
+The implementation reuses that execution path while giving the
 application Linux virtual addresses. It does not require removing the
 monitor or delegating directly from capability registers into every Linux
 syscall handler.
@@ -129,9 +130,9 @@ its saved capability context when that thread runs again. Later threading
 work should map application threads onto OS threads rather than add a second
 scheduler.
 
-These are required extensions to the existing execution path, not claims that
-it already handles virtual faults. A small experiment must select and verify
-the concrete entry, exit and fault mechanism before its ISA is frozen.
+The QEMU profile implements these boundaries for one hart and one thread per
+application process. Its CSRUNV frame/options and CSRETIRE operation remain
+experimental; the interface is not frozen for RTL or other operating systems.
 
 ## System services and memory tags
 
@@ -176,10 +177,13 @@ separate contracts and are outside this first slice.
 | R2 Faults and scheduling | Resolve a deliberately absent page through Linux and retry exactly once. Exercise consuming LDC and STC faults, timer suspension, two independent application processes, and termination of code that never yields. Bound and release retained resources. |
 | R3 Application reuse | Rebuild representative existing applications with the common SDK. Preserve output and memory-safety gates. Measure launch cost, service transitions, copied bytes, metadata, pinned pages and memory returned to Linux. Expand file mappings and threads from observed application needs. |
 
-R0 is the next bounded experiment. It determines whether the current
-execution bridge needs a small extension or a different entry mechanism.
-Do not make direct-buffer I/O, automatic trap capture or full Linux register
-context support prerequisites for this first result.
+R0 and the bounded R1–R3 application slice now pass their gates. The normal C
+test releases 1.5 MiB to Linux and exercises 388 first-touch faults; stale
+pointers fail after same-VA reuse. Two processes and a terminated non-yielding
+program exercise scheduling. SQLite persists a database across launches and
+mruby performs arithmetic and file I/O. See the adapter's records for exact
+inputs, limits and measured counters. This is application smoke coverage,
+not full upstream test-suite qualification.
 
 The initial platform target is an unchanged Linux core plus the module and
 runtime, with processor and firmware changes allowed. Any required kernel
@@ -196,7 +200,10 @@ permissions, fault values, representability, guest lifetime tables and
 privileged authority operations remain useful. Their integration with the
 supervised runtime is additional work. The Linux entry and return patches
 remain an alternative integration experiment, rather than a prerequisite for
-the runtime route. This proposal changes no implemented encoding or opcode.
+the runtime route. The runtime profile adds the experimental entry and scalar
+ancestor-retirement operations documented with its instruction gate. It does
+not freeze the direct Linux prototype's ABI or resolve its remaining
+compact-bounds work.
 
 The expected saving comes from reusing the runtime and Linux VM instead of
 expanding physical-pool management or first adapting all kernel contexts.

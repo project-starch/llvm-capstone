@@ -1,0 +1,135 @@
+{
+  "date": "2026-10-06",
+  "status": "PASS",
+  "profile": "virtual application R1-R3 slice; one hart, one thread per process",
+  "qemu_sha256": "a1e1f0d971680f8593171dc58be59b35ff3a222a568c58ce5b1baafeb85fad8f",
+  "compiler": {
+    "clang_sha256": "aaebd7f23c2a51b9f722fd179ce93d5ee9d749590f3dbe23f1e4bd0402196cfd",
+    "codegen_passed": 118,
+    "codegen_unsupported": 1,
+    "codegen_failed": 0,
+    "source_sha256": {
+      "llvm/lib/Target/Capstone/CapstoneISelDAGToDAG.cpp": "62a40458df90b057c2dc620bc1abf60a8bf401200d6f8acf5708070d5f83d8d0",
+      "llvm/lib/Target/Capstone/CapstoneISelLowering.cpp": "6c5a0a357ff33901a5429ce9977847dfebc29ba5e5af80d2caba6e3ba91c7cab",
+      "llvm/test/CodeGen/Capstone/cap-image-gp-pool.ll": "d8d08482b05c36661b0dfe1367523ec5f62b570718c60df7e45279a438a7bb4f",
+      "llvm/utils/capstone-shared-drift.py": "06c25b8bba13499dc48021140d852e30a6bf057ca9b3fa33df4dfa18c5142f65"
+    },
+    "shared_manifest_check": "Pinned Myers diff algorithm; incorrect manifest count rejected"
+  },
+  "musl": {
+    "version": "1.2.5",
+    "compiled": 1355,
+    "surveyed": 1361,
+    "excluded_from_archive": "six mallocng files fail the existing 16-byte-pointer static assertion; allocator supplied by runtime",
+    "archive_sha256": "cc8fd7f7ce55cbe2209ce7b3323b8b5b0e254d4fedde87dd121570ad4b93370f",
+    "stale_source_control_exit": 2
+  },
+  "host_unit_tests": {
+    "passed": 21,
+    "total": 21
+  },
+  "qemu_regressions": {
+    "virtual_capstone_m1": {
+      "passed": 60,
+      "total": 60
+    },
+    "trusted_linux_u_access": {
+      "passed": 69,
+      "total": 69
+    },
+    "linux_r0": {
+      "passed": 8,
+      "total": 8
+    },
+    "linux_application": {
+      "passed": 20,
+      "total": 20
+    },
+    "physical_mruby": {
+      "passed": 2,
+      "total": 2
+    }
+  },
+  "instruction_gate": {
+    "passed": 30,
+    "total": 30
+  },
+  "application_gate": {
+    "passed": 20,
+    "total": 20,
+    "record": "result.json"
+  },
+  "native_application_oracles": {
+    "status": "PASS",
+    "stdout": [
+      "SQLITE_SUM=5050",
+      "SQLITE_PERSIST=100",
+      "MRUBY_SUM=5050",
+      "MRUBY_FILE=virtual"
+    ],
+    "sha256": {
+      "sqlite": "ad66493057668bacac2269f0980bdc11528ce41b2091c1ce074bb102a9efb67f",
+      "mruby": "ed134155c3551768b66687f69f689632acca0e1c433fc37aadc3461b940f4ccc"
+    }
+  },
+  "negative_controls": {
+    "missing_application": {
+      "status": "FAIL",
+      "passed_checks": [
+        "sqlite_write",
+        "sqlite_read",
+        "mruby",
+        "cleanup",
+        "sqlite_results",
+        "mruby_results",
+        "completed"
+      ],
+      "failed_checks": [
+        "normal",
+        "stale",
+        "bounds",
+        "retired",
+        "preempt",
+        "parallel_one",
+        "parallel_two",
+        "normal_output",
+        "fault_causes",
+        "same_va_reuse",
+        "spin_entered",
+        "linux_pages_released",
+        "linux_demand_faults"
+      ]
+    },
+    "service_pc_not_advanced": {
+      "binary_sha256": "8807887b03ab0253b09536b785af9908564d28bb5b51d8a9a9b56c2dd29e6ab2",
+      "exit": 1,
+      "failed_cases": [
+        "service_scalar_reply",
+        "service_linear_reply",
+        "retire_descendants",
+        "immutable_resume_roots"
+      ]
+    }
+  },
+  "physical_applications": [
+    {
+      "image": "mruby-none.dom",
+      "exit": 0,
+      "stdout": "42",
+      "sha256": "e8ab571d58a656e27078687396644ca0b876ae4d06e4af460e009b196ac68144"
+    },
+    {
+      "image": "mruby-sublet.dom",
+      "exit": 0,
+      "stdout": "42",
+      "sha256": "0ab89e56171f41ea445c600cd46f1ba8aaad867075a85ef3b2c3196d2f85f71e"
+    }
+  ],
+  "limitations": [
+    "QEMU experiment, no RTL qualification",
+    "Private anonymous mappings; pages pinned after first touch",
+    "Monotonic bounded node identities; no indefinite reuse",
+    "No fork, shared tagged pages, multiple threads/harts, swap or migration",
+    "Allocated bounds include size-class padding; inherited compressed-bounds side metadata remains"
+  ]
+}

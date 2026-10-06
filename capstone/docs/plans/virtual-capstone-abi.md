@@ -77,7 +77,7 @@ it changes the table, a slot or a register.
 | `CSMINT` | `0x50` | `rd` ancestor ID, `rs1` slot address, `rs2` descriptor address | Descriptor `{u64 base; u64 end; u64 perms}`, 8-byte aligned, else cause 4; each doubleword is translated on its own. The slot is 16-byte aligned, else cause 6. Requires `base < end`, `perms <= 7` and bounds that survive compression unchanged, else cause 29. Requires two free IDs, else cause 30. Creates kernel ancestor `K` at depth 0 and child `R` at depth 1 below it. Writes a tagged LIN capability `{cursor=base, base, end, perms, node=R}` into the 16-byte-aligned slot. Writes `K` to `rd`. |
 | `CSCHECKR` | `0x51` | `rd` result, `rs1` slot address, `rs2` length | Reads the slot without consuming it. Returns 0 when the slot holds a tagged capability whose node is live in the selected table, whose type is LIN or NONLIN, which grants read, and whose `[cursor, cursor+length)` lies in bounds without overflow. Otherwise returns the cause the access would raise: 24, 25, 26, 27 or 28. Length 0 requires `base <= cursor <= end`. |
 | `CSCHECKW` | `0x52` | as above | Same check for write permission. |
-| `CSRETIRE` | `0x53` | `rd` zero, `rs1` ancestor ID | Requires `rs1` to name a live node, else cause 29. Invalidates every strict descendant with the existing REVOKE walk, then clears the ancestor's `VALID`. Its result in `rd` is 0. |
+| `CSRETIRE` | `0x53` | `rd` status, `rs1` ancestor ID, `rs2` zero | Invalidates every strict descendant with the existing REVOKE walk, then clears the ancestor's `VALID`. Returns 0 on success, 1 for an invalid identity/table or failed walk preflight, without partial changes. |
 
 `CSMINT` is the only way protected authority is created. The kernel calls it
 for registered arenas and for the bootstrap code, data, stack and TLS roots,
@@ -257,8 +257,11 @@ it. A freed table's memory is zeroed with scalar stores before reuse.
    **Done.**
 4. The guest table with the layout above; host tree and collector off for
    protected U. **Done**, with the table chosen per operation as below.
-5. `CSMINT`, `CSCHECKR`, `CSCHECKW` and `CSRETIRE`. **`CSMINT` done**, with
-   the decoder overflow fixed; the other three remain.
+5. `CSMINT`, `CSCHECKR`, `CSCHECKW` and `CSRETIRE`. **`CSMINT` and `CSRETIRE`
+   done** on the runtime integration branch; the two buffer checks remain.
+   CSRETIRE's status result lets the ordinary S-mode adapter handle failure
+   without taking a capability exception inside the kernel. The decoder
+   overflow fix remains part of CSMINT.
 6. PCC fetch check, PCC move into `cepc` on trap and out on xRET.
 7. Illegal-instruction policy for the protected-U table above.
 8. Representability checks at creation, then bounds decoded from stored

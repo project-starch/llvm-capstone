@@ -2,6 +2,27 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-06 — virtual C application adapter, R1–R3 slice
+
+The [virtual runtime](../../runtime/virtual/README.md) runs ordinary Capstone
+programs, SQLite and mruby through a Linux module and the existing delegated
+services. Code remains C-mode, with user PTE permissions and process-local
+lifetimes. The common SDK supplies a representable image gp and plain
+within-PCC calls. Physical monitor/domain execution remains available.
+
+The [Linux result](../../runtime/virtual/result.json) covers growing and
+returning 1.5 MiB, first-touch page faults resolved by Linux, stale and bounds
+denial, same-VA reuse, independent processes and non-yielding termination.
+SQLite persists and reopens a database; mruby performs arithmetic and file I/O.
+No additional Linux-core or firmware patch is used. Resident pages stay pinned
+until retirement, and node identities are monotonic for the launch.
+
+The [qualification record](../../runtime/virtual/qualification.json) includes
+instruction/legacy regressions and negative controls. Full upstream application
+suites, multiple threads/harts, swap/migration, shared or file-backed tagged
+mappings and full compact-bounds conformance remain outside this first profile.
+The older R0 entry below is retained as historical qualification of its subset.
+
 ## 2026-10-06 — virtual C execution through a Linux module
 
 The [R0 execution slice](../plans/virtual-capstone-runtime-r0.md) runs small

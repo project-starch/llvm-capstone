@@ -4,6 +4,12 @@ Status: implemented QEMU execution experiment, 2026-10-06. Qualification and
 input hashes live with the [Linux gate](../../tests/virtual-runtime-r0/README.md)
 and [instruction gate](../../capstone-qemu/tests/virtual-capstone-runtime/README.md).
 
+Follow-on implementation: the [virtual application adapter](../../runtime/virtual/README.md)
+now connects the loader, common libc and delegated-service loop. It adds
+Linux-backed heap growth, first-touch fault resumption, arena retirement and
+SQLite/mruby gates. The text below records the original R0 boundary; its
+remaining integration steps are completed for that bounded application profile.
+
 This implements the first execution experiment in
 [virtual Capstone through the existing runtime](../design/virtual-capstone-runtime.md).
 A small Capstone-compiled C function executes at ordinary Linux virtual

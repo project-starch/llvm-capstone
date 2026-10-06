@@ -1,16 +1,17 @@
-Virtual C runtime (2026-10-06): the bounded
-[R0 execution adapter](../plans/virtual-capstone-runtime-r0.md) now runs a
-Capstone-compiled C function through a Linux module. Next connect the existing
-loader/CRT and delegated-service loop to that entry, keeping a context and its
-lifetime namespace alive across calls. Then add Linux-backed arena growth.
-Preserve the instruction, Linux and legacy physical application gates.
+Virtual C runtime (2026-10-06): the first
+[application adapter](../../runtime/virtual/README.md) connects the common
+loader/CRT, delegated services and a growing Linux-backed heap. Its bounded
+R1–R3 gates include SQLite, mruby, recoverable first-touch faults, same-VA
+retirement, independent processes and non-yielding termination. Preserve the
+instruction, Linux and physical-application gates. Next qualify broader
+upstream workloads and node-budget behavior; design tag-preserving migration,
+threads and a second OS adapter before freezing the processor interface.
 
 Runtime integration direction (2026-10-06): build on R0 in
 [virtual Capstone through the existing runtime](../design/virtual-capstone-runtime.md).
-Reuse supervised execution and delegated Linux services. R0 now executes
-on ordinary process mappings, including an object across nonadjacent physical
-frames, with quantum resumption and terminal fault events. Add recoverable
-service events when connecting the normal application runtime. Target an
+Reuse supervised execution and delegated Linux services. The application
+profile now executes on ordinary process mappings with resumable services,
+faults and quanta. Continue targeting an
 unchanged Linux core plus module/runtime; document any unavoidable core hook.
 Keep the virtual prototype's memory-safety work. Full capability saves in
 Linux entry/return are an alternative experiment, not a prerequisite for R0.
@@ -21,7 +22,7 @@ the local M0--M3 sequence in
 [the prototype contract](../plans/virtual-capstone-prototype.md).
 Guest node tables, mode CSRs and CSMINT are recorded in the
 [current state](current-state.md). The remaining M1 work in its
-[ABI](../plans/virtual-capstone-abi.md) includes CSCHECKR, CSCHECKW, CSRETIRE,
+[ABI](../plans/virtual-capstone-abi.md) includes CSCHECKR, CSCHECKW,
 PCC enforcement, instruction policy and representability checks before
 removing the stored bounds. Preserve the existing instruction and Linux
 regression gates. Full tagged Linux contexts are still an M2 contract for

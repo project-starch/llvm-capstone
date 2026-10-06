@@ -4,6 +4,13 @@ cmake_minimum_required(VERSION 3.25)
 set(CMAKE_C_FLAGS_RELEASE "-O1 -DNDEBUG" CACHE STRING "Release C flags")
 project(capstone_application LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 11)
+option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter" OFF)
+if(CAPSTONE_APPLICATION_VIRTUAL)
+  add_compile_options("$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
+  set(sdk_codegen "[\"-mllvm\", \"-capstone-gp-free\", \"-mllvm\", \"-capstone-image-gp\"]")
+else()
+  set(sdk_codegen "[]")
+endif()
 option(CAPSTONE_CHECK_COMPILER_ABI "Qualify Capstone direct-call codegen" ON)
 if(CAPSTONE_CHECK_COMPILER_ABI)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -56,6 +63,7 @@ if(CAPSTONE_APPLICATION_SDK)
 "{
   \"version\": 1,
   \"application_abi\": 2,
+  \"codegen\": ${sdk_codegen},
   \"cc\": \"${CMAKE_C_COMPILER}\",
   \"ld\": \"${CMAKE_LINKER}\",
   \"musl\": \"${PORT_MUSL_ROOT}\",
