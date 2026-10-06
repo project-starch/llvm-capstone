@@ -23,9 +23,7 @@
     "capstone/ports/sqlite/repro322/tags.tsv",
     "capstone/ports/sqlite/cheribsd/build-corpus-cheri.sh",
     "capstone/ports/sqlite/cheribsd/deploy-corpus.sh",
-    "capstone/ports/sqlite/cheribsd/run-corpus-cheri.sh",
-    "capstone/ports/sqlite/cheribsd/run-sysalloc-cheri.sh",
-    "capstone/ports/sqlite/cheribsd/chain-twoarm.sh"
+    "capstone/ports/sqlite/cheribsd/run-corpus-cheri.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [

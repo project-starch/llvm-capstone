@@ -270,6 +270,15 @@ build_group() {
   local src tag extra
   while read -r src tag extra; do
     [ -z "${src:-}" ] && continue
+    # Build only what the corpus counts as a case. The manifest still names the
+    # baseline probes and the defects since moved out of scope, and their
+    # sources are deliberately not in this port -- so without this filter the
+    # build reports failures for things nothing will ever run, and a real
+    # failure has to be picked out of the noise.
+    case "$(awk -F'\t' -v t="$tag" '$1==t{print $3}' "$C/../repro322/tags.tsv")" in
+      case) ;;
+      *) continue ;;
+    esac
     local xsrc=() xinc=()
     case "$tag" in
       spellfixoom) xsrc=("$SRC/spellfix.c"); xinc=(-DSQLITE_CORE -I"$EXT/misc") ;;

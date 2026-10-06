@@ -43,6 +43,7 @@
 |---|---|---|---|---|
 | `mruby/cheribsd` | 4.0.0-rc2 | cheribsd-purecap | the 23 cases of the release corpus, plus its own controls: the interpreter evaluates, and 40- and 500-frame recursion survives revocation | `release-differential` |
 | `perl/cheribsd` | 5.36.3 | cheribsd-purecap | the 17-section smoke, under both libc revocation switches | -- |
+| `sqlite/cheribsd` | 3.22.0 | cheribsd-purecap | the 33 cases of sqlite/engine-repros, plus poscontrol.c, which must fault or the run is void | `engine-repros` |
 
 ## domain-libc -- the libc the domain images link against
 
@@ -62,7 +63,7 @@ A directory under `ports/` is an upstream **program**; a directory inside it is 
 | mruby | `mruby/app` · `mruby/cheribsd` | 4.0.0-rc2 |
 | perl | `perl/cheribsd` · `perl/musl` | 5.36.3 |
 | postgres | `postgres/app` (17.5) · `postgres/memory-contexts` (17.0) | **differs, see the note in its port.json** |
-| sqlite | `sqlite/app` (3.22.0) · `sqlite` (3.53.3, 3.22.0) | **differs, see the note in its port.json** |
+| sqlite | `sqlite/app` (3.22.0) · `sqlite/cheribsd` (3.22.0) · `sqlite` (3.53.3, 3.22.0) | **differs, see the note in its port.json** |
 | wireshark | `wireshark/app` · `wireshark/wmem` | 4.6.8 |
 
 The components of one program usually pin the same release, and the pin then lives in each component's own recipe rather than once per program. That duplication is guarded rather than removed: where two components pin **different** releases, one of them must say why in its `note`, and `check-ports.py` refuses the pair otherwise -- so bumping one component alone turns a silent divergence into a blocked one. PostgreSQL is the live case, and the reason its version was wrong in the study catalog until 2026-09-28.

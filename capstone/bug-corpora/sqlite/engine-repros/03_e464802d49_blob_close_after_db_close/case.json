@@ -19,8 +19,7 @@
       "run": "2026-10-05"
     },
     "cheribsd-revocation": {
-      "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=155, witnesses=1) -- REACHED-SILENT (2026-10-05)",
-      "run": "2026-10-05"
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
     }
   },
   "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
