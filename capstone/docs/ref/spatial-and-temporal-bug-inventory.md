@@ -270,7 +270,7 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **18** | 4 |
-| spatial, 25 upstream | **4** | **14** | 11 |
+| spatial, 25 upstream | **4** | **24** | 1 |
 
 > **FFmpeg entered this table on 2026-10-06**, and until that day contributed **zero**
 > measured rows — which is what the retraction of its `pool-repros` arm established.
@@ -289,6 +289,31 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 > a downward crossing. **So the qualification on "spatial is a tie with CHERI" is now
 > measured rather than argued: it holds only for crossings that leave the USABLE allocation,
 > and not at all below the base.**
+>
+> **`subobject-repros` 0-9 were measured the same day** (`results/20261006-cheribsd/`): **0 of 10
+> caught**, 22 of 22 arms, both platform controls firing, each case printing its own verdict so a
+> completion is a reading rather than a silent pass. Together with plain-heap's 3 of 4 that is the
+> whole contrast measured on one platform in one day: **a crossing that leaves the usable allocation
+> is caught; one interior to it is not.**
+>
+> **The 0 of 10 carries a weaker reason than it looks, and the arms say so.** That corpus's driver
+> hands the port's `av_malloc` one arena, which bumps a cursor and rounds to 64 bytes, so there is no
+> per-allocation bound on the struct on that harness at all. The completion shows nothing bounded
+> anything at that granularity — not that a bound was in force and held. This is the over-claim
+> corrected on the `wmem` arms, recorded before it could be made again.
+>
+> **`-O0` is load-bearing and the proof is two-sided.** A first sub-object suite built `-O1` returned
+> `VERDICT INCONCLUSIVE` for case 0 while the other nineteen arms passed and both controls fired:
+> case 0's index is a compile-time constant one past its member, and clang folded the store away.
+> Rebuilt `-O0` with nothing else changed it reads `DEFECT-REPRODUCED`. Reporting the `-O1` suite
+> would have put a **compiler artifact into this table as a CheriBSD reading**. The native arms use
+> gcc and were unaffected, which is why it surfaced only here.
+>
+> **The one row still unmeasured is `plane-repros/00`, and the blocker was tried, not assumed:** that
+> corpus links a real native `libavutil.a` (`runners/run-native.sh:16`), so a purecap reading needs a
+> purecap `libavutil`, which this project has never built. The port's own purecap build was attempted
+> and WORKS — `cmake --preset cheribsd` configures and builds `libffmpeg-pool.a` — which is what
+> unblocked the ten sub-object rows; it just does not contain `libavutil`'s frame code.
 
 - **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
 

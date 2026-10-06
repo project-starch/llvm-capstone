@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-06",
+  "runner": "ports/common/host/cheribsd/run.py",
+  "runtime_revocation": "on",
+  "guest_default_revocation": "preserved",
+  "arms": 20,
+  "arms_passed": 20,
+  "controls_passed": ["cheribsd-abi", "cheribsd-bounds"],
+  "runner_exit": 0,
+  "caught": [],
+  "completed": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  "build": "clang -O0, purecap (rv64imafdcxcheri / l64pc128d), linked against the port's libffmpeg-pool.a built with cmake --preset cheribsd",
+  "o0_is_load_bearing": "a first suite built -O1 returned VERDICT INCONCLUSIVE for so-00-buggy while the other 19 arms passed and both controls fired: case 0's index is a compile-time constant one past its member and clang folded the store away. Rebuilt -O0 with nothing else changed it reads DEFECT-REPRODUCED. Reporting the -O1 suite would have recorded a compiler artifact as a CheriBSD reading.",
+  "weaker_reason_caveat": "the driver hands the port's av_malloc ONE arena (metadata-allocator.c:26 bumps a cursor, rounds to 64 bytes) and __builtin_capstone_cap_shrink appears only on pool payload blocks, so there is no per-allocation bound on the struct on this harness. The completion does NOT show that CHERI bounded the struct; the sub-object claim rests on each case's own offset assertions instead.",
+  "platform": "stock CheriBSD purecap built on this host (kernel CHERI-PURECAP-QEMU, releng/26.07-88f39900c329 = pins.env CHERIBSD_REV) -- the same vehicle as the memcached, wireshark and ffmpeg plain-heap readings",
+  "n_per_cell": 1
+}
