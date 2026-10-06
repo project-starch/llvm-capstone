@@ -13,6 +13,10 @@
   "sublet-svheads": {
    "image_sha256": "036c9f5825d6fd5988a182d2e893d523fb9b0ac35985cfef23cd50f83eb16561",
    "what_differs": "the same level0 OUTER heap as the baseline, plus the SV head arena through the ports/perl/sv-heads lifetime adapter in PERL_SUBLET_MODE=1: a released head is revoked and reissued under a fresh alias. Relinked by ports/common/application/build.py --nested perl, which grants the adapter 32 MiB in region 1"
+  },
+  "sysalloc-sublet": {
+   "image_sha256": "a63f7edd9718835001d3753a12e518631dc2b569971e9a7e25b0031e0e59539d",
+   "what_differs": "the Sublet heap as the SYSTEM allocator: per-object bounds and every free revokes. Built as PERLD_HEAP=sublet with no SV head adapter, so it is the one arm that can catch a use-after-free in malloc'd memory"
   }
  },
  "held_fixed": "one source tree, one compiler, one musl, one QEMU, one guest, one staged library; the three images differ only in the heap they link and, for sublet-svheads, the SV head adapter",
@@ -25,7 +29,17 @@
  "result": {
   "sysalloc-none": 6,
   "sysalloc-bounds": 6,
+  "sysalloc-sublet": 6,
   "sublet-svheads": 7,
-  "regressions": 0
+  "regressions": 0,
+  "denominator": "9, not 11: 254b30e378 and 9e298ab597 do not execute their defect in a domain"
+ },
+ "positive_control_on_the_arms_themselves": {
+  "why": "three arms reporting the same 6 is exactly what a non-revoking build would also show, so 'sublet is silent on the system-allocator cases' needed a check that the revocation can fire at all. Two questions the eval/shim controls cannot answer",
+  "probe": "probe/heapprobe.c, compiled with each arm's OWN SDK and run as a domain: malloc, memset, free, then read at an argv-derived index whose value is printed so the load cannot be folded away",
+  "sysalloc-bounds": "prints READ-FREED-OK got=Z -- the read of freed memory completes, so level0's free does not revoke (l0_free sets b->free = 1 and coalesces, nothing more)",
+  "sysalloc-sublet": "prints ABOUT-TO-READ-FREED and the process ends there; the read never completes. Revocation is live, so this arm's silence on the system-allocator cases is a fact about those cases",
+  "realloc_relocates": "both arms print moved=1 for 26->52 and 1000->4000, so a dangling pointer into a grown buffer IS possible here; 'realloc grew in place' was considered and refuted",
+  "why_sysalloc_sublet_still_adds_nothing": "the two system-allocator temporal cases it was built for are the two that do not execute their defect in a domain -- 254b30e378's filehandle discards its writes, 9e298ab597's assertion passes. Not a statement about Sublet"
  }
 }

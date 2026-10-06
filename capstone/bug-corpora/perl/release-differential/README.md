@@ -45,7 +45,7 @@ the `malloc` boundary cannot see a lifetime that never crosses it.
 
 ## The arms
 
-Three measured arms. `sysalloc-bounds` is the **baseline**: per-object heap bounds are
+Four measured arms. `sysalloc-bounds` is the **baseline**: per-object heap bounds are
 what an application gets by default since PR #170, so a catch is a case the bounds arm
 does **not** fault on.
 
@@ -53,31 +53,66 @@ does **not** fault on.
 |---|---|---:|
 | `sysalloc-none` | the first-fit heap with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`: every pointer carries the whole arena's bounds | 6 |
 | **`sysalloc-bounds`** | the same heap as applications get it today. **The baseline** | **6** |
-| `sublet-svheads` | the same `level0` **outer** heap as the baseline, plus the SV head arena through the lifetime adapter of [`../../../ports/perl/sv-heads`](../../../ports/perl/sv-heads) in `PERL_SUBLET_MODE=1` | **7** |
+| `sysalloc-sublet` | the Sublet heap as the **system** allocator: bounded, and every free revokes | 6 |
+| `sublet-svheads` | the baseline's `level0` **outer** heap, plus the SV head arena through the lifetime adapter of [`../../../ports/perl/sv-heads`](../../../ports/perl/sv-heads) in `PERL_SUBLET_MODE=1` | **7** |
 
-The three images are one source each and differ only in the heap they link, so a
-difference between them is the heap's protection and nothing else. Note what the
-sv-heads arm is *not*: its outer allocator is `level0`, the same as the baseline's,
-which is `build.py`'s own rule for a nested-allocator arm. Otherwise two things would
-change at once and the comparison would measure whichever one you did not intend.
+The images are one source each and differ only in the heap they link, so a difference
+between them is the heap's protection and nothing else. Note what the sv-heads arm is
+*not*: its outer allocator is `level0`, the same as the baseline's, which is `build.py`'s
+own rule for a nested-allocator arm (`--nested` with `--heap sublet` is a `ValueError`).
+Otherwise two things would change at once and the comparison would measure whichever
+one you did not intend.
 
-| step | adds | regressions |
-|---|---:|---:|
-| bounds over none | 0 | 0 |
-| **`sublet-svheads` over the baseline** | **1** | **0** |
+The one addition over the baseline is `05_17535c984a`, a cloned constant sub whose
+`CvXSUBANY` SV head is shared without a reference — a head in the arena the adapter
+owns. The spatial case `08_b7b77ffc1e` is caught by all four, but the three bounded arms
+report it as a **bounds** violation (cause 5) where the unbounded one sees only an
+untagged dereference (cause 24): same catch, better precision.
 
-The one addition is `05_17535c984a`, a cloned constant sub whose `CvXSUBANY` SV head is
-shared without a reference — a head in the arena the adapter owns. The spatial case
-`08_b7b77ffc1e` is caught by all three, but only the two bounded arms report it as a
-**bounds** violation (cause 5); unbounded, it arrives as an untagged dereference
-(cause 24). Same catch, different precision.
+### The denominator is 9, not 11
 
-**Why +1 and not more.** Of the five cases no arm catches, four hold their stale
-pointer somewhere the adapter does not own — an `SvPVX` string buffer, an `AV` element
-array, a `reg_code_block` array, a COW `subbeg` — and the fifth is stopped by Perl's own
-refcount panic before any access happens. This is the honest shape of protecting one
-nested allocator out of four: mruby's GC heap is where mruby's object lifetimes live, so
-sublet-gc added 6 there; Perl's SV *heads* are only one of its arenas.
+Two cases do not execute their defect in a domain at all, and scoring them as misses
+would be counting the harness:
+
+- `10_254b30e378` carries **`harness_limit`**. A probe on the bounds arm shows the
+  in-memory filehandle it needs accepts its writes and throws them away: `open` returns
+  1, `print` returns 1, and the backing scalar is still `undef`, where the host build
+  holds the full 52-byte string. The overlapping `Move` that *is* the defect is never
+  reached.
+- `03_9e298ab597`'s trigger **passes its own assertion** on all four arms, so the stale
+  element slot it depends on never holds a stale pointer there.
+
+Of the nine that do exercise their defect, **seven are caught**. The other two are not
+gaps in the hardware:
+
+- `11_af11b0c528` is **out of reach by construction**. The stale `subbeg` length makes
+  `$&` read one byte past the logical string into the NUL terminator, which lies *inside
+  the same allocation*. No per-object bounds and no revocation can see an in-bounds read
+  of a live object; the only oracle is the wrong output, which every arm does produce.
+- `02_d2cddbe1df` is a **deliberate carve-out**. Upstream Perl reads a freed head's flags
+  on purpose, so the adapter answers `SvIS_FREED` and `SvTYPE` from its sidecar without
+  touching the head; making that path fault stops three upstream test files. The defect
+  is still detected — by Perl's own `panic: attempt to copy freed scalar`.
+
+### The arms carry their own positive control
+
+Three arms reporting the same six is also exactly what a build whose revocation never
+fires would show, so `sysalloc-sublet`'s silence needed proving to be a fact about the
+cases rather than about the arm.
+[`results/20261006/heapprobe.c`](results/20261006/heapprobe.c), compiled with each arm's
+own SDK and run as a domain, does `malloc`, `free`, then a read at an argv-derived index
+whose value is printed so the load cannot be folded away:
+
+| | `sysalloc-bounds` | `sysalloc-sublet` |
+|---|---|---|
+| read after `free` | `READ-FREED-OK got=Z` — completes | the process ends at the read |
+| `realloc` 26→52, 1000→4000 | `moved=1` | `moved=1` |
+
+So revocation is live in the sublet arm, `l0_free` really does only mark (it sets
+`b->free = 1` and coalesces), and a dangling pointer into a grown buffer *is* possible
+here — "realloc grew in place" was considered and refuted. `sysalloc-sublet` adds nothing
+over the baseline because the two system-allocator temporal cases it exists for are the
+two that do not execute.
 
 ### The fourth arm is missing, and why
 

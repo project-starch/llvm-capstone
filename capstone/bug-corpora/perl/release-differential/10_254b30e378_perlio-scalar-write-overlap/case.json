@@ -15,10 +15,14 @@
   "sysalloc-bounds": {
    "oracle": "no fault: completes, the workload's own oracle fails"
   },
+  "sysalloc-sublet": {
+   "oracle": "no fault: completes, the workload's own oracle fails"
+  },
   "sublet-svheads": {
    "oracle": "no fault: completes, the workload's own oracle fails"
   }
  },
- "status": "sysalloc-none, sysalloc-bounds and sublet-svheads measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
- "allocator_layer": "system allocator (the SvPVX string buffer)"
+ "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
+ "allocator_layer": "system allocator (the SvPVX string buffer)",
+ "harness_limit": "the defect does not execute in a Capstone domain. A probe on the bounds arm shows the in-memory filehandle this case needs accepts its writes and discards them: open returns 1, print returns 1, and the backing scalar is still undef afterwards, where the host build has the full 52-byte string. The overlapping Move that is the defect is therefore never reached, so no arm can report and this case is outside every arm's denominator"
 }
