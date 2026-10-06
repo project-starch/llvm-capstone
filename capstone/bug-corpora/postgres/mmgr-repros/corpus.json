@@ -14,7 +14,8 @@
     "sublet",
     "poisoncap-spatial",
     "poisoncap-protected",
-    "native-detect"
+    "native-detect",
+    "cheribsd-revocation"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -33,5 +34,5 @@
     "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu-delivery"
   ],
   "advisories": [],
-  "note": "The allocator pin is 17.0; the complete single-user backend port is 17.5."
+  "note": "The allocator pin is 17.0; the complete single-user backend port is 17.5. 2026-10-05: a cheribsd-revocation arm was added by this project and run on all 8. The corpus had no plain-purecap arm, only the two PoisonCap ones, and PoisonCap is out of scope for the study these results feed; without it these 8 could not be compared with the other PostgreSQL corpora, which all carry that arm. The build path already existed -- cmake/Replay.cmake builds one hosted executable per case under PG_CORPUS_DIR and says 'plain CheriBSD' when PG_POISONCAP is off -- so nothing in the corpus or the port was changed to produce it. One qualification on reading those 8 silences, because it bites elsewhere: the guest's security.cheri.runtime_revocation_every_free_default is 0, so a revocation sweep runs only once a quarantine threshold is crossed, and a short case that frees a handful of objects may never cross one -- a silence can then mean 'no sweep ran yet' rather than 'the mechanism could not see it'. That confound does NOT apply here, and the reason is worth stating: pfree returns a chunk to its context and never returns the block to malloc, so there is no malloc free for a sweep to act on at any threshold. The silence is a property of the nesting, not of when the quarantine happens to flush."
 }
