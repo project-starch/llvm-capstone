@@ -1,0 +1,25 @@
+{
+  "case": 27,
+  "upstream_fix": "a783931794",
+  "title": "heap-buffer-overflow in sqlite3Fts3GetVarint",
+  "consumer": "sqlite3.c (sqlite3Fts3GetVarint)",
+  "live_in_pin": true,
+  "live_proof": "backport filter: upstream fix a783931794 removes code still present in 3.22.0, and its own regression database reproduces on stock 3.22.0 under host ASan as heap-buffer-overflow in sqlite3Fts3GetVarint",
+  "allocator_layer": "memsys5",
+  "object": "the fts3 doclist buffer the varint decoder reads from",
+  "lifetime_ender": "not a lifetime defect: a corrupt image leaves an offset past the end of the doclist",
+  "shape": "read past the end of the record",
+  "fidelity": "real consumer, real allocator: upstream's own regression image, run statement by statement through the in-domain memfs",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; the probe witnesses the defective access (kind=OOB, hits=40, witnesses=1)"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=OOB, hits=40, witnesses=1)"
+}

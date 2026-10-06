@@ -1,0 +1,25 @@
+{
+  "case": 18,
+  "upstream_fix": "mem5-design",
+  "title": "row25; allocator design defect, trigger written by us",
+  "consumer": "sqlite3.c (run_case)",
+  "live_in_pin": true,
+  "live_proof": "inspection with a line number in the 3.22.0 tree: memsys5 writes Mem5Link{next,prev} into the body of a freed block at src/mem5.c:143 (MEM5LINK), keeping only CTRL_FREE out of band in aCtrl[]. Design-inherent and never patched, so it is live in the pin and in every other release",
+  "allocator_layer": "memsys5",
+  "object": "a caller's block returned to the memsys5 pool, whose bytes become freelist metadata",
+  "lifetime_ender": "sqlite3_free returns the block to the pool and a neighbour free makes memsys5 link and coalesce, writing in-band metadata through the caller's storage",
+  "shape": "free / stale read",
+  "fidelity": "constructed demonstrator, real allocator. The trigger is ours, not an upstream input: it allocates two adjacent blocks, holds a pointer to the first, frees both so memsys5 coalesces, then reads back through the held pointer. That makes it the one case here whose consumer is the case itself, which is also why its probe site is in the case source and not in sqlite3.c. It is in the corpus because it states the corpus's premise: to ASan the whole pool is one allocation, so this is invisible at the layer below",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x101da6878"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; the probe witnesses the defective access (kind=UAF, hits=1, witnesses=1)"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x101da6878; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=1, witnesses=1)"
+}

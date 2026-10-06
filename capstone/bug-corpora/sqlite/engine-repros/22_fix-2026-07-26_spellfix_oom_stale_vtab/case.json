@@ -1,0 +1,25 @@
+{
+  "case": 22,
+  "upstream_fix": "fix-2026-07-26",
+  "title": "row24",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "inspection in the pinned extension source: editDist3Install() registers editdist3() three times sharing one heap EditDist3Config, only the arity-1 registration carries the editDist3ConfigDelete destructor, and the else branch belongs to the third if -- so a failure of the second or third registration frees pConfig while an earlier registration is still live. Fixed upstream 2026-07-26 (d9305a65c876)",
+  "allocator_layer": "memsys5",
+  "object": "the shared heap EditDist3Config, referenced by up to three registered functions",
+  "lifetime_ender": "a failing registration takes the else branch and frees pConfig while an earlier successful registration still points at it",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator, but the defect is in ext/misc/spellfix.c rather than in the amalgamation; the case compiles that extension in. The failure that frees pConfig is reached by exhausting the allocator, so the case depends on the arena being small enough for the registration to fail",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b65c0"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes; clean exit, no defect-site probe in that run"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b65c0; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; clean exit, no defect-site probe in that run"
+}

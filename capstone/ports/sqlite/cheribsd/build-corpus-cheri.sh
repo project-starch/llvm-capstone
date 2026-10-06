@@ -308,7 +308,13 @@ if [ "$GROUP" = all ]; then
   # r2p and r2db stay out on purpose: those 5 _r2 images carry a host-ASan
   # signature but no derived trigger, so corpus.json does not count them as
   # cases.
-  for g in core coreT fts5 fts5S fts3 fts3P ext json rtree lbcore lbfts3 lbfts5 probes; do build_group "$g"; done
+  # r2p and r2db are in this list now. They were left out when the five R2
+  # images were believed to be non-cases; the corpus note names fz01, fz03,
+  # fz04, fz05 and fz07 as non-cases, and these groups hold fz02, fz06, fz10,
+  # fz11 and fz13 -- four of which are cases 29 to 32. Building fz13_r2 too is
+  # harmless: the runners take their case list from tags.tsv, which marks it
+  # out of scope, so it is built and not run.
+  for g in core coreT fts5 fts5S fts3 fts3P ext json rtree lbcore lbfts3 lbfts5 r2p r2db probes; do build_group "$g"; done
 else
   build_group "$GROUP"
 fi
