@@ -184,10 +184,31 @@ def preflight(args, out):
     vm(args.state, "exec", "--", "/bin/sh", "-c",
        'grep -q "^pg:" /etc/passwd || echo "pg:x:1000:1000:pg:/tmp:/bin/sh" >> /etc/passwd; '
        'grep -q "^pg:" /etc/group  || echo "pg:x:1000:" >> /etc/group')
+    # The extensions the image was built with. build-domain.sh links the module
+    # into the image and stages its control and version scripts here, and both
+    # halves are needed: CREATE EXTENSION reads the control file before it ever
+    # asks dfmgr for the library, so an image carrying the module but a share
+    # without the control file fails exactly as one carrying neither.
+    if args.extensions.is_dir():
+        target = args.share / "pgshare" / "extension"
+        target.mkdir(parents=True, exist_ok=True)
+        for source in sorted(args.extensions.iterdir()):
+            shutil.copy2(source, target / source.name)
+        print(f"  staged {len(list(args.extensions.iterdir()))} extension files "
+              f"from {args.extensions}")
+    else:
+        print(f"  no extension directory at {args.extensions}; only what the "
+              f"share already holds will be creatable")
+
     staged = vm(args.state, "exec", "--", "/bin/sh", "-c",
                 "mkdir -p /usr/local/pgsql && "
                 "[ -d /usr/local/pgsql/share/timezonesets ] || "
                 "cp -a /mnt/host/pgshare /usr/local/pgsql/share; "
+                # Unconditionally, unlike the rest of the share: a guest that
+                # has booted before already has an extension directory, and the
+                # stale one would decide what this run can create.
+                "cp -f /mnt/host/pgshare/extension/* "
+                "       /usr/local/pgsql/share/extension/ 2>/dev/null; "
                 "test -d /usr/local/pgsql/share/timezonesets && echo SHARE-OK")
     if "SHARE-OK" not in staged.stdout:
         sys.exit(f"guest share staging failed: {staged.stdout[-400:]}")
@@ -230,6 +251,9 @@ def main():
     parser.add_argument("--image", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True,
                         help="an initdb'd cluster, copied fresh for every case")
+    parser.add_argument("--extensions", type=Path,
+                        help="the control and version scripts build-domain.sh "
+                             "staged; defaults to <image>/../../share/extension")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--only", help="comma-separated case numbers")
     parser.add_argument("--gate", default="02",
@@ -245,6 +269,8 @@ def main():
         sys.exit("cheribsd-revocation is not a domain arm")
     if not args.image.is_file():
         sys.exit(f"no image at {args.image}")
+    args.extensions = args.extensions or (args.image.resolve().parents[1]
+                                          / "share" / "extension")
     config = json.loads((args.state / "config.json").read_text())
     args.share = args.share or Path(config["share"])
     if Path(config["share"]) != args.share:
@@ -313,6 +339,7 @@ def main():
         "image_sha256": digest,
         "runner_sha256": sha256(Path(__file__)),
         "fixture": str(args.fixture),
+        "extensions_staged_from": str(args.extensions),
         "started_utc": stamp,
         "extensions_wanted": wanted,
         "extensions_available": sorted(available),
