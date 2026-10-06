@@ -8,20 +8,19 @@
   "trigger": "trigger.sql",
   "live_in_pin": true,
   "live_proof": "CVE-2026-18024, fixed upstream in 849da8210539, which postdates the 17.5 pin",
-  "fidelity": "real server, core. On the purecap arm the input is refused on all four statements exactly as a correct build refuses it, so this arm does not reach the defect -- a result about the arm, not a reproduction",
+  "fidelity": "real server, core, real allocator; reached by a C caller rather than by SQL. A text datum of one data byte, 0xF0. In a UTF8 database ascii() takes 0xF0 to promise three continuation bytes and reads data[1..3], three bytes past the end of a one-byte payload. The allocation is VARHDRSZ + 1 = 5 bytes, so whether an arm reports turns on whether its capability is narrowed to the 5 bytes palloc was asked for or to the aset chunk around them.",
   "arms": {
     "spatial": {
-      "oracle": "completes; the mechanism does not report. errors 4/4 expected",
-      "run": "20261005, Capstone application VM, image sha256 8088ed6b2103e65a"
+      "oracle": "the three-byte over-read past a five-byte palloc chunk is reported, or the sequence completes and the arm did not see it"
     },
     "sublet": {
-      "oracle": "completes; the mechanism does not report. errors 4/4 expected",
-      "run": "20261005, Capstone application VM, image sha256 be234a12c9336a00"
+      "oracle": "the three-byte over-read past a five-byte palloc chunk is reported, or the sequence completes and the arm did not see it"
     },
     "cheribsd-revocation": {
-      "oracle": "the input is refused here exactly as a correct build refuses it -- MATCHES-UPSTREAM (2026-10-04). Directive evaluated and satisfied: this arm rejected 4 of 4 statements, exactly as a correct build does. The defect is not reached here because the input is refused first -- a result about this arm, not missing data."
+      "oracle": "the three-byte over-read past a five-byte palloc chunk is reported, or the sequence completes and the arm did not see it"
     }
   },
-  "status": "spatial and sublet run 2026-10-05 on the Capstone application VM; cheribsd-revocation run 2026-10-04",
-  "advisory": "CVE-2026-18024"
+  "status": "reachable on all three arms as of 2026-10-06 through the corpus module; no arm has run it yet",
+  "advisory": "CVE-2026-18024",
+  "note": "Reached by a C caller inside the backend, not by SQL. No SQL statement reaches this defect: it needs a multibyte database encoding and an invalid byte sequence stored at the same time, and those are mutually exclusive in PostgreSQL -- measured against a native 17.5 cluster on 2026-10-06, where a UTF8 database refused invalid bytes on every route, convert_from(bytea,'LATIN1') produced valid UTF-8, and a SQL_ASCII database had pg_encoding_max_length 1, which skips the branch. Upstream guards one of the two with Assert rather than a runtime check, which says the same thing. palloc does not validate, so the corpus module at ports/postgres/app/reach-module builds the datum and hands it to the defective code, which is how upstream's own note about already-corrupt on-disk data describes it being reached. What the arms then measure is the memory safety of the defective code once reached, not SQL-level exploitability. Reached and witnessed on the host cassert ASan build on 2026-10-06: TRAP: failed Assert(\"(data[i] & 0xC0) == 0x80\"), src/backend/utils/adt/oracle_compat.c:965, with ascii+0x46b directly above corpus_ascii_truncated_lead in the stack. That assertion sits on the over-read itself. ASan alone does not report it, because the datum is a palloc chunk inside an aset block and ASan sees only the block -- which is the distinction this corpus exists to measure."
 }

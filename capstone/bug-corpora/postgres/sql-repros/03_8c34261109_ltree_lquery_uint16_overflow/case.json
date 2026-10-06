@@ -11,16 +11,15 @@
   "fidelity": "real server, real allocator, in a contrib extension rather than core. ~65 KB, so it leaves its block",
   "arms": {
     "spatial": {
-      "oracle": "completes; the mechanism does not report. completed with no directive and no fault",
-      "run": "20261005, Capstone application VM, image sha256 8088ed6b2103e65a"
+      "oracle": "completes; the mechanism does not report"
     },
     "sublet": {
-      "oracle": "completes; the mechanism does not report. completed with no directive and no fault",
-      "run": "20261005, Capstone application VM, image sha256 be234a12c9336a00"
+      "oracle": "completes; the mechanism does not report"
     },
     "cheribsd-revocation": {
       "oracle": "SIGPROT on the plain purecap build -- CHERI-DETECTED (2026-10-04). SIGPROT(34) on both purecap builds. ~65 KB, leaves the malloc block."
     }
   },
-  "status": "spatial and sublet run 2026-10-05 on the Capstone application VM; cheribsd-revocation run 2026-10-04"
+  "status": "cheribsd-revocation run 2026-10-04; the 2026-10-05 spatial and sublet runs are withdrawn as control failures and not yet rerun",
+  "note": "The 2026-10-05 spatial and sublet runs are WITHDRAWN and carry no verdict. Both recorded silent on an image that did not contain ltree. A domain cannot dlopen, so an extension reaches it only by being linked in (patch 0015, ports/postgres/app/toolchain/static_modules.c), and the MODULES list of ports/postgres/app/build-domain.sh named only dict_snowball and plpgsql; the guest share directory likewise held plpgsql.control alone. The trigger's first statement, CREATE EXTENSION ltree, therefore failed on the missing control file and the lquery cast never executed. A control failure, so both arms are out of their denominators until they are rerun. build-domain.sh now links ltree, pg_trgm and fuzzystrmatch and stages their control and version scripts; both arm images were rebuilt on 2026-10-06 and carry six modules."
 }

@@ -8,7 +8,7 @@
   "trigger": "trigger.sql",
   "live_in_pin": true,
   "live_proof": "upstream 1af08af694, \"Fix pg_trgm's picksplit function with all-true datums\" (CVE-2026-14678), backpatched through 14 and therefore absent at the 17.5 pin. The pin's own code proves the type error against itself. contrib/pg_trgm/trgm_gist.c:745 declares the field as `BITVECP sign;` -- a raw bit vector with no varlena header. :824 allocates `cache_sign = palloc(siglen * (maxoff + 1))` and :827 hands each entry the slice `&cache_sign[siglen * k]`, so every sign is exactly siglen bytes. :904 and :917 pass `cache[j].sign` DIRECTLY to hemdistsign as a BITVECP, which is the correct use. But :900 and :913 wrap the same field as `GETSIGN(cache[j].sign)`, and trgm.h:106 defines `GETSIGN(x)` as `( (BITVECP)( (char*)x+TRGMHDRSIZE ) )` with TRGMHDRSIZE = VARHDRSZ + sizeof(uint8) at trgm.h:74. The pointer is therefore advanced past a header the object does not have, and sizebitvec then reads siglen bytes from there -- running TRGMHDRSIZE bytes off the end of that entry's slice, and off the end of the whole palloc'd cache_sign buffer when j is the last entry. As upstream notes, the cast inside GETSIGN is what stops the compiler warning.",
-  "fidelity": "real server, real allocator, contrib extension. The read is of a palloc'd chunk, so whether a mechanism sees it depends on whether TRGMHDRSIZE bytes is enough to leave the surrounding aset block -- it is a small overread, so the expectation is that it is not, which is exactly the asymmetry this corpus measures.",
+  "fidelity": "real server, real allocator, contrib extension. The read is of a palloc'd chunk, so whether a mechanism sees it depends on whether TRGMHDRSIZE bytes is enough to leave the surrounding aset block -- it is a small overread, so the expectation is that it is not, which is exactly the asymmetry this corpus measures. Trigger verified on a native 17.5 cluster on 2026-10-06: the first version used rows long enough that CREATE INDEX failed with \"index row requires 10464 bytes, maximum size is 8191\" before picksplit ran at all -- the defect was unreachable and the case would have taken a VM slot to prove nothing. At 60 md5-chunks per row and 6000 rows the index builds to about 3700 pages, so gtrgm_picksplit runs repeatedly over a mixture of all-true and sparse signatures, which is the branch condition. The server completes normally and answers queries, as expected: the overread is TRGMHDRSIZE = VARHDRSZ + 1 bytes inside a palloc'd slice, which no unmodified build can see. Reaching it is what the trigger has to guarantee; reporting it is the arms' job.",
   "arms": {
     "spatial": {
       "status": "not written"
@@ -20,5 +20,5 @@
       "status": "not written"
     }
   },
-  "status": "collected 2026-10-05 by the backport sweep of REL_17_5..REL_17_STABLE; not yet run on any arm"
+  "status": "collected 2026-10-05; trigger verified reachable on a native 17.5 cluster 2026-10-06; not yet run on any arm"
 }
