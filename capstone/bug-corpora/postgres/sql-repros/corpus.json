@@ -35,6 +35,7 @@
     "capstone/bug-corpora/postgres/sql-repros/results/20261005"
   ],
   "runners": [
-    "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py"
+    "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
+    "capstone/bug-corpora/postgres/sql-repros/shared/run-cheribsd.sh"
   ]
 }
