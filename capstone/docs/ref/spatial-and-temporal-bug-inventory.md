@@ -253,7 +253,7 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **18** | 4 |
-| spatial, 14 upstream | **0** | **0** | 14 |
+| spatial, 14 upstream | **0** | **3** | 11 |
 
 - **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
   - tshark 13 — `results/20260921-cheribsd/` (`matrix.tsv`, `arm=cheribsd`): expected complete,
@@ -288,6 +288,17 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
   struct. Revocation is irrelevant to it; the bounds are not. A miss would refute the bounds claim
   rather than add a data point — which is what makes it worth running first on an SDK host, beside
   the five not-nested temporal fixtures.
+- **The first measured spatial cells, 2026-10-06.** memcached's three slab cases (`allocator-repros/05-07`)
+  ran on a **stock CheriBSD vehicle built on this host** with
+  `tests/cheri-baseline/provision-cheri-vehicle.sh`, revocation on: **8 of 8 arms passed, 0 of 8
+  caught**, the five temporal cases included. The control fired in the same boot —
+  `revocation-control` exit 162, signal 34 (`SIGPROT`), `si_code` 2 (`PROT_CHERI_TAG`), with `pc`
+  equal to the address the supervisor resolved independently — and the platform's own
+  `cheribsd-abi` and `cheribsd-bounds` probes passed beside it. So this zero is a reading.
+  The vehicle is a stock published purecap world, **not** the PoisonCap platform of the 2026-09-21
+  bundles, and its hashes differ by construction; the kernel is `CHERI-PURECAP-QEMU` from
+  `releng/26.07-88f39900c329`, which is `pins.env`'s `CHERIBSD_REV`. Per this corpus's own policy
+  run summaries stay outside the repository, so each reading lives in its case file.
 - **Spatial: 0 of 11 measured.** All 11 carry a prediction that the case *completes*, and the reason
   is structural: CHERI bounds the slab page or the enclosing allocation, which is one `malloc`. Not
   measurable on this host, checked rather than assumed —

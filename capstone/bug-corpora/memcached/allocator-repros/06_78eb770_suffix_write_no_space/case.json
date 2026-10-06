@@ -33,10 +33,11 @@
       "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
     },
     "cheribsd-revocation": {
-      "oracle": "PREDICTED and UNMEASURABLE HERE: completes -- CHERI bounds the slab page, which is one malloc.",
+      "oracle": "MEASURED 2026-10-06 on this host: the sequence COMPLETES. exit=0, completed=1, object_reuses=0, chunk_reuses=0. Not caught. Both reuse counters are 0, as they must be for a spatial case: nothing is freed here, and the crossing stays inside the slab page, which is one malloc.",
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: the CheriBSD toolchain requires CHERI_SDK and CHERI_SYSROOT (ports/common/cmake/toolchains/cheribsd.cmake:4-9, which FATAL_ERRORs without them). Both are unset even after sourcing the project environment, and no CHERI SDK or rootfs exists anywhere on this host. Not pending -- unavailable."
+      "control": "the control fired in the SAME boot: revocation-control exit=162 signal=34 (SIGPROT) si_code=2 (PROT_CHERI_TAG) with pc == the address the supervisor resolved independently (0x101e42). The platform controls cheribsd-abi and cheribsd-bounds passed in the same run.",
+      "platform": "stock CheriBSD purecap built on this host with tests/cheri-baseline/provision-cheri-vehicle.sh (kernel CHERI-PURECAP-QEMU, releng/26.07-88f39900c329 = pins.env's CHERIBSD_REV; hw.machine_arch riscv64c; qemu 16135483052dfdd6, firmware f0e1fe57b0f85075, kernel 8ab453f46dc76cf2, libc fdce2289224bb519, image 0cb16209c16c5edf). NOT the PoisonCap platform the 2026-09-21 bundles used, so those hashes differ by construction."
     },
     "native-detect": {
       "status": "declined",
@@ -47,5 +48,5 @@
       "oracle": "the buggy arm's write or read crosses and the case's damage flag is set; the fixed arm's bound keeps it inside. This pair differs by the upstream fix, not by protection."
     }
   },
-  "status": "MEASURED 2026-10-05, both paths, and this is the row that settles something. QEMU domain: BOTH modes COMPLETE, no fault, in the same 8/8 pass whose negative control fired 8/8 and whose temporal control read cause 24. Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED with damage set. So the defect is real, it corrupts the value's storage, and NOTHING WE HAVE DETECTS IT -- the crossing stays inside the chunk and the slab port's bound is the chunk. The prediction of completion is CONFIRMED, which is the measured form of 'a chunk-granular bound cannot see a sub-object crossing'."
+  "status": "MEASURED 2026-10-05, both paths, and this is the row that settles something. QEMU domain: BOTH modes COMPLETE, no fault, in the same 8/8 pass whose negative control fired 8/8 and whose temporal control read cause 24. Natively: fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED with damage set. So the defect is real, it corrupts the value's storage, and NOTHING WE HAVE DETECTS IT -- the crossing stays inside the chunk and the slab port's bound is the chunk. The prediction of completion is CONFIRMED, which is the measured form of 'a chunk-granular bound cannot see a sub-object crossing'. CheriBSD MEASURED 2026-10-06 on a vehicle built on this host, revocation on, 8/8 arms passed and 0 of 8 caught; run summaries stay outside the repository by this corpus's policy, so the reading is here."
 }
