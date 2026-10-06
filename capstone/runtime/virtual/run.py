@@ -31,7 +31,7 @@ cat /tmp/ok.out
 ./capstone-vexec contract.dom threads > /tmp/threads.out 2>&1
 echo VM_EXIT:threads:$?
 cat /tmp/threads.out
-for mode in vm heap-threads sparse-churn stale bounds retired vm-ro-write vm-none-read vm-guard vm-padding sparse-stale; do
+for mode in vm linear linear-stale heap-threads sparse-churn stale bounds retired vm-ro-write vm-none-read vm-guard vm-padding sparse-stale; do
   ./capstone-vexec contract.dom "$mode" > /tmp/fault.out 2>&1
   echo VM_EXIT:$mode:$?
   cat /tmp/fault.out
@@ -156,7 +156,7 @@ def main():
             except subprocess.TimeoutExpired: guest.kill(); guest.wait()
     lines = [s.strip() for s in out.decode(errors='replace').splitlines()]
     tests = {}
-    for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
+    for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('linear', 0), ('linear-stale', 139), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
                        ('preempt', 143), ('parallel_one', 0), ('parallel_two', 0),
                        ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0), ('cleanup', 0)]:
         if a.skip_recycling and name in ('sparse-churn', 'sparse-stale'): continue
@@ -186,7 +186,7 @@ def main():
     # Loading a saved revoked pointer clears its tag; the later dereference
     # is therefore cause 24. The direct live-register node check has its own
     # cause-25 instruction gate.
-    tests['fault_causes'] = causes == [24, 28, 24, 15, 13, 13, 28] + ([] if a.skip_recycling else [24])
+    tests['fault_causes'] = causes == [24, 24, 28, 24, 15, 13, 13, 28] + ([] if a.skip_recycling else [24])
     symbols = {}
     nm = Path(os.environ['CAPSTONE_LLVM_BIN']) / 'llvm-nm'
     for line in subprocess.check_output([str(nm), '--defined-only', str(a.application)], text=True).splitlines():
@@ -196,9 +196,11 @@ def main():
     fault_sites = [tuple(int(v, 16) for v in m.groups()) for s in lines
                    if (m := re.search(r'domain fault cause=\d+ pc=0x([0-9a-f]+).* entry=0x([0-9a-f]+)', s))]
     names = ('ro', 'none', 'guard', 'padding') + (() if a.skip_recycling else ('collected',))
-    tests['vm_denial_sites'] = len(fault_sites) == 3 + len(names) and all(
+    tests['linear_output'] = lines.count('VIRTUAL_LINEAR_OK') == 1
+    tests['linear_denial_site'] = bool(fault_sites) and fault_sites[0][0] - fault_sites[0][1] == symbols.get('cap_vm_fault_linear', -1) - symbols['domain_main']
+    tests['vm_denial_sites'] = len(fault_sites) == 4 + len(names) and all(
         pc - entry == symbols.get('cap_vm_fault_' + name, -1) - symbols['domain_main']
-        for name, (pc, entry) in zip(names, fault_sites[3:]))
+        for name, (pc, entry) in zip(names, fault_sites[4:]))
     tests['vm_contract'] = lines.count('VIRTUAL_VM_OK protections guards requested_length unused_pages execute rollback') == 1
     tests['heap_threads'] = lines.count('VIRTUAL_HEAP_THREADS_OK shared_ownership metadata_growth arena_growth') == 1
     tests['vm_denial_operations'] = all(lines.count('VIRTUAL_VM_ACCESS:' + op) == 1
@@ -207,21 +209,21 @@ def main():
     tests['spin_entered'] = lines.count('VIRTUAL_SPIN_READY') == 1
     stats = [dict((k, int(v)) for k, v in re.findall(r'(\w+)=(\d+)', s))
              for s in lines if s.startswith('CAPSTONE_VM_STATS ')]
-    # normal, threads, VM policy, shared heap, two normal launches, SQLite x2,
-    # mruby. Keep the original demand/release oracle separate from new cases.
-    start = 4 if a.skip_recycling else 5
+    # normal, threads, VM policy, linear loan, shared heap, optional sparse churn,
+    # two normal launches, SQLite x2, mruby. Preserve the original page oracle.
+    start = 5 if a.skip_recycling else 6
     base_stats = stats[:2] + stats[start:start + 5]
     release_stats = [s for s in base_stats if s['peak'] > s['pages'] + 300]
     demand_stats = [s for s in base_stats if s.get('faults', 0) >= 384]
-    expected_stats = (9 if a.skip_recycling else 10) + (1 if a.perl else 0) + (1 if a.perl_smoke else 0)
+    expected_stats = (10 if a.skip_recycling else 11) + (1 if a.perl else 0) + (1 if a.perl_smoke else 0)
     tests['linux_pages_released'] = len(stats) == expected_stats and len(release_stats) == 3
     tests['linux_demand_faults'] = len(stats) == expected_stats and len(demand_stats) == 3
     tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
-    tests['shared_heap_pages_released'] = len(stats) >= 4 and stats[3]['peak'] - stats[3]['pages'] >= 768
+    tests['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
     if not a.skip_recycling:
         tests['sparse_recycling'] = (lines.count('VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags') == 1
-                                 and len(stats) >= 5 and stats[4]['collections'] >= 3
-                                 and stats[4]['reclaimed'] >= 190000 and stats[4]['peak'] < 2048)
+                                 and len(stats) >= 6 and stats[5]['collections'] >= 3
+                                 and stats[5]['reclaimed'] >= 190000 and stats[5]['peak'] < 2048)
     tests['sqlite_results'] = lines.count('SQLITE_SUM=5050') == 1 and lines.count('SQLITE_PERSIST=100') == 1
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1

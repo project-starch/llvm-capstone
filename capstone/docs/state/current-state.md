@@ -2,6 +2,28 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-07 — remaining application ports on virtual mappings
+
+CPython 3.13.7, PostgreSQL 17.5 single-user, the configured FFmpeg decoder and
+offline tshark now build from source with the shared virtual SDK. Together
+with the existing SQLite, mruby and Perl gates, all seven application ports
+have a virtual workload baseline. MicroPython is outside this migration.
+Applications remain C-mode; this step changes recipes and runtime allocator
+integration, with no additional QEMU, Linux-core or firmware change.
+
+The [port result](../../runtime/virtual/app-ports-result.json) records native
+output comparisons for normal and inner-allocator images, an omitted-image
+negative control, and 32 unchanged FFmpeg/tshark spatial and temporal
+fixtures. CPython's inner run explicitly selects revocation on every free;
+its default adapter mode is spatial-only. PostgreSQL's inner workload uses
+the existing table collector rather than requiring a larger node table.
+The virtual heap now lends linear blocks to FFmpeg pools and wmem chunks,
+retaining a senior handle to retire descendants before reuse.
+The [extended runtime gate](../../runtime/virtual/app-ports-security-result.json)
+passes 46 checks, including the new linear-block lifetime tests and existing
+SQLite/mruby/Perl, VM, thread and recycling checks. These are configured
+application workloads on one hart, not complete POSIX or RTL qualification.
+
 ## 2026-10-07 — virtual libc VM-service v2
 
 Branch `virtual-capstone-libc-vm` unifies allocator payloads, growing allocator

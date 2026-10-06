@@ -33,6 +33,7 @@ static struct block *block_slabs[(BLOCKS + BLOCK_SLAB - 1) / BLOCK_SLAB] = {init
 static struct arena *arena_slabs[(ARENAS + ARENA_SLAB - 1) / ARENA_SLAB] = {initial_arenas};
 static unsigned block_capacity = BLOCKS < BLOCK_SLAB ? BLOCKS : BLOCK_SLAB;
 static unsigned arena_capacity = ARENAS < ARENA_SLAB ? ARENAS : ARENA_SLAB;
+static unsigned long allocations, frees, live_objects, peak_objects;
 static struct block *block_at(unsigned i)
 { return &block_slabs[i / BLOCK_SLAB][i % BLOCK_SLAB]; }
 static struct arena *arena_at(unsigned i)
@@ -127,7 +128,7 @@ static int grow(unsigned long size)
     }
     return 0;
 }
-static void *allocate(size_t n, size_t alignment)
+static struct block *reserve_block(size_t n, size_t alignment)
 {
     unsigned long size = power(n > alignment ? n : alignment);
     if (!size || !free_ids()) { errno = ENOMEM; return NULL; }
@@ -140,18 +141,26 @@ static void *allocate(size_t n, size_t alignment)
                 arena->free_head = b->next_free;
                 b->next_free = 0; b->live = 1; b->requested = n;
                 ++arena->used;
-                void *p = sublet_take(&b->slot);
-                unsigned long length = n ? n : 1;
-                if (length >= 4096) {
-                    unsigned long grain = 1UL << (63 - __builtin_clzl(length) - 9);
-                    length = (length + grain - 1) & ~(grain - 1);
-                }
-                return __builtin_capstone_cap_shrink(p, b->base, b->base + length);
+                ++allocations;
+                if (++live_objects > peak_objects) peak_objects = live_objects;
+                return b;
             }
         }
         if (grow(size)) break;
     }
     errno = ENOMEM; return NULL;
+}
+static void *allocate(size_t n, size_t alignment)
+{
+    struct block *b = reserve_block(n, alignment);
+    if (!b) return NULL;
+    void *p = sublet_take(&b->slot);
+    unsigned long length = n ? n : 1;
+    if (length >= 4096) {
+        unsigned long grain = 1UL << (63 - __builtin_clzl(length) - 9);
+        length = (length + grain - 1) & ~(grain - 1);
+    }
+    return __builtin_capstone_cap_shrink(p, b->base, b->base + length);
 }
 void *malloc(size_t n)
 {
@@ -174,15 +183,60 @@ static struct block *lookup(void *p)
     }
     __builtin_trap();
 }
+static void return_block(struct block *b)
+{
+    sublet_give(&b->slot);
+    ++frees; --live_objects;
+    b->live = 0; --arena_at(b->arena)->used;
+    b->next_free = arena_at(b->arena)->free_head;
+    arena_at(b->arena)->free_head = b->index + 1;
+}
+/* Existing nested allocators borrow a whole linear block and return its
+ * scalar base. The retained senior handle revokes every derived lifetime.
+ * This is an internal allocator API, not the public free(pointer) contract. */
+unsigned long __capstone_sublet_malloc_linear(size_t n, sublet_cap *out)
+{
+    cap_vm_heap_lock();
+    struct block *b = reserve_block(n ? n : 1, 16);
+    unsigned long base = 0;
+    if (b) {
+        b->live = 2;
+        base = sublet_take_linear(&b->slot, out);
+    } else sublet_clear(out);
+    cap_vm_heap_unlock();
+    return base;
+}
+void __capstone_sublet_free_linear(unsigned long base)
+{
+    cap_vm_heap_lock();
+    for (unsigned i = 0; i < block_capacity; ++i) {
+        struct block *b = block_at(i);
+        if (b->base == base && b->live == 2) {
+            return_block(b);
+            cap_vm_heap_unlock();
+            return;
+        }
+    }
+    __builtin_trap();
+}
+void __capstone_sublet_heap_stats(unsigned long out[9])
+{
+    cap_vm_heap_lock();
+    out[0] = allocations; out[1] = frees;
+    out[2] = 0; /* size-class VM arenas do not perform buddy merges */
+    out[3] = peak_objects;
+    out[4] = sublet_stats.split; out[5] = sublet_stats.mrev;
+    out[6] = sublet_stats.delin; out[7] = sublet_stats.revoke;
+    out[8] = sublet_stats.init;
+    cap_vm_heap_unlock();
+}
 static void free_locked(void *p)
 {
     if (!p) return;
     struct block *b = lookup(p);
+    if (b->live != 1) __builtin_trap();
     memset(p, 0, __builtin_capstone_cap_get_end(p) - b->base);
-    sublet_give(&b->slot);
-    b->live = 0; --arena_at(b->arena)->used;
-    b->next_free = arena_at(b->arena)->free_head;
-    arena_at(b->arena)->free_head = b->index + 1;
+    return_block(b);
 }
 void free(void *p)
 {

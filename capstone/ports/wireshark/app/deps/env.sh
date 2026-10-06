@@ -14,6 +14,7 @@ export TS_LINKER_SCRIPT="$CAPSTONE_REPO_ROOT/capstone/my_first_domain/link.ld"
 # The key: the compiler (size and mtime of clang and the LLVM libraries it loads; a shared-libs
 # build keeps codegen in libLLVM*.so), every source the runtime is built from, and this file.
 _ts_key=$( {
+  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-physical}"
   _b=$(readlink -f "$CAPSTONE_CLANG")
   { echo "$_b"; ldd "$_b" | awk '/=> \//{print $3}' | grep -E 'libLLVM|libclang' || true; } | xargs stat -L -c '%n %s %Y'
   cat "$_ts_musl_port"/runtime/*.c "$_ts_musl_port"/runtime/*.S "$_ts_musl_port/runtime/libc_overrides.list" \

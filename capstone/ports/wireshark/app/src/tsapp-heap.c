@@ -33,7 +33,10 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#ifdef TSAPP_SUBLET_HEAP
+#if defined(TSAPP_VIRTUAL_HEAP)
+/* The growing VM heap is reported by CAPSTONE_VM_STATS in the launcher.
+ * Physical level0/buddy counters do not describe it. */
+#elif defined(TSAPP_SUBLET_HEAP)
 void __capstone_sublet_heap_stats(unsigned long out[9]);
 #ifdef TSAPP_WMEM_CHUNKS
 int tsapp_wmem_report(char *line, size_t cap);
@@ -51,7 +54,9 @@ int __capstone_at_exit(int status)
 {
 	char line[1024];
 	size_t cap = sizeof line - 2;
-#ifdef TSAPP_SUBLET_HEAP
+#if defined(TSAPP_VIRTUAL_HEAP)
+	int n = snprintf(line, cap, "TSAPP-HEAP status=%d virtual unserved=", status);
+#elif defined(TSAPP_SUBLET_HEAP)
 	unsigned long st[9];
 	__capstone_sublet_heap_stats(st);
 	int n = snprintf(line, cap,

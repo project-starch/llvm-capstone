@@ -1,5 +1,12 @@
 # Capstone project documentation
 
+The [virtual application-port baseline](../runtime/virtual/app-ports-result.json)
+adds source-built CPython, PostgreSQL, FFmpeg and tshark to SQLite, mruby and
+Perl. Normal and inner allocator workloads, unchanged spatial/temporal
+fixtures, and the [extended runtime gate](../runtime/virtual/app-ports-security-result.json)
+are recorded separately from historical physical measurements.
+See the [virtual source-build instructions](../ports/common/application/README.md#virtual-source-builds).
+
 The [virtual C execution experiment](plans/virtual-capstone-runtime-r0.md)
 now joins a loadable Linux adapter to the existing QEMU supervision engine.
 It runs a small Capstone-compiled C function on ordinary process mappings,

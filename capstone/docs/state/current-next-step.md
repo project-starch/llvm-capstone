@@ -1,3 +1,14 @@
+Virtual application ports (2026-10-07): preserve the
+[normal/inner workload and safety gates](../../runtime/virtual/app-ports-result.json)
+and [46-check runtime gate](../../runtime/virtual/app-ports-security-result.json).
+The seven existing application ports now have a virtual workload baseline.
+Use fresh source builds with `CAPSTONE_APPLICATION_PROFILE=virtual`; physical
+objects cannot be converted by relinking. CPython's inner revocation profile
+requires `CPY_SUBLET_MODE=1`. Expand upstream workloads and quantify node/page
+budgets before claiming broader application coverage; existing build feature
+restrictions and the VM lifecycle limits remain explicit. MicroPython is not
+part of this migration.
+
 Virtual libc VM-service v2 (2026-10-07): the bounded private-anonymous
 profile is qualified with SQLite, mruby and Perl in the
 [application result](../../runtime/virtual/libc-vm-result.json). Preserve its

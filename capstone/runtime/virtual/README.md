@@ -169,6 +169,24 @@ monotonic launch/elapsed times. These QEMU times are not processor benchmarks.
 
 ## Qualification and limits
 
+The shared application source recipes support a virtual profile for CPython,
+PostgreSQL, FFmpeg and tshark; see the
+[build instructions](../../ports/common/application/README.md#virtual-source-builds).
+The [port result](app-ports-result.json) passes 16/16 normal and 17/17
+inner-allocator checks against native output oracles, and 32/32 configured
+FFmpeg/tshark safety fixtures with their original expectations. Omitting the
+CPython image fails its checks while the other ports complete.
+The virtual heap also implements the internal linear-block interface used by
+FFmpeg pools and tshark wmem chunks. It loans a size-class block while keeping
+a senior revocation handle; returning the block retires derived lifetimes
+before reuse. Its scalar-base return operation belongs to the trusted nested
+allocator ABI. Public `free(pointer)` continues checking the capability and
+rejects loan blocks. Heap counters report actual operations; buddy merges are
+zero because this allocator uses size classes rather than a buddy tree.
+The [extended runtime result](app-ports-security-result.json) passes 46 checks,
+adding linear-block reuse and an exact-site stale-descendant fault to the
+existing VM, thread, recycling and SQLite/mruby/Perl checks.
+
 The [libc VM-service v2 result](libc-vm-result.json) passes 42 checks on the
 recorded QEMU/Linux platform, including SQLite, mruby and Perl. It covers
 page protections, guard pages, requested-length bounds, failed-realloc

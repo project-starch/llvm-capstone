@@ -109,6 +109,9 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -ffunction-sections -fdata-sections -std=c99 -O1 -w -Wno-int-conversion
     -D_XOPEN_SOURCE=700 "${INC[@]}")
 CPY_HEAP_BYTES=${CPY_HEAP_BYTES:-$((48 << 20))}
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+fi
 # The Sublet arm's allocator side. link-cpython-capstone.py links every *.o in
 # this directory, so compiling them here is the whole wiring; nothing in the link
 # step changes. The adapter and its metadata heap are the component port's,
@@ -144,6 +147,9 @@ fi
 COMPILER_RT=$REPO_ROOT/compiler-rt/lib/builtins
 BF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -ffreestanding -fno-builtin -ffunction-sections -fdata-sections -O1 -w -I"$COMPILER_RT")
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  BF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+fi
 rm -f "$CPY_ROOT/builtins"/*.o "$CPY_ROOT/builtins/failed.txt"
 built=0; failed=0
 for f in "$COMPILER_RT"/*.c; do

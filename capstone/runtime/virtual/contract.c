@@ -10,8 +10,12 @@
 #include <setjmp.h>
 #include <errno.h>
 #include <capstone/virtual.h>
+#include "vm.h"
 
 extern int malloc_trim(size_t);
+extern unsigned long __capstone_sublet_malloc_linear(size_t, sublet_cap *);
+extern void __capstone_sublet_free_linear(unsigned long);
+extern void __capstone_sublet_heap_stats(unsigned long [9]);
 static void *volatile stale;
 static jmp_buf jump;
 static __thread unsigned thread_value = 41;
@@ -120,6 +124,35 @@ int main(int argc, char **argv)
                              : : "r"(p + 12288) : "memory");
         }
         fail("VM denial survived");
+    }
+    if (!strcmp(mode, "linear") || !strcmp(mode, "linear-stale")) {
+        sublet_cap loan;
+        unsigned long before[9], after[9];
+        __capstone_sublet_heap_stats(before);
+        unsigned long base = __capstone_sublet_malloc_linear(4096, &loan);
+        require(base && base == sublet_base(&loan) && sublet_end(&loan) >= base + 4096,
+                "linear block grant");
+        char *p = sublet_take(&loan);
+        memset(p, 0x5a, 4096);
+        stale = p;
+        __capstone_sublet_free_linear(base);
+        __capstone_sublet_heap_stats(after);
+        require(after[0] == before[0] + 1 && after[1] == before[1] + 1 &&
+                after[7] == before[7] + 1 && after[2] == 0, "linear block retire counters");
+        char *replacement = malloc(4096);
+        require(replacement != NULL, "linear block reuse");
+        replacement[0] = 23;
+        if (!strcmp(mode, "linear-stale")) {
+            puts("VIRTUAL_LINEAR_ACCESS:stale"); fflush(stdout);
+            __asm__ volatile(".global cap_vm_fault_linear\ncap_vm_fault_linear:\nlbu zero, 0(%0)"
+                             : : "r"(stale) : "memory");
+            fail("linear descendant survived retirement");
+        }
+        require(replacement[0] == 23, "linear replacement live");
+        free(replacement);
+        require(malloc_trim(0), "linear arena release");
+        puts("VIRTUAL_LINEAR_OK");
+        return 0;
     }
     if (!strcmp(mode, "heap-threads")) {
         size_t bytes = 65536;

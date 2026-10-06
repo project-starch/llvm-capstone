@@ -1,0 +1,578 @@
+{
+  "status": "PASS",
+  "versions": {
+    "cpython": "3.13.7",
+    "postgres": "17.5 single-user",
+    "ffmpeg": "9.0.1 configured decoder",
+    "tshark": "4.6.8 offline"
+  },
+  "scope": "One hart; trusted Linux; existing VM-service v2 profile; no new processor or Linux-core change",
+  "normal_workloads": {
+    "status": "PASS",
+    "tests": {
+      "cpython_exit": true,
+      "postgres_exit": true,
+      "ffmpeg-input_exit": true,
+      "ffmpeg-input.flip_exit": true,
+      "tshark_exit": true,
+      "cleanup_exit": true,
+      "cpython_json_gc": true,
+      "postgres_native_rows": true,
+      "ffmpeg_native_frames": true,
+      "ffmpeg_flipped_frames": true,
+      "ffmpeg_input_sensitivity": true,
+      "tshark_native_dns": true,
+      "tshark_missing_input": true,
+      "resources_released": true,
+      "no_unexpected_faults": true,
+      "completed": true
+    },
+    "sha256": {
+      "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+      "cpython": "0a3f72feead4f2a3cf6a8cbbb3e574d601cc2b04414c88bb1a344e86b98bfff2",
+      "cpython_native": "9f3654c5758ed044b92c94a76ea2f9153bd47edca6e6bd1a1a87aa659abfc7a5",
+      "postgres": "df8a482ae5c89f651de877fab60a04fd7a6cbb61a22b54c7ddd56e8a4e39bf78",
+      "ffmpeg": "9448c0c64cf07c4a0488996f6211c005f20cc99140368b18763e6019409971fa",
+      "tshark": "73605852302bcf53dff3831322cb41d0c465365bdeccc543383b4d0616b064eb",
+      "tshark_native": "6424476e5166ca7d4613e93990c8b342fcf71ab1de9dde01c70d23b60f64677d",
+      "capture": "78c3c00e4cb155118468e540a6151ca222fa50edd626daf1582d25e3d79626a1",
+      "launcher": "22ea2c1cfc7579877ab3340e2ee0a25efc2255ce2a62e28d46d7bdfdb7969e65",
+      "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+      "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356",
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+      "input": "7c0964440ad178a0c9a00dba72060322e68bea340715bb247e05d6a815844362",
+      "flipped_input": "27e4bed2f7121a5970f1cbda6551969175ac5f3b6ad035ba7bbcf079124b0aa3",
+      "ffmpeg_reference": "3eebf311c9fae322ef74b8a9bad371eda975852299d620bbf3b3bd7ef466f43a",
+      "ffmpeg_flipped_reference": "a7854e605fb87221563c7b2adca2d769a97a50e0bedea70226f662521c89b293",
+      "pg_reference": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+      "sql": "f4310b7544287f8b1b400fac0820cf3162fe137048bcb940ff92cd158055346c",
+      "cpython_distribution": "c7a5fa4bdccec9374d3e80930df4398d1e87f722075e9dcb8b7e09245b13e129",
+      "postgres_pristine_cluster": "0353a5b9770f056e91d0bc2b4d47a1795e0716b6b0b91a79eabbc28bddaa6aa2",
+      "postgres_share": "9daf98e47cbd295c2467fa2c4a89899777e887b5af0bb606eb536565998d7ac1",
+      "gate_script": "2600de458ce6d961b70af38e585d91fc58c02276750c05472fd1982ed8611c8b"
+    },
+    "omitted_application": null,
+    "stats": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 6803,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 24279,
+      "tag_pages": 0,
+      "node_capacity": 65536,
+      "collections": 0,
+      "nodes_reclaimed": 0
+    },
+    "scope": "Rebuilt virtual SDK application workloads; one hart, private anonymous mappings; Linux trusted"
+  },
+  "inner_workloads": {
+    "status": "PASS",
+    "tests": {
+      "cpython_exit": true,
+      "postgres_exit": true,
+      "ffmpeg-input_exit": true,
+      "ffmpeg-input.flip_exit": true,
+      "tshark_exit": true,
+      "cleanup_exit": true,
+      "cpython_json_gc": true,
+      "cpython_inner_revocation": true,
+      "postgres_native_rows": true,
+      "ffmpeg_native_frames": true,
+      "ffmpeg_flipped_frames": true,
+      "ffmpeg_input_sensitivity": true,
+      "tshark_native_dns": true,
+      "tshark_missing_input": true,
+      "resources_released": true,
+      "no_unexpected_faults": true,
+      "completed": true
+    },
+    "sha256": {
+      "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+      "cpython": "2dd30858482e6fb3d0a6fdfbda0dd48d5de3e8a2349ff5e7ade255fb0f6243a1",
+      "cpython_native": "9f3654c5758ed044b92c94a76ea2f9153bd47edca6e6bd1a1a87aa659abfc7a5",
+      "postgres": "553388ffd6d7adc8fb8586234b413d21621e3006c0305da13140f72d682d5d96",
+      "ffmpeg": "7ca0834601a845d296d72f527f607bc885970da069d48f94e7229acc80857999",
+      "tshark": "d8e4943fd704fa2fbe6d4ab5b78308bf2d600960f805d4483b5afbcbaf85e848",
+      "tshark_native": "6424476e5166ca7d4613e93990c8b342fcf71ab1de9dde01c70d23b60f64677d",
+      "capture": "78c3c00e4cb155118468e540a6151ca222fa50edd626daf1582d25e3d79626a1",
+      "launcher": "22ea2c1cfc7579877ab3340e2ee0a25efc2255ce2a62e28d46d7bdfdb7969e65",
+      "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+      "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356",
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+      "input": "7c0964440ad178a0c9a00dba72060322e68bea340715bb247e05d6a815844362",
+      "flipped_input": "27e4bed2f7121a5970f1cbda6551969175ac5f3b6ad035ba7bbcf079124b0aa3",
+      "ffmpeg_reference": "3eebf311c9fae322ef74b8a9bad371eda975852299d620bbf3b3bd7ef466f43a",
+      "ffmpeg_flipped_reference": "a7854e605fb87221563c7b2adca2d769a97a50e0bedea70226f662521c89b293",
+      "pg_reference": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+      "sql": "f4310b7544287f8b1b400fac0820cf3162fe137048bcb940ff92cd158055346c",
+      "cpython_distribution": "c7a5fa4bdccec9374d3e80930df4398d1e87f722075e9dcb8b7e09245b13e129",
+      "postgres_pristine_cluster": "0353a5b9770f056e91d0bc2b4d47a1795e0716b6b0b91a79eabbc28bddaa6aa2",
+      "postgres_share": "9daf98e47cbd295c2467fa2c4a89899777e887b5af0bb606eb536565998d7ac1",
+      "gate_script": "c1e9b167c75e510136e7e3522bc653bbd47c31501c1d3aaba094a39fee37dbbd"
+    },
+    "omitted_application": null,
+    "stats": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 65278,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 267132,
+      "tag_pages": 0,
+      "node_capacity": 65536,
+      "collections": 8,
+      "nodes_reclaimed": 152003
+    },
+    "scope": "Rebuilt virtual SDK application workloads; one hart, private anonymous mappings; Linux trusted"
+  },
+  "inner_options": {
+    "cpython": "CPY_SUBLET_MODE=1, every free revokes",
+    "postgres": "PGSU_NESTED=sublet",
+    "ffmpeg": "FFAPP_HEAP=sublet FFAPP_POOL=sublet; M5 exit 5",
+    "tshark": "TSAPP_HEAP=chunks"
+  },
+  "postgres_inner_stats": {
+    "arenas": 15,
+    "pages": 15110,
+    "peak": 16365,
+    "nodes": 84772,
+    "steps": 15604,
+    "faults": 7833,
+    "collections": 1,
+    "reclaimed": 53011,
+    "rounds": 1340,
+    "bytes_in": 2042024,
+    "bytes_out": 3248892,
+    "node_bytes": 1048576,
+    "launch_ns": 3020260900,
+    "elapsed_ns": 45932108100
+  },
+  "safety": [
+    {
+      "status": "PASS",
+      "port": "ffmpeg",
+      "arm": "sublet",
+      "completed": true,
+      "results": [
+        {
+          "fixture": 1,
+          "passed": true,
+          "detail": "100001",
+          "image_sha256": "c706e5ea0fea93d26efcdc555cb50e563ec1a24287ae519d4f37c4af4fd442b4"
+        },
+        {
+          "fixture": 2,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "49cc494c954b4418019e52c4cd2c61f5d5d2ff4ff6a56f6c9d22c0f1a49ad75f"
+        },
+        {
+          "fixture": 3,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "b50daf08b3a5cf9c6536661b1f3aed3a898ec63356bbdc786a18ec51432c288f"
+        },
+        {
+          "fixture": 4,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "3fc3f389e8235ae5018ef27c70b3f88ce4cd50b65f5462e9aae70562af3581bf"
+        },
+        {
+          "fixture": 5,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "b31b14c9234009a4c9a7795232b2c5a57b901e797ea8258822194cdc4009d3a0"
+        },
+        {
+          "fixture": 6,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "855b286d44c1e8da7ef7440b9973fdcd69583634e18bc7bc6936e7bca8db2e24"
+        },
+        {
+          "fixture": 7,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "6ef4d83c29016b40bc105840dd368333ca594ff639d4ff7d6b6fd67d45e761cf"
+        },
+        {
+          "fixture": 8,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "f1ab84c242f0afdcec1c9d5639dd1c5ee4cae25244c3dc27c8a0c75d64651e86"
+        },
+        {
+          "fixture": 9,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "ab98ddeb7f8368b449b74129a768180e3d9944726e481d086f9065e040abfc9e"
+        },
+        {
+          "fixture": 10,
+          "passed": true,
+          "detail": "a0005b",
+          "image_sha256": "d8300d8e58eca194873c0da544c7046b58c2f7eb7ab1ad2001fd9d5dbf34f31b"
+        }
+      ],
+      "selected_fixtures": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "predictions_sha256": "a622b5537137e873e28fd186d9971cb1a8806cd8c374ddd1819b67e0c5449955",
+      "gate_sha256": "8ca46373b24f58d18f55850f31374af9900f136ce0d36ca92578730b8b87beb2",
+      "platform_sha256": {
+        "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+        "launcher": "22ea2c1cfc7579877ab3340e2ee0a25efc2255ce2a62e28d46d7bdfdb7969e65",
+        "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+        "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356"
+      }
+    },
+    {
+      "status": "PASS",
+      "port": "ffmpeg",
+      "arm": "poolsublet",
+      "completed": true,
+      "results": [
+        {
+          "fixture": 11,
+          "passed": true,
+          "detail": "b00001",
+          "image_sha256": "3b317307669e48a9f10497b4726c0893cafd5668ad7a4c1460a1efa6960507f2"
+        },
+        {
+          "fixture": 12,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "470589b6e6bafd967639781cd4009e8d148d92a82d726c7d1634c499347df33e"
+        },
+        {
+          "fixture": 13,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "498fcf5587d3fedec256f64cf84ffae92d0f669838931cae828aa70ca24cd212"
+        },
+        {
+          "fixture": 14,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "353bfc8d2bdf1e03b6abd3e41d461fe6b90861fc3f85c8c2edb0535d97760ddf"
+        },
+        {
+          "fixture": 15,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "4e527b30e717f1f95ca19228c654ab93ae8871749da296aa7b43252979c330b1"
+        },
+        {
+          "fixture": 16,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "b3ba0f5bd5f185ecb1fc4aae3d2f91442dd918ecc98f0dc5dfce6809aaedb190"
+        },
+        {
+          "fixture": 17,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "951a9c4af7f798dc84bcc0910b73ca7417a407e2518a4aba672d56c6499ef432"
+        },
+        {
+          "fixture": 20,
+          "passed": true,
+          "detail": "1400800",
+          "image_sha256": "22b5e44cf249e7937ad867d3e2d8c7bf01ba2586f2460be3d819da1ec5b0ccfd"
+        },
+        {
+          "fixture": 21,
+          "passed": true,
+          "detail": "1500800",
+          "image_sha256": "6a07b86b619f1f5fb3e19d650b1947d542210799a0a412f186bb101fa8de1ed6"
+        }
+      ],
+      "selected_fixtures": [
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        20,
+        21
+      ],
+      "predictions_sha256": "a622b5537137e873e28fd186d9971cb1a8806cd8c374ddd1819b67e0c5449955",
+      "gate_sha256": "a5d7f264cc875d3ebde1a81f9cecb195457b12f6cb02298d63fa42a567adff11",
+      "platform_sha256": {
+        "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+        "launcher": "22ea2c1cfc7579877ab3340e2ee0a25efc2255ce2a62e28d46d7bdfdb7969e65",
+        "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+        "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356"
+      }
+    },
+    {
+      "status": "PASS",
+      "port": "wireshark",
+      "arm": "chunks",
+      "completed": true,
+      "results": [
+        {
+          "fixture": 1,
+          "passed": true,
+          "detail": "100001",
+          "image_sha256": "91c8a5aa1b6433996e5f1ed41b39dff014d74598309173406e169dfea1204a38"
+        },
+        {
+          "fixture": 2,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "9e0efc2f0f3b43d273c728f36defad915c26d8d2d40ade6d4a096378f639c7a3"
+        },
+        {
+          "fixture": 3,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "ab7e0747344c4bb2f096b29b418b3ac1cd4ff379a4ee36f1f1585c32817b6bf3"
+        },
+        {
+          "fixture": 4,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "25c8a735aa4dacd783bfbcaf9e9551a407eb0286318496913fea49752b7c250d"
+        },
+        {
+          "fixture": 5,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "5d3cdab7f655cbb8756ed8b61ba2dfd15457b81513d2fb86ee0eb89b7c75aeae"
+        },
+        {
+          "fixture": 6,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "15a8b1e8e622e137369ed1ba4b67bf5f6f7919d63faf138441f9596127046752"
+        },
+        {
+          "fixture": 7,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "f5923f67552bf134698dcc0df786131599f14638b4c98ffb92dab2825d879586"
+        },
+        {
+          "fixture": 8,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "9fef1cc0325973e323087ea101fccc980c4a09f44910a7a9a37dddf88f46e524"
+        },
+        {
+          "fixture": 9,
+          "passed": true,
+          "detail": "90005b",
+          "image_sha256": "7632ec2c739ba216daa2d9637c934cf76a7385fffd3290e157db3642c9dd7ded"
+        },
+        {
+          "fixture": 10,
+          "passed": true,
+          "detail": "a0015b",
+          "image_sha256": "492eee35f2dfbe6a79c69998d761ac60c02fe4428ba2f4d11bac1ce5c093f28a"
+        },
+        {
+          "fixture": 11,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "3081daa445c3080deace6709155fc90ce4689ecfbdb313f2795c6b61dfe739aa"
+        },
+        {
+          "fixture": 12,
+          "passed": true,
+          "detail": "oob",
+          "image_sha256": "0a2518c5925fb357b3a18e64beb07e02e0f9da116d6cb875fce895f4b5c1a0aa"
+        },
+        {
+          "fixture": 13,
+          "passed": true,
+          "detail": "temporal",
+          "image_sha256": "9a3b27c2bb69bc1d704634256f879f8351a47e32c304d7696cb68b8d4fe413b8"
+        }
+      ],
+      "predictions_sha256": "51c618e08144e77eb21ecb0beecb4128db95551c665be6842b39411e65e7b67d"
+    }
+  ],
+  "negative_control": {
+    "passed": true,
+    "omitted": "cpython",
+    "expected_failed_checks": [
+      "cpython_exit",
+      "cpython_json_gc"
+    ],
+    "observed": {
+      "status": "FAIL",
+      "tests": {
+        "cpython_exit": false,
+        "postgres_exit": true,
+        "ffmpeg-input_exit": true,
+        "ffmpeg-input.flip_exit": true,
+        "tshark_exit": true,
+        "cleanup_exit": true,
+        "cpython_json_gc": false,
+        "postgres_native_rows": true,
+        "ffmpeg_native_frames": true,
+        "ffmpeg_flipped_frames": true,
+        "ffmpeg_input_sensitivity": true,
+        "tshark_native_dns": true,
+        "tshark_missing_input": true,
+        "resources_released": true,
+        "no_unexpected_faults": true,
+        "completed": true
+      },
+      "sha256": {
+        "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+        "cpython": "0a3f72feead4f2a3cf6a8cbbb3e574d601cc2b04414c88bb1a344e86b98bfff2",
+        "cpython_native": "9f3654c5758ed044b92c94a76ea2f9153bd47edca6e6bd1a1a87aa659abfc7a5",
+        "postgres": "df8a482ae5c89f651de877fab60a04fd7a6cbb61a22b54c7ddd56e8a4e39bf78",
+        "ffmpeg": "9448c0c64cf07c4a0488996f6211c005f20cc99140368b18763e6019409971fa",
+        "tshark": "73605852302bcf53dff3831322cb41d0c465365bdeccc543383b4d0616b064eb",
+        "tshark_native": "6424476e5166ca7d4613e93990c8b342fcf71ab1de9dde01c70d23b60f64677d",
+        "capture": "78c3c00e4cb155118468e540a6151ca222fa50edd626daf1582d25e3d79626a1",
+        "launcher": "22ea2c1cfc7579877ab3340e2ee0a25efc2255ce2a62e28d46d7bdfdb7969e65",
+        "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+        "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "input": "7c0964440ad178a0c9a00dba72060322e68bea340715bb247e05d6a815844362",
+        "flipped_input": "27e4bed2f7121a5970f1cbda6551969175ac5f3b6ad035ba7bbcf079124b0aa3",
+        "ffmpeg_reference": "3eebf311c9fae322ef74b8a9bad371eda975852299d620bbf3b3bd7ef466f43a",
+        "ffmpeg_flipped_reference": "a7854e605fb87221563c7b2adca2d769a97a50e0bedea70226f662521c89b293",
+        "pg_reference": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+        "sql": "f4310b7544287f8b1b400fac0820cf3162fe137048bcb940ff92cd158055346c",
+        "cpython_distribution": "c7a5fa4bdccec9374d3e80930df4398d1e87f722075e9dcb8b7e09245b13e129",
+        "postgres_pristine_cluster": "0353a5b9770f056e91d0bc2b4d47a1795e0716b6b0b91a79eabbc28bddaa6aa2",
+        "postgres_share": "9daf98e47cbd295c2467fa2c4a89899777e887b5af0bb606eb536565998d7ac1",
+        "gate_script": "2600de458ce6d961b70af38e585d91fc58c02276750c05472fd1982ed8611c8b"
+      },
+      "omitted_application": "cpython",
+      "stats": {
+        "version": 1,
+        "live_domains": 0,
+        "live_regions": 0,
+        "live_bytes": 0,
+        "cached_bytes": 0,
+        "poisoned_blocks": 0,
+        "nodes_high_water": 6541,
+        "nodes_live": 0,
+        "nodes_retired": 0,
+        "nodes_allocated_total": 17476,
+        "tag_pages": 0,
+        "node_capacity": 65536,
+        "collections": 0,
+        "nodes_reclaimed": 0
+      },
+      "scope": "Rebuilt virtual SDK application workloads; one hart, private anonymous mappings; Linux trusted"
+    }
+  },
+  "host_checks": {
+    "safety_classifier_passed": 2,
+    "common_passed": 30,
+    "common_skipped": 1,
+    "physical_build_passed": true,
+    "invalid_inherited_sdk_ignored": true,
+    "specialized_wrapper_rejection_passed": true
+  },
+  "builds": {
+    "cpython": {
+      "profile": "virtual",
+      "heap": "virtual",
+      "nested": "none",
+      "recipe_revision": "320ba350f278d22857aa8cbb1d3610f3ba56057b",
+      "runtime_dirty": true,
+      "image_sha256": "0a3f72feead4f2a3cf6a8cbbb3e574d601cc2b04414c88bb1a344e86b98bfff2",
+      "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+      "runtime_archive_sha256": "0a472150d709b3d0fe85fcf70a1cdfb8b501d4d0a335115744e0acf66d9ad716",
+      "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e"
+    },
+    "postgres": {
+      "profile": "virtual",
+      "heap": "virtual",
+      "nested": "none",
+      "recipe_revision": "320ba350f278d22857aa8cbb1d3610f3ba56057b",
+      "runtime_dirty": true,
+      "image_sha256": "df8a482ae5c89f651de877fab60a04fd7a6cbb61a22b54c7ddd56e8a4e39bf78",
+      "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+      "runtime_archive_sha256": "0a472150d709b3d0fe85fcf70a1cdfb8b501d4d0a335115744e0acf66d9ad716",
+      "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e"
+    },
+    "ffmpeg": {
+      "profile": "virtual",
+      "heap": "virtual",
+      "nested": "none",
+      "recipe_revision": "320ba350f278d22857aa8cbb1d3610f3ba56057b",
+      "runtime_dirty": true,
+      "image_sha256": "9448c0c64cf07c4a0488996f6211c005f20cc99140368b18763e6019409971fa",
+      "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+      "runtime_archive_sha256": "0a472150d709b3d0fe85fcf70a1cdfb8b501d4d0a335115744e0acf66d9ad716",
+      "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e"
+    },
+    "tshark": {
+      "profile": "virtual",
+      "heap": "virtual",
+      "nested": "none",
+      "recipe_revision": "320ba350f278d22857aa8cbb1d3610f3ba56057b",
+      "runtime_dirty": true,
+      "image_sha256": "73605852302bcf53dff3831322cb41d0c465365bdeccc543383b4d0616b064eb",
+      "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+      "runtime_archive_sha256": "0a472150d709b3d0fe85fcf70a1cdfb8b501d4d0a335115744e0acf66d9ad716",
+      "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e"
+    },
+    "cpython-inner": {
+      "profile": "virtual",
+      "heap": "virtual",
+      "nested": "cpython",
+      "recipe_revision": "320ba350f278d22857aa8cbb1d3610f3ba56057b",
+      "runtime_dirty": true,
+      "image_sha256": "2dd30858482e6fb3d0a6fdfbda0dd48d5de3e8a2349ff5e7ade255fb0f6243a1",
+      "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+      "runtime_archive_sha256": "8737a35ba8c990320c50f6534856e309d798e8c12bff3c575b46932258a9743d",
+      "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e"
+    },
+    "postgres-inner": {
+      "profile": "virtual",
+      "heap": "virtual",
+      "nested": "postgres",
+      "recipe_revision": "320ba350f278d22857aa8cbb1d3610f3ba56057b",
+      "runtime_dirty": true,
+      "image_sha256": "553388ffd6d7adc8fb8586234b413d21621e3006c0305da13140f72d682d5d96",
+      "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+      "runtime_archive_sha256": "fdaed7db6f88a72d5e8b7945aa2922f708a74a7f20b6e9bb05e1dc9c686536f1",
+      "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e"
+    }
+  },
+  "gate_source_sha256": {
+    "capstone/runtime/virtual/run-ports.py": "6a25a4b03cfbf98c89f1c0c4fc4a9b5d829461b5451f0c5c142feae8f020af6f",
+    "capstone/runtime/virtual/run-safety.py": "6a9cafddb4d43eba5c573359cb0f04d43cc15f9f2748d0d5154cf7aa753691c9",
+    "capstone/runtime/virtual/run-staged.py": "dfa0d4547d2dc373a33895f95ca5f6c7753856bc63c9ec2b9d3e129f79070514",
+    "capstone/ports/common/application/check-safety.py": "2383068cba315c630dcfc063042f814db4a9214f20bc9e89f7da08a495d333f5"
+  },
+  "exclusions": [
+    "MicroPython",
+    "optional FFmpeg filter fixtures 18, 19, 22, 23, 30\u201333",
+    "complete POSIX, RTL and performance qualification"
+  ]
+}

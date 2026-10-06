@@ -61,10 +61,12 @@ bash "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh" \
   -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" -DCAPSTONE_APPLICATION_STACK_BYTES="$STACK" \
   -DCMAKE_C_FLAGS_RELEASE="-O1 -DCAPSTONE_LEVEL0_STATS -DCAPSTONE_SUBLET_HEAP_STATS ${HEAPF[*]}"
 export CAPSTONE_SDK=$SDK
+PROFILEF=()
+[[ ${CAPSTONE_APPLICATION_PROFILE:-physical} != virtual ]] || PROFILEF=(-DTSAPP_VIRTUAL_HEAP)
 RT=() HEAPOBJ=()
 if [[ $HEAP == sublet || $HEAP == chunks ]]; then
   WMEMF=(); [[ $HEAP == chunks ]] && WMEMF=(-DTSAPP_WMEM_CHUNKS)
-  "$SDK/capstone-cc" -O1 -DTSAPP_SUBLET_HEAP "${WMEMF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
+  "$SDK/capstone-cc" -O1 "${PROFILEF[@]}" -DTSAPP_SUBLET_HEAP "${WMEMF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
   # wmem's block allocators from patch 0007, with their own ninja commands (less the dependency
   # files, which would overwrite ninja's record), on copies: the cross-built tree stays as it is.
   mkdir -p "$OUT/wmem-src/wsutil/wmem"
@@ -118,7 +120,7 @@ PY
     HEAPOBJ+=("$OUT/$f.o")
   done
 else
-  "$SDK/capstone-cc" -O1 -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
+  "$SDK/capstone-cc" -O1 "${PROFILEF[@]}" -c "$APP/src/tsapp-heap.c" -o "$OUT/tsapp-heap.o"
 fi
 
 link() {  # out-image tshark-object [runtime objects...]
