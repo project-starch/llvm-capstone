@@ -1,13 +1,14 @@
 {
-  "case": 6,
-  "upstream_fix": "a61592253e",
-  "title": "a cache entry outlives the decoding context its memory came from",
-  "consumer": "src/backend/replication/pgoutput/pgoutput.c",
+  "case": 2,
+  "upstream_fix": "ed394c4bdf",
+  "title": "a partition set freed through one alias and read through another",
+  "consumer": "src/backend/optimizer/util/inherit.c",
   "live_in_pin": true,
-  "live_proof": "inspection at the 17.0 pin: src/backend/replication/pgoutput/pgoutput.c:429 makes data->cachectx a child of the decoding context ctx->context, and :857 makes each entry->entry_cxt a grandchild, while RelationSyncCache is a static (:210) initialised into CacheMemoryContext at :524. The comment at :1698-1701 states that cachectx is deliberately not cleaned because the decoding machinery will free it, and pgoutput_shutdown:1703 destroys only the hash. An error path that tears down ctx->context without running that shutdown therefore leaves the long-lived cache pointing into a dead arena. The pre-fix shape is present.",
-  "object": "a row filter allocated in entry_cxt, a grandchild of the decoding context",
-  "lifetime_ender": "an error tears down the decoding context while RelationSyncCache keeps pointing into it",
-  "shape": "stale pointer into a deleted ancestor",
+  "live_proof": "inspection: the pre-fix shape is present in REL_17_0 src/backend/optimizer/util/inherit.c; nothing is reverted to reproduce it (PROVENANCE.md)",
+  "object": "the RelOptInfo's live_parts Bitmapset",
+  "lifetime_ender": "bms_del_member frees the set through the field when the last member goes",
+  "shape": "alias freed through a sibling",
+  "sibling_issue": "04_727bc6ac33f6_child_sjinfo_shared_relids",
   "allocator_layer": "aset",
   "fidelity": "model-consumer, real allocator",
   "arms": {
@@ -28,7 +29,8 @@
       "si_code": 2
     },
     "native-detect": {
-      "status": "not written"
+      "oracle": "stale-read-returns-other-object",
+      "note": "ASan cannot fire here and its silence is not a finding; the discriminating arm is Valgrind, reported SKIPPED when it cannot run"
     },
     "cheribsd-revocation": {
       "oracle": "completes with no capability fault; the case's own PG_DEFECT probe prints twice, so the defective sequence provably executed -- REACHED-SILENT (2026-10-05, plain purecap, revocation=1 every_free=0). A use-after-free between two palloc chunks never crosses a malloc boundary, so there is nothing for a malloc-granular revoker to reclaim.",

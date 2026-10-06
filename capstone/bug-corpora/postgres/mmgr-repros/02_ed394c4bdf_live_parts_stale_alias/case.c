@@ -1,6 +1,6 @@
 #include "corpus.h"
 
-PG_CASE(3) {
+PG_CASE(2) {
 /* Row 4 -- expand_partitioned_rtentry, fix ed394c4bdf. One Bitmapset, two
  * aliases; bms_del_member frees it through the field when the last member
  * goes, and the loop keeps reading the local. */

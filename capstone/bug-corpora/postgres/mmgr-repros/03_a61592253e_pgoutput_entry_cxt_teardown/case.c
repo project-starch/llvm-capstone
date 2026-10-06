@@ -1,6 +1,6 @@
 #include "corpus.h"
 
-PG_CASE(6) {
+PG_CASE(3) {
 /* Row 7 -- pgoutput, fix a61592253e. entry_cxt is a grandchild of the decoding
  * context; an error tears that down, while RelationSyncCache lives in
  * CacheMemoryContext and keeps pointing into the dead arena. */

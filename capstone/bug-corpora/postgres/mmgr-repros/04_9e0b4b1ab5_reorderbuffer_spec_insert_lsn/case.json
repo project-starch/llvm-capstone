@@ -1,15 +1,14 @@
 {
-  "case": 3,
-  "upstream_fix": "ed394c4bdf",
-  "title": "a partition set freed through one alias and read through another",
-  "consumer": "src/backend/optimizer/util/inherit.c",
+  "case": 4,
+  "upstream_fix": "9e0b4b1ab5",
+  "title": "the reorder buffer reads a change record it returned to the slab",
+  "consumer": "src/backend/replication/logical/reorderbuffer.c",
   "live_in_pin": true,
-  "live_proof": "inspection: the pre-fix shape is present in REL_17_0 src/backend/optimizer/util/inherit.c; nothing is reverted to reproduce it (PROVENANCE.md)",
-  "object": "the RelOptInfo's live_parts Bitmapset",
-  "lifetime_ender": "bms_del_member frees the set through the field when the last member goes",
-  "shape": "alias freed through a sibling",
-  "sibling_issue": "04_727bc6ac33f6_child_sjinfo_shared_relids",
-  "allocator_layer": "aset",
+  "live_proof": "inspection: verified in REL_17_0 with the defect given by line in PROVENANCE.md; nothing is reverted",
+  "object": "a ReorderBufferChange record from a Slab context",
+  "lifetime_ender": "ReorderBufferReturnChange puts it back on the slab's LIFO free list",
+  "shape": "same-address reuse from a fixed-size free list",
+  "allocator_layer": "slab",
   "fidelity": "model-consumer, real allocator",
   "arms": {
     "spatial": {
@@ -29,7 +28,7 @@
       "si_code": 2
     },
     "native-detect": {
-      "oracle": "stale-read-returns-other-object",
+      "oracle": "stale-read-returns-successor-lsn",
       "note": "ASan cannot fire here and its silence is not a finding; the discriminating arm is Valgrind, reported SKIPPED when it cannot run"
     },
     "cheribsd-revocation": {

@@ -1,6 +1,6 @@
 #include "corpus.h"
 
-PG_CASE(7) {
+PG_CASE(4) {
 /* Row 8 -- reorderbuffer, fix 9e0b4b1ab5. The change record comes from a Slab
  * context, so the free list is LIFO with one chunk size and the next
  * allocation returns the identical address every time.
