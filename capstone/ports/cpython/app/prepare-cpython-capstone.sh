@@ -172,9 +172,58 @@ rm -f "$COMBINED"
 printf 'CREATE %s\nADDLIB %s\nADDLIB %s\nSAVE\nEND\n' \
   "$COMBINED" "$LIBC_ARCHIVE" "$CPY_ROOT/libclang_rt.builtins.a" | "$LLVM_AR" -M
 
+# ---- the heap this image links -----------------------------------------
+# CPYD_HEAP names the arm, because the arm is the heap plus whether the port's
+# own nested allocator is sublet too, and a result that names only the knob
+# cannot be read later (docs/ref/runtime-terms-glossary.md section 6):
+#
+#   none             level0 heap with per-object bounds OFF   sysalloc-none
+#   bounds           level0 heap as applications get it       sysalloc-bounds
+#   sublet           the Sublet heap, pymalloc NOT sublet     sysalloc-sublet
+#   sublet-pymalloc  the Sublet heap AND patch 0014           sublet-pymalloc
+#
+# The last two differ by one thing only: whether pymalloc's own pools and
+# arenas are issued and revoked. That difference is what a nested-allocator
+# corpus measures, so the two must be separate images and not one.
+#
+# UNSET IS THE OLD BEHAVIOUR, byte for byte: no CAPSTONE_APPLICATION_HEAP (the
+# CMake default is level0), no bounds macro, and CPY_SUBLET alone decides 0014.
+# An earlier arm built that way was level0 + 0014 and was CALLED "sublet"; it is
+# not sublet-pymalloc, because its system heap was never the Sublet one.
 SDK_FLAGS=()
+if [[ -n ${CPYD_HEAP:-} ]]; then
+  case "$CPYD_HEAP" in
+    none)            APP_HEAP=level0; APP_BOUNDS=0; WANT_0014=0 ;;
+    bounds)          APP_HEAP=level0; APP_BOUNDS=1; WANT_0014=0 ;;
+    sublet)          APP_HEAP=sublet; APP_BOUNDS=1; WANT_0014=0 ;;
+    sublet-pymalloc) APP_HEAP=sublet; APP_BOUNDS=1; WANT_0014=1 ;;
+    *) echo "CPYD_HEAP=$CPYD_HEAP? (none, bounds, sublet, sublet-pymalloc)" >&2; exit 2 ;;
+  esac
+  # Refuse a contradiction rather than silently preferring one of them: an arm
+  # built from a heap it did not ask for is the mistake this project has made
+  # most often.
+  if [[ -n ${CPY_SUBLET:-} && ${CPY_SUBLET} != "$WANT_0014" ]]; then
+    echo "CPYD_HEAP=$CPYD_HEAP implies CPY_SUBLET=$WANT_0014, but CPY_SUBLET=$CPY_SUBLET was set" >&2
+    exit 2
+  fi
+  CPY_SUBLET=$WANT_0014
+  SDK_FLAGS+=(-DCAPSTONE_APPLICATION_HEAP="$APP_HEAP")
+  if [[ $APP_HEAP == sublet ]]; then
+    # CONTEXTS=1 is not a tuning choice, it is required. At the default 15,
+    # REGION_DATA is 16 * 256 KiB = exactly 4.00 MiB, which is the buddy
+    # allocator's largest block, and capstone-exec then fails with "cannot
+    # allocate launch regions". An earlier Sublet build here hit that and had
+    # its SDK rebuilt by hand afterwards because prepare offered no hook; the
+    # hook is this block, so the flag belongs here rather than in a caller.
+    SDK_FLAGS+=(-DCAPSTONE_APPLICATION_CONTEXTS=1)
+  fi
+  if [[ $APP_BOUNDS == 0 ]]; then
+    SDK_FLAGS+=(-DCMAKE_C_FLAGS_RELEASE="-O1 -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0")
+  fi
+  log "arm $CPYD_HEAP: application heap $APP_HEAP, per-object bounds $APP_BOUNDS, pymalloc-under-sublet $WANT_0014"
+fi
 if [[ ${CPY_SUBLET:-0} == 1 ]]; then
-  SDK_FLAGS=(-DCAPSTONE_APPLICATION_GRANT_BYTES=83886080)
+  SDK_FLAGS+=(-DCAPSTONE_APPLICATION_GRANT_BYTES=83886080)
 fi
 bash "$PORTS_DIR/common/application/build-sdk.sh" "$RT" "$MUSL_DIR" "$COMBINED" \
   -DCAPSTONE_APPLICATION_ARENA_BYTES="$CPY_HEAP_BYTES" "${SDK_FLAGS[@]}"

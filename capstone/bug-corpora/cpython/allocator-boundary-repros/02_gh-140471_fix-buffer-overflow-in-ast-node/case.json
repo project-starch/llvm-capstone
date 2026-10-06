@@ -1,0 +1,26 @@
+{
+  "case": 2,
+  "upstream_fix": "gh-140471",
+  "title": "[3.13] gh-140471: Fix buffer overflow in AST node initialization with malformed `_fields` (GH-140506) (#140510)",
+  "consumer": "unknown.c",
+  "class": "spatial",
+  "trigger": "trigger.py",
+  "live_in_pin": true,
+  "live_proof": "measured, not asserted: the trigger runs on the pinned 3.13.7 ASan build (PYTHONMALLOC=malloc, ASAN_OPTIONS=detect_leaks=0) and reports ASAN:heap-buffer-overflow in a 97-byte region. Running it is the liveness proof -- a sanitizer report here means the defect is present in this tree.",
+  "fidelity": "the trigger is upstream's own reproducer from the issue, run through the real interpreter rather than reduced to a C model. What it does NOT establish is which arm ought to catch it.",
+  "allocator_layer": "pymalloc",
+  "allocator_consumed": "yes",
+  "layer_note": "",
+  "arms": {
+    "spatial": {
+      "status": "not written"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "host oracle measured 2026-10-06 on the pinned ASan build; no arm has been run"
+}

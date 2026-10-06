@@ -1,0 +1,26 @@
+{
+  "case": 21,
+  "upstream_fix": "gh-146169",
+  "title": "Segfault/UB from expat when re-entering the XML Parser",
+  "consumer": "unknown.c",
+  "class": "temporal",
+  "trigger": "trigger.py",
+  "live_in_pin": true,
+  "live_proof": "measured, not asserted: the trigger runs on the pinned 3.13.7 ASan build (PYTHONMALLOC=malloc, ASAN_OPTIONS=detect_leaks=0) and reports ASAN:heap-use-after-free in a 524288-byte region. Running it is the liveness proof -- a sanitizer report here means the defect is present in this tree.",
+  "fidelity": "the trigger is upstream's own reproducer from the issue, run through the real interpreter rather than reduced to a C model. What it does NOT establish is which arm ought to catch it.",
+  "allocator_layer": "libc malloc (the object never reaches a pymalloc pool)",
+  "allocator_consumed": "no",
+  "layer_note": "",
+  "arms": {
+    "spatial": {
+      "status": "not written"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "host oracle measured 2026-10-06 on the pinned ASan build; no arm has been run"
+}

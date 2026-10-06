@@ -1,0 +1,35 @@
+{
+  "program": "cpython",
+  "boundary": "which allocator owns the object the defect touches: pymalloc (nested) or libc malloc (non-nested). Decided per case by MEASUREMENT, not by the object's size -- the ASan heap report is run twice and the question is whether it SURVIVES PYTHONMALLOC=pymalloc",
+  "title": "CPython 3.13.7 spatial defects at the pymalloc boundary, plus temporal and spatial defects whose memory comes straight from libc malloc",
+  "upstream": {
+    "version": "3.13.7",
+    "port": "capstone/ports/cpython/pymalloc"
+  },
+  "cases": 21,
+  "case_schema": "script-trigger",
+  "case_number_base": 1,
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "cheribsd-revocation"
+  ],
+  "status": "built",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "true": 21
+  },
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "related": [
+    "capstone/bug-corpora/cpython/pymalloc-repros",
+    "capstone/ports/cpython/pymalloc"
+  ],
+  "advisories": [],
+  "note": "A sibling of pymalloc-repros, not an addition to it. That corpus is scoped to consumer-side TEMPORAL defects whose memory comes from pymalloc and asserts completeness -- 20 cases, expect_live_in_pin {true: 20}, and a shape_prose regex matching \"[Tt]wenty reports\" in its README -- so adding a spatial or a libc-malloc case there would falsify the claim and break its own prose check. Its 20 cover the temporal/nested cell; these 21 are the other three cells: 13 spatial/nested, 5 spatial/non-nested, 3 temporal/non-nested. Liveness and the nested/non-nested side are both measured on the pinned ASan build and nothing here is inferred from a commit message or a CPE. The arms are named as pymalloc-repros names them, so the two corpora read side by side: spatial is base Capstone, sublet is the same heap plus patch 0014. No arm has been run, so every arm is declared \"not written\" and status is built rather than measured.",
+  "runners": [
+    "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/build-arms.sh",
+    "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/run-arm.sh",
+    "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/run-all.sh",
+    "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/analyse.py"
+  ]
+}

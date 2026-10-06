@@ -159,6 +159,8 @@ passes silently.
 | `sublet-malloc` | Capstone domain | the nested corpora: Sublet ONLY as the system allocator, the program's nested allocator stock -- wmem as released (`WM_VARIANT=reference`, every `g_malloc` a region, every `g_free` a revoke; positive control `wmem-repros/controls/sublet-malloc`), memcached's ledger in mode 2 (a chunk carries its page's bound, nothing revoked until a page or object is given back), FFmpeg's pools unported on the Sublet heap (`poolstock`). Column 2 of the per-bug table |
 | `sublet-full` | Capstone domain | a plain case built in the program's whole Sublet configuration: the Sublet heap plus the program's nested-allocator port linked and initialised (tshark's is `sublet-chunks`). The bug's path never enters the nested allocator, so this equals `sublet` by construction; the run confirms no interaction. Column 3 for plain cases |
 | `sublet-carve` | Capstone domain | the carved corpus: `-DFFC_SUBLET_CARVE` takes the block LINEAR from the Sublet heap and splits it into one region per carve, each issued as a bounded alias (a re-carve revokes the old aliases); a temporal carve control must fault in the same boot. Column 3 for carved cases |
+| `sublet-svheads` | Capstone domain | the same for Perl: `sysalloc-sublet` plus Perl's SV head arena |
+| `sublet-pymalloc` | Capstone domain | the same for CPython: `sysalloc-sublet` plus pymalloc's pools and arenas, via patch 0014. The difference between this arm and `sysalloc-sublet` is what sublets the nested allocator rather than only the allocation under it, which is the whole comparison a nested/non-nested corpus exists to make |
 
 The four above are the glossary's system-allocator arms
 (`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the

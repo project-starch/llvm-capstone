@@ -131,6 +131,7 @@ ARM_ORACLES = {
     "sublet-malloc": {"oracle"},
     "sublet-full": {"oracle"},
     "sublet-carve": {"oracle"},
+    "sublet-pymalloc": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),
