@@ -37,5 +37,7 @@
   },
   "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",
   "sibling_issue": "02_83ce20d671_tidstore_context_deleted_first",
-  "distinguishing": "the caller's field is stale here; case 2 is the callee's own local, a separate defect at the same site fixed ten months earlier"
+  "distinguishing": "the caller's field is stale here; case 2 is the callee's own local, a separate defect at the same site fixed ten months earlier",
+  "nested": true,
+  "nested_why": "The object comes from PostgreSQL's own memory manager -- a chunk aset.c or slab.c carved out of a block it took from malloc -- so the defect is nested by the allocator that served it."
 }

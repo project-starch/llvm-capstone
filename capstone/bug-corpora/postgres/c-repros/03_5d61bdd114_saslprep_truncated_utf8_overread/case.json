@@ -27,5 +27,7 @@
       "oracle": "AddressSanitizer: heap-buffer-overflow, READ of size 1, \"0 bytes to the right of 4-byte region\", in pg_utf8_islegal (shared/upstream_saslprep.c:45, the `a = source[2]` arm) called from pg_utf8_string_len (:96) from case.c:38. The 4-byte region is the malloc'd password \"pw\\xE2\" with its terminator, so the overread is exactly one byte past the allocation -- pg_utf_mblen returned 3 for the 0xE2 at offset 2. Host build, 2026-10-06."
     }
   },
-  "status": "reproduced on the host under ASan and run on the purecap arm 2026-10-06, where it is REACHED-SILENT for a measured reason (size-class bounds rounding); both Capstone arms are built and awaiting a run"
+  "status": "reproduced on the host under ASan and run on the purecap arm 2026-10-06, where it is REACHED-SILENT for a measured reason (size-class bounds rounding); both Capstone arms are built and awaiting a run",
+  "nested": false,
+  "nested_why": "The object comes straight from libc malloc. Nothing carves it out of a larger block, so it is not nested. libpq does have a nested allocator of its own, pqResultAlloc's PGresult blocks, but none of these five touches that storage."
 }

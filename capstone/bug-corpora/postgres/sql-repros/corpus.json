@@ -35,7 +35,6 @@
     "capstone/bug-corpora/postgres/sql-repros/results/20261005"
   ],
   "runners": [
-    "capstone/ports/postgres/app/build-domain.sh",
-    "capstone/ports/common/application/run.py"
+    "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py"
   ]
 }

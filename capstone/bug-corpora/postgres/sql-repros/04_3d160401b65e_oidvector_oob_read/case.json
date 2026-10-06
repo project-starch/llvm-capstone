@@ -23,5 +23,7 @@
     }
   },
   "status": "spatial and sublet run 2026-10-05 on the Capstone application VM; cheribsd-revocation run 2026-10-04",
-  "advisory": "CVE-2026-2003"
+  "advisory": "CVE-2026-2003",
+  "nested": true,
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
 }

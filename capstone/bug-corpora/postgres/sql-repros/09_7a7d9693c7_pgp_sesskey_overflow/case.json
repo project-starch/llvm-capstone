@@ -20,5 +20,7 @@
       "status": "not written"
     }
   },
-  "status": "collected 2026-10-06; not yet run -- needs a slot on the Capstone application VM"
+  "status": "collected 2026-10-06; not yet run -- needs a slot on the Capstone application VM",
+  "nested": true,
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
 }

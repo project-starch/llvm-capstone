@@ -22,5 +22,7 @@
       "oracle": "SIGPROT on the plain purecap build -- CHERI-DETECTED (2026-10-04). SIGPROT(34) on BOTH the plain and the cassert purecap build. ~32 KB overflow leaves the malloc block, so the capability bound is crossed."
     }
   },
-  "status": "spatial and sublet run 2026-10-05 on the Capstone application VM; cheribsd-revocation run 2026-10-04"
+  "status": "spatial and sublet run 2026-10-05 on the Capstone application VM; cheribsd-revocation run 2026-10-04",
+  "nested": true,
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
 }

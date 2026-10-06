@@ -27,5 +27,7 @@
       "oracle": "AddressSanitizer: heap-buffer-overflow, READ of size 1, \"0 bytes to the right of 24-byte region\", in pgclient_consume_content (the next streamer) called from case.c:58. The 24-byte region is the input chunk and 24 is pad_bytes_expected. Two notes print first and establish the mechanism rather than asserting it: remaining_len=0 and data_past_end=1, i.e. bbstreamer_buffer_until consumed the whole chunk and left `data` exactly one past its end, which is the pointer bbstreamer_tar.c:225 then forwards. Host build, 2026-10-06."
     }
   },
-  "status": "reproduced on the host under ASan and CHERI-DETECTED on the purecap arm, both 2026-10-06; both Capstone arms are built and awaiting a run"
+  "status": "reproduced on the host under ASan and CHERI-DETECTED on the purecap arm, both 2026-10-06; both Capstone arms are built and awaiting a run",
+  "nested": false,
+  "nested_why": "The object comes straight from libc malloc. Nothing carves it out of a larger block, so it is not nested. libpq does have a nested allocator of its own, pqResultAlloc's PGresult blocks, but none of these five touches that storage."
 }
