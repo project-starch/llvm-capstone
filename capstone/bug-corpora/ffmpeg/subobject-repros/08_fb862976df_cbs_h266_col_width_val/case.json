@@ -1,0 +1,57 @@
+{
+  "case": 8,
+  "upstream_fix": "fb862976df",
+  "title": "the uniform-tile-spacing loop guards itself with num_tile_columns, which is assigned only after the loop, so the guard can never fire",
+  "consumer": "libavcodec/cbs_h266_syntax_template.c:1899-1912, pps()",
+  "object": "H266RawPPS, one allocation holding col_width_val and row_height_val adjacently (libavcodec/cbs_h266.h:594-595)",
+  "lifetime_ender": "NONE -- the object is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "the in-loop check tests num_tile_columns, which holds a stale value throughout because it is assigned from i only after the loop; the real counter i is tested nowhere, so the writes run past col_width_val into row_height_val",
+  "allocator_layer": "the object IS one allocation and the crossing is interior to it. There is no inner allocator and nothing sub-allocated the crossed region, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED. Recorded explicitly because the tally is per corpus and case.json carries no nested field.",
+  "fidelity": "real allocator, model consumer. VVC_MAX_TILE_COLUMNS and VVC_MAX_TILE_ROWS are enum constants in libavcodec/vvc.h and are REDUCED to 20 each: the defect is that the bound check is keyed to a stale counter, so the array's real length changes only how many iterations it takes to leave. The stale guard is reproduced in the buggy arm rather than deleted, so the arms differ by its key.",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source: n9.0.1:libavcodec/cbs_h266_syntax_template.c contains the FIXED form `i == VVC_MAX_TILE_COLUMNS` (1 occurrence) and the pre-fix `num_tile_columns > VVC_MAX_TILE_COLUMNS` 0 times. Two-sided. A fix-reversal.",
+  "distinguishing": "this is the GATE-THAT-CANNOT-FIRE shape in upstream code -- a guard that is present, reads correct, and is keyed to a variable the loop does not update. The two arms therefore differ by the guard's KEY, not by the presence of a guard, which is what makes the reading about the defect rather than about adding a check. No other case in this corpus has that shape.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED: the sequence completes. The crossing is interior to one allocation, which the case asserts on the offsets, so a per-allocation bound is in bounds for it. NOT YET MEASURED: this corpus has no capstone-domain runner; cases 0-2 got their reading from probe cases 40-42 of ports/ffmpeg/buffer-pool/security-tests, and the same seam is where these will be measured. ARENA CAVEAT, stated rather than left implicit: this corpus's driver hands the port's av_malloc ONE arena (shared/driver.c calls ff2_memory_init on an aligned_alloc) and src/shared/metadata-allocator.c:26 carves it by bumping a cursor, returning a raw interior pointer and rounding every request up to 64 bytes. __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. So on this harness there is NO per-allocation bound on the struct at all, and a completion here is weaker evidence than 'the bound is the whole allocation' would be. The sub-object claim does not depend on that -- the crossing is interior by construction, which the case asserts on the offsets -- but the arm must not be read as a measured per-allocation bound.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: the sequence completes, identically to the spatial arm. Sublet is revocation and has nothing to fire on -- no lifetime ends in any of these cases, and nothing is freed. NOT YET MEASURED, same reason as the spatial arm.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: completes. Mode 0 bounds an allocation and the crossing is inside one. Unmeasurable on this host, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 FATAL_ERRORs without CHERI_SDK and CHERI_SYSROOT.",
+      "status": "predicted",
+      "note": "signal and si_code are null BECAUSE this arm predicts a COMPLETION -- there is no fault to carry a code. Copying a fault code onto a completing arm would read as a measured fault. UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: completes, for the mode-0 reason plus the absence of any lifetime event for the temporal half to act on.",
+      "status": "predicted",
+      "signal": null,
+      "si_code": null,
+      "note": "signal and si_code are null BECAUSE this arm predicts a COMPLETION -- there is no fault to carry a code. Copying a fault code onto a completing arm would read as a measured fault. UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them."
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, NOT MEASURED: completes. CHERI bounds what malloc handed out, and the crossing is interior to it. The prediction is recorded BEFORE the run so a refutation is visible: the memcached plain-heap case predicted a CATCH on a similar argument and was refuted, because CheriBSD's malloc bounds to the allocator's usable size rather than the request. That mechanism cannot rescue this row -- an interior crossing is interior under either policy -- but the reading will be taken, not derived.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "MEASURED two-sided 2026-10-06, results/20261006-native-subobject-7/: NO ASan report, and the arm also prints the value it crossed into, so the silence is not the access failing to happen. The positive control fires in the same probe: asan-probe-7.c's 'past' arm, one uint32 past the whole allocation, reports heap-buffer-overflow and exits 1. Built -O0, which is load-bearing -- at -O1 the dead stores are optimised away and the control cannot fire. The probe allocates with plain malloc rather than the port's arena, deliberately: inside a case binary av_malloc carves one arena, so ASan could not see an allocation bound even in principle and a silence there would prove nothing. DETECTOR NOTE: the first run of this probe read as a detection on ALL arms because it grepped for the string 'AddressSanitizer' while the probe leaked, and LeakSanitizer's summary line contains that string. Keyed on heap-buffer-overflow and with the leak fixed, the reading inverts. Recorded because a positive finding from a mis-keyed check is the mirror of a clean zero.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm runs to columns=26 against a 20-entry array, past=6, and clobbers exactly 6 entries of row_height_val, with the stale guard reading 26 at the end and never having fired; the fixed arm stops at 20 with past=0 and no clobber.",
+      "status": "measured"
+    },
+    "backing": {
+      "oracle": "not applicable, and recorded rather than omitted: there is no backing allocation distinct from the object. The struct IS the allocation, which is what makes the crossing a sub-object one.",
+      "status": "not-applicable"
+    }
+  },
+  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261006-native-subobject-7/). The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell."
+}
