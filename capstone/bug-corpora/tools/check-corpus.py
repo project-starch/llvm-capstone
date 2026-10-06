@@ -68,7 +68,14 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "advisory", "shape", "object", "capstone_column", "comparison",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
-                 "oracle_is_recording", "nested", "nested_why"}
+                 "oracle_is_recording", "nested", "nested_why",
+                 "citation_constraint"}
+# `citation_constraint` records that a case's upstream commit cannot be quoted
+# freely -- in practice that its SUBJECT names a person, so the fix may be cited
+# by HASH AND PATH ONLY. This tree's naming rule is absolute and applies to
+# committed files, so the constraint belongs in the case rather than in someone's
+# memory: the first instance (memcached d5d9ff0) sat undispositioned in a triage
+# doc precisely because the reason it was awkward was not recorded as a field.
 # `nested` is a BOOLEAN, and it exists because the inventory's headline nesting
 # share was being computed from `allocator_layer` PROSE. On 2026-10-06 a script
 # doing that put 11 of 25 spatial cases into an "unclassified" bucket and
