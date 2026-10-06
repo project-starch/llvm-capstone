@@ -1,0 +1,31 @@
+{
+ "arm": "cheribsd-revocation",
+ "pin": "perl 5.36.3, source archive sha256 f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a, with this port's seven pointer-layout patches, no inner adapter (manifest: 'upstream; no Sublet/PoisonCap inner adapter')",
+ "binary_sha256": "450e6f5c17bfe9863ede0a686fc66cb4d355a9ab44a2e8edbc557ff7e27004a4",
+ "platform": "CheriBSD riscv64 purecap, the published-platform image whose loader accepts this binary",
+ "why_this_platform_and_not_the_other": "the stock image's rtld refuses the dynamically linked purecap perl before main with 'Traditional TLS not supported', and this SDK's clang cannot emit the alternative: -mtls-dialect=desc is 'unknown argument'. The binary needs exactly one TLS symbol, _ThreadRuneLocale from FreeBSD libc's ctype inlines, and gets R_RISCV_TLS_GOT_HI20 for it",
+ "why_not_the_static_image": "a static link is accepted by the kernel and then dies with SIGPROT. The cause is NOT Perl: a static purecap probe reads its own __thread int 7 back as 1074491920 and then faults at the first libc TLS access, so static TLS setup is broken on this platform for any program that touches it. An earlier attribution of this fault to perl_construct as a Perl defect is RETRACTED",
+ "revocation_knob": "selected PER PROCESS with _RUNTIME_REVOCATION_ENABLE=1 / _RUNTIME_REVOCATION_DISABLE=1, with the system-wide security.cheri.runtime_revocation_default left at 0",
+ "why_per_process": "FORCED, not chosen. With the system default at 1 this guest's own sshd runs under revocation, hits the PoisonCap fault and dies: even a 2.3 MB scp fails with 'Connection closed by remote host', while the identical copies succeed with the default at 0. The mruby arm made the same concession for the every_free knob",
+ "difference_from_the_mruby_arm": "mruby ran under the SYSTEM default (=1) on the stock image; this arm selects the same revocation per process. Both are CheriBSD revocation with its default settings, but the selection path differs and the platforms differ, so the two programs' CheriBSD columns are not interchangeable",
+ "knob_control": "every case ran TWICE, revocation off and on, and the pair is the control: 254b30e378 and 39b4841b25 are clean with it off and SIGPROT with it on, so the env var is provably live. Without that pair, '7 SIGPROT' would be indistinguishable from a knob that does nothing",
+ "controls": "the guest reports the sysctl before anything is scored; the interpreter must evaluate 6*7; the harness must load shim.pl from the staged library",
+ "transfers": "split and gzipped (perl 2.3 MB, library+cases 4.3 MB) because this guest's sshd drops a single 7.4 MB copy",
+ "result": {
+  "revocation_off": {
+   "SIGPROT": 5,
+   "clean": 5,
+   "perl_panic": 1
+  },
+  "revocation_on": {
+   "SIGPROT": 7,
+   "clean": 3,
+   "perl_panic": 1
+  }
+ },
+ "comparison_with_the_capstone_arms": {
+  "both_catch_7_but_not_the_same_7": "sublet-svheads and cheribsd-revocation each report on 7 of the 11; they agree on 6, and each has exactly one the other misses. Union 8",
+  "only_sublet_svheads": "17535c984a -- the CvXSUBANY SV head lives in Perl's own head arena and is never returned to malloc, so an allocator-boundary revocation scheme has nothing to revoke. CheriBSD is clean with revocation both off and on, and host ASan is silent too. This is the nested-allocator blind spot, measured",
+  "only_cheribsd": "254b30e378 -- its SvPVX buffer IS system-allocator memory, so revocation sees it. The Capstone arms miss it because the domain's in-memory PerlIO layer discards its writes and the defect never executes there: a harness gap, not a protection gap, and CheriBSD running it proves the case is live and catchable"
+ }
+}

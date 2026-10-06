@@ -114,15 +114,63 @@ here — "realloc grew in place" was considered and refuted. `sysalloc-sublet` a
 over the baseline because the two system-allocator temporal cases it exists for are the
 two that do not execute.
 
-### The fourth arm is missing, and why
+### CheriBSD, and the two 7s that are not the same 7
 
-`cheribsd-revocation` is **not measured**. The static purecap interpreter faults with
-SIGPROT inside `perl_construct`, the stock loader refuses the dynamic one, and the only
-platform that loads it has an `sshd` that dies on a poison exception mid-copy — while
-mruby's static purecap binary runs on that same image. The localisation and what would
-settle it are in
-[`results/20261006-cheribsd-blocked`](results/20261006-cheribsd-blocked/). The mruby
-corpus has four measured arms; this one has three.
+`cheribsd-revocation` is measured: the same release, purecap on CheriBSD, libc
+revocation at its default settings. It reports on **7 of the 11** — the same count as
+`sublet-svheads`, and **not the same seven**. They agree on six, and each catches
+exactly one the other misses:
+
+| | `sublet-svheads` | `cheribsd-revocation` |
+|---|---:|---:|
+| reports | 7 | 7 |
+| agree on | 6 | 6 |
+| unique | `05_17535c984a` | `10_254b30e378` |
+
+- **`05_17535c984a` is the nested-allocator blind spot, measured.** The `CvXSUBANY` SV
+  head lives in Perl's own head arena and is never returned to `malloc`, so a scheme
+  that revokes at the allocator boundary has nothing to revoke. CheriBSD is clean with
+  revocation both off *and* on, and host ASan is silent too — only Perl's own
+  `Attempt to free unreferenced scalar` and the SV head adapter report it. This is the
+  same blindness as the three-of-eleven ASan result above, in capability hardware.
+- **`10_254b30e378` is our harness, not our protection.** Its `SvPVX` buffer *is*
+  system-allocator memory, so revocation sees it. The Capstone arms miss it because the
+  domain's in-memory PerlIO layer discards its writes and the defect never executes
+  there — and CheriBSD running it is the proof that the case is live and catchable.
+
+### That arm carries its own knob control
+
+Every case ran **twice**, revocation off and on. Without that pair, "7 SIGPROT" would be
+indistinguishable from a knob that does nothing:
+
+| | SIGPROT | clean | Perl's own panic |
+|---|---:|---:|---:|
+| revocation **off** | 5 | 5 | 1 |
+| revocation **on** | **7** | 3 | 1 |
+
+`10_254b30e378` and `07_39b4841b25` are clean with it off and SIGPROT with it on, so the
+env var is provably live. The five that fault either way are spatial or are caught by
+bounds alone.
+
+### Two platform constraints, both forced
+
+- **Revocation is selected per process** (`_RUNTIME_REVOCATION_ENABLE=1`), with the
+  system-wide `security.cheri.runtime_revocation_default` left at 0. With the system
+  default at 1 the guest's own `sshd` runs under revocation, hits the PoisonCap fault and
+  dies — even a 2.3 MB `scp` fails with `Connection closed by remote host`, while the
+  identical copies succeed with the default at 0. The mruby arm made the same concession
+  for the `every_free` knob. **The mruby arm ran under the system default, so the two
+  programs' CheriBSD columns are not interchangeable.**
+- **The image is the one whose loader accepts this binary.** The stock image's rtld
+  refuses the dynamically linked purecap perl before `main` with
+  `Traditional TLS not supported`, and this SDK's clang cannot emit the alternative —
+  `-mtls-dialect=desc` is an unknown argument. The binary needs exactly one TLS symbol,
+  `_ThreadRuneLocale` from FreeBSD libc's ctype inlines.
+- A **static** link is accepted by the kernel and then dies with SIGPROT. That is **not a
+  Perl defect**: a static purecap probe reads its own `__thread int` initialised to 7 back
+  as `1074491920`, then faults at the first libc TLS access. Static TLS setup is broken on
+  this platform for any program that touches it. An earlier note in this corpus
+  attributing that fault to `perl_construct` as Perl's own is **retracted**.
 
 **`sublet-svheads` protects exactly one of Perl's nested allocators.** The SV *bodies*,
 the hash entries and the OP slabs keep their upstream allocators. A case whose stale

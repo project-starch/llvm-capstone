@@ -20,9 +20,12 @@
   },
   "sublet-svheads": {
    "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+  },
+  "cheribsd-revocation": {
+   "oracle": "no report: Perl's own check aborts; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: Perl's own check aborts"
   }
  },
- "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
+ "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
  "allocator_layer": "nested allocator: the SV head arena",
- "note": "triggered on every arm; no arm faults, and that is a deliberate choice in the SV head adapter rather than a gap. Upstream Perl reads a freed head's flags on purpose (sv.h: \"there are some parts of the core that have pointers to already-freed SV heads\"), so the adapter answers SvIS_FREED and SvTYPE from its sidecar without touching the head; making that path fault stops three upstream test files (ports/perl/sv-heads/README.md). The defect is still detected here, by Perl's own refcount bookkeeping: panic: attempt to copy freed scalar, exit 255"
+ "note": "triggered on every arm; no arm faults, and that is a deliberate choice in the SV head adapter rather than a gap. Upstream Perl reads a freed head's flags on purpose (sv.h: \"there are some parts of the core that have pointers to already-freed SV heads\"), so the adapter answers SvIS_FREED and SvTYPE from its sidecar without touching the head; making that path fault stops three upstream test files (ports/perl/sv-heads/README.md). The defect is still detected here, by Perl's own refcount bookkeeping: panic: attempt to copy freed scalar, exit 255 -- and CheriBSD reaches the same panic with revocation both off and on, so this is not specific to the adapter's choice"
 }

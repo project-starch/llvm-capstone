@@ -20,9 +20,12 @@
   },
   "sublet-svheads": {
    "oracle": "no fault: completes, the workload's own oracle fails"
+  },
+  "cheribsd-revocation": {
+   "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
   }
  },
- "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
+ "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
  "allocator_layer": "system allocator (the RXp_SUBBEG buffer), plus the nested SV head arena (saved_copy)",
- "note": "triggered on every arm and catchable by NONE of them, for a structural reason worth recording: the stale subbeg length makes $& read one byte past the logical string into the NUL terminator, which lies INSIDE the same allocation. No per-object bounds and no revocation can see an in-bounds read of a live object. The only oracle is the wrong output, which all four arms do produce"
+ "note": "triggered on every arm, on both platforms, and catchable by NONE of them, for a structural reason worth recording: the stale subbeg length makes $& read one byte past the logical string into the NUL terminator, which lies INSIDE the same allocation. No per-object bounds and no revocation can see an in-bounds read of a live object -- CheriBSD with revocation on is clean here too. The only oracle is the wrong output, which every arm does produce"
 }

@@ -20,9 +20,12 @@
   },
   "sublet-svheads": {
    "oracle": "no fault: completes, the workload's own oracle fails"
+  },
+  "cheribsd-revocation": {
+   "oracle": "SIGPROT: the defence reports; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
   }
  },
- "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
+ "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
  "allocator_layer": "system allocator (the SvPVX string buffer)",
- "harness_limit": "the defect does not execute in a Capstone domain. A probe on the bounds arm shows the in-memory filehandle this case needs accepts its writes and discards them: open returns 1, print returns 1, and the backing scalar is still undef afterwards, where the host build has the full 52-byte string. The overlapping Move that is the defect is therefore never reached, so no arm can report and this case is outside every arm's denominator"
+ "harness_limit": "applies to the four CAPSTONE arms only. The defect does not execute in a Capstone domain: a probe on the bounds arm shows the in-memory filehandle this case needs accepts its writes and discards them -- open returns 1, print returns 1, and the backing scalar is still undef afterwards, where the host build has the full 52-byte string -- so the overlapping Move that IS the defect is never reached and this case is outside those four arms' denominator. cheribsd-revocation runs a complete FreeBSD Perl, where the layer works: the defect executes and revocation CATCHES it (SIGPROT with revocation on, clean with it off). So the case is live and catchable, and what the Capstone arms show here is a gap in the domain's PerlIO, not in the heap"
 }
