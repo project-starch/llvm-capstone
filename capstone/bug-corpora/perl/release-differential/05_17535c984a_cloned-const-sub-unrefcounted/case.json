@@ -20,8 +20,12 @@
   },
   "sublet-svheads": {
    "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+  },
+  "cheribsd-revocation": {
+   "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
   }
  },
- "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
- "allocator_layer": "nested allocator: the SV head arena (the CvXSUBANY const SV)"
+ "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
+ "allocator_layer": "nested allocator: the SV head arena (the CvXSUBANY const SV)",
+ "distinguishing": "the one case sublet-svheads adds over the baseline, and the one case CheriBSD CANNOT catch: the CvXSUBANY SV head lives in Perl's own head arena and is never returned to malloc, so an allocator-boundary scheme has nothing to revoke. CheriBSD is clean with revocation both off and on, and host ASan is silent too; only Perl's own 'Attempt to free unreferenced scalar' and the SV head adapter report it"
 }
