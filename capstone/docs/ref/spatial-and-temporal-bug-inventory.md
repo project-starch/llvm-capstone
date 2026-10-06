@@ -270,7 +270,25 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **18** | 4 |
-| spatial, 25 upstream | **1** | **10** | 15 |
+| spatial, 25 upstream | **4** | **14** | 11 |
+
+> **FFmpeg entered this table on 2026-10-06**, and until that day contributed **zero**
+> measured rows — which is what the retraction of its `pool-repros` arm established.
+> `ffmpeg/plain-heap-repros` 0-3 were run with revocation on and both platform controls
+> firing (`results/20261006-cheribsd/`): **3 of 4 CAUGHT**, `si_code` **1** (bounds), and in
+> every catch the fault address EQUALS the probe address `supervise` resolved from the ELF
+> independently — so these are the first rows in the tree where attribution is established
+> rather than noted as absent.
+>
+> **Case 1 was NOT caught, refuting its own pre-registered prediction**, and the mechanism
+> was measured in the same boot: it requests 24 bytes and CheriBSD's `malloc` returns a
+> capability of length **32**, so the read at offset 24 is inside the bounds. That is the
+> **second** instance of the usable-size mechanism — `memcached/plain-heap-repros/00` was
+> refuted by it at request 9 → length 16 — so it is now measured at two size classes.
+> Case 2 crosses **below the base** and was caught, which shows the mechanism cannot absorb
+> a downward crossing. **So the qualification on "spatial is a tie with CHERI" is now
+> measured rather than argued: it holds only for crossings that leave the USABLE allocation,
+> and not at all below the base.**
 
 - **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
 

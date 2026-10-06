@@ -64,18 +64,22 @@ _Noreturn void ffh_fail(unsigned code);
   } while (0)
 
 /* The crossings, labelled so a sanitiser's report or a capability fault can be
- * required to land HERE rather than merely somewhere in the program. */
-__attribute__((noinline, used)) static float
-read_probe(const volatile float *p) {
-  return *p;
-}
-__attribute__((noinline, used)) static unsigned
-read_probe_u8(const volatile unsigned char *p) {
-  return *p;
-}
-__attribute__((noinline, used)) static void
-write_probe_u8(volatile unsigned char *p, unsigned char v) {
-  *p = v;
-}
+ * required to land HERE rather than merely somewhere in the program.
+ *
+ * DECLARED here and DEFINED once in shared/driver.c, deliberately. The sibling
+ * plain-heap corpora make these `static` in the header, so each translation unit
+ * gets its own copy and `supervise` cannot resolve the symbol unambiguously --
+ * which is why their CheriBSD rows read "attribution: not established". One
+ * external definition makes the probe address resolvable from the image, so a
+ * fault can be required to land AT the labelled probe (SCHEMA rule 2) rather
+ * than merely somewhere in the program. */
+float ffh_read_probe(const volatile float *p);
+unsigned ffh_read_probe_u8(const volatile unsigned char *p);
+void ffh_write_probe_u8(volatile unsigned char *p, unsigned char v);
+
+/* The short spellings the cases use. */
+#define read_probe ffh_read_probe
+#define read_probe_u8 ffh_read_probe_u8
+#define write_probe_u8 ffh_write_probe_u8
 
 #endif

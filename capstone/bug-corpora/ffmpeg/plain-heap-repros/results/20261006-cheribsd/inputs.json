@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-06",
+  "runner": "ports/common/host/cheribsd/run.py",
+  "runtime_revocation": "on",
+  "guest_default_revocation": "preserved",
+  "cases": 4,
+  "caught": [0, 2, 3],
+  "not_caught": [1],
+  "si_code": 1,
+  "si_code_note": "1 is the BOUNDS code; every runner in this tree hardcodes PROT_CHERI_TAG=2, the TAG code",
+  "platform": "stock CheriBSD purecap built on this host (kernel CHERI-PURECAP-QEMU, releng/26.07-88f39900c329 = pins.env CHERIBSD_REV; hw.machine_arch riscv64c) -- the same vehicle as the memcached and wireshark readings",
+  "controls": {
+    "cheribsd-abi": "CHERI_ABI pointer_bytes=16 runtime_revocation=1 -- PASS",
+    "cheribsd-bounds": "CHERI_BOUNDARY_READY -- PASS",
+    "discarded_attempt": "a first run had BOTH controls FAIL because the corpus's own size probe was passed as --abi-probe; its case readings were identical to the valid run's and were discarded anyway, because a result whose platform controls did not fire is not a reading"
+  },
+  "capability_lengths_measured_in_guest": {"16": 16, "24": 32, "512": 512, "2048": 2048},
+  "capability_lengths_note": "measured for THIS corpus's own request sizes; the memcached/wireshark calloc table (1, 9, 16, 17, 8192) is not transferable because a size class is a step function",
+  "attribution": {
+    "established": true,
+    "how": "the probes are DECLARED in shared/corpus.h and DEFINED ONCE in shared/driver.c, so supervise resolves the symbol from the ELF independently of the run; the fault address equals it in all three catches",
+    "sibling_contrast": "memcached's and wireshark's plain-heap rows read 'attribution: not established' because their probes are static in the header and duplicated per translation unit",
+    "regression_check": "the native readings were re-run after the linkage change and came out byte-identical to the committed result-lines.txt, so the change is inert except for attribution"
+  },
+  "refutation": {
+    "case": 1,
+    "predicted": "CATCH",
+    "measured": "completes, not caught",
+    "mechanism": "requests 24 bytes, capability length 32, slack 8, so the read at offset 24 is inside the bounds",
+    "pre_registered": "the committed prediction said 24 bytes is not a size-class boundary and the usable size must be read in-guest before the catch is believed",
+    "second_instance": "memcached/plain-heap-repros/00 was refuted by the same mechanism at request 9 -> length 16"
+  },
+  "n_per_cell": 1
+}
