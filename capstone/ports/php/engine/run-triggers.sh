@@ -86,6 +86,39 @@ fault_site() {  # $1 = log -> "file:line" of the faulting pc, or empty
     | sed -n 2p | sed 's|.*/||'
 }
 
+# WHEN THE CONTROL ARM CANNOT COMPLETE BECAUSE THE DEFECT IS NOT MASKABLE.
+#
+# The matched pair rests on a premise: that stock PHP's rounding (spatial) or lifetime behaviour
+# (temporal) hides the defect, so the control MUST complete. For some cases that premise is simply
+# false, and then a control that faults is not evidence about the port:
+#
+#   CRASH-102  reads 1 byte past a 120-byte object. 120 is already 8-aligned, so REAL_SIZE rounding
+#              yields ZERO slack -- the control models PHP's rounding faithfully and that rounding
+#              has no cover to offer.
+#   CRASH-022  faults with revocation OFF, because the freed block was reused and overwritten with
+#              scalar data, which clears the tag. The stale capability load faults whether or not
+#              revocation fired.
+#
+# This is the same situation the `global` axis already handles for CRASH-005, where the overflowed
+# object is a compiler-bounded global that no allocator control can mask. The verdict is CAUGHT with
+# NO PAIR, and the thing that keeps it from degenerating into "it faulted somewhere" is that the
+# fault must land in the defect's OWN file -- the one ASAN names as frame #0.
+unmaskable_catch() {   # $1 = case id, $2 = arm tag, $3 = cause -> 0 if this is a no-pair catch
+  local id=$1 tag=$2 cause=$3 site want
+  want="${EXPECT_FILE[$id]:-}"
+  [ -z "$want" ] && return 1
+  site=$(fault_site "$CAPSTONE_TMP_ROOT/trig-${tag}.log" "$tag")
+  case "$site" in
+    "$want":*) ;;
+    *) return 1 ;;
+  esac
+  echo "    control also faults (cause = ${cause:-none}) at $site"
+  echo "VERDICT: $id CAUGHT (no pair). The fault is at the defect's own line, in $want, and the"
+  echo "         control cannot mask it: PHP's own rounding leaves no slack at this size, or the"
+  echo "         freed block was overwritten before reuse. Same shape as the global axis."
+  return 0
+}
+
 # CASES WHOSE OVER-READ IS PERFORMED BY A SHARED COPY PRIMITIVE.
 #
 # CRASH-073 is `estrndup(s, (ue-s))` at url.c:292 with the length three bytes too long, and ASAN
@@ -186,7 +219,7 @@ declare -A NEEDS_EXT=(
 declare -A EXPECT_FILE=(
   [CRASH-110]=url.c [CRASH-073]=url.c
   [CRASH-066]=var_unserializer.c [CRASH-091]=html.c [CRASH-102]=string.c
-  [CRASH-016]=formatted_print.c
+  [CRASH-016]=formatted_print.c [CRASH-022]=array.c
 )
 
 # THE TEMPORAL AXIS NEEDS A CONTROL THAT LEAVES REVOCATION ON.
@@ -254,6 +287,7 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
     c=$(run_arm "${id}_control"); v=${c%%|*}; cause=$(echo "$c" | cut -d'|' -f2)
     echo "==> CONTROL arm (-DZEND_NO_REVOKE) -- stock PHP lifetime behaviour"
     if [ -z "$v" ]; then
+      unmaskable_catch "$id" "${id}_control" "$cause" && return 0
       echo "    CONTROL DID NOT COMPLETE (cause=${cause:-none}). No verdict -- infrastructure." >&2
       return 75
     fi
@@ -337,6 +371,7 @@ one_case() {    # $1 = case id, $2 = extra -D for the source select
     return 0
   fi
   if [ -z "$v" ]; then
+    unmaskable_catch "$id" "${id}_control" "$cause" && return 0
     echo "    CONTROL DID NOT COMPLETE (cause=${cause:-none}). No verdict -- infrastructure, not a result." >&2
     return 75
   fi

@@ -554,13 +554,46 @@ float path; those are implemented rather than stubbed.
 | bucket | n | status |
 |---|---|---|
 | A: runnable with no new linking | 11 | 11 caught |
-| B: needs pure ext code linked | 13 | 9 caught, 1 missed, 3 no verdict |
+| B: needs pure ext code linked | 13 | **11 caught**, 1 missed, 1 no verdict |
 | C: needs the OS | 7 | not attempted -- sockets, writable `/tmp`, the clock |
 
-A+B is the no-OS population: **24 cases, 20 caught, 1 missed, 3 without a verdict.** Bucket C is the
+A+B is the no-OS population: **24 cases, 22 caught, 1 missed, 1 without a verdict.** Bucket C is the
 real ceiling: four need sockets or a writable `/tmp`, two need `putenv`/tick functions, and
 CRASH-008 needs `date`'s clock -- the one the standalone allocator suite already catches with a
 hand-written trigger, which only the real engine cannot reach.
+
+### TWO "NO VERDICT" CASES WERE DETECTIONS, and I had called them port problems
+
+CRASH-022 and CRASH-102 were reported as having no verdict because their CONTROL arm faults, and I
+described that as a port problem. **It was not, and the evidence was one symbolize away:**
+
+| case | control-arm fault site | ASAN frame #0 |
+|---|---|---|
+| CRASH-022 | `array.c:546` | `array_user_compare` @ `array.c:546` |
+| CRASH-102 | `string.c:1332` | `php_strspn` @ `string.c:1332` |
+
+Both land on ASAN's exact line. The control was faulting *at the defect*.
+
+The matched pair rests on a premise -- that stock PHP's rounding or lifetime behaviour hides the
+defect, so the control must complete. For these two the premise is false, for reasons intrinsic to
+the cases:
+
+- **CRASH-102** reads 1 byte past a **120-byte** object. 120 is already 8-aligned, so `REAL_SIZE`
+  rounding yields **zero slack**: the control models PHP's rounding faithfully and that rounding has
+  no cover to offer. (The trigger asks for a 2^32 length, but ASAN records the read as "0 bytes
+  after" the region -- a single byte, not a 4 GB excursion.)
+- **CRASH-022** faults with revocation OFF, because the freed block is reused and overwritten with
+  scalar data, which clears the tag. The stale capability load faults whether or not revocation
+  fired -- the tag mechanism catches it on its own.
+
+`run-triggers.sh` now scores these as **CAUGHT (no pair)**, the same treatment the `global` axis
+already gave CRASH-005, and for the same reason: no allocator control can mask the defect. What
+stops that from degenerating into "it faulted somewhere" is that the fault must land in the
+defect's OWN file, the one ASAN names, which `EXPECT_FILE` already records.
+
+**The lesson is about me, not the harness.** "The control faulted, so the port is broken" was an
+inference I had not checked, stated as a finding, twice in one paragraph. The harness was right to
+withhold the verdict under its old rule; the characterisation was wrong.
 
 ### CRASH-057 is a genuine MISS, and it is the most useful result here
 
