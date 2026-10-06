@@ -1,12 +1,13 @@
 {
   "case": 3,
-  "upstream_fix": "no-fix-recorded",
-  "title": "ltree deparse_lquery out of bounds, ~65 KB -- leaves its block",
+  "upstream_fix": "8c34261109",
+  "title": "lquery level with enough OR-variants wraps a uint16 totallen, ~65 KB -- leaves its block",
   "consumer": "lquery cast (ltree extension)",
   "class": "spatial",
+  "allocator_layer": "aset",
   "trigger": "trigger.sql",
   "live_in_pin": true,
-  "live_proof": "no fix commit recorded; established on the pin by host ASan (heap-buffer-overflow in the lquery deparse path) and by the purecap arm, which raises SIGPROT on both builds",
+  "live_proof": "upstream 8c34261109, \"ltree: Fix overflows with lquery parsing\", absent at the 17.5 pin. Upstream: a single lquery level with many OR-separated variants overflows totallen, which is a uint16, because each variant contributes MAXALIGN(LVAR_HDRSIZE + len); once it wraps, the data written by LQL_NEXT() is corrupt and the access goes out of bounds. The trigger here is 66 variants of 1000 characters, about 66 KB against a uint16 ceiling of 65535. Independently established on the pin by host ASan (heap-buffer-overflow in the lquery path) and by the purecap arm, which raises SIGPROT on both builds.",
   "fidelity": "real server, real allocator, in a contrib extension rather than core. ~65 KB, so it leaves its block",
   "arms": {
     "spatial": {

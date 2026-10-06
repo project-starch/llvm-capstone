@@ -1,12 +1,13 @@
 {
   "case": 2,
-  "upstream_fix": "no-fix-recorded",
-  "title": "ts_headline() overflow, ~32 KB -- leaves its block",
+  "upstream_fix": "3ed3dbbf44",
+  "title": "ts_headline() StartSel longer than PG_INT16_MAX overflows an int16 length, ~32 KB -- leaves its block",
   "consumer": "ts_headline()",
   "class": "spatial",
+  "allocator_layer": "aset",
   "trigger": "trigger.sql",
   "live_in_pin": true,
-  "live_proof": "no fix commit recorded; established on the pin by host ASan, which reports negative-size-param, and by the purecap arm, where the ~32 KB overflow crosses the malloc bound and raises SIGPROT on both the plain and the cassert build",
+  "live_proof": "upstream 3ed3dbbf44, \"Fix overflows with ts_headline()\" (CVE-2026-6473), backpatched through 14 and therefore absent at the 17.5 pin. Upstream: the StartSel, StopSel and FragmentDelimiter options of ts_headline() have their lengths stored as int16, so a value longer than PG_INT16_MAX overflows the stored length and generateHeadline() then writes with it. The trigger here is repeat('x', 32768), which is PG_INT16_MAX + 1 exactly. Independently established on the pin by host ASan, which reports negative-size-param -- the negative size being the overflowed int16 -- and by the purecap arm, where the ~32 KB overflow leaves its block and raises SIGPROT on both the plain and the cassert build.",
   "fidelity": "real server, real allocator. Unlike case 01 this one leaves its block, which is why both a sanitizer and a capability machine can see it",
   "arms": {
     "spatial": {

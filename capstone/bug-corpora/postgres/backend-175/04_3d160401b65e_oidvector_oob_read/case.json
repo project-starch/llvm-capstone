@@ -1,9 +1,10 @@
 {
-  "case": 15,
+  "case": 4,
   "upstream_fix": "3d160401b65e",
   "title": "array[]::oidvector out-of-bounds read, ~40 heap words -- stays inside its aset block",
   "consumer": "array[]::oidvector cast",
   "class": "spatial/oob-read",
+  "allocator_layer": "aset",
   "trigger": "trigger.sql",
   "live_in_pin": true,
   "live_proof": "CVE-2026-2003, fixed upstream in 3d160401b65e, which postdates the 17.5 pin. On the pin the cast is accepted where a correct build rejects it: the purecap run errors on 0 of the 2 statements upstream refuses",

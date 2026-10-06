@@ -1,9 +1,10 @@
 {
-  "case": 16,
+  "case": 5,
   "upstream_fix": "849da8210539",
-  "title": "ascii() \u5bf9\u622a\u65ad\u7684\u591a\u5b57\u8282\u524d\u5bfc\u5b57\u8282\u8bfb\u53d6\u5176\u540e\u7eed\u5b57\u8282\uff0c\u8d8a\u8fc7\u4e32\u5c3e\u300217.5 \u7684\u5b88\u536b\u662f Assert(*data > 0xC0)\uff0c\u975e assert \u6784\u5efa\u91cc\u88ab\u7f16\u8bd1\u6389",
+  "title": "ascii() on a truncated multibyte lead byte reads its continuation bytes past the end of the string. The 17.5 guard is Assert(*data > 0xC0), which is compiled out of a non-assert build",
   "consumer": "ascii() over a multibyte encoding",
   "class": "spatial/oob-read",
+  "allocator_layer": "aset",
   "trigger": "trigger.sql",
   "live_in_pin": true,
   "live_proof": "CVE-2026-18024, fixed upstream in 849da8210539, which postdates the 17.5 pin",

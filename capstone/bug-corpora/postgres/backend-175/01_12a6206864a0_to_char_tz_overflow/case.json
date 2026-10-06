@@ -4,6 +4,7 @@
   "title": "to_char(timestamptz,'TZ') heap overflow write, ~36 B -- stays inside its aset block",
   "consumer": "to_char(timestamptz, 'TZ')",
   "class": "spatial",
+  "allocator_layer": "aset",
   "trigger": "trigger.sql",
   "live_in_pin": true,
   "live_proof": "CVE-2026-14669, fixed upstream in 12a6206864a0, which postdates the 17.5 pin. Reproduced on the pin: PostgreSQL's own MEMORY_CONTEXT_CHECKING reports 'detected write past chunk end' in ExprContext, followed by four alloc-set integrity warnings",
