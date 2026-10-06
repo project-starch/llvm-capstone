@@ -13,7 +13,7 @@
   "layer_note": "measured: ASan reported a 4097-byte region, over the 512 B SMALL_REQUEST_THRESHOLD",
   "arms": {
     "spatial": {
-      "oracle": "fault: the object is a libc malloc block and the heap bounds each allocation"
+      "oracle": "a revoked-capability fault (cause 24) at the stale access: the object is a system allocator block and the base arm enforces revocation on its free. A bounds fault or completion would falsify this."
     },
     "sublet": {
       "oracle": "fault: the object is a libc malloc block"

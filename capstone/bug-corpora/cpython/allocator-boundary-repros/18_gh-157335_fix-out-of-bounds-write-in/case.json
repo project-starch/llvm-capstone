@@ -13,7 +13,7 @@
   "layer_note": "The ASan nesting test is structurally inconclusive here and that is expected: the buffer IS the mmap mapping, so a write past its end reaches the guard page and ASan reports SEGV rather than a heap region, with PYTHONMALLOC unset and with PYTHONMALLOC=malloc alike. allocator_consumed is 'no' on the mapping's provenance, not on that test.",
   "arms": {
     "spatial": {
-      "oracle": "fault: the object is a libc malloc block and the heap bounds each allocation"
+      "oracle": "a bounds fault (cause 7) at the write past the end of the mapping, if the mapping's capability is bounded to the requested length. This case is the arm's test of that: the buffer IS the mmap mapping, so no allocator is involved and revocation has nothing to act on."
     },
     "sublet": {
       "oracle": "fault: the object is a libc malloc block"

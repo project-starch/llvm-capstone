@@ -1,17 +1,17 @@
 case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run
-01_gh-139071_heap-overflow-in-set-dealloc-setobject	gh-139071	spatial	nested	spatial	DETECTED	24	False	spatial-20261006-105111
+01_gh-139071_heap-overflow-in-set-dealloc-setobject	gh-139071	spatial	nested	spatial	DETECTED	24	True	spatial-20261006-105111
 01_gh-139071_heap-overflow-in-set-dealloc-setobject	gh-139071	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-123446
 01_gh-139071_heap-overflow-in-set-dealloc-setobject	gh-139071	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	False	cheri11
 02_gh-140471_fix-buffer-overflow-in-ast-node	gh-140471	spatial	nested	spatial	SILENT		True	spatial-20261006-131005
 02_gh-140471_fix-buffer-overflow-in-ast-node	gh-140471	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-123446
 02_gh-140471_fix-buffer-overflow-in-ast-node	gh-140471	spatial	nested	cheribsd-revocation	SILENT		True	cheri11
-03_gh-140492_heap-buffer-overflow-in-ast-copy	gh-140492	spatial	nested	spatial	DETECTED	24	False	spatial-20261006-105111
+03_gh-140492_heap-buffer-overflow-in-ast-copy	gh-140492	spatial	nested	spatial	DETECTED	24	True	spatial-20261006-105111
 03_gh-140492_heap-buffer-overflow-in-ast-copy	gh-140492	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-112658
 03_gh-140492_heap-buffer-overflow-in-ast-copy	gh-140492	spatial	nested	cheribsd-revocation	SILENT		True	cheri11
 04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer	gh-140492	spatial	non-nested	spatial	DETECTED	24	True	spatial-20261006-105111
 04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer	gh-140492	spatial	non-nested	sublet	DETECTED	5	True	sublet-20261006-112658
 04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer	gh-140492	spatial	non-nested	cheribsd-revocation	SILENT		False	cheri11
-05_gh-140497_cpython-crash-heap-buffer-overflow-python	gh-140497	spatial	nested	spatial	DETECTED	24	False	spatial-20261006-105111
+05_gh-140497_cpython-crash-heap-buffer-overflow-python	gh-140497	spatial	nested	spatial	DETECTED	24	True	spatial-20261006-105111
 05_gh-140497_cpython-crash-heap-buffer-overflow-python	gh-140497	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-112658
 05_gh-140497_cpython-crash-heap-buffer-overflow-python	gh-140497	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	False	cheri11
 06_gh-140551_crash-in-dict-if-hash-eq	gh-140551	spatial	nested	spatial	SILENT		True	spatial-20261006-105111
@@ -23,10 +23,10 @@ case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run
 08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	spatial	SILENT		False	spatial-20261006-105111
 08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	sublet	CAPACITY			sublet-20261006-123446
 08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	cheri11
-09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	gh-140802	spatial	nested	spatial	DETECTED	24	False	spatial-20261006-105111
+09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	gh-140802	spatial	nested	spatial	DETECTED	24	True	spatial-20261006-105111
 09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	gh-140802	spatial	nested	sublet	DETECTED	24	True	sublet-20261006-112658
 09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	gh-140802	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	False	cheri11
-10_gh-142554_avoid-divmod-crashes-due-to-bad	gh-142554	spatial	nested	spatial	DETECTED	24	False	spatial-20261006-105111
+10_gh-142554_avoid-divmod-crashes-due-to-bad	gh-142554	spatial	nested	spatial	DETECTED	24	True	spatial-20261006-105111
 10_gh-142554_avoid-divmod-crashes-due-to-bad	gh-142554	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-123446
 10_gh-142554_avoid-divmod-crashes-due-to-bad	gh-142554	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	False	cheri11
 11_gh-143005_heap-buffer-overflow-in-ctypes-array	gh-143005	spatial	nested	spatial	SILENT		True	spatial-20261006-105111
@@ -38,7 +38,7 @@ case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run
 13_gh-144169_fix-three-crashes-in-ast-objects	gh-144169	spatial	nested	spatial	CAPACITY			spatial-20261006-131005
 13_gh-144169_fix-three-crashes-in-ast-objects	gh-144169	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-123446
 13_gh-144169_fix-three-crashes-in-ast-objects	gh-144169	spatial	nested	cheribsd-revocation	SILENT		True	cheri11
-14_gh-144475_heap-buffer-overflow-in-functools-partial	gh-144475	spatial	nested	spatial	DETECTED	24	False	spatial-20261006-105111
+14_gh-144475_heap-buffer-overflow-in-functools-partial	gh-144475	spatial	nested	spatial	DETECTED	24	True	spatial-20261006-105111
 14_gh-144475_heap-buffer-overflow-in-functools-partial	gh-144475	spatial	nested	sublet	DETECTED	5	True	sublet-20261006-112658
 14_gh-144475_heap-buffer-overflow-in-functools-partial	gh-144475	spatial	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	False	cheri11
 15_gh-148973_fix-segfault-on-mismatch-between-consts	gh-148973	spatial	nested	spatial	SILENT		True	spatial-20261006-105111
@@ -86,12 +86,12 @@ case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run
 29_gh-146011_decimal-signaldict-outlives-context	gh-146011	temporal	nested	spatial	SILENT		True	spatial-20261006-141858
 29_gh-146011_decimal-signaldict-outlives-context	gh-146011	temporal	nested	sublet	DETECTED	24	True	sublet-20261006-144133
 29_gh-146011_decimal-signaldict-outlives-context	gh-146011	temporal	nested	cheribsd-revocation	SILENT		True	cheri11
-30_gh-146613_grouper-parent-key	gh-146613	temporal	nested	spatial	DETECTED	24	False	spatial-20261006-141858
+30_gh-146613_grouper-parent-key	gh-146613	temporal	nested	spatial	DETECTED	24	True	spatial-20261006-141858
 30_gh-146613_grouper-parent-key	gh-146613	temporal	nested	sublet	DETECTED	24	True	sublet-20261006-144133
 30_gh-146613_grouper-parent-key	gh-146613	temporal	nested	cheribsd-revocation	SILENT		True	cheri11
-31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	spatial	DETECTED	24	False	spatial-20261006-141858
+31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	spatial	DETECTED	24	True	spatial-20261006-141858
 31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	sublet	DETECTED	24	True	sublet-20261006-144133
 31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	False	cheri11
-32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	spatial	DETECTED	24	False	spatial-20261006-141858
+32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	spatial	DETECTED	24	True	spatial-20261006-141858
 32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	sublet	CAPACITY			sublet-20261006-144133
 32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	cheribsd-revocation	DETECTED	si_code=5 (PROT_CHERI_PERM)	False	cheri11
