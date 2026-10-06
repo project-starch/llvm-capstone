@@ -57,11 +57,18 @@ _Noreturn void wsh_fail(unsigned code);
       wsh_fail(n);                                                             \
   } while (0)
 
-/* The crossing, labelled so a sanitiser's report can be required to land HERE
- * rather than merely somewhere in the program. */
-__attribute__((noinline, used)) static unsigned
-read_probe(const volatile unsigned char *p) {
-  return *p;
-}
+/* The crossing, labelled so a sanitiser's report or a capability fault can be
+ * required to land HERE rather than merely somewhere in the program.
+ *
+ * DECLARED here and DEFINED once in shared/driver.c. It was `static` in this
+ * header until 2026-10-07, which gave each translation unit a private copy and
+ * left `supervise` unable to resolve the symbol -- the reason this corpus's
+ * CheriBSD row read "attribution: not established". One external definition
+ * makes the probe address resolvable from the ELF, so a fault can be required
+ * to land inside the labelled probe. The sibling ffmpeg/plain-heap-repros made
+ * the same change and its native readings came out byte-identical, so the
+ * change is inert to everything except attribution. */
+unsigned wsh_read_probe(const volatile unsigned char *p);
+#define read_probe wsh_read_probe
 
 #endif

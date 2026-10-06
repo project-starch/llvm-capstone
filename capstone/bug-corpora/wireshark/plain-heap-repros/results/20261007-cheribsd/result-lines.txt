@@ -1,0 +1,20 @@
+# wireshark/plain-heap-repros on stock CheriBSD purecap, libc revocation ON, 2026-10-07.
+# Produced by runners/run-cheribsd.sh. Result lines only.
+
+## platform controls, same boot
+CHERI_ABI pointer_bytes=16 runtime_revocation=1
+CHERI_ABI pointer_bytes=16 runtime_revocation=1
+CHERI_BOUNDARY_READY
+
+## suite
+BOOT CheriBSD allocator suite
+PASS cheribsd-abi
+PASS cheribsd-bounds
+PASS wsh-00-fixed
+PASS wsh-00-buggy
+
+## the buggy arm
+SUPERVISE base 0x100000 /tmp/allocator-tests/wsh-00-buggy/target
+SUPERVISE expect wsh_read_probe 0x1023b4
+SUPERVISE fault signal=34 code=1 addr=0x1023c4 pc=0x1023c4
+SUPERVISE exit signalled=34
