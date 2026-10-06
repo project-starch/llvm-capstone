@@ -2,34 +2,26 @@
 
 | | | spatial | sublet | cheribsd-revocation |
 |---|---|---:|---:|---:|
-| spatial | nested | 6/12 | **9/13** | 5/13 |
-| spatial | non-nested | 2/3 | **2/3** | 1/4 |
-| temporal | nested | 2/10 | **9/10** | 1/10 |
-| temporal | non-nested | 0/2 | **2/2** | 0/3 |
-| **total** | | **10/27** | **22/28** | **7/30** |
+| spatial | nested | 6/10 | **9/11** | 5/10 |
+| spatial | non-nested | 2/2 | **2/2** | 1/3 |
+| temporal | nested | 2/8 | **9/9** | 1/8 |
+| temporal | non-nested | 0/2 | **2/2** | 0/2 |
+| **total** | | **10/22** | **22/24** | **7/23** |
 
-Each cell is `detected / measured`. A case that timed out or exhausted the
-application heap is **not** a measurement (SCHEMA rule 4) and is out of the
-denominator rather than counted as silence.
+Each cell is `detected / measured`. A row is a measurement only if the trigger
+reached the defect site. A case that timed out, exhausted the application heap,
+died at `import`, had its selected test skipped, or hit a syscall the guest does
+not implement is **not** a measurement (SCHEMA rule 4) and is out of the
+denominator rather than counted as silence. Nor is a row whose trigger has since
+been replaced.
 
 ## Why no arm's denominator is 32
 
-| arm | excluded | case | why |
-|---|---:|---|---|
-| `spatial` | 5 | | |
-| | | `07` | SUPERSEDED: the trigger reached a child process, and the application heap size is compiled in, so the child wanted a second heap of the same size. The trigger now runs in one process and the row is pending a re-run |
-| | | `08` | CAPACITY: MemoryError. The arm's full run predates run-arm.sh's CAPACITY gate and recorded this as SILENT; re-reading its log corrected it |
-| | | `13` | CAPACITY: MemoryError at `ast.Name(**{object(): 'y'})`, inside the one process |
-| | | `21` | TIMEOUT at 600 s. The cancel path then timed out too, which is why the guest stopped answering |
-| | | `32` | SUPERSEDED: the trigger reached a child process, and the application heap size is compiled in, so the child wanted a second heap of the same size. The trigger now runs in one process and the row is pending a re-run |
-| `sublet` | 4 | | |
-| | | `07` | SUPERSEDED: the trigger reached a child process, and the application heap size is compiled in, so the child wanted a second heap of the same size. The trigger now runs in one process and the row is pending a re-run |
-| | | `08` | CAPACITY: this arm revokes on every free and reaches the heap's limit on a case the base arm completes |
-| | | `21` | TIMEOUT at 600 s, as above |
-| | | `32` | SUPERSEDED: the trigger reached a child process, and the application heap size is compiled in, so the child wanted a second heap of the same size. The trigger now runs in one process and the row is pending a re-run |
-| `cheribsd-revocation` | 2 | | |
-| | | `07` | SUPERSEDED: the trigger reached a child process, and the application heap size is compiled in, so the child wanted a second heap of the same size. The trigger now runs in one process and the row is pending a re-run |
-| | | `32` | SUPERSEDED: the trigger reached a child process, and the application heap size is compiled in, so the child wanted a second heap of the same size. The trigger now runs in one process and the row is pending a re-run |
+| arm | measured | excluded | cases |
+|---|---:|---:|---|
+| `spatial` | 22/32 | 10 | **CAPACITY** `08` `13`; **NOMODULE** `11` `23` `24`; **NOTIMPL** `18`; **SKIPPED** `15`; **SUPERSEDED** `07` `32`; **TIMEOUT** `21` |
+| `sublet` | 24/32 | 8 | **CAPACITY** `08`; **NOMODULE** `11` `23`; **NOTIMPL** `18`; **SKIPPED** `15`; **SUPERSEDED** `07` `32`; **TIMEOUT** `21` |
+| `cheribsd-revocation` | 23/32 | 9 | **NOMODULE** `02` `11` `12` `13` `21` `22` `23`; **SUPERSEDED** `07` `32` |
 
 An earlier version of this file read "that sublet loses twice as many as spatial
 is itself a result: revocation's cost is what pushes those cases over the limit".
@@ -114,6 +106,40 @@ object lifetime and does reach the path where pymalloc returns an emptied arena
 to the system allocator. The two corpora's `spatial` arms are therefore not
 measuring the same thing, and their numbers still must not be pooled -- but the
 reason is now known rather than open.
+
+## The exclusions are mostly missing modules, and that was found late
+
+Four cases were thought to be short of the denominator. Re-reading every
+remaining row's own evidence -- the Capstone arms' per-case logs, and for
+cheribsd the `last` field of its `verdicts.tsv`, since that run keeps no per-case
+log -- found sixteen more rows that are not measurements at all. A case whose
+trigger dies at `import` never reaches the defect site, and recording that as the
+arm staying quiet is the same error as recording a capacity failure that way.
+
+| arm | missing, and what it costs |
+|---|---|
+| Capstone, both arms | `_ctypes` (`11`), `_testinternalcapi` (`15`, the test is skipped), `_testlimitedcapi` (`23`), and on the base arm `zoneinfo` tzdata (`24`). `18` needs `mmap`, which the guest kernel answers with `Errno 38` |
+| `cheribsd-revocation` | `test.test_ast` (`02`, `13`), `_ctypes` (`11`), `_interpreters` (`12`), `pyexpat` (`21`, `22`), `_testlimitedcapi` (`23`) -- seven of its thirty-two rows |
+
+So the denominators are not short by four. They are short by ten, eight and nine,
+and the dominant cause is the images rather than the runs: five of the seven
+cheribsd losses and three of the Capstone ones are a module that was never built
+in, not a property of any defect.
+
+### A Python exception is not evidence the defect did not run
+
+The first pass at this flagged any output containing a traceback or a skip, and
+it was wrong twice over. Cases `19` and `31` select no method and run their whole
+upstream file -- 157 tests on `19` -- so a skip there belongs to some other test.
+And case `22` shows the deeper error: on the base arm it raises `ValueError:
+unknown event ''`, while on sublet the same code path faults with `cause=24`. The
+`ValueError` IS the use-after-free's uncaught consequence -- the stale read
+returned an empty string and the interpreter carried on with it. Case `16` is the
+same shape, `ValueError: x` on the base arm against `cause=5` on sublet. Those
+rows are measurements, and the most interesting kind the corpus holds: the arm
+did not catch the defect and the program kept running on corrupted data. Only an
+import failure, a skipped selected test, an unimplemented syscall or `Ran 0
+tests` is excluded.
 
 ## How much each arm discriminates, which is not what `oracle_met` measures
 
