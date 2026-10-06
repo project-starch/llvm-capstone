@@ -1,4 +1,14 @@
 #!/bin/bash
+# STATE: NOT PROVEN. prepare works (13 min, measured); the survey step has not
+# yet completed on any arm. It is kept because the three arms this corpus
+# declares already have images, so nothing here depends on it, and because the
+# CPYD_HEAP arms it builds are the ones a later round will need. It is NOT
+# listed in corpus.json's runners for exactly that reason: a runner a reader
+# can run is a promise, and this one cannot keep it yet.
+#
+# It also does not build THIS corpus's arms. spatial and sublet are
+# pymalloc-repros' names for the level0 heap with and without patch 0014, and
+# their images predate this script.
 # build-arms.sh [arm...]: one domain image per arm, from one source tree.
 #
 # The four Capstone arms differ ONLY in the heap the image links, which is the

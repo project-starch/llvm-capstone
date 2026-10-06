@@ -17,7 +17,23 @@ export PYTHONPATH=$RT/host CAPSTONE_QEMU_LOCK=$KIT/qemu.lock
 # The revoking arms spend far more revocation nodes than the 65536 default. An
 # earlier round at the default produced 44 cause-30 (INSUF_RESOURCES) rows out
 # of 54, which is a resource ceiling and not a verdict about any defect.
-case $arm in sysalloc-sublet|sublet-pymalloc) export CAPSTONE_REV_NODES=16777216 ;; esac
+# Which arms revoke, and therefore need more than the 65536-node default. The
+# arm NAMES are read from the corpus so this cannot drift again: the first
+# version of this line matched sysalloc-sublet and sublet-pymalloc, names the
+# corpus stopped using, so the `sublet` arm would silently have run at the
+# default and produced cause-30 (INSUF_RESOURCES) rows -- a resource ceiling,
+# not a verdict about any defect.
+case $arm in
+  sublet|sysalloc-sublet|sublet-pymalloc|sublet-gc)
+    export CAPSTONE_REV_NODES=${CAPSTONE_REV_NODES:-16777216} ;;
+esac
+# The arm must be one this corpus declares, so a typo cannot produce a result
+# directory that analyse.py will later refuse.
+DECL=$(python3 -c "import json,sys; print(' '.join(json.load(open(sys.argv[1]))['required_arms']))" \
+       "$CORPUS/corpus.json")
+case " $DECL " in *" $arm "*) ;; *)
+  echo "arm '$arm' is not in corpus.json required_arms: $DECL" >&2; exit 2 ;;
+esac
 
 IMG=$KIT/images/python-$arm.dom
 INPUTS=$KIT/images/inputs.tsv

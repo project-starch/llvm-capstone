@@ -13,8 +13,11 @@ own blocks too, so the difference is what sublets the nested allocator.
 """
 import argparse, csv, json, pathlib, sys
 
-ARMS = ["sysalloc-none", "sysalloc-bounds", "sysalloc-sublet",
-        "sublet-pymalloc", "cheribsd-revocation"]
+# Read from the corpus rather than written here: a hardcoded list went stale
+# the moment the corpus changed its arms, and a stale list makes this script
+# refuse perfectly good result directories.
+_CORPUS = pathlib.Path(__file__).resolve().parent.parent / "corpus.json"
+ARMS = json.loads(_CORPUS.read_text())["required_arms"]
 
 p = argparse.ArgumentParser(description=__doc__,
                             formatter_class=argparse.RawDescriptionHelpFormatter)
