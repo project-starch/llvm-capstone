@@ -1,0 +1,24 @@
+{
+ "case": 2,
+ "upstream_fix": "d2cddbe1df",
+ "title": "caller() copies pointers to already-freed SVs into @DB::args",
+ "consumer": "pp_ctl.c",
+ "class": "temporal",
+ "trigger": "trigger.pl",
+ "live_in_pin": true,
+ "live_proof": "upstream fixed it in d2cddbe1df (d2cddbe1df3078717c41d2553f47eac6acad3f75) (2023-03-15). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin pp_ctl.c:2064 Copy(AvALLOC(ary), AvARRAY(PL_dbargs), AvFILLp(ary)+1+off, SV*)). Host ASan at the pin: no ASan report; Perl's own check: panic: attempt to copy freed scalar (rc=255); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
+ "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+ "arms": {
+  "sysalloc-none": {
+   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+  },
+  "sysalloc-bounds": {
+   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+  },
+  "sublet-svheads": {
+   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+  }
+ },
+ "status": "sysalloc-none, sysalloc-bounds and sublet-svheads measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
+ "allocator_layer": "nested allocator: the SV head arena"
+}

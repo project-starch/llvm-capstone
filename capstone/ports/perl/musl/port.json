@@ -19,5 +19,8 @@
   ],
   "related": [
     "capstone/ports/perl/cheribsd"
+  ],
+  "corpora": [
+    "capstone/bug-corpora/perl/release-differential"
   ]
 }
