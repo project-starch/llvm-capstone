@@ -40,9 +40,9 @@ An access that leaves a bound. Built from upstream defects:
 | program | nested | not nested | total | where |
 |---|---:|---:|---:|---|
 | memcached | **3** | **1** | **4** | `allocator-repros/05-07` (`slabs.c` chunks) and `plain-heap-repros/00` (`ddee3e2`, one byte past a `calloc`) |
-| tshark | **5** | 0 | **5** | `wmem-repros/13-17` — cursor skip, fixed-offset loop, negative index, parity write, off-by-one size |
+| tshark | **5** | **1** | **6** | `wmem-repros/13-17` (wmem chunks) and `plain-heap-repros/00` (`19c51d27b9`, 65471 bytes past a `g_malloc`) |
 | FFmpeg | **1** | **3** | **4** | `plane-repros/00` (`b7946098b1`, one row past a frame plane) and `subobject-repros/00-02` (members inside one `av_malloc`) |
-| **total** | **9** | **4** | **13** | |
+| **total** | **9** | **5** | **14** | |
 
 And the **synthetic baseline**, which carried the not-nested spatial row alone until
 `plain-heap-repros/00` landed and which still does the job no upstream case can -- showing
@@ -162,7 +162,7 @@ has rather than what it might:
 | cell | candidate | the crossing |
 |---|---|---|
 | memcached, not-nested spatial | **BUILT** — `plain-heap-repros/00` (`ddee3e2`) | an unclamped `fgets` scan leaves `calloc(1, sb.st_size)`; measured two-sided on both native arms, and ASan reports it |
-| tshark, not-nested spatial | **none** | `7ffc11e38f` was retracted as hardening; the cell is still empty and its candidates are the 22 unread |
+| tshark, not-nested spatial | **BUILT** — `wireshark/plain-heap-repros/00` (`19c51d27b9`) | a file-supplied record size runs the copy 65471 bytes past a `g_malloc(8192)` page buffer; measured two-sided, and ASan reports it |
 | FFmpeg, **nested** spatial | **BUILT** — `plane-repros/00` (`b7946098b1`) | one row past a frame plane, inside the frame's single `AVBuffer`; measured two-sided, and ASan is silent |
 
 They are **candidates until built and measured**, and neither is counted in any table yet.
@@ -180,10 +180,10 @@ discriminate at `malloc` granularity, which is a different job from counting ups
 | | nested | not nested | total |
 |---|---:|---:|---:|
 | temporal | **22** | **5** | **27** |
-| spatial (upstream reductions) | **9** | **4** | **13** |
-| **total** | **31** | **9** | **40** |
+| spatial (upstream reductions) | **9** | **5** | **14** |
+| **total** | **31** | **10** | **41** |
 
-**31 of 40 are instances of nesting (78%).** On the spatial side specifically, 9 of 13. Add the
+**31 of 41 are instances of nesting (76%).** On the spatial side specifically, 9 of 14. Add the
 synthetic baseline probes and the not-nested spatial row grows further, but those are probes and
 are kept out of the defect count on purpose.
 
@@ -195,7 +195,7 @@ are kept out of the defect count on purpose.
 |---|---:|---:|---:|
 | temporal, 22 nested | **0 of 22** | **21 of 22** | **22 of 22** |
 | temporal, 5 not nested | **0 of 5** | **5 of 5** | tshark **2 of 2** |
-| spatial, 13 upstream | **6 of 11 measured** | **6 of 11 measured** | tshark **5 of 5** |
+| spatial, 14 upstream | **6 of 11 measured** | **6 of 11 measured** | tshark **5 of 5** |
 
 - **Temporal, 0 of 22 without protection, measured** — not predicted. A bound cannot see a dead
   object: the stale address is in bounds by construction.
@@ -243,7 +243,7 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **18** | 4 |
-| spatial, 13 upstream | **0** | **0** | 13 |
+| spatial, 14 upstream | **0** | **0** | 14 |
 
 - **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
   - tshark 13 — `results/20260921-cheribsd/` (`matrix.tsv`, `arm=cheribsd`): expected complete,
@@ -311,12 +311,12 @@ this is what a host that has them needs in order to extend the measured column:
 
 | | count | source |
 |---|---:|---|
-| `case.json` files across the **six** corpora | **35** | `memcached/allocator-repros` 8 + `plain-heap-repros` 1, `wireshark/wmem-repros` 18, `ffmpeg/pool-repros` 4 + `subobject-repros` 3 + `plane-repros` 1 |
+| `case.json` files across the **seven** corpora | **36** | `memcached/allocator-repros` 8 + `plain-heap-repros` 1, `wireshark/wmem-repros` 18 + `plain-heap-repros` 1, `ffmpeg/pool-repros` 4 + `subobject-repros` 3 + `plane-repros` 1 |
 | temporal corpus cases | **22** | 5 + 13 + 4 |
-| spatial corpus cases | **13** | 3 + 1 + 5 + 3 + 1 |
+| spatial corpus cases | **14** | 3 + 1 + 5 + 1 + 3 + 1 |
 | not-nested temporal, as app fixtures | 5 | memcached 17/18, tshark 14/15, FFmpeg 24 |
-| **total defects in both tables** | **40** | 27 temporal + 13 spatial |
-| fix-reversals (`live_in_pin: false`) | **29 of 35** | liveness is recorded, never required |
+| **total defects in both tables** | **41** | 27 temporal + 14 spatial |
+| fix-reversals (`live_in_pin: false`) | **30 of 36** | liveness is recorded, never required |
 
 *These are recomputed from the `case.json` files, not typed. They drifted once already — the
 headline tables were updated and this section was not — which is the defect

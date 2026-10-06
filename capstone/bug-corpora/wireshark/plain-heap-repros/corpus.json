@@ -1,0 +1,44 @@
+{
+  "program": "wireshark",
+  "boundary": "the system allocator itself: one g_malloc, with no inner layer",
+  "title": "Upstream wiretap spatial defects that cross the MALLOC BOUND, tshark's not-nested row",
+  "upstream": {
+    "version": "4.6.8",
+    "port": "capstone/ports/wireshark/app"
+  },
+  "cases": 1,
+  "case_schema": "case-json",
+  "case_macro": "WSH",
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "sublet-chunks",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "cheribsd-revocation",
+    "native-detect",
+    "native-fix-differential"
+  ],
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "false": 1
+  },
+  "runners": [
+    "capstone/bug-corpora/wireshark/plain-heap-repros/runners/run-native.sh"
+  ],
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+  "evidence": [
+    "capstone/bug-corpora/wireshark/plain-heap-repros/results/20261006-native-plain-heap"
+  ],
+  "advisories": [],
+  "shape_table": true,
+  "note": "A sibling of wmem-repros, deliberately separate: that corpus's boundary is wmem -- a chunk carved from a block the system allocator handed out -- and all eighteen of its cases cross a bound wmem owns. These cross the malloc bound itself, in wiretap, which does not use wmem at all and calls g_malloc directly for its page buffers. The corpus is the mirror of memcached/plain-heap-repros and exists for the same reason: tshark's not-nested spatial row stood empty because the hunt had required its candidates to be live at the pin, which no document asks for. It also carries the one tshark row the chunk port is IRRELEVANT to, which is why sublet-chunks is a required arm here: its prediction is that the port changes nothing, because the object is not a wmem chunk. ASan REPORTS these defects, unlike the wmem and sub-object corpora.",
+  "arm_keys": {
+    "sublet-chunks": [
+      "oracle",
+      "cause"
+    ]
+  }
+}

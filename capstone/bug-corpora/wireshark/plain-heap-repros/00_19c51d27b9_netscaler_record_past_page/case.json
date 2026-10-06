@@ -1,0 +1,56 @@
+{
+  "case": 0,
+  "upstream_fix": "19c51d27b9",
+  "title": "PACKET_DESCRIBE copies a NetScaler record out of the page buffer using a length taken straight from the file",
+  "consumer": "wiretap/netscaler.c, the PACKET_DESCRIBE macro",
+  "object": "nstrace_buf, one g_malloc(NSPR_PAGESIZE) page buffer of 8192 bytes",
+  "lifetime_ender": "NONE -- the page buffer is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "a record size read from the file makes the copy start inside the page buffer and run past its end",
+  "allocator_layer": "the system allocator itself: one g_malloc, no inner layer. wiretap does not use wmem, which is what makes this the NOT-NESTED spatial row for tshark.",
+  "fidelity": "real allocator, model consumer. The allocation is the upstream size (NSPR_PAGESIZE = 8192, wiretap/netscaler.c:52, unchanged at the pin) and the length is the upstream field's full range. GLib is not linked: g_malloc is malloc plus abort-on-failure and g_free is free, which is all this case uses of it. The copy is REDUCED TO ITS FIRST CROSSING BYTE -- the unreduced memcpy spans 65471 bytes past the allocation, and walking all of it would be an unbounded read through whatever follows; the magnitude is reported as extent= and stated in PROVENANCE.md. The fix adds three guards; the case is reduced to the one that bounds the copy.",
+  "live_in_pin": false,
+  "live_proof": "the fix is an ancestor of v4.6.8 and the pin carries its guards: v4.6.8:wiretap/netscaler.c contains 2 occurrences of \"record crosses page boundary\", and the page buffer is still g_malloc(NSPR_PAGESIZE) at :731. The parent 19c51d27b9^ has the allocation at :682 and no guard at all. The case reconstructs the pre-fix consumer shape against the shipped allocator, the convention at ../../memcached/allocator-repros/README.md:132-135.",
+  "distinguishing": "the arms differ by ONE guard -- whether the remaining room in the page is compared with the record size. The allocation, the offset and the record size are identical in both.",
+  "arms": {
+    "native-fix-differential": {
+      "oracle": "the buggy arm reports cap=8192 touched=73663 extent=65471 crossed=1 damage=1; the fixed arm crossed=0 damage=0 with the same cap, touched and extent, because the guard refuses the record rather than changing its size. MEASURED 2026-10-06, results/20261006-native-plain-heap/.",
+      "status": "measured"
+    },
+    "native-detect": {
+      "oracle": "ASan REPORTS. The crossing leaves the malloc bound, so a redzone sits exactly where it lands. MEASURED two-sided 2026-10-06 -- buggy 'heap-buffer-overflow ... READ of size 1 ... 0 bytes after 8192-byte region', attributed to the labelled read_probe (shared/corpus.h:64) with the allocation at case.c:28; fixed arm silent, exit 0. The wmem and sub-object corpora record the opposite reading for the opposite reason.",
+      "status": "measured"
+    },
+    "spatial": {
+      "oracle": "PREDICTED: faults at the labelled probe. The crossing leaves the g_malloc bound, which per-object bounds enforce, so the bounds-only arm must catch it. The corresponding malloc-granular reading already exists in the tshark app port: fixtures fx2 and fx3 read level0 RETURN and shrink FAULT oob there. NOT YET MEASURED as a corpus case -- this corpus has no capstone-domain runner.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the page buffer is alive; the catch is the inherited per-object bound. NOT YET MEASURED as a corpus case.",
+      "status": "predicted"
+    },
+    "sublet-chunks": {
+      "oracle": "PREDICTED: faults, and for the SAME reason as the spatial arm rather than a different one. The chunk port narrows wmem chunks, and wiretap's page buffer is not a wmem chunk -- it is a direct g_malloc -- so the port changes nothing here. That is the point of the row: it is the one tshark case the inner-allocator port is irrelevant to. NOT YET MEASURED.",
+      "status": "predicted",
+      "cause": 5
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: mode 0 bounds each allocation, so it catches a crossing of the malloc bound.",
+      "note": "UNMEASURABLE ON THIS HOST at the time of writing, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them, and no SDK, purecap sysroot or image existed here."
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": 34,
+      "si_code": 2,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: mode 1 adds temporal protection to the same bounds, so it catches the crossing for the mode-0 reason.",
+      "note": "UNMEASURABLE ON THIS HOST at the time of writing, same check as the arm above."
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, NOT MEASURED: CATCHES. CHERI bounds each malloc, and this crossing leaves the malloc bound rather than staying inside a wmem block. Revocation is irrelevant to it; the bounds are not. Together with memcached/plain-heap-repros/00 this is one of the two rows that make the measured zero on the nested cases mean something.",
+      "note": "Not measured at the time of writing. A miss here would refute the bounds claim rather than add a data point."
+    }
+  },
+  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plain-heap/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner yet."
+}
