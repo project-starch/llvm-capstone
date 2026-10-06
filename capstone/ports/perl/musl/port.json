@@ -22,5 +22,6 @@
   ],
   "corpora": [
     "capstone/bug-corpora/perl/release-differential"
-  ]
+  ],
+  "note": "The cross build's target lib/ is staged from this script's own native reference: perl-cross installs almost none of it (636 pure-Perl modules absent, XSLoader.pm, DynaLoader.pm and PerlIO/scalar.pm among them), and because perl reaches a statically linked XS layer through its .pm, the absence is SILENT -- open($fh, '>', \\$str) succeeded with the generic perlio layer pushed instead of scalar, writes were discarded and the backing scalar stayed undef. Measured 2026-10-06; it cost a corpus case its verdict. The build now refuses to continue if any of those three is still missing."
 }

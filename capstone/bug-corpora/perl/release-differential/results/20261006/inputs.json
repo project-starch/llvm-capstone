@@ -29,10 +29,11 @@
  "result": {
   "sysalloc-none": 6,
   "sysalloc-bounds": 6,
-  "sysalloc-sublet": 6,
+  "sysalloc-sublet": 7,
   "sublet-svheads": 7,
   "regressions": 0,
-  "denominator": "9, not 11: 254b30e378 and 9e298ab597 do not execute their defect in a domain"
+  "union_of_the_two_sublet_arms": 8,
+  "denominator": "10 of 11: only 9e298ab597 fails to execute its defect anywhere but the host"
  },
  "positive_control_on_the_arms_themselves": {
   "why": "three arms reporting the same 6 is exactly what a non-revoking build would also show, so 'sublet is silent on the system-allocator cases' needed a check that the revocation can fire at all. Two questions the eval/shim controls cannot answer",
@@ -41,5 +42,13 @@
   "sysalloc-sublet": "prints ABOUT-TO-READ-FREED and the process ends there; the read never completes. Revocation is live, so this arm's silence on the system-allocator cases is a fact about those cases",
   "realloc_relocates": "both arms print moved=1 for 26->52 and 1000->4000, so a dangling pointer into a grown buffer IS possible here; 'realloc grew in place' was considered and refuted",
   "why_sysalloc_sublet_still_adds_nothing": "the two system-allocator temporal cases it was built for are the two that do not execute their defect in a domain -- 254b30e378's filehandle discards its writes, 9e298ab597's assertion passes. Not a statement about Sublet"
- }
+ },
+ "library_staging": {
+  "what_was_wrong": "perl-cross installs almost none of the TARGET library: 636 pure-Perl modules the same release installs natively were absent, XSLoader.pm, DynaLoader.pm and PerlIO/scalar.pm among them. Every extension here is linked statically, but perl still reaches an XS layer through its .pm, so PerlIO_find_layer(\"scalar\") could not require PerlIO::scalar and the open fell back SILENTLY to the generic perlio layer",
+  "how_it_showed": "the domain reported `LAYERS perlio` for open($fh, '>', \\$str) where the native reference of the same release reports `LAYERS scalar`; writes returned success and the backing scalar stayed undef. It cost 254b30e378 its verdict and would silently degrade any workload needing a module",
+  "fix": "build-perl-domain.sh stages the library from its own native reference, filling only what the cross tree lacks so the target's Config.pm wins, and refuses to continue if XSLoader.pm, DynaLoader.pm or PerlIO/scalar.pm is still missing",
+  "two_traps_in_writing_that_step": "the arch-dependent .pm stubs live under lib/<ver>/<archname>/, so a walk of the version directory alone copies DynaLoader.pm and PerlIO/scalar.pm somewhere @INC never looks -- the fill reports hundreds of files and still leaves the two that matter missing. And detecting that directory by looking for Config.pm in it also matches Net/, because Net::Config exists, which flattens Net/*.pm into the library root; the archname comes from the native perl instead",
+  "verified": "the step's output has ZERO content differences from the library the four arms were measured with, and the domain's layer stack and write behaviour now match the native reference exactly"
+ },
+ "result_before_the_fix": "sysalloc-sublet read 6 and 254b30e378 was recorded as harness_limit. Both were artefacts of the staging and are superseded"
 }
