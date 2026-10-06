@@ -23,6 +23,6 @@ case	arm	verdict	evidence
 08_c4d51b6274_levenshtein_stop_column_oob_write	spatial	silent	completed with no directive and no fault
 08_c4d51b6274_levenshtein_stop_column_oob_write	sublet	silent	completed with no directive and no fault
 08_c4d51b6274_levenshtein_stop_column_oob_write	cheribsd-revocation	silent	ran to the prompt with no fault
-09_7a7d9693c7_pgp_sesskey_overflow	spatial	not-applicable	this image cannot create pgcrypto -- outside this arm's denominator, not a verdict about it
-09_7a7d9693c7_pgp_sesskey_overflow	sublet	not-applicable	this image cannot create pgcrypto -- outside this arm's denominator, not a verdict about it
+09_7a7d9693c7_pgp_sesskey_overflow	spatial	silent	completed with no directive and no fault
+09_7a7d9693c7_pgp_sesskey_overflow	sublet	silent	completed with no directive and no fault
 09_7a7d9693c7_pgp_sesskey_overflow	cheribsd-revocation	silent	ran to the prompt with no fault

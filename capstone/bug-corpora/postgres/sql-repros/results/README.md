@@ -5,23 +5,27 @@ run against a real stand-alone backend, measured on three arms on 2026-10-06.
 
 | arm | detected | scored | not applicable |
 |---|---:|---:|---:|
-| `spatial` (base Capstone) | **2** | 8 | 1 |
-| `sublet` (Capstone + Sublet) | **4** | 7 | 2 |
+| `spatial` (base Capstone) | **2** | 9 | 0 |
+| `sublet` (Capstone + Sublet) | **4** | 8 | 1 |
 | `cheribsd-revocation` (purecap) | **2** | 9 | 0 |
 
-Every denominator is the cases *that arm can run*, and the gap is named rather
-than absorbed. `spatial` and `sublet` cannot create pgcrypto: 17.5 builds it
-around `openssl.o` unconditionally and no OpenSSL is cross-compiled for
-capstone64, so case 09 is outside both. `sublet` additionally cannot create
-ltree -- `CREATE EXTENSION ltree` takes a capability fault on that arm before
-any case's own SQL runs -- so case 03 is outside it too. Neither is a verdict
-about the mechanism, and neither is counted as one.
+Every denominator is the cases *that arm can run*, and the one gap is named
+rather than absorbed. `sublet` cannot create ltree: `CREATE EXTENSION ltree`
+takes a capability fault on that arm before any of case 03's own SQL runs, so
+that cell is `not-applicable` and not a verdict about the mechanism. The
+case's own `investigation` field records where the fault is and what has been
+ruled out.
+
+Case 09 was outside both Capstone arms until 2026-10-06, because it reached
+the defect through pgcrypto and no OpenSSL is cross-compiled for capstone64.
+It now runs the same three statements as a C caller against pgcrypto's real
+`PGP_Context`, so all three arms measure it.
 
 **The result is the sublet column.** All nine defects are palloc clients, so
 all nine are nested by the allocator that serves them: the damage stays inside
 a chunk that AllocSet carved out of a block it took from malloc, and an arm
 whose bounds are the malloc block has nothing to check. Sublet bounds each
-sub-allocation and reports 4 of 7 where base Capstone reports 2 of 8 and the
+sub-allocation and reports 4 of 8 where base Capstone reports 2 of 9 and the
 purecap guest 2 of 9.
 
 ## What produced these numbers

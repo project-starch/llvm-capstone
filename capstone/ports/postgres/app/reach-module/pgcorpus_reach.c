@@ -25,6 +25,12 @@
 
 #include "catalog/pg_collation_d.h"
 #include "fmgr.h"
+/* pgcrypto's own header, for the real PGP_Context: this case turns on where
+ * sess_key sits inside that struct and how soon a copy into it leaves it, so
+ * a look-alike declared here would measure a layout upstream does not have.
+ * Only the header is used -- no pgcrypto object is linked, which is the point,
+ * because pgcrypto itself cannot be built for a Capstone domain. */
+#include "pgp.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -102,4 +108,57 @@ corpus_regexp_invalid_subject(PG_FUNCTION_ARGS)
 										 C_COLLATION_OID,
 										 PointerGetDatum(subject),
 										 PointerGetDatum(pattern)));
+}
+
+
+/*
+ * Case 09, 7a7d9693c7 (CVE-2026-2005). pgp_pub_decrypt_bytea() takes the
+ * session-key length out of the message with no upper bound and copies that
+ * many bytes into a 32-byte inline array.
+ *
+ * The three statements below are pgp-pubdec.c:226-228 verbatim. What is not
+ * upstream is how the message gets here: upstream's own regression data
+ * arrives through pgp_pub_decrypt_bytea and an RSA or ElGamal decryption,
+ * which needs pgcrypto, which needs OpenSSL, which is not cross-compiled for
+ * capstone64 -- so on two of the three arms the extension cannot be created
+ * at all and the case had no verdict there. Supplying msglen directly keeps
+ * the defective arithmetic and the real struct while dropping the cipher the
+ * platform lacks, and nothing is lost by it: the overflow at :228 happens
+ * before any cipher is instantiated, with ctx->cipher_algo on the line above
+ * read but not yet used.
+ *
+ * msglen is the attacker-chosen length; sess_key_len is msglen - 3. The copy
+ * runs off sess_key into sess_key_len, which is the next member, and then off
+ * the end of the struct -- on the host that is at 36 bytes copied, with
+ * sess_key at offset 148 of 184. The function reports the figures for the
+ * platform it is running on rather than leaving a reader to assume the host's.
+ */
+PG_FUNCTION_INFO_V1(corpus_pgp_sesskey_overflow);
+
+Datum
+corpus_pgp_sesskey_overflow(PG_FUNCTION_ARGS)
+{
+	int32		msglen = PG_GETARG_INT32(0);
+	PGP_Context *ctx;
+	uint8	   *msg;
+
+	if (msglen < 4 || msglen > 65536)
+		elog(ERROR, "msglen must be between 4 and 65536, not %d", msglen);
+
+	ctx = palloc0(sizeof *ctx);
+	msg = palloc0(msglen);
+	msg[0] = 7;					/* the cipher-algo byte, read at :226 */
+
+	elog(NOTICE,
+		 "PGP_Context is %zu bytes, sess_key at %zu is %d wide, "
+		 "sess_key_len at %zu; copying %d bytes",
+		 sizeof *ctx, offsetof(struct PGP_Context, sess_key), PGP_MAX_KEY,
+		 offsetof(struct PGP_Context, sess_key_len), msglen - 3);
+
+	/* pgp-pubdec.c:226-228, verbatim */
+	ctx->cipher_algo = *msg;
+	ctx->sess_key_len = msglen - 3;
+	memcpy(ctx->sess_key, msg + 1, ctx->sess_key_len);
+
+	PG_RETURN_INT32((int32) ctx->sess_key_len);
 }

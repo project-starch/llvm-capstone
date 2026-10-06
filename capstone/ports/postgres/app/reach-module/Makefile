@@ -3,6 +3,10 @@ OBJS = \
 	$(WIN32RES) \
 	pgcorpus_reach.o
 
+# pgcrypto's headers only, for the real PGP_Context that case 09 turns on.
+# No pgcrypto object is linked: it cannot be built for a Capstone domain.
+PG_CPPFLAGS = -I$(top_srcdir)/contrib/pgcrypto
+
 EXTENSION = pgcorpus_reach
 DATA = pgcorpus_reach--1.0.sql
 PGFILEDESC = "pgcorpus_reach - C-level callers for defects SQL cannot reach"

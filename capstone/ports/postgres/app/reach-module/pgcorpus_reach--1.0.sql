@@ -10,3 +10,8 @@ CREATE FUNCTION corpus_regexp_invalid_subject(payload integer DEFAULT 64)
 RETURNS text[]
 AS 'MODULE_PATHNAME', 'corpus_regexp_invalid_subject'
 LANGUAGE C STRICT;
+
+CREATE FUNCTION corpus_pgp_sesskey_overflow(msglen integer DEFAULT 64)
+RETURNS integer
+AS 'MODULE_PATHNAME', 'corpus_pgp_sesskey_overflow'
+LANGUAGE C STRICT;

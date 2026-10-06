@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "kind": "signal",
+  "value": 11,
+  "fault": "capstone-exec: domain fault cause=7 pc=0xc0cbc070 address=0xc533fff0 entry=0xc0200e4c code=0xc0200000-0xc5320000 last=0x44 preparing=0x44 sha256=bbe1b56f2b4f0d88a447926f43fe53ba3c28ab464b9f92441177caa24092cdb9 image=/mnt/host/applications/postgres-bbe1b56f2b4f0d88a447926f43fe53ba3c28ab464b9f92441177caa24092cdb9.dom",
+  "image_sha256": "bbe1b56f2b4f0d88a447926f43fe53ba3c28ab464b9f92441177caa24092cdb9"
+}
