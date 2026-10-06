@@ -253,7 +253,7 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **18** | 4 |
-| spatial, 14 upstream | **0** | **3** | 11 |
+| spatial, 14 upstream | **1** | **10** | 4 |
 
 - **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
   - tshark 13 — `results/20260921-cheribsd/` (`matrix.tsv`, `arm=cheribsd`): expected complete,
@@ -288,6 +288,30 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
   struct. Revocation is irrelevant to it; the bounds are not. A miss would refute the bounds claim
   rather than add a data point — which is what makes it worth running first on an SDK host, beside
   the five not-nested temporal fixtures.
+- **The column's first CATCH, and the measured reason the other small-overflow row is a miss.**
+  On 2026-10-06 seven more spatial cases ran on the same vehicle: tshark's five wmem cases
+  (`wmem-repros/13-17`) and both plain-heap rows. The wmem five **complete**. The two plain-heap
+  rows **split**, and the split is the finding:
+
+  | row | the crossing | CheriBSD |
+  |---|---|---|
+  | `wireshark/plain-heap-repros/00` | 65471 bytes past a `g_malloc(8192)` | **CAUGHT** — `SIGPROT`, `si_code` **1**, `addr` = `pc` = `0x102006`, and `supervise` resolved the labelled probe to that same address, so SCHEMA rule 2 is met |
+  | `memcached/plain-heap-repros/00` | 1 byte past a `calloc(1, 9)` | **not caught** |
+
+  **Measured in the same guest, not inferred:** CheriBSD's `malloc` sets the capability to the
+  allocator's *usable size*, not the request — `calloc(1,1)` and `calloc(1,9)` both return
+  `length=16`, `calloc(1,17)` returns 32, `calloc(1,8192)` returns exactly 8192. Offset 9 is inside
+  a 16-byte capability, so no fault is possible there; 65471 past 8192 leaves the allocation by far
+  more than any size-class slack.
+
+  **So "spatial is a tie with CHERI" holds only for crossings that leave the USABLE allocation.**
+  Capstone's `shrink` bounds to the *request* and catches this exact shape — memcached app fixture
+  20 is the same defect and reads `shrink` FAULT `oob`. That is an allocator-policy difference, not
+  a hardware one: CHERI can express a 9-byte bound, and this `malloc` chooses not to.
+
+  **`si_code` 1 is the BOUNDS code.** Every runner in this tree hardcodes `PROT_CHERI_TAG = 2`,
+  which is the *tag* code; the bounds code was recorded nowhere before this run, which is why it was
+  deliberately not predicted.
 - **The first measured spatial cells, 2026-10-06.** memcached's three slab cases (`allocator-repros/05-07`)
   ran on a **stock CheriBSD vehicle built on this host** with
   `tests/cheri-baseline/provision-cheri-vehicle.sh`, revocation on: **8 of 8 arms passed, 0 of 8

@@ -48,9 +48,9 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "PREDICTED, NOT MEASURED: CATCHES. CHERI bounds each malloc, and this crossing leaves the malloc bound rather than staying inside a wmem block. Revocation is irrelevant to it; the bounds are not. Together with memcached/plain-heap-repros/00 this is one of the two rows that make the measured zero on the nested cases mean something.",
-      "note": "Not measured at the time of writing. A miss here would refute the bounds claim rather than add a data point."
+      "oracle": "MEASURED 2026-10-06 on this host: CAUGHT. signal=34 (SIGPROT), **si_code=1**, addr=pc=0x102006, and SUPERVISE resolved 'expect read_probe 0x102006' independently -- so the fault is AT the labelled probe and SCHEMA rule 2 is met for this row. The crossing is 65471 bytes past a g_malloc(8192), whose capability is exactly 8192 long (measured), so it leaves the allocation by far more than any size-class slack. the platform's own bounds control fired in the same boot: cheribsd-bounds runs abi-probe oob, which sets bounds to exactly 16 and reads offset 16, and it PASSED alongside cheribsd-abi reporting CHERI_ABI pointer_bytes=16 runtime_revocation=1. A spatial completion is therefore a reading, not a silent detector. si_code 1 is the BOUNDS code; every runner in this tree hardcodes PROT_CHERI_TAG=2, which is the TAG code, and the bounds code was not recorded anywhere before this run.",
+      "platform": "stock CheriBSD purecap built on this host with tests/cheri-baseline/provision-cheri-vehicle.sh (kernel CHERI-PURECAP-QEMU, releng/26.07-88f39900c329 = pins.env's CHERIBSD_REV; hw.machine_arch riscv64c; qemu 16135483052dfdd6, firmware f0e1fe57b0f85075, kernel 8ab453f46dc76cf2, libc fdce2289224bb519, image 0cb16209c16c5edf) -- the same vehicle, hash for hash, as the memcached allocator-repros run of the same day, so the readings are directly comparable."
     }
   },
-  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plain-heap/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner yet."
+  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plain-heap/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner yet. CheriBSD MEASURED 2026-10-06: CAUGHT at the labelled probe, si_code 1."
 }
