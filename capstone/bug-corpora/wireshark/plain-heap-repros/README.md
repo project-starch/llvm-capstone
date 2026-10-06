@@ -24,6 +24,7 @@ tree contradict.
 | shape | cases |
 |---|---|
 | a length read from the file makes a copy run past the end of a `g_malloc`'d page buffer | 0 |
+| an error path indexing the second array with the FIRST array's index | 1 |
 
 ## The case
 

@@ -6,7 +6,7 @@
     "version": "4.6.8",
     "port": "capstone/ports/wireshark/app"
   },
-  "cases": 1,
+  "cases": 2,
   "case_schema": "case-json",
   "case_macro": "WSH",
   "required_arms": [
@@ -22,6 +22,7 @@
   "status": "measured",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
+    "true": 1,
     "false": 1
   },
   "runners": [

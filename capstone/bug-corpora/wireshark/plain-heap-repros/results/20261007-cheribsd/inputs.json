@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-07",
+  "runner": "runners/run-cheribsd.sh",
+  "runtime_revocation": "on",
+  "guest_default_revocation": "preserved",
+  "cases": 2,
+  "caught": [
+    0,
+    1
+  ],
+  "not_caught": [],
+  "arms_total": 6,
+  "arms_passed": 6,
+  "runner_exit": 0,
+  "controls": {
+    "cheribsd-abi": "CHERI_ABI pointer_bytes=16 runtime_revocation=1 -- PASS",
+    "cheribsd-bounds": "CHERI_BOUNDARY_READY -- PASS"
+  },
+  "case_0": "65471 bytes past g_malloc(8192); 8192 is exactly a size class. CAUGHT, si_code 1.",
+  "case_1": "index 3 of a 2-entry pointer array, i.e. byte offset 24 past malloc(16); 16 is a size class with zero slack. CAUGHT, si_code 1, fault at 0x102416 with supervise resolving wsh_read_probe at 0x102406 -- inside the probe's extent, the offset being the -O0 frame setup, which is why the criterion is the RANGE and not equality with the symbol.",
+  "attribution": "established for this corpus since 2026-10-07: the probe is DECLARED in shared/corpus.h and DEFINED ONCE in shared/driver.c. It was static in the header before, which is why this row read 'attribution: not established'.",
+  "platform": {
+    "image_sha256": "0cb16209c16c5edf9f81148eedf33f750af404f890af6d65d9bd43ecf61aa4f4",
+    "note": "byte-identical to the vehicle the ffmpeg, memcached and wmem readings used, so the three programs' columns are comparable"
+  },
+  "n_per_cell": 1
+}
