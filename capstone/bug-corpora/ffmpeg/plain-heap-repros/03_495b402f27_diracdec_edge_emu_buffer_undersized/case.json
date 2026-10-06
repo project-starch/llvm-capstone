@@ -1,0 +1,51 @@
+{
+  "case": 3,
+  "upstream_fix": "495b402f27",
+  "title": "the edge-emulation base is sized for one sub-buffer and then carved into four, so the fourth runs off the end",
+  "consumer": "libavcodec/diracdec.c:1898, dirac_decode_frame_internal(), against the allocation at :342",
+  "object": "edge_emu_buffer_base, one av_malloc_array(stride, MAX_BLOCKSIZE) at libavcodec/diracdec.c:342",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "four sub-buffers are spaced i*FFALIGN(p->width, 16) apart inside an allocation of stride*MAX_BLOCKSIZE, while each is used for up to MAX_BLOCKSIZE rows of stride bytes -- room for one, not four",
+  "allocator_layer": "the platform allocator itself: one direct allocation, no inner layer. Nothing sub-allocated the crossed region, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED. Recorded explicitly because the tally is per corpus and case.json carries no nested field.",
+  "fidelity": "real allocator, model consumer. Reduced: `width = stride = 16`, so `FFALIGN(width, 16)` is the stride and the\narithmetic is the clearest it can be; the case asserts that sub-buffer 3's last row is past the end\nat the pin and inside it under the fix, so a reduction with the wrong geometry fails rather than\nmeasuring something else. Only the FIRST crossing byte is written; `extent` records that the unreduced\npath writes a whole row.",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source, not from ancestry, and keyed on the IDENTIFIER rather than on the expression. Two-sided for BOTH halves of the fix: n9.0.1:libavcodec/diracdec.c contains `edge_emu_buffer_base = av_malloc_array(stride, 4 * MAX_BLOCKSIZE)` (1) and the pre-fix `...(stride, MAX_BLOCKSIZE)` form of that assignment (0), and contains `edge_emu_buffer[i] = s->edge_emu_buffer_base + i*s->buffer_stride` (1) against the pre-fix `+ i*FFALIGN` (0). A FIX-REVERSAL. NEAR-MISS RECORDED: a first probe keyed on the bare expression `av_malloc_array(stride, MAX_BLOCKSIZE)` read vuln=1 fix=1 -- NOT two-sided -- because diracdec.c:345 allocates `s->mcscratch` with the identical expression and the fix does not touch it. Keyed that way the liveness reading was ambiguous and would have gone into this file as a proof. The identifier is what makes the probe separate the two sites.",
+  "distinguishing": "the only row here whose fix changes the ALLOCATION rather than an index, and the only one where there is NO inner bound to have crossed: pre-fix the four sub-buffers OVERLAP, so 'the sub-buffer's bound' is not a well-defined thing. That is what puts it in this corpus and not the sub-object one, and it is why it is filed as not-nested.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED: FAULTS at the labelled probe. The crossing leaves the allocation the platform allocator handed out, which per-object bounds enforce. NOT YET MEASURED: this corpus has no capstone-domain runner, as is also true of the two sibling plain-heap corpora. WHY THE PLATFORM ALLOCATOR. These cases call the platform's calloc, not the buffer-pool port's av_malloc. That port's av_malloc (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26) is a bump/freelist carve out of ONE arena returning a raw interior pointer, and it rounds every request up to 64 bytes; __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. Routing these cases through it would leave no per-allocation bound to cross AND would absorb every small crossing in the round-up, so the reading would be about the arena, not the defect.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the buffer is alive; the catch is the inherited per-object bound. NOT YET MEASURED.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults. Mode 0 bounds each allocation and the crossing leaves one. Unmeasurable on this host, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 FATAL_ERRORs without CHERI_SDK and CHERI_SYSROOT.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, for the mode-0 reason.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, NOT MEASURED: CAUGHT at the labelled probe. THE PREDICTION IS CONDITIONAL AND THE CONDITION IS THE POINT. CheriBSD's malloc bounds a capability to the allocator's USABLE SIZE, not to the request -- measured in-guest on this host 2026-10-06: calloc(1,1) and calloc(1,9) both return length 16, calloc(1,17) returns 32, calloc(1,8192) returns exactly 8192. So a crossing is caught only when it leaves the USABLE allocation. This case requests 512 bytes and crosses 33 bytes past the end, at the fourth sub-buffer's last row, which is past a 512-byte request whose usable size is 512 (a power of two), so the crossing leaves it; this is the largest margin in the corpus. memcached/plain-heap-repros/00 predicted a catch on the same argument and was REFUTED by exactly this mechanism, so the size is recorded here rather than assumed away. The reading must be taken in-guest for THIS request size and allocation call -- the calloc table above is not transferable to a differently-aligned request.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "MEASURED two-sided 2026-10-06, 20261006-native-plain-heap/: ASan REPORTS. The crossing leaves the malloc bound by 33 bytes. The FIXED arm is silent and exits 0, so the detector is shown to separate the arms rather than merely to fire. The runner keys on heap-buffer-overflow, never on the string 'AddressSanitizer' -- LeakSanitizer's summary contains that string and would make a leak read as a bounds detection. Built -O0, so a discarded out-of-bounds read is not optimised away.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm reaches touched=544 at cap=512, crossed=1, extent=33; the fixed arm touched=2032 at cap=2048, crossed=0. ASan two-sided: buggy REPORTS, fixed silent.",
+      "status": "measured"
+    }
+  },
+  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, and ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell."
+}

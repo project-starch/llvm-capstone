@@ -1,0 +1,51 @@
+{
+  "case": 0,
+  "upstream_fix": "d133b4a231",
+  "title": "the backward kernel scan is inclusive of a bound the forward scan is exclusive of, so it reads one element past tkernel",
+  "consumer": "libavfilter/avf_showcwt.c:755-762, compute_kernel()",
+  "object": "tkernel, one av_malloc_array(size, sizeof(float)) at libavfilter/avf_showcwt.c:725",
+  "lifetime_ender": "NONE -- the buffer is alive throughout. This corpus's rows are spatial by construction.",
+  "shape": "b is clamped to size + a and range is -a, so b + range == size; the forward loop is `n < b` and the backward one is `n >= a` starting at n = b, which reads tkernel[size]",
+  "allocator_layer": "the platform allocator itself: one direct allocation, no inner layer. Nothing sub-allocated the crossed region, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED. Recorded explicitly because the tally is per corpus and case.json carries no nested field.",
+  "fidelity": "real allocator, model consumer. Reduced: the frequency/deviation arithmetic that produces `a` and `b` is replaced by\nthe clamped values it yields, and the case asserts `b + range == size` so a reduction that missed\nthe clamp would fail rather than measure something else. The kernel's float contents are reduced to\n1.0f, since the scan only tests non-zero.",
+  "live_in_pin": false,
+  "live_proof": "read from the PINNED source, not from ancestry: n9.0.1:libavfilter/avf_showcwt.c contains the FIXED form (1 occurrence) and the pre-fix form 0 times. Two-sided, so the probe is known to fire; ancestry was deliberately not used, having called backported fixes live before. A fix-reversal: the pre-fix consumer shape is reconstructed against the shipped allocator, the convention at ../../memcached/allocator-repros/README.md:132-135.",
+  "distinguishing": "the only row here whose two arms differ by a single loop-start term (b versus b - 1); the index, the array and the forward pass are identical between them.",
+  "arms": {
+    "spatial": {
+      "oracle": "PREDICTED: FAULTS at the labelled probe. The crossing leaves the allocation the platform allocator handed out, which per-object bounds enforce. NOT YET MEASURED: this corpus has no capstone-domain runner, as is also true of the two sibling plain-heap corpora. WHY THE PLATFORM ALLOCATOR. These cases call the platform's calloc, not the buffer-pool port's av_malloc. That port's av_malloc (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26) is a bump/freelist carve out of ONE arena returning a raw interior pointer, and it rounds every request up to 64 bytes; __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. Routing these cases through it would leave no per-allocation bound to cross AND would absorb every small crossing in the round-up, so the reading would be about the arena, not the defect.",
+      "status": "predicted"
+    },
+    "sublet": {
+      "oracle": "PREDICTED: faults, identically to the spatial arm. Sublet is revocation and has nothing to fire on while the buffer is alive; the catch is the inherited per-object bound. NOT YET MEASURED.",
+      "status": "predicted"
+    },
+    "poisoncap-spatial": {
+      "mode": 0,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults. Mode 0 bounds each allocation and the crossing leaves one. Unmeasurable on this host, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 FATAL_ERRORs without CHERI_SDK and CHERI_SYSROOT.",
+      "status": "predicted"
+    },
+    "poisoncap-protected": {
+      "mode": 1,
+      "signal": null,
+      "si_code": null,
+      "oracle": "PREDICTED and UNMEASURABLE HERE: faults, for the mode-0 reason.",
+      "status": "predicted"
+    },
+    "cheribsd-revocation": {
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "guest_default": "preserved",
+      "oracle": "PREDICTED, NOT MEASURED: CAUGHT at the labelled probe. THE PREDICTION IS CONDITIONAL AND THE CONDITION IS THE POINT. CheriBSD's malloc bounds a capability to the allocator's USABLE SIZE, not to the request -- measured in-guest on this host 2026-10-06: calloc(1,1) and calloc(1,9) both return length 16, calloc(1,17) returns 32, calloc(1,8192) returns exactly 8192. So a crossing is caught only when it leaves the USABLE allocation. This case requests 16 bytes and crosses 4 bytes (one float) past the end, which is past a 16-byte request whose usable size is also 16, so the crossing leaves it. memcached/plain-heap-repros/00 predicted a catch on the same argument and was REFUTED by exactly this mechanism, so the size is recorded here rather than assumed away. The reading must be taken in-guest for THIS request size and allocation call -- the calloc table above is not transferable to a differently-aligned request.",
+      "status": "predicted"
+    },
+    "native-detect": {
+      "oracle": "MEASURED two-sided 2026-10-06, 20261006-native-plain-heap/: ASan REPORTS. The crossing leaves the malloc bound, so a redzone sits exactly where it lands. The FIXED arm is silent and exits 0, so the detector is shown to separate the arms rather than merely to fire. The runner keys on heap-buffer-overflow, never on the string 'AddressSanitizer' -- LeakSanitizer's summary contains that string and would make a leak read as a bounds detection. Built -O0, so a discarded out-of-bounds read is not optimised away.",
+      "status": "measured"
+    },
+    "native-fix-differential": {
+      "oracle": "the buggy arm reaches touched=4 at cap=4, crossed=1; the fixed arm touched=3, crossed=0. ASan two-sided: buggy REPORTS heap-buffer-overflow, fixed silent, exit 0.",
+      "status": "measured"
+    }
+  },
+  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, and ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell."
+}
