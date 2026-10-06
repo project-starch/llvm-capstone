@@ -172,8 +172,15 @@ processor performance result.
 2. Fix the M0 ABI details still open: serialized node/header layout and CSR
    numbers, mode transitions, privileged-operation encodings, frame layout,
    exhaustion recovery and the precise supported instruction/exception set.
+   **Drafted** in the [prototype ABI](virtual-capstone-abi.md), which also
+   records three findings in the candidate: capability causes cannot be
+   delegated, four Capstone CSRs are reachable from U, and protected U has
+   no PCC fetch check.
 3. Add Q-12 fault-and-retry probes and implement transfers against those
    probes. Preserve the existing U-mode and ordinary Linux controls.
+   **Done** for protected U and the S context path: 20/20 in the new
+   [M1 gate](../../capstone-qemu/tests/virtual-capstone-m1/README.md) and
+   74/74 in the existing U-mode suite on the same sources.
 4. Replace the selector/host table with the guest-table context, disable ID
    reuse, and remove fat bounds from protected memory tags. Complete M1
    before extending the Linux patch to full contexts.
