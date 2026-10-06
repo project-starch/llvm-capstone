@@ -156,8 +156,12 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   fi
   n=$((n+1))
   stage=$SHARE/case-$STAMP; rm -rf "$stage"; mkdir -p "$stage"
-  cp "$d/trigger.py" "$stage/" 2>/dev/null
-  [ -f "$d/upstream_test.py" ] && cp "$d/upstream_test.py" "$stage/"
+  # Every .py the case carries, not just the two known names: a case whose
+  # upstream test imports a stdlib test package the guest's pruned Lib does not
+  # have (test.test_ast, cases 02 and 13) vendors it beside the trigger, and a
+  # staging step that copied only two files left those cases dying at import
+  # while the row read as the arm staying quiet.
+  cp "$d"/*.py "$stage/" 2>/dev/null
   [ -f "$stage/trigger.py" ] || {
     printf '%s\t%s\tSTAGING-FAILED\t\t\t\n' "$c" "$arm" >> "$OUT/verdicts.tsv"
     printf '  %-56s STAGING-FAILED\n' "${c:0:56}"; continue; }

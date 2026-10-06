@@ -109,8 +109,8 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   c=$(basename "$d")
   in_subset "$c" || continue
   G "mkdir -p /root/boundary/$c"
-  tar -C "$d" -cf - trigger.py $( [[ -f $d/upstream_test.py ]] && echo upstream_test.py ) \
-    | G "tar -C /root/boundary/$c -xf -"
+  # Every .py the case carries -- see the note in run-arm.sh's staging loop.
+  ( cd "$d" && tar -cf - ./*.py ) | G "tar -C /root/boundary/$c -xf -"
   # Staging is verified per case: a missing trigger.py produced 10 verdicts in
   # this lane that looked like defect results and were "can't open file".
   G "test -f /root/boundary/$c/trigger.py" || { echo "$c: staging failed" >&2; exit 2; }
