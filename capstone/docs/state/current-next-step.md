@@ -1,8 +1,16 @@
-Runtime integration direction (2026-10-06): start with R0 in
+Virtual C runtime (2026-10-06): the bounded
+[R0 execution adapter](../plans/virtual-capstone-runtime-r0.md) now runs a
+Capstone-compiled C function through a Linux module. Next connect the existing
+loader/CRT and delegated-service loop to that entry, keeping a context and its
+lifetime namespace alive across calls. Then add Linux-backed arena growth.
+Preserve the instruction, Linux and legacy physical application gates.
+
+Runtime integration direction (2026-10-06): build on R0 in
 [virtual Capstone through the existing runtime](../design/virtual-capstone-runtime.md).
-Reuse supervised execution and delegated Linux services. Run a capability
-program on ordinary process mappings, including an object across nonadjacent
-physical frames, and identify the concrete fault/resume path. Target an
+Reuse supervised execution and delegated Linux services. R0 now executes
+on ordinary process mappings, including an object across nonadjacent physical
+frames, with quantum resumption and terminal fault events. Add recoverable
+service events when connecting the normal application runtime. Target an
 unchanged Linux core plus module/runtime; document any unavoidable core hook.
 Keep the virtual prototype's memory-safety work. Full capability saves in
 Linux entry/return are an alternative experiment, not a prerequisite for R0.

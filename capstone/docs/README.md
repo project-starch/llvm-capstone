@@ -1,5 +1,11 @@
 # Capstone project documentation
 
+The [virtual C execution experiment](plans/virtual-capstone-runtime-r0.md)
+now joins a loadable Linux adapter to the existing QEMU supervision engine.
+It runs a small Capstone-compiled C function on ordinary process mappings,
+with no additional kernel-core or firmware patch. The normal application
+loader and delegated-service loop are the next integration step.
+
 Integration direction (2026-10-06):
 [virtual Capstone through the existing runtime](design/virtual-capstone-runtime.md).
 Trust the OS, reuse the launcher and supervised continuations, and replace

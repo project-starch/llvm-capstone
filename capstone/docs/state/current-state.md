@@ -2,6 +2,25 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-06 — virtual C execution through a Linux module
+
+The [R0 execution slice](../plans/virtual-capstone-runtime-r0.md) runs small
+C-mode programs at owning-process virtual addresses, including a freestanding
+function compiled by the Capstone C compiler. It reuses the prototype's guest
+tables, mint, physical tags and linear transfers, and the runtime's QEMU
+supervisor snapshots, quantum and event machinery. The experimental CSRUNV
+entry restores S/M callers; physical CALL/RETURN remains available.
+
+The [Linux gate](../../tests/virtual-runtime-r0/README.md) uses resident private
+Sv39 mappings, one hart and one host thread, without additional Linux-core or
+firmware changes. Teardown clears user tags before restarting local IDs.
+The [result](../../tests/virtual-runtime-r0/result.json) records 8/8 Linux cases,
+21/21 instruction cases, 60/60 M1 and 69/69 U-access regressions, and two physical
+mruby applications. Removing teardown tag clearing or cached PCC enforcement
+fails its respective negative control. These checks distinguish the adapter from a complete
+`.dom` loader, syscall ABI or general memory-safety qualification. Normal
+application integration, allocator growth and recoverable faults remain open.
+
 ## 2026-10-06 — virtual memory through the existing runtime
 
 The [integration direction](../design/virtual-capstone-runtime.md) reuses the

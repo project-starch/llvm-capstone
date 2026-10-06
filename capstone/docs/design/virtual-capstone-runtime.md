@@ -2,6 +2,11 @@
 
 Status: agreed integration direction; implementation proposal, 2026-10-06.
 
+The [R0 execution experiment](../plans/virtual-capstone-runtime-r0.md) now runs
+virtual C code through a loadable Linux adapter using the existing QEMU
+supervisor. Connecting the normal application loader and service loop remains
+work beyond that bounded gate.
+
 Capstone should use the virtual address space and services of an existing
 operating system through the runtime we already have. The first target is a
 growing protected application backed by ordinary Linux mappings. Reusing the
