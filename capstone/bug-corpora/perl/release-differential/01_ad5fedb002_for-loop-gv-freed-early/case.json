@@ -1,0 +1,24 @@
+{
+ "case": 1,
+ "upstream_fix": "ad5fedb002",
+ "title": "A foreach loop over a package variable frees the GV it iterates, and pp_iter reads it again",
+ "consumer": "pp_ctl.c",
+ "class": "temporal",
+ "trigger": "trigger.pl",
+ "live_in_pin": true,
+ "live_proof": "upstream fixed it in ad5fedb002 (ad5fedb002a4e7befcb1bd42bd788878f37a0d6e) (2022-11-15). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin pp_ctl.c:2258 itersave = GvSV(sv) with no SvREFCNT_inc(sv); inline.h:3079 cx_poploop has no CXp_FOR_GV/LVREF decrement). Host ASan at the pin: ASan: SEGV (rc=77); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
+ "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+ "arms": {
+  "sysalloc-none": {
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+  },
+  "sysalloc-bounds": {
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+  },
+  "sublet-svheads": {
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+  }
+ },
+ "status": "sysalloc-none, sysalloc-bounds and sublet-svheads measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
+ "allocator_layer": "nested allocator: the SV head arena (the GV)"
+}

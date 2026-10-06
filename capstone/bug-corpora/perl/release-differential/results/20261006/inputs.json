@@ -1,0 +1,31 @@
+{
+ "pin": "perl 5.36.3, source archive sha256 f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a, with this port's seven pointer-layout patches",
+ "population": "the 11 cases of this corpus",
+ "arms": {
+  "sysalloc-none": {
+   "image_sha256": "18e562429a1a88aabc99df540f59e5fbd967b72cae473e9b5f5f6e22c2f458c5",
+   "what_differs": "the first-fit heap built with -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0: every pointer carries the whole arena's bounds, free only marks"
+  },
+  "sysalloc-bounds": {
+   "image_sha256": "8dfde932eb922b450fec77fcfadd0a7421c841d3dda6d9a8b52758ef939cc546",
+   "what_differs": "the same heap as applications get it since PR #170: each allocation bounded, no revocation. THE BASELINE"
+  },
+  "sublet-svheads": {
+   "image_sha256": "036c9f5825d6fd5988a182d2e893d523fb9b0ac35985cfef23cd50f83eb16561",
+   "what_differs": "the same level0 OUTER heap as the baseline, plus the SV head arena through the ports/perl/sv-heads lifetime adapter in PERL_SUBLET_MODE=1: a released head is revoked and reissued under a fresh alias. Relinked by ports/common/application/build.py --nested perl, which grants the adapter 32 MiB in region 1"
+  }
+ },
+ "held_fixed": "one source tree, one compiler, one musl, one QEMU, one guest, one staged library; the three images differ only in the heap they link and, for sublet-svheads, the SV head adapter",
+ "arm_flag_verified_not_word_split": "a flag list passed to cmake as separate words becomes unknown -D cache variables and is silently dropped, which made an mruby control byte-identical to its baseline on 2026-10-05. Checked here three ways: the three image hashes differ, runtime/CMakeCache.txt records CMAKE_C_FLAGS_RELEASE='-O1 -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0' as ONE string on the none arm and '-O1' on the baseline, and level0's object file differs between the two",
+ "controls": "each arm ran two controls before its cases, and the runner EXITS rather than scoring if either fails: the interpreter evaluates 6*7, and the harness loads shim.pl from the staged library. This is not decoration -- the first sublet-svheads attempt scored 11 silences with both controls failing, because the adapter refuses to start without PERL_SUBLET_MODE (PERL-SVH-FAIL code=821)",
+ "staged_library_verified": "the library is perl's lib/ minus unicore/, auto/ and *.t (47 MiB -> 19 MiB). The prune is not assumed safe: the full 11-case host run with the complete library and with the pruned one give byte-identical verdict tables. An earlier 8-module prune, derived from an %INC probe, silently broke 254b30e378 -- the probe only sees modules in a run that reaches its END block, and that case crashes first",
+ "watchdog": "90 s per case; the guest has no timeout(1), so each case carries its own sleeper",
+ "node_pool": "CAPSTONE_REV_NODES=16777216 on the sublet arm; this kit's emulator does not recycle revocation nodes",
+ "launcher": "capstone-exec of 2026-10-01 (/tmp/capstone/threads-merge/guest2); CAPSTONE_EXEC_DIAGNOSTICS=1, without which the launcher prints a fault cause only to a tty and a bounds violation cannot be told from a revocation",
+ "result": {
+  "sysalloc-none": 6,
+  "sysalloc-bounds": 6,
+  "sublet-svheads": 7,
+  "regressions": 0
+ }
+}

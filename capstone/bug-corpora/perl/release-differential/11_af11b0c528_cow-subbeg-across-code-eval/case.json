@@ -1,0 +1,24 @@
+{
+ "case": 11,
+ "upstream_fix": "af11b0c528",
+ "title": "A failed /(?{})/ branch restores a COW-backed subbeg without its length, so $& reads past the match",
+ "consumer": "regexec.c",
+ "class": "temporal",
+ "trigger": "trigger.pl",
+ "live_in_pin": true,
+ "live_proof": "upstream fixed it in af11b0c528 (af11b0c528200761891d46a7f6566aa880be45ca) (2026-07-03). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin regexec.c:10978 eval_state->subbeg = NULL; regexec.c:11010 unconditional RXp_MATCH_COPIED_on(rex); regexp.h:648 has no subbeg_flags). Host ASan at the pin: no ASan report; the workload's own oracle fails (rc=0); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
+ "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+ "arms": {
+  "sysalloc-none": {
+   "oracle": "no fault: completes, the workload's own oracle fails"
+  },
+  "sysalloc-bounds": {
+   "oracle": "no fault: completes, the workload's own oracle fails"
+  },
+  "sublet-svheads": {
+   "oracle": "no fault: completes, the workload's own oracle fails"
+  }
+ },
+ "status": "sysalloc-none, sysalloc-bounds and sublet-svheads measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
+ "allocator_layer": "system allocator (the RXp_SUBBEG buffer), plus the nested SV head arena (saved_copy)"
+}

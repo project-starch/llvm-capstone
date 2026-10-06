@@ -2,6 +2,14 @@
 # Complete Perl 5.36.3, cross-built for CheriBSD purecap. PERL_CHERI_SV_HEADS=1
 # builds the study variant: SV heads from the PoisonCap lifetime adapter in
 # ../sv-heads, and the common CheriBSD phase observer.
+#
+# PERL_CHERI_STATIC=1 links the interpreter statically. A dynamically linked
+# purecap perl is refused by the loader on the stock CheriBSD image with
+# "Traditional TLS not supported", before main -- measured 2026-10-06 on both an
+# earlier dynamic build and the recipe build, with and without a libc preload.
+# The mruby port links static for the same reason (../mruby/cheribsd/build.sh).
+# The dynamic image only ever ran on the PoisonCap platform, whose own sshd dies
+# on a poison exception part way through a file copy, so it cannot carry a corpus.
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$HERE/../../../tests/capstone-test-env.sh" >/dev/null
@@ -52,6 +60,7 @@ PY
     -Uusedl -Uusethreads -Uusemymalloc --disable-mod=Time-HiRes \
     -Dosname=freebsd -Darchname=riscv64-freebsd-purecap \
     -Dd_nanosleep=define -Dalignbytes=16 -Doptimize=-O1 ${CCFLAGS:+-Accflags=$CCFLAGS} \
+    ${PERL_CHERI_STATIC:+-Aldflags=-static} \
     > "$ROOT/configure.log" 2>&1
   make crosspatch > "$ROOT/crosspatch.log" 2>&1
   for patch_file in "${PATCH_FILES[@]}"; do
@@ -102,4 +111,10 @@ manifest = dict(schema=1, application='perl-5.36.3', compiler_target='riscv64-un
                       if sv_heads else [])]})
 (root / 'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
 PY
+# A dynamic image builds and installs perfectly and then dies in the loader before
+# main, so the link mode is checked here rather than discovered in a guest.
+if [[ -n ${PERL_CHERI_STATIC:-} ]]; then
+  file "$ROOT/perl" | grep -q 'statically linked' \
+    || { echo "PERL_CHERI_STATIC was asked for and the image is not static; the guest loader will refuse it" >&2; exit 2; }
+fi
 echo "$ROOT/perl"

@@ -1,0 +1,110 @@
+# Perl 5.36.3: spatial and temporal defects live at the pin
+
+**Scope: spatial and temporal memory defects only.** That is this study's subject,
+and it is the only thing this corpus admits. A defect that is a null dereference, a
+type confusion, an integer overflow with no out-of-bounds consequence, or a crash
+from stack exhaustion is not here, however real it is.
+
+Eleven cases. Each is a defect upstream Perl fixed after 5.36.3, whose fix never
+reached the 5.36 maintenance branch, and whose trigger is the test upstream added
+with that fix.
+
+## Liveness is measured, in both directions
+
+A case is here only because the measurement puts it here:
+
+| | at the pin (5.36.3 + ASan) | on master (`v5.45.3-85-gdb19522155` + ASan) |
+|---|---|---|
+| reports | **11 of 11** | 0 of 11 |
+| silent | 0 of 11 | **11 of 11** |
+
+Same trigger, same harness, same `ASAN_OPTIONS`, two builds. Full table in
+[`results/20261006-host-differential`](results/20261006-host-differential/).
+
+**The dates do not settle this, and would get four cases wrong.** Four of the eleven
+fixes are *dated before* the `v5.36.3` tag (2023-11-28) and are still absent from it:
+they landed on blead and were never backported. So each case records the ancestry that
+was actually checked — `git merge-base --is-ancestor <fix> v5.36.3` false,
+`--is-ancestor <fix> <blead>` true — rather than a date comparison.
+
+## What the pin's own ASan can and cannot see
+
+This is the finding that motivates the nested-allocator arm, and it is visible in the
+host measurement before any capability hardware is involved:
+
+| what the pin reports | cases | where the memory lives |
+|---|---:|---|
+`heap-use-after-free` | 3 | `malloc`/`realloc`/`calloc` — the **system allocator**, so ASan holds the allocation record |
+`SEGV on unknown address`, no allocation context | 5 | a stale `SV*` or a wild pointer; ASan does not know this memory |
+Perl's own refcount check | 2 | the SV head arena; ASan silent |
+wrong bytes only (`$&` comes back as `b\0`) | 1 | a stale COW `subbeg`; both oracles silent |
+
+**Three of eleven are visible to ASan.** The other eight are in Perl's own arenas, or
+are derefs of a pointer that never had an allocation record. A sanitizer that works at
+the `malloc` boundary cannot see a lifetime that never crosses it.
+
+## The arms
+
+Three measured arms. `sysalloc-bounds` is the **baseline**: per-object heap bounds are
+what an application gets by default since PR #170, so a catch is a case the bounds arm
+does **not** fault on.
+
+| arm | what it is | catches |
+|---|---|---:|
+| `sysalloc-none` | the first-fit heap with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`: every pointer carries the whole arena's bounds | 6 |
+| **`sysalloc-bounds`** | the same heap as applications get it today. **The baseline** | **6** |
+| `sublet-svheads` | the same `level0` **outer** heap as the baseline, plus the SV head arena through the lifetime adapter of [`../../../ports/perl/sv-heads`](../../../ports/perl/sv-heads) in `PERL_SUBLET_MODE=1` | **7** |
+
+The three images are one source each and differ only in the heap they link, so a
+difference between them is the heap's protection and nothing else. Note what the
+sv-heads arm is *not*: its outer allocator is `level0`, the same as the baseline's,
+which is `build.py`'s own rule for a nested-allocator arm. Otherwise two things would
+change at once and the comparison would measure whichever one you did not intend.
+
+| step | adds | regressions |
+|---|---:|---:|
+| bounds over none | 0 | 0 |
+| **`sublet-svheads` over the baseline** | **1** | **0** |
+
+The one addition is `05_17535c984a`, a cloned constant sub whose `CvXSUBANY` SV head is
+shared without a reference — a head in the arena the adapter owns. The spatial case
+`08_b7b77ffc1e` is caught by all three, but only the two bounded arms report it as a
+**bounds** violation (cause 5); unbounded, it arrives as an untagged dereference
+(cause 24). Same catch, different precision.
+
+**Why +1 and not more.** Of the five cases no arm catches, four hold their stale
+pointer somewhere the adapter does not own — an `SvPVX` string buffer, an `AV` element
+array, a `reg_code_block` array, a COW `subbeg` — and the fifth is stopped by Perl's own
+refcount panic before any access happens. This is the honest shape of protecting one
+nested allocator out of four: mruby's GC heap is where mruby's object lifetimes live, so
+sublet-gc added 6 there; Perl's SV *heads* are only one of its arenas.
+
+### The fourth arm is missing, and why
+
+`cheribsd-revocation` is **not measured**. The static purecap interpreter faults with
+SIGPROT inside `perl_construct`, the stock loader refuses the dynamic one, and the only
+platform that loads it has an `sshd` that dies on a poison exception mid-copy — while
+mruby's static purecap binary runs on that same image. The localisation and what would
+settle it are in
+[`results/20261006-cheribsd-blocked`](results/20261006-cheribsd-blocked/). The mruby
+corpus has four measured arms; this one has three.
+
+**`sublet-svheads` protects exactly one of Perl's nested allocators.** The SV *bodies*,
+the hash entries and the OP slabs keep their upstream allocators. A case whose stale
+pointer lives in those is outside that arm's reach by construction, and its arm entry
+says so rather than being scored as a miss.
+
+## Layout
+
+```
+NN_<fix>_<slug>/
+  case.json        the schema's fields, including the measured arm oracles
+  trigger.pl       upstream's own test, on the shared harness
+  PROVENANCE.md    the fix, the unfixed code at the pin, and both host measurements
+harness/shim.pl    plan/ok/is/like/... collecting failures instead of aborting
+results/           one bundle per measurement day
+```
+
+Every trigger's first line is `require "shim.pl";`, resolved through `@INC`, so the
+same file runs on the host, in a Capstone domain and on CheriBSD with nothing but
+`PERL5LIB` changing.

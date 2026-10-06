@@ -23,7 +23,10 @@
 # PERL_MIRROR=<dir with the tarballs> and PERL_CROSS_MIRROR=<a perl-cross clone>
 # avoid the network. PERLD_SV_HEADS=1 builds the study variant: SV heads come
 # from the lifetime adapter in ../sv-heads (its patch, -DPERL_SV_HEAD_ADAPTER,
-# and link/perl-sv-heads.o for experiments/applications/build.py --nested perl).
+# and link/perl-sv-heads.o for ../../common/application/build.py --nested perl,
+# which is what grants the adapter its region; the image this script leaves behind
+# only proves the link resolves). PERLD_SDK_CFLAGS adds C flags to the SDK's own
+# -O1 -- the corpus's unprotected arm is PERLD_SDK_CFLAGS=-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0.
 set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../../tests/capstone-test-env.sh" >/dev/null
@@ -80,13 +83,24 @@ log "musl $MUSL, archive $ARCHIVE"
 # ---- shared application SDK (also usable by other upstream build systems) ----
 O=$ROOT/runtime
 if stage runtime; then
+  EXTRA=()
+  # PERLD_SDK_CFLAGS adds C flags to the SDK's own -O1, for an arm that differs from the
+  # default only in how the system allocator bounds its objects. It must arrive as ONE cmake
+  # argument: a flag list that is word-split becomes separate -D arguments, and cmake takes
+  # an unknown -D as a cache variable and silently compiles without it, so the arm builds
+  # and comes out byte-identical to the default one (seen 2026-10-05 on the mruby port's
+  # unprotected control, caught only by comparing image hashes). CMAKE_C_FLAGS itself belongs
+  # to the domain toolchain (-nostdinc, -isystem ...); overriding that drops the sysroot.
+  if [[ -n ${PERLD_SDK_CFLAGS:-} ]]; then
+    EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${PERLD_SDK_CFLAGS}")
+  fi
   bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
     -DCAPSTONE_APPLICATION_HEAP="$HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
     -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
-    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA"
-  printf '%s\n' "$HEAP" > "$O/.heap"
+    -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
+  printf '%s\n' "$HEAP ${PERLD_SDK_CFLAGS:-}" > "$O/.heap"
 fi
-[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP" && -x "$O/capstone-cc" ]] \
+[[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP ${PERLD_SDK_CFLAGS:-}" && -x "$O/capstone-cc" ]] \
   || { echo "rebuild the application SDK (PERLD_FROM=runtime)" >&2; exit 2; }
 export CAPSTONE_SDK=$O
 export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH

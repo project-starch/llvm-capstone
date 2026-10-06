@@ -92,11 +92,14 @@ ARM_ORACLES = {
     # section 6. They are one image each of the same source, differing only in
     # the heap it links: the first-fit heap without per-object bounds, the same
     # heap as applications get it today, and the Sublet heap. A port that also
-    # sublets its own allocator names that arm for the port (sublet-gc).
+    # sublets its own allocator names that arm for the port (sublet-gc,
+    # sublet-svheads) -- the name says which nested allocator was sublet, because
+    # a program has more than one and only the named one is protected.
     "sysalloc-none": {"oracle"},
     "sysalloc-bounds": {"oracle"},
     "sysalloc-sublet": {"oracle"},
     "sublet-gc": {"oracle"},
+    "sublet-svheads": {"oracle"},
     "native-detect": set(),
     "native-fix-differential": set(),
     "backing": set(),
