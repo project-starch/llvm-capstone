@@ -120,11 +120,19 @@ for any subset, so a partial run cannot later read as a full one.
 |---|---|:--:|:--:|:--:|
 | **Capstone** | bounds and tags; no lifetime event | — | — | — |
 | **Sublet** | the last return to the pool | **fault**, cause 24 | **fault**, cause 24 | **fault**, cause 24 |
-| **CHERI default** *(PREDICTED, NOT MEASURED — retracted 2026-10-06)* | `free()` → quarantine → sweep | *—* | *—* | *—* |
+| **CHERI default** *(MEASURED 2026-10-06, revocation on)* | `free()` → quarantine → sweep | — | — | — |
 | **PoisonCap** | the lease return: poison, then sweep before reissue | **SIGPROT** 162 | **SIGPROT** 162 | **SIGPROT** 162 |
 | **Sublet port of FFmpeg's own pools** (2026-09-29) | FFmpeg's own `buffer.c`: the return to the pool is a revoke | **fault**, cause 24, at `case.c:85` | **fault**, cause 24, at `case.c:48` | **fault**, cause 24, at `case.c:33` |
 
-> **RETRACTION, 2026-10-06 — the CHERI-default row is a PREDICTION, not a measurement.** Its three
+> **MEASURED LATER THE SAME DAY — the row below is now a reading, and the retraction that
+> preceded it is kept rather than deleted.** `results/20261006-cheribsd/`: all four cases
+> complete under revocation ON, **0 of 4 caught**, 7 of 7 cases passed, runner exit 0 — and the
+> **revocation control FAULTED in the same boot** (`tag_after_sweep=0`, then SIGPROT `si_code` 2
+> at the independently resolved `mc_defect_read`), which is the bar the retraction set and the
+> one the withdrawn claim never met. The predicted outcome was right all along; what was wrong
+> was asserting it had been observed. The original retraction follows, unedited.
+>
+> **RETRACTION, 2026-10-06 — the CHERI-default row was a PREDICTION, not a measurement.** Its three
 > dashes were asserted as measured by `18a16640682b` ("Measure the stock-CheriBSD arm instead of
 > deriving it") and carried forward by `3f3abf676e58`. No such run is evidenced: the cited case names
 > `pool-0-36/37/38` are built at exactly one place,
@@ -144,14 +152,18 @@ for any subset, so a partial run cannot later read as a full one.
 > its bundle committed or its own retraction; until then this row must not be contrasted against as
 > "the measured one".
 >
-> **RESOLVED later the same day, and recorded so the open question does not outlive its answer:**
-> `../../../docs/ref/cheribsd-denominator-audit.md` counts **22** measured CheriBSD temporal rows
-> while the inventory's table (c) reports **18**. That is not a discrepancy — the two count different
-> populations. 18 = tshark 13 + memcached 5, the three programs this inventory covers, memcached's
-> recorded in its `case.json` files because that corpus keeps run summaries out of the repository by
-> policy. 22 = Wireshark 13 + Apache 9, every corpus *with a committed bundle*, which excludes
-> memcached for exactly that reason. FFmpeg contributes **0** to both, which is what this retraction
-> establishes.
+> **RESOLVED, and then MOVED by this measurement — both halves recorded so a coincidence is not
+> read as agreement.** `../../../docs/ref/cheribsd-denominator-audit.md` counted **22** measured
+> CheriBSD temporal rows while the inventory's table (c) reported **18**. That was never a
+> discrepancy: they count different populations. The audit's 22 = Wireshark 13 + Apache 9, every
+> corpus *with a committed bundle*. The inventory's 18 = tshark 13 + memcached 5, the three programs
+> it covers, memcached's recorded in its `case.json` files because that corpus keeps run summaries
+> out of the repository by policy.
+>
+> **The inventory's figure is now 22 as well — and it is a DIFFERENT 22**: tshark 13 + memcached 5 +
+> FFmpeg 4, the four added by this bundle. The two numbers now coincide numerically while still
+> counting different sets, which is exactly the kind of agreement that should not be mistaken for
+> corroboration. The audit's figure is unchanged, because FFmpeg's bundle is not in its population.
 
 The last row is the Sublet port of FFmpeg's own pools (`ports/ffmpeg/sublet`), not the
 buffer-pool port's substitute that the `Sublet` row measures. Each `case.c` runs unchanged against

@@ -41,7 +41,8 @@
     "capstone/bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port",
     "capstone/ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47",
     "capstone/ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev",
-    "capstone/ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39"
+    "capstone/ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39",
+    "capstone/bug-corpora/ffmpeg/pool-repros/results/20261006-cheribsd"
   ],
   "advisories": [],
   "shape_table": true

@@ -269,7 +269,7 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 
 | | caught | measured | not measured |
 |---|---:|---:|---:|
-| temporal, 22 nested | **0** | **18** | 4 |
+| temporal, 22 nested | **0** | **22** | 0 |
 | spatial, 25 upstream | **4** | **24** | 1 |
 
 > **FFmpeg entered this table on 2026-10-06**, and until that day contributed **zero**
@@ -315,22 +315,27 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 > and WORKS — `cmake --preset cheribsd` configures and builds `libffmpeg-pool.a` — which is what
 > unblocked the ten sub-object rows; it just does not contain `libavutil`'s frame code.
 
-- **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
+- **Temporal: 0 caught, and ALL 22 are now MEASURED with a positive control that fires.**
 
 > **Reconciled 2026-10-06 with `cheribsd-denominator-audit.md`, which counts 22 and not 18.** The two
 > numbers were flagged as a possible discrepancy; they are not one. They count **different
 > populations under different evidence conventions**:
-> - this table's **18** = tshark 13 + memcached 5, i.e. the measured temporal rows *of the three
->   programs this inventory covers*, with memcached's five recorded in their `case.json` files
->   because that corpus's `.gitignore` deliberately keeps run summaries out of the repository;
+> - this table's figure WAS **18** = tshark 13 + memcached 5, i.e. the measured temporal rows *of
+>   the three programs this inventory covers*, with memcached's five recorded in their `case.json`
+>   files because that corpus's `.gitignore` deliberately keeps run summaries out of the
+>   repository. **It is now 22**: FFmpeg's four `pool-repros` rows were measured on 2026-10-06 with
+>   the revocation control faulting in the same boot, closing the gap the morning's retraction
+>   opened. **That makes this a DIFFERENT 22 from the audit's** — tshark 13 + memcached 5 +
+>   FFmpeg 4 against Wireshark 13 + Apache 9 — so the two now coincide numerically while counting
+>   different sets, which must not be read as corroboration;
 > - the audit's **22** = Wireshark 13 + Apache 9, i.e. every corpus *with a committed bundle*. It
 >   excludes memcached precisely because there is no bundle, and excludes PostgreSQL and CPython
 >   because there is nothing at all.
 >
-> So 13 rows are common to both, memcached's 5 are in this figure and not the audit's, and Apache's 9
-> are in the audit's and not this one. Neither figure is wrong and neither needs changing; what was
-> missing was the statement that they are not comparable. FFmpeg contributes **0** to both, which is
-> what the 2026-10-06 retraction of its `pool-repros` CheriBSD arm established.
+> So 13 rows are common to both; memcached's 5 and FFmpeg's 4 are in this figure and not the
+> audit's, and Apache's 9 are in the audit's and not this one. Neither figure is wrong; what was
+> missing was the statement that they are not comparable — and that matters more now that they
+> happen to be equal.
   - tshark 13 — `results/20260921-cheribsd/` (`matrix.tsv`, `arm=cheribsd`): expected complete,
     passed, exit 0, **0 of 13 caught**. The control: the PoisonCap mode-1 arm in the *same bundle
     and the same boots* faults **13/13** with `SIGPROT` at the labelled read probe. The platform
@@ -347,13 +352,13 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
     table with no oracle at all; it was declared on 2026-10-05 with its siblings' mechanism — the
     two side tables return to their `AVRefStructPool`s (`refs.c:153`, `:157`) rather than to
     `free()` — marked **predicted, not measured**, and naming what a reading would need. So this
-    column is **22 declared, 18 measured, 0 caught**, with no blanks left in it.
+    column is **22 declared, 22 measured, 0 caught**, with no blanks left in it.
 - **The 5 not-nested temporal are the one cell this column predicts NON-ZERO, and it is unmeasured.**
   Same mechanism, run the other way: the nested cases complete because the stale storage never
   reaches `free()` — it returns to an inner allocator's own free list inside a block `malloc` still
   owns. **These five have no inner allocator**, so the quarantine does hold the object and the
   revoker does sweep it. Predicted **caught, 5 of 5**; not measurable here. That prediction is what
-  gives the measured 0 of 18 its meaning — a system catching nothing anywhere would be
+  gives the measured 0 of 22 its meaning — a system catching nothing anywhere would be
   indistinguishable from a dead instrument, while one that catches the plain cases and misses the
   nested ones is measuring the nesting. **It is therefore the first thing an SDK host should run**,
   and a miss would refute the mechanism rather than add a data point.
