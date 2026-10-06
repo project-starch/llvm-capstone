@@ -37,8 +37,10 @@
     "cheribsd-revocation": {
       "target": "stock CheriBSD purecap with libc revocation on",
       "guest_default": "preserved",
-      "oracle": "PREDICTED: the sequence COMPLETES, not caught. The crossing leaves the cache OBJECT but stays inside the page cache.c carved it from, and that page is what the platform's malloc bounded -- so a per-allocation capability is in bounds for the whole crossing. This is the same mechanism the corpus's other seven rows measured on 2026-10-06, 0 of 8 caught, with the revocation control firing. NOT YET MEASURED for this case.",
-      "status": "predicted"
+      "oracle": "MEASURED 2026-10-07: **CAUGHT -- which REFUTES this arm's prediction.** exit=162, FAULT signal=34, si_code=1 (BOUNDS), pc=0x105530. The arm predicted a COMPLETION on the reasoning that the crossing leaves the cache OBJECT but stays inside the page cache.c carved it from. That reasoning assumed cache.c sub-allocates objects out of pages the way slabs.c carves chunks. **It does not on this port**, and the port's own source says so: ports/memcached/allocators/src/cheribsd/malloc-leases.c:79 takes a slab PAGE with `void *page = malloc(size)`, while :161 takes each cache OBJECT with its own `void *object = malloc(size)`. So an object crossing leaves a real malloc bound, and CHERI sees it. THE REFUTATION IS WORTH MORE THAN THE PREDICTION WOULD HAVE BEEN, because it separates the corpus's two inner layers under CHERI rather than lumping them: cases 5, 6 and 7 cross a SLAB CHUNK and complete, because the chunk's crossing stays inside the one malloc the page came from; case 8 crosses a CACHE OBJECT and faults, because each object is its own malloc. 'memcached is 0 of 9 on CheriBSD' would have been the wrong summary -- it is 0 of 8 and 1 of 1, split by which inner allocator carved the storage. The platform controls and the revocation control all PASSED in the same boot, so this is a reading: cheribsd-abi, cheribsd-bounds, and revocation-control faulting as it must.",
+      "status": "measured",
+      "signal": 34,
+      "si_code": 1
     },
     "native-fix-differential": {
       "oracle": "MEASURED 2026-10-07: the buggy arm's cursor ends past the object (accessed_through_stale=1, damage=1) and the fixed arm's stops inside it. The case ASSERTS both -- past the object at the pin, inside it under the fix -- so a reduction whose arithmetic missed fails rather than reporting a verdict. runners/run-native.sh exit 0 over all nine cases, control arm first.",
@@ -49,5 +51,5 @@
       "status": "not written"
     }
   },
-  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell."
+  "status": "built and measured natively 2026-10-07: runners/run-native.sh exit 0 over all nine cases, control (fixed) arm first, buggy arm DEFECT-REPRODUCED. The Capstone, PoisonCap and CheriBSD arms are declared predictions -- this case has not had a domain or guest run. N = 1 per cell. CheriBSD MEASURED 2026-10-07: CAUGHT, si_code 1, REFUTING this case's prediction -- the port malloc's each cache object separately, so an object crossing leaves a real bound while the slab chunk rows stay inside their page's malloc."
 }

@@ -278,8 +278,19 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **22** | 0 |
-| spatial, 32 upstream | **6** | **30** | 2 |
+| spatial, 32 upstream | **7** | **31** | 1 |
 
+> **A SPLIT INSIDE ONE CORPUS, measured 2026-10-07, and it changes how memcached's row should be
+> read.** `allocator-repros` case 8 is **CAUGHT** on stock CheriBSD while cases 5-7 **complete**, and
+> the reason is the inner allocator, not the defect: the port's CheriBSD build takes a slab **page**
+> with one `malloc` and lets `slabs.c` carve chunks out of it
+> (`src/cheribsd/malloc-leases.c:79`), but takes each **cache object** with its own `malloc`
+> (`:161`). So a slab-chunk crossing stays inside one allocation and a cache-object crossing does
+> not. **"memcached is 0 of 9 on CheriBSD" would be the wrong summary — it is 0 of 8 and 1 of 1,
+> split by which inner allocator carved the storage.** This refuted the prediction written for case 8
+> before the run, and the refutation is the more useful result: it separates two layers that a single
+> number would have merged.
+>
 > **FFmpeg entered this table on 2026-10-06**, and until that day contributed **zero**
 > measured rows — which is what the retraction of its `pool-repros` arm established.
 > `ffmpeg/plain-heap-repros` 0-3 were run with revocation on and both platform controls
