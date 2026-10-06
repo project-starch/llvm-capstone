@@ -44,8 +44,23 @@ own member. That is `native-fix-differential`, and it is the arm these rows are 
 
 **What is measured, and what is declared.** Cases 0-2 carry a Capstone reading from probe cases
 40-42 of `ports/ffmpeg/buffer-pool/security-tests`, run under QEMU on modes 0 and 2. Cases 3-9 are
-measured on `native-fix-differential` only; their Capstone, PoisonCap, CheriBSD and ASan arms are
+measured on `native-fix-differential` and `native-detect`; their Capstone and PoisonCap arms are
 **declared predictions**, recorded before the runs so a refutation stays visible.
+
+**`cheribsd-revocation` is MEASURED for all ten, 2026-10-06** (`results/20261006-cheribsd/`):
+**0 of 10 caught**, 22 of 22 arms, runner exit 0, with `cheribsd-abi` (reporting
+`CHERI_ABI pointer_bytes=16 runtime_revocation=1`) and `cheribsd-bounds` both firing in the same boot. Each case prints its own verdict, so a completion is a reading rather than a silent
+pass. Set beside the sibling `../plain-heap-repros/`, where **3 of 4 were caught**, this is the whole
+contrast measured on one platform in one day: a crossing that leaves the usable allocation is caught,
+one interior to it is not.
+
+**Two things that reading must carry.** First, the reason is **weaker** than "CHERI bounds the
+allocation and the crossing stays inside" — see the arena caveat below; nothing bounded anything at
+this granularity on that harness. Second, **`-O0` is load-bearing**: a first suite built `-O1`
+returned `VERDICT INCONCLUSIVE` for case 0 while the other nineteen arms passed and both controls
+fired, because case 0's index is a compile-time constant one past its member and clang folded the
+store away. Rebuilt at `-O0` with nothing else changed it reads `DEFECT-REPRODUCED`. The native arms
+use gcc and were unaffected, which is why it surfaced only on this platform.
 
 **One caveat the Capstone and CheriBSD predictions must carry.** This corpus's driver hands the
 port's `av_malloc` *one* arena, and `ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26`
