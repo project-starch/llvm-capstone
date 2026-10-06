@@ -155,11 +155,11 @@ so no other kernel path reads the frame.
 | Other M interrupts | Disabled on the fixed QEMU platform. One hart, so no machine IPIs. |
 | Gate | An M-mode trap or interrupt taken while `PU` is set and the hart is in U, or between entry step 1 and 4, or between return step 2 and the xRET, fails the prototype gate. |
 
-**Finding, today:** QEMU cannot delegate causes 24–30 at all. They are
-missing from `DELEGABLE_EXCPS` (`csr.c:1137`), so writing those `medeleg`
-bits has no effect and every capability fault from U goes to M. Adding them
-is an M1 change. OpenSBI's own mask (`sbi_hart.c:194-205`) then needs the
-same bits for the Linux gate in M2.
+**Resolved in the prototype QEMU:** causes 24–30 are delegable. Before,
+they were missing from `DELEGABLE_EXCPS`, so writing those `medeleg` bits
+had no effect and every capability fault from U went to M. They stay out of
+the VS mask. OpenSBI's own mask (`sbi_hart.c:194-205`) still needs the same
+bits for the Linux gate in M2.
 
 ## Instruction set in protected U
 
@@ -190,11 +190,19 @@ requires this gate, the existing U-access suite, and a real Linux process
 through page-fault retry, syscall and task switch, plus a stripped-tag control.
 Its bounded kernel patch saves the scalar `s2` cursor before consuming STC.
 
-**Open: `tval` for causes 24–30.** QEMU reports 0 for all of them, because
-trap delivery copies `badaddr` only for the standard address causes. The
-silicon LSU reports the effective address. Reporting `badaddr` would need
-every raising site to set it first; the issue registry records sites that did
-not. Until that audit, Linux must not rely on `tval` for these causes.
+## Fault causes and `tval`
+
+| Cause | Raised by | `tval` |
+|---|---|---|
+| 24–29 | A load, store, atomic, LDC or STC | The effective address: cursor plus offset, or the scalar value plus offset for an untagged base, as on the silicon LSU. |
+| 24–29 | Any other instruction | 0 |
+| 28 | An access past the bounds in protected U | The effective address. Legacy C mode keeps its access fault 5 or 7. |
+| 30 | SPLIT, MREV or CSMINT | 0 |
+
+A Capstone fault records its `tval` through one raise function with an
+explicit argument. Every trap delivery consumes that value, so a fault raised
+any other way reports 0 and never the address of an earlier trap. The value
+does not pass through `badaddr`.
 
 ## Exhaustion
 
@@ -215,7 +223,7 @@ it. A freed table's memory is zeroed with scalar stores before reuse.
 ## M1 work this ABI implies in QEMU
 
 1. Q-12 consumption and fault order for LDC and STC, U and S. **Done.**
-2. Causes 24–30 in `DELEGABLE_EXCPS`.
+2. Causes 24–30 in `DELEGABLE_EXCPS`. **Done.**
 3. `scapctl`, `srevroot` and `urevavail`; retire debug selectors 2 and 3.
 4. The guest table with the layout above; host tree and collector off for
    protected U.
@@ -223,4 +231,4 @@ it. A freed table's memory is zeroed with scalar stores before reuse.
 6. PCC fetch check, PCC move into `cepc` on trap and out on xRET.
 7. Illegal-instruction policy for the protected-U table above.
 8. Bounds decoded from stored bits for protected tags.
-9. `tval` for causes 24–30, after auditing every raising site.
+9. `tval` for causes 24–30 and cause 28 for an access past the bounds. **Done.**

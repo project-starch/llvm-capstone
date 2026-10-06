@@ -2,6 +2,18 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-06 — virtual prototype: capability faults reach S
+
+The prototype QEMU can delegate causes 24–30 to S, and each Capstone fault
+reports an explicit `tval`: the effective address for a memory access, zero
+otherwise. An access past the bounds in protected U is cause 28. Every trap
+consumes the recorded value, so an older address cannot be reported again.
+The M1 gate passes 36/36 and the
+[delegation record](../../capstone-qemu/tests/virtual-capstone-m1/delegation-result.json)
+lists four rejected source mutations. The existing suite passes 74/74 and the
+combined Q-12 Linux gate passes. OpenSBI still redirects these causes through
+M; its delegation mask is M2 work.
+
 ## 2026-10-06 — virtual prototype Q-12 and context review fixes
 
 The prototype ABI now keeps the scalar kernel `tp` through frame restoration
