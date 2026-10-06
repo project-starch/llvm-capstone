@@ -6,6 +6,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <stdint.h>
+#include <unistd.h>
+#if defined(__FreeBSD__)
+#include <sys/ucontext.h>
+#endif
 
 _Noreturn void pgclient_give_up(unsigned long code) {
   fprintf(stderr, "CONTROL-FAILED %lx\n", code);
@@ -24,6 +30,66 @@ void pgclient_memcpy(void *d, const void *s, size_t n) { memcpy(d, s, n); }
 void pgclient_mark(void) {
   printf("PG_DEFECT case=%u mark\n", pgclient_case_number);
   fflush(stdout);
+}
+
+/* ---- fault attribution -------------------------------------------------
+ * The case says which function the fault belongs to; the handler says where
+ * it actually happened. Printing the two as offsets is what turns "the arm
+ * faulted" into "the arm faulted ON THIS DEFECT". See corpus.h for why this
+ * is done here rather than with a label on the faulting instruction. */
+static const void *expect_fn;
+static const char *expect_name = "(unset)";
+
+void pgclient_expect_fault_in(const void *fn, const char *name) {
+  expect_fn = fn;
+  expect_name = name;
+  printf("PG_DEFECT case=%u expect_fault_in=%s@%p\n",
+         pgclient_case_number, name, fn);
+  fflush(stdout);
+}
+
+static void fault_handler(int sig, siginfo_t *si, void *uc) {
+  uintptr_t pc = 0, ra = 0;
+#if defined(__FreeBSD__) && defined(__riscv)
+  const ucontext_t *u = (const ucontext_t *) uc;
+# if defined(__CHERI_PURE_CAPABILITY__)
+  pc = (uintptr_t) u->uc_mcontext.mc_capregs.cp_sepcc;
+  ra = (uintptr_t) u->uc_mcontext.mc_capregs.cp_cra;
+# else
+  pc = (uintptr_t) u->uc_mcontext.mc_gpregs.gp_sepc;
+  ra = (uintptr_t) u->uc_mcontext.mc_gpregs.gp_ra;
+# endif
+#else
+  (void) uc;   /* host build: ASan reports first and carries its own trace */
+#endif
+  char b[320];
+  uintptr_t fn = (uintptr_t) expect_fn;
+  /* Signed offsets, printed whether or not they are small: a large one is
+   * itself the finding -- it says the fault was not where the case claims. */
+  long dpc = fn ? (long) (pc - fn) : 0;
+  long dra = fn ? (long) (ra - fn) : 0;
+  int n = snprintf(b, sizeof b,
+      "\nPG_FAULT case=%u signal=%d si_code=%d addr=%p pc=%p ra=%p"
+      " expect=%s@%p pc-expect=%+ld ra-expect=%+ld\n",
+      pgclient_case_number, sig, si->si_code, (void *) si->si_addr,
+      (void *) pc, (void *) ra, expect_name, expect_fn, dpc, dra);
+  if (n > 0) (void) write(2, b, (size_t) n);
+  /* Die by the signal, not by _exit, so the runner still sees 128+sig and
+   * nothing downstream has to know this handler exists. */
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+
+static void install_fault_handler(void) {
+  struct sigaction sa;
+  memset(&sa, 0, sizeof sa);
+  sa.sa_sigaction = fault_handler;
+  sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+  (void) sigaction(SIGSEGV, &sa, 0);
+  (void) sigaction(SIGBUS, &sa, 0);
+#ifdef SIGPROT
+  (void) sigaction(SIGPROT, &sa, 0);   /* CheriBSD capability violation (34) */
+#endif
 }
 
 void pgclient_note_signed(const char *label, long v) {
@@ -79,6 +145,7 @@ int main(int argc, char **argv) {
             pgclient_case_number, want);
     return 75;
   }
+  install_fault_handler();
   printf("case %u BEGIN\n", pgclient_case_number);
   pgclient_case_run();
   printf("case %u RETURNED\n", pgclient_case_number);

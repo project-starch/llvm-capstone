@@ -54,6 +54,8 @@ PGCLIENT_CASE(4) {
   pgclient_note_signed("data_past_end", data == chunk + chunk_len);  /* 1 */
 
   /* bbstreamer_tar.c:225-228, transcribed. `data`, not bbs_buffer.data. */
+  pgclient_expect_fault_in((const void *) &pgclient_consume_content,
+                           "pgclient_consume_content");
   pgclient_mark();                   /* the defect's own line is the next one */
   pgclient_consume_content(data, pad_bytes_expected);
 

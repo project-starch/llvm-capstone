@@ -34,6 +34,23 @@ void  pgclient_memcpy(void *dst, const void *src, size_t n);
  * can be told apart from a case that never reached the defect. */
 void pgclient_mark(void);
 
+/* WHERE THE FAULT IS EXPECTED TO LAND, so that "the mechanism faulted" can be
+ * tied to the defect rather than to anything else in the process.
+ *
+ * mmgr-repros does this with a .globl label on the faulting instruction. That
+ * is not available here: in three of the five cases the faulting access is
+ * inside a function copied VERBATIM from upstream, and a label in it would
+ * make the copy no longer verbatim -- the one property these cases exist to
+ * have. So the attribution runs the other way round. The case names the
+ * function the fault should occur in, and the handler captures the faulting
+ * PC and the return address and reports both as offsets from it.
+ *
+ * Both are needed, because the faulting instruction is not always in that
+ * function: case 00 faults inside libc's memcpy called from pqGetnchar, so
+ * there the PC is far away and it is the RETURN ADDRESS that lands inside the
+ * expected function. The run is attributed when either offset is small. */
+void pgclient_expect_fault_in(const void *fn, const char *name);
+
 /* Recorded facts, printed so a run carries its own arithmetic rather than
  * relying on the reader to trust the prose. */
 void pgclient_note_signed(const char *label, long v);

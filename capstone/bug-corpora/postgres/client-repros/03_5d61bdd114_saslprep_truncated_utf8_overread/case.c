@@ -34,6 +34,10 @@ PGCLIENT_CASE(3) {
 
   pgclient_memcpy(password, truncated, n);
 
+  pgclient_expect_fault_in((const void *) &pg_utf8_string_len, "pg_utf8_string_len");
+  /* The read is in pg_utf8_islegal, which is static upstream and has no
+   * address to name; it is called from here, so the RETURN ADDRESS is
+   * what should land in pg_utf8_string_len. */
   pgclient_mark();                    /* the defect's own line is the next one */
   (void) pg_utf8_string_len(password);
 
