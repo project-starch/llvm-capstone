@@ -60,11 +60,26 @@ SIGPROT = 34
 # CATCH prediction was refuted. Encoding the refuted prediction instead would
 # make this suite fail every time and a genuine change invisible. SIGPROT is
 # still imported so the contrast with the wireshark sibling is readable.
-cases = [dict(name='mch-00-fixed', program=str(BIN/'mch-00'), args=['fixed','0'],
-              timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0),
-         dict(name='mch-00-buggy', program=str(BIN/'supervise'), args=['./target','buggy','0'],
-              inputs={'target': str(BIN/'mch-00')}, timeout=300,
-              expect='SUPERVISE exit status=0', exit=0)]
+cases = []
+for p in sorted(BIN.glob('mch-[0-9][0-9]')):
+    n = int(p.name.split('-')[1])
+    cases.append(dict(name=f'{p.name}-fixed', program=str(p), args=['fixed', str(n)],
+                      timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0))
+    # The buggy arm's expectation is PER CASE, because the two cases differ in
+    # whether the crossing leaves the allocator's USABLE size:
+    #   case 0: 1 byte past calloc(1, 9), whose capability is 16 long -> COMPLETES
+    #   case 1: 1 byte past malloc(64), and 64 is exactly a size class -> FAULTS
+    # Encoding one expectation for both would make a true reading look like a
+    # failure, which is how a measured refutation gets mistaken for a bug.
+    if n == 0:
+        cases.append(dict(name=f'{p.name}-buggy', program=str(BIN/'supervise'),
+                          args=['./target','buggy',str(n)], inputs={'target': str(p)},
+                          timeout=300, expect='SUPERVISE exit status=0', exit=0))
+    else:
+        cases.append(dict(name=f'{p.name}-buggy', program=str(BIN/'supervise'),
+                          args=['./target','buggy',str(n)], inputs={'target': str(p)},
+                          timeout=300, expect=f'SUPERVISE exit signalled={SIGPROT}',
+                          exit=128+SIGPROT))
 assert SIGPROT == 34
 OUT.write_text(json.dumps(cases, indent=2) + '\n')
 PY

@@ -39,10 +39,10 @@ An access that leaves a bound. Built from upstream defects:
 
 | program | nested | not nested | total | where |
 |---|---:|---:|---:|---|
-| memcached | **3** | **1** | **4** | `allocator-repros/05-07` (`slabs.c` chunks) and `plain-heap-repros/00` (`ddee3e2`, one byte past a `calloc`) |
-| tshark | **5** | **1** | **6** | `wmem-repros/13-17` (wmem chunks) and `plain-heap-repros/00` (`19c51d27b9`, 65471 bytes past a `g_malloc`) |
+| memcached | **3** | **2** | **5** | `allocator-repros/05-07` (`slabs.c` chunks); `plain-heap-repros/00-01` (`ddee3e2`, one byte past a `calloc`; `d5d9ff0`, a headroom guard one byte short) |
+| tshark | **9** | **1** | **10** | `wmem-repros/13-17` and `18-21` (wmem chunks; 18 is `716a200295`, **live at the pin**, a guard its own default disables); `plain-heap-repros/00` (`19c51d27b9`, 65471 bytes past a `g_malloc`) |
 | FFmpeg | **1** | **14** | **15** | `plane-repros/00` (`b7946098b1`, one row past a frame plane); `subobject-repros/00-09` (inside one allocation); `plain-heap-repros/00-03` (past a direct `av_malloc_array`/`av_calloc`) |
-| **total** | **9** | **16** | **25** | |
+| **total** | **13** | **17** | **30** | |
 
 And the **synthetic baseline**, which carried the not-nested spatial row alone until
 `plain-heap-repros/00` landed and which still does the job no upstream case can -- showing
@@ -180,13 +180,21 @@ discriminate at `malloc` granularity, which is a different job from counting ups
 | | nested | not nested | total |
 |---|---:|---:|---:|
 | temporal | **22** | **5** | **27** |
-| spatial (upstream reductions) | **9** | **16** | **25** |
-| **total** | **31** | **21** | **52** |
+| spatial (upstream reductions) | **13** | **17** | **30** |
+| **total** | **35** | **22** | **57** |
 
-**31 of 52 are instances of nesting (60%).** On the spatial side specifically, 9 of 25. Add the
+**35 of 57 are instances of nesting (61%).** On the spatial side specifically, 13 of 30. Add the
 synthetic baseline probes and the not-nested spatial row grows further, but those are probes and
 are kept out of the defect count on purpose.
 
+> **Moved again on 2026-10-07, and this time for the OPPOSITE reason — which is the thing to say.**
+> 60% -> 61%, and the nested count went **31 -> 35**: tshark gained four nested spatial rows and
+> memcached one not-nested. Yesterday's move was purely a denominator effect with the numerator
+> fixed; today's numerator moved too, so the two must not be read as the same kind of change. The
+> share is nearly flat precisely because the additions were split across both columns, which is a
+> coincidence of this batch rather than a fact about the programs. **Read the per-axis rows**:
+> nesting still dominates temporal (22 of 27) and still does not dominate spatial (13 of 30).
+>
 > **This share MOVED on 2026-10-06, and anything quoting the old figure needs re-reading.** It was
 > **31 of 41 (76%)**. Eleven not-nested spatial cases were added that day — FFmpeg's
 > `subobject-repros` grew 3 → 10 and a new `ffmpeg/plain-heap-repros` added 4 — and *none* of them is
@@ -212,7 +220,7 @@ are kept out of the defect count on purpose.
 |---|---:|---:|---:|
 | temporal, 22 nested | **0 of 22** | **21 of 22** | **22 of 22** |
 | temporal, 5 not nested | **0 of 5** | **5 of 5** | tshark **2 of 2** |
-| spatial, 25 upstream | **6 of 11 measured**, 14 declared | **6 of 11 measured**, 14 declared | tshark **5 of 5** |
+| spatial, 30 upstream | **6 of 11 measured**, 19 declared | **6 of 11 measured**, 19 declared | tshark **5 of 5** |
 
 - **Temporal, 0 of 22 without protection, measured** — not predicted. A bound cannot see a dead
   object: the stale address is in bounds by construction.
@@ -270,7 +278,7 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **22** | 0 |
-| spatial, 25 upstream | **4** | **24** | 1 |
+| spatial, 30 upstream | **5** | **29** | 1 |
 
 > **FFmpeg entered this table on 2026-10-06**, and until that day contributed **zero**
 > measured rows — which is what the retraction of its `pool-repros` arm established.
@@ -436,12 +444,12 @@ this is what a host that has them needs in order to extend the measured column:
 
 | | count | source |
 |---|---:|---|
-| `case.json` files across the **eight** corpora | **47** | `memcached/allocator-repros` 8 + `plain-heap-repros` 1, `wireshark/wmem-repros` 18 + `plain-heap-repros` 1, `ffmpeg/pool-repros` 4 + `subobject-repros` 10 + `plane-repros` 1 + `plain-heap-repros` 4 |
+| `case.json` files across the **eight** corpora | **52** | `memcached/allocator-repros` 8 + `plain-heap-repros` 2, `wireshark/wmem-repros` 22 + `plain-heap-repros` 1, `ffmpeg/pool-repros` 4 + `subobject-repros` 10 + `plane-repros` 1 + `plain-heap-repros` 4 |
 | temporal corpus cases | **22** | 5 + 13 + 4 |
-| spatial corpus cases | **25** | memcached 3 + 1, tshark 5 + 1, FFmpeg 10 + 4 + 1 |
+| spatial corpus cases | **30** | memcached 3 + 2, tshark 9 + 1, FFmpeg 10 + 4 + 1 |
 | not-nested temporal, as app fixtures | 5 | memcached 17/18, tshark 14/15, FFmpeg 24 |
-| **total defects in both tables** | **52** | 27 temporal + 25 spatial |
-| fix-reversals (`live_in_pin: false`) | **39 of 47** | liveness is recorded, never required. Recomputed from the `live_in_pin` fields, not adjusted by hand |
+| **total defects in both tables** | **57** | 27 temporal + 30 spatial |
+| fix-reversals (`live_in_pin: false`) | **43 of 52** | liveness is recorded, never required. Recomputed from the `live_in_pin` fields, not adjusted by hand |
 
 *These are recomputed from the `case.json` files, not typed. They drifted once already — the
 headline tables were updated and this section was not — which is the defect

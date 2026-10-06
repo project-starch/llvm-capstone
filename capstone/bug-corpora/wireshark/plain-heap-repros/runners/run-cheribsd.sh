@@ -54,11 +54,15 @@ python3 - "$OUT/bin" "$OUT/cases.json" <<'PY'
 import json, pathlib, sys
 BIN, OUT = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 SIGPROT = 34
-cases = [dict(name='wsh-00-fixed', program=str(BIN/'wsh-00'), args=['fixed','0'],
-              timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0),
-         dict(name='wsh-00-buggy', program=str(BIN/'supervise'), args=['./target','buggy','0'],
-              inputs={'target': str(BIN/'wsh-00')}, timeout=300,
-              expect=f'SUPERVISE exit signalled={SIGPROT}', exit=128+SIGPROT)]
+cases = []
+for p in sorted(BIN.glob('wsh-[0-9][0-9]')):
+    n = int(p.name.split('-')[1])
+    cases.append(dict(name=f'{p.name}-fixed', program=str(p), args=['fixed', str(n)],
+                      timeout=300, expect_regex=r'VERDICT FIXED .*', exit=0))
+    cases.append(dict(name=f'{p.name}-buggy', program=str(BIN/'supervise'),
+                      args=['./target','buggy',str(n)], inputs={'target': str(p)},
+                      timeout=300, expect=f'SUPERVISE exit signalled={SIGPROT}',
+                      exit=128+SIGPROT))
 OUT.write_text(json.dumps(cases, indent=2) + '\n')
 PY
 [ -s "$OUT/cases.json" ] || { echo "CONTROL-FAILED cases.json" >&2; exit 75; }

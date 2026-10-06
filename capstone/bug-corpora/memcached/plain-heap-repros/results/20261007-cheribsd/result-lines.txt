@@ -1,22 +1,30 @@
 # memcached/plain-heap-repros on stock CheriBSD purecap, libc revocation ON, 2026-10-07.
-# Produced by runners/run-cheribsd.sh. Result lines only.
+# Both cases, produced by runners/run-cheribsd.sh. Result lines only.
 
 ## platform controls, same boot
 CHERI_ABI pointer_bytes=16 runtime_revocation=1
 CHERI_ABI pointer_bytes=16 runtime_revocation=1
 CHERI_BOUNDARY_READY
 
-## suite
+## suite: 6 of 6 arms
 BOOT CheriBSD allocator suite
 PASS cheribsd-abi
 PASS cheribsd-bounds
 PASS mch-00-fixed
 PASS mch-00-buggy
+PASS mch-01-fixed
+PASS mch-01-buggy
 
-## the buggy arm
+## the buggy arms -- and the contrast that is the point
+### case 0: 1 byte past calloc(1, 9); capability length 16, so NOT caught
 SUPERVISE base 0x100000 /tmp/allocator-tests/mch-00-buggy/target
 SUPERVISE expect mch_write_probe 0x102396
 case=0 arm=buggy
 cap=9 touched=9 crossed=1 damage=1
 VERDICT DEFECT-REPRODUCED fgets wrote its terminating NUL at offset sb.st_size of a calloc(1, sb.st_size), one byte past the allocation
 SUPERVISE exit status=0
+### case 1: 1 byte past malloc(64); 64 IS a size class, so CAUGHT
+SUPERVISE base 0x100000 /tmp/allocator-tests/mch-01-buggy/target
+SUPERVISE expect mch_write_probe 0x102440
+SUPERVISE fault signal=34 code=1 addr=0x102458 pc=0x102458
+SUPERVISE exit signalled=34
