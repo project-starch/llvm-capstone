@@ -1,0 +1,24 @@
+{
+  "case": 6,
+  "upstream_fix": "e91dcfccaa",
+  "title": "regexp match/split size the wchar-to-multibyte conversion buffer by the input's byte length, which is not an upper bound for invalidly encoded input",
+  "consumer": "regexp_match(), regexp_matches(), regexp_split_to_table(), regexp_split_to_array()",
+  "class": "spatial",
+  "allocator_layer": "aset",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "upstream e91dcfccaa, \"Fix potential buffer overrun in regexp match/split functions\", which postdates the 17.5 pin. Five lines of src/backend/utils/adt/regexp.c establish it on the pin. :1444 -- pg_mb2wchar_with_len() converts the subject string and, as upstream states, silently accepts bytes that are invalid in the database encoding, turning each such byte into one pg_wchar. :1579 -- maxsiz = eml * (int64) maxlen is the honest worst case. :1592-1593 -- `if (maxsiz > orig_len) conv_bufsiz = orig_len + 1;` throws that worst case away and caps the buffer at the subject's own byte length, on the assumption that converting back cannot produce more bytes than came in. That assumption holds only for valid input: one invalid byte becomes one pg_wchar, and pg_wchar2mb_with_len can spend more than one byte re-encoding it. :1597 -- the undersized buffer is palloc'd. :1644-1648 and :1793-1815 -- the two write sites call pg_wchar2mb_with_len into that buffer and check the result only with `Assert(len < matchctx->conv_bufsiz)`, which a non-assert build compiles out. The overrun is up to the subject's own length.",
+  "fidelity": "real server, core, real allocator. The overrun is of a palloc'd chunk, so whether a mechanism sees it depends on whether the write leaves the surrounding aset block -- which is the distinction this corpus exists to measure, and is recorded per arm rather than assumed.",
+  "arms": {
+    "spatial": {
+      "status": "not written"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "collected 2026-10-05 by the backport sweep of REL_17_5..REL_17_STABLE; not yet run on any arm"
+}

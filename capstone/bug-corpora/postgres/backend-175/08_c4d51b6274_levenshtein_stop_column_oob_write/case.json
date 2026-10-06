@@ -1,0 +1,24 @@
+{
+  "case": 8,
+  "upstream_fix": "c4d51b6274",
+  "title": "levenshtein_less_equal clamps stop_column only from above, so an overflowed cost product drives an out-of-bounds write into the palloc'd row",
+  "consumer": "levenshtein_less_equal() with costs (fuzzystrmatch)",
+  "class": "spatial",
+  "allocator_layer": "aset",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "upstream c4d51b6274, \"Avoid overflow in Levenshtein distance calculations\", which postdates the 17.5 pin. Upstream states it plainly: the SQL functions accept any 32-bit integer for each cost, the distances are computed in 32-bit arithmetic, and \"certain inputs to levenshtein_less_equal() can even cause out-of-bounds writes\". Five lines of src/backend/utils/adt/levenshtein.c carry it at the pin. :152 -- `min_theo_d = net_inserts < 0 ? -net_inserts * del_c : net_inserts * ins_c;` multiplies two ints into an int, which overflows for large caller-supplied costs. :175 -- `int slack_d = max_d - min_theo_d;` inherits the wrong value. :178 -- `stop_column = best_column + (slack_d / (ins_c + del_c)) + 1;`. :179-180 -- `if (stop_column > m) stop_column = m + 1;` clamps ONLY FROM ABOVE, so a stop_column that came out negative or otherwise below range passes through untouched. :212 -- `prev = (int *) palloc(2 * m * sizeof(int));`. :240 -- `prev[stop_column] = max_d + 1;` writes at that index. Upstream widens the whole computation to int64 and replaces the one-sided clamp with `stop_column = Min(tmp, m + 1)`.",
+  "fidelity": "real server, core arithmetic reached through contrib/fuzzystrmatch. The write is into a palloc'd chunk; how far out of range it lands depends on the costs supplied, which is caller-controlled, so this case can probe both inside and outside the aset block from the same code path.",
+  "arms": {
+    "spatial": {
+      "status": "not written"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "collected 2026-10-05 by the backport sweep of REL_17_5..REL_17_STABLE; not yet run on any arm"
+}

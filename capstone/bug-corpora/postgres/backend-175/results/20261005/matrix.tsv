@@ -1,0 +1,39 @@
+case	arm	verdict	evidence
+01_12a6206864a0_to_char_tz_overflow	spatial	silent	completed with no directive and no fault
+02_no-fix-recorded_ts_headline_overflow	spatial	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc02023a8 address=0xc1dc58e0 entry=0xc0200de0 code=0xc0200000-0xc5220000 last=0x4f preparing=0x4f sha256=8088ed6b2103e65a7d679555fb1c06ecadfe376818ce0e914fe5f6795e018558 image=/mnt/host/applications/postgres-8088ed6b2103e65a7d679555fb1c06ecadfe376818ce0e914fe5f6795e018558.dom
+03_no-fix-recorded_ltree_lquery_parse_overflow	spatial	silent	completed with no directive and no fault
+04_no-fix-recorded_money_int64min_div	spatial	differential	EXPECT-ABSENT fired: '-$92,233,720,368,547,758'
+05_c4d51b62748f_levenshtein_wraparound	spatial	silent	EXPECT-ABSENT held
+06_no-fix-recorded_queryint_left_overflow	spatial	differential	errors 2/1 expected
+07_no-fix-recorded_ltree_compare_int32	spatial	silent	EXPECT-ABSENT held
+08_no-fix-recorded_isjson_uncoercible_null	spatial	detected	capability fault: capstone-exec: domain fault cause=24 pc=0xc0537ad4 address=0x0 entry=0xc0200de0 code=0xc0200000-0xc5220000 last=0x43 preparing=0x43 sha256=8088ed6b2103e65a7d679555fb1c06ecadfe376818ce0e914fe5f6795e018558 image=/mnt/host/applications/postgres-8088ed6b2103e65a7d679555fb1c06ecadfe376818ce0e914fe5f6795e018558.dom
+09_no-fix-recorded_pg_prewarm_nostorage	spatial	silent	completed with no directive and no fault
+10_no-fix-recorded_trigger_slot_natts	spatial	silent	completed with no directive and no fault
+11_no-fix-recorded_crosstable_constraint_lock	spatial	silent	completed with no directive and no fault
+12_no-fix-recorded_postgres_fdw_async	spatial	not-runnable	declared by the case: needs a postmaster; the single-user backend the arms use cannot run it
+13_no-fix-recorded_gist_indexonly_misalign	spatial	reached-recording	EXPECT-ABSENT fired: 'type with OID 860 does not exist'
+14_no-fix-recorded_logicaldecoding_empty_prepared	spatial	not-runnable	declared by the case: needs a postmaster; the single-user backend the arms use cannot run it
+15_3d160401b65e_oidvector_oob_read	spatial	differential	errors 0/2 expected
+16_849da8210539_ascii_multibyte_oob_read	spatial	silent	errors 4/4 expected
+17_eb9e5529745c_internal_type_confusion	spatial	silent	errors 3/3 expected
+18_60887d34818a_portal_type_confusion	spatial	not-runnable	declared by the case: DECLARE CURSOR requires a transaction block and postgres --single has no implicit one, so the trigger cannot reach the defect here
+19_fd6d3e7e9d55_range_subtype_usage	spatial	differential	errors 0/1 expected
+01_12a6206864a0_to_char_tz_overflow	sublet	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc0202214 address=0xc9dcf8f0 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x38 preparing=0x38 sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom
+02_no-fix-recorded_ts_headline_overflow	sublet	detected	capability fault: capstone-exec: domain fault cause=7 pc=0xc0202414 address=0xc9dd0650 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x4f preparing=0x4f sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom
+03_no-fix-recorded_ltree_lquery_parse_overflow	sublet	silent	completed with no directive and no fault
+04_no-fix-recorded_money_int64min_div	sublet	differential	EXPECT-ABSENT fired: '-$92,233,720,368,547,758'
+05_c4d51b62748f_levenshtein_wraparound	sublet	silent	EXPECT-ABSENT held
+06_no-fix-recorded_queryint_left_overflow	sublet	differential	errors 2/1 expected
+07_no-fix-recorded_ltree_compare_int32	sublet	silent	EXPECT-ABSENT held
+08_no-fix-recorded_isjson_uncoercible_null	sublet	detected	capability fault: capstone-exec: domain fault cause=24 pc=0xc0539a38 address=0x0 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x43 preparing=0x43 sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom
+09_no-fix-recorded_pg_prewarm_nostorage	sublet	silent	completed with no directive and no fault
+10_no-fix-recorded_trigger_slot_natts	sublet	silent	completed with no directive and no fault
+11_no-fix-recorded_crosstable_constraint_lock	sublet	silent	completed with no directive and no fault
+12_no-fix-recorded_postgres_fdw_async	sublet	not-runnable	declared by the case: needs a postmaster; the single-user backend the arms use cannot run it
+13_no-fix-recorded_gist_indexonly_misalign	sublet	reached-recording	EXPECT-ABSENT fired: 'type with OID 860 does not exist'
+14_no-fix-recorded_logicaldecoding_empty_prepared	sublet	not-runnable	declared by the case: needs a postmaster; the single-user backend the arms use cannot run it
+15_3d160401b65e_oidvector_oob_read	sublet	detected	capability fault: capstone-exec: domain fault cause=5 pc=0xc0ae3764 address=0xc9d60520 entry=0xc0200e4c code=0xc0200000-0xc52f0000 last=0x43 preparing=0x43 sha256=be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268 image=/mnt/host/applications/postgres-be234a12c9336a00d8208e0dc3b82efdd74f29b5d7f21ddc490b3f1e2c8bb268.dom
+16_849da8210539_ascii_multibyte_oob_read	sublet	silent	errors 4/4 expected
+17_eb9e5529745c_internal_type_confusion	sublet	silent	errors 3/3 expected
+18_60887d34818a_portal_type_confusion	sublet	not-runnable	declared by the case: DECLARE CURSOR requires a transaction block and postgres --single has no implicit one, so the trigger cannot reach the defect here
+19_fd6d3e7e9d55_range_subtype_usage	sublet	differential	errors 0/1 expected

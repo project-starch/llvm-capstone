@@ -1,0 +1,24 @@
+{
+  "case": 7,
+  "upstream_fix": "1af08af694",
+  "title": "pg_trgm's picksplit applies GETSIGN() to a field that is already a bit vector, shifting the read TRGMHDRSIZE bytes past the signature",
+  "consumer": "GiST index build over gist_trgm_ops (pg_trgm)",
+  "class": "spatial",
+  "allocator_layer": "aset",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "upstream 1af08af694, \"Fix pg_trgm's picksplit function with all-true datums\" (CVE-2026-14678), backpatched through 14 and therefore absent at the 17.5 pin. The pin's own code proves the type error against itself. contrib/pg_trgm/trgm_gist.c:745 declares the field as `BITVECP sign;` -- a raw bit vector with no varlena header. :824 allocates `cache_sign = palloc(siglen * (maxoff + 1))` and :827 hands each entry the slice `&cache_sign[siglen * k]`, so every sign is exactly siglen bytes. :904 and :917 pass `cache[j].sign` DIRECTLY to hemdistsign as a BITVECP, which is the correct use. But :900 and :913 wrap the same field as `GETSIGN(cache[j].sign)`, and trgm.h:106 defines `GETSIGN(x)` as `( (BITVECP)( (char*)x+TRGMHDRSIZE ) )` with TRGMHDRSIZE = VARHDRSZ + sizeof(uint8) at trgm.h:74. The pointer is therefore advanced past a header the object does not have, and sizebitvec then reads siglen bytes from there -- running TRGMHDRSIZE bytes off the end of that entry's slice, and off the end of the whole palloc'd cache_sign buffer when j is the last entry. As upstream notes, the cast inside GETSIGN is what stops the compiler warning.",
+  "fidelity": "real server, real allocator, contrib extension. The read is of a palloc'd chunk, so whether a mechanism sees it depends on whether TRGMHDRSIZE bytes is enough to leave the surrounding aset block -- it is a small overread, so the expectation is that it is not, which is exactly the asymmetry this corpus measures.",
+  "arms": {
+    "spatial": {
+      "status": "not written"
+    },
+    "sublet": {
+      "status": "not written"
+    },
+    "cheribsd-revocation": {
+      "status": "not written"
+    }
+  },
+  "status": "collected 2026-10-05 by the backport sweep of REL_17_5..REL_17_STABLE; not yet run on any arm"
+}
