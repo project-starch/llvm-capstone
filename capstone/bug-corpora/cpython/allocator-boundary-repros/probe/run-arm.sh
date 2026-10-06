@@ -27,6 +27,23 @@ STAMP=$(date -u +%Y%m%d-%H%M%S)
 OUT=${2:-$KIT/results/$arm-$STAMP}
 export PYTHONPATH=$REPO/capstone/runtime/host
 CASE_TIMEOUT=${CASE_TIMEOUT:-120}
+# CAP selects a capacity VARIANT of the arm's image, not another arm. The arm
+# name still carries the oracle and still has to be in corpus.json; only the
+# image and the sha the gate demands change. Four cases were excluded for
+# capacity and two of them turned out to need a child process rather than a
+# bigger heap, so the raised image must NOT silently become the image for
+# everything: a bigger application heap moves when pymalloc returns an emptied
+# arena, which is exactly what the cause-24 detections depend on.
+#   base   the image the other rows were measured with
+#   hicap  heap 192 MiB, PYM_ARENA 128 MiB, PYM_META 64 MiB, ARENA_COUNT 64,
+#          LARGE_COUNT 65536 -- for the rows that cannot run at all otherwise
+CAP=${CAP:-base}
+case $CAP in
+  base)  IMGKEY=$arm ;;
+  hicap) IMGKEY=$arm-hicap ;;
+  *) echo "CAP must be base or hicap, not '$CAP'" >&2; exit 2 ;;
+esac
+[ "$CAP" = base ] || OUT=${2:-$KIT/results/$arm-$CAP-$STAMP}
 
 # ---- the arm must be one the corpus declares -----------------------------
 DECL=$(python3 -c "import json,sys; print(' '.join(json.load(open(sys.argv[1]))['required_arms']))" \
@@ -48,14 +65,14 @@ case $arm in
 esac
 
 # ---- the image must be the one recorded for this arm ---------------------
-IMG=$KIT/images/python-$arm.dom
+IMG=$KIT/images/python-$IMGKEY.dom
 INPUTS=$KIT/images/inputs.tsv
-[ -f "$IMG" ]    || { echo "no image for $arm at $IMG" >&2; exit 2; }
+[ -f "$IMG" ]    || { echo "no image for $IMGKEY at $IMG" >&2; exit 2; }
 [ -f "$INPUTS" ] || { echo "no $INPUTS" >&2; exit 2; }
-want=$(awk -v a="$arm" '$1==a{print $3}' "$INPUTS")
+want=$(awk -F'\t' -v a="$IMGKEY" '$1==a{print $3}' "$INPUTS")
 have=$(sha256sum "$IMG" | cut -d' ' -f1)
-[ -n "$want" ] || { echo "$arm is not in $INPUTS" >&2; exit 2; }
-[ "$want" = "$have" ] || { echo "REFUSING: $IMG is not the image recorded for $arm" >&2
+[ -n "$want" ] || { echo "$IMGKEY is not in $INPUTS" >&2; exit 2; }
+[ "$want" = "$have" ] || { echo "REFUSING: $IMG is not the image recorded for $IMGKEY" >&2
   echo "  recorded ${want:0:16}  present ${have:0:16}" >&2; exit 2; }
 
 mkdir -p "$OUT"
@@ -72,10 +89,10 @@ GUESTENV=(-e PYTHONHOME=/mnt/host)
 [ "$WANT_SUBLET" = 1 ] && GUESTENV+=(-e CPY_SUBLET_MODE=1)
 mkdir -p "$SHARE"
 cp "$IMG" "$SHARE/$GUESTDOM"
-printf 'arm\t%s\nimage_sha256\t%s\nrev_nodes\t%s\nstarted_utc\t%s\n' \
-  "$arm" "$have" "${CAPSTONE_REV_NODES:-65536}" "$(date -u +%FT%TZ)" > "$OUT/run.meta"
+printf 'arm\t%s\ncapacity\t%s\nimage\t%s\nimage_sha256\t%s\nrev_nodes\t%s\nstarted_utc\t%s\n' \
+  "$arm" "$CAP" "$IMGKEY" "$have" "${CAPSTONE_REV_NODES:-65536}" "$(date -u +%FT%TZ)" > "$OUT/run.meta"
 cp "$INPUTS" "$OUT/inputs.tsv"
-echo "arm=$arm image=${have:0:16} rev_nodes=${CAPSTONE_REV_NODES:-65536}"
+echo "arm=$arm capacity=$CAP image=${have:0:16} rev_nodes=${CAPSTONE_REV_NODES:-65536}"
 
 vm() { python3 -m capstone_vm --state "$ST" "$@"; }
 cleanup() { vm down >/dev/null 2>&1 || true; }

@@ -17,10 +17,10 @@ case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run
 06_gh-140551_crash-in-dict-if-hash-eq	gh-140551	spatial	nested	spatial	SILENT		True	spatial-20261006-105111
 06_gh-140551_crash-in-dict-if-hash-eq	gh-140551	spatial	nested	sublet	SILENT		False	sublet-20261006-112658
 06_gh-140551_crash-in-dict-if-hash-eq	gh-140551	spatial	nested	cheribsd-revocation	SILENT		True	cheri11
-07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	spatial	SILENT		False	spatial-20261006-105111
-07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	sublet	CAPACITY			sublet-20261006-123446
-07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	cheribsd-revocation	DETECTED	si_code=1 (PROT_CHERI_BOUNDS)	True	cheri11
-08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	spatial	SILENT		False	spatial-20261006-105111
+07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	spatial	SUPERSEDED	trigger replaced: ran in a child		spatial-20261006-105111
+07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	sublet	SUPERSEDED	trigger replaced: ran in a child		sublet-20261006-123446
+07_gh-140594_fix-an-out-of-bounds-read	gh-140594	spatial	non-nested	cheribsd-revocation	SUPERSEDED	trigger replaced: ran in a child		cheri11
+08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	spatial	CAPACITY	MemoryError; the run predates the CAPACITY gate		spatial-20261006-105111
 08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	sublet	CAPACITY			sublet-20261006-123446
 08_gh-140607_heap-buffer-overflow-in-io-rawiobase	gh-140607	spatial	non-nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	True	cheri11
 09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	gh-140802	spatial	nested	spatial	DETECTED	24	True	spatial-20261006-105111
@@ -92,6 +92,6 @@ case	upstream_fix	class	side	arm	verdict	detail	oracle_met	run
 31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	spatial	DETECTED	24	True	spatial-20261006-141858
 31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	sublet	DETECTED	24	True	sublet-20261006-144133
 31_gh-148660_odict-copy-stale-link	gh-148660	temporal	nested	cheribsd-revocation	DETECTED	si_code=2 (PROT_CHERI_TAG)	False	cheri11
-32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	spatial	DETECTED	24	True	spatial-20261006-141858
-32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	sublet	CAPACITY			sublet-20261006-144133
-32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	cheribsd-revocation	DETECTED	si_code=5 (PROT_CHERI_PERM)	False	cheri11
+32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	spatial	SUPERSEDED	trigger replaced: ran in a child		spatial-20261006-141858
+32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	sublet	SUPERSEDED	trigger replaced: ran in a child		sublet-20261006-144133
+32_gh-149449_unicodedata-capi-cached	gh-149449	temporal	nested	cheribsd-revocation	SUPERSEDED	trigger replaced: ran in a child		cheri11
