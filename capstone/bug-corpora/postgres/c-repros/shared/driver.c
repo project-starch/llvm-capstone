@@ -48,6 +48,22 @@ void pgclient_expect_fault_in(const void *fn, const char *name) {
   fflush(stdout);
 }
 
+#if defined(__CAPSTONE__)
+/* A Capstone domain has no signal to catch. A capability violation ends the
+ * domain, and the host prints the line the runner scores:
+ *
+ *   capstone-exec: domain fault cause=7 pc=0x... address=0x... image=...
+ *
+ * Attribution still works, and without a handler: pgclient_expect_fault_in
+ * above prints expect_fault_in=<name>@<address> before the defect runs, so
+ * the host's pc is compared against an address the run itself published
+ * rather than against anything hardcoded. That is the same check the other
+ * two arms make from inside the process; here it is made from outside it.
+ *
+ * Installing a handler anyway would be worse than useless: it would not run,
+ * and its presence would suggest the arm reports through it. */
+static void install_fault_handler(void) {}
+#else
 static void fault_handler(int sig, siginfo_t *si, void *uc) {
   uintptr_t pc = 0, ra = 0;
 #if defined(__FreeBSD__) && defined(__riscv)
@@ -91,6 +107,7 @@ static void install_fault_handler(void) {
   (void) sigaction(SIGPROT, &sa, 0);   /* CheriBSD capability violation (34) */
 #endif
 }
+#endif /* !__CAPSTONE__ */
 
 void pgclient_note_signed(const char *label, long v) {
   printf("PG_NOTE %s=%ld\n", label, v);

@@ -13,10 +13,12 @@
   "fidelity": "real buffering helpers, transcribed caller, REPRODUCED. bbstreamer_buffer_until and bbstreamer_buffer_bytes are copied verbatim from bbstreamer.h:156-196, including the `*data += nbytes` that is the whole defect; the forwarding call is bbstreamer_tar.c:225-228 transcribed, passing `data` as the pin does rather than bbs_buffer.data as the fix does. StringInfo is a stand-in for src/common/stringinfo.c because the buffer's growth policy takes no part in the defect -- all that matters is that the bytes are copied somewhere else. Not reproduced: the tar parsing that reaches BBSTREAMER_MEMBER_TRAILER and computes pad_bytes_expected, which needs a server streaming a base backup.",
   "arms": {
     "spatial": {
-      "status": "not written"
+      "oracle": "the overrun of the malloc'd object is reported as a domain fault, or the case completes and this arm did not see it. level0 narrows a returned pointer to the bytes requested, not to a size class, so unlike the purecap guest the bound here is the object itself; the host's fault line carries the pc, and the expect_fault_in line the case prints before the defect is what attributes it.",
+      "status": "built 2026-10-06 by shared/build-domain.sh against the arm's own SDK ($PG_SU_ROOT/runtime); not yet run, which needs the Capstone VM"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "the overrun of the malloc'd object is reported as a domain fault, or the case completes and this arm did not see it. level0 narrows a returned pointer to the bytes requested, not to a size class, so unlike the purecap guest the bound here is the object itself; the host's fault line carries the pc, and the expect_fault_in line the case prints before the defect is what attributes it.",
+      "status": "built 2026-10-06 by shared/build-domain.sh against the arm's own SDK ($PG_SU_ROOT/runtime); not yet run, which needs the Capstone VM"
     },
     "cheribsd-revocation": {
       "oracle": "SIGPROT(34) -- CHERI-DETECTED. The next streamer reads pad_bytes_expected bytes from a pointer bbstreamer_buffer_until had already advanced to one past the end of the chunk, so the first byte read is already out of bounds. CheriBSD riscv64-purecap, static build, 2026-10-06. The PG_DEFECT marker printed before the fault, so the setup provably ran and the fault is the defective access rather than something earlier. Fault attributed to the defect, 2026-10-06: the case declares the function its fault belongs to and the handler reports the faulting PC and return address as offsets from it. signal=34 si_code=1, pc-expect=+58 against pgclient_consume_content: the faulting instruction is 58 bytes into the next streamer, which is the consumer bbstreamer_tar.c:225 hands the advanced pointer to."
@@ -25,5 +27,5 @@
       "oracle": "AddressSanitizer: heap-buffer-overflow, READ of size 1, \"0 bytes to the right of 24-byte region\", in pgclient_consume_content (the next streamer) called from case.c:58. The 24-byte region is the input chunk and 24 is pad_bytes_expected. Two notes print first and establish the mechanism rather than asserting it: remaining_len=0 and data_past_end=1, i.e. bbstreamer_buffer_until consumed the whole chunk and left `data` exactly one past its end, which is the pointer bbstreamer_tar.c:225 then forwards. Host build, 2026-10-06."
     }
   },
-  "status": "reproduced on the host under ASan and CHERI-DETECTED on the purecap arm, both 2026-10-06; the two Capstone arms cannot host it (see the corpus note)"
+  "status": "reproduced on the host under ASan and CHERI-DETECTED on the purecap arm, both 2026-10-06; both Capstone arms are built and awaiting a run"
 }
