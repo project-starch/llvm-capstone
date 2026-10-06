@@ -20,11 +20,9 @@ Every case declares one of these, and the table partitions the corpus.
 | shape | cases | why it is not the same test |
 |---|---|---|
 | free / stale read | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 | the base case: a lifetime ends and a surviving pointer reads the block |
-| read past the end of the record | 28, 30, 31, 32, 33, 34, 35, 38, 39 | the pointer is live; the decode or walk leaves the object |
-| stale or wild pointer dereference | 27, 29, 36, 37 | the slot holds a value that was never a valid pointer, so there is no block to protect |
-| non-terminating loop | 40, 42 | no memory error at all; the resource exhausted is time |
+| read past the end of the record | 28, 30, 31, 32, 33, 34, 35, 36, 37 | the pointer is live; the decode or walk leaves the object |
+| stale or wild pointer dereference | 27, 29 | the slot holds a value that was never a valid pointer, so there is no block to protect |
 | negative length into memcpy | 26 | the length is computed, goes negative, and is passed as a size_t |
-| unbounded recursion | 41 | the resource exhausted is the call stack, not the heap |
 
 ## Arms
 

@@ -1,5 +1,5 @@
 {
-  "case": 39,
+  "case": 37,
   "upstream_fix": "fz11",
   "title": "heap overflow in statDecodePage free-chain walk; needs DBSTAT_VTAB",
   "consumer": "sqlite3.c",
