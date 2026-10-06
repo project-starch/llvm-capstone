@@ -20,13 +20,15 @@ evidence rather than from memory. **It reports numbers; it does not edit the pap
 | **Wireshark** | 12 | ✅ **13/13 measured** | `wmem-repros/results/20260921-cheribsd/matrix.tsv` — 39 data rows over 3 arms, `arm=cheribsd` on 13 distinct cases, all `expected=complete`, `passed=13/13` |
 | **Apache** | 9 | ✅ **9/9 measured** | `apr-pool-repros/results/20260921-cheribsd` (1 case, revocation on *and* off) + `bucket-repros/results/20260922-cheribsd` (8 cases) |
 | **memcached** | 5 | ⚠️ **declared and claimed, no committed bundle** | all 5 `case.json` declare `cheribsd-revocation` and their `status` names a CheriBSD run, but `results/` holds no bundle. **Updated 2026-10-04:** the corpus now has a committed capability bundle at `ports/memcached/allocators/results/20261004-qemu-corpus-defects/` (spatial/sublet, 10/10, plus the negative control) and names it in `evidence`, and `e236ca79ea5a` **removed** the `INDEX.md` line this row used to quote. The CheriBSD verdict here is unchanged: that bundle deliberately did not measure CheriBSD, because the platform is absent from this host |
-| **FFmpeg** | ~~3~~ **4** | ⚠️ **declared *and claimed*, no bundle** | all 4 declare the arm (case 3 was added 2026-10-03); no bundle. **Corrected 2026-10-06:** this cell read "declared, **never claimed**", and that half was a FALSE CLEAN PRODUCED BY THIS DOC'S OWN PROBE — see the note below. Cases 0-2 *did* claim a measured run; it is now retracted |
+| **FFmpeg** | ~~3~~ **4** | ✅ **4/4 measured** | `pool-repros/results/20261006-cheribsd` — all four complete under revocation **on**, with the revocation control FAULTING in the same boot (`tag_after_sweep=0`, then SIGPROT `si_code` 2 at the independently resolved probe). **Updated twice on 2026-10-06:** this cell first read "declared, never claimed" — a false clean from this doc's own `'cheri' in status` probe; it was corrected to "declared *and claimed*, no bundle" when that claim was **retracted** as never run; it is now a real reading. Note the headline **22** above does not include these four: its population is corpora that had a committed bundle when it was written |
 | **CPython** | 20 | ❌ **nothing** | no `cheribsd-*` arm in any of the 20 `case.json`; no `status` mentions it; no bundle |
 | **PostgreSQL** | 8 | ❌ **nothing** | same three negatives |
 | SQLite | 0 (row dashed) | n/a | `required_arms: ["host-asan"]`; no CheriBSD anywhere in that corpus |
 
-So the zero is **measured** for Wireshark and Apache (22 cases), and **not yet established** for
-CPython and PostgreSQL (28 cases), with memcached and FFmpeg (8) in between.
+So the zero is **measured** for Wireshark, Apache and now FFmpeg (26 cases), and **not yet
+established** for CPython and PostgreSQL (28 cases), with memcached (5) in between — claimed in its
+`status` prose, with the readings in its `case.json` files rather than a bundle, by that corpus's
+own policy.
 
 ### Correction, 2026-10-06: this doc's own probe produced a false clean
 
@@ -42,12 +44,22 @@ probe over free prose cannot establish an absence of claims; the claim has to be
 prose *means*, not from one word. A probe that reads `arms[*].status`/`oracle` for a measured/declared
 token, rather than grepping the case's summary for a program name, would have caught it.
 
-The claim itself is **retracted** as of 2026-10-06 (`bug-corpora/ffmpeg/pool-repros/README.md`, and
-each case's `cheribsd-revocation.retraction` field). FFmpeg's CheriBSD state is therefore unchanged in
-substance — no bundle, zero measured — but the row now says what actually happened.
+The claim itself was **retracted** on 2026-10-06 (`bug-corpora/ffmpeg/pool-repros/README.md`, and each
+case's `cheribsd-revocation.retraction` field, which is kept rather than deleted).
 
-**UNRESOLVED:** this doc counts **22** measured CheriBSD rows (13 + 1 + 8); the inventory's table (c)
-reports **18**. Neither has been reconciled against the other, and this correction does not pick one.
+**And then, later the same day, it was MEASURED** — `pool-repros/results/20261006-cheribsd/`: all four
+complete under revocation on, 0 of 4 caught, with the revocation control faulting in the same boot.
+So FFmpeg's state did change in substance, twice in one day: *claimed without evidence* → *retracted*
+→ *measured*. The predicted outcome was right throughout; what was wrong was asserting it had been
+observed before it had.
+
+**RESOLVED, and then overtaken.** This doc counts **22** (Wireshark 13 + Apache 9) and the inventory's
+table (c) counted **18** (tshark 13 + memcached 5). That was never a discrepancy — different
+populations under different evidence conventions: this doc counts corpora with a *committed bundle*,
+which excludes memcached, while the inventory covers only its three programs, which excludes Apache.
+The inventory's figure is **now also 22** (tshark 13 + memcached 5 + FFmpeg 4), so the two coincide
+numerically while still counting **different sets**. That coincidence must not be read as
+corroboration, which is why both compositions are written out here and in the inventory.
 
 ## Two numbers that are easy to conflate, and why the distinction matters
 
@@ -89,8 +101,9 @@ The paper's own completion gate offers two routes, and either settles it:
 > "Completion requires the specified evidence **or an explicit narrowing of the corresponding claim**,
 > not a favorable outcome." — `appendices/a-evidence-status.tex:7-10`
 
-- **Evidence route:** run the CheriBSD arm for CPython's 20 and PostgreSQL's 8, and commit bundles for
-  memcached's 5 and FFmpeg's 3. The harness exists — Wireshark's and Apache's bundles are its output.
+- **Evidence route:** run the CheriBSD arm for CPython's 20 and PostgreSQL's 8, and commit a bundle for
+  memcached's 5. The harness exists — Wireshark's, Apache's and now FFmpeg's bundles are its output,
+  and FFmpeg's were produced on a vehicle built on this host, so the platform is no longer a blocker.
 - **Narrowing route:** state the denominator the zero was measured over (22 cases, Wireshark and
   Apache) and report the rest as not-yet-run, which is what `S3-real-bug-corpus.md:197-203` already
   provides a vocabulary for (`level-not-ported`, `other`).

@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-06",
+  "runner": "ports/common/host/cheribsd/run.py",
+  "runtime_revocation": "on",
+  "guest_default_revocation": "preserved",
+  "cases": 4,
+  "caught": [],
+  "completed": ["pool-0-36", "pool-0-37", "pool-0-38", "pool-0-39"],
+  "runner_exit": 0,
+  "controls": {
+    "revocation-control": "FAULTED -- REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1, then SIGPROT si_code 2 (PROT_CHERI_TAG) at addr=pc=0x101dc0, equal to the independently resolved mc_defect_read",
+    "cheribsd-abi": "CHERI_ABI pointer_bytes=16 runtime_revocation=1 -- PASS",
+    "cheribsd-bounds": "CHERI_BOUNDARY_READY -- PASS"
+  },
+  "closes": "the gap opened by the 2026-10-06 retraction of 18a16640682b, which claimed this reading without taking it. The predicted outcome was right; the measurement claim was not.",
+  "why_runnable_now": "the port's purecap build (cmake --preset cheribsd on ports/ffmpeg/buffer-pool) yields bin/pool-security, which already registers these four as cases 36-39. Run through ports/common/host/cheribsd/run.py with --runtime-revocation on, NOT through the port's PoisonCap wrapper, which passes the unconditional literal 'off' at poisoncap/run.py:129-130.",
+  "still_open": "the PoisonCap arms citing pool-{0,2}-{36,37,38} have no committed bundle either -- a separate, weaker gap, flagged and not closed here",
+  "n_per_cell": 1
+}
