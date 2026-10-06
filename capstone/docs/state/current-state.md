@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-06 — virtual prototype: representability measured
+
+QEMU creates capabilities its memory format cannot hold: SHRINK, SPLIT,
+CINCOFFSET and SCC check no representability, and the bounds stored beside
+each tag hide the loss. Without that store, a 64 KiB cursor move plus STC and
+LDC would decode to 16 bytes the capability never covered. The prototype
+rejects such results at creation with cause 29; the
+[history note](../history/06-10-2026_19-27-18_virtual-capstone-representability.md)
+has the measurements and the ABI the rules. The gate's tval follow-up passes
+43/43 with seven undelegated controls.
+
 ## 2026-10-06 — virtual prototype: capability faults reach S
 
 The prototype QEMU can delegate causes 24–30 to S, and each Capstone fault

@@ -204,6 +204,33 @@ explicit argument. Every trap delivery consumes that value, so a fault raised
 any other way reports 0 and never the address of an earlier trap. The value
 does not pass through `badaddr`.
 
+## Representability
+
+A capability is representable when QEMU's compression followed by its
+decompression returns base, end and cursor unchanged. The
+[measurements](../history/06-10-2026_19-27-18_virtual-capstone-representability.md)
+show that QEMU today creates values that fail this test and hides the loss
+behind the bounds it stores beside each memory tag.
+
+| Rule | Contract |
+|---|---|
+| Check at creation | `CSMINT`, `SHRINK`, `SHRINKTO`, `SPLIT` for both results, `CINCOFFSET`, `CINCOFFSETIMM` and `SCC` check every result before any change. A result that is not representable raises cause 29 with `tval` 0 and changes nothing. |
+| No rounding | No operation rounds bounds inward or outward to make them fit. |
+| Cursor inside the bounds | Moving the cursor within the bounds needs no separate check: STC through UNINIT, INIT, the cursor reset of REVOKE and SHRINK's clamp. This holds once the decoder overflow for regions of 1 GiB and more is fixed. |
+| Decoder | `cap_uncompress` computes its window mask in 64 bits. The fix lands with `CSMINT`, gated by the in-bounds cursor measurement, which must then report no failure. |
+| Side store | Protected tags drop the stored bounds only after every check above is in place, so a valid program sees no change. |
+
+Consequences for software, measured on QEMU's encoding:
+
+- An object shorter than 4096 bytes is representable at any address.
+- An object of length in `[2^k, 2^(k+1))`, `12 <= k <= 29`, needs base and
+  end aligned to `2^(k-9)`. libc rounds such allocations; Linux aligns the
+  virtual address of a protected arena accordingly.
+- The cursor may move about 2 KiB below the base and, for small objects,
+  about 14 KiB above it; the span is four times the length class from 4096
+  bytes up. Pointer arithmetic beyond that faults at the arithmetic, not at
+  the access. M3 measures what this costs C programs.
+
 ## Exhaustion
 
 `SPLIT`, `MREV` and `CSMINT` check for enough free IDs before any change and
@@ -230,7 +257,8 @@ it. A freed table's memory is zeroed with scalar stores before reuse.
 5. `CSMINT`, `CSCHECKR`, `CSCHECKW` and `CSRETIRE`.
 6. PCC fetch check, PCC move into `cepc` on trap and out on xRET.
 7. Illegal-instruction policy for the protected-U table above.
-8. Bounds decoded from stored bits for protected tags.
+8. Representability checks at creation, then bounds decoded from stored
+   bits for protected tags.
 9. `tval` for causes 24–30 and cause 28 for an access past the bounds. **Done.**
 
 ## Constraints for the remaining M1 changes
