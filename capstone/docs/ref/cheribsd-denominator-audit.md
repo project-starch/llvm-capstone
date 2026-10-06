@@ -20,13 +20,34 @@ evidence rather than from memory. **It reports numbers; it does not edit the pap
 | **Wireshark** | 12 | ✅ **13/13 measured** | `wmem-repros/results/20260921-cheribsd/matrix.tsv` — 39 data rows over 3 arms, `arm=cheribsd` on 13 distinct cases, all `expected=complete`, `passed=13/13` |
 | **Apache** | 9 | ✅ **9/9 measured** | `apr-pool-repros/results/20260921-cheribsd` (1 case, revocation on *and* off) + `bucket-repros/results/20260922-cheribsd` (8 cases) |
 | **memcached** | 5 | ⚠️ **declared and claimed, no committed bundle** | all 5 `case.json` declare `cheribsd-revocation` and their `status` names a CheriBSD run, but `results/` holds no bundle. **Updated 2026-10-04:** the corpus now has a committed capability bundle at `ports/memcached/allocators/results/20261004-qemu-corpus-defects/` (spatial/sublet, 10/10, plus the negative control) and names it in `evidence`, and `e236ca79ea5a` **removed** the `INDEX.md` line this row used to quote. The CheriBSD verdict here is unchanged: that bundle deliberately did not measure CheriBSD, because the platform is absent from this host |
-| **FFmpeg** | ~~3~~ **4** | ⚠️ **declared, never claimed, no bundle** | all 4 declare the arm (case 3 was added 2026-10-03); no `status` mentions CheriBSD; no bundle |
+| **FFmpeg** | ~~3~~ **4** | ⚠️ **declared *and claimed*, no bundle** | all 4 declare the arm (case 3 was added 2026-10-03); no bundle. **Corrected 2026-10-06:** this cell read "declared, **never claimed**", and that half was a FALSE CLEAN PRODUCED BY THIS DOC'S OWN PROBE — see the note below. Cases 0-2 *did* claim a measured run; it is now retracted |
 | **CPython** | 20 | ❌ **nothing** | no `cheribsd-*` arm in any of the 20 `case.json`; no `status` mentions it; no bundle |
 | **PostgreSQL** | 8 | ❌ **nothing** | same three negatives |
 | SQLite | 0 (row dashed) | n/a | `required_arms: ["host-asan"]`; no CheriBSD anywhere in that corpus |
 
 So the zero is **measured** for Wireshark and Apache (22 cases), and **not yet established** for
 CPython and PostgreSQL (28 cases), with memcached and FFmpeg (8) in between.
+
+### Correction, 2026-10-06: this doc's own probe produced a false clean
+
+The FFmpeg cell said "never claimed" on the strength of the reproduction recipe below, which tests
+`'cheri' in str(json.load(open(f)).get('status','')).lower()`. The three `pool-repros` cases *did*
+claim a measured CheriBSD run — their `status` read "native pair and **every arm above** run
+2026-09-20; all passed", which asserts the arm ran while containing no literal `cheri`. Re-running
+the predicate on those three files returns `False, False, False`, so the probe was working exactly
+as written and still reported the opposite of the truth.
+
+**This is the keyed-to-one-spelling shape, in an instrument built to audit claims.** A substring
+probe over free prose cannot establish an absence of claims; the claim has to be absent from what the
+prose *means*, not from one word. A probe that reads `arms[*].status`/`oracle` for a measured/declared
+token, rather than grepping the case's summary for a program name, would have caught it.
+
+The claim itself is **retracted** as of 2026-10-06 (`bug-corpora/ffmpeg/pool-repros/README.md`, and
+each case's `cheribsd-revocation.retraction` field). FFmpeg's CheriBSD state is therefore unchanged in
+substance — no bundle, zero measured — but the row now says what actually happened.
+
+**UNRESOLVED:** this doc counts **22** measured CheriBSD rows (13 + 1 + 8); the inventory's table (c)
+reports **18**. Neither has been reconciled against the other, and this correction does not pick one.
 
 ## Two numbers that are easy to conflate, and why the distinction matters
 

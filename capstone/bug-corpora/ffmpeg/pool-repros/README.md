@@ -120,9 +120,34 @@ for any subset, so a partial run cannot later read as a full one.
 |---|---|:--:|:--:|:--:|
 | **Capstone** | bounds and tags; no lifetime event | — | — | — |
 | **Sublet** | the last return to the pool | **fault**, cause 24 | **fault**, cause 24 | **fault**, cause 24 |
-| **CHERI default** | `free()` → quarantine → sweep | — | — | — |
+| **CHERI default** *(PREDICTED, NOT MEASURED — retracted 2026-10-06)* | `free()` → quarantine → sweep | *—* | *—* | *—* |
 | **PoisonCap** | the lease return: poison, then sweep before reissue | **SIGPROT** 162 | **SIGPROT** 162 | **SIGPROT** 162 |
 | **Sublet port of FFmpeg's own pools** (2026-09-29) | FFmpeg's own `buffer.c`: the return to the pool is a revoke | **fault**, cause 24, at `case.c:85` | **fault**, cause 24, at `case.c:48` | **fault**, cause 24, at `case.c:33` |
+
+> **RETRACTION, 2026-10-06 — the CHERI-default row is a PREDICTION, not a measurement.** Its three
+> dashes were asserted as measured by `18a16640682b` ("Measure the stock-CheriBSD arm instead of
+> deriving it") and carried forward by `3f3abf676e58`. No such run is evidenced: the cited case names
+> `pool-0-36/37/38` are built at exactly one place,
+> `../../../ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/run.py:70`, and that runner's only call
+> site passes the unconditional literal `"--runtime-revocation", "off"` at `:129-130` — unchanged at
+> every revision of the file — so those names belong to a revocation-**off** run. The precise scope
+> of what is and is not provable from the tree is in each case's `cheribsd-revocation.retraction`
+> field. The predicted *outcome* still stands on its mechanism and on the measured siblings
+> (`wmem-repros` 13/13, httpd 9/9); it is the **measurement** that is withdrawn.
+>
+> **A separate, weaker gap — flagged, not retracted.** The **PoisonCap** row cites the same
+> `pool-{0,2}-{36,37,38}` names, and no committed bundle holds those either: cases 36-38 entered the
+> runner in `6891936e52f3`, after the only pilot that recorded pool cases
+> (`results/measurements/20260919-poisoncap-pilot/pool-isolated-1.json`, whose case list stops at
+> `pool-2-13`). This is weaker because `--case pool-2-36` *is* a valid selector, so the run is
+> possible and may simply be uncommitted, whereas the CheriBSD arm had no code path at all. It needs
+> its bundle committed or its own retraction; until then this row must not be contrasted against as
+> "the measured one".
+>
+> **UNRESOLVED, and not silently corrected either way:**
+> `../../../docs/ref/cheribsd-denominator-audit.md` counts **22** measured CheriBSD temporal rows
+> across the corpora (13 + 1 + 8), while the inventory's table (c) reports **18**. The two have not
+> been reconciled, and neither figure is relied on here.
 
 The last row is the Sublet port of FFmpeg's own pools (`ports/ffmpeg/sublet`), not the
 buffer-pool port's substitute that the `Sublet` row measures. Each `case.c` runs unchanged against
@@ -188,7 +213,7 @@ pymalloc corpus's `PYC`. What each one means is unchanged.
 | arm | what it is |
 |---|---|
 | `native-fix-differential` | the contract's arms differ by **protection**, the defect present in both. This pair differs by whether the **upstream fix** is applied. Folding it into `spatial`/`sublet` would misname it |
-| `cheribsd-revocation` | stock CheriBSD with `libc` revocation enabled: a fourth system, and the arm that makes the blindness claim a measurement |
+| `cheribsd-revocation` | stock CheriBSD with `libc` revocation enabled: a fourth system. **Declared, NOT measured** — this line previously read "the arm that makes the blindness claim a measurement", which was retracted on 2026-10-06; see the retraction note above |
 
 `poisoncap-protected` carries `si_code: null` with a note. The runner records a
 process exit status; 162 is 128+34 so the signal is derived, but `si_code` is not
