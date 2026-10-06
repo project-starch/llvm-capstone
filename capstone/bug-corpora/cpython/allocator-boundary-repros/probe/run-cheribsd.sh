@@ -25,6 +25,14 @@ SICODE=${SICODE:-/root/sicode.so}
 GUEST_PORT=${GUEST_PORT:-10086}
 OUT=${1:-$HOME/arms/cpython/cheribsd/results/boundary-$(date -u +%Y%m%d-%H%M%S)}
 BUDGET=${CASE_BUDGET:-120}
+# ONLY=01,10,18 runs just those case numbers. It gates BOTH the staging loop
+# and the run loop: a subset that stages 32 cases but runs 3 leaves 29 stale
+# directories in the guest that the next full run would silently reuse.
+ONLY=${ONLY:-}
+in_subset() {  # $1 = case directory name, e.g. 07_gh140594
+  [ -z "$ONLY" ] && return 0
+  case ",$ONLY," in *",${1%%_*},"*) return 0 ;; *) return 1 ;; esac
+}
 K="-o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=120"
 G() { ssh $K -p "$GUEST_PORT" root@localhost "$@" 2>/dev/null; }
 P() { scp -q $K -P "$GUEST_PORT" "$1" root@localhost:"$2" 2>/dev/null; }
@@ -99,6 +107,7 @@ G "rm -rf /root/boundary && mkdir -p /root/boundary"
 n=0
 for d in "$CORPUS"/[0-9][0-9]_*/; do
   c=$(basename "$d")
+  in_subset "$c" || continue
   G "mkdir -p /root/boundary/$c"
   tar -C "$d" -cf - trigger.py $( [[ -f $d/upstream_test.py ]] && echo upstream_test.py ) \
     | G "tar -C /root/boundary/$c -xf -"
@@ -111,8 +120,10 @@ echo "staged $n cases"
 
 # ---- run ---------------------------------------------------------------
 printf 'case\tarm\trc\tsignal\tsi_code\tlast\n' > "$OUT/verdicts.tsv"
+printf 'case_budget\t%s\nonly\t%s\n' "$BUDGET" "${ONLY:-all}" >> "$OUT/run.meta"
 for d in "$CORPUS"/[0-9][0-9]_*/; do
   c=$(basename "$d")
+  in_subset "$c" || continue
   out=$(G "cd /root/boundary/$c && env PYTHONDONTWRITEBYTECODE=1 PYTHONHOME=$PYHOME \
             LD_PRELOAD=$SICODE timeout $BUDGET $GUEST/python trigger.py 2>&1; \
           echo RC=\$?")
