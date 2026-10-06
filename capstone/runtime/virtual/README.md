@@ -10,7 +10,9 @@ The [application gate](result.json) runs a normal C program, the explicit
 same-`mm` thread contract, SQLite's shell and the mruby interpreter. The
 existing ports build through the common SDK; applications must be rebuilt for
 its virtual profile. An ELF marker prevents the loader from accepting an image
-built for the physical calling convention.
+built for the physical calling convention. Virtual VM-service version 2 also
+rejects version-1 virtual images before executing them; rebuild the SDK and
+applications together when switching to this interface.
 
 ## Execution and memory
 
@@ -43,9 +45,11 @@ the process transport under a wire lock; fork, shared tagged pages and SMP
 remain out of scope.
 
 The loader registers image, stack, startup and exchange mappings. Startup
-pages are pinned. Growing RW arenas initially have absent PTEs: the module
+pages are pinned. Growing private anonymous mappings initially have absent PTEs: the module
 asks Linux's GUP interface to resolve the first touch, then retains a pin
-until retirement. It does not supply a pager or change VMA permissions to
+until retirement. A permitted write fault after `mprotect` is resolved by Linux
+and must retain the same physical backing; a denied VMA access is never fixed
+by granting more permissions. It does not supply a pager or change VMA permissions to
 make a denied access succeed. TLS uses the common capability libc setup.
 
 Each launch owns a 65,536-slot lifetime table including the invalid header
@@ -53,7 +57,7 @@ identity, occupying 1 MiB. Linux keeps the arena's private ancestor as a
 scalar identity. Whole-arena retirement walks and invalidates its descendants
 and the ancestor before clearing physical tags and unpinning pages. Reusing
 the same VA creates a fresh live identity. When the table is pressured, the
-trusted collector clears stale tags in registered pages and saved contexts,
+trusted collector clears stale tags in resident registered pages and saved contexts,
 then returns unpinned identities to the table free list; dead PCC identities
 remain pinned because a PCC has no tag to clear. Teardown discards the context
 and clears tags before freeing its table and saved frame.
@@ -65,9 +69,23 @@ before allocation. Blocks are aligned powers of two, minimum 256 bytes. The
 returned capability is bounded to the request; a request of 4 KiB or more is
 rounded up to the representable grain, at most 1/512 of its size.
 `malloc_usable_size` reports that bounded extent, not the block.
-Anonymous RW `mmap` and whole-arena `munmap` use the same grant/retire path.
-The virtual SDK reserves 65,536 block records and 256 arena records by default;
-larger applications may set `CAPSTONE_APPLICATION_VIRTUAL_BLOCKS` and
+Private anonymous `mmap`, page-range `mprotect` and whole-mapping `munmap`
+use the same VM service. `mmap` supports `PROT_NONE` and R/W/X combinations;
+its capability carries maximum anonymous-mapping rights while PTEs enforce
+current protection. `mprotect` never increases an explicitly restricted
+capability's own rights. Management operations use the registered virtual
+range without reading through the pointer, so `PROT_NONE` can be retired.
+Public lengths are rounded to pages. Internal power-of-two backing padding
+stays `PROT_NONE`, cannot be exposed by `mprotect`, and is retired with the
+whole mapping. Heap grants retain linear ownership; public mmap grants are
+explicitly delinearised. Both belong to one mm, shared by its C threads.
+The virtual SDK bounds metadata at 65,536 block records and 256 arena records by default.
+It starts with at most 256 block records and 32 arena records, then adds metadata
+slabs through the common VM service without recursing into malloc. Metadata has
+separate mapping lifetimes and survives payload `malloc_trim`. A scalar atomic
+mutex protects allocator state across thread switches and suspended mapping
+calls; contended callers return to Linux through the WAIT service. The
+uncontended malloc/free path performs no lock-service calls. Larger applications may set `CAPSTONE_APPLICATION_VIRTUAL_BLOCKS` and
 `CAPSTONE_APPLICATION_VIRTUAL_ARENAS` when building the SDK.
 The collector is only enabled after a complete namespace sweep. If all
 remaining identities are live or pinned, the context ends with a resource
@@ -79,6 +97,36 @@ globals and anonymous constant pools. It permits those pools only for this
 profile; the bounded capability-table ABI retains its existing refusal.
 Virtual C cannot fabricate a missing gp. The shared setjmp and signal-stack
 assembly follows the profile's scalar return-address convention.
+
+## VM service contract
+
+`vm-abi.h` is shared by startup assembly, libc and the trusted launcher;
+`vm.h` is the private libc grant interface. MAP takes bytes, alignment, Linux
+protection, maximum capability rights and a mapping kind (heap, application,
+metadata). It returns a consumed linear grant or a scalar negative errno.
+UNMAP removes an exact whole visible mapping. PROTECT operates on a page range
+inside one registered payload mapping. WAIT yields to Linux without holding
+the transport lock. Metadata mappings are not exposed to public protection or
+retirement services. The loader marker is `CPONVVM2`; application ABI-v2's
+ordinary delegated system-service format remains independent of this marker.
+
+Linux, the adapter and the runtime belong to the TCB. Linearity concerns
+virtual authority in one address-space instance; threads do not get separate
+ownership namespaces. The private-anonymous/pinned-page restrictions are
+integration limits, not a claim of global physical ownership. Kernel page
+faults, VMA policy and physical allocation remain Linux's responsibility.
+The adapter supplies only the capability lifecycle and continuation glue.
+
+Collection and retirement inspect missing versus resident PTEs under Linux's
+mm lock. Trusted `FOLL_NOFAULT` inspection includes resident RO/PROT_NONE
+storage without materializing holes; huge/swapped or unexpected shared backing
+fails closed. The already qualified physical tag rules clear stale tags before
+IDs are recycled. This remains a QEMU collector, not an RTL reclamation design.
+
+Executable mappings can supply PCC to an explicit virtual-thread context.
+The gp-free application's ordinary scalar-return call convention retains its
+image PCC. General JIT calls between separately bounded code mappings need a
+capability call/return ABI and are not claimed by the executable-context test.
 
 ## Build and run
 
@@ -96,7 +144,7 @@ export MUSL_CACHE_ROOT="$out/musl-source"
 musl=$(bash capstone/ports/musl-capstone/prepare-musl-capstone.sh | tail -1)
 bash capstone/runtime/virtual/build-sdk.sh "$out" "$musl"
 bash capstone/runtime/virtual/build-adapter.sh "$out/adapter"
-"$out/sdk/capstone-cc" -O1 capstone/runtime/virtual/contract.c -o "$out/contract.dom"
+"$out/sdk/capstone-cc" -O1 -Icapstone/runtime/include capstone/runtime/virtual/contract.c -o "$out/contract.dom"
 
 # Existing application ports, using this SDK:
 bash capstone/ports/sqlite/app/prepare-sources.sh "$out/sqlite-source"
@@ -120,6 +168,18 @@ The launcher reports node use, pinned pages, service/copy counters, and guest
 monotonic launch/elapsed times. These QEMU times are not processor benchmarks.
 
 ## Qualification and limits
+
+The [libc VM-service v2 result](libc-vm-result.json) passes 42 checks on the
+recorded QEMU/Linux platform, including SQLite, mruby and Perl. It covers
+page protections, guard pages, requested-length bounds, failed-realloc
+preservation, executable child contexts, shared-heap allocation across
+preemption, and rejection of old virtual images. Two 200,000-allocation
+cases exercise recycling with an untouched 64-MiB reservation and stale tags
+on a `PROT_NONE` page. The positive case reclaims 194,982 identities in three
+collections without populating unused pages; the negative case faults at the
+stale load after restoring read permission. Input and source hashes are in
+the result. See [the qualification record](libc-vm-qualification.json) for
+mutation controls and the processor regression gate.
 
 The gate requires argv/environment, TLS, longjmp, file operations including
 capability-valued lock arguments, 1.5 MiB of heap growth and release, actual
@@ -154,7 +214,9 @@ mappings, 256 MiB per registered region, 1 GiB
 aggregate registered VA, 512 mappings, and a bounded recyclable node table.
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
-signals and POSIX thread synchronization need further contracts. Anonymous
+signals and POSIX thread synchronization need further contracts. Address hints/fixed mappings and `mremap` remain unsupported. Partial unmap
+requires a separate lifetime contract: a live wide capability must not acquire
+a replacement mapping placed into its former hole. Anonymous
 `MAP_SHARED` and SysV segments are process-local compatibility for nested
 ports, since there is no fork; every other mapping form fails explicitly.
 

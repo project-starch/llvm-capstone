@@ -4,10 +4,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../sublet/sublet.h"
+#include "vm.h"
 
-extern void *__capstone_vm_map(unsigned long bytes);
-extern long __capstone_vm_unmap(unsigned long address, unsigned long bytes);
 extern long __capstone_vm_thread_create_frame(void *frame);
 extern void __capstone_vm_thread_exit(void);
 extern long __capstone_vm_thread_join(long thread);
@@ -36,15 +34,9 @@ long capstone_virtual_thread_create(void *(*entry)(void *), void *argument,
      * passing the linear return through a C variable loses its tag. */
     {
         sublet_cap slot;
-        unsigned long base;
-        sublet_store(&slot, __capstone_vm_map(4096));
-        __asm__ volatile("ld %0, 0(%1)" : "=r"(base) : "r"(&slot) : "memory");
-        if (!base)
-            frame = NULL;
-        else
-            __asm__ volatile("ldc %0, 0(%1)\n"
-                             "delin %0\n"
-                             : "=&r"(frame) : "r"(&slot) : "memory");
+        if (cap_vm_acquire(&slot, 4096, 4096, PROT_READ | PROT_WRITE,
+                           6, CAP_VM_HEAP)) frame = NULL;
+        else frame = cap_vm_copyable(&slot);
     }
     if (!frame) {
         errno = ENOMEM;

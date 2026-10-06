@@ -31,7 +31,7 @@ cat /tmp/ok.out
 ./capstone-vexec contract.dom threads > /tmp/threads.out 2>&1
 echo VM_EXIT:threads:$?
 cat /tmp/threads.out
-for mode in stale bounds retired; do
+for mode in vm heap-threads sparse-churn stale bounds retired vm-ro-write vm-none-read vm-guard vm-padding sparse-stale; do
   ./capstone-vexec contract.dom "$mode" > /tmp/fault.out 2>&1
   echo VM_EXIT:$mode:$?
   cat /tmp/fault.out
@@ -71,6 +71,11 @@ if [ -f perl.dom ]; then
 fi
 rmmod capstone_vm
 echo VM_EXIT:cleanup:$?
+if [ -f legacy.dom ]; then
+  ./capstone-vexec legacy.dom ok argument > /tmp/legacy.out 2>&1
+  echo VM_EXIT:legacy:$?
+  cat /tmp/legacy.out
+fi
 echo VIRTUAL_RUNTIME_DONE
 '''
 
@@ -84,7 +89,10 @@ def main():
     p.add_argument('--mruby', type=Path, required=True)
     p.add_argument('--perl', type=Path)
     p.add_argument('--perl-smoke', type=Path)
+    p.add_argument('--legacy-application', type=Path)
+    p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
     p.add_argument('--record', type=Path, required=True)
+    p.add_argument('--timeout', type=int, default=300)
     p.add_argument('--omit-application', action='store_true')
     a = p.parse_args()
     work = Path(tempfile.mkdtemp(prefix='virtual-app.', dir=os.environ['CAPSTONE_TMP_ROOT']))
@@ -94,6 +102,7 @@ def main():
               'sqlite': a.sqlite,
               'mruby': a.mruby,
               **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
+    if a.legacy_application: inputs['legacy'] = a.legacy_application
     if a.perl: inputs['perl'] = a.perl
     if a.perl_smoke: inputs['perl_smoke'] = a.perl_smoke
     shutil.copyfile(inputs['launcher'], stage/'capstone-vexec')
@@ -104,7 +113,11 @@ def main():
     shutil.copyfile(a.mruby, stage/'mruby.dom')
     if a.perl: shutil.copyfile(a.perl, stage/'perl.dom')
     if a.perl_smoke: shutil.copyfile(a.perl_smoke, stage/'perl-smoke.pl')
-    (stage/'gate.sh').write_text(SCRIPT)
+    if a.legacy_application: shutil.copyfile(a.legacy_application, stage/'legacy.dom')
+    script = SCRIPT
+    if a.skip_recycling:
+        script = script.replace(' sparse-churn', '').replace(' sparse-stale', '')
+    (stage/'gate.sh').write_text(script)
     disk = work/'stage.ext4'
     with disk.open('wb') as f: f.truncate(64 << 20)
     subprocess.run(['/sbin/mkfs.ext4', '-F', '-q', '-d', str(stage), str(disk)], check=True)
@@ -121,7 +134,7 @@ def main():
         guest = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
         out = b''; login = sent = False
-        deadline = time.monotonic() + 300
+        deadline = time.monotonic() + a.timeout
         try:
             while time.monotonic() < deadline:
                 if not select.select([guest.stdout], [], [], 1)[0]:
@@ -143,10 +156,13 @@ def main():
             except subprocess.TimeoutExpired: guest.kill(); guest.wait()
     lines = [s.strip() for s in out.decode(errors='replace').splitlines()]
     tests = {}
-    for name, code in [('normal', 0), ('threads', 0), ('stale', 139), ('bounds', 139), ('retired', 139),
+    for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
                        ('preempt', 143), ('parallel_one', 0), ('parallel_two', 0),
                        ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0), ('cleanup', 0)]:
+        if a.skip_recycling and name in ('sparse-churn', 'sparse-stale'): continue
         tests[name] = lines.count(f'VM_EXIT:{name}:{code}') == 1
+    if a.legacy_application:
+        tests['legacy_abi_rejected'] = lines.count('VM_EXIT:legacy:126') == 1 and any('Exec format error' in s for s in lines)
     if a.perl:
         tests['perl'] = lines.count('VM_EXIT:perl:0') == 1
         tests['perl_output'] = lines.count('PERL_VIRTUAL_OK sum=5050 file=virtual') == 1
@@ -170,31 +186,49 @@ def main():
     # Loading a saved revoked pointer clears its tag; the later dereference
     # is therefore cause 24. The direct live-register node check has its own
     # cause-25 instruction gate.
-    tests['fault_causes'] = causes == [24, 28, 24]
+    tests['fault_causes'] = causes == [24, 28, 24, 15, 13, 13, 28] + ([] if a.skip_recycling else [24])
+    symbols = {}
+    nm = Path(os.environ['CAPSTONE_LLVM_BIN']) / 'llvm-nm'
+    for line in subprocess.check_output([str(nm), '--defined-only', str(a.application)], text=True).splitlines():
+        fields = line.split()
+        if len(fields) == 3:
+            symbols[fields[2]] = int(fields[0], 16)
+    fault_sites = [tuple(int(v, 16) for v in m.groups()) for s in lines
+                   if (m := re.search(r'domain fault cause=\d+ pc=0x([0-9a-f]+).* entry=0x([0-9a-f]+)', s))]
+    names = ('ro', 'none', 'guard', 'padding') + (() if a.skip_recycling else ('collected',))
+    tests['vm_denial_sites'] = len(fault_sites) == 3 + len(names) and all(
+        pc - entry == symbols.get('cap_vm_fault_' + name, -1) - symbols['domain_main']
+        for name, (pc, entry) in zip(names, fault_sites[3:]))
+    tests['vm_contract'] = lines.count('VIRTUAL_VM_OK protections guards requested_length unused_pages execute rollback') == 1
+    tests['heap_threads'] = lines.count('VIRTUAL_HEAP_THREADS_OK shared_ownership metadata_growth arena_growth') == 1
+    tests['vm_denial_operations'] = all(lines.count('VIRTUAL_VM_ACCESS:' + op) == 1
+                                      for op in ('write_ro', 'read_none', 'guard', 'padding') + (() if a.skip_recycling else ('collected',)))
     tests['same_va_reuse'] = lines.count('VIRTUAL_VA_REUSED') == 1
     tests['spin_entered'] = lines.count('VIRTUAL_SPIN_READY') == 1
     stats = [dict((k, int(v)) for k, v in re.findall(r'(\w+)=(\d+)', s))
              for s in lines if s.startswith('CAPSTONE_VM_STATS ')]
-    # The same-mm thread case adds one low-fault stats record.  The six
-    # application runs that exercise the allocator and demand paging remain
-    # the release/fault evidence; the thread record is checked separately by
-    # threads_output and the join/stack-retirement path.
-    # The base gate has seven fixed allocator records. Optional application
-    # ports append their own records after mruby and must not change the base
-    # demand/release oracle.
-    base_stats = stats[:7]
+    # normal, threads, VM policy, shared heap, two normal launches, SQLite x2,
+    # mruby. Keep the original demand/release oracle separate from new cases.
+    start = 4 if a.skip_recycling else 5
+    base_stats = stats[:2] + stats[start:start + 5]
     release_stats = [s for s in base_stats if s['peak'] > s['pages'] + 300]
     demand_stats = [s for s in base_stats if s.get('faults', 0) >= 384]
-    expected_stats = 7 + (1 if a.perl else 0) + (1 if a.perl_smoke else 0)
+    expected_stats = (9 if a.skip_recycling else 10) + (1 if a.perl else 0) + (1 if a.perl_smoke else 0)
     tests['linux_pages_released'] = len(stats) == expected_stats and len(release_stats) == 3
-    tests['linux_demand_faults'] = len(stats) == expected_stats and len(demand_stats) == 3 and all(
-        s['faults'] >= 384 for s in demand_stats)
+    tests['linux_demand_faults'] = len(stats) == expected_stats and len(demand_stats) == 3
+    tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
+    tests['shared_heap_pages_released'] = len(stats) >= 4 and stats[3]['peak'] - stats[3]['pages'] >= 768
+    if not a.skip_recycling:
+        tests['sparse_recycling'] = (lines.count('VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags') == 1
+                                 and len(stats) >= 5 and stats[4]['collections'] >= 3
+                                 and stats[4]['reclaimed'] >= 190000 and stats[4]['peak'] < 2048)
     tests['sqlite_results'] = lines.count('SQLITE_SUM=5050') == 1 and lines.count('SQLITE_PERSIST=100') == 1
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1
     result = {'status': 'PASS' if all(tests.values()) else 'FAIL', 'tests': tests,
               'scope': 'one hart; private anonymous arenas; same-mm virtual threads',
               'control_omit_application': a.omit_application,
+              'recycling_cases_enabled': not a.skip_recycling,
               'sha256': {n: digest(path) for n, path in inputs.items()},
               'source_sha256': {str(p.relative_to(HERE)): digest(p) for p in sorted(HERE.rglob('*'))
                                if p.is_file() and p.suffix in ('.c', '.h', '.S', '.sh', '.py')},

@@ -2,6 +2,32 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-07 — virtual libc VM-service v2
+
+Branch `virtual-capstone-libc-vm` unifies allocator payloads, growing allocator
+metadata, public anonymous mappings and thread frames behind one capability
+VM service. Linux is trusted and owns scheduling, page tables and backing;
+linearity and lifetimes belong to the process virtual address space, shared
+by its threads. Applications remain in virtual C mode with the existing
+module/runtime adapter; this change requires no new Linux-core, firmware or
+QEMU processor patch.
+
+Private anonymous `mmap` supports `PROT_NONE` and R/W/X protections,
+page-range `mprotect`, and whole-mapping `munmap` without dereferencing its
+pointer. Representability padding stays inaccessible. Heap metadata grows
+without malloc recursion and a scalar atomic mutex protects shared allocator
+state across preemption. Recycling inspects only resident pages, including
+`PROT_NONE` pages, and fails closed on unsupported backing.
+
+The [application result](../../runtime/virtual/libc-vm-result.json) passes
+42 checks including SQLite, mruby, Perl, shared-heap growth, spatial and
+temporal denial, same-VA reuse, protection changes and 200,000-allocation
+recycling. VM-service ABI v2 rejects old images before execution; rebuild the
+SDK and applications together. This remains one hart with pinned private
+anonymous pages. Partial unmap, fixed replacement, file-backed/shared tagged
+mappings, swap/migration and ordinary calls across separately bounded code
+mappings require further contracts; executable child contexts are tested.
+
 ## 2026-10-07 — trusted same-`mm` virtual thread adapter
 
 The virtual Linux adapter now supports explicit same-`mm` virtual threads on

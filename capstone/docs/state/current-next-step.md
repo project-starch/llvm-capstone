@@ -1,3 +1,15 @@
+Virtual libc VM-service v2 (2026-10-07): the bounded private-anonymous
+profile is qualified with SQLite, mruby and Perl in the
+[application result](../../runtime/virtual/libc-vm-result.json). Preserve its
+spatial/temporal, protection, shared-heap and recycling gates. Rebuild SDK and
+applications together for VM-service v2. Continue application ports against
+this common VM interface. Before partial `munmap` or `MAP_FIXED` replacement,
+define how a wide live capability loses authority over a reused hole; before
+ordinary JIT calls, define capability PCC/return composition. File-backed or
+shared tagged mappings and movable pages need separate tag-lifecycle
+contracts. Linux remains trusted; ownership is local to one virtual address
+space. No additional OS core or processor change was needed for this slice.
+
 Virtual C runtime (2026-10-06): the first
 [application adapter](../../runtime/virtual/README.md) connects the common
 loader/CRT, delegated services and a growing Linux-backed heap. Its bounded
