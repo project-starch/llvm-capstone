@@ -74,9 +74,16 @@ lands. The detector is not merely assumed to work: the same tree, the same day, 
 the project's axis, measured rather than argued.**
 
 **What it does not yet buy.** `spatial` and `sublet` are declared predictions to *complete*, because
-nothing in the port narrows frame planes today. A discriminating reading needs a plane-narrowing
-adapter — port work rather than a case, the relationship `chunks` has to the wmem corpus. Until that
-exists the row measures the gap rather than closing it.
+nothing in the port narrows frame planes today.
+
+> **RETRACTED 2026-10-06.** This said a discriminating reading needs a plane-narrowing adapter, i.e.
+> that the cell is a gap awaiting port work. **Measured, it is not.** `av_frame_get_buffer` pads to
+> `FFALIGN(height, 32)`, so the alpha plane's own allocated extent is **1024 bytes** against a
+> logical plane of **160**, and the case reads at offset **160** — inside upstream's own plane
+> extent. An adapter narrowing each plane to FFmpeg's layout would not catch it; only a bound
+> tighter than upstream's own allocation would, and that faults legitimate code. **The FFmpeg plane
+> arm is a measured non-gap**, the sub-object verdict one level out: the crossing leaves a bound the
+> consumer keeps in its head and no allocator sets.
 
 `9edd06f861` (ProRes, a field crossing) remains a live-at-pin candidate for a second case.
 `30c6667dad` was disqualified on inspection: its overread is of the OBMC window table, not a frame

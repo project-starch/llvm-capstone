@@ -25,7 +25,7 @@
       "status": "predicted"
     },
     "sublet": {
-      "oracle": "PREDICTED: the sequence completes, for the spatial arm's reason plus its own -- revocation has nothing to fire on while the frame is alive. A DISCRIMINATING reading needs an adapter that narrows each plane, which is port work rather than a case, and is the relationship chunks has to the wmem corpus. NOT MEASURED.",
+      "oracle": "PREDICTED: the sequence completes, for the spatial arm's reason plus its own -- revocation has nothing to fire on while the frame is alive. RETRACTED 2026-10-06: this oracle previously said a discriminating reading needs a plane-narrowing adapter. Measured, it does not help: av_frame_get_buffer pads to FFALIGN(height,32), so the alpha plane's OWN allocated extent is 1024 bytes while the logical plane is 160, and this case reads at offset 160 -- inside upstream's own plane extent. An adapter narrowing to FFmpeg's layout cannot see it; only a bound tighter than upstream's own allocation could, and that would fault legitimate code (SIMD tail reads, av_image_copy_to_buffer over padded_height). NOT MEASURED, and not a gap.",
       "status": "predicted"
     },
     "poisoncap-spatial": {

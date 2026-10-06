@@ -41,6 +41,29 @@ inventory's nested-spatial cell, which had no upstream case before it.
 
 The case asserts both facts itself (`CHECK` 902 and 904) rather than trusting this note.
 
+## What the crossing does NOT leave, measured 2026-10-06
+
+`av_frame_get_buffer` pads before filling the plane pointers — `padded_height = FFALIGN(height, 32)`
+in `libavutil/frame.c` — so each plane's *allocated* extent is larger than the logical plane. For
+this case's `YUVA420P` 16x5 frame, read with real `libavutil`:
+
+| | bytes |
+|---|---:|
+| alpha plane as the consumer sees it, `linesize x height` | **160** |
+| alpha plane's own allocated extent, `av_image_fill_plane_sizes` at `FFALIGN(5,32) = 32` | **1024** |
+| the offset this case reads at | **160** |
+
+So the read leaves the plane **the consumer keeps in its head** and stays inside the plane
+**upstream actually allocated**, which in turn is inside the frame's one `AVBuffer`. Two consequences,
+both recorded rather than left for a reader to discover:
+
+- the case's `contained` assertion is about the **buffer**, and it holds; it was never about
+  upstream's plane extent, which is larger still;
+- **an adapter narrowing each plane to FFmpeg's own layout would not catch this.** Only a bound
+  tighter than upstream's own allocation would, and that faults legitimate code — SIMD tail reads
+  and `av_image_copy_to_buffer` both work over `padded_height` deliberately. The corpus README
+  carries the retraction of the claim that said otherwise.
+
 ## What is reduced, and what is not
 
 - **The allocator is real.** The frame, its four planes and its single `AVBuffer` come from real

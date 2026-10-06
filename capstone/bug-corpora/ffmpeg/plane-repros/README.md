@@ -51,10 +51,30 @@ and ASan reports it. The two side by side are the project's axis, measured rathe
 
 `spatial`, `sublet`, both PoisonCap arms and `cheribsd-revocation` are declared **predictions**.
 `spatial` and `sublet` are predicted to **complete**: the crossing is inside one `av_malloc`, so a
-per-allocation bound is in bounds for it, and nothing in the port narrows frame planes today. **A
-discriminating reading needs a plane-narrowing adapter**, which is port work rather than a case —
-the same relationship `chunks` has to the wmem corpus. Until it exists this row measures the gap
-rather than closing it, which is what the inventory says.
+per-allocation bound is in bounds for it.
+
+> **RETRACTED 2026-10-06.** What stood here said *"a discriminating reading needs a plane-narrowing
+> adapter, which is port work rather than a case"*, implying this row is a gap waiting on an
+> adapter. **It is not, and the measurement says so.** `av_frame_get_buffer` pads to
+> `FFALIGN(height, 32)` before filling the plane pointers (`libavutil/frame.c`), so for the
+> `YUVA420P` 16×5 frame this case uses:
+>
+> | | bytes |
+> |---|---:|
+> | the alpha plane as the consumer sees it, `linesize × height` | **160** |
+> | the alpha plane's own allocated extent, `av_image_fill_plane_sizes` at `FFALIGN(5,32)=32` | **1024** |
+> | the offset this case reads at | **160** |
+>
+> So the read is **inside upstream's own plane extent**, not merely inside the buffer. An adapter
+> narrowing each plane to FFmpeg's own layout — the faithful thing to narrow to, and what
+> `wm_narrow` does for wmem — **would not catch this crossing**. Only a bound tighter than
+> upstream's own allocation would, and that bound faults legitimate code: SIMD tail reads and
+> `av_image_copy_to_buffer` both work over `padded_height` on purpose.
+>
+> **This row is therefore a measured non-gap.** It is the same shape as the sub-object corpus's
+> "nothing we have catches this", one level out: the crossing leaves a bound the *consumer* keeps
+> in its head and no *allocator* ever sets. Nothing is owed here; what was owed was this
+> measurement.
 
 ## Running it
 
