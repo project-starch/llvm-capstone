@@ -6,7 +6,7 @@
     "version": "1.6.45",
     "port": "capstone/ports/memcached/allocators"
   },
-  "cases": 8,
+  "cases": 9,
   "case_schema": "case-json",
   "case_macro": "MC",
   "required_arms": [
@@ -22,7 +22,7 @@
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
     "true": 1,
-    "false": 7
+    "false": 8
   },
   "runners": [
     "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",

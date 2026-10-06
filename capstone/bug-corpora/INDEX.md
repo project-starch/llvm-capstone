@@ -10,7 +10,7 @@
 
 | sort | where | count | what it is |
 |---|---|---:|---|
-| third-party defects, as cases | `capstone/bug-corpora/` | 143 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
+| third-party defects, as cases | `capstone/bug-corpora/` | 144 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 30 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 107 open, 77 resolved | the registry, not reproduced cases |
@@ -28,7 +28,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/ffmpeg/subobject-repros`](ffmpeg/subobject-repros) | ffmpeg | n9.0.1 | 10 | 5 live, 5 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/httpd/apr-pool-repros`](httpd/apr-pool-repros) | httpd | 1.7.4 | 1 | 1 not asserted | 0 | case-json | measured |
 | [`capstone/bug-corpora/httpd/bucket-repros`](httpd/bucket-repros) | httpd | 1.7.4 | 8 | 8 not asserted | 0 | case-json | measured |
-| [`capstone/bug-corpora/memcached/allocator-repros`](memcached/allocator-repros) | memcached | 1.6.45 | 8 | 1 live, 7 fixed before the pin | 1 | case-json | measured |
+| [`capstone/bug-corpora/memcached/allocator-repros`](memcached/allocator-repros) | memcached | 1.6.45 | 9 | 1 live, 8 fixed before the pin | 1 | case-json | measured |
 | [`capstone/bug-corpora/memcached/plain-heap-repros`](memcached/plain-heap-repros) | memcached | 1.6.45 | 2 | 2 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/mruby/gc-slot-repros`](mruby/gc-slot-repros) | mruby | 4.0.0-rc2 | 0 | not recorded | 0 | case-json | planned |
 | [`capstone/bug-corpora/mruby/release-differential`](mruby/release-differential) | mruby | 4.0.0-rc2 | 23 | 23 live | 0 | script-trigger | measured |
@@ -42,7 +42,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
 | [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**173 cases in 20 corpora**, of which 72 are recorded live in the version their corpus pins, 43 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 14 advisories are cited across all corpora.
+**174 cases in 20 corpora**, of which 72 are recorded live in the version their corpus pins, 44 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 14 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
@@ -53,8 +53,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/cpython/pymalloc` | allocator-component | 3.13.7 | capstone-domain, cheribsd-purecap, native | `pymalloc-repros` | 20 |
 | `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | -- | 0 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 4 |
-| `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 8 |
-| `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, native | `allocator-repros` | 8 |
+| `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 9 |
+| `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, native | `allocator-repros` | 9 |
 | `capstone/ports/micropython` | full-application | 2e3304a | capstone-domain, silicon | -- | 0 |
 | `capstone/ports/mruby/app` | full-application | 4.0.0-rc2 | capstone-domain, native | `gc-slot-repros` | 0 |
 | `capstone/ports/mruby/cheribsd` | platform-build | 4.0.0-rc2 | cheribsd-purecap | `release-differential` | 23 |
