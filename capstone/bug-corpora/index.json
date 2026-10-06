@@ -338,7 +338,8 @@
       "shape_table": true,
       "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port. Cases 5-7 are SPATIAL, added 2026-10-05 from a SHAPE search over item-size computations (item_make_header / ITEM_* / do_item_alloc) rather than a wording filter -- the wording filter found 0 class-B defects here, and these three have subjects that say 'corruption' rather than 'overflow', which is exactly why it missed them. See docs/ref/memcached-spatial-defect-triage.md. This corpus's .gitignore keeps run summaries OUT of the repository by design -- 'the case files' status carries the outcome' -- so cases 5-7's measured readings live in their status fields and in docs/ref/memcached-spatial-defect-triage.md section 6, not in a committed results/ bundle.",
       "evidence": [
-        "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects"
+        "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects",
+        "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd"
       ],
       "where": "capstone/bug-corpora/memcached/allocator-repros"
     },

@@ -1,4 +1,11 @@
 __pycache__/
 *.pyc
-# Run summaries stay outside the repository; the case files' status carries the outcome.
-results/
+# Raw guest output and fixtures stay outside the repository; committed evidence is
+# RESULT LINES plus an inputs.json, which is what CLAUDE.md asks for ("commit
+# result lines, not the capture they came from") and what the other fifteen
+# corpora in this tree already do. This file previously ignored results/
+# outright, which made this the ONE corpus with no committed evidence and is
+# what cheribsd-denominator-audit.md flagged against it.
+results/*/guest/
+results/*/fixtures/
+results/*/raw/
