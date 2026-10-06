@@ -1,0 +1,27 @@
+{
+  "program": "sqlite",
+  "role": "platform-build",
+  "title": "SQLite 3.22.0 cross-built for CheriBSD purecap, the engine corpus's third and fourth arms",
+  "upstream": {
+    "version": "3.22.0",
+    "pin_source": {
+      "file": "capstone/ports/sqlite/cheribsd/build-corpus-cheri.sh",
+      "grep": "SQLITE_AMALGAMATION"
+    }
+  },
+  "targets": [
+    "cheribsd-purecap"
+  ],
+  "workload": "the 38 in-scope cases of sqlite/engine-repros, each built twice: once against memsys5 and once against the system allocator, plus poscontrol.c, which must fault or the run is void",
+  "arms": {
+    "cheribsd-revocation": "memsys5 on a 256 KiB static arena, as the Capstone arms use. Built by build-corpus-cheri.sh with no SYSALLOC, run by run-corpus-cheri.sh",
+    "cheribsd-sysmalloc": "the same cases against the system allocator, with revocation forced on every free. Built by SYSALLOC=1 build-corpus-cheri.sh, run by run-sysalloc-cheri.sh with NOMEM5=1"
+  },
+  "evidence": [
+    "capstone/bug-corpora/sqlite/engine-repros/results"
+  ],
+  "corpora": [
+    "capstone/bug-corpora/sqlite/engine-repros"
+  ],
+  "note": "Two halves are both required for the system-allocator arm and either one alone measures memsys5 twice. SYSALLOC=1 drops SQLITE_ZERO_MALLOC so a system allocator exists at all; NOMEM5=1 makes repro_init skip sqlite3_config(SQLITE_CONFIG_HEAP, ...), which is what installs memsys5. A run on 2026-10-05 had only the first and produced an arm identical to the memsys5 one case for case. The runners now refuse to score a case whose output lacks the allocator=system and revoke=on-every-free markers. The cases/ here are deliberately not the same files as repro322/: CheriBSD has a real VFS, so a case that needs a database file opens one instead of embedding it, and the probe instrumentation differs. tags.tsv in repro322/ maps every runner tag to its case or says why it is not one."
+}
