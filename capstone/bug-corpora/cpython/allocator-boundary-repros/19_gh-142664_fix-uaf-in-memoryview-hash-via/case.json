@@ -19,7 +19,7 @@
       "oracle": "fault: the object is a libc malloc block"
     },
     "cheribsd-revocation": {
-      "oracle": "fault: the object is a libc malloc block, so the platform's revocation has a free to act on"
+      "oracle": "completion is admissible and is the expected outcome under this guest's configuration: the run records security.cheri.runtime_revocation_every_free_default as 0 and runtime_revocation_async as 1, so revocation is sweep-based and asynchronous, and a stale access reached before the next sweep still holds a tagged capability. Where a sweep has run first the access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). A bounds fault would falsify this."
     }
   },
   "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-131005, sublet-20261006-123446"

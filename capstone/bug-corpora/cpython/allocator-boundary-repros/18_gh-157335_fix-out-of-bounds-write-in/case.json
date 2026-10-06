@@ -19,7 +19,7 @@
       "oracle": "fault: the object is a libc malloc block"
     },
     "cheribsd-revocation": {
-      "oracle": "fault: the object is a libc malloc block, so the platform's revocation has a free to act on"
+      "oracle": "a bounds fault, SIGPROT si_code=1 (PROT_CHERI_BOUNDS), at the write past the end of the mapping, if the mapping's capability is bounded to the requested length. No allocator issues this object, so revocation has nothing to act on."
     }
   },
   "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-105111, sublet-20261006-123446"

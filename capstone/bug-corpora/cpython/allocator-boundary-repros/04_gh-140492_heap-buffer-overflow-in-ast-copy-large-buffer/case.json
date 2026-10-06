@@ -19,7 +19,7 @@
       "oracle": "fault: the object is a libc malloc block"
     },
     "cheribsd-revocation": {
-      "oracle": "fault: the object is a libc malloc block, so the platform's revocation has a free to act on"
+      "oracle": "the arm does not separate this case, and the admissible outcomes are stated rather than one of them predicted: si_code=1 (PROT_CHERI_BOUNDS) where the access goes beyond the bounds the allocator actually set, si_code=2 (PROT_CHERI_TAG) where it instead lands in memory a revocation sweep has already reclaimed, or completion where it stays inside the bounds the allocator set -- malloc may bound a capability to a rounded size class rather than the requested length. The mechanism is live and the run proves it rather than assuming it: mech-control S_OOB faults with si_code=1. Any other si_code would falsify this."
     }
   },
   "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-105111, sublet-20261006-112658",

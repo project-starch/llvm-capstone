@@ -19,7 +19,7 @@
       "oracle": "fault at the stale access: this arm issues and revokes pymalloc's own blocks"
     },
     "cheribsd-revocation": {
-      "oracle": "complete: pymalloc links the freed block onto its own pool free list and never returns it to libc, so the platform has no free to revoke"
+      "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."
     }
   },
   "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-105111, sublet-20261006-112658"
