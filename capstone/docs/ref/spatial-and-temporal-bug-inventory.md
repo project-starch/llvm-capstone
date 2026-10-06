@@ -195,7 +195,7 @@ are kept out of the defect count on purpose.
 |---|---:|---:|---:|
 | temporal, 22 nested | **0 of 22** | **21 of 22** | **22 of 22** |
 | temporal, 5 not nested | **0 of 5** | **5 of 5** | tshark **2 of 2** |
-| spatial, 14 upstream | **6 of 11 measured** | **6 of 11 measured** | tshark **5 of 5** |
+| spatial, 14 upstream | **6 of 11 measured**, 3 declared | **6 of 11 measured**, 3 declared | tshark **5 of 5** |
 
 - **Temporal, 0 of 22 without protection, measured** — not predicted. A bound cannot see a dead
   object: the stale address is in bounds by construction.
@@ -212,6 +212,16 @@ are kept out of the defect count on purpose.
   dead object. fx2/fx3 ran in all ten boots and faulted on every enforcing arm, so the two axes are
   separated inside each boot: the same image that returns on a temporal fixture faults on a spatial
   one.
+- **Which 11, and which 3.** Eleven of the fourteen spatial cases are measured under Capstone:
+  tshark's five wmem cases, memcached's three slab cases and FFmpeg's three sub-object cases. The
+  **three declared-but-unmeasured** are the ones added on 2026-10-06 — `memcached/plain-heap-repros/00`,
+  `wireshark/plain-heap-repros/00` and `ffmpeg/plane-repros/00`. None of the three has a
+  Capstone-domain runner, and giving them one is port work rather than a case: only `ports/ffmpeg/app`
+  carries a corpus hook (`FFAPP_CORPUS_DIR`), while the memcached and wireshark app ports have none.
+  **Their predictions are not bare**, which is why the cell says *declared* rather than *blank*: the
+  two plain-heap cases predict `shrink` FAULT, and the app ports have already measured exactly that
+  shape at malloc granularity — memcached fixture 20 and tshark fx2/fx3 read `level0` RETURN with
+  `shrink` FAULT `oob`. The plane case predicts *completes*, for the reason its own row gives.
 - **The twelfth case is counted but not yet measured under Capstone.**
   `bug-corpora/memcached/plain-heap-repros/00` (`ddee3e2`) is measured on both NATIVE arms,
   two-sided — the fix differential and, unlike every sub-object case in this tree, an **ASan report**
