@@ -41,7 +41,8 @@
     "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-ON",
     "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-case13-OFF",
     "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-ON",
-    "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-OFF"
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20261005-qemu-spatial-5-OFF",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/20261007-cheribsd-revocation-control"
   ],
   "advisories": [],
   "shape_table": true,

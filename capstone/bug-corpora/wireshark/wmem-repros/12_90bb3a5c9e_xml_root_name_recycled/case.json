@@ -36,11 +36,12 @@
       "status": "not written"
     },
     "cheribsd-revocation": {
-      "target": "stock CheriBSD purecap, the guest's own libc revocation on; the run's ABI probe reported runtime_revocation=1 in both boots",
-      "oracle": "the sequence completes: the stale storage is wmem-managed, and a scope reset or an individual recycler free returns it inside a block that malloc still owns, so nothing reaches free() and the quarantine the revoker sweeps never holds it",
+      "target": "stock CheriBSD purecap with libc revocation on",
+      "oracle": "the sequence completes: the stale storage is wmem-managed, and a scope reset or an individual recycler free returns it inside a block that malloc still owns, so nothing reaches free() and the quarantine the revoker sweeps never holds it MEASURED 2026-10-07 WITH A REVOCATION CONTROL, results/20261007-cheribsd-revocation-control/: the sequence COMPLETES, NOT CAUGHT. 21 of 21 arms passed, runner exit 0, mode 0 (the port's unprotected baseline, which is the arm that asks what the shipping temporal mechanism does). The control FAULTED in the same boot -- tag_after_sweep=0 reissued=1, then SIGPROT si_code 2 at addr=pc=0x101dc0, equal to the probe address supervise resolved from the ELF independently -- so the revoker is shown to sweep and this completion means 'the mechanism is active and did not fire'. WHY A SECOND RUN: the 20260921-cheribsd bundle measured cases 0-12 at revocation on but contained NO revocation control, only a bounds control and a PoisonCap differential, neither of which shows the revoker sweeps; and it ran on image 3571a6d2..., a different vehicle. This run uses the image byte-identical to the ffmpeg and memcached readings, so the three programs' columns are comparable. The earlier bundle is kept for its PoisonCap arms.",
       "control": "the PoisonCap mode-1 arm in the same bundle and the same boots faults 13/13 with SIGPROT at the labelled read probe, so the platform CAN be made to catch these cases; the completion here is therefore a measured miss and not an absent integration",
-      "guest_default": "preserved -- the kernel default stays on",
-      "measured": "2026-09-21, results/20260921-cheribsd/ (matrix.tsv, arm=cheribsd): expected complete, passed True, exit 0. 0 of 13 caught across the corpus"
+      "guest_default": "preserved",
+      "measured": "2026-09-21, results/20260921-cheribsd/ (matrix.tsv, arm=cheribsd): expected complete, passed True, exit 0. 0 of 13 caught across the corpus",
+      "status": "measured"
     }
   },
   "status": "run 2026-09-21 under QEMU: spatial completes; sublet completes, the recorded non-detection; CheriBSD default with libc revocation on completes; PoisonCap mode 0 completes and mode 1 SIGPROT at the labelled read probe with released_chunks=1, the chunk poisoned at its individual free; results/20260921-qemu and results/20260921-cheribsd; run 2026-09-29 under QEMU with the chunk port (WM_CHUNKS=ON): spatial completes, sublet faults with cause 24 at the labelled read probe x3, and the WM_CHUNKS=OFF build still completes x3; results/20260929-qemu-chunk-port"

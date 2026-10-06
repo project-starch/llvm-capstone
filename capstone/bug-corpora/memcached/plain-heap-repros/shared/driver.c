@@ -32,3 +32,10 @@ int main(int argc, char **argv) {
     printf("VERDICT INCONCLUSIVE\n");
   return fixed ? !!o.crossed : !o.crossed;
 }
+
+/* The labelled crossing, defined ONCE here so the symbol is resolvable from the
+ * image. corpus.h explains why this is not `static` in the header. */
+__attribute__((noinline, used)) void
+mch_write_probe(volatile unsigned char *p, unsigned char v) {
+  *p = v;
+}

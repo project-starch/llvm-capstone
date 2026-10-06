@@ -24,11 +24,13 @@
     "false": 1
   },
   "runners": [
-    "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-native.sh"
+    "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-native.sh",
+    "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-cheribsd.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [
-    "capstone/bug-corpora/memcached/plain-heap-repros/results/20261006-native-plain-heap"
+    "capstone/bug-corpora/memcached/plain-heap-repros/results/20261006-native-plain-heap",
+    "capstone/bug-corpora/memcached/plain-heap-repros/results/20261007-cheribsd"
   ],
   "advisories": [],
   "shape_table": true,
