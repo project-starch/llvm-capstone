@@ -47,5 +47,7 @@
       "status": "measured"
     }
   },
-  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, and ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell."
+  "status": "built and measured natively 2026-10-06: runners/run-native.sh exit 0, control (fixed) arm first, buggy arm DEFECT-REPRODUCED, and ASan measured two-sided. The Capstone, PoisonCap and CheriBSD arms are DECLARED PREDICTIONS -- this corpus has no capstone-domain runner. N = 1 per cell.",
+  "nested": false,
+  "nested_why": "nothing sub-allocated the crossed region: the object is one allocation the platform or FFmpeg's own av_malloc handed out directly, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED."
 }

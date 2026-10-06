@@ -87,8 +87,21 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
-`allocator_consumed`, `channel`. Optional means optional: the checker does not
-invent them, and absence is not a defect.
+`allocator_consumed`, `channel`, `nested`, `nested_why`. Optional means optional:
+the checker does not invent them, and absence is not a defect.
+
+`nested` is a **boolean**, and `nested_why` its one-sentence reason. The axis is
+**who allocated the object**: an inner allocator's sub-allocation is nested, a
+direct `malloc` is not. It is **not** which bound the access crosses — collapsing
+those two produced a retraction on 2026-10-05.
+
+It exists because the inventory's headline nesting share was being computed from
+`allocator_layer` **prose**. On 2026-10-06 a script doing that put 11 of 25
+spatial cases into an "unclassified" bucket and reported **44%**; the correct
+figure is **60%**, so publishing the script's number would have been wrong by 16
+points — the unanswered probe was reading as "not nested". A tally that a
+headline depends on should come from a field, not from a substring match over
+sentences that are free to be reworded.
 
 `allocator_consumed` is the companion to `allocator_layer`, and a corpus that
 records one without the other has half of axis 2. The layer says which

@@ -47,5 +47,7 @@
       "note": "UNMEASURABLE ON THIS HOST, same check as the PoisonCap arms."
     }
   },
-  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plane/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner, and a discriminating reading would need a plane-narrowing adapter that does not exist yet."
+  "status": "built and measured natively 2026-10-06, both native arms two-sided (results/20261006-native-plane/). The Capstone, PoisonCap and CheriBSD arms are declared predictions: this corpus has no domain runner, and a discriminating reading would need a plane-narrowing adapter that does not exist yet.",
+  "nested": true,
+  "nested_why": "an inner allocator carved the crossed region out of a larger block it had itself obtained, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row IS NESTED."
 }
