@@ -15,10 +15,13 @@
   "sysalloc-bounds": {
    "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
   },
+  "sysalloc-sublet": {
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
+  },
   "sublet-svheads": {
    "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
   }
  },
- "status": "sysalloc-none, sysalloc-bounds and sublet-svheads measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
+ "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
  "allocator_layer": "system allocator (the SvPVX string buffer)"
 }

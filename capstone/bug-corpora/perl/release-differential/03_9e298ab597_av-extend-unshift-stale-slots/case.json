@@ -15,10 +15,14 @@
   "sysalloc-bounds": {
    "oracle": "no fault: completes and the workload's own oracle passes"
   },
+  "sysalloc-sublet": {
+   "oracle": "no fault: completes and the workload's own oracle passes"
+  },
   "sublet-svheads": {
    "oracle": "no fault: completes and the workload's own oracle passes"
   }
  },
- "status": "sysalloc-none, sysalloc-bounds and sublet-svheads measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
- "allocator_layer": "system allocator (the AV element array, via Renew)"
+ "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls. cheribsd-revocation NOT measured: Perl 5.36.3 purecap faults in perl_construct when linked static, and the stock loader refuses the dynamic image (results/20261006-cheribsd-blocked)",
+ "allocator_layer": "system allocator (the AV element array, via Renew)",
+ "note": "not triggered in a Capstone domain: the trigger's own assertion PASSES on all four arms, so the stale element slot the defect depends on never holds a stale pointer there. Its silence is not evidence about the arms, and it is outside their denominator. Host ASan at the pin reports SEGV, so the defect is real; what is missing is a trigger that reproduces it under this allocator"
 }
