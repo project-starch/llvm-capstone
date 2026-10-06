@@ -388,12 +388,12 @@ this is what a host that has them needs in order to extend the measured column:
 
 | | count | source |
 |---|---:|---|
-| `case.json` files across the **seven** corpora | **36** | `memcached/allocator-repros` 8 + `plain-heap-repros` 1, `wireshark/wmem-repros` 18 + `plain-heap-repros` 1, `ffmpeg/pool-repros` 4 + `subobject-repros` 3 + `plane-repros` 1 |
+| `case.json` files across the **eight** corpora | **47** | `memcached/allocator-repros` 8 + `plain-heap-repros` 1, `wireshark/wmem-repros` 18 + `plain-heap-repros` 1, `ffmpeg/pool-repros` 4 + `subobject-repros` 10 + `plane-repros` 1 + `plain-heap-repros` 4 |
 | temporal corpus cases | **22** | 5 + 13 + 4 |
-| spatial corpus cases | **14** | 3 + 1 + 5 + 1 + 3 + 1 |
+| spatial corpus cases | **25** | memcached 3 + 1, tshark 5 + 1, FFmpeg 10 + 4 + 1 |
 | not-nested temporal, as app fixtures | 5 | memcached 17/18, tshark 14/15, FFmpeg 24 |
 | **total defects in both tables** | **52** | 27 temporal + 25 spatial |
-| fix-reversals (`live_in_pin: false`) | **30 of 36** | liveness is recorded, never required |
+| fix-reversals (`live_in_pin: false`) | **39 of 47** | liveness is recorded, never required. Recomputed from the `live_in_pin` fields, not adjusted by hand |
 
 *These are recomputed from the `case.json` files, not typed. They drifted once already — the
 headline tables were updated and this section was not — which is the defect

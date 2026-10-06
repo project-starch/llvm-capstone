@@ -250,3 +250,94 @@ filesystem search finds no CHERI SDK, rootfs or PoisonCap image anywhere on this
 
 Recorded as **unavailable**, not *pending*. The distinction matters: "pending" invites someone to
 wait for a measurement that cannot be taken on this machine.
+
+---
+
+# Candidate disposition, 2026-10-06
+
+## Correction: CheriBSD is no longer unmeasurable on this host
+
+The section above says PoisonCap and CheriBSD "cannot be measured here" and that no SDK, rootfs or
+image exists on this machine. **That was true when written and is now false for CheriBSD:** a stock
+CheriBSD purecap vehicle was built on this host and used for measurements on 2026-10-05/06 (kernel
+`CHERI-PURECAP-QEMU` from `releng/26.07-88f39900c329`, the `CHERIBSD_REV` in `pins.env`). The
+memcached and wireshark plain-heap and `wmem` rows carry readings from it. **PoisonCap remains
+unmeasurable here** — that half of the claim stands. FFmpeg's CheriBSD arms are declared predictions
+because nobody has run them yet, which is a different reason from the one above and the distinction
+matters: *not yet done*, not *cannot be done*.
+
+## What the population actually is, and why no "N of M triaged" claim is made
+
+**The funnel depends entirely on the query, so the query is stated and the number is not dressed up.**
+Searching both windows for spatial wording in the five library trees:
+
+```
+git log --regexp-ignore-case --extended-regexp \
+  --grep 'out of (array|bounds)|out-of-bounds|overread|over-read|overflow|buffer overflow|OOB|past the end|off-by-one|heap-buffer' \
+  <range> -- libavcodec libavformat libavfilter libavutil libswscale
+```
+
+| range | commits |
+|---|---:|
+| `n7.0..n9.0.1` | 566 |
+| `n9.0.1..master` | 158 |
+| **distinct over `n7.0..master`** | **663** |
+
+**This is NOT a triaged population and is not claimed as one.** Unlike `bug-corpora/mruby`, whose 23
+cases rest on a committed matrix of 674 candidates each actually *run* on three arms, FFmpeg has no
+harness that can execute an arbitrary upstream fix — so there is no equivalent of that matrix to
+commit, and the mruby method does not transfer. What follows is the set that was **opened and read**,
+with its disposition. Treat it as a sample with stated reasons, not as a complete enumeration: a
+narrower keyword set yields a much smaller population, and a count like "14 of 78" would be an
+artefact of the query rather than a fact about FFmpeg.
+
+## Dispositions
+
+**Built** — 15 cases, in the corpus named:
+
+| hash | shape | corpus | case |
+|---|---|---|---:|
+| `8864fd0aec` | A — member to next member | `subobject-repros` | 0 |
+| `68845e26f7` | A | `subobject-repros` | 1 |
+| `e058af88ab` | A | `subobject-repros` | 2 |
+| `89de2f0de1` | A — *read* one past | `subobject-repros` | 3 |
+| `1a00ea51cb` | A — underflow below a member | `subobject-repros` | 4 |
+| `d29ff88422` | A — write one past | `subobject-repros` | 5 |
+| `a809a784ec` | A — unbounded walk | `subobject-repros` | 6 |
+| `275e217b10` | A — copy sized by source length | `subobject-repros` | 7 |
+| `fb862976df` | A — unbounded walk, guard keyed to a stale counter | `subobject-repros` | 8 |
+| `ac59fc542f` | B — carved sub-slice, data-controlled index | `subobject-repros` | 9 |
+| `b7946098b1` | plane/row | `plane-repros` | 0 |
+| `d133b4a231` | C — past a direct `av_malloc_array` | `plain-heap-repros` | 0 |
+| `bcbf3a5630` | C | `plain-heap-repros` | 1 |
+| `56309e476a` | C — **below** the base | `plain-heap-repros` | 2 |
+| `495b402f27` | C — allocation sized for one of four carves | `plain-heap-repros` | 3 |
+
+**Opened, classified, not built** — each with the reason, so none of them is simply forgotten:
+
+| hash | what it is | why not built |
+|---|---|---|
+| `01701bdcd5` | VVC `subpic_tiles`: `while (col_bd[*tile_x] != rx) (*tile_x)++` — an unbounded scan for an equality that may never hold | shape A and buildable; the target array's declaration was not run down, so the adjacency a case must assert is unverified. **Next candidate if more are wanted.** |
+| `8b9851b005` | `aacdec_usac_mps212`: `set_idx + data_pair > MPS_MAX_PARAM_SETS` should be `>=` | the off-by-one guard and the write shown in the diff index *different* arrays; which object is actually crossed was not established. Not buildable without that. |
+| `18761f9fb5` | `rtpdec_av1`: `pktpos += obu_size` where `buf_ptr` was meant | a two-variable confusion rather than a one-term reversal, so the arms would differ in more than one respect |
+| `9edd06f861` | verified live at the pin in an earlier pass | opened, never built — recorded here because the earlier doc said "remains a live-at-pin candidate" and then dropped it |
+| `30c6667dad` | overread of the OBMC window table | disqualified against the *nested* cell's criterion and then dropped, instead of being re-filed as not-nested. The re-filing is still open. |
+
+## Shape E: a MEASURED EXCLUSION, not a gap
+
+The single largest reason an earlier pass over this material yielded only four cases is a class of
+candidate where **the crossing never leaves an over-allocated container**. Two absorbers account for
+most of it:
+
+- **`AV_INPUT_BUFFER_PADDING_SIZE` is 64 bytes.** A bytestream overread of a few bytes past a packet
+  stays inside the allocation by construction, because FFmpeg allocates that padding precisely so
+  that readers may overrun.
+- **Per-plane pool slack.** `av_frame_get_buffer` pads to `FFALIGN(height, 32)`. This was *measured*,
+  not assumed: the alpha plane's own allocated extent came out at **1024 against a logical 160**, and
+  that measurement is what forced the retraction of the `plane-repros` discriminating-arm claim.
+
+A shape-E candidate is therefore **not a defect this inventory can count**: there is no bound for it
+to have crossed, and a case built from it would report a completion on every arm for a reason that
+has nothing to do with the upstream fix. **This is a finding about FFmpeg's allocation discipline,
+not a shortfall in the search** — and it is the reason the plane/row shape is **exhausted at one case
+and must not be grown**.
