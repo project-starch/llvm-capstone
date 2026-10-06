@@ -70,12 +70,10 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 
 ## Gaps, as the declarations state them
 
-- `capstone/bug-corpora/ffmpeg/plane-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/ffmpeg/subobject-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.
 - `capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.
 - `capstone/bug-corpora/memcached/allocator-repros` has no triage inventory under docs/ref/.
-- `capstone/bug-corpora/memcached/plain-heap-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.
 - `capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.
 - `capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.

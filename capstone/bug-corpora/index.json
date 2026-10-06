@@ -53,7 +53,7 @@
       "title": "Upstream FFmpeg spatial defects that leave a frame PLANE while staying inside the frame's single allocation",
       "upstream": {
         "version": "n9.0.1",
-        "port": "capstone/ports/ffmpeg/buffer-pool"
+        "port": "capstone/ports/ffmpeg/app"
       },
       "cases": 1,
       "case_schema": "case-json",
@@ -81,7 +81,8 @@
       ],
       "advisories": [],
       "shape_table": true,
-      "note": "The third FFmpeg corpus and the one the inventory's nested-spatial cell needed. pool-repros holds storage an AVBufferPool handed out and took back (temporal); subobject-repros holds a bound between two MEMBERS of one av_malloc (spatial, NOT nested, because av_refstruct_alloc_ext is called directly); this one holds a bound between two PLANES of one AVBuffer, which is spatial AND nested. That every plane comes from a single buffer is measured rather than assumed: a YUVA420P frame reports buf[1] == NULL with 1024 bytes of slack after the alpha plane inside that one buffer, so a read leaving the plane stays inside the allocation exactly as a wmem chunk overread stays inside its block. ASan is SILENT here and reports the memcached plain-heap row; the two readings side by side are the project's axis, measured rather than argued.",
+      "note": "The third FFmpeg corpus and the one the inventory's nested-spatial cell needed. pool-repros holds storage an AVBufferPool handed out and took back (temporal); subobject-repros holds a bound between two MEMBERS of one av_malloc (spatial, NOT nested, because av_refstruct_alloc_ext is called directly); this one holds a bound between two PLANES of one AVBuffer, which is spatial AND nested. That every plane comes from a single buffer is measured rather than assumed: a YUVA420P frame reports buf[1] == NULL with 1024 bytes of slack after the alpha plane inside that one buffer, so a read leaving the plane stays inside the allocation exactly as a wmem chunk overread stays inside its block. ASan is SILENT here and reports the memcached plain-heap row; the two readings side by side are the project's axis, measured rather than argued. The declared port is the app port rather than buffer-pool: buffer-pool compiles only libavutil/buffer.c and refstruct.c, while this case needs frame.c, imgutils.c and pixdesc.c, so the app port (whole libavutil) is the only one that could host a domain build of it. Today the corpus is native-only.",
+      "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
       "where": "capstone/bug-corpora/ffmpeg/plane-repros"
     },
     {
@@ -332,7 +333,8 @@
       ],
       "advisories": [],
       "shape_table": true,
-      "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 27 of this tree's 33 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none.",
+      "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 29 of this tree's 35 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none.",
+      "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
       "where": "capstone/bug-corpora/memcached/plain-heap-repros"
     },
     {
@@ -419,18 +421,19 @@
         "capstone/ports/perl/cheribsd",
         "capstone/bug-corpora/mruby/release-differential"
       ],
-      "note": "The population was every commit from v5.36.3 to the master tip that touches both C source and a test (457 of 9537), filtered to the ones whose diff has the shape of a spatial or temporal memory defect and triaged by hand against the pin's sources. All eleven cases here are in scope by construction: this corpus admits only spatial and temporal memory defects, which is the study's scope, so unlike the mruby corpus it carries no null dereferences, type confusions or stack-exhaustion rows. Two of the eleven are outside every arm's denominator and say so in their own files: 254b30e378 carries harness_limit because its in-memory filehandle discards its writes in a domain, so the defect never executes, and 9e298ab597's trigger passes its own assertion there. Scoring the arms over all eleven would count those two as misses; the honest denominator is 9. sysalloc-bounds is the baseline: per-object heap bounds are what applications get by default since PR #170, so a catch is a case the bounds arm does not fault on. The nested-allocator arm is sublet-svheads, and it protects ONE of Perl's nested allocators -- the SV head arena. The SV bodies, hash entries and OP slabs keep their upstream allocators, so a case whose stale pointer lives in those is out of that arm's reach by construction and its arm entry says so. cheribsd-revocation is NOT among the required arms, and this is a gap rather than a decision: Perl 5.36.3 purecap faults with SIGPROT inside perl_construct when linked static, while the stock loader refuses the dynamic image with \"Traditional TLS not supported\" and the only platform that does load it has an sshd that dies on a poison exception mid-copy. mruby's static purecap binary runs on that same image, which is what makes this Perl's defect and not the platform's. results/20261006-cheribsd-blocked has the ascending-stage localisation and what would settle it. The mruby corpus has four measured arms; this one has three.",
+      "note": "The population was every commit from v5.36.3 to the master tip that touches both C source and a test (457 of 9537), filtered to the ones whose diff has the shape of a spatial or temporal memory defect and triaged by hand against the pin's sources. All eleven cases here are in scope by construction: this corpus admits only spatial and temporal memory defects, which is the study's scope, so unlike the mruby corpus it carries no null dereferences, type confusions or stack-exhaustion rows. Two of the eleven are outside every arm's denominator and say so in their own files: 254b30e378 carries harness_limit because its in-memory filehandle discards its writes in a domain, so the defect never executes, and 9e298ab597's trigger passes its own assertion there. Scoring the arms over all eleven would count those two as misses; the honest denominator is 9. sysalloc-bounds is the baseline: per-object heap bounds are what applications get by default since PR #170, so a catch is a case the bounds arm does not fault on. The nested-allocator arm is sublet-svheads, and it protects ONE of Perl's nested allocators -- the SV head arena. The SV bodies, hash entries and OP slabs keep their upstream allocators, so a case whose stale pointer lives in those is out of that arm's reach by construction and its arm entry says so. All five arms are measured. cheribsd-revocation runs on the CheriBSD image whose loader accepts this binary, with revocation selected per process because the system-wide default kills the guest's own sshd, and every case run under both settings so the pair controls the knob. It reports on 7 of the 11 -- the same count as sublet-svheads but NOT the same 7: they agree on 6, and each catches exactly one the other misses. sublet-svheads alone catches 17535c984a, whose SV head never returns to malloc and so is invisible to any allocator-boundary scheme; cheribsd-revocation alone catches 254b30e378, which the Capstone arms miss only because the domain's in-memory PerlIO layer never executes the defect.",
       "case_number_base": 1,
       "required_arms": [
         "sysalloc-none",
         "sysalloc-bounds",
         "sysalloc-sublet",
-        "sublet-svheads"
+        "sublet-svheads",
+        "cheribsd-revocation"
       ],
       "evidence": [
         "capstone/bug-corpora/perl/release-differential/results/20261006-host-differential",
         "capstone/bug-corpora/perl/release-differential/results/20261006",
-        "capstone/bug-corpora/perl/release-differential/results/20261006-cheribsd-blocked"
+        "capstone/bug-corpora/perl/release-differential/results/20261006-cheribsd"
       ],
       "runners": [
         "capstone/ports/perl/musl/build-perl-domain.sh",
@@ -1424,12 +1427,10 @@
     ]
   },
   "gaps": [
-    "`capstone/bug-corpora/ffmpeg/plane-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/ffmpeg/subobject-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/httpd/apr-pool-repros`: liveness deliberately not asserted for 1 case.",
     "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
     "`capstone/bug-corpora/memcached/allocator-repros` has no triage inventory under docs/ref/.",
-    "`capstone/bug-corpora/memcached/plain-heap-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
     "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",

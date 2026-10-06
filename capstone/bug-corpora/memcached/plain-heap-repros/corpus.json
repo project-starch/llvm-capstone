@@ -2,19 +2,36 @@
   "program": "memcached",
   "boundary": "the system allocator itself: one calloc or malloc, with no inner layer",
   "title": "Upstream memcached spatial defects that cross the MALLOC BOUND, the not-nested row",
-  "upstream": {"version": "1.6.45", "port": "capstone/ports/memcached/app"},
+  "upstream": {
+    "version": "1.6.45",
+    "port": "capstone/ports/memcached/app"
+  },
   "cases": 1,
   "case_schema": "case-json",
   "case_macro": "MCH",
-  "required_arms": ["spatial", "sublet", "poisoncap-spatial", "poisoncap-protected",
-                    "cheribsd-revocation", "native-detect", "native-fix-differential"],
+  "required_arms": [
+    "spatial",
+    "sublet",
+    "poisoncap-spatial",
+    "poisoncap-protected",
+    "cheribsd-revocation",
+    "native-detect",
+    "native-fix-differential"
+  ],
   "status": "measured",
   "live_in_pin_recorded": true,
-  "expect_live_in_pin": {"false": 1},
-  "runners": ["capstone/bug-corpora/memcached/plain-heap-repros/runners/run-native.sh"],
+  "expect_live_in_pin": {
+    "false": 1
+  },
+  "runners": [
+    "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-native.sh"
+  ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
-  "evidence": ["capstone/bug-corpora/memcached/plain-heap-repros/results/20261006-native-plain-heap"],
+  "evidence": [
+    "capstone/bug-corpora/memcached/plain-heap-repros/results/20261006-native-plain-heap"
+  ],
   "advisories": [],
   "shape_table": true,
-  "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 27 of this tree's 33 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none."
+  "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 29 of this tree's 35 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none.",
+  "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md"
 }

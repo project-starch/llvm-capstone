@@ -126,7 +126,11 @@ and the division was measured rather than argued:
 - **memcached's three are native-only**: their Capstone readings are declared predictions pointing
   deliberately different ways, so a future reading settles something.
 
-**The measurement is now CLOSED. Every one of the 80 arm cells across the eleven cases is
+**The measurement was CLOSED over the ELEVEN cases this section counts.**
+*(Two further spatial corpora landed on 2026-10-06 — `memcached/plain-heap-repros`
+and `ffmpeg/plane-repros` — each with its own result bundle; the totals in
+`spatial-and-temporal-bug-inventory.md` are the current ones.)*
+Every one of the 80 arm cells across those eleven cases is
 accounted for**, and the arithmetic reconciles from the case files rather than from a summary:
 
 | | measured | unavailable | declined | n/a | total |
@@ -240,7 +244,7 @@ instead of an assumption behind it.
 > it to an empty cell, which rested on a premise never stated and never checked — *that a case must
 > be live at the pin to be built*.
 >
-> It is not. **27 of the 33 existing corpus cases carry `live_in_pin: false`**, and the convention is
+> It is not. **29 of the 35 existing corpus cases carry `live_in_pin: false`**, and the convention is
 > explicit at `bug-corpora/memcached/allocator-repros/README.md:132-135`: each fix is an ancestor of
 > the pin, "so the shipped allocator is exercised by a pre-fix consumer shape the commit's own diff
 > shows -- the FFmpeg corpus's tier." Liveness is a **field recorded in the case**, not a gate on

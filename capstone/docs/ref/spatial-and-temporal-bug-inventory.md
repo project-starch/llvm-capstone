@@ -311,14 +311,19 @@ this is what a host that has them needs in order to extend the measured column:
 
 | | count | source |
 |---|---:|---|
-| `case.json` files across the four corpora | 33 | `memcached/allocator-repros` 8, `wireshark/wmem-repros` 18, `ffmpeg/pool-repros` 4, `ffmpeg/subobject-repros` 3 |
-| temporal corpus cases | 22 | 5 + 13 + 4 |
-| spatial corpus cases | 11 | 3 + 5 + 3 |
+| `case.json` files across the **six** corpora | **35** | `memcached/allocator-repros` 8 + `plain-heap-repros` 1, `wireshark/wmem-repros` 18, `ffmpeg/pool-repros` 4 + `subobject-repros` 3 + `plane-repros` 1 |
+| temporal corpus cases | **22** | 5 + 13 + 4 |
+| spatial corpus cases | **13** | 3 + 1 + 5 + 3 + 1 |
 | not-nested temporal, as app fixtures | 5 | memcached 17/18, tshark 14/15, FFmpeg 24 |
-| **total defects in both tables** | **38** | 27 temporal + 11 spatial |
+| **total defects in both tables** | **40** | 27 temporal + 13 spatial |
+| fix-reversals (`live_in_pin: false`) | **29 of 35** | liveness is recorded, never required |
 
-Arm cells for the 11 spatial cases: **36 measured, 33 unavailable, 8 declined, 3 n/a = 80**, which
-is the closed accounting in the companion document.
+*These are recomputed from the `case.json` files, not typed. They drifted once already — the
+headline tables were updated and this section was not — which is the defect
+`bug-corpora/tools/build-index.py` exists to prevent, and whose `--check` mode now gates it.*
+
+Arm cells for the **13** spatial cases: the 80-cell accounting in the companion document covers
+the original 11; the two corpora added on 2026-10-06 carry their own, in their result bundles.
 
 **The two new memcached fixtures are MEASURED.** `results/2026-10-05-qemu-classa-fixtures/`,
 **15 of 15 cells as predicted** against rows registered before any image existed — fixtures 20 and
