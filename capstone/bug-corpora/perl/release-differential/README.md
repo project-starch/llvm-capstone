@@ -45,74 +45,99 @@ the `malloc` boundary cannot see a lifetime that never crosses it.
 
 ## The arms
 
-Four measured arms. `sysalloc-bounds` is the **baseline**: per-object heap bounds are
+Five measured arms. `sysalloc-bounds` is the **baseline**: per-object heap bounds are
 what an application gets by default since PR #170, so a catch is a case the bounds arm
 does **not** fault on.
 
-| arm | what it is | catches |
-|---|---|---:|
-| `sysalloc-none` | the first-fit heap with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`: every pointer carries the whole arena's bounds | 6 |
-| **`sysalloc-bounds`** | the same heap as applications get it today. **The baseline** | **6** |
-| `sysalloc-sublet` | the Sublet heap as the **system** allocator: bounded, and every free revokes | 6 |
-| `sublet-svheads` | the baseline's `level0` **outer** heap, plus the SV head arena through the lifetime adapter of [`../../../ports/perl/sv-heads`](../../../ports/perl/sv-heads) in `PERL_SUBLET_MODE=1` | **7** |
+| arm | what it is | catches | adds over the baseline |
+|---|---|---:|---|
+| `sysalloc-none` | the first-fit heap with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`: every pointer carries the whole arena's bounds | 6 | — |
+| **`sysalloc-bounds`** | the same heap as applications get it today. **The baseline** | **6** | — |
+| `sysalloc-sublet` | the Sublet heap as the **system** allocator: bounded, and every free revokes | **7** | `10_254b30e378` |
+| `sublet-svheads` | the baseline's `level0` **outer** heap, plus the SV head arena through the lifetime adapter of [`../../../ports/perl/sv-heads`](../../../ports/perl/sv-heads) in `PERL_SUBLET_MODE=1` | **7** | `05_17535c984a` |
+| `cheribsd-revocation` | the same release, purecap on CheriBSD, libc revocation at its default | 7 | — |
 
-The images are one source each and differ only in the heap they link, so a difference
-between them is the heap's protection and nothing else. Note what the sv-heads arm is
-*not*: its outer allocator is `level0`, the same as the baseline's, which is `build.py`'s
-own rule for a nested-allocator arm (`--nested` with `--heap sublet` is a `ValueError`).
-Otherwise two things would change at once and the comparison would measure whichever
-one you did not intend.
+The Capstone images are one source each and differ only in the heap they link, so a
+difference between them is the heap's protection and nothing else.
 
-The one addition over the baseline is `05_17535c984a`, a cloned constant sub whose
-`CvXSUBANY` SV head is shared without a reference — a head in the arena the adapter
-owns. The spatial case `08_b7b77ffc1e` is caught by all four, but the three bounded arms
-report it as a **bounds** violation (cause 5) where the unbounded one sees only an
-untagged dereference (cause 24): same catch, better precision.
+**The two revoking arms add different cases, and no single image here has both.**
+`build.py` forbids it: `--nested` with `--heap sublet` is a `ValueError`, because a
+nested-allocator arm takes `level0` for its separate outer heap. So `sublet-svheads`
+carries the baseline's non-revoking system allocator and cannot see `10_254b30e378`,
+while `sysalloc-sublet` has no SV head adapter and cannot see `05_17535c984a`. Their
+union is **8**, and an image combining them is the obvious next build.
 
-### The denominator is 9, not 11
+Where bounds help is precision rather than reach: the spatial case `08_b7b77ffc1e` is
+caught by all four Capstone arms, but the three bounded ones report it as a **bounds**
+violation (cause 5) where the unbounded one sees only an untagged dereference (cause 24).
 
-Two cases do not execute their defect in a domain at all, and scoring them as misses
-would be counting the harness:
+### What each defence can and cannot reach
 
-- `10_254b30e378` carries **`harness_limit`**. A probe on the bounds arm shows the
-  in-memory filehandle it needs accepts its writes and throws them away: `open` returns
-  1, `print` returns 1, and the backing scalar is still `undef`, where the host build
-  holds the full 52-byte string. The overlapping `Move` that *is* the defect is never
-  reached.
-- `03_9e298ab597`'s trigger **passes its own assertion** on all four arms, so the stale
-  element slot it depends on never holds a stale pointer there.
+Of the eleven, **ten execute their defect somewhere** and eight are caught by some
+Capstone arm:
 
-Of the nine that do exercise their defect, **seven are caught**. The other two are not
-gaps in the hardware:
+| case | where the stale pointer lives | caught by |
+|---|---|---|
+| `10_254b30e378` | system allocator (`SvPVX`) | `sysalloc-sublet`, CheriBSD |
+| `05_17535c984a` | **SV head arena** | `sublet-svheads` **only** |
+| 6 others | mixed | every arm |
+| `11_af11b0c528` | in-bounds of a live object | **nothing can** |
+| `02_d2cddbe1df` | SV head arena | nothing faults, Perl's own panic reports |
+| `03_9e298ab597` | system allocator | its trigger does not reproduce outside glibc |
 
-- `11_af11b0c528` is **out of reach by construction**. The stale `subbeg` length makes
-  `$&` read one byte past the logical string into the NUL terminator, which lies *inside
-  the same allocation*. No per-object bounds and no revocation can see an in-bounds read
-  of a live object; the only oracle is the wrong output, which every arm does produce.
-- `02_d2cddbe1df` is a **deliberate carve-out**. Upstream Perl reads a freed head's flags
-  on purpose, so the adapter answers `SvIS_FREED` and `SvTYPE` from its sidecar without
-  touching the head; making that path fault stops three upstream test files. The defect
-  is still detected — by Perl's own `panic: attempt to copy freed scalar`.
+- **`05_17535c984a` is the nested-allocator blind spot, measured twice.** The
+  `CvXSUBANY` SV head lives in Perl's own head arena and is never returned to `malloc`,
+  so neither ASan nor CheriBSD's revocation has anything to see. Only the SV head
+  adapter reports it.
+- **`11_af11b0c528` is out of reach by construction.** The stale `subbeg` length makes
+  `$&` read one byte past the logical string into the NUL terminator, which lies
+  *inside the same allocation*. No per-object bounds and no revocation can see an
+  in-bounds read of a live object; every arm produces the wrong output and nothing more.
+- **`02_d2cddbe1df` is a deliberate carve-out.** Upstream Perl reads a freed head's
+  flags on purpose, so the adapter answers `SvIS_FREED` and `SvTYPE` from its sidecar;
+  making that path fault stops three upstream test files. Perl's own
+  `panic: attempt to copy freed scalar` catches it instead, on both platforms.
+- **`03_9e298ab597` is a trigger that does not travel.** Its own assertion passes on all
+  four Capstone arms and on CheriBSD with revocation off *and* on, so the stale element
+  slot never holds a stale pointer there. Host ASan reports SEGV, so the defect is real.
+
+### A library gap that cost a verdict, and the two traps in fixing it
+
+`10_254b30e378` was recorded as `harness_limit` here on 2026-10-06 and that is
+**withdrawn**. perl-cross installs almost none of the *target* library — 636 pure-Perl
+modules the same release installs natively were absent, `XSLoader.pm`, `DynaLoader.pm`
+and `PerlIO/scalar.pm` among them. Every extension is linked statically, but perl still
+reaches an XS layer through its `.pm`, so `PerlIO_find_layer("scalar")` could not
+`require PerlIO::scalar` and the open fell back **silently**: the domain reported
+`LAYERS perlio` where the native reference reports `LAYERS scalar`, writes returned
+success, and the backing scalar stayed `undef`.
+
+`build-perl-domain.sh` now stages the library from its own native reference and refuses
+to continue if any of those three is still missing. Two things made that step easy to
+get wrong, and both were caught by checking its output rather than trusting it:
+
+- the arch-dependent `.pm` stubs live under `lib/<ver>/<archname>/`, so walking the
+  version directory alone copies `DynaLoader.pm` and `PerlIO/scalar.pm` somewhere
+  `@INC` never looks — the fill reports hundreds of files and still leaves the two that
+  matter missing;
+- detecting that directory by looking for a `Config.pm` inside it also matches `Net/`,
+  because `Net::Config` exists, which flattens `Net/*.pm` into the library root. The
+  archname comes from the native perl instead.
 
 ### The arms carry their own positive control
 
-Three arms reporting the same six is also exactly what a build whose revocation never
-fires would show, so `sysalloc-sublet`'s silence needed proving to be a fact about the
-cases rather than about the arm.
-[`results/20261006/heapprobe.c`](results/20261006/heapprobe.c), compiled with each arm's
-own SDK and run as a domain, does `malloc`, `free`, then a read at an argv-derived index
-whose value is printed so the load cannot be folded away:
+Three arms reporting the same six is also what a build whose revocation never fires
+would show. [`results/20261006/heapprobe.c`](results/20261006/heapprobe.c), compiled
+with each arm's own SDK and run as a domain, does `malloc`, `free`, then a read at an
+argv-derived index whose value is printed so the load cannot be folded away:
 
 | | `sysalloc-bounds` | `sysalloc-sublet` |
 |---|---|---|
 | read after `free` | `READ-FREED-OK got=Z` — completes | the process ends at the read |
 | `realloc` 26→52, 1000→4000 | `moved=1` | `moved=1` |
 
-So revocation is live in the sublet arm, `l0_free` really does only mark (it sets
-`b->free = 1` and coalesces), and a dangling pointer into a grown buffer *is* possible
-here — "realloc grew in place" was considered and refuted. `sysalloc-sublet` adds nothing
-over the baseline because the two system-allocator temporal cases it exists for are the
-two that do not execute.
+So revocation is live, `l0_free` really does only mark, and a dangling pointer into a
+grown buffer *is* possible here — "realloc grew in place" was considered and refuted.
 
 ### CheriBSD, and the two 7s that are not the same 7
 
@@ -125,7 +150,7 @@ exactly one the other misses:
 |---|---:|---:|
 | reports | 7 | 7 |
 | agree on | 6 | 6 |
-| unique | `05_17535c984a` | `10_254b30e378` |
+| unique against the *other* | `05_17535c984a` | `10_254b30e378` |
 
 - **`05_17535c984a` is the nested-allocator blind spot, measured.** The `CvXSUBANY` SV
   head lives in Perl's own head arena and is never returned to `malloc`, so a scheme
@@ -133,10 +158,10 @@ exactly one the other misses:
   revocation both off *and* on, and host ASan is silent too — only Perl's own
   `Attempt to free unreferenced scalar` and the SV head adapter report it. This is the
   same blindness as the three-of-eleven ASan result above, in capability hardware.
-- **`10_254b30e378` is our harness, not our protection.** Its `SvPVX` buffer *is*
-  system-allocator memory, so revocation sees it. The Capstone arms miss it because the
-  domain's in-memory PerlIO layer discards its writes and the defect never executes
-  there — and CheriBSD running it is the proof that the case is live and catchable.
+- **`10_254b30e378` is caught on both sides**, once the domain's library is staged:
+  `sysalloc-sublet` faults with cause 24 and CheriBSD reports SIGPROT. Its `SvPVX` buffer
+  is system-allocator memory, which is what revocation is for. It is unique only against
+  `sublet-svheads`, whose outer heap does not revoke.
 
 ### That arm carries its own knob control
 

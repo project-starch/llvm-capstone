@@ -238,4 +238,57 @@ PY
   log "domain image $S/perl"
   printf '%s\n' "$CC_HASH" > "$ROOT/.compiler-hash"
 fi
+
+# ---- the runnable library ----
+# perl-cross populates the TARGET lib/ with almost nothing: 639 of the pure-Perl
+# modules the same release installs natively are absent, XSLoader.pm and
+# DynaLoader.pm among them. That matters even though every extension here is
+# linked statically (-Uusedl), because perl still reaches an XS layer through its
+# .pm: PerlIO_find_layer("scalar") does `require PerlIO::scalar`, that does
+# `XSLoader::load`, and with no XSLoader.pm the require fails SILENTLY --
+# `open $fh, '>', \$str` then succeeds with the generic `perlio` layer pushed
+# instead of `scalar`, writes are discarded, and the backing scalar stays undef.
+# Measured 2026-10-06: the domain reported `LAYERS perlio` where native reports
+# `LAYERS scalar`, which cost a corpus case its verdict (bug-corpora/perl/
+# release-differential, 10_254b30e378) and would silently degrade any workload
+# needing a module. The native reference is the same release built by this script,
+# so its lib/ is the right source; the cross tree's own copy of a file always wins,
+# which keeps the target's Config.pm.
+if [[ -d $ROOT/native/lib/$PERL_VERSION && -d $S/lib ]]; then
+  # TWO source roots, and the second is easy to miss: perl installs the .pm stub of
+  # an XS module under lib/<ver>/<archname>/, not at the root, so a walk of the
+  # version directory alone copies DynaLoader.pm and PerlIO/scalar.pm to
+  # lib/<archname>/... where @INC never looks -- the fill then reports hundreds of
+  # files and still leaves the two that matter missing. Flattening them is correct
+  # here: their content is architecture-independent (byte-identical to the host
+  # build's own copies), and the XS they front is already linked into the image.
+  # Ask the native perl for its archname rather than guessing the directory: a
+  # name test picks up Net/ as well, because Net::Config exists, and Net/*.pm
+  # would then be flattened into the library root under the wrong names.
+  ARCH=$("$ROOT/native/bin/perl" -MConfig -e 'print $Config{archname}')
+  [[ -n $ARCH ]] || { echo "cannot read the native reference's archname" >&2; exit 2; }
+  SRCS=("$ROOT/native/lib/$PERL_VERSION")
+  [[ -d $ROOT/native/lib/$PERL_VERSION/$ARCH ]] && SRCS+=("$ROOT/native/lib/$PERL_VERSION/$ARCH")
+  filled=0
+  for src in "${SRCS[@]}"; do
+    while IFS= read -r rel; do
+      if [[ ! -e $S/lib/$rel ]]; then
+        mkdir -p "$S/lib/$(dirname "$rel")"
+        cp "$src/$rel" "$S/lib/$rel"
+        filled=$((filled + 1))
+      fi
+    done < <(cd "$src" && find . \( -name '*.pm' -o -name '*.pl' \) \
+               -not -path './unicore/*' -not -path "./$ARCH/*" -printf '%P\n')
+  done
+  log "library: filled $filled module(s) the cross build did not install"
+  for must in XSLoader.pm DynaLoader.pm PerlIO/scalar.pm; do
+    [[ -e $S/lib/$must ]] \
+      || { echo "library staging missed $must; an XS layer cannot be registered without it" >&2; exit 2; }
+  done
+  # A positive control on the result, because the failure mode is silence: the
+  # layer the in-memory filehandle pushes must be `scalar`, not `perlio`.
+  "$ROOT/native/bin/perl" -e 'open my $fh, ">", \my $s or die; print $fh "x";
+    die "native reference cannot do in-memory files" if !defined $s' \
+    || { echo "the native reference itself cannot open an in-memory file" >&2; exit 2; }
+fi
 ls -la "$S/perl" "$ROOT/native/bin/perl" 2>/dev/null | awk '{print "[build-perl] " $NF, $5" bytes"}'

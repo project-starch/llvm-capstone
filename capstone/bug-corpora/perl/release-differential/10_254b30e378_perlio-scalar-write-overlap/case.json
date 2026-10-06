@@ -10,16 +10,16 @@
  "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
  "arms": {
   "sysalloc-none": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
+   "oracle": "no fault: completes and the workload's own oracle passes"
   },
   "sysalloc-bounds": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
+   "oracle": "no fault: completes and the workload's own oracle passes"
   },
   "sysalloc-sublet": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
+   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
   },
   "sublet-svheads": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
+   "oracle": "no fault: completes and the workload's own oracle passes"
   },
   "cheribsd-revocation": {
    "oracle": "SIGPROT: the defence reports; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
@@ -27,5 +27,6 @@
  },
  "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
  "allocator_layer": "system allocator (the SvPVX string buffer)",
- "harness_limit": "applies to the four CAPSTONE arms only. The defect does not execute in a Capstone domain: a probe on the bounds arm shows the in-memory filehandle this case needs accepts its writes and discards them -- open returns 1, print returns 1, and the backing scalar is still undef afterwards, where the host build has the full 52-byte string -- so the overlapping Move that IS the defect is never reached and this case is outside those four arms' denominator. cheribsd-revocation runs a complete FreeBSD Perl, where the layer works: the defect executes and revocation CATCHES it (SIGPROT with revocation on, clean with it off). So the case is live and catchable, and what the Capstone arms show here is a gap in the domain's PerlIO, not in the heap"
+ "distinguishing": "the one case sysalloc-sublet adds over the baseline, and the clearest statement of what revocation is for: the stale pointer is an SvPVX buffer from the SYSTEM allocator, so bounds cannot help -- level0's free only sets b->free and coalesces -- while the Sublet heap revokes and faults. CheriBSD catches it too. It does NOT fault on sublet-svheads, whose outer heap is level0 by build.py's rule for a nested arm, so no single Capstone image here catches both this and 17535c984a",
+ "note": "this case was recorded as harness_limit on 2026-10-06 and that is WITHDRAWN. The defect did not execute in a domain because perl-cross installs almost none of the target library -- 636 pure-Perl modules absent, XSLoader.pm among them -- so PerlIO_find_layer(\"scalar\") could not require PerlIO::scalar and the open silently fell back to the generic perlio layer: the domain reported LAYERS perlio where native reports LAYERS scalar, and writes were discarded. With the library staged (build-perl-domain.sh now does it, and refuses to continue if XSLoader.pm, DynaLoader.pm or PerlIO/scalar.pm is missing) the domain matches native byte for byte and the case is caught"
 }
