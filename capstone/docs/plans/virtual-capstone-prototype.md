@@ -188,6 +188,10 @@ processor performance result.
 4. Replace the selector/host table with the guest-table context, disable ID
    reuse, and remove fat bounds from protected memory tags. Complete M1
    before extending the Linux patch to full contexts.
+   **Guest table, CSRs and `CSMINT` done**: the M1 gate passes 60/60 with
+   every probe booting through `CSMINT`, the ported U-access suite 69/69,
+   and the bounded Linux process on the migrated kernel patch. The fat
+   bounds stay until the representability checks land.
 
 The [source/model entry point](../../capstone-qemu/tests/virtual-capstone-model/README.md)
 records 8,949 generated prefixes, six directed cases and three detected

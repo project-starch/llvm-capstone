@@ -2,6 +2,21 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-06 — virtual prototype: node tables in guest RAM
+
+Protected U now runs on the prototype ABI. `scapctl` selects it, `srevroot`
+names the address space's node table in guest RAM, and `urevavail` reports
+its free identities. `CSMINT` is the only protected mint; the debug
+selectors 2 and 3 and the dual-tree swap are gone, and protected U no longer
+depends on legacy C mode or CPMP. The node list runs over a host-tree and a
+guest-table binding; the forest model passes on both, and 14 bad-data checks
+show that a refused operation changes no byte of the table. The M1 gate
+passes 60/60 with every probe booting through `CSMINT`, the ported U-access
+suite 69/69, and the bounded Linux process passes on the migrated kernel
+patch. `CSCHECKR`, `CSCHECKW`, `CSRETIRE`, the PCC rules, the protected-U
+instruction policy and the representability checks are the remaining M1
+changes.
+
 ## 2026-10-06 — virtual prototype: representability measured
 
 QEMU creates capabilities its memory format cannot hold: SHRINK, SPLIT,

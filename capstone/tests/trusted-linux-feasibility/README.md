@@ -81,8 +81,10 @@ preservation, or safe retirement.
 ## Bounded Linux process gate
 
 `protected.S` runs as an ordinary Linux U-mode process. It `mmap`s one page,
-asks the experimental kernel to select a protected lifetime namespace, and
-receives a tagged capability in `s2`. Its first store faults in the page through
+asks the kernel to protect it, and receives a tagged capability in `s2`.
+The kernel allocates one page as the task's node table, selects it with
+`srevroot`, and mints the arena with `CSMINT` into the saved `s2` slot; every
+return to U installs `srevroot` and `scapctl` for the protected task. Its first store faults in the page through
 Linux's normal lazy allocation, then retries. The runner requires exactly
 one cause-15 store-page-fault at the named first store; a successful final
 load establishes that Linux retried it. It dereferences `s2` after `getpid`,
@@ -98,8 +100,9 @@ The exact [kernel patch](linux-trusted-u.patch) applies to
 `git apply --unidiff-zero --check` can verify the zero-context patch before
 application. It is also committed
 locally on `riscv/trusted-u-entry` as `0c9d8d9d1e0d`, with the Q-12 correction
-on `virtual-capstone-q12-fixes`; the original repository denied the push, so
-the patch makes this gate reviewable without that remote. The corrected
+on `virtual-capstone-q12-fixes` and the move to the prototype ABI on
+`virtual-capstone-abi-table` as `a62e18f2b9aa`; the original repository denied
+the push, so the patch makes this gate reviewable without that remote. The corrected
 entry saves the scalar `s2` cursor before STC consumes the linear register.
 Rebuild the kernel when moving from the original non-consuming QEMU path.
 Build the patched source with `CONFIG_CAPSTONE_TRUSTED_U=y` and the
@@ -153,12 +156,16 @@ capstone/tests/trusted-linux-feasibility/run-q12.sh \
 
 The [Q-12 process record](q12-protected-result.json) and
 [stripped-tag record](q12-strip-result.json) qualify the corrected patch and
-consuming QEMU path together. Historical records above retain their original
+consuming QEMU path together. The [ABI process record](abi-table-protected-result.json)
+and [ABI stripped-tag record](abi-table-strip-result.json) qualify the
+current patch on the step-2 QEMU. On that QEMU the previous kernel image
+oopses at the removed selector, and a kernel that leaves `srevroot` at 0
+fails with cause 25 at the first `s2` store. Historical records above retain their original
 kernel and QEMU identities. Raw logs stay in the runner's scratch directory.
 
 The next gate must extend this one-register process to full tagged register
-preservation, obtain authority for ordinary Linux mappings without a debug
-mint, and fault a retained old
+preservation, mint authority for ordinary Linux mappings as this gate now
+mints its single page, and fault a retained old
 pointer after `free` and same-address reuse while the fresh pointer succeeds.
 The process must also observe ordinary PTE restrictions and receive a
 recoverable `EFAULT` for an invalid syscall buffer. A debug-minted capability

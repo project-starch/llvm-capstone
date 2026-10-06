@@ -21,7 +21,9 @@ compatibility path; a change replaces it.
 Both writable CSRs live in the standard custom supervisor read-write range,
 and `urevavail` in the custom user read-only range. None of the three numbers
 is used in the candidate. They replace the debug selectors 2 and 3 of
-`csdebugoncapmem`, which become illegal outside M once this lands.
+`csdebugoncapmem`, which now raise cause 29 in every privilege; selectors 0
+and 1 keep their legacy meaning. Under `x-capstone-u-mode` the debug mint is
+M-only and creates legacy host-tree nodes, which a guest table never names.
 
 Linux installs `satp`, `srevroot` and `scapctl` for the next task before the
 xRET into U. QEMU keeps no cached node state, so a root change needs no
@@ -72,7 +74,7 @@ it changes the table, a slot or a register.
 
 | Mnemonic | funct7 | Operands | Effect |
 |---|---|---|---|
-| `CSMINT` | `0x50` | `rd` ancestor ID, `rs1` slot address, `rs2` descriptor address | Descriptor `{u64 base; u64 end; u64 perms}`. Requires `base < end`, `perms <= 7` and bounds that survive compression unchanged, else cause 29. Requires two free IDs, else cause 30. Creates kernel ancestor `K` at depth 0 and child `R` at depth 1 below it. Writes a tagged LIN capability `{cursor=base, base, end, perms, node=R}` into the 16-byte-aligned slot. Writes `K` to `rd`. |
+| `CSMINT` | `0x50` | `rd` ancestor ID, `rs1` slot address, `rs2` descriptor address | Descriptor `{u64 base; u64 end; u64 perms}`, 8-byte aligned, else cause 4; each doubleword is translated on its own. The slot is 16-byte aligned, else cause 6. Requires `base < end`, `perms <= 7` and bounds that survive compression unchanged, else cause 29. Requires two free IDs, else cause 30. Creates kernel ancestor `K` at depth 0 and child `R` at depth 1 below it. Writes a tagged LIN capability `{cursor=base, base, end, perms, node=R}` into the 16-byte-aligned slot. Writes `K` to `rd`. |
 | `CSCHECKR` | `0x51` | `rd` result, `rs1` slot address, `rs2` length | Reads the slot without consuming it. Returns 0 when the slot holds a tagged capability whose node is live in the selected table, whose type is LIN or NONLIN, which grants read, and whose `[cursor, cursor+length)` lies in bounds without overflow. Otherwise returns the cause the access would raise: 24, 25, 26, 27 or 28. Length 0 requires `base <= cursor <= end`. |
 | `CSCHECKW` | `0x52` | as above | Same check for write permission. |
 | `CSRETIRE` | `0x53` | `rd` zero, `rs1` ancestor ID | Requires `rs1` to name a live node, else cause 29. Invalidates every strict descendant with the existing REVOKE walk, then clears the ancestor's `VALID`. Its result in `rd` is 0. |
@@ -252,9 +254,11 @@ it. A freed table's memory is zeroed with scalar stores before reuse.
 1. Q-12 consumption and fault order for LDC and STC, U and S. **Done.**
 2. Causes 24–30 in `DELEGABLE_EXCPS`. **Done.**
 3. `scapctl`, `srevroot` and `urevavail`; retire debug selectors 2 and 3.
+   **Done.**
 4. The guest table with the layout above; host tree and collector off for
-   protected U.
-5. `CSMINT`, `CSCHECKR`, `CSCHECKW` and `CSRETIRE`.
+   protected U. **Done**, with the table chosen per operation as below.
+5. `CSMINT`, `CSCHECKR`, `CSCHECKW` and `CSRETIRE`. **`CSMINT` done**, with
+   the decoder overflow fixed; the other three remain.
 6. PCC fetch check, PCC move into `cepc` on trap and out on xRET.
 7. Illegal-instruction policy for the protected-U table above.
 8. Representability checks at creation, then bounds decoded from stored
