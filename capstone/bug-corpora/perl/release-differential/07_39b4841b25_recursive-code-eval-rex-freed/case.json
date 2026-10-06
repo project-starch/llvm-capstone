@@ -9,9 +9,6 @@
  "live_proof": "upstream fixed it in 39b4841b25 (39b4841b25cd6ab8bca8f5fdce2b0517610fef83) (2025-02-22). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin regexec.c:10919 eval_state->rex = rex with no SvREFCNT_inc and no PMOP/PL_reg_curpm save; regexp.h:649 regexp *rex). Host ASan at the pin: ASan: heap-use-after-free (rc=77); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
  "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
  "arms": {
-  "sysalloc-none": {
-   "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
-  },
   "sysalloc-bounds": {
    "oracle": "capability fault, cause 24 (NOT_CAP (untagged capability))"
   },
@@ -25,6 +22,6 @@
    "oracle": "SIGPROT: the defence reports; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
   }
  },
- "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
+ "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
  "allocator_layer": "nested allocator: the SV head arena, plus the system allocator (the regexp body and program)"
 }

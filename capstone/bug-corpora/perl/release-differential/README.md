@@ -45,61 +45,75 @@ the `malloc` boundary cannot see a lifetime that never crosses it.
 
 ## The arms
 
-Five measured arms. `sysalloc-bounds` is the **baseline**: per-object heap bounds are
-what an application gets by default since PR #170, so a catch is a case the bounds arm
-does **not** fault on.
+Four arms, **cumulative**: each step adds exactly one thing, so the difference between
+two adjacent arms is that one thing and nothing else.
 
-| arm | what it is | catches | adds over the baseline |
-|---|---|---:|---|
-| `sysalloc-none` | the first-fit heap with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`: every pointer carries the whole arena's bounds | 6 | — |
-| **`sysalloc-bounds`** | the same heap as applications get it today. **The baseline** | **6** | — |
-| `sysalloc-sublet` | the Sublet heap as the **system** allocator: bounded, and every free revokes | **7** | `10_254b30e378` |
-| `sublet-svheads` | the baseline's `level0` **outer** heap, plus the SV head arena through the lifetime adapter of [`../../../ports/perl/sv-heads`](../../../ports/perl/sv-heads) in `PERL_SUBLET_MODE=1` | **7** | `05_17535c984a` |
-| `cheribsd-revocation` | the same release, purecap on CheriBSD, libc revocation at its default | 7 | — |
+| arm | protection | catches |
+|---|---|---:|
+| **`sysalloc-bounds`** | the base an application gets today: per-object heap bounds, `free` only marks | **6** |
+| `sysalloc-sublet` | the **system allocator** spatial *and* temporal — the Sublet heap: bounded, every free revokes | **7** |
+| `sublet-svheads` | that same image **plus the nested allocator**: the SV head arena through the lifetime adapter | **8** |
+| `cheribsd-revocation` | the same release on CheriBSD, revocation as it comes | **7** |
 
-The Capstone images are one source each and differ only in the heap they link, so a
-difference between them is the heap's protection and nothing else.
+| step | adds | which case |
+|---|---:|---|
+| system allocator, temporal | +1 | `10_254b30e378`, a stale `SvPVX` buffer: bounds cannot help, revocation can |
+| **the nested allocator** | **+1** | **`05_17535c984a`**, an SV head |
+| regressions, at either step | **0** | |
 
-**The two revoking arms add different cases, and no single image here has both.**
-`build.py` forbids it: `--nested` with `--heap sublet` is a `ValueError`, because a
-nested-allocator arm takes `level0` for its separate outer heap. So `sublet-svheads`
-carries the baseline's non-revoking system allocator and cannot see `10_254b30e378`,
-while `sysalloc-sublet` has no SV head adapter and cannot see `05_17535c984a`. Their
-union is **8**, and an image combining them is the obvious next build.
+**`05_17535c984a` is the argument for the third arm, in one case.** Its `CvXSUBANY` SV
+head lives in Perl's own head arena and is never returned to `malloc`. So host ASan is
+silent, protecting the system allocator spatially *and* temporally does not help —
+`sysalloc-sublet` is clean — and **CheriBSD is clean with revocation both off and on**.
+Only Perl's own `Attempt to free unreferenced scalar` and the SV head adapter report it.
+The nested allocator is where the lifetime is, and nothing that works at the `malloc`
+boundary can see it.
 
-Where bounds help is precision rather than reach: the spatial case `08_b7b77ffc1e` is
-caught by all four Capstone arms, but the three bounded ones report it as a **bounds**
-violation (cause 5) where the unbounded one sees only an untagged dereference (cause 24).
+That is why the ladder ends 6, 7, **8**, with CheriBSD at 7: the cumulative arm is the
+only configuration here that reaches every case any defence reaches.
 
-### What each defence can and cannot reach
+Where bounds buy precision rather than reach: the spatial case `08_b7b77ffc1e` faults on
+all three Capstone arms as a **bounds** violation (cause 5). An unprotected variant was
+measured too and catches 6 as well — it differs only in reporting that case as an
+untagged dereference (cause 24). It is in the results bundle as context, not as an arm.
 
-Of the eleven, **ten execute their defect somewhere** and eight are caught by some
-Capstone arm:
+### The cumulative arm needed a change to the port
 
-| case | where the stale pointer lives | caught by |
-|---|---|---|
-| `10_254b30e378` | system allocator (`SvPVX`) | `sysalloc-sublet`, CheriBSD |
-| `05_17535c984a` | **SV head arena** | `sublet-svheads` **only** |
-| 6 others | mixed | every arm |
-| `11_af11b0c528` | in-bounds of a live object | **nothing can** |
-| `02_d2cddbe1df` | SV head arena | nothing faults, Perl's own panic reports |
-| `03_9e298ab597` | system allocator | its trigger does not reproduce outside glibc |
+Before this, no single image could carry both protections. `build.py` refused the
+combination outright — `--nested` with `--heap sublet` is a `ValueError`,
+*"nested discovery arms use level0 for their separate outer heap"* — and the refusal is
+technical, not just methodological: one grant has two consumers, and `regions.c`'s
+default wrapper for Perl returns 0 for region index 0. That is harmless for `level0`,
+which keeps a static arena, and fatal for a Sublet outer heap, which needs a real region.
 
-- **`05_17535c984a` is the nested-allocator blind spot, measured twice.** The
-  `CvXSUBANY` SV head lives in Perl's own head arena and is never returned to `malloc`,
-  so neither ASan nor CheriBSD's revocation has anything to see. Only the SV head
-  adapter reports it.
+`PERLD_HEAP=sublet-svheads` now grants `(2 << HEAP_LOG) + 32 MiB` and compiles
+`regions.c` with `EXP_HEAP_AND_POOL`, splitting it: region 0 to the Sublet heap, region 1
+to the adapter. This is exactly what `ports/mruby/app/build-mruby-domain.sh` does for
+`sublet-gc` — so Perl's third arm is now the same construction as mruby's, which it was
+not before.
+
+Checked rather than assumed: the grant reached cmake as `167772160`; the linked
+`regions.o` is the splitting branch and not the fallback (it references `abort`, which
+only `EXP_HEAP_AND_POOL` does, 2184 bytes against the fallback's 1328); the image hash
+differs from every other arm's; and the arm passed both of its controls, which a failed
+region split would not.
+
+### What no arm reaches
+
+Of the eleven, ten execute their defect somewhere and **eight are caught**:
+
 - **`11_af11b0c528` is out of reach by construction.** The stale `subbeg` length makes
-  `$&` read one byte past the logical string into the NUL terminator, which lies
-  *inside the same allocation*. No per-object bounds and no revocation can see an
-  in-bounds read of a live object; every arm produces the wrong output and nothing more.
-- **`02_d2cddbe1df` is a deliberate carve-out.** Upstream Perl reads a freed head's
-  flags on purpose, so the adapter answers `SvIS_FREED` and `SvTYPE` from its sidecar;
-  making that path fault stops three upstream test files. Perl's own
+  `$&` read one byte past the logical string into the NUL terminator, which lies *inside
+  the same allocation*. No per-object bounds and no revocation can see an in-bounds read
+  of a live object; every arm produces the wrong output and nothing more.
+- **`02_d2cddbe1df` is a deliberate carve-out.** Upstream Perl reads a freed head's flags
+  on purpose, so the adapter answers `SvIS_FREED` and `SvTYPE` from its sidecar; making
+  that path fault stops three upstream test files. Perl's own
   `panic: attempt to copy freed scalar` catches it instead, on both platforms.
-- **`03_9e298ab597` is a trigger that does not travel.** Its own assertion passes on all
-  four Capstone arms and on CheriBSD with revocation off *and* on, so the stale element
-  slot never holds a stale pointer there. Host ASan reports SEGV, so the defect is real.
+- **`03_9e298ab597` is a trigger that does not travel.** Its own assertion passes on every
+  arm and on CheriBSD with revocation off *and* on, so the stale element slot never holds
+  a stale pointer there. Host ASan reports SEGV, so the defect is real. It is the only
+  case outside every denominator, which is therefore 10.
 
 ### A library gap that cost a verdict, and the two traps in fixing it
 
@@ -126,8 +140,9 @@ get wrong, and both were caught by checking its output rather than trusting it:
 
 ### The arms carry their own positive control
 
-Three arms reporting the same six is also what a build whose revocation never fires
-would show. [`results/20261006/heapprobe.c`](results/20261006/heapprobe.c), compiled
+A base and a revoking arm that reported the same six would look exactly like a build
+whose revocation never fires, so that had to be ruled out before the +1 steps meant
+anything. [`results/20261006/heapprobe.c`](results/20261006/heapprobe.c), compiled
 with each arm's own SDK and run as a domain, does `malloc`, `free`, then a read at an
 argv-derived index whose value is printed so the load cannot be folded away:
 
@@ -139,29 +154,15 @@ argv-derived index whose value is printed so the load cannot be folded away:
 So revocation is live, `l0_free` really does only mark, and a dangling pointer into a
 grown buffer *is* possible here — "realloc grew in place" was considered and refuted.
 
-### CheriBSD, and the two 7s that are not the same 7
+### CheriBSD
 
-`cheribsd-revocation` is measured: the same release, purecap on CheriBSD, libc
-revocation at its default settings. It reports on **7 of the 11** — the same count as
-`sublet-svheads`, and **not the same seven**. They agree on six, and each catches
-exactly one the other misses:
+`cheribsd-revocation` reports on **7 of the 11**, one below the cumulative Capstone arm,
+and the case it lacks is `05_17535c984a` — the SV head in Perl's own arena. Everything
+CheriBSD catches, the cumulative arm catches too.
 
-| | `sublet-svheads` | `cheribsd-revocation` |
-|---|---:|---:|
-| reports | 7 | 7 |
-| agree on | 6 | 6 |
-| unique against the *other* | `05_17535c984a` | `10_254b30e378` |
-
-- **`05_17535c984a` is the nested-allocator blind spot, measured.** The `CvXSUBANY` SV
-  head lives in Perl's own head arena and is never returned to `malloc`, so a scheme
-  that revokes at the allocator boundary has nothing to revoke. CheriBSD is clean with
-  revocation both off *and* on, and host ASan is silent too — only Perl's own
-  `Attempt to free unreferenced scalar` and the SV head adapter report it. This is the
-  same blindness as the three-of-eleven ASan result above, in capability hardware.
-- **`10_254b30e378` is caught on both sides**, once the domain's library is staged:
-  `sysalloc-sublet` faults with cause 24 and CheriBSD reports SIGPROT. Its `SvPVX` buffer
-  is system-allocator memory, which is what revocation is for. It is unique only against
-  `sublet-svheads`, whose outer heap does not revoke.
+That is the three-of-eleven ASan result above, repeated in capability hardware: a
+defence at the `malloc` boundary cannot see a lifetime that never crosses it, whichever
+boundary technology it uses.
 
 ### That arm carries its own knob control
 
@@ -174,8 +175,8 @@ indistinguishable from a knob that does nothing:
 | revocation **on** | **7** | 3 | 1 |
 
 `10_254b30e378` and `07_39b4841b25` are clean with it off and SIGPROT with it on, so the
-env var is provably live. The five that fault either way are spatial or are caught by
-bounds alone.
+env var is provably live. The five that fault either way are spatial or caught by bounds
+alone.
 
 ### Two platform constraints, both forced
 
@@ -197,10 +198,13 @@ bounds alone.
   this platform for any program that touches it. An earlier note in this corpus
   attributing that fault to `perl_construct` as Perl's own is **retracted**.
 
-**`sublet-svheads` protects exactly one of Perl's nested allocators.** The SV *bodies*,
-the hash entries and the OP slabs keep their upstream allocators. A case whose stale
-pointer lives in those is outside that arm's reach by construction, and its arm entry
-says so rather than being scored as a miss.
+## One nested allocator of four
+
+`sublet-svheads` protects the SV **heads**. The SV *bodies*, the hash entries and the OP
+slabs keep their upstream allocators, so a stale pointer living in those is outside this
+arm's reach by construction — the +1 it shows is a floor on what a nested allocator buys
+in Perl, not a ceiling. mruby's single GC heap holds essentially all of mruby's object
+lifetimes, which is why `sublet-gc` added 6 there; Perl spreads its over four arenas.
 
 ## Layout
 

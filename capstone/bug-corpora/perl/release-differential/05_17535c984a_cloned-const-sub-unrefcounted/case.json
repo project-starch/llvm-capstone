@@ -9,9 +9,6 @@
  "live_proof": "upstream fixed it in 17535c984a (17535c984ae7d68304cc6e7b997240683f7fcadf) (2024-04-18). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin pad.c:2223 CvXSUBANY(cv) = CvXSUBANY(proto) with no SvREFCNT_inc; freed at pad.c:475). Host ASan at the pin: no ASan report; the workload's own oracle fails (rc=0); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
  "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
  "arms": {
-  "sysalloc-none": {
-   "oracle": "no fault: completes, the workload's own oracle fails"
-  },
   "sysalloc-bounds": {
    "oracle": "no fault: completes, the workload's own oracle fails"
   },
@@ -25,7 +22,7 @@
    "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
   }
  },
- "status": "all four Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
+ "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
  "allocator_layer": "nested allocator: the SV head arena (the CvXSUBANY const SV)",
- "distinguishing": "the one case sublet-svheads adds over the baseline, and the one case CheriBSD CANNOT catch: the CvXSUBANY SV head lives in Perl's own head arena and is never returned to malloc, so an allocator-boundary scheme has nothing to revoke. CheriBSD is clean with revocation both off and on, and host ASan is silent too; only Perl's own 'Attempt to free unreferenced scalar' and the SV head adapter report it"
+ "distinguishing": "THE case the nested allocator buys, and the one case CheriBSD cannot catch. The CvXSUBANY SV head lives in Perl's own head arena and is never returned to malloc, so an allocator-boundary scheme has nothing to revoke: CheriBSD is clean with revocation both off and on, host ASan is silent, and protecting the system allocator spatially and temporally does not help either -- sysalloc-sublet is clean too. Only Perl's own 'Attempt to free unreferenced scalar' and the SV head adapter report it. It is the whole argument for the third arm, in one case"
 }

@@ -2,21 +2,17 @@
  "pin": "perl 5.36.3, source archive sha256 f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a, with this port's seven pointer-layout patches",
  "population": "the 11 cases of this corpus",
  "arms": {
-  "sysalloc-none": {
-   "image_sha256": "18e562429a1a88aabc99df540f59e5fbd967b72cae473e9b5f5f6e22c2f458c5",
-   "what_differs": "the first-fit heap built with -DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0: every pointer carries the whole arena's bounds, free only marks"
-  },
   "sysalloc-bounds": {
    "image_sha256": "8dfde932eb922b450fec77fcfadd0a7421c841d3dda6d9a8b52758ef939cc546",
-   "what_differs": "the same heap as applications get it since PR #170: each allocation bounded, no revocation. THE BASELINE"
-  },
-  "sublet-svheads": {
-   "image_sha256": "036c9f5825d6fd5988a182d2e893d523fb9b0ac35985cfef23cd50f83eb16561",
-   "what_differs": "the same level0 OUTER heap as the baseline, plus the SV head arena through the ports/perl/sv-heads lifetime adapter in PERL_SUBLET_MODE=1: a released head is revoked and reissued under a fresh alias. Relinked by ports/common/application/build.py --nested perl, which grants the adapter 32 MiB in region 1"
+   "what_differs": "the first-fit heap as applications get it since PR #170: each allocation bounded, free only marks. THE BASE"
   },
   "sysalloc-sublet": {
    "image_sha256": "a63f7edd9718835001d3753a12e518631dc2b569971e9a7e25b0031e0e59539d",
-   "what_differs": "the Sublet heap as the SYSTEM allocator: per-object bounds and every free revokes. Built as PERLD_HEAP=sublet with no SV head adapter, so it is the one arm that can catch a use-after-free in malloc'd memory"
+   "what_differs": "the Sublet heap as the SYSTEM allocator: bounded AND every free revokes. Adds temporal safety to the base, at the system allocator only"
+  },
+  "sublet-svheads": {
+   "image_sha256": "3d013a1c2312b9fa97fec087f8de2af136edfd1f5a57b8b8d96c62f6cd8e5f1c",
+   "what_differs": "CUMULATIVE: the same Sublet system allocator, PLUS the SV head arena through the ports/perl/sv-heads adapter in PERL_SUBLET_MODE=1. PERLD_HEAP=sublet-svheads, which this change added to the port so that one image can carry both -- the analogue of the mruby port's sublet-gc"
   }
  },
  "held_fixed": "one source tree, one compiler, one musl, one QEMU, one guest, one staged library; the three images differ only in the heap they link and, for sublet-svheads, the SV head adapter",
@@ -27,12 +23,11 @@
  "node_pool": "CAPSTONE_REV_NODES=16777216 on the sublet arm; this kit's emulator does not recycle revocation nodes",
  "launcher": "capstone-exec of 2026-10-01 (/tmp/capstone/threads-merge/guest2); CAPSTONE_EXEC_DIAGNOSTICS=1, without which the launcher prints a fault cause only to a tty and a bounds violation cannot be told from a revocation",
  "result": {
-  "sysalloc-none": 6,
   "sysalloc-bounds": 6,
   "sysalloc-sublet": 7,
-  "sublet-svheads": 7,
+  "sublet-svheads": 8,
+  "cheribsd-revocation": 7,
   "regressions": 0,
-  "union_of_the_two_sublet_arms": 8,
   "denominator": "10 of 11: only 9e298ab597 fails to execute its defect anywhere but the host"
  },
  "positive_control_on_the_arms_themselves": {
@@ -50,5 +45,12 @@
   "two_traps_in_writing_that_step": "the arch-dependent .pm stubs live under lib/<ver>/<archname>/, so a walk of the version directory alone copies DynaLoader.pm and PerlIO/scalar.pm somewhere @INC never looks -- the fill reports hundreds of files and still leaves the two that matter missing. And detecting that directory by looking for Config.pm in it also matches Net/, because Net::Config exists, which flattens Net/*.pm into the library root; the archname comes from the native perl instead",
   "verified": "the step's output has ZERO content differences from the library the four arms were measured with, and the domain's layer stack and write behaviour now match the native reference exactly"
  },
- "result_before_the_fix": "sysalloc-sublet read 6 and 254b30e378 was recorded as harness_limit. Both were artefacts of the staging and are superseded"
+ "result_before_the_fix": "sysalloc-sublet read 6 and 254b30e378 was recorded as harness_limit. Both were artefacts of the staging and are superseded",
+ "cumulative_arm_mechanics": {
+  "why_it_needed_a_new_heap_mode": "one grant has two consumers here, and regions.c's default wrapper for perl returns 0 for region index 0 -- fine for level0, which keeps a static arena, fatal for a Sublet outer heap that needs a real region. Before this change build.py refused the combination outright (--nested with --heap sublet is a ValueError, 'nested discovery arms use level0 for their separate outer heap'), so no single image could carry both protections",
+  "how": "PERLD_HEAP=sublet-svheads grants (2 << HEAP_LOG) + 32 MiB and compiles regions.c with EXP_HEAP_AND_POOL, PORT_HEAP_REGION_BYTES and PORT_INNER_REGION_BYTES, linking it with -Wl,--wrap=__capstone_region. That splits the grant: region 0 to the Sublet heap, region 1 to the adapter. It is exactly what ports/mruby/app/build-mruby-domain.sh does for sublet-gc",
+  "verified": "the grant reached cmake as 167772160 = (2<<26) + 32 MiB; the linked regions.o is the splitting branch and not the fallback (it references abort, which only EXP_HEAP_AND_POOL does, and is 2184 bytes against the fallback's 1328); the image hash differs from all the others; and the arm passed both of its controls, which a failed region split would not"
+ },
+ "also_measured_not_an_arm": "an unprotected variant (PERLD_SDK_CFLAGS=-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0) catches 6 as well; it differs from the base only in reporting the spatial case b7b77ffc1e as cause 24 (untagged dereference) rather than cause 5 (bounds). Kept as context because the design asks for four arms",
+ "superseded": "an earlier five-arm set reported sublet-svheads as 7. That build put the adapter over a level0 outer heap, which is not the cumulative arm; it could not see 254b30e378. Superseded by the mode added here"
 }

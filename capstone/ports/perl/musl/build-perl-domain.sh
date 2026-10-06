@@ -39,9 +39,16 @@ JOBS=${JOBS:-16}
 FROM=${PERLD_FROM:-all}
 HEAP=${PERLD_HEAP:-level0}
 HEAP_LOG=${PERLD_HEAP_LOG:-26}
-case "$HEAP" in level0|sublet) ;; *) echo "PERLD_HEAP=$HEAP? (level0, sublet)" >&2; exit 2 ;; esac
-SV_HEADS=${PERLD_SV_HEADS:-0}
+case "$HEAP" in level0|sublet|sublet-svheads) ;;
+  *) echo "PERLD_HEAP=$HEAP? (level0, sublet, sublet-svheads)" >&2; exit 2 ;; esac
+# sublet-svheads is CUMULATIVE and is this port's analogue of the mruby port's
+# sublet-gc: the Sublet heap for the system allocator AND the SV head arena through
+# the lifetime adapter, in one image. It implies PERLD_SV_HEADS=1.
+[[ $HEAP == sublet-svheads ]] && SV_HEADS_DEFAULT=1 || SV_HEADS_DEFAULT=0
+SV_HEADS=${PERLD_SV_HEADS:-$SV_HEADS_DEFAULT}
 case "$SV_HEADS" in 0|1) ;; *) echo "PERLD_SV_HEADS=$SV_HEADS? (0, 1)" >&2; exit 2 ;; esac
+[[ $HEAP == sublet-svheads && $SV_HEADS == 0 ]] \
+  && { echo "PERLD_HEAP=sublet-svheads is the adapter arm; it cannot take PERLD_SV_HEADS=0" >&2; exit 2; }
 
 # The pin. 5.36.3 is the evaluation's release (docs/design/perl-sublet-port-evaluation.md):
 # the SV arena mechanism is the same in every release perl-cross supports, and 5.36
@@ -82,8 +89,15 @@ log "musl $MUSL, archive $ARCHIVE"
 
 # ---- shared application SDK (also usable by other upstream build systems) ----
 O=$ROOT/runtime
+SDK_HEAP=$HEAP
+[[ $HEAP == sublet-svheads ]] && SDK_HEAP=sublet
 if stage runtime; then
   EXTRA=()
+  if [[ $HEAP == sublet-svheads ]]; then
+    # One grant, split by regions.c below: the Sublet heap takes region 0 and the
+    # SV head adapter region 1. Without the extra 32 MiB the split aborts.
+    EXTRA+=(-DCAPSTONE_APPLICATION_GRANT_BYTES="$(( (2 << HEAP_LOG) + (32 << 20) ))")
+  fi
   # PERLD_SDK_CFLAGS adds C flags to the SDK's own -O1, for an arm that differs from the
   # default only in how the system allocator bounds its objects. It must arrive as ONE cmake
   # argument: a flag list that is word-split becomes separate -D arguments, and cmake takes
@@ -95,7 +109,7 @@ if stage runtime; then
     EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${PERLD_SDK_CFLAGS}")
   fi
   bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
-    -DCAPSTONE_APPLICATION_HEAP="$HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
+    -DCAPSTONE_APPLICATION_HEAP="$SDK_HEAP" -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
     -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
   printf '%s\n' "$HEAP ${PERLD_SDK_CFLAGS:-}" > "$O/.heap"
@@ -222,7 +236,19 @@ PY
     mkdir -p "$ROOT/link"
     "$O/capstone-cc" -O1 -I"$RT/capstone/runtime/include" \
       -c "$SCRIPT_DIR/../sv-heads/capstone.c" -o "$ROOT/link/perl-sv-heads.o"
-    MAKE_VARS=("LIBS=$ROOT/link/perl-sv-heads.o")
+    LINK_OBJS=("$ROOT/link/perl-sv-heads.o")
+    if [[ $HEAP == sublet-svheads ]]; then
+      # The cumulative arm has TWO consumers of the grant, so the single pool is
+      # split: PORT_HEAP_REGION_BYTES to the Sublet heap as region 0, the rest to
+      # the adapter as region 1. The default wrapper in regions.c returns 0 for
+      # index 0, which a Sublet outer heap cannot survive -- the same split the
+      # mruby port uses for sublet-gc.
+      "$O/capstone-cc" -O1 -I"$RT/capstone/runtime/include" -DEXP_HEAP_AND_POOL \
+        -DPORT_HEAP_REGION_BYTES="$((2 << HEAP_LOG))UL" -DPORT_INNER_REGION_BYTES=33554432UL \
+        -c "$RT/capstone/ports/common/application/regions.c" -o "$ROOT/link/regions.o"
+      LINK_OBJS+=("$ROOT/link/regions.o" "-Wl,--wrap=__capstone_region")
+    fi
+    MAKE_VARS=("LIBS=${LINK_OBJS[*]}")
   fi
   # The upstream Makefile cannot see the external SDK archive dependencies.
   # Relink on each requested Perl build; compiled upstream objects remain reusable.
