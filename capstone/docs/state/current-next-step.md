@@ -1,18 +1,24 @@
-Virtual Capstone prototype (2026-10-06): follow the local M0--M3 sequence in
-[the prototype contract](../plans/virtual-capstone-prototype.md). The first
-host forest/list comparison passes, including dropped REV handles, whole-arena
-retirement and independent tables with equal IDs. The concrete ABI draft and
-Q-12 review fixes now have a combined instruction/Linux acceptance gate:
-25/25 new checks, 74/74 existing checks, and the bounded Linux process with
-its stripped-tag control. Follow the [ABI](../plans/virtual-capstone-abi.md)
-for guest-table integration next: three CSRs, monotone guest-RAM nodes,
-four privileged encodings, and removal of debug selection. The frame layout
-remains an M2 contract, not an implemented full-register Linux context.
-The candidate already checks data rights;
-verify coverage rather than treating Q-14 on the main line as its exact status.
-Disable both free-list reuse and the supervisor collector in the protected
-profile. Full tagged Linux contexts and delegation gates are M2; a static
-malloc/free process with stale-pointer counterprobes is M3. No RTL is in scope.
+Runtime integration direction (2026-10-06): start with R0 in
+[virtual Capstone through the existing runtime](../design/virtual-capstone-runtime.md).
+Reuse supervised execution and delegated Linux services. Run a capability
+program on ordinary process mappings, including an object across nonadjacent
+physical frames, and identify the concrete fault/resume path. Target an
+unchanged Linux core plus module/runtime; document any unavoidable core hook.
+Keep the virtual prototype's memory-safety work. Full capability saves in
+Linux entry/return are an alternative experiment, not a prerequisite for R0.
+The M0--M3 paragraph below describes the existing direct Linux prototype lane.
+
+Virtual Capstone prototype (2026-10-06): the direct Linux experiment follows
+the local M0--M3 sequence in
+[the prototype contract](../plans/virtual-capstone-prototype.md).
+Guest node tables, mode CSRs and CSMINT are recorded in the
+[current state](current-state.md). The remaining M1 work in its
+[ABI](../plans/virtual-capstone-abi.md) includes CSCHECKR, CSCHECKW, CSRETIRE,
+PCC enforcement, instruction policy and representability checks before
+removing the stored bounds. Preserve the existing instruction and Linux
+regression gates. Full tagged Linux contexts are still an M2 contract for
+that lane; they are not a prerequisite for the runtime integration above.
+No RTL is in scope for the prototype.
 
 Trusted Linux application compatibility (2026-10-01): follow the
 [M0–M7 plan](../plans/trusted-linux-application-compatibility.md) on

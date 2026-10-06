@@ -1,16 +1,23 @@
 # Capstone project documentation
 
+Integration direction (2026-10-06):
+[virtual Capstone through the existing runtime](design/virtual-capstone-runtime.md).
+Trust the OS, reuse the launcher and supervised continuations, and replace
+physical-pool dependence with ordinary Linux mappings. The first experiment
+joins that runtime to virtual capability accesses; full tagged Linux entry
+and return paths are an alternative, not its prerequisite. The document sets
+the processor philosophy, smallest prototype and remaining integration work.
+
 The [virtual Capstone prototype](plans/virtual-capstone-prototype.md) on
 `virtual-capstone-prototype` starts from the bounded Linux feasibility gate.
 Its M0--M3 scope is one protected U-mode process, monotone process-local node
 IDs, the existing QEMU encoding/list and software context saving. Its
 [concrete ABI draft](plans/virtual-capstone-abi.md) now specifies the guest
-interface. The reviewed Q-12 implementation passes 25/25 instruction checks,
-74/74 existing U-access checks, and the bounded Linux process plus its
-stripped-tag control after correcting the scalar-before-STC save order.
-The guest node table, mode/delegation/fetch enforcement and full Linux
-context remain to implement. The M0 host model compares the compiled QEMU
-node list with an independent forest.
+interface. Guest node tables, mode CSRs and CSMINT have followed the Q-12 and
+delegation work; the [current state](state/current-state.md) records their
+gates and the remaining enforcement work. The M0 host model compares the
+compiled QEMU node list with an independent forest. Complete tagged Linux
+contexts remain an uncompleted part of that direct integration experiment.
 
 Memory design direction on `memory-trusted-linux`:
 [trusted Linux, ordinary virtual memory and Capstone object lifetimes](design/trusted-linux-memory.md).

@@ -2,6 +2,17 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-06 — virtual memory through the existing runtime
+
+The [integration direction](../design/virtual-capstone-runtime.md) reuses the
+launcher, supervised continuations and delegated OS services while moving
+application authority onto ordinary Linux virtual mappings. The OS is trusted;
+module/runtime integration is preferred, with minimal core changes only where
+needed. R0 will establish the cost of joining the existing execution path to
+virtual accesses. Linux tagged entry/return remains an alternative experiment.
+This records the architecture direction and acceptance plan; it adds no new
+runtime result or machine-interface implementation.
+
 ## 2026-10-06 — virtual prototype: node tables in guest RAM
 
 Protected U now runs on the prototype ABI. `scapctl` selects it, `srevroot`
