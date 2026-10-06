@@ -1,117 +1,95 @@
-# FFmpeg at the 9.0.1 pin: triage by reachability first, and what it yields
+# FFmpeg at the 9.0.1 pin: we are NOT out of bugs, and what it takes to get them
 
-**Question.** The FFmpeg corpora hold 8 cases, 3 of them live at the pin. How many more
-spatial or temporal defects are there in the version we compile?
+**The short version.** FFmpeg's corpora hold 8 cases, 3 live at the pin. That is not a
+ceiling and it is not a blocked road. In `n9.0.1..master`, upstream itself labels
 
-**Answer: one solid live spatial defect and one weak one — and the binding constraint is
-the port's configuration, not the search.**
-
-## The filter order was the problem
-
-The earlier triage (`ffmpeg-live-defect-triage.md`) sieved 1,788 commits down to 15 on
-**subject wording**, and its filter 1 named spatial wording as a *disqualifier*. Wording is
-the wrong first filter in both directions: it drops defects whose subject is terse, and it
-admits prose matches that are not defects at all. Three of the candidates it would keep are
-ASan/MSan annotations, and one — `e5eb7581dd` — matched on "parsed against the **stale**
-context" in a commit whose own message says the checks fired and the fix only stops an error
-being logged per slice.
-
-Filtering by **reachability** first is precise, costs nothing, and cuts far harder:
-
-| | commits |
+| upstream's own `Fixes:` label | commits |
 |---|---:|
-| population `n9.0.1..master` | **1,912** |
-| touch a translation unit the port actually compiles (219 TUs) | **111** |
-| …with h264 + hevc added (254 TUs) | 149 |
-| …with vp9, av1 and vvc as well (295 TUs) | 169 |
+| out of array access | 47 |
+| out of array read | 29 |
+| heap buffer overflow | 12 |
+| out of array write | 10 |
+| stack buffer overflow | 2 |
+| stack buffer underflow | 1 |
+| **spatial, total** | **101** |
+| use after free | 3 |
+| double free | 1 |
+| **temporal, total** | **4** |
 
-A 94% cut from configuration alone, and the survivors are few enough to **read**, which is
-what produced the triage below. The 111 are mostly feature work; about six are candidate
-memory defects.
+Those are upstream's classifications, not our keyword guesses, and they are the right two
+classes for this study. The work left is per case — content-based liveness at the pin, then a
+reduction — not a blocked dependency.
 
-## What the port's configuration decides
+## Correcting this file's own earlier claim
 
-Read from the generated `config.h`/`config_components.h` of the built image, not assumed:
+An earlier version of this note said *"the binding constraint is the port's configuration, not
+the search"*, and dismissed candidates because their code is not in the image this port builds
+(5 decoders of 2,299; `HAVE_THREADS 0`; no hwaccels). **That reasoning is wrong for corpus
+cases, and it is withdrawn.**
 
-| | |
-|---|---|
-| `HAVE_THREADS`, `HAVE_PTHREADS` | **0** |
-| hwaccels enabled | **0** |
-| `HAVE_BIGENDIAN` | **0** |
-| decoders enabled | **5 of 2,299** (h263, mpeg4 and three trivial ones) |
+Every existing FFmpeg case is a **reduction** — `case.c` plus the shared driver, fidelity tier
+*model-consumer, real allocator*. The heap-arms bundle says so of its own fixtures: *"they never
+execute the upstream consumer"*. A reduction compiles its own consumer and calls the real
+allocator, so **whether a decoder is enabled is not a precondition for making a case from a
+defect in it.** The 101 spatial and 4 temporal labelled commits are all available this way.
 
-Four candidates die on these lines alone, which is why this check belongs **before** any
-liveness test rather than after it:
+What the configuration actually decides is the *stronger* fidelity tier — running the real
+upstream consumer — which is a separate and more valuable goal, not a gate on this one.
 
-- `ead4378652` h264_direct — the whole change is `ff_thread_await_progress` calls, and its
-  comment says the two fields are "decoded by different threads".
-- `0661ef6bb3`, `d344929552` — both move `av_refstruct_unref(&…hwaccel_picture_private)`;
-  with no hwaccel that pointer is never allocated.
-- `b8b8d43935` avcodec/h274 — **"Fixes: use after free"**, a real one: `av_freep(ctx)` frees
-  the context and the next line dereferences it through `c->buf`. The pin has the faulty
-  order, so it is live **in source**. The line sits under `#if HAVE_BIGENDIAN`, and
-  `ff_h274_hash_freep` is not in the image at all (0 symbols). Live in source, absent from
-  our binary.
+## What a candidate does need
 
-## Liveness is decided by CONTENT, and it disqualified the best-looking candidate
+Three questions, in this order, because each is cheaper than the next:
 
-`n9.0.1` is a release-branch tag that cherry-picks, so ancestry proves nothing.
+1. **Is it live at the pin, by CONTENT?** `n9.0.1` is a release-branch tag that cherry-picks, so
+   ancestry proves nothing. `79e10e5196` (*avcodec/dovi_rpudec: bound num_x/y_partitions*,
+   "Fixes: out of array access", named finder) was the most promising subject in the whole
+   population and the pin **already carries** both `VALIDATE` lines — not live. Checking content
+   first avoids reducing a defect that is already fixed.
+2. **Can the mechanism be expressed in a reduction that runs on our target?** This is where some
+   candidates really do fall out, for reasons that are about the target and not about effort:
+   - **big-endian only.** `b8b8d43935` (*avcodec/h274*, "Fixes: use after free") is real and live
+     in the pin's source — `av_freep(ctx)` frees the context and the next line dereferences it
+     through `c->buf` — but the line sits under `#if HAVE_BIGENDIAN`, and we are little-endian.
+     No reduction can make it happen here.
+   - **needs real threads.** `ead4378652` is entirely `ff_thread_await_progress` calls, and the
+     domain has `HAVE_PTHREADS 0`.
+   - **hwaccel private data is NOT such a reason.** `0661ef6bb3` and `d344929552` move an unref
+     of `hwaccel_picture_private`; a reduction allocates that pointer itself, so the ordering
+     defect is expressible without any hardware acceleration. Those two stay candidates.
+3. **Is a trigger constructible?** Some are fuzzer states that resist hand-derivation.
+   `e723ebf0e2` (*avutil/avsscanf*, "Fixes: stack-buffer-underflow") **is live** — the pin has the
+   unmasked index at `avsscanf.c:442`, where `uint32_t x[128]` with `MASK 127` is written as
+   `x[(z=(z+1 & MASK))-1]`, so `z == 127` indexes `x[-1]`. Reaching it needs `a` at 126 or 127
+   and `z` at 127, since `LD_B1B_DIG` is 2. An instrumented build of the pin's own
+   `avsscanf.c` — reporting at the site rather than trusting a sanitizer to see a four-byte
+   stack write — records **0 hits** over 8 input shapes × lengths 1…2,600, and 0 even for `1.5`.
+   The upstream report is a fuzzer finding and its input is not public. Recorded as a **triaged
+   live defect without a trigger**, which is the state most of the mruby ledger is in. Note what
+   it would test: the object is a **stack** array, so no allocator arm bounds it — that authority
+   is the compiler's.
 
-- `79e10e5196` avcodec/dovi_rpudec, *bound num_x/y_partitions*, **"Fixes: out of array
-  access"** with a named finder — the most promising subject in the whole population. The
-  pin **already carries** both `VALIDATE` lines (dovi_rpudec.c:585-586). **Not live.**
+## Decoder widening: measured, cheap, and worth doing for the OTHER reason
 
-## What survives
-
-| commit | class | state |
-|---|---|---|
-| **`e723ebf0e2`** avutil/avsscanf | **spatial** | **LIVE.** `Fixes: stack-buffer-underflow` |
-| `9fc8c785e2` avutil/encryption_info | spatial-ish | LIVE, but needs the caller to pass `num_key_ids > 0` with `key_id_size == 0` |
-| `2c2f6e96e3` avutil/hdr_dynamic_metadata | — | live, but uninitialised output bytes: outside this study's spatial/temporal scope |
-| `0a6f759027` avformat/utils | — | the author's own message says "no current caller could ever have been affected" |
-| `9a688ce884` avformat/seek | — | the message calls it "hardening against API misuse; a caller passing such an index is the bug" |
-
-### `e723ebf0e2`, the one real find, and why it has no trigger yet
-
-`decfloat` keeps `uint32_t x[KMAX]` with `KMAX 128`, `MASK 127`, and indexes it as
-
-    if ((a+i & MASK)==z) x[(z=(z+1 & MASK))-1] = 0;
-
-When `z` is 127, `z+1 & MASK` is 0 and the index is **-1**: a four-byte write one element
-below a stack array. The fix masks that index. The pin has the unmasked form
-(`avsscanf.c:442`), and `avsscanf.c` is in the image, so **the defect is live in the version
-we compile**.
-
-**No trigger yet, and the reason is recorded rather than glossed.** `LD_B1B_DIG` is 2, so the
-loop runs twice and the site is reached only when `z` equals `a` or `a+1`; the out-of-bounds
-index additionally needs `z == 127`, hence `a` at 126 or 127. Reaching that means ~127 leading
-zero groups dropped by the normalisation path plus carry propagation advancing `z`. An
-instrumented build of the pin's `avsscanf.c` — reporting at the site itself rather than relying
-on a sanitizer seeing the write — records **0 hits** across 8 input shapes × lengths 1…2,600,
-and 0 hits even for `1.5` and `0.1`. The upstream report is a fuzzer finding
-(`Fixes: YrUfC4ZuDBNi`, `ANT-2026-1B7JHPCG`) and its input is not public. Recorded as a
-**triaged live defect without a trigger**, the same state most of the mruby ledger is in.
-
-It is also worth noting what it would test: the object is a **stack** array, so neither the
-system-allocator arms nor the nested-allocator arm bounds it. It belongs to whatever narrows
-stack allocations, which is the compiler.
-
-## Decoder widening: cheap, and it buys almost nothing
-
-Both probes build with **zero** refused translation units, which was the entire variance in an
-earlier 3-6 day estimate:
+Both probes cross-build with **zero** refused translation units, which was the entire variance
+in an earlier estimate of mine that said 3-6 days:
 
 | | baseline | +h264/hevc | +vp9/av1/vvc |
 |---|---:|---:|---:|
 | cross-build | — | rc=0 | rc=0 |
 | `code_len` | ~2 MB | 5.9 MB | 7.9 MB (ceiling 256 MB) |
 | translation units | 219 | 254 | 295 |
-| reachable spatial candidates | 5 | 8 | 10 |
-| reachable temporal candidates | 3 | 7 | 10 |
 
-The decoders are verified present in the image by symbol (`ff_h264_decoder`,
-`ff_hevc_decoder`, `ff_vp9_decoder`, `ff_av1_decoder`, `ff_vvc_decoder`), not merely by
-`CONFIG_*`. But every one of the seven candidates widening adds is hwaccel private data,
-frame-threading state, or integer-overflow hardening — the same three classes the
-configuration already rules out. **Widening is a half-day and yields no case**, so it should
-be done for a reason other than this corpus.
+The decoders are verified present by symbol (`ff_h264_decoder`, `ff_hevc_decoder`,
+`ff_vp9_decoder`, `ff_av1_decoder`, `ff_vvc_decoder`), not merely by `CONFIG_*`, and the safety
+scan reports `0 hit(s) in 716502 instructions`. Image size is two orders of magnitude under the
+ceiling and the build is one run, not a project.
+
+So widening is cheap. It buys no *reduction* that we could not already write — but it is the
+only way to reach the stronger tier where the **real upstream consumer** executes the defect,
+which is worth more per case than a reduction is. That is the reason to do it.
+
+## Where to start
+
+The 101 spatial-labelled commits, newest first, checking content-liveness at the pin before
+anything else. The four temporal ones are already triaged above: one big-endian-only, one
+thread-only, two (`0661ef6bb3`, `d344929552`) still open and reducible.
