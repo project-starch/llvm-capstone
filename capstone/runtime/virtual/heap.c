@@ -1,6 +1,7 @@
 /* Grow through Linux mappings; keep object lifetimes in the existing Sublet
  * slot discipline. Power-of-two blocks keep stored bounds representable.
- * Single-thread profile: metadata is static; no allocator recursion. */
+ * One-hart profile: metadata is static and virtual contexts are serialized by
+ * the adapter; no allocator recursion. */
 #include <errno.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -40,8 +41,9 @@ static int grow(unsigned long size)
     if (a == ARENAS) return -1;
     need = bytes / size;
     /* Two root identities, need-1 splits and the first object's MREV.
-     * The profile is single-threaded, so this count cannot race another
-     * allocator in this namespace. Retirement itself allocates no nodes. */
+     * The one-hart adapter serializes virtual contexts, so this count cannot
+     * race another allocator in this namespace. Retirement itself allocates
+     * no nodes. */
     if (free_ids() < need + 2) return -1;
     for (unsigned i = 0; i < BLOCKS && count < need; ++i)
         if (!blocks[i].base) ids[count++] = i;

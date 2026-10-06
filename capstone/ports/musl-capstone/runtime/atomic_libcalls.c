@@ -7,11 +7,10 @@
  * capability-valued atomics to these generic ones instead, which pass every
  * value through memory, where a 16-byte capability store keeps it.
  *
- * Why no lock: a domain runs on one hart and has no clone, and nothing else
- * writes its memory while it runs -- the host runs only while the domain is
- * suspended in a hostcall. Each call here is therefore atomic with respect
- * to every observer that exists. This file is WRONG for any build that can
- * run two threads; such a build needs a lock or a capability CAS instruction.
+ * Why no lock: a domain runs on one hart. The virtual adapter may have
+ * several Linux worker tasks, but it admits only one virtual register context
+ * at a time, so these calls remain atomic with respect to every guest
+ * observer. A future SMP profile needs a lock or a capability CAS instruction.
  *
  * The names are the compiler's builtins, so the functions are declared under
  * other names and renamed at the symbol level, as compiler-rt's atomic.c does.

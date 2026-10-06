@@ -9,7 +9,7 @@ mkdir -p "$out/module"
 cp "$here/module/Makefile" "$here/module/capstone_vm.c" "$here/wire.h" "$out/module/"
 make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" \
     M="$(cd "$out/module" && pwd)" -j16 modules
-"${CROSS_COMPILE}gcc" -O2 -static -Wall -Wextra -Werror \
+"${CROSS_COMPILE}gcc" -O2 -static -pthread -Wall -Wextra -Werror \
     -I"$here/../include" "$here/exec.c" \
     "$here/../linux/"{application-image,image-hash,delegate-service,spawner,signals}.c \
     "$here/../linux/domain-fault.c" "$here/../linux/stub.S" "$here/../common/"{launch,delegate,spawn,msghdr}.c \

@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <setjmp.h>
+#include <capstone/virtual.h>
 
 extern int malloc_trim(size_t);
 static void *volatile stale;
@@ -15,9 +16,33 @@ static jmp_buf jump;
 static __thread unsigned thread_value = 41;
 static void fail(const char *what) { fprintf(stderr, "VM_CONTRACT_FAIL:%s\n", what); exit(1); }
 static void require(int ok, const char *what) { if (!ok) fail(what); }
+static volatile unsigned virtual_thread_value;
+static void *virtual_thread_entry(void *arg)
+{
+    volatile unsigned *value = arg;
+    *value = 42;
+    write(1, "VIRTUAL_THREAD_CHILD\n", 21);
+    capstone_virtual_thread_exit(NULL);
+}
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
+    if (!strcmp(mode, "threads")) {
+        size_t bytes = 64 * 1024;
+        void *stack = mmap(NULL, bytes, PROT_READ | PROT_WRITE,
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        require(stack != MAP_FAILED, "thread stack");
+        long tid = capstone_virtual_thread_create(virtual_thread_entry,
+                                                   (void *)&virtual_thread_value,
+                                                   (char *)stack + bytes, NULL);
+        require(tid > 0, "thread create");
+        for (unsigned i = 0; i < 100000000 && virtual_thread_value != 42; ++i)
+            __asm__ volatile("" ::: "memory");
+        require(virtual_thread_value == 42, "thread ran");
+        require(!munmap(stack, bytes), "thread stack retire");
+        puts("VIRTUAL_THREADS_OK shared_mm lifetime_root quantum");
+        return 0;
+    }
     if (!strcmp(mode, "spin")) {
         write(1, "VIRTUAL_SPIN_READY\n", 19);
         for (;;) __asm__ volatile("" ::: "memory");

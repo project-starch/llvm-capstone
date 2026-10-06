@@ -56,6 +56,16 @@ __capstone_vm_unmap:
     li a7, 2
     ecall
     ret
+.global __capstone_vm_thread_create_frame
+__capstone_vm_thread_create_frame:
+    li a7, 3
+    ecall
+    ret
+.global __capstone_vm_thread_exit
+__capstone_vm_thread_exit:
+    li a7, 4
+    ecall
+    ebreak
 .section .gct
 .balign 16
 .global __capstone_gct_start

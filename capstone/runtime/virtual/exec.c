@@ -15,6 +15,8 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <pthread.h>
+#include <sched.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -27,6 +29,39 @@ static int device = -1, image_fd = -1;
 static const char *image_path;
 static struct capstone_spawner spawner = {.socket = -1};
 static struct capstone_delegate_host host;
+#define CV_MAX_THREADS 32
+static uint64_t thread_ids[CV_MAX_THREADS] = {0};
+static unsigned thread_count = 1;
+static pthread_mutex_t service_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t thread_state_lock = PTHREAD_MUTEX_INITIALIZER;
+static unsigned long long launch_ns, start_ns;
+static int trace;
+static void *meta;
+static void *virtual_thread_worker(void *opaque);
+
+static int thread_add(uint64_t id)
+{
+    int result = 0;
+    if (!id) return -EINVAL;
+    pthread_mutex_lock(&thread_state_lock);
+    if (thread_count >= CV_MAX_THREADS) result = -EAGAIN;
+    else thread_ids[thread_count++] = id;
+    pthread_mutex_unlock(&thread_state_lock);
+    return result;
+}
+static void thread_remove(uint64_t id)
+{
+    pthread_mutex_lock(&thread_state_lock);
+    for (unsigned i = 0; i < thread_count; ++i) {
+        if (thread_ids[i] != id) continue;
+        memmove(&thread_ids[i], &thread_ids[i + 1],
+                (thread_count - i - 1) * sizeof(thread_ids[0]));
+        --thread_count;
+        pthread_mutex_unlock(&thread_state_lock);
+        return;
+    }
+    pthread_mutex_unlock(&thread_state_lock);
+}
 static unsigned long long now_ns(void)
 {
     struct timespec t;
@@ -70,12 +105,12 @@ static void *reserve(size_t bytes)
     return private_pages((void *)base, bytes);
 }
 static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
-                 uintptr_t cursor, int linear)
+                 uintptr_t cursor, int linear, uint64_t thread)
 {
     unsigned i;
     for (i = 0; i < CV_MAX_ARENAS && maps[i].address; ++i) {}
     if (i == CV_MAX_ARENAS) { errno = ENOSPC; return -1; }
-    struct cv_map r = {(uintptr_t)base, bytes, perms, reg, cursor, linear, 0};
+    struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0};
     if (ioctl(device, CV_ADD, &r)) return -1;
     maps[i] = (struct mapping){base, bytes, r.id, linear};
     return 0;
@@ -248,6 +283,129 @@ static int reserve_stdio(unsigned *mask) {
   return 0;
 }
 
+static int virtual_service(uint64_t tid, struct cv_step *step)
+{
+    step->reply = 1;
+    step->result = 0;
+    if (step->args[7] == CV_SERVICE_THREAD_CREATE) {
+        struct cv_thread_create request = {.frame = step->args[0]};
+        if (ioctl(device, CV_THREAD_CREATE, &request)) {
+            step->result = -errno;
+        } else if (thread_add(request.thread)) {
+            struct cv_thread_control rollback = {.thread = request.thread};
+            ioctl(device, CV_THREAD_EXIT, &rollback);
+            step->result = -EAGAIN;
+        } else {
+            uint64_t *child = malloc(sizeof(*child));
+            pthread_t worker;
+            if (!child || pthread_create(&worker, NULL, virtual_thread_worker,
+                                         (child ? (*child = request.thread), child : NULL))) {
+                free(child);
+                thread_remove(request.thread);
+                struct cv_thread_control rollback = {.thread = request.thread};
+                ioctl(device, CV_THREAD_EXIT, &rollback);
+                step->result = -EAGAIN;
+            } else {
+                pthread_detach(worker);
+                step->result = request.thread;
+            }
+        }
+    } else if (step->args[7] == CV_SERVICE_THREAD_EXIT) {
+        struct cv_thread_control request = {.thread = tid};
+        if (tid == 0 || ioctl(device, CV_THREAD_EXIT, &request))
+            return -1;
+        if (request.frame) {
+            long cleanup_rc = unmap_arena(request.frame, 4096);
+            if (cleanup_rc && cleanup_rc != -EINVAL) return -1;
+        }
+        thread_remove(tid);
+        step->reply = 0;
+        return 1;
+    } else if (step->args[7] == CV_SERVICE_DELEGATE) {
+        struct capstone_delegate_entry *request = meta;
+        if (request->version != CAPSTONE_DELEGATE_VERSION) return -1;
+        capstone_delegate_serve(&host, request);
+        if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE tid=%llu nr=%llu result=%lld\n",
+                           (unsigned long long)tid, (unsigned long long)request->nr,
+                           (long long)request->result);
+        if (host.exec_requested) request->result = exec_in_place();
+        if (host.exiting) {
+            struct cv_stats stats;
+            if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
+                !ioctl(device, CV_STATS, &stats))
+                fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%lu launch_ns=%llu elapsed_ns=%llu\n",
+                    stats.arenas, stats.pinned_pages, stats.peak_pages, stats.nodes, stats.steps,
+                    stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
+                    (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
+                    CV_NODE_BYTES, launch_ns, now_ns() - start_ns);
+            if (tid == 0) {
+                int result = host.exit_status;
+                cleanup();
+                return 2 | (result << 8);
+            }
+            _exit(host.exit_status);
+        }
+    } else if (step->args[7] == CV_SERVICE_MAP) {
+        size_t bytes = rounded(step->args[0]);
+        void *p = bytes ? reserve(bytes) : NULL;
+        if (p && grant(p, bytes, 10, 6, (uintptr_t)p, 1, tid)) {
+            munmap(p, bytes); p = NULL;
+        }
+        /* ADD moved a tagged reply into a0's frame slot. Otherwise zero is
+         * the explicit allocation failure; a scalar address is never minted. */
+        step->result = 0;
+    } else if (step->args[7] == CV_SERVICE_UNMAP) {
+        step->result = unmap_arena(step->args[0], step->args[1]);
+    } else {
+        step->result = -ENOSYS;
+    }
+    return 0;
+}
+
+static int virtual_service_loop(uint64_t tid)
+{
+    struct cv_step step = {.thread = tid};
+    for (;;) {
+        while (ioctl(device, CV_STEP, &step))
+            if (errno != EINTR) return die("step");
+        step.reply = 0;
+        if (step.kind == 1) {
+            /* The supervisor quantum is the preemption point. Yielding here
+             * lets Linux schedule another launcher thread on this one hart. */
+            sched_yield();
+            continue;
+        }
+        if (step.kind == 4) {
+            struct cv_thread_control control = {.thread = step.thread};
+            if (!ioctl(device, CV_RESOLVE, &control)) continue;
+        }
+        if (step.kind != 3) {
+            pthread_mutex_lock(&service_lock);
+            host.preparing_nr = ((struct capstone_delegate_entry *)meta)->nr;
+            fault(&step);
+            pthread_mutex_unlock(&service_lock);
+            return 125;
+        }
+        pthread_mutex_lock(&service_lock);
+        int result = virtual_service(tid, &step);
+        pthread_mutex_unlock(&service_lock);
+        if (result == 1) return 0;
+        if (result < 0) return die("service");
+        if (result & 2) return result >> 8;
+    }
+}
+
+static void *virtual_thread_worker(void *opaque)
+{
+    uint64_t tid = *(uint64_t *)opaque;
+    free(opaque);
+    int result = virtual_service_loop(tid);
+    /* A virtual thread is hosted by a Linux worker, so normal virtual-thread
+     * exit must return from this worker rather than terminate the process. */
+    if (result) _exit(result);
+    return NULL;
+}
+
 int main(int argc, char **argv)
 {
     int binfmt = (getauxval(AT_FLAGS) & AT_FLAGS_PRESERVE_ARGV0) != 0;
@@ -283,8 +441,8 @@ int main(int argc, char **argv)
     image_path = app_args ? argv[2] : argv[1];
     unsigned stdio_mask;
     if (reserve_stdio(&stdio_mask)) return 125;
-    unsigned long long started = now_ns(), launch_ns;
-    int trace = getenv("CAPSTONE_VM_TRACE") != NULL;
+    start_ns = now_ns();
+    trace = getenv("CAPSTONE_VM_TRACE") != NULL;
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];
     if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);
@@ -302,8 +460,9 @@ int main(int argc, char **argv)
     host.private_fds[host.private_count++] = fd;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) { munmap(image, image_bytes); return die("open"); }
-    if (grant(image, image_bytes, 3, 7, entry, 0)) { munmap(image, image_bytes); return die("image grant"); }
-    void *stack = reserve(stack_bytes), *meta = reserve(CAPSTONE_DELEGATE_META_BYTES);
+    if (grant(image, image_bytes, 3, 7, entry, 0, 0)) { munmap(image, image_bytes); return die("image grant"); }
+    void *stack = reserve(stack_bytes);
+    meta = reserve(CAPSTONE_DELEGATE_META_BYTES);
     size_t exchange_bytes = rounded(desc.exchange_bytes);
     void *exchange = exchange_bytes ? reserve(exchange_bytes) : NULL;
     void *startup = reserve(CAPSTONE_LAUNCH_BYTES);
@@ -319,14 +478,14 @@ int main(int argc, char **argv)
         argc - (app_args ? 4 : binfmt ? 2 : 1), argv + (app_args ? 4 : binfmt ? 2 : 1), environ, cwd, stdio_mask, &task) : ENOMEM;
     free(cwd);
     if (error) { errno = error; return die("startup"); }
-    if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0) ||
-        grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0) ||
-        grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0) ||
-        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0)) return die("grant");
+    if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0, 0) ||
+        grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0, 0) ||
+        grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0, 0) ||
+        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0)) return die("grant");
     if (desc.v1.heap_bytes) {
         size_t bytes = rounded(desc.v1.heap_bytes);
         void *region = bytes ? reserve(bytes) : NULL;
-        if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1))
+        if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1, 0))
             return die("nested allocator grant");
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
@@ -334,48 +493,6 @@ int main(int argc, char **argv)
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
     if ((error = capstone_delegate_seccomp())) { errno = error; return die("seccomp"); }
     for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);
-    launch_ns = now_ns() - started;
-    struct cv_step step = {0};
-    for (;;) {
-        while (ioctl(device, CV_STEP, &step))
-            if (errno != EINTR) return die("step");
-        step.reply = 0;
-        if (step.kind == 1) continue;
-        if (step.kind == 4) {
-            if (!ioctl(device, CV_RESOLVE)) continue;
-        }
-        if (step.kind != 3) {
-            host.preparing_nr = ((struct capstone_delegate_entry *)meta)->nr;
-            fault(&step);
-            return 125;
-        }
-        step.reply = 1; step.result = 0;
-        if (step.args[7] == CV_SERVICE_DELEGATE) {
-            struct capstone_delegate_entry *request = meta;
-            if (request->version != CAPSTONE_DELEGATE_VERSION) { errno = EPROTO; return die("service"); }
-            capstone_delegate_serve(&host, request);
-            if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE nr=%llu result=%lld\n",
-                               (unsigned long long)request->nr, (long long)request->result);
-            if (host.exec_requested) request->result = exec_in_place();
-            if (host.exiting) {
-                struct cv_stats stats;
-                if ((getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) && !ioctl(device, CV_STATS, &stats))
-                    fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%lu launch_ns=%llu elapsed_ns=%llu\n",
-                        stats.arenas, stats.pinned_pages, stats.peak_pages, stats.nodes, stats.steps,
-                        stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
-                        (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
-                        CV_NODE_BYTES, launch_ns, now_ns() - started);
-                int result = host.exit_status; cleanup(); return result;
-            }
-        } else if (step.args[7] == CV_SERVICE_MAP) {
-            size_t bytes = rounded(step.args[0]);
-            void *p = bytes ? reserve(bytes) : NULL;
-            if (p && grant(p, bytes, 10, 6, (uintptr_t)p, 1)) { munmap(p, bytes); p = NULL; }
-            /* ADD moved a tagged reply into a0's frame slot. Otherwise zero
-             * is the explicit allocation failure; a scalar address is never minted by libc. */
-            step.result = 0;
-        } else if (step.args[7] == CV_SERVICE_UNMAP) {
-            step.result = unmap_arena(step.args[0], step.args[1]);
-        } else step.result = -ENOSYS;
-    }
+    launch_ns = now_ns() - start_ns;
+    return virtual_service_loop(0);
 }

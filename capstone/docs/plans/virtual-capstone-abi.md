@@ -155,6 +155,26 @@ tag table in the candidate. S executes no other capability instruction
 except `CCSRRW` and the four operations above. Signal frames are excluded,
 so no other kernel path reads the frame.
 
+### Same-`mm` virtual threads (adapter extension)
+
+The Linux adapter exposes one process lifetime root per owning Linux `mm` to
+multiple virtual execution contexts; a second adapter context for that `mm` is
+rejected. `CV_THREAD_CREATE` accepts a page-aligned writable user
+frame already registered in the namespace, pins it, fills `satp` and
+`srevroot`, forces protected-U options, and allocates a monotonic thread ID.
+The trusted module refuses retirement of a live thread frame. `CV_STEP` carries
+the ID; the QEMU supervisor keeps the corresponding PCC, GPRs, FP/vector state
+and event state in a separate slot. `CV_THREAD_EXIT` discards the slot, returns
+the frame address, and the trusted launcher retires that frame mapping before
+unpinning it.
+
+The launcher creates one native Linux worker per virtual thread, so workers
+share the owning `mm` and Linux supplies scheduling. The META/exchange syscall
+transport is process-wide and serialized by a runtime wire lock; the frame and
+thread context remain private. Thread starts transfer only explicit entry,
+argument, stack and optional TLS capabilities. `fork`, shared tagged pages,
+migration and SMP are outside this extension.
+
 ## Delegation and machine entry
 
 | Item | Contract |

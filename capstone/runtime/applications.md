@@ -213,9 +213,12 @@ or hardware collection cost. Increasing `CAPSTONE_REV_NODES` only changes the
 capacity; it is no longer necessary for the six previously failing mruby repeats.
 
 The musl port's existing syscall coverage still applies: launching a Linux
-process does not add target fork, exec, threads, dynamic loading or full POSIX
+process does not add target fork, exec, dynamic loading or full POSIX
 fd semantics inside a domain. Standard-stream read/write/EOF/close/stat/query
 fcntl use Linux objects; other file operations retain the existing host service.
+The virtual adapter supplies OS-backed same-`mm` threads through
+`capstone_virtual_thread_create` and `capstone_virtual_thread_exit`; POSIX
+`pthread_create` and process `clone` remain delegated-runtime work.
 The launcher uses its Linux filesystem authority and is not a filesystem sandbox.
 No claim of a complete hostile-code or QEMU security audit is made.
 
@@ -252,7 +255,8 @@ directory notification (`F_NOTIFY`, `F_SETSIG`, `F_GETSIG`); sockets and
 epoll (below); `exit_group`. What does
 not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS),
 processes (`clone` and `fork` are ENOSYS; image exec uses the process service
-below), and threads.
+below). The virtual adapter's explicit cooperative thread API is separate from
+this syscall table.
 
 Sockets are descriptors like files: `socket`, `socketpair`, `bind`, `listen`,
 `accept`, `accept4`, `connect`, `getsockname`, `getpeername`, `sendto`,

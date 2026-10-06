@@ -154,6 +154,44 @@ static unsigned dl_rights(unsigned kind) {
 
 static uint64_t dl_status;  /* of the last round: DONE or RETRY */
 
+/* The virtual adapter keeps one META/exchange pair for the process. Linux
+ * threads share it, so serialize a complete wire round, including signal
+ * delivery. Signal handlers can make a nested delegated call, so this is a
+ * small recursive lock. The stack capability is the worker identity: virtual
+ * threads have distinct stacks, while nested calls on one stack retain the
+ * same bounded base. The QEMU supervisor still keeps register state per
+ * thread; this lock protects only the process-wide syscall transport. */
+static volatile uintptr_t dl_wire_owner;
+static unsigned dl_wire_depth;
+static uintptr_t dl_wire_token(void) {
+  void *tp;
+  volatile char marker;
+  __asm__ volatile("movc %0, tp" : "=r"(tp));
+  /* The thread pointer survives an alternate signal stack. Child contexts
+   * that deliberately omit TLS fall back to their ordinary stack identity. */
+  if (tp)
+    return __builtin_capstone_cap_get_base(tp);
+  return __builtin_capstone_cap_get_base((void *)&marker);
+}
+static void dl_wire_acquire(void) {
+  uintptr_t token = dl_wire_token();
+  if (__atomic_load_n(&dl_wire_owner, __ATOMIC_ACQUIRE) == token) {
+    ++dl_wire_depth;
+    return;
+  }
+  uintptr_t vacant = 0;
+  while (!__atomic_compare_exchange_n(&dl_wire_owner, &vacant, token, 0,
+                                      __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
+    vacant = 0;
+    __asm__ volatile("" ::: "memory");
+  }
+  dl_wire_depth = 1;
+}
+static void dl_wire_release(void) {
+  if (--dl_wire_depth == 0)
+    __atomic_store_n(&dl_wire_owner, 0, __ATOMIC_RELEASE);
+}
+
 void __capstone_delegate_regions(void *entry, void *exchange) {
   dl_entry = entry;
   dl_exchange = exchange;
@@ -233,10 +271,12 @@ long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c) {
   long r;
   if (!__capstone_delegate_ready())
     return -EIO;
+  dl_wire_acquire();
   do {
     dl_reset();
     r = dl_round(nr, args);
   } while (dl_settle());
+  dl_wire_release();
   return r;
 }
 
@@ -362,8 +402,10 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   long result;
   if (!s)
     return -ENOSYS;
+  dl_wire_acquire();
   do result = dl_call_once(s, nr, raw);
   while (dl_settle());
+  dl_wire_release();
   return result;
 }
 
@@ -378,11 +420,13 @@ static long dl_sigtimedwait(syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   if (out && !dl_buffer_ok(out, sizeof *out, 2))
     return -EFAULT;
   raw[1] = out ? (syscall_arg_t)wire : 0;
+  dl_wire_acquire();
   do {
     result = dl_call_once(shape, CAPSTONE_SYS_rt_sigtimedwait, raw);
     if (result > 0 && dl_status != CAPSTONE_ROUND_RETRY && out)
       __capstone_siginfo_translate(wire, (int)result, out);
   } while (dl_settle());
+  dl_wire_release();
   return result;
 }
 
@@ -472,8 +516,13 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
 static long dl_vector(long fd, const struct iovec *iov, long count, int writing,
                       int positioned, long long offset) {
   long result;
-  do result = dl_vector_once(fd, iov, count, writing, positioned, offset);
+  dl_wire_acquire();
+  do {
+    result = dl_vector_once(fd, iov, count, writing, positioned, offset);
+    if (result < 0) { dl_wire_release(); return result; }
+  }
   while (dl_settle());
+  dl_wire_release();
   return result;
 }
 
@@ -503,18 +552,20 @@ static long dl_ioctl(long fd, unsigned long request, void *argp) {
       return -EFAULT;
     memcpy(buffer, argp, bytes);
     raw[2] = buffer;
+    dl_wire_acquire();
     dl_reset();
     {
       uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, request, 0, 0, 0, 0};
       do {
         dl_reset();
         if (dl_alloc(64, &args[2]))
-          return -ENOMEM;
+          { dl_wire_release(); return -ENOMEM; }
         dl_bytes(dl_exchange + args[2], buffer, sizeof buffer);
         rc = dl_round(CAPSTONE_NR_IOCTL_BUF, args);
         if (rc >= 0 && dl_status != CAPSTONE_ROUND_RETRY)
           dl_bytes(argp, dl_exchange + args[2], bytes);
       } while (dl_settle());
+      dl_wire_release();
       return rc;
     }
   }
@@ -684,8 +735,10 @@ static long dl_msg(uint64_t nr, long fd, struct msghdr *msg, long flags) {
       if (type != SOCK_STREAM) return -EMSGSIZE;
     }
   }
+  dl_wire_acquire();
   do result = dl_msg_once(nr, fd, &current, flags);
   while (dl_settle());
+  dl_wire_release();
   if (nr == CAPSTONE_SYS_recvmsg && result >= 0) {
     msg->msg_namelen = current.msg_namelen;
     msg->msg_controllen = current.msg_controllen;
@@ -743,15 +796,17 @@ static long dl_fcntl(long fd, long cmd, void *arg) {
       return -EFAULT;
     if (!dl_buffer_ok(arg, 32, cmd == F_GETLK ? 6 : 4))
       return -EFAULT;
+    dl_wire_acquire();
     do {
       dl_reset();
       if (dl_alloc(32, &args[2]))
-        return -ENOMEM;
+        { dl_wire_release(); return -ENOMEM; }
       dl_bytes(dl_exchange + args[2], arg, 32);
       rc = dl_round(CAPSTONE_NR_FCNTL_LOCK, args);
       if (rc >= 0 && cmd == F_GETLK && dl_status != CAPSTONE_ROUND_RETRY)
         dl_bytes(arg, dl_exchange + args[2], 32);
     } while (dl_settle());
+    dl_wire_release();
     return rc;
   }
   {
@@ -766,8 +821,10 @@ long __capstone_delegate_hello(unsigned long entry_address, unsigned long code_b
                                unsigned long code_end) {
   uint64_t args[CAPSTONE_DELEGATE_ARGS] = {entry_address, code_base, code_end, 0, 0, 0};
   long r;
+  dl_wire_acquire();
   do r = dl_round(CAPSTONE_NR_HELLO, args);
   while (dl_settle());
+  dl_wire_release();
   return r;
 }
 

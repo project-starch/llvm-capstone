@@ -2,6 +2,24 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-07 — trusted same-`mm` virtual thread adapter
+
+The virtual Linux adapter now supports explicit same-`mm` virtual threads on
+one hart. `capstone_virtual_thread_create` allocates a page-aligned start
+frame, while the trusted module supplies the caller's `satp` and lifetime-table
+root. Each thread receives a monotonic context ID, private PCC/register/TLS
+state and its own supervisor slot; Linux worker tasks provide scheduling while
+the processor serializes execution on the hart. `capstone_virtual_thread_exit`
+retires only the calling context and its frame.
+
+The process keeps one lifetime namespace and shared virtual address space. The
+syscall META/exchange transport is serialized with a recursive stack-identity
+wire lock, so signal delivery can make nested delegated calls safely. This
+extension deliberately does not add `fork`, shared tagged pages, SMP, or the
+full POSIX `pthread_create`/join/synchronization contract. The explicit API is
+validated by the new `threads` application mode; the complete VM application
+gate must be rerun once the branch's compiler and image artifacts are built.
+
 ## 2026-10-06 — virtual C application adapter, R1–R3 slice
 
 The [virtual runtime](../../runtime/virtual/README.md) runs ordinary Capstone

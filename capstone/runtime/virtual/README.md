@@ -6,10 +6,11 @@ tables and supplies its memory and system calls. A loadable module connects
 Linux to the QEMU execution interface. No additional kernel-core or firmware
 patch is required for the recorded platform.
 
-The [application gate](result.json) runs a normal C program, SQLite's shell
-and the mruby interpreter. The existing ports build through the common SDK;
-applications must be rebuilt for its virtual profile. An ELF marker prevents
-the loader from accepting an image built for the physical calling convention.
+The [application gate](result.json) runs a normal C program, the explicit
+same-`mm` thread contract, SQLite's shell and the mruby interpreter. The
+existing ports build through the common SDK; applications must be rebuilt for
+its virtual profile. An ELF marker prevents the loader from accepting an image
+built for the physical calling convention.
 
 ## Execution and memory
 
@@ -29,6 +30,16 @@ A service reply resumes after ECALL; a resolved page fault retries the exact
 faulting instruction. Scalar replies replace a0 with an untagged value. New
 mapping replies transfer a linear capability through a consumed frame slot.
 Quanta return to Linux even if the application never calls the runtime.
+
+Virtual threads use the same Linux `mm`, page tables and lifetime table. Each
+thread has its own QEMU supervisor slot, PCC, registers, stack and optional TLS
+pointer. `capstone_virtual_thread_create` supplies an explicit start frame;
+the trusted module supplies `satp` and `srevroot`, forces protected-U options,
+and one Linux worker task drives each slot. `capstone_virtual_thread_exit`
+discards only the calling slot and returns its frame mapping to the trusted
+launcher. The workers share
+the process transport under a wire lock; fork, shared tagged pages and SMP
+remain out of scope.
 
 The loader registers image, stack, startup and exchange mappings. Startup
 pages are pinned. Growing RW arenas initially have absent PTEs: the module
@@ -108,8 +119,9 @@ monotonic launch/elapsed times. These QEMU times are not processor benchmarks.
 
 The gate requires argv/environment, TLS, longjmp, file operations including
 capability-valued lock arguments, 1.5 MiB of heap growth and release, actual
-Linux demand faults, two independent processes, termination of a non-yielding
-program, and module unload. Stale/free, bounds and retired-then-reused-VA
+Linux demand faults, two independent processes, a child virtual context sharing
+the process `mm`, termination of a non-yielding program, and module unload.
+Stale/free, bounds and retired-then-reused-VA
 accesses must fail. SQLite writes a database and another process reopens it;
 mruby performs arithmetic and file I/O. The `--omit-application` negative
 control must fail, even though the shell and other applications still run.
@@ -133,12 +145,12 @@ roots and restoration of the physical caller. The
 negative-control results. Existing physical applications remain a regression
 gate; this adapter does not replace their monitor or CALL/RETURN path.
 
-This is the first QEMU application profile: one hart, one application thread
-per process, private anonymous mappings, 256 MiB per registered region, 1 GiB
+This is the first QEMU application profile: one hart, private anonymous
+mappings, 256 MiB per registered region, 1 GiB
 aggregate registered VA, 512 mappings, and a bounded recyclable node table.
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
-signals and general thread support need further contracts. Anonymous
+signals and POSIX thread synchronization need further contracts. Anonymous
 `MAP_SHARED` and SysV segments are process-local compatibility for nested
 ports, since there is no fork; every other mapping form fails explicitly.
 

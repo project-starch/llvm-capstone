@@ -28,6 +28,9 @@ export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNO
 ./capstone-vexec contract.dom ok argument > /tmp/ok.out 2>&1
 echo VM_EXIT:normal:$?
 cat /tmp/ok.out
+./capstone-vexec contract.dom threads > /tmp/threads.out 2>&1
+echo VM_EXIT:threads:$?
+cat /tmp/threads.out
 for mode in stale bounds retired; do
   ./capstone-vexec contract.dom "$mode" > /tmp/fault.out 2>&1
   echo VM_EXIT:$mode:$?
@@ -120,11 +123,13 @@ def main():
             except subprocess.TimeoutExpired: guest.kill(); guest.wait()
     lines = [s.strip() for s in out.decode(errors='replace').splitlines()]
     tests = {}
-    for name, code in [('normal', 0), ('stale', 139), ('bounds', 139), ('retired', 139),
+    for name, code in [('normal', 0), ('threads', 0), ('stale', 139), ('bounds', 139), ('retired', 139),
                        ('preempt', 143), ('parallel_one', 0), ('parallel_two', 0),
                        ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0), ('cleanup', 0)]:
         tests[name] = lines.count(f'VM_EXIT:{name}:{code}') == 1
     tests['normal_output'] = sum(s.startswith('VIRTUAL_APPLICATION_OK ') for s in lines) == 3
+    tests['threads_output'] = (lines.count('VIRTUAL_THREAD_CHILD') == 1 and
+                               lines.count('VIRTUAL_THREADS_OK shared_mm lifetime_root quantum') == 1)
     causes = [int(m[1]) for s in lines if (m := re.match(r'capstone-exec: domain fault cause=(\d+) ', s))]
     # Loading a saved revoked pointer clears its tag; the later dereference
     # is therefore cause 24. The direct live-register node check has its own
@@ -140,7 +145,7 @@ def main():
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1
     result = {'status': 'PASS' if all(tests.values()) else 'FAIL', 'tests': tests,
-              'scope': 'one hart; private anonymous arenas; single-thread applications',
+              'scope': 'one hart; private anonymous arenas; same-mm virtual threads',
               'control_omit_application': a.omit_application,
               'sha256': {n: digest(path) for n, path in inputs.items()},
               'source_sha256': {str(p.relative_to(HERE)): digest(p) for p in sorted(HERE.rglob('*'))
