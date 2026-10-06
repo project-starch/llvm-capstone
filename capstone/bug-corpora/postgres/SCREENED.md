@@ -63,6 +63,6 @@ The sweep also supplied the upstream fix for three cases that had been carrying
 
 | case | commit | how it was matched |
 |---|---|---|
-| `backend-175/02` ts_headline | `3ed3dbbf44` (CVE-2026-6473) | upstream fixes an `int16` option length; the case's trigger is `repeat('x', 32768)`, which is `PG_INT16_MAX + 1` exactly |
-| `backend-175/03` ltree lquery | `8c34261109` | upstream fixes a `uint16` `totallen`; the case's trigger is 66 variants of 1000 characters, about 66 KB against a 65535 ceiling |
-| `client-repros/01` pg_dump transforms | `c2b16f5d49` (Security: CVE-2026-19385) | upstream describes the same two facts the case rests on, including "if there are exactly FUNC_MAX_ARGS OIDs, then parseOidArray won't zero-fill any entries, allowing the subsequent loop to run off the end" |
+| `sql-repros/02` ts_headline | `3ed3dbbf44` (CVE-2026-6473) | upstream fixes an `int16` option length; the case's trigger is `repeat('x', 32768)`, which is `PG_INT16_MAX + 1` exactly |
+| `sql-repros/03` ltree lquery | `8c34261109` | upstream fixes a `uint16` `totallen`; the case's trigger is 66 variants of 1000 characters, about 66 KB against a 65535 ceiling |
+| `c-repros/01` pg_dump transforms | `c2b16f5d49` (Security: CVE-2026-19385) | upstream describes the same two facts the case rests on, including "if there are exactly FUNC_MAX_ARGS OIDs, then parseOidArray won't zero-fill any entries, allowing the subsequent loop to run off the end" |

@@ -43,7 +43,7 @@ the pin's server is.
 `conv_buf` is a `palloc` chunk in the per-call memory context. The overrun is
 therefore bounded first by the aset block the chunk sits in, not by a `malloc`
 bound -- which is precisely the asymmetry this corpus is built to measure
-against `client-repros`.
+against `c-repros`.
 
 ## Trigger
 

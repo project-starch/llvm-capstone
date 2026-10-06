@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cross-compile client-repros for CheriBSD riscv64-purecap.
+# Cross-compile c-repros for CheriBSD riscv64-purecap.
 #
 # These cases are plain C over libc, so unlike mmgr-repros they need none of
 # PostgreSQL's memory-context sources and none of ports/postgres' CMake. That

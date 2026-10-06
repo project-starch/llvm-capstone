@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the client-repros cases on the host under ASan. This is not one of the
+# Build the c-repros cases on the host under ASan. This is not one of the
 # three arms: it is the check that a reduction REPRODUCES the defect at all,
 # before anything is claimed about what a mechanism does or does not see.
 # A case that ASan does not fault on is not yet a reproduction.
