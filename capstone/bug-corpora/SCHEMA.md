@@ -87,7 +87,8 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
-`allocator_consumed`, `channel`, `nested`, `nested_why`. Optional means optional:
+`allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`. Optional means
+optional:
 the checker does not invent them, and absence is not a defect.
 
 `nested` is a **boolean**, and `nested_why` its one-sentence reason. The axis is
@@ -102,6 +103,12 @@ figure is **60%**, so publishing the script's number would have been wrong by 16
 points — the unanswered probe was reading as "not nested". A tally that a
 headline depends on should come from a field, not from a substring match over
 sentences that are free to be reworded.
+
+`citation_constraint` records that a case's upstream commit cannot be quoted freely — in practice
+that its **subject line names a person**, so the fix may be cited **by hash and path only**. The
+naming rule in this tree is absolute for committed files, so the constraint belongs in the case
+rather than in a reader's memory. The first instance, memcached `d5d9ff0`, sat undispositioned in a
+triage doc for exactly that reason: what made it awkward was written in prose somewhere else.
 
 `allocator_consumed` is the companion to `allocator_layer`, and a corpus that
 records one without the other has half of axis 2. The layer says which

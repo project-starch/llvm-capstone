@@ -20,8 +20,31 @@ is a field recorded in the case, not a gate on building one.
 | shape | cases |
 |---|---|
 | a terminator written one byte past an allocation sized to the exact input length | 0 |
+| a terminator written past an allocation whose RESERVED HEADROOM is one byte short | 1 |
 
-## The case
+**Both crossings are a terminating NUL, and they are not duplicates.** In case 0 the *size argument*
+is wrong — the buffer is `calloc(1, sb.st_size)` where the content needs `sb.st_size + 1`. In case 1
+the size is right and the *headroom guard* is one short: it reserves five bytes for `"END\r\n"`,
+which is five characters, and forgets that the marker is written with a terminator because the buffer
+is returned as a C string. Different error, different place, and each is a one-term reversal of its
+own fix. Each case's `distinguishing` field says so.
+
+**Case 1's upstream fix is cited by HASH ONLY**, deliberately: its subject line names an outside
+contributor, and a person's name must not enter a committed file in this tree. That constraint is
+also recorded at `../../../docs/ref/memcached-spatial-defect-triage.md:43-45`, and it is why the row
+sat undispositioned while the other two class-A candidates were resolved.
+
+**The pool is small and the reason is structural, not a shortfall.** Searching memcached's whole
+history for spatial wording gives **16** commits before the `1.6.45` pin and **0** after it — the pin
+*is* `origin/master`. Of those 16, **8 are `proxy`/`mcplib`**, whose buffers are not the slab, cache
+or plain-malloc boundary any corpus here covers, so they are a different corpus's material. Of the
+remaining 8, one is this case, one is a DoS/memory-growth fix with no bound crossed (`7eeac6e`), two
+are integer-overflow-of-a-length with the spatial consequence downstream (`229cf41`, and `e3b7d33`
+which is temporal), and one is `e8364b5`, whose buffer is `do_cache_alloc`'d and therefore belongs to
+`../allocator-repros`, not here. **memcached will not reach FFmpeg's 15, and that is a fact about a
+25-kLOC server.**
+
+## The cases
 
 | case | upstream | the crossing |
 |---|---|---|
