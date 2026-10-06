@@ -57,13 +57,17 @@
 
 enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, N_KINDS, K_REPEAT = N_KINDS,
        K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG, K_ALIAS_SLOT,  /* alias records: skipped here */
-       K_END };
+       K_END, K_INSN };
 static const char *kind_name[N_KINDS] = {"read", "write", "alloc", "free", "reset"};
 
-#define N_SITES 13
+#define N_SITES 25
 static const char *site_name[N_SITES] = {"ldst", "ldc", "mrev", "split", "revoke",
                                          "delin", "create", "supervisor", "gc",
-                                         "mem_capstore", "mem_untag", "mem_clear", "drop"};
+                                         "mem_capstore", "mem_untag", "mem_clear", "drop",
+                                         /* reference-count updates (format 03, cap_refcount.h) */
+                                         "rc_reg_inc", "rc_reg_dec", "rc_mem_inc", "rc_mem_dec", "rc_same", "rc_free",
+                                         "rc_ld_inc", "rc_ld_dec", "rc_sweep_dec", "rc_sweep_free",
+                                         "rc_move", "rc_call"};
 
 #define NODE_NONE 0xffffffffu
 #define REC_SIZE 8
@@ -73,24 +77,31 @@ struct cache {
     unsigned entries, ways, sets;
     uint32_t *tag;                /* sets*ways line ids, NODE_NONE = empty */
     uint64_t *stamp;              /* last use, for LRU */
+    uint8_t *dirty;               /* written since it was brought in */
     uint64_t hit[N_SITES], miss[N_SITES];
     uint64_t read_hit, read_miss;
+    uint64_t writebacks;          /* dirty lines evicted (or flushed at a reset) */
 };
 
 static uint64_t now;
 
 static void cache_flush(struct cache *c) {
-    for (unsigned i = 0; i < c->entries; ++i) c->tag[i] = NODE_NONE;
+    for (unsigned i = 0; i < c->entries; ++i) {
+        if (c->tag[i] != NODE_NONE && c->dirty[i]) ++c->writebacks;
+        c->tag[i] = NODE_NONE; c->dirty[i] = 0;
+    }
 }
 
 /* Returns 1 on a hit. */
-static int cache_access(struct cache *c, uint32_t line) {
+static int cache_access(struct cache *c, uint32_t line, int write) {
     unsigned set = line % c->sets;
     uint32_t *t = &c->tag[set * c->ways];
     uint64_t *st = &c->stamp[set * c->ways];
+    uint8_t *d = &c->dirty[set * c->ways];
     for (unsigned w = 0; w < c->ways; ++w) {
         if (t[w] == line) {
             st[w] = now;
+            d[w] |= write;
             return 1;
         }
     }
@@ -100,8 +111,10 @@ static int cache_access(struct cache *c, uint32_t line) {
         if (t[w] == NODE_NONE) { victim = w; break; }
         if (st[w] < st[victim]) victim = w;
     }
+    if (t[victim] != NODE_NONE && d[victim]) ++c->writebacks;
     t[victim] = line;
     st[victim] = now;
+    d[victim] = write;
     return 0;
 }
 
@@ -123,10 +136,19 @@ static struct {
     uint32_t marker[N_FULL];
     uint32_t head, tail, count;
     uint64_t hist[N_FULL + 1][N_SITES], read_hist[N_FULL + 1];
+    /* bit k: the line is dirty in the size-k cache (written since it was last
+     * brought in there). A write-back is counted when the line leaves that cache,
+     * which the model learns at its next access (or at the end). */
+    uint16_t dirty[FULL_MAX];
+    uint64_t writebacks[N_FULL], dirty_at_end[N_FULL];
 } full;
 
 static void full_flush(void) {
-    for (uint32_t i = 0; i < full.count; ++i) full.slot_of[full.tag[i]] = 0;
+    for (uint32_t i = 0; i < full.count; ++i) {
+        for (int k = 0; k < N_FULL; ++k) if (full.dirty[i] & (1u << k)) ++full.writebacks[k];
+        full.dirty[i] = 0;
+        full.slot_of[full.tag[i]] = 0;
+    }
     full.count = 0;
     full.head = full.tail = NODE_NONE;
     for (int k = 0; k < N_FULL; ++k) full.marker[k] = NODE_NONE;
@@ -176,6 +198,8 @@ static unsigned full_access(uint32_t line) {
         full.marker[N_FULL - 1] = full.prev[s];
         full_unlink(s);
         full.slot_of[full.tag[s]] = 0;
+        for (int k = 0; k < N_FULL; ++k) if (full.dirty[s] & (1u << k)) ++full.writebacks[k];
+        full.dirty[s] = 0;
         full_shift_markers(N_FULL - 1);
     } else {
         s = full.count++;
@@ -233,7 +257,7 @@ int main(int argc, char **argv) {
     setvbuf(in, inbuf, _IOFBF, sizeof(inbuf));
     char magic[8];
     if (fread(magic, 1, 8, in) != 8 ||
-        (memcmp(magic, "CRNTRC01", 8) && memcmp(magic, "CRNTRC02", 8))) {
+        (memcmp(magic, "CRNTRC01", 8) && memcmp(magic, "CRNTRC02", 8) && memcmp(magic, "CRNTRC03", 8) && memcmp(magic, "CRNTRC04", 8) && memcmp(magic, "CRNTRC05", 8))) {
         fprintf(stderr, "cachesim: %s: no trace header (empty or not a node trace)\n", path);
         return 1;
     }
@@ -245,18 +269,21 @@ int main(int argc, char **argv) {
     static const unsigned sizes[] = {16, 64, 256, 1024, 4096};
     static const unsigned waysv[] = {1, 4, 8};
     enum { NS = sizeof(sizes) / sizeof(sizes[0]), NW = sizeof(waysv) / sizeof(waysv[0]) };
-    struct cache caches[NS * NW];
+    struct cache caches[NS * NW + 1];
     int nc = 0;
-    for (int si = 0; si < NS; ++si) {
+    for (int si = 0; si <= NS; ++si) {
         for (int wi = 0; wi < NW; ++wi) {
             struct cache *c = &caches[nc++];
             memset(c, 0, sizeof(*c));
-            c->entries = sizes[si];
-            c->ways = waysv[wi];
+            /* the last one is the paper's node cache: 8 KB, 2-way (USENIX Security 2023, section 7) */
+            c->entries = si < NS ? sizes[si] : 128;
+            c->ways = si < NS ? waysv[wi] : 2;
             c->sets = c->entries / c->ways;
             c->tag = calloc(c->entries, sizeof(uint32_t));
             c->stamp = calloc(c->entries, sizeof(uint64_t));
+            c->dirty = calloc(c->entries, 1);
             cache_flush(c);
+            if (si == NS) break;
         }
     }
     full.slot_of = calloc((size_t)max_line + 1, sizeof(uint32_t));
@@ -265,6 +292,11 @@ int main(int argc, char **argv) {
     uint32_t prev_line = NODE_NONE;   /* the line of the access before, for the fast path */
 
     uint64_t count[N_KINDS][N_SITES] = {{0}};
+    uint64_t insns = 0;
+    /* the state at the last allocation: what follows it is the domain's teardown
+     * (exit revokes, the heap scrubbed, the collector's sweep), reported apart */
+    static uint64_t hist_at_alloc[N_FULL + 1][N_SITES], count_at_alloc[N_KINDS][N_SITES];
+    uint64_t logical_at_alloc = 0;
     uint64_t no_node_checks[N_SITES] = {0};
     uint64_t resets = 0, excluded_recs = 0;
     uint8_t *seen = calloc((size_t)max_node + 1, 1);
@@ -302,6 +334,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         if (kind == K_END) { saw_end = 1; continue; }
+        if (kind == K_INSN) { insns |= (uint64_t)id << (site ? 32 : 0); continue; }   /* the domain's instructions (format 04) */
         if (kind == K_REPEAT) {
             if (!have_last) {
                 fprintf(stderr, "cachesim: record %llu: REPEAT with nothing before it\n",
@@ -353,6 +386,11 @@ int main(int argc, char **argv) {
             return 1;
         }
         if (id > max_id) max_id = id;
+        if (kind == K_ALLOC) {
+            memcpy(hist_at_alloc, full.hist, sizeof(hist_at_alloc));
+            memcpy(count_at_alloc, count, sizeof(count_at_alloc));
+            logical_at_alloc = logical - 1;
+        }
         ++count[kind][site];
         if (!seen[id]) { seen[id] = 1; ++distinct; }
         if (kind == K_ALLOC) idpolicy_alloc(&ids, id);      /* the record this node occupies */
@@ -383,17 +421,27 @@ int main(int argc, char **argv) {
                 ++caches[k].hit[site];
                 if (kind == K_READ) ++caches[k].read_hit;
             }
+            if (kind == K_WRITE) {
+                full.dirty[full.head] = (1u << N_FULL) - 1;
+                for (int k = 0; k < nc; ++k) cache_access(&caches[k], line, 1);   /* a hit: marks it dirty */
+            }
             ++full.hist[0][site];
             if (kind == K_READ) ++full.read_hist[0];
             continue;
         }
         prev_line = line;
         unsigned b = full_access(line);
+        {
+            uint32_t s = full.slot_of[line] - 1;   /* at the head now */
+            for (unsigned k = 0; k < b && k < N_FULL; ++k)
+                if (full.dirty[s] & (1u << k)) { ++full.writebacks[k]; full.dirty[s] &= ~(1u << k); }
+            if (kind == K_WRITE) full.dirty[s] = (1u << N_FULL) - 1;
+        }
         ++full.hist[b][site];
         if (kind == K_READ) ++full.read_hist[b];
         for (int k = 0; k < nc; ++k) {
             struct cache *c = &caches[k];
-            if (cache_access(c, line)) {
+            if (cache_access(c, line, kind == K_WRITE)) {
                 ++c->hit[site];
                 if (kind == K_READ) ++c->read_hit;
             } else {
@@ -408,14 +456,24 @@ int main(int argc, char **argv) {
                 path, got);
         return 1;
     }
+    /* dirty lines at the end: in the size-k cache still (dirty_at_end), or out of it
+     * already but never re-accessed, so their write-back was not counted yet */
+    {
+        uint64_t pos = 0;
+        for (uint32_t s = full.head; s != NODE_NONE; s = full.next[s], ++pos)
+            for (int k = 0; k < N_FULL; ++k)
+                if (full.dirty[s] & (1u << k)) {
+                    if (pos < full_sizes[k]) ++full.dirty_at_end[k]; else ++full.writebacks[k];
+                }
+    }
     if (!saw_end && !no_end) {
         fprintf(stderr, "cachesim: %s: no END record; the trace is truncated\n", path);
         return 1;
     }
 
     printf("{\n  \"trace\": \"%s\",\n  \"records\": %llu,\n  \"logical_records\": %llu,\n"
-           "  \"nodes_per_line\": %u,\n",
-           path, (unsigned long long)n, (unsigned long long)logical, npl);
+           "  \"domain_instructions\": %llu,\n  \"nodes_per_line\": %u,\n",
+           path, (unsigned long long)n, (unsigned long long)logical, (unsigned long long)insns, npl);
     printf("  ");
     idpolicy_print_json(&ids);
     printf(",\n  \"excluded_sites\": [");
@@ -444,6 +502,25 @@ int main(int argc, char **argv) {
            "\"hist\": [",
            (unsigned long long)walks, (unsigned long long)walked_total, (unsigned long long)walk_max);
     for (int b = 0; b < 11; ++b) printf("%s%llu", b ? ", " : "", (unsigned long long)walk_hist[b]);
+    printf("]},\n  \"after_last_allocation\": {\"logical_records\": %llu, \"accesses\": {",
+           (unsigned long long)(logical - logical_at_alloc));
+    for (int k = 0; k < N_KINDS; ++k) {
+        printf("%s\"%s\": {", k ? ", " : "", kind_name[k]);
+        for (int s = 0; s < N_SITES; ++s)
+            printf("%s\"%s\": %llu", s ? ", " : "", site_name[s], (unsigned long long)(count[k][s] - count_at_alloc[k][s]));
+        printf("}");
+    }
+    printf("},\n    \"full_caches\": [");
+    for (int k = 0; k < N_FULL; ++k) {
+        uint64_t ms[N_SITES] = {0}, m = 0;
+        for (int b = k + 1; b <= N_FULL; ++b)
+            for (int st = 0; st < N_SITES; ++st) ms[st] += full.hist[b][st] - hist_at_alloc[b][st];
+        for (int st = 0; st < N_SITES; ++st) m += ms[st];
+        printf("%s{\"entries\": %u, \"misses\": %llu, \"misses_by_site\": {", k ? ", " : "", full_sizes[k], (unsigned long long)m);
+        for (int st = 0; st < N_SITES; ++st)
+            printf("%s\"%s\": %llu", st ? ", " : "", site_name[st], (unsigned long long)ms[st]);
+        printf("}}");
+    }
     printf("]},\n  \"caches\": [");
     /* fully associative: size k hits every access in buckets 0..k */
     for (int k = 0; k < N_FULL; ++k) {
@@ -456,9 +533,10 @@ int main(int argc, char **argv) {
         }
         for (int st = 0; st < N_SITES; ++st) { h += hs[st]; m += ms[st]; }
         printf("%s\n    {\"entries\": %u, \"ways\": \"full\", \"ways_n\": %u, \"hits\": %llu, \"misses\": %llu, "
-               "\"read_hits\": %llu, \"read_misses\": %llu, \"by_site\": {",
+               "\"read_hits\": %llu, \"read_misses\": %llu, \"writebacks\": %llu, \"dirty_at_end\": %llu, \"by_site\": {",
                k ? "," : "", full_sizes[k], full_sizes[k], (unsigned long long)h, (unsigned long long)m,
-               (unsigned long long)rh, (unsigned long long)rm);
+               (unsigned long long)rh, (unsigned long long)rm, (unsigned long long)full.writebacks[k],
+               (unsigned long long)full.dirty_at_end[k]);
         for (int st = 0; st < N_SITES; ++st)
             printf("%s\"%s\": [%llu, %llu]", st ? ", " : "", site_name[st],
                    (unsigned long long)hs[st], (unsigned long long)ms[st]);
@@ -469,9 +547,9 @@ int main(int argc, char **argv) {
         uint64_t h = 0, m = 0;
         for (int s = 0; s < N_SITES; ++s) { h += c->hit[s]; m += c->miss[s]; }
         printf(",\n    {\"entries\": %u, \"ways\": %u, \"hits\": %llu, \"misses\": %llu, "
-               "\"read_hits\": %llu, \"read_misses\": %llu, \"by_site\": {",
+               "\"read_hits\": %llu, \"read_misses\": %llu, \"writebacks\": %llu, \"by_site\": {",
                c->entries, c->ways, (unsigned long long)h, (unsigned long long)m,
-               (unsigned long long)c->read_hit, (unsigned long long)c->read_miss);
+               (unsigned long long)c->read_hit, (unsigned long long)c->read_miss, (unsigned long long)c->writebacks);
         for (int s = 0; s < N_SITES; ++s)
             printf("%s\"%s\": [%llu, %llu]", s ? ", " : "", site_name[s],
                    (unsigned long long)c->hit[s], (unsigned long long)c->miss[s]);

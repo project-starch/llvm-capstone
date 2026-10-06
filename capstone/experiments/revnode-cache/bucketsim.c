@@ -63,9 +63,11 @@
 #include "idpolicy.h"
 
 enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, K_REPEAT, K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG,
-       K_ALIAS_SLOT, K_END };
+       K_ALIAS_SLOT, K_END, K_INSN };
 enum { S_LDST, S_LDC, S_MREV, S_SPLIT, S_REVOKE, S_DELIN, S_CREATE, S_SUPERVISOR, S_GC,
-       S_MEM_CAPSTORE, S_MEM_UNTAG, S_MEM_CLEAR, S_DROP, N_SITES };
+       S_MEM_CAPSTORE, S_MEM_UNTAG, S_MEM_CLEAR, S_DROP,
+       S_RC_REG_INC, S_RC_REG_DEC, S_RC_MEM_INC, S_RC_MEM_DEC, S_RC_SAME, S_RC_FREE,
+       S_RC_LD_INC, S_RC_LD_DEC, S_RC_SWEEP_DEC, S_RC_SWEEP_FREE, S_RC_MOVE, S_RC_CALL, N_SITES };
 
 enum { OP_INSERT, OP_DELETE, OP_FLUSH, OP_REUSE, OP_REVOKE, OP_TREE, OP_GROW, N_OPS };
 static const char *op_name[N_OPS] = {"insert", "delete", "flush", "reuse_flush", "revoke", "tree", "grow"};
@@ -455,7 +457,7 @@ int main(int argc, char **argv) {
     static char inbuf[1 << 22];
     setvbuf(in, inbuf, _IOFBF, sizeof inbuf);
     char magic[8];
-    if (fread(magic, 1, 8, in) != 8 || (memcmp(magic, "CRNTRC01", 8) && memcmp(magic, "CRNTRC02", 8))) {
+    if (fread(magic, 1, 8, in) != 8 || (memcmp(magic, "CRNTRC01", 8) && memcmp(magic, "CRNTRC02", 8) && memcmp(magic, "CRNTRC03", 8) && memcmp(magic, "CRNTRC04", 8) && memcmp(magic, "CRNTRC05", 8))) {
         fprintf(stderr, "bucketsim: %s: no trace header\n", path);
         return 1;
     }
@@ -463,6 +465,7 @@ int main(int argc, char **argv) {
     prv = malloc(N * 4); nxt = malloc(N * 4); depth = calloc(N, 4); valid = calloc(N, 1);
     sh_k = malloc(sizeof(uint32_t) << SHB); sh_v = calloc((size_t)1 << SHB, sizeof(uint32_t));
     uint32_t last_read[N_SITES];
+    uint64_t insns = 0;
     for (int s = 0; s < N_SITES; ++s) last_read[s] = NONE;
 
     uint64_t checks = 0, n = 0;
@@ -479,6 +482,7 @@ int main(int argc, char **argv) {
         unsigned kind = r[4], site = r[5];
         if (saw_end) { fprintf(stderr, "bucketsim: record after END\n"); return 1; }
         if (kind == K_END) { saw_end = 1; continue; }
+        if (kind == K_INSN) { insns |= (uint64_t)id << (site ? 32 : 0); continue; }   /* the domain's instructions (format 04) */
         if (kind == K_REPEAT) {
             if (!have_last) { fprintf(stderr, "bucketsim: REPEAT first\n"); return 1; }
             if (last_kind == K_READ && (last_site == S_LDST || last_site == S_LDC)) checks += id;
@@ -600,8 +604,8 @@ int main(int argc, char **argv) {
     }
     if (!checks) { fprintf(stderr, "bucketsim: no lifetime checks in the trace\n"); return 1; }
 
-    printf("{\n  \"trace\": \"%s\",\n  \"records\": %llu,\n  \"lifetime_checks\": %llu,\n  \"line_bytes\": 64,\n"
-           "  \"sizes_lines\": [", path, (unsigned long long)n, (unsigned long long)checks);
+    printf("{\n  \"trace\": \"%s\",\n  \"records\": %llu,\n  \"domain_instructions\": %llu,\n  \"lifetime_checks\": %llu,\n  \"line_bytes\": 64,\n"
+           "  \"sizes_lines\": [", path, (unsigned long long)n, (unsigned long long)insns, (unsigned long long)checks);
     for (int k = 0; k < NSZ; ++k) printf("%s%u", k ? ", " : "", sizes[k]);
     printf("],\n  \"variants\": [");
     int rc = 0;

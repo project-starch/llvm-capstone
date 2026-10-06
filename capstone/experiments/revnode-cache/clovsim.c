@@ -56,9 +56,11 @@
 #include <string.h>
 
 enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, K_REPEAT, K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG,
-       K_ALIAS_SLOT, K_END };
+       K_ALIAS_SLOT, K_END, K_INSN };
 enum { S_LDST, S_LDC, S_MREV, S_SPLIT, S_REVOKE, S_DELIN, S_CREATE, S_SUPERVISOR, S_GC,
-       S_MEM_CAPSTORE, S_MEM_UNTAG, S_MEM_CLEAR, S_DROP, N_SITES };
+       S_MEM_CAPSTORE, S_MEM_UNTAG, S_MEM_CLEAR, S_DROP,
+       S_RC_REG_INC, S_RC_REG_DEC, S_RC_MEM_INC, S_RC_MEM_DEC, S_RC_SAME, S_RC_FREE,
+       S_RC_LD_INC, S_RC_LD_DEC, S_RC_SWEEP_DEC, S_RC_SWEEP_FREE, S_RC_MOVE, S_RC_CALL, N_SITES };
 #define NONE 0xffffffffu
 
 #include "nested_lru.h"
@@ -223,7 +225,7 @@ int main(int argc, char **argv) {
     static char inbuf[1 << 22];
     setvbuf(in, inbuf, _IOFBF, sizeof inbuf);
     char magic[8];
-    if (fread(magic, 1, 8, in) != 8 || (memcmp(magic, "CRNTRC01", 8) && memcmp(magic, "CRNTRC02", 8))) {
+    if (fread(magic, 1, 8, in) != 8 || (memcmp(magic, "CRNTRC01", 8) && memcmp(magic, "CRNTRC02", 8) && memcmp(magic, "CRNTRC03", 8) && memcmp(magic, "CRNTRC04", 8) && memcmp(magic, "CRNTRC05", 8))) {
         fprintf(stderr, "clovsim: %s: no trace header\n", path);
         return 1;
     }
@@ -238,6 +240,7 @@ int main(int argc, char **argv) {
     fkey = malloc((size_t)4 << FB); fval = calloc((size_t)1 << FB, 4);
     prv = malloc(N * 4); nxt = malloc(N * 4); depth = calloc(N, 4); valid = calloc(N, 1);
     uint32_t last_read[N_SITES];
+    uint64_t insns = 0;
     for (int s = 0; s < N_SITES; ++s) last_read[s] = NONE;
 
     uint64_t checks = 0, stores_same = 0, stores_new = 0, stores_stale = 0, data_unreg = 0;
@@ -257,6 +260,7 @@ int main(int argc, char **argv) {
         unsigned kind = r[4], site = r[5];
         if (saw_end) { fprintf(stderr, "clovsim: record after END\n"); return 1; }
         if (kind == K_END) { saw_end = 1; continue; }
+        if (kind == K_INSN) { insns |= (uint64_t)id << (site ? 32 : 0); continue; }   /* the domain's instructions (format 04) */
         if (kind == K_REPEAT) {
             if (!have_last) { fprintf(stderr, "clovsim: REPEAT first\n"); return 1; }
             /* a repeated node access: same line again, a hit in Capstone's cache */
@@ -401,8 +405,8 @@ int main(int argc, char **argv) {
     if (orphaned) { fprintf(stderr, "clovsim: %llu node ids reused with index records left\n",
                             (unsigned long long)orphaned); return 3; }
 
-    printf("{\n  \"trace\": \"%s\",\n  \"records\": %llu,\n  \"lifetime_checks\": %llu,\n", path,
-           (unsigned long long)n, (unsigned long long)checks);
+    printf("{\n  \"trace\": \"%s\",\n  \"records\": %llu,\n  \"domain_instructions\": %llu,\n  \"lifetime_checks\": %llu,\n", path,
+           (unsigned long long)n, (unsigned long long)insns, (unsigned long long)checks);
     printf("  \"line_bytes\": 64, \"sizes_lines\": [");
     for (int k = 0; k < NSZ; ++k) printf("%s%u", k ? ", " : "", sizes[k]);
     printf("],\n");
@@ -419,7 +423,10 @@ int main(int argc, char **argv) {
         if (d == 0) {
             printf(", \"by_site\": {");
             static const char *sn[N_SITES] = {"ldst", "ldc", "mrev", "split", "revoke", "delin", "create",
-                                              "supervisor", "gc", "mem_capstore", "mem_untag", "mem_clear", "drop"};
+                                              "supervisor", "gc", "mem_capstore", "mem_untag", "mem_clear", "drop",
+                                              "rc_reg_inc", "rc_reg_dec", "rc_mem_inc", "rc_mem_dec", "rc_same", "rc_free",
+                                              "rc_ld_inc", "rc_ld_dec", "rc_sweep_dec", "rc_sweep_free",
+                                              "rc_move", "rc_call"};
             for (int s = 0, f = 1; s < N_SITES; ++s) {
                 if (!cap_by_site[s]) continue;
                 printf("%s\"%s\": %llu", f ? "" : ", ", sn[s], (unsigned long long)cap_by_site[s]); f = 0;

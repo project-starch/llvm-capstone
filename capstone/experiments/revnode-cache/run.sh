@@ -18,7 +18,17 @@
 # <workload>.clover.json, clovsim's Capstone-vs-Clover metadata traffic, and
 # <workload>.bucket.json, bucketsim's figures for the proposed index (its variants carry
 # the id policies), and <workload>.npl4-{lifo,bitmap,hybrid,chunk}.json, Capstone's node
-# cache with ids reused as those policies would (idpolicy.h).
+# cache with ids reused as those policies would (idpolicy.h). With the reference count
+# in the trace (capstone-qemu cap_refcount.h): .npl4-rcelide.json leaves out the
+# same-node pairs a counting implementation can skip, .npl4-norc.json every count
+# update, .npl4-nosweep.json the decrements and frees of the supervisor's sweep at the
+# domain's end; <workload>.refcount.txt is the emulator's own count statistics line.
+#
+# READERS=rc runs only the readers the reference-count study needs (no id-policy variants,
+# no nosup): the fan-out to thirteen readers throttles QEMU on the big traces. READERS=rcmin
+# also leaves out clovsim and bucketsim, whose models stall on the largest traces with
+# the emulator reusing ids (bc: a reader that stops consuming freezes the guest, and the
+# launcher gives up with status 255); their columns then come from the run without the count.
 #
 # Everything this host-specific run needs is a variable; the defaults are the kits
 # the SQLite and mruby lanes built (see README.md).
@@ -44,6 +54,7 @@ MIX=${MIX:-}
 # kernel places CMA below 4 GiB physical, so about 1.9 GiB is the most it can reserve
 CMA_MIB=${CMA_MIB:-1024}
 CACHE_MIB=${CACHE_MIB:-768}
+READERS=${READERS:-all}
 name=${1:?usage: run.sh <workload>}
 
 mkdir -p $K/logs $K/reports $K/fifo
@@ -78,11 +89,33 @@ case $name in
 esac
 vm down > /dev/null 2>&1; rm -rf $S
 R=$K/reports/$name
-rm -f $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.json $R.npl4-lifo.json $R.npl4-bitmap.json $R.npl4-hybrid.json $R.npl4-chunk.json
+rm -f $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.json $R.npl4-lifo.json $R.npl4-bitmap.json $R.npl4-hybrid.json $R.npl4-chunk.json \
+      $R.npl4-rcelide.json $R.npl4-norc.json $R.npl4-nosweep.json $R.refcount.txt
 # the simulators read the trace as QEMU writes it; nothing is stored. A reader that
 # dies must not block QEMU (tee keeps feeding the others) and must not pass either:
 # its .err is checked below, and every reader rejects a stream without END.
-( tee --output-error=warn >($SIM --nodes-per-line 4 - > $R.npl4.json 2> $R.npl4.err) \
+NORC=rc_reg_inc,rc_reg_dec,rc_mem_inc,rc_mem_dec,rc_same,rc_move,rc_call,rc_free,rc_ld_inc,rc_ld_dec,rc_sweep_dec,rc_sweep_free
+if [ "$READERS" = rcmin ]; then
+  VARIANTS="npl4 alias npl4-rcelide npl4-norc npl4-nosweep"
+  ( tee --output-error=warn >($SIM --nodes-per-line 4 - > $R.npl4.json 2> $R.npl4.err) \
+      >($ALIAS - > $R.alias.json 2> $R.alias.err) \
+      >($SIM --nodes-per-line 4 --exclude rc_same,rc_move,rc_call - > $R.npl4-rcelide.json 2> $R.npl4-rcelide.err) \
+      >($SIM --nodes-per-line 4 --exclude $NORC - > $R.npl4-norc.json 2> $R.npl4-norc.err) \
+      >($SIM --nodes-per-line 4 --exclude rc_sweep_dec,rc_sweep_free - > $R.npl4-nosweep.json 2> $R.npl4-nosweep.err) \
+    < $FIFO | $SIM - > $R.json 2> $R.err ) &
+elif [ "$READERS" = rc ]; then
+  VARIANTS="npl4 alias clover bucket npl4-rcelide npl4-norc npl4-nosweep"
+  ( tee --output-error=warn >($SIM --nodes-per-line 4 - > $R.npl4.json 2> $R.npl4.err) \
+      >($ALIAS - > $R.alias.json 2> $R.alias.err) \
+      >($CLOV - > $R.clover.json 2> $R.clover.err) \
+      >($BUCK - > $R.bucket.json 2> $R.bucket.err) \
+      >($SIM --nodes-per-line 4 --exclude rc_same,rc_move,rc_call - > $R.npl4-rcelide.json 2> $R.npl4-rcelide.err) \
+      >($SIM --nodes-per-line 4 --exclude $NORC - > $R.npl4-norc.json 2> $R.npl4-norc.err) \
+      >($SIM --nodes-per-line 4 --exclude rc_sweep_dec,rc_sweep_free - > $R.npl4-nosweep.json 2> $R.npl4-nosweep.err) \
+    < $FIFO | $SIM - > $R.json 2> $R.err ) &
+else
+  VARIANTS="npl4 nosup alias clover bucket npl4-lifo npl4-bitmap npl4-hybrid npl4-chunk npl4-rcelide npl4-norc npl4-nosweep"
+  ( tee --output-error=warn >($SIM --nodes-per-line 4 - > $R.npl4.json 2> $R.npl4.err) \
       >($SIM --exclude gc,supervisor - > $R.nosup.json 2> $R.nosup.err) \
       >($ALIAS - > $R.alias.json 2> $R.alias.err) \
       >($CLOV - > $R.clover.json 2> $R.clover.err) \
@@ -91,7 +124,11 @@ rm -f $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.
       >($SIM --nodes-per-line 4 --ids bitmap - > $R.npl4-bitmap.json 2> $R.npl4-bitmap.err) \
       >($SIM --nodes-per-line 4 --ids hybrid - > $R.npl4-hybrid.json 2> $R.npl4-hybrid.err) \
       >($SIM --nodes-per-line 4 --ids chunk - > $R.npl4-chunk.json 2> $R.npl4-chunk.err) \
+      >($SIM --nodes-per-line 4 --exclude rc_same,rc_move,rc_call - > $R.npl4-rcelide.json 2> $R.npl4-rcelide.err) \
+      >($SIM --nodes-per-line 4 --exclude $NORC - > $R.npl4-norc.json 2> $R.npl4-norc.err) \
+      >($SIM --nodes-per-line 4 --exclude rc_sweep_dec,rc_sweep_free - > $R.npl4-nosweep.json 2> $R.npl4-nosweep.err) \
     < $FIFO | $SIM - > $R.json 2> $R.err ) &
+fi
 SIMPID=$!
 vm up --qemu $QEMU --kernel $KERNEL --firmware $FIRMWARE --rootfs $ROOTFS --share $SHARE \
   --module $MODULE --launcher $LAUNCHER --cma-mib $CMA_MIB --process-cache-mib $CACHE_MIB \
@@ -120,16 +157,21 @@ case $name in
 esac
 echo "workload rc=$rc wall=$(( $(date +%s) - start ))s"
 vm down > /dev/null 2>&1
+grep -h "capstone: refcount:" $S/qemu.log > $R.refcount.txt 2>/dev/null
 wait $SIMPID
 for i in $(seq 1800); do
-  grep -qx "}" $R.npl4.json 2>/dev/null && grep -qx "}" $R.nosup.json 2>/dev/null \
-    && grep -qx "}" $R.alias.json 2>/dev/null && grep -qx "}" $R.clover.json 2>/dev/null \
-    && grep -qx "}" $R.bucket.json 2>/dev/null && grep -qx "}" $R.npl4-lifo.json 2>/dev/null \
-    && grep -qx "}" $R.npl4-bitmap.json 2>/dev/null && grep -qx "}" $R.npl4-hybrid.json 2>/dev/null && grep -qx "}" $R.npl4-chunk.json 2>/dev/null && break; sleep 1
+  done_all=1
+  for v in $VARIANTS; do grep -qx "}" $R.$v.json 2>/dev/null || done_all=0; done
+  [ $done_all = 1 ] && break
+  [ -s $R.err ] && break   # the main reader failed (a truncated trace): nothing more will arrive
+  sleep 1
 done
 rm -f $FIFO
 bad=0
-for f in $R.err $R.npl4.err $R.nosup.err $R.alias.err $R.clover.err $R.bucket.err $R.npl4-lifo.err $R.npl4-bitmap.err $R.npl4-hybrid.err $R.npl4-chunk.err; do [ -s $f ] && { echo "SIM ERROR $f"; cat $f; bad=1; }; done
-for f in $R.json $R.npl4.json $R.nosup.json $R.alias.json $R.clover.json $R.bucket.json $R.npl4-lifo.json $R.npl4-bitmap.json $R.npl4-hybrid.json $R.npl4-chunk.json; do grep -qx "}" $f 2>/dev/null || { echo "no report $f"; bad=1; }; done
+for v in "" $VARIANTS; do
+  f=$R${v:+.$v}
+  [ -s $f.err ] && { echo "SIM ERROR $f.err"; cat $f.err; bad=1; }
+  grep -qx "}" $f.json 2>/dev/null || { echo "no report $f.json"; bad=1; }
+done
 [ $rc = 0 ] && [ $bad = 0 ] || { echo "RUN FAILED $name"; exit 1; }
 echo "RUN-DONE $name"

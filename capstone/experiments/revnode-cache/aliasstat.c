@@ -47,12 +47,15 @@
 #include <string.h>
 
 enum { K_READ, K_WRITE, K_ALLOC, K_FREE, K_RESET, K_REPEAT, K_ALIAS_INC, K_ALIAS_DEC, K_ALIAS_REG,
-       K_ALIAS_SLOT, K_END };
+       K_ALIAS_SLOT, K_END, K_INSN };
 enum { S_LDST, S_LDC, S_MREV, S_SPLIT, S_REVOKE, S_DELIN, S_CREATE, S_SUPERVISOR, S_GC,
-       S_MEM_CAPSTORE, S_MEM_UNTAG, S_MEM_CLEAR, S_DROP, N_SITES };
+       S_MEM_CAPSTORE, S_MEM_UNTAG, S_MEM_CLEAR, S_DROP,
+       S_RC_REG_INC, S_RC_REG_DEC, S_RC_MEM_INC, S_RC_MEM_DEC, S_RC_SAME, S_RC_FREE,
+       S_RC_LD_INC, S_RC_LD_DEC, S_RC_SWEEP_DEC, S_RC_SWEEP_FREE, S_RC_MOVE, S_RC_CALL, N_SITES };
 static const char *site_name[N_SITES] = {"ldst", "ldc", "mrev", "split", "revoke", "delin",
                                          "create", "supervisor", "gc", "mem_capstore",
-                                         "mem_untag", "mem_clear", "drop"};
+                                         "mem_untag", "mem_clear", "drop", "rc_reg_inc", "rc_reg_dec", "rc_mem_inc", "rc_mem_dec", "rc_same", "rc_free",
+                                         "rc_ld_inc", "rc_ld_dec", "rc_sweep_dec", "rc_sweep_free", "rc_move", "rc_call"};
 #define NONE 0xffffffffu
 
 /* Histogram with exact buckets 0..8 and power-of-two buckets above:
@@ -181,7 +184,7 @@ int main(int argc, char **argv) {
     static char inbuf[1 << 22];
     setvbuf(in, inbuf, _IOFBF, sizeof inbuf);
     char magic[8];
-    if (fread(magic, 1, 8, in) != 8 || (memcmp(magic, "CRNTRC01", 8) && memcmp(magic, "CRNTRC02", 8))) {
+    if (fread(magic, 1, 8, in) != 8 || (memcmp(magic, "CRNTRC01", 8) && memcmp(magic, "CRNTRC02", 8) && memcmp(magic, "CRNTRC03", 8) && memcmp(magic, "CRNTRC04", 8) && memcmp(magic, "CRNTRC05", 8))) {
         fprintf(stderr, "aliasstat: %s: no trace header\n", path);
         return 1;
     }
@@ -193,6 +196,7 @@ int main(int argc, char **argv) {
     uint32_t *regs = malloc(64 * sizeof(uint32_t));
     unsigned nregs = 0;
     uint32_t last_read[N_SITES];
+    uint64_t insns = 0;
     for (int s = 0; s < N_SITES; ++s) last_read[s] = NONE;
 
     /* state of the revoke being consumed: its invalidated run was computed
@@ -215,6 +219,7 @@ int main(int argc, char **argv) {
         uint64_t times = 1;
         if (saw_end) { fprintf(stderr, "aliasstat: record after END\n"); return 1; }
         if (kind == K_END) { saw_end = 1; continue; }
+        if (kind == K_INSN) { insns |= (uint64_t)id << (site ? 32 : 0); continue; }   /* the domain's instructions (format 04) */
         if (kind == K_REPEAT) {
             if (!have_last) { fprintf(stderr, "aliasstat: REPEAT first\n"); return 1; }
             times = id; kind = last_kind; site = last_site; id = last_id;
@@ -292,6 +297,12 @@ int main(int argc, char **argv) {
             hadd(&h_free_alias, mem[id]);
             finalize(id);
             if (live[id]) live_del(id);
+            if (valid[id]) {
+                /* freed while the list still held it (the reference count reached
+                 * zero, cap_refcount.h): unlinked as the emulator does */
+                if (prv[id] != NONE) nxt[prv[id]] = nxt[id];
+                if (nxt[id] != NONE) prv[nxt[id]] = prv[id];
+            }
             live[id] = valid[id] = 0;
         } else if (site == S_REVOKE) {
             if (!in_revoke && kind == K_READ) {
@@ -346,7 +357,8 @@ int main(int argc, char **argv) {
     }
     for (uint32_t i = 0; i <= max_seen; ++i) finalize(i);
 
-    printf("{\n  \"trace\": \"%s\",\n  \"records\": %llu,\n", path, (unsigned long long)n);
+    printf("{\n  \"trace\": \"%s\",\n  \"records\": %llu,\n  \"domain_instructions\": %llu,\n", path,
+           (unsigned long long)n, (unsigned long long)insns);
     printf("  \"nodes_allocated\": %llu, \"mrev\": %llu, \"split\": %llu, \"lone\": %llu,\n",
            (unsigned long long)allocs, (unsigned long long)mrevs, (unsigned long long)splits,
            (unsigned long long)creates);

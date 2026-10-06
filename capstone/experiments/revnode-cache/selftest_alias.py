@@ -18,6 +18,7 @@ import tempfile
 
 READ, WRITE, ALLOC, FREE, RESET, REPEAT, INC, DEC, REG, SLOT = range(10)
 LDST, LDC, MREV, SPLIT, REVOKE, DELIN, CREATE, SUP, GC, CAPSTORE, UNTAG, CLEAR, DROP = range(13)
+RC_FREE = 18
 NONE = 0xFFFFFFFF
 
 
@@ -127,6 +128,21 @@ def main():
     broken = [x for x in BASE if x != (1, WRITE, REVOKE)]
     rc, _ = run(sim, broken)
     check(rc == 3, f"a recorded walk that disagrees with the tree must exit 3, got {rc}")
+
+    # the reference count frees node 4 while the list holds it (its copy left first): the
+    # emulator unlinks it, so revoking 3 walks only node 1. Without the FREE record the
+    # same walk disagrees with the tree (positive control).
+    before_revoke = BASE.index((1, REG, REVOKE))
+    freed = (BASE[:before_revoke] + [(4, DEC, CAPSTORE), (3, WRITE, RC_FREE), (1, WRITE, RC_FREE),
+                                     (4, FREE, RC_FREE), (1, REG, REVOKE), (3, REG, REVOKE),
+                                     (3, READ, REVOKE), (1, READ, REVOKE), (1, WRITE, REVOKE),
+                                     (3, WRITE, REVOKE)])
+    rc, r4 = run(sim, freed)
+    check(rc == 0 and r4["errors"]["walk_mismatch"] == 0 and r4["trees"]["revoke_run"]["max"] == 1
+          and r4["aliases"]["at_free_memory"]["buckets"] == {"0": 1},
+          f"a node freed while valid is unlinked: rc {rc} {r4 and r4['errors']} {r4 and r4['trees']['revoke_run']}")
+    rc, _ = run(sim, [x for x in freed if x[1] != FREE])
+    check(rc == 3, f"the same walk with node 4 still linked must exit 3, got {rc}")
 
     print("selftest_alias:", "PASS" if not failures else f"FAIL ({len(failures)})")
     return 1 if failures else 0

@@ -107,6 +107,14 @@ cache of a given size and associativity would have. It does not answer what a mi
   application SDK's `capstone-cc` on the **sublet heap** (one revocation node per allocation), and
   writes a manifest `programs.json` for `run-mix.py --programs`. The sources are unchanged except
   one adaptation (voronoi, below); `run.sh ptr-<par|seq>-<label>` runs them.
+- With the reference count in the trace (capstone-qemu `perf/revnode-refcount`, format 05: one
+  WRITE per count update at the sites `rc_reg_*`, `rc_ld_*`, `rc_mem_*`, the cancelling pairs
+  at `rc_same`, `rc_move`, `rc_call`, the exit sweep at `rc_sweep_*`, and an INSN record with the
+  domain's instruction count): every reader accepts it; `cachesim` also simulates the paper's
+  8 KB 2-way node cache, keeps a dirty bit per line and reports write-backs, and reports what
+  follows the last allocation; `run.sh READERS=rc|rcmin` runs fewer readers (see the section
+  "The reference count the paper describes"); `summarize_rc.py` makes that section's tables
+  per 1000 instructions, `plot_rc.py` its figures.
 
 ## Results (`results/20261005-qemu/`)
 
@@ -890,6 +898,246 @@ that cost is not in these numbers.
 **Repeatability.** The eleven programs ran twice, the second time with hybrid and chunk added;
 traced, lifo and bitmap agree between the runs within 3 % on every value above 0.05 misses per
 1000 (checks within 0.11 %). The results directory holds the second run.
+
+## The reference count the paper describes (`results/20261006-qemu-refcount/`)
+
+Every Capstone number above is from an emulator that counted nothing: the RTL node
+(`capstone_rev_node.anvil`) has no counter, and this emulator's `refcount` field was set to 1
+at creation and zeroed by the supervisor's sweep; its only updater had no caller. (The authors'
+own emulator counted memory copies through the tag map in 2025; the calls were lost in the
+Caplifive backport, and the sweep took their place.) The paper (USENIX Security 2023, section
+6, "Deallocation of revocation nodes") chooses a reference count over a sweep: a 33-bit counter
+in the node, updated "when a capability is created or overwritten", in registers as well as
+memory, with moving a linear capability exempt, and the node freed onto a free list when the
+counter reaches zero. Its evaluation (section 7, table 3) models that on gem5 with an 8 KB
+2-way node cache and SPEC CPU2017 mapped onto capability events, finds the count's updates
+"often the dominating revocation tree operations", attributes the overhead to updates "from a
+non-load/store instruction (e.g., move or pointer arithmetic)" without counting them, expects
+them to be "considerably less frequent because of the ubiquity of linear capabilities" without
+measuring it, and reports misses at one cache size and no write-backs. capstone-qemu
+`perf/revnode-refcount` implements the count (`target/riscv/cap_refcount.h`), and this section
+measures exactly those four things on Capstone code: the eleven programs of the id study (seven
+pointer benchmarks on the sublet heap, four mruby programs on fx-sublet-gc), against the run
+without the count, against Clover's stream on the same trace, and against the index.
+
+**What is counted.** Memory copies through the tag map, which keeps the node of each tagged
+granule: a capability store increments its node and decrements the node of the capability it
+overwrites, an untag decrements. Register copies through a shadow of the register file (x0..x31,
+pc, cepc, ctvec, cih, cscratch, cpmp): after each instruction that can write a capability
+register, the slots it names are compared with the shadow; a hook on integer writes catches the
+tag clears; domain switches, traps and mret/sret compare every slot. Within one instruction an
+increment and a decrement of one node cancel, and the counter is left alone, but the pair is
+traced anyway, two records, because a literal implementation would do both: at `rc_same` when a
+slot is rewritten with a copy of the node it held (pointer arithmetic in place, a granule
+overwritten by a copy of its node), at `rc_move` when a copy moved between two slots (the
+linear move the paper exempts), at `rc_call` when `cjalr` writes the program counter's node
+into the return register. A context the supervisor saves is a copy (+1 per tagged slot);
+restoring one discards the running registers. A node at zero is freed at once: unlinked if the
+list still held it (two writes), then pushed on the free list; ids come back immediately, LIFO,
+as the paper's free list gives them. Three things this emulator does differently from the
+paper's semantics are kept and noted: `stc` of a linear capability keeps the register copy,
+`ldc` does not clear the memory copy, `drop` leaves the node valid.
+
+**The denominator.** Per 1000 lifetime checks, the unit of the sections above, is Capstone's
+own event: it leaves out the register instructions that drive the count and includes the
+loaded-capability checks only Capstone makes. Trace format 04 carries the instructions the
+domain retired in C-mode blocks (each block adds its count, back-patched as the icount
+decrement is), and this section normalises to 1000 of them, the paper's unit. Checks are 263 to
+542 per 1000 instructions on these programs, memory operations 225 to 458, so the earlier
+figures convert by those factors.
+
+**Checks.** `CAPSTONE_RC_VERIFY=N` scans the registers and the saved contexts at every release
+and the tag map at every N-th; `CAPSTONE_RC_AUDIT=N` recounts every node's copies at every
+N-th release and compares. `CAPSTONE_RC_BREAK=1` drops one decrement as the positive control:
+the audit fires within the first allocations. The checks found three defects before the first
+clean run (a two-step register sync that let a move pass through zero, the supervisor's
+snapshot duplicating copies the swap then moved to memory, an alias record written after the
+FREE its decrement caused). so_lists, yacr2 and bc ran clean under VERIFY=1 AUDIT=16 or
+AUDIT=65536, every program ran with VERIFY=4096, every output matched native, and aliasstat's
+free-time alias count, computed from the trace's own alias records, is 0 at every free of every
+program: the two accountings agree.
+
+**Method.** The same programs, platforms and readers as the id study. `run.sh` adds the
+variants `.npl4-rcelide.json` (the pairs left out), `.npl4-norc.json` (every count update left
+out: the reuse the count gives, without its traffic) and `.npl4-nosweep.json` (the supervisor's
+sweep at the domain's end left out), keeps the emulator's statistics line in `.refcount.txt`,
+and with `READERS=rcmin` runs only cachesim and aliasstat: clovsim and bucketsim stall on the
+largest traces once the emulator reuses ids (a reader that stops consuming blocks the trace
+FIFO, freezes the guest, and the launcher gives up with status 255 although the program's
+output is complete), so Clover's and the index's figures here are those of the run without the
+count, scaled to this run's instructions; the two streams do not depend on the count. cachesim
+simulates the paper's node cache (8 KB, 2-way) beside the fully associative sizes, keeps a dirty
+bit per line and counts the write-backs the count's writes cause. `summarize_rc.py` makes the
+tables, `plot_rc.py` the figures in `plots/`.
+
+**The streams, per 1000 instructions.** Checks and tree operations are what Capstone does
+without the count; the count's updates by origin; the cancelling pairs by kind (two records
+each); the count literal (every update a read-modify-write of the node record) and with the
+pairs elided:
+
+| | instructions | checks | memory ops | tree ops | count: register | load | store | frees | pairs ×2: rewrite | move | call | count, literal | pairs elided |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| treeadd | 462,582,221 | 541.7 | 457.8 | 8.502 | 109.6 | 67.0 | 25.6 | 3.967 | 291.3 | 0.150 | 12.5 | 510.1 | 206.1 |
+| anagram | 9,851,866,401 | 401.8 | 332.7 | 0.019 | 113.7 | 83.9 | 23.0 | 0.002 | 426.4 | 0.344 | 10.2 | 657.4 | 220.6 |
+| yacr2 | 5,525,522,623 | 263.4 | 233.4 | 0.005 | 275.1 | 25.2 | 1.494 | 0.002 | 114.9 | 0.160 | 3.303 | 420.2 | 301.8 |
+| ft | 1,719,895,670 | 483.0 | 339.2 | 1.864 | 104.7 | 231.6 | 11.6 | 0.832 | 234.0 | 0.385 | 8.688 | 591.8 | 348.7 |
+| espresso | 6,672,732,739 | 318.9 | 271.1 | 5.147 | 119.6 | 34.3 | 31.1 | 0.549 | 416.7 | 0.320 | 9.848 | 612.5 | 185.6 |
+| bc | 18,072,630,935 | 292.5 | 252.4 | 6.415 | 70.2 | 28.2 | 30.0 | 0.697 | 521.1 | 0.234 | 9.695 | 660.2 | 129.1 |
+| cfrac | 19,438,801,536 | 381.5 | 300.1 | 8.168 | 134.1 | 49.5 | 68.1 | 0.811 | 432.7 | 0.308 | 22.6 | 708.1 | 252.5 |
+| so_lists | 2,232,458,382 | 427.4 | 338.3 | 0.023 | 140.0 | 103.7 | 34.0 | 0.004 | 347.3 | 0.249 | 9.712 | 635.0 | 277.7 |
+| so_mandelbrot | 3,144,404,587 | 291.7 | 225.5 | 0.063 | 171.7 | 83.3 | 5.066 | 0.010 | 179.0 | 0.361 | 5.228 | 444.8 | 260.1 |
+| ao_render | 8,062,381,364 | 396.6 | 302.1 | 3.738 | 180.3 | 108.2 | 45.5 | 0.373 | 269.6 | 0.333 | 7.819 | 612.2 | 334.4 |
+| lc_fizzbuzz | 10,648,455,216 | 426.7 | 332.6 | 10.3 | 144.3 | 104.4 | 57.3 | 1.035 | 339.4 | 0.396 | 10.4 | 657.3 | 307.1 |
+
+**The overhead in its three components.** Occupancy: exposed updates are the register-side
+ones, with nothing to hide behind; hideable ones come with a load or a store. Traffic: the
+misses the count's updates add in the run, and the write-backs at 64 KiB without and with the
+count. Latency: the exposed updates that miss. And the paper's node cache, 8 KB 2-way: misses
+per 1000 instructions, the miss rate as table 3 gives it, write-backs:
+
+| | exposed | hideable | elidable pairs | extra misses @4 KiB / 64 KiB / 1 MiB | write-backs @64 KiB: no count → with | exposed misses @4 KiB / 64 KiB / 1 MiB | paper's 8 KB 2-way: misses, miss rate, write-backs |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| treeadd | 109.6 | 92.5 | 303.9 | 1.798 / 1.769 / 1.736 | 0.850 → 3.044 | 0.036 / 0.000 / 0.000 | 3.551, 0.334 %, 3.126 |
+| anagram | 113.7 | 106.9 | 436.9 | 0.056 / 0.000 / 0.000 | 0.000 → 0.000 | 0.050 / 0.000 / 0.000 | 10.094, 0.953 %, 10.094 |
+| yacr2 | 275.1 | 26.7 | 118.3 | 0.002 / 0.000 / 0.000 | 0.000 → 0.001 | 0.001 / 0.000 / 0.000 | 0.002, 0.000 %, 0.002 |
+| ft | 104.7 | 243.2 | 243.1 | 0.804 / 0.535 / 0.350 | 0.308 → 78.561 | 0.308 / 0.147 / 0.000 | 97.549, 9.054 %, 97.443 |
+| espresso | 119.6 | 65.4 | 426.9 | 0.097 / 0.001 / 0.000 | 0.260 → 0.295 | 0.064 / 0.000 / 0.000 | 1.461, 0.156 %, 1.459 |
+| bc | 70.2 | 58.2 | 531.1 | 0.002 / 0.000 / 0.000 | 0.003 → 0.004 | 0.000 / 0.000 / 0.000 | 0.034, 0.004 %, 0.032 |
+| cfrac | 134.1 | 117.7 | 455.5 | 0.001 / 0.000 / 0.000 | 0.002 → 0.115 | 0.001 / 0.000 / 0.000 | 0.140, 0.013 %, 0.140 |
+| so_lists | 140.0 | 137.7 | 357.3 | 0.001 / 0.000 / 0.000 | 0.001 → 0.001 | 0.000 / 0.000 / 0.000 | 0.005, 0.000 %, 0.004 |
+| so_mandelbrot | 171.7 | 88.4 | 184.6 | 0.001 / 0.001 / 0.000 | 0.002 → 0.003 | 0.000 / 0.000 / 0.000 | 0.014, 0.002 %, 0.013 |
+| ao_render | 180.3 | 153.8 | 277.8 | 0.266 / 0.003 / 0.000 | 0.658 → 0.730 | 0.093 / 0.000 / 0.000 | 2.639, 0.260 %, 2.634 |
+| lc_fizzbuzz | 144.3 | 161.7 | 350.2 | 0.801 / 0.080 / 0.022 | 3.190 → 4.369 | 0.115 / 0.002 / 0.000 | 6.550, 0.598 %, 6.540 |
+
+**Reclamation.** Ids the count handed out against the allocations and the live set of the id
+study (nodes alive until their revoke), the frees by the count and how many of them unlinked a
+node the list still held, the frees the exit sweep had left to do, and the largest count any
+node reached:
+
+| | allocations | ids used | peak live (by revoke) | first reuse at | frees by the count | of them valid (unlinked) | frees in the exit sweep | max count |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| treeadd | 786,559 | 786,551 | 786,550 | 92 | 786,491 | 524,317 | 5 | 340 |
+| anagram | 18,006 | 1,165 | 1,164 | 92 | 17,938 | 1,072 | 5 | 417 |
+| yacr2 | 5,633 | 4,779 | 5,215 | 92 | 5,565 | 3,884 | 5 | 376 |
+| ft | 624,615 | 622,585 | 622,584 | 92 | 624,547 | 403,024 | 5 | 375 |
+| espresso | 3,663,726 | 13,312 | 13,287 | 92 | 3,663,658 | 30 | 5 | 18,385 |
+| bc | 12,586,343 | 110,910 | 110,916 | 92 | 12,586,275 | 1,777 | 5 | 348 |
+| cfrac | 15,763,280 | 26,556 | 26,551 | 92 | 15,763,212 | 35 | 5 | 533 |
+| so_lists | 6,554 | 4,650 | 4,644 | 62 | 6,499 | 1,710 | 4 | 6,940 |
+| so_mandelbrot | 21,584 | 9,799 | 9,788 | 62 | 21,529 | 4,910 | 4 | 6,944 |
+| ao_render | 2,989,001 | 28,305 | 28,280 | 62 | 2,988,946 | 8,627 | 4 | 7,013 |
+| lc_fizzbuzz | 10,880,348 | 233,222 | 232,984 | 62 | 10,880,293 | 70,584 | 4 | 34,830 |
+
+**Misses per 1000 instructions** in Capstone's node cache (16-byte records, four per line),
+without the count (fresh ids) → the count's reuse alone (its ids, its traffic left out) → with
+the count, pairs elided → with the count, literal → Clover's baseline on the same trace:
+
+| | 4 KiB | 64 KiB | 1 MiB |
+|---|---|---|---|
+| treeadd | 1.763 → 1.795 → 3.593 → 3.593 → 7.654 | 1.706 → 1.698 → 3.469 → 3.469 → 5.740 | 1.636 → 1.630 → 3.401 → 3.401 → 5.669 |
+| anagram | 17.5 → 17.3 → 17.3 → 17.3 → 2.854 | 0.001 → 0.000 → 0.000 → 0.000 → 0.001 | 0.000 → 0.000 → 0.000 → 0.000 → 0.001 |
+| yacr2 | 0.010 → 0.010 → 0.012 → 0.012 → 0.083 | 0.000 → 0.000 → 0.001 → 0.001 → 0.003 | 0.000 → 0.000 → 0.000 → 0.000 → 0.001 |
+| ft | 98.1 → 97.1 → 97.9 → 97.9 → 3.686 | 78.9 → 78.1 → 78.7 → 78.7 → 2.629 | 4.104 → 4.052 → 4.411 → 4.411 → 2.083 |
+| espresso | 0.933 → 1.591 → 1.688 → 1.688 → 11.7 | 0.331 → 0.295 → 0.296 → 0.296 → 2.227 | 0.280 → 0.000 → 0.000 → 0.000 → 0.322 |
+| bc | 0.448 → 0.012 → 0.014 → 0.014 → 2.650 | 0.358 → 0.005 → 0.005 → 0.005 → 0.373 | 0.358 → 0.003 → 0.003 → 0.003 → 0.367 |
+| cfrac | 0.628 → 0.133 → 0.134 → 0.134 → 5.672 | 0.550 → 0.115 → 0.115 → 0.115 → 0.415 | 0.412 → 0.000 → 0.000 → 0.000 → 0.413 |
+| so_lists | 0.004 → 0.003 → 0.004 → 0.004 → 0.323 | 0.002 → 0.001 → 0.001 → 0.001 → 0.013 | 0.001 → 0.001 → 0.001 → 0.001 → 0.004 |
+| so_mandelbrot | 0.012 → 0.010 → 0.012 → 0.012 → 0.906 | 0.005 → 0.003 → 0.003 → 0.003 → 0.035 | 0.002 → 0.001 → 0.001 → 0.001 → 0.009 |
+| ao_render | 2.597 → 3.098 → 3.363 → 3.363 → 24.3 | 0.559 → 0.728 → 0.731 → 0.731 → 2.111 | 0.193 → 0.001 → 0.001 → 0.001 → 0.301 |
+| lc_fizzbuzz | 2.981 → 5.912 → 6.714 → 6.714 → 50.8 | 2.111 → 4.295 → 4.375 → 4.375 → 10.9 | 1.428 → 1.857 → 1.879 → 1.879 → 7.771 |
+
+The figures in `plots/`: `rc-accesses` (the streams stacked by origin, against Clover and the
+index), `rc-misses` (misses against the cache size, 1 KiB to 4 MiB, the paper's 8 KB marked),
+`rc-writebacks` (the same for write-backs), `rc-origin` (exposed updates against memory
+operations), `rc-reclamation` (allocations, ids used, live set).
+
+**What the numbers say.**
+
+1. **The count is as frequent as the checks, or more.** Literally, 420 to 708 updates per 1000
+   instructions, 0.9 to 2.3 per lifetime check; with the cancelling pairs elided, 129 to 349,
+   0.4 to 1.1 per check. The paper's table 3 has the same order (its #RC-update is 0.2 to 2.7
+   times its #Query). Each update is a read-modify-write of the node record that the paper's
+   design puts in DRAM behind a node cache.
+2. **Linear capabilities do not make them rare.** Of the cancelling pairs, 0.15 to 0.40 per
+   1000 instructions are moves of a copy between two slots, the case the paper exempts; 115 to
+   521 are a slot rewritten with a copy of the node it already held, pointer arithmetic in
+   place, and 3 to 23 are the return register taking the program counter's node at a call. About
+   a tenth of a percent of what cancels is linearity. An implementation gets the elision only by comparing
+   node ids at the write, as this model does.
+3. **Most of what remains is exposed.** 70 to 275 updates per 1000 instructions come from
+   register instructions with no memory access to hide behind, against 27 to 243 that come with
+   a load or a store. yacr2 is the extreme: 275 exposed, 27 hideable. This is the mechanism the
+   paper names for its overhead, now counted.
+4. **The updates hit.** Exposed updates that miss are at most 0.31 per 1000 instructions at
+   4 KiB and at most 0.15 at 64 KiB: a register-side update touches the node the instruction
+   just used. The extra misses the count's traffic adds in the run are below 0.1 per 1000
+   instructions at 64 KiB for eight programs, 0.08 for lc_fizzbuzz, 0.54 for ft, and treeadd's
+   1.77 are its teardown (786 k pointer copies decremented when the heap is scrubbed at exit, at
+   `rc_mem_dec` and `rc_free`), not its run. The latency cost of the count is the RMW itself,
+   not memory latency.
+5. **The write-backs are the hidden cost.** The check reads, the count writes, and a line the
+   count touched is dirty when it leaves the cache. ft: 0.3 write-backs per 1000 instructions
+   without the count, 78.6 with it at 64 KiB, 2.0 still at 4 MiB; at the paper's 8 KB, 97.5
+   misses and 97.4 write-backs, a miss rate of 9.05 %. lc_fizzbuzz 3.2 → 4.4, treeadd 0.85 →
+   3.0, cfrac 0.002 → 0.115. Wherever the node cache misses on checks, the count doubles the
+   DRAM traffic. The paper reports misses only.
+6. **The paper's cache size is where the count looks worst and its reuse is invisible.** At 8 KB
+   the miss rates are 0.000 to 0.95 % except ft's 9.05 % (treeadd 3.55, anagram 10.1,
+   lc_fizzbuzz 6.55, ao_render 2.64, espresso 1.46 misses per 1000 instructions). Above 64 KiB
+   the count's traffic costs nothing more, and from 256 KiB to 1 MiB its reuse pays: espresso
+   0.280 → 0.000, bc 0.358 → 0.003, cfrac 0.412 → 0.000, ao_render 0.193 → 0.001 at 1 MiB,
+   because the live set fits where the fresh-id footprint never did. The exceptions are the
+   large live sets (treeadd, ft) and lc_fizzbuzz, whose LIFO reuse scatters consecutive
+   allocations over the four-record lines and costs 2.98 → 5.91 misses at 4 KiB and 1.43 → 1.86
+   at 1 MiB, the lifo effect of the id study at work in the paper's own free list.
+7. **Reclamation is exact.** The count frees every node but the four or five the exit sweep
+   finds, and the ids it uses are the live set within 0.3 % (yacr2 8 % below it, because
+   temporaries die before their revoke). The largest count any node reached is 34,830
+   (lc_fizzbuzz); 16 bits would do where the paper reserves 33.
+8. **Against Clover's baseline** the count's stream is 2 to 70 times the accesses (literal 684
+   to 1,098, elided 428 to 834, against Clover's 10 to 539 per 1000 instructions), and on
+   revoke-heavy code Clover misses 2 to 75 times more at 64 KiB (espresso 2.23 against 0.30, bc
+   0.37 against 0.005, lc_fizzbuzz 10.9 against 4.4), on the broad-read heaps less (ft 2.6
+   against 78.7). Many cheap accesses against few expensive ones, as before.
+
+**For the design.** The paper's count buys exact reclamation at the price of one node RMW per
+pointer-producing instruction, most of them exposed and almost none of them linear moves, and
+of a dirty node cache whose write-backs double the metadata traffic wherever the checks miss.
+Clover's index pays per capability store to memory instead and never touches a register move;
+the measurements above put the two on one axis, per 1000 instructions, with the cache size as
+the parameter the paper fixed.
+
+**Repeatability.** so_lists ran three times with the instruction count (twice under full
+verification, once in the series): 2,234,236,186, 2,230,902,773 and 2,232,458,382 instructions,
+within 0.15 %; its register-side increments 114,606,946, 114,283,467 and 114,438,895, within
+0.3 %; its releases 6,499 every time.
+
+**The pointer-chasing programs.** Seven Olden programs (the ptrbench build of
+`results/20261006-qemu-ptrbench/`, whose reports also give their baseline and Clover's stream),
+run after the eleven in the same series, per 1000 instructions, with the figures in
+`plots/olden/`:
+
+| | instructions | checks | exposed | hideable | pairs ×2: rewrite / call / move | count, literal | pairs elided | extra misses @64 KiB | write-backs @64 KiB: no count → with | paper's 8 KB: misses, miss rate | ids used / live set | max count |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| health | 959,418,317 | 410.5 | 88.2 | 86.9 | 329.9 / 27.0 / 0.210 | 534.4 | 177.3 | 1.274 | 0.459 → 3.144 | 3.630, 0.382 % | 844,011 / 896,458 | 338 |
+| tsp | 9,728,477,207 | 172.5 | 39.1 | 32.6 | 261.9 / 31.1 / 0.116 | 365.0 | 71.8 | 0.042 | 0.020 → 0.158 | 0.269, 0.050 % | 393,335 / 393,334 | 388 |
+| bisort | 685,553,473 | 498.6 | 96.6 | 116.5 | 220.4 / 11.2 / 0.237 | 446.3 | 214.5 | 0.653 | 0.287 → 4.223 | 7.333, 0.773 % | 393,335 / 393,334 | 395 |
+| perimeter | 645,972,582 | 502.9 | 101.0 | 105.4 | 299.8 / 16.8 / 0.210 | 527.0 | 210.2 | 1.691 | 0.812 → 3.376 | 4.423, 0.425 % | 1,048,689 / 1,048,688 | 335 |
+| bh | 5,358,751,291 | 211.2 | 42.2 | 28.9 | 278.2 / 31.4 / 0.148 | 380.8 | 71.0 | 0.003 | 0.001 → 0.019 | 0.262, 0.044 % | 8,836 / 8,867 | 339 |
+| em3d | 977,125,149 | 309.5 | 152.6 | 31.2 | 176.1 / 15.9 / 0.105 | 375.9 | 183.8 | 0.003 | 0.003 → 0.007 | 0.669, 0.098 % | 6,281 / 6,281 | 64,258 |
+| mst | 504,405,170 | 539.2 | 93.4 | 103.8 | 273.6 / 15.9 / 0.158 | 486.8 | 197.2 | 0.014 | 0.003 → 0.523 | 1.395, 0.136 % | 4,896 / 4,895 | 1,339 |
+
+They do not go beyond the eleven. Exposed updates are 39 to 153 per 1000 instructions, the
+most in em3d, whose graph hangs on a few hub nodes; calls contribute 11 to 31 (tsp and bh
+recurse), linear moves at most 0.24 again. The tree builders pay for the nodes the count frees
+while the list still holds them: health, bisort and perimeter unlink 650 k, 262 k and 699 k
+nodes, two cold writes each, and show 0.65 to 1.69 extra misses per 1000 instructions at 64 KiB
+with write-backs rising from 0.3 to 0.8 to 3.1 to 4.2. em3d's hub reaches a count of 64,258,
+the largest of the eighteen programs, still 17 bits. health uses 844 k ids for 896 k nodes
+alive by the revoke measure: its temporaries die before their revoke, as yacr2's do. Against
+Clover's stream (37 to 285 accesses per 1000 instructions) the count's literal stream is 366 to
+1,038, and at 64 KiB Clover misses 1.7 to 45 times more (em3d 0.400 against 0.009, mst 1.77
+against 0.53, bisort 10.0 against 4.4, health 5.74 against 3.36).
 
 ## What this does not measure
 

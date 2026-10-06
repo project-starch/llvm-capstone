@@ -1,0 +1,41 @@
+results/20261006-qemu-refcount: the reference count the Capstone paper describes (USENIX Security
+2023, section 6), implemented in capstone-qemu and measured on the eleven programs of the id study
+and on seven pointer-chasing Olden programs. Figures per 1000 instructions the domain retired in
+C-mode blocks (the trace's INSN record).
+
+capstone-qemu: branch perf/revnode-refcount, HEAD e3e4ee7efc (format 05: RC_MOVE and RC_CALL pair
+sites), on bafda26771 (format 04: INSN record, RC_LD_* and RC_SWEEP_* sites), on 955121ef6f (the
+count), on perf/revnode-trace 2f16a090. CAPSTONE_REFCOUNT on (default); the series ran with
+CAPSTONE_RC_VERIFY=4096 (registers and saved contexts checked at every release, the tag map at every
+4096th); so_lists and yacr2 ran beforehand under CAPSTONE_RC_VERIFY=1 CAPSTONE_RC_AUDIT=16 and bc
+under CAPSTONE_RC_VERIFY=256 CAPSTONE_RC_AUDIT=65536 (every node's copies recounted), clean, outputs
+matching native. Positive control: CAPSTONE_RC_BREAK=1 makes the audit fire on so_lists within the
+first allocations.
+
+llvm-capstone: branch perf/revnode-cache (readers at the commit that adds this directory). Readers
+cachesim (format 05, 25 sites, the paper's 8 KB 2-way node cache beside the fully associative sizes,
+dirty lines and write-backs, the after-last-allocation split), aliasstat (unlinks on FREE);
+run.sh with READERS=rcmin: cachesim variants npl4, npl4-rcelide, npl4-norc, npl4-nosweep and
+aliasstat only. clovsim and bucketsim were left out of this series: on the largest traces, once the
+emulator reuses ids, both stall (100 % CPU without consuming), the trace FIFO fills, the guest
+freezes and the launcher gives up with status 255 although the program's output is complete (bc,
+twice); their figures for the Clover and index columns come from results/20261006-qemu-ids/
+(the run without the count), scaled to this run's instructions by the checks, which match within
+0.2 %. The baseline misses without the count are from the same directory.
+
+Platforms, kits, benchmarks: as results/20261006-qemu-ids/PROVENANCE.txt (threads-generation
+platform for the pointer benchmarks, the 09-30 platform for the mruby arms; same images, same
+sha256). The Olden programs health, tsp, bisort, perimeter, bh, em3d, mst are the ptrbench build
+of results/20261006-qemu-ptrbench (sublet heap, -fno-common).
+
+Per program: <prefix>.json (one node per line), .npl4.json (four per line, every count update in),
+.npl4-rcelide.json (the cancelling pairs left out), .npl4-norc.json (every count update left out),
+.npl4-nosweep.json (the exit sweep's decrements and frees left out), .alias.json, .refcount.txt
+(the emulator's statistics line). summarize_rc.py makes the tables in README.md, plot_rc.py the
+figures in plots/ (the eleven programs).
+
+Runs: treeadd 48 s, anagram 824, yacr2 259, ft 214, espresso 587, bc 1157, cfrac 1642, so_lists 175,
+so_mandelbrot 189, ao_render 725, lc_fizzbuzz 1169 (wall, boot included), 2026-10-06 15:57 to
+17:53; then health 84, tsp 327, bisort 71, perimeter 66, bh 237, em3d 52, mst 49, to 18:07. The
+Olden programs' baseline and model reports are results/20261006-qemu-ptrbench/ (named without
+the ptr-seq- prefix).

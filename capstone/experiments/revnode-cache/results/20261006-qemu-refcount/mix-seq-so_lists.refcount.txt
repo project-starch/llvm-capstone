@@ -1,0 +1,1 @@
+capstone: refcount: reg +114438895 -198153887, ld +157587846 -73872843, mem +37992040 -37991972, sweep -6, pairs: rewrite 387710854 move 277514 call 10840316, releases 6499 (valid 1710 unlinked, invalid 4789, by the sweep 4), max count 6940, unsynced 0, stale 0, allocations 6554, ids 4650, free 4595, C-mode instructions 2232458382

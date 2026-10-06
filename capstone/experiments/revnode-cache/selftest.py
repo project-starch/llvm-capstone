@@ -24,7 +24,9 @@ import tempfile
 from collections import OrderedDict
 
 SITES = ["ldst", "ldc", "mrev", "split", "revoke", "delin", "create", "supervisor", "gc",
-         "mem_capstore", "mem_untag", "mem_clear", "drop"]
+         "mem_capstore", "mem_untag", "mem_clear", "drop",
+         "rc_reg_inc", "rc_reg_dec", "rc_mem_inc", "rc_mem_dec", "rc_same", "rc_free",
+         "rc_ld_inc", "rc_ld_dec", "rc_sweep_dec", "rc_sweep_free", "rc_move", "rc_call"]
 READ, WRITE, ALLOC, FREE, RESET = range(5)
 NONE = 0xFFFFFFFF
 
@@ -250,6 +252,56 @@ def main():
     check(w["count"] == 4 and w["nodes_walked"] == 7 and w["max"] == 3
           and w["hist"][:4] == [1, 1, 0, 2],
           f"revoke walks: {w}, want 4 walks of 3, 0, 1, 3")
+
+    # 4. reference-count records (format CRNTRC03): one WRITE per update at the rc_* sites,
+    # an rc_same pair as two records, a FREE at rc_free (the free-list write, an access of
+    # the record the decrement just wrote); --exclude leaves them out.
+    rc = [(1, WRITE, 13), (1, WRITE, 17), (1, WRITE, 17), (2, WRITE, 15), (2, FREE, 18), (1, READ, 0),
+          (3, WRITE, 19), (3, WRITE, 21), (3, FREE, 22)]
+    with tempfile.NamedTemporaryFile(suffix=".bin") as t:
+        with open(t.name, "wb") as f:
+            # format 04: the INSN pair (low, high 32 bits of the instruction count) before END
+            f.write(b"CRNTRC04" + b"".join(struct.pack("<IBBH", *x, 0) for x in rc)
+                    + struct.pack("<IBBH", 0x89ABCDEF, 11, 0, 0) + struct.pack("<IBBH", 0x12, 11, 1, 0)
+                    + struct.pack("<IBBH", 0xFFFFFFFF, 10, 0, 0))
+        r = json.loads(subprocess.run([sim, t.name], check=True, capture_output=True, text=True).stdout)
+        x = json.loads(subprocess.run([sim, "--exclude", "rc_reg_inc,rc_mem_inc,rc_same,rc_free", t.name],
+                                      check=True, capture_output=True, text=True).stdout)
+    w = r["accesses"]["write"]
+    check(w["rc_reg_inc"] == 1 and w["rc_same"] == 2 and w["rc_mem_inc"] == 1 and w["rc_ld_inc"] == 1
+          and w["rc_sweep_dec"] == 1 and r["accesses"]["free"]["rc_free"] == 1
+          and r["accesses"]["free"]["rc_sweep_free"] == 1, f"rc sites counted {w}")
+    check(r["domain_instructions"] == 0x1289ABCDEF, f"instruction count {r['domain_instructions']:#x}")
+    check(cache(r, 16, "full")["misses"] == 3 and cache(x, 16, "full")["misses"] == 2
+          and x["excluded_sites"] == ["rc_reg_inc", "rc_mem_inc", "rc_same", "rc_free"],
+          f"rc exclusion: {cache(r, 16, 'full')['misses']} / {cache(x, 16, 'full')['misses']} misses")
+    # the other readers accept the INSN record and report it
+    check(r["logical_records"] == len(rc), f"INSN records are not accesses: {r['logical_records']}")
+    # 5. the teardown: everything from the last ALLOC record on is reported apart (two
+    #    allocations, then two decrements and a free that miss a 16-line cache)
+    td = ([(NONE, RESET, 6), (1, ALLOC, 6), (1, WRITE, 6), (2, ALLOC, 6), (2, WRITE, 6), (1, READ, 0), (2, READ, 0),
+           (5, WRITE, 16), (6, WRITE, 16), (2, FREE, 18)])
+    a = run(sim, td)["after_last_allocation"]
+    fc = [c for c in a["full_caches"] if c["entries"] == 16][0]
+    check(a["logical_records"] == 7 and a["accesses"]["write"]["rc_mem_dec"] == 2 and a["accesses"]["free"]["rc_free"] == 1
+          and fc["misses"] == 3 and fc["misses_by_site"]["rc_mem_dec"] == 2,
+          f"teardown split: {a['logical_records']} records, {fc['misses']} misses, {fc['misses_by_site']['rc_mem_dec']} at rc_mem_dec")
+
+    # 6. write-backs. Nine lines written: the 8-line cache dropped line 1 dirty (counted at
+    #    its re-read), then holds 2..9 dirty and drops line 2 dirty at the end; the 16-line
+    #    cache keeps all nine dirty. Reads alone dirty nothing. Direct-mapped 16 lines:
+    #    lines 0 and 16 collide, each eviction writes back a dirty line.
+    wb = [(i, WRITE, 0) for i in range(1, 10)] + [(1, READ, 0)]
+    r = run(sim, wb, "--nodes-per-line", "1")
+    c8, c16 = cache(r, 8, "full"), cache(r, 16, "full")
+    check((c8["writebacks"], c8["dirty_at_end"], c16["writebacks"], c16["dirty_at_end"]) == (2, 7, 0, 9),
+          f"write-backs full: {c8['writebacks']}/{c8['dirty_at_end']} and {c16['writebacks']}/{c16['dirty_at_end']}, want 2/7 and 0/9")
+    r = run(sim, [(i, READ, 0) for i in range(1, 10)], "--nodes-per-line", "1")
+    check(cache(r, 8, "full")["writebacks"] == 0 and cache(r, 8, "full")["dirty_at_end"] == 0, "reads dirty nothing")
+    r = run(sim, [(0, WRITE, 0), (16, WRITE, 0), (0, READ, 0)], "--nodes-per-line", "1")
+    dm = [c for c in r["caches"] if c["entries"] == 16 and c["ways"] == 1][0]
+    check(dm["writebacks"] == 2 and dm["misses"] == 3, f"write-backs direct-mapped: {dm['writebacks']}, want 2")
+    check(any(c["entries"] == 128 and c["ways"] == 2 for c in r["caches"]), "the paper's 8 KB 2-way cache is simulated")
 
     print("selftest:", "PASS" if not failures else f"FAIL ({len(failures)})")
     return 1 if failures else 0
