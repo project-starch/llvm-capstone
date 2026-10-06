@@ -24,8 +24,21 @@
   }
  },
  "comparison_with_the_capstone_arms": {
-  "both_catch_7_but_not_the_same_7": "sublet-svheads and cheribsd-revocation each report on 7 of the 11; they agree on 6, and each has exactly one the other misses. Union 8",
-  "only_sublet_svheads": "17535c984a -- the CvXSUBANY SV head lives in Perl's own head arena and is never returned to malloc, so an allocator-boundary revocation scheme has nothing to revoke. CheriBSD is clean with revocation both off and on, and host ASan is silent too. This is the nested-allocator blind spot, measured",
-  "only_cheribsd": "254b30e378 -- its SvPVX buffer IS system-allocator memory, so revocation sees it. The Capstone arms miss it because the domain's in-memory PerlIO layer discards its writes and the defect never executes there: a harness gap, not a protection gap, and CheriBSD running it proves the case is live and catchable"
+  "the_floor_is_identical": "sysalloc-sublet and cheribsd-revocation catch EXACTLY the same 7 cases -- not the same count, the same set, with no case unique to either. Protecting the system allocator spatially and temporally in a Capstone domain reproduces CheriBSD's revocation case for case, which makes that pair the floor this corpus measures the nested allocator against",
+  "the_nested_allocator_adds_one_on_top": "sublet-svheads is that same image plus the SV head arena and catches 8. The extra case is 17535c984a, and CheriBSD cannot reach it"
+ },
+ "is_the_extra_case_in_the_quarantine": {
+  "question": "17535c984a is clean on CheriBSD under default revocation. Is its SV head quarantined but not yet swept, or never in the quarantine at all?",
+  "answer": "never in the quarantine. Perl recycles the head on PL_sv_root and it never reaches free()",
+  "how_measured": "the shadow bitmap, one bit per 16-byte granule, set while that granule is quarantined. Membership is readable in O(1) without running a sweep (quarantine-probe.c, LD_PRELOADed, wrapping malloc and free)",
+  "numbers_under_default_revocation": {
+   "mallocs": 4072,
+   "frees": 2983,
+   "quarantined_after_free": 2983,
+   "reused_while_quarantined": 0
+  },
+  "why_that_settles_it": "all 2983 frees land in the quarantine, so the quarantine is fully active during the case. Zero mallocs return memory whose bit is still set. Had the head travelled free() -> malloc() it would either have been reissued while quarantined -- counted, and the count is 0 -- or swept first, which would have revoked the stale capability and faulted. Neither happened, so it never crossed the allocator boundary",
+  "probe_controls": "a freed block reads bit 1 and a live block reads 0 with revocation on; a freed block reads 0 with revocation off. So the bit tracks quarantine membership and not merely having been freed, and a zero from this probe is informative",
+  "every_free_was_tried_and_REJECTED": "running the case under _RUNTIME_REVOCATION_EVERY_FREE_ENABLE=1 does make it SIGPROT, and that is NOT evidence: with every-free, all 11 cases fault, including af11b0c528, which is an in-bounds read of a live object that no bounds and no revocation may legitimately catch. The configuration cannot distinguish, so its verdicts are not attributable and the earlier inference from it is withdrawn"
  }
 }
