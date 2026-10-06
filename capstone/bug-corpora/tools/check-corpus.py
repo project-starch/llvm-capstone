@@ -68,7 +68,16 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "advisory", "shape", "object", "capstone_column", "comparison",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
-                 "oracle_is_recording"}
+                 "oracle_is_recording", "nested", "nested_why"}
+# `nested` is a BOOLEAN, and it exists because the inventory's headline nesting
+# share was being computed from `allocator_layer` PROSE. On 2026-10-06 a script
+# doing that put 11 of 25 spatial cases into an "unclassified" bucket and
+# reported 44%; the correct figure is 60%, so taking that number would have
+# published one wrong by 16 points -- the unanswered probe was reading as "not
+# nested". `nested_why` carries the one-sentence reason. The axis is WHO
+# ALLOCATED THE OBJECT: an inner allocator's sub-allocation is nested, a direct
+# malloc is not. It is NOT which bound the access crosses; collapsing those two
+# produced a retraction on 2026-10-05.
 # `harness_limit` says this case cannot execute on the arms at all (it needs a
 # postmaster, a transaction block, something the harness does not provide), and
 # `oracle_is_recording` says its directive was written from its own run and so

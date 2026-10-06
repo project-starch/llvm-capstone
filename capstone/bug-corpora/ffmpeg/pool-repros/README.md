@@ -144,10 +144,14 @@ for any subset, so a partial run cannot later read as a full one.
 > its bundle committed or its own retraction; until then this row must not be contrasted against as
 > "the measured one".
 >
-> **UNRESOLVED, and not silently corrected either way:**
+> **RESOLVED later the same day, and recorded so the open question does not outlive its answer:**
 > `../../../docs/ref/cheribsd-denominator-audit.md` counts **22** measured CheriBSD temporal rows
-> across the corpora (13 + 1 + 8), while the inventory's table (c) reports **18**. The two have not
-> been reconciled, and neither figure is relied on here.
+> while the inventory's table (c) reports **18**. That is not a discrepancy — the two count different
+> populations. 18 = tshark 13 + memcached 5, the three programs this inventory covers, memcached's
+> recorded in its `case.json` files because that corpus keeps run summaries out of the repository by
+> policy. 22 = Wireshark 13 + Apache 9, every corpus *with a committed bundle*, which excludes
+> memcached for exactly that reason. FFmpeg contributes **0** to both, which is what this retraction
+> establishes.
 
 The last row is the Sublet port of FFmpeg's own pools (`ports/ffmpeg/sublet`), not the
 buffer-pool port's substitute that the `Sublet` row measures. Each `case.c` runs unchanged against

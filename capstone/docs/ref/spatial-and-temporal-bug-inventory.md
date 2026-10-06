@@ -41,8 +41,8 @@ An access that leaves a bound. Built from upstream defects:
 |---|---:|---:|---:|---|
 | memcached | **3** | **1** | **4** | `allocator-repros/05-07` (`slabs.c` chunks) and `plain-heap-repros/00` (`ddee3e2`, one byte past a `calloc`) |
 | tshark | **5** | **1** | **6** | `wmem-repros/13-17` (wmem chunks) and `plain-heap-repros/00` (`19c51d27b9`, 65471 bytes past a `g_malloc`) |
-| FFmpeg | **1** | **3** | **4** | `plane-repros/00` (`b7946098b1`, one row past a frame plane) and `subobject-repros/00-02` (members inside one `av_malloc`) |
-| **total** | **9** | **5** | **14** | |
+| FFmpeg | **1** | **14** | **15** | `plane-repros/00` (`b7946098b1`, one row past a frame plane); `subobject-repros/00-09` (inside one allocation); `plain-heap-repros/00-03` (past a direct `av_malloc_array`/`av_calloc`) |
+| **total** | **9** | **16** | **25** | |
 
 And the **synthetic baseline**, which carried the not-nested spatial row alone until
 `plain-heap-repros/00` landed and which still does the job no upstream case can -- showing
@@ -180,12 +180,29 @@ discriminate at `malloc` granularity, which is a different job from counting ups
 | | nested | not nested | total |
 |---|---:|---:|---:|
 | temporal | **22** | **5** | **27** |
-| spatial (upstream reductions) | **9** | **5** | **14** |
-| **total** | **31** | **10** | **41** |
+| spatial (upstream reductions) | **9** | **16** | **25** |
+| **total** | **31** | **21** | **52** |
 
-**31 of 41 are instances of nesting (76%).** On the spatial side specifically, 9 of 14. Add the
+**31 of 52 are instances of nesting (60%).** On the spatial side specifically, 9 of 25. Add the
 synthetic baseline probes and the not-nested spatial row grows further, but those are probes and
 are kept out of the defect count on purpose.
+
+> **This share MOVED on 2026-10-06, and anything quoting the old figure needs re-reading.** It was
+> **31 of 41 (76%)**. Eleven not-nested spatial cases were added that day — FFmpeg's
+> `subobject-repros` grew 3 → 10 and a new `ffmpeg/plain-heap-repros` added 4 — and *none* of them is
+> an instance of nesting. The nested count did not change at all: **31 before, 31 after.** So the
+> drop is entirely a denominator effect, and it is a correction rather than a new result: the old
+> 76% was high because the not-nested spatial cell had been left thin by a search that required its
+> candidates to be live at the pin, which no document asks for. The honest reading of both figures
+> together is that **nesting dominates the TEMPORAL axis (22 of 27) and does not dominate the
+> spatial one (9 of 25)** — which the per-axis rows above say directly and the single blended
+> percentage obscures. Prefer the per-axis rows.
+>
+> **The share is now COMPUTABLE, not prose-derived.** Each spatial `case.json` carries an explicit
+> `nested` boolean with a `nested_why`. This was added because a script that classified the cases by
+> reading `allocator_layer` text put **11 of 25 into an "unclassified" bucket** and reported 44%;
+> taking that number would have published a figure wrong by 16 points, since the bucket was being
+> read as "not nested" rather than as "the probe did not answer".
 
 ### (b) How many does Capstone catch without extra protection, and with Sublet?
 
@@ -195,7 +212,7 @@ are kept out of the defect count on purpose.
 |---|---:|---:|---:|
 | temporal, 22 nested | **0 of 22** | **21 of 22** | **22 of 22** |
 | temporal, 5 not nested | **0 of 5** | **5 of 5** | tshark **2 of 2** |
-| spatial, 14 upstream | **6 of 11 measured**, 3 declared | **6 of 11 measured**, 3 declared | tshark **5 of 5** |
+| spatial, 25 upstream | **6 of 11 measured**, 14 declared | **6 of 11 measured**, 14 declared | tshark **5 of 5** |
 
 - **Temporal, 0 of 22 without protection, measured** — not predicted. A bound cannot see a dead
   object: the stale address is in bounds by construction.
@@ -242,7 +259,7 @@ cannot carry two meanings silently:
 |---|---|---:|
 | tshark | **per-chunk, not per-malloc.** `wm_narrow()` (`ports/wireshark/wmem/src/shared/wmem-port-hooks.h:11-15`) narrows *every* wmem allocation on *every* arm, so this harness has **no malloc-granular arm** at all | 5 of 5 |
 | memcached | **per-chunk** — the slab carve | 1 of 3 |
-| FFmpeg | **malloc-granular**, and still blind: each crossing is between two members of one `av_malloc` | 0 of 3 |
+| FFmpeg | **malloc-granular**, and still blind on the measured cohort: each of those crossings is between two members of one `av_malloc` | 0 of 3 measured (`subobject-repros/00-02`); the other 12 FFmpeg rows are declared, and `plain-heap-repros/00-03` predict a **catch** because they leave the allocation |
 
 So tshark's 5 of 5 must **not** be read as "bounds alone suffice". It is the opposite: that harness
 narrows everywhere, and the malloc-granular contrast is only visible in the app ports' fx12 ladder,
@@ -253,9 +270,24 @@ where `level0`, `shrink` and `sublet` all RETURN and only the chunk-ported arm f
 | | caught | measured | not measured |
 |---|---:|---:|---:|
 | temporal, 22 nested | **0** | **18** | 4 |
-| spatial, 14 upstream | **1** | **10** | 4 |
+| spatial, 25 upstream | **1** | **10** | 15 |
 
 - **Temporal: 0 caught, and 18 of the 22 are MEASURED with a positive control that fires.**
+
+> **Reconciled 2026-10-06 with `cheribsd-denominator-audit.md`, which counts 22 and not 18.** The two
+> numbers were flagged as a possible discrepancy; they are not one. They count **different
+> populations under different evidence conventions**:
+> - this table's **18** = tshark 13 + memcached 5, i.e. the measured temporal rows *of the three
+>   programs this inventory covers*, with memcached's five recorded in their `case.json` files
+>   because that corpus's `.gitignore` deliberately keeps run summaries out of the repository;
+> - the audit's **22** = Wireshark 13 + Apache 9, i.e. every corpus *with a committed bundle*. It
+>   excludes memcached precisely because there is no bundle, and excludes PostgreSQL and CPython
+>   because there is nothing at all.
+>
+> So 13 rows are common to both, memcached's 5 are in this figure and not the audit's, and Apache's 9
+> are in the audit's and not this one. Neither figure is wrong and neither needs changing; what was
+> missing was the statement that they are not comparable. FFmpeg contributes **0** to both, which is
+> what the 2026-10-06 retraction of its `pool-repros` CheriBSD arm established.
   - tshark 13 — `results/20260921-cheribsd/` (`matrix.tsv`, `arm=cheribsd`): expected complete,
     passed, exit 0, **0 of 13 caught**. The control: the PoisonCap mode-1 arm in the *same bundle
     and the same boots* faults **13/13** with `SIGPROT` at the labelled read probe. The platform
@@ -360,7 +392,7 @@ this is what a host that has them needs in order to extend the measured column:
 | temporal corpus cases | **22** | 5 + 13 + 4 |
 | spatial corpus cases | **14** | 3 + 1 + 5 + 1 + 3 + 1 |
 | not-nested temporal, as app fixtures | 5 | memcached 17/18, tshark 14/15, FFmpeg 24 |
-| **total defects in both tables** | **41** | 27 temporal + 14 spatial |
+| **total defects in both tables** | **52** | 27 temporal + 25 spatial |
 | fix-reversals (`live_in_pin: false`) | **30 of 36** | liveness is recorded, never required |
 
 *These are recomputed from the `case.json` files, not typed. They drifted once already — the
