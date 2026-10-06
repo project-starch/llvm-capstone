@@ -107,6 +107,42 @@ to the system allocator. The two corpora's `spatial` arms are therefore not
 measuring the same thing, and their numbers still must not be pooled -- but the
 reason is now known rather than open.
 
+## What is owed, and what is a declared boundary
+
+The exclusions are not one kind of thing, and the difference decides whether a
+later run can close them.
+
+**Pending a re-run; 13 rows, no image change needed.** `07` and `32` on all
+three arms, because their triggers were replaced and now run in one process.
+`08` on both Capstone arms and `13` on the base arm, which need the raised
+image and nothing else. `02` and `13` on cheribsd, which now carry the stdlib
+test package that guest's Lib does not have. And `21` on both Capstone arms, as
+one attempt at a larger budget rather than a belief that it will finish -- the
+earlier evidence points at the run saturating the single vCPU, because the
+cancel path timed out as well and the guest stopped answering.
+
+Which image each of those rows gets is not a detail. `07` and `32` need no extra
+capacity now, so they are measured with the SAME image as the other rows, while
+`08` and `13` cannot run without the raised one. A bigger application heap moves
+when pymalloc returns an emptied arena, which is exactly what the `cause=24`
+detections depend on.
+
+**A declared boundary until the images change; 10 rows.** `11` (`_ctypes`), `15`
+(`_testinternalcapi`), `23` (`_testlimitedcapi`) and `24` (`zoneinfo` tzdata) on
+Capstone; `11`, `12` (`_interpreters`), `21` and `22` (`pyexpat`) and `23` on
+cheribsd. Adding a module changes the binary, so every row would have to be
+re-measured against a new hash, not just the recovered ones -- the image gate
+refuses anything else, correctly. That is deliberately out of scope for this
+pass, and these rows stay out of the denominators rather than being counted as
+silence. `_ctypes` needs libffi and may not be reachable in a freestanding musl
+domain at all.
+
+**Probably permanent.** `18` on both Capstone arms: the guest kernel answers
+`mmap` with `Errno 38`, and the case's buffer IS an mmap mapping.
+
+The run plan for the 13 is kept at `~/arms/cpython/run-pending.sh` -- five boots,
+each gated on the image hash recorded for its arm and capacity variant.
+
 ## The exclusions are mostly missing modules, and that was found late
 
 Four cases were thought to be short of the denominator. Re-reading every
