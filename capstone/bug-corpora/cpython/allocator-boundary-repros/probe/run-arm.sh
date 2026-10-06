@@ -1,87 +1,177 @@
 #!/bin/bash
 # run-arm.sh <arm> [out]: boot once with that arm's image, run all 21 cases.
 #
-# The arm is the heap the image links. This script REFUSES to start unless the
-# image it is about to boot is the one build-arms.sh recorded for this arm:
-# three earlier rounds in this lane ran bounds-only under a sublet label,
-# because the label came from an argument and nothing checked the binary.
+# The arm is the heap the image links. Three things are checked before any case
+# runs, each because skipping it has produced wrong rows in this lane:
+#
+#   the image hash   three rounds ran bounds-only under a sublet label, because
+#                    the label came from an argument and nothing checked the
+#                    binary
+#   the interpreter  an image that cannot run a real workload gives meaningless
+#                    defect results, and "no module named encodings" reads
+#                    exactly like a silent mechanism
+#   the discipline   an arm named sublet that reports mode=0 is measuring the
+#                    spatial discipline under a sublet label, which is worse
+#                    than no measurement
 set -u
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=${REPO:-$(cd "$HERE/../../../../.." && pwd)}
+CORPUS=$(cd "$HERE/.." && pwd)
 KIT=${KIT:-${CAPSTONE_TMP_ROOT:-/tmp/capstone}/cpython-arms}
-CORPUS=$HERE/..
+# The share IS the guest's /mnt/host: capstone_vm has no --share on `up`, the
+# directory is fixed by the VM state and the domain reads it directly.
+SHARE=${SHARE:-$HOME/arms/cpython/shared/domain/share}
+ST=${ST:-$HOME/arms/cpython/shared/domain/vm-state}
 arm=${1:?usage: run-arm.sh <arm> [out]}
-OUT=${2:-$KIT/results/$arm-$(date -u +%Y%m%d-%H%M%S)}
-RT=$REPO/capstone/runtime
-export PYTHONPATH=$RT/host CAPSTONE_QEMU_LOCK=$KIT/qemu.lock
-# The revoking arms spend far more revocation nodes than the 65536 default. An
-# earlier round at the default produced 44 cause-30 (INSUF_RESOURCES) rows out
-# of 54, which is a resource ceiling and not a verdict about any defect.
-# Which arms revoke, and therefore need more than the 65536-node default. The
-# arm NAMES are read from the corpus so this cannot drift again: the first
-# version of this line matched sysalloc-sublet and sublet-pymalloc, names the
-# corpus stopped using, so the `sublet` arm would silently have run at the
-# default and produced cause-30 (INSUF_RESOURCES) rows -- a resource ceiling,
-# not a verdict about any defect.
-case $arm in
-  sublet|sysalloc-sublet|sublet-pymalloc|sublet-gc)
-    export CAPSTONE_REV_NODES=${CAPSTONE_REV_NODES:-16777216} ;;
-esac
-# The arm must be one this corpus declares, so a typo cannot produce a result
-# directory that analyse.py will later refuse.
+STAMP=$(date -u +%Y%m%d-%H%M%S)
+OUT=${2:-$KIT/results/$arm-$STAMP}
+export PYTHONPATH=$REPO/capstone/runtime/host
+CASE_TIMEOUT=${CASE_TIMEOUT:-120}
+
+# ---- the arm must be one the corpus declares -----------------------------
 DECL=$(python3 -c "import json,sys; print(' '.join(json.load(open(sys.argv[1]))['required_arms']))" \
        "$CORPUS/corpus.json")
 case " $DECL " in *" $arm "*) ;; *)
   echo "arm '$arm' is not in corpus.json required_arms: $DECL" >&2; exit 2 ;;
 esac
+[ "$arm" = cheribsd-revocation ] && {
+  echo "cheribsd-revocation is not a domain arm -- use run-cheribsd.sh" >&2; exit 2; }
 
+# Which arms revoke, and so need more than the 65536-node default. An earlier
+# round at the default produced 44 cause-30 (INSUF_RESOURCES) rows out of 54,
+# which is a resource ceiling and not a verdict about any defect.
+case $arm in
+  sublet|sysalloc-sublet|sublet-pymalloc|sublet-gc)
+    export CAPSTONE_REV_NODES=${CAPSTONE_REV_NODES:-16777216}
+    WANT_SUBLET=1 ;;
+  *) WANT_SUBLET=0 ;;
+esac
+
+# ---- the image must be the one recorded for this arm ---------------------
 IMG=$KIT/images/python-$arm.dom
 INPUTS=$KIT/images/inputs.tsv
-[ -f "$IMG" ]    || { echo "no image for $arm -- run build-arms.sh $arm" >&2; exit 2; }
-[ -f "$INPUTS" ] || { echo "no $INPUTS -- run build-arms.sh" >&2; exit 2; }
+[ -f "$IMG" ]    || { echo "no image for $arm at $IMG" >&2; exit 2; }
+[ -f "$INPUTS" ] || { echo "no $INPUTS" >&2; exit 2; }
 want=$(awk -v a="$arm" '$1==a{print $3}' "$INPUTS")
 have=$(sha256sum "$IMG" | cut -d' ' -f1)
 [ -n "$want" ] || { echo "$arm is not in $INPUTS" >&2; exit 2; }
-[ "$want" = "$have" ] || {
-  echo "REFUSING: $IMG is not the image recorded for $arm" >&2
+[ "$want" = "$have" ] || { echo "REFUSING: $IMG is not the image recorded for $arm" >&2
   echo "  recorded ${want:0:16}  present ${have:0:16}" >&2; exit 2; }
 
 mkdir -p "$OUT"
-cp "$INPUTS" "$OUT/inputs.tsv"
+# One run at a time: two would share the staging directory under the share.
+exec 9> "$KIT/.run.lock"
+flock -n 9 || { echo "REFUSING: another run holds $KIT/.run.lock" >&2; exit 3; }
+
+# EVERY NAME USED LATER IS ASSIGNED HERE, before the controls read them. An
+# earlier version put one of these below the positive control; under `set -u` a
+# fresh bash died with "GUESTDOM: unbound variable" and the runner reported
+# "POSITIVE CONTROL FAILED" four hours after the edit that caused it.
+GUESTDOM=python-$arm.dom
+GUESTENV=(-e PYTHONHOME=/mnt/host)
+[ "$WANT_SUBLET" = 1 ] && GUESTENV+=(-e CPY_SUBLET_MODE=1)
+mkdir -p "$SHARE"
+cp "$IMG" "$SHARE/$GUESTDOM"
 printf 'arm\t%s\nimage_sha256\t%s\nrev_nodes\t%s\nstarted_utc\t%s\n' \
   "$arm" "$have" "${CAPSTONE_REV_NODES:-65536}" "$(date -u +%FT%TZ)" > "$OUT/run.meta"
+cp "$INPUTS" "$OUT/inputs.tsv"
+echo "arm=$arm image=${have:0:16} rev_nodes=${CAPSTONE_REV_NODES:-65536}"
 
-# ---- stage the cases ----------------------------------------------------
-SHARE=$KIT/share-$arm; rm -rf "$SHARE"; mkdir -p "$SHARE/cases"
-: > "$SHARE/cases.list"
-for d in "$CORPUS"/[0-9][0-9]_*/; do
-  n=$(basename "$d")
-  mkdir -p "$SHARE/cases/$n"
-  cp "$d/trigger.py" "$SHARE/cases/$n/"
-  [ -f "$d/upstream_test.py" ] && cp "$d/upstream_test.py" "$SHARE/cases/$n/"
-  echo "$n" >> "$SHARE/cases.list"
-done
-cp "$IMG" "$SHARE/python.dom"
-cp "$HERE/run-all.sh" "$SHARE/"
-echo "staged $(wc -l < "$SHARE/cases.list") cases into $SHARE"
-
-# ---- boot, run, bring down even on failure ------------------------------
-ST=$KIT/vm-$arm
 vm() { python3 -m capstone_vm --state "$ST" "$@"; }
 cleanup() { vm down >/dev/null 2>&1 || true; }
-trap cleanup EXIT INT TERM HUP     # armed BEFORE the VM exists, not after
+trap cleanup EXIT INT TERM HUP        # armed BEFORE the VM exists
+# `up` needs --qemu --kernel --firmware --rootfs --share; `restart` needs
+# nothing, because the state directory's config.json already records them. Using
+# restart keeps those four host paths out of this script and guarantees the image
+# boots on the same VM the earlier runs used.
+[ -f "$ST/config.json" ] || {
+  echo "no $ST/config.json -- this arm needs a VM state that has booted once." >&2
+  echo "  Create it with: python3 -m capstone_vm --state $ST up \\" >&2
+  echo "    --qemu ... --kernel ... --firmware ... --rootfs ... --share $SHARE" >&2
+  exit 2; }
+# The share recorded in the state must be the one we staged into, or the guest
+# reads a different /mnt/host than the one holding this arm's image.
+recshare=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['share'])" "$ST/config.json")
+[ "$recshare" = "$SHARE" ] || {
+  echo "REFUSING: the VM state's share is $recshare but this run staged into $SHARE" >&2
+  exit 2; }
 vm down >/dev/null 2>&1 || true
-vm up --share "$SHARE" >"$OUT/boot.log" 2>&1 || { echo "boot failed, see $OUT/boot.log" >&2; exit 2; }
-vm run --cwd /mnt/host -- sh /mnt/host/run-all.sh /mnt/host/python.dom "${CASE_BUDGET:-120}" \
-    < "$SHARE/cases.list" > "$OUT/stream.txt" 2>&1
-rc=$?
-printf 'ended_utc\t%s\nstream_rc\t%s\n' "$(date -u +%FT%TZ)" "$rc" >> "$OUT/run.meta"
+vm restart >"$OUT/boot.log" 2>&1 || { echo "boot failed, see $OUT/boot.log" >&2; exit 2; }
 
-# ---- a stream with no ARMS-DONE is not a result -------------------------
-grep -q '^ARMS-BEGIN' "$OUT/stream.txt" || { echo "no ARMS-BEGIN: the guest never started the batch" >&2; exit 2; }
-grep -q '^ARMS-DONE'  "$OUT/stream.txt" || echo "WARNING: no ARMS-DONE -- the stream was cut, rows after the last CASE are missing" >&2
-awk -v arm="$arm" 'BEGIN{OFS="\t"; print "case","arm","rc","last"}
-  /^CASE /{ n=$2; rc=""; sub(/^rc=/,"",$3); rc=$3; $1=$2=$3=""; sub(/^ *LAST= */,""); print n,arm,rc,$0 }' \
-  "$OUT/stream.txt" > "$OUT/verdicts.tsv"
-echo "rows: $(($(wc -l < "$OUT/verdicts.tsv")-1)) / $(wc -l < "$SHARE/cases.list")"
+# ---- control 1: can this image run a real workload at all? --------------
+echo "--- positive control: objects.py 8 3 0"
+[ -f "$SHARE/objects.py" ] || { echo "  no $SHARE/objects.py to control with" >&2; exit 2; }
+pcall=$(cd "$SHARE" && timeout 900 python3 -m capstone_vm --state "$ST" run --cwd /mnt/host \
+        "${GUESTENV[@]}" "/mnt/host/$GUESTDOM" objects.py 8 3 0 2>&1)
+pc=$(printf '%s' "$pcall" | tail -1)
+echo "  $pc"
+printf '%s\n' "$pcall" > "$OUT/positive-control.log"
+case "$pc" in EXP-OK*) ;; *)
+  echo "  POSITIVE CONTROL FAILED -- not running defects on an unqualified image" >&2
+  exit 2 ;; esac
+
+# ---- control 2: is this arm's discipline actually in force? -------------
+pcmode=$(printf '%s' "$pcall" | grep -oE "CPY-SUBLET mode=[0-9]" | head -1)
+[ -n "$pcmode" ] && echo "  $pcmode"
+if [ "$WANT_SUBLET" = 1 ]; then
+  case "$pcmode" in
+    "CPY-SUBLET mode=1") echo "  sublet discipline confirmed" ;;
+    "") echo "  REFUSING: the image printed no CPY-SUBLET mode line at all" >&2; exit 2 ;;
+    *)  echo "  REFUSING: arm '$arm' asked for the sublet discipline, image reports $pcmode" >&2
+        exit 2 ;;
+  esac
+fi
+printf 'positive_control\t%s\ndiscipline\t%s\n' "$pc" "${pcmode:-none}" >> "$OUT/run.meta"
+
+# ---- the cases ----------------------------------------------------------
+# ONLY=01,10,18 runs just those case numbers. A re-run after raising the
+# watchdog must not silently re-measure cases that already produced a verdict
+# under the stricter setting, so the subset is explicit and recorded.
+ONLY=${ONLY:-}
+printf 'case\tarm\tverdict\trc\tcause\tlast\n' > "$OUT/verdicts.tsv"
+printf 'case_timeout\t%s\nonly\t%s\n' "$CASE_TIMEOUT" "${ONLY:-all}" >> "$OUT/run.meta"
+n=0
+for d in "$CORPUS"/[0-9][0-9]_*/; do
+  c=$(basename "$d")
+  if [ -n "$ONLY" ]; then
+    num=${c%%_*}
+    case ",$ONLY," in *",$num,"*) ;; *) continue ;; esac
+  fi
+  n=$((n+1))
+  stage=$SHARE/case-$STAMP; rm -rf "$stage"; mkdir -p "$stage"
+  cp "$d/trigger.py" "$stage/" 2>/dev/null
+  [ -f "$d/upstream_test.py" ] && cp "$d/upstream_test.py" "$stage/"
+  [ -f "$stage/trigger.py" ] || {
+    printf '%s\t%s\tSTAGING-FAILED\t\t\t\n' "$c" "$arm" >> "$OUT/verdicts.tsv"
+    printf '  %-56s STAGING-FAILED\n' "${c:0:56}"; continue; }
+  before=$(wc -l < "$ST/qemu.log" 2>/dev/null || echo 0)
+  out=$(cd "$stage" && timeout "$CASE_TIMEOUT" python3 -m capstone_vm --state "$ST" run \
+          --cwd "/mnt/host/case-$STAMP" "${GUESTENV[@]}" \
+          "/mnt/host/$GUESTDOM" trigger.py 2>&1); rc=$?
+  printf '%s\n' "$out" > "$OUT/$c.log"
+  tailq=$(tail -n +$((before+1)) "$ST/qemu.log" 2>/dev/null)
+  # The launcher relays the fault on the run's own stdout with NO spaces around
+  # "=", while qemu.log writes "cause = 24". Read both: a parser that matched
+  # only the spaced form once scored a real cause=24 as NORUN.
+  cause=$(printf '%s' "$out$tailq" | grep -oE "cause ?= ?[0-9]+" | tail -1 | grep -oE "[0-9]+$")
+  last=$(printf '%s' "$out" | tail -2 | tr '\n' ' ')
+  # Order matters. A fault is a measurement whatever else the log says; a
+  # watchdog kill and an exhausted allocator are not measurements at all and
+  # must never be read as "ran and the mechanism was silent".
+  if [ -n "${cause:-}" ]; then
+    v="DETECTED"
+  elif [ "$rc" = 124 ]; then
+    v="TIMEOUT"
+  elif printf '%s' "$out" | grep -qE "cannot allocate application heap|MemoryError|error return without exception set"; then
+    v="CAPACITY"
+  elif [ "$rc" = 0 ] || [ "$rc" = 1 ]; then
+    v="SILENT"
+  else
+    v="OTHER-rc$rc"
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$c" "$arm" "$v" "$rc" "${cause:-}" "$last" >> "$OUT/verdicts.tsv"
+  printf '  %-54s %-9s rc=%-4s %s\n' "${c:0:54}" "$v" "$rc" "${cause:+cause=$cause}"
+done
+printf 'ended_utc\t%s\ncases\t%s\n' "$(date -u +%FT%TZ)" "$n" >> "$OUT/run.meta"
+echo "rows: $(($(wc -l < "$OUT/verdicts.tsv")-1)) / $n"
 echo "out:  $OUT"

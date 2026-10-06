@@ -1,0 +1,51 @@
+{
+ "arms": {
+  "cheribsd-revocation": {
+   "arm": "cheribsd-revocation",
+   "ended_utc": "2026-10-06T14:51:08Z",
+   "every_free_default": "0",
+   "positive_control": "EXP-OK cpython 552",
+   "python_sha256": "fba7e8d89796a2221e3eb029aff1c1adefe4a60648bcd8af604abf94587e638b",
+   "revocation_default": "1",
+   "sicode_control": "si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB",
+   "started_utc": "2026-10-06T14:15:18Z"
+  },
+  "spatial": {
+   "arm": "spatial",
+   "case_timeout": "600",
+   "cases": "11",
+   "discipline": "none",
+   "ended_utc": "2026-10-06T14:41:33Z",
+   "image_sha256": "7788ac72f70a02aceca2544df7403c79fcf6819da7d0c79f6a5c750deff5b1db",
+   "only": "22,23,24,25,26,27,28,29,30,31,32",
+   "positive_control": "EXP-OK cpython 552",
+   "rev_nodes": "65536",
+   "started_utc": "2026-10-06T14:18:58Z"
+  },
+  "sublet": {
+   "arm": "sublet",
+   "case_timeout": "600",
+   "cases": "11",
+   "discipline": "CPY-SUBLET mode=1",
+   "ended_utc": "2026-10-06T15:12:38Z",
+   "image_sha256": "1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae",
+   "only": "22,23,24,25,26,27,28,29,30,31,32",
+   "positive_control": "EXP-OK cpython 552",
+   "rev_nodes": "16777216",
+   "started_utc": "2026-10-06T14:41:33Z"
+  }
+ },
+ "cases": 32,
+ "note": "Each cell is the arm's own verdict word. TIMEOUT, CAPACITY and STAGING-FAILED are not measurements (SCHEMA rule 4) and are excluded from every rate; oracle_met is blank for them.",
+ "runs": [
+  "boundary-20261006-104241",
+  "cheri11",
+  "cheri11",
+  "spatial-20261006-105111",
+  "spatial-20261006-131005",
+  "spatial-20261006-141858",
+  "sublet-20261006-112658",
+  "sublet-20261006-123446",
+  "sublet-20261006-144133"
+ ]
+}

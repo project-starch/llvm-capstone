@@ -13,15 +13,15 @@
   "layer_note": "measured: ASan reported a 524321-byte region, over the 512 B SMALL_REQUEST_THRESHOLD",
   "arms": {
     "spatial": {
-      "status": "not written"
+      "oracle": "fault: the object is a libc malloc block and the heap bounds each allocation"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "fault: the object is a libc malloc block"
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "oracle": "fault: the object is a libc malloc block, so the platform's revocation has a free to act on"
     }
   },
-  "status": "host oracle measured 2026-10-06 on the pinned ASan build; no arm has been run",
+  "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-105111, sublet-20261006-112658",
   "distinguishing": "the same upstream defect as case 03 with the victim object enlarged, which moves it over the 512-byte threshold: case 03 is the nested manifestation, this is the non-nested one. Kept because it still FIRES at the larger size (524321-byte region), not because the size was changed"
 }

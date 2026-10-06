@@ -6,7 +6,7 @@
     "version": "3.13.7",
     "port": "capstone/ports/cpython/pymalloc"
   },
-  "cases": 21,
+  "cases": 32,
   "case_schema": "script-trigger",
   "case_number_base": 1,
   "required_arms": [
@@ -17,7 +17,7 @@
   "status": "built",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
-    "true": 21
+    "true": 32
   },
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "related": [

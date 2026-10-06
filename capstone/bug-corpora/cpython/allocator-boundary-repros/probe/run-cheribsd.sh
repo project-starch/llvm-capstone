@@ -16,6 +16,12 @@ set -u
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CORPUS=$(cd "$HERE/.." && pwd)
 PY=${CHERI_PYTHON:-$HOME/arms/cpython/cheribsd/build-tgot/python}
+GUEST=${GUEST:-/root/cpython}
+# PYTHONHOME is the pyhome DIRECTORY INSIDE the install, not the install.
+# With the wrong one every case dies before any Python runs, with
+# "No module named encodings" -- indistinguishable from a silent arm.
+PYHOME=${PYHOME:-$GUEST/pyhome}
+SICODE=${SICODE:-/root/sicode.so}
 GUEST_PORT=${GUEST_PORT:-10086}
 OUT=${1:-$HOME/arms/cpython/cheribsd/results/boundary-$(date -u +%Y%m%d-%H%M%S)}
 BUDGET=${CASE_BUDGET:-120}
@@ -48,6 +54,46 @@ printf 'arm\tcheribsd-revocation\npython_sha256\t%s\nrevocation_default\t%s\neve
   "$(sha256sum "$PY" | cut -d' ' -f1)" "$rev" "${ef:-unrecorded}" "$(date -u +%FT%TZ)" > "$OUT/run.meta"
 echo "revocation_default=$rev every_free_default=${ef:-unrecorded}"
 
+# ---- control: can this interpreter run a real workload at all? ---------
+# Without this, a wrong PYTHONHOME or a missing sicode.so turns every case into
+# a fabricated silence. objects.py is the same workload the Capstone arms use.
+G "test -x $GUEST/python" || { echo "no $GUEST/python in the guest" >&2; exit 2; }
+G "test -f $SICODE" || { echo "no $SICODE in the guest -- push it before running" >&2; exit 2; }
+pc=$(G "cd $GUEST && env PYTHONHOME=$PYHOME LD_PRELOAD=$SICODE timeout 300 ./python objects.py 8 3 0 2>&1 | tail -1")
+echo "positive control: ${pc:-<no output>}"
+case "$pc" in
+  EXP-OK*) ;;
+  *) echo "REFUSING: the interpreter is not qualified on this guest." >&2
+     echo "  Got: ${pc:-<no output>}" >&2
+     echo "  A run now would record 21 silences that are the harness, not the arm." >&2
+     exit 2 ;;
+esac
+# si_code reporting is what makes this arm informative at all: without it a
+# fault is just "it crashed", and BOUNDS, TAG and PERM are indistinguishable.
+#
+# The probe is mech-control S_OOB -- an in-bounds pointer read past the end --
+# and it carries si_code out through its EXIT STATUS, _exit(100 + si_code), so
+# this reads the status directly. Reading it through a pipeline would give the
+# pipeline's status instead, which is how an earlier check here reported rc=0
+# for a probe that had in fact faulted.
+MECH=${MECH:-/root/mech-control}
+G "test -x $MECH" || { echo "no $MECH in the guest -- the si_code handler cannot be controlled" >&2
+  echo "  build it from ports/cpython/cheribsd and push it, or set MECH=" >&2; exit 2; }
+scrc=$(G "cd /root && env LD_PRELOAD=$SICODE timeout 60 $MECH S_OOB >/dev/null 2>&1; echo \$?")
+case "$scrc" in
+  101) sc="si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB" ;;
+  1??) sc="si_code=$((scrc-100)) via mech-control S_OOB"
+       echo "WARNING: S_OOB reported si_code $((scrc-100)), expected 1 (BOUNDS)." >&2
+       echo "  The handler works, but a spatial probe faulting for another reason" >&2
+       echo "  means this arm's si_code values need rechecking before they are read." >&2 ;;
+  *)   echo "REFUSING: mech-control S_OOB exited $scrc, not 100+si_code." >&2
+       echo "  The si_code handler reported nothing on a deliberate out-of-bounds read," >&2
+       echo "  so every fault this arm sees would be unclassifiable." >&2
+       exit 2 ;;
+esac
+echo "si_code control:  $sc"
+printf 'positive_control\t%s\nsicode_control\t%s\n' "$pc" "$sc" >> "$OUT/run.meta"
+
 # ---- stage: one directory per case, named as the corpus names it --------
 G "rm -rf /root/boundary && mkdir -p /root/boundary"
 n=0
@@ -67,8 +113,8 @@ echo "staged $n cases"
 printf 'case\tarm\trc\tsignal\tsi_code\tlast\n' > "$OUT/verdicts.tsv"
 for d in "$CORPUS"/[0-9][0-9]_*/; do
   c=$(basename "$d")
-  out=$(G "cd /root/boundary/$c && env PYTHONDONTWRITEBYTECODE=1 PYTHONHOME=/root/cpython \
-            LD_PRELOAD=/root/sicode.so timeout $BUDGET /root/cpython/python trigger.py 2>&1; \
+  out=$(G "cd /root/boundary/$c && env PYTHONDONTWRITEBYTECODE=1 PYTHONHOME=$PYHOME \
+            LD_PRELOAD=$SICODE timeout $BUDGET $GUEST/python trigger.py 2>&1; \
           echo RC=\$?")
   rc=$(printf '%s' "$out" | grep -oE 'RC=[0-9]+' | tail -1 | cut -d= -f2)
   sig=$(printf '%s' "$out" | grep -oE 'signal=[0-9]+' | head -1 | cut -d= -f2)

@@ -1,0 +1,27 @@
+{
+  "case": 32,
+  "upstream_fix": "gh-149449",
+  "title": "[3.13] gh-149449: Fix use-after-free in `_PyUnicode_GetNameCAPI` (GH-150323) (#150354)",
+  "consumer": "Objects/obmalloc.c (the freed block's pool); see the C-model sibling",
+  "class": "temporal",
+  "trigger": "trigger.py",
+  "live_in_pin": true,
+  "live_proof": "measured on the pinned 3.13.7 ASan build with PYTHONMALLOC=malloc and ASAN_OPTIONS=detect_leaks=0: REGRESSION-TEST-FAILS. Running the trigger is the proof.",
+  "fidelity": "interpreter-trigger, real allocator. Upstream's own reproducer driven through the real CPython. The SAME defect also exists in ../pymalloc-repros as a C model consumer against the same allocator; that one locates the faulting instruction with a labelled probe and this one does not, so for attribution the C model is the stronger of the two. This one exists because the C models cannot be built for the cheribsd-revocation arm at all: shared/corpus.h's inline asm uses \"r\" constraints that cannot hold a 128-bit capability.",
+  "allocator_layer": "L1-pymalloc-pool",
+  "allocator_consumed": "yes",
+  "arms": {
+    "spatial": {
+      "oracle": "complete: the stale access stays inside one arena the system allocator still holds, so no allocation boundary is crossed"
+    },
+    "sublet": {
+      "oracle": "fault at the stale access: this arm issues and revokes pymalloc's own blocks"
+    },
+    "cheribsd-revocation": {
+      "oracle": "complete: pymalloc links the freed block onto its own pool free list and never returns it to libc, so the platform has no free to revoke"
+    }
+  },
+  "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-141858, sublet-20261006-144133",
+  "sibling_issue": "../pymalloc-repros/15_gh-149449_unicodedata_capi_cached",
+  "layer_note": "from the allocation site; ASan gave no region for this case"
+}

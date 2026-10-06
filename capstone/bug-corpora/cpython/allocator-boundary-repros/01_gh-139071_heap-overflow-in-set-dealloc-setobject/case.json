@@ -13,14 +13,14 @@
   "layer_note": "measured: ASan reported a 216-byte region, at or under the 512 B SMALL_REQUEST_THRESHOLD",
   "arms": {
     "spatial": {
-      "status": "not written"
+      "oracle": "complete: the stale access stays inside one arena the system allocator still holds, so no allocation boundary is crossed"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "fault at the stale access: this arm issues and revokes pymalloc's own blocks"
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "oracle": "complete: pymalloc links the freed block onto its own pool free list and never returns it to libc, so the platform has no free to revoke"
     }
   },
-  "status": "host oracle measured 2026-10-06 on the pinned ASan build; no arm has been run"
+  "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-105111, sublet-20261006-123446"
 }
