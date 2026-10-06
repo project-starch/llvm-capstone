@@ -17,7 +17,7 @@ the three arms run the same defects from the same sources with the same
 triggers, and differ only in what sits underneath.
 
 **The temporal row is the result.** Sublet reports 24 of 25 where base
-Capstone reports 6 and CheriBSD 4. A use-after-free between two memsys5 chunks
+Capstone reports 6 and CheriBSD 5. A use-after-free between two memsys5 chunks
 never crosses a `malloc` boundary, so a mechanism that knows only `malloc`
 blocks has nothing to check; Sublet bounds each sub-allocation, and sees them.
 
