@@ -1,55 +1,55 @@
 {
-  "case": 0,
-  "upstream_fix": "8864fd0aec",
-  "title": "the pic_timing decoding-unit loop writes one uint16_t past its array into the next struct member",
-  "consumer": "libavcodec/cbs_h265_syntax_template.c",
-  "live_in_pin": true,
-  "live_proof": "LIVE, read from the pinned tree. n9.0.1:libavcodec/cbs_h265_syntax_template.c:1997 still bounds the count INCLUSIVELY -- 'ue(num_decoding_units_minus1, 0, HEVC_MAX_SLICE_SEGMENTS);' -- and :2004-2005 loops 'for (i = 0; i <= current->num_decoding_units_minus1; i++)' writing num_nalus_in_du_minus1[i]. The fix's call to cbs_h265_pic_size_in_ctbs() does not appear in this function at the pin. The two adjacent members are n9.0.1:libavcodec/cbs_h265.h:627-628 and HEVC_MAX_SLICE_SEGMENTS = 600 is n9.0.1:libavcodec/hevc/hevc.h:150. Verified line by line.",
-  "object": "H265RawSEIPicTiming, one refstruct allocation (cbs_sei.c:257 -> refstruct.c:109)",
-  "lifetime_ender": "NONE -- the object is alive throughout. Sub-object spatial row.",
-  "shape": "array member written one element past, into the next member of the same allocation",
-  "allocator_layer": "av_refstruct over av_malloc: header and payload are ONE allocation",
-  "fidelity": "model-consumer, real allocator. The struct is reduced to the two adjacent array members the crossing involves, with the real declared widths; the bitstream reader is reduced to the loop's index arithmetic, which is what the defect is.",
-  "distinguishing": "offset 1200 is 4-aligned and is exactly where the second member begins, so the two-byte write lands on its LOW HALF -- asserted by the case, which checks that the high half survives. Fully contained: no magnitude escapes the allocation.",
-  "arms": {
-    "spatial": {
-      "oracle": "the sequence completes. NOTHING WE HAVE CATCHES THIS, and measuring that is the row's purpose. The crossing is between two members of ONE allocation, so every per-allocation bound -- shrink, sublet, the pool arms, CHERI -- is in bounds for it. The authority that would have to be narrowed is per struct member, which means the compiler or the allocation site, not an allocator. That is the taxonomy's partial-squared cell, where table6-cheri-vs-capstone-explained.md already gives CHERI and Capstone the same verdict.",
-      "probe_case": 40,
-      "note": "Measured as probe case 40 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound."
-    },
-    "sublet": {
-      "oracle": "the sequence completes: revocation has nothing to fire on, no lifetime ends here, and the bound is the whole allocation. NOTHING WE HAVE CATCHES THIS, and measuring that is the row's purpose. The crossing is between two members of ONE allocation, so every per-allocation bound -- shrink, sublet, the pool arms, CHERI -- is in bounds for it. The authority that would have to be narrowed is per struct member, which means the compiler or the allocation site, not an allocator. That is the taxonomy's partial-squared cell, where table6-cheri-vs-capstone-explained.md already gives CHERI and Capstone the same verdict.",
-      "probe_case": 40,
-      "note": "Measured as probe case 40 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound."
-    },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: completes. Mode 0 bounds an allocation, and the crossing is inside one.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "signal": 34,
-      "si_code": 2,
-      "oracle": "PREDICTED and UNMEASURABLE HERE: completes. Mode 1 adds temporal protection and no lifetime ends here.",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
-    },
-    "cheribsd-revocation": {
-      "oracle": "PREDICTED and UNMEASURABLE HERE: completes, for the same reason -- CHERI bounds the av_malloc and the crossing stays inside it.",
-      "target": "stock CheriBSD purecap with the guest's own libc revocation on",
-      "guest_default": "preserved",
-      "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
-    },
-    "native-detect": {
-      "oracle": "NO ASan report, MEASURED two-sided. The member-to-member crossing is inside one allocation, so there is no redzone to poison; a write one uint16_t PAST the same allocation is the positive control and ASan does report it (heap-buffer-overflow, exit 1). Without that control the silence would say nothing about the subject and something about the instrument -- and the first build of the probe proved the point: at -O1 the control was silent too, because the dead store had been optimised away.",
-      "measured": "2026-10-05, results/20261005-native-subobject/ (asan-probe.c and its two arms)"
-    },
-    "native-fix-differential": {
-      "oracle": "the buggy arm's write crosses into the neighbouring member and the sentinel there changes; the fixed arm's bound keeps every write inside its own member. This pair differs by the upstream fix, not by protection -- which is the ONLY oracle available for this class."
-    },
-    "backing": {
-      "oracle": "not applicable, and recorded rather than omitted: there is no backing allocation distinct from the object. The object IS one av_malloc (av_refstruct_allocz -> refstruct.c:109, av_malloc(size + REFCOUNT_OFFSET)), so the 'a mechanism at the wrong point' distinction this arm draws for the pool corpus has nothing to separate here."
-    }
+ "case": 0,
+ "upstream_fix": "8864fd0aec",
+ "title": "the pic_timing decoding-unit loop writes one uint16_t past its array into the next struct member",
+ "consumer": "libavcodec/cbs_h265_syntax_template.c",
+ "live_in_pin": true,
+ "live_proof": "LIVE, read from the pinned tree. n9.0.1:libavcodec/cbs_h265_syntax_template.c:1997 still bounds the count INCLUSIVELY -- 'ue(num_decoding_units_minus1, 0, HEVC_MAX_SLICE_SEGMENTS);' -- and :2004-2005 loops 'for (i = 0; i <= current->num_decoding_units_minus1; i++)' writing num_nalus_in_du_minus1[i]. The fix's call to cbs_h265_pic_size_in_ctbs() does not appear in this function at the pin. The two adjacent members are n9.0.1:libavcodec/cbs_h265.h:627-628 and HEVC_MAX_SLICE_SEGMENTS = 600 is n9.0.1:libavcodec/hevc/hevc.h:150. Verified line by line.",
+ "object": "H265RawSEIPicTiming, one refstruct allocation (cbs_sei.c:257 -> refstruct.c:109)",
+ "lifetime_ender": "NONE -- the object is alive throughout. Sub-object spatial row.",
+ "shape": "array member written one element past, into the next member of the same allocation",
+ "allocator_layer": "av_refstruct over av_malloc: header and payload are ONE allocation",
+ "fidelity": "model-consumer, real allocator. The struct is reduced to the two adjacent array members the crossing involves, with the real declared widths; the bitstream reader is reduced to the loop's index arithmetic, which is what the defect is.",
+ "distinguishing": "offset 1200 is 4-aligned and is exactly where the second member begins, so the two-byte write lands on its LOW HALF -- asserted by the case, which checks that the high half survives. Fully contained: no magnitude escapes the allocation.",
+ "arms": {
+  "spatial": {
+   "oracle": "the sequence completes. NOTHING WE HAVE CATCHES THIS, and measuring that is the row's purpose. The crossing is between two members of ONE allocation, so every per-allocation bound -- shrink, sublet, the pool arms, CHERI -- is in bounds for it. The authority that would have to be narrowed is per struct member, which means the compiler or the allocation site, not an allocator. That is the taxonomy's partial-squared cell, where table6-cheri-vs-capstone-explained.md already gives CHERI and Capstone the same verdict.",
+   "probe_case": 40,
+   "note": "Measured as probe case 40 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound."
   },
-  "status": "MEASURED 2026-10-05, both paths. Capstone: probe case 40 (cbs-h265-pic-timing-member-write) of ports/ffmpeg/buffer-pool/security-tests, run under QEMU on BOTH modes 0 and 2 -- PASS/PASS, expected=completed, runner exit 0. So the prediction that NOTHING WE HAVE CATCHES THIS is now measured under Capstone and not merely declared. Native: runners/run-native.sh exit 0, fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261005-native-subobject/). PoisonCap and CheriBSD remain unmeasurable here. N = 1 per cell."
+  "sublet": {
+   "oracle": "the sequence completes: revocation has nothing to fire on, no lifetime ends here, and the bound is the whole allocation. NOTHING WE HAVE CATCHES THIS, and measuring that is the row's purpose. The crossing is between two members of ONE allocation, so every per-allocation bound -- shrink, sublet, the pool arms, CHERI -- is in bounds for it. The authority that would have to be narrowed is per struct member, which means the compiler or the allocation site, not an allocator. That is the taxonomy's partial-squared cell, where table6-cheri-vs-capstone-explained.md already gives CHERI and Capstone the same verdict.",
+   "probe_case": 40,
+   "note": "Measured as probe case 40 of ports/ffmpeg/buffer-pool/security-tests (pool-lifetime-probes.c), which is how pool-repros measures its own Capstone arms. The probe ASSERTS the crossing happened -- the neighbouring member's sentinel must change and its far end must survive -- so a completion is a measurement and not a quiet nothing. verify-outcomes.py's fault predicate deliberately does not list these cases, because a crossing inside one allocation is in bounds for every per-allocation bound."
+  },
+  "poisoncap-spatial": {
+   "mode": 0,
+   "oracle": "PREDICTED and UNMEASURABLE HERE: completes. Mode 0 bounds an allocation, and the crossing is inside one.",
+   "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
+  },
+  "poisoncap-protected": {
+   "mode": 1,
+   "signal": 34,
+   "si_code": 2,
+   "oracle": "PREDICTED and UNMEASURABLE HERE: completes. Mode 1 adds temporal protection and no lifetime ends here.",
+   "note": "UNMEASURABLE ON THIS HOST, checked rather than assumed: ports/common/cmake/toolchains/cheribsd.cmake:4-9 requires CHERI_SDK and CHERI_SYSROOT and FATAL_ERRORs without them; both are unset even after sourcing the project environment, and no CHERI SDK, rootfs or PoisonCap image exists anywhere on this host. Unavailable, not pending."
+  },
+  "cheribsd-revocation": {
+   "oracle": "MEASURED 2026-10-06, replacing a prediction, and the reading is that this reduction does NOT reproduce on purecap: revocation off, control VERDICT FIXED, defect arm exit 1 with VERDICT INCONCLUSIVE. The case is ABI-dependent by construction -- its distinguishing field turns on offset 1200 being 4-aligned and the two-byte write landing on the LOW HALF of the next member -- and under l64pc128d the struct does not lay out that way, so the assertion about which half survives no longer describes what happens. Not a defence result; the case is outside this arm's denominator. With revocation on the cell is not scoreable either: the fixed control arm itself exits 162, which attribution-probe.c attributes to the fixture or libffmpeg-pool rather than to the platform, since a plain malloc/realloc/free program built the same way returns RC=0 under both settings. See results/20261006-cheribsd-subobject.",
+   "target": "CheriBSD purecap, the image whose loader accepts dynamically linked purecap binaries; revocation selected per process because with the system default at 1 the guest's own sshd dies during a file copy",
+   "guest_default": "preserved",
+   "measured": "2026-10-06, results/20261006-cheribsd-subobject"
+  },
+  "native-detect": {
+   "oracle": "NO ASan report, MEASURED two-sided. The member-to-member crossing is inside one allocation, so there is no redzone to poison; a write one uint16_t PAST the same allocation is the positive control and ASan does report it (heap-buffer-overflow, exit 1). Without that control the silence would say nothing about the subject and something about the instrument -- and the first build of the probe proved the point: at -O1 the control was silent too, because the dead store had been optimised away.",
+   "measured": "2026-10-05, results/20261005-native-subobject/ (asan-probe.c and its two arms)"
+  },
+  "native-fix-differential": {
+   "oracle": "the buggy arm's write crosses into the neighbouring member and the sentinel there changes; the fixed arm's bound keeps every write inside its own member. This pair differs by the upstream fix, not by protection -- which is the ONLY oracle available for this class."
+  },
+  "backing": {
+   "oracle": "not applicable, and recorded rather than omitted: there is no backing allocation distinct from the object. The object IS one av_malloc (av_refstruct_allocz -> refstruct.c:109, av_malloc(size + REFCOUNT_OFFSET)), so the 'a mechanism at the wrong point' distinction this arm draws for the pool corpus has nothing to separate here."
+  }
+ },
+ "status": "MEASURED 2026-10-05, both paths. Capstone: probe case 40 (cbs-h265-pic-timing-member-write) of ports/ffmpeg/buffer-pool/security-tests, run under QEMU on BOTH modes 0 and 2 -- PASS/PASS, expected=completed, runner exit 0. So the prediction that NOTHING WE HAVE CATCHES THIS is now measured under Capstone and not merely declared. Native: runners/run-native.sh exit 0, fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261005-native-subobject/). PoisonCap and CheriBSD remain unmeasurable here. N = 1 per cell."
 }

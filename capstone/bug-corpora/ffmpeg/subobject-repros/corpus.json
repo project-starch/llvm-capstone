@@ -1,37 +1,41 @@
 {
-  "program": "ffmpeg",
-  "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
-  "title": "Upstream FFmpeg spatial defects that cross a bound BETWEEN TWO MEMBERS of one allocation",
-  "upstream": {
-    "version": "n9.0.1",
-    "port": "capstone/ports/ffmpeg/buffer-pool"
-  },
-  "cases": 3,
-  "case_schema": "case-json",
-  "case_macro": "FF2",
-  "required_arms": [
-    "spatial",
-    "sublet",
-    "poisoncap-spatial",
-    "poisoncap-protected",
-    "cheribsd-revocation",
-    "native-detect",
-    "native-fix-differential",
-    "backing"
-  ],
-  "status": "measured",
-  "live_in_pin_recorded": true,
-  "expect_live_in_pin": {
-    "true": 3
-  },
-  "runners": [
-    "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh"
-  ],
-  "checker": "capstone/bug-corpora/tools/check-corpus.py",
-  "evidence": [
-    "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject"
-  ],
-  "advisories": [],
-  "shape_table": true,
-  "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. All three cases are LIVE at the n9.0.1 pin. No arm we have catches any of them; the oracle is the upstream fix, and the ASan arm is measured blind with a positive control. Triage: docs/ref/ffmpeg-spatial-defect-triage.md."
+ "program": "ffmpeg",
+ "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
+ "title": "Upstream FFmpeg spatial defects that cross a bound BETWEEN TWO MEMBERS of one allocation",
+ "upstream": {
+  "version": "n9.0.1",
+  "port": "capstone/ports/ffmpeg/buffer-pool"
+ },
+ "cases": 3,
+ "case_schema": "case-json",
+ "case_macro": "FF2",
+ "required_arms": [
+  "spatial",
+  "sublet",
+  "poisoncap-spatial",
+  "poisoncap-protected",
+  "cheribsd-revocation",
+  "native-detect",
+  "native-fix-differential",
+  "backing"
+ ],
+ "status": "measured",
+ "live_in_pin_recorded": true,
+ "expect_live_in_pin": {
+  "true": 3
+ },
+ "runners": [
+  "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh"
+ ],
+ "checker": "capstone/bug-corpora/tools/check-corpus.py",
+ "evidence": [
+  "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject",
+  "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd-subobject"
+ ],
+ "advisories": [],
+ "shape_table": true,
+ "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. All three cases are LIVE at the n9.0.1 pin. No arm we have catches any of them; the oracle is the upstream fix, and the ASan arm is measured blind with a positive control. Triage: docs/ref/ffmpeg-spatial-defect-triage.md. cheribsd-revocation was a PREDICTION on all three rows until 2026-10-06, justified by cheribsd.cmake needing CHERI_SDK and CHERI_SYSROOT, which this host now has: the buffer-pool port's cheribsd preset configures and builds, and the fixtures cross-build against the purecap libffmpeg-pool.a. Measured with revocation off, the control holds and cases 01 and 02 reproduce their defect on purecap, so CHERI does not catch a member-to-member crossing -- the row's claim, measured. Case 00 does not reproduce on l64pc128d and is outside the arm's denominator. The revocation-on cells are not scoreable because the fixture's own fixed control arm faults, which an attribution probe pins on the fixture or libffmpeg-pool and not on the platform. ARM-DESIGN.md maps all three FFmpeg corpora onto the study's four cumulative arms.",
+ "related": [
+  "capstone/bug-corpora/ffmpeg/ARM-DESIGN.md"
+ ]
 }

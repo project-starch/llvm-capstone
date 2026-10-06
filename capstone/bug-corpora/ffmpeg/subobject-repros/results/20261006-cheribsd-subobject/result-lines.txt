@@ -1,0 +1,14 @@
+00_8864fd0aec_cbs_h265_pic_timing_member revoff fixed RC=0 VERDICT FIXED the fix's bound of 599 keeps every write inside its own member
+00_8864fd0aec_cbs_h265_pic_timing_member revon  fixed RC=162 (no verdict line)
+00_8864fd0aec_cbs_h265_pic_timing_member revoff buggy RC=1 VERDICT INCONCLUSIVE
+00_8864fd0aec_cbs_h265_pic_timing_member revon  buggy RC=162 (no verdict line)
+01_68845e26f7_vulkan_hevc_refpicset_member revoff fixed RC=0 VERDICT FIXED the fix's FF_ARRAY_ELEMS guard keeps every write inside its own array
+01_68845e26f7_vulkan_hevc_refpicset_member revon  fixed RC=162 (no verdict line)
+01_68845e26f7_vulkan_hevc_refpicset_member revoff buggy RC=0 VERDICT DEFECT-REPRODUCED nb_refs = 16 wrote 8 bytes past RefPicSetStCurrBefore[8] into RefPicSetStCurrAfter, inside one refstruct allocation
+01_68845e26f7_vulkan_hevc_refpicset_member revon  buggy RC=162 (no verdict line)
+02_e058af88ab_vulkan_hevc_dpb_member revoff fixed RC=0 VERDICT FIXED the fix's nb_refs >= HEVC_MAX_REFS guard stops the walk at the array's end
+02_e058af88ab_vulkan_hevc_dpb_member revon  fixed RC=162 (no verdict line)
+02_e058af88ab_vulkan_hevc_dpb_member revoff buggy RC=0 VERDICT DEFECT-REPRODUCED the DPB walk wrote ref_src[16], which is h265_refs[0], inside one refstruct allocation
+02_e058af88ab_vulkan_hevc_dpb_member revon  buggy RC=162 (no verdict line)
+attribution-probe revoff plain-malloc-free RC=0 ok=True
+attribution-probe revon  plain-malloc-free RC=0 ok=True
