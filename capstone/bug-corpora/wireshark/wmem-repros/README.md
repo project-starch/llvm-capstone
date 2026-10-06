@@ -6,6 +6,14 @@ and its four allocators from the pinned 4.6.8 release, compiled unmodified but
 for the guarded authority hooks the port applies. The consumers are reduced,
 the allocator is not.
 
+> **Looking for more cases?** [`../LIVE-CANDIDATES.md`](../LIVE-CANDIDATES.md) lists **92
+> defects live at the 4.6.8 pin**, checked by content rather than by ancestry, with the two
+> sharpest verified by hand against the pinned source. The reason they were not found earlier
+> is the population: the previous triage searched `v4.6.8..release-4.6`, 83 commits, which by
+> construction cannot see a defect whose fix was **never backported**. `v4.6.8..master` is
+> 4,401. The checker is committed beside the list as `../check-liveness-at-pin.py`.
+
+
 The layout is the contract in
 [`../../SCHEMA.md`](../../SCHEMA.md):
 one directory per case, `NN_<upstream-fix>_<slug>/`, holding a `case.c` that is

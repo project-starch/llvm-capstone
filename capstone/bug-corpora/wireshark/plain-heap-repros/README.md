@@ -6,6 +6,14 @@ wmem — a chunk carved from a block the system allocator handed out — and all
 cross a bound wmem owns. These cross the system allocator's own bound, **in wiretap, which does not
 use wmem at all**: it calls `g_malloc` directly for its page buffers.
 
+> **Looking for more cases?** [`../LIVE-CANDIDATES.md`](../LIVE-CANDIDATES.md) lists **92
+> defects live at the 4.6.8 pin**, checked by content rather than by ancestry, with the two
+> sharpest verified by hand against the pinned source. The reason they were not found earlier
+> is the population: the previous triage searched `v4.6.8..release-4.6`, 83 commits, which by
+> construction cannot see a defect whose fix was **never backported**. `v4.6.8..master` is
+> 4,401. The checker is committed beside the list as `../check-liveness-at-pin.py`.
+
+
 The mirror of [`../../memcached/plain-heap-repros`](../../memcached/plain-heap-repros/README.md),
 built for the same reason: tshark's not-nested spatial row stood empty because the hunt had required
 its candidates to be **live at the pin**, which no document asks for and which most cases in this
