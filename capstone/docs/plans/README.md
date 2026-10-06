@@ -25,6 +25,7 @@ on 2026-08-18. They are kept, not deleted, because several record measured resul
 
 | File | last touched |
 |------|------|
+| [virtual-capstone-prototype.md](virtual-capstone-prototype.md) — QEMU/Linux M0--M3 contract for process-local virtual ownership | 2026-10-06 |
 | [trusted-linux-application-compatibility.md](trusted-linux-application-compatibility.md) — shared Linux feature parity, architecture decision and acceptance milestones for all application ports | 2026-09-30 |
 | [capstone-heap-protection.md](capstone-heap-protection.md) — qualify libc malloc/free protection with Capstone and minimal changes (plan) | 2026-09-30 |
 | `backend-compiler-fixes.md` | 2026-06-22 |

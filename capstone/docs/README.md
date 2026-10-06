@@ -1,5 +1,12 @@
 # Capstone project documentation
 
+The [virtual Capstone prototype](plans/virtual-capstone-prototype.md) on
+`virtual-capstone-prototype` starts from the bounded Linux feasibility gate.
+Its M0--M3 scope is one protected U-mode process, monotone process-local node
+IDs, the existing QEMU encoding/list and software context saving. The first
+M0 artifact compares the compiled QEMU node list with an independent forest;
+the guest ABI, Q-12 transfers and full Linux context remain to implement.
+
 Memory design direction on `memory-trusted-linux`:
 [trusted Linux, ordinary virtual memory and Capstone object lifetimes](design/trusted-linux-memory.md).
 The [application compatibility milestones](plans/trusted-linux-application-compatibility.md)

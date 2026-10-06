@@ -2,6 +2,19 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-06 — virtual Capstone prototype starts at M0
+
+`virtual-capstone-prototype` starts from superproject `3638abe58a4c` and
+QEMU `2e6d0ff145`. The [prototype contract](../plans/virtual-capstone-prototype.md)
+keeps the QEMU encoding, node list and conditional UNINIT behavior; it uses
+monotone local IDs, a trusted kernel and software tagged context saving.
+The QEMU `tests/virtual-capstone-model/result.json` host gate compares the
+actual C node list against a parent forest: 8,949 operation prefixes, six
+directed cases and three detected fault controls. It checks node ancestry,
+arena containment and independent tables, not guest context selection or
+Linux execution. No runtime implementation change or new Linux/QEMU boot
+result is claimed. M0 is still open for ABI details; M1--M3 remain open.
+
 ## 2026-10-02 — bounded Linux process review fixes
 
 The [one-register Linux gate](../../tests/trusted-linux-feasibility/README.md)

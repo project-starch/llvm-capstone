@@ -1,3 +1,15 @@
+Virtual Capstone prototype (2026-10-06): follow the local M0--M3 sequence in
+[the prototype contract](../plans/virtual-capstone-prototype.md). The first
+host forest/list comparison passes, including dropped REV handles, whole-arena
+retirement and independent tables with equal IDs. Finish M0's serialized
+table/CSR ABI, mode and exception policy, exhaustion recovery and authoritative
+context frame. Then add the Q-12 consuming-LDC/STC fault/retry gate and implement
+it before guest-table integration. The candidate already checks data rights;
+verify coverage rather than treating Q-14 on the main line as its exact status.
+Disable both free-list reuse and the supervisor collector in the protected
+profile. Full tagged Linux contexts and delegation gates are M2; a static
+malloc/free process with stale-pointer counterprobes is M3. No RTL is in scope.
+
 Trusted Linux application compatibility (2026-10-01): follow the
 [M0–M7 plan](../plans/trusted-linux-application-compatibility.md) on
 `memory-trusted-linux` and its implementation lanes. The
