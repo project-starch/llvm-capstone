@@ -57,6 +57,18 @@ cat /tmp/sqlite.out
 ./capstone-vexec mruby.dom -e 'puts "MRUBY_SUM=#{(1..100).inject(0){|s,n| s+n}}"; File.open("/tmp/virtual-ruby", "w"){|f| f.write("virtual")}; puts "MRUBY_FILE=#{File.read("/tmp/virtual-ruby")}"' > /tmp/mruby.out 2>&1
 echo VM_EXIT:mruby:$?
 cat /tmp/mruby.out
+if [ -f perl.dom ]; then
+  ./capstone-vexec perl.dom -e 'my $sum = 0; $sum += $_ for 1..100; open my $w, ">", "/tmp/virtual-perl" or die $!; print $w "virtual"; close $w; open my $r, "<", "/tmp/virtual-perl" or die $!; my $text = <$r>; close $r; print "PERL_VIRTUAL_OK sum=$sum file=$text\n"' > /tmp/perl.out 2>&1
+  echo VM_EXIT:perl:$?
+  cat /tmp/perl.out
+  if [ -f perl-smoke.pl ]; then
+    mkdir -p /tmp/virtual-perl-files
+    cp /mnt/vm/perl-smoke.pl /tmp/virtual-perl-files/smoke.pl
+    CAPSTONE_PERL_SMOKE_OBJECTS=2000 ./capstone-vexec perl.dom /mnt/vm/perl-smoke.pl /tmp/virtual-perl-files > /tmp/perl-smoke.out 2>&1
+    echo VM_EXIT:perl_smoke:$?
+    cat /tmp/perl-smoke.out
+  fi
+fi
 rmmod capstone_vm
 echo VM_EXIT:cleanup:$?
 echo VIRTUAL_RUNTIME_DONE
@@ -70,6 +82,8 @@ def main():
     p.add_argument('--application', type=Path, required=True)
     p.add_argument('--sqlite', type=Path, required=True)
     p.add_argument('--mruby', type=Path, required=True)
+    p.add_argument('--perl', type=Path)
+    p.add_argument('--perl-smoke', type=Path)
     p.add_argument('--record', type=Path, required=True)
     p.add_argument('--omit-application', action='store_true')
     a = p.parse_args()
@@ -80,12 +94,16 @@ def main():
               'sqlite': a.sqlite,
               'mruby': a.mruby,
               **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
+    if a.perl: inputs['perl'] = a.perl
+    if a.perl_smoke: inputs['perl_smoke'] = a.perl_smoke
     shutil.copyfile(inputs['launcher'], stage/'capstone-vexec')
     (stage/'capstone-vexec').chmod(0o755)
     shutil.copyfile(inputs['module'], stage/'capstone_vm.ko')
     if not a.omit_application: shutil.copyfile(a.application, stage/'contract.dom')
     shutil.copyfile(a.sqlite, stage/'sqlite3.dom')
     shutil.copyfile(a.mruby, stage/'mruby.dom')
+    if a.perl: shutil.copyfile(a.perl, stage/'perl.dom')
+    if a.perl_smoke: shutil.copyfile(a.perl_smoke, stage/'perl-smoke.pl')
     (stage/'gate.sh').write_text(SCRIPT)
     disk = work/'stage.ext4'
     with disk.open('wb') as f: f.truncate(64 << 20)
@@ -129,6 +147,22 @@ def main():
                        ('preempt', 143), ('parallel_one', 0), ('parallel_two', 0),
                        ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0), ('cleanup', 0)]:
         tests[name] = lines.count(f'VM_EXIT:{name}:{code}') == 1
+    if a.perl:
+        tests['perl'] = lines.count('VM_EXIT:perl:0') == 1
+        tests['perl_output'] = lines.count('PERL_VIRTUAL_OK sum=5050 file=virtual') == 1
+    if a.perl_smoke:
+        tests['perl_smoke'] = lines.count('VM_EXIT:perl_smoke:0') == 1
+        smoke_markers = (
+            'P1 hello', 'P2 array 2000 4002000', 'P3 hash 3000 2999',
+            'P4 string 2390 ab0ab1ab2a', 'P5 churn ok', 'P6 fib 6765',
+            'P7 deep 500', 'P8 eval caught msg',
+            'P9 num 4.50 2.5 1.18059162071741e+21',
+            'P10 sort apple banana fig pear',
+            'P11 regex The quick | The slow brown fox | 2',
+            'P12 closure 5', 'P13 ref ARRAY REF 2', 'P14 method Counter 3',
+            'P15 file 50 last-ok', 'P16 dir 1', 'P17 pack 1,2,3 03.14',
+            'SMOKE_DONE')
+        tests['perl_smoke_output'] = all(lines.count(marker) == 1 for marker in smoke_markers)
     tests['normal_output'] = sum(s.startswith('VIRTUAL_APPLICATION_OK ') for s in lines) == 3
     tests['threads_output'] = (lines.count('VIRTUAL_THREAD_CHILD') == 1 and
                                lines.count('VIRTUAL_THREADS_OK shared_mm lifetime_root quantum') == 1)
@@ -145,10 +179,15 @@ def main():
     # application runs that exercise the allocator and demand paging remain
     # the release/fault evidence; the thread record is checked separately by
     # threads_output and the join/stack-retirement path.
-    release_stats = [s for s in stats if s['peak'] > s['pages'] + 300]
-    demand_stats = [s for s in stats if s.get('faults', 0) >= 384]
-    tests['linux_pages_released'] = len(stats) == 7 and len(release_stats) == 3
-    tests['linux_demand_faults'] = len(stats) == 7 and len(demand_stats) == 3 and all(
+    # The base gate has seven fixed allocator records. Optional application
+    # ports append their own records after mruby and must not change the base
+    # demand/release oracle.
+    base_stats = stats[:7]
+    release_stats = [s for s in base_stats if s['peak'] > s['pages'] + 300]
+    demand_stats = [s for s in base_stats if s.get('faults', 0) >= 384]
+    expected_stats = 7 + (1 if a.perl else 0) + (1 if a.perl_smoke else 0)
+    tests['linux_pages_released'] = len(stats) == expected_stats and len(release_stats) == 3
+    tests['linux_demand_faults'] = len(stats) == expected_stats and len(demand_stats) == 3 and all(
         s['faults'] >= 384 for s in demand_stats)
     tests['sqlite_results'] = lines.count('SQLITE_SUM=5050') == 1 and lines.count('SQLITE_PERSIST=100') == 1
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1

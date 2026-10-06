@@ -66,6 +66,9 @@ returned capability is bounded to the request; a request of 4 KiB or more is
 rounded up to the representable grain, at most 1/512 of its size.
 `malloc_usable_size` reports that bounded extent, not the block.
 Anonymous RW `mmap` and whole-arena `munmap` use the same grant/retire path.
+The virtual SDK reserves 65,536 block records and 256 arena records by default;
+larger applications may set `CAPSTONE_APPLICATION_VIRTUAL_BLOCKS` and
+`CAPSTONE_APPLICATION_VIRTUAL_ARENAS` when building the SDK.
 The collector is only enabled after a complete namespace sweep. If all
 remaining identities are live or pinned, the context ends with a resource
 fault (cause 30) instead of guessing that a stale capability is gone.

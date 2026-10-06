@@ -8,12 +8,22 @@
 #include <string.h>
 #include "sublet.h"
 
-#define ARENAS 256
-#define BLOCKS 8192
+#ifndef CAPSTONE_VIRTUAL_ARENAS
+#define CAPSTONE_VIRTUAL_ARENAS 256
+#endif
+#ifndef CAPSTONE_VIRTUAL_BLOCKS
+#define CAPSTONE_VIRTUAL_BLOCKS 65536
+#endif
+#define ARENAS CAPSTONE_VIRTUAL_ARENAS
+#define BLOCKS CAPSTONE_VIRTUAL_BLOCKS
 #define MIN_BLOCK 256UL
 #define MIN_ARENA 65536UL
-struct arena { unsigned long base, bytes, block; unsigned used; };
-struct block { sublet_cap slot; unsigned long base, requested; unsigned arena, live; };
+struct arena { unsigned long base, bytes, block; unsigned used, free_head; };
+struct block {
+    sublet_cap slot;
+    unsigned long base, requested;
+    unsigned arena, live, next_free;
+};
 static struct arena arenas[ARENAS];
 static struct block blocks[BLOCKS];
 extern void *__capstone_vm_map(unsigned long bytes);
@@ -55,10 +65,13 @@ static int grow(unsigned long size)
     __asm__ volatile("ld %0, 0(%1)" : "=r"(base) : "r"(&rest) : "memory");
     if (!base) return -1;
     base = sublet_base(&rest);
-    arenas[a] = (struct arena){base, bytes, size, 0};
+    arenas[a] = (struct arena){base, bytes, size, 0, 0};
     for (unsigned i = 0; i < need; ++i) {
         struct block *b = &blocks[ids[i]];
         b->base = base + i * size; b->arena = a;
+        b->live = 0; b->requested = 0;
+        b->next_free = arenas[a].free_head;
+        arenas[a].free_head = ids[i] + 1;
         if (i + 1 == need) sublet_move(&rest, &b->slot);
         else {
             sublet_cap tail;
@@ -74,10 +87,14 @@ static void *allocate(size_t n, size_t alignment)
     unsigned long size = power(n > alignment ? n : alignment);
     if (!size || !free_ids()) { errno = ENOMEM; return NULL; }
     for (unsigned retry = 0; retry < 2; ++retry) {
-        for (unsigned i = 0; i < BLOCKS; ++i) {
-            struct block *b = &blocks[i];
-            if (b->base && !b->live && arenas[b->arena].block == size) {
-                b->live = 1; b->requested = n; ++arenas[b->arena].used;
+        for (unsigned a = 0; a < ARENAS; ++a) {
+            struct arena *arena = &arenas[a];
+            if (arena->bytes && arena->block == size && arena->free_head) {
+                unsigned index = arena->free_head - 1;
+                struct block *b = &blocks[index];
+                arena->free_head = b->next_free;
+                b->next_free = 0; b->live = 1; b->requested = n;
+                ++arena->used;
                 void *p = sublet_take(&b->slot);
                 unsigned long length = n ? n : 1;
                 if (length >= 4096) {
@@ -111,6 +128,8 @@ void free(void *p)
     memset(p, 0, __builtin_capstone_cap_get_end(p) - b->base);
     sublet_give(&b->slot);
     b->live = 0; --arenas[b->arena].used;
+    b->next_free = arenas[b->arena].free_head;
+    arenas[b->arena].free_head = (unsigned)(b - blocks) + 1;
 }
 void __libc_free(void *p) { free(p); }
 void *calloc(size_t n, size_t size)

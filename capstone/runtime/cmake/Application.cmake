@@ -124,6 +124,11 @@ function(capstone_configure_application target)
   target_compile_definitions(${target} PRIVATE _XOPEN_SOURCE=700
     CAPSTONE_DOMREQ_DATA=${data_bytes} CAPSTONE_DOMREQ_STACK=${app_STACK_BYTES}
     CAPSTONE_LEVEL0_ARENA_BYTES=${app_ARENA_BYTES})
+  if(CAPSTONE_APPLICATION_VIRTUAL)
+    target_compile_definitions(${target} PRIVATE
+      CAPSTONE_VIRTUAL_BLOCKS=${CAPSTONE_APPLICATION_VIRTUAL_BLOCKS}
+      CAPSTONE_VIRTUAL_ARENAS=${CAPSTONE_APPLICATION_VIRTUAL_ARENAS})
+  endif()
   target_compile_options(${target} PRIVATE -ffunction-sections -fdata-sections -fno-jump-tables)
   target_sources(${target} PRIVATE $<TARGET_OBJECTS:capstone-application-core>)
   target_link_libraries(${target} PRIVATE Capstone::Runtime

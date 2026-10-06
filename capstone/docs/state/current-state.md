@@ -20,6 +20,17 @@ full POSIX `pthread_create`/join/synchronization contract. The explicit API is
 validated by the new `threads` application mode; the complete VM application
 gate must be rerun once the branch's compiler and image artifacts are built.
 
+## 2026-10-07 — first full application port on virtual Capstone
+
+Perl 5.36.3 now builds through the virtual Musl/SDK profile with the existing
+Capstone-width fixes and delegated ABI v2. Its ELF carries the virtual marker,
+uses Linux virtual mappings and the scalable virtual allocator, and passes the
+combined application gate plus the virtual Perl smoke workload. The record is
+[`ports/perl/musl/results/virtual/2026-10-07.json`](../../ports/perl/musl/results/virtual/2026-10-07.json).
+The smoke gate uses 2,000 live-object iterations to keep QEMU bounded; the
+physical Perl smoke default remains 20,000. Perl's fork-based tests and full
+POSIX threads remain outside this first virtual profile.
+
 ## 2026-10-06 — virtual C application adapter, R1–R3 slice
 
 The [virtual runtime](../../runtime/virtual/README.md) runs ordinary Capstone
