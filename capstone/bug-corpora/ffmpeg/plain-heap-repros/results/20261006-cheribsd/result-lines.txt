@@ -52,3 +52,36 @@ SUPERVISE base 0x100000 /tmp/allocator-tests/ffh-03-buggy/target
 SUPERVISE expect ffh_write_probe_u8 0x102120
 SUPERVISE fault signal=34 code=1 addr=0x102120 pc=0x102120
 SUPERVISE exit signalled=34
+
+## REPRODUCED 2026-10-06 by the committed runner (runners/run-cheribsd.sh), built -O0
+## The capability lengths come out IDENTICAL. The fault addresses do NOT equal the symbol
+## address any more, and that is the -O0 frame setup, not a loss of attribution: the fault
+## lies INSIDE the probe function's extent, which is what attribution means.
+##   ffh_read_probe spans [0x10213a, 0x102156) (size 0x1c); the fault is at 0x10214a.
+BOOT CheriBSD allocator suite
+PASS cheribsd-abi
+PASS cheribsd-bounds
+PASS cap-bounds
+PASS ffh-00-fixed
+PASS ffh-00-buggy
+PASS ffh-01-fixed
+FAIL ffh-01-buggy
+PASS ffh-02-fixed
+PASS ffh-02-buggy
+PASS ffh-03-fixed
+PASS ffh-03-buggy
+SUPERVISE expect ffh_read_probe 0x10213a
+SUPERVISE fault signal=34 code=1 addr=0x10214a pc=0x10214a
+SUPERVISE exit signalled=34
+SUPERVISE expect ffh_read_probe_u8 0x102266
+SUPERVISE exit status=0
+SUPERVISE expect ffh_read_probe 0x1022f4
+SUPERVISE fault signal=34 code=1 addr=0x102304 pc=0x102304
+SUPERVISE exit signalled=34
+SUPERVISE expect ffh_write_probe_u8 0x102270
+SUPERVISE fault signal=34 code=1 addr=0x102288 pc=0x102288
+SUPERVISE exit signalled=34
+CAPBOUNDS request=16 length=16 slack=0 base=0x40a0f000 addr_eq_base=1
+CAPBOUNDS request=24 length=32 slack=8 base=0x40a1a000 addr_eq_base=1
+CAPBOUNDS request=512 length=512 slack=0 base=0x40a1b000 addr_eq_base=1
+CAPBOUNDS request=2048 length=2048 slack=0 base=0x40a1d000 addr_eq_base=1
