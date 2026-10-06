@@ -8,9 +8,9 @@
   "live_in_pin": true,
   "live_proof": "measured, not asserted: the trigger runs on the pinned 3.13.7 ASan build (PYTHONMALLOC=malloc, ASAN_OPTIONS=detect_leaks=0) and reports ASAN:SEGV in safe_byte_copy (mmapmodule.c:361). Running it is the liveness proof -- a sanitizer report here means the defect is present in this tree.",
   "fidelity": "the trigger is upstream's own reproducer from the issue, run through the real interpreter rather than reduced to a C model. What it does NOT establish is which arm ought to catch it.",
-  "allocator_layer": "libc malloc (the object never reaches a pymalloc pool)",
+  "allocator_layer": "mmap mapping (mmapmodule.c); no allocator issues this object, so no pymalloc pool is involved in any configuration",
   "allocator_consumed": "no",
-  "layer_note": "NOT measured as a region -- the buffer IS an mmap mapping (mmapmodule.c), so a write past its end reaches the OS and ASan reports SEGV rather than a heap region. No pymalloc pool is involved in any configuration",
+  "layer_note": "The ASan nesting test is structurally inconclusive here and that is expected: the buffer IS the mmap mapping, so a write past its end reaches the guard page and ASan reports SEGV rather than a heap region, with PYTHONMALLOC unset and with PYTHONMALLOC=malloc alike. allocator_consumed is 'no' on the mapping's provenance, not on that test.",
   "arms": {
     "spatial": {
       "oracle": "fault: the object is a libc malloc block and the heap bounds each allocation"

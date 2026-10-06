@@ -23,5 +23,5 @@
   },
   "status": "three arms measured 2026-10-06: cheri11, spatial-20261006-141858, sublet-20261006-144133",
   "sibling_issue": "../pymalloc-repros/15_gh-149449_unicodedata_capi_cached",
-  "layer_note": "from the allocation site; ASan gave no region for this case"
+  "layer_note": "unicodedata_create_capi (Modules/unicodedata.c:1465) takes the struct from PyMem_Malloc(sizeof(_PyUnicode_Name_CAPI)) = 16 bytes. The ASan nesting test cannot resolve this case because the fault is an indirect call through the dangling pointer -- ASan instruments loads and stores, not the jump, so it reports SEGV at the PC under PYTHONMALLOC unset and under PYTHONMALLOC=malloc alike. The routing was measured directly instead: PyMem_Malloc(16) freed and read back gives no ASan report with PYTHONMALLOC unset and heap-use-after-free with PYTHONMALLOC=malloc, so the MEM domain is pymalloc and 16 bytes is under the 512-byte threshold. PyMem_RawMalloc(16) reports in both, which is the control."
 }
