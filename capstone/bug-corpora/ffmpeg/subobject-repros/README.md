@@ -59,8 +59,15 @@ allocation and the crossing stays inside" — see the arena caveat below; nothin
 this granularity on that harness. Second, **`-O0` is load-bearing**: a first suite built `-O1`
 returned `VERDICT INCONCLUSIVE` for case 0 while the other nineteen arms passed and both controls
 fired, because case 0's index is a compile-time constant one past its member and clang folded the
-store away. Rebuilt at `-O0` with nothing else changed it reads `DEFECT-REPRODUCED`. The native arms
-use gcc and were unaffected, which is why it surfaced only on this platform.
+store away. Rebuilt at `-O0` with nothing else changed it reads `DEFECT-REPRODUCED`.
+
+**This is compiler-specific, not platform-specific, and the distinction matters for anyone
+re-running the native arms.** gcc at `-O1` keeps the store — the committed native readings in
+`results/20261006-native-subobject-7/result-lines.txt` were captured with gcc at `-O1` and are
+correct as they stand. clang at `-O1` folds it. So a native re-run with `CC=clang` at `-O1` will
+disagree with the committed file on case 0, and that disagreement is the compiler, not a
+regression. The purecap builds use clang because that is the only CHERI compiler, which is why
+this surfaced on the CheriBSD arm first.
 
 **One caveat the Capstone and CheriBSD predictions must carry.** This corpus's driver hands the
 port's `av_malloc` *one* arena, and `ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26`
@@ -71,7 +78,12 @@ and a completion is weaker evidence than "the bound is the whole allocation" wou
 sub-object claim does not rest on it — each case asserts its offsets — but the arm must not be read
 as a measured per-allocation bound.
 
-## The three rows
+## The original three rows
+
+Cases 3-9 were added on 2026-10-06; their shapes are in the table above and their
+measurements in `results/20261006-native-subobject-7/`. The three below are the corpus's first,
+kept with their own detail because the reductions they record are referenced elsewhere.
+
 
 | case | upstream | the crossing |
 |---|---|---|
@@ -79,7 +91,7 @@ as a measured per-allocation bound.
 | **1** | `68845e26f7` Vulkan HEVC ref sets | 8 bytes past `RefPicSetStCurrBefore[8]` → wholly into `RefPicSetStCurrAfter[8]`. **Fully contained: no magnitude escapes the allocation** |
 | **2** | `e058af88ab` Vulkan HEVC DPB | `ref_src[16]` → `h265_refs[0]`. Contained **for the first crossing only**; far past it the walk leaves the struct, which is why the case is reduced to that first write |
 
-## Measured, 2026-10-05
+## Measured, 2026-10-05 — the original three
 
 `runners/run-native.sh` **exit 0**: all three fixed arms print `VERDICT FIXED` and all three buggy
 arms print `VERDICT DEFECT-REPRODUCED`. The runner runs the **control arm first** and treats its
