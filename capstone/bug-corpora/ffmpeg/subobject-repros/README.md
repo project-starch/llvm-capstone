@@ -1,28 +1,60 @@
-# FFmpeg sub-object spatial defects: a bound crossed BETWEEN TWO MEMBERS of one allocation
+# FFmpeg sub-object spatial defects: a bound crossed INSIDE ONE ALLOCATION
 
 A sibling of [`../pool-repros/`](../pool-repros/README.md), deliberately separate. That corpus's
-boundary is storage an `AVBufferPool` handed out; these three defects cross a bound **inside a
-single allocation**, between adjacent members of a struct, which is a different boundary and would
-have been misdescribed by widening the other corpus's.
+boundary is storage an `AVBufferPool` handed out; these ten defects cross a bound **inside a
+single allocation** — between adjacent members of a struct, or between two slices carved from one
+block by arithmetic — which is a different boundary and would have been misdescribed by widening the
+other corpus's.
 
-**All three are LIVE at the `n9.0.1` pin.** Triage:
+**Cases 0, 1, 2, 5 and 6 are LIVE at the `n9.0.1` pin; 3, 4, 7, 8 and 9 are fix-reversals.**
+Liveness is **recorded, never required** — the convention is at
+[`../../memcached/allocator-repros/README.md:132-135`](../../memcached/allocator-repros/README.md),
+and treating it as a requirement is what kept this corpus at three cases until 2026-10-06. Every
+liveness reading here was taken from the **pinned source**, two-sided (vulnerable construct present,
+fix marker absent, or the reverse), not from `git merge-base --is-ancestor`, which has called
+backported fixes live before. Triage and the full candidate disposition:
 [`docs/ref/ffmpeg-spatial-defect-triage.md`](../../../docs/ref/ffmpeg-spatial-defect-triage.md).
+
+**Under this inventory's axis — *who allocated the object* — every row here is NOT NESTED.** The
+object is one allocation and nothing sub-allocated the crossed region. Case 9 is the row most likely
+to be mis-filed: its bound is a slice carved by `base + i*stride`, which is a *sub-object*, not an
+inner allocator's sub-allocation. The tally is per corpus, so that sentence is load-bearing.
 
 ## What makes this class worth a corpus of its own
 
 | shape | cases | caught by any arm we have | oracle used |
 |---|---|:--:|---|
-| array member written past its end into the next member of the same allocation | 0, 1, 2 | **0 / 3** | the upstream fix |
+| array member written one element past its end into the next member | 0, 1, 2, 5 | **0 / 4** | the upstream fix |
+| array member **read** one element past its end into the next member | 3 | **0 / 1** | the upstream fix |
+| index **underflows** out of the START of a member into the one before it | 4 | **0 / 1** | the upstream fix |
+| an **unbounded loop** walks off a member's end into the next member | 6, 8 | **0 / 2** | the upstream fix |
+| a copy sized by its **source** length overruns the destination member | 7 | **0 / 1** | the upstream fix |
+| a **carved sub-slice** crossed by a data-controlled index | 9 | **0 / 1** | the upstream fix |
 
 **Nothing we have catches any of them, and measuring that is the point.** Every per-allocation
-bound — `shrink`, `sublet`, the pool arms, CHERI — is *in bounds* for a member-to-member crossing.
-The authority that would have to be narrowed is **per struct member**, which means the compiler or
-the allocation site, not an allocator. That is the taxonomy's `partial²` cell, where
-`table6-cheri-vs-capstone-explained.md` already gives CHERI and Capstone the same verdict.
+bound — `shrink`, `sublet`, the pool arms, CHERI — is *in bounds* for a crossing interior to one
+allocation. The authority that would have to be narrowed is **per struct member**, or per carved
+slice, which means the compiler or the allocation site, not an allocator. That is the taxonomy's
+`partial²` cell, where `table6-cheri-vs-capstone-explained.md` already gives CHERI and Capstone the
+same verdict.
 
-So the only oracle available is the **upstream fix**: the buggy arm's write crosses into the
-neighbouring member and a sentinel there changes; the fixed arm's bound keeps every write inside its
+So the only oracle available is the **upstream fix**: the buggy arm's access crosses into the
+neighbouring member and a sentinel there changes; the fixed arm's bound keeps every access inside its
 own member. That is `native-fix-differential`, and it is the arm these rows are measured on.
+
+**What is measured, and what is declared.** Cases 0-2 carry a Capstone reading from probe cases
+40-42 of `ports/ffmpeg/buffer-pool/security-tests`, run under QEMU on modes 0 and 2. Cases 3-9 are
+measured on `native-fix-differential` only; their Capstone, PoisonCap, CheriBSD and ASan arms are
+**declared predictions**, recorded before the runs so a refutation stays visible.
+
+**One caveat the Capstone and CheriBSD predictions must carry.** This corpus's driver hands the
+port's `av_malloc` *one* arena, and `ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26`
+carves it by bumping a cursor, rounding every request up to 64 bytes;
+`__builtin_capstone_cap_shrink` appears only in `src/capstone-domain/payload-capabilities.c:57`, on
+pool *payload* blocks. So on this harness there is **no per-allocation bound on the struct at all**,
+and a completion is weaker evidence than "the bound is the whole allocation" would be. The
+sub-object claim does not rest on it — each case asserts its offsets — but the arm must not be read
+as a measured per-allocation bound.
 
 ## The three rows
 
