@@ -1,0 +1,8 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> backend> 	 1: corpus_regexp_invalid_subject	(typeid = 1009, len = -1, typmod = -1, byval = f)
+	----
+	 1: corpus_regexp_invalid_subject = "{}"	(typeid = 1009, len = -1, typmod = -1, byval = f)
+	----
+backend> 2026-10-06 16:55:31.321 UTC [12644] LOG:  checkpoint starting: shutdown immediate
+2026-10-06 16:55:31.607 UTC [12644] LOG:  checkpoint complete: wrote 23 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.263 s, sync=0.005 s, total=0.287 s; sync files=19, longest=0.001 s, average=0.001 s; distance=70 kB, estimate=70 kB; lsn=0/1566470, redo lsn=0/1566470

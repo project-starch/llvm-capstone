@@ -32,5 +32,10 @@
   "runners": [
     "capstone/bug-corpora/postgres/c-repros/shared/run-arm.py",
     "capstone/bug-corpora/postgres/c-repros/shared/run-cheribsd.sh"
+  ],
+  "evidence": [
+    "capstone/bug-corpora/postgres/c-repros/results/spatial-20261006-160406",
+    "capstone/bug-corpora/postgres/c-repros/results/sublet-20261006-161014",
+    "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023"
   ]
 }

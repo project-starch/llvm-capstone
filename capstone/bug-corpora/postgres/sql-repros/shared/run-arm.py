@@ -131,10 +131,26 @@ def score(case_dir, text, result, available):
     if "[runner] TIMEOUT" in text:
         return "other", "runner timeout; not a measurement"
 
+    # A fault is only this case's result if it happened after the setup. The
+    # trigger's CREATE EXTENSION statements come first, and the stand-alone
+    # backend prints one prompt per statement it is ready for, so the prompts
+    # seen before the fault say which statement was running. Measured on the
+    # sublet arm on 2026-10-06: case 03 faulted with ONE prompt, so the fault
+    # was in CREATE EXTENSION ltree and not in the lquery cast the case is
+    # about. Scoring that as detected would credit the mechanism with catching
+    # a defect it never reached.
+    setup = len(extensions_needed(case_dir))
     fault = result.get("fault")
-    if fault:
-        return "detected", f"capability fault: {fault}"
-    if result.get("kind") == "signal":
+    faulted = bool(fault) or result.get("kind") == "signal"
+    if faulted:
+        before = text.count("backend>")
+        if setup and before <= setup:
+            return ("setup-fault",
+                    f"faulted after {before} prompt(s) with {setup} CREATE "
+                    f"EXTENSION statement(s) ahead of the trigger, so the fault "
+                    f"is in the setup and not at the defect: {fault or 'signal'}")
+        if fault:
+            return "detected", f"capability fault: {fault}"
         return "detected", f"terminated by signal {result.get('value')}"
 
     if "backend>" not in text:
@@ -148,6 +164,19 @@ def score(case_dir, text, result, available):
             return ("control-failure",
                     f"CREATE EXTENSION {name} failed in this run although the "
                     f"preflight created it; the trigger did not reach the defect")
+
+    # A syntax error means the backend was handed something other than the
+    # trigger as written, so whatever followed is not this case's measurement.
+    # `postgres --single` takes one line per statement with no continuation,
+    # and a multi-line trigger reaches it in pieces: cases 07 and 09 were
+    # scored silent on three arms that way on 2026-10-06. Cases that expect
+    # errors say so with EXPECT-ERRORS, and a syntax error is never one of
+    # those -- the defect is in the backend, not in the SQL.
+    if re.search(r"ERROR:\s*(syntax error|unterminated)", text):
+        first = re.search(r"ERROR:\s*(syntax error|unterminated)[^\n]*", text)
+        return ("control-failure",
+                f"the trigger did not parse as written, so nothing below it is "
+                f"this case's result: {first.group(0)[:90]}")
 
     want_errors, absent = directives((case_dir / "trigger.sql").read_text())
     notes = []
@@ -214,22 +243,64 @@ def preflight(args, out):
         sys.exit(f"guest share staging failed: {staged.stdout[-400:]}")
 
     wanted = sorted({e for d in cases(args) for e in extensions_needed(d)})
-    probe = out / "preflight.sql"
-    probe.write_text("SELECT 1 AS backend_runs_sql;\n"
-                     + "".join(f"CREATE EXTENSION {e};\n" for e in wanted))
-    cluster(args, "pgdata-preflight")
-    text, _ = backend(args, probe, "pgdata-preflight",
-                      out / "preflight.json", out / "preflight.out", timeout=600)
-    shutil.rmtree(args.share / "pgdata-preflight", ignore_errors=True)
 
+    # ONE SESSION PER EXTENSION, and each has to say so itself. Putting all of
+    # them in one session and reading "no error" as success is wrong in both
+    # directions, and both were observed on 2026-10-06: on the sublet arm the
+    # session took a capability fault on its second statement, and the three
+    # extensions after it were recorded available although they never ran.
+    # Absence of an error is not evidence; the marker below is.
+    first = out / "preflight-00-backend.sql"
+    first.write_text("SELECT 'PREFLIGHT-BACKEND-OK' AS marker;\n")
+    cluster(args, "pgdata-preflight")
+    text, _ = backend(args, first, "pgdata-preflight",
+                      out / "preflight-00.json", out / "preflight-00.out", timeout=600)
+    shutil.rmtree(args.share / "pgdata-preflight", ignore_errors=True)
     if "backend>" not in text:
         sys.exit("POSITIVE CONTROL FAILED: the image did not reach a backend prompt")
-    if "backend_runs_sql" not in text:
-        sys.exit("POSITIVE CONTROL FAILED: the image did not answer SELECT 1")
-    available = {e for e in wanted
-                 if not re.search(rf'ERROR:.*(extension|library).*"?{re.escape(e)}"?', text)}
-    for name in wanted:
-        print(f"  extension {name:<16} {'available' if name in available else 'NOT AVAILABLE'}")
+    if "PREFLIGHT-BACKEND-OK" not in text:
+        sys.exit("POSITIVE CONTROL FAILED: the image did not answer a trivial SELECT")
+
+    available, notes = set(), {}
+    for index, name in enumerate(wanted, start=1):
+        probe = out / f"preflight-{index:02d}-{name}.sql"
+        # The marker is read back OUT OF pg_extension, not printed beside the
+        # CREATE. `postgres --single` does not abort a session on ERROR, it
+        # moves to the next statement, so a marker that merely follows the
+        # CREATE prints whether or not the extension was created -- which
+        # recorded pgcrypto as available on an image that cannot contain it.
+        # ON ONE LINE, for the same reason the triggers are: `postgres --single`
+        # takes a line at a time and has no continuation. Written over two
+        # lines this probe was itself split in half, every extension came back
+        # NOT AVAILABLE, and two arms recorded case 07 as not-applicable on an
+        # image that could create pg_trgm perfectly well.
+        probe.write_text(
+            f"CREATE EXTENSION {name};\n"
+            f"SELECT 'PREFLIGHT-OK-' || extname AS marker FROM pg_extension"
+            f" WHERE extname = '{name}';\n")
+        cluster(args, "pgdata-preflight")
+        text, result = backend(args, probe, "pgdata-preflight",
+                               out / f"preflight-{index:02d}.json",
+                               out / f"preflight-{index:02d}.out", timeout=600)
+        shutil.rmtree(args.share / "pgdata-preflight", ignore_errors=True)
+        # A syntax error here is this runner's bug, not a missing extension, and
+        # the two must never be confused: one is a harness failure and the
+        # other is a fact about the image.
+        if re.search(r"ERROR:\s*(syntax error|unterminated)", text):
+            sys.exit(f"PREFLIGHT IS BROKEN: the probe for {name} did not parse. "
+                     f"This is the runner's SQL, not the image: see "
+                     f"{out / f'preflight-{index:02d}.out'}")
+        if f"PREFLIGHT-OK-{name}" in text:
+            available.add(name)
+            notes[name] = "created"
+        elif result.get("fault") or result.get("kind") == "signal":
+            # Creating it faults. Not available for measurement, and worth its
+            # own word: a case built on it would record a fault that belongs to
+            # the extension's own setup rather than to the defect.
+            notes[name] = "FAULTS ON CREATE"
+        else:
+            notes[name] = "NOT AVAILABLE"
+        print(f"  extension {name:<16} {notes[name]}")
     return wanted, available
 
 
@@ -332,7 +403,7 @@ def main():
         counts[verdict] = counts.get(verdict, 0) + 1
     scored = sum(n for v, n in counts.items()
                  if v not in ("not-applicable", "not-runnable", "control-failure",
-                              "BADRUN", "other"))
+                              "setup-fault", "BADRUN", "other"))
     (out / "inputs.json").write_text(json.dumps({
         "arm": args.arm,
         "image": str(args.image),

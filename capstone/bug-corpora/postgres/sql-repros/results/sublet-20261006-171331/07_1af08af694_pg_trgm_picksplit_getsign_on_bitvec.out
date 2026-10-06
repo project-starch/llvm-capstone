@@ -1,0 +1,150 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> TopMemoryContext: 221952 total in 8 blocks; 84576 free (17 chunks); 137376 used
+  TableSpace cache: 16656 total in 2 blocks; 4784 free (3 chunks); 11872 used
+  TopTransactionContext: 8464 total in 1 blocks; 4944 free (2 chunks); 3520 used
+  RegexpCacheMemoryContext: 1296 total in 1 blocks; 1024 free (0 chunks); 272 used
+    RegexpMemoryContext: 13680 total in 5 blocks; 5984 free (7 chunks); 7696 used: ^\\echo.*$
+  search_path processing cache: 8464 total in 1 blocks; 3248 free (5 chunks); 5216 used
+  RowDescriptionContext: 8464 total in 1 blocks; 7152 free (0 chunks); 1312 used
+  MessageContext: 8464 total in 1 blocks; 2752 free (1 chunks); 5712 used
+  Operator class cache: 16656 total in 2 blocks; 3760 free (4 chunks); 12896 used
+  PgStat Shared Ref Hash: 9584 total in 2 blocks; 960 free (0 chunks); 8624 used
+  PgStat Shared Ref: 16656 total in 5 blocks; 7744 free (2 chunks); 8912 used
+  PgStat Pending: 16656 total in 5 blocks; 9584 free (31 chunks); 7072 used
+  smgr relation table: 65808 total in 4 blocks; 34448 free (15 chunks); 31360 used
+  TransactionAbortContext: 33040 total in 1 blocks; 32768 free (0 chunks); 272 used
+  Portal hash: 16656 total in 2 blocks; 3760 free (4 chunks); 12896 used
+  TopPortalContext: 8464 total in 1 blocks; 7664 free (0 chunks); 800 used
+    PortalContext: 54800 total in 10 blocks; 19168 free (27 chunks); 35632 used: <unnamed>
+      TupleSort main: 57712 total in 2 blocks; 6880 free (8 chunks); 50832 used
+        TupleSort sort: 8464 total in 1 blocks; 8192 free (0 chunks); 272 used
+          Caller tuples: 8000 total in 1 blocks; 7936 free; 64 used
+  Relcache by OID: 33040 total in 3 blocks; 7776 free (9 chunks); 25264 used
+  CacheMemoryContext: 917776 total in 17 blocks; 92384 free (80 chunks); 825392 used
+    index info: 3344 total in 2 blocks; 1040 free (1 chunks); 2304 used: pg_toast_12891_index
+    index info: 3344 total in 2 blocks; 928 free (1 chunks); 2416 used: pg_class_tblspc_relfilenode_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_amproc_oid_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_amop_oid_index
+    index info: 4016 total in 3 blocks; 960 free (0 chunks); 3056 used: pg_shdepend_depender_index
+    index info: 3616 total in 3 blocks; 944 free (0 chunks); 2672 used: pg_description_o_c_o_index
+    index info: 3616 total in 3 blocks; 944 free (0 chunks); 2672 used: pg_depend_reference_index
+    index info: 3616 total in 3 blocks; 944 free (0 chunks); 2672 used: pg_depend_depender_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_index_indrelid_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_extension_oid_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_extension_name_index
+    EventTriggerCache: 8464 total in 1 blocks; 8192 free (5 chunks); 272 used
+      EventTriggerCacheHash: 16656 total in 2 blocks; 5824 free (4 chunks); 10832 used
+    index info: 3344 total in 2 blocks; 1168 free (1 chunks); 2176 used: pg_user_mapping_user_server_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_user_mapping_oid_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_type_oid_index
+    index info: 3344 total in 2 blocks; 960 free (1 chunks); 2384 used: pg_type_typname_nsp_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_ts_template_oid_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_ts_template_tmplname_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_ts_parser_oid_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_ts_parser_prsname_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_ts_dict_oid_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_ts_dict_dictname_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_ts_config_oid_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_ts_config_cfgname_index
+    index info: 2592 total in 2 blocks; 240 free (0 chunks); 2352 used: pg_ts_config_map_index
+    index info: 3344 total in 2 blocks; 1040 free (1 chunks); 2304 used: pg_transform_type_lang_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_transform_oid_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_tablespace_oid_index
+    index info: 3344 total in 2 blocks; 1168 free (1 chunks); 2176 used: pg_subscription_rel_srrelid_srsubid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_subscription_oid_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_subscription_subname_index
+    index info: 2592 total in 2 blocks; 208 free (0 chunks); 2384 used: pg_statistic_relid_att_inh_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_statistic_ext_oid_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_statistic_ext_name_index
+    index info: 3344 total in 2 blocks; 1168 free (1 chunks); 2176 used: pg_statistic_ext_data_stxoid_inh_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_sequence_seqrelid_index
+    index info: 2320 total in 2 blocks; 704 free (1 chunks); 1616 used: pg_replication_origin_roname_index
+    index info: 2320 total in 2 blocks; 704 free (1 chunks); 1616 used: pg_replication_origin_roiident_index
+    index info: 3344 total in 2 blocks; 960 free (1 chunks); 2384 used: pg_class_relname_nsp_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_range_rngtypid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_range_rngmultitypid_index
+    index info: 3344 total in 2 blocks; 1168 free (1 chunks); 2176 used: pg_publication_rel_prrelid_prpubid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_publication_rel_oid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_publication_oid_index
+    index info: 3344 total in 2 blocks; 1168 free (1 chunks); 2176 used: pg_publication_namespace_pnnspid_pnpubid_index
+    index info: 2320 total in 2 blocks; 704 free (1 chunks); 1616 used: pg_publication_namespace_oid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_publication_pubname_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_proc_oid_index
+    index info: 3616 total in 3 blocks; 944 free (0 chunks); 2672 used: pg_proc_proname_args_nsp_index
+    index info: 2320 total in 2 blocks; 704 free (1 chunks); 1616 used: pg_partitioned_table_partrelid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_parameter_acl_oid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_parameter_acl_parname_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_opfamily_oid_index
+    index info: 3616 total in 3 blocks; 944 free (0 chunks); 2672 used: pg_opfamily_am_name_nsp_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_operator_oid_index
+    index info: 4016 total in 3 blocks; 800 free (0 chunks); 3216 used: pg_operator_oprname_l_r_n_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_namespace_oid_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_namespace_nspname_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_language_oid_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_language_name_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_foreign_table_relid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_foreign_server_oid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_foreign_server_name_index
+    index info: 2320 total in 2 blocks; 704 free (1 chunks); 1616 used: pg_foreign_data_wrapper_oid_index
+    index info: 2320 total in 2 blocks; 704 free (1 chunks); 1616 used: pg_foreign_data_wrapper_name_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_event_trigger_oid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_event_trigger_evtname_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_enum_typid_label_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_enum_oid_index
+    index info: 3616 total in 3 blocks; 992 free (1 chunks); 2624 used: pg_default_acl_role_nsp_obj_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_conversion_oid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_constraint_oid_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_conversion_name_nsp_index
+    index info: 2992 total in 2 blocks; 176 free (0 chunks); 2816 used: pg_conversion_default_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_collation_oid_index
+    index info: 2592 total in 2 blocks; 240 free (0 chunks); 2352 used: pg_collation_name_enc_nsp_index
+    index info: 3616 total in 3 blocks; 944 free (0 chunks); 2672 used: pg_opclass_am_name_nsp_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_cast_source_target_index
+    index info: 2592 total in 2 blocks; 208 free (0 chunks); 2384 used: pg_auth_members_role_member_index
+    index info: 3344 total in 2 blocks; 960 free (1 chunks); 2384 used: pg_attribute_relid_attnam_index
+    index info: 4016 total in 3 blocks; 800 free (0 chunks); 3216 used: pg_amop_fam_strat_index
+    index info: 3616 total in 3 blocks; 944 free (0 chunks); 2672 used: pg_amop_opr_fam_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_aggregate_fnoid_index
+    index info: 2592 total in 2 blocks; 240 free (0 chunks); 2352 used: pg_shseclabel_object_index
+    index info: 2592 total in 2 blocks; 208 free (0 chunks); 2384 used: pg_auth_members_member_role_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_authid_oid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_authid_rolname_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_database_oid_index
+    index info: 2320 total in 2 blocks; 736 free (2 chunks); 1584 used: pg_database_datname_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_trigger_tgrelid_tgname_index
+    index info: 3344 total in 2 blocks; 1200 free (1 chunks); 2144 used: pg_rewrite_rel_rulename_index
+    index info: 4016 total in 3 blocks; 800 free (0 chunks); 3216 used: pg_amproc_fam_proc_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_opclass_oid_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_index_indexrelid_index
+    index info: 3344 total in 2 blocks; 960 free (1 chunks); 2384 used: pg_attribute_relid_attnum_index
+    index info: 2320 total in 2 blocks; 576 free (2 chunks); 1744 used: pg_class_oid_index
+  WAL record construction: 50560 total in 2 blocks; 6192 free (0 chunks); 44368 used
+  PrivateRefCount: 16656 total in 2 blocks; 5824 free (4 chunks); 10832 used
+  MdSmgr: 8464 total in 1 blocks; 5536 free (0 chunks); 2928 used
+  Pending ops context: 8464 total in 1 blocks; 8192 free (0 chunks); 272 used
+    Pending Ops Table: 16656 total in 2 blocks; 3760 free (4 chunks); 12896 used
+  LOCALLOCK hash: 33040 total in 3 blocks; 18096 free (10 chunks); 14944 used
+  GUCMemoryContext: 24848 total in 2 blocks; 9152 free (3 chunks); 15696 used
+    GUC hash table: 65808 total in 4 blocks; 24032 free (14 chunks); 41776 used
+  Timezones: 112688 total in 3 blocks; 5904 free (4 chunks); 106784 used
+  ErrorContext: 8464 total in 1 blocks; 8192 free (0 chunks); 272 used
+Grand total: 2184928 bytes in 302 blocks; 540528 free (387 chunks); 1644400 used
+2026-10-06 17:24:14.351 GMT [490] ERROR:  out of memory
+2026-10-06 17:24:14.351 GMT [490] DETAIL:  Failed on request of size 268800 in memory context "WAL record construction".
+2026-10-06 17:24:14.351 GMT [490] STATEMENT:  CREATE TABLE trgm_split (t text);
+	
+backend> backend> backend> 2026-10-06 17:24:14.762 GMT [490] ERROR:  relation "trgm_split" does not exist at character 13
+2026-10-06 17:24:14.762 GMT [490] STATEMENT:  INSERT INTO trgm_split SELECT string_agg(md5(random()::text), ' ') FROM generate_series(1, 60) g, generate_series(1, 3000) s GROUP BY s;
+	
+backend> backend> backend> backend> 2026-10-06 17:24:14.879 GMT [490] ERROR:  relation "trgm_split" does not exist at character 13
+2026-10-06 17:24:14.879 GMT [490] STATEMENT:  INSERT INTO trgm_split SELECT 'ab' || i FROM generate_series(1, 3000) i;
+	
+backend> backend> backend> backend> 2026-10-06 17:24:14.991 GMT [490] ERROR:  relation "trgm_split" does not exist
+2026-10-06 17:24:14.991 GMT [490] STATEMENT:  CREATE INDEX trgm_split_idx ON trgm_split USING gist (t gist_trgm_ops);
+	
+backend> backend> 2026-10-06 17:24:15.063 GMT [490] ERROR:  table "trgm_split" does not exist
+2026-10-06 17:24:15.063 GMT [490] STATEMENT:  DROP TABLE trgm_split;
+	
+backend> 2026-10-06 17:24:15.181 GMT [490] LOG:  checkpoint starting: shutdown immediate
+2026-10-06 17:24:19.584 GMT [490] LOG:  checkpoint complete: wrote 104 buffers (20.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.357 s, sync=1.283 s, total=4.424 s; sync files=62, longest=0.065 s, average=0.021 s; distance=510 kB, estimate=510 kB; lsn=0/15B1420, redo lsn=0/15B1420

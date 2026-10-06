@@ -524,6 +524,11 @@
         "capstone/bug-corpora/postgres/c-repros/shared/run-arm.py",
         "capstone/bug-corpora/postgres/c-repros/shared/run-cheribsd.sh"
       ],
+      "evidence": [
+        "capstone/bug-corpora/postgres/c-repros/results/spatial-20261006-160406",
+        "capstone/bug-corpora/postgres/c-repros/results/sublet-20261006-161014",
+        "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023"
+      ],
       "where": "capstone/bug-corpora/postgres/c-repros"
     },
     {
@@ -598,8 +603,9 @@
       ],
       "note": "Narrowed 2026-10-05 to the four categories the study measures -- temporal and spatial, each nested or not -- and the 14 cases outside them were removed: 4 integer, 5 invariant, 2 type-confusion, 1 wrong-answer, 1 authz, 1 null-deref. They were real defects, reproduced and measured on all three arms, and they are recoverable from commit 607802a0421e; they are gone from here because they do not exercise an allocator and so say nothing about nesting. Of the five that remain, all five allocate through palloc, so all five are nested clients. Two of them (02, 03) overflow by ~32 KB and ~65 KB and therefore leave the underlying malloc block, which a malloc-granular mechanism can see; the other three stay inside the palloc chunk. One removed case is worth re-collecting rather than replacing: 05_levenshtein carried CVE-2026-15742, whose upstream description is an arbitrary-address WRITE via integer wraparound, but our trigger only reached the wrong-answer path -- the case's own fidelity said 'an integer wraparound with no memory error'. The extension, the scaffolding and the fix commit c4d51b62748f are all in hand; what is missing is a trigger that reaches the write. Sibling of mmgr-repros, which pins 17.0 and reduces memory-manager defects to C programs. Our own constructed demonstrators are not here: they are fixtures, which README.md places under ports/*/security-tests. Renamed from sql-repros on 2026-10-06. The old name said WHERE the code lives, and that reads as a claim about the allocator which does not hold: src/backend has 193 direct libc call sites against 2940 palloc-family ones, and a defect on one of those objects would be non-nested in the backend -- 2aa6be6e64 is exactly that, a double free of an EVP_CIPHER_CTX that came from OpenSSL's allocator. The name now says how the defect is REACHED, which is what actually distinguishes this corpus from its two siblings and is what its results can be read as evidence for. Whether a case is nested is decided per case by allocator_layer, not by which directory it sits in.",
       "evidence": [
-        "capstone/bug-corpora/postgres/sql-repros/results/20261004",
-        "capstone/bug-corpora/postgres/sql-repros/results/20261005"
+        "capstone/bug-corpora/postgres/sql-repros/results/spatial-20261006-165125",
+        "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261006-171331",
+        "capstone/bug-corpora/postgres/sql-repros/results/cheribsd-revocation-20261006-165125"
       ],
       "runners": [
         "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
@@ -1610,7 +1616,6 @@
     "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.",
-    "`capstone/bug-corpora/postgres/c-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.",
     "`capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.",

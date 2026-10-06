@@ -11,16 +11,25 @@
   "fidelity": "real server, real allocator, contrib extension. The read is of a palloc'd chunk, so whether a mechanism sees it depends on whether TRGMHDRSIZE bytes is enough to leave the surrounding aset block -- it is a small overread, so the expectation is that it is not, which is exactly the asymmetry this corpus measures. Trigger verified on a native 17.5 cluster on 2026-10-06: the first version used rows long enough that CREATE INDEX failed with \"index row requires 10464 bytes, maximum size is 8191\" before picksplit ran at all -- the defect was unreachable and the case would have taken a VM slot to prove nothing. At 60 md5-chunks per row and 6000 rows the index builds to about 3700 pages, so gtrgm_picksplit runs repeatedly over a mixture of all-true and sparse signatures, which is the branch condition. The server completes normally and answers queries, as expected: the overread is TRGMHDRSIZE = VARHDRSZ + 1 bytes inside a palloc'd slice, which no unmodified build can see. Reaching it is what the trigger has to guarantee; reporting it is the arms' job.",
   "arms": {
     "spatial": {
-      "status": "not written"
+      "oracle": "the mechanism reports, or the case completes and it did not",
+      "verdict": "silent",
+      "evidence": "completed with no directive and no fault",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "the mechanism reports, or the case completes and it did not",
+      "verdict": "silent",
+      "evidence": "completed with no directive and no fault",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "oracle": "the mechanism reports, or the case completes and it did not",
+      "verdict": "silent",
+      "evidence": "ran to the prompt with no fault",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
     }
   },
-  "status": "collected 2026-10-05; trigger verified reachable on a native 17.5 cluster 2026-10-06; not yet run on any arm",
+  "status": "measured on all three arms 2026-10-06: spatial=silent, sublet=silent, cheribsd-revocation=silent",
   "nested": true,
   "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
 }

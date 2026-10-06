@@ -44,6 +44,17 @@ mkdir -p "$OUT"
 
 CASES=$(cd "$CORPUS" && ls -d [0-9][0-9]_*/ 2>/dev/null | tr -d / | sort)
 [ -n "$CASES" ] || { echo "no cases under $CORPUS" >&2; exit 2; }
+# ONLY=03,07 runs just those, and the subset is recorded: a rerun after a fix
+# must not look like a full pass that happened to score fewer cases.
+ONLY=${ONLY:-}
+if [ -n "$ONLY" ]; then
+  keep=""
+  for tag in $CASES; do
+    case ",$ONLY," in *",${tag%%_*},"*) keep="$keep $tag" ;; esac
+  done
+  CASES=$keep
+  [ -n "$CASES" ] || { echo "ONLY=$ONLY matched no case" >&2; exit 2; }
+fi
 
 KERN=$(G 'uname -r')
 [ -n "$KERN" ] || { echo "no answer from the guest on port $PORT" >&2; exit 2; }
@@ -114,15 +125,26 @@ for tag in $CASES; do
     echo __EXIT=\$?; rm -rf \$w'")
   ex=$(printf '%s' "$raw" | grep -o '__EXIT=[0-9]*' | tail -1 | cut -d= -f2)
   body=$(printf '%s' "$raw" | grep -v '__EXIT=')
-  printf '%s\n' "$body" > "$OUT/$tag.out"
-  last=$(printf '%s' "$body" | grep -ohE '(PANIC|FATAL|ERROR|TRAP):.*' | head -1 | cut -c1-70)
+  LOG=$OUT/$tag.out
+  printf '%s\n' "$body" > "$LOG"
+  # Everything below reads the FILE. Case 07 prints thousands of rows, and
+  # passing that through `printf '%s' "$body" | grep` overflowed the argument
+  # list, so every check matched nothing and a run that plainly reached the
+  # prompt was recorded BADRUN.
+  last=$(grep -ohE '(PANIC|FATAL|ERROR|TRAP):.*' "$LOG" | head -1 | cut -c1-70)
 
   extfail=""
   for e in $need; do
-    printf '%s' "$body" | grep -qE "ERROR:.*extension \"$e\"" && extfail="$extfail $e"
+    grep -qE "ERROR:.*extension \"$e\"" "$LOG" && extfail="$extfail $e"
   done
 
-  if [ -n "$extfail" ]; then
+  # A syntax error means the backend was handed something other than the
+  # trigger as written; `postgres --single` has no line continuation, and
+  # cases 07 and 09 were scored silent that way on 2026-10-06.
+  if grep -qE "ERROR:  (syntax error|unterminated)" "$LOG"; then
+    v=control-failure
+    why="the trigger did not parse as written: $(grep -ohE 'ERROR:  (syntax error|unterminated)[^\n]*' "$LOG" | head -1 | cut -c1-90)"
+  elif [ -n "$extfail" ]; then
     v=control-failure
     why="CREATE EXTENSION$extfail failed here although the preflight created it; the trigger did not reach the defect"
   elif [ "${ex:-0}" = 162 ]; then
@@ -132,7 +154,7 @@ for tag in $CASES; do
     why="$([ "${ex}" = 139 ] && echo 'SIGSEGV(11)' || echo 'SIGBUS(10)') -- a port defect, not a detection${last:+; $last}"
   elif [ "${ex:-0}" = 124 ]; then
     v=other; why="timed out; not a measurement"
-  elif ! printf '%s' "$body" | grep -q 'backend>'; then
+  elif ! grep -q 'backend>' "$LOG"; then
     v=BADRUN; why="no stand-alone backend prompt -- nothing executed"
   else
     v=silent; why="ran to the prompt with no fault${last:+; first message: $last}"
@@ -166,6 +188,7 @@ cat > "$OUT/inputs.json" <<JSON
     "passed": $([ "${gv:-}" = detected ] && echo true || echo false),
     "kind": "a corpus case required to be detected, which is weaker than a purpose-built control: it says the mechanism reported on something in this configuration, not that it would have reported on each silent case"
   },
+  "only": "${ONLY:-all}",
   "cases": $n,
   "scored": $scored
 }

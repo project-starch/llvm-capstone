@@ -11,16 +11,25 @@
   "fidelity": "real server, core arithmetic reached through contrib/fuzzystrmatch. The write is into a palloc'd chunk; how far out of range it lands depends on the costs supplied, which is caller-controlled, so this case can probe both inside and outside the aset block from the same code path. Trigger derived and then verified, in that order. The first version used round numbers (2000000000, 1073741824) and reached nothing: every one of them tripped the early `if (min_theo_d > max_d) return max_d + 1` and left the function before stop_column was computed at all. Modelling the three int32 operations instead gives a parameter set that drives stop_column to -1: source 3 characters, target 200, ins_c 715827883, del_c 1, max_d 2000000000. 197 * 715827883 overflows negative, slack_d then overflows in turn, and the clamp at :179 is one-sided so -1 passes through to prev[-1]. On a native 17.5 cluster on 2026-10-06 this returns -715827814: a Levenshtein distance cannot be negative, so the return value is itself evidence that the overflow occurred and was used. The server does not crash, as expected -- prev[-1] lands inside the palloc chunk's own block.",
   "arms": {
     "spatial": {
-      "status": "not written"
+      "oracle": "the mechanism reports, or the case completes and it did not",
+      "verdict": "silent",
+      "evidence": "completed with no directive and no fault",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
     },
     "sublet": {
-      "status": "not written"
+      "oracle": "the mechanism reports, or the case completes and it did not",
+      "verdict": "silent",
+      "evidence": "completed with no directive and no fault",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
     },
     "cheribsd-revocation": {
-      "status": "not written"
+      "oracle": "the mechanism reports, or the case completes and it did not",
+      "verdict": "silent",
+      "evidence": "ran to the prompt with no fault",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
     }
   },
-  "status": "collected 2026-10-05; trigger derived from the int32 arithmetic and verified to reach the defect on a native 17.5 cluster 2026-10-06; not yet run on any arm",
+  "status": "measured on all three arms 2026-10-06: spatial=silent, sublet=silent, cheribsd-revocation=silent",
   "nested": true,
   "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
 }

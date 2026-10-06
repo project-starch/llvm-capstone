@@ -1,0 +1,11 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> 2026-10-06 17:18:10.069 GMT [462] ERROR:  extension "pgcrypto" is not available
+2026-10-06 17:18:10.069 GMT [462] DETAIL:  Could not open extension control file "/usr/local/pgsql/share/extension/pgcrypto.control": No such file or directory.
+2026-10-06 17:18:10.069 GMT [462] HINT:  The extension must first be installed on the system where PostgreSQL is running.
+2026-10-06 17:18:10.069 GMT [462] STATEMENT:  CREATE EXTENSION pgcrypto;
+	
+backend> 	 1: marker	(typeid = 25, len = -1, typmod = -1, byval = f)
+	----
+backend> 2026-10-06 17:18:12.394 GMT [462] LOG:  checkpoint starting: shutdown immediate
+2026-10-06 17:18:13.375 GMT [462] LOG:  checkpoint complete: wrote 3 buffers (0.6%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.265 s, sync=0.081 s, total=0.979 s; sync files=2, longest=0.045 s, average=0.038 s; distance=0 kB, estimate=0 kB; lsn=0/1531A00, redo lsn=0/1531A00
