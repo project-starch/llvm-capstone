@@ -491,13 +491,13 @@
     },
     {
       "program": "postgres",
-      "boundary": "the engine, reached through SQL against a running server",
-      "title": "Engine and contrib defects in PostgreSQL 17.5, reached by SQL rather than by a C reduction",
+      "boundary": "the backend, reached through SQL against a running server",
+      "title": "Spatial memory-safety defects in PostgreSQL 17.5, reached by SQL against a running server",
       "upstream": {
         "version": "17.5",
         "port": "capstone/ports/postgres/memory-contexts"
       },
-      "cases": 19,
+      "cases": 8,
       "case_schema": "script-trigger",
       "case_number_base": 1,
       "required_arms": [
@@ -508,7 +508,7 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "true": 19
+        "true": 8
       },
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "related": [
@@ -516,23 +516,52 @@
       ],
       "advisories": [
         "CVE-2026-14669",
-        "CVE-2026-14680",
-        "CVE-2026-15742",
-        "CVE-2026-16239",
         "CVE-2026-18024",
-        "CVE-2026-2003",
-        "CVE-2026-6470"
+        "CVE-2026-2003"
       ],
-      "note": "Sibling of mmgr-repros, not an extension of it. Those 8 cases are upstream use-after-free and double-free defects in the memory managers, pinned at 17.0 and reduced to C programs against aset/slab. These 19 are reached through SQL against a running 17.5 server and are mostly not allocator defects at all: 5 invariant, 4 integer, 3 spatial, 2 spatial/oob-read, 2 type-confusion, 1 null-deref, 1 wrong-answer, 1 authz. That spread is the point -- a corpus filtered to what a sanitizer can see would keep 6 of 19. Cases 12, 14 and 18 need a postmaster and cannot run under the single-user backend the arms use; their arms say so rather than reporting silence. Case 13's directive was written from its own run output and is a recording, not an independent oracle; its case.json says so. Our own constructed memory-context demonstrators are deliberately NOT here: they are this project's fixtures, which README.md places under ports/*/security-tests rather than in bug material.",
+      "note": "Narrowed 2026-10-05 to the four categories the study measures -- temporal and spatial, each nested or not -- and the 14 cases outside them were removed: 4 integer, 5 invariant, 2 type-confusion, 1 wrong-answer, 1 authz, 1 null-deref. They were real defects, reproduced and measured on all three arms, and they are recoverable from commit 607802a0421e; they are gone from here because they do not exercise an allocator and so say nothing about nesting. Of the five that remain, all five allocate through palloc, so all five are nested clients. Two of them (02, 03) overflow by ~32 KB and ~65 KB and therefore leave the underlying malloc block, which a malloc-granular mechanism can see; the other three stay inside the palloc chunk. One removed case is worth re-collecting rather than replacing: 05_levenshtein carried CVE-2026-15742, whose upstream description is an arbitrary-address WRITE via integer wraparound, but our trigger only reached the wrong-answer path -- the case's own fidelity said 'an integer wraparound with no memory error'. The extension, the scaffolding and the fix commit c4d51b62748f are all in hand; what is missing is a trigger that reaches the write. Sibling of mmgr-repros, which pins 17.0 and reduces memory-manager defects to C programs. Our own constructed demonstrators are not here: they are fixtures, which README.md places under ports/*/security-tests.",
       "evidence": [
-        "capstone/bug-corpora/postgres/engine-175/results/20261004",
-        "capstone/bug-corpora/postgres/engine-175/results/20261005"
+        "capstone/bug-corpora/postgres/backend-175/results/20261004",
+        "capstone/bug-corpora/postgres/backend-175/results/20261005"
       ],
       "runners": [
         "capstone/ports/postgres/app/build-domain.sh",
         "capstone/ports/common/application/run.py"
       ],
-      "where": "capstone/bug-corpora/postgres/engine-175"
+      "where": "capstone/bug-corpora/postgres/backend-175"
+    },
+    {
+      "program": "postgres",
+      "boundary": "libpq and the client tools, which allocate from libc and not from a memory context",
+      "title": "Memory-safety defects in PostgreSQL 17.5's client side, where allocation is a direct libc client",
+      "upstream": {
+        "version": "17.5"
+      },
+      "cases": 5,
+      "case_schema": "case-json",
+      "case_macro": "PGCLIENT",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "cheribsd-revocation"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 5
+      },
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "related": [
+        "capstone/bug-corpora/postgres/backend-175",
+        "capstone/bug-corpora/postgres/mmgr-repros"
+      ],
+      "advisories": [
+        "CVE-2026-19385",
+        "CVE-2026-6477",
+        "CVE-2026-16241"
+      ],
+      "note": "The counterpart to backend-175 and mmgr-repros, and the reason it exists: both of those are palloc clients, so every defect in them is nested by construction. PostgreSQL's client side is not -- libpq, psql, pg_dump and fe_utils call malloc, realloc and free directly, about 990 call sites against the backend's 82 -- so a defect here is a libc client and is non-nested. Without this corpus the study has no non-nested arm to compare against, and a mechanism's silence on a nested defect cannot be attributed to the nesting. These cases are C reductions, not SQL: the defect is in the client process and no statement sent to a server can reach it. Each drives the real upstream function with a constructed input, the way mmgr-repros drives the real aset and slab. That also makes them freestanding domains, so unlike backend-175 they need no application VM. All five were reproduced on the host under ASan on 2026-10-06 against shared/corpus.h and shared/driver.c, each driving the real upstream function copied verbatim from the pin (shared/upstream_libpq.c, upstream_pgdump.c, upstream_ecpg.c, upstream_saslprep.c, upstream_bbstreamer.c). Each case's host-asan oracle records the faulting access, its size and the exact size of the region it ran off, so the reduction is checkable against the arithmetic in its live_proof rather than taken on trust. RESULT ON THE PURECAP ARM, 2026-10-06: 3 of 5 detected (00, 02, 04 all SIGPROT with their PG_DEFECT marker printed first), 2 reached-silent (01, 03). Every one of the five verdicts is predicted by one measured fact, and the fact is worth more than the ratio: this guest's malloc rounds capability bounds to a SIZE CLASS, not to the request. Measured requested->granted pairs: 1->16, 4->16, 8->16, 16->16, 24->32, 32->32, 100->112, 400->448, 4096->4096. Lining the cases up against it: 00 writes 4096 bytes into an 8-byte request (cap 16) and faults; 02 walks ~4 GiB from a 1-byte request (cap 16) and faults; 04 reads 24 bytes from offset 24 of a 24-byte request (cap 32) and crosses at offset 32, so it faults; 01 reads offset 400 of a 400-byte request (cap 448) and does not; 03 reads offset 4 of a 4-byte request (cap 16) and does not. So a malloc-granular capability machine sees an overrun exactly when it exceeds the ALLOCATOR'S ROUNDING, not when it exceeds the object. Two of five real CVE-class defects are invisible here for that reason alone, with no nesting involved at all -- which is a second blind spot, independent of the one this corpus was built to measure, and it narrows the claim that non-nested defects are the ones such a mechanism catches.",
+      "where": "capstone/bug-corpora/postgres/client-repros"
     },
     {
       "program": "postgres",
@@ -1487,7 +1516,8 @@
     "capstone/bug-corpora/mruby/gc-slot-repros": 0,
     "capstone/bug-corpora/mruby/release-differential": 23,
     "capstone/bug-corpora/perl/release-differential": 11,
-    "capstone/bug-corpora/postgres/engine-175": 19,
+    "capstone/bug-corpora/postgres/backend-175": 8,
+    "capstone/bug-corpora/postgres/client-repros": 5,
     "capstone/bug-corpora/postgres/mmgr-repros": 8,
     "capstone/bug-corpora/sqlite/capi-repros": 19,
     "capstone/bug-corpora/wireshark/plain-heap-repros": 1,
@@ -1497,13 +1527,13 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 156,
+  "cases_here": 150,
   "cases_xlang": 30,
-  "cases_total": 186,
-  "live_true": 89,
+  "cases_total": 180,
+  "live_true": 83,
   "live_false": 39,
   "live_not": 28,
-  "advisories_total": 21,
+  "advisories_total": 20,
   "renames": {
     "schema_version": 1,
     "note": "Path history for port components. An archived result bundle records which directory a measured binary was built from, so it is never rewritten and keeps quoting the 'from' path; docs/history/ is append-only for the same reason. Resolve an old path here. check-ports.py verifies that every 'from' is gone, every 'to' exists, and every file listed under quoted_by really still quotes the old path.",
@@ -1573,7 +1603,9 @@
     "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
     "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.",
-    "`capstone/bug-corpora/postgres/engine-175` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/postgres/backend-175` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/postgres/client-repros` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/postgres/client-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/postgres/mmgr-repros`: 3 of 8 cases have a PROVENANCE.md.",
     "`capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.",
     "`capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.",
@@ -1593,7 +1625,8 @@
     "`capstone/bug-corpora/ffmpeg/plane-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/ffmpeg/subobject-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/memcached/plain-heap-repros` is not referenced by any port.json.",
-    "`capstone/bug-corpora/postgres/engine-175` is not referenced by any port.json.",
+    "`capstone/bug-corpora/postgres/backend-175` is not referenced by any port.json.",
+    "`capstone/bug-corpora/postgres/client-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/wireshark/plain-heap-repros` is not referenced by any port.json."
   ]
 }
