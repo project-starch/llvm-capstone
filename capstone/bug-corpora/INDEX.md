@@ -10,7 +10,7 @@
 
 | sort | where | count | what it is |
 |---|---|---:|---|
-| third-party defects, as cases | `capstone/bug-corpora/` | 126 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
+| third-party defects, as cases | `capstone/bug-corpora/` | 137 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 30 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 107 open, 77 resolved | the registry, not reproduced cases |
@@ -22,9 +22,10 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | corpus | program | pinned version | cases | liveness in that pin | advisories | schema | status |
 |---|---|---|---:|---|---:|---|---|
 | [`capstone/bug-corpora/cpython/pymalloc-repros`](cpython/pymalloc-repros) | cpython | 3.13.7 | 20 | 20 live | 0 | case-json | measured |
+| [`capstone/bug-corpora/ffmpeg/plain-heap-repros`](ffmpeg/plain-heap-repros) | ffmpeg | n9.0.1 | 4 | 4 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/ffmpeg/plane-repros`](ffmpeg/plane-repros) | ffmpeg | n9.0.1 | 1 | 1 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/ffmpeg/pool-repros`](ffmpeg/pool-repros) | ffmpeg | 9.0.1 | 4 | 4 fixed before the pin | 0 | case-json | measured |
-| [`capstone/bug-corpora/ffmpeg/subobject-repros`](ffmpeg/subobject-repros) | ffmpeg | n9.0.1 | 3 | 3 live | 0 | case-json | measured |
+| [`capstone/bug-corpora/ffmpeg/subobject-repros`](ffmpeg/subobject-repros) | ffmpeg | n9.0.1 | 10 | 5 live, 5 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/httpd/apr-pool-repros`](httpd/apr-pool-repros) | httpd | 1.7.4 | 1 | 1 not asserted | 0 | case-json | measured |
 | [`capstone/bug-corpora/httpd/bucket-repros`](httpd/bucket-repros) | httpd | 1.7.4 | 8 | 8 not asserted | 0 | case-json | measured |
 | [`capstone/bug-corpora/memcached/allocator-repros`](memcached/allocator-repros) | memcached | 1.6.45 | 8 | 1 live, 7 fixed before the pin | 1 | case-json | measured |
@@ -41,7 +42,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
 | [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**156 cases in 19 corpora**, of which 68 are recorded live in the version their corpus pins, 30 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 14 advisories are cited across all corpora.
+**167 cases in 20 corpora**, of which 70 are recorded live in the version their corpus pins, 39 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 14 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
@@ -94,6 +95,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/ports/postgres/app` is a complete application with no corpus.
 - `capstone/ports/sqlite/app` is a complete application with no corpus.
 - `capstone/ports/wireshark/app` is a complete application with no corpus.
+- `capstone/bug-corpora/ffmpeg/plain-heap-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/ffmpeg/plane-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/ffmpeg/subobject-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/memcached/plain-heap-repros` is not referenced by any port.json.

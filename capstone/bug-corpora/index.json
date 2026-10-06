@@ -49,6 +49,45 @@
     },
     {
       "program": "ffmpeg",
+      "boundary": "the system allocator itself: one av_malloc_array or av_calloc, with no inner layer",
+      "title": "Upstream FFmpeg spatial defects that cross the MALLOC BOUND, FFmpeg's not-nested row",
+      "upstream": {
+        "version": "n9.0.1",
+        "port": "capstone/ports/ffmpeg/buffer-pool"
+      },
+      "cases": 4,
+      "case_schema": "case-json",
+      "case_macro": "FFH",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "false": 4
+      },
+      "runners": [
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/runners/run-native.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+      "evidence": [
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261006-native-plain-heap",
+        "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261006-cheribsd"
+      ],
+      "advisories": [],
+      "shape_table": true,
+      "note": "The third plain-heap corpus, after memcached's and wireshark's, and a sibling of subobject-repros and pool-repros rather than part of either: those boundaries are 'inside one allocation' and 'storage an AVBufferPool handed out', while every case here leaves a buffer FFmpeg obtained DIRECTLY from av_malloc_array or av_calloc. Under this inventory's axis (WHO ALLOCATED THE OBJECT) all four rows are NOT NESTED. ASan REPORTS all four, two-sided, unlike the sub-object corpora -- which is the contrast this corpus exists to draw. Case 2 is the only row in the whole inventory that crosses BELOW an allocation's base. All four are fix-reversals: liveness is recorded, never required, and requiring it is what kept FFmpeg's spatial count at four. WHY THE PLATFORM ALLOCATOR. These cases call the platform's calloc, not the buffer-pool port's av_malloc. That port's av_malloc (ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c:26) is a bump/freelist carve out of ONE arena returning a raw interior pointer, and it rounds every request up to 64 bytes; __builtin_capstone_cap_shrink appears only in src/capstone-domain/payload-capabilities.c:57, on pool PAYLOAD blocks. Routing these cases through it would leave no per-allocation bound to cross AND would absorb every small crossing in the round-up, so the reading would be about the arena, not the defect. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 3 of 4 CAUGHT with the fault attributed to the labelled probe, si_code 1; case 1 NOT caught, refuting its pre-registered prediction because its 24-byte request yields a 32-byte capability. This is the first CheriBSD reading of any FFmpeg corpus, and the first in the tree where attribution is established -- the probes are defined once externally rather than static per translation unit.",
+      "where": "capstone/bug-corpora/ffmpeg/plain-heap-repros"
+    },
+    {
+      "program": "ffmpeg",
       "boundary": "a bound between two PLANES of one AVBuffer, as av_frame_get_buffer carves them",
       "title": "Upstream FFmpeg spatial defects that leave a frame PLANE while staying inside the frame's single allocation",
       "upstream": {
@@ -128,7 +167,8 @@
         "capstone/bug-corpora/ffmpeg/pool-repros/results/20260929-qemu-sublet-port",
         "capstone/ports/ffmpeg/app/results/20261004-qemu-pool-corpus-40-47",
         "capstone/ports/ffmpeg/buffer-pool/results/measurements/20260925-pool-corpus-dev",
-        "capstone/ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39"
+        "capstone/ports/ffmpeg/buffer-pool/results/measurements/20261004-vvc-case3-probe39",
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/20261006-cheribsd"
       ],
       "advisories": [],
       "shape_table": true,
@@ -137,12 +177,12 @@
     {
       "program": "ffmpeg",
       "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
-      "title": "Upstream FFmpeg spatial defects that cross a bound BETWEEN TWO MEMBERS of one allocation",
+      "title": "Upstream FFmpeg spatial defects that cross a bound INSIDE ONE ALLOCATION -- between two members of a struct, or between two slices carved from one block by arithmetic",
       "upstream": {
         "version": "n9.0.1",
         "port": "capstone/ports/ffmpeg/buffer-pool"
       },
-      "cases": 3,
+      "cases": 10,
       "case_schema": "case-json",
       "case_macro": "FF2",
       "required_arms": [
@@ -158,18 +198,21 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "true": 3
+        "true": 5,
+        "false": 5
       },
       "runners": [
         "capstone/bug-corpora/ffmpeg/subobject-repros/runners/run-native.sh"
       ],
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "evidence": [
-        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject"
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject",
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-native-subobject-7",
+        "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd"
       ],
       "advisories": [],
       "shape_table": true,
-      "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. All three cases are LIVE at the n9.0.1 pin. No arm we have catches any of them; the oracle is the upstream fix, and the ASan arm is measured blind with a positive control. Triage: docs/ref/ffmpeg-spatial-defect-triage.md.",
+      "note": "A sibling of pool-repros, deliberately separate: that corpus's boundary is storage an AVBufferPool handed out, and these defects cross a bound inside a single allocation, which is a different boundary. The seam is a verbatim copy of pool-repros' -- each corpus owns a private copy, and the FF2_* infrastructure macros come from the port's replay-config. Cases 0-2 are LIVE at the n9.0.1 pin; cases 3-9 were added 2026-10-06, of which 5, 6 are live and 3, 4, 7, 8, 9 are fix-reversals -- liveness is RECORDED, never required, and requiring it is what kept this cell at three cases. Under this inventory's axis (WHO ALLOCATED THE OBJECT) every row here is NOT NESTED: the object is one allocation and nothing sub-allocated the crossed region. No arm we have catches any of them; the oracle is the upstream fix. The Capstone arms for 3-9 are declared predictions -- cases 0-2 got theirs from probe cases 40-42 of ports/ffmpeg/buffer-pool/security-tests, which is the seam 3-9 will use. Triage and the full candidate disposition: docs/ref/ffmpeg-spatial-defect-triage.md. CheriBSD MEASURED 2026-10-06 (results/20261006-cheribsd): 0 of 10 caught, 22/22 arms, both platform controls firing -- and the reason is recorded as WEAKER than 'the bound is the allocation', because the port's av_malloc is an un-narrowed arena carve.",
       "where": "capstone/bug-corpora/ffmpeg/subobject-repros"
     },
     {
@@ -1386,9 +1429,10 @@
   ],
   "cases_by_corpus": {
     "capstone/bug-corpora/cpython/pymalloc-repros": 20,
+    "capstone/bug-corpora/ffmpeg/plain-heap-repros": 4,
     "capstone/bug-corpora/ffmpeg/plane-repros": 1,
     "capstone/bug-corpora/ffmpeg/pool-repros": 4,
-    "capstone/bug-corpora/ffmpeg/subobject-repros": 3,
+    "capstone/bug-corpora/ffmpeg/subobject-repros": 10,
     "capstone/bug-corpora/httpd/apr-pool-repros": 1,
     "capstone/bug-corpora/httpd/bucket-repros": 8,
     "capstone/bug-corpora/memcached/allocator-repros": 8,
@@ -1405,11 +1449,11 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 126,
+  "cases_here": 137,
   "cases_xlang": 30,
-  "cases_total": 156,
-  "live_true": 68,
-  "live_false": 30,
+  "cases_total": 167,
+  "live_true": 70,
+  "live_false": 39,
   "live_not": 28,
   "advisories_total": 14,
   "renames": {
@@ -1496,6 +1540,7 @@
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
     "`capstone/ports/sqlite/app` is a complete application with no corpus.",
     "`capstone/ports/wireshark/app` is a complete application with no corpus.",
+    "`capstone/bug-corpora/ffmpeg/plain-heap-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/ffmpeg/plane-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/ffmpeg/subobject-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/memcached/plain-heap-repros` is not referenced by any port.json.",
