@@ -33,6 +33,9 @@ function(capstone_configure_application target)
   set(startup "${musl}/start-musl.S")
   if(CAPSTONE_APPLICATION_VIRTUAL)
     set(startup "${capstone}/runtime/virtual/start.S")
+    target_compile_options(${target} PRIVATE
+      "$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
+    target_compile_definitions(${target} PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
   endif()
   if(NOT TARGET capstone-application-core)
     add_library(capstone-application-core OBJECT
@@ -41,6 +44,8 @@ function(capstone_configure_application target)
       "${capstone}/runtime/common/launch.c")
     if(CAPSTONE_APPLICATION_VIRTUAL)
       target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
+      target_compile_options(capstone-application-core PRIVATE
+        "$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
     endif()
     file(STRINGS "${musl}/libc_overrides.list" overrides)
     foreach(source IN LISTS overrides)

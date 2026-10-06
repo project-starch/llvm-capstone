@@ -15,12 +15,16 @@ returning 1.5 MiB, first-touch page faults resolved by Linux, stale and bounds
 denial, same-VA reuse, independent processes and non-yielding termination.
 SQLite persists and reopens a database; mruby performs arithmetic and file I/O.
 No additional Linux-core or firmware patch is used. Resident pages stay pinned
-until retirement, and node identities are monotonic for the launch.
+until retirement; node identities are recyclable after the trusted namespace
+sweep, with dead PCC identities retained.
 
 The [qualification record](../../runtime/virtual/qualification.json) includes
-instruction/legacy regressions and negative controls. Full upstream application
-suites, multiple threads/harts, swap/migration, shared or file-backed tagged
-mappings and full compact-bounds conformance remain outside this first profile.
+instruction/legacy regressions, recycling pressure and negative controls.
+Full upstream application suites, multiple threads/harts, swap/migration,
+shared or file-backed tagged mappings and full compact-bounds conformance
+remain outside this first profile. The collector has been exercised past
+200,000 allocation/free cycles; it reuses only after clearing the namespace's
+registered tags and saved contexts, while dead PCC identities remain pinned.
 The older R0 entry below is retained as historical qualification of its subset.
 
 ## 2026-10-06 — virtual C execution through a Linux module
@@ -60,7 +64,7 @@ names the address space's node table in guest RAM, and `urevavail` reports
 its free identities. `CSMINT` is the only protected mint; the debug
 selectors 2 and 3 and the dual-tree swap are gone, and protected U no longer
 depends on legacy C mode or CPMP. The node list runs over a host-tree and a
-guest-table binding; the forest model passes on both, and 14 bad-data checks
+guest-table binding; the forest model passes on both, and 24 bad-data checks
 show that a refused operation changes no byte of the table. The M1 gate
 passes 60/60 with every probe booting through `CSMINT`, the ported U-access
 suite 69/69, and the bounded Linux process passes on the migrated kernel

@@ -1,8 +1,8 @@
 {
-  "date": "2026-10-06",
+  "date": "2026-10-07",
   "status": "PASS",
-  "profile": "virtual application R1-R3 slice; one hart, one thread per process",
-  "qemu_sha256": "a1e1f0d971680f8593171dc58be59b35ff3a222a568c58ce5b1baafeb85fad8f",
+  "profile": "virtual application R1-R3 slice with recyclable guest table; one hart, one thread per process",
+  "qemu_sha256": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
   "compiler": {
     "clang_sha256": "aaebd7f23c2a51b9f722fd179ce93d5ee9d749590f3dbe23f1e4bd0402196cfd",
     "codegen_passed": 118,
@@ -25,8 +25,8 @@
     "stale_source_control_exit": 2
   },
   "host_unit_tests": {
-    "passed": 21,
-    "total": 21
+    "passed": 22,
+    "total": 22
   },
   "qemu_regressions": {
     "virtual_capstone_m1": {
@@ -42,8 +42,8 @@
       "total": 8
     },
     "linux_application": {
-      "passed": 20,
-      "total": 20
+      "passed": 21,
+      "total": 21
     },
     "physical_mruby": {
       "passed": 2,
@@ -51,13 +51,23 @@
     }
   },
   "instruction_gate": {
-    "passed": 30,
-    "total": 30
+    "passed": 33,
+    "total": 33
   },
   "application_gate": {
-    "passed": 20,
-    "total": 20,
+    "passed": 21,
+    "total": 21,
     "record": "result.json"
+  },
+  "recycling_gate": {
+    "allocation_free_cycles": 200000,
+    "node_capacity": 65536,
+    "nodes_high_water": 65278,
+    "nodes_allocated_total": 869163,
+    "collections": 13,
+    "nodes_reclaimed": 780096,
+    "stale_reuse_fault": 24,
+    "exhaustion_result": "resource fault after collector cannot free live or pinned identities"
   },
   "native_application_oracles": {
     "status": "PASS",
@@ -128,7 +138,7 @@
   "limitations": [
     "QEMU experiment, no RTL qualification",
     "Private anonymous mappings; pages pinned after first touch",
-    "Monotonic bounded node identities; no indefinite reuse",
+    "Recycling depends on a complete registered-page and saved-context sweep; dead PCC identities remain pinned",
     "No fork, shared tagged pages, multiple threads/harts, swap or migration",
     "Allocated bounds include size-class padding; inherited compressed-bounds side metadata remains"
   ]

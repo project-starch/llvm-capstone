@@ -8,6 +8,7 @@
 #include <linux/sched/signal.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/list.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include "wire.h"
@@ -19,6 +20,7 @@ struct arena {
     bool lazy;
 };
 struct context {
+    struct list_head link;
     struct mm_struct *mm;
     unsigned long *frame, *table;
     struct arena arenas[CV_MAX_ARENAS];
@@ -28,6 +30,58 @@ struct context {
     u64 next_id, ids[CV_MAX_ARENAS];
 };
 static DEFINE_MUTEX(vm_lock);
+static LIST_HEAD(contexts);
+static u64 allocated_total, high_water, collections_total, reclaimed_total;
+
+static unsigned long run(unsigned long frame, unsigned long action);
+
+static int pin_remaining(struct context *c, struct arena *a)
+{
+    for (unsigned j = 0; j < a->count; ++j) {
+        struct page *page;
+        if (a->pages[j]) continue;
+        if (pin_user_pages_fast(a->address + j * PAGE_SIZE, 1, FOLL_WRITE, &page) != 1)
+            return -EFAULT;
+        if (!PageAnon(page) || page_mapcount(page) != 1) {
+            unpin_user_page(page); return -EACCES;
+        }
+        a->pages[j] = page;
+        ++c->stats.pinned_pages;
+        c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
+    }
+    return 0;
+}
+
+static int collect(struct context *c)
+{
+    unsigned long count, at = 0, flags, result, *pages;
+    unsigned order;
+    /* Include pages even if Linux or the trusted launcher populated a lazy
+     * arena without a C fault. This conservative sweep materializes remaining
+     * holes at the first collection; a failed GUP never releases any IDs. */
+    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
+        int error = pin_remaining(c, &c->arenas[i]);
+        if (error) return error;
+    }
+    count = c->stats.pinned_pages + 1;
+    order = get_order(count * sizeof(unsigned long));
+    pages = (void *)__get_free_pages(GFP_KERNEL, order);
+    if (!pages) return -ENOMEM;
+    pages[at++] = virt_to_phys(c->frame);
+    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
+        for (unsigned j = 0; j < c->arenas[i].count; ++j)
+            if (c->arenas[i].pages[j]) pages[at++] = page_to_phys(c->arenas[i].pages[j]);
+    c->frame[80] = at;
+    c->frame[81] = virt_to_phys(pages);
+    preempt_disable(); local_irq_save(flags);
+    result = run(virt_to_phys(c->frame), 3);
+    local_irq_restore(flags); preempt_enable();
+    c->frame[80] = c->frame[81] = 0;
+    free_pages((unsigned long)pages, order);
+    if (result == ULONG_MAX) return -EIO;
+    ++c->stats.collections; c->stats.reclaimed += result;
+    return 0;
+}
 
 static unsigned long run(unsigned long frame, unsigned long action)
 {
@@ -51,6 +105,10 @@ static int retire(struct context *c, struct arena *a, bool destroying)
 {
     unsigned long flags, old, status;
     unsigned i, j;
+    if (!destroying) {
+        int error = pin_remaining(c, a);
+        if (error) return error;
+    }
     preempt_disable(); local_irq_save(flags);
     old = select_root(c);
     asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
@@ -58,8 +116,8 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     restore_root(old);
     local_irq_restore(flags); preempt_enable();
     if (status && !destroying) return -EIO;
-    /* Retired identities are never reused. Clear tags before returning frames
-     * to Linux too, so another namespace cannot reinterpret their local IDs. */
+    /* Clear every tag before returning frames to Linux. Later collection can
+     * reuse dead IDs only after sweeping all remaining namespace storage. */
     for (i = 0; i < a->count; ++i) {
         unsigned long *p;
         if (!a->pages[i]) continue;
@@ -82,7 +140,7 @@ static int add(struct context *c, struct cv_map *r)
     unsigned long flags, old, desc[3], ancestor, *slot, mapped = 0;
     struct page **pages;
     long n;
-    if (!r->bytes || r->bytes > CV_MAX_BYTES ||
+    if (!r->bytes || r->bytes > CV_MAX_REGION_BYTES ||
         ((r->address | r->bytes) & (PAGE_SIZE - 1)) ||
         !is_power_of_2(r->bytes) || (r->address & (r->bytes - 1)) ||
         r->address > ULONG_MAX - r->bytes ||
@@ -92,7 +150,7 @@ static int add(struct context *c, struct cv_map *r)
         (r->linear && r->cursor != r->address) ||
         (c->started && (c->event != 3 || r->reg != 10 || c->reply_cap)) ||
         (!c->started && r->reg != 2 && r->reg != 3 &&
-         r->reg != 10 && r->reg != 11 && r->reg != 12) ||
+         r->reg != 10 && r->reg != 11 && r->reg != 12 && r->reg != 13) ||
         (r->reg == 3 && (!(r->permissions & 1) || r->linear)))
         return -EINVAL;
     for (i = 0; i < CV_MAX_ARENAS; ++i) {
@@ -104,7 +162,7 @@ static int add(struct context *c, struct cv_map *r)
     }
     if (!a) return -ENOSPC;
     if (mapped + r->bytes > CV_MAX_BYTES) return -ENOMEM;
-    if (c->table[1] > c->table[0] - 2) return -ENOSPC;
+    if (((c->table[0] & ~(1UL << 63)) - c->table[1] + (c->table[2] >> 32)) < 2) return -ENOSPC;
     mmap_read_lock(c->mm);
     for (unsigned long at = r->address; at < r->address + r->bytes;) {
         struct vm_area_struct *v = find_vma(c->mm, at);
@@ -114,6 +172,11 @@ static int add(struct context *c, struct cv_map *r)
             ((r->permissions & 1) && !(v->vm_flags & VM_EXEC))) {
             mmap_read_unlock(c->mm); return -EACCES;
         }
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+        if (!(v->vm_flags & VM_NOHUGEPAGE)) {
+            mmap_read_unlock(c->mm); return -EOPNOTSUPP;
+        }
+#endif
         at = min((unsigned long)(r->address + r->bytes), v->vm_end);
     }
     mmap_read_unlock(c->mm);
@@ -191,6 +254,19 @@ static int resolve(struct context *c)
     }
     return -EFAULT;
 }
+static void node_stats(struct context *c)
+{
+    c->stats.nodes = c->table[3];
+    c->stats.nodes_high_water = c->table[1] - 2;
+    c->stats.nodes_live = c->stats.nodes_retired = 0;
+    for (unsigned long id = 2; id < c->table[1]; ++id) {
+        unsigned long flags = c->table[2 * id + 1] >> 32;
+        if (flags & 1) ++c->stats.nodes_live;
+        else if (!(flags & 4)) ++c->stats.nodes_retired;
+    }
+    high_water = max(high_water, c->stats.nodes_high_water);
+}
+
 static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
 {
     struct context *c = f->private_data;
@@ -199,7 +275,24 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
     if (current->mm != c->mm || atomic_read(&c->mm->mm_users) != 1)
         return -EPERM;
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
-    if (op == CV_ADD) {
+    if (op == CV_GLOBAL) {
+        struct context *other;
+        struct cv_global stats = {.nodes_allocated = allocated_total,
+            .collections = collections_total, .reclaimed = reclaimed_total};
+        list_for_each_entry(other, &contexts, link) {
+            node_stats(other);
+            stats.arenas += other->stats.arenas;
+            stats.pinned_pages += other->stats.pinned_pages;
+            stats.nodes_allocated += other->stats.nodes;
+            stats.nodes_live += other->stats.nodes_live;
+            stats.nodes_retired += other->stats.nodes_retired;
+            stats.collections += other->stats.collections;
+            stats.reclaimed += other->stats.reclaimed;
+            if (other->stats.arenas) ++stats.contexts;
+        }
+        stats.nodes_high_water = high_water;
+        rc = copy_to_user((void __user *)arg, &stats, sizeof(stats)) ? -EFAULT : 0;
+    } else if (op == CV_ADD) {
         struct cv_map r;
         if (c->terminal) goto out;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
@@ -224,6 +317,13 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
         c->started = true; c->reply_cap = false;
         local_irq_restore(flags); preempt_enable();
         ++c->stats.steps;
+        if (c->event == 5) {
+            int error = collect(c);
+            unsigned long available = (c->table[0] & ~(1UL << 63)) - c->table[1] + (c->table[2] >> 32);
+            /* Return through Linux between retries. Refuse endless retries
+             * when the namespace consists of live or pinned identities. */
+            c->frame[2] = error || available <= 256 ? 2 : 1;
+        }
         r.kind = c->frame[2]; r.cause = c->frame[3];
         r.pc = c->frame[4]; r.address = c->frame[5];
         memcpy(r.args, c->frame + 72, sizeof(r.args));
@@ -239,7 +339,7 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
         for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
             if (c->ids[i] == id && c->arenas[i].pages) { rc = retire(c, &c->arenas[i], false); break; }
     } else if (op == CV_STATS) {
-        c->stats.nodes = c->table[1];
+        node_stats(c);
         rc = copy_to_user((void __user *)arg, &c->stats, sizeof(c->stats)) ? -EFAULT : 0;
     } else rc = -ENOTTY;
 out:
@@ -259,10 +359,13 @@ static int vm_open(struct inode *inode, struct file *f)
         if (c->table) free_pages((unsigned long)c->table, CV_NODE_ORDER);
         kvfree(c); return -ENOMEM;
     }
-    c->table[0] = CV_NODE_BYTES / 16; c->table[1] = 1;
+    c->table[0] = (1UL << 63) | (CV_NODE_BYTES / 16); c->table[1] = 2;
     c->frame[1] = virt_to_phys(c->table);
     c->mm = current->mm; mmgrab(c->mm);
     f->private_data = c;
+    mutex_lock(&vm_lock);
+    list_add(&c->link, &contexts);
+    mutex_unlock(&vm_lock);
     return 0;
 }
 static int vm_release(struct inode *inode, struct file *f)
@@ -270,6 +373,11 @@ static int vm_release(struct inode *inode, struct file *f)
     struct context *c = f->private_data;
     unsigned long flags;
     mutex_lock(&vm_lock);
+    list_del(&c->link);
+    node_stats(c);
+    allocated_total += c->stats.nodes;
+    collections_total += c->stats.collections;
+    reclaimed_total += c->stats.reclaimed;
     if (c->started) {
         preempt_disable(); local_irq_save(flags);
         run(virt_to_phys(c->frame), 1);

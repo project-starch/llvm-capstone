@@ -1,5 +1,9 @@
 #define _GNU_SOURCE
 #include "wire.h"
+#include "capstone/linux-domain-fault.h"
+#include "capstone/spawn.h"
+#include <linux/binfmts.h>
+#include <sys/auxv.h>
 #include "../linux/application-image.h"
 #include "../linux/delegate-service.h"
 #include <elf.h>
@@ -19,7 +23,9 @@ struct mapping { void *address; size_t bytes; uint64_t id; int heap; };
 static struct mapping maps[CV_MAX_ARENAS];
 static void *reuse_address;
 static size_t reuse_bytes;
-static int device = -1;
+static int device = -1, image_fd = -1;
+static const char *image_path;
+static struct capstone_spawner spawner = {.socket = -1};
 static struct capstone_delegate_host host;
 static unsigned long long now_ns(void)
 {
@@ -31,9 +37,18 @@ static unsigned long long now_ns(void)
 static size_t rounded(size_t n)
 {
     size_t size = 4096;
-    if (!n || n > (64u << 20)) return 0;
+    if (!n || n > CV_MAX_REGION_BYTES) return 0;
     while (size < n) size <<= 1;
     return size;
+}
+static void *private_pages(void *p, size_t bytes)
+{
+    /* Demand resolution accounts for one base page at a time. The module
+     * requires this VMA policy on kernels that can instantiate huge pages. */
+    if (madvise(p, bytes, MADV_NOHUGEPAGE) && errno != EINVAL) {
+        int error = errno; munmap(p, bytes); errno = error; return NULL;
+    }
+    return p;
 }
 static void *reserve(size_t bytes)
 {
@@ -43,7 +58,7 @@ static void *reserve(size_t bytes)
         void *p = mmap(reuse_address, bytes, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
         reuse_address = NULL;
-        if (p != MAP_FAILED) return p;
+        if (p != MAP_FAILED) return private_pages(p, bytes);
     }
     char *raw = mmap(NULL, bytes * 2, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -52,7 +67,7 @@ static void *reserve(size_t bytes)
     if (base != (uintptr_t)raw) munmap(raw, base - (uintptr_t)raw);
     size_t tail = (uintptr_t)raw + bytes * 2 - base - bytes;
     if (tail) munmap((void *)(base + bytes), tail);
-    return (void *)base;
+    return private_pages((void *)base, bytes);
 }
 static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
                  uintptr_t cursor, int linear)
@@ -83,6 +98,8 @@ static void cleanup(void)
     if (device >= 0) { close(device); device = -1; }
     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
         if (maps[i].address) munmap(maps[i].address, maps[i].bytes);
+    if (image_fd >= 0) { close(image_fd); image_fd = -1; }
+    capstone_spawner_stop(&spawner);
     capstone_delegate_host_free(&host);
 }
 static int die(const char *what)
@@ -135,17 +152,154 @@ static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *s
     __builtin___clear_cache(*image, (char *)*image + *bytes);
     return 0;
 }
+struct exec_state {
+  uint64_t magic;
+  struct capstone_spawner spawner;
+  unsigned child_count;
+  int image;
+  pid_t children[CAPSTONE_DELEGATE_CHILDREN];
+};
+#define EXEC_STATE_MAGIC UINT64_C(0x4350455845433031)
+
+static int above_stdio(int fd) {
+  if (fd < 0 || fd >= 3) return fd;
+  int parked = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+  int error = errno;
+  close(fd);
+  errno = error;
+  return parked;
+}
+
+static long exec_in_place(void) {
+  static char *argv[CAPSTONE_SPAWN_STRINGS + 7], *envp[CAPSTONE_SPAWN_STRINGS + 1];
+  static const char *paths[CAPSTONE_SPAWN_ACTIONS];
+  struct capstone_spawn_view view;
+  struct capstone_application_descriptor_v2 descriptor;
+  host.exec_requested = 0;
+  if (capstone_spawn_unpack(host.exec_block, host.exec_bytes, argv + 6,
+                            CAPSTONE_SPAWN_STRINGS + 1, envp, CAPSTONE_SPAWN_STRINGS + 1, paths,
+                            CAPSTONE_SPAWN_ACTIONS, &view))
+    return -EINVAL;
+  int checked = above_stdio(capstone_application_image(view.path, &descriptor));
+  if (checked < 0) return -errno;
+  if (!view.argc) { close(checked); return -EINVAL; }
+  struct exec_state state = {.magic = EXEC_STATE_MAGIC, .spawner = spawner,
+                            .child_count = host.child_count, .image = checked};
+  memcpy(state.children, host.children, sizeof state.children);
+  int fd = above_stdio(memfd_create("capstone-exec-state", MFD_CLOEXEC));
+  if (fd < 0) { int error = errno; close(checked); return -error; }
+  int error = 0;
+  if (write(fd, &state, sizeof state) != sizeof state || lseek(fd, 0, SEEK_SET) < 0 ||
+      fcntl(fd, F_SETFD, 0) < 0 || fcntl(checked, F_SETFD, 0) < 0 ||
+      (spawner.socket >= 0 && fcntl(spawner.socket, F_SETFD, 0) < 0)) {
+    error = errno ? errno : EIO;
+  } else {
+    char fd_string[32];
+    snprintf(fd_string, sizeof fd_string, "%d", fd);
+    argv[0] = spawner.self;
+    argv[1] = "--resume";
+    argv[2] = fd_string;
+    argv[3] = "--application-argv";
+    argv[4] = (char *)view.path;
+    argv[5] = "--";
+    execve(spawner.self, argv, envp);
+    error = errno;
+  }
+  close(fd);
+  close(checked);
+  if (spawner.socket >= 0) fcntl(spawner.socket, F_SETFD, FD_CLOEXEC);
+  return -error;
+}
+
+static void cleanup_fault(void *unused) { (void)unused; cleanup(); }
+static void fault(const struct cv_step *step)
+{
+    if (!host.image_sha256[0] && image_fd >= 0)
+        capstone_application_hash(image_fd, host.image_sha256);
+    const char *record = getenv("CAPSTONE_FAULT_RECORD");
+    int fd = record && *record ? open(record, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600) : -1;
+    if (fd >= 0) {
+        capstone_delegate_fault_record(fd, &host, image_path, step->cause, step->pc, step->address);
+        close(fd);
+    }
+    if (isatty(2) || getenv("CAPSTONE_EXEC_DIAGNOSTICS"))
+        capstone_delegate_fault_record(2, &host, image_path, step->cause, step->pc, step->address);
+    capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, cleanup_fault, NULL);
+}
+static int reserve_stdio(unsigned *mask) {
+  *mask = 0;
+  for (int i = 0; i < 3; ++i) {
+    if (fcntl(i, F_GETFD) >= 0) {
+      *mask |= 1u << i;
+      continue;
+    }
+    if (errno != EBADF)
+      return -1;
+    int fd = open("/dev/null", O_RDWR);
+    if (fd < 0)
+      return -1;
+    if (fd != i) {
+      int rc = dup2(fd, i);
+      close(fd);
+      if (rc < 0)
+        return -1;
+    }
+  }
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
-    if (argc < 2) { fprintf(stderr, "usage: capstone-vexec PROGRAM.dom [ARG...]\n"); return 2; }
+    int binfmt = (getauxval(AT_FLAGS) & AT_FLAGS_PRESERVE_ARGV0) != 0;
+    if (binfmt && argc < 3) return 125;
+    struct exec_state resumed = {0};
+    if (!binfmt && argc > 3 && !strcmp(argv[1], "--resume")) {
+        char *end; long fd = strtol(argv[2], &end, 10);
+        if (*end || fd < 3 || fd > 65535 || read(fd, &resumed, sizeof resumed) != sizeof resumed ||
+            resumed.magic != EXEC_STATE_MAGIC || resumed.child_count > CAPSTONE_DELEGATE_CHILDREN)
+            return 125;
+        close(fd);
+        if (resumed.spawner.socket >= 0 && fcntl(resumed.spawner.socket, F_SETFD, FD_CLOEXEC) < 0)
+            return 125;
+        spawner = resumed.spawner; host.child_count = resumed.child_count;
+        memcpy(host.children, resumed.children, sizeof resumed.children);
+        argc -= 2; argv += 2;
+    }
+    int app_args = !binfmt && argc >= 5 && !strcmp(argv[1], "--application-argv") && !strcmp(argv[3], "--");
+    int literal = binfmt || (argc > 1 && !strcmp(argv[1], "--"));
+    if (literal && !binfmt) { --argc; ++argv; }
+    if (argc < 2) { fprintf(stderr, "usage: capstone-vexec [--] PROGRAM.dom [ARG...]\n"); return 2; }
+    if (!literal && argc == 2 && !strcmp(argv[1], "--stats")) {
+        int fd = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
+        struct cv_global stats;
+        if (fd < 0 || ioctl(fd, CV_GLOBAL, &stats)) return 125;
+        close(fd);
+        printf("{\"version\":1,\"live_domains\":%llu,\"live_regions\":%llu,\"live_bytes\":%llu,\"cached_bytes\":0,\"poisoned_blocks\":0,\"nodes_high_water\":%llu,\"nodes_live\":%llu,\"nodes_retired\":%llu,\"nodes_allocated_total\":%llu,\"tag_pages\":%llu,\"node_capacity\":%lu,\"collections\":%llu,\"nodes_reclaimed\":%llu}\n",
+            stats.contexts, stats.arenas, stats.pinned_pages * 4096,
+            stats.nodes_high_water, stats.nodes_live, stats.nodes_retired, stats.nodes_allocated,
+            stats.pinned_pages, CV_NODE_BYTES / 16, stats.collections, stats.reclaimed);
+        return 0;
+    }
+    image_path = app_args ? argv[2] : argv[1];
+    unsigned stdio_mask;
+    if (reserve_stdio(&stdio_mask)) return 125;
     unsigned long long started = now_ns(), launch_ns;
     int trace = getenv("CAPSTONE_VM_TRACE") != NULL;
     struct capstone_application_descriptor_v2 desc;
-    int fd = capstone_application_image(argv[1], &desc);
-    if (fd < 0) { perror("capstone-vexec: image"); return 126; }
+    char resumed_path[64];
+    if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);
+    int fd = capstone_application_image(resumed.magic ? resumed_path : image_path, &desc);
+    int image_error = errno;
+    if (resumed.magic) close(resumed.image);
+    errno = image_error;
+    if (fd < 0) { perror("capstone-vexec: image"); return errno == ENOENT ? 127 : 126; }
+    image_fd = fd;
+    if (spawner.socket < 0) { int error = capstone_spawner_start(&spawner);
+        if (error) { errno = error; return die("spawner"); } }
+    host.spawner = &spawner;
     void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
     if (load(fd, &image, &image_bytes, &entry, &stack_bytes)) { close(fd); perror("capstone-vexec: virtual ABI"); return 126; }
-    close(fd);
+    host.private_fds[host.private_count++] = fd;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) { munmap(image, image_bytes); return die("open"); }
     if (grant(image, image_bytes, 3, 7, entry, 0)) { munmap(image, image_bytes); return die("image grant"); }
@@ -162,17 +316,24 @@ int main(int argc, char **argv)
         .realtime_ns = (uint64_t)rt.tv_sec * 1000000000 + rt.tv_nsec,
         .monotonic_ns = (uint64_t)mt.tv_sec * 1000000000 + mt.tv_nsec };
     int error = cwd ? capstone_launch_pack(startup, CAPSTONE_LAUNCH_BYTES,
-        argc - 1, argv + 1, environ, cwd, 7, &task) : ENOMEM;
+        argc - (app_args ? 4 : binfmt ? 2 : 1), argv + (app_args ? 4 : binfmt ? 2 : 1), environ, cwd, stdio_mask, &task) : ENOMEM;
     free(cwd);
     if (error) { errno = error; return die("startup"); }
     if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0) ||
         grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0) ||
         grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0) ||
         grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0)) return die("grant");
+    if (desc.v1.heap_bytes) {
+        size_t bytes = rounded(desc.v1.heap_bytes);
+        void *region = bytes ? reserve(bytes) : NULL;
+        if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1))
+            return die("nested allocator grant");
+    }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
     host.private_fds[host.private_count++] = device;
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
     if ((error = capstone_delegate_seccomp())) { errno = error; return die("seccomp"); }
+    for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);
     launch_ns = now_ns() - started;
     struct cv_step step = {0};
     for (;;) {
@@ -184,9 +345,9 @@ int main(int argc, char **argv)
             if (!ioctl(device, CV_RESOLVE)) continue;
         }
         if (step.kind != 3) {
-            fprintf(stderr, "CAPSTONE_VM_FAULT cause=%llu pc=%llx address=%llx\n",
-                    step.cause, step.pc, step.address);
-            cleanup(); return 128 + SIGSEGV;
+            host.preparing_nr = ((struct capstone_delegate_entry *)meta)->nr;
+            fault(&step);
+            return 125;
         }
         step.reply = 1; step.result = 0;
         if (step.args[7] == CV_SERVICE_DELEGATE) {
@@ -195,13 +356,13 @@ int main(int argc, char **argv)
             capstone_delegate_serve(&host, request);
             if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE nr=%llu result=%lld\n",
                                (unsigned long long)request->nr, (long long)request->result);
-            if (host.exec_requested) { host.exec_requested = 0; request->result = -ENOSYS; }
+            if (host.exec_requested) request->result = exec_in_place();
             if (host.exiting) {
                 struct cv_stats stats;
-                if (!ioctl(device, CV_STATS, &stats))
-                    fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%lu launch_ns=%llu elapsed_ns=%llu\n",
+                if ((getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) && !ioctl(device, CV_STATS, &stats))
+                    fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%lu launch_ns=%llu elapsed_ns=%llu\n",
                         stats.arenas, stats.pinned_pages, stats.peak_pages, stats.nodes, stats.steps,
-                        stats.faults, (unsigned long long)host.rounds,
+                        stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
                         (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
                         CV_NODE_BYTES, launch_ns, now_ns() - started);
                 int result = host.exit_status; cleanup(); return result;

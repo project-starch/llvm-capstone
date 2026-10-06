@@ -4,22 +4,23 @@
 .section .text.entry,"ax"
 .global _start
 _start:
-    cincoffsetimm sp, sp, -64
+    cincoffsetimm sp, sp, -80
     stc a0, 0(sp)
     stc a1, 16(sp)
     stc a2, 32(sp)
+    stc a3, 48(sp)
     lla t0, __capstone_cap_init_start
-    sd t0, 48(sp)
-1:  ld t0, 48(sp)
+    sd t0, 64(sp)
+1:  ld t0, 64(sp)
     lla t1, __capstone_cap_init_end
     bgeu t0, t1, 2f
     scc t2, gp, t0
     ld t3, 0(t2)
     add t3, t0, t3
     jalr ra, t3, 0
-    ld t0, 48(sp)
+    ld t0, 64(sp)
     addi t0, t0, 8
-    sd t0, 48(sp)
+    sd t0, 64(sp)
     j 1b
 2:  ldc a0, 0(sp)
     li a1, 1
@@ -30,7 +31,12 @@ _start:
     ldc a0, 32(sp)
     li a1, 1
     call domain_main
-    li a0, 0
+    ld t0, 48(sp)
+    beqz t0, 3f
+    ldc a0, 48(sp)
+    li a1, 1
+    call domain_main
+3:  li a0, 0
     li a1, 0
     call domain_main
     ebreak

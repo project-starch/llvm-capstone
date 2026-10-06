@@ -36,12 +36,15 @@ asks Linux's GUP interface to resolve the first touch, then retains a pin
 until retirement. It does not supply a pager or change VMA permissions to
 make a denied access succeed. TLS uses the common capability libc setup.
 
-Each launch owns a monotonic lifetime table: 65,536 records including the
-invalid header identity, occupying 1 MiB. Linux keeps the arena's private
-ancestor as a scalar identity. Whole-arena retirement walks and invalidates
-its descendants and the ancestor before clearing physical tags and unpinning
-pages. Reusing the same VA creates new identities. Teardown discards the
-context and clears tags before freeing its table and saved frame.
+Each launch owns a 65,536-slot lifetime table including the invalid header
+identity, occupying 1 MiB. Linux keeps the arena's private ancestor as a
+scalar identity. Whole-arena retirement walks and invalidates its descendants
+and the ancestor before clearing physical tags and unpinning pages. Reusing
+the same VA creates a fresh live identity. When the table is pressured, the
+trusted collector clears stale tags in registered pages and saved contexts,
+then returns unpinned identities to the table free list; dead PCC identities
+remain pinned because a PCC has no tag to clear. Teardown discards the context
+and clears tags before freeing its table and saved frame.
 
 The allocator uses existing Sublet operations for object lifetimes. It grows
 through Linux mappings and supports `malloc`, `calloc`, `realloc`, alignment
@@ -49,7 +52,9 @@ and whole-free-arena `malloc_trim`. It checks the remaining node budget
 before allocation. Blocks are aligned powers of two, minimum 256 bytes;
 `malloc_usable_size` reports that allocated extent, including padding.
 Anonymous RW `mmap` and whole-arena `munmap` use the same grant/retire path.
-No identity is recycled during a launch.
+The collector is only enabled after a complete namespace sweep. If all
+remaining identities are live or pinned, allocation fails instead of guessing
+that a stale capability is gone.
 
 The compiler profile combines `-capstone-gp-free` calls within PCC with
 `-capstone-image-gp`: a representable readable image capability supplies
@@ -115,16 +120,18 @@ negative-control results. Existing physical applications remain a regression
 gate; this adapter does not replace their monitor or CALL/RETURN path.
 
 This is the first QEMU application profile: one hart, one application thread
-per process, private anonymous mappings, 256 MiB registered VA, 512 mappings,
-and a bounded monotonic node budget. Fork, shared tagged mappings, file-backed
+per process, private anonymous mappings, 256 MiB per registered region, 1 GiB
+aggregate registered VA, 512 mappings, and a bounded recyclable node table.
+Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
 signals and general thread support need further contracts. Unsupported mapping
 forms fail explicitly; no fake shared-memory implementation is substituted.
 
 Pages stay pinned after first touch. The initial ELF image has the existing
 combined code/data layout. Allocator padding is accessible within its own
-block. The node budget is cumulative, so this is not an indefinitely running
-allocator. Compact-bounds conformance of every existing compiler/helper path
+block. Recycling requires the registered-page and saved-context sweep; a
+namespace full of live or pinned identities reports resource exhaustion.
+Compact-bounds conformance of every existing compiler/helper path
 remains separate work: the inherited QEMU data-tag implementation still
 retains extra bounds metadata. The gates establish the stated behavior in
 QEMU; they do not establish an RTL implementation or a complete memory-safety

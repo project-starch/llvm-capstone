@@ -24,7 +24,7 @@ def digest(path):
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 insmod capstone_vm.ko || exit 1
-export CAPSTONE_VM_CONTRACT=environment
+export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
 ./capstone-vexec contract.dom ok argument > /tmp/ok.out 2>&1
 echo VM_EXIT:normal:$?
 cat /tmp/ok.out
@@ -125,7 +125,7 @@ def main():
                        ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0), ('cleanup', 0)]:
         tests[name] = lines.count(f'VM_EXIT:{name}:{code}') == 1
     tests['normal_output'] = sum(s.startswith('VIRTUAL_APPLICATION_OK ') for s in lines) == 3
-    causes = [int(m[1]) for s in lines if (m := re.match(r'CAPSTONE_VM_FAULT cause=(\d+) ', s))]
+    causes = [int(m[1]) for s in lines if (m := re.match(r'capstone-exec: domain fault cause=(\d+) ', s))]
     # Loading a saved revoked pointer clears its tag; the later dereference
     # is therefore cause 24. The direct live-register node check has its own
     # cause-25 instruction gate.

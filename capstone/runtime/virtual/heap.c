@@ -27,7 +27,7 @@ static unsigned long free_ids(void)
 static unsigned long power(unsigned long n)
 {
     unsigned long p = MIN_BLOCK;
-    if (n > (64UL << 20)) return 0;
+    if (n > (256UL << 20)) return 0;
     while (p < n) p <<= 1;
     return p;
 }
@@ -77,9 +77,12 @@ static void *allocate(size_t n, size_t alignment)
             if (b->base && !b->live && arenas[b->arena].block == size) {
                 b->live = 1; b->requested = n; ++arenas[b->arena].used;
                 void *p = sublet_take(&b->slot);
-                /* An allocation includes representability padding. Report
-                 * that usable extent, and never widen outside its block. */
-                return p;
+                unsigned long length = n ? n : 1;
+                if (length >= 4096) {
+                    unsigned long grain = 1UL << (63 - __builtin_clzl(length) - 9);
+                    length = (length + grain - 1) & ~(grain - 1);
+                }
+                return __builtin_capstone_cap_shrink(p, b->base, b->base + length);
             }
         }
         if (grow(size)) break;
@@ -103,7 +106,7 @@ void free(void *p)
 {
     if (!p) return;
     struct block *b = lookup(p);
-    memset(p, 0, arenas[b->arena].block);
+    memset(p, 0, __builtin_capstone_cap_get_end(p) - b->base);
     sublet_give(&b->slot);
     b->live = 0; --arenas[b->arena].used;
 }
@@ -127,7 +130,9 @@ void *realloc(void *p, size_t n)
 }
 size_t malloc_usable_size(void *p)
 {
-    return p ? arenas[lookup(p)->arena].block : 0;
+    if (!p) return 0;
+    struct block *b = lookup(p);
+    return __builtin_capstone_cap_get_end(p) - b->base;
 }
 void *aligned_alloc(size_t align, size_t n)
 {
@@ -150,7 +155,7 @@ void *memalign(size_t align, size_t n)
     return p;
 }
 /* Return every wholly free arena to Linux after retiring all descendants.
- * No node identity is recycled, even if mmap later chooses the same VA. */
+ * Its old tags are cleared before any retired identity can be recycled. */
 int malloc_trim(size_t pad)
 {
     int released = 0; (void)pad;

@@ -1,6 +1,6 @@
 # Virtual Capstone prototype ABI (M0)
 
-Status: **M0 ABI draft**, 2026-10-06. This fixes the concrete interfaces that
+Status: **M0 ABI draft**, 2026-10-07. This fixes the concrete interfaces that
 the [prototype contract](virtual-capstone-prototype.md) left open: mode
 control, the guest node table, privileged operations, the PCC and context
 frame, delegation, exhaustion and the protected-U instruction set. It applies
@@ -16,7 +16,7 @@ compatibility path; a change replaces it.
 |---|---|---|---|
 | `scapctl` | `0x5C0` | S/M read-write | Bit 0 `PU`: protected U. All other bits read zero and ignore writes. `PU` applies only while the hart executes in U. It persists across traps; S code always runs scalar. Changing it takes effect at the next xRET into U. |
 | `srevroot` | `0x5C1` | S/M read-write | Physical address of the selected node table, 4 KiB aligned; bits 11:0 read zero. Zero selects no table: every node ID is dead and every allocation raises cause 30. |
-| `urevavail` | `0xCC0` | read-only, all modes | `capacity - next` of the selected table, zero without a table. Lets libc refuse an allocation before SPLIT or MREV traps. |
+| `urevavail` | `0xCC0` | read-only, all modes | `capacity - next + free_count` of the selected table, zero without a table. Lets libc refuse an allocation before SPLIT or MREV traps. |
 
 Both writable CSRs live in the standard custom supervisor read-write range,
 and `urevavail` in the custom user read-only range. None of the three numbers
@@ -39,9 +39,12 @@ The table is pinned, physically contiguous guest RAM, reserved from Linux's
 allocator and never mapped into U. All fields are little-endian.
 
 ```text
-srevroot + 0      u64 capacity   number of 16-byte slots, header included
-srevroot + 8      u64 next       next ID to issue, starts at 1
-srevroot + 16*id  node record, 1 <= id < next
+srevroot + 0      u64 capacity   number of 16-byte slots, header included;
+                                 bit 63 enables trusted recycling
+srevroot + 8      u64 next       next monotonic ID, starts at 2 in recycle mode
+srevroot + 16     u32 free_head, u32 free_count (recycle mode)
+srevroot + 24     u64 allocations (recycle mode)
+srevroot + 16*id  node record, id >= 2 in recycle mode
 
 record + 0        u32 prev       0 = none
 record + 4        u32 next       0 = none
@@ -50,15 +53,19 @@ record + 12       u32 flags      bit 0 VALID, bit 1 LINEAR, others zero
 ```
 
 Slot 0 is the header, so ID 0 is never a node and 0 serves as the list
-terminator. A node is live only if `1 <= id < next`, `next <= capacity`,
-`capacity <= 2^31` and `VALID` is set. A header violating these bounds makes
+terminator. Recycle mode reserves ID 1 and allocates IDs `2 <= id < next`.
+A node is live only if its ID is in range, `next <= capacity`,
+`capacity <= 2^31`, and `VALID` is set. A header violating these bounds makes
 every ID dead and every allocation fail with cause 30. The capability's
 existing 31-bit node field holds the ID; the encoding does not change.
 
-Allocation reads `next`, requires `next < capacity`, writes the record, then
-increments `next`. IDs are never reused within one table. There is no
-reference count, free list or collector for this table; QEMU's host tree and
-supervisor collector remain only on the legacy C-mode path.
+Allocation first consumes a validated free-list record, when one exists;
+otherwise it reads `next`, requires `next < capacity`, writes the record, then
+increments `next`. A trusted collector may put invalid, unpinned records on
+the free list only after clearing every tagged memory slot and saved register
+in the namespace. Invalid PCC identities are pinned because a PCC has no tag.
+There is no generation field: the complete sweep is the reuse invariant.
+The host tree and supervisor collector remain the legacy C-mode path.
 
 Hardware writes to the table are ordinary physical stores; they clear any
 physical tag on the touched granules. A table access outside RAM treats the
@@ -237,9 +244,9 @@ Consequences for software, measured on QEMU's encoding:
 
 `SPLIT`, `MREV` and `CSMINT` check for enough free IDs before any change and
 raise cause 30, `tval` 0, delegated to S. libc reads `urevavail` before
-carving and returns `NULL` from `malloc` instead. A cause-30 trap from U is
-therefore a bug in libc; Linux terminates the task, since user signal
-handlers are excluded.
+carving and returns `NULL` from `malloc` instead. The trusted adapter may run
+the namespace collector after a resource event and retry; if all identities
+are live or pinned, the operation remains a clean allocation failure.
 
 ## Retirement and teardown
 
@@ -279,8 +286,9 @@ Agreed in review before the guest-table change.
   the context it enters.
 - **One list algorithm, two storage bindings.** Allocation, header, null ID,
   reference counts and release belong to the binding, not only record reads
-  and writes. The guest binding never recycles an ID and never turns bad
-  guest data into a host assertion. The forest model runs against both.
+  and writes. The guest binding recycles an ID only after the trusted sweep
+  and never turns bad guest data into a host assertion. The forest model runs
+  against both.
 - **Complete preflight.** Before the first write, every range the operation
   will write is writable RAM and no address computation overflows. REVOKE
   and `CSRETIRE` walk the run first, with a visit bound against cycles, and

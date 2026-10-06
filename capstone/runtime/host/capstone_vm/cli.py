@@ -292,6 +292,9 @@ def start(args: argparse.Namespace, state: Path) -> int:
                 files[key] = require_file(getattr(args, key))
         if "launcher" in files and "job_helper" not in files:
             files["job_helper"] = require_file(files["launcher"].with_name("capstone-job"))
+        profile = getattr(args, "profile", "physical")
+        if profile == "virtual" and not {"launcher", "module"} <= files.keys():
+            raise VMError("Virtual profile requires its launcher and module")
         share = args.share.resolve(strict=True)
         if not share.is_dir() or "," in str(share):
             raise VMError("Share must be a directory whose path contains no comma")
@@ -312,7 +315,7 @@ def start(args: argparse.Namespace, state: Path) -> int:
                                      for name, path in files.items()},
                            "share": str(share), "memory": args.memory, "cma_mib": args.cma_mib,
                            "process_cache_mib": args.process_cache_mib,
-                           "environment": environment}
+                           "environment": environment, "profile": profile}
         if running(state):
             old = json.loads((state / "config.json").read_text())
             if old.get("identity") != identity_config or args.port not in (0, old["port"]):
@@ -381,6 +384,12 @@ fi
 dropbearkey -y -f /etc/dropbear/dropbear_ed25519_host_key | sed -n '/^ssh-ed25519 /p' > /mnt/control/hostkey.pub
 dropbear -s -g -p 22
 """
+        if profile == "virtual":
+            begin = setup.index("current_cache=")
+            end = setup.index("capstone-exec --stats >/dev/null")
+            setup = setup[:begin] + """if [ -c /dev/capstone-vm ]; then rmmod capstone_vm; fi
+insmod /mnt/control/module
+""" + setup[end:]
         (assets / "setup.sh").write_text(setup)
         # An ephemeral host port is chosen once; QEMU fails safely if a racer takes it.
         with socket.socket() as reservation:
@@ -401,7 +410,7 @@ dropbear -s -g -p 22
             "-serial", "chardev:console", "-qmp", f"unix:{state / 'qmp.sock'},server=on,wait=off",
             "-netdev", f"user,id=net,restrict=on,hostfwd=tcp:127.0.0.1:{port}-:22",
             "-device", "virtio-net-device,netdev=net", "-device", "virtio-rng-device",
-            "-cpu", "rv64,sstc=false,h=false",
+            "-cpu", "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true" if profile == "virtual" else "rv64,sstc=false,h=false",
         ]
         config = {"port": port, "share": str(share), "command": command, "identity": identity_config}
         (state / "config.json").write_text(json.dumps(config, indent=2) + "\n")
@@ -461,6 +470,7 @@ def main(argv: list[str] | None = None) -> int:
     up = sub.add_parser("up", help="Boot and provision one persistent guest")
     for option in ("qemu", "kernel", "firmware", "rootfs", "share"):
         up.add_argument("--" + option, type=Path, required=True)
+    up.add_argument("--profile", choices=("physical", "virtual"), default="physical")
     for option in ("launcher", "ssh-server", "module", "job-helper"):
         up.add_argument("--" + option, type=Path, help="Override the installed guest component")
     up.add_argument("--port", type=int, default=0)
@@ -501,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
             settings.update(share=Path(config["share"]), memory=config["memory"],
                             cma_mib=config.get("cma_mib", 512),
                             process_cache_mib=config.get("process_cache_mib", 384),
-                            environment=config["environment"], port=0, boot_timeout=120)
+                            environment=config["environment"], profile=config.get("profile", "physical"), port=0, boot_timeout=120)
             return start(argparse.Namespace(**settings), state)
         if args.action == "status":
             active = running(state)

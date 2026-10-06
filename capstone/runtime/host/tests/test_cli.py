@@ -79,6 +79,21 @@ class TransportTests(unittest.TestCase):
                 self.assertEqual(args.port, 0)
                 self.assertFalse(hasattr(args, "launcher"))
 
+    def test_restart_preserves_virtual_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            identity = {"files": {k: {"path": "/tmp/" + k, "sha256": "old"}
+                        for k in ("qemu", "kernel", "firmware", "rootfs", "launcher", "module")},
+                        "share": "/tmp/share", "memory": "2G", "cma_mib": 768,
+                        "process_cache_mib": 384, "environment": {}, "profile": "virtual"}
+            (state / "config.json").write_text(json.dumps({"identity": identity}))
+            with patch.object(cli, "running", return_value=False), patch.object(cli, "start", return_value=0) as start:
+                self.assertEqual(cli.main(["--state", directory, "restart"]), 0)
+                args, _ = start.call_args.args
+                self.assertEqual(args.profile, "virtual")
+                self.assertEqual(args.launcher, Path("/tmp/launcher"))
+                self.assertEqual(args.module, Path("/tmp/module"))
+
     def test_qmp_events_and_partial_messages(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
