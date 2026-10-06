@@ -1,0 +1,29 @@
+{
+  "fault_cause": 24,
+  "fault_site": "protected_first_store",
+  "first_store_page_fault_cause": 15,
+  "first_store_page_faults": 0,
+  "guest_exit": 132,
+  "kernel_context_base_revision": "0c9d8d9d1e0d",
+  "kernel_entry_fix_revision": "f12525db4c78ea466091a39e341c85d1961c0fdf",
+  "kernel_source_provenance": "Image built from the context base plus the scalar-before-STC entry fix, serialized in linux-trusted-u.patch; source and patch hashes are included.",
+  "probe_binary_sha256": "d36f523d62fcbcbcc20cdbf3b894f97c3b236a190142076a61a4b088201518b2",
+  "protected_binary_sha256": "29b2fb48ea8d115c635f1876fa9241c45109377d1d22430c76f7ba4f3b74cc2c",
+  "protected_process": true,
+  "protected_scope": "one tagged s2, one mm, one hart; no libc or checked syscall copy",
+  "same_address_observed": true,
+  "schema": 2,
+  "scope": "stripped_tag_control",
+  "sha256": {
+    "Image": "0e45a2609746a5e06a5428c21974d3ce0b2c7f6859d6d68f8ba97455d547f8b3",
+    "compiler": "1e1308b723db462043d5d5bff44c0ea35ee658cb4131d011614b817e26abc420",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "kernel_entry_source": "3f36ad483fe9dd9bf3325c051e063fd4bb10b8b547b47009bb7df10a04088d55",
+    "kernel_patch": "14aa4bd01b1b77c77b25c8e97b0cf85a726718c3d9e147c6388a3166d357b3bc",
+    "protected_source": "4975d44dcc0ae18451c6e084d0d9c12b7fa75fee1caf23a23534308383cfd250",
+    "qemu": "bd1bd1d41d13ca433a205bf54782d35514f6592b756e145e7845161be59ecb13",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "source": "2a17ccd4d93b49c6ed9b56cb02739fdcc21279b1f9506f3d8f1a92e76a155b96"
+  },
+  "status": "PASS"
+}

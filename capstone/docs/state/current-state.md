@@ -2,6 +2,24 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-06 — virtual prototype Q-12 and context review fixes
+
+The prototype ABI now keeps the scalar kernel `tp` through frame restoration
+by writing `cscratch` from a disposable temporary. Its scalar-edit rule
+excludes PCC and preserves syscall results while clearing their tags.
+The QEMU LDC helper snapshots bytes and tag from one physical RAM granule;
+a different write-preflight destination faults before mutation. The
+[reviewed instruction record](../../capstone-qemu/tests/virtual-capstone-m1/review-fixes.json)
+has 25/25 passes, including U/S remaps and overlapping operands, and rejects
+a mutation without the physical-identity guard. The existing suite passes
+74/74 on the same binary.
+
+The corrected Linux patch saves scalar `s2` before consuming STC. The
+[combined Q-12 gate](../../tests/trusted-linux-feasibility/run-q12.sh) passes
+the bounded protected process and its stripped-tag control. This is one
+tagged register; it does not qualify full context, protected malloc or the
+guest lifetime table. M0's concrete ABI remains a draft; M1--M3 stay open.
+
 ## 2026-10-06 — virtual Capstone prototype starts at M0
 
 `virtual-capstone-prototype` starts from superproject `3638abe58a4c` and

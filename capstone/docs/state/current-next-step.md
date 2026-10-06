@@ -1,10 +1,14 @@
 Virtual Capstone prototype (2026-10-06): follow the local M0--M3 sequence in
 [the prototype contract](../plans/virtual-capstone-prototype.md). The first
 host forest/list comparison passes, including dropped REV handles, whole-arena
-retirement and independent tables with equal IDs. Finish M0's serialized
-table/CSR ABI, mode and exception policy, exhaustion recovery and authoritative
-context frame. Then add the Q-12 consuming-LDC/STC fault/retry gate and implement
-it before guest-table integration. The candidate already checks data rights;
+retirement and independent tables with equal IDs. The concrete ABI draft and
+Q-12 review fixes now have a combined instruction/Linux acceptance gate:
+25/25 new checks, 74/74 existing checks, and the bounded Linux process with
+its stripped-tag control. Follow the [ABI](../plans/virtual-capstone-abi.md)
+for guest-table integration next: three CSRs, monotone guest-RAM nodes,
+four privileged encodings, and removal of debug selection. The frame layout
+remains an M2 contract, not an implemented full-register Linux context.
+The candidate already checks data rights;
 verify coverage rather than treating Q-14 on the main line as its exact status.
 Disable both free-list reuse and the supervisor collector in the protected
 profile. Full tagged Linux contexts and delegation gates are M2; a static

@@ -178,9 +178,13 @@ processor performance result.
    no PCC fetch check.
 3. Add Q-12 fault-and-retry probes and implement transfers against those
    probes. Preserve the existing U-mode and ordinary Linux controls.
-   **Done** for protected U and the S context path: 20/20 in the new
+   **Done** for protected U and the S context path: 25/25 in the reviewed
    [M1 gate](../../capstone-qemu/tests/virtual-capstone-m1/README.md) and
-   74/74 in the existing U-mode suite on the same sources.
+   74/74 in the existing U-mode suite on the same binary. The
+   [combined acceptance runner](../../tests/trusted-linux-feasibility/run-q12.sh)
+   also requires the bounded Linux process and its stripped-tag control.
+   The kernel saves scalar `s2` before consuming STC; the full ABI keeps
+   kernel `tp` until the final restore and excludes PCC from GPR cursor edits.
 4. Replace the selector/host table with the guest-table context, disable ID
    reuse, and remove fat bounds from protected memory tags. Complete M1
    before extending the Linux patch to full contexts.

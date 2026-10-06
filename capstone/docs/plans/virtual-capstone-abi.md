@@ -125,13 +125,18 @@ kernel stack exists. `pt_regs` stays scalar and unchanged.
 
 **Return to protected U:**
 
-1. A C helper compares every `pt_regs` value with the low word of its slot.
+1. A C helper compares the saved GPR values in `pt_regs` with the low words
+   of slots 1--31. PCC in slot 0 is excluded: `sepc` changes, including the
+   increment after `ecall`, are composed with its saved authority at xRET.
    On a mismatch it stores the scalar value into that low word. The scalar
    store clears the slot's tag, so a kernel edit cannot inherit authority.
-   The syscall return path also clears `slot[10]`, even when `a0` happens to
-   equal the old cursor.
+   The syscall return path also clears the tag of `slot[10]` after storing
+   the scalar result, even when `a0` happens to equal the old cursor.
 2. `LDC t0, slot[0]` then `ccsrrw zero, t0, cepc`.
-3. `ccsrrw zero, tp, cscratch` stores the kernel `tp` scalar for the next entry.
+3. `mv t0, tp` then `ccsrrw zero, t0, cscratch` stores the kernel `tp` scalar
+   for the next entry. Keep `tp` unchanged as the frame address until step 4.
+   The candidate's CCSRRW can consume even an untagged scalar source; the
+   temporary is disposable after publishing PCC in step 2.
 4. `LDC` every GPR from its slot, with `tp` itself last. An untagged slot
    restores the scalar value. LDC in S consumes linear slots, so the frame
    holds no second copy afterwards.
@@ -171,14 +176,19 @@ same bits for the Linux gate in M2.
 |---|---|
 | LDC | After all address checks and the load, if the loaded value is tagged and not NONLIN, the slot is consumed: 16 zero bytes and no tag. This depends on the loaded value, not on `rd`, so `LDC` into `x0` destroys a linear slot. Consumption requires write permission from the address capability, else cause 27, and a writable PTE, else store page fault 15 with `tval` at the slot. |
 | STC | After the store and any UNINIT cursor advance of `rs1`, if `rs2` is tagged and not NONLIN, `rs2` becomes null. |
+| Physical identity | LDC reads bytes and tag from the same physical granule. Its write preflight must select that same granule; a disagreement raises store access fault 7 with `tval` at the virtual slot before any consumption or destination update. Linux must still perform normal `SFENCE.VMA` after PTE changes. |
 | Faults | Any fault leaves `rd`, `rs1`, `rs2`, the slot bytes, its tag and any UNINIT cursor exactly as before. A retry after the kernel resolves the fault moves exactly once. |
 | Order | Capability checks 24–28, then translation and PTE read or write, then the consumption checks, then commit. Page-table accessed and dirty bits are not rolled back. |
 
 Implemented for protected U and the S-mode context path in the prototype
 QEMU, with the gate in `tests/virtual-capstone-m1/`. Legacy C mode keeps the
-divergence recorded as Q-12. The gate failed 12 of its 20 checks on the
-unchanged base and rejects two source mutations: dropping the capability
-write check, and writing `rd` before the consumption checks.
+divergence recorded as Q-12. The original 20-check gate failed 12 checks on
+the unchanged base and rejected mutations of the write check and commit
+order. The reviewed gate adds frame-base and physical-identity checks.
+The combined [Q-12 acceptance runner](../../tests/trusted-linux-feasibility/run-q12.sh)
+requires this gate, the existing U-access suite, and a real Linux process
+through page-fault retry, syscall and task switch, plus a stripped-tag control.
+Its bounded kernel patch saves the scalar `s2` cursor before consuming STC.
 
 **Open: `tval` for causes 24–30.** QEMU reports 0 for all of them, because
 trap delivery copies `badaddr` only for the standard address causes. The

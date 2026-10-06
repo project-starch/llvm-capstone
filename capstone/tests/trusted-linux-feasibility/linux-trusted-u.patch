@@ -53,12 +53,12 @@ index df9444397908..fc465cd2305e 100644
 +	OFFSET(PT_CAPSTONE_S2, pt_regs, capstone_s2);
 +#endif
 diff --git a/arch/riscv/kernel/entry.S b/arch/riscv/kernel/entry.S
-index 186abd146eaf..0f6b3f7c4e04 100644
+index 186abd146eaf..394ed83ba971 100644
 --- a/arch/riscv/kernel/entry.S
 +++ b/arch/riscv/kernel/entry.S
-@@ -45,0 +46,4 @@ _save_context:
+@@ -61,0 +62,4 @@ _save_context:
 +#ifdef CONFIG_CAPSTONE_TRUSTED_U
-+	/* Preserve s2's tag before Linux's scalar pt_regs stores touch it. */
++	/* Save the scalar cursor before STC consumes a linear s2. */
 +	.insn s 0x5b, 4, x18, PT_CAPSTONE_S2(sp)
 +#endif
 @@ -279,0 +284,6 @@ resume_userspace:

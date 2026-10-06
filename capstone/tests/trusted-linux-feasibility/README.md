@@ -97,8 +97,11 @@ The exact [kernel patch](linux-trusted-u.patch) applies to
 `transcapstone-linux` revision `830b3c68c1fb1e9176028d02ef86f3cf76aa2476`;
 `git apply --unidiff-zero --check` can verify the zero-context patch before
 application. It is also committed
-locally on `riscv/trusted-u-entry` as `0c9d8d9d1e0d`; the original repository
-denied the push, so the patch makes this gate reviewable without that remote.
+locally on `riscv/trusted-u-entry` as `0c9d8d9d1e0d`, with the Q-12 correction
+on `virtual-capstone-q12-fixes`; the original repository denied the push, so
+the patch makes this gate reviewable without that remote. The corrected
+entry saves the scalar `s2` cursor before STC consumes the linear register.
+Rebuild the kernel when moving from the original non-consuming QEMU path.
 Build the patched source with `CONFIG_CAPSTONE_TRUSTED_U=y` and the
 same Buildroot cross-compiler used for the guest image. This option is
 experimental and requires QEMU's `x-capstone-u-mode=true`. Place the built
@@ -137,6 +140,21 @@ would inherit protection without `s2` authority; the refusal is required by
 this bounded prototype. It does not check `tp`/`sp` or other capability
 registers, signals, ptrace, protected fork inheritance, checked syscall copies, frame
 reclaim, object revocation or a real allocator. M1 remains open.
+
+The combined Q-12 acceptance gate requires the QEMU instruction and U-access
+suites, then this protected Linux process and its stripped-tag control:
+
+```sh
+capstone/tests/trusted-linux-feasibility/run-q12.sh \
+  --image-dir /path/to/patched-linux-images \
+  --cc /path/to/riscv64-buildroot-linux-gnu-gcc \
+  --qemu /path/to/qemu-system-riscv64
+```
+
+The [Q-12 process record](q12-protected-result.json) and
+[stripped-tag record](q12-strip-result.json) qualify the corrected patch and
+consuming QEMU path together. Historical records above retain their original
+kernel and QEMU identities. Raw logs stay in the runner's scratch directory.
 
 The next gate must extend this one-register process to full tagged register
 preservation, obtain authority for ordinary Linux mappings without a debug
