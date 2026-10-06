@@ -37,7 +37,31 @@ echo "kernel=$(G 'uname -r')"
 echo
 printf '%-22s %-10s %-9s %-14s %s\n' CASE VERDICT SWITCHED REVOKE DETAIL
 
-for tag in $(ls "$WORK/out" | grep '_sys$'); do
+# THE CASE LIST COMES FROM THE CORPUS, NOT FROM WHAT HAPPENS TO BE BUILT.
+# `ls out/` answers "what was built", which is a different question, and on
+# 2026-10-05 the two answers differed without saying so: five baseline probes
+# were measured as if they were cases and five real cases were absent, the
+# totals both came to 43, and nothing in the output disagreed with the corpus.
+# tags.tsv is the accounting -- one row per tag, giving the case directory it
+# belongs to or the reason it is not a case.
+TAGS=$C/../repro322/tags.tsv
+[ -r "$TAGS" ] || { echo "cannot read $TAGS" >&2; exit 2; }
+CASES=$(awk -F'\t' '$3=="case"{print $1}' "$TAGS" | sort)
+[ -n "$CASES" ] || { echo "no cases in $TAGS" >&2; exit 2; }
+
+# Refuse rather than measure a short set. A missing binary is a build problem,
+# and scoring the rest would report a smaller denominator as if it were whole.
+missing=""
+for tag in $CASES; do [ -x "$WORK/out/${tag}_sys" ] || missing="$missing $tag"; done
+if [ -n "$missing" ]; then
+  echo "REFUSING TO RUN: these cases have no system-allocator binary in $WORK/out:" >&2
+  for t in $missing; do echo "  ${t}_sys" >&2; done
+  echo "build them first; a partial run would understate the denominator" >&2
+  exit 2
+fi
+echo "cases from $TAGS: $(printf '%s\n' $CASES | wc -l)"
+
+for tag in $(printf '%s_sys\n' $CASES); do
   raw=$(G "cd /root/corpus && NOMEM5=1 timeout 300 ./$tag 2>&1; echo __EXIT=\$?")
   ex=$(printf '%s' "$raw" | grep -o '__EXIT=[0-9]*' | tail -1 | cut -d= -f2)
   body=$(printf '%s' "$raw" | grep -v '__EXIT=')
