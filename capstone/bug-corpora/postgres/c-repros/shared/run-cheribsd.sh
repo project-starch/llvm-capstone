@@ -30,9 +30,17 @@ PORT=${PG_CHERI_PORT:-10086}
 STAMP=$(date -u +%Y%m%d-%H%M%S)
 OUT=${1:-$CORPUS/results/cheribsd-revocation-$STAMP}
 
-K="-n -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no"
+# -n belongs to ssh and not to scp, which rejects it and then copies nothing.
+# The first run of this script lost its positive control that way: the binary
+# never reached the guest, the gate saw exit 127, and it refused to score --
+# which is the gate working, but the cause was here.
+K="-i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=no"
 K="$K -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
-G() { ssh $K -p "$PORT" root@localhost "$@" 2>/dev/null; }
+G() { ssh -n $K -p "$PORT" root@localhost "$@" 2>/dev/null; }
+# Copies are checked: a silent scp failure reads downstream as a missing
+# binary, which is indistinguishable from a build that never produced one.
+P() { scp $K -P "$PORT" "$1" root@localhost:"$2" >/dev/null 2>&1 \
+      || { echo "scp of $1 to the guest failed" >&2; exit 2; }; }
 
 mkdir -p "$OUT"
 
@@ -70,7 +78,7 @@ echo "kernel=$KERN revocation_default=$REVD every_free_default=$REVF"
 GATE=$(printf '%s\n' $CASES | grep '^00_' | head -1)
 [ -n "$GATE" ] || { echo "no case 00 to use as the positive control" >&2; exit 2; }
 G "mkdir -p /root/c-repros"
-scp $K -P "$PORT" "$BIN/$GATE" root@localhost:/root/c-repros/ >/dev/null 2>&1
+P "$BIN/$GATE" /root/c-repros/
 graw=$(G "cd /root/c-repros && timeout 120 ./$GATE 0 2>&1; echo __EXIT=\$?")
 gex=$(printf '%s' "$graw" | grep -o '__EXIT=[0-9]*' | tail -1 | cut -d= -f2)
 echo "positive control $GATE: exit=${gex:-?}"
@@ -87,7 +95,7 @@ n=0
 for tag in $CASES; do
   n=$((n+1))
   num=$(printf '%s' "$tag" | cut -d_ -f1 | sed 's/^0*//'); num=${num:-0}
-  scp $K -P "$PORT" "$BIN/$tag" root@localhost:/root/c-repros/ >/dev/null 2>&1
+  P "$BIN/$tag" /root/c-repros/
   raw=$(G "cd /root/c-repros && timeout 300 ./$tag $num 2>&1; echo __EXIT=\$?")
   ex=$(printf '%s' "$raw" | grep -o '__EXIT=[0-9]*' | tail -1 | cut -d= -f2)
   body=$(printf '%s' "$raw" | grep -v '__EXIT=')
