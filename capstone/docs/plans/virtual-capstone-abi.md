@@ -232,3 +232,41 @@ it. A freed table's memory is zeroed with scalar stores before reuse.
 7. Illegal-instruction policy for the protected-U table above.
 8. Bounds decoded from stored bits for protected tags.
 9. `tval` for causes 24–30 and cause 28 for an access past the bounds. **Done.**
+
+## Constraints for the remaining M1 changes
+
+Agreed in review before the guest-table change.
+
+- **Table choice by operation.** Protected-U accesses and the S context path
+  use `srevroot`; legacy C mode and M keep the host tree. `CSMINT`, the two
+  checks and `CSRETIRE` use the guest table in every privilege, M included,
+  so a bootstrap cannot mint into the wrong tree. An xRET uses the table of
+  the context it enters.
+- **One list algorithm, two storage bindings.** Allocation, header, null ID,
+  reference counts and release belong to the binding, not only record reads
+  and writes. The guest binding never recycles an ID and never turns bad
+  guest data into a host assertion. The forest model runs against both.
+- **Complete preflight.** Before the first write, every range the operation
+  will write is writable RAM and no address computation overflows. REVOKE
+  and `CSRETIRE` walk the run first, with a visit bound against cycles, and
+  only then invalidate. Translation is done once per contiguous chunk: the
+  24-byte `CSMINT` descriptor can cross a page into an unrelated frame.
+- **PCC.** QEMU reads instruction bytes while translating, before any helper
+  it generates runs (`translate.c:1296`). The fetch rule therefore fixes the
+  fault order, 16- and 32-bit instructions and page crossings, and requires
+  the whole instruction inside the PCC bounds. `pc_cap` gets an explicit tag.
+  A control revokes the PCC after its code was translated and runs it again.
+- **Representability first.** Measure whether stored bits can widen bounds
+  before `CSMINT` relies on them. An operation whose result is not exactly
+  representable is rejected before any change; inward rounding would change
+  SPLIT's partition and needs its own semantics. The check covers cursor
+  changes too, such as CINCOFFSET followed by a store and load.
+  `cap_in_bounds` (`cap.h:112`) computes `base + size` without an overflow
+  check and must become overflow-safe.
+- **Existing gates move with the ABI.** The bounded Linux patch still uses
+  the debug selectors and debug mint. It is migrated with the selector
+  removal, or its run is documented as a historical control.
+- **Instruction policy** keeps the standard FP CSRs while RV64F and D stay
+  supported.
+- **Completion.** Protected mode is M1-complete only after one joint
+  acceptance run of all remaining changes.
