@@ -67,15 +67,44 @@ corpora make the same choice for the same reason.
 **Measured:** `native-fix-differential` and `native-detect`, both two-sided, control arm first.
 `runners/run-native.sh` exit 0. Result lines in `results/20261006-native-plain-heap/`.
 
-**Declared predictions:** the Capstone, PoisonCap and CheriBSD arms. This corpus has no
-capstone-domain runner, as is also true of the two sibling plain-heap corpora.
+**Also measured — `cheribsd-revocation`, on 2026-10-06** (`results/20261006-cheribsd/`), with
+revocation **on** and both platform controls firing in the same boot. **3 of 4 CAUGHT, and the fault
+is attributed to the labelled probe in every one of them**; case 1 is **not** caught, which refutes
+its own pre-registered prediction. This is the first CheriBSD reading of any FFmpeg corpus.
 
-**The CheriBSD predictions are deliberately CONDITIONAL, and each names its own request size.** That
-platform's `malloc` bounds a capability to the allocator's **usable size**, not to the request —
-measured in-guest on this host on 2026-10-06: `calloc(1,1)` and `calloc(1,9)` both return length 16,
-`calloc(1,17)` returns 32, `calloc(1,8192)` returns exactly 8192. `memcached/plain-heap-repros/00`
-predicted a catch without that condition and was **refuted** by precisely this mechanism. So each arm
-here records the bytes requested and the distance crossed, and says the reading must be taken in-guest
-for *that* request size rather than carried over from the `calloc` table.
+| case | crossing | CheriBSD |
+|---:|---|---|
+| 0 | 4 B past a 16 B request | **CAUGHT** — `si_code` 1, `addr`=`pc`=`0x1020ba` = the resolved probe |
+| 1 | 1 B past a 24 B request | **not caught** — the capability is 32 long, so offset 24 is inside |
+| 2 | 4 B **below** the base | **CAUGHT** — `0x1020de` |
+| 3 | 33 B past a 512 B request | **CAUGHT** — `0x102120` |
+
+**Why case 1 is a clean refutation rather than a surprise.** CheriBSD's `malloc` bounds to the
+allocator's **usable size**, not the request, and this corpus measured the lengths for *its own*
+request sizes in the same boot instead of reusing the `calloc` table taken at 1/9/16/17/8192 for the
+sibling corpora — because a size class is a step function:
+
+| request | length | slack |
+|---:|---:|---:|
+| 16 | 16 | **0** |
+| **24** | **32** | **8** |
+| 512 | 512 | 0 |
+
+The committed prediction for case 1 said in advance that 24 bytes "is not a size-class boundary, so
+the usable size must be read in-guest before this is believed". It was read, and it was 32. This is
+the **second** instance of the mechanism — `memcached/plain-heap-repros/00` was refuted by it at
+request 9 → length 16 — so it is now measured at two size classes, and case 2 shows it cannot apply
+below the base.
+
+**Attribution is established here and is not in the sibling corpora.** They declare their probes
+`static` in the header, so each translation unit gets a private copy and `supervise` cannot resolve
+the symbol — their rows read *"attribution: not established"*. This corpus **declares** the probes in
+`shared/corpus.h` and **defines them once** in `shared/driver.c`, so the fault address can be matched
+against a symbol resolved from the ELF independently of the run. The native readings were re-run
+after that change and came out byte-identical, so it is inert to everything except attribution.
+
+**Still declared predictions:** the Capstone and PoisonCap arms. This corpus has no capstone-domain
+runner, as is also true of the two sibling plain-heap corpora, and PoisonCap is unavailable on this
+host.
 
 **N = 1 per cell.**

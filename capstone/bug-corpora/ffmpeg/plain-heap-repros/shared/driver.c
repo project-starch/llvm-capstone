@@ -10,6 +10,21 @@ _Noreturn void ffh_fail(unsigned code) {
   exit(75); /* an infrastructure failure is never a verdict */
 }
 
+/* The labelled crossings, defined ONCE here so the symbol is resolvable from the
+ * image and a fault can be required to land at it. corpus.h explains why this is
+ * not `static` in the header the way the sibling corpora have it. */
+__attribute__((noinline, used)) float ffh_read_probe(const volatile float *p) {
+  return *p;
+}
+__attribute__((noinline, used)) unsigned
+ffh_read_probe_u8(const volatile unsigned char *p) {
+  return *p;
+}
+__attribute__((noinline, used)) void
+ffh_write_probe_u8(volatile unsigned char *p, unsigned char v) {
+  *p = v;
+}
+
 int main(int argc, char **argv) {
   int fixed = argc > 1 && !strcmp(argv[1], "fixed");
   if (argc > 2 && atoi(argv[2]) != ffh_case_number) {
