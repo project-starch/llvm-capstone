@@ -19,12 +19,14 @@ until retirement; node identities are recyclable after the trusted namespace
 sweep, with dead PCC identities retained.
 
 The [qualification record](../../runtime/virtual/qualification.json) includes
-instruction/legacy regressions, recycling pressure and negative controls.
+instruction/legacy regressions, recycling pressure, the process, signal and
+socket fixtures rebuilt for this profile, and negative controls.
 Full upstream application suites, multiple threads/harts, swap/migration,
 shared or file-backed tagged mappings and full compact-bounds conformance
-remain outside this first profile. The collector has been exercised past
-200,000 allocation/free cycles; it reuses only after clearing the namespace's
-registered tags and saved contexts, while dead PCC identities remain pinned.
+remain outside this first profile. The application contract's churn mode
+exercises the collector past 200,000 allocation/free cycles through the
+virtual launcher; it reuses only after clearing the namespace's registered
+tags and saved contexts, while dead PCC identities remain pinned.
 The older R0 entry below is retained as historical qualification of its subset.
 
 ## 2026-10-06 — virtual C execution through a Linux module

@@ -42,8 +42,8 @@
       "total": 8
     },
     "linux_application": {
-      "passed": 21,
-      "total": 21
+      "passed": 20,
+      "total": 20
     },
     "physical_mruby": {
       "passed": 2,
@@ -55,19 +55,51 @@
     "total": 33
   },
   "application_gate": {
-    "passed": 21,
-    "total": 21,
-    "record": "result.json"
+    "passed": 20,
+    "total": 20,
+    "record": "result.json",
+    "inputs_sha256": {
+      "application": "13fe3e641f3c11b2a5ac94d7a5ff77d88034d6a636aaef276854159db05343e8",
+      "sqlite": "98fe3bf6b93d46302e7d558e7c8d4f300da4fa899f27c7a1b93460da2d0c316e",
+      "mruby": "cb8db21a1022600db304ba52d1ea05f6dec45b0ac3f3bcbe1155d47ee62a6e12",
+      "launcher": "63fb8ba0111dac443e69545ffe60d859d2a6d43027232a39c70d53e5692f757f",
+      "module": "0f73ac90503a5746a0184fb9f78ea7bc2967122a659769f6fb34532081b382a8"
+    }
   },
   "recycling_gate": {
-    "allocation_free_cycles": 200000,
+    "program": "runtime/tests/application/contract.c, target application-contract-sublet (GRANT_BYTES 2 MiB) with CAPSTONE_APPLICATION_VIRTUAL=ON",
+    "image_sha256": "08ec4e6607a925bae0d8022d358e2172cb2cf073a86bd9e8b2a740793e785d7d",
+    "platform": "capstone_vm --profile virtual with the application gate launcher and module; one hart, 2 GiB",
+    "command": "capstone_vm exec -- /tmp/application-supervisor /usr/bin/capstone-exec /mnt/host/application-contract-sublet.dom --mode MODE, with capstone-exec --stats before and after each mode (runtime/tests/application/supervisor.c supplies stdin, cwd, environment and argv)",
     "node_capacity": 65536,
-    "nodes_high_water": 65278,
-    "nodes_allocated_total": 869163,
-    "collections": 13,
-    "nodes_reclaimed": 780096,
-    "stale_reuse_fault": 24,
-    "exhaustion_result": "resource fault after collector cannot free live or pinned identities"
+    "churn": {
+      "cycles": 200000,
+      "supervisor_verdict": "PASS",
+      "wait_status": 0,
+      "nodes_allocated": 200271,
+      "collections": 3,
+      "nodes_reclaimed": 195024,
+      "nodes_high_water_after": 65278
+    },
+    "fault_reused": {
+      "supervisor_verdict": "PASS",
+      "wait_status": 11,
+      "nodes_allocated": 200271,
+      "collections": 3,
+      "nodes_reclaimed": 195024,
+      "nodes_high_water_after": 65278,
+      "fault_cause": 24
+    },
+    "fault_exhaust": {
+      "supervisor_verdict": "PASS",
+      "wait_status": 11,
+      "nodes_allocated": 65278,
+      "collections": 1,
+      "nodes_reclaimed": 0,
+      "nodes_high_water_after": 65278,
+      "fault_cause": 30
+    },
+    "exhaustion_result": "cause 30 after a collection leaves at most 256 free identities; the launcher reports the fault and exits"
   },
   "native_application_oracles": {
     "status": "PASS",
@@ -126,13 +158,15 @@
       "image": "mruby-none.dom",
       "exit": 0,
       "stdout": "42",
-      "sha256": "e8ab571d58a656e27078687396644ca0b876ae4d06e4af460e009b196ac68144"
+      "sha256": "e8ab571d58a656e27078687396644ca0b876ae4d06e4af460e009b196ac68144",
+      "command": "mruby-none.dom -e 'puts 6*7'"
     },
     {
       "image": "mruby-sublet.dom",
       "exit": 0,
       "stdout": "42",
-      "sha256": "0ab89e56171f41ea445c600cd46f1ba8aaad867075a85ef3b2c3196d2f85f71e"
+      "sha256": "0ab89e56171f41ea445c600cd46f1ba8aaad867075a85ef3b2c3196d2f85f71e",
+      "command": "mruby-sublet.dom -e 'puts 6*7'"
     }
   ],
   "limitations": [
@@ -140,6 +174,45 @@
     "Private anonymous mappings; pages pinned after first touch",
     "Recycling depends on a complete registered-page and saved-context sweep; dead PCC identities remain pinned",
     "No fork, shared tagged pages, multiple threads/harts, swap or migration",
-    "Allocated bounds include size-class padding; inherited compressed-bounds side metadata remains"
-  ]
+    "Allocated bounds follow the request, rounded to the representable grain for 4 KiB and larger; inherited compressed-bounds side metadata remains",
+    "Teardown clears tags only on pages the module pinned; pages Linux populated without an application fault rely on Linux zeroing before reuse"
+  ],
+  "fixture_gate": {
+    "platform": "the recycling_gate VM; images built from runtime/tests/application with CAPSTONE_APPLICATION_VIRTUAL=ON",
+    "process_sequence": {
+      "driver": "application-supervisor without --mode; loop runs under SIGTERM, SIGKILL and SIGINT",
+      "modes": [
+        "healthy",
+        "pty",
+        "fault",
+        "fault-stack",
+        "fault-vector",
+        "exit139",
+        "fault-mrev",
+        "fault-privcsr",
+        "fault-debugcap",
+        "fault-capenter",
+        "loop",
+        "loop",
+        "loop",
+        "healthy"
+      ],
+      "passed_runs": 14
+    },
+    "signals": {
+      "driver": "runtime/tests/application/run-signals.py",
+      "passed": 30,
+      "total": 30
+    },
+    "sockets": {
+      "driver": "runtime/tests/application/run-sockets.py",
+      "passed": 11,
+      "total": 11
+    },
+    "images_sha256": {
+      "application-contract.dom": "2a00b2e430eae45ad62fa87eec97205fb47c79bc1344356c04a1846c599b30a8",
+      "signal-contract.dom": "1a0d150222ffd8c6a9a65a4683b223f823abef51a15963fd99180491caa4417e",
+      "socket-contract.dom": "d678ee85fde092e6b39532b75f961207942c0f56242f89ded3da7a5bf2698749"
+    }
+  }
 }

@@ -49,12 +49,14 @@ and clears tags before freeing its table and saved frame.
 The allocator uses existing Sublet operations for object lifetimes. It grows
 through Linux mappings and supports `malloc`, `calloc`, `realloc`, alignment
 and whole-free-arena `malloc_trim`. It checks the remaining node budget
-before allocation. Blocks are aligned powers of two, minimum 256 bytes;
-`malloc_usable_size` reports that allocated extent, including padding.
+before allocation. Blocks are aligned powers of two, minimum 256 bytes. The
+returned capability is bounded to the request; a request of 4 KiB or more is
+rounded up to the representable grain, at most 1/512 of its size.
+`malloc_usable_size` reports that bounded extent, not the block.
 Anonymous RW `mmap` and whole-arena `munmap` use the same grant/retire path.
 The collector is only enabled after a complete namespace sweep. If all
-remaining identities are live or pinned, allocation fails instead of guessing
-that a stale capability is gone.
+remaining identities are live or pinned, the context ends with a resource
+fault (cause 30) instead of guessing that a stale capability is gone.
 
 The compiler profile combines `-capstone-gp-free` calls within PCC with
 `-capstone-image-gp`: a representable readable image capability supplies
@@ -112,6 +114,18 @@ accesses must fail. SQLite writes a database and another process reopens it;
 mruby performs arithmetic and file I/O. The `--omit-application` negative
 control must fail, even though the shell and other applications still run.
 
+The recycling evidence uses the existing application contract
+(`runtime/tests/application/contract.c`), built with this SDK and run through
+`capstone_vm --profile virtual`: `churn` performs 200,000 malloc/free cycles
+beside a held block, `fault-reused` then dereferences the first freed pointer
+(cause 24), and `fault-exhaust` keeps creating unrevoked ancestors until the
+namespace is exhausted (cause 30 after a collection that frees nothing). The
+guest supervisor of `runtime/tests/application` drives each mode, and the
+launcher's `--stats` counters read before and after it give the allocations,
+collections and reclaimed identities of that mode; the
+[qualification record](qualification.json) keeps them with the command, as
+well as the process, signal and socket fixtures run on the same images.
+
 The [instruction gate](../../capstone-qemu/tests/virtual-capstone-runtime/README.md)
 also checks consuming LDC/STC fault retries, linear replies, immutable context
 roots and restoration of the physical caller. The
@@ -124,13 +138,18 @@ per process, private anonymous mappings, 256 MiB per registered region, 1 GiB
 aggregate registered VA, 512 mappings, and a bounded recyclable node table.
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
-signals and general thread support need further contracts. Unsupported mapping
-forms fail explicitly; no fake shared-memory implementation is substituted.
+signals and general thread support need further contracts. Anonymous
+`MAP_SHARED` and SysV segments are process-local compatibility for nested
+ports, since there is no fork; every other mapping form fails explicitly.
 
-Pages stay pinned after first touch. The initial ELF image has the existing
-combined code/data layout. Allocator padding is accessible within its own
-block. Recycling requires the registered-page and saved-context sweep; a
-namespace full of live or pinned identities reports resource exhaustion.
+Pages stay pinned after first touch. A page that Linux populated without an
+application fault is pinned by the next retirement or collection, so a
+teardown does not clear its tags itself; Linux clears them with ordinary
+stores when it zeroes the page for reuse. The initial ELF image has the
+existing combined code/data layout. Representability padding above 4 KiB
+requests is accessible within its own block. Recycling requires the
+registered-page and saved-context sweep; a namespace full of live or pinned
+identities reports resource exhaustion.
 Compact-bounds conformance of every existing compiler/helper path
 remains separate work: the inherited QEMU data-tag implementation still
 retains extra bounds metadata. The gates establish the stated behavior in

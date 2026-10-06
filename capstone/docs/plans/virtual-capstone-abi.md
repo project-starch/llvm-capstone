@@ -244,9 +244,11 @@ Consequences for software, measured on QEMU's encoding:
 
 `SPLIT`, `MREV` and `CSMINT` check for enough free IDs before any change and
 raise cause 30, `tval` 0, delegated to S. libc reads `urevavail` before
-carving and returns `NULL` from `malloc` instead. The trusted adapter may run
-the namespace collector after a resource event and retry; if all identities
-are live or pinned, the operation remains a clean allocation failure.
+carving and returns `NULL` from `malloc` instead. The trusted adapter runs
+the namespace collector after a resource event and retries the instruction;
+if at most 256 identities are free afterwards, it ends the context with cause
+30 rather than retrying forever. Only libc's own `urevavail` check yields a
+clean `NULL`.
 
 ## Retirement and teardown
 

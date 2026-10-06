@@ -141,7 +141,6 @@ def main():
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1
     result = {'status': 'PASS' if all(tests.values()) else 'FAIL', 'tests': tests,
               'scope': 'one hart; private anonymous arenas; single-thread applications',
-              'kernel_core_changes': False, 'firmware_changes': False,
               'control_omit_application': a.omit_application,
               'sha256': {n: digest(path) for n, path in inputs.items()},
               'source_sha256': {str(p.relative_to(HERE)): digest(p) for p in sorted(HERE.rglob('*'))
