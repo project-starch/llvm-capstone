@@ -46,12 +46,14 @@ Anonymous `MAP_SHARED` and SysV compatibility accepted by the runtime remain
 process-local backing in this no-fork profile. They do not establish
 cross-process tagged sharing.
 
-The prototype has resource limits: a 65,536-slot / 1-MiB node table per
-launch (including reserved slots), 32 supervisor slots on the hart, at most
+The node-growth extension replaces the fixed 65,536-slot / 1-MiB table with
+base-page-backed tables bounded by RAM, an optional quota and the 31-bit ID
+field. It retains the separate limits of 32 supervisor slots on the hart, at most
 512 registered mappings, 256 MiB per registered region and 1 GiB aggregate
-registered VA. The table requires contiguous physical backing; application
-payloads do not. Some allocator requests return `ENOMEM` early. If collection
-cannot release enough IDs, node pressure terminates with resource cause 30;
+registered VA, 65,536 allocator block records and 256 allocator arenas by
+default. Table pages can be physically scattered. Allocator capacity requests
+can return `ENOMEM`; if collection and growth cannot supply enough IDs,
+node pressure terminates with resource cause 30;
 it is not universally converted into recoverable `malloc` failure.
 
 ## Encoding work still matters

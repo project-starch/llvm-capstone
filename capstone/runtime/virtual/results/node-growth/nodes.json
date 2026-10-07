@@ -6,6 +6,7 @@
     "growth": true,
     "two_live_populations": true,
     "stale": true,
+    "stale_site": true,
     "budget_errno": true,
     "quota_fault": true,
     "causes": true,
@@ -23,7 +24,7 @@
       "pages": 482,
       "peak": 482,
       "nodes": 140029,
-      "steps": 373,
+      "steps": 134,
       "faults": 14,
       "collections": 2,
       "reclaimed": 140004,
@@ -33,15 +34,15 @@
       "node_bytes": 1142784,
       "node_capacity": 70656,
       "node_growths": 17,
-      "launch_ns": 103774200,
-      "elapsed_ns": 1950927400
+      "launch_ns": 97880000,
+      "elapsed_ns": 681437000
     },
     {
       "arenas": 9,
       "pages": 485,
       "peak": 485,
       "nodes": 283,
-      "steps": 53,
+      "steps": 32,
       "faults": 17,
       "collections": 0,
       "reclaimed": 0,
@@ -51,12 +52,12 @@
       "node_bytes": 36864,
       "node_capacity": 1536,
       "node_growths": 1,
-      "launch_ns": 86799900,
-      "elapsed_ns": 263976500
+      "launch_ns": 86840200,
+      "elapsed_ns": 157078900
     }
   ],
   "sha256": {
-    "qemu": "000b202bab2503dd7c9dcb89d565544ce651da9d59c814ff679414a16b521c8f",
+    "qemu": "0aa10750223a81c897a90cfc18c57f0485f355d43e0176b57af470872d758b21",
     "application": "b073420a586daa4d05131bd30fe3ef2da861f9e206f3ef25b8c8e013d8be2f22",
     "launcher": "f877aa542de9639c20d79e0f037fb545aa0b7e2e772190a09722c951a7dbde41",
     "module": "b844685b3a0365a978f252f1d5addbf3a342ea0f4445b29538a800697e07e536",
@@ -65,7 +66,7 @@
     "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
   },
   "source_sha256": {
-    "run-nodes.py": "09d31ccc4de08062c3ca28b22031133219576cb24bbf6808f43ed6ef619dba0c",
+    "run-nodes.py": "9a665dace0edc77363a49e81ccb373d1190e8d3905944be7e85a793405271024",
     "node-contract.c": "a531dcd7ecc3d6d0efefd1cc95a5e26ec7baac7d34b3190c42115cb74db69c97",
     "run-staged.py": "a021fae1584abe7dcd191961fb3b562165ec643c700c1066579620d48a87826f"
   },
