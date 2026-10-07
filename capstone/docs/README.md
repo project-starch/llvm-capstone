@@ -9,6 +9,12 @@ Use its pinned QEMU and the [runtime build instructions](../runtime/virtual/READ
 [qualification records](../runtime/virtual/results/node-growth/qualification.json)
 identify the exact tested inputs and scope.
 
+The `virtual-musl-policy` branch adds ABI v4 allocation through unmodified
+native musl 1.2.5 mallocng and removes the virtual custom allocator. It requires
+the pinned opt-in QEMU exact-bounds shadow-metadata profile; this is not an RTL
+qualification. See the [allocator contract](../runtime/virtual/README.md#native-mallocng-capability-contract)
+and [results](../runtime/virtual/results/musl-policy/).
+
 Lane-only work on `delegation-threads` (not landed on `dev`):
 [the threads computing model](design/delegated-threads-model.md),
 [thread plan and integration constraints](plans/delegation-threads.md),

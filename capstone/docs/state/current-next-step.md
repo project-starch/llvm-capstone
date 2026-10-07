@@ -1,3 +1,14 @@
+2026-10-08 — **Review `virtual-musl-policy` against `review/virtual-node-growth`.**
+The branch preserves native upstream mallocng policy and removes the custom
+virtual allocator. Review QEMU's opt-in exact-bound storage contract together
+with ABI v4's trusted heap bridge; the runtime depends on the pinned processor
+change. The [qualification](../../runtime/virtual/results/musl-policy/README.md)
+records the current tested scope. Rebuild the virtual SDK and relink before
+using v4. Extend application and corpus qualification to the remaining ports,
+and design the additional bounds metadata for RTL before hardware claims.
+This profile retains one-hart and public VM restrictions. Historical node-growth
+and physical tasks below retain their original scope.
+
 2026-10-07 — **Review the growing node tables on `review/virtual-node-growth`.**
 The original virtual stack is merged into `dev`. Merge
 [QEMU #17](https://github.com/project-starch/capstone-qemu/pull/17) into

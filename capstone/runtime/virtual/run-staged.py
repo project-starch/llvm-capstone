@@ -15,6 +15,7 @@ def main():
     p.add_argument('--images', type=Path, required=True)
     p.add_argument('--stage', type=Path, required=True, help='Contains executable gate.sh and application resources')
     p.add_argument('--timeout', type=int, default=600)
+    p.add_argument('--exact-bounds', action='store_true', help='Enable the native mallocng processor profile')
     p.add_argument('--disk-mib', type=int, default=1024)
     p.add_argument('--work', type=Path, required=True, help='New output directory')
     a = p.parse_args()
@@ -32,6 +33,8 @@ def main():
            '-drive', f'file={disk},format=raw,id=gate,readonly=on',
            '-device', 'virtio-blk-device,drive=gate', '-cpu',
            'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true']
+    if a.exact_bounds:
+        cmd[-1] += ',x-capstone-exact-bounds=true'
     completed = login = sent = False
     out = b''
     with open(os.environ['CAPSTONE_QEMU_LOCK'], 'a+b') as lock, (a.work/'serial.log').open('wb') as log:

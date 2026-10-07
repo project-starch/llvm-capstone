@@ -252,3 +252,26 @@ Implementation: [decoder][decode], [CSRs][csr], [mint/retire][table],
 [table]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/capstone_table.c
 [supervisor]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/capstone_supervisor.c
 [translate]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/translate.c
+
+## Native mallocng prototype profile
+
+`x-capstone-exact-bounds=true` is opt-in. Read-only `scapctl` bit 8 advertises
+it to the trusted adapter. It makes exact bounds in physical shadow metadata
+authoritative on capability loads and virtual context restore. Compressed
+128-bit memory bytes remain present, but their decoded bounds alone no longer
+represent the complete authority. This changes the storage contract and needs
+a hardware design before any RTL claim. Default legacy behavior is unchanged.
+
+| Instruction | funct7 | Inputs | Result |
+|---|---|---|---|
+| `CSCAPINFO` | `0x54` | Tagged slot VA, six-word output VA | One for live authority, zero otherwise; base/end/cursor/node/type/permissions |
+| `CSHEAPMOVE` | `0x55` | Destination/source aligned 16-byte kernel slots | Zero on success; preserve non-linear tags and consume linear source |
+
+Both use opcode `0x5b`, funct3 `1`, require this profile and trusted S or
+scalar M mode, and trap in capability applications. Their source/destination
+translations and permissions are preflighted before writes. The copy operates
+on module-pinned RAM; it is not a user-access authorization substitute.
+On a supervised service escape, tagged a0 moves into the trusted reply frame
+and is cleared in the private continuation. Scalar a0 is carried in the event
+arguments, leaving the reply capability slot empty. This prevents duplicated
+linear arguments while allowing allocator input authority to be inspected.

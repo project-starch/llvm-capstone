@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "tests": {
+    "ordinary_memcpy_loses_tag": true,
+    "omitted_retire_preserves_stale_authority": true
+  },
+  "mutant_sha256": {
+    "launcher_without_tag_copy": "952ac916cf5718f331bac9955d9a15a2c9d91bae463c68bc18e33aef8927a7f4",
+    "module_without_retire": "4ef2069b2e188d045a11e0cbc4c26059a62227423e662af1807bf2cd3db506fd"
+  }
+}

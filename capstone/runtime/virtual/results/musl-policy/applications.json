@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "tests": {
+    "sqlite_write": true,
+    "sqlite_read": true,
+    "mruby": true,
+    "perl": true,
+    "perl_smoke": true,
+    "cleanup": true,
+    "sqlite_sum": true,
+    "sqlite_persistence": true,
+    "mruby_sum": true,
+    "mruby_file": true,
+    "perl_sum_file": true,
+    "perl_smoke_17": true
+  },
+  "virtual_vm_abi": 4,
+  "exact_bounds": true,
+  "input_sha256": {
+    "capstone-vexec": "20aa81cf7ae5f410b49128024bc9bc6645e321ee718bfd5e0d85281df950fbd4",
+    "capstone_vm.ko": "83ec68266efa1f2902ef9a6afc5560f52e77c06ff2b89a7a43f423d9fa590e06",
+    "sqlite3.dom": "f3efaea0d801e97ab4119abbd29c44f8b61958b7dfe3d3f49458f59522b9cd15",
+    "mruby.dom": "aa6b9ef406d446a0c84a72da259e02da05d09fade48c0b2e2bf195bcd94f8695",
+    "perl.dom": "d5764ef17d1f7367973a1adf5dc2cbb45267aa3abd03a2c7e5cb18f3b3b20540",
+    "perl-smoke.pl": "15bf158879a2f5432b183ed944bd52d928e0e4bbf40a5f93a8d9d0f2c6af1f44",
+    "qemu": "130c946598a5a030e0976b30f55acebb30c20285ed772d402c0a927b98824b38",
+    "recipe_source": "82936af44b0526bf6457cd29b6486b7345117132750306c14aaaad5e3b376e0c"
+  },
+  "gate_sha256": "1daab1ee0d20af3b3ab359a0ad5d3bcbd16f8bbfe84d6fe478f141c2c80b9342"
+}

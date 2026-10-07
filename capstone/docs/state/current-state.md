@@ -1,5 +1,26 @@
 # Current Capstone state
 
+## 2026-10-08 — virtual allocation with unchanged musl policy
+
+`virtual-musl-policy` replaces the custom virtual allocator with ABI v4 wrappers
+around a native RV64 build of unmodified musl 1.2.5 mallocng. All eight allocator
+C/header sources match the verified archive, including platform glue. The
+trusted bridge handles object lifetimes, dynamic object/page metadata, revoke
+before native reuse, fresh lifetimes on successful in-place realloc, and tagged
+moving realloc. The 65,536-block ceiling is removed. Linux core, firmware and
+upstream allocation policy are unchanged. Rebuild the virtual SDK and relink.
+
+The pinned QEMU adds opt-in exact-bound physical shadow metadata, trusted
+inspection and granule moves. This is a new prototype storage contract,
+**not a one-bit-tag or RTL qualification**. Default-profile processor gates
+pass 60/60 M1, 69/69 virtual-runtime and 69/69 U-access. The
+[qualification](../../runtime/virtual/results/musl-policy/README.md) records
+17/17 allocator/safety checks, 9/9 shared-mm pthread checks and SQLite, mruby,
+Perl plus its 17-section smoke. Tests cover 70,000 live objects, 200,000
+lifetimes, actual same-address reuse, exact fault sites and mutation controls.
+The known compiler was reused with an incomplete target-coverage freshness
+check. Other application ports and full bug corpora remain unqualified for v4.
+
 ## 2026-10-07 — growing virtual node tables
 
 The `review/virtual-node-growth` branch builds on `dev` at `08cf07d75ad2`

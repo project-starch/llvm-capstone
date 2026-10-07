@@ -101,7 +101,7 @@ closure of every nested-allocator safety gap.
 | Memory authority and consuming transfers | QEMU [op_helper.c][helpers] |
 | Per-mm owner, pins, faults and ioctls | [module/capstone_vm.c][module] |
 | ELF loader, native services and worker loop | [virtual/exec.c][exec] |
-| Object lifetimes and heap growth | [virtual/heap.c][heap] and [Sublet primitives][sublet] |
+| Object lifetimes and heap growth | [virtual/heap-musl.c][heap] and [Sublet primitives][sublet] |
 | Public VM and pthread bridge | [mapping.c][mapping], [pthread.c][pthread], [thread.c][thread] |
 | Service numbers versus ioctl structures | [vm-abi.h][vm-abi], [wire.h][wire] |
 
@@ -122,7 +122,7 @@ reason to reimplement Linux scheduling or allocation.
 [helpers]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/op_helper.c
 [module]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/module/capstone_vm.c
 [exec]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/exec.c
-[heap]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/heap.c
+[heap]: ../../../runtime/virtual/heap-musl.c
 [sublet]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/include/sublet/sublet.h
 [mapping]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/mapping.c
 [pthread]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/pthread.c

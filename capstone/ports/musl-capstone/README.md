@@ -8,6 +8,23 @@ stubs, and the next workload would need its own.
 
 ## Status
 
+### Allocator policy
+
+Source preparation checks all mallocng C files and `meta.h` against the
+SHA-256-verified upstream archive. `glue.h` is the platform boundary and is
+excluded from that comparison. Changing `UNIT`, `IB`, size classes, group
+counts, reuse decisions or `realloc` paths therefore fails preparation.
+This is a source-policy gate, not a capability-safety test.
+
+The virtual ABI v4 delegates allocation to a native RV64 build of unmodified
+musl 1.2.5 mallocng. Its eight allocator sources, including `glue.h`, match the
+verified upstream archive. The capability libc contains ABI wrappers only;
+no allocator size classes, grouping, retention or reuse policy are replaced.
+The trusted bridge supplies exact object bounds and separate lifetimes, and
+preserves capability tags during moving realloc. See the
+[allocator contract](../../runtime/virtual/README.md#native-mallocng-capability-contract).
+This requires the opt-in QEMU exact-bounds profile; it is not an RTL claim.
+
 **A domain runs musl**, as a delegated application (ABI v2, the only application runtime:
 [applications.md](../../runtime/applications.md)). The delegated libc-test runner runs musl's
 functional suite in one guest boot and currently records **56 PASS, 3 FAIL, 1 FAULT, 5 NOBUILD,

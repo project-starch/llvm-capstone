@@ -65,24 +65,30 @@ physical monitor and its domain protocol remain a separate execution path.
 
 ## malloc, mmap and the meaning of an arena
 
-Most `malloc`/`free` calls stay inside capability libc. The heap uses size
-classes, revocation handles and a shared metadata lock. When it needs more
-space, it sends a VM MAP request. The native launcher obtains Linux anonymous
-backing and the module registers it and supplies a linear grant.
+Virtual ABI v4 forwards allocation requests to the trusted launcher. It runs
+unmodified native RV64 musl 1.2.5 mallocng, so its slot geometry, grouping,
+retention, reuse and realloc decisions remain upstream policy. Capability libc
+adds the ABI boundary; it does not implement another allocator.
 
 ```text
-Linux mapping -> linear arena grant -> split blocks -> object lifetimes
-                                                       malloc / free
+capability malloc/free -> trusted native mallocng -> Linux mappings
+                               |
+                       module object lifetime -> bounded capability
 ```
 
-Backing, visible mapping length and individual object bounds are distinct.
-The current heap uses power-of-two blocks of at least 256 bytes. Returned
-bounds are narrowed to the request, with representability rounding for
-requests of at least 4 KiB. That small padding is accessible within the
-block; the implementation does not promise byte-exact requested bounds for
-every size. Heap metadata grows through separate VM mappings without
-recursing into malloc. Completely free payload arenas can be returned by
-`malloc_trim` while metadata remains valid.
+Each live allocation has a module-owned private ancestor. Free revokes before
+native reuse. Successful realloc replaces the lifetime even in place; failure
+preserves the old one. Moving realloc copies non-linear authority and moves
+linear authority. Dynamic object/page trees replace the fixed block-record
+limit. Native map wrappers maintain pinned backing and the stale-tag inventory.
+All capability contexts are paused during an allocator transaction.
+
+Unchanged mallocng geometry requires the opt-in QEMU exact-bounds profile:
+physical shadow metadata retains authoritative bounds beside compressed
+128-bit capability bytes. This prototype does not demonstrate a one-bit-tag
+RTL implementation. Requested bounds are exact, except successful zero-sized
+allocation has a one-byte extent. musl controls unmapping; `malloc_trim` is a
+compatibility no-op. Linux core and upstream allocator sources are unchanged.
 
 Public anonymous `mmap` uses the same service, then makes the grant copyable.
 It supports `PROT_NONE` and R/W/X protection combinations, page-range
@@ -165,7 +171,7 @@ Sources: [launcher][exec], [module][module], [heap][heap], [mapping libc][mappin
 
 [exec]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/exec.c
 [module]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/module/capstone_vm.c
-[heap]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/heap.c
+[heap]: ../../../runtime/virtual/heap-musl.c
 [mapping]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/mapping.c
 [pthread]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/pthread.c
 [abi]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/vm-abi.h

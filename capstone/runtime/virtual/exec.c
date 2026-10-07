@@ -6,6 +6,7 @@
 #include <linux/futex.h>
 #include <sys/syscall.h>
 #include <sys/auxv.h>
+#include <sys/prctl.h>
 #include "../linux/application-image.h"
 #include "../linux/delegate-service.h"
 #include <elf.h>
@@ -47,6 +48,8 @@ static pthread_mutex_t thread_state_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t thread_state_cond = PTHREAD_COND_INITIALIZER;
 static unsigned long long launch_ns, start_ns;
 static int trace;
+extern void capstone_native_heap_init(int);
+extern long capstone_native_heap(uint64_t, struct cv_step *);
 static void *meta;
 static void *virtual_thread_worker(void *opaque);
 
@@ -199,7 +202,8 @@ static int registered_span(uintptr_t p, size_t bytes)
         if (maps[i].address && p >= base && p - base <= maps[i].visible &&
             maps[i].visible - (p - base) >= bytes) return 1;
     }
-    return 0;
+    struct cv_heap_range span = {.address = p, .bytes = bytes};
+    return !ioctl(device, CV_HEAP_SPAN, &span);
 }
 static int registered_word(uintptr_t p)
 { return !(p & 3) && registered_span(p, sizeof(int)); }
@@ -234,7 +238,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
 }
 static void cleanup(void)
 {
-    if (device >= 0) { close(device); device = -1; }
+    if (device >= 0) { capstone_native_heap_init(-1); close(device); device = -1; }
     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
         if (maps[i].address) munmap(maps[i].address, maps[i].bytes);
     if (image_fd >= 0) { close(image_fd); image_fd = -1; }
@@ -269,7 +273,7 @@ static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *s
         if (sh[i].sh_type != SHT_PROGBITS) continue;
         if (!strcmp(names + sh[i].sh_name, ".capstone_virtual") && sh[i].sh_size == 8) {
             memcpy(v, raw + sh[i].sh_offset, 8);
-            virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V2;
+            virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V3 || v[0] == CV_IMAGE_MAGIC_V2;
         }
         if (!strcmp(names + sh[i].sh_name, ".capstone_domreq") && sh[i].sh_size == 24) {
             memcpy(v, raw + sh[i].sh_offset, 24);
@@ -397,6 +401,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_THREAD_CREATE) {
         struct cv_thread_create request = {.frame = step->args[0]};
         if (ioctl(device, CV_THREAD_CREATE, &request)) {
+            if (trace) fprintf(stderr, "CAPSTONE_VM_THREAD frame=%llx error=%d\n",
+                               (unsigned long long)request.frame, errno);
             step->result = -errno;
         } else if (thread_add(request.thread)) {
             struct cv_thread_control rollback = {.thread = request.thread};
@@ -405,8 +411,10 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         } else {
             uint64_t *child = malloc(sizeof(*child));
             pthread_t worker;
-            if (!child || pthread_create(&worker, NULL, virtual_thread_worker,
-                                         (child ? (*child = request.thread), child : NULL))) {
+            int thread_error = child ? pthread_create(&worker, NULL, virtual_thread_worker,
+                                         ((*child = request.thread), child)) : ENOMEM;
+            if (thread_error) {
+                if (trace) fprintf(stderr, "CAPSTONE_VM_THREAD native_error=%d\n", thread_error);
                 free(child);
                 thread_remove(request.thread);
                 struct cv_thread_control rollback = {.thread = request.thread};
@@ -540,9 +548,14 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_NODES) {
         struct cv_nodes nodes = {.thread = tid, .available = step->args[0]};
         step->result = ioctl(device, CV_NODES, &nodes) ? -errno : 0;
+    } else if (step->args[7] == CV_SERVICE_HEAP) {
+        step->result = capstone_native_heap(tid, step);
     } else {
         step->result = -ENOSYS;
     }
+    if (trace) fprintf(stderr, "CAPSTONE_VM_BRIDGE service=%llu a0=%llx a1=%llu result=%ld\n",
+        (unsigned long long)step->args[7], (unsigned long long)step->args[0],
+        (unsigned long long)step->args[1], (long)step->result);
     return 0;
 }
 
@@ -551,7 +564,8 @@ static int virtual_service_loop(uint64_t tid)
     struct cv_step step = {.thread = tid};
     for (;;) {
         while (ioctl(device, CV_STEP, &step))
-            if (errno != EINTR) return die("step");
+            if (errno == EAGAIN) sched_yield();
+            else if (errno != EINTR) return die("step");
         step.reply = 0;
         if (step.kind == 1) {
             /* The supervisor quantum is the preemption point. Yielding here
@@ -561,7 +575,11 @@ static int virtual_service_loop(uint64_t tid)
         }
         if (step.kind == 4) {
             struct cv_thread_control control = {.thread = step.thread};
-            if (!ioctl(device, CV_RESOLVE, &control)) continue;
+            int error;
+            do { error = ioctl(device, CV_RESOLVE, &control);
+                 if (error && errno == EAGAIN) sched_yield();
+            } while (error && errno == EAGAIN);
+            if (!error) continue;
         }
         if (step.kind != 3) {
             pthread_mutex_lock(&service_lock);
@@ -654,6 +672,8 @@ int main(int argc, char **argv)
     host.private_fds[host.private_count++] = fd;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) { munmap(image, image_bytes); return die("open"); }
+    capstone_native_heap_init(device);
+    if (prctl(PR_SET_THP_DISABLE, 1, 0, 0, 0)) return die("disable huge pages");
     if (grant(image, image_bytes, 3, 7, entry, 0, 0)) { munmap(image, image_bytes); return die("image grant"); }
     void *stack = reserve(stack_bytes);
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);

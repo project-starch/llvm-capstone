@@ -9,6 +9,7 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/rbtree.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -22,6 +23,12 @@ struct arena {
     unsigned count;
     bool lazy;
 };
+struct heap_object {
+    struct rb_node link;
+    unsigned long address, bytes, ancestor, node;
+    bool linear;
+};
+struct heap_page { struct page *page; unsigned long address; struct rb_node link; };
 struct context;
 struct cv_thread {
     struct list_head link;
@@ -45,7 +52,14 @@ struct context {
     struct arena arenas[CV_MAX_ARENAS];
     struct cv_stats stats;
     u64 next_id, ids[CV_MAX_ARENAS];
+    struct rb_root heap_objects, heap_pages;
+    bool heap_busy, heap_enabled;
+    u64 heap_owner, heap_op;
+    struct heap_object *heap_old, *heap_pending;
+    unsigned long heap_stats[9], heap_live;
 };
+static int heap_pin(struct context *c, unsigned long address, struct page **result);
+static int heap_resident(struct context *c, struct heap_object *o);
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 31-bit ISA limit. Parameters are
  * read-only after module load so concurrent contexts see a stable policy. */
@@ -318,12 +332,18 @@ static int collect(struct context *c, struct cv_thread *owner)
         int error = pin_remaining(c, &c->arenas[i]);
         if (error) return error;
     }
+    for (struct rb_node *n = rb_first(&c->heap_objects); n; n = rb_next(n)) {
+        int error = heap_resident(c, rb_entry(n, struct heap_object, link));
+        if (error) return error;
+    }
     list_for_each_entry(t, &c->threads, link)
         if (collect_page(&list, t->frame_pa)) goto out;
     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
         for (unsigned j = 0; j < c->arenas[i].count; ++j)
             if (c->arenas[i].pages[j] &&
                 collect_page(&list, page_to_phys(c->arenas[i].pages[j]))) goto out;
+    for (struct rb_node *n = rb_first(&c->heap_pages); n; n = rb_next(n))
+        if (collect_page(&list, page_to_phys(rb_entry(n, struct heap_page, link)->page))) goto out;
     owner->frame[80] = list.count | CAP_REV_COLLECT_CHAIN;
     owner->frame[81] = virt_to_phys(list.head);
     preempt_disable(); local_irq_save(flags);
@@ -394,6 +414,7 @@ static void restore_root(unsigned long root)
 {
     asm volatile("csrw 0x5c1, %0" : : "r"(root) : "memory");
 }
+#include "heap-native.inc"
 static int retire(struct context *c, struct arena *a, bool destroying)
 {
     unsigned long flags, old, status;
@@ -568,7 +589,7 @@ static int resolve(struct context *c, struct cv_thread *t)
         c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
         return 0;
     }
-    return -EFAULT;
+    return heap_resolve(c, address);
 }
 
 static void node_stats(struct context *c)
@@ -608,6 +629,44 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
         }
         stats.nodes_high_water = high_water;
         rc = copy_to_user((void __user *)arg, &stats, sizeof(stats)) ? -EFAULT : 0;
+    } else if (op == CV_HEAP_BEGIN || op == CV_HEAP_COMMIT) {
+        struct cv_heap r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = op == CV_HEAP_BEGIN ? heap_begin(c, &r) : heap_commit(c, &r);
+    } else if (op == CV_HEAP_RELEASE) {
+        u64 address;
+        if (copy_from_user(&address, (void __user *)arg, sizeof(address))) { rc = -EFAULT; goto out; }
+        rc = heap_release(c, address);
+    } else if (op == CV_HEAP_COPY) {
+        struct cv_heap_copy r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = heap_copy(c, &r);
+    } else if (op == CV_HEAP_RANGE) {
+        struct cv_heap_range r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = heap_range(c, &r);
+    } else if (op == CV_HEAP_SPAN) {
+        struct cv_heap_range r;
+        struct rb_node *n = c->heap_objects.rb_node;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = -EINVAL;
+        while (n) {
+            struct heap_object *o = rb_entry(n, struct heap_object, link);
+            if (r.address >= o->address && r.address - o->address <= o->bytes &&
+                r.bytes <= o->bytes - (r.address - o->address)) { rc = 0; break; }
+            n = r.address < o->address ? n->rb_left : n->rb_right;
+        }
+    } else if (op == CV_HEAP_STATS) {
+        struct cv_heap_stats r;
+        struct cv_thread *t;
+        unsigned long info[6];
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        t = find_thread(c, r.thread);
+        if (!t || t->event != 3 || !heap_info(c, t->frame + 28, info) ||
+            info[2] != r.address || !(info[5] & 2) || r.address < info[0] ||
+            r.address > info[1] ||
+            info[1] - r.address < sizeof(c->heap_stats)) { rc = -EFAULT; goto out; }
+        rc = copy_to_user((void __user *)r.address, c->heap_stats, sizeof(c->heap_stats)) ? -EFAULT : 0;
     } else if (op == CV_NODES) {
         struct cv_nodes r;
         struct cv_thread *t;
@@ -673,6 +732,7 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
         struct cv_thread *t;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
+        if (c->heap_busy) { rc = -EAGAIN; goto out; }
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
         if (r.reply > 1 || (r.reply != (t->started && t->event == 3))) goto out;
         if (!t->started && (!t->frame[8] || !t->frame[12])) goto out;
@@ -708,6 +768,7 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
         struct cv_thread *t;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
+        if (c->heap_busy) { rc = -EAGAIN; goto out; }
         rc = t ? resolve(c, t) : -ESRCH;
     } else if (op == CV_RETIRE) {
         u64 id;
@@ -736,6 +797,8 @@ static int vm_open(struct inode *inode, struct file *f)
         (node_max_pages && node_max_pages < node_initial_pages)) return -EINVAL;
     c = kvzalloc(sizeof(*c), GFP_KERNEL);
     if (!c) return -ENOMEM;
+    asm volatile("csrr %0, 0x5c0" : "=r"(available));
+    c->heap_enabled = !!(available & 0x100);
     INIT_LIST_HEAD(&c->threads);
     c->next_thread = 0;
     t = kvzalloc(sizeof(*t), GFP_KERNEL);
@@ -816,6 +879,11 @@ static int vm_release(struct inode *inode, struct file *f)
              * call pin_user_pages_fast() to materialize lazy holes; only
              * already pinned pages can safely be revoked and released. */
             retire(c, &c->arenas[i], true);
+    while (c->heap_objects.rb_node)
+        heap_retire(c, rb_entry(rb_first(&c->heap_objects), struct heap_object, link));
+    while (c->heap_pages.rb_node)
+        heap_drop_page(c, rb_entry(rb_first(&c->heap_pages), struct heap_page, link), true);
+    kfree(c->heap_pending);
     list_for_each_entry_safe(t, tmp, &c->threads, link) {
         list_del(&t->link);
         if (t->user_frame) { clear_thread_frame(t); drop_thread_frame(t); }

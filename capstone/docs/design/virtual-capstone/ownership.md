@@ -69,10 +69,10 @@ flowchart TB
     OBJ --> Q
 ```
 
-1. Linux supplies backing; the adapter mints an arena grant beneath its
-   private ancestor. The heap splits the grant into blocks.
-2. `malloc` retains a handle, delinearizes the child and bounds the returned
-   pointer to the allocation's representable extent.
+1. Native upstream mallocng obtains backing through Linux and chooses a slot.
+   The adapter mints an object child beneath a private ancestor.
+2. `malloc` returns a non-linear child bounded to the requested bytes, using
+   the prototype's exact-bounds physical shadow contract.
 3. `q = p` copies a non-linear capability. Both pointers name the same lifetime.
 4. `free(p)` revokes the object subtree before making the block reusable.
    `q` may retain its address bits and even a tag, but its dead node denies use.
@@ -144,6 +144,6 @@ Implementation references: [Sublet operations][sublet], [virtual heap][heap],
 [guarantees](guarantees.md) for representability and trust assumptions.
 
 [sublet]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/include/sublet/sublet.h
-[heap]: https://github.com/project-starch/llvm-capstone/blob/518a5b805aa70c222ef0496c151b2845b4ab8dae/capstone/runtime/virtual/heap.c
+[heap]: ../../../runtime/virtual/heap-musl.c
 [tree]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/cap_rev_tree.c
 [supervisor]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/capstone_supervisor.c

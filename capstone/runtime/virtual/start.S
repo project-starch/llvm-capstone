@@ -42,6 +42,11 @@ _start:
     call domain_main
     ebreak
 .text
+.global __capstone_vm_heap
+__capstone_vm_heap:
+    li a7, CV_SERVICE_HEAP
+    ecall
+    ret
 .global __capstone_yield
 .global __capstone_vm_delegate_transport
 .global __capstone_vm_thread_self

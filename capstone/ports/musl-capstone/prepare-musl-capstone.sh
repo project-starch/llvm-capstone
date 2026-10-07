@@ -34,6 +34,13 @@ for patch in "$SCRIPT_DIR"/musl-patches/*.patch; do
   }
 done
 
+# Allocation policy stays upstream. Capability/platform work belongs at the
+# boundary, not in size classes, group geometry or realloc's decision paths.
+MUSL_POLICY_ARCHIVE=${MUSL_ARCHIVE:-${MUSL_CACHE_ROOT:-$CAPSTONE_TMP_ROOT/musl-src}/musl-${MUSL_VERSION:-1.2.5}.tar.gz}
+python3 "$SCRIPT_DIR/check-mallocng-policy.py" "$MUSL_SRC_DIR" \
+  "$MUSL_POLICY_ARCHIVE" \
+  --sha256 "${MUSL_ARCHIVE_SHA256:-a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4}" >&2
+
 rm -rf "$ARCH_DIR"
 cp -r "$MUSL_SRC_DIR/arch/riscv64" "$ARCH_DIR"
 cp -a "$SCRIPT_DIR/arch-capstone64/." "$ARCH_DIR/"

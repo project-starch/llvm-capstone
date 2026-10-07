@@ -31,6 +31,21 @@ struct cv_thread_control {
 struct cv_nodes {
     __u64 thread, available;
 };
+/* Native mallocng transaction. All C contexts remain paused between begin
+ * and commit; the trusted native allocator owns policy and metadata. */
+struct cv_heap {
+    __u64 thread, op, address, bytes;
+};
+struct cv_heap_copy { __u64 dst, src, bytes; };
+struct cv_heap_range { __u64 address, bytes, replacement, replacement_bytes; };
+struct cv_heap_stats { __u64 thread, address; };
+#define CV_HEAP_BEGIN _IOW('V', 25, struct cv_heap)
+#define CV_HEAP_COMMIT _IOW('V', 26, struct cv_heap)
+#define CV_HEAP_COPY _IOW('V', 27, struct cv_heap_copy)
+#define CV_HEAP_RANGE _IOW('V', 28, struct cv_heap_range)
+#define CV_HEAP_STATS _IOW('V', 29, struct cv_heap_stats)
+#define CV_HEAP_RELEASE _IOW('V', 30, __u64)
+#define CV_HEAP_SPAN _IOW('V', 31, struct cv_heap_range)
 struct cv_stats {
     __u64 arenas, pinned_pages, peak_pages, nodes, steps, faults;
     __u64 collections, reclaimed, nodes_high_water, nodes_live, nodes_retired;

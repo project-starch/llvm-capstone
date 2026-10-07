@@ -20,6 +20,7 @@ def main():
     for name in ('adapter', 'application', 'qemu', 'images', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=180)
+    p.add_argument('--exact-bounds', action='store_true')
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work/'stage'
@@ -42,14 +43,16 @@ echo VIRTUAL_STAGED_DONE
     (stage/'gate.sh').write_text(gate)
     run = subprocess.run([sys.executable, str(HERE/'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                           '--images', str(a.images.resolve()), '--stage', str(stage),
-                          '--work', str(a.work/'guest'), '--timeout', str(a.timeout)])
+                          '--work', str(a.work/'guest'), '--timeout', str(a.timeout)] +
+                         (['--exact-bounds'] if a.exact_bounds else []))
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
     checks = {name: log.count('VIRTUAL_PTHREAD_OK ' + name) == 1 for name in
               ('unsupported_clone_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes')}
     checks['exit'] = log.count('PTHREAD_EXIT:0') == 1
     checks['cleanup'] = run.returncode == 0 and log.count('PTHREAD_CLEANUP:0') == 1
     record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
-                  harts=1, virtual_vm_abi=3, input_sha256={name: sha(path) for name, path in paths.items()},
+                  harts=1, virtual_vm_abi=4 if a.exact_bounds else 3,
+                  input_sha256={name: sha(path) for name, path in paths.items()},
                   gate_sha256=hashlib.sha256(gate.encode()).hexdigest(), runner_sha256=sha(Path(__file__)))
     (a.work/'result.json').write_text(json.dumps(record, indent=2) + '\n')
     print(json.dumps(record, indent=2))

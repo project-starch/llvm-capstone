@@ -162,14 +162,55 @@ set of saved PCC IDs replaces the host bitmap indexed by the node high-water
 mark. `node_capacity`, `node_bytes` (including directories) and `node_growths`
 report actual resources instead of the former fixed 1-MiB charge.
 
-The allocator uses existing Sublet operations for object lifetimes. It grows
-through Linux mappings and supports `malloc`, `calloc`, `realloc`, alignment
-and whole-free-arena `malloc_trim`. It checks the remaining node budget
-before allocation and asks the adapter for more capacity when needed.
-Blocks are aligned powers of two, minimum 256 bytes. The
-returned capability is bounded to the request; a request of 4 KiB or more is
-rounded up to the representable grain, at most 1/512 of its size.
-`malloc_usable_size` reports that bounded extent, not the block.
+### Native mallocng capability contract
+
+ABI v4 replaces the custom virtual allocator with **unmodified native musl
+1.2.5 mallocng**. Capability libc forwards `malloc`, `calloc`, `realloc`,
+`free` and alignment requests through service 13. The trusted launcher runs
+upstream allocation policy with native eight-byte pointers. Its build verifies
+all allocator C/header files, including `glue.h`, against the pinned archive.
+`UNIT=16`, `IB=4`, size classes, group layouts, retention, offset cycling,
+in-place realloc and `mremap` remain upstream decisions. The full native libc
+is part of the trusted runtime; Linux core and firmware need no allocator patch.
+
+```text
+capability libc --service 13--> native musl mallocng --> Linux VM
+                                    |
+                           trusted module bridge
+                                    |
+                       private ancestor -> object capability
+```
+
+The module reserves lifetime capacity before invoking the allocator and pauses
+all capability contexts through each transaction. Free revokes the private
+ancestor before native musl can reuse the slot. Every successful realloc
+creates a fresh lifetime, even at the same address; failed realloc leaves the
+old lifetime live. Moving realloc retains non-linear tags and moves linear
+tags exactly once. Native `munmap`/`mremap` wrappers maintain the physical-page
+inventory used by fault resolution and complete stale-tag collection. Freed
+slots' pages remain pinned until native unmap, so collection also inspects
+capabilities retained in freed payload. Object records and page records use
+dynamic kernel trees; the former 65,536-block ceiling is removed.
+
+Enable QEMU with `x-capstone-exact-bounds=true` in addition to the virtual
+profile. **Exact bounds are authoritative physical shadow metadata in this
+prototype**, accompanying the compressed 128-bit payload; this is not the
+one-bit tag contract or a deployed RTL encoding. It permits unchanged 16-byte
+mallocng slot geometry while returning byte-exact requested bounds. A zero-size
+allocation, if successful, carries a one-byte extent. `malloc_usable_size`
+reports accessible bounds; `malloc_trim` is a compatibility no-op because
+upstream musl controls group release. No extra allocator trimming policy is
+introduced. The profile adds privileged `CSCAPINFO` (0x54) and `CSHEAPMOVE`
+(0x55); capability applications cannot execute either instruction. The legacy
+processor profile defaults to the original encoding behavior.
+
+Build the adapter with `build-adapter.sh`, rebuild the virtual SDK and relink
+applications. Run `run-malloc.py` with adapter, application, native-reference,
+QEMU, images and work arguments; it checks the malloc contract, 70,000 live
+objects, 200,000 lifetimes, and exact-site spatial/temporal denials, including
+same-address reuse. Run `run-pthreads.py --exact-bounds` for shared-mm threads.
+Recorded qualification lives in [results/musl-policy](results/musl-policy/).
+
 Private anonymous `mmap`, page-range `mprotect` and whole-mapping `munmap`
 use the same VM service. `mmap` supports `PROT_NONE` and R/W/X combinations;
 its capability carries maximum anonymous-mapping rights while PTEs enforce
@@ -180,14 +221,6 @@ Public lengths are rounded to pages. Internal power-of-two backing padding
 stays `PROT_NONE`, cannot be exposed by `mprotect`, and is retired with the
 whole mapping. Heap grants retain linear ownership; public mmap grants are
 explicitly delinearised. Both belong to one mm, shared by its C threads.
-The virtual SDK bounds metadata at 65,536 block records and 256 arena records by default.
-It starts with at most 256 block records and 32 arena records, then adds metadata
-slabs through the common VM service without recursing into malloc. Metadata has
-separate mapping lifetimes and survives payload `malloc_trim`. A scalar atomic
-mutex protects allocator state across thread switches and suspended mapping
-calls; contended callers return to Linux through the WAIT service. The
-uncontended malloc/free path performs no lock-service calls. Larger applications may set `CAPSTONE_APPLICATION_VIRTUAL_BLOCKS` and
-`CAPSTONE_APPLICATION_VIRTUAL_ARENAS` when building the SDK.
 The collector is only enabled after a complete namespace sweep. If growth
 is unavailable and remaining identities are live or pinned, the context ends with a resource
 fault (cause 30) instead of guessing that a stale capability is gone.
@@ -374,11 +407,13 @@ This is the first QEMU application profile: one hart, private anonymous
 mappings, 256 MiB per registered region, 1 GiB
 aggregate registered VA, 512 mappings, and a recyclable node table bounded by
 RAM, an optional module quota and the 31-bit ID field. The separate allocator
-block/arena limits are unchanged by node-table growth.
+block-record limit is removed by the native mallocng integration. Public VM
+registrations still have the mapping limits above.
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
 signals need further contracts. The qualified pthread subset is described
-above. Address hints/fixed mappings and `mremap` remain unsupported. Partial unmap
+above. Public address hints/fixed mappings and public `mremap` remain unsupported.
+Native mallocng's internal `mremap` is supported by the trusted bridge. Partial unmap
 requires a separate lifetime contract: a live wide capability must not acquire
 a replacement mapping placed into its former hole. Anonymous
 `MAP_SHARED` and SysV segments are process-local compatibility for nested
@@ -388,8 +423,8 @@ Pages stay pinned after first touch. A page that Linux populated without an
 application fault is pinned by the next retirement or collection, so a
 teardown does not clear its tags itself; Linux clears them with ordinary
 stores when it zeroes the page for reuse. The initial ELF image has the
-existing combined code/data layout. Representability padding above 4 KiB
-requests is accessible within its own block. Recycling requires the
+existing combined code/data layout. ABI v4 heap requests use exact shadow
+bounds; older recorded allocator profiles had representability padding. Recycling requires the
 registered-page and saved-context sweep; a namespace full of live or pinned
 identities reports resource exhaustion when growth is unavailable.
 Compact-bounds conformance of every existing compiler/helper path

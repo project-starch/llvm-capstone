@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "date": "2026-10-08",
+  "profile": "native mallocng with exact-bound physical shadow metadata",
+  "qemu_source": "5818ea052f",
+  "qemu_sha256": "130c946598a5a030e0976b30f55acebb30c20285ed772d402c0a927b98824b38",
+  "processor_tests": {
+    "M1": 60,
+    "virtual_runtime": 69,
+    "u_access": 69
+  },
+  "allocator_source": "unmodified native musl 1.2.5",
+  "mallocng_files_verified": 8,
+  "upstream_archive_sha256": "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4",
+  "compiler_reused": true,
+  "compiler_freshness_check": "rc=2: target coverage incomplete; known compiler reused, no compiler changes",
+  "linux_core_unchanged": true,
+  "firmware_unchanged": true,
+  "limitations": [
+    "QEMU only; no RTL qualification",
+    "authoritative exact bounds require additional physical shadow metadata",
+    "one hart",
+    "public VM mapping restrictions retained",
+    "other five application ports and their full bug corpora not requalified for ABI v4"
+  ]
+}
