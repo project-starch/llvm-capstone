@@ -24,7 +24,7 @@
       "pages": 482,
       "peak": 482,
       "nodes": 140029,
-      "steps": 134,
+      "steps": 136,
       "faults": 14,
       "collections": 2,
       "reclaimed": 140004,
@@ -34,8 +34,8 @@
       "node_bytes": 1142784,
       "node_capacity": 70656,
       "node_growths": 17,
-      "launch_ns": 97880000,
-      "elapsed_ns": 681437000
+      "launch_ns": 105098700,
+      "elapsed_ns": 708878800
     },
     {
       "arenas": 9,
@@ -52,12 +52,12 @@
       "node_bytes": 36864,
       "node_capacity": 1536,
       "node_growths": 1,
-      "launch_ns": 86840200,
-      "elapsed_ns": 157078900
+      "launch_ns": 82429800,
+      "elapsed_ns": 154047900
     }
   ],
   "sha256": {
-    "qemu": "0aa10750223a81c897a90cfc18c57f0485f355d43e0176b57af470872d758b21",
+    "qemu": "3e836e688f6db8631b2d15e3ec9dfce831341081300c86d8218decaa6f6cf7a0",
     "application": "b073420a586daa4d05131bd30fe3ef2da861f9e206f3ef25b8c8e013d8be2f22",
     "launcher": "f877aa542de9639c20d79e0f037fb545aa0b7e2e772190a09722c951a7dbde41",
     "module": "b844685b3a0365a978f252f1d5addbf3a342ea0f4445b29538a800697e07e536",

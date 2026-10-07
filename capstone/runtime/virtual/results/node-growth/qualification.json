@@ -1,24 +1,25 @@
 {
   "schema": 1,
   "scope": "one-hart QEMU; trusted Linux; shared-mm virtual C contexts; no RTL",
-  "base_superproject": "caa19c48ec3482d560cca5fafcbd621f3b5bce7b",
-  "qemu_commit": "6f312662d16fb625e5eb4c37b4f04cabb55c5aad",
-  "runtime_implementation": "283bf36ac2b6",
+  "base_superproject": "08cf07d75ad28ff670087247fd9ed2827431e43c",
+  "qemu_commit": "736f4a7a4e7a52709858c6684d86716250ac7d5e",
+  "runtime_implementation": "c0c284f17ca2",
   "build": {
     "fresh": [
-      "QEMU",
-      "Linux adapter module",
-      "native launcher",
-      "virtual SDK runtime",
-      "contract programs"
+      "QEMU (rebased onto b649187a989c)",
+      "native CTest binaries under ASan/UBSan",
+      "SQLite 3.22.0 source preparation",
+      "virtual SDK for the PostgreSQL relink"
     ],
     "reused": [
       "baseline LLVM compiler and linker",
       "unchanged musl 1.2.5 archive",
       "unchanged Linux Image, firmware and rootfs",
-      "application library/object inputs documented in relink.json"
+      "source-matched Linux adapter, launcher, virtual SDK and contract programs from the original node-growth build",
+      "source-matched SQLite, mruby and Perl executables from relink.json"
     ],
-    "applications": "SQLite, mruby and Perl relinked with the fresh virtual SDK; not full source rebuilds",
+    "source_match": "The runtime, musl bridge, common application build inputs, linker script and LLVM/Clang/LLD/compiler-rt sources are unchanged from the original qualified node-growth head. Only QEMU needed rebuilding for the upstream diagnostic change.",
+    "applications": "SQLite, mruby and Perl were rerun with the rebuilt QEMU; PostgreSQL 17.5 existing objects were relinked with a fresh virtual SDK, without a workload rerun or full source rebuild.",
     "compiler_freshness": "Environment check returned rc=2: llvm-capstone is outside the freshness coverage. No complete toolchain freshness claim; SDK codegen gates passed."
   },
   "sha256": {
@@ -40,10 +41,11 @@
     "relink": "relink.json",
     "processor": "capstone/capstone-qemu/tests/virtual-capstone-runtime/paged-result.json",
     "model": "capstone/capstone-qemu/tests/virtual-capstone-model/paged-result.json",
-    "runtime": "runtime.json"
+    "runtime": "runtime.json",
+    "build_repairs": "build-repairs.json"
   },
   "status": "PASS",
-  "runtime_checkpoint": "ba66490c1b15",
+  "runtime_checkpoint": "0a77b2bbe940",
   "gates": {
     "runtime": 46,
     "nodes": 15,
@@ -52,7 +54,52 @@
       "runtime": 69,
       "m1": 60,
       "u_access": 69
+    },
+    "native_ctest": {
+      "passed": 87,
+      "total": 87,
+      "sanitizers": [
+        "address",
+        "undefined"
+      ]
     }
   },
-  "all_processor_and_runtime_gates_share_one_qemu_binary": true
+  "all_processor_and_runtime_gates_share_one_qemu_binary": true,
+  "original_build_provenance": {
+    "base_superproject": "caa19c48ec3482d560cca5fafcbd621f3b5bce7b",
+    "qemu_commit": "6f312662d16fb625e5eb4c37b4f04cabb55c5aad",
+    "runtime_implementation": "283bf36ac2b6",
+    "runtime_checkpoint": "ba66490c1b15",
+    "build": {
+      "fresh": [
+        "QEMU",
+        "Linux adapter module",
+        "native launcher",
+        "virtual SDK runtime",
+        "contract programs"
+      ],
+      "reused": [
+        "baseline LLVM compiler and linker",
+        "unchanged musl 1.2.5 archive",
+        "unchanged Linux Image, firmware and rootfs",
+        "application library/object inputs documented in relink.json"
+      ],
+      "applications": "SQLite, mruby and Perl relinked with the fresh virtual SDK; not full source rebuilds",
+      "compiler_freshness": "Environment check returned rc=2: llvm-capstone is outside the freshness coverage. No complete toolchain freshness claim; SDK codegen gates passed."
+    }
+  },
+  "build_repair_commit": "17bc4e6d691a10e71865b4fdfc151ec4ca968505",
+  "rebase_from": "04aaa1b06ad1",
+  "additional_checks": {
+    "physical_linear_uninit_corpus": {
+      "status": "NOT_QUALIFIED",
+      "observation": "The guest boots and loads the module, but create_dom returns -1 before probe execution, including positive controls. The harness reports failures. The cause is unresolved; this run establishes neither a physical regression nor physical compatibility.",
+      "attempts": "The pinned loader and an older loader were tried with the available physical guest snapshot; neither reached the probe body.",
+      "log_sha256": {
+        "linear-uninit-qualified.log": "4f56521c472f9e01a6dfb44d25c3964e3da43ae29d62fef4c4cd7809ae3776b9",
+        "linear-uninit-matched.log": "9d857b134717af50cb11a2ddbb0f82fc66d6633ee310bd46a280d6c6b8a20023"
+      }
+    }
+  },
+  "model_evidence": "The existing forest/model record and mutation controls are retained: the compared C algorithm and bindings did not change during rebase."
 }

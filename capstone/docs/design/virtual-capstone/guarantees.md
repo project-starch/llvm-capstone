@@ -108,12 +108,21 @@ passed” therefore does not mean every tested bug was prevented. Memcached's
 slab/cache lifetime and bipbuffer logical-reuse gaps remain; other ports need
 their documented inner-allocator configurations.
 
-Fresh full builds and current corpus/workload gates for Perl, CPython,
-PostgreSQL, FFmpeg and tshark remain required on the extracted stack.
-So do the physical runtime/thread regression, reruns of inherited
-epoll/message mutation variants and final integration of all app leaves.
-Historical runs retain their value for their recorded revisions; they do not
-qualify a future merged tree automatically.
+### Growing node-table qualification
+
+The core virtual stack is now on `dev`. The node-growth review branch has its
+own [qualification manifest](../../../runtime/virtual/results/node-growth/qualification.json),
+covering the paged processor paths, growth/reuse and quota refusals, same-mm
+pthreads, and the complete runtime gate with SQLite, mruby and Perl smoke.
+The manifest distinguishes new QEMU builds from reused source-matched runtime,
+compiler and application artifacts. Node exhaustion and failed collection
+remain fail-closed, and published pages are retained until namespace teardown.
+
+This does not requalify every application port, the full upstream suites or
+all nested-allocator bug corpora. Full physical runtime/thread regression,
+the inherited epoll/message mutation matrix, multi-hart and RTL remain outside
+this node-growth qualification. Historical runs retain their value for their
+recorded revisions; they do not qualify a future merged tree automatically.
 
 [qemu]: https://github.com/project-starch/capstone-qemu/tree/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9
 [runtime]: https://github.com/project-starch/llvm-capstone/tree/518a5b805aa70c222ef0496c151b2845b4ab8dae

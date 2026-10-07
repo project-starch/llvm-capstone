@@ -1,12 +1,18 @@
-2026-10-07 — **Node-table growth is implemented on `virtual-node-growth`.**
-Review QEMU `6f312662d1` before the runtime/module change that pins it.
-The shared physical page-directory format, publication rules, complete-sweep
-reuse, quota behavior and tests are documented in
-[the runtime README](../../runtime/virtual/README.md) and
-[the ISA chapter](../design/virtual-capstone/isa.md#lifetime-storage-and-encoding).
-This is a feature branch based on the integration branch below, not a change
-to the physical/RTL baseline. Removing the separate allocator block-record
-ceiling or returning empty node pages needs subsequent work.
+2026-10-07 — **Review the growing node tables on `review/virtual-node-growth`.**
+The original virtual stack is merged into `dev`. Merge
+[QEMU #17](https://github.com/project-starch/capstone-qemu/pull/17) into
+`virtual-capstone` and [build repairs #194](https://github.com/project-starch/llvm-capstone/pull/194)
+into `dev`, then retarget the stacked runtime PR from
+`review/virtual-build-repairs` to `dev`. If the repairs are squashed, rebase
+only the runtime commits onto the landed `dev` first. Preserve
+the QEMU pin's tested source when moving it to the landed processor commit.
+
+For new work, branch from the runtime review head and initialize its pinned
+QEMU. The [runtime README](../../runtime/virtual/README.md) gives build and
+qualification commands; the [ISA chapter](../design/virtual-capstone/isa.md#lifetime-storage-and-encoding)
+defines publication and complete-sweep reuse. The separate malloc block-record
+ceiling, empty-page reclamation, multi-hart and virtual RTL remain future work.
+Historical physical/silicon tasks below retain their recorded scope.
 
 2026-10-05, night: **R-29 AND S-10b HAVE A LINT-CLEAN RTL FIX IN SIMULATION** (capstone-ariane `sup-call` 776d9d859; the
 dated blocks in ISSUES R-29 and S-10b). A read whose granule has a conflicting store in flight -- a plain store for a 16-byte

@@ -1,19 +1,11 @@
 # Virtual C applications on Linux
 
-Current review integration: [pthread checks](results/review-r3-pthreads.json)
-pass 9/9 with freshly built libc, SDK and adapter. The
-[v2 compatibility gate](results/review-r3-v2-compatibility.json) passes 39/39,
-with its two long recycling cases explicitly omitted. Earlier result files
-below retain the identities of the historical runs they describe.
-
-
-Review integration: checked-in qualification JSON files identify historical
-binaries by hash. They do not qualify this extracted stack on current dev.
-The [integrated R1 result](results/review-r1.json) passes 22/22 checks, including
-SQLite/mruby relinked against the fresh SDK; its build scope is explicit.
-The adapter uses trusted Linux and one hart. POSIX pthreads are introduced in
-a dependent change; this stage supports the explicit virtual-context API.
-
+The node-growth review branch builds on the virtual stack landed on `dev`
+at `08cf07d75ad2`, with the application build repairs. Its
+[qualification manifest](results/node-growth/qualification.json) identifies
+exact source and executable hashes. Earlier R1/R2/R3 result files below retain
+their historical scope. This profile uses trusted Linux, same-mm pthreads
+and one hart.
 
 This adapter runs Capstone applications in **C mode with user virtual
 addresses**. The existing Linux kernel schedules the launcher, owns its page
@@ -306,9 +298,17 @@ checks and 198 processor checks on one QEMU executable. It includes two
 and both 200,000-allocation sparse recycling cases. The sparse positive case
 uses 348 KiB of node metadata, with 18 demand faults and a 486-page payload
 peak. SQLite persistence, mruby and Perl smoke pass with the new SDK.
-Application objects were relinked; the compiler, musl archive and Linux/firmware
-images were reused. This does not requalify all eight ports or their full
-bug corpora. Earlier records below retain their original fixed-table scope.
+After rebasing, QEMU was rebuilt and all these gates were repeated. The
+source-matched adapter, SDK and application executables from the original
+node-growth qualification were reused, along with the compiler, musl archive
+and Linux/firmware images. Native CTest passes 87/87 under ASan/UBSan; fresh
+SQLite source preparation and PostgreSQL relinking also pass. This does not
+requalify all eight ports or their full bug corpora.
+
+The additional physical LINEAR/UNINIT corpus attempt did not reach its probe
+bodies: `create_dom` returned -1, including for positive controls. Its cause
+is unresolved, so this attempt establishes neither physical compatibility
+nor a processor regression. Earlier records below retain their original scope.
 
 The shared application source recipes support a virtual profile for CPython,
 PostgreSQL, FFmpeg and tshark; see the

@@ -4,7 +4,7 @@
 
 This chapter describes the experimental interface introduced at
 [QEMU revision 9bf9c1f28653][qemu], plus the paged node-store and collection-list
-extensions on `virtual-node-growth`. The superproject QEMU pin selects their
+extensions on `review/virtual-node-growth`. The superproject QEMU pin selects their
 implementation; the older source links describe the original interface.
 Numeric allocations and the context-storage
 ABI are not frozen. It supplements the [academic-spec amendment][spec-patch];

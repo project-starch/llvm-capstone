@@ -2,8 +2,10 @@
 
 ## 2026-10-07 — growing virtual node tables
 
-The `virtual-node-growth` feature branch extends `virtual-capstone-integration`.
-QEMU `6f312662d1` adds a paged guest node store with a stable physical root,
+The `review/virtual-node-growth` branch builds on `dev` at `08cf07d75ad2`
+and the application build repairs in `review/virtual-build-repairs`. Its QEMU
+pin includes the `b649187a989c` UNINIT diagnostic fix and a paged guest node
+store with a stable physical root,
 unchanged 31-bit IDs and 16-byte records, and chained collection requests.
 The trusted Linux module allocates base pages on demand and reuses IDs only
 after the existing complete stale-tag sweep. The SDK requests node capacity
@@ -28,6 +30,9 @@ sparse positive case uses 348 KiB of node metadata, reclaims 188,631 IDs and
 leaves unused payload pages unpopulated. All processor and runtime gates use
 the same QEMU executable. See the [qualification manifest](../../runtime/virtual/results/node-growth/qualification.json)
 for hashes, reused compiler/musl/platform inputs and application relink scope.
+The rebase also passes 87/87 native CTest checks under ASan/UBSan. An additional
+physical LINEAR/UNINIT corpus attempt fails at `create_dom` before its probes;
+the cause remains unresolved and physical compatibility is not requalified.
 
 This is one-hart QEMU evidence. The 65,536 allocator block-record limit is
 separate and unchanged. Node capacity is bounded by RAM, an optional module

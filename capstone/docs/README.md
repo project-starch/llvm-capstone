@@ -1,10 +1,13 @@
 # Capstone project documentation
 
 Start with the [virtual Capstone guide](design/virtual-capstone/README.md)
-to understand the supervised virtual C profile under review: ownership,
+to understand the supervised virtual C profile: ownership,
 processor interface, Linux runtime, application ports and safety limits.
-It identifies the implementation revisions it describes; its presence here
-does not imply that the implementation PRs have landed on `dev`.
+The core virtual stack is on `dev`. The growing node-table extension is on
+`review/virtual-node-growth`, based on `dev` plus `review/virtual-build-repairs`.
+Use its pinned QEMU and the [runtime build instructions](../runtime/virtual/README.md);
+[qualification records](../runtime/virtual/results/node-growth/qualification.json)
+identify the exact tested inputs and scope.
 
 Lane-only work on `delegation-threads` (not landed on `dev`):
 [the threads computing model](design/delegated-threads-model.md),
