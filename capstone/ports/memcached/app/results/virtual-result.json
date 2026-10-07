@@ -1,0 +1,370 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "native_null",
+      "passed": true
+    },
+    {
+      "name": "oracle_detects_value",
+      "passed": true
+    },
+    {
+      "name": "oracle_detects_cas",
+      "passed": true
+    },
+    {
+      "name": "pthread_unsupported_clone_refused",
+      "passed": true
+    },
+    {
+      "name": "pthread_tls_mutex_cond_tagged_join",
+      "passed": true
+    },
+    {
+      "name": "pthread_timed_wait",
+      "passed": true
+    },
+    {
+      "name": "pthread_independent_blocking_io",
+      "passed": true
+    },
+    {
+      "name": "pthread_private_epoll_events",
+      "passed": true
+    },
+    {
+      "name": "pthread_shared_tls_transport",
+      "passed": true
+    },
+    {
+      "name": "pthread_64_joined_lifetimes",
+      "passed": true
+    },
+    {
+      "name": "normal1_harness",
+      "passed": true
+    },
+    {
+      "name": "normal1_protocol",
+      "passed": true
+    },
+    {
+      "name": "normal1_identity",
+      "passed": true
+    },
+    {
+      "name": "normal1_exit",
+      "passed": true
+    },
+    {
+      "name": "normal1_stderr",
+      "passed": true
+    },
+    {
+      "name": "normal2_harness",
+      "passed": true
+    },
+    {
+      "name": "normal2_protocol",
+      "passed": true
+    },
+    {
+      "name": "normal2_identity",
+      "passed": true
+    },
+    {
+      "name": "normal2_exit",
+      "passed": true
+    },
+    {
+      "name": "normal2_stderr",
+      "passed": true
+    },
+    {
+      "name": "usr1_harness",
+      "passed": true
+    },
+    {
+      "name": "usr1_protocol",
+      "passed": true
+    },
+    {
+      "name": "usr1_identity",
+      "passed": true
+    },
+    {
+      "name": "usr1_exit",
+      "passed": true
+    },
+    {
+      "name": "usr1_stderr",
+      "passed": true
+    },
+    {
+      "name": "marker_harness",
+      "passed": true
+    },
+    {
+      "name": "marker_protocol",
+      "passed": true
+    },
+    {
+      "name": "marker_identity",
+      "passed": true
+    },
+    {
+      "name": "marker_exit",
+      "passed": true
+    },
+    {
+      "name": "four_workers",
+      "passed": true
+    },
+    {
+      "name": "worker_gate_control",
+      "passed": true
+    },
+    {
+      "name": "marker_stderr",
+      "passed": true
+    },
+    {
+      "name": "fx1_harness",
+      "passed": true
+    },
+    {
+      "name": "fx1_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx2_harness",
+      "passed": true
+    },
+    {
+      "name": "fx2_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx3_harness",
+      "passed": true
+    },
+    {
+      "name": "fx3_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx4_harness",
+      "passed": true
+    },
+    {
+      "name": "fx4_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx5_harness",
+      "passed": true
+    },
+    {
+      "name": "fx5_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx6_harness",
+      "passed": true
+    },
+    {
+      "name": "fx6_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx7_harness",
+      "passed": true
+    },
+    {
+      "name": "fx7_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx8_harness",
+      "passed": true
+    },
+    {
+      "name": "fx8_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx9_harness",
+      "passed": true
+    },
+    {
+      "name": "fx9_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx10_harness",
+      "passed": true
+    },
+    {
+      "name": "fx10_prediction",
+      "passed": true
+    },
+    {
+      "name": "adapter_cleanup",
+      "passed": true
+    }
+  ],
+  "fixtures": [
+    {
+      "fixture": 1,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "100001",
+      "expected": [
+        [
+          "RETURN",
+          "100001"
+        ],
+        [
+          "LEN",
+          "64"
+        ]
+      ]
+    },
+    {
+      "fixture": 2,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 3,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 4,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 5,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 6,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 7,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 8,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 9,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "9000ee",
+      "expected": [
+        [
+          "RETURN",
+          "9000ee"
+        ]
+      ]
+    },
+    {
+      "fixture": 10,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "a0015b",
+      "expected": [
+        [
+          "RETURN",
+          "a0015b"
+        ]
+      ]
+    }
+  ],
+  "workers": 4,
+  "harts": 1,
+  "virtual_vm_abi": 3,
+  "safety_prediction_arm": "sublet",
+  "known_gaps": [
+    "slab_neighbour",
+    "slab_reuse"
+  ],
+  "input_sha256": {
+    "launcher": "9a80e54687b92a1459de91b8dce207716c148c8ff25d7718ccabe5a53270922e",
+    "module": "0f6347aececb1fd2aea6aa2f1d346aead1a756a1a78cf5e9e231d9cd4a409fb5",
+    "job": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+    "pthread": "7467c407caf818fbd4c3a6c119d9ae15e9a46c51054d3b29bcb3ddd0d451858a",
+    "memcached": "1170900a7a03d3c0f3b10e6e5b11510789458bf5d038d62b0de530d9ffa177b3",
+    "marker": "a3593e61bd8cff9f5ad881d18f4f524d56c8712b6598bae82a604df91c9bb5b8",
+    "safety": "6cd968f7f2605a22094607bc3b26faa2f9c7260e20e90ccf2ee98528898336a8",
+    "native": "1c157d4bf9b64c3f80706427707cf6aa640fcb947315f0fb704fc1ac3a7ecab0",
+    "native_marker": "89d8b572e87ad576c78d37e070e1ec5f0d53992bb5a54072cd7751d7b21a2578",
+    "qemu": "b54f82da1abc38702f7c53b5f7879481203306deff8f77c26ed7354f1a1b69cf",
+    "harness_source": "1e569a8b63b49af1262db6456c271f24d8ee6ffc2ab58f29b0e445cff557532e",
+    "Image": "ca9fc7d8ad08554295a3296706c35c135e51f123f910f69a41a624a287cc8356",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "runner_sha256": "794f9ceb16ba96a4a7555ebd6e8909c09c792db845b42cc455c478744cdf463a",
+  "gate_sha256": "a41d0849df79c8db2913c7a4c188b42d674ffaa823997635e9fe66e0d0cc4397",
+  "predictions_sha256": "5a40e7d0673233b7b97a1f1ed92b5d5327a69b9b02816ced4b6a55d368ff0c31"
+}
