@@ -1,5 +1,14 @@
 add_library(replay-options INTERFACE)
 option(PG_POISONCAP "PoisonCap lifetimes on CheriBSD" OFF)
+# The nested arm in the VIRTUAL address space. The freestanding replay-sublet
+# target has always compiled the memory-context adapter; this option puts the
+# same adapter in a Capstone PROCESS, where the arena is LENT by the system
+# allocator as one linear capability, so that the protected and unprotected
+# nested arms are the same program with one layer swapped.
+option(PG_SUBLET "Nested lifetimes in a Capstone process: the memory-context adapter, with the arena lent linear" OFF)
+if(PG_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
+  message(FATAL_ERROR "PG_SUBLET needs the capstone-application toolchain")
+endif()
 if(PG_POISONCAP AND NOT PORT_PLATFORM STREQUAL "cheribsd")
   message(FATAL_ERROR "PG_POISONCAP requires the PoisonCap CheriBSD toolchain")
 endif()
@@ -90,6 +99,18 @@ if(PORT_HOSTED)
       target_sources(manager-native PRIVATE src/cheribsd/poisoncap.c)
       target_compile_definitions(manager-native PUBLIC PG_POISONCAP)
       target_include_directories(manager-native PUBLIC "${PROJECT_SOURCE_DIR}/src/cheribsd")
+      set(capability_variant sublet)
+    elseif(PG_SUBLET)
+      # The same source variant the domain's replay-sublet builds, with the
+      # adapter under it: the Sublet aset/generation/slab/bump, the context
+      # pools, and the refusal for the families the adapter does not cover.
+      pg_manager(manager-native sublet)
+      target_sources(manager-native PRIVATE
+        src/allocators/sublet/context-pools.c
+        src/allocators/sublet/unsupported-allocators.c)
+      target_compile_definitions(manager-native PUBLIC PG_DEFECTS_SUBLET PG_BORROW_LINEAR)
+      target_include_directories(manager-native PUBLIC
+        "${PROJECT_SOURCE_DIR}/src/allocators/sublet")
       set(capability_variant sublet)
     else()
       pg_manager(manager-native spatial)

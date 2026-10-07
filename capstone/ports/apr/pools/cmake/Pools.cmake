@@ -1,5 +1,9 @@
 add_subdirectory("${CAPSTONE_REPO_ROOT}/capstone/runtime" "${CMAKE_BINARY_DIR}/capstone-runtime")
 add_library(pools-options INTERFACE)
+option(APRP_SUBLET "Nested lifetimes in a Capstone process: the Sublet lease layer, with the payload lent linear" OFF)
+if(APRP_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
+  message(FATAL_ERROR "APRP_SUBLET needs the capstone-application toolchain")
+endif()
 target_link_libraries(pools-options INTERFACE Capstone::Runtime)
 # The shim stays where the census keeps it; the port includes it from there
 # rather than carrying a second copy that could drift.
@@ -53,6 +57,18 @@ if(PORT_HOSTED)
     add_executable(revocation-control security-tests/cheribsd/revocation-control.c)
     # The probes use GNU inline asm with a "C" operand, as cheric.h does.
     set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
+  elseif(APRP_SUBLET)
+    # The nested arm in the VIRTUAL address space: the same lease layer the
+    # freestanding domain compiles, in a process, with the payload region LENT
+    # by the system allocator as one linear capability. node-pointers.c, which
+    # this replaces, has no authority to revoke and refuses mode 1 -- so the
+    # protected and unprotected nested arms differ in this layer and nothing
+    # else.
+    target_compile_definitions(pools-options INTERFACE APRP_BORROW_LINEAR)
+    target_sources(apr-pools PRIVATE src/allocators/sublet/node-leases.c)
+    if(APRP_BUCKETS)
+      target_sources(apr-pools PRIVATE src/allocators/sublet/bucket-leases.c)
+    endif()
   else()
     target_sources(apr-pools PRIVATE src/native/node-pointers.c)
     if(APRP_BUCKETS)

@@ -12,7 +12,13 @@ struct raw_block {
 static unsigned char *metadata;
 static size_t used;
 static struct raw_block *available;
-#if !defined(PYMALLOC_DOMAIN) && !defined(PYMALLOC_POISONCAP)
+/* PYMALLOC_CAPABILITY, not PYMALLOC_DOMAIN: what decides whether this file
+ * owns the arena is whether a capability lifetime adapter owns it instead --
+ * src/allocators/sublet/block-lifetimes.c or src/cheribsd/poisoncap-lifetimes.c
+ * -- and that is independent of whether the program is freestanding. Keying it
+ * on the domain conflated the two, and the two came apart as soon as the
+ * adapter was wanted in a hosted process: see cmake/Replay.cmake. */
+#ifndef PYMALLOC_CAPABILITY
 static unsigned char *arena;
 static size_t arena_used, arena_count, arena_releases;
 static struct {
@@ -23,7 +29,7 @@ static uint64_t decisions;
 #endif
 void pym_backing_init(void *m, void *a) {
   metadata = m;
-#if !defined(PYMALLOC_DOMAIN) && !defined(PYMALLOC_POISONCAP)
+#ifndef PYMALLOC_CAPABILITY
   arena = a;
   /* Pools must be 16 KiB aligned; arenas need not be 1 MiB aligned. */
   arena_used = (-(uintptr_t)a) & 16383;
@@ -81,7 +87,7 @@ void *pym_raw_realloc(void *p, size_t n) {
   }
   return q;
 }
-#if !defined(PYMALLOC_DOMAIN) && !defined(PYMALLOC_POISONCAP)
+#ifndef PYMALLOC_CAPABILITY
 void *pym_arena_alloc(void *ctx, size_t n) {
   (void)ctx;
   if (n != 1048576)

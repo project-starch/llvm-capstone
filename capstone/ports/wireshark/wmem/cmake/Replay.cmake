@@ -28,11 +28,24 @@ option(WM_P2_CONTROL "compile the old-byte check without the chunk port" OFF)
 # only for fixtures that never reissue the freed chunk (4 and 13); anything that does would take a
 # slot still holding a lent handle.
 option(WM_P1_ABLATE "the port with a chunk free's revoke stubbed out" OFF)
+# The nested arm in the VIRTUAL address space. Until this existed the only
+# capability build was the freestanding domain, so one macro carried two
+# meanings: WM_DOMAIN said both "capabilities" and "no libc". They are now
+# WM_CAPABILITY and WM_DOMAIN, and this option asks for the first without the
+# second -- the Sublet region and chunk layers in a Capstone PROCESS, with the
+# payload LENT by the system allocator as one linear capability.
+option(WM_SUBLET "Nested lifetimes in a Capstone process: the Sublet region and chunk layers, with the payload lent linear" OFF)
+if(WM_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
+  message(FATAL_ERROR "WM_SUBLET needs the capstone-application toolchain")
+endif()
 function(wm_executable name variant)
   set(workload ${ARGN})
   set(source "${CMAKE_BINARY_DIR}/source-${variant}")
   wm_upstream_units(upstream ${variant})
-  if(PORT_HOSTED)
+  if(PORT_HOSTED AND WM_SUBLET)
+    set(platform src/native/main.c src/allocators/sublet/regions.c
+      src/allocators/sublet/chunks.c ${WM_BACKING})
+  elseif(PORT_HOSTED)
     set(platform src/native/main.c src/native/regions.c ${WM_BACKING} ${WM_CHUNKS_HOSTED})
   else()
     set(platform src/capstone-domain/entry.c src/allocators/sublet/regions.c
@@ -61,8 +74,12 @@ function(wm_executable name variant)
   endif()
   target_compile_options(${name} PRIVATE -Wall -Wextra -ffunction-sections -fdata-sections)
   target_link_libraries(${name} PRIVATE Capstone::Runtime)
+  if(WM_SUBLET)
+    target_compile_definitions(${name} PRIVATE WM_CAPABILITY WM_BORROW_LINEAR)
+  endif()
   if(NOT PORT_HOSTED)
-    target_compile_definitions(${name} PRIVATE WM_DOMAIN)
+    # Both: the domain is freestanding AND it is a capability build.
+    target_compile_definitions(${name} PRIVATE WM_DOMAIN WM_CAPABILITY)
     set(link_script "${CAPSTONE_REPO_ROOT}/capstone/my_first_domain/link.ld")
     target_link_options(${name} PRIVATE --gc-sections -T "${link_script}")
     set_target_properties(${name} PROPERTIES SUFFIX .dom LINK_DEPENDS "${link_script}")
@@ -75,7 +92,16 @@ wm_source(ported)
 wm_executable(replay ported src/shared/replay.c)
 if(PORT_HOSTED)
   wm_upstream_units(upstream_ported ported)
-  add_library(wireshark-wmem STATIC src/native/regions.c ${WM_BACKING} ${WM_CHUNKS_HOSTED} ${WM_SHARED} ${upstream_ported})
+  # The corpus's hosted targets link this library, so the nested arm has to be
+  # IN IT: the region and chunk layers, and the two definitions, are PUBLIC so
+  # that a corpus case compiled against it takes the capability path too.
+  if(WM_SUBLET)
+    add_library(wireshark-wmem STATIC src/allocators/sublet/regions.c
+      src/allocators/sublet/chunks.c ${WM_BACKING} ${WM_SHARED} ${upstream_ported})
+    target_compile_definitions(wireshark-wmem PUBLIC WM_CAPABILITY WM_BORROW_LINEAR)
+  else()
+    add_library(wireshark-wmem STATIC src/native/regions.c ${WM_BACKING} ${WM_CHUNKS_HOSTED} ${WM_SHARED} ${upstream_ported})
+  endif()
   add_dependencies(wireshark-wmem source-ported)
   target_include_directories(wireshark-wmem PUBLIC src/shared/shim src/shared
     "${CMAKE_BINARY_DIR}/source-ported/wsutil/wmem")

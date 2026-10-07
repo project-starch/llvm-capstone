@@ -1,6 +1,6 @@
 #include "port.h"
 #include "wmem_core.h"
-#if defined(WM_DOMAIN) && defined(WMEM_PORT_CHUNKS)
+#if defined(WM_CAPABILITY) && defined(WMEM_PORT_CHUNKS)
 #include "chunks.h"
 #endif
 #include <string.h>
@@ -50,7 +50,7 @@ void wm_replay(const struct wm_header *in, struct wm_header *out) {
           check_pool(a);
       ++out->completed;
       wm_backing_stats(out);
-#if defined(WM_DOMAIN) && defined(WMEM_PORT_CHUNKS)
+#if defined(WM_CAPABILITY) && defined(WMEM_PORT_CHUNKS)
       wm_chunk_report(out);
 #endif
       return;
