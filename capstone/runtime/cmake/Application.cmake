@@ -44,7 +44,8 @@ function(capstone_configure_application target)
       "${capstone}/runtime/common/launch.c")
     if(CAPSTONE_APPLICATION_VIRTUAL)
       target_sources(capstone-application-core PRIVATE
-        "${capstone}/runtime/virtual/thread.c")
+        "${capstone}/runtime/virtual/thread.c"
+        "${capstone}/runtime/virtual/pthread.c")
       target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
       target_compile_options(capstone-application-core PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")

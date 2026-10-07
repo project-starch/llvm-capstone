@@ -43,6 +43,16 @@ _start:
     ebreak
 .text
 .global __capstone_yield
+.global __capstone_vm_delegate_transport
+.global __capstone_vm_thread_self
+__capstone_vm_thread_self:
+    li a7, CV_SERVICE_THREAD_SELF
+    ecall
+    ret
+__capstone_vm_delegate_transport:
+    li a7, CV_SERVICE_THREAD_DELEGATE
+    ecall
+    ret
 __capstone_yield:
     li a7, CV_SERVICE_DELEGATE
     ecall
@@ -75,7 +85,16 @@ __capstone_vm_thread_create_frame:
     ret
 .global __capstone_vm_thread_exit
 __capstone_vm_thread_exit:
+    li a0, 0
+    li a1, 0
+    li a2, 0
+    li a3, 0
     li a7, CV_SERVICE_THREAD_EXIT
+    ecall
+    ebreak
+.global __capstone_vm_thread_exit_clear
+__capstone_vm_thread_exit_clear:
+    li a7, CV_SERVICE_PTHREAD_EXIT
     ecall
     ebreak
 .global __capstone_vm_thread_join
@@ -91,6 +110,11 @@ __capstone_vm_protect:
 .global __capstone_vm_wait
 __capstone_vm_wait:
     li a7, CV_SERVICE_WAIT
+    ecall
+    ret
+.global __capstone_vm_futex
+__capstone_vm_futex:
+    li a7, CV_SERVICE_FUTEX
     ecall
     ret
 .section .gct

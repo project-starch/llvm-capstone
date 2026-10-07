@@ -67,9 +67,36 @@ extern char __capstone_tls_image[], __capstone_tdata_end[], __capstone_tls_end[]
  * Without thread-locals the segment is empty and this is the static struct above,
  * exactly as before. */
 static char *__capstone_tp;
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+static struct tls_module virtual_tls_image;
+static void describe_virtual_tls(void)
+{
+    size_t data = __capstone_tdata_end - __capstone_tls_image;
+    size_t size = __capstone_tls_end - __capstone_tls_image;
+    if (size) {
+        virtual_tls_image = (struct tls_module){.image = __capstone_tls_image,
+            .len = data, .size = size, .align = 4096, .offset = 0};
+        libc.tls_head = &virtual_tls_image;
+        libc.tls_cnt = 1;
+    }
+    libc.page_size = 4096;
+    libc.tls_align = 4096;
+    libc.tls_size = (2 * sizeof(void *) + sizeof(struct pthread) + size + 4096 + 15) & -16;
+}
+#endif
 
 int __capstone_init_tls(void)
 {
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+    if (__capstone_tp)
+        return __init_tp(__capstone_tp - sizeof(struct pthread));
+    describe_virtual_tls();
+    unsigned char *mem = calloc(1, libc.tls_size);
+    if (!mem) return -1;
+    struct pthread *td = __copy_tls(mem);
+    __capstone_tp = (char *)td + sizeof(struct pthread);
+    return __init_tp(td);
+#else
 	size_t tdata = __capstone_tdata_end - __capstone_tls_image;
 	size_t memsz = __capstone_tls_end - __capstone_tls_image;
 	if (memsz == 0)
@@ -88,6 +115,7 @@ int __capstone_init_tls(void)
 	memcpy(tp, __capstone_tls_image, tdata);
 	__capstone_tp = tp;
 	return __init_tp(tp - sizeof(struct pthread));
+#endif
 }
 
 /* The thread pointer is installed before the launch record is applied, so

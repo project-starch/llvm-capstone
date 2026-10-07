@@ -3,11 +3,14 @@
 #include "capstone/linux-domain-fault.h"
 #include "capstone/spawn.h"
 #include <linux/binfmts.h>
+#include <linux/futex.h>
+#include <sys/syscall.h>
 #include <sys/auxv.h>
 #include "../linux/application-image.h"
 #include "../linux/delegate-service.h"
 #include <elf.h>
 #include <errno.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +37,7 @@ static int device = -1, image_fd = -1;
 static const char *image_path;
 static struct capstone_spawner spawner = {.socket = -1};
 static struct capstone_delegate_host host;
+static __thread struct capstone_delegate_host *worker_host;
 #define CV_MAX_THREADS 32
 static uint64_t thread_ids[CV_MAX_THREADS] = {0};
 static unsigned thread_done[CV_MAX_THREADS];
@@ -187,6 +191,18 @@ static long protect_range(uintptr_t base, size_t bytes, int prot)
     }
     return -EINVAL;
 }
+
+static int registered_span(uintptr_t p, size_t bytes)
+{
+    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
+        uintptr_t base = (uintptr_t)maps[i].address;
+        if (maps[i].address && p >= base && p - base <= maps[i].visible &&
+            maps[i].visible - (p - base) >= bytes) return 1;
+    }
+    return 0;
+}
+static int registered_word(uintptr_t p)
+{ return !(p & 3) && registered_span(p, sizeof(int)); }
 static long acquire_mapping(uint64_t tid, struct cv_step *step)
 {
     size_t visible = step->args[0], alignment = step->args[1];
@@ -253,7 +269,7 @@ static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *s
         if (sh[i].sh_type != SHT_PROGBITS) continue;
         if (!strcmp(names + sh[i].sh_name, ".capstone_virtual") && sh[i].sh_size == 8) {
             memcpy(v, raw + sh[i].sh_offset, 8);
-            virtual = v[0] == CV_IMAGE_MAGIC;
+            virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V2;
         }
         if (!strcmp(names + sh[i].sh_name, ".capstone_domreq") && sh[i].sh_size == 24) {
             memcpy(v, raw + sh[i].sh_offset, 24);
@@ -334,20 +350,21 @@ static long exec_in_place(void) {
   return -error;
 }
 
-static void cleanup_fault(void *unused) { (void)unused; cleanup(); }
 static void fault(const struct cv_step *step)
 {
-    if (!host.image_sha256[0] && image_fd >= 0)
-        capstone_application_hash(image_fd, host.image_sha256);
+    struct capstone_delegate_host *h = worker_host ? worker_host : &host;
+    if (!h->image_sha256[0] && image_fd >= 0)
+        capstone_application_hash(image_fd, h->image_sha256);
     const char *record = getenv("CAPSTONE_FAULT_RECORD");
     int fd = record && *record ? open(record, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600) : -1;
     if (fd >= 0) {
-        capstone_delegate_fault_record(fd, &host, image_path, step->cause, step->pc, step->address);
+        capstone_delegate_fault_record(fd, h, image_path, step->cause, step->pc, step->address);
         close(fd);
     }
     if (isatty(2) || getenv("CAPSTONE_EXEC_DIAGNOSTICS"))
-        capstone_delegate_fault_record(2, &host, image_path, step->cause, step->pc, step->address);
-    capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, cleanup_fault, NULL);
+        capstone_delegate_fault_record(2, h, image_path, step->cause, step->pc, step->address);
+    /* Signal death stops the process before Linux releases shared mappings. */
+    capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, NULL, NULL);
 }
 static int reserve_stdio(unsigned *mask) {
   *mask = 0;
@@ -375,7 +392,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
 {
     step->reply = 1;
     step->result = 0;
-    if (step->args[7] == CV_SERVICE_THREAD_CREATE) {
+    if (step->args[7] == CV_SERVICE_THREAD_SELF) {
+        step->result = tid + 1; /* zero remains the wire lock's vacant value */
+    } else if (step->args[7] == CV_SERVICE_THREAD_CREATE) {
         struct cv_thread_create request = {.frame = step->args[0]};
         if (ioctl(device, CV_THREAD_CREATE, &request)) {
             step->result = -errno;
@@ -398,8 +417,11 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                 step->result = request.thread;
             }
         }
-    } else if (step->args[7] == CV_SERVICE_THREAD_EXIT) {
+    } else if (step->args[7] == CV_SERVICE_THREAD_EXIT || step->args[7] == CV_SERVICE_PTHREAD_EXIT) {
         struct cv_thread_control request = {.thread = tid};
+        int posix = step->args[7] == CV_SERVICE_PTHREAD_EXIT;
+        uintptr_t clear = posix ? step->args[0] : 0;
+        if (clear && !registered_word(clear)) return -1;
         if (tid == 0 || ioctl(device, CV_THREAD_EXIT, &request))
             return -1;
         if (request.frame) {
@@ -407,23 +429,88 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             if (cleanup_rc && cleanup_rc != -EINVAL) return -1;
         }
         thread_mark_done(tid);
+        /* musl join may retire the child's stack/TLS after this store.
+         * The virtual CPU has stopped and its tagged frame is gone first. */
+        if (posix && step->args[1] && unmap_arena(step->args[1], step->args[2])) return -1;
+        if (clear) {
+            __atomic_store_n((int *)clear, 0, __ATOMIC_RELEASE);
+            syscall(SYS_futex, (int *)clear, FUTEX_WAKE_PRIVATE, INT_MAX, NULL, NULL, 0);
+            thread_remove(tid);
+        }
         step->reply = 0;
         return 1;
+    } else if (step->args[7] == CV_SERVICE_FUTEX) {
+        int op = (int)step->args[1];
+        int command = op & FUTEX_CMD_MASK;
+        if (!registered_word(step->args[0])) step->result = -EFAULT;
+        else if (command != FUTEX_WAIT && command != FUTEX_WAKE &&
+                 command != FUTEX_WAIT_BITSET && command != FUTEX_WAKE_BITSET)
+            step->result = -ENOSYS;
+        else {
+            struct timespec timeout = {(long)step->args[3], (long)step->args[4]};
+            pthread_mutex_unlock(&service_lock);
+            long result = syscall(SYS_futex, (int *)(uintptr_t)step->args[0],
+                                  op | FUTEX_PRIVATE_FLAG, (int)step->args[2],
+                                  timeout.tv_sec < 0 ? NULL : &timeout, NULL, (int)step->args[5]);
+            int error = errno;
+            pthread_mutex_lock(&service_lock);
+            step->result = result < 0 ? -error : result;
+        }
     } else if (step->args[7] == CV_SERVICE_THREAD_JOIN) {
         /* The child must acquire the same transport lock to publish its
          * exit.  Do not wait while holding it, or join would deadlock. */
         pthread_mutex_unlock(&service_lock);
         step->result = thread_join(step->args[0]);
         pthread_mutex_lock(&service_lock);
-    } else if (step->args[7] == CV_SERVICE_DELEGATE) {
-        struct capstone_delegate_entry *request = meta;
+    } else if (step->args[7] == CV_SERVICE_DELEGATE ||
+               step->args[7] == CV_SERVICE_THREAD_DELEGATE) {
+        int separate = step->args[7] == CV_SERVICE_THREAD_DELEGATE;
+        struct capstone_delegate_entry *request = separate ? (void *)(uintptr_t)step->args[0] : meta;
+        struct capstone_delegate_host *h = &host;
+        if (separate) {
+            if (!registered_span(step->args[0], CAPSTONE_DELEGATE_META_BYTES) ||
+                !step->args[2] || step->args[2] > (64UL << 20) ||
+                !registered_span(step->args[1], step->args[2])) return -1;
+            if (request == meta) {
+                if (h->exchange != (void *)(uintptr_t)step->args[1] ||
+                    h->exchange_bytes != step->args[2]) return -1;
+                if (tid) capstone_signals_attach(&h->signals);
+            } else if (tid) {
+                if (!worker_host) {
+                    worker_host = calloc(1, sizeof *worker_host);
+                    if (!worker_host) return -1;
+                    worker_host->exchange = (void *)(uintptr_t)step->args[1];
+                    worker_host->exchange_bytes = step->args[2];
+                    worker_host->private_count = host.private_count;
+                    memcpy(worker_host->private_fds, host.private_fds, sizeof host.private_fds);
+                    worker_host->entry_address = host.entry_address;
+                    worker_host->code_base = host.code_base;
+                    worker_host->code_end = host.code_end;
+                    memcpy(worker_host->image_sha256, host.image_sha256, sizeof host.image_sha256);
+                    struct capstone_signal_block *block = (void *)((char *)request + CAPSTONE_SIGNAL_OFFSET);
+                    uint64_t inherited_mask = block->initial_mask;
+                    capstone_signals_init_context(&worker_host->signals, block, &host.signals);
+                    worker_host->signals.logical = inherited_mask;
+                    block->initial_mask = inherited_mask;
+                    capstone_signals_attach(&worker_host->signals);
+                }
+                h = worker_host;
+                if (h->exchange != (void *)(uintptr_t)step->args[1] ||
+                    h->exchange_bytes != step->args[2] ||
+                    h->signals.block != (void *)((char *)request + CAPSTONE_SIGNAL_OFFSET)) return -1;
+            } else return -1;
+        }
         if (request->version != CAPSTONE_DELEGATE_VERSION) return -1;
-        capstone_delegate_serve(&host, request);
+        /* Each native worker owns its bounce buffer and signal ring. A
+         * blocked epoll/read must not stop another virtual context. */
+        if (separate) pthread_mutex_unlock(&service_lock);
+        capstone_delegate_serve(h, request);
+        if (separate) pthread_mutex_lock(&service_lock);
         if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE tid=%llu nr=%llu result=%lld\n",
                            (unsigned long long)tid, (unsigned long long)request->nr,
                            (long long)request->result);
-        if (host.exec_requested) request->result = exec_in_place();
-        if (host.exiting) {
+        if (h->exec_requested) request->result = tid ? -ENOSYS : exec_in_place();
+        if (h->exiting) {
             struct cv_stats stats;
             if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
                 !ioctl(device, CV_STATS, &stats))
@@ -432,12 +519,10 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
                     (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
                     CV_NODE_BYTES, launch_ns, now_ns() - start_ns);
-            if (tid == 0) {
-                int result = host.exit_status;
-                cleanup();
-                return 2 | (result << 8);
-            }
-            _exit(host.exit_status);
+            /* exit_group stops all native workers before Linux releases
+             * mappings and the adapter fd. Unmapping here would race a
+             * worker completing its blocked delegated read. */
+            _exit(h->exit_status);
         }
     } else if (step->args[7] == CV_SERVICE_MAP) {
         step->result = acquire_mapping(tid, step);
@@ -476,7 +561,11 @@ static int virtual_service_loop(uint64_t tid)
         }
         if (step.kind != 3) {
             pthread_mutex_lock(&service_lock);
-            host.preparing_nr = ((struct capstone_delegate_entry *)meta)->nr;
+            if (worker_host)
+                worker_host->preparing_nr = ((struct capstone_delegate_entry *)
+                    ((char *)worker_host->signals.block - CAPSTONE_SIGNAL_OFFSET))->nr;
+            else
+                host.preparing_nr = ((struct capstone_delegate_entry *)meta)->nr;
             fault(&step);
             pthread_mutex_unlock(&service_lock);
             return 125;
@@ -498,6 +587,12 @@ static void *virtual_thread_worker(void *opaque)
     /* A virtual thread is hosted by a Linux worker, so normal virtual-thread
      * exit must return from this worker rather than terminate the process. */
     if (result) _exit(result);
+    if (worker_host) {
+        capstone_signals_detach();
+        capstone_delegate_host_free(worker_host);
+        free(worker_host);
+        worker_host = NULL;
+    }
     return NULL;
 }
 
@@ -585,6 +680,7 @@ int main(int argc, char **argv)
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
     host.private_fds[host.private_count++] = device;
+    capstone_signals_settle_libc();
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
     if ((error = capstone_delegate_seccomp())) { errno = error; return die("seccomp"); }
     for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);

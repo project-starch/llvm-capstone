@@ -153,8 +153,8 @@ static unsigned fd_arguments(uint64_t nr) {
 static long spawn(struct capstone_delegate_host *host, const struct capstone_delegate_entry *entry) {
   const char *block = host->exchange + entry->args[0];
   size_t bytes = (size_t)entry->args[1];
-  static char *argv[CAPSTONE_SPAWN_STRINGS + 1], *envp[CAPSTONE_SPAWN_STRINGS + 1];
-  static const char *paths[CAPSTONE_SPAWN_ACTIONS];
+  char *argv[CAPSTONE_SPAWN_STRINGS + 1], *envp[CAPSTONE_SPAWN_STRINGS + 1];
+  const char *paths[CAPSTONE_SPAWN_ACTIONS];
   struct capstone_spawn_view view;
   int fds[CAPSTONE_SPAWNER_FDS], numbers[CAPSTONE_SPAWNER_FDS];
   uint64_t cloexec;
@@ -294,8 +294,10 @@ static long vector_call(struct capstone_delegate_host *host,
  * out is refused, as it is in every descriptor position. */
 static long msg_call(struct capstone_delegate_host *host,
                      const struct capstone_delegate_entry *entry) {
-  static struct capstone_msghdr_view view;
-  static struct iovec iov[CAPSTONE_MSGHDR_IOVS];
+  /* Linux workers can block here independently. Both the validated view and
+   * kernel descriptors must belong to this invocation through copy-back. */
+  struct capstone_msghdr_view view;
+  struct iovec iov[CAPSTONE_MSGHDR_IOVS];
   struct msghdr m;
   int sending = entry->nr == CAPSTONE_SYS_sendmsg;
   int error = capstone_msghdr_unpack(host->exchange, host->exchange_bytes, entry->args[1], &view);

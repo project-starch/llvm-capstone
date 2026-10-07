@@ -218,8 +218,10 @@ fd semantics inside a domain. Standard-stream read/write/EOF/close/stat/query
 fcntl use Linux objects; other file operations retain the existing host service.
 The virtual adapter supplies OS-backed same-`mm` threads through
 `capstone_virtual_thread_create`, `capstone_virtual_thread_join` and
-`capstone_virtual_thread_exit`; POSIX
-`pthread_create` and process `clone` remain delegated-runtime work.
+`capstone_virtual_thread_exit`. Its VM-service v3 musl bridge additionally
+qualifies `pthread_create`, join, TLS, mutexes and condition variables; see the
+[virtual adapter](virtual/README.md). Process `clone` remains outside this
+profile.
 The launcher uses its Linux filesystem authority and is not a filesystem sandbox.
 No claim of a complete hostile-code or QEMU security audit is made.
 
@@ -256,8 +258,8 @@ directory notification (`F_NOTIFY`, `F_SETSIG`, `F_GETSIG`); sockets and
 epoll (below); `exit_group`. What does
 not: memory (`mmap` is the domain allocator's, file `mmap` is ENOSYS),
 processes (`clone` and `fork` are ENOSYS; image exec uses the process service
-below). The virtual adapter's explicit cooperative thread API is separate from
-this syscall table.
+below). Virtual-profile musl threads use the adapter's dedicated clone/futex
+bridge; the generic process syscall table still refuses process creation.
 
 Sockets are descriptors like files: `socket`, `socketpair`, `bind`, `listen`,
 `accept`, `accept4`, `connect`, `getsockname`, `getpeername`, `sendto`,

@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 #include "ksigaction.h"
 
 #pragma clang diagnostic ignored "-Wcapstone-pointer-roundtrip"
@@ -44,15 +45,43 @@ struct pending {
   unsigned char state, on_alt;
   uintptr_t frame;        /* a local of the frame that runs it, or alt stack top */
 };
-static struct pending events[EVENTS];
-static unsigned event_count;
-
-static uint64_t logical;  /* the mask, as the kernel holds it for this task */
-static struct capstone_signal_block *block;
-static uint64_t seen_published;
-static stack_t alt;
-static int alt_enabled;
-static int transition;    /* a management round of delivery is in progress */
+struct signal_context {
+  struct pending events[EVENTS];
+  unsigned event_count;
+  uint64_t logical, seen_published;
+  struct capstone_signal_block *block;
+  stack_t alt;
+  int alt_enabled, transition;
+};
+static struct signal_context default_context;
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+static __thread struct signal_context *private_context;
+static struct signal_context *signal_context(void) {
+  void *tp;
+  __asm__ volatile("movc %0, tp" : "=r"(tp));
+  return tp && private_context ? private_context : &default_context;
+}
+size_t __capstone_signals_thread_state_size(void) { return sizeof(struct signal_context); }
+void __capstone_signals_thread_attach(void *state, void *meta) {
+  private_context = state;
+  private_context->block = (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET);
+  private_context->logical = private_context->block->initial_mask;
+}
+void __capstone_signals_thread_detach(void) {
+  free(private_context);
+  private_context = NULL;
+}
+#else
+static struct signal_context *signal_context(void) { return &default_context; }
+#endif
+#define pending_events (signal_context()->events)
+#define event_count (signal_context()->event_count)
+#define logical (signal_context()->logical)
+#define block (signal_context()->block)
+#define seen_published (signal_context()->seen_published)
+#define alt (signal_context()->alt)
+#define alt_enabled (signal_context()->alt_enabled)
+#define transition (signal_context()->transition)
 
 static uint64_t bit(int sig) { return sig >= 1 && sig <= SIGNALS ? UINT64_C(1) << (sig - 1) : 0; }
 static uint64_t of_set(const sigset_t *set) { uint64_t m; memcpy(&m, set, sizeof m); return m; }
@@ -80,11 +109,11 @@ void __capstone_signals_take(void) {
   if (!block) return;
   for (uint32_t i = 0; i < block->count && i < CAPSTONE_SIGNAL_EVENTS; ++i) {
     unsigned slot;
-    for (slot = 0; slot < EVENTS && events[slot].state != FREE; ++slot) ;
+    for (slot = 0; slot < EVENTS && pending_events[slot].state != FREE; ++slot) ;
     if (slot == EVENTS) break;   /* 256 unacknowledged events: the rest wait in the launcher */
-    events[slot].ev = block->events[i];
-    events[slot].state = PENDING;
-    events[slot].on_alt = 0;
+    pending_events[slot].ev = block->events[i];
+    pending_events[slot].state = PENDING;
+    pending_events[slot].on_alt = 0;
     if (slot >= event_count) event_count = slot + 1;
   }
   seen_published = block->published;
@@ -192,7 +221,7 @@ void __capstone_longjmp_reap(void *buf) {
   uintptr_t sp = (uintptr_t)target, base = (uintptr_t)alt.ss_sp;
   int target_alt = alt_enabled && sp >= base && sp < base + alt.ss_size;
   for (unsigned i = 0; i < event_count; ++i) {
-    struct pending *p = &events[i];
+    struct pending *p = &pending_events[i];
     if (p->state != RUNNING) continue;
     int gone = p->on_alt == target_alt ? p->frame < sp : p->on_alt;
     if (gone) acknowledge(p);
@@ -248,7 +277,7 @@ static void run_event(struct pending *p) {
 static struct pending *next_runnable(int only_sig) {
   struct pending *best = 0;
   for (unsigned i = 0; i < event_count; ++i) {
-    struct pending *p = &events[i];
+    struct pending *p = &pending_events[i];
     if (p->state != PENDING) continue;
     if (only_sig && (int)p->ev.signo != only_sig) continue;
     if (!(p->ev.flags & CAPSTONE_SIGNAL_WAIT) && (logical & bit((int)p->ev.signo))) continue;
