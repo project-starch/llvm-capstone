@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "scope": "one-hart QEMU; trusted Linux; shared-mm virtual C contexts; no RTL",
+  "base_superproject": "caa19c48ec3482d560cca5fafcbd621f3b5bce7b",
+  "qemu_commit": "6f312662d16fb625e5eb4c37b4f04cabb55c5aad",
+  "runtime_implementation": "283bf36ac2b6",
+  "build": {
+    "fresh": [
+      "QEMU",
+      "Linux adapter module",
+      "native launcher",
+      "virtual SDK runtime",
+      "contract programs"
+    ],
+    "reused": [
+      "baseline LLVM compiler and linker",
+      "unchanged musl 1.2.5 archive",
+      "unchanged Linux Image, firmware and rootfs",
+      "application library/object inputs documented in relink.json"
+    ],
+    "applications": "SQLite, mruby and Perl relinked with the fresh virtual SDK; not full source rebuilds",
+    "compiler_freshness": "Environment check returned rc=2: llvm-capstone is outside the freshness coverage. No complete toolchain freshness claim; SDK codegen gates passed."
+  },
+  "sha256": {
+    "compiler": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+    "linker": "8b35f5c42522a5c2f7b08abcf0d329525da8dddbab9b46e19be38b973d124dba",
+    "runtime_archive": "ac83dffd12d4a9c236392891f5b4b03c839967f28ca45dfefce4fb5c952d461d",
+    "builtins_archive": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e",
+    "musl_archive": "846df2e8675a986cd37a1dfb810bb7a79e24800867cbaf440d25c5ea61d19e50"
+  },
+  "limits": [
+    "31-bit node ID space, available RAM and optional module quota",
+    "65,536 malloc block records unchanged",
+    "No individual node-page reclamation or compaction",
+    "No physical RAM hotplug/migration, multi-hart or RTL qualification"
+  ],
+  "results": {
+    "nodes": "nodes.json",
+    "pthreads": "pthreads.json",
+    "relink": "relink.json",
+    "processor": "capstone/capstone-qemu/tests/virtual-capstone-runtime/paged-result.json",
+    "model": "capstone/capstone-qemu/tests/virtual-capstone-model/paged-result.json",
+    "runtime": "runtime.json"
+  },
+  "status": "PASS",
+  "runtime_checkpoint": "ba66490c1b15",
+  "gates": {
+    "runtime": 46,
+    "nodes": 15,
+    "pthreads": 9,
+    "processor": {
+      "runtime": 69,
+      "m1": 60,
+      "u_access": 69
+    }
+  },
+  "all_processor_and_runtime_gates_share_one_qemu_binary": true
+}

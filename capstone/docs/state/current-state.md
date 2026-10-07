@@ -21,10 +21,13 @@ node backend matches the forest model for 8,949 prefixes per binding
 controls. The [pthread gate](../../runtime/virtual/results/node-growth/pthreads.json)
 passes 9/9.
 
-The complete runtime/application gate is still being requalified for this
-feature branch. The independent mruby smoke succeeds with the optimized
-QEMU RAM-read path; the integration branch's older 46/46 result below must
-not be read as a qualification of this extension.
+The [complete runtime gate](../../runtime/virtual/results/node-growth/runtime.json)
+passes 46/46, including both 200,000-allocation recycling cases, exact-site
+stale denial, spatial checks, SQLite persistence, mruby and Perl smoke. The
+sparse positive case uses 348 KiB of node metadata, reclaims 188,631 IDs and
+leaves unused payload pages unpopulated. All processor and runtime gates use
+the same QEMU executable. See the [qualification manifest](../../runtime/virtual/results/node-growth/qualification.json)
+for hashes, reused compiler/musl/platform inputs and application relink scope.
 
 This is one-hart QEMU evidence. The 65,536 allocator block-record limit is
 separate and unchanged. Node capacity is bounded by RAM, an optional module
