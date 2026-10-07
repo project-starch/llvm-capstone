@@ -10,7 +10,7 @@
 
 | sort | where | count | what it is |
 |---|---|---:|---|
-| third-party defects, as cases | `capstone/bug-corpora/` | 188 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
+| third-party defects, as cases | `capstone/bug-corpora/` | 162 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 30 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 107 open, 77 resolved | the registry, not reproduced cases |
@@ -31,13 +31,12 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/memcached/allocator-repros`](memcached/allocator-repros) | memcached | 1.6.45 | 9 | 1 live, 8 fixed before the pin | 1 | case-json | measured |
 | [`capstone/bug-corpora/memcached/plain-heap-repros`](memcached/plain-heap-repros) | memcached | 1.6.45 | 2 | 2 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/mruby/gc-slot-repros`](mruby/gc-slot-repros) | mruby | 4.0.0-rc2 | 0 | not recorded | 0 | case-json | planned |
-| [`capstone/bug-corpora/mruby/release-differential`](mruby/release-differential) | mruby | 4.0.0-rc2 | 23 | 23 live | 0 | script-trigger | measured |
+| [`capstone/bug-corpora/mruby/release-differential`](mruby/release-differential) | mruby | 4.0.0-rc2 | 17 | 17 live | 0 | script-trigger | measured |
 | [`capstone/bug-corpora/perl/release-differential`](perl/release-differential) | perl | 5.36.3 | 11 | 11 live | 0 | script-trigger | measured |
 | [`capstone/bug-corpora/postgres/c-repros`](postgres/c-repros) | postgres | 17.5 | 5 | 5 live | 3 | case-json | measured |
 | [`capstone/bug-corpora/postgres/mmgr-repros`](postgres/mmgr-repros) | postgres | 17.5 | 5 | 5 live | 0 | case-json | measured |
 | [`capstone/bug-corpora/postgres/sql-repros`](postgres/sql-repros) | postgres | 17.5 | 9 | 9 live | 4 | script-trigger | measured |
-| [`capstone/bug-corpora/sqlite/capi-repros`](sqlite/capi-repros) | sqlite | 3.53.3 amalgamation, for the host ASan arm | 19 | 19 not asserted | 2 | sqlite-row | measured |
-| [`capstone/bug-corpora/sqlite/engine-repros`](sqlite/engine-repros) | sqlite | 3.22.0 amalgamation | 33 | 33 live | 0 | case-json | measured |
+| [`capstone/bug-corpora/sqlite/engine-repros`](sqlite/engine-repros) | sqlite | 3.22.0 amalgamation | 32 | 32 live | 0 | case-json | measured |
 | [`capstone/bug-corpora/wireshark/plain-heap-repros`](wireshark/plain-heap-repros) | wireshark | 4.6.8 | 2 | 1 live, 1 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/wireshark/wmem-repros`](wireshark/wmem-repros) | wireshark | 4.6.8 | 22 | 3 live, 19 fixed before the pin | 0 | case-json | measured |
 | [`xlang/lua-cdp`](../../xlang/lua-cdp) | Lua C-data-pointer bindings | per row | 13 | not recorded | 0 | xlang-row | measured |
@@ -45,7 +44,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
 | [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**218 cases in 23 corpora**, of which 116 are recorded live in the version their corpus pins, 44 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 21 advisories are cited across all corpora.
+**192 cases in 22 corpora**, of which 109 are recorded live in the version their corpus pins, 44 were fixed upstream before it, and 9 carry an explicit decision not to assert liveness. 19 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
@@ -60,7 +59,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, capstone-virtual, native | `allocator-repros` | 9 |
 | `capstone/ports/micropython` | full-application | 2e3304a | capstone-domain, silicon | -- | 0 |
 | `capstone/ports/mruby/app` | full-application | 4.0.0-rc2 | capstone-domain, native | `gc-slot-repros` | 0 |
-| `capstone/ports/mruby/cheribsd` | platform-build | 4.0.0-rc2 | cheribsd-purecap | `release-differential` | 23 |
+| `capstone/ports/mruby/cheribsd` | platform-build | 4.0.0-rc2 | cheribsd-purecap | `release-differential` | 17 |
 | `capstone/ports/musl-capstone` | domain-libc | 1.2.5 | capstone-domain | -- | 0 |
 | `capstone/ports/nginx` | allocator-component | 1.28.0 | capstone-domain, native | -- | 0 |
 | `capstone/ports/perl/cheribsd` | platform-build | 5.36.3 | cheribsd-purecap | -- | 0 |
@@ -68,8 +67,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/postgres/app` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
 | `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-domain, cheribsd-purecap, linux-guest, native | `mmgr-repros` | 5 |
 | `capstone/ports/sqlite/app` | full-application | 3.22.0 | capstone-domain, native | -- | 0 |
-| `capstone/ports/sqlite/cheribsd` | platform-build | 3.22.0 | cheribsd-purecap | `engine-repros` | 33 |
-| `capstone/ports/sqlite` | full-application | 3.53.3, 3.22.0 | capstone-domain, silicon, native | `capi-repros`, `engine-repros` | 52 |
+| `capstone/ports/sqlite/cheribsd` | platform-build | 3.22.0 | cheribsd-purecap | `engine-repros` | 32 |
+| `capstone/ports/sqlite` | full-application | 3.53.3, 3.22.0 | capstone-domain, silicon, native | `capi-repros`, `engine-repros` | 32 |
 | `capstone/ports/whisper/ggml-context` | allocator-component | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | 0 |
 | `capstone/ports/wireshark/app` | full-application | 4.6.8 | capstone-domain | -- | 0 |
 | `capstone/ports/wireshark/wmem` | allocator-component | 4.6.8 | capstone-domain, cheribsd-purecap, native | `wmem-repros` | 22 |
@@ -87,8 +86,6 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.
 - `capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.
-- `capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.
-- `capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.
 - `capstone/bug-corpora/sqlite/engine-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/wireshark/wmem-repros` has no triage inventory under docs/ref/.
 - `xlang/lua-cdp` does not record live_in_pin: Each row is pinned to the binding version its upstream report names, not to a release this project ports.

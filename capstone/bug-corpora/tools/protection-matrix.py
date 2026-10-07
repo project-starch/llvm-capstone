@@ -330,6 +330,20 @@ def read_pass_lines(bundle, spec):
 # ---------------------------------------------------------------------------
 # Joining a reader's keys to the corpus's cases
 # ---------------------------------------------------------------------------
+def slug(key):
+    """A case's identity without its position.
+
+    `07_129371553c_fts3_destroy_oom` and `06_129371553c_fts3_destroy_oom` are the
+    same case: the number says where it sits in the run order, and deleting a
+    case ahead of it moves that number. An archived bundle keeps the number it
+    was run under, so a cell joined on the number breaks the moment the corpus is
+    renumbered -- which is how 17 cells silently became "not run" once. Joining
+    on what follows the number does not break, because the fix id and the slug
+    are the case.
+    """
+    return key.split("_", 1)[1] if key[:2].isdigit() and "_" in key else key
+
+
 def numeric(key):
     """`00` and `0` are the same case: one bundle zero-pads its tags and another
     does not, and nothing is gained by making the declaration say which."""
@@ -340,6 +354,7 @@ def case_identifiers(case_dir, case):
     """Every name a bundle might use for this case."""
     return {
         "dir": case_dir.name,
+        "slug": slug(case_dir.name),
         "number": str(case["case"]),
         "number0": f"{case['case']:02d}",
         "fix": case.get("upstream_fix", ""),
@@ -409,8 +424,9 @@ def build():
                         problems.append(f"{name}/{group}/{arm}: bundle {one} "
                                         f"does not exist")
                         continue
+                    normalise = slug if spec.get("key") == "slug" else numeric
                     try:
-                        table.update({numeric(k): v for k, v in
+                        table.update({normalise(k): v for k, v in
                                       READERS[spec["reader"]](bundle, spec).items()})
                     except KeyError as exc:
                         problems.append(f"{name}/{group}/{arm}: unknown reader "
@@ -445,7 +461,8 @@ def build():
                         cells[arm] = {"verdict": "not-run", "caught": None,
                                       "why": "the bundle could not be read"}
                         continue
-                    key = numeric(ids.get(spec.get("key", "dir"), ""))
+                    key = ids.get(spec.get("key", "dir"), "")
+                    key = key if spec.get("key") == "slug" else numeric(key)
                     if key not in table:
                         cells[arm] = {"verdict": "not-run", "caught": None,
                                       "why": spec.get("missing_reason",

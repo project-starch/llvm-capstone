@@ -1,0 +1,25 @@
+{
+  "case": 10,
+  "upstream_fix": "dee0359ddb",
+  "title": "row11",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "inspection with a line number in the 3.22.0 tree: fts3SegReaderNext() points pReader->zTerm straight into the pending-terms hash key memory at fts3_write.c:1333. Fixed upstream in 3.37.0",
+  "allocator_layer": "memsys5",
+  "object": "the pending-terms hash key memory that pReader->zTerm aliases",
+  "lifetime_ender": "an optimize() during the scan frees the pending-terms hash",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator: a non-empty pending hash, a SELECT scan open over it, and optimize() run mid-scan. Built in the fts3 group",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "completes"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+    }
+  },
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+}

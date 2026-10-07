@@ -1,0 +1,25 @@
+{
+  "case": 16,
+  "upstream_fix": "28001204f4",
+  "title": "new01",
+  "consumer": "sqlite3.c (binCollFunc)",
+  "live_in_pin": true,
+  "live_proof": "inspection in the 3.22.0 tree: the JEACH_JSON arm of jsonEachColumn returns p->sParse.zJson as SQLITE_STATIC while jsonEachFilter allocates p->zJson and jsonEachCursorReset frees it. Fixed upstream in 3.45.2 by switching to SQLITE_TRANSIENT",
+  "allocator_layer": "memsys5",
+  "object": "p->zJson, the cursor's own malloc'd copy of the input JSON, handed to the SQL layer as SQLITE_STATIC",
+  "lifetime_ender": "driving json_each from the right of a join re-filters it per outer row, and each jsonEachFilter calls jsonEachCursorReset, freeing the previous zJson",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator. The accumulator is the part that makes it observable: SQLITE_STATIC means no copy is made and sqlite3VdbeMemCopy keeps MEM_Static as-is, so a min()/max() accumulator retains the raw pointer and minmaxStep() compares against freed memory. Built in the json group",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b801c"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b801c; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=14)"
+}

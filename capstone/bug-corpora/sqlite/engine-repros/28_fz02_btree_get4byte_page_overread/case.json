@@ -1,0 +1,25 @@
+{
+  "case": 28,
+  "upstream_fix": "fz02",
+  "title": "heap-buffer-overflow / SEGV: sqlite3Get4byte reads a page past the buffer",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "fuzz-corpus diff: the image is from SQLite's post-3.22.0 fuzz corpus and reproduces on stock 3.22.0 under host ASan as heap-buffer-overflow in sqlite3Get4byte at sqlite3.c:29655",
+  "allocator_layer": "memsys5",
+  "object": "the page buffer sqlite3Get4byte reads a 4-byte big-endian value from",
+  "lifetime_ender": "not a lifetime defect: a corrupt page header sends the read past the end of the page buffer",
+  "shape": "read past the end of the record",
+  "fidelity": "real consumer, real allocator, with a reconstructed trigger. The corpus entry carried only the database and an ASan log -- fuzzcheck pairs every database with every script and the provenance kept only the database id -- so the statement was re-derived by replaying candidate statements one process at a time against a fresh copy of the image. A cumulative script does not work here: an earlier statement leaves the image in a state the later one no longer reaches",
+  "arms": {
+    "spatial": {
+      "oracle": "capability fault delivered, cause 5 load out of bounds (spatial) pc=0x102029578"
+    },
+    "sublet": {
+      "oracle": "capability fault delivered, cause 5 load out of bounds (spatial) pc=0x102029778"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran Correction rather than measurement: this column previously recorded a capability bounds fault here. That verdict came from the PROBE build (out-probe, -DLB_PROBE_BUILD=1, instrumented amalgamation) while the other 31 cases came from the plain build, so the two were not comparable. The plain build does not fault. Whether the instrumentation changes behaviour or reaches further is not established; the earlier result is kept in results/probe-20261005-082728 and is not counted here."
+    }
+  },
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+}

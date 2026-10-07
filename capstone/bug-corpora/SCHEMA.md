@@ -310,9 +310,9 @@ these carries different weight:
 
 | `kind` | what it means |
 |---|---|
-| `no-runtime` | no arm here can run it at all. The material is kept, the measurement does not exist. Declared on a **group** where it holds for all of it -- SQLite's binding rows are programs in Rust, Go, Python and Tcl, and no arm has a runtime for one |
-| `arm` | one or more **named** arms cannot run it; the others measure it normally. `arms` lists them. SQLite's case 07 calls `sqlite3_config` itself and fills `sqlite_heap`, which exists only where memsys5 is configured over a static array |
-| `out-of-scope` | neither spatial nor temporal, so outside what the study measures. mruby's four null dereferences, one type confusion and one C-stack exhaustion are kept because they are what the arms reported on that release |
+| `no-runtime` | no arm here can run it at all. Declared on a **group** where it holds for all of it. **Unused:** the one group that had it, SQLite's 19 binding rows, was deleted on 2026-10-08 rather than kept as unrunnable material |
+| `arm` | one or more **named** arms cannot run it; the others measure it normally. `arms` lists them. **Unused:** the one case that had it, SQLite's heap-configuring OOM case, was deleted on 2026-10-08 |
+| `out-of-scope` | neither spatial nor temporal, so outside what the study measures. **Unused:** mruby's four null dereferences, one type confusion and one C-stack exhaustion were deleted on 2026-10-08 rather than kept |
 | `parked` | measured or measurable, and **deliberately not reported**. The first three kinds are properties of the case; this one is a decision about what the study says, so its `why` must name on whose decision and what the omission costs |
 
 Every kind needs a `why` of more than a few words -- twelve for `parked` -- and

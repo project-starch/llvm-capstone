@@ -3054,186 +3054,6 @@
        "local_arm": "sublet-gc"
       }
      }
-    },
-    {
-     "case": "18_03f242d09_mod-visibility-null-mt",
-     "group": "release-differential",
-     "number": 18,
-     "upstream_fix": "03f242d09",
-     "title": "mrb_mod_visibility hands a NULL method table to mt_put after a prepend",
-     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
-     "nested": null,
-     "ignored": true,
-     "arms": {
-      "cheribsd": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sysalloc": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sublet": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      }
-     }
-    },
-    {
-     "case": "19_77d1d928f_method-defined-null-mt",
-     "group": "release-differential",
-     "number": 19,
-     "upstream_fix": "77d1d928f",
-     "title": "method_defined? reaches mt_put with a NULL method table",
-     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
-     "nested": null,
-     "ignored": true,
-     "arms": {
-      "cheribsd": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sysalloc": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sublet": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      }
-     }
-    },
-    {
-     "case": "20_94993eede_visibility-unprepared-mt",
-     "group": "release-differential",
-     "number": 20,
-     "upstream_fix": "94993eede",
-     "title": "a visibility change runs before the method table is prepared, so mt_put dereferences NULL",
-     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
-     "nested": null,
-     "ignored": true,
-     "arms": {
-      "cheribsd": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sysalloc": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sublet": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      }
-     }
-    },
-    {
-     "case": "21_ff047f5fe_method-defined-inherit-null-mt",
-     "group": "release-differential",
-     "number": 21,
-     "upstream_fix": "ff047f5fe",
-     "title": "Module#method_defined? with its inherit argument reaches mt_put with a NULL method table",
-     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
-     "nested": null,
-     "ignored": true,
-     "arms": {
-      "cheribsd": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sysalloc": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sublet": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "null-deref, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      }
-     }
-    },
-    {
-     "case": "22_d8911416c_alias-mid-as-irep",
-     "group": "release-differential",
-     "number": 22,
-     "upstream_fix": "d8911416c",
-     "title": "a method's symbol id is dereferenced as an mrb_irep pointer where aliases are not handled",
-     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
-     "nested": null,
-     "ignored": true,
-     "arms": {
-      "cheribsd": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "type-confusion, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sysalloc": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "type-confusion, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sublet": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "type-confusion, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      }
-     }
-    },
-    {
-     "case": "23_1737589f0_file-join-recursive-array",
-     "group": "release-differential",
-     "number": 23,
-     "upstream_fix": "1737589f0",
-     "title": "File.join recurses on a self-referencing array until the C stack is exhausted",
-     "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
-     "nested": null,
-     "ignored": true,
-     "arms": {
-      "cheribsd": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "c-stack-exhaustion, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sysalloc": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "c-stack-exhaustion, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      },
-      "capstone-sublet": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "out-of-scope",
-       "why": "c-stack-exhaustion, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
-      }
-     }
     }
    ],
    "groups": {
@@ -3244,7 +3064,7 @@
     },
     "release-differential": {
      "boundary": "the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses",
-     "cases": 23,
+     "cases": 17,
      "ignore": null
     }
    },
@@ -4505,7 +4325,7 @@
   {
    "corpus": "sqlite",
    "program": "sqlite",
-   "title": "SQLite: the engine's own defects under memsys5, and the binding defects that hold its C API",
+   "title": "SQLite: thirty-two engine defects under memsys5, SQLite's own arena allocator",
    "cases": [
     {
      "case": "00_adfb203a7d_fts5_getvarint_stale_read",
@@ -4753,42 +4573,9 @@
      }
     },
     {
-     "case": "07_129371553c_fts3_destroy_oom_stale_table",
+     "case": "07_51dd67080a_fts3_offsets_stale_buffer",
      "group": "engine-repros",
      "number": 7,
-     "upstream_fix": "129371553c",
-     "title": "new04",
-     "boundary": "memsys5, SQLite's own arena allocator, under the engine",
-     "nested": null,
-     "ignored": true,
-     "arms": {
-      "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied be",
-       "group": "engine-repros",
-       "bundle": "results",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "cheribsd-revocation"
-      },
-      "capstone-sysalloc": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "arm",
-       "why": "the case engineers its OOM by calling sqlite3_config itself and filling sqlite_heap, which exists only where memsys5 is configured over a static array: the platform-allocator arm has no such array, and under the Sublet port the pool is a grant rather than an array, so neither arm can run it as written"
-      },
-      "capstone-sublet": {
-       "verdict": "ignored",
-       "caught": null,
-       "kind": "arm",
-       "why": "the case engineers its OOM by calling sqlite3_config itself and filling sqlite_heap, which exists only where memsys5 is configured over a static array: the platform-allocator arm has no such array, and under the Sublet port the pool is a grant rather than an array, so neither arm can run it as written"
-      }
-     }
-    },
-    {
-     "case": "08_51dd67080a_fts3_offsets_stale_buffer",
-     "group": "engine-repros",
-     "number": 8,
      "upstream_fix": "51dd67080a",
      "title": "row13",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -4821,9 +4608,9 @@
      }
     },
     {
-     "case": "09_fix-2026-08-17_fts3_snippet_stale_buffer",
+     "case": "08_fix-2026-08-17_fts3_snippet_stale_buffer",
      "group": "engine-repros",
-     "number": 9,
+     "number": 8,
      "upstream_fix": "fix-2026-08-17",
      "title": "row23",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -4856,9 +4643,9 @@
      }
     },
     {
-     "case": "10_becd68ba0d_fts3_snippet_or_stale_iter",
+     "case": "09_becd68ba0d_fts3_snippet_or_stale_iter",
      "group": "engine-repros",
-     "number": 10,
+     "number": 9,
      "upstream_fix": "becd68ba0d",
      "title": "row06",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -4891,9 +4678,9 @@
      }
     },
     {
-     "case": "11_dee0359ddb_fts3_zterm_stale_buffer",
+     "case": "10_dee0359ddb_fts3_zterm_stale_buffer",
      "group": "engine-repros",
-     "number": 11,
+     "number": 10,
      "upstream_fix": "dee0359ddb",
      "title": "row11",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -4926,9 +4713,9 @@
      }
     },
     {
-     "case": "12_fb8ca7de0c_fts5_inplace_stale_leaf",
+     "case": "11_fb8ca7de0c_fts5_inplace_stale_leaf",
      "group": "engine-repros",
-     "number": 12,
+     "number": 11,
      "upstream_fix": "fb8ca7de0c",
      "title": "row10",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -4957,9 +4744,9 @@
      }
     },
     {
-     "case": "13_fix-2026-06-08_fts5_near_stale_phrase",
+     "case": "12_fix-2026-06-08_fts5_near_stale_phrase",
      "group": "engine-repros",
-     "number": 13,
+     "number": 12,
      "upstream_fix": "fix-2026-06-08",
      "title": "row22",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -4992,9 +4779,9 @@
      }
     },
     {
-     "case": "14_25e3073741_fts5_structure_release_refcount",
+     "case": "13_25e3073741_fts5_structure_release_refcount",
      "group": "engine-repros",
-     "number": 14,
+     "number": 13,
      "upstream_fix": "25e3073741",
      "title": "row03",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5027,9 +4814,9 @@
      }
     },
     {
-     "case": "15_2639ddc474_fts5_vocab_eof_stale_poslist",
+     "case": "14_2639ddc474_fts5_vocab_eof_stale_poslist",
      "group": "engine-repros",
-     "number": 15,
+     "number": 14,
      "upstream_fix": "2639ddc474",
      "title": "row01",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5062,9 +4849,9 @@
      }
     },
     {
-     "case": "16_unfixed_json_each_root_stale_key",
+     "case": "15_unfixed_json_each_root_stale_key",
      "group": "engine-repros",
-     "number": 16,
+     "number": 15,
      "upstream_fix": "unfixed",
      "title": "new02; found by us, still unfixed",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5097,9 +4884,9 @@
      }
     },
     {
-     "case": "17_28001204f4_json_each_static_stale_key",
+     "case": "16_28001204f4_json_each_static_stale_key",
      "group": "engine-repros",
-     "number": 17,
+     "number": 16,
      "upstream_fix": "28001204f4",
      "title": "new01",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5132,9 +4919,9 @@
      }
     },
     {
-     "case": "18_mem5-design_memsys5_inband_freelist_overwrite",
+     "case": "17_mem5-design_memsys5_inband_freelist_overwrite",
      "group": "engine-repros",
-     "number": 18,
+     "number": 17,
      "upstream_fix": "mem5-design",
      "title": "row25; allocator design defect, trigger written by us",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5167,9 +4954,9 @@
      }
     },
     {
-     "case": "19_c8c9cdd9dd_rtree_cursor_stale_node",
+     "case": "18_c8c9cdd9dd_rtree_cursor_stale_node",
      "group": "engine-repros",
-     "number": 19,
+     "number": 18,
      "upstream_fix": "c8c9cdd9dd",
      "title": "new05",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5202,9 +4989,9 @@
      }
     },
     {
-     "case": "20_d21bd37c7c_rtree_inode0_stale_node",
+     "case": "19_d21bd37c7c_rtree_inode0_stale_node",
      "group": "engine-repros",
-     "number": 20,
+     "number": 19,
      "upstream_fix": "d21bd37c7c",
      "title": "new16; unfixed in every release",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5237,9 +5024,9 @@
      }
     },
     {
-     "case": "21_eab0e10304_rtree_static_bind_stale_text",
+     "case": "20_eab0e10304_rtree_static_bind_stale_text",
      "group": "engine-repros",
-     "number": 21,
+     "number": 20,
      "upstream_fix": "eab0e10304",
      "title": "new03, rtree arm -- same bug, second observable",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5272,9 +5059,9 @@
      }
     },
     {
-     "case": "22_fix-2026-07-26_spellfix_oom_stale_vtab",
+     "case": "21_fix-2026-07-26_spellfix_oom_stale_vtab",
      "group": "engine-repros",
-     "number": 22,
+     "number": 21,
      "upstream_fix": "fix-2026-07-26",
      "title": "row24",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5307,9 +5094,9 @@
      }
     },
     {
-     "case": "23_eab0e10304_fts3_static_bind_stale_text",
+     "case": "22_eab0e10304_fts3_static_bind_stale_text",
      "group": "engine-repros",
-     "number": 23,
+     "number": 22,
      "upstream_fix": "eab0e10304",
      "title": "new03, fts3 arm",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5342,9 +5129,9 @@
      }
     },
     {
-     "case": "24_d4b646997a_writable_schema_stale_table",
+     "case": "23_d4b646997a_writable_schema_stale_table",
      "group": "engine-repros",
-     "number": 24,
+     "number": 23,
      "upstream_fix": "d4b646997a",
      "title": "row08",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5377,9 +5164,9 @@
      }
     },
     {
-     "case": "25_415540ddaa_fts5_getvarint_overread",
+     "case": "24_415540ddaa_fts5_getvarint_overread",
      "group": "engine-repros",
-     "number": 25,
+     "number": 24,
      "upstream_fix": "415540ddaa",
      "title": "heap-buffer-overflow in sqlite3Fts5GetVarint",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5412,9 +5199,9 @@
      }
     },
     {
-     "case": "26_8f5b14a5c2_fts5_decode_getvarint32_overread",
+     "case": "25_8f5b14a5c2_fts5_decode_getvarint32_overread",
      "group": "engine-repros",
-     "number": 26,
+     "number": 25,
      "upstream_fix": "8f5b14a5c2",
      "title": "heap-buffer-overflow in sqlite3Fts5GetVarint (fts5_decode)",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5447,9 +5234,9 @@
      }
     },
     {
-     "case": "27_a783931794_fts3_getvarint_overread",
+     "case": "26_a783931794_fts3_getvarint_overread",
      "group": "engine-repros",
-     "number": 27,
+     "number": 26,
      "upstream_fix": "a783931794",
      "title": "heap-buffer-overflow in sqlite3Fts3GetVarint",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5482,9 +5269,9 @@
      }
     },
     {
-     "case": "28_c7def600bd_fts3_matchinfo_overread",
+     "case": "27_c7def600bd_fts3_matchinfo_overread",
      "group": "engine-repros",
-     "number": 28,
+     "number": 27,
      "upstream_fix": "c7def600bd",
      "title": "heap-buffer-overflow in fts3EvalUpdateCounts",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5517,9 +5304,9 @@
      }
     },
     {
-     "case": "29_fz02_btree_get4byte_page_overread",
+     "case": "28_fz02_btree_get4byte_page_overread",
      "group": "engine-repros",
-     "number": 29,
+     "number": 28,
      "upstream_fix": "fz02",
      "title": "heap-buffer-overflow / SEGV: sqlite3Get4byte reads a page past the buffer",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5552,9 +5339,9 @@
      }
     },
     {
-     "case": "30_fz06_recordcompareint_overread",
+     "case": "29_fz06_recordcompareint_overread",
      "group": "engine-repros",
-     "number": 30,
+     "number": 29,
      "upstream_fix": "fz06",
      "title": "heap-buffer-overflow: vdbeRecordCompareInt THREE_BYTE_INT",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5587,9 +5374,9 @@
      }
     },
     {
-     "case": "31_fz10_dbstat_decodepage_overflow",
+     "case": "30_fz10_dbstat_decodepage_overflow",
      "group": "engine-repros",
-     "number": 31,
+     "number": 30,
      "upstream_fix": "fz10",
      "title": "heap overflow in statDecodePage; needs -DSQLITE_ENABLE_DBSTAT_VTAB",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5622,9 +5409,9 @@
      }
     },
     {
-     "case": "32_fz11_dbstat_freechain_overflow",
+     "case": "31_fz11_dbstat_freechain_overflow",
      "group": "engine-repros",
-     "number": 32,
+     "number": 31,
      "upstream_fix": "fz11",
      "title": "heap overflow in statDecodePage free-chain walk; needs DBSTAT_VTAB",
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
@@ -5658,17 +5445,9 @@
     }
    ],
    "groups": {
-    "capi-repros": {
-     "boundary": "the SQLite C API, as host bindings hold it",
-     "cases": 19,
-     "ignore": {
-      "kind": "no-runtime",
-      "why": "a case here is a program in the host language that holds SQLite's C API -- Rust, Go, Python, Tcl -- and none of the three arms has a runtime for one. The group is a provenance ledger in this tree, not an executable corpus"
-     }
-    },
     "engine-repros": {
      "boundary": "memsys5, SQLite's own arena allocator, under the engine",
-     "cases": 33,
+     "cases": 32,
      "ignore": null
     }
    },
@@ -5678,9 +5457,10 @@
       "bundle": "results",
       "reader": "sqlite-axis",
       "arm": "cheribsd-revocation",
-      "key": "dir",
+      "key": "slug",
       "vehicle": "cheribsd-purecap",
-      "group": "engine-repros"
+      "group": "engine-repros",
+      "key_why": "the number is positional and a deletion ahead of a case moves it; the fix id and slug are the case, and the archived bundles keep the number they ran under"
      }
     ],
     "capstone-sysalloc": [
@@ -5688,9 +5468,10 @@
       "bundle": "results/20261007-virtual-platform-allocator",
       "reader": "virtual",
       "arm": "virtual-platform-allocator",
-      "key": "dir",
+      "key": "slug",
       "vehicle": "capstone-virtual",
-      "group": "engine-repros"
+      "group": "engine-repros",
+      "key_why": "the number is positional and a deletion ahead of a case moves it; the fix id and slug are the case, and the archived bundles keep the number they ran under"
      }
     ],
     "capstone-sublet": [

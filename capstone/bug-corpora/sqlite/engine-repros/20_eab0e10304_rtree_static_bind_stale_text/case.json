@@ -1,0 +1,25 @@
+{
+  "case": 20,
+  "upstream_fix": "eab0e10304",
+  "title": "new03, rtree arm -- same bug, second observable",
+  "consumer": "sqlite3.c (sqlite3VdbeSerialPut)",
+  "live_in_pin": true,
+  "live_proof": "inspection in the 3.22.0 tree: nodeNew() allocates the RtreeNode and its payload as one block with pNode->zData pointing inside it, nodeWrite() binds that payload SQLITE_STATIC into the cached pWriteNode statement, and sqlite3_reset() does not clear bindings. Fixed upstream in 3.23.0 (eab0e10304), sixteen days after 3.22.0 shipped, by adding the missing bind_null",
+  "allocator_layer": "memsys5",
+  "object": "the RtreeNode payload buffer, still bound as parameter 2 of a persistent cached statement",
+  "lifetime_ender": "nodeRelease() frees the node block while the cached statement's binding still points into it",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator. Same upstream fix as case 24 and deliberately kept separate: one upstream commit, two independently reachable observables, in rtree and in fts3. The threat model is upstream's own, quoted in the fix's commit message: a caller may reach the persistent statement through sqlite3_next_stmt() and read the freed buffer",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=213)"
+}

@@ -22,9 +22,9 @@ measured by its own run, which is why a cell names the bundle of its own group.
 
 | arm | caught | missed | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|
-| `cheribsd` | 32 | 91 | 26 | 149 | 20 |
-| `capstone-sysalloc` | 66 | 80 | 2 | 148 | 21 |
-| `capstone-sublet` | 94 | 0 | 54 | 148 | 21 |
+| `cheribsd` | 32 | 90 | 26 | 148 | 14 |
+| `capstone-sysalloc` | 66 | 80 | 2 | 148 | 14 |
+| `capstone-sublet` | 94 | 0 | 54 | 148 | 14 |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -148,14 +148,14 @@ memcached: eleven defects across its two inner allocators and the platform heap
 - `capstone-sysalloc`: **8** caught, 3 missed, of 11.
 - `capstone-sublet`: **2** caught, 0 missed, 9 not run, of 11.
 
-### mruby -- 23 cases
+### mruby -- 17 cases
 
 mruby: the measured subset of the 165 defects live at the 4.0.0-rc2 pin, plus the GC-slot boundary
 
 | group | cases | the boundary its cases cross |
 |---|---:|---|
 | `gc-slot-repros` | 0 | GC slots (mrb_heap_page) |
-| `release-differential` | 23 | the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses |
+| `release-differential` | 17 | the release itself: every defect live in the ported 4.0.0-rc2, whatever layer it reuses |
 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
@@ -176,16 +176,10 @@ mruby: the measured subset of the 165 defects live at the 4.0.0-rc2 pin, plus th
 | `release-differential` | 15 | `af6f23ddb` | String#prepend with a self-referencing argument memcpys past the resized buf | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 16 | `ec89364c4` | start + length overflows mrb_int, both guards go false, and fill writes far  | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 17 | `bef45e223` | __pat_values and __except hold the key array's pointer and its length across | · | **C** | **C**<sup>b</sup> |
-| `release-differential` | 18 | `03f242d09` | mrb_mod_visibility hands a NULL method table to mt_put after a prepend | ∅ | ∅ | ∅ |
-| `release-differential` | 19 | `77d1d928f` | method_defined? reaches mt_put with a NULL method table | ∅ | ∅ | ∅ |
-| `release-differential` | 20 | `94993eede` | a visibility change runs before the method table is prepared, so mt_put dere | ∅ | ∅ | ∅ |
-| `release-differential` | 21 | `ff047f5fe` | Module#method_defined? with its inherit argument reaches mt_put with a NULL  | ∅ | ∅ | ∅ |
-| `release-differential` | 22 | `d8911416c` | a method's symbol id is dereferenced as an mrb_irep pointer where aliases ar | ∅ | ∅ | ∅ |
-| `release-differential` | 23 | `1737589f0` | File.join recurses on a self-referencing array until the C stack is exhauste | ∅ | ∅ | ∅ |
 
-- `cheribsd`: **8** caught, 8 missed, 1 not run, of 17; 6 ignored.
-- `capstone-sysalloc`: **13** caught, 3 missed, 1 not run, of 17; 6 ignored.
-- `capstone-sublet`: **17** caught, 0 missed, of 17; 6 ignored.
+- `cheribsd`: **8** caught, 8 missed, 1 not run, of 17.
+- `capstone-sysalloc`: **13** caught, 3 missed, 1 not run, of 17.
+- `capstone-sublet`: **17** caught, 0 missed, of 17.
 
 ### perl -- 11 cases
 
@@ -245,14 +239,9 @@ PostgreSQL: nineteen defects at three fidelities -- a C reduction, the memory co
 - `capstone-sysalloc`: **6** caught, 13 missed, of 19.
 - `capstone-sublet`: **10** caught, 0 missed, 9 not run, of 19.
 
-### sqlite -- 33 cases with a directory, of 52 declared
+### sqlite -- 32 cases
 
-SQLite: the engine's own defects under memsys5, and the binding defects that hold its C API
-
-| group | cases | the boundary its cases cross |
-|---|---:|---|
-| `capi-repros` | 19 | the SQLite C API, as host bindings hold it **∅ ignored**: a case here is a program in the host language that holds SQLite's C API -- Rust, Go, Python, Tcl -- and none of the three arms has a runtime for one. The group is a provenance ledger in this tree, not an executable corpus |
-| `engine-repros` | 33 | memsys5, SQLite's own arena allocator, under the engine |
+SQLite: thirty-two engine defects under memsys5, SQLite's own arena allocator
 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
@@ -263,36 +252,35 @@ SQLite: the engine's own defects under memsys5, and the binding defects that hol
 | `engine-repros` | 4 | `8504d37b99` | row20 | · | · | — |
 | `engine-repros` | 5 | `6397a78b2b` | row04 | **C** | **C** | — |
 | `engine-repros` | 6 | `0c8c9a64b3` | row19 | · | **C** | — |
-| `engine-repros` | 7 | `129371553c` | new04 | · | ∅ | ∅ |
-| `engine-repros` | 8 | `51dd67080a` | row13 | · | · | — |
-| `engine-repros` | 9 | `fix-2026-08-17` | row23 | · | · | — |
-| `engine-repros` | 10 | `becd68ba0d` | row06 | · | · | — |
-| `engine-repros` | 11 | `dee0359ddb` | row11 | · | · | — |
-| `engine-repros` | 12 | `fb8ca7de0c` | row10 | · | — | — |
-| `engine-repros` | 13 | `fix-2026-06-08` | row22 | · | **C** | — |
-| `engine-repros` | 14 | `25e3073741` | row03 | · | **C** | — |
-| `engine-repros` | 15 | `2639ddc474` | row01 | · | **C** | — |
-| `engine-repros` | 16 | `unfixed` | new02; found by us, still unfixed | · | **C** | — |
-| `engine-repros` | 17 | `28001204f4` | new01 | · | **C** | — |
-| `engine-repros` | 18 | `mem5-design` | row25; allocator design defect, trigger written by us | · | **C** | — |
-| `engine-repros` | 19 | `c8c9cdd9dd` | new05 | **C** | **C** | — |
-| `engine-repros` | 20 | `d21bd37c7c` | new16; unfixed in every release | **C** | **C** | — |
-| `engine-repros` | 21 | `eab0e10304` | new03, rtree arm -- same bug, second observable | · | **C** | — |
-| `engine-repros` | 22 | `fix-2026-07-26` | row24 | **C** | · | — |
-| `engine-repros` | 23 | `eab0e10304` | new03, fts3 arm | · | **C** | — |
-| `engine-repros` | 24 | `d4b646997a` | row08 | · | **C** | — |
-| `engine-repros` | 25 | `415540ddaa` | heap-buffer-overflow in sqlite3Fts5GetVarint | · | **C** | — |
-| `engine-repros` | 26 | `8f5b14a5c2` | heap-buffer-overflow in sqlite3Fts5GetVarint (fts5_decode) | · | **C** | — |
-| `engine-repros` | 27 | `a783931794` | heap-buffer-overflow in sqlite3Fts3GetVarint | · | · | — |
-| `engine-repros` | 28 | `c7def600bd` | heap-buffer-overflow in fts3EvalUpdateCounts | · | · | — |
-| `engine-repros` | 29 | `fz02` | heap-buffer-overflow / SEGV: sqlite3Get4byte reads a page past the buffer | · | **C** | — |
-| `engine-repros` | 30 | `fz06` | heap-buffer-overflow: vdbeRecordCompareInt THREE_BYTE_INT | · | **C** | — |
-| `engine-repros` | 31 | `fz10` | heap overflow in statDecodePage; needs -DSQLITE_ENABLE_DBSTAT_VTAB | · | **C** | — |
-| `engine-repros` | 32 | `fz11` | heap overflow in statDecodePage free-chain walk; needs DBSTAT_VTAB | · | **C** | — |
+| `engine-repros` | 7 | `51dd67080a` | row13 | · | · | — |
+| `engine-repros` | 8 | `fix-2026-08-17` | row23 | · | · | — |
+| `engine-repros` | 9 | `becd68ba0d` | row06 | · | · | — |
+| `engine-repros` | 10 | `dee0359ddb` | row11 | · | · | — |
+| `engine-repros` | 11 | `fb8ca7de0c` | row10 | · | — | — |
+| `engine-repros` | 12 | `fix-2026-06-08` | row22 | · | **C** | — |
+| `engine-repros` | 13 | `25e3073741` | row03 | · | **C** | — |
+| `engine-repros` | 14 | `2639ddc474` | row01 | · | **C** | — |
+| `engine-repros` | 15 | `unfixed` | new02; found by us, still unfixed | · | **C** | — |
+| `engine-repros` | 16 | `28001204f4` | new01 | · | **C** | — |
+| `engine-repros` | 17 | `mem5-design` | row25; allocator design defect, trigger written by us | · | **C** | — |
+| `engine-repros` | 18 | `c8c9cdd9dd` | new05 | **C** | **C** | — |
+| `engine-repros` | 19 | `d21bd37c7c` | new16; unfixed in every release | **C** | **C** | — |
+| `engine-repros` | 20 | `eab0e10304` | new03, rtree arm -- same bug, second observable | · | **C** | — |
+| `engine-repros` | 21 | `fix-2026-07-26` | row24 | **C** | · | — |
+| `engine-repros` | 22 | `eab0e10304` | new03, fts3 arm | · | **C** | — |
+| `engine-repros` | 23 | `d4b646997a` | row08 | · | **C** | — |
+| `engine-repros` | 24 | `415540ddaa` | heap-buffer-overflow in sqlite3Fts5GetVarint | · | **C** | — |
+| `engine-repros` | 25 | `8f5b14a5c2` | heap-buffer-overflow in sqlite3Fts5GetVarint (fts5_decode) | · | **C** | — |
+| `engine-repros` | 26 | `a783931794` | heap-buffer-overflow in sqlite3Fts3GetVarint | · | · | — |
+| `engine-repros` | 27 | `c7def600bd` | heap-buffer-overflow in fts3EvalUpdateCounts | · | · | — |
+| `engine-repros` | 28 | `fz02` | heap-buffer-overflow / SEGV: sqlite3Get4byte reads a page past the buffer | · | **C** | — |
+| `engine-repros` | 29 | `fz06` | heap-buffer-overflow: vdbeRecordCompareInt THREE_BYTE_INT | · | **C** | — |
+| `engine-repros` | 30 | `fz10` | heap overflow in statDecodePage; needs -DSQLITE_ENABLE_DBSTAT_VTAB | · | **C** | — |
+| `engine-repros` | 31 | `fz11` | heap overflow in statDecodePage free-chain walk; needs DBSTAT_VTAB | · | **C** | — |
 
-- `cheribsd`: **5** caught, 28 missed, of 33.
-- `capstone-sysalloc`: **22** caught, 9 missed, 1 not run, of 32; 1 ignored.
-- `capstone-sublet`: **0** caught, 0 missed, 32 not run, of 32; 1 ignored.
+- `cheribsd`: **5** caught, 27 missed, of 32.
+- `capstone-sysalloc`: **22** caught, 9 missed, 1 not run, of 32.
+- `capstone-sublet`: **0** caught, 0 missed, 32 not run, of 32.
 
 ### wireshark -- 24 cases
 

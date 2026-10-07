@@ -1,0 +1,25 @@
+{
+  "case": 25,
+  "upstream_fix": "8f5b14a5c2",
+  "title": "heap-buffer-overflow in sqlite3Fts5GetVarint (fts5_decode)",
+  "consumer": "sqlite3.c (sqlite3Fts5GetVarint32)",
+  "live_in_pin": true,
+  "live_proof": "backport filter: upstream fix 8f5b14a5c2 removes code still present in 3.22.0, and its own regression database reproduces on stock 3.22.0 under host ASan as heap-buffer-overflow in sqlite3Fts5GetVarint32",
+  "allocator_layer": "memsys5",
+  "object": "the buffer fts5_decode walks while rendering a page",
+  "lifetime_ender": "not a lifetime defect: a corrupt image leaves the decode offset past the end of the buffer",
+  "shape": "read past the end of the record",
+  "fidelity": "real consumer, real allocator: upstream's own regression image, run statement by statement through the in-domain memfs",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=OOB,kind=UAF, hits=13720, witnesses=4765)"
+}

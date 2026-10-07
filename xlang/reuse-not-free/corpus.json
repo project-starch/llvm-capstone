@@ -12,8 +12,6 @@
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "inventory": "capstone/docs/ref/paper-bug-inventory.md",
   "advisories": [],
-  "related": [
-    "capstone/bug-corpora/sqlite/capi-repros"
-  ],
+  "related": [],
   "note": "Host-verified: ASan is silent on both, and one is silent only while lookaside is on. Neither has a Capstone or CHERI column yet."
 }

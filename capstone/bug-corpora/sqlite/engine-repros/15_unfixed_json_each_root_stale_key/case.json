@@ -1,0 +1,25 @@
+{
+  "case": 15,
+  "upstream_fix": "unfixed",
+  "title": "new02; found by us, still unfixed",
+  "consumer": "sqlite3.c (binCollFunc)",
+  "live_in_pin": true,
+  "live_proof": "inspection with line numbers in the 3.22.0 tree, and the case is still unfixed upstream: jsonEachColumn()'s default arm returns p->zRoot as SQLITE_STATIC at ext/misc/json1.c:2139, while jsonEachFilter() allocates it at :2244 and jsonEachCursorReset() frees it at :1963. The 3.45.2 fix (28001204f4) converted only the JEACH_JSON arm to SQLITE_TRANSIENT and left this sibling arm as it was",
+  "allocator_layer": "memsys5",
+  "object": "p->zRoot, the cursor's own malloc'd copy of the path argument, handed out as SQLITE_STATIC",
+  "lifetime_ender": "re-filtering the cursor per outer row calls jsonEachCursorReset, which frees the previous zRoot while an accumulator still holds the pointer",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator. Found by us rather than collected: it is the sibling the upstream fix left behind, which is why its upstream_fix is 'unfixed' and not a commit. Same shape and same reduction as case 18; the two differ only in which column of json_each is read",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe reaches the defect site but cannot show this access was the stale one (hits=10)"
+}
