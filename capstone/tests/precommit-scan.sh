@@ -138,14 +138,28 @@ elif [[ -n "$RANGE" ]]; then
     | { if [[ "$ME" != " <>" ]]; then grep -vxF -- "$ME" || true; else cat; fi; } >> "$TMP"
   git diff "$RANGE" -- . ":(exclude)$SELF"         >> "$TMP" 2>/dev/null
 else
-  git diff --cached -- . ":(exclude)$SELF"         >> "$TMP" 2>/dev/null
+  # ADDED LINES ONLY, for the DIFF portion. A deletion cannot publish anything, so feeding
+  # `-` lines to the detectors made the gate unable to pass the one commit that REMOVES a
+  # name -- the fix is always blocked by the very string it is removing. Found 2026-10-07
+  # taking a collaborator's name out of a handoff doc that had just been merged into dev:
+  # every hit was on a `-` line, the tree was already clean, and the gate still said BLOCKED.
+  #
+  # That is worse than a nuisance. The gate's own advice is "do not weaken the patterns to
+  # make it pass", and an operator facing an unpassable gate on an urgent name removal is
+  # being pushed toward exactly that. Scanning additions is not a weakened pattern: the same
+  # name in a message, in an added line, or in an untracked file still blocks, and the
+  # controls at the foot of this file prove all three. Context lines are dropped for the same
+  # reason -- they are already-committed content this commit is not touching, and `--tree` is
+  # the mode for auditing those.
+  ADDED_ONLY() { grep -E '^(\+\+\+|\+)' | grep -vE '^\+\+\+ /dev/null' || true; }
+  git diff --cached -- . ":(exclude)$SELF" 2>/dev/null | ADDED_ONLY >> "$TMP"
   # ALSO the unstaged and the UNTRACKED. Without these the scan is only as good as the
   # user's staging discipline, and it silently was not: running it BEFORE `git add` scanned
   # the commit message and nothing else, then printed CLEAN. A brand-new file -- exactly the
   # kind that carries a fresh name or a pasted console URL -- appears in NO diff until it is
   # staged, so the most dangerous content was the least likely to be seen. Caught 2026-08-18
   # when a new plans/ document passed a scan that had never read a byte of it.
-  git diff -- . ":(exclude)$SELF"                  >> "$TMP" 2>/dev/null
+  git diff -- . ":(exclude)$SELF" 2>/dev/null | ADDED_ONLY >> "$TMP"
   while IFS= read -r -d '' f; do
     [[ "$f" == "$SELF" ]] && continue
     printf '=== untracked: %s ===\n' "$f" >> "$TMP"
