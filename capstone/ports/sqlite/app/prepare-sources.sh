@@ -3,7 +3,8 @@
 # (build-native.sh), under <root>:
 #   sqlite3.c        the amalgamation with the Capstone adaptations (../adapt-sqlite-322.sh)
 #   sqlite3-stock.c  the amalgamation as released, for the native oracle
-#   sqlite3.h, sqlite3ext.h, shell.c   as released
+#   sqlite3.h       the matching Capstone-adapted header
+#   sqlite3ext.h, shell.c   as released
 #   speedtest1.c     test/speedtest1.c from the full source release, with the result oracle
 #                    (../study/speedtest1-oracle.patch; built with -DSQLITE_STUDY_ORACLE)
 # Both archives are pinned by SHA3-256 and kept in a cache root of this version only, so a
@@ -34,7 +35,7 @@ PY
 patch -s -p1 -d "$ROOT" < "$PORT/study/speedtest1-oracle.patch"
 grep -q 'STUDY-ORACLE phase=%d rows=%llu hash=%016llx' "$ROOT/speedtest1.c"
 
-bash "$PORT/adapt-sqlite-322.sh" "$AMALGAMATION/sqlite3.c" "$ROOT/sqlite3.c" > /dev/null
+bash "$PORT/adapt-sqlite-322.sh" "$AMALGAMATION" "$ROOT" > /dev/null
 # One more adaptation, for a path only this build takes. With temporary data in files (SQLite's
 # default TEMP_STORE), the sorter packs its records into one buffer at ROUND8 offsets, and every
 # record holds a pointer 16 bytes in (SorterRecord.u.pNext): a record 8 bytes off its boundary
@@ -53,5 +54,5 @@ if text.count(old) != 1:
 open(path, "w").write(text.replace(old, new))
 PY
 cp "$AMALGAMATION/sqlite3.c" "$ROOT/sqlite3-stock.c"
-cp "$AMALGAMATION/sqlite3.h" "$AMALGAMATION/sqlite3ext.h" "$AMALGAMATION/shell.c" "$ROOT/"
+cp "$AMALGAMATION/sqlite3ext.h" "$AMALGAMATION/shell.c" "$ROOT/"
 printf '%s\n' "$ROOT"
