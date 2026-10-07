@@ -28,6 +28,9 @@ struct cv_thread_control {
     __u64 thread;
     __u64 frame;
 };
+struct cv_remap {
+    __u64 thread, id, bytes, address; /* address zero cancels after Linux failure */
+};
 struct cv_nodes {
     __u64 thread, available;
 };
@@ -50,6 +53,9 @@ struct cv_global {
 #define CV_THREAD_CREATE _IOWR('V', 22, struct cv_thread_create)
 #define CV_THREAD_EXIT _IOW('V', 23, struct cv_thread_control)
 #define CV_NODES _IOW('V', 24, struct cv_nodes)
+#define CV_REMAP_BEGIN _IOW('V', 25, struct cv_remap)
+#define CV_REMAP_END _IOW('V', 26, struct cv_remap)
+#define CV_PROFILE _IOR('V', 27, __u64)
 #define CV_MAX_ARENAS 512
 #define CV_MAX_REGION_BYTES (256UL << 20)
 #define CV_MAX_BYTES (1024UL << 20)

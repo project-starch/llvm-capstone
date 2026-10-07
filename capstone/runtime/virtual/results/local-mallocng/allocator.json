@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "tests": {
+    "native_reference": true,
+    "basic_inplace_mremap_failure": true,
+    "nonlinear_and_linear_tag_transfer": true,
+    "70000_simultaneously_live_objects": true,
+    "cleanup": true,
+    "no_kernel_fault": true,
+    "200000_lifetimes": true,
+    "collection_exercised": true,
+    "reuse-stale": true,
+    "reuse-free": true,
+    "stale": true,
+    "remap-stale": true,
+    "inplace-stale": true,
+    "bounds": true,
+    "stale-free": true,
+    "interior-free": true,
+    "local_allocation_fast_path": true,
+    "fast_path_control_detects_service": true,
+    "real_linux_mremap_growth_and_shrink": true
+  },
+  "virtual_vm_abi": 5,
+  "harts": 1,
+  "allocator": "Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy",
+  "exact_bounds": "physical shadow metadata; QEMU prototype",
+  "skipped": [],
+  "input_sha256": {
+    "launcher": "5240ec2c6b04c30b5d4c73710a0cfca0745e13b30cf4b11146785791474b457c",
+    "module": "2394a455036735288a119887d4eca24c1ae9c9ab2b679da5591ae5ba935932fd",
+    "application": "c591c899445e279b9c74f96c2317dc9bde0a81aa1812e884036aeae5ad6cf352",
+    "native": "1f7db0f26350fe260b1b81a1bc49af6294973b55841570b53b013385d881a459",
+    "qemu": "81abbe8d995f0e18ae26f3601b172f0da56cf8a76ca88c413e737b6b7c1187a6",
+    "source": "0a29ac29524b2efd4a480993da5bb1a3a15997184f8469f566ee6265425bcb41",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "gate_sha256": "9c0758c94b79ddd44cd6de46552d5e5e52ecd00556db29c29b92ad3d054b09c8",
+  "runner_sha256": "93df90f1aadaae569282d78554d621558980a53011071f86d2d424382b9c1b05"
+}

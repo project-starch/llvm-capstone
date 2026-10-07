@@ -95,7 +95,7 @@ function(capstone_configure_application target)
   set(heap_bytes 0)
   if(CAPSTONE_APPLICATION_VIRTUAL)
     set(heap "${capstone}/runtime/virtual/heap.c")
-    target_include_directories(${target} PRIVATE "${capstone}/sublet")
+    target_include_directories(${target} PRIVATE "${capstone}/sublet" "${PORT_MUSL_ROOT}/arch/capstone64")
   elseif(app_HEAP STREQUAL "sublet")
     if(NOT app_HEAP_LOG MATCHES "^[0-9]+$" OR app_HEAP_LOG LESS 12 OR app_HEAP_LOG GREATER 27)
       message(FATAL_ERROR "Sublet applications require HEAP_LOG between 12 and 27")
@@ -166,11 +166,6 @@ function(capstone_configure_application target)
     CAPSTONE_DOMREQ_DATA=${data_bytes} CAPSTONE_DOMREQ_STACK=${app_STACK_BYTES}
     CAPSTONE_CONTEXT_ARENA_BYTES=${app_CONTEXT_BYTES}
     CAPSTONE_LEVEL0_ARENA_BYTES=${app_ARENA_BYTES})
-  if(CAPSTONE_APPLICATION_VIRTUAL)
-    target_compile_definitions(${target} PRIVATE
-      CAPSTONE_VIRTUAL_BLOCKS=${CAPSTONE_APPLICATION_VIRTUAL_BLOCKS}
-      CAPSTONE_VIRTUAL_ARENAS=${CAPSTONE_APPLICATION_VIRTUAL_ARENAS})
-  endif()
   target_compile_options(${target} PRIVATE -ffunction-sections -fdata-sections -fno-jump-tables)
   target_sources(${target} PRIVATE $<TARGET_OBJECTS:capstone-application-core>)
   target_link_libraries(${target} PRIVATE Capstone::Runtime

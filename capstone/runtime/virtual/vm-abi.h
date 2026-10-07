@@ -1,10 +1,11 @@
 #ifndef CAPSTONE_VIRTUAL_VM_ABI_H
 #define CAPSTONE_VIRTUAL_VM_ABI_H
-/* Shared by assembly, libc and the trusted launcher. Version 3 adds POSIX
- * services without changing version 2's mapping or explicit-thread ABI.
- * A v3 launcher accepts v2 images; a v2 launcher rejects v3 images. */
+/* Version 5 compiles mallocng inside Capstone and adds only a VM-remap
+ * service. It requires the explicit exact-bounds QEMU profile. Versions 2/3
+ * remain accepted by the launcher; the withdrawn native-heap v4 is rejected. */
 #define CV_IMAGE_MAGIC_V2 0x324d56564e4f5043
-#define CV_IMAGE_MAGIC 0x334d56564e4f5043
+#define CV_IMAGE_MAGIC_V3 0x334d56564e4f5043
+#define CV_IMAGE_MAGIC 0x354d56564e4f5043
 #define CV_SERVICE_DELEGATE 0
 #define CV_SERVICE_MAP 1
 #define CV_SERVICE_UNMAP 2
@@ -18,6 +19,7 @@
 #define CV_SERVICE_THREAD_DELEGATE 10
 #define CV_SERVICE_THREAD_SELF 11
 #define CV_SERVICE_NODES 12
+#define CV_SERVICE_REMAP 13
 /* Node instructions pause at this remaining cleanup reserve. */
 #define CV_NODE_RESERVE 256
 #define CV_MAP_HEAP 0

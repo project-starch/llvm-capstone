@@ -80,6 +80,21 @@ static void check_file(int fd, char *buffer, char value)
     assert(read(fd, buffer, 1) == 0);
 }
 
+static void *allocator_worker(void *arg)
+{
+    for (unsigned i=0; i<8; ++i) {
+        unsigned char *p = malloc(200003);
+        assert(p);
+        *(void **)p = arg; p[199999] = 91;
+        p = realloc(p, 400000);
+        assert(p && *(void **)p == arg && p[199999] == 91);
+        p = realloc(p, 200003);
+        assert(p && *(void **)p == arg && p[199999] == 91);
+        free(p);
+    }
+    return arg;
+}
+
 int main(void)
 {
     pthread_t a, b;
@@ -145,5 +160,10 @@ int main(void)
         assert(!pthread_join(a, &result) && result == &values[0]);
     }
     puts("VIRTUAL_PTHREAD_OK 64_joined_lifetimes");
+    assert(!pthread_create(&a, NULL, allocator_worker, &values[0]));
+    assert(!pthread_create(&b, NULL, allocator_worker, &values[1]));
+    assert(!pthread_join(a, &result) && result == &values[0]);
+    assert(!pthread_join(b, &result) && result == &values[1]);
+    puts("VIRTUAL_PTHREAD_OK concurrent_allocator_remap");
     return 0;
 }

@@ -1,5 +1,35 @@
 # Current Capstone state
 
+## 2026-10-08 — mallocng executes locally in virtual Capstone
+
+Branch `virtual-musl-local` replaces the virtual buddy heap with Capstone-compiled
+musl 1.2.5 mallocng. malloc/free and ownership operations execute in the
+application's virtual C context. Actual syscall/VM, node-pressure, fault and
+scheduling paths cross the existing trusted Linux adapter. Upstream allocation
+policy is retained; patch 0009 ports capability representation and lifetime
+hooks. The fixed allocator block/arena arrays are removed.
+
+ABI v5 requires QEMU's opt-in exact physical-shadow bounds profile, pinned at
+`24b1e95b1dac`. This is extra QEMU metadata, not a tag-bit-only or RTL design.
+The default physical processor profile and physical allocator selection retain
+their previous behavior. Linux core and firmware are unchanged.
+
+The [qualification](../../runtime/virtual/results/local-mallocng/README.md)
+records 19/19 allocator, 42/42 runtime, 10/10 pthread, 16/16 other normal-port
+and 73/73 memcached checks, plus 202 processor checks. It includes 200,000
+lifetimes, 70,000 live objects, exact-site spatial/temporal denials and a
+control detecting an inserted allocation-loop service. All eight application
+ports are relinked with the new SDK. The compiler and platform are reused;
+the two long sparse runtime cases and the CPython inner / FFmpeg-tshark safety
+corpora are not requalified here. The memcached fixture-17 setup now searches
+for actual reissue; its original temporal-fault prediction is unchanged.
+
+The withdrawn native-heap branches are not the integration target. Merge the
+node-growth stack, then QEMU [#19](https://github.com/project-starch/capstone-qemu/pull/19),
+then the matching local-mallocng runtime. Rebuild SDK and applications together.
+The [allocator contract](../../runtime/virtual/mallocng.md) explains the
+representation, metadata cost, VM remap transaction and remaining limits.
+
 ## 2026-10-07 — growing virtual node tables
 
 The `review/virtual-node-growth` branch builds on `dev` at `08cf07d75ad2`

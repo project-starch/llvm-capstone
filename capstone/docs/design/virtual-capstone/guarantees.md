@@ -13,7 +13,7 @@ RTL/FPGA result.
 | Mechanism | Protection | Condition or limit |
 |---|---|---|
 | Tag and type checks | Scalar bits cannot manufacture a usable capability | Trusted minting and tag-preserving transfers remain part of the contract |
-| Bounds and rights | Access stays within the authority carried by the pointer | Authority must have been narrowed to the intended object; representability padding can be accessible |
+| Bounds and rights | Access stays within the authority carried by the pointer | Authority must have been narrowed to the intended object; ABI v5 uses exact shadow bounds in QEMU |
 | User PTE permissions | VM protection restricts permitted accesses further | `mprotect` does not revoke an object's lifetime |
 | Lifetime revocation | Old aliases cannot access a retired object even at a reused VA | Allocator must revoke before reuse; nested objects need nested lifetimes |
 | Consuming transfers | Moving linear authority does not duplicate its source | All fault checks precede mutation and use the same translation |
@@ -37,7 +37,7 @@ controls whether aliases or independent overlapping grants may exist.
 |---|---|
 | One hart; Linux-scheduled same-mm contexts and the tested musl pthread subset | Multi-hart execution, cross-core revocation and context migration |
 | Private anonymous backing, demand faults, resident-page pinning | Swap, physical-page migration and general shared/file-backed tagged mappings |
-| Whole-mapping unmap and page-range protection changes | Partial unmap, fixed replacement, address hints and `mremap` |
+| Whole-mapping unmap and page-range protection changes | Partial unmap, fixed replacement, address hints and public `mremap` (mallocng uses an internal VM remap path) |
 | Independent launches with separate namespaces | Protected `fork` and capability transfer between address spaces |
 | Executable child contexts | General JIT calls/returns across separately bounded code mappings |
 | Recorded delegated signal and exit behavior | Full POSIX cancellation, arbitrary signal delivery and signal register editing |
@@ -50,18 +50,21 @@ The node-growth extension replaces the fixed 65,536-slot / 1-MiB table with
 base-page-backed tables bounded by RAM, an optional quota and the 31-bit ID
 field. It retains the separate limits of 32 supervisor slots on the hart, at most
 512 registered mappings, 256 MiB per registered region and 1 GiB aggregate
-registered VA, 65,536 allocator block records and 256 allocator arenas by
-default. Table pages can be physically scattered. Allocator capacity requests
+registered VA. Local mallocng removes the fixed allocator block/arena arrays;
+its metadata grows through musl mappings and remains subject to the adapter
+quotas above. Table pages can be physically scattered. Allocator capacity requests
 can return `ENOMEM`; if collection and growth cannot supply enough IDs,
 node pressure terminates with resource cause 30;
 it is not universally converted into recoverable `malloc` failure.
 
 ## Encoding work still matters
 
-QEMU uses a different 128-bit field split from deployed RTL and still keeps
-extra uncompressed bounds in some tag paths. `CSMINT` rejects inexact initial
-bounds, but that is not a proof that every later shrink, split and store/load
-preserves exactly the same authority. A future tag-bit-only implementation
+QEMU uses a different 128-bit field split from deployed RTL and keeps extra
+uncompressed bounds in its physical tag shadow. The opt-in exact-bounds
+profile makes those bounds authoritative during minting and context restore
+as well as normal spill/reload. Local mallocng requires this profile to retain
+upstream slot geometry and expose only requested object bounds. The default
+profile continues to reject inexact CSMINT descriptors. A future tag-bit-only implementation
 must not widen authority during a round trip. Reconcile the formats and test
 representability before claiming ISA/RTL equivalence or freezing the format.
 

@@ -70,9 +70,10 @@ flowchart TB
 ```
 
 1. Linux supplies backing; the adapter mints an arena grant beneath its
-   private ancestor. The heap splits the grant into blocks.
+   private ancestor. mallocng splits the grant into its chosen groups and slots.
 2. `malloc` retains a handle, delinearizes the child and bounds the returned
-   pointer to the allocation's representable extent.
+   pointer to the requested extent (one byte for a zero-size request). ABI v5
+   preserves those bounds through QEMU shadow metadata.
 3. `q = p` copies a non-linear capability. Both pointers name the same lifetime.
 4. `free(p)` revokes the object subtree before making the block reusable.
    `q` may retain its address bits and even a tag, but its dead node denies use.

@@ -10,6 +10,7 @@
 #include "../linux/delegate-service.h"
 #include <elf.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <limits.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -31,6 +32,7 @@ struct mapping {
     int heap, kind;
 };
 static struct mapping maps[CV_MAX_ARENAS];
+static bool local_malloc;
 static void *reuse_address;
 static size_t reuse_bytes;
 static int device = -1, image_fd = -1;
@@ -215,7 +217,13 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         (kind != CV_MAP_APPLICATION && (prot != (PROT_READ | PROT_WRITE) || rights != 6)) ||
         (kind == CV_MAP_APPLICATION && rights != 7)) return -EINVAL;
     if (bytes < alignment) bytes = alignment;
-    void *p = reserve(bytes);
+    void *p;
+    if (local_malloc && kind == CV_MAP_HEAP && alignment == 4096) {
+        bytes = visible;
+        p = mmap(NULL, bytes, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        if (p == MAP_FAILED) return -errno;
+        p = private_pages(p, bytes);
+    } else p = reserve(bytes);
     if (!p) return -errno;
     /* Padding remains inaccessible, including after later mprotect calls.
      * No capability reply exists until registration has succeeded. */
@@ -231,6 +239,32 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
             break;
         }
     return 0;
+}
+static long remap_mapping(uint64_t tid, struct cv_step *step)
+{
+    uintptr_t base = step->args[0];
+    size_t old = step->args[1], bytes = step->args[2];
+    if (!local_malloc || !bytes || bytes > CV_MAX_REGION_BYTES ||
+        ((base | old | bytes) & 4095)) return -EINVAL;
+    for (unsigned i=0; i<CV_MAX_ARENAS; ++i) {
+        struct mapping *m = &maps[i];
+        if ((uintptr_t)m->address != base || m->visible != old || m->bytes != old ||
+            !m->heap || m->kind != CV_MAP_HEAP) continue;
+        struct cv_remap r = {tid, m->id, bytes, 0};
+        if (ioctl(device, CV_REMAP_BEGIN, &r)) return -errno;
+        void *p = mremap(m->address, old, bytes, MREMAP_MAYMOVE);
+        if (p == MAP_FAILED) {
+            int e = errno;
+            if (ioctl(device, CV_REMAP_END, &r)) abort();
+            return -e;
+        }
+        r.address = (uintptr_t)p;
+        if (ioctl(device, CV_REMAP_END, &r)) abort();
+        m->address = p; m->bytes = m->visible = bytes;
+        if (trace) fprintf(stderr, "CAPSTONE_VM_REMAP_OK old=%zu bytes=%zu\n", old, bytes);
+        return 0;
+    }
+    return -EINVAL;
 }
 static void cleanup(void)
 {
@@ -269,7 +303,8 @@ static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *s
         if (sh[i].sh_type != SHT_PROGBITS) continue;
         if (!strcmp(names + sh[i].sh_name, ".capstone_virtual") && sh[i].sh_size == 8) {
             memcpy(v, raw + sh[i].sh_offset, 8);
-            virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V2;
+            virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V2 || v[0] == CV_IMAGE_MAGIC_V3;
+            local_malloc = v[0] == CV_IMAGE_MAGIC;
         }
         if (!strcmp(names + sh[i].sh_name, ".capstone_domreq") && sh[i].sh_size == 24) {
             memcpy(v, raw + sh[i].sh_offset, 24);
@@ -390,6 +425,8 @@ static int reserve_stdio(unsigned *mask) {
 
 static int virtual_service(uint64_t tid, struct cv_step *step)
 {
+    if (trace) fprintf(stderr, "CAPSTONE_VM_BOUNDARY kind=%llu\n",
+                       (unsigned long long)step->args[7]);
     step->reply = 1;
     step->result = 0;
     if (step->args[7] == CV_SERVICE_THREAD_SELF) {
@@ -527,6 +564,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         }
     } else if (step->args[7] == CV_SERVICE_MAP) {
         step->result = acquire_mapping(tid, step);
+    } else if (step->args[7] == CV_SERVICE_REMAP) {
+        step->result = remap_mapping(tid, step);
     } else if (step->args[7] == CV_SERVICE_UNMAP) {
         step->result = unmap_arena(step->args[0], step->args[1]);
     } else if (step->args[7] == CV_SERVICE_PROTECT) {
@@ -551,7 +590,7 @@ static int virtual_service_loop(uint64_t tid)
     struct cv_step step = {.thread = tid};
     for (;;) {
         while (ioctl(device, CV_STEP, &step))
-            if (errno != EINTR) return die("step");
+            if (errno != EINTR && errno != EAGAIN) return die("step");
         step.reply = 0;
         if (step.kind == 1) {
             /* The supervisor quantum is the preemption point. Yielding here
@@ -654,6 +693,10 @@ int main(int argc, char **argv)
     host.private_fds[host.private_count++] = fd;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) { munmap(image, image_bytes); return die("open"); }
+    uint64_t profile = 0;
+    if (local_malloc && (ioctl(device, CV_PROFILE, &profile) || !(profile & 0x100))) {
+        munmap(image, image_bytes); errno = ENOTSUP; return die("exact-bounds CPU profile required");
+    }
     if (grant(image, image_bytes, 3, 7, entry, 0, 0)) { munmap(image, image_bytes); return die("image grant"); }
     void *stack = reserve(stack_bytes);
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);

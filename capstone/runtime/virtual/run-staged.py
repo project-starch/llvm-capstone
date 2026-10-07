@@ -17,6 +17,7 @@ def main():
     p.add_argument('--timeout', type=int, default=600)
     p.add_argument('--disk-mib', type=int, default=1024)
     p.add_argument('--work', type=Path, required=True, help='New output directory')
+    p.add_argument("--exact-bounds", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     disk = a.work / 'stage.ext4'
@@ -32,11 +33,14 @@ def main():
            '-drive', f'file={disk},format=raw,id=gate,readonly=on',
            '-device', 'virtio-blk-device,drive=gate', '-cpu',
            'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true']
+    if a.exact_bounds:
+        cmd[-1] += ",x-capstone-exact-bounds=true"
     completed = login = sent = False
     out = b''
     with open(os.environ['CAPSTONE_QEMU_LOCK'], 'a+b') as lock, (a.work/'serial.log').open('wb') as log:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        guest = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        guest_env = dict(os.environ, TMPDIR=str(a.work.resolve()))
+        guest = subprocess.Popen(cmd, env=guest_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
         deadline = time.monotonic() + a.timeout
         try:

@@ -7,6 +7,8 @@ The core virtual stack has landed on `dev`. The node-growth review branch
 `review/virtual-node-growth` adds paged lifetime storage on top of `dev` and
 the build repairs in `review/virtual-build-repairs`. Source links below retain
 the original review boundaries; use the checkout's QEMU pin for new builds.
+`virtual-musl-local` adds Capstone-compiled mallocng executing locally in the
+application; see the [allocator contract](../../../runtime/virtual/mallocng.md).
 
 ## Repositories and profiles
 
@@ -47,7 +49,7 @@ bash capstone/runtime/virtual/build-adapter.sh "$virtual_out/adapter"
 ```
 
 Boot the matching guest with one hart and CPU settings
-`rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true`.
+`rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true`.
 Copy the generated module, launcher and contract into the guest. From their
 guest directory, as root:
 
@@ -66,9 +68,10 @@ that gate also requires SQLite and mruby images. A successful boot or one
 successful program is not a substitute for the negative safety cases.
 
 The software interfaces have separate versions: delegated services use
-application ABI v2; virtual VM-service v3 images carry `CPONVVM3`. The new
-launcher also accepts `CPONVVM2`; v1 virtual images and physical-profile
-images are rejected. Rebuild the SDK and application together when changing
+application ABI v2; the local-mallocng VM-service v5 image carries `CPONVVM5`.
+The launcher also accepts `CPONVVM2` and `CPONVVM3`; v1, withdrawn native-heap
+v4 and physical-profile images are rejected. ABI v5 requires the processor
+exact-bounds feature bit. Rebuild the SDK and application together when changing
 the VM-service profile.
 
 ## Application ports
