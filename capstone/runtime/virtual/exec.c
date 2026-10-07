@@ -21,7 +21,12 @@
 #include <unistd.h>
 
 extern char **environ;
-struct mapping { void *address; size_t bytes; uint64_t id; int heap; };
+struct mapping {
+    void *address;
+    size_t bytes, visible;
+    uint64_t id;
+    int heap, kind;
+};
 static struct mapping maps[CV_MAX_ARENAS];
 static void *reuse_address;
 static size_t reuse_bytes;
@@ -151,13 +156,15 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
     if (i == CV_MAX_ARENAS) { errno = ENOSPC; return -1; }
     struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0};
     if (ioctl(device, CV_ADD, &r)) return -1;
-    maps[i] = (struct mapping){base, bytes, r.id, linear};
+    maps[i] = (struct mapping){.address = base, .bytes = bytes, .visible = bytes,
+                               .id = r.id, .heap = linear,
+                               .kind = linear ? CV_MAP_HEAP : -1};
     return 0;
 }
 static long unmap_arena(uintptr_t base, size_t bytes)
 {
     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
-        if ((uintptr_t)maps[i].address != base || maps[i].bytes != bytes || !maps[i].heap)
+        if ((uintptr_t)maps[i].address != base || maps[i].visible != bytes || !maps[i].heap || maps[i].kind == CV_MAP_METADATA)
             continue;
         if (ioctl(device, CV_RETIRE, &maps[i].id)) return -errno;
         if (munmap(maps[i].address, maps[i].bytes)) return -errno;
@@ -166,6 +173,48 @@ static long unmap_arena(uintptr_t base, size_t bytes)
         return 0;
     }
     return -EINVAL;
+}
+static long protect_range(uintptr_t base, size_t bytes, int prot)
+{
+    if (!bytes || (base & 4095) || (bytes & 4095) ||
+        (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))) return -EINVAL;
+    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
+        struct mapping *m = &maps[i];
+        uintptr_t at = (uintptr_t)m->address;
+        if (!m->address || !m->heap || m->kind == CV_MAP_METADATA || base < at ||
+            base - at > m->visible || bytes > m->visible - (base - at)) continue;
+        return mprotect((void *)base, bytes, prot) ? -errno : 0;
+    }
+    return -EINVAL;
+}
+static long acquire_mapping(uint64_t tid, struct cv_step *step)
+{
+    size_t visible = step->args[0], alignment = step->args[1];
+    unsigned prot = step->args[2], rights = step->args[3], kind = step->args[4];
+    size_t bytes = rounded(visible);
+    if (!bytes || (visible & 4095) || alignment < 4096 ||
+        (alignment & (alignment - 1)) || alignment > CV_MAX_REGION_BYTES ||
+        (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) || rights > 7 ||
+        kind > CV_MAP_METADATA ||
+        (kind != CV_MAP_APPLICATION && (prot != (PROT_READ | PROT_WRITE) || rights != 6)) ||
+        (kind == CV_MAP_APPLICATION && rights != 7)) return -EINVAL;
+    if (bytes < alignment) bytes = alignment;
+    void *p = reserve(bytes);
+    if (!p) return -errno;
+    /* Padding remains inaccessible, including after later mprotect calls.
+     * No capability reply exists until registration has succeeded. */
+    if ((visible < bytes && mprotect((char *)p + visible, bytes - visible, PROT_NONE)) ||
+        mprotect(p, visible, prot) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid)) {
+        int error = errno;
+        munmap(p, bytes);
+        return -error;
+    }
+    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
+        if (maps[i].address == p) {
+            maps[i].visible = visible; maps[i].kind = kind;
+            break;
+        }
+    return 0;
 }
 static void cleanup(void)
 {
@@ -204,7 +253,7 @@ static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *s
         if (sh[i].sh_type != SHT_PROGBITS) continue;
         if (!strcmp(names + sh[i].sh_name, ".capstone_virtual") && sh[i].sh_size == 8) {
             memcpy(v, raw + sh[i].sh_offset, 8);
-            virtual = v[0] == UINT64_C(0x314d56564e4f5043);
+            virtual = v[0] == CV_IMAGE_MAGIC;
         }
         if (!strcmp(names + sh[i].sh_name, ".capstone_domreq") && sh[i].sh_size == 24) {
             memcpy(v, raw + sh[i].sh_offset, 24);
@@ -391,16 +440,17 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             _exit(host.exit_status);
         }
     } else if (step->args[7] == CV_SERVICE_MAP) {
-        size_t bytes = rounded(step->args[0]);
-        void *p = bytes ? reserve(bytes) : NULL;
-        if (p && grant(p, bytes, 10, 6, (uintptr_t)p, 1, tid)) {
-            munmap(p, bytes); p = NULL;
-        }
-        /* ADD moved a tagged reply into a0's frame slot. Otherwise zero is
-         * the explicit allocation failure; a scalar address is never minted. */
-        step->result = 0;
+        step->result = acquire_mapping(tid, step);
     } else if (step->args[7] == CV_SERVICE_UNMAP) {
         step->result = unmap_arena(step->args[0], step->args[1]);
+    } else if (step->args[7] == CV_SERVICE_PROTECT) {
+        step->result = protect_range(step->args[0], step->args[1], step->args[2]);
+    } else if (step->args[7] == CV_SERVICE_WAIT) {
+        /* The heap's contended atomic mutex must let its owner run, including
+         * the owner's mapping service. Never yield with the wire lock held. */
+        pthread_mutex_unlock(&service_lock);
+        sched_yield();
+        pthread_mutex_lock(&service_lock);
     } else {
         step->result = -ENOSYS;
     }

@@ -11,6 +11,7 @@
 #include <linux/list.h>
 #include <asm/csr.h>
 #include <asm/io.h>
+#include <asm/pgtable.h>
 #include "wire.h"
 
 struct arena {
@@ -137,21 +138,66 @@ static void clear_thread_frame(struct cv_thread *t)
     memset(t->frame, 0, 656);
 }
 
+/* Called with mmap_read_lock held. Missing PTEs contain no application tags;
+ * swapped/huge mappings are outside this profile and fail closed. */
+static int resident_page(struct mm_struct *mm, unsigned long address)
+{
+    pgd_t *pgd = pgd_offset(mm, address);
+    p4d_t *p4d;
+    pud_t *pud;
+    pmd_t *pmd;
+    pte_t *pte, value;
+    spinlock_t *lock;
+    if (pgd_none(*pgd)) return 0;
+    if (pgd_bad(*pgd)) return -EFAULT;
+    p4d = p4d_offset(pgd, address);
+    if (p4d_none(*p4d)) return 0;
+    if (p4d_bad(*p4d)) return -EFAULT;
+    pud = pud_offset(p4d, address);
+    if (pud_none(*pud)) return 0;
+    if (pud_leaf(*pud)) return -EOPNOTSUPP;
+    if (pud_bad(*pud)) return -EFAULT;
+    pmd = pmd_offset(pud, address);
+    if (pmd_none(*pmd)) return 0;
+    if (pmd_leaf(*pmd)) return -EOPNOTSUPP;
+    if (pmd_bad(*pmd)) return -EFAULT;
+    pte = pte_offset_map_lock(mm, pmd, address, &lock);
+    if (!pte) return -EFAULT;
+    value = READ_ONCE(*pte);
+    pte_unmap_unlock(pte, lock);
+    if (pte_none(value)) return 0;
+    return pte_present(value) ? 1 : -EOPNOTSUPP;
+}
 static int pin_remaining(struct context *c, struct arena *a)
 {
+    int error = 0;
+    mmap_read_lock(c->mm);
     for (unsigned j = 0; j < a->count; ++j) {
         struct page *page;
+        unsigned long address = a->address + j * PAGE_SIZE;
+        int resident;
         if (a->pages[j]) continue;
-        if (pin_user_pages_fast(a->address + j * PAGE_SIZE, 1, FOLL_WRITE, &page) != 1)
-            return -EFAULT;
+        resident = resident_page(c->mm, address);
+        if (!resident) continue;
+        if (resident < 0) { error = resident; break; }
+        /* Trusted inspection may read PROT_NONE/RO pages, but it never faults
+         * in unused pages, changes PTE rights or manufactures fresh backing. */
+        if (pin_user_pages_remote(c->mm, address, 1, FOLL_FORCE | FOLL_NOFAULT,
+                                  &page, NULL, NULL) != 1) {
+            error = -EFAULT; break;
+        }
+        if (is_zero_pfn(page_to_pfn(page))) {
+            unpin_user_page(page); continue;
+        }
         if (!PageAnon(page) || page_mapcount(page) != 1) {
-            unpin_user_page(page); return -EACCES;
+            unpin_user_page(page); error = -EACCES; break;
         }
         a->pages[j] = page;
         ++c->stats.pinned_pages;
         c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
     }
-    return 0;
+    mmap_read_unlock(c->mm);
+    return error;
 }
 
 static int collect(struct context *c, struct cv_thread *owner)
@@ -159,9 +205,9 @@ static int collect(struct context *c, struct cv_thread *owner)
     unsigned long count, at = 0, flags, result, *pages;
     unsigned order;
     struct cv_thread *t;
-    /* Include pages even if Linux or the trusted launcher populated a lazy
-     * arena without a C fault. This conservative sweep materializes remaining
-     * holes at the first collection; a failed GUP never releases any IDs. */
+    /* Include resident pages populated by Linux/the trusted launcher without
+     * a C fault. Missing pages are not materialized; any inspection failure
+     * prevents identity reuse. Saved contexts share this mm's namespace. */
     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
         int error = pin_remaining(c, &c->arenas[i]);
         if (error) return error;
@@ -273,9 +319,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     for (unsigned long at = r->address; at < r->address + r->bytes;) {
         struct vm_area_struct *v = find_vma(c->mm, at);
         if (!v || v->vm_start > at || v->vm_file || (v->vm_flags & VM_SHARED) ||
-            !(v->vm_flags & VM_READ) ||
-            ((r->permissions & 2) && !(v->vm_flags & VM_WRITE)) ||
-            ((r->permissions & 1) && !(v->vm_flags & VM_EXEC))) {
+            ((r->permissions & 4) && !(v->vm_flags & (r->linear ? VM_MAYREAD : VM_READ))) ||
+            ((r->permissions & 2) && !(v->vm_flags & (r->linear ? VM_MAYWRITE : VM_WRITE))) ||
+            ((r->permissions & 1) && !(v->vm_flags & (r->linear ? VM_MAYEXEC : VM_EXEC)))) {
             mmap_read_unlock(c->mm); return -EACCES;
         }
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
@@ -338,20 +384,41 @@ static int resolve(struct context *c, struct cv_thread *t)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
     struct page *page;
-    if (!t->started || t->event != 4 || (cause != 13 && cause != 15)) return -EINVAL;
+    struct vm_area_struct *v;
+    unsigned long required = cause == 15 ? VM_WRITE : cause == 12 ? VM_EXEC : VM_READ;
+    if (!t->started || t->event != 4 || (cause != 12 && cause != 13 && cause != 15))
+        return -EINVAL;
     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
         struct arena *a = &c->arenas[i];
         unsigned index;
+        long n;
         if (!a->pages || !a->lazy || address < a->address ||
             address - a->address >= a->bytes) continue;
         index = (address - a->address) / PAGE_SIZE;
-        /* A fault on an already pinned page is a permission failure. Do not
-         * alter the VMA or grant permissions in response to such a fault. */
-        if (a->pages[index]) return -EACCES;
-        if (pin_user_pages_fast(address & PAGE_MASK, 1, FOLL_WRITE, &page) != 1)
-            return -EFAULT;
+        mmap_read_lock(c->mm);
+        v = find_vma(c->mm, address);
+        if (!v || v->vm_start > address || !(v->vm_flags & required) ||
+            v->vm_file || (v->vm_flags & VM_SHARED)) {
+            mmap_read_unlock(c->mm); return -EACCES;
+        }
+        /* Check actual PTE policy first. FORCE then materializes private
+         * anonymous backing even for a read-only zero-page first touch. The
+         * application still sees its original VMA/PTE protection. */
+        n = pin_user_pages_remote(c->mm, address & PAGE_MASK, 1,
+                                  FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
+                                  &page, NULL, NULL);
+        mmap_read_unlock(c->mm);
+        if (n != 1) return -EFAULT;
         if (!PageAnon(page) || page_mapcount(page) != 1) {
             unpin_user_page(page); return -EACCES;
+        }
+        if (a->pages[index]) {
+            /* mprotect may leave a write fault for Linux to resolve. It must
+             * resolve to the same backing: tag-preserving moves are not part
+             * of this pinned profile. Drop only the additional pin. */
+            int same = a->pages[index] == page;
+            unpin_user_page(page);
+            return same ? 0 : -EACCES;
         }
         a->pages[index] = page;
         ++c->stats.pinned_pages;
@@ -360,6 +427,7 @@ static int resolve(struct context *c, struct cv_thread *t)
     }
     return -EFAULT;
 }
+
 static void node_stats(struct context *c)
 {
     c->stats.nodes = c->table[3];
