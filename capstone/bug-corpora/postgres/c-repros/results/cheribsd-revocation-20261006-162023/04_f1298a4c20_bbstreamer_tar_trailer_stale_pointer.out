@@ -1,0 +1,7 @@
+case 4 BEGIN
+PG_NOTE remaining_len=0
+PG_NOTE data_past_end=1
+PG_DEFECT case=4 expect_fault_in=pgclient_consume_content@0x3d624
+PG_DEFECT case=4 mark
+
+PG_FAULT case=4 signal=34 si_code=1 addr=0x3d65e pc=0x3d65e ra=0x3ccdc expect=pgclient_consume_content@0x3d624 pc-expect=+58 ra-expect=-2376

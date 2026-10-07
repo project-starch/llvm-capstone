@@ -1,0 +1,37 @@
+{
+  "case": 3,
+  "upstream_fix": "8c34261109",
+  "title": "lquery level with enough OR-variants wraps a uint16 totallen, ~65 KB -- leaves its block",
+  "consumer": "lquery cast (ltree extension)",
+  "class": "spatial",
+  "allocator_layer": "aset",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "upstream 8c34261109, \"ltree: Fix overflows with lquery parsing\", absent at the 17.5 pin. Upstream: a single lquery level with many OR-separated variants overflows totallen, which is a uint16, because each variant contributes MAXALIGN(LVAR_HDRSIZE + len); once it wraps, the data written by LQL_NEXT() is corrupt and the access goes out of bounds. The trigger here is 66 variants of 1000 characters, about 66 KB against a uint16 ceiling of 65535. Independently established on the pin by host ASan (heap-buffer-overflow in the lquery path) and by the purecap arm, which raises SIGPROT on both builds.",
+  "fidelity": "real server, real allocator, in a contrib extension rather than core. ~65 KB, so it leaves its block",
+  "arms": {
+    "spatial": {
+      "oracle": "completes; the mechanism does not report",
+      "verdict": "detected",
+      "evidence": "capability fault: capstone-exec: domain fault cause=7 pc=0xc02023a8 address=0xc1e134a0 entry=0xc0200de0 code=0xc0200000-0xc5250000 last=0x4f preparing=0x4f sha256=25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e image=/mnt/host/applications/postgres-25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e.dom",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+    },
+    "sublet": {
+      "oracle": "the mechanism reports, or the case completes and it did not",
+      "verdict": "not-applicable",
+      "evidence": "this arm cannot create ltree, so the case is outside its denominator. `CREATE EXTENSION ltree` takes a capability fault before any of the case's own SQL runs, and the fault is not about this defect.",
+      "investigation": "Localised on 2026-10-06, root cause not found. The fault is cause 7, a STORE bounds violation, at the `delin` that prepares the capability for the indirect call to pg_subpool_carve from GenerationAllocLarge -- PostgreSQL's Generation context allocator, which patch postgresql-17.0-0006-generation-sublet-lifetimes routes through the sublet context pools. Reported address 0xc533fff0, which is 0x1fff0 past the end of the image's code range. Two explanations were tested and both are ruled out: (1) data-stack exhaustion -- rebuilding the SDK with CAPSTONE_APPLICATION_STACK_BYTES raised from 1 to 4 MiB and relinking leaves the fault at the SAME address, which a stack-depth fault could not; (2) a larger GCT in this arm -- the .gct section is 0xbb25 bytes in both the spatial and the sublet image, byte for byte. A third fact narrows it further: AllocSetAlloc and AllocSetAllocLarge in the same image call pg_subpool_carve through an identical cincoffset-from-gp / delin / cjalr sequence and work, so it is not the calling sequence either, and the four cases that run on this arm are all aset clients. What remains is something about the state at that call, and identifying it needs the runtime's region and GCT semantics rather than anything in this corpus.",
+      "why_not_a_verdict": "The arm never reached the lquery cast. Recording silence here would say the mechanism did not see a 65 KB overrun it was never shown."
+    },
+    "cheribsd-revocation": {
+      "oracle": "SIGPROT on the plain purecap build -- CHERI-DETECTED (2026-10-04). SIGPROT(34) on both purecap builds. ~65 KB, leaves the malloc block.",
+      "verdict": "detected",
+      "evidence": "SIGPROT(34) -- a capability violation",
+      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+    }
+  },
+  "status": "spatial and cheribsd-revocation measured 2026-10-06, both detected; sublet cannot create the extension, see its arm",
+  "note": "The 2026-10-05 spatial and sublet runs are WITHDRAWN and carry no verdict. Both recorded silent on an image that did not contain ltree. A domain cannot dlopen, so an extension reaches it only by being linked in (patch 0015, ports/postgres/app/toolchain/static_modules.c), and the MODULES list of ports/postgres/app/build-domain.sh named only dict_snowball and plpgsql; the guest share directory likewise held plpgsql.control alone. The trigger's first statement, CREATE EXTENSION ltree, therefore failed on the missing control file and the lquery cast never executed. A control failure, so both arms are out of their denominators until they are rerun. build-domain.sh now links ltree, pg_trgm and fuzzystrmatch and stages their control and version scripts; both arm images were rebuilt on 2026-10-06 and carry six modules.",
+  "nested": true,
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
+}

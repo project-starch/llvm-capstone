@@ -1,0 +1,26 @@
+{
+  "arm": "spatial",
+  "image": "/tmp/capstone/pg-su-none/link/postgres.dom",
+  "image_sha256": "f1673f3c83bc5ff381388f3a22ebb2457cf9c3139b240e186ed6cd24b6f3d9bf",
+  "runner_sha256": "2a1a040633e87dc39e91e9b205e7034d00076cf5f603455c73b8fc4bd7acb5ab",
+  "fixture": "/home/zephyr/arms/postgres/capstone/build/fixture-cluster",
+  "extensions_staged_from": "/tmp/capstone/pg-su-none/share/extension",
+  "started_utc": "20261006-181644",
+  "extensions_wanted": [
+    "pgcorpus_reach"
+  ],
+  "extensions_available": [
+    "pgcorpus_reach"
+  ],
+  "mechanism_gate": {
+    "case": "02",
+    "passed": true,
+    "kind": "a corpus case required to be detected"
+  },
+  "cases": 2,
+  "scored": 2,
+  "verdicts": {
+    "detected": 1,
+    "silent": 1
+  }
+}

@@ -1,0 +1,12 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> 	 1: levenshtein_less_equal	(typeid = 23, len = 4, typmod = -1, byval = t)
+	----
+	 1: levenshtein_less_equal = "-715827814"	(typeid = 23, len = 4, typmod = -1, byval = t)
+	----
+backend> 	 1: levenshtein_less_equal	(typeid = 23, len = 4, typmod = -1, byval = t)
+	----
+	 1: levenshtein_less_equal = "-715827814"	(typeid = 23, len = 4, typmod = -1, byval = t)
+	----
+backend> 2026-10-06 17:08:44.802 UTC [12670] LOG:  checkpoint starting: shutdown immediate
+2026-10-06 17:08:45.612 UTC [12670] LOG:  checkpoint complete: wrote 30 buffers (0.2%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.747 s, sync=0.013 s, total=0.814 s; sync files=19, longest=0.002 s, average=0.001 s; distance=131 kB, estimate=131 kB; lsn=0/1575580, redo lsn=0/1575580

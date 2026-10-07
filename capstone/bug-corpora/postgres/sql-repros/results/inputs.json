@@ -1,0 +1,90 @@
+{
+  "spatial": {
+    "arm": "spatial",
+    "image": "/tmp/capstone/pg-su-none/link/postgres.dom",
+    "image_sha256": "25a03908ee2eec2d319c41eb35eccb78e3c54d7db4cf1099b357b6a011578b5e",
+    "runner_sha256": "2a1a040633e87dc39e91e9b205e7034d00076cf5f603455c73b8fc4bd7acb5ab",
+    "fixture": "/home/zephyr/arms/postgres/capstone/build/fixture-cluster",
+    "extensions_staged_from": "/tmp/capstone/pg-su-none/share/extension",
+    "started_utc": "20261006-165125",
+    "extensions_wanted": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach",
+      "pgcrypto"
+    ],
+    "extensions_available": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ],
+    "mechanism_gate": {
+      "case": "02",
+      "passed": true,
+      "kind": "a corpus case required to be detected"
+    },
+    "cases": 9,
+    "scored": 8,
+    "verdicts": {
+      "silent": 5,
+      "detected": 2,
+      "differential": 1,
+      "not-applicable": 1
+    }
+  },
+  "sublet": {
+    "arm": "sublet",
+    "image": "/tmp/capstone/pg-su-sublet/link/postgres.dom",
+    "image_sha256": "1def8335522884db1349e4b9c0f3255b3ef2ab818f62bb4ef8394f71dc8f8be8",
+    "runner_sha256": "2a1a040633e87dc39e91e9b205e7034d00076cf5f603455c73b8fc4bd7acb5ab",
+    "fixture": "/home/zephyr/arms/postgres/capstone/build/fixture-cluster",
+    "extensions_staged_from": "/tmp/capstone/pg-su-sublet/share/extension",
+    "started_utc": "20261006-171331",
+    "extensions_wanted": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach",
+      "pgcrypto"
+    ],
+    "extensions_available": [
+      "fuzzystrmatch",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ],
+    "mechanism_gate": {
+      "case": "02",
+      "passed": true,
+      "kind": "a corpus case required to be detected"
+    },
+    "cases": 9,
+    "scored": 7,
+    "verdicts": {
+      "detected": 4,
+      "not-applicable": 2,
+      "silent": 3
+    }
+  },
+  "cheribsd-revocation": {
+    "arm": "cheribsd-revocation",
+    "kernel": "15.0-CURRENT",
+    "revocation_default": "1",
+    "revocation_every_free_default": "0",
+    "pg_bin": "/usr/local/pgsql/bin",
+    "base_cluster": "/home/pg/data",
+    "started_utc": "20261006-165125",
+    "extensions_wanted": "fuzzystrmatch ltree pgcorpus_reach pgcrypto pg_trgm ",
+    "extensions_available": "fuzzystrmatch ltree pgcorpus_reach pgcrypto pg_trgm",
+    "mechanism_gate": {
+      "case": "02",
+      "verdict": "detected",
+      "passed": true,
+      "kind": "a corpus case required to be detected, which is weaker than a purpose-built control: it says the mechanism reported on something in this configuration, not that it would have reported on each silent case"
+    },
+    "only": "all",
+    "cases": 9,
+    "scored": 9
+  }
+}
