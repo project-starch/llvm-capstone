@@ -1,0 +1,1606 @@
+{
+  "date": "2026-10-07",
+  "status": "Draft review stack; no shared-target merges",
+  "main_base": "4ea8ea9f6fa3709418236a26b2b9b9db57568963",
+  "qemu_base": "b8f08e5993308f04b1f40a69f2f10ee0fed4c845",
+  "qemu_integration_branch": "virtual-capstone",
+  "qemu_default_branch": "master",
+  "pull_requests": [
+    {
+      "id": "q1",
+      "repository": "project-starch/capstone-qemu",
+      "url": "https://github.com/project-starch/capstone-qemu/pull/13",
+      "head": "virtual-qemu-access",
+      "base": "virtual-capstone",
+      "commit": "0d28cc3c82093ff60361b0057721afd893a7de29",
+      "base_commit": "b8f08e5993308f04b1f40a69f2f10ee0fed4c845"
+    },
+    {
+      "id": "q2",
+      "repository": "project-starch/capstone-qemu",
+      "url": "https://github.com/project-starch/capstone-qemu/pull/14",
+      "head": "virtual-qemu-tables",
+      "base": "virtual-qemu-access",
+      "commit": "80bb8738cb4d68b78ccfc76908da2b6ba11a1c9d",
+      "base_commit": "0d28cc3c82093ff60361b0057721afd893a7de29"
+    },
+    {
+      "id": "q3",
+      "repository": "project-starch/capstone-qemu",
+      "url": "https://github.com/project-starch/capstone-qemu/pull/15",
+      "head": "virtual-qemu-execution",
+      "base": "virtual-qemu-tables",
+      "commit": "1fd0fabb233cc39fddf36629484e00c4ea4950d5",
+      "base_commit": "80bb8738cb4d68b78ccfc76908da2b6ba11a1c9d"
+    },
+    {
+      "id": "q4",
+      "repository": "project-starch/capstone-qemu",
+      "url": "https://github.com/project-starch/capstone-qemu/pull/16",
+      "head": "virtual-qemu-recycling",
+      "base": "virtual-qemu-execution",
+      "commit": "9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9",
+      "base_commit": "1fd0fabb233cc39fddf36629484e00c4ea4950d5"
+    },
+    {
+      "id": "c1",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/182",
+      "head": "virtual-compiler",
+      "base": "dev",
+      "commit": "5d077ae20a203fd9661c56eda9c2a3ff59e757a5",
+      "base_commit": "4ea8ea9f6fa3709418236a26b2b9b9db57568963"
+    },
+    {
+      "id": "d1",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/183",
+      "head": "virtual-delegated-authority",
+      "base": "virtual-compiler",
+      "commit": "25c58d548f66d51a4c6bc5683581bc34e2320d84",
+      "base_commit": "5d077ae20a203fd9661c56eda9c2a3ff59e757a5"
+    },
+    {
+      "id": "r1",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/184",
+      "head": "virtual-linux-adapter",
+      "base": "virtual-delegated-authority",
+      "commit": "2b18557802726a73dfc9726342855491a979d342",
+      "base_commit": "25c58d548f66d51a4c6bc5683581bc34e2320d84"
+    },
+    {
+      "id": "r2",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/185",
+      "head": "virtual-libc-vm",
+      "base": "virtual-linux-adapter",
+      "commit": "a68c81be020b9d1672f195c3582d82480859e191",
+      "base_commit": "2b18557802726a73dfc9726342855491a979d342"
+    },
+    {
+      "id": "r3",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/191",
+      "head": "virtual-pthreads",
+      "base": "virtual-libc-vm",
+      "commit": "518a5b805aa70c222ef0496c151b2845b4ab8dae",
+      "base_commit": "a68c81be020b9d1672f195c3582d82480859e191"
+    },
+    {
+      "id": "a1",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/186",
+      "head": "virtual-perl",
+      "base": "virtual-libc-vm",
+      "commit": "df81ef2312e2b5ad5a961b9181aba3e3bcd6635c",
+      "base_commit": "a68c81be020b9d1672f195c3582d82480859e191"
+    },
+    {
+      "id": "a2a",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/187",
+      "head": "virtual-cpython",
+      "base": "virtual-libc-vm",
+      "commit": "495e7766b9842784dc9b3eff5c6cd2bd6b83c23f",
+      "base_commit": "a68c81be020b9d1672f195c3582d82480859e191"
+    },
+    {
+      "id": "a2b",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/188",
+      "head": "virtual-postgres",
+      "base": "virtual-libc-vm",
+      "commit": "06a24bf6b9f6585110e8e80da4aaab9400ad032d",
+      "base_commit": "a68c81be020b9d1672f195c3582d82480859e191"
+    },
+    {
+      "id": "a2c",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/189",
+      "head": "virtual-ffmpeg",
+      "base": "virtual-libc-vm",
+      "commit": "f6db21fdfb04c0003071b8e27d51977b62e86520",
+      "base_commit": "a68c81be020b9d1672f195c3582d82480859e191"
+    },
+    {
+      "id": "a2d",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/190",
+      "head": "virtual-tshark",
+      "base": "virtual-libc-vm",
+      "commit": "9f5f575273f73bc9743079dc86f83f0b31ba3325",
+      "base_commit": "a68c81be020b9d1672f195c3582d82480859e191"
+    },
+    {
+      "id": "a3",
+      "repository": "project-starch/llvm-capstone",
+      "url": "https://github.com/project-starch/llvm-capstone/pull/192",
+      "head": "virtual-memcached-server",
+      "base": "virtual-pthreads",
+      "commit": "1354aee956cd79905a1eba3055aac00dae9f3ebb",
+      "base_commit": "518a5b805aa70c222ef0496c151b2845b4ab8dae"
+    }
+  ],
+  "qualification": {
+    "compiler": {
+      "focused_lit": "7/7",
+      "full_rebuild": false,
+      "note": "The compiler sources match the qualified binary source. The freshness helper reports incomplete tool discovery (rc 2); no full LLVM rebuild is claimed."
+    },
+    "qemu": {
+      "q2_m1": [
+        60,
+        60
+      ],
+      "q4_m1": [
+        60,
+        60
+      ],
+      "q4_access": [
+        69,
+        69
+      ],
+      "q4_virtual": [
+        33,
+        33
+      ],
+      "physical_bounds": [
+        3,
+        3
+      ],
+      "model": {
+        "schema": 2,
+        "scope": "C node list over the host tree and the guest-table layout / abstract forest comparison",
+        "depth": 4,
+        "capacity_per_table": 8,
+        "directed_cases": [
+          "nested_arena_retirement",
+          "drop_keeps_descendants",
+          "revoke_then_fresh_child",
+          "nonlinear_revoke",
+          "readonly_revoke",
+          "equal_ids_independent"
+        ],
+        "bindings": {
+          "host": {
+            "enumerated_prefixes": 8949,
+            "controls": {
+              "mrev_without_depth": {
+                "detected": true,
+                "trace": [
+                  [
+                    0,
+                    "mrev",
+                    0
+                  ]
+                ],
+                "mismatch": "table=0: node=1: strict descendants"
+              },
+              "root_only": {
+                "detected": true,
+                "trace": [
+                  [
+                    0,
+                    "retire",
+                    1
+                  ]
+                ],
+                "mismatch": "table=0: node=0: liveness"
+              },
+              "shared_table": {
+                "detected": true,
+                "trace": [
+                  [
+                    0,
+                    "retire",
+                    1
+                  ]
+                ],
+                "mismatch": "table=1: node=0: liveness"
+              }
+            }
+          },
+          "guest": {
+            "enumerated_prefixes": 8949,
+            "controls": {
+              "mrev_without_depth": {
+                "detected": true,
+                "trace": [
+                  [
+                    0,
+                    "mrev",
+                    0
+                  ]
+                ],
+                "mismatch": "table=0: node=1: strict descendants"
+              },
+              "root_only": {
+                "detected": true,
+                "trace": [
+                  [
+                    0,
+                    "retire",
+                    1
+                  ]
+                ],
+                "mismatch": "table=0: node=0: liveness"
+              },
+              "shared_table": {
+                "detected": true,
+                "trace": [
+                  [
+                    0,
+                    "retire",
+                    1
+                  ]
+                ],
+                "mismatch": "table=1: node=0: liveness"
+              }
+            }
+          }
+        },
+        "guest_table_checks": [
+          "access_span_no_wrap",
+          "collect_once",
+          "dead_null_unissued_retired",
+          "dead_pcc_identity_pinned",
+          "exhausted_mrev",
+          "fill_two_identities",
+          "free_list_cannot_name_live_node",
+          "free_list_self_cycle",
+          "header_capacity_past_node_field",
+          "header_capacity_zero",
+          "header_next_past_capacity",
+          "header_next_zero",
+          "mrev_dangling_prev",
+          "mrev_dead_node",
+          "recycle_header_is_not_capability",
+          "retire_interior_sibling",
+          "reuse_after_reopen",
+          "reuse_does_not_break_ancestor_walk",
+          "revoke_cycle_hits_visit_bound",
+          "revoke_dangling_link",
+          "revoke_run_back_to_start",
+          "second_free_entry_cannot_name_live_node",
+          "table_not_entirely_ram",
+          "well_formed_revoke"
+        ],
+        "guest_table_controls": {
+          "walk_without_start_check": {
+            "detected_by": "revoke_run_back_to_start"
+          },
+          "walk_without_read_only_pass": {
+            "detected_by": "revoke_dangling_link"
+          }
+        },
+        "sources_sha256": {
+          "tests/virtual-capstone-model/adapter.c": "a6cb9a7461be2bdd5ee23a8dfd6a647e06012c6b177cc4c87061a974b2cd72ee",
+          "tests/virtual-capstone-model/table-checks.c": "72c714756dd269592fa174ee490b5e832885ae57f08378b747c69c1523aa6873",
+          "tests/virtual-capstone-model/model.py": "417e1c91ca78ce164978c56983cbcbf33e32c4a31e95d3cdb420a2535b1196ef",
+          "target/riscv/cap.h": "2cef774cf18f83e380ec038150596af2618f7119721f174eb3ac6a9388ab349d",
+          "target/riscv/cap_rev_tree.h": "30e756a444fdeb8f27bd12ec492a77eb1a5d96b814c1c2543caf1f0446dd4b89",
+          "target/riscv/cap_rev_tree.c": "82e6c7bc352b75131f3dd83ab71bdc4967a43f62ab78eddad589bdbbd630261c",
+          "target/riscv/cap_rev_table.h": "2b6d804163d14ed85433a52211afc165185a1eb5d161fec97fdb652bcd9e27af",
+          "target/riscv/cap_rev_table.c": "1dcc5c62408df4d778f31f53b50f3af646dcaf6904991d51e13686a580e682fd"
+        },
+        "guest_execution_tested": false
+      },
+      "q1_access": [
+        74,
+        74
+      ],
+      "q1_m1": [
+        43,
+        43
+      ]
+    },
+    "r1": {
+      "status": "PASS",
+      "tests": {
+        "normal": true,
+        "threads": true,
+        "stale": true,
+        "bounds": true,
+        "retired": true,
+        "preempt": true,
+        "parallel_one": true,
+        "parallel_two": true,
+        "sqlite_write": true,
+        "sqlite_read": true,
+        "mruby": true,
+        "cleanup": true,
+        "normal_output": true,
+        "threads_output": true,
+        "fault_causes": true,
+        "same_va_reuse": true,
+        "spin_entered": true,
+        "linux_pages_released": true,
+        "linux_demand_faults": true,
+        "sqlite_results": true,
+        "mruby_results": true,
+        "completed": true
+      },
+      "scope": "one hart; private anonymous arenas; same-mm virtual threads",
+      "control_omit_application": false,
+      "sha256": {
+        "qemu": "dcb35a810990e9a58ae33c7e0999f25bbcbcb8a09ddbb23a8fdb885880ca4a97",
+        "launcher": "80fc52eeb001a10faa89fefeaec9f2d956da40675278fb71081017f8ed2328e9",
+        "module": "be2913e9205b1926d1fd8072de400d9b0bfa10b1e320159b943bfa66e4def216",
+        "application": "a80ac5e2ef52ad9b77ca3cd367e187710d21e605d7ae6a8e62f916dc77840648",
+        "sqlite": "07299f08983724e30a9db7835408396f15ec8ebf3cf4625bbf604db06bbbb9f4",
+        "mruby": "cf724c1b13feae05d758ca7fcafa157dea9e2a0e48858154393031df4c227a9a",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "source_sha256": {
+        "build-adapter.sh": "988a8ae847f796d2a34a0f2ceb5b12c6a21280255f0277aa1caeea7716b10021",
+        "build-sdk.sh": "9e39558fca766a8d55cbf4af7248d6b066d030a7310ec2cfd0b7e3329b3df3e9",
+        "contract.c": "b03ff0bb07f9f3ffb71387e863835bb7d5fcbed46796afa10440d63354ddea23",
+        "exec.c": "8dcaebab069467857e76f610e99fb558707871031ce5472fb0ba63d14e62002e",
+        "heap.c": "3760cea89ef12d61e010e29e3115693478ace2ed74d0874f6658fb1436f8a09e",
+        "mapping.c": "d64211a5f87a38b796286c7b83030236f46d1a74a1dc95968e40138966c28265",
+        "module/capstone_vm.c": "e0a99c943289b4a1bb899a4feef3aadf1f6852b59d1793d2ecc0f44c8a3b67ed",
+        "run.py": "7a6f7a5d26bbceeb694cc5a235fa45f456f46d12079b5fd513dc493768026d82",
+        "start.S": "ebe61c809d59f3488a5d79d8e900ea3cd19901904df77f6b3208cb4ebb58e99e",
+        "thread.c": "5458ece9494a6f4aba0ac46e10e2b25e17b6521f65140f3a869f1296f13bfb9b",
+        "wire.h": "22223c26ac4a7a825dbd28d047f3e32e31f5878043ca817814375ae57b2eda97"
+      },
+      "stats": [
+        {
+          "arenas": 7,
+          "pages": 609,
+          "peak": 993,
+          "nodes": 61,
+          "steps": 713,
+          "faults": 399,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 12,
+          "bytes_in": 214,
+          "bytes_out": 143,
+          "node_bytes": 1048576,
+          "launch_ns": 185955700,
+          "elapsed_ns": 2436998200
+        },
+        {
+          "arenas": 7,
+          "pages": 609,
+          "peak": 625,
+          "nodes": 27,
+          "steps": 36,
+          "faults": 16,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 5,
+          "bytes_in": 136,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 168716300,
+          "elapsed_ns": 262218100
+        },
+        {
+          "arenas": 7,
+          "pages": 609,
+          "peak": 993,
+          "nodes": 61,
+          "steps": 718,
+          "faults": 399,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 12,
+          "bytes_in": 214,
+          "bytes_out": 143,
+          "node_bytes": 1048576,
+          "launch_ns": 325805200,
+          "elapsed_ns": 5005688500
+        },
+        {
+          "arenas": 7,
+          "pages": 609,
+          "peak": 993,
+          "nodes": 61,
+          "steps": 718,
+          "faults": 399,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 12,
+          "bytes_in": 214,
+          "bytes_out": 143,
+          "node_bytes": 1048576,
+          "launch_ns": 339429500,
+          "elapsed_ns": 5087399300
+        },
+        {
+          "arenas": 16,
+          "pages": 1472,
+          "peak": 1472,
+          "nodes": 706,
+          "steps": 366,
+          "faults": 108,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 130,
+          "bytes_in": 26680,
+          "bytes_out": 12580,
+          "node_bytes": 1048576,
+          "launch_ns": 627265100,
+          "elapsed_ns": 1543946700
+        },
+        {
+          "arenas": 15,
+          "pages": 1443,
+          "peak": 1443,
+          "nodes": 611,
+          "steps": 217,
+          "faults": 79,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 52,
+          "bytes_in": 467,
+          "bytes_out": 18531,
+          "node_bytes": 1048576,
+          "launch_ns": 592659000,
+          "elapsed_ns": 1185180700
+        },
+        {
+          "arenas": 19,
+          "pages": 1508,
+          "peak": 1508,
+          "nodes": 2327,
+          "steps": 777,
+          "faults": 144,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 134,
+          "bytes_in": 156,
+          "bytes_out": 21136,
+          "node_bytes": 1048576,
+          "launch_ns": 697721900,
+          "elapsed_ns": 3702373100
+        }
+      ]
+    },
+    "r2_full": {
+      "status": "PASS",
+      "tests": {
+        "normal": true,
+        "threads": true,
+        "vm": true,
+        "linear": true,
+        "linear-stale": true,
+        "heap-threads": true,
+        "vm-ro-write": true,
+        "vm-none-read": true,
+        "vm-guard": true,
+        "vm-padding": true,
+        "sparse-churn": true,
+        "sparse-stale": true,
+        "stale": true,
+        "bounds": true,
+        "retired": true,
+        "preempt": true,
+        "parallel_one": true,
+        "parallel_two": true,
+        "sqlite_write": true,
+        "sqlite_read": true,
+        "mruby": true,
+        "cleanup": true,
+        "legacy_abi_rejected": true,
+        "normal_output": true,
+        "threads_output": true,
+        "fault_causes": true,
+        "linear_output": true,
+        "linear_denial_site": true,
+        "vm_denial_sites": true,
+        "vm_contract": true,
+        "heap_threads": true,
+        "vm_denial_operations": true,
+        "same_va_reuse": true,
+        "spin_entered": true,
+        "linux_pages_released": true,
+        "linux_demand_faults": true,
+        "unused_pages_not_populated": true,
+        "shared_heap_pages_released": true,
+        "sparse_recycling": true,
+        "sqlite_results": true,
+        "mruby_results": true,
+        "completed": true
+      },
+      "scope": "one hart; private anonymous arenas; same-mm virtual threads",
+      "control_omit_application": false,
+      "recycling_cases_enabled": true,
+      "sha256": {
+        "qemu": "dcb35a810990e9a58ae33c7e0999f25bbcbcb8a09ddbb23a8fdb885880ca4a97",
+        "launcher": "c08d3f10d9ebcb69f2586ba05bcb2bca67c81d84ec0d4a17d1f9e64b0ede7a4e",
+        "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+        "application": "f4f9a5b22b851550cc85c130c3a479c2067d063fc1ce9e758eeb4575328d9ebf",
+        "sqlite": "3c7986cf3802c69be5570c3055dd724388b14b8ce7732b0c2f32bc3ba97f2a42",
+        "mruby": "e6cb9e6a996011e04a2e752638f21c6ee9ffc11ef9f27830524898bae7eb3d7d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "legacy": "a80ac5e2ef52ad9b77ca3cd367e187710d21e605d7ae6a8e62f916dc77840648"
+      },
+      "source_sha256": {
+        "build-adapter.sh": "02268570f072cc6c775f5776af82348c654cd0b9617d4459711fb75b17ba6aea",
+        "build-sdk.sh": "4ad9fe6e73fbca9abb765ff0f5e27e6c542d8f66abee535ff1ec7f871190978d",
+        "contract.c": "45ad1f27a85b5d01292b05a655e05da504de85c843b769b3fc9de549e2d45409",
+        "exec.c": "544786fc8e0f786cee373b1d9b8592a0e8c2c14f8da65d1913c16ffc517f8ecb",
+        "heap.c": "d9e904c4f47eaea36cb1da103ed75e143261bd9e7b47fad73f220046f3f3f24a",
+        "mapping.c": "437524c03bf4b9faba8ccb376a5bf03a6b4ce857d1dea2589094cb886db92873",
+        "module/capstone_vm.c": "4a2f43eb3ab45c0e48bc75ba64cedb65da3ee102470a717cfbb445efc30351fb",
+        "run-ports.py": "6a25a4b03cfbf98c89f1c0c4fc4a9b5d829461b5451f0c5c142feae8f020af6f",
+        "run-safety.py": "6a9cafddb4d43eba5c573359cb0f04d43cc15f9f2748d0d5154cf7aa753691c9",
+        "run-staged.py": "dfa0d4547d2dc373a33895f95ca5f6c7753856bc63c9ec2b9d3e129f79070514",
+        "run.py": "0265f62f5e3c306adef0e7d317e65c4e6c574eba7e83ac0fced38911dd4cbb43",
+        "start.S": "b88ab966a87fb39dd3777308e07f5e5c68907e92ce11b0ac02bda966363990fd",
+        "thread.c": "bb85e3c84ee0cc7065ea4b493e25a2fcb4e9be27129e9fbdf418e6cdab6a73ed",
+        "vm-abi.h": "7f267ff777607b7d14d6de7beb5b76da33bbd701f076b1c03324b080a7e40ac8",
+        "vm.h": "443f9531c0549a6b2b695b2498480478253ff814b2044ef49dfd9ee346550182",
+        "wire.h": "cc703b499860fb5c8ba2110d9f6e5640c12dd83dc40a880a7384dceb9f1612c1"
+      },
+      "stats": [
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 865,
+          "nodes": 61,
+          "steps": 694,
+          "faults": 399,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 12,
+          "bytes_in": 214,
+          "bytes_out": 143,
+          "node_bytes": 1048576,
+          "launch_ns": 125655100,
+          "elapsed_ns": 2267152300
+        },
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 483,
+          "nodes": 27,
+          "steps": 33,
+          "faults": 15,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 5,
+          "bytes_in": 136,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 107782300,
+          "elapsed_ns": 214552200
+        },
+        {
+          "arenas": 9,
+          "pages": 485,
+          "peak": 485,
+          "nodes": 293,
+          "steps": 52,
+          "faults": 22,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 4,
+          "bytes_in": 144,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 103930800,
+          "elapsed_ns": 188568300
+        },
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 482,
+          "nodes": 43,
+          "steps": 26,
+          "faults": 14,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 4,
+          "bytes_in": 82,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 109351600,
+          "elapsed_ns": 175203800
+        },
+        {
+          "arenas": 11,
+          "pages": 491,
+          "peak": 1260,
+          "nodes": 1619,
+          "steps": 1850,
+          "faults": 793,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 4,
+          "bytes_in": 134,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 107627100,
+          "elapsed_ns": 3599115700
+        },
+        {
+          "arenas": 9,
+          "pages": 485,
+          "peak": 486,
+          "nodes": 200288,
+          "steps": 22633,
+          "faults": 18,
+          "collections": 3,
+          "reclaimed": 194973,
+          "rounds": 4,
+          "bytes_in": 128,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 108998400,
+          "elapsed_ns": 116879162500
+        },
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 865,
+          "nodes": 61,
+          "steps": 701,
+          "faults": 399,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 12,
+          "bytes_in": 214,
+          "bytes_out": 143,
+          "node_bytes": 1048576,
+          "launch_ns": 210326100,
+          "elapsed_ns": 4628987600
+        },
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 865,
+          "nodes": 61,
+          "steps": 700,
+          "faults": 399,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 12,
+          "bytes_in": 214,
+          "bytes_out": 143,
+          "node_bytes": 1048576,
+          "launch_ns": 218478000,
+          "elapsed_ns": 4540870300
+        },
+        {
+          "arenas": 17,
+          "pages": 963,
+          "peak": 963,
+          "nodes": 708,
+          "steps": 389,
+          "faults": 111,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 130,
+          "bytes_in": 26680,
+          "bytes_out": 12580,
+          "node_bytes": 1048576,
+          "launch_ns": 364758200,
+          "elapsed_ns": 1388062000
+        },
+        {
+          "arenas": 16,
+          "pages": 934,
+          "peak": 934,
+          "nodes": 613,
+          "steps": 221,
+          "faults": 82,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 52,
+          "bytes_in": 467,
+          "bytes_out": 18531,
+          "node_bytes": 1048576,
+          "launch_ns": 340056100,
+          "elapsed_ns": 922415900
+        },
+        {
+          "arenas": 23,
+          "pages": 1520,
+          "peak": 1520,
+          "nodes": 2335,
+          "steps": 714,
+          "faults": 156,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 122,
+          "bytes_in": 156,
+          "bytes_out": 12816,
+          "node_bytes": 1048576,
+          "launch_ns": 741826600,
+          "elapsed_ns": 3401801200
+        }
+      ]
+    },
+    "r3_pthreads": {
+      "status": "PASS",
+      "tests": {
+        "unsupported_clone_refused": true,
+        "tls mutex cond tagged_join": true,
+        "timed_wait": true,
+        "independent_blocking_io": true,
+        "private_epoll_events": true,
+        "shared_tls_transport": true,
+        "64_joined_lifetimes": true,
+        "exit": true,
+        "cleanup": true
+      },
+      "harts": 1,
+      "virtual_vm_abi": 3,
+      "input_sha256": {
+        "launcher": "12a78e0385ec97e48cdc69e1025bac7ecd3d8fc753c6dfd52ca0bf38a4bf8990",
+        "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+        "application": "55216aea03b0f625833fcbd74d7a08111704bb2a50d17af0acaa07dd3abc2fc3",
+        "qemu": "dcb35a810990e9a58ae33c7e0999f25bbcbcb8a09ddbb23a8fdb885880ca4a97",
+        "source": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "gate_sha256": "128f93709619e2bffac61fa3de62be632bb4720579dd17baab1396e2c540f211",
+      "runner_sha256": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab"
+    },
+    "r3_v2_compatibility": {
+      "status": "PASS",
+      "tests": {
+        "normal": true,
+        "threads": true,
+        "vm": true,
+        "linear": true,
+        "linear-stale": true,
+        "heap-threads": true,
+        "vm-ro-write": true,
+        "vm-none-read": true,
+        "vm-guard": true,
+        "vm-padding": true,
+        "stale": true,
+        "bounds": true,
+        "retired": true,
+        "preempt": true,
+        "parallel_one": true,
+        "parallel_two": true,
+        "sqlite_write": true,
+        "sqlite_read": true,
+        "mruby": true,
+        "cleanup": true,
+        "legacy_abi_rejected": true,
+        "normal_output": true,
+        "threads_output": true,
+        "fault_causes": true,
+        "linear_output": true,
+        "linear_denial_site": true,
+        "vm_denial_sites": true,
+        "vm_contract": true,
+        "heap_threads": true,
+        "vm_denial_operations": true,
+        "same_va_reuse": true,
+        "spin_entered": true,
+        "linux_pages_released": true,
+        "linux_demand_faults": true,
+        "unused_pages_not_populated": true,
+        "shared_heap_pages_released": true,
+        "sqlite_results": true,
+        "mruby_results": true,
+        "completed": true
+      },
+      "scope": "one hart; private anonymous arenas; same-mm virtual threads",
+      "control_omit_application": false,
+      "recycling_cases_enabled": false,
+      "sha256": {
+        "qemu": "dcb35a810990e9a58ae33c7e0999f25bbcbcb8a09ddbb23a8fdb885880ca4a97",
+        "launcher": "12a78e0385ec97e48cdc69e1025bac7ecd3d8fc753c6dfd52ca0bf38a4bf8990",
+        "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+        "application": "f4f9a5b22b851550cc85c130c3a479c2067d063fc1ce9e758eeb4575328d9ebf",
+        "sqlite": "3c7986cf3802c69be5570c3055dd724388b14b8ce7732b0c2f32bc3ba97f2a42",
+        "mruby": "e6cb9e6a996011e04a2e752638f21c6ee9ffc11ef9f27830524898bae7eb3d7d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "legacy": "a80ac5e2ef52ad9b77ca3cd367e187710d21e605d7ae6a8e62f916dc77840648"
+      },
+      "source_sha256": {
+        "build-adapter.sh": "02268570f072cc6c775f5776af82348c654cd0b9617d4459711fb75b17ba6aea",
+        "build-sdk.sh": "4ad9fe6e73fbca9abb765ff0f5e27e6c542d8f66abee535ff1ec7f871190978d",
+        "contract.c": "45ad1f27a85b5d01292b05a655e05da504de85c843b769b3fc9de549e2d45409",
+        "exec.c": "6d2ec6358b34cd15ca8ae2feee0e1a6a8285339bcae0dc2cd262c72b38f725ce",
+        "heap.c": "d9e904c4f47eaea36cb1da103ed75e143261bd9e7b47fad73f220046f3f3f24a",
+        "mapping.c": "6902255ba1786281f42a99c3de750640a00d57589cb01b7115329283b1f734c1",
+        "module/capstone_vm.c": "4a2f43eb3ab45c0e48bc75ba64cedb65da3ee102470a717cfbb445efc30351fb",
+        "pthread-contract.c": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+        "pthread.c": "e3502e1649a61eacdb6797be214c93b0735e4f7a338198956aa12fcddaf05562",
+        "run-ports.py": "6a25a4b03cfbf98c89f1c0c4fc4a9b5d829461b5451f0c5c142feae8f020af6f",
+        "run-pthreads.py": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab",
+        "run-safety.py": "6a9cafddb4d43eba5c573359cb0f04d43cc15f9f2748d0d5154cf7aa753691c9",
+        "run-staged.py": "a021fae1584abe7dcd191961fb3b562165ec643c700c1066579620d48a87826f",
+        "run.py": "0265f62f5e3c306adef0e7d317e65c4e6c574eba7e83ac0fced38911dd4cbb43",
+        "start.S": "88497c709c837ae9c7b10d186dc1fa07460b760b5bfc3d89aa8dc2fafdaef166",
+        "thread.c": "b7288d4b3143c189901ebd73549b81fbea44eef4f0333f3d576b67df360e2bb0",
+        "vm-abi.h": "3e891117b1056711c998704235a5659f3c2d41ffd488acfe8b79e660885cade3",
+        "vm.h": "443f9531c0549a6b2b695b2498480478253ff814b2044ef49dfd9ee346550182",
+        "wire.h": "cc703b499860fb5c8ba2110d9f6e5640c12dd83dc40a880a7384dceb9f1612c1"
+      },
+      "stats": [
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 865,
+          "nodes": 61,
+          "steps": 698,
+          "faults": 399,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 12,
+          "bytes_in": 214,
+          "bytes_out": 143,
+          "node_bytes": 1048576,
+          "launch_ns": 131865700,
+          "elapsed_ns": 2263397500
+        },
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 483,
+          "nodes": 27,
+          "steps": 33,
+          "faults": 15,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 5,
+          "bytes_in": 136,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 108331600,
+          "elapsed_ns": 184707600
+        },
+        {
+          "arenas": 9,
+          "pages": 485,
+          "peak": 485,
+          "nodes": 293,
+          "steps": 52,
+          "faults": 22,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 4,
+          "bytes_in": 144,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 107837400,
+          "elapsed_ns": 192264400
+        },
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 482,
+          "nodes": 43,
+          "steps": 25,
+          "faults": 14,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 4,
+          "bytes_in": 82,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 105362900,
+          "elapsed_ns": 171905700
+        },
+        {
+          "arenas": 11,
+          "pages": 491,
+          "peak": 1261,
+          "nodes": 1619,
+          "steps": 1769,
+          "faults": 793,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 4,
+          "bytes_in": 134,
+          "bytes_out": 64,
+          "node_bytes": 1048576,
+          "launch_ns": 108964100,
+          "elapsed_ns": 3593624500
+        },
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 865,
+          "nodes": 61,
+          "steps": 690,
+          "faults": 399,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 12,
+          "bytes_in": 214,
+          "bytes_out": 143,
+          "node_bytes": 1048576,
+          "launch_ns": 212542600,
+          "elapsed_ns": 4435135300
+        },
+        {
+          "arenas": 7,
+          "pages": 481,
+          "peak": 865,
+          "nodes": 61,
+          "steps": 690,
+          "faults": 399,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 12,
+          "bytes_in": 214,
+          "bytes_out": 143,
+          "node_bytes": 1048576,
+          "launch_ns": 226844500,
+          "elapsed_ns": 4436917300
+        },
+        {
+          "arenas": 17,
+          "pages": 963,
+          "peak": 963,
+          "nodes": 708,
+          "steps": 384,
+          "faults": 111,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 130,
+          "bytes_in": 26680,
+          "bytes_out": 12580,
+          "node_bytes": 1048576,
+          "launch_ns": 359961600,
+          "elapsed_ns": 1401829900
+        },
+        {
+          "arenas": 16,
+          "pages": 934,
+          "peak": 934,
+          "nodes": 613,
+          "steps": 227,
+          "faults": 82,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 52,
+          "bytes_in": 467,
+          "bytes_out": 18531,
+          "node_bytes": 1048576,
+          "launch_ns": 326051200,
+          "elapsed_ns": 994904200
+        },
+        {
+          "arenas": 23,
+          "pages": 1520,
+          "peak": 1520,
+          "nodes": 2335,
+          "steps": 710,
+          "faults": 156,
+          "collections": 0,
+          "reclaimed": 0,
+          "rounds": 121,
+          "bytes_in": 138,
+          "bytes_out": 17040,
+          "node_bytes": 1048576,
+          "launch_ns": 702113100,
+          "elapsed_ns": 3325630900
+        }
+      ]
+    },
+    "host_suite": "23/23",
+    "native_blocked_receive": "32 iterations passed",
+    "memcached": {
+      "status": "PASS",
+      "checks": [
+        {
+          "name": "native_null",
+          "passed": true
+        },
+        {
+          "name": "oracle_detects_value",
+          "passed": true
+        },
+        {
+          "name": "oracle_detects_cas",
+          "passed": true
+        },
+        {
+          "name": "pthread_unsupported_clone_refused",
+          "passed": true
+        },
+        {
+          "name": "pthread_tls_mutex_cond_tagged_join",
+          "passed": true
+        },
+        {
+          "name": "pthread_timed_wait",
+          "passed": true
+        },
+        {
+          "name": "pthread_independent_blocking_io",
+          "passed": true
+        },
+        {
+          "name": "pthread_private_epoll_events",
+          "passed": true
+        },
+        {
+          "name": "pthread_shared_tls_transport",
+          "passed": true
+        },
+        {
+          "name": "pthread_64_joined_lifetimes",
+          "passed": true
+        },
+        {
+          "name": "normal1_harness",
+          "passed": true
+        },
+        {
+          "name": "normal1_protocol",
+          "passed": true
+        },
+        {
+          "name": "normal1_identity",
+          "passed": true
+        },
+        {
+          "name": "normal1_exit",
+          "passed": true
+        },
+        {
+          "name": "normal1_stderr",
+          "passed": true
+        },
+        {
+          "name": "normal2_harness",
+          "passed": true
+        },
+        {
+          "name": "normal2_protocol",
+          "passed": true
+        },
+        {
+          "name": "normal2_identity",
+          "passed": true
+        },
+        {
+          "name": "normal2_exit",
+          "passed": true
+        },
+        {
+          "name": "normal2_stderr",
+          "passed": true
+        },
+        {
+          "name": "usr1_harness",
+          "passed": true
+        },
+        {
+          "name": "usr1_protocol",
+          "passed": true
+        },
+        {
+          "name": "usr1_identity",
+          "passed": true
+        },
+        {
+          "name": "usr1_exit",
+          "passed": true
+        },
+        {
+          "name": "usr1_stderr",
+          "passed": true
+        },
+        {
+          "name": "marker_harness",
+          "passed": true
+        },
+        {
+          "name": "marker_protocol",
+          "passed": true
+        },
+        {
+          "name": "marker_identity",
+          "passed": true
+        },
+        {
+          "name": "marker_exit",
+          "passed": true
+        },
+        {
+          "name": "four_workers",
+          "passed": true
+        },
+        {
+          "name": "worker_gate_control",
+          "passed": true
+        },
+        {
+          "name": "marker_stderr",
+          "passed": true
+        },
+        {
+          "name": "fx1_harness",
+          "passed": true
+        },
+        {
+          "name": "fx1_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx2_harness",
+          "passed": true
+        },
+        {
+          "name": "fx2_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx3_harness",
+          "passed": true
+        },
+        {
+          "name": "fx3_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx4_harness",
+          "passed": true
+        },
+        {
+          "name": "fx4_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx5_harness",
+          "passed": true
+        },
+        {
+          "name": "fx5_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx6_harness",
+          "passed": true
+        },
+        {
+          "name": "fx6_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx7_harness",
+          "passed": true
+        },
+        {
+          "name": "fx7_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx8_harness",
+          "passed": true
+        },
+        {
+          "name": "fx8_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx9_harness",
+          "passed": true
+        },
+        {
+          "name": "fx9_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx10_harness",
+          "passed": true
+        },
+        {
+          "name": "fx10_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx12_harness",
+          "passed": true
+        },
+        {
+          "name": "fx12_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx13_harness",
+          "passed": true
+        },
+        {
+          "name": "fx13_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx14_harness",
+          "passed": true
+        },
+        {
+          "name": "fx14_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx15_harness",
+          "passed": true
+        },
+        {
+          "name": "fx15_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx16_harness",
+          "passed": true
+        },
+        {
+          "name": "fx16_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx17_harness",
+          "passed": true
+        },
+        {
+          "name": "fx17_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx18_harness",
+          "passed": true
+        },
+        {
+          "name": "fx18_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx19_harness",
+          "passed": true
+        },
+        {
+          "name": "fx19_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx20_harness",
+          "passed": true
+        },
+        {
+          "name": "fx20_prediction",
+          "passed": true
+        },
+        {
+          "name": "fx21_harness",
+          "passed": true
+        },
+        {
+          "name": "fx21_prediction",
+          "passed": true
+        },
+        {
+          "name": "adapter_cleanup",
+          "passed": true
+        }
+      ],
+      "fixtures": [
+        {
+          "fixture": 1,
+          "passed": true,
+          "outcome": "RETURN",
+          "detail": "100001",
+          "expected": [
+            [
+              "RETURN",
+              "100001"
+            ],
+            [
+              "LEN",
+              "64"
+            ]
+          ]
+        },
+        {
+          "fixture": 2,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "oob",
+          "expected": [
+            [
+              "FAULT",
+              "oob"
+            ]
+          ]
+        },
+        {
+          "fixture": 3,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "oob",
+          "expected": [
+            [
+              "FAULT",
+              "oob"
+            ]
+          ]
+        },
+        {
+          "fixture": 4,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "temporal",
+          "expected": [
+            [
+              "FAULT",
+              "temporal"
+            ]
+          ]
+        },
+        {
+          "fixture": 5,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "temporal",
+          "expected": [
+            [
+              "FAULT",
+              "temporal"
+            ]
+          ]
+        },
+        {
+          "fixture": 6,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "temporal",
+          "expected": [
+            [
+              "FAULT",
+              "temporal"
+            ]
+          ]
+        },
+        {
+          "fixture": 7,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "oob",
+          "expected": [
+            [
+              "FAULT",
+              "oob"
+            ]
+          ]
+        },
+        {
+          "fixture": 8,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "oob",
+          "expected": [
+            [
+              "FAULT",
+              "oob"
+            ]
+          ]
+        },
+        {
+          "fixture": 9,
+          "passed": true,
+          "outcome": "RETURN",
+          "detail": "9000ee",
+          "expected": [
+            [
+              "RETURN",
+              "9000ee"
+            ]
+          ]
+        },
+        {
+          "fixture": 10,
+          "passed": true,
+          "outcome": "RETURN",
+          "detail": "a0015b",
+          "expected": [
+            [
+              "RETURN",
+              "a0015b"
+            ]
+          ]
+        },
+        {
+          "fixture": 12,
+          "passed": true,
+          "outcome": "RETURN",
+          "detail": "c00101",
+          "expected": [
+            [
+              "RETURN",
+              "c00101"
+            ]
+          ]
+        },
+        {
+          "fixture": 13,
+          "passed": true,
+          "outcome": "RETURN",
+          "detail": "d00101",
+          "expected": [
+            [
+              "RETURN",
+              "d00101"
+            ]
+          ]
+        },
+        {
+          "fixture": 14,
+          "passed": true,
+          "outcome": "RETURN",
+          "detail": "e0015c",
+          "expected": [
+            [
+              "RETURN",
+              "e0015c"
+            ]
+          ]
+        },
+        {
+          "fixture": 15,
+          "passed": true,
+          "outcome": "RETURN",
+          "detail": "f0012e",
+          "expected": [
+            [
+              "RETURN",
+              "f0012e"
+            ]
+          ]
+        },
+        {
+          "fixture": 16,
+          "passed": true,
+          "outcome": "RETURN",
+          "detail": "1000191",
+          "expected": [
+            [
+              "RETURN",
+              "1000191"
+            ]
+          ]
+        },
+        {
+          "fixture": 17,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "temporal",
+          "expected": [
+            [
+              "FAULT",
+              "temporal"
+            ]
+          ]
+        },
+        {
+          "fixture": 18,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "temporal",
+          "expected": [
+            [
+              "FAULT",
+              "temporal"
+            ]
+          ]
+        },
+        {
+          "fixture": 19,
+          "passed": true,
+          "outcome": "RETURN",
+          "detail": "130015b",
+          "expected": [
+            [
+              "RETURN",
+              "130015b"
+            ]
+          ]
+        },
+        {
+          "fixture": 20,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "oob",
+          "expected": [
+            [
+              "FAULT",
+              "oob"
+            ]
+          ]
+        },
+        {
+          "fixture": 21,
+          "passed": true,
+          "outcome": "FAULT",
+          "detail": "oob",
+          "expected": [
+            [
+              "FAULT",
+              "oob"
+            ]
+          ]
+        }
+      ],
+      "workers": 4,
+      "harts": 1,
+      "virtual_vm_abi": 3,
+      "safety_prediction_arm": "sublet",
+      "known_gaps": [
+        "nested slab/cache lifetimes",
+        "bipbuffer logical reuse"
+      ],
+      "input_sha256": {
+        "launcher": "12a78e0385ec97e48cdc69e1025bac7ecd3d8fc753c6dfd52ca0bf38a4bf8990",
+        "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+        "job": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+        "pthread": "55216aea03b0f625833fcbd74d7a08111704bb2a50d17af0acaa07dd3abc2fc3",
+        "memcached": "73581419a1e698e39b4617e003e69fd11203b5cd6623f6e934acd8d14c6d2273",
+        "marker": "cec3532b768677efeb8266cc2b8ebc70778abbc27d60c606162d0e633a09fd08",
+        "safety": "5666ae5740d2486f10e9716e90e8eaa3df9d6f92bca5565666870b8a54e6a4de",
+        "native": "8b24165cd1f2a9e19c52bc77c70801ef5b19ea144bdc7180ba04c2e0ad65d4c1",
+        "native_marker": "d01d701c03c46caa19162697b5a3046fe569e915daef134a60ba43cb32123e76",
+        "qemu": "dcb35a810990e9a58ae33c7e0999f25bbcbcb8a09ddbb23a8fdb885880ca4a97",
+        "harness_source": "1e569a8b63b49af1262db6456c271f24d8ee6ffc2ab58f29b0e445cff557532e",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "runner_sha256": "049be8a226482e174a2c17e76ac07d80c869c65f64d6b0912694706cba28f0ed",
+      "gate_sha256": "59c8f503ede586ab3f4afb16a74d87303811e11aa90c9eecbb7ade857ebc54bc",
+      "predictions_sha256": "a6f9f673ba39b43f8f3a94d230c381ccbf2beaa9844153689701c07e590cad32",
+      "review_base": "518a5b805aa70c222ef0496c151b2845b4ab8dae",
+      "build_scope": "Fresh normal/safety/worker-marker memcached images and native controls. Fresh virtual libc and SDK from the review tree; reused previously qualified Capstone libevent 2.1.12 archives. Upstream libevent tests were not rerun.",
+      "dependency_sha256": {
+        "libevent.a": "6eceea7d5d59003526a1d7989ab26c0b9c8900fb58aab0d7a91a8de806c40efe",
+        "libevent_core.a": "e6c079b024370018bd892e2dce58dd94a5789b2ce5ade66316aacf966351ed6a"
+      }
+    }
+  },
+  "pending": [
+    "Fresh full source builds and current application corpus gates for Perl, CPython, PostgreSQL, FFmpeg and tshark.",
+    "Physical guest runtime/thread regression and integration of all app leaf branches.",
+    "Rerun the inherited epoll/message mutation variants on the extracted stack."
+  ],
+  "spec": {
+    "repository": "project-starch/capstone-academic-spec",
+    "branch": "virtual-capstone-isa",
+    "commit": "6e05ba67eaccd1b1b10c61e3384c4dc2fefe0109",
+    "published": false,
+    "reason": "GitHub write permission denied (403); ordinary repository forking is disabled.",
+    "transfer_patch": "virtual-capstone-isa.patch",
+    "render": "Full HTML and PDF passed with warnings treated as failures."
+  }
+}

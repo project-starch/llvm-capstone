@@ -1,13 +1,67 @@
 # Virtual Capstone review and landing plan
 
-Prepare a dependency stack of fresh review branches from current shared targets.
-Keep the existing working branches as provenance. Do not replace dev with the
-virtual tree: newer physical-runtime and application work exists there, and the
-qualified virtual binary has not integrated all current shared QEMU fixes.
+The implementation is now extracted into draft review branches from the audited
+shared targets. Existing working branches remain provenance. The historical
+feature snapshot predates newer physical-runtime, application and shared QEMU
+fixes; the new review commits integrate those changes instead of replacing dev.
 
 The direction is supervised **virtual C mode**, with a trusted kernel and
 adapter, Linux scheduling/VM, and one lifetime namespace per address space.
 The earlier direct protected-U Linux experiment remains a separate lane.
+
+## Created review stack
+
+The [review manifest](virtual-capstone-review-results.json) records PR URLs,
+exact branch commits, fresh test results and pending gates. These are draft
+PRs; no shared target has been merged or made a release baseline.
+
+| ID | Draft PR | Review base |
+|---|---|---|
+| Q1 | [QEMU #13](https://github.com/project-starch/capstone-qemu/pull/13) | `virtual-capstone` |
+| Q2 | [QEMU #14](https://github.com/project-starch/capstone-qemu/pull/14) | `virtual-qemu-access` |
+| Q3 | [QEMU #15](https://github.com/project-starch/capstone-qemu/pull/15) | `virtual-qemu-tables` |
+| Q4 | [QEMU #16](https://github.com/project-starch/capstone-qemu/pull/16) | `virtual-qemu-execution` |
+| C1 | [LLVM #182](https://github.com/project-starch/llvm-capstone/pull/182) | `dev` |
+| D1 | [LLVM #183](https://github.com/project-starch/llvm-capstone/pull/183) | `virtual-compiler` |
+| R1 | [LLVM #184](https://github.com/project-starch/llvm-capstone/pull/184) | `virtual-delegated-authority` |
+| R2 | [LLVM #185](https://github.com/project-starch/llvm-capstone/pull/185) | `virtual-linux-adapter` |
+| R3 | [LLVM #191](https://github.com/project-starch/llvm-capstone/pull/191) | `virtual-libc-vm` |
+| A1 | [LLVM #186](https://github.com/project-starch/llvm-capstone/pull/186) | `virtual-libc-vm` |
+| A2a | [LLVM #187](https://github.com/project-starch/llvm-capstone/pull/187) | `virtual-libc-vm` |
+| A2b | [LLVM #188](https://github.com/project-starch/llvm-capstone/pull/188) | `virtual-libc-vm` |
+| A2c | [LLVM #189](https://github.com/project-starch/llvm-capstone/pull/189) | `virtual-libc-vm` |
+| A2d | [LLVM #190](https://github.com/project-starch/llvm-capstone/pull/190) | `virtual-libc-vm` |
+| A3 | [LLVM #192](https://github.com/project-starch/llvm-capstone/pull/192) | `virtual-pthreads` |
+
+QEMU now has a dedicated `virtual-capstone` integration branch, created at
+`b8f08e599330` from `c128-qemu-merge`. Q1 targets it; Q2--Q4 each target their
+predecessor for a small review diff. `c128-qemu-merge` remains the physical
+integration branch; GitHub's repository default is still `master`. Leave the
+default unchanged until the new processor profile is reviewed. The previous
+qualified virtual working branch remains `virtual-capstone-runtime-parity` at
+`6bf04634a2c2`; R1 pins the new Q4 review tip `9bf9c1f28653`.
+
+Review Q1--Q4 and the ISA appendix together. C1/D1 lead to R1, then R2; R3
+and the five independent application leaves branch from R2. Memcached depends
+on R3. When landing the stack, prepare each logical squash on the reviewed
+integration target and update the next PR's base without force-pushing old
+working branches. Update the superproject pin to the final landed QEMU
+commit before merging R1; its current review pin is deliberately explicit.
+
+Fresh gates: compiler 7/7 focused lit tests; Q4 33/33 virtual, 60/60 M1,
+69/69 access and 3/3 physical bounds tests, plus the independent forest model.
+R1 passes 22/22 Linux checks. R2 passes 42/42 including both 200,000-allocation
+recycling cases. R3 passes 9/9 pthread and 39/39 short v2 compatibility checks,
+plus 32 native blocked-receive iterations. Memcached passes 73/73, including
+all 20 applicable current outer-heap fixtures. App leaf descriptions distinguish
+syntax/build checks from still-pending full builds and current corpus runs.
+These results do not replace the full physical guest regression or an
+all-leaves integration gate.
+
+The ISA branch remains local: GitHub denies writes to academic-spec (403),
+and an ordinary fork attempt is also denied because forking is disabled.
+The rendered, transferable [ISA patch](virtual-capstone-isa.patch) is ready;
+no spec PR or published spec branch is claimed.
 
 ## Audited bases
 
@@ -82,7 +136,7 @@ published provenance branches.
 | ID / proposed title | Repository and base | Scope and acceptance |
 |---|---|---|
 | S1: Document the trusted-OS virtual execution profile | academic-spec master | Draft ownership/ISA/ABI appendix, implemented behavior and open freeze decisions; HTML/PDF render. Ready for review independently. |
-| Q1: Enforce protected capability access and physical tags | QEMU c128-qemu-merge | Physical tags/kernel-store invalidation, rights/bounds, trusted S-mode slot transfers, consuming Q-12, explicit fault data/delegation; protected and physical regressions. Retain experimental opt-in. |
+| Q1: Enforce protected capability access and physical tags | QEMU virtual-capstone, from c128-qemu-merge | Physical tags/kernel-store invalidation, rights/bounds, trusted S-mode slot transfers, consuming Q-12, explicit fault data/delegation; protected and physical regressions. Retain experimental opt-in. |
 | Q2: Select bounded guest lifetime tables and trusted minting | QEMU Q1 | Shared revocation algorithm/model, fail-closed IDs, guest records, three CSRs, CSMINT; initially monotone IDs. Independent-root, capacity, corruption and mint-preflight gates. |
 | Q3: Enter supervised virtual C contexts | QEMU Q2 | CSRUNV, user-PTE translation, execution-time PCC, instruction policy, service/fault/quantum events, CSRETIRE; virtual gate including cached-PCC and exact retries. |
 | Q4: Recycle IDs after a stopped-namespace sweep | QEMU Q3 | Free-list header, node pressure, CSRUNV action 3, stale memory/register tag removal and dead-PCC pinning; inventory/refusal, reuse and sustained-allocation gates. |
@@ -160,9 +214,10 @@ recorded QEMU gates are provenance, not measurements of the planned merge.
 
 The final gate rebuilds QEMU/compiler, runs physical/protected/virtual CPU
 tests, VM/thread/security gates and all eight requested application profiles,
-with native controls and current applicable corpus arms. This documentation
-review reruns no runtime workload. Source inspection, dry merges and spec
-rendering do not substitute for integrated execution tests.
+with native controls and current applicable corpus arms. The initial audit reran no runtime workloads. Fresh extraction checks are
+listed above and in the review manifest; the remaining application and
+all-leaves gates are still required before merging. Source inspection, dry
+merges and spec rendering do not substitute for those execution tests.
 
 ## Prepared branches
 
@@ -183,6 +238,7 @@ rendering do not substitute for integrated execution tests.
   `git apply /path/to/virtual-capstone-isa.patch`. It changes only the spec
   README, main include list and the new profile appendix.
 
-Existing working and stacked review branches remain intact. Q1--A3 are proposed
-implementation slices; none has been silently rebased, merged or claimed tested
-against current dev.
+Existing working branches remain intact. The draft PRs above are new extracted
+commits against the audited dev/QEMU bases, with target-side fixes retained.
+They have not been merged. Their descriptions and the review manifest state
+which fresh checks passed and which merge gates remain.
