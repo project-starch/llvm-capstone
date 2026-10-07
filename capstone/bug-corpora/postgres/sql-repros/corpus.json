@@ -42,5 +42,24 @@
   "runners": [
     "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
     "capstone/bug-corpora/postgres/sql-repros/shared/run-cheribsd.sh"
-  ]
+  ],
+  "protection": {
+    "cheribsd": {
+      "bundle": "results",
+      "reader": "arm-verdict",
+      "arm": "cheribsd-revocation",
+      "key": "dir",
+      "vehicle": "cheribsd-purecap"
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "not_run": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm."
+    }
+  }
 }

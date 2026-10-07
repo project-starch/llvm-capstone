@@ -166,6 +166,62 @@ point: the process status alone cannot tell this corpus reproducing from an
 arbitrary crash, a bounds fault, a permission fault, a fault elsewhere, or the
 allocator refusing the request.
 
+## The three protection arms, and `protection` in `corpus.json`
+
+The arms above are **mechanism** arms: each one names an oracle for one thing a
+vehicle can do, and every corpus grew the ones its own measurements needed.
+Sixteen of them now exist, in seventeen result-table shapes, and that is the
+right record of how a number was produced — but it is not an answer to the
+question the corpora are for: *for this bug, which defence reports?*
+
+[`arms.json`](arms.json) defines the three arms that question is asked of:
+
+| arm | what is protected | vehicle |
+|---|---|---|
+| `cheribsd` | the libc malloc/free boundary, by stock CheriBSD with revocation at its shipped default: asynchronous, quarantine 1/4 | a purecap process |
+| `capstone-sysalloc` | the same boundary, by Capstone: bounded on issue, revoked at `free` with no quarantine | a Capstone process, or a freestanding domain where a corpus has no process run |
+| `capstone-sublet` | the above, plus the program's **nested** allocator issuing and revoking its own objects | the same |
+
+PoisonCap is not among them and will not be: it is our adapter for a
+competitor's platform, so a reader is entitled to discount it. The
+`poisoncap-*` arms stay in the cases as a record of what was measured and are
+not read into this table.
+
+Every corpus declares, in `corpus.json`, a **`protection`** block with one entry
+per arm, and each entry is one of three things:
+
+    "protection": {
+      "cheribsd":          {"bundle": "results/20261006-cheribsd",
+                            "reader": "supervise-blocks", "key": "number",
+                            "vehicle": "cheribsd-purecap"},
+      "capstone-sysalloc": {"bundle": "results/20261007-virtual", "reader": "virtual",
+                            "arm": "virtual", "key": "dir",
+                            "vehicle": "capstone-virtual"},
+      "capstone-sublet":   {"coincides_with": "capstone-sysalloc", "why": "..."}
+    }
+
+* a **`bundle`** (or a list of them) with the `reader` that understands its
+  shape, the `key` naming which of the case's identifiers that bundle uses, and
+  the `vehicle` it ran on. The verdict is then read out of the bundle, never
+  typed into the declaration.
+* **`coincides_with`** plus a `why`, for an arm that is the same binary and the
+  same measurement as another — a corpus whose objects come straight from
+  `malloc` has no nested allocator for `capstone-sublet` to protect.
+* **`not_run`** with a reason of at least a few words. "Cannot be measured
+  here", "waiting on a port" and "nobody got to it" weigh differently in a
+  denominator, and a bare blank hides which one it is. `tools/check-corpus.py`
+  refuses a one-word reason.
+
+`tools/protection-matrix.py` reads the blocks and writes
+[PROTECTION.md](PROTECTION.md) and `protection.json`: one row per bug, three
+cells, each carrying the bundle it came from. Both files are generated; the
+checker holds every bundle path, reader name and arm name to what exists, and
+`--check` fails if the generated files are stale.
+
+The `xlang-row` corpora are exempt for now. Their cases are not case
+directories and their arms live in their own `rows.tsv`, so folding their 30
+rows in needs a reader per table, not a declaration.
+
 ## Rules a reader can rely on
 
 1. **Paired arms over a single binary.** Every case runs twice against the same
@@ -196,6 +252,7 @@ checkable from outside, and it is the only input to the generated index.
 | field | meaning |
 |---|---|
 | `program`, `boundary`, `title` | what the corpus is about: the upstream program, the allocator or API boundary its cases cross, and one line of scope |
+| `protection` | where this corpus's verdict for each of the three protection arms comes from, as above |
 | `upstream` | `{version, port}` -- the release the cases are built against, and the port component that pins it. Absent where each row pins its own commit |
 | `cases` | how many cases the corpus has. The checker counts the tree and refuses a mismatch |
 | `case_schema` | `case-json` (a reduction with `case.c`), `script-trigger` (a defect whose trigger is an interpreter script rather than a C reduction; each case names its own file in `trigger`), `sqlite-row` (a binding row carrying the provenance ledger's columns), or `xlang-row` (a shim row, declaration-level only) |

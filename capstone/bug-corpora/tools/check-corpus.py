@@ -35,7 +35,7 @@ SEARCH = ["capstone/bug-corpora", "xlang"]
 
 DECL_REQUIRED = {"program", "boundary", "title", "cases", "case_schema", "status",
                  "live_in_pin_recorded"}
-DECL_OPTIONAL = {"upstream", "expect_live_in_pin", "live_in_pin_note", "case_macro",
+DECL_OPTIONAL = {"protection", "upstream", "expect_live_in_pin", "live_in_pin_note", "case_macro",
                  "case_glob", "case_exclude", "case_number_base", "case_table",
                  "case_dir_column", "case_doc", "required_arms", "arm_keys",
                  "expect_provenance", "runners", "checker", "inventory", "evidence",
@@ -122,6 +122,19 @@ ARM_ORACLES = {
     "host-asan": {"oracle"},
     "capstone-domain": {"oracle"},
 }
+# The three arms every bug gets a verdict for, and the readers that can produce
+# one. Both are read out of the generator and arms.json rather than copied here,
+# so a reader added there cannot fail validation for not being in a second list.
+def protection_vocabulary():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "protection_matrix", Path(__file__).resolve().parent / "protection-matrix.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    arms = json.loads((Path(__file__).resolve().parent.parent / "arms.json").read_text())
+    return tuple(module.ARMS), set(module.READERS), set(arms["arms"])
+
+
 WORDS = {"eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
          "thirteen": 13, "twenty": 20}
 
@@ -383,6 +396,60 @@ def check_cases(corpus, decl, dirs, problems):
                                 f"{counted}")
 
 
+def check_protection(corpus, decl, problems):
+    """Every corpus says, for each of the three arms, where its verdict comes from.
+
+    This is what keeps PROTECTION.md honest: a cell is either a bundle this
+    checker can see, or an explicit reason there is no measurement, and there is
+    no third state in which a reader cannot tell the difference. The arm names
+    and the readers come from `arms.json` and `tools/protection-matrix.py`, so
+    the three files cannot drift apart silently.
+    """
+    arms, readers, declared = protection_vocabulary()
+    if set(arms) != declared:
+        problems.append(f"arms.json declares {sorted(declared)} and "
+                        f"protection-matrix.py {sorted(arms)}")
+    block = decl.get("protection")
+    if block is None:
+        problems.append("no protection block: every corpus declares, per arm, the "
+                        "bundle its verdict is read from or why there is none "
+                        "(SCHEMA.md, 'The three protection arms')")
+        return
+    for key in sorted(set(block) - set(arms) - {"note"}):
+        problems.append(f"protection has an entry {key!r} that is not one of "
+                        f"{sorted(arms)}")
+    for arm in arms:
+        spec = block.get(arm)
+        where = f"protection.{arm}"
+        if not isinstance(spec, dict):
+            problems.append(f"{where} is missing or is not an object")
+            continue
+        if "not_run" in spec:
+            if len(spec) != 1:
+                problems.append(f"{where} has not_run and {sorted(set(spec) - {'not_run'})}"
+                                f": a cell is a measurement or a reason, not both")
+            elif len(spec["not_run"].split()) < 6:
+                problems.append(f"{where}: not_run is a label, not a reason -- say "
+                                f"whether it can be measured and what it waits on")
+            continue
+        if "coincides_with" in spec:
+            if spec["coincides_with"] not in arms:
+                problems.append(f"{where}: coincides_with names {spec['coincides_with']!r}")
+            if not spec.get("why"):
+                problems.append(f"{where}: coincides_with with no why")
+            continue
+        for field in ("bundle", "reader", "vehicle"):
+            if field not in spec:
+                problems.append(f"{where}: no {field}")
+        if spec.get("reader") not in readers:
+            problems.append(f"{where}: reader {spec.get('reader')!r} is not one of "
+                            f"{sorted(readers)}")
+        names = spec.get("bundle", [])
+        for one in [names] if isinstance(names, str) else names:
+            if not (corpus / one).is_dir():
+                problems.append(f"{where}: bundle {one} does not exist")
+
+
 def check_one(manifest):
     """Check the corpus that `manifest` declares. Returns a list of problems."""
     corpus = manifest.parent
@@ -430,6 +497,10 @@ def check_one(manifest):
         check_cases(corpus, decl, dirs, problems)
     if decl.get("shape_table"):
         check_shape_table(corpus, decl, len(dirs), problems)
+    # An xlang row is not a case directory and its arms live in its own table,
+    # so the protection block does not apply to that schema yet.
+    if decl["case_schema"] != "xlang-row":
+        check_protection(corpus, decl, problems)
 
     return [f"{where}: {p}" for p in problems]
 

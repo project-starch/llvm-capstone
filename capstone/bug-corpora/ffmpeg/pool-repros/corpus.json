@@ -48,5 +48,38 @@
     "capstone/bug-corpora/ffmpeg/pool-repros/results/20261007-bounds-probe"
   ],
   "advisories": [],
-  "shape_table": true
+  "shape_table": true,
+  "protection": {
+    "cheribsd": {
+      "bundle": "results/20261006-cheribsd",
+      "reader": "supervise-blocks",
+      "key": "number",
+      "case_from": "FF2_PROBE case=(\\d+) ready",
+      "remap": {
+        "36": "0",
+        "37": "1",
+        "38": "2",
+        "39": "3"
+      },
+      "fixed_heading": "-fixed\\b",
+      "vehicle": "cheribsd-purecap",
+      "because": "the blocks are named by the port's fixture number, 36-39, which are this corpus's cases 0-3 in order; the bundle's README tabulates the same four."
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "bundle": "results/20261007-virtual-nested-capability",
+      "reader": "virtual",
+      "arm": "virtual-nested-capability-backend",
+      "mode": "m2",
+      "key": "dir",
+      "vehicle": "capstone-virtual",
+      "because": "mode 2 is the arm in which the pool's own lease return revokes: modes 0 and 1 are the same adapter with no revoke and with a block-granular one, and the bundle carries all three."
+    }
+  }
 }

@@ -40,5 +40,29 @@
   ],
   "expect_live_in_pin": {
     "true": 11
+  },
+  "protection": {
+    "cheribsd": {
+      "bundle": "results/20261006-cheribsd",
+      "reader": "column-per-arm",
+      "arm": "revocation_on",
+      "key": "fix",
+      "vehicle": "cheribsd-purecap"
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "bundle": "results/20261006",
+      "reader": "column-per-arm",
+      "arm": "sublet-svheads",
+      "key": "fix",
+      "vehicle": "capstone-baremetal",
+      "because": "sublet-svheads is the Sublet heap plus Perl's SV head arena under the discipline, which is the nested allocator this corpus's defects live in."
+    }
   }
 }

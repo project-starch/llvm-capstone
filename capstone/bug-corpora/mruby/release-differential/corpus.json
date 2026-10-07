@@ -37,5 +37,30 @@
   ],
   "expect_live_in_pin": {
     "true": 23
+  },
+  "protection": {
+    "cheribsd": {
+      "bundle": "results/20261006-cheribsd",
+      "reader": "verdict-word",
+      "arm": "cheribsd-revocation",
+      "key": "fix",
+      "vehicle": "cheribsd-purecap"
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "bundle": "results/20261006",
+      "reader": "verdict-word",
+      "arm": "sublet-gc",
+      "key": "fix",
+      "vehicle": "capstone-baremetal",
+      "because": "sublet-gc is the Sublet heap plus mruby's own GC slots under the discipline (ports/mruby/app/patches/4.0.0-rc2/0008-gc-slots-under-sublet.patch). The sysalloc-bounds arm in the same bundle bounds objects without revoking them, so it is NOT this tree's capstone-sysalloc; the virtual run is."
+    },
+    "note": "READ THE capstone-sublet COLUMN WITH THE CORPUS'S SELECTION RULE IN HAND. The 23 cases are the measured subset of 165 live defects: a case is here BECAUSE a Capstone arm reports on it. So 23 of 23 on capstone-sublet is the selection criterion coming back, not a hit rate, and the informative numbers are the other two columns on the same 23 and the 165-row ledger behind them (ledger.json)."
   }
 }

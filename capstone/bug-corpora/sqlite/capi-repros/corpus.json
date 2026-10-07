@@ -34,5 +34,16 @@
     "RUSTSEC-2021-0128 = CVE-2021-45713 = GHSA-q89g-4vhh-mvvm",
     "RUSTSEC-2021-0037"
   ],
-  "note": "The defects are in the bindings, not in the engine. SQLite's own engine-internal CVEs are recorded as out of scope in row12's PROVENANCE.md. The Capstone column is measured on 7 of the 19 rows."
+  "note": "The defects are in the bindings, not in the engine. SQLite's own engine-internal CVEs are recorded as out of scope in row12's PROVENANCE.md. The Capstone column is measured on 7 of the 19 rows.",
+  "protection": {
+    "cheribsd": {
+      "not_run": "not run anywhere. The cases are defects in SQLite's foreign-language bindings, so a case is a program in that language; none of the three arms has a runtime for one. The corpus is a provenance ledger here, not an executable corpus."
+    },
+    "capstone-sysalloc": {
+      "not_run": "not run anywhere. The cases are defects in SQLite's foreign-language bindings, so a case is a program in that language; none of the three arms has a runtime for one. The corpus is a provenance ledger here, not an executable corpus."
+    },
+    "capstone-sublet": {
+      "not_run": "not run anywhere. The cases are defects in SQLite's foreign-language bindings, so a case is a program in that language; none of the three arms has a runtime for one. The corpus is a provenance ledger here, not an executable corpus."
+    }
+  }
 }

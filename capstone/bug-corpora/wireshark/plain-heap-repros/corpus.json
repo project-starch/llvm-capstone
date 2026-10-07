@@ -44,5 +44,24 @@
       "oracle",
       "cause"
     ]
+  },
+  "protection": {
+    "cheribsd": {
+      "bundle": "results/20261007-cheribsd",
+      "reader": "supervise-blocks",
+      "key": "number",
+      "vehicle": "cheribsd-purecap"
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "coincides_with": "capstone-sysalloc",
+      "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+    }
   }
 }

@@ -43,5 +43,25 @@
     "[Tt]wenty reports, (\\w+) shapes",
     "The (\\w+) shapes, and what each"
   ],
-  "note": "The inventory states this is the whole reachable set at the pin, not a sample."
+  "note": "The inventory states this is the whole reachable set at the pin, not a sample.",
+  "protection": {
+    "cheribsd": {
+      "not_run": "no stock-CheriBSD reading exists. This corpus's CheriBSD arms are the poisoncap-* pair, which is our own adapter for a competitor's platform and which arms.json excludes on purpose; plain purecap has never been run. ports/cpython/pymalloc has a cheribsd branch, so it is buildable."
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "bundle": "results/20260919-qemu-20",
+      "reader": "qemu-paired",
+      "arm": "sublet",
+      "key": "number",
+      "vehicle": "capstone-baremetal",
+      "because": "the domain build of ports/cpython/pymalloc always compiles src/allocators/sublet/block-lifetimes.c (cmake/Replay.cmake:41-43), so this corpus's spatial/sublet pair is that adapter's mode 0 and mode 1 -- the nested arm, on the freestanding vehicle."
+    }
+  }
 }

@@ -41,5 +41,27 @@
     "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
     "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8",
     "capstone/bug-corpora/memcached/allocator-repros/results/20261007-virtual"
-  ]
+  ],
+  "protection": {
+    "cheribsd": {
+      "bundle": [
+        "results/20261006-cheribsd",
+        "results/20261007-cheribsd-case8"
+      ],
+      "reader": "case-lines",
+      "key": "number",
+      "vehicle": "cheribsd-purecap",
+      "because": "two bundles because case 8 was run on its own the next day, and it is the one that refuted its prediction."
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "not_run": "not run. The slab adapter exists and the domain build compiles it (ports/memcached/allocators/src/allocators/sublet/authority.c, cmake/Allocators.cmake:104) and every case declares its mode-0/mode-1 oracle, but results/ holds only CheriBSD and virtual bundles: the domain run was never filed."
+    }
+  }
 }

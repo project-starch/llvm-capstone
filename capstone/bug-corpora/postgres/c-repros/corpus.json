@@ -38,5 +38,25 @@
     "capstone/bug-corpora/postgres/c-repros/results/sublet-20261006-161014",
     "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023",
     "capstone/bug-corpora/postgres/c-repros/results/20261007-virtual"
-  ]
+  ],
+  "protection": {
+    "cheribsd": {
+      "bundle": "results",
+      "reader": "arm-verdict",
+      "arm": "cheribsd-revocation",
+      "key": "dir",
+      "vehicle": "cheribsd-purecap"
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "coincides_with": "capstone-sysalloc",
+      "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left."
+    }
+  }
 }

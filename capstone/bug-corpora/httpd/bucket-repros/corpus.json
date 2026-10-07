@@ -38,5 +38,28 @@
     "capstone/bug-corpora/httpd/bucket-repros/results/20261007-virtual"
   ],
   "advisories": [],
-  "shape_table": true
+  "shape_table": true,
+  "protection": {
+    "cheribsd": {
+      "bundle": "results/20260922-cheribsd",
+      "reader": "revocation-rows",
+      "key": "number",
+      "vehicle": "cheribsd-purecap"
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "bundle": "results/20260922-qemu",
+      "reader": "qemu-paired",
+      "arm": "sublet",
+      "key": "number",
+      "vehicle": "capstone-baremetal",
+      "because": "the domain build compiles node-leases.c and, with APRP_BUCKETS, bucket-leases.c (cmake/Pools.cmake:88-90)."
+    }
+  }
 }

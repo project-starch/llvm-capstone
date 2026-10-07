@@ -34,5 +34,20 @@
   "advisories": [],
   "shape_table": true,
   "note": "The third FFmpeg corpus and the one the inventory's nested-spatial cell needed. pool-repros holds storage an AVBufferPool handed out and took back (temporal); subobject-repros holds a bound between two MEMBERS of one av_malloc (spatial, NOT nested, because av_refstruct_alloc_ext is called directly); this one holds a bound between two PLANES of one AVBuffer, which is spatial AND nested. That every plane comes from a single buffer is measured rather than assumed: a YUVA420P frame reports buf[1] == NULL with 1024 bytes of slack after the alpha plane inside that one buffer, so a read leaving the plane stays inside the allocation exactly as a wmem chunk overread stays inside its block. ASan is SILENT here and reports the memcached plain-heap row; the two readings side by side are the project's axis, measured rather than argued. The declared port is the app port rather than buffer-pool: buffer-pool compiles only libavutil/buffer.c and refstruct.c, while this case needs frame.c, imgutils.c and pixdesc.c, so the app port (whole libavutil) is the only one that could host a domain build of it. Today the corpus is native-only.",
-  "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md"
+  "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+  "protection": {
+    "cheribsd": {
+      "not_run": "not run. The corpus was added after the 2026-10-06 CheriBSD sweep of the three sibling FFmpeg corpora and was not included in it; the same runner (bug-corpora/ffmpeg/plain-heap-repros/runners/run-cheribsd.sh) applies."
+    },
+    "capstone-sysalloc": {
+      "bundle": "results/20261007-virtual",
+      "reader": "virtual",
+      "arm": "virtual",
+      "key": "dir",
+      "vehicle": "capstone-virtual"
+    },
+    "capstone-sublet": {
+      "not_run": "not run. The planes are carved out of one av_frame_get_buffer allocation, so the carve IS a nested allocator, but no adapter issues per-plane capabilities: ports/ffmpeg/buffer-pool's adapter leases pool buffers, not planes."
+    }
+  }
 }
