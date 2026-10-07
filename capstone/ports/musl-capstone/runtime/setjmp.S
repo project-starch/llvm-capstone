@@ -75,8 +75,12 @@ __sigsetjmp:
 2:
 	auipc t0, %pcrel_hi(__capstone_sigsetjmp_save)
 	addi t0, t0, %pcrel_lo(2b)
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+	jalr ra, 0(t0)
+#else
 	cincoffset t0, gp, t0
 	cjalr ra, 0(t0)
+#endif
 	ldc ra, 16(sp)
 	cincoffsetimm sp, sp, 32
 1:
@@ -97,8 +101,12 @@ _longjmp:
 2:
 	auipc t0, %pcrel_hi(__capstone_longjmp_reap)
 	addi t0, t0, %pcrel_lo(2b)
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+	jalr ra, 0(t0)
+#else
 	cincoffset t0, gp, t0
 	cjalr ra, 0(t0)
+#endif
 	ldc a0, 0(sp)
 	ld a1, 16(sp)
 	cincoffsetimm sp, sp, 32

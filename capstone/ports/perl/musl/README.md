@@ -47,6 +47,27 @@ CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
 capstone-vm --state "$CAPSTONE_TMP_ROOT/dev-vm" run /mnt/host/perl.dom -e 'print 1'
 ```
 
+### Virtual Linux profile
+
+The same Perl source can be rebuilt for the virtual C runtime. This keeps Perl's
+capability-width fixes and delegated syscall ABI, but gives the image the
+`.capstone_virtual` marker, Linux virtual-address mappings and the virtual
+allocator. The physical profile remains the default.
+
+```sh
+CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
+PERLD_PROFILE=virtual PERLD_OPT=-O1 PERLD_VIRTUAL_BLOCKS=65536 \
+  bash capstone/ports/perl/musl/build-perl-domain.sh
+capstone-vexec /mnt/host/perl.dom -e 'print "virtual perl\\n"'
+```
+
+The virtual build uses private anonymous mappings and one-hart execution. Perl's
+fork-based test cases remain excluded; backticks and piped opens use the existing
+delegated `popen` path. The first qualification is the smoke program and the
+`t/base` subset through the virtual launcher, with the native Perl output as its
+oracle. It uses the larger virtual metadata profile needed by Perl's live SV
+working set (`CAPSTONE_APPLICATION_VIRTUAL_BLOCKS=65536`).
+
 The build recipe retains the pinned upstream sources, cross configuration,
 patches and native reference. CMake now builds the [shared application SDK](../../../runtime/applications.md)
 under `$PERLD_ROOT/runtime`; its `capstone-cc` supplies the CRT and linker rules.

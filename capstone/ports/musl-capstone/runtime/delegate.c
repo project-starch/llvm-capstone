@@ -49,6 +49,7 @@ long __capstone_sigaction(int sig, const struct k_sigaction *new, struct k_sigac
 long __capstone_sigprocmask(int how, const sigset_t *set, sigset_t *old, unsigned long size);
 long __capstone_sigaltstack(const stack_t *ss, stack_t *old);
 void __capstone_siginfo_translate(const unsigned char *raw, int sig, siginfo_t *si);
+static int dl_buffer_ok(const void *buffer, size_t bytes, unsigned rights);
 
 /* Answered without a round, from the launch record (see launch.h): the task's
  * identity, which cannot change under a domain, and the two clocks as rdtime
@@ -60,6 +61,8 @@ static int dl_clock(long clock, struct timespec *ts) {
   uint64_t base, now, elapsed, ns;
   if (!t || !t->ticks_per_second || !ts)
     return 0;
+  if (!dl_buffer_ok(ts, sizeof *ts, 2))
+    return 0;  /* the shaped syscall path returns EFAULT */
   switch (clock) {
   case CLOCK_REALTIME: case CLOCK_REALTIME_COARSE:
     base = t->realtime_ns;
@@ -106,9 +109,35 @@ static long dl_identity(long n, long *answer) {
    context installs transport 0 when the regions arrive, a further context the
    transport its creator reserved, before its first delegated call. A context
    without one gets -EIO from every call. */
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+struct dl_transport {
+  volatile struct capstone_delegate_entry *entry;
+  char *exchange;
+  size_t capacity, used;
+  uint64_t status;
+  volatile uintptr_t wire_owner;
+  unsigned wire_depth;
+};
+static struct dl_transport default_transport;
+static __thread struct dl_transport *private_transport;
+static struct dl_transport *dl_transport(void) {
+  void *tp;
+  __asm__ volatile("movc %0, tp" : "=r"(tp));
+  return tp && private_transport ? private_transport : &default_transport;
+}
+#define dl_entry (dl_transport()->entry)
+#define dl_exchange (dl_transport()->exchange)
+#define dl_capacity (dl_transport()->capacity)
+#define dl_used (dl_transport()->used)
+#define dl_status (dl_transport()->status)
+#define dl_wire_owner (dl_transport()->wire_owner)
+#define dl_wire_depth (dl_transport()->wire_depth)
+#else
 static __thread volatile struct capstone_delegate_entry *dl_entry;
 static __thread char *dl_exchange;
 static __thread size_t dl_capacity, dl_used;
+static __thread uint64_t dl_status;
+#endif
 
 /* Argument marshalling record for one call. */
 struct dl_slot {
@@ -118,12 +147,82 @@ struct dl_slot {
   unsigned char copy_back;
 };
 
+/* Keep the checked pointer and its copy-back coordinates together. Allocate
+ * only as many records as the validated vector needs, including for messages;
+ * a one-element call must not reserve 1024 capability slots on the stack. */
+struct dl_iov_slot {
+  void *base;
+  uint64_t offset;
+  size_t bytes;
+};
+
 static size_t cap_bytes(void *cap) {
   return (size_t)(__builtin_capstone_cap_get_end(cap) -
                   __builtin_capstone_cap_get_cursor(cap));
 }
 
-static __thread uint64_t dl_status;  /* of the last round: DONE or RETRY */
+/* LCC's type selector is total even on an untagged value. The tag builtin
+ * collapses all capability types to one bit, so it cannot reject a REV or a
+ * sealed handle before the permission and bounds selectors are used. READ is
+ * bit 2, WRITE bit 1 in the Capstone permission field. This checks the
+ * requested span; the actual copy still uses the original capability and
+ * checks liveness at each access. */
+static int dl_buffer_ok(const void *buffer, size_t bytes, unsigned rights) {
+  unsigned long type, base, cursor, end, perms;
+  if (!bytes)
+    return 1;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x1"
+                   : "=r"(type) : "r"(buffer));
+  if (type != 0 && type != 1)  /* LINEAR or NONLINEAR data */
+    return 0;
+  base = __builtin_capstone_cap_get_base((void *)buffer);
+  end = __builtin_capstone_cap_get_end((void *)buffer);
+  cursor = __builtin_capstone_cap_get_cursor((void *)buffer);
+  perms = __builtin_capstone_cap_get_perm((void *)buffer);
+  return (perms & rights) == rights && base <= cursor && cursor <= end &&
+         bytes <= end - cursor;
+}
+
+static unsigned dl_rights(unsigned kind) {
+  switch (kind) {
+  case CAPSTONE_ARG_IN: case CAPSTONE_ARG_OPT_IN: return 4;
+  case CAPSTONE_ARG_OUT: case CAPSTONE_ARG_OPT_OUT: return 2;
+  default: return 6;  /* INOUT */
+  }
+}
+
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+/* Serialize each transport through copy-back and signal delivery. POSIX
+ * children install private transports; explicit contexts sharing TLS keep
+ * their creator's transport. Nested signal handlers may enter recursively. */
+static uintptr_t dl_wire_identity(void) {
+  extern long __capstone_vm_thread_self(void);
+  /* Context identity survives shared TLS and alternate signal stacks. */
+  return (uintptr_t)__capstone_vm_thread_self();
+}
+static void dl_wire_acquire(void) {
+  uintptr_t identity = dl_wire_identity();
+  if (__atomic_load_n(&dl_wire_owner, __ATOMIC_ACQUIRE) == identity) {
+    ++dl_wire_depth;
+    return;
+  }
+  uintptr_t vacant = 0;
+  while (!__atomic_compare_exchange_n(&dl_wire_owner, &vacant, identity, 0,
+                                      __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
+    vacant = 0;
+    __asm__ volatile("" ::: "memory");
+  }
+  dl_wire_depth = 1;
+}
+static void dl_wire_release(void) {
+  if (--dl_wire_depth == 0)
+    __atomic_store_n(&dl_wire_owner, 0, __ATOMIC_RELEASE);
+}
+
+#else
+static void dl_wire_acquire(void) {}
+static void dl_wire_release(void) {}
+#endif
 
 /* posix_spawn's and execve's one request block (capstone/lock.h, Q6). */
 volatile int __capstone_spawn_lock;
@@ -158,6 +257,13 @@ static int dl_install(size_t index) {
    application without transports. */
 void __capstone_application_transports(unsigned long *count, unsigned long *exchange_bytes);
 void __capstone_delegate_regions(void *meta, void *exchange) {
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+  dl_entry = meta;
+  dl_exchange = exchange;
+  dl_capacity = exchange ? cap_bytes(exchange) : 0;
+  if (dl_capacity > 0x40000000u) dl_capacity = 0x40000000u;
+  __capstone_signals_regions(meta, meta ? cap_bytes(meta) : 0);
+#else
   unsigned long count, slice;
   __capstone_application_transports(&count, &slice);
   dl_meta_region = meta;
@@ -181,6 +287,7 @@ void __capstone_delegate_regions(void *meta, void *exchange) {
     return;
   }
   __capstone_signals_regions((void *)dl_entry, CAPSTONE_DELEGATE_META_BYTES);
+#endif
 }
 
 /* A further context, at its first entry: the transport its creator reserved,
@@ -192,6 +299,18 @@ int __capstone_delegate_transport(unsigned long index) {
   __capstone_signals_attach((void *)dl_entry);
   return 0;
 }
+
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+void __capstone_delegate_thread_attach(void *state, void *entry, void *exchange, void *signals) {
+  private_transport = state;
+  dl_entry = entry;
+  dl_exchange = exchange;
+  dl_capacity = cap_bytes(exchange);
+  extern void __capstone_signals_thread_attach(void *, void *);
+  __capstone_signals_thread_attach(signals, entry);
+}
+size_t __capstone_delegate_thread_state_size(void) { return sizeof(struct dl_transport); }
+#endif
 
 int __capstone_delegate_ready(void) {
   return dl_entry && dl_exchange && cap_bytes((void *)dl_entry) >= sizeof *dl_entry;
@@ -258,7 +377,12 @@ static long dl_round(uint64_t nr, const uint64_t args[CAPSTONE_DELEGATE_ARGS]) {
     return -EINVAL;
   }
   dl_bytes((void *)dl_entry, &e, sizeof e);
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+  extern void __capstone_vm_delegate_transport(void *, void *, size_t);
+  __capstone_vm_delegate_transport((void *)dl_entry, dl_exchange, dl_capacity);
+#else
   __capstone_yield();
+#endif
   dl_status = dl_entry->status;
   __capstone_signals_take();
   /* A RETRY round has no result of its own. When it is not issued again (a
@@ -301,10 +425,12 @@ long __capstone_delegate_ints4(uint64_t nr, uint64_t a, uint64_t b, uint64_t c, 
   long r;
   if (!__capstone_delegate_ready())
     return -EIO;
+  dl_wire_acquire();
   do {
     dl_reset();
     r = dl_round(nr, args);
   } while (dl_settle_own());
+  dl_wire_release();
   return r;
 }
 
@@ -313,10 +439,16 @@ long __capstone_delegate_ints(uint64_t nr, uint64_t a, uint64_t b, uint64_t c) {
 }
 
 static long dl_string(const char *s, uint64_t *offset) {
-  size_t n;
+  size_t n, available;
   if (!s)
     return -EFAULT;
-  n = strlen(s) + 1;
+  if (!dl_buffer_ok(s, 1, 4))
+    return -EFAULT;
+  available = cap_bytes((void *)s);
+  n = strnlen(s, available);
+  if (n == available)
+    return -EFAULT;
+  ++n;
   if (dl_alloc(n, offset))
     return -ENAMETOOLONG;
   dl_bytes(dl_exchange + *offset, s, n);
@@ -330,6 +462,7 @@ static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
   uint64_t args[CAPSTONE_DELEGATE_ARGS];
   struct dl_slot slots[CAPSTONE_DELEGATE_ARGS] = {{0}};
   long result;
+  dl_status = CAPSTONE_ROUND_DONE;
   dl_reset();
   dl_entry->nr = nr; /* named in a fault record if the copy below faults */
   for (unsigned i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
@@ -361,6 +494,17 @@ static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
             args[a->size] == 0))
         return -EFAULT;
     }
+    /* The caller's whole requested span must fit, even when the exchange
+       region will service only a short prefix of this call. */
+    if (a->length == CAPSTONE_LEN_ARG && a->size < CAPSTONE_DELEGATE_ARGS &&
+        args[a->size] && !dl_buffer_ok(raw[i], args[a->size], dl_rights(a->kind)))
+      return -EFAULT;
+    if (a->length == CAPSTONE_LEN_ARG_SCALED && a->size < CAPSTONE_DELEGATE_ARGS &&
+        a->scale && args[a->size]) {
+      if (args[a->size] > SIZE_MAX / a->scale ||
+          !dl_buffer_ok(raw[i], (size_t)args[a->size] * a->scale, dl_rights(a->kind)))
+        return -EFAULT;
+    }
     size_t aligned = (dl_used + 15) & ~(size_t)15;
     if (aligned >= dl_capacity)
       return -ENOMEM;
@@ -377,6 +521,8 @@ static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
          the kernel reports the object's true length in the word regardless */
       uint32_t w;
       memcpy(&w, dl_exchange + args[a->size], sizeof w);
+      if (w && !dl_buffer_ok(raw[i], w, dl_rights(a->kind)))
+        return -EFAULT;
       if (w > room) {
         w = (uint32_t)room;
         memcpy(dl_exchange + args[a->size], &w, sizeof w);
@@ -387,6 +533,8 @@ static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
       dl_bytes(probe.args, args, sizeof args);
       bytes = capstone_delegate_arg_bytes(s, &probe, dl_exchange, dl_capacity, i);
     }
+    if (bytes && !dl_buffer_ok(raw[i], bytes, dl_rights(a->kind)))
+      return -EFAULT;
     if (dl_alloc(bytes, &args[i]))
       return -ENOMEM;
     if (bytes && a->kind != CAPSTONE_ARG_OUT && a->kind != CAPSTONE_ARG_OPT_OUT)
@@ -412,8 +560,10 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   long result;
   if (!s)
     return -ENOSYS;
+  dl_wire_acquire();
   do result = dl_call_once(s, nr, raw);
   while (dl_settle());
+  dl_wire_release();
   return result;
 }
 
@@ -622,12 +772,16 @@ static long dl_sigtimedwait(syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   siginfo_t *out = (siginfo_t *)raw[1];
   unsigned char wire[128];
   long result;
+  if (out && !dl_buffer_ok(out, sizeof *out, 2))
+    return -EFAULT;
   raw[1] = out ? (syscall_arg_t)wire : 0;
+  dl_wire_acquire();
   do {
     result = dl_call_once(shape, CAPSTONE_SYS_rt_sigtimedwait, raw);
     if (result > 0 && dl_status != CAPSTONE_ROUND_RETRY && out)
       __capstone_siginfo_translate(wire, (int)result, out);
   } while (dl_settle());
+  dl_wire_release();
   return result;
 }
 
@@ -651,38 +805,50 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
   dl_reset();
   uint64_t args[6] = {(uint64_t)fd, 0, 0, (uint64_t)offset & UINT32_MAX,
                       (uint64_t)offset >> 32, 0};
-  uint64_t offsets[1024];
-  size_t lengths[1024], total = 0;
+  size_t total = 0;
+  dl_status = CAPSTONE_ROUND_DONE;
   if (count < 0 || count > 1024)
     return -EINVAL;
   if (count && !iov)
     return -EFAULT;
+  if (count && !dl_buffer_ok(iov, (size_t)count * sizeof *iov, 4))
+    return -EFAULT;
+  struct dl_iov_slot slots[count ? (size_t)count : 1];
   for (long i = 0; i < count; ++i) {
-    if (iov[i].iov_len > (size_t)LONG_MAX - total)
+    struct iovec current = iov[i];
+    if (current.iov_len > (size_t)LONG_MAX - total)
       return -EINVAL;
-    total += iov[i].iov_len;
+    if (current.iov_len &&
+        !dl_buffer_ok(current.iov_base, current.iov_len, writing ? 4 : 2))
+      return -EFAULT;
+    total += current.iov_len;
   }
   dl_reset();
   /* Reserve the entire descriptor array; oversized metadata is an error. */
   if (dl_alloc((size_t)count * 16, &args[1]))
     return -EMSGSIZE;
   for (long i = 0; i < count; ++i) {
+    struct iovec current = iov[i];
+    /* A concurrent edit of the descriptor cannot swap the checked pointer
+       for an unchecked one. Use this same snapshot for copy-back. */
+    if (current.iov_len &&
+        !dl_buffer_ok(current.iov_base, current.iov_len, writing ? 4 : 2))
+      return -EFAULT;
     size_t aligned = (dl_used + 15) & ~(size_t)15;
     size_t room = aligned < dl_capacity ? dl_capacity - aligned : 0;
-    size_t bytes = iov[i].iov_len < room ? iov[i].iov_len : room;
-    if (!bytes && iov[i].iov_len)
+    size_t bytes = current.iov_len < room ? current.iov_len : room;
+    if (!bytes && current.iov_len)
       break;
-    if (bytes && !iov[i].iov_base)
-      return -EFAULT;
-    if (dl_alloc(bytes, &offsets[i]))
+    if (dl_alloc(bytes, &slots[i].offset))
       break;
-    lengths[i] = bytes;
-    uint64_t wire[2] = {offsets[i], bytes};
+    slots[i].base = current.iov_base;
+    slots[i].bytes = bytes;
+    uint64_t wire[2] = {slots[i].offset, bytes};
     dl_bytes(dl_exchange + args[1] + (size_t)i * 16, wire, sizeof wire);
     if (writing && bytes)
-      dl_bytes(dl_exchange + offsets[i], iov[i].iov_base, bytes);
+      dl_bytes(dl_exchange + slots[i].offset, slots[i].base, bytes);
     ++args[2];
-    if (bytes < iov[i].iov_len)
+    if (bytes < current.iov_len)
       break;
   }
   if (count && !args[2])
@@ -695,8 +861,8 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
   if (!writing && result > 0) {
     size_t left = (size_t)result;
     for (size_t i = 0; i < args[2] && left; ++i) {
-      size_t n = lengths[i] < left ? lengths[i] : left;
-      dl_bytes(iov[i].iov_base, dl_exchange + offsets[i], n);
+      size_t n = slots[i].bytes < left ? slots[i].bytes : left;
+      dl_bytes(slots[i].base, dl_exchange + slots[i].offset, n);
       left -= n;
     }
   }
@@ -706,8 +872,13 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
 static long dl_vector(long fd, const struct iovec *iov, long count, int writing,
                       int positioned, long long offset) {
   long result;
-  do result = dl_vector_once(fd, iov, count, writing, positioned, offset);
+  dl_wire_acquire();
+  do {
+    result = dl_vector_once(fd, iov, count, writing, positioned, offset);
+    if (result < 0) { dl_wire_release(); return result; }
+  }
   while (dl_settle());
+  dl_wire_release();
   return result;
 }
 
@@ -733,20 +904,24 @@ static long dl_ioctl(long fd, unsigned long request, void *argp) {
   if (bytes && argp) {
     unsigned char buffer[64] = {0};
     long rc;
+    if (!dl_buffer_ok(argp, bytes, 6))
+      return -EFAULT;
     dl_bytes(buffer, argp, bytes);
     raw[2] = buffer;
+    dl_wire_acquire();
     dl_reset();
     {
       uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, request, 0, 0, 0, 0};
       do {
         dl_reset();
         if (dl_alloc(64, &args[2]))
-          return -ENOMEM;
+          { dl_wire_release(); return -ENOMEM; }
         dl_bytes(dl_exchange + args[2], buffer, sizeof buffer);
         rc = dl_round(CAPSTONE_NR_IOCTL_BUF, args);
         if (rc >= 0 && dl_status != CAPSTONE_ROUND_RETRY)
           dl_bytes(argp, dl_exchange + args[2], bytes);
       } while (dl_settle());
+      dl_wire_release();
       return rc;
     }
   }
@@ -825,12 +1000,13 @@ static long dl_msg_once(uint64_t nr, long fd, struct msghdr *msg, long flags) {
   int sending = nr == CAPSTONE_SYS_sendmsg;
   struct capstone_msghdr_block b = {0};
   uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, 0, (uint64_t)flags, 0, 0, 0};
-  uint64_t offsets[CAPSTONE_MSGHDR_IOVS];
-  size_t lengths[CAPSTONE_MSGHDR_IOVS], count = (size_t)msg->msg_iovlen, fitted = 0;
+  size_t count = (size_t)msg->msg_iovlen, fitted = 0;
+  dl_status = CAPSTONE_ROUND_DONE;
   if (msg->msg_iovlen < 0 || count > CAPSTONE_MSGHDR_IOVS)
     return -EMSGSIZE;
   if (count && !msg->msg_iov)
     return -EFAULT;
+  struct dl_iov_slot slots[count ? count : 1];
   dl_reset();
   if (dl_alloc(CAPSTONE_MSGHDR_BYTES, &args[1]))
     return -ENOMEM;
@@ -852,22 +1028,27 @@ static long dl_msg_once(uint64_t nr, long fd, struct msghdr *msg, long flags) {
     b.controllen = msg->msg_controllen;
   }
   for (size_t i = 0; i < count; ++i) {
+    struct iovec current = msg->msg_iov[i];
+    /* The iovec array may change after the outer preflight. Validate this
+       snapshot and retain its capability through the later copy-back. */
+    if (current.iov_len &&
+        !dl_buffer_ok(current.iov_base, current.iov_len, sending ? 4 : 2))
+      return -EFAULT;
     size_t aligned = (dl_used + 15) & ~(size_t)15;
     size_t room = aligned < dl_capacity ? dl_capacity - aligned : 0;
-    size_t bytes = msg->msg_iov[i].iov_len < room ? msg->msg_iov[i].iov_len : room;
-    if (!bytes && msg->msg_iov[i].iov_len)
+    size_t bytes = current.iov_len < room ? current.iov_len : room;
+    if (!bytes && current.iov_len)
       break;
-    if (bytes && !msg->msg_iov[i].iov_base)
-      return -EFAULT;
-    if (dl_alloc(bytes, &offsets[i]))
+    if (dl_alloc(bytes, &slots[i].offset))
       break;
-    lengths[i] = bytes;
-    uint64_t pair[2] = {offsets[i], bytes};
+    slots[i].base = current.iov_base;
+    slots[i].bytes = bytes;
+    uint64_t pair[2] = {slots[i].offset, bytes};
     dl_bytes(dl_exchange + b.iov + 16 * i, pair, sizeof pair);
     if (sending && bytes)
-      dl_bytes(dl_exchange + offsets[i], msg->msg_iov[i].iov_base, bytes);
+      dl_bytes(dl_exchange + slots[i].offset, slots[i].base, bytes);
     ++fitted;
-    if (bytes < msg->msg_iov[i].iov_len)
+    if (bytes < current.iov_len)
       break;
   }
   if (count && !fitted)
@@ -883,8 +1064,8 @@ static long dl_msg_once(uint64_t nr, long fd, struct msghdr *msg, long flags) {
     size_t left = (size_t)result;
     dl_bytes(&back, dl_exchange + args[1], sizeof back);
     for (size_t i = 0; i < fitted && left; ++i) {
-      size_t n = lengths[i] < left ? lengths[i] : left;
-      dl_bytes(msg->msg_iov[i].iov_base, dl_exchange + offsets[i], n);
+      size_t n = slots[i].bytes < left ? slots[i].bytes : left;
+      dl_bytes(slots[i].base, dl_exchange + slots[i].offset, n);
       left -= n;
     }
     if (msg->msg_name) {
@@ -904,25 +1085,53 @@ static long dl_msg_once(uint64_t nr, long fd, struct msghdr *msg, long flags) {
 
 static long dl_msg(uint64_t nr, long fd, struct msghdr *msg, long flags) {
   long result;
+  struct msghdr current;
   if (!msg)
     return -EFAULT;
+  if (!dl_buffer_ok(msg, sizeof *msg, nr == CAPSTONE_SYS_sendmsg ? 4 : 6))
+    return -EFAULT;
+  current = *msg;
+  if (current.msg_iovlen < 0 || current.msg_iovlen > CAPSTONE_MSGHDR_IOVS)
+    return -EMSGSIZE;
+  if (current.msg_iovlen &&
+      !dl_buffer_ok(current.msg_iov, (size_t)current.msg_iovlen * sizeof *current.msg_iov, 4))
+    return -EFAULT;
+  if (current.msg_name && current.msg_namelen &&
+      !dl_buffer_ok(current.msg_name, current.msg_namelen, nr == CAPSTONE_SYS_sendmsg ? 4 : 6))
+    return -EFAULT;
+  if (current.msg_control && current.msg_controllen &&
+      !dl_buffer_ok(current.msg_control, current.msg_controllen, nr == CAPSTONE_SYS_sendmsg ? 4 : 6))
+    return -EFAULT;
+  for (size_t i = 0; i < (size_t)current.msg_iovlen; ++i) {
+    struct iovec part = current.msg_iov[i];
+    if (part.iov_len &&
+        !dl_buffer_ok(part.iov_base, part.iov_len, nr == CAPSTONE_SYS_sendmsg ? 4 : 2))
+      return -EFAULT;
+  }
   if (nr == CAPSTONE_SYS_sendmsg) {
     /* the whole message must fit, or the socket must be a stream */
     size_t total = 0, reserved = CAPSTONE_MSGHDR_BYTES + 16;
-    for (int i = 0; i < msg->msg_iovlen && i < (int)CAPSTONE_MSGHDR_IOVS; ++i)
-      total += msg->msg_iov ? msg->msg_iov[i].iov_len : 0;
-    reserved += (size_t)msg->msg_iovlen * 16 + 16;
-    if (msg->msg_name) reserved += ((size_t)msg->msg_namelen + 15 & ~(size_t)15) + 16;
-    if (msg->msg_control) reserved += ((size_t)msg->msg_controllen + 15 & ~(size_t)15) + 16;
-    reserved += (size_t)msg->msg_iovlen * 16;   /* one alignment gap per buffer */
+    for (int i = 0; i < current.msg_iovlen; ++i)
+      total += current.msg_iov[i].iov_len;
+    reserved += (size_t)current.msg_iovlen * 16 + 16;
+    if (current.msg_name) reserved += ((size_t)current.msg_namelen + 15 & ~(size_t)15) + 16;
+    if (current.msg_control) reserved += ((size_t)current.msg_controllen + 15 & ~(size_t)15) + 16;
+    reserved += (size_t)current.msg_iovlen * 16;   /* one alignment gap per buffer */
     if (total > dl_room_after(reserved)) {
       long type = dl_socket_type(fd);
       if (type < 0) return type;
       if (type != SOCK_STREAM) return -EMSGSIZE;
     }
   }
-  do result = dl_msg_once(nr, fd, msg, flags);
+  dl_wire_acquire();
+  do result = dl_msg_once(nr, fd, &current, flags);
   while (dl_settle());
+  dl_wire_release();
+  if (nr == CAPSTONE_SYS_recvmsg && result >= 0) {
+    msg->msg_namelen = current.msg_namelen;
+    msg->msg_controllen = current.msg_controllen;
+    msg->msg_flags = current.msg_flags;
+  }
   return result;
 }
 
@@ -935,6 +1144,8 @@ static long dl_epoll_ctl(long epfd, long op, long fd, const struct epoll_event *
   struct dl_epoll_wire wire = {0, 0, 0};
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {(syscall_arg_t)epfd, (syscall_arg_t)op, (syscall_arg_t)fd, 0, 0, 0};
   if (ev) {
+    if (!dl_buffer_ok(ev, sizeof *ev, 4))
+      return -EFAULT;
     wire.events = ev->events;
     wire.data = ev->data.u64;
     raw[3] = (syscall_arg_t)&wire;
@@ -944,11 +1155,14 @@ static long dl_epoll_ctl(long epfd, long op, long fd, const struct epoll_event *
 
 static long dl_epoll_pwait(long epfd, struct epoll_event *ev, long count, long timeout,
                            const sigset_t *mask, long size) {
-  static struct dl_epoll_wire wire[1024];   /* a shorter list is a legal answer */
+  /* Conversion continues after the transport lock is released. */
+  struct dl_epoll_wire wire[1024];   /* a shorter list is a legal answer */
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS];
   long r;
   if (count > 1024)
     count = 1024;
+  if (ev && count > 0 && !dl_buffer_ok(ev, (size_t)count * sizeof *ev, 2))
+    return -EFAULT;
   raw[0] = (syscall_arg_t)epfd;
   raw[1] = ev && count > 0 ? (syscall_arg_t)wire : (syscall_arg_t)ev;
   raw[2] = (syscall_arg_t)count;
@@ -969,15 +1183,19 @@ static long dl_fcntl(long fd, long cmd, void *arg) {
     long rc;
     if (!arg)
       return -EFAULT;
+    if (!dl_buffer_ok(arg, 32, cmd == F_GETLK ? 6 : 4))
+      return -EFAULT;
+    dl_wire_acquire();
     do {
       dl_reset();
       if (dl_alloc(32, &args[2]))
-        return -ENOMEM;
+        { dl_wire_release(); return -ENOMEM; }
       dl_bytes(dl_exchange + args[2], arg, 32);
       rc = dl_round(CAPSTONE_NR_FCNTL_LOCK, args);
       if (rc >= 0 && cmd == F_GETLK && dl_status != CAPSTONE_ROUND_RETRY)
         dl_bytes(arg, dl_exchange + args[2], 32);
     } while (dl_settle());
+    dl_wire_release();
     return rc;
   }
   {
@@ -992,8 +1210,10 @@ long __capstone_delegate_hello(unsigned long entry_address, unsigned long code_b
                                unsigned long code_end) {
   uint64_t args[CAPSTONE_DELEGATE_ARGS] = {entry_address, code_base, code_end, 0, 0, 0};
   long r;
+  dl_wire_acquire();
   do r = dl_round(CAPSTONE_NR_HELLO, args);
   while (dl_settle());
+  dl_wire_release();
   return r;
 }
 
@@ -1001,6 +1221,22 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d,
                               syscall_arg_t e, syscall_arg_t f) {
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {a, b, c, d, e, f};
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+  if (n == SYS_futex) {
+    extern long __capstone_virtual_futex(void *, int, int, const struct timespec *, int);
+    return __capstone_virtual_futex((void *)a, (int)(long)b, (int)(long)c,
+                                   (const struct timespec *)d, (int)(long)f);
+  }
+  if (n == SYS_exit) {
+    extern _Noreturn void __capstone_virtual_pthread_exit(long);
+    __capstone_virtual_pthread_exit((long)a);
+  }
+  /* Bootstrap musl locally; never enter the physical context protocol. */
+  if (n == SYS_set_tid_address) {
+    const struct capstone_launch_task *t = __capstone_launch_task();
+    return t && t->pid ? (long)t->pid : 1;
+  }
+#else
   /* musl's thread setup: the tid is the context's runtime identity (the pid
      for the first context), and the word to clear at the context's end is the
      runtime's to keep (context.c). The first context asks before its
@@ -1011,6 +1247,7 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
      context ends even when its transport could not be installed. */
   if (n == SYS_exit)
     return __capstone_thread_exit((int)(long)a);
+#endif
   if (!__capstone_delegate_ready())
     return -EIO;
   /* The hint: the launcher's trampoline accepted a signal since the last
@@ -1125,6 +1362,9 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     *(void **)b = dl_robust_head;
     *(size_t *)c = dl_robust_len;
     return 0;
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+  case SYS_exit:
+#endif
   case SYS_exit_group: {
     /* The program's last words before the task ends it: the at-exit hook,
        then the unserved report, then the real exit_group. Nothing resumes. */

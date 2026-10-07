@@ -35,10 +35,17 @@ RT=${RUNTIME_REPO:-$CAPSTONE_REPO_ROOT}
 MUSL_PORT=$RT/capstone/ports/musl-capstone
 MRT=$MUSL_PORT/runtime
 ARENA=${PERLD_ARENA_BYTES:-$((64 * 1024 * 1024))}
+VIRTUAL_BLOCKS=${PERLD_VIRTUAL_BLOCKS:-65536}
+VIRTUAL_ARENAS=${PERLD_VIRTUAL_ARENAS:-256}
 JOBS=${JOBS:-16}
 FROM=${PERLD_FROM:-all}
 HEAP=${PERLD_HEAP:-level0}
 HEAP_LOG=${PERLD_HEAP_LOG:-26}
+PROFILE=${PERLD_PROFILE:-physical}
+case "$PROFILE" in physical|virtual) ;; *) echo "PERLD_PROFILE=$PROFILE? (physical, virtual)" >&2; exit 2;; esac
+if [[ $PROFILE == virtual && -z ${PERLD_ROOT:-} ]]; then
+  ROOT=$CAPSTONE_TMP_ROOT/perl-domain-virtual
+fi
 case "$HEAP" in level0|sublet|sublet-svheads) ;;
   *) echo "PERLD_HEAP=$HEAP? (level0, sublet, sublet-svheads)" >&2; exit 2 ;; esac
 # sublet-svheads is CUMULATIVE and is this port's analogue of the mruby port's
@@ -47,6 +54,10 @@ case "$HEAP" in level0|sublet|sublet-svheads) ;;
 [[ $HEAP == sublet-svheads ]] && SV_HEADS_DEFAULT=1 || SV_HEADS_DEFAULT=0
 SV_HEADS=${PERLD_SV_HEADS:-$SV_HEADS_DEFAULT}
 case "$SV_HEADS" in 0|1) ;; *) echo "PERLD_SV_HEADS=$SV_HEADS? (0, 1)" >&2; exit 2 ;; esac
+if [[ $PROFILE == virtual && $SV_HEADS == 1 ]]; then
+  echo "virtual SV-head arena integration is not qualified; use PERLD_SV_HEADS=0" >&2
+  exit 2
+fi
 [[ $HEAP == sublet-svheads && $SV_HEADS == 0 ]] \
   && { echo "PERLD_HEAP=sublet-svheads is the adapter arm; it cannot take PERLD_SV_HEADS=0" >&2; exit 2; }
 
@@ -80,15 +91,37 @@ mkdir -p "$MUSL_CACHE_ROOT"
 [[ -f "$MUSL_CACHE_ROOT/musl-1.2.5.tar.gz" || ! -f "$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5.tar.gz" ]] \
   || cp "$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5.tar.gz" "$MUSL_CACHE_ROOT/"
 MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
-if stage musl; then
-  OUT_DIR=$ROOT/musl-build bash "$MUSL_PORT/build-musl-capstone.sh" >/dev/null
+if [[ $PROFILE == virtual ]]; then
+  VROOT=$ROOT/runtime-virtual
+  VIRTUAL_EXTRA=()
+  if [[ -n ${PERLD_SDK_CFLAGS:-} ]]; then
+    VIRTUAL_EXTRA+=(-DCMAKE_C_FLAGS_RELEASE="-O1 ${PERLD_SDK_CFLAGS}")
+  fi
+  if stage runtime || [[ ! -f "$VROOT/libc/libc-capstone-virtual.a" ]]; then
+    bash "$RT/capstone/runtime/virtual/build-sdk.sh" "$VROOT" "$MUSL" \
+      -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
+      -DCAPSTONE_APPLICATION_STACK_BYTES="${PERLD_STACK_BYTES:-1048576}" \
+      -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" \
+      -DCAPSTONE_APPLICATION_HEAP="$HEAP" \
+      -DCAPSTONE_APPLICATION_HEAP_LOG="$HEAP_LOG" \
+      -DCAPSTONE_APPLICATION_VIRTUAL_BLOCKS="$VIRTUAL_BLOCKS" \
+      -DCAPSTONE_APPLICATION_VIRTUAL_ARENAS="$VIRTUAL_ARENAS" "${VIRTUAL_EXTRA[@]}"
+  fi
+  ARCHIVE=$VROOT/libc/libc-capstone-virtual.a
+  O=$VROOT/sdk
+  printf '%s\n' "$HEAP ${PERLD_SDK_CFLAGS:-}" > "$O/.heap"
+else
+  if stage musl; then
+    OUT_DIR=$ROOT/musl-build bash "$MUSL_PORT/build-musl-capstone.sh" >/dev/null
+  fi
+  ARCHIVE=$ROOT/musl-build/libc-capstone.a
+  O=$ROOT/runtime
 fi
-ARCHIVE=$ROOT/musl-build/libc-capstone.a
 [[ -f "$ARCHIVE" ]] || { echo "no $ARCHIVE" >&2; exit 2; }
 log "musl $MUSL, archive $ARCHIVE"
 
 # ---- shared application SDK (also usable by other upstream build systems) ----
-O=$ROOT/runtime
+if [[ $PROFILE == physical ]]; then
 SDK_HEAP=$HEAP
 [[ $HEAP == sublet-svheads ]] && SDK_HEAP=sublet
 if stage runtime; then
@@ -113,6 +146,7 @@ if stage runtime; then
     -DCAPSTONE_APPLICATION_DATA_BYTES="${PERLD_DATA_BYTES:-33554432}" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA" "${EXTRA[@]}"
   printf '%s\n' "$HEAP ${PERLD_SDK_CFLAGS:-}" > "$O/.heap"
+fi
 fi
 [[ $(cat "$O/.heap" 2>/dev/null) == "$HEAP ${PERLD_SDK_CFLAGS:-}" && -x "$O/capstone-cc" ]] \
   || { echo "rebuild the application SDK (PERLD_FROM=runtime)" >&2; exit 2; }

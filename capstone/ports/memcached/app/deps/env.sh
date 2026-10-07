@@ -15,15 +15,17 @@ export MC_LINKER_SCRIPT="$CAPSTONE_REPO_ROOT/capstone/my_first_domain/link.ld"
 # The key: the compiler (size and mtime of clang and the LLVM libraries it loads; a shared-libs
 # build keeps codegen in libLLVM*.so), every source the runtime is built from, and this file.
 _mc_key=$( {
+  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-physical}"
   _b=$(readlink -f "$CAPSTONE_CLANG")
   { echo "$_b"; ldd "$_b" | awk '/=> \//{print $3}' | grep -E 'libLLVM|libclang' || true; } | xargs stat -L -c '%n %s %Y'
   cat "$_mc_musl_port"/runtime/*.c "$_mc_musl_port"/runtime/*.S "$_mc_musl_port/runtime/libc_overrides.list" \
       "$MC_DEPS_DIR/capstone-cc" "$MC_DEPS_DIR/env.sh"
   # git ls-files, not rg: a script does not see an interactive rg, and a failed listing would drop
   # every runtime source from the key without a word (wireshark/app/deps/env.sh had that shape).
-  (cd "$CAPSTONE_REPO_ROOT" && git ls-files capstone/runtime capstone/ports/common/application) |
+  (cd "$CAPSTONE_REPO_ROOT" && git ls-files --cached --others --exclude-standard capstone/runtime capstone/ports/common/application) |
     sort | while IFS= read -r path; do cat "$CAPSTONE_REPO_ROOT/$path"; done
   cat "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh"
+  cat "$_mc_musl_port"/musl-patches/*.patch
 } | sha256sum | cut -c1-16)
 
 # One libc and one runtime per key, never rebuilt in place: a build that sourced this file keeps

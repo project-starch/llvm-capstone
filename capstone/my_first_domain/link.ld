@@ -163,6 +163,8 @@ SECTIONS {
     . = ALIGN(16);
   } :domain
 
+  .capstone_virtual 0 : { KEEP(*(.capstone_virtual)) }
+
   /DISCARD/ : {
     *(.comment)
     *(.note*)
@@ -171,6 +173,5 @@ SECTIONS {
     *(.riscv.attributes)
   }
 }
-
 
 

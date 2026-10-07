@@ -11,11 +11,13 @@
   },
   "targets": [
     "capstone-domain",
+    "capstone-virtual",
     "native"
   ],
   "workload": "scripts/smoke.pl, byte-identical to the native reference",
   "evidence": [
-    "capstone/ports/perl/musl/results/2026-09-26"
+    "capstone/ports/perl/musl/results/2026-09-26",
+    "capstone/ports/perl/musl/results/virtual/2026-10-07.json"
   ],
   "related": [
     "capstone/ports/perl/cheribsd"

@@ -36,11 +36,20 @@ __capstone_call_on_stack:
 	movc sp, a2
 	movc t0, a0
 	movc a0, a1
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+	lcc t0, t0, 2
+	jalr ra, 0(t0)
+#else
 	cjalr ra, 0(t0)
+#endif
 	movc sp, s0
 	ldc ra, 16(sp)
 	ldc s0, 0(sp)
 	cincoffsetimm sp, sp, 32
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+	ret
+#else
 	cjalr zero, 0(ra)
+#endif
 #endif
 .size __capstone_call_on_stack, .-__capstone_call_on_stack

@@ -81,6 +81,22 @@ void *__capstone_signals_detach(void) {
   return list;
 }
 
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+/* Reuse dev's per-thread signal fields. The creator allocates the event
+ * array before publishing the child, so attachment cannot fail midway. */
+size_t __capstone_signals_thread_state_size(void) { return EVENTS * sizeof *events; }
+void __capstone_signals_thread_attach(void *state, void *meta) {
+  events = state;
+  event_count = 0;
+  seen_published = 0;
+  block = (struct capstone_signal_block *)((char *)meta + CAPSTONE_SIGNAL_OFFSET);
+  logical = block->initial_mask;
+}
+void __capstone_signals_thread_detach(void) {
+  free(__capstone_signals_detach());
+}
+#endif
+
 /* A context takes its transport's handover block: its mask as the launcher
    set it (the first context's from the launch, a further context's its
    creator's), no events. Without room for its events it takes none, and its

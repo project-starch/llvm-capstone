@@ -11,7 +11,8 @@ my $s = ""; $s .= "ab$_" for (0 .. 499);
 print "P4 string ", length($s), " ", substr($s, 0, 10), "\n";
 # SV churn: the arenas hand out and reclaim heads and bodies for every one of
 # these, which is the layer this port exists to put under Sublet.
-my @objs; push @objs, { i => $_, s => "s$_", a => [$_, $_ + 1] } for (0 .. 19999);
+my $object_count = $ENV{CAPSTONE_PERL_SMOKE_OBJECTS} || 20000;
+my @objs; push @objs, { i => $_, s => "s$_", a => [$_, $_ + 1] } for (0 .. $object_count - 1);
 @objs = (); print "P5 churn ok\n";
 sub fib { my $n = shift; $n < 2 ? $n : fib($n - 1) + fib($n - 2) }
 print "P6 fib ", fib(20), "\n";

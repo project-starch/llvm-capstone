@@ -1,0 +1,576 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "native_null",
+      "passed": true
+    },
+    {
+      "name": "oracle_detects_value",
+      "passed": true
+    },
+    {
+      "name": "oracle_detects_cas",
+      "passed": true
+    },
+    {
+      "name": "pthread_unsupported_clone_refused",
+      "passed": true
+    },
+    {
+      "name": "pthread_tls_mutex_cond_tagged_join",
+      "passed": true
+    },
+    {
+      "name": "pthread_timed_wait",
+      "passed": true
+    },
+    {
+      "name": "pthread_independent_blocking_io",
+      "passed": true
+    },
+    {
+      "name": "pthread_private_epoll_events",
+      "passed": true
+    },
+    {
+      "name": "pthread_shared_tls_transport",
+      "passed": true
+    },
+    {
+      "name": "pthread_64_joined_lifetimes",
+      "passed": true
+    },
+    {
+      "name": "normal1_harness",
+      "passed": true
+    },
+    {
+      "name": "normal1_protocol",
+      "passed": true
+    },
+    {
+      "name": "normal1_identity",
+      "passed": true
+    },
+    {
+      "name": "normal1_exit",
+      "passed": true
+    },
+    {
+      "name": "normal1_stderr",
+      "passed": true
+    },
+    {
+      "name": "normal2_harness",
+      "passed": true
+    },
+    {
+      "name": "normal2_protocol",
+      "passed": true
+    },
+    {
+      "name": "normal2_identity",
+      "passed": true
+    },
+    {
+      "name": "normal2_exit",
+      "passed": true
+    },
+    {
+      "name": "normal2_stderr",
+      "passed": true
+    },
+    {
+      "name": "usr1_harness",
+      "passed": true
+    },
+    {
+      "name": "usr1_protocol",
+      "passed": true
+    },
+    {
+      "name": "usr1_identity",
+      "passed": true
+    },
+    {
+      "name": "usr1_exit",
+      "passed": true
+    },
+    {
+      "name": "usr1_stderr",
+      "passed": true
+    },
+    {
+      "name": "marker_harness",
+      "passed": true
+    },
+    {
+      "name": "marker_protocol",
+      "passed": true
+    },
+    {
+      "name": "marker_identity",
+      "passed": true
+    },
+    {
+      "name": "marker_exit",
+      "passed": true
+    },
+    {
+      "name": "four_workers",
+      "passed": true
+    },
+    {
+      "name": "worker_gate_control",
+      "passed": true
+    },
+    {
+      "name": "marker_stderr",
+      "passed": true
+    },
+    {
+      "name": "fx1_harness",
+      "passed": true
+    },
+    {
+      "name": "fx1_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx2_harness",
+      "passed": true
+    },
+    {
+      "name": "fx2_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx3_harness",
+      "passed": true
+    },
+    {
+      "name": "fx3_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx4_harness",
+      "passed": true
+    },
+    {
+      "name": "fx4_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx5_harness",
+      "passed": true
+    },
+    {
+      "name": "fx5_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx6_harness",
+      "passed": true
+    },
+    {
+      "name": "fx6_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx7_harness",
+      "passed": true
+    },
+    {
+      "name": "fx7_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx8_harness",
+      "passed": true
+    },
+    {
+      "name": "fx8_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx9_harness",
+      "passed": true
+    },
+    {
+      "name": "fx9_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx10_harness",
+      "passed": true
+    },
+    {
+      "name": "fx10_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx12_harness",
+      "passed": true
+    },
+    {
+      "name": "fx12_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx13_harness",
+      "passed": true
+    },
+    {
+      "name": "fx13_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx14_harness",
+      "passed": true
+    },
+    {
+      "name": "fx14_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx15_harness",
+      "passed": true
+    },
+    {
+      "name": "fx15_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx16_harness",
+      "passed": true
+    },
+    {
+      "name": "fx16_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx17_harness",
+      "passed": true
+    },
+    {
+      "name": "fx17_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx18_harness",
+      "passed": true
+    },
+    {
+      "name": "fx18_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx19_harness",
+      "passed": true
+    },
+    {
+      "name": "fx19_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx20_harness",
+      "passed": true
+    },
+    {
+      "name": "fx20_prediction",
+      "passed": true
+    },
+    {
+      "name": "fx21_harness",
+      "passed": true
+    },
+    {
+      "name": "fx21_prediction",
+      "passed": true
+    },
+    {
+      "name": "adapter_cleanup",
+      "passed": true
+    }
+  ],
+  "fixtures": [
+    {
+      "fixture": 1,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "100001",
+      "expected": [
+        [
+          "RETURN",
+          "100001"
+        ],
+        [
+          "LEN",
+          "64"
+        ]
+      ]
+    },
+    {
+      "fixture": 2,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 3,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 4,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 5,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 6,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 7,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 8,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 9,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "9000ee",
+      "expected": [
+        [
+          "RETURN",
+          "9000ee"
+        ]
+      ]
+    },
+    {
+      "fixture": 10,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "a0015b",
+      "expected": [
+        [
+          "RETURN",
+          "a0015b"
+        ]
+      ]
+    },
+    {
+      "fixture": 12,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "c00101",
+      "expected": [
+        [
+          "RETURN",
+          "c00101"
+        ]
+      ]
+    },
+    {
+      "fixture": 13,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "d00101",
+      "expected": [
+        [
+          "RETURN",
+          "d00101"
+        ]
+      ]
+    },
+    {
+      "fixture": 14,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "e0015c",
+      "expected": [
+        [
+          "RETURN",
+          "e0015c"
+        ]
+      ]
+    },
+    {
+      "fixture": 15,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "f0012e",
+      "expected": [
+        [
+          "RETURN",
+          "f0012e"
+        ]
+      ]
+    },
+    {
+      "fixture": 16,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "1000191",
+      "expected": [
+        [
+          "RETURN",
+          "1000191"
+        ]
+      ]
+    },
+    {
+      "fixture": 17,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 18,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "temporal",
+      "expected": [
+        [
+          "FAULT",
+          "temporal"
+        ]
+      ]
+    },
+    {
+      "fixture": 19,
+      "passed": true,
+      "outcome": "RETURN",
+      "detail": "130015b",
+      "expected": [
+        [
+          "RETURN",
+          "130015b"
+        ]
+      ]
+    },
+    {
+      "fixture": 20,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    },
+    {
+      "fixture": 21,
+      "passed": true,
+      "outcome": "FAULT",
+      "detail": "oob",
+      "expected": [
+        [
+          "FAULT",
+          "oob"
+        ]
+      ]
+    }
+  ],
+  "workers": 4,
+  "harts": 1,
+  "virtual_vm_abi": 3,
+  "safety_prediction_arm": "sublet",
+  "known_gaps": [
+    "nested slab/cache lifetimes",
+    "bipbuffer logical reuse"
+  ],
+  "input_sha256": {
+    "launcher": "12a78e0385ec97e48cdc69e1025bac7ecd3d8fc753c6dfd52ca0bf38a4bf8990",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "job": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+    "pthread": "55216aea03b0f625833fcbd74d7a08111704bb2a50d17af0acaa07dd3abc2fc3",
+    "memcached": "73581419a1e698e39b4617e003e69fd11203b5cd6623f6e934acd8d14c6d2273",
+    "marker": "cec3532b768677efeb8266cc2b8ebc70778abbc27d60c606162d0e633a09fd08",
+    "safety": "5666ae5740d2486f10e9716e90e8eaa3df9d6f92bca5565666870b8a54e6a4de",
+    "native": "8b24165cd1f2a9e19c52bc77c70801ef5b19ea144bdc7180ba04c2e0ad65d4c1",
+    "native_marker": "d01d701c03c46caa19162697b5a3046fe569e915daef134a60ba43cb32123e76",
+    "qemu": "dcb35a810990e9a58ae33c7e0999f25bbcbcb8a09ddbb23a8fdb885880ca4a97",
+    "harness_source": "1e569a8b63b49af1262db6456c271f24d8ee6ffc2ab58f29b0e445cff557532e",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "runner_sha256": "049be8a226482e174a2c17e76ac07d80c869c65f64d6b0912694706cba28f0ed",
+  "gate_sha256": "59c8f503ede586ab3f4afb16a74d87303811e11aa90c9eecbb7ade857ebc54bc",
+  "predictions_sha256": "a6f9f673ba39b43f8f3a94d230c381ccbf2beaa9844153689701c07e590cad32",
+  "review_base": "518a5b805aa70c222ef0496c151b2845b4ab8dae",
+  "build_scope": "Fresh normal/safety/worker-marker memcached images and native controls. Fresh virtual libc and SDK from the review tree; reused previously qualified Capstone libevent 2.1.12 archives. Upstream libevent tests were not rerun.",
+  "dependency_sha256": {
+    "libevent.a": "6eceea7d5d59003526a1d7989ab26c0b9c8900fb58aab0d7a91a8de806c40efe",
+    "libevent_core.a": "e6c079b024370018bd892e2dce58dd94a5789b2ce5ade66316aacf966351ed6a"
+  }
+}

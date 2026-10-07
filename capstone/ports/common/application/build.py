@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 import shlex
 from pathlib import Path
 import subprocess
@@ -70,6 +71,7 @@ def main():
     p.add_argument('--root', type=Path, required=True)
     p.add_argument('--toolchain', type=Path, required=True)
     p.add_argument('--heap', choices=['level0', 'sublet'], default='level0')
+    p.add_argument('--profile', choices=['physical', 'virtual'], default='physical')
     p.add_argument('--arena', type=int, default=64*1024*1024)
     p.add_argument('--heap-log', type=int, default=26)
     p.add_argument('--out', type=Path, required=True)
@@ -87,6 +89,8 @@ def main():
     args = p.parse_args()
     if (args.allocations or args.gc_gaps or args.reuse_gap) and not args.instrument:
         p.error('study observers require --instrument')
+    if args.profile == 'virtual' and args.instrument:
+        p.error('virtual migration does not qualify historical memory-study observers')
     input_revision = subprocess.check_output(['git', '-C', REPO, 'rev-parse', args.input_revision+'^{commit}'], text=True).strip()
     root, out = args.root.resolve(), args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -94,7 +98,11 @@ def main():
     def run(cmd):
         cmd = list(map(str, cmd)); commands.append(cmd)
         (out / 'commands.json').write_text(json.dumps(commands, indent=2) + '\n')
-        subprocess.run(cmd, check=True)
+        env = os.environ.copy()
+        # This adapter owns the SDK it just built. An upstream recipe's SDK
+        # must not redirect capstone-cc to another runtime at the final link.
+        env.pop('CAPSTONE_SDK', None)
+        subprocess.run(cmd, check=True, env=env)
     libc_root = args.libc_root.resolve() if args.libc_root else root
     musl = libc_root / 'musl-src/musl-1.2.5'
     libc = libc_root / 'musl-build/libc-capstone.a'
@@ -127,6 +135,7 @@ def main():
          '-DPORT_HEADER_PROVIDER=musl', '-DPORT_C11_ATOMICS=ON',
          '-DPORT_MUSL_ROOT=' + str(musl), '-DCAPSTONE_MUSL_ARCHIVE=' + str(libc),
          '-DCAPSTONE_APPLICATION_SDK=ON', '-DCAPSTONE_APPLICATION_HEAP=' + args.heap,
+         '-DCAPSTONE_APPLICATION_VIRTUAL=' + ('ON' if args.profile == 'virtual' else 'OFF'),
          '-DCAPSTONE_APPLICATION_HEAP_LOG=' + str(args.heap_log),
          '-DCAPSTONE_APPLICATION_DATA_BYTES=33554432',
          '-DCAPSTONE_APPLICATION_ARENA_BYTES=' + str(args.arena),
@@ -165,11 +174,14 @@ def main():
         extra += ['-O1', '-Wl,--wrap=main', *defines, HERE / 'initialize.c']
     run([sdk / 'capstone-cc', *extra, *objects, '-o', image])
     run([args.toolchain / 'bin/llvm-objcopy', '--strip-debug', image])
-    manifest = dict(application=args.app, application_abi=2, instrument=args.instrument, allocations=args.allocations,
+    manifest = dict(application=args.app, application_abi=2, profile=args.profile,
+                    virtual_vm_abi=3 if args.profile == 'virtual' else None,
+                    instrument=args.instrument, allocations=args.allocations,
                     gc_gaps=args.gc_gaps,
                     reuse_gap=args.reuse_gap,
                     allocations_sha256=sha(EXPERIMENTS / 'allocations.c') if args.allocations else None,
-                    heap=args.heap, nested=args.nested, recipe_revision=input_revision,
+                    heap='virtual' if args.profile == 'virtual' else args.heap,
+                    nested=args.nested, recipe_revision=input_revision,
                     runtime_revision=subprocess.check_output(['git', '-C', REPO, 'rev-parse', 'HEAD'], text=True).strip(),
                     runtime_dirty=bool(subprocess.check_output(['git', '-C', REPO, 'status', '--porcelain'])),
                     arena_bytes=args.arena, heap_log=args.heap_log,

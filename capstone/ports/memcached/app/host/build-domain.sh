@@ -23,6 +23,12 @@ fi
   || { echo "build FAILED"; grep -E 'error' "$LOG/build.log" | head -5; exit 1; }
 touch "$LOG/cast-log.txt"; sort -u "$LOG/cast-log.txt" > "$LOG/cast-sites.txt"
 cp "$X/memcached" "$OUT/memcached.dom"
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  # The virtual SDK supplies one growing, revoking heap; the physical
+  # level0/shrink/sublet comparison arms retain their original recipe below.
+  "$CAPSTONE_LLVM_BIN/llvm-readelf" -h "$OUT/memcached.dom" > /dev/null
+  echo "virtual memcached: $OUT/memcached.dom"
+else
 # The three heap arms, from the same objects: only the runtime the image links differs.
 #   shrink: the SDK's default level0, each allocation bounded (memcached.dom above);
 #   level0: level0 built with CAPSTONE_LEVEL0_OBJECT_BOUNDS=0, no heap safety;
@@ -54,6 +60,7 @@ done
 [ "$("$CAPSTONE_LLVM_BIN/llvm-nm" "$OUT/memcached-shrink.dom" | grep -cE ' [Tt] (sh_free|sh_carve_block)$')" = 0 ] \
   || { echo "ARM GATE: the sublet image lacks the Sublet heap, or the level0 image has it"; exit 1; }
 echo "arms: three distinct images; the Sublet heap is in the sublet image only"
+fi
 "$CAPSTONE_LLVM_BIN/llvm-readelf" -h "$OUT/memcached.dom" > /dev/null
 # _DYNAMIC is the one undefined name every SDK image carries (the startup's reference; the threads
 # probe and every tshark arm have it and run): anything else undefined fails the gate.
