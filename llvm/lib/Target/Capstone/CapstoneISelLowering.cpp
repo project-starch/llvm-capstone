@@ -6914,9 +6914,10 @@ SDValue CapstoneTargetLowering::expandUnalignedRVVStore(SDValue Op,
 // giving pools a slot (the monitor copying the pool into dom_data) is a scope item, not a fix here.
 // See docs/ref/ISSUES.md C-43.
 bool capstoneGpFreeAbiActive();
+bool capstoneImageGpAbiActive();
 static void diagnoseAnonymousConstantUnderGpCaptable(SelectionDAG &DAG,
                                                      const SDLoc &DL) {
-  if (!capstoneGpFreeAbiActive())
+  if (!capstoneGpFreeAbiActive() || capstoneImageGpAbiActive())
     return;
   DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
       DAG.getMachineFunction().getFunction(),
