@@ -362,6 +362,20 @@ def main():
     p.add_argument('--adapter', type=Path, required=True)
     p.add_argument('--timeout', type=int, default=1800, help='Whole-boot bound')
     p.add_argument('--disk-mib', type=int, default=1024)
+    # The processor profile the runtime's allocator needs, ON by default because
+    # without it EVERY case faults before its first line and the run still looks
+    # like a result. It cost a whole pass on 2026-10-08: the musl mallocng
+    # policy in runtime/virtual/heap-musl.c requires the opt-in exact-bound
+    # capabilities of the pinned QEMU (x-capstone-exact-bounds=true), and with
+    # the option absent every image stopped at `cincoffsetimm with an UNTAGGED
+    # rs1 ... val=0x0` -- which this runner scored as `detected` for the defect
+    # arms and `harness` elsewhere, so fifteen corpora reported numbers that
+    # measured nothing. A FIXED arm that faults is the tell, and it is why the
+    # controls are counted separately from the verdicts.
+    p.add_argument('--exact-bounds', action='store_true', default=True,
+                   help='Enable the native mallocng processor profile (default)')
+    p.add_argument('--no-exact-bounds', dest='exact_bounds', action='store_false',
+                   help='For a QEMU that does not know the option')
     p.add_argument('--nm', type=Path, help='llvm-nm, to attribute a fault to a '
                                            'case\'s labelled probe symbol')
     p.add_argument('--rescore', action='store_true',
@@ -417,7 +431,8 @@ def main():
                           '--qemu', str(a.qemu.resolve()),
                           '--images', str(a.platform_images.resolve()),
                           '--stage', str(stage), '--work', str(a.work / 'guest'),
-                          '--disk-mib', str(a.disk_mib), '--timeout', str(a.timeout)])
+                          '--disk-mib', str(a.disk_mib), '--timeout', str(a.timeout)]
+                         + (['--exact-bounds'] if a.exact_bounds else []))
     log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
 
     rows = verdicts(plan, log, images, tables, bases)
