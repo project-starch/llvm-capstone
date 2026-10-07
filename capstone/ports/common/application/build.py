@@ -54,13 +54,12 @@ def inputs(app, root):
         return [root / 'build' / name for name in dict.fromkeys(names)]
     if app == 'postgres':
         src = root / 'domain/postgresql-17.5'
-        names = set()
-        for directory in ('src/backend', 'src/timezone'):
-            for listing in (src / directory).rglob('objfiles.txt'):
-                names.update(listing.read_text().split())
-        # Module names are renamed by the port's build recipe.
-        for directory in ('src/backend/snowball', 'src/pl/plpgsql/src'):
-            names.update(str(p.relative_to(src)) for p in (src / directory).rglob('*.o'))
+        listing = root / 'link/backend-objects.txt'
+        if not listing.is_file():
+            raise ValueError('PostgreSQL link inputs missing; rerun build-domain.sh with PGSU_FROM=link')
+        names = set(listing.read_text().split())
+        if not names:
+            raise ValueError('PostgreSQL backend object list is empty')
         return ([root / 'link/static_modules.o'] + [src / n for n in sorted(names)] +
                 [src / 'src/port/libpgport_srv.a', src / 'src/common/libpgcommon_srv.a'])
     raise ValueError(app)
