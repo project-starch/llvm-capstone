@@ -232,6 +232,27 @@ time-based page return: sh6bench with
 `MALLOC_CONF=dirty_decay_ms:0,muzzy_decay_ms:0` has the same max RSS
 (`results/e7-decay0`).
 
+### R8. What the same objects would need in Capstone's Sublet heap (`results/e16-fit`, `fit.py`)
+
+A prediction from the CheriBSD traces, not a Capstone measurement. Tracer v4
+counts the most objects held at once and the peak of the held bytes with
+every request rounded up to a power of two of at least 256 bytes, the
+rounding of the physical Sublet heap (`ports/musl-capstone/runtime/sublet_heap.c`:
+buddy, 256-byte atoms, one pool of 4 MiB by default, 65 536 identities).
+
+| Program | peak held MiB | peak objects | rounded peak MiB | × held | 4 MiB pool |
+|---|---|---|---|---|---|
+| cfrac | 0.92 | 24 381 | 5.96 | 6.46 | too small |
+| espresso largest.espresso | 1.17 | 4 408 | 1.89 | 1.62 | fits |
+| glibc-simple | 0.12 | 1 601 | 0.42 | 3.38 | fits |
+| mstress 1 25 25 | 4.26 | 2 856 | 5.35 | 1.26 | too small |
+| mstress 1 50 25 | 7.43 | 5 522 | 9.53 | 1.28 | too small |
+
+All five stay far below 65 536 identities. The rounded peak is a lower bound
+for the pool: it ignores the buddy's own holes, and the two peaks are taken
+independently. cfrac's objects (8–31 bytes asked, `MQ-SIZES`) cost 6.5× their size at 256-byte
+atoms; mstress needs a larger pool (`CAPSTONE_SUBLET_HEAP_LOG`).
+
 ### Instrument checks
 
 - **Tracer does not change the heap:** mstress under the tracer ends with
@@ -278,8 +299,5 @@ time-based page return: sh6bench with
 
 ## Not yet done
 
-- What the same objects would need in Capstone's Sublet heap (256-byte
-  buddy atoms, 65 536 identities): `peak_live_objects` and
-  `peak_live_pow2_256` from tracer v4 (`results/e16-fit`, running).
 - Instruction counts (deliberately left out for now).
 - The Capstone side.

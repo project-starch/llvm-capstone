@@ -44,3 +44,11 @@ alloc-test_1         samples=34 peak total=   37.0 MiB  jemalloc=26.7 mrs=5.9 fi
 glibc-simple         samples=58 peak total=   35.4 MiB  jemalloc=21.4 mrs=11.1 file=2.1 other=0.8  mrs peak share=41.9%  time -l maxrss=35.7
 mstress_1_200_25     samples=3 peak total=   78.7 MiB  jemalloc=74.3 mrs=1.2 file=2.1 other=1.1  mrs peak share=1.7%  time -l maxrss=80.0
 sh6bench             samples=98 peak total=  749.2 MiB  jemalloc=601.1 mrs=139.7 file=2.1 other=6.2  mrs peak share=26.3%  time -l maxrss=750.8
+
+## R8 Sublet fit prediction (fit.py)
+program                       peak MiB  objects  pow2-256 MiB  x held  pool 4 MiB    ids
+cfrac 1754518652050731705637      0.92    24381          5.96    6.46   too small   fits
+espresso largest.espresso         1.17     4408          1.89    1.62        fits   fits
+glibc-simple                      0.12     1601          0.42    3.38        fits   fits
+mstress 1 25 25                   4.26     2856          5.35    1.26   too small   fits
+mstress 1 50 25                   7.43     5522          9.53    1.28   too small   fits
