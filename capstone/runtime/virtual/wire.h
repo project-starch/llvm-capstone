@@ -1,5 +1,6 @@
 #ifndef CAPSTONE_VIRTUAL_WIRE_H
 #define CAPSTONE_VIRTUAL_WIRE_H
+#include "vm-abi.h"
 #include <linux/types.h>
 #include <linux/ioctl.h>
 
@@ -48,11 +49,4 @@ struct cv_global {
 #define CV_MAX_BYTES (1024UL << 20)
 #define CV_NODE_ORDER 8
 #define CV_NODE_BYTES (4096UL << CV_NODE_ORDER)
-/* Runtime ECALL requests: 0 delegate, 1 mapping, 2 retirement. */
-#define CV_SERVICE_DELEGATE 0
-#define CV_SERVICE_MAP 1
-#define CV_SERVICE_UNMAP 2
-#define CV_SERVICE_THREAD_CREATE 3
-#define CV_SERVICE_THREAD_EXIT 4
-#define CV_SERVICE_THREAD_JOIN 5
 #endif

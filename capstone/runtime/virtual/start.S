@@ -1,3 +1,4 @@
+#include "vm-abi.h"
 /* Virtual application startup: all authority arrives in explicit registers.
  * gp is an image capability with a representable cursor; gp-free codegen
  * uses SCC for globals and ordinary calls within PCC. */
@@ -43,32 +44,53 @@ _start:
 .text
 .global __capstone_yield
 __capstone_yield:
-    li a7, 0
+    li a7, CV_SERVICE_DELEGATE
     ecall
     ret
 .global __capstone_vm_map
 __capstone_vm_map:
-    li a7, 1
+    mv a1, a0
+    li a2, 3
+    li a3, 6
+    li a4, 0
+    li a7, CV_SERVICE_MAP
+    ecall
+    bgez a0, 1f
+    li a0, 0
+1:  ret
+.global __capstone_vm_acquire
+__capstone_vm_acquire:
+    li a7, CV_SERVICE_MAP
     ecall
     ret
 .global __capstone_vm_unmap
 __capstone_vm_unmap:
-    li a7, 2
+    li a7, CV_SERVICE_UNMAP
     ecall
     ret
 .global __capstone_vm_thread_create_frame
 __capstone_vm_thread_create_frame:
-    li a7, 3
+    li a7, CV_SERVICE_THREAD_CREATE
     ecall
     ret
 .global __capstone_vm_thread_exit
 __capstone_vm_thread_exit:
-    li a7, 4
+    li a7, CV_SERVICE_THREAD_EXIT
     ecall
     ebreak
 .global __capstone_vm_thread_join
 __capstone_vm_thread_join:
-    li a7, 5
+    li a7, CV_SERVICE_THREAD_JOIN
+    ecall
+    ret
+.global __capstone_vm_protect
+__capstone_vm_protect:
+    li a7, CV_SERVICE_PROTECT
+    ecall
+    ret
+.global __capstone_vm_wait
+__capstone_vm_wait:
+    li a7, CV_SERVICE_WAIT
     ecall
     ret
 .section .gct
@@ -77,7 +99,7 @@ __capstone_vm_thread_join:
 .hidden __capstone_gct_start
 __capstone_gct_start:
 .section .capstone_virtual,"",@progbits
-.quad 0x314d56564e4f5043
+.quad CV_IMAGE_MAGIC
 
 /* The same non-executable cancellation markers used by start-musl.S. */
 .section .rodata.capstone_cancel_points,"a",@progbits

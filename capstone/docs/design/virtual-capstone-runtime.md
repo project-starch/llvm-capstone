@@ -130,9 +130,38 @@ its saved capability context when that thread runs again. Later threading
 work should map application threads onto OS threads rather than add a second
 scheduler.
 
-The QEMU profile implements these boundaries for one hart and one thread per
-application process. Its CSRUNV frame/options and CSRETIRE operation remain
+The QEMU profile implements these boundaries for one hart, including explicit
+same-address-space virtual threads driven by Linux worker tasks. Its CSRUNV frame/options and CSRETIRE operation remain
 experimental; the interface is not frozen for RTL or other operating systems.
+
+## Private anonymous libc VM integration
+
+The VM-service-v2 implementation extends the existing application route.
+Linux belongs to the TCB. Linear ownership is defined over virtual ranges
+within an address-space instance, and all its threads share one lifetime
+namespace. The private-page checks in the first adapter restrict integration;
+they do not redefine virtual linearity as global physical-frame ownership.
+
+One internal libc service acquires a linear grant. The heap keeps it for
+Sublet object lifetimes; public mmap explicitly makes its grant copyable.
+Mappings carry separate visible/backing sizes and kinds. Hidden backing
+padding stays inaccessible. Private anonymous mappings support PROT_NONE,
+R/W/X protections, page-range protection changes and whole-range retirement.
+PTE policy enforces current protection; the original mapping capability
+retains maximum authority so protection can later be restored.
+
+Allocator metadata starts small and grows independently of payload arenas.
+A scalar atomic mutex protects it across continuation switches. Contention
+returns to Linux, and uncontended malloc/free remain local. Collection scans
+resident tagged storage and saved contexts without populating reserved holes;
+any unsupported backing or inspection error prevents ID reuse.
+
+Partial removal/replacement of a mapping remains a distinct architectural
+contract. Revoking its whole ancestor would invalidate pointers into retained
+pages; retaining it would let a wide stale capability reach replacement pages.
+Do not implement this by merely forwarding munmap or splitting registry rows.
+Ordinary calls into separately bounded executable mappings also need a return
+PCC contract; starting an explicit C context with such a mapping is supported.
 
 ## System services and memory tags
 

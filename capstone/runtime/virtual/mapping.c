@@ -5,46 +5,61 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ipc.h>
-#include "../../sublet/sublet.h"
-extern void *__capstone_vm_map(unsigned long bytes);
-extern long __capstone_vm_unmap(unsigned long address, unsigned long bytes);
+#include "vm.h"
 __attribute__((__weak__)) void __vm_wait(void) {}
+static int mapping_length(size_t n, unsigned long *bytes)
+{
+    if (!n || n > CAP_VM_MAX_BYTES) { errno = EINVAL; return -1; }
+    *bytes = (n + 4095) & ~4095UL;
+    return 0;
+}
 void *mmap(void *addr, size_t n, int prot, int flags, int fd, off_t off)
 {
     if (flags & MAP_HUGETLB) { errno = ENOMEM; return MAP_FAILED; }
-    /* Preserve the physical runtime's process-local MAP_SHARED compatibility.
-     * The backing stays private: fork and shared tagged pages are unsupported. */
-    if (addr || !n || n > (256UL << 20) || prot != (PROT_READ | PROT_WRITE) ||
-        (flags != (MAP_PRIVATE | MAP_ANONYMOUS) && flags != (MAP_SHARED | MAP_ANONYMOUS)) || fd != -1 || off) {
+    /* The existing MAP_SHARED compatibility remains process-local. */
+    if (addr || (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) ||
+        (flags != (MAP_PRIVATE | MAP_ANONYMOUS) &&
+         flags != (MAP_SHARED | MAP_ANONYMOUS)) || fd != -1 || off) {
         errno = EINVAL; return MAP_FAILED;
     }
-    unsigned long size = 4096;
-    while (size < n) size <<= 1;
+    unsigned long bytes;
+    if (mapping_length(n, &bytes)) return MAP_FAILED;
     sublet_cap slot;
-    sublet_store(&slot, __capstone_vm_map(size));
-    unsigned long raw;
-    __asm__ volatile("ld %0, 0(%1)" : "=r"(raw) : "r"(&slot) : "memory");
-    if (!raw) { errno = ENOMEM; return MAP_FAILED; }
-    /* Keep the kernel's ancestor as retirement authority, return copyable
-     * application authority. No additional MREV is necessary for mmap. */
-    void *p;
-    __asm__ volatile("ldc %0, 0(%1)\ndelin %0"
-                     : "=&r"(p) : "r"(&slot) : "memory");
-    return p;
+    /* PTEs enforce current protection. The grant retains the maximum rights
+     * of this private anonymous mapping so mprotect can restore them later. */
+    if (cap_vm_acquire(&slot, bytes, 4096, prot, 7, CAP_VM_MAPPING))
+        return MAP_FAILED;
+    void *p = cap_vm_copyable(&slot);
+    unsigned long base = __builtin_capstone_cap_get_cursor(p);
+    return __builtin_capstone_cap_shrink(p, base, base + bytes);
 }
 void *__mmap(void *a, size_t n, int p, int f, int fd, off_t off)
 { return mmap(a, n, p, f, fd, off); }
 int munmap(void *p, size_t n)
 {
-    if (!p || !n || n > (256UL << 20)) { errno = EINVAL; return -1; }
-    unsigned long size = 4096;
-    while (size < n) size <<= 1;
-    (void)*(volatile unsigned char *)p;
-    long rc = __capstone_vm_unmap(__builtin_capstone_cap_get_cursor(p), size);
+    unsigned long bytes, address = __builtin_capstone_cap_get_cursor(p);
+    if ((address & 4095) || mapping_length(n, &bytes)) {
+        errno = EINVAL; return -1;
+    }
+    /* VM operations must work on PROT_NONE, without probing its contents.
+     * The trusted service resolves the range against its mapping registry. */
+    long rc = __capstone_vm_unmap(address, bytes);
     if (rc) { errno = -rc; return -1; }
     return 0;
 }
 int __munmap(void *p, size_t n) { return munmap(p, n); }
+int mprotect(void *p, size_t n, int prot)
+{
+    unsigned long bytes, address = __builtin_capstone_cap_get_cursor(p);
+    if ((address & 4095) || (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))) {
+        errno = EINVAL; return -1;
+    }
+    if (!n) return 0;
+    if (mapping_length(n, &bytes)) return -1;
+    long rc = __capstone_vm_protect(address, bytes, prot);
+    if (rc) { errno = -rc; return -1; }
+    return 0;
+}
 /* Sharing and file-backed mappings have no tag-lifecycle contract yet. */
 void *mremap(void *p, size_t old, size_t n, int flags, ...)
 { (void)p; (void)old; (void)n; (void)flags; errno = ENOSYS; return MAP_FAILED; }

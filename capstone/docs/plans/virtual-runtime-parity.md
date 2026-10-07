@@ -30,3 +30,22 @@ forbidden privilege operations and restoration of the trusted caller.
 Compact-bounds behavior and QEMU-only collection must not be reported as RTL
 qualification. Removing the historical physical implementation is a separate
 cleanup after the replacement gate, not a prerequisite for comparison.
+
+## Libc VM service v2
+
+Work branch: `virtual-capstone-libc-vm`. Reuse the existing processor interface;
+Linux is in the TCB and linear ownership is address-space-local. The common
+MAP service supplies linear heap grants and public copyable mappings, with
+protection changes, whole-range retirement and inaccessible backing padding.
+Metadata slabs grow without allocator recursion; scalar atomics protect
+shared heap state. Resident-only collection includes protected stale-tag
+storage without faulting in unused virtual reservations.
+
+Qualification must cover requested lengths, R/W/NONE protection changes,
+guard neighbours, exact denial PCs, executable-context PCC, cross-thread
+allocation/free, metadata growth, sparse 200,000-cycle recycling, retained
+stale pointers after collection, application regressions and old VM-ABI
+rejection. Negative controls remove protection enforcement and allocator
+locking. General partial unmap/MAP_FIXED replacement, true shared/file-backed
+mappings and cross-mapping call/return need their own contracts before broader
+POSIX completeness is claimed.

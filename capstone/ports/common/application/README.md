@@ -11,6 +11,61 @@ backend, SQLite's in-memory SQL application, the configured FFmpeg decoder,
 and offline tshark. Standalone allocator and FPGA instruction tests are
 separate targets; their historical HostCall transport is not an application ABI.
 
+## Virtual source builds
+
+The [virtual result](../../../runtime/virtual/app-ports-result.json) passes
+16/16 normal workload checks and 17/17 inner-allocator checks, plus 32/32
+configured FFmpeg/tshark spatial and temporal fixtures. An omitted CPython
+image fails precisely its two checks. The
+[extended runtime gate](../../../runtime/virtual/app-ports-security-result.json)
+passes 46/46 checks with SQLite, mruby and Perl. These results qualify the
+existing configured ports on one hart; broader upstream features remain
+separate work.
+
+CPython, PostgreSQL, FFmpeg and tshark now accept
+`CAPSTONE_APPLICATION_PROFILE=virtual` in their source recipes. Select the
+gp-free/image-gp compiler before sourcing `capstone/tests/capstone-test-env.sh`.
+Use fresh output directories: relinking physically compiled objects cannot
+convert their addressing convention. Physical remains the default profile.
+
+For the normal variants, the shared wrapper builds upstream objects and a
+matching VM-service v2 SDK, then records input and image hashes:
+
+```sh
+export CAPSTONE_LLVM_BUILD_DIR=/path/to/qualified/compiler-build
+export CAPSTONE_LLVM_BIN="$CAPSTONE_LLVM_BUILD_DIR/bin"
+source capstone/tests/capstone-test-env.sh
+bash capstone/ports/common/application/build-virtual.sh cpython \
+  "$CAPSTONE_TMP_ROOT/cpython-virtual"
+```
+
+Replace `cpython` with `postgres`, `ffmpeg` or `tshark`. The image is
+`OUTPUT/image/APP.dom`; run it with `capstone-vexec`, not the physical launcher.
+The existing source recipes retain their dependency requirements, including
+the PostgreSQL source archive and host Meson for GLib. CPython's distribution
+library and PostgreSQL's cluster/share files must accompany their images.
+
+`CPY_SUBLET=1` and `PGSU_NESTED=sublet` select their protected inner allocator
+variants through the wrapper. For FFmpeg pools and tshark wmem chunks, invoke
+their source recipes directly with the virtual profile and
+`FFAPP_HEAP=sublet FFAPP_POOL=sublet` or `TSAPP_HEAP=chunks`; use their
+`domain-sublet-poolsublet/ffapp_m5.dom` or `domain-chunks/tshark_m5.dom` output.
+The generic relinker does not include those additional allocator objects.
+Historical memory-study observers remain outside this virtual qualification.
+Run the inner CPython image with `CPY_SUBLET_MODE=1` to revoke on every free;
+its adapter's default mode performs spatial checks only. The workload runner
+sets that variable and `--cpython-inner` requires its revocation-mode marker.
+For the source recipe's FFmpeg M5 image, pass `--ffmpeg-staged`: its successful
+exit status is the stage number 5, unlike the generic application's status 0.
+Both profiles require all 30 frame hashes to match the native reference.
+
+The virtual workload and safety runners are
+`runtime/virtual/run-ports.py` and `runtime/virtual/run-safety.py`.
+Their `--help` lists explicit images, native oracle inputs and fresh work
+directories. FFmpeg's safety subset must match its configured decoder:
+fixtures 1–17, 20 and 21; optional filter fixtures require additional builds.
+The safety runner uses the existing physical-port predictions unchanged.
+
 ## Verified migration (2026-09-29)
 
 [Result lines and binary identities](results/20260929-delegation.json) record
