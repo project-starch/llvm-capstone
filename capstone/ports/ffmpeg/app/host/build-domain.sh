@@ -96,6 +96,7 @@ fi
 MUSL=$(bash "$MUSL_PORT/prepare-musl-capstone.sh" | tail -1)
 ARCHIVE=$WORK/musl-build/libc-capstone.a
 COMPILER_HASH=$(sha256sum "$CLANG" | cut -d' ' -f1)
+COMPILER_HASH="$COMPILER_HASH:${CAPSTONE_APPLICATION_PROFILE:-physical}"
 if [[ ! -f "$ARCHIVE" || $(cat "$WORK/musl-build/compiler.sha256" 2>/dev/null) != "$COMPILER_HASH" ]]; then
   OUT_DIR=$WORK/musl-build bash "$MUSL_PORT/build-musl-capstone.sh"
   printf '%s\n' "$COMPILER_HASH" > "$WORK/musl-build/compiler.sha256"
@@ -114,6 +115,9 @@ INC=(-nostdinc -isystem "$MUSL/arch/capstone64" -isystem "$MUSL/arch/generic"
      -isystem "$MUSL/obj/include" -isystem "$MUSL/include" -isystem "$("$CLANG" -print-resource-dir)/include")
 FLAGS=("${TARGET[@]}" -ffreestanding -fno-builtin -fno-jump-tables -ffunction-sections
        -fdata-sections -O1 -Wno-int-conversion -D_GNU_SOURCE "${INC[@]}")
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+  FLAGS+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+fi
 
 # --- shared application SDK ------------------------------------------------
 SDK=$RT/sdk
@@ -160,6 +164,7 @@ CONFIG_EDIT='s/^#define HAVE_POSIX_MEMALIGN 1$/#define HAVE_POSIX_MEMALIGN 0/; s
 # compiled before C-50..C-58 would have been reused on a fixed compiler.
 toolchain_id() {
   local bin; bin=$(readlink -f "$CLANG")
+  printf '%s\n' "${CAPSTONE_APPLICATION_PROFILE:-physical}"
   # `|| true`: a statically linked clang loads no LLVM libraries, and its codegen is in the binary.
   { echo "$bin"; ldd "$bin" | awk '/=> \//{print $3}' | grep -E 'libLLVM|libclang' || true; } |
     xargs stat -L -c '%n %s %Y'
