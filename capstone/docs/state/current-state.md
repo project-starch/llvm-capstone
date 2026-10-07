@@ -2,6 +2,32 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-10-07 — complete virtual memcached and musl workers
+
+The full memcached 1.6.45 server/libevent port now runs four real musl workers
+in the trusted Linux virtual C adapter. All eight application ports have a
+configured virtual workload baseline; MicroPython remains excluded.
+Threads share one process VA/lifetime namespace. musl owns TLS, joins,
+mutexes and condition variables; Linux schedules workers and supplies native-VA
+futex waits. Independent syscall/signal state and per-call epoll/message
+descriptors prevent cross-worker response corruption. Exit clears musl's
+join word only after the virtual context/frame stops.
+
+The [server result](../../ports/memcached/app/results/virtual-result.json)
+passes 53/53 native protocol, termination, worker and fixture checks. All ten
+physical Sublet safety predictions are unchanged; slab-neighbour/reuse remain
+known gaps. The [pthread result](../../runtime/virtual/pthread-result.json)
+passes 9/9, and both shared-buffer mutations fail as intended. The recorded
+46-check v2 regression precedes the final descriptor fixes; targeted native
+and server gates cover those additions. New VM-service v3 images require the
+new launcher, which also accepts v2 images.
+
+This slice changes runtime/libc and application recipes, with no new QEMU,
+kernel module, Linux-core, firmware or RTL change. The module binary hash is
+unchanged. See the [review/landing stack](../plans/virtual-capstone-pr-stack.md)
+and its complete historical commit/path audit. Preserve newer dev RTL and
+Buildroot pins and reconcile the shared QEMU supervisor fixes before landing.
+
 ## 2026-10-07 — remaining application ports on virtual mappings
 
 CPython 3.13.7, PostgreSQL 17.5 single-user, the configured FFmpeg decoder and

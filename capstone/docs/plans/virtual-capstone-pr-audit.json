@@ -1,0 +1,1286 @@
+{
+  "date": "2026-10-07",
+  "scope": "Historical virtual stack through the application-port baseline; two new review commits are described in the companion plan.",
+  "feature_baseline": "6fb2df614ca43deadf94ec454b47c49d1998006a",
+  "refs": {
+    "dev": "a8922b0979b96b32f13ba94d1fd3d28265fd7765",
+    "main": "88618641986d6b2787271e58c50730353e042e40",
+    "virtual-addressing": "6b5779a0907200205718238238440922bcc4a5db",
+    "delegation-threads": "92d21b84324b5f39c5683fd57777ea14e5e3cb81",
+    "virtual-capstone-prototype": "55708215b54071ba0db40a9163d4e723d691fcc2",
+    "virtual-capstone-runtime-parity": "b7c0ad843f877f541d7e3d6bff82e9a4815ee6c9",
+    "memcached-app": "c839e7294e23358e8683b6f96f3092abe1756677"
+  },
+  "merge_base": "4439dd0a55f9c849276dfc4d8e38b50293a2d10e",
+  "main_commits": [
+    {
+      "commit": "31afca6f81a39834c1d5d46032a7529cea73bab6",
+      "subject": "Define memory safety over trusted Linux virtual memory"
+    },
+    {
+      "commit": "6ba9673ab2dc7c4182c907d04a8c8bc6b758160d",
+      "subject": "Plan Linux feature parity across capability application ports"
+    },
+    {
+      "commit": "4715ec129b60af60ba44bf2bc5609c2515ed17a0",
+      "subject": "Check caller buffer authority before delegated I/O"
+    },
+    {
+      "commit": "923cc8c235ae0df5ec476cd7a995e03628b8b258",
+      "subject": "Size delegated I/O snapshots by count and restore heap controls"
+    },
+    {
+      "commit": "eb28401e058fbf590312ba1bbae014197b51bf03",
+      "subject": "Choose Linux U-mode as M1 capability execution target"
+    },
+    {
+      "commit": "76b94b47f21de2f809eceef2b1c795c9259a8655",
+      "subject": "Model trusted-Linux context and retirement transitions"
+    },
+    {
+      "commit": "a79944e5e32b2d7e1590cd58f4ee1c758204bfe7",
+      "subject": "Test and preserve fresh object lifetimes across address reuse"
+    },
+    {
+      "commit": "2f79545124de51c45e671e774dd212306528d150",
+      "subject": "Record QEMU U-mode access slice and remaining M1 gates"
+    },
+    {
+      "commit": "bc43ffd47ad6e8e52b7c1f5200c0f98b2ea6ee1b",
+      "subject": "Correct U-mode gate claims and record reviewed QEMU fixes"
+    },
+    {
+      "commit": "b950da12ccad304f43d690510d8e26361b32e2af",
+      "subject": "Record physical-tag U-mode slice and remaining M1 gates"
+    },
+    {
+      "commit": "436358e1b8cfa85cbd070e461b4eff646841b17a",
+      "subject": "Record ordered two-hart physical-tag gate"
+    },
+    {
+      "commit": "3b354f614ff295d06d9698e0941adf3556bc5091",
+      "subject": "Record S-mode alias-store physical-tag gate"
+    },
+    {
+      "commit": "6728e48a1016917d7daa339ddaed9cd3eb09c015",
+      "subject": "Record single-hart bound and store-tag repair for U-mode slice"
+    },
+    {
+      "commit": "e26a37322b8362ee6251e11a28184ff3a73bdcaa",
+      "subject": "Record S-mode vector tag invalidation and scrub gate for M1"
+    },
+    {
+      "commit": "b62ca75c0f0637d9d3fbe5fa6e6a4462c9d78a0c",
+      "subject": "Record the strengthened kernel-write gate and smoke provenance"
+    },
+    {
+      "commit": "ab335244702516aa65276e4d2d82aaf45d07974c",
+      "subject": "Pin the M1 runtime opt-in QEMU slice and record its Linux boot gate"
+    },
+    {
+      "commit": "6a3bc87dc3ed7168f3200b7e5ae4544dccdf2301",
+      "subject": "Add an ordinary Linux feasibility control for protected-process M1"
+    },
+    {
+      "commit": "c2762a33622251ddbf48c7e594b81b18b18dd883",
+      "subject": "Pin the tagged S-mode context candidate for M1 integration"
+    },
+    {
+      "commit": "97c842b820acea7cfbb8e57c3c1d5d47d6a45983",
+      "subject": "Pin reviewed context fixes and the expanded M1 gate"
+    },
+    {
+      "commit": "fd4112940afa2fad365e0011e8ad4529e3c2570c",
+      "subject": "Record Linux S-mode context instruction gate before process selection"
+    },
+    {
+      "commit": "14faf8b8f7f3c15563ab31e12c48110e4e15a990",
+      "subject": "Gate one tagged register in a Linux-selected Capstone process"
+    },
+    {
+      "commit": "3638abe58a4c4bafbb8a9270a257c79f68d5f555",
+      "subject": "Qualify protected Linux clone refusal and first page fault"
+    },
+    {
+      "commit": "7c6b2a0f7cc20659db79b062d1ce543cd6c0e753",
+      "subject": "Start the virtual Capstone prototype contract and model gate"
+    },
+    {
+      "commit": "ac8e9f98cf7044b81f20351f7ba1fd128bf843ad",
+      "subject": "Fix the virtual Capstone M0 ABI and land Q-12 in the prototype QEMU"
+    },
+    {
+      "commit": "07c0aa45659d9cca5c4d0cef805850d90b947e7c",
+      "subject": "Qualify consuming capability transfers through the Linux entry path"
+    },
+    {
+      "commit": "35021e78d33c00349a2900a76f0739a2e05c46f3",
+      "subject": "Deliver capability faults to S in the virtual Capstone prototype"
+    },
+    {
+      "commit": "44ebc308ae5315ae67b442e7d12f23223b41cf55",
+      "subject": "Record the review constraints for the remaining virtual Capstone M1 changes"
+    },
+    {
+      "commit": "43b8ca0cb0bc3155f8bf017a88775adab345156f",
+      "subject": "Measure representability and set the prototype's rules before CSMINT"
+    },
+    {
+      "commit": "55708215b54071ba0db40a9163d4e723d691fcc2",
+      "subject": "Move the virtual Capstone prototype onto guest node tables and CSMINT"
+    },
+    {
+      "commit": "bd13d9348b75ff70a0bdd199f77224cacafe117f",
+      "subject": "Document virtual Capstone integration through the existing runtime"
+    },
+    {
+      "commit": "add3a1b77f100f3b6b725ca4002ec72af10d3d65",
+      "subject": "capstone: qualify virtual C execution through a Linux module"
+    },
+    {
+      "commit": "4a9fe710ef99781e60c524f13d9b7c5c4ea22dc1",
+      "subject": "Run virtual Capstone applications through a Linux module and runtime"
+    },
+    {
+      "commit": "b7c0ad843f877f541d7e3d6bff82e9a4815ee6c9",
+      "subject": "Virtual runtime: complete Linux application parity gate"
+    },
+    {
+      "commit": "04f9e1175bfed20808ab1d4642229a26f43b5222",
+      "subject": "Virtual runtime: re-measure the parity gate on the final inputs"
+    },
+    {
+      "commit": "cda7e335ff9fadd4f2701f68b4878e3cb01cf4d5",
+      "subject": "Virtual runtime: add trusted same-mm thread contexts"
+    },
+    {
+      "commit": "da36ed0e1d8e58774702e0423e09462c9396a4d4",
+      "subject": "Fix virtual thread lifetime and finalize runtime gate"
+    },
+    {
+      "commit": "e2777455c4f12c4bce02305bab6d1c0f01dfc026",
+      "subject": "Port Perl application to virtual Capstone runtime"
+    },
+    {
+      "commit": "320ba350f278d22857aa8cbb1d3610f3ba56057b",
+      "subject": "Integrate virtual libc mappings and a shared growing heap"
+    },
+    {
+      "commit": "6fb2df614ca43deadf94ec454b47c49d1998006a",
+      "subject": "Migrate remaining application ports to virtual Capstone"
+    }
+  ],
+  "main_changes": [
+    {
+      "path": "capstone/capstone-qemu",
+      "added": "1",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/docs/README.md",
+      "added": "68",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/design/trusted-linux-execution-boundary.md",
+      "added": "344",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/design/trusted-linux-memory.md",
+      "added": "311",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/design/virtual-capstone-runtime.md",
+      "added": "247",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/history/06-10-2026_19-27-18_virtual-capstone-representability.md",
+      "added": "56",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/plans/README.md",
+      "added": "2",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/plans/capstone-heap-protection.md",
+      "added": "4",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/docs/plans/trusted-linux-application-compatibility.md",
+      "added": "332",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/plans/virtual-capstone-abi.md",
+      "added": "337",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/plans/virtual-capstone-prototype.md",
+      "added": "200",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/plans/virtual-capstone-runtime-r0.md",
+      "added": "134",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/plans/virtual-runtime-parity.md",
+      "added": "51",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/state/current-next-step.md",
+      "added": "98",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/docs/state/current-state.md",
+      "added": "418",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/models/trusted-linux-m1/README.md",
+      "added": "138",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/models/trusted-linux-m1/model.py",
+      "added": "655",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/models/trusted-linux-m1/result.json",
+      "added": "2404",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/my_first_domain/link.ld",
+      "added": "2",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/ports/README.md",
+      "added": "4",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/common/application/README.md",
+      "added": "55",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/common/application/build-sdk.sh",
+      "added": "7",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/common/application/build-virtual.sh",
+      "added": "55",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/common/application/build.py",
+      "added": "15",
+      "removed": "3"
+    },
+    {
+      "path": "capstone/ports/cpython/app/prepare-cpython-capstone.sh",
+      "added": "6",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/ffmpeg/app/host/build-domain.sh",
+      "added": "8",
+      "removed": "3"
+    },
+    {
+      "path": "capstone/ports/mruby/app/build-mruby-domain.sh",
+      "added": "7",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/build-musl-capstone.sh",
+      "added": "7",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/runtime/altstack.S",
+      "added": "9",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/runtime/atomic_libcalls.c",
+      "added": "4",
+      "removed": "5"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/runtime/delegate.c",
+      "added": "215",
+      "removed": "40"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/runtime/level0.c",
+      "added": "9",
+      "removed": "7"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/runtime/setjmp.S",
+      "added": "8",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/survey-musl-capstone.py",
+      "added": "4",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/perl/musl/README.md",
+      "added": "21",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/perl/musl/build-perl-domain.sh",
+      "added": "36",
+      "removed": "10"
+    },
+    {
+      "path": "capstone/ports/perl/musl/port.json",
+      "added": "3",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/ports/perl/musl/results/virtual/2026-10-07.json",
+      "added": "205",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/perl/musl/results/virtual/README.md",
+      "added": "26",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/perl/musl/scripts/smoke.pl",
+      "added": "2",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/ports/postgres/app/build-domain.sh",
+      "added": "4",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/wireshark/app/deps/env.sh",
+      "added": "1",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/ports/wireshark/app/host/build-domain.sh",
+      "added": "6",
+      "removed": "4"
+    },
+    {
+      "path": "capstone/ports/wireshark/app/host/safety-expect.txt",
+      "added": "2",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/ports/wireshark/app/src/tsapp-heap.c",
+      "added": "7",
+      "removed": "2"
+    },
+    {
+      "path": "capstone/runtime/application/CMakeLists.txt",
+      "added": "10",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/applications.md",
+      "added": "24",
+      "removed": "8"
+    },
+    {
+      "path": "capstone/runtime/cmake/Application.cmake",
+      "added": "29",
+      "removed": "3"
+    },
+    {
+      "path": "capstone/runtime/host/capstone_vm/cli.py",
+      "added": "13",
+      "removed": "3"
+    },
+    {
+      "path": "capstone/runtime/host/capstone_vm/compiler.py",
+      "added": "1",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/host/tests/test_cli.py",
+      "added": "15",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/include/capstone/virtual.h",
+      "added": "23",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/linux/delegate-service.c",
+      "added": "2",
+      "removed": "2"
+    },
+    {
+      "path": "capstone/runtime/tests/application/CMakeLists.txt",
+      "added": "13",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/runtime/tests/application/bounded-stack.S",
+      "added": "32",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/tests/application/contract.c",
+      "added": "2",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/runtime/tests/application/delegate-contract.c",
+      "added": "98",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/tests/application/results/20260930-syscall-buffer-bounds.json",
+      "added": "82",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/tests/application/results/20261001-heap-controls.json",
+      "added": "367",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/tests/application/results/20261001-syscall-bounds-review-fixes.json",
+      "added": "267",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/tests/application/results/20261001-udp-recheck.json",
+      "added": "24",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/tests/application/run-binfmt.py",
+      "added": "5",
+      "removed": "1"
+    },
+    {
+      "path": "capstone/runtime/virtual/README.md",
+      "added": "253",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/app-ports-result.json",
+      "added": "578",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/app-ports-security-result.json",
+      "added": "296",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/build-adapter.sh",
+      "added": "18",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/build-sdk.sh",
+      "added": "22",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/contract.c",
+      "added": "312",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/exec.c",
+      "added": "593",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/heap.c",
+      "added": "325",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/libc-vm-qualification.json",
+      "added": "94",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/libc-vm-result.json",
+      "added": "273",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/mapping.c",
+      "added": "218",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/Makefile",
+      "added": "1",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/capstone_vm.c",
+      "added": "667",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/qualification.json",
+      "added": "218",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/result.json",
+      "added": "167",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/run-ports.py",
+      "added": "163",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/run-safety.py",
+      "added": "99",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/run-staged.py",
+      "added": "75",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/run.py",
+      "added": "245",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/start.S",
+      "added": "102",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/thread.c",
+      "added": "90",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/vm-abi.h",
+      "added": "17",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/vm.h",
+      "added": "44",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/runtime/virtual/wire.h",
+      "added": "52",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/README.md",
+      "added": "183",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/abi-table-protected-result.json",
+      "added": "40",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/abi-table-strip-result.json",
+      "added": "28",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/kernel-context-result.json",
+      "added": "39",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/kernel-context/Makefile",
+      "added": "1",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/kernel-context/capstone_s_context.c",
+      "added": "33",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/linux-trusted-u.patch",
+      "added": "248",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/probe.c",
+      "added": "85",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/protected-result.json",
+      "added": "22",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/protected-strip-control.json",
+      "added": "24",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/protected.S",
+      "added": "107",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/q12-protected-result.json",
+      "added": "35",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/q12-strip-result.json",
+      "added": "29",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/result.json",
+      "added": "16",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/run-q12.sh",
+      "added": "48",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/trusted-linux-feasibility/run.py",
+      "added": "313",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/Makefile",
+      "added": "1",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/README.md",
+      "added": "70",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/build.sh",
+      "added": "20",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/entry.c",
+      "added": "7",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/probe.c",
+      "added": "103",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/program.S",
+      "added": "25",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/result.json",
+      "added": "163",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/run.py",
+      "added": "108",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/runtime_r0.c",
+      "added": "187",
+      "removed": "0"
+    },
+    {
+      "path": "capstone/tests/virtual-runtime-r0/wire.h",
+      "added": "13",
+      "removed": "0"
+    },
+    {
+      "path": "llvm/lib/Target/Capstone/CapstoneISelDAGToDAG.cpp",
+      "added": "10",
+      "removed": "0"
+    },
+    {
+      "path": "llvm/lib/Target/Capstone/CapstoneISelLowering.cpp",
+      "added": "2",
+      "removed": "1"
+    },
+    {
+      "path": "llvm/test/CodeGen/Capstone/cap-image-gp-pool.ll",
+      "added": "16",
+      "removed": "0"
+    },
+    {
+      "path": "llvm/utils/capstone-shared-drift.py",
+      "added": "4",
+      "removed": "2"
+    }
+  ],
+  "submodule_pins": {
+    "dev": {
+      "capstone/caplifive-buildroot": "8fd1ea1249a99a16ffe40886161e9a55831fdbdf",
+      "capstone/caplifive-system": "da972182cb24f3c194d1abd31b31025881f72f15",
+      "capstone/capstone-ariane": "776d9d85900e0b7f7fd71b5369a5827af1bb715e",
+      "capstone/capstone-qemu": "674cdab03c3e3b0140d33d6f1e13d9a05e610239"
+    },
+    "main": {},
+    "virtual": {
+      "capstone/caplifive-buildroot": "d60365e36fef22f005c8815b98416843f6d5d864",
+      "capstone/caplifive-system": "da972182cb24f3c194d1abd31b31025881f72f15",
+      "capstone/capstone-ariane": "f6ec6c198121495b89a9ee95d71730437e7902b6",
+      "capstone/capstone-qemu": "6bf04634a2c28e0cf96488ac805287b89027fa02"
+    }
+  },
+  "qemu": {
+    "qualified_commit": "6bf04634a2c28e0cf96488ac805287b89027fa02",
+    "target": "b8f08e5993308f04b1f40a69f2f10ee0fed4c845",
+    "merge_base": "ac2837aa0edaf9042d9e553e884cbf680d4b45af",
+    "feature_commits": [
+      {
+        "commit": "db53c89ad041a4b3c531bbc740e582bd3fe27f71",
+        "subject": "RISC-V: check capability access before U-mode page translation"
+      },
+      {
+        "commit": "b71529835a964cf1b268eee6f68518be96a1b2c0",
+        "subject": "Fix U-mode authority checks, fault retry and legacy monitor selection"
+      },
+      {
+        "commit": "fc05b25cb878118070159ddb23405438771b67a6",
+        "subject": "Share experimental U-mode tags by physical granule"
+      },
+      {
+        "commit": "4f030b8a6767344ad58ed5cdbf5de83dc0aaee06",
+        "subject": "Test ordered capability-tag transfer across two harts"
+      },
+      {
+        "commit": "f38c88108ac4cf4f82a45b7ef12eba98bdc8d689",
+        "subject": "Qualify S-mode alias stores against physical tags"
+      },
+      {
+        "commit": "a417a3ed8b4377b0c7feed53e21230982d5ce6c0",
+        "subject": "Fix physical tag clearing and bound experimental U-mode to one hart"
+      },
+      {
+        "commit": "988d78387e9a96014b6f4170138b5f3b59b0122a",
+        "subject": "Clear physical tags after S-mode vector stores in the U-mode experiment"
+      },
+      {
+        "commit": "ed8b9f956ec01d4683aded4c82e1a638a7aa51a6",
+        "subject": "Strengthen kernel-write fault and full-page scrub regression gates"
+      },
+      {
+        "commit": "fafae833fe2bea70427e6ce49ad48a07ee7039fa",
+        "subject": "Require a runtime opt-in for experimental U-mode capability execution"
+      },
+      {
+        "commit": "c9d79399b975efb915e0dcdf017529bc35a9fb65",
+        "subject": "Prototype tagged S-mode context spills for protected Linux entry"
+      },
+      {
+        "commit": "6d312209d2d3b0d9623a4f3e8cac8c59589b187f",
+        "subject": "Preserve x0 on capability loads and require the precise scalar-spill fault"
+      },
+      {
+        "commit": "ffb0e58759a52395c6f90d71460265f0fb97a000",
+        "subject": "Allow trusted S-mode context operations before U selection"
+      },
+      {
+        "commit": "6bd20b1337dcedf26e7d9a0501f6f5ae666059bb",
+        "subject": "Preflight trusted S-mode context slots against full CPMP span"
+      },
+      {
+        "commit": "c6279f4fe3603499a1ee1e26a98f08fd45a87563",
+        "subject": "Isolate Linux process lifetime tree from legacy firmware state"
+      },
+      {
+        "commit": "2e6d0ff145205743d863b45fca83567e32b3d080",
+        "subject": "riscv: isolate Linux and legacy revocation node IDs"
+      },
+      {
+        "commit": "e9413fe3d284ff99eda80d6e235c6aa2e07e7101",
+        "subject": "Model process-local revocation against the C node list"
+      },
+      {
+        "commit": "f153d90d292b89daccc1f98d069e42b3a1aeb6a9",
+        "subject": "Consume linear capabilities in protected-U LDC and STC (Q-12)"
+      },
+      {
+        "commit": "d2da1a852cbcd4802c56dac7e08eca3fee371943",
+        "subject": "Bind consuming LDC to the physical granule it read"
+      },
+      {
+        "commit": "f5f0ed887ede78f45fc2652bb4b396a98d68cfcb",
+        "subject": "Deliver Capstone faults to S with an explicit tval"
+      },
+      {
+        "commit": "cbd3764a6412464d756fe2f99abd9c84687f9051",
+        "subject": "Check Capstone tval in every M1 case and every undelegated cause"
+      },
+      {
+        "commit": "3a411e63790fe02fc1d1fd5afbe0702c774e13c9",
+        "subject": "Measure capability representability in the prototype QEMU"
+      },
+      {
+        "commit": "dc8878185d9dd1fd209897c3c03bfb6689a26581",
+        "subject": "Give protected U per-address-space node tables, its CSRs and CSMINT"
+      },
+      {
+        "commit": "5adb91104352f861eed7bc87c9d38505c96ee557",
+        "subject": "riscv: execute supervised virtual C contexts through user page tables"
+      },
+      {
+        "commit": "49328837b0d8be8f2a1efd23b6d1d1daa9ce6dfe",
+        "subject": "Support virtual application services and demand fault continuations"
+      },
+      {
+        "commit": "8ad8d281583c88abae8b4e722c10cefc25eb7b33",
+        "subject": "Virtual runtime: recycle protected node identities safely"
+      },
+      {
+        "commit": "6bf04634a2c28e0cf96488ac805287b89027fa02",
+        "subject": "Correct the recorded application gate and case counts"
+      }
+    ],
+    "target_commits_missing": [
+      {
+        "commit": "63ea307a115fd70d87bca10d2bf28090292b5c5b",
+        "subject": "Merge pull request #9 from project-starch/domain-process-runtime"
+      },
+      {
+        "commit": "9b987218b59b180312fec91fd108064e3094d002",
+        "subject": "Merge pull request #10 from project-starch/runtime-node-reuse"
+      },
+      {
+        "commit": "ee9c93777f1af5984c0d82b61982ff27a01dd1ab",
+        "subject": "Supervisor: a revoked seal is a dead slot, answered with a status"
+      },
+      {
+        "commit": "a8ece5fcdb114f3bb8b3b320ef67dccf7ba57be2",
+        "subject": "Supervisor: a supervised context never leaves C-mode"
+      },
+      {
+        "commit": "3589d6af6fdbf862b6ab8a1c7d6b36b3d124db2a",
+        "subject": "Supervisor: node instruments and a control knob for the capability-ABA probe"
+      },
+      {
+        "commit": "a53ac18e3d94af6e9319e4259b539cee1affe430",
+        "subject": "Supervisor: a sealed-return capability reaches only the caller's GP slots"
+      },
+      {
+        "commit": "674cdab03c3e3b0140d33d6f1e13d9a05e610239",
+        "subject": "RISC-V: reject capability accesses that wrap address space"
+      },
+      {
+        "commit": "b277660a451cf3c05bc9c1afdac90e35cf7f47e9",
+        "subject": "Merge pull request #11 from project-starch/qemu/supervisor-switch-cost"
+      },
+      {
+        "commit": "b8f08e5993308f04b1f40a69f2f10ee0fed4c845",
+        "subject": "Merge pull request #12 from project-starch/qemu/context-slots-on-pin"
+      }
+    ],
+    "changes": [
+      {
+        "path": "target/riscv/cap.h",
+        "added": "2",
+        "removed": "1"
+      },
+      {
+        "path": "target/riscv/cap_compress.c",
+        "added": "16",
+        "removed": "7"
+      },
+      {
+        "path": "target/riscv/cap_compress.h",
+        "added": "2",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cap_mem_map.c",
+        "added": "55",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cap_mem_map.h",
+        "added": "10",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cap_rev_table.c",
+        "added": "179",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cap_rev_table.h",
+        "added": "63",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cap_rev_tree.c",
+        "added": "279",
+        "removed": "86"
+      },
+      {
+        "path": "target/riscv/cap_rev_tree.h",
+        "added": "67",
+        "removed": "16"
+      },
+      {
+        "path": "target/riscv/capstone_helper.c",
+        "added": "9",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/capstone_supervisor.c",
+        "added": "316",
+        "removed": "8"
+      },
+      {
+        "path": "target/riscv/capstone_supervisor.h",
+        "added": "1",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/capstone_table.c",
+        "added": "193",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/capstone_table.h",
+        "added": "25",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cpu.c",
+        "added": "19",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cpu.h",
+        "added": "27",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cpu_bits.h",
+        "added": "5",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cpu_cfg.h",
+        "added": "2",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/cpu_helper.c",
+        "added": "31",
+        "removed": "4"
+      },
+      {
+        "path": "target/riscv/csr.c",
+        "added": "66",
+        "removed": "3"
+      },
+      {
+        "path": "target/riscv/helper.h",
+        "added": "9",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/insn32.decode",
+        "added": "6",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/insn_trans/trans_capstone.c.inc",
+        "added": "122",
+        "removed": "15"
+      },
+      {
+        "path": "target/riscv/insn_trans/trans_rva.c.inc",
+        "added": "3",
+        "removed": "1"
+      },
+      {
+        "path": "target/riscv/insn_trans/trans_rvd.c.inc",
+        "added": "18",
+        "removed": "2"
+      },
+      {
+        "path": "target/riscv/insn_trans/trans_rvf.c.inc",
+        "added": "18",
+        "removed": "2"
+      },
+      {
+        "path": "target/riscv/insn_trans/trans_rvi.c.inc",
+        "added": "4",
+        "removed": "2"
+      },
+      {
+        "path": "target/riscv/insn_trans/trans_rvzce.c.inc",
+        "added": "8",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/insn_trans/trans_rvzfh.c.inc",
+        "added": "20",
+        "removed": "4"
+      },
+      {
+        "path": "target/riscv/insn_trans/trans_rvzicbo.c.inc",
+        "added": "13",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/meson.build",
+        "added": "2",
+        "removed": "0"
+      },
+      {
+        "path": "target/riscv/op_helper.c",
+        "added": "360",
+        "removed": "60"
+      },
+      {
+        "path": "target/riscv/translate.c",
+        "added": "95",
+        "removed": "5"
+      },
+      {
+        "path": "target/riscv/vector_helper.c",
+        "added": "47",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/README.md",
+        "added": "229",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/context-trap.S",
+        "added": "180",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/context.S",
+        "added": "140",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/finish.inc",
+        "added": "27",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/legacy.S",
+        "added": "112",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/link.ld",
+        "added": "28",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/probe.S",
+        "added": "817",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/result.json",
+        "added": "189",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/run-linux-boot.py",
+        "added": "109",
+        "removed": "0"
+      },
+      {
+        "path": "tests/trusted-linux-u-access/run.sh",
+        "added": "223",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/README.md",
+        "added": "106",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/bootstrap.inc",
+        "added": "103",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/deleg.S",
+        "added": "319",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/delegation-result.json",
+        "added": "78",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/finish.inc",
+        "added": "31",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/link.ld",
+        "added": "28",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/q12.S",
+        "added": "593",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/representability/README.md",
+        "added": "44",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/representability/codec-sweep.c",
+        "added": "99",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/representability/decode-cases.c",
+        "added": "16",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/representability/in-bounds-cursor.c",
+        "added": "33",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/representability/masking.S",
+        "added": "213",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/representability/run.sh",
+        "added": "31",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/result.json",
+        "added": "89",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/review-fixes.json",
+        "added": "174",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/run.sh",
+        "added": "159",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/step2-result.json",
+        "added": "153",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-m1/table.S",
+        "added": "503",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-model/README.md",
+        "added": "79",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-model/adapter.c",
+        "added": "202",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-model/model.py",
+        "added": "346",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-model/result.json",
+        "added": "137",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-model/table-checks.c",
+        "added": "229",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-runtime/README.md",
+        "added": "62",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-runtime/link.ld",
+        "added": "9",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-runtime/probe.S",
+        "added": "464",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-runtime/result.json",
+        "added": "100",
+        "removed": "0"
+      },
+      {
+        "path": "tests/virtual-capstone-runtime/run.sh",
+        "added": "50",
+        "removed": "0"
+      }
+    ]
+  },
+  "linux": {
+    "qualified_source_commit": "a62e18f2b9aa25c697fc2250e95098a4374537c5",
+    "additional_core_changes": false
+  },
+  "comparison": "Three-dot feature changes, not a replacement of the current dev tree. Do not roll back dev RTL or Buildroot pins."
+}

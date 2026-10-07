@@ -1,0 +1,42 @@
+Subject: [PATCH 5/5] An opt-in hook: the port's safety fixtures, run on a worker by a hidden command
+Upstream: memcached 1.6.45
+Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
+Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
+Build-Variants: only with -DMC_CAPSTONE_SAFETY_FIXTURES (host/build-safety.sh); every other build is unchanged
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+The port's Safety milestone asks what a heap overflow, a use after free and a stale free do in the
+memcached domain, on each heap arm, with the fault in a worker as a real one would be. A build with
+MC_CAPSTONE_SAFETY_FIXTURES includes ports/memcached/app/src/mcapp-safety.c into proto_text.c (the
+build copies it beside the file) and answers `mc_capstone_fixture <n>` by running fixture n on the
+worker that took the connection, which ends the process with the fixture's mark or faults. The
+oracle's and the marker's images are built without it.
+
+--- a/proto_text.c
++++ b/proto_text.c
+@@ -19,6 +19,12 @@
+ #include <string.h>
+ #include <stdlib.h>
+ 
++#ifdef MC_CAPSTONE_SAFETY_FIXTURES
++/* the port's safety fixtures (ports/memcached/app/src/mcapp-safety.c), copied beside this file by
++   host/build-safety.sh: only that build defines MC_CAPSTONE_SAFETY_FIXTURES */
++#include "mcapp-safety.c"
++#endif
++
+ #define _DO_CAS true
+ #define _NO_CAS false
+ #define _DO_TOUCH true
+@@ -1536,6 +1542,11 @@
+     }
+ 
+     t->cur_sfd = c->sfd; // cuddle sfd for logging.
++#ifdef MC_CAPSTONE_SAFETY_FIXTURES
++    /* `mc_capstone_fixture <n>`: run fixture n on this worker; it never returns (exit(mark)) */
++    if (cmdlen > 20 && strncmp(command, "mc_capstone_fixture ", 20) == 0)
++        mcapp_run_fixture(atoi(command + 20));
++#endif
+     int ret = process_request(&pr, command, cmdlen);
+     c->resp->noreply = pr.noreply;
+     if (settings.verbose > 1) {

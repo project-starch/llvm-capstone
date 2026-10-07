@@ -1,3 +1,16 @@
+Virtual memcached and pthreads (2026-10-07): preserve the
+[53-check server gate](../../ports/memcached/app/results/virtual-result.json),
+[9-check pthread gate](../../runtime/virtual/pthread-result.json), shared-buffer
+mutation controls and recorded v2 compatibility regression. All eight configured
+application ports now have a virtual baseline. Review the reusable pthread
+bridge separately from memcached using the
+[audited PR stack](../plans/virtual-capstone-pr-stack.md). For shared-branch
+landing, preserve dev's newer pins, integrate QEMU's target-only supervisor
+fixes, then rerun physical/protected/virtual gates before updating its pin.
+The memcached slab-item lifetime gap needs its own nested-allocator work;
+virtual mappings alone do not close it. Full POSIX/signals and SMP remain
+separate qualification work.
+
 Virtual application ports (2026-10-07): preserve the
 [normal/inner workload and safety gates](../../runtime/virtual/app-ports-result.json)
 and [46-check runtime gate](../../runtime/virtual/app-ports-security-result.json).

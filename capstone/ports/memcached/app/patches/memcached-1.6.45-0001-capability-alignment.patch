@@ -1,0 +1,70 @@
+Subject: [PATCH 1/5] Align items and chunk headers to the 16-byte capability on Capstone
+Upstream: memcached 1.6.45
+Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
+Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
+Build-Variants: Capstone domain only (every change is under __CAPSTONE__; a native build is unchanged)
+Depends-On: none
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+memcached rounds slab class sizes to CHUNK_ALIGN_BYTES (8) and carves items at page + i * size.
+An item begins with three pointers, 16 bytes each on Capstone, and a capability stored at an
+address that is not 16-aligned faults, so in any class whose size is 8 mod 16 every other item
+would fault on its first link. Chunked items have the same shape twice over: ITEM_schunk rounds an
+offset from &it->data, which is itself 8 mod 16 here, so no rounding of the offset aligns the chunk
+header (three more pointers), and the header item's size (htotal) leaves no room for padding.
+
+- memcached.h: CHUNK_ALIGN_BYTES 16 under __CAPSTONE__.
+- memcached.h: under __CAPSTONE__, ITEM_schunk aligns the address with __builtin_align_up, which
+  keeps the capability's provenance.
+- items.c: under __CAPSTONE__, htotal reserves sizeof(void *) - 1 bytes for that alignment.
+
+--- a/items.c	2026-07-08 07:10:43.000000000 +0800
++++ b/items.c	2026-10-01 15:23:09.431555532 +0800
+@@ -277,7 +277,10 @@
+         if (settings.use_cas) {
+             htotal += sizeof(uint64_t);
+         }
+-#ifdef NEED_ALIGN
++#ifdef __CAPSTONE__
++        // ITEM_schunk aligns the chunk header to the pointer size: room for that padding
++        htotal += sizeof(void *) - 1;
++#elif defined(NEED_ALIGN)
+         // header chunk needs to be padded on some systems
+         int remain = htotal % 8;
+         if (remain != 0) {
+--- a/memcached.h	2026-07-08 07:10:43.000000000 +0800
++++ b/memcached.h	2026-10-01 15:23:09.431555532 +0800
+@@ -118,7 +118,14 @@
+ #define POWER_SMALLEST 1
+ #define POWER_LARGEST  256 /* actual cap is 255 */
+ #define SLAB_GLOBAL_PAGE_POOL 0 /* magic slab class for storing pages for reassignment */
++#ifdef __CAPSTONE__
++/* A pointer here is a 16-byte capability, and storing one at an address that is not 16-aligned
++ * faults. Items carry three (next, prev, h_next) at their start and are carved out of a slab page at
++ * page + i * size, so every slab class size must be a multiple of the pointer size. */
++#define CHUNK_ALIGN_BYTES 16
++#else
+ #define CHUNK_ALIGN_BYTES 8
++#endif
+ /* slab class max is a 6-bit number, -1. */
+ #define MAX_NUMBER_OF_SLAB_CLASSES (63 + 1)
+ 
+@@ -672,7 +679,17 @@
+     char data[];
+ } item_chunk;
+ 
+-#ifdef NEED_ALIGN
++#ifdef __CAPSTONE__
++/* The chunk header after a chunked item's key and suffix holds three pointers (next, prev, head).
++ * &it->data sits 8 bytes past a 16-byte boundary (data[] follows a 72-byte prefix), so rounding the
++ * offset cannot align it: align the address itself. items.c reserves the padding in htotal. */
++static inline char *ITEM_schunk(item *it) {
++    char *p = (char *) &(it->data) + it->nkey + 1
++        + ((it->it_flags & ITEM_CFLAGS) ? sizeof(client_flags_t) : 0)
++        + ((it->it_flags & ITEM_CAS) ? sizeof(uint64_t) : 0);
++    return __builtin_align_up(p, sizeof(void *));
++}
++#elif defined(NEED_ALIGN)
+ static inline char *ITEM_schunk(item *it) {
+     int offset = it->nkey + 1
+         + ((it->it_flags & ITEM_CFLAGS) ? sizeof(client_flags_t) : 0)

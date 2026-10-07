@@ -2,7 +2,8 @@
 
 Complete Linux application ports now use the
 [delegated ABI-v2 build and runner](common/application/README.md): Perl, mruby,
-CPython, PostgreSQL single-user, SQLite, FFmpeg and offline tshark. Old application
+CPython, PostgreSQL single-user, SQLite, FFmpeg, offline tshark and the
+[four-worker memcached server](memcached/app/README.md). Old application
 images must be rebuilt. The component/allocator and silicon targets described
 below are separate from these application entry points.
 

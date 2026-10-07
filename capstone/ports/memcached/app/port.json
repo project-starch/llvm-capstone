@@ -1,0 +1,25 @@
+{
+  "program": "memcached",
+  "role": "full-application",
+  "title": "The complete memcached server, its worker threads and libevent, in a Capstone domain",
+  "upstream": {
+    "version": "1.6.45",
+    "pin_source": {
+      "file": "capstone/ports/memcached/app/upstream.json",
+      "grep": "\"version\": \"1.6.45\""
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "capstone-virtual",
+    "native"
+  ],
+  "workload": "mc-harness: a fixed text- and meta-protocol script over one connection and 2 x -t concurrent ones, compared byte for byte with the native server",
+  "corpora": [
+    "capstone/bug-corpora/memcached/allocator-repros"
+  ],
+  "related": [
+    "capstone/ports/memcached/allocators"
+  ],
+  "status": "Full physical port imported from memcached-app; virtual four-worker workload and worker safety qualification: see app/README.md"
+}
