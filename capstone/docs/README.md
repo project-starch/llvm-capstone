@@ -1,5 +1,11 @@
 # Capstone project documentation
 
+Start with the [virtual Capstone guide](design/virtual-capstone/README.md)
+to understand the supervised virtual C profile under review: ownership,
+processor interface, Linux runtime, application ports and safety limits.
+It identifies the implementation revisions it describes; its presence here
+does not imply that the implementation PRs have landed on `dev`.
+
 Lane-only work on `delegation-threads` (not landed on `dev`):
 [the threads computing model](design/delegated-threads-model.md),
 [thread plan and integration constraints](plans/delegation-threads.md),
