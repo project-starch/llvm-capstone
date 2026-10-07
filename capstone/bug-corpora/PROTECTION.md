@@ -22,9 +22,9 @@ measured by its own run, which is why a cell names the bundle of its own group.
 
 | arm | caught | missed | not run | of | ignored |
 |---|---:|---:|---:|---:|---:|
-| `cheribsd` | 32 | 104 | 27 | 163 | 6 |
-| `capstone-sysalloc` | 66 | 94 | 2 | 162 | 7 |
-| `capstone-sublet` | 94 | 13 | 55 | 162 | 7 |
+| `cheribsd` | 32 | 91 | 26 | 149 | 20 |
+| `capstone-sysalloc` | 66 | 80 | 2 | 148 | 21 |
+| `capstone-sublet` | 94 | 0 | 54 | 148 | 21 |
 
 A `=` marks a cell that coincides with the arm to its left because the group has no nested allocator to protect; a `b` marks one measured on the freestanding vehicle, which is NOT paired with the cell to its left.
 
@@ -76,25 +76,25 @@ FFmpeg: nineteen spatial and temporal defects across four boundaries, from a dir
 | `plain-heap-repros` | 1 | `bcbf3a5630` | the colour-space compaction loop guards on j while reading j + 1, so it read | · | **C** | **C**<sup>=</sup> |
 | `plain-heap-repros` | 2 | `56309e476a` | the hand-rolled filter mirror reflects a tap index of 2*w to -1 and never re | **C** | **C** | **C**<sup>=</sup> |
 | `plain-heap-repros` | 3 | `495b402f27` | the edge-emulation base is sized for one sub-buffer and then carved into fou | **C** | **C** | **C**<sup>=</sup> |
-| `plane-repros` | 0 | `b7946098b1` | ff_sws_alphablendaway averages the alpha row below the plane's last on a sub | — | · | — |
+| `plane-repros` | 0 | `b7946098b1` | ff_sws_alphablendaway averages the alpha row below the plane's last on a sub | ∅ | ∅ | ∅ |
 | `pool-repros` | 0 | `461fb22053` | af_join tracks an input buffer by the channel index instead of nb_buffers | · | · | **C** |
 | `pool-repros` | 1 | `1886c3269d` | h264_refs clears ref_list up to ref_count instead of the array length | · | · | **C** |
 | `pool-repros` | 2 | `316531e61c` | vidstabtransform leaves a shallow copy of the source frame in the library's  | · | · | **C** |
 | `pool-repros` | 3 | `5c66a3ab51` | a non-reference VVC frame that is output is fully released, returning its po | · | · | **C** |
-| `subobject-repros` | 0 | `8864fd0aec` | the pic_timing decoding-unit loop writes one uint16_t past its array into th | · | · | · |
-| `subobject-repros` | 1 | `68845e26f7` | the HEVC reference-set fill writes up to eight bytes past an eight-entry arr | · | · | · |
-| `subobject-repros` | 2 | `e058af88ab` | the DPB walk writes ref_src[16], which is the first element of the next stru | · | · | · |
-| `subobject-repros` | 3 | `89de2f0de1` | ff_aac_ac_get_context reads state->last[i + 1] for the last window index, ta | · | · | · |
-| `subobject-repros` | 4 | `1a00ea51cb` | the SDP parser indexes control_url at strlen()-1 without checking for the em | · | · | · |
-| `subobject-repros` | 5 | `d29ff88422` | the Vulkan AV1 tile-count check is both the wrong relation and hoisted out o | · | · | · |
-| `subobject-repros` | 6 | `a809a784ec` | sh_entry_points bounds its write index by nothing, so a slice whose every CT | · | · | · |
-| `subobject-repros` | 7 | `275e217b10` | parse_playlist passes av_strlcpy a SOURCE length where its contract takes th | · | · | · |
-| `subobject-repros` | 8 | `fb862976df` | the uniform-tile-spacing loop guards itself with num_tile_columns, which is  | · | · | · |
-| `subobject-repros` | 9 | `ac59fc542f` | get_hist16's tail loop uses a raw high-bit-depth sample as a histogram index | · | · | · |
+| `subobject-repros` | 0 | `8864fd0aec` | the pic_timing decoding-unit loop writes one uint16_t past its array into th | ∅ | ∅ | ∅ |
+| `subobject-repros` | 1 | `68845e26f7` | the HEVC reference-set fill writes up to eight bytes past an eight-entry arr | ∅ | ∅ | ∅ |
+| `subobject-repros` | 2 | `e058af88ab` | the DPB walk writes ref_src[16], which is the first element of the next stru | ∅ | ∅ | ∅ |
+| `subobject-repros` | 3 | `89de2f0de1` | ff_aac_ac_get_context reads state->last[i + 1] for the last window index, ta | ∅ | ∅ | ∅ |
+| `subobject-repros` | 4 | `1a00ea51cb` | the SDP parser indexes control_url at strlen()-1 without checking for the em | ∅ | ∅ | ∅ |
+| `subobject-repros` | 5 | `d29ff88422` | the Vulkan AV1 tile-count check is both the wrong relation and hoisted out o | ∅ | ∅ | ∅ |
+| `subobject-repros` | 6 | `a809a784ec` | sh_entry_points bounds its write index by nothing, so a slice whose every CT | ∅ | ∅ | ∅ |
+| `subobject-repros` | 7 | `275e217b10` | parse_playlist passes av_strlcpy a SOURCE length where its contract takes th | ∅ | ∅ | ∅ |
+| `subobject-repros` | 8 | `fb862976df` | the uniform-tile-spacing loop guards itself with num_tile_columns, which is  | ∅ | ∅ | ∅ |
+| `subobject-repros` | 9 | `ac59fc542f` | get_hist16's tail loop uses a raw high-bit-depth sample as a histogram index | ∅ | ∅ | ∅ |
 
-- `cheribsd`: **3** caught, 15 missed, 1 not run, of 19.
-- `capstone-sysalloc`: **4** caught, 15 missed, of 19.
-- `capstone-sublet`: **8** caught, 10 missed, 1 not run, of 19.
+- `cheribsd`: **3** caught, 5 missed, of 8; 11 ignored.
+- `capstone-sysalloc`: **4** caught, 4 missed, of 8; 11 ignored.
+- `capstone-sublet`: **8** caught, 0 missed, of 8; 11 ignored.
 
 ### httpd -- 9 cases
 
@@ -194,8 +194,8 @@ Perl: eleven spatial and temporal defects live at the 5.36.3 pin, each measured 
 | group | case | upstream | what the defect is | CheriBSD | capstone-sysalloc | capstone-sublet |
 |---|---:|---|---|:---:|:---:|:---:|
 | `release-differential` | 1 | `ad5fedb002` | A foreach loop over a package variable frees the GV it iterates, and pp_iter | **C** | **C** | **C**<sup>b</sup> |
-| `release-differential` | 2 | `d2cddbe1df` | caller() copies pointers to already-freed SVs into @DB::args | w | · | ·<sup>b</sup> |
-| `release-differential` | 3 | `9e298ab597` | av_extend_guts after an unshift leaves the trailing element slots holding st | · | · | ·<sup>b</sup> |
+| `release-differential` | 2 | `d2cddbe1df` | caller() copies pointers to already-freed SVs into @DB::args | ∅ | ∅ | ∅ |
+| `release-differential` | 3 | `9e298ab597` | av_extend_guts after an unshift leaves the trailing element slots holding st | ∅ | ∅ | ∅ |
 | `release-differential` | 4 | `e4be969235` | join() keeps the delimiter's string buffer across a magical fetch that frees | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 5 | `17535c984a` | A cloned constant-state sub shares the prototype's CvXSUBANY SV without taki | · | · | **C**<sup>b</sup> |
 | `release-differential` | 6 | `40727c420c` | reg_code_blocks carries one count for both its size and its used entries, so | **C** | **C** | **C**<sup>b</sup> |
@@ -203,11 +203,11 @@ Perl: eleven spatial and temporal defects live at the 5.36.3 pin, each measured 
 | `release-differential` | 8 | `b7b77ffc1e` | CLEAR_ERRSV grows a one-byte buffer over a glob's GP, so the next write to $ | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 9 | `1189b87114` | newATTRSUB_x keeps using a CV that clear_special_blocks has already freed | **C** | **C** | **C**<sup>b</sup> |
 | `release-differential` | 10 | `254b30e378` | Writing a scalar into the in-memory handle backed by that same scalar moves  | **C** | **C** | **C**<sup>b</sup> |
-| `release-differential` | 11 | `af11b0c528` | A failed /(?{})/ branch restores a COW-backed subbeg without its length, so  | · | · | ·<sup>b</sup> |
+| `release-differential` | 11 | `af11b0c528` | A failed /(?{})/ branch restores a COW-backed subbeg without its length, so  | ∅ | ∅ | ∅ |
 
-- `cheribsd`: **7** caught, 3 missed, 1 wrong answer, of 11.
-- `capstone-sysalloc`: **7** caught, 4 missed, of 11.
-- `capstone-sublet`: **8** caught, 3 missed, of 11.
+- `cheribsd`: **7** caught, 1 missed, of 8; 3 ignored.
+- `capstone-sysalloc`: **7** caught, 1 missed, of 8; 3 ignored.
+- `capstone-sublet`: **8** caught, 0 missed, of 8; 3 ignored.
 
 ### postgres -- 19 cases
 

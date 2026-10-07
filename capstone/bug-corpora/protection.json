@@ -901,26 +901,25 @@
      "title": "ff_sws_alphablendaway averages the alpha row below the plane's last on a subsampled odd size",
      "boundary": "a bound between two PLANES of one AVBuffer, as av_frame_get_buffer carves them",
      "nested": true,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "not-run",
+       "verdict": "ignored",
        "caught": null,
-       "why": "not run. The corpus was added after the 2026-10-06 CheriBSD sweep of the three sibling FFmpeg corpora and was not included in it; the same runner (bug-corpora/ffmpeg/plain-heap-repros/runners/run-cheribsd.sh) applies."
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "plane-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "not-run",
+       "verdict": "ignored",
        "caught": null,
-       "why": "not run. The planes are carved out of one av_frame_get_buffer allocation, so the carve IS a nested allocator, but no adapter issues per-plane capabilities: ports/ffmpeg/buffer-pool's adapter leases pool buffers, not planes."
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1088,34 +1087,25 @@
      "title": "the pic_timing decoding-unit loop writes one uint16_t past its array into the next struct member",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1127,34 +1117,25 @@
      "title": "the HEVC reference-set fill writes up to eight bytes past an eight-entry array into the next array of the same struct",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1166,34 +1147,25 @@
      "title": "the DPB walk writes ref_src[16], which is the first element of the next struct member",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1205,34 +1177,25 @@
      "title": "ff_aac_ac_get_context reads state->last[i + 1] for the last window index, taking the low byte of the next member",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1244,34 +1207,25 @@
      "title": "the SDP parser indexes control_url at strlen()-1 without checking for the empty string, so the index wraps to SIZE_MAX",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1283,34 +1237,25 @@
      "title": "the Vulkan AV1 tile-count check is both the wrong relation and hoisted out of the loop it guards, so tile_sizes is written one past its end",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1322,34 +1267,25 @@
      "title": "sh_entry_points bounds its write index by nothing, so a slice whose every CTU starts a boundary walks off entry_point_start_ctu",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1361,34 +1297,25 @@
      "title": "parse_playlist passes av_strlcpy a SOURCE length where its contract takes the DESTINATION size, so a long #EXT-X-KEY URI overruns key_uri",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1400,34 +1327,25 @@
      "title": "the uniform-tile-spacing loop guards itself with num_tile_columns, which is assigned only after the loop, so the guard can never fire",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     },
@@ -1439,34 +1357,25 @@
      "title": "get_hist16's tail loop uses a raw high-bit-depth sample as a histogram index, so the bump lands outside the 256-entry sub-slice carved for that plane",
      "boundary": "sub-object bounds inside ONE allocation (av_refstruct / av_malloc)",
      "nested": false,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "supervise-blocks"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "subobject-repros",
-       "bundle": "results/20261007-virtual-nested-capability",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual-nested-capability-backend"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     }
@@ -3437,34 +3346,25 @@
      "title": "caller() copies pointers to already-freed SVs into @DB::args",
      "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
      "nested": null,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "wrong-answer",
-       "caught": false,
-       "detail": "perl panic",
-       "group": "release-differential",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "revocation_on"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the defect IS in the arm's context -- the SV head arena -- but Perl's own check aborts first, `panic: attempt to copy freed scalar`, so no arm gets to report and the row measures Perl's assertion rather than any protection. The omission costs the observation that the program wins the race."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "release-differential",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the defect IS in the arm's context -- the SV head arena -- but Perl's own check aborts first, `panic: attempt to copy freed scalar`, so no arm gets to report and the row measures Perl's assertion rather than any protection. The omission costs the observation that the program wins the race."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "silent (exit 255)",
-       "group": "release-differential",
-       "bundle": "results/20261006",
-       "vehicle": "capstone-baremetal",
-       "local_arm": "sublet-svheads"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the defect IS in the arm's context -- the SV head arena -- but Perl's own check aborts first, `panic: attempt to copy freed scalar`, so no arm gets to report and the row measures Perl's assertion rather than any protection. The omission costs the observation that the program wins the race."
       }
      }
     },
@@ -3476,34 +3376,25 @@
      "title": "av_extend_guts after an unshift leaves the trailing element slots holding stale SV pointers",
      "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
      "nested": null,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "clean",
-       "group": "release-differential",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "revocation_on"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: this trigger never dereferences the stale slots it leaves behind -- the workload's own oracle passes -- so there is no access for any arm to catch. The omission costs nothing until a stronger trigger exists; writing one would make it a real row again."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "release-differential",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: this trigger never dereferences the stale slots it leaves behind -- the workload's own oracle passes -- so there is no access for any arm to catch. The omission costs nothing until a stronger trigger exists; writing one would make it a real row again."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "silent (exit 0)",
-       "group": "release-differential",
-       "bundle": "results/20261006",
-       "vehicle": "capstone-baremetal",
-       "local_arm": "sublet-svheads"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: this trigger never dereferences the stale slots it leaves behind -- the workload's own oracle passes -- so there is no access for any arm to catch. The omission costs nothing until a stronger trigger exists; writing one would make it a real row again."
       }
      }
     },
@@ -3788,34 +3679,25 @@
      "title": "A failed /(?{})/ branch restores a COW-backed subbeg without its length, so $& reads past the match",
      "boundary": "the release itself: every spatial or temporal memory defect live in the ported 5.36.3, whatever allocator holds the memory",
      "nested": null,
-     "ignored": false,
+     "ignored": true,
      "arms": {
       "cheribsd": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "clean",
-       "group": "release-differential",
-       "bundle": "results/20261006-cheribsd",
-       "vehicle": "cheribsd-purecap",
-       "local_arm": "revocation_on"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sysalloc": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "ran to the end, status 0",
-       "group": "release-differential",
-       "bundle": "results/20261007-virtual",
-       "vehicle": "capstone-virtual",
-       "local_arm": "virtual"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       },
       "capstone-sublet": {
-       "verdict": "missed",
-       "caught": false,
-       "detail": "silent (exit 0)",
-       "group": "release-differential",
-       "bundle": "results/20261006",
-       "vehicle": "capstone-baremetal",
-       "local_arm": "sublet-svheads"
+       "verdict": "ignored",
+       "caught": null,
+       "kind": "parked",
+       "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
       }
      }
     }

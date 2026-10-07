@@ -1,28 +1,32 @@
 {
- "case": 2,
- "upstream_fix": "d2cddbe1df",
- "title": "caller() copies pointers to already-freed SVs into @DB::args",
- "consumer": "pp_ctl.c",
- "class": "temporal",
- "trigger": "trigger.pl",
- "live_in_pin": true,
- "live_proof": "upstream fixed it in d2cddbe1df (d2cddbe1df3078717c41d2553f47eac6acad3f75) (2023-03-15). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin pp_ctl.c:2064 Copy(AvALLOC(ary), AvARRAY(PL_dbargs), AvFILLp(ary)+1+off, SV*)). Host ASan at the pin: no ASan report; Perl's own check: panic: attempt to copy freed scalar (rc=255); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
- "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
- "arms": {
-  "sysalloc-bounds": {
-   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+  "case": 2,
+  "upstream_fix": "d2cddbe1df",
+  "title": "caller() copies pointers to already-freed SVs into @DB::args",
+  "consumer": "pp_ctl.c",
+  "class": "temporal",
+  "trigger": "trigger.pl",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in d2cddbe1df (d2cddbe1df3078717c41d2553f47eac6acad3f75) (2023-03-15). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin pp_ctl.c:2064 Copy(AvALLOC(ary), AvARRAY(PL_dbargs), AvFILLp(ary)+1+off, SV*)). Host ASan at the pin: no ASan report; Perl's own check: panic: attempt to copy freed scalar (rc=255); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
+  "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-bounds": {
+      "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+    },
+    "sysalloc-sublet": {
+      "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+    },
+    "sublet-svheads": {
+      "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
+    },
+    "cheribsd-revocation": {
+      "oracle": "no report: Perl's own check aborts; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: Perl's own check aborts"
+    }
   },
-  "sysalloc-sublet": {
-   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
-  },
-  "sublet-svheads": {
-   "oracle": "no fault: Perl's own check aborts (panic: attempt to copy freed scalar)"
-  },
-  "cheribsd-revocation": {
-   "oracle": "no report: Perl's own check aborts; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: Perl's own check aborts"
+  "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
+  "allocator_layer": "nested allocator: the SV head arena",
+  "note": "triggered on every arm; no arm faults, and that is a deliberate choice in the SV head adapter rather than a gap. Upstream Perl reads a freed head's flags on purpose (sv.h: \"there are some parts of the core that have pointers to already-freed SV heads\"), so the adapter answers SvIS_FREED and SvTYPE from its sidecar without touching the head; making that path fault stops three upstream test files (ports/perl/sv-heads/README.md). The defect is still detected here, by Perl's own refcount bookkeeping: panic: attempt to copy freed scalar, exit 255 -- and CheriBSD reaches the same panic with revocation both off and on, so this is not specific to the adapter's choice",
+  "ignore": {
+    "kind": "parked",
+    "why": "PARKED on the user's decision, 2026-10-08: the defect IS in the arm's context -- the SV head arena -- but Perl's own check aborts first, `panic: attempt to copy freed scalar`, so no arm gets to report and the row measures Perl's assertion rather than any protection. The omission costs the observation that the program wins the race."
   }
- },
- "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
- "allocator_layer": "nested allocator: the SV head arena",
- "note": "triggered on every arm; no arm faults, and that is a deliberate choice in the SV head adapter rather than a gap. Upstream Perl reads a freed head's flags on purpose (sv.h: \"there are some parts of the core that have pointers to already-freed SV heads\"), so the adapter answers SvIS_FREED and SvTYPE from its sidecar without touching the head; making that path fault stops three upstream test files (ports/perl/sv-heads/README.md). The defect is still detected here, by Perl's own refcount bookkeeping: panic: attempt to copy freed scalar, exit 255 -- and CheriBSD reaches the same panic with revocation both off and on, so this is not specific to the adapter's choice"
 }

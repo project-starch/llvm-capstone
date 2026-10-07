@@ -55,5 +55,9 @@
   },
   "status": "MEASURED 2026-10-05, both paths. Capstone: probe case 42 (vulkan-hevc-dpb-member-write) of ports/ffmpeg/buffer-pool/security-tests, run under QEMU on BOTH modes 0 and 2 -- PASS/PASS, expected=completed, runner exit 0. So the prediction that NOTHING WE HAVE CATCHES THIS is now measured under Capstone and not merely declared. Native: runners/run-native.sh exit 0, fixed arm VERDICT FIXED, buggy arm VERDICT DEFECT-REPRODUCED. ASan measured blind two-sided with a firing positive control (results/20261005-native-subobject/). PoisonCap and CheriBSD remain unmeasurable here. N = 1 per cell. CheriBSD MEASURED 2026-10-06, revocation on: completes, NOT caught, 22/22 arms with both platform controls firing (results/20261006-cheribsd/); built -O0, which is load-bearing.",
   "nested": false,
-  "nested_why": "nothing sub-allocated the crossed region: the object is one allocation the platform or FFmpeg's own av_malloc handed out directly, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED."
+  "nested_why": "nothing sub-allocated the crossed region: the object is one allocation the platform or FFmpeg's own av_malloc handed out directly, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT NESTED.",
+  "ignore": {
+    "kind": "parked",
+    "why": "PARKED on the user's decision, 2026-10-08: the crossing stays INSIDE ONE ALLOCATION, so no allocator ever vested the bound it crosses and no arm of this study can report on it. What the omission costs is the statement of where the mechanism's limit lies -- that statement now lives in this reason and in `protection-matrix.py --focus parked`, not in a 0-of-N row."
+  }
 }

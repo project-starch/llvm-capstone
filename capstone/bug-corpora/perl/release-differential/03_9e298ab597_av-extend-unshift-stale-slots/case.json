@@ -1,28 +1,32 @@
 {
- "case": 3,
- "upstream_fix": "9e298ab597",
- "title": "av_extend_guts after an unshift leaves the trailing element slots holding stale SV pointers",
- "consumer": "av.c",
- "class": "temporal",
- "trigger": "trigger.pl",
- "live_in_pin": true,
- "live_proof": "upstream fixed it in 9e298ab597 (9e298ab597b2c6fc0741749d7e29119e2d6cd628) (2023-07-18). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin av.c:111 to_null = *arrayp - *allocp; av.c:118 newmax = key + *maxp; goto resize with no to_null correction). Host ASan at the pin: ASan: SEGV (rc=77); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
- "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
- "arms": {
-  "sysalloc-bounds": {
-   "oracle": "no fault: completes and the workload's own oracle passes"
+  "case": 3,
+  "upstream_fix": "9e298ab597",
+  "title": "av_extend_guts after an unshift leaves the trailing element slots holding stale SV pointers",
+  "consumer": "av.c",
+  "class": "temporal",
+  "trigger": "trigger.pl",
+  "live_in_pin": true,
+  "live_proof": "upstream fixed it in 9e298ab597 (9e298ab597b2c6fc0741749d7e29119e2d6cd628) (2023-07-18). That commit is an ancestor of v5.45.3-85-gdb19522155 and is NOT an ancestor of the v5.36.3 tag (checked with git merge-base --is-ancestor, both directions), so it never reached the 5.36 maintenance branch; the pin's tree shows the unfixed code (pin av.c:111 to_null = *arrayp - *allocp; av.c:118 newmax = key + *maxp; goto resize with no to_null correction). Host ASan at the pin: ASan: SEGV (rc=77); the same trigger, same harness and same ASan options on master: no report (rc=0, the harness reports [PASS])",
+  "fidelity": "the trigger is the test upstream added with its own fix, extracted onto a self-contained harness that collects failures instead of aborting, so one script yields one verdict. It is upstream's own reproduction, not a reduction of ours; what it does NOT establish is which arm ought to catch it",
+  "arms": {
+    "sysalloc-bounds": {
+      "oracle": "no fault: completes and the workload's own oracle passes"
+    },
+    "sysalloc-sublet": {
+      "oracle": "no fault: completes and the workload's own oracle passes"
+    },
+    "sublet-svheads": {
+      "oracle": "no fault: completes and the workload's own oracle passes"
+    },
+    "cheribsd-revocation": {
+      "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
+    }
   },
-  "sysalloc-sublet": {
-   "oracle": "no fault: completes and the workload's own oracle passes"
-  },
-  "sublet-svheads": {
-   "oracle": "no fault: completes and the workload's own oracle passes"
-  },
-  "cheribsd-revocation": {
-   "oracle": "no report: completes; with revocation off (_RUNTIME_REVOCATION_DISABLE=1) the same binary gives: no report: completes"
+  "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
+  "allocator_layer": "system allocator (the AV element array, via Renew)",
+  "note": "not triggered by this trigger anywhere but the host: its own assertion PASSES on all four Capstone arms AND on CheriBSD with revocation both off and on, so the stale element slot the defect depends on never holds a stale pointer there. Its silence is not evidence about any arm and it is outside every denominator. Host ASan at the pin reports SEGV, so the defect is real; what is missing is a trigger that reproduces it under an allocator other than glibc",
+  "ignore": {
+    "kind": "parked",
+    "why": "PARKED on the user's decision, 2026-10-08: this trigger never dereferences the stale slots it leaves behind -- the workload's own oracle passes -- so there is no access for any arm to catch. The omission costs nothing until a stronger trigger exists; writing one would make it a real row again."
   }
- },
- "status": "all three Capstone arms measured 2026-10-06 on the Capstone application VM, each after passing its own two controls; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap, revocation selected per process because the system-wide default kills the guest's sshd, and every case run under both settings so the pair controls the knob (results/20261006-cheribsd)",
- "allocator_layer": "system allocator (the AV element array, via Renew)",
- "note": "not triggered by this trigger anywhere but the host: its own assertion PASSES on all four Capstone arms AND on CheriBSD with revocation both off and on, so the stale element slot the defect depends on never holds a stale pointer there. Its silence is not evidence about any arm and it is outside every denominator. Host ASan at the pin reports SEGV, so the defect is real; what is missing is a trigger that reproduces it under an allocator other than glibc"
 }
