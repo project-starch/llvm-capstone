@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "positive": {
+    "status": "PASS",
+    "iterations": 32,
+    "stdout": "delegate thread isolation passed"
+  },
+  "mutation": {
+    "status": "EXPECTED_FAIL",
+    "exit": 134,
+    "assertion": "a->exchange[1024] == 'a' && !a->exchange[2048]",
+    "change": "Restore static message view and iovec array; all other dispatcher code is identical."
+  },
+  "interleaving": "A native worker blocks in recvmsg. A second context receives through another socket at different exchange offsets before the first is released.",
+  "native_regressions": [
+    "signal service passed",
+    "delegate-service-test: ok",
+    "7 delegated socket cases passed"
+  ],
+  "input_sha256": {
+    "test": "d1109e2b84eef7365b932827c63a7907a191ec42e684864245476d418f462f10",
+    "dispatcher": "d82a3c31be229d8146d8da8b5c854f7769b75831e7f8266661fc6d3279f64154",
+    "positive_binary": "feab3421d5ead8796161ff3d697e78de917ae8145685fb73ef9ce92aa2357140",
+    "mutation_binary": "cdd95bcc6a6abaa9f1f6f6722174ed69832e581c05c6e0c2507fb1cc539d1752",
+    "mutation_dispatcher": "4c3be42ba87dac638650db0af3dca4477a1433f76dcd9d15a5b74126ba48eb8d"
+  }
+}

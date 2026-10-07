@@ -10,14 +10,6 @@ extern long __capstone_vm_thread_create_frame(void *frame);
 extern void __capstone_vm_thread_exit(void);
 extern long __capstone_vm_thread_join(long thread);
 
-/* POSIX threads require the later TLS/transport adapter. Do not let musl
- * enter the physical context protocol from a virtual application. */
-int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
-{
-    (void)entry; (void)stack; (void)flags; (void)arg;
-    return -ENOSYS;
-}
-
 static void *thread_exit_entry(void *unused)
 {
     (void)unused;
