@@ -137,6 +137,26 @@ By shape, for the two mechanisms that catch anything:
 | a marking loop bounded by the field's extent rather than by the bitmap's length | 20 | not run | not run |
 | a fixed, compile-time-known output larger than its fixed buffer | 21 | not run | not run |
 
+**Cases 18-21 were added 2026-10-07, and two candidates from the same lists were REJECTED rather
+than built.** The leads came from [`../LIVE-CANDIDATES.md`](../LIVE-CANDIDATES.md) and from the
+class-B candidates `docs/ref/wireshark-spatial-defect-triage.md:226-229` named and left unbuilt.
+Rejected, with the reason recorded so nobody re-derives it:
+
+| candidate | why not |
+|---|---|
+| `1c090e9292` | a **stack** buffer overflow — no heap allocator boundary, the same reason memcached's `11b5f9b` was disqualified |
+| `d7d1686a95` | indexes a **static** `value_string` array — likewise no allocator |
+| `0939cf989d` | the same ETSI DCP defect as case 16 under a second hash — a duplicate, not a case |
+| `b2bc518e4d` | crosses a **tvb** bound, not an allocator's |
+| `76459b8134`, `de719cc5ac` | signed/unsigned overflow of a length, with the spatial consequence downstream — the class this project retracted `f207d25f4b` for |
+
+**Why the corpus stopped at 22 rather than going further.** The spatial-wording population is large —
+234 commits across `v4.4.0..v4.6.8` and `v4.6.8..HEAD` in `epan` and `wiretap` — but it and the
+hand-verified LIVE list are both **dominated by integer overflow**, which this corpus's filter
+excludes by design. The table above is what the remaining named candidates came to. Going further
+would have meant admitting rows whose defect class would then have to be misdescribed, which is how
+the two retractions of 2026-10-06 happened.
+
 Across cases 0-12 every `spatial` and every plain-CheriBSD arm completed. **Case 13 is the
 exception and it is not a counter-example:** it is the one spatial row, so its unprotected arm
 faults too (cause 5, measured both builds — `results/20261005-qemu-spatial-case13-ON/`). For the

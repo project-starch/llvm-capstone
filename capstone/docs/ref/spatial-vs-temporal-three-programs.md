@@ -10,14 +10,26 @@ here; `paper-bug-inventory.md` is the whole-tree inventory.
 failing to catch *temporal* bugs. It is not a count of spatial bugs, and it is not evidence that
 anything is broken. A grep for the word finds arms, not defects.
 
-## 1. The 27 real upstream defects are all temporal — because spatial was filtered out
+## 1. The temporal 27 were all there was, because spatial had been filtered out — no longer true
+
+> **HEADING CORRECTED 2026-10-07.** It read *"The 27 real upstream defects are all temporal"*, which
+> was the state when this document was written and contradicted its own table below as soon as the
+> spatial hunt produced anything. The spatial corpus is now **32 built and measured cases**, so the
+> sentence had become false in the one place a reader looks first.
 
 | | nested allocator | plain / system allocator | total |
 |---|---:|---:|---:|
-| **spatial**, built and measured | **8** | **3** | **11** |
+| **spatial**, built and measured | **14** | **18** | **32** |
 | **spatial**, triaged upstream defects (§1a) | **19** (15 class B + 4 class C) | **29** class-A *candidates*, **0** verified — see §1b | **48** |
 | **temporal**, built and measured | 22 | 5 | **27** |
 
+> **UPDATED 2026-10-07.** The spatial row read *"8 | 3 | 11"* until today. It is now **14 | 18 | 32**:
+> FFmpeg went 4 -> 15 (2026-10-06), tshark 6 -> 11 and memcached 4 -> 6 (2026-10-07). The
+> not-nested column grew most, because requiring liveness at the pin had been keeping it thin — a
+> requirement no document ever asked for, and the retraction of that inference is what unblocked the
+> growth. Counts are recomputed from each case's `nested` boolean, which exists so this row cannot
+> drift from the tree again.
+>
 > **CORRECTED 2026-10-05.** The spatial row previously read *"11 built and measured | 0"*, putting
 > every built case under *nested allocator*. **That is wrong, and the axis was the problem.** This
 > table's axis is **who allocated the object**; §1a's A/B/C axis is **which bound the access

@@ -188,12 +188,16 @@ synthetic baseline probes and the not-nested spatial row grows further, but thos
 are kept out of the defect count on purpose.
 
 > **Moved again on 2026-10-07, and this time for the OPPOSITE reason — which is the thing to say.**
-> 60% -> 61%, and the nested count went **31 -> 35**: tshark gained four nested spatial rows and
-> memcached one not-nested. Yesterday's move was purely a denominator effect with the numerator
-> fixed; today's numerator moved too, so the two must not be read as the same kind of change. The
-> share is nearly flat precisely because the additions were split across both columns, which is a
-> coincidence of this batch rather than a fact about the programs. **Read the per-axis rows**:
-> nesting still dominates temporal (22 of 27) and still does not dominate spatial (13 of 30).
+> 60% -> 61%, and the nested count went **31 -> 36**: tshark gained four nested spatial rows and two
+> not-nested, memcached one of each. Yesterday's move was purely a denominator effect with the
+> numerator fixed; today's numerator moved too, so the two must not be read as the same kind of
+> change. The share is nearly flat precisely because the additions split across both columns, which
+> is a coincidence of this batch rather than a fact about the programs. **Read the per-axis rows**:
+> nesting still dominates temporal (22 of 27) and still does not dominate spatial (**14 of 32**).
+>
+> *(This note was itself stale for part of 2026-10-07: it said 35 and "13 of 30" while the batch was
+> still landing. Recomputed from the `nested` fields at the end of it. A dated note that quotes
+> live counts has to be re-read when the batch it describes finishes.)*
 >
 > **This share MOVED on 2026-10-06, and anything quoting the old figure needs re-reading.** It was
 > **31 of 41 (76%)**. Eleven not-nested spatial cases were added that day — FFmpeg's
@@ -202,9 +206,10 @@ are kept out of the defect count on purpose.
 > drop is entirely a denominator effect, and it is a correction rather than a new result: the old
 > 76% was high because the not-nested spatial cell had been left thin by a search that required its
 > candidates to be live at the pin, which no document asks for. The honest reading of both figures
-> together is that **nesting dominates the TEMPORAL axis (22 of 27) and does not dominate the
-> spatial one (9 of 25)** — which the per-axis rows above say directly and the single blended
-> percentage obscures. Prefer the per-axis rows.
+> together is that **nesting dominates the TEMPORAL axis and does not dominate the spatial one** —
+> which the per-axis rows above say directly and the single blended percentage obscures. *As of
+> 2026-10-06 those rows read 22 of 27 and 9 of 25; see the note above for where they stand now.*
+> Prefer the per-axis rows, and read them from the table rather than from this paragraph.
 >
 > **The share is now COMPUTABLE, not prose-derived.** Each spatial `case.json` carries an explicit
 > `nested` boolean with a `nested_why`. This was added because a script that classified the cases by
