@@ -35,15 +35,35 @@ function(capstone_configure_application target)
   set_target_properties(${target} PROPERTIES CAPSTONE_DOMAIN_CONFIGURED TRUE)
   get_filename_component(capstone "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../.." ABSOLUTE)
   set(musl "${capstone}/ports/musl-capstone/runtime")
+  set(startup "${musl}/start-musl.S")
+  if(CAPSTONE_APPLICATION_VIRTUAL)
+    set(startup "${capstone}/runtime/virtual/start.S")
+    target_compile_options(${target} PRIVATE
+      "$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
+    target_compile_definitions(${target} PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
+  endif()
   if(NOT TARGET capstone-application-core)
     add_library(capstone-application-core OBJECT
-      "${musl}/start-musl.S" "${musl}/set_thread_area.S" "${musl}/setjmp.S"
-      "${musl}/hostcall.c" "${musl}/tls.c" "${musl}/atomic_libcalls.c" "${musl}/context.c"
+      "${startup}" "${musl}/set_thread_area.S" "${musl}/setjmp.S"
+      "${musl}/hostcall.c" "${musl}/tls.c" "${musl}/atomic_libcalls.c"
       "${musl}/lock.c"
       "${capstone}/runtime/common/launch.c")
+    if(CAPSTONE_APPLICATION_VIRTUAL)
+      target_sources(capstone-application-core PRIVATE
+        "${capstone}/runtime/virtual/thread.c")
+      target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
+      target_compile_options(capstone-application-core PRIVATE
+        "$<$<COMPILE_LANGUAGE:C>:SHELL:-mllvm -capstone-gp-free -mllvm -capstone-image-gp>")
+    else()
+      target_sources(capstone-application-core PRIVATE "${musl}/context.c")
+    endif()
     file(STRINGS "${musl}/libc_overrides.list" overrides)
     foreach(source IN LISTS overrides)
-      target_sources(capstone-application-core PRIVATE "${musl}/${source}.c")
+      if(CAPSTONE_APPLICATION_VIRTUAL AND source STREQUAL "mmap_shm_level0")
+        target_sources(capstone-application-core PRIVATE "${capstone}/runtime/virtual/mapping.c")
+      else()
+        target_sources(capstone-application-core PRIVATE "${musl}/${source}.c")
+      endif()
     endforeach()
     target_include_directories(capstone-application-core PRIVATE
       "${PORT_MUSL_ROOT}/src/include" "${PORT_MUSL_ROOT}/src/internal"
@@ -72,7 +92,10 @@ function(capstone_configure_application target)
     set(app_HEAP level0)
   endif()
   set(heap_bytes 0)
-  if(app_HEAP STREQUAL "sublet")
+  if(CAPSTONE_APPLICATION_VIRTUAL)
+    set(heap "${capstone}/runtime/virtual/heap.c")
+    target_include_directories(${target} PRIVATE "${capstone}/sublet")
+  elseif(app_HEAP STREQUAL "sublet")
     if(NOT app_HEAP_LOG MATCHES "^[0-9]+$" OR app_HEAP_LOG LESS 12 OR app_HEAP_LOG GREATER 27)
       message(FATAL_ERROR "Sublet applications require HEAP_LOG between 12 and 27")
     endif()

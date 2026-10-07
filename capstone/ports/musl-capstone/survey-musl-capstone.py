@@ -141,6 +141,8 @@ def bucket(message: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("musl_dir")
+    parser.add_argument("--virtual", action="store_true",
+                        help="use representable gp and within-PCC calls for virtual C")
     parser.add_argument("--expect-ok", type=int, default=BASELINE_OK)
     parser.add_argument("--jobs", type=int, default=min(16, (os.cpu_count() or 4)))
     parser.add_argument("--list-failures", action="store_true")
@@ -174,6 +176,8 @@ def main() -> int:
         return 2
 
     flags = compile_flags(musl)
+    if args.virtual:
+        flags += ["-mllvm", "-capstone-gp-free", "-mllvm", "-capstone-image-gp"]
 
     objdir = pathlib.Path(args.objects).resolve() if args.objects else None
 

@@ -903,8 +903,8 @@ static const uint16_t launcher_own[] = {
      startup needs the image memfd, the spawner fork and socket, and the
      second filter installation */
   CAPSTONE_SYS_execve, 279 /* memfd_create */, 167 /* prctl */, 277 /* seccomp */,
-  CAPSTONE_SYS_clone, 199 /* socketpair */, CAPSTONE_SYS_dup3, CAPSTONE_SYS_pipe2,
-  CAPSTONE_SYS_getcwd, 154 /* setpgid */, 155 /* getpgid */
+  CAPSTONE_SYS_clone, 435 /* clone3, for native pthread startup */, 199 /* socketpair */, CAPSTONE_SYS_dup3, CAPSTONE_SYS_pipe2,
+  CAPSTONE_SYS_getcwd, 154 /* setpgid */, 155 /* getpgid */, 293 /* rseq */
 };
 
 int capstone_delegate_seccomp(void) {

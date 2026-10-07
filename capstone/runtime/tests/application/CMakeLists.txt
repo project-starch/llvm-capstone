@@ -5,6 +5,18 @@ add_subdirectory(../.. runtime)
 add_executable(application-contract contract.c)
 capstone_configure_application(application-contract
   DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144)
+# Heap qualification needs an explicitly unprotected control even though
+# ordinary level0 applications now receive per-object bounds by default.
+add_executable(application-contract-unbounded contract.c)
+capstone_configure_application(application-contract-unbounded
+  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144)
+target_compile_definitions(application-contract-unbounded PRIVATE CAPSTONE_LEVEL0_OBJECT_BOUNDS=0)
+add_executable(application-contract-sublet contract.c)
+capstone_configure_application(application-contract-sublet
+  DATA_BYTES 1048576 STACK_BYTES 262144 ARENA_BYTES 262144 HEAP sublet HEAP_LOG 20 GRANT_BYTES 2097152)
+foreach(target application-contract-unbounded application-contract-sublet)
+  target_link_options(${target} PRIVATE "-Map=$<TARGET_FILE:${target}>.map")
+endforeach()
 add_executable(delegate-bench delegate-bench.c)
 capstone_configure_application(delegate-bench
   DATA_BYTES 262144 STACK_BYTES 65536 ARENA_BYTES 65536 EXCHANGE_BYTES 65536)
