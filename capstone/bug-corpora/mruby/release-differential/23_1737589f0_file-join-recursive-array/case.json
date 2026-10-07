@@ -22,5 +22,9 @@
       "oracle": "the guest timeout killed it at 25 s (it does not terminate)"
     }
   },
-  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default"
+  "status": "sysalloc-none, sysalloc-bounds and sublet-gc measured 2026-10-06 on the Capstone application VM; cheribsd-revocation measured 2026-10-06 on CheriBSD purecap with libc revocation at its default",
+  "ignore": {
+    "kind": "out-of-scope",
+    "why": "c-stack-exhaustion, so the study measures spatial and temporal memory safety, and this defect is neither: it is kept because it is what the arms actually reported on the release, and dropping it would hide a reading that was taken"
+  }
 }

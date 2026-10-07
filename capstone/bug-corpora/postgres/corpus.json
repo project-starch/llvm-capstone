@@ -1,0 +1,199 @@
+{
+  "program": "postgres",
+  "title": "PostgreSQL: nineteen defects at three fidelities -- a C reduction, the memory contexts under replay, and SQL against a running server",
+  "cases": 19,
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "groups": {
+    "c-repros": {
+      "boundary": "C reductions that drive the real upstream function, compiled verbatim from the 17.5 pin, with no server in the process",
+      "title": "Memory-safety defects in PostgreSQL 17.5 reduced to C against the real upstream function",
+      "upstream": {
+        "version": "17.5"
+      },
+      "cases": 5,
+      "case_schema": "case-json",
+      "case_macro": "PGCLIENT",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "cheribsd-revocation"
+      ],
+      "status": "measured",
+      "expect_live_in_pin": {
+        "true": 5
+      },
+      "live_in_pin_recorded": true,
+      "runners": [
+        "capstone/bug-corpora/postgres/c-repros/shared/run-arm.py",
+        "capstone/bug-corpora/postgres/c-repros/shared/run-cheribsd.sh"
+      ],
+      "evidence": [
+        "capstone/bug-corpora/postgres/c-repros/results/spatial-20261006-160406",
+        "capstone/bug-corpora/postgres/c-repros/results/sublet-20261006-161014",
+        "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023",
+        "capstone/bug-corpora/postgres/c-repros/results/20261007-virtual"
+      ],
+      "advisories": [
+        "CVE-2026-19385",
+        "CVE-2026-6477",
+        "CVE-2026-16241"
+      ],
+      "related": [
+        "capstone/bug-corpora/postgres/sql-repros",
+        "capstone/bug-corpora/postgres/mmgr-repros"
+      ],
+      "note": "The counterpart to sql-repros and mmgr-repros, and the reason it exists: both of those are palloc clients, so every defect in them is nested by construction. PostgreSQL's client side is not -- libpq, psql, pg_dump and fe_utils call malloc, realloc and free directly, about 990 call sites against the backend's 82 -- so a defect here is a libc client and is non-nested. Without this corpus the study has no non-nested arm to compare against, and a mechanism's silence on a nested defect cannot be attributed to the nesting. These cases are C reductions, not SQL: the defect is in the client process and no statement sent to a server can reach it. Each drives the real upstream function with a constructed input, the way mmgr-repros drives the real aset and slab. That also makes them freestanding domains, so unlike sql-repros they need no application VM. All five were reproduced on the host under ASan on 2026-10-06 against shared/corpus.h and shared/driver.c, each driving the real upstream function copied verbatim from the pin (shared/upstream_libpq.c, upstream_pgdump.c, upstream_ecpg.c, upstream_saslprep.c, upstream_bbstreamer.c). Each case's host-asan oracle records the faulting access, its size and the exact size of the region it ran off, so the reduction is checkable against the arithmetic in its live_proof rather than taken on trust. RESULT ON THE PURECAP ARM, 2026-10-06: 3 of 5 detected (00, 02, 04 all SIGPROT with their PG_DEFECT marker printed first), 2 reached-silent (01, 03). Every one of the five verdicts is predicted by one measured fact, and the fact is worth more than the ratio: this guest's malloc rounds capability bounds to a SIZE CLASS, not to the request. Measured requested->granted pairs: 1->16, 4->16, 8->16, 16->16, 24->32, 32->32, 100->112, 400->448, 4096->4096. Lining the cases up against it: 00 writes 4096 bytes into an 8-byte request (cap 16) and faults; 02 walks ~4 GiB from a 1-byte request (cap 16) and faults; 04 reads 24 bytes from offset 24 of a 24-byte request (cap 32) and crosses at offset 32, so it faults; 01 reads offset 400 of a 400-byte request (cap 448) and does not; 03 reads offset 4 of a 4-byte request (cap 16) and does not. So a malloc-granular capability machine sees an overrun exactly when it exceeds the ALLOCATOR'S ROUNDING, not when it exceeds the object. Two of five real CVE-class defects are invisible here for that reason alone, with no nesting involved at all -- which is a second blind spot, independent of the one this corpus was built to measure, and it narrows the claim that non-nested defects are the ones such a mechanism catches. On fault attribution: these cases cannot use mmgr-repros' .globl label on the faulting instruction, because in three of the five that instruction is inside a function copied verbatim from upstream and a label would make the copy no longer verbatim. The handler in shared/driver.c reports the faulting PC and the return address as offsets from a function the case names instead, which attributes the fault without touching upstream code; case 00 is why both are reported, since its fault is inside libc's memcpy and only the return address lands in pqGetnchar. One field is NOT usable here and is recorded so nobody relies on it: on this guest SIGPROT arrives with si_addr equal to the faulting PC, not to the data address -- measured as addr==pc on all three faulting cases -- so the fault address cannot be cross-checked against an object's bounds from siginfo. Renamed from c-repros on 2026-10-06, and the old boundary text -- \"libpq and the client tools, which allocate from libc and not from a memory context\" -- was wrong and is replaced. libpq has a nested allocator of its own: fe-exec.c:563 pqResultAlloc carves every PGresult's subsidiary storage out of 2048-byte PGRESULT_DATA_BLOCKSIZE blocks it mallocs, and upstream's own comment calls it \"our trivial space allocator\". So a client-side defect is not non-nested by virtue of being client-side. The five cases here are non-nested because of what each one touches -- a caller's buffer, a pg_dump array, an ecpg host variable, an application password, a pg_basebackup chunk -- and not one of them touches PGresult storage. That is a property of the selection, not of the client side, and a future case on PGresult memory would belong here with allocator_layer set accordingly. CORRECTION, 2026-10-06. This corpus previously recorded that the two Capstone arms could not host these cases, on the grounds that a domain's malloc is itself a nested allocator (the spatial arm) or refuses outright (the sublet arm). That was wrong, and it pointed at the wrong code: both of those files, memory-contexts/src/allocators/spatial/backing-allocator.c and .../sublet/unsupported-allocators.c, belong to the memory-contexts replay study and are linked into neither arm image -- checked by symbol, pg_subpool_refuse is absent from both postgres.dom binaries. What an arm image links is ports/musl-capstone/runtime/level0.c, whose CAPSTONE_LEVEL0_OBJECT_BOUNDS has been on by default since 2026-09-30 and which neither arm overrides; malloc there narrows what it returns to the bytes asked for, and the built binaries carry six shrink instructions inside malloc itself. So a non-nested object has always been hostable on both arms. What was missing was a domain build, and shared/build-domain.sh is now it: 5 of 5 cases build against each arm's SDK. Nothing was relaxed to achieve this, and the sublet arm's refusing malloc, whose job is to catch a PostgreSQL memory manager reaching an unadapted libc path, is not part of this build and is unchanged. A prediction worth recording before the run, because it is falsifiable: the purecap guest rounds bounds to a size class and so missed 01 and 03, while level0 bounds the request exactly, so both should be reported here. If they are not, the difference is not bounds granularity and this note is wrong."
+    },
+    "mmgr-repros": {
+      "boundary": "memory contexts (aset, slab)",
+      "title": "Upstream use-after-free and double-free defects in PostgreSQL's memory managers",
+      "upstream": {
+        "version": "17.5",
+        "port": "capstone/ports/postgres/memory-contexts"
+      },
+      "cases": 5,
+      "case_schema": "case-json",
+      "case_macro": "PG",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "native-detect",
+        "cheribsd-revocation"
+      ],
+      "status": "measured",
+      "expect_live_in_pin": {
+        "true": 5
+      },
+      "live_in_pin_recorded": true,
+      "expect_provenance": 3,
+      "runners": [
+        "capstone/bug-corpora/postgres/mmgr-repros/shared/run-defects.py",
+        "capstone/bug-corpora/postgres/mmgr-repros/run-host-repros.sh"
+      ],
+      "inventory": "capstone/docs/ref/postgres-nested-allocator-defects.md",
+      "evidence": [
+        "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/20260918-qemu-delivery",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/20261007-virtual"
+      ],
+      "advisories": [],
+      "note": "The allocator pin is 17.0; the complete single-user backend port is 17.5. 2026-10-05: a cheribsd-revocation arm was added by this project and run on all 8. The corpus had no plain-purecap arm, only the two PoisonCap ones, and PoisonCap is out of scope for the study these results feed; without it these 8 could not be compared with the other PostgreSQL corpora, which all carry that arm. The build path already existed -- cmake/Replay.cmake builds one hosted executable per case under PG_CORPUS_DIR and says 'plain CheriBSD' when PG_POISONCAP is off -- so nothing in the corpus or the port was changed to produce it. One qualification on reading those 8 silences, because it bites elsewhere: the guest's security.cheri.runtime_revocation_every_free_default is 0, so a revocation sweep runs only once a quarantine threshold is crossed, and a short case that frees a handful of objects may never cross one -- a silence can then mean 'no sweep ran yet' rather than 'the mechanism could not see it'. That confound does NOT apply here, and the reason is worth stating: pfree returns a chunk to its context and never returns the block to malloc, so there is no malloc free for a sweep to act on at any threshold. The silence is a property of the nesting, not of when the quarantine happens to flush. Re-pinned from 17.0 to 17.5 on 2026-10-06, and three cases moved to not-live-at-17-5/ because `git merge-base --is-ancestor` shows their upstream fixes are already in REL_17_5: 83ce20d671, 727bc6ac33f6 and 9d5ce4f1a00a. The 17.0 pin was the only one in the PostgreSQL study, and it is what let three already-fixed defects appear in a 17.5 result table. The five that remain all have fixes later than REL_17_5 (2025-05-05): 2025-08-02, 2025-08-30, 2025-10-03, 2025-10-09 and 2026-03-30. COMPARABILITY, recorded 2026-10-06 rather than resolved. This corpus's `spatial` and `sublet` rows were measured on 2026-09-18, before the 17.5 re-pin, and against the memory-contexts replay study's level 0 (ports/postgres/memory-contexts/src/allocators): backing-allocator.c for the unprotected arm and the refusing unsupported-allocators.c for the protected one. The sibling corpora sql-repros and c-repros were measured on 2026-10-06 against the application domain, whose level 0 is ports/musl-capstone/runtime/level0.c with CAPSTONE_LEVEL0_OBJECT_BOUNDS on. The two are different allocators with different bounds behaviour -- the replay one hands out pointers carrying the whole arena's bounds, the application one narrows to the request -- so these five rows may be added to a per-arm total only with that stated. They are not withdrawn: each is a real measurement of its own arm, and the temporal result they carry (sublet 5 of 5 where both others report 0 of 5) does not depend on bounds granularity, because a use-after-free is caught by revocation and not by a bound. Rerunning them against the application domain would make the three corpora directly comparable and has not been done."
+    },
+    "sql-repros": {
+      "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
+      "title": "Memory-safety defects in PostgreSQL 17.5 reached by SQL against a real server",
+      "upstream": {
+        "version": "17.5",
+        "port": "capstone/ports/postgres/memory-contexts"
+      },
+      "cases": 9,
+      "case_schema": "script-trigger",
+      "case_number_base": 1,
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "cheribsd-revocation"
+      ],
+      "status": "measured",
+      "expect_live_in_pin": {
+        "true": 9
+      },
+      "live_in_pin_recorded": true,
+      "runners": [
+        "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
+        "capstone/bug-corpora/postgres/sql-repros/shared/run-cheribsd.sh"
+      ],
+      "evidence": [
+        "capstone/bug-corpora/postgres/sql-repros/results/spatial-20261006-165125",
+        "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261006-171331",
+        "capstone/bug-corpora/postgres/sql-repros/results/cheribsd-revocation-20261006-165125",
+        "capstone/bug-corpora/postgres/sql-repros/results/spatial-20261006-181644",
+        "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261006-181930",
+        "capstone/bug-corpora/postgres/sql-repros/results/cheribsd-revocation-20261006-181644",
+        "capstone/bug-corpora/postgres/sql-repros/results/20261007-virtual"
+      ],
+      "advisories": [
+        "CVE-2026-14669",
+        "CVE-2026-18024",
+        "CVE-2026-2003",
+        "CVE-2026-2005"
+      ],
+      "related": [
+        "capstone/bug-corpora/postgres/mmgr-repros"
+      ],
+      "note": "Narrowed 2026-10-05 to the four categories the study measures -- temporal and spatial, each nested or not -- and the 14 cases outside them were removed: 4 integer, 5 invariant, 2 type-confusion, 1 wrong-answer, 1 authz, 1 null-deref. They were real defects, reproduced and measured on all three arms, and they are recoverable from commit 607802a0421e; they are gone from here because they do not exercise an allocator and so say nothing about nesting. Of the five that remain, all five allocate through palloc, so all five are nested clients. Two of them (02, 03) overflow by ~32 KB and ~65 KB and therefore leave the underlying malloc block, which a malloc-granular mechanism can see; the other three stay inside the palloc chunk. One removed case is worth re-collecting rather than replacing: 05_levenshtein carried CVE-2026-15742, whose upstream description is an arbitrary-address WRITE via integer wraparound, but our trigger only reached the wrong-answer path -- the case's own fidelity said 'an integer wraparound with no memory error'. The extension, the scaffolding and the fix commit c4d51b62748f are all in hand; what is missing is a trigger that reaches the write. Sibling of mmgr-repros, which pins 17.0 and reduces memory-manager defects to C programs. Our own constructed demonstrators are not here: they are fixtures, which README.md places under ports/*/security-tests. Renamed from sql-repros on 2026-10-06. The old name said WHERE the code lives, and that reads as a claim about the allocator which does not hold: src/backend has 193 direct libc call sites against 2940 palloc-family ones, and a defect on one of those objects would be non-nested in the backend -- 2aa6be6e64 is exactly that, a double free of an EVP_CIPHER_CTX that came from OpenSSL's allocator. The name now says how the defect is REACHED, which is what actually distinguishes this corpus from its two siblings and is what its results can be read as evidence for. Whether a case is nested is decided per case by allocator_layer, not by which directory it sits in."
+    }
+  },
+  "protection": {
+    "cheribsd": [
+      {
+        "bundle": "results",
+        "reader": "arm-verdict",
+        "arm": "cheribsd-revocation",
+        "key": "dir",
+        "vehicle": "cheribsd-purecap",
+        "group": "c-repros"
+      },
+      {
+        "not_run": "measured on 2026-10-05 and written into each case's cheribsd-revocation arm, but no results bundle was ever filed, so this table has nothing to read. The fix is to file the run, not to re-measure.",
+        "group": "mmgr-repros"
+      },
+      {
+        "bundle": "results",
+        "reader": "arm-verdict",
+        "arm": "cheribsd-revocation",
+        "key": "dir",
+        "vehicle": "cheribsd-purecap",
+        "group": "sql-repros"
+      }
+    ],
+    "capstone-sysalloc": [
+      {
+        "bundle": "results/20261007-virtual",
+        "reader": "virtual",
+        "arm": "virtual",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "group": "c-repros"
+      },
+      {
+        "bundle": "results/20261007-virtual",
+        "reader": "virtual",
+        "arm": "virtual",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "group": "mmgr-repros"
+      },
+      {
+        "bundle": "results/20261007-virtual",
+        "reader": "virtual",
+        "arm": "virtual",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "group": "sql-repros"
+      }
+    ],
+    "capstone-sublet": [
+      {
+        "coincides_with": "capstone-sysalloc",
+        "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left.",
+        "group": "c-repros"
+      },
+      {
+        "bundle": "results/20260918-qemu",
+        "reader": "mmgr-columns",
+        "arm": "sublet",
+        "key": "number",
+        "vehicle": "capstone-baremetal",
+        "because": "the replay-sublet target compiles src/allocators/sublet/context-pools.c and replay-spatial does not (ports/postgres/memory-contexts/cmake/Replay.cmake:193-196), so the sublet column is the memory-context adapter and the spatial column is the same program without it.",
+        "group": "mmgr-repros"
+      },
+      {
+        "not_run": "not run. PostgreSQL's memory contexts have a Sublet port -- five patches under ports/postgres/memory-contexts/patches and a build script ports/postgres/build-mmgr-sublet.sh -- but no server image carrying it has been run against this corpus. The sublet arm in results/ is the Sublet HEAP under an unmodified mmgr, which is this table's capstone-sysalloc on the freestanding vehicle, not the nested arm.",
+        "group": "sql-repros"
+      }
+    ]
+  }
+}

@@ -346,92 +346,133 @@ def case_identifiers(case_dir, case):
     }
 
 
-def load_cases(corpus):
-    decl = json.loads((corpus / "corpus.json").read_text())
-    glob = decl.get("case_glob", "[0-9][0-9]_*")
+def load_cases(directory, declaration):
+    """The case directories of one group, in run order."""
     cases = []
-    for d in sorted(corpus.glob(glob)):
+    for d in sorted(directory.glob(declaration.get("case_glob", "[0-9][0-9]_*"))):
         manifest = d / "case.json"
         if manifest.exists():
             cases.append((d, json.loads(manifest.read_text())))
-    return decl, cases
+    return cases
+
+
+def entry_for(block, arm, group):
+    """The protection entry that scores this group's cases under this arm.
+
+    An arm holds one entry per group, because the groups of one application were
+    measured by different runs and a cell must name the run that scored its own
+    case."""
+    entries = block.get(arm)
+    if isinstance(entries, dict):
+        entries = [entries]
+    for spec in entries or []:
+        if spec.get("group", "") == group:
+            return spec
+    return None
 
 
 def build():
+    """One row per case, grouped by application. ONE CORPUS PER APPLICATION: the
+    groups inside it are what used to be separate corpora, and they are kept
+    because the boundary a case crosses, its upstream pin and the run that
+    measured it are all per group."""
     corpora = []
     problems = []
-    for manifest in sorted(CORPORA.glob("*/*/corpus.json")):
+    for manifest in sorted(CORPORA.glob("*/corpus.json")):
         corpus = manifest.parent
-        decl, cases = load_cases(corpus)
+        decl = json.loads(manifest.read_text())
+        name = corpus.name
         block = decl.get("protection")
-        name = str(corpus.relative_to(CORPORA))
         if not block:
             problems.append(f"{name}: no protection block in corpus.json")
             continue
-        read = {}
-        for arm in ARMS:
-            spec = block.get(arm)
-            if not spec:
-                problems.append(f"{name}: protection has no {arm} entry")
-                continue
-            if "bundle" not in spec:
-                continue
-            names = spec["bundle"]
-            table = {}
-            for one in [names] if isinstance(names, str) else names:
-                bundle = corpus / one
-                if not bundle.is_dir():
-                    problems.append(f"{name}/{arm}: bundle {one} does not exist")
-                    continue
-                try:
-                    table.update({numeric(k): v for k, v in
-                              READERS[spec["reader"]](bundle, spec).items()})
-                except KeyError as exc:
-                    problems.append(f"{name}/{arm}: unknown reader "
-                                    f"{spec['reader']!r} ({exc})")
-                except Exception as exc:                   # noqa: BLE001
-                    problems.append(f"{name}/{arm}: reader {spec['reader']} "
-                                    f"failed on {one}: {exc!r}")
-            read[arm] = table
         out_cases = []
-        for case_dir, case in cases:
-            ids = case_identifiers(case_dir, case)
-            cells = {}
+        for group, group_decl in sorted(decl.get("groups", {}).items()):
+            # A group that runs on no arm here owes no bundles: its own `ignore`
+            # is the statement, and every one of its cases carries it.
+            group_ignore = group_decl.get("ignore")
+            read = {}
             for arm in ARMS:
-                spec = block.get(arm) or {}
-                if "coincides_with" in spec:
-                    cells[arm] = {"verdict": "coincides", "with": spec["coincides_with"],
-                                  "why": spec.get("why", "")}
+                spec = entry_for(block, arm, group)
+                if spec is None:
+                    if not group_ignore:
+                        problems.append(f"{name}/{group}: protection has no "
+                                        f"{arm} entry")
                     continue
-                if "not_run" in spec:
-                    cells[arm] = {"verdict": "not-run", "caught": None,
-                                  "why": spec["not_run"]}
+                if "bundle" not in spec:
                     continue
-                table = read.get(arm)
-                if table is None:
-                    cells[arm] = {"verdict": "not-run", "caught": None,
-                                  "why": "the bundle could not be read"}
-                    continue
-                key = numeric(ids.get(spec.get("key", "dir"), ""))
-                if key not in table:
-                    cells[arm] = {"verdict": "not-run", "caught": None,
-                                  "why": spec.get("missing_reason",
-                                                  "the bundle of record has no row for "
-                                                  "this case")}
-                    continue
-                caught, verdict, detail = table[key]
-                cells[arm] = {"verdict": verdict, "caught": caught, "detail": detail,
-                              "bundle": spec["bundle"] if isinstance(spec["bundle"], str)
-                              else ", ".join(spec["bundle"]),
-                              "vehicle": spec["vehicle"],
-                              "local_arm": spec.get("arm", spec["reader"])}
-            out_cases.append({"case": case_dir.name, "number": case["case"],
-                              "upstream_fix": case.get("upstream_fix", ""),
-                              "title": case["title"],
-                              "nested": case.get("nested"),
-                              "arms": cells})
+                names = spec["bundle"]
+                table = {}
+                for one in [names] if isinstance(names, str) else names:
+                    bundle = corpus / group / one
+                    if not bundle.is_dir():
+                        problems.append(f"{name}/{group}/{arm}: bundle {one} "
+                                        f"does not exist")
+                        continue
+                    try:
+                        table.update({numeric(k): v for k, v in
+                                      READERS[spec["reader"]](bundle, spec).items()})
+                    except KeyError as exc:
+                        problems.append(f"{name}/{group}/{arm}: unknown reader "
+                                        f"{spec['reader']!r} ({exc})")
+                    except Exception as exc:               # noqa: BLE001
+                        problems.append(f"{name}/{group}/{arm}: reader "
+                                        f"{spec['reader']} failed on {one}: {exc!r}")
+                read[arm] = table
+            for case_dir, case in load_cases(corpus / group, group_decl):
+                ids = case_identifiers(case_dir, case)
+                ignore = case.get("ignore") or group_ignore
+                cells = {}
+                for arm in ARMS:
+                    spec = entry_for(block, arm, group) or {}
+                    if ignore and (ignore.get("kind") != "arm"
+                                   or arm in (ignore.get("arms") or [])):
+                        cells[arm] = {"verdict": "ignored", "caught": None,
+                                      "kind": ignore.get("kind"),
+                                      "why": ignore.get("why", "")}
+                        continue
+                    if "coincides_with" in spec:
+                        cells[arm] = {"verdict": "coincides",
+                                      "with": spec["coincides_with"],
+                                      "why": spec.get("why", "")}
+                        continue
+                    if "not_run" in spec:
+                        cells[arm] = {"verdict": "not-run", "caught": None,
+                                      "why": spec["not_run"]}
+                        continue
+                    table = read.get(arm)
+                    if table is None:
+                        cells[arm] = {"verdict": "not-run", "caught": None,
+                                      "why": "the bundle could not be read"}
+                        continue
+                    key = numeric(ids.get(spec.get("key", "dir"), ""))
+                    if key not in table:
+                        cells[arm] = {"verdict": "not-run", "caught": None,
+                                      "why": spec.get("missing_reason",
+                                                      "the bundle of record has no "
+                                                      "row for this case")}
+                        continue
+                    caught, verdict, detail = table[key]
+                    cells[arm] = {"verdict": verdict, "caught": caught,
+                                  "detail": detail, "group": group,
+                                  "bundle": spec["bundle"] if isinstance(
+                                      spec["bundle"], str) else ", ".join(spec["bundle"]),
+                                  "vehicle": spec["vehicle"],
+                                  "local_arm": spec.get("arm", spec["reader"])}
+                out_cases.append({"case": case_dir.name, "group": group,
+                                  "number": case["case"],
+                                  "upstream_fix": case.get("upstream_fix", ""),
+                                  "title": case["title"],
+                                  "boundary": group_decl.get("boundary", ""),
+                                  "nested": case.get("nested"),
+                                  "ignored": bool(ignore),
+                                  "arms": cells})
         corpora.append({"corpus": name, "program": decl["program"],
-                        "boundary": decl["boundary"], "cases": out_cases,
+                        "title": decl["title"], "cases": out_cases,
+                        "groups": {g: {"boundary": d.get("boundary", ""),
+                                       "cases": d.get("cases", 0),
+                                       "ignore": d.get("ignore")}
+                                   for g, d in sorted(decl.get("groups", {}).items())},
                         "protection": block})
     return corpora, problems
 
@@ -445,17 +486,23 @@ def resolve(cell, cells):
     return cell
 
 
-MARK = {"caught": "**C**", "missed": "·", "wrong-answer": "w", "not-run": "—"}
+MARK = {"caught": "**C**", "missed": "·", "wrong-answer": "w", "not-run": "—",
+        "ignored": "∅"}
 
 
 def render(corpora):
     lines = [
         "# Does it catch it? Every bug in this tree, against three protection arms",
         "",
-        "Generated by `tools/protection-matrix.py` from each corpus's `protection`",
-        "declaration -- do not edit. `arms.json` defines the three arms and the verdict",
-        "vocabulary; every cell below was read out of the results bundle its corpus",
-        "names, and the JSON beside this file carries the bundle and the detail per cell.",
+        "Generated by `tools/protection-matrix.py` from each application's",
+        "`protection` declaration -- do not edit. `arms.json` defines the three arms and",
+        "the verdict vocabulary; every cell below was read out of the results bundle its",
+        "corpus names, and the JSON beside this file carries the bundle and the detail",
+        "per cell.",
+        "",
+        "ONE CORPUS PER APPLICATION. The groups inside an application are what used to be",
+        "separate corpora: each crosses one boundary, pins one upstream version and was",
+        "measured by its own run, which is why a cell names the bundle of its own group.",
         "",
         "| | |",
         "|---|---|",
@@ -463,16 +510,16 @@ def render(corpora):
         "| · | missed: the sequence ran to the end and the mechanism said nothing |",
         "| w | the program's own oracle failed, no mechanism fired |",
         "| — | not run; the per-case reason is in the JSON |",
+        "| ∅ | ignored: the case stays as material and leaves every denominator |",
         "",
     ]
-    totals = {arm: {"caught": 0, "missed": 0, "wrong-answer": 0, "not-run": 0}
-              for arm in ARMS}
-    lines += ["## Totals", "",
-              "| arm | caught | missed | not run | of |", "|---|---:|---:|---:|---:|"]
+    totals = {arm: {v: 0 for v in MARK} for arm in ARMS}
+    lines += ["## Totals, ignored cases excluded", "",
+              "| arm | caught | missed | not run | of | ignored |",
+              "|---|---:|---:|---:|---:|---:|"]
     body = []
     for corpus in corpora:
-        counts = {arm: {"caught": 0, "missed": 0, "wrong-answer": 0, "not-run": 0}
-                  for arm in ARMS}
+        counts = {arm: {v: 0 for v in MARK} for arm in ARMS}
         rows_out = []
         for case in corpus["cases"]:
             cells = []
@@ -486,28 +533,43 @@ def render(corpora):
                 elif cell.get("vehicle") == "capstone-baremetal":
                     mark += "<sup>b</sup>"
                 cells.append(mark)
-            rows_out.append(f"| {case['number']} | `{case['upstream_fix']}` | "
-                            f"{case['title'][:88]} | " + " | ".join(cells) + " |")
+            rows_out.append(f"| `{case['group']}` | {case['number']} | "
+                            f"`{case['upstream_fix']}` | {case['title'][:76]} | "
+                            + " | ".join(cells) + " |")
         n = len(corpus["cases"])
-        body += [f"### {corpus['corpus']} -- {n} cases", "",
-                 f"{corpus['program']}, at {corpus['boundary']}.", "",
-                 "| case | upstream | what the defect is | CheriBSD | capstone-sysalloc "
-                 "| capstone-sublet |", "|---:|---|---|:---:|:---:|:---:|"] + rows_out + [""]
+        declared = sum(g["cases"] for g in corpus["groups"].values())
+        head = f"### {corpus['corpus']} -- {n} cases"
+        if declared != n:
+            head += (f" with a directory, of {declared} declared")
+        body += [head, "", corpus["title"], ""]
+        if len(corpus["groups"]) > 1:
+            body += ["| group | cases | the boundary its cases cross |",
+                     "|---|---:|---|"]
+            for g, info in corpus["groups"].items():
+                mark = (f" **∅ ignored**: {info['ignore']['why']}"
+                        if info["ignore"] else "")
+                body.append(f"| `{g}` | {info['cases']} | {info['boundary']}{mark} |")
+            body += [""]
+        body += ["| group | case | upstream | what the defect is | CheriBSD "
+                 "| capstone-sysalloc | capstone-sublet |",
+                 "|---|---:|---|---|:---:|:---:|:---:|"] + rows_out + [""]
         for arm in ARMS:
             c = counts[arm]
+            measured = n - c["ignored"]
             body.append(f"- `{arm}`: **{c['caught']}** caught, {c['missed']} missed"
                         + (f", {c['wrong-answer']} wrong answer" if c["wrong-answer"] else "")
                         + (f", {c['not-run']} not run" if c["not-run"] else "")
-                        + f", of {n}.")
+                        + f", of {measured}"
+                        + (f"; {c['ignored']} ignored" if c["ignored"] else "") + ".")
         body.append("")
     for arm in ARMS:
         c = totals[arm]
-        n = sum(c.values())
+        n = sum(c.values()) - c["ignored"]
         lines.append(f"| `{arm}` | {c['caught']} | {c['missed'] + c['wrong-answer']} | "
-                     f"{c['not-run']} | {n} |")
+                     f"{c['not-run']} | {n} | {c['ignored']} |")
     lines += ["",
               "A `=` marks a cell that coincides with the arm to its left because the "
-              "corpus has no nested allocator to protect; a `b` marks one measured on the "
+              "group has no nested allocator to protect; a `b` marks one measured on the "
               "freestanding vehicle, which is NOT paired with the cell to its left.",
               ""] + body
     return "\n".join(lines) + "\n"

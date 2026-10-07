@@ -1,0 +1,141 @@
+{
+  "program": "memcached",
+  "title": "memcached: eleven defects across its two inner allocators and the platform heap",
+  "cases": 11,
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "groups": {
+    "allocator-repros": {
+      "boundary": "slabs and the per-thread object cache",
+      "title": "Consumer-side defects in memcached's nested allocators: five temporal, three spatial",
+      "upstream": {
+        "version": "1.6.45",
+        "port": "capstone/ports/memcached/allocators"
+      },
+      "cases": 9,
+      "case_schema": "case-json",
+      "case_macro": "MC",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "status": "measured",
+      "expect_live_in_pin": {
+        "true": 1,
+        "false": 8
+      },
+      "live_in_pin_recorded": true,
+      "runners": [
+        "capstone/bug-corpora/memcached/allocator-repros/runners/capstone-domain/run-defects.py",
+        "capstone/bug-corpora/memcached/allocator-repros/runners/cheribsd/run-defects.py",
+        "capstone/bug-corpora/memcached/allocator-repros/runners/poisoncap/run-defects.py",
+        "capstone/bug-corpora/memcached/allocator-repros/runners/run-native.sh"
+      ],
+      "evidence": [
+        "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects",
+        "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
+        "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8",
+        "capstone/bug-corpora/memcached/allocator-repros/results/20261007-virtual"
+      ],
+      "advisories": [
+        "CVE-2018-1000127"
+      ],
+      "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port. Cases 5-7 are SPATIAL, added 2026-10-05 from a SHAPE search over item-size computations (item_make_header / ITEM_* / do_item_alloc) rather than a wording filter -- the wording filter found 0 class-B defects here, and these three have subjects that say 'corruption' rather than 'overflow', which is exactly why it missed them. See docs/ref/memcached-spatial-defect-triage.md. This corpus's .gitignore keeps run summaries OUT of the repository by design -- 'the case files' status carries the outcome' -- so cases 5-7's measured readings live in their status fields and in docs/ref/memcached-spatial-defect-triage.md section 6, not in a committed results/ bundle. 2026-10-07: case 8 is CAUGHT on stock CheriBSD while cases 5-7 complete, and the split is the finding -- src/cheribsd/malloc-leases.c:79 malloc's a slab PAGE which slabs.c then carves, while :161 malloc's each cache OBJECT separately. A slab-chunk crossing therefore stays inside one malloc and a cache-object crossing does not. '0 of 9 caught' would be the wrong summary for this corpus on CheriBSD; it is 0 of 8 and 1 of 1, split by inner allocator.",
+      "shape_table": true
+    },
+    "plain-heap-repros": {
+      "boundary": "the system allocator itself: one calloc or malloc, with no inner layer",
+      "title": "Upstream memcached spatial defects that cross the MALLOC BOUND, the not-nested row",
+      "upstream": {
+        "version": "1.6.45",
+        "port": "capstone/ports/memcached/app"
+      },
+      "cases": 2,
+      "case_schema": "case-json",
+      "case_macro": "MCH",
+      "required_arms": [
+        "spatial",
+        "sublet",
+        "poisoncap-spatial",
+        "poisoncap-protected",
+        "cheribsd-revocation",
+        "native-detect",
+        "native-fix-differential"
+      ],
+      "status": "measured",
+      "expect_live_in_pin": {
+        "false": 2
+      },
+      "live_in_pin_recorded": true,
+      "runners": [
+        "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-native.sh",
+        "capstone/bug-corpora/memcached/plain-heap-repros/runners/run-cheribsd.sh"
+      ],
+      "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
+      "evidence": [
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/20261006-native-plain-heap",
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/20261007-cheribsd",
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/20261007-cheribsd",
+        "capstone/bug-corpora/memcached/plain-heap-repros/results/20261007-virtual"
+      ],
+      "advisories": [],
+      "note": "A sibling of allocator-repros, deliberately separate: that corpus's boundary is memcached's NESTED allocators (slabs.c and the per-thread object cache) and all eight of its cases cross a bound those own. These cross the malloc bound itself, so there is no inner layer to port and no slab geometry to derive -- and that is precisely what makes them the inventory's not-nested spatial row. The corpus exists because that row stood empty for a reason that did not hold: the hunt had required its candidates to be live at the pin, which no document asks for and which 29 of this tree's 35 cases contradict. ASan REPORTS these defects, unlike the sub-object corpora, and the two readings together are the contrast: a crossing that leaves the allocation is seen by every tool, a crossing inside one is seen by none. Case 1 (d5d9ff0) added 2026-10-07: item_cachedump's headroom guard reserves five bytes for \"END\\r\\n\" and the marker is written with a terminating NUL, so the NUL lands one byte past malloc(memlimit). Cited by HASH ONLY -- its subject names an outside contributor. It was the one class-A candidate in docs/ref/memcached-spatial-defect-triage.md that had never been dispositioned.",
+      "shape_table": true
+    }
+  },
+  "protection": {
+    "cheribsd": [
+      {
+        "bundle": [
+          "results/20261006-cheribsd",
+          "results/20261007-cheribsd-case8"
+        ],
+        "reader": "case-lines",
+        "key": "number",
+        "vehicle": "cheribsd-purecap",
+        "because": "two bundles because case 8 was run on its own the next day, and it is the one that refuted its prediction.",
+        "group": "allocator-repros"
+      },
+      {
+        "bundle": "results/20261007-cheribsd",
+        "reader": "supervise-blocks",
+        "key": "number",
+        "vehicle": "cheribsd-purecap",
+        "group": "plain-heap-repros"
+      }
+    ],
+    "capstone-sysalloc": [
+      {
+        "bundle": "results/20261007-virtual",
+        "reader": "virtual",
+        "arm": "virtual",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "group": "allocator-repros"
+      },
+      {
+        "bundle": "results/20261007-virtual",
+        "reader": "virtual",
+        "arm": "virtual",
+        "key": "dir",
+        "vehicle": "capstone-virtual",
+        "group": "plain-heap-repros"
+      }
+    ],
+    "capstone-sublet": [
+      {
+        "not_run": "not run. The slab adapter exists and the domain build compiles it (ports/memcached/allocators/src/allocators/sublet/authority.c, cmake/Allocators.cmake:104) and every case declares its mode-0/mode-1 oracle, but results/ holds only CheriBSD and virtual bundles: the domain run was never filed.",
+        "group": "allocator-repros"
+      },
+      {
+        "coincides_with": "capstone-sysalloc",
+        "why": "the object comes straight from the system allocator: there is no nested allocator between the program and malloc, so this arm is the same binary and the same measurement as the one to its left.",
+        "group": "plain-heap-repros"
+      }
+    ]
+  }
+}

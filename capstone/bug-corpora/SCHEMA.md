@@ -246,13 +246,46 @@ rows in needs a reader per table, not a declaration.
 
 ## The corpus declaration: `corpus.json`
 
-One per corpus, at its root. It is what makes a corpus findable, countable and
-checkable from outside, and it is the only input to the generated index.
+**One per program**, at `bug-corpora/<program>/`, with the cases in **groups**.
+
+It was one per boundary -- nineteen declarations over nine programs -- and that
+is one unit too many to hold in the head: nineteen protection blocks, nineteen
+index rows, nineteen READMEs, for nine programs. A group is now what a corpus
+was, and the program is the corpus.
+
+What stays with the group is what is true of it alone: the **boundary** its
+cases cross, the **upstream pin** (FFmpeg's four groups share one, PostgreSQL's
+three do not), the build seam's **case macro** and **case schema**, its own
+runners, inventory and result bundles. What belongs to the program moves up: the
+title, the total, and the protection sources. Nothing moved on disk, so no
+archived bundle's case names became wrong.
+
+    {
+      "program": "ffmpeg", "title": "...", "cases": 19,
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "groups": {
+        "plain-heap-repros": {"boundary": "one av_malloc_array, no inner layer", ...},
+        "pool-repros":       {"boundary": "AVBufferPool / AVRefStructPool", ...},
+        ...
+      },
+      "protection": {"cheribsd": [{"group": "plain-heap-repros", "bundle": ...}, ...], ...}
+    }
+
+Each arm holds **one entry per group**, because the groups of one program were
+measured by different runs -- FFmpeg's pool bundle is not its plain-heap bundle
+-- and a cell must name the run that scored its own case. A group that runs on
+no arm here carries `ignore` instead and owes no entries.
+
+The fields below are a group's, except `program`, `title`, `cases`, `checker`,
+`groups` and `protection`, which are the program's. A declaration with **no**
+`groups` is read as one group spelled inline, which is the shape `xlang/` uses.
 
 | field | meaning |
 |---|---|
-| `program`, `boundary`, `title` | what the corpus is about: the upstream program, the allocator or API boundary its cases cross, and one line of scope |
-| `protection` | where this corpus's verdict for each of the three protection arms comes from, as above |
+| `program`, `boundary`, `title` | the upstream program, the allocator or API boundary the group's cases cross, and one line of scope |
+| `groups` | the program's groups, each a map of the fields below |
+| `protection` | per arm, one entry per group, saying where that verdict comes from -- see above |
+| `ignore` | on a group: it runs on no arm here, with the reason. See **Ignored cases** |
 | `upstream` | `{version, port}` -- the release the cases are built against, and the port component that pins it. Absent where each row pins its own commit |
 | `cases` | how many cases the corpus has. The checker counts the tree and refuses a mismatch |
 | `case_schema` | `case-json` (a reduction with `case.c`), `script-trigger` (a defect whose trigger is an interpreter script rather than a C reduction; each case names its own file in `trigger`), `sqlite-row` (a binding row carrying the provenance ledger's columns), or `xlang-row` (a shim row, declaration-level only) |
@@ -267,6 +300,24 @@ checkable from outside, and it is the only input to the generated index.
 | `advisories` | one entry per advisory, with its aliases in the same string, so counting entries counts advisories rather than identifiers |
 | `shape_table`, `shape_prose` | whether the README carries a shape table that must partition the cases, and any prose claim about its size |
 | `note` | anything a reader needs that no field above holds |
+
+## Ignored cases
+
+A case that stays in the corpus and leaves every denominator says so in an
+`ignore` object, and says which of three kinds it is. The kinds are separated
+because a bare "ignored" is the one cell a reader cannot interpret, and each of
+these carries different weight:
+
+| `kind` | what it means |
+|---|---|
+| `no-runtime` | no arm here can run it at all. The material is kept, the measurement does not exist. Declared on a **group** where it holds for all of it -- SQLite's binding rows are programs in Rust, Go, Python and Tcl, and no arm has a runtime for one |
+| `arm` | one or more **named** arms cannot run it; the others measure it normally. `arms` lists them. SQLite's case 07 calls `sqlite3_config` itself and fills `sqlite_heap`, which exists only where memsys5 is configured over a static array |
+| `out-of-scope` | neither spatial nor temporal, so outside what the study measures. mruby's four null dereferences, one type confusion and one C-stack exhaustion are kept because they are what the arms reported on that release |
+
+Every kind needs a `why` of more than a few words; the checker refuses a label.
+An ignored case is `∅` in PROTECTION.md and is subtracted from that arm's
+denominator -- the totals there are stated with the ignored count beside them,
+so a reader can see what was left out rather than infer it from a gap.
 
 **`live_in_pin` is three-valued.** `true` and `false` both need a `live_proof`
 that says how it was established -- a backport, or an inspection with file and

@@ -1,9 +1,17 @@
 # Bug corpora
 
-Reproduction material for defects in third-party software, one directory per program.
+Reproduction material for defects in third-party software, **one corpus per program**.
 Deliberately outside `ports/`, which holds the ports themselves and their build.
 
-**[INDEX.md](INDEX.md) lists every corpus, its case count, the version each one pins and
+A program's corpus is one `corpus.json` with its cases in GROUPS -- what used to be a
+corpus of its own. A group is a boundary: FFmpeg has four, because a crossing past a
+direct `av_malloc` and a crossing between two members of one allocation are different
+questions and the arms answer them differently. The group keeps what is true of it
+alone -- that boundary, its upstream pin, its build seam, the runs that measured it --
+and the program keeps the title, the total and where each arm's verdict comes from.
+[PROTECTION.md](PROTECTION.md) is one table per program, with the group as a column.
+
+**[INDEX.md](INDEX.md) lists every group, its case count, the version each one pins and
 whether those defects are live in that version.** It is generated from each corpus's
 `corpus.json`, so start there rather than here: the hand-written list this replaced had
 memcached at two cases when it had five, and did not mention the Wireshark corpus at all.

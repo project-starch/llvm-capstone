@@ -2,7 +2,7 @@
 
 Companion to [`ffmpeg-pool-consumer-defects.md`](ffmpeg-pool-consumer-defects.md), which surveys
 *pool-consumer* defects across upstream history and is the `inventory` named in
-`bug-corpora/ffmpeg/pool-repros/corpus.json`. **This file asks a different question with a different
+`bug-corpora/ffmpeg/corpus.json` (group `pool-repros`). **This file asks a different question with a different
 instrument** and does not replace it.
 
 **The question, in two halves.** All three cases in `pool-repros` are `live_in_pin: false`. (a) Is

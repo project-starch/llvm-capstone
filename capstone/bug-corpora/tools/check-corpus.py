@@ -33,9 +33,20 @@ CORPORA = TOOLS.parent
 REPO = CORPORA.parents[1]
 SEARCH = ["capstone/bug-corpora", "xlang"]
 
+# ONE CORPUS PER APPLICATION. What used to be a corpus is a GROUP inside its
+# application's corpus: the boundary it crosses, the upstream pin and the build
+# seam's case macro stay with the group, because that is where they are true,
+# and the title, the total and the protection sources belong to the application.
+# Nothing moved on disk, so no archived result bundle's case names became wrong.
+#
+# The flat shape below is still checked, because `xlang/` uses it: a declaration
+# with no `groups` is read as one group spelled inline.
+PROGRAM_REQUIRED = {"program", "title", "cases", "checker", "groups", "protection"}
+PROGRAM_OPTIONAL = {"note", "related", "advisories", "inventory"}
+
 DECL_REQUIRED = {"program", "boundary", "title", "cases", "case_schema", "status",
                  "live_in_pin_recorded"}
-DECL_OPTIONAL = {"protection", "upstream", "expect_live_in_pin", "live_in_pin_note", "case_macro",
+DECL_OPTIONAL = {"ignore", "protection", "upstream", "expect_live_in_pin", "live_in_pin_note", "case_macro",
                  "case_glob", "case_exclude", "case_number_base", "case_table",
                  "case_dir_column", "case_doc", "required_arms", "arm_keys",
                  "expect_provenance", "runners", "checker", "inventory", "evidence",
@@ -63,7 +74,16 @@ CASE_REQUIRED = {
     "script-trigger": ["case", "upstream_fix", "title", "consumer", "class",
                        "trigger", "fidelity", "arms", "status"],
 }
-CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
+# Three kinds of case that stay in the corpus and leave every denominator.
+# A bare "ignored" is the one cell a reader cannot interpret, so each kind says
+# what it is and every one of them carries a reason.
+IGNORE_KINDS = {
+    "no-runtime": "no arm here can run it at all -- the case is material, not a measurement",
+    "arm": "one or more named arms cannot run it; the others measure it normally",
+    "out-of-scope": "neither spatial nor temporal, so outside what the study measures",
+}
+
+CASE_OPTIONAL = {"ignore", "live_in_pin", "live_proof", "live_note", "distinguishing",
                  "sibling_issue", "size_class", "size_note", "layer_note", "note",
                  "advisory", "shape", "object", "capstone_column", "comparison",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
@@ -397,13 +417,18 @@ def check_cases(corpus, decl, dirs, problems):
 
 
 def check_protection(corpus, decl, problems):
-    """Every corpus says, for each of the three arms, where its verdict comes from.
+    """Every corpus says, for each of the three arms and for each of its groups,
+    where that verdict comes from.
 
     This is what keeps PROTECTION.md honest: a cell is either a bundle this
     checker can see, or an explicit reason there is no measurement, and there is
     no third state in which a reader cannot tell the difference. The arm names
     and the readers come from `arms.json` and `tools/protection-matrix.py`, so
     the three files cannot drift apart silently.
+
+    An arm holds one entry PER GROUP, because the groups of one application were
+    measured by different runs -- FFmpeg's pool bundle is not its plain-heap
+    bundle -- and a cell must name the run that scored its own case.
     """
     arms, readers, declared = protection_vocabulary()
     if set(arms) != declared:
@@ -418,55 +443,96 @@ def check_protection(corpus, decl, problems):
     for key in sorted(set(block) - set(arms) - {"note"}):
         problems.append(f"protection has an entry {key!r} that is not one of "
                         f"{sorted(arms)}")
+    # A group that runs on no arm here owes no protection entries: its `ignore`
+    # IS the statement, and asking it for three bundles that cannot exist would
+    # turn a clear fact into three holes.
+    groups = {name for name, group in (decl.get("groups") or {"": None}).items()
+              if not (group or {}).get("ignore")}
     for arm in arms:
-        spec = block.get(arm)
+        entries = block.get(arm)
         where = f"protection.{arm}"
-        if not isinstance(spec, dict):
-            problems.append(f"{where} is missing or is not an object")
+        if isinstance(entries, dict):           # the flat shape: one group inline
+            entries = [entries]
+        if not isinstance(entries, list) or not entries:
+            problems.append(f"{where} is missing or is not a non-empty list")
             continue
-        if "not_run" in spec:
-            if len(spec) != 1:
-                problems.append(f"{where} has not_run and {sorted(set(spec) - {'not_run'})}"
-                                f": a cell is a measurement or a reason, not both")
-            elif len(spec["not_run"].split()) < 6:
-                problems.append(f"{where}: not_run is a label, not a reason -- say "
-                                f"whether it can be measured and what it waits on")
-            continue
-        if "coincides_with" in spec:
-            if spec["coincides_with"] not in arms:
-                problems.append(f"{where}: coincides_with names {spec['coincides_with']!r}")
-            if not spec.get("why"):
-                problems.append(f"{where}: coincides_with with no why")
-            continue
-        for field in ("bundle", "reader", "vehicle"):
-            if field not in spec:
-                problems.append(f"{where}: no {field}")
-        if spec.get("reader") not in readers:
-            problems.append(f"{where}: reader {spec.get('reader')!r} is not one of "
-                            f"{sorted(readers)}")
-        names = spec.get("bundle", [])
-        for one in [names] if isinstance(names, str) else names:
-            if not (corpus / one).is_dir():
-                problems.append(f"{where}: bundle {one} does not exist")
+        seen = [e.get("group", "") for e in entries]
+        for group in sorted(groups - set(seen)):
+            problems.append(f"{where}: no entry for group {group!r}")
+        for group in sorted({g for g in seen if seen.count(g) > 1}):
+            problems.append(f"{where}: {seen.count(group)} entries for group {group!r}")
+        for spec in entries:
+            group = spec.get("group", "")
+            if groups != {""} and group not in groups:
+                problems.append(f"{where}: entry names group {group!r}, which the "
+                                f"corpus does not declare")
+                continue
+            root = corpus / group if group else corpus
+            label = f"{where}[{group}]" if group else where
+            if "not_run" in spec:
+                if set(spec) - {"not_run", "group"}:
+                    problems.append(f"{label} has not_run and "
+                                    f"{sorted(set(spec) - {'not_run', 'group'})}: a "
+                                    f"cell is a measurement or a reason, not both")
+                elif len(spec["not_run"].split()) < 6:
+                    problems.append(f"{label}: not_run is a label, not a reason -- say "
+                                    f"whether it can be measured and what it waits on")
+                continue
+            if "coincides_with" in spec:
+                if spec["coincides_with"] not in arms:
+                    problems.append(f"{label}: coincides_with names "
+                                    f"{spec['coincides_with']!r}")
+                if not spec.get("why"):
+                    problems.append(f"{label}: coincides_with with no why")
+                continue
+            for field in ("bundle", "reader", "vehicle"):
+                if field not in spec:
+                    problems.append(f"{label}: no {field}")
+            if spec.get("reader") not in readers:
+                problems.append(f"{label}: reader {spec.get('reader')!r} is not one of "
+                                f"{sorted(readers)}")
+            names = spec.get("bundle", [])
+            for one in [names] if isinstance(names, str) else names:
+                if not (root / one).is_dir():
+                    problems.append(f"{label}: bundle {one} does not exist")
 
 
-def check_one(manifest):
-    """Check the corpus that `manifest` declares. Returns a list of problems."""
-    corpus = manifest.parent
-    where = corpus.relative_to(REPO)
-    problems = []
-    try:
-        decl = json.loads(manifest.read_text())
-    except json.JSONDecodeError as exc:
-        return [f"{where}: corpus.json is not valid JSON: {exc}"]
+def check_ignore(where, number, case, problems):
+    """An ignored case says which kind it is and why, and nothing else."""
+    spec = case.get("ignore")
+    if spec is None:
+        return
+    if not isinstance(spec, dict):
+        problems.append(f"case {number}: ignore is not an object")
+        return
+    kind = spec.get("kind")
+    if kind not in IGNORE_KINDS:
+        problems.append(f"case {number}: ignore.kind {kind!r} is not one of "
+                        f"{sorted(IGNORE_KINDS)}")
+    if len(str(spec.get("why", "")).split()) < 6:
+        problems.append(f"case {number}: ignore.why is a label, not a reason")
+    if kind == "arm" and not spec.get("arms"):
+        problems.append(f"case {number}: ignore.kind is 'arm' with no arms named")
+    if kind != "arm" and spec.get("arms"):
+        problems.append(f"case {number}: ignore names arms but its kind is {kind!r}")
+    for arm in spec.get("arms") or []:
+        if arm not in protection_vocabulary()[0]:
+            problems.append(f"case {number}: ignore names arm {arm!r}, which is not "
+                            f"one of the three")
 
-    for key in sorted(DECL_REQUIRED - set(decl)):
+
+def check_group(corpus, decl, where, problems):
+    """One group: what a corpus used to be, checked exactly as it was."""
+    ignore = decl.get("ignore")
+    if ignore is not None:
+        check_ignore(where, "group", {"ignore": ignore}, problems)
+    for key in sorted(DECL_REQUIRED - set(decl) - {"program"}):
         problems.append(f"missing required declaration {key!r}")
-    for key in sorted(set(decl) - DECL_REQUIRED - DECL_OPTIONAL):
+    for key in sorted(set(decl) - DECL_REQUIRED - DECL_OPTIONAL - {"protection_note"}):
         problems.append(f"unknown declaration {key!r} -- add it to SCHEMA.md and to "
                         f"this checker, or drop it")
     if problems:
-        return [f"{where}: {p}" for p in problems]
+        return
 
     if decl["case_schema"] not in SCHEMAS:
         problems.append(f"case_schema {decl['case_schema']!r} is not one of "
@@ -482,7 +548,7 @@ def check_one(manifest):
     if decl["cases"] == 0 and decl["status"] not in {"planned", "triaged"}:
         problems.append(f"no cases, but status is {decl['status']!r}")
     if problems:
-        return [f"{where}: {p}" for p in problems]
+        return
 
     for field in PATH_FIELDS:
         value = decl.get(field)
@@ -495,12 +561,55 @@ def check_one(manifest):
         problems.append(f"cases says {decl['cases']}, the tree has {len(dirs)}")
     if decl["cases"] and decl["case_schema"] != "xlang-row":
         check_cases(corpus, decl, dirs, problems)
+        for directory in dirs:
+            manifest = directory / "case.json"
+            if manifest.exists():
+                try:
+                    check_ignore(where, directory.name,
+                                 json.loads(manifest.read_text()), problems)
+                except json.JSONDecodeError:
+                    pass          # check_cases already reports it
     if decl.get("shape_table"):
         check_shape_table(corpus, decl, len(dirs), problems)
-    # An xlang row is not a case directory and its arms live in its own table,
-    # so the protection block does not apply to that schema yet.
-    if decl["case_schema"] != "xlang-row":
-        check_protection(corpus, decl, problems)
+
+
+def check_one(manifest):
+    """Check the corpus that `manifest` declares. Returns a list of problems."""
+    corpus = manifest.parent
+    where = corpus.relative_to(REPO)
+    problems = []
+    try:
+        decl = json.loads(manifest.read_text())
+    except json.JSONDecodeError as exc:
+        return [f"{where}: corpus.json is not valid JSON: {exc}"]
+
+    if "groups" not in decl:
+        # The flat shape: one group spelled inline, which is what xlang/ uses.
+        check_group(corpus, decl, where, problems)
+        if decl.get("case_schema") != "xlang-row":
+            check_protection(corpus, decl, problems)
+        return [f"{where}: {p}" for p in problems]
+
+    for key in sorted(PROGRAM_REQUIRED - set(decl)):
+        problems.append(f"missing required declaration {key!r}")
+    for key in sorted(set(decl) - PROGRAM_REQUIRED - PROGRAM_OPTIONAL):
+        problems.append(f"unknown declaration {key!r} -- add it to SCHEMA.md and to "
+                        f"this checker, or drop it")
+    if problems:
+        return [f"{where}: {p}" for p in problems]
+
+    total = 0
+    for name, group in sorted(decl["groups"].items()):
+        directory = corpus / name
+        if not directory.is_dir():
+            problems.append(f"group {name!r} has no directory")
+            continue
+        total += group.get("cases", 0)
+        check_group(directory, dict(group, program=decl["program"]),
+                    directory.relative_to(REPO), problems)
+    if total != decl["cases"]:
+        problems.append(f"cases says {decl['cases']}, the groups say {total}")
+    check_protection(corpus, decl, problems)
 
     return [f"{where}: {p}" for p in problems]
 
@@ -513,7 +622,11 @@ def self_test():
     sixth corruption is added, and keeps printing five when one stops running.
     The number has to come from the list that ran, or it is decoration.
     """
+    # The victim is a GROUP: one corpus per program now, so the declaration the
+    # case checks run against is the group's entry inside its program's file.
     victim = CORPORA / "cpython/pymalloc-repros"
+    group = json.loads((CORPORA / "cpython/corpus.json").read_text())["groups"][
+        "pymalloc-repros"]
     accepted = []
     corruptions = (
         ("a missing required field", lambda c: c.pop("consumer")),
@@ -525,6 +638,13 @@ def self_test():
         # gate that spots it.
         ("a misspelled arm hidden behind 'not written'",
          lambda c: c["arms"].update(spatail={"status": "not written"})),
+        ("an ignore with no kind",
+         lambda c: c.update(ignore={"why": "because it does not run here at all"})),
+        ("an ignore whose reason is a label",
+         lambda c: c.update(ignore={"kind": "out-of-scope", "why": "n/a"})),
+        ("kind 'arm' with no arm named",
+         lambda c: c.update(ignore={"kind": "arm",
+                                    "why": "one arm cannot run this case as written"})),
     )
     for label, mutate in corruptions:
         with tempfile.TemporaryDirectory() as tmp:
@@ -535,8 +655,8 @@ def self_test():
             mutate(case)
             (target / "case.json").write_text(json.dumps(case, indent=2))
             problems = []
-            decl = json.loads((copy / "corpus.json").read_text())
-            check_cases(copy, decl, sorted(copy.glob("[0-9][0-9]_*")), problems)
+            check_cases(copy, group, sorted(copy.glob("[0-9][0-9]_*")), problems)
+            check_ignore("self-test", target.name, case, problems)
             if not problems:
                 accepted.append(label)
     return accepted, len(corruptions)
