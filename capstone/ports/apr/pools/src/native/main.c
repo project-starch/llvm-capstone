@@ -16,8 +16,7 @@
 /* The heap lends one linear block and keeps the senior handle, so the lease
  * layer can revoke inside it. Declared, not included: the allocator's own
  * interface. */
-#include <capstone/capability.h>
-unsigned long __capstone_sublet_malloc_linear(size_t, capstone_cap_slot *);
+#include "../../../../common/include/borrow-aligned-block.h"
 #endif
 _Noreturn void aprp_fail(unsigned code) {
   fprintf(stderr, "APRP failed=%u\n", code);
@@ -54,9 +53,11 @@ int main(int argc, char **argv) {
    * it measures. The heap gives all three by construction: a request is
    * rounded up to a power of two and each arena is acquired aligned to its own
    * size. */
-  capstone_cap_slot lent;
+  capstone_cap_slot lent, head, tail;
   void *payload = NULL;
-  if (!__capstone_sublet_malloc_linear(APRP_PAYLOAD_BYTES, &lent))
+  /* A page, because aprp_payload_init requires the region page-aligned. */
+  if (!capstone_borrow_aligned_block(APRP_PAYLOAD_BYTES, 4096, &lent,
+                                     &head, &tail))
     return 4;
 #else
   void *payload = aligned_alloc(4096, APRP_PAYLOAD_BYTES);

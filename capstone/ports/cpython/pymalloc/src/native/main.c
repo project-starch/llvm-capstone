@@ -7,10 +7,9 @@
 #ifdef PYMALLOC_BORROW_LINEAR
 /* The arena is LENT, not allocated: the system allocator hands over one linear
  * block and keeps the senior handle, which is what lets the nested adapter
- * revoke inside it and still lets the heap reclaim the whole thing. This is
- * the allocator's internal interface, so it is declared rather than included. */
-#include <capstone/capability.h>
-unsigned long __capstone_sublet_malloc_linear(size_t, capstone_cap_slot *);
+ * revoke inside it and still lets the heap reclaim the whole thing. The helper
+ * carves the alignment the adapter needs out of that block. */
+#include "../../../../common/include/borrow-aligned-block.h"
 #endif
 _Noreturn void pym_fail(unsigned code) {
   fprintf(stderr, "PYM failed=%u\n", code);
@@ -41,18 +40,17 @@ int main(int argc, char **argv) {
   void *metadata = aligned_alloc(16384, PYM_META_BYTES);
 #ifdef PYMALLOC_BORROW_LINEAR
   /* The adapter requires the arena pool-aligned and exactly PYM_ARENA_BYTES
-   * long, and it gets both by construction rather than by luck: the heap
-   * rounds a request up to a power of two and acquires each arena aligned to
-   * its own size, so a block is aligned to at least its size. Checked anyway,
-   * because an arm that silently starts measuring something else is worse than
-   * one that refuses to run. */
-  capstone_cap_slot lent;
+   * long. The previous heap gave both by accident -- it rounded a request up to
+   * a power of two and acquired each arena aligned to its own size -- and this
+   * arm relied on that until the musl mallocng policy stopped providing it, at
+   * which point all twenty cases refused to start. The alignment is made now,
+   * and the refusal below stays: an arm that silently starts measuring
+   * something else is worse than one that will not run. */
+  capstone_cap_slot lent, head, tail;
   void *arena = NULL;
-  if (!__capstone_sublet_malloc_linear(PYM_ARENA_BYTES, &lent))
-    return 4;
-  if (capstone_cap_type(&lent) != CAPSTONE_CAP_LINEAR ||
-      capstone_cap_end(&lent) - capstone_cap_base(&lent) < PYM_ARENA_BYTES ||
-      (capstone_cap_base(&lent) & 16383)) {
+  /* 16 KiB, because pym_lifetime_init requires the arena on a pool boundary.
+   * The heap's lend entry takes no alignment, so the helper makes one. */
+  if (!capstone_borrow_aligned_block(PYM_ARENA_BYTES, 16384, &lent, &head, &tail)) {
     fprintf(stderr, "PYM failed=505 the lent arena is not a pool-aligned "
                     "linear region of %lu bytes\n", (unsigned long)PYM_ARENA_BYTES);
     return 4;

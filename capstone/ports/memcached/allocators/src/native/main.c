@@ -19,8 +19,7 @@
 /* The heap lends one linear block and keeps the senior handle, so the
  * authority layer can revoke inside it and the heap can still reclaim all of
  * it. Declared, not included: this is the allocator's internal interface. */
-#include <capstone/capability.h>
-unsigned long __capstone_sublet_malloc_linear(size_t, capstone_cap_slot *);
+#include "../../../../common/include/borrow-aligned-block.h"
 #endif
 _Noreturn void mcp_fail(unsigned code) {
   fprintf(stderr, "MCP failed=%u\n", code);
@@ -57,9 +56,10 @@ int main(int argc, char **argv) {
    * its own size -- and the authority layer checks them again and calls
    * mcp_fail(501) if they do not hold, so a region that is merely nearly right
    * stops the arm instead of quietly changing what it measures. */
-  capstone_cap_slot lent;
+  capstone_cap_slot lent, head, tail;
   void *payload = NULL;
-  if (!__capstone_sublet_malloc_linear(MCP_PAYLOAD_BYTES, &lent))
+  if (!capstone_borrow_aligned_block(MCP_PAYLOAD_BYTES, MCP_GRAIN, &lent,
+                                     &head, &tail))
     return 4;
 #else
   void *payload = aligned_alloc(4096, MCP_PAYLOAD_BYTES);
