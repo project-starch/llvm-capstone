@@ -167,6 +167,50 @@ static unsigned dl_rights(unsigned kind) {
 
 static __thread uint64_t dl_status;  /* of the last round: DONE or RETRY */
 
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+/* The virtual adapter keeps one META/exchange pair for the process. Linux
+ * threads share it, so serialize a complete wire round, including signal
+ * delivery. Signal handlers can make a nested delegated call, so this is a
+ * small recursive lock. The stack capability is the worker identity: virtual
+ * threads have distinct stacks, while nested calls on one stack retain the
+ * same bounded base. The QEMU supervisor still keeps register state per
+ * thread; this lock protects only the process-wide syscall transport. */
+static volatile uintptr_t dl_wire_owner;
+static unsigned dl_wire_depth;
+static uintptr_t dl_wire_identity(void) {
+  void *tp;
+  volatile char marker;
+  __asm__ volatile("movc %0, tp" : "=r"(tp));
+  /* The thread pointer survives an alternate signal stack. Child contexts
+   * that deliberately omit TLS fall back to their ordinary stack identity. */
+  if (tp)
+    return __builtin_capstone_cap_get_base(tp);
+  return __builtin_capstone_cap_get_base((void *)&marker);
+}
+static void dl_wire_acquire(void) {
+  uintptr_t identity = dl_wire_identity();
+  if (__atomic_load_n(&dl_wire_owner, __ATOMIC_ACQUIRE) == identity) {
+    ++dl_wire_depth;
+    return;
+  }
+  uintptr_t vacant = 0;
+  while (!__atomic_compare_exchange_n(&dl_wire_owner, &vacant, identity, 0,
+                                      __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
+    vacant = 0;
+    __asm__ volatile("" ::: "memory");
+  }
+  dl_wire_depth = 1;
+}
+static void dl_wire_release(void) {
+  if (--dl_wire_depth == 0)
+    __atomic_store_n(&dl_wire_owner, 0, __ATOMIC_RELEASE);
+}
+
+#else
+static void dl_wire_acquire(void) {}
+static void dl_wire_release(void) {}
+#endif
+
 /* posix_spawn's and execve's one request block (capstone/lock.h, Q6). */
 volatile int __capstone_spawn_lock;
 
@@ -200,6 +244,13 @@ static int dl_install(size_t index) {
    application without transports. */
 void __capstone_application_transports(unsigned long *count, unsigned long *exchange_bytes);
 void __capstone_delegate_regions(void *meta, void *exchange) {
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+  dl_entry = meta;
+  dl_exchange = exchange;
+  dl_capacity = exchange ? cap_bytes(exchange) : 0;
+  if (dl_capacity > 0x40000000u) dl_capacity = 0x40000000u;
+  __capstone_signals_regions(meta, meta ? cap_bytes(meta) : 0);
+#else
   unsigned long count, slice;
   __capstone_application_transports(&count, &slice);
   dl_meta_region = meta;
@@ -223,6 +274,7 @@ void __capstone_delegate_regions(void *meta, void *exchange) {
     return;
   }
   __capstone_signals_regions((void *)dl_entry, CAPSTONE_DELEGATE_META_BYTES);
+#endif
 }
 
 /* A further context, at its first entry: the transport its creator reserved,
@@ -343,10 +395,12 @@ long __capstone_delegate_ints4(uint64_t nr, uint64_t a, uint64_t b, uint64_t c, 
   long r;
   if (!__capstone_delegate_ready())
     return -EIO;
+  dl_wire_acquire();
   do {
     dl_reset();
     r = dl_round(nr, args);
   } while (dl_settle_own());
+  dl_wire_release();
   return r;
 }
 
@@ -476,8 +530,10 @@ static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   long result;
   if (!s)
     return -ENOSYS;
+  dl_wire_acquire();
   do result = dl_call_once(s, nr, raw);
   while (dl_settle());
+  dl_wire_release();
   return result;
 }
 
@@ -689,11 +745,13 @@ static long dl_sigtimedwait(syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   if (out && !dl_buffer_ok(out, sizeof *out, 2))
     return -EFAULT;
   raw[1] = out ? (syscall_arg_t)wire : 0;
+  dl_wire_acquire();
   do {
     result = dl_call_once(shape, CAPSTONE_SYS_rt_sigtimedwait, raw);
     if (result > 0 && dl_status != CAPSTONE_ROUND_RETRY && out)
       __capstone_siginfo_translate(wire, (int)result, out);
   } while (dl_settle());
+  dl_wire_release();
   return result;
 }
 
@@ -784,8 +842,13 @@ static long dl_vector_once(long fd, const struct iovec *iov, long count, int wri
 static long dl_vector(long fd, const struct iovec *iov, long count, int writing,
                       int positioned, long long offset) {
   long result;
-  do result = dl_vector_once(fd, iov, count, writing, positioned, offset);
+  dl_wire_acquire();
+  do {
+    result = dl_vector_once(fd, iov, count, writing, positioned, offset);
+    if (result < 0) { dl_wire_release(); return result; }
+  }
   while (dl_settle());
+  dl_wire_release();
   return result;
 }
 
@@ -815,18 +878,20 @@ static long dl_ioctl(long fd, unsigned long request, void *argp) {
       return -EFAULT;
     dl_bytes(buffer, argp, bytes);
     raw[2] = buffer;
+    dl_wire_acquire();
     dl_reset();
     {
       uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, request, 0, 0, 0, 0};
       do {
         dl_reset();
         if (dl_alloc(64, &args[2]))
-          return -ENOMEM;
+          { dl_wire_release(); return -ENOMEM; }
         dl_bytes(dl_exchange + args[2], buffer, sizeof buffer);
         rc = dl_round(CAPSTONE_NR_IOCTL_BUF, args);
         if (rc >= 0 && dl_status != CAPSTONE_ROUND_RETRY)
           dl_bytes(argp, dl_exchange + args[2], bytes);
       } while (dl_settle());
+      dl_wire_release();
       return rc;
     }
   }
@@ -1028,8 +1093,10 @@ static long dl_msg(uint64_t nr, long fd, struct msghdr *msg, long flags) {
       if (type != SOCK_STREAM) return -EMSGSIZE;
     }
   }
+  dl_wire_acquire();
   do result = dl_msg_once(nr, fd, &current, flags);
   while (dl_settle());
+  dl_wire_release();
   if (nr == CAPSTONE_SYS_recvmsg && result >= 0) {
     msg->msg_namelen = current.msg_namelen;
     msg->msg_controllen = current.msg_controllen;
@@ -1087,15 +1154,17 @@ static long dl_fcntl(long fd, long cmd, void *arg) {
       return -EFAULT;
     if (!dl_buffer_ok(arg, 32, cmd == F_GETLK ? 6 : 4))
       return -EFAULT;
+    dl_wire_acquire();
     do {
       dl_reset();
       if (dl_alloc(32, &args[2]))
-        return -ENOMEM;
+        { dl_wire_release(); return -ENOMEM; }
       dl_bytes(dl_exchange + args[2], arg, 32);
       rc = dl_round(CAPSTONE_NR_FCNTL_LOCK, args);
       if (rc >= 0 && cmd == F_GETLK && dl_status != CAPSTONE_ROUND_RETRY)
         dl_bytes(arg, dl_exchange + args[2], 32);
     } while (dl_settle());
+    dl_wire_release();
     return rc;
   }
   {
@@ -1110,8 +1179,10 @@ long __capstone_delegate_hello(unsigned long entry_address, unsigned long code_b
                                unsigned long code_end) {
   uint64_t args[CAPSTONE_DELEGATE_ARGS] = {entry_address, code_base, code_end, 0, 0, 0};
   long r;
+  dl_wire_acquire();
   do r = dl_round(CAPSTONE_NR_HELLO, args);
   while (dl_settle());
+  dl_wire_release();
   return r;
 }
 
@@ -1119,6 +1190,14 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d,
                               syscall_arg_t e, syscall_arg_t f) {
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {a, b, c, d, e, f};
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+  /* Explicit virtual contexts precede the pthread adapter. Bootstrap musl's
+     main thread locally; never dispatch through the physical context ABI. */
+  if (n == SYS_set_tid_address) {
+    const struct capstone_launch_task *t = __capstone_launch_task();
+    return t && t->pid ? (long)t->pid : 1;
+  }
+#else
   /* musl's thread setup: the tid is the context's runtime identity (the pid
      for the first context), and the word to clear at the context's end is the
      runtime's to keep (context.c). The first context asks before its
@@ -1129,6 +1208,7 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
      context ends even when its transport could not be installed. */
   if (n == SYS_exit)
     return __capstone_thread_exit((int)(long)a);
+#endif
   if (!__capstone_delegate_ready())
     return -EIO;
   /* The hint: the launcher's trampoline accepted a signal since the last
@@ -1243,6 +1323,9 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     *(void **)b = dl_robust_head;
     *(size_t *)c = dl_robust_len;
     return 0;
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+  case SYS_exit:
+#endif
   case SYS_exit_group: {
     /* The program's last words before the task ends it: the at-exit hook,
        then the unserved report, then the real exit_group. Nothing resumes. */
