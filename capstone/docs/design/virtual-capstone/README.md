@@ -11,6 +11,11 @@ launcher and its worker threads, and a loadable module connects them to the
 processor. The recorded platform needs no additional Linux-core or firmware
 patch. This is a QEMU implementation, not a released RTL interface.
 
+To continue development on the combined stack, use the
+[integration branch and build guide](../../plans/virtual-capstone-integration.md).
+Its result manifest records fresh application builds and subsequent integration
+tests; the revision-pinned references below retain their original scope.
+
 ## Read in this order
 
 | Question | Chapter |

@@ -1,3 +1,17 @@
+2026-10-07 — **New virtual work starts from `virtual-capstone-integration`.**
+Follow the [integration guide](../plans/virtual-capstone-integration.md) to
+create a feature worktree, initialize the pinned dependencies and select the
+qualified build inputs. Processor work starts from QEMU's `virtual-capstone`
+branch. Push processor commits before changing the superproject gitlink.
+The eight application leaves and system guide are integrated here; their PRs
+remain independently reviewable. When that stack lands, carry the build repairs
+in `087c140739e1` too, then compare the resulting `dev` tree and pins before
+moving development there. The recorded gates qualify this integration tree,
+not an arbitrary future merge. Existing physical/silicon work below is separate.
+Complete the prepared physical guest contract/context/thread regression when
+the shared QEMU test slot is free; the integration guide records the setup and
+the required stdin for the healthy contract. This remains an open test gate.
+
 2026-10-05, night: **R-29 AND S-10b HAVE A LINT-CLEAN RTL FIX IN SIMULATION** (capstone-ariane `sup-call` 776d9d859; the
 dated blocks in ISSUES R-29 and S-10b). A read whose granule has a conflicting store in flight -- a plain store for a 16-byte
 read, a capability store for a plain high-word read -- now waits in the dcache read controller until the store has drained,

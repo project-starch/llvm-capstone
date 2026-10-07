@@ -6,6 +6,13 @@ processor interface, Linux runtime, application ports and safety limits.
 It identifies the implementation revisions it describes; its presence here
 does not imply that the implementation PRs have landed on `dev`.
 
+For new virtual development, use
+[`virtual-capstone-integration`](plans/virtual-capstone-integration.md).
+It combines the complete review stack with `dev` at `6bad37084768`, preserves
+the physical pins, and includes fresh builds of all eight application ports.
+The integration guide gives worktree setup, build requirements, exact test
+scope and the remaining limits. Individual PRs keep their review boundaries.
+
 Lane-only work on `delegation-threads` (not landed on `dev`):
 [the threads computing model](design/delegated-threads-model.md),
 [thread plan and integration constraints](plans/delegation-threads.md),

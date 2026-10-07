@@ -106,12 +106,28 @@ passed” therefore does not mean every tested bug was prevented. Memcached's
 slab/cache lifetime and bipbuffer logical-reuse gaps remain; other ports need
 their documented inner-allocator configurations.
 
-Fresh full builds and current corpus/workload gates for Perl, CPython,
-PostgreSQL, FFmpeg and tshark remain required on the extracted stack.
-So do the physical runtime/thread regression, reruns of inherited
-epoll/message mutation variants and final integration of all app leaves.
-Historical runs retain their value for their recorded revisions; they do not
-qualify a future merged tree automatically.
+### Subsequent integration qualification
+
+The [integration baseline](../../plans/virtual-capstone-integration.md)
+combines all app leaves and the guide on `dev` at `6bad37084768`, with two
+application build repairs in `087c140739e1`. All eight target ports were rebuilt.
+The [integration manifest](../../plans/virtual-capstone-integration-results.json)
+adds current application workloads, both long recycling cases, selected
+FFmpeg/tshark outer-heap fixtures and detected epoll/message isolation mutations.
+It also records a Perl corpus difference: ten of eleven outcomes match the
+older record; one now matches the registered cause-24 oracle, with a passing
+independent-copy control. That is not eleven unchanged outcomes or eleven
+prevented defects.
+
+The integration record distinguishes freshly built targets from reused
+compiler, native fixtures and platform inputs. Complete upstream suites and
+the full nested-allocator matrices remain outside this qualification.
+The physical guest context/thread regression is still pending: its fresh
+artifacts are prepared, but the shared QEMU test slot became occupied by
+another benchmark before the corrected gate could run. This integration
+therefore does not claim completed physical runtime regression coverage.
+Historical records above are unchanged; neither they nor the integration
+results qualify a future merged tree automatically.
 
 [qemu]: https://github.com/project-starch/capstone-qemu/tree/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9
 [runtime]: https://github.com/project-starch/llvm-capstone/tree/518a5b805aa70c222ef0496c151b2845b4ab8dae

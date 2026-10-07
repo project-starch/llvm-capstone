@@ -1,0 +1,1964 @@
+{
+  "schema": 1,
+  "date": "2026-10-07",
+  "status": "VIRTUAL_QUALIFIED_PHYSICAL_REGRESSION_PENDING",
+  "branch": "virtual-capstone-integration",
+  "source": {
+    "dev_base": "6bad3708476812ab12e6f85f1a24f8bf0b08eb82",
+    "integration_merge": "9e07f38a782c63e6920902e014ec6f58fb42e6c4",
+    "implementation": "087c140739e16d71845ef5e6ada8911cc4244104",
+    "qemu": "4e271895a88e0e6a963bbf216809b65cf3674cf8",
+    "buildroot": "8fd1ea1249a99a16ffe40886161e9a55831fdbdf",
+    "rtl": "776d9d85900e0b7f7fd71b5369a5827af1bb715e"
+  },
+  "build_scope": {
+    "qemu": {
+      "source": "fresh builds of merged virtual-capstone tree",
+      "serial_gate_sha256": "bb668759975034f58046e440d14278c4d685852286a2e27b7f9370c576e65652",
+      "development_sha256": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+      "development_build_change": "enable slirp for the SSH-based VM driver; processor source unchanged",
+      "slirp_revision": "26be815b86e8d49add8c9a8b320239b9594ff03d",
+      "validation": "full application and virtual gates use the serial build; instruction gates rerun on the development build, plus 39-check virtual compatibility; physical guest regression remains separate and its status is recorded below"
+    },
+    "target_applications": {
+      "sqlite": {
+        "version": "3.22.0",
+        "fresh_source_build": true,
+        "image_sha256": "4512e82655d64babee38fad25be1a26e24433c5ee3d362e90a7a4715ad1db3e4"
+      },
+      "mruby": {
+        "version": "4.0.0-rc2",
+        "fresh_source_build": true,
+        "image_sha256": "327c6acc444b6b74b6637fcb96e12dbe4866d4341a97b4e519f1624a6cb6248a"
+      },
+      "perl": {
+        "version": "5.36.3",
+        "fresh_source_build": true,
+        "image_sha256": "aa2f7a1c0b1a1145c9fd2c1ae2ea2e8773d42b52cf00f904990b06ad866bd3a2"
+      },
+      "cpython": {
+        "version": "3.13.7",
+        "fresh_source_build": true,
+        "image_sha256": "1757cce39de4e501ffc9884179848f4c3f80c666224c148e54646d4fad87e8b4"
+      },
+      "postgres": {
+        "version": "17.5",
+        "fresh_source_build": true,
+        "image_sha256": "bab114d2039044727d065c895f6d1cc97052562835b12ab75f266cb4c41f8843"
+      },
+      "ffmpeg": {
+        "version": "9.0.1",
+        "fresh_source_build": true,
+        "image_sha256": "754838d9fbeab98c5fb94e1462999044f9fa0b16439a7a520535076be4f91b2c"
+      },
+      "tshark": {
+        "version": "4.6.8",
+        "fresh_source_build": true,
+        "image_sha256": "eff212c76732f1b6fd7868403ad74c4c7e74ed09cfcf432409cc9feaf8762f0b"
+      },
+      "memcached": {
+        "version": "1.6.45",
+        "fresh_source_build": true,
+        "image_sha256": "6a256d13faad8b59e7dc83141aff09d867a0b0def5f73aa817e7a6ee3c7aedb6"
+      }
+    },
+    "runtime": "fresh virtual libc, SDK, adapter and contracts; fresh physical libc, contracts, launcher and driver",
+    "compiler": "existing qualified build reused; compiler source directories equal e0313149630450c1a906cc3506b317add64266e0; that checkout is clean in those directories; focused lit gate rerun",
+    "compiler_freshness_checker": "rc 2: tool discovery reports llvm-capstone as an unverified tool; not treated as a complete provenance check",
+    "platform": "existing matching kernel, firmware and rootfs reused; identities in guest records",
+    "native_fixtures_reused": [
+      "PostgreSQL 17.5 MAXALIGN=16 pristine cluster/reference",
+      "FFmpeg 9.0.1 input, flipped input and native frame references",
+      "stock tshark 4.6.8 oracle"
+    ],
+    "native_rebuilt": [
+      "CPython 3.13.7",
+      "Perl 5.36.3",
+      "memcached 1.6.45 and libevent controls",
+      "tshark dependency libraries and their configured host suites"
+    ],
+    "excluded_application": "MicroPython"
+  },
+  "compiler": {
+    "passed": 7,
+    "total": 7,
+    "tests": [
+      "c43-anon-constant-pool.ll",
+      "cap-gp-captable.ll",
+      "cap-gp-free-call-ret.ll",
+      "cap-gp-free-frame-verifier.ll",
+      "cap-gp-free-ra-spill-keeps-tag.ll",
+      "cap-image-gp-pool.ll",
+      "gp-table-linear-delin.ll"
+    ],
+    "test_sha256": {
+      "c43-anon-constant-pool.ll": "d9c7953f2ded52f00daab42c8bb3c3e911ba830e9619056348aca1910fac106d",
+      "cap-gp-captable.ll": "f534f09a305f45ce30c4e57a883b51a59f8b173e34e4ec1942895e5c0ce50115",
+      "cap-gp-free-call-ret.ll": "136eda737e5695fbbbd1786f0a7273d247bedceea8ecfa449aa2d75d505f309c",
+      "cap-gp-free-frame-verifier.ll": "678d51c14812f16b860f6f3e7975640e9a9e0a20cc9b577b4ae26457bc449c26",
+      "cap-gp-free-ra-spill-keeps-tag.ll": "962f69c0cb86a2c64b85ec08501506ba5c03d1d54b3898ab922f9b4269dd5fa1",
+      "cap-image-gp-pool.ll": "d8d08482b05c36661b0dfe1367523ec5f62b570718c60df7e45279a438a7bb4f",
+      "gp-table-linear-delin.ll": "1412caf78e99ef5df7573157483bbc176eb42560e4a6fdea593418ba7df87d82"
+    }
+  },
+  "host": {
+    "runtime_python": {
+      "passed": 23,
+      "total": 23
+    },
+    "heap_python": {
+      "passed": 20,
+      "total": 20
+    },
+    "native_asan_ubsan": {
+      "passed": 87,
+      "total": 87,
+      "execution": "86 existing CTest cases, then the newly registered delegate-thread-isolation case"
+    },
+    "message_mutation": {
+      "status": "DETECTED",
+      "positive_iterations": 32,
+      "mutation_exit": 134,
+      "assertion": "the written byte belongs to the calling exchange, and the peer offset remains untouched",
+      "mutation": "static message view, iovecs and msghdr",
+      "test_sha256": "d1109e2b84eef7365b932827c63a7907a191ec42e684864245476d418f462f10",
+      "mutated_source_sha256": "db2363a41649c331c1b4fcda8a2418eb141c01113fa761f635347d5bce230543"
+    }
+  },
+  "qemu": {
+    "m1": {
+      "passed": 60,
+      "total": 60
+    },
+    "runtime": {
+      "passed": 33,
+      "total": 33
+    },
+    "access": {
+      "passed": 69,
+      "total": 69
+    },
+    "physical_bounds": {
+      "passed": 3,
+      "total": 3
+    }
+  },
+  "development_qemu": {
+    "m1": {
+      "passed": 60,
+      "total": 60
+    },
+    "runtime": {
+      "passed": 33,
+      "total": 33
+    },
+    "access": {
+      "passed": 69,
+      "total": 69
+    }
+  },
+  "development_qemu_virtual_compatibility": {
+    "status": "PASS",
+    "tests": {
+      "normal": true,
+      "threads": true,
+      "vm": true,
+      "linear": true,
+      "linear-stale": true,
+      "heap-threads": true,
+      "vm-ro-write": true,
+      "vm-none-read": true,
+      "vm-guard": true,
+      "vm-padding": true,
+      "stale": true,
+      "bounds": true,
+      "retired": true,
+      "preempt": true,
+      "parallel_one": true,
+      "parallel_two": true,
+      "sqlite_write": true,
+      "sqlite_read": true,
+      "mruby": true,
+      "cleanup": true,
+      "legacy_abi_rejected": true,
+      "normal_output": true,
+      "threads_output": true,
+      "fault_causes": true,
+      "linear_output": true,
+      "linear_denial_site": true,
+      "vm_denial_sites": true,
+      "vm_contract": true,
+      "heap_threads": true,
+      "vm_denial_operations": true,
+      "same_va_reuse": true,
+      "spin_entered": true,
+      "linux_pages_released": true,
+      "linux_demand_faults": true,
+      "unused_pages_not_populated": true,
+      "shared_heap_pages_released": true,
+      "sqlite_results": true,
+      "mruby_results": true,
+      "completed": true
+    },
+    "scope": "one hart; private anonymous arenas; same-mm virtual threads",
+    "control_omit_application": false,
+    "recycling_cases_enabled": false,
+    "sha256": {
+      "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+      "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+      "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+      "application": "c8e555e8fc72fd6916515c39b69ceb1f253676af4701c2b43e7791e5844a8667",
+      "sqlite": "4512e82655d64babee38fad25be1a26e24433c5ee3d362e90a7a4715ad1db3e4",
+      "mruby": "327c6acc444b6b74b6637fcb96e12dbe4866d4341a97b4e519f1624a6cb6248a",
+      "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+      "legacy": "a5f283e0e98e90b8d1a128618c4b53021716de115939a720fb992dcb208b7fcd"
+    },
+    "source_sha256": {
+      "build-adapter.sh": "02268570f072cc6c775f5776af82348c654cd0b9617d4459711fb75b17ba6aea",
+      "build-sdk.sh": "4ad9fe6e73fbca9abb765ff0f5e27e6c542d8f66abee535ff1ec7f871190978d",
+      "contract.c": "45ad1f27a85b5d01292b05a655e05da504de85c843b769b3fc9de549e2d45409",
+      "exec.c": "6d2ec6358b34cd15ca8ae2feee0e1a6a8285339bcae0dc2cd262c72b38f725ce",
+      "heap.c": "d9e904c4f47eaea36cb1da103ed75e143261bd9e7b47fad73f220046f3f3f24a",
+      "mapping.c": "6902255ba1786281f42a99c3de750640a00d57589cb01b7115329283b1f734c1",
+      "module/capstone_vm.c": "4a2f43eb3ab45c0e48bc75ba64cedb65da3ee102470a717cfbb445efc30351fb",
+      "pthread-contract.c": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+      "pthread.c": "e3502e1649a61eacdb6797be214c93b0735e4f7a338198956aa12fcddaf05562",
+      "run-ports.py": "6a25a4b03cfbf98c89f1c0c4fc4a9b5d829461b5451f0c5c142feae8f020af6f",
+      "run-pthreads.py": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab",
+      "run-safety.py": "6a9cafddb4d43eba5c573359cb0f04d43cc15f9f2748d0d5154cf7aa753691c9",
+      "run-staged.py": "a021fae1584abe7dcd191961fb3b562165ec643c700c1066579620d48a87826f",
+      "run.py": "0265f62f5e3c306adef0e7d317e65c4e6c574eba7e83ac0fced38911dd4cbb43",
+      "start.S": "88497c709c837ae9c7b10d186dc1fa07460b760b5bfc3d89aa8dc2fafdaef166",
+      "thread.c": "b7288d4b3143c189901ebd73549b81fbea44eef4f0333f3d576b67df360e2bb0",
+      "vm-abi.h": "3e891117b1056711c998704235a5659f3c2d41ffd488acfe8b79e660885cade3",
+      "vm.h": "443f9531c0549a6b2b695b2498480478253ff814b2044ef49dfd9ee346550182",
+      "wire.h": "cc703b499860fb5c8ba2110d9f6e5640c12dd83dc40a880a7384dceb9f1612c1"
+    },
+    "stats": [
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 865,
+        "nodes": 61,
+        "steps": 670,
+        "faults": 399,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 12,
+        "bytes_in": 214,
+        "bytes_out": 143,
+        "node_bytes": 1048576,
+        "launch_ns": 112894200,
+        "elapsed_ns": 1949867600
+      },
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 483,
+        "nodes": 27,
+        "steps": 37,
+        "faults": 15,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 5,
+        "bytes_in": 136,
+        "bytes_out": 64,
+        "node_bytes": 1048576,
+        "launch_ns": 89864200,
+        "elapsed_ns": 240028400
+      },
+      {
+        "arenas": 9,
+        "pages": 485,
+        "peak": 485,
+        "nodes": 293,
+        "steps": 53,
+        "faults": 22,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 4,
+        "bytes_in": 144,
+        "bytes_out": 64,
+        "node_bytes": 1048576,
+        "launch_ns": 85408100,
+        "elapsed_ns": 157773000
+      },
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 482,
+        "nodes": 43,
+        "steps": 29,
+        "faults": 14,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 4,
+        "bytes_in": 82,
+        "bytes_out": 64,
+        "node_bytes": 1048576,
+        "launch_ns": 84426000,
+        "elapsed_ns": 144584100
+      },
+      {
+        "arenas": 11,
+        "pages": 491,
+        "peak": 1260,
+        "nodes": 1619,
+        "steps": 2174,
+        "faults": 793,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 4,
+        "bytes_in": 134,
+        "bytes_out": 64,
+        "node_bytes": 1048576,
+        "launch_ns": 93230300,
+        "elapsed_ns": 3183738300
+      },
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 865,
+        "nodes": 61,
+        "steps": 677,
+        "faults": 399,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 12,
+        "bytes_in": 214,
+        "bytes_out": 143,
+        "node_bytes": 1048576,
+        "launch_ns": 175781000,
+        "elapsed_ns": 4053827000
+      },
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 865,
+        "nodes": 61,
+        "steps": 676,
+        "faults": 399,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 12,
+        "bytes_in": 214,
+        "bytes_out": 143,
+        "node_bytes": 1048576,
+        "launch_ns": 184634200,
+        "elapsed_ns": 3970150800
+      },
+      {
+        "arenas": 17,
+        "pages": 963,
+        "peak": 963,
+        "nodes": 708,
+        "steps": 503,
+        "faults": 111,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 130,
+        "bytes_in": 26680,
+        "bytes_out": 12580,
+        "node_bytes": 1048576,
+        "launch_ns": 297886400,
+        "elapsed_ns": 1271136600
+      },
+      {
+        "arenas": 16,
+        "pages": 934,
+        "peak": 934,
+        "nodes": 613,
+        "steps": 271,
+        "faults": 82,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 52,
+        "bytes_in": 467,
+        "bytes_out": 18531,
+        "node_bytes": 1048576,
+        "launch_ns": 281045300,
+        "elapsed_ns": 879311600
+      },
+      {
+        "arenas": 22,
+        "pages": 1507,
+        "peak": 1507,
+        "nodes": 1918,
+        "steps": 634,
+        "faults": 143,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 103,
+        "bytes_in": 139,
+        "bytes_out": 16912,
+        "node_bytes": 1048576,
+        "launch_ns": 588811400,
+        "elapsed_ns": 2562968900
+      }
+    ]
+  },
+  "node_model": {
+    "schema": 2,
+    "scope": "C node list over the host tree and the guest-table layout / abstract forest comparison",
+    "depth": 4,
+    "capacity_per_table": 8,
+    "directed_cases": [
+      "nested_arena_retirement",
+      "drop_keeps_descendants",
+      "revoke_then_fresh_child",
+      "nonlinear_revoke",
+      "readonly_revoke",
+      "equal_ids_independent"
+    ],
+    "bindings": {
+      "host": {
+        "enumerated_prefixes": 8949,
+        "controls": {
+          "mrev_without_depth": {
+            "detected": true,
+            "trace": [
+              [
+                0,
+                "mrev",
+                0
+              ]
+            ],
+            "mismatch": "table=0: node=1: strict descendants"
+          },
+          "root_only": {
+            "detected": true,
+            "trace": [
+              [
+                0,
+                "retire",
+                1
+              ]
+            ],
+            "mismatch": "table=0: node=0: liveness"
+          },
+          "shared_table": {
+            "detected": true,
+            "trace": [
+              [
+                0,
+                "retire",
+                1
+              ]
+            ],
+            "mismatch": "table=1: node=0: liveness"
+          }
+        }
+      },
+      "guest": {
+        "enumerated_prefixes": 8949,
+        "controls": {
+          "mrev_without_depth": {
+            "detected": true,
+            "trace": [
+              [
+                0,
+                "mrev",
+                0
+              ]
+            ],
+            "mismatch": "table=0: node=1: strict descendants"
+          },
+          "root_only": {
+            "detected": true,
+            "trace": [
+              [
+                0,
+                "retire",
+                1
+              ]
+            ],
+            "mismatch": "table=0: node=0: liveness"
+          },
+          "shared_table": {
+            "detected": true,
+            "trace": [
+              [
+                0,
+                "retire",
+                1
+              ]
+            ],
+            "mismatch": "table=1: node=0: liveness"
+          }
+        }
+      }
+    },
+    "guest_table_checks": [
+      "access_span_no_wrap",
+      "collect_once",
+      "dead_null_unissued_retired",
+      "dead_pcc_identity_pinned",
+      "exhausted_mrev",
+      "fill_two_identities",
+      "free_list_cannot_name_live_node",
+      "free_list_self_cycle",
+      "header_capacity_past_node_field",
+      "header_capacity_zero",
+      "header_next_past_capacity",
+      "header_next_zero",
+      "mrev_dangling_prev",
+      "mrev_dead_node",
+      "recycle_header_is_not_capability",
+      "retire_interior_sibling",
+      "reuse_after_reopen",
+      "reuse_does_not_break_ancestor_walk",
+      "revoke_cycle_hits_visit_bound",
+      "revoke_dangling_link",
+      "revoke_run_back_to_start",
+      "second_free_entry_cannot_name_live_node",
+      "table_not_entirely_ram",
+      "well_formed_revoke"
+    ],
+    "guest_table_controls": {
+      "walk_without_start_check": {
+        "detected_by": "revoke_run_back_to_start"
+      },
+      "walk_without_read_only_pass": {
+        "detected_by": "revoke_dangling_link"
+      }
+    },
+    "sources_sha256": {
+      "tests/virtual-capstone-model/adapter.c": "a6cb9a7461be2bdd5ee23a8dfd6a647e06012c6b177cc4c87061a974b2cd72ee",
+      "tests/virtual-capstone-model/table-checks.c": "72c714756dd269592fa174ee490b5e832885ae57f08378b747c69c1523aa6873",
+      "tests/virtual-capstone-model/model.py": "417e1c91ca78ce164978c56983cbcbf33e32c4a31e95d3cdb420a2535b1196ef",
+      "target/riscv/cap.h": "2cef774cf18f83e380ec038150596af2618f7119721f174eb3ac6a9388ab349d",
+      "target/riscv/cap_rev_tree.h": "30e756a444fdeb8f27bd12ec492a77eb1a5d96b814c1c2543caf1f0446dd4b89",
+      "target/riscv/cap_rev_tree.c": "82e6c7bc352b75131f3dd83ab71bdc4967a43f62ab78eddad589bdbbd630261c",
+      "target/riscv/cap_rev_table.h": "2b6d804163d14ed85433a52211afc165185a1eb5d161fec97fdb652bcd9e27af",
+      "target/riscv/cap_rev_table.c": "1dcc5c62408df4d778f31f53b50f3af646dcaf6904991d51e13686a580e682fd"
+    },
+    "guest_execution_tested": false
+  },
+  "virtual_runtime": {
+    "status": "PASS",
+    "tests": {
+      "normal": true,
+      "threads": true,
+      "vm": true,
+      "linear": true,
+      "linear-stale": true,
+      "heap-threads": true,
+      "vm-ro-write": true,
+      "vm-none-read": true,
+      "vm-guard": true,
+      "vm-padding": true,
+      "sparse-churn": true,
+      "sparse-stale": true,
+      "stale": true,
+      "bounds": true,
+      "retired": true,
+      "preempt": true,
+      "parallel_one": true,
+      "parallel_two": true,
+      "sqlite_write": true,
+      "sqlite_read": true,
+      "mruby": true,
+      "cleanup": true,
+      "legacy_abi_rejected": true,
+      "perl": true,
+      "perl_output": true,
+      "perl_smoke": true,
+      "perl_smoke_output": true,
+      "normal_output": true,
+      "threads_output": true,
+      "fault_causes": true,
+      "linear_output": true,
+      "linear_denial_site": true,
+      "vm_denial_sites": true,
+      "vm_contract": true,
+      "heap_threads": true,
+      "vm_denial_operations": true,
+      "same_va_reuse": true,
+      "spin_entered": true,
+      "linux_pages_released": true,
+      "linux_demand_faults": true,
+      "unused_pages_not_populated": true,
+      "shared_heap_pages_released": true,
+      "sparse_recycling": true,
+      "sqlite_results": true,
+      "mruby_results": true,
+      "completed": true
+    },
+    "scope": "one hart; private anonymous arenas; same-mm virtual threads",
+    "control_omit_application": false,
+    "recycling_cases_enabled": true,
+    "sha256": {
+      "qemu": "bb668759975034f58046e440d14278c4d685852286a2e27b7f9370c576e65652",
+      "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+      "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+      "application": "c8e555e8fc72fd6916515c39b69ceb1f253676af4701c2b43e7791e5844a8667",
+      "sqlite": "4512e82655d64babee38fad25be1a26e24433c5ee3d362e90a7a4715ad1db3e4",
+      "mruby": "327c6acc444b6b74b6637fcb96e12dbe4866d4341a97b4e519f1624a6cb6248a",
+      "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+      "legacy": "a5f283e0e98e90b8d1a128618c4b53021716de115939a720fb992dcb208b7fcd",
+      "perl": "aa2f7a1c0b1a1145c9fd2c1ae2ea2e8773d42b52cf00f904990b06ad866bd3a2",
+      "perl_smoke": "15bf158879a2f5432b183ed944bd52d928e0e4bbf40a5f93a8d9d0f2c6af1f44"
+    },
+    "source_sha256": {
+      "build-adapter.sh": "02268570f072cc6c775f5776af82348c654cd0b9617d4459711fb75b17ba6aea",
+      "build-sdk.sh": "4ad9fe6e73fbca9abb765ff0f5e27e6c542d8f66abee535ff1ec7f871190978d",
+      "contract.c": "45ad1f27a85b5d01292b05a655e05da504de85c843b769b3fc9de549e2d45409",
+      "exec.c": "6d2ec6358b34cd15ca8ae2feee0e1a6a8285339bcae0dc2cd262c72b38f725ce",
+      "heap.c": "d9e904c4f47eaea36cb1da103ed75e143261bd9e7b47fad73f220046f3f3f24a",
+      "mapping.c": "6902255ba1786281f42a99c3de750640a00d57589cb01b7115329283b1f734c1",
+      "module/capstone_vm.c": "4a2f43eb3ab45c0e48bc75ba64cedb65da3ee102470a717cfbb445efc30351fb",
+      "pthread-contract.c": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+      "pthread.c": "e3502e1649a61eacdb6797be214c93b0735e4f7a338198956aa12fcddaf05562",
+      "run-ports.py": "6a25a4b03cfbf98c89f1c0c4fc4a9b5d829461b5451f0c5c142feae8f020af6f",
+      "run-pthreads.py": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab",
+      "run-safety.py": "6a9cafddb4d43eba5c573359cb0f04d43cc15f9f2748d0d5154cf7aa753691c9",
+      "run-staged.py": "a021fae1584abe7dcd191961fb3b562165ec643c700c1066579620d48a87826f",
+      "run.py": "0265f62f5e3c306adef0e7d317e65c4e6c574eba7e83ac0fced38911dd4cbb43",
+      "start.S": "88497c709c837ae9c7b10d186dc1fa07460b760b5bfc3d89aa8dc2fafdaef166",
+      "thread.c": "b7288d4b3143c189901ebd73549b81fbea44eef4f0333f3d576b67df360e2bb0",
+      "vm-abi.h": "3e891117b1056711c998704235a5659f3c2d41ffd488acfe8b79e660885cade3",
+      "vm.h": "443f9531c0549a6b2b695b2498480478253ff814b2044ef49dfd9ee346550182",
+      "wire.h": "cc703b499860fb5c8ba2110d9f6e5640c12dd83dc40a880a7384dceb9f1612c1"
+    },
+    "stats": [
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 865,
+        "nodes": 61,
+        "steps": 740,
+        "faults": 399,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 12,
+        "bytes_in": 214,
+        "bytes_out": 143,
+        "node_bytes": 1048576,
+        "launch_ns": 186742700,
+        "elapsed_ns": 2589066700
+      },
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 483,
+        "nodes": 27,
+        "steps": 37,
+        "faults": 15,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 5,
+        "bytes_in": 136,
+        "bytes_out": 64,
+        "node_bytes": 1048576,
+        "launch_ns": 110562700,
+        "elapsed_ns": 193236300
+      },
+      {
+        "arenas": 9,
+        "pages": 485,
+        "peak": 485,
+        "nodes": 293,
+        "steps": 55,
+        "faults": 22,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 4,
+        "bytes_in": 144,
+        "bytes_out": 64,
+        "node_bytes": 1048576,
+        "launch_ns": 109487000,
+        "elapsed_ns": 200459900
+      },
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 482,
+        "nodes": 43,
+        "steps": 30,
+        "faults": 14,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 4,
+        "bytes_in": 82,
+        "bytes_out": 64,
+        "node_bytes": 1048576,
+        "launch_ns": 110286600,
+        "elapsed_ns": 181978300
+      },
+      {
+        "arenas": 11,
+        "pages": 491,
+        "peak": 1260,
+        "nodes": 1619,
+        "steps": 2254,
+        "faults": 793,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 4,
+        "bytes_in": 134,
+        "bytes_out": 64,
+        "node_bytes": 1048576,
+        "launch_ns": 111462600,
+        "elapsed_ns": 4111089500
+      },
+      {
+        "arenas": 9,
+        "pages": 485,
+        "peak": 486,
+        "nodes": 200288,
+        "steps": 26184,
+        "faults": 18,
+        "collections": 3,
+        "reclaimed": 194973,
+        "rounds": 4,
+        "bytes_in": 128,
+        "bytes_out": 64,
+        "node_bytes": 1048576,
+        "launch_ns": 110941900,
+        "elapsed_ns": 135543570900
+      },
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 865,
+        "nodes": 61,
+        "steps": 745,
+        "faults": 399,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 12,
+        "bytes_in": 214,
+        "bytes_out": 143,
+        "node_bytes": 1048576,
+        "launch_ns": 231181100,
+        "elapsed_ns": 5106198200
+      },
+      {
+        "arenas": 7,
+        "pages": 481,
+        "peak": 865,
+        "nodes": 61,
+        "steps": 745,
+        "faults": 399,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 12,
+        "bytes_in": 214,
+        "bytes_out": 143,
+        "node_bytes": 1048576,
+        "launch_ns": 220507600,
+        "elapsed_ns": 5202817700
+      },
+      {
+        "arenas": 17,
+        "pages": 963,
+        "peak": 963,
+        "nodes": 708,
+        "steps": 532,
+        "faults": 111,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 130,
+        "bytes_in": 26680,
+        "bytes_out": 12580,
+        "node_bytes": 1048576,
+        "launch_ns": 368578700,
+        "elapsed_ns": 1490858000
+      },
+      {
+        "arenas": 16,
+        "pages": 934,
+        "peak": 934,
+        "nodes": 613,
+        "steps": 282,
+        "faults": 82,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 52,
+        "bytes_in": 467,
+        "bytes_out": 18531,
+        "node_bytes": 1048576,
+        "launch_ns": 364612900,
+        "elapsed_ns": 1142581000
+      },
+      {
+        "arenas": 22,
+        "pages": 1507,
+        "peak": 1507,
+        "nodes": 1918,
+        "steps": 779,
+        "faults": 143,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 147,
+        "bytes_in": 156,
+        "bytes_out": 17040,
+        "node_bytes": 1048576,
+        "launch_ns": 710288900,
+        "elapsed_ns": 3115651300
+      },
+      {
+        "arenas": 24,
+        "pages": 4595,
+        "peak": 4595,
+        "nodes": 2508,
+        "steps": 943,
+        "faults": 159,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 44,
+        "bytes_in": 429,
+        "bytes_out": 17176,
+        "node_bytes": 1048576,
+        "launch_ns": 2892399700,
+        "elapsed_ns": 7104682800
+      },
+      {
+        "arenas": 207,
+        "pages": 6649,
+        "peak": 6649,
+        "nodes": 38687,
+        "steps": 57800,
+        "faults": 2213,
+        "collections": 0,
+        "reclaimed": 0,
+        "rounds": 50,
+        "bytes_in": 1134,
+        "bytes_out": 99096,
+        "node_bytes": 1048576,
+        "launch_ns": 3096125900,
+        "elapsed_ns": 296880340200
+      }
+    ]
+  },
+  "pthreads": {
+    "status": "PASS",
+    "tests": {
+      "unsupported_clone_refused": true,
+      "tls mutex cond tagged_join": true,
+      "timed_wait": true,
+      "independent_blocking_io": true,
+      "private_epoll_events": true,
+      "shared_tls_transport": true,
+      "64_joined_lifetimes": true,
+      "exit": true,
+      "cleanup": true
+    },
+    "harts": 1,
+    "virtual_vm_abi": 3,
+    "input_sha256": {
+      "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+      "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+      "application": "0f91c10d735e16bba91e5b6139142d790a19c0bc4552e2aa9ffeeecb9642a1b4",
+      "qemu": "bb668759975034f58046e440d14278c4d685852286a2e27b7f9370c576e65652",
+      "source": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+      "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+    },
+    "gate_sha256": "128f93709619e2bffac61fa3de62be632bb4720579dd17baab1396e2c540f211",
+    "runner_sha256": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab"
+  },
+  "application_workloads": {
+    "status": "PASS",
+    "tests": {
+      "cpython_exit": true,
+      "postgres_exit": true,
+      "ffmpeg-input_exit": true,
+      "ffmpeg-input.flip_exit": true,
+      "tshark_exit": true,
+      "cleanup_exit": true,
+      "cpython_json_gc": true,
+      "postgres_native_rows": true,
+      "ffmpeg_native_frames": true,
+      "ffmpeg_flipped_frames": true,
+      "ffmpeg_input_sensitivity": true,
+      "tshark_native_dns": true,
+      "tshark_missing_input": true,
+      "resources_released": true,
+      "no_unexpected_faults": true,
+      "completed": true
+    },
+    "sha256": {
+      "qemu": "bb668759975034f58046e440d14278c4d685852286a2e27b7f9370c576e65652",
+      "cpython": "1757cce39de4e501ffc9884179848f4c3f80c666224c148e54646d4fad87e8b4",
+      "cpython_native": "62aff6368e613c8f12db14b1e15ac5498855e23cfe06a7b684061e95f4c57aa6",
+      "postgres": "bab114d2039044727d065c895f6d1cc97052562835b12ab75f266cb4c41f8843",
+      "ffmpeg": "754838d9fbeab98c5fb94e1462999044f9fa0b16439a7a520535076be4f91b2c",
+      "tshark": "eff212c76732f1b6fd7868403ad74c4c7e74ed09cfcf432409cc9feaf8762f0b",
+      "tshark_native": "6424476e5166ca7d4613e93990c8b342fcf71ab1de9dde01c70d23b60f64677d",
+      "capture": "78c3c00e4cb155118468e540a6151ca222fa50edd626daf1582d25e3d79626a1",
+      "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+      "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+      "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+      "input": "7c0964440ad178a0c9a00dba72060322e68bea340715bb247e05d6a815844362",
+      "flipped_input": "27e4bed2f7121a5970f1cbda6551969175ac5f3b6ad035ba7bbcf079124b0aa3",
+      "ffmpeg_reference": "3eebf311c9fae322ef74b8a9bad371eda975852299d620bbf3b3bd7ef466f43a",
+      "ffmpeg_flipped_reference": "a7854e605fb87221563c7b2adca2d769a97a50e0bedea70226f662521c89b293",
+      "pg_reference": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+      "sql": "f4310b7544287f8b1b400fac0820cf3162fe137048bcb940ff92cd158055346c",
+      "cpython_distribution": "c7a5fa4bdccec9374d3e80930df4398d1e87f722075e9dcb8b7e09245b13e129",
+      "postgres_pristine_cluster": "0353a5b9770f056e91d0bc2b4d47a1795e0716b6b0b91a79eabbc28bddaa6aa2",
+      "postgres_share": "9daf98e47cbd295c2467fa2c4a89899777e887b5af0bb606eb536565998d7ac1",
+      "gate_script": "c1e9b167c75e510136e7e3522bc653bbd47c31501c1d3aaba094a39fee37dbbd"
+    },
+    "omitted_application": null,
+    "stats": {
+      "version": 1,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 6816,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 24321,
+      "tag_pages": 0,
+      "node_capacity": 65536,
+      "collections": 0,
+      "nodes_reclaimed": 0
+    },
+    "scope": "Rebuilt virtual SDK application workloads; one hart, private anonymous mappings; Linux trusted"
+  },
+  "memcached": {
+    "status": "PASS",
+    "checks": [
+      {
+        "name": "native_null",
+        "passed": true
+      },
+      {
+        "name": "oracle_detects_value",
+        "passed": true
+      },
+      {
+        "name": "oracle_detects_cas",
+        "passed": true
+      },
+      {
+        "name": "pthread_unsupported_clone_refused",
+        "passed": true
+      },
+      {
+        "name": "pthread_tls_mutex_cond_tagged_join",
+        "passed": true
+      },
+      {
+        "name": "pthread_timed_wait",
+        "passed": true
+      },
+      {
+        "name": "pthread_independent_blocking_io",
+        "passed": true
+      },
+      {
+        "name": "pthread_private_epoll_events",
+        "passed": true
+      },
+      {
+        "name": "pthread_shared_tls_transport",
+        "passed": true
+      },
+      {
+        "name": "pthread_64_joined_lifetimes",
+        "passed": true
+      },
+      {
+        "name": "normal1_harness",
+        "passed": true
+      },
+      {
+        "name": "normal1_protocol",
+        "passed": true
+      },
+      {
+        "name": "normal1_identity",
+        "passed": true
+      },
+      {
+        "name": "normal1_exit",
+        "passed": true
+      },
+      {
+        "name": "normal1_stderr",
+        "passed": true
+      },
+      {
+        "name": "normal2_harness",
+        "passed": true
+      },
+      {
+        "name": "normal2_protocol",
+        "passed": true
+      },
+      {
+        "name": "normal2_identity",
+        "passed": true
+      },
+      {
+        "name": "normal2_exit",
+        "passed": true
+      },
+      {
+        "name": "normal2_stderr",
+        "passed": true
+      },
+      {
+        "name": "usr1_harness",
+        "passed": true
+      },
+      {
+        "name": "usr1_protocol",
+        "passed": true
+      },
+      {
+        "name": "usr1_identity",
+        "passed": true
+      },
+      {
+        "name": "usr1_exit",
+        "passed": true
+      },
+      {
+        "name": "usr1_stderr",
+        "passed": true
+      },
+      {
+        "name": "marker_harness",
+        "passed": true
+      },
+      {
+        "name": "marker_protocol",
+        "passed": true
+      },
+      {
+        "name": "marker_identity",
+        "passed": true
+      },
+      {
+        "name": "marker_exit",
+        "passed": true
+      },
+      {
+        "name": "four_workers",
+        "passed": true
+      },
+      {
+        "name": "worker_gate_control",
+        "passed": true
+      },
+      {
+        "name": "marker_stderr",
+        "passed": true
+      },
+      {
+        "name": "fx1_harness",
+        "passed": true
+      },
+      {
+        "name": "fx1_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx2_harness",
+        "passed": true
+      },
+      {
+        "name": "fx2_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx3_harness",
+        "passed": true
+      },
+      {
+        "name": "fx3_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx4_harness",
+        "passed": true
+      },
+      {
+        "name": "fx4_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx5_harness",
+        "passed": true
+      },
+      {
+        "name": "fx5_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx6_harness",
+        "passed": true
+      },
+      {
+        "name": "fx6_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx7_harness",
+        "passed": true
+      },
+      {
+        "name": "fx7_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx8_harness",
+        "passed": true
+      },
+      {
+        "name": "fx8_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx9_harness",
+        "passed": true
+      },
+      {
+        "name": "fx9_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx10_harness",
+        "passed": true
+      },
+      {
+        "name": "fx10_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx12_harness",
+        "passed": true
+      },
+      {
+        "name": "fx12_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx13_harness",
+        "passed": true
+      },
+      {
+        "name": "fx13_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx14_harness",
+        "passed": true
+      },
+      {
+        "name": "fx14_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx15_harness",
+        "passed": true
+      },
+      {
+        "name": "fx15_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx16_harness",
+        "passed": true
+      },
+      {
+        "name": "fx16_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx17_harness",
+        "passed": true
+      },
+      {
+        "name": "fx17_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx18_harness",
+        "passed": true
+      },
+      {
+        "name": "fx18_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx19_harness",
+        "passed": true
+      },
+      {
+        "name": "fx19_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx20_harness",
+        "passed": true
+      },
+      {
+        "name": "fx20_prediction",
+        "passed": true
+      },
+      {
+        "name": "fx21_harness",
+        "passed": true
+      },
+      {
+        "name": "fx21_prediction",
+        "passed": true
+      },
+      {
+        "name": "adapter_cleanup",
+        "passed": true
+      }
+    ],
+    "fixtures": [
+      {
+        "fixture": 1,
+        "passed": true,
+        "outcome": "RETURN",
+        "detail": "100001",
+        "expected": [
+          [
+            "RETURN",
+            "100001"
+          ],
+          [
+            "LEN",
+            "64"
+          ]
+        ]
+      },
+      {
+        "fixture": 2,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "oob",
+        "expected": [
+          [
+            "FAULT",
+            "oob"
+          ]
+        ]
+      },
+      {
+        "fixture": 3,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "oob",
+        "expected": [
+          [
+            "FAULT",
+            "oob"
+          ]
+        ]
+      },
+      {
+        "fixture": 4,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "temporal",
+        "expected": [
+          [
+            "FAULT",
+            "temporal"
+          ]
+        ]
+      },
+      {
+        "fixture": 5,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "temporal",
+        "expected": [
+          [
+            "FAULT",
+            "temporal"
+          ]
+        ]
+      },
+      {
+        "fixture": 6,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "temporal",
+        "expected": [
+          [
+            "FAULT",
+            "temporal"
+          ]
+        ]
+      },
+      {
+        "fixture": 7,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "oob",
+        "expected": [
+          [
+            "FAULT",
+            "oob"
+          ]
+        ]
+      },
+      {
+        "fixture": 8,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "oob",
+        "expected": [
+          [
+            "FAULT",
+            "oob"
+          ]
+        ]
+      },
+      {
+        "fixture": 9,
+        "passed": true,
+        "outcome": "RETURN",
+        "detail": "9000ee",
+        "expected": [
+          [
+            "RETURN",
+            "9000ee"
+          ]
+        ]
+      },
+      {
+        "fixture": 10,
+        "passed": true,
+        "outcome": "RETURN",
+        "detail": "a0015b",
+        "expected": [
+          [
+            "RETURN",
+            "a0015b"
+          ]
+        ]
+      },
+      {
+        "fixture": 12,
+        "passed": true,
+        "outcome": "RETURN",
+        "detail": "c00101",
+        "expected": [
+          [
+            "RETURN",
+            "c00101"
+          ]
+        ]
+      },
+      {
+        "fixture": 13,
+        "passed": true,
+        "outcome": "RETURN",
+        "detail": "d00101",
+        "expected": [
+          [
+            "RETURN",
+            "d00101"
+          ]
+        ]
+      },
+      {
+        "fixture": 14,
+        "passed": true,
+        "outcome": "RETURN",
+        "detail": "e0015c",
+        "expected": [
+          [
+            "RETURN",
+            "e0015c"
+          ]
+        ]
+      },
+      {
+        "fixture": 15,
+        "passed": true,
+        "outcome": "RETURN",
+        "detail": "f0012e",
+        "expected": [
+          [
+            "RETURN",
+            "f0012e"
+          ]
+        ]
+      },
+      {
+        "fixture": 16,
+        "passed": true,
+        "outcome": "RETURN",
+        "detail": "1000191",
+        "expected": [
+          [
+            "RETURN",
+            "1000191"
+          ]
+        ]
+      },
+      {
+        "fixture": 17,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "temporal",
+        "expected": [
+          [
+            "FAULT",
+            "temporal"
+          ]
+        ]
+      },
+      {
+        "fixture": 18,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "temporal",
+        "expected": [
+          [
+            "FAULT",
+            "temporal"
+          ]
+        ]
+      },
+      {
+        "fixture": 19,
+        "passed": true,
+        "outcome": "RETURN",
+        "detail": "130015b",
+        "expected": [
+          [
+            "RETURN",
+            "130015b"
+          ]
+        ]
+      },
+      {
+        "fixture": 20,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "oob",
+        "expected": [
+          [
+            "FAULT",
+            "oob"
+          ]
+        ]
+      },
+      {
+        "fixture": 21,
+        "passed": true,
+        "outcome": "FAULT",
+        "detail": "oob",
+        "expected": [
+          [
+            "FAULT",
+            "oob"
+          ]
+        ]
+      }
+    ],
+    "workers": 4,
+    "harts": 1,
+    "virtual_vm_abi": 3,
+    "safety_prediction_arm": "sublet",
+    "known_gaps": [
+      "nested slab/cache lifetimes",
+      "bipbuffer logical reuse"
+    ],
+    "input_sha256": {
+      "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+      "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+      "job": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+      "pthread": "2fa798dbcb2c31feaf0e929664120b0783d56c43e0dd49cdf39d3d9df15feec8",
+      "memcached": "6a256d13faad8b59e7dc83141aff09d867a0b0def5f73aa817e7a6ee3c7aedb6",
+      "marker": "50483b8c3d110aaa4c2515eaf81100a522c970950a63d57037833e13a909d555",
+      "safety": "17fd466eb0145c3a47a62f6de9653ead7c9730c0dfb05bd828bae0b3f7b7502e",
+      "native": "aba43e50d8093576e8d5c3737a82fa5bc79fca32212de947223402e67c9f9da3",
+      "native_marker": "325d253b8fcaf75be1cbfebf0e35ff4732373f241c6f525f0bc0a10e8529a47f",
+      "qemu": "bb668759975034f58046e440d14278c4d685852286a2e27b7f9370c576e65652",
+      "harness_source": "1e569a8b63b49af1262db6456c271f24d8ee6ffc2ab58f29b0e445cff557532e",
+      "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+    },
+    "runner_sha256": "049be8a226482e174a2c17e76ac07d80c869c65f64d6b0912694706cba28f0ed",
+    "gate_sha256": "59c8f503ede586ab3f4afb16a74d87303811e11aa90c9eecbb7ade857ebc54bc",
+    "predictions_sha256": "a6f9f673ba39b43f8f3a94d230c381ccbf2beaa9844153689701c07e590cad32"
+  },
+  "ffmpeg_outer_safety": {
+    "status": "PASS",
+    "port": "ffmpeg",
+    "arm": "sublet",
+    "completed": true,
+    "results": [
+      {
+        "fixture": 1,
+        "passed": true,
+        "detail": "100001",
+        "image_sha256": "e8398defbf1a39fc19be4795cb68c9ff3c1cfce37cb6f6d1a37152d2da2cb7ec"
+      },
+      {
+        "fixture": 2,
+        "passed": true,
+        "detail": "oob",
+        "image_sha256": "9b08841641d38cbedaff23e98edb27b49b17061059022d0679f0873679d60bc6"
+      },
+      {
+        "fixture": 3,
+        "passed": true,
+        "detail": "oob",
+        "image_sha256": "2f7295aa6103d8368b56142bfc017732effc556fb2edf20ea06de5a4d912a894"
+      },
+      {
+        "fixture": 4,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "bf6db2a9ee5be90757afc4c2638c6167abfbc108dd0162f6fdec97a41f08021d"
+      },
+      {
+        "fixture": 5,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "b777b2392d4dc0f8ff0f080749f1dcf0b7024b45b1c91f072136f8cd659c3187"
+      },
+      {
+        "fixture": 6,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "0b022f8b43bdabe3ac651e41082cdbedce3506189a43a24f6d47be6844cb3f3a"
+      },
+      {
+        "fixture": 7,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "8679c1ef9719c1fbbbcaa0455bcfa5f839a18fed7a4bebd648b2cfecd93f050e"
+      },
+      {
+        "fixture": 8,
+        "passed": true,
+        "detail": "oob",
+        "image_sha256": "ad609948f864dc25f5fcbe76ad01583d9f5b72a6f8bc4bbdc7d446b5fdfd9176"
+      },
+      {
+        "fixture": 9,
+        "passed": true,
+        "detail": "oob",
+        "image_sha256": "95c330dd63de5e27bba546437c318918c6193bcdb9d3509f70979f160309d84e"
+      },
+      {
+        "fixture": 10,
+        "passed": true,
+        "detail": "a0005b",
+        "image_sha256": "00538c9c322cc747208cb65a9dab796e52d52024cdff172bd170fe583891ef3e"
+      },
+      {
+        "fixture": 16,
+        "passed": true,
+        "detail": "1000000",
+        "image_sha256": "5fbec1a07ec638c038e7a5e724f3aee99f91e5f142c3dad16192a8658e93f2f4"
+      },
+      {
+        "fixture": 24,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "087afaa20d1468609799bc0e38a391f5e33c0f3fef9326e0a475a092feb55a07"
+      },
+      {
+        "fixture": 25,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "194c02a7f02026740e970148c1ffa2c6f8bbed189d7b315d825d7b25d7199246"
+      }
+    ],
+    "selected_fixtures": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      16,
+      24,
+      25
+    ],
+    "predictions_sha256": "c598efdf1bcdb8ab8f3667501fe06ebf1d9e6c316fdfceb7cfd4ef4a243e930b",
+    "gate_sha256": "55f8a02b83d081449c29adb7bf0aa94aba9826151a7499735f1fa6f6d5b3e633",
+    "platform_sha256": {
+      "qemu": "bb668759975034f58046e440d14278c4d685852286a2e27b7f9370c576e65652",
+      "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+      "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+      "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+    }
+  },
+  "tshark_outer_safety": {
+    "status": "PASS",
+    "port": "wireshark",
+    "arm": "sublet",
+    "completed": true,
+    "results": [
+      {
+        "fixture": 1,
+        "passed": true,
+        "detail": "100001",
+        "image_sha256": "39b05e1887b60485a54e61e9d1547b6e8faf24280b82b9ac0b21300e0bc01bb4"
+      },
+      {
+        "fixture": 2,
+        "passed": true,
+        "detail": "oob",
+        "image_sha256": "6336c648f550bb3b59a4ecfd876fbbe11bafb3b27f5ab16eef663592a80848cc"
+      },
+      {
+        "fixture": 3,
+        "passed": true,
+        "detail": "oob",
+        "image_sha256": "432a1104dc25196dcf711fa07f4760a467d8ccdd085cccb9fec8d70703e6949d"
+      },
+      {
+        "fixture": 4,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "70334ef558bb3cf8a3a26538e027e141643e6e6549ffcacf2ae6af59cbd79e85"
+      },
+      {
+        "fixture": 5,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "7fa121cf032557152ad22419ab34abb8c0b4473bc058b19d83b6fc2bff013beb"
+      },
+      {
+        "fixture": 6,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "c9ee9c35c7a27897983ef562493bacb4953c329c6dd39b79dd3a377fdc47d78b"
+      },
+      {
+        "fixture": 7,
+        "passed": true,
+        "detail": "oob",
+        "image_sha256": "2d25569991d02baf29e252d39e20da05738210e2d92331c3f09685af3bd741c1"
+      },
+      {
+        "fixture": 8,
+        "passed": true,
+        "detail": "oob",
+        "image_sha256": "b8a63cc71566f9c958426470b756d59b6d59f7508c69a15664977ceea030db48"
+      },
+      {
+        "fixture": 9,
+        "passed": true,
+        "detail": "90005b",
+        "image_sha256": "c48c0d41acccbe0968827e74f317886e5fd24f60625f1cd00b6b377c045123fc"
+      },
+      {
+        "fixture": 10,
+        "passed": true,
+        "detail": "a0015b",
+        "image_sha256": "062cf6a96ff406c230655e5b5e3575445630f17b80b7524aacd0ef61b58a44ce"
+      },
+      {
+        "fixture": 11,
+        "passed": true,
+        "detail": "b0015b",
+        "image_sha256": "d10890107e8cbfa84f95e39cbbdc50488f1da710044b92b34199eccc5e48b696"
+      },
+      {
+        "fixture": 12,
+        "passed": true,
+        "detail": "c000ee",
+        "image_sha256": "81bc4642d6565662bb7ceebf7d1c2316cb62c475cadec902302e46076299a13c"
+      },
+      {
+        "fixture": 13,
+        "passed": true,
+        "detail": "d00020",
+        "image_sha256": "b27f87f1e68305b15c4e2692406e67d38a0ccee1b4b70d3fed5b67c407a4cf02"
+      },
+      {
+        "fixture": 14,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "40f65fac97fcf74f8ecdba2a089d72d7a6179552b699ec86d63cb5d549ca4b49"
+      },
+      {
+        "fixture": 15,
+        "passed": true,
+        "detail": "temporal",
+        "image_sha256": "65efee4ac92f6547420528b481a7ef6b2b67352d4a20cf8f4353da88e0242b1c"
+      }
+    ],
+    "selected_fixtures": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "predictions_sha256": "8e9dd044f5507290ec773838b2fc3ed6efa9d3733375358717cca0d8c7cafc75",
+    "gate_sha256": "41a3447f358d4d66a611231321b981cfa57474f2664b972635bc86f9719f8226",
+    "platform_sha256": {
+      "qemu": "bb668759975034f58046e440d14278c4d685852286a2e27b7f9370c576e65652",
+      "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+      "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+      "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+    }
+  },
+  "epoll_mutation": {
+    "status": "DETECTED",
+    "interleaving": "both arms sleep 1 ms after delegated epoll returns; only the mutation uses a static result buffer",
+    "private": {
+      "status": "PASS",
+      "tests": {
+        "unsupported_clone_refused": true,
+        "tls mutex cond tagged_join": true,
+        "timed_wait": true,
+        "independent_blocking_io": true,
+        "private_epoll_events": true,
+        "shared_tls_transport": true,
+        "64_joined_lifetimes": true,
+        "exit": true,
+        "cleanup": true
+      },
+      "harts": 1,
+      "virtual_vm_abi": 3,
+      "input_sha256": {
+        "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+        "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+        "application": "bb30663a49cd51cedb3a62dfd49adfe0c8195b9a8fa45fdbc26f297cd5c1b632",
+        "qemu": "bb668759975034f58046e440d14278c4d685852286a2e27b7f9370c576e65652",
+        "source": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "gate_sha256": "128f93709619e2bffac61fa3de62be632bb4720579dd17baab1396e2c540f211",
+      "runner_sha256": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab"
+    },
+    "shared_expected_failure": {
+      "status": "FAIL",
+      "tests": {
+        "unsupported_clone_refused": true,
+        "tls mutex cond tagged_join": true,
+        "timed_wait": true,
+        "independent_blocking_io": true,
+        "private_epoll_events": false,
+        "shared_tls_transport": false,
+        "64_joined_lifetimes": false,
+        "exit": false,
+        "cleanup": true
+      },
+      "harts": 1,
+      "virtual_vm_abi": 3,
+      "input_sha256": {
+        "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+        "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+        "application": "8fac9de0e34eddca3e911dbe3bf21a355834517140e9bbe937d6312da411fe18",
+        "qemu": "bb668759975034f58046e440d14278c4d685852286a2e27b7f9370c576e65652",
+        "source": "8f881d64bfc7273bdcf213ab24806bfed4c7d7ed7d6333956326ead43463836d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "gate_sha256": "128f93709619e2bffac61fa3de62be632bb4720579dd17baab1396e2c540f211",
+      "runner_sha256": "0732dde661b50c7914ec5c4425cdfe1392dfd7392c980e14473d887007ffbcab"
+    }
+  },
+  "perl_corpus": {
+    "status": "REPLAY_COMPLETE_WITH_ONE_DIFFERENCE",
+    "cases": 11,
+    "unchanged_from_older_O1_record": 10,
+    "current_optimization": "-O2",
+    "historical_comparison_passed": false,
+    "observations": {
+      "ad5fedb002": [
+        139,
+        "cause=24",
+        "none"
+      ],
+      "d2cddbe1df": [
+        255,
+        "none",
+        "[PASS] 0"
+      ],
+      "9e298ab597": [
+        0,
+        "none",
+        "[PASS] 1"
+      ],
+      "e4be969235": [
+        139,
+        "cause=24",
+        "none"
+      ],
+      "17535c984a": [
+        0,
+        "none",
+        "[FAIL] 1 of 2: 2,ok,no 'Attempt to free unreferenced scalar'"
+      ],
+      "40727c420c": [
+        139,
+        "cause=24",
+        "none"
+      ],
+      "39b4841b25": [
+        139,
+        "cause=24",
+        "none"
+      ],
+      "b7b77ffc1e": [
+        139,
+        "cause=28",
+        "none"
+      ],
+      "1189b87114": [
+        139,
+        "cause=24",
+        "none"
+      ],
+      "254b30e378": [
+        139,
+        "cause=24",
+        "none"
+      ],
+      "af11b0c528": [
+        0,
+        "none",
+        "[FAIL] 3 of 3: 1,is,[perl #16952] failed (?{}) branch keeps prior captures,got=foo-o"
+      ]
+    },
+    "source_sha256": {
+      "ad5fedb002": "252a969a740e904cf26f706b68697d74ecf3fa7c9d72156edf5137ac7ee56d16",
+      "d2cddbe1df": "c87184d0421a29edd8cfdcafc6e014b355b7e9561fbc3413073f43740b1af0d4",
+      "9e298ab597": "a0a8f4c0945e174e2cd80e9a5136f9bc2d61d26044b7fcbcedcb444525e74e32",
+      "e4be969235": "33ded74f3bf0dcacb54075989f413b4c2c456b953f6d50b18e22903275f6e6cb",
+      "17535c984a": "e0fbcd45a7b6a6c984b25bea51dd30ce131c43af94384182cedb3cc301f3dad5",
+      "40727c420c": "e5902280a01895e022335bf2faf6415f9a38a4756c09922e8325c899c4016926",
+      "39b4841b25": "d29f8739eeb3ede942e2e55f2fa1153a9bc6e9e61f3023ea3e51319e93790e78",
+      "b7b77ffc1e": "37088baf07fe4d3b0e894c4b305a7c66ce41b6bf616499ca8d44276cfbcf112c",
+      "1189b87114": "56e1f2399456071fd80e508dfec1a0cb6b4c074468f55fc32409bba5ebf57471",
+      "254b30e378": "961e4e41cf7ed9d65a4414e6bb35658fa724b4d0344390618240399ee27ad6e4",
+      "af11b0c528": "c9544f35c16d5fdceac444584a485a553f906dbc85c4409b44207afa1fcd2a18"
+    },
+    "input_sha256": {
+      "perl.dom": "aa2f7a1c0b1a1145c9fd2c1ae2ea2e8773d42b52cf00f904990b06ad866bd3a2",
+      "capstone-vexec": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+      "capstone_vm.ko": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+      "gate.sh": "bb254067e9df3147202d7d977e182ea7f5f7e1ce96074fb579a20b410a9bbeaf"
+    },
+    "difference": {
+      "case": "254b30e378",
+      "previous": [
+        30,
+        "none",
+        "[PASS] 0"
+      ],
+      "current": [
+        139,
+        "cause=24",
+        "none"
+      ],
+      "registered_sysalloc_sublet_oracle": "capability fault, cause 24",
+      "interpretation": "The current observation matches the registered protected-allocator expectation. This is not proof that optimization alone caused the historical difference."
+    },
+    "alias_control": {
+      "status": "PASS",
+      "checks": {
+        "alias_denied": true,
+        "separate_copy_passes": true,
+        "cleanup": true
+      },
+      "scope": "Pinned Perl 5.36.3 -O2: original self-alias trigger versus an independent copy of the same string",
+      "input_sha256": {
+        "alias.pl": "961e4e41cf7ed9d65a4414e6bb35658fa724b4d0344390618240399ee27ad6e4",
+        "separate.pl": "6c206acf4e35d17ef5f324a6e45d53dcc5a95eaa46779a5fb3eaac977411a483",
+        "perl.dom": "aa2f7a1c0b1a1145c9fd2c1ae2ea2e8773d42b52cf00f904990b06ad866bd3a2",
+        "capstone-vexec": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+        "capstone_vm.ko": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+        "gate.sh": "5df2cbfebba68a2af896a77fa2ab9e0ba00dfa1a9a4d6a061746645fdf1e4ce9"
+      }
+    },
+    "scope": "Retained non-detections and harness-level outcomes are not counted as prevented defects"
+  },
+  "physical_regression": {
+    "status": "NOT_QUALIFIED",
+    "reason": "Shared QEMU lock occupied by an independent application benchmark; full physical regression not completed.",
+    "pending_gates": [
+      "healthy application contract with prescribed stdin",
+      "default context suite",
+      "thread suite",
+      "pthread suite"
+    ],
+    "attempts": [
+      {
+        "firmware": "virtual stock firmware",
+        "result": "Launcher could not allocate managed physical launch regions; this firmware is not the physical process monitor."
+      },
+      {
+        "firmware": "physical managed monitor",
+        "result": "Application entered and emitted stdout/stderr; exited 44 because the test invocation omitted the required stdin. Corrected invocation has no completed result and this attempt is not a pass."
+      }
+    ],
+    "qemu_sha256": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "platform_sha256": {
+      "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+      "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "firmware": "fc3f4795efd771dbec751429ade16b333b9ace474ec6160dfef6ded8ae253b43",
+      "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+      "launcher": "b055e3390f88dc85dc376480740c303677a24d8b691d2893d9321068138e86f2",
+      "ssh_server": "900e4b0526538c4af35825f33ba192acb5f2f9b7dc49938039b5b8084db29882",
+      "module": "5cf792e093a27b091b374adf40c065eab2233410c676c49b097fb5d89047fc31",
+      "job_helper": "42cfa11ebddb0351c0cc7be0d3cd7ce9204ce74900b6f12eb143f27de45e2c76"
+    },
+    "platform_scope": "Physical managed-monitor firmware is a separate input; virtual gates use the separately identified stock firmware. Same kernel and rootfs. Static SSH server supplied through the VM driver override.",
+    "sha256": {
+      "launcher": "b055e3390f88dc85dc376480740c303677a24d8b691d2893d9321068138e86f2",
+      "module": "5cf792e093a27b091b374adf40c065eab2233410c676c49b097fb5d89047fc31",
+      "contract": "a5f283e0e98e90b8d1a128618c4b53021716de115939a720fb992dcb208b7fcd",
+      "context": "088950faa62bf8b88cb2f13ec45b2af6d5b530af02d035bcf3579608b35a7782",
+      "threads": "c838d4cf87b685a842552f10c7a122084d5b09de5c0e5b98efd70c71fcddbcea",
+      "pthreads": "b78f41b7708cdefd9e527f2c3070280c54741ae330a00bde7337e15e4bcf399a"
+    }
+  },
+  "dependency_observations": [
+    "libevent native verify had a monotonic fallback timing failure; its six isolated reruns passed, as required by the existing recipe",
+    "libgcrypt t-lock intentionally fails with libgpg-error threads disabled; 40 native tests passed and 2 skipped",
+    "c-ares: 1093 configured native tests passed; Live network tests excluded by the recipe",
+    "GLib: 133 configured native tests passed, 1 skipped",
+    "libgpg-error: 13 passed; t-poll excluded for the documented upstream configuration defect",
+    "libxml2 external W3C conformance inputs are absent from the release archive"
+  ],
+  "limits": [
+    "QEMU, one hart, trusted Linux; no new RTL or FPGA qualification",
+    "Eight focused application workloads, not complete upstream test suites",
+    "Selected outer-heap safety fixtures; full nested allocator and release-differential matrices were not rerun",
+    "Physical guest regression remains unqualified until the prepared test inputs can run on the shared QEMU test slot; full physical lifecycle, signal, heap and process campaigns are also outside this record",
+    "Existing virtual mapping, clone and signal policy restrictions remain as documented in the system guide",
+    "Expected surviving slab/cache, bipbuffer and nested-lifetime gaps are not successful detections"
+  ]
+}

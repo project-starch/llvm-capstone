@@ -1,5 +1,31 @@
 # Current Capstone state
 
+## 2026-10-07 — virtual development integration branch
+
+`virtual-capstone-integration` combines the virtual review stack and system
+guide with `dev` at `6bad37084768`. The tested implementation is `087c140739e1`,
+including the SQLite preparation and PostgreSQL static-module relink repairs.
+QEMU is the merged `virtual-capstone` branch at `4e271895a88e`; Buildroot and
+RTL pins are retained from `dev`. This does not merge the LLVM PRs into `dev`.
+
+All eight target ports were rebuilt: SQLite, mruby, Perl, CPython, PostgreSQL,
+FFmpeg, tshark and memcached. The full virtual runtime passes 46/46 including
+both long recycling cases; pthreads 9/9, four-port comparisons 16/16,
+memcached 73/73, and selected FFmpeg/tshark outer safety gates 13/13 and 15/15.
+Both delegated-message and epoll shared-buffer mutations are detected.
+Perl's eleven corpus cases were replayed: ten match the older record; one now
+faults with cause 24, matching its registered oracle, and passes an independent
+source-copy control. It is recorded as a difference, not an unchanged pass.
+Physical guest context/thread regression remains pending; its artifacts are
+prepared, but the shared QEMU slot became occupied by a separate benchmark.
+The completed native and physical-bounds checks do not replace those suites.
+
+Use the [integration guide](../plans/virtual-capstone-integration.md) and
+[result manifest](../plans/virtual-capstone-integration-results.json) for exact
+build and regression scope. This remains a one-hart QEMU qualification with
+trusted Linux and process-local ownership; full upstream suites, complete
+nested-allocator matrices and virtual RTL/FPGA validation remain outside it.
+
 ## 2026-10-05 — B0: a gp-captable delegated application runs byte-exact on silicon
 
 - **b0-hello passes on `caplifive_supcall_715bdd1fe.bit`, byte-exact under a `cmp` oracle, N=2** (boots 13 and
