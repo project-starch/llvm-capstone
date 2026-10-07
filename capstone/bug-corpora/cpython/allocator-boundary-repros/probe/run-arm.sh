@@ -26,6 +26,21 @@ arm=${1:?usage: run-arm.sh <arm> [out]}
 STAMP=$(date -u +%Y%m%d-%H%M%S)
 OUT=${2:-$KIT/results/$arm-$STAMP}
 export PYTHONPATH=$REPO/capstone/runtime/host
+# capstone_vm needs Python 3.11 or later. cli.py opens with
+# "from __future__ import annotations", which rules out 3.6, and
+# cli.py:190 calls hashlib.file_digest, which exists only from 3.11.
+# This box has 3.6.9 on both the non-interactive and the login PATH and 3.9.12
+# in miniconda's base, so BOTH of those fail -- and the first version of this
+# check said 3.7, let 3.9 through, and produced four boots that died in one
+# second each with the AttributeError buried in boot.log.
+# /home/miniconda/miniconda3/envs/cheri-deps/bin/python3 is 3.11.16.
+pyv=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo 0.0)
+pyok=$(python3 -c 'import hashlib; print(1 if hasattr(hashlib, "file_digest") else 0)' 2>/dev/null || echo 0)
+if [ "$pyok" != 1 ]; then
+  echo "REFUSING: python3 is ${pyv} and has no hashlib.file_digest; capstone_vm needs >= 3.11" >&2
+  echo "  try PATH=/home/miniconda/miniconda3/envs/cheri-deps/bin:\$PATH" >&2
+  exit 2
+fi
 CASE_TIMEOUT=${CASE_TIMEOUT:-120}
 # CAP selects a capacity VARIANT of the arm's image, not another arm. The arm
 # name still carries the oracle and still has to be in corpus.json; only the

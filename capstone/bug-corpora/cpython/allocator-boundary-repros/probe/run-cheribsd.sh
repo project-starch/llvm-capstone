@@ -127,10 +127,16 @@ for d in "$CORPUS"/[0-9][0-9]_*/; do
   out=$(G "cd /root/boundary/$c && env PYTHONDONTWRITEBYTECODE=1 PYTHONHOME=$PYHOME \
             LD_PRELOAD=$SICODE timeout $BUDGET $GUEST/python trigger.py 2>&1; \
           echo RC=\$?")
-  rc=$(printf '%s' "$out" | grep -oE 'RC=[0-9]+' | tail -1 | cut -d= -f2)
-  sig=$(printf '%s' "$out" | grep -oE 'signal=[0-9]+' | head -1 | cut -d= -f2)
-  code=$(printf '%s' "$out" | grep -oE 'si_code=[0-9]+ \([A-Z_]+\)' | head -1)
-  last=$(printf '%s' "$out" | grep -v '^RC=' | tail -2 | tr '\n' ' ')
+  # -a, and strip non-printables before anything is matched or recorded. Case
+  # 02's upstream test asserts on a GARBLED field name -- the overflow's own
+  # output -- so the trigger's stdout contains raw bytes. Without this, grep
+  # calls the stream binary and the recorded `last` field reads
+  # "Binary file (standard input) matches", which hides the actual last lines.
+  out=$(printf '%s' "$out" | tr -d '\000' | LC_ALL=C tr -c '\11\12\15\40-\176' '?')
+  rc=$(printf '%s' "$out" | grep -a -oE 'RC=[0-9]+' | tail -1 | cut -d= -f2)
+  sig=$(printf '%s' "$out" | grep -a -oE 'signal=[0-9]+' | head -1 | cut -d= -f2)
+  code=$(printf '%s' "$out" | grep -a -oE 'si_code=[0-9]+ \([A-Z_]+\)' | head -1)
+  last=$(printf '%s' "$out" | grep -a -v '^RC=' | tail -2 | tr '\n' ' ')
   printf '%s\tcheribsd-revocation\t%s\t%s\t%s\t%s\n' \
     "$c" "${rc:-?}" "${sig:-}" "${code:-}" "$last" >> "$OUT/verdicts.tsv"
   printf '  %-56s rc=%-4s %s\n' "${c:0:56}" "${rc:-?}" "${code:-}"
