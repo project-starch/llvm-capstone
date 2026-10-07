@@ -32,7 +32,8 @@
   "evidence": [
     "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261005-native-subobject",
     "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-native-subobject-7",
-    "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd"
+    "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261006-cheribsd",
+    "capstone/bug-corpora/ffmpeg/subobject-repros/results/20261007-virtual"
   ],
   "advisories": [],
   "shape_table": true,

@@ -233,8 +233,9 @@ ported backend was 17.5.
 | `role` | `full-application` (the whole program runs), `allocator-component` (one allocator, replayed or driven), `platform-build`, `domain-libc`, or `census` |
 | `upstream` | `{version, commit?, pin_source}`. `version` may be a list where a component pins more than one release |
 | `upstream.pin_source` | `{file, grep, version?}`, one or a list: the text that actually decides the pin. The checker requires `grep` to appear verbatim in `file`, and the declared version or commit to appear inside `grep` -- so the declaration cannot become a second source of truth, and a bump to the recipe fails the check until the declaration follows |
-| `targets` | where it runs: `capstone-domain`, `cheribsd-purecap`, `linux-guest`, `silicon`, `native` |
+| `targets` | where it runs: `capstone-domain` (a freestanding domain), `capstone-virtual` (a Capstone application in a Linux process, user virtual addresses), `cheribsd-purecap`, `linux-guest`, `silicon`, `native` |
 | `workload`, `evidence`, `corpora`, `related`, `status`, `note` | the qualifying workload, result bundles, the corpora whose cases are its own, neighbouring components, and anything else a reader needs. Paths must exist |
+| `arms` | optional: one note per arm this component builds, where the arm's construction is a property of the component rather than of a corpus |
 
 **`role` says what a component is, so a path never has to.** Three components were
 renamed to the rule in [`../ports/README.md`](../ports/README.md#naming) on 2026-09-28 —

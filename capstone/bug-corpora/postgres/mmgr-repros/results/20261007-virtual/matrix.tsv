@@ -1,0 +1,6 @@
+case	arm	verdict	cause	attributed	evidence
+00_1f5b6a5e5d_tuplestore_double_free:0	virtual	silent	--	--	completed with status 0
+01_3549ffb6af_vacuum_dead_items_stale_struct:0	virtual	silent	--	--	completed with status 0
+02_ed394c4bdf_live_parts_stale_alias:0	virtual	silent	--	--	completed with status 0
+03_a61592253e_pgoutput_entry_cxt_teardown:0	virtual	silent	--	--	completed with status 0
+04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn:0	virtual	silent	--	--	completed with status 0

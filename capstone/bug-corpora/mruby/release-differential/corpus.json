@@ -28,7 +28,8 @@
   ],
   "evidence": [
     "capstone/bug-corpora/mruby/release-differential/results/20261006",
-    "capstone/bug-corpora/mruby/release-differential/results/20261006-cheribsd"
+    "capstone/bug-corpora/mruby/release-differential/results/20261006-cheribsd",
+    "capstone/bug-corpora/mruby/release-differential/results/20261007-virtual"
   ],
   "runners": [
     "capstone/ports/mruby/app/build-mruby-domain.sh",

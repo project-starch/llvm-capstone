@@ -34,7 +34,8 @@
   "evidence": [
     "capstone/bug-corpora/httpd/apr-pool-repros/results/20260921-qemu",
     "capstone/bug-corpora/httpd/apr-pool-repros/results/20260921-cheribsd",
-    "capstone/bug-corpora/httpd/apr-pool-repros/results/20260922-poisoncap"
+    "capstone/bug-corpora/httpd/apr-pool-repros/results/20260922-poisoncap",
+    "capstone/bug-corpora/httpd/apr-pool-repros/results/20261007-virtual"
   ],
   "advisories": [],
   "shape_table": true

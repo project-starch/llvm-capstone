@@ -34,7 +34,8 @@
   "evidence": [
     "capstone/bug-corpora/httpd/bucket-repros/results/20260922-cheribsd",
     "capstone/bug-corpora/httpd/bucket-repros/results/20260922-poisoncap",
-    "capstone/bug-corpora/httpd/bucket-repros/results/20260922-poisoncap-negative-control"
+    "capstone/bug-corpora/httpd/bucket-repros/results/20260922-poisoncap-negative-control",
+    "capstone/bug-corpora/httpd/bucket-repros/results/20261007-virtual"
   ],
   "advisories": [],
   "shape_table": true

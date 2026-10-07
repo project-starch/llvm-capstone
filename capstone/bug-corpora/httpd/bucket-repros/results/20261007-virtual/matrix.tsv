@@ -1,0 +1,9 @@
+case	arm	verdict	cause	attributed	evidence
+00_1c7a70c9d9_wrong_bucket_alloc_across_connections	virtual	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f9061478c
+01_d2a1cf5f8c_buckets_outlive_backend_allocator	virtual	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fba09430c
+02_106d0761c0_brigade_on_request_pool_past_eor	virtual	silent	--	--	completed with status 0
+03_d9c2352952_buckets_from_pool_that_dies_first	virtual	silent	--	--	completed with status 0
+04_c81adad105_brigade_not_cleaned_before_reuse	virtual	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3fb241478c
+05_60919177e8_read_from_destroyed_brigade	virtual	silent	--	--	completed with status 0
+06_4930450013_bucket_outlives_its_brigade	virtual	detected	24 (UNEXP_OP_TYPE)	no	capability fault cause=24 (UNEXP_OP_TYPE) pc=0x3f8d914390
+07_edc450c8ac_subrequest_pool_private_data	virtual	silent	--	--	completed with status 0

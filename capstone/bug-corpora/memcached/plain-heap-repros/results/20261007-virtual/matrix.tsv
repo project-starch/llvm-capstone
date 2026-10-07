@@ -1,0 +1,5 @@
+case	arm	verdict	cause	attributed	evidence
+00_ddee3e2_authfile_scan_past_calloc:fixed	control	silent	--	--	completed with status 0
+00_ddee3e2_authfile_scan_past_calloc:buggy	virtual	detected	28 (CAP_OOB)	yes	capability fault cause=28 (CAP_OOB) pc=0x3fa3b905ec
+01_d5d9ff0_cachedump_end_marker_off_by_one:fixed	control	silent	--	--	completed with status 0
+01_d5d9ff0_cachedump_end_marker_off_by_one:buggy	virtual	detected	28 (CAP_OOB)	yes	capability fault cause=28 (CAP_OOB) pc=0x3f9c8108f0

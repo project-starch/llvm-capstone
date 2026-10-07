@@ -1,0 +1,42 @@
+{
+  "corpus": "capstone/bug-corpora/httpd/bucket-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 8,
+  "measured": 8,
+  "controls": 0,
+  "controls_held": 0,
+  "verdicts": {
+    "detected": 4,
+    "silent": 4
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "45c245f3acc989471f96679adcb17b8a51ca655eb19c631c41cb8508399eea52",
+  "staged_sha256": {
+    "traces/00_1c7a70c9d9_wrong_bucket_alloc_across_connections.bin": "748c243a431878ecd5fa4665bb227d64672b63ccc101ffe60c26205a39d89113",
+    "traces/01_d2a1cf5f8c_buckets_outlive_backend_allocator.bin": "d2695ccb17f87676a1af13f443bee22e346eebd38bfc96da424681cfb7a389ad",
+    "traces/02_106d0761c0_brigade_on_request_pool_past_eor.bin": "556034d4f499ceab2f911b498cf08f42078249ca1f5f950820bf2651df024655",
+    "traces/03_d9c2352952_buckets_from_pool_that_dies_first.bin": "f0a8c40bf5b824a20de1685665f57e473e5b4dc3277901f06a1b4cf6a40f4139",
+    "traces/04_c81adad105_brigade_not_cleaned_before_reuse.bin": "63b28ade8c3692ff57f175b6fb92104257896ffd6e549f0c94df5eec50a55b7a",
+    "traces/05_60919177e8_read_from_destroyed_brigade.bin": "1e8cfcf2fc55f49d0e388f1bf7b74db99a0ad165d547b9015f21c6c1edf7d205",
+    "traces/06_4930450013_bucket_outlives_its_brigade.bin": "c8b318310005fe2bb08434ca694f2da454594bc15733552da9958f815977130a",
+    "traces/07_edc450c8ac_subrequest_pool_private_data.bin": "1d6e8a9c6c62e3b699382ef6a184f74e374c041ecf64fb8dea4bd39826992527"
+  },
+  "image_sha256": {
+    "00_1c7a70c9d9_wrong_bucket_alloc_across_connections": "dfbfa04b2271eaf7459ab10ba9400cfa39893b6c195f5b70b0f35efb58f3233e",
+    "01_d2a1cf5f8c_buckets_outlive_backend_allocator": "7818cd42a764ebc9f20a8d9a4932c5b7045f93664f754d4583ca7c2d109c285d",
+    "02_106d0761c0_brigade_on_request_pool_past_eor": "40a579298d24ac06e5d27ea735e7013c64a0d9d19f0027696be6e08e156b02de",
+    "03_d9c2352952_buckets_from_pool_that_dies_first": "03ec309615fc94729ff832230d2dd7a0ff347210b3a13dbe12bed774dff02447",
+    "04_c81adad105_brigade_not_cleaned_before_reuse": "d156a51775afd23f71b597a00ef6feaba19744c17f54e314687bf096335bdbe8",
+    "05_60919177e8_read_from_destroyed_brigade": "c279ac5d28b122d30d63636bdeaaa512893f3b00777575b5f6ee1d845b92b07f",
+    "06_4930450013_bucket_outlives_its_brigade": "8bcce9b06bd8fda73362ce0369321f38e6aec88450115248cbd4f4d929ae0b0d",
+    "07_edc450c8ac_subrequest_pool_private_data": "82ed58fdf0be089d714c6151489bb4bac91df4d7595b8d12041bdf112f3a175a"
+  }
+}

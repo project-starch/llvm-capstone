@@ -77,7 +77,12 @@ function(pg_manager name mode)
 endfunction()
 
 if(PORT_HOSTED)
-  if(PORT_PLATFORM STREQUAL "cheribsd")
+  # Both hosted CAPABILITY platforms, because the reason is the pointer and not
+  # the operating system: upstream's aset.c asserts that an AllocFreeListLink
+  # fits in the minimum chunk, and a 16-byte pointer does not. Building
+  # capstone-application against the plain native manager fails that assertion
+  # at compile time (measured 2026-10-07), which is the assertion doing its job.
+  if(PORT_PLATFORM MATCHES "^(cheribsd|capstone-application)$")
     # The existing capability-layout variant has 16-byte chunks/free links.
     # Retain its ABI changes without enabling Sublet lifetime hooks.
     if(PG_POISONCAP)
@@ -85,17 +90,18 @@ if(PORT_HOSTED)
       target_sources(manager-native PRIVATE src/cheribsd/poisoncap.c)
       target_compile_definitions(manager-native PUBLIC PG_POISONCAP)
       target_include_directories(manager-native PUBLIC "${PROJECT_SOURCE_DIR}/src/cheribsd")
-      set(cheri_variant sublet)
+      set(capability_variant sublet)
     else()
       pg_manager(manager-native spatial)
-      set(cheri_variant spatial)
+      set(capability_variant spatial)
     endif()
-    file(READ "${CMAKE_BINARY_DIR}/variants/${cheri_variant}/include/pg_config.h" cheri_config)
+    file(READ "${CMAKE_BINARY_DIR}/variants/${capability_variant}/include/pg_config.h"
+      capability_config)
     string(REPLACE "#define SIZEOF_VOID_P 8" "#define SIZEOF_VOID_P 16"
-      cheri_config "${cheri_config}")
-    file(WRITE "${CMAKE_BINARY_DIR}/cheribsd-include/pg_config.h" "${cheri_config}")
+      capability_config "${capability_config}")
+    file(WRITE "${CMAKE_BINARY_DIR}/capability-include/pg_config.h" "${capability_config}")
     target_include_directories(manager-native BEFORE PUBLIC
-      "${CMAKE_BINARY_DIR}/cheribsd-include")
+      "${CMAKE_BINARY_DIR}/capability-include")
   else()
     pg_manager(manager-native native)
   endif()
@@ -123,7 +129,11 @@ if(PORT_HOSTED)
   # same cases must build against the plain spatial CheriBSD manager as well,
   # so that the arm running under the guest's OWN libc revocation can be
   # measured rather than argued about.
-  if(PORT_PLATFORM STREQUAL "cheribsd")
+  # Built on every hosted platform that HAS a fault oracle: CheriBSD, where a
+  # supervisor reads signal and si_code from outside, and capstone-application,
+  # where the virtual launcher reports the fault and the runner resolves the
+  # probe from the image. Not on native, which has neither and uses `replay`.
+  if(PORT_PLATFORM MATCHES "^(cheribsd|capstone-application)$")
     # One program per case, per the corpus contract in
     # bug-corpora/cpython/pymalloc-repros/SCHEMA.md: a capability fault ends
     # the run, so a case that provokes one cannot report results beside it.
@@ -155,10 +165,14 @@ if(PORT_HOSTED)
         message(STATUS "PostgreSQL defect corpus: ${pg_case_count} hosted cases (plain CheriBSD)")
       endif()
     endif()
-    add_executable(supervise
-      "${CAPSTONE_REPO_ROOT}/capstone/bug-corpora/cpython/pymalloc-repros/observe/supervise.c")
-    target_compile_definitions(supervise PRIVATE PROBE_SYMBOL="pg_defect_probe")
-    target_link_libraries(supervise PRIVATE util)
+    # The out-of-process observer is CheriBSD's; the virtual arm's observer is
+    # the launcher, and this host program would not link against a Capstone libc.
+    if(PORT_PLATFORM STREQUAL "cheribsd")
+      add_executable(supervise
+        "${CAPSTONE_REPO_ROOT}/capstone/bug-corpora/cpython/pymalloc-repros/observe/supervise.c")
+      target_compile_definitions(supervise PRIVATE PROBE_SYMBOL="pg_defect_probe")
+      target_link_libraries(supervise PRIVATE util)
+    endif()
   endif()
 else()
   enable_language(ASM)

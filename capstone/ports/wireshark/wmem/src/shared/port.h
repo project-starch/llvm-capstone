@@ -3,7 +3,13 @@
 #include <stddef.h>
 #include <stdint.h>
 #define WM_MAGIC UINT64_C(0x31304d454d575357)
+/* The replay's backing arena. Overridable because a platform may cap a single
+ * allocation: the virtual Capstone allocator refuses anything above 256 MiB
+ * (runtime/virtual/heap.c, power()), so its arm asks for 256 MiB and says so
+ * in its record rather than silently getting a NULL and exiting 75. */
+#ifndef WM_PAYLOAD_BYTES
 #define WM_PAYLOAD_BYTES (384UL << 20)
+#endif
 #define WM_META_BYTES (8UL << 20)
 #define WM_TRACE_BYTES (16UL << 20)
 #define WM_ALLOCATORS 64

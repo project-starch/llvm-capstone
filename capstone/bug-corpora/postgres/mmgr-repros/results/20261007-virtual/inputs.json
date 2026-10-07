@@ -1,0 +1,29 @@
+{
+  "corpus": "capstone/bug-corpora/postgres/mmgr-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 5,
+  "measured": 5,
+  "controls": 0,
+  "controls_held": 0,
+  "verdicts": {
+    "silent": 5
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "d334bc1b67698f129b7bab43c040fb32ba1b8dbbe1a48eb73d48fae9cec4a922",
+  "staged_sha256": {},
+  "image_sha256": {
+    "00_1f5b6a5e5d_tuplestore_double_free:0": "3edd738eee5e36bec9c8056d4167dec7ca59ddf90fa3354fa7bdd5b235c58ed1",
+    "01_3549ffb6af_vacuum_dead_items_stale_struct:0": "3d90300e2835bb102d2918fbba0a9545a4eb7239fe6ae0a068901fe5e44269d1",
+    "02_ed394c4bdf_live_parts_stale_alias:0": "dab4010bdbc9136a923662f46fd09694b32180c2966afcc7950cb3a64a139c17",
+    "03_a61592253e_pgoutput_entry_cxt_teardown:0": "17878c7e51a19946a725782388dcc4a010c6626889adc2ce38bcc290f14e5d58",
+    "04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn:0": "48f0857f88eb1de7c5cf64bc646ae9e7c83eb6e67d737e6da8f72497b671eeca"
+  }
+}

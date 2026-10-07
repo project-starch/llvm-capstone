@@ -39,6 +39,7 @@
   "evidence": [
     "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects",
     "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
-    "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8"
+    "capstone/bug-corpora/memcached/allocator-repros/results/20261007-cheribsd-case8",
+    "capstone/bug-corpora/memcached/allocator-repros/results/20261007-virtual"
   ]
 }

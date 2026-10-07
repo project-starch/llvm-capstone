@@ -57,14 +57,14 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | -- | 0 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 4 |
 | `capstone/ports/memcached/allocators` | allocator-component | 1.6.45 | capstone-domain, cheribsd-purecap, native | `allocator-repros` | 9 |
-| `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, native | `allocator-repros` | 9 |
+| `capstone/ports/memcached/app` | full-application | 1.6.45 | capstone-domain, capstone-virtual, native | `allocator-repros` | 9 |
 | `capstone/ports/micropython` | full-application | 2e3304a | capstone-domain, silicon | -- | 0 |
 | `capstone/ports/mruby/app` | full-application | 4.0.0-rc2 | capstone-domain, native | `gc-slot-repros` | 0 |
 | `capstone/ports/mruby/cheribsd` | platform-build | 4.0.0-rc2 | cheribsd-purecap | `release-differential` | 23 |
 | `capstone/ports/musl-capstone` | domain-libc | 1.2.5 | capstone-domain | -- | 0 |
 | `capstone/ports/nginx` | allocator-component | 1.28.0 | capstone-domain, native | -- | 0 |
 | `capstone/ports/perl/cheribsd` | platform-build | 5.36.3 | cheribsd-purecap | -- | 0 |
-| `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, native | `release-differential` | 11 |
+| `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, capstone-virtual, native | `release-differential` | 11 |
 | `capstone/ports/postgres/app` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
 | `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-domain, cheribsd-purecap, linux-guest, native | `mmgr-repros` | 5 |
 | `capstone/ports/sqlite/app` | full-application | 3.22.0 | capstone-domain, native | -- | 0 |

@@ -36,7 +36,8 @@
     "capstone/bug-corpora/postgres/sql-repros/results/cheribsd-revocation-20261006-165125",
     "capstone/bug-corpora/postgres/sql-repros/results/spatial-20261006-181644",
     "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261006-181930",
-    "capstone/bug-corpora/postgres/sql-repros/results/cheribsd-revocation-20261006-181644"
+    "capstone/bug-corpora/postgres/sql-repros/results/cheribsd-revocation-20261006-181644",
+    "capstone/bug-corpora/postgres/sql-repros/results/20261007-virtual"
   ],
   "runners": [
     "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",

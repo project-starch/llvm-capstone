@@ -101,14 +101,7 @@ __attribute__((used, noinline)) static void write_probe(volatile unsigned char *
  * pyc_defect_read label itself, so the marker only has to say that the case
  * reached its critical access. */
 static void mark(unsigned which) {
-#ifdef PYMALLOC_POISONCAP
-  /* Nothing to publish on this target. The supervisor observes the fault from
-   * outside -- signal, si_code and PC from the kernel, the expected address
-   * from the child's memory map and the ELF -- so the program neither reports
-   * nor judges anything about itself. The Capstone target still needs the
-   * marker instructions below, because its oracle reads them off the monitor. */
-  (void)which;
-#else
+#ifdef PYMALLOC_DOMAIN
   extern void pyc_defect_read(void), pyc_defect_write(void);
   unsigned long code = 0xcf19000000000000UL | which;
   __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0\n"
@@ -116,6 +109,19 @@ static void mark(unsigned which) {
                    ".insn r 0x5b, 0x1, 0x43, x0, %2, x0\n" ::"r"(code),
                    "r"(pyc_defect_read), "r"(pyc_defect_write)
                    : "memory");
+#else
+  /* Nothing to publish anywhere else, and -- the reason this is keyed on
+   * PYMALLOC_DOMAIN rather than on "not PoisonCap", as its three sibling
+   * corpora already are -- the marker instructions MUST NOT be emitted off
+   * the freestanding domain. Their oracle is the monitor reading them; there
+   * is no monitor in a hosted build. On CheriBSD the supervisor observes the
+   * fault from outside (signal, si_code and PC from the kernel, the expected
+   * address from the child's map and the ELF), and in the virtual address
+   * space the launcher reports the fault and the runner resolves the probe
+   * from the image. Emitting them hosted on Capstone made all twenty cases
+   * stop with cause 2, ILLEGAL_INST, before any case had run: QEMU's U-mode
+   * decoder does not implement that custom opcode. Measured 2026-10-07. */
+  (void)which;
 #endif
 }
 

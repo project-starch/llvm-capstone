@@ -1,0 +1,29 @@
+{
+  "corpus": "capstone/bug-corpora/postgres/c-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 5,
+  "measured": 5,
+  "controls": 0,
+  "controls_held": 0,
+  "verdicts": {
+    "detected": 5
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "e9b574c8a99037b68c260be23f065b6471894e1ced90913ebd20e5b1f06d3116",
+  "staged_sha256": {},
+  "image_sha256": {
+    "00_CVE-2026-6477_pqfn_unbounded_result_copy": "45b4bc5c01ee8bf9215a8d1ca5c7124b9827f92313b8686476f577c4edbe5cfc",
+    "01_CVE-2026-19385_pgdump_transform_list_overread": "f30e6573539bafc7b5310cb904f2542aa469ddd5d2ade0862411499afc9d7c37",
+    "02_CVE-2026-16241_ecpg_bytea_negative_length": "9fa2b059314239117b65443bc5f2643d99e310a01a790bca8b98792375e2e7a8",
+    "03_5d61bdd114_saslprep_truncated_utf8_overread": "4ac757ffb917a963e531c9ba4b745ba49b8c23d8816aea60ededa15be7d63c6a",
+    "04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer": "7b23df17c37aad145d2db57c67ec10f5f3f4985fd8c6d2101ec3db4fac322133"
+  }
+}

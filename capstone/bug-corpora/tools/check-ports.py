@@ -29,10 +29,14 @@ PORTS = REPO / "capstone/ports"
 RENAMES = PORTS / "renames.json"
 
 REQUIRED = {"program", "role", "title", "upstream", "targets"}
-OPTIONAL = {"workload", "evidence", "corpora", "related", "note", "status"}
+OPTIONAL = {"workload", "evidence", "corpora", "related", "note", "status", "arms"}
 ROLES = {"full-application", "allocator-component", "platform-build", "domain-libc",
          "census"}
-TARGETS = {"capstone-domain", "cheribsd-purecap", "linux-guest", "silicon", "native"}
+# capstone-virtual is the user-virtual-address platform: a Capstone application
+# in a Linux process, not a bare-metal domain. Two components already declared
+# it when the virtual stack landed, which this checker rejected.
+TARGETS = {"capstone-domain", "capstone-virtual", "cheribsd-purecap", "linux-guest",
+           "silicon", "native"}
 PATH_FIELDS = ("evidence", "corpora", "related")
 
 

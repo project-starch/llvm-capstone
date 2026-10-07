@@ -1,0 +1,32 @@
+{
+  "corpus": "capstone/bug-corpora/ffmpeg/plain-heap-repros",
+  "arm": "virtual",
+  "address_space": "virtual",
+  "status": "PASS",
+  "cases": 4,
+  "measured": 4,
+  "controls": 4,
+  "controls_held": 4,
+  "verdicts": {
+    "detected": 4
+  },
+  "completed": true,
+  "platform_sha256": {
+    "qemu": "da15f2bccb7000836fcd01262226417549b870acc602b1cf032dc2cc7afdf430",
+    "launcher": "39d64558ccedd8ab424ebd0013a9e7bf669dec194a221c0c9a21fb454768bf75",
+    "module": "dc766d79c8fb8278aa3475223ad2ef641683d36cf97501ed64e6e958b671a096",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  },
+  "gate_sha256": "242b4d26fa9b848ee52529b240a8a113a88360bf3c92d22cdb98eda46c38bec7",
+  "staged_sha256": {},
+  "image_sha256": {
+    "00_d133b4a231_showcwt_kernel_scan_past_array:fixed": "0549a71b952b00ff1490e6d50a42abf6076e12c5e1aee744ae4f874749c053af",
+    "00_d133b4a231_showcwt_kernel_scan_past_array:buggy": "0549a71b952b00ff1490e6d50a42abf6076e12c5e1aee744ae4f874749c053af",
+    "01_bcbf3a5630_vf_scale_format_list_compaction:fixed": "faeab276789bfc3f3eedcf8a83f86cdb500f649beaac6ce59355b038c1cea321",
+    "01_bcbf3a5630_vf_scale_format_list_compaction:buggy": "faeab276789bfc3f3eedcf8a83f86cdb500f649beaac6ce59355b038c1cea321",
+    "02_56309e476a_vf_vif_mirror_below_base:fixed": "f7e851a92f9b0d25f3700853979f83aba43089e860be5bb02bdc0ede43c94494",
+    "02_56309e476a_vf_vif_mirror_below_base:buggy": "f7e851a92f9b0d25f3700853979f83aba43089e860be5bb02bdc0ede43c94494",
+    "03_495b402f27_diracdec_edge_emu_buffer_undersized:fixed": "3452edcc8423134ac892284259ff602c51cad2eec70ad750f1bccf6ca6064a97",
+    "03_495b402f27_diracdec_edge_emu_buffer_undersized:buggy": "3452edcc8423134ac892284259ff602c51cad2eec70ad750f1bccf6ca6064a97"
+  }
+}

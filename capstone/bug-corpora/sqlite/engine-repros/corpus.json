@@ -27,7 +27,9 @@
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [
-    "capstone/bug-corpora/sqlite/engine-repros/results"
+    "capstone/bug-corpora/sqlite/engine-repros/results",
+    "capstone/bug-corpora/sqlite/engine-repros/results/20261007-virtual-memsys5-nested",
+    "capstone/bug-corpora/sqlite/engine-repros/results/20261007-virtual-platform-allocator"
   ],
   "related": [
     "capstone/bug-corpora/sqlite/capi-repros"

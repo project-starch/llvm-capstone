@@ -31,7 +31,8 @@
   "inventory": "capstone/docs/ref/spatial-and-temporal-bug-inventory.md",
   "evidence": [
     "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261006-native-plain-heap",
-    "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261006-cheribsd"
+    "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261006-cheribsd",
+    "capstone/bug-corpora/ffmpeg/plain-heap-repros/results/20261007-virtual"
   ],
   "advisories": [],
   "shape_table": true,

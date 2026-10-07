@@ -28,7 +28,8 @@
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "evidence": [
-    "capstone/bug-corpora/ffmpeg/plane-repros/results/20261006-native-plane"
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/20261006-native-plane",
+    "capstone/bug-corpora/ffmpeg/plane-repros/results/20261007-virtual"
   ],
   "advisories": [],
   "shape_table": true,
