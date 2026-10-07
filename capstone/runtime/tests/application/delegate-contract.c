@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 #include <sys/uio.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -23,8 +24,74 @@ static int waited(pid_t pid, int code) {
   return waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == code;
 }
 
+extern int capstone_test_with_32k_stack(int (*callback)(void));
+
+/* Exercise the dynamic snapshot's empty, small and maximum sizes through
+ * both copy directions. Payload and descriptors live on the heap so the
+ * constrained-stack cases measure libc's own space, not the test's arrays. */
+static int vector_roundtrip(int count, int message) {
+  int fd[2];
+  char *data = malloc(count ? (size_t)count : 1);
+  struct iovec *iov = calloc(count ? (size_t)count : 1, sizeof *iov);
+  CHECK(data && iov);
+  CHECK(message ? !socketpair(AF_UNIX, SOCK_DGRAM, 0, fd) : !pipe(fd));
+  for (int i = 0; i < count; ++i) {
+    data[i] = (char)('a' + i % 26);
+    iov[i].iov_base = data + i;
+    iov[i].iov_len = 1;
+  }
+  struct msghdr msg = {.msg_iov = iov, .msg_iovlen = count};
+  CHECK((message ? sendmsg(fd[1], &msg, 0) : writev(fd[1], iov, count)) == count);
+  memset(data, 0, count);
+  CHECK((message ? recvmsg(fd[0], &msg, 0) : readv(fd[0], iov, count)) == count);
+  for (int i = 0; i < count; ++i) CHECK(data[i] == (char)('a' + i % 26));
+  /* Reject invalid counts before allocating any variable-sized snapshot. */
+  if (message) {
+    msg.msg_iov = NULL;
+    msg.msg_iovlen = 1025;
+    CHECK(sendmsg(fd[1], &msg, 0) == -1 && errno == EMSGSIZE);
+  } else {
+    CHECK(writev(fd[1], NULL, -1) == -1 && errno == EINVAL);
+    CHECK(readv(fd[0], NULL, 1025) == -1 && errno == EINVAL);
+  }
+  CHECK(!close(fd[0]) && !close(fd[1]));
+  free(iov);
+  free(data);
+  return 0;
+}
+
+static int small_vectors(void) {
+  CHECK(!vector_roundtrip(0, 0));
+  CHECK(!vector_roundtrip(1, 0));
+  CHECK(!vector_roundtrip(4, 0));
+  return 0;
+}
+
+static int small_messages(void) {
+  CHECK(!vector_roundtrip(0, 1));
+  CHECK(!vector_roundtrip(1, 1));
+  CHECK(!vector_roundtrip(4, 1));
+  return 0;
+}
+
 int main(int argc, char **argv) {
   CHECK(argc >= 2);
+  if (!strcmp(argv[1], "vector-stack")) {
+    CHECK(!capstone_test_with_32k_stack(small_vectors));
+    puts("delegate-contract: vector stack ok");
+    return 0;
+  }
+  if (!strcmp(argv[1], "message-stack")) {
+    CHECK(!capstone_test_with_32k_stack(small_messages));
+    puts("delegate-contract: message stack ok");
+    return 0;
+  }
+  if (!strcmp(argv[1], "vector-limit")) {
+    CHECK(!vector_roundtrip(1024, 0));
+    CHECK(!vector_roundtrip(1024, 1));
+    puts("delegate-contract: vector limit ok");
+    return 0;
+  }
   if (!strcmp(argv[1], "after-closed-exec")) {
     for (int fd = 0; fd < 3; ++fd) CHECK(fcntl(fd, F_GETFD) == -1 && errno == EBADF);
     return 0;
@@ -88,6 +155,37 @@ int main(int argc, char **argv) {
       free(b);
     }
     puts("delegate-contract: usable size ok");
+    return 0;
+  }
+  if (!strcmp(argv[1], "buffer-bounds")) {
+    int fds[2];
+    char *p = malloc(16);
+    const char contents[] = "0123456789abcdefghijklmnopqrstuv";
+    CHECK(p && !pipe(fds));
+    CHECK(write(fds[1], contents, sizeof contents - 1) == sizeof contents - 1);
+    /* Rejection must happen before the file offset or pipe contents change. */
+    errno = 0;
+    CHECK(read(fds[0], p, 4096) == -1 && errno == EFAULT);
+    errno = 0;
+    CHECK(read(fds[0], (void *)0x1000, 1) == -1 && errno == EFAULT);
+    char *readonly = __builtin_capstone_cap_tighten(p, 4);
+    errno = 0;
+    CHECK(read(fds[0], readonly, 1) == -1 && errno == EFAULT);
+    struct iovec iov[2] = {{p, 16}, {p, 17}};
+    errno = 0;
+    CHECK(readv(fds[0], iov, 2) == -1 && errno == EFAULT);
+    CHECK(read(fds[0], p, 16) == 16 && !memcmp(p, contents, 16));
+    CHECK(read(fds[0], p, 16) == 16 && !memcmp(p, contents + 16, 16));
+    errno = 0;
+    CHECK(write(fds[1], p, 4096) == -1 && errno == EFAULT);
+    char *writeonly = __builtin_capstone_cap_tighten(p, 2);
+    errno = 0;
+    CHECK(write(fds[1], writeonly, 1) == -1 && errno == EFAULT);
+    CHECK(!close(fds[1]));
+    CHECK(read(fds[0], p, 16) == 0);
+    CHECK(!close(fds[0]));
+    free(p);
+    puts("delegate-contract: buffer bounds ok");
     return 0;
   }
   CHECK(argc == 3);
