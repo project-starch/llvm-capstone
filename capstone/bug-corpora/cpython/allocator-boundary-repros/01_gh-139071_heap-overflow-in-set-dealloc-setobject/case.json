@@ -13,7 +13,7 @@
   "layer_note": "measured: ASan reported a 216-byte region, at or under the 512 B SMALL_REQUEST_THRESHOLD",
   "arms": {
     "spatial": {
-      "oracle": "no bounds fault is admissible: pymalloc sub-allocates inside an arena, so the stale access stays within the bounds of the capability that covers it. The base arm does enforce revocation (CAPSTONE_REVOCATION_ENFORCE defaults to 1 and is independent of the sublet discipline), so the admissible outcomes are completion, or a revoked-capability fault (cause 24) once pymalloc has returned the block's emptied arena to the system allocator. Which of the two occurs is a property of arena occupancy rather than of the defect, so this arm does not separate these cases. A cause 5 or 7 fault would falsify this."
+      "oracle": "no bounds fault is admissible: pymalloc sub-allocates inside an arena, so the stale access stays within the bounds of the capability that covers it. The base arm does enforce revocation (CAPSTONE_REVOCATION_ENFORCE defaults to 1 and is independent of the sublet discipline), so the admissible outcomes are completion, or a revoked-capability fault (cause 24) once pymalloc has returned the block's emptied arena to the system allocator. Which of the two occurs is a property of arena occupancy rather than of the defect, so this arm does not separate these cases. A cause 5 or 7 fault would falsify this. A fault whose cause is anything other than 24 falsifies this too, including cause 2 (ILLEGAL_INST), which is an ordinary trap that no capability mechanism produced -- control reaching non-code, the way any CPU would trap it."
     },
     "sublet": {
       "oracle": "fault at the stale access: this arm issues and revokes pymalloc's own blocks"

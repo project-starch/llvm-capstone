@@ -13,7 +13,7 @@
   "layer_note": "measured: the heap report SURVIVES PYTHONMALLOC=pymalloc, so the object is not a pymalloc block. It is PyMem_RawMalloc d (myreadline.c:207,223,325,347) -- a libc block at 100 bytes, which is why the <=512 B shortcut was wrong",
   "arms": {
     "spatial": {
-      "oracle": "a fault at the offending access: cause 5 on a load or 7 on a store where the access leaves the object's own capability, or cause 24 where it reaches memory the system allocator has already freed and revoked. The object is a system allocator block, so one of the two applies; completion would falsify this."
+      "oracle": "a fault at the offending access: cause 5 on a load or 7 on a store where the access leaves the object's own capability, or cause 24 where it reaches memory the system allocator has already freed and revoked. The object is a system allocator block, so one of the two applies; completion would falsify this. The fault must carry cause 5, 7 or 24; any other cause, cause 2 (ILLEGAL_INST) among them, is an ordinary trap rather than this arm's mechanism and falsifies this."
     },
     "sublet": {
       "oracle": "fault: the object is a libc malloc block"

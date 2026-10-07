@@ -1,51 +1,132 @@
 {
- "arms": {
-  "cheribsd-revocation": {
-   "arm": "cheribsd-revocation",
-   "ended_utc": "2026-10-06T14:51:08Z",
-   "every_free_default": "0",
-   "positive_control": "EXP-OK cpython 552",
-   "python_sha256": "fba7e8d89796a2221e3eb029aff1c1adefe4a60648bcd8af604abf94587e638b",
-   "revocation_default": "1",
-   "sicode_control": "si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB",
-   "started_utc": "2026-10-06T14:15:18Z"
+  "arms": {
+    "cheribsd-revocation": {
+      "arm": "cheribsd-revocation",
+      "ended_utc": "2026-10-06T14:51:08Z",
+      "every_free_default": "0",
+      "positive_control": "EXP-OK cpython 552",
+      "python_sha256": "fba7e8d89796a2221e3eb029aff1c1adefe4a60648bcd8af604abf94587e638b",
+      "revocation_default": "1",
+      "sicode_control": "si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB",
+      "started_utc": "2026-10-06T14:15:18Z"
+    },
+    "spatial": {
+      "arm": "spatial",
+      "case_timeout": "600",
+      "cases": "11",
+      "discipline": "none",
+      "ended_utc": "2026-10-06T14:41:33Z",
+      "image_sha256": "7788ac72f70a02aceca2544df7403c79fcf6819da7d0c79f6a5c750deff5b1db",
+      "only": "22,23,24,25,26,27,28,29,30,31,32",
+      "positive_control": "EXP-OK cpython 552",
+      "rev_nodes": "65536",
+      "started_utc": "2026-10-06T14:18:58Z"
+    },
+    "sublet": {
+      "arm": "sublet",
+      "case_timeout": "600",
+      "cases": "11",
+      "discipline": "CPY-SUBLET mode=1",
+      "ended_utc": "2026-10-06T15:12:38Z",
+      "image_sha256": "1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae",
+      "only": "22,23,24,25,26,27,28,29,30,31,32",
+      "positive_control": "EXP-OK cpython 552",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-06T14:41:33Z"
+    }
   },
-  "spatial": {
-   "arm": "spatial",
-   "case_timeout": "600",
-   "cases": "11",
-   "discipline": "none",
-   "ended_utc": "2026-10-06T14:41:33Z",
-   "image_sha256": "7788ac72f70a02aceca2544df7403c79fcf6819da7d0c79f6a5c750deff5b1db",
-   "only": "22,23,24,25,26,27,28,29,30,31,32",
-   "positive_control": "EXP-OK cpython 552",
-   "rev_nodes": "65536",
-   "started_utc": "2026-10-06T14:18:58Z"
-  },
-  "sublet": {
-   "arm": "sublet",
-   "case_timeout": "600",
-   "cases": "11",
-   "discipline": "CPY-SUBLET mode=1",
-   "ended_utc": "2026-10-06T15:12:38Z",
-   "image_sha256": "1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae",
-   "only": "22,23,24,25,26,27,28,29,30,31,32",
-   "positive_control": "EXP-OK cpython 552",
-   "rev_nodes": "16777216",
-   "started_utc": "2026-10-06T14:41:33Z"
-  }
- },
- "cases": 32,
- "note": "Each cell is the arm's own verdict word. TIMEOUT, CAPACITY and STAGING-FAILED are not measurements (SCHEMA rule 4) and are excluded from every rate; oracle_met is blank for them.",
- "runs": [
-  "boundary-20261006-104241",
-  "cheri11",
-  "cheri11",
-  "spatial-20261006-105111",
-  "spatial-20261006-131005",
-  "spatial-20261006-141858",
-  "sublet-20261006-112658",
-  "sublet-20261006-123446",
-  "sublet-20261006-144133"
- ]
+  "cases": 32,
+  "note": "Each cell is the arm's own verdict word. TIMEOUT, CAPACITY and STAGING-FAILED are not measurements (SCHEMA rule 4) and are excluded from every rate; oracle_met is blank for them.",
+  "runs": [
+    "boundary-20261006-104241",
+    "cheri11",
+    "cheri11",
+    "spatial-20261006-105111",
+    "spatial-20261006-131005",
+    "spatial-20261006-141858",
+    "sublet-20261006-112658",
+    "sublet-20261006-123446",
+    "sublet-20261006-144133",
+    "spatial-20261007-020747",
+    "spatial-hicap-20261007-021742",
+    "sublet-20261007-022142",
+    "sublet-hicap-20261007-023111",
+    "boundary-20261007-020413"
+  ],
+  "reruns_20261007": [
+    {
+      "arm": "spatial",
+      "capacity": "base",
+      "image": "spatial",
+      "image_sha256": "7788ac72f70a02aceca2544df7403c79fcf6819da7d0c79f6a5c750deff5b1db",
+      "rev_nodes": "65536",
+      "started_utc": "2026-10-07T02:07:48Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "none",
+      "case_timeout": "1800",
+      "only": "07,32,21",
+      "ended_utc": "2026-10-07T02:17:42Z",
+      "cases": "3",
+      "dir": "spatial-20261007-020747"
+    },
+    {
+      "arm": "spatial",
+      "capacity": "hicap",
+      "image": "spatial-hicap",
+      "image_sha256": "06e42d510a6a1a3fe7c17d4314e8b21dfff48adc008e7f63b007f4949e2445aa",
+      "rev_nodes": "65536",
+      "started_utc": "2026-10-07T02:17:42Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "none",
+      "case_timeout": "600",
+      "only": "08,13",
+      "ended_utc": "2026-10-07T02:21:42Z",
+      "cases": "2",
+      "dir": "spatial-hicap-20261007-021742"
+    },
+    {
+      "arm": "sublet",
+      "capacity": "base",
+      "image": "sublet",
+      "image_sha256": "1dd1c0f6df64d5951d78e86a7ba4298b097fba6c09d11c9abd08a631fe1517ae",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-07T02:21:43Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "CPY-SUBLET mode=1",
+      "case_timeout": "1800",
+      "only": "07,32,21",
+      "ended_utc": "2026-10-07T02:31:11Z",
+      "cases": "3",
+      "dir": "sublet-20261007-022142"
+    },
+    {
+      "arm": "sublet",
+      "capacity": "hicap",
+      "image": "sublet-hicap",
+      "image_sha256": "dee1ac02805524e7bf9b3bdd6e9fd521e7266bc848433ef4b550c86dae8479fa",
+      "rev_nodes": "16777216",
+      "started_utc": "2026-10-07T02:31:11Z",
+      "positive_control": "EXP-OK cpython 552",
+      "discipline": "CPY-SUBLET mode=1",
+      "case_timeout": "600",
+      "only": "08",
+      "ended_utc": "2026-10-07T02:33:19Z",
+      "cases": "1",
+      "dir": "sublet-hicap-20261007-023111"
+    },
+    {
+      "arm": "cheribsd-revocation",
+      "python_sha256": "fba7e8d89796a2221e3eb029aff1c1adefe4a60648bcd8af604abf94587e638b",
+      "revocation_default": "1",
+      "every_free_default": "0",
+      "started_utc": "2026-10-07T02:04:21Z",
+      "positive_control": "EXP-OK cpython 552",
+      "sicode_control": "si_code=1 (PROT_CHERI_BOUNDS) via mech-control S_OOB",
+      "case_budget": "600",
+      "only": "02,07,13,32",
+      "ended_utc": "2026-10-07T02:08:01Z",
+      "dir": "boundary-20261007-020413"
+    }
+  ],
+  "note_20261007": "Four rows per Capstone arm and four on cheribsd were re-measured on 2026-10-07; the matrix's run column says which row came from which. 07 and 32 carry new single-process triggers and were deliberately measured on the SAME image as the other rows (CAP=base). Only 08 and 13 were given the raised image (CAP=hicap), and neither was recovered by it: 08's trigger has readinto claim 2147483647 bytes and 13 uses a pointer as a length and asks for 0x9fad41ee2fbf, about 175 TB. Capacity was not the limit on either. 21 was given 1800 s where it had had 600 s, and completed in roughly 430 s -- but in a three-case subset, where its 600 s timeout had occurred in a full 32-case pass, so subset and full runs are not freely comparable."
 }

@@ -1,12 +1,12 @@
-# Three arms over 32 cases, 2026-10-06
+# Three arms over 32 cases, 2026-10-06 and 2026-10-07
 
 | | | spatial | sublet | cheribsd-revocation |
 |---|---|---:|---:|---:|
-| spatial | nested | 6/10 | **9/11** | 5/10 |
-| spatial | non-nested | 2/2 | **2/2** | 1/3 |
-| temporal | nested | 2/8 | **9/9** | 1/8 |
-| temporal | non-nested | 0/2 | **2/2** | 0/2 |
-| **total** | | **10/22** | **22/24** | **7/23** |
+| spatial | nested | 6/10 | **9/11** | 6/12 |
+| spatial | non-nested | 3/3 | **3/3** | 2/4 |
+| temporal | nested | 3/9 | **10/10** | 2/9 |
+| temporal | non-nested | 0/3 | **3/3** | 0/2 |
+| **total** | | **12/25** | **25/27** | **10/27** |
 
 Each cell is `detected / measured`. A row is a measurement only if the trigger
 reached the defect site. A case that timed out, exhausted the application heap,
@@ -19,9 +19,9 @@ been replaced.
 
 | arm | measured | excluded | cases |
 |---|---:|---:|---|
-| `spatial` | 22/32 | 10 | **CAPACITY** `08` `13`; **NOMODULE** `11` `23` `24`; **NOTIMPL** `18`; **SKIPPED** `15`; **SUPERSEDED** `07` `32`; **TIMEOUT** `21` |
-| `sublet` | 24/32 | 8 | **CAPACITY** `08`; **NOMODULE** `11` `23`; **NOTIMPL** `18`; **SKIPPED** `15`; **SUPERSEDED** `07` `32`; **TIMEOUT** `21` |
-| `cheribsd-revocation` | 23/32 | 9 | **NOMODULE** `02` `11` `12` `13` `21` `22` `23`; **SUPERSEDED** `07` `32` |
+| `spatial` | 25/32 | 7 | **CAPACITY** `08` `13`; **NOMODULE** `11` `23` `24`; **NOTIMPL** `18`; **SKIPPED** `15` |
+| `sublet` | 27/32 | 5 | **CAPACITY** `08`; **NOMODULE** `11` `23`; **NOTIMPL** `18`; **SKIPPED** `15` |
+| `cheribsd-revocation` | 27/32 | 5 | **NOMODULE** `11` `12` `21` `22` `23` |
 
 An earlier version of this file read "that sublet loses twice as many as spatial
 is itself a result: revocation's cost is what pushes those cases over the limit".
@@ -107,41 +107,68 @@ to the system allocator. The two corpora's `spatial` arms are therefore not
 measuring the same thing, and their numbers still must not be pooled -- but the
 reason is now known rather than open.
 
-## What is owed, and what is a declared boundary
+## What the re-runs settled, and what is left
 
-The exclusions are not one kind of thing, and the difference decides whether a
-later run can close them.
+Thirteen rows were re-measured on 2026-10-07: `07` and `32` on all three arms
+with their new single-process triggers, `02` and `13` on cheribsd with the
+vendored stdlib test package, `08` and `13` against the raised image, and `21`
+with 1800 s where it had had 600 s. Five of the ten module losses remain, plus
+`08` and `13` on the Capstone arms for a reason that turned out not to be
+capacity at all.
 
-**Pending a re-run; 13 rows, no image change needed.** `07` and `32` on all
-three arms, because their triggers were replaced and now run in one process.
-`08` on both Capstone arms and `13` on the base arm, which need the raised
-image and nothing else. `02` and `13` on cheribsd, which now carry the stdlib
-test package that guest's Lib does not have. And `21` on both Capstone arms, as
-one attempt at a larger budget rather than a belief that it will finish -- the
-earlier evidence points at the run saturating the single vCPU, because the
-cancel path timed out as well and the guest stopped answering.
+**`21` is measured now, and the earlier reading of it was wrong.** It had been
+recorded as TIMEOUT on both Capstone arms, and the judgement here was that
+raising the budget would not help because the cancel path had timed out too and
+the guest had stopped answering. It helped: `21` is SILENT on the base arm and
+`DETECTED cause=24` on sublet, which is the sharpest single row in the table --
+a non-nested use-after-free in expat that revocation catches and the baseline
+does not. One caveat is recorded rather than smoothed over: it completed in
+roughly 430 s, under the 600 s it had previously exceeded, but in a three-case
+subset where the timeout had happened in a full 32-case pass. Subset and full
+runs are therefore not freely comparable, and that is a property of the harness,
+not of the defect.
 
-Which image each of those rows gets is not a detail. `07` and `32` need no extra
-capacity now, so they are measured with the SAME image as the other rows, while
-`08` and `13` cannot run without the raised one. A bigger application heap moves
-when pymalloc returns an emptied arena, which is exactly what the `cause=24`
-detections depend on.
+**`08` and `13` were never capacity-bound, and the raised images were built on a
+wrong premise.** Two images were built at 192 MiB of application heap against
+48 MiB, on the belief that these two cases were short of room. Neither was
+recovered, and the logs say why:
 
-**A declared boundary until the images change; 10 rows.** `11` (`_ctypes`), `15`
-(`_testinternalcapi`), `23` (`_testlimitedcapi`) and `24` (`zoneinfo` tzdata) on
-Capstone; `11`, `12` (`_interpreters`), `21` and `22` (`pyexpat`) and `23` on
-cheribsd. Adding a module changes the binary, so every row would have to be
-re-measured against a new hash, not just the recovered ones -- the image gate
-refuses anything else, correctly. That is deliberately out of scope for this
-pass, and these rows stay out of the denominators rather than being counted as
-silence. `_ctypes` needs libffi and may not be reachable in a freestanding musl
-domain at all.
+- `08` has its `readinto` return `2147483647`, and the defect IS that
+  `BufferedReader` trusts that number. The real region is 8193 bytes; the
+  overflow is the difference. The domain is asked for 2 GiB and answers
+  `MemoryError`, so the overflow never happens.
+- `13` passes `object()` as a keyword name and the pin uses a pointer as a
+  length: the host ASan build reports `failed to allocate 0x9fad41ee2fbf bytes`,
+  about 175 TB. No heap in any configuration satisfies that.
+
+So both are a declared boundary on the Capstone arms, for a property of the
+defect rather than a tunable. What the raised images did establish is that
+capacity was not the explanation -- a negative result, and the reason the
+hypothesis is not still open.
+
+`13` also gives the cleanest three-way contrast in the corpus. The base arm
+cannot run it: the allocator refuses the bogus length and the defect's read
+never happens. Sublet reports `cause=5`, catching the access before the
+allocation path is reached. CheriBSD reports `si_code=2`. The nested-allocator
+discipline turns a case the baseline cannot even measure into a bounds fault.
+
+**Still a declared boundary, five rows, needing a different image.** `11`
+(`_ctypes`), `15` (`_testinternalcapi`), `23` (`_testlimitedcapi`) and `24`
+(`zoneinfo` tzdata) on Capstone; `11`, `12` (`_interpreters`), `21` and `22`
+(`pyexpat`) and `23` on cheribsd. Adding a module changes the binary, so every
+row would have to be re-measured against a new hash rather than only the
+recovered ones, and that is deliberately out of scope here. `_ctypes` needs
+libffi and may not be reachable in a freestanding musl domain at all.
 
 **Probably permanent.** `18` on both Capstone arms: the guest kernel answers
 `mmap` with `Errno 38`, and the case's buffer IS an mmap mapping.
 
-The run plan for the 13 is kept at `~/arms/cpython/run-pending.sh` -- five boots,
-each gated on the image hash recorded for its arm and capacity variant.
+Two consistency checks worth recording. `07` and `32` kept their signatures
+across the trigger rewrite: `07` still faults with `si_code=1` on cheribsd and
+`32` still with `si_code=5`, exactly as their child processes had, so running
+them in one process changed the harness and not the defect. And `13` on cheribsd
+is a detection that had been hidden as NOMODULE -- the vendored package did not
+merely let the case run, it uncovered a fault.
 
 ## The exclusions are mostly missing modules, and that was found late
 
@@ -177,6 +204,31 @@ did not catch the defect and the program kept running on corrupted data. Only an
 import failure, a skipped selected test, an unimplemented syscall or `Ran 0
 tests` is excluded.
 
+## Not every fault is the mechanism
+
+| arm | detections | by the capability mechanism | an ordinary trap |
+|---|---:|---:|---|
+| `spatial` | 12 | **11** | `32` cause 2 |
+| `sublet` | 25 | **25** | none |
+| `cheribsd-revocation` | 10 | **10** | none |
+
+Case `32` is why this column exists. Its dangling `_ucnhash_CAPI` pointer is
+**called**, and on the base arm control lands on non-code at `0x87d0` and the CPU
+raises `cause=2`, `RISCV_EXCP_ILLEGAL_INST` -- the way any CPU traps that, with no
+capability mechanism involved. The same case on sublet faults with `cause=24`,
+`UNEXP_OP_TYPE`, a revoked capability used as a pointer, which IS the mechanism.
+Counting both as a detection would credit the base arm with a protection that
+did not act, so the spatial oracles now name their falsifier: a fault whose cause
+is anything other than 24 falsifies them, `cause=2` included. That tightening
+moved exactly one row, `32` on `spatial`, and it moved it from met to unmet --
+the opposite direction from the two earlier oracle corrections, which is the
+check that it was not fitted to the numbers.
+
+The capability causes are `5` and `7` (an access outside a capability's bounds),
+and `24`, `25`, `26` (`UNEXP_OP_TYPE`, `INVALID_CAP`, `UNEXP_CAP_TYPE`), from
+`capstone-qemu/target/riscv/cpu_bits.h`. On cheribsd the mechanism announces
+itself with a `si_code`, so every fault there is one.
+
 ## How much each arm discriminates, which is not what `oracle_met` measures
 
 Both the spatial and the cheribsd oracles have now been corrected, and both
@@ -187,16 +239,16 @@ not, and the number that says what actually happened is this one:
 
 | arm | measured | `oracle_met` | cases the classification PREDICTS | of those, met |
 |---|---:|---:|---:|---:|
-| `spatial` | 27 | 24/27 | **5/27** | 2 |
-| `sublet` | 28 | 22/28 | **28/28** | 22 |
-| `cheribsd-revocation` | 30 | 29/30 | **1/30** | 0 |
+| `spatial` | 25 | 21/25 | **6/25** | 3 |
+| `sublet` | 27 | 25/27 | **27/27** | 25 |
+| `cheribsd-revocation` | 27 | 26/27 | **1/27** | 0 |
 
-The corrected oracles stopped predicting outcomes that the mechanism does not
+The corrected oracles stopped predicting outcomes the mechanism does not
 determine, so they are met more often and say less. On the base arm, whether a
 nested defect faults depends on whether pymalloc has returned the block's
 emptied arena to the system allocator (`insert_to_freepool`, when `nf ==
-ao->ntotalpools && ao->nextarena != NULL`). On CheriBSD it depends on that and
-on sweep timing as well, because the run records
+ao->ntotalpools && ao->nextarena != NULL`). On CheriBSD it depends on that and on
+sweep timing as well, because the run records
 `security.cheri.runtime_revocation_every_free_default` as 0 and
 `runtime_revocation_async` as 1 -- revocation there is sweep-based and
 asynchronous, so a stale access reached before the next sweep still holds a
@@ -205,9 +257,15 @@ tagged capability.
 Those outcomes are reproducible: the triggers are deterministic. They are simply
 not derivable from the case's class and side, which is the whole claim a
 four-cell table makes. **`sublet` is the only arm whose outcome follows from the
-defect's classification for every case it measured**, and it is the only arm
-whose misses are therefore informative: six of them, `06`, `11`, `15`, `17`,
-`18` and `23`, where the oracle names a fault and the arm was silent.
+defect's classification for every case it measured**, and it is therefore the
+only arm whose misses are informative: two of them, `06`, `17`,
+where the oracle names a fault and the arm was silent.
+
+The base arm's four unmet rows are `19`, `20`, `21`, `32`. `19`, `20` and
+`21` are non-nested use-after-free on system-allocator blocks, which is what
+revocation exists to catch and this arm did not; `21` is the one sublet does
+catch, with `cause=24`. `32` is unmet because its fault is `cause=2`, an ordinary
+illegal-instruction trap rather than the arm's mechanism.
 
 The one case the cheribsd oracle does predict is `18_gh-157335`, and it is not
 met. Its buffer is an mmap mapping, so a bounds fault was the prediction and the

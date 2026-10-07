@@ -13,7 +13,7 @@
   "layer_note": "",
   "arms": {
     "spatial": {
-      "oracle": "a revoked-capability fault (cause 24) at the stale access: the object is a system allocator block and the base arm enforces revocation on its free. A bounds fault or completion would falsify this."
+      "oracle": "a revoked-capability fault (cause 24) at the stale access: the object is a system allocator block and the base arm enforces revocation on its free. A bounds fault or completion would falsify this. The fault must carry cause 5, 7 or 24; any other cause, cause 2 (ILLEGAL_INST) among them, is an ordinary trap rather than this arm's mechanism and falsifies this."
     },
     "sublet": {
       "oracle": "fault: the object is a libc malloc block"
