@@ -1,0 +1,25 @@
+{
+  "case": 1,
+  "upstream_fix": "5e4233a9e4",
+  "title": "row17",
+  "consumer": "sqlite3.c",
+  "live_in_pin": true,
+  "live_proof": "inspection with line numbers in the 3.22.0 tree: the op2 miscount is at resolve.c:598, countOfViewOptimization() deletes the owning ExprList at select.c:5069, and resetAccumulator() reads pF->pExpr at select.c:4752. Fixed upstream in 3.45.0, long after the pin",
+  "allocator_layer": "memsys5",
+  "object": "the Expr nodes owned by the sub-select's ExprList, which AggInfo still points into",
+  "lifetime_ender": "countOfViewOptimization() deletes the owning ExprList while AggInfo holds pointers into it",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator. Needs -DSQLITE_COUNTOFVIEW_OPTIMIZATION for the free site to exist at all; the trigger shape follows upstream forum post c9970a37ed",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+    }
+  },
+  "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05"
+}

@@ -131,6 +131,15 @@ and in `results/`. An arm that is declared but not written says so with
 `"status": "not written"` instead of an oracle, so the gap is visible rather
 than silently absent.
 
+An unwritten arm may carry **`not_run_reason`**: one or two sentences saying
+why it was not run and whether it can be. A bare "not run" is the one cell a
+reader cannot interpret -- it covers a case that is impossible here, a case
+waiting on a build change, and a case nobody got to, and those three carry
+different weight in a denominator. Without the field the reason survives only
+in whoever ran it. The checker does not yet enforce this: an unwritten arm
+short-circuits before its keys are examined, so a misspelt `not_run_reason`
+passes silently.
+
 | arm | target | oracle |
 |---|---|---|
 | `spatial` | Capstone domain | the sequence completes |

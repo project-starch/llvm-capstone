@@ -1,0 +1,25 @@
+{
+  "case": 6,
+  "upstream_fix": "0c8c9a64b3",
+  "title": "row19",
+  "consumer": "sqlite3.c (idxRemFunc)",
+  "live_in_pin": true,
+  "live_proof": "inspection with line numbers in the pinned extension source: idxPopulateStat1() frees the context and returns without unregistering at sqlite3expert.c:1671, :1676 and :1719, leaving rem() and sample() registered on the user connection. Fixed upstream in 3.46.1",
+  "allocator_layer": "memsys5",
+  "object": "the heap IdxRemCtx that rem() was registered with",
+  "lifetime_ender": "idxPopulateStat1() frees the context and returns without unregistering the functions that point at it",
+  "shape": "free / stale read",
+  "fidelity": "real consumer, real allocator, but the defect is in ext/expert/sqlite3expert.c rather than in the amalgamation; the case compiles that extension into the domain. The stale read is in idxRemFunc, which is why its probe site is in the extension and not in sqlite3.c",
+  "arms": {
+    "spatial": {
+      "oracle": "completes"
+    },
+    "sublet": {
+      "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b86c8"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran"
+    }
+  },
+  "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b86c8; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=12, witnesses=4)"
+}
