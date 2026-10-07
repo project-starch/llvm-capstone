@@ -1,3 +1,13 @@
+2026-10-07 — **Node-table growth is implemented on `virtual-node-growth`.**
+Review QEMU `6f312662d1` before the runtime/module change that pins it.
+The shared physical page-directory format, publication rules, complete-sweep
+reuse, quota behavior and tests are documented in
+[the runtime README](../../runtime/virtual/README.md) and
+[the ISA chapter](../design/virtual-capstone/isa.md#lifetime-storage-and-encoding).
+This is a feature branch based on the integration branch below, not a change
+to the physical/RTL baseline. Removing the separate allocator block-record
+ceiling or returning empty node pages needs subsequent work.
+
 2026-10-07 — **New virtual work starts from `virtual-capstone-integration`.**
 Follow the [integration guide](../plans/virtual-capstone-integration.md) to
 create a feature worktree, initialize the pinned dependencies and select the

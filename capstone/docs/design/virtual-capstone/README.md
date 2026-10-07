@@ -68,7 +68,10 @@ A large virtual range can span noncontiguous physical pages. The runtime no
 longer needs a large contiguous physical payload pool. It still uses arenas
 to amortize allocation: an arena is now a Linux-backed virtual mapping from
 which libc carves objects. Ordinary applications call `malloc` and `mmap`.
-The current lifetime table itself is still a contiguous physical allocation.
+The node-growth extension gives the lifetime table scattered physical backing
+too: its stable physical root selects a directory of 256-record pages.
+Capability IDs and the ownership model stay unchanged; see the
+[table format and publication rules](isa.md#lifetime-storage-and-encoding).
 
 ## Responsibilities
 

@@ -63,10 +63,23 @@ def main():
     stats = [dict((k, int(v)) for k, v in re.findall(r'(\w+)=(\d+)', line))
              for line in log.splitlines() if line.startswith('CAPSTONE_VM_STATS ')]
     census = [json.loads(line) for line in log.splitlines() if line.startswith('{"version":1,')]
+    nm = Path(os.environ['CAPSTONE_LLVM_BIN']) / 'llvm-nm'
+    symbols = {}
+    for line in subprocess.check_output([str(nm), '--defined-only', str(a.application)], text=True).splitlines():
+        fields = line.split()
+        if len(fields) == 3:
+            symbols[fields[2]] = int(fields[0], 16)
+    stale_sites = re.findall(
+        r'^capstone-exec: domain fault cause=24 pc=(0x[0-9a-f]+) '
+        r'address=0x[0-9a-f]+ entry=(0x[0-9a-f]+)', log, re.M)
     checks = {'completed': run.returncode == 0,
               'growth': 'NODE_EXIT:growth:0' in log and 'NODE_GROWTH_OK' in log,
               'two_live_populations': log.count('NODE_LIVE:0:70000') == 2 and log.count('NODE_LIVE:1:70000') == 2,
               'stale': 'NODE_EXIT:stale:139' in log and 'NODE_STALE_ACCESS' in log,
+              'stale_site': len(stale_sites) == 1 and
+                  'cap_node_stale' in symbols and 'domain_main' in symbols and
+                  int(stale_sites[0][0], 16) - int(stale_sites[0][1], 16) ==
+                  symbols['cap_node_stale'] - symbols['domain_main'],
               'budget_errno': 'NODE_EXIT:budget:0' in log and 'NODE_BUDGET_OK' in log,
               'quota_fault': 'NODE_EXIT:quota:139' in log,
               'causes': re.findall(r'^capstone-exec: domain fault cause=(\d+) ', log, re.M) == ['24', '30'],

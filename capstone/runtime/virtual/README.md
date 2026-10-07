@@ -113,6 +113,20 @@ root stays fixed; a 5:9:9-bit directory maps the high 23 bits of a node ID to
 a 4-KiB record page, and the low eight bits select one of its 256 slots.
 Only base-page allocations are required. The initial four record pages plus
 root and directory pages occupy 28 KiB; IDs 0 and 1 remain reserved.
+
+```text
+node ID:       [ 5 bits ][ 9 bits ][ 9 bits ][ 8 bits ]
+                   |         |         |         |
+srevroot (PA)      v         v         v         v
+     +------> root[32] -> dir[512] -> dir[512] -> nodes[256]
+              +64 B       4 KiB       4 KiB       4 KiB
+             header                             16 B/node
+
+All arrows contain physical page addresses; satp is not consulted.
+Growth appends pages. Existing root, node IDs and records stay in place.
+Reuse follows: revoke -> complete stale-tag sweep -> free list -> allocate.
+```
+
 Linux keeps the arena's private ancestor as a
 scalar identity. Whole-arena retirement walks and invalidates its descendants
 and the ancestor before clearing physical tags and unpinning pages. Reusing
