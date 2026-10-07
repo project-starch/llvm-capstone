@@ -48,7 +48,10 @@ def main():
                 data = os.read(guest.stdout.fileno(), 65536)
                 if not data:
                     break
-                log.write(data); log.flush(); out += data
+                log.write(data); log.flush()
+                # Keep only the marker window; transcripts remain in the log.
+                # Large network workloads must not repeatedly copy that log.
+                out = (out + data)[-65536:]
                 if not login and b'login:' in out:
                     guest.stdin.write(b'root\n'); guest.stdin.flush()
                     login = True; out = b''

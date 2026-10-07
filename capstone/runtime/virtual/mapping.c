@@ -60,6 +60,8 @@ int mprotect(void *p, size_t n, int prot)
     if (rc) { errno = -rc; return -1; }
     return 0;
 }
+/* musl's pthread stack setup calls the hidden symbol directly. */
+int __mprotect(void *p, size_t n, int prot) { return mprotect(p, n, prot); }
 /* Sharing and file-backed mappings have no tag-lifecycle contract yet. */
 void *mremap(void *p, size_t old, size_t n, int flags, ...)
 { (void)p; (void)old; (void)n; (void)flags; errno = ENOSYS; return MAP_FAILED; }

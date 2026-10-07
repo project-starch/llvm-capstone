@@ -1,5 +1,12 @@
 # Virtual C applications on Linux
 
+Current review integration: [pthread checks](results/review-r3-pthreads.json)
+pass 9/9 with freshly built libc, SDK and adapter. The
+[v2 compatibility gate](results/review-r3-v2-compatibility.json) passes 39/39,
+with its two long recycling cases explicitly omitted. Earlier result files
+below retain the identities of the historical runs they describe.
+
+
 Review integration: checked-in qualification JSON files identify historical
 binaries by hash. They do not qualify this extracted stack on current dev.
 The [integrated R1 result](results/review-r1.json) passes 22/22 checks, including
@@ -18,9 +25,10 @@ The [application gate](result.json) runs a normal C program, the explicit
 same-`mm` thread contract, SQLite's shell and the mruby interpreter. The
 existing ports build through the common SDK; applications must be rebuilt for
 its virtual profile. An ELF marker prevents the loader from accepting an image
-built for the physical calling convention. Virtual VM-service version 2 also
-rejects version-1 virtual images before executing them; rebuild the SDK and
-applications together when switching to this interface.
+built for the physical calling convention. VM-service version 3 adds pthread
+services and accepts version-2 images, whose mapping ABI is unchanged.
+Version-1 virtual images are rejected. Older launchers reject version-3 images;
+rebuild the SDK and application together for the pthread profile.
 
 ## Execution and memory
 
@@ -51,6 +59,46 @@ launcher. `capstone_virtual_thread_join` waits for that exit protocol before
 the caller retires the child stack or TLS mapping. The workers share
 the process transport under a wire lock; fork, shared tagged pages and SMP
 remain out of scope.
+
+The virtual musl bridge also supplies `pthread_create`, join, TLS, mutexes and
+condition variables. musl owns thread objects, stack layout and join protocol;
+the runtime replaces clone, futex transport and final thread exit. Each POSIX
+worker installs its own META/exchange pair, bounce buffer, logical signal mask
+and event ring. Linux executes blocking I/O without holding the process service
+lock, and futexes use the original registered VA rather than an exchange copy.
+The child clears musl's exit word only after its virtual CPU and saved frame
+have stopped, so join can safely retire its stack. Process exit and faults stop
+all Linux workers before mappings are released by the adapter's fd teardown.
+
+The [pthread gate](pthread-result.json) checks separate TLS, tagged join results,
+mutex/condition synchronization, timeout, independent blocking I/O, private
+epoll event conversion and 64
+successive joined lifetimes, plus preempted I/O through a shared-TLS explicit
+context. Wire ownership uses the trusted context ID, not the TLS address.
+Compile `pthread-contract.c` with the SDK and `-I capstone/runtime/include`,
+then run `run-pthreads.py` with adapter, application, QEMU, images and a fresh
+work directory. Cancellation, arbitrary `pthread_kill`, main-thread-only
+`pthread_exit` and full POSIX signal/register semantics are not qualified by
+this gate. The processor interface and kernel module are unchanged by this
+pthread bridge.
+
+The [version-2 compatibility regression](pthread-compatibility-result.json)
+passes the existing 46 checks, including spatial/temporal faults, shared-heap
+threads, SQLite/mruby/Perl and both 200,000-allocation recycling cases. It was
+run after the blocking-I/O/exit changes; the final context-identity and
+worker-fault-record additions and epoll/message conversion fixes are covered by the new
+pthread/server gates. The [epoll controls](pthread-epoll-controls.json) insert
+the same sleep after syscall copy-back in both variants: the shared-buffer
+mutation fails the event-identity assertion, while the private-buffer version
+passes. An ordinary old-buffer run can pass; the controlled interleaving is
+what exposes the race.
+The [host message controls](pthread-host-controls.json) additionally block one
+delegated receive while another completes with different buffer offsets. The
+shared-view/iovec mutation corrupts the first copy-back; private per-call
+descriptors pass. Build the native test from
+`runtime/tests/application/delegate-thread-test.c`, `linux/delegate-service.c`,
+`linux/signals.c`, `linux/spawner.c`, `linux/park.c`, `common/delegate.c`, `common/msghdr.c` and
+`common/spawn.c`, with `-I runtime/include -lpthread`.
 
 The loader registers image, stack, startup and exchange mappings. Startup
 pages are pinned. Growing private anonymous mappings initially have absent PTEs: the module
@@ -115,7 +163,8 @@ metadata). It returns a consumed linear grant or a scalar negative errno.
 UNMAP removes an exact whole visible mapping. PROTECT operates on a page range
 inside one registered payload mapping. WAIT yields to Linux without holding
 the transport lock. Metadata mappings are not exposed to public protection or
-retirement services. The loader marker is `CPONVVM2`; application ABI-v2's
+retirement services. New images carry `CPONVVM3`; the launcher also accepts
+`CPONVVM2` images. Application ABI-v2's
 ordinary delegated system-service format remains independent of this marker.
 
 Linux, the adapter and the runtime belong to the TCB. Linearity concerns
@@ -240,7 +289,8 @@ mappings, 256 MiB per registered region, 1 GiB
 aggregate registered VA, 512 mappings, and a bounded recyclable node table.
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
-signals and POSIX thread synchronization need further contracts. Address hints/fixed mappings and `mremap` remain unsupported. Partial unmap
+signals need further contracts. The qualified pthread subset is described
+above. Address hints/fixed mappings and `mremap` remain unsupported. Partial unmap
 requires a separate lifetime contract: a live wide capability must not acquire
 a replacement mapping placed into its former hole. Anonymous
 `MAP_SHARED` and SysV segments are process-local compatibility for nested

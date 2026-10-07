@@ -109,9 +109,35 @@ static long dl_identity(long n, long *answer) {
    context installs transport 0 when the regions arrive, a further context the
    transport its creator reserved, before its first delegated call. A context
    without one gets -EIO from every call. */
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+struct dl_transport {
+  volatile struct capstone_delegate_entry *entry;
+  char *exchange;
+  size_t capacity, used;
+  uint64_t status;
+  volatile uintptr_t wire_owner;
+  unsigned wire_depth;
+};
+static struct dl_transport default_transport;
+static __thread struct dl_transport *private_transport;
+static struct dl_transport *dl_transport(void) {
+  void *tp;
+  __asm__ volatile("movc %0, tp" : "=r"(tp));
+  return tp && private_transport ? private_transport : &default_transport;
+}
+#define dl_entry (dl_transport()->entry)
+#define dl_exchange (dl_transport()->exchange)
+#define dl_capacity (dl_transport()->capacity)
+#define dl_used (dl_transport()->used)
+#define dl_status (dl_transport()->status)
+#define dl_wire_owner (dl_transport()->wire_owner)
+#define dl_wire_depth (dl_transport()->wire_depth)
+#else
 static __thread volatile struct capstone_delegate_entry *dl_entry;
 static __thread char *dl_exchange;
 static __thread size_t dl_capacity, dl_used;
+static __thread uint64_t dl_status;
+#endif
 
 /* Argument marshalling record for one call. */
 struct dl_slot {
@@ -165,27 +191,14 @@ static unsigned dl_rights(unsigned kind) {
   }
 }
 
-static __thread uint64_t dl_status;  /* of the last round: DONE or RETRY */
-
 #ifdef CAPSTONE_RUNTIME_VIRTUAL
-/* The virtual adapter keeps one META/exchange pair for the process. Linux
- * threads share it, so serialize a complete wire round, including signal
- * delivery. Signal handlers can make a nested delegated call, so this is a
- * small recursive lock. The stack capability is the worker identity: virtual
- * threads have distinct stacks, while nested calls on one stack retain the
- * same bounded base. The QEMU supervisor still keeps register state per
- * thread; this lock protects only the process-wide syscall transport. */
-static volatile uintptr_t dl_wire_owner;
-static unsigned dl_wire_depth;
+/* Serialize each transport through copy-back and signal delivery. POSIX
+ * children install private transports; explicit contexts sharing TLS keep
+ * their creator's transport. Nested signal handlers may enter recursively. */
 static uintptr_t dl_wire_identity(void) {
-  void *tp;
-  volatile char marker;
-  __asm__ volatile("movc %0, tp" : "=r"(tp));
-  /* The thread pointer survives an alternate signal stack. Child contexts
-   * that deliberately omit TLS fall back to their ordinary stack identity. */
-  if (tp)
-    return __builtin_capstone_cap_get_base(tp);
-  return __builtin_capstone_cap_get_base((void *)&marker);
+  extern long __capstone_vm_thread_self(void);
+  /* Context identity survives shared TLS and alternate signal stacks. */
+  return (uintptr_t)__capstone_vm_thread_self();
 }
 static void dl_wire_acquire(void) {
   uintptr_t identity = dl_wire_identity();
@@ -287,6 +300,18 @@ int __capstone_delegate_transport(unsigned long index) {
   return 0;
 }
 
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+void __capstone_delegate_thread_attach(void *state, void *entry, void *exchange, void *signals) {
+  private_transport = state;
+  dl_entry = entry;
+  dl_exchange = exchange;
+  dl_capacity = cap_bytes(exchange);
+  extern void __capstone_signals_thread_attach(void *, void *);
+  __capstone_signals_thread_attach(signals, entry);
+}
+size_t __capstone_delegate_thread_state_size(void) { return sizeof(struct dl_transport); }
+#endif
+
 int __capstone_delegate_ready(void) {
   return dl_entry && dl_exchange && cap_bytes((void *)dl_entry) >= sizeof *dl_entry;
 }
@@ -352,7 +377,12 @@ static long dl_round(uint64_t nr, const uint64_t args[CAPSTONE_DELEGATE_ARGS]) {
     return -EINVAL;
   }
   dl_bytes((void *)dl_entry, &e, sizeof e);
+#ifdef CAPSTONE_RUNTIME_VIRTUAL
+  extern void __capstone_vm_delegate_transport(void *, void *, size_t);
+  __capstone_vm_delegate_transport((void *)dl_entry, dl_exchange, dl_capacity);
+#else
   __capstone_yield();
+#endif
   dl_status = dl_entry->status;
   __capstone_signals_take();
   /* A RETRY round has no result of its own. When it is not issued again (a
@@ -1125,7 +1155,8 @@ static long dl_epoll_ctl(long epfd, long op, long fd, const struct epoll_event *
 
 static long dl_epoll_pwait(long epfd, struct epoll_event *ev, long count, long timeout,
                            const sigset_t *mask, long size) {
-  static struct dl_epoll_wire wire[1024];   /* a shorter list is a legal answer */
+  /* Conversion continues after the transport lock is released. */
+  struct dl_epoll_wire wire[1024];   /* a shorter list is a legal answer */
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS];
   long r;
   if (count > 1024)
@@ -1191,8 +1222,16 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t e, syscall_arg_t f) {
   syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS] = {a, b, c, d, e, f};
 #ifdef CAPSTONE_RUNTIME_VIRTUAL
-  /* Explicit virtual contexts precede the pthread adapter. Bootstrap musl's
-     main thread locally; never dispatch through the physical context ABI. */
+  if (n == SYS_futex) {
+    extern long __capstone_virtual_futex(void *, int, int, const struct timespec *, int);
+    return __capstone_virtual_futex((void *)a, (int)(long)b, (int)(long)c,
+                                   (const struct timespec *)d, (int)(long)f);
+  }
+  if (n == SYS_exit) {
+    extern _Noreturn void __capstone_virtual_pthread_exit(long);
+    __capstone_virtual_pthread_exit((long)a);
+  }
+  /* Bootstrap musl locally; never enter the physical context protocol. */
   if (n == SYS_set_tid_address) {
     const struct capstone_launch_task *t = __capstone_launch_task();
     return t && t->pid ? (long)t->pid : 1;

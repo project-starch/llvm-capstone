@@ -175,7 +175,7 @@ def main():
     run([sdk / 'capstone-cc', *extra, *objects, '-o', image])
     run([args.toolchain / 'bin/llvm-objcopy', '--strip-debug', image])
     manifest = dict(application=args.app, application_abi=2, profile=args.profile,
-                    virtual_vm_abi=2 if args.profile == 'virtual' else None,
+                    virtual_vm_abi=3 if args.profile == 'virtual' else None,
                     instrument=args.instrument, allocations=args.allocations,
                     gc_gaps=args.gc_gaps,
                     reuse_gap=args.reuse_gap,
